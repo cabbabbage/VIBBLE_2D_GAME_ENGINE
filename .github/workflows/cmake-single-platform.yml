@@ -1,0 +1,73 @@
+name: CMake on Windows with vcpkg
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        build_type: [Release]
+        c_compiler: [cl]
+        cpp_compiler: [cl]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set reusable strings
+        id: strings
+        shell: bash
+        run: |
+          echo "build-output-dir=${{ github.workspace }}/build" >> "$GITHUB_OUTPUT"
+
+      # Optional: Improve resilience of Windows networking during large downloads
+      - name: Windows networking retry tweaks (optional)
+        shell: bash
+        run: |
+          git config --global http.postBuffer 524288000
+          git config --global http.version HTTP/1.1 || true
+
+      # === Bootstrap vcpkg ===
+      - name: Bootstrap vcpkg
+        shell: bash
+        run: |
+          git clone https://github.com/microsoft/vcpkg.git
+          ./vcpkg/bootstrap-vcpkg.sh
+
+      # === Install dependencies from manifest with retry + binary caching ===
+      - name: Install dependencies from vcpkg.json
+        shell: bash
+        env:
+          VCPKG_FEATURE_FLAGS: "manifests,registries,binarycaching"
+          VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
+        run: |
+          for i in {1..4}; do
+            ./vcpkg/vcpkg install --clean-after-build && exit 0
+            echo "vcpkg install failed (attempt $i). Sleeping 20s then retrying..."
+            sleep 20
+          done
+          echo "vcpkg install failed after retries." >&2
+          exit 1
+
+      - name: Configure CMake (with vcpkg toolchain)
+        run: >
+          cmake -B ${{ steps.strings.outputs.build-output-dir }}
+          -DCMAKE_CXX_COMPILER=${{ matrix.cpp_compiler }}
+          -DCMAKE_C_COMPILER=${{ matrix.c_compiler }}
+          -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+          -DCMAKE_TOOLCHAIN_FILE=${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake
+          -S ${{ github.workspace }}
+
+      - name: Build
+        run: cmake --build ${{ steps.strings.outputs.build-output-dir }} --config ${{ matrix.build_type }}
+
+      - name: Test
+        working-directory: ${{ steps.strings.outputs.build-output-dir }}
+        run: ctest --build-config ${{ matrix.build_type }}
+
