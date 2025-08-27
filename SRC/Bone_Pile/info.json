@@ -1,0 +1,37 @@
+{
+    "asset_name": "Bone_Pile",
+    "asset_type": "Object",
+    "animations": {
+        "default": {
+            "frames_path": "default",
+            "speed": 1.0,
+            "on_end": "default",
+            "randomize": false,
+            "audio_path": "",
+            "volume": 50
+        }
+    },
+    "impassable_area": null,
+    "z_threshold": 5,
+    "size_settings": {
+        "scale_percentage": 20,
+        "variability_percentage": 0
+    },
+    "spacing_area": "spacing_area.json",
+    "min_same_type_distance": 400,
+    "visited_tabs": [
+        "Spacing"
+    ],
+    "tags": [
+        "bone",
+        "scary",
+        "passable",
+        "white",
+        "ground"
+    ],
+    "rnd_spawn_min": 300,
+    "rnd_spawn_max": 400,
+    "anti_tags": [],
+    "has_spacing": true,
+    "min_distance_all": 0
+}

@@ -1,0 +1,115 @@
+{
+    "impassable_area": null,
+    "asset_name": "Davey",
+    "asset_type": "Player",
+    "animations": {
+        "default": {
+            "frames_path": "default",
+            "on_end": "default",
+            "event_data": [],
+            "randomize": false,
+            "audio_path": "",
+            "volume": 50,
+            "lock_until_done": false
+        },
+        "right": {
+            "frames_path": "right",
+            "on_end": "right",
+            "event_data": [],
+            "randomize": false,
+            "audio_path": "",
+            "volume": 50,
+            "lock_until_done": false
+        },
+        "backward": {
+            "frames_path": "backward",
+            "on_end": "backward",
+            "event_data": [],
+            "randomize": false,
+            "audio_path": "",
+            "volume": 50,
+            "lock_until_done": false
+        },
+        "forward": {
+            "frames_path": "forward",
+            "on_end": "forward",
+            "event_data": [],
+            "randomize": false,
+            "audio_path": "",
+            "volume": 50,
+            "lock_until_done": false
+        },
+        "left": {
+            "frames_path": "left",
+            "on_end": "left",
+            "event_data": [],
+            "randomize": false,
+            "audio_path": "",
+            "volume": 50,
+            "lock_until_done": false
+        }
+    },
+    "z_threshold": 43,
+    "size_settings": {
+        "scale_percentage": 45
+    },
+    "visited_tabs": [
+        "Passability",
+        "Spacing"
+    ],
+    "spacing_area": "spacing_area.json",
+    "min_same_type_distance": 686,
+    "tags": [
+        "forward",
+        "passable",
+        "start",
+        "default",
+        "left",
+        "player",
+        "backward",
+        "right"
+    ],
+    "rnd_spawn_min": 300,
+    "rnd_spawn_max": 400,
+    "lighting_info": [
+        {
+            "has_light_source": true,
+            "light_intensity": 255,
+            "radius": 592,
+            "y_radius": 127,
+            "x_radius": 45,
+            "falloff": 0,
+            "factor": 100
+        },
+        {
+            "has_light_source": true,
+            "light_intensity": 164,
+            "light_color": [
+                255,
+                255,
+                255
+            ],
+            "radius": 300,
+            "falloff": 0,
+            "flicker": 0,
+            "flare": 0,
+            "offset_x": 0,
+            "offset_y": -9
+        }
+    ],
+    "shading_info": {
+        "has_shading": false,
+        "has_base_shadow": null,
+        "base_shadow_intensity": null,
+        "has_gradient_shadow": null,
+        "number_of_gradient_shadows": null,
+        "gradient_shadow_intensity": null,
+        "has_casted_shadows": null,
+        "number_of_casted_shadows": null,
+        "cast_shadow_intensity": null
+    },
+    "has_spacing": true,
+    "min_distance_all": 0,
+    "anti_tags": [],
+    "has_shading": true
+}

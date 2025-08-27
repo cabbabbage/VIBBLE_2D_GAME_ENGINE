@@ -1,0 +1,40 @@
+{
+    "asset_name": "Book",
+    "asset_type": "Object",
+    "animations": {
+        "default": {
+            "frames_path": "default",
+            "speed": 1.0,
+            "on_end": "default",
+            "randomize": false,
+            "audio_path": "",
+            "volume": 50
+        }
+    },
+    "impassable_area": null,
+    "z_threshold": 2,
+    "size_settings": {
+        "scale_percentage": 12
+    },
+    "spacing_area": "spacing_area.json",
+    "min_same_type_distance": 0,
+    "visited_tabs": [
+        "Spacing"
+    ],
+    "tags": [
+        "man-made",
+        "barrel_child",
+        "passable",
+        "library",
+        "red",
+        "book"
+    ],
+    "rnd_spawn_min": 300,
+    "rnd_spawn_max": 400,
+    "has_spacing": true,
+    "anti_tags": [
+        "default",
+        "ground"
+    ],
+    "min_distance_all": 0
+}

@@ -1,0 +1,81 @@
+{
+    "impassable_area": "impassable_area.json",
+    "asset_name": "Grave_2",
+    "asset_type": "Object",
+    "duplicatable": false,
+    "duplication_interval_min": 30,
+    "duplication_interval_max": 60,
+    "min_child_depth": 0,
+    "max_child_depth": 2,
+    "animations": {
+        "default": {
+            "frames_path": "default",
+            "speed": 1.0,
+            "on_end": "default",
+            "event_data": [],
+            "randomize": false,
+            "audio_path": "",
+            "volume": 50
+        }
+    },
+    "tags": [
+        "death",
+        "still",
+        "man-made",
+        "grey",
+        "scary",
+        "impassable",
+        "graveyard",
+        "default",
+        "medium",
+        "grave"
+    ],
+    "z_threshold": 6,
+    "size_settings": {
+        "scale_percentage": 17
+    },
+    "rnd_spawn_min": 300,
+    "rnd_spawn_max": 400,
+    "anti_tags": [
+        "black",
+        "bone",
+        "book",
+        "booze",
+        "boundary",
+        "center",
+        "crime",
+        "drinking",
+        "flowers",
+        "green",
+        "library",
+        "light",
+        "meadow",
+        "moving",
+        "mushroom",
+        "nature",
+        "passable",
+        "plant",
+        "purple",
+        "red",
+        "rock",
+        "small",
+        "white",
+        "wood"
+    ],
+    "has_shading": true,
+    "lighting_info": [
+        {
+            "has_light_source": true,
+            "light_intensity": 255,
+            "radius": 114,
+            "y_radius": 84,
+            "x_radius": 61,
+            "falloff": 0,
+            "factor": 100
+        }
+    ],
+    "has_spacing": true,
+    "spacing_area": "spacing_area.json",
+    "min_same_type_distance": 0,
+    "min_distance_all": 0
+}

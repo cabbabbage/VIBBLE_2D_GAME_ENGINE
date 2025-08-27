@@ -1,0 +1,61 @@
+{
+    "impassable_area": "impassable_area.json",
+    "asset_name": "car",
+    "asset_type": "Object",
+    "duplicatable": false,
+    "duplication_interval_min": 30,
+    "duplication_interval_max": 60,
+    "min_child_depth": 0,
+    "max_child_depth": 2,
+    "animations": {
+        "default": {
+            "frames_path": "default",
+            "speed": 1.0,
+            "on_end": "default",
+            "event_data": [],
+            "randomize": false,
+            "audio_path": "",
+            "volume": 50
+        }
+    },
+    "tags": [
+        "large",
+        "man-made",
+        "default",
+        "impassable",
+        "center",
+        "car",
+        "metal",
+        "grey",
+        "black"
+    ],
+    "z_threshold": 29,
+    "size_settings": {
+        "scale_percentage": 29
+    },
+    "has_spacing": true,
+    "spacing_area": "spacing_area.json",
+    "min_same_type_distance": 2000,
+    "rnd_spawn_min": 300,
+    "rnd_spawn_max": 400,
+    "child_assets": [],
+    "anti_tags": [
+        "passable"
+    ],
+    "min_distance_all": 72,
+    "lighting_info": [
+        {
+            "has_light_source": true,
+            "light_intensity": 255,
+            "radius": 431,
+            "y_radius": 270,
+            "x_radius": 316,
+            "falloff": 0,
+            "factor": 100
+        }
+    ],
+    "has_shading": true,
+    "can_invert": true,
+    "update_radius": 1000,
+    "render_radius": 1000
+}

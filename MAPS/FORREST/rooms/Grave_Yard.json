@@ -1,0 +1,85 @@
+{
+  "name": "Grave_Yard",
+  "min_width": 2080,
+  "max_width": 2383,
+  "min_height": 2082,
+  "max_height": 2500,
+  "edge_smoothness": 100,
+  "geometry": "Square",
+  "is_spawn": false,
+  "is_boss": false,
+  "inherits_map_assets": false,
+  "assets": [
+    {
+      "name": "candle",
+      "min_number": 5,
+      "max_number": 5,
+      "position": "Perimeter",
+      "exact_position": null,
+      "tag": false,
+      "check_overlap": false,
+      "check_min_spacing": false,
+      "inherited": false
+    },
+    {
+      "name": "bone",
+      "min_number": 82,
+      "max_number": 82,
+      "position": "Random",
+      "exact_position": null,
+      "tag": true,
+      "check_overlap": false,
+      "check_min_spacing": false,
+      "inherited": false
+    },
+    {
+      "name": "lantern",
+      "min_number": 10,
+      "max_number": 10,
+      "position": "Center",
+      "exact_position": null,
+      "tag": false,
+      "check_overlap": false,
+      "check_min_spacing": false,
+      "inherited": false
+    },
+    {
+      "name": "Grass_1_FPS_2",
+      "min_number": -100,
+      "max_number": 192,
+      "position": "Random",
+      "exact_position": null,
+      "tag": false,
+      "check_overlap": false,
+      "check_min_spacing": false,
+      "inherited": false
+    }
+  ],
+  "batch_assets": {
+    "has_batch_assets": true,
+    "grid_spacing_min": 215,
+    "grid_spacing_max": 215,
+    "jitter_min": 0,
+    "jitter_max": 0,
+    "batch_assets": [
+      {
+        "name": "null",
+        "tag": false,
+        "percent": 20,
+        "color": "#CCCCCC"
+      },
+      {
+        "name": "Grave_1",
+        "tag": false,
+        "percent": 40,
+        "color": "#c9683c"
+      },
+      {
+        "name": "Grave_2",
+        "tag": false,
+        "percent": 40,
+        "color": "#335364"
+      }
+    ]
+  }
+}

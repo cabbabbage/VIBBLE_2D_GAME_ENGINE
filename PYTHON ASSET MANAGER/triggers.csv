@@ -1,0 +1,12 @@
+trigger_name,requires_area,top_level_flag
+default,False, 
+forward,False,
+backward,False,
+left,False,
+right,False,
+rest, False,
+collision,True,is_collidable
+interaction,True,is_interactable
+hit,True,is_attackable
+spawn, False
+group, False

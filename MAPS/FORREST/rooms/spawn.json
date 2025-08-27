@@ -1,0 +1,69 @@
+{
+  "name": "spawn",
+  "min_width": 1825,
+  "max_width": 1825,
+  "curvyness": 1,
+  "assets": [
+    {
+      "name": "Davey",
+      "min_number": 1,
+      "max_number": 1,
+      "position": "Center",
+      "exact_position": null,
+      "tag": false,
+      "check_overlap": false,
+      "check_min_spacing": false,
+      "inherited": false
+    },
+    {
+      "name": "candle",
+      "min_number": 10,
+      "max_number": 10,
+      "position": "Perimeter",
+      "exact_position": null,
+      "tag": false,
+      "check_overlap": false,
+      "check_min_spacing": false,
+      "inherited": false,
+      "border_shift_min": 163,
+      "border_shift_max": 163,
+      "sector_center_min": 0,
+      "sector_center_max": 0,
+      "sector_range_min": 360,
+      "sector_range_max": 360
+    },
+    {
+      "name": "ground",
+      "min_number": 0,
+      "max_number": 45,
+      "position": "Random",
+      "exact_position": null,
+      "tag": true,
+      "check_overlap": false,
+      "check_min_spacing": false,
+      "inherited": false
+    }
+  ],
+  "min_height": 761,
+  "max_height": 761,
+  "edge_smoothness": 100,
+  "geometry": "Circle",
+  "is_spawn": true,
+  "is_boss": false,
+  "inherits_map_assets": false,
+  "batch_assets": {
+    "has_batch_assets": false,
+    "grid_spacing_min": 100,
+    "grid_spacing_max": 100,
+    "jitter_min": 0,
+    "jitter_max": 0,
+    "batch_assets": [
+      {
+        "name": "null",
+        "tag": false,
+        "percent": 100,
+        "color": "#CCCCCC"
+      }
+    ]
+  }
+}

@@ -1,0 +1,84 @@
+{
+    "impassable_area": null,
+    "asset_name": "lantern",
+    "asset_type": "Object",
+    "duplicatable": false,
+    "duplication_interval_min": 30,
+    "duplication_interval_max": 60,
+    "min_child_depth": 3,
+    "max_child_depth": 9,
+    "animations": {
+        "default": {
+            "frames_path": "default",
+            "speed": 1.0,
+            "on_end": "rest",
+            "event_data": [],
+            "randomize": true,
+            "audio_path": "",
+            "volume": 50
+        }
+    },
+    "z_threshold": 3,
+    "size_settings": {
+        "scale_percentage": 30
+    },
+    "spacing_area": "spacing_area.json",
+    "min_same_type_distance": 2000,
+    "tags": [
+        "large",
+        "man-made",
+        "passable",
+        "default",
+        "tall",
+        "still",
+        "center",
+        "metal",
+        "black",
+        "light"
+    ],
+    "rnd_spawn_min": 300,
+    "rnd_spawn_max": 400,
+    "lighting_info": [
+        {
+            "has_light_source": true,
+            "light_intensity": 0,
+            "radius": 0,
+            "x_radius": 0,
+            "y_radius": 0
+        },
+        {
+            "has_light_source": true,
+            "light_intensity": 99,
+            "light_color": [
+                255,
+                255,
+                255
+            ],
+            "radius": 94,
+            "falloff": 11,
+            "flicker": 0,
+            "flare": 83,
+            "offset_x": 35,
+            "offset_y": -220
+        },
+        {
+            "has_light_source": true,
+            "light_intensity": 255,
+            "light_color": [
+                255,
+                255,
+                255
+            ],
+            "radius": 742,
+            "falloff": 91,
+            "flicker": 0,
+            "flare": 1,
+            "offset_x": 35,
+            "offset_y": 0
+        }
+    ],
+    "has_spacing": true,
+    "anti_tags": [],
+    "min_distance_all": 82,
+    "has_shading": false
+}

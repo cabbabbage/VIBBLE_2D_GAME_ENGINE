@@ -1,0 +1,61 @@
+{
+  "asset_name": "Box",
+  "asset_type": "Object",
+  "animations": {
+    "default": {
+      "frames_path": "default",
+      "speed": 1.0,
+      "on_end": "default",
+      "randomize": false,
+      "audio_path": "",
+      "volume": 50
+    }
+  },
+  "impassable_area": "impassable_area.json",
+  "z_threshold": 91,
+  "size_settings": {
+    "scale_percentage": 13
+  },
+  "visited_tabs": [
+    "Passability",
+    "Region-Based Child Assets",
+    "Spacing"
+  ],
+  "spacing_area": "spacing_area.json",
+  "min_same_type_distance": 911,
+  "duplicatable": false,
+  "duplication_interval_min": 30,
+  "duplication_interval_max": 60,
+  "min_child_depth": 0,
+  "max_child_depth": 2,
+  "tags": [
+    "man-made",
+    "wood",
+    "surface",
+    "impassable",
+    "parent"
+  ],
+  "rnd_spawn_min": 300,
+  "rnd_spawn_max": 400,
+  "has_spacing": true,
+  "anti_tags": [],
+  "child_assets": [
+    "child_assets_1.json"
+  ],
+  "min_distance_all": 0,
+  "has_shading": true,
+  "lighting_info": [
+    {
+      "has_light_source": true,
+      "light_intensity": 255,
+      "radius": 142,
+      "y_radius": 96,
+      "x_radius": 178,
+      "falloff": 0,
+      "factor": 100
+    }
+  ],
+  "can_invert": true,
+  "update_radius": 1000,
+  "render_radius": 1000
+}

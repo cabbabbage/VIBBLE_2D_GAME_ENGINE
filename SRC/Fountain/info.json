@@ -1,0 +1,87 @@
+{
+  "asset_name": "Fountain",
+  "asset_type": "Object",
+  "animations": {
+    "default": {
+      "frames_path": "default",
+      "speed": 1.0,
+      "on_end": "default",
+      "randomize": false,
+      "audio_path": "",
+      "volume": 50
+    }
+  },
+  "impassable_area": "impassable_area.json",
+  "z_threshold": 1,
+  "size_settings": {
+    "scale_percentage": 77
+  },
+  "spacing_area": "spacing_area.json",
+  "min_same_type_distance": 2000,
+  "visited_tabs": [
+    "Spacing"
+  ],
+  "tags": [
+    "healing",
+    "default",
+    "water",
+    "blue",
+    "impassable",
+    "movement",
+    "white",
+    "center",
+    "medium",
+    "grey",
+    "light"
+  ],
+  "rnd_spawn_min": 300,
+  "rnd_spawn_max": 400,
+  "lighting_info": [
+    {
+      "has_light_source": true,
+      "light_intensity": 255,
+      "radius": 494,
+      "y_radius": 196,
+      "x_radius": 181,
+      "falloff": 0,
+      "factor": 100
+    },
+    {
+      "has_light_source": true,
+      "light_intensity": 173,
+      "light_color": [
+        138,
+        255,
+        255
+      ],
+      "radius": 449,
+      "falloff": 0,
+      "flicker": 0,
+      "flare": 3,
+      "offset_x": 0,
+      "offset_y": 0
+    }
+  ],
+  "shading_info": {
+    "has_shading": false,
+    "has_base_shadow": null,
+    "base_shadow_intensity": null,
+    "has_gradient_shadow": null,
+    "number_of_gradient_shadows": null,
+    "gradient_shadow_intensity": null,
+    "has_casted_shadows": null,
+    "number_of_casted_shadows": null,
+    "cast_shadow_intensity": null
+  },
+  "anti_tags": [
+    "any",
+    "static",
+    "still"
+  ],
+  "child_assets": [
+    "child_assets_1.json"
+  ],
+  "has_spacing": true,
+  "min_distance_all": 0,
+  "has_shading": true
+}

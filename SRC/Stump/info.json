@@ -1,0 +1,84 @@
+{
+    "asset_name": "Stump",
+    "asset_type": "Object",
+    "animations": {
+        "default": {
+            "frames_path": "default",
+            "speed": 1.0,
+            "on_end": "default",
+            "randomize": false,
+            "audio_path": "",
+            "volume": 50
+        }
+    },
+    "impassable_area": "impassable_area.json",
+    "z_threshold": 46,
+    "size_settings": {
+        "scale_percentage": 35
+    },
+    "visited_tabs": [
+        "Passability",
+        "Spacing"
+    ],
+    "spacing_area": "spacing_area.json",
+    "min_same_type_distance": 0,
+    "tags": [
+        "meadow",
+        "default",
+        "brown",
+        "still",
+        "medium",
+        "impassable",
+        "nature",
+        "wood"
+    ],
+    "rnd_spawn_min": 300,
+    "rnd_spawn_max": 400,
+    "has_spacing": true,
+    "anti_tags": [
+        "black",
+        "bone",
+        "booze",
+        "boundary",
+        "center",
+        "crime",
+        "drinking",
+        "flowers",
+        "green",
+        "man-made",
+        "moving",
+        "mushroom",
+        "passable",
+        "purple",
+        "red",
+        "scary",
+        "small",
+        "white"
+    ],
+    "child_assets": [],
+    "min_distance_all": 0,
+    "lighting_info": [
+        {
+            "has_light_source": true,
+            "light_intensity": 255,
+            "radius": 214,
+            "y_radius": 76,
+            "x_radius": 157,
+            "falloff": 0,
+            "factor": 100
+        }
+    ],
+    "shading_info": {
+        "has_shading": true,
+        "has_base_shadow": false,
+        "base_shadow_intensity": 0,
+        "has_gradient_shadow": false,
+        "gradient_shadow_intensity": 0,
+        "has_casted_shadows": false,
+        "cast_shadow_intensity": 0
+    },
+    "can_invert": true,
+    "update_radius": 1000,
+    "render_radius": 1000,
+    "has_shading": true
+}

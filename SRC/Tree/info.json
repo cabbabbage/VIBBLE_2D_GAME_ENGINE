@@ -1,0 +1,74 @@
+{
+  "asset_name": "Tree",
+  "asset_type": "boundary",
+  "duplicatable": false,
+  "duplication_interval_min": 30,
+  "duplication_interval_max": 60,
+  "min_child_depth": 0,
+  "max_child_depth": 2,
+  "tags": [
+    "group",
+    "default",
+    "spawn",
+    "impassable"
+  ],
+  "z_threshold": 34,
+  "size_settings": {
+    "scale_percentage": 65
+  },
+  "rnd_spawn_min": 300,
+  "rnd_spawn_max": 400,
+  "animations": {
+    "default": {
+      "frames_path": "default",
+      "on_end": "default",
+      "event_data": [],
+      "randomize": true,
+      "audio_path": "",
+      "volume": 50,
+      "lock_until_done": false
+    },
+    "group": {
+      "frames_path": "group",
+      "on_end": "group",
+      "event_data": [],
+      "randomize": false,
+      "audio_path": "",
+      "volume": 50,
+      "lock_until_done": false
+    }
+  },
+  "impassable_area": "impassable_area.json",
+  "spacing_area": "spacing_area.json",
+  "min_same_type_distance": 0,
+  "shading_info": {
+    "has_shading": true,
+    "has_base_shadow": true,
+    "base_shadow_intensity": 100,
+    "has_gradient_shadow": false,
+    "number_of_gradient_shadows": 1,
+    "gradient_shadow_intensity": 100,
+    "has_casted_shadows": false,
+    "number_of_casted_shadows": 1,
+    "cast_shadow_intensity": 100
+  },
+  "lighting_info": [
+    {
+      "has_light_source": true,
+      "light_intensity": 255,
+      "radius": 731,
+      "y_radius": 609,
+      "x_radius": 393,
+      "falloff": 0,
+      "factor": 100
+    }
+  ],
+  "child_assets": [],
+  "has_spacing": true,
+  "min_distance_all": 0,
+  "anti_tags": [],
+  "has_shading": true,
+  "can_invert": true,
+  "update_radius": 1000,
+  "render_radius": 1000
+}

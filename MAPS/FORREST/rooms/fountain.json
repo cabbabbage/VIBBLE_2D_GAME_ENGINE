@@ -1,0 +1,95 @@
+{
+  "name": "fountain",
+  "min_width": 2078,
+  "max_width": 2500,
+  "min_height": 2082,
+  "max_height": 2500,
+  "edge_smoothness": 100,
+  "geometry": "Square",
+  "is_spawn": false,
+  "is_boss": true,
+  "inherits_map_assets": true,
+  "assets": [
+    {
+      "name": "Fountain",
+      "min_number": 1,
+      "max_number": 1,
+      "position": "Center",
+      "exact_position": null,
+      "inherited": false,
+      "check_overlap": false,
+      "check_min_spacing": false,
+      "tag": false
+    },
+    {
+      "name": "Bench",
+      "min_number": 1,
+      "max_number": 1,
+      "position": "Exact Position",
+      "exact_position": null,
+      "inherited": false,
+      "check_overlap": false,
+      "check_min_spacing": false,
+      "tag": false,
+      "ep_x_min": 50,
+      "ep_x_max": 50,
+      "ep_y_min": 10,
+      "ep_y_max": 10
+    },
+    {
+      "name": "flowers",
+      "min_number": 1,
+      "max_number": 1,
+      "position": "Distributed",
+      "exact_position": null,
+      "inherited": false,
+      "check_overlap": false,
+      "check_min_spacing": false,
+      "tag": false,
+      "grid_spacing_min": 100,
+      "grid_spacing_max": 100,
+      "jitter_min": 0,
+      "jitter_max": 0,
+      "empty_grid_spaces_min": 0,
+      "empty_grid_spaces_max": 0
+    },
+    {
+      "name": "candle",
+      "min_number": 5,
+      "max_number": 43,
+      "position": "Perimeter",
+      "exact_position": null,
+      "tag": false,
+      "check_overlap": false,
+      "check_min_spacing": false,
+      "inherited": false,
+      "border_shift_min": 100,
+      "border_shift_max": 100,
+      "sector_center_min": 0,
+      "sector_center_max": 0,
+      "sector_range_min": 360,
+      "sector_range_max": 360
+    }
+  ],
+  "batch_assets": {
+    "has_batch_assets": true,
+    "grid_spacing_min": 100,
+    "grid_spacing_max": 100,
+    "jitter_min": 0,
+    "jitter_max": 0,
+    "batch_assets": [
+      {
+        "name": "Barrel",
+        "tag": false,
+        "percent": 1,
+        "color": "#e08b50"
+      },
+      {
+        "name": "null",
+        "tag": false,
+        "percent": 99,
+        "color": "#123602"
+      }
+    ]
+  }
+}

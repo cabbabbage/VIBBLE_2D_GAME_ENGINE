@@ -1,0 +1,65 @@
+{
+    "asset_name": "Bone",
+    "asset_type": "Object",
+    "animations": {
+        "default": {
+            "frames_path": "default",
+            "speed": 1.0,
+            "on_end": "default",
+            "randomize": false,
+            "event_data": [
+                "Adjust score",
+                "5"
+            ],
+            "audio_path": "",
+            "volume": 50
+        }
+    },
+    "impassable_area": null,
+    "z_threshold": 5,
+    "size_settings": {
+        "scale_percentage": 20,
+        "variability_percentage": 0
+    },
+    "spacing_area": "spacing_area.json",
+    "min_same_type_distance": 500,
+    "visited_tabs": [
+        "Spacing"
+    ],
+    "tags": [
+        "bone",
+        "scary",
+        "passable",
+        "white",
+        "ground"
+    ],
+    "rnd_spawn_min": 300,
+    "rnd_spawn_max": 400,
+    "anti_tags": [
+        "barrel_child",
+        "man-made"
+    ],
+    "has_spacing": true,
+    "min_distance_all": 0,
+    "lighting_info": [
+        {
+            "has_light_source": true,
+            "light_intensity": 0,
+            "light_color": [
+                255,
+                255,
+                255
+            ],
+            "radius": 0,
+            "fall_off": 0,
+            "jitter_min": 0,
+            "jitter_max": 0,
+            "offset_x": 0,
+            "offset_y": 0,
+            "flicker": false
+        }
+    ],
+    "can_invert": true,
+    "update_radius": 1000,
+    "render_radius": 1000
+}

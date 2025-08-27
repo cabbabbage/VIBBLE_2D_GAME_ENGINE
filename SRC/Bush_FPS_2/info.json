@@ -1,0 +1,62 @@
+{
+    "asset_name": "Bush_FPS_2",
+    "asset_type": "boundary",
+    "animations": {
+        "default": {
+            "frames_path": "default",
+            "speed": 1.0,
+            "on_end": "default",
+            "randomize": true,
+            "audio_path": "",
+            "volume": 50
+        }
+    },
+    "impassable_area": null,
+    "z_threshold": 30,
+    "size_settings": {
+        "scale_percentage": 13
+    },
+    "spacing_area": "spacing_area.json",
+    "min_same_type_distance": 557,
+    "visited_tabs": [
+        "Passability",
+        "Spacing"
+    ],
+    "duplicatable": false,
+    "duplication_interval_min": 30,
+    "duplication_interval_max": 60,
+    "min_child_depth": 0,
+    "max_child_depth": 2,
+    "tags": [
+        "moving",
+        "bush",
+        "passable",
+        "nature"
+    ],
+    "rnd_spawn_min": 300,
+    "rnd_spawn_max": 400,
+    "has_spacing": true,
+    "min_distance_all": 0,
+    "anti_tags": [],
+    "shading_info": {
+        "has_shading": true,
+        "has_base_shadow": false,
+        "base_shadow_intensity": 0,
+        "has_gradient_shadow": false,
+        "gradient_shadow_intensity": 0,
+        "has_casted_shadows": false,
+        "cast_shadow_intensity": 0
+    },
+    "has_shading": true,
+    "lighting_info": [
+        {
+            "has_light_source": true,
+            "light_intensity": 255,
+            "radius": 195,
+            "y_radius": 127,
+            "x_radius": 143,
+            "falloff": 0,
+            "factor": 100
+        }
+    ]
+}

@@ -1,0 +1,31 @@
+{
+  "assets": [],
+  "inherits_map_assets": false,
+  "batch_assets": {
+    "has_batch_assets": true,
+    "grid_spacing_min": 150,
+    "grid_spacing_max": 150,
+    "jitter_min": 29,
+    "jitter_max": 29,
+    "batch_assets": [
+      {
+        "name": "Tree",
+        "tag": false,
+        "percent": 31,
+        "color": "#16a0d5"
+      },
+      {
+        "name": "Tree_Dark",
+        "tag": false,
+        "percent": 35,
+        "color": "#8a8bec"
+      },
+      {
+        "name": "Tree_Darker",
+        "tag": false,
+        "percent": 34,
+        "color": "#5bad2e"
+      }
+    ]
+  }
+}

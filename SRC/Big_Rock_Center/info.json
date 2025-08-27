@@ -1,0 +1,68 @@
+{
+  "asset_name": "Big_Rock_Center",
+  "asset_type": "boundary",
+  "animations": {
+    "default": {
+      "frames_path": "default",
+      "speed": 1.0,
+      "on_end": "default",
+      "randomize": false,
+      "audio_path": "",
+      "volume": 50
+    }
+  },
+  "impassable_area": "impassable_area.json",
+  "z_threshold": 1,
+  "size_settings": {
+    "scale_percentage": 67
+  },
+  "spacing_area": "spacing_area.json",
+  "min_same_type_distance": 643,
+  "visited_tabs": [
+    "Passability",
+    "Spacing"
+  ],
+  "duplicatable": false,
+  "duplication_interval_min": 2161,
+  "duplication_interval_max": 3766,
+  "min_child_depth": 0,
+  "max_child_depth": 2,
+  "tags": [
+    "center",
+    "rock",
+    "impassable"
+  ],
+  "rnd_spawn_min": 300,
+  "rnd_spawn_max": 400,
+  "has_spacing": true,
+  "child_assets": [
+    "child_assets_1.json",
+    "child_assets_2.json"
+  ],
+  "min_distance_all": 95,
+  "anti_tags": [],
+  "shading_info": {
+    "has_shading": true,
+    "has_base_shadow": false,
+    "base_shadow_intensity": 0,
+    "has_gradient_shadow": false,
+    "gradient_shadow_intensity": 0,
+    "has_casted_shadows": false,
+    "cast_shadow_intensity": 0
+  },
+  "can_invert": true,
+  "update_radius": 1000,
+  "render_radius": 1000,
+  "has_shading": true,
+  "lighting_info": [
+    {
+      "has_light_source": true,
+      "light_intensity": 255,
+      "radius": 390,
+      "y_radius": 168,
+      "x_radius": 286,
+      "falloff": 0,
+      "factor": 100
+    }
+  ]
+}

@@ -1,0 +1,47 @@
+{
+  "name": "basic",
+  "min_width": 800,
+  "max_width": 800,
+  "curvyness": 4,
+  "assets": [
+    {
+      "name": "candle",
+      "min_number": 1,
+      "max_number": 1,
+      "position": "Intersection",
+      "exact_position": null,
+      "tag": false,
+      "check_overlap": false,
+      "check_min_spacing": false,
+      "inherited": false
+    }
+  ],
+  "inherits_map_assets": true,
+  "batch_assets": {
+    "has_batch_assets": true,
+    "grid_spacing_min": 100,
+    "grid_spacing_max": 100,
+    "jitter_min": 0,
+    "jitter_max": 0,
+    "batch_assets": [
+      {
+        "name": "null",
+        "tag": false,
+        "percent": 82,
+        "color": "#CCCCCC"
+      },
+      {
+        "name": "light",
+        "tag": true,
+        "percent": 15,
+        "color": "#60d4f0"
+      },
+      {
+        "name": "flower_1",
+        "tag": false,
+        "percent": 3,
+        "color": "#c327e3"
+      }
+    ]
+  }
+}

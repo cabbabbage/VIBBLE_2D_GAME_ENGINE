@@ -1,0 +1,41 @@
+{
+  "name": "brick",
+  "min_width": 800,
+  "max_width": 800,
+  "curvyness": 4,
+  "inherits_map_assets": true,
+  "assets": [],
+  "batch_assets": {
+    "has_batch_assets": true,
+    "grid_spacing_min": 100,
+    "grid_spacing_max": 100,
+    "jitter_min": 0,
+    "jitter_max": 0,
+    "batch_assets": [
+      {
+        "name": "null",
+        "tag": false,
+        "percent": 71,
+        "color": "#CCCCCC"
+      },
+      {
+        "name": "light",
+        "tag": true,
+        "percent": 19,
+        "color": "#2911cb"
+      },
+      {
+        "name": "flowers",
+        "tag": true,
+        "percent": 8,
+        "color": "#1e4b95"
+      },
+      {
+        "name": "candle",
+        "tag": false,
+        "percent": 2,
+        "color": "#62b3e9"
+      }
+    ]
+  }
+}

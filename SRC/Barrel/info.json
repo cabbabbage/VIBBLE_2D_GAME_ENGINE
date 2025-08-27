@@ -1,0 +1,75 @@
+{
+    "asset_name": "Barrel",
+    "asset_type": "Object",
+    "duplicatable": false,
+    "duplication_interval_min": 30,
+    "duplication_interval_max": 60,
+    "min_child_depth": 0,
+    "max_child_depth": 2,
+    "animations": {
+        "default": {
+            "frames_path": "default",
+            "speed": 1.0,
+            "on_end": "default",
+            "event_data": [],
+            "randomize": false,
+            "audio_path": "",
+            "volume": 50
+        },
+        "collision": {
+            "frames_path": "collision",
+            "speed": 1.0,
+            "on_end": "default",
+            "event_data": [],
+            "randomize": false,
+            "audio_path": "",
+            "volume": 50,
+            "area_path": "collision_area.json"
+        }
+    },
+    "available_animations": [
+        "frames_path",
+        "speed",
+        "on_end",
+        "event_data",
+        "randomize",
+        "audio_path",
+        "volume"
+    ],
+    "tags": [
+        "collision",
+        "default",
+        "impassable",
+        "wood"
+    ],
+    "impassable_area": "impassable_area.json",
+    "spacing_area": "spacing_area.json",
+    "min_same_type_distance": 557,
+    "z_threshold": 99,
+    "size_settings": {
+        "scale_percentage": 11
+    },
+    "rnd_spawn_min": 300,
+    "rnd_spawn_max": 400,
+    "has_spacing": true,
+    "child_assets": [
+        "child_assets_1.json"
+    ],
+    "min_distance_all": 0,
+    "anti_tags": [],
+    "can_invert": true,
+    "update_radius": 1000,
+    "render_radius": 1000,
+    "has_shading": true,
+    "lighting_info": [
+        {
+            "has_light_source": true,
+            "light_intensity": 255,
+            "radius": 161,
+            "y_radius": 118,
+            "x_radius": 93,
+            "falloff": 0,
+            "factor": 100
+        }
+    ]
+}

@@ -1,0 +1,77 @@
+{
+    "impassable_area": null,
+    "asset_name": "candle",
+    "asset_type": "Object",
+    "duplicatable": false,
+    "duplication_interval_min": 30,
+    "duplication_interval_max": 60,
+    "min_child_depth": 0,
+    "max_child_depth": 2,
+    "animations": {
+        "default": {
+            "frames_path": "default",
+            "speed": 1.0,
+            "on_end": "default",
+            "event_data": [],
+            "randomize": true,
+            "audio_path": "",
+            "volume": 50
+        }
+    },
+    "tags": [
+        "man-made",
+        "orange",
+        "passable",
+        "default",
+        "barrel_child",
+        "light"
+    ],
+    "rnd_spawn_min": 300,
+    "rnd_spawn_max": 400,
+    "z_threshold": 5,
+    "size_settings": {
+        "scale_percentage": 5
+    },
+    "spacing_area": "spacing_area.json",
+    "min_same_type_distance": 1299,
+    "blend_mode": "SDL_BLENDMODE_BLEND",
+    "lighting_info": [
+        {
+            "has_light_source": true,
+            "light_intensity": 0,
+            "radius": 0,
+            "x_radius": 0,
+            "y_radius": 0
+        },
+        {
+            "has_light_source": true,
+            "light_intensity": 210,
+            "light_color": [
+                255,
+                219,
+                183
+            ],
+            "radius": 543,
+            "falloff": 0,
+            "flicker": 3,
+            "flare": 36,
+            "offset_x": -2,
+            "offset_y": -30
+        }
+    ],
+    "shading_info": {
+        "has_shading": false,
+        "has_base_shadow": null,
+        "base_shadow_intensity": null,
+        "has_gradient_shadow": null,
+        "number_of_gradient_shadows": null,
+        "gradient_shadow_intensity": null,
+        "has_casted_shadows": null,
+        "number_of_casted_shadows": null,
+        "cast_shadow_intensity": null
+    },
+    "anti_tags": [],
+    "has_spacing": true,
+    "min_distance_all": 0,
+    "has_shading": false
+}

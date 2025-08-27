@@ -1,0 +1,59 @@
+{
+    "impassable_area": null,
+    "asset_name": "Bench",
+    "asset_type": "Object",
+    "duplicatable": false,
+    "duplication_interval_min": 30,
+    "duplication_interval_max": 60,
+    "min_child_depth": 0,
+    "max_child_depth": 2,
+    "tags": [
+        "wood",
+        "passable",
+        "default",
+        "man-made"
+    ],
+    "animations": {
+        "default": {
+            "frames_path": "default",
+            "speed": 0.25,
+            "on_end": "default",
+            "event_data": [],
+            "randomize": false,
+            "audio_path": "",
+            "volume": 27,
+            "lock_until_done": false
+        }
+    },
+    "rnd_spawn_min": 300,
+    "rnd_spawn_max": 400,
+    "z_threshold": 1,
+    "size_settings": {
+        "scale_percentage": 17
+    },
+    "child_assets": [
+        "child_assets_1.json"
+    ],
+    "anti_tags": [],
+    "shading_info": {
+        "has_shading": true,
+        "has_base_shadow": false,
+        "base_shadow_intensity": 0,
+        "has_gradient_shadow": false,
+        "gradient_shadow_intensity": 0,
+        "has_casted_shadows": false,
+        "cast_shadow_intensity": 0
+    },
+    "has_shading": true,
+    "lighting_info": [
+        {
+            "has_light_source": true,
+            "light_intensity": 255,
+            "radius": 351,
+            "y_radius": 122,
+            "x_radius": 257,
+            "falloff": 0,
+            "factor": 100
+        }
+    ]
+}

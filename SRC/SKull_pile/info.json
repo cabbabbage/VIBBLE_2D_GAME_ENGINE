@@ -1,0 +1,45 @@
+{
+  "asset_name": "Skull_Pile",
+  "asset_type": "Object",
+  "animations": {
+    "default": {
+      "frames_path": "default",
+      "speed": 1.0,
+      "on_end": "default",
+      "randomize": false,
+      "audio_path": "",
+      "volume": 50
+    }
+  },
+  "impassable_area": null,
+  "z_threshold": 13,
+  "size_settings": {
+    "scale_percentage": 26,
+    "variability_percentage": 0,
+    "flipability": true
+  },
+  "spacing_area": "spacing_area.json",
+  "min_same_type_distance": 600,
+  "visited_tabs": [
+    "Spacing"
+  ],
+  "tags": [
+    "default",
+    "still",
+    "ground",
+    "skull",
+    "graveyard",
+    "scary",
+    "small",
+    "passable",
+    "death",
+    "white",
+    "bone"
+  ],
+  "rnd_spawn_min": 300,
+  "rnd_spawn_max": 400,
+  "anti_tags": [],
+  "has_spacing": true,
+  "min_distance_all": 0,
+  "lighting_info": []
+}

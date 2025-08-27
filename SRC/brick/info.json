@@ -1,0 +1,34 @@
+{
+  "impassable_area": null,
+  "asset_name": "brick",
+  "asset_type": "Object",
+  "duplicatable": false,
+  "duplication_interval_min": 30,
+  "duplication_interval_max": 60,
+  "min_child_depth": 0,
+  "animations": {
+    "default": {
+      "frames_path": "default",
+      "speed": 1.0,
+      "on_end": "default",
+      "randomize": true,
+      "audio_path": "",
+      "volume": 50
+    }
+  },
+  "max_child_depth": 2,
+  "tags": [
+    "passable"
+  ],
+  "rnd_spawn_min": 300,
+  "rnd_spawn_max": 400,
+  "z_threshold": -100,
+  "size_settings": {
+    "scale_percentage": 27
+  },
+  "spacing_area": "spacing_area.json",
+  "min_same_type_distance": 0,
+  "has_spacing": true,
+  "min_distance_all": 0,
+  "anti_tags": []
+}

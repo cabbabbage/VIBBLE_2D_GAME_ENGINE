@@ -1,0 +1,39 @@
+{
+  "asset_name": "Book_Pile",
+  "asset_type": "Object",
+  "animations": {
+    "default": {
+      "frames_path": "default",
+      "speed": 1.0,
+      "on_end": "default",
+      "randomize": false,
+      "audio_path": "",
+      "volume": 50
+    }
+  },
+  "impassable_area": null,
+  "z_threshold": 6,
+  "size_settings": {
+    "scale_percentage": 20,
+    "variability_percentage": 0
+  },
+  "spacing_area": "spacing_area.json",
+  "min_same_type_distance": 1000,
+  "visited_tabs": [
+    "Spacing"
+  ],
+  "tags": [
+    "library",
+    "passable",
+    "man-made",
+    "book",
+    "barrel_child"
+  ],
+  "rnd_spawn_min": 300,
+  "rnd_spawn_max": 400,
+  "anti_tags": [
+    "ground"
+  ],
+  "has_spacing": true,
+  "min_distance_all": 0
+}

@@ -1,0 +1,39 @@
+{
+  "impassable_area": null,
+  "asset_name": "Axe",
+  "asset_type": "Object",
+  "duplicatable": false,
+  "duplication_interval_min": 30,
+  "duplication_interval_max": 60,
+  "min_child_depth": 2,
+  "max_child_depth": 2,
+  "animations": {
+    "default": {
+      "frames_path": "default",
+      "on_end": "default",
+      "event_data": [],
+      "randomize": false,
+      "audio_path": "",
+      "volume": 50,
+      "lock_until_done": false
+    }
+  },
+  "tags": [
+    "default",
+    "passable"
+  ],
+  "has_spacing": true,
+  "spacing_area": "spacing_area.json",
+  "min_same_type_distance": 0,
+  "z_threshold": 5,
+  "size_settings": {
+    "scale_percentage": 20
+  },
+  "min_distance_all": 0,
+  "anti_tags": [],
+  "rnd_spawn_min": 300,
+  "rnd_spawn_max": 400,
+  "render_radius": 2191,
+  "can_invert": true,
+  "update_radius": 1000
+}

@@ -1,0 +1,91 @@
+{
+  "name": "chest",
+  "min_width": 1873,
+  "max_width": 2500,
+  "min_height": 730,
+  "max_height": 730,
+  "edge_smoothness": 100,
+  "geometry": "Circle",
+  "is_spawn": false,
+  "is_boss": false,
+  "inherits_map_assets": true,
+  "assets": [
+    {
+      "name": "Chest",
+      "min_number": 1,
+      "max_number": 1,
+      "position": "Perimeter",
+      "exact_position": null,
+      "tag": false,
+      "check_overlap": false,
+      "check_min_spacing": false,
+      "inherited": false
+    },
+    {
+      "name": "light",
+      "min_number": 1,
+      "max_number": 1,
+      "position": "Distributed",
+      "exact_position": null,
+      "tag": true,
+      "check_overlap": false,
+      "check_min_spacing": false,
+      "inherited": false,
+      "grid_spacing_min": 100,
+      "grid_spacing_max": 100,
+      "jitter_min": 0,
+      "jitter_max": 0,
+      "empty_grid_spaces_min": 0,
+      "empty_grid_spaces_max": 0
+    },
+    {
+      "name": "ground",
+      "min_number": 0,
+      "max_number": 102,
+      "position": "Random",
+      "exact_position": null,
+      "tag": true,
+      "check_overlap": false,
+      "check_min_spacing": false,
+      "inherited": false
+    },
+    {
+      "name": "flowers",
+      "min_number": 0,
+      "max_number": 0,
+      "position": "Random",
+      "exact_position": null,
+      "tag": true,
+      "check_overlap": false,
+      "check_min_spacing": false,
+      "inherited": false
+    }
+  ],
+  "batch_assets": {
+    "has_batch_assets": true,
+    "grid_spacing_min": 100,
+    "grid_spacing_max": 100,
+    "jitter_min": 0,
+    "jitter_max": 0,
+    "batch_assets": [
+      {
+        "name": "null",
+        "tag": false,
+        "percent": 44,
+        "color": "#34d6ad"
+      },
+      {
+        "name": "plant",
+        "tag": true,
+        "percent": 45,
+        "color": "#06a004"
+      },
+      {
+        "name": "Mushroom_1",
+        "tag": false,
+        "percent": 11,
+        "color": "#f026ea"
+      }
+    ]
+  }
+}

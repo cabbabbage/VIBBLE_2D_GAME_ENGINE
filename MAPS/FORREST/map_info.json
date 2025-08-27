@@ -1,0 +1,77 @@
+{
+  "map_name": "FORREST",
+  "map_assets": "map_assets.json",
+  "map_boundary": "map_boundary.json",
+  "map_layers": [
+    {
+      "level": 0,
+      "name": "layer_0",
+      "radius": 0,
+      "min_rooms": 1,
+      "max_rooms": 1,
+      "rooms": [
+        {
+          "name": "spawn",
+          "min_instances": 1,
+          "max_instances": 1,
+          "required_children": []
+        }
+      ]
+    },
+    {
+      "level": 1,
+      "name": "layer_1",
+      "radius": 3167,
+      "min_rooms": 3,
+      "max_rooms": 3,
+      "rooms": [
+        {
+          "name": "manmade",
+          "min_instances": 0,
+          "max_instances": 1,
+          "required_children": []
+        },
+        {
+          "name": "Grave_Yard",
+          "min_instances": 0,
+          "max_instances": 1,
+          "required_children": []
+        },
+        {
+          "name": "flower",
+          "min_instances": 0,
+          "max_instances": 1,
+          "required_children": []
+        }
+      ]
+    },
+    {
+      "level": 2,
+      "name": "layer_2",
+      "radius": 7360,
+      "min_rooms": 7,
+      "max_rooms": 7,
+      "rooms": [
+        {
+          "name": "library",
+          "min_instances": 0,
+          "max_instances": 4,
+          "required_children": []
+        },
+        {
+          "name": "KEY",
+          "min_instances": 0,
+          "max_instances": 4,
+          "required_children": []
+        },
+        {
+          "name": "fountain",
+          "min_instances": 0,
+          "max_instances": 4,
+          "required_children": []
+        }
+      ]
+    }
+  ],
+  "map_radius": 10628.639402604544
+}

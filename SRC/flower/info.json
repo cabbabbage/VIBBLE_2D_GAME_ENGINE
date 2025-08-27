@@ -1,0 +1,94 @@
+{
+    "asset_name": "flower",
+    "asset_type": "Object",
+    "duplicatable": false,
+    "duplication_interval_min": 30,
+    "duplication_interval_max": 60,
+    "min_child_depth": 0,
+    "max_child_depth": 2,
+    "tags": [
+        "purple",
+        "flowers",
+        "passable",
+        "plant",
+        "pretty",
+        "leafy",
+        "ground",
+        "small",
+        "nature",
+        "meadow",
+        "cover",
+        "still",
+        "default"
+    ],
+    "rnd_spawn_min": 300,
+    "rnd_spawn_max": 400,
+    "lighting_info": [
+        {
+            "has_light_source": true,
+            "light_intensity": 77,
+            "light_color": [
+                128,
+                0,
+                255
+            ],
+            "radius": 327,
+            "fall_off": 100,
+            "jitter_min": 0,
+            "jitter_max": 0,
+            "offset_x": 0,
+            "offset_y": 0,
+            "flicker": false
+        }
+    ],
+    "shading_info": {
+        "has_shading": false,
+        "has_base_shadow": null,
+        "base_shadow_intensity": null,
+        "has_gradient_shadow": null,
+        "number_of_gradient_shadows": null,
+        "gradient_shadow_intensity": null,
+        "has_casted_shadows": null,
+        "number_of_casted_shadows": null,
+        "cast_shadow_intensity": null
+    },
+    "z_threshold": 6,
+    "size_settings": {
+        "scale_percentage": 6,
+        "variability_percentage": 0,
+        "flipability": false
+    },
+    "animations": {
+        "default": {
+            "frames_path": "default",
+            "speed": 1.0,
+            "on_end": "default",
+            "event_data": [],
+            "randomize": false,
+            "audio_path": "",
+            "volume": 50
+        }
+    },
+    "has_spacing": true,
+    "spacing_area": "spacing_area.json",
+    "min_same_type_distance": 20,
+    "anti_tags": [
+        "bone",
+        "book",
+        "booze",
+        "boundary",
+        "center",
+        "drinking",
+        "impassable",
+        "library",
+        "light",
+        "man-made",
+        "moving",
+        "mushroom",
+        "scary",
+        "white",
+        "wood"
+    ],
+    "min_distance_all": 0,
+    "impassable_area": null
+}
