@@ -1,5 +1,8 @@
 # VIBBLE - Custom 2D Game Engine
-[logo]: https://github.com/cabbabbage/VIBBLE_2D_GAME_ENGINE/blob/main/MISC_CONTENT/promo2.png?raw=true "Logo Title Text 2"
+<p align="center">
+  <img src="https://github.com/cabbabbage/VIBBLE_2D_GAME_ENGINE/blob/main/MISC_CONTENT/promo2.png?raw=true" alt="Logo Title Text 2">
+</p>
+
 ## 1. Engine Core & Runtime Loop
 The runtime (see `ENGINE/engine.cpp`, `main.cpp`) initializes SDL, loads the map and assets, then runs the game loop.
 
