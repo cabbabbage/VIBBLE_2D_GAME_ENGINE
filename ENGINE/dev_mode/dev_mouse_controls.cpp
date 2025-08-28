@@ -1,8 +1,8 @@
 
 #include "dev_mouse_controls.hpp"
-#include "asset\asset.hpp"
+#include "asset/Asset.hpp"
 #include "utils/mouse_input.hpp"
-#include "utils\parallax.hpp"
+#include "utils/parallax.hpp"
 #include <cmath>
 #include <SDL.h>
 

@@ -6,7 +6,7 @@
 #include <memory>
 #include <random>
 #include <SDL.h>
-#include "room/Room.hpp"
+#include "room/room.hpp"
 #include "utils/area.hpp"
 #include "Assets.hpp"
 #include "asset/Asset.hpp"

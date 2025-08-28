@@ -3,8 +3,8 @@
 
 #include <vector>
 #include <memory>
-#include "asset\Asset.hpp"
-#include "asset\asset_info.hpp"
+#include "asset/Asset.hpp"
+#include "asset/asset_info.hpp"
 #include "utils/area.hpp"
 
 class Check {

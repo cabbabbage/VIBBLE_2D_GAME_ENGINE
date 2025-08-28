@@ -194,3 +194,4 @@ void RenderAsset::render_shadow_received_static_lights(Asset* a, const SDL_Rect&
         SDL_RenderCopy(renderer_, sl.source->texture, nullptr, &dst);
     }
 }
+
