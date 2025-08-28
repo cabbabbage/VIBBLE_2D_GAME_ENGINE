@@ -1,4 +1,3 @@
-
 #include "main.hpp"
 
 #include "utils/rebuild_assets.hpp"
@@ -14,7 +13,6 @@
 #include <SDL_image.h>
 #include <SDL_mixer.h>
 #include <SDL_ttf.h>
-
 
 #include <ctime>
 #include <fstream>
@@ -36,316 +34,7 @@ extern "C" {
 }
 
 
-static std::vector<fs::path> list_images_in(const fs::path& dir) {
-    std::vector<fs::path> out;
-    if (!fs::exists(dir) || !fs::is_directory(dir)) return out;
 
-    fs::path candidate = dir / "0.png";
-    if (fs::exists(candidate) && fs::is_regular_file(candidate)) {
-        out.push_back(candidate);
-    }
-    return out;
-}
-
-static std::string pick_random_message_from_csv(const fs::path& csv_path) {
-    std::vector<std::string> lines;
-    std::ifstream in(csv_path);
-    if (!in.is_open()) return "";
-    std::string line;
-    while (std::getline(in, line)) {
-        if (!line.empty() && line.front() == '\xEF') {
-            if (line.size() >= 3 && 
-                (unsigned char)line[0] == 0xEF && 
-                (unsigned char)line[1] == 0xBB && 
-                (unsigned char)line[2] == 0xBF) {
-                line.erase(0, 3);
-            }
-        }
-        if (!line.empty() && line.back() == '\r') line.pop_back();
-        if (!line.empty()) lines.push_back(line);
-    }
-    if (lines.empty()) return "";
-    std::mt19937 rng{std::random_device{}()};
-    std::uniform_int_distribution<size_t> dist(0, lines.size() - 1);
-    return lines[dist(rng)];
-}
-
-static void draw_text(SDL_Renderer* r, const TextStyle& style, const std::string& txt, int x, int y) {
-    TTF_Font* font = style.open_font();
-    if (!font || txt.empty()) return;
-    SDL_Surface* surf = TTF_RenderText_Blended(font, txt.c_str(), style.color);
-    if (!surf) { TTF_CloseFont(font); return; }
-    SDL_Texture* tex = SDL_CreateTextureFromSurface(r, surf);
-    const int tw = surf->w, th = surf->h;
-    SDL_FreeSurface(surf);
-    if (!tex) { TTF_CloseFont(font); return; }
-    SDL_Rect dst{ x, y, tw, th };
-    SDL_RenderCopy(r, tex, nullptr, &dst);
-    SDL_DestroyTexture(tex);
-    TTF_CloseFont(font);
-}
-
-static void render_justified_text(SDL_Renderer* r, const TextStyle& style, const std::string& text, const SDL_Rect& rect) {
-    TTF_Font* font = style.open_font();
-    if (!font || text.empty()) return;
-
-    std::istringstream iss(text);
-    std::vector<std::string> words; std::string w;
-    while (iss >> w) words.push_back(w);
-    if (words.empty()) { TTF_CloseFont(font); return; }
-
-    int space_w = 0, space_h = 0;
-    TTF_SizeText(font, " ", &space_w, &space_h);
-
-    auto width_of = [&](const std::vector<std::string>& ws) {
-        int sum = 0;
-        for (size_t i = 0; i < ws.size(); ++i) {
-            int w = 0, h = 0;
-            TTF_SizeText(font, ws[i].c_str(), &w, &h);
-            sum += w;
-            if (i + 1 < ws.size()) sum += space_w;
-        }
-        return sum;
-    };
-
-    std::vector<std::vector<std::string>> lines;
-    std::vector<std::string> cur;
-    for (const auto& word : words) {
-        auto test = cur; test.push_back(word);
-        if (width_of(test) <= rect.w || cur.empty()) cur = std::move(test);
-        else { lines.push_back(cur); cur.clear(); cur.push_back(word); }
-    }
-    if (!cur.empty()) lines.push_back(cur);
-
-    int line_y = rect.y;
-    for (const auto& line : lines) {
-        int words_total_w = 0, word_h = 0;
-        std::vector<int> ww(line.size(), 0);
-        for (size_t i = 0; i < line.size(); ++i) {
-            int w = 0, h = 0;
-            TTF_SizeText(font, line[i].c_str(), &w, &h);
-            ww[i] = w; words_total_w += w; word_h = std::max(word_h, h);
-        }
-
-        const int gaps = (int)line.size() - 1;
-        int x = rect.x;
-        if (gaps <= 0) {
-            x = rect.x + (rect.w - words_total_w) / 2;
-        }
-        for (size_t i = 0; i < line.size(); ++i) {
-            SDL_Surface* surf = TTF_RenderText_Blended(font, line[i].c_str(), style.color);
-            if (!surf) continue;
-            SDL_Texture* tex = SDL_CreateTextureFromSurface(r, surf);
-            const int tw = surf->w, th = surf->h;
-            SDL_FreeSurface(surf);
-            if (!tex) continue;
-            SDL_Rect dst{ x, line_y, tw, th };
-            SDL_RenderCopy(r, tex, nullptr, &dst);
-            SDL_DestroyTexture(tex);
-            x += ww[i] + space_w;
-        }
-
-        line_y += word_h;
-        if (line_y >= rect.y + rect.h) break;
-    }
-
-    TTF_CloseFont(font);
-}
-
-static void render_scaled_center(SDL_Renderer* r, SDL_Texture* tex, int target_w, int target_h, int cx, int cy) {
-    if (!tex) return;
-    int w = 0, h = 0;
-    SDL_QueryTexture(tex, nullptr, nullptr, &w, &h);
-    if (w <= 0 || h <= 0) return;
-
-    const double ar = (double)w / (double)h;
-    int dw = target_w;
-    int dh = (int)(dw / ar);
-    if (dh > target_h) {
-        dh = target_h;
-        dw = (int)(dh * ar);
-    }
-    SDL_Rect dst{ cx - dw/2, cy - dh/2, dw, dh };
-    SDL_RenderCopy(r, tex, nullptr, &dst);
-}
-
-
-static SDL_Rect compute_scaled_dest(SDL_Texture* tex, int target_w, int target_h, int cx, int cy) {
-    SDL_Rect dst{0,0,0,0};
-    if (!tex) return dst;
-    int w=0,h=0; SDL_QueryTexture(tex, nullptr, nullptr, &w, &h);
-    if (w <= 0 || h <= 0) return dst;
-
-    const double ar = double(w) / double(h);
-    int dw = target_w;
-    int dh = int(dw / ar);
-    if (dh > target_h) { dh = target_h; dw = int(dh * ar); }
-    dst = { cx - dw/2, cy - dh/2, dw, dh };
-    return dst;
-}
-
-static SDL_Point measure_text(const TextStyle& style, const std::string& s) {
-    SDL_Point sz{0,0};
-    TTF_Font* f = style.open_font();
-    if (!f) return sz;
-    TTF_SizeText(f, s.c_str(), &sz.x, &sz.y);
-    TTF_CloseFont(f);
-    return sz;
-}
-
-
-
-
-static void show_loading_screen(SDL_Renderer* renderer, int screen_w, int screen_h) {
-    auto cover_dst = [&](SDL_Texture* tex) -> SDL_Rect {
-        int tw = 0, th = 0;
-        SDL_QueryTexture(tex, nullptr, nullptr, &tw, &th);
-        if (tw <= 0 || th <= 0) return SDL_Rect{0, 0, screen_w, screen_h};
-        const double ar = static_cast<double>(tw) / static_cast<double>(th);
-        int w = screen_w;
-        int h = static_cast<int>(w / ar);
-        if (h < screen_h) { h = screen_h; w = static_cast<int>(screen_h * ar); }
-        SDL_Rect dst{ (screen_w - w) / 2, (screen_h - h) / 2, w, h };
-        return dst;
-    };
-
-    SDL_SetRenderTarget(renderer, nullptr);
-
-    
-    SDL_Texture* bg_tex = nullptr;
-    {
-        fs::path folder = "./MISC_CONTENT/backgrounds";
-        if (fs::exists(folder) && fs::is_directory(folder)) {
-            fs::path pick;
-            for (const auto& p : fs::directory_iterator(folder)) {
-                if (!p.is_regular_file()) continue;
-                std::string ext = p.path().extension().string();
-                for (auto& c : ext) c = static_cast<char>(tolower(c));
-                if (ext == ".png" || ext == ".jpg" || ext == ".jpeg") { pick = p.path(); break; }
-            }
-            if (!pick.empty()) {
-                const std::string path = fs::absolute(pick).u8string();
-                bg_tex = IMG_LoadTexture(renderer, path.c_str());
-                if (!bg_tex) {
-                    std::cerr << "[Loading] Failed to load background: " << path
-                              << " | " << IMG_GetError() << "\n";
-                }
-            }
-        }
-    }
-
-    
-    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
-    SDL_RenderClear(renderer);
-    if (bg_tex) {
-        SDL_Rect bg_dst = cover_dst(bg_tex);
-        SDL_RenderCopy(renderer, bg_tex, nullptr, &bg_dst);
-    }
-    SDL_RenderPresent(renderer);
-    SDL_PumpEvents();
-
-    
-    std::vector<fs::path> folders;
-    if (fs::exists("loading") && fs::is_directory("loading")) {
-        for (auto& p : fs::directory_iterator("loading"))
-            if (p.is_directory()) folders.push_back(p.path());
-    }
-    if (folders.empty()) { if (bg_tex) SDL_DestroyTexture(bg_tex); return; }
-
-    std::mt19937 rng{std::random_device{}()};
-    fs::path folder = folders[ std::uniform_int_distribution<size_t>(0, folders.size() - 1)(rng) ];
-
-    auto images = list_images_in(folder);
-    std::string msg = pick_random_message_from_csv(folder / "messages.csv");
-
-    SDL_Texture* tarot_tex = nullptr;
-    if (!images.empty()) {
-        const std::string abs_utf8 = fs::absolute(images.front()).u8string();
-        tarot_tex = IMG_LoadTexture(renderer, abs_utf8.c_str());
-        if (!tarot_tex) {
-            std::cerr << "[Loading] Failed to load tarot image: " << abs_utf8
-                      << " | " << IMG_GetError() << "\n";
-        }
-    }
-
-    
-    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
-    SDL_RenderClear(renderer);
-
-    if (bg_tex) {
-        SDL_Rect bg_dst = cover_dst(bg_tex);
-        SDL_RenderCopy(renderer, bg_tex, nullptr, &bg_dst);
-
-        
-        SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 110);
-        SDL_Rect vignette{0, 0, screen_w, screen_h};
-        SDL_RenderFillRect(renderer, &vignette);
-    }
-
-    
-    SDL_Rect img_dst{ (screen_w - screen_w/3) / 2, (screen_h - screen_h/3) / 2, screen_w/3, screen_h/3 };
-    if (tarot_tex) {
-        img_dst = compute_scaled_dest(tarot_tex, screen_w / 3, screen_h / 3, screen_w / 2, screen_h / 2);
-    }
-
-    const int pad = 24;
-
-    
-    const std::string loading_str = "LOADING...";
-    SDL_Point title_sz = measure_text(TextStyles::Title(), loading_str);
-    int title_x = (screen_w - title_sz.x) / 2;
-    int title_y = std::max(0, img_dst.y - pad - title_sz.y);
-    draw_text(renderer, TextStyles::Title(), loading_str, title_x, title_y);
-
-    
-    if (tarot_tex) {
-        SDL_RenderCopy(renderer, tarot_tex, nullptr, &img_dst);
-        SDL_DestroyTexture(tarot_tex);
-        tarot_tex = nullptr;
-    }
-
-    
-    if (!msg.empty()) {
-        int msg_w = screen_w / 3;
-        int msg_x = (screen_w - msg_w) / 2;
-        int msg_y = img_dst.y + img_dst.h + pad;
-        int msg_h = std::max(0, screen_h - msg_y - pad);
-        SDL_Rect msg_rect{ msg_x, msg_y, msg_w, msg_h };
-        render_justified_text(renderer, TextStyles::SmallSecondary(), msg, msg_rect);
-    }
-
-    SDL_RenderPresent(renderer);
-    SDL_PumpEvents();
-
-    if (bg_tex) SDL_DestroyTexture(bg_tex);
-}
-
-
-
-
-static std::string show_main_menu(SDL_Renderer* renderer, int screen_w, int screen_h) {
-    MainMenu menu(renderer, screen_w, screen_h);
-    std::string chosen_map;
-    SDL_Event e;
-    bool choosing = true;
-
-    while (choosing) {
-        while (SDL_PollEvent(&e)) {
-            if (e.type == SDL_QUIT) return "QUIT";
-            chosen_map = menu.handle_event(e);
-            if (chosen_map == "QUIT") return "QUIT";
-            if (!chosen_map.empty()) { choosing = false; break; }
-        }
-        SDL_SetRenderTarget(renderer, nullptr);
-        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
-        SDL_RenderClear(renderer);
-        menu.render();
-        SDL_RenderPresent(renderer);
-        SDL_Delay(16);
-    }
-    return chosen_map;
-}
 
 
 MainApp::MainApp(const std::string& map_path, SDL_Renderer* renderer, int screen_w, int screen_h)
@@ -369,10 +58,13 @@ void MainApp::setup() {
     try {
         loader_ = std::make_unique<AssetLoader>(map_path_, renderer_);
         minimap_texture_ = loader_->createMinimap(200, 200);
+
         auto assets_uptr = loader_->createAssets(screen_w_, screen_h_);
         game_assets_ = assets_uptr.release();
+
         mouse_input_ = new MouseInput();
         game_assets_->set_mouse_input(mouse_input_);
+
         scene_ = new SceneRenderer(renderer_, game_assets_, screen_w_, screen_h_, map_path_);
     } catch (const std::exception& e) {
         std::cerr << "[MainApp] Setup error: " << e.what() << "\n";
@@ -416,33 +108,59 @@ void MainApp::game_loop() {
 }
 
 
+
+
+
 static void run(SDL_Window* window, SDL_Renderer* renderer, int screen_w, int screen_h, bool rebuild_cache) {
     (void)window;
 
     while (true) {
         
-        std::string chosen = show_main_menu(renderer, screen_w, screen_h);
-        if (chosen == "QUIT" || chosen.empty()) break;
+        MainMenu menu(renderer, screen_w, screen_h);
+        std::string chosen_map;
+        SDL_Event e;
+        bool choosing = true;
+
+        while (choosing) {
+            while (SDL_PollEvent(&e)) {
+                if (e.type == SDL_QUIT) { chosen_map = "QUIT"; choosing = false; break; }
+                std::string result = menu.handle_event(e);
+                if (result == "QUIT") { chosen_map = "QUIT"; choosing = false; break; }
+                if (!result.empty()) { chosen_map = result; choosing = false; break; }
+            }
+            SDL_SetRenderTarget(renderer, nullptr);
+            SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+            SDL_RenderClear(renderer);
+            menu.render();
+            SDL_RenderPresent(renderer);
+            SDL_Delay(16);
+        }
+
+        if (chosen_map == "QUIT" || chosen_map.empty()) break;
 
         
-        show_loading_screen(renderer, screen_w, screen_h);
+        menu.showLoadingScreen();
 
         
         if (rebuild_cache) {
             std::cout << "[Main] Rebuilding asset cache...\n";
-            RebuildAssets* rebuilder = new RebuildAssets(renderer, chosen);
+            RebuildAssets* rebuilder = new RebuildAssets(renderer, chosen_map);
             delete rebuilder;
             std::cout << "[Main] Asset cache rebuild complete.\n";
         }
 
         
-        MenuUI app(renderer, screen_w, screen_h, chosen);
+        MenuUI app(renderer, screen_w, screen_h, chosen_map);
         app.init();
 
+        
         if (app.wants_return_to_main_menu()) continue;
         break;
     }
 }
+
+
+
 
 
 int main(int argc, char* argv[]) {
