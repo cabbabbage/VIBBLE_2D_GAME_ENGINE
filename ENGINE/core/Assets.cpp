@@ -1,5 +1,5 @@
 
-#include "assets.hpp"
+#include "Assets.hpp"
 #include "asset/initialize_assets.hpp"
 
 #include "controls_manager.hpp"

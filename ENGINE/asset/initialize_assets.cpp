@@ -1,6 +1,6 @@
 
 #include "initialize_assets.hpp"
-#include "assets.hpp"
+#include "Assets.hpp"
 #include "Asset.hpp"
 #include "asset_info.hpp"
 #include "active_assets_manager.hpp"

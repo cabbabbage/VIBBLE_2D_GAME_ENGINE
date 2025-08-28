@@ -4,9 +4,9 @@
 #include <SDL.h>
 #include <vector>
 #include <random>
-#include "core\assets.hpp"
+#include "core/Assets.hpp"
 #include "global_light_source.hpp"
-#include "utils\parallax.hpp"
+#include "utils/parallax.hpp"
 
 class LightMap {
 public:

@@ -1,4 +1,4 @@
-#include "asset.hpp"
+#include "Asset.hpp"
 #include "generate_light.hpp"
 #include <random>
 #include <algorithm>

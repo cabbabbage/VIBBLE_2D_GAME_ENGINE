@@ -2,7 +2,7 @@
 
 #include <SDL.h>
 #include <algorithm>
-#include "asset\Asset.hpp"
+#include "asset/Asset.hpp"
 
 class view {
 public:

@@ -1,9 +1,9 @@
 
 #include "scene_renderer.hpp"
-#include "core\assets.hpp"
-#include "asset\Asset.hpp"
+#include "core/Assets.hpp"
+#include "asset/Asset.hpp"
 #include "light_map.hpp"
-#include "utils\parallax.hpp"
+#include "utils/parallax.hpp"
 
 #include <algorithm>
 #include <cmath>

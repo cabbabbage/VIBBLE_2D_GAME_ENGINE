@@ -7,7 +7,7 @@
 #include "light_map.hpp"
 #include "global_light_source.hpp"
 #include "render_asset.hpp"
-#include "utils\parallax.hpp"
+#include "utils/parallax.hpp"
 
 class Assets;
 class Asset;

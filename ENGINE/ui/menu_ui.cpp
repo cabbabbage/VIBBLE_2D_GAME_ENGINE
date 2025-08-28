@@ -303,3 +303,4 @@ void MenuUI::doSaveCurrentRoom() {
         std::cerr << "[MenuUI] Failed to save room: " << e.what() << "\n";
     }
 }
+
