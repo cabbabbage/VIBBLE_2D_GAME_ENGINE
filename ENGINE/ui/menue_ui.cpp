@@ -1,4 +1,4 @@
-
+// === File: ui/menu_ui.cpp ===
 #include "ui/menu_ui.hpp"
 
 #include "ui/tinyfiledialogs.h"
@@ -24,18 +24,9 @@ MenuUI::MenuUI(SDL_Renderer* renderer,
             std::cerr << "TTF_Init failed: " << TTF_GetError() << "\n";
         }
     }
-    font_ = TTF_OpenFont("C:/Windows/Fonts/consola.ttf", 24);
-    if (!font_) {
-        std::cerr << "Failed to load font: " << TTF_GetError() << "\n";
-    }
 }
 
-MenuUI::~MenuUI() {
-    if (font_) {
-        TTF_CloseFont(font_);
-        font_ = nullptr;
-    }
-}
+MenuUI::~MenuUI() = default;
 
 void MenuUI::init() {
     setup();
@@ -151,8 +142,12 @@ void MenuUI::render() {
         SDL_SetRenderDrawColor(renderer_, 255, 255, 255, 255);
         SDL_RenderDrawRect(renderer_, &b.rect);
 
-        drawTextCentered(b.label, b.rect, b.hovered ? SDL_Color{255,255,255,255}
-                                                    : SDL_Color{220,220,220,255});
+        // Choose style per button
+        const TextStyle& style = (b.action == MenuAction::EXIT)
+                               ? TextStyles::MediumSecondary()
+                               : TextStyles::MediumMain();
+
+        drawTextCentered(b.label, b.rect, style, b.hovered);
     }
 }
 
@@ -176,7 +171,6 @@ void MenuUI::rebuildButtons() {
         buttons_.push_back({r, label, false, action});
     };
 
-
     addButton("End Run",            MenuAction::EXIT);
     addButton("Restart Run",        MenuAction::RESTART);
     addButton("Settings",           MenuAction::SETTINGS);
@@ -185,14 +179,23 @@ void MenuUI::rebuildButtons() {
     addButton("Save Current Room",  MenuAction::SAVE_ROOM);
 }
 
-void MenuUI::drawTextCentered(const std::string& text, const SDL_Rect& rect, SDL_Color color) {
-    if (!font_) return;
-    SDL_Surface* surf = TTF_RenderText_Blended(font_, text.c_str(), color);
-    if (!surf) return;
+void MenuUI::drawTextCentered(const std::string& text,
+                              const SDL_Rect& rect,
+                              const TextStyle& style,
+                              bool hovered) {
+    TTF_Font* font = style.open_font();
+    if (!font) return;
+
+    SDL_Color col = hovered ? SDL_Color{255,255,255,255} : style.color;
+
+    SDL_Surface* surf = TTF_RenderText_Blended(font, text.c_str(), col);
+    if (!surf) { TTF_CloseFont(font); return; }
+
     SDL_Texture* tex = SDL_CreateTextureFromSurface(renderer_, surf);
     int tw = surf->w, th = surf->h;
     SDL_FreeSurface(surf);
-    if (!tex) return;
+
+    if (!tex) { TTF_CloseFont(font); return; }
 
     SDL_Rect dst {
         rect.x + (rect.w - tw) / 2,
@@ -201,6 +204,7 @@ void MenuUI::drawTextCentered(const std::string& text, const SDL_Rect& rect, SDL
     };
     SDL_RenderCopy(renderer_, tex, nullptr, &dst);
     SDL_DestroyTexture(tex);
+    TTF_CloseFont(font);
 }
 
 void MenuUI::doExit() {
@@ -247,7 +251,6 @@ void MenuUI::doSaveCurrentRoom() {
     std::string room_name;
 
     std::string abs_map_path = fs::absolute(map_path_).string();
-
 
     const char* folder = tinyfd_selectFolderDialog(
         "Select folder to save room copy",
