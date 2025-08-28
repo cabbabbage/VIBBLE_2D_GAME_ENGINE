@@ -2,7 +2,7 @@
 #include <string>
 #include <memory>
 #include "utils/area.hpp"
-#include "asset\asset_info.hpp"
+#include "asset/asset_info.hpp"
 
 struct SpawnInfo {
     std::string name;

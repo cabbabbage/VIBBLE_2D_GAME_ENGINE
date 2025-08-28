@@ -2,7 +2,7 @@
 
 #include "room.hpp"
 #include "utils/area.hpp"
-#include "asset\asset_library.hpp"
+#include "asset/asset_library.hpp"
 #include <vector>
 #include <string>
 #include <memory>

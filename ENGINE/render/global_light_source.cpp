@@ -1,7 +1,7 @@
 
 #include "global_light_source.hpp"
 #include "generate_light.hpp"
-#include "utils\light_source.hpp"
+#include "utils/light_source.hpp"
 #include <nlohmann/json.hpp>
 #include <fstream>
 #include <iostream>

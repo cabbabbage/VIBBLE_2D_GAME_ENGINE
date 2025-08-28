@@ -1,6 +1,6 @@
 
 
-#include "Animation.hpp"
+#include "animation.hpp"
 #include "utils/cache_manager.hpp"
 #include <SDL_image.h>
 #include <filesystem>

@@ -5,7 +5,7 @@
 #include <unordered_set>
 #include <algorithm>
 #include <SDL.h>
-#include "utils\parallax.hpp" 
+#include "utils/parallax.hpp" 
 
 class Asset;
 class MouseInput;
