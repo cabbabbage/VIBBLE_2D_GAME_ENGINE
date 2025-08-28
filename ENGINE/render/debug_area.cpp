@@ -40,7 +40,7 @@ void AreaDebugRenderer::render(const AssetInfo* info, int world_x, int world_y) 
         int w = maxx - minx + 1;
         int h = maxy - miny + 1;
 
-        // use parallax instead of util
+        
         SDL_Point screen_pos = parallax_.apply(world_x, world_y);
         SDL_Rect dst{ screen_pos.x - w / 2, screen_pos.y - h, w, h };
 

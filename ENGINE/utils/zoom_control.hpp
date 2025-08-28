@@ -1,4 +1,4 @@
-// === File: zoom_control.hpp ===
+
 #pragma once
 
 #include <vector>

@@ -1,8 +1,8 @@
-// === File: asset_library.cpp ===
+
 #include "asset_library.hpp"
 #include <filesystem>
 #include <iostream>
-#include <iomanip>  // for std::setw
+#include <iomanip>  
 
 namespace fs = std::filesystem;
 
@@ -57,8 +57,8 @@ AssetLibrary::all() const {
 }
 
 
-// asset_library.cpp
-// implement:
+
+
 
 void AssetLibrary::loadAllAnimations(SDL_Renderer* renderer) {
     for (auto& [name, info] : info_by_name_) {

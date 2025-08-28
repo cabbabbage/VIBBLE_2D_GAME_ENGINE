@@ -1,4 +1,4 @@
-// === File: spawn_methods.cpp ===
+
 #include "spawn_methods.hpp"
 #include <cmath>
 #include <iostream>
@@ -27,7 +27,7 @@ SpawnMethods::SpawnMethods(std::mt19937& rng,
 
 
 
-// === File: spawn_methods.cpp ===
+
 Asset* SpawnMethods::spawn_(const std::string& name,
                             const std::shared_ptr<AssetInfo>& info,
                             const Area& area,
@@ -36,21 +36,21 @@ Asset* SpawnMethods::spawn_(const std::string& name,
                             int depth,
                             Asset* parent)
 {
-    // 1) create & store the new asset in the global pool
+    
     auto assetPtr = std::make_unique<Asset>(info, area, x, y, depth, parent);
     Asset* raw = assetPtr.get();
     all_.push_back(std::move(assetPtr));
 
-    // only debug-print assets that have defined children
+    
     if (raw->info && !raw->info->children.empty()) {
         std::cout << "[SpawnMethods] Spawned parent asset: \""
                   << raw->info->name << "\" at ("
                   << raw->pos_X << ", " << raw->pos_Y << ")\n";
     }
 
-    // 2) immediately spawn its children (if any are defined)
+    
     if (raw->info && !raw->info->children.empty()) {
-        // shuffle child pointers instead of values to avoid copying
+        
         std::vector<ChildInfo*> shuffled_children;
         for (auto& c : raw->info->children)
             shuffled_children.push_back(&c);
@@ -75,7 +75,7 @@ Asset* SpawnMethods::spawn_(const std::string& name,
                 continue;
             }
 
-            // parse JSON
+            
             nlohmann::json j;
             try {
                 std::ifstream in(childJsonPath);
@@ -86,7 +86,7 @@ Asset* SpawnMethods::spawn_(const std::string& name,
                 continue;
             }
 
-            // align the preloaded area
+            
             Area childArea = *childInfo->area_ptr;
 
             childArea.align(raw->pos_X, raw->pos_Y);
@@ -101,7 +101,7 @@ Asset* SpawnMethods::spawn_(const std::string& name,
                     << childArea.get_area() << "\n";
 
 
-            // plan & spawn
+            
             AssetSpawnPlanner childPlanner(
                 std::vector<nlohmann::json>{ j },
                 childArea.get_area(),
@@ -110,7 +110,7 @@ Asset* SpawnMethods::spawn_(const std::string& name,
             AssetSpawner childSpawner(asset_library_, exclusion_zones_);
             childSpawner.spawn_children(childArea, &childPlanner);
 
-            // collect and adopt
+            
             auto kids = childSpawner.extract_all_assets();
             std::cout << "[SpawnMethods]  Spawned " << kids.size()
                     << " children for \"" << raw->info->name << "\"\n";
@@ -118,18 +118,18 @@ Asset* SpawnMethods::spawn_(const std::string& name,
             for (auto& uptr : kids) {
                 if (!uptr || !uptr->info) continue;
 
-                // apply z-offset from ChildInfo and parent linkage
+                
                 uptr->set_z_offset(childInfo->z_offset);
                 uptr->parent = raw;
                 uptr->set_hidden(true);
-                //uptr->set_z_index();
+                
 
                 std::cout << "[SpawnMethods]    Adopting child \""
                         << uptr->info->name << "\" at ("
                         << uptr->pos_X << ", " << uptr->pos_Y
                         << "), z_offset=" << childInfo->z_offset << "\n";
 
-                // parent stores non-owning pointer; we keep ownership in all_
+                
                 raw->add_child(uptr.get());
                 all_.push_back(std::move(uptr));
             }
@@ -185,7 +185,7 @@ void SpawnMethods::spawn_item_exact(const SpawnInfo& item, const Area* area) {
 void SpawnMethods::spawn_item_center(const SpawnInfo& item, const Area* area) {
     if (!item.info || !area) return;
 
-    const int Y_SHIFT = 200; // Adjust this to move the center upward by N pixels
+    const int Y_SHIFT = 200; 
 
     Point center = get_area_center(*area);
     center.second -= Y_SHIFT;
@@ -263,7 +263,7 @@ void SpawnMethods::spawn_item_distributed(const SpawnInfo& item, const Area* are
 void SpawnMethods::spawn_item_perimeter(const SpawnInfo& item, const Area* area) {
     if (!item.info || item.quantity <= 0 || !area) return;
 
-    const int Y_SHIFT = 200; // Adjust this to move everything up by N pixels
+    const int Y_SHIFT = 200; 
 
     const auto& boundary = area->get_points();
     if (boundary.size() < 2) return;

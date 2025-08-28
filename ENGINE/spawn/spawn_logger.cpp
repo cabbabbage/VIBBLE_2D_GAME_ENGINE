@@ -1,4 +1,4 @@
-// spawn_logger.cpp
+
 #include "spawn_logger.hpp"
 #include <fstream>
 #include <vector>

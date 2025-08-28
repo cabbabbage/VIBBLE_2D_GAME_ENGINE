@@ -1,4 +1,4 @@
-// === File: initialize_assets.hpp ===
+
 #pragma once
 
 #include <vector>

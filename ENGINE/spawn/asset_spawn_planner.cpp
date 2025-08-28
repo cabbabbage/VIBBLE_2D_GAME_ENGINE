@@ -88,10 +88,10 @@ void AssetSpawnPlanner::parse_asset_spawns(double area) {
                             (position == "Center" || position == "center"));
         bool isPerimeter    = (position == "Perimeter" || position == "perimeter");
 
-        //if (!isSingleCenter && !isPerimeter) {
-         //   quantity = static_cast<int>(std::round(quantity * (area / REPRESENTATIVE_SPAWN_AREA)));
-        //    if (quantity < 1) quantity = 1;
-        //}
+        
+         
+        
+        
 
         SpawnInfo s;
         s.name = name;

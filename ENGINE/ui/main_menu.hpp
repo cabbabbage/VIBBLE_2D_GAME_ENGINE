@@ -1,4 +1,4 @@
-// === File: main_menu.hpp ===
+
 #pragma once
 
 #include <SDL.h>
@@ -11,10 +11,10 @@ public:
     MainMenu(SDL_Renderer* renderer, int screen_w, int screen_h);
     ~MainMenu();
 
-    // Call this once per SDL_Event
+    
     std::string handle_event(const SDL_Event& e);
 
-    // Draw menu
+    
     void render();
 
 private:

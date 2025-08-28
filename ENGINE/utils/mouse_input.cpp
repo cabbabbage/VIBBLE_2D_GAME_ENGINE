@@ -23,8 +23,8 @@ void MouseInput::handleEvent(const SDL_Event& e) {
         if (idx >= 0) {
             buttons[idx] = down;
             if (!down) {
-                // A full click happened (down→up), buffer it for a few frames
-                clickBuffer[idx] = 3; // ✅ survives 3 frames
+                
+                clickBuffer[idx] = 3; 
             }
         }
         break;
@@ -43,7 +43,7 @@ void MouseInput::update() {
         released[i] = (prevButtons[i] && !buttons[i]);
         prevButtons[i] = buttons[i];
 
-        if (clickBuffer[i] > 0) clickBuffer[i]--; // countdown
+        if (clickBuffer[i] > 0) clickBuffer[i]--; 
     }
 
     dx = dy = 0;

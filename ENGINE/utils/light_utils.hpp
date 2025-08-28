@@ -1,7 +1,7 @@
-// light_utils.hpp
+
 #pragma once
 #include <algorithm>
-#include "Asset.hpp" // or forward declare if possible
+#include "Asset.hpp" 
 
 namespace LightUtils {
 
@@ -29,4 +29,4 @@ inline double calculate_static_alpha_percentage(const Asset* assetA, const Asset
     return std::clamp(factor, MIN_OPACITY, MAX_OPACITY);
 }
 
-} // namespace LightUtils
+} 

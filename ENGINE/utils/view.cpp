@@ -3,16 +3,16 @@
 
 view::view(int screen_width, int screen_height, const Bounds& starting_bounds)
 {
-    // Store the exact starting bounds (global, unscaled)
+    
     current_bounds_ = starting_bounds;
 
-    // Set base bounds to half-width/height of screen
+    
     base_bounds_.left   = -screen_width  ;
     base_bounds_.right  =  screen_width  ;
     base_bounds_.top    = -screen_height ;
     base_bounds_.bottom =  screen_height ;
 
-    // Expand base bounds by 10%
+    
     int extra_w = static_cast<int>((base_bounds_.right - base_bounds_.left) * 1.0f / 2.0f);
     int extra_h = static_cast<int>((base_bounds_.bottom - base_bounds_.top) * 1.0f / 2.0f);
     base_bounds_.left   -= extra_w;
@@ -20,7 +20,7 @@ view::view(int screen_width, int screen_height, const Bounds& starting_bounds)
     base_bounds_.top    -= extra_h;
     base_bounds_.bottom += extra_h + 100;
 
-    // Initial scale is ratio of current bounds to base bounds (using width ratio)
+    
     int base_w = base_bounds_.right - base_bounds_.left;
     int curr_w = current_bounds_.right - current_bounds_.left;
     scale_ = (base_w != 0) ? static_cast<float>(curr_w) / static_cast<float>(base_w) : 1.0f;

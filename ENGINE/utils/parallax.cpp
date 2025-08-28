@@ -1,4 +1,4 @@
-// === File: parallax.cpp ===
+
 #include "parallax.hpp"
 #include <algorithm>
 #include <cmath>
@@ -24,11 +24,11 @@ SDL_Point Parallax::apply(int ax, int ay) const {
     float world_dx = float(ax - lastPx_);
     float world_dy = float(ay - lastPy_);
 
-    // normalize displacement relative to viewport
+    
     float ndx = world_dx / halfWidth_;
     float ndy = world_dy / halfHeight_;
 
-    // apply horizontal and vertical parallax offsets
+    
     float offX = ndx * parallaxMaxX_;
     float offY = ndy * parallaxMaxY_;
 

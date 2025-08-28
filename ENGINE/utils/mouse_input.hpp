@@ -1,7 +1,7 @@
 #pragma once
 #include <SDL.h>
 #include <array>
-// mouse_input.hpp
+
 class MouseInput {
 public:
     enum Button { LEFT, RIGHT, MIDDLE, X1, X2, COUNT };
@@ -12,7 +12,7 @@ public:
     bool isDown(Button b) const { return buttons[b]; }
     bool wasPressed(Button b) const { return pressed[b]; }
     bool wasReleased(Button b) const { return released[b]; }
-    bool wasClicked(Button b) const; // ✅ new — survives short taps
+    bool wasClicked(Button b) const; 
 
     int getX() const { return x; }
     int getY() const { return y; }
@@ -23,7 +23,7 @@ private:
     bool pressed[COUNT]   = {false};
     bool released[COUNT]  = {false};
 
-    int clickBuffer[COUNT] = {0}; // ✅ counts down frames to keep clicks alive
+    int clickBuffer[COUNT] = {0}; 
 
     int x = 0, y = 0;
     int dx = 0, dy = 0;

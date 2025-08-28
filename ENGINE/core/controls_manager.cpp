@@ -1,10 +1,10 @@
-// === File: controls_manager.cpp ===
+
 #include "controls_manager.hpp"
 #include "active_assets_manager.hpp"
 #include <cmath>
 #include <iostream>
 
-// Axis-Aligned Bounding Box overlap
+
 bool ControlsManager::aabb(const Area& A, const Area& B) const {
     auto [a_minx, a_miny, a_maxx, a_maxy] = A.get_bounds();
     auto [b_minx, b_miny, b_maxx, b_maxy] = B.get_bounds();
@@ -12,14 +12,14 @@ bool ControlsManager::aabb(const Area& A, const Area& B) const {
              a_maxy < b_miny || b_maxy < a_miny);
 }
 
-// Point inside AABB
+
 bool ControlsManager::pointInAABB(int x, int y, const Area& B) const {
     auto [b_minx, b_miny, b_maxx, b_maxy] = B.get_bounds();
     return (x >= b_minx && x <= b_maxx &&
             y >= b_miny && y <= b_maxy);
 }
 
-// Constructor
+
 ControlsManager::ControlsManager(Asset* player, ActiveAssetsManager& aam)
     : player_(player),
       aam_(aam),
@@ -28,7 +28,7 @@ ControlsManager::ControlsManager(Asset* player, ActiveAssetsManager& aam)
       teleport_set_(false)
 {}
 
-// Handle WASD movement and animations
+
 void ControlsManager::movement(const std::unordered_set<SDL_Keycode>& keys) {
     dx_ = dy_ = 0;
     if (!player_) return;
@@ -51,7 +51,7 @@ void ControlsManager::movement(const std::unordered_set<SDL_Keycode>& keys) {
 
         float base_speed = player_->player_speed;
         if (keys.count(SDLK_LSHIFT) || keys.count(SDLK_RSHIFT)) {
-            base_speed *= 1.5f;  // sprint
+            base_speed *= 1.5f;  
         }
 
         float speed = base_speed / len;
@@ -82,7 +82,7 @@ void ControlsManager::movement(const std::unordered_set<SDL_Keycode>& keys) {
     }
 }
 
-// Check if movement is possible given impassable assets
+
 bool ControlsManager::canMove(int offset_x, int offset_y) {
     if (!player_) return false;
 
@@ -99,7 +99,7 @@ bool ControlsManager::canMove(int offset_x, int offset_y) {
     return true;
 }
 
-// Handle 'E' interaction
+
 void ControlsManager::interaction() {
     if (!player_ || !player_->info) {
         return;
@@ -117,7 +117,7 @@ void ControlsManager::interaction() {
     }
 }
 
-// Handle teleport with space/q
+
 void ControlsManager::handle_teleport(const std::unordered_set<SDL_Keycode>& keys) {
     if (!player_) return;
 
@@ -133,7 +133,7 @@ void ControlsManager::handle_teleport(const std::unordered_set<SDL_Keycode>& key
     }
 }
 
-// Update loop: teleport, movement, interaction
+
 void ControlsManager::update(const std::unordered_set<SDL_Keycode>& keys) {
     dx_ = dy_ = 0;
 

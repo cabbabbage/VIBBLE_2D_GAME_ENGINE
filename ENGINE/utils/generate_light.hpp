@@ -1,4 +1,4 @@
-// === File: generate_light.hpp ===
+
 #pragma once
 
 #include <SDL.h>

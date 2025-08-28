@@ -9,4 +9,4 @@ public:
     RebuildAssets(SDL_Renderer* renderer, const std::string& map_dir);
 };
 
-#endif // REBUILD_ASSETS_HPP
+#endif 

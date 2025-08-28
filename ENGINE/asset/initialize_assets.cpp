@@ -1,4 +1,4 @@
-// === File: initialize_assets.cpp ===
+
 #include "initialize_assets.hpp"
 #include "assets.hpp"
 #include "Asset.hpp"
@@ -39,7 +39,7 @@ void InitializeAssets::initialize(Assets& assets,
             continue;
         }
 
-        // Attach the pre-existing Assets.window to each asset
+        
         a.set_view(&assets.window);
 
         assets.all.push_back(std::move(a));
@@ -54,7 +54,7 @@ void InitializeAssets::initialize(Assets& assets,
 
     setup_shading_groups(assets);
 
-    // ControlsManager and DevMouseControls do NOT take window anymore
+    
     assets.controls = new ControlsManager(assets.player, assets.activeManager);
 
     if (assets.player) {
@@ -76,7 +76,7 @@ void InitializeAssets::initialize(Assets& assets,
                                             screen_center_x,
                                             screen_center_y);
 
-    // keep zoom normalized
+    
     assets.window.zoom_scale(1.0, 200);
 }
 

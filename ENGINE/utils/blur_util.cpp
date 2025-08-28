@@ -1,4 +1,4 @@
-// === File: blur_util.cpp ===
+
 #include "blur_util.hpp"
 #include <vector>
 #include <algorithm>
@@ -17,7 +17,7 @@ BlurUtil::BlurUtil(SDL_Renderer* renderer,
       weight_max_(weight_max)
 {}
 
-// Shared core function
+
 SDL_Texture* BlurUtil::blur_core(SDL_Texture* source_tex,
                                  int override_w,
                                  int override_h,
@@ -26,25 +26,25 @@ SDL_Texture* BlurUtil::blur_core(SDL_Texture* source_tex,
 {
     if (!source_tex) throw std::runtime_error("blur_core: source_tex is null");
 
-    // Get original size
+    
     int tex_w = 0, tex_h = 0;
     SDL_QueryTexture(source_tex, nullptr, nullptr, &tex_w, &tex_h);
     int w = (override_w > 0) ? override_w : tex_w;
     int h = (override_h > 0) ? override_h : tex_h;
     int radius = (override_blur_radius > 0) ? override_blur_radius : blur_radius_;
 
-    // Downscaled size
+    
     int small_w = std::max(1, w / downscale_);
     int small_h = std::max(1, h / downscale_);
 
-    // --- Step 1: Downscale ---
+    
     SDL_Texture* downscaled = SDL_CreateTexture(renderer_, SDL_PIXELFORMAT_RGBA8888,
                                                 SDL_TEXTUREACCESS_TARGET, small_w, small_h);
     SDL_SetTextureBlendMode(downscaled, SDL_BLENDMODE_NONE);
     SDL_SetRenderTarget(renderer_, downscaled);
     SDL_RenderCopy(renderer_, source_tex, nullptr, nullptr);
 
-    // --- Step 2: Read pixels ---
+    
     SDL_Surface* surf = SDL_CreateRGBSurfaceWithFormat(0, small_w, small_h, 32, SDL_PIXELFORMAT_RGBA8888);
     if (!surf) throw std::runtime_error("blur_core: failed to create surface");
 
@@ -61,7 +61,7 @@ SDL_Texture* BlurUtil::blur_core(SDL_Texture* source_tex,
 
     std::mt19937 rng{ std::random_device{}() };
 
-    // --- Step 3: Horizontal pass ---
+    
     for (int y = 0; y < small_h; ++y) {
         for (int x = 0; x < small_w; ++x) {
             float r = 0, g = 0, b = 0, a = 0, total_weight = 0;
@@ -83,7 +83,7 @@ SDL_Texture* BlurUtil::blur_core(SDL_Texture* source_tex,
         }
     }
 
-    // --- Step 4: Vertical pass ---
+    
     temp.assign(pixels, pixels + small_w * small_h);
     for (int y = 0; y < small_h; ++y) {
         for (int x = 0; x < small_w; ++x) {
@@ -106,13 +106,13 @@ SDL_Texture* BlurUtil::blur_core(SDL_Texture* source_tex,
         }
     }
 
-    // --- Step 5: Create blurred small texture ---
+    
     SDL_Texture* blurred_small = SDL_CreateTextureFromSurface(renderer_, surf);
     SDL_SetTextureBlendMode(blurred_small, SDL_BLENDMODE_MOD);
     SDL_FreeSurface(surf);
     SDL_DestroyTexture(downscaled);
 
-    // --- Step 6: Scale back up ---
+    
     SDL_Texture* blurred_full = SDL_CreateTexture(renderer_, SDL_PIXELFORMAT_RGBA8888,
                                                   SDL_TEXTUREACCESS_TARGET, w, h);
     SDL_SetTextureBlendMode(blurred_full, SDL_BLENDMODE_MOD);
@@ -124,7 +124,7 @@ SDL_Texture* BlurUtil::blur_core(SDL_Texture* source_tex,
     return blurred_full;
 }
 
-// Public wrappers
+
 SDL_Texture* BlurUtil::blur_texture(SDL_Texture* source_tex,
                                     int override_w,
                                     int override_h,

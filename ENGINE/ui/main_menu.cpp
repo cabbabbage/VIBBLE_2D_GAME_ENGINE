@@ -1,4 +1,4 @@
-// === File: main_menu.cpp ===
+
 #include "main_menu.hpp"
 #include <filesystem>
 #include <iostream>
@@ -47,6 +47,10 @@ void MainMenu::buildButtons() {
     } catch (const std::exception& e) {
         std::cerr << "[MainMenu] Failed to read MAPS folder: " << e.what() << "\n";
     }
+
+    
+    SDL_Rect quit_rect{ (screen_w_ - btn_w) / 2, screen_h_ - btn_h - 50, btn_w, btn_h };
+    buttons_.push_back({quit_rect, "QUIT GAME", false});
 }
 
 std::string MainMenu::handle_event(const SDL_Event& e) {
@@ -60,7 +64,10 @@ std::string MainMenu::handle_event(const SDL_Event& e) {
         SDL_Point p{ e.button.x, e.button.y };
         for (auto& b : buttons_) {
             if (SDL_PointInRect(&p, &b.rect)) {
-                std::cout << "[MainMenu] Folder clicked: " << b.label << "\n";
+                std::cout << "[MainMenu] Button clicked: " << b.label << "\n";
+                if (b.label == "QUIT GAME") {
+                    return "QUIT";
+                }
                 return "MAPS/" + b.label;
             }
         }
@@ -75,13 +82,20 @@ void MainMenu::render() {
     SDL_RenderFillRect(renderer_, &bg);
 
     for (auto& b : buttons_) {
-        // body
-        SDL_SetRenderDrawColor(renderer_, b.hovered ? 70 : 40, b.hovered ? 70 : 40, b.hovered ? 70 : 40, 255);
+        if (b.label == "QUIT GAME") {
+            SDL_SetRenderDrawColor(renderer_, b.hovered ? 200 : 160, 40, 40, 255);
+        } else {
+            SDL_SetRenderDrawColor(renderer_, b.hovered ? 70 : 40, b.hovered ? 70 : 40, b.hovered ? 70 : 40, 255);
+        }
+
+
         SDL_RenderFillRect(renderer_, &b.rect);
-        // border
+
+
         SDL_SetRenderDrawColor(renderer_, 255, 255, 255, 255);
         SDL_RenderDrawRect(renderer_, &b.rect);
-        // label
+
+        
         drawTextCentered(b.label, b.rect, b.hovered ? SDL_Color{255,255,255,255}
                                                     : SDL_Color{200,200,200,255});
     }

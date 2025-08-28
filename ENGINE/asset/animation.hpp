@@ -1,4 +1,4 @@
-// === File: Animation.hpp ===
+
 
 #pragma once
 
@@ -42,5 +42,5 @@ public:
     bool frozen = false;
 
 private:
-    // No private members required currently
+    
 };

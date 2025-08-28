@@ -134,7 +134,7 @@ std::vector<std::pair<SDL_Texture*, SDL_Rect>> FadeTextureGenerator::generate_al
 
         const float fade_radius = static_cast<float>(fw + 250);
 
-        const int step = 25;  // Lower resolution = ~4x faster, smooths with alpha
+        const int step = 25;  
 
         for (int y = 0; y < h; y += step) {
             for (int x = 0; x < w; x += step) {
@@ -152,7 +152,7 @@ std::vector<std::pair<SDL_Texture*, SDL_Rect>> FadeTextureGenerator::generate_al
                     float dy = gy - cy;
                     float dist = std::sqrt(dx * dx + dy * dy);
                     float falloff = 1.0f - clamp(dist / fade_radius, 0.0f, 1.0f);
-                    alpha = falloff * falloff; // smoother fade
+                    alpha = falloff * falloff; 
                 }
 
                 if (alpha > 0.01f) {
@@ -165,26 +165,26 @@ std::vector<std::pair<SDL_Texture*, SDL_Rect>> FadeTextureGenerator::generate_al
             }
         }
 
-        // Step 1: Read pixels back into a surface
+        
         SDL_Surface* raw = SDL_CreateRGBSurfaceWithFormat(0, w, h, 32, SDL_PIXELFORMAT_RGBA32);
         SDL_SetRenderTarget(renderer_, tex);
         SDL_RenderReadPixels(renderer_, nullptr, SDL_PIXELFORMAT_RGBA32, raw->pixels, raw->pitch);
         SDL_SetRenderTarget(renderer_, nullptr);
 
-        // Step 2: Apply blur (radius can be tuned, e.g. 2–5)
+        
         SDL_Surface* blurred = blurSurfaceFast(raw, 3);
         SDL_FreeSurface(raw);
 
-        // Step 3: Convert blurred surface back to texture
+        
         SDL_Texture* blurredTex = SDL_CreateTextureFromSurface(renderer_, blurred);
         SDL_FreeSurface(blurred);
         SDL_SetTextureBlendMode(blurredTex, SDL_BLENDMODE_BLEND);
 
-        // Step 4: Store blurred texture
+        
         SDL_Rect dst = { minx, miny, w, h };
         results.emplace_back(blurredTex, dst);
 
-        // Cleanup original tex
+        
         SDL_DestroyTexture(tex);
 
 

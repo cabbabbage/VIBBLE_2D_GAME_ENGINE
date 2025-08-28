@@ -1,4 +1,4 @@
-// === File: asset_spawner.cpp ===
+
 #include "asset_spawner.hpp"
 #include "asset_spawn_planner.hpp"
 #include "spawn_methods.hpp"

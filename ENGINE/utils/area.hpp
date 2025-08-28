@@ -1,4 +1,4 @@
-// area.hpp
+
 #pragma once
 
 #include <vector>
@@ -14,12 +14,12 @@ public:
     using Point = std::pair<int, int>;
 
 public:
-    // Public fields used by engine code
+    
     int pos_X = 0;
     int pos_Y = 0;
     void apply_parallax(const Parallax& parallax);
 public:
-    // Constructors
+    
     explicit Area(const std::string& name);
     Area(const std::string& name, const std::vector<Point>& pts);
     Area(const std::string& name,
@@ -30,7 +30,7 @@ public:
     Area(const std::string& name, const std::string& json_path, float scale);
 
 public:
-    // Geometry transforms and queries
+    
     void apply_offset(int dx, int dy);
     void align(int target_x, int target_y);
     std::tuple<int, int, int, int> get_bounds() const;
@@ -49,14 +49,14 @@ public:
 
 public:
     const std::string& get_name() const { return area_name_; }
-    // Texturing
+    
     SDL_Texture* get_texture() const;
     void create_area_texture(SDL_Renderer* renderer);
 
 public:
-    // Mirroring
+    
     void flip_horizontal(std::optional<int> axis_x = std::nullopt);
-    // In Area.hpp (public section)
+    
     void scale(float factor);
 
 private:

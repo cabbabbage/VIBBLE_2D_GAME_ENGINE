@@ -1,4 +1,4 @@
-// === File: light_source.hpp ===
+
 
 #pragma once
 

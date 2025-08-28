@@ -1,4 +1,4 @@
-// === File: blur_util.hpp ===
+
 #pragma once
 #include <SDL.h>
 #include <functional>
@@ -12,13 +12,13 @@ public:
              float weight_min = 0.8f,
              float weight_max = 1.2f);
 
-    // Uniform blur
+    
     SDL_Texture* blur_texture(SDL_Texture* source_tex,
                               int override_w = 0,
                               int override_h = 0,
                               int override_blur_radius = 0);
 
-    // Random-weight blur
+    
     SDL_Texture* blur_texture_random(SDL_Texture* source_tex,
                                      int override_w = 0,
                                      int override_h = 0,
@@ -31,7 +31,7 @@ private:
     float weight_min_;
     float weight_max_;
 
-    // Shared core blur function
+    
     SDL_Texture* blur_core(SDL_Texture* source_tex,
                            int override_w,
                            int override_h,

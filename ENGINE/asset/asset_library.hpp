@@ -1,4 +1,4 @@
-// === File: asset_library.hpp ===
+
 #pragma once
 
 #include "asset_info.hpp"

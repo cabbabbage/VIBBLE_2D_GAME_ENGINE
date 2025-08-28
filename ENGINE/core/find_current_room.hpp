@@ -1,4 +1,4 @@
-// === File: current_room_finder.hpp ===
+
 #pragma once
 
 #include <vector>

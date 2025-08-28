@@ -1,4 +1,4 @@
-// === File: trail_geometry.hpp ===
+
 #pragma once
 
 #include <vector>

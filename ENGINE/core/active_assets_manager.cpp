@@ -1,4 +1,4 @@
-// === File: active_assets_manager.cpp ===
+
 #include "active_assets_manager.hpp"
 
 #include <algorithm>
@@ -27,7 +27,7 @@ void ActiveAssetsManager::initialize(std::vector<Asset>& all_assets,
     updateActiveAssets(screen_center_x, screen_center_y);
     if (player) activate(player);
 
-    // Build derived lists and z-order once at init
+    
     updateClosestAssets(player, 3);
     sortByZIndex();
 }
@@ -36,19 +36,19 @@ void ActiveAssetsManager::updateAssetVectors(Asset* player,
                                              int screen_center_x,
                                              int screen_center_y)
 {
-    // only update active list every update_activate_interval frames
+    
     if (++activate_counter_ >= update_activate_interval) {
         updateActiveAssets(screen_center_x, screen_center_y);
         activate_counter_ = 0;
     }
 
-    // only update closest list every update_closest_interval frames
+    
     if (++closest_counter_ >= update_closest_interval) {
         updateClosestAssets(player, 3);
         closest_counter_ = 0;
     }
 
-    // z-index sort still every frame
+    
     sortByZIndex();
 
 }
@@ -56,7 +56,7 @@ void ActiveAssetsManager::updateAssetVectors(Asset* player,
 
 void ActiveAssetsManager::updateClosestAssets(Asset* player, std::size_t max_count)
 {
-    // Unset previous lighting flags (only those we touched last time)
+    
     for (auto* a : closest_assets_) {
         if (a) a->set_render_player_light(false);
     }
@@ -66,15 +66,15 @@ void ActiveAssetsManager::updateClosestAssets(Asset* player, std::size_t max_cou
     interactive_assets_.clear();
     if (!player || active_assets_.empty() || max_count == 0) return;
 
-    // Track k-nearest using a max-heap of size k (O(n log k))
+    
     struct Pair { float d2; Asset* a; };
-    auto cmp = [](const Pair& L, const Pair& R){ return L.d2 < R.d2; }; // max-heap by d2
+    auto cmp = [](const Pair& L, const Pair& R){ return L.d2 < R.d2; }; 
     std::priority_queue<Pair, std::vector<Pair>, decltype(cmp)> heap(cmp);
 
     const int px = player->pos_X;
     const int py = player->pos_Y;
 
-    // Single pass over active assets to find k nearest
+    
     for (Asset* a : active_assets_) {
         if (!a || a == player) continue;
 
@@ -90,7 +90,7 @@ void ActiveAssetsManager::updateClosestAssets(Asset* player, std::size_t max_cou
         }
     }
 
-    // Extract heap to vector sorted ascending by distance
+    
     closest_assets_.reserve(heap.size());
     while (!heap.empty()) {
         closest_assets_.push_back(heap.top().a);
@@ -103,7 +103,7 @@ void ActiveAssetsManager::updateClosestAssets(Asset* player, std::size_t max_cou
                   return dAx*dAx + dAy*dAy < dBx*dBx + dBy*dBy;
               });
 
-    // Mark lighting and build derived subsets in one small pass over k
+    
     for (Asset* a : closest_assets_) {
         if (!a) continue;
         a->set_render_player_light(true);
@@ -128,10 +128,10 @@ void ActiveAssetsManager::activate(Asset* asset)
 
     active_assets_.insert(it, asset);
 
-    // Also activate children so they are rendered
+    
     for (Asset* c : asset->children) {
         if (c && !c->dead && c->info) {
-            activate(c); // instead of just c->update();
+            activate(c); 
         }
     }
 }
@@ -149,27 +149,27 @@ void ActiveAssetsManager::updateActiveAssets(int cx, int cy)
 {
     if (!all_assets_) return;
 
-    // Keep last frame's active list
+    
     static std::unordered_set<Asset*> prev_active;
     prev_active.clear();
     prev_active.insert(active_assets_.begin(), active_assets_.end());
 
-    // Mark them inactive so activate() can re-add if still visible
+    
     for (Asset* a : prev_active) {
         a->active = false;
     }
 
-    // Start fresh
+    
     active_assets_.clear();
 
-    // Single pass over all assets using view bounds
+    
     for (Asset& a : *all_assets_) {
         if (view_.is_asset_in_bounds(a, cx, cy)) {
             activate(&a);
         }
     }
 
-    // Deactivate ones that were active before but not now
+    
     for (Asset* old_a : prev_active) {
         if (!old_a->active) {
             old_a->deactivate();

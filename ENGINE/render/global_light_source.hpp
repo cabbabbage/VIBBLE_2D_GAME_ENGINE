@@ -1,4 +1,4 @@
-// === File: global_light_source.hpp ===
+
 #pragma once
 
 #include <SDL.h>
@@ -24,13 +24,13 @@ public:
     SDL_Texture*       get_texture() const;
     SDL_Color          get_tint() const;
 
-    // Optional helper: apply current tint to a color with external alpha modifier
+    
     SDL_Color apply_tint_to_color(const SDL_Color& base, int alpha_mod) const;
 
     SDL_Color get_current_color() const;
     int       get_brightness() const;
 
-    // Cached dimensions for performance
+    
     int get_cached_w() const { return cached_w_; }
     int get_cached_h() const { return cached_h_; }
 
@@ -63,7 +63,7 @@ private:
     int  frame_counter_;
     int  light_brightness;
 
-    // Params loaded from JSON (with defaults)
+    
     float radius_;
     float intensity_;
     float mult_;
@@ -73,7 +73,7 @@ private:
 
     std::vector<KeyEntry> key_colors_;
 
-    // Cached texture dimensions
+    
     int cached_w_ = 0;
     int cached_h_ = 0;
 };

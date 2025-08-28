@@ -1,4 +1,4 @@
-// Area.cpp
+
 #include "area.hpp"
 #include "cache_manager.hpp"
 #include <fstream>
@@ -314,18 +314,18 @@ void Area::flip_horizontal(std::optional<int> axis_x) {
         p.first = 2 * cx - p.first;
     }
 
-    // Re-align pos_X relative to chosen axis to keep semantic consistency.
+    
     pos_X = 2 * cx - pos_X;
 
     update_geometry_data();
 }
 
 
-// In Area.cpp
+
 void Area::scale(float factor) {
     if (points.empty() || factor <= 0.0f) return;
 
-    // Scale about the current geometric center to preserve shape placement.
+    
     const int pivot_x = center_x;
     const int pivot_y = center_y;
 
@@ -336,7 +336,7 @@ void Area::scale(float factor) {
         p.second = pivot_y + static_cast<int>(std::lround(dy * factor));
     }
 
-    // Update anchor (bottom-center) and cached geometry after scaling
+    
     auto [minx, miny, maxx, maxy] = get_bounds();
     pos_X = (minx + maxx) / 2;
     pos_Y = maxy;
@@ -347,7 +347,7 @@ void Area::scale(float factor) {
 
 
 
-// Project all points into screen space using parallax
+
 void Area::apply_parallax(const Parallax& parallax) {
     for (auto& p : points) {
         SDL_Point scr = parallax.apply(p.first, p.second);
@@ -355,7 +355,7 @@ void Area::apply_parallax(const Parallax& parallax) {
         p.second = scr.y;
     }
 
-    // Recompute cached geometry after transform
+    
     update_geometry_data();
 }
 
