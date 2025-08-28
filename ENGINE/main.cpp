@@ -1,4 +1,4 @@
-// === File: main.cpp ===
+
 #include "main.hpp"
 
 #include "utils/rebuild_assets.hpp"
@@ -35,7 +35,7 @@ extern "C" {
     __declspec(dllexport) int NvOptimusEnablement                = 0x00000001;
 }
 
-// ---------- helpers ----------
+
 static std::vector<fs::path> list_images_in(const fs::path& dir) {
     std::vector<fs::path> out;
     if (!fs::exists(dir) || !fs::is_directory(dir)) return out;
@@ -169,7 +169,7 @@ static void render_scaled_center(SDL_Renderer* r, SDL_Texture* tex, int target_w
     SDL_RenderCopy(r, tex, nullptr, &dst);
 }
 
-// Add these helpers above show_loading_screen(...)
+
 static SDL_Rect compute_scaled_dest(SDL_Texture* tex, int target_w, int target_h, int cx, int cy) {
     SDL_Rect dst{0,0,0,0};
     if (!tex) return dst;
@@ -193,60 +193,119 @@ static SDL_Point measure_text(const TextStyle& style, const std::string& s) {
     return sz;
 }
 
-// ---------- loading screen (spacing tied to image) ----------
+
+
+
 static void show_loading_screen(SDL_Renderer* renderer, int screen_w, int screen_h) {
+    auto cover_dst = [&](SDL_Texture* tex) -> SDL_Rect {
+        int tw = 0, th = 0;
+        SDL_QueryTexture(tex, nullptr, nullptr, &tw, &th);
+        if (tw <= 0 || th <= 0) return SDL_Rect{0, 0, screen_w, screen_h};
+        const double ar = static_cast<double>(tw) / static_cast<double>(th);
+        int w = screen_w;
+        int h = static_cast<int>(w / ar);
+        if (h < screen_h) { h = screen_h; w = static_cast<int>(screen_h * ar); }
+        SDL_Rect dst{ (screen_w - w) / 2, (screen_h - h) / 2, w, h };
+        return dst;
+    };
+
     SDL_SetRenderTarget(renderer, nullptr);
+
+    
+    SDL_Texture* bg_tex = nullptr;
+    {
+        fs::path folder = "./MISC_CONTENT/backgrounds";
+        if (fs::exists(folder) && fs::is_directory(folder)) {
+            fs::path pick;
+            for (const auto& p : fs::directory_iterator(folder)) {
+                if (!p.is_regular_file()) continue;
+                std::string ext = p.path().extension().string();
+                for (auto& c : ext) c = static_cast<char>(tolower(c));
+                if (ext == ".png" || ext == ".jpg" || ext == ".jpeg") { pick = p.path(); break; }
+            }
+            if (!pick.empty()) {
+                const std::string path = fs::absolute(pick).u8string();
+                bg_tex = IMG_LoadTexture(renderer, path.c_str());
+                if (!bg_tex) {
+                    std::cerr << "[Loading] Failed to load background: " << path
+                              << " | " << IMG_GetError() << "\n";
+                }
+            }
+        }
+    }
+
+    
     SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
     SDL_RenderClear(renderer);
+    if (bg_tex) {
+        SDL_Rect bg_dst = cover_dst(bg_tex);
+        SDL_RenderCopy(renderer, bg_tex, nullptr, &bg_dst);
+    }
     SDL_RenderPresent(renderer);
     SDL_PumpEvents();
 
-    // Pick a folder and load image/message
+    
     std::vector<fs::path> folders;
     if (fs::exists("loading") && fs::is_directory("loading")) {
-        for (auto& p : fs::directory_iterator("loading")) if (p.is_directory()) folders.push_back(p.path());
+        for (auto& p : fs::directory_iterator("loading"))
+            if (p.is_directory()) folders.push_back(p.path());
     }
-    if (folders.empty()) return;
+    if (folders.empty()) { if (bg_tex) SDL_DestroyTexture(bg_tex); return; }
 
     std::mt19937 rng{std::random_device{}()};
-    fs::path folder = folders[ std::uniform_int_distribution<size_t>(0, folders.size()-1)(rng) ];
+    fs::path folder = folders[ std::uniform_int_distribution<size_t>(0, folders.size() - 1)(rng) ];
 
     auto images = list_images_in(folder);
     std::string msg = pick_random_message_from_csv(folder / "messages.csv");
 
-    SDL_Texture* tex = nullptr;
+    SDL_Texture* tarot_tex = nullptr;
     if (!images.empty()) {
         const std::string abs_utf8 = fs::absolute(images.front()).u8string();
-        tex = IMG_LoadTexture(renderer, abs_utf8.c_str());
+        tarot_tex = IMG_LoadTexture(renderer, abs_utf8.c_str());
+        if (!tarot_tex) {
+            std::cerr << "[Loading] Failed to load tarot image: " << abs_utf8
+                      << " | " << IMG_GetError() << "\n";
+        }
     }
 
-    // Compose with equal spacing relative to the image
+    
     SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
     SDL_RenderClear(renderer);
 
-    // Compute where the image will render
-    SDL_Rect img_dst{ (screen_w - screen_w/3)/2, (screen_h - screen_h/3)/2, screen_w/3, screen_h/3 };
-    if (tex) {
-        img_dst = compute_scaled_dest(tex, screen_w/3, screen_h/3, screen_w/2, screen_h/2);
+    if (bg_tex) {
+        SDL_Rect bg_dst = cover_dst(bg_tex);
+        SDL_RenderCopy(renderer, bg_tex, nullptr, &bg_dst);
+
+        
+        SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 110);
+        SDL_Rect vignette{0, 0, screen_w, screen_h};
+        SDL_RenderFillRect(renderer, &vignette);
     }
 
-    // Use a single padding so top title and bottom message are equidistant from image
+    
+    SDL_Rect img_dst{ (screen_w - screen_w/3) / 2, (screen_h - screen_h/3) / 2, screen_w/3, screen_h/3 };
+    if (tarot_tex) {
+        img_dst = compute_scaled_dest(tarot_tex, screen_w / 3, screen_h / 3, screen_w / 2, screen_h / 2);
+    }
+
     const int pad = 24;
 
-    // Title ("LOADING...") positioned pad above the image
+    
     const std::string loading_str = "LOADING...";
     SDL_Point title_sz = measure_text(TextStyles::Title(), loading_str);
     int title_x = (screen_w - title_sz.x) / 2;
     int title_y = std::max(0, img_dst.y - pad - title_sz.y);
     draw_text(renderer, TextStyles::Title(), loading_str, title_x, title_y);
 
-    // Draw the image
-    if (tex) {
-        SDL_RenderCopy(renderer, tex, nullptr, &img_dst);
-        SDL_DestroyTexture(tex);
+    
+    if (tarot_tex) {
+        SDL_RenderCopy(renderer, tarot_tex, nullptr, &img_dst);
+        SDL_DestroyTexture(tarot_tex);
+        tarot_tex = nullptr;
     }
 
-    // Bottom message starts pad below the image
+    
     if (!msg.empty()) {
         int msg_w = screen_w / 3;
         int msg_x = (screen_w - msg_w) / 2;
@@ -258,11 +317,13 @@ static void show_loading_screen(SDL_Renderer* renderer, int screen_w, int screen
 
     SDL_RenderPresent(renderer);
     SDL_PumpEvents();
+
+    if (bg_tex) SDL_DestroyTexture(bg_tex);
 }
 
 
 
-// ---------- main menu ----------
+
 static std::string show_main_menu(SDL_Renderer* renderer, int screen_w, int screen_h) {
     MainMenu menu(renderer, screen_w, screen_h);
     std::string chosen_map;
@@ -286,7 +347,7 @@ static std::string show_main_menu(SDL_Renderer* renderer, int screen_w, int scre
     return chosen_map;
 }
 
-// ---------- MainApp method definitions (declared in main.hpp) ----------
+
 MainApp::MainApp(const std::string& map_path, SDL_Renderer* renderer, int screen_w, int screen_h)
     : map_path_(map_path), renderer_(renderer), screen_w_(screen_w), screen_h_(screen_h) {}
 
@@ -354,19 +415,19 @@ void MainApp::game_loop() {
     }
 }
 
-// ---------- run loop ----------
+
 static void run(SDL_Window* window, SDL_Renderer* renderer, int screen_w, int screen_h, bool rebuild_cache) {
     (void)window;
 
     while (true) {
-        // 1) pick map
+        
         std::string chosen = show_main_menu(renderer, screen_w, screen_h);
         if (chosen == "QUIT" || chosen.empty()) break;
 
-        // 2) show loading screen immediately (draws at least a black frame instantly)
+        
         show_loading_screen(renderer, screen_w, screen_h);
 
-        // 3) optional: rebuild asset cache (blocking)
+        
         if (rebuild_cache) {
             std::cout << "[Main] Rebuilding asset cache...\n";
             RebuildAssets* rebuilder = new RebuildAssets(renderer, chosen);
@@ -374,7 +435,7 @@ static void run(SDL_Window* window, SDL_Renderer* renderer, int screen_w, int sc
             std::cout << "[Main] Asset cache rebuild complete.\n";
         }
 
-        // 4) launch the actual game/menu UI
+        
         MenuUI app(renderer, screen_w, screen_h, chosen);
         app.init();
 
@@ -383,7 +444,7 @@ static void run(SDL_Window* window, SDL_Renderer* renderer, int screen_w, int sc
     }
 }
 
-// ---------- entry ----------
+
 int main(int argc, char* argv[]) {
     std::cout << "[Main] Starting game engine...\n";
     const bool rebuild_cache = (argc > 1 && argv[1] && std::string(argv[1]) == "-r");

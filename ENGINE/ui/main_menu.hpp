@@ -1,10 +1,10 @@
-// === File: main_menu.hpp ===
+// === File: ui/main_menu.hpp ===
 #pragma once
 #include <SDL.h>
 #include <SDL_ttf.h>
 #include <string>
 #include <vector>
-#include "text_style.hpp"   // for TextStyle and TextStyles
+#include "text_style.hpp"
 
 class MainMenu {
 public:
@@ -26,9 +26,14 @@ private:
     int screen_h_;
     std::vector<Button> buttons_;
 
+    SDL_Texture* background_tex_ = nullptr;
+
     void buildButtons();
     void drawTextCentered(const std::string& text,
                           const SDL_Rect& rect,
                           const TextStyle& style,
                           bool hovered);
+    void drawDecoButton(const SDL_Rect& r, bool hovered);
+    void renderBackground();
+    void loadBackgroundFromMisc();
 };
