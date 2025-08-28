@@ -1,6 +1,6 @@
 # VIBBLE - Custom 2D Game Engine
 <p align="center">
-  <img src="https://github.com/cabbabbage/VIBBLE_2D_GAME_ENGINE/blob/main/MISC_CONTENT/promo2.png?raw=true" alt="Logo Title Text 2">
+  <img src="https://github.com/cabbabbage/VIBBLE_2D_GAME_ENGINE/blob/main/MISC_CONTENT/promo2.png?raw=true" alt="Logo Title Text 2" width="50%">
 </p>
 
 ## 1. Engine Core & Runtime Loop
