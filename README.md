@@ -3,7 +3,12 @@
   <img src="https://github.com/cabbabbage/VIBBLE_2D_GAME_ENGINE/blob/main/MISC_CONTENT/promo2.png?raw=true" alt="Logo Title Text 2" width="50%">
 </p>
 
-[Game Story & Workflow Google Doc Link](https://docs.google.com/document/d/1ycEDrvMvW7dMhB_WGPmQ0kkO49OlFVgBVEcGVcmUEY4/edit?tab=t.0)
+<p align="center">
+  <a href="https://docs.google.com/document/d/1ycEDrvMvW7dMhB_WGPmQ0kkO49OlFVgBVEcGVcmUEY4/edit?tab=t.0" target="_blank">
+    <img src="https://img.shields.io/badge/Game%20Story%20%26%20Workflow-Click%20Here-blue?style=for-the-badge&logo=bookstack" alt="Game Story & Workflow">
+  </a>
+</p>
+
 
 
 ## 1. Engine Core & Runtime Loop
