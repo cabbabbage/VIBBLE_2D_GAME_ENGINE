@@ -4,14 +4,15 @@
 #include <string>
 #include <vector>
 #include <memory>
-#include <random>
-#include <SDL.h>
-#include "room/room.hpp"
-#include "utils/area.hpp"
-#include "Assets.hpp"
-#include "asset/Asset.hpp"
-#include "asset/asset_library.hpp"
-#include "room/generate_rooms.hpp"
+
+class Asset;
+class Assets;
+class Room;
+class Area;
+class AssetLibrary;
+struct SDL_Texture;
+struct SDL_Renderer;
+struct LayerSpec;
 
 class AssetLoader {
 public:
@@ -34,10 +35,8 @@ public:
 
 private:
     
-    
     std::string map_path_;
     SDL_Renderer* renderer_;
-    std::mt19937 rng_;
 
     
     std::vector<Room*> rooms_;
@@ -60,5 +59,4 @@ private:
     void removeMergedAssets(const std::vector<Asset*>& to_remove, Asset* skip = nullptr);
 
     
-    std::vector<Area> getRoomTrailAreas() const; 
 };

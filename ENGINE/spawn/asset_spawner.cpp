@@ -1,7 +1,13 @@
 
 #include "asset_spawner.hpp"
 #include "asset_spawn_planner.hpp"
-#include "spawn_methods.hpp"
+#include "utils/spawn_context.hpp"
+#include "methods/exact_spawner.hpp"
+#include "methods/center_spawner.hpp"
+#include "methods/random_spawner.hpp"
+#include "methods/distributed_spawner.hpp"
+#include "methods/perimeter_spawner.hpp"
+#include "methods/distributed_batch_spawner.hpp"
 #include "check.hpp"
 
 #include <algorithm>
@@ -71,7 +77,13 @@ void AssetSpawner::run_spawning(AssetSpawnPlanner* planner, const Area& area) {
     int spacing = planner->get_batch_grid_spacing();
     int jitter  = planner->get_batch_jitter();
 
-    SpawnMethods methods(rng_, checker_, logger_, exclusion_zones, asset_info_library_, all_, asset_library_);
+    SpawnContext ctx(rng_, checker_, logger_, exclusion_zones, asset_info_library_, all_, asset_library_);
+    ExactSpawner exact;
+    CenterSpawner center;
+    RandomSpawner random;
+    DistributedSpawner distributed;
+    PerimeterSpawner perimeter;
+    DistributedBatchSpawner batch;
 
     for (auto& queue_item : spawn_queue_) {
         logger_.start_timer();
@@ -79,23 +91,19 @@ void AssetSpawner::run_spawning(AssetSpawnPlanner* planner, const Area& area) {
 
         const std::string& pos = queue_item.position;
         if (pos == "Exact Position") {
-            methods.spawn_item_exact(queue_item, &area);
-        }
-        else if (pos == "Center") {
-            methods.spawn_item_center(queue_item, &area);
-        }
-        else if (pos == "Perimeter") {
-            methods.spawn_item_perimeter(queue_item, &area);
-        }
-        else if (pos == "Distributed") {
-            methods.spawn_item_distributed(queue_item, &area);
-        }
-        else {
-            methods.spawn_item_random(queue_item, &area);
+            exact.spawn(queue_item, &area, ctx);
+        } else if (pos == "Center") {
+            center.spawn(queue_item, &area, ctx);
+        } else if (pos == "Perimeter") {
+            perimeter.spawn(queue_item, &area, ctx);
+        } else if (pos == "Distributed") {
+            distributed.spawn(queue_item, &area, ctx);
+        } else {
+            random.spawn(queue_item, &area, ctx);
         }
     }
 
     if (!batch_assets.empty()) {
-        methods.spawn_distributed_batch(batch_assets, &area, spacing, jitter);
+        batch.spawn(batch_assets, &area, spacing, jitter, ctx);
     }
 }

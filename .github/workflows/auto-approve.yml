@@ -1,0 +1,25 @@
+name: Auto Approve
+
+on:
+  pull_request:
+    types: [opened, ready_for_review, synchronize, reopened]
+
+# The token must be allowed to write PR reviews
+permissions:
+  pull-requests: write
+  contents: read
+
+jobs:
+  approve:
+    runs-on: ubuntu-latest
+    # (Strongly recommended) Restrict which PRs get auto-approved:
+    # here, Dependabot PRs or PRs labeled "autopilot"
+    if: >
+      github.actor == 'dependabot[bot]' ||
+      contains(toJson(github.event.pull_request.labels.*.name), 'autopilot')
+    steps:
+      - uses: hmarr/auto-approve-action@v3
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          # Optional:
+          # review-message: "Automated approval ✅"

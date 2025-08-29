@@ -1,5 +1,9 @@
 #include "view.hpp"
+#include "asset/Asset.hpp"
+#include "room/room.hpp"
+#include "find_current_room.hpp"
 #include <cmath>
+#include <algorithm>
 
 view::view(int screen_width, int screen_height, const Bounds& starting_bounds)
 {
@@ -131,4 +135,65 @@ void view::update() {
     double t = static_cast<double>(steps_done_) / static_cast<double>(steps_total_);
     double s = start_scale_ + (target_scale_ - start_scale_) * t;
     scale_ = static_cast<float>(std::max(0.0001, s));
+}
+
+bool view::aabb_intersect(const SDL_Rect& A, const SDL_Rect& B) {
+    return !(A.x + A.w <= B.x || B.x + B.w <= A.x ||
+             A.y + A.h <= B.y || B.y + B.h <= A.y);
+}
+
+namespace {
+    static constexpr double BASE_RATIO = 1.1;
+}
+
+double view::compute_room_scale_from_area(const Room* room) const {
+    if (!room || !room->room_area || starting_area_ <= 0.0) return BASE_RATIO;
+    double a = room->room_area->get_size();
+    if (a <= 0.0 || room->type == "trail") return BASE_RATIO * 0.8;
+    double s = (a / starting_area_) * BASE_RATIO;
+    s = std::clamp(s, BASE_RATIO * 0.9, BASE_RATIO * 1.05);
+    return s;
+}
+
+void view::set_up_rooms(CurrentRoomFinder* finder) {
+    if (!finder) return;
+    Room* current = finder->getCurrentRoom();
+    if (!current) return;
+    starting_room_ = current;
+    if (starting_room_ && starting_room_->room_area) {
+        starting_area_ = starting_room_->room_area->get_size();
+        if (starting_area_ <= 0.0) starting_area_ = 1.0;
+    }
+}
+
+void view::update_zoom(Room* cur, CurrentRoomFinder* finder, Asset* player) {
+    if (!player || !finder || !starting_room_) return;
+    update();
+    if (!cur) return;
+
+    Room* neigh = finder->getNeighboringRoom(cur);
+    if (!neigh) neigh = cur;
+
+    const double sa = compute_room_scale_from_area(cur);
+    const double sb = compute_room_scale_from_area(neigh);
+
+    auto [ax, ay] = cur->room_area->get_center();
+    auto [bx, by] = neigh->room_area->get_center();
+
+    const double pax = double(player->pos_X);
+    const double pay = double(player->pos_Y);
+
+    const double vx = double(bx - ax);
+    const double vy = double(by - ay);
+    const double wx = double(pax - ax);
+    const double wy = double(pay - ay);
+
+    const double vlen2 = vx * vx + vy * vy;
+    double t = (vlen2 > 0.0) ? ((wx * vx + wy * vy) / vlen2) : 0.0;
+    t = std::clamp(t, 0.0, 1.0);
+
+    double target_zoom = (sa * (1.0 - t)) + (sb * t);
+    target_zoom = std::clamp(target_zoom, BASE_RATIO * 0.7, BASE_RATIO * 1.3);
+
+    zoom_scale(target_zoom, 35);
 }

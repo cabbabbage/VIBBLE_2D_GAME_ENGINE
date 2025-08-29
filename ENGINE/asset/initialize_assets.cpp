@@ -5,7 +5,6 @@
 #include "asset_info.hpp"
 #include "active_assets_manager.hpp"
 #include "controls_manager.hpp"
-#include "zoom_control.hpp"
 
 #include <algorithm>
 #include <iostream>
@@ -56,11 +55,6 @@ void InitializeAssets::initialize(Assets& assets,
 
     
     assets.controls = new ControlsManager(assets.player, assets.activeManager);
-
-    if (assets.player) {
-        assets.zoom_control = new ZoomControl(assets.window, assets.rooms_, assets.player);
-        assets.zoom_control->set_up_rooms();
-    }
 
     std::cout << "[InitializeAssets] Initialization base complete. Total assets: "
               << assets.all.size() << "\n";

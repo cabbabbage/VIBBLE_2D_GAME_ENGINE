@@ -2,7 +2,10 @@
 
 #include <SDL.h>
 #include <algorithm>
-#include "asset/Asset.hpp"
+
+class Asset;
+class Room;
+class CurrentRoomFinder;
 
 class view {
 public:
@@ -29,6 +32,8 @@ public:
     void zoom_scale(double target_scale, int duration_steps);
     void zoom_bounds(const Bounds& target_bounds, int duration_steps);
     void update();
+    void set_up_rooms(CurrentRoomFinder* finder);
+    void update_zoom(Room* cur, CurrentRoomFinder* finder, Asset* player);
     bool intro = true;
     bool   zooming_      = false;
 private:
@@ -42,8 +47,11 @@ private:
     int    steps_done_   = 0;
 
 
-    static inline bool aabb_intersect(const SDL_Rect& A, const SDL_Rect& B) {
-        return !(A.x + A.w <= B.x || B.x + B.w <= A.x ||
-                 A.y + A.h <= B.y || B.y + B.h <= A.y);
-    }
+    static bool aabb_intersect(const SDL_Rect& A, const SDL_Rect& B);
+
+    // Zoom state derived from rooms
+    Room*  starting_room_ = nullptr;
+    double starting_area_ = 1.0;
+
+    double compute_room_scale_from_area(const Room* room) const;
 };

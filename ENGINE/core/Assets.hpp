@@ -11,7 +11,6 @@
 
 class Asset;
 class ControlsManager;
-class ZoomControl;
 class CurrentRoomFinder;
 class Room;
 class MouseInput;       
@@ -63,7 +62,7 @@ Assets(std::vector<Asset>&& loaded,
     std::vector<Asset> all;
     Asset* player = nullptr;
     ControlsManager* controls = nullptr;
-    ZoomControl* zoom_control = nullptr;
+    
     CurrentRoomFinder* finder_ = nullptr;
 
     MouseInput* mouse_input = nullptr;     
