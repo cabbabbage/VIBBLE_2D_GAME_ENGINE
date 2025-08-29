@@ -65,5 +65,12 @@ private:
 
     // Cached panel rect (computed per frame)
     mutable SDL_Rect panel_ {0,0,0,0};
+
+    // Last known screen size (for event-time layout refresh)
+    mutable int last_screen_w_ = 0;
+    mutable int last_screen_h_ = 0;
+
+    // Guard to avoid recursive synthetic -> handle_event -> update loops
+    mutable bool synthesizing_ = false;
 };
 

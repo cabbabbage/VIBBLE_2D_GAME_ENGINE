@@ -95,55 +95,64 @@ void AssetInfoUI::build_widgets() {
 }
 
 void AssetInfoUI::layout_widgets(int screen_w, int screen_h) const {
-    (void)screen_h;
+    // Cache screen size for event-time refresh
+    last_screen_w_ = screen_w;
+    last_screen_h_ = screen_h;
     // Right third
     int panel_x = (screen_w * 2) / 3;
     int panel_w = screen_w - panel_x;
     panel_ = SDL_Rect{ panel_x, 0, panel_w, screen_h };
 
     int x = panel_.x + 16;
-    int y = 16 - scroll_;
+    // Use a scroll-independent layout cursor; subtract scroll only when assigning rects.
+    int y = 16;
 
     // Group: Identity
     if (t_type_) {
-        t_type_->set_rect(SDL_Rect{ x, y + 20, std::min(440, panel_w - 32), TextBox::height() });
+        t_type_->set_rect(SDL_Rect{ x, (y + 20) - scroll_, panel_w - 32, TextBox::height() });
         y += 20 + TextBox::height() + 14;
     }
     if (t_tags_) {
-        t_tags_->set_rect(SDL_Rect{ x, y + 20, std::min(480, panel_w - 32), TextBox::height() });
+        t_tags_->set_rect(SDL_Rect{ x, (y + 20) - scroll_, panel_w - 32, TextBox::height() });
         y += 20 + TextBox::height() + 30;
     }
 
     // Group: Appearance
     if (t_blend_) {
-        t_blend_->set_rect(SDL_Rect{ x, y + 20, std::min(360, panel_w - 32), TextBox::height() });
+        t_blend_->set_rect(SDL_Rect{ x, (y + 20) - scroll_, panel_w - 32, TextBox::height() });
         y += 20 + TextBox::height() + 10;
     }
     if (s_scale_pct_) {
-        s_scale_pct_->set_rect(SDL_Rect{ x, y + 10, panel_w - 32, Slider::height() });
+        s_scale_pct_->set_rect(SDL_Rect{ x, (y + 10) - scroll_, panel_w - 32, Slider::height() });
         y += 10 + Slider::height() + 8;
     }
     if (c_shading_) {
-        c_shading_->set_rect(SDL_Rect{ x, y + 8, panel_w - 32, Checkbox::height() });
+        c_shading_->set_rect(SDL_Rect{ x, (y + 8) - scroll_, panel_w - 32, Checkbox::height() });
         y += 8 + Checkbox::height() + 6;
     }
     if (c_flipable_) {
-        c_flipable_->set_rect(SDL_Rect{ x, y + 4, panel_w - 32, Checkbox::height() });
+        c_flipable_->set_rect(SDL_Rect{ x, (y + 4) - scroll_, panel_w - 32, Checkbox::height() });
         y += 4 + Checkbox::height() + 18;
     }
 
     // Group: Distances / Z
     if (s_z_threshold_) {
-        s_z_threshold_->set_rect(SDL_Rect{ x, y + 10, panel_w - 32, Slider::height() });
+        s_z_threshold_->set_rect(SDL_Rect{ x, (y + 10) - scroll_, panel_w - 32, Slider::height() });
         y += 10 + Slider::height() + 8;
     }
     if (s_min_same_type_) {
-        s_min_same_type_->set_rect(SDL_Rect{ x, y + 10, panel_w - 32, Slider::height() });
+        s_min_same_type_->set_rect(SDL_Rect{ x, (y + 10) - scroll_, panel_w - 32, Slider::height() });
         y += 10 + Slider::height() + 8;
     }
     if (s_min_all_) {
-        s_min_all_->set_rect(SDL_Rect{ x, y + 10, panel_w - 32, Slider::height() });
+        s_min_all_->set_rect(SDL_Rect{ x, (y + 10) - scroll_, panel_w - 32, Slider::height() });
         y += 10 + Slider::height() + 8;
+    }
+
+    // Group: Flags (passable)
+    if (c_passable_) {
+        c_passable_->set_rect(SDL_Rect{ x, (y + 10) - scroll_, panel_w - 32, Checkbox::height() });
+        y += 10 + Checkbox::height() + 8;
     }
 
         if (b_close_) {
@@ -157,7 +166,8 @@ void AssetInfoUI::layout_widgets(int screen_w, int screen_h) const {
     }
 
     // Compute scroll max
-    max_scroll_ = std::max(0, y + 20 - panel_.h);
+    // y currently holds the unscrolled content bottom; derive max scroll independent of current scroll
+    max_scroll_ = std::max(0, (y + 20) - panel_.h);
 }
 
 void AssetInfoUI::update(const Input& input, int screen_w, int screen_h) {
@@ -175,14 +185,43 @@ void AssetInfoUI::update(const Input& input, int screen_w, int screen_h) {
             scroll_ -= dy * 40;
             scroll_ = std::max(0, std::min(max_scroll_, scroll_));
         }
+
+        // Synthesize basic click interactions if SDL events are not routed
+        if (input.wasClicked(Input::LEFT) && !synthesizing_) {
+            synthesizing_ = true;
+            SDL_Event down{}; down.type = SDL_MOUSEBUTTONDOWN; down.button.button = SDL_BUTTON_LEFT; down.button.x = mx; down.button.y = my;
+            SDL_Event up{};   up.type   = SDL_MOUSEBUTTONUP;   up.button.button   = SDL_BUTTON_LEFT; up.button.x   = mx; up.button.y   = my;
+            handle_event(down);
+            handle_event(up);
+            synthesizing_ = false;
+        }
     }
 }
 
 void AssetInfoUI::handle_event(const SDL_Event& e) {
     if (!visible_ || !info_) return;
-    if (b_close_ && b_close_->handle_event(e)) {
-        return; // close() already called in button callback
+    // Ensure layout is current for this event
+    int lw = last_screen_w_;
+    int lh = last_screen_h_;
+    if (lw <= 0 || lh <= 0) {
+        Uint32 wid = 0;
+        switch (e.type) {
+            case SDL_MOUSEMOTION:      wid = e.motion.windowID; break;
+            case SDL_MOUSEBUTTONDOWN:
+            case SDL_MOUSEBUTTONUP:    wid = e.button.windowID; break;
+            case SDL_MOUSEWHEEL:       wid = e.wheel.windowID; break;
+            default: break;
+        }
+        if (wid != 0) {
+            if (SDL_Window* win = SDL_GetWindowFromID(wid)) {
+                SDL_GetWindowSize(win, &lw, &lh);
+            }
+        }
     }
+    if (lw > 0 && lh > 0) {
+        layout_widgets(lw, lh);
+    }
+    if (b_close_ && b_close_->handle_event(e)) { close(); return; }
     bool changed = false;
 
     // Ensure layout is up-to-date before hit-testing
@@ -327,6 +366,9 @@ void AssetInfoUI::render(SDL_Renderer* r, int screen_w, int screen_h) const {
     int flagsHeaderY = (c_passable_ ? c_passable_->rect().y - 24 + scroll_ : panel_.y + 520);
     draw_header("Flags", flagsHeaderY);
     if (c_passable_) c_passable_->render(r);
+
+    // Close button (anchored to panel corner; not scrolled)
+    if (b_close_) b_close_->render(r);
 }
 
 void AssetInfoUI::save_now() const {

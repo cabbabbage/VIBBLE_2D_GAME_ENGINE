@@ -31,13 +31,11 @@ public:
     Asset* get_hovered_asset() const { return hovered_asset; }
 
 private:
-    SDL_Point compute_mouse_world(int mx_screen, int my_screen) const;
     bool dragging_;
     int drag_last_x_, drag_last_y_;
 
-    // Double-click detection
-    Uint32 last_click_time_ms_ = 0;
-    Asset* last_click_asset_ = nullptr;
+    // Double-click detection (left button release edges)
+    Uint32 last_left_click_time_ms_ = 0;
 
 private:
     int click_buffer_frames_ = 0;

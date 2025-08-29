@@ -209,5 +209,7 @@ void SceneRenderer::render() {
         assets_->render_overlays(renderer_);
     }
 
-    SDL_RenderPresent(renderer_);
+    if (!defer_present_) {
+        SDL_RenderPresent(renderer_);
+    }
 }

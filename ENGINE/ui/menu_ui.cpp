@@ -68,6 +68,10 @@ void MenuUI::game_loop() {
         }
 
         if (game_assets_ && game_assets_->player) {
+            // If menu is active, defer present inside scene renderer so we can overlay and present once.
+            if (game_assets_->scene) {
+                game_assets_->scene->set_defer_present(menu_active_);
+            }
             const int px = game_assets_->player->pos_X;
             const int py = game_assets_->player->pos_Y;
             game_assets_->update(*input_, px, py);
@@ -88,7 +92,14 @@ void MenuUI::game_loop() {
             }
         }
 
-        if (menu_active_) SDL_RenderPresent(renderer_);
+        // When menu is active, we draw the overlay on top of the scene and present once.
+        if (menu_active_) {
+            SDL_RenderPresent(renderer_);
+            // Return scene renderer to normal presenting after our overlay present.
+            if (game_assets_ && game_assets_->scene) {
+                game_assets_->scene->set_defer_present(false);
+            }
+        }
 
         ++frame_count;
         if (input_) input_->update();
