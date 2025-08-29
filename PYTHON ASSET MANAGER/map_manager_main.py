@@ -3,12 +3,12 @@ import json
 import tkinter as tk
 from tkinter import ttk, simpledialog, messagebox
 
-from pages.map_info_page     import MapInfoPage
-from pages.rooms_page        import RoomsPage
-from pages.trails_page       import TrailsPage
-from pages.boundary_page     import BoundaryPage
-from pages.map_assets_page   import MapAssetsPage
-from pages.map_light_page    import MapLightPage
+from map_pages.map_info_page     import MapInfoPage
+from map_pages.rooms_page        import RoomsPage
+from map_pages.trails_page       import TrailsPage
+from map_pages.boundary_page     import BoundaryPage
+from map_pages.map_assets_page   import MapAssetsPage
+from map_pages.map_light_page    import MapLightPage
 
 MAPS_DIR = "MAPS"
 TABS = {

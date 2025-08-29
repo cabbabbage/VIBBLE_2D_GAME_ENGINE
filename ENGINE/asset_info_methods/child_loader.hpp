@@ -1,8 +1,8 @@
 #pragma once
 
 #include <string>
+#include <nlohmann/json.hpp>
 class AssetInfo;
-class nlohmann_json_fwd;
 
 class ChildLoader {
 public:
@@ -10,4 +10,3 @@ public:
                               const nlohmann::json& data,
                               const std::string& dir_path);
 };
-

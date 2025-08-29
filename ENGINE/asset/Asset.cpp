@@ -1,14 +1,9 @@
 #include "Asset.hpp"
-#include "generate_light.hpp"
 #include <random>
-#include <algorithm>
-#include <SDL_image.h>
 #include <filesystem>
-#include "view.hpp"   
-#include <fstream>
-#include <nlohmann/json.hpp>
+#include "view.hpp"
 #include <iostream>
-#include "utils/light_utils.hpp" 
+#include "utils/light_utils.hpp"
 
 
 Asset::Asset(std::shared_ptr<AssetInfo> info_,
@@ -37,7 +32,6 @@ Asset::Asset(std::shared_ptr<AssetInfo> info_,
 {
     set_flip();
     set_z_index();
-    player_speed = 10;
     
     auto it = info->animations.find("start");
     if (it == info->animations.end())
@@ -71,7 +65,6 @@ void Asset::finalize_setup() {
         if (it != info->animations.end() && !it->second.frames.empty()) {
             current_animation = it->first;
             Animation& anim = it->second;
-            static_frame = (anim.frames.size() == 1);
             anim.change(current_frame_index, static_frame);
             if (anim.randomize && anim.frames.size() > 1) {
                 std::mt19937 rng{ std::random_device{}() };
@@ -280,6 +273,11 @@ bool Asset::is_shading_group_set() const {
 void Asset::set_shading_group(int x){
     shading_group = x;
     shading_group_set = true;
+}
+
+void Asset::set_screen_position(int sx, int sy) {
+    screen_X = sx;
+    screen_Y = sy;
 }
 
 void Asset::add_static_light_source(LightSource* light, int world_x, int world_y, Asset* owner) {

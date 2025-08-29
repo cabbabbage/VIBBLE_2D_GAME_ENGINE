@@ -62,6 +62,11 @@ public:
     SDL_Texture* get_final_texture() const;
     void set_final_texture(SDL_Texture* tex);
 
+    // Screen-space position (post-parallax) updated each frame
+    void set_screen_position(int sx, int sy);
+    inline int get_screen_x() const { return screen_X; }
+    inline int get_screen_y() const { return screen_Y; }
+
     
     void set_view(view* v) { window = v; }
 
@@ -70,6 +75,8 @@ public:
     std::string current_animation;
     int pos_X = 0;
     int pos_Y = 0;
+    int screen_X = 0; // computed by Parallax each frame
+    int screen_Y = 0; // computed by Parallax each frame
     int z_index = 0;
     int z_offset = 0;
     int player_speed = 10;

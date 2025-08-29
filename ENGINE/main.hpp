@@ -10,7 +10,7 @@
 class Assets;
 class SceneRenderer;
 class AssetLoader;
-class MouseInput;
+class Input;
 
 class MainApp {
 public:
@@ -32,7 +32,7 @@ protected:
     std::unique_ptr<AssetLoader> loader_;
     Assets*        game_assets_      = nullptr;
     SceneRenderer* scene_            = nullptr;
-    MouseInput*    mouse_input_      = nullptr;
+    Input*         input_            = nullptr;
 
     SDL_Texture* overlay_texture_    = nullptr;
     SDL_Texture* minimap_texture_    = nullptr;

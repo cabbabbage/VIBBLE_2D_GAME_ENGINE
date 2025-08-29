@@ -36,7 +36,11 @@
       "sector_center_min": 0,
       "sector_center_max": 0,
       "sector_range_min": 180,
-      "sector_range_max": 180
+      "sector_range_max": 180,
+      "perimeter_x_offset_min": 0,
+      "perimeter_x_offset_max": 0,
+      "perimeter_y_offset_min": 0,
+      "perimeter_y_offset_max": 0
     }
   ],
   "batch_assets": {

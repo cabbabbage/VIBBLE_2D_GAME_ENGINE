@@ -54,7 +54,7 @@ void InitializeAssets::initialize(Assets& assets,
     setup_shading_groups(assets);
 
     
-    assets.controls = new ControlsManager(assets.player, assets.activeManager);
+    assets.controls = new ControlsManager(&assets, assets.player, assets.activeManager);
 
     std::cout << "[InitializeAssets] Initialization base complete. Total assets: "
               << assets.all.size() << "\n";

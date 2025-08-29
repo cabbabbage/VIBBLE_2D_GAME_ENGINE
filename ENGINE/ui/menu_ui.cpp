@@ -5,7 +5,7 @@
 #include "asset_loader.hpp"
 #include "scene_renderer.hpp"
 #include "assets.hpp"
-#include "mouse_input.hpp"
+#include "input.hpp"
 
 #include <iostream>
 #include <fstream>
@@ -48,7 +48,6 @@ void MenuUI::game_loop() {
     const int FRAME_MS = 1000 / 60;
     bool quit = false;
     SDL_Event e;
-    std::unordered_set<SDL_Keycode> keys;
     int frame_count = 0;
 
     return_to_main_menu_ = false;
@@ -60,22 +59,18 @@ void MenuUI::game_loop() {
             if (e.type == SDL_QUIT) {
                 quit = true;
             } else if (e.type == SDL_KEYDOWN) {
-                keys.insert(e.key.keysym.sym);
                 if (e.key.keysym.sym == SDLK_ESCAPE && e.key.repeat == 0) {
                     toggleMenu();
                 }
-            } else if (e.type == SDL_KEYUP) {
-                keys.erase(e.key.keysym.sym);
             }
-
-            if (mouse_input_) mouse_input_->handleEvent(e);
+            if (input_) input_->handleEvent(e);
             if (menu_active_) handle_event(e);
         }
 
         if (game_assets_ && game_assets_->player) {
             const int px = game_assets_->player->pos_X;
             const int py = game_assets_->player->pos_Y;
-            game_assets_->update(keys, px, py);
+            game_assets_->update(*input_, px, py);
         }
 
 
@@ -96,7 +91,7 @@ void MenuUI::game_loop() {
         if (menu_active_) SDL_RenderPresent(renderer_);
 
         ++frame_count;
-        if (mouse_input_) mouse_input_->update();
+        if (input_) input_->update();
 
         Uint32 elapsed = SDL_GetTicks() - start;
         if (elapsed < FRAME_MS) SDL_Delay(FRAME_MS - elapsed);
@@ -261,8 +256,8 @@ void MenuUI::doRestart() {
                                   static_cast<int>(loader_->getMapRadius() * 1.2),
                                   renderer_,
                                   map_path_);
-        if (!mouse_input_) mouse_input_ = new MouseInput();
-        game_assets_->set_mouse_input(mouse_input_);
+        if (!input_) input_ = new Input();
+        game_assets_->set_input(input_);
     } catch (const std::exception& ex) {
         std::cerr << "[MenuUI] Restart failed: " << ex.what() << "\n";
         return;

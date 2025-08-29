@@ -1,17 +1,20 @@
 
 #include "dev_mouse_controls.hpp"
 #include "asset/Asset.hpp"
-#include "utils/mouse_input.hpp"
+#include "core/Assets.hpp"
+#include "utils/input.hpp"
 #include "utils/parallax.hpp"
 #include <cmath>
 #include <SDL.h>
 
-DevMouseControls::DevMouseControls(MouseInput* m,
+DevMouseControls::DevMouseControls(Input* m,
+                                   Assets* assets,
                                    std::vector<Asset*>& actives,
                                    Asset* player_,
                                    int screen_w_,
                                    int screen_h_)
     : mouse(m),
+      assets_(assets),
       active_assets(actives),
       player(player_),
       screen_w(screen_w_),
@@ -23,9 +26,13 @@ DevMouseControls::DevMouseControls(MouseInput* m,
 {
 }
 
-void DevMouseControls::handle_mouse_input(const std::unordered_set<SDL_Keycode>& keys) {
-    
-    if (keys.count(SDLK_ESCAPE)) {
+void DevMouseControls::handle_mouse_input(const Input& input) {
+    // Keep parallax reference fresh for world<->screen conversions
+    if (player) {
+        parallax_.setReference(player->pos_X, player->pos_Y);
+    }
+
+    if (input.isKeyDown(SDLK_ESCAPE)) {
         selected_assets.clear();
         highlighted_assets.clear();
         hovered_asset = nullptr;
@@ -48,7 +55,7 @@ void DevMouseControls::handle_mouse_input(const std::unordered_set<SDL_Keycode>&
     const int my = mouse->getY();
 
     
-    if (mouse->isDown(MouseInput::LEFT) && !selected_assets.empty()) {
+    if (mouse->isDown(Input::LEFT) && !selected_assets.empty()) {
         if (!dragging_) {
             
             dragging_ = true;
@@ -74,8 +81,30 @@ void DevMouseControls::handle_mouse_input(const std::unordered_set<SDL_Keycode>&
 
 
 
+        // Right-click to open asset selection and record spawn point
+        if (mouse->wasClicked(Input::RIGHT) && assets_) {
+            spawn_click_screen_x_ = mx;
+            spawn_click_screen_y_ = my;
+            SDL_Point wp = compute_mouse_world(mx, my);
+            spawn_world_x_ = wp.x;
+            spawn_world_y_ = wp.y;
+            waiting_spawn_selection_ = true;
+            assets_->open_asset_library();
+        }
+
+        // If waiting for selection, check if a selection was made
+        if (waiting_spawn_selection_ && assets_) {
+            if (!assets_->is_asset_library_open()) {
+                auto chosen = assets_->consume_selected_asset_from_library();
+                if (chosen) {
+                    assets_->spawn_asset(chosen->name, spawn_world_x_, spawn_world_y_);
+                }
+                waiting_spawn_selection_ = false;
+            }
+        }
+
         handle_hover();
-        handle_click(keys);
+        handle_click(input);
         update_highlighted_assets();
 
         last_mx = mx;
@@ -124,12 +153,12 @@ void DevMouseControls::handle_hover() {
     }
 }
 
-void DevMouseControls::handle_click(const std::unordered_set<SDL_Keycode>& keys) {
-    if (!mouse || !player || !mouse->wasClicked(MouseInput::LEFT)) return;
+void DevMouseControls::handle_click(const Input& input) {
+    if (!mouse || !player || !mouse->wasClicked(Input::LEFT)) return;
 
     Asset* nearest = hovered_asset; 
     if (nearest) {
-        const bool ctrlHeld = keys.count(SDLK_LCTRL) || keys.count(SDLK_RCTRL);
+        const bool ctrlHeld = input.isKeyDown(SDLK_LCTRL) || input.isKeyDown(SDLK_RCTRL);
         auto it = std::find(selected_assets.begin(), selected_assets.end(), nearest);
 
         if (ctrlHeld) {
@@ -146,11 +175,26 @@ void DevMouseControls::handle_click(const std::unordered_set<SDL_Keycode>& keys)
                 selected_assets.push_back(nearest);
             }
         }
+
+        // Double-click detection: same asset within 300ms
+        Uint32 now = SDL_GetTicks();
+        if (last_click_asset_ == nearest && (now - last_click_time_ms_) <= 300) {
+            if (assets_ && nearest->info) {
+                //assets_->open_asset_info_editor(nearest->info);
+            }
+            last_click_time_ms_ = 0;
+            last_click_asset_ = nullptr;
+        } else {
+            last_click_time_ms_ = now;
+            last_click_asset_ = nearest;
+        }
     } else {
-        const bool ctrlHeld = keys.count(SDLK_LCTRL) || keys.count(SDLK_RCTRL);
+        const bool ctrlHeld = input.isKeyDown(SDLK_LCTRL) || input.isKeyDown(SDLK_RCTRL);
         if (!ctrlHeld) {
             selected_assets.clear();
         }
+        last_click_asset_ = nullptr;
+        last_click_time_ms_ = 0;
     }
 }
 
@@ -179,4 +223,9 @@ void DevMouseControls::update_highlighted_assets() {
             a->set_selected(false);
         }
     }
+}
+
+SDL_Point DevMouseControls::compute_mouse_world(int mx_screen, int my_screen) const {
+    // Inverse of parallax projection based on current player reference
+    return parallax_.inverse(mx_screen, my_screen);
 }

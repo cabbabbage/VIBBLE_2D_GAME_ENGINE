@@ -29,6 +29,18 @@ public:
          int map_width, int map_height);
     Area(const std::string& name, const std::string& json_path, float scale);
 
+    // Interactive constructors (SDL-based editor)
+    // Opens a simple SDL editor to draw/mask over an existing Area's texture
+    // and constructs a new Area from the drawn boundary. If the base area has no
+    // texture, a debug outline texture will be generated.
+    Area(const std::string& name, const Area& base, SDL_Renderer* renderer,
+         int window_w = 0, int window_h = 0);
+
+    // Opens the editor over an SDL texture as the background and constructs
+    // a new Area from the drawn boundary.
+    Area(const std::string& name, SDL_Texture* background, SDL_Renderer* renderer,
+         int window_w = 0, int window_h = 0);
+
 public:
     
     void apply_offset(int dx, int dy);

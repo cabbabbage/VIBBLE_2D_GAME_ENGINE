@@ -51,6 +51,31 @@ void AreaLoader::try_load_area(const json& data,
         }
     }
 
+    // NEW: support embedded area object in info.json
+    if (!area_loaded && data.contains(key) && data[key].is_object()) {
+        try {
+            const auto& obj = data[key];
+            std::vector<Area::Point> pts;
+            if (obj.contains("points") && obj["points"].is_array()) {
+                for (const auto& p : obj["points"]) {
+                    if (p.is_array() && p.size() >= 2) {
+                        int x = static_cast<int>(std::round(p[0].get<double>()));
+                        int y = static_cast<int>(std::round(p[1].get<double>()));
+                        pts.emplace_back(x + offset_x, y + offset_y);
+                    }
+                }
+            }
+            if (!pts.empty()) {
+                std::string nm = name_hint.empty() ? key : (name_hint + "_" + key);
+                area_ref = std::make_unique<Area>(nm, pts);
+                flag_ref = true;
+                area_loaded = true;
+            }
+        } catch (const std::exception& e) {
+            std::cerr << "[AreaLoader] failed embedded area for '" << key << "': " << e.what() << "\n";
+        }
+    }
+
     if (!area_loaded && key == "spacing_area") {
         std::string fallback_name = name_hint.empty() ? "circle_spacing" : name_hint + "_circle_spacing";
         int radius = static_cast<int>(std::ceil(std::max(0, 0) * scale / 2.0f));
@@ -72,4 +97,3 @@ void AreaLoader::try_load_area(const json& data,
         flag_ref = true;
     }
 }
-

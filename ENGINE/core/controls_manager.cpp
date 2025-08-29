@@ -1,8 +1,11 @@
 
 #include "controls_manager.hpp"
 #include "active_assets_manager.hpp"
+#include "core/Assets.hpp"
+#include "utils/input.hpp"
 #include <cmath>
 #include <iostream>
+#include <random>
 
 
 bool ControlsManager::aabb(const Area& A, const Area& B) const {
@@ -20,8 +23,9 @@ bool ControlsManager::pointInAABB(int x, int y, const Area& B) const {
 }
 
 
-ControlsManager::ControlsManager(Asset* player, ActiveAssetsManager& aam)
-    : player_(player),
+ControlsManager::ControlsManager(Assets* assets, Asset* player, ActiveAssetsManager& aam)
+    : assets_(assets),
+      player_(player),
       aam_(aam),
       dx_(0),
       dy_(0),
@@ -29,14 +33,14 @@ ControlsManager::ControlsManager(Asset* player, ActiveAssetsManager& aam)
 {}
 
 
-void ControlsManager::movement(const std::unordered_set<SDL_Keycode>& keys) {
+void ControlsManager::movement(const Input& input) {
     dx_ = dy_ = 0;
     if (!player_) return;
 
-    bool up    = keys.count(SDLK_w);
-    bool down  = keys.count(SDLK_s);
-    bool left  = keys.count(SDLK_a);
-    bool right = keys.count(SDLK_d);
+    bool up    = input.isKeyDown(SDLK_w);
+    bool down  = input.isKeyDown(SDLK_s);
+    bool left  = input.isKeyDown(SDLK_a);
+    bool right = input.isKeyDown(SDLK_d);
 
     int move_x = (right ? 1 : 0) - (left ? 1 : 0);
     int move_y = (down  ? 1 : 0) - (up    ? 1 : 0);
@@ -50,7 +54,7 @@ void ControlsManager::movement(const std::unordered_set<SDL_Keycode>& keys) {
         if (len == 0.0f) return;
 
         float base_speed = player_->player_speed;
-        if (keys.count(SDLK_LSHIFT) || keys.count(SDLK_RSHIFT)) {
+        if (input.isKeyDown(SDLK_LSHIFT) || input.isKeyDown(SDLK_RSHIFT)) {
             base_speed *= 1.5f;  
         }
 
@@ -118,30 +122,54 @@ void ControlsManager::interaction() {
 }
 
 
-void ControlsManager::handle_teleport(const std::unordered_set<SDL_Keycode>& keys) {
+void ControlsManager::handle_teleport(const Input& input) {
     if (!player_) return;
 
-    if (keys.count(SDLK_SPACE)) {
+    // On press: set teleport point and drop a marker nearby (~30px radius)
+    if (input.wasKeyPressed(SDLK_SPACE)) {
         teleport_point_ = { player_->pos_X, player_->pos_Y };
         teleport_set_ = true;
+
+        // Remove existing marker if present
+        if (marker_asset_ && assets_) {
+            assets_->remove(marker_asset_);
+            marker_asset_ = nullptr;
+        }
+
+        // Spawn new marker near the player
+        if (assets_) {
+            static std::mt19937 rng{ std::random_device{}() };
+            std::uniform_real_distribution<float> angle(0.0f, 6.2831853f);
+            float a = angle(rng);
+            int r = 30; // radius in pixels
+            int mx = player_->pos_X + static_cast<int>(std::round(std::cos(a) * r));
+            int my = player_->pos_Y + static_cast<int>(std::round(std::sin(a) * r));
+            marker_asset_ = assets_->spawn_asset("marker", mx, my);
+        }
     }
 
-    if (keys.count(SDLK_q) && teleport_set_) {
+    // On press: teleport and remove marker
+    if (input.wasKeyPressed(SDLK_q) && teleport_set_) {
         player_->set_position(teleport_point_.x, teleport_point_.y);
         teleport_point_ = { 0, 0 };
         teleport_set_ = false;
+
+        if (marker_asset_ && assets_) {
+            assets_->remove(marker_asset_);
+            marker_asset_ = nullptr;
+        }
     }
 }
 
 
-void ControlsManager::update(const std::unordered_set<SDL_Keycode>& keys) {
+void ControlsManager::update(const Input& input) {
     dx_ = dy_ = 0;
 
-    if (keys.count(SDLK_SPACE) || keys.count(SDLK_q)) {
-        handle_teleport(keys);
+    if (input.isKeyDown(SDLK_SPACE) || input.isKeyDown(SDLK_q)) {
+        handle_teleport(input);
     }
-    movement(keys);
-    if (keys.count(SDLK_e)) {
+    movement(input);
+    if (input.isKeyDown(SDLK_e)) {
         interaction();
     }
 }
