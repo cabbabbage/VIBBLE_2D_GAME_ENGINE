@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <iostream>
 #include <stdexcept>
+#include <memory>
 
 void InitializeAssets::initialize(Assets& assets,
                                   std::vector<Asset>&& loaded,
@@ -38,10 +39,11 @@ void InitializeAssets::initialize(Assets& assets,
             continue;
         }
 
-        
-        a.set_view(&assets.window);
+        auto newAsset = std::make_unique<Asset>(std::move(a));
+        newAsset->set_view(&assets.window);
 
-        assets.all.push_back(std::move(a));
+        assets.owned_assets.push_back(std::move(newAsset));
+        assets.all.push_back(assets.owned_assets.back().get());
     }
 
     find_player(assets);
@@ -75,9 +77,9 @@ void InitializeAssets::initialize(Assets& assets,
 }
 
 void InitializeAssets::find_player(Assets& assets) {
-    for (auto& asset : assets.all) {
-        if (asset.info && asset.info->type == "Player") {
-            assets.player = &asset;
+    for (Asset* asset : assets.all) {
+        if (asset && asset->info && asset->info->type == "Player") {
+            assets.player = asset;
             std::cout << "[InitializeAssets] Found player asset: "
                       << assets.player->info->name << "\n";
             break;
@@ -119,9 +121,9 @@ void InitializeAssets::setup_static_sources(Assets& assets) {
 
                 std::vector<Asset*> targets;
                 targets.reserve(assets.all.size());
-                for (const auto& a : assets.all) {
-                    if (!a.info) continue;
-                    collect_assets_in_range(&a, lx, ly, r2, targets);
+                for (Asset* a : assets.all) {
+                    if (!a || !a->info) continue;
+                    collect_assets_in_range(a, lx, ly, r2, targets);
                 }
 
                 for (Asset* t : targets) {
@@ -136,15 +138,16 @@ void InitializeAssets::setup_static_sources(Assets& assets) {
         }
     };
 
-    for (auto& owner : assets.all)
-        recurse(owner);
+    for (Asset* owner : assets.all)
+        if (owner)
+            recurse(*owner);
 }
 
 void InitializeAssets::setup_shading_groups(Assets& assets) {
     int group = 1;
-    for (auto& a : assets.all) {
-        if (!a.info) continue;
-        set_shading_group_recursive(a, group, assets.num_groups_);
+    for (Asset* a : assets.all) {
+        if (!a || !a->info) continue;
+        set_shading_group_recursive(*a, group, assets.num_groups_);
         group = (group == assets.num_groups_) ? 1 : group + 1;
     }
 }

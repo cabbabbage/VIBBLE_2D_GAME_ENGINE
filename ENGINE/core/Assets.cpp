@@ -14,6 +14,18 @@
 
 #include <algorithm>
 #include <iostream>
+#include <memory>
+
+namespace {
+// Ensure newly created assets and any children share the same view
+void set_view_recursive(Asset* asset, view* v) {
+    if (!asset) return;
+    asset->set_view(v);
+    for (Asset* child : asset->children) {
+        set_view_recursive(child, v);
+    }
+}
+} // namespace
 
 Assets::Assets(std::vector<Asset>&& loaded,
                AssetLibrary& library,
@@ -135,16 +147,19 @@ void Assets::remove(Asset* asset) {
               << (asset->info ? asset->info->name : "<null>")
               << " at (" << asset->pos_X << ", " << asset->pos_Y << ")\n";
 
-    active_assets.erase(std::remove(active_assets.begin(), active_assets.end(), asset),
-                        active_assets.end());
-    closest_assets.erase(std::remove(closest_assets.begin(), closest_assets.end(), asset),
-                         closest_assets.end());
+    // Remove from active manager and refresh cached vectors
+    activeManager.remove(asset);
+    activeManager.updateClosestAssets(player, 3);
+    active_assets  = activeManager.getActive();
+    closest_assets = activeManager.getClosest();
 
-    all.erase(std::remove_if(all.begin(), all.end(),
-                             [asset](Asset& a) { return &a == asset; }),
-              all.end());
-
-    asset->~Asset();
+    // Remove from pointer list
+    all.erase(std::remove(all.begin(), all.end(), asset), all.end());
+    // Remove owned storage
+    owned_assets.erase(
+        std::remove_if(owned_assets.begin(), owned_assets.end(),
+                        [asset](const std::unique_ptr<Asset>& a) { return a.get() == asset; }),
+        owned_assets.end());
 }
 
 void Assets::set_dev_mode(bool mode) {
@@ -178,61 +193,133 @@ nlohmann::json Assets::save_current_room(std::string room_name) {
 }
 
 void Assets::addAsset(const std::string& name, int gx, int gy) {
+    std::cout << "\n[Assets::addAsset] Request to create asset '" << name
+              << "' at grid (" << gx << ", " << gy << ")\n";
+
+    // Check library
     auto info = library_.get(name);
     if (!info) {
-        std::cerr << "[Assets] addAsset failed: no info for '" << name << "'\n";
+        std::cerr << "[Assets::addAsset][Error] No asset info found for '" << name << "'\n";
+        return;
+    }
+    std::cout << "[Assets::addAsset] Retrieved AssetInfo '" << info->name
+              << "' at " << info << "\n";
+
+    // Construct area
+    Area spawn_area(name, gx, gy, 1, 1, "Point", 1, 1, 1);
+    std::cout << "[Assets::addAsset] Created Area '" << spawn_area.get_name()
+              << "' at (" << gx << ", " << gy << ")\n";
+
+    // Track size before
+    size_t prev_size = owned_assets.size();
+
+    // Construct asset
+    owned_assets.emplace_back(
+        std::make_unique<Asset>(info, spawn_area, gx, gy, 0, nullptr));
+
+    if (owned_assets.size() <= prev_size) {
+        std::cerr << "[Assets::addAsset][Error] owned_assets did not grow!\n";
         return;
     }
 
-    
-    Area spawn_area(name,
-                    gx, gy,
-                    1, 1,
-                    "Point",
-                    1,
-                    1,
-                    1);
+    Asset* newAsset = owned_assets.back().get();
+    if (!newAsset) {
+        std::cerr << "[Assets::addAsset][Error] Asset allocation failed for '" << name << "'\n";
+        return;
+    }
+    std::cout << "[Assets::addAsset][Debug] New Asset allocated at " << newAsset
+              << " (info=" << (newAsset->info ? newAsset->info->name : "<null>")
+              << ")\n";
 
-    
-    all.emplace_back(info, spawn_area, gx, gy, 0, nullptr);
-    Asset* newAsset = &all.back();
+    // Insert into master list
+    all.push_back(newAsset);
+    std::cout << "[Assets::addAsset] all.size() now = " << all.size() << "\n";
 
-    
-    
-
-    std::cout << "[Assets] Added asset '" << name
-              << "' at (" << gx << ", " << gy << ")\n";
-}
-
-Asset* Assets::spawn_asset(const std::string& name, int world_x, int world_y) {
-    auto info = library_.get(name);
-    if (!info) {
-        std::cerr << "[Assets] spawn_asset failed: no info for '" << name << "'\n";
-        return nullptr;
+    // Set view + finalize
+    try {
+        set_view_recursive(newAsset, &window);
+        std::cout << "[Assets::addAsset] View set successfully\n";
+        newAsset->finalize_setup();
+        std::cout << "[Assets::addAsset] Finalize setup successful\n";
+    } catch (const std::exception& e) {
+        std::cerr << "[Assets::addAsset][Exception] " << e.what() << "\n";
     }
 
-    Area spawn_area(name,
-                    world_x, world_y,
-                    1, 1,
-                    "Point",
-                    1,
-                    1,
-                    1);
-
-    all.emplace_back(info, spawn_area, world_x, world_y, 0, nullptr);
-    Asset* newAsset = &all.back();
-    newAsset->set_view(&window);
-    newAsset->finalize_setup();
-
-    // Optionally place into active list this frame by recomputing vectors
-    activeManager.updateAssetVectors(player, player ? player->pos_X : world_x, player ? player->pos_Y : world_y);
+    // Activate in manager
+    activeManager.activate(newAsset);
+    activeManager.updateClosestAssets(player, 3);
     active_assets  = activeManager.getActive();
     closest_assets = activeManager.getClosest();
 
-    std::cout << "[Assets] Spawned asset '" << name
+    std::cout << "[Assets::addAsset] Active assets=" << active_assets.size()
+              << ", Closest=" << closest_assets.size() << "\n";
+
+    std::cout << "[Assets::addAsset] Successfully added asset '" << name
+              << "' at (" << gx << ", " << gy << ")\n";
+}
+
+
+Asset* Assets::spawn_asset(const std::string& name, int world_x, int world_y) {
+    std::cout << "\n[Assets::spawn_asset] Request to spawn asset '" << name
+              << "' at world (" << world_x << ", " << world_y << ")\n";
+
+    auto info = library_.get(name);
+    if (!info) {
+        std::cerr << "[Assets::spawn_asset][Error] No asset info found for '" << name << "'\n";
+        return nullptr;
+    }
+    std::cout << "[Assets::spawn_asset] Retrieved AssetInfo '" << info->name
+              << "' at " << info << "\n";
+
+    Area spawn_area(name, world_x, world_y, 1, 1, "Point", 1, 1, 1);
+    std::cout << "[Assets::spawn_asset] Created Area '" << spawn_area.get_name()
               << "' at (" << world_x << ", " << world_y << ")\n";
+
+    size_t prev_size = owned_assets.size();
+    owned_assets.emplace_back(
+        std::make_unique<Asset>(info, spawn_area, world_x, world_y, 0, nullptr));
+
+    if (owned_assets.size() <= prev_size) {
+        std::cerr << "[Assets::spawn_asset][Error] owned_assets did not grow!\n";
+        return nullptr;
+    }
+
+    Asset* newAsset = owned_assets.back().get();
+    if (!newAsset) {
+        std::cerr << "[Assets::spawn_asset][Error] Asset allocation failed for '" << name << "'\n";
+        return nullptr;
+    }
+
+    std::cout << "[Assets::spawn_asset][Debug] New Asset allocated at " << newAsset
+              << " (info=" << (newAsset->info ? newAsset->info->name : "<null>")
+              << ")\n";
+
+    all.push_back(newAsset);
+    std::cout << "[Assets::spawn_asset] all.size() now = " << all.size() << "\n";
+
+    try {
+        set_view_recursive(newAsset, &window);
+        std::cout << "[Assets::spawn_asset] View set successfully\n";
+        newAsset->finalize_setup();
+        std::cout << "[Assets::spawn_asset] Finalize setup successful\n";
+    } catch (const std::exception& e) {
+        std::cerr << "[Assets::spawn_asset][Exception] " << e.what() << "\n";
+    }
+
+    activeManager.activate(newAsset);
+    activeManager.updateClosestAssets(player, 3);
+    active_assets  = activeManager.getActive();
+    closest_assets = activeManager.getClosest();
+
+    std::cout << "[Assets::spawn_asset] Active assets=" << active_assets.size()
+              << ", Closest=" << closest_assets.size() << "\n";
+
+    std::cout << "[Assets::spawn_asset] Successfully spawned asset '" << name
+              << "' at (" << world_x << ", " << world_y << ")\n";
+
     return newAsset;
 }
+
 
 void Assets::render_overlays(SDL_Renderer* renderer) {
     if (library_ui_ && library_ui_->is_visible()) {

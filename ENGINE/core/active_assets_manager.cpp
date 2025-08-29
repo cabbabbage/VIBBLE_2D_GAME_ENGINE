@@ -13,7 +13,7 @@ ActiveAssetsManager::ActiveAssetsManager(int screen_width, int screen_height, vi
       all_assets_(nullptr)
 {}
 
-void ActiveAssetsManager::initialize(std::vector<Asset>& all_assets,
+void ActiveAssetsManager::initialize(std::vector<Asset*>& all_assets,
                                      Asset* player,
                                      int screen_center_x,
                                      int screen_center_y)
@@ -163,9 +163,9 @@ void ActiveAssetsManager::updateActiveAssets(int cx, int cy)
     active_assets_.clear();
 
     
-    for (Asset& a : *all_assets_) {
-        if (view_.is_asset_in_bounds(a, cx, cy)) {
-            activate(&a);
+    for (Asset* a : *all_assets_) {
+        if (a && view_.is_asset_in_bounds(*a, cx, cy)) {
+            activate(a);
         }
     }
 

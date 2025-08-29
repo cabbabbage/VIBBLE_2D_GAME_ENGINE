@@ -123,40 +123,80 @@ void ControlsManager::interaction() {
 
 
 void ControlsManager::handle_teleport(const Input& input) {
-    if (!player_) return;
+    if (!player_) {
+        std::cerr << "[ControlsManager::handle_teleport][Error] player_ is null, cannot teleport\n";
+        return;
+    }
 
-    // On press: set teleport point and drop a marker nearby (~30px radius)
+    std::cout << "\n[ControlsManager::handle_teleport] Handling teleport input\n";
+    std::cout << "[Debug] Player position: (" << player_->pos_X << ", " << player_->pos_Y << ")\n";
+
+    // --- Set teleport point and drop a marker ---
     if (input.wasKeyPressed(SDLK_SPACE)) {
+        std::cout << "[Teleport] SPACE pressed -> setting teleport point\n";
+
         teleport_point_ = { player_->pos_X, player_->pos_Y };
         teleport_set_ = true;
+        std::cout << "[Teleport] Teleport point set at (" 
+                  << teleport_point_.x << ", " << teleport_point_.y << ")\n";
 
-        // Remove existing marker if present
+        // Remove existing marker
         if (marker_asset_ && assets_) {
+            std::cout << "[Teleport] Removing existing marker at " << marker_asset_ << "\n";
+            aam_.remove(marker_asset_);
             assets_->remove(marker_asset_);
+            aam_.updateClosestAssets(player_, 3);
             marker_asset_ = nullptr;
+            std::cout << "[Teleport] Marker removed successfully\n";
         }
 
-        // Spawn new marker near the player
+        // Spawn new marker nearby
         if (assets_) {
+            std::cout << "[Teleport] Spawning new marker asset near player\n";
             static std::mt19937 rng{ std::random_device{}() };
             std::uniform_real_distribution<float> angle(0.0f, 6.2831853f);
+
             float a = angle(rng);
-            int r = 30; // radius in pixels
-            int mx = player_->pos_X + static_cast<int>(std::round(std::cos(a) * r));
-            int my = player_->pos_Y + static_cast<int>(std::round(std::sin(a) * r));
+            int r   = 30; // radius
+            int mx  = player_->pos_X + static_cast<int>(std::round(std::cos(a) * r));
+            int my  = player_->pos_Y + static_cast<int>(std::round(std::sin(a) * r));
+
+            std::cout << "[Teleport][Debug] Marker spawn coords: (" << mx << ", " << my 
+                      << ") offset " << r << "px @ angle " << a << " radians\n";
+
             marker_asset_ = assets_->spawn_asset("marker", mx, my);
+            if (marker_asset_) {
+                std::cout << "[Teleport] Marker asset spawned successfully at " << marker_asset_ << "\n";
+            } else {
+                std::cerr << "[Teleport][Error] Failed to spawn marker asset\n";
+            }
+        } else {
+            std::cerr << "[Teleport][Error] assets_ is null, cannot spawn marker\n";
         }
     }
 
-    // On press: teleport and remove marker
+    // --- Teleport on 'Q' press ---
     if (input.wasKeyPressed(SDLK_q) && teleport_set_) {
-        player_->set_position(teleport_point_.x, teleport_point_.y);
-        teleport_point_ = { 0, 0 };
-        teleport_set_ = false;
+        std::cout << "[Teleport] Q pressed -> teleporting player to ("
+                  << teleport_point_.x << ", " << teleport_point_.y << ")\n";
 
+        player_->set_position(teleport_point_.x, teleport_point_.y);
+
+        // Reset teleport state
+        teleport_point_ = { 0, 0 };
+        teleport_set_   = false;
+        std::cout << "[Teleport] Teleport completed, reset point and state\n";
+
+        // Remove marker if it exists
         if (marker_asset_ && assets_) {
+            std::cout << "[Teleport] Removing marker after teleport at " << marker_asset_ << "\n";
+            aam_.remove(marker_asset_);
             assets_->remove(marker_asset_);
+            aam_.updateClosestAssets(player_, 3);
             marker_asset_ = nullptr;
+            std::cout << "[Teleport] Marker cleaned up after teleport\n";
+        } else {
+            std::cout << "[Teleport] No marker to remove after teleport\n";
         }
     }
 }

@@ -8,6 +8,8 @@
 #include <string>
 #include <vector>
 #include <unordered_set>
+#include <memory>
+#include <deque>
 #include "room/room.hpp"
 
 class Asset;
@@ -67,7 +69,10 @@ Assets(std::vector<Asset>&& loaded,
     const view& getView() const { return window; }
 
     
-    std::vector<Asset> all;
+    // Owns all asset instances to keep their memory stable
+    std::deque<std::unique_ptr<Asset>> owned_assets;
+    // Non-owning flat list for easy iteration/access
+    std::vector<Asset*> all;
     Asset* player = nullptr;
     ControlsManager* controls = nullptr;
     

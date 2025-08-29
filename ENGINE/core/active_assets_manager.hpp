@@ -7,12 +7,13 @@
 #include <vector>
 #include <unordered_set>
 #include <cstddef>
+#include <memory>
 
 class ActiveAssetsManager {
 public:
     ActiveAssetsManager(int screen_width, int screen_height, view& v);
 
-    void initialize(std::vector<Asset>& all_assets,
+    void initialize(std::vector<Asset*>& all_assets,
                     Asset* player,
                     int screen_center_x,
                     int screen_center_y);
@@ -56,7 +57,7 @@ private:
     int screen_height_;
 
     
-    std::vector<Asset>* all_assets_;
+    std::vector<Asset*>* all_assets_;
 
     
     std::vector<Asset*> active_assets_;
