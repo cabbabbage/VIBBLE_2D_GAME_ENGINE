@@ -126,6 +126,9 @@ void Area::align(int target_x, int target_y) {
 }
 
 std::tuple<int, int, int, int> Area::get_bounds() const {
+    if (bounds_valid_) {
+        return {min_x_, min_y_, max_x_, max_y_};
+    }
     if (points.empty())
         throw std::runtime_error("[Area: " + area_name_ + "] get_bounds() on empty point set");
 
@@ -137,6 +140,8 @@ std::tuple<int, int, int, int> Area::get_bounds() const {
         miny = std::min(miny, p.second);
         maxy = std::max(maxy, p.second);
     }
+    min_x_ = minx; min_y_ = miny; max_x_ = maxx; max_y_ = maxy;
+    bounds_valid_ = true;
     return {minx, miny, maxx, maxy};
 }
 
@@ -189,15 +194,8 @@ void Area::contract(int inset) {
 }
 
 double Area::get_area() const {
-    size_t n = points.size();
-    if (n < 3) return 0.0;
-    double area = 0.0;
-    for (size_t i = 0; i < n; ++i) {
-        auto [x0, y0] = points[i];
-        auto [x1, y1] = points[(i + 1) % n];
-        area += x0 * y1 - x1 * y0;
-    }
-    return std::abs(area) * 0.5;
+    // area_size is kept up-to-date in update_geometry_data()
+    return area_size;
 }
 
 const std::vector<Area::Point>& Area::get_points() const {
@@ -210,23 +208,28 @@ void Area::union_with(const Area& other) {
 }
 
 bool Area::contains_point(const Point& pt) const {
-    bool inside = false;
-    const double x = pt.first;
-    const double y = pt.second;
     const size_t n = points.size();
     if (n < 3) return false;
 
-    for (size_t i = 0, j = n - 1; i < n; j = i++) {
-        double xi = points[i].first;
-        double yi = points[i].second;
-        double xj = points[j].first;
-        double yj = points[j].second;
-
-        bool crossing = ((yi > y) != (yj > y)) &&
-                        (x < xi + (y - yi) * (xj - xi) / (yj - yi));
-        if (crossing) inside = !inside;
+    // Fast AABB reject
+    auto [minx, miny, maxx, maxy] = get_bounds();
+    if (pt.first < minx || pt.first > maxx || pt.second < miny || pt.second > maxy) {
+        return false;
     }
 
+    bool inside = false;
+    const double x = pt.first;
+    const double y = pt.second;
+    for (size_t i = 0, j = n - 1; i < n; j = i++) {
+        const double xi = points[i].first;
+        const double yi = points[i].second;
+        const double xj = points[j].first;
+        const double yj = points[j].second;
+
+        const bool intersect = ((yi > y) != (yj > y)) &&
+                               (x < (xj - xi) * (y - yi) / (yj - yi + 1e-12) + xi);
+        if (intersect) inside = !inside;
+    }
     return inside;
 }
 
@@ -241,12 +244,35 @@ void Area::update_geometry_data() {
         center_x = 0;
         center_y = 0;
         area_size = 0.0;
+        min_x_ = min_y_ = max_x_ = max_y_ = 0;
+        bounds_valid_ = true;
         return;
     }
-    auto [minx, miny, maxx, maxy] = get_bounds();
+
+    // Compute bounds and polygon area in a single pass
+    int minx = points[0].first, maxx = minx;
+    int miny = points[0].second, maxy = miny;
+    long long twice_area = 0;
+    const size_t n = points.size();
+    for (size_t i = 0, j = n - 1; i < n; j = i++) {
+        const int xi = points[i].first;
+        const int yi = points[i].second;
+        const int xj = points[j].first;
+        const int yj = points[j].second;
+
+        minx = std::min(minx, xi);
+        maxx = std::max(maxx, xi);
+        miny = std::min(miny, yi);
+        maxy = std::max(maxy, yi);
+
+        twice_area += static_cast<long long>(xj) * yi - static_cast<long long>(xi) * yj;
+    }
+
+    min_x_ = minx; min_y_ = miny; max_x_ = maxx; max_y_ = maxy;
+    bounds_valid_ = true;
     center_x = (minx + maxx) / 2;
     center_y = (miny + maxy) / 2;
-    area_size = get_area();
+    area_size = std::abs(static_cast<double>(twice_area)) * 0.5;
 }
 
 Area::Point Area::random_point_within() const {

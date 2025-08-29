@@ -44,7 +44,6 @@ MainApp::~MainApp() {
     if (overlay_texture_)  SDL_DestroyTexture(overlay_texture_);
     if (minimap_texture_)  SDL_DestroyTexture(minimap_texture_);
     delete game_assets_;
-    delete scene_;
     delete mouse_input_;
 }
 
@@ -59,13 +58,30 @@ void MainApp::setup() {
         loader_ = std::make_unique<AssetLoader>(map_path_, renderer_);
         minimap_texture_ = loader_->createMinimap(200, 200);
 
-        auto assets_uptr = loader_->createAssets(screen_w_, screen_h_);
-        game_assets_ = assets_uptr.release();
+        auto all_assets = loader_->createAssets(screen_w_, screen_h_);
+
+        Asset* player_ptr = nullptr;
+        for (auto& a : all_assets) {
+            if (a.info && a.info->type == "Player") { player_ptr = &a; break; }
+        }
+        if (!player_ptr) throw std::runtime_error("[Main] No player asset found");
+
+        game_assets_ = new Assets(std::move(all_assets),
+                                  *loader_->getAssetLibrary(),
+                                  player_ptr,
+                                  loader_->getRooms(),
+                                  screen_w_,
+                                  screen_h_,
+                                  player_ptr->pos_X,
+                                  player_ptr->pos_Y,
+                                  static_cast<int>(loader_->getMapRadius() * 1.2),
+                                  renderer_,
+                                  map_path_);
 
         mouse_input_ = new MouseInput();
         game_assets_->set_mouse_input(mouse_input_);
 
-        scene_ = new SceneRenderer(renderer_, game_assets_, screen_w_, screen_h_, map_path_);
+        
     } catch (const std::exception& e) {
         std::cerr << "[MainApp] Setup error: " << e.what() << "\n";
         throw;
@@ -94,10 +110,7 @@ void MainApp::game_loop() {
             game_assets_->update(keys, px, py);
         }
 
-        if (frame_count >= 80) {
-            if (scene_) scene_->render();
-            SDL_RenderPresent(renderer_);
-        }
+        // Rendering is handled by the SceneRenderer owned by Assets
 
         ++frame_count;
         if (mouse_input_) mouse_input_->update();

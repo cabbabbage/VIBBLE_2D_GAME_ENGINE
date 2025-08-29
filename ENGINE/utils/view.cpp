@@ -1,9 +1,11 @@
 #include "view.hpp"
 #include "asset/Asset.hpp"
+#include "utils/area.hpp"
 #include "room/room.hpp"
 #include "find_current_room.hpp"
 #include <cmath>
 #include <algorithm>
+#include <vector>
 
 view::view(int screen_width, int screen_height, const Bounds& starting_bounds)
 {
@@ -67,25 +69,33 @@ SDL_Rect view::to_world_rect(int cx, int cy) const {
     return SDL_Rect{ x, y, w, h };
 }
 
+Area view::get_view_area(int cx, int cy) const {
+    Bounds b = get_current_bounds();
+    const int vx = cx + b.left;
+    const int vy = cy + b.top;
+    const int vw = (b.right - b.left);
+    const int vh = (b.bottom - b.top);
+    std::vector<Area::Point> corners{
+        {vx, vy},
+        {vx + vw, vy},
+        {vx + vw, vy + vh},
+        {vx, vy + vh}
+    };
+    return Area("view_bounds", corners);
+}
+
 bool view::is_point_in_bounds(int x, int y, int cx, int cy) const {
-    SDL_Rect vr = to_world_rect(cx, cy);
-    return (x >= vr.x && x < vr.x + vr.w &&
-            y >= vr.y && y < vr.y + vr.h);
+    Area view_area = get_view_area(cx, cy);
+    return view_area.contains_point({x, y});
 }
 
 bool view::is_asset_in_bounds(const Asset& a, int cx, int cy) const {
-    SDL_Texture* tex = a.get_current_frame();
-    int tw = 0, th = 0;
-    if (tex) {
-        SDL_QueryTexture(tex, nullptr, nullptr, &tw, &th);
+    Area view_area = get_view_area(cx, cy);
+    Area asset_area = a.get_area("collision");
+    if (asset_area.get_points().empty()) {
+        asset_area = a.get_area("clickable");
     }
-
-    int ax = a.pos_X - tw / 2;
-    int ay = a.pos_Y - th;
-    SDL_Rect asset_rect{ ax, ay, std::max(1, tw), std::max(1, th) };
-
-    SDL_Rect view_rect = to_world_rect(cx, cy);
-    return aabb_intersect(asset_rect, view_rect);
+    return view_area.intersects(asset_area);
 }
 
 void view::zoom_scale(double target_scale, int duration_steps) {
@@ -135,11 +145,6 @@ void view::update() {
     double t = static_cast<double>(steps_done_) / static_cast<double>(steps_total_);
     double s = start_scale_ + (target_scale_ - start_scale_) * t;
     scale_ = static_cast<float>(std::max(0.0001, s));
-}
-
-bool view::aabb_intersect(const SDL_Rect& A, const SDL_Rect& B) {
-    return !(A.x + A.w <= B.x || B.x + B.w <= A.x ||
-             A.y + A.h <= B.y || B.y + B.h <= A.y);
 }
 
 namespace {
