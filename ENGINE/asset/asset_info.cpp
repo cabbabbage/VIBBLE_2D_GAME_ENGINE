@@ -1,11 +1,16 @@
 #include "asset_info.hpp"
 #include "utils/cache_manager.hpp"
+#include "utils/generate_light.hpp"
 #include <SDL_image.h>
 #include <iostream>
 #include <fstream>
 #include <random>
 #include <sstream>
 #include <iomanip>
+#include "asset_info_methods/animation_loader.hpp"
+#include "asset_info_methods/lighting_loader.hpp"
+#include "asset_info_methods/area_loader.hpp"
+#include "asset_info_methods/child_loader.hpp"
 
 namespace fs = std::filesystem;
 
@@ -57,22 +62,17 @@ AssetInfo::AssetInfo(const std::string& asset_folder_name)
     
     if (data.contains("animations")) {
         anims_json_ = data["animations"];
-        interaction = anims_json_.contains("interaction") && !anims_json_["interaction"].is_null();
-        hit         = anims_json_.contains("hit")        && !anims_json_["hit"].is_null();
-        collision   = anims_json_.contains("collision")  && !anims_json_["collision"].is_null();
     }
 
     
     load_base_properties(data);
-
     
-    load_lighting_info(data);
-
+    
+    LightingLoader::load(*this, data);
+    
     
     const auto& ss = data.value("size_settings", nlohmann::json::object());
-    scale_percentage       = ss.value("scale_percentage", 100.0f);
-    variability_percentage = ss.value("variability_percentage", 0.0f);
-    scale_factor           = scale_percentage / 100.0f;
+    scale_factor = ss.value("scale_percentage", 100.0f) / 100.0f;
 
     
     int scaled_canvas_w = static_cast<int>(original_canvas_width * scale_factor);
@@ -80,8 +80,8 @@ AssetInfo::AssetInfo(const std::string& asset_folder_name)
     int offset_x = (scaled_canvas_w - 0) / 2;
     int offset_y = (scaled_canvas_h - 0);
 
-    load_collision_areas(data, dir_path_, offset_x, offset_y);
-    load_child_json_paths(data, dir_path_);
+    AreaLoader::load_collision_areas(*this, data, dir_path_, offset_x, offset_y);
+    ChildLoader::load_children(*this, data, dir_path_);
 }
 
 AssetInfo::~AssetInfo() {
@@ -96,7 +96,6 @@ AssetInfo::~AssetInfo() {
         anim.frames.clear();
     }
     animations.clear();
-    child_json_paths.clear();
 }
 
 void AssetInfo::loadAnimations(SDL_Renderer* renderer) {
@@ -139,58 +138,7 @@ void AssetInfo::loadAnimations(SDL_Renderer* renderer) {
 }
 
 void AssetInfo::get_area_textures(SDL_Renderer* renderer) {
-    if (!renderer) return;
-
-    CacheManager cache;
-
-    auto try_load_or_create = [&](std::unique_ptr<Area>& area, const std::string& kind) {
-        if (!area) return;
-
-        std::string folder = "cache/areas/" + name + "_" + kind;
-        std::string meta_file = folder + "/metadata.json";
-        std::string bmp_file = folder + "/0.bmp";
-
-        auto [minx, miny, maxx, maxy] = area->get_bounds();
-        nlohmann::json meta;
-        if (cache.load_metadata(meta_file, meta)) {
-            if (meta.value("bounds", std::vector<int>{}) == std::vector<int>{minx, miny, maxx, maxy}) {
-                SDL_Surface* surf = cache.load_surface(bmp_file);
-                if (surf) {
-                    SDL_Texture* tex = cache.surface_to_texture(renderer, surf);
-                    SDL_FreeSurface(surf);
-                    if (tex) {
-                        
-                        area->create_area_texture(renderer); 
-                        return;
-                    }
-                }
-            }
-        }
-
-        area->create_area_texture(renderer);
-
-        
-        area->create_area_texture(renderer);
-        SDL_Texture* tex = area->get_texture();
-        if (tex) {
-            SDL_Surface* surf = SDL_CreateRGBSurfaceWithFormat(0, maxx - minx + 1, maxy - miny + 1, 32, SDL_PIXELFORMAT_RGBA8888);
-            if (surf) {
-                SDL_SetRenderTarget(renderer, tex);
-                SDL_RenderReadPixels(renderer, nullptr, SDL_PIXELFORMAT_RGBA8888, surf->pixels, surf->pitch);
-                cache.save_surface_as_png(surf, bmp_file);
-                SDL_FreeSurface(surf);
-                meta["bounds"] = {minx, miny, maxx, maxy};
-                cache.save_metadata(meta_file, meta);
-                SDL_SetRenderTarget(renderer, nullptr);
-            }
-        }
-    };
-
-    try_load_or_create(passability_area, "passability");
-    try_load_or_create(spacing_area, "spacing");
-    try_load_or_create(collision_area, "collision");
-    try_load_or_create(interaction_area, "interaction");
-    try_load_or_create(attack_area, "attack");
+    AnimationLoader::get_area_textures(*this, renderer);
 }
 
 void AssetInfo::load_base_properties(const nlohmann::json& data) {
@@ -204,174 +152,23 @@ void AssetInfo::load_base_properties(const nlohmann::json& data) {
 
     min_same_type_distance = data.value("min_same_type_distance", 0);
     min_distance_all = data.value("min_distance_all", 0);
-    can_invert = data.value("can_invert", true);
-    max_child_depth = data.value("max_child_depth", 0);
-    min_child_depth = data.value("min_child_depth", 0);
-    duplicatable = data.value("duplicatable", false);
-    duplication_interval_min = data.value("duplication_interval_min", 0);
-    duplication_interval_max = data.value("duplication_interval_max", 0);
-    update_radius = data.value("update_radius", 1000);
     has_shading = data.value("has_shading", false);
-    flipable               = data.value("can_invert", false);
-
-    std::mt19937 rng{ std::random_device{}() };
-    if (min_child_depth <= max_child_depth) {
-        child_depth = std::uniform_int_distribution<int>(min_child_depth, max_child_depth)(rng);
-    } else {
-        child_depth = 0;
-    }
-
-
-
-
-    if (duplication_interval_min <= duplication_interval_max && duplicatable) {
-        duplication_interval = std::uniform_int_distribution<int>(duplication_interval_min, duplication_interval_max)(rng);
-    } else {
-        duplication_interval = 0;
-    }
+    flipable = data.value("can_invert", false);
 }
 
-void AssetInfo::load_lighting_info(const nlohmann::json& data) {
-    has_light_source = false;
-    light_sources.clear();
-    orbital_light_sources.clear();
-
-    if (!data.contains("lighting_info"))
-        return;
-
-    const auto& linfo = data["lighting_info"];
-
-    auto parse_light = [](const nlohmann::json& l) -> std::optional<LightSource> {
-        if (!l.is_object() || !l.value("has_light_source", false))
-            return std::nullopt;
-
-        LightSource light;
-        light.intensity = l.value("light_intensity", 0);
-        light.radius    = l.value("radius", 100);
-        light.fall_off  = l.value("fall_off", 0);
-        light.flare     = l.value("flare", 1);
-        light.flicker   = l.value("flicker", 0);
-        light.offset_x  = l.value("offset_x", 0);
-        light.offset_y  = l.value("offset_y", 0);
-        light.x_radius  = l.value("x_radius", 0);
-        light.y_radius  = l.value("y_radius", 0);
-        double factor   = l.value("factor", 100);
-        light.color     = {255, 255, 255, 255};
-        factor = factor/100;
-        light.x_radius = light.x_radius * factor;
-        light.y_radius = light.y_radius * factor;
-
-        if (l.contains("light_color") && l["light_color"].is_array() && l["light_color"].size() == 3) {
-            light.color.r = l["light_color"][0].get<int>();
-            light.color.g = l["light_color"][1].get<int>();
-            light.color.b = l["light_color"][2].get<int>();
-        }
-
-        return light;
-    };
-
-    if (linfo.is_array()) {
-        for (const auto& l : linfo) {
-            auto maybe = parse_light(l);
-            if (maybe.has_value()) {
-                has_light_source = true;
-                LightSource light = maybe.value();
-
-                
-                if (light.x_radius > 0 || light.y_radius > 0)
-                    orbital_light_sources.push_back(light);
-                else
-                    light_sources.push_back(light);
-            }
-        }
-    } else if (linfo.is_object()) {
-        auto maybe = parse_light(linfo);
-        if (maybe.has_value()) {
-            has_light_source = true;
-            LightSource light = maybe.value();
-
-            if (light.x_radius > 0 || light.y_radius > 0)
-                orbital_light_sources.push_back(light);
-            else
-                light_sources.push_back(light);
-        }
-    }
-}
+void AssetInfo::load_lighting_info(const nlohmann::json& data) { LightingLoader::load(*this, data); }
 
 
 void AssetInfo::load_collision_areas(const nlohmann::json& data,
                                      const std::string& dir_path,
                                      int offset_x,
                                      int offset_y) {
-    try_load_area(data, "impassable_area", dir_path, passability_area, has_passability_area, scale_factor, offset_x, offset_y);
-    try_load_area(data, "spacing_area", dir_path, spacing_area, has_spacing_area, scale_factor, offset_x, offset_y);
-    try_load_area(data, "collision_area", dir_path, collision_area, has_collision_area, scale_factor, offset_x, offset_y);
-    try_load_area(data, "interaction_area", dir_path, interaction_area, has_interaction_area, scale_factor, offset_x, offset_y);
-    try_load_area(data, "hit_area", dir_path, attack_area, has_attack_area, scale_factor, offset_x, offset_y);
+    AreaLoader::load_collision_areas(*this, data, dir_path, offset_x, offset_y);
 }
 
 void AssetInfo::load_child_json_paths(const nlohmann::json& data,
-                                      const std::string& dir_path)
-{
-    children.clear();
-    if (!data.contains("child_assets") || !data["child_assets"].is_array())
-        return;
-
-    for (const auto& entry : data["child_assets"]) {
-        std::string rel_path;
-        if (entry.is_string()) {
-            rel_path = entry.get<std::string>();
-        }
-        else if (entry.is_object() && entry.contains("json_path") && entry["json_path"].is_string()) {
-            rel_path = entry["json_path"].get<std::string>();
-        } else {
-            continue;
-        }
-
-        fs::path full_path = fs::path(dir_path) / rel_path;
-        if (!fs::exists(full_path)) {
-            std::cerr << "[AssetInfo] child JSON not found: " << full_path << "\n";
-            continue;
-        }
-
-        
-        int z_offset_value = 0;
-        try {
-            std::ifstream in(full_path);
-            nlohmann::json childJson;
-            in >> childJson;
-            if (childJson.contains("z_offset")) {
-                auto& jz = childJson["z_offset"];
-                if (jz.is_number()) {
-                    z_offset_value = static_cast<int>(jz.get<double>());
-                } else if (jz.is_string()) {
-                    try { z_offset_value = std::stoi(jz.get<std::string>()); } catch (...) {}
-                }
-            }
-        } catch (const std::exception& e) {
-            std::cerr << "[AssetInfo] failed to parse z_offset from "
-                      << full_path << " | " << e.what() << "\n";
-        }
-
-        ChildInfo ci;
-        ci.json_path = full_path.string();
-        ci.z_offset  = z_offset_value;
-
-        try {
-            std::string area_name = fs::path(rel_path).stem().string();
-            ci.area_ptr = std::make_unique<Area>(area_name, full_path.string(), scale_factor);
-            ci.area_ptr->apply_offset(0, 100);
-            ci.has_area = true;
-            std::cout << "[AssetInfo] loaded child area from: "
-                      << full_path.string() << "\n";
-        } catch (const std::exception& e) {
-            std::cerr << "[AssetInfo] failed to construct area from child JSON: "
-                      << full_path << " | " << e.what() << "\n";
-            ci.has_area = false;
-        }
-
-        children.emplace_back(std::move(ci));
-    }
+                                      const std::string& dir_path) {
+    ChildLoader::load_children(*this, data, dir_path);
 }
 
 void AssetInfo::load_animations(const nlohmann::json& anims_json,
@@ -540,29 +337,4 @@ bool AssetInfo::has_tag(const std::string& tag) const {
     return std::find(tags.begin(), tags.end(), tag) != tags.end();
 }
 
-void AssetInfo::generate_lights(SDL_Renderer* renderer) {
-    GenerateLight generator(renderer);
-
-    for (std::size_t i = 0; i < light_sources.size(); ++i) {
-        SDL_Texture* tex = generator.generate(renderer, name, light_sources[i], i);
-        if (tex) {
-            SDL_SetTextureBlendMode(tex, SDL_BLENDMODE_BLEND);
-            light_sources[i].texture = tex;
-
-            
-            SDL_QueryTexture(tex, nullptr, nullptr, &light_sources[i].cached_w, &light_sources[i].cached_h);
-        }
-    }
-
-    std::size_t base_index = light_sources.size();
-    for (std::size_t i = 0; i < orbital_light_sources.size(); ++i) {
-        SDL_Texture* tex = generator.generate(renderer, name, orbital_light_sources[i], base_index + i);
-        if (tex) {
-            SDL_SetTextureBlendMode(tex, SDL_BLENDMODE_BLEND);
-            orbital_light_sources[i].texture = tex;
-
-            
-            SDL_QueryTexture(tex, nullptr, nullptr, &orbital_light_sources[i].cached_w, &orbital_light_sources[i].cached_h);
-        }
-    }
-}
+void AssetInfo::generate_lights(SDL_Renderer* renderer) { LightingLoader::generate_textures(*this, renderer); }

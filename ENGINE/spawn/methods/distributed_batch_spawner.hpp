@@ -2,7 +2,7 @@
 
 #include <vector>
 
-class BatchSpawnInfo;
+struct BatchSpawnInfo;
 class Area;
 class SpawnContext;
 

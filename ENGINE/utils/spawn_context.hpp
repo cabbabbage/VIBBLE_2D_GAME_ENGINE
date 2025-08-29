@@ -8,6 +8,7 @@
 #include "asset/Asset.hpp"
 #include "utils/area.hpp"
 #include "asset/asset_info.hpp"
+#include "spawn/check.hpp"
 
 class Asset;
 class Area;
@@ -15,7 +16,6 @@ class AssetInfo;
 class AssetLibrary;
 class AssetSpawnPlanner;
 class AssetSpawner;
-class Check;
 class SpawnLogger;
 
 class SpawnContext {
@@ -57,4 +57,3 @@ private:
     std::vector<std::unique_ptr<Asset>>& all_;
     AssetLibrary* asset_library_;
 };
-
