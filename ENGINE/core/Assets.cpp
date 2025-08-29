@@ -3,7 +3,6 @@
 #include "asset/initialize_assets.hpp"
 
 #include "controls_manager.hpp"
-#include "zoom_control.hpp"
 #include "find_current_room.hpp"   
 #include "asset/Asset.hpp"
 #include "asset/asset_info.hpp"
@@ -41,13 +40,14 @@ Assets::Assets(std::vector<Asset>&& loaded,
                                  map_radius);
 
     finder_ = new CurrentRoomFinder(rooms_, player);
-    
+    if (finder_) {
+        window.set_up_rooms(finder_);
+    }
 }
 
 
 Assets::~Assets() {
     delete controls;
-    delete zoom_control;
     delete finder_;
     delete dev_mouse;
 }
@@ -74,7 +74,7 @@ void Assets::update(const std::unordered_set<SDL_Keycode>& keys,
     activeManager.updateAssetVectors(player, screen_center_x, screen_center_y);
 
     current_room_ = finder_ ? finder_->getCurrentRoom() : nullptr;
-    if (zoom_control) zoom_control->update(current_room_);
+    window.update_zoom(current_room_, finder_, player);
 
     dx = dy = 0;
 

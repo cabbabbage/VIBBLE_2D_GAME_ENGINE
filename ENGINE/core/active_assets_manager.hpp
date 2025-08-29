@@ -1,8 +1,8 @@
 
 #pragma once
 
-#include "asset\Asset.hpp"
-#include "utils\view.hpp"
+#include "asset/Asset.hpp"
+#include "utils/view.hpp"
 
 #include <vector>
 #include <unordered_set>

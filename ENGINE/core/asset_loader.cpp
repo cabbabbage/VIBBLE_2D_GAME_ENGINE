@@ -1,20 +1,28 @@
 
 #include "asset_loader.hpp"
+
 #include <fstream>
 #include <iostream>
-#include <nlohmann/json.hpp>
 #include <queue>
 #include <numeric>
+#include <unordered_map>
+#include <cmath>
+#include <stdexcept>
+
+#include <SDL.h>
+
+#include "Assets.hpp"
+#include "asset/Asset.hpp"
+#include "asset/asset_library.hpp"
+#include "room/room.hpp"
+#include "utils/area.hpp"
+#include "room/generate_rooms.hpp"
+
+#include <nlohmann/json.hpp>
 
 using json = nlohmann::json;
 
 namespace {
-    size_t countAssets(const std::vector<Room*>& rooms) {
-        size_t total = 0;
-        for (auto* r : rooms) total += r->assets.size();
-        return total;
-    }
-
     Asset* findCenterAsset(const std::vector<Asset*>& group) {
         if (group.empty()) return nullptr;
         double avgX = std::accumulate(group.begin(), group.end(), 0.0,
@@ -36,18 +44,11 @@ namespace {
         return center;
     }
 
-    void logCountChange(const std::string& label, size_t before, size_t after) {
-        std::cout << "[AssetLoader] " << label
-                  << " before: " << before
-                  << ", after: " << after
-                  << " (" << (before - after) << " removed)\n";
-    }
 }
 
 AssetLoader::AssetLoader(const std::string& map_dir, SDL_Renderer* renderer)
     : map_path_(map_dir),
-      renderer_(renderer),
-      rng_(std::random_device{}())
+      renderer_(renderer)
 {
     load_map_json();
     asset_library_ = std::make_unique<AssetLibrary>();
