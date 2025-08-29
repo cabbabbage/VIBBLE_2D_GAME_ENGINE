@@ -1,6 +1,6 @@
 #pragma once
 
-class SpawnInfo;
+struct SpawnInfo;
 class Area;
 class SpawnContext;
 

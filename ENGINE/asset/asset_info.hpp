@@ -3,11 +3,9 @@
 #include <string>
 #include <vector>
 #include <map>
-#include <unordered_map>
 #include <SDL.h>
 #include <nlohmann/json.hpp>
 #include "utils/area.hpp"
-#include "utils/generate_light.hpp"
 #include "animation.hpp"
 #include "utils/light_source.hpp"
 
@@ -22,8 +20,6 @@ struct ChildInfo {
 
 class AssetInfo {
 public:
-    nlohmann::json json_data_;
-
     AssetInfo(const std::string& asset_folder_name);
     ~AssetInfo();
 
@@ -38,27 +34,14 @@ public:
     bool                          passable;
     int                           min_same_type_distance;
     int                           min_distance_all;
-    bool                          can_invert;
-    int                           max_child_depth;
-    int                           min_child_depth;
-    int                           child_depth;
-    bool                          duplicatable;
-    int                           duplication_interval_min;
-    int                           duplication_interval_max;
-    int                           duplication_interval;
-    float                         scale_percentage;
-    float                         variability_percentage;
     float                         scale_factor;
     int                           original_canvas_width;
     int                           original_canvas_height;
-    bool flipable;
+    bool                          flipable;
 
     std::vector<std::string>      tags;
     SDL_BlendMode                 blendmode;
 
-    bool                          interaction;
-    bool                          hit;
-    bool                          collision;
     bool                          has_light_source;
     bool                          has_shading;
     bool                          has_base_shadow;
@@ -88,14 +71,10 @@ public:
 
     std::map<std::string, Animation> animations;
 
-    std::vector<std::string> child_json_paths;
     std::vector<ChildInfo> children;
-    int update_radius;
 private:
     void get_area_textures(SDL_Renderer* renderer);
 
-    int offset_x;
-    int offset_y;
     void load_base_properties(const nlohmann::json& data);
     void load_lighting_info    (const nlohmann::json& data);
     void generate_lights(SDL_Renderer* renderer);
@@ -122,4 +101,9 @@ private:
 
     nlohmann::json anims_json_;
     std::string     dir_path_;
+
+    friend class AnimationLoader;
+    friend class LightingLoader;
+    friend class AreaLoader;
+    friend class ChildLoader;
 };

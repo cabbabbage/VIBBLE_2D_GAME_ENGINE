@@ -1,6 +1,7 @@
 #include "center_spawner.hpp"
 
 #include "utils/spawn_context.hpp"
+#include "check.hpp"
 #include "asset_spawn_planner.hpp"
 #include "asset/asset_info.hpp"
 #include "utils/area.hpp"
