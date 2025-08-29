@@ -178,8 +178,78 @@ class AssetEditor(tk.Frame):
                 for child in option_container.winfo_children():
                     child.destroy()
                 frame.position_options.clear()
-                # Build ranges based on position_var.get(), similar to original logic
-                # ... omitted for brevity ...
+
+                pos = position_var.get()
+
+                # Helper to add a labeled Range and wire autosave
+                def add_range(key, label, min_bound, max_bound, default_min=0, default_max=0):
+                    rw = Range(
+                        option_container,
+                        min_bound=min_bound,
+                        max_bound=max_bound,
+                        set_min=asset.get(f"{key}_min", default_min),
+                        set_max=asset.get(f"{key}_max", default_max),
+                        label=label
+                    )
+                    # Hook autosave when any value changes
+                    rw.on_change = self.save_assets
+                    # Also trace internal vars for safety
+                    for v in (rw.var_min, rw.var_max, getattr(rw, 'var_random', None)):
+                        if v:
+                            try:
+                                v.trace_add('write', lambda *_: self.save_assets())
+                            except Exception:
+                                pass
+                    rw.pack(fill=tk.X, pady=(2, 6))
+                    frame.position_options[key] = rw
+
+                # Perimeter placement controls
+                if pos == "Perimeter":
+                    # Sector selection around the area's center (degrees)
+                    add_range(
+                        key="sector_center",
+                        label="Sector Center (deg)",
+                        min_bound=0,
+                        max_bound=359,
+                        default_min=0,
+                        default_max=0
+                    )
+                    add_range(
+                        key="sector_range",
+                        label="Sector Range (deg)",
+                        min_bound=0,
+                        max_bound=360,
+                        default_min=360,
+                        default_max=360
+                    )
+                    # Shift the perimeter inward/outward as a percent of radius
+                    add_range(
+                        key="border_shift",
+                        label="Border Shift (%)",
+                        min_bound=0,
+                        max_bound=100,
+                        default_min=0,
+                        default_max=0
+                    )
+                    # Pixel offsets from computed perimeter point
+                    add_range(
+                        key="perimeter_x_offset",
+                        label="X Offset (px)",
+                        min_bound=-2000,
+                        max_bound=2000,
+                        default_min=0,
+                        default_max=0
+                    )
+                    add_range(
+                        key="perimeter_y_offset",
+                        label="Y Offset (px)",
+                        min_bound=-2000,
+                        max_bound=2000,
+                        default_min=0,
+                        default_max=0
+                    )
+
+                # Save after rebuilding option UI so current values persist
                 self.save_assets()
 
             cb.bind('<<ComboboxSelected>>', lambda *_: update_position())

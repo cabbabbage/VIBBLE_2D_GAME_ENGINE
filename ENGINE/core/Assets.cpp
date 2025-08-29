@@ -7,8 +7,10 @@
 #include "asset/Asset.hpp"
 #include "asset/asset_info.hpp"
 #include "dev_mode/dev_mouse_controls.hpp"
-#include "utils/mouse_input.hpp"
+#include "utils/input.hpp"
 #include "render/scene_renderer.hpp"
+#include "ui/asset_library_ui.hpp"
+#include "ui/asset_info_ui.hpp"
 
 #include <algorithm>
 #include <iostream>
@@ -57,14 +59,17 @@ Assets::~Assets() {
     delete scene;
     delete finder_;
     delete dev_mouse;
+    delete library_ui_;
+    delete info_ui_;
 }
 
-void Assets::set_mouse_input(MouseInput* m) {
-    mouse_input = m;
+void Assets::set_input(Input* m) {
+    input = m;
 
     delete dev_mouse; 
-    if (mouse_input) {
-        dev_mouse = new DevMouseControls(mouse_input,
+    if (input) {
+        dev_mouse = new DevMouseControls(input,
+                                         this,
                                          active_assets,
                                          player,        
                                          screen_width,  
@@ -74,7 +79,7 @@ void Assets::set_mouse_input(MouseInput* m) {
     }
 }
 
-void Assets::update(const std::unordered_set<SDL_Keycode>& keys,
+void Assets::update(const Input& input,
                     int screen_center_x,
                     int screen_center_y)
 {
@@ -86,7 +91,7 @@ void Assets::update(const std::unordered_set<SDL_Keycode>& keys,
     dx = dy = 0;
 
     if (controls) {
-        controls->update(keys); 
+        controls->update(input); 
         dx = controls->get_dx();
         dy = controls->get_dy();
     }
@@ -105,8 +110,19 @@ void Assets::update(const std::unordered_set<SDL_Keycode>& keys,
 
     
     if (dev_mode && dev_mouse) {
-        dev_mouse->handle_mouse_input(keys);
+        bool ui_blocking = (library_ui_ && library_ui_->is_visible()) || (info_ui_ && info_ui_->is_visible());
+        if (!ui_blocking) {
+            dev_mouse->handle_mouse_input(input);
+        }
     }
+
+    // UI toggles
+    if (input.wasKeyPressed(SDLK_TAB)) {
+        toggle_asset_library();
+    }
+
+    // Update any visible UI
+    update_ui(input);
 
     // Render the scene each tick from within Assets
     if (scene) scene->render();
@@ -186,4 +202,96 @@ void Assets::addAsset(const std::string& name, int gx, int gy) {
 
     std::cout << "[Assets] Added asset '" << name
               << "' at (" << gx << ", " << gy << ")\n";
+}
+
+Asset* Assets::spawn_asset(const std::string& name, int world_x, int world_y) {
+    auto info = library_.get(name);
+    if (!info) {
+        std::cerr << "[Assets] spawn_asset failed: no info for '" << name << "'\n";
+        return nullptr;
+    }
+
+    Area spawn_area(name,
+                    world_x, world_y,
+                    1, 1,
+                    "Point",
+                    1,
+                    1,
+                    1);
+
+    all.emplace_back(info, spawn_area, world_x, world_y, 0, nullptr);
+    Asset* newAsset = &all.back();
+    newAsset->set_view(&window);
+    newAsset->finalize_setup();
+
+    // Optionally place into active list this frame by recomputing vectors
+    activeManager.updateAssetVectors(player, player ? player->pos_X : world_x, player ? player->pos_Y : world_y);
+    active_assets  = activeManager.getActive();
+    closest_assets = activeManager.getClosest();
+
+    std::cout << "[Assets] Spawned asset '" << name
+              << "' at (" << world_x << ", " << world_y << ")\n";
+    return newAsset;
+}
+
+void Assets::render_overlays(SDL_Renderer* renderer) {
+    if (library_ui_ && library_ui_->is_visible()) {
+        library_ui_->render(renderer, library_, screen_width, screen_height);
+    }
+    if (info_ui_ && info_ui_->is_visible()) {
+        info_ui_->render(renderer, screen_width, screen_height);
+    }
+}
+
+void Assets::toggle_asset_library() {
+    if (!library_ui_) library_ui_ = new AssetLibraryUI();
+    library_ui_->toggle();
+}
+
+void Assets::open_asset_library() {
+    if (!library_ui_) library_ui_ = new AssetLibraryUI();
+    library_ui_->open();
+}
+
+void Assets::close_asset_library() {
+    if (library_ui_) library_ui_->close();
+}
+
+bool Assets::is_asset_library_open() const {
+    return library_ui_ && library_ui_->is_visible();
+}
+
+void Assets::update_ui(const Input& input) {
+    if (library_ui_ && library_ui_->is_visible()) {
+        library_ui_->update(input, screen_width, screen_height, library_);
+    }
+    if (info_ui_ && info_ui_->is_visible()) {
+        info_ui_->update(input, screen_width, screen_height);
+    }
+}
+
+std::shared_ptr<AssetInfo> Assets::consume_selected_asset_from_library() {
+    if (!library_ui_) return nullptr;
+    return library_ui_->consume_selection();
+}
+
+void Assets::open_asset_info_editor(const std::shared_ptr<AssetInfo>& info) {
+    if (!info) return;
+    if (!info_ui_) info_ui_ = new AssetInfoUI();
+    info_ui_->set_info(info);
+    info_ui_->open();
+}
+
+void Assets::close_asset_info_editor() {
+    if (info_ui_) info_ui_->close();
+}
+
+bool Assets::is_asset_info_editor_open() const {
+    return info_ui_ && info_ui_->is_visible();
+}
+
+void Assets::handle_sdl_event(const SDL_Event& e) {
+    if (info_ui_ && info_ui_->is_visible()) {
+        info_ui_->handle_event(e);
+    }
 }

@@ -1,5 +1,6 @@
 
 #include "parallax.hpp"
+#include "asset/Asset.hpp"
 #include <algorithm>
 #include <cmath>
 
@@ -66,4 +67,9 @@ void Parallax::setDisabled(bool flag) {
 
 bool Parallax::isDisabled() const {
     return disabled_;
+}
+
+void Parallax::update_screen_position(Asset& a) const {
+    SDL_Point p = apply(a.pos_X, a.pos_Y);
+    a.set_screen_position(p.x, p.y);
 }

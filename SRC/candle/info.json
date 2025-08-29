@@ -20,11 +20,11 @@
   },
   "tags": [
     "man-made",
+    "light",
     "orange",
-    "passable",
-    "default",
     "barrel_child",
-    "light"
+    "default",
+    "passable"
   ],
   "rnd_spawn_min": 300,
   "rnd_spawn_max": 400,

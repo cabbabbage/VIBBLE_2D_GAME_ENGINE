@@ -2447,14 +2447,14 @@
     "Spacing"
   ],
   "tags": [
-    "impassable",
+    "default",
+    "interaction",
+    "center",
     "valuable",
     "wood",
-    "default",
-    "center",
+    "loot",
     "man-made",
-    "interaction",
-    "loot"
+    "impassable"
   ],
   "rnd_spawn_min": 300,
   "rnd_spawn_max": 400,

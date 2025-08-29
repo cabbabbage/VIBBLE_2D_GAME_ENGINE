@@ -44,7 +44,18 @@ class MaskModePanel(tk.Frame):
         self.mask_arr = self._get_union_mask_arr()
         self.base_img = self.frames[0].resize((self.disp_w, self.disp_h), Image.LANCZOS)
         self.tk_base = ImageTk.PhotoImage(self.base_img)
-        self.img_id = self.canvas.create_image(0, 0, anchor='nw', image=self.tk_base)
+        # Center the image on the canvas
+        self.canvas.delete('all')
+        self.img_id = self.canvas.create_image(self.canvas.winfo_width() // 2,
+                                              self.canvas.winfo_height() // 2,
+                                              anchor='center', image=self.tk_base)
+        # Keep centered on resize
+        def _on_cfg(e):
+            try:
+                self.canvas.coords(self.img_id, e.width // 2, e.height // 2)
+            except Exception:
+                pass
+        self.canvas.bind('<Configure>', _on_cfg)
         self._refresh_preview()
 
     def _get_union_mask_arr(self):

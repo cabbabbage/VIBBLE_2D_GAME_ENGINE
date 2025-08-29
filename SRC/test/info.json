@@ -1,19 +1,19 @@
 {
-    "impassable_area": null,
-    "asset_name": "test",
-    "asset_type": "Object",
-    "duplicatable": false,
-    "duplication_interval_min": 30,
-    "duplication_interval_max": 60,
-    "min_child_depth": 0,
-    "max_child_depth": 2,
-    "animations": {
-        "default": {
-            "path": null,
-            "end_path": null
-        }
-    },
-    "tags": [
-        "passable"
-    ]
+  "impassable_area": null,
+  "asset_name": "test",
+  "asset_type": "Object",
+  "duplicatable": false,
+  "duplication_interval_min": 30,
+  "duplication_interval_max": 60,
+  "min_child_depth": 0,
+  "max_child_depth": 2,
+  "animations": {
+    "default": {
+      "path": null,
+      "end_path": null
+    }
+  },
+  "tags": [
+    "passable"
+  ]
 }

@@ -110,7 +110,7 @@ SDL_Rect SceneRenderer::get_scaled_position_rect(Asset* a, int fw, int fh,
         return {0, 0, 0, 0};
     }
 
-    SDL_Point cp = parallax_.apply(a->pos_X, a->pos_Y); 
+    SDL_Point cp{ a->screen_X, a->screen_Y }; 
     cp.x = screen_width_ / 2 + static_cast<int>((cp.x - screen_width_ / 2) * smooth_inv_scale);
     cp.y = screen_height_ / 2 + static_cast<int>((cp.y - screen_height_ / 2) * smooth_inv_scale);
 
@@ -128,6 +128,12 @@ void SceneRenderer::render() {
     parallax_.setReference(px, py); 
 
     main_light_source_.update();
+
+    // Update screen positions for all active assets based on current parallax
+    for (Asset* a : assets_->active_assets) {
+        if (!a) continue;
+        parallax_.update_screen_position(*a);
+    }
 
     
     SDL_SetRenderTarget(renderer_, accumulation_tex_);
@@ -221,6 +227,10 @@ void SceneRenderer::render() {
     SDL_RenderFillRect(renderer_, &screenRect);
     SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_NONE);
 
-    
+    // Draw overlays (e.g., asset library panel) before presenting
+    if (assets_) {
+        assets_->render_overlays(renderer_);
+    }
+
     SDL_RenderPresent(renderer_);
 }

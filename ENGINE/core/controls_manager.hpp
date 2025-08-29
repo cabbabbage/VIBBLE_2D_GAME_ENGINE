@@ -8,14 +8,17 @@
 #include "utils/area.hpp"
 #include "active_assets_manager.hpp"
 
+class Input;
+class Assets; // fwd
+
 class ControlsManager {
 public:
-    ControlsManager(Asset* player, ActiveAssetsManager& aam);
+    ControlsManager(Assets* assets, Asset* player, ActiveAssetsManager& aam);
 
-    void update(const std::unordered_set<SDL_Keycode>& keys);
-    void movement(const std::unordered_set<SDL_Keycode>& keys);
+    void update(const Input& input);
+    void movement(const Input& input);
     void interaction();
-    void handle_teleport(const std::unordered_set<SDL_Keycode>& keys);
+    void handle_teleport(const Input& input);
     bool canMove(int offset_x, int offset_y);
 
     int get_dx() const;
@@ -25,6 +28,7 @@ private:
     bool aabb(const Area& A, const Area& B) const;
     bool pointInAABB(int x, int y, const Area& B) const;
 
+    Assets* assets_ = nullptr;
     Asset* player_;
     ActiveAssetsManager& aam_;
 
@@ -33,4 +37,7 @@ private:
 
     SDL_Point teleport_point_;
     bool teleport_set_;
+
+    // Marker spawned on SPACE; removed on 'q'
+    Asset* marker_asset_ = nullptr;
 };

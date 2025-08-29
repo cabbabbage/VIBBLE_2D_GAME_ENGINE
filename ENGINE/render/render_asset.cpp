@@ -39,7 +39,7 @@ SDL_Texture* RenderAsset::render_shadow_mask(Asset* a, int bw, int bh) {
         SDL_SetTextureColorMod(base, 255, 255, 255);
     }
 
-    SDL_Point parallax_pos = parallax_.apply(a->pos_X, a->pos_Y);
+    SDL_Point parallax_pos{ a->screen_X, a->screen_Y };
     SDL_Rect bounds{ parallax_pos.x - bw / 2, parallax_pos.y - bh, bw, bh };
     const Uint8 light_alpha = static_cast<Uint8>(main_light_source_.get_brightness());
 

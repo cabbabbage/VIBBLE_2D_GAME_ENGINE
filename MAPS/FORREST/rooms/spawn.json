@@ -25,12 +25,16 @@
       "check_overlap": false,
       "check_min_spacing": false,
       "inherited": false,
-      "border_shift_min": 163,
-      "border_shift_max": 163,
+      "border_shift_min": 100,
+      "border_shift_max": 100,
       "sector_center_min": 0,
       "sector_center_max": 0,
       "sector_range_min": 360,
-      "sector_range_max": 360
+      "sector_range_max": 360,
+      "perimeter_x_offset_min": 0,
+      "perimeter_x_offset_max": 0,
+      "perimeter_y_offset_min": 0,
+      "perimeter_y_offset_max": 0
     },
     {
       "name": "ground",

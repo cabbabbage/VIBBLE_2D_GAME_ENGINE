@@ -20,6 +20,15 @@ class DrawModePanel(tk.Frame):
         self.BRUSH_RADIUS = 10
         self.cursor_oval = None
 
+        # Canvas state
+        self.canvas_w = 1
+        self.canvas_h = 1
+
+        # Anchor-locked drawing mask (in display pixels)
+        self.mask_img = None  # PIL 'L'
+        self.mask_ox = 0      # mask coordinate of anchor X
+        self.mask_oy = 0      # mask coordinate of anchor Y
+
         self._build_ui()
         self._prepare_images()
         self._bind_events()
@@ -42,34 +51,109 @@ class DrawModePanel(tk.Frame):
         self.brush_range.var_max.trace_add("write", self._on_brush_change)
 
     def _prepare_images(self):
+        # Base (resized) image used for preview; image is centered on the canvas
         self.base_img = self.frames[0].resize((self.disp_w, self.disp_h), Image.LANCZOS)
-        self.draw_mask = Image.new('L', (self.disp_w, self.disp_h), 0)
-
         self.tk_base = ImageTk.PhotoImage(self.base_img)
         self.canvas.delete('all')
-        self.img_id = self.canvas.create_image(0, 0, anchor='nw', image=self.tk_base)
+        # Place image at canvas center
+        self.img_id = self.canvas.create_image(self.canvas_w // 2, self.canvas_h // 2,
+                                               anchor='center', image=self.tk_base)
+        # Initialize a large mask if missing
+        if self.mask_img is None:
+            self._init_mask()
 
     def _bind_events(self):
         self.canvas.bind("<B1-Motion>", self._on_draw)
         self.canvas.bind("<Button-1>", self._on_draw)
         self.canvas.bind("<Motion>", self._show_brush_cursor)
+        self.canvas.bind("<Configure>", self._on_canvas_configure)
+
+    def _on_canvas_configure(self, event):
+        # Track canvas size and keep image centered
+        self.canvas_w, self.canvas_h = event.width, event.height
+        try:
+            self.canvas.coords(self.img_id, self.canvas_w // 2, self.canvas_h // 2)
+        except Exception:
+            pass
+        # Ensure mask exists
+        if self.mask_img is None:
+            self._init_mask()
+        # Redraw preview with new centering
+        self._refresh_draw_preview()
+
+    def _init_mask(self):
+        # Start with a mask as large as the current canvas (or the image), anchor at its corresponding position
+        w = max(self.canvas_w, self.disp_w, 1)
+        h = max(self.canvas_h, self.disp_h, 1)
+        self.mask_img = Image.new('L', (w, h), 0)
+        # Place anchor in the mask where it would be on the canvas: center x, center y + disp_h/2
+        self.mask_ox = w // 2
+        self.mask_oy = h // 2 + self.disp_h // 2
 
     def _on_brush_change(self, *_):
         self.BRUSH_RADIUS = self.brush_range.get_max()
         self._refresh_draw_preview()
 
     def _on_draw(self, event):
-        x, y = event.x, event.y
-        if 0 <= x < self.disp_w and 0 <= y < self.disp_h:
-            d = ImageDraw.Draw(self.draw_mask)
-            r = self.BRUSH_RADIUS
-            d.ellipse((x - r, y - r, x + r, y + r), fill=255)
-            self._refresh_draw_preview()
+        # Allow drawing anywhere on the canvas (not limited to image bounds)
+        x, y = int(event.x), int(event.y)
+        # Convert canvas coords to mask coords (anchor-locked)
+        ax, ay = self._anchor_canvas_coords()
+        px = int(self.mask_ox + (x - ax))
+        py = int(self.mask_oy + (y - ay))
+        r = int(self.BRUSH_RADIUS)
+        self._ensure_mask_capacity(px - r, py - r, px + r, py + r)
+        d = ImageDraw.Draw(self.mask_img)
+        d.ellipse((px - r, py - r, px + r, py + r), fill=255)
+        self._refresh_draw_preview()
+
+    def _anchor_canvas_coords(self):
+        # Bottom-center of the image on the canvas
+        cx = self.canvas_w / 2.0
+        cy = self.canvas_h / 2.0 + self.disp_h / 2.0
+        return cx, cy
+
+    def _ensure_mask_capacity(self, left, top, right, bottom):
+        # Expand mask image if drawing goes out-of-bounds
+        w, h = self.mask_img.size
+        new_left = min(0, left)
+        new_top = min(0, top)
+        new_right = max(w, right)
+        new_bottom = max(h, bottom)
+        if new_left == 0 and new_top == 0 and new_right == w and new_bottom == h:
+            return
+        new_w = int(new_right - new_left)
+        new_h = int(new_bottom - new_top)
+        new_mask = Image.new('L', (new_w, new_h), 0)
+        # Paste old mask into new, adjusting origin for anchor
+        offset_x = -int(new_left)
+        offset_y = -int(new_top)
+        new_mask.paste(self.mask_img, (offset_x, offset_y))
+        self.mask_img = new_mask
+        self.mask_ox += offset_x
+        self.mask_oy += offset_y
 
     def _refresh_draw_preview(self):
-        comp = self.base_img.copy().convert('RGBA')
-        red = Image.new('RGBA', (self.disp_w, self.disp_h), (255, 0, 0, 128))
-        comp.paste(red, (0, 0), self.draw_mask)
+        # Compose a full-canvas preview so drawing is visible beyond image bounds
+        cw = max(1, int(self.canvas_w))
+        ch = max(1, int(self.canvas_h))
+        comp = Image.new('RGBA', (cw, ch), (0, 0, 0, 255))
+
+        # Paste the centered base image
+        img_left = int(round(cw / 2.0 - self.disp_w / 2.0))
+        img_top = int(round(ch / 2.0 - self.disp_h / 2.0))
+        comp.paste(self.base_img.convert('RGBA'), (img_left, img_top))
+
+        # Build a red overlay from the mask and paste aligned to the anchor
+        if self.mask_img is not None:
+            ax, ay = self._anchor_canvas_coords()
+            ox = int(round(ax - self.mask_ox))
+            oy = int(round(ay - self.mask_oy))
+            overlay = Image.new('RGBA', self.mask_img.size, (255, 0, 0, 0))
+            # semi-transparent red
+            overlay.putalpha(self.mask_img.point(lambda v: int(v * 0.5)))
+            comp.paste(overlay, (ox, oy), overlay)
+
         self.tk_draw = ImageTk.PhotoImage(comp)
         self.canvas.itemconfig(self.img_id, image=self.tk_draw)
 
@@ -89,17 +173,32 @@ class DrawModePanel(tk.Frame):
         return [(int(x), int(y)) for x, y in pts]
 
     def get_points(self):
-        pts = self._extract_edge_pixels(self.draw_mask)
-        scale_x = self.orig_w / self.disp_w
-        scale_y = self.orig_h / self.disp_h
-        return [
-            (int(x * scale_x - self.anchor_x), int(y * scale_y - self.anchor_y))
-            for x, y in pts
-        ]
+        # Extract edge points from the full mask (anchor-locked)
+        pts = self._extract_edge_pixels(self.mask_img)
+        result = []
+        for mx, my in pts:
+            dx_disp = mx - self.mask_ox
+            dy_disp = my - self.mask_oy
+            # Convert display pixels back to original pixel units (relative to bottom-center)
+            rx = int(round(dx_disp / max(self.scale, 1e-6)))
+            ry = int(round(dy_disp / max(self.scale, 1e-6)))
+            result.append((rx, ry))
+        return result
 
     def update_zoom(self, new_scale):
+        if new_scale <= 0:
+            return
+        # Resample mask to keep geometry consistent while zooming
+        ratio = new_scale / self.scale if self.scale else 1.0
         self.scale = new_scale
         self.disp_w = int(self.orig_w * self.scale)
         self.disp_h = int(self.orig_h * self.scale)
+        # Resize mask and adjust anchor origin accordingly
+        if self.mask_img is not None and abs(ratio - 1.0) > 1e-6:
+            new_w = max(1, int(round(self.mask_img.width * ratio)))
+            new_h = max(1, int(round(self.mask_img.height * ratio)))
+            self.mask_img = self.mask_img.resize((new_w, new_h), resample=Image.NEAREST)
+            self.mask_ox = int(round(self.mask_ox * ratio))
+            self.mask_oy = int(round(self.mask_oy * ratio))
         self._prepare_images()
         self._refresh_draw_preview()

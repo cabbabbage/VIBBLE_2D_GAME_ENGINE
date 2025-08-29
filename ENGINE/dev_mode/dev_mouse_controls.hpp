@@ -8,20 +8,22 @@
 #include "utils/parallax.hpp" 
 
 class Asset;
-class MouseInput;
+class Input;
 class Parallax;
+class Assets; // fwd
 
 class DevMouseControls {
 public:
-    DevMouseControls(MouseInput* m,
+    DevMouseControls(Input* m,
+                     Assets* assets,
                      std::vector<Asset*>& actives,
                      Asset* player,
                      int screen_w,
                      int screen_h);
 
-    void handle_mouse_input(const std::unordered_set<SDL_Keycode>& keys);
+    void handle_mouse_input(const Input& input);
     void handle_hover();
-    void handle_click(const std::unordered_set<SDL_Keycode>& keys);
+    void handle_click(const Input& input);
     void update_highlighted_assets();
 
     const std::vector<Asset*>& get_selected_assets() const { return selected_assets; }
@@ -33,10 +35,15 @@ private:
     bool dragging_;
     int drag_last_x_, drag_last_y_;
 
+    // Double-click detection
+    Uint32 last_click_time_ms_ = 0;
+    Asset* last_click_asset_ = nullptr;
+
 private:
     int click_buffer_frames_ = 0;
     int hover_miss_frames_ = 0;
-    MouseInput* mouse;
+    Input* mouse;
+    Assets* assets_ = nullptr;
     std::vector<Asset*>& active_assets;
     Asset* player;
     int screen_w;
@@ -47,4 +54,11 @@ private:
     Asset* hovered_asset = nullptr;
     std::vector<Asset*> selected_assets;
     std::vector<Asset*> highlighted_assets;
+
+    // Spawn via right-click + asset selection
+    bool waiting_spawn_selection_ = false;
+    int spawn_click_screen_x_ = 0;
+    int spawn_click_screen_y_ = 0;
+    int spawn_world_x_ = 0;
+    int spawn_world_y_ = 0;
 };

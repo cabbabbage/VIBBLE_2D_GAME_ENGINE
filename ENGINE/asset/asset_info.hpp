@@ -72,6 +72,32 @@ public:
     std::map<std::string, Animation> animations;
 
     std::vector<ChildInfo> children;
+
+    // --- Update API for basic (non-area, non-animation) values ---
+public:
+    // Persist current in-memory values back to SRC/<name>/info.json
+    bool update_info_json() const;
+
+    // Setters that update both members and backing JSON snapshot
+    void set_asset_type(const std::string& t);
+    void set_z_threshold(int z);
+    void set_min_same_type_distance(int d);
+    void set_min_distance_all(int d);
+    void set_has_shading(bool v);
+    void set_flipable(bool v);
+
+    void set_blend_mode(SDL_BlendMode mode);
+    void set_blend_mode_string(const std::string& mode_str);
+
+    // Scale: factor in [0..1], or percentage (e.g. 100.0)
+    void set_scale_factor(float factor);
+    void set_scale_percentage(float percent);
+
+    // Tags & passable (passable tag present => passable true)
+    void set_tags(const std::vector<std::string>& t);
+    void add_tag(const std::string& tag);
+    void remove_tag(const std::string& tag);
+    void set_passable(bool v);
 private:
     void get_area_textures(SDL_Renderer* renderer);
 
@@ -101,6 +127,9 @@ private:
 
     nlohmann::json anims_json_;
     std::string     dir_path_;
+    // Snapshot of info.json for incremental updates
+    nlohmann::json  info_json_;
+    std::string     info_json_path_;
 
     friend class AnimationLoader;
     friend class LightingLoader;

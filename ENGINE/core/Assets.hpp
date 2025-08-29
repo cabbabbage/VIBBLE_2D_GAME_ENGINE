@@ -16,8 +16,11 @@ class SceneRenderer;
 struct SDL_Renderer;
 class CurrentRoomFinder;
 class Room;
-class MouseInput;       
+class Input;            
 class DevMouseControls; 
+class AssetLibraryUI;
+class AssetInfoUI;
+class AssetInfo;
 
 class Assets {
 public:
@@ -40,7 +43,7 @@ Assets(std::vector<Asset>&& loaded,
 
     nlohmann::json save_current_room(std::string room_name);
 
-    void update(const std::unordered_set<SDL_Keycode>& keys,
+    void update(const Input& input,
                 int screen_center_x,
                 int screen_center_y);
 
@@ -48,8 +51,8 @@ Assets(std::vector<Asset>&& loaded,
     void set_dev_mode(bool mode);
 
     
-    void set_mouse_input(MouseInput* m);
-    MouseInput* get_mouse_input() const { return mouse_input; }
+    void set_input(Input* m);
+    Input* get_input() const { return input; }
 
     
     const std::vector<Asset*>& get_selected_assets() const;
@@ -70,7 +73,7 @@ Assets(std::vector<Asset>&& loaded,
     
     CurrentRoomFinder* finder_ = nullptr;
 
-    MouseInput* mouse_input = nullptr;     
+    Input* input = nullptr;     
     DevMouseControls* dev_mouse = nullptr; 
 
     view window;
@@ -91,6 +94,33 @@ Assets(std::vector<Asset>&& loaded,
     int num_groups_ = 4;
     bool dev_mode = false;
     AssetLibrary& library_;
+
+    // Spawn API
+    Asset* spawn_asset(const std::string& name, int world_x, int world_y);
+
+    // Overlay UIs
+public:
+    // Called by renderer to draw overlays (e.g., asset library)
+    void render_overlays(SDL_Renderer* renderer);
+    // Toggle asset library (bound to TAB)
+    void toggle_asset_library();
+    void open_asset_library();
+    void close_asset_library();
+    bool is_asset_library_open() const;
+    // Pump UI update
+    void update_ui(const Input& input);
+    // Retrieve selection from asset library, if any
+    std::shared_ptr<AssetInfo> consume_selected_asset_from_library();
+
+    // Asset info editor panel
+    void open_asset_info_editor(const std::shared_ptr<AssetInfo>& info);
+    void close_asset_info_editor();
+    bool is_asset_info_editor_open() const;
+    void handle_sdl_event(const SDL_Event& e);
+
+private:
+    AssetLibraryUI* library_ui_ = nullptr;
+    AssetInfoUI*    info_ui_    = nullptr;
 private:
     void addAsset(const std::string& name, int gx, int gy);
 

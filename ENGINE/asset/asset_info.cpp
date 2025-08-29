@@ -7,6 +7,7 @@
 #include <random>
 #include <sstream>
 #include <iomanip>
+#include <algorithm>
 #include "asset_info_methods/animation_loader.hpp"
 #include "asset_info_methods/lighting_loader.hpp"
 #include "asset_info_methods/area_loader.hpp"
@@ -34,6 +35,7 @@ AssetInfo::AssetInfo(const std::string& asset_folder_name)
     name = asset_folder_name;
     dir_path_ = "SRC/" + asset_folder_name;
     std::string info_path = dir_path_ + "/info.json";
+    info_json_path_ = info_path;
 
     std::ifstream in(info_path);
     if (!in.is_open()) {
@@ -41,6 +43,7 @@ AssetInfo::AssetInfo(const std::string& asset_folder_name)
     }
     nlohmann::json data;
     in >> data;
+    info_json_ = data; // keep a snapshot for updates
 
     
     if (data.contains("blend_mode") && data["blend_mode"].is_string()) {
@@ -338,3 +341,113 @@ bool AssetInfo::has_tag(const std::string& tag) const {
 }
 
 void AssetInfo::generate_lights(SDL_Renderer* renderer) { LightingLoader::generate_textures(*this, renderer); }
+
+// --------------------- Update API ---------------------
+
+static std::string blend_mode_to_string(SDL_BlendMode mode) {
+    switch (mode) {
+        case SDL_BLENDMODE_NONE: return "SDL_BLENDMODE_NONE";
+        case SDL_BLENDMODE_BLEND: return "SDL_BLENDMODE_BLEND";
+        case SDL_BLENDMODE_ADD: return "SDL_BLENDMODE_ADD";
+        case SDL_BLENDMODE_MOD: return "SDL_BLENDMODE_MOD";
+        case SDL_BLENDMODE_MUL: return "SDL_BLENDMODE_MUL";
+        default: return "SDL_BLENDMODE_BLEND";
+    }
+}
+
+bool AssetInfo::update_info_json() const {
+    try {
+        std::ofstream out(info_json_path_);
+        if (!out.is_open()) return false;
+        out << info_json_.dump(4);
+        return true;
+    } catch (...) {
+        return false;
+    }
+}
+
+void AssetInfo::set_asset_type(const std::string& t) {
+    type = t;
+    info_json_["asset_type"] = t;
+}
+
+void AssetInfo::set_z_threshold(int z) {
+    z_threshold = z;
+    info_json_["z_threshold"] = z;
+}
+
+void AssetInfo::set_min_same_type_distance(int d) {
+    min_same_type_distance = d;
+    info_json_["min_same_type_distance"] = d;
+}
+
+void AssetInfo::set_min_distance_all(int d) {
+    min_distance_all = d;
+    info_json_["min_distance_all"] = d;
+}
+
+void AssetInfo::set_has_shading(bool v) {
+    has_shading = v;
+    info_json_["has_shading"] = v;
+}
+
+void AssetInfo::set_flipable(bool v) {
+    flipable = v;
+    info_json_["can_invert"] = v;
+}
+
+void AssetInfo::set_blend_mode(SDL_BlendMode mode) {
+    blendmode = mode;
+    info_json_["blend_mode"] = blend_mode_to_string(mode);
+}
+
+void AssetInfo::set_blend_mode_string(const std::string& mode_str) {
+    info_json_["blend_mode"] = mode_str;
+    blendmode = parse_blend_mode(mode_str);
+}
+
+void AssetInfo::set_scale_factor(float factor) {
+    if (factor < 0.f) factor = 0.f;
+    scale_factor = factor;
+    // Ensure size_settings exists
+    if (!info_json_.contains("size_settings") || !info_json_["size_settings"].is_object()) {
+        info_json_["size_settings"] = nlohmann::json::object();
+    }
+    info_json_["size_settings"]["scale_percentage"] = factor * 100.0f;
+}
+
+void AssetInfo::set_scale_percentage(float percent) {
+    scale_factor = percent / 100.0f;
+    if (!info_json_.contains("size_settings") || !info_json_["size_settings"].is_object()) {
+        info_json_["size_settings"] = nlohmann::json::object();
+    }
+    info_json_["size_settings"]["scale_percentage"] = percent;
+}
+
+void AssetInfo::set_tags(const std::vector<std::string>& t) {
+    tags = t;
+    // reflect in JSON
+    nlohmann::json arr = nlohmann::json::array();
+    for (const auto& s : tags) arr.push_back(s);
+    info_json_["tags"] = std::move(arr);
+    // update passable cache
+    passable = has_tag("passable");
+}
+
+void AssetInfo::add_tag(const std::string& tag) {
+    if (std::find(tags.begin(), tags.end(), tag) == tags.end()) {
+        tags.push_back(tag);
+    }
+    set_tags(tags); // syncs json + passable
+}
+
+void AssetInfo::remove_tag(const std::string& tag) {
+    tags.erase(std::remove(tags.begin(), tags.end(), tag), tags.end());
+    set_tags(tags); // syncs json + passable
+}
+
+void AssetInfo::set_passable(bool v) {
+    passable = v;
+    if (v) add_tag("passable");
+    else   remove_tag("passable");
+}

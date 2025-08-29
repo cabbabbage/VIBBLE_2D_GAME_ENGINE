@@ -7,7 +7,7 @@
 #include "asset_loader.hpp"
 #include "scene_renderer.hpp"
 #include "Assets.hpp"
-#include "mouse_input.hpp"
+#include "input.hpp"
 
 #include <SDL.h>
 #include <SDL_image.h>
@@ -44,7 +44,7 @@ MainApp::~MainApp() {
     if (overlay_texture_)  SDL_DestroyTexture(overlay_texture_);
     if (minimap_texture_)  SDL_DestroyTexture(minimap_texture_);
     delete game_assets_;
-    delete mouse_input_;
+    delete input_;
 }
 
 void MainApp::init() {
@@ -78,8 +78,8 @@ void MainApp::setup() {
                                   renderer_,
                                   map_path_);
 
-        mouse_input_ = new MouseInput();
-        game_assets_->set_mouse_input(mouse_input_);
+        input_ = new Input();
+        game_assets_->set_input(input_);
 
         
     } catch (const std::exception& e) {
@@ -92,28 +92,27 @@ void MainApp::game_loop() {
     constexpr int FRAME_MS = 1000 / 30;
     bool quit = false;
     SDL_Event e;
-    std::unordered_set<SDL_Keycode> keys;
+    // Input is handled by the Input class
     int frame_count = 0;
 
     while (!quit) {
         Uint32 start = SDL_GetTicks();
         while (SDL_PollEvent(&e)) {
             if (e.type == SDL_QUIT) quit = true;
-            else if (e.type == SDL_KEYDOWN) keys.insert(e.key.keysym.sym);
-            else if (e.type == SDL_KEYUP) keys.erase(e.key.keysym.sym);
-            if (mouse_input_) mouse_input_->handleEvent(e);
+            if (input_) input_->handleEvent(e);
+            if (game_assets_) game_assets_->handle_sdl_event(e);
         }
 
         if (game_assets_ && game_assets_->player) {
             const int px = game_assets_->player->pos_X;
             const int py = game_assets_->player->pos_Y;
-            game_assets_->update(keys, px, py);
+            game_assets_->update(*input_, px, py);
         }
 
         // Rendering is handled by the SceneRenderer owned by Assets
 
         ++frame_count;
-        if (mouse_input_) mouse_input_->update();
+        if (input_) input_->update();
 
         Uint32 elapsed = SDL_GetTicks() - start;
         if (elapsed < FRAME_MS) SDL_Delay(FRAME_MS - elapsed);

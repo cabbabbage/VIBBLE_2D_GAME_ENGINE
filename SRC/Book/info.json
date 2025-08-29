@@ -1373,12 +1373,12 @@
     "Spacing"
   ],
   "tags": [
-    "man-made",
-    "barrel_child",
     "passable",
-    "library",
+    "book",
     "red",
-    "book"
+    "library",
+    "man-made",
+    "barrel_child"
   ],
   "rnd_spawn_min": 300,
   "rnd_spawn_max": 400,
