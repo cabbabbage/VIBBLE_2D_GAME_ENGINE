@@ -8,6 +8,7 @@
 #include "asset/asset_info.hpp"
 #include "dev_mode/dev_mouse_controls.hpp"
 #include "utils/mouse_input.hpp"
+#include "render/scene_renderer.hpp"
 
 #include <algorithm>
 #include <iostream>
@@ -20,7 +21,9 @@ Assets::Assets(std::vector<Asset>&& loaded,
                int screen_height_,
                int screen_center_x,
                int screen_center_y,
-               int map_radius)
+               int map_radius,
+               SDL_Renderer* renderer,
+               const std::string& map_path)
     : window(screen_width_, screen_height_, view::Bounds{
           -map_radius, map_radius,
           -map_radius, map_radius
@@ -43,11 +46,15 @@ Assets::Assets(std::vector<Asset>&& loaded,
     if (finder_) {
         window.set_up_rooms(finder_);
     }
+
+    // Create scene renderer owned by Assets
+    scene = new SceneRenderer(renderer, this, screen_width_, screen_height_, map_path);
 }
 
 
 Assets::~Assets() {
     delete controls;
+    delete scene;
     delete finder_;
     delete dev_mouse;
 }
@@ -100,6 +107,9 @@ void Assets::update(const std::unordered_set<SDL_Keycode>& keys,
     if (dev_mode && dev_mouse) {
         dev_mouse->handle_mouse_input(keys);
     }
+
+    // Render the scene each tick from within Assets
+    if (scene) scene->render();
 }
 
 void Assets::remove(Asset* asset) {

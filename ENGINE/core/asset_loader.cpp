@@ -11,7 +11,7 @@
 
 #include <SDL.h>
 
-#include "Assets.hpp"
+
 #include "asset/Asset.hpp"
 #include "asset/asset_library.hpp"
 #include "room/room.hpp"
@@ -267,41 +267,13 @@ std::vector<Asset> AssetLoader::extract_all_assets() {
 }
 
 
-std::unique_ptr<Assets> AssetLoader::createAssets(int screen_width, int screen_height) {
+std::vector<Asset> AssetLoader::createAssets(int screen_width, int screen_height) {
     std::cout << "[AssetLoader] createAssets() start\n";
     auto assetsVec = extract_all_assets();
     std::cout << "[AssetLoader] extracted " << assetsVec.size() << " assets\n";
 
-    Asset* player_ptr = nullptr;
-    for (size_t i = 0; i < assetsVec.size(); ++i) {
-        auto& a = assetsVec[i];
-        if (a.info && a.info->type == "Player") {
-            player_ptr = &a;
-            std::cout << "[AssetLoader] found player asset '" << a.info->name
-                      << "' at index " << i << "\n";
-            break;
-        }
-    }
-    if (!player_ptr) {
-        std::cerr << "[AssetLoader] ERROR: no player asset found\n";
-        throw std::runtime_error("No player asset found in extracted assets");
-    }
-
-    std::cout << "[AssetLoader] constructing Assets manager\n";
-    auto assetsPtr = std::make_unique<Assets>(
-        std::move(assetsVec),
-        *asset_library_,   
-        player_ptr,
-        rooms_,
-        screen_width,
-        screen_height,
-        player_ptr->pos_X,
-        player_ptr->pos_Y, 
-        static_cast<int>(map_radius_ * 1.2)
-    );
-
-    std::cout << "[AssetLoader] createAssets() complete\n";
-    return assetsPtr;
+    std::cout << "[AssetLoader] createAssets(): built vector of " << assetsVec.size() << " assets\n";
+    return assetsVec;
 }
 
 

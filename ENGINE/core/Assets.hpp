@@ -5,12 +5,15 @@
 #include "active_assets_manager.hpp"
 #include "asset/asset_library.hpp"
 #include <SDL.h>
+#include <string>
 #include <vector>
 #include <unordered_set>
 #include "room/room.hpp"
 
 class Asset;
 class ControlsManager;
+class SceneRenderer;
+struct SDL_Renderer;
 class CurrentRoomFinder;
 class Room;
 class MouseInput;       
@@ -26,7 +29,9 @@ Assets(std::vector<Asset>&& loaded,
        int screen_height,
        int screen_center_x,
        int screen_center_y,
-       int map_radius);
+       int map_radius,
+       SDL_Renderer* renderer,
+       const std::string& map_path);
 
 
 
@@ -69,6 +74,7 @@ Assets(std::vector<Asset>&& loaded,
     DevMouseControls* dev_mouse = nullptr; 
 
     view window;
+    SceneRenderer* scene = nullptr;
     ActiveAssetsManager activeManager;
 
     int screen_width;
@@ -87,4 +93,6 @@ Assets(std::vector<Asset>&& loaded,
     AssetLibrary& library_;
 private:
     void addAsset(const std::string& name, int gx, int gy);
+
+    friend class SceneRenderer;
 };

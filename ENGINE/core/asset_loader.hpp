@@ -28,10 +28,16 @@ public:
     
     void link_by_child(const std::vector<std::vector<Asset*>>& groups);
 
-    std::unique_ptr<Assets> createAssets(int screen_width, int screen_height);
+    // Build and return all assets; no Assets object is created here
+    std::vector<Asset> createAssets(int screen_width, int screen_height);
 
     std::vector<Area> getAllRoomAndTrailAreas() const;
     SDL_Texture* createMinimap(int width, int height);
+
+    // Access for metadata needed to construct Assets externally
+    AssetLibrary* getAssetLibrary() const { return asset_library_.get(); }
+    const std::vector<Room*>& getRooms() const { return rooms_; }
+    double getMapRadius() const { return map_radius_; }
 
 private:
     

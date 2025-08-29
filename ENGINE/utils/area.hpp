@@ -66,5 +66,12 @@ private:
     int center_y = 0;
     double area_size = 0.0;
     SDL_Texture* texture_ = nullptr;
+
+    // Cached AABB for fast queries
+    mutable int min_x_ = 0;
+    mutable int min_y_ = 0;
+    mutable int max_x_ = 0;
+    mutable int max_y_ = 0;
+    mutable bool bounds_valid_ = false;
 };
 

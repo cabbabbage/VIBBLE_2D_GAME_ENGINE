@@ -2,6 +2,7 @@
 
 #include <SDL.h>
 #include <algorithm>
+#include "utils/area.hpp"
 
 class Asset;
 class Room;
@@ -25,6 +26,7 @@ public:
     Bounds get_current_bounds() const;
 
     SDL_Rect to_world_rect(int cx, int cy) const;
+    Area get_view_area(int cx, int cy) const;
 
     bool is_point_in_bounds(int x, int y, int cx, int cy) const;
     bool is_asset_in_bounds(const Asset& a, int cx, int cy) const;
@@ -46,8 +48,6 @@ private:
     int    steps_total_  = 0;
     int    steps_done_   = 0;
 
-
-    static bool aabb_intersect(const SDL_Rect& A, const SDL_Rect& B);
 
     // Zoom state derived from rooms
     Room*  starting_room_ = nullptr;
