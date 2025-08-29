@@ -28,10 +28,11 @@ public:
 
     void render(bool debugging);
 
+    ~LightMap();
+
 private:
     void collect_layers(std::vector<LightEntry>& out, std::mt19937& rng);
-    SDL_Texture* build_lowres_mask(const std::vector<LightEntry>& layers,
-                                   int low_w, int low_h, int downscale);
+    void build_lowres_mask(const std::vector<LightEntry>& layers);
     SDL_Rect get_scaled_position_rect(const std::pair<int,int>& pos,
                                       int fw, int fh,
                                       float inv_scale,
@@ -45,4 +46,8 @@ private:
     int screen_width_;
     int screen_height_;
     SDL_Texture* fullscreen_light_tex_;
+    SDL_Texture* lowres_mask_;
+    int downscale_;
+    int low_w_;
+    int low_h_;
 };

@@ -28,7 +28,7 @@ private:
     SDL_Rect get_scaled_position_rect(Asset* a,
                                       int fw,
                                       int fh,
-                                      float inv_scale,
+                                      float smooth_inv_scale,
                                       int min_w,
                                       int min_h);
 
@@ -48,4 +48,6 @@ private:
     int current_shading_group_ = 0;
     int num_groups_ = 20;
     bool debugging = false;
+
+    float smooth_inv_scale_ = 1.0f;
 };
