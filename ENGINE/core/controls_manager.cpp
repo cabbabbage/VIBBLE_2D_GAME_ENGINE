@@ -132,7 +132,7 @@ void ControlsManager::handle_teleport(const Input& input) {
     std::cout << "[Debug] Player position: (" << player_->pos_X << ", " << player_->pos_Y << ")\n";
 
     // --- Set teleport point and drop a marker ---
-    if (input.wasKeyPressed(SDLK_SPACE)) {
+    if (input.wasKeyPressed(SDLK_SPACE) && !teleport_set_) {
         std::cout << "[Teleport] SPACE pressed -> setting teleport point\n";
 
         teleport_point_ = { player_->pos_X, player_->pos_Y };

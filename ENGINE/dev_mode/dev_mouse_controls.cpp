@@ -180,7 +180,7 @@ void DevMouseControls::handle_click(const Input& input) {
         Uint32 now = SDL_GetTicks();
         if (last_click_asset_ == nearest && (now - last_click_time_ms_) <= 300) {
             if (assets_ && nearest->info) {
-                //assets_->open_asset_info_editor(nearest->info);
+                assets_->open_asset_info_editor(nearest->info);
             }
             last_click_time_ms_ = 0;
             last_click_asset_ = nullptr;
