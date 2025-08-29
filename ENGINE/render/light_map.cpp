@@ -19,8 +19,28 @@ LightMap::LightMap(SDL_Renderer* renderer,
       main_light_(main_light),
       screen_width_(screen_width),
       screen_height_(screen_height),
-      fullscreen_light_tex_(fullscreen_light_tex)
-{}
+      fullscreen_light_tex_(fullscreen_light_tex),
+      lowres_mask_(nullptr),
+      downscale_(4),
+      low_w_(screen_width / downscale_),
+      low_h_(screen_height / downscale_)
+{
+    lowres_mask_ = SDL_CreateTexture(renderer_, SDL_PIXELFORMAT_RGBA8888,
+                                     SDL_TEXTUREACCESS_TARGET, low_w_, low_h_);
+    if (!lowres_mask_) {
+        std::cerr << "[LightMap] Failed to create lowres mask: "
+                  << SDL_GetError() << "\n";
+    } else {
+        SDL_SetTextureBlendMode(lowres_mask_, SDL_BLENDMODE_NONE);
+    }
+}
+
+LightMap::~LightMap() {
+    if (lowres_mask_) {
+        SDL_DestroyTexture(lowres_mask_);
+        lowres_mask_ = nullptr;
+    }
+}
 
 void LightMap::render(bool debugging) {
     if (debugging) std::cout << "[render_asset_lights_z] start\n";
@@ -31,17 +51,11 @@ void LightMap::render(bool debugging) {
 
     collect_layers(z_lights, flicker_rng);
 
-    const int downscale = 4;
-    const int low_w = screen_width_  / downscale;
-    const int low_h = screen_height_ / downscale;
+    build_lowres_mask(z_lights);
 
-    SDL_Texture* lowres_mask = build_lowres_mask(z_lights, low_w, low_h, downscale);
-
-    SDL_SetTextureBlendMode(lowres_mask, SDL_BLENDMODE_MOD);
+    SDL_SetTextureBlendMode(lowres_mask_, SDL_BLENDMODE_MOD);
     SDL_SetRenderTarget(renderer_, nullptr);
-    SDL_RenderCopy(renderer_, lowres_mask, nullptr, nullptr);
-
-    SDL_DestroyTexture(lowres_mask);
+    SDL_RenderCopy(renderer_, lowres_mask_, nullptr, nullptr);
 
     if (debugging) std::cout << "[render_asset_lights_z] end\n";
 }
@@ -103,12 +117,10 @@ void LightMap::collect_layers(std::vector<LightEntry>& out, std::mt19937& rng) {
     }
 }
 
-SDL_Texture* LightMap::build_lowres_mask(const std::vector<LightEntry>& layers,
-                                         int low_w, int low_h, int downscale) {
-    SDL_Texture* lowres_mask = SDL_CreateTexture(renderer_, SDL_PIXELFORMAT_RGBA8888,
-                                                 SDL_TEXTUREACCESS_TARGET, low_w, low_h);
-    SDL_SetTextureBlendMode(lowres_mask, SDL_BLENDMODE_NONE);
-    SDL_SetRenderTarget(renderer_, lowres_mask);
+void LightMap::build_lowres_mask(const std::vector<LightEntry>& layers) {
+    if (!lowres_mask_) return;
+
+    SDL_SetRenderTarget(renderer_, lowres_mask_);
     SDL_SetRenderDrawColor(renderer_, 0, 0, 0, 200);
     SDL_RenderClear(renderer_);
     SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_ADD);
@@ -125,15 +137,13 @@ SDL_Texture* LightMap::build_lowres_mask(const std::vector<LightEntry>& layers,
         }
 
         SDL_Rect scaled_dst{
-            e.dst.x / downscale,
-            e.dst.y / downscale,
-            e.dst.w / downscale,
-            e.dst.h / downscale
+            e.dst.x / downscale_,
+            e.dst.y / downscale_,
+            e.dst.w / downscale_,
+            e.dst.h / downscale_
         };
         SDL_RenderCopyEx(renderer_, e.tex, nullptr, &scaled_dst, 0, nullptr, e.flip);
     }
-
-    return lowres_mask;
 }
 
 SDL_Rect LightMap::get_scaled_position_rect(const std::pair<int,int>& pos, int fw, int fh,
