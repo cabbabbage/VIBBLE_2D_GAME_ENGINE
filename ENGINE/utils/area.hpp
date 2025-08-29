@@ -48,6 +48,7 @@ public:
     std::tuple<int, int, int, int> get_bounds() const;
     void generate_circle(int cx, int cy, int radius, int edge_smoothness, int map_width, int map_height);
     void generate_square(int cx, int cy, int w, int h, int edge_smoothness, int map_width, int map_height);
+    void generate_point(int cx, int cy, int map_width, int map_height);
     void contract(int inset);
     double get_area() const;
     const std::vector<Point>& get_points() const;

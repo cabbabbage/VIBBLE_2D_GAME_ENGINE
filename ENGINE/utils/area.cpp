@@ -213,6 +213,8 @@ Area::Area(const std::string& name, int cx, int cy, int w, int h,
         generate_circle(cx, cy, w / 2, edge_smoothness, map_width, map_height);
     } else if (geometry == "Square") {
         generate_square(cx, cy, w, h, edge_smoothness, map_width, map_height);
+    } else if (geometry == "Point") {
+        generate_point(cx, cy, map_width, map_height);
     } else {
         throw std::runtime_error("[Area: " + area_name_ + "] Unknown geometry: " + geometry);
     }
@@ -363,6 +365,12 @@ std::tuple<int, int, int, int> Area::get_bounds() const {
     return {minx, miny, maxx, maxy};
 }
 
+void Area::generate_point(int cx, int cy, int map_width, int map_height) {
+    points.clear();
+    points.emplace_back(std::clamp(cx, 0, map_width),
+                        std::clamp(cy, 0, map_height));
+}
+
 void Area::generate_circle(int cx, int cy, int radius, int edge_smoothness, int map_width, int map_height) {
     int s = std::clamp(edge_smoothness, 0, 100);
     int count = std::max(12, 6 + s * 2);
@@ -427,6 +435,9 @@ void Area::union_with(const Area& other) {
 
 bool Area::contains_point(const Point& pt) const {
     const size_t n = points.size();
+    if (n == 1) {
+        return pt == points[0];
+    }
     if (n < 3) return false;
 
     // Fast AABB reject
@@ -494,6 +505,9 @@ void Area::update_geometry_data() {
 }
 
 Area::Point Area::random_point_within() const {
+    if (points.size() == 1) {
+        return points[0];
+    }
     auto [minx, miny, maxx, maxy] = get_bounds();
     for (int i = 0; i < 100; ++i) {
         int x = std::uniform_int_distribution<int>(minx, maxx)(rng);
