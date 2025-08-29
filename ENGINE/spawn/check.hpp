@@ -18,7 +18,6 @@ public:
                int test_y,
                const std::vector<Area>& exclusion_areas,
                const std::vector<std::unique_ptr<Asset>>& assets,
-               bool check_spacing,
                bool check_min_distance,
                bool check_min_distance_all,
                int num_neighbors) const;
@@ -33,10 +32,7 @@ private:
     std::vector<Asset*> get_closest_assets(int x, int y, int max_count,
                                            const std::vector<std::unique_ptr<Asset>>& assets) const;
 
-    bool check_spacing_overlap(const std::shared_ptr<AssetInfo>& info,
-                               int test_pos_X,
-                               int test_pos_Y,
-                               const std::vector<Asset*>& closest_assets) const;
+    // spacing-area based overlap removed
 
     bool check_min_type_distance(const std::shared_ptr<AssetInfo>& info,
                                  const Point& pos,

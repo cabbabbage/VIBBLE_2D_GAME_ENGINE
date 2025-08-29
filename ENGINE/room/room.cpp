@@ -219,7 +219,7 @@ nlohmann::json Room::create_static_room_json(std::string name) {
         entry["name"] = a->info->name;
         entry["min_number"] = 1;
         entry["max_number"] = 1;
-        entry["position"] = "Exact Position";
+        entry["position"] = "spawn_exact_percentage()";
         entry["exact_position"] = nullptr;
         entry["inherited"] = false;
         entry["check_overlap"] = false;

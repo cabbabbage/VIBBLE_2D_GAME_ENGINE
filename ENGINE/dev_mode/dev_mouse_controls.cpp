@@ -123,7 +123,7 @@ void DevMouseControls::handle_hover() {
     for (Asset* a : active_assets) {
         if (!a || !a->info) continue;
         const std::string& t = a->info->type;
-        if (t == "Boundary" || t == "boundary" || t == "Texture") continue;
+        if (t == "Texture") continue;
 
         
         SDL_Point scr = parallax_.apply(a->pos_X, a->pos_Y);

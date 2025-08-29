@@ -19,7 +19,7 @@
     "rnd_spawn_min": 300,
     "size_settings": {
         "flipability": true,
-        "scale_percentage": 147.0,
+        "scale_percentage": 78.0,
         "variability_percentage": 0
     },
     "spacing_area": {
@@ -548,5 +548,5 @@
     "visited_tabs": [
         "Spacing"
     ],
-    "z_threshold": 3
+    "z_threshold": -325
 }

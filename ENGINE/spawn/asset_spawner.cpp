@@ -90,7 +90,8 @@ void AssetSpawner::run_spawning(AssetSpawnPlanner* planner, const Area& area) {
         if (!queue_item.info) continue;
 
         const std::string& pos = queue_item.position;
-        if (pos == "Exact Position") {
+        // Support both legacy and new naming for exact-percentage spawning
+        if (pos == "spawn_exact_percentage()" || pos == "Exact Position") {
             exact.spawn(queue_item, &area, ctx);
         } else if (pos == "Center") {
             center.spawn(queue_item, &area, ctx);

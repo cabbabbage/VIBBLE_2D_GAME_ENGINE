@@ -15,7 +15,7 @@ void CenterSpawner::spawn(const SpawnInfo& item, const Area* area, SpawnContext&
     center.second -= Y_SHIFT;
 
     if (ctx.checker().check(item.info, center.first, center.second, ctx.exclusion_zones(), ctx.all_assets(),
-                            item.check_overlap, item.check_min_spacing, false, 5)) {
+                            item.check_min_spacing, false, 5)) {
         ctx.logger().output_and_log(item.name, item.quantity, 0, 1, 1, "center");
         return;
     }

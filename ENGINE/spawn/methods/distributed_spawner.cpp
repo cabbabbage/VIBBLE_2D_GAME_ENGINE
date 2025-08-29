@@ -32,7 +32,7 @@ void DistributedSpawner::spawn(const SpawnInfo& item, const Area* area, SpawnCon
             if (std::uniform_int_distribution<int>(0, 99)(ctx.rng()) < item.empty_grid_spaces) continue;
             if (!area->contains_point({cx, cy})) continue;
             if (ctx.checker().check(item.info, cx, cy, ctx.exclusion_zones(), ctx.all_assets(),
-                                    true, false, true, 5)) continue;
+                                    false, true, 5)) continue;
 
             ctx.spawnAsset(item.name, item.info, *area, cx, cy, 0, nullptr);
             ++placed;

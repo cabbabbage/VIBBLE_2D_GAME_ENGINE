@@ -41,6 +41,14 @@ private:
     void commit_scalar_changes();
     void save_now() const;
 
+    // Areas UI helpers
+    void rebuild_area_buttons();
+    SDL_Texture* get_default_frame_texture() const;
+    SDL_Texture* ensure_default_frame_texture(SDL_Renderer* r) const;
+    bool has_area_key(const std::string& key) const;
+    void apply_area_from_points(const std::string& key,
+                                const std::vector<std::pair<int,int>>& pts) const;
+
 private:
     bool visible_ = false;
     std::shared_ptr<AssetInfo> info_{};
@@ -72,5 +80,18 @@ private:
 
     // Guard to avoid recursive synthetic -> handle_event -> update loops
     mutable bool synthesizing_ = false;
+
+    // Request to rebuild animations (e.g., after scale change)
+    mutable bool reload_pending_ = false;
+
+    // Area edit/create buttons (ordered)
+    std::vector<std::pair<std::string, std::unique_ptr<Button>>> area_buttons_;
+    // Human-readable names for keys (parallel to area_buttons_ order)
+    std::vector<std::string> area_labels_;
+
+    // Pending action from event to perform during render (needs renderer)
+    mutable bool pending_area_action_ = false;
+    mutable std::string pending_area_key_;
+    mutable bool pending_create_ = false;
 };
 

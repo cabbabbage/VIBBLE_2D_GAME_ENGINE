@@ -100,7 +100,6 @@ void AnimationLoader::get_area_textures(AssetInfo& info, SDL_Renderer* renderer)
     };
 
     try_load_or_create(info.passability_area, "passability");
-    try_load_or_create(info.spacing_area,     "spacing");
     try_load_or_create(info.collision_area,   "collision");
     try_load_or_create(info.interaction_area, "interaction");
     try_load_or_create(info.attack_area,      "attack");

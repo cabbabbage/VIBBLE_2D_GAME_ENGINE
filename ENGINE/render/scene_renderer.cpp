@@ -84,6 +84,16 @@ void SceneRenderer::update_shading_groups() {
 
 bool SceneRenderer::shouldRegen(Asset* a) {
     if (!a->get_final_texture()) { return true; }
+
+    // If the base frame size changed (e.g., scale slider), regenerate.
+    if (SDL_Texture* base = a->get_current_frame()) {
+        int bw = 0, bh = 0;
+        SDL_QueryTexture(base, nullptr, nullptr, &bw, &bh);
+        if (bw != a->cached_w || bh != a->cached_h) {
+            return true;
+        }
+    }
+
     return (a->get_shading_group() > 0 &&
             a->get_shading_group() == current_shading_group_) ||
            (!a->get_final_texture() ||

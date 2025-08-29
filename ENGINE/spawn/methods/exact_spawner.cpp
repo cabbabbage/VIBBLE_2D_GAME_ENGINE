@@ -22,7 +22,7 @@ void ExactSpawner::spawn(const SpawnInfo& item, const Area* area, SpawnContext& 
     int final_y = center.second + static_cast<int>(norm_y * height);
 
     if (ctx.checker().check(item.info, final_x, final_y, ctx.exclusion_zones(), ctx.all_assets(),
-                            item.check_overlap, item.check_min_spacing, false, 5)) {
+                            item.check_min_spacing, false, 5)) {
         ctx.logger().output_and_log(item.name, item.quantity, 0, 0, 0, "exact");
         return;
     }

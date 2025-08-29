@@ -151,7 +151,8 @@ void AssetSpawnPlanner::parse_batch_assets() {
 
 void AssetSpawnPlanner::sort_spawn_queue() {
     const std::vector<std::string> priority_order = {
-        "Center", "Entrance", "Exit", "Exact Position", "Perimeter", "Distributed", "DistributedBatch"
+        // Keep legacy and new naming adjacent for stable ordering
+        "Center", "Entrance", "Exit", "spawn_exact_percentage()", "Exact Position", "Perimeter", "Distributed", "DistributedBatch"
     };
 
     auto to_lower = [](const std::string& s) {

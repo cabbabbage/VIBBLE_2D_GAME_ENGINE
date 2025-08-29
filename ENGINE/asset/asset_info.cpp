@@ -133,6 +133,11 @@ void AssetInfo::loadAnimations(SDL_Renderer* renderer) {
                   original_canvas_height);
 
         if (!anim.frames.empty()) {
+            auto old = animations.find(trigger);
+            if (old != animations.end()) {
+                for (SDL_Texture* t : old->second.frames) { if (t) SDL_DestroyTexture(t); }
+                old->second.frames.clear();
+            }
             animations[trigger] = std::move(anim);
         }
     }
@@ -313,27 +318,7 @@ void AssetInfo::try_load_area(const nlohmann::json& data,
         }
     }
 
-    if (!area_loaded && key == "spacing_area") {
-        std::string fallback_name = name + "_circle_spacing";
-        int radius = static_cast<int>(std::ceil(std::max(original_canvas_width, original_canvas_height) * scale / 2.0f));
-        int center_x = offset_x;
-        int center_y = offset_y;
-        int size = radius * 2;
-
-        area_ref = std::make_unique<Area>(
-            fallback_name,
-            center_x,
-            center_y,
-            size,
-            size,
-            "Circle",
-            1,
-            std::numeric_limits<int>::max(),
-            std::numeric_limits<int>::max()
-        );
-        flag_ref = true;
-        std::cerr << "[AssetInfo] fallback: created circular spacing area for '" << name << "'\n";
-    }
+    // spacing_area removed: no fallback generation
 }
 
 bool AssetInfo::has_tag(const std::string& tag) const {
@@ -450,4 +435,19 @@ void AssetInfo::set_passable(bool v) {
     passable = v;
     if (v) add_tag("passable");
     else   remove_tag("passable");
+}
+
+void AssetInfo::set_area_points(const std::string& key,
+                                const std::vector<Area::Point>& points) {
+    // Ensure object for this key exists and embed raw points
+    nlohmann::json pts = nlohmann::json::array();
+    for (const auto& p : points) {
+        nlohmann::json pp = nlohmann::json::array();
+        pp.push_back(p.first);
+        pp.push_back(p.second);
+        pts.push_back(std::move(pp));
+    }
+    nlohmann::json obj;
+    obj["points"] = std::move(pts);
+    info_json_[key] = std::move(obj);
 }

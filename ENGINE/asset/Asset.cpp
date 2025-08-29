@@ -307,9 +307,7 @@ Area Asset::get_area(const std::string& name) const {
         if (name == "passability" && info->passability_area) {
             result = *info->passability_area;
         }
-        else if (name == "spacing" && info->has_spacing_area && info->spacing_area) {
-            result = *info->spacing_area;
-        }
+        // spacing area removed
         else if (name == "collision" && info->has_collision_area && info->collision_area) {
             result = *info->collision_area;
         }

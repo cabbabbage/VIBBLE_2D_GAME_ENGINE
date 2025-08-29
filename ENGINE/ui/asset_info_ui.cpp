@@ -4,12 +4,15 @@
 #include <sstream>
 #include <cmath>
 #include <vector>
+#include <climits>
 
 #include "utils/input.hpp"
 #include "asset/asset_info.hpp"
 #include "ui/slider.hpp"
 #include "ui/checkbox.hpp"
 #include "ui/text_box.hpp"
+#include "ui/button.hpp"
+#include "asset/animation.hpp"
 #include "utils/text_style.hpp"
 #include "ui/styles.hpp"
 
@@ -92,6 +95,8 @@ void AssetInfoUI::build_widgets() {
     );
 
     scroll_ = 0;
+
+    rebuild_area_buttons();
 }
 
 void AssetInfoUI::layout_widgets(int screen_w, int screen_h) const {
@@ -104,55 +109,72 @@ void AssetInfoUI::layout_widgets(int screen_w, int screen_h) const {
     panel_ = SDL_Rect{ panel_x, 0, panel_w, screen_h };
 
     int x = panel_.x + 16;
-    // Use a scroll-independent layout cursor; subtract scroll only when assigning rects.
-    int y = 16;
+    // Base cursor; widgets subtract scroll_ when setting their rects.
+    // Leave generous space at top for the first group header.
+    int y = panel_.y + 56;
+
+    const int gap_after_text = 32;    // text box label sits above by ~18px
+    const int gap_after_slider = 18;  // breathing room under sliders
+    const int gap_after_checkbox = 16;
 
     // Group: Identity
     if (t_type_) {
-        t_type_->set_rect(SDL_Rect{ x, (y + 20) - scroll_, panel_w - 32, TextBox::height() });
-        y += 20 + TextBox::height() + 14;
+        t_type_->set_rect(SDL_Rect{ x, y - scroll_, panel_w - 32, TextBox::height() });
+        y += TextBox::height() + gap_after_text;
     }
     if (t_tags_) {
-        t_tags_->set_rect(SDL_Rect{ x, (y + 20) - scroll_, panel_w - 32, TextBox::height() });
-        y += 20 + TextBox::height() + 30;
+        t_tags_->set_rect(SDL_Rect{ x, y - scroll_, panel_w - 32, TextBox::height() });
+        y += TextBox::height() + gap_after_text + 4;
     }
 
     // Group: Appearance
     if (t_blend_) {
-        t_blend_->set_rect(SDL_Rect{ x, (y + 20) - scroll_, panel_w - 32, TextBox::height() });
-        y += 20 + TextBox::height() + 10;
+        t_blend_->set_rect(SDL_Rect{ x, y - scroll_, panel_w - 32, TextBox::height() });
+        y += TextBox::height() + gap_after_text - 4;
     }
     if (s_scale_pct_) {
-        s_scale_pct_->set_rect(SDL_Rect{ x, (y + 10) - scroll_, panel_w - 32, Slider::height() });
-        y += 10 + Slider::height() + 8;
+        s_scale_pct_->set_rect(SDL_Rect{ x, y - scroll_, panel_w - 32, Slider::height() });
+        y += Slider::height() + gap_after_slider;
     }
     if (c_shading_) {
-        c_shading_->set_rect(SDL_Rect{ x, (y + 8) - scroll_, panel_w - 32, Checkbox::height() });
-        y += 8 + Checkbox::height() + 6;
+        c_shading_->set_rect(SDL_Rect{ x, y - scroll_, panel_w - 32, Checkbox::height() });
+        y += Checkbox::height() + gap_after_checkbox;
     }
     if (c_flipable_) {
-        c_flipable_->set_rect(SDL_Rect{ x, (y + 4) - scroll_, panel_w - 32, Checkbox::height() });
-        y += 4 + Checkbox::height() + 18;
+        c_flipable_->set_rect(SDL_Rect{ x, y - scroll_, panel_w - 32, Checkbox::height() });
+        y += Checkbox::height() + gap_after_checkbox + 6;
     }
 
     // Group: Distances / Z
     if (s_z_threshold_) {
-        s_z_threshold_->set_rect(SDL_Rect{ x, (y + 10) - scroll_, panel_w - 32, Slider::height() });
-        y += 10 + Slider::height() + 8;
+        s_z_threshold_->set_rect(SDL_Rect{ x, y - scroll_, panel_w - 32, Slider::height() });
+        y += Slider::height() + gap_after_slider;
     }
     if (s_min_same_type_) {
-        s_min_same_type_->set_rect(SDL_Rect{ x, (y + 10) - scroll_, panel_w - 32, Slider::height() });
-        y += 10 + Slider::height() + 8;
+        s_min_same_type_->set_rect(SDL_Rect{ x, y - scroll_, panel_w - 32, Slider::height() });
+        y += Slider::height() + gap_after_slider;
     }
     if (s_min_all_) {
-        s_min_all_->set_rect(SDL_Rect{ x, (y + 10) - scroll_, panel_w - 32, Slider::height() });
-        y += 10 + Slider::height() + 8;
+        s_min_all_->set_rect(SDL_Rect{ x, y - scroll_, panel_w - 32, Slider::height() });
+        y += Slider::height() + gap_after_slider;
     }
 
     // Group: Flags (passable)
     if (c_passable_) {
-        c_passable_->set_rect(SDL_Rect{ x, (y + 10) - scroll_, panel_w - 32, Checkbox::height() });
-        y += 10 + Checkbox::height() + 8;
+        c_passable_->set_rect(SDL_Rect{ x, y - scroll_, panel_w - 32, Checkbox::height() });
+        y += Checkbox::height() + gap_after_checkbox;
+    }
+
+    // Group: Areas (buttons)
+    if (!area_buttons_.empty()) {
+        // Layout buttons full width under this group
+        const int btn_h = Button::height();
+        for (auto& kv : area_buttons_) {
+            if (kv.second) {
+                kv.second->set_rect(SDL_Rect{ x, y - scroll_, panel_w - 32, btn_h });
+                y += btn_h + 14;
+            }
+        }
     }
 
         if (b_close_) {
@@ -258,6 +280,7 @@ void AssetInfoUI::handle_event(const SDL_Event& e) {
     }
     if (s_scale_pct_ && s_scale_pct_->handle_event(e)) {
         info_->set_scale_percentage((float)s_scale_pct_->value());
+        reload_pending_ = true; // rebuild animations with new scale
         changed = true;
     }
 
@@ -311,11 +334,29 @@ void AssetInfoUI::handle_event(const SDL_Event& e) {
     }
 
     if (changed) save_now();
+
+    // Area buttons: handle clicks and defer heavy actions to render()
+    for (size_t i = 0; i < area_buttons_.size(); ++i) {
+        auto& kv = area_buttons_[i];
+        if (kv.second && kv.second->handle_event(e)) {
+            const std::string key = kv.first;
+            const bool exists = has_area_key(key);
+            pending_area_key_ = key;
+            pending_create_ = !exists;
+            pending_area_action_ = true;
+        }
+    }
 }
 
 void AssetInfoUI::render(SDL_Renderer* r, int screen_w, int screen_h) const {
     if (!visible_ || !info_) return;
     layout_widgets(screen_w, screen_h);
+
+    // If any setting requires a rebuild of animations (e.g., scale), do it now.
+    if (reload_pending_) {
+        info_->loadAnimations(r);
+        reload_pending_ = false;
+    }
 
     SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
 
@@ -324,53 +365,214 @@ void AssetInfoUI::render(SDL_Renderer* r, int screen_w, int screen_h) const {
     SDL_SetRenderDrawColor(r, kInfoPanelBG.r, kInfoPanelBG.g, kInfoPanelBG.b, kInfoPanelBG.a);
     SDL_RenderFillRect(r, &panel_);
 
-    // Draw group headers and widgets
-    auto draw_header = [&](const char* title, int& y) {
-        const TextStyle& h = TextStyles::MediumSecondary();
-        TTF_Font* f = h.open_font();
-        if (!f) return;
-        SDL_Surface* surf = TTF_RenderText_Blended(f, title, Styles::Gold());
-        if (surf) {
-            SDL_Texture* tex = SDL_CreateTextureFromSurface(r, surf);
-            if (tex) {
-                SDL_Rect dst{ panel_.x + 16, y - scroll_, surf->w, surf->h };
-                SDL_RenderCopy(r, tex, nullptr, &dst);
-                SDL_DestroyTexture(tex);
-            }
-            SDL_FreeSurface(surf);
-        }
-        TTF_CloseFont(f);
-        y += 22;
-    };
+    // Section headers disabled per request
+    auto draw_header = [&](const char* /*title*/, int& /*y*/) { /* no-op */ };
 
-    int y = 16;
-    draw_header("Identity", y);
+    // Headers removed: directly render widgets
+    int y_hdr = (t_type_ ? t_type_->rect().y : panel_.y + 40);
+    int tmp = y_hdr - 26 + scroll_;
     if (t_type_)  t_type_->render(r);
     if (t_tags_)  t_tags_->render(r);
 
-    y = t_tags_ ? (t_tags_->rect().y + t_tags_->rect().h + 18 + scroll_) : y + 60;
-    draw_header("Appearance", y);
+    // Appearance widgets (no header)
+    int min_app_y = INT_MAX;
+    if (t_blend_)     min_app_y = std::min(min_app_y, t_blend_->rect().y);
+    if (s_scale_pct_) min_app_y = std::min(min_app_y, s_scale_pct_->rect().y);
+    if (c_shading_)   min_app_y = std::min(min_app_y, c_shading_->rect().y);
+    if (c_flipable_)  min_app_y = std::min(min_app_y, c_flipable_->rect().y);
+    if (min_app_y != INT_MAX) {
+        tmp = min_app_y - 26 + scroll_;
+        // no header
+    }
     if (t_blend_)     t_blend_->render(r);
     if (s_scale_pct_) s_scale_pct_->render(r);
     if (c_shading_)   c_shading_->render(r);
     if (c_flipable_)  c_flipable_->render(r);
 
-    int headerDZ = (s_z_threshold_ ? s_z_threshold_->rect().y - 24 : (panel_.y + 280)) + scroll_;
-    headerDZ = std::max(headerDZ, (c_flipable_ ? c_flipable_->rect().y + 16 + scroll_ : headerDZ));
-    draw_header("Distances & Z", headerDZ);
+    // Distances & Z widgets (no header)
+    int min_dz_y = INT_MAX;
+    if (s_z_threshold_)   min_dz_y = std::min(min_dz_y, s_z_threshold_->rect().y);
+    if (s_min_same_type_) min_dz_y = std::min(min_dz_y, s_min_same_type_->rect().y);
+    if (s_min_all_)       min_dz_y = std::min(min_dz_y, s_min_all_->rect().y);
+    if (min_dz_y != INT_MAX) {
+        tmp = min_dz_y - 26 + scroll_;
+        // no header
+    }
     if (s_z_threshold_)   s_z_threshold_->render(r);
     if (s_min_same_type_) s_min_same_type_->render(r);
     if (s_min_all_)       s_min_all_->render(r);
 
-    // Flags header placed above passable checkbox
-    int flagsHeaderY = (c_passable_ ? c_passable_->rect().y - 24 + scroll_ : panel_.y + 520);
-    draw_header("Flags", flagsHeaderY);
-    if (c_passable_) c_passable_->render(r);
+    // Flags (no header)
+    if (c_passable_) {
+        tmp = c_passable_->rect().y - 26 + scroll_;
+        // no header
+        c_passable_->render(r);
+    }
+
+    // Areas (no header)
+    if (!area_buttons_.empty()) {
+        // Find first button y
+        int first_y = INT_MAX;
+        for (const auto& kv : area_buttons_) {
+            if (kv.second) first_y = std::min(first_y, kv.second->rect().y);
+        }
+        if (first_y != INT_MAX) {
+            tmp = first_y - 26 + scroll_;
+            // no header
+        }
+        for (const auto& kv : area_buttons_) {
+            if (kv.second) kv.second->render(r);
+        }
+    }
 
     // Close button (anchored to panel corner; not scrolled)
     if (b_close_) b_close_->render(r);
+
+    // Execute pending area edit/create action (requires renderer)
+    if (pending_area_action_) {
+        pending_area_action_ = false;
+        try {
+            const std::string key = pending_area_key_;
+            pending_area_key_.clear();
+
+            // Determine label for name seed
+            std::string display = key;
+            if (key == "spacing_area") display = "Spacing Area";
+            else if (key == "impassable_area") display = "Impassable Area";
+            else if (key == "collision_area") display = "Collision Area";
+            else if (key == "interaction_area") display = "Interaction Area";
+            else if (key == "hit_area") display = "Hit Area";
+
+            // Edit existing or create new via interactive editor
+            // Always use a meaningful background: default frame if available,
+            // otherwise fall back to any area texture we already have.
+            SDL_Texture* bg = ensure_default_frame_texture(r);
+            if (!bg) {
+                if (info_->collision_area) bg = info_->collision_area->get_texture();
+                else if (info_->interaction_area) bg = info_->interaction_area->get_texture();
+                else if (info_->attack_area) bg = info_->attack_area->get_texture();
+                else if (info_->passability_area) bg = info_->passability_area->get_texture();
+            }
+            if (!pending_create_) {
+                // Edit in place using chosen background
+                if (key == "impassable_area" && info_->passability_area && bg) {
+                    info_->passability_area->edit_with_ui(bg, r);
+                    apply_area_from_points(key, info_->passability_area->get_points());
+                    info_->has_passability_area = true;
+                } else if (key == "collision_area" && info_->collision_area && bg) {
+                    info_->collision_area->edit_with_ui(bg, r);
+                    apply_area_from_points(key, info_->collision_area->get_points());
+                    info_->has_collision_area = true;
+                } else if (key == "interaction_area" && info_->interaction_area && bg) {
+                    info_->interaction_area->edit_with_ui(bg, r);
+                    apply_area_from_points(key, info_->interaction_area->get_points());
+                    info_->has_interaction_area = true;
+                } else if (key == "hit_area" && info_->attack_area && bg) {
+                    info_->attack_area->edit_with_ui(bg, r);
+                    apply_area_from_points(key, info_->attack_area->get_points());
+                    info_->has_attack_area = true;
+                }
+            } else {
+                // Create new using chosen background
+                if (bg) {
+                    if (key == "impassable_area") {
+                        info_->passability_area = std::make_unique<Area>(display, bg, r);
+                        apply_area_from_points(key, info_->passability_area->get_points());
+                        info_->has_passability_area = true;
+                    } else if (key == "collision_area") {
+                        info_->collision_area = std::make_unique<Area>(display, bg, r);
+                        apply_area_from_points(key, info_->collision_area->get_points());
+                        info_->has_collision_area = true;
+                    } else if (key == "interaction_area") {
+                        info_->interaction_area = std::make_unique<Area>(display, bg, r);
+                        apply_area_from_points(key, info_->interaction_area->get_points());
+                        info_->has_interaction_area = true;
+                    } else if (key == "hit_area") {
+                        info_->attack_area = std::make_unique<Area>(display, bg, r);
+                        apply_area_from_points(key, info_->attack_area->get_points());
+                        info_->has_attack_area = true;
+                    }
+                }
+            }
+
+            // Persist and refresh button labels
+            (void)info_->update_info_json();
+            const_cast<AssetInfoUI*>(this)->rebuild_area_buttons();
+        } catch (const std::exception& ex) {
+            SDL_Log("[AssetInfoUI] Area edit/create failed: %s", ex.what());
+        }
+    }
 }
 
 void AssetInfoUI::save_now() const {
     if (info_) (void)info_->update_info_json();
+}
+
+// -------------------- Areas helpers --------------------
+
+void AssetInfoUI::rebuild_area_buttons() {
+    area_buttons_.clear();
+    area_labels_.clear();
+    if (!info_) return;
+
+    struct Row { const char* key; const char* label; bool present; } rows[] = {
+        { "impassable_area",   "Impassable Area",   info_->has_passability_area && info_->passability_area },
+        { "collision_area",    "Collision Area",    info_->has_collision_area    && info_->collision_area },
+        { "interaction_area",  "Interaction Area",  info_->has_interaction_area  && info_->interaction_area },
+        { "hit_area",          "Hit Area",          info_->has_attack_area       && info_->attack_area }
+    };
+
+    for (const auto& r : rows) {
+        std::string btn_text = std::string(r.present ? "Edit " : "Create ") + r.label;
+        auto btn = std::make_unique<Button>(btn_text, &Styles::MainDecoButton(), Button::width(), Button::height());
+        area_buttons_.emplace_back(r.key, std::move(btn));
+        area_labels_.emplace_back(r.label);
+    }
+}
+
+SDL_Texture* AssetInfoUI::get_default_frame_texture() const {
+    if (!info_) return nullptr;
+    auto it = info_->animations.find("default");
+    if (it == info_->animations.end()) it = info_->animations.find("start");
+    if (it == info_->animations.end() && !info_->animations.empty()) it = info_->animations.begin();
+    if (it == info_->animations.end()) return nullptr;
+    const Animation& anim = it->second;
+    if (anim.frames.empty()) return nullptr;
+    return anim.frames.front();
+}
+
+SDL_Texture* AssetInfoUI::ensure_default_frame_texture(SDL_Renderer* r) const {
+    if (!info_) return nullptr;
+    SDL_Texture* tex = get_default_frame_texture();
+    if (!tex) {
+        // Attempt to load animations to populate frames
+        info_->loadAnimations(r);
+        tex = get_default_frame_texture();
+    }
+    return tex;
+}
+
+bool AssetInfoUI::has_area_key(const std::string& key) const {
+    if (!info_) return false;
+    if (key == "impassable_area")   return info_->has_passability_area && info_->passability_area;
+    if (key == "collision_area")    return info_->has_collision_area    && info_->collision_area;
+    if (key == "interaction_area")  return info_->has_interaction_area  && info_->interaction_area;
+    if (key == "hit_area")          return info_->has_attack_area       && info_->attack_area;
+    return false;
+}
+
+void AssetInfoUI::apply_area_from_points(const std::string& key,
+                                         const std::vector<std::pair<int,int>>& pts) const {
+    if (!info_) return;
+    // Convert absolute points to coordinates relative to the sprite pivot
+    // pivot = (scaled_canvas_w/2, scaled_canvas_h)
+    const int pivot_x = static_cast<int>(std::lround(info_->original_canvas_width  * info_->scale_factor / 2.0f));
+    const int pivot_y = static_cast<int>(std::lround(info_->original_canvas_height * info_->scale_factor        ));
+
+    std::vector<std::pair<int,int>> rel;
+    rel.reserve(pts.size());
+    for (auto [x,y] : pts) {
+        rel.emplace_back(x - pivot_x, y - pivot_y);
+    }
+    info_->set_area_points(key, rel);
 }
