@@ -22,7 +22,36 @@ void ChildLoader::load_children(AssetInfo& info, const json& data, const std::st
         }
         else if (entry.is_object() && entry.contains("json_path") && entry["json_path"].is_string()) {
             rel_path = entry["json_path"].get<std::string>();
-        } else {
+        } else if (entry.is_object()) {
+            // NEW: embedded child definition
+            int z_offset_value = entry.value("z_offset", 0);
+            ChildInfo ci;
+            ci.json_path = "";
+            ci.z_offset  = z_offset_value;
+            ci.has_area = false;
+            try {
+                if (entry.contains("area") && entry["area"].is_object()) {
+                    const auto& aobj = entry["area"];
+                    std::vector<Area::Point> pts;
+                    if (aobj.contains("points") && aobj["points"].is_array()) {
+                        for (const auto& p : aobj["points"]) {
+                            if (p.is_array() && p.size() >= 2) {
+                                int x = static_cast<int>(std::round(p[0].get<double>()));
+                                int y = static_cast<int>(std::round(p[1].get<double>()));
+                                pts.emplace_back(x, y);
+                            }
+                        }
+                    }
+                    if (!pts.empty()) {
+                        std::string nm = entry.value("name", std::string{"child"});
+                        ci.area_ptr = std::make_unique<Area>(nm, pts);
+                        ci.has_area = true;
+                    }
+                }
+            } catch (const std::exception& e) {
+                std::cerr << "[ChildLoader] embedded child load failed: " << e.what() << "\n";
+            }
+            info.children.emplace_back(std::move(ci));
             continue;
         }
 
@@ -68,4 +97,3 @@ void ChildLoader::load_children(AssetInfo& info, const json& data, const std::st
         info.children.emplace_back(std::move(ci));
     }
 }
-

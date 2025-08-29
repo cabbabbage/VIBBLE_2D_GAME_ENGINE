@@ -1,0 +1,93 @@
+*** Begin Patch
+*** Update File: PYTHON ASSET MANAGER/asset_pages/child.py
+@@
+-import os
+-import json
++import os
++import json
+ import copy
+ import tkinter as tk
+ from tkinter import ttk, messagebox
+ from shared.boundary import BoundaryConfigurator
+ from shared.assets_editor import AssetEditor
+ from shared.range import Range
++from shared.asset_io import load_info, save_info
+@@
+-    def _update_info_json(self):
+-        try:
+-            with open(self.asset_path, 'r') as f:
+-                data = json.load(f)
+-        except Exception as e:
+-            messagebox.showerror("Error", f"Failed to load parent info.json: {e}")
+-            return
+-
+-        new_paths = []
+-        for entry in self.child_frames:
+-            if entry["json_path"]:
+-                new_paths.append(entry["json_path"])
+-
+-        data["child_assets"] = new_paths
+-        try:
+-            with open(self.asset_path, 'w') as f:
+-                json.dump(data, f, indent=2)
+-        except Exception as e:
+-            messagebox.showerror("Error", f"Failed to update info.json: {e}")
++    def _update_info_json(self):
++        try:
++            data = load_info(self.asset_path)
++        except Exception as e:
++            messagebox.showerror("Error", f"Failed to load parent info.json: {e}")
++            return
++
++        new_children = []
++        for entry in self.child_frames:
++            child = {
++                "z_offset": entry["z_var"].get()
++            }
++            if entry.get("area_data"):
++                child["area"] = entry["area_data"]
++            if entry.get("json_path"):
++                child["json_path"] = entry["json_path"]
++            assets = entry.get("asset_editor").get_assets() if hasattr(entry.get("asset_editor"), 'get_assets') else []
++            if assets:
++                child["assets"] = assets
++            new_children.append(child)
++
++        data["child_assets"] = new_children
++        try:
++            save_info(self.asset_path, data)
++        except Exception as e:
++            messagebox.showerror("Error", f"Failed to update info.json: {e}")
+@@
+-        try:
+-            data = json.load(open(info_path))
+-            for item in data.get("child_assets", []):
+-                if isinstance(item, dict):
+-                    path = item.get("json_path")
+-                else:
+-                    path = item
+-                full = os.path.join(os.path.dirname(info_path), path)
+-                if not os.path.exists(full):
+-                    continue
+-                with open(full) as f:
+-                    child = json.load(f)
+-                child["json_path"] = path
+-                self._add_child_region(child)
+-        except Exception as e:
++        try:
++            data = load_info(info_path)
++            for item in data.get("child_assets", []):
++                if isinstance(item, dict):
++                    self._add_child_region(item)
++                else:
++                    path = item
++                    full = os.path.join(os.path.dirname(info_path), path)
++                    if not os.path.exists(full):
++                        continue
++                    with open(full) as f:
++                        child = json.load(f)
++                    child["json_path"] = path
++                    self._add_child_region(child)
++        except Exception as e:
+             print(f"[ChildAssetsPage] load failed: {e}")
+*** End Patch

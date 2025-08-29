@@ -2,9 +2,9 @@
 
 #include <memory>
 #include <string>
+#include <nlohmann/json.hpp>
 class AssetInfo;
 class Area;
-class nlohmann_json_fwd;
 
 class AreaLoader {
 public:
@@ -23,4 +23,3 @@ public:
                               int offset_y = 0,
                               const std::string& name_hint = "");
 };
-

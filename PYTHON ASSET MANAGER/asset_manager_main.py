@@ -5,18 +5,18 @@ import tkinter as tk
 from tkinter import ttk, messagebox, simpledialog
 from PIL import Image, ImageTk
 
-from pages.basic_info import BasicInfoPage
-from pages.size import SizePage
-from pages.Animations import AnimationsPage
-from pages.passa import PassabilityPage
-from pages.overlay import ImageOverlayPage
-from pages.child import ChildAssetsPage
-from pages.spacing import SpacingThresholdPage
-from pages.tags import TagsPage
-from pages.blend_page import BlendModePage
-from pages.edit_raw_json import EditRawJsonPage
-from pages.shading import ShadingPage
-from pages.lighting import LightingPage
+from asset_pages.basic_info import BasicInfoPage
+from asset_pages.size import SizePage
+from asset_pages.Animations import AnimationsPage
+from asset_pages.passa import PassabilityPage
+from asset_pages.overlay import ImageOverlayPage
+from asset_pages.child import ChildAssetsPage
+from asset_pages.spacing import SpacingThresholdPage
+from asset_pages.tags import TagsPage
+from asset_pages.blend_page import BlendModePage
+from asset_pages.edit_raw_json import EditRawJsonPage
+from asset_pages.shading import ShadingPage
+from asset_pages.lighting import LightingPage
 
 ASSET_DIR = "SRC"
 
