@@ -127,7 +127,7 @@ void InitializeAssets::setup_static_sources(Assets& assets) {
                 }
 
                 for (Asset* t : targets) {
-                    if (t && t->info && t->info->has_shading) {
+                    if (t && t->info) {
                         t->add_static_light_source(&light, lx, ly, &owner);
                     }
                 }

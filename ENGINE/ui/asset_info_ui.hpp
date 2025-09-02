@@ -52,12 +52,10 @@ private:
     std::unique_ptr<Slider>   s_scale_pct_;
 
     std::unique_ptr<Checkbox> c_passable_;
-    std::unique_ptr<Checkbox> c_shading_;
     std::unique_ptr<Checkbox> c_flipable_;
 
     std::unique_ptr<TextBox>  t_type_;
     std::unique_ptr<TextBox>  t_tags_;
-    std::unique_ptr<TextBox>  t_blend_;
 
     // Scroll state
     mutable int scroll_ = 0;

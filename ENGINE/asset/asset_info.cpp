@@ -9,24 +9,8 @@
 #include <iostream>
 #include <sstream>
 
-static SDL_BlendMode parse_blend_mode(const std::string &mode_str) {
-  if (mode_str == "SDL_BLENDMODE_NONE")
-    return SDL_BLENDMODE_NONE;
-  if (mode_str == "SDL_BLENDMODE_BLEND")
-    return SDL_BLENDMODE_BLEND;
-  if (mode_str == "SDL_BLENDMODE_ADD")
-    return SDL_BLENDMODE_ADD;
-  if (mode_str == "SDL_BLENDMODE_MOD")
-    return SDL_BLENDMODE_MOD;
-  if (mode_str == "SDL_BLENDMODE_MUL")
-    return SDL_BLENDMODE_MUL;
-  return SDL_BLENDMODE_BLEND;
-}
-
 AssetInfo::AssetInfo(const std::string &asset_folder_name)
-    : blendmode(SDL_BLENDMODE_BLEND), has_light_source(false),
-      has_shading(false), has_base_shadow(false), has_gradient_shadow(false),
-      has_casted_shadows(false) {
+    : has_light_source(false) {
   name = asset_folder_name;
   dir_path_ = "SRC/" + asset_folder_name;
   std::string info_path = dir_path_ + "/info.json";
@@ -39,10 +23,6 @@ AssetInfo::AssetInfo(const std::string &asset_folder_name)
   nlohmann::json data;
   in >> data;
   info_json_ = data; // keep a snapshot for updates
-
-  if (data.contains("blend_mode") && data["blend_mode"].is_string()) {
-    blendmode = parse_blend_mode(data["blend_mode"].get<std::string>());
-  }
 
   tags.clear();
   if (data.contains("tags") && data["tags"].is_array()) {
@@ -71,8 +51,8 @@ AssetInfo::AssetInfo(const std::string &asset_folder_name)
   int offset_x = (scaled_canvas_w - 0) / 2;
   int offset_y = (scaled_canvas_h - 0);
 
-  AreaLoader::load_collision_areas(*this, data, dir_path_, offset_x, offset_y);
-  ChildLoader::load_children(*this, data, dir_path_);
+  load_areas(data, scale_factor, offset_x, offset_y);
+  load_children(data);
 }
 
 AssetInfo::~AssetInfo() {
@@ -105,23 +85,11 @@ void AssetInfo::load_base_properties(const nlohmann::json &data) {
 
   min_same_type_distance = data.value("min_same_type_distance", 0);
   min_distance_all = data.value("min_distance_all", 0);
-  has_shading = data.value("has_shading", false);
   flipable = data.value("can_invert", false);
 }
 
 void AssetInfo::load_lighting_info(const nlohmann::json &data) {
   LightingLoader::load(*this, data);
-}
-
-void AssetInfo::load_collision_areas(const nlohmann::json &data,
-                                     const std::string &dir_path, int offset_x,
-                                     int offset_y) {
-  AreaLoader::load_collision_areas(*this, data, dir_path, offset_x, offset_y);
-}
-
-void AssetInfo::load_child_json_paths(const nlohmann::json &data,
-                                      const std::string &dir_path) {
-  ChildLoader::load_children(*this, data, dir_path);
 }
 
 bool AssetInfo::has_tag(const std::string &tag) const {
@@ -167,24 +135,9 @@ void AssetInfo::set_min_distance_all(int d) {
   info_json_["min_distance_all"] = d;
 }
 
-void AssetInfo::set_has_shading(bool v) {
-  has_shading = v;
-  info_json_["has_shading"] = v;
-}
-
 void AssetInfo::set_flipable(bool v) {
   flipable = v;
   info_json_["can_invert"] = v;
-}
-
-void AssetInfo::set_blend_mode(SDL_BlendMode mode) {
-  blendmode = mode;
-  info_json_["blend_mode"] = blend_mode_to_string(mode);
-}
-
-void AssetInfo::set_blend_mode_string(const std::string &mode_str) {
-  info_json_["blend_mode"] = mode_str;
-  blendmode = parse_blend_mode(mode_str);
 }
 
 void AssetInfo::set_scale_factor(float factor) {
@@ -237,4 +190,20 @@ void AssetInfo::set_passable(bool v) {
     add_tag("passable");
   else
     remove_tag("passable");
+}
+
+Area* AssetInfo::find_area(const std::string& name) {
+  for (auto& na : areas) {
+    if (na.name == name) return na.area.get();
+  }
+  return nullptr;
+}
+
+void AssetInfo::load_areas(const nlohmann::json& data, float scale, int offset_x,
+                           int offset_y) {
+  AreaLoader::load(*this, data, scale, offset_x, offset_y);
+}
+
+void AssetInfo::load_children(const nlohmann::json& data) {
+  ChildLoader::load_children(*this, data, dir_path_);
 }

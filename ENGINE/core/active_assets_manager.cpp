@@ -111,7 +111,7 @@ void ActiveAssetsManager::updateClosestAssets(Asset* player, std::size_t max_cou
         if (a->info) {
             if (!a->info->passable)
                 impassable_assets_.push_back(a);
-            if (a->info->has_interaction_area)
+            if (a->info->find_area("interaction_area"))
                 interactive_assets_.push_back(a);
         }
     }

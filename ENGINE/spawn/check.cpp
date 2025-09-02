@@ -54,7 +54,7 @@ bool Check::check(const std::shared_ptr<AssetInfo>& info,
     auto nearest = get_closest_assets(test_x, test_y, num_neighbors, assets);
     if (debug_) std::cout << "[Check] Found " << nearest.size() << " nearest assets.\n";
 
-    if (check_spacing && info->has_spacing_area && info->spacing_area) {
+    if (check_spacing && info->find_area("spacing_area")) {
         if (check_spacing_overlap(info, test_x, test_y, nearest)) {
             if (debug_) std::cout << "[Check] Spacing overlap detected.\n";
             return true;
@@ -128,9 +128,11 @@ bool Check::check_spacing_overlap(const std::shared_ptr<AssetInfo>& info,
                                   int test_pos_Y,
                                   const std::vector<Asset*>& closest_assets) const
 {
-    if (!info || !info->spacing_area) return false;
+    if (!info) return false;
+    Area* spacing = info->find_area("spacing_area");
+    if (!spacing) return false;
 
-    Area test_area = *info->spacing_area;
+    Area test_area = *spacing;
     auto [tminx, tminy, tmaxx, tmaxy] = test_area.get_bounds();
     int th = tmaxy - tminy + 1;
     test_area.align(test_pos_X, test_pos_Y - th / 2);
@@ -138,14 +140,13 @@ bool Check::check_spacing_overlap(const std::shared_ptr<AssetInfo>& info,
     for (Asset* other : closest_assets) {
         if (!other || !other->info) continue;
 
-        Area other_area = (other->info->has_spacing_area && other->info->spacing_area)
-            ? *other->info->spacing_area
-            : Area("fallback", other->pos_X, other->pos_Y,
-                   1, 1, "Square", 0,
-                   std::numeric_limits<int>::max(),
-                   std::numeric_limits<int>::max());
-
-        if (other->info->has_spacing_area && other->info->spacing_area) {
+        Area other_area("fallback", other->pos_X, other->pos_Y,
+                        1, 1, "Square", 0,
+                        std::numeric_limits<int>::max(),
+                        std::numeric_limits<int>::max());
+        Area* o_spacing = other->info->find_area("spacing_area");
+        if (o_spacing) {
+            other_area = *o_spacing;
             auto [ominx, ominy, omaxx, omaxy] = other_area.get_bounds();
             int oh = omaxy - ominy + 1;
             other_area.align(other->pos_X, other->pos_Y - oh / 2);

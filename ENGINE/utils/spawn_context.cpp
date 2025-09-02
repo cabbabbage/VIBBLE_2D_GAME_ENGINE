@@ -73,8 +73,9 @@ Asset* SpawnContext::spawnAsset(const std::string& name,
         std::shuffle(shuffled_children.begin(), shuffled_children.end(), g);
 
         for (auto* childInfo : shuffled_children) {
-            if (!childInfo->has_area) {
-                std::cout << "[Spawn]  Skipping child (no area loaded)\n";
+            Area* base_area = raw->info->find_area(childInfo->area_name);
+            if (!base_area) {
+                std::cout << "[Spawn]  Skipping child (area not found)\n";
                 continue;
             }
 
@@ -95,7 +96,7 @@ Asset* SpawnContext::spawnAsset(const std::string& name,
                 continue;
             }
 
-            Area childArea = *childInfo->area_ptr;
+            Area childArea = *base_area;
             childArea.align(raw->pos_X, raw->pos_Y);
             if (raw->flipped) {
                 childArea.flip_horizontal(raw->pos_X);

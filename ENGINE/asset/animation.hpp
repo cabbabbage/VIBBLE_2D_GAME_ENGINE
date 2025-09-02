@@ -16,7 +16,6 @@ public:
               const std::string& dir_path,
               const std::string& root_cache,
               float scale_factor,
-              SDL_BlendMode blendmode,
               SDL_Renderer* renderer,
               SDL_Texture*& base_sprite,
               int& scaled_sprite_w,

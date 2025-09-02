@@ -3,7 +3,6 @@
 #include "animation.hpp"
 #include "utils/area.hpp"
 #include "utils/light_source.hpp"
-#include <SDL.h>
 #include <map>
 #include <nlohmann/json.hpp>
 #include <string>
@@ -11,8 +10,7 @@
 
 struct ChildInfo {
   std::string json_path;
-  std::unique_ptr<Area> area_ptr;
-  bool has_area = false;
+  std::string area_name;
   int z_offset;
 };
 
@@ -38,33 +36,15 @@ public:
   bool flipable;
 
   std::vector<std::string> tags;
-  SDL_BlendMode blendmode;
 
   bool has_light_source;
-  bool has_shading;
-  bool has_base_shadow;
-  int base_shadow_intensity;
-  bool has_gradient_shadow;
-  int number_of_gradient_shadows;
-  int gradient_shadow_intensity;
-  bool has_casted_shadows;
-  int number_of_casted_shadows;
-  int cast_shadow_intensity;
 
-  std::unique_ptr<Area> passability_area;
-  bool has_passability_area = false;
+  struct NamedArea {
+    std::string name;
+    std::unique_ptr<Area> area;
+  };
 
-  std::unique_ptr<Area> spacing_area;
-  bool has_spacing_area = false;
-
-  std::unique_ptr<Area> collision_area;
-  bool has_collision_area = false;
-
-  std::unique_ptr<Area> interaction_area;
-  bool has_interaction_area = false;
-
-  std::unique_ptr<Area> attack_area;
-  bool has_attack_area = false;
+  std::vector<NamedArea> areas;
 
   std::map<std::string, Animation> animations;
 
@@ -82,9 +62,6 @@ public:
   void set_min_distance_all(int d);
   void set_flipable(bool v);
 
-  void set_blend_mode(SDL_BlendMode mode);
-  void set_blend_mode_string(const std::string &mode_str);
-
   // Scale: factor in [0..1], or percentage (e.g. 100.0)
   void set_scale_factor(float factor);
   void set_scale_percentage(float percent);
@@ -95,15 +72,15 @@ public:
   void remove_tag(const std::string &tag);
   void set_passable(bool v);
 
+  Area* find_area(const std::string& name);
+
 private:
   void load_base_properties(const nlohmann::json &data);
   void load_lighting_info(const nlohmann::json &data);
   void generate_lights(SDL_Renderer *renderer);
-  void load_collision_areas(const nlohmann::json &data,
-                            const std::string &dir_path, int offset_x,
-                            int offset_y);
-  void load_child_json_paths(const nlohmann::json &data,
-                             const std::string &dir_path);
+  void load_areas(const nlohmann::json &data, float scale, int offset_x,
+                  int offset_y);
+  void load_children(const nlohmann::json &data);
 
   nlohmann::json anims_json_;
   std::string dir_path_;
