@@ -62,5 +62,6 @@
     "scale_percentage": 100,
     "variability_percentage": 0,
     "flipability": true
-  }
+  },
+  "areas": []
 }
