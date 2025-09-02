@@ -47,7 +47,8 @@ void DistributedBatchSpawner::spawn(const std::vector<BatchSpawnInfo>& items,
             auto& info = it->second;
             if (ctx.checker().check(info, cx, cy, ctx.exclusion_zones(), ctx.all_assets(), false, true, 5)) continue;
 
-            ctx.spawnAsset(selected.name, info, *area, cx, cy, 0, nullptr);
+            // Use the shared id for the selected batch entry
+            ctx.spawnAsset(selected.name, info, "distributed_batch", cx, cy, 0, nullptr, selected.asset_id);
             ++placed_quantities[selected.name];
         }
     }

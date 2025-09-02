@@ -220,6 +220,7 @@ nlohmann::json Room::create_static_room_json(std::string name) {
         entry["min_number"] = 1;
         entry["max_number"] = 1;
         entry["position"] = "spawn_exact_percentage()";
+        entry["asset_id"] = a->asset_id;
         entry["exact_position"] = nullptr;
         entry["inherited"] = false;
         entry["check_overlap"] = false;
@@ -240,12 +241,14 @@ nlohmann::json Room::create_static_room_json(std::string name) {
             {"name", "Davey"},
             {"min_number", 1},
             {"max_number", 1},
-            {"position", "Center"},
+            {"position", "spawn_exact_percentage()"},
             {"exact_position", nullptr},
             {"tag", false},
             {"check_overlap", false},
             {"check_min_spacing", false},
-            {"inherited", false}
+            {"inherited", false},
+            {"ep_x_min", 50}, {"ep_x_max", 50},
+            {"ep_y_min", 50}, {"ep_y_max", 50}
         };
         assets_arr.push_back(std::move(davey_entry));
     }
@@ -253,4 +256,74 @@ nlohmann::json Room::create_static_room_json(std::string name) {
     out["assets"] = std::move(assets_arr);
 
     return out;
+}
+
+void Room::regenerate_room(AssetLibrary* asset_lib) {
+    // Preserve Player asset, clear others
+    std::vector<std::unique_ptr<Asset>> preserved;
+    preserved.reserve(assets.size());
+    for (auto& up : assets) {
+        if (up && up->info && up->info->type == "Player") {
+            preserved.push_back(std::move(up));
+        }
+    }
+    assets.clear();
+    for (auto& up : preserved) assets.push_back(std::move(up));
+
+    // Reload the latest room JSON from disk
+    try {
+        std::ifstream in(json_path);
+        if (in.is_open()) {
+            nlohmann::json J;
+            in >> J;
+            assets_json = J;
+        }
+    } catch (...) {
+        // Keep existing assets_json on failure
+    }
+
+    // Rebuild planner from current json and room area
+    std::vector<nlohmann::json> json_sources;
+    json_sources.push_back(assets_json);
+    if (assets_json.value("inherits_map_assets", false)) {
+        std::ifstream map_in(map_path + "/map_assets.json");
+        if (map_in.is_open()) {
+            nlohmann::json map_assets;
+            map_in >> map_assets;
+            json_sources.push_back(map_assets);
+        }
+    }
+
+    planner = std::make_unique<AssetSpawnPlanner>(
+        json_sources,
+        room_area ? room_area->get_area() : 0.0,
+        *asset_lib
+    );
+
+    // Spawn into this room, using the same area
+    std::vector<Area> exclusion;
+    AssetSpawner spawner(asset_lib, exclusion);
+    size_t before_spawn = assets.size();
+    spawner.spawn(*this);
+
+    // If JSON included a Player entry, drop newly spawned Player to avoid duplicates
+    if (assets.size() > before_spawn) {
+        std::vector<std::unique_ptr<Asset>> filtered;
+        filtered.reserve(assets.size());
+        // keep all preserved (at indexes < before_spawn)
+        for (size_t i = 0; i < assets.size(); ++i) {
+            auto& up = assets[i];
+            if (!up) continue;
+            if (i < before_spawn) {
+                filtered.push_back(std::move(up));
+            } else {
+                if (up->info && up->info->type == "Player") {
+                    // drop duplicate player
+                    continue;
+                }
+                filtered.push_back(std::move(up));
+            }
+        }
+        assets = std::move(filtered);
+    }
 }

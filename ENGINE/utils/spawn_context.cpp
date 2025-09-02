@@ -47,13 +47,14 @@ SpawnContext::Point SpawnContext::get_point_within_area(const Area& area) {
 
 Asset* SpawnContext::spawnAsset(const std::string& name,
                                 const std::shared_ptr<AssetInfo>& info,
-                                const Area& area,
+                                const std::string& spawn_type,
                                 int x,
                                 int y,
                                 int depth,
-                                Asset* parent)
+                                Asset* parent,
+                                const std::string& asset_id)
 {
-    auto assetPtr = std::make_unique<Asset>(info, area, x, y, depth, parent);
+    auto assetPtr = std::make_unique<Asset>(info, spawn_type, x, y, depth, parent, asset_id);
     Asset* raw = assetPtr.get();
     all_.push_back(std::move(assetPtr));
 
@@ -125,4 +126,3 @@ Asset* SpawnContext::spawnAsset(const std::string& name,
 
     return raw;
 }
-

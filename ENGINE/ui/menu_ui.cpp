@@ -60,7 +60,20 @@ void MenuUI::game_loop() {
                 quit = true;
             } else if (e.type == SDL_KEYDOWN) {
                 if (e.key.keysym.sym == SDLK_ESCAPE && e.key.repeat == 0) {
-                    toggleMenu();
+                    // Close overlay UIs first; only open menu if none are open
+                    bool handled = false;
+                    if (game_assets_) {
+                        if (game_assets_->is_asset_library_open()) {
+                            game_assets_->close_asset_library();
+                            handled = true;
+                        } else if (game_assets_->is_asset_info_editor_open()) {
+                            game_assets_->close_asset_info_editor();
+                            handled = true;
+                        }
+                    }
+                    if (!handled) {
+                        toggleMenu();
+                    }
                 }
             }
             if (input_) input_->handleEvent(e);
@@ -75,6 +88,11 @@ void MenuUI::game_loop() {
             const int px = game_assets_->player->pos_X;
             const int py = game_assets_->player->pos_Y;
             game_assets_->update(*input_, px, py);
+
+            // Enforce exclusivity: if any overlay UI opens, close the menu overlay
+            if (menu_active_ && (game_assets_->is_asset_library_open() || game_assets_->is_asset_info_editor_open())) {
+                menu_active_ = false;
+            }
         }
 
 
@@ -110,7 +128,13 @@ void MenuUI::game_loop() {
 }
 
 void MenuUI::toggleMenu() {
-    menu_active_ = !menu_active_;
+    bool new_state = !menu_active_;
+    if (new_state && game_assets_) {
+        // Close other overlays to ensure only one UI is open
+        game_assets_->close_asset_library();
+        game_assets_->close_asset_info_editor();
+    }
+    menu_active_ = new_state;
     std::cout << "[MenuUI] ESC -> menu_active=" << (menu_active_ ? "true" : "false") << "\n";
 }
 

@@ -2,8 +2,8 @@
 #include "asset_spawner.hpp"
 #include "asset_spawn_planner.hpp"
 #include "utils/spawn_context.hpp"
+#include "methods/percentage_spawner.hpp"
 #include "methods/exact_spawner.hpp"
-#include "methods/center_spawner.hpp"
 #include "methods/random_spawner.hpp"
 #include "methods/distributed_spawner.hpp"
 #include "methods/perimeter_spawner.hpp"
@@ -78,8 +78,8 @@ void AssetSpawner::run_spawning(AssetSpawnPlanner* planner, const Area& area) {
     int jitter  = planner->get_batch_jitter();
 
     SpawnContext ctx(rng_, checker_, logger_, exclusion_zones, asset_info_library_, all_, asset_library_);
+    PercentageSpawner percentage;
     ExactSpawner exact;
-    CenterSpawner center;
     RandomSpawner random;
     DistributedSpawner distributed;
     PerimeterSpawner perimeter;
@@ -90,11 +90,14 @@ void AssetSpawner::run_spawning(AssetSpawnPlanner* planner, const Area& area) {
         if (!queue_item.info) continue;
 
         const std::string& pos = queue_item.position;
-        // Support both legacy and new naming for exact-percentage spawning
-        if (pos == "spawn_exact_percentage()" || pos == "Exact Position") {
+        // Support both legacy and new naming for percentage spawning
+        if (pos == "spawn_exact_percentage()" || pos == "Exact Position" || pos == "Percentage Position") {
+            percentage.spawn(queue_item, &area, ctx);
+        } else if (pos == "Exact Spawn") {
             exact.spawn(queue_item, &area, ctx);
         } else if (pos == "Center") {
-            center.spawn(queue_item, &area, ctx);
+            // Center is migrated to Percentage Position in planner; no direct handling here
+            percentage.spawn(queue_item, &area, ctx);
         } else if (pos == "Perimeter") {
             perimeter.spawn(queue_item, &area, ctx);
         } else if (pos == "Distributed") {

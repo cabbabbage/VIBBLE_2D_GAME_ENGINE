@@ -52,7 +52,6 @@ private:
 private:
     bool visible_ = false;
     std::shared_ptr<AssetInfo> info_{};
-    std::unique_ptr<Button> b_close_;
     // Widgets (owned)
     std::unique_ptr<Slider>   s_z_threshold_;
     std::unique_ptr<Slider>   s_min_same_type_;
@@ -60,12 +59,29 @@ private:
     std::unique_ptr<Slider>   s_scale_pct_;
 
     std::unique_ptr<Checkbox> c_passable_;
-    std::unique_ptr<Checkbox> c_shading_;
     std::unique_ptr<Checkbox> c_flipable_;
 
     std::unique_ptr<TextBox>  t_type_;
     std::unique_ptr<TextBox>  t_tags_;
-    std::unique_ptr<TextBox>  t_blend_;
+
+    // Collapsible section headers
+    std::unique_ptr<Button>   h_basic_;
+    std::unique_ptr<Button>   h_animations_;
+    std::unique_ptr<Button>   h_rendering_;
+    std::unique_ptr<Button>   h_spawning_;
+    std::unique_ptr<Button>   h_passability_;
+    std::unique_ptr<Button>   h_lighting_;
+    std::unique_ptr<Button>   h_children_;
+    // Section open states
+    bool open_basic_       = true;
+    bool open_animations_  = false;
+    bool open_rendering_   = true;
+    bool open_spawning_    = true;
+    bool open_passability_ = true;
+    bool open_lighting_    = false;
+    bool open_children_    = false;
+    // Optional placeholder for scale variability UI (not persisted yet)
+    std::unique_ptr<Slider>   s_scale_var_pct_;
 
     // Scroll state
     mutable int scroll_ = 0;

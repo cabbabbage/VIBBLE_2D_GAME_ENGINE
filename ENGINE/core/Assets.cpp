@@ -11,6 +11,7 @@
 #include "render/scene_renderer.hpp"
 #include "ui/asset_library_ui.hpp"
 #include "ui/asset_info_ui.hpp"
+#include "spawn/asset_spawn_id.hpp"
 
 #include <algorithm>
 #include <iostream>
@@ -133,6 +134,18 @@ void Assets::update(const Input& input,
         toggle_asset_library();
     }
 
+    // ESC should close any overlay UI if open (library or info)
+    // This supplements higher-level handlers to ensure consistent behavior.
+    if (library_ui_ && library_ui_->is_visible()) {
+        if (input.wasKeyPressed(SDLK_ESCAPE)) {
+            library_ui_->close();
+        }
+    } else if (info_ui_ && info_ui_->is_visible()) {
+        if (input.wasKeyPressed(SDLK_ESCAPE)) {
+            info_ui_->close();
+        }
+    }
+
     // Update any visible UI
     update_ui(input);
 
@@ -205,17 +218,17 @@ void Assets::addAsset(const std::string& name, int gx, int gy) {
     std::cout << "[Assets::addAsset] Retrieved AssetInfo '" << info->name
               << "' at " << info << "\n";
 
-    // Construct area
-    Area spawn_area(name, gx, gy, 1, 1, "Point", 1, 1, 1);
-    std::cout << "[Assets::addAsset] Created Area '" << spawn_area.get_name()
-              << "' at (" << gx << ", " << gy << ")\n";
+    // Spawn type for manual placement
+    const std::string spawn_type = "manual";
 
     // Track size before
     size_t prev_size = owned_assets.size();
 
     // Construct asset
+    // Generate unique spawn id for manual add
+    std::string asid = AssetSpawnId::generate();
     owned_assets.emplace_back(
-        std::make_unique<Asset>(info, spawn_area, gx, gy, 0, nullptr));
+        std::make_unique<Asset>(info, spawn_type, gx, gy, 0, nullptr, asid));
 
     if (owned_assets.size() <= prev_size) {
         std::cerr << "[Assets::addAsset][Error] owned_assets did not grow!\n";
@@ -271,13 +284,13 @@ Asset* Assets::spawn_asset(const std::string& name, int world_x, int world_y) {
     std::cout << "[Assets::spawn_asset] Retrieved AssetInfo '" << info->name
               << "' at " << info << "\n";
 
-    Area spawn_area(name, world_x, world_y, 1, 1, "Point", 1, 1, 1);
-    std::cout << "[Assets::spawn_asset] Created Area '" << spawn_area.get_name()
-              << "' at (" << world_x << ", " << world_y << ")\n";
+    // Spawn type for manual placement
+    const std::string spawn_type = "manual";
 
     size_t prev_size = owned_assets.size();
+    std::string asid = AssetSpawnId::generate();
     owned_assets.emplace_back(
-        std::make_unique<Asset>(info, spawn_area, world_x, world_y, 0, nullptr));
+        std::make_unique<Asset>(info, spawn_type, world_x, world_y, 0, nullptr, asid));
 
     if (owned_assets.size() <= prev_size) {
         std::cerr << "[Assets::spawn_asset][Error] owned_assets did not grow!\n";
@@ -332,11 +345,20 @@ void Assets::render_overlays(SDL_Renderer* renderer) {
 
 void Assets::toggle_asset_library() {
     if (!library_ui_) library_ui_ = new AssetLibraryUI();
-    library_ui_->toggle();
+    // If currently closed, open exclusively; else close it.
+    if (!library_ui_->is_visible()) {
+        // Close asset info editor to enforce exclusivity
+        if (info_ui_) info_ui_->close();
+        library_ui_->open();
+    } else {
+        library_ui_->close();
+    }
 }
 
 void Assets::open_asset_library() {
     if (!library_ui_) library_ui_ = new AssetLibraryUI();
+    // Close asset info editor to enforce exclusivity
+    if (info_ui_) info_ui_->close();
     library_ui_->open();
 }
 
@@ -365,6 +387,8 @@ std::shared_ptr<AssetInfo> Assets::consume_selected_asset_from_library() {
 void Assets::open_asset_info_editor(const std::shared_ptr<AssetInfo>& info) {
     if (!info) return;
     if (!info_ui_) info_ui_ = new AssetInfoUI();
+    // Close asset library to enforce exclusivity
+    if (library_ui_) library_ui_->close();
     info_ui_->set_info(info);
     info_ui_->open();
 }
@@ -378,6 +402,17 @@ bool Assets::is_asset_info_editor_open() const {
 }
 
 void Assets::handle_sdl_event(const SDL_Event& e) {
+    // ESC closes overlays if open
+    if (e.type == SDL_KEYDOWN && e.key.keysym.sym == SDLK_ESCAPE) {
+        if (library_ui_ && library_ui_->is_visible()) {
+            library_ui_->close();
+            return;
+        }
+        if (info_ui_ && info_ui_->is_visible()) {
+            info_ui_->close();
+            return;
+        }
+    }
     if (info_ui_ && info_ui_->is_visible()) {
         info_ui_->handle_event(e);
     }

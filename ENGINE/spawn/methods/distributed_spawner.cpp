@@ -34,7 +34,7 @@ void DistributedSpawner::spawn(const SpawnInfo& item, const Area* area, SpawnCon
             if (ctx.checker().check(item.info, cx, cy, ctx.exclusion_zones(), ctx.all_assets(),
                                     false, true, 5)) continue;
 
-            ctx.spawnAsset(item.name, item.info, *area, cx, cy, 0, nullptr);
+            ctx.spawnAsset(item.name, item.info, "distributed", cx, cy, 0, nullptr, item.asset_id);
             ++placed;
             ctx.logger().progress(item.info, placed, item.quantity);
         }

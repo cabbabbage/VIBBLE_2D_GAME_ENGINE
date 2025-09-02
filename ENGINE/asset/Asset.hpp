@@ -29,11 +29,12 @@ public:
     Area get_area(const std::string& name) const;
 
     Asset(std::shared_ptr<AssetInfo> info,
-          const Area& spawn_area,
+          const std::string& spawn_type,
           int start_pos_X,
           int start_pos_Y,
           int depth,
-          Asset* parent = nullptr);
+          Asset* parent = nullptr,
+          const std::string& asset_id = "");
 
     void finalize_setup();
     void set_position(int x, int y);
@@ -88,8 +89,7 @@ public:
     bool render_player_light = false;
 
     double alpha_percentage = 1.0;
-
-    Area spawn_area_local;
+    
     std::vector<Area> base_areas;
     std::vector<Area> areas;
 
@@ -127,6 +127,12 @@ private:
     void set_z_index();
     bool selected = false;
     std::string next_animation;
+    
+public:
+    // Stable identifier linking this instance to its spawn JSON entry
+    std::string asset_id;
+    // Which spawn method created this asset (e.g., "random", "exact", "distributed", "perimeter", "percentage", "manual")
+    std::string spawn_type;
     int current_frame_index = 0;
     int shading_group = 0;
     bool shading_group_set = false;

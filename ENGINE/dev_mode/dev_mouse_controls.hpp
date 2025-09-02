@@ -59,4 +59,15 @@ private:
     int spawn_click_screen_y_ = 0;
     int spawn_world_x_ = 0;
     int spawn_world_y_ = 0;
+
+private:
+    // Returns all active assets sharing the same spawn-id as target.
+    // If target has no id, returns the target alone.
+    std::vector<Asset*> group_for(Asset* target) const;
+    
+    // Utility: check if vector contains pointer
+    static bool contains_ptr(const std::vector<Asset*>& vec, const Asset* ptr);
+    
+    // Utility: remove pointer if present
+    static void remove_ptr(std::vector<Asset*>& vec, const Asset* ptr);
 };

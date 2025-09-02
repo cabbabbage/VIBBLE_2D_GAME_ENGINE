@@ -12,6 +12,7 @@
     "anti_tags": [],
     "asset_name": "Mushroom_2",
     "asset_type": "Object",
+    "can_invert": false,
     "has_spacing": true,
     "impassable_area": null,
     "lighting_info": {
@@ -560,8 +561,7 @@
         "small",
         "purple",
         "ground",
-        "plant",
-        "passable"
+        "plant"
     ],
     "visited_tabs": [
         "Spacing"

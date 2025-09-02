@@ -21,7 +21,7 @@ void RandomSpawner::spawn(const SpawnInfo& item, const Area* area, SpawnContext&
         if (ctx.checker().check(item.info, pos.first, pos.second, ctx.exclusion_zones(), ctx.all_assets(),
                                 true, true, 5)) continue;
 
-        ctx.spawnAsset(item.name, item.info, *area, pos.first, pos.second, 0, nullptr);
+        ctx.spawnAsset(item.name, item.info, "random", pos.first, pos.second, 0, nullptr, item.asset_id);
         ++spawned;
         ctx.logger().progress(item.info, spawned, item.quantity);
     }

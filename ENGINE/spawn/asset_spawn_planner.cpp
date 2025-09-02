@@ -1,9 +1,11 @@
 #include "asset_spawn_planner.hpp"
+#include "asset_spawn_id.hpp"
 #include <iostream>
 #include <sstream>
 #include <fstream>
 #include <random>
 #include <algorithm>
+#include <unordered_set>
 
 namespace fs = std::filesystem;
 
@@ -54,8 +56,18 @@ void AssetSpawnPlanner::parse_asset_spawns(double area) {
 
     if (!root_json_.contains("assets")) return;
 
-    for (const auto& entry : root_json_["assets"]) {
-        nlohmann::json asset = entry;
+    // Ensure each asset has a unique asset_id, reflect into planner and queue
+    std::unordered_set<std::string> used_ids;
+    if (root_json_.contains("assets") && root_json_["assets"].is_array()) {
+        for (const auto& e : root_json_["assets"]) {
+            if (e.contains("asset_id") && e["asset_id"].is_string()) {
+                used_ids.insert(e["asset_id"].get<std::string>());
+            }
+        }
+    }
+
+    for (size_t idx = 0; idx < root_json_["assets"].size(); ++idx) {
+        nlohmann::json asset = root_json_["assets"][idx];
 
         if (!asset.contains("name") || !asset["name"].is_string()) {
             continue;
@@ -84,6 +96,17 @@ void AssetSpawnPlanner::parse_asset_spawns(double area) {
         int quantity = std::uniform_int_distribution<int>(min_num, max_num)(rng);
 
         std::string position = asset.value("position", "Random");
+        // Migrate Center -> Percentage at 50/50 (center of area)
+        if (position == "Center" || position == "center") {
+            asset["position"] = "spawn_exact_percentage()";
+            asset["ep_x_min"] = 50;
+            asset["ep_x_max"] = 50;
+            asset["ep_y_min"] = 50;
+            asset["ep_y_max"] = 50;
+            position = "spawn_exact_percentage()";
+            // Write back to root JSON
+            root_json_["assets"][idx] = asset;
+        }
         bool isSingleCenter = (min_num == 1 && max_num == 1 &&
                             (position == "Center" || position == "center"));
         bool isPerimeter    = (position == "Perimeter" || position == "perimeter");
@@ -111,11 +134,43 @@ void AssetSpawnPlanner::parse_asset_spawns(double area) {
         s.empty_grid_spaces = get_val("empty_grid_spaces_min", "empty_grid_spaces_max");
         s.ep_x = get_val("ep_x_min", "ep_x_max", -1);
         s.ep_y = get_val("ep_y_min", "ep_y_max", -1);
+
+        // Parse exact pixel coordinates if provided
+        if (asset.contains("exact_position") && !asset["exact_position"].is_null()) {
+            const auto& ex = asset["exact_position"];
+            if (ex.is_array() && ex.size() >= 2 && ex[0].is_number_integer() && ex[1].is_number_integer()) {
+                s.exact_x = ex[0].get<int>();
+                s.exact_y = ex[1].get<int>();
+            } else if (ex.is_object()) {
+                if (ex.contains("x") && ex["x"].is_number_integer()) s.exact_x = ex["x"].get<int>();
+                if (ex.contains("y") && ex["y"].is_number_integer()) s.exact_y = ex["y"].get<int>();
+            }
+        }
+
+        // Parse displacement-based exact spawn (scaled to room)
+        // expected keys: orig_room_width, orig_room_height, disp_x, disp_y
+        s.orig_room_width = asset.value("orig_room_width", s.orig_room_width);
+        s.orig_room_height = asset.value("orig_room_height", s.orig_room_height);
+        s.disp_x = asset.value("disp_x", s.disp_x);
+        s.disp_y = asset.value("disp_y", s.disp_y);
         s.border_shift = get_val("border_shift_min", "border_shift_max");
         s.sector_center = get_val("sector_center_min", "sector_center_max");
         s.sector_range = get_val("sector_range_min", "sector_range_max");
         s.perimeter_x_offset = get_val("perimeter_x_offset_min", "perimeter_x_offset_max");
         s.perimeter_y_offset = get_val("perimeter_y_offset_min", "perimeter_y_offset_max");
+
+        // Assign/generate unique asset_id for this entry
+        std::string aid = asset.value("asset_id", std::string{});
+        if (aid.empty()) {
+            // generate until unique within this planner
+            do { aid = AssetSpawnId::generate(); } while (used_ids.count(aid));
+        }
+        used_ids.insert(aid);
+        asset["asset_id"] = aid;
+        s.asset_id = aid;
+
+        // Reflect updated asset back to root JSON so downstream consumers can see it
+        root_json_["assets"][idx] = asset;
 
         s.info = info;
         spawn_queue_.push_back(s);
@@ -131,8 +186,31 @@ void AssetSpawnPlanner::parse_batch_assets() {
     batch_grid_spacing_ = (batch_data.value("grid_spacing_min", 100) + batch_data.value("grid_spacing_max", 100)) / 2;
     batch_jitter_ = (batch_data.value("jitter_min", 0) + batch_data.value("jitter_max", 0)) / 2;
 
-    for (const auto& entry : batch_data.value("batch_assets", std::vector<nlohmann::json>{})) {
-        nlohmann::json asset = entry;
+    // Build set of used ids across assets and batch assets
+    std::unordered_set<std::string> used_ids;
+    if (root_json_.contains("assets") && root_json_["assets"].is_array()) {
+        for (const auto& e : root_json_["assets"]) {
+            if (e.contains("asset_id") && e["asset_id"].is_string()) {
+                used_ids.insert(e["asset_id"].get<std::string>());
+            }
+        }
+    }
+    if (root_json_.contains("batch_assets") && root_json_["batch_assets"].contains("batch_assets")) {
+        for (const auto& e : root_json_["batch_assets"]["batch_assets"]) {
+            if (e.contains("asset_id") && e["asset_id"].is_string()) {
+                used_ids.insert(e["asset_id"].get<std::string>());
+            }
+        }
+    }
+
+    // Iterate by index so we can write back generated ids
+    if (!root_json_["batch_assets"].contains("batch_assets") ||
+        !root_json_["batch_assets"]["batch_assets"].is_array()) {
+        return;
+    }
+
+    for (size_t idx = 0; idx < root_json_["batch_assets"]["batch_assets"].size(); ++idx) {
+        nlohmann::json asset = root_json_["batch_assets"]["batch_assets"][idx];
 
         if (asset.contains("tag") && asset["tag"].is_string()) {
             asset = resolve_asset_from_tag(asset);
@@ -145,14 +223,25 @@ void AssetSpawnPlanner::parse_batch_assets() {
         BatchSpawnInfo b;
         b.name = asset["name"];
         b.percent = asset.value("percent", 0);
+
+        // Ensure each batch entry has a shared id
+        std::string aid = asset.value("asset_id", std::string{});
+        if (aid.empty()) {
+            do { aid = AssetSpawnId::generate(); } while (used_ids.count(aid));
+        }
+        used_ids.insert(aid);
+        asset["asset_id"] = aid;
+        root_json_["batch_assets"]["batch_assets"][idx] = asset;
+        b.asset_id = aid;
+
         batch_spawn_assets_.push_back(b);
     }
 }
 
 void AssetSpawnPlanner::sort_spawn_queue() {
     const std::vector<std::string> priority_order = {
-        // Keep legacy and new naming adjacent for stable ordering
-        "Center", "Entrance", "Exit", "spawn_exact_percentage()", "Exact Position", "Perimeter", "Distributed", "DistributedBatch"
+        // Center is migrated to percentage; keep others
+        "Entrance", "Exit", "spawn_exact_percentage()", "Exact Position", "Percentage Position", "Exact Spawn", "Perimeter", "Distributed", "DistributedBatch"
     };
 
     auto to_lower = [](const std::string& s) {

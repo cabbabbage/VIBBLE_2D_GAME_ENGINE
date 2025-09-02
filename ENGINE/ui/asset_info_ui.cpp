@@ -52,11 +52,18 @@ void AssetInfoUI::clear_info() {
     s_min_all_.reset();
     s_scale_pct_.reset();
     c_passable_.reset();
-    c_shading_.reset();
     c_flipable_.reset();
     t_type_.reset();
     t_tags_.reset();
-    t_blend_.reset();
+    // New collapsible header widgets and extras
+    h_basic_.reset();
+    h_animations_.reset();
+    h_rendering_.reset();
+    h_spawning_.reset();
+    h_passability_.reset();
+    h_lighting_.reset();
+    h_children_.reset();
+    s_scale_var_pct_.reset();
 }
 
 void AssetInfoUI::open()  { visible_ = true; }
@@ -66,6 +73,15 @@ void AssetInfoUI::toggle(){ visible_ = !visible_; }
 void AssetInfoUI::build_widgets() {
     if (!info_) return;
 
+    // Section headers
+    h_basic_       = std::make_unique<Button>("Basic",        &Styles::MainDecoButton(), Button::width(), Button::height());
+    h_animations_  = std::make_unique<Button>("Animations",   &Styles::MainDecoButton(), Button::width(), Button::height());
+    h_rendering_   = std::make_unique<Button>("Rendering",    &Styles::MainDecoButton(), Button::width(), Button::height());
+    h_spawning_    = std::make_unique<Button>("Spawning",     &Styles::MainDecoButton(), Button::width(), Button::height());
+    h_passability_ = std::make_unique<Button>("Passability",  &Styles::MainDecoButton(), Button::width(), Button::height());
+    h_lighting_    = std::make_unique<Button>("Lighting",     &Styles::MainDecoButton(), Button::width(), Button::height());
+    h_children_    = std::make_unique<Button>("Child Assets", &Styles::MainDecoButton(), Button::width(), Button::height());
+
     // Sliders (use broad ranges)
     s_z_threshold_   = std::make_unique<Slider>("Z Threshold", -1024, 1024, info_->z_threshold);
     s_min_same_type_ = std::make_unique<Slider>("Min Same-Type Distance", 0, 2048, info_->min_same_type_distance);
@@ -73,10 +89,10 @@ void AssetInfoUI::build_widgets() {
 
     int pct = std::max(0, (int)std::round(info_->scale_factor * 100.0f));
     s_scale_pct_     = std::make_unique<Slider>("Scale (%)", 10, 400, pct);
+    s_scale_var_pct_ = std::make_unique<Slider>("Scale Variability (%)", 0, 100, 0);
 
-    // Checkboxes
-    c_passable_ = std::make_unique<Checkbox>("Passable", info_->has_tag("passable"));
-    c_shading_  = std::make_unique<Checkbox>("Has Shading", info_->has_shading);
+    // Checkboxes (passable derived from area presence; not directly editable)
+    c_passable_.reset();
     c_flipable_ = std::make_unique<Checkbox>("Flipable (can invert)", info_->flipable);
 
     // Text boxes
@@ -85,14 +101,6 @@ void AssetInfoUI::build_widgets() {
     std::ostringstream oss;
     for (size_t i=0;i<info_->tags.size();++i) { oss << info_->tags[i]; if (i+1<info_->tags.size()) oss << ", "; }
     t_tags_  = std::make_unique<TextBox>("Tags (comma)", oss.str());
-    t_blend_ = std::make_unique<TextBox>("Blend Mode", blend_mode_to_string(info_->blendmode));
-
-    b_close_ = std::make_unique<Button>(
-        "Close",
-        &Styles::ExitDecoButton(),
-        Button::width(),
-        Button::height()
-    );
 
     scroll_ = 0;
 
@@ -110,85 +118,54 @@ void AssetInfoUI::layout_widgets(int screen_w, int screen_h) const {
 
     int x = panel_.x + 16;
     // Base cursor; widgets subtract scroll_ when setting their rects.
-    // Leave generous space at top for the first group header.
-    int y = panel_.y + 56;
+    int y = panel_.y + 16;
 
     const int gap_after_text = 32;    // text box label sits above by ~18px
     const int gap_after_slider = 18;  // breathing room under sliders
     const int gap_after_checkbox = 16;
 
-    // Group: Identity
-    if (t_type_) {
-        t_type_->set_rect(SDL_Rect{ x, y - scroll_, panel_w - 32, TextBox::height() });
-        y += TextBox::height() + gap_after_text;
-    }
-    if (t_tags_) {
-        t_tags_->set_rect(SDL_Rect{ x, y - scroll_, panel_w - 32, TextBox::height() });
-        y += TextBox::height() + gap_after_text + 4;
+    // Basic
+    if (h_basic_) { h_basic_->set_rect(SDL_Rect{ x, y - scroll_, panel_w - 32, Button::height() }); y += Button::height() + 8; }
+    if (open_basic_) {
+        if (t_type_)  { t_type_->set_rect(SDL_Rect{ x, y - scroll_, panel_w - 32, TextBox::height() }); y += TextBox::height() + gap_after_text; }
+        if (t_tags_)  { t_tags_->set_rect(SDL_Rect{ x, y - scroll_, panel_w - 32, TextBox::height() }); y += TextBox::height() + gap_after_text + 4; }
     }
 
-    // Group: Appearance
-    if (t_blend_) {
-        t_blend_->set_rect(SDL_Rect{ x, y - scroll_, panel_w - 32, TextBox::height() });
-        y += TextBox::height() + gap_after_text - 4;
-    }
-    if (s_scale_pct_) {
-        s_scale_pct_->set_rect(SDL_Rect{ x, y - scroll_, panel_w - 32, Slider::height() });
-        y += Slider::height() + gap_after_slider;
-    }
-    if (c_shading_) {
-        c_shading_->set_rect(SDL_Rect{ x, y - scroll_, panel_w - 32, Checkbox::height() });
-        y += Checkbox::height() + gap_after_checkbox;
-    }
-    if (c_flipable_) {
-        c_flipable_->set_rect(SDL_Rect{ x, y - scroll_, panel_w - 32, Checkbox::height() });
-        y += Checkbox::height() + gap_after_checkbox + 6;
+    // Animations (empty)
+    if (h_animations_) { h_animations_->set_rect(SDL_Rect{ x, y - scroll_, panel_w - 32, Button::height() }); y += Button::height() + 8; }
+
+    // Rendering
+    if (h_rendering_) { h_rendering_->set_rect(SDL_Rect{ x, y - scroll_, panel_w - 32, Button::height() }); y += Button::height() + 8; }
+    if (open_rendering_) {
+        if (s_scale_pct_)     { s_scale_pct_->set_rect(SDL_Rect{ x, y - scroll_, panel_w - 32, Slider::height() }); y += Slider::height() + gap_after_slider; }
+        if (s_scale_var_pct_) { s_scale_var_pct_->set_rect(SDL_Rect{ x, y - scroll_, panel_w - 32, Slider::height() }); y += Slider::height() + gap_after_slider; }
+        if (s_z_threshold_)   { s_z_threshold_->set_rect(SDL_Rect{ x, y - scroll_, panel_w - 32, Slider::height() }); y += Slider::height() + gap_after_slider; }
+        if (c_flipable_)      { c_flipable_->set_rect(SDL_Rect{ x, y - scroll_, panel_w - 32, Checkbox::height() }); y += Checkbox::height() + gap_after_checkbox; }
     }
 
-    // Group: Distances / Z
-    if (s_z_threshold_) {
-        s_z_threshold_->set_rect(SDL_Rect{ x, y - scroll_, panel_w - 32, Slider::height() });
-        y += Slider::height() + gap_after_slider;
-    }
-    if (s_min_same_type_) {
-        s_min_same_type_->set_rect(SDL_Rect{ x, y - scroll_, panel_w - 32, Slider::height() });
-        y += Slider::height() + gap_after_slider;
-    }
-    if (s_min_all_) {
-        s_min_all_->set_rect(SDL_Rect{ x, y - scroll_, panel_w - 32, Slider::height() });
-        y += Slider::height() + gap_after_slider;
+    // Spawning
+    if (h_spawning_) { h_spawning_->set_rect(SDL_Rect{ x, y - scroll_, panel_w - 32, Button::height() }); y += Button::height() + 8; }
+    if (open_spawning_) {
+        if (s_min_same_type_) { s_min_same_type_->set_rect(SDL_Rect{ x, y - scroll_, panel_w - 32, Slider::height() }); y += Slider::height() + gap_after_slider; }
+        if (s_min_all_)       { s_min_all_->set_rect(SDL_Rect{ x, y - scroll_, panel_w - 32, Slider::height() }); y += Slider::height() + gap_after_slider; }
     }
 
-    // Group: Flags (passable)
-    if (c_passable_) {
-        c_passable_->set_rect(SDL_Rect{ x, y - scroll_, panel_w - 32, Checkbox::height() });
-        y += Checkbox::height() + gap_after_checkbox;
-    }
-
-    // Group: Areas (buttons)
-    if (!area_buttons_.empty()) {
-        // Layout buttons full width under this group
-        const int btn_h = Button::height();
-        for (auto& kv : area_buttons_) {
-            if (kv.second) {
-                kv.second->set_rect(SDL_Rect{ x, y - scroll_, panel_w - 32, btn_h });
-                y += btn_h + 14;
-            }
+    // Passability
+    if (h_passability_) { h_passability_->set_rect(SDL_Rect{ x, y - scroll_, panel_w - 32, Button::height() }); y += Button::height() + 8; }
+    if (open_passability_) {
+        if (!area_buttons_.empty() && area_buttons_.front().second) {
+            area_buttons_.front().second->set_rect(SDL_Rect{ x, y - scroll_, panel_w - 32, Button::height() });
+            y += Button::height() + 12;
         }
     }
 
-        if (b_close_) {
-        int btn_w = 100;
-        int btn_h = Button::height();
-        b_close_->set_rect(SDL_Rect{
-            panel_.x + panel_.w - btn_w - 16,
-            panel_.y + panel_.h - btn_h - 16,
-            btn_w, btn_h
-        });
-    }
+    // Lighting (empty)
+    if (h_lighting_) { h_lighting_->set_rect(SDL_Rect{ x, y - scroll_, panel_w - 32, Button::height() }); y += Button::height() + 8; }
+
+    // Child assets (empty)
+    if (h_children_) { h_children_->set_rect(SDL_Rect{ x, y - scroll_, panel_w - 32, Button::height() }); y += Button::height() + 8; }
 
     // Compute scroll max
-    // y currently holds the unscrolled content bottom; derive max scroll independent of current scroll
     max_scroll_ = std::max(0, (y + 20) - panel_.h);
 }
 
@@ -243,74 +220,63 @@ void AssetInfoUI::handle_event(const SDL_Event& e) {
     if (lw > 0 && lh > 0) {
         layout_widgets(lw, lh);
     }
-    if (b_close_ && b_close_->handle_event(e)) { close(); return; }
+
     bool changed = false;
 
-    // Ensure layout is up-to-date before hit-testing
-    // (Caller should have called update() earlier this frame.)
 
-    // Manage exclusive focus for text boxes on mouse down
     if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
         const SDL_Point p{ e.button.x, e.button.y };
         auto inside = [&](const std::unique_ptr<TextBox>& tb){ return tb && SDL_PointInRect(&p, &tb->rect()); };
-        bool any = (t_type_ && inside(t_type_)) || (t_tags_ && inside(t_tags_)) || (t_blend_ && inside(t_blend_));
+        bool any = (t_type_ && inside(t_type_)) || (t_tags_ && inside(t_tags_));
         if (any) {
             if (t_type_  && !inside(t_type_))  t_type_->set_editing(false);
             if (t_tags_  && !inside(t_tags_))  t_tags_->set_editing(false);
-            if (t_blend_ && !inside(t_blend_)) t_blend_->set_editing(false);
         } else {
             if (t_type_)  t_type_->set_editing(false);
             if (t_tags_)  t_tags_->set_editing(false);
-            if (t_blend_) t_blend_->set_editing(false);
         }
     }
 
+    // Toggle collapsible sections via header buttons
+    if (h_basic_       && h_basic_->handle_event(e))       open_basic_       = !open_basic_;
+    if (h_animations_  && h_animations_->handle_event(e))  open_animations_  = !open_animations_;
+    if (h_rendering_   && h_rendering_->handle_event(e))   open_rendering_   = !open_rendering_;
+    if (h_spawning_    && h_spawning_->handle_event(e))    open_spawning_    = !open_spawning_;
+    if (h_passability_ && h_passability_->handle_event(e)) open_passability_ = !open_passability_;
+    if (h_lighting_    && h_lighting_->handle_event(e))    open_lighting_    = !open_lighting_;
+    if (h_children_    && h_children_->handle_event(e))    open_children_    = !open_children_;
+
     // Sliders
-    if (s_z_threshold_ && s_z_threshold_->handle_event(e)) {
+    if (open_rendering_ && s_z_threshold_ && s_z_threshold_->handle_event(e)) {
         info_->set_z_threshold(s_z_threshold_->value());
         changed = true;
     }
-    if (s_min_same_type_ && s_min_same_type_->handle_event(e)) {
+    if (open_spawning_ && s_min_same_type_ && s_min_same_type_->handle_event(e)) {
         info_->set_min_same_type_distance(s_min_same_type_->value());
         changed = true;
     }
-    if (s_min_all_ && s_min_all_->handle_event(e)) {
+    if (open_spawning_ && s_min_all_ && s_min_all_->handle_event(e)) {
         info_->set_min_distance_all(s_min_all_->value());
         changed = true;
     }
-    if (s_scale_pct_ && s_scale_pct_->handle_event(e)) {
+    if (open_rendering_ && s_scale_pct_ && s_scale_pct_->handle_event(e)) {
         info_->set_scale_percentage((float)s_scale_pct_->value());
         reload_pending_ = true; // rebuild animations with new scale
         changed = true;
     }
 
     // Checkboxes
-    if (c_passable_ && c_passable_->handle_event(e)) {
-        info_->set_passable(c_passable_->value());
-        // Also reflect in tags textbox
-        if (t_tags_) {
-            // rebuild tags string
-            std::ostringstream oss;
-            for (size_t i=0;i<info_->tags.size();++i) { oss << info_->tags[i]; if (i+1<info_->tags.size()) oss << ", "; }
-            t_tags_->set_value(oss.str());
-        }
-        changed = true;
-    }
-    if (c_shading_ && c_shading_->handle_event(e)) {
-        info_->set_has_shading(c_shading_->value());
-        changed = true;
-    }
     if (c_flipable_ && c_flipable_->handle_event(e)) {
         info_->set_flipable(c_flipable_->value());
         changed = true;
     }
 
     // Text boxes (live updates)
-    if (t_type_ && t_type_->handle_event(e)) {
+    if (open_basic_ && t_type_ && t_type_->handle_event(e)) {
         info_->set_asset_type(t_type_->value());
         changed = true;
     }
-    if (t_tags_ && t_tags_->handle_event(e)) {
+    if (open_basic_ && t_tags_ && t_tags_->handle_event(e)) {
         // Parse CSV into tags vector
         std::vector<std::string> tags;
         std::string s = t_tags_->value();
@@ -324,20 +290,18 @@ void AssetInfoUI::handle_event(const SDL_Event& e) {
             pos = comma + 1;
         }
         info_->set_tags(tags);
-        // Keep passable checkbox in sync
-        if (c_passable_) c_passable_->set_value(info_->has_tag("passable"));
+        // Keep 'passable' derived from presence of passability area, not tags
+        bool has_pass = info_->has_passability_area && (bool)info_->passability_area;
+        info_->set_passable(has_pass);
         changed = true;
     }
-    if (t_blend_ && t_blend_->handle_event(e)) {
-        info_->set_blend_mode_string(t_blend_->value());
-        changed = true;
-    }
+    
 
     if (changed) save_now();
 
-    // Area buttons: handle clicks and defer heavy actions to render()
-    for (size_t i = 0; i < area_buttons_.size(); ++i) {
-        auto& kv = area_buttons_[i];
+    // Passability button only: handle click and defer heavy actions to render()
+    if (!area_buttons_.empty()) {
+        auto& kv = area_buttons_.front();
         if (kv.second && kv.second->handle_event(e)) {
             const std::string key = kv.first;
             const bool exists = has_area_key(key);
@@ -365,77 +329,41 @@ void AssetInfoUI::render(SDL_Renderer* r, int screen_w, int screen_h) const {
     SDL_SetRenderDrawColor(r, kInfoPanelBG.r, kInfoPanelBG.g, kInfoPanelBG.b, kInfoPanelBG.a);
     SDL_RenderFillRect(r, &panel_);
 
-    // Section headers disabled per request
-    auto draw_header = [&](const char* /*title*/, int& /*y*/) { /* no-op */ };
+    // Section headers
+    if (h_basic_)       h_basic_->render(r);
+    if (h_animations_)  h_animations_->render(r);
+    if (h_rendering_)   h_rendering_->render(r);
+    if (h_spawning_)    h_spawning_->render(r);
+    if (h_passability_) h_passability_->render(r);
+    if (h_lighting_)    h_lighting_->render(r);
+    if (h_children_)    h_children_->render(r);
 
-    // Headers removed: directly render widgets
-    int y_hdr = (t_type_ ? t_type_->rect().y : panel_.y + 40);
-    int tmp = y_hdr - 26 + scroll_;
-    if (t_type_)  t_type_->render(r);
-    if (t_tags_)  t_tags_->render(r);
-
-    // Appearance widgets (no header)
-    int min_app_y = INT_MAX;
-    if (t_blend_)     min_app_y = std::min(min_app_y, t_blend_->rect().y);
-    if (s_scale_pct_) min_app_y = std::min(min_app_y, s_scale_pct_->rect().y);
-    if (c_shading_)   min_app_y = std::min(min_app_y, c_shading_->rect().y);
-    if (c_flipable_)  min_app_y = std::min(min_app_y, c_flipable_->rect().y);
-    if (min_app_y != INT_MAX) {
-        tmp = min_app_y - 26 + scroll_;
-        // no header
+    // Sections
+    if (open_basic_) {
+        if (t_type_)  t_type_->render(r);
+        if (t_tags_)  t_tags_->render(r);
     }
-    if (t_blend_)     t_blend_->render(r);
-    if (s_scale_pct_) s_scale_pct_->render(r);
-    if (c_shading_)   c_shading_->render(r);
-    if (c_flipable_)  c_flipable_->render(r);
-
-    // Distances & Z widgets (no header)
-    int min_dz_y = INT_MAX;
-    if (s_z_threshold_)   min_dz_y = std::min(min_dz_y, s_z_threshold_->rect().y);
-    if (s_min_same_type_) min_dz_y = std::min(min_dz_y, s_min_same_type_->rect().y);
-    if (s_min_all_)       min_dz_y = std::min(min_dz_y, s_min_all_->rect().y);
-    if (min_dz_y != INT_MAX) {
-        tmp = min_dz_y - 26 + scroll_;
-        // no header
+    if (open_rendering_) {
+        if (s_scale_pct_)     s_scale_pct_->render(r);
+        if (s_scale_var_pct_) s_scale_var_pct_->render(r);
+        if (s_z_threshold_)   s_z_threshold_->render(r);
+        if (c_flipable_)      c_flipable_->render(r);
     }
-    if (s_z_threshold_)   s_z_threshold_->render(r);
-    if (s_min_same_type_) s_min_same_type_->render(r);
-    if (s_min_all_)       s_min_all_->render(r);
-
-    // Flags (no header)
-    if (c_passable_) {
-        tmp = c_passable_->rect().y - 26 + scroll_;
-        // no header
-        c_passable_->render(r);
+    if (open_spawning_) {
+        if (s_min_same_type_) s_min_same_type_->render(r);
+        if (s_min_all_)       s_min_all_->render(r);
     }
-
-    // Areas (no header)
-    if (!area_buttons_.empty()) {
-        // Find first button y
-        int first_y = INT_MAX;
-        for (const auto& kv : area_buttons_) {
-            if (kv.second) first_y = std::min(first_y, kv.second->rect().y);
-        }
-        if (first_y != INT_MAX) {
-            tmp = first_y - 26 + scroll_;
-            // no header
-        }
-        for (const auto& kv : area_buttons_) {
-            if (kv.second) kv.second->render(r);
+    if (open_passability_) {
+        if (!area_buttons_.empty() && area_buttons_.front().second) {
+            area_buttons_.front().second->render(r);
         }
     }
 
-    // Close button (anchored to panel corner; not scrolled)
-    if (b_close_) b_close_->render(r);
-
-    // Execute pending area edit/create action (requires renderer)
     if (pending_area_action_) {
         pending_area_action_ = false;
         try {
             const std::string key = pending_area_key_;
             pending_area_key_.clear();
-
-            // Determine label for name seed
             std::string display = key;
             if (key == "spacing_area") display = "Spacing Area";
             else if (key == "impassable_area") display = "Impassable Area";
@@ -443,9 +371,7 @@ void AssetInfoUI::render(SDL_Renderer* r, int screen_w, int screen_h) const {
             else if (key == "interaction_area") display = "Interaction Area";
             else if (key == "hit_area") display = "Hit Area";
 
-            // Edit existing or create new via interactive editor
-            // Always use a meaningful background: default frame if available,
-            // otherwise fall back to any area texture we already have.
+
             SDL_Texture* bg = ensure_default_frame_texture(r);
             if (!bg) {
                 if (info_->collision_area) bg = info_->collision_area->get_texture();
@@ -454,7 +380,7 @@ void AssetInfoUI::render(SDL_Renderer* r, int screen_w, int screen_h) const {
                 else if (info_->passability_area) bg = info_->passability_area->get_texture();
             }
             if (!pending_create_) {
-                // Edit in place using chosen background
+
                 if (key == "impassable_area" && info_->passability_area && bg) {
                     info_->passability_area->edit_with_ui(bg, r);
                     apply_area_from_points(key, info_->passability_area->get_points());
@@ -473,7 +399,7 @@ void AssetInfoUI::render(SDL_Renderer* r, int screen_w, int screen_h) const {
                     info_->has_attack_area = true;
                 }
             } else {
-                // Create new using chosen background
+
                 if (bg) {
                     if (key == "impassable_area") {
                         info_->passability_area = std::make_unique<Area>(display, bg, r);
@@ -495,6 +421,10 @@ void AssetInfoUI::render(SDL_Renderer* r, int screen_w, int screen_h) const {
                 }
             }
 
+            // Update derived passable from presence of passability area
+            bool has_pass = info_->has_passability_area && (bool)info_->passability_area;
+            info_->set_passable(has_pass);
+
             // Persist and refresh button labels
             (void)info_->update_info_json();
             const_cast<AssetInfoUI*>(this)->rebuild_area_buttons();
@@ -515,19 +445,14 @@ void AssetInfoUI::rebuild_area_buttons() {
     area_labels_.clear();
     if (!info_) return;
 
-    struct Row { const char* key; const char* label; bool present; } rows[] = {
-        { "impassable_area",   "Impassable Area",   info_->has_passability_area && info_->passability_area },
-        { "collision_area",    "Collision Area",    info_->has_collision_area    && info_->collision_area },
-        { "interaction_area",  "Interaction Area",  info_->has_interaction_area  && info_->interaction_area },
-        { "hit_area",          "Hit Area",          info_->has_attack_area       && info_->attack_area }
-    };
+    bool present = info_->has_passability_area && info_->passability_area;
+    std::string btn_text = std::string(present ? "Edit " : "Create ") + std::string("Passability Area");
+    auto btn = std::make_unique<Button>(btn_text, &Styles::MainDecoButton(), Button::width(), Button::height());
+    area_buttons_.emplace_back("impassable_area", std::move(btn));
+    area_labels_.emplace_back("Passability Area");
 
-    for (const auto& r : rows) {
-        std::string btn_text = std::string(r.present ? "Edit " : "Create ") + r.label;
-        auto btn = std::make_unique<Button>(btn_text, &Styles::MainDecoButton(), Button::width(), Button::height());
-        area_buttons_.emplace_back(r.key, std::move(btn));
-        area_labels_.emplace_back(r.label);
-    }
+    // Keep passable derived from presence
+    info_->set_passable(present);
 }
 
 SDL_Texture* AssetInfoUI::get_default_frame_texture() const {

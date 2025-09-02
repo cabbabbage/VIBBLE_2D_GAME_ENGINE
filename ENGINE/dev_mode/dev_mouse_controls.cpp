@@ -26,6 +26,29 @@ DevMouseControls::DevMouseControls(Input* m,
 {
 }
 
+std::vector<Asset*> DevMouseControls::group_for(Asset* target) const {
+    std::vector<Asset*> result;
+    if (!target) return result;
+    const std::string& id = target->asset_id;
+    if (id.empty()) {
+        result.push_back(target);
+        return result;
+    }
+    for (Asset* a : active_assets) {
+        if (a && a->asset_id == id) result.push_back(a);
+    }
+    if (result.empty()) result.push_back(target);
+    return result;
+}
+
+bool DevMouseControls::contains_ptr(const std::vector<Asset*>& vec, const Asset* ptr) {
+    return std::find(vec.begin(), vec.end(), ptr) != vec.end();
+}
+
+void DevMouseControls::remove_ptr(std::vector<Asset*>& vec, const Asset* ptr) {
+    vec.erase(std::remove(vec.begin(), vec.end(), ptr), vec.end());
+}
+
 void DevMouseControls::handle_mouse_input(const Input& input) {
     // Keep parallax reference fresh for world<->screen conversions
     if (player) {
@@ -158,21 +181,21 @@ void DevMouseControls::handle_click(const Input& input) {
     Asset* nearest = hovered_asset; 
     if (nearest) {
         const bool ctrlHeld = input.isKeyDown(SDLK_LCTRL) || input.isKeyDown(SDLK_RCTRL);
-        auto it = std::find(selected_assets.begin(), selected_assets.end(), nearest);
-
+        auto group = group_for(nearest);
         if (ctrlHeld) {
-            if (it == selected_assets.end()) {
-                selected_assets.push_back(nearest);
+            // Toggle entire group as a unit
+            bool all_selected = true;
+            for (Asset* a : group) {
+                if (!contains_ptr(selected_assets, a)) { all_selected = false; break; }
+            }
+            if (all_selected) {
+                for (Asset* a : group) remove_ptr(selected_assets, a);
             } else {
-                selected_assets.erase(it);
+                for (Asset* a : group) if (!contains_ptr(selected_assets, a)) selected_assets.push_back(a);
             }
         } else {
-            if (it != selected_assets.end() && selected_assets.size() == 1) {
-                selected_assets.clear(); 
-            } else {
-                selected_assets.clear();
-                selected_assets.push_back(nearest);
-            }
+            // Replace selection with entire group
+            selected_assets = group;
         }
 
         // Double-click detection (left): within 300ms triggers spawn flow
@@ -209,9 +232,11 @@ void DevMouseControls::handle_click(const Input& input) {
 
 void DevMouseControls::update_highlighted_assets() {
     highlighted_assets = selected_assets;
-    if (hovered_asset &&
-        std::find(highlighted_assets.begin(), highlighted_assets.end(), hovered_asset) == highlighted_assets.end()) {
-        highlighted_assets.push_back(hovered_asset);
+    if (hovered_asset) {
+        auto hgroup = group_for(hovered_asset);
+        for (Asset* a : hgroup) {
+            if (!contains_ptr(highlighted_assets, a)) highlighted_assets.push_back(a);
+        }
     }
 
     for (Asset* a : active_assets) {
