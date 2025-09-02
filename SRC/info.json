@@ -1,8 +1,9 @@
 {
-    "animations": {
-        "default": {
-            "path": null,
-            "end_path": null
-        }
+  "animations": {
+    "default": {
+      "path": null,
+      "end_path": null
     }
+  },
+  "areas": []
 }
