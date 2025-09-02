@@ -63,8 +63,9 @@ SDL_Texture* RenderAsset::regenerateFinalTexture(Asset* a) {
     if (!base) return nullptr;
 
     const Uint8 main_alpha = main_light_source_.get_current_color().a;
-    int bw = a->cached_w, bh = a->cached_h;
-    if (bw == 0 || bh == 0) SDL_QueryTexture(base, nullptr, nullptr, &bw, &bh);
+    // Always query the base frame size in case it changed (e.g., scale slider)
+    int bw = 0, bh = 0;
+    SDL_QueryTexture(base, nullptr, nullptr, &bw, &bh);
 
     SDL_Texture* final_tex = SDL_CreateTexture(renderer_,
                                                SDL_PIXELFORMAT_RGBA8888,

@@ -32,11 +32,12 @@ public:
 
     Asset* spawnAsset(const std::string& name,
                       const std::shared_ptr<AssetInfo>& info,
-                      const Area& area,
+                      const std::string& spawn_type,
                       int x,
                       int y,
                       int depth,
-                      Asset* parent);
+                      Asset* parent,
+                      const std::string& asset_id);
 
     Point get_area_center(const Area& area) const;
     Point get_point_within_area(const Area& area);

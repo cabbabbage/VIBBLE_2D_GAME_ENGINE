@@ -41,6 +41,12 @@ public:
     Area(const std::string& name, SDL_Texture* background, SDL_Renderer* renderer,
          int window_w = 0, int window_h = 0);
 
+    // Edit-in-place (SDL-based editor)
+    // Similar to the interactive constructors, but modifies this Area
+    // instead of creating a new one.
+    void edit_with_ui(SDL_Renderer* renderer, int window_w = 0, int window_h = 0);
+    void edit_with_ui(SDL_Texture* background, SDL_Renderer* renderer, int window_w = 0, int window_h = 0);
+
 public:
     
     void apply_offset(int dx, int dy);

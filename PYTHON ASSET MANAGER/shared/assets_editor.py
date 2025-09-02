@@ -161,11 +161,15 @@ class AssetEditor(tk.Frame):
                 style='Big.TCheckbutton', command=self.save_assets
             ).pack(anchor='w', pady=(0,6))
 
-            position_var = tk.StringVar(value=asset.get('position', 'Random'))
+            # Migrate legacy position string "Exact Position" to new engine title
+            initial_pos = asset.get('position', 'Random')
+            if initial_pos == 'Exact Position':
+                initial_pos = 'spawn_exact_percentage()'
+            position_var = tk.StringVar(value=initial_pos)
             frame.position_var = position_var
             cb = ttk.Combobox(
                 content, textvariable=position_var, state='readonly',
-                values=["Random","Center","Perimeter","Entrance","Distributed","Exact Position","Intersection"]
+                values=["Random","Center","Perimeter","Entrance","Distributed","spawn_exact_percentage()","Intersection"]
             )
             cb.pack(fill=tk.X, pady=(0,4))
             # Option container

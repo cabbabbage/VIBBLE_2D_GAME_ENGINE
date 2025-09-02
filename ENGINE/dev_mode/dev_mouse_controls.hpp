@@ -31,13 +31,11 @@ public:
     Asset* get_hovered_asset() const { return hovered_asset; }
 
 private:
-    SDL_Point compute_mouse_world(int mx_screen, int my_screen) const;
     bool dragging_;
     int drag_last_x_, drag_last_y_;
 
-    // Double-click detection
-    Uint32 last_click_time_ms_ = 0;
-    Asset* last_click_asset_ = nullptr;
+    // Double-click detection (left button release edges)
+    Uint32 last_left_click_time_ms_ = 0;
 
 private:
     int click_buffer_frames_ = 0;
@@ -61,4 +59,15 @@ private:
     int spawn_click_screen_y_ = 0;
     int spawn_world_x_ = 0;
     int spawn_world_y_ = 0;
+
+private:
+    // Returns all active assets sharing the same spawn-id as target.
+    // If target has no id, returns the target alone.
+    std::vector<Asset*> group_for(Asset* target) const;
+    
+    // Utility: check if vector contains pointer
+    static bool contains_ptr(const std::vector<Asset*>& vec, const Asset* ptr);
+    
+    // Utility: remove pointer if present
+    static void remove_ptr(std::vector<Asset*>& vec, const Asset* ptr);
 };

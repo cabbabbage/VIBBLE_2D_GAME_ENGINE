@@ -22,6 +22,11 @@ public:
 
     void render();
 
+    // When true, render() will not call SDL_RenderPresent.
+    // Allows external overlays (e.g., pause menu) to present once after drawing.
+    void set_defer_present(bool defer) { defer_present_ = defer; }
+    bool is_present_deferred() const { return defer_present_; }
+
 private:
     void update_shading_groups();
     bool shouldRegen(Asset* a);
@@ -50,4 +55,6 @@ private:
     bool debugging = false;
 
     float smooth_inv_scale_ = 1.0f;
+
+    bool defer_present_ = false;
 };

@@ -61,6 +61,10 @@ public:
 
     nlohmann::json create_static_room_json(std::string name);
 
+    // Regenerate room assets using the existing room area and the room's JSON
+    // Keeps the Player asset (if present) and respawns all others from JSON
+    void regenerate_room(AssetLibrary* asset_lib);
+
 private:
     nlohmann::json assets_json;
 

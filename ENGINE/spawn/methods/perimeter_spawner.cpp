@@ -86,9 +86,9 @@ void PerimeterSpawner::spawn(const SpawnInfo& item, const Area* area, SpawnConte
 
         ++attempts;
         if (ctx.checker().check(item.info, x, y, ctx.exclusion_zones(), ctx.all_assets(),
-                                item.check_overlap, false, false, 5)) continue;
+                                false, false, 5)) continue;
 
-        ctx.spawnAsset(item.name, item.info, *area, x, y, 0, nullptr);
+        ctx.spawnAsset(item.name, item.info, "perimeter", x, y, 0, nullptr, item.asset_id);
         ++placed;
         ctx.logger().progress(item.info, placed, item.quantity);
     }

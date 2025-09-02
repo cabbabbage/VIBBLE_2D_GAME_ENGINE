@@ -18,6 +18,13 @@ struct SpawnInfo {
     int empty_grid_spaces = 0;
     int ep_x = -1;
     int ep_y = -1;
+    int exact_x = -1;
+    int exact_y = -1;
+    // Exact spawn via scaled displacement
+    int orig_room_width = -1;
+    int orig_room_height = -1;
+    int disp_x = 0;  // displacement from original center (pixels)
+    int disp_y = 0;  // displacement from original center (pixels)
     int border_shift = 0;
     int sector_center = 0;
     int sector_range = 0;
@@ -26,11 +33,13 @@ struct SpawnInfo {
     bool check_overlap = false;
     bool check_min_spacing = false;
     std::shared_ptr<AssetInfo> info;
+    std::string asset_id;
 };
 
 struct BatchSpawnInfo {
     std::string name;
     int percent = 0;
+    std::string asset_id;
 };
 
 class AssetSpawnPlanner {

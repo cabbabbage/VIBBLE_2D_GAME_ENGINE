@@ -14,10 +14,7 @@ void AreaDebugRenderer::render(const AssetInfo* info, int world_x, int world_y) 
         const Area* area = nullptr;
         SDL_Color color = {255, 255, 255, 80};
 
-        if (key == "spacing" && info->has_spacing_area && info->spacing_area) {
-            area = info->spacing_area.get();
-            color = {0, 255, 0, 80};
-        } else if (key == "pass" && !info->passable && info->passability_area) {
+        if (key == "pass" && !info->passable && info->passability_area) {
             area = info->passability_area.get();
             color = {255, 255, 0, 80};
         } else if (key == "collision" && info->has_collision_area && info->collision_area) {

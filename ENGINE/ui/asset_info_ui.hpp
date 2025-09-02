@@ -41,10 +41,17 @@ private:
     void commit_scalar_changes();
     void save_now() const;
 
+    // Areas UI helpers
+    void rebuild_area_buttons();
+    SDL_Texture* get_default_frame_texture() const;
+    SDL_Texture* ensure_default_frame_texture(SDL_Renderer* r) const;
+    bool has_area_key(const std::string& key) const;
+    void apply_area_from_points(const std::string& key,
+                                const std::vector<std::pair<int,int>>& pts) const;
+
 private:
     bool visible_ = false;
     std::shared_ptr<AssetInfo> info_{};
-    std::unique_ptr<Button> b_close_;
     // Widgets (owned)
     std::unique_ptr<Slider>   s_z_threshold_;
     std::unique_ptr<Slider>   s_min_same_type_;
@@ -52,12 +59,29 @@ private:
     std::unique_ptr<Slider>   s_scale_pct_;
 
     std::unique_ptr<Checkbox> c_passable_;
-    std::unique_ptr<Checkbox> c_shading_;
     std::unique_ptr<Checkbox> c_flipable_;
 
     std::unique_ptr<TextBox>  t_type_;
     std::unique_ptr<TextBox>  t_tags_;
-    std::unique_ptr<TextBox>  t_blend_;
+
+    // Collapsible section headers
+    std::unique_ptr<Button>   h_basic_;
+    std::unique_ptr<Button>   h_animations_;
+    std::unique_ptr<Button>   h_rendering_;
+    std::unique_ptr<Button>   h_spawning_;
+    std::unique_ptr<Button>   h_passability_;
+    std::unique_ptr<Button>   h_lighting_;
+    std::unique_ptr<Button>   h_children_;
+    // Section open states
+    bool open_basic_       = true;
+    bool open_animations_  = false;
+    bool open_rendering_   = true;
+    bool open_spawning_    = true;
+    bool open_passability_ = true;
+    bool open_lighting_    = false;
+    bool open_children_    = false;
+    // Optional placeholder for scale variability UI (not persisted yet)
+    std::unique_ptr<Slider>   s_scale_var_pct_;
 
     // Scroll state
     mutable int scroll_ = 0;
@@ -65,5 +89,25 @@ private:
 
     // Cached panel rect (computed per frame)
     mutable SDL_Rect panel_ {0,0,0,0};
+
+    // Last known screen size (for event-time layout refresh)
+    mutable int last_screen_w_ = 0;
+    mutable int last_screen_h_ = 0;
+
+    // Guard to avoid recursive synthetic -> handle_event -> update loops
+    mutable bool synthesizing_ = false;
+
+    // Request to rebuild animations (e.g., after scale change)
+    mutable bool reload_pending_ = false;
+
+    // Area edit/create buttons (ordered)
+    std::vector<std::pair<std::string, std::unique_ptr<Button>>> area_buttons_;
+    // Human-readable names for keys (parallel to area_buttons_ order)
+    std::vector<std::string> area_labels_;
+
+    // Pending action from event to perform during render (needs renderer)
+    mutable bool pending_area_action_ = false;
+    mutable std::string pending_area_key_;
+    mutable bool pending_create_ = false;
 };
 

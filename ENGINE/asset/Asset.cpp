@@ -7,11 +7,12 @@
 
 
 Asset::Asset(std::shared_ptr<AssetInfo> info_,
-             const Area& spawn_area,
+             const std::string& spawn_type_,
              int start_pos_X,
              int start_pos_Y,
              int depth_,
-             Asset* parent_)
+             Asset* parent_,
+             const std::string& asset_id_)
     : parent(parent_),
       info(std::move(info_)),
       current_animation(),
@@ -27,8 +28,9 @@ Asset::Asset(std::shared_ptr<AssetInfo> info_,
       is_shaded(info->has_shading),
       alpha_percentage(1.0),
       has_base_shadow(false),
-      spawn_area_local(spawn_area),
-      depth(depth_)
+      depth(depth_),
+      asset_id(asset_id_),
+      spawn_type(spawn_type_)
 {
     set_flip();
     set_z_index();
@@ -307,9 +309,7 @@ Area Asset::get_area(const std::string& name) const {
         if (name == "passability" && info->passability_area) {
             result = *info->passability_area;
         }
-        else if (name == "spacing" && info->has_spacing_area && info->spacing_area) {
-            result = *info->spacing_area;
-        }
+        // spacing area removed
         else if (name == "collision" && info->has_collision_area && info->collision_area) {
             result = *info->collision_area;
         }
@@ -350,15 +350,12 @@ Area Asset::get_area(const std::string& name) const {
     }
 
     
-    float scale = (window ? window->get_scale() : 1.0f);
-    float inv_scale = (scale != 0.0f) ? 1.0f / scale : 1.0f;
-
-    result.scale(inv_scale);
-
-    
     if (flipped) {
         result.flip_horizontal();
     }
+
+    // Align to the asset's world position so tests use world-space
+    result.align(pos_X, pos_Y);
 
     return result;
 }

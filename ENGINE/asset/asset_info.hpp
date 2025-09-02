@@ -57,8 +57,6 @@ public:
     std::unique_ptr<Area> passability_area;
     bool has_passability_area = false;
 
-    std::unique_ptr<Area> spacing_area;
-    bool has_spacing_area = false;
 
     std::unique_ptr<Area> collision_area;
     bool has_collision_area = false;
@@ -98,6 +96,12 @@ public:
     void add_tag(const std::string& tag);
     void remove_tag(const std::string& tag);
     void set_passable(bool v);
+
+    // Embed an area directly into info.json under the given key
+    // using absolute pixel points (top-left origin). This replaces any
+    // previous filename string for the key.
+    void set_area_points(const std::string& key,
+                         const std::vector<Area::Point>& points);
 private:
     void get_area_textures(SDL_Renderer* renderer);
 

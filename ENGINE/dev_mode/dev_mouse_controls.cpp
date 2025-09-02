@@ -26,6 +26,29 @@ DevMouseControls::DevMouseControls(Input* m,
 {
 }
 
+std::vector<Asset*> DevMouseControls::group_for(Asset* target) const {
+    std::vector<Asset*> result;
+    if (!target) return result;
+    const std::string& id = target->asset_id;
+    if (id.empty()) {
+        result.push_back(target);
+        return result;
+    }
+    for (Asset* a : active_assets) {
+        if (a && a->asset_id == id) result.push_back(a);
+    }
+    if (result.empty()) result.push_back(target);
+    return result;
+}
+
+bool DevMouseControls::contains_ptr(const std::vector<Asset*>& vec, const Asset* ptr) {
+    return std::find(vec.begin(), vec.end(), ptr) != vec.end();
+}
+
+void DevMouseControls::remove_ptr(std::vector<Asset*>& vec, const Asset* ptr) {
+    vec.erase(std::remove(vec.begin(), vec.end(), ptr), vec.end());
+}
+
 void DevMouseControls::handle_mouse_input(const Input& input) {
     // Keep parallax reference fresh for world<->screen conversions
     if (player) {
@@ -81,15 +104,11 @@ void DevMouseControls::handle_mouse_input(const Input& input) {
 
 
 
-        // Right-click to open asset selection and record spawn point
-        if (mouse->wasClicked(Input::RIGHT) && assets_) {
-            spawn_click_screen_x_ = mx;
-            spawn_click_screen_y_ = my;
-            SDL_Point wp = compute_mouse_world(mx, my);
-            spawn_world_x_ = wp.x;
-            spawn_world_y_ = wp.y;
-            waiting_spawn_selection_ = true;
-            assets_->open_asset_library();
+        // Right-click now opens the asset info editor for the hovered asset
+        if (mouse->wasReleased(Input::RIGHT) && assets_) {
+            if (hovered_asset && hovered_asset->info) {
+                assets_->open_asset_info_editor(hovered_asset->info);
+            }
         }
 
         // If waiting for selection, check if a selection was made
@@ -127,7 +146,7 @@ void DevMouseControls::handle_hover() {
     for (Asset* a : active_assets) {
         if (!a || !a->info) continue;
         const std::string& t = a->info->type;
-        if (t == "Boundary" || t == "boundary" || t == "Texture") continue;
+        if (t == "Texture") continue;
 
         
         SDL_Point scr = parallax_.apply(a->pos_X, a->pos_Y);
@@ -154,55 +173,70 @@ void DevMouseControls::handle_hover() {
 }
 
 void DevMouseControls::handle_click(const Input& input) {
-    if (!mouse || !player || !mouse->wasClicked(Input::LEFT)) return;
+    if (!mouse || !player) return;
+
+    // Use release edge for click/double-click to avoid multi-frame click buffer repeats
+    if (!mouse->wasReleased(Input::LEFT)) return;
 
     Asset* nearest = hovered_asset; 
     if (nearest) {
         const bool ctrlHeld = input.isKeyDown(SDLK_LCTRL) || input.isKeyDown(SDLK_RCTRL);
-        auto it = std::find(selected_assets.begin(), selected_assets.end(), nearest);
-
+        auto group = group_for(nearest);
         if (ctrlHeld) {
-            if (it == selected_assets.end()) {
-                selected_assets.push_back(nearest);
+            // Toggle entire group as a unit
+            bool all_selected = true;
+            for (Asset* a : group) {
+                if (!contains_ptr(selected_assets, a)) { all_selected = false; break; }
+            }
+            if (all_selected) {
+                for (Asset* a : group) remove_ptr(selected_assets, a);
             } else {
-                selected_assets.erase(it);
+                for (Asset* a : group) if (!contains_ptr(selected_assets, a)) selected_assets.push_back(a);
             }
         } else {
-            if (it != selected_assets.end() && selected_assets.size() == 1) {
-                selected_assets.clear(); 
-            } else {
-                selected_assets.clear();
-                selected_assets.push_back(nearest);
-            }
+            // Replace selection with entire group
+            selected_assets = group;
         }
 
-        // Double-click detection: same asset within 300ms
+        // Double-click detection (left): within 300ms triggers spawn flow
         Uint32 now = SDL_GetTicks();
-        if (last_click_asset_ == nearest && (now - last_click_time_ms_) <= 300) {
-            if (assets_ && nearest->info) {
-                assets_->open_asset_info_editor(nearest->info);
+        if (now - last_left_click_time_ms_ <= 300) {
+            if (assets_) {
+                int mx = mouse->getX();
+                int my = mouse->getY();
+                spawn_click_screen_x_ = mx;
+                spawn_click_screen_y_ = my;
+                // Place exactly where visually clicked: convert screen->world using player center + screen offset
+                int cx = screen_w / 2;
+                int cy = screen_h / 2;
+                int px = assets_->player ? assets_->player->pos_X : 0;
+                int py = assets_->player ? assets_->player->pos_Y : 0;
+                spawn_world_x_ = px + (mx - cx);
+                spawn_world_y_ = py + (my - cy);
+                waiting_spawn_selection_ = true;
+                assets_->open_asset_library();
             }
-            last_click_time_ms_ = 0;
-            last_click_asset_ = nullptr;
+            last_left_click_time_ms_ = 0; // reset after double-click
+            return; // do not process further selection changes this frame
         } else {
-            last_click_time_ms_ = now;
-            last_click_asset_ = nearest;
+            last_left_click_time_ms_ = now;
         }
     } else {
         const bool ctrlHeld = input.isKeyDown(SDLK_LCTRL) || input.isKeyDown(SDLK_RCTRL);
         if (!ctrlHeld) {
             selected_assets.clear();
         }
-        last_click_asset_ = nullptr;
-        last_click_time_ms_ = 0;
+        last_left_click_time_ms_ = 0;
     }
 }
 
 void DevMouseControls::update_highlighted_assets() {
     highlighted_assets = selected_assets;
-    if (hovered_asset &&
-        std::find(highlighted_assets.begin(), highlighted_assets.end(), hovered_asset) == highlighted_assets.end()) {
-        highlighted_assets.push_back(hovered_asset);
+    if (hovered_asset) {
+        auto hgroup = group_for(hovered_asset);
+        for (Asset* a : hgroup) {
+            if (!contains_ptr(highlighted_assets, a)) highlighted_assets.push_back(a);
+        }
     }
 
     for (Asset* a : active_assets) {
@@ -225,7 +259,4 @@ void DevMouseControls::update_highlighted_assets() {
     }
 }
 
-SDL_Point DevMouseControls::compute_mouse_world(int mx_screen, int my_screen) const {
-    // Inverse of parallax projection based on current player reference
-    return parallax_.inverse(mx_screen, my_screen);
-}
+// compute_mouse_world removed: mouse is treated as screen space; spawn uses direct screen offset from player

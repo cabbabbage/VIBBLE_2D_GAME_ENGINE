@@ -18,7 +18,6 @@ void AreaLoader::load_collision_areas(AssetInfo& info,
                                       int offset_x,
                                       int offset_y) {
     try_load_area(data, "impassable_area", dir_path, info.passability_area, info.has_passability_area, info.scale_factor, offset_x, offset_y, info.name);
-    try_load_area(data, "spacing_area", dir_path, info.spacing_area, info.has_spacing_area, info.scale_factor, offset_x, offset_y, info.name);
     try_load_area(data, "collision_area", dir_path, info.collision_area, info.has_collision_area, info.scale_factor, offset_x, offset_y, info.name);
     try_load_area(data, "interaction_area", dir_path, info.interaction_area, info.has_interaction_area, info.scale_factor, offset_x, offset_y, info.name);
     try_load_area(data, "hit_area", dir_path, info.attack_area, info.has_attack_area, info.scale_factor, offset_x, offset_y, info.name);
@@ -76,24 +75,5 @@ void AreaLoader::try_load_area(const json& data,
         }
     }
 
-    if (!area_loaded && key == "spacing_area") {
-        std::string fallback_name = name_hint.empty() ? "circle_spacing" : name_hint + "_circle_spacing";
-        int radius = static_cast<int>(std::ceil(std::max(0, 0) * scale / 2.0f));
-        int center_x = offset_x;
-        int center_y = offset_y;
-        int size = radius * 2;
-
-        area_ref = std::make_unique<Area>(
-            fallback_name,
-            center_x,
-            center_y,
-            size,
-            size,
-            "Circle",
-            1,
-            std::numeric_limits<int>::max(),
-            std::numeric_limits<int>::max()
-        );
-        flag_ref = true;
-    }
+    // No spacing_area fallback: feature removed
 }
