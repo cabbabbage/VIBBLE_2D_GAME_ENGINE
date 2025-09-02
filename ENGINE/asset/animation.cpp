@@ -15,7 +15,6 @@ void Animation::load(const std::string& trigger,
                      const std::string& dir_path,
                      const std::string& root_cache,
                      float scale_factor,
-                     SDL_BlendMode blendmode,
                      SDL_Renderer* renderer,
                      SDL_Texture*& base_sprite,
                      int& scaled_sprite_w,
@@ -50,8 +49,7 @@ void Animation::load(const std::string& trigger,
         if (meta.value("frame_count", -1) == expected_frames &&
             meta.value("scale_factor", -1.0f) == scale_factor &&
             meta.value("original_width", -1) == orig_w &&
-            meta.value("original_height", -1) == orig_h &&
-            meta.value("blend_mode", -1) == int(blendmode))
+            meta.value("original_height", -1) == orig_h)
         {
             use_cache = true;
         }
@@ -72,7 +70,6 @@ void Animation::load(const std::string& trigger,
                 std::cerr << "[Animation] Failed to load or scale: " << f << "\n";
                 continue;
             }
-            SDL_SetSurfaceBlendMode(scaled, blendmode);
             if (i == 0) {
                 original_canvas_width  = orig_w;
                 original_canvas_height = orig_h;
@@ -88,7 +85,6 @@ void Animation::load(const std::string& trigger,
         new_meta["scale_factor"]    = scale_factor;
         new_meta["original_width"]  = orig_w;
         new_meta["original_height"] = orig_h;
-        new_meta["blend_mode"]      = int(blendmode);
         cache.save_metadata(meta_file, new_meta);
     }
 
@@ -105,7 +101,6 @@ void Animation::load(const std::string& trigger,
             std::cerr << "[Animation] Failed to create texture for '" << trigger << "'\n";
             continue;
         }
-        SDL_SetTextureBlendMode(tex, blendmode);
         frames.push_back(tex);
     }
 

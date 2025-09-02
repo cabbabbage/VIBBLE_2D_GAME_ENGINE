@@ -37,7 +37,6 @@ void AnimationLoader::load(AssetInfo& info, SDL_Renderer* renderer) {
                   info.dir_path_,
                   root_cache,
                   info.scale_factor,
-                  info.blendmode,
                   renderer,
                   base_sprite,
                   scaled_sprite_w,
@@ -58,14 +57,14 @@ void AnimationLoader::get_area_textures(AssetInfo& info, SDL_Renderer* renderer)
 
     CacheManager cache;
 
-    auto try_load_or_create = [&](std::unique_ptr<Area>& area, const std::string& kind) {
-        if (!area) return;
+    for (auto& named : info.areas) {
+        if (!named.area) continue;
 
-        std::string folder = "cache/areas/" + info.name + "_" + kind;
+        std::string folder = "cache/areas/" + info.name + "_" + named.name;
         std::string meta_file = folder + "/metadata.json";
         std::string bmp_file = folder + "/0.bmp";
 
-        auto [minx, miny, maxx, maxy] = area->get_bounds();
+        auto [minx, miny, maxx, maxy] = named.area->get_bounds();
         json meta;
         if (cache.load_metadata(meta_file, meta)) {
             if (meta.value("bounds", std::vector<int>{}) == std::vector<int>{minx, miny, maxx, maxy}) {
@@ -74,17 +73,15 @@ void AnimationLoader::get_area_textures(AssetInfo& info, SDL_Renderer* renderer)
                     SDL_Texture* tex = cache.surface_to_texture(renderer, surf);
                     SDL_FreeSurface(surf);
                     if (tex) {
-                        area->create_area_texture(renderer);
-                        return;
+                        named.area->create_area_texture(renderer);
+                        continue;
                     }
                 }
             }
         }
 
-        area->create_area_texture(renderer);
-
-        area->create_area_texture(renderer);
-        SDL_Texture* tex = area->get_texture();
+        named.area->create_area_texture(renderer);
+        SDL_Texture* tex = named.area->get_texture();
         if (tex) {
             SDL_Surface* surf = SDL_CreateRGBSurfaceWithFormat(0, maxx - minx + 1, maxy - miny + 1, 32, SDL_PIXELFORMAT_RGBA8888);
             if (surf) {
@@ -97,12 +94,6 @@ void AnimationLoader::get_area_textures(AssetInfo& info, SDL_Renderer* renderer)
                 SDL_SetRenderTarget(renderer, nullptr);
             }
         }
-    };
-
-    try_load_or_create(info.passability_area, "passability");
-    try_load_or_create(info.spacing_area,     "spacing");
-    try_load_or_create(info.collision_area,   "collision");
-    try_load_or_create(info.interaction_area, "interaction");
-    try_load_or_create(info.attack_area,      "attack");
+    }
 }
 

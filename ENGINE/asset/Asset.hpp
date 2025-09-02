@@ -81,7 +81,6 @@ public:
     int z_offset = 0;
     int player_speed = 10;
     bool is_lit = false;
-    bool is_shaded = false;
     bool has_base_shadow = false;
     bool active = false;
     bool flipped = false;

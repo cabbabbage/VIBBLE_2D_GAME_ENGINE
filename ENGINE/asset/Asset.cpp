@@ -24,7 +24,6 @@ Asset::Asset(std::shared_ptr<AssetInfo> info_,
       z_offset(0),
       player_speed(10),
       is_lit(info->has_light_source),
-      is_shaded(info->has_shading),
       alpha_percentage(1.0),
       has_base_shadow(false),
       spawn_area_local(spawn_area),
@@ -93,8 +92,6 @@ void Asset::finalize_setup() {
             }
         }
     }
-
-    has_shading = info->has_shading;
 
 }
 
@@ -304,22 +301,7 @@ Area Asset::get_area(const std::string& name) const {
     Area result(name);
 
     if (info) {
-        if (name == "passability" && info->passability_area) {
-            result = *info->passability_area;
-        }
-        else if (name == "spacing" && info->has_spacing_area && info->spacing_area) {
-            result = *info->spacing_area;
-        }
-        else if (name == "collision" && info->has_collision_area && info->collision_area) {
-            result = *info->collision_area;
-        }
-        else if (name == "interaction" && info->has_interaction_area && info->interaction_area) {
-            result = *info->interaction_area;
-        }
-        else if (name == "attack" && info->has_attack_area && info->attack_area) {
-            result = *info->attack_area;
-        }
-        else if (name == "clickable") {
+        if (name == "clickable") {
             int base_w = (cached_w > 0) ? cached_w
                         : static_cast<int>(info->original_canvas_width * info->scale_factor);
             int base_h = (cached_h > 0) ? cached_h
@@ -328,15 +310,11 @@ Area Asset::get_area(const std::string& name) const {
             if (base_w <= 0) base_w = 1;
             if (base_h <= 0) base_h = 1;
 
-            
             int click_w = static_cast<int>(base_w * 1.5f);
             int click_h = static_cast<int>(base_h * 1.5f);
 
-            
-            
-            
             int left   = pos_X - click_w / 2;
-            int top    = pos_Y - click_h;   
+            int top    = pos_Y - click_h;
             result = Area(name,
                           left,
                           top,
@@ -346,16 +324,18 @@ Area Asset::get_area(const std::string& name) const {
                           1,
                           std::numeric_limits<int>::max(),
                           std::numeric_limits<int>::max());
+        } else {
+            Area* a = info->find_area(name + "_area");
+            if (a) {
+                result = *a;
+            }
         }
     }
 
-    
     float scale = (window ? window->get_scale() : 1.0f);
     float inv_scale = (scale != 0.0f) ? 1.0f / scale : 1.0f;
-
     result.scale(inv_scale);
 
-    
     if (flipped) {
         result.flip_horizontal();
     }

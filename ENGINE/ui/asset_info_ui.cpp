@@ -22,16 +22,6 @@ namespace {
         return s.substr(b, e-b+1);
     }
 
-    std::string blend_mode_to_string(SDL_BlendMode mode) {
-        switch (mode) {
-            case SDL_BLENDMODE_NONE: return "SDL_BLENDMODE_NONE";
-            case SDL_BLENDMODE_BLEND: return "SDL_BLENDMODE_BLEND";
-            case SDL_BLENDMODE_ADD: return "SDL_BLENDMODE_ADD";
-            case SDL_BLENDMODE_MOD: return "SDL_BLENDMODE_MOD";
-            case SDL_BLENDMODE_MUL: return "SDL_BLENDMODE_MUL";
-            default: return "SDL_BLENDMODE_BLEND";
-        }
-    }
 }
 
 AssetInfoUI::AssetInfoUI() {}
@@ -49,11 +39,9 @@ void AssetInfoUI::clear_info() {
     s_min_all_.reset();
     s_scale_pct_.reset();
     c_passable_.reset();
-    c_shading_.reset();
     c_flipable_.reset();
     t_type_.reset();
     t_tags_.reset();
-    t_blend_.reset();
 }
 
 void AssetInfoUI::open()  { visible_ = true; }
@@ -73,7 +61,6 @@ void AssetInfoUI::build_widgets() {
 
     // Checkboxes
     c_passable_ = std::make_unique<Checkbox>("Passable", info_->has_tag("passable"));
-    c_shading_  = std::make_unique<Checkbox>("Has Shading", info_->has_shading);
     c_flipable_ = std::make_unique<Checkbox>("Flipable (can invert)", info_->flipable);
 
     // Text boxes
@@ -82,7 +69,6 @@ void AssetInfoUI::build_widgets() {
     std::ostringstream oss;
     for (size_t i=0;i<info_->tags.size();++i) { oss << info_->tags[i]; if (i+1<info_->tags.size()) oss << ", "; }
     t_tags_  = std::make_unique<TextBox>("Tags (comma)", oss.str());
-    t_blend_ = std::make_unique<TextBox>("Blend Mode", blend_mode_to_string(info_->blendmode));
 
     b_close_ = std::make_unique<Button>(
         "Close",
@@ -115,17 +101,9 @@ void AssetInfoUI::layout_widgets(int screen_w, int screen_h) const {
     }
 
     // Group: Appearance
-    if (t_blend_) {
-        t_blend_->set_rect(SDL_Rect{ x, y + 20, std::min(360, panel_w - 32), TextBox::height() });
-        y += 20 + TextBox::height() + 10;
-    }
     if (s_scale_pct_) {
         s_scale_pct_->set_rect(SDL_Rect{ x, y + 10, panel_w - 32, Slider::height() });
         y += 10 + Slider::height() + 8;
-    }
-    if (c_shading_) {
-        c_shading_->set_rect(SDL_Rect{ x, y + 8, panel_w - 32, Checkbox::height() });
-        y += 8 + Checkbox::height() + 6;
     }
     if (c_flipable_) {
         c_flipable_->set_rect(SDL_Rect{ x, y + 4, panel_w - 32, Checkbox::height() });
@@ -192,15 +170,13 @@ void AssetInfoUI::handle_event(const SDL_Event& e) {
     if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
         const SDL_Point p{ e.button.x, e.button.y };
         auto inside = [&](const std::unique_ptr<TextBox>& tb){ return tb && SDL_PointInRect(&p, &tb->rect()); };
-        bool any = (t_type_ && inside(t_type_)) || (t_tags_ && inside(t_tags_)) || (t_blend_ && inside(t_blend_));
+        bool any = (t_type_ && inside(t_type_)) || (t_tags_ && inside(t_tags_));
         if (any) {
             if (t_type_  && !inside(t_type_))  t_type_->set_editing(false);
             if (t_tags_  && !inside(t_tags_))  t_tags_->set_editing(false);
-            if (t_blend_ && !inside(t_blend_)) t_blend_->set_editing(false);
         } else {
             if (t_type_)  t_type_->set_editing(false);
             if (t_tags_)  t_tags_->set_editing(false);
-            if (t_blend_) t_blend_->set_editing(false);
         }
     }
 
@@ -234,10 +210,6 @@ void AssetInfoUI::handle_event(const SDL_Event& e) {
         }
         changed = true;
     }
-    if (c_shading_ && c_shading_->handle_event(e)) {
-        info_->set_has_shading(c_shading_->value());
-        changed = true;
-    }
     if (c_flipable_ && c_flipable_->handle_event(e)) {
         info_->set_flipable(c_flipable_->value());
         changed = true;
@@ -264,10 +236,6 @@ void AssetInfoUI::handle_event(const SDL_Event& e) {
         info_->set_tags(tags);
         // Keep passable checkbox in sync
         if (c_passable_) c_passable_->set_value(info_->has_tag("passable"));
-        changed = true;
-    }
-    if (t_blend_ && t_blend_->handle_event(e)) {
-        info_->set_blend_mode_string(t_blend_->value());
         changed = true;
     }
 
@@ -311,9 +279,7 @@ void AssetInfoUI::render(SDL_Renderer* r, int screen_w, int screen_h) const {
 
     y = t_tags_ ? (t_tags_->rect().y + t_tags_->rect().h + 18 + scroll_) : y + 60;
     draw_header("Appearance", y);
-    if (t_blend_)     t_blend_->render(r);
     if (s_scale_pct_) s_scale_pct_->render(r);
-    if (c_shading_)   c_shading_->render(r);
     if (c_flipable_)  c_flipable_->render(r);
 
     int headerDZ = (s_z_threshold_ ? s_z_threshold_->rect().y - 24 : (panel_.y + 280)) + scroll_;
