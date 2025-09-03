@@ -9,11 +9,18 @@
 #include <filesystem>
 #include <vector>
 #include <string>
+#include <iostream>
 
 using nlohmann::json;
 
 void AnimationLoader::load(AssetInfo& info, SDL_Renderer* renderer) {
     if (info.anims_json_.is_null()) return;
+
+    if (!info.anims_json_.is_object()) {
+        std::cerr << "[AnimationLoader] animations JSON for '" << info.name
+                  << "' is not an object\n";
+        return;
+    }
 
     SDL_Texture* base_sprite = nullptr;
     int scaled_sprite_w = 0;
@@ -30,24 +37,38 @@ void AnimationLoader::load(AssetInfo& info, SDL_Renderer* renderer) {
         const auto& anim_json = it.value();
         if (anim_json.is_null())
             continue;
+        if (!anim_json.is_object()) {
+            std::cerr << "[AnimationLoader] animation '" << trigger
+                      << "' has invalid JSON\n";
+            continue;
+        }
 
         Animation anim;
-        anim.load(trigger,
-                  anim_json,
-                  info,
-                  info.dir_path_,
-                  root_cache,
-                  info.scale_factor,
-                  renderer,
-                  base_sprite,
-                  scaled_sprite_w,
-                  scaled_sprite_h,
-                  info.original_canvas_width,
-                  info.original_canvas_height);
-
-        if (!anim.frames.empty()) {
-            info.animations[trigger] = std::move(anim);
+        try {
+            anim.load(trigger,
+                      anim_json,
+                      info,
+                      info.dir_path_,
+                      root_cache,
+                      info.scale_factor,
+                      renderer,
+                      base_sprite,
+                      scaled_sprite_w,
+                      scaled_sprite_h,
+                      info.original_canvas_width,
+                      info.original_canvas_height);
+        } catch (const std::exception& e) {
+            std::cerr << "[AnimationLoader] error loading animation '" << trigger
+                      << "': " << e.what() << "\n";
+            continue;
         }
+
+        if (anim.frames.empty()) {
+            std::cerr << "[AnimationLoader] animation '" << trigger
+                      << "' produced no frames\n";
+            continue;
+        }
+        info.animations[trigger] = std::move(anim);
     }
 
     get_area_textures(info, renderer);
