@@ -238,21 +238,36 @@ class AnimationEditor(ttk.Frame):
         if not self.asset_folder or not self.trigger_name:
             return
 
-        gif_path = os.path.join(
-            self.asset_folder, self.trigger_name, "preview.gif"
-        )
-        if not os.path.isfile(gif_path):
-            return
+        """Load a preview image for the animation.
 
-        gif = Image.open(gif_path)
+        Prefer a generated ``preview.gif`` if it exists; otherwise fall back to
+        the first frame (``0.png``) so that an image is always shown on the
+        animation node.  This makes the Animations page more informative even
+        if the preview GIF has not been generated.
+        """
+
+        # Determine the folder that holds the animation frames
+        folder_name = self.frames_path.get() or self.trigger_name
+        anim_folder = os.path.join(self.asset_folder or "", folder_name)
+
+        # Try loading the generated preview GIF first
+        img_path = os.path.join(anim_folder, "preview.gif")
+        if not os.path.isfile(img_path):
+            # Fall back to the first frame if the GIF doesn't exist
+            fallback = os.path.join(anim_folder, "0.png")
+            if not os.path.isfile(fallback):
+                return
+            img_path = fallback
+
+        img = Image.open(img_path)
         width = 320
-        height = int((width / gif.width) * gif.height)
-        gif = gif.resize((width, height), Image.LANCZOS)
+        height = int((width / img.width) * img.height)
+        img = img.resize((width, height), Image.LANCZOS)
 
-        self.preview_gif = ImageTk.PhotoImage(gif)
+        self.preview_gif = ImageTk.PhotoImage(img)
         self.preview_canvas.delete("all")
         self.preview_canvas.create_image(
-            0, 0, anchor='nw', image=self.preview_gif
+            0, 0, anchor="nw", image=self.preview_gif
         )
 
     def load(self, trigger_name: str, anim_data: dict, asset_folder: str):
