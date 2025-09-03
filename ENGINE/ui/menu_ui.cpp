@@ -58,8 +58,19 @@ void MenuUI::game_loop() {
         while (SDL_PollEvent(&e)) {
             if (e.type == SDL_QUIT) {
                 quit = true;
-            } else if (e.type == SDL_KEYDOWN) {
-                if (e.key.keysym.sym == SDLK_ESCAPE && e.key.repeat == 0) {
+            } else if (e.type == SDL_KEYDOWN && e.key.repeat == 0 && e.key.keysym.sym == SDLK_ESCAPE) {
+                bool closed_ui = false;
+                if (game_assets_) {
+                    if (game_assets_->is_asset_info_editor_open()) {
+                        game_assets_->close_asset_info_editor();
+                        closed_ui = true;
+                    }
+                    if (game_assets_->is_asset_library_open()) {
+                        game_assets_->close_asset_library();
+                        closed_ui = true;
+                    }
+                }
+                if (!closed_ui) {
                     toggleMenu();
                 }
             }

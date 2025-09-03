@@ -378,6 +378,19 @@ bool Assets::is_asset_info_editor_open() const {
 }
 
 void Assets::handle_sdl_event(const SDL_Event& e) {
+    if (e.type == SDL_KEYDOWN && e.key.keysym.sym == SDLK_ESCAPE) {
+        bool closed = false;
+        if (info_ui_ && info_ui_->is_visible()) {
+            info_ui_->close();
+            closed = true;
+        }
+        if (library_ui_ && library_ui_->is_visible()) {
+            library_ui_->close();
+            closed = true;
+        }
+        if (closed) return;
+    }
+
     if (info_ui_ && info_ui_->is_visible()) {
         info_ui_->handle_event(e);
     }

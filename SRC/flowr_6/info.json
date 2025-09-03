@@ -1,75 +1,8 @@
 {
-  "asset_name": "flowr_6",
-  "asset_type": "Object",
-  "duplicatable": false,
-  "duplication_interval_min": 30,
-  "duplication_interval_max": 60,
-  "min_child_depth": 0,
-  "max_child_depth": 2,
-  "tags": [
-    "meadow",
-    "cover",
-    "nature",
-    "still",
-    "piss",
-    "flowers",
-    "small",
-    "pretty",
-    "passable",
-    "plant",
-    "ground",
-    "leafy",
-    "default",
-    "yellow"
-  ],
-  "rnd_spawn_min": 300,
-  "rnd_spawn_max": 400,
-  "lighting_info": [
-    {
-      "has_light_source": true,
-      "light_intensity": 77,
-      "light_color": [
-        128,
-        0,
-        255
-      ],
-      "radius": 327,
-      "fall_off": 100,
-      "jitter_min": 0,
-      "jitter_max": 0,
-      "offset_x": 0,
-      "offset_y": 0,
-      "flicker": false
-    }
-  ],
-  "shading_info": {
-    "has_shading": false,
-    "has_base_shadow": null,
-    "base_shadow_intensity": null,
-    "has_gradient_shadow": null,
-    "number_of_gradient_shadows": null,
-    "gradient_shadow_intensity": null,
-    "has_casted_shadows": null,
-    "number_of_casted_shadows": null,
-    "cast_shadow_intensity": null
-  },
-  "z_threshold": 6,
-  "size_settings": {
-    "scale_percentage": 6,
-    "variability_percentage": 0
-  },
   "animations": {
     "default": {
-      "source": {
-        "kind": "folder",
-        "path": "default",
-        "name": null
-      },
       "flipped_source": false,
-      "reverse_source": false,
       "locked": false,
-      "speed_factor": 1,
-      "number_of_frames": 2,
       "movement": [
         [
           0,
@@ -80,11 +13,17 @@
           0
         ]
       ],
-      "on_end_mapping": "2aeebc2b"
+      "number_of_frames": 2,
+      "on_end_mapping": "2aeebc2b",
+      "reverse_source": false,
+      "source": {
+        "kind": "folder",
+        "name": null,
+        "path": "default"
+      },
+      "speed_factor": 1
     }
   },
-  "has_spacing": true,
-  "min_same_type_distance": 20,
   "anti_tags": [
     "any",
     "barrel_child",
@@ -133,11 +72,15 @@
     "white",
     "wood"
   ],
-  "min_distance_all": 0,
-  "impassable_area": null,
   "areas": [
     {
       "name": "spacing_area",
+      "offset_x": 0,
+      "offset_y": 0,
+      "original_dimensions": [
+        369,
+        662
+      ],
       "points": [
         [
           -6.0,
@@ -4487,13 +4430,33 @@
           -34.0,
           0.0
         ]
+      ]
+    }
+  ],
+  "asset_name": "flowr_6",
+  "asset_type": "Object",
+  "can_invert": true,
+  "duplicatable": false,
+  "duplication_interval_max": 60,
+  "duplication_interval_min": 30,
+  "has_spacing": true,
+  "impassable_area": null,
+  "lighting_info": [
+    {
+      "fall_off": 100,
+      "flicker": false,
+      "has_light_source": true,
+      "jitter_max": 0,
+      "jitter_min": 0,
+      "light_color": [
+        128,
+        0,
+        255
       ],
-      "original_dimensions": [
-        369,
-        662
-      ],
+      "light_intensity": 77,
       "offset_x": 0,
-      "offset_y": 0
+      "offset_y": 0,
+      "radius": 327
     }
   ],
   "mappings": {
@@ -4509,6 +4472,57 @@
           ]
         }
       }
+    ],
+    "5e05d657": [
+      {
+        "condition": "",
+        "map_to": {
+          "options": [
+            {
+              "animation": "idle",
+              "percent": 100
+            }
+          ]
+        }
+      }
     ]
-  }
+  },
+  "max_child_depth": 2,
+  "min_child_depth": 0,
+  "min_distance_all": 0,
+  "min_same_type_distance": 0,
+  "rnd_spawn_max": 400,
+  "rnd_spawn_min": 300,
+  "shading_info": {
+    "base_shadow_intensity": null,
+    "cast_shadow_intensity": null,
+    "gradient_shadow_intensity": null,
+    "has_base_shadow": null,
+    "has_casted_shadows": null,
+    "has_gradient_shadow": null,
+    "has_shading": false,
+    "number_of_casted_shadows": null,
+    "number_of_gradient_shadows": null
+  },
+  "size_settings": {
+    "scale_percentage": 10.0,
+    "variability_percentage": 0
+  },
+  "tags": [
+    "meadow",
+    "cover",
+    "nature",
+    "still",
+    "piss",
+    "flowers",
+    "small",
+    "pretty",
+    "passable",
+    "plant",
+    "ground",
+    "leafy",
+    "default",
+    "yellow"
+  ],
+  "z_threshold": 6
 }
