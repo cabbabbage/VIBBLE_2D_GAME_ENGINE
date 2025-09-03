@@ -9,13 +9,27 @@
   "max_child_depth": 9,
   "animations": {
     "default": {
-      "frames_path": "default",
-      "speed": 1.0,
-      "on_end": "rest",
-      "event_data": [],
-      "randomize": true,
-      "audio_path": "",
-      "volume": 50
+      "source": {
+        "kind": "folder",
+        "path": "default",
+        "name": null
+      },
+      "flipped_source": false,
+      "reverse_source": false,
+      "locked": false,
+      "speed_factor": 1,
+      "number_of_frames": 2,
+      "movement": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ]
+      ],
+      "on_end_mapping": "d506a4d2"
     }
   },
   "z_threshold": 3,
@@ -7492,5 +7506,20 @@
       "offset_x": 0,
       "offset_y": 0
     }
-  ]
+  ],
+  "mappings": {
+    "d506a4d2": [
+      {
+        "condition": "",
+        "map_to": {
+          "options": [
+            {
+              "animation": "rest",
+              "percent": 100
+            }
+          ]
+        }
+      }
+    ]
+  }
 }

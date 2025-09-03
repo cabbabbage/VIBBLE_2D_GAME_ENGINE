@@ -3,22 +3,70 @@
   "asset_type": "Object",
   "animations": {
     "default": {
-      "frames_path": "default",
-      "on_end": "default",
-      "event_data": [],
-      "randomize": false,
-      "audio_path": "",
-      "volume": 50,
-      "lock_until_done": false
+      "source": {
+        "kind": "folder",
+        "path": "default",
+        "name": null
+      },
+      "flipped_source": false,
+      "reverse_source": false,
+      "locked": false,
+      "speed_factor": 1,
+      "number_of_frames": 2,
+      "movement": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ]
+      ],
+      "on_end_mapping": "be1f4e28"
     },
     "interaction": {
-      "frames_path": "interaction",
-      "on_end": "freeze_on_last",
-      "event_data": [],
-      "randomize": false,
-      "audio_path": "",
-      "volume": 50,
-      "lock_until_done": true,
+      "source": {
+        "kind": "folder",
+        "path": "interaction",
+        "name": null
+      },
+      "flipped_source": false,
+      "reverse_source": false,
+      "locked": true,
+      "speed_factor": 1,
+      "number_of_frames": 7,
+      "movement": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ]
+      ],
+      "on_end_mapping": "1704cac6",
       "area_name": "interaction_area"
     }
   },
@@ -2470,5 +2518,33 @@
       "offset_x": 0,
       "offset_y": 0
     }
-  ]
+  ],
+  "mappings": {
+    "be1f4e28": [
+      {
+        "condition": "",
+        "map_to": {
+          "options": [
+            {
+              "animation": "default",
+              "percent": 100
+            }
+          ]
+        }
+      }
+    ],
+    "1704cac6": [
+      {
+        "condition": "",
+        "map_to": {
+          "options": [
+            {
+              "animation": "freeze_on_last",
+              "percent": 100
+            }
+          ]
+        }
+      }
+    ]
+  }
 }

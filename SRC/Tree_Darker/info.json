@@ -8,22 +8,46 @@
   "max_child_depth": 8,
   "animations": {
     "default": {
-      "frames_path": "default",
-      "on_end": "default",
-      "event_data": [],
-      "randomize": true,
-      "audio_path": "",
-      "volume": 50,
-      "lock_until_done": false
+      "source": {
+        "kind": "folder",
+        "path": "default",
+        "name": null
+      },
+      "flipped_source": false,
+      "reverse_source": false,
+      "locked": false,
+      "speed_factor": 1,
+      "number_of_frames": 1,
+      "movement": [
+        [
+          0,
+          0
+        ]
+      ],
+      "on_end_mapping": "953ce49f"
     },
     "group": {
-      "frames_path": "group",
-      "on_end": "group",
-      "event_data": [],
-      "randomize": false,
-      "audio_path": "",
-      "volume": 50,
-      "lock_until_done": false
+      "source": {
+        "kind": "folder",
+        "path": "group",
+        "name": null
+      },
+      "flipped_source": false,
+      "reverse_source": false,
+      "locked": false,
+      "speed_factor": 1,
+      "number_of_frames": 2,
+      "movement": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ]
+      ],
+      "on_end_mapping": "74b4aeae"
     }
   },
   "z_threshold": 34,
@@ -1830,5 +1854,33 @@
       "offset_x": 0,
       "offset_y": 0
     }
-  ]
+  ],
+  "mappings": {
+    "953ce49f": [
+      {
+        "condition": "",
+        "map_to": {
+          "options": [
+            {
+              "animation": "default",
+              "percent": 100
+            }
+          ]
+        }
+      }
+    ],
+    "74b4aeae": [
+      {
+        "condition": "",
+        "map_to": {
+          "options": [
+            {
+              "animation": "group",
+              "percent": 100
+            }
+          ]
+        }
+      }
+    ]
+  }
 }

@@ -1,9 +1,39 @@
 {
   "animations": {
     "default": {
-      "path": null,
-      "end_path": null
+      "source": {
+        "kind": "folder",
+        "path": "default",
+        "name": null
+      },
+      "flipped_source": false,
+      "reverse_source": false,
+      "locked": false,
+      "speed_factor": 1,
+      "number_of_frames": 1,
+      "movement": [
+        [
+          0,
+          0
+        ]
+      ],
+      "on_end_mapping": "4365d34b"
     }
   },
-  "areas": []
+  "areas": [],
+  "mappings": {
+    "4365d34b": [
+      {
+        "condition": "",
+        "map_to": {
+          "options": [
+            {
+              "animation": "default",
+              "percent": 100
+            }
+          ]
+        }
+      }
+    ]
+  }
 }
