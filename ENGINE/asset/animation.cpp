@@ -27,9 +27,21 @@ void Animation::load(const std::string& trigger,
 
     if (anim_json.contains("source")) {
         const auto& s = anim_json["source"];
-        source.kind = s.value("kind", "folder");
-        source.path = s.value("path", "");
-        source.name = s.value("name", "");
+
+        if (s.contains("kind") && s["kind"].is_string())
+            source.kind = s["kind"].get<std::string>();
+        else
+            source.kind = "folder";
+
+        if (s.contains("path") && s["path"].is_string())
+            source.path = s["path"].get<std::string>();
+        else
+            source.path.clear();
+
+        if (s.contains("name") && s["name"].is_string())
+            source.name = s["name"].get<std::string>();
+        else
+            source.name.clear();
     }
     flipped_source = anim_json.value("flipped_source", false);
     reverse_source = anim_json.value("reverse_source", false);
