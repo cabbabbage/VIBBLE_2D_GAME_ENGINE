@@ -45,6 +45,7 @@ private:
     bool visible_ = false;
     std::shared_ptr<AssetInfo> info_{};
     std::unique_ptr<Button> b_close_;
+    std::unique_ptr<Button> b_config_anim_;
     // Widgets (owned)
     std::unique_ptr<Slider>   s_z_threshold_;
     std::unique_ptr<Slider>   s_min_same_type_;
