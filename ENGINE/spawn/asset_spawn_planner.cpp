@@ -83,7 +83,15 @@ void AssetSpawnPlanner::parse_asset_spawns(double area) {
         int max_num = asset.value("max_number", min_num);
         int quantity = std::uniform_int_distribution<int>(min_num, max_num)(rng);
 
-        std::string position = asset.value("position", "Random");
+        std::string position = "Random";
+        if (asset.contains("position")) {
+            if (asset["position"].is_string()) {
+                position = asset["position"].get<std::string>();
+            } else {
+                std::cerr << "[AssetSpawnPlanner] Asset '" << name
+                          << "' has non-string 'position' field; defaulting to 'Random'.\n";
+            }
+        }
         bool isSingleCenter = (min_num == 1 && max_num == 1 &&
                             (position == "Center" || position == "center"));
         bool isPerimeter    = (position == "Perimeter" || position == "perimeter");
@@ -177,7 +185,13 @@ void AssetSpawnPlanner::sort_spawn_queue() {
 
 nlohmann::json AssetSpawnPlanner::resolve_asset_from_tag(const nlohmann::json& tag_entry) {
     static std::mt19937 rng(std::random_device{}());
-    std::string tag = tag_entry.value("tag", "");
+    std::string tag;
+    if (tag_entry.contains("tag") && tag_entry["tag"].is_string()) {
+        tag = tag_entry["tag"].get<std::string>();
+    } else {
+        std::cerr << "[AssetSpawnPlanner] Missing or non-string 'tag' field when resolving asset.\n";
+        tag.clear();
+    }
 
     std::vector<std::string> matches;
     for (const auto& [name, info] : asset_library_->all()) {
