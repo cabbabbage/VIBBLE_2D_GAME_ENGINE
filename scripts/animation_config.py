@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 # main_canvas.py
-# Main canvas + app that uses nodes.py (AnimationModal, MapModal)
-# - Place this file alongside nodes.py inside your SRC root (where asset folders live).
+# Main canvas + app that uses in-canvas nodes (AnimationNode, MapperNode)
+# - Place this file alongside the node modules inside your SRC root (where asset folders live).
 # - Lists every subfolder containing info.json.
 # - On selection, loads/creates animations + mappings sections, builds nodes.
 # - Drag nodes, connect Animation → Mapping by clicking ports.
-# - Edits inside each node’s modal auto-save back to info.json.
+# - Edits inside each node update info.json immediately.
 #
 # Requirements: Python 3.x stdlib only (tkinter)
 
@@ -19,7 +19,8 @@ import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 
 # local nodes
-from nodes import AnimationModal, MapModal
+from animation_node import AnimationNode
+from mapper_node import MapperNode
 
 # ------------------------- JSON helpers -------------------------
 
@@ -43,9 +44,9 @@ class GraphCanvas(tk.Canvas):
     """Canvas that hosts nodes and draws edges between them."""
     def __init__(self, master, **kwargs):
         super().__init__(master, bg="#2d3436", highlightthickness=0, **kwargs)
-        self.nodes: Dict[str, object] = {}  # id -> AnimationModal | MapModal
-        self.anim_nodes: Dict[str, AnimationModal] = {}
-        self.map_nodes: Dict[str, MapModal] = {}
+        self.nodes: Dict[str, object] = {}  # id -> AnimationNode | MapperNode
+        self.anim_nodes: Dict[str, AnimationNode] = {}
+        self.map_nodes: Dict[str, MapperNode] = {}
         self.edges: List[Tuple[str, str]] = []  # (anim_name, mapping_id)
 
         # connection state
@@ -63,8 +64,8 @@ class GraphCanvas(tk.Canvas):
         self.edges.clear()
         self.pending_from_anim = None
 
-    def add_anim_node(self, anim_name: str, payload: Dict[str, Any], x: int, y: int) -> AnimationModal:
-        node = AnimationModal(self, anim_name, payload, x=x, y=y)
+    def add_anim_node(self, anim_name: str, payload: Dict[str, Any], x: int, y: int) -> AnimationNode:
+        node = AnimationNode(self, anim_name, payload, x=x, y=y)
         node.on_begin_connect = self._begin_connect_from_anim
         node.on_changed = self._on_node_changed
         node.on_moved = lambda _id, _x, _y: self.redraw_edges()
@@ -72,8 +73,8 @@ class GraphCanvas(tk.Canvas):
         self.anim_nodes[anim_name] = node
         return node
 
-    def add_map_node(self, mapping_id: str, payload: List[Dict[str, Any]], x: int, y: int) -> MapModal:
-        node = MapModal(self, mapping_id, payload, x=x, y=y)
+    def add_map_node(self, mapping_id: str, payload: List[Dict[str, Any]], x: int, y: int) -> MapperNode:
+        node = MapperNode(self, mapping_id, payload, x=x, y=y)
         node.on_end_connect = self._end_connect_to_map
         node.on_changed = self._on_node_changed
         node.on_moved = lambda _id, _x, _y: self.redraw_edges()
