@@ -182,7 +182,8 @@ void AssetInfoUI::handle_event(const SDL_Event& e) {
     if (b_config_anim_ && b_config_anim_->handle_event(e)) {
         save_now();
         std::string path = "SRC/" + info_->name + "/info.json";
-        std::string cmd = "python3 scripts/main.py \"" + path + "\"";
+        std::string cmd = "python3 scripts/animation_ui.py \"" + path + "\"";
+
         std::system(cmd.c_str());
         return;
     }

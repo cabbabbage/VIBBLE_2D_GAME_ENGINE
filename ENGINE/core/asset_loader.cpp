@@ -390,9 +390,15 @@ void AssetLoader::load_map_json() {
             rs.name = R.value("name", "unnamed");
             rs.min_instances = R.value("min_instances", 1);
             rs.max_instances = R.value("max_instances", 1);
-            if (R.contains("required_children")) {
-                for (const auto& c : R["required_children"])
-                    rs.required_children.push_back(c.get<std::string>());
+            if (R.contains("required_children") && R["required_children"].is_array()) {
+                for (const auto& c : R["required_children"]) {
+                    if (c.is_string()) {
+                        rs.required_children.push_back(c.get<std::string>());
+                    } else {
+                        std::cerr << "[AssetLoader] Room '" << rs.name
+                                  << "' has non-string entry in 'required_children'; skipping.\n";
+                    }
+                }
             }
             spec.rooms.push_back(std::move(rs));
         }
