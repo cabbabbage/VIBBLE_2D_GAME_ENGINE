@@ -10,8 +10,8 @@
   "animations": {
     "default": {
       "source": {
-        "kind": "folder",
-        "path": "default",
+        "kind": "animation",
+        "path": "",
         "name": null
       },
       "flipped_source": false,
@@ -30,6 +30,25 @@
         ]
       ],
       "on_end_mapping": "015acce1"
+    },
+    "new_anim": {
+      "source": {
+        "kind": "folder",
+        "path": "new_anim",
+        "name": null
+      },
+      "flipped_source": false,
+      "reverse_source": false,
+      "locked": false,
+      "speed_factor": 1,
+      "number_of_frames": 1,
+      "movement": [
+        [
+          0,
+          0
+        ]
+      ],
+      "on_end_mapping": ""
     }
   },
   "tags": [
@@ -1934,6 +1953,23 @@
           "options": [
             {
               "animation": "default",
+              "percent": 100
+            },
+            {
+              "animation": "idle",
+              "percent": 0
+            }
+          ]
+        }
+      }
+    ],
+    "2ab4b45a": [
+      {
+        "condition": "",
+        "map_to": {
+          "options": [
+            {
+              "animation": "idle",
               "percent": 100
             }
           ]
