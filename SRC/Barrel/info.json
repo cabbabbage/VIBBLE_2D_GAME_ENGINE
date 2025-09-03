@@ -8,34 +8,53 @@
   "max_child_depth": 2,
   "animations": {
     "default": {
-      "frames_path": "default",
-      "speed": 1.0,
-      "on_end": "default",
-      "event_data": [],
-      "randomize": false,
-      "audio_path": "",
-      "volume": 50
+      "source": {
+        "kind": "folder",
+        "path": "default",
+        "name": null
+      },
+      "flipped_source": false,
+      "reverse_source": false,
+      "locked": false,
+      "speed_factor": 1,
+      "number_of_frames": 2,
+      "movement": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ]
+      ],
+      "on_end_mapping": "fad797da"
     },
     "collision": {
-      "frames_path": "collision",
-      "speed": 1.0,
-      "on_end": "default",
-      "event_data": [],
-      "randomize": false,
-      "audio_path": "",
-      "volume": 50,
+      "source": {
+        "kind": "folder",
+        "path": "collision",
+        "name": null
+      },
+      "flipped_source": false,
+      "reverse_source": false,
+      "locked": false,
+      "speed_factor": 1,
+      "number_of_frames": 2,
+      "movement": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ]
+      ],
+      "on_end_mapping": "cd225d64",
       "area_name": "collision_area"
     }
   },
-  "available_animations": [
-    "frames_path",
-    "speed",
-    "on_end",
-    "event_data",
-    "randomize",
-    "audio_path",
-    "volume"
-  ],
   "tags": [
     "default",
     "wood",
@@ -3001,5 +3020,33 @@
       "offset_x": 0,
       "offset_y": 0
     }
-  ]
+  ],
+  "mappings": {
+    "fad797da": [
+      {
+        "condition": "",
+        "map_to": {
+          "options": [
+            {
+              "animation": "default",
+              "percent": 100
+            }
+          ]
+        }
+      }
+    ],
+    "cd225d64": [
+      {
+        "condition": "",
+        "map_to": {
+          "options": [
+            {
+              "animation": "default",
+              "percent": 100
+            }
+          ]
+        }
+      }
+    ]
+  }
 }

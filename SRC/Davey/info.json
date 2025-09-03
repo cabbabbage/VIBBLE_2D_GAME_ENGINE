@@ -4,49 +4,387 @@
   "asset_type": "Player",
   "animations": {
     "default": {
-      "frames_path": "default",
-      "on_end": "default",
-      "event_data": [],
-      "randomize": false,
-      "audio_path": "",
-      "volume": 50,
-      "lock_until_done": false
+      "source": {
+        "kind": "folder",
+        "path": "default",
+        "name": null
+      },
+      "flipped_source": false,
+      "reverse_source": false,
+      "locked": false,
+      "speed_factor": 1,
+      "number_of_frames": 25,
+      "movement": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ]
+      ],
+      "on_end_mapping": "9770dc59"
     },
     "right": {
-      "frames_path": "right",
-      "on_end": "right",
-      "event_data": [],
-      "randomize": false,
-      "audio_path": "",
-      "volume": 50,
-      "lock_until_done": false
+      "source": {
+        "kind": "folder",
+        "path": "right",
+        "name": null
+      },
+      "flipped_source": false,
+      "reverse_source": false,
+      "locked": false,
+      "speed_factor": 1,
+      "number_of_frames": 13,
+      "movement": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ]
+      ],
+      "on_end_mapping": "671fd1cf"
     },
     "backward": {
-      "frames_path": "backward",
-      "on_end": "backward",
-      "event_data": [],
-      "randomize": false,
-      "audio_path": "",
-      "volume": 50,
-      "lock_until_done": false
+      "source": {
+        "kind": "folder",
+        "path": "backward",
+        "name": null
+      },
+      "flipped_source": false,
+      "reverse_source": false,
+      "locked": false,
+      "speed_factor": 1,
+      "number_of_frames": 13,
+      "movement": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ]
+      ],
+      "on_end_mapping": "5657dfe4"
     },
     "forward": {
-      "frames_path": "forward",
-      "on_end": "forward",
-      "event_data": [],
-      "randomize": false,
-      "audio_path": "",
-      "volume": 50,
-      "lock_until_done": false
+      "source": {
+        "kind": "folder",
+        "path": "forward",
+        "name": null
+      },
+      "flipped_source": false,
+      "reverse_source": false,
+      "locked": false,
+      "speed_factor": 1,
+      "number_of_frames": 13,
+      "movement": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ]
+      ],
+      "on_end_mapping": "76b46430"
     },
     "left": {
-      "frames_path": "left",
-      "on_end": "left",
-      "event_data": [],
-      "randomize": false,
-      "audio_path": "",
-      "volume": 50,
-      "lock_until_done": false
+      "source": {
+        "kind": "folder",
+        "path": "left",
+        "name": null
+      },
+      "flipped_source": false,
+      "reverse_source": false,
+      "locked": false,
+      "speed_factor": 1,
+      "number_of_frames": 13,
+      "movement": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ]
+      ],
+      "on_end_mapping": "846c131e"
     }
   },
   "z_threshold": 43,
@@ -883,5 +1221,72 @@
       "offset_x": 0,
       "offset_y": 0
     }
-  ]
+  ],
+  "mappings": {
+    "9770dc59": [
+      {
+        "condition": "",
+        "map_to": {
+          "options": [
+            {
+              "animation": "default",
+              "percent": 100
+            }
+          ]
+        }
+      }
+    ],
+    "671fd1cf": [
+      {
+        "condition": "",
+        "map_to": {
+          "options": [
+            {
+              "animation": "right",
+              "percent": 100
+            }
+          ]
+        }
+      }
+    ],
+    "5657dfe4": [
+      {
+        "condition": "",
+        "map_to": {
+          "options": [
+            {
+              "animation": "backward",
+              "percent": 100
+            }
+          ]
+        }
+      }
+    ],
+    "76b46430": [
+      {
+        "condition": "",
+        "map_to": {
+          "options": [
+            {
+              "animation": "forward",
+              "percent": 100
+            }
+          ]
+        }
+      }
+    ],
+    "846c131e": [
+      {
+        "condition": "",
+        "map_to": {
+          "options": [
+            {
+              "animation": "left",
+              "percent": 100
+            }
+          ]
+        }
+      }
+    ]
+  }
 }

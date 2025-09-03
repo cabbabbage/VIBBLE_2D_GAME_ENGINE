@@ -3,12 +3,27 @@
   "asset_type": "Object",
   "animations": {
     "default": {
-      "frames_path": "default",
-      "speed": 1.0,
-      "on_end": "default",
-      "randomize": false,
-      "audio_path": "",
-      "volume": 50
+      "source": {
+        "kind": "folder",
+        "path": "default",
+        "name": null
+      },
+      "flipped_source": false,
+      "reverse_source": false,
+      "locked": false,
+      "speed_factor": 1,
+      "number_of_frames": 2,
+      "movement": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ]
+      ],
+      "on_end_mapping": "a909b36a"
     }
   },
   "impassable_area": null,
@@ -629,5 +644,20 @@
       "offset_x": 0,
       "offset_y": 0
     }
-  ]
+  ],
+  "mappings": {
+    "a909b36a": [
+      {
+        "condition": "",
+        "map_to": {
+          "options": [
+            {
+              "animation": "default",
+              "percent": 100
+            }
+          ]
+        }
+      }
+    ]
+  }
 }
