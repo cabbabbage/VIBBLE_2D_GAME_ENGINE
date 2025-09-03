@@ -64,5 +64,9 @@ private:
 
     // Cached panel rect (computed per frame)
     mutable SDL_Rect panel_ {0,0,0,0};
+
+    // Last known screen dimensions for event-driven layout
+    mutable int last_screen_w_ = 0;
+    mutable int last_screen_h_ = 0;
 };
 

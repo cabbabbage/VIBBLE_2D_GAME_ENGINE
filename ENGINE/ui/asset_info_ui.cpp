@@ -160,6 +160,9 @@ void AssetInfoUI::update(const Input& input, int screen_w, int screen_h) {
     if (!visible_) return;
     if (!info_) return;
 
+    // Cache dimensions for event-driven layout and position widgets
+    last_screen_w_ = screen_w;
+    last_screen_h_ = screen_h;
     layout_widgets(screen_w, screen_h);
 
     // Scroll only when mouse within panel
@@ -176,6 +179,9 @@ void AssetInfoUI::update(const Input& input, int screen_w, int screen_h) {
 
 void AssetInfoUI::handle_event(const SDL_Event& e) {
     if (!visible_ || !info_) return;
+
+    // Ensure widgets have valid rectangles before hit-testing
+    layout_widgets(last_screen_w_, last_screen_h_);
     if (b_close_ && b_close_->handle_event(e)) {
         return; // close() already called in button callback
     }
@@ -187,9 +193,6 @@ void AssetInfoUI::handle_event(const SDL_Event& e) {
         return;
     }
     bool changed = false;
-
-    // Ensure layout is up-to-date before hit-testing
-    // (Caller should have called update() earlier this frame.)
 
     // Manage exclusive focus for text boxes on mouse down
     if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
@@ -269,6 +272,10 @@ void AssetInfoUI::handle_event(const SDL_Event& e) {
 
 void AssetInfoUI::render(SDL_Renderer* r, int screen_w, int screen_h) const {
     if (!visible_ || !info_) return;
+
+    // Cache dimensions in case events arrive before the next update
+    last_screen_w_ = screen_w;
+    last_screen_h_ = screen_h;
     layout_widgets(screen_w, screen_h);
 
     SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
