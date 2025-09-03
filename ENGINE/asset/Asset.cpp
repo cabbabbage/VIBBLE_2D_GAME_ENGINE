@@ -65,6 +65,7 @@ void Asset::finalize_setup() {
             current_animation = it->first;
             Animation& anim = it->second;
             anim.change(current_frame_index, static_frame);
+            frame_progress = 0.0f;
             if (anim.randomize && anim.frames.size() > 1) {
                 std::mt19937 rng{ std::random_device{}() };
                 std::uniform_int_distribution<int> dist(0, int(anim.frames.size()) - 1);
@@ -147,6 +148,7 @@ void Asset::update() {
                 Animation& anim = nit->second;
                 static_frame = (static_cast<int>(anim.frames.size()) <= 1);
                 current_frame_index = 0;
+                frame_progress = 0.0f;
             }
             next_animation.clear();
         }
@@ -158,12 +160,16 @@ void Asset::update() {
 
     
     if (!static_frame) {
-        std::string auto_transition;
-        bool advanced = anim.advance(current_frame_index, auto_transition);
-        if (!advanced && !auto_transition.empty() &&
-            info->animations.count(auto_transition))
-        {
-            next_animation = auto_transition;
+        std::string mapping_id;
+        int dx = 0, dy = 0;
+        bool advanced = anim.advance(current_frame_index, frame_progress, dx, dy, mapping_id);
+        pos_X += dx;
+        pos_Y += dy;
+        if (!advanced && !mapping_id.empty()) {
+            std::string resolved = info->pick_next_animation(mapping_id);
+            if (!resolved.empty() && info->animations.count(resolved)) {
+                next_animation = resolved;
+            }
         }
     }
 

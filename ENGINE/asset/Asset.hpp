@@ -127,6 +127,7 @@ private:
     bool selected = false;
     std::string next_animation;
     int current_frame_index = 0;
+    float frame_progress = 0.0f;
     int shading_group = 0;
     bool shading_group_set = false;
 

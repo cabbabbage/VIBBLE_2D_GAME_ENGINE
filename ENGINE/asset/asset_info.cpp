@@ -8,6 +8,7 @@
 #include <iomanip>
 #include <iostream>
 #include <sstream>
+#include <random>
 
 AssetInfo::AssetInfo(const std::string &asset_folder_name)
     : has_light_source(false) {
@@ -35,8 +36,62 @@ AssetInfo::AssetInfo(const std::string &asset_folder_name)
     }
   }
 
-  if (data.contains("animations")) {
-    anims_json_ = data["animations"];
+  if (data.contains("animations") && data["animations"].is_object()) {
+    nlohmann::json new_anim = nlohmann::json::object();
+    for (auto it = data["animations"].begin(); it != data["animations"].end(); ++it) {
+      const std::string trig = it.key();
+      const auto& anim_json = it.value();
+      nlohmann::json converted = anim_json;
+      if (!anim_json.contains("source")) {
+        converted["source"] = {
+          {"kind", "folder"},
+          {"path", anim_json.value("frames_path", trig)}
+        };
+        converted["locked"] = anim_json.value("lock_until_done", false);
+        converted["speed_factor"] = anim_json.value("speed", 1.0f);
+        std::string on_end = anim_json.value("on_end", "");
+        if (!on_end.empty()) {
+          std::string mapping_id = trig + "_auto";
+          converted["on_end_mapping"] = mapping_id;
+          MappingOption opt{on_end, 100.0f};
+          MappingEntry entry{"", {opt}};
+          mappings[mapping_id] = {entry};
+          info_json_["mappings"][mapping_id] = nlohmann::json::array({{
+            {"condition", ""},
+            {"map_to", { {"options", nlohmann::json::array({{{"animation", on_end}, {"percent", 100.0}}}) }}
+          }}});
+        }
+        converted.erase("frames_path");
+        converted.erase("on_end");
+        converted.erase("lock_until_done");
+        converted.erase("speed");
+      }
+      new_anim[trig] = converted;
+    }
+    anims_json_ = new_anim;
+    info_json_["animations"] = new_anim;
+  }
+
+  if (data.contains("mappings") && data["mappings"].is_object()) {
+    for (auto it = data["mappings"].begin(); it != data["mappings"].end(); ++it) {
+      const std::string id = it.key();
+      Mapping map;
+      if (it.value().is_array()) {
+        for (const auto& entry_json : it.value()) {
+          MappingEntry me;
+          me.condition = entry_json.value("condition", "");
+          if (entry_json.contains("map_to") && entry_json["map_to"].contains("options")) {
+            for (const auto& opt_json : entry_json["map_to"]["options"]) {
+              MappingOption opt{opt_json.value("animation", ""), opt_json.value("percent", 100.0f)};
+              me.options.push_back(opt);
+            }
+          }
+          map.push_back(me);
+        }
+      }
+      mappings[id] = map;
+    }
+    info_json_["mappings"] = data["mappings"];
   }
 
   load_base_properties(data);
@@ -197,6 +252,29 @@ Area* AssetInfo::find_area(const std::string& name) {
     if (na.name == name) return na.area.get();
   }
   return nullptr;
+}
+
+std::string AssetInfo::pick_next_animation(const std::string& mapping_id) const {
+  auto it = mappings.find(mapping_id);
+  if (it == mappings.end()) return {};
+  static std::mt19937 rng{std::random_device{}()};
+  for (const auto& entry : it->second) {
+    // Stub condition evaluator: treat empty or "true" as true
+    if (!entry.condition.empty() && entry.condition != "true") continue;
+    float total = 0.0f;
+    for (const auto& opt : entry.options) {
+      total += opt.percent;
+    }
+    if (total <= 0.0f) continue;
+    std::uniform_real_distribution<float> dist(0.0f, total);
+    float r = dist(rng);
+    for (const auto& opt : entry.options) {
+      if ((r -= opt.percent) <= 0.0f) {
+        return opt.animation;
+      }
+    }
+  }
+  return {};
 }
 
 void AssetInfo::load_areas(const nlohmann::json& data, float scale, int offset_x,
