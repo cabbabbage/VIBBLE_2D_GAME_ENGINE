@@ -3,7 +3,7 @@
 
 This tool expects a path to an ``info.json`` file describing the asset.
 It opens a Tk application that lets the user edit animation and mapping
-entries by dragging nodes and editing their properties in modal dialogs.
+entries by dragging nodes and editing their properties directly on the canvas.
 """
 
 from __future__ import annotations
@@ -15,8 +15,8 @@ from typing import Dict, Any, List, Tuple, Optional
 import tkinter as tk
 from tkinter import ttk, messagebox
 
-from animation_modal import AnimationModal
-from map_modal import MapModal
+from animation_node import AnimationNode
+from mapper_node import MapperNode
 
 
 def read_json(p: Path) -> Dict[str, Any]:
@@ -42,8 +42,8 @@ class GraphCanvas(tk.Canvas):
     def __init__(self, master, **kwargs):
         super().__init__(master, bg="#2d3436", highlightthickness=0, **kwargs)
         self.nodes: Dict[str, object] = {}
-        self.anim_nodes: Dict[str, AnimationModal] = {}
-        self.map_nodes: Dict[str, MapModal] = {}
+        self.anim_nodes: Dict[str, AnimationNode] = {}
+        self.map_nodes: Dict[str, MapperNode] = {}
         self.edges: List[Tuple[str, str]] = []
 
         # connection state
@@ -60,8 +60,8 @@ class GraphCanvas(tk.Canvas):
         self.edges.clear()
         self.pending_from_anim = None
 
-    def add_anim_node(self, anim_name: str, payload: Dict[str, Any], x: int, y: int) -> AnimationModal:
-        node = AnimationModal(self, anim_name, payload, x=x, y=y)
+    def add_anim_node(self, anim_name: str, payload: Dict[str, Any], x: int, y: int) -> AnimationNode:
+        node = AnimationNode(self, anim_name, payload, x=x, y=y)
         node.on_begin_connect = self._begin_connect_from_anim
         node.on_changed = self._on_node_changed
         node.on_moved = lambda _id, _x, _y: self.redraw_edges()
@@ -69,8 +69,8 @@ class GraphCanvas(tk.Canvas):
         self.anim_nodes[anim_name] = node
         return node
 
-    def add_map_node(self, mapping_id: str, payload: List[Dict[str, Any]], x: int, y: int) -> MapModal:
-        node = MapModal(self, mapping_id, payload, x=x, y=y)
+    def add_map_node(self, mapping_id: str, payload: List[Dict[str, Any]], x: int, y: int) -> MapperNode:
+        node = MapperNode(self, mapping_id, payload, x=x, y=y)
         node.on_end_connect = self._end_connect_to_map
         node.on_changed = self._on_node_changed
         node.on_moved = lambda _id, _x, _y: self.redraw_edges()
