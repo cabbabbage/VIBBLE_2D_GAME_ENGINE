@@ -28,12 +28,13 @@ void AnimationLoader::load(AssetInfo& info, SDL_Renderer* renderer) {
     for (auto it = info.anims_json_.begin(); it != info.anims_json_.end(); ++it) {
         const std::string& trigger = it.key();
         const auto& anim_json = it.value();
-        if (anim_json.is_null() || !anim_json.contains("frames_path"))
+        if (anim_json.is_null())
             continue;
 
         Animation anim;
         anim.load(trigger,
                   anim_json,
+                  info,
                   info.dir_path_,
                   root_cache,
                   info.scale_factor,

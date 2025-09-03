@@ -14,6 +14,18 @@ struct ChildInfo {
   int z_offset;
 };
 
+struct MappingOption {
+  std::string animation;
+  float percent;
+};
+
+struct MappingEntry {
+  std::string condition;
+  std::vector<MappingOption> options;
+};
+
+using Mapping = std::vector<MappingEntry>;
+
 class AssetInfo {
 public:
   AssetInfo(const std::string &asset_folder_name);
@@ -47,6 +59,7 @@ public:
   std::vector<NamedArea> areas;
 
   std::map<std::string, Animation> animations;
+  std::map<std::string, Mapping> mappings;
 
   std::vector<ChildInfo> children;
 
@@ -73,6 +86,8 @@ public:
   void set_passable(bool v);
 
   Area* find_area(const std::string& name);
+
+  std::string pick_next_animation(const std::string& mapping_id) const;
 
 private:
   void load_base_properties(const nlohmann::json &data);
