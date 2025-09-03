@@ -1,7 +1,10 @@
 # animation_modal.py
+import os
 import tkinter as tk
-from tkinter import ttk
+from tkinter import filedialog, ttk
 from typing import Any, Callable, Dict, List, Optional, Tuple
+
+from PIL import Image, ImageTk
 
 class _BaseNode:
     def __init__(self, canvas: tk.Canvas, node_id: str, title: str, x: int = 50, y: int = 50, width: int = 220, height: int = 80):
@@ -120,7 +123,7 @@ class AnimationModal(_BaseNode):
             self._dlg.lift(); return
         self._dlg = tk.Toplevel(self.canvas)
         self._dlg.title(f"Animation: {self.node_id}")
-        self._dlg.geometry("420x520")
+        self._dlg.geometry("420x620")
         frm = ttk.Frame(self._dlg); frm.pack(fill="both", expand=True, padx=8, pady=8)
         sf = ttk.LabelFrame(frm, text="Source"); sf.pack(fill="x", pady=6)
         kind = tk.StringVar(value=self.payload["source"]["kind"])
@@ -129,9 +132,46 @@ class AnimationModal(_BaseNode):
         ttk.Label(sf, text="path").grid(row=1, column=0, sticky="e")
         path_var = tk.StringVar(value=self.payload["source"].get("path") or "")
         ttk.Entry(sf, textvariable=path_var, width=32).grid(row=1, column=1, sticky="w", padx=4)
+        def select_folder():
+            d = filedialog.askdirectory(parent=self._dlg)
+            if d:
+                path_var.set(d)
+        browse_btn = ttk.Button(sf, text="Browse...", command=select_folder)
+        browse_btn.grid(row=1, column=2, sticky="w")
         ttk.Label(sf, text="name").grid(row=2, column=0, sticky="e")
         name_var = tk.StringVar(value=self.payload["source"].get("name") or "")
         ttk.Entry(sf, textvariable=name_var, width=32).grid(row=2, column=1, sticky="w", padx=4)
+
+        pvf = ttk.LabelFrame(frm, text="Preview"); pvf.pack(fill="both", pady=6)
+        img_label = ttk.Label(pvf)
+        img_label.pack()
+
+        def update_preview():
+            img_label.config(image="", text="No preview")
+            img_label.image = None
+            if kind.get() == "folder":
+                folder = path_var.get()
+                if folder and os.path.isdir(folder):
+                    for fname in sorted(os.listdir(folder)):
+                        if fname.lower().endswith((".png", ".jpg", ".jpeg", ".gif")):
+                            fp = os.path.join(folder, fname)
+                            try:
+                                im = Image.open(fp)
+                                im.thumbnail((256, 256), Image.LANCZOS)
+                                tkimg = ImageTk.PhotoImage(im)
+                                img_label.config(image=tkimg, text="")
+                                img_label.image = tkimg
+                            except Exception:
+                                pass
+                            break
+
+        def update_kind(*_):
+            browse_btn["state"] = "normal" if kind.get() == "folder" else "disabled"
+            update_preview()
+
+        kind.trace_add("write", update_kind)
+        path_var.trace_add("write", lambda *_: update_preview())
+        update_kind()
         pf = ttk.LabelFrame(frm, text="Playback"); pf.pack(fill="x", pady=6)
         flipped = tk.BooleanVar(value=bool(self.payload.get("flipped_source", False)))
         reversed_ = tk.BooleanVar(value=bool(self.payload.get("reverse_source", False)))
