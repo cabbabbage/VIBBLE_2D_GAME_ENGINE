@@ -4,6 +4,7 @@
 #include <sstream>
 #include <cmath>
 #include <vector>
+#include <cstdlib>
 
 #include "utils/input.hpp"
 #include "asset/asset_info.hpp"
@@ -42,6 +43,7 @@ void AssetInfoUI::clear_info() {
     c_flipable_.reset();
     t_type_.reset();
     t_tags_.reset();
+    b_config_anim_.reset();
 }
 
 void AssetInfoUI::open()  { visible_ = true; }
@@ -69,6 +71,13 @@ void AssetInfoUI::build_widgets() {
     std::ostringstream oss;
     for (size_t i=0;i<info_->tags.size();++i) { oss << info_->tags[i]; if (i+1<info_->tags.size()) oss << ", "; }
     t_tags_  = std::make_unique<TextBox>("Tags (comma)", oss.str());
+
+    b_config_anim_ = std::make_unique<Button>(
+        "Configure Animations",
+        &Styles::MainDecoButton(),
+        260,
+        Button::height()
+    );
 
     b_close_ = std::make_unique<Button>(
         "Close",
@@ -124,7 +133,16 @@ void AssetInfoUI::layout_widgets(int screen_w, int screen_h) const {
         y += 10 + Slider::height() + 8;
     }
 
-        if (b_close_) {
+    if (b_config_anim_) {
+        int btn_w = 260;
+        int btn_h = Button::height();
+        b_config_anim_->set_rect(SDL_Rect{
+            panel_.x + 16,
+            panel_.y + panel_.h - btn_h - 16,
+            btn_w, btn_h
+        });
+    }
+    if (b_close_) {
         int btn_w = 100;
         int btn_h = Button::height();
         b_close_->set_rect(SDL_Rect{
@@ -160,6 +178,13 @@ void AssetInfoUI::handle_event(const SDL_Event& e) {
     if (!visible_ || !info_) return;
     if (b_close_ && b_close_->handle_event(e)) {
         return; // close() already called in button callback
+    }
+    if (b_config_anim_ && b_config_anim_->handle_event(e)) {
+        save_now();
+        std::string path = "SRC/" + info_->name + "/info.json";
+        std::string cmd = "python3 scripts/main.py \"" + path + "\"";
+        std::system(cmd.c_str());
+        return;
     }
     bool changed = false;
 
@@ -293,6 +318,9 @@ void AssetInfoUI::render(SDL_Renderer* r, int screen_w, int screen_h) const {
     int flagsHeaderY = (c_passable_ ? c_passable_->rect().y - 24 + scroll_ : panel_.y + 520);
     draw_header("Flags", flagsHeaderY);
     if (c_passable_) c_passable_->render(r);
+
+    if (b_config_anim_) b_config_anim_->render(r);
+    if (b_close_)        b_close_->render(r);
 }
 
 void AssetInfoUI::save_now() const {

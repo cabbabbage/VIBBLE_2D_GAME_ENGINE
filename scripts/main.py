@@ -1,7 +1,14 @@
 #!/usr/bin/env python3
-# main_animation_config.py
+"""Standalone editor for an asset's animations and mappings.
+
+This tool expects a path to an ``info.json`` file describing the asset.
+It opens a Tk application that lets the user edit animation and mapping
+entries by dragging nodes and editing their properties in modal dialogs.
+"""
+
 from __future__ import annotations
 import json
+import sys
 from pathlib import Path
 from typing import Dict, Any, List, Tuple, Optional
 
@@ -11,13 +18,16 @@ from tkinter import ttk, messagebox
 from animation_modal import AnimationModal
 from map_modal import MapModal
 
+
 def read_json(p: Path) -> Dict[str, Any]:
     with p.open("r", encoding="utf-8") as f:
         return json.load(f)
 
+
 def write_json(p: Path, data: Dict[str, Any]) -> None:
     with p.open("w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
+
 
 def ensure_sections(d: Dict[str, Any]) -> None:
     if "animations" not in d or not isinstance(d["animations"], dict):
@@ -25,14 +35,21 @@ def ensure_sections(d: Dict[str, Any]) -> None:
     if "mappings" not in d or not isinstance(d["mappings"], dict):
         d["mappings"] = {}
 
+
 class GraphCanvas(tk.Canvas):
+    """Canvas that hosts nodes and draws edges between them."""
+
     def __init__(self, master, **kwargs):
         super().__init__(master, bg="#2d3436", highlightthickness=0, **kwargs)
         self.nodes: Dict[str, object] = {}
         self.anim_nodes: Dict[str, AnimationModal] = {}
         self.map_nodes: Dict[str, MapModal] = {}
         self.edges: List[Tuple[str, str]] = []
+
+        # connection state
         self.pending_from_anim: Optional[str] = None
+
+        # redraw on size change
         self.bind("<Configure>", lambda _e: self.redraw_edges())
 
     def clear(self):
@@ -76,8 +93,10 @@ class GraphCanvas(tk.Canvas):
 
     def _begin_connect_from_anim(self, anim_id: str):
         self.pending_from_anim = anim_id
+        # visual hint around mapping nodes
         for n in self.map_nodes.values():
-            self.create_rectangle(n.x, n.y, n.x + n.w, n.y + n.h, outline="#f5cd79", width=2, tags=("hint",))
+            self.create_rectangle(n.x, n.y, n.x + n.w, n.y + n.h,
+                                 outline="#f5cd79", width=2, tags=("hint",))
         self.after(500, lambda: self.delete("hint"))
 
     def _end_connect_to_map(self, mapping_id: str):
@@ -87,6 +106,7 @@ class GraphCanvas(tk.Canvas):
         self.pending_from_anim = None
 
     def redraw_edges(self):
+        # remove previous edges
         self.delete("edge")
         for anim_name, mid in self.edges:
             an = self.anim_nodes.get(anim_name)
@@ -97,71 +117,51 @@ class GraphCanvas(tk.Canvas):
             mx, my = mn.input_port_center()
             if not (ax and mx):
                 continue
-            self.create_line(ax, ay, mx, my, fill="#dcdde1", width=2, arrow=tk.LAST, tags=("edge",))
+            self.create_line(ax, ay, mx, my, fill="#dcdde1", width=2,
+                             arrow=tk.LAST, tags=("edge",))
 
     def _on_node_changed(self, node_id: str, payload: Dict[str, Any]):
         self.event_generate("<<NodeChanged>>", data=node_id)
 
+
 class AnimationConfiguratorApp:
-    def __init__(self, root_dir: Path):
-        self.root_dir = root_dir
-        self.assets: List[Tuple[str, Path]] = []
+    """Tk application for editing a single ``info.json`` file."""
+
+    def __init__(self, info_path: Path):
+        self.info_path = info_path
         self.data: Optional[Dict[str, Any]] = None
-        self.info_path: Optional[Path] = None
 
         self.win = tk.Tk()
         self.win.title("Animation & Mapping Configurator")
         self.win.geometry("1280x760")
 
-        left = ttk.Frame(self.win); left.pack(side="left", fill="y")
-        ttk.Label(left, text="Assets (with info.json)").pack(anchor="w", padx=8, pady=6)
-        self.asset_list = tk.Listbox(left, width=36, height=28)
-        self.asset_list.pack(fill="y", padx=8, pady=4)
-        self.asset_list.bind("<<ListboxSelect>>", self.on_select_asset)
+        # Load data after creating the window so messageboxes work
+        try:
+            self.data = read_json(self.info_path)
+        except Exception as e:
+            messagebox.showerror("Load error", f"Failed to read {self.info_path}:\n{e}")
+            self.win.destroy()
+            raise
 
-        act = ttk.Frame(left); act.pack(fill="x", padx=8, pady=6)
+        ensure_sections(self.data)
+
+        act = ttk.Frame(self.win)
+        act.pack(side="top", fill="x", padx=8, pady=6)
         ttk.Button(act, text="New Animation", command=self.create_animation).pack(side="left", padx=2)
         ttk.Button(act, text="New Mapping", command=self.create_mapping).pack(side="left", padx=2)
         ttk.Button(act, text="Save", command=self.save_current).pack(side="right", padx=2)
 
-        center = ttk.Frame(self.win); center.pack(side="left", fill="both", expand=True)
-        self.canvas = GraphCanvas(center)
+        self.canvas = GraphCanvas(self.win)
         self.canvas.pack(fill="both", expand=True)
 
         self.canvas.bind("<<GraphConnect>>", self.on_graph_connect)
         self.canvas.bind("<<NodeChanged>>", self.on_node_changed)
 
-        self.status = tk.StringVar(value="Select an asset on the left.")
-        status_bar = ttk.Label(self.win, textvariable=self.status, relief=tk.SUNKEN, anchor="w")
+        self.status = tk.StringVar(value=f"Loaded {self.info_path}")
+        status_bar = ttk.Label(self.win, textvariable=self.status,
+                               relief=tk.SUNKEN, anchor="w")
         status_bar.pack(side="bottom", fill="x")
 
-        self.scan_assets()
-
-    def scan_assets(self):
-        self.assets.clear()
-        self.asset_list.delete(0, tk.END)
-        for child in sorted(self.root_dir.iterdir()):
-            if not child.is_dir():
-                continue
-            info = child / "info.json"
-            if info.exists():
-                self.assets.append((child.name, info))
-                self.asset_list.insert(tk.END, child.name)
-
-    def on_select_asset(self, _e=None):
-        sel = self.asset_list.curselection()
-        if not sel:
-            return
-        idx = sel[0]
-        _, path = self.assets[idx]
-        try:
-            self.data = read_json(path)
-        except Exception as e:
-            messagebox.showerror("Load error", f"Failed to read {path}:\n{e}")
-            return
-        self.info_path = path
-        ensure_sections(self.data)
-        self.status.set(f"Loaded {path}")
         self.rebuild_graph()
 
     def save_current(self):
@@ -193,7 +193,7 @@ class AnimationConfiguratorApp:
         self.canvas.set_edges_from_data(self.data)
         self.canvas.redraw_edges()
 
-    def on_node_changed(self, event):
+    def on_node_changed(self, _event):
         if not (self.data and self.info_path):
             return
         for aid, node in self.canvas.anim_nodes.items():
@@ -239,7 +239,7 @@ class AnimationConfiguratorApp:
             "speed_factor": 1,
             "number_of_frames": 1,
             "movement": [[0, 0]],
-            "on_end_mapping": ""
+            "on_end_mapping": "",
         }
         self.data["animations"][name] = payload
         self.save_current()
@@ -261,7 +261,17 @@ class AnimationConfiguratorApp:
     def run(self):
         self.win.mainloop()
 
-if __name__ == "__main__":
-    here = Path(__file__).parent.resolve()
-    app = AnimationConfiguratorApp(here)
+
+def main(argv: List[str]) -> int:
+    if len(argv) != 2:
+        print("Usage: main.py path/to/info.json")
+        return 1
+    info_path = Path(argv[1]).expanduser().resolve()
+    app = AnimationConfiguratorApp(info_path)
     app.run()
+    return 0
+
+
+if __name__ == "__main__":  # pragma: no cover - GUI entry point
+    raise SystemExit(main(sys.argv))
+
