@@ -106,7 +106,7 @@ SDL_Rect SceneRenderer::get_scaled_position_rect(Asset* a, int fw, int fh,
     return SDL_Rect{ cp.x - sw / 2, cp.y - sh, sw, sh };
 }
 
-void SceneRenderer::render() {
+void SceneRenderer::render(bool present) {
     update_shading_groups();
 
     int px = assets_->player ? assets_->player->pos_X : 0;
@@ -209,5 +209,7 @@ void SceneRenderer::render() {
         assets_->render_overlays(renderer_);
     }
 
-    SDL_RenderPresent(renderer_);
+    if (present) {
+        SDL_RenderPresent(renderer_);
+    }
 }

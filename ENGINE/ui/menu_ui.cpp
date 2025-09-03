@@ -64,17 +64,15 @@ void MenuUI::game_loop() {
                 }
             }
             if (input_) input_->handleEvent(e);
+            if (game_assets_) game_assets_->handle_sdl_event(e);
             if (menu_active_) handle_event(e);
         }
 
-        if (game_assets_ && game_assets_->player) {
-            const int px = game_assets_->player->pos_X;
-            const int py = game_assets_->player->pos_Y;
-            game_assets_->update(*input_, px, py);
-        }
-
-
         if (menu_active_) {
+            if (game_assets_) {
+                game_assets_->update_ui(*input_);
+                if (game_assets_->scene) game_assets_->scene->render(false);
+            }
             update(dev_mode_local_);
             render();
 
@@ -86,9 +84,12 @@ void MenuUI::game_loop() {
                 case MenuAction::SAVE_ROOM:       doSaveCurrentRoom();                   break;
                 default: break;
             }
+            SDL_RenderPresent(renderer_);
+        } else if (game_assets_ && game_assets_->player) {
+            const int px = game_assets_->player->pos_X;
+            const int py = game_assets_->player->pos_Y;
+            game_assets_->update(*input_, px, py);
         }
-
-        if (menu_active_) SDL_RenderPresent(renderer_);
 
         ++frame_count;
         if (input_) input_->update();
@@ -272,7 +273,11 @@ void MenuUI::doSettings() {
 void MenuUI::doToggleDevMode() {
     dev_mode_local_ = !dev_mode_local_;
     dev_mode_ = dev_mode_local_;
-    if (game_assets_) game_assets_->set_dev_mode(dev_mode_);
+    if (game_assets_) {
+        game_assets_->set_dev_mode(dev_mode_);
+        game_assets_->close_asset_library();
+        game_assets_->close_asset_info_editor();
+    }
     std::cout << "[MenuUI] Dev Mode = " << (dev_mode_ ? "ON" : "OFF") << "\n";
 }
 

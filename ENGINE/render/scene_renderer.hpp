@@ -20,7 +20,7 @@ public:
                   int screen_height,
                   const std::string& map_path);
 
-    void render();
+    void render(bool present = true);
 
 private:
     void update_shading_groups();
