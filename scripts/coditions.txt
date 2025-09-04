@@ -1,0 +1,3 @@
+condition formatting. each indavidual condition will be in () multiple conditions can be within on set of () but the sub conditions needs to be also in () conditions can be subject to binary opperators AND = &&, OR ||, XOW <come up with something> and NOT !!
+
+Overlap (if  an area overlaps an area) (Overlap (("asset_name_1","area_name"),("asset_name_2", "area_name2")))

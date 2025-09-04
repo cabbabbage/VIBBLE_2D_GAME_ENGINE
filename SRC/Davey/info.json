@@ -1223,70 +1223,75 @@
     }
   ],
   "mappings": {
-    "9770dc59": [
-      {
-        "condition": "",
-        "map_to": {
-          "options": [
-            {
-              "animation": "default",
-              "percent": 100
-            }
-          ]
+    "9770dc59": {
+      "type": "regular",
+      "entries": [
+        {
+          "condition": "",
+          "animation": "default"
         }
-      }
-    ],
-    "671fd1cf": [
-      {
-        "condition": "",
-        "map_to": {
-          "options": [
-            {
-              "animation": "right",
-              "percent": 100
-            }
-          ]
+      ],
+      "on_end_mapping": "",
+      "on_end_animation": ""
+    },
+    "671fd1cf": {
+      "type": "regular",
+      "entries": [
+        {
+          "condition": "",
+          "animation": "right"
         }
-      }
-    ],
-    "5657dfe4": [
-      {
-        "condition": "",
-        "map_to": {
-          "options": [
-            {
-              "animation": "backward",
-              "percent": 100
-            }
-          ]
+      ],
+      "on_end_mapping": "",
+      "on_end_animation": ""
+    },
+    "5657dfe4": {
+      "type": "regular",
+      "entries": [
+        {
+          "condition": "",
+          "animation": "backward"
         }
-      }
-    ],
-    "76b46430": [
-      {
-        "condition": "",
-        "map_to": {
-          "options": [
-            {
-              "animation": "forward",
-              "percent": 100
-            }
-          ]
+      ],
+      "on_end_mapping": "",
+      "on_end_animation": ""
+    },
+    "76b46430": {
+      "type": "regular",
+      "entries": [
+        {
+          "condition": "",
+          "animation": "forward"
         }
-      }
-    ],
-    "846c131e": [
-      {
-        "condition": "",
-        "map_to": {
-          "options": [
-            {
-              "animation": "left",
-              "percent": 100
-            }
-          ]
+      ],
+      "on_end_mapping": "",
+      "on_end_animation": ""
+    },
+    "846c131e": {
+      "type": "regular",
+      "entries": [
+        {
+          "condition": "",
+          "animation": "left"
         }
-      }
-    ]
+      ],
+      "on_end_mapping": "",
+      "on_end_animation": ""
+    },
+    "f2e13c2f": {
+      "type": "random",
+      "options": [
+        {
+          "animation": "idle",
+          "percent": 100
+        },
+        {
+          "animation": "idle",
+          "percent": 0
+        }
+      ],
+      "on_end_mapping": "",
+      "on_end_animation": ""
+    }
   }
 }
