@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
-from typing import Dict, Any, List, Tuple, Optional, Any
+from typing import Dict, Any, List, Tuple, Optional
 
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
@@ -26,6 +26,56 @@ def ensure_sections(d: Dict[str, Any]) -> None:
         d["animations"] = {}
     if "mappings" not in d or not isinstance(d["mappings"], dict):
         d["mappings"] = {}
+    if "edges" not in d or not isinstance(d["edges"], list):
+        d["edges"] = []
+
+    # migrate legacy edge fields (on_end_mapping/on_end_animation, animation strings)
+    edges: List[List[str]] = list(d.get("edges", []))
+    anims = d.get("animations", {})
+    maps = d.get("mappings", {})
+    for aid, cfg in list(anims.items()):
+        if not isinstance(cfg, dict):
+            continue
+        nxt = cfg.pop("on_end_mapping", "")
+        if nxt:
+            edges.append([aid, nxt])
+    for mid, cfg in list(maps.items()):
+        # regular list payload legacy
+        if isinstance(cfg, list):
+            entries = []
+            for idx, e in enumerate(cfg):
+                cond = (e or {}).get("condition", "")
+                entries.append({"condition": cond})
+                opts = ((e or {}).get("map_to") or {}).get("options", [])
+                if opts:
+                    anim = opts[0].get("animation", "") or opts[0].get("mapping", "")
+                    if anim:
+                        edges.append([f"{mid}::entry:{idx}", anim])
+            maps[mid] = {"type": "regular", "entries": entries}
+            continue
+        if not isinstance(cfg, dict):
+            continue
+        # migrate per-node edge fields
+        m_to = cfg.pop("on_end_mapping", "")
+        a_to = cfg.pop("on_end_animation", "")
+        if m_to:
+            edges.append([mid, m_to])
+        if a_to:
+            edges.append([mid, a_to])
+        if cfg.get("type") == "regular":
+            for i, entry in enumerate(cfg.get("entries", [])):
+                anim = entry.pop("animation", "")
+                if anim:
+                    edges.append([f"{mid}::entry:{i}", anim])
+        if cfg.get("type") == "random":
+            for i, opt in enumerate(cfg.get("options", [])):
+                anim = opt.pop("animation", "")
+                if anim:
+                    edges.append([f"{mid}::option:{i}", anim])
+
+    # only set edges if found legacy ones
+    if edges:
+        d["edges"] = edges
 
 
 # ---------- graph ----------
@@ -59,46 +109,32 @@ class GraphCanvas(tk.Canvas):
         node.on_begin_connect = self._begin_drag_from
         node.on_changed = self._on_node_changed
         node.on_moved = lambda _id, _x, _y: self.redraw_edges()
+        node.on_renamed = self._on_node_renamed
         self.anim_nodes[anim_name] = node
         return node
 
     def add_map_node(self, mapping_id: str, payload: Any, x: int, y: int):
         is_random = isinstance(payload, dict) and payload.get("type") == "random"
-        node = RandomMappingNode(self, mapping_id, payload, x=x, y=y) if is_random else RegularMappingNode(self, mapping_id, payload, x=x, y=y)
+        node = (RandomMappingNode(self, mapping_id, payload, x=x, y=y)
+                if is_random else
+                RegularMappingNode(self, mapping_id, payload, x=x, y=y))
         node.on_begin_connect = self._begin_drag_from
         node.on_changed = self._on_node_changed
         node.on_moved = lambda _id, _x, _y: self.redraw_edges()
+        node.on_renamed = self._on_node_renamed
         self.map_nodes[mapping_id] = node
         return node
 
     # --- load edges from data ---
     def set_edges_from_data(self, data: Dict[str, Any]):
         self.edges.clear()
-        anims = data.get("animations", {})
-        maps = data.get("mappings", {})
-        if not isinstance(anims, dict) or not isinstance(maps, dict):
-            return
-
-        # A → M
-        for aid, cfg in anims.items():
-            if isinstance(cfg, dict):
-                mid = cfg.get("on_end_mapping", "")
-                if mid and mid in maps:
-                    self.edges.append((aid, mid))
-
-        # M → M
-        for mid, cfg in maps.items():
-            if isinstance(cfg, dict):
-                nxt = cfg.get("on_end_mapping", "")
-                if nxt and nxt in maps:
-                    self.edges.append((mid, nxt))
-
-        # M → A
-        for mid, cfg in maps.items():
-            if isinstance(cfg, dict):
-                nxt_a = cfg.get("on_end_animation", "")
-                if nxt_a and nxt_a in anims:
-                    self.edges.append((mid, nxt_a))
+        for edge in data.get("edges", []):
+            try:
+                src, dst = edge
+            except Exception:
+                continue
+            if src and dst:
+                self.edges.append((str(src), str(dst)))
 
     # --- drag connect flow ---
     def _begin_drag_from(self, src_id: str):
@@ -136,6 +172,12 @@ class GraphCanvas(tk.Canvas):
         self._reset_drag()
 
     def _node_output_center(self, node_id: str) -> Tuple[Optional[int], Optional[int]]:
+        if "::" in node_id:
+            base, slot = node_id.split("::", 1)
+            n = self.map_nodes.get(base)
+            if n and hasattr(n, "slot_output_port_center"):
+                return n.slot_output_port_center(slot)
+            return (None, None)
         if node_id in self.anim_nodes:
             return self.anim_nodes[node_id].output_port_center()
         n = self.map_nodes.get(node_id)
@@ -181,6 +223,29 @@ class GraphCanvas(tk.Canvas):
     def _on_node_changed(self, node_id: str, payload: Dict[str, Any]):
         self.event_generate("<<NodeChanged>>", data=node_id)
 
+    def _on_node_renamed(self, old_id: str, new_id: str):
+        if old_id in self.anim_nodes:
+            node = self.anim_nodes.pop(old_id)
+            self.anim_nodes[new_id] = node
+        elif old_id in self.map_nodes:
+            node = self.map_nodes.pop(old_id)
+            self.map_nodes[new_id] = node
+        new_edges = []
+        prefix = old_id + "::"
+        for src, dst in self.edges:
+            s = src
+            d = dst
+            if src == old_id:
+                s = new_id
+            elif src.startswith(prefix):
+                s = new_id + src[len(old_id):]
+            if dst == old_id:
+                d = new_id
+            new_edges.append((s, d))
+        self.edges = new_edges
+        self.redraw_edges()
+        self.event_generate("<<NodeRenamed>>", data=f"{old_id}|{new_id}")
+
 
 # ---------- app ----------
 class AnimationConfiguratorAppSingle:
@@ -213,6 +278,7 @@ class AnimationConfiguratorAppSingle:
         self.canvas.bind("<<GraphConnect>>", self.on_graph_connect)
         self.canvas.bind("<<GraphDisconnect>>", self.on_graph_disconnect)
         self.canvas.bind("<<NodeChanged>>", self.on_node_changed)
+        self.canvas.bind("<<NodeRenamed>>", self.on_node_renamed)
 
         self.status = tk.StringVar(value=f"Loaded {self.info_path}")
         ttk.Label(self.win, textvariable=self.status, relief=tk.SUNKEN, anchor="w").pack(side="bottom", fill="x")
@@ -258,6 +324,7 @@ class AnimationConfiguratorAppSingle:
             self.data["animations"][aid] = node.to_dict()
         for mid, node in self.canvas.map_nodes.items():
             self.data["mappings"][mid] = node.to_payload()
+        self.data["edges"] = [list(e) for e in self.canvas.edges]
         self.save_current()
         self.canvas.set_edges_from_data(self.data)
         self.canvas.redraw_edges()
@@ -271,30 +338,9 @@ class AnimationConfiguratorAppSingle:
         except Exception:
             return
 
-        if src_id in self.data["animations"]:
-            # Animation → (Mapping only)
-            if dst_id in self.data["mappings"]:
-                self.data["animations"][src_id]["on_end_mapping"] = dst_id
-            else:
-                return  # ignore A→A
-        elif src_id in self.data["mappings"]:
-            # Mapping → Mapping or Animation
-            m = self.data["mappings"].get(src_id) or {}
-            if not isinstance(m, dict):
-                m = {}
-            m["type"] = m.get("type", "regular")
-            if dst_id in self.data["mappings"]:
-                m["on_end_mapping"] = dst_id
-                m["on_end_animation"] = ""
-            elif dst_id in self.data["animations"]:
-                m["on_end_animation"] = dst_id
-                m["on_end_mapping"] = ""
-            else:
-                return
-            self.data["mappings"][src_id] = m
-        else:
-            return
-
+        edges = [edge for edge in self.data.setdefault("edges", []) if edge[0] != src_id]
+        edges.append([src_id, dst_id])
+        self.data["edges"] = edges
         self.save_current()
         self.canvas.set_edges_from_data(self.data)
         self.canvas.redraw_edges()
@@ -309,25 +355,42 @@ class AnimationConfiguratorAppSingle:
         except Exception:
             return
 
-        changed = False
-        if src_id in self.data["animations"]:
-            if self.data["animations"][src_id].get("on_end_mapping") == dst_id:
-                self.data["animations"][src_id]["on_end_mapping"] = ""
-                changed = True
-        elif src_id in self.data["mappings"]:
-            m = self.data["mappings"].get(src_id)
-            if isinstance(m, dict):
-                if m.get("on_end_mapping") == dst_id:
-                    m["on_end_mapping"] = ""
-                    changed = True
-                if m.get("on_end_animation") == dst_id:
-                    m["on_end_animation"] = ""
-                    changed = True
-        if changed:
-            self.save_current()
-            self.canvas.set_edges_from_data(self.data)
-            self.canvas.redraw_edges()
-            self.status.set(f"Removed link {src_id} → {dst_id}")
+        edges = [edge for edge in self.data.get("edges", []) if not (edge[0] == src_id and edge[1] == dst_id)]
+        self.data["edges"] = edges
+        self.save_current()
+        self.canvas.set_edges_from_data(self.data)
+        self.canvas.redraw_edges()
+        self.status.set(f"Removed link {src_id} → {dst_id}")
+
+    def on_node_renamed(self, event):
+        if not (self.data and self.info_path):
+            return
+        try:
+            pair = event.__dict__.get("data", "")
+            old_id, new_id = pair.split("|", 1)
+        except Exception:
+            return
+        if old_id in self.data.get("animations", {}):
+            self.data["animations"][new_id] = self.data["animations"].pop(old_id)
+        elif old_id in self.data.get("mappings", {}):
+            self.data["mappings"][new_id] = self.data["mappings"].pop(old_id)
+        new_edges = []
+        prefix = old_id + "::"
+        for src, dst in self.data.get("edges", []):
+            s = src
+            d = dst
+            if src == old_id:
+                s = new_id
+            elif src.startswith(prefix):
+                s = new_id + src[len(old_id):]
+            if dst == old_id:
+                d = new_id
+            new_edges.append([s, d])
+        self.data["edges"] = new_edges
+        self.save_current()
+        self.canvas.set_edges_from_data(self.data)
+        self.canvas.redraw_edges()
+        self.status.set(f"Renamed {old_id} → {new_id}")
 
     # creators
     def create_animation(self):
@@ -343,7 +406,6 @@ class AnimationConfiguratorAppSingle:
             "speed_factor": 1,
             "number_of_frames": 1,
             "movement": [[0, 0]],
-            "on_end_mapping": "",
         }
         self.save_current()
         self.rebuild_graph()
@@ -355,9 +417,7 @@ class AnimationConfiguratorAppSingle:
             mid = uuid.uuid4().hex[:8]
         self.data["mappings"][mid] = {
             "type": "regular",
-            "entries": [{"condition": "", "animation": "idle"}],
-            "on_end_mapping": "",
-            "on_end_animation": "",
+            "entries": [{"condition": ""}],
         }
         self.save_current()
         self.rebuild_graph()
@@ -369,9 +429,7 @@ class AnimationConfiguratorAppSingle:
             mid = uuid.uuid4().hex[:8]
         self.data["mappings"][mid] = {
             "type": "random",
-            "options": [{"animation": "idle", "percent": 100}],
-            "on_end_mapping": "",
-            "on_end_animation": "",
+            "options": [{"percent": 100}],
         }
         self.save_current()
         self.rebuild_graph()

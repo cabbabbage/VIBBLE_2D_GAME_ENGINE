@@ -44,6 +44,7 @@ class BaseNode:
         self.on_begin_connect: Optional[Callable[[str], None]] = None
         self.on_moved: Optional[Callable[[str, int, int], None]] = None
         self.on_changed: Optional[Callable[[str, Dict[str, Any]], None]] = None
+        self.on_renamed: Optional[Callable[[str, str], None]] = None
 
         # --- widget structure ---
         self.frame = ttk.Frame(canvas, relief=tk.RIDGE, borderwidth=2)
@@ -67,6 +68,7 @@ class BaseNode:
             anchor="w",
         )
         self.title_label.pack(side="left", fill="x", expand=True)
+        self.title_label.bind("<Double-Button-1>", self._start_rename)
 
         # content for subclass UI
         self.content = ttk.Frame(self.frame)
@@ -176,6 +178,44 @@ class BaseNode:
     def _on_begin_connect(self, _evt=None):
         if self.on_begin_connect:
             self.on_begin_connect(self.node_id)
+
+    # ---------- internal: rename ----------
+    def _start_rename(self, _evt=None):
+        if hasattr(self, "_title_entry"):
+            return
+        self._title_entry = ttk.Entry(self.header_frame, textvariable=self._title_var)
+        self.title_label.forget()
+        self._title_entry.pack(side="left", fill="x", expand=True)
+        self._title_entry.focus_set()
+        self._title_entry.select_range(0, tk.END)
+        self._title_entry.bind("<Return>", self._commit_rename)
+        self._title_entry.bind("<Escape>", self._cancel_rename)
+        self._title_entry.bind("<FocusOut>", self._commit_rename)
+
+    def _finish_rename(self, commit: bool):
+        entry = getattr(self, "_title_entry", None)
+        if not entry:
+            return
+        new_name = entry.get().strip()
+        entry.destroy()
+        delattr(self, "_title_entry")
+        self.title_label.pack(side="left", fill="x", expand=True)
+        if commit and new_name:
+            old_id = self.node_id
+            if new_name != old_id:
+                self.node_id = new_name
+                self._title_var.set(new_name)
+                if self.on_renamed:
+                    self.on_renamed(old_id, new_name)
+        else:
+            self._title_var.set(self.node_id)
+        self.request_layout()
+
+    def _commit_rename(self, _evt=None):
+        self._finish_rename(True)
+
+    def _cancel_rename(self, _evt=None):
+        self._finish_rename(False)
 
     # ---------- internal: collapse ----------
     def _on_toggle(self, _evt=None):

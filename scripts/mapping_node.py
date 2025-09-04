@@ -73,7 +73,7 @@ class RegularMappingNode(BaseNode):
 
     def __init__(self, canvas: tk.Canvas, mapping_id: str, payload: Any, x: int = 420, y: int = 60):
         self.payload = _coerce_regular(payload)
-        super().__init__(canvas, mapping_id, f"Map (Regular): {mapping_id}", x, y)
+        super().__init__(canvas, mapping_id, mapping_id, x, y)
 
         # storage for row widgets and their per-row ports
         self._row_frames: List[ttk.Frame] = []
@@ -162,6 +162,21 @@ class RegularMappingNode(BaseNode):
         if self.on_begin_connect:
             self.on_begin_connect(f"{self.node_id}::entry:{idx}")
 
+    def slot_output_port_center(self, slot: str) -> Tuple[Optional[int], Optional[int]]:
+        try:
+            kind, idx_str = slot.split(":", 1)
+            idx = int(idx_str)
+        except Exception:
+            return (None, None)
+        if kind != "entry" or not (0 <= idx < len(self._row_frames)):
+            return (None, None)
+        x, _, w, _ = self._current_win_geometry()
+        r = self.PORT_RADIUS
+        m = self.PORT_MARGIN
+        cy = _widget_center_y_in_canvas(self.canvas, self._row_frames[idx])
+        cx = x + w - (m + r)
+        return (cx, cy)
+
     # ----- mutate data -----
     def _add_entry(self):
         self.payload.setdefault("entries", []).append({"condition": ""})
@@ -196,7 +211,7 @@ class RandomMappingNode(BaseNode):
 
     def __init__(self, canvas: tk.Canvas, mapping_id: str, payload: Any, x: int = 520, y: int = 60):
         self.payload = _coerce_random(payload)
-        super().__init__(canvas, mapping_id, f"Map (Random): {mapping_id}", x, y)
+        super().__init__(canvas, mapping_id, mapping_id, x, y)
 
         self._row_frames: List[ttk.Frame] = []
         self._row_ports: List[int] = []
@@ -281,6 +296,21 @@ class RandomMappingNode(BaseNode):
     def _begin_connect_option(self, idx: int):
         if self.on_begin_connect:
             self.on_begin_connect(f"{self.node_id}::option:{idx}")
+
+    def slot_output_port_center(self, slot: str) -> Tuple[Optional[int], Optional[int]]:
+        try:
+            kind, idx_str = slot.split(":", 1)
+            idx = int(idx_str)
+        except Exception:
+            return (None, None)
+        if kind != "option" or not (0 <= idx < len(self._row_frames)):
+            return (None, None)
+        x, _, w, _ = self._current_win_geometry()
+        r = self.PORT_RADIUS
+        m = self.PORT_MARGIN
+        cy = _widget_center_y_in_canvas(self.canvas, self._row_frames[idx])
+        cx = x + w - (m + r)
+        return (cx, cy)
 
     # ----- mutate data -----
     def _add_option(self):
