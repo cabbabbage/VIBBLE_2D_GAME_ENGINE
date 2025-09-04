@@ -14,7 +14,7 @@ class AnimationNode(BaseNode):
 
     def __init__(self, canvas: tk.Canvas, anim_name: str, payload: Dict[str, Any], x: int = 60, y: int = 40):
         self.payload = self._coerce_payload(anim_name, payload)
-        super().__init__(canvas, anim_name, f"Anim: {anim_name}", x, y)
+        super().__init__(canvas, anim_name, anim_name, x, y)
         self._build_ui()
         self.request_layout()
 
