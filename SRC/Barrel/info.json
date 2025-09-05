@@ -27,8 +27,7 @@
           0,
           0
         ]
-      ],
-      "on_end_mapping": "fad797da"
+      ]
     },
     "collision": {
       "source": {
@@ -51,7 +50,6 @@
           0
         ]
       ],
-      "on_end_mapping": "cd225d64",
       "area_name": "collision_area"
     }
   },
@@ -68,7 +66,6 @@
   },
   "rnd_spawn_min": 300,
   "rnd_spawn_max": 400,
-  "has_spacing": true,
   "child_assets": [
     {
       "z_offset": 1,
@@ -3020,33 +3017,5 @@
       "offset_x": 0,
       "offset_y": 0
     }
-  ],
-  "mappings": {
-    "fad797da": [
-      {
-        "condition": "",
-        "map_to": {
-          "options": [
-            {
-              "animation": "default",
-              "percent": 100
-            }
-          ]
-        }
-      }
-    ],
-    "cd225d64": [
-      {
-        "condition": "",
-        "map_to": {
-          "options": [
-            {
-              "animation": "default",
-              "percent": 100
-            }
-          ]
-        }
-      }
-    ]
-  }
+  ]
 }

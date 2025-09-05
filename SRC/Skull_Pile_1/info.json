@@ -22,8 +22,7 @@
           0,
           0
         ]
-      ],
-      "on_end_mapping": "e5acdd9b"
+      ]
     }
   },
   "impassable_area": null,
@@ -34,9 +33,6 @@
     "flipability": true
   },
   "min_same_type_distance": 832,
-  "visited_tabs": [
-    "Spacing"
-  ],
   "tags": [
     "graveyard",
     "skull",
@@ -54,7 +50,6 @@
   "rnd_spawn_min": 300,
   "rnd_spawn_max": 400,
   "anti_tags": [],
-  "has_spacing": true,
   "min_distance_all": 107,
   "areas": [
     {
@@ -668,20 +663,5 @@
       "offset_x": 0,
       "offset_y": 0
     }
-  ],
-  "mappings": {
-    "e5acdd9b": [
-      {
-        "condition": "",
-        "map_to": {
-          "options": [
-            {
-              "animation": "default",
-              "percent": 100
-            }
-          ]
-        }
-      }
-    ]
-  }
+  ]
 }

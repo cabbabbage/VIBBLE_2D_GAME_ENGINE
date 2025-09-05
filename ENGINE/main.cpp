@@ -6,7 +6,7 @@
 #include "ui/menu_ui.hpp"
 #include "asset_loader.hpp"
 #include "scene_renderer.hpp"
-#include "Assets.hpp"
+#include "AssetsManager.hpp"
 #include "input.hpp"
 
 #include <SDL.h>

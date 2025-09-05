@@ -25,6 +25,14 @@ public:
     void handle_hover();
     void handle_click(const Input& input);
     void update_highlighted_assets();
+    // Ensure a single logical click is handled only once across frames
+    // and reset state when switching modes.
+    void reset_click_state() {
+        click_buffer_frames_ = 0;
+        last_click_time_ms_ = 0;
+        last_click_asset_ = nullptr;
+        dragging_ = false;
+    }
 
     const std::vector<Asset*>& get_selected_assets() const { return selected_assets; }
     const std::vector<Asset*>& get_highlighted_assets() const { return highlighted_assets; }

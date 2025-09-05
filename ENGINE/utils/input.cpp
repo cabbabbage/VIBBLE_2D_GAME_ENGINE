@@ -75,3 +75,9 @@ void Input::update() {
 bool Input::wasClicked(Button b) const {
     return clickBuffer_[b] > 0;
 }
+
+void Input::clearClickBuffer() {
+    for (int i = 0; i < COUNT; ++i) {
+        clickBuffer_[i] = 0;
+    }
+}

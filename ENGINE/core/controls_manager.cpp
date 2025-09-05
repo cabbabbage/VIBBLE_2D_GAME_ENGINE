@@ -1,7 +1,7 @@
 
 #include "controls_manager.hpp"
 #include "active_assets_manager.hpp"
-#include "core/Assets.hpp"
+#include "core/AssetsManager.hpp"
 #include "utils/input.hpp"
 #include <cmath>
 #include <iostream>

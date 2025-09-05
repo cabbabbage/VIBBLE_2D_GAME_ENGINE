@@ -40,32 +40,22 @@ AssetInfo::AssetInfo(const std::string &asset_folder_name)
     nlohmann::json new_anim = nlohmann::json::object();
     for (auto it = data["animations"].begin(); it != data["animations"].end(); ++it) {
       const std::string trig = it.key();
-      const auto& anim_json = it.value();
+      const auto &anim_json = it.value();
       nlohmann::json converted = anim_json;
+
+      // Legacy-to-new conversion for older keys (only frames path/speed flags)
       if (!anim_json.contains("source")) {
         converted["source"] = {
-          {"kind", "folder"},
-          {"path", anim_json.value("frames_path", trig)}
-        };
+            {"kind", "folder"},
+            {"path", anim_json.value("frames_path", trig)}};
         converted["locked"] = anim_json.value("lock_until_done", false);
         converted["speed_factor"] = anim_json.value("speed", 1.0f);
-        std::string on_end = anim_json.value("on_end", "");
-        if (!on_end.empty()) {
-          std::string mapping_id = trig + "_auto";
-          converted["on_end_mapping"] = mapping_id;
-          MappingOption opt{on_end, 100.0f};
-          MappingEntry entry{"", {opt}};
-          mappings[mapping_id] = {entry};
-          info_json_["mappings"][mapping_id] = nlohmann::json::array({{
-            {"condition", ""},
-            {"map_to", { {"options", nlohmann::json::array({{{"animation", on_end}, {"percent", 100.0}}}) }}
-          }}});
-        }
         converted.erase("frames_path");
-        converted.erase("on_end");
         converted.erase("lock_until_done");
         converted.erase("speed");
       }
+
+      // Keep simplified schema's on_end as-is (no mapping synthesis)
       new_anim[trig] = converted;
     }
     anims_json_ = new_anim;
@@ -108,6 +98,15 @@ AssetInfo::AssetInfo(const std::string &asset_folder_name)
 
   load_areas(data, scale_factor, offset_x, offset_y);
   load_children(data);
+
+  // Optional custom controller key (if present in info.json)
+  try {
+    if (data.contains("custom_controller_key") && data["custom_controller_key"].is_string()) {
+      custom_controller_key = data["custom_controller_key"].get<std::string>();
+    }
+  } catch (...) {
+    custom_controller_key.clear();
+  }
 }
 
 AssetInfo::~AssetInfo() {
@@ -134,6 +133,9 @@ void AssetInfo::load_base_properties(const nlohmann::json &data) {
   if (type == "Player") {
     std::cout << "[AssetInfo] Player asset '" << name << "' loaded\n\n";
   }
+
+  // preferred start animation id
+  start_animation = data.value("start", std::string{"default"});
 
   z_threshold = data.value("z_threshold", 0);
   passable = has_tag("passable");

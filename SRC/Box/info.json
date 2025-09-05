@@ -22,19 +22,13 @@
           0,
           0
         ]
-      ],
-      "on_end_mapping": "f0005841"
+      ]
     }
   },
   "z_threshold": 91,
   "size_settings": {
     "scale_percentage": 13
   },
-  "visited_tabs": [
-    "Passability",
-    "Region-Based Child Assets",
-    "Spacing"
-  ],
   "min_same_type_distance": 911,
   "duplicatable": false,
   "duplication_interval_min": 30,
@@ -50,7 +44,6 @@
   ],
   "rnd_spawn_min": 300,
   "rnd_spawn_max": 400,
-  "has_spacing": true,
   "anti_tags": [],
   "child_assets": [
     {
@@ -2634,20 +2627,5 @@
       "offset_x": 0,
       "offset_y": 0
     }
-  ],
-  "mappings": {
-    "f0005841": [
-      {
-        "condition": "",
-        "map_to": {
-          "options": [
-            {
-              "animation": "default",
-              "percent": 100
-            }
-          ]
-        }
-      }
-    ]
-  }
+  ]
 }

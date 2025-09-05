@@ -22,8 +22,7 @@
           0,
           0
         ]
-      ],
-      "on_end_mapping": "0fffc598"
+      ]
     }
   },
   "impassable_area": null,
@@ -1489,20 +1488,5 @@
         270
       ]
     }
-  ],
-  "mappings": {
-    "0fffc598": [
-      {
-        "condition": "",
-        "map_to": {
-          "options": [
-            {
-              "animation": "default",
-              "percent": 100
-            }
-          ]
-        }
-      }
-    ]
-  }
+  ]
 }

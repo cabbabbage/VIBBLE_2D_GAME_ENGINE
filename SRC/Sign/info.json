@@ -22,8 +22,7 @@
           0,
           0
         ]
-      ],
-      "on_end_mapping": "924389b5"
+      ]
     }
   },
   "impassable_area": null,
@@ -32,7 +31,6 @@
   ],
   "rnd_spawn_min": 300,
   "rnd_spawn_max": 400,
-  "has_spacing": true,
   "min_same_type_distance": 0,
   "z_threshold": 191,
   "size_settings": {
@@ -1690,20 +1688,5 @@
       "offset_x": 0,
       "offset_y": 0
     }
-  ],
-  "mappings": {
-    "924389b5": [
-      {
-        "condition": "",
-        "map_to": {
-          "options": [
-            {
-              "animation": "default",
-              "percent": 100
-            }
-          ]
-        }
-      }
-    ]
-  }
+  ]
 }

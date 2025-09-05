@@ -1,7 +1,7 @@
 
 #include "dev_mouse_controls.hpp"
 #include "asset/Asset.hpp"
-#include "core/Assets.hpp"
+#include "core/AssetsManager.hpp"
 #include "utils/input.hpp"
 #include "utils/parallax.hpp"
 #include <cmath>
@@ -154,7 +154,20 @@ void DevMouseControls::handle_hover() {
 }
 
 void DevMouseControls::handle_click(const Input& input) {
-    if (!mouse || !player || !mouse->wasClicked(Input::LEFT)) return;
+    if (!mouse || !player) return;
+
+    // Only handle a physical click once, even though wasClicked() spans frames
+    if (!mouse->wasClicked(Input::LEFT)) {
+        click_buffer_frames_ = 0; // allow next click when buffer ends
+        return;
+    }
+    if (click_buffer_frames_ > 0) {
+        // Suppress duplicate handling for the same physical click
+        click_buffer_frames_--;
+        return;
+    }
+    // Consume this click and suppress duplicates for a couple frames
+    click_buffer_frames_ = 2;
 
     Asset* nearest = hovered_asset; 
     if (nearest) {

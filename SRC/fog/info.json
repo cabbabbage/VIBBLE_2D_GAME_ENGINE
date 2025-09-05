@@ -32,15 +32,13 @@
           0,
           0
         ]
-      ],
-      "on_end_mapping": "33d6b33d"
+      ]
     }
   },
   "tags": [
     "passable",
     "default"
   ],
-  "has_spacing": true,
   "min_same_type_distance": 0,
   "z_threshold": -100,
   "size_settings": {
@@ -235,20 +233,5 @@
       "offset_x": 0,
       "offset_y": 0
     }
-  ],
-  "mappings": {
-    "33d6b33d": [
-      {
-        "condition": "",
-        "map_to": {
-          "options": [
-            {
-              "animation": "default",
-              "percent": 100
-            }
-          ]
-        }
-      }
-    ]
-  }
+  ]
 }

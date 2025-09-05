@@ -28,8 +28,7 @@
           0,
           0
         ]
-      ],
-      "on_end_mapping": "e14a0296"
+      ]
     }
   },
   "tags": [
@@ -54,7 +53,6 @@
     "variability_percentage": 0,
     "flipability": true
   },
-  "has_spacing": true,
   "min_same_type_distance": 20,
   "anti_tags": [],
   "min_distance_all": 0,
@@ -4418,20 +4416,5 @@
       "offset_x": 0,
       "offset_y": 0
     }
-  ],
-  "mappings": {
-    "e14a0296": [
-      {
-        "condition": "",
-        "map_to": {
-          "options": [
-            {
-              "animation": "default",
-              "percent": 100
-            }
-          ]
-        }
-      }
-    ]
-  }
+  ]
 }

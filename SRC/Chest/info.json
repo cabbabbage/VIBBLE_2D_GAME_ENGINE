@@ -22,8 +22,7 @@
           0,
           0
         ]
-      ],
-      "on_end_mapping": "be1f4e28"
+      ]
     },
     "interaction": {
       "source": {
@@ -66,7 +65,6 @@
           0
         ]
       ],
-      "on_end_mapping": "1704cac6",
       "area_name": "interaction_area"
     }
   },
@@ -75,9 +73,6 @@
     "scale_percentage": 41
   },
   "min_same_type_distance": 1000,
-  "visited_tabs": [
-    "Spacing"
-  ],
   "tags": [
     "default",
     "interaction",
@@ -101,18 +96,6 @@
       "factor": 100
     }
   ],
-  "shading_info": {
-    "has_shading": false,
-    "has_base_shadow": null,
-    "base_shadow_intensity": null,
-    "has_gradient_shadow": null,
-    "number_of_gradient_shadows": null,
-    "gradient_shadow_intensity": null,
-    "has_casted_shadows": null,
-    "number_of_casted_shadows": null,
-    "cast_shadow_intensity": null
-  },
-  "has_spacing": true,
   "min_distance_all": 1011,
   "anti_tags": [],
   "has_shading": true,
@@ -2518,33 +2501,5 @@
       "offset_x": 0,
       "offset_y": 0
     }
-  ],
-  "mappings": {
-    "be1f4e28": [
-      {
-        "condition": "",
-        "map_to": {
-          "options": [
-            {
-              "animation": "default",
-              "percent": 100
-            }
-          ]
-        }
-      }
-    ],
-    "1704cac6": [
-      {
-        "condition": "",
-        "map_to": {
-          "options": [
-            {
-              "animation": "freeze_on_last",
-              "percent": 100
-            }
-          ]
-        }
-      }
-    ]
-  }
+  ]
 }

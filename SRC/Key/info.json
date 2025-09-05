@@ -22,8 +22,7 @@
           0,
           0
         ]
-      ],
-      "on_end_mapping": "263bb99a"
+      ]
     }
   },
   "impassable_area": null,
@@ -52,17 +51,6 @@
     "jitter_max": 0,
     "flicker": false
   },
-  "shading_info": {
-    "has_shading": false,
-    "has_base_shadow": null,
-    "base_shadow_intensity": null,
-    "has_gradient_shadow": null,
-    "number_of_gradient_shadows": null,
-    "gradient_shadow_intensity": null,
-    "has_casted_shadows": null,
-    "number_of_casted_shadows": null,
-    "cast_shadow_intensity": null
-  },
   "anti_tags": [
     "any",
     "book",
@@ -78,20 +66,5 @@
     "variability_percentage": 0,
     "flipability": true
   },
-  "areas": [],
-  "mappings": {
-    "263bb99a": [
-      {
-        "condition": "",
-        "map_to": {
-          "options": [
-            {
-              "animation": "default",
-              "percent": 100
-            }
-          ]
-        }
-      }
-    ]
-  }
+  "areas": []
 }

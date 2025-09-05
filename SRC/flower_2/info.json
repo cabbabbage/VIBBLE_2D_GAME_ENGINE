@@ -24,27 +24,11 @@
           0,
           0
         ]
-      ],
-      "on_end_mapping": "40b911b6"
+      ]
     }
   },
   "tags": [
     "passable"
   ],
-  "areas": [],
-  "mappings": {
-    "40b911b6": [
-      {
-        "condition": "",
-        "map_to": {
-          "options": [
-            {
-              "animation": "default",
-              "percent": 100
-            }
-          ]
-        }
-      }
-    ]
-  }
+  "areas": []
 }

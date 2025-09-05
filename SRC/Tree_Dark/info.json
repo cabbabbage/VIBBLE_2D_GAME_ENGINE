@@ -18,8 +18,7 @@
           0,
           0
         ]
-      ],
-      "on_end_mapping": "e1411646"
+      ]
     },
     "group": {
       "source": {
@@ -41,18 +40,13 @@
           0,
           0
         ]
-      ],
-      "on_end_mapping": "44abe8f1"
+      ]
     }
   },
   "z_threshold": 34,
   "size_settings": {
     "scale_percentage": 65
   },
-  "visited_tabs": [
-    "Passability",
-    "Spacing"
-  ],
   "min_same_type_distance": 39,
   "duplicatable": false,
   "duplication_interval_min": 30,
@@ -71,17 +65,6 @@
   ],
   "rnd_spawn_min": 300,
   "rnd_spawn_max": 400,
-  "shading_info": {
-    "has_shading": true,
-    "has_base_shadow": true,
-    "base_shadow_intensity": 100,
-    "has_gradient_shadow": false,
-    "number_of_gradient_shadows": 1,
-    "gradient_shadow_intensity": 100,
-    "has_casted_shadows": false,
-    "number_of_casted_shadows": 1,
-    "cast_shadow_intensity": 100
-  },
   "lighting_info": [
     {
       "has_light_source": true,
@@ -93,7 +76,6 @@
       "factor": 100
     }
   ],
-  "has_spacing": true,
   "min_distance_all": 0,
   "anti_tags": [],
   "has_shading": true,
@@ -6027,33 +6009,5 @@
       "offset_x": 0,
       "offset_y": 0
     }
-  ],
-  "mappings": {
-    "e1411646": [
-      {
-        "condition": "",
-        "map_to": {
-          "options": [
-            {
-              "animation": "default",
-              "percent": 100
-            }
-          ]
-        }
-      }
-    ],
-    "44abe8f1": [
-      {
-        "condition": "",
-        "map_to": {
-          "options": [
-            {
-              "animation": "group",
-              "percent": 100
-            }
-          ]
-        }
-      }
-    ]
-  }
+  ]
 }

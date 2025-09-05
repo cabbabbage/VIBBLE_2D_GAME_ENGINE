@@ -22,15 +22,11 @@
           0,
           0
         ]
-      ],
-      "on_end_mapping": "6ebea8f6"
+      ]
     }
   },
   "impassable_area": null,
   "min_same_type_distance": 400,
-  "visited_tabs": [
-    "Spacing"
-  ],
   "z_threshold": 3,
   "size_settings": {
     "scale_percentage": 22,
@@ -559,20 +555,5 @@
       "offset_x": 0,
       "offset_y": 0
     }
-  ],
-  "mappings": {
-    "6ebea8f6": [
-      {
-        "condition": "",
-        "map_to": {
-          "options": [
-            {
-              "animation": "default",
-              "percent": 100
-            }
-          ]
-        }
-      }
-    ]
-  }
+  ]
 }

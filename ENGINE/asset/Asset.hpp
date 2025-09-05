@@ -1,4 +1,3 @@
-
 #ifndef ASSET_HPP
 #define ASSET_HPP
 
@@ -11,128 +10,144 @@
 #include "utils/area.hpp"
 #include "asset_info.hpp"
 #include "asset_library.hpp"
-#include "spawn\asset_spawn_planner.hpp"
-#include "utils\light_source.hpp"
-
+#include "spawn/asset_spawn_planner.hpp"
+#include "utils/light_source.hpp"
+#include "asset_controller.hpp"
 
 class view;
+class Assets;
+class Input;
+
+
 
 struct StaticLight {
-    LightSource* source = nullptr;
-    int offset_x = 0;
-    int offset_y = 0;
-    double alpha_percentage = 1.0;
+   LightSource* source = nullptr;
+   int offset_x = 0;
+   int offset_y = 0;
+   double alpha_percentage = 1.0;
 };
 
 class Asset {
 public:
-    Area get_area(const std::string& name) const;
+   Area get_area(const std::string& name) const;
 
-    Asset(std::shared_ptr<AssetInfo> info,
-          const Area& spawn_area,
-          int start_pos_X,
-          int start_pos_Y,
-          int depth,
-          Asset* parent = nullptr);
+   Asset(std::shared_ptr<AssetInfo> info,
+         const Area& spawn_area,
+         int start_pos_X,
+         int start_pos_Y,
+         int depth,
+         Asset* parent = nullptr);
 
-    void finalize_setup();
-    void set_position(int x, int y);
-    void update();
-    void change_animation(const std::string& name);
+   Asset(const Asset& other);
+   Asset& operator=(const Asset& other);
+   Asset(Asset&&) noexcept = default;
+   Asset& operator=(Asset&&) noexcept = default;
+   ~Asset();
 
-    SDL_Texture* get_current_frame() const;
+   void finalize_setup();
+   void set_position(int x, int y);
+   void update();
+   void change_animation(const std::string& name);
 
-    std::string get_current_animation() const;
-    std::string get_type() const;
+   SDL_Texture* get_current_frame() const;
 
-    
-    void add_child(Asset* child);
-    inline const std::vector<Asset*>& get_children() const { return children; }
+   std::string get_current_animation() const;
+   std::string get_type() const;
 
-    void add_static_light_source(LightSource* light, int world_x, int world_y, Asset* owner);
+   void add_child(Asset* child);
+   inline const std::vector<Asset*>& get_children() const { return children; }
 
-    void set_render_player_light(bool value);
-    bool get_render_player_light() const;
+   void add_static_light_source(LightSource* light, int world_x, int world_y, Asset* owner);
 
-    void set_z_offset(int z);
-    void set_shading_group(int x);
-    bool is_shading_group_set() const;
-    int get_shading_group() const;
+   void set_render_player_light(bool value);
+   bool get_render_player_light() const;
 
-    SDL_Texture* get_final_texture() const;
-    void set_final_texture(SDL_Texture* tex);
+   void set_z_offset(int z);
+   void set_shading_group(int x);
+   bool is_shading_group_set() const;
+   int get_shading_group() const;
 
-    // Screen-space position (post-parallax) updated each frame
-    void set_screen_position(int sx, int sy);
-    inline int get_screen_x() const { return screen_X; }
-    inline int get_screen_y() const { return screen_Y; }
+   SDL_Texture* get_final_texture() const;
+   void set_final_texture(SDL_Texture* tex);
 
-    
-    void set_view(view* v) { window = v; }
+   void set_screen_position(int sx, int sy);
+   inline int get_screen_x() const { return screen_X; }
+   inline int get_screen_y() const { return screen_Y; }
 
-    Asset* parent = nullptr;
-    std::shared_ptr<AssetInfo> info;
-    std::string current_animation;
-    int pos_X = 0;
-    int pos_Y = 0;
-    int screen_X = 0; // computed by Parallax each frame
-    int screen_Y = 0; // computed by Parallax each frame
-    int z_index = 0;
-    int z_offset = 0;
-    int player_speed = 10;
-    bool is_lit = false;
-    bool has_base_shadow = false;
-    bool active = false;
-    bool flipped = false;
-    bool render_player_light = false;
+   void set_view(view* v) { window = v; }
 
-    double alpha_percentage = 1.0;
+   Asset* parent = nullptr;
+   std::shared_ptr<AssetInfo> info;
+   std::string current_animation;
+   int pos_X = 0;
+   int pos_Y = 0;
+   int screen_X = 0;
+   int screen_Y = 0;
+   int z_index = 0;
+   int z_offset = 0;
+   int player_speed = 10;
+   bool is_lit = false;
+   bool has_base_shadow = false;
+   bool active = false;
+   bool flipped = false;
+   bool render_player_light = false;
 
-    Area spawn_area_local;
-    std::vector<Area> base_areas;
-    std::vector<Area> areas;
+   double alpha_percentage = 1.0;
 
-    std::vector<Asset*> children;
+   Area spawn_area_local;
+   std::vector<Area> base_areas;
+   std::vector<Area> areas;
 
-    std::vector<StaticLight> static_lights;
-    int gradient_shadow = 0;
-    int depth = 0;
-    bool has_shading = false;
-    bool dead = false;
-    bool static_frame = true;
+   std::vector<Asset*> children;
 
-    void deactivate();
-    int cached_w = 0;
-    int cached_h = 0;
-    bool get_merge();
+   std::vector<StaticLight> static_lights;
+   int gradient_shadow = 0;
+   int depth = 0;
+   bool has_shading = false;
+   bool dead = false;
+   bool static_frame = true;
 
-    void set_hidden(bool state);
-    bool is_hidden();
-    void set_remove();
+   void deactivate();
+   int cached_w = 0;
+   int cached_h = 0;
+   bool get_merge();
 
-    void set_highlighted(bool state);
-    bool is_highlighted();
-    void set_selected(bool state);
-    bool is_selected();
+   void set_hidden(bool state);
+   bool is_hidden();
+   void set_remove();
+
+   void set_highlighted(bool state);
+   bool is_highlighted();
+   void set_selected(bool state);
+   bool is_selected();
+   // Assign owning Assets manager. Also initializes custom controller
+   // if one is specified for this Asset and not yet created.
+   void set_assets(Assets* a);
+   Assets* get_assets() const { return assets_; }
 
 private:
-    view* window = nullptr;        
-    bool highlighted = false;
-    bool hidden = false;
-    bool merged = false;
-    bool remove = false;
+   view* window = nullptr;
+   bool highlighted = false;
+   bool hidden = false;
+   bool merged = false;
+   bool remove = false;
 
-    void set_flip();
-    void set_z_index();
-    bool selected = false;
-    std::string next_animation;
-    int current_frame_index = 0;
-    float frame_progress = 0.0f;
-    int shading_group = 0;
-    bool shading_group_set = false;
+   void set_flip();
+   void set_z_index();
+   bool selected = false;
+   std::string next_animation;
+   int current_frame_index = 0;
+   float frame_progress = 0.0f;
+   int shading_group = 0;
+   bool shading_group_set = false;
 
-    SDL_Texture* final_texture = nullptr;
-    std::unordered_map<std::string, std::vector<SDL_Texture*>> custom_frames;
+   SDL_Texture* final_texture = nullptr;
+   std::unordered_map<std::string, std::vector<SDL_Texture*>> custom_frames;
+
+   Assets* assets_ = nullptr;
+
+   // single runtime controller
+   std::unique_ptr<AssetController> controller_;
 };
 
-#endif 
+#endif

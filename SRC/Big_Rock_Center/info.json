@@ -22,8 +22,7 @@
           0,
           0
         ]
-      ],
-      "on_end_mapping": "2c5da4d9"
+      ]
     }
   },
   "z_threshold": 1,
@@ -31,10 +30,6 @@
     "scale_percentage": 67
   },
   "min_same_type_distance": 643,
-  "visited_tabs": [
-    "Passability",
-    "Spacing"
-  ],
   "duplicatable": false,
   "duplication_interval_min": 2161,
   "duplication_interval_max": 3766,
@@ -47,7 +42,6 @@
   ],
   "rnd_spawn_min": 300,
   "rnd_spawn_max": 400,
-  "has_spacing": true,
   "child_assets": [
     {
       "z_offset": 1,
@@ -72,15 +66,6 @@
   ],
   "min_distance_all": 95,
   "anti_tags": [],
-  "shading_info": {
-    "has_shading": true,
-    "has_base_shadow": false,
-    "base_shadow_intensity": 0,
-    "has_gradient_shadow": false,
-    "gradient_shadow_intensity": 0,
-    "has_casted_shadows": false,
-    "cast_shadow_intensity": 0
-  },
   "can_invert": true,
   "update_radius": 1000,
   "render_radius": 1000,
@@ -2773,20 +2758,5 @@
       "offset_x": 0,
       "offset_y": 0
     }
-  ],
-  "mappings": {
-    "2c5da4d9": [
-      {
-        "condition": "",
-        "map_to": {
-          "options": [
-            {
-              "animation": "default",
-              "percent": 100
-            }
-          ]
-        }
-      }
-    ]
-  }
+  ]
 }

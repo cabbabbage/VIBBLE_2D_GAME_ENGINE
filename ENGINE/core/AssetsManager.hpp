@@ -13,7 +13,6 @@
 #include "room/room.hpp"
 
 class Asset;
-class ControlsManager;
 class SceneRenderer;
 struct SDL_Renderer;
 class CurrentRoomFinder;
@@ -51,6 +50,8 @@ Assets(std::vector<Asset>&& loaded,
 
     void remove(Asset* asset);
     void set_dev_mode(bool mode);
+    // Control whether rendering happens inside update() (useful for pause menus)
+    void set_render_suppressed(bool suppressed);
 
     
     void set_input(Input* m);
@@ -74,7 +75,7 @@ Assets(std::vector<Asset>&& loaded,
     // Non-owning flat list for easy iteration/access
     std::vector<Asset*> all;
     Asset* player = nullptr;
-    ControlsManager* controls = nullptr;
+    // Deprecated: controls moved to custom controllers (per-asset)
     
     CurrentRoomFinder* finder_ = nullptr;
 
@@ -99,6 +100,7 @@ Assets(std::vector<Asset>&& loaded,
     int num_groups_ = 4;
     bool dev_mode = false;
     AssetLibrary& library_;
+    bool suppress_render_ = false;
 
     // Spawn API
     Asset* spawn_asset(const std::string& name, int world_x, int world_y);
@@ -130,4 +132,5 @@ private:
     void addAsset(const std::string& name, int gx, int gy);
 
     friend class SceneRenderer;
+    friend class Asset; // allow assets to access internals if needed
 };

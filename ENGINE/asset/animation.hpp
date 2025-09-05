@@ -53,6 +53,9 @@ public:
     int number_of_frames = 0;
     std::vector<std::pair<int,int>> movement;
     std::string on_end_mapping;
+    // If using simplified schema (no mappings), this holds the direct
+    // animation id to switch to when the animation ends.
+    std::string on_end_animation;
 
     std::vector<SDL_Texture*> frames;
 

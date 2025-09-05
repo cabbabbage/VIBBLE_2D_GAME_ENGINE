@@ -1,201 +1,11 @@
 {
-  "impassable_area": null,
-  "asset_name": "Davey",
-  "asset_type": "Player",
   "animations": {
-    "default": {
-      "source": {
-        "kind": "folder",
-        "path": "default",
-        "name": null
-      },
-      "flipped_source": false,
-      "reverse_source": false,
-      "locked": false,
-      "speed_factor": 1,
-      "number_of_frames": 25,
-      "movement": [
-        [
-          0,
-          0
-        ],
-        [
-          0,
-          0
-        ],
-        [
-          0,
-          0
-        ],
-        [
-          0,
-          0
-        ],
-        [
-          0,
-          0
-        ],
-        [
-          0,
-          0
-        ],
-        [
-          0,
-          0
-        ],
-        [
-          0,
-          0
-        ],
-        [
-          0,
-          0
-        ],
-        [
-          0,
-          0
-        ],
-        [
-          0,
-          0
-        ],
-        [
-          0,
-          0
-        ],
-        [
-          0,
-          0
-        ],
-        [
-          0,
-          0
-        ],
-        [
-          0,
-          0
-        ],
-        [
-          0,
-          0
-        ],
-        [
-          0,
-          0
-        ],
-        [
-          0,
-          0
-        ],
-        [
-          0,
-          0
-        ],
-        [
-          0,
-          0
-        ],
-        [
-          0,
-          0
-        ],
-        [
-          0,
-          0
-        ],
-        [
-          0,
-          0
-        ],
-        [
-          0,
-          0
-        ],
-        [
-          0,
-          0
-        ]
-      ],
-      "on_end_mapping": "9770dc59"
-    },
-    "right": {
-      "source": {
-        "kind": "folder",
-        "path": "right",
-        "name": null
-      },
-      "flipped_source": false,
-      "reverse_source": false,
-      "locked": false,
-      "speed_factor": 1,
-      "number_of_frames": 13,
-      "movement": [
-        [
-          0,
-          0
-        ],
-        [
-          0,
-          0
-        ],
-        [
-          0,
-          0
-        ],
-        [
-          0,
-          0
-        ],
-        [
-          0,
-          0
-        ],
-        [
-          0,
-          0
-        ],
-        [
-          0,
-          0
-        ],
-        [
-          0,
-          0
-        ],
-        [
-          0,
-          0
-        ],
-        [
-          0,
-          0
-        ],
-        [
-          0,
-          0
-        ],
-        [
-          0,
-          0
-        ],
-        [
-          0,
-          0
-        ]
-      ],
-      "on_end_mapping": "671fd1cf"
-    },
     "backward": {
-      "source": {
-        "kind": "folder",
-        "path": "backward",
-        "name": null
-      },
+      "custom_animation_controller_hpp_path": "",
+      "custom_animation_controller_key": "",
       "flipped_source": false,
-      "reverse_source": false,
+      "has_custom_animation_controller": false,
       "locked": false,
-      "speed_factor": 1,
-      "number_of_frames": 13,
       "movement": [
         [
           0,
@@ -203,67 +13,191 @@
         ],
         [
           0,
-          0
+          3,
+          true,
+          [
+            255,
+            255,
+            255
+          ]
         ],
         [
           0,
-          0
+          4,
+          true,
+          [
+            255,
+            255,
+            255
+          ]
         ],
         [
           0,
-          0
+          3,
+          true,
+          [
+            255,
+            255,
+            255
+          ]
         ],
         [
           0,
-          0
+          3,
+          true,
+          [
+            255,
+            255,
+            255
+          ]
         ],
         [
           0,
-          0
+          4,
+          true,
+          [
+            255,
+            255,
+            255
+          ]
         ],
         [
           0,
-          0
+          3,
+          true,
+          [
+            255,
+            255,
+            255
+          ]
         ],
         [
           0,
-          0
+          3,
+          true,
+          [
+            255,
+            255,
+            255
+          ]
         ],
         [
           0,
-          0
+          4,
+          true,
+          [
+            255,
+            255,
+            255
+          ]
         ],
         [
           0,
-          0
+          3,
+          true,
+          [
+            255,
+            255,
+            255
+          ]
         ],
         [
           0,
-          0
+          3,
+          true,
+          [
+            255,
+            255,
+            255
+          ]
         ],
         [
           0,
-          0
+          4,
+          true,
+          [
+            255,
+            255,
+            255
+          ]
         ],
         [
           0,
-          0
+          3,
+          true,
+          [
+            255,
+            255,
+            255
+          ]
         ]
       ],
-      "on_end_mapping": "5657dfe4"
-    },
-    "forward": {
+      "number_of_frames": 13,
+      "on_end": "default",
+      "reverse_source": false,
       "source": {
         "kind": "folder",
         "path": "forward",
         "name": null
       },
+      "speed_factor": 1
+    },
+    "default": {
+      "custom_animation_controller_hpp_path": "C:\\Users\\cal_m\\OneDrive\\Documents\\GitHub\\VIBBLE_2D_GAME_ENGINE\\ENGINE\\custom_controllers\\Davey_default_controller.hpp",
+      "custom_animation_controller_key": "Davey_default_controller",
       "flipped_source": false,
-      "reverse_source": false,
+      "has_custom_animation_controller": true,
+      "has_custom_tick_update": false,
       "locked": false,
-      "speed_factor": 1,
-      "number_of_frames": 13,
       "movement": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
         [
           0,
           0
@@ -317,19 +251,22 @@
           0
         ]
       ],
-      "on_end_mapping": "76b46430"
-    },
-    "left": {
+      "number_of_frames": 25,
+      "on_end": "default",
+      "reverse_source": false,
       "source": {
         "kind": "folder",
-        "path": "left",
-        "name": null
+        "name": null,
+        "path": "default"
       },
+      "speed_factor": 1
+    },
+    "forward": {
+      "custom_animation_controller_hpp_path": "",
+      "custom_animation_controller_key": "",
       "flipped_source": false,
-      "reverse_source": false,
+      "has_custom_animation_controller": false,
       "locked": false,
-      "speed_factor": 1,
-      "number_of_frames": 13,
       "movement": [
         [
           0,
@@ -384,18 +321,207 @@
           0
         ]
       ],
-      "on_end_mapping": "846c131e"
+      "number_of_frames": 13,
+      "on_end": "default",
+      "reverse_source": false,
+      "source": {
+        "kind": "folder",
+        "name": null,
+        "path": "backward"
+      },
+      "speed_factor": 1
+    },
+    "left": {
+      "custom_animation_controller_hpp_path": "",
+      "custom_animation_controller_key": "",
+      "flipped_source": true,
+      "has_custom_animation_controller": false,
+      "locked": false,
+      "movement": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ]
+      ],
+      "number_of_frames": 13,
+      "on_end": "default",
+      "reverse_source": false,
+      "source": {
+        "kind": "animation",
+        "name": "right",
+        "path": ""
+      },
+      "speed_factor": 1
+    },
+    "right": {
+      "flipped_source": false,
+      "has_custom_tick_update": true,
+      "locked": false,
+      "movement": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ]
+      ],
+      "number_of_frames": 13,
+      "on_end": "default",
+      "reverse_source": false,
+      "source": {
+        "kind": "folder",
+        "name": null,
+        "path": "right"
+      },
+      "speed_factor": 1
     }
   },
-  "z_threshold": 43,
+  "anti_tags": [],
+  "areas": [
+    {}
+  ],
+  "asset_name": "Davey",
+  "asset_type": "Player",
+  "custom_controller_key": "Davey_controller",
+  "has_shading": true,
+  "impassable_area": null,
+  "layout": {
+    "__view": {
+      "geometry": "1920x1009+5+-19",
+      "zoom": 1.0,
+      "xview": 0.0,
+      "yview": 0.0
+    }
+  },
+  "lighting_info": [
+    {
+      "factor": 100,
+      "falloff": 0,
+      "has_light_source": true,
+      "light_intensity": 255,
+      "radius": 592,
+      "x_radius": 45,
+      "y_radius": 127
+    },
+    {
+      "falloff": 0,
+      "flare": 0,
+      "flicker": 0,
+      "has_light_source": true,
+      "light_color": [
+        255,
+        255,
+        255
+      ],
+      "light_intensity": 164,
+      "offset_x": 0,
+      "offset_y": -9,
+      "radius": 300
+    }
+  ],
+  "mappings": {},
+  "min_distance_all": 0,
+  "min_same_type_distance": 686,
+  "rnd_spawn_max": 400,
+  "rnd_spawn_min": 300,
   "size_settings": {
     "scale_percentage": 45
   },
-  "visited_tabs": [
-    "Passability",
-    "Spacing"
-  ],
-  "min_same_type_distance": 686,
+  "start": "default",
   "tags": [
     "forward",
     "passable",
@@ -406,887 +532,5 @@
     "backward",
     "right"
   ],
-  "rnd_spawn_min": 300,
-  "rnd_spawn_max": 400,
-  "lighting_info": [
-    {
-      "has_light_source": true,
-      "light_intensity": 255,
-      "radius": 592,
-      "y_radius": 127,
-      "x_radius": 45,
-      "falloff": 0,
-      "factor": 100
-    },
-    {
-      "has_light_source": true,
-      "light_intensity": 164,
-      "light_color": [
-        255,
-        255,
-        255
-      ],
-      "radius": 300,
-      "falloff": 0,
-      "flicker": 0,
-      "flare": 0,
-      "offset_x": 0,
-      "offset_y": -9
-    }
-  ],
-  "shading_info": {
-    "has_shading": false,
-    "has_base_shadow": null,
-    "base_shadow_intensity": null,
-    "has_gradient_shadow": null,
-    "number_of_gradient_shadows": null,
-    "gradient_shadow_intensity": null,
-    "has_casted_shadows": null,
-    "number_of_casted_shadows": null,
-    "cast_shadow_intensity": null
-  },
-  "has_spacing": true,
-  "min_distance_all": 0,
-  "anti_tags": [],
-  "has_shading": true,
-  "areas": [
-    {
-      "name": "spacing_area",
-      "points": [
-        [
-          20,
-          -188
-        ],
-        [
-          28,
-          -188
-        ],
-        [
-          -16,
-          -186
-        ],
-        [
-          32,
-          -186
-        ],
-        [
-          -18,
-          -184
-        ],
-        [
-          34,
-          -184
-        ],
-        [
-          -24,
-          -182
-        ],
-        [
-          36,
-          -182
-        ],
-        [
-          -26,
-          -180
-        ],
-        [
-          36,
-          -180
-        ],
-        [
-          -30,
-          -178
-        ],
-        [
-          38,
-          -178
-        ],
-        [
-          -34,
-          -176
-        ],
-        [
-          40,
-          -176
-        ],
-        [
-          -36,
-          -174
-        ],
-        [
-          42,
-          -174
-        ],
-        [
-          -38,
-          -172
-        ],
-        [
-          44,
-          -172
-        ],
-        [
-          -40,
-          -170
-        ],
-        [
-          44,
-          -170
-        ],
-        [
-          -42,
-          -168
-        ],
-        [
-          48,
-          -168
-        ],
-        [
-          -44,
-          -166
-        ],
-        [
-          50,
-          -166
-        ],
-        [
-          -46,
-          -164
-        ],
-        [
-          50,
-          -164
-        ],
-        [
-          -48,
-          -162
-        ],
-        [
-          52,
-          -162
-        ],
-        [
-          -50,
-          -160
-        ],
-        [
-          54,
-          -160
-        ],
-        [
-          -52,
-          -158
-        ],
-        [
-          54,
-          -158
-        ],
-        [
-          -54,
-          -156
-        ],
-        [
-          56,
-          -156
-        ],
-        [
-          -54,
-          -154
-        ],
-        [
-          58,
-          -154
-        ],
-        [
-          -56,
-          -152
-        ],
-        [
-          58,
-          -152
-        ],
-        [
-          -56,
-          -150
-        ],
-        [
-          58,
-          -150
-        ],
-        [
-          -58,
-          -148
-        ],
-        [
-          60,
-          -148
-        ],
-        [
-          -58,
-          -146
-        ],
-        [
-          62,
-          -146
-        ],
-        [
-          -58,
-          -144
-        ],
-        [
-          64,
-          -144
-        ],
-        [
-          -60,
-          -142
-        ],
-        [
-          64,
-          -142
-        ],
-        [
-          -60,
-          -140
-        ],
-        [
-          64,
-          -140
-        ],
-        [
-          -62,
-          -138
-        ],
-        [
-          66,
-          -138
-        ],
-        [
-          -62,
-          -136
-        ],
-        [
-          68,
-          -136
-        ],
-        [
-          -64,
-          -134
-        ],
-        [
-          68,
-          -134
-        ],
-        [
-          -66,
-          -132
-        ],
-        [
-          70,
-          -132
-        ],
-        [
-          -66,
-          -130
-        ],
-        [
-          70,
-          -130
-        ],
-        [
-          -66,
-          -128
-        ],
-        [
-          72,
-          -128
-        ],
-        [
-          -66,
-          -126
-        ],
-        [
-          72,
-          -126
-        ],
-        [
-          -70,
-          -124
-        ],
-        [
-          74,
-          -124
-        ],
-        [
-          -70,
-          -122
-        ],
-        [
-          74,
-          -122
-        ],
-        [
-          -70,
-          -120
-        ],
-        [
-          74,
-          -120
-        ],
-        [
-          -74,
-          -118
-        ],
-        [
-          76,
-          -118
-        ],
-        [
-          -74,
-          -116
-        ],
-        [
-          78,
-          -116
-        ],
-        [
-          -74,
-          -114
-        ],
-        [
-          78,
-          -114
-        ],
-        [
-          -74,
-          -112
-        ],
-        [
-          80,
-          -112
-        ],
-        [
-          -74,
-          -110
-        ],
-        [
-          80,
-          -110
-        ],
-        [
-          -76,
-          -108
-        ],
-        [
-          80,
-          -108
-        ],
-        [
-          -76,
-          -106
-        ],
-        [
-          80,
-          -106
-        ],
-        [
-          -76,
-          -104
-        ],
-        [
-          82,
-          -104
-        ],
-        [
-          -78,
-          -102
-        ],
-        [
-          84,
-          -102
-        ],
-        [
-          -78,
-          -100
-        ],
-        [
-          84,
-          -100
-        ],
-        [
-          -78,
-          -98
-        ],
-        [
-          84,
-          -98
-        ],
-        [
-          -80,
-          -96
-        ],
-        [
-          84,
-          -96
-        ],
-        [
-          -80,
-          -94
-        ],
-        [
-          84,
-          -94
-        ],
-        [
-          -80,
-          -92
-        ],
-        [
-          84,
-          -92
-        ],
-        [
-          -80,
-          -90
-        ],
-        [
-          84,
-          -90
-        ],
-        [
-          -82,
-          -88
-        ],
-        [
-          84,
-          -88
-        ],
-        [
-          -82,
-          -86
-        ],
-        [
-          84,
-          -86
-        ],
-        [
-          -82,
-          -84
-        ],
-        [
-          84,
-          -84
-        ],
-        [
-          -82,
-          -82
-        ],
-        [
-          84,
-          -82
-        ],
-        [
-          -84,
-          -80
-        ],
-        [
-          84,
-          -80
-        ],
-        [
-          -84,
-          -78
-        ],
-        [
-          84,
-          -78
-        ],
-        [
-          -84,
-          -76
-        ],
-        [
-          84,
-          -76
-        ],
-        [
-          -84,
-          -74
-        ],
-        [
-          84,
-          -74
-        ],
-        [
-          -84,
-          -72
-        ],
-        [
-          84,
-          -72
-        ],
-        [
-          -84,
-          -70
-        ],
-        [
-          84,
-          -70
-        ],
-        [
-          -84,
-          -68
-        ],
-        [
-          84,
-          -68
-        ],
-        [
-          -84,
-          -66
-        ],
-        [
-          84,
-          -66
-        ],
-        [
-          -84,
-          -64
-        ],
-        [
-          84,
-          -64
-        ],
-        [
-          -84,
-          -62
-        ],
-        [
-          84,
-          -62
-        ],
-        [
-          -84,
-          -60
-        ],
-        [
-          84,
-          -60
-        ],
-        [
-          -84,
-          -58
-        ],
-        [
-          84,
-          -58
-        ],
-        [
-          -84,
-          -56
-        ],
-        [
-          84,
-          -56
-        ],
-        [
-          -84,
-          -54
-        ],
-        [
-          84,
-          -54
-        ],
-        [
-          -84,
-          -52
-        ],
-        [
-          84,
-          -52
-        ],
-        [
-          -84,
-          -50
-        ],
-        [
-          84,
-          -50
-        ],
-        [
-          -82,
-          -48
-        ],
-        [
-          84,
-          -48
-        ],
-        [
-          -82,
-          -46
-        ],
-        [
-          84,
-          -46
-        ],
-        [
-          -80,
-          -44
-        ],
-        [
-          84,
-          -44
-        ],
-        [
-          -78,
-          -42
-        ],
-        [
-          84,
-          -42
-        ],
-        [
-          -78,
-          -40
-        ],
-        [
-          84,
-          -40
-        ],
-        [
-          -76,
-          -38
-        ],
-        [
-          84,
-          -38
-        ],
-        [
-          -76,
-          -36
-        ],
-        [
-          84,
-          -36
-        ],
-        [
-          -74,
-          -34
-        ],
-        [
-          84,
-          -34
-        ],
-        [
-          -70,
-          -32
-        ],
-        [
-          84,
-          -32
-        ],
-        [
-          -70,
-          -30
-        ],
-        [
-          82,
-          -30
-        ],
-        [
-          -66,
-          -28
-        ],
-        [
-          82,
-          -28
-        ],
-        [
-          -64,
-          -26
-        ],
-        [
-          80,
-          -26
-        ],
-        [
-          -64,
-          -24
-        ],
-        [
-          80,
-          -24
-        ],
-        [
-          -60,
-          -22
-        ],
-        [
-          78,
-          -22
-        ],
-        [
-          -58,
-          -20
-        ],
-        [
-          78,
-          -20
-        ],
-        [
-          -56,
-          -18
-        ],
-        [
-          76,
-          -18
-        ],
-        [
-          -54,
-          -16
-        ],
-        [
-          74,
-          -16
-        ],
-        [
-          -50,
-          -14
-        ],
-        [
-          74,
-          -14
-        ],
-        [
-          -48,
-          -12
-        ],
-        [
-          72,
-          -12
-        ],
-        [
-          -46,
-          -10
-        ],
-        [
-          70,
-          -10
-        ],
-        [
-          -40,
-          -8
-        ],
-        [
-          70,
-          -8
-        ],
-        [
-          -36,
-          -6
-        ],
-        [
-          68,
-          -6
-        ],
-        [
-          -34,
-          -4
-        ],
-        [
-          66,
-          -4
-        ],
-        [
-          -24,
-          -2
-        ],
-        [
-          62,
-          -2
-        ],
-        [
-          -10,
-          0
-        ],
-        [
-          60,
-          0
-        ]
-      ],
-      "original_dimensions": [
-        480,
-        270
-      ],
-      "offset_x": 0,
-      "offset_y": 0
-    }
-  ],
-  "mappings": {
-    "9770dc59": [
-      {
-        "condition": "",
-        "map_to": {
-          "options": [
-            {
-              "animation": "default",
-              "percent": 100
-            }
-          ]
-        }
-      }
-    ],
-    "671fd1cf": [
-      {
-        "condition": "",
-        "map_to": {
-          "options": [
-            {
-              "animation": "right",
-              "percent": 100
-            }
-          ]
-        }
-      }
-    ],
-    "5657dfe4": [
-      {
-        "condition": "",
-        "map_to": {
-          "options": [
-            {
-              "animation": "backward",
-              "percent": 100
-            }
-          ]
-        }
-      }
-    ],
-    "76b46430": [
-      {
-        "condition": "",
-        "map_to": {
-          "options": [
-            {
-              "animation": "forward",
-              "percent": 100
-            }
-          ]
-        }
-      }
-    ],
-    "846c131e": [
-      {
-        "condition": "",
-        "map_to": {
-          "options": [
-            {
-              "animation": "left",
-              "percent": 100
-            }
-          ]
-        }
-      }
-    ]
-  }
+  "z_threshold": 43
 }

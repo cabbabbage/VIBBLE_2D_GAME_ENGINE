@@ -34,8 +34,7 @@
           0,
           0
         ]
-      ],
-      "on_end_mapping": "41504163"
+      ]
     }
   },
   "rnd_spawn_min": 300,
@@ -57,15 +56,6 @@
     }
   ],
   "anti_tags": [],
-  "shading_info": {
-    "has_shading": true,
-    "has_base_shadow": false,
-    "base_shadow_intensity": 0,
-    "has_gradient_shadow": false,
-    "gradient_shadow_intensity": 0,
-    "has_casted_shadows": false,
-    "cast_shadow_intensity": 0
-  },
   "has_shading": true,
   "lighting_info": [
     {
@@ -594,20 +584,5 @@
       "offset_x": 0,
       "offset_y": 0
     }
-  ],
-  "mappings": {
-    "41504163": [
-      {
-        "condition": "",
-        "map_to": {
-          "options": [
-            {
-              "animation": "default",
-              "percent": 100
-            }
-          ]
-        }
-      }
-    ]
-  }
+  ]
 }

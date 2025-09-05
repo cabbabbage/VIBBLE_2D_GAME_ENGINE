@@ -22,8 +22,7 @@
           0,
           0
         ]
-      ],
-      "on_end_mapping": "80e6fefc"
+      ]
     }
   },
   "impassable_area": null,
@@ -34,9 +33,6 @@
     "flipability": true
   },
   "min_same_type_distance": 29,
-  "visited_tabs": [
-    "Spacing"
-  ],
   "tags": [
     "nature",
     "cover",
@@ -64,19 +60,7 @@
     "jitter_max": 0,
     "flicker": false
   },
-  "shading_info": {
-    "has_shading": false,
-    "has_base_shadow": null,
-    "base_shadow_intensity": null,
-    "has_gradient_shadow": null,
-    "number_of_gradient_shadows": null,
-    "gradient_shadow_intensity": null,
-    "has_casted_shadows": null,
-    "number_of_casted_shadows": null,
-    "cast_shadow_intensity": null
-  },
   "anti_tags": [],
-  "has_spacing": true,
   "min_distance_all": 0,
   "areas": [
     {
@@ -578,20 +562,5 @@
       "offset_x": 0,
       "offset_y": 0
     }
-  ],
-  "mappings": {
-    "80e6fefc": [
-      {
-        "condition": "",
-        "map_to": {
-          "options": [
-            {
-              "animation": "default",
-              "percent": 100
-            }
-          ]
-        }
-      }
-    ]
-  }
+  ]
 }

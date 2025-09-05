@@ -17,6 +17,10 @@ public:
     bool wasReleased(Button b) const { return released_[b]; }
     bool wasClicked(Button b) const; // short-lived click buffer
 
+    // Clear all pending click buffers (prevents stale clicks being processed
+    // for multiple frames, e.g., when switching UI modes)
+    void clearClickBuffer();
+
     int getX() const { return x_; }
     int getY() const { return y_; }
 

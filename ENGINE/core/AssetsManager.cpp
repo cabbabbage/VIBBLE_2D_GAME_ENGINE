@@ -1,8 +1,7 @@
 
-#include "Assets.hpp"
+#include "AssetsManager.hpp"
 #include "asset/initialize_assets.hpp"
 
-#include "controls_manager.hpp"
 #include "find_current_room.hpp"   
 #include "asset/Asset.hpp"
 #include "asset/asset_info.hpp"
@@ -23,6 +22,15 @@ void set_view_recursive(Asset* asset, view* v) {
     asset->set_view(v);
     for (Asset* child : asset->children) {
         set_view_recursive(child, v);
+    }
+}
+
+// Ensure newly created assets and any children know their owning Assets manager
+void set_assets_owner_recursive(Asset* asset, Assets* owner) {
+    if (!asset) return;
+    asset->set_assets(owner);
+    for (Asset* child : asset->children) {
+        set_assets_owner_recursive(child, owner);
     }
 }
 } // namespace
@@ -63,11 +71,15 @@ Assets::Assets(std::vector<Asset>&& loaded,
 
     // Create scene renderer owned by Assets
     scene = new SceneRenderer(renderer, this, screen_width_, screen_height_, map_path);
+
+    // Ensure all existing assets have a back-reference to this manager
+    for (Asset* a : all) {
+        if (a) a->set_assets(this);
+    }
 }
 
 
 Assets::~Assets() {
-    delete controls;
     delete scene;
     delete finder_;
     delete dev_mouse;
@@ -102,16 +114,22 @@ void Assets::update(const Input& input,
 
     dx = dy = 0;
 
-    if (controls) {
-        controls->update(input); 
-        dx = controls->get_dx();
-        dy = controls->get_dy();
-    }
+    // Track player start position for this tick
+    int start_px = player ? player->pos_X : 0;
+    int start_py = player ? player->pos_Y : 0;
+
+    // Per-asset controllers now live inside each Asset instance
 
     active_assets  = activeManager.getActive();
     closest_assets = activeManager.getClosest();
 
+    // Advance player (applies per-frame movement from animation)
     if (player) player->update();
+    // Compute dx/dy from resulting position delta
+    if (player) {
+        dx = player->pos_X - start_px;
+        dy = player->pos_Y - start_py;
+    }
     for (Asset* a : active_assets) {
         if (a && a != player)
             a->update();
@@ -136,8 +154,8 @@ void Assets::update(const Input& input,
     // Update any visible UI
     update_ui(input);
 
-    // Render the scene each tick from within Assets
-    if (scene) scene->render();
+    // Render the scene each tick from within Assets (unless suppressed by UI)
+    if (scene && !suppress_render_) scene->render();
 }
 
 void Assets::remove(Asset* asset) {
@@ -164,6 +182,18 @@ void Assets::remove(Asset* asset) {
 
 void Assets::set_dev_mode(bool mode) {
     dev_mode = mode;
+    // Close any UI panels when entering dev mode to start clean
+    if (dev_mode) {
+        close_asset_library();
+        close_asset_info_editor();
+    }
+    // Clear any pending mouse click buffers to avoid stale clicks opening panels
+    if (input) input->clearClickBuffer();
+    if (dev_mouse) dev_mouse->reset_click_state();
+}
+
+void Assets::set_render_suppressed(bool suppressed) {
+    suppress_render_ = suppressed;
 }
 
 
@@ -238,6 +268,7 @@ void Assets::addAsset(const std::string& name, int gx, int gy) {
     // Set view + finalize
     try {
         set_view_recursive(newAsset, &window);
+        set_assets_owner_recursive(newAsset, this);
         std::cout << "[Assets::addAsset] View set successfully\n";
         newAsset->finalize_setup();
         std::cout << "[Assets::addAsset] Finalize setup successful\n";
@@ -299,6 +330,7 @@ Asset* Assets::spawn_asset(const std::string& name, int world_x, int world_y) {
 
     try {
         set_view_recursive(newAsset, &window);
+        set_assets_owner_recursive(newAsset, this);
         std::cout << "[Assets::spawn_asset] View set successfully\n";
         newAsset->finalize_setup();
         std::cout << "[Assets::spawn_asset] Finalize setup successful\n";
