@@ -46,13 +46,7 @@
             "movement": [
                 [
                     0,
-                    0,
-                    true,
-                    [
-                        255,
-                        255,
-                        255
-                    ]
+                    0
                 ],
                 [
                     2,
@@ -188,13 +182,7 @@
             "movement": [
                 [
                     0,
-                    0,
-                    true,
-                    [
-                        255,
-                        255,
-                        255
-                    ]
+                    0
                 ],
                 [
                     -2,
@@ -330,13 +318,7 @@
             "movement": [
                 [
                     0,
-                    0,
-                    true,
-                    [
-                        255,
-                        255,
-                        255
-                    ]
+                    0
                 ],
                 [
                     0,
@@ -472,13 +454,7 @@
             "movement": [
                 [
                     0,
-                    0,
-                    true,
-                    [
-                        255,
-                        255,
-                        255
-                    ]
+                    0
                 ],
                 [
                     0,
@@ -603,7 +579,7 @@
     },
     "z_threshold": 0,
     "size_settings": {
-        "scale_percentage": 12
+        "scale_percentage": 25
     },
     "tags": [
         "passable"
@@ -617,10 +593,10 @@
     "mappings": {},
     "layout": {
         "__view": {
-            "geometry": "1920x1009+156+156",
+            "geometry": "1920x1009+-136+49",
             "zoom": 1.0,
             "xview": 0.0,
-            "yview": 0.0
+            "yview": 0.28237951807228917
         }
     },
     "start": "left",

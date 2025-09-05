@@ -184,12 +184,7 @@ class SourcesElementPanel:
         rel = os.path.basename(out_dir)
         self.folder_rel_var.set(rel)
         self.kind_var.set("folder")
-        # crop frames if available
-        if callable(crop_folder):
-            try:
-                crop_folder(out_dir, verbose=False)
-            except Exception:
-                pass
+
         # optionally write preview.gif if PIL present
         if Image is not None:
             try:
