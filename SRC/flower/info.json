@@ -41,17 +41,6 @@
       "flicker": false
     }
   ],
-  "shading_info": {
-    "has_shading": false,
-    "has_base_shadow": null,
-    "base_shadow_intensity": null,
-    "has_gradient_shadow": null,
-    "number_of_gradient_shadows": null,
-    "gradient_shadow_intensity": null,
-    "has_casted_shadows": null,
-    "number_of_casted_shadows": null,
-    "cast_shadow_intensity": null
-  },
   "z_threshold": 6,
   "size_settings": {
     "scale_percentage": 6,
@@ -79,11 +68,9 @@
           0,
           0
         ]
-      ],
-      "on_end_mapping": "27350f70"
+      ]
     }
   },
-  "has_spacing": true,
   "min_same_type_distance": 20,
   "anti_tags": [
     "bone",
@@ -4464,20 +4451,5 @@
       "offset_x": 0,
       "offset_y": 0
     }
-  ],
-  "mappings": {
-    "27350f70": [
-      {
-        "condition": "",
-        "map_to": {
-          "options": [
-            {
-              "animation": "default",
-              "percent": 100
-            }
-          ]
-        }
-      }
-    ]
-  }
+  ]
 }

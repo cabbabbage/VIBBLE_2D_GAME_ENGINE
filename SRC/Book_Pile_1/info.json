@@ -22,8 +22,7 @@
           0,
           0
         ]
-      ],
-      "on_end_mapping": "e82cd8ad"
+      ]
     }
   },
   "impassable_area": null,
@@ -32,9 +31,6 @@
     "scale_percentage": 20
   },
   "min_same_type_distance": 1000,
-  "visited_tabs": [
-    "Spacing"
-  ],
   "tags": [
     "passable",
     "barrel_child",
@@ -47,7 +43,6 @@
   "anti_tags": [
     "ground"
   ],
-  "has_spacing": true,
   "min_distance_all": 0,
   "areas": [
     {
@@ -165,20 +160,5 @@
       "offset_x": 0,
       "offset_y": 0
     }
-  ],
-  "mappings": {
-    "e82cd8ad": [
-      {
-        "condition": "",
-        "map_to": {
-          "options": [
-            {
-              "animation": "default",
-              "percent": 100
-            }
-          ]
-        }
-      }
-    ]
-  }
+  ]
 }

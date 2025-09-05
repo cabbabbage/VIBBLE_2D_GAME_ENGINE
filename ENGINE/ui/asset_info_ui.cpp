@@ -15,6 +15,7 @@
 #include "ui/text_box.hpp"
 #include "utils/text_style.hpp"
 #include "ui/styles.hpp"
+#include "custom_controllers/Vibble_controller.hpp"
 
 namespace {
     
@@ -178,8 +179,15 @@ void AssetInfoUI::update(const Input& input, int screen_w, int screen_h) {
 
 void AssetInfoUI::handle_event(const SDL_Event& e) {
     if (!visible_ || !info_) return;
+    // Close on ESC
+    if (e.type == SDL_KEYDOWN && e.key.keysym.sym == SDLK_ESCAPE) {
+        close();
+        return;
+    }
+    // Close button
     if (b_close_ && b_close_->handle_event(e)) {
-        return; // close() already called in button callback
+        close();
+        return;
     }
     if (b_config_anim_ && b_config_anim_->handle_event(e)) {
         save_now();

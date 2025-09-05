@@ -22,19 +22,13 @@
           0,
           0
         ]
-      ],
-      "on_end_mapping": "d081f1d9"
+      ]
     }
   },
   "z_threshold": 1,
   "size_settings": {
     "scale_percentage": 13
   },
-  "visited_tabs": [
-    "Passability",
-    "Region-Based Child Assets",
-    "Spacing"
-  ],
   "min_same_type_distance": 1038,
   "duplicatable": false,
   "duplication_interval_min": 30,
@@ -51,7 +45,6 @@
   ],
   "rnd_spawn_min": 300,
   "rnd_spawn_max": 400,
-  "has_spacing": true,
   "anti_tags": [],
   "child_assets": [
     {
@@ -6283,20 +6276,5 @@
       "offset_x": 0,
       "offset_y": 0
     }
-  ],
-  "mappings": {
-    "d081f1d9": [
-      {
-        "condition": "",
-        "map_to": {
-          "options": [
-            {
-              "animation": "default",
-              "percent": 100
-            }
-          ]
-        }
-      }
-    ]
-  }
+  ]
 }

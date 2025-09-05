@@ -27,8 +27,7 @@
           0,
           0
         ]
-      ],
-      "on_end_mapping": "b404376f"
+      ]
     }
   },
   "z_threshold": 0,
@@ -686,20 +685,5 @@
       "offset_x": 0,
       "offset_y": 0
     }
-  ],
-  "mappings": {
-    "b404376f": [
-      {
-        "condition": "",
-        "map_to": {
-          "options": [
-            {
-              "animation": "default",
-              "percent": 100
-            }
-          ]
-        }
-      }
-    ]
-  }
+  ]
 }

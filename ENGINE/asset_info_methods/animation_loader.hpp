@@ -3,6 +3,7 @@
 #include <SDL.h>
 #include "custom_controllers/Davey_controller.hpp"
 #include "custom_controllers/Davey_default_controller.hpp"
+#include "custom_controllers/Vibble_controller.hpp"
 
 class AssetInfo;
 

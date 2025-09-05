@@ -2,7 +2,6 @@
 #include "AssetsManager.hpp"
 #include "asset/initialize_assets.hpp"
 
-#include "controls_manager.hpp"
 #include "find_current_room.hpp"   
 #include "asset/Asset.hpp"
 #include "asset/asset_info.hpp"
@@ -81,7 +80,6 @@ Assets::Assets(std::vector<Asset>&& loaded,
 
 
 Assets::~Assets() {
-    delete controls;
     delete scene;
     delete finder_;
     delete dev_mouse;
@@ -116,16 +114,22 @@ void Assets::update(const Input& input,
 
     dx = dy = 0;
 
-    if (controls) {
-        controls->update(input); 
-        dx = controls->get_dx();
-        dy = controls->get_dy();
-    }
+    // Track player start position for this tick
+    int start_px = player ? player->pos_X : 0;
+    int start_py = player ? player->pos_Y : 0;
+
+    // Per-asset controllers now live inside each Asset instance
 
     active_assets  = activeManager.getActive();
     closest_assets = activeManager.getClosest();
 
+    // Advance player (applies per-frame movement from animation)
     if (player) player->update();
+    // Compute dx/dy from resulting position delta
+    if (player) {
+        dx = player->pos_X - start_px;
+        dy = player->pos_Y - start_py;
+    }
     for (Asset* a : active_assets) {
         if (a && a != player)
             a->update();
@@ -150,8 +154,8 @@ void Assets::update(const Input& input,
     // Update any visible UI
     update_ui(input);
 
-    // Render the scene each tick from within Assets
-    if (scene) scene->render();
+    // Render the scene each tick from within Assets (unless suppressed by UI)
+    if (scene && !suppress_render_) scene->render();
 }
 
 void Assets::remove(Asset* asset) {
@@ -178,6 +182,18 @@ void Assets::remove(Asset* asset) {
 
 void Assets::set_dev_mode(bool mode) {
     dev_mode = mode;
+    // Close any UI panels when entering dev mode to start clean
+    if (dev_mode) {
+        close_asset_library();
+        close_asset_info_editor();
+    }
+    // Clear any pending mouse click buffers to avoid stale clicks opening panels
+    if (input) input->clearClickBuffer();
+    if (dev_mouse) dev_mouse->reset_click_state();
+}
+
+void Assets::set_render_suppressed(bool suppressed) {
+    suppress_render_ = suppressed;
 }
 
 

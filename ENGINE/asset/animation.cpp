@@ -27,9 +27,24 @@ void Animation::load(const std::string& trigger,
 
     if (anim_json.contains("source")) {
         const auto& s = anim_json["source"];
-        source.kind = s.value("kind", "folder");
-        source.path = s.value("path", "");
-        source.name = s.value("name", "");
+        try {
+            if (s.contains("kind") && s["kind"].is_string())
+                source.kind = s["kind"].get<std::string>();
+            else
+                source.kind = "folder";
+        } catch (...) { source.kind = "folder"; }
+        try {
+            if (s.contains("path") && s["path"].is_string())
+                source.path = s["path"].get<std::string>();
+            else
+                source.path.clear();
+        } catch (...) { source.path.clear(); }
+        try {
+            if (s.contains("name") && s["name"].is_string())
+                source.name = s["name"].get<std::string>();
+            else
+                source.name.clear();
+        } catch (...) { source.name.clear(); }
     }
     flipped_source = anim_json.value("flipped_source", false);
     reverse_source = anim_json.value("reverse_source", false);
@@ -38,6 +53,7 @@ void Animation::load(const std::string& trigger,
     loop           = anim_json.value("loop", true);
     randomize      = anim_json.value("randomize", false);
     on_end_mapping = anim_json.value("on_end_mapping", "");
+    on_end_animation = anim_json.value("on_end", std::string{});
 
     if (anim_json.contains("movement") && anim_json["movement"].is_array()) {
         for (const auto& mv : anim_json["movement"]) {
@@ -51,11 +67,29 @@ void Animation::load(const std::string& trigger,
     if (source.kind == "animation" && !source.name.empty()) {
         auto it = info.animations.find(source.name);
         if (it != info.animations.end()) {
-            frames = it->second.frames;
+            // Duplicate frames from the referenced animation, optionally flipped
+            const auto& src_frames = it->second.frames;
+            for (SDL_Texture* src : src_frames) {
+                if (!src) continue;
+                Uint32 fmt; int access, w, h;
+                if (SDL_QueryTexture(src, &fmt, &access, &w, &h) != 0) {
+                    continue;
+                }
+                SDL_Texture* dst = SDL_CreateTexture(renderer, fmt, SDL_TEXTUREACCESS_TARGET, w, h);
+                if (!dst) continue;
+                SDL_SetTextureBlendMode(dst, SDL_BLENDMODE_BLEND);
+                SDL_SetRenderTarget(renderer, dst);
+                SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
+                SDL_RenderClear(renderer);
+                SDL_Rect r{0, 0, w, h};
+                SDL_RendererFlip flip = flipped_source ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE;
+                SDL_RenderCopyEx(renderer, src, nullptr, &r, 0.0, nullptr, flip);
+                SDL_SetRenderTarget(renderer, nullptr);
+                frames.push_back(dst);
+            }
             if (reverse_source) {
                 std::reverse(frames.begin(), frames.end());
             }
-            // NOTE: flipped_source not implemented
         }
     } else {
         std::string src_folder   = dir_path + "/" + source.path;
@@ -132,6 +166,40 @@ void Animation::load(const std::string& trigger,
             }
             frames.push_back(tex);
         }
+
+        // Apply optional flip for folder sources after textures are made
+        if (flipped_source && !frames.empty()) {
+            std::vector<SDL_Texture*> flipped;
+            flipped.reserve(frames.size());
+            for (SDL_Texture* src : frames) {
+                if (!src) { flipped.push_back(nullptr); continue; }
+                Uint32 fmt; int access, w, h;
+                if (SDL_QueryTexture(src, &fmt, &access, &w, &h) != 0) {
+                    flipped.push_back(nullptr);
+                    continue;
+                }
+                SDL_Texture* dst = SDL_CreateTexture(renderer, fmt, SDL_TEXTUREACCESS_TARGET, w, h);
+                if (!dst) { flipped.push_back(nullptr); continue; }
+                SDL_SetTextureBlendMode(dst, SDL_BLENDMODE_BLEND);
+                SDL_SetRenderTarget(renderer, dst);
+                SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
+                SDL_RenderClear(renderer);
+                SDL_Rect r{0, 0, w, h};
+                SDL_RenderCopyEx(renderer, src, nullptr, &r, 0.0, nullptr, SDL_FLIP_HORIZONTAL);
+                SDL_SetRenderTarget(renderer, nullptr);
+                flipped.push_back(dst);
+            }
+            // Destroy original unflipped textures before replacing
+            for (SDL_Texture* t : frames) {
+                if (t) SDL_DestroyTexture(t);
+            }
+            frames.swap(flipped);
+        }
+
+        // Optional reverse ordering for folder sources
+        if (reverse_source && !frames.empty()) {
+            std::reverse(frames.begin(), frames.end());
+        }
     }
 
     number_of_frames = static_cast<int>(frames.size());
@@ -180,7 +248,13 @@ bool Animation::advance(int& index,
     }
 
     if (!on_end_mapping.empty()) {
-        mapping_id = on_end_mapping;
+        mapping_id = on_end_mapping; // treated as mapping id
+        index = number_of_frames > 0 ? number_of_frames - 1 : 0;
+        return false;
+    }
+
+    if (!on_end_animation.empty()) {
+        mapping_id = on_end_animation; // treated as direct animation id
         index = number_of_frames > 0 ? number_of_frames - 1 : 0;
         return false;
     }

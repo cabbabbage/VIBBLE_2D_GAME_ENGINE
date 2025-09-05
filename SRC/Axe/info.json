@@ -28,8 +28,7 @@
           0,
           0
         ]
-      ],
-      "on_end_mapping": "015acce1"
+      ]
     },
     "new_anim": {
       "source": {
@@ -47,15 +46,13 @@
           0,
           0
         ]
-      ],
-      "on_end_mapping": ""
+      ]
     }
   },
   "tags": [
     "default",
     "passable"
   ],
-  "has_spacing": true,
   "min_same_type_distance": 0,
   "z_threshold": 5,
   "size_settings": {
@@ -1944,37 +1941,5 @@
       "offset_x": 0,
       "offset_y": 0
     }
-  ],
-  "mappings": {
-    "015acce1": [
-      {
-        "condition": "",
-        "map_to": {
-          "options": [
-            {
-              "animation": "default",
-              "percent": 100
-            },
-            {
-              "animation": "idle",
-              "percent": 0
-            }
-          ]
-        }
-      }
-    ],
-    "2ab4b45a": [
-      {
-        "condition": "",
-        "map_to": {
-          "options": [
-            {
-              "animation": "idle",
-              "percent": 100
-            }
-          ]
-        }
-      }
-    ]
-  }
+  ]
 }

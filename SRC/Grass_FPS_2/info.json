@@ -66,8 +66,7 @@
           0,
           0
         ]
-      ],
-      "on_end_mapping": "bb64f8e3"
+      ]
     }
   },
   "impassable_area": null,
@@ -76,9 +75,6 @@
     "scale_percentage": 3
   },
   "min_same_type_distance": 40,
-  "visited_tabs": [
-    "Spacing"
-  ],
   "tags": [
     "moving",
     "leafy",
@@ -97,7 +93,6 @@
   "duplication_interval_max": 60,
   "min_child_depth": 0,
   "max_child_depth": 2,
-  "has_spacing": true,
   "min_distance_all": 40,
   "anti_tags": [],
   "can_invert": true,
@@ -5763,20 +5758,5 @@
       "offset_x": 0,
       "offset_y": 0
     }
-  ],
-  "mappings": {
-    "bb64f8e3": [
-      {
-        "condition": "",
-        "map_to": {
-          "options": [
-            {
-              "animation": "default",
-              "percent": 100
-            }
-          ]
-        }
-      }
-    ]
-  }
+  ]
 }

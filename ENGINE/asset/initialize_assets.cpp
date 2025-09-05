@@ -4,7 +4,6 @@
 #include "Asset.hpp"
 #include "asset_info.hpp"
 #include "active_assets_manager.hpp"
-#include "controls_manager.hpp"
 
 #include <algorithm>
 #include <iostream>
@@ -55,9 +54,6 @@ void InitializeAssets::initialize(Assets& assets,
     assets.closest_assets = assets.activeManager.getClosest();
 
     setup_shading_groups(assets);
-
-    
-    assets.controls = new ControlsManager(&assets, assets.player, assets.activeManager);
 
     std::cout << "[InitializeAssets] Initialization base complete. Total assets: "
               << assets.all.size() << "\n";

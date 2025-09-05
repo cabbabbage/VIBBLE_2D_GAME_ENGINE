@@ -1,9 +1,40 @@
 #include "Asset.hpp"
+#include "custom_controllers/Davey_controller.hpp"
+#include "custom_controllers/Vibble_controller.hpp"
+#include "core/AssetsManager.hpp"
 #include <random>
 #include <filesystem>
 #include "view.hpp"
 #include <iostream>
 #include "utils/light_utils.hpp"
+
+
+
+
+
+
+// helper to create controller by key
+static std::unique_ptr<AssetController> make_controller(const std::string& key,
+                                                       Assets* assets,
+                                                       Asset* self)
+{
+ 
+   try {
+      if (!assets || !self) return nullptr;
+
+      // both custom controllers must implement AssetController
+      if (key == "Davey_controller") {
+         return std::unique_ptr<AssetController>(new DaveyController(assets, self, assets->activeManager));
+      }
+      if (key == "Vibble_controller") {
+         return std::unique_ptr<AssetController>(new VibbleController(assets, self, assets->activeManager));
+      }
+   } catch (...) {
+      // ignore controller init failures
+   }
+   return nullptr;
+}
+
 
 
 Asset::Asset(std::shared_ptr<AssetInfo> info_,
@@ -32,7 +63,8 @@ Asset::Asset(std::shared_ptr<AssetInfo> info_,
     set_flip();
     set_z_index();
     
-    auto it = info->animations.find("start");
+    std::string start_id = info->start_animation.empty() ? std::string{"default"} : info->start_animation;
+    auto it = info->animations.find(start_id);
     if (it == info->animations.end())
         it = info->animations.find("default");
 
@@ -48,6 +80,105 @@ Asset::Asset(std::shared_ptr<AssetInfo> info_,
     }
 }
 
+Asset::~Asset() = default;
+
+// Copy constructor: shallow-copy most fields; do not copy controller_
+Asset::Asset(const Asset& o)
+    : parent(o.parent),
+      info(o.info),
+      current_animation(o.current_animation),
+      pos_X(o.pos_X),
+      pos_Y(o.pos_Y),
+      screen_X(o.screen_X),
+      screen_Y(o.screen_Y),
+      z_index(o.z_index),
+      z_offset(o.z_offset),
+      player_speed(o.player_speed),
+      is_lit(o.is_lit),
+      has_base_shadow(o.has_base_shadow),
+      active(o.active),
+      flipped(o.flipped),
+      render_player_light(o.render_player_light),
+      alpha_percentage(o.alpha_percentage),
+      spawn_area_local(o.spawn_area_local),
+      base_areas(o.base_areas),
+      areas(o.areas),
+      children(o.children),
+      static_lights(o.static_lights),
+      gradient_shadow(o.gradient_shadow),
+      depth(o.depth),
+      has_shading(o.has_shading),
+      dead(o.dead),
+      static_frame(o.static_frame),
+      cached_w(o.cached_w),
+      cached_h(o.cached_h),
+      window(o.window),
+      highlighted(o.highlighted),
+      hidden(o.hidden),
+      merged(o.merged),
+      remove(o.remove),
+      selected(o.selected),
+      next_animation(o.next_animation),
+      current_frame_index(o.current_frame_index),
+      frame_progress(o.frame_progress),
+      shading_group(o.shading_group),
+      shading_group_set(o.shading_group_set),
+      final_texture(o.final_texture),
+      custom_frames(o.custom_frames),
+      assets_(o.assets_),
+      controller_(nullptr)
+{
+}
+
+// Copy assignment: same approach as copy constructor
+Asset& Asset::operator=(const Asset& o) {
+    if (this == &o) return *this;
+    parent               = o.parent;
+    info                 = o.info;
+    current_animation    = o.current_animation;
+    pos_X                = o.pos_X;
+    pos_Y                = o.pos_Y;
+    screen_X             = o.screen_X;
+    screen_Y             = o.screen_Y;
+    z_index              = o.z_index;
+    z_offset             = o.z_offset;
+    player_speed         = o.player_speed;
+    is_lit               = o.is_lit;
+    has_base_shadow      = o.has_base_shadow;
+    active               = o.active;
+    flipped              = o.flipped;
+    render_player_light  = o.render_player_light;
+    alpha_percentage     = o.alpha_percentage;
+    spawn_area_local     = o.spawn_area_local;
+    base_areas           = o.base_areas;
+    areas                = o.areas;
+    children             = o.children;
+    static_lights        = o.static_lights;
+    gradient_shadow      = o.gradient_shadow;
+    depth                = o.depth;
+    has_shading          = o.has_shading;
+    dead                 = o.dead;
+    static_frame         = o.static_frame;
+    cached_w             = o.cached_w;
+    cached_h             = o.cached_h;
+    window               = o.window;
+    highlighted          = o.highlighted;
+    hidden               = o.hidden;
+    merged               = o.merged;
+    remove               = o.remove;
+    selected             = o.selected;
+    next_animation       = o.next_animation;
+    current_frame_index  = o.current_frame_index;
+    frame_progress       = o.frame_progress;
+    shading_group        = o.shading_group;
+    shading_group_set    = o.shading_group_set;
+    final_texture        = o.final_texture;
+    custom_frames        = o.custom_frames;
+    assets_              = o.assets_;
+    controller_.reset();
+    return *this;
+}
+
 void Asset::finalize_setup() {
     if (!info) return;
 
@@ -55,7 +186,8 @@ void Asset::finalize_setup() {
     if (current_animation.empty() ||
         info->animations[current_animation].frames.empty())
     {
-        auto it = info->animations.find("start");
+        std::string start_id = info->start_animation.empty() ? std::string{"default"} : info->start_animation;
+        auto it = info->animations.find(start_id);
         if (it == info->animations.end())
             it = info->animations.find("default");
         if (it == info->animations.end())
@@ -94,6 +226,13 @@ void Asset::finalize_setup() {
         }
     }
 
+    try {
+        if (assets_ && info && !info->custom_controller_key.empty()) {
+            controller_ = make_controller(info->custom_controller_key, assets_, this);
+        }
+    } catch (...) {
+        // ignore controller init failures
+    }
 }
 
 bool Asset::get_merge(){
@@ -128,6 +267,12 @@ void Asset::set_position(int x, int y) {
 void Asset::update() {
     if (!info) return;
     
+    // Run any per-asset controller before animation advances
+    if (controller_ && assets_) {
+        if (Input* in = assets_->get_input()) {
+            controller_->update(*in);
+        }
+    }
 
     
     if (!next_animation.empty()) {
@@ -166,9 +311,15 @@ void Asset::update() {
         pos_X += dx;
         pos_Y += dy;
         if (!advanced && !mapping_id.empty()) {
+            // First, try mapping resolution (typed/legacy mappings)
             std::string resolved = info->pick_next_animation(mapping_id);
             if (!resolved.empty() && info->animations.count(resolved)) {
                 next_animation = resolved;
+            } else {
+                // Fallback: treat mapping_id as a direct animation id (simplified schema)
+                if (info->animations.count(mapping_id)) {
+                    next_animation = mapping_id;
+                }
             }
         }
     }

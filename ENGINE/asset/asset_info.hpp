@@ -38,6 +38,7 @@ public:
 
   std::string name;
   std::string type;
+  std::string start_animation; // from info.json "start"
   int z_threshold;
   bool passable;
   int min_same_type_distance;
@@ -62,6 +63,9 @@ public:
   std::map<std::string, Mapping> mappings;
 
   std::vector<ChildInfo> children;
+
+  // Optional per-asset custom controller (by key/name)
+  std::string custom_controller_key; // e.g., "Davey_controller"
 
   // --- Update API for basic (non-area, non-animation) values ---
 public:

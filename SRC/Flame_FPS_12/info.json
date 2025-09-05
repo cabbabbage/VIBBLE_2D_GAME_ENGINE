@@ -406,8 +406,7 @@
           0,
           0
         ]
-      ],
-      "on_end_mapping": "13881460"
+      ]
     }
   },
   "impassable_area": null,
@@ -416,20 +415,5 @@
   ],
   "rnd_spawn_min": 300,
   "rnd_spawn_max": 400,
-  "areas": [],
-  "mappings": {
-    "13881460": [
-      {
-        "condition": "",
-        "map_to": {
-          "options": [
-            {
-              "animation": "default",
-              "percent": 100
-            }
-          ]
-        }
-      }
-    ]
-  }
+  "areas": []
 }

@@ -27,8 +27,7 @@
           0,
           0
         ]
-      ],
-      "on_end_mapping": "255519cf"
+      ]
     }
   },
   "max_child_depth": 2,
@@ -42,7 +41,6 @@
     "scale_percentage": 27
   },
   "min_same_type_distance": 0,
-  "has_spacing": true,
   "min_distance_all": 0,
   "anti_tags": [],
   "areas": [
@@ -2521,20 +2519,5 @@
       "offset_x": 0,
       "offset_y": 0
     }
-  ],
-  "mappings": {
-    "255519cf": [
-      {
-        "condition": "",
-        "map_to": {
-          "options": [
-            {
-              "animation": "default",
-              "percent": 100
-            }
-          ]
-        }
-      }
-    ]
-  }
+  ]
 }

@@ -1,212 +1,11 @@
 {
-  "impassable_area": null,
-  "asset_name": "Davey",
-  "asset_type": "Player",
   "animations": {
-    "default": {
-      "source": {
-        "kind": "folder",
-        "path": "default",
-        "name": null
-      },
-      "flipped_source": false,
-      "reverse_source": false,
-      "locked": false,
-      "speed_factor": 1,
-      "number_of_frames": 25,
-      "movement": [
-        [
-          0,
-          0
-        ],
-        [
-          0,
-          0
-        ],
-        [
-          0,
-          0
-        ],
-        [
-          0,
-          0
-        ],
-        [
-          0,
-          0
-        ],
-        [
-          0,
-          0
-        ],
-        [
-          0,
-          0
-        ],
-        [
-          0,
-          0
-        ],
-        [
-          0,
-          0
-        ],
-        [
-          0,
-          0
-        ],
-        [
-          0,
-          0
-        ],
-        [
-          0,
-          0
-        ],
-        [
-          0,
-          0
-        ],
-        [
-          0,
-          0
-        ],
-        [
-          0,
-          0
-        ],
-        [
-          0,
-          0
-        ],
-        [
-          0,
-          0
-        ],
-        [
-          0,
-          0
-        ],
-        [
-          0,
-          0
-        ],
-        [
-          0,
-          0
-        ],
-        [
-          0,
-          0
-        ],
-        [
-          0,
-          0
-        ],
-        [
-          0,
-          0
-        ],
-        [
-          0,
-          0
-        ],
-        [
-          0,
-          0
-        ]
-      ],
-      "on_end_mapping": "",
-      "on_end": "default",
-      "has_custom_tick_update": false,
-      "custom_update_hpp_path": "",
-      "custom_update_key": "",
-      "has_custom_animation_controller": true,
-      "custom_animation_controller_hpp_path": "C:\\Users\\cal_m\\OneDrive\\Documents\\GitHub\\VIBBLE_2D_GAME_ENGINE\\ENGINE\\custom_controllers\\Davey_default_controller.hpp",
-      "custom_animation_controller_key": "Davey_default_controller"
-    },
-    "right": {
-      "source": {
-        "kind": "folder",
-        "path": "right",
-        "name": null
-      },
-      "flipped_source": false,
-      "reverse_source": false,
-      "locked": false,
-      "speed_factor": 1,
-      "number_of_frames": 13,
-      "movement": [
-        [
-          0,
-          0
-        ],
-        [
-          0,
-          0
-        ],
-        [
-          0,
-          0
-        ],
-        [
-          0,
-          0
-        ],
-        [
-          0,
-          0
-        ],
-        [
-          0,
-          0
-        ],
-        [
-          0,
-          0
-        ],
-        [
-          0,
-          0
-        ],
-        [
-          0,
-          0
-        ],
-        [
-          0,
-          0
-        ],
-        [
-          0,
-          0
-        ],
-        [
-          0,
-          0
-        ],
-        [
-          0,
-          0
-        ]
-      ],
-      "on_end_mapping": "",
-      "on_end": "default",
-      "has_custom_tick_update": true,
-      "custom_update_hpp_path": "",
-      "custom_update_key": ""
-    },
     "backward": {
-      "source": {
-        "kind": "folder",
-        "path": "backward",
-        "name": null
-      },
+      "custom_animation_controller_hpp_path": "",
+      "custom_animation_controller_key": "",
       "flipped_source": false,
-      "reverse_source": false,
+      "has_custom_animation_controller": false,
       "locked": false,
-      "speed_factor": 1,
-      "number_of_frames": 13,
       "movement": [
         [
           0,
@@ -214,66 +13,260 @@
         ],
         [
           0,
-          0
+          3,
+          true,
+          [
+            255,
+            255,
+            255
+          ]
         ],
         [
           0,
-          0
+          4,
+          true,
+          [
+            255,
+            255,
+            255
+          ]
         ],
         [
           0,
-          0
+          3,
+          true,
+          [
+            255,
+            255,
+            255
+          ]
         ],
         [
           0,
-          0
+          3,
+          true,
+          [
+            255,
+            255,
+            255
+          ]
         ],
         [
           0,
-          0
+          4,
+          true,
+          [
+            255,
+            255,
+            255
+          ]
         ],
         [
           0,
-          0
+          3,
+          true,
+          [
+            255,
+            255,
+            255
+          ]
         ],
         [
           0,
-          0
+          3,
+          true,
+          [
+            255,
+            255,
+            255
+          ]
         ],
         [
           0,
-          0
+          4,
+          true,
+          [
+            255,
+            255,
+            255
+          ]
         ],
         [
           0,
-          0
+          3,
+          true,
+          [
+            255,
+            255,
+            255
+          ]
         ],
         [
           0,
-          0
+          3,
+          true,
+          [
+            255,
+            255,
+            255
+          ]
         ],
         [
           0,
-          0
+          4,
+          true,
+          [
+            255,
+            255,
+            255
+          ]
         ],
         [
           0,
-          0
+          3,
+          true,
+          [
+            255,
+            255,
+            255
+          ]
         ]
       ],
-      "on_end_mapping": ""
-    },
-    "forward": {
+      "number_of_frames": 13,
+      "on_end": "default",
+      "reverse_source": false,
       "source": {
         "kind": "folder",
         "path": "forward",
         "name": null
       },
+      "speed_factor": 1
+    },
+    "default": {
+      "custom_animation_controller_hpp_path": "C:\\Users\\cal_m\\OneDrive\\Documents\\GitHub\\VIBBLE_2D_GAME_ENGINE\\ENGINE\\custom_controllers\\Davey_default_controller.hpp",
+      "custom_animation_controller_key": "Davey_default_controller",
       "flipped_source": false,
-      "reverse_source": false,
+      "has_custom_animation_controller": true,
+      "has_custom_tick_update": false,
       "locked": false,
-      "speed_factor": 1,
-      "number_of_frames": 13,
+      "movement": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ]
+      ],
+      "number_of_frames": 25,
+      "on_end": "default",
+      "reverse_source": false,
+      "source": {
+        "kind": "folder",
+        "name": null,
+        "path": "default"
+      },
+      "speed_factor": 1
+    },
+    "forward": {
+      "custom_animation_controller_hpp_path": "",
+      "custom_animation_controller_key": "",
+      "flipped_source": false,
+      "has_custom_animation_controller": false,
+      "locked": false,
       "movement": [
         [
           0,
@@ -328,19 +321,22 @@
           0
         ]
       ],
-      "on_end_mapping": ""
+      "number_of_frames": 13,
+      "on_end": "default",
+      "reverse_source": false,
+      "source": {
+        "kind": "folder",
+        "name": null,
+        "path": "backward"
+      },
+      "speed_factor": 1
     },
     "left": {
-      "source": {
-        "kind": "animation",
-        "path": "",
-        "name": "backward"
-      },
+      "custom_animation_controller_hpp_path": "",
+      "custom_animation_controller_key": "",
       "flipped_source": true,
-      "reverse_source": false,
+      "has_custom_animation_controller": false,
       "locked": false,
-      "speed_factor": 1,
-      "number_of_frames": 13,
       "movement": [
         [
           0,
@@ -395,18 +391,137 @@
           0
         ]
       ],
-      "on_end_mapping": ""
+      "number_of_frames": 13,
+      "on_end": "default",
+      "reverse_source": false,
+      "source": {
+        "kind": "animation",
+        "name": "right",
+        "path": ""
+      },
+      "speed_factor": 1
+    },
+    "right": {
+      "flipped_source": false,
+      "has_custom_tick_update": true,
+      "locked": false,
+      "movement": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ]
+      ],
+      "number_of_frames": 13,
+      "on_end": "default",
+      "reverse_source": false,
+      "source": {
+        "kind": "folder",
+        "name": null,
+        "path": "right"
+      },
+      "speed_factor": 1
     }
   },
-  "z_threshold": 43,
+  "anti_tags": [],
+  "areas": [
+    {}
+  ],
+  "asset_name": "Davey",
+  "asset_type": "Player",
+  "custom_controller_key": "Davey_controller",
+  "has_shading": true,
+  "impassable_area": null,
+  "layout": {
+    "__view": {
+      "geometry": "1920x1009+5+-19",
+      "zoom": 1.0,
+      "xview": 0.0,
+      "yview": 0.0
+    }
+  },
+  "lighting_info": [
+    {
+      "factor": 100,
+      "falloff": 0,
+      "has_light_source": true,
+      "light_intensity": 255,
+      "radius": 592,
+      "x_radius": 45,
+      "y_radius": 127
+    },
+    {
+      "falloff": 0,
+      "flare": 0,
+      "flicker": 0,
+      "has_light_source": true,
+      "light_color": [
+        255,
+        255,
+        255
+      ],
+      "light_intensity": 164,
+      "offset_x": 0,
+      "offset_y": -9,
+      "radius": 300
+    }
+  ],
+  "mappings": {},
+  "min_distance_all": 0,
+  "min_same_type_distance": 686,
+  "rnd_spawn_max": 400,
+  "rnd_spawn_min": 300,
   "size_settings": {
     "scale_percentage": 45
   },
-  "visited_tabs": [
-    "Passability",
-    "Spacing"
-  ],
-  "min_same_type_distance": 686,
+  "start": "default",
   "tags": [
     "forward",
     "passable",
@@ -417,187 +532,5 @@
     "backward",
     "right"
   ],
-  "rnd_spawn_min": 300,
-  "rnd_spawn_max": 400,
-  "lighting_info": [
-    {
-      "has_light_source": true,
-      "light_intensity": 255,
-      "radius": 592,
-      "y_radius": 127,
-      "x_radius": 45,
-      "falloff": 0,
-      "factor": 100
-    },
-    {
-      "has_light_source": true,
-      "light_intensity": 164,
-      "light_color": [
-        255,
-        255,
-        255
-      ],
-      "radius": 300,
-      "falloff": 0,
-      "flicker": 0,
-      "flare": 0,
-      "offset_x": 0,
-      "offset_y": -9
-    }
-  ],
-  "shading_info": {
-    "has_shading": false,
-    "has_base_shadow": null,
-    "base_shadow_intensity": null,
-    "has_gradient_shadow": null,
-    "number_of_gradient_shadows": null,
-    "gradient_shadow_intensity": null,
-    "has_casted_shadows": null,
-    "number_of_casted_shadows": null,
-    "cast_shadow_intensity": null
-  },
-  "has_spacing": true,
-  "min_distance_all": 0,
-  "anti_tags": [],
-  "has_shading": true,
-  "areas": [
-    {}
-  ],
-  "mappings": {
-    "9770dc59": {
-      "type": "regular",
-      "entries": [
-        {
-          "condition": ""
-        },
-        {
-          "condition": ""
-        }
-      ]
-    },
-    "671fd1cf": {
-      "type": "regular",
-      "entries": [
-        {
-          "condition": ""
-        },
-        {
-          "condition": ""
-        },
-        {
-          "condition": ""
-        }
-      ]
-    },
-    "5657dfe4": {
-      "type": "regular",
-      "entries": [
-        {
-          "condition": ""
-        }
-      ]
-    },
-    "76b46430": {
-      "type": "regular",
-      "entries": [
-        {
-          "condition": ""
-        }
-      ]
-    },
-    "846c131e": {
-      "type": "regular",
-      "entries": [
-        {
-          "condition": ""
-        }
-      ]
-    },
-    "f2e13c2f": {
-      "type": "random",
-      "options": [
-        {
-          "percent": 100
-        },
-        {
-          "percent": 0
-        }
-      ]
-    },
-    "91536424": {
-      "type": "random",
-      "options": [
-        {
-          "percent": 0
-        },
-        {
-          "percent": 0
-        }
-      ]
-    }
-  },
-  "edges": [
-    [
-      "default",
-      "9770dc59"
-    ],
-    [
-      "right",
-      "671fd1cf"
-    ],
-    [
-      "backward",
-      "5657dfe4"
-    ],
-    [
-      "forward",
-      "76b46430"
-    ],
-    [
-      "9770dc59::entry:0",
-      "default"
-    ],
-    [
-      "671fd1cf::entry:0",
-      "right"
-    ],
-    [
-      "5657dfe4::entry:0",
-      "backward"
-    ],
-    [
-      "76b46430::entry:0",
-      "forward"
-    ],
-    [
-      "846c131e::entry:0",
-      "left"
-    ],
-    [
-      "f2e13c2f::option:0",
-      "idle"
-    ],
-    [
-      "f2e13c2f::option:1",
-      "idle"
-    ],
-    [
-      "left",
-      "846c131e"
-    ],
-    [
-      "new_anim",
-      "91536424"
-    ]
-  ],
-  "layout": {
-    "__view": {
-      "geometry": "1280x760+104+104",
-      "zoom": 0.6830134553650705,
-      "xview": 0.0,
-      "yview": 0.0
-    }
-  },
-  "start": "default",
-  "custom_controller_key": "Davey_controller"
+  "z_threshold": 43
 }

@@ -22,8 +22,7 @@
           0,
           0
         ]
-      ],
-      "on_end_mapping": "627cc7df"
+      ]
     }
   },
   "impassable_area": null,
@@ -43,7 +42,6 @@
   "anti_tags": [
     "ground"
   ],
-  "has_spacing": true,
   "min_same_type_distance": 161,
   "min_distance_all": 0,
   "areas": [
@@ -1414,20 +1412,5 @@
       "offset_x": 0,
       "offset_y": 0
     }
-  ],
-  "mappings": {
-    "627cc7df": [
-      {
-        "condition": "",
-        "map_to": {
-          "options": [
-            {
-              "animation": "default",
-              "percent": 100
-            }
-          ]
-        }
-      }
-    ]
-  }
+  ]
 }

@@ -58,12 +58,28 @@ void MenuUI::game_loop() {
         while (SDL_PollEvent(&e)) {
             if (e.type == SDL_QUIT) {
                 quit = true;
-            } else if (e.type == SDL_KEYDOWN) {
-                if (e.key.keysym.sym == SDLK_ESCAPE && e.key.repeat == 0) {
+            }
+
+            // Prioritize in-game overlays over opening the pause menu.
+            // ESC closes asset info or library if open; otherwise toggles pause menu.
+            if (e.type == SDL_KEYDOWN && e.key.keysym.sym == SDLK_ESCAPE && e.key.repeat == 0) {
+                bool esc_consumed = false;
+                if (game_assets_) {
+                    if (game_assets_->is_asset_info_editor_open()) {
+                        game_assets_->close_asset_info_editor();
+                        esc_consumed = true;
+                    } else if (game_assets_->is_asset_library_open()) {
+                        game_assets_->close_asset_library();
+                        esc_consumed = true;
+                    }
+                }
+                if (!esc_consumed) {
                     toggleMenu();
                 }
             }
+
             if (input_) input_->handleEvent(e);
+            if (game_assets_) game_assets_->handle_sdl_event(e);
             if (menu_active_) handle_event(e);
         }
 
@@ -101,6 +117,7 @@ void MenuUI::game_loop() {
 void MenuUI::toggleMenu() {
     menu_active_ = !menu_active_;
     std::cout << "[MenuUI] ESC -> menu_active=" << (menu_active_ ? "true" : "false") << "\n";
+    if (game_assets_) game_assets_->set_render_suppressed(menu_active_);
 }
 
 void MenuUI::handle_event(const SDL_Event& e) {

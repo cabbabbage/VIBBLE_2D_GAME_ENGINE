@@ -28,8 +28,7 @@
           0,
           0
         ]
-      ],
-      "on_end_mapping": "ef6586d9"
+      ]
     }
   },
   "tags": [
@@ -59,7 +58,6 @@
     "plant",
     "wood"
   ],
-  "has_spacing": true,
   "min_same_type_distance": 50,
   "min_distance_all": 0,
   "can_invert": true,
@@ -7017,20 +7015,5 @@
       "offset_x": 0,
       "offset_y": 0
     }
-  ],
-  "mappings": {
-    "ef6586d9": [
-      {
-        "condition": "",
-        "map_to": {
-          "options": [
-            {
-              "animation": "default",
-              "percent": 100
-            }
-          ]
-        }
-      }
-    ]
-  }
+  ]
 }

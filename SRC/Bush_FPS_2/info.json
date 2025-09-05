@@ -338,8 +338,7 @@
           0,
           0
         ]
-      ],
-      "on_end_mapping": "e44cb805"
+      ]
     }
   },
   "impassable_area": null,
@@ -348,10 +347,6 @@
     "scale_percentage": 13
   },
   "min_same_type_distance": 557,
-  "visited_tabs": [
-    "Passability",
-    "Spacing"
-  ],
   "duplicatable": false,
   "duplication_interval_min": 30,
   "duplication_interval_max": 60,
@@ -365,18 +360,8 @@
   ],
   "rnd_spawn_min": 300,
   "rnd_spawn_max": 400,
-  "has_spacing": true,
   "min_distance_all": 0,
   "anti_tags": [],
-  "shading_info": {
-    "has_shading": true,
-    "has_base_shadow": false,
-    "base_shadow_intensity": 0,
-    "has_gradient_shadow": false,
-    "gradient_shadow_intensity": 0,
-    "has_casted_shadows": false,
-    "cast_shadow_intensity": 0
-  },
   "has_shading": true,
   "lighting_info": [
     {
@@ -7097,20 +7082,5 @@
       "offset_x": 0,
       "offset_y": 0
     }
-  ],
-  "mappings": {
-    "e44cb805": [
-      {
-        "condition": "",
-        "map_to": {
-          "options": [
-            {
-              "animation": "default",
-              "percent": 100
-            }
-          ]
-        }
-      }
-    ]
-  }
+  ]
 }

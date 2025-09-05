@@ -72,8 +72,7 @@
           0,
           0
         ]
-      ],
-      "on_end_mapping": "53194978"
+      ]
     }
   },
   "tags": [
@@ -87,7 +86,6 @@
     "green",
     "small"
   ],
-  "has_spacing": true,
   "min_same_type_distance": 40,
   "z_threshold": 14,
   "size_settings": {
@@ -5829,20 +5827,5 @@
       "offset_x": 0,
       "offset_y": 0
     }
-  ],
-  "mappings": {
-    "53194978": [
-      {
-        "condition": "",
-        "map_to": {
-          "options": [
-            {
-              "animation": "default",
-              "percent": 100
-            }
-          ]
-        }
-      }
-    ]
-  }
+  ]
 }

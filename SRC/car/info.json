@@ -27,8 +27,7 @@
           0,
           0
         ]
-      ],
-      "on_end_mapping": "11c49e9f"
+      ]
     }
   },
   "tags": [
@@ -46,7 +45,6 @@
   "size_settings": {
     "scale_percentage": 29
   },
-  "has_spacing": true,
   "min_same_type_distance": 2000,
   "rnd_spawn_min": 300,
   "rnd_spawn_max": 400,
@@ -4997,20 +4995,5 @@
       "offset_x": 0,
       "offset_y": 0
     }
-  ],
-  "mappings": {
-    "11c49e9f": [
-      {
-        "condition": "",
-        "map_to": {
-          "options": [
-            {
-              "animation": "default",
-              "percent": 100
-            }
-          ]
-        }
-      }
-    ]
-  }
+  ]
 }

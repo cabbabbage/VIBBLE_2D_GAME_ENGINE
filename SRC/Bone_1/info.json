@@ -22,8 +22,7 @@
           1,
           0
         ]
-      ],
-      "on_end_mapping": "52179d20"
+      ]
     }
   },
   "impassable_area": null,
@@ -33,9 +32,6 @@
     "variability_percentage": 0
   },
   "min_same_type_distance": 500,
-  "visited_tabs": [
-    "Spacing"
-  ],
   "tags": [
     "bone",
     "scary",
@@ -46,7 +42,6 @@
   "rnd_spawn_min": 300,
   "rnd_spawn_max": 400,
   "anti_tags": [],
-  "has_spacing": true,
   "min_distance_all": 0,
   "can_invert": true,
   "update_radius": 1000,
@@ -783,20 +778,5 @@
       "offset_x": 0,
       "offset_y": 0
     }
-  ],
-  "mappings": {
-    "52179d20": [
-      {
-        "condition": "",
-        "map_to": {
-          "options": [
-            {
-              "animation": "default",
-              "percent": 100
-            }
-          ]
-        }
-      }
-    ]
-  }
+  ]
 }

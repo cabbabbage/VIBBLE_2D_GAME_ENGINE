@@ -12,6 +12,7 @@
 #include <vector>
 #include <string>
 #include <unordered_map>
+#include "custom_controllers/Vibble_controller.hpp"
 
 using nlohmann::json;
 
@@ -64,12 +65,23 @@ void AnimationLoader::load(AssetInfo& info, SDL_Renderer* renderer) {
         }
     }
 
-    // --- Load animations ---
+    // --- Load animations in two passes: folder sources first, then aliases ---
+    std::vector<std::pair<std::string, nlohmann::json>> alias_queue;
+
+    // Pass 1: load concrete sources (e.g., folders)
     for (auto it = info.anims_json_.begin(); it != info.anims_json_.end(); ++it) {
         const std::string& trigger = it.key();
         const auto& anim_json = it.value();
-        if (anim_json.is_null())
-            continue;
+        if (anim_json.is_null()) continue;
+
+        // If this is an alias to another animation, queue it for pass 2
+        if (anim_json.contains("source") && anim_json["source"].is_object()) {
+            std::string kind = anim_json["source"].value("kind", std::string{"folder"});
+            if (kind == "animation") {
+                alias_queue.emplace_back(trigger, anim_json);
+                continue;
+            }
+        }
 
         Animation anim;
         anim.load(trigger,
@@ -85,7 +97,35 @@ void AnimationLoader::load(AssetInfo& info, SDL_Renderer* renderer) {
                   info.original_canvas_width,
                   info.original_canvas_height);
 
-        // Override on_end_mapping using edges if present
+        auto eit = anim_to_mapping.find(trigger);
+        if (eit != anim_to_mapping.end()) {
+            anim.on_end_mapping = eit->second;
+        }
+
+        if (!anim.frames.empty()) {
+            info.animations[trigger] = std::move(anim);
+        }
+    }
+
+    // Pass 2: resolve alias animations now that sources are available
+    for (const auto& item : alias_queue) {
+        const std::string& trigger = item.first;
+        const auto& anim_json = item.second;
+
+        Animation anim;
+        anim.load(trigger,
+                  anim_json,
+                  info,
+                  info.dir_path_,
+                  root_cache,
+                  info.scale_factor,
+                  renderer,
+                  base_sprite,
+                  scaled_sprite_w,
+                  scaled_sprite_h,
+                  info.original_canvas_width,
+                  info.original_canvas_height);
+
         auto eit = anim_to_mapping.find(trigger);
         if (eit != anim_to_mapping.end()) {
             anim.on_end_mapping = eit->second;
@@ -98,8 +138,7 @@ void AnimationLoader::load(AssetInfo& info, SDL_Renderer* renderer) {
 
     // --- Build runtime mappings from new schema (typed mappings + edges) ---
     if (maps_json.is_object()) {
-        // Replace any previously parsed legacy mappings with the graph-derived ones
-        info.mappings.clear();
+        // Overlay graph-derived mappings on top of any legacy mappings parsed earlier
 
         for (auto it = maps_json.begin(); it != maps_json.end(); ++it) {
             const std::string mapping_id = it.key();
@@ -145,11 +184,13 @@ void AnimationLoader::load(AssetInfo& info, SDL_Renderer* renderer) {
                 }
                 built.push_back(std::move(entry));
             } else if (m.is_array()) {
-                // Legacy array form: keep what AssetInfo may have parsed earlier.
-                // No-op here to avoid duplicating conversion logic.
+                // Legacy array form: keep existing parsed mappings as-is.
+                // Don't overwrite here unless we actually built something.
             }
 
-            info.mappings[mapping_id] = std::move(built);
+            if (!built.empty()) {
+                info.mappings[mapping_id] = std::move(built);
+            }
         }
     }
 

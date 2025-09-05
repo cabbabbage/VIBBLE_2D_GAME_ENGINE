@@ -22,8 +22,7 @@
           0,
           0
         ]
-      ],
-      "on_end_mapping": "c555ebf7"
+      ]
     }
   },
   "impassable_area": null,
@@ -32,9 +31,6 @@
     "scale_percentage": 12
   },
   "min_same_type_distance": 0,
-  "visited_tabs": [
-    "Spacing"
-  ],
   "tags": [
     "passable",
     "book",
@@ -45,7 +41,6 @@
   ],
   "rnd_spawn_min": 300,
   "rnd_spawn_max": 400,
-  "has_spacing": true,
   "anti_tags": [
     "default",
     "ground"
@@ -1399,20 +1394,5 @@
       "offset_x": 0,
       "offset_y": 0
     }
-  ],
-  "mappings": {
-    "c555ebf7": [
-      {
-        "condition": "",
-        "map_to": {
-          "options": [
-            {
-              "animation": "default",
-              "percent": 100
-            }
-          ]
-        }
-      }
-    ]
-  }
+  ]
 }

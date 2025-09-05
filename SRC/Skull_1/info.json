@@ -22,8 +22,7 @@
           0,
           0
         ]
-      ],
-      "on_end_mapping": "afc992f7"
+      ]
     }
   },
   "impassable_area": null,
@@ -34,9 +33,6 @@
     "flipability": true
   },
   "min_same_type_distance": 500,
-  "visited_tabs": [
-    "Spacing"
-  ],
   "tags": [
     "nature",
     "graveyard",
@@ -62,7 +58,6 @@
     "plant",
     "wood"
   ],
-  "has_spacing": true,
   "min_distance_all": 0,
   "areas": [
     {
@@ -804,20 +799,5 @@
       "offset_x": 0,
       "offset_y": 0
     }
-  ],
-  "mappings": {
-    "afc992f7": [
-      {
-        "condition": "",
-        "map_to": {
-          "options": [
-            {
-              "animation": "default",
-              "percent": 100
-            }
-          ]
-        }
-      }
-    ]
-  }
+  ]
 }
