@@ -377,6 +377,23 @@ void Asset::add_child(Asset* child) {
     children.push_back(child);
 }
 
+// Assign owning Assets manager and lazily create any custom controller.
+// This is invoked during asset initialization once the global Assets
+// manager becomes available.
+void Asset::set_assets(Assets* a) {
+    assets_ = a;
+
+    // If this asset specifies a custom controller and one hasn't been
+    // created yet, instantiate it now that we have a valid Assets owner.
+    if (!controller_ && assets_ && info && !info->custom_controller_key.empty()) {
+        try {
+            controller_ = make_controller(info->custom_controller_key, assets_, this);
+        } catch (...) {
+            controller_.reset();
+        }
+    }
+}
+
 void Asset::set_z_index() {
     try {
         if (parent) {

@@ -1,148 +1,148 @@
 {
-  "impassable_area": null,
-  "asset_name": "Vibble",
-  "asset_type": "Player",
-  "duplicatable": false,
-  "duplication_interval_min": 30,
-  "duplication_interval_max": 60,
-  "min_child_depth": 0,
-  "max_child_depth": 2,
   "animations": {
-    "default": {
-      "path": null,
-      "end_path": null,
-      "source": {
-        "kind": "folder",
-        "path": "default",
-        "name": null
-      },
-      "flipped_source": false,
-      "reverse_source": false,
-      "locked": false,
-      "speed_factor": 1,
-      "number_of_frames": 1,
-      "movement": [
-        [
-          0,
-          0
-        ]
-      ],
-      "on_end": "default",
-      "has_custom_animation_controller": false,
-      "custom_animation_controller_hpp_path": "",
-      "custom_animation_controller_key": ""
-    },
-    "forward": {
-      "source": {
-        "kind": "folder",
-        "path": "forward",
-        "name": null
-      },
-      "flipped_source": false,
-      "reverse_source": false,
-      "locked": false,
-      "speed_factor": 1,
-      "number_of_frames": 1,
-      "movement": [
-        [
-          0,
-          0
-        ]
-      ],
-      "on_end": "default",
-      "has_custom_animation_controller": false,
-      "custom_animation_controller_hpp_path": "",
-      "custom_animation_controller_key": ""
-    },
     "backward": {
+      "custom_animation_controller_hpp_path": "",
+      "custom_animation_controller_key": "",
+      "flipped_source": false,
+      "has_custom_animation_controller": false,
+      "locked": false,
+      "movement": [
+        [
+          0,
+          0
+        ]
+      ],
+      "number_of_frames": 1,
+      "on_end": "default",
+      "reverse_source": true,
       "source": {
         "kind": "animation",
         "path": "",
         "name": "forward"
       },
+      "speed_factor": 1
+    },
+    "default": {
+      "custom_animation_controller_hpp_path": "",
+      "custom_animation_controller_key": "",
+      "end_path": null,
       "flipped_source": false,
-      "reverse_source": true,
+      "has_custom_animation_controller": false,
       "locked": false,
-      "speed_factor": 1,
-      "number_of_frames": 1,
       "movement": [
         [
           0,
           0
         ]
       ],
+      "number_of_frames": 1,
       "on_end": "default",
-      "has_custom_animation_controller": false,
-      "custom_animation_controller_hpp_path": "",
-      "custom_animation_controller_key": ""
-    },
-    "left": {
+      "path": null,
+      "reverse_source": false,
       "source": {
         "kind": "folder",
-        "path": "left",
-        "name": null
+        "name": null,
+        "path": "default"
       },
+      "speed_factor": 1
+    },
+    "forward": {
+      "custom_animation_controller_hpp_path": "",
+      "custom_animation_controller_key": "",
       "flipped_source": false,
-      "reverse_source": false,
+      "has_custom_animation_controller": false,
       "locked": false,
-      "speed_factor": 1,
-      "number_of_frames": 1,
       "movement": [
         [
           0,
           0
         ]
       ],
+      "number_of_frames": 1,
       "on_end": "default",
-      "has_custom_animation_controller": false,
+      "reverse_source": false,
+      "source": {
+        "kind": "folder",
+        "name": null,
+        "path": "forward"
+      },
+      "speed_factor": 1
+    },
+    "left": {
       "custom_animation_controller_hpp_path": "",
-      "custom_animation_controller_key": ""
+      "custom_animation_controller_key": "",
+      "flipped_source": false,
+      "has_custom_animation_controller": false,
+      "locked": false,
+      "movement": [
+        [
+          0,
+          0
+        ]
+      ],
+      "number_of_frames": 1,
+      "on_end": "default",
+      "reverse_source": false,
+      "source": {
+        "kind": "folder",
+        "name": null,
+        "path": "left"
+      },
+      "speed_factor": 1
     },
     "right": {
-      "source": {
-        "kind": "animation",
-        "path": "",
-        "name": "left"
-      },
+      "custom_animation_controller_hpp_path": "",
+      "custom_animation_controller_key": "",
       "flipped_source": true,
-      "reverse_source": false,
+      "has_custom_animation_controller": false,
       "locked": false,
-      "speed_factor": 1,
-      "number_of_frames": 1,
       "movement": [
         [
           0,
           0
         ]
       ],
+      "number_of_frames": 1,
       "on_end": "default",
-      "has_custom_animation_controller": false,
-      "custom_animation_controller_hpp_path": "",
-      "custom_animation_controller_key": ""
+      "reverse_source": false,
+      "source": {
+        "kind": "animation",
+        "name": "left",
+        "path": ""
+      },
+      "speed_factor": 1
     }
   },
-  "z_threshold": 0,
-  "size_settings": {
-    "scale_percentage": 100
-  },
-  "tags": [
-    "passable"
-  ],
   "anti_tags": [],
-  "rnd_spawn_min": 300,
-  "rnd_spawn_max": 400,
+  "asset_name": "Vibble",
+  "asset_type": "Player",
   "can_invert": false,
-  "update_radius": 1000,
-  "render_radius": 1000,
-  "mappings": {},
+  "custom_controller_key": "Vibble_controller",
+  "duplicatable": false,
+  "duplication_interval_max": 60,
+  "duplication_interval_min": 30,
+  "impassable_area": null,
   "layout": {
     "__view": {
       "geometry": "1100x780+490+171",
       "zoom": 1.0,
       "xview": 0.0,
-      "yview": 0.4894217207334274
+      "yview": 0.0
     }
   },
+  "mappings": {},
+  "max_child_depth": 2,
+  "min_child_depth": 0,
+  "render_radius": 1000,
+  "rnd_spawn_max": 400,
+  "rnd_spawn_min": 300,
+  "size_settings": {
+    "scale_percentage": 100
+  },
   "start": "default",
-  "custom_controller_key": "Vibble_controller"
+  "tags": [
+    "passable"
+  ],
+  "update_radius": 1000,
+  "z_threshold": 0
 }

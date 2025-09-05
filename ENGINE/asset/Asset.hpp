@@ -120,8 +120,9 @@ public:
    bool is_highlighted();
    void set_selected(bool state);
    bool is_selected();
-
-   void set_assets(Assets* a) { assets_ = a; }
+   // Assign owning Assets manager. Also initializes custom controller
+   // if one is specified for this Asset and not yet created.
+   void set_assets(Assets* a);
    Assets* get_assets() const { return assets_; }
 
 private:
