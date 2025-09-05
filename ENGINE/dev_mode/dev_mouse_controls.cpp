@@ -1,7 +1,7 @@
 
 #include "dev_mouse_controls.hpp"
 #include "asset/Asset.hpp"
-#include "core/Assets.hpp"
+#include "core/AssetsManager.hpp"
 #include "utils/input.hpp"
 #include "utils/parallax.hpp"
 #include <cmath>

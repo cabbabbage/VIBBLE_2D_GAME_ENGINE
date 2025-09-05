@@ -4,7 +4,7 @@
 #include "ui/tinyfiledialogs.h"
 #include "asset_loader.hpp"
 #include "scene_renderer.hpp"
-#include "assets.hpp"
+#include "AssetsManager.hpp"
 #include "input.hpp"
 
 #include <iostream>

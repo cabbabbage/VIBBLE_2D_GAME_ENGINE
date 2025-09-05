@@ -1,6 +1,6 @@
 
 #include "initialize_assets.hpp"
-#include "Assets.hpp"
+#include "AssetsManager.hpp"
 #include "Asset.hpp"
 #include "asset_info.hpp"
 #include "active_assets_manager.hpp"
@@ -41,6 +41,7 @@ void InitializeAssets::initialize(Assets& assets,
 
         auto newAsset = std::make_unique<Asset>(std::move(a));
         newAsset->set_view(&assets.window);
+        newAsset->set_assets(&assets);
 
         assets.owned_assets.push_back(std::move(newAsset));
         assets.all.push_back(assets.owned_assets.back().get());

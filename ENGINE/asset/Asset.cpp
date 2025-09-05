@@ -214,6 +214,10 @@ void Asset::add_child(Asset* child) {
     }
 
     child->parent = this;
+    // Ensure child has the same owning Assets manager reference
+    if (!child->get_assets()) {
+        child->set_assets(this->assets_);
+    }
     child->set_z_index();
 
 

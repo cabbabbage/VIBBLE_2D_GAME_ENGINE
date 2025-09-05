@@ -1,5 +1,5 @@
 
-#include "Assets.hpp"
+#include "AssetsManager.hpp"
 #include "asset/initialize_assets.hpp"
 
 #include "controls_manager.hpp"
@@ -23,6 +23,15 @@ void set_view_recursive(Asset* asset, view* v) {
     asset->set_view(v);
     for (Asset* child : asset->children) {
         set_view_recursive(child, v);
+    }
+}
+
+// Ensure newly created assets and any children know their owning Assets manager
+void set_assets_owner_recursive(Asset* asset, Assets* owner) {
+    if (!asset) return;
+    asset->set_assets(owner);
+    for (Asset* child : asset->children) {
+        set_assets_owner_recursive(child, owner);
     }
 }
 } // namespace
@@ -63,6 +72,11 @@ Assets::Assets(std::vector<Asset>&& loaded,
 
     // Create scene renderer owned by Assets
     scene = new SceneRenderer(renderer, this, screen_width_, screen_height_, map_path);
+
+    // Ensure all existing assets have a back-reference to this manager
+    for (Asset* a : all) {
+        if (a) a->set_assets(this);
+    }
 }
 
 
@@ -238,6 +252,7 @@ void Assets::addAsset(const std::string& name, int gx, int gy) {
     // Set view + finalize
     try {
         set_view_recursive(newAsset, &window);
+        set_assets_owner_recursive(newAsset, this);
         std::cout << "[Assets::addAsset] View set successfully\n";
         newAsset->finalize_setup();
         std::cout << "[Assets::addAsset] Finalize setup successful\n";
@@ -299,6 +314,7 @@ Asset* Assets::spawn_asset(const std::string& name, int world_x, int world_y) {
 
     try {
         set_view_recursive(newAsset, &window);
+        set_assets_owner_recursive(newAsset, this);
         std::cout << "[Assets::spawn_asset] View set successfully\n";
         newAsset->finalize_setup();
         std::cout << "[Assets::spawn_asset] Finalize setup successful\n";

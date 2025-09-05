@@ -130,4 +130,6 @@ private:
     void addAsset(const std::string& name, int gx, int gy);
 
     friend class SceneRenderer;
+    friend class Asset; // allow assets to access internals if needed
 };
+

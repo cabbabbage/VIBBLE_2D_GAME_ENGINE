@@ -1,4 +1,6 @@
 #include "animation_loader.hpp"
+#include "custom_controllers/Davey_controller.hpp"
+#include "custom_controllers/Davey_default_controller.hpp"
 
 #include "asset/asset_info.hpp"
 #include "utils/cache_manager.hpp"
@@ -9,6 +11,7 @@
 #include <filesystem>
 #include <vector>
 #include <string>
+#include <unordered_map>
 
 using nlohmann::json;
 
@@ -25,6 +28,43 @@ void AnimationLoader::load(AssetInfo& info, SDL_Renderer* renderer) {
     CacheManager cache;
     std::string root_cache = "cache/" + info.name + "/animations";
 
+    // --- Parse graph edges from info.json (new schema) ---
+    // Map: animation_id -> mapping_id (end-of-animation transition)
+    std::unordered_map<std::string, std::string> anim_to_mapping;
+    // Map: "mapping_id::entry:i" or "mapping_id::option:i" -> animation_id
+    std::unordered_map<std::string, std::string> slot_to_anim;
+
+    const json& full_info = info.info_json_;
+    const bool has_edges = full_info.contains("edges") && full_info["edges"].is_array();
+    const json& maps_json = (full_info.contains("mappings") && full_info["mappings"].is_object())
+                                ? full_info["mappings"]
+                                : json::object();
+
+    if (has_edges) {
+        for (const auto& e : full_info["edges"]) {
+            if (!e.is_array() || e.size() < 2) continue;
+            if (!e[0].is_string() || !e[1].is_string()) continue;
+            std::string src = e[0].get<std::string>();
+            std::string dst = e[1].get<std::string>();
+
+            const bool src_is_slot = (src.find("::entry:") != std::string::npos) ||
+                                     (src.find("::option:") != std::string::npos);
+
+            if (src_is_slot) {
+                // Only record slot -> animation links
+                if (info.anims_json_.contains(dst)) {
+                    slot_to_anim[src] = dst;
+                }
+            } else {
+                // Treat src as an animation id and dst as a mapping id
+                if (info.anims_json_.contains(src) && maps_json.contains(dst)) {
+                    anim_to_mapping[src] = dst;
+                }
+            }
+        }
+    }
+
+    // --- Load animations ---
     for (auto it = info.anims_json_.begin(); it != info.anims_json_.end(); ++it) {
         const std::string& trigger = it.key();
         const auto& anim_json = it.value();
@@ -45,8 +85,71 @@ void AnimationLoader::load(AssetInfo& info, SDL_Renderer* renderer) {
                   info.original_canvas_width,
                   info.original_canvas_height);
 
+        // Override on_end_mapping using edges if present
+        auto eit = anim_to_mapping.find(trigger);
+        if (eit != anim_to_mapping.end()) {
+            anim.on_end_mapping = eit->second;
+        }
+
         if (!anim.frames.empty()) {
             info.animations[trigger] = std::move(anim);
+        }
+    }
+
+    // --- Build runtime mappings from new schema (typed mappings + edges) ---
+    if (maps_json.is_object()) {
+        // Replace any previously parsed legacy mappings with the graph-derived ones
+        info.mappings.clear();
+
+        for (auto it = maps_json.begin(); it != maps_json.end(); ++it) {
+            const std::string mapping_id = it.key();
+            const json& m = it.value();
+            std::vector<MappingEntry> built;
+
+            const std::string type = m.value("type", std::string{"regular"});
+            if (type == "regular") {
+                const auto& entries = m.value("entries", json::array());
+                if (entries.is_array()) {
+                    for (size_t i = 0; i < entries.size(); ++i) {
+                        MappingEntry entry;
+                        const auto& ej = entries[i];
+                        if (ej.is_object()) entry.condition = ej.value("condition", std::string{});
+                        // Expect exactly one outgoing edge for this entry slot
+                        std::string slot = mapping_id + "::entry:" + std::to_string(i);
+                        auto sit = slot_to_anim.find(slot);
+                        if (sit != slot_to_anim.end()) {
+                            MappingOption opt{sit->second, 100.0f};
+                            entry.options.push_back(opt);
+                        }
+                        built.push_back(std::move(entry));
+                    }
+                }
+            } else if (type == "random") {
+                // Aggregate all options under a single conditional entry
+                MappingEntry entry;
+                entry.condition = "";
+                const auto& opts = m.value("options", json::array());
+                if (opts.is_array()) {
+                    for (size_t i = 0; i < opts.size(); ++i) {
+                        float pct = 0.0f;
+                        if (opts[i].is_object()) {
+                            pct = opts[i].value("percent", 0.0f);
+                        }
+                        std::string slot = mapping_id + "::option:" + std::to_string(i);
+                        auto sit = slot_to_anim.find(slot);
+                        if (sit != slot_to_anim.end()) {
+                            MappingOption opt{sit->second, pct};
+                            entry.options.push_back(opt);
+                        }
+                    }
+                }
+                built.push_back(std::move(entry));
+            } else if (m.is_array()) {
+                // Legacy array form: keep what AssetInfo may have parsed earlier.
+                // No-op here to avoid duplicating conversion logic.
+            }
+
+            info.mappings[mapping_id] = std::move(built);
         }
     }
 

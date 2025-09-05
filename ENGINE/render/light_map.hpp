@@ -4,7 +4,7 @@
 #include <SDL.h>
 #include <vector>
 #include <random>
-#include "core/Assets.hpp"
+#include "core/AssetsManager.hpp"
 #include "global_light_source.hpp"
 #include "utils/parallax.hpp"
 

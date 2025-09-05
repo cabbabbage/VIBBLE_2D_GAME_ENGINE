@@ -1,92 +1,357 @@
 #!/usr/bin/env python3
 from __future__ import annotations
-from typing import List, Callable
+from typing import List, Callable, Tuple
 
 import tkinter as tk
 from tkinter import ttk
 
 
 class MovementModal(tk.Toplevel):
-    """Modal dialog to edit per-frame movement vectors."""
+   """Edit per-frame movement with click-to-place positions, zoom & pan, and editable totals.
 
-    def __init__(self, parent: tk.Widget, movement: List[List[int]], frames_count: int,
-                 on_save: Callable[[List[List[int]]], None], title: str = "Edit Movement"):
-        super().__init__(parent)
-        self.title(title)
-        self.transient(parent)
-        self.resizable(True, True)
+   Interaction:
+     - Left click: set current frame position (frames 1..N-2 only).
+     - Middle (or Right) drag: pan the view.
+     - Mouse wheel: zoom at cursor.
+     - Arrow keys ◀ ▶ switch current frame.
+     - Frame 0 fixed at (0,0); last frame fixed at (ΔX,ΔY) (change via totals).
+   """
 
-        self._frames_count = max(1, int(frames_count))
-        self._movement = self._coerce(movement, self._frames_count)
-        self._on_save = on_save
+   CANVAS_W = 420
+   CANVAS_H = 300
+   DOT_R    = 5
 
-        frm = ttk.Frame(self); frm.pack(fill="both", expand=True, padx=8, pady=8)
-        top = ttk.LabelFrame(frm, text="Movement [dx, dy] (first frame forced to 0,0)")
-        top.pack(fill="both", expand=True)
+   SCALE_MIN = 2.0
+   SCALE_MAX = 64.0
+   ZOOM_STEP = 1.1
 
-        self.mv_list = tk.Listbox(top, height=10); self.mv_list.pack(side="left", fill="both", expand=True, padx=4, pady=4)
+   def __init__(self, parent: tk.Widget, movement: List[List[int]], frames_count: int,
+               on_save: Callable[[List[List[int]]], None], title: str = "Edit Movement"):
+      super().__init__(parent)
+      self.title(title)
+      self.transient(parent)
+      self.resizable(True, True)
 
-        side = ttk.Frame(top); side.pack(side="right", fill="y", padx=4, pady=4)
-        ttk.Button(side, text="Sync to Frames", command=self._sync_len).pack(fill="x", pady=2)
-        ttk.Separator(side, orient="horizontal").pack(fill="x", pady=4)
-        self.dx_var = tk.IntVar(value=0); self.dy_var = tk.IntVar(value=0)
-        ttk.Label(side, text="dx").pack(anchor="w"); ttk.Entry(side, textvariable=self.dx_var, width=8).pack(anchor="w")
-        ttk.Label(side, text="dy").pack(anchor="w"); ttk.Entry(side, textvariable=self.dy_var, width=8).pack(anchor="w")
-        ttk.Button(side, text="Apply to Selected", command=self._apply_mv).pack(fill="x", pady=4)
-        ttk.Button(side, text="Zero All", command=self._zero_all_mv).pack(fill="x", pady=2)
+      # data
+      self._frames_count = max(1, int(frames_count))
+      self._movement = self._coerce_movement(movement, self._frames_count)
+      self._positions = self._movement_to_positions(self._movement)
+      self._idx = 0
 
-        btns = ttk.Frame(frm); btns.pack(fill="x", pady=(8, 0))
-        ttk.Button(btns, text="OK", command=self._on_ok).pack(side="right", padx=4)
-        ttk.Button(btns, text="Cancel", command=self._on_cancel).pack(side="right")
+      # viewport
+      self._scale = 0.0
+      self._center_x = 0.0
+      self._center_y = 0.0
 
-        self._refresh_mv()
-        self.grab_set()
-        self.protocol("WM_DELETE_WINDOW", self._on_cancel)
-        self.mv_list.focus_set()
+      # totals trace suppression (prevents clicks from being undone)
+      self._suspend_totals_trace = False
 
-    @staticmethod
-    def _coerce(movement: List[List[int]], frames_count: int) -> List[List[int]]:
-        if not isinstance(movement, list):
-            movement = []
-        mv = [[int(dx), int(dy)] for dx, dy in movement] if movement else []
-        if len(mv) < frames_count:
-            mv.extend([[0, 0] for _ in range(frames_count - len(mv))])
-        elif len(mv) > frames_count:
-            mv = mv[:frames_count]
-        mv[0] = [0, 0]
-        return mv
+      # panning state
+      self._panning = False
+      self._pan_last: Tuple[int, int] = (0, 0)
 
-    def _refresh_mv(self):
-        self.mv_list.delete(0, tk.END)
-        for i, (dx, dy) in enumerate(self._movement):
-            self.mv_list.insert(tk.END, f"{i:02d}: [{dx}, {dy}]")
+      # ui
+      root = ttk.Frame(self)
+      root.pack(fill="both", expand=True, padx=10, pady=10)
 
-    def _sync_len(self):
-        self._movement = self._coerce(self._movement, self._frames_count)
-        self._refresh_mv()
+      # totals + frame nav
+      top = ttk.Frame(root); top.pack(fill="x", pady=(0, 8))
 
-    def _apply_mv(self):
-        sel = self.mv_list.curselection()
-        if not sel:
-            return
-        idx = sel[0]
-        if 0 <= idx < len(self._movement):
-            self._movement[idx] = [int(self.dx_var.get()), int(self.dy_var.get())]
-            if idx == 0:
-                self._movement[0] = [0, 0]
-            self._refresh_mv()
+      ttk.Label(top, text="Total ΔX:").pack(side="left")
+      self._total_dx_var = tk.StringVar()
+      ttk.Entry(top, textvariable=self._total_dx_var, width=8).pack(side="left", padx=(2, 12))
 
-    def _zero_all_mv(self):
-        self._movement = [[0, 0] for _ in range(self._frames_count)]
-        self._movement[0] = [0, 0]
-        self._refresh_mv()
+      ttk.Label(top, text="Total ΔY:").pack(side="left")
+      self._total_dy_var = tk.StringVar()
+      ttk.Entry(top, textvariable=self._total_dy_var, width=8).pack(side="left", padx=(2, 12))
 
-    def _on_ok(self):
-        self._sync_len()
-        self._on_save(self._movement)
-        self.grab_release()
-        self.destroy()
+      nav = ttk.Frame(top); nav.pack(side="right")
+      ttk.Button(nav, text="◀", width=3, command=self._prev_frame).pack(side="left", padx=4)
+      self._frame_label = ttk.Label(nav, text=self._frame_label_text())
+      self._frame_label.pack(side="left", padx=4)
+      ttk.Button(nav, text="▶", width=3, command=self._next_frame).pack(side="left", padx=4)
 
-    def _on_cancel(self):
-        self.grab_release()
-        self.destroy()
+      # editor
+      editor = ttk.LabelFrame(root, text="Positions (absolute, relative to origin 0,0)")
+      editor.pack(fill="both", expand=True)
+      self._canvas = tk.Canvas(editor, bg="#1e1f24", highlightthickness=0,
+                              width=self.CANVAS_W, height=self.CANVAS_H)
+      self._canvas.pack(fill="both", expand=True, padx=6, pady=6)
+
+      # buttons
+      btns = ttk.Frame(root); btns.pack(fill="x", pady=(8, 0))
+      ttk.Button(btns, text="Zero All", command=self._zero_all).pack(side="left")
+      ttk.Button(btns, text="OK", command=self._on_ok).pack(side="right", padx=4)
+      ttk.Button(btns, text="Cancel", command=self._on_cancel).pack(side="right")
+
+      # events
+      self._canvas.bind("<Configure>", self._on_canvas_resize)
+
+      # left-click to set a point (only middle frames)
+      self._canvas.bind("<Button-1>", self._on_canvas_click)
+
+      # pan with middle or right mouse button
+      self._canvas.bind("<Button-2>", self._on_pan_start)
+      self._canvas.bind("<B2-Motion>", self._on_pan_move)
+      self._canvas.bind("<ButtonRelease-2>", self._on_pan_end)
+
+      self._canvas.bind("<Button-3>", self._on_pan_start)
+      self._canvas.bind("<B3-Motion>", self._on_pan_move)
+      self._canvas.bind("<ButtonRelease-3>", self._on_pan_end)
+
+      # zoom
+      self._canvas.bind("<MouseWheel>", self._on_mouse_wheel)     # Windows/macOS
+      self._canvas.bind("<Button-4>", lambda e: self._on_wheel_steps(e, +1))  # X11
+      self._canvas.bind("<Button-5>", lambda e: self._on_wheel_steps(e, -1))  # X11
+
+      self.bind("<Left>",  lambda _e: self._prev_frame())
+      self.bind("<Right>", lambda _e: self._next_frame())
+
+      # totals fields change → recompute linear distribution
+      self._total_dx_var.trace_add("write", lambda *_: self._on_totals_changed())
+      self._total_dy_var.trace_add("write", lambda *_: self._on_totals_changed())
+
+      # finalize
+      self._set_totals_from_positions()
+      self.grab_set()
+      self.protocol("WM_DELETE_WINDOW", self._on_cancel)
+      self._canvas.focus_set()
+      self._auto_fit_view()
+      self._redraw()
+
+   # ---------------- data coercion / conversion ----------------
+   @staticmethod
+   def _coerce_movement(movement: List[List[int]], frames_count: int) -> List[List[int]]:
+      if not isinstance(movement, list):
+         movement = []
+      mv: List[List[int]] = []
+      for i, item in enumerate(movement[:frames_count]):
+         try:
+            dx, dy = int(item[0]), int(item[1])
+         except Exception:
+            dx, dy = 0, 0
+         if i == 0:
+            dx, dy = 0, 0
+         mv.append([dx, dy])
+      if len(mv) < frames_count:
+         mv.extend([[0, 0] for _ in range(frames_count - len(mv))])
+      if mv:
+         mv[0] = [0, 0]
+      return mv
+
+   @staticmethod
+   def _movement_to_positions(mv: List[List[int]]) -> List[List[int]]:
+      pos: List[List[int]] = []
+      x, y = 0, 0
+      for i, (dx, dy) in enumerate(mv):
+         if i == 0:
+            x, y = 0, 0
+         else:
+            x += int(dx); y += int(dy)
+         pos.append([x, y])
+      return pos
+
+   @staticmethod
+   def _positions_to_movement(pos: List[List[int]]) -> List[List[int]]:
+      out: List[List[int]] = []
+      for i, (x, y) in enumerate(pos):
+         if i == 0:
+            out.append([0, 0])
+         else:
+            px, py = pos[i - 1]
+            out.append([int(x - px), int(y - py)])
+      return out
+
+   # ---------------- frame nav / totals ------------------------
+   def _frame_label_text(self) -> str:
+      return f"Frame {self._idx} / {self._frames_count - 1}"
+
+   def _set_frame(self, idx: int):
+      self._idx = max(0, min(self._frames_count - 1, idx))
+      self._frame_label.configure(text=self._frame_label_text())
+      self._redraw()
+
+   def _prev_frame(self):
+      self._set_frame(self._idx - 1)
+
+   def _next_frame(self):
+      self._set_frame(self._idx + 1)
+
+   def _set_totals_from_positions(self):
+      lastx, lasty = self._positions[-1] if self._positions else (0, 0)
+      self._suspend_totals_trace = True
+      try:
+         self._total_dx_var.set(str(int(lastx)))
+         self._total_dy_var.set(str(int(lasty)))
+      finally:
+         self._suspend_totals_trace = False
+
+   def _on_totals_changed(self):
+      if self._suspend_totals_trace:
+         return
+      # When totals are edited, recompute evenly spaced positions from origin to (ΔX,ΔY).
+      try:
+         dx = int(self._total_dx_var.get() or "0")
+      except Exception:
+         dx = 0
+      try:
+         dy = int(self._total_dy_var.get() or "0")
+      except Exception:
+         dy = 0
+      self._redistribute_positions_linear(dx, dy)
+      self._movement = self._positions_to_movement(self._positions)
+      self._auto_fit_view()
+      self._redraw()
+
+   def _redistribute_positions_linear(self, dx: int, dy: int):
+      n = self._frames_count
+      if n <= 1:
+         self._positions = [[0, 0]]
+         return
+      self._positions = []
+      for i in range(n):
+         t = i / (n - 1)
+         x = round(dx * t)
+         y = round(dy * t)
+         self._positions.append([x, y])
+      self._positions[0]  = [0, 0]
+      self._positions[-1] = [dx, dy]
+
+   # ---------------- viewport / transforms ---------------------
+   def _auto_fit_view(self):
+      xs = [0] + [p[0] for p in self._positions]
+      ys = [0] + [p[1] for p in self._positions]
+      xmin, xmax = min(xs), max(xs)
+      ymin, ymax = min(ys), max(ys)
+      if xmin == xmax:
+         xmin -= 10; xmax += 10
+      if ymin == ymax:
+         ymin -= 10; ymax += 10
+      dx = (xmax - xmin) * 0.15
+      dy = (ymax - ymin) * 0.15
+      xmin -= dx; xmax += dx
+      ymin -= dy; ymax += dy
+      self._center_x = (xmin + xmax) / 2.0
+      self._center_y = (ymin + ymax) / 2.0
+      cw = max(1, self._canvas.winfo_width())
+      ch = max(1, self._canvas.winfo_height())
+      sx = cw / max(1e-6, (xmax - xmin))
+      sy = ch / max(1e-6, (ymax - ymin))
+      self._scale = max(self.SCALE_MIN, min(self.SCALE_MAX, min(sx, sy)))
+
+   def _world_to_canvas(self, x: float, y: float) -> Tuple[int, int]:
+      cw = max(1, self._canvas.winfo_width())
+      ch = max(1, self._canvas.winfo_height())
+      cx = int((x - self._center_x) * self._scale + cw / 2.0)
+      cy = int((self._center_y - y) * self._scale + ch / 2.0)
+      return cx, cy
+
+   def _canvas_to_world(self, cx: int, cy: int) -> Tuple[float, float]:
+      cw = max(1, self._canvas.winfo_width())
+      ch = max(1, self._canvas.winfo_height())
+      x = (cx - cw / 2.0) / max(1e-6, self._scale) + self._center_x
+      y = self._center_y - (cy - ch / 2.0) / max(1e-6, self._scale)
+      return x, y
+
+   def _zoom_at(self, canvas_x: int, canvas_y: int, steps: int):
+      if steps == 0:
+         return
+      wx, wy = self._canvas_to_world(canvas_x, canvas_y)
+      for _ in range(abs(steps)):
+         if steps > 0:
+            self._scale *= self.ZOOM_STEP
+         else:
+            self._scale /= self.ZOOM_STEP
+         self._scale = max(self.SCALE_MIN, min(self.SCALE_MAX, self._scale))
+      cw = max(1, self._canvas.winfo_width())
+      ch = max(1, self._canvas.winfo_height())
+      self._center_x = wx - (canvas_x - cw / 2.0) / self._scale
+      self._center_y = (canvas_y - ch / 2.0) / self._scale + wy
+      self._redraw()
+
+   # ---------------- drawing & interaction --------------------
+   def _on_canvas_resize(self, _evt=None):
+      if self._scale <= 0.0:
+         self._auto_fit_view()
+      self._redraw()
+
+   def _redraw(self, _evt=None):
+      c = self._canvas
+      c.delete("all")
+
+      cw = max(1, c.winfo_width())
+      ch = max(1, c.winfo_height())
+
+      # axes
+      ox, oy = self._world_to_canvas(0, 0)
+      c.create_line(0, oy, cw, oy, fill="#3a3f46")
+      c.create_line(ox, 0, ox, ch, fill="#3a3f46")
+      c.create_oval(ox-2, oy-2, ox+2, oy+2, fill="#7f8fa6", outline="")
+
+      # path and dots
+      prev = (0, 0)
+      for i, (x, y) in enumerate(self._positions):
+         cx, cy = self._world_to_canvas(x, y)
+         px, py = self._world_to_canvas(prev[0], prev[1])
+         c.create_line(px, py, cx, cy, fill="#9aa0a6")
+         prev = (x, y)
+         color = "#e84118" if i == self._idx else "#44bd32"
+         c.create_oval(cx - self.DOT_R, cy - self.DOT_R, cx + self.DOT_R, cy + self.DOT_R,
+                       fill=color, outline="#111")
+
+      # sync totals display with last point without retriggering trace
+      self._set_totals_from_positions()
+
+   def _on_canvas_click(self, evt):
+      # only allow editing middle frames; frame 0 and last are locked
+      if self._idx == 0 or self._idx == self._frames_count - 1:
+         return
+      x, y = self._canvas_to_world(evt.x, evt.y)
+      self._positions[self._idx] = [int(round(x)), int(round(y))]
+      self._movement = self._positions_to_movement(self._positions)
+      self._redraw()
+
+   # --- panning (middle or right mouse) ---
+   def _on_pan_start(self, evt):
+      self._panning = True
+      self._pan_last = (evt.x, evt.y)
+
+   def _on_pan_move(self, evt):
+      if not self._panning:
+         return
+      lx, ly = self._pan_last
+      dx_pix = evt.x - lx
+      dy_pix = evt.y - ly
+      self._pan_last = (evt.x, evt.y)
+      # pixel delta -> world delta (note inverted y)
+      self._center_x -= dx_pix / self._scale
+      self._center_y += dy_pix / self._scale
+      self._redraw()
+
+   def _on_pan_end(self, _evt):
+      self._panning = False
+
+   # --- zoom ---
+   def _on_mouse_wheel(self, evt):
+      steps = 1 if evt.delta > 0 else -1
+      self._zoom_at(evt.x, evt.y, steps)
+
+   def _on_wheel_steps(self, evt, steps: int):
+      self._zoom_at(evt.x, evt.y, steps)
+
+   # ---------------- bulk actions / save ----------------------
+   def _zero_all(self):
+      self._redistribute_positions_linear(0, 0)
+      self._movement = self._positions_to_movement(self._positions)
+      self._set_frame(0)
+
+   def _on_ok(self):
+      self._movement = self._positions_to_movement(self._positions)
+      self._movement[0] = [0, 0]
+      self._on_save(self._movement)
+      self.grab_release()
+      self.destroy()
+
+   def _on_cancel(self):
+      self.grab_release()
+      self.destroy()

@@ -3,13 +3,14 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
-from typing import Dict, Any, List, Tuple, Optional
+from typing import Dict, Any, List, Optional
 
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 
-from animation_node import AnimationNode
-from mapping_node import RegularMappingNode, RandomMappingNode
+from animations_pannel import AnimationsPanel
+from ui_state import HistoryManager, ViewStateManager
+from custom_controller_manager import CustomControllerManager
 
 
 # ---------- json helpers ----------
@@ -17,245 +18,34 @@ def read_json(p: Path) -> Dict[str, Any]:
     with p.open("r", encoding="utf-8") as f:
         return json.load(f)
 
+
 def write_json(p: Path, data: Dict[str, Any]) -> None:
     with p.open("w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
 
+
 def ensure_sections(d: Dict[str, Any]) -> None:
     if "animations" not in d or not isinstance(d["animations"], dict):
         d["animations"] = {}
+    # keep for compatibility; not used by this UI
     if "mappings" not in d or not isinstance(d["mappings"], dict):
         d["mappings"] = {}
-    if "edges" not in d or not isinstance(d["edges"], list):
-        d["edges"] = []
-
-    # migrate legacy edge fields (on_end_mapping/on_end_animation, animation strings)
-    edges: List[List[str]] = list(d.get("edges", []))
-    anims = d.get("animations", {})
-    maps = d.get("mappings", {})
-    for aid, cfg in list(anims.items()):
-        if not isinstance(cfg, dict):
-            continue
-        nxt = cfg.pop("on_end_mapping", "")
-        if nxt:
-            edges.append([aid, nxt])
-    for mid, cfg in list(maps.items()):
-        # regular list payload legacy
-        if isinstance(cfg, list):
-            entries = []
-            for idx, e in enumerate(cfg):
-                cond = (e or {}).get("condition", "")
-                entries.append({"condition": cond})
-                opts = ((e or {}).get("map_to") or {}).get("options", [])
-                if opts:
-                    anim = opts[0].get("animation", "") or opts[0].get("mapping", "")
-                    if anim:
-                        edges.append([f"{mid}::entry:{idx}", anim])
-            maps[mid] = {"type": "regular", "entries": entries}
-            continue
-        if not isinstance(cfg, dict):
-            continue
-        # migrate per-node edge fields
-        m_to = cfg.pop("on_end_mapping", "")
-        a_to = cfg.pop("on_end_animation", "")
-        if m_to:
-            edges.append([mid, m_to])
-        if a_to:
-            edges.append([mid, a_to])
-        if cfg.get("type") == "regular":
-            for i, entry in enumerate(cfg.get("entries", [])):
-                anim = entry.pop("animation", "")
-                if anim:
-                    edges.append([f"{mid}::entry:{i}", anim])
-        if cfg.get("type") == "random":
-            for i, opt in enumerate(cfg.get("options", [])):
-                anim = opt.pop("animation", "")
-                if anim:
-                    edges.append([f"{mid}::option:{i}", anim])
-
-    # only set edges if found legacy ones
-    if edges:
-        d["edges"] = edges
+    if "layout" not in d or not isinstance(d["layout"], dict):
+        d["layout"] = {}
+    # optional start field
+    if "start" not in d:
+        d["start"] = ""
 
 
-# ---------- graph ----------
-class GraphCanvas(tk.Canvas):
-    PORT_HIT_RADIUS = 12
-
-    def __init__(self, master, **kwargs):
-        super().__init__(master, bg="#2d3436", highlightthickness=0, **kwargs)
-        self.anim_nodes: Dict[str, AnimationNode] = {}
-        self.map_nodes: Dict[str, tk.Widget] = {}   # id -> mapping node
-        # edges are stored as tuples (src_id, dst_id)
-        self.edges: List[Tuple[str, str]] = []
-
-        self._drag_src_id: Optional[str] = None
-        self._drag_line_id: Optional[int] = None
-        self._drag_src_pos: Optional[Tuple[int, int]] = None
-
-        self.bind("<Configure>", lambda _e: self.redraw_edges())
-        self.bind("<B1-Motion>", self._on_mouse_drag)
-        self.bind("<ButtonRelease-1>", self._on_mouse_release)
-
-    def clear(self):
-        self.delete("all")
-        self.anim_nodes.clear()
-        self.map_nodes.clear()
-        self.edges.clear()
-        self._reset_drag()
-
-    def add_anim_node(self, anim_name: str, payload: Dict[str, Any], x: int, y: int):
-        node = AnimationNode(self, anim_name, payload, x=x, y=y)
-        node.on_begin_connect = self._begin_drag_from
-        node.on_changed = self._on_node_changed
-        node.on_moved = lambda _id, _x, _y: self.redraw_edges()
-        node.on_renamed = self._on_node_renamed
-        self.anim_nodes[anim_name] = node
-        return node
-
-    def add_map_node(self, mapping_id: str, payload: Any, x: int, y: int):
-        is_random = isinstance(payload, dict) and payload.get("type") == "random"
-        node = (RandomMappingNode(self, mapping_id, payload, x=x, y=y)
-                if is_random else
-                RegularMappingNode(self, mapping_id, payload, x=x, y=y))
-        node.on_begin_connect = self._begin_drag_from
-        node.on_changed = self._on_node_changed
-        node.on_moved = lambda _id, _x, _y: self.redraw_edges()
-        node.on_renamed = self._on_node_renamed
-        self.map_nodes[mapping_id] = node
-        return node
-
-    # --- load edges from data ---
-    def set_edges_from_data(self, data: Dict[str, Any]):
-        self.edges.clear()
-        for edge in data.get("edges", []):
-            try:
-                src, dst = edge
-            except Exception:
-                continue
-            if src and dst:
-                self.edges.append((str(src), str(dst)))
-
-    # --- drag connect flow ---
-    def _begin_drag_from(self, src_id: str):
-        self._drag_src_id = src_id
-        sx, sy = self._node_output_center(src_id)
-        if sx is None:
-            self._reset_drag()
-            return
-        self._drag_src_pos = (sx, sy)
-        if self._drag_line_id:
-            self.delete(self._drag_line_id)
-        self._drag_line_id = self.create_line(sx, sy, sx, sy, fill="#9AECDB", width=2, dash=(4, 2), tags=("drag_line",))
-
-    def _on_mouse_drag(self, event):
-        if not self._drag_line_id or not self._drag_src_pos:
-            return
-        x = self.canvasx(event.x)
-        y = self.canvasy(event.y)
-        sx, sy = self._drag_src_pos
-        self.coords(self._drag_line_id, sx, sy, x, y)
-
-    def _on_mouse_release(self, event):
-        if not self._drag_src_id:
-            return
-        tx = self.canvasx(event.x)
-        ty = self.canvasy(event.y)
-
-        # prefer mapping input if close, else animation input
-        dst_id = self._hit_test_inputs(self.map_nodes, tx, ty)
-        if not dst_id:
-            dst_id = self._hit_test_inputs(self.anim_nodes, tx, ty)
-
-        if dst_id and dst_id != self._drag_src_id:
-            self.event_generate("<<GraphConnect>>", data=f"{self._drag_src_id}|{dst_id}")
-        self._reset_drag()
-
-    def _node_output_center(self, node_id: str) -> Tuple[Optional[int], Optional[int]]:
-        if "::" in node_id:
-            base, slot = node_id.split("::", 1)
-            n = self.map_nodes.get(base)
-            if n and hasattr(n, "slot_output_port_center"):
-                return n.slot_output_port_center(slot)
-            return (None, None)
-        if node_id in self.anim_nodes:
-            return self.anim_nodes[node_id].output_port_center()
-        n = self.map_nodes.get(node_id)
-        return n.output_port_center() if n else (None, None)
-
-    def _hit_test_inputs(self, node_dict: Dict[str, Any], x: float, y: float) -> Optional[str]:
-        r = self.PORT_HIT_RADIUS
-        for nid, node in node_dict.items():
-            cx, cy = node.input_port_center()
-            if cx is None:
-                continue
-            if (x - cx) ** 2 + (y - cy) ** 2 <= r ** 2:
-                return nid
-        return None
-
-    def _reset_drag(self):
-        self._drag_src_id = None
-        self._drag_src_pos = None
-        if self._drag_line_id:
-            self.delete(self._drag_line_id)
-            self._drag_line_id = None
-
-    # --- edges + dbl-click delete ---
-    def redraw_edges(self):
-        self.delete("edge")
-        for src_id, dst_id in self.edges:
-            sx, sy = self._node_output_center(src_id)
-            # dst can be map or anim
-            if dst_id in self.map_nodes:
-                dx, dy = self.map_nodes[dst_id].input_port_center()
-            else:
-                dn = self.anim_nodes.get(dst_id)
-                dx, dy = dn.input_port_center() if dn else (None, None)
-            if not (sx and dx):
-                continue
-            line_id = self.create_line(sx, sy, dx, dy, fill="#dcdde1", width=2, arrow=tk.LAST,
-                                       tags=("edge", f"edge:{src_id}|{dst_id}"))
-            self.tag_bind(line_id, "<Double-Button-1>", lambda _e, s=src_id, d=dst_id: self._request_disconnect(s, d))
-
-    def _request_disconnect(self, src_id: str, dst_id: str):
-        self.event_generate("<<GraphDisconnect>>", data=f"{src_id}|{dst_id}")
-
-    def _on_node_changed(self, node_id: str, payload: Dict[str, Any]):
-        self.event_generate("<<NodeChanged>>", data=node_id)
-
-    def _on_node_renamed(self, old_id: str, new_id: str):
-        if old_id in self.anim_nodes:
-            node = self.anim_nodes.pop(old_id)
-            self.anim_nodes[new_id] = node
-        elif old_id in self.map_nodes:
-            node = self.map_nodes.pop(old_id)
-            self.map_nodes[new_id] = node
-        new_edges = []
-        prefix = old_id + "::"
-        for src, dst in self.edges:
-            s = src
-            d = dst
-            if src == old_id:
-                s = new_id
-            elif src.startswith(prefix):
-                s = new_id + src[len(old_id):]
-            if dst == old_id:
-                d = new_id
-            new_edges.append((s, d))
-        self.edges = new_edges
-        self.redraw_edges()
-        self.event_generate("<<NodeRenamed>>", data=f"{old_id}|{new_id}")
-
-
-# ---------- app ----------
+# ---------- app (list-based UI) ----------
 class AnimationConfiguratorAppSingle:
     def __init__(self, info_path: Path):
         self.info_path = info_path
         self.data: Optional[Dict[str, Any]] = None
 
         self.win = tk.Tk()
-        self.win.title("Animation & Mapping Configurator")
-        self.win.geometry("1280x760")
+        self.win.title("Animation Configurator")
+        self.win.geometry("1100x780")
 
         try:
             self.data = read_json(self.info_path)
@@ -266,134 +56,249 @@ class AnimationConfiguratorAppSingle:
 
         ensure_sections(self.data)
 
+        # managers: undo + view persistence
+        self.history = HistoryManager(limit=200)
+        self.view_state = ViewStateManager()
+        self.history.snapshot(self.data)
+
+        # Actions bar
         act = ttk.Frame(self.win); act.pack(side="top", fill="x", padx=8, pady=6)
+        # Custom controller button (asset-level)
+        self.cc_manager = CustomControllerManager(self.info_path)
+        self.custom_ctrl_btn = ttk.Button(act, text=self._custom_ctrl_button_text(), command=self._on_custom_ctrl)
+        self.custom_ctrl_btn.pack(side="left", padx=(2, 8))
+        # Proactively ensure engine sources include all existing controllers
+        try:
+            self._ensure_all_custom_includes()
+        except Exception:
+            pass
+
         ttk.Button(act, text="New Animation", command=self.create_animation).pack(side="left", padx=2)
-        ttk.Button(act, text="New Regular Map", command=self.create_regular_mapping).pack(side="left", padx=2)
-        ttk.Button(act, text="New Random Map", command=self.create_random_mapping).pack(side="left", padx=2)
-        ttk.Button(act, text="Save", command=self.save_current).pack(side="right", padx=2)
+        ttk.Label(act, text="Start:").pack(side="left", padx=(16, 4))
+        self.start_var = tk.StringVar(value=str(self.data.get("start", "")))
+        self.start_cb = ttk.Combobox(act, textvariable=self.start_var, width=24, state="readonly")
+        self.start_cb.pack(side="left")
+        self.start_cb.bind("<<ComboboxSelected>>", self._on_start_changed)
 
-        self.canvas = GraphCanvas(self.win)
-        self.canvas.pack(fill="both", expand=True)
-
-        self.canvas.bind("<<GraphConnect>>", self.on_graph_connect)
-        self.canvas.bind("<<GraphDisconnect>>", self.on_graph_disconnect)
-        self.canvas.bind("<<NodeChanged>>", self.on_node_changed)
-        self.canvas.bind("<<NodeRenamed>>", self.on_node_renamed)
+        # Scrollable list area
+        list_wrap = ttk.Frame(self.win)
+        list_wrap.pack(fill="both", expand=True)
+        self.scroll_canvas = tk.Canvas(list_wrap, bg="#2d3436", highlightthickness=0)
+        vsb = ttk.Scrollbar(list_wrap, orient="vertical", command=self.scroll_canvas.yview)
+        self.scroll_canvas.configure(yscrollcommand=vsb.set)
+        vsb.pack(side="right", fill="y")
+        self.scroll_canvas.pack(side="left", fill="both", expand=True)
+        self.inner = ttk.Frame(self.scroll_canvas)
+        self.scroll_window = self.scroll_canvas.create_window((0, 0), window=self.inner, anchor="nw")
+        self.inner.bind("<Configure>", lambda _e: self.scroll_canvas.configure(scrollregion=self.scroll_canvas.bbox("all")))
+        # keep inner frame width matching canvas width
+        self.scroll_canvas.bind("<Configure>", lambda e: self.scroll_canvas.itemconfigure(self.scroll_window, width=e.width))
+        # grid config for multi-column layout
+        self.grid_cols = 2  # number of columns in the panel grid
+        for c in range(self.grid_cols):
+            self.inner.columnconfigure(c, weight=1, uniform="panels")
 
         self.status = tk.StringVar(value=f"Loaded {self.info_path}")
         ttk.Label(self.win, textvariable=self.status, relief=tk.SUNKEN, anchor="w").pack(side="bottom", fill="x")
 
-        self.rebuild_graph()
+        # keyboard + close
+        try:
+            self.win.bind_all("<Control-z>", self._undo_last_change)
+            self.win.bind_all("<Control-Z>", self._undo_last_change)
+        except Exception:
+            pass
+        try:
+            self.win.protocol("WM_DELETE_WINDOW", self._on_close)
+        except Exception:
+            pass
 
-    # save
+        # panels registry
+        self.panels: Dict[str, AnimationsPanel] = {}
+
+        # preview provider (optional)
+        try:
+            from preview_provider import PreviewProvider  # type: ignore
+            self.preview_provider = PreviewProvider(
+                base_dir=self.info_path.parent,
+                animation_lookup=lambda name: self.data.get("animations", {}).get(name),
+                size=(72, 72),
+            )
+        except Exception:
+            self.preview_provider = None
+
+        # apply geometry if saved
+        try:
+            view = self.data.get("layout", {}).get("__view", {})
+            if isinstance(view, dict):
+                geom = view.get("geometry")
+                if geom:
+                    self.win.geometry(str(geom))
+        except Exception:
+            pass
+
+        self.rebuild_list()
+        self._restore_view_state()
+        
+    # ----- autosave -----
     def save_current(self):
         if not (self.data and self.info_path):
             return
         try:
+            # persist view state
+            self._save_view_state_to_data()
             write_json(self.info_path, self.data)
             self.status.set(f"Saved {self.info_path}")
         except Exception as e:
             messagebox.showerror("Save error", f"Failed to save {self.info_path}:\n{e}")
 
-    # graph
-    def rebuild_graph(self):
-        self.canvas.clear()
-        if not self.data:
-            return
-        anims = list(self.data["animations"].keys())
-        maps = list(self.data["mappings"].keys())
-
-        y = 30
+    # ----- list build -----
+    def rebuild_list(self):
+        for w in self.inner.winfo_children():
+            w.destroy()
+        self.panels.clear()
+        anims = list(self.data.get("animations", {}).keys())
+        anims.sort()
+        # place panels in a grid with spacing
+        cmax = max(1, int(getattr(self, "grid_cols", 2)))
+        r = 0; c = 0
         for a in anims:
-            self.canvas.add_anim_node(a, self.data["animations"][a], x=60, y=y)
-            y += 100
+            p = AnimationsPanel(
+                self.inner,
+                a,
+                self.data["animations"][a],
+                on_changed=self._on_panel_changed,
+                on_renamed=self._on_panel_renamed,
+                on_delete=self._on_panel_delete,
+                preview_provider=self.preview_provider,
+                asset_folder=str(self.info_path.parent),
+                list_animation_names=lambda: list(self.data.get("animations", {}).keys()),
+            )
+            fr = p.get_frame()
+            fr.grid(row=r, column=c, sticky="nsew", padx=12, pady=12)
+            self.panels[a] = p
+            c += 1
+            if c >= cmax:
+                c = 0
+                r += 1
+        self._refresh_start_selector()
 
-        y = 30
-        for m in maps:
-            self.canvas.add_map_node(m, self.data["mappings"][m], x=560, y=y)
-            y += 120
-
-        self.canvas.set_edges_from_data(self.data)
-        self.canvas.redraw_edges()
-
-    # events
-    def on_node_changed(self, _event):
+    # ----- panel callbacks -----
+    def _on_panel_changed(self, node_id: str, payload: Dict[str, Any]):
         if not (self.data and self.info_path):
             return
-        for aid, node in self.canvas.anim_nodes.items():
-            self.data["animations"][aid] = node.to_dict()
-        for mid, node in self.canvas.map_nodes.items():
-            self.data["mappings"][mid] = node.to_payload()
-        self.data["edges"] = [list(e) for e in self.canvas.edges]
+        self._snapshot()
+        self.data.setdefault("animations", {})[node_id] = payload
         self.save_current()
-        self.canvas.set_edges_from_data(self.data)
-        self.canvas.redraw_edges()
 
-    def on_graph_connect(self, event):
+    def _on_panel_renamed(self, old_id: str, new_id: str):
         if not (self.data and self.info_path):
             return
+        new_id = str(new_id).strip()
+        if not new_id:
+            return
+        if new_id in self.data.get("animations", {}) and new_id != old_id:
+            messagebox.showerror("Rename", f"'{new_id}' already exists.")
+            # rebuild to reset UI to old id
+            self.rebuild_list()
+            return
+        self._snapshot()
+        anims = self.data.setdefault("animations", {})
+        anims[new_id] = anims.pop(old_id)
+        # update start if matches
+        if str(self.data.get("start", "")) == old_id:
+            self.data["start"] = new_id
+        self.save_current()
+        self.rebuild_list()
+
+    def _custom_ctrl_button_text(self) -> str:
+        return "Open Custom Controller in IDE" if self.cc_manager.exists() else "Create Custom Controller"
+
+    def _on_custom_ctrl(self):
+        if self.cc_manager.exists():
+            self.cc_manager.open_in_ide()
+            return
+        # create files and update JSON with key
         try:
-            pair = event.__dict__.get("data", "")
-            src_id, dst_id = pair.split("|", 1)
-        except Exception:
+            self.cc_manager.create()
+        except Exception as e:
+            messagebox.showerror("Create error", f"Failed to create custom controller files:\n{e}")
             return
-
-        edges = [edge for edge in self.data.setdefault("edges", []) if edge[0] != src_id]
-        edges.append([src_id, dst_id])
-        self.data["edges"] = edges
+        # store key at top-level
+        try:
+            self.data["custom_controller_key"] = self.cc_manager.key()
+        except Exception:
+            pass
         self.save_current()
-        self.canvas.set_edges_from_data(self.data)
-        self.canvas.redraw_edges()
-        self.status.set(f"Linked {src_id} → {dst_id}")
+        try:
+            self.custom_ctrl_btn.configure(text=self._custom_ctrl_button_text())
+        except Exception:
+            pass
 
-    def on_graph_disconnect(self, event):
+    def _ensure_all_custom_includes(self):
+        # Scan ENGINE/custom_controllers for headers and ensure includes exist in key engine files
+        engine_dir = self.info_path.parents[2] / "ENGINE"
+        cc_dir = engine_dir / "custom_controllers"
+        if not cc_dir.exists():
+            return
+        targets = [
+            engine_dir / "asset_info_methods" / "animation_loader.cpp",
+            engine_dir / "asset_info_methods" / "animation_loader.hpp",
+            engine_dir / "ui" / "asset_info_ui.cpp",
+        ]
+        headers = [p for p in cc_dir.glob("*.hpp")]
+        for hdr in headers:
+            base = hdr.stem  # without extension
+            inc = f"#include \"custom_controllers/{base}.hpp\"\n"
+            for t in targets:
+                try:
+                    if not t.exists():
+                        continue
+                    txt = t.read_text(encoding="utf-8")
+                    if inc.strip() in txt:
+                        continue
+                    lines = txt.splitlines(True)
+                    ins = 0
+                    for i, ln in enumerate(lines[:100]):
+                        if ln.lstrip().startswith('#include'):
+                            ins = i + 1
+                    lines.insert(ins, inc)
+                    t.write_text("".join(lines), encoding="utf-8")
+                except Exception:
+                    pass
+
+    def _on_panel_delete(self, node_id: str):
         if not (self.data and self.info_path):
             return
-        try:
-            pair = event.__dict__.get("data", "")
-            src_id, dst_id = pair.split("|", 1)
-        except Exception:
-            return
-
-        edges = [edge for edge in self.data.get("edges", []) if not (edge[0] == src_id and edge[1] == dst_id)]
-        self.data["edges"] = edges
+        self._snapshot()
+        self.data.setdefault("animations", {}).pop(node_id, None)
+        if str(self.data.get("start", "")) == node_id:
+            self.data["start"] = ""
         self.save_current()
-        self.canvas.set_edges_from_data(self.data)
-        self.canvas.redraw_edges()
-        self.status.set(f"Removed link {src_id} → {dst_id}")
+        self.rebuild_list()
 
-    def on_node_renamed(self, event):
+    # ----- start selector -----
+    def _refresh_start_selector(self):
+        node_ids = list(self.data.get("animations", {}).keys())
+        node_ids.sort()
+        self.start_cb["values"] = node_ids
+        cur = str(self.data.get("start", ""))
+        if cur and cur not in node_ids:
+            cur = ""
+            self.data["start"] = ""
+        self.start_var.set(cur)
+
+    def _on_start_changed(self, _evt=None):
         if not (self.data and self.info_path):
             return
-        try:
-            pair = event.__dict__.get("data", "")
-            old_id, new_id = pair.split("|", 1)
-        except Exception:
-            return
-        if old_id in self.data.get("animations", {}):
-            self.data["animations"][new_id] = self.data["animations"].pop(old_id)
-        elif old_id in self.data.get("mappings", {}):
-            self.data["mappings"][new_id] = self.data["mappings"].pop(old_id)
-        new_edges = []
-        prefix = old_id + "::"
-        for src, dst in self.data.get("edges", []):
-            s = src
-            d = dst
-            if src == old_id:
-                s = new_id
-            elif src.startswith(prefix):
-                s = new_id + src[len(old_id):]
-            if dst == old_id:
-                d = new_id
-            new_edges.append([s, d])
-        self.data["edges"] = new_edges
+        self._snapshot()
+        self.data["start"] = self.start_var.get()
         self.save_current()
-        self.canvas.set_edges_from_data(self.data)
-        self.canvas.redraw_edges()
-        self.status.set(f"Renamed {old_id} → {new_id}")
 
-    # creators
+    # ----- create -----
     def create_animation(self):
+        if not (self.data and self.info_path):
+            return
+        self._snapshot()
         base = "new_anim"
         name, i = base, 1
         while name in self.data["animations"]:
@@ -406,33 +311,56 @@ class AnimationConfiguratorAppSingle:
             "speed_factor": 1,
             "number_of_frames": 1,
             "movement": [[0, 0]],
+            "on_end": "",
         }
         self.save_current()
-        self.rebuild_graph()
+        self.rebuild_list()
 
-    def create_regular_mapping(self):
-        import uuid
-        mid = uuid.uuid4().hex[:8]
-        while mid in self.data["mappings"]:
-            mid = uuid.uuid4().hex[:8]
-        self.data["mappings"][mid] = {
-            "type": "regular",
-            "entries": [{"condition": ""}],
-        }
-        self.save_current()
-        self.rebuild_graph()
+    # ----- view persistence + undo -----
+    def _save_view_state_to_data(self):
+        try:
+            layout = self.data.setdefault("layout", {})
+            layout["__view"] = self.view_state.capture(self.win, self.scroll_canvas)
+        except Exception:
+            pass
 
-    def create_random_mapping(self):
-        import uuid
-        mid = uuid.uuid4().hex[:8]
-        while mid in self.data["mappings"]:
-            mid = uuid.uuid4().hex[:8]
-        self.data["mappings"][mid] = {
-            "type": "random",
-            "options": [{"percent": 100}],
-        }
-        self.save_current()
-        self.rebuild_graph()
+    def _restore_view_state(self):
+        try:
+            view = self.data.get("layout", {}).get("__view", {})
+            if isinstance(view, dict):
+                self.win.after(50, lambda v=view: self.view_state.apply(self.win, self.scroll_canvas, v))
+        except Exception:
+            pass
+
+    def _snapshot(self):
+        try:
+            if self.data is not None:
+                self.history.snapshot(self.data)
+        except Exception:
+            pass
+
+    def _undo_last_change(self, _evt=None):
+        try:
+            snap = self.history.undo()
+            if snap is None:
+                return
+            self.data = snap
+            write_json(self.info_path, self.data)
+            self.rebuild_list()
+            self._restore_view_state()
+            self.status.set("Undid last change")
+        except Exception:
+            pass
+
+    def _on_close(self):
+        try:
+            self._save_view_state_to_data()
+            self.save_current()
+        finally:
+            try:
+                self.win.destroy()
+            except Exception:
+                pass
 
     def run(self):
         self.win.mainloop()

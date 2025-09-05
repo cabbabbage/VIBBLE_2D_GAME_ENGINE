@@ -1,6 +1,6 @@
 
 #include "scene_renderer.hpp"
-#include "core/Assets.hpp"
+#include "core/AssetsManager.hpp"
 #include "asset/Asset.hpp"
 #include "light_map.hpp"
 #include "utils/parallax.hpp"

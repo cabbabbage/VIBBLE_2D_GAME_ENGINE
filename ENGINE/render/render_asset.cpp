@@ -2,7 +2,7 @@
 #include "render_asset.hpp"
 #include "global_light_source.hpp"
 #include "asset\Asset.hpp"
-#include "core\assets.hpp"
+#include "core/AssetsManager.hpp"
 #include "utils\light_utils.hpp"
 #include "utils\parallax.hpp"
 #include <algorithm>

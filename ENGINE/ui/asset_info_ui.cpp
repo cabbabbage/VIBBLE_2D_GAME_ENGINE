@@ -1,4 +1,6 @@
 #include "asset_info_ui.hpp"
+#include "custom_controllers/Davey_controller.hpp"
+#include "custom_controllers/Davey_default_controller.hpp"
 
 #include <algorithm>
 #include <sstream>

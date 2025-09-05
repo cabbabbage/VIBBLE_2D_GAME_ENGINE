@@ -16,6 +16,7 @@
 
 
 class view;
+class Assets; // forward declaration of owning manager
 
 struct StaticLight {
     LightSource* source = nullptr;
@@ -115,6 +116,10 @@ public:
     void set_selected(bool state);
     bool is_selected();
 
+    // Link this asset to its owning Assets manager
+    void set_assets(Assets* a) { assets_ = a; }
+    Assets* get_assets() const { return assets_; }
+
 private:
     view* window = nullptr;        
     bool highlighted = false;
@@ -133,6 +138,9 @@ private:
 
     SDL_Texture* final_texture = nullptr;
     std::unordered_map<std::string, std::vector<SDL_Texture*>> custom_frames;
+
+    // Back-reference to the Assets manager that owns/tracks this Asset
+    Assets* assets_ = nullptr;
 };
 
 #endif 
