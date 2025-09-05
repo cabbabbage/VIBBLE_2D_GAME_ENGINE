@@ -10,6 +10,28 @@
 #include <stdexcept>
 #include <memory>
 
+namespace {
+// Recursively assign the rendering view to an asset and all its children.
+void set_view_recursive(Asset* asset, view* v) {
+    if (!asset) return;
+    asset->set_view(v);
+    for (Asset* child : asset->children) {
+        set_view_recursive(child, v);
+    }
+}
+
+// Recursively set the owning Assets manager for an asset hierarchy. This also
+// allows child assets to instantiate their custom controllers once the manager
+// becomes available.
+void set_assets_recursive(Asset* asset, Assets* owner) {
+    if (!asset) return;
+    asset->set_assets(owner);
+    for (Asset* child : asset->children) {
+        set_assets_recursive(child, owner);
+    }
+}
+} // namespace
+
 void InitializeAssets::initialize(Assets& assets,
                                   std::vector<Asset>&& loaded,
                                   std::vector<Room*> rooms,
@@ -39,11 +61,13 @@ void InitializeAssets::initialize(Assets& assets,
         }
 
         auto newAsset = std::make_unique<Asset>(std::move(a));
-        newAsset->set_view(&assets.window);
-        newAsset->set_assets(&assets);
+        Asset* raw = newAsset.get();
+        set_view_recursive(raw, &assets.window);
+        set_assets_recursive(raw, &assets);
 
         assets.owned_assets.push_back(std::move(newAsset));
-        assets.all.push_back(assets.owned_assets.back().get());
+        assets.all.push_back(raw);
+        raw->finalize_setup();
     }
 
     find_player(assets);
