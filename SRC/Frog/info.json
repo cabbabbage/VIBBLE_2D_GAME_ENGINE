@@ -1,0 +1,29 @@
+{
+    "impassable_area": null,
+    "asset_name": "Frog",
+    "asset_type": "Object",
+    "duplicatable": false,
+    "duplication_interval_min": 30,
+    "duplication_interval_max": 60,
+    "min_child_depth": 0,
+    "max_child_depth": 2,
+    "animations": {
+        "default": {
+            "path": null,
+            "end_path": null
+        }
+    },
+    "z_threshold": 0,
+    "size_settings": {
+        "scale_percentage": 100
+    },
+    "tags": [
+        "passable"
+    ],
+    "anti_tags": [],
+    "rnd_spawn_min": 300,
+    "rnd_spawn_max": 400,
+    "can_invert": false,
+    "update_radius": 1000,
+    "render_radius": 1000
+}

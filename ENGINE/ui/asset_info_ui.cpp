@@ -16,6 +16,7 @@
 #include "utils/text_style.hpp"
 #include "ui/styles.hpp"
 #include "custom_controllers/Vibble_controller.hpp"
+#include "custom_controllers/Bomb_controller.hpp"
 
 namespace {
     

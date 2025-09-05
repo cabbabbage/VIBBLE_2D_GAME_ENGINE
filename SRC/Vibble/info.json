@@ -10,9 +10,33 @@
         [
           0,
           0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
         ]
       ],
-      "number_of_frames": 1,
+      "number_of_frames": 7,
       "on_end": "default",
       "reverse_source": true,
       "source": {
@@ -63,8 +87,8 @@
       "reverse_source": false,
       "source": {
         "kind": "folder",
-        "name": null,
-        "path": "forward"
+        "path": "forward",
+        "name": null
       },
       "speed_factor": 1
     },
@@ -124,7 +148,7 @@
   "impassable_area": null,
   "layout": {
     "__view": {
-      "geometry": "1100x780+490+171",
+      "geometry": "1920x1009+442+120",
       "zoom": 1.0,
       "xview": 0.0,
       "yview": 0.0

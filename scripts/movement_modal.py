@@ -125,8 +125,10 @@ class MovementModal(tk.Toplevel):
       self.bind("<Right>", lambda _e: self._next_frame())
 
       # totals fields change → recompute linear distribution
-      self._total_dx_var.trace_add("write", lambda *_: self._on_totals_changed())
-      self._total_dy_var.trace_add("write", lambda *_: self._on_totals_changed())
+      self._totals_trace_ids = (
+         self._total_dx_var.trace_add("write", self._on_totals_var_changed),
+         self._total_dy_var.trace_add("write", self._on_totals_var_changed),
+      )
 
       # finalize
       self._set_totals_from_positions()
@@ -296,10 +298,9 @@ class MovementModal(tk.Toplevel):
       finally:
          self._suspend_totals_trace = False
 
-   def _on_totals_changed(self):
+   def _on_totals_changed(self, *_):
       if self._suspend_totals_trace:
          return
-      # When totals are edited, recompute evenly spaced positions from origin to (ΔX,ΔY).
       dx = self._parse_int_or_none(self._total_dx_var.get())
       dy = self._parse_int_or_none(self._total_dy_var.get())
       if dx is None or dy is None:
@@ -309,6 +310,7 @@ class MovementModal(tk.Toplevel):
       self._update_frame_props_ui()
       self._auto_fit_view()
       self._redraw()
+
 
    def _redistribute_positions_linear(self, dx: int, dy: int):
       n = self._frames_count

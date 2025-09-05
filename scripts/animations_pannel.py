@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import annotations
-from typing import Any, Dict, List, Optional, Callable
-
+from typing import Any, Dict, List, Optional, Callable, Set
+import os
 import tkinter as tk
 from tkinter import ttk
 
@@ -24,6 +24,10 @@ class AnimationsPanel:
       - on_changed(node_id, payload)
       - on_renamed(old_id, new_id)
       - on_delete(node_id)
+
+    Optional resolver:
+      - resolve_animation_payload(name) -> Dict[str, Any]
+        Allows recursive resolution when source.kind == "animation".
     """
 
     def __init__(
@@ -38,6 +42,7 @@ class AnimationsPanel:
         preview_provider: Any = None,
         asset_folder: Optional[str] = None,
         list_animation_names: Optional[Callable[[], List[str]]] = None,
+        resolve_animation_payload: Optional[Callable[[str], Optional[Dict[str, Any]]]] = None,
     ) -> None:
         self.parent = parent
         self.node_id = str(anim_id)
@@ -47,8 +52,10 @@ class AnimationsPanel:
         self.preview_provider = preview_provider
         self.asset_folder = asset_folder
         self.list_animation_names = list_animation_names or (lambda: [])
+        self.resolve_animation_payload = resolve_animation_payload
 
         self.payload = self._coerce_payload(self.node_id, payload)
+        self._sync_frames_from_source()
 
         # Use tk.LabelFrame so we can control border thickness reliably
         self.frame = tk.LabelFrame(parent, text=self.node_id, bd=6, relief=tk.GROOVE)
@@ -115,11 +122,12 @@ class AnimationsPanel:
         spin_speed = ttk.Spinbox(pf, from_=1, to=240, textvariable=self.speed_var, width=8, command=self._apply_changes)
         spin_speed.grid(row=1, column=1, sticky="w", padx=4)
         spin_speed.bind("<FocusOut>", lambda _e: self._apply_changes())
+
+        # frames (read-only; derived from source)
         ttk.Label(pf, text="frames").grid(row=2, column=0, sticky="e")
         self.frames_var = tk.IntVar(value=int(self.payload.get("number_of_frames", 1)))
-        spin_frames = ttk.Spinbox(pf, from_=1, to=9999, textvariable=self.frames_var, width=8, command=self._apply_changes)
-        spin_frames.grid(row=2, column=1, sticky="w", padx=4)
-        spin_frames.bind("<FocusOut>", lambda _e: self._apply_changes())
+        frames_entry = ttk.Entry(pf, textvariable=self.frames_var, width=8, state="readonly")
+        frames_entry.grid(row=2, column=1, sticky="w", padx=4)
 
         # movement
         mvf = ttk.LabelFrame(body, text="Movement")
@@ -140,8 +148,91 @@ class AnimationsPanel:
     def get_frame(self) -> ttk.Frame:
         return self.frame
 
+    # ---------- frames derivation ----------
+    def _count_frame_files(self, path: str) -> int:
+        """Count frame files in a folder, excluding GIFs and non-files."""
+        if not path:
+            return 1
+        try:
+            count = 0
+            with os.scandir(path) as it:
+                for entry in it:
+                    if not entry.is_file():
+                        continue
+                    name = entry.name.lower()
+                    # exclude gifs; include common still formats
+                    if name.endswith((".png", ".jpg", ".jpeg", ".bmp", ".webp")):
+                        count += 1
+            return max(1, count)
+        except Exception:
+            return 1
+
+    def _compute_frames_from_source(self, src: Dict[str, Any]) -> int:
+        """Compute number_of_frames by following source chains until a real frame source is found."""
+        visited: Set[str] = set()
+        current = dict(src or {})
+
+        while True:
+            kind = (current or {}).get("kind", "folder")
+
+            if kind == "folder":
+                base = self.asset_folder or ""
+                rel = (current.get("path") or "").strip()
+                path = os.path.join(base, rel) if rel else base
+                return self._count_frame_files(path)
+
+            if kind == "spritesheet":
+                # support common metadata styles
+                cols = int((current.get("cols") or 0))
+                rows = int((current.get("rows") or 0))
+                frames = int((current.get("frames") or 0))
+                if cols > 0 and rows > 0:
+                    return max(1, cols * rows)
+                if frames > 0:
+                    return frames
+                # fallback to 1 if undefined
+                return 1
+
+            if kind == "animation":
+                # Follow the referenced animation to its source, avoiding cycles.
+                # Prefer 'name' for the target animation ID, else fall back to 'path' if that's how it's stored.
+                target = (current.get("name") or current.get("path") or "").strip()
+                if not target:
+                    return 1
+                # cycle guard
+                if target in visited:
+                    return 1
+                visited.add(target)
+
+                # resolve the referenced animation payload using the optional resolver
+                resolved_payload: Optional[Dict[str, Any]] = None
+                if callable(self.resolve_animation_payload):
+                    try:
+                        resolved_payload = self.resolve_animation_payload(target)
+                    except Exception:
+                        resolved_payload = None
+
+                if not isinstance(resolved_payload, dict):
+                    # cannot resolve: safest fallback
+                    return 1
+
+                # move to that animation's source and continue
+                current = dict(resolved_payload.get("source") or {})
+                continue
+
+            # Unknown kind → conservative fallback
+            return 1
+
+    def _sync_frames_from_source(self) -> None:
+        n = self._compute_frames_from_source(self.payload.get("source", {}))
+        self.payload["number_of_frames"] = n
+        # UI var may not exist yet during __init__, so guard it
+        if hasattr(self, "frames_var"):
+            self.frames_var.set(n)
+
     def set_payload(self, new_payload: Dict[str, Any]) -> None:
         self.payload = self._coerce_payload(self.node_id, new_payload)
+        self._sync_frames_from_source()
         # sync sub-panels + vars
         self.sources_panel.set_values(self.payload.get("source", {}))
         try:
@@ -185,10 +276,11 @@ class AnimationsPanel:
 
     def _open_movement_modal(self):
         parent = self.frame.winfo_toplevel()
+        n = self._compute_frames_from_source(self.payload.get("source", {}))
         MovementModal(
             parent=parent,
             movement=self.payload.get("movement", []),
-            frames_count=int(self.frames_var.get()),
+            frames_count=n,
             on_save=self._on_movement_saved,
             title=f"Movement: {self.node_id}",
         )
@@ -206,11 +298,12 @@ class AnimationsPanel:
         payload["reverse_source"] = bool(self.reversed_var.get())
         payload["locked"] = bool(self.locked_var.get())
         payload["speed_factor"] = max(1, int(self.speed_var.get()))
-        payload["number_of_frames"] = max(1, int(self.frames_var.get()))
-        sel = str(self.on_end_var.get() or "default")
-        payload["on_end"] = sel
 
-        # movement normalization
+        # derive frames from (possibly-recursive) source
+        payload["number_of_frames"] = self._compute_frames_from_source(payload.get("source", {}))
+        self.frames_var.set(payload["number_of_frames"])
+
+        # movement normalization stays the same
         mv = payload.get("movement", [])
         if not isinstance(mv, list):
             mv = []
@@ -223,7 +316,6 @@ class AnimationsPanel:
             mv[0] = [0, 0]
         payload["movement"] = mv
 
-        # custom updates
         try:
             payload.update(self.custom_panel.get_values())
         except Exception:
@@ -262,10 +354,14 @@ class AnimationsPanel:
             p.setdefault("speed_factor", max(1, int(p.get("speed_factor", 1))))
         except Exception:
             p.setdefault("speed_factor", 1)
+
+        # number_of_frames will be overwritten by _sync_frames_from_source()
         try:
             p.setdefault("number_of_frames", max(1, int(p.get("number_of_frames", 1))))
         except Exception:
             p.setdefault("number_of_frames", 1)
+
+        # movement sizing will be normalized after frames sync as well
         mv = p.get("movement")
         n = p["number_of_frames"]
         if not isinstance(mv, list) or len(mv) < 1:
@@ -277,10 +373,12 @@ class AnimationsPanel:
                 mv = mv[:n]
         mv[0] = [0, 0]
         p["movement"] = mv
+
         val = p.get("on_end")
         if not val:
             val = "default"
         p["on_end"] = str(val)
+
         # migrate legacy custom update keys to new custom animation controller keys
         if "has_custom_animation_controller" not in p:
             p["has_custom_animation_controller"] = bool(

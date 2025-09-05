@@ -13,6 +13,7 @@
 #include <string>
 #include <unordered_map>
 #include "custom_controllers/Vibble_controller.hpp"
+#include "custom_controllers/Bomb_controller.hpp"
 
 using nlohmann::json;
 
