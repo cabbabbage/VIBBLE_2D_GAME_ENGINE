@@ -8,6 +8,19 @@
 
 #include <cmath>
 #include <algorithm>
+#include <climits>
+
+/*
+  bomb ai
+  random wander
+  follow player inside 500
+  explode at 20
+*/
+
+BombController::BombController(Assets* assets, Asset* self, ActiveAssetsManager& aam)
+ : BombController(assets, self, aam, nullptr)
+{
+}
 
 BombController::BombController(Assets* assets, Asset* self, ActiveAssetsManager& aam, Asset* player)
  : assets_(assets)
@@ -25,7 +38,10 @@ void BombController::update(const Input& /*in*/) {
   if (!self_ || !self_->info) return;
 
   if (!player_) {
-    return;  // needs player wiring
+    if (frames_until_think_ > 0) { frames_until_think_ -= 1; return; }
+    think_random();
+    frames_until_think_ = rand_range(think_interval_min_, think_interval_max_);
+    return;
   }
 
   int d2 = dist2_to_player();
@@ -64,7 +80,11 @@ void BombController::think_random() {
 
   for (int i=0;i<8;i++) {
     int a = rand_range(0,3), b = rand_range(0,3);
-    if (a!=b) { std::swap(dx[a], dx[b]); std::swap(dy[a], dy[b]); std::swap(const_cast<const char*&>(names[a]), const_cast<const char*&>(names[b])); }
+    if (a!=b) {
+      std::swap(dx[a], dx[b]);
+      std::swap(dy[a], dy[b]);
+      std::swap(const_cast<const char*&>(names[a]), const_cast<const char*&>(names[b]));
+    }
   }
 
   if (!try_hop_dirs(names, dx, dy, 4)) {

@@ -46,6 +46,28 @@
       "check_overlap": false,
       "check_min_spacing": false,
       "inherited": false
+    },
+    {
+      "name": "Bomb",
+      "min_number": 3,
+      "max_number": 3,
+      "position": "Random",
+      "exact_position": null,
+      "tag": false,
+      "check_overlap": false,
+      "check_min_spacing": false,
+      "inherited": false
+    },
+    {
+      "name": "Frog",
+      "min_number": 4,
+      "max_number": 4,
+      "position": "Random",
+      "exact_position": null,
+      "tag": false,
+      "check_overlap": false,
+      "check_min_spacing": false,
+      "inherited": false
     }
   ],
   "min_height": 761,

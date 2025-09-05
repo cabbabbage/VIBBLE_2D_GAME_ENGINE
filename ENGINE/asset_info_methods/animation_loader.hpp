@@ -5,6 +5,7 @@
 #include "custom_controllers/Davey_default_controller.hpp"
 #include "custom_controllers/Vibble_controller.hpp"
 #include "custom_controllers/Bomb_controller.hpp"
+#include "custom_controllers/Frog_controller.hpp"
 
 class AssetInfo;
 

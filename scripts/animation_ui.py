@@ -172,6 +172,7 @@ class AnimationConfiguratorAppSingle:
                 preview_provider=self.preview_provider,
                 asset_folder=str(self.info_path.parent),
                 list_animation_names=lambda: list(self.data.get("animations", {}).keys()),
+                resolve_animation_payload=lambda name: self.data.get("animations", {}).get(str(name), None),
             )
             fr = p.get_frame()
             fr.grid(row=r, column=c, sticky="nsew", padx=12, pady=12)

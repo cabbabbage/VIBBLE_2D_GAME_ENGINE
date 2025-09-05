@@ -126,9 +126,18 @@ class MovementModal(tk.Toplevel):
 
       # totals fields change → recompute linear distribution
       self._totals_trace_ids = (
-         self._total_dx_var.trace_add("write", self._on_totals_var_changed),
-         self._total_dy_var.trace_add("write", self._on_totals_var_changed),
+         self._total_dx_var.trace_add("write", lambda *_: self._on_totals_changed()),
+         self._total_dy_var.trace_add("write", lambda *_: self._on_totals_changed()),
       )
+
+      # commit totals on enter / leaving the field
+      self._total_dx_entry.bind("<Return>",   lambda e: self._on_totals_changed())
+      self._total_dy_entry.bind("<Return>",   lambda e: self._on_totals_changed())
+      self._total_dx_entry.bind("<KP_Enter>", lambda e: self._on_totals_changed())
+      self._total_dy_entry.bind("<KP_Enter>", lambda e: self._on_totals_changed())
+      self._total_dx_entry.bind("<FocusOut>", lambda e: self._on_totals_changed())
+      self._total_dy_entry.bind("<FocusOut>", lambda e: self._on_totals_changed())
+
 
       # finalize
       self._set_totals_from_positions()
@@ -352,15 +361,16 @@ class MovementModal(tk.Toplevel):
       cw = max(1, self._canvas.winfo_width())
       ch = max(1, self._canvas.winfo_height())
       cx = int((x - self._center_x) * self._scale + cw / 2.0)
-      cy = int((self._center_y - y) * self._scale + ch / 2.0)
+      cy = int((y - self._center_y) * self._scale + ch / 2.0)  # SDL: +y goes down
       return cx, cy
 
    def _canvas_to_world(self, cx: int, cy: int) -> Tuple[float, float]:
       cw = max(1, self._canvas.winfo_width())
       ch = max(1, self._canvas.winfo_height())
       x = (cx - cw / 2.0) / max(1e-6, self._scale) + self._center_x
-      y = self._center_y - (cy - ch / 2.0) / max(1e-6, self._scale)
+      y = (cy - ch / 2.0) / max(1e-6, self._scale) + self._center_y  # SDL: +y goes down
       return x, y
+
 
    def _zoom_at(self, canvas_x: int, canvas_y: int, steps: int):
       if steps == 0:
@@ -372,11 +382,12 @@ class MovementModal(tk.Toplevel):
          else:
             self._scale /= self.ZOOM_STEP
          self._scale = max(self.SCALE_MIN, min(self.SCALE_MAX, self._scale))
-      cw = max(1, self._canvas.winfo_width())
-      ch = max(1, self._canvas.winfo_height())
-      self._center_x = wx - (canvas_x - cw / 2.0) / self._scale
-      self._center_y = (canvas_y - ch / 2.0) / self._scale + wy
-      self._redraw()
+         cw = max(1, self._canvas.winfo_width())
+         ch = max(1, self._canvas.winfo_height())
+         self._center_x = wx - (canvas_x - cw / 2.0) / self._scale
+         self._center_y = wy - (canvas_y - ch / 2.0) / self._scale  # SDL: +y down
+         self._redraw()
+
 
    # ---------------- drawing & interaction --------------------
    def _on_canvas_resize(self, _evt=None):
@@ -433,10 +444,11 @@ class MovementModal(tk.Toplevel):
       dx_pix = evt.x - lx
       dy_pix = evt.y - ly
       self._pan_last = (evt.x, evt.y)
-      # pixel delta -> world delta (note inverted y)
+      # pixel delta -> world delta (SDL: +y down)
       self._center_x -= dx_pix / self._scale
-      self._center_y += dy_pix / self._scale
+      self._center_y -= dy_pix / self._scale
       self._redraw()
+
 
    def _on_pan_end(self, _evt):
       self._panning = False

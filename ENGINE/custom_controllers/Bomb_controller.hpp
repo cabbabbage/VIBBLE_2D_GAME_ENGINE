@@ -11,6 +11,7 @@ class Area;
 
 class BombController : public AssetController {
  public:
+  BombController(Assets* assets, Asset* self, ActiveAssetsManager& aam);
   BombController(Assets* assets, Asset* self, ActiveAssetsManager& aam, Asset* player);
   ~BombController();
 

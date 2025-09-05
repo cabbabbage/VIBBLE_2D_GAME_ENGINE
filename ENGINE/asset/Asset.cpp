@@ -1,6 +1,8 @@
 #include "Asset.hpp"
 #include "custom_controllers/Davey_controller.hpp"
 #include "custom_controllers/Vibble_controller.hpp"
+#include "custom_controllers/Frog_controller.hpp"
+#include "custom_controllers/Bomb_controller.hpp"
 #include "core/AssetsManager.hpp"
 #include <random>
 #include <filesystem>
@@ -19,20 +21,27 @@ static std::unique_ptr<AssetController> make_controller(const std::string& key,
                                                        Asset* self)
 {
  
-   try {
-      if (!assets || !self) return nullptr;
+    try {
+    if (!assets || !self) return nullptr;
 
-      // both custom controllers must implement AssetController
-      if (key == "Davey_controller") {
-         return std::unique_ptr<AssetController>(new DaveyController(assets, self, assets->activeManager));
-      }
-      if (key == "Vibble_controller") {
-         return std::unique_ptr<AssetController>(new VibbleController(assets, self, assets->activeManager));
-      }
-   } catch (...) {
-      // ignore controller init failures
-   }
-   return nullptr;
+    // all custom controllers implement AssetController
+    if (key == "Davey_controller") {
+    return std::make_unique<DaveyController>(assets, self, assets->activeManager);
+    }
+    if (key == "Vibble_controller") {
+    return std::make_unique<VibbleController>(assets, self, assets->activeManager);
+    }
+    if (key == "Frog_controller") {
+    return std::make_unique<FrogController>(assets, self, assets->activeManager);
+    }
+    if (key == "Bomb_controller") {
+    return std::make_unique<BombController>(assets, self, assets->activeManager);
+    }
+    } catch (...) {
+    // ignore controller init failures
+    }
+    return nullptr;
+
 }
 
 

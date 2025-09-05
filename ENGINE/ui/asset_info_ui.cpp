@@ -17,6 +17,7 @@
 #include "ui/styles.hpp"
 #include "custom_controllers/Vibble_controller.hpp"
 #include "custom_controllers/Bomb_controller.hpp"
+#include "custom_controllers/Frog_controller.hpp"
 
 namespace {
     

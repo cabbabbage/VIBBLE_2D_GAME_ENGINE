@@ -287,9 +287,16 @@ class AnimationsPanel:
 
     def _on_movement_saved(self, new_movement: List[List[int]]):
         self.payload["movement"] = new_movement
+
+        # persist totals for debugging / re-open convenience
+        tot_dx = sum(int(it[0]) for it in new_movement)  # frame 0 is 0 anyway
+        tot_dy = sum(int(it[1]) for it in new_movement)
+        self.payload["movement_total"] = {"dx": int(tot_dx), "dy": int(tot_dy)}
+
         if self.on_changed:
             self.on_changed(self.node_id, self.payload)
         self._refresh_preview()
+
 
     def _apply_changes(self):
         payload = self.payload
@@ -342,10 +349,11 @@ class AnimationsPanel:
     def _coerce_payload(anim_name: str, p: Dict[str, Any]) -> Dict[str, Any]:
         p = dict(p or {})
         src = dict(p.get("source") or {})
+        _kind = src.get("kind", "folder")
         p["source"] = {
-            "kind": src.get("kind", "folder"),
-            "path": src.get("path", anim_name if src.get("kind", "folder") == "folder" else ""),
-            "name": src.get("name", None if src.get("kind", "folder") == "folder" else anim_name),
+            "kind": _kind,
+            "path": src.get("path", anim_name if _kind == "folder" else ""),
+            "name": src.get("name", None if _kind == "folder" else ""),
         }
         p.setdefault("flipped_source", False)
         p.setdefault("reverse_source", False)
