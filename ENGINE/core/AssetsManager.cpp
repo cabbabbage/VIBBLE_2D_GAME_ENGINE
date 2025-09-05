@@ -5,6 +5,7 @@
 #include "find_current_room.hpp"   
 #include "asset/Asset.hpp"
 #include "asset/asset_info.hpp"
+#include "asset/asset_utils.hpp"
 #include "dev_mode/dev_mouse_controls.hpp"
 #include "utils/input.hpp"
 #include "render/scene_renderer.hpp"
@@ -15,25 +16,6 @@
 #include <iostream>
 #include <memory>
 
-namespace {
-// Ensure newly created assets and any children share the same view
-void set_view_recursive(Asset* asset, view* v) {
-    if (!asset) return;
-    asset->set_view(v);
-    for (Asset* child : asset->children) {
-        set_view_recursive(child, v);
-    }
-}
-
-// Ensure newly created assets and any children know their owning Assets manager
-void set_assets_owner_recursive(Asset* asset, Assets* owner) {
-    if (!asset) return;
-    asset->set_assets(owner);
-    for (Asset* child : asset->children) {
-        set_assets_owner_recursive(child, owner);
-    }
-}
-} // namespace
 
 Assets::Assets(std::vector<Asset>&& loaded,
                AssetLibrary& library,

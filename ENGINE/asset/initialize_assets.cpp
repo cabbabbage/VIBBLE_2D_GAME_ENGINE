@@ -3,6 +3,7 @@
 #include "AssetsManager.hpp"
 #include "Asset.hpp"
 #include "asset_info.hpp"
+#include "asset_utils.hpp"
 #include "active_assets_manager.hpp"
 
 #include <algorithm>
@@ -10,27 +11,6 @@
 #include <stdexcept>
 #include <memory>
 
-namespace {
-// Recursively assign the rendering view to an asset and all its children.
-void set_view_recursive(Asset* asset, view* v) {
-    if (!asset) return;
-    asset->set_view(v);
-    for (Asset* child : asset->children) {
-        set_view_recursive(child, v);
-    }
-}
-
-// Recursively set the owning Assets manager for an asset hierarchy. This also
-// allows child assets to instantiate their custom controllers once the manager
-// becomes available.
-void set_assets_recursive(Asset* asset, Assets* owner) {
-    if (!asset) return;
-    asset->set_assets(owner);
-    for (Asset* child : asset->children) {
-        set_assets_recursive(child, owner);
-    }
-}
-} // namespace
 
 void InitializeAssets::initialize(Assets& assets,
                                   std::vector<Asset>&& loaded,
@@ -63,7 +43,7 @@ void InitializeAssets::initialize(Assets& assets,
         auto newAsset = std::make_unique<Asset>(std::move(a));
         Asset* raw = newAsset.get();
         set_view_recursive(raw, &assets.window);
-        set_assets_recursive(raw, &assets);
+        set_assets_owner_recursive(raw, &assets);
 
         assets.owned_assets.push_back(std::move(newAsset));
         assets.all.push_back(raw);
