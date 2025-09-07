@@ -17,8 +17,8 @@
       "flipped_source": false,
       "reverse_source": false,
       "locked": false,
-      "speed_factor": 1,
-      "number_of_frames": 13,
+      "speed_factor": -2,
+      "number_of_frames": 12,
       "movement": [
         [
           0,
@@ -67,12 +67,13 @@
         [
           0,
           0
-        ],
-        [
-          0,
-          0
         ]
-      ]
+      ],
+      "rnd_start": false,
+      "on_end": "default",
+      "has_custom_animation_controller": false,
+      "custom_animation_controller_hpp_path": "",
+      "custom_animation_controller_key": ""
     }
   },
   "tags": [
@@ -5827,5 +5828,15 @@
       "offset_x": 0,
       "offset_y": 0
     }
-  ]
+  ],
+  "mappings": {},
+  "layout": {
+    "__view": {
+      "geometry": "1100x780+182+182",
+      "zoom": 1.0,
+      "xview": 0.0,
+      "yview": 0.0
+    }
+  },
+  "start": ""
 }

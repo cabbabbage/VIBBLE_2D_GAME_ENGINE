@@ -28,7 +28,7 @@
       "flipped_source": false,
       "reverse_source": false,
       "locked": false,
-      "speed_factor": 1,
+      "speed_factor": -2,
       "number_of_frames": 192,
       "movement": [
         [
@@ -799,7 +799,12 @@
           0,
           0
         ]
-      ]
+      ],
+      "rnd_start": true,
+      "on_end": "default",
+      "has_custom_animation_controller": false,
+      "custom_animation_controller_hpp_path": "",
+      "custom_animation_controller_key": ""
     },
     "group": {
       "source": {
@@ -810,18 +815,19 @@
       "flipped_source": false,
       "reverse_source": false,
       "locked": false,
-      "speed_factor": 1,
-      "number_of_frames": 2,
+      "speed_factor": -2,
+      "number_of_frames": 1,
       "movement": [
         [
           0,
           0
-        ],
-        [
-          0,
-          0
         ]
-      ]
+      ],
+      "rnd_start": true,
+      "on_end": "default",
+      "has_custom_animation_controller": false,
+      "custom_animation_controller_hpp_path": "",
+      "custom_animation_controller_key": ""
     }
   },
   "min_same_type_distance": 0,
@@ -7082,5 +7088,15 @@
       "offset_x": 0,
       "offset_y": 0
     }
-  ]
+  ],
+  "mappings": {},
+  "layout": {
+    "__view": {
+      "geometry": "1100x780+234+234",
+      "zoom": 1.0,
+      "xview": 0.0,
+      "yview": 0.0
+    }
+  },
+  "start": ""
 }
