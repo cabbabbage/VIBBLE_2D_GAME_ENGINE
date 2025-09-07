@@ -2,6 +2,8 @@
 
 #include "utils/input.hpp"
 #include "asset/Asset.hpp"
+#include "asset/determine_movement.hpp"
+#include "asset/move.hpp"
 #include "utils/area.hpp"
 #include "core/active_assets_manager.hpp"
 #include "core/AssetsManager.hpp"
@@ -31,30 +33,23 @@ FrogController::FrogController(Assets* assets, Asset* self, ActiveAssetsManager&
 FrogController::~FrogController() {}
 
 void FrogController::update(const Input& /*in*/) {
-  if (!self_ || !self_->info) return;
+  updated_by_determine_ = false;
+  // Run brain tick if valid; always tick animation at end.
+  if (self_ && self_->info) {
+    // No controller-side animation speed manipulation; timing handled by AnimationManager
+    if (frames_until_think_ > 0) {
+      frames_until_think_ -= 1;
+    } else {
+      std::cout << "[frog] think start cur='" << self_->get_current_animation()
+                << "' at (" << self_->pos_X << "," << self_->pos_Y << ")\n";
 
-  /* slow animation frames 4x */
-  frame_phase_ = (frame_phase_ + 1) % frame_slow_div_;
-  bool advance_now = (frame_phase_ == 0);
-  bool prev_static = self_->static_frame;
-  self_->static_frame = !advance_now;
-  if (prev_static != self_->static_frame) {
-    std::cout << "[frog] static_frame=" << (self_->static_frame ? "true" : "false")
-              << " (phase " << frame_phase_ << ")\n";
+      think();
+
+      frames_until_think_ = rand_range(think_interval_min_, think_interval_max_);
+      std::cout << "[frog] next think in " << frames_until_think_ << " frames\n";
+    }
   }
-
-  if (frames_until_think_ > 0) {
-    frames_until_think_ -= 1;
-    return;
-  }
-
-  std::cout << "[frog] think start cur='" << self_->get_current_animation()
-            << "' at (" << self_->pos_X << "," << self_->pos_Y << ")\n";
-
-  think();
-
-  frames_until_think_ = rand_range(think_interval_min_, think_interval_max_);
-  std::cout << "[frog] next think in " << frames_until_think_ << " frames\n";
+  if (self_ && !updated_by_determine_) self_->update_animation_manager();
 }
 
 void FrogController::think() {
@@ -93,39 +88,29 @@ void FrogController::think() {
 bool FrogController::try_hop_any_dir() {
   if (!self_) return false;
 
-  struct Dir { const char* name; int dx; int dy; };
-  Dir dirs[4] = {
-    {"left",    -probe_,  0},
-    {"right",    probe_,  0},
-    {"forward",  0,       probe_},
-    {"backward", 0,      -probe_}
-  };
+  // Randomly pick a target offset around the frog, then choose best animation
+  // towards this target using per-animation totals.
+  static const char* names[4] = { "left", "right", "forward", "backward" };
 
-  for (int i = 0; i < 8; ++i) {
-    int a = rand_range(0,3), b = rand_range(0,3);
-    if (a != b) { auto t = dirs[a]; dirs[a] = dirs[b]; dirs[b] = t; }
+  // Shuffle choice to vary targets over time
+  int idx = rand_range(0,3);
+  int dx = 0, dy = 0;
+  switch (idx) {
+    case 0: dx = -probe_; dy = 0; break;      // left
+    case 1: dx =  probe_; dy = 0; break;      // right
+    case 2: dx = 0;        dy =  probe_; break; // forward
+    default: dx = 0;       dy = -probe_; break; // backward
   }
 
-  for (const auto& d : dirs) {
-    std::cout << "[frog] test dir '" << d.name << "' dx=" << d.dx << " dy=" << d.dy << "\n";
+  int target_x = self_->pos_X + dx;
+  int target_y = self_->pos_Y + dy;
 
-    if (!has_anim(d.name)) {
-      std::cout << "[frog][warn] missing anim '" << d.name << "'\n";
-      continue;
-    }
-    if (!canMove(d.dx, d.dy)) {
-      std::cout << "[frog] blocked '" << d.name << "'\n";
-      continue;
-    }
-
-    if (self_->get_current_animation() != d.name) {
-      std::cout << "[frog] hop -> '" << d.name << "'\n";
-      self_->change_animation(d.name);
-    } else {
-      std::cout << "[frog] already '" << d.name << "'\n";
-    }
+  std::vector<std::string> candidates = { names[0], names[1], names[2], names[3] };
+  if ((updated_by_determine_ = DetermineMovement::apply_best_animation(self_, aam_, target_x, target_y, candidates))) {
+    std::cout << "[frog] hop -> '" << self_->get_current_animation() << "'\n";
     return true;
   }
+  std::cout << "[frog] hop blocked (no valid direction)\n";
   return false;
 }
 

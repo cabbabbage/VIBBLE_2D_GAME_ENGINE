@@ -49,19 +49,52 @@ void Animation::load(const std::string& trigger,
     flipped_source = anim_json.value("flipped_source", false);
     reverse_source = anim_json.value("reverse_source", false);
     locked         = anim_json.value("locked", false);
+    // Speed handling:
+    //  - Positive values behave as usual (frames advance by speed_factor per tick)
+    //  - Negative values mean "slow down by that factor"; e.g. -2 -> advance by 1/2 per tick
+    //  - Zero keeps animation paused (no frame advance)
     speed_factor   = anim_json.value("speed_factor", 1.0f);
+    if (speed_factor < 0.0f) {
+        float mag = -speed_factor; // slowdown factor magnitude
+        // Prevent divide-by-zero or denormals
+        if (mag < 0.0001f) mag = 0.0001f;
+        speed_factor = 1.0f / mag;
+    }
     loop           = anim_json.value("loop", true);
     randomize      = anim_json.value("randomize", false);
+    // New: optional random-start flag (alias/alternative to randomize)
+    rnd_start      = anim_json.value("rnd_start", false);
     on_end_mapping = anim_json.value("on_end_mapping", "");
     on_end_animation = anim_json.value("on_end", std::string{});
 
+    // Parse movement frames: [dx, dy, opt_bool_sort_x_index, opt_rgb[3]]
+    total_dx = 0;
+    total_dy = 0;
+    movement.clear();
     if (anim_json.contains("movement") && anim_json["movement"].is_array()) {
         for (const auto& mv : anim_json["movement"]) {
-            if (mv.is_array() && mv.size() >= 2) {
-                movement.emplace_back(mv[0].get<int>(), mv[1].get<int>());
+            if (!mv.is_array() || mv.size() < 2) continue;
+            FrameMovement fm;
+            try { fm.dx = mv[0].get<int>(); } catch (...) { fm.dx = 0; }
+            try { fm.dy = mv[1].get<int>(); } catch (...) { fm.dy = 0; }
+            if (mv.size() >= 3 && mv[2].is_boolean()) {
+                fm.sort_z_index = mv[2].get<bool>();
             }
+            if (mv.size() >= 4 && mv[3].is_array() && mv[3].size() >= 3) {
+                auto clamp = [](int v) { return (v < 0) ? 0 : (v > 255 ? 255 : v); };
+                int r = 255, g = 255, b = 255;
+                try { r = clamp(mv[3][0].get<int>()); } catch (...) { r = 255; }
+                try { g = clamp(mv[3][1].get<int>()); } catch (...) { g = 255; }
+                try { b = clamp(mv[3][2].get<int>()); } catch (...) { b = 255; }
+                fm.rgb = SDL_Color{ static_cast<Uint8>(r), static_cast<Uint8>(g), static_cast<Uint8>(b), 255 };
+            }
+            movement.push_back(fm);
+            total_dx += fm.dx;
+            total_dy += fm.dy;
         }
     }
+    // Movement flag: true only if totals are not both zero
+    movment = !(total_dx == 0 && total_dy == 0);
 
     // Load frames depending on source kind
     if (source.kind == "animation" && !source.name.empty()) {
@@ -218,48 +251,70 @@ bool Animation::advance(int& index,
                         float& progress,
                         int& dx,
                         int& dy,
-                        std::string& mapping_id) const
+                        std::string& mapping_id,
+                        bool& resort_z) const
 {
     if (frozen || frames.empty()) return false;
 
+    // Movement should sync with frame progression. Apply movement only when
+    // a frame boundary is crossed, and accumulate for multi-frame jumps.
+    dx = 0;
+    dy = 0;
+    resort_z = false;
+
     progress += speed_factor;
-    bool frame_changed = false;
+
+    // Track whether we hit the end of a non-looping animation
+    bool reached_end = false;
+
     while (progress >= 1.0f) {
         progress -= 1.0f;
         ++index;
-        frame_changed = true;
+
+        if (index < number_of_frames) {
+            if (index < static_cast<int>(movement.size())) {
+                dx += movement[index].dx;
+                dy += movement[index].dy;
+                resort_z = resort_z || movement[index].sort_z_index;
+            }
+            continue;
+        }
+
+        // We stepped past the last frame; handle loop or finalize
+        if (loop && number_of_frames > 0) {
+            index = 0;
+            if (!movement.empty()) {
+                dx += movement[0].dx;
+                dy += movement[0].dy;
+                resort_z = resort_z || movement[0].sort_z_index;
+            }
+            // keep looping if progress still >= 1
+        } else {
+            // Non-looping: finalize and signal mapping/next
+            reached_end = true;
+            index = number_of_frames > 0 ? number_of_frames - 1 : 0;
+            break;
+        }
     }
 
-    if (index < number_of_frames) {
-        if (index < static_cast<int>(movement.size())) {
-            dx = movement[index].first;
-            dy = movement[index].second;
-        }
+    if (!reached_end) {
+        // We're still within the animation (or looped). Return true to indicate
+        // the animation is active. If speed is slow and no frame boundary was
+        // crossed, dx/dy will remain zero, preserving sync with frames.
         return true;
     }
 
-    if (loop) {
-        index = 0;
-        if (!movement.empty()) {
-            dx = movement[0].first;
-            dy = movement[0].second;
-        }
-        return true;
-    }
-
+    // End reached on a non-looping animation; set mapping if specified.
     if (!on_end_mapping.empty()) {
         mapping_id = on_end_mapping; // treated as mapping id
-        index = number_of_frames > 0 ? number_of_frames - 1 : 0;
         return false;
     }
 
     if (!on_end_animation.empty()) {
         mapping_id = on_end_animation; // treated as direct animation id
-        index = number_of_frames > 0 ? number_of_frames - 1 : 0;
         return false;
     }
 
-    index = number_of_frames > 0 ? number_of_frames - 1 : 0;
     return false;
 }
 
@@ -280,4 +335,3 @@ bool Animation::is_frozen() const {
 bool Animation::is_static() const {
     return frames.size() <= 1;
 }
-

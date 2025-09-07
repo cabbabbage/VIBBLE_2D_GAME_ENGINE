@@ -5,6 +5,7 @@
 #include <SDL_ttf.h>
 #include <string>
 #include <vector>
+#include <filesystem>
 
 #include "styles.hpp"
 #include "button.hpp"

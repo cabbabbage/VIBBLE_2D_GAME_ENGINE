@@ -2,19 +2,19 @@
 
 #include "utils/input.hpp"
 #include "asset/Asset.hpp"
+#include "asset/determine_movement.hpp"
 #include "utils/area.hpp"
 #include "core/active_assets_manager.hpp"
 #include "core/AssetsManager.hpp"
 
 #include <cmath>
 #include <algorithm>
-#include <climits>
 
 /*
   bomb ai
   random wander
   follow player inside 500
-  explode at 20
+  explosion at 20
 */
 
 BombController::BombController(Assets* assets, Asset* self, ActiveAssetsManager& aam)
@@ -35,34 +35,33 @@ BombController::BombController(Assets* assets, Asset* self, ActiveAssetsManager&
 BombController::~BombController() {}
 
 void BombController::update(const Input& /*in*/) {
-  if (!self_ || !self_->info) return;
-
-  if (!player_) {
-    if (frames_until_think_ > 0) { frames_until_think_ -= 1; return; }
-    think_random();
-    frames_until_think_ = rand_range(think_interval_min_, think_interval_max_);
-    return;
+  updated_by_determine_ = false;
+  if (self_ && self_->info) {
+    if (!player_) {
+      if (frames_until_think_ > 0) {
+        frames_until_think_ -= 1;
+      } else {
+        think_random();
+        frames_until_think_ = rand_range(think_interval_min_, think_interval_max_);
+      }
+    } else {
+      float d = self_->distance_to_player;
+      if (d <= static_cast<float>(explosion_radius_)) {
+        if (self_->get_current_animation() != "explosion")
+          self_->change_animation("explosion");
+      } else if (d <= static_cast<float>(follow_radius_)) {
+        pursue();
+      } else {
+        if (frames_until_think_ > 0) {
+          frames_until_think_ -= 1;
+        } else {
+          think_random();
+          frames_until_think_ = rand_range(think_interval_min_, think_interval_max_);
+        }
+      }
+    }
   }
-
-  int d2 = dist2_to_player();
-  if (d2 <= explode_radius_ * explode_radius_) {
-    if (self_->get_current_animation() != "Explode")
-      self_->change_animation("Explode");
-    return;
-  }
-
-  if (d2 <= follow_radius_ * follow_radius_) {
-    pursue();
-    return;
-  }
-
-  if (frames_until_think_ > 0) {
-    frames_until_think_ -= 1;
-    return;
-  }
-
-  think_random();
-  frames_until_think_ = rand_range(think_interval_min_, think_interval_max_);
+  if (self_ && !updated_by_determine_) self_->update_animation_manager();
 }
 
 void BombController::think_random() {
@@ -75,19 +74,21 @@ void BombController::think_random() {
   }
 
   static const char* names[4] = { "left", "right", "forward", "backward" };
-  int dx[4] = { -probe_,  probe_, 0,  0 };
-  int dy[4] = {      0,       0,  probe_, -probe_ };
 
-  for (int i=0;i<8;i++) {
-    int a = rand_range(0,3), b = rand_range(0,3);
-    if (a!=b) {
-      std::swap(dx[a], dx[b]);
-      std::swap(dy[a], dy[b]);
-      std::swap(const_cast<const char*&>(names[a]), const_cast<const char*&>(names[b]));
-    }
+  // Pick a random nearby target and choose an animation using DetermineMovement
+  int choice = rand_range(0,3);
+  int dx = 0, dy = 0;
+  switch (choice) {
+    case 0: dx = -probe_; dy = 0; break;
+    case 1: dx =  probe_; dy = 0; break;
+    case 2: dx = 0;       dy =  probe_; break;
+    default: dx = 0;      dy = -probe_; break;
   }
+  int target_x = self_->pos_X + dx;
+  int target_y = self_->pos_Y + dy;
 
-  if (!try_hop_dirs(names, dx, dy, 4)) {
+  std::vector<std::string> candidates = { names[0], names[1], names[2], names[3] };
+  if (!(updated_by_determine_ = DetermineMovement::apply_best_animation(self_, aam_, target_x, target_y, candidates))) {
     if (self_->get_current_animation() != "default")
       self_->change_animation("default");
   }
@@ -96,36 +97,12 @@ void BombController::think_random() {
 void BombController::pursue() {
   if (!self_ || !player_) return;
 
-  int vx = player_->pos_X - self_->pos_X;
-  int vy = player_->pos_Y - self_->pos_Y;
-
-  const char* order[4];
-  int dx[4], dy[4];
-
-  if (std::abs(vx) >= std::abs(vy)) {
-    order[0] = vx < 0 ? "left" : "right";
-    order[1] = vy < 0 ? "backward" : "forward";
-    order[2] = vy < 0 ? "backward" : "forward";
-    order[3] = vx < 0 ? "left" : "right";
+  // Use per-animation totals to choose best hop towards the player
+  std::vector<std::string> candidates = {"left", "right", "forward", "backward"};
+  if (!(updated_by_determine_ = DetermineMovement::apply_best_animation(self_, aam_, player_->pos_X, player_->pos_Y, candidates))) {
+    if (self_->get_current_animation() != "default") self_->change_animation("default");
   } else {
-    order[0] = vy < 0 ? "backward" : "forward";
-    order[1] = vx < 0 ? "left" : "right";
-    order[2] = vx < 0 ? "left" : "right";
-    order[3] = vy < 0 ? "backward" : "forward";
-  }
-
-  for (int i=0;i<4;i++) {
-    if      (order[i] == std::string("left"))     { dx[i] = -probe_; dy[i] = 0; }
-    else if (order[i] == std::string("right"))    { dx[i] =  probe_; dy[i] = 0; }
-    else if (order[i] == std::string("forward"))  { dx[i] = 0;       dy[i] =  probe_; }
-    else                                          { dx[i] = 0;       dy[i] = -probe_; }
-  }
-
-  if (!try_hop_dirs(order, dx, dy, 4)) {
-    if (self_->get_current_animation() != "default")
-      self_->change_animation("default");
-  } else {
-    explode_if_close();
+    explosion_if_close();
   }
 }
 
@@ -140,12 +117,12 @@ bool BombController::try_hop_dirs(const char* const* names, const int* dx, const
   return false;
 }
 
-void BombController::explode_if_close() {
+void BombController::explosion_if_close() {
   if (!self_ || !player_) return;
-  int d2 = dist2_to_player();
-  if (d2 <= explode_radius_ * explode_radius_) {
-    if (self_->get_current_animation() != "Explode")
-      self_->change_animation("Explode");
+  float d = self_->distance_to_player;
+  if (d <= static_cast<float>(explosion_radius_)) {
+    if (self_->get_current_animation() != "explosion")
+      self_->change_animation("explosion");
   }
 }
 
@@ -163,13 +140,6 @@ bool BombController::canMove(int offset_x, int offset_y) const {
     }
   }
   return true;
-}
-
-int BombController::dist2_to_player() const {
-  if (!self_ || !player_) return INT_MAX;
-  long dx = long(player_->pos_X) - long(self_->pos_X);
-  long dy = long(player_->pos_Y) - long(self_->pos_Y);
-  return int(dx*dx + dy*dy);
 }
 
 bool BombController::aabb(const Area& A, const Area& B) const {

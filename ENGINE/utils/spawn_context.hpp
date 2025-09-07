@@ -36,7 +36,9 @@ public:
                       int x,
                       int y,
                       int depth,
-                      Asset* parent);
+                      Asset* parent,
+                      const std::string& spawn_id = std::string{},
+                      const std::string& spawn_method = std::string{});
 
     Point get_area_center(const Area& area) const;
     Point get_point_within_area(const Area& area);

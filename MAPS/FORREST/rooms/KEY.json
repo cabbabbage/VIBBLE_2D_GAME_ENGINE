@@ -1,73 +1,77 @@
 {
-  "name": "KEY",
-  "min_width": 1983,
-  "max_width": 2500,
-  "min_height": 1984,
-  "max_height": 1984,
-  "edge_smoothness": 100,
-  "geometry": "Circle",
-  "is_spawn": false,
-  "is_boss": false,
-  "inherits_map_assets": true,
   "assets": [
     {
-      "name": "Key",
-      "min_number": 1,
+      "check_min_spacing": false,
+      "check_overlap": false,
+      "exact_position": null,
+      "inherited": false,
       "max_number": 1,
+      "min_number": 1,
+      "name": "Key",
       "position": "Center",
-      "exact_position": null,
-      "tag": false,
-      "check_overlap": false,
-      "check_min_spacing": false,
-      "inherited": false
+      "spawn_id": "spn-c0acafaef323",
+      "tag": false
     },
     {
-      "name": "light",
-      "min_number": 5,
+      "check_min_spacing": false,
+      "check_overlap": false,
+      "exact_position": null,
+      "inherited": false,
       "max_number": 20,
+      "min_number": 5,
+      "name": "light",
       "position": "Random",
-      "exact_position": null,
-      "tag": true,
-      "check_overlap": false,
-      "check_min_spacing": false,
-      "inherited": false
+      "spawn_id": "spn-2ce92fe4113b",
+      "tag": true
     },
     {
-      "name": "parent",
-      "min_number": 0,
+      "check_min_spacing": false,
+      "check_overlap": false,
+      "exact_position": null,
+      "inherited": false,
       "max_number": 0,
+      "min_number": 0,
+      "name": "parent",
       "position": "Perimeter",
-      "exact_position": null,
-      "tag": true,
-      "check_overlap": false,
-      "check_min_spacing": false,
-      "inherited": false
+      "spawn_id": "spn-1eab18dd8347",
+      "tag": true
     },
     {
-      "name": "piss",
-      "min_number": -100,
-      "max_number": 78,
-      "position": "Random",
-      "exact_position": null,
-      "tag": true,
-      "check_overlap": false,
       "check_min_spacing": false,
-      "inherited": false
+      "check_overlap": false,
+      "exact_position": null,
+      "inherited": false,
+      "max_number": 78,
+      "min_number": -100,
+      "name": "piss",
+      "position": "Random",
+      "spawn_id": "spn-b890336f4f11",
+      "tag": true
     }
   ],
   "batch_assets": {
-    "has_batch_assets": false,
-    "grid_spacing_min": 100,
-    "grid_spacing_max": 100,
-    "jitter_min": 0,
-    "jitter_max": 0,
     "batch_assets": [
       {
+        "color": "#CCCCCC",
         "name": "null",
-        "tag": false,
         "percent": 100,
-        "color": "#CCCCCC"
+        "tag": false
       }
-    ]
-  }
+    ],
+    "grid_spacing_max": 100,
+    "grid_spacing_min": 100,
+    "has_batch_assets": false,
+    "jitter_max": 0,
+    "jitter_min": 0
+  },
+  "edge_smoothness": 100,
+  "geometry": "Circle",
+  "inherits_map_assets": true,
+  "is_boss": false,
+  "is_spawn": false,
+  "max_height": 1984,
+  "max_width": 2500,
+  "min_height": 1984,
+  "min_width": 1983,
+  "name": "KEY"
 }

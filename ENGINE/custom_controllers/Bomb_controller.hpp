@@ -25,9 +25,7 @@ class BombController : public AssetController {
   void think_random();
   void pursue();
   bool try_hop_dirs(const char* const* names, const int* dx, const int* dy, int n);
-  void explode_if_close();
-
-  int dist2_to_player() const;
+  void explosion_if_close();
 
   int randu();
   int rand_range(int lo, int hi);
@@ -45,8 +43,9 @@ class BombController : public AssetController {
   int probe_              = 24;
 
   int follow_radius_      = 500;
-  int explode_radius_     = 20;
+  int explosion_radius_     = 20;
 
+  bool updated_by_determine_ = false;
   unsigned int rng_seed_  = 0xB00B1Eu;
 };
 

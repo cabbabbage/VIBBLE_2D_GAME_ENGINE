@@ -1,456 +1,11 @@
 {
-    "impassable_area": null,
-    "asset_name": "Frog",
-    "asset_type": "Object",
-    "duplicatable": false,
-    "duplication_interval_min": 30,
-    "duplication_interval_max": 60,
-    "min_child_depth": 0,
-    "max_child_depth": 2,
     "animations": {
-        "default": {
-            "path": null,
-            "end_path": null,
-            "source": {
-                "kind": "folder",
-                "path": "default",
-                "name": null
-            },
-            "flipped_source": false,
-            "reverse_source": false,
-            "locked": false,
-            "speed_factor": 1,
-            "number_of_frames": 1,
-            "movement": [
-                [
-                    0,
-                    0
-                ]
-            ],
-            "on_end": "default",
-            "has_custom_animation_controller": false,
-            "custom_animation_controller_hpp_path": "",
-            "custom_animation_controller_key": ""
-        },
-        "right": {
-            "source": {
-                "kind": "folder",
-                "path": "right",
-                "name": null
-            },
-            "flipped_source": false,
-            "reverse_source": false,
-            "locked": false,
-            "speed_factor": 1,
-            "number_of_frames": 12,
-            "movement": [
-                [
-                    0,
-                    0
-                ],
-                [
-                    2,
-                    0,
-                    true,
-                    [
-                        255,
-                        255,
-                        255
-                    ]
-                ],
-                [
-                    2,
-                    0,
-                    true,
-                    [
-                        255,
-                        255,
-                        255
-                    ]
-                ],
-                [
-                    1,
-                    0,
-                    true,
-                    [
-                        255,
-                        255,
-                        255
-                    ]
-                ],
-                [
-                    2,
-                    0,
-                    true,
-                    [
-                        255,
-                        255,
-                        255
-                    ]
-                ],
-                [
-                    2,
-                    0,
-                    true,
-                    [
-                        255,
-                        255,
-                        255
-                    ]
-                ],
-                [
-                    2,
-                    0,
-                    true,
-                    [
-                        255,
-                        255,
-                        255
-                    ]
-                ],
-                [
-                    2,
-                    0,
-                    true,
-                    [
-                        255,
-                        255,
-                        255
-                    ]
-                ],
-                [
-                    2,
-                    0,
-                    true,
-                    [
-                        255,
-                        255,
-                        255
-                    ]
-                ],
-                [
-                    1,
-                    0,
-                    true,
-                    [
-                        255,
-                        255,
-                        255
-                    ]
-                ],
-                [
-                    2,
-                    0,
-                    true,
-                    [
-                        255,
-                        255,
-                        255
-                    ]
-                ],
-                [
-                    2,
-                    0,
-                    true,
-                    [
-                        255,
-                        255,
-                        255
-                    ]
-                ]
-            ],
-            "on_end": "default",
-            "has_custom_animation_controller": false,
-            "custom_animation_controller_hpp_path": "",
-            "custom_animation_controller_key": "",
-            "movement_total": {
-                "dx": 20,
-                "dy": 0
-            }
-        },
-        "left": {
-            "source": {
-                "kind": "animation",
-                "path": "",
-                "name": "right"
-            },
-            "flipped_source": true,
-            "reverse_source": false,
-            "locked": false,
-            "speed_factor": 1,
-            "number_of_frames": 12,
-            "movement": [
-                [
-                    0,
-                    0
-                ],
-                [
-                    -2,
-                    0,
-                    true,
-                    [
-                        255,
-                        255,
-                        255
-                    ]
-                ],
-                [
-                    -2,
-                    0,
-                    true,
-                    [
-                        255,
-                        255,
-                        255
-                    ]
-                ],
-                [
-                    -1,
-                    0,
-                    true,
-                    [
-                        255,
-                        255,
-                        255
-                    ]
-                ],
-                [
-                    -2,
-                    0,
-                    true,
-                    [
-                        255,
-                        255,
-                        255
-                    ]
-                ],
-                [
-                    -2,
-                    0,
-                    true,
-                    [
-                        255,
-                        255,
-                        255
-                    ]
-                ],
-                [
-                    -2,
-                    0,
-                    true,
-                    [
-                        255,
-                        255,
-                        255
-                    ]
-                ],
-                [
-                    -2,
-                    0,
-                    true,
-                    [
-                        255,
-                        255,
-                        255
-                    ]
-                ],
-                [
-                    -2,
-                    0,
-                    true,
-                    [
-                        255,
-                        255,
-                        255
-                    ]
-                ],
-                [
-                    -1,
-                    0,
-                    true,
-                    [
-                        255,
-                        255,
-                        255
-                    ]
-                ],
-                [
-                    -2,
-                    0,
-                    true,
-                    [
-                        255,
-                        255,
-                        255
-                    ]
-                ],
-                [
-                    -2,
-                    0,
-                    true,
-                    [
-                        255,
-                        255,
-                        255
-                    ]
-                ]
-            ],
-            "on_end": "default",
-            "has_custom_animation_controller": false,
-            "custom_animation_controller_hpp_path": "",
-            "custom_animation_controller_key": "",
-            "movement_total": {
-                "dx": -20,
-                "dy": 0
-            }
-        },
-        "forward": {
-            "source": {
-                "kind": "animation",
-                "path": "",
-                "name": "right"
-            },
-            "flipped_source": false,
-            "reverse_source": false,
-            "locked": false,
-            "speed_factor": 1,
-            "number_of_frames": 12,
-            "movement": [
-                [
-                    0,
-                    0
-                ],
-                [
-                    0,
-                    2,
-                    true,
-                    [
-                        255,
-                        255,
-                        255
-                    ]
-                ],
-                [
-                    0,
-                    2,
-                    true,
-                    [
-                        255,
-                        255,
-                        255
-                    ]
-                ],
-                [
-                    0,
-                    1,
-                    true,
-                    [
-                        255,
-                        255,
-                        255
-                    ]
-                ],
-                [
-                    0,
-                    2,
-                    true,
-                    [
-                        255,
-                        255,
-                        255
-                    ]
-                ],
-                [
-                    0,
-                    2,
-                    true,
-                    [
-                        255,
-                        255,
-                        255
-                    ]
-                ],
-                [
-                    0,
-                    2,
-                    true,
-                    [
-                        255,
-                        255,
-                        255
-                    ]
-                ],
-                [
-                    0,
-                    2,
-                    true,
-                    [
-                        255,
-                        255,
-                        255
-                    ]
-                ],
-                [
-                    0,
-                    2,
-                    true,
-                    [
-                        255,
-                        255,
-                        255
-                    ]
-                ],
-                [
-                    0,
-                    1,
-                    true,
-                    [
-                        255,
-                        255,
-                        255
-                    ]
-                ],
-                [
-                    0,
-                    2,
-                    true,
-                    [
-                        255,
-                        255,
-                        255
-                    ]
-                ],
-                [
-                    0,
-                    2,
-                    true,
-                    [
-                        255,
-                        255,
-                        255
-                    ]
-                ]
-            ],
-            "on_end": "default",
-            "has_custom_animation_controller": false,
-            "custom_animation_controller_hpp_path": "",
-            "custom_animation_controller_key": "",
-            "movement_total": {
-                "dx": 0,
-                "dy": 20
-            }
-        },
         "backward": {
-            "source": {
-                "kind": "animation",
-                "path": "",
-                "name": "right"
-            },
+            "custom_animation_controller_hpp_path": "",
+            "custom_animation_controller_key": "",
             "flipped_source": false,
-            "reverse_source": false,
+            "has_custom_animation_controller": false,
             "locked": false,
-            "speed_factor": 1,
-            "number_of_frames": 12,
             "movement": [
                 [
                     0,
@@ -567,38 +122,488 @@
                     ]
                 ]
             ],
-            "on_end": "default",
-            "has_custom_animation_controller": false,
-            "custom_animation_controller_hpp_path": "",
-            "custom_animation_controller_key": "",
             "movement_total": {
                 "dx": 0,
                 "dy": -20
-            }
+            },
+            "number_of_frames": 12,
+            "on_end": "default",
+            "reverse_source": false,
+            "rnd_start": false,
+            "source": {
+                "kind": "animation",
+                "name": "right",
+                "path": ""
+            },
+            "speed_factor": -4
+        },
+        "default": {
+            "custom_animation_controller_hpp_path": "",
+            "custom_animation_controller_key": "",
+            "end_path": null,
+            "flipped_source": false,
+            "has_custom_animation_controller": false,
+            "locked": false,
+            "movement": [
+                [
+                    0,
+                    0
+                ]
+            ],
+            "number_of_frames": 1,
+            "on_end": "default",
+            "path": null,
+            "reverse_source": false,
+            "rnd_start": false,
+            "source": {
+                "kind": "folder",
+                "name": null,
+                "path": "default"
+            },
+            "speed_factor": -4
+        },
+        "forward": {
+            "custom_animation_controller_hpp_path": "",
+            "custom_animation_controller_key": "",
+            "flipped_source": false,
+            "has_custom_animation_controller": false,
+            "locked": false,
+            "movement": [
+                [
+                    0,
+                    0
+                ],
+                [
+                    0,
+                    2,
+                    true,
+                    [
+                        255,
+                        255,
+                        255
+                    ]
+                ],
+                [
+                    0,
+                    2,
+                    true,
+                    [
+                        255,
+                        255,
+                        255
+                    ]
+                ],
+                [
+                    0,
+                    1,
+                    true,
+                    [
+                        255,
+                        255,
+                        255
+                    ]
+                ],
+                [
+                    0,
+                    2,
+                    true,
+                    [
+                        255,
+                        255,
+                        255
+                    ]
+                ],
+                [
+                    0,
+                    2,
+                    true,
+                    [
+                        255,
+                        255,
+                        255
+                    ]
+                ],
+                [
+                    0,
+                    2,
+                    true,
+                    [
+                        255,
+                        255,
+                        255
+                    ]
+                ],
+                [
+                    0,
+                    2,
+                    true,
+                    [
+                        255,
+                        255,
+                        255
+                    ]
+                ],
+                [
+                    0,
+                    2,
+                    true,
+                    [
+                        255,
+                        255,
+                        255
+                    ]
+                ],
+                [
+                    0,
+                    1,
+                    true,
+                    [
+                        255,
+                        255,
+                        255
+                    ]
+                ],
+                [
+                    0,
+                    2,
+                    true,
+                    [
+                        255,
+                        255,
+                        255
+                    ]
+                ],
+                [
+                    0,
+                    2,
+                    true,
+                    [
+                        255,
+                        255,
+                        255
+                    ]
+                ]
+            ],
+            "movement_total": {
+                "dx": 0,
+                "dy": 20
+            },
+            "number_of_frames": 12,
+            "on_end": "default",
+            "reverse_source": false,
+            "rnd_start": false,
+            "source": {
+                "kind": "animation",
+                "name": "right",
+                "path": ""
+            },
+            "speed_factor": -4
+        },
+        "left": {
+            "custom_animation_controller_hpp_path": "",
+            "custom_animation_controller_key": "",
+            "flipped_source": true,
+            "has_custom_animation_controller": false,
+            "locked": false,
+            "movement": [
+                [
+                    0,
+                    0
+                ],
+                [
+                    -2,
+                    0,
+                    true,
+                    [
+                        255,
+                        255,
+                        255
+                    ]
+                ],
+                [
+                    -2,
+                    0,
+                    true,
+                    [
+                        255,
+                        255,
+                        255
+                    ]
+                ],
+                [
+                    -1,
+                    0,
+                    true,
+                    [
+                        255,
+                        255,
+                        255
+                    ]
+                ],
+                [
+                    -2,
+                    0,
+                    true,
+                    [
+                        255,
+                        255,
+                        255
+                    ]
+                ],
+                [
+                    -2,
+                    0,
+                    true,
+                    [
+                        255,
+                        255,
+                        255
+                    ]
+                ],
+                [
+                    -2,
+                    0,
+                    true,
+                    [
+                        255,
+                        255,
+                        255
+                    ]
+                ],
+                [
+                    -2,
+                    0,
+                    true,
+                    [
+                        255,
+                        255,
+                        255
+                    ]
+                ],
+                [
+                    -2,
+                    0,
+                    true,
+                    [
+                        255,
+                        255,
+                        255
+                    ]
+                ],
+                [
+                    -1,
+                    0,
+                    true,
+                    [
+                        255,
+                        255,
+                        255
+                    ]
+                ],
+                [
+                    -2,
+                    0,
+                    true,
+                    [
+                        255,
+                        255,
+                        255
+                    ]
+                ],
+                [
+                    -2,
+                    0,
+                    true,
+                    [
+                        255,
+                        255,
+                        255
+                    ]
+                ]
+            ],
+            "movement_total": {
+                "dx": -20,
+                "dy": 0
+            },
+            "number_of_frames": 12,
+            "on_end": "default",
+            "reverse_source": false,
+            "rnd_start": false,
+            "source": {
+                "kind": "animation",
+                "name": "right",
+                "path": ""
+            },
+            "speed_factor": -4
+        },
+        "right": {
+            "custom_animation_controller_hpp_path": "",
+            "custom_animation_controller_key": "",
+            "flipped_source": false,
+            "has_custom_animation_controller": false,
+            "locked": false,
+            "movement": [
+                [
+                    0,
+                    0
+                ],
+                [
+                    2,
+                    0,
+                    true,
+                    [
+                        255,
+                        255,
+                        255
+                    ]
+                ],
+                [
+                    2,
+                    0,
+                    true,
+                    [
+                        255,
+                        255,
+                        255
+                    ]
+                ],
+                [
+                    1,
+                    0,
+                    true,
+                    [
+                        255,
+                        255,
+                        255
+                    ]
+                ],
+                [
+                    2,
+                    0,
+                    true,
+                    [
+                        255,
+                        255,
+                        255
+                    ]
+                ],
+                [
+                    2,
+                    0,
+                    true,
+                    [
+                        255,
+                        255,
+                        255
+                    ]
+                ],
+                [
+                    2,
+                    0,
+                    true,
+                    [
+                        255,
+                        255,
+                        255
+                    ]
+                ],
+                [
+                    2,
+                    0,
+                    true,
+                    [
+                        255,
+                        255,
+                        255
+                    ]
+                ],
+                [
+                    2,
+                    0,
+                    true,
+                    [
+                        255,
+                        255,
+                        255
+                    ]
+                ],
+                [
+                    1,
+                    0,
+                    true,
+                    [
+                        255,
+                        255,
+                        255
+                    ]
+                ],
+                [
+                    2,
+                    0,
+                    true,
+                    [
+                        255,
+                        255,
+                        255
+                    ]
+                ],
+                [
+                    2,
+                    0,
+                    true,
+                    [
+                        255,
+                        255,
+                        255
+                    ]
+                ]
+            ],
+            "movement_total": {
+                "dx": 20,
+                "dy": 0
+            },
+            "number_of_frames": 12,
+            "on_end": "default",
+            "reverse_source": false,
+            "rnd_start": false,
+            "source": {
+                "kind": "folder",
+                "name": null,
+                "path": "right"
+            },
+            "speed_factor": -4
         }
     },
-    "z_threshold": 0,
-    "size_settings": {
-        "scale_percentage": 25
+    "anti_tags": [],
+    "asset_name": "Frog",
+    "asset_type": "Object",
+    "can_invert": true,
+    "custom_controller_key": "Frog_controller",
+    "duplicatable": false,
+    "duplication_interval_max": 60,
+    "duplication_interval_min": 30,
+    "impassable_area": null,
+    "layout": {
+        "__view": {
+            "geometry": "1920x1009+82+-15",
+            "xview": 0.0,
+            "yview": 0.0,
+            "zoom": 1.0
+        }
     },
+    "mappings": {},
+    "max_child_depth": 2,
+    "min_child_depth": 0,
+    "render_radius": 1000,
+    "rnd_spawn_max": 400,
+    "rnd_spawn_min": 300,
+    "size_settings": {
+        "scale_percentage": 11.0
+    },
+    "start": "left",
     "tags": [
         "passable"
     ],
-    "anti_tags": [],
-    "rnd_spawn_min": 300,
-    "rnd_spawn_max": 400,
-    "can_invert": false,
     "update_radius": 1000,
-    "render_radius": 1000,
-    "mappings": {},
-    "layout": {
-        "__view": {
-            "geometry": "1920x1009+-136+49",
-            "zoom": 1.0,
-            "xview": 0.0,
-            "yview": 0.28237951807228917
-        }
-    },
-    "start": "left",
-    "custom_controller_key": "Frog_controller"
+    "z_threshold": 0
 }

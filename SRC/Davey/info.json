@@ -9,7 +9,53 @@
       "movement": [
         [
           0,
-          0
+          0,
+          true,
+          [
+            255,
+            255,
+            255
+          ]
+        ],
+        [
+          0,
+          4,
+          true,
+          [
+            255,
+            255,
+            255
+          ]
+        ],
+        [
+          0,
+          3,
+          true,
+          [
+            255,
+            255,
+            255
+          ]
+        ],
+        [
+          0,
+          4,
+          true,
+          [
+            255,
+            255,
+            255
+          ]
+        ],
+        [
+          0,
+          4,
+          true,
+          [
+            255,
+            255,
+            255
+          ]
         ],
         [
           0,
@@ -43,7 +89,7 @@
         ],
         [
           0,
-          3,
+          4,
           true,
           [
             255,
@@ -73,57 +119,7 @@
         ],
         [
           0,
-          3,
-          true,
-          [
-            255,
-            255,
-            255
-          ]
-        ],
-        [
-          0,
           4,
-          true,
-          [
-            255,
-            255,
-            255
-          ]
-        ],
-        [
-          0,
-          3,
-          true,
-          [
-            255,
-            255,
-            255
-          ]
-        ],
-        [
-          0,
-          3,
-          true,
-          [
-            255,
-            255,
-            255
-          ]
-        ],
-        [
-          0,
-          4,
-          true,
-          [
-            255,
-            255,
-            255
-          ]
-        ],
-        [
-          0,
-          3,
           true,
           [
             255,
@@ -132,7 +128,7 @@
           ]
         ]
       ],
-      "number_of_frames": 13,
+      "number_of_frames": 12,
       "on_end": "default",
       "reverse_source": false,
       "source": {
@@ -140,7 +136,12 @@
         "path": "forward",
         "name": null
       },
-      "speed_factor": 1
+      "speed_factor": 1,
+      "rnd_start": false,
+      "movement_total": {
+        "dx": 0,
+        "dy": 40
+      }
     },
     "default": {
       "custom_animation_controller_hpp_path": "C:\\Users\\cal_m\\OneDrive\\Documents\\GitHub\\VIBBLE_2D_GAME_ENGINE\\ENGINE\\custom_controllers\\Davey_default_controller.hpp",
@@ -270,66 +271,139 @@
       "movement": [
         [
           0,
-          0
+          0,
+          true,
+          [
+            255,
+            255,
+            255
+          ]
         ],
         [
           0,
-          0
+          -4,
+          true,
+          [
+            255,
+            255,
+            255
+          ]
         ],
         [
           0,
-          0
+          -3,
+          true,
+          [
+            255,
+            255,
+            255
+          ]
         ],
         [
           0,
-          0
+          -4,
+          true,
+          [
+            255,
+            255,
+            255
+          ]
         ],
         [
           0,
-          0
+          -4,
+          true,
+          [
+            255,
+            255,
+            255
+          ]
         ],
         [
           0,
-          0
+          -3,
+          true,
+          [
+            255,
+            255,
+            255
+          ]
         ],
         [
           0,
-          0
+          -4,
+          true,
+          [
+            255,
+            255,
+            255
+          ]
         ],
         [
           0,
-          0
+          -3,
+          true,
+          [
+            255,
+            255,
+            255
+          ]
         ],
         [
           0,
-          0
+          -4,
+          true,
+          [
+            255,
+            255,
+            255
+          ]
         ],
         [
           0,
-          0
+          -4,
+          true,
+          [
+            255,
+            255,
+            255
+          ]
         ],
         [
           0,
-          0
+          -3,
+          true,
+          [
+            255,
+            255,
+            255
+          ]
         ],
         [
           0,
-          0
-        ],
-        [
-          0,
-          0
+          -4,
+          true,
+          [
+            255,
+            255,
+            255
+          ]
         ]
       ],
-      "number_of_frames": 13,
+      "number_of_frames": 12,
       "on_end": "default",
       "reverse_source": false,
       "source": {
         "kind": "folder",
-        "name": null,
-        "path": "backward"
+        "path": "backward",
+        "name": null
       },
-      "speed_factor": 1
+      "speed_factor": 1,
+      "rnd_start": false,
+      "movement_total": {
+        "dx": 0,
+        "dy": -40
+      }
     },
     "left": {
       "custom_animation_controller_hpp_path": "",
@@ -340,66 +414,139 @@
       "movement": [
         [
           0,
-          0
+          0,
+          true,
+          [
+            255,
+            255,
+            255
+          ]
         ],
         [
+          -4,
           0,
-          0
+          true,
+          [
+            255,
+            255,
+            255
+          ]
         ],
         [
+          -3,
           0,
-          0
+          true,
+          [
+            255,
+            255,
+            255
+          ]
         ],
         [
+          -4,
           0,
-          0
+          true,
+          [
+            255,
+            255,
+            255
+          ]
         ],
         [
+          -4,
           0,
-          0
+          true,
+          [
+            255,
+            255,
+            255
+          ]
         ],
         [
+          -3,
           0,
-          0
+          true,
+          [
+            255,
+            255,
+            255
+          ]
         ],
         [
+          -4,
           0,
-          0
+          true,
+          [
+            255,
+            255,
+            255
+          ]
         ],
         [
+          -3,
           0,
-          0
+          true,
+          [
+            255,
+            255,
+            255
+          ]
         ],
         [
+          -4,
           0,
-          0
+          true,
+          [
+            255,
+            255,
+            255
+          ]
         ],
         [
+          -4,
           0,
-          0
+          true,
+          [
+            255,
+            255,
+            255
+          ]
         ],
         [
+          -3,
           0,
-          0
+          true,
+          [
+            255,
+            255,
+            255
+          ]
         ],
         [
+          -4,
           0,
-          0
-        ],
-        [
-          0,
-          0
+          true,
+          [
+            255,
+            255,
+            255
+          ]
         ]
       ],
-      "number_of_frames": 13,
+      "number_of_frames": 12,
       "on_end": "default",
       "reverse_source": false,
       "source": {
         "kind": "animation",
-        "name": "right",
-        "path": ""
+        "path": "",
+        "name": "right"
       },
-      "speed_factor": 1
+      "speed_factor": 1,
+      "rnd_start": false,
+      "movement_total": {
+        "dx": -40,
+        "dy": 0
+      }
     },
     "right": {
       "flipped_source": false,
@@ -408,66 +555,142 @@
       "movement": [
         [
           0,
-          0
+          0,
+          true,
+          [
+            255,
+            255,
+            255
+          ]
         ],
         [
+          4,
           0,
-          0
+          true,
+          [
+            255,
+            255,
+            255
+          ]
         ],
         [
+          3,
           0,
-          0
+          true,
+          [
+            255,
+            255,
+            255
+          ]
         ],
         [
+          4,
           0,
-          0
+          true,
+          [
+            255,
+            255,
+            255
+          ]
         ],
         [
+          4,
           0,
-          0
+          true,
+          [
+            255,
+            255,
+            255
+          ]
         ],
         [
+          3,
           0,
-          0
+          true,
+          [
+            255,
+            255,
+            255
+          ]
         ],
         [
+          4,
           0,
-          0
+          true,
+          [
+            255,
+            255,
+            255
+          ]
         ],
         [
+          3,
           0,
-          0
+          true,
+          [
+            255,
+            255,
+            255
+          ]
         ],
         [
+          4,
           0,
-          0
+          true,
+          [
+            255,
+            255,
+            255
+          ]
         ],
         [
+          4,
           0,
-          0
+          true,
+          [
+            255,
+            255,
+            255
+          ]
         ],
         [
+          3,
           0,
-          0
+          true,
+          [
+            255,
+            255,
+            255
+          ]
         ],
         [
+          4,
           0,
-          0
-        ],
-        [
-          0,
-          0
+          true,
+          [
+            255,
+            255,
+            255
+          ]
         ]
       ],
-      "number_of_frames": 13,
+      "number_of_frames": 12,
       "on_end": "default",
       "reverse_source": false,
       "source": {
         "kind": "folder",
-        "name": null,
-        "path": "right"
+        "path": "right",
+        "name": null
       },
-      "speed_factor": 1
+      "speed_factor": 1,
+      "rnd_start": false,
+      "has_custom_animation_controller": true,
+      "custom_animation_controller_hpp_path": "",
+      "custom_animation_controller_key": "",
+      "movement_total": {
+        "dx": 40,
+        "dy": 0
+      }
     }
   },
   "anti_tags": [],
@@ -475,16 +698,16 @@
     {}
   ],
   "asset_name": "Davey",
-  "asset_type": "Player",
+  "asset_type": "Enemy",
   "custom_controller_key": "Davey_controller",
   "has_shading": true,
   "impassable_area": null,
   "layout": {
     "__view": {
-      "geometry": "1920x1009+5+-19",
+      "geometry": "1920x1009+-135+78",
       "zoom": 1.0,
       "xview": 0.0,
-      "yview": 0.0
+      "yview": 0.34321157822191595
     }
   },
   "lighting_info": [
@@ -523,14 +746,17 @@
   },
   "start": "default",
   "tags": [
+    "default",
     "forward",
     "passable",
-    "start",
-    "default",
-    "left",
     "player",
     "backward",
+    "left",
+    "start",
     "right"
   ],
-  "z_threshold": 43
+  "z_threshold": 43,
+  "can_invert": false,
+  "update_radius": 1000,
+  "render_radius": 1000
 }

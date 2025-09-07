@@ -309,6 +309,7 @@ class AnimationConfiguratorAppSingle:
             "flipped_source": False,
             "reverse_source": False,
             "locked": False,
+            "rnd_start": False,
             "speed_factor": 1,
             "number_of_frames": 1,
             "movement": [[0, 0]],

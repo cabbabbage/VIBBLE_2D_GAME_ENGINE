@@ -256,6 +256,62 @@ Area* AssetInfo::find_area(const std::string& name) {
   return nullptr;
 }
 
+void AssetInfo::upsert_area_from_editor(const Area& area) {
+  // Update in-memory list
+  bool found = false;
+  for (auto& na : areas) {
+    if (na.name == area.get_name()) {
+      na.area = std::make_unique<Area>(area);
+      found = true;
+      break;
+    }
+  }
+  if (!found) {
+    NamedArea na;
+    na.name = area.get_name();
+    na.area = std::make_unique<Area>(area);
+    areas.push_back(std::move(na));
+  }
+
+  // Ensure info_json_ has an array for areas
+  if (!info_json_.contains("areas") || !info_json_["areas"].is_array()) {
+    info_json_["areas"] = nlohmann::json::array();
+  }
+
+  // Compute inverse transform: absolute -> relative (unscaled)
+  float scale = scale_factor;
+  if (scale <= 0.0f) scale = 1.0f;
+  int scaled_canvas_w = static_cast<int>(original_canvas_width * scale);
+  int scaled_canvas_h = static_cast<int>(original_canvas_height * scale);
+  int offset_x = (scaled_canvas_w - 0) / 2;
+  int offset_y = (scaled_canvas_h - 0);
+
+  // Serialize points
+  nlohmann::json points = nlohmann::json::array();
+  for (const auto& p : area.get_points()) {
+    double rel_x = (static_cast<double>(p.first)  - static_cast<double>(offset_x)) / static_cast<double>(scale);
+    double rel_y = (static_cast<double>(p.second) - static_cast<double>(offset_y)) / static_cast<double>(scale);
+    points.push_back({ rel_x, rel_y });
+  }
+
+  // Upsert JSON entry by name
+  bool json_found = false;
+  for (auto& entry : info_json_["areas"]) {
+    if (entry.is_object() && entry.value("name", std::string{}) == area.get_name()) {
+      entry["name"] = area.get_name();
+      entry["points"] = std::move(points);
+      json_found = true;
+      break;
+    }
+  }
+  if (!json_found) {
+    nlohmann::json entry;
+    entry["name"] = area.get_name();
+    entry["points"] = std::move(points);
+    info_json_["areas"].push_back(std::move(entry));
+  }
+}
+
 std::string AssetInfo::pick_next_animation(const std::string& mapping_id) const {
   auto it = mappings.find(mapping_id);
   if (it == mappings.end()) return {};

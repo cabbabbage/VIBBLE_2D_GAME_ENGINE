@@ -40,9 +40,9 @@ class FrogController : public AssetController {
 
   int probe_ = 24;
 
-  int  frame_slow_div_ = 4;   // advance animation 1 out of 4 ticks
-  int  frame_phase_     = 0;
+  // No controller-side animation slowdowns; handled centrally
 
+  bool updated_by_determine_ = false;
   unsigned int rng_seed_ = 0xC0FFEEu;
 };
 

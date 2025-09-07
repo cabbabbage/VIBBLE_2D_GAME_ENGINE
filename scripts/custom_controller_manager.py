@@ -5,6 +5,7 @@ from typing import Optional, Tuple
 import os
 import sys
 import subprocess
+import re
 
 
 class CustomControllerManager:
@@ -12,17 +13,29 @@ class CustomControllerManager:
 
     Files live in ENGINE/custom_controllers/<asset>_controller.hpp/.cpp
     The key equals the file base name (e.g., "player_controller").
+
+    Also patches ENGINE/asset/controller_factory.cpp to include and register
+    the newly created controller in create_by_key(...).
     """
 
     def __init__(self, info_path: Path) -> None:
         self.info_path = info_path
         self.asset_name = info_path.parent.name
         self.repo_root = self._find_repo_root_with_engine(info_path)
-        self.engine_dir = self.repo_root / "ENGINE" if self.repo_root else info_path.parents[2] / "ENGINE"
+        self.engine_dir = (
+            self.repo_root / "ENGINE"
+            if self.repo_root
+            else info_path.parents[2] / "ENGINE"
+        )
         self.ctrl_dir = self.engine_dir / "custom_controllers"
         self.base_name = f"{self.asset_name}_controller"
         self.hpp = self.ctrl_dir / f"{self.base_name}.hpp"
         self.cpp = self.ctrl_dir / f"{self.base_name}.cpp"
+
+        # controller factory assumed to live with other asset code
+        self.factory_dir = self.engine_dir / "asset"
+        self.factory_cpp = self.factory_dir / "controller_factory.cpp"
+        self.factory_hpp = self.factory_dir / "controller_factory.hpp"
 
     @staticmethod
     def _find_repo_root_with_engine(start: Path) -> Optional[Path]:
@@ -37,42 +50,67 @@ class CustomControllerManager:
     def key(self) -> str:
         return self.base_name
 
+    # ---------- public API ----------
+
     def create(self) -> Tuple[Path, Path]:
+        """Create controller files and register them in the controller factory."""
         self.ctrl_dir.mkdir(parents=True, exist_ok=True)
         class_name = self._class_name()
+
+        # --- generate files in expected controller format ---
         hpp = f"""#pragma once
-#include <string>
+#include "asset_controller.hpp"
 
-class {class_name} {{
+class Assets;
+class Asset;
+class ActiveAssetsManager;
+class Input;
+
+/*
+  {class_name}
+  auto generated controller for asset "{self.asset_name}"
+  dummy behavior for now
+*/
+class {class_name} : public AssetController {{
 public:
-    // Unique key for this controller
-    std::string key = "{self.base_name}";
+    {class_name}(Assets* assets, Asset* self, ActiveAssetsManager& aam);
+    ~{class_name}() override;
 
-    {class_name}();
-    void update(float dt);
+    void update(const Input& in) override;
 
 private:
-    // TODO: add state here
+    Assets* assets_ = nullptr;           // non owning
+    Asset*  self_   = nullptr;           // non owning
+    ActiveAssetsManager& aam_;
 }};
 """
-        cpp = f"""#include "{self.base_name}.hpp"
+        cpp = f"""#include "custom_controllers/{self.base_name}.hpp"
 
-{class_name}::{class_name}() {{
-    // TODO: initialize state
-}}
+#include "asset/Asset.hpp"
+#include "core/AssetsManager.hpp"
+#include "core/active_assets_manager.hpp"
 
-void {class_name}::update(float dt) {{
-    (void)dt;
-    // TODO: per-frame logic
+{class_name}::{class_name}(Assets* assets, Asset* self, ActiveAssetsManager& aam)
+    : assets_(assets)
+    , self_(self)
+    , aam_(aam)
+{{}}
+
+{class_name}::~{class_name}() {{}}
+
+void {class_name}::update(const Input& /*in*/) {{
+    // dummy controller; animation is handled by AnimationManager
+    (void)assets_;
+    (void)self_;
+    (void)aam_;
 }}
 """
         self.hpp.write_text(hpp, encoding="utf-8")
         self.cpp.write_text(cpp, encoding="utf-8")
-        # Ensure engine UI/loader include this controller header
-        try:
-            self._ensure_includes()
-        except Exception:
-            pass
+
+        # --- register in controller factory ---
+        self._register_in_controller_factory(class_name)
+
         return self.hpp, self.cpp
 
     def open_in_ide(self) -> None:
@@ -89,38 +127,72 @@ void {class_name}::update(float dt) {{
         except Exception:
             pass
 
+    # ---------- internals ----------
+
     def _class_name(self) -> str:
         # Convert file base (snake/other) to PascalCase
-        parts = [p for p in self.base_name.replace('-', '_').split('_') if p]
-        return ''.join(s[:1].upper() + s[1:] for s in parts)
+        parts = [p for p in self.base_name.replace("-", "_").split("_") if p]
+        return "".join(s[:1].upper() + s[1:] for s in parts)
 
-    # ----- include injection -----
-    def _ensure_includes(self) -> None:
-        include_line = f"#include \"custom_controllers/{self.base_name}.hpp\"\n"
-        # asset info ui
-        ui_cpp = self.engine_dir / "ui" / "asset_info_ui.cpp"
-        self._ensure_include_in_file(ui_cpp, include_line)
-        # animation loader
-        al_cpp = self.engine_dir / "asset_info_methods" / "animation_loader.cpp"
-        al_hpp = self.engine_dir / "asset_info_methods" / "animation_loader.hpp"
-        self._ensure_include_in_file(al_cpp, include_line)
-        self._ensure_include_in_file(al_hpp, include_line)
+    # controller factory patching
+    def _register_in_controller_factory(self, class_name: str) -> None:
+        """Ensure controller_factory.cpp includes and returns this controller."""
+        if not self.factory_cpp.exists():
+            # fail softly; user can wire manually if project layout differs
+            return
 
-    @staticmethod
-    def _ensure_include_in_file(path: Path, include_line: str) -> None:
-        try:
-            if not path.exists():
-                return
-            text = path.read_text(encoding="utf-8")
-            if include_line.strip() in text:
-                return
+        text = self.factory_cpp.read_text(encoding="utf-8")
+
+        include_line = f'#include "custom_controllers/{self.base_name}.hpp"\n'
+        if include_line not in text:
+            # insert after last custom_controllers include if present, else after other includes
             lines = text.splitlines(True)
-            # find last include line to insert after
             insert_at = 0
-            for i, ln in enumerate(lines[:100]):  # only scan header region
+            last_inc = 0
+            for i, ln in enumerate(lines):
                 if ln.lstrip().startswith("#include"):
+                    last_inc = i + 1
+                # prefer clustering with other custom_controllers includes
+                if 'custom_controllers/' in ln:
                     insert_at = i + 1
+            if insert_at == 0:
+                insert_at = last_inc
             lines.insert(insert_at, include_line)
-            path.write_text("".join(lines), encoding="utf-8")
-        except Exception:
-            pass
+            text = "".join(lines)
+
+        # add branch in create_by_key
+        key_branch = (
+            f' if (key == "{self.base_name}")\n'
+            f'  return std::make_unique<{class_name}>(assets_, self, aam_);\n'
+        )
+
+        # find create_by_key(...) body
+        m = re.search(
+            r"(std::unique_ptr<\s*AssetController\s*>\s*ControllerFactory::create_by_key\s*\([^)]*\)\s*{\s*)(.*?)(\n})",
+            text,
+            flags=re.DOTALL,
+        )
+        if m:
+            head, body, tail = m.group(1), m.group(2), m.group(3)
+
+            if key_branch not in body:
+                # insert before the first closing '}' of the try block if present,
+                # else just before the final 'return nullptr;'
+                # try to locate the try { ... } block
+                try_block = re.search(r"try\s*{\s*(.*?)}\s*catch", body, flags=re.DOTALL)
+                if try_block:
+                    tb_head, tb_content, tb_tail = (
+                        body[: try_block.start(0)],
+                        try_block.group(1),
+                        body[try_block.end(1) :],
+                    )
+                    if key_branch not in tb_content:
+                        tb_content = tb_content + key_branch
+                    body = tb_head + "try {\n" + tb_content + "}" + tb_tail
+                else:
+                    # fallback: place before final return nullptr;
+                    body = body.replace("return nullptr;", key_branch + " return nullptr;")
+
+            text = head + body + tail
+
+        self.factory_cpp.write_text(text, encoding="utf-8")

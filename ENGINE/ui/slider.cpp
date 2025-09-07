@@ -142,7 +142,7 @@ static void blit_text(SDL_Renderer* r, const TextStyle& style, const std::string
 void Slider::draw_track(SDL_Renderer* r) const {
     const SDL_Rect tr = track_rect();
     // Background
-    SDL_Color trackBg = Styles::Slate();
+    SDL_Color trackBg = style_ ? style_->track_bg : Styles::Slate();
     fill_rect(r, tr, trackBg);
 
     // Active fill from left to current value
@@ -150,17 +150,20 @@ void Slider::draw_track(SDL_Renderer* r) const {
     const int range = std::max(1, max_ - min_);
     const float t = float(value_ - min_) / float(range);
     tr_fill.w = std::max(0, int(std::round(t * tr.w)));
-    SDL_Color trackFill = Styles::Teal();
+    SDL_Color trackFill = style_ ? style_->track_fill : Styles::Teal();
     fill_rect(r, tr_fill, trackFill);
 
     // Frame
-    stroke_rect(r, tr, Styles::GoldDim());
+    SDL_Color frame = style_ ? style_->frame_normal : Styles::GoldDim();
+    stroke_rect(r, tr, frame);
 }
 
 void Slider::draw_knob(SDL_Renderer* r, const SDL_Rect& krect, bool hovered) const {
-    SDL_Color knobCol = hovered ? Styles::Fog() : Styles::Ivory();
+    SDL_Color knobCol = style_ ? (hovered ? style_->knob_fill_hover : style_->knob_fill)
+                               : (hovered ? Styles::Fog() : Styles::Ivory());
     fill_rect(r, krect, knobCol);
-    SDL_Color frame = hovered ? Styles::Gold() : Styles::GoldDim();
+    SDL_Color frame = style_ ? (hovered ? style_->knob_frame_hover : style_->knob_frame)
+                             : (hovered ? Styles::Gold() : Styles::GoldDim());
     stroke_rect(r, krect, frame);
     SDL_SetRenderDrawColor(r, frame.r, frame.g, frame.b, 180);
     const int gx = krect.x + krect.w/2;
@@ -169,8 +172,8 @@ void Slider::draw_knob(SDL_Renderer* r, const SDL_Rect& krect, bool hovered) con
 
 void Slider::draw_text(SDL_Renderer* r) const {
     // Render label (left) and value (right)
-    const TextStyle& labelStyle = TextStyles::SmallMain();
-    const TextStyle& valueStyle = TextStyles::SmallSecondary();
+    const TextStyle& labelStyle = style_ ? style_->label_style : TextStyles::SmallMain();
+    const TextStyle& valueStyle = style_ ? style_->value_style : TextStyles::SmallSecondary();
 
     blit_text(r, labelStyle, label_, rect_.x + 8, rect_.y + 6);
 
@@ -179,8 +182,9 @@ void Slider::draw_text(SDL_Renderer* r) const {
 }
 
 void Slider::render(SDL_Renderer* renderer) const {
-    // Outer frame to match button vibe
-    SDL_Color frame = knob_hovered_ || dragging_ ? Styles::Gold() : Styles::GoldDim();
+    // Outer frame
+    SDL_Color frame = knob_hovered_ || dragging_ ? (style_ ? style_->frame_hover : Styles::Gold())
+                                                 : (style_ ? style_->frame_normal : Styles::GoldDim());
     stroke_rect(renderer, rect_, frame);
     SDL_Rect inner{ rect_.x+1, rect_.y+1, rect_.w-2, rect_.h-2 };
     stroke_rect(renderer, inner, frame);

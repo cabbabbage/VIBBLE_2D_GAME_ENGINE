@@ -49,7 +49,7 @@ std::vector<std::unique_ptr<Asset>> AssetSpawner::spawn_boundary_from_file(const
     nlohmann::json boundary_json;
     file >> boundary_json;
     std::vector<nlohmann::json> json_sources{ boundary_json };
-    AssetSpawnPlanner planner(json_sources, spawn_area.get_area(), *asset_library_);
+    AssetSpawnPlanner planner(json_sources, spawn_area, *asset_library_, std::vector<std::string>{ json_path });
 
     logger_ = SpawnLogger("", "");
     run_spawning(&planner, spawn_area);
