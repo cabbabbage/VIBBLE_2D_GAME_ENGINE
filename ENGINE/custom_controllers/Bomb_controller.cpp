@@ -18,15 +18,9 @@
 */
 
 BombController::BombController(Assets* assets, Asset* self, ActiveAssetsManager& aam)
- : BombController(assets, self, aam, nullptr)
-{
-}
-
-BombController::BombController(Assets* assets, Asset* self, ActiveAssetsManager& aam, Asset* player)
  : assets_(assets)
  , self_(self)
  , aam_(aam)
- , player_(player)
 {
   rng_seed_ ^= reinterpret_cast<uintptr_t>(self_) + 0x9e3779b9u;
   frames_until_think_ = rand_range(think_interval_min_, think_interval_max_);
@@ -37,7 +31,8 @@ BombController::~BombController() {}
 void BombController::update(const Input& /*in*/) {
   updated_by_determine_ = false;
   if (self_ && self_->info) {
-    if (!player_) {
+    Asset* player = assets_ ? assets_->player : nullptr;
+    if (!player) {
       if (frames_until_think_ > 0) {
         frames_until_think_ -= 1;
       } else {
@@ -50,7 +45,7 @@ void BombController::update(const Input& /*in*/) {
         if (self_->get_current_animation() != "explosion")
           self_->change_animation("explosion");
       } else if (d <= static_cast<float>(follow_radius_)) {
-        pursue();
+        pursue(player);
       } else {
         if (frames_until_think_ > 0) {
           frames_until_think_ -= 1;
@@ -94,15 +89,15 @@ void BombController::think_random() {
   }
 }
 
-void BombController::pursue() {
-  if (!self_ || !player_) return;
+void BombController::pursue(Asset* player) {
+  if (!self_ || !player) return;
 
   // Use per-animation totals to choose best hop towards the player
   std::vector<std::string> candidates = {"left", "right", "forward", "backward"};
-  if (!(updated_by_determine_ = DetermineMovement::apply_best_animation(self_, aam_, player_->pos_X, player_->pos_Y, candidates))) {
+  if (!(updated_by_determine_ = DetermineMovement::apply_best_animation(self_, aam_, player->pos_X, player->pos_Y, candidates))) {
     if (self_->get_current_animation() != "default") self_->change_animation("default");
   } else {
-    explosion_if_close();
+    explosion_if_close(player);
   }
 }
 
@@ -117,8 +112,8 @@ bool BombController::try_hop_dirs(const char* const* names, const int* dx, const
   return false;
 }
 
-void BombController::explosion_if_close() {
-  if (!self_ || !player_) return;
+void BombController::explosion_if_close(Asset* player) {
+  if (!self_ || !player) return;
   float d = self_->distance_to_player;
   if (d <= static_cast<float>(explosion_radius_)) {
     if (self_->get_current_animation() != "explosion")

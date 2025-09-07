@@ -12,7 +12,6 @@ class Area;
 class BombController : public AssetController {
  public:
   BombController(Assets* assets, Asset* self, ActiveAssetsManager& aam);
-  BombController(Assets* assets, Asset* self, ActiveAssetsManager& aam, Asset* player);
   ~BombController();
 
   void update(const Input& in) override;
@@ -23,9 +22,9 @@ class BombController : public AssetController {
   bool canMove(int offset_x, int offset_y) const;
 
   void think_random();
-  void pursue();
+  void pursue(Asset* player);
   bool try_hop_dirs(const char* const* names, const int* dx, const int* dy, int n);
-  void explosion_if_close();
+  void explosion_if_close(Asset* player);
 
   int randu();
   int rand_range(int lo, int hi);
@@ -35,7 +34,6 @@ class BombController : public AssetController {
   Assets* assets_ = nullptr;
   Asset*  self_   = nullptr;
   ActiveAssetsManager& aam_;
-  Asset* player_   = nullptr;
 
   int frames_until_think_ = 0;
   int think_interval_min_ = 30;
