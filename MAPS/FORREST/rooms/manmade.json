@@ -1,73 +1,77 @@
 {
-  "name": "manmade",
-  "min_width": 2238,
-  "max_width": 2500,
-  "min_height": 700,
-  "max_height": 700,
-  "edge_smoothness": 0,
-  "geometry": "Circle",
-  "is_spawn": false,
-  "is_boss": false,
-  "inherits_map_assets": true,
   "assets": [
     {
-      "name": "center",
-      "min_number": 1,
+      "check_min_spacing": false,
+      "check_overlap": false,
+      "exact_position": null,
+      "inherited": false,
       "max_number": 1,
+      "min_number": 1,
+      "name": "center",
       "position": "Center",
-      "exact_position": null,
-      "tag": true,
-      "check_overlap": false,
-      "check_min_spacing": false,
-      "inherited": false
+      "spawn_id": "spn-bbcc9bc62e2f",
+      "tag": true
     },
     {
-      "name": "man-made",
+      "check_min_spacing": false,
+      "check_overlap": false,
+      "exact_position": null,
+      "inherited": false,
+      "max_number": 20,
       "min_number": 0,
-      "max_number": 20,
-      "position": "Random",
-      "exact_position": null,
-      "tag": true,
-      "check_overlap": false,
-      "check_min_spacing": false,
-      "inherited": false
-    },
-    {
       "name": "man-made",
-      "min_number": -100,
-      "max_number": 20,
       "position": "Random",
-      "exact_position": null,
-      "tag": true,
-      "check_overlap": false,
-      "check_min_spacing": false,
-      "inherited": false
+      "spawn_id": "spn-3b9d96d0ce8b",
+      "tag": true
     },
     {
-      "name": "light",
-      "min_number": 10,
-      "max_number": 20,
-      "position": "Random",
-      "exact_position": null,
-      "tag": true,
-      "check_overlap": false,
       "check_min_spacing": false,
-      "inherited": false
+      "check_overlap": false,
+      "exact_position": null,
+      "inherited": false,
+      "max_number": 20,
+      "min_number": -100,
+      "name": "man-made",
+      "position": "Random",
+      "spawn_id": "spn-ae8aed580b64",
+      "tag": true
+    },
+    {
+      "check_min_spacing": false,
+      "check_overlap": false,
+      "exact_position": null,
+      "inherited": false,
+      "max_number": 20,
+      "min_number": 10,
+      "name": "light",
+      "position": "Random",
+      "spawn_id": "spn-85abc831c050",
+      "tag": true
     }
   ],
   "batch_assets": {
-    "has_batch_assets": false,
-    "grid_spacing_min": 100,
-    "grid_spacing_max": 100,
-    "jitter_min": 0,
-    "jitter_max": 0,
     "batch_assets": [
       {
+        "color": "#CCCCCC",
         "name": "null",
-        "tag": false,
         "percent": 100,
-        "color": "#CCCCCC"
+        "tag": false
       }
-    ]
-  }
+    ],
+    "grid_spacing_max": 100,
+    "grid_spacing_min": 100,
+    "has_batch_assets": false,
+    "jitter_max": 0,
+    "jitter_min": 0
+  },
+  "edge_smoothness": 0,
+  "geometry": "Circle",
+  "inherits_map_assets": true,
+  "is_boss": false,
+  "is_spawn": false,
+  "max_height": 700,
+  "max_width": 2500,
+  "min_height": 700,
+  "min_width": 2238,
+  "name": "manmade"
 }

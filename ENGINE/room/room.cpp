@@ -93,23 +93,30 @@ Room::Room(Point origin,
     }
 
     std::vector<json> json_sources;
+    std::vector<std::string> source_paths;
     json_sources.push_back(assets_json);
+    source_paths.push_back(json_path);
 
     if (assets_json.value("inherits_map_assets", false)) {
-        std::ifstream map_in(map_path + "/map_assets.json");
+        const std::string map_assets_path = map_path + "/map_assets.json";
+        std::ifstream map_in(map_assets_path);
         if (map_in.is_open()) {
             json map_assets;
             map_in >> map_assets;
             json_sources.push_back(map_assets);
+            source_paths.push_back(map_assets_path);
         } else if (testing) {
             std::cerr << "[Room] Warning: inherits_map_assets is true, but map_assets.json not found in " << map_path << "\n";
         }
     }
 
+    // Note: AssetSpawnPlanner now handles persistence of spawn_id and exact-origin size.
+
     planner = std::make_unique<AssetSpawnPlanner>(
         json_sources,
-        room_area->get_area(),
-        *asset_lib
+        *room_area,
+        *asset_lib,
+        source_paths
     );
 
     std::vector<Area> exclusion;

@@ -42,6 +42,7 @@ private:
     SDL_Point compute_mouse_world(int mx_screen, int my_screen) const;
     bool dragging_;
     int drag_last_x_, drag_last_y_;
+    Asset* drag_anchor_asset_ = nullptr; // asset under cursor when drag starts
 
     // Double-click detection
     Uint32 last_click_time_ms_ = 0;

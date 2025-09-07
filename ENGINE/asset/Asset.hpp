@@ -43,7 +43,9 @@ public:
        int start_pos_X,
        int start_pos_Y,
        int depth,
-       Asset* parent = nullptr);
+       Asset* parent = nullptr,
+       const std::string& spawn_id = std::string{},
+       const std::string& spawn_method = std::string{});
 
  Asset(const Asset& other);
  Asset& operator=(const Asset& other);
@@ -141,6 +143,10 @@ public:
 
  int cached_w = 0;
  int cached_h = 0;
+
+ // spawn metadata
+ std::string spawn_id;
+ std::string spawn_method;
 
 private:
  // animation manager drives private animation state

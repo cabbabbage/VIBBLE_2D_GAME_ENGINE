@@ -42,8 +42,7 @@ class FrogController : public AssetController {
 
   // No controller-side animation slowdowns; handled centrally
 
-  bool updated_by_determine_ = false;
-  unsigned int rng_seed_ = 0xC0FFEEu;
+  bool updated_by_determine_ = false;`r`n  unsigned int rng_seed_ = 0xC0FFEEu;
 };
 
 #endif

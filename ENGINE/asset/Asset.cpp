@@ -15,7 +15,9 @@ Asset::Asset(std::shared_ptr<AssetInfo> info_,
              int start_pos_X,
              int start_pos_Y,
              int depth_,
-             Asset* parent_)
+             Asset* parent_,
+             const std::string& spawn_id_,
+             const std::string& spawn_method_)
  : parent(parent_)
  , info(std::move(info_))
  , current_animation()
@@ -32,6 +34,8 @@ Asset::Asset(std::shared_ptr<AssetInfo> info_,
  , has_base_shadow(false)
  , spawn_area_local(spawn_area)
  , depth(depth_)
+ , spawn_id(spawn_id_)
+ , spawn_method(spawn_method_)
 {
  set_flip();
  set_z_index();
@@ -98,6 +102,8 @@ Asset::Asset(const Asset& o)
  , final_texture(o.final_texture)
  , custom_frames(o.custom_frames)
  , assets_(o.assets_)
+ , spawn_id(o.spawn_id)
+ , spawn_method(o.spawn_method)
  , controller_(nullptr)
 {
  // anim_ intentionally not copied (runtime helper)
@@ -148,6 +154,8 @@ Asset& Asset::operator=(const Asset& o) {
  final_texture        = o.final_texture;
  custom_frames        = o.custom_frames;
  assets_              = o.assets_;
+ spawn_id             = o.spawn_id;
+ spawn_method         = o.spawn_method;
  controller_.reset();
  // anim_ rebuilt on finalize_setup
  return *this;

@@ -76,6 +76,9 @@ bool DetermineMovement::apply_best_animation(
   if (id.empty()) return false;
   if (self->get_current_animation() == id) return false;
   self->change_animation(id);
+  // Ensure the animation change applies immediately so controllers
+  // don't need to call update_animation_manager() right after.
+  if (self) self->update_animation_manager();
   return true;
 }
 

@@ -33,6 +33,7 @@ FrogController::FrogController(Assets* assets, Asset* self, ActiveAssetsManager&
 FrogController::~FrogController() {}
 
 void FrogController::update(const Input& /*in*/) {
+  updated_by_determine_ = false;
   // Run brain tick if valid; always tick animation at end.
   if (self_ && self_->info) {
     // No controller-side animation speed manipulation; timing handled by AnimationManager
@@ -48,7 +49,7 @@ void FrogController::update(const Input& /*in*/) {
       std::cout << "[frog] next think in " << frames_until_think_ << " frames\n";
     }
   }
-  if (self_) self_->update_animation_manager();
+  if (self_ && !updated_by_determine_) self_->update_animation_manager();
 }
 
 void FrogController::think() {
@@ -105,7 +106,7 @@ bool FrogController::try_hop_any_dir() {
   int target_y = self_->pos_Y + dy;
 
   std::vector<std::string> candidates = { names[0], names[1], names[2], names[3] };
-  if (DetermineMovement::apply_best_animation(self_, aam_, target_x, target_y, candidates)) {
+  if ((updated_by_determine_ = DetermineMovement::apply_best_animation(self_, aam_, target_x, target_y, candidates))) {
     std::cout << "[frog] hop -> '" << self_->get_current_animation() << "'\n";
     return true;
   }

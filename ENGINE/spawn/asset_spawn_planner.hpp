@@ -6,12 +6,19 @@
 #include <filesystem>
 #include "asset/asset_info.hpp"
 #include "asset/asset_library.hpp"
+#include "utils/area.hpp"
 
 constexpr double REPRESENTATIVE_SPAWN_AREA = 4096.0 * 4096.0;
 
 struct SpawnInfo {
     std::string name;
     std::string position;
+    std::string spawn_id;
+    // Exact-position helpers
+    int exact_dx = 0;              // distance from center along X at original size
+    int exact_dy = 0;              // distance from center along Y at original size
+    int exact_origin_w = 0;        // original room width recorded for this entry
+    int exact_origin_h = 0;        // original room height recorded for this entry
     int quantity = 0;
     int grid_spacing = 0;
     int jitter = 0;
@@ -36,8 +43,9 @@ struct BatchSpawnInfo {
 class AssetSpawnPlanner {
 public:
     AssetSpawnPlanner(const std::vector<nlohmann::json>& json_sources,
-                      double area,
-                      AssetLibrary& asset_library);
+                      const Area& area,
+                      AssetLibrary& asset_library,
+                      const std::vector<std::string>& source_paths = {});
 
     const std::vector<SpawnInfo>& get_spawn_queue() const;
     const std::vector<BatchSpawnInfo>& get_batch_spawn_assets() const;
@@ -46,12 +54,17 @@ public:
     int get_batch_jitter() const;
 
 private:
-    void parse_asset_spawns(double area);
+    void parse_asset_spawns(const Area& area);
     void parse_batch_assets();
     void sort_spawn_queue();
     nlohmann::json resolve_asset_from_tag(const nlohmann::json& tag_entry);
+    void persist_sources();
 
     nlohmann::json root_json_;
+    std::vector<nlohmann::json> source_jsons_;
+    std::vector<std::string> source_paths_;
+    std::vector<std::pair<int,int>> assets_provenance_; // (source_index, index_within_source_assets)
+    std::vector<bool> source_changed_;
     AssetLibrary* asset_library_;
     std::vector<SpawnInfo> spawn_queue_;
     std::vector<BatchSpawnInfo> batch_spawn_assets_;

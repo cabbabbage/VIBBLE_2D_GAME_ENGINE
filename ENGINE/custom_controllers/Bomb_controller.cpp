@@ -14,7 +14,7 @@
   bomb ai
   random wander
   follow player inside 500
-  explode at 20
+  explosion at 20
 */
 
 BombController::BombController(Assets* assets, Asset* self, ActiveAssetsManager& aam)
@@ -35,6 +35,7 @@ BombController::BombController(Assets* assets, Asset* self, ActiveAssetsManager&
 BombController::~BombController() {}
 
 void BombController::update(const Input& /*in*/) {
+  updated_by_determine_ = false;
   if (self_ && self_->info) {
     if (!player_) {
       if (frames_until_think_ > 0) {
@@ -45,9 +46,9 @@ void BombController::update(const Input& /*in*/) {
       }
     } else {
       float d = self_->distance_to_player;
-      if (d <= static_cast<float>(explode_radius_)) {
-        if (self_->get_current_animation() != "Explode")
-          self_->change_animation("Explode");
+      if (d <= static_cast<float>(explosion_radius_)) {
+        if (self_->get_current_animation() != "explosion")
+          self_->change_animation("explosion");
       } else if (d <= static_cast<float>(follow_radius_)) {
         pursue();
       } else {
@@ -60,7 +61,7 @@ void BombController::update(const Input& /*in*/) {
       }
     }
   }
-  if (self_) self_->update_animation_manager();
+  if (self_ && !updated_by_determine_) self_->update_animation_manager();
 }
 
 void BombController::think_random() {
@@ -87,7 +88,7 @@ void BombController::think_random() {
   int target_y = self_->pos_Y + dy;
 
   std::vector<std::string> candidates = { names[0], names[1], names[2], names[3] };
-  if (!DetermineMovement::apply_best_animation(self_, aam_, target_x, target_y, candidates)) {
+  if (!(updated_by_determine_ = DetermineMovement::apply_best_animation(self_, aam_, target_x, target_y, candidates))) {
     if (self_->get_current_animation() != "default")
       self_->change_animation("default");
   }
@@ -98,10 +99,10 @@ void BombController::pursue() {
 
   // Use per-animation totals to choose best hop towards the player
   std::vector<std::string> candidates = {"left", "right", "forward", "backward"};
-  if (!DetermineMovement::apply_best_animation(self_, aam_, player_->pos_X, player_->pos_Y, candidates)) {
+  if (!(updated_by_determine_ = DetermineMovement::apply_best_animation(self_, aam_, player_->pos_X, player_->pos_Y, candidates))) {
     if (self_->get_current_animation() != "default") self_->change_animation("default");
   } else {
-    explode_if_close();
+    explosion_if_close();
   }
 }
 
@@ -116,12 +117,12 @@ bool BombController::try_hop_dirs(const char* const* names, const int* dx, const
   return false;
 }
 
-void BombController::explode_if_close() {
+void BombController::explosion_if_close() {
   if (!self_ || !player_) return;
   float d = self_->distance_to_player;
-  if (d <= static_cast<float>(explode_radius_)) {
-    if (self_->get_current_animation() != "Explode")
-      self_->change_animation("Explode");
+  if (d <= static_cast<float>(explosion_radius_)) {
+    if (self_->get_current_animation() != "explosion")
+      self_->change_animation("explosion");
   }
 }
 

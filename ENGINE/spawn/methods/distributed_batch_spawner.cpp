@@ -17,6 +17,17 @@ void DistributedBatchSpawner::spawn(const std::vector<BatchSpawnInfo>& items,
                                     SpawnContext& ctx) {
     if (!area || items.empty()) return;
 
+    // Generate a single spawn_id for this entire distributed batch invocation
+    auto gen_id = []() {
+        static std::mt19937 rng(std::random_device{}());
+        static const char* hex = "0123456789abcdef";
+        std::uniform_int_distribution<int> d(0, 15);
+        std::string s = "spn-";
+        for (int i = 0; i < 12; ++i) s.push_back(hex[d(rng)]);
+        return s;
+    };
+    const std::string spawn_id = gen_id();
+
     auto [minx, miny, maxx, maxy] = area->get_bounds();
     int w = maxx - minx;
     int h = maxy - miny;
@@ -47,7 +58,8 @@ void DistributedBatchSpawner::spawn(const std::vector<BatchSpawnInfo>& items,
             auto& info = it->second;
             if (ctx.checker().check(info, cx, cy, ctx.exclusion_zones(), ctx.all_assets(), true, false, true, 5)) continue;
 
-            ctx.spawnAsset(selected.name, info, *area, cx, cy, 0, nullptr);
+            ctx.spawnAsset(selected.name, info, *area, cx, cy, 0, nullptr,
+                           spawn_id, std::string("DistributedBatch"));
             ++placed_quantities[selected.name];
         }
     }

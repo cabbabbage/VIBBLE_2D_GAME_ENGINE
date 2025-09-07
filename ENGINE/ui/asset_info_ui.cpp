@@ -14,6 +14,11 @@
 #include "ui/styles.hpp"
 #include "ui/dev_styles.hpp"
 #include "utils/area.hpp"
+#include "custom_controllers/Bomb_controller.hpp"
+#include "custom_controllers/Davey_controller.hpp"
+#include "custom_controllers/default_controller.hpp"
+#include "custom_controllers/Frog_controller.hpp"
+#include "custom_controllers/Vibble_controller.hpp"
 
 namespace {
     
@@ -435,26 +440,76 @@ void AssetInfoUI::open_area_editor(const std::string& name) {
     for (auto& na : info_->areas) {
         if (na.name == name && na.area) { base = na.area.get(); break; }
     }
-    try {
-        if (base) {
-            base->create_area_texture(last_renderer_);
-            Area edited(name, *base, last_renderer_);
-            info_->upsert_area_from_editor(edited);
-        } else {
-            // Create blank background
-            int w = std::max(32, (int)std::round(info_->original_canvas_width * info_->scale_factor));
-            int h = std::max(32, (int)std::round(info_->original_canvas_height * info_->scale_factor));
-            SDL_Texture* bg = SDL_CreateTexture(last_renderer_, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET, w, h);
-            if (bg) {
-                SDL_SetTextureBlendMode(bg, SDL_BLENDMODE_BLEND);
-                SDL_SetRenderTarget(last_renderer_, bg);
-                SDL_SetRenderDrawColor(last_renderer_, 0, 0, 0, 0);
-                SDL_RenderClear(last_renderer_);
-                SDL_SetRenderTarget(last_renderer_, nullptr);
+
+    // Determine canvas size (scaled)
+    const int canvas_w = std::max(32, (int)std::lround(info_->original_canvas_width  * info_->scale_factor));
+    const int canvas_h = std::max(32, (int)std::lround(info_->original_canvas_height * info_->scale_factor));
+
+    // Choose a representative sprite frame as background content
+    auto pick_sprite = [&]() -> SDL_Texture* {
+        // Prefer start animation, then "default", then any with frames
+        auto try_get = [&](const std::string& key) -> SDL_Texture* {
+            auto it = info_->animations.find(key);
+            if (it != info_->animations.end() && !it->second.frames.empty()) {
+                return it->second.frames.front();
             }
-            Area created(name, bg, last_renderer_);
-            info_->upsert_area_from_editor(created);
+            return nullptr;
+        };
+        if (!info_->start_animation.empty()) {
+            if (auto t = try_get(info_->start_animation)) return t;
         }
+        if (auto t = try_get("default")) return t;
+        for (auto& kv : info_->animations) {
+            if (!kv.second.frames.empty()) return kv.second.frames.front();
+        }
+        return nullptr;
+    };
+
+    try {
+        // Build a canvas texture of the asset's scaled canvas size
+        SDL_Texture* bg = SDL_CreateTexture(last_renderer_, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET, canvas_w, canvas_h);
+        if (!bg) throw std::runtime_error("Failed to create editor canvas");
+        SDL_SetTextureBlendMode(bg, SDL_BLENDMODE_BLEND);
+
+        SDL_Texture* prev = SDL_GetRenderTarget(last_renderer_);
+        SDL_SetRenderTarget(last_renderer_, bg);
+        SDL_SetRenderDrawBlendMode(last_renderer_, SDL_BLENDMODE_BLEND);
+        SDL_SetRenderDrawColor(last_renderer_, 0, 0, 0, 0);
+        SDL_RenderClear(last_renderer_);
+
+        // Blit the chosen sprite centered at bottom of the canvas
+        if (SDL_Texture* sprite = pick_sprite()) {
+            int sw = 0, sh = 0; (void)SDL_QueryTexture(sprite, nullptr, nullptr, &sw, &sh);
+            SDL_Rect dst{
+                std::max(0, (canvas_w - sw) / 2),
+                std::max(0,  canvas_h - sh),
+                sw, sh
+            };
+            SDL_RenderCopy(last_renderer_, sprite, nullptr, &dst);
+        }
+
+        // If editing an existing area, draw its outline as an overlay
+        if (base) {
+            SDL_SetRenderDrawColor(last_renderer_, 0, 200, 255, 180);
+            std::vector<SDL_Point> pts; pts.reserve(base->get_points().size() + 1);
+            for (const auto& p : base->get_points()) {
+                pts.push_back(SDL_Point{ p.first, p.second });
+            }
+            if (!pts.empty()) {
+                pts.push_back(pts.front());
+                SDL_RenderDrawLines(last_renderer_, pts.data(), (int)pts.size());
+            }
+        }
+
+        SDL_SetRenderTarget(last_renderer_, prev);
+
+        // Launch the interactive editor using this canvas as the background
+        Area edited(name, bg, last_renderer_);
+        info_->upsert_area_from_editor(edited);
+
+        // Destroy temporary canvas texture
+        SDL_DestroyTexture(bg);
+
         rebuild_area_widgets();
         save_now();
     } catch (...) {

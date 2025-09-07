@@ -15,6 +15,7 @@ DaveyController::DaveyController(Assets* assets, Asset* self, ActiveAssetsManage
    : assets_(assets), self_(self), aam_(aam) {}
 
 void DaveyController::update(const Input& /*input*/) {
+   bool updated_by_determine = false;
    // Non-player follower: move towards Assets::player when within 1000px
    if (!self_ || !assets_ || !self_->info) return;
 
@@ -32,12 +33,12 @@ void DaveyController::update(const Input& /*input*/) {
    const long long r = 1000LL;
    if (d2 <= r*r) {
       std::vector<std::string> candidates = {"left", "right", "forward", "backward"};
-      if (!DetermineMovement::apply_best_animation(self_, aam_, player->pos_X, player->pos_Y, candidates)) {
+      updated_by_determine = DetermineMovement::apply_best_animation(self_, aam_, player->pos_X, player->pos_Y, candidates);
+      if (!updated_by_determine) {
 
       }
    } else {
       if (self_->get_current_animation() != "default") self_->change_animation("default");
    }
-
-   self_->update_animation_manager();
+   if (!updated_by_determine) self_->update_animation_manager();
 }

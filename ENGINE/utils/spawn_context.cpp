@@ -51,9 +51,11 @@ Asset* SpawnContext::spawnAsset(const std::string& name,
                                 int x,
                                 int y,
                                 int depth,
-                                Asset* parent)
+                                Asset* parent,
+                                const std::string& spawn_id,
+                                const std::string& spawn_method)
 {
-    auto assetPtr = std::make_unique<Asset>(info, area, x, y, depth, parent);
+    auto assetPtr = std::make_unique<Asset>(info, area, x, y, depth, parent, spawn_id, spawn_method);
     Asset* raw = assetPtr.get();
     all_.push_back(std::move(assetPtr));
 
@@ -103,8 +105,9 @@ Asset* SpawnContext::spawnAsset(const std::string& name,
             }
 
             AssetSpawnPlanner childPlanner(std::vector<nlohmann::json>{ j },
-                                           childArea.get_area(),
-                                           *asset_library_);
+                                           childArea,
+                                           *asset_library_,
+                                           std::vector<std::string>{ childJsonPath });
             AssetSpawner childSpawner(asset_library_, exclusion_zones_);
             childSpawner.spawn_children(childArea, &childPlanner);
 

@@ -432,6 +432,57 @@
       },
       "speed_factor": -10,
       "rnd_start": false
+    },
+    "explosion": {
+      "source": {
+        "kind": "folder",
+        "path": "explosion",
+        "name": null
+      },
+      "flipped_source": false,
+      "reverse_source": false,
+      "locked": false,
+      "rnd_start": false,
+      "speed_factor": 1,
+      "number_of_frames": 8,
+      "movement": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ]
+      ],
+      "on_end": "default",
+      "has_custom_animation_controller": false,
+      "custom_animation_controller_hpp_path": "",
+      "custom_animation_controller_key": ""
     }
   },
   "anti_tags": [],

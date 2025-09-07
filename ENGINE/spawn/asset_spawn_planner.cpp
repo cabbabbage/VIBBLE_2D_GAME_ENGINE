@@ -4,26 +4,48 @@
 #include <fstream>
 #include <random>
 #include <algorithm>
+#include <iomanip>
 
 namespace fs = std::filesystem;
 
+static std::string generate_spawn_id() {
+    static std::mt19937 rng(std::random_device{}());
+    static const char* hex = "0123456789abcdef";
+    std::uniform_int_distribution<int> dist(0, 15);
+    std::string s = "spn-";
+    for (int i = 0; i < 12; ++i) s.push_back(hex[dist(rng)]);
+    return s;
+}
+
 AssetSpawnPlanner::AssetSpawnPlanner(const std::vector<nlohmann::json>& json_sources,
-                                     double area,
-                                     AssetLibrary& asset_library)
+                                     const Area& area,
+                                     AssetLibrary& asset_library,
+                                     const std::vector<std::string>& source_paths)
     : asset_library_(&asset_library) {
+
+    // Keep copies of the original sources and their paths for persistence
+    source_jsons_ = json_sources;
+    source_paths_ = source_paths;
+    if (source_paths_.size() < source_jsons_.size()) {
+        source_paths_.resize(source_jsons_.size());
+    }
+    source_changed_.assign(source_jsons_.size(), false);
 
     nlohmann::json merged;
     merged["assets"] = nlohmann::json::array();
     merged["batch_assets"]["batch_assets"] = nlohmann::json::array();
 
-    for (const auto& json : json_sources) {
-        if (json.contains("assets") && json["assets"].is_array()) {
-            for (const auto& asset : json["assets"]) {
-                merged["assets"].push_back(asset);
+    // Merge while tracking provenance
+    for (size_t si = 0; si < source_jsons_.size(); ++si) {
+        const auto& js = source_jsons_[si];
+        if (js.contains("assets") && js["assets"].is_array()) {
+            for (size_t ai = 0; ai < js["assets"].size(); ++ai) {
+                merged["assets"].push_back(js["assets"][ai]);
+                assets_provenance_.emplace_back(static_cast<int>(si), static_cast<int>(ai));
             }
         }
-        if (json.contains("batch_assets") && json["batch_assets"].contains("batch_assets")) {
-            const auto& b = json["batch_assets"];
+        if (js.contains("batch_assets") && js["batch_assets"].contains("batch_assets")) {
+            const auto& b = js["batch_assets"];
             merged["batch_assets"]["has_batch_assets"] = true;
             merged["batch_assets"]["grid_spacing_min"] = b.value("grid_spacing_min", 100);
             merged["batch_assets"]["grid_spacing_max"] = b.value("grid_spacing_max", 100);
@@ -39,6 +61,7 @@ AssetSpawnPlanner::AssetSpawnPlanner(const std::vector<nlohmann::json>& json_sou
     parse_asset_spawns(area);
     parse_batch_assets();
     sort_spawn_queue();
+    persist_sources();
 }
 
 const std::vector<SpawnInfo>& AssetSpawnPlanner::get_spawn_queue() const {
@@ -49,12 +72,13 @@ const std::vector<BatchSpawnInfo>& AssetSpawnPlanner::get_batch_spawn_assets() c
     return batch_spawn_assets_;
 }
 
-void AssetSpawnPlanner::parse_asset_spawns(double area) {
+void AssetSpawnPlanner::parse_asset_spawns(const Area& area) {
     std::mt19937 rng(std::random_device{}());
 
     if (!root_json_.contains("assets")) return;
 
-    for (const auto& entry : root_json_["assets"]) {
+    for (size_t idx = 0; idx < root_json_["assets"].size(); ++idx) {
+        auto& entry = root_json_["assets"][idx];
         nlohmann::json asset = entry;
 
         if (!asset.contains("name") || !asset["name"].is_string()) {
@@ -100,10 +124,70 @@ void AssetSpawnPlanner::parse_asset_spawns(double area) {
          
         
         
+        // Ensure spawn_id exists; if not, create and write back to JSON.
+        std::string spawn_id;
+        if (asset.contains("spawn_id") && asset["spawn_id"].is_string()) {
+            spawn_id = asset["spawn_id"].get<std::string>();
+        } else {
+            spawn_id = generate_spawn_id();
+            entry["spawn_id"] = spawn_id; // persist in merged JSON
+            asset["spawn_id"] = spawn_id; // local copy for convenience
+            // Also write back to originating JSON source
+            if (idx < assets_provenance_.size()) {
+                auto [si, ai] = assets_provenance_[idx];
+                if (si >= 0 && static_cast<size_t>(si) < source_jsons_.size()) {
+                    try {
+                        auto& src = source_jsons_[si];
+                        if (src.contains("assets") && src["assets"].is_array() && static_cast<size_t>(ai) < src["assets"].size()) {
+                            src["assets"][ai]["spawn_id"] = spawn_id;
+                            if (static_cast<size_t>(si) < source_changed_.size()) source_changed_[si] = true;
+                        }
+                    } catch (...) {}
+                }
+            }
+        }
+
+        // Ensure original room width/height for exact spawns
+        if (position == "Exact Position" || position == "Exact") {
+            auto [minx, miny, maxx, maxy] = area.get_bounds();
+            int curr_w = std::max(1, maxx - minx);
+            int curr_h = std::max(1, maxy - miny);
+            bool set_wh = false;
+            if (!asset.contains("exact_origin_width") || !asset["exact_origin_width"].is_number_integer()) {
+                entry["exact_origin_width"] = curr_w;
+                asset["exact_origin_width"] = curr_w;
+                set_wh = true;
+            }
+            if (!asset.contains("exact_origin_height") || !asset["exact_origin_height"].is_number_integer()) {
+                entry["exact_origin_height"] = curr_h;
+                asset["exact_origin_height"] = curr_h;
+                set_wh = true;
+            }
+            if (set_wh && idx < assets_provenance_.size()) {
+                auto [si, ai] = assets_provenance_[idx];
+                if (si >= 0 && static_cast<size_t>(si) < source_jsons_.size()) {
+                    try {
+                        auto& src = source_jsons_[si];
+                        if (src.contains("assets") && src["assets"].is_array() && static_cast<size_t>(ai) < src["assets"].size()) {
+                            if (!src["assets"][ai].contains("exact_origin_width"))
+                                src["assets"][ai]["exact_origin_width"] = entry["exact_origin_width"];
+                            if (!src["assets"][ai].contains("exact_origin_height"))
+                                src["assets"][ai]["exact_origin_height"] = entry["exact_origin_height"];
+                            if (static_cast<size_t>(si) < source_changed_.size()) source_changed_[si] = true;
+                        }
+                    } catch (...) {}
+                }
+            }
+        }
 
         SpawnInfo s;
         s.name = name;
         s.position = position;
+        s.spawn_id = spawn_id;
+        s.exact_dx = asset.value("exact_dx", 0);
+        s.exact_dy = asset.value("exact_dy", 0);
+        s.exact_origin_w = asset.value("exact_origin_width", 0);
+        s.exact_origin_h = asset.value("exact_origin_height", 0);
         s.quantity = quantity;
         s.check_overlap = asset.value("check_overlap", false);
         s.check_min_spacing = asset.value("check_min_spacing", false);
@@ -181,6 +265,24 @@ void AssetSpawnPlanner::sort_spawn_queue() {
     std::sort(spawn_queue_.begin(), spawn_queue_.end(), [&](const SpawnInfo& a, const SpawnInfo& b) {
         return priority_index(a.position) < priority_index(b.position);
     });
+}
+
+void AssetSpawnPlanner::persist_sources() {
+    for (size_t i = 0; i < source_jsons_.size(); ++i) {
+        if (i >= source_changed_.size() || !source_changed_[i]) continue;
+        if (i >= source_paths_.size()) continue;
+        const std::string& path = source_paths_[i];
+        if (path.empty()) continue;
+        try {
+            std::ofstream out(path);
+            if (out.is_open()) {
+                out << source_jsons_[i].dump(2);
+                out.close();
+            }
+        } catch (...) {
+            // best-effort only
+        }
+    }
 }
 
 nlohmann::json AssetSpawnPlanner::resolve_asset_from_tag(const nlohmann::json& tag_entry) {

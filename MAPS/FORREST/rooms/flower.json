@@ -1,134 +1,143 @@
 {
-  "name": "flower",
-  "min_width": 2025,
-  "max_width": 2500,
-  "min_height": 700,
-  "max_height": 700,
-  "edge_smoothness": 0,
-  "geometry": "Circle",
-  "is_spawn": false,
-  "is_boss": false,
-  "inherits_map_assets": false,
   "assets": [
     {
-      "name": "flowers",
-      "min_number": -24,
+      "check_min_spacing": false,
+      "check_overlap": false,
+      "exact_position": null,
+      "inherited": false,
       "max_number": 502,
+      "min_number": -24,
+      "name": "flowers",
       "position": "Perimeter",
-      "exact_position": null,
-      "tag": true,
-      "check_overlap": false,
-      "check_min_spacing": false,
-      "inherited": false
+      "spawn_id": "spn-402d2f8b31dc",
+      "tag": true
     },
     {
-      "name": "flowers",
-      "min_number": -24,
+      "check_min_spacing": false,
+      "check_overlap": false,
+      "exact_position": null,
+      "inherited": false,
       "max_number": 60,
+      "min_number": -24,
+      "name": "flowers",
       "position": "Random",
-      "exact_position": null,
-      "tag": true,
-      "check_overlap": false,
-      "check_min_spacing": false,
-      "inherited": false
+      "spawn_id": "spn-85e73d1809b7",
+      "tag": true
     },
     {
-      "name": "flowers",
-      "min_number": -24,
+      "check_min_spacing": false,
+      "check_overlap": false,
+      "exact_position": null,
+      "inherited": false,
       "max_number": 60,
+      "min_number": -24,
+      "name": "flowers",
       "position": "Center",
-      "exact_position": null,
-      "tag": true,
-      "check_overlap": false,
-      "check_min_spacing": false,
-      "inherited": false
+      "spawn_id": "spn-bb9e89ee3825",
+      "tag": true
     },
     {
-      "name": "flowers",
-      "min_number": -24,
+      "check_min_spacing": false,
+      "check_overlap": false,
+      "exact_position": null,
+      "inherited": false,
       "max_number": 60,
+      "min_number": -24,
+      "name": "flowers",
       "position": "Random",
-      "exact_position": null,
-      "tag": true,
-      "check_overlap": false,
-      "check_min_spacing": false,
-      "inherited": false
+      "spawn_id": "spn-76f3c9de90dd",
+      "tag": true
     },
     {
-      "name": "flowers",
-      "min_number": -24,
+      "check_min_spacing": false,
+      "check_overlap": false,
+      "exact_position": null,
+      "inherited": false,
       "max_number": 60,
+      "min_number": -24,
+      "name": "flowers",
       "position": "Perimeter",
-      "exact_position": null,
-      "tag": true,
-      "check_overlap": false,
-      "check_min_spacing": false,
-      "inherited": false
+      "spawn_id": "spn-bcb2979c2c66",
+      "tag": true
     },
     {
-      "name": "flowers",
-      "min_number": -24,
+      "check_min_spacing": false,
+      "check_overlap": false,
+      "exact_position": null,
+      "inherited": false,
       "max_number": 60,
+      "min_number": -24,
+      "name": "flowers",
       "position": "Random",
-      "exact_position": null,
-      "tag": true,
-      "check_overlap": false,
-      "check_min_spacing": false,
-      "inherited": false
+      "spawn_id": "spn-ec8ee3ea07dd",
+      "tag": true
     },
     {
-      "name": "flowers",
-      "min_number": -24,
+      "check_min_spacing": false,
+      "check_overlap": false,
+      "exact_position": null,
+      "inherited": false,
       "max_number": 60,
+      "min_number": -24,
+      "name": "flowers",
       "position": "Random",
-      "exact_position": null,
-      "tag": true,
-      "check_overlap": false,
-      "check_min_spacing": false,
-      "inherited": false
+      "spawn_id": "spn-486d047d4982",
+      "tag": true
     },
     {
-      "name": "flowers",
-      "min_number": -24,
+      "check_min_spacing": false,
+      "check_overlap": false,
+      "exact_position": null,
+      "inherited": false,
       "max_number": 60,
+      "min_number": -24,
+      "name": "flowers",
       "position": "Center",
-      "exact_position": null,
-      "tag": true,
-      "check_overlap": false,
-      "check_min_spacing": false,
-      "inherited": false
+      "spawn_id": "spn-7c817c49a607",
+      "tag": true
     },
     {
-      "name": "Chest",
-      "min_number": 0,
+      "check_min_spacing": false,
+      "check_overlap": false,
+      "exact_position": null,
+      "inherited": false,
       "max_number": 0,
+      "min_number": 0,
+      "name": "Chest",
       "position": "Center",
-      "exact_position": null,
-      "tag": false,
-      "check_overlap": false,
-      "check_min_spacing": false,
-      "inherited": false
+      "spawn_id": "spn-b6ffdf0c84fa",
+      "tag": false
     }
   ],
   "batch_assets": {
-    "has_batch_assets": true,
-    "grid_spacing_min": 100,
-    "grid_spacing_max": 100,
-    "jitter_min": 0,
-    "jitter_max": 0,
     "batch_assets": [
       {
+        "color": "#CCCCCC",
         "name": "null",
-        "tag": false,
         "percent": 50,
-        "color": "#CCCCCC"
+        "tag": false
       },
       {
+        "color": "#a6b937",
         "name": "flowers",
-        "tag": true,
         "percent": 50,
-        "color": "#a6b937"
+        "tag": true
       }
-    ]
-  }
+    ],
+    "grid_spacing_max": 100,
+    "grid_spacing_min": 100,
+    "has_batch_assets": true,
+    "jitter_max": 0,
+    "jitter_min": 0
+  },
+  "edge_smoothness": 0,
+  "geometry": "Circle",
+  "inherits_map_assets": false,
+  "is_boss": false,
+  "is_spawn": false,
+  "max_height": 700,
+  "max_width": 2500,
+  "min_height": 700,
+  "min_width": 2025,
+  "name": "flower"
 }
