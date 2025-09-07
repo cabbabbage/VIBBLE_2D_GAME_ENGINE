@@ -7,15 +7,13 @@ from tkinter import ttk
 from tkinter import filedialog, messagebox
 import os
 import shutil
+import re
 try:
     from PIL import Image, ImageSequence
 except Exception:
     Image = None
     ImageSequence = None
-try:
-    from crop import crop_folder
-except Exception:
-    crop_folder = None
+
 
 
 class SourcesElementPanel:
@@ -211,7 +209,27 @@ class SourcesElementPanel:
         out_dir = self._ensure_output_dir()
         if not out_dir:
             return
-        png_files = [f for f in sorted(os.listdir(folder)) if f.lower().endswith('.png')]
+        # Collect and sort files by their original numeric order if present.
+        # This preserves the OG numbering (e.g., 0.png, 1.png, 10.png, 11.png, 2.png -> 0,1,2,10,11).
+        def _num_key(name: str):
+            stem = os.path.splitext(name)[0]
+            # Prefer full-stem integer when possible
+            try:
+                return (0, int(stem), stem.lower())
+            except Exception:
+                # Fallback: extract first integer substring
+                m = re.search(r"\d+", stem)
+                if m:
+                    try:
+                        return (0, int(m.group(0)), stem.lower())
+                    except Exception:
+                        pass
+                return (1, stem.lower())
+        try:
+            entries = [f for f in os.listdir(folder) if f.lower().endswith('.png')]
+            png_files = sorted(entries, key=_num_key)
+        except Exception:
+            png_files = [f for f in sorted(os.listdir(folder)) if f.lower().endswith('.png')]
         if not png_files:
             messagebox.showerror("No Images", "No PNG images found in selected folder.")
             return

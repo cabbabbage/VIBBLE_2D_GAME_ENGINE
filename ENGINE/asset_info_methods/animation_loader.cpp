@@ -1,6 +1,6 @@
 #include "animation_loader.hpp"
 #include "custom_controllers/Davey_controller.hpp"
-#include "custom_controllers/Davey_default_controller.hpp"
+
 
 #include "asset/asset_info.hpp"
 #include "utils/cache_manager.hpp"
@@ -15,6 +15,7 @@
 #include "custom_controllers/Vibble_controller.hpp"
 #include "custom_controllers/Bomb_controller.hpp"
 #include "custom_controllers/Frog_controller.hpp"
+#include "custom_controllers/default_controller.hpp"
 
 using nlohmann::json;
 

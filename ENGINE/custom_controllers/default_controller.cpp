@@ -10,13 +10,9 @@ DefaultController::DefaultController(Assets* assets, Asset* self, ActiveAssetsMa
  , aam_(aam)
 {}
 
-DefaultController::~DefaultController() {}
+DefaultController::~DefaultController() = default;
 
 void DefaultController::update(const Input& /*in*/) {
- // dummy controller no animation updates
- // animation progression and on end mapping handled by AnimationManager
- // future basic behavior (eg idle state changes) can go here
- (void)assets_;
- (void)self_;
- (void)aam_;
+ // No behavior; drive animation progression explicitly.
+ if (self_) self_->update_animation_manager();
 }

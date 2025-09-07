@@ -2,6 +2,7 @@
 
 #include "utils/input.hpp"
 #include "asset/Asset.hpp"
+#include "asset/move.hpp"
 #include "utils/area.hpp"
 #include "core/active_assets_manager.hpp"
 #include "core/AssetsManager.hpp"
@@ -118,7 +119,12 @@ void VibbleController::handle_teleport(const Input& input) {
    }
 
    if (input.wasKeyPressed(SDLK_q) && teleport_set_) {
-      player_->set_position(teleport_point_.x, teleport_point_.y);
+      // Teleport via Move helper using a single FrameMovement
+      Animation::FrameMovement fm;
+      fm.dx = teleport_point_.x - player_->pos_X;
+      fm.dy = teleport_point_.y - player_->pos_Y;
+      fm.sort_z_index = true;
+      Move::apply(player_, fm);
 
       teleport_point_ = { 0, 0 };
       teleport_set_   = false;
@@ -141,6 +147,7 @@ void VibbleController::update(const Input& input) {
    if (input.isKeyDown(SDLK_e)) {
       interaction();
    }
+   if (player_) player_->update_animation_manager();
 }
 
 int VibbleController::get_dx() const { return dx_; }

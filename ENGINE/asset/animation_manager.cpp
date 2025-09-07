@@ -3,21 +3,18 @@
 #include "asset/Asset.hpp"
 #include "asset/asset_info.hpp"
 #include "animation.hpp"
+#include "core/AssetsManager.hpp" // for Assets and ActiveAssetsManager access
 
 #include <random>
 #include <string>
 
-/*
-  advances current animation
-  applies next animation requests and on end mappings
-  updates owner position deltas
-*/
+
 
 AnimationManager::AnimationManager(Asset* owner)
  : self_(owner)
 {}
 
-AnimationManager::~AnimationManager() {}
+AnimationManager::~AnimationManager() = default;
 
 void AnimationManager::apply_pending() {
  if (!self_ || !self_->info) return;
@@ -61,17 +58,25 @@ void AnimationManager::update() {
  std::string mapping_id;
  int dx = 0;
  int dy = 0;
+ bool resort_z = false;
 
  bool advanced = anim.advance(
  self_->current_frame_index,
  self_->frame_progress,
  dx,
  dy,
- mapping_id
+ mapping_id,
+ resort_z
  );
 
  self_->pos_X += dx;
  self_->pos_Y += dy;
+ if ((dx != 0 || dy != 0) && resort_z) {
+  self_->set_z_index();
+  if (Assets* as = self_->get_assets()) {
+   as->activeManager.sortByZIndex();
+  }
+ }
 
  if (!advanced && !mapping_id.empty()) {
  std::string resolved = self_->info->pick_next_animation(mapping_id);

@@ -90,6 +90,8 @@ public:
   void set_passable(bool v);
 
   Area* find_area(const std::string& name);
+  // Persist or update an area drawn via the editor: updates in-memory list and info.json
+  void upsert_area_from_editor(const class Area& area);
 
   std::string pick_next_animation(const std::string& mapping_id) const;
 

@@ -114,12 +114,15 @@ class AnimationsPanel:
         self.flipped_var = tk.BooleanVar(value=bool(self.payload.get("flipped_source", False)))
         self.reversed_var = tk.BooleanVar(value=bool(self.payload.get("reverse_source", False)))
         self.locked_var = tk.BooleanVar(value=bool(self.payload.get("locked", False)))
+        # random start flag
+        self.rnd_start_var = tk.BooleanVar(value=bool(self.payload.get("rnd_start", False)))
         ttk.Checkbutton(pf, text="flipped", variable=self.flipped_var, command=self._apply_changes).grid(row=0, column=0, sticky="w")
         ttk.Checkbutton(pf, text="reverse", variable=self.reversed_var, command=self._apply_changes).grid(row=0, column=1, sticky="w")
         ttk.Checkbutton(pf, text="locked", variable=self.locked_var, command=self._apply_changes).grid(row=0, column=2, sticky="w")
+        ttk.Checkbutton(pf, text="rnd start", variable=self.rnd_start_var, command=self._apply_changes).grid(row=0, column=3, sticky="w")
         ttk.Label(pf, text="speed").grid(row=1, column=0, sticky="e")
         self.speed_var = tk.IntVar(value=int(self.payload.get("speed_factor", 1)))
-        spin_speed = ttk.Spinbox(pf, from_=1, to=240, textvariable=self.speed_var, width=8, command=self._apply_changes)
+        spin_speed = ttk.Spinbox(pf, from_=-20, to=20, textvariable=self.speed_var, width=8, command=self._apply_changes)
         spin_speed.grid(row=1, column=1, sticky="w", padx=4)
         spin_speed.bind("<FocusOut>", lambda _e: self._apply_changes())
 
@@ -242,6 +245,10 @@ class AnimationsPanel:
         self.flipped_var.set(bool(self.payload.get("flipped_source", False)))
         self.reversed_var.set(bool(self.payload.get("reverse_source", False)))
         self.locked_var.set(bool(self.payload.get("locked", False)))
+        try:
+            self.rnd_start_var.set(bool(self.payload.get("rnd_start", False)))
+        except Exception:
+            pass
         self.speed_var.set(int(self.payload.get("speed_factor", 1)))
         self.frames_var.set(int(self.payload.get("number_of_frames", 1)))
         self.on_end_var.set(str(self.payload.get("on_end", "default") or "default"))
@@ -304,7 +311,12 @@ class AnimationsPanel:
         payload["flipped_source"] = bool(self.flipped_var.get())
         payload["reverse_source"] = bool(self.reversed_var.get())
         payload["locked"] = bool(self.locked_var.get())
-        payload["speed_factor"] = max(1, int(self.speed_var.get()))
+        payload["rnd_start"] = bool(self.rnd_start_var.get())
+        v = int(self.speed_var.get())
+        if v == 0:
+            v = 1
+        v = max(-20, min(20, v))
+        payload["speed_factor"] = v
 
         # derive frames from (possibly-recursive) source
         payload["number_of_frames"] = self._compute_frames_from_source(payload.get("source", {}))
@@ -358,10 +370,15 @@ class AnimationsPanel:
         p.setdefault("flipped_source", False)
         p.setdefault("reverse_source", False)
         p.setdefault("locked", False)
+        p.setdefault("rnd_start", bool(p.get("rnd_start", False)))
         try:
-            p.setdefault("speed_factor", max(1, int(p.get("speed_factor", 1))))
+            _raw = int(str(p.get("speed_factor", 1)).strip())
         except Exception:
-            p.setdefault("speed_factor", 1)
+            _raw = 1
+        if _raw == 0:
+            _raw = 1
+        _raw = max(-20, min(20, _raw))
+        p.setdefault("speed_factor", _raw)
 
         # number_of_frames will be overwritten by _sync_frames_from_source()
         try:

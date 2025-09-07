@@ -15,6 +15,8 @@
 #include <algorithm>
 #include <iostream>
 #include <memory>
+#include <cmath>
+#include <limits>
 
 
 Assets::Assets(std::vector<Asset>&& loaded,
@@ -111,6 +113,25 @@ void Assets::update(const Input& input,
     if (player) {
         dx = player->pos_X - start_px;
         dy = player->pos_Y - start_py;
+    }
+    // Update distance_to_player for all active assets before their updates,
+    // so controllers can use a fresh value this frame.
+    if (player) {
+        const int px = player->pos_X;
+        const int py = player->pos_Y;
+        player->distance_to_player = 0.0f;
+        for (Asset* a : active_assets) {
+            if (!a || a == player) continue;
+            const float dxp = float(a->pos_X - px);
+            const float dyp = float(a->pos_Y - py);
+            const float d2  = dxp*dxp + dyp*dyp;
+            a->distance_to_player = std::sqrt(d2);
+        }
+    } else {
+        for (Asset* a : active_assets) {
+            if (!a) continue;
+            a->distance_to_player = std::numeric_limits<float>::infinity();
+        }
     }
     for (Asset* a : active_assets) {
         if (a && a != player)

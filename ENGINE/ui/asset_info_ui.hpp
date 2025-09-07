@@ -10,6 +10,7 @@ class Input;
 class Slider;
 class Checkbox;
 class TextBox;
+class Area;
 
 // Right-side editor panel for AssetInfo basic values
 // - Occupies right 1/3 of the screen with semi-transparent background
@@ -40,12 +41,23 @@ private:
     void layout_widgets(int screen_w, int screen_h) const;
     void commit_scalar_changes();
     void save_now() const;
+    void rebuild_area_widgets();
+    void open_area_editor(const std::string& name);
+    void create_new_area();
 
 private:
     bool visible_ = false;
     std::shared_ptr<AssetInfo> info_{};
     std::unique_ptr<Button> b_close_;
     std::unique_ptr<Button> b_config_anim_;
+    // Areas section
+    mutable SDL_Renderer* last_renderer_ = nullptr; // set during render
+    bool areas_expanded_ = false;
+    std::unique_ptr<Button> b_areas_toggle_;
+    std::vector<std::unique_ptr<Button>> area_buttons_;
+    std::unique_ptr<Button> b_create_area_;
+    bool prompt_new_area_ = false;
+    std::unique_ptr<TextBox> t_new_area_name_;
     // Widgets (owned)
     std::unique_ptr<Slider>   s_z_threshold_;
     std::unique_ptr<Slider>   s_min_same_type_;

@@ -41,10 +41,10 @@ Asset::Asset(std::shared_ptr<AssetInfo> info_,
  if (it == info->animations.end())
   it = info->animations.find("default");
 
- if (it != info->animations.end() && !it->second.frames.empty()) {
+  if (it != info->animations.end() && !it->second.frames.empty()) {
   current_animation = it->first;
   static_frame = (it->second.frames.size() == 1);
-  if (it->second.randomize && it->second.frames.size() > 1) {
+  if ((it->second.randomize || it->second.rnd_start) && it->second.frames.size() > 1) {
    std::mt19937 g{ std::random_device{}() };
    std::uniform_int_distribution<int> d(0, int(it->second.frames.size()) - 1);
    current_frame_index = d(g);
@@ -71,6 +71,7 @@ Asset::Asset(const Asset& o)
  , flipped(o.flipped)
  , render_player_light(o.render_player_light)
  , alpha_percentage(o.alpha_percentage)
+ , distance_to_player(o.distance_to_player)
  , spawn_area_local(o.spawn_area_local)
  , base_areas(o.base_areas)
  , areas(o.areas)
@@ -120,6 +121,7 @@ Asset& Asset::operator=(const Asset& o) {
  flipped              = o.flipped;
  render_player_light  = o.render_player_light;
  alpha_percentage     = o.alpha_percentage;
+ distance_to_player   = o.distance_to_player;
  spawn_area_local     = o.spawn_area_local;
  base_areas           = o.base_areas;
  areas                = o.areas;
@@ -167,7 +169,7 @@ void Asset::finalize_setup() {
    Animation& anim = it->second;
    anim.change(current_frame_index, static_frame);
    frame_progress = 0.0f;
-   if (anim.randomize && anim.frames.size() > 1) {
+   if ((anim.randomize || anim.rnd_start) && anim.frames.size() > 1) {
     std::mt19937 rng{ std::random_device{}() };
     std::uniform_int_distribution<int> dist(0, int(anim.frames.size()) - 1);
     current_frame_index = dist(rng);
@@ -228,11 +230,13 @@ void Asset::update() {
    controller_->update(*in);
  }
 
- if (anim_) anim_->update();
-
  for (Asset* c : children)
   if (c && !c->dead && c->info)
    c->update();
+}
+
+void Asset::update_animation_manager() {
+ if (anim_) anim_->update();
 }
 
 void Asset::change_animation(const std::string& name) {
@@ -290,6 +294,10 @@ void Asset::set_z_offset(int z) {
  z_offset = z;
  set_z_index();
  std::cout << "Z offset set to " << z << " for asset " << info->name << "\n";
+}
+
+void Asset::recompute_z_index() {
+ set_z_index();
 }
 
 void Asset::set_flip() {

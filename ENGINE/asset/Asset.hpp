@@ -6,6 +6,9 @@
 #include <memory>
 #include <unordered_map>
 #include <SDL.h>
+#include <limits>
+
+#include "animation_manager.hpp" // ensure complete type for unique_ptr deleter
 
 #include "utils/area.hpp"
 #include "asset_info.hpp"
@@ -18,7 +21,7 @@
 class view;
 class Assets;
 class Input;
-class AnimationManager   ; // forward declare
+// AnimationManager used via unique_ptr; complete type included above
 
 struct StaticLight {
  LightSource* source = nullptr;
@@ -50,8 +53,11 @@ public:
 
  void finalize_setup();
  void set_position(int x, int y);
- void update();
- void change_animation(const std::string& name);
+  void update();
+  void change_animation(const std::string& name);
+
+  // Allow controllers to drive animation progression explicitly.
+  void update_animation_manager();
 
  SDL_Texture* get_current_frame() const;
 
@@ -67,6 +73,8 @@ public:
  bool get_render_player_light() const;
 
  void set_z_offset(int z);
+ // Recompute z-index based on current position and thresholds
+ void recompute_z_index();
  void set_shading_group(int x);
  bool is_shading_group_set() const;
  int  get_shading_group() const;
@@ -112,8 +120,12 @@ public:
  bool has_base_shadow = false;
  bool active = false;
  bool flipped = false;
- bool render_player_light = false;
- double alpha_percentage = 1.0;
+  bool render_player_light = false;
+  double alpha_percentage = 1.0;
+
+  // Runtime helper: Euclidean distance to the current player (in world units).
+  // Updated once per frame by AssetsManager after the player moves.
+  float distance_to_player = std::numeric_limits<float>::infinity();
 
  Area spawn_area_local;
  std::vector<Area> base_areas;
@@ -133,6 +145,7 @@ public:
 private:
  // animation manager drives private animation state
  friend class AnimationManager;
+ friend class Move; // allow Move helper to adjust z-index
 
  view* window = nullptr;
  bool highlighted = false;

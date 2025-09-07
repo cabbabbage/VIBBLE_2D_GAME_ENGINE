@@ -19,7 +19,17 @@
       "tag": false,
       "check_overlap": false,
       "check_min_spacing": false,
-      "inherited": false
+      "inherited": false,
+      "sector_center_min": 0,
+      "sector_center_max": 0,
+      "sector_range_min": 360,
+      "sector_range_max": 360,
+      "border_shift_min": 0,
+      "border_shift_max": 0,
+      "perimeter_x_offset_min": 0,
+      "perimeter_x_offset_max": 0,
+      "perimeter_y_offset_min": 0,
+      "perimeter_y_offset_max": 0
     },
     {
       "name": "bone",

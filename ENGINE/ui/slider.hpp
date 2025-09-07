@@ -4,6 +4,7 @@
 #include <SDL_ttf.h>
 #include <string>
 #include <optional>
+#include "utils/text_style.hpp"
 
 // Reusable horizontal slider UI element.
 // Construct with label, min, max, and optional starting value.
@@ -18,6 +19,20 @@
 //       // apply v
 //   }
 //   volume.render(renderer);
+// Style for a flat, professional slider look.
+struct SliderStyle {
+    SDL_Color frame_normal{200,200,200,255};
+    SDL_Color frame_hover{160,160,160,255};
+    SDL_Color track_bg{235,238,241,255};
+    SDL_Color track_fill{59,130,246,255};  // blue
+    SDL_Color knob_fill{248,249,251,255};
+    SDL_Color knob_fill_hover{241,243,245,255};
+    SDL_Color knob_frame{180,185,190,255};
+    SDL_Color knob_frame_hover{120,130,140,255};
+    TextStyle label_style{ "C:/Windows/Fonts/segoeui.ttf", 16, SDL_Color{75,85,99,255} }; // gray-600
+    TextStyle value_style{ "C:/Windows/Fonts/segoeui.ttf", 16, SDL_Color{31,41,55,255} }; // gray-800
+};
+
 class Slider {
 public:
     // Constructors
@@ -49,6 +64,10 @@ public:
     static int width();
     static int height();
 
+    // Style
+    void set_style(const SliderStyle* style) { style_ = style; }
+    const SliderStyle* style() const { return style_; }
+
 private:
     // Helpers
     SDL_Rect track_rect() const;          // inner track area within rect_
@@ -66,4 +85,5 @@ private:
     int value_ = 0;
     bool dragging_ = false;
     bool knob_hovered_ = false;
+    const SliderStyle* style_ = nullptr; // optional custom style
 };

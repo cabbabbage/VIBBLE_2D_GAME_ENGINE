@@ -27,8 +27,6 @@ class BombController : public AssetController {
   bool try_hop_dirs(const char* const* names, const int* dx, const int* dy, int n);
   void explode_if_close();
 
-  int dist2_to_player() const;
-
   int randu();
   int rand_range(int lo, int hi);
   bool coin(int percent_true);

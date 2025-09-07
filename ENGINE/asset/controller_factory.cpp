@@ -19,49 +19,41 @@ ControllerFactory::ControllerFactory(Assets* assets, ActiveAssetsManager& aam)
  , aam_(aam)
 {}
 
-ControllerFactory::~ControllerFactory() {}
+ControllerFactory::~ControllerFactory() = default;
 
 std::unique_ptr<AssetController>
 ControllerFactory::create_by_key(const std::string& key, Asset* self) const {
  if (!assets_ || !self) return nullptr;
 
  try {
- if (key == "Davey_controller")
- return std::make_unique<DaveyController>(assets_, self, aam_);
+     if (key == "Davey_controller")
+         return std::make_unique<DaveyController>(assets_, self, aam_);
 
- if (key == "Vibble_controller")
- return std::make_unique<VibbleController>(assets_, self, aam_);
+     if (key == "Vibble_controller")
+         return std::make_unique<VibbleController>(assets_, self, aam_);
 
- if (key == "Frog_controller")
- return std::make_unique<FrogController>(assets_, self, aam_);
+     if (key == "Frog_controller")
+         return std::make_unique<FrogController>(assets_, self, aam_);
 
- if (key == "Bomb_controller")
- return std::make_unique<BombController>(assets_, self, aam_);
+     if (key == "Bomb_controller")
+         return std::make_unique<BombController>(assets_, self, aam_);
  } catch (...) {
- return nullptr;
+     // fall through to default below
  }
 
- return nullptr;
+ // Unrecognized key: return default controller
+ return std::make_unique<DefaultController>(assets_, self, aam_);
 }
 
 std::unique_ptr<AssetController>
 ControllerFactory::create_for_asset(Asset* self) const {
  if (!assets_ || !self || !self->info) return nullptr;
 
- std::unique_ptr<AssetController> out;
-
  const std::string key = self->info->custom_controller_key;
  if (!key.empty()) {
- out = create_by_key(key, self);
+     return create_by_key(key, self);
  }
 
- if (!out) {
- try {
- out = std::make_unique<DefaultController>(assets_, self, aam_);
- } catch (...) {
- out.reset();
- }
- }
-
- return out;
+ // No key configured: return default controller
+ return std::make_unique<DefaultController>(assets_, self, aam_);
 }

@@ -1,7 +1,4 @@
 #include "asset_info_ui.hpp"
-#include "custom_controllers/Davey_controller.hpp"
-#include "custom_controllers/Davey_default_controller.hpp"
-
 #include <algorithm>
 #include <sstream>
 #include <cmath>
@@ -15,9 +12,8 @@
 #include "ui/text_box.hpp"
 #include "utils/text_style.hpp"
 #include "ui/styles.hpp"
-#include "custom_controllers/Vibble_controller.hpp"
-#include "custom_controllers/Bomb_controller.hpp"
-#include "custom_controllers/Frog_controller.hpp"
+#include "ui/dev_styles.hpp"
+#include "utils/area.hpp"
 
 namespace {
     
@@ -66,6 +62,13 @@ void AssetInfoUI::build_widgets() {
     int pct = std::max(0, (int)std::round(info_->scale_factor * 100.0f));
     s_scale_pct_     = std::make_unique<Slider>("Scale (%)", 10, 400, pct);
 
+    // Apply dev UI styles to sliders for a clean editor look
+    const SliderStyle* dev_slider = &DevStyles::DefaultSlider();
+    if (s_z_threshold_)   s_z_threshold_->set_style(dev_slider);
+    if (s_min_same_type_) s_min_same_type_->set_style(dev_slider);
+    if (s_min_all_)       s_min_all_->set_style(dev_slider);
+    if (s_scale_pct_)     s_scale_pct_->set_style(dev_slider);
+
     // Checkboxes
     c_passable_ = std::make_unique<Checkbox>("Passable", info_->has_tag("passable"));
     c_flipable_ = std::make_unique<Checkbox>("Flipable (can invert)", info_->flipable);
@@ -79,17 +82,35 @@ void AssetInfoUI::build_widgets() {
 
     b_config_anim_ = std::make_unique<Button>(
         "Configure Animations",
-        &Styles::MainDecoButton(),
+        &DevStyles::PrimaryButton(),
         260,
         Button::height()
     );
 
     b_close_ = std::make_unique<Button>(
         "Close",
-        &Styles::ExitDecoButton(),
+        &DevStyles::SecondaryButton(),
         Button::width(),
         Button::height()
     );
+
+    // Areas section widgets
+    b_areas_toggle_ = std::make_unique<Button>(
+        "Areas ▸",
+        &DevStyles::SecondaryButton(),
+        180,
+        Button::height()
+    );
+    b_create_area_ = std::make_unique<Button>(
+        "Create New Area",
+        &DevStyles::PrimaryButton(),
+        220,
+        Button::height()
+    );
+    t_new_area_name_ = std::make_unique<TextBox>("Area Name", "");
+    t_new_area_name_->set_editing(false);
+    prompt_new_area_ = false;
+    rebuild_area_widgets();
 
     scroll_ = 0;
 }
@@ -278,6 +299,32 @@ void AssetInfoUI::handle_event(const SDL_Event& e) {
     }
 
     if (changed) save_now();
+
+    // Areas interactions
+    if (b_areas_toggle_ && b_areas_toggle_->handle_event(e)) {
+        areas_expanded_ = !areas_expanded_;
+    }
+    if (areas_expanded_) {
+        for (auto& btn : area_buttons_) {
+            if (btn && btn->handle_event(e)) {
+                open_area_editor(btn->text());
+                break;
+            }
+        }
+        if (b_create_area_ && b_create_area_->handle_event(e)) {
+            prompt_new_area_ = true;
+            if (t_new_area_name_) t_new_area_name_->set_editing(true);
+        }
+        if (prompt_new_area_ && t_new_area_name_ && t_new_area_name_->handle_event(e)) {
+            std::string nm = t_new_area_name_->value();
+            // Commit when user finishes editing
+            if (!nm.empty() && !t_new_area_name_->is_editing()) {
+                open_area_editor(nm); // will create if missing
+                prompt_new_area_ = false;
+                t_new_area_name_->set_value("");
+            }
+        }
+    }
 }
 
 void AssetInfoUI::render(SDL_Renderer* r, int screen_w, int screen_h) const {
@@ -332,10 +379,85 @@ void AssetInfoUI::render(SDL_Renderer* r, int screen_w, int screen_h) const {
     draw_header("Flags", flagsHeaderY);
     if (c_passable_) c_passable_->render(r);
 
+    // Areas section
+    int areasHeaderY = (c_passable_ ? c_passable_->rect().y + c_passable_->rect().h + 24 + scroll_ : panel_.y + 560);
+    int y2 = areasHeaderY;
+    draw_header("Areas", y2);
+    if (b_areas_toggle_) {
+        b_areas_toggle_->set_rect(SDL_Rect{ panel_.x + 16, y2 - scroll_, 140, Button::height() });
+        b_areas_toggle_->set_text(areas_expanded_ ? std::string("Areas ▾") : std::string("Areas ▸"));
+        b_areas_toggle_->render(r);
+    }
+    int yAreas = y2 + Button::height() + 8;
+    if (areas_expanded_) {
+        int x = panel_.x + 32;
+        for (auto& btn : area_buttons_) {
+            btn->set_rect(SDL_Rect{ x, yAreas - scroll_, 240, Button::height() });
+            btn->render(r);
+            yAreas += Button::height() + 6;
+        }
+        if (b_create_area_) {
+            b_create_area_->set_rect(SDL_Rect{ x, yAreas - scroll_, 220, Button::height() });
+            b_create_area_->render(r);
+            yAreas += Button::height() + 6;
+        }
+        if (prompt_new_area_ && t_new_area_name_) {
+            t_new_area_name_->set_rect(SDL_Rect{ x, yAreas - scroll_, 260, TextBox::height() });
+            t_new_area_name_->render(r);
+            yAreas += TextBox::height() + 6;
+        }
+    }
+
     if (b_config_anim_) b_config_anim_->render(r);
     if (b_close_)        b_close_->render(r);
+
+    // remember renderer for area editor
+    last_renderer_ = r;
 }
 
 void AssetInfoUI::save_now() const {
     if (info_) (void)info_->update_info_json();
+}
+
+void AssetInfoUI::rebuild_area_widgets() {
+    area_buttons_.clear();
+    if (!info_) return;
+    for (const auto& na : info_->areas) {
+        auto b = std::make_unique<Button>(na.name, &DevStyles::SecondaryButton(), 240, Button::height());
+        area_buttons_.push_back(std::move(b));
+    }
+}
+
+void AssetInfoUI::open_area_editor(const std::string& name) {
+    if (!info_ || !last_renderer_) return;
+    // Find existing area by name
+    Area* base = nullptr;
+    for (auto& na : info_->areas) {
+        if (na.name == name && na.area) { base = na.area.get(); break; }
+    }
+    try {
+        if (base) {
+            base->create_area_texture(last_renderer_);
+            Area edited(name, *base, last_renderer_);
+            info_->upsert_area_from_editor(edited);
+        } else {
+            // Create blank background
+            int w = std::max(32, (int)std::round(info_->original_canvas_width * info_->scale_factor));
+            int h = std::max(32, (int)std::round(info_->original_canvas_height * info_->scale_factor));
+            SDL_Texture* bg = SDL_CreateTexture(last_renderer_, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET, w, h);
+            if (bg) {
+                SDL_SetTextureBlendMode(bg, SDL_BLENDMODE_BLEND);
+                SDL_SetRenderTarget(last_renderer_, bg);
+                SDL_SetRenderDrawColor(last_renderer_, 0, 0, 0, 0);
+                SDL_RenderClear(last_renderer_);
+                SDL_SetRenderTarget(last_renderer_, nullptr);
+            }
+            Area created(name, bg, last_renderer_);
+            info_->upsert_area_from_editor(created);
+        }
+        rebuild_area_widgets();
+        save_now();
+    } catch (...) {
+        // ignore
+    }
 }
