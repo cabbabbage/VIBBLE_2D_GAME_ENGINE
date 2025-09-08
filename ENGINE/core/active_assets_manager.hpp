@@ -12,13 +12,8 @@ class ActiveAssetsManager {
 
 	public:
     ActiveAssetsManager(int screen_width, int screen_height, view& v);
-    void initialize(std::vector<Asset*>& all_assets,
-                    Asset* player,
-                    int screen_center_x,
-                    int screen_center_y);
-    void updateAssetVectors(Asset* player,
-                            int screen_center_x,
-                            int screen_center_y);
+    void initialize(std::vector<Asset*>& all_assets, Asset* player, int screen_center_x, int screen_center_y);
+    void updateAssetVectors(Asset* player, int screen_center_x, int screen_center_y);
     void updateClosestAssets(Asset* player, std::size_t max_count);
     void sortByZIndex();
     void activate(Asset* asset);

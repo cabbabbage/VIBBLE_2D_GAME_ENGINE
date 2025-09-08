@@ -42,8 +42,7 @@ void InitializeAssets::initialize(Assets& assets,
 		raw->finalize_setup();
 	}
 	find_player(assets);
-	assets.activeManager.initialize(assets.all, assets.player,
-                                 screen_center_x, screen_center_y);
+	assets.activeManager.initialize(assets.all, assets.player, screen_center_x, screen_center_y);
 	assets.active_assets  = assets.activeManager.getActive();
 	assets.closest_assets = assets.activeManager.getClosest();
 	setup_shading_groups(assets);
@@ -55,9 +54,7 @@ void InitializeAssets::initialize(Assets& assets,
 		std::cerr << "[InitializeAssets] light-gen failed: " << e.what() << "\n";
 	}
 	std::cout << "[InitializeAssets] All static sources set.\n";
-	assets.activeManager.updateAssetVectors(assets.player,
-                                         screen_center_x,
-                                         screen_center_y);
+	assets.activeManager.updateAssetVectors(assets.player, screen_center_x, screen_center_y);
 	assets.window.zoom_scale(1.0, 200);
 }
 

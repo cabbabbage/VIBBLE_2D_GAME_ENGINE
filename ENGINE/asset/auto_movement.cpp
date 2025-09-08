@@ -183,8 +183,7 @@ void AutoMovement::move() {
 			int denom = std::max(0, idle_rest_ratio_) + 1;
 			std::uniform_int_distribution<int> pick(0, denom - 1);
 			bool choose_rest = (pick(rng_) != 0);
-			std::string next_anim = choose_rest ? pick_least_movement_animation()
-			: pick_best_animation_towards(target_.first, target_.second);
+			std::string next_anim = choose_rest ? pick_least_movement_animation() : pick_best_animation_towards(target_.first, target_.second);
 			if (!next_anim.empty() && self_->get_current_animation() != next_anim) self_->change_animation(next_anim);
 			self_->update_animation_manager();
 			break;

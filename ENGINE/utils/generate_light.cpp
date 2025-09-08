@@ -34,16 +34,7 @@ SDL_Texture* GenerateLight::generate(SDL_Renderer* renderer,
 	json meta;
 	if (CacheManager::load_metadata(meta_file, meta)) {
 		bool meta_ok =
-		meta.value("radius",   -1) == light.radius &&
-		meta.value("fall_off", -1) == light.fall_off &&
-		meta.value("intensity",-1) == light.intensity &&
-		meta.value("flare",    -1) == light.flare &&
-		meta.value("blur_passes", -1) == blur_passes &&
-		meta.contains("color") &&
-		meta["color"].is_array() && meta["color"].size() == 3 &&
-		meta["color"][0].get<int>() == light.color.r &&
-		meta["color"][1].get<int>() == light.color.g &&
-		meta["color"][2].get<int>() == light.color.b;
+		meta.value("radius",   -1) == light.radius && meta.value("fall_off", -1) == light.fall_off && meta.value("intensity",-1) == light.intensity && meta.value("flare",    -1) == light.flare && meta.value("blur_passes", -1) == blur_passes && meta.contains("color") && meta["color"].is_array() && meta["color"].size() == 3 && meta["color"][0].get<int>() == light.color.r && meta["color"][1].get<int>() == light.color.g && meta["color"][2].get<int>() == light.color.b;
 		if (meta_ok) {
 			if (SDL_Surface* surf = CacheManager::load_surface(img_file)) {
 					SDL_Texture* tex = CacheManager::surface_to_texture(renderer, surf);

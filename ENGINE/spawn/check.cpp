@@ -121,10 +121,7 @@ bool Check::check_spacing_overlap(const std::shared_ptr<AssetInfo>& info,
 	test_area.align(test_pos_X, test_pos_Y - th / 2);
 	for (Asset* other : closest_assets) {
 		if (!other || !other->info) continue;
-		Area other_area("fallback", other->pos_X, other->pos_Y,
-                            1, 1, "Square", 0,
-		std::numeric_limits<int>::max(),
-		std::numeric_limits<int>::max());
+		Area other_area("fallback", other->pos_X, other->pos_Y, 1, 1, "Square", 0, std::numeric_limits<int>::max(), std::numeric_limits<int>::max());
 		Area* o_spacing = other->info->find_area("spacing_area");
 		if (o_spacing) {
 			other_area = *o_spacing;

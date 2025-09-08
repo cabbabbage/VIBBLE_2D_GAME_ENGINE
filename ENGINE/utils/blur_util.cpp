@@ -29,8 +29,7 @@ std::function<float(std::mt19937&)> weight_func)
 	int radius = (override_blur_radius > 0) ? override_blur_radius : blur_radius_;
 	int small_w = std::max(1, w / downscale_);
 	int small_h = std::max(1, h / downscale_);
-	SDL_Texture* downscaled = SDL_CreateTexture(renderer_, SDL_PIXELFORMAT_RGBA8888,
-                                             SDL_TEXTUREACCESS_TARGET, small_w, small_h);
+	SDL_Texture* downscaled = SDL_CreateTexture(renderer_, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET, small_w, small_h);
 	SDL_SetTextureBlendMode(downscaled, SDL_BLENDMODE_NONE);
 	SDL_SetRenderTarget(renderer_, downscaled);
 	SDL_RenderCopy(renderer_, source_tex, nullptr, nullptr);
@@ -57,11 +56,7 @@ std::function<float(std::mt19937&)> weight_func)
 					r += pr * weight; g += pg * weight; b += pb * weight; a += pa * weight;
 					total_weight += weight;
 			}
-			pixels[y * small_w + x] = SDL_MapRGBA(surf->format,
-			static_cast<Uint8>(r / total_weight),
-			static_cast<Uint8>(g / total_weight),
-			static_cast<Uint8>(b / total_weight),
-			static_cast<Uint8>(a / total_weight));
+			pixels[y * small_w + x] = SDL_MapRGBA(surf->format, static_cast<Uint8>(r / total_weight), static_cast<Uint8>(g / total_weight), static_cast<Uint8>(b / total_weight), static_cast<Uint8>(a / total_weight));
 		}
 	}
 	temp.assign(pixels, pixels + small_w * small_h);
@@ -76,19 +71,14 @@ std::function<float(std::mt19937&)> weight_func)
 					r += pr * weight; g += pg * weight; b += pb * weight; a += pa * weight;
 					total_weight += weight;
 			}
-			pixels[y * small_w + x] = SDL_MapRGBA(surf->format,
-			static_cast<Uint8>(r / total_weight),
-			static_cast<Uint8>(g / total_weight),
-			static_cast<Uint8>(b / total_weight),
-			static_cast<Uint8>(a / total_weight));
+			pixels[y * small_w + x] = SDL_MapRGBA(surf->format, static_cast<Uint8>(r / total_weight), static_cast<Uint8>(g / total_weight), static_cast<Uint8>(b / total_weight), static_cast<Uint8>(a / total_weight));
 		}
 	}
 	SDL_Texture* blurred_small = SDL_CreateTextureFromSurface(renderer_, surf);
 	SDL_SetTextureBlendMode(blurred_small, SDL_BLENDMODE_MOD);
 	SDL_FreeSurface(surf);
 	SDL_DestroyTexture(downscaled);
-	SDL_Texture* blurred_full = SDL_CreateTexture(renderer_, SDL_PIXELFORMAT_RGBA8888,
-                                               SDL_TEXTUREACCESS_TARGET, w, h);
+	SDL_Texture* blurred_full = SDL_CreateTexture(renderer_, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET, w, h);
 	SDL_SetTextureBlendMode(blurred_full, SDL_BLENDMODE_MOD);
 	SDL_SetRenderTarget(renderer_, blurred_full);
 	SDL_RenderCopy(renderer_, blurred_small, nullptr, nullptr);

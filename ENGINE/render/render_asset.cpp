@@ -18,10 +18,7 @@ main_light_source_(main_light),
 p(player) {}
 
 SDL_Texture* RenderAsset::render_shadow_mask(Asset* a, int bw, int bh) {
-	SDL_Texture* mask = SDL_CreateTexture(renderer_,
-                                       SDL_PIXELFORMAT_RGBA8888,
-                                       SDL_TEXTUREACCESS_TARGET,
-                                       bw, bh);
+	SDL_Texture* mask = SDL_CreateTexture(renderer_, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET, bw, bh);
 	if (!mask) return nullptr;
 	SDL_SetTextureBlendMode(mask, SDL_BLENDMODE_BLEND);
 	SDL_Texture* prev_target = SDL_GetRenderTarget(renderer_);
@@ -55,10 +52,7 @@ SDL_Texture* RenderAsset::regenerateFinalTexture(Asset* a) {
 	const Uint8 main_alpha = main_light_source_.get_current_color().a;
 	int bw = a->cached_w, bh = a->cached_h;
 	if (bw == 0 || bh == 0) SDL_QueryTexture(base, nullptr, nullptr, &bw, &bh);
-	SDL_Texture* final_tex = SDL_CreateTexture(renderer_,
-                                            SDL_PIXELFORMAT_RGBA8888,
-                                            SDL_TEXTUREACCESS_TARGET,
-                                            bw, bh);
+	SDL_Texture* final_tex = SDL_CreateTexture(renderer_, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET, bw, bh);
 	if (!final_tex) return nullptr;
 	SDL_SetTextureBlendMode(final_tex, SDL_BLENDMODE_BLEND);
 	SDL_Texture* prev_target = SDL_GetRenderTarget(renderer_);
@@ -115,8 +109,7 @@ void RenderAsset::render_shadow_orbital_lights(Asset* a, const SDL_Rect& bounds,
 		if (!light.texture || light.x_radius <= 0 || light.y_radius <= 0) continue;
 		const float lx = a->pos_X + std::cos(angle) * light.x_radius;
 		const float ly = a->pos_Y - std::sin(angle) * light.y_radius;
-		SDL_Point pnt = parallax_.apply(static_cast<int>(std::round(lx)),
-		static_cast<int>(std::round(ly)));
+		SDL_Point pnt = parallax_.apply(static_cast<int>(std::round(lx)), static_cast<int>(std::round(ly)));
 		int lw = light.cached_w, lh = light.cached_h;
 		if (lw == 0 || lh == 0) SDL_QueryTexture(light.texture, nullptr, nullptr, &lw, &lh);
 		SDL_Rect dst {

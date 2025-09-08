@@ -374,20 +374,15 @@ Area Asset::get_area(const std::string& name) const {
 	Area result(name);
 	if (info) {
 		if (name == "clickable") {
-			int base_w = (cached_w > 0) ? cached_w
-			: int(info->original_canvas_width * info->scale_factor);
-			int base_h = (cached_h > 0) ? cached_h
-			: int(info->original_canvas_height * info->scale_factor);
+			int base_w = (cached_w > 0) ? cached_w : int(info->original_canvas_width * info->scale_factor);
+			int base_h = (cached_h > 0) ? cached_h : int(info->original_canvas_height * info->scale_factor);
 			if (base_w <= 0) base_w = 1;
 			if (base_h <= 0) base_h = 1;
 			int click_w = int(base_w * 1.5f);
 			int click_h = int(base_h * 1.5f);
 			int left    = pos_X - click_w / 2;
 			int top     = pos_Y - click_h;
-			result = Area(name, left, top, click_w, click_h,
-                 "Square", 1,
-			std::numeric_limits<int>::max(),
-			std::numeric_limits<int>::max());
+			result = Area(name, left, top, click_w, click_h, "Square", 1, std::numeric_limits<int>::max(), std::numeric_limits<int>::max());
 		} else {
 			Area* a = info->find_area(name + "_area");
 			if (a) result = *a;

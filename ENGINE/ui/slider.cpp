@@ -144,11 +144,9 @@ void Slider::draw_track(SDL_Renderer* r) const {
 }
 
 void Slider::draw_knob(SDL_Renderer* r, const SDL_Rect& krect, bool hovered) const {
-	SDL_Color knobCol = style_ ? (hovered ? style_->knob_fill_hover : style_->knob_fill)
-	: (hovered ? Styles::Fog() : Styles::Ivory());
+	SDL_Color knobCol = style_ ? (hovered ? style_->knob_fill_hover : style_->knob_fill) : (hovered ? Styles::Fog() : Styles::Ivory());
 	fill_rect(r, krect, knobCol);
-	SDL_Color frame = style_ ? (hovered ? style_->knob_frame_hover : style_->knob_frame)
-	: (hovered ? Styles::Gold() : Styles::GoldDim());
+	SDL_Color frame = style_ ? (hovered ? style_->knob_frame_hover : style_->knob_frame) : (hovered ? Styles::Gold() : Styles::GoldDim());
 	stroke_rect(r, krect, frame);
 	SDL_SetRenderDrawColor(r, frame.r, frame.g, frame.b, 180);
 	const int gx = krect.x + krect.w/2;
@@ -164,8 +162,7 @@ void Slider::draw_text(SDL_Renderer* r) const {
 }
 
 void Slider::render(SDL_Renderer* renderer) const {
-	SDL_Color frame = knob_hovered_ || dragging_ ? (style_ ? style_->frame_hover : Styles::Gold())
-	: (style_ ? style_->frame_normal : Styles::GoldDim());
+	SDL_Color frame = knob_hovered_ || dragging_ ? (style_ ? style_->frame_hover : Styles::Gold()) : (style_ ? style_->frame_normal : Styles::GoldDim());
 	stroke_rect(renderer, rect_, frame);
 	SDL_Rect inner{ rect_.x+1, rect_.y+1, rect_.w-2, rect_.h-2 };
 	stroke_rect(renderer, inner, frame);

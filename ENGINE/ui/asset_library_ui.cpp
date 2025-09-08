@@ -106,17 +106,11 @@ void AssetLibraryUI::render(SDL_Renderer* r,
 			if (SDL_Texture* tex = get_default_frame_texture(*info)) {
 					int tw=0, th=0; SDL_QueryTexture(tex, nullptr, nullptr, &tw, &th);
 					if (tw > 0 && th > 0) {
-								float scale = std::min(
-								(tile_rect.w) / float(tw),
-								(tile_rect.h) / float(th)
-        );
+								float scale = std::min( (tile_rect.w) / float(tw), (tile_rect.h) / float(th) );
 								int dw = int(tw * scale);
 								int dh = int(th * scale);
 								SDL_Rect dst{
-													tile_rect.x + (tile_rect.w - dw) / 2,
-													tile_rect.y + (tile_rect.h - dh) / 2,
-													dw, dh
-								};
+													tile_rect.x + (tile_rect.w - dw) / 2, tile_rect.y + (tile_rect.h - dh) / 2, dw, dh };
 								SDL_RenderCopy(r, tex, nullptr, &dst);
 					}
 			}

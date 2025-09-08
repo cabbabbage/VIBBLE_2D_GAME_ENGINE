@@ -28,8 +28,7 @@ void AssetLibrary::load_all_from_SRC() {
 		}
 		std::cout << "[AssetLibrary] Loaded: " << loaded
 		<< "   Failed: " << failed
-		<< "   Current: " << std::left << std::setw(20) << name
-		<< "\r" << std::flush;
+		<< "   Current: " << std::left << std::setw(20) << name << "\r" << std::flush;
 	}
 	std::cout << std::endl
 	<< "[AssetLibrary] Loaded " << info_by_name_.size() << " assets.\n";

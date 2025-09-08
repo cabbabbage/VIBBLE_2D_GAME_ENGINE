@@ -55,17 +55,7 @@ void MainApp::setup() {
 			if (a.info && a.info->type == "Player") { player_ptr = &a; break; }
 		}
 		if (!player_ptr) throw std::runtime_error("[Main] No player asset found");
-		game_assets_ = new Assets(std::move(all_assets),
-		*loader_->getAssetLibrary(),
-                            player_ptr,
-		loader_->getRooms(),
-                            screen_w_,
-                            screen_h_,
-                            player_ptr->pos_X,
-                            player_ptr->pos_Y,
-		static_cast<int>(loader_->getMapRadius() * 1.2),
-                            renderer_,
-                            map_path_);
+		game_assets_ = new Assets(std::move(all_assets), *loader_->getAssetLibrary(), player_ptr, loader_->getRooms(), screen_w_, screen_h_, player_ptr->pos_X, player_ptr->pos_Y, static_cast<int>(loader_->getMapRadius() * 1.2), renderer_, map_path_);
 		input_ = new Input();
 		game_assets_->set_input(input_);
 	} catch (const std::exception& e) {
@@ -150,9 +140,7 @@ int main(int argc, char* argv[]) {
 	(IMG_INIT_PNG | IMG_INIT_JPG | IMG_INIT_TIF | IMG_INIT_WEBP))) {
 		std::cerr << "IMG_Init failed: " << IMG_GetError() << "\n"; SDL_Quit(); return 1;
 	}
-	SDL_Window* window = SDL_CreateWindow("Game Window",
-                                                    SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
-                                                    0, 0, SDL_WINDOW_FULLSCREEN_DESKTOP);
+	SDL_Window* window = SDL_CreateWindow("Game Window", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 0, 0, SDL_WINDOW_FULLSCREEN_DESKTOP);
 	if (!window) {
 		std::cerr << "SDL_CreateWindow failed: " << SDL_GetError() << "\n";
 		IMG_Quit(); TTF_Quit(); SDL_Quit(); return 1;

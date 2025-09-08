@@ -34,14 +34,7 @@ screen_width(screen_width_),
 screen_height(screen_height_),
 library_(library)
 {
-	InitializeAssets::initialize(*this,
-	std::move(loaded),
-	std::move(rooms),
-                              screen_width_,
-                              screen_height_,
-                              screen_center_x,
-                              screen_center_y,
-                              map_radius);
+	InitializeAssets::initialize(*this, std::move(loaded), std::move(rooms), screen_width_, screen_height_, screen_center_x, screen_center_y, map_radius);
 	finder_ = new CurrentRoomFinder(rooms_, player);
 	if (finder_) {
 		window.set_up_rooms(finder_);
@@ -64,12 +57,7 @@ void Assets::set_input(Input* m) {
 	input = m;
 	delete dev_mouse;
 	if (input) {
-		dev_mouse = new DevMouseControls(input,
-                                   this,
-                                   active_assets,
-                                   player,
-                                   screen_width,
-                                   screen_height);
+		dev_mouse = new DevMouseControls(input, this, active_assets, player, screen_width, screen_height);
 	} else {
 		dev_mouse = nullptr;
 	}
@@ -178,11 +166,9 @@ void Assets::addAsset(const std::string& name, int gx, int gy) {
 	std::cout << "[Assets::addAsset] Retrieved AssetInfo '" << info->name
 	<< "' at " << info << "\n";
 	Area spawn_area(name, gx, gy, 1, 1, "Point", 1, 1, 1);
-	std::cout << "[Assets::addAsset] Created Area '" << spawn_area.get_name()
-	<< "' at (" << gx << ", " << gy << ")\n";
+	std::cout << "[Assets::addAsset] Created Area '" << spawn_area.get_name() << "' at (" << gx << ", " << gy << ")\n";
 	size_t prev_size = owned_assets.size();
-	owned_assets.emplace_back(
-	std::make_unique<Asset>(info, spawn_area, gx, gy, 0, nullptr));
+	owned_assets.emplace_back( std::make_unique<Asset>(info, spawn_area, gx, gy, 0, nullptr));
 	if (owned_assets.size() <= prev_size) {
 		std::cerr << "[Assets::addAsset][Error] owned_assets did not grow!\n";
 		return;
@@ -193,8 +179,7 @@ void Assets::addAsset(const std::string& name, int gx, int gy) {
 		return;
 	}
 	std::cout << "[Assets::addAsset][Debug] New Asset allocated at " << newAsset
-	<< " (info=" << (newAsset->info ? newAsset->info->name : "<null>")
-	<< ")\n";
+	<< " (info=" << (newAsset->info ? newAsset->info->name : "<null>") << ")\n";
 	all.push_back(newAsset);
 	std::cout << "[Assets::addAsset] all.size() now = " << all.size() << "\n";
 	try {
@@ -210,8 +195,7 @@ void Assets::addAsset(const std::string& name, int gx, int gy) {
 	activeManager.updateClosestAssets(player, 3);
 	active_assets  = activeManager.getActive();
 	closest_assets = activeManager.getClosest();
-	std::cout << "[Assets::addAsset] Active assets=" << active_assets.size()
-	<< ", Closest=" << closest_assets.size() << "\n";
+	std::cout << "[Assets::addAsset] Active assets=" << active_assets.size() << ", Closest=" << closest_assets.size() << "\n";
 	std::cout << "[Assets::addAsset] Successfully added asset '" << name
 	<< "' at (" << gx << ", " << gy << ")\n";
 }
@@ -227,11 +211,9 @@ Asset* Assets::spawn_asset(const std::string& name, int world_x, int world_y) {
 	std::cout << "[Assets::spawn_asset] Retrieved AssetInfo '" << info->name
 	<< "' at " << info << "\n";
 	Area spawn_area(name, world_x, world_y, 1, 1, "Point", 1, 1, 1);
-	std::cout << "[Assets::spawn_asset] Created Area '" << spawn_area.get_name()
-	<< "' at (" << world_x << ", " << world_y << ")\n";
+	std::cout << "[Assets::spawn_asset] Created Area '" << spawn_area.get_name() << "' at (" << world_x << ", " << world_y << ")\n";
 	size_t prev_size = owned_assets.size();
-	owned_assets.emplace_back(
-	std::make_unique<Asset>(info, spawn_area, world_x, world_y, 0, nullptr));
+	owned_assets.emplace_back( std::make_unique<Asset>(info, spawn_area, world_x, world_y, 0, nullptr));
 	if (owned_assets.size() <= prev_size) {
 		std::cerr << "[Assets::spawn_asset][Error] owned_assets did not grow!\n";
 		return nullptr;
@@ -242,8 +224,7 @@ Asset* Assets::spawn_asset(const std::string& name, int world_x, int world_y) {
 		return nullptr;
 	}
 	std::cout << "[Assets::spawn_asset][Debug] New Asset allocated at " << newAsset
-	<< " (info=" << (newAsset->info ? newAsset->info->name : "<null>")
-	<< ")\n";
+	<< " (info=" << (newAsset->info ? newAsset->info->name : "<null>") << ")\n";
 	all.push_back(newAsset);
 	std::cout << "[Assets::spawn_asset] all.size() now = " << all.size() << "\n";
 	try {
@@ -259,8 +240,7 @@ Asset* Assets::spawn_asset(const std::string& name, int world_x, int world_y) {
 	activeManager.updateClosestAssets(player, 3);
 	active_assets  = activeManager.getActive();
 	closest_assets = activeManager.getClosest();
-	std::cout << "[Assets::spawn_asset] Active assets=" << active_assets.size()
-	<< ", Closest=" << closest_assets.size() << "\n";
+	std::cout << "[Assets::spawn_asset] Active assets=" << active_assets.size() << ", Closest=" << closest_assets.size() << "\n";
 	std::cout << "[Assets::spawn_asset] Successfully spawned asset '" << name
 	<< "' at (" << world_x << ", " << world_y << ")\n";
 	return newAsset;

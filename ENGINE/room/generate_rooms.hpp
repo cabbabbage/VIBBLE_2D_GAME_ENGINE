@@ -29,13 +29,8 @@ class GenerateRooms {
 
 	public:
     using Point = std::pair<int, int>;
-    GenerateRooms(const std::vector<LayerSpec>& layers,
-                  int map_cx,
-                  int map_cy,
-                  const std::string& map_dir);
-    std::vector<std::unique_ptr<Room>> build(AssetLibrary* asset_lib,
-                                             int map_radius,
-                                             const std::string& boundary_json);
+    GenerateRooms(const std::vector<LayerSpec>& layers, int map_cx, int map_cy, const std::string& map_dir);
+    std::vector<std::unique_ptr<Room>> build(AssetLibrary* asset_lib, int map_radius, const std::string& boundary_json);
     bool testing = false;
 
 	private:

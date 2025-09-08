@@ -70,30 +70,10 @@ void AssetInfoUI::build_widgets() {
 	std::ostringstream oss;
 	for (size_t i=0;i<info_->tags.size();++i) { oss << info_->tags[i]; if (i+1<info_->tags.size()) oss << ", "; }
 	t_tags_  = std::make_unique<TextBox>("Tags (comma)", oss.str());
-	b_config_anim_ = std::make_unique<Button>(
-                                               "Configure Animations",
-	&DevStyles::PrimaryButton(),
-                                               260,
-	Button::height()
- );
-	b_close_ = std::make_unique<Button>(
-                                         "Close",
-	&DevStyles::SecondaryButton(),
-	Button::width(),
-	Button::height()
- );
-	b_areas_toggle_ = std::make_unique<Button>(
-                                                "Areas ▸",
-	&DevStyles::SecondaryButton(),
-                                                180,
-	Button::height()
- );
-	b_create_area_ = std::make_unique<Button>(
-                                               "Create New Area",
-	&DevStyles::PrimaryButton(),
-                                               220,
-	Button::height()
- );
+	b_config_anim_ = std::make_unique<Button>( "Configure Animations", &DevStyles::PrimaryButton(), 260, Button::height() );
+	b_close_ = std::make_unique<Button>( "Close", &DevStyles::SecondaryButton(), Button::width(), Button::height() );
+	b_areas_toggle_ = std::make_unique<Button>( "Areas ▸", &DevStyles::SecondaryButton(), 180, Button::height() );
+	b_create_area_ = std::make_unique<Button>( "Create New Area", &DevStyles::PrimaryButton(), 220, Button::height() );
 	t_new_area_name_ = std::make_unique<TextBox>("Area Name", "");
 	t_new_area_name_->set_editing(false);
 	prompt_new_area_ = false;
@@ -400,10 +380,7 @@ void AssetInfoUI::open_area_editor(const std::string& name) {
 		if (SDL_Texture* sprite = pick_sprite()) {
 			int sw = 0, sh = 0; (void)SDL_QueryTexture(sprite, nullptr, nullptr, &sw, &sh);
 			SDL_Rect dst{
-					std::max(0, (canvas_w - sw) / 2),
-					std::max(0,  canvas_h - sh),
-					sw, sh
-			};
+					std::max(0, (canvas_w - sw) / 2), std::max(0,  canvas_h - sh), sw, sh };
 			SDL_RenderCopy(last_renderer_, sprite, nullptr, &dst);
 		}
 		if (base) {

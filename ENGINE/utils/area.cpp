@@ -134,8 +134,7 @@ std::tuple<int, int, int, int> Area::get_bounds() const {
 
 void Area::generate_point(int cx, int cy, int map_width, int map_height) {
 	points.clear();
-	points.emplace_back(std::clamp(cx, 0, map_width),
-	std::clamp(cy, 0, map_height));
+	points.emplace_back(std::clamp(cx, 0, map_width), std::clamp(cy, 0, map_height));
 }
 
 void Area::generate_circle(int cx, int cy, int radius, int edge_smoothness, int map_width, int map_height) {
@@ -215,8 +214,7 @@ bool Area::contains_point(const Point& pt) const {
 		const double yi = points[i].second;
 		const double xj = points[j].first;
 		const double yj = points[j].second;
-		const bool intersect = ((yi > y) != (yj > y)) &&
-		(x < (xj - xi) * (y - yi) / (yj - yi + 1e-12) + xi);
+		const bool intersect = ((yi > y) != (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi + 1e-12) + xi);
 		if (intersect) inside = !inside;
 	}
 	return inside;
@@ -289,8 +287,7 @@ void Area::create_area_texture(SDL_Renderer* renderer) {
 	auto [minx, miny, maxx, maxy] = get_bounds();
 	int w = maxx - minx + 1;
 	int h = maxy - miny + 1;
-	SDL_Texture* target = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888,
-                                         SDL_TEXTUREACCESS_TARGET, w, h);
+	SDL_Texture* target = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET, w, h);
 	if (!target) return;
 	SDL_Texture* prev_target = SDL_GetRenderTarget(renderer);
 	SDL_SetRenderTarget(renderer, target);

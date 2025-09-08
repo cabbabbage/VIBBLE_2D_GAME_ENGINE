@@ -105,8 +105,7 @@ bool FrogController::has_anim(const char* name) const {
 bool FrogController::aabb(const Area& A, const Area& B) const {
 	auto [a_minx, a_miny, a_maxx, a_maxy] = A.get_bounds();
 	auto [b_minx, b_miny, b_maxx, b_maxy] = B.get_bounds();
-	return !(a_maxx < b_minx || b_maxx < a_minx ||
-          a_maxy < b_miny || b_maxy < a_miny);
+	return !(a_maxx < b_minx || b_maxx < a_minx || a_maxy < b_miny || b_maxy < a_miny);
 }
 
 bool FrogController::pointInAABB(int x, int y, const Area& B) const {

@@ -22,13 +22,7 @@ class SpawnContext {
 
 	public:
     using Point = std::pair<int, int>;
-    SpawnContext(std::mt19937& rng,
-                 Check& checker,
-                 SpawnLogger& logger,
-                 std::vector<Area>& exclusion_zones,
-                 std::unordered_map<std::string, std::shared_ptr<AssetInfo>>& asset_info_library,
-                 std::vector<std::unique_ptr<Asset>>& all,
-                 AssetLibrary* asset_library);
+    SpawnContext(std::mt19937& rng, Check& checker, SpawnLogger& logger, std::vector<Area>& exclusion_zones, std::unordered_map<std::string, std::shared_ptr<AssetInfo>>& asset_info_library, std::vector<std::unique_ptr<Asset>>& all, AssetLibrary* asset_library);
     Asset* spawnAsset(const std::string& name,
                       const std::shared_ptr<AssetInfo>& info,
                       const Area& area,

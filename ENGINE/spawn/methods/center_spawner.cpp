@@ -15,8 +15,7 @@ void CenterSpawner::spawn(const SpawnInfo& item, const Area* area, SpawnContext&
 		ctx.logger().output_and_log(item.name, item.quantity, 0, 1, 1, "center");
 		return;
 	}
-	auto* result = ctx.spawnAsset(item.name, item.info, *area, center.first, center.second, 0, nullptr,
-                               item.spawn_id, item.position);
+	auto* result = ctx.spawnAsset(item.name, item.info, *area, center.first, center.second, 0, nullptr, item.spawn_id, item.position);
 	int spawned = result ? 1 : 0;
 	ctx.logger().progress(item.info, spawned, item.quantity);
 	ctx.logger().output_and_log(item.name, item.quantity, spawned, 1, 1, "center");

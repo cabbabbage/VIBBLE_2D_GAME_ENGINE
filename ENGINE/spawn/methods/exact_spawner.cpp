@@ -11,12 +11,8 @@ void ExactSpawner::spawn(const SpawnInfo& item, const Area* area, SpawnContext& 
 	auto [minx, miny, maxx, maxy] = area->get_bounds();
 	int curr_w = std::max(1, maxx - minx);
 	int curr_h = std::max(1, maxy - miny);
-	int canvas_w = (item.info && item.info->original_canvas_width > 0)
-	? static_cast<int>(std::lround(item.info->original_canvas_width * item.info->scale_factor))
-	: curr_w;
-	int canvas_h = (item.info && item.info->original_canvas_height > 0)
-	? static_cast<int>(std::lround(item.info->original_canvas_height * item.info->scale_factor))
-	: curr_h;
+	int canvas_w = (item.info && item.info->original_canvas_width > 0) ? static_cast<int>(std::lround(item.info->original_canvas_width * item.info->scale_factor)) : curr_w;
+	int canvas_h = (item.info && item.info->original_canvas_height > 0) ? static_cast<int>(std::lround(item.info->original_canvas_height * item.info->scale_factor)) : curr_h;
 	int orig_w = item.exact_origin_w > 0 ? item.exact_origin_w : canvas_w;
 	int orig_h = item.exact_origin_h > 0 ? item.exact_origin_h : canvas_h;
 	int dx = item.exact_dx;
@@ -37,8 +33,7 @@ void ExactSpawner::spawn(const SpawnInfo& item, const Area* area, SpawnContext& 
 		ctx.logger().output_and_log(item.name, item.quantity, 0, 0, 0, "exact");
 		return;
 	}
-	ctx.spawnAsset(item.name, item.info, *area, final_x, final_y, 0, nullptr,
-                item.spawn_id, item.position);
+	ctx.spawnAsset(item.name, item.info, *area, final_x, final_y, 0, nullptr, item.spawn_id, item.position);
 	ctx.logger().progress(item.info, 1, item.quantity);
 	ctx.logger().output_and_log(item.name, item.quantity, 1, 1, 1, "exact");
 }

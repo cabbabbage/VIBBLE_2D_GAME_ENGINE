@@ -101,8 +101,7 @@ void AssetSpawnPlanner::parse_asset_spawns(const Area& area) {
 					<< "' has non-string 'position' field; defaulting to 'Random'.\n";
 			}
 		}
-		bool isSingleCenter = (min_num == 1 && max_num == 1 &&
-		(position == "Center" || position == "center"));
+		bool isSingleCenter = (min_num == 1 && max_num == 1 && (position == "Center" || position == "center"));
 		bool isPerimeter    = (position == "Perimeter" || position == "perimeter");
 		std::string spawn_id;
 		if (asset.contains("spawn_id") && asset["spawn_id"].is_string()) {

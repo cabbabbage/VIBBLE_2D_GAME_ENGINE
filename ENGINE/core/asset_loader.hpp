@@ -18,11 +18,7 @@ class AssetLoader {
 	public:
     AssetLoader(const std::string& map_dir, SDL_Renderer* renderer);
     std::vector<Asset*> collectDistantAssets(int fade_start_distance, int fade_end_distance);
-    std::vector<std::vector<Asset*>> group_neighboring_assets(
-                                                                  const std::vector<Asset*>& assets,
-                                                                  int tile_width,
-                                                                  int tile_height,
-                                                                  const std::string& group_type);
+    std::vector<std::vector<Asset*>> group_neighboring_assets( const std::vector<Asset*>& assets, int tile_width, int tile_height, const std::string& group_type);
     void link_by_child(const std::vector<std::vector<Asset*>>& groups);
     std::vector<Asset> createAssets(int screen_width, int screen_height);
     std::vector<Area> getAllRoomAndTrailAreas() const;

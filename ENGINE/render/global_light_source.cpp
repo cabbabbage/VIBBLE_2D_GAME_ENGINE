@@ -150,24 +150,14 @@ SDL_Color Global_Light_Source::compute_color_from_horizon() const {
 		if (deg >= K0.degree && deg <= K1.degree) {
 			float t = (deg - K0.degree) / (K1.degree - K0.degree);
 			return {
-					lerp(K0.color.r, K1.color.r, t),
-					lerp(K0.color.g, K1.color.g, t),
-					lerp(K0.color.b, K1.color.b, t),
-					lerp(K0.color.a, K1.color.a, t)
-			};
+					lerp(K0.color.r, K1.color.r, t), lerp(K0.color.g, K1.color.g, t), lerp(K0.color.b, K1.color.b, t), lerp(K0.color.a, K1.color.a, t) };
 		}
 	}
 	auto &KL = key_colors_.back(), &KF = key_colors_.front();
 	float span = 360.0f - KL.degree + KF.degree;
-	float t = (deg < KF.degree)
-	? (deg + 360.0f - KL.degree) / span
-	: (deg - KL.degree) / span;
+	float t = (deg < KF.degree) ? (deg + 360.0f - KL.degree) / span : (deg - KL.degree) / span;
 	return {
-		lerp(KL.color.r, KF.color.r, t),
-		lerp(KL.color.g, KF.color.g, t),
-		lerp(KL.color.b, KF.color.b, t),
-		lerp(KL.color.a, KF.color.a, t)
-	};
+		lerp(KL.color.r, KF.color.r, t), lerp(KL.color.g, KF.color.g, t), lerp(KL.color.b, KF.color.b, t), lerp(KL.color.a, KF.color.a, t) };
 }
 
 SDL_Color Global_Light_Source::get_current_color() const {

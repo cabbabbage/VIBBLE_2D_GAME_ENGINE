@@ -10,10 +10,7 @@ class Parallax;
 class RenderAsset {
 
 	public:
-    RenderAsset(SDL_Renderer* renderer,
-                Parallax& parallax,
-                Global_Light_Source& main_light,
-                Asset* player);
+    RenderAsset(SDL_Renderer* renderer, Parallax& parallax, Global_Light_Source& main_light, Asset* player);
     SDL_Texture* regenerateFinalTexture(Asset* a);
 
 	private:

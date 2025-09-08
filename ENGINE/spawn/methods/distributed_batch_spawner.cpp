@@ -43,8 +43,7 @@ void DistributedBatchSpawner::spawn(const std::vector<BatchSpawnInfo>& items,
 			if (it == ctx.info_library().end()) continue;
 			auto& info = it->second;
 			if (ctx.checker().check(info, cx, cy, ctx.exclusion_zones(), ctx.all_assets(), true, false, true, 5)) continue;
-			ctx.spawnAsset(selected.name, info, *area, cx, cy, 0, nullptr,
-			spawn_id, std::string("DistributedBatch"));
+			ctx.spawnAsset(selected.name, info, *area, cx, cy, 0, nullptr, spawn_id, std::string("DistributedBatch"));
 			++placed_quantities[selected.name];
 		}
 	}

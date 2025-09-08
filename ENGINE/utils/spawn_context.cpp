@@ -100,8 +100,7 @@ Asset* SpawnContext::spawnAsset(const std::string& name,
 			AssetSpawner childSpawner(asset_library_, exclusion_zones_);
 			childSpawner.spawn_children(childArea, &childPlanner);
 			auto kids = childSpawner.extract_all_assets();
-			std::cout << "[Spawn]  Spawned " << kids.size()
-			<< " children for \"" << raw->info->name << "\"\n";
+			std::cout << "[Spawn]  Spawned " << kids.size() << " children for \"" << raw->info->name << "\"\n";
 			for (auto& uptr : kids) {
 					if (!uptr || !uptr->info) continue;
 					uptr->set_z_offset(childInfo->z_offset);

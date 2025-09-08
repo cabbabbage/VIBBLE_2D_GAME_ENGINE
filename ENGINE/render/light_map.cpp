@@ -53,9 +53,7 @@ void LightMap::collect_layers(std::vector<LightEntry>& out, std::mt19937& rng) {
 		int lw = main_light_.get_cached_w();
 		int lh = main_light_.get_cached_h();
 		if (lw == 0 || lh == 0) SDL_QueryTexture(map_tex, nullptr, nullptr, &lw, &lh);
-		SDL_Rect map_rect = get_scaled_position_rect(main_light_.get_position(),
-                                               lw, lh, inv_scale,
-                                               min_visible_w, min_visible_h);
+		SDL_Rect map_rect = get_scaled_position_rect(main_light_.get_position(), lw, lh, inv_scale, min_visible_w, min_visible_h);
 		if (map_rect.w != 0 || map_rect.h != 0) {
 			out.push_back({ map_tex, map_rect, main_alpha, SDL_FLIP_NONE, false });
 		}
@@ -87,8 +85,7 @@ void LightMap::collect_layers(std::vector<LightEntry>& out, std::mt19937& rng) {
 
 SDL_Texture* LightMap::build_lowres_mask(const std::vector<LightEntry>& layers,
                                          int low_w, int low_h, int downscale) {
-	SDL_Texture* lowres_mask = SDL_CreateTexture(renderer_, SDL_PIXELFORMAT_RGBA8888,
-                                              SDL_TEXTUREACCESS_TARGET, low_w, low_h);
+	SDL_Texture* lowres_mask = SDL_CreateTexture(renderer_, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET, low_w, low_h);
 	SDL_SetTextureBlendMode(lowres_mask, SDL_BLENDMODE_NONE);
 	SDL_SetRenderTarget(renderer_, lowres_mask);
 	SDL_SetRenderDrawColor(renderer_, 0, 0, 0, 200);

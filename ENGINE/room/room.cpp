@@ -74,15 +74,7 @@ type(type_)
 			<< ", geometry: " << geometry
 			<< ", map radius: " << map_radius << "\n";
 		}
-		room_area = std::make_unique<Area>(room_name,
-                                     map_origin.first,
-                                     map_origin.second,
-                                     width,
-                                     height,
-                                     geometry,
-                                     edge_smoothness,
-                                     map_w,
-                                     map_h);
+		room_area = std::make_unique<Area>(room_name, map_origin.first, map_origin.second, width, height, geometry, edge_smoothness, map_w, map_h);
 	}
 	std::vector<json> json_sources;
 	std::vector<std::string> source_paths;
@@ -100,12 +92,7 @@ type(type_)
 			std::cerr << "[Room] Warning: inherits_map_assets is true, but map_assets.json not found in " << map_path << "\n";
 		}
 	}
-	planner = std::make_unique<AssetSpawnPlanner>(
-                                                   json_sources,
-                                                   *room_area,
-                                                   *asset_lib,
-                                                   source_paths
- );
+	planner = std::make_unique<AssetSpawnPlanner>( json_sources, *room_area, *asset_lib, source_paths );
 	std::vector<Area> exclusion;
 	AssetSpawner spawner(asset_lib, exclusion);
 	spawner.spawn(*this);

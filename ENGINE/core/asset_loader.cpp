@@ -118,10 +118,7 @@ std::vector<std::vector<Asset*>> AssetLoader::group_neighboring_assets(
 		largest_group = std::max(largest_group, g.size());
 	}
 	double avg_group_size = groups.empty() ? 0.0 : (double)total_assets / groups.size();
-	std::cout << "[" << group_type << "] Created " << groups.size()
-	<< " tile groups, total assets: " << total_assets
-	<< ", avg group size: " << avg_group_size
-	<< ", largest group: " << largest_group << "\n";
+	std::cout << "[" << group_type << "] Created " << groups.size() << " tile groups, total assets: " << total_assets << ", avg group size: " << avg_group_size << ", largest group: " << largest_group << "\n";
 	return groups;
 }
 
@@ -168,8 +165,7 @@ std::vector<Asset*> AssetLoader::collectDistantAssets(int fade_start_distance, i
 					if (minDist <= fade_start_distance) alpha = 1.0;
 					else if (minDist >= fade_end_distance) alpha = 0.0;
 					else {
-								double t = (minDist - fade_start_distance) /
-								(fade_end_distance - fade_start_distance);
+								double t = (minDist - fade_start_distance) / (fade_end_distance - fade_start_distance);
 								alpha = std::pow(1.0 - t, 2.0);
 					}
 					asset->alpha_percentage = alpha * 1.2;
@@ -237,12 +233,7 @@ SDL_Texture* AssetLoader::createMinimap(int width, int height) {
 	int scaleFactor = 2;
 	int render_width  = width  * scaleFactor;
 	int render_height = height * scaleFactor;
-	SDL_Texture* highres = SDL_CreateTexture(
-                                              renderer_,
-                                              SDL_PIXELFORMAT_RGBA8888,
-                                              SDL_TEXTUREACCESS_TARGET,
-                                              render_width, render_height
- );
+	SDL_Texture* highres = SDL_CreateTexture( renderer_, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET, render_width, render_height );
 	if (!highres) {
 		std::cerr << "[Minimap] Failed to create high-res texture: " << SDL_GetError() << "\n";
 		return nullptr;
@@ -258,9 +249,7 @@ SDL_Texture* AssetLoader::createMinimap(int width, int height) {
 		try {
 			auto [minx, miny, maxx, maxy] = room->room_area->get_bounds();
 			SDL_Rect r{ int(std::round(minx * scaleX)),
-					int(std::round(miny * scaleY)),
-					int(std::round((maxx - minx) * scaleX)),
-					int(std::round((maxy - miny) * scaleY)) };
+					int(std::round(miny * scaleY)), int(std::round((maxx - minx) * scaleX)), int(std::round((maxy - miny) * scaleY)) };
 			if (room->room_name.find("trail") != std::string::npos) {
 					SDL_SetRenderDrawColor(renderer_, 0, 255, 0, 255);
 					int cx = int(std::round((minx + maxx) * 0.5 * scaleX));
@@ -280,12 +269,7 @@ SDL_Texture* AssetLoader::createMinimap(int width, int height) {
 		}
 	}
 	SDL_SetRenderTarget(renderer_, prev);
-	SDL_Texture* final = SDL_CreateTexture(
-                                            renderer_,
-                                            SDL_PIXELFORMAT_RGBA8888,
-                                            SDL_TEXTUREACCESS_TARGET,
-                                            width, height
- );
+	SDL_Texture* final = SDL_CreateTexture( renderer_, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET, width, height );
 	if (!final) {
 		std::cerr << "[Minimap] Failed to create final texture: " << SDL_GetError() << "\n";
 		SDL_DestroyTexture(highres);

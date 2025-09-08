@@ -12,8 +12,7 @@ class AutoMovement {
 
 	public:
     AutoMovement(Asset* self, ActiveAssetsManager& aam, bool confined);
-    AutoMovement(Asset* self, ActiveAssetsManager& aam, bool confined,
-                 double directness_weight, double sparsity_weight);
+    AutoMovement(Asset* self, ActiveAssetsManager& aam, bool confined, double directness_weight, double sparsity_weight);
     void set_idle(int min_target_distance, int max_target_distance, int rest_ratio);
     void set_pursue(Asset* final_target, int min_target_distance, int max_target_distance);
     void set_run(Asset* threat, int min_target_distance, int max_target_distance);
@@ -35,14 +34,8 @@ class AutoMovement {
     void ensure_pursue_target(int min_dist, int max_dist, const Asset* final_target);
     void ensure_run_target(int min_dist, int max_dist, const Asset* threat);
     void ensure_orbit_target(int min_radius, int max_radius, const Asset* center, int keep_direction_ratio);
-    void ensure_patrol_target(const std::vector<Area::Point>& waypoints,
-                              bool loop,
-                              int hold_frames);
-    void ensure_serpentine_target(int min_stride,
-                                  int max_stride,
-                                  int sway,
-                                  const Asset* final_target,
-                                  int keep_side_ratio);
+    void ensure_patrol_target(const std::vector<Area::Point>& waypoints, bool loop, int hold_frames);
+    void ensure_serpentine_target(int min_stride, int max_stride, int sway, const Asset* final_target, int keep_side_ratio);
     Area::Point choose_balanced_target(int desired_x, int desired_y, const Asset* final_target) const;
     void transition_mode(Mode m);
     bool is_target_reached() const;

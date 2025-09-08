@@ -101,13 +101,7 @@ void SpawnLogger::output_and_log(const std::string& asset_name,
 	}
 	std::ostringstream updated_line;
 	updated_line << asset_name << ","
-	<< std::fixed << std::setprecision(3) << new_percent << ","
-	<< total_success << ","
-	<< total_attempts << ","
-	<< method << ","
-	<< std::fixed << std::setprecision(3) << average_time << ","
-	<< times_generated << ","
-	<< std::fixed << std::setprecision(3) << delta_time;
+	<< std::fixed << std::setprecision(3) << new_percent << "," << total_success << "," << total_attempts << "," << method << "," << std::fixed << std::setprecision(3) << average_time << "," << times_generated << "," << std::fixed << std::setprecision(3) << delta_time;
 	lines[asset_line_index] = updated_line.str();
 	std::ofstream outfile(csv_path);
 	if (outfile.is_open()) {
@@ -125,8 +119,6 @@ void SpawnLogger::progress(const std::shared_ptr<AssetInfo>& info, int current, 
 	std::string bar(filled, '#');
 	bar.resize(bar_width, '-');
 	std::ostringstream oss;
-	oss << "[Checking] " << std::left << std::setw(20) << info->name
-	<< "[" << bar << "] "
-	<< std::setw(3) << static_cast<int>(percent * 100) << "%\r";
+	oss << "[Checking] " << std::left << std::setw(20) << info->name << "[" << bar << "] " << std::setw(3) << static_cast<int>(percent * 100) << "%\r";
 	std::cout << oss.str() << std::flush;
 }

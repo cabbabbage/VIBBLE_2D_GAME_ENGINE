@@ -149,8 +149,7 @@ void MenuUI::rebuildButtons() {
 	int start_y = 150;
 	const int x = (screen_w_ - btn_w) / 2;
 	auto addButton = [&](const std::string& label, MenuAction action, bool is_exit=false) {
-		Button b = is_exit ? Button::get_exit_button(label)
-		: Button::get_main_button(label);
+		Button b = is_exit ? Button::get_exit_button(label) : Button::get_main_button(label);
 		b.set_rect(SDL_Rect{ x, start_y, btn_w, btn_h });
 		start_y += btn_h + gap;
 		buttons_.push_back(MenuButton{ std::move(b), action });
@@ -158,8 +157,7 @@ void MenuUI::rebuildButtons() {
 	addButton("End Run",            MenuAction::EXIT, true);
 	addButton("Restart Run",        MenuAction::RESTART);
 	addButton("Settings",           MenuAction::SETTINGS);
-	addButton(dev_mode_local_ ? "Switch to Player Mode" : "Switch to Dev Mode",
-           MenuAction::DEV_MODE_TOGGLE);
+	addButton(dev_mode_local_ ? "Switch to Player Mode" : "Switch to Dev Mode", MenuAction::DEV_MODE_TOGGLE);
 	addButton("Save Current Room",  MenuAction::SAVE_ROOM);
 }
 
@@ -246,17 +244,7 @@ void MenuUI::doRestart() {
 			if (a.info && a.info->type == "Player") { player_ptr = &a; break; }
 		}
 		if (!player_ptr) throw std::runtime_error("[MenuUI] No player asset found");
-		game_assets_ = new Assets(std::move(all_assets),
-		*loader_->getAssetLibrary(),
-                            player_ptr,
-		loader_->getRooms(),
-                            screen_w_,
-                            screen_h_,
-                            player_ptr->pos_X,
-                            player_ptr->pos_Y,
-		static_cast<int>(loader_->getMapRadius() * 1.2),
-                            renderer_,
-                            map_path_);
+		game_assets_ = new Assets(std::move(all_assets), *loader_->getAssetLibrary(), player_ptr, loader_->getRooms(), screen_w_, screen_h_, player_ptr->pos_X, player_ptr->pos_Y, static_cast<int>(loader_->getMapRadius() * 1.2), renderer_, map_path_);
 		if (!input_) input_ = new Input();
 		game_assets_->set_input(input_);
 	} catch (const std::exception& ex) {
@@ -281,10 +269,7 @@ void MenuUI::doSaveCurrentRoom() {
 	std::string save_path;
 	std::string room_name;
 	std::string abs_map_path = fs::absolute(map_path_).string();
-	const char* folder = tinyfd_selectFolderDialog(
-                                                    "Select folder to save room copy",
-	abs_map_path.c_str()
- );
+	const char* folder = tinyfd_selectFolderDialog( "Select folder to save room copy", abs_map_path.c_str() );
 	if (!folder) {
 		std::cout << "[MenuUI] No folder selected.\n";
 		return;

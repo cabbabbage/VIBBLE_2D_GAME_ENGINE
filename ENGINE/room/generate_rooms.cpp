@@ -97,16 +97,7 @@ std::vector<std::unique_ptr<Room>> GenerateRooms::build(AssetLibrary* asset_lib,
 								std::cout << "[GenerateRooms] Placing layer-1 child " << children_specs[i].name
 								<< " at angle " << angle << " → (" << pos.first << ", " << pos.second << ")\n";
 					}
-					auto child = std::make_unique<Room>(
-                                             pos,
-                                             "room",
-                                             children_specs[i].name,
-                                             current_parents[0],
-                                             map_path_ + "/rooms",
-                                             map_path_,
-                                             asset_lib,
-                                             nullptr
-     );
+					auto child = std::make_unique<Room>( pos, "room", children_specs[i].name, current_parents[0], map_path_ + "/rooms", map_path_, asset_lib, nullptr );
 					child->layer = layer.level;
 					if (!next_parents.empty()) {
 								next_parents.back()->set_sibling_right(child.get());
@@ -157,16 +148,7 @@ std::vector<std::unique_ptr<Room>> GenerateRooms::build(AssetLibrary* asset_lib,
 													<< " under parent " << parent->room_name
 													<< " at angle " << angle << " → (" << pos.first << ", " << pos.second << ")\n";
 								}
-								auto child = std::make_unique<Room>(
-                                                pos,
-                                                "room",
-                                                kids[i].name,
-                                                parent,
-                                                map_path_ + "/rooms",
-                                                map_path_,
-                                                asset_lib,
-                                                nullptr
-        );
+								auto child = std::make_unique<Room>( pos, "room", kids[i].name, parent, map_path_ + "/rooms", map_path_, asset_lib, nullptr );
 								child->layer = layer.level;
 								if (!next_parents.empty()) {
 													next_parents.back()->set_sibling_right(child.get());

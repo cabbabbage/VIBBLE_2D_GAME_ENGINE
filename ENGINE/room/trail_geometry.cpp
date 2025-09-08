@@ -33,10 +33,7 @@ std::vector<TrailGeometry::Point> TrailGeometry::build_centerline(
 			double nx = -dy / len;
 			double ny =  dx / len;
 			double off = offset_dist(rng);
-			line.emplace_back(
-			std::round(px + nx * off),
-			std::round(py + ny * off)
-   );
+			line.emplace_back( std::round(px + nx * off), std::round(py + ny * off) );
 		}
 	}
 	line.push_back(end);
@@ -68,14 +65,8 @@ std::vector<TrailGeometry::Point> TrailGeometry::extrude_centerline(
 		if (len <= 0.0) len = 1.0;
 		double nx = -dy / len;
 		double ny =  dx / len;
-		left.emplace_back(
-		std::round(cx + nx * half_w),
-		std::round(cy + ny * half_w)
-  );
-		right.emplace_back(
-		std::round(cx - nx * half_w),
-		std::round(cy - ny * half_w)
-  );
+		left.emplace_back( std::round(cx + nx * half_w), std::round(cy + ny * half_w) );
+		right.emplace_back( std::round(cx - nx * half_w), std::round(cy - ny * half_w) );
 	}
 	std::vector<Point> polygon;
 	polygon.reserve(left.size() + right.size());
@@ -135,8 +126,7 @@ bool TrailGeometry::attempt_trail_connection(
 	const int max_width = config.value("max_width", 80);
 	const int curvyness = config.value("curvyness", 2);
 	const std::string name = config.value("name", "trail_segment");
-	const double width = static_cast<double>(
-	std::uniform_int_distribution<int>(min_width, max_width)(rng));
+	const double width = static_cast<double>( std::uniform_int_distribution<int>(min_width, max_width)(rng));
 	if (testing) {
 		std::cout << "[TrailGen] Using asset: " << path
 		<< "  width=" << width
@@ -202,8 +192,7 @@ bool TrailGeometry::attempt_trail_connection(
 		std::vector<Area::Point> pts;
 		pts.reserve(polygon.size());
 		for (auto& p : polygon) {
-			pts.emplace_back(static_cast<int>(std::round(p.first)),
-			static_cast<int>(std::round(p.second)));
+			pts.emplace_back(static_cast<int>(std::round(p.first)), static_cast<int>(std::round(p.second)));
 		}
 		Area candidate("trail_candidate", pts);
 		int intersection_count = 0;
@@ -224,16 +213,7 @@ bool TrailGeometry::attempt_trail_connection(
 			continue;
 		}
 		std::string room_dir = fs::path(path).parent_path().string();
-		auto trail_room = std::make_unique<Room>(
-                                               a->map_origin,
-                                               "trail",
-                                               name,
-                                               nullptr,
-                                               room_dir,
-                                               map_dir,
-                                               asset_lib,
-                                               &candidate
-  );
+		auto trail_room = std::make_unique<Room>( a->map_origin, "trail", name, nullptr, room_dir, map_dir, asset_lib, &candidate );
 		a->add_connecting_room(trail_room.get());
 		b->add_connecting_room(trail_room.get());
 		trail_room->add_connecting_room(a);

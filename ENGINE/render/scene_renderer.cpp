@@ -32,11 +32,7 @@ fullscreen_light_tex_(nullptr),
 render_asset_(renderer, parallax_, main_light_source_, assets->player),
 accumulation_tex_(nullptr)
 {
-	fullscreen_light_tex_ = SDL_CreateTexture(renderer_,
-                                           SDL_PIXELFORMAT_RGBA8888,
-                                           SDL_TEXTUREACCESS_TARGET,
-                                           screen_width_,
-                                           screen_height_);
+	fullscreen_light_tex_ = SDL_CreateTexture(renderer_, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET, screen_width_, screen_height_);
 	if (fullscreen_light_tex_) {
 		SDL_SetTextureBlendMode(fullscreen_light_tex_, SDL_BLENDMODE_BLEND);
 		SDL_Texture* prev = SDL_GetRenderTarget(renderer_);
@@ -49,24 +45,14 @@ accumulation_tex_(nullptr)
 		std::cerr << "[SceneRenderer] Failed to create fullscreen light texture: "
 		<< SDL_GetError() << "\n";
 	}
-	accumulation_tex_ = SDL_CreateTexture(renderer_,
-                                       SDL_PIXELFORMAT_RGBA8888,
-                                       SDL_TEXTUREACCESS_TARGET,
-                                       screen_width_,
-                                       screen_height_);
+	accumulation_tex_ = SDL_CreateTexture(renderer_, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET, screen_width_, screen_height_);
 	if (!accumulation_tex_) {
 		std::cerr << "[SceneRenderer] Failed to create accumulation texture: "
 		<< SDL_GetError() << "\n";
 	} else {
 		SDL_SetTextureBlendMode(accumulation_tex_, SDL_BLENDMODE_BLEND);
 	}
-	z_light_pass_ = std::make_unique<LightMap>(renderer_,
-                                            assets_,
-                                            parallax_,
-                                            main_light_source_,
-                                            screen_width_,
-                                            screen_height_,
-                                            fullscreen_light_tex_);
+	z_light_pass_ = std::make_unique<LightMap>(renderer_, assets_, parallax_, main_light_source_, screen_width_, screen_height_, fullscreen_light_tex_);
 	main_light_source_.update();
 	z_light_pass_->render(debugging);
 }
@@ -80,10 +66,7 @@ void SceneRenderer::update_shading_groups() {
 bool SceneRenderer::shouldRegen(Asset* a) {
 	if (!a->get_final_texture()){return true;}
 	return (a->get_shading_group() > 0 &&
-	a->get_shading_group() == current_shading_group_) ||
-	(!a->get_final_texture() ||
-  !a->static_frame ||
-	a->get_render_player_light());
+	a->get_shading_group() == current_shading_group_) || (!a->get_final_texture() || !a->static_frame || a->get_render_player_light());
 }
 
 SDL_Rect SceneRenderer::get_scaled_position_rect(Asset* a, int fw, int fh,
@@ -134,8 +117,7 @@ void SceneRenderer::render() {
 		int fw = a->cached_w;
 		int fh = a->cached_h;
 		if (fw == 0 || fh == 0) SDL_QueryTexture(final_tex, nullptr, nullptr, &fw, &fh);
-		SDL_Rect fb = get_scaled_position_rect(a, fw, fh, inv_scale,
-                                         min_visible_w, min_visible_h);
+		SDL_Rect fb = get_scaled_position_rect(a, fw, fh, inv_scale, min_visible_w, min_visible_h);
 		if (fb.w == 0 && fb.h == 0) continue;
 		if (a->is_highlighted()) {
 			SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_ADD);
@@ -158,13 +140,7 @@ void SceneRenderer::render() {
 		else {
 			SDL_SetTextureColorMod(final_tex, 255, 255, 255);
 		}
-		SDL_RenderCopyEx(renderer_,
-                   final_tex,
-                   nullptr,
-                   &fb,
-                   0,
-                   nullptr,
-                   a->flipped ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE);
+		SDL_RenderCopyEx(renderer_, final_tex, nullptr, &fb, 0, nullptr, a->flipped ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE);
 		SDL_SetTextureColorMod(final_tex, 255, 255, 255);
 	}
 	SDL_SetRenderTarget(renderer_, nullptr);

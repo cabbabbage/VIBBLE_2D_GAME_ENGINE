@@ -64,8 +64,7 @@ namespace {
 		const int minW = 800, minH = 600;
 		int win_w = window_w > 0 ? window_w : std::max(minW, tex_w);
 		int win_h = window_h > 0 ? window_h : std::max(minH, tex_h);
-		SDL_Window* win = SDL_CreateWindow("Area Editor", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
-                                                  win_w, win_h, SDL_WINDOW_SHOWN);
+		SDL_Window* win = SDL_CreateWindow("Area Editor", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, win_w, win_h, SDL_WINDOW_SHOWN);
 		if (!win) throw std::runtime_error("[Area Editor] Failed to create window");
 		SDL_Renderer* rend = SDL_CreateRenderer(win, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
 		if (!rend) {
@@ -81,8 +80,7 @@ namespace {
 		SDL_FillRect(mask, nullptr, SDL_MapRGBA(mask->format, 255, 0, 0, 0));
 		SDL_Texture* bg_local = nullptr;
 		if (src_renderer) {
-			SDL_Texture* tmp = SDL_CreateTexture(src_renderer, SDL_PIXELFORMAT_RGBA8888,
-                                        SDL_TEXTUREACCESS_TARGET, tex_w, tex_h);
+			SDL_Texture* tmp = SDL_CreateTexture(src_renderer, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET, tex_w, tex_h);
 			if (tmp) {
 					SDL_Texture* prev = SDL_GetRenderTarget(src_renderer);
 					SDL_Rect prev_vp; SDL_RenderGetViewport(src_renderer, &prev_vp);
@@ -219,8 +217,7 @@ namespace {
 			SDL_Rect dst{ off_x, off_y, draw_w, draw_h };
 			if (bg_local) SDL_RenderCopy(rend, bg_local, nullptr, &dst);
 			if (initial_area) {
-					const bool bg_is_area_bb = (tex_w == (area_maxx - area_minx + 1)) &&
-					(tex_h == (area_maxy - area_miny + 1));
+					const bool bg_is_area_bb = (tex_w == (area_maxx - area_minx + 1)) && (tex_h == (area_maxy - area_miny + 1));
 					const int origin_x = bg_is_area_bb ? area_minx : 0;
 					const int origin_y = bg_is_area_bb ? area_miny : 0;
 					SDL_SetRenderDrawColor(rend, 0, 200, 255, 180);

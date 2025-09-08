@@ -73,42 +73,22 @@ static const LabelStyle kLabelExit{
 	"/usr/share/fonts/truetype/dejavu/DejaVuSerif-Bold.ttf",
 #endif
 	32,
-	make_color(210,170,60,255)
-};
+	make_color(210,170,60,255) };
 
 static SDL_Color brighten(SDL_Color c, int r=20, int g=20, int b=10) {
 	auto clamp255 = [](int v){ return std::max(0, std::min(255, v)); };
-	return make_color(
-	Uint8(clamp255(int(c.r) + r)),
-	Uint8(clamp255(int(c.g) + g)),
-	Uint8(clamp255(int(c.b) + b)),
-                       c.a
- );
+	return make_color( Uint8(clamp255(int(c.r) + r)), Uint8(clamp255(int(c.g) + g)), Uint8(clamp255(int(c.b) + b)), c.a );
 }
 
 static const ButtonStyle kMainDecoButton{
 	kLabelMain,
 	kSlate,
-	make_color(kCoal.r, kCoal.g, kCoal.b, 200),
-	kGold,
-	kGoldDim,
-	kTeal,
-	make_color(kGold.r, kGold.g, kGold.b, 45),
-	kLabelMain.color,
-	brighten(kLabelMain.color)
-};
+	make_color(kCoal.r, kCoal.g, kCoal.b, 200), kGold, kGoldDim, kTeal, make_color(kGold.r, kGold.g, kGold.b, 45), kLabelMain.color, brighten(kLabelMain.color) };
 
 static const ButtonStyle kExitDecoButton{
 	kLabelExit,
 	kSlate,
-	make_color(kCoal.r, kCoal.g, kCoal.b, 200),
-	kGold,
-	kGoldDim,
-	kTeal,
-	make_color(kGold.r, kGold.g, kGold.b, 45),
-	kLabelExit.color,
-	brighten(kLabelExit.color)
-};
+	make_color(kCoal.r, kCoal.g, kCoal.b, 200), kGold, kGoldDim, kTeal, make_color(kGold.r, kGold.g, kGold.b, 45), kLabelExit.color, brighten(kLabelExit.color) };
 
 const SDL_Color& Styles::Gold()      { return kGold; }
 const SDL_Color& Styles::GoldDim()   { return kGoldDim; }

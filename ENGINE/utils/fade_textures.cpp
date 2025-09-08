@@ -88,8 +88,7 @@ std::vector<std::pair<SDL_Texture*, SDL_Rect>> FadeTextureGenerator::generate_al
 			for (size_t i = 0, j = n - 1; i < n; j = i++) {
 					auto [xi, yi] = poly[i];
 					auto [xj, yj] = poly[j];
-					bool intersect = ((yi > py) != (yj > py)) &&
-					(px < (xj - xi) * (py - yi) / (yj - yi + 1e-9) + xi);
+					bool intersect = ((yi > py) != (yj > py)) && (px < (xj - xi) * (py - yi) / (yj - yi + 1e-9) + xi);
 					if (intersect) inside = !inside;
 			}
 			return inside;

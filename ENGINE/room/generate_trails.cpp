@@ -47,11 +47,7 @@ std::vector<std::unique_ptr<Room>> GenerateTrails::generate_trails(
 		bool success = false;
 		for (int attempts = 0; attempts < 1000 && !success; ++attempts) {
 			std::string path = pick_random_asset();
-			success = TrailGeometry::attempt_trail_connection(
-                                                         a, b, all_areas, map_dir, asset_lib, trail_rooms,
-                                                         1,
-                                                         path, testing, rng_
-   );
+			success = TrailGeometry::attempt_trail_connection( a, b, all_areas, map_dir, asset_lib, trail_rooms, 1, path, testing, rng_ );
 		}
 		if (!success && testing) {
 			std::cout << "[TrailGen] Failed to place trail between "
@@ -120,9 +116,7 @@ void GenerateTrails::find_and_connect_isolated(
 			break;
 		}
 		if (testing) {
-			std::cout << "[ConnectIsolated] Pass " << pass + 1 << " - " << isolated_groups.size()
-			<< " disconnected groups found | allowed intersections: "
-			<< allowed_intersections << "\n";
+			std::cout << "[ConnectIsolated] Pass " << pass + 1 << " - " << isolated_groups.size() << " disconnected groups found | allowed intersections: " << allowed_intersections << "\n";
 		}
 		bool any_connection_made = false;
 		for (const auto& group : isolated_groups) {
@@ -199,9 +193,7 @@ void GenerateTrails::remove_connection(Room* a,
 	a->remove_connecting_room(b);
 	b->remove_connecting_room(a);
 	std::cout << "[Debug][remove_connection] After removal, "
-	<< a->room_name << " has " << a->connected_rooms.size()
-	<< " connections; " << b->room_name << " has "
-	<< b->connected_rooms.size() << " connections.\n";
+	<< a->room_name << " has " << a->connected_rooms.size() << " connections; " << b->room_name << " has " << b->connected_rooms.size() << " connections.\n";
 	size_t before = trail_rooms.size();
 	trail_rooms.erase(
 	std::remove_if(trail_rooms.begin(), trail_rooms.end(),
@@ -227,8 +219,7 @@ void GenerateTrails::remove_connection(Room* a,
 	trail_rooms.end()
  );
 	std::cout << "[Debug][remove_connection] Removed "
-	<< (before - trail_rooms.size())
-	<< " trail room(s) connecting them.\n";
+	<< (before - trail_rooms.size()) << " trail room(s) connecting them.\n";
 }
 
 void GenerateTrails::remove_random_connection(std::vector<std::unique_ptr<Room>>& trail_rooms) {
@@ -253,9 +244,7 @@ void GenerateTrails::remove_random_connection(std::vector<std::unique_ptr<Room>>
 		a->remove_connecting_room(b);
 		b->remove_connecting_room(a);
 		std::cout << "[Debug][remove_random_connection] After disconnect, "
-		<< a->room_name << " has " << a->connected_rooms.size()
-		<< " connections; " << b->room_name << " has "
-		<< b->connected_rooms.size() << " connections.\n";
+		<< a->room_name << " has " << a->connected_rooms.size() << " connections; " << b->room_name << " has " << b->connected_rooms.size() << " connections.\n";
 	}
 	trail_rooms.erase(trail_rooms.begin() + index);
 	std::cout << "[Debug][remove_random_connection] Erased trail room at index "
