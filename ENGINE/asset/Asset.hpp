@@ -111,6 +111,7 @@ public:
  bool is_hidden();
   void set_remove();
   bool needs_removal() const;
+  void delete_self();
 
  void set_highlighted(bool state);
  bool is_highlighted();

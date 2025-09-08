@@ -103,6 +103,7 @@ Assets(std::vector<Asset>&& loaded,
 
     // Spawn API
     Asset* spawn_asset(const std::string& name, int world_x, int world_y);
+    void delete_asset(Asset* asset);
 
     // Overlay UIs
 public:

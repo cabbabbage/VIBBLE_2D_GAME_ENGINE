@@ -269,8 +269,6 @@ SDL_Texture* Asset::get_current_frame() const {
  return nullptr;
 }
 
-void Asset::set_remove(){ remove = true; }
-
 void Asset::set_position(int x, int y) {
  pos_X = x;
  pos_Y = y;
@@ -479,3 +477,11 @@ bool  Asset::is_selected(){ return selected; }
 bool Asset::needs_removal() const { return remove; }
 
 void Asset::set_remove() { remove = true; }
+
+void Asset::delete_self() {
+    if (assets_) {
+        assets_->delete_asset(this);
+    } else {
+        delete this;
+    }
+}
