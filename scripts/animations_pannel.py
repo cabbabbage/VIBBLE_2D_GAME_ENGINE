@@ -317,7 +317,7 @@ class AnimationsPanel:
             v = 1
         v = max(-20, min(20, v))
         payload["speed_factor"] = v
-
+        payload["on_end"] = str(self.on_end_var.get() or "default")
         # derive frames from (possibly-recursive) source
         payload["number_of_frames"] = self._compute_frames_from_source(payload.get("source", {}))
         self.frames_var.set(payload["number_of_frames"])
