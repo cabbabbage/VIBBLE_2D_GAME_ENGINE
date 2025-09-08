@@ -439,12 +439,37 @@
     "rnd_spawn_max": 400,
     "rnd_spawn_min": 300,
     "size_settings": {
-        "scale_percentage": 20
+        "scale_percentage": 15
     },
     "start": "default",
     "tags": [
         "passable"
     ],
     "update_radius": 1000,
-    "z_threshold": 64
+    "z_threshold": 64,
+    "has_shading": false,
+    "lighting_info": [
+        {
+            "has_light_source": true,
+            "light_intensity": 0,
+            "radius": 0,
+            "x_radius": 0,
+            "y_radius": 0
+        },
+        {
+            "has_light_source": true,
+            "light_intensity": 129,
+            "light_color": [
+                0,
+                255,
+                255
+            ],
+            "radius": 514,
+            "falloff": 100,
+            "flicker": 0,
+            "flare": 0,
+            "offset_x": 0,
+            "offset_y": 0
+        }
+    ]
 }

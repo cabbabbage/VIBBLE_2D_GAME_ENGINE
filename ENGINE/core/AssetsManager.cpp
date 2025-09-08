@@ -149,48 +149,43 @@ void Assets::update(const Input& input,
         }
     }
 
-    // UI toggles
+
     if (input.wasKeyPressed(SDLK_TAB)) {
         toggle_asset_library();
     }
 
-    // Update any visible UI
+
     update_ui(input);
 
-    // Render the scene each tick from within Assets (unless suppressed by UI)
+
     if (scene && !suppress_render_) scene->render();
+
+
+    {
+        std::vector<Asset*> pending;
+        pending.reserve(owned_assets.size());
+        for (const auto& up : owned_assets) {
+            if (up && up->needs_removal()) pending.push_back(up.get());
+        }
+        for (Asset* a : pending) {
+            auto it = std::find_if(owned_assets.begin(), owned_assets.end(),
+                                   [a](const std::unique_ptr<Asset>& p){ return p.get() == a; });
+            if (it != owned_assets.end()) {
+                owned_assets.erase(it); // triggers Asset::~Asset to unregister itself
+            }
+        }
+    }
 }
 
-void Assets::remove(Asset* asset) {
-    if (!asset) return;
-
-    std::cout << "[Assets] Removing asset: "
-              << (asset->info ? asset->info->name : "<null>")
-              << " at (" << asset->pos_X << ", " << asset->pos_Y << ")\n";
-
-    // Remove from active manager and refresh cached vectors
-    activeManager.remove(asset);
-    activeManager.updateClosestAssets(player, 3);
-    active_assets  = activeManager.getActive();
-    closest_assets = activeManager.getClosest();
-
-    // Remove from pointer list
-    all.erase(std::remove(all.begin(), all.end(), asset), all.end());
-    // Remove owned storage
-    owned_assets.erase(
-        std::remove_if(owned_assets.begin(), owned_assets.end(),
-                        [asset](const std::unique_ptr<Asset>& a) { return a.get() == asset; }),
-        owned_assets.end());
-}
+// Removal is centralized in Asset::~Asset and the owned_assets erasure above.
 
 void Assets::set_dev_mode(bool mode) {
     dev_mode = mode;
-    // Close any UI panels when entering dev mode to start clean
     if (dev_mode) {
         close_asset_library();
         close_asset_info_editor();
     }
-    // Clear any pending mouse click buffers to avoid stale clicks opening panels
+
     if (input) input->clearClickBuffer();
     if (dev_mouse) dev_mouse->reset_click_state();
 }
@@ -229,7 +224,7 @@ void Assets::addAsset(const std::string& name, int gx, int gy) {
     std::cout << "\n[Assets::addAsset] Request to create asset '" << name
               << "' at grid (" << gx << ", " << gy << ")\n";
 
-    // Check library
+
     auto info = library_.get(name);
     if (!info) {
         std::cerr << "[Assets::addAsset][Error] No asset info found for '" << name << "'\n";
@@ -238,15 +233,15 @@ void Assets::addAsset(const std::string& name, int gx, int gy) {
     std::cout << "[Assets::addAsset] Retrieved AssetInfo '" << info->name
               << "' at " << info << "\n";
 
-    // Construct area
+
     Area spawn_area(name, gx, gy, 1, 1, "Point", 1, 1, 1);
     std::cout << "[Assets::addAsset] Created Area '" << spawn_area.get_name()
               << "' at (" << gx << ", " << gy << ")\n";
 
-    // Track size before
+
     size_t prev_size = owned_assets.size();
 
-    // Construct asset
+
     owned_assets.emplace_back(
         std::make_unique<Asset>(info, spawn_area, gx, gy, 0, nullptr));
 

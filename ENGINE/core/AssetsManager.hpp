@@ -48,7 +48,6 @@ Assets(std::vector<Asset>&& loaded,
                 int screen_center_x,
                 int screen_center_y);
 
-    void remove(Asset* asset);
     void set_dev_mode(bool mode);
     // Control whether rendering happens inside update() (useful for pause menus)
     void set_render_suppressed(bool suppressed);

@@ -577,7 +577,7 @@
     "anti_tags": [],
     "asset_name": "Frog",
     "asset_type": "Object",
-    "can_invert": true,
+    "can_invert": false,
     "custom_controller_key": "Frog_controller",
     "duplicatable": false,
     "duplication_interval_max": 60,

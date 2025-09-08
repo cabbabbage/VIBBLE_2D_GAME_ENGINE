@@ -1,18 +1,23 @@
 
 #include "scene_renderer.hpp"
-#include "core/AssetsManager.hpp"
-#include "asset/Asset.hpp"
+#include "core\assetsManager.hpp"
+#include "asset\Asset.hpp"
 #include "light_map.hpp"
-#include "utils/parallax.hpp"
+#include "utils\parallax.hpp"
 
+#include <algorithm>
+#include <cmath>
 #include <iostream>
+#include <random>
+#include <tuple>
+#include <vector>
 
 static constexpr SDL_Color SLATE_COLOR = {69, 101, 74, 255};
 static constexpr float MIN_VISIBLE_SCREEN_RATIO = 0.015f;
 
 
-static constexpr int MOTION_BLUR_STRENGTH   = 150;
-static constexpr int MOTION_BLUR_PERSISTENCE = 200;
+static int MOTION_BLUR_STRENGTH   = 150; 
+static int MOTION_BLUR_PERSISTENCE = 200; 
 
 SceneRenderer::SceneRenderer(SDL_Renderer* renderer,
                              Assets* assets,
@@ -83,7 +88,7 @@ void SceneRenderer::update_shading_groups() {
 }
 
 bool SceneRenderer::shouldRegen(Asset* a) {
-    if (!a->get_final_texture()) { return true; }
+    if (!a->get_final_texture()){return true;}
     return (a->get_shading_group() > 0 &&
             a->get_shading_group() == current_shading_group_) ||
            (!a->get_final_texture() ||
@@ -92,14 +97,20 @@ bool SceneRenderer::shouldRegen(Asset* a) {
 }
 
 SDL_Rect SceneRenderer::get_scaled_position_rect(Asset* a, int fw, int fh,
-                                                 float smooth_inv_scale, int min_w, int min_h) {
+                                                 float inv_scale, int min_w, int min_h) {
+    static float smooth_inv_scale = 1.0f;      
+    constexpr float lerp_speed = 0.08f;        
+
+    
+    smooth_inv_scale += (inv_scale - smooth_inv_scale) * lerp_speed;
+
     int sw = static_cast<int>(fw * smooth_inv_scale);
     int sh = static_cast<int>(fh * smooth_inv_scale);
     if (sw < min_w && sh < min_h) {
         return {0, 0, 0, 0};
     }
 
-    SDL_Point cp{ a->screen_X, a->screen_Y }; 
+    SDL_Point cp = parallax_.apply(a->pos_X, a->pos_Y); 
     cp.x = screen_width_ / 2 + static_cast<int>((cp.x - screen_width_ / 2) * smooth_inv_scale);
     cp.y = screen_height_ / 2 + static_cast<int>((cp.y - screen_height_ / 2) * smooth_inv_scale);
 
@@ -107,6 +118,9 @@ SDL_Rect SceneRenderer::get_scaled_position_rect(Asset* a, int fw, int fh,
 }
 
 void SceneRenderer::render() {
+    static int render_call_count = 0;
+    ++render_call_count;
+
     update_shading_groups();
 
     int px = assets_->player ? assets_->player->pos_X : 0;
@@ -114,12 +128,6 @@ void SceneRenderer::render() {
     parallax_.setReference(px, py); 
 
     main_light_source_.update();
-
-    // Update screen positions for all active assets based on current parallax
-    for (Asset* a : assets_->active_assets) {
-        if (!a) continue;
-        parallax_.update_screen_position(*a);
-    }
 
     
     SDL_SetRenderTarget(renderer_, accumulation_tex_);
@@ -137,7 +145,6 @@ void SceneRenderer::render() {
     const auto& view_state = assets_->getView();
     float scale = view_state.get_scale();
     float inv_scale = 1.0f / scale;
-    smooth_inv_scale_ += (inv_scale - smooth_inv_scale_) * 0.08f;
 
     int min_visible_w = static_cast<int>(screen_width_  * MIN_VISIBLE_SCREEN_RATIO);
     int min_visible_h = static_cast<int>(screen_height_ * MIN_VISIBLE_SCREEN_RATIO);
@@ -156,37 +163,47 @@ void SceneRenderer::render() {
 
         int fw = a->cached_w;
         int fh = a->cached_h;
-        if (fw <= 0 || fh <= 0) {
-            SDL_QueryTexture(final_tex, nullptr, nullptr, &fw, &fh);
-            a->cached_w = fw;
-            a->cached_h = fh;
-        }
+        if (fw == 0 || fh == 0) SDL_QueryTexture(final_tex, nullptr, nullptr, &fw, &fh);
 
-        SDL_Rect fb = get_scaled_position_rect(a, fw, fh, smooth_inv_scale_,
+        SDL_Rect fb = get_scaled_position_rect(a, fw, fh, inv_scale,
                                                min_visible_w, min_visible_h);
         if (fb.w == 0 && fb.h == 0) continue;
-        if (a->is_highlighted() || a->is_selected()) {
-            SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_ADD);
-            if (a->is_highlighted()) {
-                SDL_SetRenderDrawColor(renderer_, 200, 5, 5, 100);
-            } else {
-                SDL_SetRenderDrawColor(renderer_, 5, 5, 200, 100);
-            }
 
-            SDL_Rect outline = fb;
-            outline.x -= 2; outline.y -= 2;
-            outline.w += 4; outline.h += 4;
-            SDL_RenderFillRect(renderer_, &outline);
-            SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND);
+    if (a->is_highlighted()) {
+        SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_ADD);
+        SDL_SetRenderDrawColor(renderer_, 200, 5, 5, 100); 
 
-            SDL_SetTextureColorMod(final_tex, 255, 200, 200);
-            SDL_RenderCopyEx(renderer_, final_tex, nullptr, &fb, 0, nullptr,
-                             a->flipped ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE);
-            SDL_SetTextureColorMod(final_tex, 255, 255, 255);
-        } else {
-            SDL_RenderCopyEx(renderer_, final_tex, nullptr, &fb, 0, nullptr,
-                             a->flipped ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE);
-        }
+        SDL_Rect outline = fb;
+        outline.x -= 2; outline.y -= 2;
+        outline.w += 4; outline.h += 4;
+        SDL_RenderFillRect(renderer_, &outline);
+
+        SDL_SetTextureColorMod(final_tex, 255, 200, 200); 
+    }
+    else if (a->is_selected()) {
+        SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_ADD);
+        SDL_SetRenderDrawColor(renderer_, 5, 5, 200, 100); 
+
+        SDL_Rect outline = fb;
+        outline.x -= 2; outline.y -= 2;
+        outline.w += 4; outline.h += 4;
+        SDL_RenderFillRect(renderer_, &outline);
+
+        SDL_SetTextureColorMod(final_tex, 255, 200, 200); 
+    }
+    else {
+        SDL_SetTextureColorMod(final_tex, 255, 255, 255); 
+    }
+
+        SDL_RenderCopyEx(renderer_,
+                         final_tex,
+                         nullptr,
+                         &fb,
+                         0,
+                         nullptr,
+                         a->flipped ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE);
+
+        SDL_SetTextureColorMod(final_tex, 255, 255, 255); 
     }
 
     
@@ -196,18 +213,8 @@ void SceneRenderer::render() {
     
     z_light_pass_->render(debugging);
 
+    // Removed global tint overlay pass (no-op now for performance)
+
     
-    SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_MOD);
-    SDL_Color tint = main_light_source_.apply_tint_to_color({255, 255, 255, 255}, 255);
-    SDL_SetRenderDrawColor(renderer_, tint.r, tint.g, tint.b, tint.a);
-    SDL_Rect screenRect{0, 0, screen_width_, screen_height_};
-    SDL_RenderFillRect(renderer_, &screenRect);
-    SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_NONE);
-
-    // Draw overlays (e.g., asset library panel) before presenting
-    if (assets_) {
-        assets_->render_overlays(renderer_);
-    }
-
     SDL_RenderPresent(renderer_);
 }

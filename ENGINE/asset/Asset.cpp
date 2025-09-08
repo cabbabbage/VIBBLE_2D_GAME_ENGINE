@@ -9,6 +9,8 @@
 #include <filesystem>
 #include <iostream>
 #include <random>
+#include <algorithm>
+#include "dev_mode/dev_mouse_controls.hpp"
 
 Asset::Asset(std::shared_ptr<AssetInfo> info_,
              const Area& spawn_area,
@@ -40,6 +42,11 @@ Asset::Asset(std::shared_ptr<AssetInfo> info_,
  set_flip();
  set_z_index();
 
+ // Initialize shading flag from asset info
+ if (info) {
+  try { has_shading = info->has_shading; } catch (...) { has_shading = false; }
+ }
+
  std::string start_id = info->start_animation.empty() ? std::string{"default"} : info->start_animation;
  auto it = info->animations.find(start_id);
  if (it == info->animations.end())
@@ -56,7 +63,47 @@ Asset::Asset(std::shared_ptr<AssetInfo> info_,
  }
 }
 
-Asset::~Asset() = default;
+Asset::~Asset() {
+ // Detach from parent/children relationships
+ if (parent) {
+  auto& vec = parent->children;
+  vec.erase(std::remove(vec.begin(), vec.end(), this), vec.end());
+  parent = nullptr;
+ }
+ for (Asset* c : children) {
+  if (c && c->parent == this) c->parent = nullptr;
+ }
+
+ // Destroy any final texture we own
+ if (final_texture) {
+  SDL_DestroyTexture(final_texture);
+  final_texture = nullptr;
+ }
+
+ // Proactively unregister from managers/vectors that hold raw pointers
+ try {
+  if (assets_) {
+   // Clear dev-mode selections to avoid dangling pointers
+   if (assets_->dev_mouse) {
+    assets_->dev_mouse->purge_asset(this);
+   }
+
+   // If this was the player reference, clear it
+   if (assets_->player == this) assets_->player = nullptr;
+
+   // Remove from active manager and flat vectors
+   assets_->activeManager.remove(this);
+   auto& act = assets_->active_assets;
+   act.erase(std::remove(act.begin(), act.end(), this), act.end());
+   auto& clo = assets_->closest_assets;
+   clo.erase(std::remove(clo.begin(), clo.end(), this), clo.end());
+   auto& allv = assets_->all;
+   allv.erase(std::remove(allv.begin(), allv.end(), this), allv.end());
+  }
+ } catch (...) {
+  // Swallow any cleanup-time errors; destructor must not throw
+ }
+}
 
 Asset::Asset(const Asset& o)
  : parent(o.parent)
@@ -256,6 +303,36 @@ void Asset::change_animation(const std::string& name) {
 std::string Asset::get_current_animation() const { return current_animation; }
 std::string Asset::get_type() const { return info ? info->type : ""; }
 
+bool Asset::is_current_animation_locked_in_progress() const {
+ if (!info) return false;
+ auto it = info->animations.find(current_animation);
+ if (it == info->animations.end()) return false;
+ const Animation& anim = it->second;
+ if (!anim.locked) return false;
+ int last = static_cast<int>(anim.frames.size()) - 1;
+ if (last < 0) return false; // treat empty as not locked-in-progress
+ // Locked means: allow change only once the last frame has been reached.
+ return current_frame_index != last;
+}
+
+bool Asset::is_current_animation_last_frame() const {
+ if (!info) return false;
+ auto it = info->animations.find(current_animation);
+ if (it == info->animations.end()) return false;
+ const Animation& anim = it->second;
+ int last = static_cast<int>(anim.frames.size()) - 1;
+ if (last < 0) return true; // no frames -> treat as done
+ return current_frame_index >= last;
+}
+
+bool Asset::is_current_animation_looping() const {
+ if (!info) return false;
+ auto it = info->animations.find(current_animation);
+ if (it == info->animations.end()) return false;
+ const Animation& anim = it->second;
+ return anim.loop;
+}
+
 void Asset::add_child(Asset* child) {
  if (!child || !child->info) return;
 
@@ -398,3 +475,7 @@ bool  Asset::is_highlighted(){ return highlighted; }
 
 void Asset::set_selected(bool state){ selected = state; }
 bool  Asset::is_selected(){ return selected; }
+
+bool Asset::needs_removal() const { return remove; }
+
+void Asset::set_remove() { remove = true; }

@@ -242,3 +242,18 @@ SDL_Point DevMouseControls::compute_mouse_world(int mx_screen, int my_screen) co
     // Inverse of parallax projection based on current player reference
     return parallax_.inverse(mx_screen, my_screen);
 }
+
+void DevMouseControls::purge_asset(Asset* a) {
+    if (!a) return;
+    if (hovered_asset == a) hovered_asset = nullptr;
+    if (last_click_asset_ == a) {
+        last_click_asset_ = nullptr;
+        last_click_time_ms_ = 0;
+    }
+    selected_assets.erase(std::remove(selected_assets.begin(), selected_assets.end(), a), selected_assets.end());
+    highlighted_assets.erase(std::remove(highlighted_assets.begin(), highlighted_assets.end(), a), highlighted_assets.end());
+    if (drag_anchor_asset_ == a) {
+        drag_anchor_asset_ = nullptr;
+        dragging_ = false;
+    }
+}

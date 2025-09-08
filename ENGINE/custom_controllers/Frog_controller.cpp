@@ -2,7 +2,7 @@
 
 #include "utils/input.hpp"
 #include "asset/Asset.hpp"
-#include "asset/determine_movement.hpp"
+#include "asset/auto_movement.hpp"
 #include "asset/move.hpp"
 #include "utils/area.hpp"
 #include "core/active_assets_manager.hpp"
@@ -22,7 +22,8 @@
 FrogController::FrogController(Assets* assets, Asset* self, ActiveAssetsManager& aam)
  : assets_(assets),
    self_(self),
-   aam_(aam)
+   aam_(aam),
+   mover_(self, aam, true)
 {
   rng_seed_ ^= reinterpret_cast<uintptr_t>(self_) + 0x9e3779b9u;
   frames_until_think_ = rand_range(think_interval_min_, think_interval_max_);
@@ -36,6 +37,18 @@ void FrogController::update(const Input& /*in*/) {
   updated_by_determine_ = false;
   // Run brain tick if valid; always tick animation at end.
   if (self_ && self_->info) {
+    // Recompute or maintain a persistent wander target every 100 frames
+    constexpr double pi = 3.14159265358979323846;
+    if (pursue_frames_left_ <= 0) {
+      int angle_deg = rand_range(0, 359);
+      double theta = (static_cast<double>(angle_deg) * pi) / 180.0;
+      int radius = 30; // small local wander radius
+      pursue_target_x_ = self_->pos_X + static_cast<int>(std::llround(radius * std::cos(theta)));
+      pursue_target_y_ = self_->pos_Y + static_cast<int>(std::llround(radius * std::sin(theta)));
+      pursue_frames_left_ = pursue_recalc_interval_;
+    } else {
+      pursue_frames_left_ -= 1;
+    }
     // No controller-side animation speed manipulation; timing handled by AnimationManager
     if (frames_until_think_ > 0) {
       frames_until_think_ -= 1;
@@ -88,26 +101,15 @@ void FrogController::think() {
 bool FrogController::try_hop_any_dir() {
   if (!self_) return false;
 
-  // Randomly pick a target offset around the frog, then choose best animation
-  // towards this target using per-animation totals.
-  static const char* names[4] = { "left", "right", "forward", "backward" };
+  // Idle-like micro hops for now; pursue will be implemented next.
+  const std::string before = self_->get_current_animation();
+  mover_.set_idle(/*min=*/0, /*max=*/30, /*rest_ratio=*/3);
+  mover_.move();
+  updated_by_determine_ = true;
+  const std::string after = self_->get_current_animation();
 
-  // Shuffle choice to vary targets over time
-  int idx = rand_range(0,3);
-  int dx = 0, dy = 0;
-  switch (idx) {
-    case 0: dx = -probe_; dy = 0; break;      // left
-    case 1: dx =  probe_; dy = 0; break;      // right
-    case 2: dx = 0;        dy =  probe_; break; // forward
-    default: dx = 0;       dy = -probe_; break; // backward
-  }
-
-  int target_x = self_->pos_X + dx;
-  int target_y = self_->pos_Y + dy;
-
-  std::vector<std::string> candidates = { names[0], names[1], names[2], names[3] };
-  if ((updated_by_determine_ = DetermineMovement::apply_best_animation(self_, aam_, target_x, target_y, candidates))) {
-    std::cout << "[frog] hop -> '" << self_->get_current_animation() << "'\n";
+  if (after != before) {
+    std::cout << "[frog] hop -> '" << after << "' (idle)\n";
     return true;
   }
   std::cout << "[frog] hop blocked (no valid direction)\n";

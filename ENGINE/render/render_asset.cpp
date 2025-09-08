@@ -2,7 +2,7 @@
 #include "render_asset.hpp"
 #include "global_light_source.hpp"
 #include "asset\Asset.hpp"
-#include "core/AssetsManager.hpp"
+#include "core\assetsManager.hpp"
 #include "utils\light_utils.hpp"
 #include "utils\parallax.hpp"
 #include <algorithm>
@@ -39,7 +39,7 @@ SDL_Texture* RenderAsset::render_shadow_mask(Asset* a, int bw, int bh) {
         SDL_SetTextureColorMod(base, 255, 255, 255);
     }
 
-    SDL_Point parallax_pos{ a->screen_X, a->screen_Y };
+    SDL_Point parallax_pos = parallax_.apply(a->pos_X, a->pos_Y);
     SDL_Rect bounds{ parallax_pos.x - bw / 2, parallax_pos.y - bh, bw, bh };
     const Uint8 light_alpha = static_cast<Uint8>(main_light_source_.get_brightness());
 
@@ -82,9 +82,8 @@ SDL_Texture* RenderAsset::regenerateFinalTexture(Asset* a) {
     int alpha_mod = (c >= 1.0f) ? 255 : int(main_alpha * c);
     if (a->info->type == "Player") alpha_mod = std::min(255, alpha_mod * 3);
 
-    const SDL_Color mod_color = main_light_source_.apply_tint_to_color({255, 255, 255, 255}, alpha_mod);
-
-    SDL_SetTextureColorMod(base, mod_color.r, mod_color.g, mod_color.b);
+    // Remove global tinting: render base as-is (white color mod)
+    SDL_SetTextureColorMod(base, 255, 255, 255);
     SDL_RenderCopy(renderer_, base, nullptr, nullptr);
     SDL_SetTextureColorMod(base, 255, 255, 255);
 
@@ -194,4 +193,3 @@ void RenderAsset::render_shadow_received_static_lights(Asset* a, const SDL_Rect&
         SDL_RenderCopy(renderer_, sl.source->texture, nullptr, &dst);
     }
 }
-

@@ -2,6 +2,7 @@
 #define FROG_CONTROLLER_HPP
 
 #include "asset/asset_controller.hpp"
+#include "asset/auto_movement.hpp"
 
 class Assets;
 class Asset;
@@ -33,6 +34,7 @@ class FrogController : public AssetController {
   Assets* assets_ = nullptr;
   Asset*  self_   = nullptr;
   ActiveAssetsManager& aam_;
+  AutoMovement mover_;
 
   int frames_until_think_ = 0;
   int think_interval_min_ = 45;
@@ -44,6 +46,12 @@ class FrogController : public AssetController {
 
   bool updated_by_determine_ = false;
   unsigned int rng_seed_ = 0xC0FFEEu;
+
+  // Persistent wander target; updated every N frames
+  int pursue_target_x_ = 0;
+  int pursue_target_y_ = 0;
+  int pursue_frames_left_ = 0;
+  int pursue_recalc_interval_ = 100;
 };
 
 #endif
