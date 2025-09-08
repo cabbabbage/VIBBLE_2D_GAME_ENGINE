@@ -28,20 +28,18 @@
   "impassable_area": null,
   "z_threshold": 2,
   "size_settings": {
-    "scale_percentage": 22,
-    "variability_percentage": 0,
-    "flipability": true
+    "scale_percentage": 22
   },
   "min_same_type_distance": 29,
   "tags": [
-    "nature",
-    "cover",
     "mushroom",
     "pretty",
-    "small",
     "purple",
-    "ground",
+    "cover",
+    "small",
     "plant",
+    "ground",
+    "nature",
     "passable"
   ],
   "rnd_spawn_min": 300,

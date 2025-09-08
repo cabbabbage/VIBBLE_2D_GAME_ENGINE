@@ -36,8 +36,9 @@
     }
   },
   "tags": [
+    "default",
     "passable",
-    "default"
+    "ground"
   ],
   "min_same_type_distance": 0,
   "z_threshold": -100,

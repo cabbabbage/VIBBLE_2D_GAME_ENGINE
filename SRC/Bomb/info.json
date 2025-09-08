@@ -303,7 +303,7 @@
         ]
       ],
       "number_of_frames": 8,
-      "on_end": "default",
+      "on_end": "end",
       "reverse_source": false,
       "rnd_start": false,
       "source": {

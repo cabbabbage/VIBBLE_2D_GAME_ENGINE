@@ -77,14 +77,15 @@
     }
   },
   "tags": [
-    "moving",
     "cover",
-    "passable",
-    "nature",
-    "meadow",
-    "plant",
     "default",
     "green",
+    "ground",
+    "meadow",
+    "moving",
+    "nature",
+    "passable",
+    "plant",
     "small"
   ],
   "min_same_type_distance": 40,

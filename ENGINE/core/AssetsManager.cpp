@@ -168,7 +168,7 @@ void Assets::update(const Input& input,
             if (up && up->needs_removal()) pending.push_back(up.get());
         }
         for (Asset* a : pending) {
-            delete_asset(a);
+            if (a) a->Delete();
         }
     }
 }
@@ -351,7 +351,7 @@ void Assets::delete_asset(Asset* asset) {
     auto it = std::find_if(owned_assets.begin(), owned_assets.end(),
                            [asset](const std::unique_ptr<Asset>& p){ return p.get() == asset; });
     if (it != owned_assets.end()) {
-        owned_assets.erase(it); // triggers Asset::~Asset to unregister itself
+        owned_assets.erase(it);
     }
 }
 

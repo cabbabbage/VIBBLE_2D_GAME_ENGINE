@@ -100,7 +100,7 @@ void VibbleController::handle_teleport(const Input& input) {
 
       if (marker_asset_ && assets_) {
          aam_.remove(marker_asset_);
-         assets_->remove(marker_asset_);
+         marker_asset_->Delete();
          aam_.updateClosestAssets(player_, 3);
          marker_asset_ = nullptr;
       }

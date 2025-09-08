@@ -65,8 +65,8 @@ void BombController::explosion_if_close(Asset* player) {
   if (!self_ || !player) return;
   
   if (self_->get_current_animation() == "explosion") {
-    if (self_->is_current_animation_last_frame() && !self_->is_current_animation_looping()) {
-      self_->delete_self();
+    if (self_->is_current_animation_last_frame()) {
+      self_->Delete();
     }
     return;
   }

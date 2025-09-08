@@ -41,7 +41,6 @@ public:
                  float& progress,
                  int& dx,
                  int& dy,
-                 std::string& mapping_id,
                  bool& resort_z) const;
     void change(int& index, bool& static_flag) const;
 

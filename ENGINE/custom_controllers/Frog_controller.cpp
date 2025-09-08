@@ -27,8 +27,8 @@ FrogController::FrogController(Assets* assets, Asset* self, ActiveAssetsManager&
 {
   rng_seed_ ^= reinterpret_cast<uintptr_t>(self_) + 0x9e3779b9u;
   frames_until_think_ = rand_range(think_interval_min_, think_interval_max_);
-  std::cout << "[frog] init at (" << (self_ ? self_->pos_X : 0) << "," << (self_ ? self_->pos_Y : 0)
-            << ") next think in " << frames_until_think_ << " frames\n";
+  
+
 }
 
 FrogController::~FrogController() {}
@@ -53,13 +53,12 @@ void FrogController::update(const Input& /*in*/) {
     if (frames_until_think_ > 0) {
       frames_until_think_ -= 1;
     } else {
-      std::cout << "[frog] think start cur='" << self_->get_current_animation()
-                << "' at (" << self_->pos_X << "," << self_->pos_Y << ")\n";
+
 
       think();
 
       frames_until_think_ = rand_range(think_interval_min_, think_interval_max_);
-      std::cout << "[frog] next think in " << frames_until_think_ << " frames\n";
+      
     }
   }
   if (self_ && !updated_by_determine_) self_->update_animation_manager();
@@ -73,13 +72,13 @@ void FrogController::think() {
   if (coin(55)) {
     if (cur != "default") {
       if (has_anim("default")) {
-        std::cout << "[frog] rest -> 'default'\n";
+        
         self_->change_animation("default");
       } else {
-        std::cout << "[frog][warn] missing anim 'default'\n";
+        
       }
     } else {
-      std::cout << "[frog] rest keep 'default'\n";
+      
     }
     return;
   }
@@ -87,13 +86,13 @@ void FrogController::think() {
   if (!try_hop_any_dir()) {
     if (cur != "default") {
       if (has_anim("default")) {
-        std::cout << "[frog] hop blocked -> fallback 'default'\n";
+        
         self_->change_animation("default");
       } else {
-        std::cout << "[frog][warn] missing anim 'default' on fallback\n";
+        
       }
     } else {
-      std::cout << "[frog] hop blocked, remain 'default'\n";
+      
     }
   }
 }
@@ -109,10 +108,10 @@ bool FrogController::try_hop_any_dir() {
   const std::string after = self_->get_current_animation();
 
   if (after != before) {
-    std::cout << "[frog] hop -> '" << after << "' (idle)\n";
+    
     return true;
   }
-  std::cout << "[frog] hop blocked (no valid direction)\n";
+  
   return false;
 }
 
