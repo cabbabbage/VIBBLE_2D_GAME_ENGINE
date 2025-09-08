@@ -36,11 +36,10 @@ void Input::handleEvent(const SDL_Event& e) {
         break;
 
     case SDL_KEYDOWN:
-        // ignore key repeats for pressed edge state; key remains down
-        keys_down_.insert(e.key.keysym.sym);
+        keys_down_[e.key.keysym.scancode] = true;
         break;
     case SDL_KEYUP:
-        keys_down_.erase(e.key.keysym.sym);
+        keys_down_[e.key.keysym.scancode] = false;
         break;
     default:
         break;
@@ -57,15 +56,11 @@ void Input::update() {
     }
 
     // Keyboard transitions
-    keys_pressed_.clear();
-    keys_released_.clear();
-    for (const auto& k : keys_down_) {
-        if (prev_keys_down_.count(k) == 0) keys_pressed_.insert(k);
+    for (int i = 0; i < SDL_NUM_SCANCODES; ++i) {
+        keys_pressed_[i]  = (!prev_keys_down_[i] && keys_down_[i]);
+        keys_released_[i] = (prev_keys_down_[i] && !keys_down_[i]);
+        prev_keys_down_[i] = keys_down_[i];
     }
-    for (const auto& k : prev_keys_down_) {
-        if (keys_down_.count(k) == 0) keys_released_.insert(k);
-    }
-    prev_keys_down_ = keys_down_;
 
     // Reset per-frame deltas
     dx_ = dy_ = 0;

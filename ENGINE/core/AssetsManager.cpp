@@ -150,7 +150,7 @@ void Assets::update(const Input& input,
     }
 
 
-    if (input.wasKeyPressed(SDLK_TAB)) {
+    if (input.wasScancodePressed(SDL_SCANCODE_TAB)) {
         toggle_asset_library();
     }
 

@@ -31,10 +31,10 @@ void VibbleController::movement(const Input& input) {
    dx_ = dy_ = 0;
    if (!player_) return;
 
-   bool up    = input.isKeyDown(SDLK_w);
-   bool down  = input.isKeyDown(SDLK_s);
-   bool left  = input.isKeyDown(SDLK_a);
-   bool right = input.isKeyDown(SDLK_d);
+   bool up    = input.isScancodeDown(SDL_SCANCODE_W);
+   bool down  = input.isScancodeDown(SDL_SCANCODE_S);
+   bool left  = input.isScancodeDown(SDL_SCANCODE_A);
+   bool right = input.isScancodeDown(SDL_SCANCODE_D);
 
    int move_x = (right ? 1 : 0) - (left ? 1 : 0);
    int move_y = (down  ? 1 : 0) - (up    ? 1 : 0);
@@ -94,7 +94,7 @@ void VibbleController::handle_teleport(const Input& input) {
       return;
    }
 
-   if (input.wasKeyPressed(SDLK_SPACE) && !teleport_set_) {
+   if (input.wasScancodePressed(SDL_SCANCODE_SPACE) && !teleport_set_) {
       teleport_point_ = { player_->pos_X, player_->pos_Y };
       teleport_set_ = true;
 
@@ -118,7 +118,7 @@ void VibbleController::handle_teleport(const Input& input) {
       }
    }
 
-   if (input.wasKeyPressed(SDLK_q) && teleport_set_) {
+   if (input.wasScancodePressed(SDL_SCANCODE_Q) && teleport_set_) {
       // Teleport via Move helper using a single FrameMovement
       Animation::FrameMovement fm;
       fm.dx = teleport_point_.x - player_->pos_X;
@@ -140,11 +140,11 @@ void VibbleController::handle_teleport(const Input& input) {
 
 void VibbleController::update(const Input& input) {
    dx_ = dy_ = 0;
-   if (input.isKeyDown(SDLK_SPACE) || input.isKeyDown(SDLK_q)) {
+   if (input.isScancodeDown(SDL_SCANCODE_SPACE) || input.isScancodeDown(SDL_SCANCODE_Q)) {
       handle_teleport(input);
    }
    movement(input);
-   if (input.isKeyDown(SDLK_e)) {
+   if (input.isScancodeDown(SDL_SCANCODE_E)) {
       interaction();
    }
    if (player_) player_->update_animation_manager();

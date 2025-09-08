@@ -32,7 +32,7 @@ void DevMouseControls::handle_mouse_input(const Input& input) {
         parallax_.setReference(player->pos_X, player->pos_Y);
     }
 
-    if (input.isKeyDown(SDLK_ESCAPE)) {
+    if (input.isScancodeDown(SDL_SCANCODE_ESCAPE)) {
         selected_assets.clear();
         highlighted_assets.clear();
         hovered_asset = nullptr;
@@ -171,7 +171,7 @@ void DevMouseControls::handle_click(const Input& input) {
 
     Asset* nearest = hovered_asset; 
     if (nearest) {
-        const bool ctrlHeld = input.isKeyDown(SDLK_LCTRL) || input.isKeyDown(SDLK_RCTRL);
+        const bool ctrlHeld = input.isScancodeDown(SDL_SCANCODE_LCTRL) || input.isScancodeDown(SDL_SCANCODE_RCTRL);
         auto it = std::find(selected_assets.begin(), selected_assets.end(), nearest);
 
         if (ctrlHeld) {
@@ -202,7 +202,7 @@ void DevMouseControls::handle_click(const Input& input) {
             last_click_asset_ = nearest;
         }
     } else {
-        const bool ctrlHeld = input.isKeyDown(SDLK_LCTRL) || input.isKeyDown(SDLK_RCTRL);
+        const bool ctrlHeld = input.isScancodeDown(SDL_SCANCODE_LCTRL) || input.isScancodeDown(SDL_SCANCODE_RCTRL);
         if (!ctrlHeld) {
             selected_assets.clear();
         }
