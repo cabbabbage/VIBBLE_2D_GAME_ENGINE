@@ -856,7 +856,7 @@
   "impassable_area": null,
   "layout": {
     "__view": {
-      "geometry": "1920x1009+-25+-16",
+      "geometry": "1920x1009+-36+69",
       "zoom": 1.0,
       "xview": 0.0,
       "yview": 0.0

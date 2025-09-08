@@ -5,6 +5,9 @@ import sys
 from pathlib import Path
 from typing import Dict, Any, List, Optional
 
+import threading
+from frame_cropper import get_image_paths, compute_union_bounds, crop_images_with_bounds  # type: ignore
+
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 
@@ -62,11 +65,18 @@ class AnimationConfiguratorAppSingle:
         self.history.snapshot(self.data)
 
         # Actions bar
-        act = ttk.Frame(self.win); act.pack(side="top", fill="x", padx=8, pady=6)
+        act = ttk.Frame(self.win)
+        act.pack(side="top", fill="x", padx=8, pady=6)
+
         # Custom controller button (asset-level)
         self.cc_manager = CustomControllerManager(self.info_path)
-        self.custom_ctrl_btn = ttk.Button(act, text=self._custom_ctrl_button_text(), command=self._on_custom_ctrl)
+        self.custom_ctrl_btn = ttk.Button(
+            act,
+            text=self._custom_ctrl_button_text(),
+            command=self._on_custom_ctrl,
+        )
         self.custom_ctrl_btn.pack(side="left", padx=(2, 8))
+
         # Proactively ensure engine sources include all existing controllers
         try:
             self._ensure_all_custom_includes()
@@ -74,6 +84,14 @@ class AnimationConfiguratorAppSingle:
             pass
 
         ttk.Button(act, text="New Animation", command=self.create_animation).pack(side="left", padx=2)
+
+        # Crop All (Global Bounds) button
+        ttk.Button(
+            act,
+            text="Crop All (Global Bounds)",
+            command=self._crop_all_global,
+        ).pack(side="left", padx=2)
+
         ttk.Label(act, text="Start:").pack(side="left", padx=(16, 4))
         self.start_var = tk.StringVar(value=str(self.data.get("start", "")))
         self.start_cb = ttk.Combobox(act, textvariable=self.start_var, width=24, state="readonly")
@@ -138,7 +156,100 @@ class AnimationConfiguratorAppSingle:
 
         self.rebuild_list()
         self._restore_view_state()
-        
+
+    # ----- helpers for cropping -----
+    def _anim_source_folder(self, anim_payload: Dict[str, Any]) -> Optional[Path]:
+        try:
+            src = anim_payload.get("source", {})
+            if not isinstance(src, dict):
+                return None
+            if src.get("kind") != "folder":
+                return None
+            rel = src.get("path")
+            if not rel:
+                return None
+            return (self.info_path.parent / rel).resolve()
+        except Exception:
+            return None
+
+    def _run_in_thread(self, fn, on_done=None):
+        def _wrap():
+            try:
+                result = fn()
+            except Exception as e:
+                result = e
+            finally:
+                if on_done:
+                    self.win.after(0, lambda r=result: on_done(r))
+        threading.Thread(target=_wrap, daemon=True).start()
+
+    def _crop_all_global(self):
+        if not (self.data and isinstance(self.data.get("animations"), dict)):
+            messagebox.showinfo("Crop All", "No animations found.")
+            return
+
+        # 1) Collect all folders and image paths
+        anims = list(self.data["animations"].items())
+        images_by_folder: Dict[Path, List[str]] = {}
+
+        for _name, payload in anims:
+            folder = self._anim_source_folder(payload)
+            if folder and folder.exists():
+                try:
+                    images_by_folder[folder] = get_image_paths(str(folder))
+                except Exception:
+                    images_by_folder[folder] = []
+
+        all_image_paths: List[str] = []
+        for lst in images_by_folder.values():
+            all_image_paths.extend(lst)
+
+        if not all_image_paths:
+            messagebox.showinfo("Crop All", "No numbered PNG frames found.")
+            return
+
+        # 2) Background work: compute global bounds, then crop everything with those bounds
+        def work():
+            # Slightly tolerant threshold to ignore faint halos
+            top, bottom, left, right, _w, _h = compute_union_bounds(all_image_paths, alpha_threshold=2)
+            if top == bottom == left == right == 0:
+                return {"bounds": (0, 0, 0, 0), "total": 0, "per_folder": []}
+
+            total_cropped = 0
+            per_folder = []
+            for folder, imgs in images_by_folder.items():
+                if not imgs:
+                    per_folder.append((str(folder), 0))
+                    continue
+                n = crop_images_with_bounds(imgs, top, bottom, left, right)
+                total_cropped += n
+                per_folder.append((str(folder), n))
+            return {"bounds": (top, bottom, left, right), "total": total_cropped, "per_folder": per_folder}
+
+        def done(res):
+            if isinstance(res, Exception):
+                messagebox.showerror("Crop All", f"Error: {res}")
+                return
+            bounds = res.get("bounds", (0, 0, 0, 0))
+            total = res.get("total", 0)
+            per_folder = res.get("per_folder", [])
+            t, b, l, r = bounds
+            if total == 0:
+                messagebox.showinfo("Crop All", "No cropping needed (global bounds empty).")
+            else:
+                lines = [f"Global crop (T:{t}, B:{b}, L:{l}, R:{r})", f"Total frames cropped: {total}", ""]
+                for folder, n in per_folder:
+                    lines.append(f"{folder}: {n} frames")
+                messagebox.showinfo("Crop All", "\n".join(lines))
+            # refresh previews and save
+            try:
+                self.save_current()
+                self.rebuild_list()
+            except Exception:
+                pass
+
+        self._run_in_thread(work, on_done=done)
+
     # ----- autosave -----
     def save_current(self):
         if not (self.data and self.info_path):
@@ -160,7 +271,8 @@ class AnimationConfiguratorAppSingle:
         anims.sort()
         # place panels in a grid with spacing
         cmax = max(1, int(getattr(self, "grid_cols", 2)))
-        r = 0; c = 0
+        r = 0
+        c = 0
         for a in anims:
             p = AnimationsPanel(
                 self.inner,
@@ -303,7 +415,8 @@ class AnimationConfiguratorAppSingle:
         base = "new_anim"
         name, i = base, 1
         while name in self.data["animations"]:
-            name = f"{base}_{i}"; i += 1
+            name = f"{base}_{i}"
+            i += 1
         self.data["animations"][name] = {
             "source": {"kind": "folder", "path": name, "name": None},
             "flipped_source": False,
@@ -370,10 +483,12 @@ class AnimationConfiguratorAppSingle:
 
 # ---------- entry ----------
 def _choose_info_json() -> Optional[Path]:
-    root = tk.Tk(); root.withdraw(); root.update_idletasks()
+    root = tk.Tk()
+    root.withdraw()
+    root.update_idletasks()
     path_str = filedialog.askopenfilename(
         title="Select info.json",
-        filetypes=[("JSON files", "*.json"), ("All files", "*.*")]
+        filetypes=[("JSON files", "*.json"), ("All files", "*.*")],
     )
     root.destroy()
     if not path_str:

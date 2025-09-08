@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+
 from __future__ import annotations
 from typing import Any, Dict, List, Optional, Callable, Set
 import os
@@ -7,29 +7,9 @@ from tkinter import ttk
 
 from movement_modal import MovementModal
 from sources_element_pannel import SourcesElementPanel
-from custom_updates_panel import CustomUpdatesPanel
 
 
 class AnimationsPanel:
-    """
-    Composed panel for editing a single animation.
-
-    - Header: ID (rename), Delete, preview thumbnail
-    - SourcesElementPanel (replaces embedded sources UI)
-    - Playback
-    - Movement (modal)
-    - On End (new)
-
-    Callbacks:
-      - on_changed(node_id, payload)
-      - on_renamed(old_id, new_id)
-      - on_delete(node_id)
-
-    Optional resolver:
-      - resolve_animation_payload(name) -> Dict[str, Any]
-        Allows recursive resolution when source.kind == "animation".
-    """
-
     def __init__(
         self,
         parent: tk.Widget,
@@ -57,12 +37,12 @@ class AnimationsPanel:
         self.payload = self._coerce_payload(self.node_id, payload)
         self._sync_frames_from_source()
 
-        # Use tk.LabelFrame so we can control border thickness reliably
+        
         self.frame = tk.LabelFrame(parent, text=self.node_id, bd=6, relief=tk.GROOVE)
         self._build_ui()
         self._refresh_preview()
 
-    # ----- UI -----
+    
     def _build_ui(self) -> None:
         header = ttk.Frame(self.frame)
         header.grid(row=0, column=0, sticky="ew", padx=8, pady=(6, 8))
@@ -71,7 +51,7 @@ class AnimationsPanel:
         id_font = ("Segoe UI", 14, "bold")
         ttk.Label(header, text="ID:", font=id_font).pack(side="left")
         self.id_var = tk.StringVar(value=self.node_id)
-        # Use tk.Entry to ensure custom font applies across themes
+        
         id_entry = tk.Entry(header, textvariable=self.id_var, width=24, font=id_font)
         id_entry.pack(side="left", padx=(4, 10))
         id_entry.bind("<FocusOut>", self._commit_rename)
@@ -87,17 +67,7 @@ class AnimationsPanel:
         body.grid(row=1, column=0, sticky="nsew", padx=8, pady=(0, 8))
         self.frame.rowconfigure(1, weight=1)
 
-        # custom animation controller panel (under preview, before sources)
-        self.custom_panel = CustomUpdatesPanel(
-            body,
-            self.payload,
-            on_changed=self._apply_changes,
-            asset_folder=self.asset_folder or "",
-            get_current_name=lambda: self.node_id,
-        )
-        self.custom_panel.get_frame().pack(fill="x", pady=4)
-
-        # source sub-panel
+        
         self.sources_panel = SourcesElementPanel(
             body,
             self.payload.get("source", {}),
@@ -108,37 +78,41 @@ class AnimationsPanel:
         )
         self.sources_panel.get_frame().pack(fill="x", pady=4)
 
-        # playback
+        
         pf = ttk.LabelFrame(body, text="Playback")
         pf.pack(fill="x", pady=4)
         self.flipped_var = tk.BooleanVar(value=bool(self.payload.get("flipped_source", False)))
         self.reversed_var = tk.BooleanVar(value=bool(self.payload.get("reverse_source", False)))
         self.locked_var = tk.BooleanVar(value=bool(self.payload.get("locked", False)))
-        # random start flag
+        self.loop_var = tk.BooleanVar(value=bool(self.payload.get("loop", False)))  
+        
         self.rnd_start_var = tk.BooleanVar(value=bool(self.payload.get("rnd_start", False)))
-        ttk.Checkbutton(pf, text="flipped", variable=self.flipped_var, command=self._apply_changes).grid(row=0, column=0, sticky="w")
-        ttk.Checkbutton(pf, text="reverse", variable=self.reversed_var, command=self._apply_changes).grid(row=0, column=1, sticky="w")
-        ttk.Checkbutton(pf, text="locked", variable=self.locked_var, command=self._apply_changes).grid(row=0, column=2, sticky="w")
-        ttk.Checkbutton(pf, text="rnd start", variable=self.rnd_start_var, command=self._apply_changes).grid(row=0, column=3, sticky="w")
+
+        ttk.Checkbutton(pf, text="flipped",  variable=self.flipped_var,  command=self._apply_changes).grid(row=0, column=0, sticky="w")
+        ttk.Checkbutton(pf, text="reverse",  variable=self.reversed_var, command=self._apply_changes).grid(row=0, column=1, sticky="w")
+        ttk.Checkbutton(pf, text="locked",   variable=self.locked_var,   command=self._apply_changes).grid(row=0, column=2, sticky="w")
+        ttk.Checkbutton(pf, text="rnd start",variable=self.rnd_start_var,command=self._apply_changes).grid(row=0, column=3, sticky="w")
+        ttk.Checkbutton(pf, text="loop",     variable=self.loop_var,     command=self._apply_changes).grid(row=0, column=4, sticky="w")  
+
         ttk.Label(pf, text="speed").grid(row=1, column=0, sticky="e")
         self.speed_var = tk.IntVar(value=int(self.payload.get("speed_factor", 1)))
         spin_speed = ttk.Spinbox(pf, from_=-20, to=20, textvariable=self.speed_var, width=8, command=self._apply_changes)
         spin_speed.grid(row=1, column=1, sticky="w", padx=4)
         spin_speed.bind("<FocusOut>", lambda _e: self._apply_changes())
 
-        # frames (read-only; derived from source)
+        
         ttk.Label(pf, text="frames").grid(row=2, column=0, sticky="e")
         self.frames_var = tk.IntVar(value=int(self.payload.get("number_of_frames", 1)))
         frames_entry = ttk.Entry(pf, textvariable=self.frames_var, width=8, state="readonly")
         frames_entry.grid(row=2, column=1, sticky="w", padx=4)
 
-        # movement
+        
         mvf = ttk.LabelFrame(body, text="Movement")
         mvf.pack(fill="x", pady=4)
         ttk.Label(mvf, text="Edit per-frame movement vectors").grid(row=0, column=0, sticky="w", padx=4)
         ttk.Button(mvf, text="Edit Movement...", command=self._open_movement_modal).grid(row=0, column=1, sticky="e", padx=4)
 
-        # on end (dropdown with built-ins + animations)
+        
         oef = ttk.LabelFrame(body, text="On End")
         oef.pack(fill="x", pady=4)
         self.on_end_var = tk.StringVar(value=str(self.payload.get("on_end", "default") or "default"))
@@ -147,11 +121,11 @@ class AnimationsPanel:
         self.on_end_combo.bind("<<ComboboxSelected>>", lambda _e: self._apply_changes())
         self._refresh_on_end_options()
 
-    # ----- public API -----
+    
     def get_frame(self) -> ttk.Frame:
         return self.frame
 
-    # ---------- frames derivation ----------
+    
     def _count_frame_files(self, path: str) -> int:
         """Count frame files in a folder, excluding GIFs and non-files."""
         if not path:
@@ -163,7 +137,7 @@ class AnimationsPanel:
                     if not entry.is_file():
                         continue
                     name = entry.name.lower()
-                    # exclude gifs; include common still formats
+                    
                     if name.endswith((".png", ".jpg", ".jpeg", ".bmp", ".webp")):
                         count += 1
             return max(1, count)
@@ -185,7 +159,7 @@ class AnimationsPanel:
                 return self._count_frame_files(path)
 
             if kind == "spritesheet":
-                # support common metadata styles
+                
                 cols = int((current.get("cols") or 0))
                 rows = int((current.get("rows") or 0))
                 frames = int((current.get("frames") or 0))
@@ -193,21 +167,21 @@ class AnimationsPanel:
                     return max(1, cols * rows)
                 if frames > 0:
                     return frames
-                # fallback to 1 if undefined
+                
                 return 1
 
             if kind == "animation":
-                # Follow the referenced animation to its source, avoiding cycles.
-                # Prefer 'name' for the target animation ID, else fall back to 'path' if that's how it's stored.
+                
+                
                 target = (current.get("name") or current.get("path") or "").strip()
                 if not target:
                     return 1
-                # cycle guard
+                
                 if target in visited:
                     return 1
                 visited.add(target)
 
-                # resolve the referenced animation payload using the optional resolver
+                
                 resolved_payload: Optional[Dict[str, Any]] = None
                 if callable(self.resolve_animation_payload):
                     try:
@@ -216,35 +190,33 @@ class AnimationsPanel:
                         resolved_payload = None
 
                 if not isinstance(resolved_payload, dict):
-                    # cannot resolve: safest fallback
+                    
                     return 1
 
-                # move to that animation's source and continue
+                
                 current = dict(resolved_payload.get("source") or {})
                 continue
 
-            # Unknown kind → conservative fallback
+            
             return 1
 
     def _sync_frames_from_source(self) -> None:
         n = self._compute_frames_from_source(self.payload.get("source", {}))
         self.payload["number_of_frames"] = n
-        # UI var may not exist yet during __init__, so guard it
+        
         if hasattr(self, "frames_var"):
             self.frames_var.set(n)
 
     def set_payload(self, new_payload: Dict[str, Any]) -> None:
         self.payload = self._coerce_payload(self.node_id, new_payload)
         self._sync_frames_from_source()
-        # sync sub-panels + vars
+        
         self.sources_panel.set_values(self.payload.get("source", {}))
-        try:
-            self.custom_panel.set_values(self.payload)
-        except Exception:
-            pass
+
         self.flipped_var.set(bool(self.payload.get("flipped_source", False)))
         self.reversed_var.set(bool(self.payload.get("reverse_source", False)))
         self.locked_var.set(bool(self.payload.get("locked", False)))
+        self.loop_var.set(bool(self.payload.get("loop", False)))
         try:
             self.rnd_start_var.set(bool(self.payload.get("rnd_start", False)))
         except Exception:
@@ -257,7 +229,7 @@ class AnimationsPanel:
         if self.on_changed:
             self.on_changed(self.node_id, self.payload)
 
-    # ----- internal -----
+    
     def _commit_rename(self, _evt=None):
         new_id = self.id_var.get().strip()
         if not new_id or new_id == self.node_id:
@@ -269,7 +241,7 @@ class AnimationsPanel:
             self.frame.configure(text=new_id)
         except Exception:
             pass
-        # refresh any lists that depend on id
+        
         try:
             self._refresh_on_end_options()
         except Exception:
@@ -295,8 +267,8 @@ class AnimationsPanel:
     def _on_movement_saved(self, new_movement: List[List[int]]):
         self.payload["movement"] = new_movement
 
-        # persist totals for debugging / re-open convenience
-        tot_dx = sum(int(it[0]) for it in new_movement)  # frame 0 is 0 anyway
+        
+        tot_dx = sum(int(it[0]) for it in new_movement)  
         tot_dy = sum(int(it[1]) for it in new_movement)
         self.payload["movement_total"] = {"dx": int(tot_dx), "dy": int(tot_dy)}
 
@@ -304,25 +276,27 @@ class AnimationsPanel:
             self.on_changed(self.node_id, self.payload)
         self._refresh_preview()
 
-
     def _apply_changes(self):
         payload = self.payload
         payload["source"] = self.sources_panel.read_values()
         payload["flipped_source"] = bool(self.flipped_var.get())
         payload["reverse_source"] = bool(self.reversed_var.get())
         payload["locked"] = bool(self.locked_var.get())
+        payload["loop"] = bool(self.loop_var.get())  
         payload["rnd_start"] = bool(self.rnd_start_var.get())
+
         v = int(self.speed_var.get())
         if v == 0:
             v = 1
         v = max(-20, min(20, v))
         payload["speed_factor"] = v
         payload["on_end"] = str(self.on_end_var.get() or "default")
-        # derive frames from (possibly-recursive) source
+
+        
         payload["number_of_frames"] = self._compute_frames_from_source(payload.get("source", {}))
         self.frames_var.set(payload["number_of_frames"])
 
-        # movement normalization stays the same
+        
         mv = payload.get("movement", [])
         if not isinstance(mv, list):
             mv = []
@@ -334,11 +308,6 @@ class AnimationsPanel:
         if n >= 1:
             mv[0] = [0, 0]
         payload["movement"] = mv
-
-        try:
-            payload.update(self.custom_panel.get_values())
-        except Exception:
-            pass
 
         if self.on_changed:
             self.on_changed(self.node_id, payload)
@@ -356,7 +325,7 @@ class AnimationsPanel:
         except Exception:
             pass
 
-    # ----- helpers -----
+    
     @staticmethod
     def _coerce_payload(anim_name: str, p: Dict[str, Any]) -> Dict[str, Any]:
         p = dict(p or {})
@@ -370,6 +339,7 @@ class AnimationsPanel:
         p.setdefault("flipped_source", False)
         p.setdefault("reverse_source", False)
         p.setdefault("locked", False)
+        p.setdefault("loop", bool(p.get("loop", False)))  
         p.setdefault("rnd_start", bool(p.get("rnd_start", False)))
         try:
             _raw = int(str(p.get("speed_factor", 1)).strip())
@@ -380,13 +350,13 @@ class AnimationsPanel:
         _raw = max(-20, min(20, _raw))
         p.setdefault("speed_factor", _raw)
 
-        # number_of_frames will be overwritten by _sync_frames_from_source()
+        
         try:
             p.setdefault("number_of_frames", max(1, int(p.get("number_of_frames", 1))))
         except Exception:
             p.setdefault("number_of_frames", 1)
 
-        # movement sizing will be normalized after frames sync as well
+        
         mv = p.get("movement")
         n = p["number_of_frames"]
         if not isinstance(mv, list) or len(mv) < 1:
@@ -404,19 +374,7 @@ class AnimationsPanel:
             val = "default"
         p["on_end"] = str(val)
 
-        # migrate legacy custom update keys to new custom animation controller keys
-        if "has_custom_animation_controller" not in p:
-            p["has_custom_animation_controller"] = bool(
-                p.get("has_custom_animation_controller", p.get("has_custom_tick_update", False))
-            )
-        if "custom_animation_controller_hpp_path" not in p:
-            p["custom_animation_controller_hpp_path"] = str(
-                p.get("custom_animation_controller_hpp_path", p.get("custom_update_hpp_path", "")) or ""
-            )
-        if "custom_animation_controller_key" not in p:
-            p["custom_animation_controller_key"] = str(
-                p.get("custom_animation_controller_key", p.get("custom_update_key", "")) or ""
-            )
+        
         return p
 
     def _refresh_on_end_options(self):
@@ -424,8 +382,9 @@ class AnimationsPanel:
             names = sorted(self.list_animation_names())
         except Exception:
             names = []
-        base = ["default", "loop", "reverse", "end"]
-        # merge and deduplicate while preserving base order
+        
+        base = ["default", "reverse", "end"]
+        
         seen = set()
         values = []
         for x in base + names:
@@ -437,7 +396,7 @@ class AnimationsPanel:
             self.on_end_combo["values"] = values
         except Exception:
             pass
-        # ensure current selection is valid
+        
         cur = str(self.on_end_var.get() or "default")
         if cur not in values:
             self.on_end_var.set("default")
