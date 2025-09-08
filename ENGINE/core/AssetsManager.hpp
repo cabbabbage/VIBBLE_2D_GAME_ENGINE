@@ -41,7 +41,7 @@ Assets(std::vector<Asset>&& loaded,
                 int screen_center_x,
                 int screen_center_y);
     void set_dev_mode(bool mode);
-    // Control whether rendering happens inside update() (useful for pause menus)
+    
     void set_render_suppressed(bool suppressed);
     void set_input(Input* m);
     Input* get_input() const { return input; }
@@ -52,12 +52,12 @@ Assets(std::vector<Asset>&& loaded,
     const std::vector<Asset*>& getClosest() const { return closest_assets; }
     view& getView() { return window; }
     const view& getView() const { return window; }
-    // Owns all asset instances to keep their memory stable
+    
     std::deque<std::unique_ptr<Asset>> owned_assets;
-    // Non-owning flat list for easy iteration/access
+    
     std::vector<Asset*> all;
     Asset* player = nullptr;
-    // Deprecated: controls moved to custom controllers (per-asset)
+    
     CurrentRoomFinder* finder_ = nullptr;
     Input* input = nullptr;
     DevMouseControls* dev_mouse = nullptr;
@@ -76,22 +76,22 @@ Assets(std::vector<Asset>&& loaded,
     bool dev_mode = false;
     AssetLibrary& library_;
     bool suppress_render_ = false;
-    // Spawn API
+    
     Asset* spawn_asset(const std::string& name, int world_x, int world_y);
-    // Overlay UIs
+    
 public:
-    // Called by renderer to draw overlays (e.g., asset library)
+    
     void render_overlays(SDL_Renderer* renderer);
-    // Toggle asset library (bound to TAB)
+    
     void toggle_asset_library();
     void open_asset_library();
     void close_asset_library();
     bool is_asset_library_open() const;
-    // Pump UI update
+    
     void update_ui(const Input& input);
-    // Retrieve selection from asset library, if any
+    
     std::shared_ptr<AssetInfo> consume_selected_asset_from_library();
-    // Asset info editor panel
+    
     void open_asset_info_editor(const std::shared_ptr<AssetInfo>& info);
     void close_asset_info_editor();
     bool is_asset_info_editor_open() const;

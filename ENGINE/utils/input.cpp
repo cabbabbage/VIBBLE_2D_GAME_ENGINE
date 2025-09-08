@@ -21,7 +21,7 @@ void Input::handleEvent(const SDL_Event& e) {
         if (idx >= 0) {
             buttons_[idx] = down;
             if (!down) {
-                // small click window
+                
                 clickBuffer_[idx] = 3;
             }
         }
@@ -32,7 +32,7 @@ void Input::handleEvent(const SDL_Event& e) {
         scrollY_ += e.wheel.y;
         break;
     case SDL_KEYDOWN:
-        // ignore key repeats for pressed edge state; key remains down
+        
         keys_down_.insert(e.key.keysym.sym);
         break;
     case SDL_KEYUP:
@@ -44,14 +44,14 @@ void Input::handleEvent(const SDL_Event& e) {
 }
 
 void Input::update() {
-    // Mouse button transitions
+    
     for (int i = 0; i < COUNT; ++i) {
         pressed_[i]   = (!prevButtons_[i] && buttons_[i]);
         released_[i]  = (prevButtons_[i] && !buttons_[i]);
         prevButtons_[i] = buttons_[i];
         if (clickBuffer_[i] > 0) clickBuffer_[i]--;
     }
-    // Keyboard transitions
+    
     keys_pressed_.clear();
     keys_released_.clear();
     for (const auto& k : keys_down_) {
@@ -61,7 +61,7 @@ void Input::update() {
         if (keys_down_.count(k) == 0) keys_released_.insert(k);
     }
     prev_keys_down_ = keys_down_;
-    // Reset per-frame deltas
+    
     dx_ = dy_ = 0;
     scrollX_ = scrollY_ = 0;
 }

@@ -12,7 +12,7 @@ public:
     void setParallaxMax(float maxX, float maxY);
     void setDisabled(bool flag);
     bool isDisabled() const;
-    // Compute and set asset screen position from its world position
+    
     void update_screen_position(Asset& a) const;
 private:
     int screenWidth_;

@@ -37,7 +37,7 @@ Asset::Asset(std::shared_ptr<AssetInfo> info_,
 {
  set_flip();
  set_z_index();
- // Initialize shading flag from asset info
+ 
  if (info) {
   try { has_shading = info->has_shading; } catch (...) { has_shading = false; }
  }
@@ -57,7 +57,7 @@ Asset::Asset(std::shared_ptr<AssetInfo> info_,
 }
 
 Asset::~Asset() {
- // Detach from parent/children relationships
+ 
  if (parent) {
   auto& vec = parent->children;
   vec.erase(std::remove(vec.begin(), vec.end(), this), vec.end());
@@ -66,7 +66,7 @@ Asset::~Asset() {
  for (Asset* c : children) {
   if (c && c->parent == this) c->parent = nullptr;
  }
-// Destroy any final texture we own
+
 if (final_texture) {
  SDL_DestroyTexture(final_texture);
  final_texture = nullptr;
@@ -120,7 +120,7 @@ Asset::Asset(const Asset& o)
  , spawn_method(o.spawn_method)
  , controller_(nullptr)
 {
- // anim_ intentionally not copied (runtime helper)
+ 
 }
 
 Asset& Asset::operator=(const Asset& o) {
@@ -170,7 +170,7 @@ Asset& Asset::operator=(const Asset& o) {
  spawn_id             = o.spawn_id;
  spawn_method         = o.spawn_method;
  controller_.reset();
- // anim_ rebuilt on finalize_setup
+ 
  return *this;
 }
 
@@ -206,12 +206,12 @@ void Asset::finalize_setup() {
     std::cout << "    - \"" << child->info->name
               << "\" at (" << child->pos_X << ", " << child->pos_Y << ")\n";
  }
- // build controller via factory (factory returns default when no key)
+ 
  if (assets_) {
   ControllerFactory cf(assets_, assets_->activeManager);
   controller_ = cf.create_for_asset(this);
  }
- // build animation manager
+ 
  anim_ = std::make_unique<AnimationManager>(this);
 }
 
@@ -265,7 +265,7 @@ bool Asset::is_current_animation_locked_in_progress() const {
  if (!anim.locked) return false;
  int last = static_cast<int>(anim.frames.size()) - 1;
  if (last < 0) return false;
- // Locked means: allow change only once the last frame has been reached.
+ 
  return current_frame_index != last;
 }
 

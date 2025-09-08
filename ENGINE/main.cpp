@@ -78,7 +78,7 @@ void MainApp::game_loop() {
     constexpr int FRAME_MS = 1000 / 30;
     bool quit = false;
     SDL_Event e;
-    // Input is handled by the Input class
+    
     int frame_count = 0;
     while (!quit) {
         Uint32 start = SDL_GetTicks();
@@ -92,7 +92,7 @@ void MainApp::game_loop() {
             const int py = game_assets_->player->pos_Y;
             game_assets_->update(*input_, px, py);
         }
-        // Rendering is handled by the SceneRenderer owned by Assets
+        
         ++frame_count;
         if (input_) input_->update();
         Uint32 elapsed = SDL_GetTicks() - start;

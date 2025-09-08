@@ -1,4 +1,4 @@
-// === File: ui/main_menu.cpp ===
+
 #include "main_menu.hpp"
 
 #include <SDL_image.h>
@@ -11,7 +11,7 @@
 
 namespace fs = std::filesystem;
 
-// ---------- MainMenu ----------
+
 
 MainMenu::MainMenu(SDL_Renderer* renderer, int screen_w, int screen_h)
     : renderer_(renderer), screen_w_(screen_w), screen_h_(screen_h)
@@ -72,7 +72,7 @@ std::string MainMenu::handle_event(const SDL_Event& e) {
 }
 
 void MainMenu::render() {
-    // Background
+    
     if (background_tex_) {
         SDL_Rect dst = coverDst(background_tex_);
         SDL_RenderCopy(renderer_, background_tex_, nullptr, &dst);
@@ -82,11 +82,11 @@ void MainMenu::render() {
         SDL_RenderClear(renderer_);
     }
     drawVignette(120);
-    // Title
+    
     const std::string title = "DEPARTED AFFAIRS & CO.";
     SDL_Rect trect{ 0, 60, screen_w_, 80 };
-    blitTextCentered(renderer_, Styles::LabelTitle(), title, trect, /*shadow=*/true, SDL_Color{0,0,0,0});
-    // Buttons
+    blitTextCentered(renderer_, Styles::LabelTitle(), title, trect, true, SDL_Color{0,0,0,0});
+    
     for (auto& b : buttons_) {
         b.render(renderer_);
     }
@@ -94,7 +94,7 @@ void MainMenu::render() {
 
 void MainMenu::showLoadingScreen() {
     SDL_SetRenderTarget(renderer_, nullptr);
-    // Background (reuse same loader or current tex)
+    
     SDL_Texture* bg = background_tex_;
     bool temp_bg = false;
     if (!bg) {
@@ -105,7 +105,7 @@ void MainMenu::showLoadingScreen() {
             temp_bg = (bg != nullptr);
         }
     }
-    // Clear and draw bg
+    
     SDL_SetRenderDrawColor(renderer_, 0, 0, 0, 255);
     SDL_RenderClear(renderer_);
     if (bg) {
@@ -113,7 +113,7 @@ void MainMenu::showLoadingScreen() {
         SDL_RenderCopy(renderer_, bg, nullptr, &bgdst);
     }
     drawVignette(110);
-    // Random loading set folder
+    
     std::vector<fs::path> folders;
     if (fs::exists("loading") && fs::is_directory("loading")) {
         for (const auto& e : fs::directory_iterator("loading")) {
@@ -129,20 +129,20 @@ void MainMenu::showLoadingScreen() {
         if (!img.empty()) tarot = loadTexture(img);
         msg = pickRandomLine(folder / "messages.csv");
     }
-    // "LOADING..." title
+    
     const std::string loading = "LOADING...";
     SDL_Point tsize = measureText(Styles::LabelTitle(), loading);
     const int title_x = (screen_w_ - tsize.x) / 2;
     const int title_y = std::max(0, (screen_h_ / 2) - screen_h_ / 6 - tsize.y - 24);
-    blitText(renderer_, Styles::LabelTitle(), loading, title_x, title_y, /*shadow=*/true, SDL_Color{0,0,0,0});
-    // Tarot image
+    blitText(renderer_, Styles::LabelTitle(), loading, title_x, title_y, true, SDL_Color{0,0,0,0});
+    
     if (tarot) {
         SDL_Rect dst = fitCenter(tarot, screen_w_/3, screen_h_/3, screen_w_/2, screen_h_/2);
         SDL_RenderCopy(renderer_, tarot, nullptr, &dst);
         SDL_DestroyTexture(tarot);
         tarot = nullptr;
     }
-    // Message (simple wrap)
+    
     if (!msg.empty()) {
         const int pad = 24;
         const int mw  = screen_w_/3;
@@ -163,7 +163,7 @@ void MainMenu::showLoadingScreen() {
                 std::string test = line.empty()? word : line + " " + word;
                 SDL_Point sz = measureText(L, test);
                 if (sz.x > mrect.w && !line.empty()) {
-                    blitText(renderer_, L, line, mrect.x, y, /*shadow=*/false, SDL_Color{0,0,0,0});
+                    blitText(renderer_, L, line, mrect.x, y, false, SDL_Color{0,0,0,0});
                     y += line_h;
                     line = word;
                 } else {
@@ -172,7 +172,7 @@ void MainMenu::showLoadingScreen() {
                 if (y >= mrect.y + mrect.h) break;
             }
             if (!line.empty() && y < mrect.y + mrect.h) {
-                blitText(renderer_, L, line, mrect.x, y, /*shadow=*/false, SDL_Color{0,0,0,0});
+                blitText(renderer_, L, line, mrect.x, y, false, SDL_Color{0,0,0,0});
             }
         }
     }
@@ -181,7 +181,7 @@ void MainMenu::showLoadingScreen() {
     if (temp_bg && bg) SDL_DestroyTexture(bg);
 }
 
-// ---------- Private helpers ----------
+
 
 SDL_Texture* MainMenu::loadTexture(const std::string& abs_utf8_path) {
     SDL_Texture* t = IMG_LoadTexture(renderer_, abs_utf8_path.c_str());

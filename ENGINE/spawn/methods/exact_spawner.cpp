@@ -11,7 +11,7 @@ void ExactSpawner::spawn(const SpawnInfo& item, const Area* area, SpawnContext& 
     auto [minx, miny, maxx, maxy] = area->get_bounds();
     int curr_w = std::max(1, maxx - minx);
     int curr_h = std::max(1, maxy - miny);
-    // Use the asset's scaled canvas size as the default origin reference
+    
     int canvas_w = (item.info && item.info->original_canvas_width > 0)
                      ? static_cast<int>(std::lround(item.info->original_canvas_width * item.info->scale_factor))
                      : curr_w;

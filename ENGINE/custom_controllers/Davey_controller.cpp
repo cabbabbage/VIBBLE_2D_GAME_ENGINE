@@ -12,13 +12,13 @@
 DaveyController::DaveyController(Assets* assets, Asset* self, ActiveAssetsManager& aam)
    : assets_(assets), self_(self), aam_(aam), mover_(self, aam, true) {}
 
-void DaveyController::update(const Input& /*input*/) {
+void DaveyController::update(const Input& ) {
    bool updated_by_determine = false;
-   // Non-player follower: move towards Assets::player when within 1000px
+   
    if (!self_ || !assets_ || !self_->info) return;
    Asset* player = assets_->player;
    if (!player) {
-      // idle: do not change animation here; just progress frames
+      
       self_->update_animation_manager();
       return;
    }
@@ -27,7 +27,7 @@ void DaveyController::update(const Input& /*input*/) {
    long long d2 = dx*dx + dy*dy;
    const long long r = 1000LL;
    if (d2 <= r*r) {
-      // Choose or reuse a random point on a 30px radius circle around the player
+      
       constexpr int radius = 30;
       constexpr double pi = 3.14159265358979323846;
       static thread_local std::mt19937 rng{std::random_device{}()};
@@ -42,12 +42,12 @@ void DaveyController::update(const Input& /*input*/) {
       }
       int target_x = pursue_target_x_;
       int target_y = pursue_target_y_;
-      // Pursue the player while staying within a radius band around current pos
-      mover_.set_pursue(player, /*min=*/20, /*max=*/30);
+      
+      mover_.set_pursue(player, 20, 30);
       mover_.move();
       updated_by_determine = true;
    } else {
-      // Out of range: do not force animation here; AutoMovement owns changes.
+      
    }
    if (!updated_by_determine) self_->update_animation_manager();
 }

@@ -46,9 +46,9 @@ Assets::Assets(std::vector<Asset>&& loaded,
     if (finder_) {
         window.set_up_rooms(finder_);
     }
-    // Create scene renderer owned by Assets
+    
     scene = new SceneRenderer(renderer, this, screen_width_, screen_height_, map_path);
-    // Ensure all existing assets have a back-reference to this manager
+    
     for (Asset* a : all) {
         if (a) a->set_assets(this);
     }
@@ -86,21 +86,21 @@ void Assets::update(const Input& input,
     current_room_ = finder_ ? finder_->getCurrentRoom() : nullptr;
     window.update_zoom(current_room_, finder_, player);
     dx = dy = 0;
-    // Track player start position for this tick
+    
     int start_px = player ? player->pos_X : 0;
     int start_py = player ? player->pos_Y : 0;
-    // Per-asset controllers now live inside each Asset instance
+    
     active_assets  = activeManager.getActive();
     closest_assets = activeManager.getClosest();
-    // Advance player (applies per-frame movement from animation)
+    
     if (player) player->update();
-    // Compute dx/dy from resulting position delta
+    
     if (player) {
         dx = player->pos_X - start_px;
         dy = player->pos_Y - start_py;
     }
-    // Update distance_to_player for all active assets before their updates,
-    // so controllers can use a fresh value this frame.
+    
+    
     if (player) {
         const int px = player->pos_X;
         const int py = player->pos_Y;
@@ -203,10 +203,10 @@ void Assets::addAsset(const std::string& name, int gx, int gy) {
     std::cout << "[Assets::addAsset][Debug] New Asset allocated at " << newAsset
               << " (info=" << (newAsset->info ? newAsset->info->name : "<null>")
               << ")\n";
-    // Insert into master list
+    
     all.push_back(newAsset);
     std::cout << "[Assets::addAsset] all.size() now = " << all.size() << "\n";
-    // Set view + finalize
+    
     try {
         set_view_recursive(newAsset, &window);
         set_assets_owner_recursive(newAsset, this);
@@ -216,7 +216,7 @@ void Assets::addAsset(const std::string& name, int gx, int gy) {
     } catch (const std::exception& e) {
         std::cerr << "[Assets::addAsset][Exception] " << e.what() << "\n";
     }
-    // Activate in manager
+    
     activeManager.activate(newAsset);
     activeManager.updateClosestAssets(player, 3);
     active_assets  = activeManager.getActive();

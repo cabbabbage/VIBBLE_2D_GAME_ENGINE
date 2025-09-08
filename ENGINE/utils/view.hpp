@@ -40,7 +40,7 @@ private:
     double target_scale_ = 1.0;
     int    steps_total_  = 0;
     int    steps_done_   = 0;
-    // Zoom state derived from rooms
+    
     Room*  starting_room_ = nullptr;
     double starting_area_ = 1.0;
     double compute_room_scale_from_area(const Room* room) const;

@@ -4,7 +4,7 @@
 #include <algorithm>
 #include <stdexcept>
 #include <vector>
-// --- Interactive Area Editor implementation split from area.cpp ---
+
 namespace {
 struct EditorResult {
     std::vector<Area::Point> points;
@@ -72,25 +72,25 @@ static EditorResult run_area_editor(SDL_Texture* background,
         SDL_DestroyWindow(win);
         throw std::runtime_error("[Area Editor] Failed to create renderer");
     }
-    // Prepare mask surface (ARGB): we'll use the alpha channel as the mask value
+    
     SDL_Surface* mask = SDL_CreateRGBSurfaceWithFormat(0, tex_w, tex_h, 32, SDL_PIXELFORMAT_RGBA32);
     if (!mask) {
         SDL_DestroyRenderer(rend);
         SDL_DestroyWindow(win);
         throw std::runtime_error("[Area Editor] Failed to allocate mask surface");
     }
-    // Clear mask to transparent
+    
     SDL_FillRect(mask, nullptr, SDL_MapRGBA(mask->format, 255, 0, 0, 0));
-    // no pre-stamp; we render the existing area outline as an overlay every frame
-    // Build a local background texture compatible with 'rend' by copying pixels
+    
+    
     SDL_Texture* bg_local = nullptr;
     if (src_renderer) {
-        // Render the background texture into a temporary target on the source renderer,
-        // then read back pixels into a surface to recreate a texture for the editor renderer.
+        
+        
         SDL_Texture* tmp = SDL_CreateTexture(src_renderer, SDL_PIXELFORMAT_RGBA8888,
                                             SDL_TEXTUREACCESS_TARGET, tex_w, tex_h);
         if (tmp) {
-            // Save mutable state that could clip/scale and cause partial copies
+            
             SDL_Texture* prev = SDL_GetRenderTarget(src_renderer);
             SDL_Rect prev_vp; SDL_RenderGetViewport(src_renderer, &prev_vp);
             SDL_Rect prev_clip; SDL_RenderGetClipRect(src_renderer, &prev_clip);
@@ -111,7 +111,7 @@ static EditorResult run_area_editor(SDL_Texture* background,
                 }
                 SDL_FreeSurface(bg_surf);
             }
-            // Restore renderer state
+            
             SDL_SetRenderTarget(src_renderer, prev);
             SDL_RenderSetViewport(src_renderer, &prev_vp);
             SDL_RenderSetClipRect(src_renderer, &prev_clip);
@@ -120,7 +120,7 @@ static EditorResult run_area_editor(SDL_Texture* background,
         }
     }
     if (!bg_local) {
-        // Fallback: solid gray
+        
         bg_local = SDL_CreateTexture(rend, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET, tex_w, tex_h);
         if (bg_local) {
             SDL_Texture* prev_t = SDL_GetRenderTarget(rend);
@@ -130,26 +130,26 @@ static EditorResult run_area_editor(SDL_Texture* background,
             SDL_SetRenderTarget(rend, prev_t);
         }
     }
-    // View transform: scale (zoom) and offset
-    // Start at a zoom that shows 100% of the image (fit-to-window, but not above 1:1)
+    
+    
     const double fit_scale = std::min(static_cast<double>(win_w) / tex_w, static_cast<double>(win_h) / tex_h);
     double view_scale = std::min(1.0, fit_scale);
     int pan_x = 0, pan_y = 0;
     auto recompute_layout = [&](int& draw_w, int& draw_h, int& off_x, int& off_y){
         draw_w = static_cast<int>(std::round(tex_w * view_scale));
         draw_h = static_cast<int>(std::round(tex_h * view_scale));
-        // Center + pan
+        
         off_x = (win_w - draw_w) / 2 + pan_x;
         off_y = (win_h - draw_h) / 2 + pan_y;
     };
     int draw_w = 0, draw_h = 0, off_x = 0, off_y = 0;
     recompute_layout(draw_w, draw_h, off_x, off_y);
-    // Cache area bounds if provided for overlay mapping
+    
     int area_minx = 0, area_miny = 0, area_maxx = 0, area_maxy = 0;
     if (initial_area) {
         std::tie(area_minx, area_miny, area_maxx, area_maxy) = initial_area->get_bounds();
     }
-    // Brush settings
+    
     int brush = 10;
     bool drawing = false;
     bool erasing = false;
@@ -174,13 +174,13 @@ static EditorResult run_area_editor(SDL_Texture* background,
                     pan_x = pan_y = 0;
                     recompute_layout(draw_w, draw_h, off_x, off_y);
                 } else if (e.key.keysym.sym == SDLK_1) {
-                    // Anchor to center
+                    
                     view_scale = 1.0;
                     pan_x = pan_y = 0;
                     recompute_layout(draw_w, draw_h, off_x, off_y);
                 }
             } else if (e.type == SDL_MOUSEBUTTONDOWN) {
-                // Simple on-screen buttons
+                
                 SDL_Rect btn_draw{10,10,80,28};
                 SDL_Rect btn_erase{100,10,80,28};
                 SDL_Rect btn_save{win_w-100,10,80,28};
@@ -198,21 +198,21 @@ static EditorResult run_area_editor(SDL_Texture* background,
                 if (e.button.button == SDL_BUTTON_RIGHT) erasing = false;
                 if (e.button.button == SDL_BUTTON_MIDDLE) panning = false;
             } else if (e.type == SDL_MOUSEWHEEL) {
-                // Zoom towards mouse pointer
+                
                 int mx, my; SDL_GetMouseState(&mx, &my);
-                // Texture coord under mouse before zoom
+                
                 double tx = (mx - off_x) / view_scale;
                 double ty = (my - off_y) / view_scale;
                 if (e.wheel.y > 0)      view_scale = std::min(10.0, view_scale * 1.1);
                 else if (e.wheel.y < 0) view_scale = std::max(0.05, view_scale / 1.1);
-                // Recompute draw sizes
+                
                 int new_draw_w = 0, new_draw_h = 0, cx = 0, cy = 0;
-                // Center offset without pan
+                
                 new_draw_w = static_cast<int>(std::round(tex_w * view_scale));
                 new_draw_h = static_cast<int>(std::round(tex_h * view_scale));
                 cx = (win_w - new_draw_w) / 2;
                 cy = (win_h - new_draw_h) / 2;
-                // Adjust pan so that (tx,ty) stays under cursor
+                
                 pan_x = (int)std::lround((mx - tx * view_scale) - cx);
                 pan_y = (int)std::lround((my - ty * view_scale) - cy);
                 recompute_layout(draw_w, draw_h, off_x, off_y);
@@ -225,7 +225,7 @@ static EditorResult run_area_editor(SDL_Texture* background,
                     last_mx = mx; last_my = my;
                     recompute_layout(draw_w, draw_h, off_x, off_y);
                 }
-                // Map to texture space
+                
                 int tx = static_cast<int>(std::round((mx - off_x) / view_scale));
                 int ty = static_cast<int>(std::round((my - off_y) / view_scale));
                 if (tx >= 0 && tx < tex_w && ty >= 0 && ty < tex_h) {
@@ -238,13 +238,13 @@ static EditorResult run_area_editor(SDL_Texture* background,
         }
         SDL_SetRenderDrawColor(rend, 20, 20, 20, 255);
         SDL_RenderClear(rend);
-        // Draw background centered
+        
         SDL_Rect dst{ off_x, off_y, draw_w, draw_h };
         if (bg_local) SDL_RenderCopy(rend, bg_local, nullptr, &dst);
-        // Draw existing area outline overlay (relative to background origin)
+        
         if (initial_area) {
-            // If the background is exactly the area's bounding box, subtract min bounds.
-            // Otherwise, assume the background is the full canvas starting at (0,0).
+            
+            
             const bool bg_is_area_bb = (tex_w == (area_maxx - area_minx + 1)) &&
                                        (tex_h == (area_maxy - area_miny + 1));
             const int origin_x = bg_is_area_bb ? area_minx : 0;
@@ -262,7 +262,7 @@ static EditorResult run_area_editor(SDL_Texture* background,
                 SDL_RenderDrawLines(rend, pts.data(), static_cast<int>(pts.size()));
             }
         }
-        // Draw red overlay from mask
+        
         SDL_Texture* overlay = SDL_CreateTextureFromSurface(rend, mask);
         if (overlay) {
             SDL_SetTextureBlendMode(overlay, SDL_BLENDMODE_BLEND);
@@ -270,7 +270,7 @@ static EditorResult run_area_editor(SDL_Texture* background,
             SDL_RenderCopy(rend, overlay, nullptr, &dst);
             SDL_DestroyTexture(overlay);
         }
-        // Simple UI buttons (no text rendering): Draw/Erase/Save
+        
         auto draw_button = [&](SDL_Rect rct, SDL_Color col){
             SDL_SetRenderDrawColor(rend, col.r, col.g, col.b, 200);
             SDL_RenderFillRect(rend, &rct);
@@ -280,10 +280,10 @@ static EditorResult run_area_editor(SDL_Texture* background,
         draw_button(SDL_Rect{10,10,80,28}, draw_mode ? SDL_Color{80,180,80,255} : SDL_Color{60,60,60,255});
         draw_button(SDL_Rect{100,10,80,28}, !draw_mode ? SDL_Color{180,80,80,255} : SDL_Color{60,60,60,255});
         draw_button(SDL_Rect{win_w-100,10,80,28}, SDL_Color{80,80,200,255});
-        // Draw brush preview
+        
         int mx, my; (void)SDL_GetMouseState(&mx, &my);
         SDL_SetRenderDrawColor(rend, 255, 255, 255, 255);
-        // Approximate circle preview
+        
         for (int a = 0; a < 360; a += 6) {
             double rad = a * M_PI / 180.0;
             int x = mx + static_cast<int>(std::cos(rad) * brush);
@@ -295,7 +295,7 @@ static EditorResult run_area_editor(SDL_Texture* background,
     EditorResult res;
     res.bg_w = tex_w;
     res.bg_h = tex_h;
-    res.points = extract_edge_points(mask, /*step=*/1);
+    res.points = extract_edge_points(mask, 1);
     SDL_FreeSurface(mask);
     SDL_DestroyRenderer(rend);
     SDL_DestroyWindow(win);
@@ -304,7 +304,7 @@ static EditorResult run_area_editor(SDL_Texture* background,
 }
 }
 
-// Interactive constructors moved here
+
 Area::Area(const std::string& name, const Area& base, SDL_Renderer* renderer,
            int window_w, int window_h)
     : area_name_(name)
@@ -319,7 +319,7 @@ Area::Area(const std::string& name, const Area& base, SDL_Renderer* renderer,
     if (er.points.empty()) {
         throw std::runtime_error("[Area: editor] No points drawn");
     }
-    // Construct absolute points in image pixel space; pivot is bottom-center
+    
     int pivot_x = er.bg_w / 2;
     int pivot_y = er.bg_h;
     points.clear();

@@ -56,28 +56,28 @@ public:
   std::map<std::string, Animation> animations;
   std::map<std::string, Mapping> mappings;
   std::vector<ChildInfo> children;
-  // Optional per-asset custom controller (by key/name)
+  
   std::string custom_controller_key;
-  // --- Update API for basic (non-area, non-animation) values ---
+  
 public:
-  // Persist current in-memory values back to SRC/<name>/info.json
+  
   bool update_info_json() const;
-  // Setters that update both members and backing JSON snapshot
+  
   void set_asset_type(const std::string &t);
   void set_z_threshold(int z);
   void set_min_same_type_distance(int d);
   void set_min_distance_all(int d);
   void set_flipable(bool v);
-  // Scale: factor in [0..1], or percentage (e.g. 100.0)
+  
   void set_scale_factor(float factor);
   void set_scale_percentage(float percent);
-  // Tags & passable (passable tag present => passable true)
+  
   void set_tags(const std::vector<std::string> &t);
   void add_tag(const std::string &tag);
   void remove_tag(const std::string &tag);
   void set_passable(bool v);
   Area* find_area(const std::string& name);
-  // Persist or update an area drawn via the editor: updates in-memory list and info.json
+  
   void upsert_area_from_editor(const class Area& area);
   std::string pick_next_animation(const std::string& mapping_id) const;
 private:
@@ -89,7 +89,7 @@ private:
   void load_children(const nlohmann::json &data);
   nlohmann::json anims_json_;
   std::string dir_path_;
-  // Snapshot of info.json for incremental updates
+  
   nlohmann::json info_json_;
   std::string info_json_path_;
   friend class AnimationLoader;

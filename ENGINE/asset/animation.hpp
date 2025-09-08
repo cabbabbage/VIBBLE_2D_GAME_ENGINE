@@ -11,7 +11,7 @@ class AssetInfo;
 class Animation {
 public:
     Animation();
-    // Per-frame movement with optional sort flag and color
+    
     struct FrameMovement {
         int dx = 0;
         int dy = 0;
@@ -50,16 +50,16 @@ public:
     bool locked = false;
     float speed_factor = 1.0f;
     int number_of_frames = 0;
-    // Movement per frame, and aggregated totals
+    
     std::vector<FrameMovement> movement;
     int total_dx = 0;
     int total_dy = 0;
     bool movment = false;
-    // Optional: randomize starting frame
+    
     bool rnd_start = false;
     std::string on_end_mapping;
-    // If using simplified schema (no mappings), this holds the direct
-    // animation id to switch to when the animation ends.
+    
+    
     std::string on_end_animation;
     std::vector<SDL_Texture*> frames;
     bool randomize = false;

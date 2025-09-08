@@ -13,7 +13,7 @@ void DistributedBatchSpawner::spawn(const std::vector<BatchSpawnInfo>& items,
                                     int jitter,
                                     SpawnContext& ctx) {
     if (!area || items.empty()) return;
-    // Generate a single spawn_id for this entire distributed batch invocation
+    
     auto gen_id = []() {
         static std::mt19937 rng(std::random_device{}());
         static const char* hex = "0123456789abcdef";

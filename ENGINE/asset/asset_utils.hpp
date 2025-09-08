@@ -2,7 +2,7 @@
 
 #include "Asset.hpp"
 
-// Recursively assign the rendering view to an asset and all of its children.
+
 inline void set_view_recursive(Asset* asset, view* v) {
     if (!asset) return;
     asset->set_view(v);
@@ -11,7 +11,7 @@ inline void set_view_recursive(Asset* asset, view* v) {
     }
 }
 
-// Recursively assign the owning Assets manager to an asset hierarchy.
+
 inline void set_assets_owner_recursive(Asset* asset, Assets* owner) {
     if (!asset) return;
     asset->set_assets(owner);

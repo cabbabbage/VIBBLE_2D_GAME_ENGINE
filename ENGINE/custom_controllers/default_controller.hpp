@@ -5,10 +5,7 @@ class Assets;
 class Asset;
 class ActiveAssetsManager;
 
-/*
-  default controller
-  no behavior for now
-*/
+
 class DefaultController : public AssetController {
 public:
  DefaultController(Assets* assets, Asset* self, ActiveAssetsManager& aam);

@@ -14,7 +14,7 @@ struct SpawnInfo {
     std::string name;
     std::string position;
     std::string spawn_id;
-    // Exact-position helpers
+    
     int exact_dx = 0;
     int exact_dy = 0;
     int exact_origin_w = 0;

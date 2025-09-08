@@ -18,7 +18,7 @@ public:
     std::pair<int,int> get_position() const;
     float              get_angle() const;
     SDL_Texture*       get_texture() const;
-    // Tinting removed; global tint no longer applied.
+    
     SDL_Color get_current_color() const;
     int       get_brightness() const;
     int get_cached_w() const { return cached_w_; }

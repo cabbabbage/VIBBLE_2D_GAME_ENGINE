@@ -42,7 +42,7 @@ void LightMap::collect_layers(std::vector<LightEntry>& out, std::mt19937& rng) {
     constexpr int min_visible_w = 1;
     constexpr int min_visible_h = 1;
     Uint8 main_alpha = main_light_.get_current_color().a;
-    // Reserve to reduce reallocations
+    
     if (out.capacity() < assets_->active_assets.size() + 3) {
         out.reserve(assets_->active_assets.size() + 3);
     }
@@ -98,7 +98,7 @@ SDL_Texture* LightMap::build_lowres_mask(const std::vector<LightEntry>& layers,
     for (auto& e : layers) {
         SDL_SetTextureBlendMode(e.tex, SDL_BLENDMODE_ADD);
         SDL_SetTextureAlphaMod(e.tex, e.alpha);
-        // Global tinting removed; always use neutral color for lights
+        
         SDL_SetTextureColorMod(e.tex, 255, 255, 220);
         SDL_Rect scaled_dst{
             e.dst.x / downscale,

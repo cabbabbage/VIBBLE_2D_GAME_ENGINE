@@ -24,14 +24,14 @@ public:
          int edge_smoothness,
          int map_width, int map_height);
     Area(const std::string& name, const std::string& json_path, float scale);
-    // Interactive constructors (SDL-based editor)
-    // Opens a simple SDL editor to draw/mask over an existing Area's texture
-    // and constructs a new Area from the drawn boundary. If the base area has no
-    // texture, a debug outline texture will be generated.
+    
+    
+    
+    
     Area(const std::string& name, const Area& base, SDL_Renderer* renderer,
          int window_w = 0, int window_h = 0);
-    // Opens the editor over an SDL texture as the background and constructs
-    // a new Area from the drawn boundary.
+    
+    
     Area(const std::string& name, SDL_Texture* background, SDL_Renderer* renderer,
          int window_w = 0, int window_h = 0);
 public:
@@ -65,7 +65,7 @@ private:
     int center_y = 0;
     double area_size = 0.0;
     SDL_Texture* texture_ = nullptr;
-    // Cached AABB for fast queries
+    
     mutable int min_x_ = 0;
     mutable int min_y_ = 0;
     mutable int max_x_ = 0;

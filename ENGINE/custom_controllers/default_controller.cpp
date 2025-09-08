@@ -10,7 +10,7 @@ DefaultController::DefaultController(Assets* assets, Asset* self, ActiveAssetsMa
 
 DefaultController::~DefaultController() = default;
 
-void DefaultController::update(const Input& /*in*/) {
- // No behavior; drive animation progression explicitly.
+void DefaultController::update(const Input& ) {
+ 
  if (self_) self_->update_animation_manager();
 }

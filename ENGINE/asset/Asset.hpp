@@ -21,7 +21,7 @@
 class view;
 class Assets;
 class Input;
-// AnimationManager used via unique_ptr; complete type included above
+
 
 struct StaticLight {
  LightSource* source = nullptr;
@@ -29,11 +29,7 @@ struct StaticLight {
  int offset_y = 0;
  double alpha_percentage = 1.0;
 };
-/*
-  asset runtime object
-  rendering and animation state
-  controller attached by factory
-*/
+
 class Asset {
 public:
  Area get_area(const std::string& name) const;
@@ -54,16 +50,16 @@ public:
  void set_position(int x, int y);
   void update();
   void change_animation(const std::string& name);
-  // Allow controllers to drive animation progression explicitly.
+  
   void update_animation_manager();
  SDL_Texture* get_current_frame() const;
   std::string get_current_animation() const;
   std::string get_type() const;
-  // True when the current animation is marked locked and is still in progress.
-  // For non-looping locked animations: returns true until the last frame is reached.
-  // For looping locked animations: always returns true.
+  
+  
+  
   bool is_current_animation_locked_in_progress() const;
-  // Helpers for controllers: query current animation status
+  
   bool is_current_animation_last_frame() const;
   bool is_current_animation_looping() const;
  void add_child(Asset* child);
@@ -72,7 +68,7 @@ public:
  void set_render_player_light(bool value);
  bool get_render_player_light() const;
  void set_z_offset(int z);
- // Recompute z-index based on current position and thresholds
+ 
  void recompute_z_index();
  void set_shading_group(int x);
  bool is_shading_group_set() const;
@@ -83,10 +79,10 @@ public:
  inline int get_screen_x() const { return screen_X; }
  inline int get_screen_y() const { return screen_Y; }
  void set_view(view* v) { window = v; }
- // lifetime and ownership
+ 
  void set_assets(Assets* a);
  Assets* get_assets() const { return assets_; }
- // misc flags
+ 
  void deactivate();
  bool get_merge();
  void set_hidden(bool state);
@@ -96,7 +92,7 @@ public:
  bool is_highlighted();
  void set_selected(bool state);
  bool is_selected();
- // public data commonly read in render
+ 
  Asset* parent = nullptr;
  std::shared_ptr<AssetInfo> info;
  std::string current_animation;
@@ -113,8 +109,8 @@ public:
  bool flipped = false;
   bool render_player_light = false;
   double alpha_percentage = 1.0;
-  // Runtime helper: Euclidean distance to the current player (in world units).
-  // Updated once per frame by AssetsManager after the player moves.
+  
+  
   float distance_to_player = std::numeric_limits<float>::infinity();
  Area spawn_area_local;
  std::vector<Area> base_areas;
@@ -128,11 +124,11 @@ public:
  bool static_frame = true;
  int cached_w = 0;
  int cached_h = 0;
- // spawn metadata
+ 
  std::string spawn_id;
  std::string spawn_method;
 private:
- // animation manager drives private animation state
+ 
  friend class AnimationManager;
  friend class Move;
  view* window = nullptr;
@@ -142,7 +138,7 @@ private:
  bool selected = false;
  void set_flip();
  void set_z_index();
- // animation internals
+ 
  std::string next_animation;
  int   current_frame_index = 0;
  float frame_progress = 0.0f;
@@ -151,7 +147,7 @@ private:
  SDL_Texture* final_texture = nullptr;
  std::unordered_map<std::string, std::vector<SDL_Texture*>> custom_frames;
  Assets* assets_ = nullptr;
- // runtime helpers
+ 
  std::unique_ptr<AssetController>   controller_;
  std::unique_ptr<AnimationManager>  anim_;
 };

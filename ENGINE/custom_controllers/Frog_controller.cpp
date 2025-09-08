@@ -9,12 +9,7 @@
 #include <cmath>
 #include <random>
 #include <iostream>
-/*
-  frog ai
-  random idle/hop
-  only hop into free space
-  verbose debug
-*/
+
 
 FrogController::FrogController(Assets* assets, Asset* self, ActiveAssetsManager& aam)
  : assets_(assets),
@@ -28,11 +23,11 @@ FrogController::FrogController(Assets* assets, Asset* self, ActiveAssetsManager&
 
 FrogController::~FrogController() {}
 
-void FrogController::update(const Input& /*in*/) {
+void FrogController::update(const Input& ) {
   updated_by_determine_ = false;
-  // Run brain tick if valid; always tick animation at end.
+  
   if (self_ && self_->info) {
-    // Recompute or maintain a persistent wander target every 100 frames
+    
     constexpr double pi = 3.14159265358979323846;
     if (pursue_frames_left_ <= 0) {
       int angle_deg = rand_range(0, 359);
@@ -44,7 +39,7 @@ void FrogController::update(const Input& /*in*/) {
     } else {
       pursue_frames_left_ -= 1;
     }
-    // No controller-side animation speed manipulation; timing handled by AnimationManager
+    
     if (frames_until_think_ > 0) {
       frames_until_think_ -= 1;
     } else {
@@ -81,9 +76,9 @@ void FrogController::think() {
 
 bool FrogController::try_hop_any_dir() {
   if (!self_) return false;
-  // Idle-like micro hops for now; pursue will be implemented next.
+  
   const std::string before = self_->get_current_animation();
-  mover_.set_idle(/*min=*/0, /*max=*/30, /*rest_ratio=*/3);
+  mover_.set_idle(0, 30, 3);
   mover_.move();
   updated_by_determine_ = true;
   const std::string after = self_->get_current_animation();
@@ -125,7 +120,7 @@ bool FrogController::pointInAABB(int x, int y, const Area& B) const {
           y >= b_miny && y <= b_maxy);
 }
 
-/* rng */
+
 int FrogController::randu() {
   rng_seed_ = 1664525u * rng_seed_ + 1013904223u;
   return int(rng_seed_ >> 1);

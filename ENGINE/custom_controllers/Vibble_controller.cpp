@@ -102,7 +102,7 @@ void VibbleController::handle_teleport(const Input& input) {
       }
    }
    if (input.wasKeyPressed(SDLK_q) && teleport_set_) {
-      // Teleport via Move helper using a single FrameMovement
+      
       Animation::FrameMovement fm;
       fm.dx = teleport_point_.x - player_->pos_X;
       fm.dy = teleport_point_.y - player_->pos_Y;

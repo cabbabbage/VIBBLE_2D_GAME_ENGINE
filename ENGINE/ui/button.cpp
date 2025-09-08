@@ -103,7 +103,7 @@ void Button::render(SDL_Renderer* renderer) const {
     const SDL_Color text_normal = style_->text_normal;
     const SDL_Color text_hover  = style_->text_hover;
     const SDL_Color chosen = hovered_ ? text_hover : text_normal;
-    blit_text_center(renderer, style_->label, label_, rect_, /*shadow=*/true, chosen);
+    blit_text_center(renderer, style_->label, label_, rect_, true, chosen);
 }
 
 bool Button::is_hovered() const { return hovered_; }

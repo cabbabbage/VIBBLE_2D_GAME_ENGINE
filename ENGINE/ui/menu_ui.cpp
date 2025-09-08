@@ -1,4 +1,4 @@
-// === File: ui/menu_ui.cpp ===
+
 #include "ui/menu_ui.hpp"
 
 #include "ui/tinyfiledialogs.h"
@@ -56,8 +56,8 @@ void MenuUI::game_loop() {
             if (e.type == SDL_QUIT) {
                 quit = true;
             }
-            // Prioritize in-game overlays over opening the pause menu.
-            // ESC closes asset info or library if open; otherwise toggles pause menu.
+            
+            
             if (e.type == SDL_KEYDOWN && e.key.keysym.sym == SDLK_ESCAPE && e.key.repeat == 0) {
                 bool esc_consumed = false;
                 if (game_assets_) {

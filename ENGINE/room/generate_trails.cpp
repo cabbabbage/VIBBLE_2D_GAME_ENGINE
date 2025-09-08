@@ -49,7 +49,7 @@ std::vector<std::unique_ptr<Room>> GenerateTrails::generate_trails(
             std::string path = pick_random_asset();
             success = TrailGeometry::attempt_trail_connection(
                 a, b, all_areas, map_dir, asset_lib, trail_rooms,
-                /*allowed_intersections=*/1,
+                1,
                 path, testing, rng_
             );
         }
@@ -368,7 +368,7 @@ void GenerateTrails::circular_connection(std::vector<std::unique_ptr<Room>>& tra
             std::string path = pick_random_asset();
             if (TrailGeometry::attempt_trail_connection(current, next, existing_areas, map_dir,
                                                         asset_lib, trail_rooms,
-                                                        /*allowed_intersections=*/1,
+                                                        1,
                                                         path, testing, rng_)) {
                 std::cout << "[Debug][circular_connection] Connected on attempt "
                           << attempt+1 << " using asset: " << path << "\n";

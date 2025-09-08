@@ -3,10 +3,7 @@
 
 class Asset;
 
-/*
-  animation manager
-  owns next animation queue and frame advance for an asset
-*/
+
 class AnimationManager {
 public:
  explicit AnimationManager(Asset* owner);

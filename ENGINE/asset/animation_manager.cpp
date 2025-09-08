@@ -15,10 +15,10 @@ void AnimationManager::apply_pending() {
     if (self_->next_animation.empty()) return;
     if (self_->next_animation == "end") {
         std::cout << "End called for " << self_->info->name << "\n";
-        // Deleting the asset immediately here can invalidate this
-        // AnimationManager mid-call. Instead, request deletion on the
-        // owning asset. The Assets manager will safely purge it after
-        // the update loop completes.
+        
+        
+        
+        
         self_->Delete();
         self_->next_animation.clear();
         return;
@@ -70,8 +70,8 @@ void AnimationManager::update() {
             as->activeManager.sortByZIndex();
         }
     }
-    // ⬇️ This is where the block goes
-    // If animation finished, trigger on_end_animation
+    
+    
     if (!advanced) {
         if (!anim.on_end_animation.empty()) {
             if (anim.on_end_animation == "end") {

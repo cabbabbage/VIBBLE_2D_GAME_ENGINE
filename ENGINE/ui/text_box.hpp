@@ -4,9 +4,9 @@
 #include <SDL_ttf.h>
 #include <string>
 
-// Simple text input box with label.
-// - Click to focus, type to edit. Enter or click outside to commit.
-// - Returns true from handle_event when text changes.
+
+
+
 class TextBox {
 public:
     TextBox(const std::string& label, const std::string& value);
@@ -19,7 +19,7 @@ public:
     const std::string& value() const;
     bool is_editing() const { return editing_; }
     void set_editing(bool e);
-    // Returns true if the underlying value changed this event
+    
     bool handle_event(const SDL_Event& e);
     void render(SDL_Renderer* r) const;
     static int width();

@@ -17,8 +17,8 @@
 
 static std::mt19937 rng{std::random_device{}()};
 
-// --- Helpers for the interactive editor ---
-// UI/editor utilities moved to area_ui.cpp
+
+
 
 Area::Area(const std::string& name)
     : pos_X(0), pos_Y(0), area_name_(name) {}
@@ -100,7 +100,7 @@ Area::Area(const std::string& name, const std::string& json_path, float scale)
     update_geometry_data();
 }
 
-// Interactive constructors moved to area_ui.cpp
+
 
 void Area::apply_offset(int dx, int dy) {
     for (auto& p : points) {
@@ -190,7 +190,7 @@ void Area::contract(int inset) {
 }
 
 double Area::get_area() const {
-    // area_size is kept up-to-date in update_geometry_data()
+    
     return area_size;
 }
 
@@ -209,7 +209,7 @@ bool Area::contains_point(const Point& pt) const {
         return pt == points[0];
     }
     if (n < 3) return false;
-    // Fast AABB reject
+    
     auto [minx, miny, maxx, maxy] = get_bounds();
     if (pt.first < minx || pt.first > maxx || pt.second < miny || pt.second > maxy) {
         return false;
@@ -244,7 +244,7 @@ void Area::update_geometry_data() {
         bounds_valid_ = true;
         return;
     }
-    // Compute bounds and polygon area in a single pass
+    
     int minx = points[0].first, maxx = minx;
     int miny = points[0].second, maxy = miny;
     long long twice_area = 0;

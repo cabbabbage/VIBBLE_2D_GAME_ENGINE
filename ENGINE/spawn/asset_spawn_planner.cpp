@@ -21,7 +21,7 @@ AssetSpawnPlanner::AssetSpawnPlanner(const std::vector<nlohmann::json>& json_sou
                                      AssetLibrary& asset_library,
                                      const std::vector<std::string>& source_paths)
     : asset_library_(&asset_library) {
-    // Keep copies of the original sources and their paths for persistence
+    
     source_jsons_ = json_sources;
     source_paths_ = source_paths;
     if (source_paths_.size() < source_jsons_.size()) {
@@ -31,7 +31,7 @@ AssetSpawnPlanner::AssetSpawnPlanner(const std::vector<nlohmann::json>& json_sou
     nlohmann::json merged;
     merged["assets"] = nlohmann::json::array();
     merged["batch_assets"]["batch_assets"] = nlohmann::json::array();
-    // Merge while tracking provenance
+    
     for (size_t si = 0; si < source_jsons_.size(); ++si) {
         const auto& js = source_jsons_[si];
         if (js.contains("assets") && js["assets"].is_array()) {
@@ -106,7 +106,7 @@ void AssetSpawnPlanner::parse_asset_spawns(const Area& area) {
         bool isSingleCenter = (min_num == 1 && max_num == 1 &&
                             (position == "Center" || position == "center"));
         bool isPerimeter    = (position == "Perimeter" || position == "perimeter");
-        // Ensure spawn_id exists; if not, create and write back to JSON.
+        
         std::string spawn_id;
         if (asset.contains("spawn_id") && asset["spawn_id"].is_string()) {
             spawn_id = asset["spawn_id"].get<std::string>();
@@ -114,7 +114,7 @@ void AssetSpawnPlanner::parse_asset_spawns(const Area& area) {
             spawn_id = generate_spawn_id();
             entry["spawn_id"] = spawn_id;
             asset["spawn_id"] = spawn_id;
-            // Also write back to originating JSON source
+            
             if (idx < assets_provenance_.size()) {
                 auto [si, ai] = assets_provenance_[idx];
                 if (si >= 0 && static_cast<size_t>(si) < source_jsons_.size()) {
@@ -128,7 +128,7 @@ void AssetSpawnPlanner::parse_asset_spawns(const Area& area) {
                 }
             }
         }
-        // Ensure original room width/height for exact spawns
+        
         if (position == "Exact Position" || position == "Exact") {
             auto [minx, miny, maxx, maxy] = area.get_bounds();
             int curr_w = std::max(1, maxx - minx);
@@ -248,7 +248,7 @@ void AssetSpawnPlanner::persist_sources() {
                 out.close();
             }
         } catch (...) {
-            // best-effort only
+            
         }
     }
 }

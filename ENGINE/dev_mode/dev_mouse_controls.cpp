@@ -25,7 +25,7 @@ DevMouseControls::DevMouseControls(Input* m,
 }
 
 void DevMouseControls::handle_mouse_input(const Input& input) {
-    // Keep parallax reference fresh for world<->screen conversions
+    
     if (player) {
         parallax_.setReference(player->pos_X, player->pos_Y);
     }
@@ -67,7 +67,7 @@ void DevMouseControls::handle_mouse_input(const Input& input) {
     } else {
         dragging_ = false;
     }
-        // Right-click to open asset selection and record spawn point
+        
         if (mouse->wasClicked(Input::RIGHT) && assets_) {
             spawn_click_screen_x_ = mx;
             spawn_click_screen_y_ = my;
@@ -77,7 +77,7 @@ void DevMouseControls::handle_mouse_input(const Input& input) {
             waiting_spawn_selection_ = true;
             assets_->open_asset_library();
         }
-        // If waiting for selection, check if a selection was made
+        
         if (waiting_spawn_selection_ && assets_) {
             if (!assets_->is_asset_library_open()) {
                 auto chosen = assets_->consume_selected_asset_from_library();
@@ -127,17 +127,17 @@ void DevMouseControls::handle_hover() {
 
 void DevMouseControls::handle_click(const Input& input) {
     if (!mouse || !player) return;
-    // Only handle a physical click once, even though wasClicked() spans frames
+    
     if (!mouse->wasClicked(Input::LEFT)) {
         click_buffer_frames_ = 0;
         return;
     }
     if (click_buffer_frames_ > 0) {
-        // Suppress duplicate handling for the same physical click
+        
         click_buffer_frames_--;
         return;
     }
-    // Consume this click and suppress duplicates for a couple frames
+    
     click_buffer_frames_ = 2;
     Asset* nearest = hovered_asset;
     if (nearest) {
@@ -157,7 +157,7 @@ void DevMouseControls::handle_click(const Input& input) {
                 selected_assets.push_back(nearest);
             }
         }
-        // Double-click detection: same asset within 300ms
+        
         Uint32 now = SDL_GetTicks();
         if (last_click_asset_ == nearest && (now - last_click_time_ms_) <= 300) {
             if (assets_ && nearest->info) {
@@ -203,7 +203,7 @@ void DevMouseControls::update_highlighted_assets() {
 }
 
 SDL_Point DevMouseControls::compute_mouse_world(int mx_screen, int my_screen) const {
-    // Inverse of parallax projection based on current player reference
+    
     return parallax_.inverse(mx_screen, my_screen);
 }
 

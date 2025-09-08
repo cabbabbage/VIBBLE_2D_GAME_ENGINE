@@ -8,44 +8,32 @@
 class Asset;
 class ActiveAssetsManager;
 
-/*
-  AutoMovement
-  ------------
-  Instance helper for controllers. Owns the notion of a "current method"
-  (idle/pursue/etc.) and a persistent target while that method is active.
 
-  Construct with the controlled asset, the ActiveAssetsManager, and whether
-  movement must remain confined to the current room area.
-
-  Configure a movement style via set_* methods (idle, pursue, run, orbit,
-  patrol, serpentine), then call move() each frame. The helper keeps per-mode
-  sticky target points until reached (within one total-animation movement).
-*/
 class AutoMovement {
 public:
   AutoMovement(Asset* self, ActiveAssetsManager& aam, bool confined);
   AutoMovement(Asset* self, ActiveAssetsManager& aam, bool confined,
                double directness_weight, double sparsity_weight);
-  // Configure the current movement method, then call move() each frame.
+  
   void set_idle(int min_target_distance, int max_target_distance, int rest_ratio);
   void set_pursue(Asset* final_target, int min_target_distance, int max_target_distance);
   void set_run(Asset* threat, int min_target_distance, int max_target_distance);
   void set_orbit(Asset* center, int min_radius, int max_radius, int keep_direction_ratio);
   void set_patrol(const std::vector<Area::Point>& waypoints, bool loop, int hold_frames);
   void set_serpentine(Asset* final_target, int min_stride, int max_stride, int sway, int keep_side_ratio);
-  // Advance one tick based on the configured movement method.
+  
   void move();
-  // Update target selection weights
+  
   void set_weights(double directness_weight, double sparsity_weight);
-  // Pick and set a balanced target near the desired point, balancing directness
-  // toward final_target (if non-null) and sparsity (average distance to nearby
-  // assets ahead in the current direction). Excludes final_target from sparsity.
+  
+  
+  
   void set_target(int desired_x, int desired_y, const Asset* final_target);
-  // Alias for convenience/typo tolerance
+  
   inline void set_traget(int desired_x, int desired_y, const Asset* final_target) { set_target(desired_x, desired_y, final_target); }
 private:
   enum class Mode { None, Idle, Pursue, Run, Orbit, Patrol, Serpentine };
-  // Core helpers
+  
   bool can_move_by(int dx, int dy) const;
   bool would_overlap_same_or_player(int dx, int dy) const;
   std::string pick_best_animation_towards(int target_x, int target_y) const;
@@ -76,26 +64,26 @@ private:
   Area::Point target_ {0, 0};
   mutable int cached_min_move_len2_ = -1;
   std::mt19937 rng_;
-  // Balancing weights for target selection
+  
   double weight_dir_ = 0.6;
   double weight_sparse_ = 0.4;
-  // Orbit state
+  
   int    orbit_dir_ = +1;
   double orbit_angle_ = 0.0;
   int    orbit_radius_ = 0;
   bool   orbit_params_set_ = false;
-  // Patrol state
+  
   std::vector<Area::Point> patrol_points_;
   std::size_t patrol_index_ = 0;
   bool patrol_loop_ = true;
   int  patrol_hold_frames_ = 0;
   int  patrol_hold_left_ = 0;
   bool patrol_initialized_ = false;
-  // Serpentine state
+  
   int  serp_side_ = +1;
   int  serp_stride_ = 0;
   bool serp_params_set_ = false;
-  // Configured parameters per mode
+  
   int idle_min_dist_ = 0;
   int idle_max_dist_ = 0;
   int idle_rest_ratio_ = 0;

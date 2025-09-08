@@ -68,7 +68,7 @@ SDL_Texture* RenderAsset::regenerateFinalTexture(Asset* a) {
     const float c = a->alpha_percentage;
     int alpha_mod = (c >= 1.0f) ? 255 : int(main_alpha * c);
     if (a->info->type == "Player") alpha_mod = std::min(255, alpha_mod * 3);
-    // Remove global tinting: render base as-is (white color mod)
+    
     SDL_SetTextureColorMod(base, 255, 255, 255);
     SDL_RenderCopy(renderer_, base, nullptr, nullptr);
     SDL_SetTextureColorMod(base, 255, 255, 255);

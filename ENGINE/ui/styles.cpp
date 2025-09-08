@@ -1,4 +1,4 @@
-// === File: ui/styles.cpp ===
+
 #include "styles.hpp"
 
 #include <algorithm>
@@ -7,7 +7,7 @@ static inline SDL_Color make_color(Uint8 r, Uint8 g, Uint8 b, Uint8 a = 255) {
     return SDL_Color{ r, g, b, a };
 }
 
-// ---------- Palette (singletons) ----------
+
 static const SDL_Color kGold      = make_color(250,195, 73,255);
 static const SDL_Color kGoldDim   = make_color(180,135, 40,255);
 static const SDL_Color kTeal      = make_color( 40,110,120,255);
@@ -18,7 +18,7 @@ static const SDL_Color kFog       = make_color(220,220,200,255);
 static const SDL_Color kMist      = make_color(140,160,160,255);
 static const SDL_Color kIvory     = make_color(200,200,255,200);
 
-// ---------- Label styles ----------
+
 static const LabelStyle kLabelTitle{
 #ifdef _WIN32
     "C:/Windows/Fonts/COPRGTB.TTF",
@@ -76,11 +76,11 @@ static const LabelStyle kLabelExit{
     "/usr/share/fonts/truetype/dejavu/DejaVuSerif-Bold.ttf",
 #endif
     32,
-    // Slightly dimmer than main gold for EXIT emphasis
+    
     make_color(210,170,60,255)
 };
 
-// Utility to brighten a color slightly (used for hover text)
+
 static SDL_Color brighten(SDL_Color c, int r=20, int g=20, int b=10) {
     auto clamp255 = [](int v){ return std::max(0, std::min(255, v)); };
     return make_color(
@@ -91,32 +91,32 @@ static SDL_Color brighten(SDL_Color c, int r=20, int g=20, int b=10) {
     );
 }
 
-// ---------- Button styles ----------
+
 static const ButtonStyle kMainDecoButton{
-    /*label       */ kLabelMain,
-    /*fill_base   */ kSlate,
-    /*fill_top    */ make_color(kCoal.r, kCoal.g, kCoal.b, 200),
-    /*outline     */ kGold,
-    /*outline_dim */ kGoldDim,
-    /*accent      */ kTeal,
-    /*glow        */ make_color(kGold.r, kGold.g, kGold.b, 45),
-    /*text_normal */ kLabelMain.color,
-    /*text_hover  */ brighten(kLabelMain.color)
+     kLabelMain,
+     kSlate,
+     make_color(kCoal.r, kCoal.g, kCoal.b, 200),
+     kGold,
+     kGoldDim,
+     kTeal,
+     make_color(kGold.r, kGold.g, kGold.b, 45),
+     kLabelMain.color,
+     brighten(kLabelMain.color)
 };
 
 static const ButtonStyle kExitDecoButton{
-    /*label       */ kLabelExit,
-    /*fill_base   */ kSlate,
-    /*fill_top    */ make_color(kCoal.r, kCoal.g, kCoal.b, 200),
-    /*outline     */ kGold,
-    /*outline_dim */ kGoldDim,
-    /*accent      */ kTeal,
-    /*glow        */ make_color(kGold.r, kGold.g, kGold.b, 45),
-    /*text_normal */ kLabelExit.color,
-    /*text_hover  */ brighten(kLabelExit.color)
+     kLabelExit,
+     kSlate,
+     make_color(kCoal.r, kCoal.g, kCoal.b, 200),
+     kGold,
+     kGoldDim,
+     kTeal,
+     make_color(kGold.r, kGold.g, kGold.b, 45),
+     kLabelExit.color,
+     brighten(kLabelExit.color)
 };
 
-// ---------- Styles accessors ----------
+
 const SDL_Color& Styles::Gold()      { return kGold; }
 const SDL_Color& Styles::GoldDim()   { return kGoldDim; }
 const SDL_Color& Styles::Teal()      { return kTeal; }

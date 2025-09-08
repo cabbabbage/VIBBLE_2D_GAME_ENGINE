@@ -34,7 +34,7 @@ bool TextBox::handle_event(const SDL_Event& e) {
         set_editing(inside);
     }
     else if (editing_ && e.type == SDL_TEXTINPUT) {
-        // Append text; SDL sends UTF-8 in e.text.text
+        
         text_ += e.text.text;
         changed = true;
     }
@@ -44,10 +44,10 @@ bool TextBox::handle_event(const SDL_Event& e) {
         }
         else if (e.key.keysym.sym == SDLK_RETURN || e.key.keysym.sym == SDLK_KP_ENTER) {
             set_editing(false);
-            // changed already captured by text edits
+            
         }
         else if ((e.key.keysym.mod & KMOD_CTRL) && e.key.keysym.sym == SDLK_v) {
-            // Skip OS clipboard integration here for simplicity
+            
         }
     }
     return changed;
@@ -72,12 +72,12 @@ void TextBox::draw_text(SDL_Renderer* r, const std::string& s, int x, int y, SDL
 
 void TextBox::render(SDL_Renderer* r) const {
     SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
-    // Label (above or left-top)
+    
     if (!label_.empty()) {
         SDL_Color labelCol = Styles::Mist();
         draw_text(r, label_, rect_.x, rect_.y - 18, labelCol);
     }
-    // Input box
+    
     SDL_Rect box{ rect_.x, rect_.y, rect_.w, rect_.h };
     SDL_Color bg = Styles::Slate(); bg.a = 160;
     SDL_SetRenderDrawColor(r, bg.r, bg.g, bg.b, bg.a);
@@ -87,7 +87,7 @@ void TextBox::render(SDL_Renderer* r) const {
     SDL_Color frame = (hovered_ || editing_) ? border_on : border_off;
     SDL_SetRenderDrawColor(r, frame.r, frame.g, frame.b, 255);
     SDL_RenderDrawRect(r, &box);
-    // Value text inside box with small padding
+    
     SDL_Color textCol = Styles::Ivory();
     draw_text(r, text_, rect_.x + 6, rect_.y + (rect_.h/2 - 8), textCol);
 }

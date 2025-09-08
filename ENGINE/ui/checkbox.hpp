@@ -3,8 +3,8 @@
 #include <SDL.h>
 #include <string>
 
-// Simple reusable checkbox UI element.
-// Initialized with a label and initial value.
+
+
 class Checkbox {
 public:
     Checkbox(const std::string& label, bool value);
@@ -15,7 +15,7 @@ public:
     const std::string& label() const;
     void set_value(bool v);
     bool value() const;
-    // Returns true when toggled
+    
     bool handle_event(const SDL_Event& e);
     void render(SDL_Renderer* r) const;
     static int width();

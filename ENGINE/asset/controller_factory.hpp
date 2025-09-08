@@ -7,10 +7,7 @@ class Asset;
 class ActiveAssetsManager;
 class AssetController;
 
-/*
- controller factory
- builds controllers by key or default
-*/
+
 class ControllerFactory {
 public:
     ControllerFactory(Assets* assets, ActiveAssetsManager& aam);

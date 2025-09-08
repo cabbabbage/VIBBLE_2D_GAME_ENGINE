@@ -38,7 +38,7 @@ AssetInfo::AssetInfo(const std::string &asset_folder_name)
       const std::string trig = it.key();
       const auto &anim_json = it.value();
       nlohmann::json converted = anim_json;
-      // Legacy-to-new conversion for older keys (only frames path/speed flags)
+      
       if (!anim_json.contains("source")) {
         converted["source"] = {
             {"kind", "folder"},
@@ -49,7 +49,7 @@ AssetInfo::AssetInfo(const std::string &asset_folder_name)
         converted.erase("lock_until_done");
         converted.erase("speed");
       }
-      // Keep simplified schema's on_end as-is (no mapping synthesis)
+      
       new_anim[trig] = converted;
     }
     anims_json_ = new_anim;
@@ -86,7 +86,7 @@ AssetInfo::AssetInfo(const std::string &asset_folder_name)
   int offset_y = (scaled_canvas_h - 0);
   load_areas(data, scale_factor, offset_x, offset_y);
   load_children(data);
-  // Optional custom controller key (if present in info.json)
+  
   try {
     if (data.contains("custom_controller_key") && data["custom_controller_key"].is_string()) {
       custom_controller_key = data["custom_controller_key"].get<std::string>();
@@ -119,7 +119,7 @@ void AssetInfo::load_base_properties(const nlohmann::json &data) {
   if (type == "Player") {
     std::cout << "[AssetInfo] Player asset '" << name << "' loaded\n\n";
   }
-  // preferred start animation id
+  
   start_animation = data.value("start", std::string{"default"});
   z_threshold = data.value("z_threshold", 0);
   passable = has_tag("passable");
@@ -141,7 +141,7 @@ void AssetInfo::generate_lights(SDL_Renderer *renderer) {
   LightingLoader::generate_textures(*this, renderer);
 }
 
-// --------------------- Update API ---------------------
+
 
 bool AssetInfo::update_info_json() const {
   try {
@@ -184,7 +184,7 @@ void AssetInfo::set_scale_factor(float factor) {
   if (factor < 0.f)
     factor = 0.f;
   scale_factor = factor;
-  // Ensure size_settings exists
+  
   if (!info_json_.contains("size_settings") ||
       !info_json_["size_settings"].is_object()) {
     info_json_["size_settings"] = nlohmann::json::object();
@@ -203,12 +203,12 @@ void AssetInfo::set_scale_percentage(float percent) {
 
 void AssetInfo::set_tags(const std::vector<std::string> &t) {
   tags = t;
-  // reflect in JSON
+  
   nlohmann::json arr = nlohmann::json::array();
   for (const auto &s : tags)
     arr.push_back(s);
   info_json_["tags"] = std::move(arr);
-  // update passable cache
+  
   passable = has_tag("passable");
 }
 
@@ -240,7 +240,7 @@ Area* AssetInfo::find_area(const std::string& name) {
 }
 
 void AssetInfo::upsert_area_from_editor(const Area& area) {
-  // Update in-memory list
+  
   bool found = false;
   for (auto& na : areas) {
     if (na.name == area.get_name()) {
@@ -255,25 +255,25 @@ void AssetInfo::upsert_area_from_editor(const Area& area) {
     na.area = std::make_unique<Area>(area);
     areas.push_back(std::move(na));
   }
-  // Ensure info_json_ has an array for areas
+  
   if (!info_json_.contains("areas") || !info_json_["areas"].is_array()) {
     info_json_["areas"] = nlohmann::json::array();
   }
-  // Compute inverse transform: absolute -> relative (unscaled)
+  
   float scale = scale_factor;
   if (scale <= 0.0f) scale = 1.0f;
   int scaled_canvas_w = static_cast<int>(original_canvas_width * scale);
   int scaled_canvas_h = static_cast<int>(original_canvas_height * scale);
   int offset_x = (scaled_canvas_w - 0) / 2;
   int offset_y = (scaled_canvas_h - 0);
-  // Serialize points
+  
   nlohmann::json points = nlohmann::json::array();
   for (const auto& p : area.get_points()) {
     double rel_x = (static_cast<double>(p.first)  - static_cast<double>(offset_x)) / static_cast<double>(scale);
     double rel_y = (static_cast<double>(p.second) - static_cast<double>(offset_y)) / static_cast<double>(scale);
     points.push_back({ rel_x, rel_y });
   }
-  // Upsert JSON entry by name
+  
   bool json_found = false;
   for (auto& entry : info_json_["areas"]) {
     if (entry.is_object() && entry.value("name", std::string{}) == area.get_name()) {
@@ -296,7 +296,7 @@ std::string AssetInfo::pick_next_animation(const std::string& mapping_id) const 
   if (it == mappings.end()) return {};
   static std::mt19937 rng{std::random_device{}()};
   for (const auto& entry : it->second) {
-    // Stub condition evaluator: treat empty or "true" as true
+    
     if (!entry.condition.empty() && entry.condition != "true") continue;
     float total = 0.0f;
     for (const auto& opt : entry.options) {

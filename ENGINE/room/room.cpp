@@ -100,7 +100,7 @@ Room::Room(Point origin,
             std::cerr << "[Room] Warning: inherits_map_assets is true, but map_assets.json not found in " << map_path << "\n";
         }
     }
-    // Note: AssetSpawnPlanner now handles persistence of spawn_id and exact-origin size.
+    
     planner = std::make_unique<AssetSpawnPlanner>(
         json_sources,
         *room_area,

@@ -32,7 +32,7 @@ bool Checkbox::handle_event(const SDL_Event& e) {
 
 void Checkbox::render(SDL_Renderer* r) const {
     SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
-    // Label on the left
+    
     const TextStyle& ls = TextStyles::SmallMain();
     if (!label_.empty()) {
         TTF_Font* f = ls.open_font();
@@ -50,7 +50,7 @@ void Checkbox::render(SDL_Renderer* r) const {
             TTF_CloseFont(f);
         }
     }
-    // Checkbox square at right side of rect_
+    
     const int box_size = rect_.h - 6;
     SDL_Rect box{
         rect_.x + rect_.w - box_size - 4,
@@ -67,7 +67,7 @@ void Checkbox::render(SDL_Renderer* r) const {
     SDL_SetRenderDrawColor(r, frame.r, frame.g, frame.b, 255);
     SDL_RenderDrawRect(r, &box);
     if (value_) {
-        // Check mark: simple filled smaller rect
+        
         SDL_Rect inner{ box.x + 4, box.y + 4, box.w - 8, box.h - 8 };
         SDL_Color fill = Styles::Ivory();
         SDL_SetRenderDrawColor(r, fill.r, fill.g, fill.b, fill.a ? fill.a : 200);

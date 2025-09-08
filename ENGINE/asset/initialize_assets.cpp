@@ -11,11 +11,11 @@
 void InitializeAssets::initialize(Assets& assets,
                                   std::vector<Asset>&& loaded,
                                   std::vector<Room*> rooms,
-                                  int /*screen_width*/,
-                                  int /*screen_height*/,
+                                  int ,
+                                  int ,
                                   int screen_center_x,
                                   int screen_center_y,
-                                  int /*map_radius*/)
+                                  int )
 {
     std::cout << "[InitializeAssets] Initializing Assets manager...\n";
     assets.rooms_ = std::move(rooms);
@@ -74,10 +74,10 @@ void InitializeAssets::find_player(Assets& assets) {
 
 void InitializeAssets::set_shading_group_recursive(Asset& asset,
                                                    int group,
-                                                   int /*num_groups*/) {
+                                                   int ) {
     asset.set_shading_group(group);
     for (Asset* child : asset.children) {
-        if (child) set_shading_group_recursive(*child, group, /*num_groups*/0);
+        if (child) set_shading_group_recursive(*child, group, 0);
     }
 }
 

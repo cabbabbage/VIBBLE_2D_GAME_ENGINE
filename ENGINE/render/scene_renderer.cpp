@@ -170,6 +170,6 @@ void SceneRenderer::render() {
     SDL_SetRenderTarget(renderer_, nullptr);
     SDL_RenderCopy(renderer_, accumulation_tex_, nullptr, nullptr);
     z_light_pass_->render(debugging);
-    // Removed global tint overlay pass (no-op now for performance)
+    
     SDL_RenderPresent(renderer_);
 }

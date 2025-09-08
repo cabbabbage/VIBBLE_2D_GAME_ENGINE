@@ -23,10 +23,10 @@ public:
     void handle_hover();
     void handle_click(const Input& input);
     void update_highlighted_assets();
-    // Remove references to a destroyed asset from hover/selection state
+    
     void purge_asset(Asset* a);
-    // Ensure a single logical click is handled only once across frames
-    // and reset state when switching modes.
+    
+    
     void reset_click_state() {
         click_buffer_frames_ = 0;
         last_click_time_ms_ = 0;
@@ -41,7 +41,7 @@ private:
     bool dragging_;
     int drag_last_x_, drag_last_y_;
     Asset* drag_anchor_asset_ = nullptr;
-    // Double-click detection
+    
     Uint32 last_click_time_ms_ = 0;
     Asset* last_click_asset_ = nullptr;
 private:
@@ -57,7 +57,7 @@ private:
     Asset* hovered_asset = nullptr;
     std::vector<Asset*> selected_assets;
     std::vector<Asset*> highlighted_assets;
-    // Spawn via right-click + asset selection
+    
     bool waiting_spawn_selection_ = false;
     int spawn_click_screen_x_ = 0;
     int spawn_click_screen_y_ = 0;

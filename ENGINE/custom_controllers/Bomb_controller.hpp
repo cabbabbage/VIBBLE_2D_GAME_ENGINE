@@ -31,7 +31,7 @@ class BombController : public AssetController {
   int explosion_radius_   = 150;
   bool updated_by_determine_ = false;
   unsigned int rng_seed_  = 0xB00B1Eu;
-  // Persistent movement target; updated on animation end
+  
   int  move_target_x_ = 0;
   int  move_target_y_ = 0;
   bool have_target_   = false;

@@ -7,9 +7,7 @@
 #include "custom_controllers/Frog_controller.hpp"
 #include "custom_controllers/Bomb_controller.hpp"
 #include "custom_controllers/default_controller.hpp"
-/*
- minimal error guards no throws
-*/
+
 
 ControllerFactory::ControllerFactory(Assets* assets, ActiveAssetsManager& aam)
  : assets_(assets)
@@ -31,9 +29,9 @@ ControllerFactory::create_by_key(const std::string& key, Asset* self) const {
      if (key == "Bomb_controller")
          return std::make_unique<BombController>(assets_, self, aam_);
  } catch (...) {
-     // fall through to default below
+     
  }
- // Unrecognized key: return default controller
+ 
  return std::make_unique<DefaultController>(assets_, self, aam_);
 }
 
@@ -44,6 +42,6 @@ ControllerFactory::create_for_asset(Asset* self) const {
  if (!key.empty()) {
      return create_by_key(key, self);
  }
- // No key configured: return default controller
+ 
  return std::make_unique<DefaultController>(assets_, self, aam_);
 }
