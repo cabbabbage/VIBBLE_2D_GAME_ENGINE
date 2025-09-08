@@ -6,7 +6,7 @@
 #include <nlohmann/json.hpp>
 #include <filesystem>
 #include "Room.hpp"
-#include "asset\asset_library.hpp"
+#include "asset/asset_library.hpp"
 #include "utils/area.hpp"
 #include <iostream>
 #include <limits>

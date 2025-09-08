@@ -1,9 +1,9 @@
 #include "render_asset.hpp"
 #include "global_light_source.hpp"
-#include "asset\Asset.hpp"
-#include "core\assetsManager.hpp"
-#include "utils\light_utils.hpp"
-#include "utils\parallax.hpp"
+#include "asset/Asset.hpp"
+#include "core/assetsManager.hpp"
+#include "utils/light_utils.hpp"
+#include "utils/parallax.hpp"
 #include <algorithm>
 #include <cmath>
 #include <random>

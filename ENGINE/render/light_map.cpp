@@ -1,5 +1,5 @@
 #include "light_map.hpp"
-#include "utils\parallax.hpp"
+#include "utils/parallax.hpp"
 #include <algorithm>
 #include <random>
 #include <vector>

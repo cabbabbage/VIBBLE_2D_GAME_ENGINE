@@ -3,7 +3,7 @@
 #include <string>
 #include <chrono>
 #include <memory>
-#include "asset\asset_info.hpp"
+#include "asset/asset_info.hpp"
 
 class SpawnLogger {
 

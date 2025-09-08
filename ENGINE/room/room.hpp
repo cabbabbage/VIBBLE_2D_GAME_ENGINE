@@ -1,9 +1,9 @@
 #pragma once
 
 #include "utils/area.hpp"
-#include "asset\asset_library.hpp"
-#include "spawn\asset_spawn_planner.hpp"
-#include "asset\asset.hpp"
+#include "asset/asset_library.hpp"
+#include "spawn/asset_spawn_planner.hpp"
+#include "asset/asset.hpp"
 
 #include <string>
 #include <vector>

@@ -1,6 +1,6 @@
 #include "generate_rooms.hpp"
 #include "generate_trails.hpp"
-#include "spawn\asset_spawner.hpp"
+#include "spawn/asset_spawner.hpp"
 #include <cmath>
 #include <algorithm>
 #include <random>
