@@ -4,11 +4,9 @@
 #include <SDL_ttf.h>
 #include <string>
 
-
-
-
 class TextBox {
-public:
+
+	public:
     TextBox(const std::string& label, const std::string& value);
     void set_position(int x, int y);
     void set_rect(const SDL_Rect& r);
@@ -19,14 +17,15 @@ public:
     const std::string& value() const;
     bool is_editing() const { return editing_; }
     void set_editing(bool e);
-    
     bool handle_event(const SDL_Event& e);
     void render(SDL_Renderer* r) const;
     static int width();
     static int height();
-private:
+
+	private:
     void draw_text(SDL_Renderer* r, const std::string& s, int x, int y, SDL_Color col) const;
-private:
+
+	private:
     SDL_Rect rect_{0,0,420,36};
     std::string label_;
     std::string text_;

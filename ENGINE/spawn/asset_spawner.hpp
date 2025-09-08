@@ -16,14 +16,16 @@
 #include "check.hpp"
 
 class AssetSpawner {
-public:
+
+	public:
     using Point = std::pair<int, int>;
     AssetSpawner(AssetLibrary* asset_library, std::vector<Area> exclusion_zones);
     void spawn(Room& room);
     void spawn_children(const Area& spawn_area, AssetSpawnPlanner* planner);
     std::vector<std::unique_ptr<Asset>> spawn_boundary_from_file(const std::string& json_path, const Area& spawn_area);
     std::vector<std::unique_ptr<Asset>> extract_all_assets();
-private:
+
+	private:
     void run_spawning(AssetSpawnPlanner* planner, const Area& area);
     void spawn_all_children();
     std::vector<Area> exclusion_zones;

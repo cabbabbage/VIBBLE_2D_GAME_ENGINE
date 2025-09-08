@@ -11,14 +11,15 @@ class AssetLoader;
 class Input;
 
 class MainApp {
-public:
+
+	public:
     MainApp(const std::string& map_path, SDL_Renderer* renderer, int screen_w, int screen_h);
     virtual ~MainApp();
     virtual void init();
     virtual void game_loop();
     virtual void setup();
-protected:
-protected:
+	protected:
+	protected:
     std::string   map_path_;
     SDL_Renderer* renderer_   = nullptr;
     int           screen_w_   = 0;

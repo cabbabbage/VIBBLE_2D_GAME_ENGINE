@@ -7,7 +7,7 @@ class Area;
 class SpawnContext;
 
 class ExactSpawner {
-public:
+
+	public:
     void spawn(const SpawnInfo& item, const Area* area, SpawnContext& ctx);
 };
-

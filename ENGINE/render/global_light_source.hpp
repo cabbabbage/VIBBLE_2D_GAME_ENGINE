@@ -6,32 +6,34 @@
 #include <string>
 
 class Global_Light_Source {
-public:
+
+	public:
     Global_Light_Source(SDL_Renderer* renderer,
-                        int screen_center_x,
-                        int screen_center_y,
-                        int screen_width,
-                        SDL_Color fallback_base_color,
-                        const std::string& map_path);
+    int screen_center_x,
+    int screen_center_y,
+    int screen_width,
+    SDL_Color fallback_base_color,
+    const std::string& map_path);
     ~Global_Light_Source();
     void update();
     std::pair<int,int> get_position() const;
     float              get_angle() const;
     SDL_Texture*       get_texture() const;
-    
     SDL_Color get_current_color() const;
     int       get_brightness() const;
     int get_cached_w() const { return cached_w_; }
     int get_cached_h() const { return cached_h_; }
-private:
+
+	private:
     struct KeyEntry {
-        float degree;
-        SDL_Color color;
-    };
+    float degree;
+    SDL_Color color;
+	};
     void build_texture();
     void set_light_brightness();
     SDL_Color compute_color_from_horizon() const;
-private:
+
+	private:
     SDL_Renderer* renderer_;
     SDL_Texture*  texture_;
     SDL_Color base_color_;

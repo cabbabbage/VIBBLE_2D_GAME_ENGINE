@@ -6,10 +6,12 @@
 #include "styles.hpp"
 
 class Button {
-public:
+
+	public:
     static Button get_main_button(const std::string& text);
     static Button get_exit_button(const std::string& text);
-public:
+
+	public:
     Button();
     Button(const std::string& text, const ButtonStyle* style, int w, int h);
     void set_position(int x, int y);
@@ -23,9 +25,11 @@ public:
     bool is_pressed() const;
     static int width();
     static int height();
-private:
+
+	private:
     void draw_deco(SDL_Renderer* r, const SDL_Rect& rect, bool hovered) const;
-private:
+
+	private:
     SDL_Rect rect_{0,0,520,64};
     std::string label_;
     bool hovered_ = false;

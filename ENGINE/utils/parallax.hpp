@@ -4,7 +4,8 @@
 class Asset;
 
 class Parallax {
-public:
+
+	public:
     Parallax(int screenWidth, int screenHeight);
     void setReference(int px, int py);
     SDL_Point apply(int ax, int ay) const;
@@ -12,9 +13,9 @@ public:
     void setParallaxMax(float maxX, float maxY);
     void setDisabled(bool flag);
     bool isDisabled() const;
-    
     void update_screen_position(Asset& a) const;
-private:
+
+	private:
     int screenWidth_;
     int screenHeight_;
     float halfWidth_;

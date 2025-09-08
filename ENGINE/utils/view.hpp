@@ -9,13 +9,14 @@ class Room;
 class CurrentRoomFinder;
 
 class view {
-public:
+
+	public:
     struct Bounds {
-        int left;
-        int right;
-        int top;
-        int bottom;
-    };
+    int left;
+    int right;
+    int top;
+    int bottom;
+	};
     view(int screen_width, int screen_height, const Bounds& starting_bounds);
     void set_scale(float s);
     float get_scale() const;
@@ -32,7 +33,8 @@ public:
     void update_zoom(Room* cur, CurrentRoomFinder* finder, Asset* player);
     bool intro = true;
     bool   zooming_      = false;
-private:
+
+	private:
     Bounds base_bounds_{};
     Bounds current_bounds_{};
     float  scale_ = 1.0f;
@@ -40,7 +42,6 @@ private:
     double target_scale_ = 1.0;
     int    steps_total_  = 0;
     int    steps_done_   = 0;
-    
     Room*  starting_room_ = nullptr;
     double starting_area_ = 1.0;
     double compute_room_scale_from_area(const Room* room) const;

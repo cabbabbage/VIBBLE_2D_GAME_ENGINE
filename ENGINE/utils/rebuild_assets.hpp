@@ -5,7 +5,8 @@
 #include <SDL.h>
 
 class RebuildAssets {
-public:
+
+	public:
     RebuildAssets(SDL_Renderer* renderer, const std::string& map_dir);
 };
 

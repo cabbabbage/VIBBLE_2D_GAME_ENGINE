@@ -14,24 +14,24 @@ struct SDL_Renderer;
 struct LayerSpec;
 
 class AssetLoader {
-public:
+
+	public:
     AssetLoader(const std::string& map_dir, SDL_Renderer* renderer);
     std::vector<Asset*> collectDistantAssets(int fade_start_distance, int fade_end_distance);
     std::vector<std::vector<Asset*>> group_neighboring_assets(
-        const std::vector<Asset*>& assets,
-        int tile_width,
-        int tile_height,
-        const std::string& group_type);
+    const std::vector<Asset*>& assets,
+    int tile_width,
+    int tile_height,
+    const std::string& group_type);
     void link_by_child(const std::vector<std::vector<Asset*>>& groups);
-    
     std::vector<Asset> createAssets(int screen_width, int screen_height);
     std::vector<Area> getAllRoomAndTrailAreas() const;
     SDL_Texture* createMinimap(int width, int height);
-    
     AssetLibrary* getAssetLibrary() const { return asset_library_.get(); }
     const std::vector<Room*>& getRooms() const { return rooms_; }
     double getMapRadius() const { return map_radius_; }
-private:
+
+	private:
     std::string map_path_;
     SDL_Renderer* renderer_;
     std::vector<Room*> rooms_;

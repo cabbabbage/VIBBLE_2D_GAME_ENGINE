@@ -7,11 +7,13 @@
 #include <filesystem>
 
 class LoadingScreen {
-public:
+
+	public:
     LoadingScreen(SDL_Renderer* renderer, int screen_w, int screen_h);
     void init();
     void draw_frame();
-private:
+
+	private:
     SDL_Renderer* renderer_;
     int screen_w_;
     int screen_h_;

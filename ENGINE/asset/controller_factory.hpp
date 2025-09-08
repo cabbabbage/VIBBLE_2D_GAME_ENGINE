@@ -7,15 +7,16 @@ class Asset;
 class ActiveAssetsManager;
 class AssetController;
 
-
 class ControllerFactory {
-public:
+
+	public:
     ControllerFactory(Assets* assets, ActiveAssetsManager& aam);
- ~ControllerFactory();
- std::unique_ptr<AssetController> create_by_key(const std::string& key,
- Asset* self) const;
- std::unique_ptr<AssetController> create_for_asset(Asset* self) const;
-private:
- Assets* assets_;
- ActiveAssetsManager& aam_;
+    ~ControllerFactory();
+    std::unique_ptr<AssetController> create_by_key(const std::string& key,
+    Asset* self) const;
+    std::unique_ptr<AssetController> create_for_asset(Asset* self) const;
+
+	private:
+    Assets* assets_;
+    ActiveAssetsManager& aam_;
 };

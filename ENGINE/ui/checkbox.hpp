@@ -3,10 +3,9 @@
 #include <SDL.h>
 #include <string>
 
-
-
 class Checkbox {
-public:
+
+	public:
     Checkbox(const std::string& label, bool value);
     void set_position(int x, int y);
     void set_rect(const SDL_Rect& r);
@@ -15,12 +14,12 @@ public:
     const std::string& label() const;
     void set_value(bool v);
     bool value() const;
-    
     bool handle_event(const SDL_Event& e);
     void render(SDL_Renderer* r) const;
     static int width();
     static int height();
-private:
+
+	private:
     SDL_Rect rect_{0,0,300,28};
     std::string label_;
     bool value_ = false;

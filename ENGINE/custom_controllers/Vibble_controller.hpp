@@ -10,20 +10,23 @@ class Input;
 class Area;
 
 class VibbleController : public AssetController {
-   public:
+
+	public:
     VibbleController(Assets* assets, Asset* player, ActiveAssetsManager& aam);
     ~VibbleController() = default;
     void update(const Input& in) override;
     int get_dx() const;
     int get_dy() const;
-   private:
+
+	private:
     bool aabb(const Area& A, const Area& B) const;
     bool pointInAABB(int x, int y, const Area& B) const;
     void movement(const Input& input);
     bool canMove(int offset_x, int offset_y);
     void interaction();
     void handle_teleport(const Input& input);
-   private:
+
+	private:
     Assets* assets_ = nullptr;
     Asset*  player_ = nullptr;
     ActiveAssetsManager& aam_;

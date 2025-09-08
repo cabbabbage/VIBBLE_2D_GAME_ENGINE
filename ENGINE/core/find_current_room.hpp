@@ -7,13 +7,15 @@ class Room;
 class Asset;
 
 class CurrentRoomFinder {
-public:
+
+	public:
     CurrentRoomFinder(std::vector<Room*>& rooms, Asset*& player);
     Room* getCurrentRoom() const;
     Room* getNeighboringRoom(Room* current) const;
     void setRooms(std::vector<Room*>& rooms);
     void setPlayer(Asset*& player);
-private:
+
+	private:
     std::vector<Room*>& rooms_;
     Asset*&             player_;
 };

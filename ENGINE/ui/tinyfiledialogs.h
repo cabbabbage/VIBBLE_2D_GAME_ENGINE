@@ -12,7 +12,7 @@
 
 A big thank you to Don Heyse http://ldglite.sf.net for
                    his code contributions, bug corrections & thorough testing!
-		
+
             git://git.code.sf.net/p/tinyfiledialogs/code
 
 Please
@@ -184,7 +184,6 @@ char const * tinyfd_colorChooser(
 		/* aDefaultRGB and aoResultRGB can be the same array */
 		/* returns NULL on cancel */
 
-
 /************ NOT CROSS PLATFORM SECTION STARTS HERE ************************/
 #ifdef _WIN32
 #ifndef TINYFD_NOLIB
@@ -235,7 +234,6 @@ wchar_t const * tinyfd_colorChooserW(
 		/* aDefaultRGB is used only if aDefaultHexRGB is NULL */
 		/* aDefaultRGB and aoResultRGB can be the same array */
 		/* returns NULL on cancel */
-
 
 #endif /*TINYFD_NOLIB*/
 #else /*_WIN32*/

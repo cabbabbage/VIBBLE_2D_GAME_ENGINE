@@ -9,41 +9,33 @@ class Input;
 class AssetInfo;
 class AssetLibrary;
 
-
-
-
-
-
 class AssetLibraryUI {
-public:
+
+	public:
     AssetLibraryUI();
     ~AssetLibraryUI();
-    
     void toggle();
     bool is_visible() const { return visible_; }
     void open() { visible_ = true; }
     void close();
-    
     void update(const Input& input,
-                int screen_w,
-                int screen_h,
-                AssetLibrary& lib);
-    
+    int screen_w,
+    int screen_h,
+    AssetLibrary& lib);
     void render(SDL_Renderer* r,
-                AssetLibrary& lib,
-                int screen_w,
-                int screen_h) const;
-    
+    AssetLibrary& lib,
+    int screen_w,
+    int screen_h) const;
     std::shared_ptr<AssetInfo> consume_selection();
-private:
+
+	private:
     void ensure_items(AssetLibrary& lib);
     SDL_Texture* get_default_frame_texture(const AssetInfo& info) const;
-private:
+
+	private:
     bool visible_ = false;
-    
     std::vector<std::shared_ptr<AssetInfo>> items_;
     bool items_cached_ = false;
-    
     int panel_w_ = 200;
     int padding_ = 10;
     int tile_size_ = 180;

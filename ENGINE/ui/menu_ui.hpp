@@ -12,20 +12,22 @@
 #include "button.hpp"
 
 class MenuUI : public MainApp {
-public:
+
+	public:
     enum class MenuAction {
-        NONE = 0,
-        EXIT,
-        RESTART,
-        SETTINGS,
-        DEV_MODE_TOGGLE,
-        SAVE_ROOM
-    };
+    NONE = 0,
+    EXIT,
+    RESTART,
+    SETTINGS,
+    DEV_MODE_TOGGLE,
+    SAVE_ROOM
+	};
     MenuUI(SDL_Renderer* renderer, int screen_w, int screen_h, const std::string& map_path);
     ~MenuUI();
     void init();
     bool wants_return_to_main_menu() const;
-private:
+
+	private:
     void game_loop();
     void toggleMenu();
     void handle_event(const SDL_Event& e);
@@ -48,11 +50,12 @@ private:
     void doSettings();
     void doToggleDevMode();
     void doSaveCurrentRoom();
-private:
+
+	private:
     struct MenuButton {
-        Button     button;
-        MenuAction action = MenuAction::NONE;
-    };
+    Button     button;
+    MenuAction action = MenuAction::NONE;
+	};
     bool menu_active_ = false;
     bool dev_mode_local_ = false;
     MenuAction last_action_ = MenuAction::NONE;

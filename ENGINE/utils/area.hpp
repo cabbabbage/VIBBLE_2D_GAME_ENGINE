@@ -9,32 +9,30 @@
 #include "parallax.hpp"
 
 class Area {
-public:
+
+	public:
     using Point = std::pair<int, int>;
-public:
+
+	public:
     int pos_X = 0;
     int pos_Y = 0;
     void apply_parallax(const Parallax& parallax);
-public:
+
+	public:
     explicit Area(const std::string& name);
     Area(const std::string& name, const std::vector<Point>& pts);
     Area(const std::string& name,
-         int cx, int cy, int w, int h,
-         const std::string& geometry,
-         int edge_smoothness,
-         int map_width, int map_height);
+    int cx, int cy, int w, int h,
+    const std::string& geometry,
+    int edge_smoothness,
+    int map_width, int map_height);
     Area(const std::string& name, const std::string& json_path, float scale);
-    
-    
-    
-    
     Area(const std::string& name, const Area& base, SDL_Renderer* renderer,
-         int window_w = 0, int window_h = 0);
-    
-    
+    int window_w = 0, int window_h = 0);
     Area(const std::string& name, SDL_Texture* background, SDL_Renderer* renderer,
-         int window_w = 0, int window_h = 0);
-public:
+    int window_w = 0, int window_h = 0);
+
+	public:
     void apply_offset(int dx, int dy);
     void align(int target_x, int target_y);
     std::tuple<int, int, int, int> get_bounds() const;
@@ -51,25 +49,26 @@ public:
     Point random_point_within() const;
     Point get_center() const;
     double get_size() const;
-public:
+
+	public:
     const std::string& get_name() const { return area_name_; }
     SDL_Texture* get_texture() const;
     void create_area_texture(SDL_Renderer* renderer);
-public:
+
+	public:
     void flip_horizontal(std::optional<int> axis_x = std::nullopt);
     void scale(float factor);
-private:
+
+	private:
     std::vector<Point> points;
     std::string area_name_;
     int center_x = 0;
     int center_y = 0;
     double area_size = 0.0;
     SDL_Texture* texture_ = nullptr;
-    
     mutable int min_x_ = 0;
     mutable int min_y_ = 0;
     mutable int max_x_ = 0;
     mutable int max_y_ = 0;
     mutable bool bounds_valid_ = false;
 };
-

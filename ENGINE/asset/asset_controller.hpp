@@ -4,10 +4,11 @@
 class Input;
 
 class AssetController {
- public:
-  AssetController();
-   virtual ~AssetController();
-   virtual void update(const Input& in) = 0;
+
+	public:
+    AssetController();
+    virtual ~AssetController();
+    virtual void update(const Input& in) = 0;
 };
 
 #endif
