@@ -168,7 +168,7 @@ void Assets::update(const Input& input,
             if (up && up->needs_removal()) pending.push_back(up.get());
         }
         for (Asset* a : pending) {
-            delete_asset(a);
+            if (a) a->Delete();
         }
     }
 }

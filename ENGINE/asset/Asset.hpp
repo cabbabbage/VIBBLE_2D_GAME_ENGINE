@@ -111,7 +111,8 @@ public:
  bool is_hidden();
   void set_remove();
   bool needs_removal() const;
-  void delete_self();
+  // Remove this asset from its owner and destroy it.
+  void Delete();
 
  void set_highlighted(bool state);
  bool is_highlighted();

@@ -478,7 +478,7 @@ bool Asset::needs_removal() const { return remove; }
 
 void Asset::set_remove() { remove = true; }
 
-void Asset::delete_self() {
+void Asset::Delete() {
     if (assets_) {
         assets_->delete_asset(this);
     } else {
