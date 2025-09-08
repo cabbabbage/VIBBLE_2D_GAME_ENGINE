@@ -64,7 +64,13 @@ def compute_union_bounds(image_paths: Iterable[str], alpha_threshold: int = 0) -
     crop_bottom = max(0, base_h - B)
     return (crop_top, crop_bottom, crop_left, crop_right, base_w, base_h)
 
-def crop_images_with_bounds(image_paths: Iterable[str], crop_top: int, crop_bottom: int, crop_left: int, crop_right: int) -> int:
+def crop_images_with_bounds(
+    image_paths: Iterable[str],
+    crop_top: int,
+    crop_bottom: int,
+    crop_left: int,
+    crop_right: int,
+) -> int:
     """Crops each image in-place using the fixed margins. Returns count cropped."""
     if Image is None:
         return 0

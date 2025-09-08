@@ -107,17 +107,20 @@ void SceneRenderer::render() {
 	int min_visible_h = static_cast<int>(screen_height_ * MIN_VISIBLE_SCREEN_RATIO);
 	for (Asset* a : assets_->active_assets) {
 		if (!a || !a->info) continue;
-		if (shouldRegen(a)) {
-			SDL_Texture* tex = render_asset_.regenerateFinalTexture(a);
-			a->set_final_texture(tex);
-			if (tex) SDL_QueryTexture(tex, nullptr, nullptr, &a->cached_w, &a->cached_h);
-		}
-		SDL_Texture* final_tex = a->get_final_texture();
-		if (!final_tex) continue;
-		int fw = a->cached_w;
-		int fh = a->cached_h;
-		if (fw == 0 || fh == 0) SDL_QueryTexture(final_tex, nullptr, nullptr, &fw, &fh);
-		SDL_Rect fb = get_scaled_position_rect(a, fw, fh, inv_scale, min_visible_w, min_visible_h);
+                if (shouldRegen(a)) {
+                        SDL_Texture* tex = render_asset_.regenerateFinalTexture(a);
+                        a->set_final_texture(tex);
+                }
+                SDL_Texture* final_tex = a->get_final_texture();
+                if (!final_tex) continue;
+                int fw = a->cached_w;
+                int fh = a->cached_h;
+                if (fw == 0 || fh == 0) {
+                        SDL_QueryTexture(final_tex, nullptr, nullptr, &fw, &fh);
+                        a->cached_w = fw;
+                        a->cached_h = fh;
+                }
+                SDL_Rect fb = get_scaled_position_rect(a, fw, fh, inv_scale, min_visible_w, min_visible_h);
 		if (fb.w == 0 && fb.h == 0) continue;
 		if (a->is_highlighted()) {
 			SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_ADD);
