@@ -31,10 +31,10 @@ void AssetLibraryUI::ensure_items(AssetLibrary& lib) {
 		if (kv.second) items_.push_back(kv.second);
 	}
 	std::sort(items_.begin(), items_.end(), [](const auto& a, const auto& b){
-		const std::string an = a ? a->name : std::string{};
-		const std::string bn = b ? b->name : std::string{};
-		return an < bn;
-	});
+           const std::string an = a ? a->name : std::string{};
+           const std::string bn = b ? b->name : std::string{};
+           return an < bn;
+           });
 	items_cached_ = true;
 }
 
@@ -49,9 +49,9 @@ SDL_Texture* AssetLibraryUI::get_default_frame_texture(const AssetInfo& info) co
 }
 
 void AssetLibraryUI::update(const Input& input,
-int screen_w,
-int screen_h,
-AssetLibrary& lib)
+                            int screen_w,
+                            int screen_h,
+                            AssetLibrary& lib)
 {
 	(void)screen_w; (void)screen_h;
 	if (!visible_) return;
@@ -82,9 +82,9 @@ AssetLibrary& lib)
 }
 
 void AssetLibraryUI::render(SDL_Renderer* r,
-AssetLibrary& lib,
-int screen_w,
-int screen_h) const
+                            AssetLibrary& lib,
+                            int screen_w,
+                            int screen_h) const
 {
 	if (!visible_) return;
 	(void)screen_w;
@@ -109,7 +109,7 @@ int screen_h) const
 								float scale = std::min(
 								(tile_rect.w) / float(tw),
 								(tile_rect.h) / float(th)
-								);
+        );
 								int dw = int(tw * scale);
 								int dh = int(th * scale);
 								SDL_Rect dst{

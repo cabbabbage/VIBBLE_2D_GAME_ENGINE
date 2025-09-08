@@ -9,11 +9,11 @@ class Global_Light_Source {
 
 	public:
     Global_Light_Source(SDL_Renderer* renderer,
-    int screen_center_x,
-    int screen_center_y,
-    int screen_width,
-    SDL_Color fallback_base_color,
-    const std::string& map_path);
+                        int screen_center_x,
+                        int screen_center_y,
+                        int screen_width,
+                        SDL_Color fallback_base_color,
+                        const std::string& map_path);
     ~Global_Light_Source();
     void update();
     std::pair<int,int> get_position() const;

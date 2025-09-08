@@ -12,14 +12,14 @@ void Check::setDebug(bool debug) {
 }
 
 bool Check::check(const std::shared_ptr<AssetInfo>& info,
-int test_x,
-int test_y,
-const std::vector<Area>& exclusion_areas,
-const std::vector<std::unique_ptr<Asset>>& assets,
-bool check_spacing,
-bool check_min_distance,
-bool check_min_distance_all,
-int num_neighbors) const
+                  int test_x,
+                  int test_y,
+                  const std::vector<Area>& exclusion_areas,
+                  const std::vector<std::unique_ptr<Asset>>& assets,
+                  bool check_spacing,
+                  bool check_min_distance,
+                  bool check_min_distance_all,
+                  int num_neighbors) const
 {
 	if (!info) {
 		if (debug_) std::cout << "[Check] AssetInfo is null\n";
@@ -73,7 +73,7 @@ bool Check::is_in_exclusion_zone(int x, int y, const std::vector<Area>& zones) c
 }
 
 std::vector<Asset*> Check::get_closest_assets(int x, int y, int max_count,
-const std::vector<std::unique_ptr<Asset>>& assets) const
+                                              const std::vector<std::unique_ptr<Asset>>& assets) const
 {
 	std::vector<std::pair<int, Asset*>> pairs;
 	pairs.reserve(assets.size());
@@ -108,9 +108,9 @@ const std::vector<std::unique_ptr<Asset>>& assets) const
 }
 
 bool Check::check_spacing_overlap(const std::shared_ptr<AssetInfo>& info,
-int test_pos_X,
-int test_pos_Y,
-const std::vector<Asset*>& closest_assets) const
+                                  int test_pos_X,
+                                  int test_pos_Y,
+                                  const std::vector<Asset*>& closest_assets) const
 {
 	if (!info) return false;
 	Area* spacing = info->find_area("spacing_area");
@@ -122,7 +122,7 @@ const std::vector<Asset*>& closest_assets) const
 	for (Asset* other : closest_assets) {
 		if (!other || !other->info) continue;
 		Area other_area("fallback", other->pos_X, other->pos_Y,
-		1, 1, "Square", 0,
+                            1, 1, "Square", 0,
 		std::numeric_limits<int>::max(),
 		std::numeric_limits<int>::max());
 		Area* o_spacing = other->info->find_area("spacing_area");
@@ -142,8 +142,8 @@ const std::vector<Asset*>& closest_assets) const
 }
 
 bool Check::check_min_distance_all(const std::shared_ptr<AssetInfo>& info,
-const Point& pos,
-const std::vector<std::unique_ptr<Asset>>& assets) const
+                                   const Point& pos,
+                                   const std::vector<std::unique_ptr<Asset>>& assets) const
 {
 	if (!info || info->min_distance_all <= 0)
 	return false;
@@ -166,8 +166,8 @@ const std::vector<std::unique_ptr<Asset>>& assets) const
 }
 
 bool Check::check_min_type_distance(const std::shared_ptr<AssetInfo>& info,
-const Point& pos,
-const std::vector<std::unique_ptr<Asset>>& assets) const
+                                    const Point& pos,
+                                    const std::vector<std::unique_ptr<Asset>>& assets) const
 {
 	if (!info || info->name.empty() || info->min_same_type_distance <= 0)
 	return false;

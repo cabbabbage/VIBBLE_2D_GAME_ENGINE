@@ -15,21 +15,21 @@ class SceneRenderer {
 
 	public:
     SceneRenderer(SDL_Renderer* renderer,
-    Assets* assets,
-    int screen_width,
-    int screen_height,
-    const std::string& map_path);
+                  Assets* assets,
+                  int screen_width,
+                  int screen_height,
+                  const std::string& map_path);
     void render();
 
 	private:
     void update_shading_groups();
     bool shouldRegen(Asset* a);
     SDL_Rect get_scaled_position_rect(Asset* a,
-    int fw,
-    int fh,
-    float smooth_inv_scale,
-    int min_w,
-    int min_h);
+                                      int fw,
+                                      int fh,
+                                      float smooth_inv_scale,
+                                      int min_w,
+                                      int min_h);
     std::string map_path_;
     SDL_Renderer* renderer_;
     Assets* assets_;

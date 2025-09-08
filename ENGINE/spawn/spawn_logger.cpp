@@ -6,7 +6,7 @@
 #include <iostream>
 #include <iomanip>
 SpawnLogger::SpawnLogger(const std::string& map_dir,
-std::string room_dir)
+                         std::string room_dir)
 : map_dir_(map_dir),
 room_dir_(std::move(room_dir)),
 start_time_(std::chrono::steady_clock::now())
@@ -17,11 +17,11 @@ void SpawnLogger::start_timer() {
 }
 
 void SpawnLogger::output_and_log(const std::string& asset_name,
-int quantity,
-int spawned,
-int attempts,
-int max_attempts,
-const std::string& method) {
+                                 int quantity,
+                                 int spawned,
+                                 int attempts,
+                                 int max_attempts,
+                                 const std::string& method) {
 	auto end_time = std::chrono::steady_clock::now();
 	double duration_ms = std::chrono::duration<double, std::milli>(end_time - start_time_).count();
 	const std::string csv_path = map_dir_ + "/spawn_log.csv";
@@ -38,7 +38,7 @@ const std::string& method) {
 	for (size_t i = 0; i < lines.size(); ++i) {
 		if (lines[i].empty() && i + 3 < lines.size()
 		&& lines[i + 1].empty() && lines[i + 2].empty()
-		&& lines[i + 3] == room_dir_) {
+      && lines[i + 3] == room_dir_) {
 			room_line_index = static_cast<int>(i + 3);
 			break;
 		}

@@ -15,20 +15,20 @@
 #include <cmath>
 #include <limits>
 Assets::Assets(std::vector<Asset>&& loaded,
-AssetLibrary& library,
-Asset* ,
-std::vector<Room*> rooms,
-int screen_width_,
-int screen_height_,
-int screen_center_x,
-int screen_center_y,
-int map_radius,
-SDL_Renderer* renderer,
-const std::string& map_path)
+               AssetLibrary& library,
+               Asset* ,
+               std::vector<Room*> rooms,
+               int screen_width_,
+               int screen_height_,
+               int screen_center_x,
+               int screen_center_y,
+               int map_radius,
+               SDL_Renderer* renderer,
+               const std::string& map_path)
 : window(screen_width_, screen_height_, view::Bounds{
-	-map_radius, map_radius,
-	-map_radius, map_radius
-}),
+         -map_radius, map_radius,
+         -map_radius, map_radius
+         }),
 activeManager(screen_width_, screen_height_, window),
 screen_width(screen_width_),
 screen_height(screen_height_),
@@ -37,11 +37,11 @@ library_(library)
 	InitializeAssets::initialize(*this,
 	std::move(loaded),
 	std::move(rooms),
-	screen_width_,
-	screen_height_,
-	screen_center_x,
-	screen_center_y,
-	map_radius);
+                              screen_width_,
+                              screen_height_,
+                              screen_center_x,
+                              screen_center_y,
+                              map_radius);
 	finder_ = new CurrentRoomFinder(rooms_, player);
 	if (finder_) {
 		window.set_up_rooms(finder_);
@@ -65,19 +65,19 @@ void Assets::set_input(Input* m) {
 	delete dev_mouse;
 	if (input) {
 		dev_mouse = new DevMouseControls(input,
-		this,
-		active_assets,
-		player,
-		screen_width,
-		screen_height);
+                                   this,
+                                   active_assets,
+                                   player,
+                                   screen_width,
+                                   screen_height);
 	} else {
 		dev_mouse = nullptr;
 	}
 }
 
 void Assets::update(const Input& input,
-int screen_center_x,
-int screen_center_y)
+                    int screen_center_x,
+                    int screen_center_y)
 {
 	process_removals();
 	activeManager.updateAssetVectors(player, screen_center_x, screen_center_y);

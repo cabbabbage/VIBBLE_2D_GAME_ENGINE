@@ -31,7 +31,7 @@ AutoMovement::AutoMovement(Asset* self, ActiveAssetsManager& aam, bool confined)
 }
 
 AutoMovement::AutoMovement(Asset* self, ActiveAssetsManager& aam, bool confined,
-double directness_weight, double sparsity_weight)
+                           double directness_weight, double sparsity_weight)
 : self_(self), aam_(aam), confined_(confined),
 weight_dir_(directness_weight), weight_sparse_(sparsity_weight)
 {
@@ -458,8 +458,8 @@ void AutoMovement::ensure_orbit_target(int min_radius, int max_radius, const Ass
 }
 
 void AutoMovement::ensure_patrol_target(const std::vector<Area::Point>& waypoints,
-bool loop,
-int hold_frames)
+                                        bool loop,
+                                        int hold_frames)
 {
 	if (!self_) return;
 	if (waypoints.empty()) return;
@@ -494,10 +494,10 @@ int hold_frames)
 }
 
 void AutoMovement::ensure_serpentine_target(int min_stride,
-int max_stride,
-int sway,
-const Asset* final_target,
-int keep_side_ratio)
+                                            int max_stride,
+                                            int sway,
+                                            const Asset* final_target,
+                                            int keep_side_ratio)
 {
 	if (!self_ || !final_target) return;
 	if (mode_ == Mode::Serpentine && have_target_ && !is_target_reached()) return;

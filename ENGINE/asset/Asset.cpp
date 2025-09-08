@@ -9,13 +9,13 @@
 #include <random>
 #include <algorithm>
 Asset::Asset(std::shared_ptr<AssetInfo> info_,
-const Area& spawn_area,
-int start_pos_X,
-int start_pos_Y,
-int depth_,
-Asset* parent_,
-const std::string& spawn_id_,
-const std::string& spawn_method_)
+             const Area& spawn_area,
+             int start_pos_X,
+             int start_pos_Y,
+             int depth_,
+             Asset* parent_,
+             const std::string& spawn_id_,
+             const std::string& spawn_method_)
 : parent(parent_)
 , info(std::move(info_))
 , current_animation()
@@ -385,7 +385,7 @@ Area Asset::get_area(const std::string& name) const {
 			int left    = pos_X - click_w / 2;
 			int top     = pos_Y - click_h;
 			result = Area(name, left, top, click_w, click_h,
-			"Square", 1,
+                 "Square", 1,
 			std::numeric_limits<int>::max(),
 			std::numeric_limits<int>::max());
 		} else {

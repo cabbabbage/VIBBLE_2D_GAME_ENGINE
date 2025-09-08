@@ -6,11 +6,11 @@
 #include <cmath>
 #include <SDL.h>
 DevMouseControls::DevMouseControls(Input* m,
-Assets* assets,
-std::vector<Asset*>& actives,
-Asset* player_,
-int screen_w_,
-int screen_h_)
+                                   Assets* assets,
+                                   std::vector<Asset*>& actives,
+                                   Asset* player_,
+                                   int screen_w_,
+                                   int screen_h_)
 : mouse(m),
 assets_(assets),
 active_assets(actives),

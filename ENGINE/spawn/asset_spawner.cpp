@@ -17,7 +17,7 @@
 namespace fs = std::filesystem;
 
 AssetSpawner::AssetSpawner(AssetLibrary* asset_library,
-std::vector<Area> exclusion_zones)
+                           std::vector<Area> exclusion_zones)
 : asset_library_(asset_library),
 exclusion_zones(std::move(exclusion_zones)),
 rng_(std::random_device{}()),

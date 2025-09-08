@@ -10,9 +10,9 @@
 using json = nlohmann::json;
 
 GenerateRooms::GenerateRooms(const std::vector<LayerSpec>& layers,
-int map_cx,
-int map_cy,
-const std::string& map_dir)
+                             int map_cx,
+                             int map_cy,
+                             const std::string& map_dir)
 : map_layers_(layers),
 map_center_x_(map_cx),
 map_center_y_(map_cy),
@@ -53,8 +53,8 @@ std::vector<RoomSpec> GenerateRooms::get_children_from_layer(const LayerSpec& la
 }
 
 std::vector<std::unique_ptr<Room>> GenerateRooms::build(AssetLibrary* asset_lib,
-int map_radius,
-const std::string& boundary_json) {
+                                                        int map_radius,
+                                                        const std::string& boundary_json) {
 	std::vector<std::unique_ptr<Room>> all_rooms;
 	if (map_layers_.empty()) return all_rooms;
 	const auto& root_spec = map_layers_[0].rooms[0];
@@ -62,15 +62,15 @@ const std::string& boundary_json) {
 		std::cout << "[GenerateRooms] Creating root room: " << root_spec.name << "\n";
 	}
 	auto root = std::make_unique<Room>(
-	Point{ map_center_x_, map_center_y_ },
-	"room",
-	root_spec.name,
-	nullptr,
-	map_path_ + "/rooms",
-	map_path_,
-	asset_lib,
-	nullptr
-	);
+                                        Point{ map_center_x_, map_center_y_ },
+                                        "room",
+                                        root_spec.name,
+                                        nullptr,
+                                        map_path_ + "/rooms",
+                                        map_path_,
+                                        asset_lib,
+                                        nullptr
+ );
 	root->layer = 0;
 	all_rooms.push_back(std::move(root));
 	std::vector<Room*> current_parents = { all_rooms[0].get() };
@@ -98,15 +98,15 @@ const std::string& boundary_json) {
 								<< " at angle " << angle << " → (" << pos.first << ", " << pos.second << ")\n";
 					}
 					auto child = std::make_unique<Room>(
-					pos,
-					"room",
-					children_specs[i].name,
-					current_parents[0],
-					map_path_ + "/rooms",
-					map_path_,
-					asset_lib,
-					nullptr
-					);
+                                             pos,
+                                             "room",
+                                             children_specs[i].name,
+                                             current_parents[0],
+                                             map_path_ + "/rooms",
+                                             map_path_,
+                                             asset_lib,
+                                             nullptr
+     );
 					child->layer = layer.level;
 					if (!next_parents.empty()) {
 								next_parents.back()->set_sibling_right(child.get());
@@ -158,15 +158,15 @@ const std::string& boundary_json) {
 													<< " at angle " << angle << " → (" << pos.first << ", " << pos.second << ")\n";
 								}
 								auto child = std::make_unique<Room>(
-								pos,
-								"room",
-								kids[i].name,
-								parent,
-								map_path_ + "/rooms",
-								map_path_,
-								asset_lib,
-								nullptr
-								);
+                                                pos,
+                                                "room",
+                                                kids[i].name,
+                                                parent,
+                                                map_path_ + "/rooms",
+                                                map_path_,
+                                                asset_lib,
+                                                nullptr
+        );
 								child->layer = layer.level;
 								if (!next_parents.empty()) {
 													next_parents.back()->set_sibling_right(child.get());

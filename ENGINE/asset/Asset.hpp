@@ -34,13 +34,13 @@ class Asset {
 	public:
     Area get_area(const std::string& name) const;
     Asset(std::shared_ptr<AssetInfo> info,
-    const Area& spawn_area,
-    int start_pos_X,
-    int start_pos_Y,
-    int depth,
-    Asset* parent = nullptr,
-    const std::string& spawn_id = std::string{},
-    const std::string& spawn_method = std::string{});
+          const Area& spawn_area,
+          int start_pos_X,
+          int start_pos_Y,
+          int depth,
+          Asset* parent = nullptr,
+          const std::string& spawn_id = std::string{},
+          const std::string& spawn_method = std::string{});
     Asset(const Asset& other);
     Asset& operator=(const Asset& other);
     Asset(Asset&&) noexcept = default;

@@ -16,9 +16,9 @@
 namespace fs = std::filesystem;
 
 MenuUI::MenuUI(SDL_Renderer* renderer,
-int screen_w,
-int screen_h,
-const std::string& map_path)
+               int screen_w,
+               int screen_h,
+               const std::string& map_path)
 : MainApp(map_path, renderer, screen_w, screen_h)
 {
 	if (TTF_WasInit() == 0) {
@@ -159,7 +159,7 @@ void MenuUI::rebuildButtons() {
 	addButton("Restart Run",        MenuAction::RESTART);
 	addButton("Settings",           MenuAction::SETTINGS);
 	addButton(dev_mode_local_ ? "Switch to Player Mode" : "Switch to Dev Mode",
-	MenuAction::DEV_MODE_TOGGLE);
+           MenuAction::DEV_MODE_TOGGLE);
 	addButton("Save Current Room",  MenuAction::SAVE_ROOM);
 }
 
@@ -174,11 +174,11 @@ SDL_Point MenuUI::measureText(const LabelStyle& style, const std::string& s) con
 }
 
 void MenuUI::blitText(SDL_Renderer* r,
-const LabelStyle& style,
-const std::string& s,
-int x, int y,
-bool shadow,
-SDL_Color override_col) const
+                      const LabelStyle& style,
+                      const std::string& s,
+                      int x, int y,
+                      bool shadow,
+                      SDL_Color override_col) const
 {
 	if (s.empty()) return;
 	TTF_Font* f = style.open_font();
@@ -210,11 +210,11 @@ SDL_Color override_col) const
 }
 
 void MenuUI::blitTextCentered(SDL_Renderer* r,
-const LabelStyle& style,
-const std::string& s,
-const SDL_Rect& rect,
-bool shadow,
-SDL_Color override_col) const
+                              const LabelStyle& style,
+                              const std::string& s,
+                              const SDL_Rect& rect,
+                              bool shadow,
+                              SDL_Color override_col) const
 {
 	SDL_Point sz = measureText(style, s);
 	const int x = rect.x + (rect.w - sz.x)/2;
@@ -248,15 +248,15 @@ void MenuUI::doRestart() {
 		if (!player_ptr) throw std::runtime_error("[MenuUI] No player asset found");
 		game_assets_ = new Assets(std::move(all_assets),
 		*loader_->getAssetLibrary(),
-		player_ptr,
+                            player_ptr,
 		loader_->getRooms(),
-		screen_w_,
-		screen_h_,
-		player_ptr->pos_X,
-		player_ptr->pos_Y,
+                            screen_w_,
+                            screen_h_,
+                            player_ptr->pos_X,
+                            player_ptr->pos_Y,
 		static_cast<int>(loader_->getMapRadius() * 1.2),
-		renderer_,
-		map_path_);
+                            renderer_,
+                            map_path_);
 		if (!input_) input_ = new Input();
 		game_assets_->set_input(input_);
 	} catch (const std::exception& ex) {
@@ -282,9 +282,9 @@ void MenuUI::doSaveCurrentRoom() {
 	std::string room_name;
 	std::string abs_map_path = fs::absolute(map_path_).string();
 	const char* folder = tinyfd_selectFolderDialog(
-	"Select folder to save room copy",
+                                                    "Select folder to save room copy",
 	abs_map_path.c_str()
-	);
+ );
 	if (!folder) {
 		std::cout << "[MenuUI] No folder selected.\n";
 		return;

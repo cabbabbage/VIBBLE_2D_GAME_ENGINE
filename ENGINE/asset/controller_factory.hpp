@@ -13,7 +13,7 @@ class ControllerFactory {
     ControllerFactory(Assets* assets, ActiveAssetsManager& aam);
     ~ControllerFactory();
     std::unique_ptr<AssetController> create_by_key(const std::string& key,
-    Asset* self) const;
+                                                   Asset* self) const;
     std::unique_ptr<AssetController> create_for_asset(Asset* self) const;
 
 	private:

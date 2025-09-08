@@ -21,9 +21,9 @@ GenerateLight::GenerateLight(SDL_Renderer* renderer)
 : renderer_(renderer) {}
 
 SDL_Texture* GenerateLight::generate(SDL_Renderer* renderer,
-const std::string& asset_name,
-const LightSource& light,
-std::size_t light_index)
+                                     const std::string& asset_name,
+                                     const LightSource& light,
+                                     std::size_t light_index)
 {
 	if (!renderer) return nullptr;
 	const std::string cache_root = "cache/" + asset_name + "/lights";

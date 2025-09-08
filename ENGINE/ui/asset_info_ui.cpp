@@ -71,29 +71,29 @@ void AssetInfoUI::build_widgets() {
 	for (size_t i=0;i<info_->tags.size();++i) { oss << info_->tags[i]; if (i+1<info_->tags.size()) oss << ", "; }
 	t_tags_  = std::make_unique<TextBox>("Tags (comma)", oss.str());
 	b_config_anim_ = std::make_unique<Button>(
-	"Configure Animations",
+                                               "Configure Animations",
 	&DevStyles::PrimaryButton(),
-	260,
+                                               260,
 	Button::height()
-	);
+ );
 	b_close_ = std::make_unique<Button>(
-	"Close",
+                                         "Close",
 	&DevStyles::SecondaryButton(),
 	Button::width(),
 	Button::height()
-	);
+ );
 	b_areas_toggle_ = std::make_unique<Button>(
-	"Areas ▸",
+                                                "Areas ▸",
 	&DevStyles::SecondaryButton(),
-	180,
+                                                180,
 	Button::height()
-	);
+ );
 	b_create_area_ = std::make_unique<Button>(
-	"Create New Area",
+                                               "Create New Area",
 	&DevStyles::PrimaryButton(),
-	220,
+                                               220,
 	Button::height()
-	);
+ );
 	t_new_area_name_ = std::make_unique<TextBox>("Area Name", "");
 	t_new_area_name_->set_editing(false);
 	prompt_new_area_ = false;
@@ -140,19 +140,19 @@ void AssetInfoUI::layout_widgets(int screen_w, int screen_h) const {
 		int btn_w = 260;
 		int btn_h = Button::height();
 		b_config_anim_->set_rect(SDL_Rect{
-			panel_.x + 16,
-			panel_.y + panel_.h - btn_h - 16,
-			btn_w, btn_h
-		});
+                           panel_.x + 16,
+                           panel_.y + panel_.h - btn_h - 16,
+                           btn_w, btn_h
+                           });
 	}
 	if (b_close_) {
 		int btn_w = 100;
 		int btn_h = Button::height();
 		b_close_->set_rect(SDL_Rect{
-			panel_.x + panel_.w - btn_w - 16,
-			panel_.y + panel_.h - btn_h - 16,
-			btn_w, btn_h
-		});
+                     panel_.x + panel_.w - btn_w - 16,
+                     panel_.y + panel_.h - btn_h - 16,
+                     btn_w, btn_h
+                     });
 	}
 	max_scroll_ = std::max(0, y + 20 - panel_.h);
 }

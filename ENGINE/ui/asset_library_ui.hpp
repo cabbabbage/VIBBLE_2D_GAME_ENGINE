@@ -19,13 +19,13 @@ class AssetLibraryUI {
     void open() { visible_ = true; }
     void close();
     void update(const Input& input,
-    int screen_w,
-    int screen_h,
-    AssetLibrary& lib);
+                int screen_w,
+                int screen_h,
+                AssetLibrary& lib);
     void render(SDL_Renderer* r,
-    AssetLibrary& lib,
-    int screen_w,
-    int screen_h) const;
+                AssetLibrary& lib,
+                int screen_w,
+                int screen_h) const;
     std::shared_ptr<AssetInfo> consume_selection();
 
 	private:

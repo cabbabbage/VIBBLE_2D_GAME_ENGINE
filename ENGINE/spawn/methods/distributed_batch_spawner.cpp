@@ -8,10 +8,10 @@
 #include "utils/area.hpp"
 #include "spawn_logger.hpp"
 void DistributedBatchSpawner::spawn(const std::vector<BatchSpawnInfo>& items,
-const Area* area,
-int spacing,
-int jitter,
-SpawnContext& ctx) {
+                                    const Area* area,
+                                    int spacing,
+                                    int jitter,
+                                    SpawnContext& ctx) {
 	if (!area || items.empty()) return;
 	auto gen_id = []() {
 		static std::mt19937 rng(std::random_device{}());

@@ -300,7 +300,7 @@ std::string AssetInfo::pick_next_animation(const std::string& mapping_id) const 
 }
 
 void AssetInfo::load_areas(const nlohmann::json& data, float scale, int offset_x,
-int offset_y) {
+                           int offset_y) {
 	AreaLoader::load(*this, data, scale, offset_x, offset_y);
 }
 

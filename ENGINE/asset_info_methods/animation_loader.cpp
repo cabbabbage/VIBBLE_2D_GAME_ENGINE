@@ -38,17 +38,17 @@ void AnimationLoader::load(AssetInfo& info, SDL_Renderer* renderer) {
 		}
 		Animation anim;
 		anim.load(trigger,
-		anim_json,
-		info,
-		info.dir_path_,
-		root_cache,
-		info.scale_factor,
-		renderer,
-		base_sprite,
-		scaled_sprite_w,
-		scaled_sprite_h,
-		info.original_canvas_width,
-		info.original_canvas_height);
+            anim_json,
+            info,
+            info.dir_path_,
+            root_cache,
+            info.scale_factor,
+            renderer,
+            base_sprite,
+            scaled_sprite_w,
+            scaled_sprite_h,
+            info.original_canvas_width,
+            info.original_canvas_height);
 		anim.on_end_mapping = anim_json.value("on_end", std::string{"default"});
 		if (!anim.frames.empty()) {
 			info.animations[trigger] = std::move(anim);
@@ -59,17 +59,17 @@ void AnimationLoader::load(AssetInfo& info, SDL_Renderer* renderer) {
 		const auto& anim_json = item.second;
 		Animation anim;
 		anim.load(trigger,
-		anim_json,
-		info,
-		info.dir_path_,
-		root_cache,
-		info.scale_factor,
-		renderer,
-		base_sprite,
-		scaled_sprite_w,
-		scaled_sprite_h,
-		info.original_canvas_width,
-		info.original_canvas_height);
+            anim_json,
+            info,
+            info.dir_path_,
+            root_cache,
+            info.scale_factor,
+            renderer,
+            base_sprite,
+            scaled_sprite_w,
+            scaled_sprite_h,
+            info.original_canvas_width,
+            info.original_canvas_height);
 		anim.on_end_mapping = anim_json.value("on_end", std::string{});
 		if (!anim.frames.empty()) {
 			info.animations[trigger] = std::move(anim);

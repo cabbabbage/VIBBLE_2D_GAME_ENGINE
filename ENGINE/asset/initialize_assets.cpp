@@ -9,13 +9,13 @@
 #include <stdexcept>
 #include <memory>
 void InitializeAssets::initialize(Assets& assets,
-std::vector<Asset>&& loaded,
-std::vector<Room*> rooms,
-int ,
-int ,
-int screen_center_x,
-int screen_center_y,
-int )
+                                  std::vector<Asset>&& loaded,
+                                  std::vector<Room*> rooms,
+                                  int ,
+                                  int ,
+                                  int screen_center_x,
+                                  int screen_center_y,
+                                  int )
 {
 	std::cout << "[InitializeAssets] Initializing Assets manager...\n";
 	assets.rooms_ = std::move(rooms);
@@ -43,7 +43,7 @@ int )
 	}
 	find_player(assets);
 	assets.activeManager.initialize(assets.all, assets.player,
-	screen_center_x, screen_center_y);
+                                 screen_center_x, screen_center_y);
 	assets.active_assets  = assets.activeManager.getActive();
 	assets.closest_assets = assets.activeManager.getClosest();
 	setup_shading_groups(assets);
@@ -56,8 +56,8 @@ int )
 	}
 	std::cout << "[InitializeAssets] All static sources set.\n";
 	assets.activeManager.updateAssetVectors(assets.player,
-	screen_center_x,
-	screen_center_y);
+                                         screen_center_x,
+                                         screen_center_y);
 	assets.window.zoom_scale(1.0, 200);
 }
 
@@ -73,8 +73,8 @@ void InitializeAssets::find_player(Assets& assets) {
 }
 
 void InitializeAssets::set_shading_group_recursive(Asset& asset,
-int group,
-int ) {
+                                                   int group,
+                                                   int ) {
 	asset.set_shading_group(group);
 	for (Asset* child : asset.children) {
 		if (child) set_shading_group_recursive(*child, group, 0);
@@ -82,10 +82,10 @@ int ) {
 }
 
 void InitializeAssets::collect_assets_in_range(const Asset* asset,
-int cx,
-int cy,
-int r2,
-std::vector<Asset*>& result) {
+                                               int cx,
+                                               int cy,
+                                               int r2,
+                                               std::vector<Asset*>& result) {
 	int dx = asset->pos_X - cx;
 	int dy = asset->pos_Y - cy;
 	if (dx * dx + dy * dy <= r2) {

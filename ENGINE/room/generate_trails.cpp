@@ -31,10 +31,10 @@ void GenerateTrails::set_all_rooms_reference(const std::vector<Room*>& rooms) {
 }
 
 std::vector<std::unique_ptr<Room>> GenerateTrails::generate_trails(
-const std::vector<std::pair<Room*, Room*>>& room_pairs,
-const std::vector<Area>& existing_areas,
-const std::string& map_dir,
-AssetLibrary* asset_lib)
+                                                                       const std::vector<std::pair<Room*, Room*>>& room_pairs,
+                                                                       const std::vector<Area>& existing_areas,
+                                                                       const std::string& map_dir,
+                                                                       AssetLibrary* asset_lib)
 {
 	trail_areas_.clear();
 	std::vector<std::unique_ptr<Room>> trail_rooms;
@@ -48,10 +48,10 @@ AssetLibrary* asset_lib)
 		for (int attempts = 0; attempts < 1000 && !success; ++attempts) {
 			std::string path = pick_random_asset();
 			success = TrailGeometry::attempt_trail_connection(
-			a, b, all_areas, map_dir, asset_lib, trail_rooms,
-			1,
-			path, testing, rng_
-			);
+                                                         a, b, all_areas, map_dir, asset_lib, trail_rooms,
+                                                         1,
+                                                         path, testing, rng_
+   );
 		}
 		if (!success && testing) {
 			std::cout << "[TrailGen] Failed to place trail between "
@@ -72,10 +72,10 @@ std::string GenerateTrails::pick_random_asset() {
 }
 
 void GenerateTrails::find_and_connect_isolated(
-const std::string& map_dir,
-AssetLibrary* asset_lib,
-std::vector<Area>& existing_areas,
-std::vector<std::unique_ptr<Room>>& trail_rooms)
+                                                   const std::string& map_dir,
+                                                   AssetLibrary* asset_lib,
+                                                   std::vector<Area>& existing_areas,
+                                                   std::vector<std::unique_ptr<Room>>& trail_rooms)
 {
 	const int max_passes = 1000000;
 	int allowed_intersections = 0;
@@ -130,7 +130,7 @@ std::vector<std::unique_ptr<Room>>& trail_rooms)
 			std::vector<Room*> sorted_group = group;
 			std::sort(sorted_group.begin(), sorted_group.end(), [](Room* a, Room* b) {
 					return a->connected_rooms.size() < b->connected_rooms.size();
-			});
+             });
 			for (Room* roomA : sorted_group) {
 					std::vector<Room*> candidates;
 					for (Room* candidate : all_rooms_reference) {
@@ -139,7 +139,7 @@ std::vector<std::unique_ptr<Room>>& trail_rooms)
 								[&](const std::pair<Room*, Room*>& p) {
 													return (p.first == roomA && p.second == candidate) ||
 													(p.first == candidate && p.second == roomA);
-								});
+                                   });
 								if (illegal) continue;
 								std::unordered_set<Room*> check_visited;
 								std::function<bool(Room*)> dfs = [&](Room* current) -> bool {
@@ -158,16 +158,16 @@ std::vector<std::unique_ptr<Room>>& trail_rooms)
 					if (candidates.empty()) continue;
 					std::sort(candidates.begin(), candidates.end(), [](Room* a, Room* b) {
 								return a->connected_rooms.size() < b->connected_rooms.size();
-					});
+               });
 					if (candidates.size() > 5) candidates.resize(5);
 					for (Room* roomB : candidates) {
 								for (int attempt = 0; attempt < 100; ++attempt) {
 													std::string path = pick_random_asset();
 													if (TrailGeometry::attempt_trail_connection(
-													roomA, roomB, existing_areas, map_dir,
-													asset_lib, trail_rooms,
-													allowed_intersections,
-													path, testing, rng_)) {
+                 roomA, roomB, existing_areas, map_dir,
+                 asset_lib, trail_rooms,
+                 allowed_intersections,
+                 path, testing, rng_)) {
 																					any_connection_made = true;
 																					goto next_group;
 													}
@@ -189,9 +189,9 @@ std::vector<std::unique_ptr<Room>>& trail_rooms)
 }
 
 void GenerateTrails::remove_connection(Room* a,
-Room* b,
-std::vector<std::unique_ptr<Room>>& trail_rooms,
-std::vector<Area>& existing_areas)
+                                       Room* b,
+                                       std::vector<std::unique_ptr<Room>>& trail_rooms,
+                                       std::vector<Area>& existing_areas)
 {
 	if (!a || !b) return;
 	std::cout << "[Debug][remove_connection] Removing connection between '"
@@ -207,25 +207,25 @@ std::vector<Area>& existing_areas)
 	std::remove_if(trail_rooms.begin(), trail_rooms.end(),
 	[&](const std::unique_ptr<Room>& trail) {
 		if (!trail) return false;
-		bool connects_a = false, connects_b = false;
+                       bool connects_a = false, connects_b = false;
 		for (Room* r : trail->connected_rooms) {
 			if (r == a) connects_a = true;
 			if (r == b) connects_b = true;
-		}
+                       }
 		if (connects_a && connects_b) {
 			existing_areas.erase(
 			std::remove_if(existing_areas.begin(), existing_areas.end(),
 			[&](const Area& area) {
 					return area.get_name() == trail->room_area->get_name();
-			}),
+                       }),
 			existing_areas.end()
-			);
-			return true;
-		}
-		return false;
-	}),
+ );
+                       return true;
+                       }
+                       return false;
+                       }),
 	trail_rooms.end()
-	);
+ );
 	std::cout << "[Debug][remove_connection] Removed "
 	<< (before - trail_rooms.size())
 	<< " trail room(s) connecting them.\n";
@@ -263,10 +263,10 @@ void GenerateTrails::remove_random_connection(std::vector<std::unique_ptr<Room>>
 }
 
 void GenerateTrails::remove_and_connect(std::vector<std::unique_ptr<Room>>& trail_rooms,
-std::vector<std::pair<Room*, Room*>>& illegal_connections,
-const std::string& map_dir,
-AssetLibrary* asset_lib,
-std::vector<Area>& existing_areas)
+                                        std::vector<std::pair<Room*, Room*>>& illegal_connections,
+                                        const std::string& map_dir,
+                                        AssetLibrary* asset_lib,
+                                        std::vector<Area>& existing_areas)
 {
 	Room* target = nullptr;
 	for (Room* room : all_rooms_reference) {
@@ -304,9 +304,9 @@ std::vector<Area>& existing_areas)
 }
 
 void GenerateTrails::circular_connection(std::vector<std::unique_ptr<Room>>& trail_rooms,
-const std::string& map_dir,
-AssetLibrary* asset_lib,
-std::vector<Area>& existing_areas)
+                                         const std::string& map_dir,
+                                         AssetLibrary* asset_lib,
+                                         std::vector<Area>& existing_areas)
 {
 	if (all_rooms_reference.empty()) {
 		std::cout << "[Debug][circular_connection] No rooms available.\n";
@@ -367,9 +367,9 @@ std::vector<Area>& existing_areas)
 		for (int attempt = 0; attempt < 1000; ++attempt) {
 			std::string path = pick_random_asset();
 			if (TrailGeometry::attempt_trail_connection(current, next, existing_areas, map_dir,
-			asset_lib, trail_rooms,
-			1,
-			path, testing, rng_)) {
+       asset_lib, trail_rooms,
+       1,
+       path, testing, rng_)) {
 					std::cout << "[Debug][circular_connection] Connected on attempt "
 					<< attempt+1 << " using asset: " << path << "\n";
 					current = next;

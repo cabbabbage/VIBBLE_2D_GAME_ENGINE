@@ -46,7 +46,7 @@ void PerimeterSpawner::spawn(const SpawnInfo& item, const Area* area, SpawnConte
 	for (int i = 0; i < item.quantity; ++i) {
 		double target = i * spacing;
 		while (seg_index < segment_lengths.size() &&
-		dist_accum + segment_lengths[seg_index] < target) {
+         dist_accum + segment_lengths[seg_index] < target) {
 			dist_accum += segment_lengths[seg_index++];
 		}
 		if (seg_index >= segment_lengths.size()) break;
@@ -70,9 +70,9 @@ void PerimeterSpawner::spawn(const SpawnInfo& item, const Area* area, SpawnConte
 		y += item.perimeter_y_offset;
 		++attempts;
 		if (ctx.checker().check(item.info, x, y, ctx.exclusion_zones(), ctx.all_assets(),
-		item.check_overlap, false, false, 5)) continue;
+      item.check_overlap, false, false, 5)) continue;
 		ctx.spawnAsset(item.name, item.info, *area, x, y, 0, nullptr,
-		item.spawn_id, item.position);
+                 item.spawn_id, item.position);
 		++placed;
 		ctx.logger().progress(item.info, placed, item.quantity);
 	}

@@ -81,7 +81,7 @@ class AssetInfo {
     void load_lighting_info(const nlohmann::json &data);
     void generate_lights(SDL_Renderer *renderer);
     void load_areas(const nlohmann::json &data, float scale, int offset_x,
-    int offset_y);
+                    int offset_y);
     void load_children(const nlohmann::json &data);
     nlohmann::json anims_json_;
     std::string dir_path_;

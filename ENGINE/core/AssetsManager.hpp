@@ -26,21 +26,21 @@ class Assets {
 
 	public:
     Assets(std::vector<Asset>&& loaded,
-    AssetLibrary& library,
-    Asset* ,
-    std::vector<Room*> rooms,
-    int screen_width,
-    int screen_height,
-    int screen_center_x,
-    int screen_center_y,
-    int map_radius,
-    SDL_Renderer* renderer,
-    const std::string& map_path);
+           AssetLibrary& library,
+           Asset* ,
+           std::vector<Room*> rooms,
+           int screen_width,
+           int screen_height,
+           int screen_center_x,
+           int screen_center_y,
+           int map_radius,
+           SDL_Renderer* renderer,
+           const std::string& map_path);
     ~Assets();
     nlohmann::json save_current_room(std::string room_name);
     void update(const Input& input,
-    int screen_center_x,
-    int screen_center_y);
+                int screen_center_x,
+                int screen_center_y);
     void set_dev_mode(bool mode);
     void set_render_suppressed(bool suppressed);
     void set_input(Input* m);

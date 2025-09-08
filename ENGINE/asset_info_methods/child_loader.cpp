@@ -6,8 +6,8 @@ using nlohmann::json;
 namespace fs = std::filesystem;
 
 void ChildLoader::load_children(AssetInfo& info,
-const json& data,
-const std::string& dir_path) {
+                                const json& data,
+                                const std::string& dir_path) {
 	info.children.clear();
 	if (!data.contains("child_assets") || !data["child_assets"].is_array())
 	return;

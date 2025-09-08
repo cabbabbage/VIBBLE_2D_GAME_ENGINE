@@ -33,12 +33,12 @@ void ExactSpawner::spawn(const SpawnInfo& item, const Area* area, SpawnContext& 
 	int final_x = center.first + static_cast<int>(std::lround(dx * rx));
 	int final_y = center.second + static_cast<int>(std::lround(dy * ry));
 	if (ctx.checker().check(item.info, final_x, final_y, ctx.exclusion_zones(), ctx.all_assets(),
-	item.check_overlap, item.check_min_spacing, false, 5)) {
+     item.check_overlap, item.check_min_spacing, false, 5)) {
 		ctx.logger().output_and_log(item.name, item.quantity, 0, 0, 0, "exact");
 		return;
 	}
 	ctx.spawnAsset(item.name, item.info, *area, final_x, final_y, 0, nullptr,
-	item.spawn_id, item.position);
+                item.spawn_id, item.position);
 	ctx.logger().progress(item.info, 1, item.quantity);
 	ctx.logger().output_and_log(item.name, item.quantity, 1, 1, 1, "exact");
 }

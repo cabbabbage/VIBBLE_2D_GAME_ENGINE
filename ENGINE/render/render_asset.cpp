@@ -9,9 +9,9 @@
 #include <random>
 #include <iostream>
 RenderAsset::RenderAsset(SDL_Renderer* renderer,
-Parallax& parallax,
-Global_Light_Source& main_light,
-Asset* player)
+                         Parallax& parallax,
+                         Global_Light_Source& main_light,
+                         Asset* player)
 : renderer_(renderer),
 parallax_(parallax),
 main_light_source_(main_light),
@@ -19,9 +19,9 @@ p(player) {}
 
 SDL_Texture* RenderAsset::render_shadow_mask(Asset* a, int bw, int bh) {
 	SDL_Texture* mask = SDL_CreateTexture(renderer_,
-	SDL_PIXELFORMAT_RGBA8888,
-	SDL_TEXTUREACCESS_TARGET,
-	bw, bh);
+                                       SDL_PIXELFORMAT_RGBA8888,
+                                       SDL_TEXTUREACCESS_TARGET,
+                                       bw, bh);
 	if (!mask) return nullptr;
 	SDL_SetTextureBlendMode(mask, SDL_BLENDMODE_BLEND);
 	SDL_Texture* prev_target = SDL_GetRenderTarget(renderer_);
@@ -56,9 +56,9 @@ SDL_Texture* RenderAsset::regenerateFinalTexture(Asset* a) {
 	int bw = a->cached_w, bh = a->cached_h;
 	if (bw == 0 || bh == 0) SDL_QueryTexture(base, nullptr, nullptr, &bw, &bh);
 	SDL_Texture* final_tex = SDL_CreateTexture(renderer_,
-	SDL_PIXELFORMAT_RGBA8888,
-	SDL_TEXTUREACCESS_TARGET,
-	bw, bh);
+                                            SDL_PIXELFORMAT_RGBA8888,
+                                            SDL_TEXTUREACCESS_TARGET,
+                                            bw, bh);
 	if (!final_tex) return nullptr;
 	SDL_SetTextureBlendMode(final_tex, SDL_BLENDMODE_BLEND);
 	SDL_Texture* prev_target = SDL_GetRenderTarget(renderer_);

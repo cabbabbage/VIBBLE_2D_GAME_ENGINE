@@ -18,13 +18,13 @@ class Room {
 	public:
     typedef std::pair<int, int> Point;
     Room(Point origin,
-    std::string type_,
-    const std::string& room_def_name,
-    Room* parent,
-    const std::string& room_dir,
-    const std::string& map_dir,
-    AssetLibrary* asset_lib,
-    Area* precomputed_area);
+         std::string type_,
+         const std::string& room_def_name,
+         Room* parent,
+         const std::string& room_dir,
+         const std::string& map_dir,
+         AssetLibrary* asset_lib,
+         Area* precomputed_area);
     void set_sibling_left(Room* left_room);
     void set_sibling_right(Room* right_room);
     void add_connecting_room(Room* room);

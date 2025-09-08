@@ -9,13 +9,13 @@
 using json = nlohmann::json;
 
 Room::Room(Point origin,
-std::string type_,
-const std::string& room_def_name,
-Room* parent,
-const std::string& room_dir,
-const std::string& map_dir,
-AssetLibrary* asset_lib,
-Area* precomputed_area
+           std::string type_,
+           const std::string& room_def_name,
+           Room* parent,
+           const std::string& room_dir,
+           const std::string& map_dir,
+           AssetLibrary* asset_lib,
+           Area* precomputed_area
 )
 : map_origin(origin),
 parent(parent),
@@ -75,14 +75,14 @@ type(type_)
 			<< ", map radius: " << map_radius << "\n";
 		}
 		room_area = std::make_unique<Area>(room_name,
-		map_origin.first,
-		map_origin.second,
-		width,
-		height,
-		geometry,
-		edge_smoothness,
-		map_w,
-		map_h);
+                                     map_origin.first,
+                                     map_origin.second,
+                                     width,
+                                     height,
+                                     geometry,
+                                     edge_smoothness,
+                                     map_w,
+                                     map_h);
 	}
 	std::vector<json> json_sources;
 	std::vector<std::string> source_paths;
@@ -101,11 +101,11 @@ type(type_)
 		}
 	}
 	planner = std::make_unique<AssetSpawnPlanner>(
-	json_sources,
-	*room_area,
-	*asset_lib,
-	source_paths
-	);
+                                                   json_sources,
+                                                   *room_area,
+                                                   *asset_lib,
+                                                   source_paths
+ );
 	std::vector<Area> exclusion;
 	AssetSpawner spawner(asset_lib, exclusion);
 	spawner.spawn(*this);

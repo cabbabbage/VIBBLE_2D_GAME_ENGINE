@@ -10,11 +10,11 @@
 using json = nlohmann::json;
 
 Global_Light_Source::Global_Light_Source(SDL_Renderer* renderer,
-int screen_center_x,
-int screen_center_y,
-int screen_width,
-SDL_Color fallback_base_color,
-const std::string& map_path)
+                                         int screen_center_x,
+                                         int screen_center_y,
+                                         int screen_width,
+                                         SDL_Color fallback_base_color,
+                                         const std::string& map_path)
 : renderer_(renderer),
 texture_(nullptr),
 base_color_(fallback_base_color),

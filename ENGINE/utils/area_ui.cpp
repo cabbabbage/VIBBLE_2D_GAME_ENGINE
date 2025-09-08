@@ -53,10 +53,10 @@ namespace {
 		return out;
 	}
 	static EditorResult run_area_editor(SDL_Texture* background,
-	SDL_Renderer* src_renderer,
-	int window_w,
-	int window_h,
-	const Area* initial_area = nullptr) {
+                                     SDL_Renderer* src_renderer,
+                                     int window_w,
+                                     int window_h,
+                                     const Area* initial_area = nullptr) {
 		if (!background) throw std::runtime_error("[Area Editor] No background texture provided");
 		int tex_w = 0, tex_h = 0;
 		SDL_QueryTexture(background, nullptr, nullptr, &tex_w, &tex_h);
@@ -65,7 +65,7 @@ namespace {
 		int win_w = window_w > 0 ? window_w : std::max(minW, tex_w);
 		int win_h = window_h > 0 ? window_h : std::max(minH, tex_h);
 		SDL_Window* win = SDL_CreateWindow("Area Editor", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
-		win_w, win_h, SDL_WINDOW_SHOWN);
+                                                  win_w, win_h, SDL_WINDOW_SHOWN);
 		if (!win) throw std::runtime_error("[Area Editor] Failed to create window");
 		SDL_Renderer* rend = SDL_CreateRenderer(win, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
 		if (!rend) {
@@ -82,7 +82,7 @@ namespace {
 		SDL_Texture* bg_local = nullptr;
 		if (src_renderer) {
 			SDL_Texture* tmp = SDL_CreateTexture(src_renderer, SDL_PIXELFORMAT_RGBA8888,
-			SDL_TEXTUREACCESS_TARGET, tex_w, tex_h);
+                                        SDL_TEXTUREACCESS_TARGET, tex_w, tex_h);
 			if (tmp) {
 					SDL_Texture* prev = SDL_GetRenderTarget(src_renderer);
 					SDL_Rect prev_vp; SDL_RenderGetViewport(src_renderer, &prev_vp);
@@ -275,7 +275,7 @@ namespace {
 }
 
 Area::Area(const std::string& name, const Area& base, SDL_Renderer* renderer,
-int window_w, int window_h)
+           int window_w, int window_h)
 : area_name_(name)
 {
 	SDL_Texture* bg = base.get_texture();
@@ -301,7 +301,7 @@ int window_w, int window_h)
 }
 
 Area::Area(const std::string& name, SDL_Texture* background, SDL_Renderer* renderer,
-int window_w, int window_h)
+           int window_w, int window_h)
 : area_name_(name)
 {
 	if (!background) throw std::runtime_error("[Area: editor] Null background texture");

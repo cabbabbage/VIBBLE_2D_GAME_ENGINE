@@ -14,7 +14,7 @@ using json = nlohmann::json;
 namespace fs = std::filesystem;
 
 std::vector<TrailGeometry::Point> TrailGeometry::build_centerline(
-const Point& start, const Point& end, int curvyness, std::mt19937& rng)
+                                                                      const Point& start, const Point& end, int curvyness, std::mt19937& rng)
 {
 	std::vector<Point> line;
 	line.reserve(static_cast<size_t>(curvyness) + 2);
@@ -36,7 +36,7 @@ const Point& start, const Point& end, int curvyness, std::mt19937& rng)
 			line.emplace_back(
 			std::round(px + nx * off),
 			std::round(py + ny * off)
-			);
+   );
 		}
 	}
 	line.push_back(end);
@@ -44,7 +44,7 @@ const Point& start, const Point& end, int curvyness, std::mt19937& rng)
 }
 
 std::vector<TrailGeometry::Point> TrailGeometry::extrude_centerline(
-const std::vector<Point>& centerline, double width)
+                                                                        const std::vector<Point>& centerline, double width)
 {
 	const double half_w = width * 0.5;
 	std::vector<Point> left, right;
@@ -71,11 +71,11 @@ const std::vector<Point>& centerline, double width)
 		left.emplace_back(
 		std::round(cx + nx * half_w),
 		std::round(cy + ny * half_w)
-		);
+  );
 		right.emplace_back(
 		std::round(cx - nx * half_w),
 		std::round(cy - ny * half_w)
-		);
+  );
 	}
 	std::vector<Point> polygon;
 	polygon.reserve(left.size() + right.size());
@@ -85,8 +85,8 @@ const std::vector<Point>& centerline, double width)
 }
 
 TrailGeometry::Point TrailGeometry::compute_edge_point(const Point& center,
-const Point& toward,
-const Area* area)
+                                                       const Point& toward,
+                                                       const Area* area)
 {
 	if (!area) return center;
 	double dx = toward.first  - center.first;
@@ -113,16 +113,16 @@ const Area* area)
 }
 
 bool TrailGeometry::attempt_trail_connection(
-Room* a,
-Room* b,
-std::vector<Area>& existing_areas,
-const std::string& map_dir,
-AssetLibrary* asset_lib,
-std::vector<std::unique_ptr<Room>>& trail_rooms,
-int allowed_intersections,
-const std::string& path,
-bool testing,
-std::mt19937& rng)
+                                                 Room* a,
+                                                 Room* b,
+                                                 std::vector<Area>& existing_areas,
+                                                 const std::string& map_dir,
+                                                 AssetLibrary* asset_lib,
+                                                 std::vector<std::unique_ptr<Room>>& trail_rooms,
+                                                 int allowed_intersections,
+                                                 const std::string& path,
+                                                 bool testing,
+                                                 std::mt19937& rng)
 {
 	std::ifstream in(path);
 	if (!in.is_open()) {
@@ -147,8 +147,8 @@ std::mt19937& rng)
 	const double overshoot = 100.0;
 	const double min_interior_depth = std::max(40.0, width * 0.75);
 	auto make_edge_triplet = [&](const Point& center,
-	const Point& toward,
-	const Area* area)
+                              const Point& toward,
+                              const Area* area)
 	{
 		Point edge = TrailGeometry::compute_edge_point(center, toward, area);
 		double dx = edge.first  - center.first;
@@ -225,15 +225,15 @@ std::mt19937& rng)
 		}
 		std::string room_dir = fs::path(path).parent_path().string();
 		auto trail_room = std::make_unique<Room>(
-		a->map_origin,
-		"trail",
-		name,
-		nullptr,
-		room_dir,
-		map_dir,
-		asset_lib,
-		&candidate
-		);
+                                               a->map_origin,
+                                               "trail",
+                                               name,
+                                               nullptr,
+                                               room_dir,
+                                               map_dir,
+                                               asset_lib,
+                                               &candidate
+  );
 		a->add_connecting_room(trail_room.get());
 		b->add_connecting_room(trail_room.get());
 		trail_room->add_connecting_room(a);

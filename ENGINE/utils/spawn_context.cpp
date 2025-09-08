@@ -13,12 +13,12 @@
 namespace fs = std::filesystem;
 
 SpawnContext::SpawnContext(std::mt19937& rng,
-Check& checker,
-SpawnLogger& logger,
-std::vector<Area>& exclusion_zones,
-std::unordered_map<std::string, std::shared_ptr<AssetInfo>>& asset_info_library,
-std::vector<std::unique_ptr<Asset>>& all,
-AssetLibrary* asset_library)
+                           Check& checker,
+                           SpawnLogger& logger,
+                           std::vector<Area>& exclusion_zones,
+                           std::unordered_map<std::string, std::shared_ptr<AssetInfo>>& asset_info_library,
+                           std::vector<std::unique_ptr<Asset>>& all,
+                           AssetLibrary* asset_library)
 : rng_(rng),
 checker_(checker),
 logger_(logger),
@@ -43,14 +43,14 @@ SpawnContext::Point SpawnContext::get_point_within_area(const Area& area) {
 }
 
 Asset* SpawnContext::spawnAsset(const std::string& name,
-const std::shared_ptr<AssetInfo>& info,
-const Area& area,
-int x,
-int y,
-int depth,
-Asset* parent,
-const std::string& spawn_id,
-const std::string& spawn_method)
+                                const std::shared_ptr<AssetInfo>& info,
+                                const Area& area,
+                                int x,
+                                int y,
+                                int depth,
+                                Asset* parent,
+                                const std::string& spawn_id,
+                                const std::string& spawn_method)
 {
 	auto assetPtr = std::make_unique<Asset>(info, area, x, y, depth, parent, spawn_id, spawn_method);
 	Asset* raw = assetPtr.get();
@@ -94,9 +94,9 @@ const std::string& spawn_method)
 					childArea.flip_horizontal(raw->pos_X);
 			}
 			AssetSpawnPlanner childPlanner(std::vector<nlohmann::json>{ j },
-			childArea,
-			*asset_library_,
-			std::vector<std::string>{ childJsonPath });
+                                  childArea,
+                                  *asset_library_,
+                                  std::vector<std::string>{ childJsonPath });
 			AssetSpawner childSpawner(asset_library_, exclusion_zones_);
 			childSpawner.spawn_children(childArea, &childPlanner);
 			auto kids = childSpawner.extract_all_assets();

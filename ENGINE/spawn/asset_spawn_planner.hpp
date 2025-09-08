@@ -43,9 +43,9 @@ class AssetSpawnPlanner {
 
 	public:
     AssetSpawnPlanner(const std::vector<nlohmann::json>& json_sources,
-    const Area& area,
-    AssetLibrary& asset_library,
-    const std::vector<std::string>& source_paths = {});
+                      const Area& area,
+                      AssetLibrary& asset_library,
+                      const std::vector<std::string>& source_paths = {});
     const std::vector<SpawnInfo>& get_spawn_queue() const;
     const std::vector<BatchSpawnInfo>& get_batch_spawn_assets() const;
     int get_batch_grid_spacing() const;

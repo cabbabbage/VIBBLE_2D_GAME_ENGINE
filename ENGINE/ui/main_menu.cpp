@@ -234,11 +234,11 @@ SDL_Point MainMenu::measureText(const LabelStyle& style, const std::string& s) c
 }
 
 void MainMenu::blitText(SDL_Renderer* r,
-const LabelStyle& style,
-const std::string& s,
-int x, int y,
-bool shadow,
-SDL_Color override_col) const
+                        const LabelStyle& style,
+                        const std::string& s,
+                        int x, int y,
+                        bool shadow,
+                        SDL_Color override_col) const
 {
 	if (s.empty()) return;
 	TTF_Font* f = style.open_font();
@@ -270,11 +270,11 @@ SDL_Color override_col) const
 }
 
 void MainMenu::blitTextCentered(SDL_Renderer* r,
-const LabelStyle& style,
-const std::string& s,
-const SDL_Rect& rect,
-bool shadow,
-SDL_Color override_col) const
+                                const LabelStyle& style,
+                                const std::string& s,
+                                const SDL_Rect& rect,
+                                bool shadow,
+                                SDL_Color override_col) const
 {
 	SDL_Point sz = measureText(style, s);
 	const int x = rect.x + (rect.w - sz.x)/2;

@@ -17,9 +17,9 @@ static std::string generate_spawn_id() {
 }
 
 AssetSpawnPlanner::AssetSpawnPlanner(const std::vector<nlohmann::json>& json_sources,
-const Area& area,
-AssetLibrary& asset_library,
-const std::vector<std::string>& source_paths)
+                                     const Area& area,
+                                     AssetLibrary& asset_library,
+                                     const std::vector<std::string>& source_paths)
 : asset_library_(&asset_library) {
 	source_jsons_ = json_sources;
 	source_paths_ = source_paths;
@@ -227,7 +227,7 @@ void AssetSpawnPlanner::sort_spawn_queue() {
 	};
 	std::sort(spawn_queue_.begin(), spawn_queue_.end(), [&](const SpawnInfo& a, const SpawnInfo& b) {
 		return priority_index(a.position) < priority_index(b.position);
-	});
+           });
 }
 
 void AssetSpawnPlanner::persist_sources() {

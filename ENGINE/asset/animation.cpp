@@ -10,17 +10,17 @@ namespace fs = std::filesystem;
 Animation::Animation() = default;
 
 void Animation::load(const std::string& trigger,
-const nlohmann::json& anim_json,
-AssetInfo& info,
-const std::string& dir_path,
-const std::string& root_cache,
-float scale_factor,
-SDL_Renderer* renderer,
-SDL_Texture*& base_sprite,
-int& scaled_sprite_w,
-int& scaled_sprite_h,
-int& original_canvas_width,
-int& original_canvas_height)
+                     const nlohmann::json& anim_json,
+                     AssetInfo& info,
+                     const std::string& dir_path,
+                     const std::string& root_cache,
+                     float scale_factor,
+                     SDL_Renderer* renderer,
+                     SDL_Texture*& base_sprite,
+                     int& scaled_sprite_w,
+                     int& scaled_sprite_h,
+                     int& original_canvas_width,
+                     int& original_canvas_height)
 {
 	CacheManager cache;
 	if (anim_json.contains("source")) {
@@ -220,10 +220,10 @@ SDL_Texture* Animation::get_frame(int index) const {
 }
 
 bool Animation::advance(int& index,
-float& progress,
-int& dx,
-int& dy,
-bool& resort_z) const
+                        float& progress,
+                        int& dx,
+                        int& dy,
+                        bool& resort_z) const
 {
 	if (frozen || frames.empty()) return false;
 	dx = 0;

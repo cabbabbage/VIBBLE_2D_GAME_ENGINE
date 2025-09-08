@@ -4,10 +4,10 @@
 #include <stdexcept>
 #include <random>
 BlurUtil::BlurUtil(SDL_Renderer* renderer,
-int downscale,
-int blur_radius,
-float weight_min,
-float weight_max)
+                   int downscale,
+                   int blur_radius,
+                   float weight_min,
+                   float weight_max)
 : renderer_(renderer),
 downscale_(downscale),
 blur_radius_(blur_radius),
@@ -16,9 +16,9 @@ weight_max_(weight_max)
 {}
 
 SDL_Texture* BlurUtil::blur_core(SDL_Texture* source_tex,
-int override_w,
-int override_h,
-int override_blur_radius,
+                                 int override_w,
+                                 int override_h,
+                                 int override_blur_radius,
 std::function<float(std::mt19937&)> weight_func)
 {
 	if (!source_tex) throw std::runtime_error("blur_core: source_tex is null");
@@ -30,14 +30,14 @@ std::function<float(std::mt19937&)> weight_func)
 	int small_w = std::max(1, w / downscale_);
 	int small_h = std::max(1, h / downscale_);
 	SDL_Texture* downscaled = SDL_CreateTexture(renderer_, SDL_PIXELFORMAT_RGBA8888,
-	SDL_TEXTUREACCESS_TARGET, small_w, small_h);
+                                             SDL_TEXTUREACCESS_TARGET, small_w, small_h);
 	SDL_SetTextureBlendMode(downscaled, SDL_BLENDMODE_NONE);
 	SDL_SetRenderTarget(renderer_, downscaled);
 	SDL_RenderCopy(renderer_, source_tex, nullptr, nullptr);
 	SDL_Surface* surf = SDL_CreateRGBSurfaceWithFormat(0, small_w, small_h, 32, SDL_PIXELFORMAT_RGBA8888);
 	if (!surf) throw std::runtime_error("blur_core: failed to create surface");
 	if (SDL_RenderReadPixels(renderer_, nullptr, SDL_PIXELFORMAT_RGBA8888,
-	surf->pixels, surf->pitch) != 0)
+     surf->pixels, surf->pitch) != 0)
 	{
 		SDL_FreeSurface(surf);
 		SDL_DestroyTexture(downscaled);
@@ -88,7 +88,7 @@ std::function<float(std::mt19937&)> weight_func)
 	SDL_FreeSurface(surf);
 	SDL_DestroyTexture(downscaled);
 	SDL_Texture* blurred_full = SDL_CreateTexture(renderer_, SDL_PIXELFORMAT_RGBA8888,
-	SDL_TEXTUREACCESS_TARGET, w, h);
+                                               SDL_TEXTUREACCESS_TARGET, w, h);
 	SDL_SetTextureBlendMode(blurred_full, SDL_BLENDMODE_MOD);
 	SDL_SetRenderTarget(renderer_, blurred_full);
 	SDL_RenderCopy(renderer_, blurred_small, nullptr, nullptr);
@@ -98,22 +98,22 @@ std::function<float(std::mt19937&)> weight_func)
 }
 
 SDL_Texture* BlurUtil::blur_texture(SDL_Texture* source_tex,
-int override_w,
-int override_h,
-int override_blur_radius)
+                                    int override_w,
+                                    int override_h,
+                                    int override_blur_radius)
 {
 	return blur_core(source_tex, override_w, override_h, override_blur_radius,
 	[](std::mt19937&) { return 1.0f; });
 }
 
 SDL_Texture* BlurUtil::blur_texture_random(SDL_Texture* source_tex,
-int override_w,
-int override_h,
-int override_blur_radius)
+                                           int override_w,
+                                           int override_h,
+                                           int override_blur_radius)
 {
 	return blur_core(source_tex, override_w, override_h, override_blur_radius,
 	[this](std::mt19937& rng) {
 		std::uniform_real_distribution<float> dist(weight_min_, weight_max_);
 		return dist(rng);
-	});
+                  });
 }

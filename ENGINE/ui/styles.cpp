@@ -82,8 +82,8 @@ static SDL_Color brighten(SDL_Color c, int r=20, int g=20, int b=10) {
 	Uint8(clamp255(int(c.r) + r)),
 	Uint8(clamp255(int(c.g) + g)),
 	Uint8(clamp255(int(c.b) + b)),
-	c.a
-	);
+                       c.a
+ );
 }
 
 static const ButtonStyle kMainDecoButton{

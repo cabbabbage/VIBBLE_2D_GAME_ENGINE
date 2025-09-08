@@ -11,9 +11,9 @@ all_assets_(nullptr)
 {}
 
 void ActiveAssetsManager::initialize(std::vector<Asset*>& all_assets,
-Asset* player,
-int screen_center_x,
-int screen_center_y)
+                                     Asset* player,
+                                     int screen_center_x,
+                                     int screen_center_y)
 {
 	all_assets_ = &all_assets;
 	active_assets_.clear();
@@ -27,8 +27,8 @@ int screen_center_y)
 }
 
 void ActiveAssetsManager::updateAssetVectors(Asset* player,
-int screen_center_x,
-int screen_center_y)
+                                             int screen_center_x,
+                                             int screen_center_y)
 {
 	if (++activate_counter_ >= update_activate_interval) {
 		updateActiveAssets(screen_center_x, screen_center_y);
@@ -76,8 +76,8 @@ void ActiveAssetsManager::updateClosestAssets(Asset* player, std::size_t max_cou
 	[&](Asset* A, Asset* B){
 		float dAx = float(A->pos_X - px), dAy = float(A->pos_Y - py);
 		float dBx = float(B->pos_X - px), dBy = float(B->pos_Y - py);
-		return dAx*dAx + dAy*dAy < dBx*dBx + dBy*dBy;
-	});
+           return dAx*dAx + dAy*dAy < dBx*dBx + dBy*dBy;
+           });
 	for (Asset* a : closest_assets_) {
 		if (!a) continue;
 		a->set_render_player_light(true);
@@ -142,6 +142,6 @@ void ActiveAssetsManager::sortByZIndex()
 		if (A->z_index != B->z_index) return A->z_index < B->z_index;
 		if (A->pos_Y != B->pos_Y)     return A->pos_Y < B->pos_Y;
 		if (A->pos_X != B->pos_X)     return A->pos_X < B->pos_X;
-		return A < B;
-	});
+           return A < B;
+           });
 }

@@ -16,10 +16,10 @@ static int MOTION_BLUR_STRENGTH   = 150;
 static int MOTION_BLUR_PERSISTENCE = 200;
 
 SceneRenderer::SceneRenderer(SDL_Renderer* renderer,
-Assets* assets,
-int screen_width,
-int screen_height,
-const std::string& map_path)
+                             Assets* assets,
+                             int screen_width,
+                             int screen_height,
+                             const std::string& map_path)
 : map_path_(map_path),
 renderer_(renderer),
 assets_(assets),
@@ -27,16 +27,16 @@ screen_width_(screen_width),
 screen_height_(screen_height),
 parallax_(screen_width, screen_height),
 main_light_source_(renderer, screen_width / 2, screen_height / 2,
-screen_width, SDL_Color{255, 255, 255, 255}, map_path),
+                   screen_width, SDL_Color{255, 255, 255, 255}, map_path),
 fullscreen_light_tex_(nullptr),
 render_asset_(renderer, parallax_, main_light_source_, assets->player),
 accumulation_tex_(nullptr)
 {
 	fullscreen_light_tex_ = SDL_CreateTexture(renderer_,
-	SDL_PIXELFORMAT_RGBA8888,
-	SDL_TEXTUREACCESS_TARGET,
-	screen_width_,
-	screen_height_);
+                                           SDL_PIXELFORMAT_RGBA8888,
+                                           SDL_TEXTUREACCESS_TARGET,
+                                           screen_width_,
+                                           screen_height_);
 	if (fullscreen_light_tex_) {
 		SDL_SetTextureBlendMode(fullscreen_light_tex_, SDL_BLENDMODE_BLEND);
 		SDL_Texture* prev = SDL_GetRenderTarget(renderer_);
@@ -50,10 +50,10 @@ accumulation_tex_(nullptr)
 		<< SDL_GetError() << "\n";
 	}
 	accumulation_tex_ = SDL_CreateTexture(renderer_,
-	SDL_PIXELFORMAT_RGBA8888,
-	SDL_TEXTUREACCESS_TARGET,
-	screen_width_,
-	screen_height_);
+                                       SDL_PIXELFORMAT_RGBA8888,
+                                       SDL_TEXTUREACCESS_TARGET,
+                                       screen_width_,
+                                       screen_height_);
 	if (!accumulation_tex_) {
 		std::cerr << "[SceneRenderer] Failed to create accumulation texture: "
 		<< SDL_GetError() << "\n";
@@ -61,12 +61,12 @@ accumulation_tex_(nullptr)
 		SDL_SetTextureBlendMode(accumulation_tex_, SDL_BLENDMODE_BLEND);
 	}
 	z_light_pass_ = std::make_unique<LightMap>(renderer_,
-	assets_,
-	parallax_,
-	main_light_source_,
-	screen_width_,
-	screen_height_,
-	fullscreen_light_tex_);
+                                            assets_,
+                                            parallax_,
+                                            main_light_source_,
+                                            screen_width_,
+                                            screen_height_,
+                                            fullscreen_light_tex_);
 	main_light_source_.update();
 	z_light_pass_->render(debugging);
 }
@@ -82,12 +82,12 @@ bool SceneRenderer::shouldRegen(Asset* a) {
 	return (a->get_shading_group() > 0 &&
 	a->get_shading_group() == current_shading_group_) ||
 	(!a->get_final_texture() ||
-	!a->static_frame ||
+  !a->static_frame ||
 	a->get_render_player_light());
 }
 
 SDL_Rect SceneRenderer::get_scaled_position_rect(Asset* a, int fw, int fh,
-float inv_scale, int min_w, int min_h) {
+                                                 float inv_scale, int min_w, int min_h) {
 	static float smooth_inv_scale = 1.0f;
 	constexpr float lerp_speed = 0.08f;
 	smooth_inv_scale += (inv_scale - smooth_inv_scale) * lerp_speed;
@@ -135,7 +135,7 @@ void SceneRenderer::render() {
 		int fh = a->cached_h;
 		if (fw == 0 || fh == 0) SDL_QueryTexture(final_tex, nullptr, nullptr, &fw, &fh);
 		SDL_Rect fb = get_scaled_position_rect(a, fw, fh, inv_scale,
-		min_visible_w, min_visible_h);
+                                         min_visible_w, min_visible_h);
 		if (fb.w == 0 && fb.h == 0) continue;
 		if (a->is_highlighted()) {
 			SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_ADD);
@@ -159,12 +159,12 @@ void SceneRenderer::render() {
 			SDL_SetTextureColorMod(final_tex, 255, 255, 255);
 		}
 		SDL_RenderCopyEx(renderer_,
-		final_tex,
-		nullptr,
-		&fb,
-		0,
-		nullptr,
-		a->flipped ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE);
+                   final_tex,
+                   nullptr,
+                   &fb,
+                   0,
+                   nullptr,
+                   a->flipped ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE);
 		SDL_SetTextureColorMod(final_tex, 255, 255, 255);
 	}
 	SDL_SetRenderTarget(renderer_, nullptr);

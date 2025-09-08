@@ -7,10 +7,10 @@
 using nlohmann::json;
 
 void AreaLoader::load(AssetInfo& info,
-const json& data,
-float scale,
-int offset_x,
-int offset_y) {
+                      const json& data,
+                      float scale,
+                      int offset_x,
+                      int offset_y) {
 	info.areas.clear();
 	if (!data.contains("areas") || !data["areas"].is_array()) return;
 	for (const auto& entry : data["areas"]) {

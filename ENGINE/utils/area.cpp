@@ -32,9 +32,9 @@ Area::Area(const std::string& name, const std::vector<Point>& pts)
 }
 
 Area::Area(const std::string& name, int cx, int cy, int w, int h,
-const std::string& geometry,
-int edge_smoothness,
-int map_width, int map_height)
+           const std::string& geometry,
+           int edge_smoothness,
+           int map_width, int map_height)
 : area_name_(name)
 {
 	if (w <= 0 || h <= 0 || map_width <= 0 || map_height <= 0) {
@@ -165,10 +165,10 @@ void Area::generate_square(int cx, int cy, int w, int h, int edge_smoothness, in
 	points.clear();
 	points.reserve(4);
 	for (auto [x0, y0] : std::array<Point, 4>{
-		Point{cx - half_w, cy - half_h},
-		Point{cx + half_w, cy - half_h},
-		Point{cx + half_w, cy + half_h},
-		Point{cx - half_w, cy + half_h}}) {
+      Point{cx - half_w, cy - half_h},
+      Point{cx + half_w, cy - half_h},
+      Point{cx + half_w, cy + half_h},
+      Point{cx - half_w, cy + half_h}}) {
 		int x = static_cast<int>(std::round(x0 + xoff(rng)));
 		int y = static_cast<int>(std::round(y0 + yoff(rng)));
 		points.emplace_back(std::clamp(x, 0, map_width), std::clamp(y, 0, map_height));
@@ -290,7 +290,7 @@ void Area::create_area_texture(SDL_Renderer* renderer) {
 	int w = maxx - minx + 1;
 	int h = maxy - miny + 1;
 	SDL_Texture* target = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888,
-	SDL_TEXTUREACCESS_TARGET, w, h);
+                                         SDL_TEXTUREACCESS_TARGET, w, h);
 	if (!target) return;
 	SDL_Texture* prev_target = SDL_GetRenderTarget(renderer);
 	SDL_SetRenderTarget(renderer, target);

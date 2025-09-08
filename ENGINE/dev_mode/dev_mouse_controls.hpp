@@ -15,11 +15,11 @@ class DevMouseControls {
 
 	public:
     DevMouseControls(Input* m,
-    Assets* assets,
-    std::vector<Asset*>& actives,
-    Asset* player,
-    int screen_w,
-    int screen_h);
+                     Assets* assets,
+                     std::vector<Asset*>& actives,
+                     Asset* player,
+                     int screen_w,
+                     int screen_h);
     void handle_mouse_input(const Input& input);
     void handle_hover();
     void handle_click(const Input& input);

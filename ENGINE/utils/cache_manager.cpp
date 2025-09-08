@@ -68,12 +68,12 @@ SDL_Surface* CacheManager::load_and_scale_surface(const std::string& path, float
 	out_w = new_w;
 	out_h = new_h;
 	SDL_Surface* scaled = SDL_CreateRGBSurfaceWithFormat(
-	0,
-	new_w,
-	new_h,
-	original->format->BitsPerPixel,
-	original->format->format
-	);
+                                                          0,
+                                                          new_w,
+                                                          new_h,
+                                                          original->format->BitsPerPixel,
+                                                          original->format->format
+ );
 	if (!scaled) {
 		SDL_FreeSurface(original);
 		return nullptr;

@@ -1,11 +1,11 @@
 #include "button.hpp"
 #include <algorithm>
 static void blit_text_center(SDL_Renderer* r,
-const LabelStyle& style,
-const std::string& s,
-const SDL_Rect& rect,
-bool shadow,
-SDL_Color override_col)
+                             const LabelStyle& style,
+                             const std::string& s,
+                             const SDL_Rect& rect,
+                             bool shadow,
+                             SDL_Color override_col)
 {
 	if (s.empty()) return;
 	TTF_Font* f = style.open_font();

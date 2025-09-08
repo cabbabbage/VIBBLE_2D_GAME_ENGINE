@@ -52,12 +52,12 @@ void AnimationManager::update() {
 	int dy = 0;
 	bool resort_z = false;
 	bool advanced = anim.advance(
-	self_->current_frame_index,
-	self_->frame_progress,
-	dx,
-	dy,
-	resort_z
-	);
+                                  self_->current_frame_index,
+                                  self_->frame_progress,
+                                  dx,
+                                  dy,
+                                  resort_z
+ );
 	self_->pos_X += dx;
 	self_->pos_Y += dy;
 	if ((dx != 0 || dy != 0) && resort_z) {

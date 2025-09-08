@@ -89,10 +89,10 @@ void AssetLoader::removeMergedAssets(const std::vector<Asset*>& to_remove, Asset
 }
 
 std::vector<std::vector<Asset*>> AssetLoader::group_neighboring_assets(
-const std::vector<Asset*>& assets,
-int tile_width,
-int tile_height,
-const std::string& group_type)
+                                                                           const std::vector<Asset*>& assets,
+                                                                           int tile_width,
+                                                                           int tile_height,
+                                                                           const std::string& group_type)
 {
 	std::unordered_map<long long, std::vector<Asset*>> tile_map;
 	auto make_tile_key = [&](int tx, int ty) -> long long {
@@ -238,11 +238,11 @@ SDL_Texture* AssetLoader::createMinimap(int width, int height) {
 	int render_width  = width  * scaleFactor;
 	int render_height = height * scaleFactor;
 	SDL_Texture* highres = SDL_CreateTexture(
-	renderer_,
-	SDL_PIXELFORMAT_RGBA8888,
-	SDL_TEXTUREACCESS_TARGET,
-	render_width, render_height
-	);
+                                              renderer_,
+                                              SDL_PIXELFORMAT_RGBA8888,
+                                              SDL_TEXTUREACCESS_TARGET,
+                                              render_width, render_height
+ );
 	if (!highres) {
 		std::cerr << "[Minimap] Failed to create high-res texture: " << SDL_GetError() << "\n";
 		return nullptr;
@@ -281,11 +281,11 @@ SDL_Texture* AssetLoader::createMinimap(int width, int height) {
 	}
 	SDL_SetRenderTarget(renderer_, prev);
 	SDL_Texture* final = SDL_CreateTexture(
-	renderer_,
-	SDL_PIXELFORMAT_RGBA8888,
-	SDL_TEXTUREACCESS_TARGET,
-	width, height
-	);
+                                            renderer_,
+                                            SDL_PIXELFORMAT_RGBA8888,
+                                            SDL_TEXTUREACCESS_TARGET,
+                                            width, height
+ );
 	if (!final) {
 		std::cerr << "[Minimap] Failed to create final texture: " << SDL_GetError() << "\n";
 		SDL_DestroyTexture(highres);

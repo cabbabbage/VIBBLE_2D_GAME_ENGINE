@@ -9,17 +9,17 @@ class SpawnLogger {
 
 	public:
     SpawnLogger(const std::string& map_dir,
-    std::string room_dir);
+                std::string room_dir);
     void start_timer();
     void output_and_log(const std::string& asset_name,
-    int quantity,
-    int spawned,
-    int attempts,
-    int max_attempts,
-    const std::string& method);
+                        int quantity,
+                        int spawned,
+                        int attempts,
+                        int max_attempts,
+                        const std::string& method);
     void progress(const std::shared_ptr<AssetInfo>& info,
-    int current,
-    int total);
+                  int current,
+                  int total);
 
 	private:
     std::string map_dir_;
