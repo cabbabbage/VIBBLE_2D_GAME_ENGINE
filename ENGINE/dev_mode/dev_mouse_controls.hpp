@@ -25,6 +25,8 @@ public:
     void handle_hover();
     void handle_click(const Input& input);
     void update_highlighted_assets();
+    // Remove references to a destroyed asset from hover/selection state
+    void purge_asset(Asset* a);
     // Ensure a single logical click is handled only once across frames
     // and reset state when switching modes.
     void reset_click_state() {

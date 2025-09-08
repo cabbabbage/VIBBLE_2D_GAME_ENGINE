@@ -5,7 +5,7 @@
       "custom_animation_controller_key": "",
       "flipped_source": false,
       "has_custom_animation_controller": false,
-      "locked": false,
+      "locked": true,
       "movement": [
         [
           0,
@@ -13,79 +13,169 @@
         ],
         [
           0,
-          0
+          5,
+          true,
+          [
+            255,
+            255,
+            255
+          ]
         ],
         [
           0,
-          0
+          6,
+          true,
+          [
+            255,
+            255,
+            255
+          ]
         ],
         [
           0,
-          0
+          5,
+          true,
+          [
+            255,
+            255,
+            255
+          ]
         ],
         [
           0,
-          0
+          5,
+          true,
+          [
+            255,
+            255,
+            255
+          ]
         ],
         [
           0,
-          0
+          6,
+          true,
+          [
+            255,
+            255,
+            255
+          ]
         ],
         [
           0,
-          0
+          5,
+          true,
+          [
+            255,
+            255,
+            255
+          ]
         ],
         [
           0,
-          0
+          5,
+          true,
+          [
+            255,
+            255,
+            255
+          ]
         ],
         [
           0,
-          0
+          6,
+          true,
+          [
+            255,
+            255,
+            255
+          ]
         ],
         [
           0,
-          0
+          5,
+          true,
+          [
+            255,
+            255,
+            255
+          ]
         ],
         [
           0,
-          0
+          5,
+          true,
+          [
+            255,
+            255,
+            255
+          ]
         ],
         [
           0,
-          0
+          6,
+          true,
+          [
+            255,
+            255,
+            255
+          ]
         ],
         [
           0,
-          0
+          5,
+          true,
+          [
+            255,
+            255,
+            255
+          ]
         ],
         [
           0,
-          0
+          5,
+          true,
+          [
+            255,
+            255,
+            255
+          ]
         ],
         [
           0,
-          0
+          6,
+          true,
+          [
+            255,
+            255,
+            255
+          ]
         ],
         [
           0,
-          0
+          5,
+          true,
+          [
+            255,
+            255,
+            255
+          ]
         ]
       ],
       "movement_total": {
         "dx": 0,
-        "dy": -50
+        "dy": 80
       },
       "number_of_frames": 16,
       "on_end": "default",
       "reverse_source": false,
+      "rnd_start": false,
       "source": {
         "kind": "animation",
-        "path": "",
-        "name": "default"
+        "name": "default",
+        "path": ""
       },
-      "speed_factor": -10,
-      "rnd_start": false
+      "speed_factor": -4
     },
     "default": {
       "custom_animation_controller_hpp_path": "",
@@ -93,7 +183,7 @@
       "end_path": null,
       "flipped_source": false,
       "has_custom_animation_controller": false,
-      "locked": false,
+      "locked": true,
       "movement": [
         [
           0,
@@ -164,20 +254,71 @@
       "on_end": "default",
       "path": null,
       "reverse_source": false,
+      "rnd_start": true,
       "source": {
         "kind": "folder",
-        "path": "default",
+        "name": null,
+        "path": "default"
+      },
+      "speed_factor": -4
+    },
+    "explosion": {
+      "custom_animation_controller_hpp_path": "",
+      "custom_animation_controller_key": "",
+      "flipped_source": false,
+      "has_custom_animation_controller": false,
+      "locked": true,
+      "movement": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ]
+      ],
+      "number_of_frames": 8,
+      "on_end": "default",
+      "reverse_source": false,
+      "rnd_start": false,
+      "source": {
+        "kind": "folder",
+        "path": "explosion",
         "name": null
       },
-      "speed_factor": -10,
-      "rnd_start": false
+      "speed_factor": -5
     },
     "forward": {
       "custom_animation_controller_hpp_path": "",
       "custom_animation_controller_key": "",
       "flipped_source": false,
       "has_custom_animation_controller": false,
-      "locked": false,
+      "locked": true,
       "movement": [
         [
           0,
@@ -185,304 +326,523 @@
         ],
         [
           0,
-          0
+          -5,
+          true,
+          [
+            255,
+            255,
+            255
+          ]
         ],
         [
           0,
-          0
+          -6,
+          true,
+          [
+            255,
+            255,
+            255
+          ]
         ],
         [
           0,
-          0
+          -5,
+          true,
+          [
+            255,
+            255,
+            255
+          ]
         ],
         [
           0,
-          0
+          -5,
+          true,
+          [
+            255,
+            255,
+            255
+          ]
         ],
         [
           0,
-          0
+          -6,
+          true,
+          [
+            255,
+            255,
+            255
+          ]
         ],
         [
           0,
-          0
+          -5,
+          true,
+          [
+            255,
+            255,
+            255
+          ]
         ],
         [
           0,
-          0
+          -5,
+          true,
+          [
+            255,
+            255,
+            255
+          ]
         ],
         [
           0,
-          0
+          -6,
+          true,
+          [
+            255,
+            255,
+            255
+          ]
         ],
         [
           0,
-          0
+          -5,
+          true,
+          [
+            255,
+            255,
+            255
+          ]
         ],
         [
           0,
-          0
+          -5,
+          true,
+          [
+            255,
+            255,
+            255
+          ]
         ],
         [
           0,
-          0
+          -6,
+          true,
+          [
+            255,
+            255,
+            255
+          ]
         ],
         [
           0,
-          0
+          -5,
+          true,
+          [
+            255,
+            255,
+            255
+          ]
         ],
         [
           0,
-          0
+          -5,
+          true,
+          [
+            255,
+            255,
+            255
+          ]
         ],
         [
           0,
-          0
+          -6,
+          true,
+          [
+            255,
+            255,
+            255
+          ]
         ],
         [
           0,
-          0
+          -5,
+          true,
+          [
+            255,
+            255,
+            255
+          ]
         ]
       ],
       "movement_total": {
         "dx": 0,
-        "dy": 50
+        "dy": -80
       },
       "number_of_frames": 16,
       "on_end": "default",
       "reverse_source": false,
+      "rnd_start": false,
       "source": {
         "kind": "animation",
-        "path": "",
-        "name": "default"
+        "name": "backward",
+        "path": ""
       },
-      "speed_factor": -10,
-      "rnd_start": false
+      "speed_factor": -4
     },
     "left": {
       "custom_animation_controller_hpp_path": "",
       "custom_animation_controller_key": "",
       "flipped_source": true,
       "has_custom_animation_controller": false,
-      "locked": false,
+      "locked": true,
       "movement": [
         [
           0,
           0
         ],
         [
+          -5,
           0,
-          0
+          true,
+          [
+            255,
+            255,
+            255
+          ]
         ],
         [
+          -6,
           0,
-          0
+          true,
+          [
+            255,
+            255,
+            255
+          ]
         ],
         [
+          -5,
           0,
-          0
+          true,
+          [
+            255,
+            255,
+            255
+          ]
         ],
         [
+          -5,
           0,
-          0
+          true,
+          [
+            255,
+            255,
+            255
+          ]
         ],
         [
+          -6,
           0,
-          0
+          true,
+          [
+            255,
+            255,
+            255
+          ]
         ],
         [
+          -5,
           0,
-          0
+          true,
+          [
+            255,
+            255,
+            255
+          ]
         ],
         [
+          -5,
           0,
-          0
+          true,
+          [
+            255,
+            255,
+            255
+          ]
         ],
         [
+          -6,
           0,
-          0
+          true,
+          [
+            255,
+            255,
+            255
+          ]
         ],
         [
+          -5,
           0,
-          0
+          true,
+          [
+            255,
+            255,
+            255
+          ]
         ],
         [
+          -5,
           0,
-          0
+          true,
+          [
+            255,
+            255,
+            255
+          ]
         ],
         [
+          -6,
           0,
-          0
+          true,
+          [
+            255,
+            255,
+            255
+          ]
         ],
         [
+          -5,
           0,
-          0
+          true,
+          [
+            255,
+            255,
+            255
+          ]
         ],
         [
+          -5,
           0,
-          0
+          true,
+          [
+            255,
+            255,
+            255
+          ]
         ],
         [
+          -6,
           0,
-          0
+          true,
+          [
+            255,
+            255,
+            255
+          ]
         ],
         [
+          -5,
           0,
-          0
+          true,
+          [
+            255,
+            255,
+            255
+          ]
         ]
       ],
       "movement_total": {
-        "dx": -50,
+        "dx": -80,
         "dy": 0
       },
       "number_of_frames": 16,
       "on_end": "default",
       "reverse_source": false,
+      "rnd_start": false,
       "source": {
         "kind": "animation",
-        "path": "",
-        "name": "default"
+        "name": "default",
+        "path": ""
       },
-      "speed_factor": -10,
-      "rnd_start": false
+      "speed_factor": -4
     },
     "right": {
       "custom_animation_controller_hpp_path": "",
       "custom_animation_controller_key": "",
       "flipped_source": false,
       "has_custom_animation_controller": false,
-      "locked": false,
+      "locked": true,
       "movement": [
         [
           0,
           0
         ],
         [
+          5,
           0,
-          0
+          true,
+          [
+            255,
+            255,
+            255
+          ]
         ],
         [
+          6,
           0,
-          0
+          true,
+          [
+            255,
+            255,
+            255
+          ]
         ],
         [
+          5,
           0,
-          0
+          true,
+          [
+            255,
+            255,
+            255
+          ]
         ],
         [
+          5,
           0,
-          0
+          true,
+          [
+            255,
+            255,
+            255
+          ]
         ],
         [
+          6,
           0,
-          0
+          true,
+          [
+            255,
+            255,
+            255
+          ]
         ],
         [
+          5,
           0,
-          0
+          true,
+          [
+            255,
+            255,
+            255
+          ]
         ],
         [
+          5,
           0,
-          0
+          true,
+          [
+            255,
+            255,
+            255
+          ]
         ],
         [
+          6,
           0,
-          0
+          true,
+          [
+            255,
+            255,
+            255
+          ]
         ],
         [
+          5,
           0,
-          0
+          true,
+          [
+            255,
+            255,
+            255
+          ]
         ],
         [
+          5,
           0,
-          0
+          true,
+          [
+            255,
+            255,
+            255
+          ]
         ],
         [
+          6,
           0,
-          0
+          true,
+          [
+            255,
+            255,
+            255
+          ]
         ],
         [
+          5,
           0,
-          0
+          true,
+          [
+            255,
+            255,
+            255
+          ]
         ],
         [
+          5,
           0,
-          0
+          true,
+          [
+            255,
+            255,
+            255
+          ]
         ],
         [
+          6,
           0,
-          0
+          true,
+          [
+            255,
+            255,
+            255
+          ]
         ],
         [
+          5,
           0,
-          0
+          true,
+          [
+            255,
+            255,
+            255
+          ]
         ]
       ],
       "movement_total": {
-        "dx": 50,
+        "dx": 80,
         "dy": 0
       },
       "number_of_frames": 16,
       "on_end": "default",
       "reverse_source": false,
+      "rnd_start": false,
       "source": {
         "kind": "animation",
-        "path": "",
-        "name": "default"
+        "name": "default",
+        "path": ""
       },
-      "speed_factor": -10,
-      "rnd_start": false
-    },
-    "explosion": {
-      "source": {
-        "kind": "folder",
-        "path": "explosion",
-        "name": null
-      },
-      "flipped_source": false,
-      "reverse_source": false,
-      "locked": false,
-      "rnd_start": false,
-      "speed_factor": 1,
-      "number_of_frames": 8,
-      "movement": [
-        [
-          0,
-          0
-        ],
-        [
-          0,
-          0
-        ],
-        [
-          0,
-          0
-        ],
-        [
-          0,
-          0
-        ],
-        [
-          0,
-          0
-        ],
-        [
-          0,
-          0
-        ],
-        [
-          0,
-          0
-        ],
-        [
-          0,
-          0
-        ]
-      ],
-      "on_end": "default",
-      "has_custom_animation_controller": false,
-      "custom_animation_controller_hpp_path": "",
-      "custom_animation_controller_key": ""
+      "speed_factor": -4
     }
   },
   "anti_tags": [],
@@ -496,7 +856,7 @@
   "impassable_area": null,
   "layout": {
     "__view": {
-      "geometry": "1920x1009+-9+-24",
+      "geometry": "1920x1009+-25+-16",
       "zoom": 1.0,
       "xview": 0.0,
       "yview": 0.0
@@ -505,11 +865,13 @@
   "mappings": {},
   "max_child_depth": 2,
   "min_child_depth": 0,
+  "min_distance_all": 254,
+  "min_same_type_distance": 466,
   "render_radius": 1000,
   "rnd_spawn_max": 400,
   "rnd_spawn_min": 300,
   "size_settings": {
-    "scale_percentage": 15.0
+    "scale_percentage": 18
   },
   "start": "",
   "tags": [

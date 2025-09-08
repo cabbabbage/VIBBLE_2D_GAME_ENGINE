@@ -2,12 +2,12 @@
 #define BOMB_CONTROLLER_HPP
 
 #include "asset/asset_controller.hpp"
+#include "asset/auto_movement.hpp"
 
 class Assets;
 class Asset;
 class ActiveAssetsManager;
 class Input;
-class Area;
 
 class BombController : public AssetController {
  public:
@@ -17,13 +17,8 @@ class BombController : public AssetController {
   void update(const Input& in) override;
 
  private:
-  bool aabb(const Area& A, const Area& B) const;
-  bool pointInAABB(int x, int y, const Area& B) const;
-  bool canMove(int offset_x, int offset_y) const;
-
   void think_random();
   void pursue(Asset* player);
-  bool try_hop_dirs(const char* const* names, const int* dx, const int* dy, int n);
   void explosion_if_close(Asset* player);
 
   int randu();
@@ -35,16 +30,20 @@ class BombController : public AssetController {
   Asset*  self_   = nullptr;
   ActiveAssetsManager& aam_;
 
-  int frames_until_think_ = 0;
-  int think_interval_min_ = 30;
-  int think_interval_max_ = 90;
+  AutoMovement mover_;
+
   int probe_              = 24;
 
-  int follow_radius_      = 500;
-  int explosion_radius_     = 20;
+  int follow_radius_      = 1000;
+  int explosion_radius_   = 150;
 
   bool updated_by_determine_ = false;
   unsigned int rng_seed_  = 0xB00B1Eu;
+
+  // Persistent movement target; updated on animation end
+  int  move_target_x_ = 0;
+  int  move_target_y_ = 0;
+  bool have_target_   = false;
 };
 
 #endif

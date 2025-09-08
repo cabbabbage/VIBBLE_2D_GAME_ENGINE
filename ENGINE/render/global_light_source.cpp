@@ -21,7 +21,6 @@ Global_Light_Source::Global_Light_Source(SDL_Renderer* renderer,
     texture_(nullptr),
     base_color_(fallback_base_color),
     current_color_(fallback_base_color),
-    tint_({0,0,0,255}),
     center_x_(screen_center_x),
     center_y_(screen_center_y),
     angle_(0.0f),
@@ -93,16 +92,11 @@ void Global_Light_Source::update() {
         
         return;
     }
-
-    
-
-    
     if (!initialized_) {
         static thread_local std::mt19937 rng{std::random_device{}()};
         std::uniform_real_distribution<float> dist(0.0f, 2.0f * float(M_PI));
         angle_ = dist(rng);
         initialized_ = true;
-        
     }
 
     
@@ -116,20 +110,9 @@ void Global_Light_Source::update() {
     pos_x_ = center_x_ + int(orbit_radius * ca);
     pos_y_ = center_y_ - int(orbit_radius * sa);
     
-      
-
-    
     SDL_Color k = compute_color_from_horizon();
     current_color_ = k;
 
-
-    
-    tint_.r = Uint8(std::clamp(int(current_color_.r * mult_), 0, 255));
-    tint_.g = Uint8(std::clamp(int(current_color_.g * mult_), 0, 255));
-    tint_.b = Uint8(std::clamp(int(current_color_.b * mult_), 0, 255));
-    tint_.a = 255;
-    
-    
 
     set_light_brightness();
     
@@ -145,10 +128,6 @@ float Global_Light_Source::get_angle() const {
 
 SDL_Texture* Global_Light_Source::get_texture() const {
     return texture_;
-}
-
-SDL_Color Global_Light_Source::get_tint() const {
-    return tint_;
 }
 
 void Global_Light_Source::set_light_brightness() {
@@ -223,20 +202,6 @@ SDL_Color Global_Light_Source::compute_color_from_horizon() const {
         lerp(KL.color.g, KF.color.g, t),
         lerp(KL.color.b, KF.color.b, t),
         lerp(KL.color.a, KF.color.a, t)
-    };
-}
-
-SDL_Color Global_Light_Source::apply_tint_to_color(const SDL_Color& base, int alpha_mod) const {
-    float factor = mult_ * (alpha_mod / 255.0f);
-    auto blend = [&](Uint8 bc, Uint8 tc){
-        float val = bc * (1.0f - mult_) + tc * factor;
-        return Uint8(std::clamp(val, 0.0f, 255.0f));
-    };
-    return {
-        blend(base.r, tint_.r),
-        blend(base.g, tint_.g),
-        blend(base.b, tint_.b),
-        base.a
     };
 }
 

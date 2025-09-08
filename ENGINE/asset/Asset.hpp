@@ -63,8 +63,17 @@ public:
 
  SDL_Texture* get_current_frame() const;
 
- std::string get_current_animation() const;
- std::string get_type() const;
+  std::string get_current_animation() const;
+  std::string get_type() const;
+
+  // True when the current animation is marked locked and is still in progress.
+  // For non-looping locked animations: returns true until the last frame is reached.
+  // For looping locked animations: always returns true.
+  bool is_current_animation_locked_in_progress() const;
+
+  // Helpers for controllers: query current animation status
+  bool is_current_animation_last_frame() const;
+  bool is_current_animation_looping() const;
 
  void add_child(Asset* child);
  inline const std::vector<Asset*>& get_children() const { return children; }
@@ -100,7 +109,9 @@ public:
 
  void set_hidden(bool state);
  bool is_hidden();
- void set_remove();
+  void set_remove();
+  bool needs_removal() const;
+  void delete_self();
 
  void set_highlighted(bool state);
  bool is_highlighted();

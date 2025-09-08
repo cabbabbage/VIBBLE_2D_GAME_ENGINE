@@ -3762,5 +3762,5 @@
         "grave"
     ],
     "update_radius": 1000,
-    "z_threshold": 4
+    "z_threshold": 40
 }

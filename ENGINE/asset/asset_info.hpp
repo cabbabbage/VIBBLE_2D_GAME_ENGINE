@@ -41,6 +41,7 @@ public:
   std::string start_animation; // from info.json "start"
   int z_threshold;
   bool passable;
+  bool has_shading; // whether this asset should render a shadow mask
   int min_same_type_distance;
   int min_distance_all;
   float scale_factor;

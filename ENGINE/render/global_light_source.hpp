@@ -22,10 +22,7 @@ public:
     std::pair<int,int> get_position() const;
     float              get_angle() const;
     SDL_Texture*       get_texture() const;
-    SDL_Color          get_tint() const;
-
-    
-    SDL_Color apply_tint_to_color(const SDL_Color& base, int alpha_mod) const;
+    // Tinting removed; global tint no longer applied.
 
     SDL_Color get_current_color() const;
     int       get_brightness() const;
@@ -50,7 +47,6 @@ private:
 
     SDL_Color base_color_;
     SDL_Color current_color_;
-    SDL_Color tint_;
 
     int   center_x_;
     int   center_y_;
