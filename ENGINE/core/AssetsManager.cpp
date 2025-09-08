@@ -160,17 +160,8 @@ void Assets::update(const Input& input,
 
     if (scene && !suppress_render_) scene->render();
 
-
-    {
-        std::vector<Asset*> pending;
-        pending.reserve(owned_assets.size());
-        for (const auto& up : owned_assets) {
-            if (up && up->needs_removal()) pending.push_back(up.get());
-        }
-        for (Asset* a : pending) {
-            if (a) a->Delete();
-        }
-    }
+    // Process any assets that were scheduled for removal this frame
+    process_removals();
 }
 
 // Removal is centralized in Asset::~Asset and the owned_assets erasure above.
@@ -346,15 +337,21 @@ Asset* Assets::spawn_asset(const std::string& name, int world_x, int world_y) {
     return newAsset;
 }
 
-void Assets::delete_asset(Asset* asset) {
-    if (!asset) return;
-    auto it = std::find_if(owned_assets.begin(), owned_assets.end(),
-                           [asset](const std::unique_ptr<Asset>& p){ return p.get() == asset; });
-    if (it != owned_assets.end()) {
-        owned_assets.erase(it);
-    }
+void Assets::schedule_removal(Asset* a) {
+    if (a) removal_queue.push_back(a);
 }
 
+void Assets::process_removals() {
+    if (removal_queue.empty()) return;
+    for (Asset* a : removal_queue) {
+        auto it = std::find_if(owned_assets.begin(), owned_assets.end(),
+                               [a](const std::unique_ptr<Asset>& p){ return p.get() == a; });
+        if (it != owned_assets.end()) {
+            owned_assets.erase(it);
+        }
+    }
+    removal_queue.clear();
+}
 
 void Assets::render_overlays(SDL_Renderer* renderer) {
     if (library_ui_ && library_ui_->is_visible()) {
