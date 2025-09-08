@@ -1,4 +1,3 @@
-
 #pragma once
 
 #include <string>
@@ -7,7 +6,8 @@
 #include <nlohmann/json.hpp>
 
 class CacheManager {
-public:
+
+	public:
     static bool load_metadata(const std::string& meta_file, nlohmann::json& out_meta);
     static bool save_metadata(const std::string& meta_file, const nlohmann::json& meta);
     static SDL_Surface* load_surface(const std::string& path);

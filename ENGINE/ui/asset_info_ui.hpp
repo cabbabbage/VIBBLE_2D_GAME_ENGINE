@@ -12,31 +12,22 @@ class Checkbox;
 class TextBox;
 class Area;
 
-// Right-side editor panel for AssetInfo basic values
-// - Occupies right 1/3 of the screen with semi-transparent background
-// - Groups similar fields and uses Slider/Checkbox/TextBox
-// - Persists changes to info.json immediately on adjustment
 class AssetInfoUI {
-public:
+
+	public:
     AssetInfoUI();
     ~AssetInfoUI();
-
     void set_info(const std::shared_ptr<AssetInfo>& info);
     void clear_info();
-
     void open();
     void close();
     void toggle();
     bool is_visible() const { return visible_; }
-
-    // Feed high-level input (for scrolling)
     void update(const Input& input, int screen_w, int screen_h);
-    // Feed raw SDL events for widgets (mouse + text input)
     void handle_event(const SDL_Event& e);
-
     void render(SDL_Renderer* r, int screen_w, int screen_h) const;
 
-private:
+	private:
     void build_widgets();
     void layout_widgets(int screen_w, int screen_h) const;
     void commit_scalar_changes();
@@ -45,36 +36,27 @@ private:
     void open_area_editor(const std::string& name);
     void create_new_area();
 
-private:
+	private:
     bool visible_ = false;
     std::shared_ptr<AssetInfo> info_{};
     std::unique_ptr<Button> b_close_;
     std::unique_ptr<Button> b_config_anim_;
-    // Areas section
-    mutable SDL_Renderer* last_renderer_ = nullptr; // set during render
+    mutable SDL_Renderer* last_renderer_ = nullptr;
     bool areas_expanded_ = false;
     std::unique_ptr<Button> b_areas_toggle_;
     std::vector<std::unique_ptr<Button>> area_buttons_;
     std::unique_ptr<Button> b_create_area_;
     bool prompt_new_area_ = false;
     std::unique_ptr<TextBox> t_new_area_name_;
-    // Widgets (owned)
     std::unique_ptr<Slider>   s_z_threshold_;
     std::unique_ptr<Slider>   s_min_same_type_;
     std::unique_ptr<Slider>   s_min_all_;
     std::unique_ptr<Slider>   s_scale_pct_;
-
     std::unique_ptr<Checkbox> c_passable_;
     std::unique_ptr<Checkbox> c_flipable_;
-
     std::unique_ptr<TextBox>  t_type_;
     std::unique_ptr<TextBox>  t_tags_;
-
-    // Scroll state
     mutable int scroll_ = 0;
     mutable int max_scroll_ = 0;
-
-    // Cached panel rect (computed per frame)
     mutable SDL_Rect panel_ {0,0,0,0};
 };
-

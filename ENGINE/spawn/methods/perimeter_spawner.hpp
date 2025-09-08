@@ -5,7 +5,7 @@ class Area;
 class SpawnContext;
 
 class PerimeterSpawner {
-public:
+
+	public:
     void spawn(const SpawnInfo& item, const Area* area, SpawnContext& ctx);
 };
-

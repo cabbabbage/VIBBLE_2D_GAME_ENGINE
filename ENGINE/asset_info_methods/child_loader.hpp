@@ -5,8 +5,7 @@
 class AssetInfo;
 
 class ChildLoader {
-public:
-    static void load_children(AssetInfo& info,
-                              const nlohmann::json& data,
-                              const std::string& dir_path);
+
+	public:
+    static void load_children(AssetInfo& info, const nlohmann::json& data, const std::string& dir_path);
 };

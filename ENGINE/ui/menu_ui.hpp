@@ -1,4 +1,3 @@
-
 #pragma once
 
 #include <SDL.h>
@@ -13,42 +12,32 @@
 #include "button.hpp"
 
 class MenuUI : public MainApp {
-public:
-    enum class MenuAction {
-        NONE = 0,
-        EXIT,
-        RESTART,
-        SETTINGS,
-        DEV_MODE_TOGGLE,
-        SAVE_ROOM
-    };
 
+	public:
+    enum class MenuAction {
+    NONE = 0,
+    EXIT,
+    RESTART,
+    SETTINGS,
+    DEV_MODE_TOGGLE,
+    SAVE_ROOM
+	};
     MenuUI(SDL_Renderer* renderer, int screen_w, int screen_h, const std::string& map_path);
     ~MenuUI();
-
     void init();
-
-    
     bool wants_return_to_main_menu() const;
 
-private:
-    
+	private:
     void game_loop();
     void toggleMenu();
     void handle_event(const SDL_Event& e);
-
-    
     void update(bool dev_mode_now);
     void render();
     MenuAction consumeAction();
     void rebuildButtons();
-
-    
     SDL_Point measureText(const LabelStyle& style, const std::string& s) const;
     void blitText(SDL_Renderer* r, const LabelStyle& style, const std::string& s, int x, int y, bool shadow, SDL_Color override_col) const;
     void blitTextCentered(SDL_Renderer* r, const LabelStyle& style, const std::string& s, const SDL_Rect& rect, bool shadow, SDL_Color override_col) const;
-
-    
     SDL_Texture* loadTexture(const std::string& abs_utf8_path);
     SDL_Texture* loadTexture(const std::filesystem::path& p);
     std::filesystem::path firstImageIn(const std::filesystem::path& folder) const;
@@ -56,29 +45,21 @@ private:
     SDL_Rect fitCenter(SDL_Texture* tex, int max_w, int max_h, int cx, int cy) const;
     std::string pickRandomLine(const std::filesystem::path& csv_path) const;
     void drawVignette(Uint8 alpha) const;
-
-    
     void doExit();
     void doRestart();
     void doSettings();
     void doToggleDevMode();
     void doSaveCurrentRoom();
 
-private:
+	private:
     struct MenuButton {
-        Button     button;
-        MenuAction action = MenuAction::NONE;
-    };
-
-    
+    Button     button;
+    MenuAction action = MenuAction::NONE;
+	};
     bool menu_active_ = false;
     bool dev_mode_local_ = false;
     MenuAction last_action_ = MenuAction::NONE;
     bool return_to_main_menu_ = false;
-
-    
     SDL_Texture* background_tex_ = nullptr;
-
-    
     std::vector<MenuButton> buttons_;
 };

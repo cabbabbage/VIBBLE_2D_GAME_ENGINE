@@ -7,21 +7,15 @@ class Asset;
 class ActiveAssetsManager;
 class AssetController;
 
-/*
- controller factory
- builds controllers by key or default
-*/
 class ControllerFactory {
-public:
+
+	public:
     ControllerFactory(Assets* assets, ActiveAssetsManager& aam);
- ~ControllerFactory();
+    ~ControllerFactory();
+    std::unique_ptr<AssetController> create_by_key(const std::string& key, Asset* self) const;
+    std::unique_ptr<AssetController> create_for_asset(Asset* self) const;
 
- std::unique_ptr<AssetController> create_by_key(const std::string& key,
- Asset* self) const;
-
- std::unique_ptr<AssetController> create_for_asset(Asset* self) const;
-
-private:
- Assets* assets_;
- ActiveAssetsManager& aam_;
+	private:
+    Assets* assets_;
+    ActiveAssetsManager& aam_;
 };

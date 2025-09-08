@@ -11,7 +11,8 @@
 class AssetInfo;
 
 class AnimationLoader {
-public:
+
+	public:
     static void load(AssetInfo& info, SDL_Renderer* renderer);
     static void get_area_textures(AssetInfo& info, SDL_Renderer* renderer);
 };
