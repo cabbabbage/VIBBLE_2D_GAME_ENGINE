@@ -6,7 +6,6 @@
 #include <random>
 #include <algorithm>
 #include <iostream>
-
 using json = nlohmann::json;
 
 Room::Room(Point origin,
@@ -24,7 +23,7 @@ Room::Room(Point origin,
       room_directory(room_dir),
       map_path(map_dir),
       json_path(room_dir + "/" + room_def_name + ".json"),
-      room_area(nullptr), 
+      room_area(nullptr),
       type(type_)
 {
     if (testing) {
@@ -32,7 +31,6 @@ Room::Room(Point origin,
                   << " at (" << origin.first << ", " << origin.second << ")"
                   << (parent ? " with parent\n" : " (no parent)\n");
     }
-
     std::ifstream in(json_path);
     if (!in.is_open()) {
         throw std::runtime_error("[Room] Failed to open room JSON: " + json_path);
@@ -40,7 +38,6 @@ Room::Room(Point origin,
     json J;
     in >> J;
     assets_json = J;
-
     int map_radius = 0;
     {
         std::ifstream minf(map_path + "/map_info.json");
@@ -54,7 +51,6 @@ Room::Room(Point origin,
     }
     int map_w = map_radius * 2;
     int map_h = map_radius * 2;
-
     if (precomputed_area) {
         if (testing) {
             std::cout << "[Room] Using precomputed area for: " << room_name << "\n";
@@ -68,11 +64,9 @@ Room::Room(Point origin,
         int edge_smoothness = J.value("edge_smoothness", 2);
         std::string geometry = J.value("geometry", "square");
         if (!geometry.empty()) geometry[0] = std::toupper(geometry[0]);
-
         static std::mt19937 rng(std::random_device{}());
         int width = std::uniform_int_distribution<>(min_w, max_w)(rng);
         int height = std::uniform_int_distribution<>(min_h, max_h)(rng);
-
         if (testing) {
             std::cout << "[Room] Creating area from JSON: " << room_name
                       << " (" << width << "x" << height << ")"
@@ -80,7 +74,6 @@ Room::Room(Point origin,
                       << ", geometry: " << geometry
                       << ", map radius: " << map_radius << "\n";
         }
-
         room_area = std::make_unique<Area>(room_name,
                                            map_origin.first,
                                            map_origin.second,
@@ -91,12 +84,10 @@ Room::Room(Point origin,
                                            map_w,
                                            map_h);
     }
-
     std::vector<json> json_sources;
     std::vector<std::string> source_paths;
     json_sources.push_back(assets_json);
     source_paths.push_back(json_path);
-
     if (assets_json.value("inherits_map_assets", false)) {
         const std::string map_assets_path = map_path + "/map_assets.json";
         std::ifstream map_in(map_assets_path);
@@ -109,16 +100,13 @@ Room::Room(Point origin,
             std::cerr << "[Room] Warning: inherits_map_assets is true, but map_assets.json not found in " << map_path << "\n";
         }
     }
-
     // Note: AssetSpawnPlanner now handles persistence of spawn_id and exact-origin size.
-
     planner = std::make_unique<AssetSpawnPlanner>(
         json_sources,
         *room_area,
         *asset_lib,
         source_paths
     );
-
     std::vector<Area> exclusion;
     AssetSpawner spawner(asset_lib, exclusion);
     spawner.spawn(*this);
@@ -152,9 +140,8 @@ std::vector<std::unique_ptr<Asset>>&& Room::get_room_assets() {
     return std::move(assets);
 }
 
-
 void Room::set_scale(double s) {
-    if (s <= 0.0) s = 1.0;  
+    if (s <= 0.0) s = 1.0;
     scale_ = s;
 }
 
@@ -171,20 +158,14 @@ void Room::bounds_to_size(const std::tuple<int,int,int,int>& b, int& w, int& h) 
     h = std::max(0, maxy - miny);
 }
 
-
-
 nlohmann::json Room::create_static_room_json(std::string name) {
     json out;
-
-    
     const std::string geometry = assets_json.value("geometry", "Square");
     const int edge_smoothness = assets_json.value("edge_smoothness", 2);
-
     int width = 0, height = 0;
     if (room_area) {
         bounds_to_size(room_area->get_bounds(), width, height);
     }
-
     out["name"] = std::move(name);
     out["min_width"] = width;
     out["max_width"] = width;
@@ -192,36 +173,25 @@ nlohmann::json Room::create_static_room_json(std::string name) {
     out["max_height"] = height;
     out["edge_smoothness"] = edge_smoothness;
     out["geometry"] = geometry;
-
-    
     bool is_spawn = assets_json.value("is_spawn", false);
     out["is_spawn"] = is_spawn;
     out["is_boss"] = assets_json.value("is_boss", false);
     out["inherits_map_assets"] = assets_json.value("inherits_map_assets", false);
-
-    
     json assets_arr = json::array();
-
     int cx = 0, cy = 0;
     if (room_area) {
         auto c = room_area->get_center();
         cx = c.first;
         cy = c.second;
     }
-
     for (const auto& uptr : assets) {
         const Asset* a = uptr.get();
-        
-
         const int ax = a->pos_X;
         const int ay = a->pos_Y;
-
         double norm_x = (width  != 0) ? (static_cast<double>(ax - cx) / static_cast<double>(width))  : 0.0;
         double norm_y = (height != 0) ? (static_cast<double>(ay - cy) / static_cast<double>(height)) : 0.0;
-
         int ep_x = clamp_int(static_cast<int>(std::lround(norm_x * 100.0 + 50.0)), 0, 100);
         int ep_y = clamp_int(static_cast<int>(std::lround(norm_y * 100.0 + 50.0)), 0, 100);
-
         json entry;
         entry["name"] = a->info->name;
         entry["min_number"] = 1;
@@ -232,16 +202,12 @@ nlohmann::json Room::create_static_room_json(std::string name) {
         entry["check_overlap"] = false;
         entry["check_min_spacing"] = false;
         entry["tag"] = false;
-
         entry["ep_x_min"] = ep_x;
         entry["ep_x_max"] = ep_x;
         entry["ep_y_min"] = ep_y;
         entry["ep_y_max"] = ep_y;
-
         assets_arr.push_back(std::move(entry));
     }
-
-    
     if (is_spawn) {
         json davey_entry = {
             {"name", "Davey"},
@@ -256,8 +222,6 @@ nlohmann::json Room::create_static_room_json(std::string name) {
         };
         assets_arr.push_back(std::move(davey_entry));
     }
-
     out["assets"] = std::move(assets_arr);
-
     return out;
 }

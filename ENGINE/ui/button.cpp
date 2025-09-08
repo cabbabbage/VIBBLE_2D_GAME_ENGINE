@@ -1,9 +1,5 @@
-
 #include "button.hpp"
-
 #include <algorithm>
-
-
 static void blit_text_center(SDL_Renderer* r,
                              const LabelStyle& style,
                              const std::string& s,
@@ -14,26 +10,19 @@ static void blit_text_center(SDL_Renderer* r,
     if (s.empty()) return;
     TTF_Font* f = style.open_font();
     if (!f) return;
-
     int tw=0, th=0;
     TTF_SizeText(f, s.c_str(), &tw, &th);
-
     const int x = rect.x + (rect.w - tw)/2;
     const int y = rect.y + (rect.h - th)/2;
-
     const SDL_Color text_col = (override_col.a ? override_col : style.color);
     SDL_Surface* surf_text = TTF_RenderText_Blended(f, s.c_str(), text_col);
     SDL_Surface* surf_shadow = nullptr;
-
     if (shadow) {
-        
         SDL_Color coal = Styles::Coal();
         surf_shadow = TTF_RenderText_Blended(f, s.c_str(), coal);
     }
-
     if (surf_text) {
         SDL_Texture* tex_text = SDL_CreateTextureFromSurface(r, surf_text);
-
         if (surf_shadow) {
             SDL_Texture* tex_shadow = SDL_CreateTextureFromSurface(r, surf_shadow);
             if (tex_shadow) {
@@ -43,20 +32,16 @@ static void blit_text_center(SDL_Renderer* r,
                 SDL_DestroyTexture(tex_shadow);
             }
         }
-
         if (tex_text) {
             SDL_Rect dst { x, y, surf_text->w, surf_text->h };
             SDL_RenderCopy(r, tex_text, nullptr, &dst);
             SDL_DestroyTexture(tex_text);
         }
     }
-
     if (surf_shadow) SDL_FreeSurface(surf_shadow);
     if (surf_text) SDL_FreeSurface(surf_text);
     TTF_CloseFont(f);
 }
-
-
 
 Button Button::get_main_button(const std::string& text) {
     return Button(text, &Styles::MainDecoButton(), width(), height());
@@ -93,7 +78,6 @@ const std::string& Button::text() const {
 
 bool Button::handle_event(const SDL_Event& e) {
     bool clicked = false;
-
     if (e.type == SDL_MOUSEMOTION) {
         SDL_Point p{ e.motion.x, e.motion.y };
         hovered_ = SDL_PointInRect(&p, &rect_);
@@ -110,21 +94,15 @@ bool Button::handle_event(const SDL_Event& e) {
         if (pressed_ && inside) clicked = true;
         pressed_ = false;
     }
-
     return clicked;
 }
 
 void Button::render(SDL_Renderer* renderer) const {
     if (!style_) return;
-
-    
     draw_deco(renderer, rect_, hovered_);
-
-    
     const SDL_Color text_normal = style_->text_normal;
     const SDL_Color text_hover  = style_->text_hover;
     const SDL_Color chosen = hovered_ ? text_hover : text_normal;
-
     blit_text_center(renderer, style_->label, label_, rect_, /*shadow=*/true, chosen);
 }
 
@@ -136,33 +114,23 @@ int Button::height() { return 64; }
 
 void Button::draw_deco(SDL_Renderer* r, const SDL_Rect& b, bool hovered) const {
     if (!style_) return;
-
     const SDL_Color fill_base   = style_->fill_base;
-    SDL_Color fill_top          = style_->fill_top; 
+    SDL_Color fill_top          = style_->fill_top;
     const SDL_Color outline_on  = style_->outline;
     const SDL_Color outline_off = style_->outline_dim;
     const SDL_Color accent      = style_->accent;
     const SDL_Color glow        = style_->glow;
-
-    
     SDL_SetRenderDrawColor(r, fill_base.r, fill_base.g, fill_base.b, fill_base.a);
     SDL_RenderFillRect(r, &b);
-
-    
     SDL_Rect topHalf{ b.x, b.y, b.w, b.h/2 };
     SDL_SetRenderDrawColor(r, fill_top.r, fill_top.g, fill_top.b, fill_top.a ? fill_top.a : 200);
     SDL_RenderFillRect(r, &topHalf);
-
-    
     const SDL_Color frame = hovered ? outline_on : outline_off;
     SDL_SetRenderDrawColor(r, frame.r, frame.g, frame.b, 255);
-
     SDL_Rect outer{ b.x, b.y, b.w, b.h };
     SDL_RenderDrawRect(r, &outer);
     SDL_Rect inner{ b.x+1, b.y+1, b.w-2, b.h-2 };
     SDL_RenderDrawRect(r, &inner);
-
-    
     SDL_SetRenderDrawColor(r, accent.r, accent.g, accent.b, 255);
     SDL_RenderDrawLine(r, b.x + 10, b.y + 10,     b.x + b.w - 10, b.y + 10);
     SDL_RenderDrawLine(r, b.x + 10, b.y + b.h-11, b.x + b.w - 10, b.y + b.h - 11);
@@ -172,8 +140,6 @@ void Button::draw_deco(SDL_Renderer* r, const SDL_Rect& b, bool hovered) const {
         SDL_RenderDrawLine(r, b.x + 10 + i,       b.y + b.h - 21,  b.x + 10 + i,       b.y + b.h - 11);
         SDL_RenderDrawLine(r, b.x + b.w - 11 - i, b.y + b.h - 21,  b.x + b.w - 11 - i, b.y + b.h - 11);
     }
-
-    
     if (hovered) {
         SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_ADD);
         SDL_SetRenderDrawColor(r, glow.r, glow.g, glow.b, glow.a ? glow.a : 45);

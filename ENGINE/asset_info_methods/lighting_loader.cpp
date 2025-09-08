@@ -1,25 +1,19 @@
 #include "lighting_loader.hpp"
-
 #include "asset/asset_info.hpp"
 #include "utils/generate_light.hpp"
 #include <nlohmann/json.hpp>
-
 using nlohmann::json;
 
 void LightingLoader::load(AssetInfo& info, const json& data) {
     info.has_light_source = false;
     info.light_sources.clear();
     info.orbital_light_sources.clear();
-
     if (!data.contains("lighting_info"))
         return;
-
     const auto& linfo = data["lighting_info"];
-
     auto parse_light = [](const json& l) -> std::optional<LightSource> {
         if (!l.is_object() || !l.value("has_light_source", false))
             return std::nullopt;
-
         LightSource light;
         light.intensity = l.value("light_intensity", 0);
         light.radius    = l.value("radius", 100);
@@ -35,16 +29,13 @@ void LightingLoader::load(AssetInfo& info, const json& data) {
         factor = factor / 100;
         light.x_radius = light.x_radius * factor;
         light.y_radius = light.y_radius * factor;
-
         if (l.contains("light_color") && l["light_color"].is_array() && l["light_color"].size() == 3) {
             light.color.r = l["light_color"][0].get<int>();
             light.color.g = l["light_color"][1].get<int>();
             light.color.b = l["light_color"][2].get<int>();
         }
-
         return light;
     };
-
     if (linfo.is_array()) {
         for (const auto& l : linfo) {
             auto maybe = parse_light(l);
@@ -80,7 +71,6 @@ void LightingLoader::generate_textures(AssetInfo& info, SDL_Renderer* renderer) 
             SDL_QueryTexture(tex, nullptr, nullptr, &info.light_sources[i].cached_w, &info.light_sources[i].cached_h);
         }
     }
-
     std::size_t base_index = info.light_sources.size();
     for (std::size_t i = 0; i < info.orbital_light_sources.size(); ++i) {
         SDL_Texture* tex = generator.generate(renderer, info.name, info.orbital_light_sources[i], base_index + i);

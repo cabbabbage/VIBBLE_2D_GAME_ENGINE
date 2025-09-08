@@ -1,11 +1,9 @@
 #include "area_loader.hpp"
-
 #include "asset/asset_info.hpp"
 #include "utils/area.hpp"
 #include <cmath>
 #include <filesystem>
 #include <iostream>
-
 using nlohmann::json;
 
 void AreaLoader::load(AssetInfo& info,
@@ -15,12 +13,10 @@ void AreaLoader::load(AssetInfo& info,
                       int offset_y) {
     info.areas.clear();
     if (!data.contains("areas") || !data["areas"].is_array()) return;
-
     for (const auto& entry : data["areas"]) {
         if (!entry.is_object()) continue;
         std::string name = entry.value("name", std::string{});
         if (name.empty()) continue;
-
         std::vector<Area::Point> pts;
         if (entry.contains("points") && entry["points"].is_array()) {
             for (const auto& p : entry["points"]) {
@@ -32,7 +28,6 @@ void AreaLoader::load(AssetInfo& info,
             }
         }
         if (pts.empty()) continue;
-
         auto area = std::make_unique<Area>(name, pts);
         info.areas.push_back({name, std::move(area)});
     }

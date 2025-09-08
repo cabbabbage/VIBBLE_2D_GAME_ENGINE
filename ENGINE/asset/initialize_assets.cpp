@@ -1,17 +1,13 @@
-
 #include "initialize_assets.hpp"
 #include "AssetsManager.hpp"
 #include "Asset.hpp"
 #include "asset_info.hpp"
 #include "asset_utils.hpp"
 #include "active_assets_manager.hpp"
-
 #include <algorithm>
 #include <iostream>
 #include <stdexcept>
 #include <memory>
-
-
 void InitializeAssets::initialize(Assets& assets,
                                   std::vector<Asset>&& loaded,
                                   std::vector<Room*> rooms,
@@ -22,9 +18,7 @@ void InitializeAssets::initialize(Assets& assets,
                                   int /*map_radius*/)
 {
     std::cout << "[InitializeAssets] Initializing Assets manager...\n";
-
     assets.rooms_ = std::move(rooms);
-
     assets.all.reserve(loaded.size());
     while (!loaded.empty()) {
         Asset a = std::move(loaded.back());
@@ -39,41 +33,31 @@ void InitializeAssets::initialize(Assets& assets,
                       << "': missing or empty default animation\n";
             continue;
         }
-
         auto newAsset = std::make_unique<Asset>(std::move(a));
         Asset* raw = newAsset.get();
         set_view_recursive(raw, &assets.window);
         set_assets_owner_recursive(raw, &assets);
-
         assets.owned_assets.push_back(std::move(newAsset));
         assets.all.push_back(raw);
         raw->finalize_setup();
     }
-
     find_player(assets);
-
     assets.activeManager.initialize(assets.all, assets.player,
                                     screen_center_x, screen_center_y);
     assets.active_assets  = assets.activeManager.getActive();
     assets.closest_assets = assets.activeManager.getClosest();
-
     setup_shading_groups(assets);
-
     std::cout << "[InitializeAssets] Initialization base complete. Total assets: "
               << assets.all.size() << "\n";
-
     try {
         setup_static_sources(assets);
     } catch (const std::length_error& e) {
         std::cerr << "[InitializeAssets] light-gen failed: " << e.what() << "\n";
     }
-
     std::cout << "[InitializeAssets] All static sources set.\n";
     assets.activeManager.updateAssetVectors(assets.player,
                                             screen_center_x,
                                             screen_center_y);
-
-    
     assets.window.zoom_scale(1.0, 200);
 }
 
@@ -119,14 +103,12 @@ void InitializeAssets::setup_static_sources(Assets& assets) {
                 const int lx = owner.pos_X + light.offset_x;
                 const int ly = owner.pos_Y + light.offset_y;
                 const int r2 = light.radius * light.radius;
-
                 std::vector<Asset*> targets;
                 targets.reserve(assets.all.size());
                 for (Asset* a : assets.all) {
                     if (!a || !a->info) continue;
                     collect_assets_in_range(a, lx, ly, r2, targets);
                 }
-
                 for (Asset* t : targets) {
                     if (t && t->info) {
                         t->add_static_light_source(&light, lx, ly, &owner);
@@ -138,7 +120,6 @@ void InitializeAssets::setup_static_sources(Assets& assets) {
             if (child) recurse(*child);
         }
     };
-
     for (Asset* owner : assets.all)
         if (owner)
             recurse(*owner);

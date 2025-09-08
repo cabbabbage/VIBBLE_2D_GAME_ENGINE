@@ -13,12 +13,10 @@ struct SliderStyle;
 class DevStyles {
 public:
     // Buttons
-    static const ButtonStyle& PrimaryButton();   // solid, neutral primary
-    static const ButtonStyle& SecondaryButton(); // subtle secondary/close
-
+    static const ButtonStyle& PrimaryButton();
+    static const ButtonStyle& SecondaryButton();
     // Sliders
     static const SliderStyle& DefaultSlider();
-
     // Optional neutrals for editor panels
     static const SDL_Color& PanelBG();
     static const SDL_Color& Outline();

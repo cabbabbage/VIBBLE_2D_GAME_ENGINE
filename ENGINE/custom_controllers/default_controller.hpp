@@ -13,11 +13,9 @@ class DefaultController : public AssetController {
 public:
  DefaultController(Assets* assets, Asset* self, ActiveAssetsManager& aam);
  ~DefaultController() override;
-
  void update(const Input& in) override;
-
 private:
- Assets* assets_ = nullptr;      // non owning
- Asset*  self_   = nullptr;      // non owning
+ Assets* assets_ = nullptr;
+ Asset*  self_   = nullptr;
  ActiveAssetsManager& aam_;
 };

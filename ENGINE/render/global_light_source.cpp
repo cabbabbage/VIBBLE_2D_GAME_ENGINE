@@ -1,4 +1,3 @@
-
 #include "global_light_source.hpp"
 #include "generate_light.hpp"
 #include "utils/light_source.hpp"
@@ -8,7 +7,6 @@
 #include <cmath>
 #include <algorithm>
 #include <random>
-
 using json = nlohmann::json;
 
 Global_Light_Source::Global_Light_Source(SDL_Renderer* renderer,
@@ -30,35 +28,27 @@ Global_Light_Source::Global_Light_Source(SDL_Renderer* renderer,
     frame_counter_(0),
     light_brightness(255)
 {
-    
     radius_          = float(screen_width) * 3.0f;
     intensity_       = 255.0f;
     mult_            = 0.4f;
     fall_off_        = 1.0f;
     orbit_radius     = screen_width / 4;
     update_interval_ = 2;
-
-    
     std::ifstream in(map_path + "/map_light.json");
     if (!in.is_open()) {
         throw std::runtime_error("[MapLight] Failed to open map_light.json");
     }
     json j; in >> j;
-
-    
     for (auto& key : {"radius","intensity","orbit_radius","update_interval","mult","fall_off","base_color","keys"}) {
         if (!j.contains(key))
             throw std::runtime_error(std::string("[MapLight] Missing field: ") + key);
     }
-
     radius_          = j["radius"].get<float>();
     intensity_       = j["intensity"].get<float>();
     orbit_radius     = j["orbit_radius"].get<int>();
     update_interval_ = j["update_interval"].get<int>();
     mult_            = j["mult"].get<float>();
     fall_off_        = j["fall_off"].get<float>();
-
-    
     auto& bc = j["base_color"];
     if (!bc.is_array() || bc.size() < 3)
         throw std::runtime_error("[MapLight] Invalid base_color");
@@ -67,10 +57,7 @@ Global_Light_Source::Global_Light_Source(SDL_Renderer* renderer,
         base_color_.a = static_cast<Uint8>(bc[3].get<int>());
     else
         base_color_.a = 255;
-
     current_color_ = base_color_;
-
-    
     key_colors_.clear();
     for (auto& entry : j["keys"]) {
         if (!entry.is_array() || entry.size()!=2)
@@ -82,14 +69,11 @@ Global_Light_Source::Global_Light_Source(SDL_Renderer* renderer,
         SDL_Color c{ Uint8(col[0]), Uint8(col[1]), Uint8(col[2]), Uint8(col[3]) };
         key_colors_.push_back({deg,c});
     }
-
     build_texture();
 }
 
 void Global_Light_Source::update() {
-    
     if (++frame_counter_ % update_interval_ != 0) {
-        
         return;
     }
     if (!initialized_) {
@@ -98,24 +82,15 @@ void Global_Light_Source::update() {
         angle_ = dist(rng);
         initialized_ = true;
     }
-
-    
     float prev = angle_;
     angle_ -= 0.01f;
     if (angle_ < 0.0f) angle_ += 2.0f * float(M_PI);
-    
-
-    
     float ca = std::cos(angle_), sa = std::sin(angle_);
     pos_x_ = center_x_ + int(orbit_radius * ca);
     pos_y_ = center_y_ - int(orbit_radius * sa);
-    
     SDL_Color k = compute_color_from_horizon();
     current_color_ = k;
-
-
     set_light_brightness();
-    
 }
 
 std::pair<int,int> Global_Light_Source::get_position() const {
@@ -145,14 +120,12 @@ void Global_Light_Source::set_light_brightness() {
 
 void Global_Light_Source::build_texture() {
     if (texture_) SDL_DestroyTexture(texture_);
-
     LightSource ls;
     ls.radius    = int(radius_);
     ls.intensity = int(intensity_);
     ls.fall_off  = int(fall_off_);
     ls.flare     = 0;
     ls.color     = base_color_;
-
     GenerateLight gen(renderer_);
     texture_ = gen.generate(renderer_, "map", ls, 0);
     if (!texture_) {
@@ -163,22 +136,15 @@ void Global_Light_Source::build_texture() {
     }
 }
 
-
-
 SDL_Color Global_Light_Source::compute_color_from_horizon() const {
-    
     float deg = std::fmod(angle_ * (180.0f/float(M_PI)) + 270.0f, 360.0f);
     if (deg < 0) deg += 360.0f;
-
     auto lerp = [](Uint8 A, Uint8 B, float t){
         return Uint8(A + (B - A) * t);
     };
-
     if (key_colors_.size() < 2) {
         return key_colors_.empty() ? base_color_ : key_colors_.front().color;
     }
-
-    
     for (size_t i = 0; i + 1 < key_colors_.size(); ++i) {
         auto &K0 = key_colors_[i], &K1 = key_colors_[i+1];
         if (deg >= K0.degree && deg <= K1.degree) {
@@ -191,7 +157,6 @@ SDL_Color Global_Light_Source::compute_color_from_horizon() const {
             };
         }
     }
-    
     auto &KL = key_colors_.back(), &KF = key_colors_.front();
     float span = 360.0f - KL.degree + KF.degree;
     float t = (deg < KF.degree)

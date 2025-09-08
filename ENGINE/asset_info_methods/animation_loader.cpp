@@ -1,7 +1,5 @@
 #include "animation_loader.hpp"
 #include "custom_controllers/Davey_controller.hpp"
-
-
 #include "asset/asset_info.hpp"
 #include "utils/cache_manager.hpp"
 #include "asset/animation.hpp"
@@ -16,31 +14,24 @@
 #include "custom_controllers/Bomb_controller.hpp"
 #include "custom_controllers/Frog_controller.hpp"
 #include "custom_controllers/default_controller.hpp"
-
 using nlohmann::json;
 
 void AnimationLoader::load(AssetInfo& info, SDL_Renderer* renderer) {
     if (info.anims_json_.is_null()) return;
-
     SDL_Texture* base_sprite = nullptr;
     int scaled_sprite_w = 0;
     int scaled_sprite_h = 0;
-
     // Generate light textures before loading animations
     info.generate_lights(renderer);
-
     CacheManager cache;
     std::string root_cache = "cache/" + info.name + "/animations";
-
     // --- Load animations in two passes: folder sources first, then aliases ---
     std::vector<std::pair<std::string, nlohmann::json>> alias_queue;
-
     // Pass 1: load concrete sources (e.g., folders)
     for (auto it = info.anims_json_.begin(); it != info.anims_json_.end(); ++it) {
         const std::string& trigger = it.key();
         const auto& anim_json = it.value();
         if (anim_json.is_null()) continue;
-
         // If this is an alias to another animation, queue it for pass 2
         if (anim_json.contains("source") && anim_json["source"].is_object()) {
             std::string kind = anim_json["source"].value("kind", std::string{"folder"});
@@ -49,7 +40,6 @@ void AnimationLoader::load(AssetInfo& info, SDL_Renderer* renderer) {
                 continue;
             }
         }
-
         Animation anim;
         anim.load(trigger,
                   anim_json,
@@ -63,22 +53,17 @@ void AnimationLoader::load(AssetInfo& info, SDL_Renderer* renderer) {
                   scaled_sprite_h,
                   info.original_canvas_width,
                   info.original_canvas_height);
-
         // SIMPLE: read next animation directly from "on_end" if present
 // instead of empty string fallback
         anim.on_end_mapping = anim_json.value("on_end", std::string{"default"});
-
-
         if (!anim.frames.empty()) {
             info.animations[trigger] = std::move(anim);
         }
     }
-
     // Pass 2: resolve alias animations now that sources are available
     for (const auto& item : alias_queue) {
         const std::string& trigger = item.first;
         const auto& anim_json = item.second;
-
         Animation anim;
         anim.load(trigger,
                   anim_json,
@@ -92,32 +77,24 @@ void AnimationLoader::load(AssetInfo& info, SDL_Renderer* renderer) {
                   scaled_sprite_h,
                   info.original_canvas_width,
                   info.original_canvas_height);
-
         // SIMPLE: same "on_end" for aliases
         anim.on_end_mapping = anim_json.value("on_end", std::string{});
-
         if (!anim.frames.empty()) {
             info.animations[trigger] = std::move(anim);
         }
     }
-
     // Done — no graph, no mappings.
     get_area_textures(info, renderer);
 }
 
-
 void AnimationLoader::get_area_textures(AssetInfo& info, SDL_Renderer* renderer) {
     if (!renderer) return;
-
     CacheManager cache;
-
     for (auto& named : info.areas) {
         if (!named.area) continue;
-
         std::string folder = "cache/areas/" + info.name + "_" + named.name;
         std::string meta_file = folder + "/metadata.json";
         std::string bmp_file = folder + "/0.bmp";
-
         auto [minx, miny, maxx, maxy] = named.area->get_bounds();
         json meta;
         if (cache.load_metadata(meta_file, meta)) {
@@ -133,7 +110,6 @@ void AnimationLoader::get_area_textures(AssetInfo& info, SDL_Renderer* renderer)
                 }
             }
         }
-
         named.area->create_area_texture(renderer);
         SDL_Texture* tex = named.area->get_texture();
         if (tex) {

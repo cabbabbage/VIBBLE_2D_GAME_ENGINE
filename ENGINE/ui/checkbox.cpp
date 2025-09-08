@@ -1,8 +1,6 @@
 #include "checkbox.hpp"
-
 #include "utils/text_style.hpp"
 #include "ui/styles.hpp"
-
 Checkbox::Checkbox(const std::string& label, bool value)
     : label_(label), value_(value) {}
 
@@ -34,7 +32,6 @@ bool Checkbox::handle_event(const SDL_Event& e) {
 
 void Checkbox::render(SDL_Renderer* r) const {
     SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
-
     // Label on the left
     const TextStyle& ls = TextStyles::SmallMain();
     if (!label_.empty()) {
@@ -53,7 +50,6 @@ void Checkbox::render(SDL_Renderer* r) const {
             TTF_CloseFont(f);
         }
     }
-
     // Checkbox square at right side of rect_
     const int box_size = rect_.h - 6;
     SDL_Rect box{
@@ -62,17 +58,14 @@ void Checkbox::render(SDL_Renderer* r) const {
         box_size,
         box_size
     };
-
     SDL_Color bg = Styles::Slate(); bg.a = 160;
     SDL_SetRenderDrawColor(r, bg.r, bg.g, bg.b, bg.a);
     SDL_RenderFillRect(r, &box);
-
     SDL_Color border_on  = Styles::Gold();
     SDL_Color border_off = Styles::GoldDim();
     SDL_Color frame = hovered_ ? border_on : border_off;
     SDL_SetRenderDrawColor(r, frame.r, frame.g, frame.b, 255);
     SDL_RenderDrawRect(r, &box);
-
     if (value_) {
         // Check mark: simple filled smaller rect
         SDL_Rect inner{ box.x + 4, box.y + 4, box.w - 8, box.h - 8 };

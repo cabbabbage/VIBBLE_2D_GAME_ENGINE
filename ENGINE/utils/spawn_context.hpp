@@ -21,7 +21,6 @@ class SpawnLogger;
 class SpawnContext {
 public:
     using Point = std::pair<int, int>;
-
     SpawnContext(std::mt19937& rng,
                  Check& checker,
                  SpawnLogger& logger,
@@ -29,7 +28,6 @@ public:
                  std::unordered_map<std::string, std::shared_ptr<AssetInfo>>& asset_info_library,
                  std::vector<std::unique_ptr<Asset>>& all,
                  AssetLibrary* asset_library);
-
     Asset* spawnAsset(const std::string& name,
                       const std::shared_ptr<AssetInfo>& info,
                       const Area& area,
@@ -39,17 +37,14 @@ public:
                       Asset* parent,
                       const std::string& spawn_id = std::string{},
                       const std::string& spawn_method = std::string{});
-
     Point get_area_center(const Area& area) const;
     Point get_point_within_area(const Area& area);
-
     std::mt19937& rng() { return rng_; }
     Check& checker() { return checker_; }
     SpawnLogger& logger() { return logger_; }
     std::vector<Area>& exclusion_zones() { return exclusion_zones_; }
     std::unordered_map<std::string, std::shared_ptr<AssetInfo>>& info_library() { return asset_info_library_; }
     std::vector<std::unique_ptr<Asset>>& all_assets() { return all_; }
-
 private:
     std::mt19937& rng_;
     Check& checker_;

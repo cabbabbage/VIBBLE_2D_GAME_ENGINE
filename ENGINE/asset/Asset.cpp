@@ -1,17 +1,13 @@
 #include "Asset.hpp"
 #include "controller_factory.hpp"
 #include "animation_manager.hpp"
-
 #include "core/AssetsManager.hpp"
 #include "view.hpp"
 #include "utils/light_utils.hpp"
-
 #include <filesystem>
 #include <iostream>
 #include <random>
 #include <algorithm>
-#include "dev_mode/dev_mouse_controls.hpp"
-
 Asset::Asset(std::shared_ptr<AssetInfo> info_,
              const Area& spawn_area,
              int start_pos_X,
@@ -41,17 +37,14 @@ Asset::Asset(std::shared_ptr<AssetInfo> info_,
 {
  set_flip();
  set_z_index();
-
  // Initialize shading flag from asset info
  if (info) {
   try { has_shading = info->has_shading; } catch (...) { has_shading = false; }
  }
-
  std::string start_id = info->start_animation.empty() ? std::string{"default"} : info->start_animation;
  auto it = info->animations.find(start_id);
  if (it == info->animations.end())
   it = info->animations.find("default");
-
   if (it != info->animations.end() && !it->second.frames.empty()) {
   current_animation = it->first;
   static_frame = (it->second.frames.size() == 1);
@@ -73,36 +66,11 @@ Asset::~Asset() {
  for (Asset* c : children) {
   if (c && c->parent == this) c->parent = nullptr;
  }
-
- // Destroy any final texture we own
- if (final_texture) {
-  SDL_DestroyTexture(final_texture);
-  final_texture = nullptr;
- }
-
- // Proactively unregister from managers/vectors that hold raw pointers
- try {
-  if (assets_) {
-   // Clear dev-mode selections to avoid dangling pointers
-   if (assets_->dev_mouse) {
-    assets_->dev_mouse->purge_asset(this);
-   }
-
-   // If this was the player reference, clear it
-   if (assets_->player == this) assets_->player = nullptr;
-
-   // Remove from active manager and flat vectors
-   assets_->activeManager.remove(this);
-   auto& act = assets_->active_assets;
-   act.erase(std::remove(act.begin(), act.end(), this), act.end());
-   auto& clo = assets_->closest_assets;
-   clo.erase(std::remove(clo.begin(), clo.end(), this), clo.end());
-   auto& allv = assets_->all;
-   allv.erase(std::remove(allv.begin(), allv.end(), this), allv.end());
-  }
- } catch (...) {
-  // Swallow any cleanup-time errors; destructor must not throw
- }
+// Destroy any final texture we own
+if (final_texture) {
+ SDL_DestroyTexture(final_texture);
+ final_texture = nullptr;
+}
 }
 
 Asset::Asset(const Asset& o)
@@ -139,7 +107,6 @@ Asset::Asset(const Asset& o)
  , highlighted(o.highlighted)
  , hidden(o.hidden)
  , merged(o.merged)
- , remove(o.remove)
  , selected(o.selected)
  , next_animation(o.next_animation)
  , current_frame_index(o.current_frame_index)
@@ -191,7 +158,6 @@ Asset& Asset::operator=(const Asset& o) {
  highlighted          = o.highlighted;
  hidden               = o.hidden;
  merged               = o.merged;
- remove               = o.remove;
  selected             = o.selected;
  next_animation       = o.next_animation;
  current_frame_index  = o.current_frame_index;
@@ -210,7 +176,6 @@ Asset& Asset::operator=(const Asset& o) {
 
 void Asset::finalize_setup() {
  if (!info) return;
-
  if (current_animation.empty() ||
      info->animations[current_animation].frames.empty())
  {
@@ -218,7 +183,6 @@ void Asset::finalize_setup() {
   auto it = info->animations.find(start_id);
   if (it == info->animations.end()) it = info->animations.find("default");
   if (it == info->animations.end()) it = info->animations.begin();
-
   if (it != info->animations.end() && !it->second.frames.empty()) {
    current_animation = it->first;
    Animation& anim = it->second;
@@ -231,10 +195,8 @@ void Asset::finalize_setup() {
    }
   }
  }
-
  for (Asset* child : children)
   if (child) child->finalize_setup();
-
  if (!children.empty()) {
   std::cout << "[Asset] \"" << (info ? info->name : std::string{"<null>"})
             << "\" at (" << pos_X << ", " << pos_Y
@@ -244,13 +206,11 @@ void Asset::finalize_setup() {
     std::cout << "    - \"" << child->info->name
               << "\" at (" << child->pos_X << ", " << child->pos_Y << ")\n";
  }
-
  // build controller via factory (factory returns default when no key)
  if (assets_) {
   ControllerFactory cf(assets_, assets_->activeManager);
   controller_ = cf.create_for_asset(this);
  }
-
  // build animation manager
  anim_ = std::make_unique<AnimationManager>(this);
 }
@@ -261,11 +221,9 @@ SDL_Texture* Asset::get_current_frame() const {
  auto itc = custom_frames.find(current_animation);
  if (itc != custom_frames.end() && !itc->second.empty())
   return itc->second[current_frame_index];
-
  auto iti = info->animations.find(current_animation);
  if (iti != info->animations.end())
   return iti->second.get_frame(current_frame_index);
-
  return nullptr;
 }
 
@@ -277,12 +235,10 @@ void Asset::set_position(int x, int y) {
 
 void Asset::update() {
  if (!info) return;
-
  if (controller_ && assets_) {
   if (Input* in = assets_->get_input())
    controller_->update(*in);
  }
-
  for (Asset* c : children)
   if (c && !c->dead && c->info)
    c->update();
@@ -308,7 +264,7 @@ bool Asset::is_current_animation_locked_in_progress() const {
  const Animation& anim = it->second;
  if (!anim.locked) return false;
  int last = static_cast<int>(anim.frames.size()) - 1;
- if (last < 0) return false; // treat empty as not locked-in-progress
+ if (last < 0) return false;
  // Locked means: allow change only once the last frame has been reached.
  return current_frame_index != last;
 }
@@ -319,7 +275,7 @@ bool Asset::is_current_animation_last_frame() const {
  if (it == info->animations.end()) return false;
  const Animation& anim = it->second;
  int last = static_cast<int>(anim.frames.size()) - 1;
- if (last < 0) return true; // no frames -> treat as done
+ if (last < 0) return true;
  return current_frame_index >= last;
 }
 
@@ -333,7 +289,6 @@ bool Asset::is_current_animation_looping() const {
 
 void Asset::add_child(Asset* child) {
  if (!child || !child->info) return;
-
  if (info) {
   for (const auto& ci : info->children) {
    try {
@@ -344,7 +299,6 @@ void Asset::add_child(Asset* child) {
    } catch (...) {}
   }
  }
-
  child->parent = this;
  if (!child->get_assets()) child->set_assets(this->assets_);
  child->set_z_index();
@@ -426,7 +380,6 @@ bool Asset::get_render_player_light() const { return render_player_light; }
 
 Area Asset::get_area(const std::string& name) const {
  Area result(name);
-
  if (info) {
   if (name == "clickable") {
    int base_w = (cached_w > 0) ? cached_w
@@ -435,12 +388,10 @@ Area Asset::get_area(const std::string& name) const {
              : int(info->original_canvas_height * info->scale_factor);
    if (base_w <= 0) base_w = 1;
    if (base_h <= 0) base_h = 1;
-
    int click_w = int(base_w * 1.5f);
    int click_h = int(base_h * 1.5f);
    int left    = pos_X - click_w / 2;
    int top     = pos_Y - click_h;
-
    result = Area(name, left, top, click_w, click_h,
                  "Square", 1,
                  std::numeric_limits<int>::max(),
@@ -450,7 +401,6 @@ Area Asset::get_area(const std::string& name) const {
    if (a) result = *a;
   }
  }
-
  float scale = (window ? window->get_scale() : 1.0f);
  float inv   = (scale != 0.0f) ? 1.0f / scale : 1.0f;
  result.scale(inv);
@@ -474,14 +424,11 @@ bool  Asset::is_highlighted(){ return highlighted; }
 void Asset::set_selected(bool state){ selected = state; }
 bool  Asset::is_selected(){ return selected; }
 
-bool Asset::needs_removal() const { return remove; }
-
-void Asset::set_remove() { remove = true; }
-
 void Asset::Delete() {
+    dead = true;
+    hidden = true;
     if (assets_) {
-        assets_->delete_asset(this);
-    } else {
-        delete this;
+        assets_->activeManager.remove(this);
+        assets_->schedule_removal(this);
     }
 }

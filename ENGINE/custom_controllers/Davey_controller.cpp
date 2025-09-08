@@ -1,17 +1,14 @@
 #include "Davey_controller.hpp"
-
 #include "utils/input.hpp"
 #include "asset/Asset.hpp"
 #include "asset/auto_movement.hpp"
 #include "utils/area.hpp"
 #include "core/active_assets_manager.hpp"
 #include "core/AssetsManager.hpp"
-
 #include <cmath>
 #include <iostream>
 #include <random>
 #include <algorithm>
-
 DaveyController::DaveyController(Assets* assets, Asset* self, ActiveAssetsManager& aam)
    : assets_(assets), self_(self), aam_(aam), mover_(self, aam, true) {}
 
@@ -19,20 +16,17 @@ void DaveyController::update(const Input& /*input*/) {
    bool updated_by_determine = false;
    // Non-player follower: move towards Assets::player when within 1000px
    if (!self_ || !assets_ || !self_->info) return;
-
    Asset* player = assets_->player;
    if (!player) {
       // idle: do not change animation here; just progress frames
       self_->update_animation_manager();
       return;
    }
-
    long long dx = static_cast<long long>(player->pos_X) - static_cast<long long>(self_->pos_X);
    long long dy = static_cast<long long>(player->pos_Y) - static_cast<long long>(self_->pos_Y);
    long long d2 = dx*dx + dy*dy;
    const long long r = 1000LL;
    if (d2 <= r*r) {
-
       // Choose or reuse a random point on a 30px radius circle around the player
       constexpr int radius = 30;
       constexpr double pi = 3.14159265358979323846;
@@ -48,7 +42,6 @@ void DaveyController::update(const Input& /*input*/) {
       }
       int target_x = pursue_target_x_;
       int target_y = pursue_target_y_;
-
       // Pursue the player while staying within a radius band around current pos
       mover_.set_pursue(player, /*min=*/20, /*max=*/30);
       mover_.move();

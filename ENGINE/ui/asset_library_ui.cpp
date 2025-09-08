@@ -1,14 +1,11 @@
 #include "asset_library_ui.hpp"
-
 #include <algorithm>
 #include <unordered_map>
-
 #include "utils/input.hpp"
 #include "asset/asset_library.hpp"
 #include "asset/asset_info.hpp"
 #include "asset/animation.hpp"
 #include "ui/styles.hpp"
-
 namespace {
     // Colors sourced from Styles palette
     const SDL_Color kLibraryPanelBG = [](){ auto c = Styles::Slate(); auto cc = c; cc.a = 180; return cc; }();
@@ -60,18 +57,15 @@ void AssetLibraryUI::update(const Input& input,
 {
     (void)screen_w; (void)screen_h;
     if (!visible_) return;
-
     ensure_items(lib);
-
     // scroll
     const int total_h = int(items_.size()) * (tile_size_ + gap_y_) + padding_;
     max_scroll_ = std::max(0, total_h - screen_h);
     if (int sy = input.getScrollY(); sy != 0) {
         // SDL wheel: +Y up, -Y down
-        scroll_offset_ -= sy * 40; // 40px per wheel notch
+        scroll_offset_ -= sy * 40;
         scroll_offset_ = std::max(0, std::min(max_scroll_, scroll_offset_));
     }
-
     // hover detection
     hover_index_ = -1;
     const int mx = input.getX();
@@ -87,7 +81,6 @@ void AssetLibraryUI::update(const Input& input,
             }
         }
     }
-
     // click to select
     if (hover_index_ >= 0 && input.wasClicked(Input::LEFT)) {
         selection_ = items_[hover_index_];
@@ -103,28 +96,22 @@ void AssetLibraryUI::render(SDL_Renderer* r,
     if (!visible_) return;
     (void)screen_w;
     (void)lib;
-
     // Panel background (semi-transparent)
     SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
     SDL_SetRenderDrawColor(r, kLibraryPanelBG.r, kLibraryPanelBG.g, kLibraryPanelBG.b, kLibraryPanelBG.a);
     SDL_Rect panel{ 0, 0, panel_w_, screen_h };
     SDL_RenderFillRect(r, &panel);
-
     // Draw tiles
     const int inner_x = padding_;
     int y = padding_ - scroll_offset_;
-
     for (int i = 0; i < (int)items_.size(); ++i) {
         const SDL_Rect tile_rect{ inner_x, y, panel_w_ - 2 * padding_, tile_size_ };
-
         // Skip if not visible
         if (tile_rect.y + tile_rect.h < 0) { y += tile_size_ + gap_y_; continue; }
         if (tile_rect.y > screen_h) { break; }
-
         // Tile base
         SDL_SetRenderDrawColor(r, kTileBG.r, kTileBG.g, kTileBG.b, kTileBG.a);
         SDL_RenderFillRect(r, &tile_rect);
-
         // Draw image scaled to fit inside square (preserve aspect)
         const AssetInfo* info = items_[i].get();
         if (info) {
@@ -146,7 +133,6 @@ void AssetLibraryUI::render(SDL_Renderer* r,
                 }
             }
         }
-
         // Hover effect
         if (i == hover_index_) {
             // Orange-ish overlay + border
@@ -154,11 +140,9 @@ void AssetLibraryUI::render(SDL_Renderer* r,
             SDL_SetRenderDrawColor(r, kTileHL.r, kTileHL.g, kTileHL.b, kTileHL.a);
             SDL_RenderFillRect(r, &tile_rect);
             SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
-
             SDL_SetRenderDrawColor(r, kTileBd.r, kTileBd.g, kTileBd.b, kTileBd.a);
             SDL_RenderDrawRect(r, &tile_rect);
         }
-
         y += tile_size_ + gap_y_;
     }
 }

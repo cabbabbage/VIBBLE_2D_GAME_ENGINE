@@ -1,18 +1,15 @@
 #include "spawn_context.hpp"
-
 #include <algorithm>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <nlohmann/json.hpp>
-
 #include "asset/Asset.hpp"
 #include "asset/asset_info.hpp"
 #include "asset/asset_library.hpp"
 #include "spawn/asset_spawn_planner.hpp"
 #include "spawn/asset_spawner.hpp"
 #include "utils/area.hpp"
-
 namespace fs = std::filesystem;
 
 SpawnContext::SpawnContext(std::mt19937& rng,
@@ -58,36 +55,30 @@ Asset* SpawnContext::spawnAsset(const std::string& name,
     auto assetPtr = std::make_unique<Asset>(info, area, x, y, depth, parent, spawn_id, spawn_method);
     Asset* raw = assetPtr.get();
     all_.push_back(std::move(assetPtr));
-
     if (raw->info && !raw->info->children.empty()) {
         std::cout << "[Spawn] Spawned parent asset: \""
                   << raw->info->name << "\" at ("
                   << raw->pos_X << ", " << raw->pos_Y << ")\n";
     }
-
     if (raw->info && !raw->info->children.empty()) {
         std::vector<ChildInfo*> shuffled_children;
         for (auto& c : raw->info->children)
             shuffled_children.push_back(&c);
-
         std::random_device rd;
         std::mt19937 g(rd());
         std::shuffle(shuffled_children.begin(), shuffled_children.end(), g);
-
         for (auto* childInfo : shuffled_children) {
             Area* base_area = raw->info->find_area(childInfo->area_name);
             if (!base_area) {
                 std::cout << "[Spawn]  Skipping child (area not found)\n";
                 continue;
             }
-
             const auto& childJsonPath = childInfo->json_path;
             std::cout << "[Spawn]  Loading child JSON: " << childJsonPath << "\n";
             if (!fs::exists(childJsonPath)) {
                 std::cerr << "[Spawn]  Child JSON not found: " << childJsonPath << "\n";
                 continue;
             }
-
             nlohmann::json j;
             try {
                 std::ifstream in(childJsonPath);
@@ -97,24 +88,20 @@ Asset* SpawnContext::spawnAsset(const std::string& name,
                           << childJsonPath << " | " << e.what() << "\n";
                 continue;
             }
-
             Area childArea = *base_area;
             childArea.align(raw->pos_X, raw->pos_Y);
             if (raw->flipped) {
                 childArea.flip_horizontal(raw->pos_X);
             }
-
             AssetSpawnPlanner childPlanner(std::vector<nlohmann::json>{ j },
                                            childArea,
                                            *asset_library_,
                                            std::vector<std::string>{ childJsonPath });
             AssetSpawner childSpawner(asset_library_, exclusion_zones_);
             childSpawner.spawn_children(childArea, &childPlanner);
-
             auto kids = childSpawner.extract_all_assets();
             std::cout << "[Spawn]  Spawned " << kids.size()
                       << " children for \"" << raw->info->name << "\"\n";
-
             for (auto& uptr : kids) {
                 if (!uptr || !uptr->info) continue;
                 uptr->set_z_offset(childInfo->z_offset);
@@ -126,7 +113,6 @@ Asset* SpawnContext::spawnAsset(const std::string& name,
             }
         }
     }
-
     return raw;
 }
 

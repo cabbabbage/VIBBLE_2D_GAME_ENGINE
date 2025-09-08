@@ -1,5 +1,4 @@
 #include "input.hpp"
-
 void Input::handleEvent(const SDL_Event& e) {
     switch (e.type) {
     case SDL_MOUSEMOTION:
@@ -8,7 +7,6 @@ void Input::handleEvent(const SDL_Event& e) {
         x_ = e.motion.x;
         y_ = e.motion.y;
         break;
-
     case SDL_MOUSEBUTTONDOWN:
     case SDL_MOUSEBUTTONUP: {
         bool down = (e.type == SDL_MOUSEBUTTONDOWN);
@@ -29,12 +27,10 @@ void Input::handleEvent(const SDL_Event& e) {
         }
         break;
     }
-
     case SDL_MOUSEWHEEL:
         scrollX_ += e.wheel.x;
         scrollY_ += e.wheel.y;
         break;
-
     case SDL_KEYDOWN:
         // ignore key repeats for pressed edge state; key remains down
         keys_down_.insert(e.key.keysym.sym);
@@ -53,9 +49,8 @@ void Input::update() {
         pressed_[i]   = (!prevButtons_[i] && buttons_[i]);
         released_[i]  = (prevButtons_[i] && !buttons_[i]);
         prevButtons_[i] = buttons_[i];
-        if (clickBuffer_[i] > 0) clickBuffer_[i]--; 
+        if (clickBuffer_[i] > 0) clickBuffer_[i]--;
     }
-
     // Keyboard transitions
     keys_pressed_.clear();
     keys_released_.clear();
@@ -66,7 +61,6 @@ void Input::update() {
         if (keys_down_.count(k) == 0) keys_released_.insert(k);
     }
     prev_keys_down_ = keys_down_;
-
     // Reset per-frame deltas
     dx_ = dy_ = 0;
     scrollX_ = scrollY_ = 0;

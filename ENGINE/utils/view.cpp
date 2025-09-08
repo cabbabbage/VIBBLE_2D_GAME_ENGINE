@@ -6,31 +6,22 @@
 #include <cmath>
 #include <algorithm>
 #include <vector>
-
 view::view(int screen_width, int screen_height, const Bounds& starting_bounds)
 {
-    
     current_bounds_ = starting_bounds;
-
-    
     base_bounds_.left   = -screen_width  ;
     base_bounds_.right  =  screen_width  ;
     base_bounds_.top    = -screen_height ;
     base_bounds_.bottom =  screen_height ;
-
-    
     int extra_w = static_cast<int>((base_bounds_.right - base_bounds_.left) * 1.0f / 2.0f);
     int extra_h = static_cast<int>((base_bounds_.bottom - base_bounds_.top) * 1.0f / 2.0f);
     base_bounds_.left   -= extra_w;
     base_bounds_.right  += extra_w;
     base_bounds_.top    -= extra_h;
     base_bounds_.bottom += extra_h + 100;
-
-    
     int base_w = base_bounds_.right - base_bounds_.left;
     int curr_w = current_bounds_.right - current_bounds_.left;
     scale_ = (base_w != 0) ? static_cast<float>(curr_w) / static_cast<float>(base_w) : 1.0f;
-
     zooming_ = false;
     steps_total_ = steps_done_ = 0;
     start_scale_ = target_scale_ = scale_;
@@ -116,15 +107,12 @@ void view::zoom_bounds(const Bounds& target_bounds, int duration_steps) {
     const int base_h = base_bounds_.bottom - base_bounds_.top;
     const int tgt_w  = target_bounds.right - target_bounds.left;
     const int tgt_h  = target_bounds.bottom - target_bounds.top;
-
     double sx = base_w != 0 ? static_cast<double>(tgt_w) / static_cast<double>(base_w) : 1.0;
     double sy = base_h != 0 ? static_cast<double>(tgt_h) / static_cast<double>(base_h) : 1.0;
-
     double target = sx;
     if (std::abs(sx - sy) > 0.001) {
         target = (sx + sy) * 0.5;
     }
-
     zoom_scale(target, duration_steps);
 }
 
@@ -132,7 +120,6 @@ void view::update() {
     if (!zooming_) {
         intro = false;
         return;}
-
     ++steps_done_;
     if (steps_done_ >= steps_total_) {
         scale_ = static_cast<float>(target_scale_);
@@ -141,7 +128,6 @@ void view::update() {
         start_scale_ = target_scale_;
         return;
     }
-
     double t = static_cast<double>(steps_done_) / static_cast<double>(steps_total_);
     double s = start_scale_ + (target_scale_ - start_scale_) * t;
     scale_ = static_cast<float>(std::max(0.0001, s));
@@ -175,30 +161,22 @@ void view::update_zoom(Room* cur, CurrentRoomFinder* finder, Asset* player) {
     if (!player || !finder || !starting_room_) return;
     update();
     if (!cur) return;
-
     Room* neigh = finder->getNeighboringRoom(cur);
     if (!neigh) neigh = cur;
-
     const double sa = compute_room_scale_from_area(cur);
     const double sb = compute_room_scale_from_area(neigh);
-
     auto [ax, ay] = cur->room_area->get_center();
     auto [bx, by] = neigh->room_area->get_center();
-
     const double pax = double(player->pos_X);
     const double pay = double(player->pos_Y);
-
     const double vx = double(bx - ax);
     const double vy = double(by - ay);
     const double wx = double(pax - ax);
     const double wy = double(pay - ay);
-
     const double vlen2 = vx * vx + vy * vy;
     double t = (vlen2 > 0.0) ? ((wx * vx + wy * vy) / vlen2) : 0.0;
     t = std::clamp(t, 0.0, 1.0);
-
     double target_zoom = (sa * (1.0 - t)) + (sb * t);
     target_zoom = std::clamp(target_zoom, BASE_RATIO * 0.7, BASE_RATIO * 1.3);
-
     zoom_scale(target_zoom, 35);
 }

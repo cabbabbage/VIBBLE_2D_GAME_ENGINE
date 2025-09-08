@@ -1,9 +1,7 @@
 #include "text_box.hpp"
-
 #include <algorithm>
 #include "utils/text_style.hpp"
 #include "ui/styles.hpp"
-
 TextBox::TextBox(const std::string& label, const std::string& value)
     : label_(label), text_(value) {}
 
@@ -74,25 +72,21 @@ void TextBox::draw_text(SDL_Renderer* r, const std::string& s, int x, int y, SDL
 
 void TextBox::render(SDL_Renderer* r) const {
     SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
-
     // Label (above or left-top)
     if (!label_.empty()) {
         SDL_Color labelCol = Styles::Mist();
         draw_text(r, label_, rect_.x, rect_.y - 18, labelCol);
     }
-
     // Input box
     SDL_Rect box{ rect_.x, rect_.y, rect_.w, rect_.h };
     SDL_Color bg = Styles::Slate(); bg.a = 160;
     SDL_SetRenderDrawColor(r, bg.r, bg.g, bg.b, bg.a);
     SDL_RenderFillRect(r, &box);
-
     SDL_Color border_on  = Styles::Gold();
     SDL_Color border_off = Styles::GoldDim();
     SDL_Color frame = (hovered_ || editing_) ? border_on : border_off;
     SDL_SetRenderDrawColor(r, frame.r, frame.g, frame.b, 255);
     SDL_RenderDrawRect(r, &box);
-
     // Value text inside box with small padding
     SDL_Color textCol = Styles::Ivory();
     draw_text(r, text_, rect_.x + 6, rect_.y + (rect_.h/2 - 8), textCol);

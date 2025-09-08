@@ -9,22 +9,19 @@
 #include <iostream>
 #include <sstream>
 #include <random>
-
 AssetInfo::AssetInfo(const std::string &asset_folder_name)
     : has_light_source(false) {
   name = asset_folder_name;
   dir_path_ = "SRC/" + asset_folder_name;
   std::string info_path = dir_path_ + "/info.json";
   info_json_path_ = info_path;
-
   std::ifstream in(info_path);
   if (!in.is_open()) {
     throw std::runtime_error("Failed to open asset info: " + info_path);
   }
   nlohmann::json data;
   in >> data;
-  info_json_ = data; // keep a snapshot for updates
-
+  info_json_ = data;
   tags.clear();
   if (data.contains("tags") && data["tags"].is_array()) {
     for (const auto &tag : data["tags"]) {
@@ -35,14 +32,12 @@ AssetInfo::AssetInfo(const std::string &asset_folder_name)
       }
     }
   }
-
   if (data.contains("animations") && data["animations"].is_object()) {
     nlohmann::json new_anim = nlohmann::json::object();
     for (auto it = data["animations"].begin(); it != data["animations"].end(); ++it) {
       const std::string trig = it.key();
       const auto &anim_json = it.value();
       nlohmann::json converted = anim_json;
-
       // Legacy-to-new conversion for older keys (only frames path/speed flags)
       if (!anim_json.contains("source")) {
         converted["source"] = {
@@ -54,14 +49,12 @@ AssetInfo::AssetInfo(const std::string &asset_folder_name)
         converted.erase("lock_until_done");
         converted.erase("speed");
       }
-
       // Keep simplified schema's on_end as-is (no mapping synthesis)
       new_anim[trig] = converted;
     }
     anims_json_ = new_anim;
     info_json_["animations"] = new_anim;
   }
-
   if (data.contains("mappings") && data["mappings"].is_object()) {
     for (auto it = data["mappings"].begin(); it != data["mappings"].end(); ++it) {
       const std::string id = it.key();
@@ -83,22 +76,16 @@ AssetInfo::AssetInfo(const std::string &asset_folder_name)
     }
     info_json_["mappings"] = data["mappings"];
   }
-
   load_base_properties(data);
-
   LightingLoader::load(*this, data);
-
   const auto &ss = data.value("size_settings", nlohmann::json::object());
   scale_factor = ss.value("scale_percentage", 100.0f) / 100.0f;
-
   int scaled_canvas_w = static_cast<int>(original_canvas_width * scale_factor);
   int scaled_canvas_h = static_cast<int>(original_canvas_height * scale_factor);
   int offset_x = (scaled_canvas_w - 0) / 2;
   int offset_y = (scaled_canvas_h - 0);
-
   load_areas(data, scale_factor, offset_x, offset_y);
   load_children(data);
-
   // Optional custom controller key (if present in info.json)
   try {
     if (data.contains("custom_controller_key") && data["custom_controller_key"].is_string()) {
@@ -113,7 +100,6 @@ AssetInfo::~AssetInfo() {
   std::ostringstream oss;
   oss << "[AssetInfo] Destructor for '" << name << "'\r";
   std::cout << std::left << std::setw(60) << oss.str() << std::flush;
-
   for (auto &[key, anim] : animations) {
     for (SDL_Texture *tex : anim.frames) {
       if (tex)
@@ -133,14 +119,11 @@ void AssetInfo::load_base_properties(const nlohmann::json &data) {
   if (type == "Player") {
     std::cout << "[AssetInfo] Player asset '" << name << "' loaded\n\n";
   }
-
   // preferred start animation id
   start_animation = data.value("start", std::string{"default"});
-
   z_threshold = data.value("z_threshold", 0);
   passable = has_tag("passable");
   has_shading = data.value("has_shading", false);
-
   min_same_type_distance = data.value("min_same_type_distance", 0);
   min_distance_all = data.value("min_distance_all", 0);
   flipable = data.value("can_invert", false);
@@ -159,7 +142,6 @@ void AssetInfo::generate_lights(SDL_Renderer *renderer) {
 }
 
 // --------------------- Update API ---------------------
-
 
 bool AssetInfo::update_info_json() const {
   try {
@@ -234,12 +216,12 @@ void AssetInfo::add_tag(const std::string &tag) {
   if (std::find(tags.begin(), tags.end(), tag) == tags.end()) {
     tags.push_back(tag);
   }
-  set_tags(tags); // syncs json + passable
+  set_tags(tags);
 }
 
 void AssetInfo::remove_tag(const std::string &tag) {
   tags.erase(std::remove(tags.begin(), tags.end(), tag), tags.end());
-  set_tags(tags); // syncs json + passable
+  set_tags(tags);
 }
 
 void AssetInfo::set_passable(bool v) {
@@ -273,12 +255,10 @@ void AssetInfo::upsert_area_from_editor(const Area& area) {
     na.area = std::make_unique<Area>(area);
     areas.push_back(std::move(na));
   }
-
   // Ensure info_json_ has an array for areas
   if (!info_json_.contains("areas") || !info_json_["areas"].is_array()) {
     info_json_["areas"] = nlohmann::json::array();
   }
-
   // Compute inverse transform: absolute -> relative (unscaled)
   float scale = scale_factor;
   if (scale <= 0.0f) scale = 1.0f;
@@ -286,7 +266,6 @@ void AssetInfo::upsert_area_from_editor(const Area& area) {
   int scaled_canvas_h = static_cast<int>(original_canvas_height * scale);
   int offset_x = (scaled_canvas_w - 0) / 2;
   int offset_y = (scaled_canvas_h - 0);
-
   // Serialize points
   nlohmann::json points = nlohmann::json::array();
   for (const auto& p : area.get_points()) {
@@ -294,7 +273,6 @@ void AssetInfo::upsert_area_from_editor(const Area& area) {
     double rel_y = (static_cast<double>(p.second) - static_cast<double>(offset_y)) / static_cast<double>(scale);
     points.push_back({ rel_x, rel_y });
   }
-
   // Upsert JSON entry by name
   bool json_found = false;
   for (auto& entry : info_json_["areas"]) {

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "asset/animation.hpp" // for Animation::FrameMovement
+#include "asset/animation.hpp"
 
 class Asset;
 

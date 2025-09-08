@@ -1,4 +1,3 @@
-
 #include "dev_mouse_controls.hpp"
 #include "asset/Asset.hpp"
 #include "core/AssetsManager.hpp"
@@ -6,7 +5,6 @@
 #include "utils/parallax.hpp"
 #include <cmath>
 #include <SDL.h>
-
 DevMouseControls::DevMouseControls(Input* m,
                                    Assets* assets,
                                    std::vector<Asset*>& actives,
@@ -19,7 +17,7 @@ DevMouseControls::DevMouseControls(Input* m,
       player(player_),
       screen_w(screen_w_),
       screen_h(screen_h_),
-      parallax_(screen_w_, screen_h_),   
+      parallax_(screen_w_, screen_h_),
       dragging_(false),
       drag_last_x_(0),
       drag_last_y_(0)
@@ -31,38 +29,29 @@ void DevMouseControls::handle_mouse_input(const Input& input) {
     if (player) {
         parallax_.setReference(player->pos_X, player->pos_Y);
     }
-
     if (input.isKeyDown(SDLK_ESCAPE)) {
         selected_assets.clear();
         highlighted_assets.clear();
         hovered_asset = nullptr;
         dragging_ = false;
-
         for (Asset* a : active_assets) {
             if (!a) continue;
             a->set_selected(false);
             a->set_highlighted(false);
         }
-        return; 
+        return;
     }
-
     if (!mouse) return;
-
     static int last_mx = -1;
     static int last_my = -1;
-
     const int mx = mouse->getX();
     const int my = mouse->getY();
-
-    
     if (mouse->isDown(Input::LEFT) && !selected_assets.empty()) {
         if (!dragging_) {
-            
             dragging_ = true;
             drag_last_x_ = mx;
             drag_last_y_ = my;
         } else {
-            
             int dx = mx - drag_last_x_;
             int dy = my - drag_last_y_;
             if (dx != 0 || dy != 0) {
@@ -76,11 +65,8 @@ void DevMouseControls::handle_mouse_input(const Input& input) {
             }
         }
     } else {
-        dragging_ = false; 
+        dragging_ = false;
     }
-
-
-
         // Right-click to open asset selection and record spawn point
         if (mouse->wasClicked(Input::RIGHT) && assets_) {
             spawn_click_screen_x_ = mx;
@@ -91,7 +77,6 @@ void DevMouseControls::handle_mouse_input(const Input& input) {
             waiting_spawn_selection_ = true;
             assets_->open_asset_library();
         }
-
         // If waiting for selection, check if a selection was made
         if (waiting_spawn_selection_ && assets_) {
             if (!assets_->is_asset_library_open()) {
@@ -102,46 +87,33 @@ void DevMouseControls::handle_mouse_input(const Input& input) {
                 waiting_spawn_selection_ = false;
             }
         }
-
         handle_hover();
         handle_click(input);
         update_highlighted_assets();
-
         last_mx = mx;
         last_my = my;
-
 }
 
 void DevMouseControls::handle_hover() {
     if (!mouse || !player) return;
-
     const int mx = mouse->getX();
     const int my = mouse->getY();
-
-    
     parallax_.setReference(player->pos_X, player->pos_Y);
-
     Asset* nearest = nullptr;
     float nearest_d2 = std::numeric_limits<float>::max();
-
     for (Asset* a : active_assets) {
         if (!a || !a->info) continue;
         const std::string& t = a->info->type;
         if (t == "Boundary" || t == "boundary" || t == "Texture") continue;
-
-        
         SDL_Point scr = parallax_.apply(a->pos_X, a->pos_Y);
-
         float dx = float(mx - scr.x);
         float dy = float(my - scr.y);
         float d2 = dx * dx + dy * dy;
-
         if (d2 < nearest_d2) {
             nearest_d2 = d2;
             nearest = a;
         }
     }
-
     if (nearest) {
         hovered_asset = nearest;
         hover_miss_frames_ = 0;
@@ -155,10 +127,9 @@ void DevMouseControls::handle_hover() {
 
 void DevMouseControls::handle_click(const Input& input) {
     if (!mouse || !player) return;
-
     // Only handle a physical click once, even though wasClicked() spans frames
     if (!mouse->wasClicked(Input::LEFT)) {
-        click_buffer_frames_ = 0; // allow next click when buffer ends
+        click_buffer_frames_ = 0;
         return;
     }
     if (click_buffer_frames_ > 0) {
@@ -168,12 +139,10 @@ void DevMouseControls::handle_click(const Input& input) {
     }
     // Consume this click and suppress duplicates for a couple frames
     click_buffer_frames_ = 2;
-
-    Asset* nearest = hovered_asset; 
+    Asset* nearest = hovered_asset;
     if (nearest) {
         const bool ctrlHeld = input.isKeyDown(SDLK_LCTRL) || input.isKeyDown(SDLK_RCTRL);
         auto it = std::find(selected_assets.begin(), selected_assets.end(), nearest);
-
         if (ctrlHeld) {
             if (it == selected_assets.end()) {
                 selected_assets.push_back(nearest);
@@ -182,13 +151,12 @@ void DevMouseControls::handle_click(const Input& input) {
             }
         } else {
             if (it != selected_assets.end() && selected_assets.size() == 1) {
-                selected_assets.clear(); 
+                selected_assets.clear();
             } else {
                 selected_assets.clear();
                 selected_assets.push_back(nearest);
             }
         }
-
         // Double-click detection: same asset within 300ms
         Uint32 now = SDL_GetTicks();
         if (last_click_asset_ == nearest && (now - last_click_time_ms_) <= 300) {
@@ -217,21 +185,17 @@ void DevMouseControls::update_highlighted_assets() {
         std::find(highlighted_assets.begin(), highlighted_assets.end(), hovered_asset) == highlighted_assets.end()) {
         highlighted_assets.push_back(hovered_asset);
     }
-
     for (Asset* a : active_assets) {
         if (!a) continue;
         a->set_highlighted(false);
         a->set_selected(false);
     }
-
     for (Asset* a : highlighted_assets) {
         if (!a) continue;
         if (std::find(selected_assets.begin(), selected_assets.end(), a) != selected_assets.end()) {
-            
             a->set_selected(true);
             a->set_highlighted(false);
         } else {
-            
             a->set_highlighted(true);
             a->set_selected(false);
         }

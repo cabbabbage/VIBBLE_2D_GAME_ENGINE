@@ -1,9 +1,7 @@
 #include "child_loader.hpp"
-
 #include "asset/asset_info.hpp"
 #include <filesystem>
 #include <iostream>
-
 using nlohmann::json;
 namespace fs = std::filesystem;
 
@@ -13,7 +11,6 @@ void ChildLoader::load_children(AssetInfo& info,
     info.children.clear();
     if (!data.contains("child_assets") || !data["child_assets"].is_array())
         return;
-
     for (const auto& entry : data["child_assets"]) {
         if (!entry.is_object()) continue;
         ChildInfo ci;

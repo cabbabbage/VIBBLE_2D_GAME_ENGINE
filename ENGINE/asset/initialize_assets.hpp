@@ -1,4 +1,3 @@
-
 #pragma once
 
 #include <vector>
@@ -19,7 +18,6 @@ public:
                            int screen_center_x,
                            int screen_center_y,
                            int map_radius);
-
 private:
     static void setup_shading_groups(Assets& assets);
     static void setup_static_sources(Assets& assets);

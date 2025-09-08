@@ -1,19 +1,16 @@
 #include "area.hpp"
-
 #include <SDL.h>
 #include <cmath>
 #include <algorithm>
 #include <stdexcept>
 #include <vector>
-
 // --- Interactive Area Editor implementation split from area.cpp ---
 namespace {
 struct EditorResult {
-    std::vector<Area::Point> points; // in background pixel coordinates (top-left origin)
+    std::vector<Area::Point> points;
     int bg_w = 0;
     int bg_h = 0;
 };
-
 static void stamp_circle(SDL_Surface* surf, int cx, int cy, int r, Uint32 color) {
     if (!surf) return;
     SDL_LockSurface(surf);
@@ -32,7 +29,6 @@ static void stamp_circle(SDL_Surface* surf, int cx, int cy, int r, Uint32 color)
     }
     SDL_UnlockSurface(surf);
 }
-
 static std::vector<Area::Point> extract_edge_points(SDL_Surface* surf, int step = 1) {
     std::vector<Area::Point> out;
     if (!surf) return out;
@@ -56,22 +52,18 @@ static std::vector<Area::Point> extract_edge_points(SDL_Surface* surf, int step 
     SDL_UnlockSurface(surf);
     return out;
 }
-
 static EditorResult run_area_editor(SDL_Texture* background,
                                    SDL_Renderer* src_renderer,
                                    int window_w,
                                    int window_h,
                                    const Area* initial_area = nullptr) {
     if (!background) throw std::runtime_error("[Area Editor] No background texture provided");
-
     int tex_w = 0, tex_h = 0;
     SDL_QueryTexture(background, nullptr, nullptr, &tex_w, &tex_h);
     if (tex_w <= 0 || tex_h <= 0) throw std::runtime_error("[Area Editor] Invalid background texture size");
-
     const int minW = 800, minH = 600;
     int win_w = window_w > 0 ? window_w : std::max(minW, tex_w);
     int win_h = window_h > 0 ? window_h : std::max(minH, tex_h);
-
     SDL_Window* win = SDL_CreateWindow("Area Editor", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
                                       win_w, win_h, SDL_WINDOW_SHOWN);
     if (!win) throw std::runtime_error("[Area Editor] Failed to create window");
@@ -80,7 +72,6 @@ static EditorResult run_area_editor(SDL_Texture* background,
         SDL_DestroyWindow(win);
         throw std::runtime_error("[Area Editor] Failed to create renderer");
     }
-
     // Prepare mask surface (ARGB): we'll use the alpha channel as the mask value
     SDL_Surface* mask = SDL_CreateRGBSurfaceWithFormat(0, tex_w, tex_h, 32, SDL_PIXELFORMAT_RGBA32);
     if (!mask) {
@@ -90,9 +81,7 @@ static EditorResult run_area_editor(SDL_Texture* background,
     }
     // Clear mask to transparent
     SDL_FillRect(mask, nullptr, SDL_MapRGBA(mask->format, 255, 0, 0, 0));
-
     // no pre-stamp; we render the existing area outline as an overlay every frame
-
     // Build a local background texture compatible with 'rend' by copying pixels
     SDL_Texture* bg_local = nullptr;
     if (src_renderer) {
@@ -106,7 +95,6 @@ static EditorResult run_area_editor(SDL_Texture* background,
             SDL_Rect prev_vp; SDL_RenderGetViewport(src_renderer, &prev_vp);
             SDL_Rect prev_clip; SDL_RenderGetClipRect(src_renderer, &prev_clip);
             float prev_sx = 1.0f, prev_sy = 1.0f; SDL_RenderGetScale(src_renderer, &prev_sx, &prev_sy);
-
             SDL_SetRenderTarget(src_renderer, tmp);
             SDL_RenderSetViewport(src_renderer, nullptr);
             SDL_RenderSetClipRect(src_renderer, nullptr);
@@ -142,12 +130,11 @@ static EditorResult run_area_editor(SDL_Texture* background,
             SDL_SetRenderTarget(rend, prev_t);
         }
     }
-
     // View transform: scale (zoom) and offset
     // Start at a zoom that shows 100% of the image (fit-to-window, but not above 1:1)
     const double fit_scale = std::min(static_cast<double>(win_w) / tex_w, static_cast<double>(win_h) / tex_h);
     double view_scale = std::min(1.0, fit_scale);
-    int pan_x = 0, pan_y = 0; // user panning offset in screen pixels
+    int pan_x = 0, pan_y = 0;
     auto recompute_layout = [&](int& draw_w, int& draw_h, int& off_x, int& off_y){
         draw_w = static_cast<int>(std::round(tex_w * view_scale));
         draw_h = static_cast<int>(std::round(tex_h * view_scale));
@@ -157,22 +144,19 @@ static EditorResult run_area_editor(SDL_Texture* background,
     };
     int draw_w = 0, draw_h = 0, off_x = 0, off_y = 0;
     recompute_layout(draw_w, draw_h, off_x, off_y);
-
     // Cache area bounds if provided for overlay mapping
     int area_minx = 0, area_miny = 0, area_maxx = 0, area_maxy = 0;
     if (initial_area) {
         std::tie(area_minx, area_miny, area_maxx, area_maxy) = initial_area->get_bounds();
     }
-
     // Brush settings
     int brush = 10;
     bool drawing = false;
     bool erasing = false;
     bool panning = false;
     int last_mx = 0, last_my = 0;
-
     bool quit = false;
-    bool draw_mode = true; // true=draw, false=erase
+    bool draw_mode = true;
     while (!quit) {
         SDL_Event e;
         while (SDL_PollEvent(&e)) {
@@ -185,11 +169,11 @@ static EditorResult run_area_editor(SDL_Texture* background,
                 else if (e.key.keysym.sym == SDLK_EQUALS || e.key.keysym.sym == SDLK_PLUS) { brush = std::min(300, brush + 2); }
                 else if (e.key.keysym.sym == SDLK_MINUS) { brush = std::max(1, brush - 2); }
                 else if (e.key.keysym.sym == SDLK_c) { SDL_FillRect(mask, nullptr, SDL_MapRGBA(mask->format, 255, 0, 0, 0)); }
-                else if (e.key.keysym.sym == SDLK_f) { // fit to window
+                else if (e.key.keysym.sym == SDLK_f) {
                     view_scale = fit_scale;
                     pan_x = pan_y = 0;
                     recompute_layout(draw_w, draw_h, off_x, off_y);
-                } else if (e.key.keysym.sym == SDLK_1) { // 1:1 zoom
+                } else if (e.key.keysym.sym == SDLK_1) {
                     // Anchor to center
                     view_scale = 1.0;
                     pan_x = pan_y = 0;
@@ -252,13 +236,11 @@ static EditorResult run_area_editor(SDL_Texture* background,
                 }
             }
         }
-
         SDL_SetRenderDrawColor(rend, 20, 20, 20, 255);
         SDL_RenderClear(rend);
         // Draw background centered
         SDL_Rect dst{ off_x, off_y, draw_w, draw_h };
         if (bg_local) SDL_RenderCopy(rend, bg_local, nullptr, &dst);
-
         // Draw existing area outline overlay (relative to background origin)
         if (initial_area) {
             // If the background is exactly the area's bounding box, subtract min bounds.
@@ -280,7 +262,6 @@ static EditorResult run_area_editor(SDL_Texture* background,
                 SDL_RenderDrawLines(rend, pts.data(), static_cast<int>(pts.size()));
             }
         }
-
         // Draw red overlay from mask
         SDL_Texture* overlay = SDL_CreateTextureFromSurface(rend, mask);
         if (overlay) {
@@ -289,7 +270,6 @@ static EditorResult run_area_editor(SDL_Texture* background,
             SDL_RenderCopy(rend, overlay, nullptr, &dst);
             SDL_DestroyTexture(overlay);
         }
-
         // Simple UI buttons (no text rendering): Draw/Erase/Save
         auto draw_button = [&](SDL_Rect rct, SDL_Color col){
             SDL_SetRenderDrawColor(rend, col.r, col.g, col.b, 200);
@@ -300,7 +280,6 @@ static EditorResult run_area_editor(SDL_Texture* background,
         draw_button(SDL_Rect{10,10,80,28}, draw_mode ? SDL_Color{80,180,80,255} : SDL_Color{60,60,60,255});
         draw_button(SDL_Rect{100,10,80,28}, !draw_mode ? SDL_Color{180,80,80,255} : SDL_Color{60,60,60,255});
         draw_button(SDL_Rect{win_w-100,10,80,28}, SDL_Color{80,80,200,255});
-
         // Draw brush preview
         int mx, my; (void)SDL_GetMouseState(&mx, &my);
         SDL_SetRenderDrawColor(rend, 255, 255, 255, 255);
@@ -311,22 +290,19 @@ static EditorResult run_area_editor(SDL_Texture* background,
             int y = my + static_cast<int>(std::sin(rad) * brush);
             SDL_RenderDrawPoint(rend, x, y);
         }
-
         SDL_RenderPresent(rend);
     }
-
     EditorResult res;
     res.bg_w = tex_w;
     res.bg_h = tex_h;
     res.points = extract_edge_points(mask, /*step=*/1);
-
     SDL_FreeSurface(mask);
     SDL_DestroyRenderer(rend);
     SDL_DestroyWindow(win);
     if (bg_local) SDL_DestroyTexture(bg_local);
     return res;
 }
-} // namespace
+}
 
 // Interactive constructors moved here
 Area::Area(const std::string& name, const Area& base, SDL_Renderer* renderer,
@@ -339,16 +315,13 @@ Area::Area(const std::string& name, const Area& base, SDL_Renderer* renderer,
         bg = base.get_texture();
     }
     if (!bg) throw std::runtime_error("[Area: editor] Base area has no background texture");
-
     EditorResult er = run_area_editor(bg, renderer, window_w, window_h, &base);
     if (er.points.empty()) {
         throw std::runtime_error("[Area: editor] No points drawn");
     }
-
     // Construct absolute points in image pixel space; pivot is bottom-center
     int pivot_x = er.bg_w / 2;
     int pivot_y = er.bg_h;
-
     points.clear();
     points.reserve(er.points.size());
     for (const auto& p : er.points) {

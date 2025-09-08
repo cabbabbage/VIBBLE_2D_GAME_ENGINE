@@ -1,12 +1,9 @@
 #include "slider.hpp"
-
 #include <algorithm>
 #include <cmath>
 #include <string>
-
-#include "utils/text_style.hpp"  // Fonts for simple text rendering
+#include "utils/text_style.hpp"
 #include "ui/styles.hpp"
-
 // ---- Slider implementation ----
 
 Slider::Slider(const std::string& label, int min_val, int max_val)
@@ -55,7 +52,7 @@ SDL_Rect Slider::track_rect() const {
     const int track_h = 6;
     const int cy = rect_.y + rect_.h/2;
     SDL_Rect t{ rect_.x + pad, cy - track_h/2, rect_.w - 2*pad, track_h };
-    if (t.w < 10) t.w = 10; // minimal width safeguard
+    if (t.w < 10) t.w = 10;
     return t;
 }
 
@@ -63,7 +60,6 @@ SDL_Rect Slider::knob_rect_for_value(int v) const {
     const SDL_Rect tr = track_rect();
     const int knob_w = 12;
     const int knob_h = 24;
-
     const int range = std::max(1, max_ - min_);
     const float t = float(v - min_) / float(range);
     const int x = tr.x + int(std::round(t * (tr.w))) - knob_w/2;
@@ -82,9 +78,7 @@ int Slider::value_for_x(int mouse_x) const {
 
 bool Slider::handle_event(const SDL_Event& e) {
     bool changed = false;
-
     const SDL_Rect krect = knob_rect_for_value(value_);
-
     if (e.type == SDL_MOUSEMOTION) {
         SDL_Point p{ e.motion.x, e.motion.y };
         knob_hovered_ = SDL_PointInRect(&p, &krect);
@@ -108,7 +102,6 @@ bool Slider::handle_event(const SDL_Event& e) {
             dragging_ = false;
         }
     }
-
     return changed;
 }
 
@@ -144,7 +137,6 @@ void Slider::draw_track(SDL_Renderer* r) const {
     // Background
     SDL_Color trackBg = style_ ? style_->track_bg : Styles::Slate();
     fill_rect(r, tr, trackBg);
-
     // Active fill from left to current value
     SDL_Rect tr_fill = tr;
     const int range = std::max(1, max_ - min_);
@@ -152,7 +144,6 @@ void Slider::draw_track(SDL_Renderer* r) const {
     tr_fill.w = std::max(0, int(std::round(t * tr.w)));
     SDL_Color trackFill = style_ ? style_->track_fill : Styles::Teal();
     fill_rect(r, tr_fill, trackFill);
-
     // Frame
     SDL_Color frame = style_ ? style_->frame_normal : Styles::GoldDim();
     stroke_rect(r, tr, frame);
@@ -174,10 +165,8 @@ void Slider::draw_text(SDL_Renderer* r) const {
     // Render label (left) and value (right)
     const TextStyle& labelStyle = style_ ? style_->label_style : TextStyles::SmallMain();
     const TextStyle& valueStyle = style_ ? style_->value_style : TextStyles::SmallSecondary();
-
     blit_text(r, labelStyle, label_, rect_.x + 8, rect_.y + 6);
-
-    const int right_pad = 60; // keep room for knob overlap
+    const int right_pad = 60;
     blit_text(r, valueStyle, std::to_string(value_), rect_.x + rect_.w - right_pad, rect_.y + 6);
 }
 
@@ -188,14 +177,11 @@ void Slider::render(SDL_Renderer* renderer) const {
     stroke_rect(renderer, rect_, frame);
     SDL_Rect inner{ rect_.x+1, rect_.y+1, rect_.w-2, rect_.h-2 };
     stroke_rect(renderer, inner, frame);
-
     // Track
     draw_track(renderer);
-
     // Knob for current value
     const SDL_Rect krect = knob_rect_for_value(value_);
     draw_knob(renderer, krect, knob_hovered_ || dragging_);
-
     // Text overlays
     draw_text(renderer);
 }

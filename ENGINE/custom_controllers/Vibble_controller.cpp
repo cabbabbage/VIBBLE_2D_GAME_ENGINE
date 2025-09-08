@@ -1,16 +1,13 @@
 #include "Vibble_controller.hpp"
-
 #include "utils/input.hpp"
 #include "asset/Asset.hpp"
 #include "asset/move.hpp"
 #include "utils/area.hpp"
 #include "core/active_assets_manager.hpp"
 #include "core/AssetsManager.hpp"
-
 #include <cmath>
 #include <iostream>
 #include <random>
-
 VibbleController::VibbleController(Assets* assets, Asset* player, ActiveAssetsManager& aam)
    : assets_(assets), player_(player), aam_(aam) {}
 
@@ -30,22 +27,18 @@ bool VibbleController::pointInAABB(int x, int y, const Area& B) const {
 void VibbleController::movement(const Input& input) {
    dx_ = dy_ = 0;
    if (!player_) return;
-
    bool up    = input.isKeyDown(SDLK_w);
    bool down  = input.isKeyDown(SDLK_s);
    bool left  = input.isKeyDown(SDLK_a);
    bool right = input.isKeyDown(SDLK_d);
-
    int move_x = (right ? 1 : 0) - (left ? 1 : 0);
    int move_y = (down  ? 1 : 0) - (up    ? 1 : 0);
-
    const std::string current = player_->get_current_animation();
    if (move_x == 0 && move_y == 0) {
       if (current != "default")
          player_->change_animation("default");
       return;
    }
-
    if (!(move_x != 0 && move_y != 0)) {
       std::string anim;
       if      (move_y < 0) anim = "backward";
@@ -59,10 +52,8 @@ void VibbleController::movement(const Input& input) {
 
 bool VibbleController::canMove(int offset_x, int offset_y) {
    if (!player_) return false;
-
    int test_x = player_->pos_X + offset_x;
    int test_y = player_->pos_Y + offset_y - player_->info->z_threshold;
-
    for (Asset* a : aam_.getImpassableClosest()) {
       if (!a || a == player_) continue;
       Area obstacle = a->get_area("passability");
@@ -75,10 +66,8 @@ bool VibbleController::canMove(int offset_x, int offset_y) {
 
 void VibbleController::interaction() {
    if (!player_ || !player_->info) return;
-
    int px = player_->pos_X;
    int py = player_->pos_Y - player_->info->z_threshold;
-
    for (Asset* a : aam_.getInteractiveClosest()) {
       if (!a || a == player_) continue;
       Area ia = a->get_area("interaction");
@@ -93,31 +82,25 @@ void VibbleController::handle_teleport(const Input& input) {
       std::cerr << "[VibbleController::handle_teleport] player_ null\n";
       return;
    }
-
    if (input.wasKeyPressed(SDLK_SPACE) && !teleport_set_) {
       teleport_point_ = { player_->pos_X, player_->pos_Y };
       teleport_set_ = true;
-
-      if (marker_asset_ && assets_) {
-         aam_.remove(marker_asset_);
-         marker_asset_->Delete();
-         aam_.updateClosestAssets(player_, 3);
-         marker_asset_ = nullptr;
-      }
-
+           if (marker_asset_ && assets_) {
+               aam_.remove(marker_asset_);
+               marker_asset_->Delete();
+               aam_.updateClosestAssets(player_, 3);
+               marker_asset_ = nullptr;
+           }
       if (assets_) {
          static std::mt19937 rng{ std::random_device{}() };
          std::uniform_real_distribution<float> angle(0.0f, 6.2831853f);
-
          float a = angle(rng);
          int r   = 30;
          int mx  = player_->pos_X + static_cast<int>(std::round(std::cos(a) * r));
          int my  = player_->pos_Y + static_cast<int>(std::round(std::sin(a) * r));
-
          marker_asset_ = assets_->spawn_asset("marker", mx, my);
       }
    }
-
    if (input.wasKeyPressed(SDLK_q) && teleport_set_) {
       // Teleport via Move helper using a single FrameMovement
       Animation::FrameMovement fm;
@@ -125,10 +108,8 @@ void VibbleController::handle_teleport(const Input& input) {
       fm.dy = teleport_point_.y - player_->pos_Y;
       fm.sort_z_index = true;
       Move::apply(player_, fm);
-
       teleport_point_ = { 0, 0 };
       teleport_set_   = false;
-
       if (marker_asset_ && assets_) {
          aam_.remove(marker_asset_);
          marker_asset_;

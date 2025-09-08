@@ -49,17 +49,13 @@ void MenuUI::game_loop() {
     bool quit = false;
     SDL_Event e;
     int frame_count = 0;
-
     return_to_main_menu_ = false;
-
     while (!quit) {
         Uint32 start = SDL_GetTicks();
-
         while (SDL_PollEvent(&e)) {
             if (e.type == SDL_QUIT) {
                 quit = true;
             }
-
             // Prioritize in-game overlays over opening the pause menu.
             // ESC closes asset info or library if open; otherwise toggles pause menu.
             if (e.type == SDL_KEYDOWN && e.key.keysym.sym == SDLK_ESCAPE && e.key.repeat == 0) {
@@ -77,23 +73,18 @@ void MenuUI::game_loop() {
                     toggleMenu();
                 }
             }
-
             if (input_) input_->handleEvent(e);
             if (game_assets_) game_assets_->handle_sdl_event(e);
             if (menu_active_) handle_event(e);
         }
-
         if (game_assets_ && game_assets_->player) {
             const int px = game_assets_->player->pos_X;
             const int py = game_assets_->player->pos_Y;
             game_assets_->update(*input_, px, py);
         }
-
-
         if (menu_active_) {
             update(dev_mode_local_);
             render();
-
             switch (consumeAction()) {
                 case MenuAction::EXIT:            doExit();         quit = true;        break;
                 case MenuAction::RESTART:         doRestart();      frame_count = 0;    break;
@@ -103,12 +94,9 @@ void MenuUI::game_loop() {
                 default: break;
             }
         }
-
         if (menu_active_) SDL_RenderPresent(renderer_);
-
         ++frame_count;
         if (input_) input_->update();
-
         Uint32 elapsed = SDL_GetTicks() - start;
         if (elapsed < FRAME_MS) SDL_Delay(FRAME_MS - elapsed);
     }
@@ -251,7 +239,6 @@ void MenuUI::doExit() {
 
 void MenuUI::doRestart() {
     std::cout << "[MenuUI] Restarting...\n";
-    
     if (minimap_texture_)  { SDL_DestroyTexture(minimap_texture_); minimap_texture_ = nullptr; }
     if (game_assets_)      { delete game_assets_; game_assets_ = nullptr; }
     try {
@@ -279,7 +266,6 @@ void MenuUI::doRestart() {
         std::cerr << "[MenuUI] Restart failed: " << ex.what() << "\n";
         return;
     }
-    
 }
 
 void MenuUI::doSettings() {

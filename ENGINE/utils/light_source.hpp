@@ -1,5 +1,3 @@
-
-
 #pragma once
 
 #include <SDL.h>
@@ -18,5 +16,5 @@ struct LightSource {
     int cached_w = 0;
     int cached_h = 0;
     SDL_Color color = {255, 255, 255, 255};
-    SDL_Texture* texture = nullptr;  
+    SDL_Texture* texture = nullptr;
 };

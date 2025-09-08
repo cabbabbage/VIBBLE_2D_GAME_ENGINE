@@ -1,28 +1,24 @@
 #include "auto_movement.hpp"
-
 #include "asset/Asset.hpp"
 #include "asset/asset_info.hpp"
 #include "core/active_assets_manager.hpp"
 #include "core/AssetsManager.hpp"
 #include "utils/area.hpp"
-
 #include <limits>
 #include <cmath>
 #include <algorithm>
-
 namespace {
 static inline long long dist2(int x1, int y1, int x2, int y2) {
   long long dx = static_cast<long long>(x1) - static_cast<long long>(x2);
   long long dy = static_cast<long long>(y1) - static_cast<long long>(y2);
   return dx*dx + dy*dy;
 }
-
 static inline Area dm_get_collision_area(Asset* a) {
   Area area = a->get_area("collision");
   if (area.get_points().empty()) area = a->get_area("clickable");
   return area;
 }
-} // namespace
+}
 
 AutoMovement::AutoMovement(Asset* self, ActiveAssetsManager& aam, bool confined)
   : self_(self), aam_(aam), confined_(confined)
@@ -58,27 +54,23 @@ void AutoMovement::transition_mode(Mode m) {
 // Choose a refined target that balances directness vs sparsity.
 Area::Point AutoMovement::choose_balanced_target(int desired_x, int desired_y, const Asset* final_target) const {
   if (!self_) return { desired_x, desired_y };
-
   // Forward direction toward final target if provided, else toward desired point.
   const int sx = self_->pos_X;
   const int sy = self_->pos_Y;
   int ax = desired_x;
   int ay = desired_y;
   if (final_target) { ax = final_target->pos_X; ay = final_target->pos_Y; }
-
   double fvx = static_cast<double>(ax - sx);
   double fvy = static_cast<double>(ay - sy);
   double flen = std::sqrt(fvx*fvx + fvy*fvy);
   if (flen > 1e-6) { fvx /= flen; fvy /= flen; }
   else { fvx = 1.0; fvy = 0.0; }
-
   // Baseline angle and radius based on desired point
   int dx0 = desired_x - sx;
   int dy0 = desired_y - sy;
   double base_angle = std::atan2(static_cast<double>(dy0), static_cast<double>(dx0));
   double base_radius = std::sqrt(static_cast<double>(dx0*dx0 + dy0*dy0));
   if (base_radius < 1.0) base_radius = 1.0;
-
   // Neighbor set: prefer closest, else active.
   const auto& nearby = aam_.getClosest();
   const auto& active = aam_.getActive();
@@ -86,20 +78,16 @@ Area::Point AutoMovement::choose_balanced_target(int desired_x, int desired_y, c
   neighbors.reserve(nearby.size());
   for (Asset* a : nearby) neighbors.push_back(a);
   if (neighbors.empty()) for (Asset* a : active) neighbors.push_back(a);
-
   // Candidate generation: sample angles around base, and slight radial jitter.
   static const double ang_offsets[] = { -0.6, -0.4, -0.25, -0.12, 0.0, 0.12, 0.25, 0.4, 0.6 };
   static const double rad_scales[]  = { 0.9, 1.0, 1.1 };
-
   Area::Point best = { desired_x, desired_y };
   double best_cost = std::numeric_limits<double>::infinity();
-
   // Normalization constants
   const double rline = std::max(1.0, std::sqrt(static_cast<double>((ax - sx)*(ax - sx) + (ay - sy)*(ay - sy))));
-  const double sparse_cap = 300.0; // cap neighbor distances
+  const double sparse_cap = 300.0;
   const double w_dir = std::max(0.0, weight_dir_);
   const double w_sparse = std::max(0.0, weight_sparse_);
-
   for (double dth : ang_offsets) {
     for (double rs : rad_scales) {
       double ang = base_angle + dth;
@@ -108,16 +96,14 @@ Area::Point AutoMovement::choose_balanced_target(int desired_x, int desired_y, c
       int cy = sy + static_cast<int>(std::llround(rr * std::sin(ang)));
       int px = cx, py = cy;
       clamp_to_room(px, py);
-
       // Directness: distance to final target (or desired if no final target)
       double d_dir = std::sqrt(static_cast<double>((px - ax)*(px - ax) + (py - ay)*(py - ay)));
-      double dir_norm = d_dir / rline; // in [0, ~]
-
+      double dir_norm = d_dir / rline;
       // Sparsity: average distance to neighbors ahead in the forward direction
       double sum = 0.0; int cnt = 0;
       for (Asset* n : neighbors) {
         if (!n || n == self_) continue;
-        if (final_target && n == final_target) continue; // exclude final target from density
+        if (final_target && n == final_target) continue;
         if (!n->info) continue;
         // Ignore assets tagged as ground in spacing calculations
         if (n->info->has_tag("ground")) continue;
@@ -126,14 +112,13 @@ Area::Point AutoMovement::choose_balanced_target(int desired_x, int desired_y, c
         double rvx = static_cast<double>(nx - sx);
         double rvy = static_cast<double>(ny - sy);
         double dot = rvx*fvx + rvy*fvy;
-        if (dot <= 0.0) continue; // behind -> ignore
+        if (dot <= 0.0) continue;
         double d = std::sqrt(static_cast<double>((px - nx)*(px - nx) + (py - ny)*(py - ny)));
         sum += std::min(d, sparse_cap);
         cnt += 1;
       }
       double avg = (cnt > 0) ? (sum / cnt) : sparse_cap;
-      double sparse_norm = avg / sparse_cap; // in [0,1]
-
+      double sparse_norm = avg / sparse_cap;
       double cost = w_dir * dir_norm - w_sparse * sparse_norm;
       if (cost < best_cost) { best_cost = cost; best = { px, py }; }
     }
@@ -206,13 +191,12 @@ void AutoMovement::move() {
     self_->update_animation_manager();
     return;
   }
-
   switch (mode_) {
     case Mode::Idle: {
       ensure_idle_target(idle_min_dist_, idle_max_dist_);
       int denom = std::max(0, idle_rest_ratio_) + 1;
       std::uniform_int_distribution<int> pick(0, denom - 1);
-      bool choose_rest = (pick(rng_) != 0); // 0 => move, others => rest
+      bool choose_rest = (pick(rng_) != 0);
       std::string next_anim = choose_rest ? pick_least_movement_animation()
                                           : pick_best_animation_towards(target_.first, target_.second);
       if (!next_anim.empty() && self_->get_current_animation() != next_anim) self_->change_animation(next_anim);
@@ -265,7 +249,6 @@ bool AutoMovement::can_move_by(int dx, int dy) const {
   if (!self_ || !self_->info) return false;
   int test_x = self_->pos_X + dx;
   int test_y = self_->pos_Y + dy - self_->info->z_threshold;
-
   for (Asset* a : aam_.getImpassableClosest()) {
     if (!a || a == self_) continue;
     Area obstacle = a->get_area("passability");
@@ -280,7 +263,6 @@ bool AutoMovement::would_overlap_same_or_player(int dx, int dy) const {
   if (!self_ || !self_->info) return true;
   Area moved = dm_get_collision_area(self_);
   moved.apply_offset(dx, dy);
-
   const auto& active = aam_.getActive();
   for (Asset* a : active) {
     if (!a || a == self_ || !a->info) continue;
@@ -297,19 +279,16 @@ std::string AutoMovement::pick_best_animation_towards(int target_x, int target_y
   if (!self_ || !self_->info) return {};
   const auto& all = self_->info->animations;
   if (all.empty()) return {};
-
   long long best_d2 = std::numeric_limits<long long>::max();
   std::string best_id;
-
   for (const auto& kv : all) {
     const std::string& id = kv.first;
     const Animation& anim = kv.second;
     const int dx = anim.total_dx;
     const int dy = anim.total_dy;
-    if (dx == 0 && dy == 0) continue; // only movement animations considered
+    if (dx == 0 && dy == 0) continue;
     if (!can_move_by(dx, dy)) continue;
     if (would_overlap_same_or_player(dx, dy)) continue;
-
     const int nx = self_->pos_X + dx;
     const int ny = self_->pos_Y + dy;
     long long d2 = dist2(nx, ny, target_x, target_y);
@@ -325,35 +304,29 @@ std::string AutoMovement::pick_least_movement_animation() const {
   if (!self_ || !self_->info) return {};
   const auto& all = self_->info->animations;
   if (all.empty()) return {};
-
   // Prefer an explicit zero-move animation if any (e.g., "default").
   std::string zero_id;
   int min_len2 = std::numeric_limits<int>::max();
   std::string min_id;
-
   for (const auto& kv : all) {
     const std::string& id = kv.first;
     const Animation& anim = kv.second;
     int dx = anim.total_dx;
     int dy = anim.total_dy;
     int len2 = dx*dx + dy*dy;
-
     if (dx == 0 && dy == 0) {
       // track zero-move
       // Only consider zero-move if different from current (optional)
       zero_id = id;
       continue;
     }
-
     if (!can_move_by(dx, dy)) continue;
     if (would_overlap_same_or_player(dx, dy)) continue;
-
     if (len2 < min_len2) {
       min_len2 = len2;
       min_id = id;
     }
   }
-
   // Prefer zero-move when resting; otherwise the smallest non-zero move.
   if (!zero_id.empty()) return zero_id;
   return min_id;
@@ -379,7 +352,7 @@ int AutoMovement::min_move_len2() const {
     const Animation& anim = kv.second;
     int dx = anim.total_dx, dy = anim.total_dy;
     int len2 = dx*dx + dy*dy;
-    if (dx == 0 && dy == 0) continue; // ignore true rest for step length
+    if (dx == 0 && dy == 0) continue;
     if (len2 > 0) cached_min_move_len2_ = std::min(cached_min_move_len2_, len2);
   }
   if (cached_min_move_len2_ == std::numeric_limits<int>::max()) cached_min_move_len2_ = 1;
@@ -395,71 +368,56 @@ bool AutoMovement::is_target_reached() const {
 }
 
 void AutoMovement::ensure_idle_target(int min_dist, int max_dist) {
-  if (mode_ == Mode::Idle && have_target_ && !is_target_reached()) return; // keep it
-
+  if (mode_ == Mode::Idle && have_target_ && !is_target_reached()) return;
   // Pick a new random target around current position within the radius range.
   int cx = self_ ? self_->pos_X : 0;
   int cy = self_ ? self_->pos_Y : 0;
-
   if (max_dist < min_dist) std::swap(min_dist, max_dist);
   min_dist = std::max(0, min_dist);
   max_dist = std::max(0, max_dist);
-
   std::uniform_real_distribution<double> angle(0.0, 2.0 * 3.14159265358979323846);
   std::uniform_real_distribution<double> radius(static_cast<double>(min_dist), static_cast<double>(max_dist));
   double a = angle(rng_);
   double r = radius(rng_);
   int tx = cx + static_cast<int>(std::llround(r * std::cos(a)));
   int ty = cy + static_cast<int>(std::llround(r * std::sin(a)));
-
   set_target(tx, ty, /*final_target=*/nullptr);
   mode_ = Mode::Idle;
 }
 
-
-
 void AutoMovement::ensure_pursue_target(int min_dist, int max_dist, const Asset* final_target) {
-  if (mode_ == Mode::Pursue && have_target_ && !is_target_reached()) return; // keep it
+  if (mode_ == Mode::Pursue && have_target_ && !is_target_reached()) return;
   if (!self_ || !final_target) return;
-
   if (max_dist < min_dist) std::swap(min_dist, max_dist);
   min_dist = std::max(0, min_dist);
   max_dist = std::max(0, max_dist);
-
   int cx = self_->pos_X;
   int cy = self_->pos_Y;
   int tx = final_target->pos_X;
   int ty = final_target->pos_Y;
   int vx = tx - cx;
   int vy = ty - cy;
-
   double a = std::atan2(static_cast<double>(vy), static_cast<double>(vx));
   std::uniform_real_distribution<double> radius(static_cast<double>(min_dist), static_cast<double>(max_dist));
   double r = radius(rng_);
   int nx = cx + static_cast<int>(std::llround(r * std::cos(a)));
   int ny = cy + static_cast<int>(std::llround(r * std::sin(a)));
-
   set_target(nx, ny, /*final_target=*/final_target);
   mode_ = Mode::Pursue;
 }
 
-
-
 void AutoMovement::ensure_run_target(int min_dist, int max_dist, const Asset* threat) {
-  if (mode_ == Mode::Run && have_target_ && !is_target_reached()) return; // keep it
+  if (mode_ == Mode::Run && have_target_ && !is_target_reached()) return;
   if (!self_ || !threat) return;
-
   if (max_dist < min_dist) std::swap(min_dist, max_dist);
   min_dist = std::max(0, min_dist);
   max_dist = std::max(0, max_dist);
-
   int cx = self_->pos_X;
   int cy = self_->pos_Y;
   int tx = threat->pos_X;
   int ty = threat->pos_Y;
-  int vx = cx - tx; // away-from vector
+  int vx = cx - tx;
   int vy = cy - ty;
-
   double a = std::atan2(static_cast<double>(vy), static_cast<double>(vx));
   // Handle degenerate case where threat == self position by picking a random angle
   if (vx == 0 && vy == 0) {
@@ -470,21 +428,16 @@ void AutoMovement::ensure_run_target(int min_dist, int max_dist, const Asset* th
   double r = radius(rng_);
   int nx = cx + static_cast<int>(std::llround(r * std::cos(a)));
   int ny = cy + static_cast<int>(std::llround(r * std::sin(a)));
-
   set_target(nx, ny, /*final_target=*/nullptr);
   mode_ = Mode::Run;
 }
 
-
-
 void AutoMovement::ensure_orbit_target(int min_radius, int max_radius, const Asset* center, int keep_direction_ratio) {
-  if (mode_ == Mode::Orbit && have_target_ && !is_target_reached()) return; // keep current waypoint
+  if (mode_ == Mode::Orbit && have_target_ && !is_target_reached()) return;
   if (!self_ || !center) return;
-
   if (max_radius < min_radius) std::swap(min_radius, max_radius);
   min_radius = std::max(0, min_radius);
   max_radius = std::max(0, max_radius);
-
   // If we were orbiting before, probabilistically keep the same direction
   // based on keep_direction_ratio/(keep_direction_ratio+1).
   if (mode_ == Mode::Orbit && orbit_params_set_) {
@@ -497,7 +450,6 @@ void AutoMovement::ensure_orbit_target(int min_radius, int max_radius, const Ass
     std::uniform_int_distribution<int> dirpick(0, 1);
     orbit_dir_ = dirpick(rng_) ? +1 : -1;
   }
-
   // Choose or clamp radius
   if (!orbit_params_set_) {
     std::uniform_int_distribution<int> rpick(min_radius, max_radius);
@@ -505,10 +457,8 @@ void AutoMovement::ensure_orbit_target(int min_radius, int max_radius, const Ass
   } else {
     orbit_radius_ = std::clamp(orbit_radius_, min_radius, max_radius);
   }
-
   const int cx = center->pos_X;
   const int cy = center->pos_Y;
-
   // Compute current angle of self relative to center (if undefined, random)
   int vx = self_->pos_X - cx;
   int vy = self_->pos_Y - cy;
@@ -521,23 +471,18 @@ void AutoMovement::ensure_orbit_target(int min_radius, int max_radius, const Ass
     }
     orbit_params_set_ = true;
   }
-
   // Advance along the orbit by a small angular step scaled by typical move length.
   double step_len = std::max(1.0, std::sqrt(static_cast<double>(min_move_len2())));
   double dtheta = step_len / std::max(1, orbit_radius_);
   // Add a small floor to avoid extremely tiny steps on large radii
-  if (dtheta < 0.08) dtheta = 0.08; // ~4.6 degrees
-
+  if (dtheta < 0.08) dtheta = 0.08;
   double next_angle = orbit_angle_ + static_cast<double>(orbit_dir_) * dtheta;
   int nx = cx + static_cast<int>(std::llround(std::cos(next_angle) * orbit_radius_));
   int ny = cy + static_cast<int>(std::llround(std::sin(next_angle) * orbit_radius_));
-
   set_target(nx, ny, /*final_target=*/nullptr);
   mode_ = Mode::Orbit;
   orbit_angle_ = next_angle;
 }
-
-
 
 void AutoMovement::ensure_patrol_target(const std::vector<Area::Point>& waypoints,
                                         bool loop,
@@ -545,18 +490,15 @@ void AutoMovement::ensure_patrol_target(const std::vector<Area::Point>& waypoint
 {
   if (!self_) return;
   if (waypoints.empty()) return;
-
   // If already on patrol and not yet reached current target, keep it.
   if (mode_ == Mode::Patrol && have_target_ && !is_target_reached()) return;
-
   // If reached current target, honor hold timer
   if (mode_ == Mode::Patrol && have_target_ && is_target_reached()) {
     if (patrol_hold_left_ > 0) {
       patrol_hold_left_ -= 1;
-      return; // still holding position
+      return;
     }
   }
-
   // Initialize or refresh points when first entering patrol
   if (!patrol_initialized_ || patrol_points_.size() != waypoints.size()) {
     patrol_points_ = waypoints;
@@ -566,17 +508,15 @@ void AutoMovement::ensure_patrol_target(const std::vector<Area::Point>& waypoint
     patrol_hold_left_ = patrol_hold_frames_;
     patrol_initialized_ = true;
   }
-
   // Advance to the next waypoint if we were already on one and reached it
   if (mode_ == Mode::Patrol && have_target_ && is_target_reached()) {
     if (patrol_loop_) {
       patrol_index_ = (patrol_index_ + 1) % patrol_points_.size();
     } else if (patrol_index_ + 1 < patrol_points_.size()) {
       patrol_index_ += 1;
-    } // else stay at the last point
+    }
     patrol_hold_left_ = patrol_hold_frames_;
   }
-
   // Select current waypoint as target
   Area::Point wp = patrol_points_[patrol_index_];
   int nx = wp.first;
@@ -585,8 +525,6 @@ void AutoMovement::ensure_patrol_target(const std::vector<Area::Point>& waypoint
   mode_ = Mode::Patrol;
 }
 
-
-
 void AutoMovement::ensure_serpentine_target(int min_stride,
                                             int max_stride,
                                             int sway,
@@ -594,20 +532,17 @@ void AutoMovement::ensure_serpentine_target(int min_stride,
                                             int keep_side_ratio)
 {
   if (!self_ || !final_target) return;
-  if (mode_ == Mode::Serpentine && have_target_ && !is_target_reached()) return; // keep it
-
+  if (mode_ == Mode::Serpentine && have_target_ && !is_target_reached()) return;
   if (max_stride < min_stride) std::swap(min_stride, max_stride);
   min_stride = std::max(0, min_stride);
   max_stride = std::max(0, max_stride);
   sway = std::max(0, sway);
-
   int cx = self_->pos_X;
   int cy = self_->pos_Y;
   int tx = final_target->pos_X;
   int ty = final_target->pos_Y;
   int vx = tx - cx;
   int vy = ty - cy;
-
   double a;
   if (vx == 0 && vy == 0) {
     std::uniform_real_distribution<double> ang(0.0, 2.0 * 3.14159265358979323846);
@@ -615,7 +550,6 @@ void AutoMovement::ensure_serpentine_target(int min_stride,
   } else {
     a = std::atan2(static_cast<double>(vy), static_cast<double>(vx));
   }
-
   // Choose or keep lateral side
   if (mode_ == Mode::Serpentine && serp_params_set_) {
     int denom = std::max(0, keep_side_ratio) + 1;
@@ -626,15 +560,12 @@ void AutoMovement::ensure_serpentine_target(int min_stride,
     std::uniform_int_distribution<int> sidepick(0, 1);
     serp_side_ = sidepick(rng_) ? +1 : -1;
   }
-
   // Choose stride length
   std::uniform_int_distribution<int> stridepick(min_stride, max_stride);
   serp_stride_ = stridepick(rng_);
-
   // Base point along direction
   double bx = static_cast<double>(cx) + static_cast<double>(serp_stride_) * std::cos(a);
   double by = static_cast<double>(cy) + static_cast<double>(serp_stride_) * std::sin(a);
-
   // Perpendicular normalized vector
   double pvx, pvy;
   if (vx == 0 && vy == 0) {
@@ -645,10 +576,8 @@ void AutoMovement::ensure_serpentine_target(int min_stride,
     pvx = -static_cast<double>(vy) / norm;
     pvy =  static_cast<double>(vx) / norm;
   }
-
   double ox = bx + static_cast<double>(serp_side_) * static_cast<double>(sway) * pvx;
   double oy = by + static_cast<double>(serp_side_) * static_cast<double>(sway) * pvy;
-
   int nx = static_cast<int>(std::llround(ox));
   int ny = static_cast<int>(std::llround(oy));
   set_target(nx, ny, /*final_target=*/final_target);

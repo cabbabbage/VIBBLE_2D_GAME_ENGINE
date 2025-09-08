@@ -8,15 +8,15 @@ static inline SDL_Color make_color(Uint8 r, Uint8 g, Uint8 b, Uint8 a = 255) {
 }
 
 // ---------- Palette (singletons) ----------
-static const SDL_Color kGold      = make_color(250,195, 73,255);  // Primary
-static const SDL_Color kGoldDim   = make_color(180,135, 40,255);  // Primary (dim)
-static const SDL_Color kTeal      = make_color( 40,110,120,255);  // Accent
-static const SDL_Color kSlate     = make_color( 28, 32, 36,230);  // Button base
-static const SDL_Color kCoal      = make_color( 12, 16, 18,255);  // Button top overlay
-static const SDL_Color kNight     = make_color(  8, 12, 18,255);  // Screen bg
-static const SDL_Color kFog       = make_color(220,220,200,255);  // Neutral light text
-static const SDL_Color kMist      = make_color(140,160,160,255);  // Muted text
-static const SDL_Color kIvory     = make_color(200,200,255,200);  // Cool light (semi)
+static const SDL_Color kGold      = make_color(250,195, 73,255);
+static const SDL_Color kGoldDim   = make_color(180,135, 40,255);
+static const SDL_Color kTeal      = make_color( 40,110,120,255);
+static const SDL_Color kSlate     = make_color( 28, 32, 36,230);
+static const SDL_Color kCoal      = make_color( 12, 16, 18,255);
+static const SDL_Color kNight     = make_color(  8, 12, 18,255);
+static const SDL_Color kFog       = make_color(220,220,200,255);
+static const SDL_Color kMist      = make_color(140,160,160,255);
+static const SDL_Color kIvory     = make_color(200,200,255,200);
 
 // ---------- Label styles ----------
 static const LabelStyle kLabelTitle{
@@ -108,11 +108,11 @@ static const ButtonStyle kExitDecoButton{
     /*label       */ kLabelExit,
     /*fill_base   */ kSlate,
     /*fill_top    */ make_color(kCoal.r, kCoal.g, kCoal.b, 200),
-    /*outline     */ kGold,            // still gold, for consistency
+    /*outline     */ kGold,
     /*outline_dim */ kGoldDim,
     /*accent      */ kTeal,
     /*glow        */ make_color(kGold.r, kGold.g, kGold.b, 45),
-    /*text_normal */ kLabelExit.color, // dimmer gold than main
+    /*text_normal */ kLabelExit.color,
     /*text_hover  */ brighten(kLabelExit.color)
 };
 

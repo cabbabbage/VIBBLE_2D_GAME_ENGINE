@@ -5,7 +5,6 @@
 #include <algorithm>
 #include <filesystem>
 #include <iostream>
-
 namespace fs = std::filesystem;
 
 Animation::Animation() = default;
@@ -24,7 +23,6 @@ void Animation::load(const std::string& trigger,
                      int& original_canvas_height)
 {
     CacheManager cache;
-
     if (anim_json.contains("source")) {
         const auto& s = anim_json["source"];
         try {
@@ -49,11 +47,6 @@ void Animation::load(const std::string& trigger,
     flipped_source = anim_json.value("flipped_source", false);
     reverse_source = anim_json.value("reverse_source", false);
     locked         = anim_json.value("locked", false);
-
-    
-    
-    
-    
     speed_factor   = anim_json.value("speed_factor", 1.0f);
     if (speed_factor < 0.0f) {
         float mag = -speed_factor;
@@ -63,11 +56,7 @@ void Animation::load(const std::string& trigger,
     loop      = anim_json.value("loop", false);
     randomize = anim_json.value("randomize", false);
     rnd_start = anim_json.value("rnd_start", false);
-
-    
     on_end_animation = anim_json.value("on_end", std::string{"default"});
-
-    
     total_dx = 0;
     total_dy = 0;
     movement.clear();
@@ -94,8 +83,6 @@ void Animation::load(const std::string& trigger,
         }
     }
     movment = !(total_dx == 0 && total_dy == 0);
-
-    
     if (source.kind == "animation" && !source.name.empty()) {
         auto it = info.animations.find(source.name);
         if (it != info.animations.end()) {
@@ -126,7 +113,6 @@ void Animation::load(const std::string& trigger,
         std::string src_folder   = dir_path + "/" + source.path;
         std::string cache_folder = root_cache + "/" + trigger;
         std::string meta_file    = cache_folder + "/metadata.json";
-
         int expected_frames = 0;
         int orig_w = 0, orig_h = 0;
         while (true) {
@@ -142,7 +128,6 @@ void Animation::load(const std::string& trigger,
             ++expected_frames;
         }
         if (expected_frames == 0) return;
-
         bool use_cache = false;
         nlohmann::json meta;
         if (cache.load_metadata(meta_file, meta)) {
@@ -154,12 +139,10 @@ void Animation::load(const std::string& trigger,
                 use_cache = true;
             }
         }
-
         std::vector<SDL_Surface*> surfaces;
         if (use_cache) {
             use_cache = cache.load_surface_sequence(cache_folder, expected_frames, surfaces);
         }
-
         if (!use_cache) {
             surfaces.clear();
             for (int i = 0; i < expected_frames; ++i) {
@@ -179,7 +162,6 @@ void Animation::load(const std::string& trigger,
                 surfaces.push_back(scaled);
             }
             cache.save_surface_sequence(cache_folder, surfaces);
-
             nlohmann::json new_meta;
             new_meta["frame_count"]     = expected_frames;
             new_meta["scale_factor"]    = scale_factor;
@@ -187,7 +169,6 @@ void Animation::load(const std::string& trigger,
             new_meta["original_height"] = orig_h;
             cache.save_metadata(meta_file, new_meta);
         }
-
         for (SDL_Surface* surf : surfaces) {
             SDL_Texture* tex = cache.surface_to_texture(renderer, surf);
             SDL_FreeSurface(surf);
@@ -197,7 +178,6 @@ void Animation::load(const std::string& trigger,
             }
             frames.push_back(tex);
         }
-
         if (flipped_source && !frames.empty()) {
             std::vector<SDL_Texture*> flipped;
             flipped.reserve(frames.size());
@@ -224,14 +204,11 @@ void Animation::load(const std::string& trigger,
             }
             frames.swap(flipped);
         }
-
         if (reverse_source && !frames.empty()) {
             std::reverse(frames.begin(), frames.end());
         }
     }
-
     number_of_frames = static_cast<int>(frames.size());
-
     if (trigger == "default" && !frames.empty()) {
         base_sprite = frames[0];
     }
@@ -249,18 +226,14 @@ bool Animation::advance(int& index,
                         bool& resort_z) const
 {
     if (frozen || frames.empty()) return false;
-
     dx = 0;
     dy = 0;
     resort_z = false;
-
     progress += speed_factor;
     bool reached_end = false;
-
     while (progress >= 1.0f) {
         progress -= 1.0f;
         ++index;
-
         if (index < number_of_frames) {
             if (index < static_cast<int>(movement.size())) {
                 dx += movement[index].dx;
@@ -269,7 +242,6 @@ bool Animation::advance(int& index,
             }
             continue;
         }
-
         if (loop && number_of_frames > 0) {
             index = 0;
             if (!movement.empty()) {
@@ -283,7 +255,6 @@ bool Animation::advance(int& index,
             break;
         }
     }
-
     return !reached_end;
 }
 

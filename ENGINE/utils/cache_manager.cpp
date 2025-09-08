@@ -1,5 +1,3 @@
-
-
 #include "cache_manager.hpp"
 #include <SDL.h>
 #include <SDL_image.h>
@@ -7,7 +5,6 @@
 #include <fstream>
 #include <filesystem>
 #include <iostream>
-
 namespace fs = std::filesystem;
 
 bool CacheManager::load_metadata(const std::string& meta_file, nlohmann::json& out_meta) {
@@ -66,12 +63,10 @@ bool CacheManager::save_surface_sequence(const std::string& folder, const std::v
 SDL_Surface* CacheManager::load_and_scale_surface(const std::string& path, float scale, int& out_w, int& out_h) {
     SDL_Surface* original = IMG_Load(path.c_str());
     if (!original) return nullptr;
-
     int new_w = static_cast<int>(original->w * scale + 0.5f);
     int new_h = static_cast<int>(original->h * scale + 0.5f);
     out_w = new_w;
     out_h = new_h;
-
     SDL_Surface* scaled = SDL_CreateRGBSurfaceWithFormat(
         0,
         new_w,
@@ -83,13 +78,11 @@ SDL_Surface* CacheManager::load_and_scale_surface(const std::string& path, float
         SDL_FreeSurface(original);
         return nullptr;
     }
-
     if (SDL_BlitScaled(original, nullptr, scaled, nullptr) < 0) {
         SDL_FreeSurface(original);
         SDL_FreeSurface(scaled);
         return nullptr;
     }
-
     SDL_FreeSurface(original);
     return scaled;
 }

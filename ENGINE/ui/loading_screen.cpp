@@ -1,11 +1,9 @@
-
 #include "loading_screen.hpp"
 #include <SDL_image.h>
 #include <fstream>
 #include <sstream>
 #include <random>
 #include <iostream>
-
 namespace fs = std::filesystem;
 
 LoadingScreen::LoadingScreen(SDL_Renderer* renderer, int screen_w, int screen_h)
@@ -67,7 +65,6 @@ void LoadingScreen::render_justified_text(TTF_Font* font, const std::string& tex
     std::vector<std::string> words; std::string w;
     while (iss >> w) words.push_back(w);
     if (words.empty()) return;
-
     int space_w; int space_h; TTF_SizeText(font, " ", &space_w, &space_h);
     std::vector<std::vector<std::string>> lines;
     std::vector<std::string> cur;
@@ -85,7 +82,6 @@ void LoadingScreen::render_justified_text(TTF_Font* font, const std::string& tex
         else{ lines.push_back(cur); cur.clear(); cur.push_back(word);}
     }
     if(!cur.empty()) lines.push_back(cur);
-
     int line_y=rect.y;
     for(auto& l:lines){
         int words_total_w=0,word_h=0; std::vector<int> ww(l.size());

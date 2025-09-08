@@ -36,13 +36,11 @@ MainMenu::~MainMenu() {
 
 void MainMenu::buildButtons() {
     buttons_.clear();
-
     const int btn_w = Button::width();
     const int btn_h = Button::height();
     const int gap   = 18;
     int y = (screen_h_ / 2) - 140;
     const int x = (screen_w_ - btn_w) / 2;
-
     try {
         if (fs::exists("MAPS") && fs::is_directory("MAPS")) {
             for (const auto& e : fs::directory_iterator("MAPS")) {
@@ -57,7 +55,6 @@ void MainMenu::buildButtons() {
     } catch (const std::exception& ex) {
         std::cerr << "[MainMenu] MAPS scan failed: " << ex.what() << "\n";
     }
-
     Button quit = Button::get_exit_button("QUIT GAME");
     quit.set_rect(SDL_Rect{ x, y + 12, btn_w, btn_h });
     buttons_.push_back(std::move(quit));
@@ -85,12 +82,10 @@ void MainMenu::render() {
         SDL_RenderClear(renderer_);
     }
     drawVignette(120);
-
     // Title
     const std::string title = "DEPARTED AFFAIRS & CO.";
     SDL_Rect trect{ 0, 60, screen_w_, 80 };
     blitTextCentered(renderer_, Styles::LabelTitle(), title, trect, /*shadow=*/true, SDL_Color{0,0,0,0});
-
     // Buttons
     for (auto& b : buttons_) {
         b.render(renderer_);
@@ -99,7 +94,6 @@ void MainMenu::render() {
 
 void MainMenu::showLoadingScreen() {
     SDL_SetRenderTarget(renderer_, nullptr);
-
     // Background (reuse same loader or current tex)
     SDL_Texture* bg = background_tex_;
     bool temp_bg = false;
@@ -111,7 +105,6 @@ void MainMenu::showLoadingScreen() {
             temp_bg = (bg != nullptr);
         }
     }
-
     // Clear and draw bg
     SDL_SetRenderDrawColor(renderer_, 0, 0, 0, 255);
     SDL_RenderClear(renderer_);
@@ -120,7 +113,6 @@ void MainMenu::showLoadingScreen() {
         SDL_RenderCopy(renderer_, bg, nullptr, &bgdst);
     }
     drawVignette(110);
-
     // Random loading set folder
     std::vector<fs::path> folders;
     if (fs::exists("loading") && fs::is_directory("loading")) {
@@ -128,7 +120,6 @@ void MainMenu::showLoadingScreen() {
             if (e.is_directory()) folders.push_back(e.path());
         }
     }
-
     SDL_Texture* tarot = nullptr;
     std::string msg;
     if (!folders.empty()) {
@@ -138,14 +129,12 @@ void MainMenu::showLoadingScreen() {
         if (!img.empty()) tarot = loadTexture(img);
         msg = pickRandomLine(folder / "messages.csv");
     }
-
     // "LOADING..." title
     const std::string loading = "LOADING...";
     SDL_Point tsize = measureText(Styles::LabelTitle(), loading);
     const int title_x = (screen_w_ - tsize.x) / 2;
     const int title_y = std::max(0, (screen_h_ / 2) - screen_h_ / 6 - tsize.y - 24);
     blitText(renderer_, Styles::LabelTitle(), loading, title_x, title_y, /*shadow=*/true, SDL_Color{0,0,0,0});
-
     // Tarot image
     if (tarot) {
         SDL_Rect dst = fitCenter(tarot, screen_w_/3, screen_h_/3, screen_w_/2, screen_h_/2);
@@ -153,7 +142,6 @@ void MainMenu::showLoadingScreen() {
         SDL_DestroyTexture(tarot);
         tarot = nullptr;
     }
-
     // Message (simple wrap)
     if (!msg.empty()) {
         const int pad = 24;
@@ -162,14 +150,12 @@ void MainMenu::showLoadingScreen() {
         const int my  = (screen_h_/2) + screen_h_/6 + pad;
         const int mh  = std::max(0, screen_h_ - my - pad);
         SDL_Rect mrect{ mx, my, mw, mh };
-
         const LabelStyle& L = Styles::LabelSmallSecondary();
         TTF_Font* f = L.open_font();
         if (f) {
             int space_w=0, line_h=0;
             TTF_SizeText(f, " ", &space_w, &line_h);
             TTF_CloseFont(f);
-
             std::istringstream iss(msg);
             std::string word, line;
             int y = mrect.y;
@@ -190,10 +176,8 @@ void MainMenu::showLoadingScreen() {
             }
         }
     }
-
     SDL_RenderPresent(renderer_);
     SDL_PumpEvents();
-
     if (temp_bg && bg) SDL_DestroyTexture(bg);
 }
 
@@ -228,7 +212,6 @@ SDL_Rect MainMenu::coverDst(SDL_Texture* tex) const {
     int tw=0, th=0;
     SDL_QueryTexture(tex, nullptr, nullptr, &tw, &th);
     if (tw<=0 || th<=0) return SDL_Rect{0,0,screen_w_,screen_h_};
-
     const double ar = double(tw)/double(th);
     int w = screen_w_;
     int h = int(w / ar);
@@ -244,7 +227,6 @@ SDL_Rect MainMenu::fitCenter(SDL_Texture* tex, int max_w, int max_h, int cx, int
     int tw=0, th=0;
     SDL_QueryTexture(tex, nullptr, nullptr, &tw, &th);
     if (tw<=0 || th<=0) return SDL_Rect{ cx - max_w/2, cy - max_h/2, max_w, max_h };
-
     const double ar = double(tw)/double(th);
     int w = max_w;
     int h = int(w / ar);
@@ -275,16 +257,12 @@ void MainMenu::blitText(SDL_Renderer* r,
     if (s.empty()) return;
     TTF_Font* f = style.open_font();
     if (!f) return;
-
     const SDL_Color coal = Styles::Coal();
     const SDL_Color col  = override_col.a ? override_col : style.color;
-
     SDL_Surface* surf_text = TTF_RenderText_Blended(f, s.c_str(), col);
     SDL_Surface* surf_shadow = shadow ? TTF_RenderText_Blended(f, s.c_str(), coal) : nullptr;
-
     if (surf_text) {
         SDL_Texture* tex_text = SDL_CreateTextureFromSurface(r, surf_text);
-
         if (surf_shadow) {
             SDL_Texture* tex_shadow = SDL_CreateTextureFromSurface(r, surf_shadow);
             if (tex_shadow) {
@@ -294,14 +272,12 @@ void MainMenu::blitText(SDL_Renderer* r,
                 SDL_DestroyTexture(tex_shadow);
             }
         }
-
         if (tex_text) {
             SDL_Rect dst { x, y, surf_text->w, surf_text->h };
             SDL_RenderCopy(r, tex_text, nullptr, &dst);
             SDL_DestroyTexture(tex_text);
         }
     }
-
     if (surf_shadow) SDL_FreeSurface(surf_shadow);
     if (surf_text)   SDL_FreeSurface(surf_text);
     TTF_CloseFont(f);

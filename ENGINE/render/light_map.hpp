@@ -1,4 +1,3 @@
-
 #pragma once
 
 #include <SDL.h>
@@ -17,7 +16,6 @@ public:
         SDL_RendererFlip flip;
         bool apply_tint;
     };
-
     LightMap(SDL_Renderer* renderer,
              Assets* assets,
              Parallax& parallax,
@@ -25,9 +23,7 @@ public:
              int screen_width,
              int screen_height,
              SDL_Texture* fullscreen_light_tex);
-
     void render(bool debugging);
-
 private:
     void collect_layers(std::vector<LightEntry>& out, std::mt19937& rng);
     SDL_Texture* build_lowres_mask(const std::vector<LightEntry>& layers,
@@ -36,7 +32,6 @@ private:
                                       int fw, int fh,
                                       float inv_scale,
                                       int min_w, int min_h);
-
 private:
     SDL_Renderer* renderer_;
     Assets* assets_;

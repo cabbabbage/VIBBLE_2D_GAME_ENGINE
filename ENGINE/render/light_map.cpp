@@ -4,7 +4,6 @@
 #include <random>
 #include <vector>
 #include <iostream>
-
 LightMap::LightMap(SDL_Renderer* renderer,
                    Assets* assets,
                    Parallax& parallax,
@@ -23,25 +22,18 @@ LightMap::LightMap(SDL_Renderer* renderer,
 
 void LightMap::render(bool debugging) {
     if (debugging) std::cout << "[render_asset_lights_z] start\n";
-
     static std::mt19937 flicker_rng{ std::random_device{}() };
     static std::vector<LightEntry> z_lights;
     z_lights.clear();
-
     collect_layers(z_lights, flicker_rng);
-
     const int downscale = 4;
     const int low_w = screen_width_  / downscale;
     const int low_h = screen_height_ / downscale;
-
     SDL_Texture* lowres_mask = build_lowres_mask(z_lights, low_w, low_h, downscale);
-
     SDL_SetTextureBlendMode(lowres_mask, SDL_BLENDMODE_MOD);
     SDL_SetRenderTarget(renderer_, nullptr);
     SDL_RenderCopy(renderer_, lowres_mask, nullptr, nullptr);
-
     SDL_DestroyTexture(lowres_mask);
-
     if (debugging) std::cout << "[render_asset_lights_z] end\n";
 }
 
@@ -49,25 +41,19 @@ void LightMap::collect_layers(std::vector<LightEntry>& out, std::mt19937& rng) {
     const float inv_scale = 1.0f / assets_->getView().get_scale();
     constexpr int min_visible_w = 1;
     constexpr int min_visible_h = 1;
-
     Uint8 main_alpha = main_light_.get_current_color().a;
-
     // Reserve to reduce reallocations
     if (out.capacity() < assets_->active_assets.size() + 3) {
         out.reserve(assets_->active_assets.size() + 3);
     }
-
     if (fullscreen_light_tex_) {
         out.push_back({ fullscreen_light_tex_, { 0, 0, screen_width_, screen_height_ },
                         static_cast<Uint8>(main_alpha / 2), SDL_FLIP_NONE, false });
     }
-
     if (SDL_Texture* map_tex = main_light_.get_texture()) {
         int lw = main_light_.get_cached_w();
         int lh = main_light_.get_cached_h();
-
         if (lw == 0 || lh == 0) SDL_QueryTexture(map_tex, nullptr, nullptr, &lw, &lh);
-
         SDL_Rect map_rect = get_scaled_position_rect(main_light_.get_position(),
                                                      lw, lh, inv_scale,
                                                      min_visible_w, min_visible_h);
@@ -75,31 +61,24 @@ void LightMap::collect_layers(std::vector<LightEntry>& out, std::mt19937& rng) {
             out.push_back({ map_tex, map_rect, main_alpha, SDL_FLIP_NONE, false });
         }
     }
-
     for (Asset* a : assets_->active_assets) {
         if (!a || !a->info || !a->info->has_light_source) continue;
-
         for (const auto& light : a->info->light_sources) {
             if (!light.texture) continue;
-
             int offX = a->flipped ? -light.offset_x : light.offset_x;
             int lw = light.cached_w, lh = light.cached_h;
             if (lw == 0 || lh == 0) SDL_QueryTexture(light.texture, nullptr, nullptr, &lw, &lh);
-
             SDL_Rect dst = get_scaled_position_rect({ a->pos_X + offX, a->pos_Y + light.offset_y },
                                                     lw, lh, inv_scale,
                                                     min_visible_w, min_visible_h);
             if (dst.w == 0 && dst.h == 0) continue;
-
             float alpha_f = static_cast<float>(main_light_.get_brightness());
             if (a == assets_->player) alpha_f *= 0.9f;
-
             if (light.flicker > 0) {
                 float intensity_scale = std::clamp(light.intensity / 255.0f, 0.0f, 1.0f);
                 float max_jitter = (light.flicker / 100.0f) * intensity_scale;
                 alpha_f *= (1.0f + std::uniform_real_distribution<float>(-max_jitter, max_jitter)(rng));
             }
-
             Uint8 alpha = static_cast<Uint8>(std::clamp(alpha_f, 0.0f, 255.0f));
             out.push_back({ light.texture, dst, alpha,
                             a->flipped ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE, true });
@@ -116,14 +95,11 @@ SDL_Texture* LightMap::build_lowres_mask(const std::vector<LightEntry>& layers,
     SDL_SetRenderDrawColor(renderer_, 0, 0, 0, 200);
     SDL_RenderClear(renderer_);
     SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_ADD);
-
     for (auto& e : layers) {
         SDL_SetTextureBlendMode(e.tex, SDL_BLENDMODE_ADD);
         SDL_SetTextureAlphaMod(e.tex, e.alpha);
-
         // Global tinting removed; always use neutral color for lights
         SDL_SetTextureColorMod(e.tex, 255, 255, 220);
-
         SDL_Rect scaled_dst{
             e.dst.x / downscale,
             e.dst.y / downscale,
@@ -132,7 +108,6 @@ SDL_Texture* LightMap::build_lowres_mask(const std::vector<LightEntry>& layers,
         };
         SDL_RenderCopyEx(renderer_, e.tex, nullptr, &scaled_dst, 0, nullptr, e.flip);
     }
-
     return lowres_mask;
 }
 
@@ -143,11 +118,8 @@ SDL_Rect LightMap::get_scaled_position_rect(const std::pair<int,int>& pos, int f
     if (sw < min_w && sh < min_h) {
         return {0, 0, 0, 0};
     }
-
-    
     SDL_Point cp = parallax_.apply(pos.first, pos.second);
     cp.x = screen_width_ / 2 + static_cast<int>((cp.x - screen_width_ / 2) * inv_scale);
     cp.y = screen_height_ / 2 + static_cast<int>((cp.y - screen_height_ / 2) * inv_scale);
-
     return SDL_Rect{ cp.x - sw / 2, cp.y - sh / 2, sw, sh };
 }
