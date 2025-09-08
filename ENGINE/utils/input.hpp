@@ -1,6 +1,6 @@
 #pragma once
 #include <SDL.h>
-#include <unordered_set>
+#include <array>
 
 class Input {
 
@@ -19,9 +19,30 @@ class Input {
     int getDY() const { return dy_; }
     int getScrollX() const { return scrollX_; }
     int getScrollY() const { return scrollY_; }
+
     bool isKeyDown(SDL_Keycode key) const { return keys_down_.count(key) != 0; }
     bool wasKeyPressed(SDL_Keycode key) const { return keys_pressed_.count(key) != 0; }
     bool wasKeyReleased(SDL_Keycode key) const { return keys_released_.count(key) != 0; }
+
+
+    // Keyboard queries
+    bool isKeyDown(SDL_Keycode key) const {
+        SDL_Scancode sc = SDL_GetScancodeFromKey(key);
+        return keys_down_[sc];
+    }
+    bool wasKeyPressed(SDL_Keycode key) const {
+        SDL_Scancode sc = SDL_GetScancodeFromKey(key);
+        return keys_pressed_[sc];
+    }
+    bool wasKeyReleased(SDL_Keycode key) const {
+        SDL_Scancode sc = SDL_GetScancodeFromKey(key);
+        return keys_released_[sc];
+    }
+
+    bool isScancodeDown(SDL_Scancode sc) const { return keys_down_[sc]; }
+    bool wasScancodePressed(SDL_Scancode sc) const { return keys_pressed_[sc]; }
+    bool wasScancodeReleased(SDL_Scancode sc) const { return keys_released_[sc]; }
+
 
 	private:
     bool buttons_[COUNT]      = {false};
@@ -32,8 +53,17 @@ class Input {
     int  x_ = 0, y_ = 0;
     int  dx_ = 0, dy_ = 0;
     int  scrollX_ = 0, scrollY_ = 0;
+
     std::unordered_set<SDL_Keycode> keys_down_;
     std::unordered_set<SDL_Keycode> prev_keys_down_;
     std::unordered_set<SDL_Keycode> keys_pressed_;
     std::unordered_set<SDL_Keycode> keys_released_;
+
+
+    // Keyboard state
+    std::array<bool, SDL_NUM_SCANCODES> keys_down_{};
+    std::array<bool, SDL_NUM_SCANCODES> prev_keys_down_{};
+    std::array<bool, SDL_NUM_SCANCODES> keys_pressed_{};
+    std::array<bool, SDL_NUM_SCANCODES> keys_released_{};
+
 };

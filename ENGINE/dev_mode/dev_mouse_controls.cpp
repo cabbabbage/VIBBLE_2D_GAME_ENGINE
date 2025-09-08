@@ -25,6 +25,7 @@ drag_last_y_(0)
 }
 
 void DevMouseControls::handle_mouse_input(const Input& input) {
+
 	if (player) {
 		parallax_.setReference(player->pos_X, player->pos_Y);
 	}
@@ -89,6 +90,91 @@ void DevMouseControls::handle_mouse_input(const Input& input) {
 	update_highlighted_assets();
 	last_mx = mx;
 	last_my = my;
+
+    // Keep parallax reference fresh for world<->screen conversions
+    if (player) {
+        parallax_.setReference(player->pos_X, player->pos_Y);
+    }
+
+    if (input.isScancodeDown(SDL_SCANCODE_ESCAPE)) {
+        selected_assets.clear();
+        highlighted_assets.clear();
+        hovered_asset = nullptr;
+        dragging_ = false;
+
+        for (Asset* a : active_assets) {
+            if (!a) continue;
+            a->set_selected(false);
+            a->set_highlighted(false);
+        }
+        return; 
+    }
+
+    if (!mouse) return;
+
+    static int last_mx = -1;
+    static int last_my = -1;
+
+    const int mx = mouse->getX();
+    const int my = mouse->getY();
+
+    
+    if (mouse->isDown(Input::LEFT) && !selected_assets.empty()) {
+        if (!dragging_) {
+            
+            dragging_ = true;
+            drag_last_x_ = mx;
+            drag_last_y_ = my;
+        } else {
+            
+            int dx = mx - drag_last_x_;
+            int dy = my - drag_last_y_;
+            if (dx != 0 || dy != 0) {
+                for (Asset* a : selected_assets) {
+                    if (!a) continue;
+                    a->pos_X += dx;
+                    a->pos_Y += dy;
+                }
+                drag_last_x_ = mx;
+                drag_last_y_ = my;
+            }
+        }
+    } else {
+        dragging_ = false; 
+    }
+
+
+
+        // Right-click to open asset selection and record spawn point
+        if (mouse->wasClicked(Input::RIGHT) && assets_) {
+            spawn_click_screen_x_ = mx;
+            spawn_click_screen_y_ = my;
+            SDL_Point wp = compute_mouse_world(mx, my);
+            spawn_world_x_ = wp.x;
+            spawn_world_y_ = wp.y;
+            waiting_spawn_selection_ = true;
+            assets_->open_asset_library();
+        }
+
+        // If waiting for selection, check if a selection was made
+        if (waiting_spawn_selection_ && assets_) {
+            if (!assets_->is_asset_library_open()) {
+                auto chosen = assets_->consume_selected_asset_from_library();
+                if (chosen) {
+                    assets_->spawn_asset(chosen->name, spawn_world_x_, spawn_world_y_);
+                }
+                waiting_spawn_selection_ = false;
+            }
+        }
+
+        handle_hover();
+        handle_click(input);
+        update_highlighted_assets();
+
+        last_mx = mx;
+        last_my = my;
+
+
 }
 
 void DevMouseControls::handle_hover() {
@@ -123,6 +209,7 @@ void DevMouseControls::handle_hover() {
 }
 
 void DevMouseControls::handle_click(const Input& input) {
+
 	if (!mouse || !player) return;
 	if (!mouse->wasClicked(Input::LEFT)) {
 		click_buffer_frames_ = 0;
@@ -170,6 +257,63 @@ void DevMouseControls::handle_click(const Input& input) {
 		last_click_asset_ = nullptr;
 		last_click_time_ms_ = 0;
 	}
+
+    if (!mouse || !player) return;
+
+    // Only handle a physical click once, even though wasClicked() spans frames
+    if (!mouse->wasClicked(Input::LEFT)) {
+        click_buffer_frames_ = 0; // allow next click when buffer ends
+        return;
+    }
+    if (click_buffer_frames_ > 0) {
+        // Suppress duplicate handling for the same physical click
+        click_buffer_frames_--;
+        return;
+    }
+    // Consume this click and suppress duplicates for a couple frames
+    click_buffer_frames_ = 2;
+
+    Asset* nearest = hovered_asset; 
+    if (nearest) {
+        const bool ctrlHeld = input.isScancodeDown(SDL_SCANCODE_LCTRL) || input.isScancodeDown(SDL_SCANCODE_RCTRL);
+        auto it = std::find(selected_assets.begin(), selected_assets.end(), nearest);
+
+        if (ctrlHeld) {
+            if (it == selected_assets.end()) {
+                selected_assets.push_back(nearest);
+            } else {
+                selected_assets.erase(it);
+            }
+        } else {
+            if (it != selected_assets.end() && selected_assets.size() == 1) {
+                selected_assets.clear(); 
+            } else {
+                selected_assets.clear();
+                selected_assets.push_back(nearest);
+            }
+        }
+
+        // Double-click detection: same asset within 300ms
+        Uint32 now = SDL_GetTicks();
+        if (last_click_asset_ == nearest && (now - last_click_time_ms_) <= 300) {
+            if (assets_ && nearest->info) {
+                assets_->open_asset_info_editor(nearest->info);
+            }
+            last_click_time_ms_ = 0;
+            last_click_asset_ = nullptr;
+        } else {
+            last_click_time_ms_ = now;
+            last_click_asset_ = nearest;
+        }
+    } else {
+        const bool ctrlHeld = input.isScancodeDown(SDL_SCANCODE_LCTRL) || input.isScancodeDown(SDL_SCANCODE_RCTRL);
+        if (!ctrlHeld) {
+            selected_assets.clear();
+        }
+        last_click_asset_ = nullptr;
+        last_click_time_ms_ = 0;
+    }
+
 }
 
 void DevMouseControls::update_highlighted_assets() {

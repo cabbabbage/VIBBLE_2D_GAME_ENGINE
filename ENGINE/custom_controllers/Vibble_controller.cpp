@@ -110,6 +110,35 @@ void DevMouseControls::handle_mouse_input(const Input& input) {
         last_mx = mx;
         last_my = my;
 
+
+void VibbleController::movement(const Input& input) {
+   dx_ = dy_ = 0;
+   if (!player_) return;
+
+   bool up    = input.isScancodeDown(SDL_SCANCODE_W);
+   bool down  = input.isScancodeDown(SDL_SCANCODE_S);
+   bool left  = input.isScancodeDown(SDL_SCANCODE_A);
+   bool right = input.isScancodeDown(SDL_SCANCODE_D);
+
+   int move_x = (right ? 1 : 0) - (left ? 1 : 0);
+   int move_y = (down  ? 1 : 0) - (up    ? 1 : 0);
+
+   const std::string current = player_->get_current_animation();
+   if (move_x == 0 && move_y == 0) {
+      if (current != "default")
+         player_->change_animation("default");
+      return;
+   }
+
+   if (!(move_x != 0 && move_y != 0)) {
+      std::string anim;
+      if      (move_y < 0) anim = "backward";
+      else if (move_y > 0) anim = "forward";
+      else if (move_x < 0) anim = "left";
+      else if (move_x > 0) anim = "right";
+      if (!anim.empty() && anim != current)
+         player_->change_animation(anim);
+   }
 }
 
 void DevMouseControls::handle_hover() {
@@ -211,6 +240,7 @@ void DevMouseControls::handle_click(const Input& input) {
     }
 }
 
+
 void DevMouseControls::update_highlighted_assets() {
     highlighted_assets = selected_assets;
     if (hovered_asset &&
@@ -241,6 +271,67 @@ void DevMouseControls::update_highlighted_assets() {
 SDL_Point DevMouseControls::compute_mouse_world(int mx_screen, int my_screen) const {
     // Inverse of parallax projection based on current player reference
     return parallax_.inverse(mx_screen, my_screen);
+  
+void VibbleController::handle_teleport(const Input& input) {
+   if (!player_) {
+      std::cerr << "[VibbleController::handle_teleport] player_ null\n";
+      return;
+   }
+
+   if (input.wasScancodePressed(SDL_SCANCODE_SPACE) && !teleport_set_) {
+      teleport_point_ = { player_->pos_X, player_->pos_Y };
+      teleport_set_ = true;
+
+      if (marker_asset_ && assets_) {
+         aam_.remove(marker_asset_);
+         marker_asset_->Delete();
+         aam_.updateClosestAssets(player_, 3);
+         marker_asset_ = nullptr;
+      }
+
+      if (assets_) {
+         static std::mt19937 rng{ std::random_device{}() };
+         std::uniform_real_distribution<float> angle(0.0f, 6.2831853f);
+
+         float a = angle(rng);
+         int r   = 30;
+         int mx  = player_->pos_X + static_cast<int>(std::round(std::cos(a) * r));
+         int my  = player_->pos_Y + static_cast<int>(std::round(std::sin(a) * r));
+
+         marker_asset_ = assets_->spawn_asset("marker", mx, my);
+      }
+   }
+
+   if (input.wasScancodePressed(SDL_SCANCODE_Q) && teleport_set_) {
+      // Teleport via Move helper using a single FrameMovement
+      Animation::FrameMovement fm;
+      fm.dx = teleport_point_.x - player_->pos_X;
+      fm.dy = teleport_point_.y - player_->pos_Y;
+      fm.sort_z_index = true;
+      Move::apply(player_, fm);
+
+      teleport_point_ = { 0, 0 };
+      teleport_set_   = false;
+
+      if (marker_asset_ && assets_) {
+         aam_.remove(marker_asset_);
+         marker_asset_;
+         aam_.updateClosestAssets(player_, 3);
+         marker_asset_ = nullptr;
+      }
+   }
+}
+
+void VibbleController::update(const Input& input) {
+   dx_ = dy_ = 0;
+   if (input.isScancodeDown(SDL_SCANCODE_SPACE) || input.isScancodeDown(SDL_SCANCODE_Q)) {
+      handle_teleport(input);
+   }
+   movement(input);
+   if (input.isScancodeDown(SDL_SCANCODE_E)) {
+      interaction();
+   }
+   if (player_) player_->update_animation_manager();
 }
 
 void DevMouseControls::purge_asset(Asset* a) {
