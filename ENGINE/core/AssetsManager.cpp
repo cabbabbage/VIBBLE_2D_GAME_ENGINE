@@ -168,11 +168,7 @@ void Assets::update(const Input& input,
             if (up && up->needs_removal()) pending.push_back(up.get());
         }
         for (Asset* a : pending) {
-            auto it = std::find_if(owned_assets.begin(), owned_assets.end(),
-                                   [a](const std::unique_ptr<Asset>& p){ return p.get() == a; });
-            if (it != owned_assets.end()) {
-                owned_assets.erase(it); // triggers Asset::~Asset to unregister itself
-            }
+            delete_asset(a);
         }
     }
 }
@@ -348,6 +344,15 @@ Asset* Assets::spawn_asset(const std::string& name, int world_x, int world_y) {
               << "' at (" << world_x << ", " << world_y << ")\n";
 
     return newAsset;
+}
+
+void Assets::delete_asset(Asset* asset) {
+    if (!asset) return;
+    auto it = std::find_if(owned_assets.begin(), owned_assets.end(),
+                           [asset](const std::unique_ptr<Asset>& p){ return p.get() == asset; });
+    if (it != owned_assets.end()) {
+        owned_assets.erase(it); // triggers Asset::~Asset to unregister itself
+    }
 }
 
 
