@@ -1,6 +1,5 @@
 #include "Asset.hpp"
 #include "controller_factory.hpp"
-#include "animation_manager.hpp"
 #include "animation.hpp"
 #include "core/AssetsManager.hpp"
 #include "view.hpp"
@@ -200,11 +199,10 @@ void Asset::finalize_setup() {
                 std::cout << "    - \"" << child->info->name
                 << "\" at (" << child->pos.x << ", " << child->pos.y << ")\n";
 	}
-	if (assets_) {
-		ControllerFactory cf(assets_, assets_->activeManager);
-		controller_ = cf.create_for_asset(this);
-	}
-	anim_ = std::make_unique<AnimationManager>(this);
+        if (assets_) {
+                ControllerFactory cf(assets_, assets_->activeManager);
+                controller_ = cf.create_for_asset(this);
+        }
 }
 
 bool Asset::get_merge(){ return merged; }
@@ -234,26 +232,27 @@ void Asset::update() {
     }
 
     if (!dead) {
-        update_animation_manager();
+        // Animation updates handled by controllers via AnimationUpdate
     }
-}
-
-
-void Asset::update_animation_manager() {
-        if (anim_) anim_->update();
 }
 
 void Asset::change_animation_now(const std::string& name) {
         if (!info || name.empty()) return;
         auto it = info->animations.find(name);
         if (it == info->animations.end()) return;
-        if (name == current_animation) return;
-        current_animation        = name;
-        Animation& anim          = it->second;
-        static_frame             = (static_cast<int>(anim.frames.size()) <= 1);
-        current_frame_index      = 0;
-        frame_progress           = 0.0f;
-        next_animation           = anim.on_end_animation;
+        current_animation = name;
+        Animation& anim   = it->second;
+        anim.change(current_frame_index, static_frame);
+        frame_progress = 0.0f;
+        if ((anim.randomize || anim.rnd_start) && anim.frames.size() > 1) {
+                std::mt19937 g{ std::random_device{}() };
+                std::uniform_int_distribution<int> d(0, int(anim.frames.size()) - 1);
+                current_frame_index = d(g);
+        }
+        next_animation.clear();
+        // Let the AnimationUpdate decide on any follow-up animation when this
+        // one finishes.  Automatically queuing the on_end animation here would
+        // immediately skip the new animation on the next update.
 }
 
 void Asset::change_animation_qued(const std::string& name) {

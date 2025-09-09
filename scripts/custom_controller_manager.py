@@ -82,6 +82,7 @@ private:
     Assets* assets_ = nullptr;           // non owning
     Asset*  self_   = nullptr;           // non owning
     ActiveAssetsManager& aam_;
+    AnimationUpdate anim_;
 }};
 """
         cpp = f"""#include "custom_controllers/{self.base_name}.hpp"
@@ -89,20 +90,20 @@ private:
 #include "asset/Asset.hpp"
 #include "core/AssetsManager.hpp"
 #include "core/active_assets_manager.hpp"
+#include "asset/animation_update.hpp"
 
 {class_name}::{class_name}(Assets* assets, Asset* self, ActiveAssetsManager& aam)
     : assets_(assets)
     , self_(self)
     , aam_(aam)
+    , anim_(self, aam, true)
 {{}}
 
 {class_name}::~{class_name}() {{}}
 
 void {class_name}::update(const Input& /*in*/) {{
-    // dummy controller; animation is handled by AnimationManager
-    (void)assets_;
-    (void)self_;
-    (void)aam_;
+    // dummy controller
+    anim_.update();
 }}
 """
         self.hpp.write_text(hpp, encoding="utf-8")

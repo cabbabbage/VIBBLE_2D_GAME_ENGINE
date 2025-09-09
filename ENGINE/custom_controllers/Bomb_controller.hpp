@@ -2,7 +2,7 @@
 #define BOMB_CONTROLLER_HPP
 
 #include "asset/asset_controller.hpp"
-#include "asset/auto_movement.hpp"
+#include "asset/animation_update.hpp"
 
 class Assets;
 class Asset;
@@ -28,7 +28,7 @@ class BombController : public AssetController {
     Assets* assets_ = nullptr;
     Asset*  self_   = nullptr;
     ActiveAssetsManager& aam_;
-    AutoMovement mover_;
+    AnimationUpdate anim_;
     int probe_              = 24;
     int follow_radius_      = 1000;
     int explosion_radius_   = 150;

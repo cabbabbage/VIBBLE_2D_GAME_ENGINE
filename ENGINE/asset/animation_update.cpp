@@ -1,6 +1,7 @@
-#include "auto_movement.hpp"
+#include "animation_update.hpp"
 #include "asset/Asset.hpp"
 #include "asset/asset_info.hpp"
+#include "animation.hpp"
 #include "core/active_assets_manager.hpp"
 #include "core/AssetsManager.hpp"
 #include "utils/area.hpp"
@@ -9,8 +10,11 @@
 #include <limits>
 #include <cmath>
 #include <algorithm>
+#include <random>
+#include <string>
+#include <iostream>
 
-AutoMovement::AutoMovement(Asset* self, ActiveAssetsManager& aam, bool confined)
+AnimationUpdate::AnimationUpdate(Asset* self, ActiveAssetsManager& aam, bool confined)
 : self_(self), aam_(aam), confined_(confined)
 {
 	std::seed_seq seed{ static_cast<unsigned>(reinterpret_cast<uintptr_t>(self) & 0xffffffffu),
@@ -20,7 +24,7 @@ AutoMovement::AutoMovement(Asset* self, ActiveAssetsManager& aam, bool confined)
 	weight_sparse_ = 0.4;
 }
 
-AutoMovement::AutoMovement(Asset* self, ActiveAssetsManager& aam, bool confined,
+AnimationUpdate::AnimationUpdate(Asset* self, ActiveAssetsManager& aam, bool confined,
                            double directness_weight, double sparsity_weight)
 : self_(self), aam_(aam), confined_(confined),
 weight_dir_(directness_weight), weight_sparse_(sparsity_weight)
@@ -30,7 +34,7 @@ weight_dir_(directness_weight), weight_sparse_(sparsity_weight)
 	rng_.seed(seed);
 }
 
-void AutoMovement::transition_mode(Mode m) {
+void AnimationUpdate::transition_mode(Mode m) {
 	if (mode_ == m) return;
 	mode_ = m;
 	have_target_ = false;
@@ -39,7 +43,7 @@ void AutoMovement::transition_mode(Mode m) {
 	if (m != Mode::Patrol) patrol_initialized_ = false;
 }
 
-SDL_Point AutoMovement::choose_balanced_target(SDL_Point desired, const Asset* final_target) const {
+SDL_Point AnimationUpdate::choose_balanced_target(SDL_Point desired, const Asset* final_target) const {
 	if (!self_) return desired;
 	const int sx = self_->pos.x;
 	const int sy = self_->pos.y;
@@ -103,39 +107,39 @@ SDL_Point AutoMovement::choose_balanced_target(SDL_Point desired, const Asset* f
 	return best;
 }
 
-void AutoMovement::set_target(SDL_Point desired, const Asset* final_target) {
+void AnimationUpdate::set_target(SDL_Point desired, const Asset* final_target) {
 	SDL_Point pick = choose_balanced_target(desired, final_target);
 	target_ = pick;
 	have_target_ = true;
 }
 
-void AutoMovement::set_weights(double directness_weight, double sparsity_weight) {
+void AnimationUpdate::set_weights(double directness_weight, double sparsity_weight) {
 	weight_dir_ = std::max(0.0, directness_weight);
 	weight_sparse_ = std::max(0.0, sparsity_weight);
 }
 
-void AutoMovement::set_idle(int min_target_distance, int max_target_distance, int rest_ratio) {
+void AnimationUpdate::set_idle(int min_target_distance, int max_target_distance, int rest_ratio) {
 	idle_min_dist_ = min_target_distance;
 	idle_max_dist_ = max_target_distance;
 	idle_rest_ratio_ = rest_ratio;
 	transition_mode(Mode::Idle);
 }
 
-void AutoMovement::set_pursue(Asset* final_target, int min_target_distance, int max_target_distance) {
+void AnimationUpdate::set_pursue(Asset* final_target, int min_target_distance, int max_target_distance) {
 	pursue_target_ = final_target;
 	pursue_min_dist_ = min_target_distance;
 	pursue_max_dist_ = max_target_distance;
 	transition_mode(Mode::Pursue);
 }
 
-void AutoMovement::set_run(Asset* threat, int min_target_distance, int max_target_distance) {
+void AnimationUpdate::set_run(Asset* threat, int min_target_distance, int max_target_distance) {
 	run_threat_ = threat;
 	run_min_dist_ = min_target_distance;
 	run_max_dist_ = max_target_distance;
 	transition_mode(Mode::Run);
 }
 
-void AutoMovement::set_orbit(Asset* center, int min_radius, int max_radius, int keep_direction_ratio) {
+void AnimationUpdate::set_orbit(Asset* center, int min_radius, int max_radius, int keep_direction_ratio) {
 	orbit_center_ = center;
 	orbit_min_radius_ = min_radius;
 	orbit_max_radius_ = max_radius;
@@ -143,7 +147,7 @@ void AutoMovement::set_orbit(Asset* center, int min_radius, int max_radius, int 
 	transition_mode(Mode::Orbit);
 }
 
-void AutoMovement::set_patrol(const std::vector<SDL_Point>& waypoints, bool loop, int hold_frames) {
+void AnimationUpdate::set_patrol(const std::vector<SDL_Point>& waypoints, bool loop, int hold_frames) {
 	patrol_points_ = waypoints;
 	patrol_loop_ = loop;
 	patrol_hold_frames_ = std::max(0, hold_frames);
@@ -151,7 +155,7 @@ void AutoMovement::set_patrol(const std::vector<SDL_Point>& waypoints, bool loop
 	transition_mode(Mode::Patrol);
 }
 
-void AutoMovement::set_serpentine(Asset* final_target, int min_stride, int max_stride, int sway, int keep_side_ratio) {
+void AnimationUpdate::set_serpentine(Asset* final_target, int min_stride, int max_stride, int sway, int keep_side_ratio) {
 	serp_target_ = final_target;
 	serp_min_stride_ = min_stride;
 	serp_max_stride_ = max_stride;
@@ -160,7 +164,7 @@ void AutoMovement::set_serpentine(Asset* final_target, int min_stride, int max_s
 	transition_mode(Mode::Serpentine);
 }
 
-void AutoMovement::move() {
+void AnimationUpdate::move() {
         if (!self_) return;
         if (self_->is_current_animation_locked_in_progress()) {
                 return;
@@ -172,41 +176,54 @@ void AutoMovement::move() {
                         std::uniform_int_distribution<int> pick(0, denom - 1);
                         bool choose_rest = (pick(rng_) != 0);
                         std::string next_anim = pick_best_animation_towards(target_);
-                        if (!choose_rest && !next_anim.empty()) {
-                                self_->change_animation_qued(next_anim);
-                        } else {
-                                self_->change_animation_qued("default");
+                        const std::string cur = self_->get_current_animation();
+                        if (self_->next_animation.empty()) {
+                                if (!choose_rest && !next_anim.empty() && next_anim != cur) {
+                                        self_->change_animation_qued(next_anim);
+                                } else if (cur != "default") {
+                                        self_->change_animation_qued("default");
+                                }
                         }
                         break;
                 }
                 case Mode::Pursue: {
                         ensure_pursue_target(pursue_min_dist_, pursue_max_dist_, pursue_target_);
                         std::string next_anim = pick_best_animation_towards(target_);
-                        self_->change_animation_qued(next_anim);
+                        if (self_->next_animation.empty() && !next_anim.empty() && next_anim != self_->get_current_animation()) {
+                                self_->change_animation_qued(next_anim);
+                        }
                         break;
                 }
                 case Mode::Run: {
                         ensure_run_target(run_min_dist_, run_max_dist_, run_threat_);
                         std::string next_anim = pick_best_animation_towards(target_);
-                        self_->change_animation_qued(next_anim);
+                        if (self_->next_animation.empty() && !next_anim.empty() && next_anim != self_->get_current_animation()) {
+                                self_->change_animation_qued(next_anim);
+                        }
                         break;
                 }
                 case Mode::Orbit: {
                         ensure_orbit_target(orbit_min_radius_, orbit_max_radius_, orbit_center_, orbit_keep_ratio_);
                         std::string next_anim = pick_best_animation_towards(target_);
-                        self_->change_animation_qued(next_anim);
+                        if (self_->next_animation.empty() && !next_anim.empty() && next_anim != self_->get_current_animation()) {
+                                self_->change_animation_qued(next_anim);
+                        }
                         break;
                 }
                 case Mode::Patrol: {
                         ensure_patrol_target(patrol_points_, patrol_loop_, patrol_hold_frames_);
                         std::string next_anim = pick_best_animation_towards(target_);
-                        self_->change_animation_qued(next_anim);
+                        if (self_->next_animation.empty() && !next_anim.empty() && next_anim != self_->get_current_animation()) {
+                                self_->change_animation_qued(next_anim);
+                        }
                         break;
                 }
                 case Mode::Serpentine: {
                         ensure_serpentine_target(serp_min_stride_, serp_max_stride_, serp_sway_, serp_target_, serp_keep_ratio_);
                         std::string next_anim = pick_best_animation_towards(target_);
-                        self_->change_animation_qued(next_anim);
+                        if (self_->next_animation.empty() && !next_anim.empty() && next_anim != self_->get_current_animation()) {
+                                self_->change_animation_qued(next_anim);
+                        }
                         break;
                 }
                 case Mode::None:
@@ -215,7 +232,7 @@ void AutoMovement::move() {
         }
 }
 
-bool AutoMovement::can_move_by(int dx, int dy) const {
+bool AnimationUpdate::can_move_by(int dx, int dy) const {
 	if (!self_ || !self_->info) return false;
 	int test_x = self_->pos.x + dx;
 	int test_y = self_->pos.y + dy - self_->info->z_threshold;
@@ -229,7 +246,7 @@ bool AutoMovement::can_move_by(int dx, int dy) const {
 	return true;
 }
 
-bool AutoMovement::would_overlap_same_or_player(int dx, int dy) const {
+bool AnimationUpdate::would_overlap_same_or_player(int dx, int dy) const {
     if (!self_ || !self_->info) return true;
 
     SDL_Point new_pos{ self_->pos.x + dx, self_->pos.y + dy };
@@ -253,7 +270,7 @@ bool AutoMovement::would_overlap_same_or_player(int dx, int dy) const {
 }
 
 
-std::string AutoMovement::pick_best_animation_towards(SDL_Point target) const {
+std::string AnimationUpdate::pick_best_animation_towards(SDL_Point target) const {
 	if (!self_ || !self_->info) return {};
 	const auto& all = self_->info->animations;
 	if (all.empty()) return {};
@@ -278,7 +295,7 @@ std::string AutoMovement::pick_best_animation_towards(SDL_Point target) const {
 }
 
 
-void AutoMovement::clamp_to_room(int& x, int& y) const {
+void AnimationUpdate::clamp_to_room(int& x, int& y) const {
 	if (!confined_) return;
 	if (!self_) return;
 	Assets* assets = self_->get_assets();
@@ -290,7 +307,7 @@ void AutoMovement::clamp_to_room(int& x, int& y) const {
 	if (y > maxy) y = maxy;
 }
 
-int AutoMovement::min_move_len2() const {
+int AnimationUpdate::min_move_len2() const {
         if (cached_min_move_len2_ >= 0) return cached_min_move_len2_;
         cached_min_move_len2_ = std::numeric_limits<int>::max();
         if (!self_ || !self_->info) { cached_min_move_len2_ = 1; return cached_min_move_len2_; }
@@ -306,7 +323,7 @@ int AutoMovement::min_move_len2() const {
         return cached_min_move_len2_;
 }
 
-bool AutoMovement::is_target_reached() {
+bool AnimationUpdate::is_target_reached() {
     if (!self_) return true;
     double d = Range::get_distance(SDL_Point{ self_->pos.x, self_->pos.y }, target_);
     bool reached = d <= std::sqrt(static_cast<double>(min_move_len2()));
@@ -340,7 +357,7 @@ bool AutoMovement::is_target_reached() {
 }
 
 
-void AutoMovement::ensure_idle_target(int min_dist, int max_dist) {
+void AnimationUpdate::ensure_idle_target(int min_dist, int max_dist) {
 	if (mode_ == Mode::Idle && have_target_ && !is_target_reached()) return;
 	int cx = self_ ? self_->pos.x : 0;
 	int cy = self_ ? self_->pos.y : 0;
@@ -357,7 +374,7 @@ void AutoMovement::ensure_idle_target(int min_dist, int max_dist) {
 	mode_ = Mode::Idle;
 }
 
-void AutoMovement::ensure_pursue_target(int min_dist, int max_dist, const Asset* final_target) {
+void AnimationUpdate::ensure_pursue_target(int min_dist, int max_dist, const Asset* final_target) {
 	if (mode_ == Mode::Pursue && have_target_ && !is_target_reached()) return;
 	if (!self_ || !final_target) return;
 	if (max_dist < min_dist) std::swap(min_dist, max_dist);
@@ -378,7 +395,7 @@ void AutoMovement::ensure_pursue_target(int min_dist, int max_dist, const Asset*
 	mode_ = Mode::Pursue;
 }
 
-void AutoMovement::ensure_run_target(int min_dist, int max_dist, const Asset* threat) {
+void AnimationUpdate::ensure_run_target(int min_dist, int max_dist, const Asset* threat) {
 	if (mode_ == Mode::Run && have_target_ && !is_target_reached()) return;
 	if (!self_ || !threat) return;
 	if (max_dist < min_dist) std::swap(min_dist, max_dist);
@@ -403,7 +420,7 @@ void AutoMovement::ensure_run_target(int min_dist, int max_dist, const Asset* th
 	mode_ = Mode::Run;
 }
 
-void AutoMovement::ensure_orbit_target(int min_radius, int max_radius, const Asset* center, int keep_direction_ratio) {
+void AnimationUpdate::ensure_orbit_target(int min_radius, int max_radius, const Asset* center, int keep_direction_ratio) {
 	if (mode_ == Mode::Orbit && have_target_ && !is_target_reached()) return;
 	if (!self_ || !center) return;
 	if (max_radius < min_radius) std::swap(min_radius, max_radius);
@@ -448,7 +465,7 @@ void AutoMovement::ensure_orbit_target(int min_radius, int max_radius, const Ass
 	orbit_angle_ = next_angle;
 }
 
-void AutoMovement::ensure_patrol_target(const std::vector<SDL_Point>& waypoints,
+void AnimationUpdate::ensure_patrol_target(const std::vector<SDL_Point>& waypoints,
                                         bool loop,
                                         int hold_frames)
 {
@@ -484,7 +501,7 @@ void AutoMovement::ensure_patrol_target(const std::vector<SDL_Point>& waypoints,
 	mode_ = Mode::Patrol;
 }
 
-void AutoMovement::ensure_serpentine_target(int min_stride,
+void AnimationUpdate::ensure_serpentine_target(int min_stride,
                                             int max_stride,
                                             int sway,
                                             const Asset* final_target,
@@ -536,6 +553,94 @@ void AutoMovement::ensure_serpentine_target(int min_stride,
 	int nx = static_cast<int>(std::llround(ox));
 	int ny = static_cast<int>(std::llround(oy));
 	set_target(SDL_Point{nx, ny}, final_target);
-	mode_ = Mode::Serpentine;
-	serp_params_set_ = true;
+        mode_ = Mode::Serpentine;
+        serp_params_set_ = true;
+}
+
+void AnimationUpdate::update() {
+    if (!self_ || !self_->info) return;
+
+    if (!self_->next_animation.empty()) {
+        const std::string next = self_->next_animation;
+
+        if (next == self_->current_animation) {
+            auto it = self_->info->animations.find(self_->current_animation);
+            if (it != self_->info->animations.end()) {
+                Animation& anim = it->second;
+                anim.change(self_->current_frame_index, self_->static_frame);
+                self_->frame_progress = 0.0f;
+                if ((anim.randomize || anim.rnd_start) && anim.frames.size() > 1) {
+                    std::mt19937 g{ std::random_device{}() };
+                    std::uniform_int_distribution<int> d(0, int(anim.frames.size()) - 1);
+                    self_->current_frame_index = d(g);
+                }
+            }
+            self_->next_animation.clear();
+        } else if (next == "end") {
+            std::cout << "End called for " << (self_->info ? self_->info->name : std::string("<unknown>")) << "\n";
+            self_->next_animation.clear();
+            self_->Delete();
+            return;
+        } else if (next == "freeze_on_last") {
+            auto it = self_->info->animations.find(self_->current_animation);
+            if (it != self_->info->animations.end()) {
+                const Animation& curr = it->second;
+                const int last = static_cast<int>(curr.frames.size()) - 1;
+                if (self_->current_frame_index >= last) {
+                    self_->static_frame = true;
+                    self_->next_animation.clear();
+                    return;
+                }
+            }
+        } else {
+            auto nit = self_->info->animations.find(next);
+            if (nit != self_->info->animations.end()) {
+                self_->current_animation = next;
+                Animation& anim = nit->second;
+                anim.change(self_->current_frame_index, self_->static_frame);
+                self_->frame_progress = 0.0f;
+                if ((anim.randomize || anim.rnd_start) && anim.frames.size() > 1) {
+                    std::mt19937 g{ std::random_device{}() };
+                    std::uniform_int_distribution<int> d(0, int(anim.frames.size()) - 1);
+                    self_->current_frame_index = d(g);
+                }
+            }
+            self_->next_animation.clear();
+        }
+    }
+
+    auto it = self_->info->animations.find(self_->current_animation);
+    if (it == self_->info->animations.end()) return;
+
+    Animation& anim = it->second;
+
+    if (self_->static_frame) {
+        if (self_->next_animation.empty() && !anim.on_end_animation.empty()) {
+            self_->next_animation = anim.on_end_animation;
+        }
+        return;
+    }
+
+    int dx = 0;
+    int dy = 0;
+    bool resort_z = false;
+
+    const bool advanced = anim.advance(self_->current_frame_index,
+                                       self_->frame_progress,
+                                       dx, dy, resort_z);
+
+    self_->pos.x += dx;
+    self_->pos.y += dy;
+
+    if (!advanced && !anim.loop && self_->next_animation.empty() &&
+        !anim.on_end_animation.empty()) {
+        self_->next_animation = anim.on_end_animation;
+    }
+
+    if ((dx != 0 || dy != 0) && resort_z) {
+        self_->set_z_index();
+        if (Assets* as = self_->get_assets()) {
+            as->activeManager.sortByZIndex();
+        }
+    }
 }

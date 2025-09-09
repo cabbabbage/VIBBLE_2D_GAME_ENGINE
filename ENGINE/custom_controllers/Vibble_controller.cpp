@@ -14,7 +14,7 @@
 #include <string>
 
 VibbleController::VibbleController(Assets* assets, Asset* player, ActiveAssetsManager& aam)
-    : assets_(assets), player_(player), aam_(aam) {}
+    : assets_(assets), player_(player), aam_(aam), anim_(player, aam, true) {}
 
 int VibbleController::get_dx() const { return dx_; }
 int VibbleController::get_dy() const { return dy_; }
@@ -54,8 +54,8 @@ void VibbleController::movement(const Input& input) {
 
     const std::string current = player_->get_current_animation();
     if (move_x == 0 && move_y == 0) {
-        if (current != "default")
-            player_->change_animation_now("default");
+        if (current != "default" && player_->next_animation.empty())
+            player_->change_animation_qued("default");
         return;
     }
 
@@ -65,8 +65,8 @@ void VibbleController::movement(const Input& input) {
         else if (move_y > 0) anim = "forward";
         else if (move_x < 0) anim = "left";
         else if (move_x > 0) anim = "right";
-        if (!anim.empty() && anim != current)
-            player_->change_animation_now(anim);
+        if (!anim.empty() && anim != current && player_->next_animation.empty())
+            player_->change_animation_qued(anim);
     }
 }
 
@@ -78,5 +78,6 @@ void VibbleController::update(const Input& input) {
     dx_ = dy_ = 0;
     movement(input);
     interaction();
+    anim_.update();
 }
 

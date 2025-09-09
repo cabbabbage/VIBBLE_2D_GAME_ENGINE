@@ -2,6 +2,7 @@
 #define VIBBLE_CONTROLLER_HPP
 
 #include "asset/asset_controller.hpp"
+#include "asset/animation_update.hpp"
 #include <SDL.h>
 
 class Assets;
@@ -31,6 +32,7 @@ class VibbleController : public AssetController {
     Assets* assets_ = nullptr;
     Asset*  player_ = nullptr;
     ActiveAssetsManager& aam_;
+    AnimationUpdate anim_;
     int dx_ = 0;
     int dy_ = 0;
     SDL_Point teleport_point_{};
