@@ -229,7 +229,6 @@ Area* AssetInfo::find_area(const std::string& name) {
 	}
 	return nullptr;
 }
-
 void AssetInfo::upsert_area_from_editor(const Area& area) {
 	bool found = false;
 	for (auto& na : areas) {
@@ -256,8 +255,8 @@ void AssetInfo::upsert_area_from_editor(const Area& area) {
 	int offset_y = (scaled_canvas_h - 0);
 	nlohmann::json points = nlohmann::json::array();
 	for (const auto& p : area.get_points()) {
-		double rel_x = (static_cast<double>(p.first)  - static_cast<double>(offset_x)) / static_cast<double>(scale);
-		double rel_y = (static_cast<double>(p.second) - static_cast<double>(offset_y)) / static_cast<double>(scale);
+		double rel_x = (static_cast<double>(p.x) - static_cast<double>(offset_x)) / static_cast<double>(scale);
+		double rel_y = (static_cast<double>(p.y) - static_cast<double>(offset_y)) / static_cast<double>(scale);
 		points.push_back({ rel_x, rel_y });
 	}
 	bool json_found = false;
@@ -276,6 +275,7 @@ void AssetInfo::upsert_area_from_editor(const Area& area) {
 		info_json_["areas"].push_back(std::move(entry));
 	}
 }
+
 
 std::string AssetInfo::pick_next_animation(const std::string& mapping_id) const {
 	auto it = mappings.find(mapping_id);

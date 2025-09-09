@@ -8,7 +8,6 @@
 #include <SDL.h>
 #include <limits>
 
-#include "animation_manager.hpp"
 
 #include "utils/area.hpp"
 #include "asset_info.hpp"
@@ -21,13 +20,14 @@
 class view;
 class Assets;
 class Input;
+class AnimationUpdate;
 
 struct StaticLight {
-	LightSource* source = nullptr;
-	int offset_x = 0;
-	int offset_y = 0;
-	double alpha_percentage = 1.0;
+    LightSource* source = nullptr;
+    SDL_Point offset{0, 0};
+    double alpha_percentage = 1.0;
 };
+
 
 class Asset {
 
@@ -35,8 +35,7 @@ class Asset {
     Area get_area(const std::string& name) const;
     Asset(std::shared_ptr<AssetInfo> info,
           const Area& spawn_area,
-          int start_pos_X,
-          int start_pos_Y,
+          SDL_Point start_pos,
           int depth,
           Asset* parent = nullptr,
           const std::string& spawn_id = std::string{},
@@ -47,10 +46,10 @@ class Asset {
     Asset& operator=(Asset&&) noexcept = default;
     ~Asset();
     void finalize_setup();
-    void set_position(int x, int y);
+    void set_position(SDL_Point p);
     void update();
-    void change_animation(const std::string& name);
-    void update_animation_manager();
+    void change_animation_now(const std::string& name);
+    void change_animation_qued(const std::string& name);
     SDL_Texture* get_current_frame() const;
     std::string get_current_animation() const;
     std::string get_type() const;
@@ -59,7 +58,7 @@ class Asset {
     bool is_current_animation_looping() const;
     void add_child(Asset* child);
     inline const std::vector<Asset*>& get_children() const { return children; }
-    void add_static_light_source(LightSource* light, int world_x, int world_y, Asset* owner);
+    void add_static_light_source(LightSource* light, SDL_Point world, Asset* owner);
     void set_render_player_light(bool value);
     bool get_render_player_light() const;
     void set_z_offset(int z);
@@ -67,9 +66,10 @@ class Asset {
     void set_shading_group(int x);
     bool is_shading_group_set() const;
     int  get_shading_group() const;
+    int   current_frame_index = 0;
     SDL_Texture* get_final_texture() const;
     void set_final_texture(SDL_Texture* tex);
-    void set_screen_position(int sx, int sy);
+    void set_screen_position(SDL_Point s);
     inline int get_screen_x() const { return screen_X; }
     inline int get_screen_y() const { return screen_Y; }
     void set_view(view* v) { window = v; }
@@ -87,8 +87,7 @@ class Asset {
     Asset* parent = nullptr;
     std::shared_ptr<AssetInfo> info;
     std::string current_animation;
-    int pos_X = 0;
-    int pos_Y = 0;
+    SDL_Point pos{0, 0};
     int screen_X = 0;
     int screen_Y = 0;
     int z_index = 0;
@@ -100,8 +99,6 @@ class Asset {
     bool flipped = false;
     bool render_player_light = false;
     double alpha_percentage = 1.0;
-    // Squared distance from this asset to the player. Storing the squared
-    // value avoids expensive square root calculations every frame.
     float distance_to_player_sq = std::numeric_limits<float>::infinity();
     Area spawn_area_local;
     std::vector<Area> base_areas;
@@ -117,9 +114,9 @@ class Asset {
     int cached_h = 0;
     std::string spawn_id;
     std::string spawn_method;
-
+    std::string next_animation;
 	private:
-    friend class AnimationManager;
+    friend class AnimationUpdate;
     friend class Move;
     view* window = nullptr;
     bool highlighted = false;
@@ -128,8 +125,7 @@ class Asset {
     bool selected = false;
     void set_flip();
     void set_z_index();
-    std::string next_animation;
-    int   current_frame_index = 0;
+
     float frame_progress = 0.0f;
     int  shading_group = 0;
     bool shading_group_set = false;
@@ -137,7 +133,6 @@ class Asset {
     std::unordered_map<std::string, std::vector<SDL_Texture*>> custom_frames;
     Assets* assets_ = nullptr;
     std::unique_ptr<AssetController>   controller_;
-    std::unique_ptr<AnimationManager>  anim_;
 };
 
 #endif

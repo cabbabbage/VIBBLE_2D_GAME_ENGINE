@@ -25,7 +25,6 @@ class view {
     SDL_Rect to_world_rect(int cx, int cy) const;
     Area get_view_area(int cx, int cy) const;
     bool is_point_in_bounds(int x, int y, int cx, int cy) const;
-    bool is_asset_in_bounds(const Asset& a, int cx, int cy) const;
     void zoom_scale(double target_scale, int duration_steps);
     void zoom_bounds(const Bounds& target_bounds, int duration_steps);
     void update();

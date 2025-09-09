@@ -5,6 +5,7 @@
 #include <string>
 #include <unordered_map>
 #include <vector>
+#include <SDL.h>
 #include "asset/Asset.hpp"
 #include "utils/area.hpp"
 #include "asset/asset_info.hpp"
@@ -21,13 +22,12 @@ class SpawnLogger;
 class SpawnContext {
 
 	public:
-    using Point = std::pair<int, int>;
+    using Point = SDL_Point;
     SpawnContext(std::mt19937& rng, Check& checker, SpawnLogger& logger, std::vector<Area>& exclusion_zones, std::unordered_map<std::string, std::shared_ptr<AssetInfo>>& asset_info_library, std::vector<std::unique_ptr<Asset>>& all, AssetLibrary* asset_library);
     Asset* spawnAsset(const std::string& name,
                       const std::shared_ptr<AssetInfo>& info,
                       const Area& area,
-                      int x,
-                      int y,
+                      SDL_Point pos,
                       int depth,
                       Asset* parent,
                       const std::string& spawn_id = std::string{},

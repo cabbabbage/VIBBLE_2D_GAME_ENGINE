@@ -4,35 +4,15 @@
 #include <vector>
 #include <string>
 #include <filesystem>
+#include <SDL.h>
 #include "asset/asset_info.hpp"
 #include "asset/asset_library.hpp"
 #include "utils/area.hpp"
+#include "spawn_info.hpp"
 
 constexpr double REPRESENTATIVE_SPAWN_AREA = 4096.0 * 4096.0;
 
-struct SpawnInfo {
-	std::string name;
-	std::string position;
-	std::string spawn_id;
-	int exact_dx = 0;
-	int exact_dy = 0;
-	int exact_origin_w = 0;
-	int exact_origin_h = 0;
-	int quantity = 0;
-	int grid_spacing = 0;
-	int jitter = 0;
-	int empty_grid_spaces = 0;
-	int ep_x = -1;
-	int ep_y = -1;
-	int border_shift = 0;
-	int sector_center = 0;
-	int sector_range = 0;
-	int perimeter_x_offset = 0;
-	int perimeter_y_offset = 0;
-	bool check_overlap = false;
-	bool check_min_spacing = false;
-	std::shared_ptr<AssetInfo> info;
-};
+
 
 struct BatchSpawnInfo {
 	std::string name;

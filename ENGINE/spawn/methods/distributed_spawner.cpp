@@ -1,7 +1,7 @@
 #include "distributed_spawner.hpp"
 #include <algorithm>
 #include <random>
-#include "utils/spawn_context.hpp"
+#include "spawn_context.hpp"
 #include "check.hpp"
 #include "asset_spawn_planner.hpp"
 #include "asset/asset_info.hpp"
@@ -22,10 +22,10 @@ void DistributedSpawner::spawn(const SpawnInfo& item, const Area* area, SpawnCon
 			int cy = y + std::uniform_int_distribution<int>(-jitter, jitter)(ctx.rng());
 			++attempts;
 			if (std::uniform_int_distribution<int>(0, 99)(ctx.rng()) < item.empty_grid_spaces) continue;
-			if (!area->contains_point({cx, cy})) continue;
-			if (ctx.checker().check(item.info, cx, cy, ctx.exclusion_zones(), ctx.all_assets(),
+                        if (!area->contains_point(SDL_Point{cx, cy})) continue;
+                        if (ctx.checker().check(item.info, SDL_Point{cx, cy}, ctx.exclusion_zones(), ctx.all_assets(),
        true, false, true, 5)) continue;
-			ctx.spawnAsset(item.name, item.info, *area, cx, cy, 0, nullptr, item.spawn_id, item.position);
+                        ctx.spawnAsset(item.name, item.info, *area, SDL_Point{cx, cy}, 0, nullptr, item.spawn_id, item.position);
 			++placed;
 			ctx.logger().progress(item.info, placed, item.quantity);
 		}

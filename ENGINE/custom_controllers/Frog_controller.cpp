@@ -1,7 +1,7 @@
 #include "Frog_controller.hpp"
 #include "utils/input.hpp"
 #include "asset/Asset.hpp"
-#include "asset/auto_movement.hpp"
+#include "asset/animation_update.hpp"
 #include "asset/move.hpp"
 #include "utils/area.hpp"
 #include "core/active_assets_manager.hpp"
@@ -14,7 +14,7 @@ FrogController::FrogController(Assets* assets, Asset* self, ActiveAssetsManager&
 : assets_(assets),
 self_(self),
 aam_(aam),
-mover_(self, aam, true)
+anim_(self, aam, true)
 {
 	rng_seed_ ^= reinterpret_cast<uintptr_t>(self_) + 0x9e3779b9u;
 	frames_until_think_ = rand_range(think_interval_min_, think_interval_max_);
@@ -23,27 +23,26 @@ mover_(self, aam, true)
 FrogController::~FrogController() {}
 
 void FrogController::update(const Input& ) {
-	updated_by_determine_ = false;
-	if (self_ && self_->info) {
-		constexpr double pi = 3.14159265358979323846;
-		if (pursue_frames_left_ <= 0) {
-			int angle_deg = rand_range(0, 359);
-			double theta = (static_cast<double>(angle_deg) * pi) / 180.0;
+        if (self_ && self_->info) {
+                constexpr double pi = 3.14159265358979323846;
+                if (pursue_frames_left_ <= 0) {
+                        int angle_deg = rand_range(0, 359);
+                        double theta = (static_cast<double>(angle_deg) * pi) / 180.0;
 			int radius = 30;
-			pursue_target_x_ = self_->pos_X + static_cast<int>(std::llround(radius * std::cos(theta)));
-			pursue_target_y_ = self_->pos_Y + static_cast<int>(std::llround(radius * std::sin(theta)));
+			pursue_target_x_ = self_->pos.x + static_cast<int>(std::llround(radius * std::cos(theta)));
+			pursue_target_y_ = self_->pos.y + static_cast<int>(std::llround(radius * std::sin(theta)));
 			pursue_frames_left_ = pursue_recalc_interval_;
 		} else {
 			pursue_frames_left_ -= 1;
-		}
-		if (frames_until_think_ > 0) {
-			frames_until_think_ -= 1;
-		} else {
-			think();
-			frames_until_think_ = rand_range(think_interval_min_, think_interval_max_);
-		}
-	}
-	if (self_ && !updated_by_determine_) self_->update_animation_manager();
+                }
+                if (frames_until_think_ > 0) {
+                        frames_until_think_ -= 1;
+                } else {
+                        think();
+                        frames_until_think_ = rand_range(think_interval_min_, think_interval_max_);
+                }
+        }
+    anim_.update();
 }
 
 void FrogController::think() {
@@ -51,42 +50,41 @@ void FrogController::think() {
 	const std::string cur = self_->get_current_animation();
 	if (coin(55)) {
 		if (cur != "default") {
-			if (has_anim("default")) {
-					self_->change_animation("default");
-			} else {
-			}
+                        if (has_anim("default") && self_->next_animation.empty()) {
+                                        self_->change_animation_qued("default");
+                        } else {
+                        }
 		} else {
 		}
 		return;
 	}
 	if (!try_hop_any_dir()) {
 		if (cur != "default") {
-			if (has_anim("default")) {
-					self_->change_animation("default");
-			} else {
-			}
+                        if (has_anim("default") && self_->next_animation.empty()) {
+                                        self_->change_animation_qued("default");
+                        } else {
+                        }
 		} else {
 		}
 	}
 }
 
 bool FrogController::try_hop_any_dir() {
-	if (!self_) return false;
-	const std::string before = self_->get_current_animation();
-	mover_.set_idle(0, 30, 3);
-	mover_.move();
-	updated_by_determine_ = true;
-	const std::string after = self_->get_current_animation();
-	if (after != before) {
-		return true;
-	}
-	return false;
+        if (!self_) return false;
+        const std::string before = self_->get_current_animation();
+        anim_.set_idle(0, 30, 3);
+        anim_.move();
+        const std::string after = self_->get_current_animation();
+        if (after != before) {
+                return true;
+        }
+        return false;
 }
 
 bool FrogController::canMove(int offset_x, int offset_y) {
 	if (!self_ || !self_->info) return false;
-	int test_x = self_->pos_X + offset_x;
-	int test_y = self_->pos_Y + offset_y - self_->info->z_threshold;
+	int test_x = self_->pos.x + offset_x;
+	int test_y = self_->pos.y + offset_y - self_->info->z_threshold;
 	for (Asset* a : aam_.getImpassableClosest()) {
 		if (!a || a == self_) continue;
 		Area obstacle = a->get_area("passability");

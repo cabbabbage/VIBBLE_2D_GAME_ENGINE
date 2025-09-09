@@ -1,7 +1,7 @@
 #include "distributed_batch_spawner.hpp"
 #include <random>
 #include <unordered_map>
-#include "utils/spawn_context.hpp"
+#include "spawn_context.hpp"
 #include "check.hpp"
 #include "asset_spawn_planner.hpp"
 #include "asset/asset_info.hpp"
@@ -33,7 +33,7 @@ void DistributedBatchSpawner::spawn(const std::vector<BatchSpawnInfo>& items,
 		for (int y = miny; y <= maxy; y += spacing) {
 			int cx = x + jitter_dist(ctx.rng());
 			int cy = y + jitter_dist(ctx.rng());
-			if (!area->contains_point({cx, cy})) continue;
+                        if (!area->contains_point(SDL_Point{cx, cy})) continue;
 			std::vector<int> weights;
 			for (const auto& item : items) weights.push_back(item.percent);
 			std::discrete_distribution<int> picker(weights.begin(), weights.end());
@@ -42,8 +42,8 @@ void DistributedBatchSpawner::spawn(const std::vector<BatchSpawnInfo>& items,
 			auto it = ctx.info_library().find(selected.name);
 			if (it == ctx.info_library().end()) continue;
 			auto& info = it->second;
-			if (ctx.checker().check(info, cx, cy, ctx.exclusion_zones(), ctx.all_assets(), true, false, true, 5)) continue;
-			ctx.spawnAsset(selected.name, info, *area, cx, cy, 0, nullptr, spawn_id, std::string("DistributedBatch"));
+                        if (ctx.checker().check(info, SDL_Point{cx, cy}, ctx.exclusion_zones(), ctx.all_assets(), true, false, true, 5)) continue;
+                        ctx.spawnAsset(selected.name, info, *area, SDL_Point{cx, cy}, 0, nullptr, spawn_id, std::string("DistributedBatch"));
 			++placed_quantities[selected.name];
 		}
 	}

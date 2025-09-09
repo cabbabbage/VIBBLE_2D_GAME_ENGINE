@@ -1,38 +1,41 @@
 #include "perimeter_spawner.hpp"
 #include <cmath>
 #include <vector>
-#include "utils/spawn_context.hpp"
+#include <algorithm>
+#include <SDL.h>
+#include "spawn_context.hpp"
 #include "check.hpp"
 #include "asset_spawn_planner.hpp"
 #include "asset/asset_info.hpp"
 #include "utils/area.hpp"
 #include "spawn_logger.hpp"
+
 void PerimeterSpawner::spawn(const SpawnInfo& item, const Area* area, SpawnContext& ctx) {
 	if (!item.info || item.quantity <= 0 || !area) return;
-	using Point = std::pair<int,int>;
+        using Point = SDL_Point;
 	const int Y_SHIFT = 200;
 	const auto& boundary = area->get_points();
 	if (boundary.size() < 2) return;
 	double cx = 0.0, cy = 0.0;
-	for (const auto& pt : boundary) { cx += pt.first; cy += pt.second; }
+        for (const auto& pt : boundary) { cx += pt.x; cy += pt.y; }
 	cx /= boundary.size();
 	cy /= boundary.size();
 	double shift_ratio = 1.0 - (item.border_shift / 100.0);
 	std::vector<Point> contracted;
 	contracted.reserve(boundary.size());
-	for (const auto& pt : boundary) {
-		double dx = pt.first - cx;
-		double dy = pt.second - cy;
-		int new_x = static_cast<int>(std::round(cx + dx * shift_ratio));
-		int new_y = static_cast<int>(std::round(cy + dy * shift_ratio)) - Y_SHIFT;
-		contracted.emplace_back(new_x, new_y);
-	}
+        for (const auto& pt : boundary) {
+                double dx = pt.x - cx;
+                double dy = pt.y - cy;
+                int new_x = static_cast<int>(std::round(cx + dx * shift_ratio));
+                int new_y = static_cast<int>(std::round(cy + dy * shift_ratio)) - Y_SHIFT;
+                contracted.push_back(Point{new_x, new_y});
+        }
 	std::vector<double> segment_lengths;
 	double total_length = 0.0;
 	for (size_t i = 0; i < contracted.size(); ++i) {
-		const Point& a = contracted[i];
-		const Point& b = contracted[(i + 1) % contracted.size()];
-		double len = std::hypot(b.first - a.first, b.second - a.second);
+                const Point& a = contracted[i];
+                const Point& b = contracted[(i + 1) % contracted.size()];
+                double len = std::hypot(b.x - a.x, b.y - a.y);
 		segment_lengths.push_back(len);
 		total_length += len;
 	}
@@ -50,12 +53,12 @@ void PerimeterSpawner::spawn(const SpawnInfo& item, const Area* area, SpawnConte
 			dist_accum += segment_lengths[seg_index++];
 		}
 		if (seg_index >= segment_lengths.size()) break;
-		const Point& p1 = contracted[seg_index];
-		const Point& p2 = contracted[(seg_index + 1) % contracted.size()];
-		double t = (target - dist_accum) / segment_lengths[seg_index];
-		int x = static_cast<int>(std::round(p1.first + t * (p2.first - p1.first)));
-		int y = static_cast<int>(std::round(p1.second + t * (p2.second - p1.second)));
-		double angle = std::atan2(y - (cy - Y_SHIFT), x - cx) * 180.0 / M_PI;
+                const Point& p1 = contracted[seg_index];
+                const Point& p2 = contracted[(seg_index + 1) % contracted.size()];
+                double t = (target - dist_accum) / segment_lengths[seg_index];
+                int x = static_cast<int>(std::round(p1.x + t * (p2.x - p1.x)));
+                int y = static_cast<int>(std::round(p1.y + t * (p2.y - p1.y)));
+                double angle = std::atan2(y - (cy - Y_SHIFT), x - cx) * 180.0 / M_PI;
 		if (angle < 0) angle += 360;
 		int angle_start = angle_center - angle_range / 2;
 		int angle_end   = angle_center + angle_range / 2;
@@ -66,12 +69,12 @@ void PerimeterSpawner::spawn(const SpawnInfo& item, const Area* area, SpawnConte
 			within_sector = (angle >= angle_start && angle <= angle_end);
 		}
 		if (!within_sector) continue;
-		x += item.perimeter_x_offset;
-		y += item.perimeter_y_offset;
+		x += item.perimeter_offset.x;
+		y += item.perimeter_offset.y;
 		++attempts;
-		if (ctx.checker().check(item.info, x, y, ctx.exclusion_zones(), ctx.all_assets(),
+                if (ctx.checker().check(item.info, SDL_Point{ x, y }, ctx.exclusion_zones(), ctx.all_assets(),
       item.check_overlap, false, false, 5)) continue;
-		ctx.spawnAsset(item.name, item.info, *area, x, y, 0, nullptr, item.spawn_id, item.position);
+                ctx.spawnAsset(item.name, item.info, *area, SDL_Point{x, y}, 0, nullptr, item.spawn_id, item.position);
 		++placed;
 		ctx.logger().progress(item.info, placed, item.quantity);
 	}

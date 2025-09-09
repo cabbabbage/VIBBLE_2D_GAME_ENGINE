@@ -14,11 +14,11 @@ Slider::Slider(const std::string& label, int min_val, int max_val)
 Slider::Slider(const std::string& label, int min_val, int max_val, int current_val)
 : label_(label), min_(std::min(min_val, max_val)), max_(std::max(min_val, max_val))
 {
-	value_ = std::max(min_, std::min(max_, current_val));
+        value_ = std::max(min_, std::min(max_, current_val));
 }
 
-void Slider::set_position(int x, int y) {
-	rect_.x = x; rect_.y = y;
+void Slider::set_position(SDL_Point p) {
+        rect_.x = p.x; rect_.y = p.y;
 }
 
 void Slider::set_rect(const SDL_Rect& r) { rect_ = r; }

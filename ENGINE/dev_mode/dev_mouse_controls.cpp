@@ -28,7 +28,7 @@ DevMouseControls::DevMouseControls(Input* m,
 
 void DevMouseControls::handle_mouse_input(const Input& input) {
     if (player) {
-        parallax_.setReference(player->pos_X, player->pos_Y);
+        parallax_.setReference(player->pos.x, player->pos.y);
     }
 
     if (input.isScancodeDown(SDL_SCANCODE_ESCAPE)) {
@@ -64,8 +64,8 @@ void DevMouseControls::handle_mouse_input(const Input& input) {
             if (dx != 0 || dy != 0) {
                 for (Asset* a : selected_assets) {
                     if (!a) continue;
-                    a->pos_X += dx;
-                    a->pos_Y += dy;
+                    a->pos.x += dx;
+                    a->pos.y += dy;
                 }
                 drag_last_x_ = mx;
                 drag_last_y_ = my;
@@ -91,7 +91,7 @@ void DevMouseControls::handle_mouse_input(const Input& input) {
         if (!assets_->is_asset_library_open()) {
             auto chosen = assets_->consume_selected_asset_from_library();
             if (chosen) {
-                assets_->spawn_asset(chosen->name, spawn_world_x_, spawn_world_y_);
+                assets_->spawn_asset(chosen->name, SDL_Point{spawn_world_x_, spawn_world_y_});
             }
             waiting_spawn_selection_ = false;
         }
@@ -111,7 +111,7 @@ void DevMouseControls::handle_hover() {
     const int mx = mouse->getX();
     const int my = mouse->getY();
 
-    parallax_.setReference(player->pos_X, player->pos_Y);
+    parallax_.setReference(player->pos.x, player->pos.y);
 
     Asset* nearest = nullptr;
     float nearest_d2 = std::numeric_limits<float>::max();
@@ -121,7 +121,7 @@ void DevMouseControls::handle_hover() {
         const std::string& t = a->info->type;
         if (t == "Boundary" || t == "boundary" || t == "Texture") continue;
 
-        SDL_Point scr = parallax_.apply(a->pos_X, a->pos_Y);
+        SDL_Point scr = parallax_.apply(a->pos.x, a->pos.y);
         float dx = float(mx - scr.x);
         float dy = float(my - scr.y);
         float d2 = dx * dx + dy * dy;

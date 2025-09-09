@@ -45,7 +45,7 @@ namespace {
 					Uint8 a = getA(x, y);
 					if (a == 0) continue;
 					if (getA(x - 1, y) == 0 || getA(x + 1, y) == 0 || getA(x, y - 1) == 0 || getA(x, y + 1) == 0) {
-								out.emplace_back(x, y);
+								out.emplace_back(SDL_Point{ x, y });
 					}
 			}
 		}
@@ -224,8 +224,8 @@ namespace {
 					std::vector<SDL_Point> pts;
 					pts.reserve(initial_area->get_points().size() + 1);
 					for (const auto& p : initial_area->get_points()) {
-								int sx = off_x + static_cast<int>(std::round((p.first - origin_x) * view_scale));
-								int sy = off_y + static_cast<int>(std::round((p.second - origin_y) * view_scale));
+								int sx = off_x + static_cast<int>(std::round((p.x - origin_x) * view_scale));
+								int sy = off_y + static_cast<int>(std::round((p.y - origin_y) * view_scale));
 								pts.push_back(SDL_Point{ sx, sy });
 					}
 					if (!pts.empty()) {
@@ -289,11 +289,11 @@ Area::Area(const std::string& name, const Area& base, SDL_Renderer* renderer,
 	int pivot_y = er.bg_h;
 	points.clear();
 	points.reserve(er.points.size());
-	for (const auto& p : er.points) {
-		points.emplace_back(p.first, p.second);
-	}
-	pos_X = pivot_x;
-	pos_Y = pivot_y;
+        for (const auto& p : er.points) {
+                points.emplace_back(SDL_Point{ p.x, p.y });
+        }
+        pos.x = pivot_x;
+        pos.y = pivot_y;
 	update_geometry_data();
 }
 
@@ -310,10 +310,10 @@ Area::Area(const std::string& name, SDL_Texture* background, SDL_Renderer* rende
 	int pivot_y = er.bg_h;
 	points.clear();
 	points.reserve(er.points.size());
-	for (const auto& p : er.points) {
-		points.emplace_back(p.first, p.second);
-	}
-	pos_X = pivot_x;
-	pos_Y = pivot_y;
+        for (const auto& p : er.points) {
+                points.emplace_back(SDL_Point{ p.x, p.y });
+        }
+        pos.x = pivot_x;
+        pos.y = pivot_y;
 	update_geometry_data();
 }

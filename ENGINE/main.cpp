@@ -55,7 +55,7 @@ void MainApp::setup() {
 			if (a.info && a.info->type == "Player") { player_ptr = &a; break; }
 		}
 		if (!player_ptr) throw std::runtime_error("[Main] No player asset found");
-		game_assets_ = new Assets(std::move(all_assets), *loader_->getAssetLibrary(), player_ptr, loader_->getRooms(), screen_w_, screen_h_, player_ptr->pos_X, player_ptr->pos_Y, static_cast<int>(loader_->getMapRadius() * 1.2), renderer_, map_path_);
+		game_assets_ = new Assets(std::move(all_assets), *loader_->getAssetLibrary(), player_ptr, loader_->getRooms(), screen_w_, screen_h_, player_ptr->pos.x, player_ptr->pos.y, static_cast<int>(loader_->getMapRadius() * 1.2), renderer_, map_path_);
 		input_ = new Input();
 		game_assets_->set_input(input_);
 	} catch (const std::exception& e) {
@@ -77,8 +77,8 @@ void MainApp::game_loop() {
 			if (game_assets_) game_assets_->handle_sdl_event(e);
 		}
 		if (game_assets_ && game_assets_->player) {
-			const int px = game_assets_->player->pos_X;
-			const int py = game_assets_->player->pos_Y;
+			const int px = game_assets_->player->pos.x;
+			const int py = game_assets_->player->pos.y;
 			game_assets_->update(*input_, px, py);
 		}
 		++frame_count;

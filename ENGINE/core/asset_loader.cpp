@@ -19,14 +19,14 @@ namespace {
 	Asset* findCenterAsset(const std::vector<Asset*>& group) {
 		if (group.empty()) return nullptr;
 		double avgX = std::accumulate(group.begin(), group.end(), 0.0,
-		[](double sum, Asset* a) { return sum + a->pos_X; }) / group.size();
+		[](double sum, Asset* a) { return sum + a->pos.x; }) / group.size();
 		double avgY = std::accumulate(group.begin(), group.end(), 0.0,
-		[](double sum, Asset* a) { return sum + a->pos_Y; }) / group.size();
+		[](double sum, Asset* a) { return sum + a->pos.y; }) / group.size();
 		Asset* center = group.front();
 		double bestDistSq = std::numeric_limits<double>::infinity();
 		for (auto* a : group) {
-			double dx = a->pos_X - avgX;
-			double dy = a->pos_Y - avgY;
+			double dx = a->pos.x - avgX;
+			double dy = a->pos.y - avgY;
 			double distSq = dx * dx + dy * dy;
 			if (distSq < bestDistSq) {
 					bestDistSq = distSq;
@@ -100,10 +100,10 @@ std::vector<std::vector<Asset*>> AssetLoader::group_neighboring_assets(
 	};
 	for (Asset* a : assets) {
 		if (!a) continue;
-		int tx = a->pos_X / tile_width;
-		int ty = a->pos_Y / tile_height;
-		if (a->pos_X < 0 && a->pos_X % tile_width != 0) tx -= 1;
-		if (a->pos_Y < 0 && a->pos_Y % tile_height != 0) ty -= 1;
+		int tx = a->pos.x / tile_width;
+		int ty = a->pos.y / tile_height;
+		if (a->pos.x < 0 && a->pos.x % tile_width != 0) tx -= 1;
+		if (a->pos.y < 0 && a->pos.y % tile_height != 0) ty -= 1;
 		tile_map[make_tile_key(tx, ty)].push_back(a);
 	}
 	std::vector<std::vector<Asset*>> groups;
@@ -137,7 +137,7 @@ std::vector<Asset*> AssetLoader::collectDistantAssets(int fade_start_distance, i
 			}
 			bool is_inside = false;
 			for (const Area& zone : allZones) {
-					if (zone.contains_point({asset->pos_X, asset->pos_Y})) {
+					if (zone.contains_point({asset->pos.x, asset->pos.y})) {
 								is_inside = true;
 								break;
 					}
@@ -150,14 +150,14 @@ std::vector<Asset*> AssetLoader::collectDistantAssets(int fade_start_distance, i
 													auto [x1, y1] = pts[i];
 													auto [x2, y2] = pts[(i + 1) % pts.size()];
 													double vx = x2 - x1, vy = y2 - y1;
-													double wx = asset->pos_X - x1, wy = asset->pos_Y - y1;
+													double wx = asset->pos.x - x1, wy = asset->pos.y - y1;
 													double len2 = vx * vx + vy * vy;
 													double t = len2 > 0.0 ? (vx * wx + vy * wy) / len2 : 0.0;
 													t = std::clamp(t, 0.0, 1.0);
 													double projx = x1 + t * vx;
 													double projy = y1 + t * vy;
-                                                                                                       double dx = projx - asset->pos_X;
-                                                                                                       double dy = projy - asset->pos_Y;
+                                                                                                       double dx = projx - asset->pos.x;
+                                                                                                       double dy = projy - asset->pos.y;
                                                                                                        double distSq = dx * dx + dy * dy;
                                                                                                        minDistSq = std::min(minDistSq, distSq);
                                                                }

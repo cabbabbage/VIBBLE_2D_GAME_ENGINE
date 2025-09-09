@@ -2,7 +2,7 @@
 #define FROG_CONTROLLER_HPP
 
 #include "asset/asset_controller.hpp"
-#include "asset/auto_movement.hpp"
+#include "asset/animation_update.hpp"
 
 class Assets;
 class Asset;
@@ -32,12 +32,11 @@ class FrogController : public AssetController {
     Assets* assets_ = nullptr;
     Asset*  self_   = nullptr;
     ActiveAssetsManager& aam_;
-    AutoMovement mover_;
+    AnimationUpdate anim_;
     int frames_until_think_ = 0;
     int think_interval_min_ = 45;
     int think_interval_max_ = 150;
     int probe_ = 24;
-    bool updated_by_determine_ = false;
     unsigned int rng_seed_ = 0xC0FFEEu;
     int pursue_target_x_ = 0;
     int pursue_target_y_ = 0;

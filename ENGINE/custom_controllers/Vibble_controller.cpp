@@ -6,7 +6,6 @@
 #include "utils/input.hpp"
 #include "utils/area.hpp"
 #include "asset/move.hpp"
-#include "asset/animation_manager.hpp"
 
 #include <SDL.h>
 #include <algorithm>
@@ -15,7 +14,7 @@
 #include <string>
 
 VibbleController::VibbleController(Assets* assets, Asset* player, ActiveAssetsManager& aam)
-    : assets_(assets), player_(player), aam_(aam) {}
+    : assets_(assets), player_(player), aam_(aam), anim_(player, aam, true) {}
 
 int VibbleController::get_dx() const { return dx_; }
 int VibbleController::get_dy() const { return dy_; }
@@ -27,9 +26,9 @@ bool VibbleController::aabb(const Area& A, const Area& B) const {
              a_maxy < b_miny || b_maxy < a_miny);
 }
 
-bool VibbleController::pointInAABB(int x, int y, const Area& B) const {
+bool VibbleController::pointInAABB(SDL_Point p, const Area& B) const {
     auto [b_minx, b_miny, b_maxx, b_maxy] = B.get_bounds();
-    return (x >= b_minx && x <= b_maxx && y >= b_miny && y <= b_maxy);
+    return (p.x >= b_minx && p.x <= b_maxx && p.y >= b_miny && p.y <= b_maxy);
 }
 
 bool VibbleController::canMove(int, int) {
@@ -55,8 +54,8 @@ void VibbleController::movement(const Input& input) {
 
     const std::string current = player_->get_current_animation();
     if (move_x == 0 && move_y == 0) {
-        if (current != "default")
-            player_->change_animation("default");
+        if (current != "default" && player_->next_animation.empty())
+            player_->change_animation_qued("default");
         return;
     }
 
@@ -66,8 +65,8 @@ void VibbleController::movement(const Input& input) {
         else if (move_y > 0) anim = "forward";
         else if (move_x < 0) anim = "left";
         else if (move_x > 0) anim = "right";
-        if (!anim.empty() && anim != current)
-            player_->change_animation(anim);
+        if (!anim.empty() && anim != current && player_->next_animation.empty())
+            player_->change_animation_qued(anim);
     }
 }
 
@@ -79,7 +78,6 @@ void VibbleController::update(const Input& input) {
     dx_ = dy_ = 0;
     movement(input);
     interaction();
-    // Update player's animation manager if present
-    if (player_) player_->update_animation_manager();
+    anim_.update();
 }
 

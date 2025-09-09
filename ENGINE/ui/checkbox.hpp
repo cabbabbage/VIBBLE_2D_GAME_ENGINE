@@ -7,7 +7,7 @@ class Checkbox {
 
 	public:
     Checkbox(const std::string& label, bool value);
-    void set_position(int x, int y);
+    void set_position(SDL_Point p);
     void set_rect(const SDL_Rect& r);
     const SDL_Rect& rect() const;
     void set_label(const std::string& s);

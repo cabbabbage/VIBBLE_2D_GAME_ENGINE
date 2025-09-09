@@ -14,6 +14,7 @@
 #include "asset_spawn_planner.hpp"
 #include "spawn_logger.hpp"
 #include "check.hpp"
+#include "spawn_info.hpp"
 
 class AssetSpawner {
 

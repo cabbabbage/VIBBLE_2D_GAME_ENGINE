@@ -9,8 +9,8 @@ bool Range::xy(const Asset* a, double& x, double& y) {
  x = 0.0;
   y = 0.0;
    if (!a) return false;
-    x = static_cast<double>(a->pos_X);
-     y = static_cast<double>(a->pos_Y);
+    x = static_cast<double>(a->pos.x);
+     y = static_cast<double>(a->pos.y);
       return true;
 }
 

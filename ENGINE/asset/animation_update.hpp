@@ -3,42 +3,43 @@
 #include <string>
 #include <random>
 #include <vector>
+#include <SDL.h>
 #include "utils/area.hpp"
 
 class Asset;
 class ActiveAssetsManager;
 
-class AutoMovement {
+class AnimationUpdate {
 
 	public:
-    AutoMovement(Asset* self, ActiveAssetsManager& aam, bool confined);
-    AutoMovement(Asset* self, ActiveAssetsManager& aam, bool confined, double directness_weight, double sparsity_weight);
+    AnimationUpdate(Asset* self, ActiveAssetsManager& aam, bool confined);
+    AnimationUpdate(Asset* self, ActiveAssetsManager& aam, bool confined, double directness_weight, double sparsity_weight);
     void set_idle(int min_target_distance, int max_target_distance, int rest_ratio);
     void set_pursue(Asset* final_target, int min_target_distance, int max_target_distance);
     void set_run(Asset* threat, int min_target_distance, int max_target_distance);
     void set_orbit(Asset* center, int min_radius, int max_radius, int keep_direction_ratio);
-    void set_patrol(const std::vector<Area::Point>& waypoints, bool loop, int hold_frames);
+    void set_patrol(const std::vector<SDL_Point>& waypoints, bool loop, int hold_frames);
     void set_serpentine(Asset* final_target, int min_stride, int max_stride, int sway, int keep_side_ratio);
     void move();
+    void update();
     void set_weights(double directness_weight, double sparsity_weight);
-    void set_target(int desired_x, int desired_y, const Asset* final_target);
-    inline void set_traget(int desired_x, int desired_y, const Asset* final_target) { set_target(desired_x, desired_y, final_target); }
+    void set_target(SDL_Point desired, const Asset* final_target);
+    inline void set_traget(int desired_x, int desired_y, const Asset* final_target) { set_target(SDL_Point{ desired_x, desired_y }, final_target); }
 
 	private:
     enum class Mode { None, Idle, Pursue, Run, Orbit, Patrol, Serpentine };
     bool can_move_by(int dx, int dy) const;
     bool would_overlap_same_or_player(int dx, int dy) const;
-    std::string pick_best_animation_towards(int target_x, int target_y) const;
-    std::string pick_least_movement_animation() const;
+    std::string pick_best_animation_towards(SDL_Point target) const;
     void ensure_idle_target(int min_dist, int max_dist);
     void ensure_pursue_target(int min_dist, int max_dist, const Asset* final_target);
     void ensure_run_target(int min_dist, int max_dist, const Asset* threat);
     void ensure_orbit_target(int min_radius, int max_radius, const Asset* center, int keep_direction_ratio);
-    void ensure_patrol_target(const std::vector<Area::Point>& waypoints, bool loop, int hold_frames);
+    void ensure_patrol_target(const std::vector<SDL_Point>& waypoints, bool loop, int hold_frames);
     void ensure_serpentine_target(int min_stride, int max_stride, int sway, const Asset* final_target, int keep_side_ratio);
-    Area::Point choose_balanced_target(int desired_x, int desired_y, const Asset* final_target) const;
+    SDL_Point choose_balanced_target(SDL_Point desired, const Asset* final_target) const;
     void transition_mode(Mode m);
-    bool is_target_reached() const;
+    bool is_target_reached();
     int  min_move_len2() const;
     void clamp_to_room(int& x, int& y) const;
 
@@ -48,7 +49,7 @@ class AutoMovement {
     bool confined_ = true;
     Mode mode_ = Mode::None;
     bool have_target_ = false;
-    Area::Point target_ {0, 0};
+    SDL_Point target_ {0, 0};
     mutable int cached_min_move_len2_ = -1;
     std::mt19937 rng_;
     double weight_dir_ = 0.6;
@@ -57,7 +58,7 @@ class AutoMovement {
     double orbit_angle_ = 0.0;
     int    orbit_radius_ = 0;
     bool   orbit_params_set_ = false;
-    std::vector<Area::Point> patrol_points_;
+    std::vector<SDL_Point> patrol_points_;
     std::size_t patrol_index_ = 0;
     bool patrol_loop_ = true;
     int  patrol_hold_frames_ = 0;

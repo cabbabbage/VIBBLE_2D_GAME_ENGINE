@@ -61,7 +61,7 @@ class Assets {
     bool dev_mode = false;
     AssetLibrary& library_;
     bool suppress_render_ = false;
-    Asset* spawn_asset(const std::string& name, int world_x, int world_y);
+    Asset* spawn_asset(const std::string& name, SDL_Point world_pos);
 
 	public:
     void render_overlays(SDL_Renderer* renderer);
@@ -84,7 +84,7 @@ class Assets {
     void process_removals();
 
 	private:
-    void addAsset(const std::string& name, int gx, int gy);
+    void addAsset(const std::string& name, SDL_Point g);
     friend class SceneRenderer;
     friend class Asset;
 };

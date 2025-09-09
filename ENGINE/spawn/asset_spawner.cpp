@@ -1,6 +1,6 @@
 #include "asset_spawner.hpp"
 #include "asset_spawn_planner.hpp"
-#include "utils/spawn_context.hpp"
+#include "spawn_context.hpp"
 #include "methods/exact_spawner.hpp"
 #include "methods/center_spawner.hpp"
 #include "methods/random_spawner.hpp"

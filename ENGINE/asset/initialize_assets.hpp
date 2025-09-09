@@ -3,6 +3,7 @@
 #include <vector>
 #include <memory>
 #include <unordered_set>
+#include <SDL.h>
 
 class Assets;
 class Asset;
@@ -17,6 +18,6 @@ class InitializeAssets {
     static void setup_shading_groups(Assets& assets);
     static void setup_static_sources(Assets& assets);
     static void set_shading_group_recursive(Asset& asset, int group, int );
-    static void collect_assets_in_range(const Asset* asset, int cx, int cy, int r2, std::vector<Asset*>& result);
+    static void collect_assets_in_range(const Asset* asset, SDL_Point center, int radius, std::vector<Asset*>& result);
     static void find_player(Assets& assets);
 };
