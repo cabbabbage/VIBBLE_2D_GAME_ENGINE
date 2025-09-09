@@ -30,8 +30,8 @@ void FrogController::update(const Input& ) {
 			int angle_deg = rand_range(0, 359);
 			double theta = (static_cast<double>(angle_deg) * pi) / 180.0;
 			int radius = 30;
-			pursue_target_x_ = self_->pos_X + static_cast<int>(std::llround(radius * std::cos(theta)));
-			pursue_target_y_ = self_->pos_Y + static_cast<int>(std::llround(radius * std::sin(theta)));
+			pursue_target_x_ = self_->pos.x + static_cast<int>(std::llround(radius * std::cos(theta)));
+			pursue_target_y_ = self_->pos.y + static_cast<int>(std::llround(radius * std::sin(theta)));
 			pursue_frames_left_ = pursue_recalc_interval_;
 		} else {
 			pursue_frames_left_ -= 1;
@@ -85,8 +85,8 @@ bool FrogController::try_hop_any_dir() {
 
 bool FrogController::canMove(int offset_x, int offset_y) {
 	if (!self_ || !self_->info) return false;
-	int test_x = self_->pos_X + offset_x;
-	int test_y = self_->pos_Y + offset_y - self_->info->z_threshold;
+	int test_x = self_->pos.x + offset_x;
+	int test_y = self_->pos.y + offset_y - self_->info->z_threshold;
 	for (Asset* a : aam_.getImpassableClosest()) {
 		if (!a || a == self_) continue;
 		Area obstacle = a->get_area("passability");

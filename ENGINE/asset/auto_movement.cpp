@@ -4,15 +4,13 @@
 #include "core/active_assets_manager.hpp"
 #include "core/AssetsManager.hpp"
 #include "utils/area.hpp"
+#include "utils/range_util.hpp"
+#include <SDL.h>
 #include <limits>
 #include <cmath>
 #include <algorithm>
+
 namespace {
-	static inline long long dist2(int x1, int y1, int x2, int y2) {
-		long long dx = static_cast<long long>(x1) - static_cast<long long>(x2);
-		long long dy = static_cast<long long>(y1) - static_cast<long long>(y2);
-		return dx*dx + dy*dy;
-	}
 	static inline Area dm_get_collision_area(Asset* a) {
 		Area area = a->get_area("collision");
 		if (area.get_points().empty()) area = a->get_area("clickable");
@@ -49,20 +47,19 @@ void AutoMovement::transition_mode(Mode m) {
 	if (m != Mode::Patrol) patrol_initialized_ = false;
 }
 
-Area::Point AutoMovement::choose_balanced_target(int desired_x, int desired_y, const Asset* final_target) const {
-	if (!self_) return { desired_x, desired_y };
-	const int sx = self_->pos_X;
-	const int sy = self_->pos_Y;
-	int ax = desired_x;
-	int ay = desired_y;
-	if (final_target) { ax = final_target->pos_X; ay = final_target->pos_Y; }
-	double fvx = static_cast<double>(ax - sx);
-	double fvy = static_cast<double>(ay - sy);
+SDL_Point AutoMovement::choose_balanced_target(SDL_Point desired, const Asset* final_target) const {
+	if (!self_) return desired;
+	const int sx = self_->pos.x;
+	const int sy = self_->pos.y;
+	SDL_Point aim = desired;
+	if (final_target) { aim.x = final_target->pos.x; aim.y = final_target->pos.y; }
+	double fvx = static_cast<double>(aim.x - sx);
+	double fvy = static_cast<double>(aim.y - sy);
 	double flen = std::sqrt(fvx*fvx + fvy*fvy);
 	if (flen > 1e-6) { fvx /= flen; fvy /= flen; }
 	else { fvx = 1.0; fvy = 0.0; }
-	int dx0 = desired_x - sx;
-	int dy0 = desired_y - sy;
+	int dx0 = desired.x - sx;
+	int dy0 = desired.y - sy;
 	double base_angle = std::atan2(static_cast<double>(dy0), static_cast<double>(dx0));
 	double base_radius = std::sqrt(static_cast<double>(dx0*dx0 + dy0*dy0));
 	if (base_radius < 1.0) base_radius = 1.0;
@@ -74,9 +71,9 @@ Area::Point AutoMovement::choose_balanced_target(int desired_x, int desired_y, c
 	if (neighbors.empty()) for (Asset* a : active) neighbors.push_back(a);
 	static const double ang_offsets[] = { -0.6, -0.4, -0.25, -0.12, 0.0, 0.12, 0.25, 0.4, 0.6 };
 	static const double rad_scales[]  = { 0.9, 1.0, 1.1 };
-	Area::Point best = { desired_x, desired_y };
+	SDL_Point best = desired;
 	double best_cost = std::numeric_limits<double>::infinity();
-	const double rline = std::max(1.0, std::sqrt(static_cast<double>((ax - sx)*(ax - sx) + (ay - sy)*(ay - sy))));
+	const double rline = std::max(1.0, Range::get_distance(SDL_Point{sx, sy}, aim));
 	const double sparse_cap = 300.0;
 	const double w_dir = std::max(0.0, weight_dir_);
 	const double w_sparse = std::max(0.0, weight_sparse_);
@@ -88,34 +85,34 @@ Area::Point AutoMovement::choose_balanced_target(int desired_x, int desired_y, c
 			int cy = sy + static_cast<int>(std::llround(rr * std::sin(ang)));
 			int px = cx, py = cy;
 			clamp_to_room(px, py);
-			double d_dir = std::sqrt(static_cast<double>((px - ax)*(px - ax) + (py - ay)*(py - ay)));
+			double d_dir = Range::get_distance(SDL_Point{px, py}, aim);
 			double dir_norm = d_dir / rline;
 			double sum = 0.0; int cnt = 0;
 			for (Asset* n : neighbors) {
-					if (!n || n == self_) continue;
-					if (final_target && n == final_target) continue;
-					if (!n->info) continue;
-					if (n->info->has_tag("ground")) continue;
-					int nx = n->pos_X, ny = n->pos_Y;
-					double rvx = static_cast<double>(nx - sx);
-					double rvy = static_cast<double>(ny - sy);
-					double dot = rvx*fvx + rvy*fvy;
-					if (dot <= 0.0) continue;
-					double d = std::sqrt(static_cast<double>((px - nx)*(px - nx) + (py - ny)*(py - ny)));
-					sum += std::min(d, sparse_cap);
-					cnt += 1;
+				if (!n || n == self_) continue;
+				if (final_target && n == final_target) continue;
+				if (!n->info) continue;
+				if (n->info->has_tag("ground")) continue;
+				int nx = n->pos.x, ny = n->pos.y;
+				double rvx = static_cast<double>(nx - sx);
+				double rvy = static_cast<double>(ny - sy);
+				double dot = rvx*fvx + rvy*fvy;
+				if (dot <= 0.0) continue;
+				double d = Range::get_distance(SDL_Point{px, py}, SDL_Point{nx, ny});
+				sum += std::min(d, sparse_cap);
+				cnt += 1;
 			}
 			double avg = (cnt > 0) ? (sum / cnt) : sparse_cap;
 			double sparse_norm = avg / sparse_cap;
 			double cost = w_dir * dir_norm - w_sparse * sparse_norm;
-			if (cost < best_cost) { best_cost = cost; best = { px, py }; }
+			if (cost < best_cost) { best_cost = cost; best = SDL_Point{ px, py }; }
 		}
 	}
 	return best;
 }
 
-void AutoMovement::set_target(int desired_x, int desired_y, const Asset* final_target) {
-	Area::Point pick = choose_balanced_target(desired_x, desired_y, final_target);
+void AutoMovement::set_target(SDL_Point desired, const Asset* final_target) {
+	SDL_Point pick = choose_balanced_target(desired, final_target);
 	target_ = pick;
 	have_target_ = true;
 }
@@ -154,7 +151,7 @@ void AutoMovement::set_orbit(Asset* center, int min_radius, int max_radius, int 
 	transition_mode(Mode::Orbit);
 }
 
-void AutoMovement::set_patrol(const std::vector<Area::Point>& waypoints, bool loop, int hold_frames) {
+void AutoMovement::set_patrol(const std::vector<SDL_Point>& waypoints, bool loop, int hold_frames) {
 	patrol_points_ = waypoints;
 	patrol_loop_ = loop;
 	patrol_hold_frames_ = std::max(0, hold_frames);
@@ -183,42 +180,42 @@ void AutoMovement::move() {
 			int denom = std::max(0, idle_rest_ratio_) + 1;
 			std::uniform_int_distribution<int> pick(0, denom - 1);
 			bool choose_rest = (pick(rng_) != 0);
-			std::string next_anim = choose_rest ? pick_least_movement_animation() : pick_best_animation_towards(target_.first, target_.second);
+			std::string next_anim = choose_rest ? pick_least_movement_animation() : pick_best_animation_towards(target_);
 			if (!next_anim.empty() && self_->get_current_animation() != next_anim) self_->change_animation(next_anim);
 			self_->update_animation_manager();
 			break;
 		}
 		case Mode::Pursue: {
 			ensure_pursue_target(pursue_min_dist_, pursue_max_dist_, pursue_target_);
-			std::string next_anim = pick_best_animation_towards(target_.first, target_.second);
+			std::string next_anim = pick_best_animation_towards(target_);
 			if (!next_anim.empty() && self_->get_current_animation() != next_anim) self_->change_animation(next_anim);
 			self_->update_animation_manager();
 			break;
 		}
 		case Mode::Run: {
 			ensure_run_target(run_min_dist_, run_max_dist_, run_threat_);
-			std::string next_anim = pick_best_animation_towards(target_.first, target_.second);
+			std::string next_anim = pick_best_animation_towards(target_);
 			if (!next_anim.empty() && self_->get_current_animation() != next_anim) self_->change_animation(next_anim);
 			self_->update_animation_manager();
 			break;
 		}
 		case Mode::Orbit: {
 			ensure_orbit_target(orbit_min_radius_, orbit_max_radius_, orbit_center_, orbit_keep_ratio_);
-			std::string next_anim = pick_best_animation_towards(target_.first, target_.second);
+			std::string next_anim = pick_best_animation_towards(target_);
 			if (!next_anim.empty() && self_->get_current_animation() != next_anim) self_->change_animation(next_anim);
 			self_->update_animation_manager();
 			break;
 		}
 		case Mode::Patrol: {
 			ensure_patrol_target(patrol_points_, patrol_loop_, patrol_hold_frames_);
-			std::string next_anim = pick_best_animation_towards(target_.first, target_.second);
+			std::string next_anim = pick_best_animation_towards(target_);
 			if (!next_anim.empty() && self_->get_current_animation() != next_anim) self_->change_animation(next_anim);
 			self_->update_animation_manager();
 			break;
 		}
 		case Mode::Serpentine: {
 			ensure_serpentine_target(serp_min_stride_, serp_max_stride_, serp_sway_, serp_target_, serp_keep_ratio_);
-			std::string next_anim = pick_best_animation_towards(target_.first, target_.second);
+			std::string next_anim = pick_best_animation_towards(target_);
 			if (!next_anim.empty() && self_->get_current_animation() != next_anim) self_->change_animation(next_anim);
 			self_->update_animation_manager();
 			break;
@@ -232,8 +229,8 @@ void AutoMovement::move() {
 
 bool AutoMovement::can_move_by(int dx, int dy) const {
 	if (!self_ || !self_->info) return false;
-	int test_x = self_->pos_X + dx;
-	int test_y = self_->pos_Y + dy - self_->info->z_threshold;
+	int test_x = self_->pos.x + dx;
+	int test_y = self_->pos.y + dy - self_->info->z_threshold;
 	for (Asset* a : aam_.getImpassableClosest()) {
 		if (!a || a == self_) continue;
 		Area obstacle = a->get_area("passability");
@@ -260,11 +257,11 @@ bool AutoMovement::would_overlap_same_or_player(int dx, int dy) const {
 	return false;
 }
 
-std::string AutoMovement::pick_best_animation_towards(int target_x, int target_y) const {
+std::string AutoMovement::pick_best_animation_towards(SDL_Point target) const {
 	if (!self_ || !self_->info) return {};
 	const auto& all = self_->info->animations;
 	if (all.empty()) return {};
-	long long best_d2 = std::numeric_limits<long long>::max();
+	double best_d = std::numeric_limits<double>::infinity();
 	std::string best_id;
 	for (const auto& kv : all) {
 		const std::string& id = kv.first;
@@ -274,11 +271,10 @@ std::string AutoMovement::pick_best_animation_towards(int target_x, int target_y
 		if (dx == 0 && dy == 0) continue;
 		if (!can_move_by(dx, dy)) continue;
 		if (would_overlap_same_or_player(dx, dy)) continue;
-		const int nx = self_->pos_X + dx;
-		const int ny = self_->pos_Y + dy;
-		long long d2 = dist2(nx, ny, target_x, target_y);
-		if (d2 < best_d2) {
-			best_d2 = d2;
+		SDL_Point next{ self_->pos.x + dx, self_->pos.y + dy };
+		double d = Range::get_distance(next, target);
+		if (d < best_d) {
+			best_d = d;
 			best_id = id;
 		}
 	}
@@ -342,16 +338,14 @@ int AutoMovement::min_move_len2() const {
 
 bool AutoMovement::is_target_reached() const {
 	if (!self_) return true;
-	int dx = target_.first  - self_->pos_X;
-	int dy = target_.second - self_->pos_Y;
-	long long d2 = static_cast<long long>(dx)*dx + static_cast<long long>(dy)*dy;
-	return d2 <= static_cast<long long>(min_move_len2());
+	double d = Range::get_distance(SDL_Point{ self_->pos.x, self_->pos.y }, target_);
+	return d <= std::sqrt(static_cast<double>(min_move_len2()));
 }
 
 void AutoMovement::ensure_idle_target(int min_dist, int max_dist) {
 	if (mode_ == Mode::Idle && have_target_ && !is_target_reached()) return;
-	int cx = self_ ? self_->pos_X : 0;
-	int cy = self_ ? self_->pos_Y : 0;
+	int cx = self_ ? self_->pos.x : 0;
+	int cy = self_ ? self_->pos.y : 0;
 	if (max_dist < min_dist) std::swap(min_dist, max_dist);
 	min_dist = std::max(0, min_dist);
 	max_dist = std::max(0, max_dist);
@@ -361,7 +355,7 @@ void AutoMovement::ensure_idle_target(int min_dist, int max_dist) {
 	double r = radius(rng_);
 	int tx = cx + static_cast<int>(std::llround(r * std::cos(a)));
 	int ty = cy + static_cast<int>(std::llround(r * std::sin(a)));
-	set_target(tx, ty, nullptr);
+	set_target(SDL_Point{tx, ty}, nullptr);
 	mode_ = Mode::Idle;
 }
 
@@ -371,10 +365,10 @@ void AutoMovement::ensure_pursue_target(int min_dist, int max_dist, const Asset*
 	if (max_dist < min_dist) std::swap(min_dist, max_dist);
 	min_dist = std::max(0, min_dist);
 	max_dist = std::max(0, max_dist);
-	int cx = self_->pos_X;
-	int cy = self_->pos_Y;
-	int tx = final_target->pos_X;
-	int ty = final_target->pos_Y;
+	int cx = self_->pos.x;
+	int cy = self_->pos.y;
+	int tx = final_target->pos.x;
+	int ty = final_target->pos.y;
 	int vx = tx - cx;
 	int vy = ty - cy;
 	double a = std::atan2(static_cast<double>(vy), static_cast<double>(vx));
@@ -382,7 +376,7 @@ void AutoMovement::ensure_pursue_target(int min_dist, int max_dist, const Asset*
 	double r = radius(rng_);
 	int nx = cx + static_cast<int>(std::llround(r * std::cos(a)));
 	int ny = cy + static_cast<int>(std::llround(r * std::sin(a)));
-	set_target(nx, ny, final_target);
+	set_target(SDL_Point{nx, ny}, final_target);
 	mode_ = Mode::Pursue;
 }
 
@@ -392,10 +386,10 @@ void AutoMovement::ensure_run_target(int min_dist, int max_dist, const Asset* th
 	if (max_dist < min_dist) std::swap(min_dist, max_dist);
 	min_dist = std::max(0, min_dist);
 	max_dist = std::max(0, max_dist);
-	int cx = self_->pos_X;
-	int cy = self_->pos_Y;
-	int tx = threat->pos_X;
-	int ty = threat->pos_Y;
+	int cx = self_->pos.x;
+	int cy = self_->pos.y;
+	int tx = threat->pos.x;
+	int ty = threat->pos.y;
 	int vx = cx - tx;
 	int vy = cy - ty;
 	double a = std::atan2(static_cast<double>(vy), static_cast<double>(vx));
@@ -407,7 +401,7 @@ void AutoMovement::ensure_run_target(int min_dist, int max_dist, const Asset* th
 	double r = radius(rng_);
 	int nx = cx + static_cast<int>(std::llround(r * std::cos(a)));
 	int ny = cy + static_cast<int>(std::llround(r * std::sin(a)));
-	set_target(nx, ny, nullptr);
+	set_target(SDL_Point{nx, ny}, nullptr);
 	mode_ = Mode::Run;
 }
 
@@ -432,10 +426,10 @@ void AutoMovement::ensure_orbit_target(int min_radius, int max_radius, const Ass
 	} else {
 		orbit_radius_ = std::clamp(orbit_radius_, min_radius, max_radius);
 	}
-	const int cx = center->pos_X;
-	const int cy = center->pos_Y;
-	int vx = self_->pos_X - cx;
-	int vy = self_->pos_Y - cy;
+	const int cx = center->pos.x;
+	const int cy = center->pos.y;
+	int vx = self_->pos.x - cx;
+	int vy = self_->pos.y - cy;
 	if (!orbit_params_set_) {
 		if (vx == 0 && vy == 0) {
 			std::uniform_real_distribution<double> ang(0.0, 2.0 * 3.14159265358979323846);
@@ -451,12 +445,12 @@ void AutoMovement::ensure_orbit_target(int min_radius, int max_radius, const Ass
 	double next_angle = orbit_angle_ + static_cast<double>(orbit_dir_) * dtheta;
 	int nx = cx + static_cast<int>(std::llround(std::cos(next_angle) * orbit_radius_));
 	int ny = cy + static_cast<int>(std::llround(std::sin(next_angle) * orbit_radius_));
-	set_target(nx, ny, nullptr);
+	set_target(SDL_Point{nx, ny}, nullptr);
 	mode_ = Mode::Orbit;
 	orbit_angle_ = next_angle;
 }
 
-void AutoMovement::ensure_patrol_target(const std::vector<Area::Point>& waypoints,
+void AutoMovement::ensure_patrol_target(const std::vector<SDL_Point>& waypoints,
                                         bool loop,
                                         int hold_frames)
 {
@@ -485,10 +479,10 @@ void AutoMovement::ensure_patrol_target(const std::vector<Area::Point>& waypoint
 		}
 		patrol_hold_left_ = patrol_hold_frames_;
 	}
-	Area::Point wp = patrol_points_[patrol_index_];
-	int nx = wp.first;
-	int ny = wp.second;
-	set_target(nx, ny, nullptr);
+	SDL_Point wp = patrol_points_[patrol_index_];
+	int nx = wp.x;
+	int ny = wp.y;
+	set_target(SDL_Point{nx, ny}, nullptr);
 	mode_ = Mode::Patrol;
 }
 
@@ -504,10 +498,10 @@ void AutoMovement::ensure_serpentine_target(int min_stride,
 	min_stride = std::max(0, min_stride);
 	max_stride = std::max(0, max_stride);
 	sway = std::max(0, sway);
-	int cx = self_->pos_X;
-	int cy = self_->pos_Y;
-	int tx = final_target->pos_X;
-	int ty = final_target->pos_Y;
+	int cx = self_->pos.x;
+	int cy = self_->pos.y;
+	int tx = final_target->pos.x;
+	int ty = final_target->pos.y;
 	int vx = tx - cx;
 	int vy = ty - cy;
 	double a;
@@ -543,7 +537,7 @@ void AutoMovement::ensure_serpentine_target(int min_stride,
 	double oy = by + static_cast<double>(serp_side_) * static_cast<double>(sway) * pvy;
 	int nx = static_cast<int>(std::llround(ox));
 	int ny = static_cast<int>(std::llround(oy));
-	set_target(nx, ny, final_target);
+	set_target(SDL_Point{nx, ny}, final_target);
 	mode_ = Mode::Serpentine;
 	serp_params_set_ = true;
 }

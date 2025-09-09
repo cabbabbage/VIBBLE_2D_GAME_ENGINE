@@ -74,7 +74,7 @@ type(type_)
 			<< ", geometry: " << geometry
 			<< ", map radius: " << map_radius << "\n";
 		}
-		room_area = std::make_unique<Area>(room_name, map_origin.first, map_origin.second, width, height, geometry, edge_smoothness, map_w, map_h);
+                room_area = std::make_unique<Area>(room_name, SDL_Point{map_origin.first, map_origin.second}, width, height, geometry, edge_smoothness, map_w, map_h);
 	}
 	std::vector<json> json_sources;
 	std::vector<std::string> source_paths;
@@ -172,8 +172,8 @@ nlohmann::json Room::create_static_room_json(std::string name) {
 	}
 	for (const auto& uptr : assets) {
 		const Asset* a = uptr.get();
-		const int ax = a->pos_X;
-		const int ay = a->pos_Y;
+		const int ax = a->pos.x;
+		const int ay = a->pos.y;
 		double norm_x = (width  != 0) ? (static_cast<double>(ax - cx) / static_cast<double>(width))  : 0.0;
 		double norm_y = (height != 0) ? (static_cast<double>(ay - cy) / static_cast<double>(height)) : 0.0;
 		int ep_x = clamp_int(static_cast<int>(std::lround(norm_x * 100.0 + 50.0)), 0, 100);

@@ -12,8 +12,8 @@ void CurrentRoomFinder::setPlayer(Asset*& player) { player_ = player; }
 
 Room* CurrentRoomFinder::getCurrentRoom() const {
 	if (!player_) return nullptr;
-	const int px = player_->pos_X;
-	const int py = player_->pos_Y;
+	const int px = player_->pos.x;
+	const int py = player_->pos.y;
 	Room* best = nullptr;
 	for (Room* r : rooms_) {
 		if (!r || !r->room_area) continue;

@@ -4,10 +4,13 @@
 #include "asset_info.hpp"
 #include "asset_utils.hpp"
 #include "active_assets_manager.hpp"
+#include "utils/range_util.hpp"
 #include <algorithm>
 #include <iostream>
 #include <stdexcept>
 #include <memory>
+#include <SDL.h>
+
 void InitializeAssets::initialize(Assets& assets,
                                   std::vector<Asset>&& loaded,
                                   std::vector<Room*> rooms,
@@ -79,17 +82,15 @@ void InitializeAssets::set_shading_group_recursive(Asset& asset,
 }
 
 void InitializeAssets::collect_assets_in_range(const Asset* asset,
-                                               int cx,
-                                               int cy,
-                                               int r2,
+                                               SDL_Point center,
+                                               int radius,
                                                std::vector<Asset*>& result) {
-	int dx = asset->pos_X - cx;
-	int dy = asset->pos_Y - cy;
-	if (dx * dx + dy * dy <= r2) {
+	if (!asset) return;
+	if (Range::is_in_range(asset, center, radius)) {
 		result.push_back(const_cast<Asset*>(asset));
 	}
 	for (Asset* child : asset->children) {
-		if (child) collect_assets_in_range(child, cx, cy, r2, result);
+		if (child) collect_assets_in_range(child, center, radius, result);
 	}
 }
 
@@ -97,20 +98,15 @@ void InitializeAssets::setup_static_sources(Assets& assets) {
 	std::function<void(Asset&)> recurse = [&](Asset& owner) {
 		if (owner.info) {
 			for (LightSource& light : owner.info->light_sources) {
-					const int lx = owner.pos_X + light.offset_x;
-					const int ly = owner.pos_Y + light.offset_y;
-					const int r2 = light.radius * light.radius;
-					std::vector<Asset*> targets;
-					targets.reserve(assets.all.size());
-					for (Asset* a : assets.all) {
-								if (!a || !a->info) continue;
-								collect_assets_in_range(a, lx, ly, r2, targets);
+				SDL_Point l{ owner.pos.x + light.offset_x, owner.pos.y + light.offset_y };
+				std::vector<Asset*> targets;
+				targets.reserve(assets.all.size());
+				Range::get_in_range(l, light.radius, assets.all, targets);
+				for (Asset* t : targets) {
+					if (t && t->info) {
+						t->add_static_light_source(&light, l, &owner);
 					}
-					for (Asset* t : targets) {
-								if (t && t->info) {
-													t->add_static_light_source(&light, lx, ly, &owner);
-								}
-					}
+				}
 			}
 		}
 		for (Asset* child : owner.children) {

@@ -2,6 +2,7 @@
 #define VIBBLE_CONTROLLER_HPP
 
 #include "asset/asset_controller.hpp"
+#include <SDL.h>
 
 class Assets;
 class Asset;
@@ -20,7 +21,7 @@ class VibbleController : public AssetController {
 
 	private:
     bool aabb(const Area& A, const Area& B) const;
-    bool pointInAABB(int x, int y, const Area& B) const;
+    bool pointInAABB(SDL_Point p, const Area& B) const;
     void movement(const Input& input);
     bool canMove(int offset_x, int offset_y);
     void interaction();
@@ -32,8 +33,7 @@ class VibbleController : public AssetController {
     ActiveAssetsManager& aam_;
     int dx_ = 0;
     int dy_ = 0;
-    struct Point { int x=0; int y=0; };
-    Point teleport_point_{};
+    SDL_Point teleport_point_{};
     bool teleport_set_ = false;
     Asset* marker_asset_ = nullptr;
 };

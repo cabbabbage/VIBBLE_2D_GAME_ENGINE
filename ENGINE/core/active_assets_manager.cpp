@@ -56,12 +56,12 @@ void ActiveAssetsManager::updateClosestAssets(Asset* player, std::size_t max_cou
 	struct Pair { float d2; Asset* a; };
 	auto cmp = [](const Pair& L, const Pair& R){ return L.d2 < R.d2; };
 	std::priority_queue<Pair, std::vector<Pair>, decltype(cmp)> heap(cmp);
-	const int px = player->pos_X;
-	const int py = player->pos_Y;
+	const int px = player->pos.x;
+	const int py = player->pos.y;
 	for (Asset* a : active_assets_) {
 		if (!a || a == player) continue;
-		const float dx = float(a->pos_X - px);
-		const float dy = float(a->pos_Y - py);
+		const float dx = float(a->pos.x - px);
+		const float dy = float(a->pos.y - py);
 		const float d2 = dx*dx + dy*dy;
 		if (heap.size() < max_count) {
 			heap.push({d2, a});
@@ -77,8 +77,8 @@ void ActiveAssetsManager::updateClosestAssets(Asset* player, std::size_t max_cou
 	}
 	std::sort(closest_assets_.begin(), closest_assets_.end(),
 	[&](Asset* A, Asset* B){
-		float dAx = float(A->pos_X - px), dAy = float(A->pos_Y - py);
-		float dBx = float(B->pos_X - px), dBy = float(B->pos_Y - py);
+		float dAx = float(A->pos.x - px), dAy = float(A->pos.y - py);
+		float dBx = float(B->pos.x - px), dBy = float(B->pos.y - py);
            return dAx*dAx + dAy*dAy < dBx*dBx + dBy*dBy;
            });
 	for (Asset* a : closest_assets_) {
@@ -143,8 +143,8 @@ void ActiveAssetsManager::sortByZIndex()
         std::sort(active_assets_.begin(), active_assets_.end(),
         [](Asset* A, Asset* B) {
                 if (A->z_index != B->z_index) return A->z_index < B->z_index;
-                if (A->pos_Y != B->pos_Y)     return A->pos_Y < B->pos_Y;
-                if (A->pos_X != B->pos_X)     return A->pos_X < B->pos_X;
+                if (A->pos.y != B->pos.y)     return A->pos.y < B->pos.y;
+                if (A->pos.x != B->pos.x)     return A->pos.x < B->pos.x;
            return A < B;
            });
         needs_sort_ = false;

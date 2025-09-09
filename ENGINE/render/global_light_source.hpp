@@ -2,28 +2,31 @@
 
 #include <SDL.h>
 #include <vector>
-#include <utility>
 #include <string>
 
 class Global_Light_Source {
 
 	public:
-    Global_Light_Source(SDL_Renderer* renderer, int screen_center_x, int screen_center_y, int screen_width, SDL_Color fallback_base_color, const std::string& map_path);
+    Global_Light_Source(SDL_Renderer* renderer,
+                        SDL_Point screen_center,
+                        int screen_width,
+                        SDL_Color fallback_base_color,
+                        const std::string& map_path);
     ~Global_Light_Source();
     void update();
-    std::pair<int,int> get_position() const;
-    float              get_angle() const;
-    SDL_Texture*       get_texture() const;
-    SDL_Color get_current_color() const;
-    int       get_brightness() const;
+    SDL_Point    get_position() const;
+    float        get_angle() const;
+    SDL_Texture* get_texture() const;
+    SDL_Color    get_current_color() const;
+    int          get_brightness() const;
     int get_cached_w() const { return cached_w_; }
     int get_cached_h() const { return cached_h_; }
 
 	private:
     struct KeyEntry {
-    float degree;
-    SDL_Color color;
-	};
+        float degree;
+        SDL_Color color;
+    };
     void build_texture();
     void set_light_brightness();
     SDL_Color compute_color_from_horizon() const;
@@ -33,14 +36,12 @@ class Global_Light_Source {
     SDL_Texture*  texture_;
     SDL_Color base_color_;
     SDL_Color current_color_;
-    int   center_x_;
-    int   center_y_;
+    SDL_Point center_;
+    SDL_Point pos_;
     float angle_;
     bool  initialized_;
-    int pos_x_;
-    int pos_y_;
-    int  frame_counter_;
-    int  light_brightness;
+    int   frame_counter_;
+    int   light_brightness;
     float radius_;
     float intensity_;
     float mult_;

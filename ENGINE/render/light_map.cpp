@@ -70,7 +70,7 @@ void LightMap::collect_layers(std::vector<LightEntry>& out, std::mt19937& rng) {
                                 light.cached_w = lw;
                                 light.cached_h = lh;
                         }
-                        SDL_Rect dst = get_scaled_position_rect({ a->pos_X + offX, a->pos_Y + light.offset_y },
+                        SDL_Rect dst = get_scaled_position_rect(SDL_Point{ a->pos.x + offX, a->pos.y + light.offset_y },
                                            lw, lh, inv_scale,
                                            min_visible_w, min_visible_h);
                         if (dst.w == 0 && dst.h == 0) continue;
@@ -111,14 +111,14 @@ SDL_Texture* LightMap::build_lowres_mask(const std::vector<LightEntry>& layers,
 	return lowres_mask;
 }
 
-SDL_Rect LightMap::get_scaled_position_rect(const std::pair<int,int>& pos, int fw, int fh,
+SDL_Rect LightMap::get_scaled_position_rect(SDL_Point pos, int fw, int fh,
                                             float inv_scale, int min_w, int min_h) {
 	int sw = static_cast<int>(fw * inv_scale);
 	int sh = static_cast<int>(fh * inv_scale);
 	if (sw < min_w && sh < min_h) {
 		return {0, 0, 0, 0};
 	}
-	SDL_Point cp = parallax_.apply(pos.first, pos.second);
+        SDL_Point cp = parallax_.apply(pos.x, pos.y);
 	cp.x = screen_width_ / 2 + static_cast<int>((cp.x - screen_width_ / 2) * inv_scale);
 	cp.y = screen_height_ / 2 + static_cast<int>((cp.y - screen_height_ / 2) * inv_scale);
 	return SDL_Rect{ cp.x - sw / 2, cp.y - sh / 2, sw, sh };

@@ -167,8 +167,8 @@ void view::update_zoom(Room* cur, CurrentRoomFinder* finder, Asset* player) {
 	const double sb = compute_room_scale_from_area(neigh);
 	auto [ax, ay] = cur->room_area->get_center();
 	auto [bx, by] = neigh->room_area->get_center();
-	const double pax = double(player->pos_X);
-	const double pay = double(player->pos_Y);
+	const double pax = double(player->pos.x);
+	const double pay = double(player->pos.y);
 	const double vx = double(bx - ax);
 	const double vy = double(by - ay);
 	const double wx = double(pax - ax);

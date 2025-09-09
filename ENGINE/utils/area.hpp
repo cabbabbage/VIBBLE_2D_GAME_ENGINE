@@ -4,35 +4,33 @@
 #include <string>
 #include <tuple>
 #include <optional>
-#include <utility>
 #include <SDL.h>
 #include "parallax.hpp"
 
 class Area {
 
 	public:
-    using Point = std::pair<int, int>;
+    using Point = SDL_Point;
 
-	public:
-    int pos_X = 0;
-    int pos_Y = 0;
+        public:
+    SDL_Point pos{0, 0};
     void apply_parallax(const Parallax& parallax);
 
 	public:
     explicit Area(const std::string& name);
     Area(const std::string& name, const std::vector<Point>& pts);
-    Area(const std::string& name, int cx, int cy, int w, int h, const std::string& geometry, int edge_smoothness, int map_width, int map_height);
+    Area(const std::string& name, SDL_Point center, int w, int h, const std::string& geometry, int edge_smoothness, int map_width, int map_height);
     Area(const std::string& name, const std::string& json_path, float scale);
     Area(const std::string& name, const Area& base, SDL_Renderer* renderer, int window_w = 0, int window_h = 0);
     Area(const std::string& name, SDL_Texture* background, SDL_Renderer* renderer, int window_w = 0, int window_h = 0);
 
 	public:
     void apply_offset(int dx, int dy);
-    void align(int target_x, int target_y);
+    void align(SDL_Point target);
     std::tuple<int, int, int, int> get_bounds() const;
-    void generate_circle(int cx, int cy, int radius, int edge_smoothness, int map_width, int map_height);
-    void generate_square(int cx, int cy, int w, int h, int edge_smoothness, int map_width, int map_height);
-    void generate_point(int cx, int cy, int map_width, int map_height);
+    void generate_circle(SDL_Point center, int radius, int edge_smoothness, int map_width, int map_height);
+    void generate_square(SDL_Point center, int w, int h, int edge_smoothness, int map_width, int map_height);
+    void generate_point(SDL_Point center, int map_width, int map_height);
     void contract(int inset);
     double get_area() const;
     const std::vector<Point>& get_points() const;

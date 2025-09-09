@@ -52,8 +52,8 @@ void AnimationManager::update() {
 	int dy = 0;
 	bool resort_z = false;
 	bool advanced = anim.advance( self_->current_frame_index, self_->frame_progress, dx, dy, resort_z );
-	self_->pos_X += dx;
-	self_->pos_Y += dy;
+	self_->pos.x += dx;
+	self_->pos.y += dy;
 	if ((dx != 0 || dy != 0) && resort_z) {
 		self_->set_z_index();
 		if (Assets* as = self_->get_assets()) {

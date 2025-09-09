@@ -33,32 +33,31 @@ SpawnContext::Point SpawnContext::get_area_center(const Area& area) const {
 }
 
 SpawnContext::Point SpawnContext::get_point_within_area(const Area& area) {
-	auto [minx, miny, maxx, maxy] = area.get_bounds();
-	for (int i = 0; i < 100; ++i) {
-		int x = std::uniform_int_distribution<int>(minx, maxx)(rng_);
-		int y = std::uniform_int_distribution<int>(miny, maxy)(rng_);
-		if (area.contains_point({x, y})) return {x, y};
-	}
-	return {0, 0};
+        auto [minx, miny, maxx, maxy] = area.get_bounds();
+        for (int i = 0; i < 100; ++i) {
+                int x = std::uniform_int_distribution<int>(minx, maxx)(rng_);
+                int y = std::uniform_int_distribution<int>(miny, maxy)(rng_);
+                if (area.contains_point(SDL_Point{ x, y })) return SDL_Point{ x, y };
+        }
+        return SDL_Point{0, 0};
 }
 
 Asset* SpawnContext::spawnAsset(const std::string& name,
                                 const std::shared_ptr<AssetInfo>& info,
                                 const Area& area,
-                                int x,
-                                int y,
+                                SDL_Point pos,
                                 int depth,
                                 Asset* parent,
                                 const std::string& spawn_id,
                                 const std::string& spawn_method)
 {
-	auto assetPtr = std::make_unique<Asset>(info, area, x, y, depth, parent, spawn_id, spawn_method);
-	Asset* raw = assetPtr.get();
-	all_.push_back(std::move(assetPtr));
+        auto assetPtr = std::make_unique<Asset>(info, area, pos, depth, parent, spawn_id, spawn_method);
+        Asset* raw = assetPtr.get();
+        all_.push_back(std::move(assetPtr));
 	if (raw->info && !raw->info->children.empty()) {
 		std::cout << "[Spawn] Spawned parent asset: \""
 		<< raw->info->name << "\" at ("
-		<< raw->pos_X << ", " << raw->pos_Y << ")\n";
+		<< raw->pos.x << ", " << raw->pos.y << ")\n";
 	}
 	if (raw->info && !raw->info->children.empty()) {
 		std::vector<ChildInfo*> shuffled_children;
@@ -88,10 +87,10 @@ Asset* SpawnContext::spawnAsset(const std::string& name,
 					<< childJsonPath << " | " << e.what() << "\n";
 					continue;
 			}
-			Area childArea = *base_area;
-			childArea.align(raw->pos_X, raw->pos_Y);
+                        Area childArea = *base_area;
+                        childArea.align(SDL_Point{raw->pos.x, raw->pos.y});
 			if (raw->flipped) {
-					childArea.flip_horizontal(raw->pos_X);
+					childArea.flip_horizontal(raw->pos.x);
 			}
 			AssetSpawnPlanner childPlanner(std::vector<nlohmann::json>{ j },
                                   childArea,

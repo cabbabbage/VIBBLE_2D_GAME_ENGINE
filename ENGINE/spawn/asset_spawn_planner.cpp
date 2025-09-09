@@ -158,8 +158,8 @@ void AssetSpawnPlanner::parse_asset_spawns(const Area& area) {
 		s.name = name;
 		s.position = position;
 		s.spawn_id = spawn_id;
-		s.exact_dx = asset.value("exact_dx", 0);
-		s.exact_dy = asset.value("exact_dy", 0);
+		s.exact_offset.x = asset.value("exact_dx", 0);
+		s.exact_offset.y = asset.value("exact_dy", 0);
 		s.exact_origin_w = asset.value("exact_origin_width", 0);
 		s.exact_origin_h = asset.value("exact_origin_height", 0);
 		s.quantity = quantity;
@@ -173,13 +173,13 @@ void AssetSpawnPlanner::parse_asset_spawns(const Area& area) {
 		s.grid_spacing = get_val("grid_spacing_min", "grid_spacing_max");
 		s.jitter = get_val("jitter_min", "jitter_max");
 		s.empty_grid_spaces = get_val("empty_grid_spaces_min", "empty_grid_spaces_max");
-		s.ep_x = get_val("ep_x_min", "ep_x_max", -1);
-		s.ep_y = get_val("ep_y_min", "ep_y_max", -1);
+		s.exact_point.x = get_val("ep_x_min", "ep_x_max", -1);
+		s.exact_point.y = get_val("ep_y_min", "ep_y_max", -1);
 		s.border_shift = get_val("border_shift_min", "border_shift_max");
 		s.sector_center = get_val("sector_center_min", "sector_center_max");
 		s.sector_range = get_val("sector_range_min", "sector_range_max");
-		s.perimeter_x_offset = get_val("perimeter_x_offset_min", "perimeter_x_offset_max");
-		s.perimeter_y_offset = get_val("perimeter_y_offset_min", "perimeter_y_offset_max");
+		s.perimeter_offset.x = get_val("perimeter_x_offset_min", "perimeter_x_offset_max");
+		s.perimeter_offset.y = get_val("perimeter_y_offset_min", "perimeter_y_offset_max");
 		s.info = info;
 		spawn_queue_.push_back(s);
 	}

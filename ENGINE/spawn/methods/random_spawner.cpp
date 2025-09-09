@@ -10,12 +10,12 @@ void RandomSpawner::spawn(const SpawnInfo& item, const Area* area, SpawnContext&
 	int spawned = 0, attempts = 0;
 	int max_attempts = item.quantity * 10;
 	while (spawned < item.quantity && attempts < max_attempts) {
-		auto pos = ctx.get_point_within_area(*area);
-		++attempts;
-		if (!area->contains_point(pos)) continue;
-		if (ctx.checker().check(item.info, pos.first, pos.second, ctx.exclusion_zones(), ctx.all_assets(),
+                SDL_Point pos = ctx.get_point_within_area(*area);
+                ++attempts;
+                if (!area->contains_point(pos)) continue;
+                if (ctx.checker().check(item.info, pos.x, pos.y, ctx.exclusion_zones(), ctx.all_assets(),
       true, true, true, 5)) continue;
-		ctx.spawnAsset(item.name, item.info, *area, pos.first, pos.second, 0, nullptr, item.spawn_id, item.position);
+                ctx.spawnAsset(item.name, item.info, *area, pos, 0, nullptr, item.spawn_id, item.position);
 		++spawned;
 		ctx.logger().progress(item.info, spawned, item.quantity);
 	}

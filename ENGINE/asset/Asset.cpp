@@ -8,10 +8,11 @@
 #include <iostream>
 #include <random>
 #include <algorithm>
+#include <SDL.h>
+
 Asset::Asset(std::shared_ptr<AssetInfo> info_,
              const Area& spawn_area,
-             int start_pos_X,
-             int start_pos_Y,
+             SDL_Point start_pos,
              int depth_,
              Asset* parent_,
              const std::string& spawn_id_,
@@ -22,8 +23,7 @@ Asset::Asset(std::shared_ptr<AssetInfo> info_,
 , current_frame_index(0)
 , static_frame(false)
 , active(false)
-, pos_X(start_pos_X)
-, pos_Y(start_pos_Y)
+, pos(start_pos)
 , z_index(0)
 , z_offset(0)
 , player_speed(10)
@@ -74,8 +74,7 @@ Asset::Asset(const Asset& o)
 : parent(o.parent)
 , info(o.info)
 , current_animation(o.current_animation)
-, pos_X(o.pos_X)
-, pos_Y(o.pos_Y)
+, pos(o.pos)
 , screen_X(o.screen_X)
 , screen_Y(o.screen_Y)
 , z_index(o.z_index)
@@ -124,8 +123,7 @@ Asset& Asset::operator=(const Asset& o) {
 	parent               = o.parent;
 	info                 = o.info;
 	current_animation    = o.current_animation;
-	pos_X                = o.pos_X;
-	pos_Y                = o.pos_Y;
+    pos                  = o.pos;
 	screen_X             = o.screen_X;
 	screen_Y             = o.screen_Y;
 	z_index              = o.z_index;
@@ -194,12 +192,12 @@ void Asset::finalize_setup() {
 	if (child) child->finalize_setup();
 	if (!children.empty()) {
 		std::cout << "[Asset] \"" << (info ? info->name : std::string{"<null>"})
-		<< "\" at (" << pos_X << ", " << pos_Y
-		<< ") has " << children.size() << " child(ren):\n";
-		for (Asset* child : children)
-		if (child && child->info)
-		std::cout << "    - \"" << child->info->name
-		<< "\" at (" << child->pos_X << ", " << child->pos_Y << ")\n";
+                << "\" at (" << pos.x << ", " << pos.y
+                << ") has " << children.size() << " child(ren):\n";
+                for (Asset* child : children)
+                if (child && child->info)
+                std::cout << "    - \"" << child->info->name
+                << "\" at (" << child->pos.x << ", " << child->pos.y << ")\n";
 	}
 	if (assets_) {
 		ControllerFactory cf(assets_, assets_->activeManager);
@@ -220,10 +218,9 @@ SDL_Texture* Asset::get_current_frame() const {
 	return nullptr;
 }
 
-void Asset::set_position(int x, int y) {
-	pos_X = x;
-	pos_Y = y;
-	set_z_index();
+void Asset::set_position(SDL_Point p) {
+        pos = p;
+        set_z_index();
 }
 
 void Asset::update() {
@@ -311,9 +308,9 @@ void Asset::set_z_index() {
                 if (parent) {
                         if (z_offset > 0)       z_index = parent->z_index + 1;
                         else if (z_offset < 0)  z_index = parent->z_index - 1;
-                        else                    z_index = pos_Y + info->z_threshold;
+                        else                    z_index = pos.y + info->z_threshold;
                 } else if (info) {
-                        z_index = pos_Y + info->z_threshold;
+                        z_index = pos.y + info->z_threshold;
                 }
         } catch (const std::exception& e) {
                 std::cerr << "[Asset::set_z_index] Exception: " << e.what() << "\n";
@@ -356,20 +353,21 @@ void Asset::set_shading_group(int x){
 	shading_group_set = true;
 }
 
-void Asset::set_screen_position(int sx, int sy) {
-	screen_X = sx;
-	screen_Y = sy;
+void Asset::set_screen_position(SDL_Point s) {
+    screen_X = s.x;
+    screen_Y = s.y;
 }
 
-void Asset::add_static_light_source(LightSource* light, int world_x, int world_y, Asset* owner) {
-	if (!light) return;
-	StaticLight sl;
-	sl.source = light;
-	sl.offset_x = world_x - pos_X;
-	sl.offset_y = world_y - pos_Y;
-	sl.alpha_percentage = LightUtils::calculate_static_alpha_percentage(this, owner);
-	static_lights.push_back(sl);
+void Asset::add_static_light_source(LightSource* light, SDL_Point world, Asset* owner) {
+    if (!light) return;
+
+    StaticLight sl;
+    sl.source = light;
+    sl.offset = { world.x - pos.x, world.y - pos.y };
+    sl.alpha_percentage = LightUtils::calculate_static_alpha_percentage(this, owner);
+    static_lights.push_back(sl);
 }
+
 
 void Asset::set_render_player_light(bool value) { render_player_light = value; }
 bool Asset::get_render_player_light() const { return render_player_light; }
@@ -377,20 +375,8 @@ bool Asset::get_render_player_light() const { return render_player_light; }
 Area Asset::get_area(const std::string& name) const {
 	Area result(name);
 	if (info) {
-		if (name == "clickable") {
-			int base_w = (cached_w > 0) ? cached_w : int(info->original_canvas_width * info->scale_factor);
-			int base_h = (cached_h > 0) ? cached_h : int(info->original_canvas_height * info->scale_factor);
-			if (base_w <= 0) base_w = 1;
-			if (base_h <= 0) base_h = 1;
-			int click_w = int(base_w * 1.5f);
-			int click_h = int(base_h * 1.5f);
-			int left    = pos_X - click_w / 2;
-			int top     = pos_Y - click_h;
-			result = Area(name, left, top, click_w, click_h, "Square", 1, std::numeric_limits<int>::max(), std::numeric_limits<int>::max());
-		} else {
-			Area* a = info->find_area(name + "_area");
-			if (a) result = *a;
-		}
+		Area* a = info->find_area(name + "_area");
+		if (a) result = *a;	
 	}
 	float scale = (window ? window->get_scale() : 1.0f);
 	float inv   = (scale != 0.0f) ? 1.0f / scale : 1.0f;

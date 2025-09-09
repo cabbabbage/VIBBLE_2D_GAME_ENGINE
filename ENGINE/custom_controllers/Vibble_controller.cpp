@@ -27,9 +27,9 @@ bool VibbleController::aabb(const Area& A, const Area& B) const {
              a_maxy < b_miny || b_maxy < a_miny);
 }
 
-bool VibbleController::pointInAABB(int x, int y, const Area& B) const {
+bool VibbleController::pointInAABB(SDL_Point p, const Area& B) const {
     auto [b_minx, b_miny, b_maxx, b_maxy] = B.get_bounds();
-    return (x >= b_minx && x <= b_maxx && y >= b_miny && y <= b_maxy);
+    return (p.x >= b_minx && p.x <= b_maxx && p.y >= b_miny && p.y <= b_maxy);
 }
 
 bool VibbleController::canMove(int, int) {

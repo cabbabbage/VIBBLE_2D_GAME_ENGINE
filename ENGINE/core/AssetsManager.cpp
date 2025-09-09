@@ -1,8 +1,7 @@
-
 #include "AssetsManager.hpp"
 #include "asset/initialize_assets.hpp"
 
-#include "find_current_room.hpp"   
+#include "find_current_room.hpp"
 #include "asset/Asset.hpp"
 #include "asset/asset_info.hpp"
 #include "asset/asset_utils.hpp"
@@ -16,6 +15,7 @@
 #include <iostream>
 #include <memory>
 #include <limits>
+#include "utils/range_util.hpp"
 
 
 Assets::Assets(std::vector<Asset>&& loaded,
@@ -36,7 +36,7 @@ Assets::Assets(std::vector<Asset>&& loaded,
       activeManager(screen_width_, screen_height_, window),
       screen_width(screen_width_),
       screen_height(screen_height_),
-      library_(library)   
+      library_(library)
 {
     InitializeAssets::initialize(*this,
                                  std::move(loaded),
@@ -52,10 +52,8 @@ Assets::Assets(std::vector<Asset>&& loaded,
         window.set_up_rooms(finder_);
     }
 
-    // Create scene renderer owned by Assets
     scene = new SceneRenderer(renderer, this, screen_width_, screen_height_, map_path);
 
-    // Ensure all existing assets have a back-reference to this manager
     for (Asset* a : all) {
         if (a) a->set_assets(this);
     }
@@ -73,14 +71,14 @@ Assets::~Assets() {
 void Assets::set_input(Input* m) {
     input = m;
 
-    delete dev_mouse; 
+    delete dev_mouse;
     if (input) {
         dev_mouse = new DevMouseControls(input,
                                          this,
                                          active_assets,
-                                         player,        
-                                         screen_width,  
-                                         screen_height);       
+                                         player,
+                                         screen_width,
+                                         screen_height);
     } else {
         dev_mouse = nullptr;
     }
@@ -97,34 +95,23 @@ void Assets::update(const Input& input,
 
     dx = dy = 0;
 
-    // Track player start position for this tick
-    int start_px = player ? player->pos_X : 0;
-    int start_py = player ? player->pos_Y : 0;
-
-    // Per-asset controllers now live inside each Asset instance
+    int start_px = player ? player->pos.x : 0;
+    int start_py = player ? player->pos.y : 0;
 
     active_assets  = activeManager.getActive();
     closest_assets = activeManager.getClosest();
 
-    // Advance player (applies per-frame movement from animation)
     if (player) player->update();
-    // Compute dx/dy from resulting position delta
     if (player) {
-        dx = player->pos_X - start_px;
-        dy = player->pos_Y - start_py;
+        dx = player->pos.x - start_px;
+        dy = player->pos.y - start_py;
     }
-    // Update squared distance to player for all active assets before their updates,
-    // so controllers can use a fresh value this frame.
     if (player) {
-        const int px = player->pos_X;
-        const int py = player->pos_Y;
         player->distance_to_player_sq = 0.0f;
         for (Asset* a : active_assets) {
             if (!a || a == player) continue;
-            const float dxp = float(a->pos_X - px);
-            const float dyp = float(a->pos_Y - py);
-            const float d2  = dxp*dxp + dyp*dyp;
-            a->distance_to_player_sq = d2;
+            const double d = Range::get_distance(a, player);
+            a->distance_to_player_sq = static_cast<float>(d * d);
         }
     } else {
         for (Asset* a : active_assets) {
@@ -145,22 +132,16 @@ void Assets::update(const Input& input,
         }
     }
 
-
     if (input.wasScancodePressed(SDL_SCANCODE_TAB)) {
         toggle_asset_library();
     }
 
-
     update_ui(input);
-
 
     if (scene && !suppress_render_) scene->render();
 
-    // Process any assets that were scheduled for removal this frame
     process_removals();
 }
-
-// Removal is centralized in Asset::~Asset and the owned_assets erasure above.
 
 void Assets::set_dev_mode(bool mode) {
     dev_mode = mode;
@@ -176,7 +157,6 @@ void Assets::set_dev_mode(bool mode) {
 void Assets::set_render_suppressed(bool suppressed) {
     suppress_render_ = suppressed;
 }
-
 
 const std::vector<Asset*>& Assets::get_selected_assets() const {
     static std::vector<Asset*> empty;
@@ -198,15 +178,14 @@ nlohmann::json Assets::save_current_room(std::string room_name) {
     }
 
     nlohmann::json j = current_room_->create_static_room_json(room_name);
-    j["room_name"] = room_name; 
+    j["room_name"] = room_name;
 
     return j;
 }
 
-void Assets::addAsset(const std::string& name, int gx, int gy) {
+void Assets::addAsset(const std::string& name, SDL_Point g) {
     std::cout << "\n[Assets::addAsset] Request to create asset '" << name
-              << "' at grid (" << gx << ", " << gy << ")\n";
-
+              << "' at grid (" << g.x << ", " << g.y << ")\n";
 
     auto info = library_.get(name);
     if (!info) {
@@ -216,17 +195,14 @@ void Assets::addAsset(const std::string& name, int gx, int gy) {
     std::cout << "[Assets::addAsset] Retrieved AssetInfo '" << info->name
               << "' at " << info << "\n";
 
-
-    Area spawn_area(name, gx, gy, 1, 1, "Point", 1, 1, 1);
+    Area spawn_area(name, SDL_Point{g.x, g.y}, 1, 1, "Point", 1, 1, 1);
     std::cout << "[Assets::addAsset] Created Area '" << spawn_area.get_name()
-              << "' at (" << gx << ", " << gy << ")\n";
-
+              << "' at (" << g.x << ", " << g.y << ")\n";
 
     size_t prev_size = owned_assets.size();
 
-
     owned_assets.emplace_back(
-        std::make_unique<Asset>(info, spawn_area, gx, gy, 0, nullptr));
+        std::make_unique<Asset>(info, spawn_area, SDL_Point{g.x, g.y}, 0, nullptr));
 
     if (owned_assets.size() <= prev_size) {
         std::cerr << "[Assets::addAsset][Error] owned_assets did not grow!\n";
@@ -242,11 +218,9 @@ void Assets::addAsset(const std::string& name, int gx, int gy) {
               << " (info=" << (newAsset->info ? newAsset->info->name : "<null>")
               << ")\n";
 
-    // Insert into master list
     all.push_back(newAsset);
     std::cout << "[Assets::addAsset] all.size() now = " << all.size() << "\n";
 
-    // Set view + finalize
     try {
         set_view_recursive(newAsset, &window);
         set_assets_owner_recursive(newAsset, this);
@@ -257,7 +231,6 @@ void Assets::addAsset(const std::string& name, int gx, int gy) {
         std::cerr << "[Assets::addAsset][Exception] " << e.what() << "\n";
     }
 
-    // Activate in manager
     activeManager.activate(newAsset);
     activeManager.updateClosestAssets(player, 3);
     active_assets  = activeManager.getActive();
@@ -267,13 +240,12 @@ void Assets::addAsset(const std::string& name, int gx, int gy) {
               << ", Closest=" << closest_assets.size() << "\n";
 
     std::cout << "[Assets::addAsset] Successfully added asset '" << name
-              << "' at (" << gx << ", " << gy << ")\n";
+              << "' at (" << g.x << ", " << g.y << ")\n";
 }
 
-
-Asset* Assets::spawn_asset(const std::string& name, int world_x, int world_y) {
+Asset* Assets::spawn_asset(const std::string& name, SDL_Point world_pos) {
     std::cout << "\n[Assets::spawn_asset] Request to spawn asset '" << name
-              << "' at world (" << world_x << ", " << world_y << ")\n";
+              << "' at world (" << world_pos.x << ", " << world_pos.y << ")\n";
 
     auto info = library_.get(name);
     if (!info) {
@@ -283,13 +255,13 @@ Asset* Assets::spawn_asset(const std::string& name, int world_x, int world_y) {
     std::cout << "[Assets::spawn_asset] Retrieved AssetInfo '" << info->name
               << "' at " << info << "\n";
 
-    Area spawn_area(name, world_x, world_y, 1, 1, "Point", 1, 1, 1);
+    Area spawn_area(name, SDL_Point{world_pos.x, world_pos.y}, 1, 1, "Point", 1, 1, 1);
     std::cout << "[Assets::spawn_asset] Created Area '" << spawn_area.get_name()
-              << "' at (" << world_x << ", " << world_y << ")\n";
+              << "' at (" << world_pos.x << ", " << world_pos.y << ")\n";
 
     size_t prev_size = owned_assets.size();
     owned_assets.emplace_back(
-        std::make_unique<Asset>(info, spawn_area, world_x, world_y, 0, nullptr));
+        std::make_unique<Asset>(info, spawn_area, world_pos, 0, nullptr));
 
     if (owned_assets.size() <= prev_size) {
         std::cerr << "[Assets::spawn_asset][Error] owned_assets did not grow!\n";
@@ -328,7 +300,7 @@ Asset* Assets::spawn_asset(const std::string& name, int world_x, int world_y) {
               << ", Closest=" << closest_assets.size() << "\n";
 
     std::cout << "[Assets::spawn_asset] Successfully spawned asset '" << name
-              << "' at (" << world_x << ", " << world_y << ")\n";
+              << "' at (" << world_pos.x << ", " << world_pos.y << ")\n";
 
     return newAsset;
 }

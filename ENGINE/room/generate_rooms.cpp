@@ -213,8 +213,8 @@ std::vector<std::unique_ptr<Room>> GenerateRooms::build(AssetLibrary* asset_lib,
 					auto [minx, miny, maxx, maxy] = room_ptr->room_area->get_bounds();
 					int center_x = (minx + maxx) / 2;
 					int center_y = (miny + maxy) / 2;
-					double dx = static_cast<double>(asset->pos_X - center_x);
-					double dy = static_cast<double>(asset->pos_Y - center_y);
+					double dx = static_cast<double>(asset->pos.x - center_x);
+					double dy = static_cast<double>(asset->pos.y - center_y);
 					double dist_sq = dx * dx + dy * dy;
 					if (dist_sq < closest_dist_sq) {
 								closest_dist_sq = dist_sq;

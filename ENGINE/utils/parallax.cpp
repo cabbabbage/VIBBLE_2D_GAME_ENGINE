@@ -58,6 +58,6 @@ bool Parallax::isDisabled() const {
 }
 
 void Parallax::update_screen_position(Asset& a) const {
-	SDL_Point p = apply(a.pos_X, a.pos_Y);
+	SDL_Point p = apply(a.pos.x, a.pos.y);
 	a.set_screen_position(p.x, p.y);
 }
