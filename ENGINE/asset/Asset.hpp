@@ -100,7 +100,9 @@ class Asset {
     bool flipped = false;
     bool render_player_light = false;
     double alpha_percentage = 1.0;
-    float distance_to_player = std::numeric_limits<float>::infinity();
+    // Squared distance from this asset to the player. Storing the squared
+    // value avoids expensive square root calculations every frame.
+    float distance_to_player_sq = std::numeric_limits<float>::infinity();
     Area spawn_area_local;
     std::vector<Area> base_areas;
     std::vector<Area> areas;

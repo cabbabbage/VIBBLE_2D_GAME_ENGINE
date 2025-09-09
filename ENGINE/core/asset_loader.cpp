@@ -143,7 +143,7 @@ std::vector<Asset*> AssetLoader::collectDistantAssets(int fade_start_distance, i
 					}
 			}
 			if (!is_inside) {
-					double minDist = std::numeric_limits<double>::infinity();
+                                       double minDistSq = std::numeric_limits<double>::infinity();
 					for (const Area& zone : allZones) {
 								const auto& pts = zone.get_points();
 								for (size_t i = 0; i + 1 < pts.size(); ++i) {
@@ -156,19 +156,22 @@ std::vector<Asset*> AssetLoader::collectDistantAssets(int fade_start_distance, i
 													t = std::clamp(t, 0.0, 1.0);
 													double projx = x1 + t * vx;
 													double projy = y1 + t * vy;
-													double dx = projx - asset->pos_X;
-													double dy = projy - asset->pos_Y;
-													minDist = std::min(minDist, std::hypot(dx, dy));
-								}
-					}
-					double alpha = 0.0;
-					if (minDist <= fade_start_distance) alpha = 1.0;
-					else if (minDist >= fade_end_distance) alpha = 0.0;
-					else {
-								double t = (minDist - fade_start_distance) / (fade_end_distance - fade_start_distance);
-								alpha = std::pow(1.0 - t, 2.0);
-					}
-					asset->alpha_percentage = alpha * 1.2;
+                                                                                                       double dx = projx - asset->pos_X;
+                                                                                                       double dy = projy - asset->pos_Y;
+                                                                                                       double distSq = dx * dx + dy * dy;
+                                                                                                       minDistSq = std::min(minDistSq, distSq);
+                                                               }
+                                       }
+                                       double minDist = std::sqrt(minDistSq);
+                                       double alpha = 0.0;
+                                       if (minDist <= fade_start_distance) alpha = 1.0;
+                                       else if (minDist >= fade_end_distance) alpha = 0.0;
+                                       else {
+                                                               double t = (minDist - fade_start_distance) / (fade_end_distance - fade_start_distance);
+                                                               double diff = 1.0 - t;
+                                                               alpha = diff * diff;
+                                       }
+                                       asset->alpha_percentage = alpha * 1.2;
 					bool distant = !(alpha > 0.3);
 					asset->static_frame = distant;
 					if (distant) distant_assets.push_back(asset);

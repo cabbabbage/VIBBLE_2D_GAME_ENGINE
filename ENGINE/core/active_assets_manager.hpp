@@ -4,7 +4,6 @@
 #include "utils/view.hpp"
 
 #include <vector>
-#include <unordered_set>
 #include <cstddef>
 #include <memory>
 
@@ -18,6 +17,7 @@ class ActiveAssetsManager {
     void sortByZIndex();
     void activate(Asset* asset);
     void remove(Asset* asset);
+    void markNeedsSort();
     int update_activate_interval = 15;
     int update_closest_interval  = 2;
     const std::vector<Asset*>& getActive() const { return active_assets_; }
@@ -27,6 +27,7 @@ class ActiveAssetsManager {
 
 	private:
     void updateActiveAssets(int cx, int cy);
+    void addActiveUnsorted(Asset* asset);
     int activate_counter_ = 0;
     int closest_counter_  = 0;
     view& view_;
@@ -37,4 +38,5 @@ class ActiveAssetsManager {
     std::vector<Asset*> closest_assets_;
     std::vector<Asset*> impassable_assets_;
     std::vector<Asset*> interactive_assets_;
+    bool needs_sort_ = false;
 };
