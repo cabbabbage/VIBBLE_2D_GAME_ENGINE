@@ -30,7 +30,6 @@ class AutoMovement {
     bool can_move_by(int dx, int dy) const;
     bool would_overlap_same_or_player(int dx, int dy) const;
     std::string pick_best_animation_towards(SDL_Point target) const;
-    std::string pick_least_movement_animation() const;
     void ensure_idle_target(int min_dist, int max_dist);
     void ensure_pursue_target(int min_dist, int max_dist, const Asset* final_target);
     void ensure_run_target(int min_dist, int max_dist, const Asset* threat);
@@ -39,7 +38,7 @@ class AutoMovement {
     void ensure_serpentine_target(int min_stride, int max_stride, int sway, const Asset* final_target, int keep_side_ratio);
     SDL_Point choose_balanced_target(SDL_Point desired, const Asset* final_target) const;
     void transition_mode(Mode m);
-    bool is_target_reached() const;
+    bool is_target_reached();
     int  min_move_len2() const;
     void clamp_to_room(int& x, int& y) const;
 

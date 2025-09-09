@@ -119,7 +119,7 @@ void ActiveAssetsManager::remove(Asset* asset)
         active_assets_.erase(it, active_assets_.end());
 }
 
-void ActiveAssetsManager::updateActiveAssets(int /*cx*/, int /*cy*/)
+void ActiveAssetsManager::updateActiveAssets(int cx, int cy)
 {
         if (!all_assets_) return;
 
@@ -130,8 +130,19 @@ void ActiveAssetsManager::updateActiveAssets(int /*cx*/, int /*cy*/)
                 if (a) a->active = false;
         }
 
+        const int buffer = 200;
+        const int half_w = screen_width_  / 2 + buffer;
+        const int half_h = screen_height_ / 2 + buffer;
+        const int left   = cx - half_w;
+        const int right  = cx + half_w;
+        const int top    = cy - half_h;
+        const int bottom = cy + half_h;
+
         for (Asset* a : *all_assets_) {
-                if (a) {
+                if (!a) continue;
+                const int ax = a->pos.x;
+                const int ay = a->pos.y;
+                if (ax >= left && ax <= right && ay >= top && ay <= bottom) {
                         addActiveUnsorted(a);
                 }
         }

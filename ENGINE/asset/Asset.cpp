@@ -224,48 +224,11 @@ void Asset::set_position(SDL_Point p) {
 }
 
 void Asset::update() {
-    if (!info) {
-        std::cerr << "[Asset::update][ERROR] Asset has null info (" << this << ")\n";
-        return;
-    }
+    if (!info) return;
 
-    try {
-        if (controller_ && assets_) {
-            if (Input* in = assets_->get_input()) {
-                controller_->update(*in);
-            } else {
-                std::cerr << "[Asset::update][WARN] No input for '" << info->name << "'\n";
-            }
-        }
-    } catch (const std::exception& e) {
-        std::cerr << "[Asset::update][EXCEPTION] Controller for '" 
-                  << info->name << "' threw: " << e.what() << "\n";
-    } catch (...) {
-        std::cerr << "[Asset::update][EXCEPTION] Controller for '" 
-                  << info->name << "' threw unknown error\n";
-    }
-
-    for (Asset* c : children) {
-        if (!c) {
-            std::cerr << "[Asset::update][WARN] Null child in '" << info->name << "'\n";
-            continue;
-        }
-        if (c->dead) continue;
-        if (!c->info) {
-            std::cerr << "[Asset::update][WARN] Child with no info in '" << info->name << "'\n";
-            continue;
-        }
-
-        try {
-            c->update();
-        } catch (const std::exception& e) {
-            std::cerr << "[Asset::update][EXCEPTION] Child '" 
-                      << c->info->name << "' of '" << info->name 
-                      << "' threw: " << e.what() << "\n";
-        } catch (...) {
-            std::cerr << "[Asset::update][EXCEPTION] Child '" 
-                      << c->info->name << "' of '" << info->name 
-                      << "' threw unknown error\n";
+    if (controller_ && assets_) {
+        if (Input* in = assets_->get_input()) {
+            controller_->update(*in);
         }
     }
 }

@@ -10,14 +10,6 @@
 #include <cmath>
 #include <algorithm>
 
-namespace {
-	static inline Area dm_get_collision_area(Asset* a) {
-		Area area = a->get_area("collision");
-		if (area.get_points().empty()) area = a->get_area("clickable");
-		return area;
-	}
-}
-
 AutoMovement::AutoMovement(Asset* self, ActiveAssetsManager& aam, bool confined)
 : self_(self), aam_(aam), confined_(confined)
 {
@@ -180,7 +172,7 @@ void AutoMovement::move() {
 			int denom = std::max(0, idle_rest_ratio_) + 1;
 			std::uniform_int_distribution<int> pick(0, denom - 1);
 			bool choose_rest = (pick(rng_) != 0);
-			std::string next_anim = choose_rest ? pick_least_movement_animation() : pick_best_animation_towards(target_);
+			std::string next_anim = pick_best_animation_towards(target_);
 			if (!next_anim.empty() && self_->get_current_animation() != next_anim) self_->change_animation(next_anim);
 			self_->update_animation_manager();
 			break;
@@ -250,9 +242,10 @@ bool AutoMovement::would_overlap_same_or_player(int dx, int dy) const {
     for (Asset* a : active) {
         if (!a || a == self_ || !a->info) continue;
 
-        bool is_enemy = (a->info->type == "Enemy");
+        bool is_enemy = (a->info->type == "enemy");
+        bool is_player = (a->info->type == "Player");
 
-        if (!is_enemy) continue;
+        if (!is_enemy && !is_player) continue;
 
         double dist = Range::get_distance(new_pos, a);
         if (dist < 40.0) {
@@ -288,34 +281,6 @@ std::string AutoMovement::pick_best_animation_towards(SDL_Point target) const {
 	return best_id;
 }
 
-std::string AutoMovement::pick_least_movement_animation() const {
-	if (!self_ || !self_->info) return {};
-	const auto& all = self_->info->animations;
-	if (all.empty()) return {};
-	std::string zero_id;
-        double min_len = std::numeric_limits<double>::infinity();
-        std::string min_id;
-        for (const auto& kv : all) {
-                const std::string& id = kv.first;
-                const Animation& anim = kv.second;
-                int dx = anim.total_dx;
-                int dy = anim.total_dy;
-                SDL_Point delta{dx, dy};
-                double len = Range::get_distance(SDL_Point{0,0}, delta);
-                if (dx == 0 && dy == 0) {
-                        zero_id = id;
-                        continue;
-                }
-                if (!can_move_by(dx, dy)) continue;
-                if (would_overlap_same_or_player(dx, dy)) continue;
-                if (len < min_len) {
-                        min_len = len;
-                        min_id = id;
-                }
-        }
-        if (!zero_id.empty()) return zero_id;
-        return min_id;
-}
 
 void AutoMovement::clamp_to_room(int& x, int& y) const {
 	if (!confined_) return;
@@ -345,11 +310,39 @@ int AutoMovement::min_move_len2() const {
         return cached_min_move_len2_;
 }
 
-bool AutoMovement::is_target_reached() const {
-	if (!self_) return true;
-	double d = Range::get_distance(SDL_Point{ self_->pos.x, self_->pos.y }, target_);
-	return d <= std::sqrt(static_cast<double>(min_move_len2()));
+bool AutoMovement::is_target_reached() {
+    if (!self_) return true;
+    double d = Range::get_distance(SDL_Point{ self_->pos.x, self_->pos.y }, target_);
+    bool reached = d <= std::sqrt(static_cast<double>(min_move_len2()));
+
+    if (reached) {
+        switch (mode_) {
+            case Mode::Idle:
+                ensure_idle_target(idle_min_dist_, idle_max_dist_);
+                break;
+            case Mode::Pursue:
+                ensure_pursue_target(pursue_min_dist_, pursue_max_dist_, pursue_target_);
+                break;
+            case Mode::Run:
+                ensure_run_target(run_min_dist_, run_max_dist_, run_threat_);
+                break;
+            case Mode::Orbit:
+                ensure_orbit_target(orbit_min_radius_, orbit_max_radius_, orbit_center_, orbit_keep_ratio_);
+                break;
+            case Mode::Patrol:
+                ensure_patrol_target(patrol_points_, patrol_loop_, patrol_hold_frames_);
+                break;
+            case Mode::Serpentine:
+                ensure_serpentine_target(serp_min_stride_, serp_max_stride_, serp_sway_, serp_target_, serp_keep_ratio_);
+                break;
+            default:
+                break;
+        }
+    }
+
+    return reached;
 }
+
 
 void AutoMovement::ensure_idle_target(int min_dist, int max_dist) {
 	if (mode_ == Mode::Idle && have_target_ && !is_target_reached()) return;

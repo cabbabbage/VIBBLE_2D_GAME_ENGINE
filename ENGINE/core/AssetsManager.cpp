@@ -128,7 +128,7 @@ void Assets::update(const Input& input,
             a->update();
     }
 
-    activeManager.sortByZIndex();
+    //activeManager.sortByZIndex();
 
     if (dev_mode && dev_mouse) {
         bool ui_blocking = (library_ui_ && library_ui_->is_visible()) || (info_ui_ && info_ui_->is_visible());
