@@ -2,7 +2,7 @@
 #define Davey_CONTROLLER_HPP
 
 #include "asset/asset_controller.hpp"
-#include "asset/auto_movement.hpp"
+#include "asset/animation_update.hpp"
 
 class Assets;
 class Asset;
@@ -21,7 +21,7 @@ class DaveyController : public AssetController {
     Assets* assets_ = nullptr;
     Asset*  self_   = nullptr;
     ActiveAssetsManager& aam_;
-    AutoMovement mover_;
+    AnimationUpdate anim_;
     int pursue_target_x_ = 0;
     int pursue_target_y_ = 0;
     int pursue_frames_left_ = 0;

@@ -9,11 +9,11 @@
 class Asset;
 class ActiveAssetsManager;
 
-class AutoMovement {
+class AnimationUpdate {
 
 	public:
-    AutoMovement(Asset* self, ActiveAssetsManager& aam, bool confined);
-    AutoMovement(Asset* self, ActiveAssetsManager& aam, bool confined, double directness_weight, double sparsity_weight);
+    AnimationUpdate(Asset* self, ActiveAssetsManager& aam, bool confined);
+    AnimationUpdate(Asset* self, ActiveAssetsManager& aam, bool confined, double directness_weight, double sparsity_weight);
     void set_idle(int min_target_distance, int max_target_distance, int rest_ratio);
     void set_pursue(Asset* final_target, int min_target_distance, int max_target_distance);
     void set_run(Asset* threat, int min_target_distance, int max_target_distance);
@@ -21,6 +21,7 @@ class AutoMovement {
     void set_patrol(const std::vector<SDL_Point>& waypoints, bool loop, int hold_frames);
     void set_serpentine(Asset* final_target, int min_stride, int max_stride, int sway, int keep_side_ratio);
     void move();
+    void update();
     void set_weights(double directness_weight, double sparsity_weight);
     void set_target(SDL_Point desired, const Asset* final_target);
     inline void set_traget(int desired_x, int desired_y, const Asset* final_target) { set_target(SDL_Point{ desired_x, desired_y }, final_target); }

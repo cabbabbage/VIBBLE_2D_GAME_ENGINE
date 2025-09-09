@@ -1,7 +1,7 @@
 #include "Frog_controller.hpp"
 #include "utils/input.hpp"
 #include "asset/Asset.hpp"
-#include "asset/auto_movement.hpp"
+#include "asset/animation_update.hpp"
 #include "asset/move.hpp"
 #include "utils/area.hpp"
 #include "core/active_assets_manager.hpp"
@@ -14,7 +14,7 @@ FrogController::FrogController(Assets* assets, Asset* self, ActiveAssetsManager&
 : assets_(assets),
 self_(self),
 aam_(aam),
-mover_(self, aam, true)
+anim_(self, aam, true)
 {
 	rng_seed_ ^= reinterpret_cast<uintptr_t>(self_) + 0x9e3779b9u;
 	frames_until_think_ = rand_range(think_interval_min_, think_interval_max_);
@@ -42,6 +42,7 @@ void FrogController::update(const Input& ) {
                         frames_until_think_ = rand_range(think_interval_min_, think_interval_max_);
                 }
         }
+    anim_.update();
 }
 
 void FrogController::think() {
@@ -49,8 +50,8 @@ void FrogController::think() {
 	const std::string cur = self_->get_current_animation();
 	if (coin(55)) {
 		if (cur != "default") {
-                        if (has_anim("default")) {
-                                        self_->change_animation_now("default");
+                        if (has_anim("default") && self_->next_animation.empty()) {
+                                        self_->change_animation_qued("default");
                         } else {
                         }
 		} else {
@@ -59,8 +60,8 @@ void FrogController::think() {
 	}
 	if (!try_hop_any_dir()) {
 		if (cur != "default") {
-                        if (has_anim("default")) {
-                                        self_->change_animation_now("default");
+                        if (has_anim("default") && self_->next_animation.empty()) {
+                                        self_->change_animation_qued("default");
                         } else {
                         }
 		} else {
@@ -71,8 +72,8 @@ void FrogController::think() {
 bool FrogController::try_hop_any_dir() {
         if (!self_) return false;
         const std::string before = self_->get_current_animation();
-        mover_.set_idle(0, 30, 3);
-        mover_.move();
+        anim_.set_idle(0, 30, 3);
+        anim_.move();
         const std::string after = self_->get_current_animation();
         if (after != before) {
                 return true;

@@ -1,5 +1,6 @@
 #pragma once
 #include "asset_controller.hpp"
+#include "asset/animation_update.hpp"
 
 class Assets;
 class Asset;
@@ -16,4 +17,5 @@ class DefaultController : public AssetController {
     Assets* assets_ = nullptr;
     Asset*  self_   = nullptr;
     ActiveAssetsManager& aam_;
+    AnimationUpdate anim_;
 };

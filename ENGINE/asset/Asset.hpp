@@ -8,7 +8,6 @@
 #include <SDL.h>
 #include <limits>
 
-#include "animation_manager.hpp"
 
 #include "utils/area.hpp"
 #include "asset_info.hpp"
@@ -21,6 +20,7 @@
 class view;
 class Assets;
 class Input;
+class AnimationUpdate;
 
 struct StaticLight {
     LightSource* source = nullptr;
@@ -50,7 +50,6 @@ class Asset {
     void update();
     void change_animation_now(const std::string& name);
     void change_animation_qued(const std::string& name);
-    void update_animation_manager();
     SDL_Texture* get_current_frame() const;
     std::string get_current_animation() const;
     std::string get_type() const;
@@ -117,7 +116,7 @@ class Asset {
     std::string spawn_method;
     std::string next_animation;
 	private:
-    friend class AnimationManager;
+    friend class AnimationUpdate;
     friend class Move;
     view* window = nullptr;
     bool highlighted = false;
@@ -134,7 +133,6 @@ class Asset {
     std::unordered_map<std::string, std::vector<SDL_Texture*>> custom_frames;
     Assets* assets_ = nullptr;
     std::unique_ptr<AssetController>   controller_;
-    std::unique_ptr<AnimationManager>  anim_;
 };
 
 #endif

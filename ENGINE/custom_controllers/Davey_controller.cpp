@@ -1,7 +1,7 @@
 #include "Davey_controller.hpp"
 #include "utils/input.hpp"
 #include "asset/Asset.hpp"
-#include "asset/auto_movement.hpp"
+#include "asset/animation_update.hpp"
 #include "utils/area.hpp"
 #include "core/active_assets_manager.hpp"
 #include "core/AssetsManager.hpp"
@@ -11,12 +11,13 @@
 #include <random>
 #include <algorithm>
 DaveyController::DaveyController(Assets* assets, Asset* self, ActiveAssetsManager& aam)
-: assets_(assets), self_(self), aam_(aam), mover_(self, aam, true) {}
+: assets_(assets), self_(self), aam_(aam), anim_(self, aam, true) {}
 
 void DaveyController::update(const Input& ) {
-        if (!self_ || !assets_ || !self_->info) return;
+        if (!self_ || !assets_ || !self_->info) { anim_.update(); return; }
         Asset* player = assets_->player;
         if (!player) {
+                anim_.update();
                 return;
         }
         if (Range::is_in_range(player, self_, 1000)) {
@@ -34,8 +35,9 @@ void DaveyController::update(const Input& ) {
                 }
                 int target_x = pursue_target_x_;
                 int target_y = pursue_target_y_;
-                mover_.set_pursue(player, 20, 30);
-                mover_.move();
+                anim_.set_pursue(player, 20, 30);
+                anim_.move();
         } else {
         }
+        anim_.update();
 }
