@@ -15,7 +15,6 @@
 #include <algorithm>
 #include <iostream>
 #include <memory>
-#include <cmath>
 #include <limits>
 
 
@@ -114,34 +113,31 @@ void Assets::update(const Input& input,
         dx = player->pos_X - start_px;
         dy = player->pos_Y - start_py;
     }
-    // Update distance_to_player for all active assets before their updates,
+    // Update squared distance to player for all active assets before their updates,
     // so controllers can use a fresh value this frame.
     if (player) {
         const int px = player->pos_X;
         const int py = player->pos_Y;
-        player->distance_to_player = 0.0f;
+        player->distance_to_player_sq = 0.0f;
         for (Asset* a : active_assets) {
             if (!a || a == player) continue;
             const float dxp = float(a->pos_X - px);
             const float dyp = float(a->pos_Y - py);
             const float d2  = dxp*dxp + dyp*dyp;
-            a->distance_to_player = std::sqrt(d2);
+            a->distance_to_player_sq = d2;
         }
     } else {
         for (Asset* a : active_assets) {
             if (!a) continue;
-            a->distance_to_player = std::numeric_limits<float>::infinity();
+            a->distance_to_player_sq = std::numeric_limits<float>::infinity();
         }
     }
     for (Asset* a : active_assets) {
         if (a && a != player)
             a->update();
     }
+    activeManager.sortByZIndex();
 
-    if (dx != 0 || dy != 0)
-        activeManager.sortByZIndex();
-
-    
     if (dev_mode && dev_mouse) {
         bool ui_blocking = (library_ui_ && library_ui_->is_visible()) || (info_ui_ && info_ui_->is_visible());
         if (!ui_blocking) {

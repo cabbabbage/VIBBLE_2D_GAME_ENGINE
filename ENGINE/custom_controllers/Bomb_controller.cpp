@@ -25,7 +25,7 @@ void BombController::update(const Input& ) {
 		self_->update_animation_manager();
 		return;
 	}
-	if (player && self_->distance_to_player <= static_cast<float>(follow_radius_))
+        if (player && self_->distance_to_player_sq <= static_cast<float>(follow_radius_sq_))
 	pursue(player);
 	else
 	think_random();
@@ -54,8 +54,8 @@ void BombController::explosion_if_close(Asset* player) {
 		}
 		return;
 	}
-	float d = self_->distance_to_player;
-	if (d <= static_cast<float>(explosion_radius_)) {
+        float d_sq = self_->distance_to_player_sq;
+        if (d_sq <= static_cast<float>(explosion_radius_sq_)) {
 		if (self_->get_current_animation() != "explosion")
 		self_->change_animation("explosion");
 	}

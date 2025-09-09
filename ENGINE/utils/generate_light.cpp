@@ -66,8 +66,9 @@ SDL_Texture* GenerateLight::generate(SDL_Renderer* renderer,
 	}
 	Uint32* pixels = static_cast<Uint32*>(surf->pixels);
 	SDL_PixelFormat* fmt = surf->format;
-	float white_core_ratio  = std::pow(1.0f - falloff / 100.0f, 2.0f);
-	float white_core_radius = radius * white_core_ratio;
+        float falloff_ratio = 1.0f - falloff / 100.0f;
+        float white_core_ratio  = falloff_ratio * falloff_ratio;
+        float white_core_radius = radius * white_core_ratio;
 	std::mt19937 rng(std::random_device{}());
 	std::uniform_real_distribution<float> angle_dist(0.0f, 2.0f * float(M_PI));
 	std::uniform_real_distribution<float> spread_dist(0.2f, 0.6f);
@@ -81,15 +82,19 @@ SDL_Texture* GenerateLight::generate(SDL_Renderer* renderer,
 	auto put_pixel = [&](int x, int y, Uint8 r, Uint8 g, Uint8 b, Uint8 a) {
 		pixels[y * size + x] = SDL_MapRGBA(fmt, r, g, b, a);
 	};
-	for (int y = 0; y < size; ++y) {
-		for (int x = 0; x < size; ++x) {
-			float dx = x - radius + 0.5f;
-			float dy = y - radius + 0.5f;
-			float dist = std::sqrt(dx * dx + dy * dy);
-			if (dist > radius) {
-					put_pixel(x, y, 0, 0, 0, 0);
-					continue;
-			}
+        float radius_f = static_cast<float>(radius);
+        float radius_sq = radius_f * radius_f;
+        float inv_radius = 1.0f / radius_f;
+        for (int y = 0; y < size; ++y) {
+                for (int x = 0; x < size; ++x) {
+                        float dx = x - radius + 0.5f;
+                        float dy = y - radius + 0.5f;
+                        float dist_sq = dx * dx + dy * dy;
+                        if (dist_sq > radius_sq) {
+                                        put_pixel(x, y, 0, 0, 0, 0);
+                                        continue;
+                        }
+                        float dist = std::sqrt(dist_sq);
 			float angle = std::atan2(dy, dx);
 			float ray_boost = 1.0f;
 			for (const auto& rs : rays) {
@@ -104,7 +109,7 @@ SDL_Texture* GenerateLight::generate(SDL_Renderer* renderer,
 					}
 			}
 			ray_boost = std::clamp(ray_boost, 1.0f, 1.1f);
-			float alpha_ratio = std::pow(1.0f - (dist / float(radius)), 1.4f);
+                        float alpha_ratio = std::pow(1.0f - (dist * inv_radius), 1.4f);
 			alpha_ratio = std::clamp(alpha_ratio * ray_boost, 0.0f, 1.0f);
 			Uint8 alpha = static_cast<Uint8>(std::min(255.0f, intensity * alpha_ratio * 1.6f));
 			SDL_Color final_color;

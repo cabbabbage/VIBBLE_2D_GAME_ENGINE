@@ -32,6 +32,8 @@ class BombController : public AssetController {
     int probe_              = 24;
     int follow_radius_      = 1000;
     int explosion_radius_   = 150;
+    int follow_radius_sq_   = follow_radius_ * follow_radius_;
+    int explosion_radius_sq_ = explosion_radius_ * explosion_radius_;
     bool updated_by_determine_ = false;
     unsigned int rng_seed_  = 0xB00B1Eu;
     int  move_target_x_ = 0;

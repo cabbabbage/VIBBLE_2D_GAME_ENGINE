@@ -87,7 +87,7 @@ Asset::Asset(const Asset& o)
 , flipped(o.flipped)
 , render_player_light(o.render_player_light)
 , alpha_percentage(o.alpha_percentage)
-, distance_to_player(o.distance_to_player)
+, distance_to_player_sq(o.distance_to_player_sq)
 , spawn_area_local(o.spawn_area_local)
 , base_areas(o.base_areas)
 , areas(o.areas)
@@ -137,7 +137,7 @@ Asset& Asset::operator=(const Asset& o) {
 	flipped              = o.flipped;
 	render_player_light  = o.render_player_light;
 	alpha_percentage     = o.alpha_percentage;
-	distance_to_player   = o.distance_to_player;
+        distance_to_player_sq = o.distance_to_player_sq;
 	spawn_area_local     = o.spawn_area_local;
 	base_areas           = o.base_areas;
 	areas                = o.areas;
@@ -306,17 +306,21 @@ void Asset::set_assets(Assets* a) {
 }
 
 void Asset::set_z_index() {
-	try {
-		if (parent) {
-			if (z_offset > 0)       z_index = parent->z_index + 1;
-			else if (z_offset < 0)  z_index = parent->z_index - 1;
-			else                    z_index = pos_Y + info->z_threshold;
-		} else if (info) {
-			z_index = pos_Y + info->z_threshold;
-		}
-	} catch (const std::exception& e) {
-		std::cerr << "[Asset::set_z_index] Exception: " << e.what() << "\n";
-	}
+        int old_z = z_index;
+        try {
+                if (parent) {
+                        if (z_offset > 0)       z_index = parent->z_index + 1;
+                        else if (z_offset < 0)  z_index = parent->z_index - 1;
+                        else                    z_index = pos_Y + info->z_threshold;
+                } else if (info) {
+                        z_index = pos_Y + info->z_threshold;
+                }
+        } catch (const std::exception& e) {
+                std::cerr << "[Asset::set_z_index] Exception: " << e.what() << "\n";
+        }
+        if (assets_ && z_index != old_z) {
+                assets_->activeManager.markNeedsSort();
+        }
 }
 
 void Asset::set_z_offset(int z) {
