@@ -6,7 +6,6 @@
 #include "utils/input.hpp"
 #include "utils/area.hpp"
 #include "asset/move.hpp"
-#include "asset/animation_manager.hpp"
 
 #include <SDL.h>
 #include <algorithm>
@@ -56,7 +55,7 @@ void VibbleController::movement(const Input& input) {
     const std::string current = player_->get_current_animation();
     if (move_x == 0 && move_y == 0) {
         if (current != "default")
-            player_->change_animation("default");
+            player_->change_animation_now("default");
         return;
     }
 
@@ -67,7 +66,7 @@ void VibbleController::movement(const Input& input) {
         else if (move_x < 0) anim = "left";
         else if (move_x > 0) anim = "right";
         if (!anim.empty() && anim != current)
-            player_->change_animation(anim);
+            player_->change_animation_now(anim);
     }
 }
 
@@ -79,7 +78,5 @@ void VibbleController::update(const Input& input) {
     dx_ = dy_ = 0;
     movement(input);
     interaction();
-    // Update player's animation manager if present
-    if (player_) player_->update_animation_manager();
 }
 

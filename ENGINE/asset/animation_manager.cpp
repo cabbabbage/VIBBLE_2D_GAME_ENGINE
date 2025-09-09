@@ -58,7 +58,14 @@ void AnimationManager::update() {
     if (it == self_->info->animations.end()) return;
 
     Animation& anim = it->second;
-    if (self_->static_frame) return;
+
+    // Handle single-frame animations by triggering their on_end immediately.
+    if (self_->static_frame) {
+        if (self_->next_animation.empty() && !anim.on_end_animation.empty()) {
+            self_->next_animation = anim.on_end_animation;
+        }
+        return;
+    }
 
     int  dx = 0;
     int  dy = 0;
@@ -67,10 +74,14 @@ void AnimationManager::update() {
     const bool advanced = anim.advance(self_->current_frame_index,
                                        self_->frame_progress,
                                        dx, dy, resort_z);
-    (void)advanced; 
 
     self_->pos.x += dx;
     self_->pos.y += dy;
+
+    if (!advanced && !anim.loop && self_->next_animation.empty() &&
+        !anim.on_end_animation.empty()) {
+        self_->next_animation = anim.on_end_animation;
+    }
 
     if ((dx != 0 || dy != 0) && resort_z) {
         self_->set_z_index();

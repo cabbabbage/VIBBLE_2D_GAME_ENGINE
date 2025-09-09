@@ -48,7 +48,8 @@ class Asset {
     void finalize_setup();
     void set_position(SDL_Point p);
     void update();
-    void change_animation(const std::string& name);
+    void change_animation_now(const std::string& name);
+    void change_animation_qued(const std::string& name);
     void update_animation_manager();
     SDL_Texture* get_current_frame() const;
     std::string get_current_animation() const;

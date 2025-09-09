@@ -18,33 +18,32 @@ void DefaultController::update(const Input& /*in*/) {
         if (it != self_->info->animations.end()) return "default";
         it = self_->info->animations.find("Default");
         if (it != self_->info->animations.end()) return "Default";
-        return self_->info->animations.empty()
-             ? std::string()
-             : self_->info->animations.begin()->first;
+        return self_->info->animations.empty() ? std::string()
+                                              : self_->info->animations.begin()->first;
     };
 
-    std::string chosen;
-
-    
     const std::string& cur = self_->get_current_animation();
-    if (!cur.empty()) {
-        auto it = self_->info->animations.find(cur);
-        if (it != self_->info->animations.end()) {
-            const Animation& anim = it->second;
-            const std::string& oe = anim.on_end_animation;
-            if (!oe.empty()) {
-                
-                if (oe == "end" || oe == "freeze_on_last" ||
-                    self_->info->animations.find(oe) != self_->info->animations.end()) {
-                    chosen = oe;
-                }
-            }
+    if (cur.empty()) {
+        self_->change_animation_now(pick_default());
+        return;
+    }
+
+    // Only intervene when the current animation has finished, no next animation
+    // is pending, and there is no specific on_end directive.
+    if (!self_->is_current_animation_last_frame() || !self_->next_animation.empty()) {
+        return;
+    }
+
+    auto it = self_->info->animations.find(cur);
+    if (it != self_->info->animations.end()) {
+        const Animation& anim = it->second;
+        if (!anim.on_end_animation.empty()) {
+            return; // AnimationManager will handle its on_end logic
         }
     }
 
-    
-    if (chosen.empty()) chosen = pick_default();
-
-    
-    self_->next_animation = chosen;
+    std::string chosen = pick_default();
+    if (!chosen.empty() && chosen != cur) {
+        self_->change_animation_now(chosen);
+    }
 }

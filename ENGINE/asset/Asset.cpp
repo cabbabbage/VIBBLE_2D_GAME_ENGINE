@@ -1,6 +1,7 @@
 #include "Asset.hpp"
 #include "controller_factory.hpp"
 #include "animation_manager.hpp"
+#include "animation.hpp"
 #include "core/AssetsManager.hpp"
 #include "view.hpp"
 #include "utils/light_utils.hpp"
@@ -231,17 +232,33 @@ void Asset::update() {
             controller_->update(*in);
         }
     }
+
+    if (!dead) {
+        update_animation_manager();
+    }
 }
 
 
 void Asset::update_animation_manager() {
-	if (anim_) anim_->update();
+        if (anim_) anim_->update();
 }
 
-void Asset::change_animation(const std::string& name) {
-	if (!info || name.empty()) return;
-	if (name == current_animation) return;
-	next_animation = name;
+void Asset::change_animation_now(const std::string& name) {
+        if (!info || name.empty()) return;
+        auto it = info->animations.find(name);
+        if (it == info->animations.end()) return;
+        if (name == current_animation) return;
+        current_animation        = name;
+        Animation& anim          = it->second;
+        static_frame             = (static_cast<int>(anim.frames.size()) <= 1);
+        current_frame_index      = 0;
+        frame_progress           = 0.0f;
+        next_animation           = anim.on_end_animation;
+}
+
+void Asset::change_animation_qued(const std::string& name) {
+        if (!info) return;
+        next_animation = name;
 }
 
 std::string Asset::get_current_animation() const { return current_animation; }
