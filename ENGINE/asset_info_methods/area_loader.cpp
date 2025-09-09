@@ -21,9 +21,9 @@ void AreaLoader::load(AssetInfo& info,
 		if (entry.contains("points") && entry["points"].is_array()) {
 			for (const auto& p : entry["points"]) {
 					if (p.is_array() && p.size() >= 2) {
-								int x = static_cast<int>(std::round(p[0].get<double>() * scale));
-								int y = static_cast<int>(std::round(p[1].get<double>() * scale));
-								pts.emplace_back(x + offset_x, y + offset_y);
+                                                                int x = static_cast<int>(std::round(p[0].get<double>() * scale));
+                                                                int y = static_cast<int>(std::round(p[1].get<double>() * scale));
+                                                                pts.push_back({x + offset_x, y + offset_y});
 					}
 			}
 		}

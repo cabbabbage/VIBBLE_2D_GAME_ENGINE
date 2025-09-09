@@ -81,9 +81,9 @@ Area::Area(const std::string& name, const std::string& json_path, float scale)
 		if (!elem.is_array() || elem.size() < 2) continue;
 		float rel_x = elem[0].get<float>();
 		float rel_y = elem[1].get<float>();
-		int x = pivot_x + static_cast<int>(std::round(rel_x * scale));
-		int y = pivot_y + static_cast<int>(std::round(rel_y * scale));
-		points.emplace_back(x, y);
+                int x = pivot_x + static_cast<int>(std::round(rel_x * scale));
+                int y = pivot_y + static_cast<int>(std::round(rel_y * scale));
+                points.push_back({x, y});
 	}
 	if (points.empty())
 	throw std::runtime_error("[Area: " + area_name_ + "] No points loaded");

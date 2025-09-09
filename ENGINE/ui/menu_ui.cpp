@@ -35,7 +35,6 @@ void MenuUI::init() {
 	setup();
 	dev_mode_local_ = dev_mode_;
 	rebuildButtons();
-	std::cout << "\n\nENTERING GAME LOOP (MenuUI)\n\n";
 	game_loop();
 }
 

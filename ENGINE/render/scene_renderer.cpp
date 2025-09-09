@@ -167,6 +167,9 @@ void SceneRenderer::render() {
 
 	SDL_SetRenderTarget(renderer_, nullptr);
 	SDL_RenderCopy(renderer_, accumulation_tex_, nullptr, nullptr);
-	z_light_pass_->render(debugging);
-	SDL_RenderPresent(renderer_);
+        z_light_pass_->render(debugging);
+        if (assets_) {
+                assets_->render_overlays(renderer_);
+        }
+        SDL_RenderPresent(renderer_);
 }

@@ -57,6 +57,7 @@ Assets::Assets(std::vector<Asset>&& loaded,
     for (Asset* a : all) {
         if (a) a->set_assets(this);
     }
+
 }
 
 
@@ -82,12 +83,14 @@ void Assets::set_input(Input* m) {
     } else {
         dev_mouse = nullptr;
     }
+
 }
 
 void Assets::update(const Input& input,
                     int screen_center_x,
                     int screen_center_y)
 {
+
     activeManager.updateAssetVectors(player, screen_center_x, screen_center_y);
 
     current_room_ = finder_ ? finder_->getCurrentRoom() : nullptr;
@@ -101,7 +104,8 @@ void Assets::update(const Input& input,
     active_assets  = activeManager.getActive();
     closest_assets = activeManager.getClosest();
 
-    if (player) player->update();
+    if (player) player->update();        
+
     if (player) {
         dx = player->pos.x - start_px;
         dy = player->pos.y - start_py;
@@ -123,6 +127,7 @@ void Assets::update(const Input& input,
         if (a && a != player)
             a->update();
     }
+
     activeManager.sortByZIndex();
 
     if (dev_mode && dev_mouse) {

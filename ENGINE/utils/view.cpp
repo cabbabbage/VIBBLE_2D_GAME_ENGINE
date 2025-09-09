@@ -80,15 +80,6 @@ bool view::is_point_in_bounds(int x, int y, int cx, int cy) const {
 	return view_area.contains_point({x, y});
 }
 
-bool view::is_asset_in_bounds(const Asset& a, int cx, int cy) const {
-	Area view_area = get_view_area(cx, cy);
-	Area asset_area = a.get_area("collision");
-	if (asset_area.get_points().empty()) {
-		asset_area = a.get_area("clickable");
-	}
-	return view_area.intersects(asset_area);
-}
-
 void view::zoom_scale(double target_scale, int duration_steps) {
 	double clamped = (target_scale > 0.0) ? target_scale : 0.0001;
 	if (duration_steps <= 0) {

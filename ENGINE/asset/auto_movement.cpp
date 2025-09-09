@@ -242,20 +242,27 @@ bool AutoMovement::can_move_by(int dx, int dy) const {
 }
 
 bool AutoMovement::would_overlap_same_or_player(int dx, int dy) const {
-	if (!self_ || !self_->info) return true;
-	Area moved = dm_get_collision_area(self_);
-	moved.apply_offset(dx, dy);
-	const auto& active = aam_.getActive();
-	for (Asset* a : active) {
-		if (!a || a == self_ || !a->info) continue;
-		bool same_name = (a->info->name == self_->info->name);
-		bool is_player = (a->info->type == std::string("Player"));
-		if (!same_name && !is_player) continue;
-		Area oa = dm_get_collision_area(a);
-		if (moved.intersects(oa)) return true;
-	}
-	return false;
+    if (!self_ || !self_->info) return true;
+
+    SDL_Point new_pos{ self_->pos.x + dx, self_->pos.y + dy };
+    const auto& active = aam_.getActive();
+
+    for (Asset* a : active) {
+        if (!a || a == self_ || !a->info) continue;
+
+        bool is_enemy = (a->info->type == "Enemy");
+
+        if (!is_enemy) continue;
+
+        double dist = Range::get_distance(new_pos, a);
+        if (dist < 40.0) {
+            return true; 
+        }
+    }
+
+    return false;
 }
+
 
 std::string AutoMovement::pick_best_animation_towards(SDL_Point target) const {
 	if (!self_ || !self_->info) return {};

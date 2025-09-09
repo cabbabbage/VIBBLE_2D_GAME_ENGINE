@@ -1269,14 +1269,14 @@
   },
   "start": "default",
   "tags": [
-    "forward",
-    "player",
-    "left",
-    "backward",
     "passable",
-    "default",
+    "left",
+    "forward",
+    "start",
     "right",
-    "start"
+    "default",
+    "player",
+    "backward"
   ],
   "update_radius": 1000,
   "z_threshold": 159
