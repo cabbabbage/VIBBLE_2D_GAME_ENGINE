@@ -2,6 +2,8 @@
 #include <algorithm>
 #include <queue>
 #include <cmath>
+#include "utils/range_util.hpp"
+
 ActiveAssetsManager::ActiveAssetsManager(int screen_width, int screen_height, view& v)
 : view_(v),
 screen_width_(screen_width),
@@ -18,7 +20,6 @@ void ActiveAssetsManager::initialize(std::vector<Asset*>& all_assets,
 	active_assets_.clear();
 	closest_assets_.clear();
 	impassable_assets_.clear();
-	interactive_assets_.clear();
 	updateActiveAssets(screen_center_x, screen_center_y);
 	if (player) activate(player);
 	updateClosestAssets(player, 3);
@@ -51,44 +52,45 @@ void ActiveAssetsManager::updateClosestAssets(Asset* player, std::size_t max_cou
 	}
 	closest_assets_.clear();
 	impassable_assets_.clear();
-	interactive_assets_.clear();
+
 	if (!player || active_assets_.empty() || max_count == 0) return;
-	struct Pair { float d2; Asset* a; };
-	auto cmp = [](const Pair& L, const Pair& R){ return L.d2 < R.d2; };
-	std::priority_queue<Pair, std::vector<Pair>, decltype(cmp)> heap(cmp);
-	const int px = player->pos.x;
-	const int py = player->pos.y;
-	for (Asset* a : active_assets_) {
-		if (!a || a == player) continue;
-		const float dx = float(a->pos.x - px);
-		const float dy = float(a->pos.y - py);
-		const float d2 = dx*dx + dy*dy;
-		if (heap.size() < max_count) {
-			heap.push({d2, a});
-		} else if (d2 < heap.top().d2) {
-			heap.pop();
-			heap.push({d2, a});
-		}
-	}
+
+        struct Pair { double dist; Asset* a; };
+        auto cmp = [](const Pair& L, const Pair& R){ return L.dist < R.dist; };
+        std::priority_queue<Pair, std::vector<Pair>, decltype(cmp)> heap(cmp);
+
+        const int px = player->pos.x;
+        const int py = player->pos.y;
+
+        for (Asset* a : active_assets_) {
+                if (!a || a == player) continue;
+                double d = Range::get_distance(a, SDL_Point{px, py});
+                if (heap.size() < max_count) {
+                        heap.push({d, a});
+                } else if (d < heap.top().dist) {
+                        heap.pop();
+                        heap.push({d, a});
+                }
+        }
+
 	closest_assets_.reserve(heap.size());
 	while (!heap.empty()) {
 		closest_assets_.push_back(heap.top().a);
 		heap.pop();
 	}
-	std::sort(closest_assets_.begin(), closest_assets_.end(),
-	[&](Asset* A, Asset* B){
-		float dAx = float(A->pos.x - px), dAy = float(A->pos.y - py);
-		float dBx = float(B->pos.x - px), dBy = float(B->pos.y - py);
-           return dAx*dAx + dAy*dAy < dBx*dBx + dBy*dBy;
-           });
+
+        std::sort(closest_assets_.begin(), closest_assets_.end(),
+        [&](Asset* A, Asset* B){
+                double dA = Range::get_distance(A, SDL_Point{px, py});
+                double dB = Range::get_distance(B, SDL_Point{px, py});
+                return dA < dB;
+        });
+
 	for (Asset* a : closest_assets_) {
 		if (!a) continue;
 		a->set_render_player_light(true);
-		if (a->info) {
-			if (!a->info->passable)
+		if (a->info && !a->info->passable) {
 			impassable_assets_.push_back(a);
-			if (a->info->find_area("interaction_area"))
-			interactive_assets_.push_back(a);
 		}
 	}
 }
@@ -101,6 +103,7 @@ void ActiveAssetsManager::activate(Asset* asset)
 	active_assets_.begin(), active_assets_.end(), asset,
 	[](Asset* A, Asset* B) { return A->z_index < B->z_index; });
 	active_assets_.insert(it, asset);
+
 	for (Asset* c : asset->children) {
 		if (c && !c->dead && c->info) {
 			activate(c);
@@ -116,24 +119,29 @@ void ActiveAssetsManager::remove(Asset* asset)
         active_assets_.erase(it, active_assets_.end());
 }
 
-void ActiveAssetsManager::updateActiveAssets(int cx, int cy)
+void ActiveAssetsManager::updateActiveAssets(int /*cx*/, int /*cy*/)
 {
         if (!all_assets_) return;
+
         std::vector<Asset*> prev_active;
         prev_active.swap(active_assets_);
+
         for (Asset* a : prev_active) {
                 if (a) a->active = false;
         }
+
         for (Asset* a : *all_assets_) {
-                if (a && view_.is_asset_in_bounds(*a, cx, cy)) {
+                if (a) {
                         addActiveUnsorted(a);
                 }
         }
+
         for (Asset* old_a : prev_active) {
                 if (old_a && !old_a->active) {
                         old_a->deactivate();
                 }
         }
+
         needs_sort_ = true;
 }
 
@@ -155,6 +163,7 @@ void ActiveAssetsManager::addActiveUnsorted(Asset* asset)
         if (!asset || asset->active) return;
         asset->active = true;
         active_assets_.push_back(asset);
+
         for (Asset* c : asset->children) {
                 if (c && !c->dead && c->info) {
                         addActiveUnsorted(c);

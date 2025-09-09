@@ -167,8 +167,8 @@ nlohmann::json Room::create_static_room_json(std::string name) {
 	int cx = 0, cy = 0;
 	if (room_area) {
 		auto c = room_area->get_center();
-		cx = c.first;
-		cy = c.second;
+		cx = c.x;
+		cy = c.y;
 	}
 	for (const auto& uptr : assets) {
 		const Asset* a = uptr.get();
@@ -196,7 +196,7 @@ nlohmann::json Room::create_static_room_json(std::string name) {
 	}
 	if (is_spawn) {
 		json davey_entry = {
-			{"name", "Davey"},
+			{"name", "Vibble"},
 			{"min_number", 1},
 			{"max_number", 1},
 			{"position", "Center"},

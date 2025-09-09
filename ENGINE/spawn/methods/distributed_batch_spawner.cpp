@@ -1,7 +1,7 @@
 #include "distributed_batch_spawner.hpp"
 #include <random>
 #include <unordered_map>
-#include "utils/spawn_context.hpp"
+#include "spawn_context.hpp"
 #include "check.hpp"
 #include "asset_spawn_planner.hpp"
 #include "asset/asset_info.hpp"
@@ -42,7 +42,7 @@ void DistributedBatchSpawner::spawn(const std::vector<BatchSpawnInfo>& items,
 			auto it = ctx.info_library().find(selected.name);
 			if (it == ctx.info_library().end()) continue;
 			auto& info = it->second;
-                        if (ctx.checker().check(info, cx, cy, ctx.exclusion_zones(), ctx.all_assets(), true, false, true, 5)) continue;
+                        if (ctx.checker().check(info, SDL_Point{cx, cy}, ctx.exclusion_zones(), ctx.all_assets(), true, false, true, 5)) continue;
                         ctx.spawnAsset(selected.name, info, *area, SDL_Point{cx, cy}, 0, nullptr, spawn_id, std::string("DistributedBatch"));
 			++placed_quantities[selected.name];
 		}

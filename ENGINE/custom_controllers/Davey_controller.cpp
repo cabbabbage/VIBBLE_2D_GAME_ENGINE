@@ -5,6 +5,7 @@
 #include "utils/area.hpp"
 #include "core/active_assets_manager.hpp"
 #include "core/AssetsManager.hpp"
+#include "utils/range_util.hpp"
 #include <cmath>
 #include <iostream>
 #include <random>
@@ -20,15 +21,11 @@ void DaveyController::update(const Input& ) {
 		self_->update_animation_manager();
 		return;
 	}
-	long long dx = static_cast<long long>(player->pos.x) - static_cast<long long>(self_->pos.x);
-	long long dy = static_cast<long long>(player->pos.y) - static_cast<long long>(self_->pos.y);
-	long long d2 = dx*dx + dy*dy;
-	const long long r = 1000LL;
-	if (d2 <= r*r) {
-		constexpr int radius = 30;
-		constexpr double pi = 3.14159265358979323846;
-		static thread_local std::mt19937 rng{std::random_device{}()};
-		if (pursue_frames_left_ <= 0) {
+        if (Range::is_in_range(player, self_, 1000)) {
+                constexpr int radius = 30;
+                constexpr double pi = 3.14159265358979323846;
+                static thread_local std::mt19937 rng{std::random_device{}()};
+                if (pursue_frames_left_ <= 0) {
 			std::uniform_real_distribution<double> angle_dist(0.0, 2.0 * pi);
 			double theta = angle_dist(rng);
 			pursue_target_x_ = player->pos.x + static_cast<int>(std::llround(radius * std::cos(theta)));

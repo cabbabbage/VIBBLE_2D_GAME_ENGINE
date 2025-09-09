@@ -20,10 +20,10 @@ map_path_(map_dir),
 rng_(std::random_device{}())
 {}
 
-GenerateRooms::Point GenerateRooms::polar_to_cartesian(int cx, int cy, int radius, float angle_rad) {
+SDL_Point GenerateRooms::polar_to_cartesian(int cx, int cy, int radius, float angle_rad) {
 	float x = cx + std::cos(angle_rad) * radius;
 	float y = cy + std::sin(angle_rad) * radius;
-	return { static_cast<int>(std::round(x)), static_cast<int>(std::round(y)) };
+	return SDL_Point{ static_cast<int>(std::round(x)), static_cast<int>(std::round(y)) };
 }
 
 std::vector<RoomSpec> GenerateRooms::get_children_from_layer(const LayerSpec& layer) {
@@ -62,7 +62,7 @@ std::vector<std::unique_ptr<Room>> GenerateRooms::build(AssetLibrary* asset_lib,
 		std::cout << "[GenerateRooms] Creating root room: " << root_spec.name << "\n";
 	}
 	auto root = std::make_unique<Room>(
-                                        Point{ map_center_x_, map_center_y_ },
+                                        SDL_Point{ map_center_x_, map_center_y_ },
                                         "room",
                                         root_spec.name,
                                         nullptr,
@@ -92,10 +92,10 @@ std::vector<std::unique_ptr<Room>> GenerateRooms::build(AssetLibrary* asset_lib,
 			float buf = slice * 0.05f;
 			for (size_t i = 0; i < children_specs.size(); ++i) {
 					float angle = i * slice + buf;
-					Point pos = polar_to_cartesian(map_center_x_, map_center_y_, radius, angle);
+					SDL_Point pos = polar_to_cartesian(map_center_x_, map_center_y_, radius, angle);
 					if (testing) {
 								std::cout << "[GenerateRooms] Placing layer-1 child " << children_specs[i].name
-								<< " at angle " << angle << " → (" << pos.first << ", " << pos.second << ")\n";
+								<< " at angle " << angle << " → (" << pos.x << ", " << pos.y << ")\n";
 					}
 					auto child = std::make_unique<Room>( pos, "room", children_specs[i].name, current_parents[0], map_path_ + "/rooms", map_path_, asset_lib, nullptr );
 					child->layer = layer.level;
@@ -142,11 +142,11 @@ std::vector<std::unique_ptr<Room>> GenerateRooms::build(AssetLibrary* asset_lib,
 					for (size_t i = 0; i < kids.size(); ++i) {
 								float angle = sec.start_angle + i * slice + buf;
 								float spread = slice - 2 * buf;
-								Point pos = polar_to_cartesian(map_center_x_, map_center_y_, radius, angle);
+								SDL_Point pos = polar_to_cartesian(map_center_x_, map_center_y_, radius, angle);
 								if (testing) {
 													std::cout << "[GenerateRooms] Placing child " << kids[i].name
 													<< " under parent " << parent->room_name
-													<< " at angle " << angle << " → (" << pos.first << ", " << pos.second << ")\n";
+													<< " at angle " << angle << " → (" << pos.x << ", " << pos.y << ")\n";
 								}
 								auto child = std::make_unique<Room>( pos, "room", kids[i].name, parent, map_path_ + "/rooms", map_path_, asset_lib, nullptr );
 								child->layer = layer.level;
@@ -198,7 +198,8 @@ std::vector<std::unique_ptr<Room>> GenerateRooms::build(AssetLibrary* asset_lib,
 		int cx = map_radius;
 		int cy = map_radius;
 		int diameter = map_radius * 2;
-		Area area("Map", cx, cy, diameter, diameter, "Circle", 1, diameter, diameter);
+		SDL_Point center{cx, cy};
+		Area area("Map", center, diameter, diameter, "Circle", 1, diameter, diameter);
 		std::cout << "[Boundary] Created circular boundary area with diameter " << diameter << "\n";
 		AssetSpawner spawner(asset_lib, exclusion_zones);
 		std::vector<std::unique_ptr<Asset>> boundary_assets = spawner.spawn_boundary_from_file(map_path_ + "/" + boundary_json, area);

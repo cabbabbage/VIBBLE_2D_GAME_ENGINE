@@ -286,27 +286,28 @@ std::string AutoMovement::pick_least_movement_animation() const {
 	const auto& all = self_->info->animations;
 	if (all.empty()) return {};
 	std::string zero_id;
-	int min_len2 = std::numeric_limits<int>::max();
-	std::string min_id;
-	for (const auto& kv : all) {
-		const std::string& id = kv.first;
-		const Animation& anim = kv.second;
-		int dx = anim.total_dx;
-		int dy = anim.total_dy;
-		int len2 = dx*dx + dy*dy;
-		if (dx == 0 && dy == 0) {
-			zero_id = id;
-			continue;
-		}
-		if (!can_move_by(dx, dy)) continue;
-		if (would_overlap_same_or_player(dx, dy)) continue;
-		if (len2 < min_len2) {
-			min_len2 = len2;
-			min_id = id;
-		}
-	}
-	if (!zero_id.empty()) return zero_id;
-	return min_id;
+        double min_len = std::numeric_limits<double>::infinity();
+        std::string min_id;
+        for (const auto& kv : all) {
+                const std::string& id = kv.first;
+                const Animation& anim = kv.second;
+                int dx = anim.total_dx;
+                int dy = anim.total_dy;
+                SDL_Point delta{dx, dy};
+                double len = Range::get_distance(SDL_Point{0,0}, delta);
+                if (dx == 0 && dy == 0) {
+                        zero_id = id;
+                        continue;
+                }
+                if (!can_move_by(dx, dy)) continue;
+                if (would_overlap_same_or_player(dx, dy)) continue;
+                if (len < min_len) {
+                        min_len = len;
+                        min_id = id;
+                }
+        }
+        if (!zero_id.empty()) return zero_id;
+        return min_id;
 }
 
 void AutoMovement::clamp_to_room(int& x, int& y) const {
@@ -322,18 +323,19 @@ void AutoMovement::clamp_to_room(int& x, int& y) const {
 }
 
 int AutoMovement::min_move_len2() const {
-	if (cached_min_move_len2_ >= 0) return cached_min_move_len2_;
-	cached_min_move_len2_ = std::numeric_limits<int>::max();
-	if (!self_ || !self_->info) { cached_min_move_len2_ = 1; return cached_min_move_len2_; }
-	for (const auto& kv : self_->info->animations) {
-		const Animation& anim = kv.second;
-		int dx = anim.total_dx, dy = anim.total_dy;
-		int len2 = dx*dx + dy*dy;
-		if (dx == 0 && dy == 0) continue;
-		if (len2 > 0) cached_min_move_len2_ = std::min(cached_min_move_len2_, len2);
-	}
-	if (cached_min_move_len2_ == std::numeric_limits<int>::max()) cached_min_move_len2_ = 1;
-	return cached_min_move_len2_;
+        if (cached_min_move_len2_ >= 0) return cached_min_move_len2_;
+        cached_min_move_len2_ = std::numeric_limits<int>::max();
+        if (!self_ || !self_->info) { cached_min_move_len2_ = 1; return cached_min_move_len2_; }
+        for (const auto& kv : self_->info->animations) {
+                const Animation& anim = kv.second;
+                SDL_Point delta{anim.total_dx, anim.total_dy};
+                double len = Range::get_distance(SDL_Point{0,0}, delta);
+                int len2 = static_cast<int>(len * len);
+                if (anim.total_dx == 0 && anim.total_dy == 0) continue;
+                if (len2 > 0) cached_min_move_len2_ = std::min(cached_min_move_len2_, len2);
+        }
+        if (cached_min_move_len2_ == std::numeric_limits<int>::max()) cached_min_move_len2_ = 1;
+        return cached_min_move_len2_;
 }
 
 bool AutoMovement::is_target_reached() const {

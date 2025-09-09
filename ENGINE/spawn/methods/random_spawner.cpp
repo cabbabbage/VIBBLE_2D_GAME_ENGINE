@@ -1,5 +1,5 @@
 #include "random_spawner.hpp"
-#include "utils/spawn_context.hpp"
+#include "spawn_context.hpp"
 #include "check.hpp"
 #include "asset_spawn_planner.hpp"
 #include "asset/asset_info.hpp"
@@ -13,7 +13,7 @@ void RandomSpawner::spawn(const SpawnInfo& item, const Area* area, SpawnContext&
                 SDL_Point pos = ctx.get_point_within_area(*area);
                 ++attempts;
                 if (!area->contains_point(pos)) continue;
-                if (ctx.checker().check(item.info, pos.x, pos.y, ctx.exclusion_zones(), ctx.all_assets(),
+                if (ctx.checker().check(item.info, pos, ctx.exclusion_zones(), ctx.all_assets(),
       true, true, true, 5)) continue;
                 ctx.spawnAsset(item.name, item.info, *area, pos, 0, nullptr, item.spawn_id, item.position);
 		++spawned;

@@ -3,7 +3,7 @@
 #include <vector>
 #include <algorithm>
 #include <SDL.h>
-#include "utils/spawn_context.hpp"
+#include "spawn_context.hpp"
 #include "check.hpp"
 #include "asset_spawn_planner.hpp"
 #include "asset/asset_info.hpp"

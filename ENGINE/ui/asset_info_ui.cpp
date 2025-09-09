@@ -387,7 +387,7 @@ void AssetInfoUI::open_area_editor(const std::string& name) {
 			SDL_SetRenderDrawColor(last_renderer_, 0, 200, 255, 180);
 			std::vector<SDL_Point> pts; pts.reserve(base->get_points().size() + 1);
 			for (const auto& p : base->get_points()) {
-					pts.push_back(SDL_Point{ p.first, p.second });
+					pts.push_back(SDL_Point{ p.x, p.y });
 			}
 			if (!pts.empty()) {
 					pts.push_back(pts.front());

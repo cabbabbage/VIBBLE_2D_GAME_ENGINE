@@ -14,7 +14,7 @@ class Button {
 	public:
     Button();
     Button(const std::string& text, const ButtonStyle* style, int w, int h);
-    void set_position(int x, int y);
+    void set_position(SDL_Point p);
     void set_rect(const SDL_Rect& r);
     const SDL_Rect& rect() const;
     void set_text(const std::string& text);

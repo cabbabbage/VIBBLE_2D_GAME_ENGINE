@@ -1,5 +1,5 @@
 #include "center_spawner.hpp"
-#include "utils/spawn_context.hpp"
+#include "spawn_context.hpp"
 #include "check.hpp"
 #include "asset_spawn_planner.hpp"
 #include "asset/asset_info.hpp"
@@ -10,7 +10,7 @@ void CenterSpawner::spawn(const SpawnInfo& item, const Area* area, SpawnContext&
 	const int Y_SHIFT = 200;
         SDL_Point center = ctx.get_area_center(*area);
         center.y -= Y_SHIFT;
-        if (ctx.checker().check(item.info, center.x, center.y, ctx.exclusion_zones(), ctx.all_assets(),
+        if (ctx.checker().check(item.info, center, ctx.exclusion_zones(), ctx.all_assets(),
      item.check_overlap, item.check_min_spacing, false, 5)) {
                 ctx.logger().output_and_log(item.name, item.quantity, 0, 1, 1, "center");
                 return;

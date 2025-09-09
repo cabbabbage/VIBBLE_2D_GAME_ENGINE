@@ -5,7 +5,7 @@
 TextBox::TextBox(const std::string& label, const std::string& value)
 : label_(label), text_(value) {}
 
-void TextBox::set_position(int x, int y) { rect_.x = x; rect_.y = y; }
+void TextBox::set_position(SDL_Point p) { rect_.x = p.x; rect_.y = p.y; }
 void TextBox::set_rect(const SDL_Rect& r) { rect_ = r; }
 const SDL_Rect& TextBox::rect() const { return rect_; }
 

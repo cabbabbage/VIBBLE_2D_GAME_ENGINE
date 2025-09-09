@@ -56,8 +56,8 @@ Button::Button() = default;
 Button::Button(const std::string& text, const ButtonStyle* style, int w, int h)
 : rect_{0,0,w,h}, label_(text), style_(style) {}
 
-void Button::set_position(int x, int y) {
-	rect_.x = x; rect_.y = y;
+void Button::set_position(SDL_Point p) {
+        rect_.x = p.x; rect_.y = p.y;
 }
 
 void Button::set_rect(const SDL_Rect& r) {

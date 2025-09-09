@@ -1,7 +1,7 @@
 #include "exact_spawner.hpp"
 #include <cmath>
 #include <algorithm>
-#include "utils/spawn_context.hpp"
+#include "spawn_context.hpp"
 #include "check.hpp"
 #include "asset_spawn_planner.hpp"
 #include "asset/asset_info.hpp"

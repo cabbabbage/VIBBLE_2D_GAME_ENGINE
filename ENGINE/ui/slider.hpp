@@ -24,7 +24,7 @@ class Slider {
 	public:
     Slider(const std::string& label, int min_val, int max_val);
     Slider(const std::string& label, int min_val, int max_val, int current_val);
-    void set_position(int x, int y);
+    void set_position(SDL_Point p);
     void set_rect(const SDL_Rect& r);
     const SDL_Rect& rect() const;
     void set_label(const std::string& text);

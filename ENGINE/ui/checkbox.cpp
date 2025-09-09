@@ -4,7 +4,7 @@
 Checkbox::Checkbox(const std::string& label, bool value)
 : label_(label), value_(value) {}
 
-void Checkbox::set_position(int x, int y) { rect_.x = x; rect_.y = y; }
+void Checkbox::set_position(SDL_Point p) { rect_.x = p.x; rect_.y = p.y; }
 void Checkbox::set_rect(const SDL_Rect& r) { rect_ = r; }
 const SDL_Rect& Checkbox::rect() const { return rect_; }
 
