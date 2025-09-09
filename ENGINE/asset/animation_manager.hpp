@@ -10,7 +10,6 @@ class AnimationManager {
     ~AnimationManager();
     void update();
 
-	private:
+        private:
     Asset* self_ = nullptr;
-    void apply_pending();
 };

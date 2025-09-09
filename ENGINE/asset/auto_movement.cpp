@@ -167,51 +167,55 @@ void AutoMovement::move() {
 		return;
 	}
 	switch (mode_) {
-		case Mode::Idle: {
-			ensure_idle_target(idle_min_dist_, idle_max_dist_);
-			int denom = std::max(0, idle_rest_ratio_) + 1;
-			std::uniform_int_distribution<int> pick(0, denom - 1);
-			bool choose_rest = (pick(rng_) != 0);
-			std::string next_anim = pick_best_animation_towards(target_);
-			if (!next_anim.empty() && self_->get_current_animation() != next_anim) self_->change_animation(next_anim);
-			self_->update_animation_manager();
-			break;
-		}
-		case Mode::Pursue: {
-			ensure_pursue_target(pursue_min_dist_, pursue_max_dist_, pursue_target_);
-			std::string next_anim = pick_best_animation_towards(target_);
-			if (!next_anim.empty() && self_->get_current_animation() != next_anim) self_->change_animation(next_anim);
-			self_->update_animation_manager();
-			break;
-		}
-		case Mode::Run: {
-			ensure_run_target(run_min_dist_, run_max_dist_, run_threat_);
-			std::string next_anim = pick_best_animation_towards(target_);
-			if (!next_anim.empty() && self_->get_current_animation() != next_anim) self_->change_animation(next_anim);
-			self_->update_animation_manager();
-			break;
-		}
-		case Mode::Orbit: {
-			ensure_orbit_target(orbit_min_radius_, orbit_max_radius_, orbit_center_, orbit_keep_ratio_);
-			std::string next_anim = pick_best_animation_towards(target_);
-			if (!next_anim.empty() && self_->get_current_animation() != next_anim) self_->change_animation(next_anim);
-			self_->update_animation_manager();
-			break;
-		}
-		case Mode::Patrol: {
-			ensure_patrol_target(patrol_points_, patrol_loop_, patrol_hold_frames_);
-			std::string next_anim = pick_best_animation_towards(target_);
-			if (!next_anim.empty() && self_->get_current_animation() != next_anim) self_->change_animation(next_anim);
-			self_->update_animation_manager();
-			break;
-		}
-		case Mode::Serpentine: {
-			ensure_serpentine_target(serp_min_stride_, serp_max_stride_, serp_sway_, serp_target_, serp_keep_ratio_);
-			std::string next_anim = pick_best_animation_towards(target_);
-			if (!next_anim.empty() && self_->get_current_animation() != next_anim) self_->change_animation(next_anim);
-			self_->update_animation_manager();
-			break;
-		}
+                case Mode::Idle: {
+                        ensure_idle_target(idle_min_dist_, idle_max_dist_);
+                        int denom = std::max(0, idle_rest_ratio_) + 1;
+                        std::uniform_int_distribution<int> pick(0, denom - 1);
+                        bool choose_rest = (pick(rng_) != 0);
+                        std::string next_anim = pick_best_animation_towards(target_);
+                        if (!choose_rest && !next_anim.empty()) {
+                                self_->next_animation = next_anim;
+                        } else {
+                                self_->next_animation.clear();
+                        }
+                        self_->update_animation_manager();
+                        break;
+                }
+                case Mode::Pursue: {
+                        ensure_pursue_target(pursue_min_dist_, pursue_max_dist_, pursue_target_);
+                        std::string next_anim = pick_best_animation_towards(target_);
+                        self_->next_animation = next_anim;
+                        self_->update_animation_manager();
+                        break;
+                }
+                case Mode::Run: {
+                        ensure_run_target(run_min_dist_, run_max_dist_, run_threat_);
+                        std::string next_anim = pick_best_animation_towards(target_);
+                        self_->next_animation = next_anim;
+                        self_->update_animation_manager();
+                        break;
+                }
+                case Mode::Orbit: {
+                        ensure_orbit_target(orbit_min_radius_, orbit_max_radius_, orbit_center_, orbit_keep_ratio_);
+                        std::string next_anim = pick_best_animation_towards(target_);
+                        self_->next_animation = next_anim;
+                        self_->update_animation_manager();
+                        break;
+                }
+                case Mode::Patrol: {
+                        ensure_patrol_target(patrol_points_, patrol_loop_, patrol_hold_frames_);
+                        std::string next_anim = pick_best_animation_towards(target_);
+                        self_->next_animation = next_anim;
+                        self_->update_animation_manager();
+                        break;
+                }
+                case Mode::Serpentine: {
+                        ensure_serpentine_target(serp_min_stride_, serp_max_stride_, serp_sway_, serp_target_, serp_keep_ratio_);
+                        std::string next_anim = pick_best_animation_towards(target_);
+                        self_->next_animation = next_anim;
+                        self_->update_animation_manager();
+                        break;
+                }
 		case Mode::None:
 		default:
 		self_->update_animation_manager();

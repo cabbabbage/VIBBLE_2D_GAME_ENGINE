@@ -66,6 +66,7 @@ class Asset {
     void set_shading_group(int x);
     bool is_shading_group_set() const;
     int  get_shading_group() const;
+    int   current_frame_index = 0;
     SDL_Texture* get_final_texture() const;
     void set_final_texture(SDL_Texture* tex);
     void set_screen_position(SDL_Point s);
@@ -113,7 +114,7 @@ class Asset {
     int cached_h = 0;
     std::string spawn_id;
     std::string spawn_method;
-
+    std::string next_animation;
 	private:
     friend class AnimationManager;
     friend class Move;
@@ -124,8 +125,7 @@ class Asset {
     bool selected = false;
     void set_flip();
     void set_z_index();
-    std::string next_animation;
-    int   current_frame_index = 0;
+
     float frame_progress = 0.0f;
     int  shading_group = 0;
     bool shading_group_set = false;
