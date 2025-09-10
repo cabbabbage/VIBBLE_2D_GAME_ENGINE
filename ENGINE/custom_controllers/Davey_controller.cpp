@@ -4,7 +4,9 @@
 #include "utils/range_util.hpp"
 
 DaveyController::DaveyController(Assets* assets, Asset* self, ActiveAssetsManager& aam)
-    : assets_(assets), self_(self), anim_(self, aam, true) {}
+    : assets_(assets), self_(self), anim_(self, aam, true) {
+    anim_.set_idle(40, 80, 5);
+}
 
 void DaveyController::update(const Input&) {
     if (!self_ || !assets_ || !self_->info) {
@@ -14,6 +16,8 @@ void DaveyController::update(const Input&) {
 
     if (Asset* player = assets_->player; player && Range::is_in_range(player, self_, 1000)) {
         anim_.set_pursue(player, 20, 30);
+    } else {
+        anim_.set_idle(40, 80, 5);
     }
 
     anim_.update();

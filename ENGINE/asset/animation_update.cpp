@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <random>
 #include <string>
+#include <iostream>
 
 // ---------- small local helpers (no header changes) ----------
 namespace {
@@ -508,63 +509,93 @@ void AnimationUpdate::ensure_serpentine_target(int min_stride,
 }
 
 bool AnimationUpdate::advance(AnimationFrame*& frame) {
-    if (!self_ || !self_->info || !frame) return true;
+    try {
+        if (!self_ || !self_->info || !frame) return true;
 
-    auto it = self_->info->animations.find(self_->current_animation);
-    if (it == self_->info->animations.end()) return true;
-    Animation& anim = it->second;
+        auto it = self_->info->animations.find(self_->current_animation);
+        if (it == self_->info->animations.end()) return true;
+        Animation& anim = it->second;
 
-    self_->pos.x += frame->dx;
-    self_->pos.y += frame->dy;
+        self_->pos.x += frame->dx;
+        self_->pos.y += frame->dy;
 
-    if ((frame->dx || frame->dy) && frame->z_resort) {
-        self_->set_z_index();
-        if (Assets* as = self_->get_assets()) {
-            as->activeManager.sortByZIndex();
+        if ((frame->dx || frame->dy) && frame->z_resort) {
+            self_->set_z_index();
+            if (Assets* as = self_->get_assets()) {
+                as->activeManager.sortByZIndex();
+            }
         }
-    }
 
-    bool reached_end = false;
-    self_->frame_progress += anim.speed_factor;
-    while (self_->frame_progress >= 1.0f) {
-        self_->frame_progress -= 1.0f;
-        if (frame->next) {
-            frame = frame->next;
-        } else if (anim.loop) {
-            frame = anim.get_first_frame();
-        } else {
-            reached_end = true;
-            break;
+        bool reached_end = false;
+        self_->frame_progress += anim.speed_factor;
+        while (self_->frame_progress >= 1.0f) {
+            self_->frame_progress -= 1.0f;
+            if (frame->next) {
+                frame = frame->next;
+            } else if (anim.loop) {
+                frame = anim.get_first_frame();
+            } else {
+                reached_end = true;
+                break;
+            }
         }
+        self_->current_frame = frame;
+        return !reached_end;
+    } catch (const std::exception& e) {
+        std::cerr << "[AnimationUpdate::advance] " << e.what() << "\n";
+    } catch (...) {
+        std::cerr << "[AnimationUpdate::advance] unknown exception\n";
     }
-    self_->current_frame = frame;
-    return !reached_end;
+    return false;
 }
 
 void AnimationUpdate::switch_to(const std::string& id) {
-    if (!self_ || !self_->info) return;
-    auto it = self_->info->animations.find(id);
-    if (it == self_->info->animations.end()) return;
-    self_->current_animation = id;
-    Animation& anim = it->second;
-    anim.change(self_->current_frame, self_->static_frame);
-    self_->frame_progress = 0.0f;
+    try {
+        if (!self_ || !self_->info) return;
+
+        auto it = self_->info->animations.find(id);
+        if (it == self_->info->animations.end()) return;
+
+        Animation& anim = it->second;
+        if (anim.is_frozen()) return;
+
+        AnimationFrame* new_frame = anim.get_first_frame();
+        if (!new_frame) return;
+
+        self_->current_animation = id;
+        self_->current_frame = new_frame;
+        self_->static_frame = anim.is_static();
+        self_->frame_progress = 0.0f;
+    } catch (const std::exception& e) {
+        std::cerr << "[AnimationUpdate::switch_to] " << e.what() << "\n";
+    } catch (...) {
+        std::cerr << "[AnimationUpdate::switch_to] unknown exception\n";
+    }
 }
 
 void AnimationUpdate::get_animation() {
-    if (!self_ || !self_->info) return;
-    auto it = self_->info->animations.find(self_->current_animation);
-    if (it == self_->info->animations.end()) return;
-    std::string next = it->second.on_end_mapping;
-    if (next.empty()) next = "default";
-    if (next == "end") { self_->Delete(); return; }
-    if (next == "freeze_on_last") { self_->static_frame = true; return; }
-    auto nit = self_->info->animations.find(next);
-    if (nit != self_->info->animations.end()) {
-        self_->current_animation = next;
-        Animation& anim = nit->second;
-        anim.change(self_->current_frame, self_->static_frame);
-        self_->frame_progress = 0.0f;
+    try {
+        if (!self_ || !self_->info) return;
+        auto it = self_->info->animations.find(self_->current_animation);
+        if (it == self_->info->animations.end()) return;
+        std::string next = it->second.on_end_mapping;
+        if (next.empty()) next = "default";
+        if (next == "end") { self_->Delete(); return; }
+        if (next == "freeze_on_last") { self_->static_frame = true; return; }
+        auto nit = self_->info->animations.find(next);
+        if (nit != self_->info->animations.end()) {
+            Animation& anim = nit->second;
+            AnimationFrame* start = anim.get_first_frame();
+            if (!start) return;
+            self_->current_animation = next;
+            self_->current_frame = start;
+            self_->static_frame = anim.is_static();
+            self_->frame_progress = 0.0f;
+        }
+    } catch (const std::exception& e) {
+        std::cerr << "[AnimationUpdate::get_animation] " << e.what() << "\n";
+    } catch (...) {
+        std::cerr << "[AnimationUpdate::get_animation] unknown exception\n";
     }
 }
 
@@ -590,75 +621,80 @@ void AnimationUpdate::set_animation_qued(const std::string& anim_id) {
 // -------------------------------
 void AnimationUpdate::update() {
     if (!self_ || !self_->info) return;
+    try {
+        // If currently playing a forced/queued animation
+        if (forced_active_) {
+            bool cont = advance(self_->current_frame);
+            if (!cont) {
+                forced_active_ = false;
+                if (queued_anim_) {
+                    switch_to(*queued_anim_);
+                    queued_anim_.reset();
+                    forced_active_ = true;
+                    advance(self_->current_frame);
+                    return;
+                }
+                if (mode_suspended_) {
+                    mode_ = saved_mode_;
+                    mode_suspended_ = false;
+                    if (mode_ == Mode::None) {
+                        get_animation();
+                    }
+                } else {
+                    if (mode_ == Mode::None) {
+                        get_animation();
+                    }
+                }
+            }
+            return;
+        }
 
-    // If currently playing a forced/queued animation
-    if (forced_active_) {
+        // If a queued animation is waiting and the current finished
+        if (queued_anim_ && self_->is_current_animation_last_frame()) {
+            switch_to(*queued_anim_);
+            queued_anim_.reset();
+            forced_active_ = true;
+            bool cont = advance(self_->current_frame);
+            if (!cont) {
+                forced_active_ = false;
+                if (mode_ == Mode::None) get_animation();
+            }
+            return;
+        }
+
+        // Normal mode-driven update
+        if (mode_ != Mode::None) {
+            if (!self_->is_current_animation_locked_in_progress()) {
+                if (!have_target_ || is_target_reached()) {
+                    switch (mode_) {
+                        case Mode::Idle:       ensure_idle_target(idle_min_dist_, idle_max_dist_); break;
+                        case Mode::Pursue:     ensure_pursue_target(pursue_min_dist_, pursue_max_dist_, pursue_target_); break;
+                        case Mode::Run:        ensure_run_target(run_min_dist_, run_max_dist_, run_threat_); break;
+                        case Mode::Orbit:      ensure_orbit_target(orbit_min_radius_, orbit_max_radius_, orbit_center_, orbit_keep_ratio_); break;
+                        case Mode::Patrol:     ensure_patrol_target(patrol_points_, patrol_loop_, patrol_hold_frames_); break;
+                        case Mode::Serpentine: ensure_serpentine_target(serp_min_stride_, serp_max_stride_, serp_sway_, serp_target_, serp_keep_ratio_); break;
+                        default: break;
+                    }
+                }
+
+                const std::string next_anim = pick_best_animation_towards(target_);
+                const std::string cur = self_->get_current_animation();
+                if (!next_anim.empty() && next_anim != cur) {
+                    switch_to(next_anim);
+                }
+            }
+            advance(self_->current_frame);
+            return;
+        }
+
+        // No mode: just advance current animation
         bool cont = advance(self_->current_frame);
         if (!cont) {
-            forced_active_ = false;
-            if (queued_anim_) {
-                switch_to(*queued_anim_);
-                queued_anim_.reset();
-                forced_active_ = true;
-                advance(self_->current_frame);
-                return;
-            }
-            if (mode_suspended_) {
-                mode_ = saved_mode_;
-                mode_suspended_ = false;
-                if (mode_ == Mode::None) {
-                    get_animation();
-                }
-            } else {
-                if (mode_ == Mode::None) {
-                    get_animation();
-                }
-            }
+            get_animation();
         }
-        return;
-    }
-
-    // If a queued animation is waiting and the current finished
-    if (queued_anim_ && self_->is_current_animation_last_frame()) {
-        switch_to(*queued_anim_);
-        queued_anim_.reset();
-        forced_active_ = true;
-        bool cont = advance(self_->current_frame);
-        if (!cont) {
-            forced_active_ = false;
-            if (mode_ == Mode::None) get_animation();
-        }
-        return;
-    }
-
-    // Normal mode-driven update
-    if (mode_ != Mode::None) {
-        if (!self_->is_current_animation_locked_in_progress()) {
-            if (!have_target_ || is_target_reached()) {
-                switch (mode_) {
-                    case Mode::Idle:       ensure_idle_target(idle_min_dist_, idle_max_dist_); break;
-                    case Mode::Pursue:     ensure_pursue_target(pursue_min_dist_, pursue_max_dist_, pursue_target_); break;
-                    case Mode::Run:        ensure_run_target(run_min_dist_, run_max_dist_, run_threat_); break;
-                    case Mode::Orbit:      ensure_orbit_target(orbit_min_radius_, orbit_max_radius_, orbit_center_, orbit_keep_ratio_); break;
-                    case Mode::Patrol:     ensure_patrol_target(patrol_points_, patrol_loop_, patrol_hold_frames_); break;
-                    case Mode::Serpentine: ensure_serpentine_target(serp_min_stride_, serp_max_stride_, serp_sway_, serp_target_, serp_keep_ratio_); break;
-                    default: break;
-                }
-            }
-
-            const std::string next_anim = pick_best_animation_towards(target_);
-            const std::string cur = self_->get_current_animation();
-            if (!next_anim.empty() && next_anim != cur) {
-                switch_to(next_anim);
-            }
-        }
-        advance(self_->current_frame);
-        return;
-    }
-
-    // No mode: just advance current animation
-    bool cont = advance(self_->current_frame);
-    if (!cont) {
-        get_animation();
+    } catch (const std::exception& e) {
+        std::cerr << "[AnimationUpdate::update] " << e.what() << "\n";
+    } catch (...) {
+        std::cerr << "[AnimationUpdate::update] unknown exception\n";
     }
 }
