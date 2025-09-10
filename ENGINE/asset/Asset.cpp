@@ -39,23 +39,23 @@ Asset::Asset(std::shared_ptr<AssetInfo> info_,
 	if (info) {
 		try { has_shading = info->has_shading; } catch (...) { has_shading = false; }
 	}
-	std::string start_id = info->start_animation.empty() ? std::string{"default"} : info->start_animation;
-	auto it = info->animations.find(start_id);
-	if (it == info->animations.end())
-	it = info->animations.find("default");
-                if (it != info->animations.end() && !it->second.frames.empty()) {
-                        current_animation = it->first;
-                        Animation& anim = it->second;
-                        static_frame = (anim.frames.size() == 1);
-                        current_frame = anim.get_first_frame();
-                        if ((anim.randomize || anim.rnd_start) && anim.frames.size() > 1) {
-                                std::mt19937 g{ std::random_device{}() };
-                                std::uniform_int_distribution<int> d(0, int(anim.frames.size()) - 1);
-                                int idx = d(g);
-                                AnimationFrame* f = anim.get_first_frame();
-                                while (idx-- > 0 && f && f->next) { f = f->next; }
-                                current_frame = f;
-                        }
+        std::string start_id = info->start_animation.empty() ? std::string{"default"} : info->start_animation;
+        auto it = info->animations.find(start_id);
+        if (it == info->animations.end()) {
+                it = info->animations.find("default");
+        }
+        if (it != info->animations.end() && !it->second.frames.empty()) {
+                current_animation = it->first;
+                Animation& anim  = it->second;
+                static_frame     = (anim.frames.size() == 1);
+                current_frame    = anim.get_first_frame();
+                if ((anim.randomize || anim.rnd_start) && anim.frames.size() > 1) {
+                        std::mt19937 g{ std::random_device{}() };
+                        std::uniform_int_distribution<int> d(0, int(anim.frames.size()) - 1);
+                        int idx = d(g);
+                        AnimationFrame* f = anim.get_first_frame();
+                        while (idx-- > 0 && f && f->next) { f = f->next; }
+                        current_frame = f;
                 }
         }
 }

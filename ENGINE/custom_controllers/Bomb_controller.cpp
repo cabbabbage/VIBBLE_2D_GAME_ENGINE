@@ -1,35 +1,19 @@
 #include "Bomb_controller.hpp"
-#include "utils/input.hpp"
 #include "asset/Asset.hpp"
-#include "asset/animation_update.hpp"
-#include "core/active_assets_manager.hpp"
 #include "core/AssetsManager.hpp"
-#include <algorithm>
 
 BombController::BombController(Assets* assets, Asset* self, ActiveAssetsManager& aam)
-: assets_(assets)
-, self_(self)
-, aam_(aam)
-, anim_(self, aam, true)
-{
-    rng_seed_ ^= reinterpret_cast<uintptr_t>(self_) + 0x9e3779b9u;
-}
-
-BombController::~BombController() {}
+    : assets_(assets), self_(self), anim_(self, aam, true) {}
 
 void BombController::update(const Input&) {
     if (!self_ || !self_->info) return;
 
-    // If we are already exploding, let AnimationUpdate handle it and bail.
-    if (self_->get_current_animation() == "explosion") {
+    Asset* player = assets_ ? assets_->player : nullptr;
+
+    // If currently exploding or just triggered, run animation update and bail.
+    if (self_->get_current_animation() == "explosion" || explosion_if_close(player)) {
         anim_.update();
         return;
-    }
-
-    // Try to explode if the player is close. If triggered, switch immediately (this frame) and return.
-    Asset* player = assets_ ? assets_->player : nullptr;
-    if (explosion_if_close(player)) {
-        return; // explosion animation already advanced this frame
     }
 
     // Decide behavior for this frame (pursue vs idle), then run a single animation update.
@@ -67,7 +51,6 @@ bool BombController::explosion_if_close(Asset* player) {
     const float d_sq = self_->distance_to_player_sq;
     if (d_sq <= static_cast<float>(explosion_radius_sq_)) {
         anim_.set_animation_now("explosion");
-        anim_.update();
         return true;
     }
 

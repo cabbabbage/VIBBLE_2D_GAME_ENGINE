@@ -60,6 +60,7 @@ class CustomControllerManager:
         # --- generate files in expected controller format ---
         hpp = f"""#pragma once
 #include "asset_controller.hpp"
+#include "asset/animation_update.hpp"
 
 class Assets;
 class Asset;
@@ -74,14 +75,13 @@ class Input;
 class {class_name} : public AssetController {{
 public:
     {class_name}(Assets* assets, Asset* self, ActiveAssetsManager& aam);
-    ~{class_name}() override;
+    ~{class_name}() override = default;
 
     void update(const Input& in) override;
 
 private:
     Assets* assets_ = nullptr;           // non owning
     Asset*  self_   = nullptr;           // non owning
-    ActiveAssetsManager& aam_;
     AnimationUpdate anim_;
 }};
 """
@@ -95,11 +95,8 @@ private:
 {class_name}::{class_name}(Assets* assets, Asset* self, ActiveAssetsManager& aam)
     : assets_(assets)
     , self_(self)
-    , aam_(aam)
     , anim_(self, aam, true)
 {{}}
-
-{class_name}::~{class_name}() {{}}
 
 void {class_name}::update(const Input& /*in*/) {{
     // dummy controller

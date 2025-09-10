@@ -2,20 +2,17 @@
 #include "asset_controller.hpp"
 #include "asset/animation_update.hpp"
 
-class Assets;
 class Asset;
 class ActiveAssetsManager;
 
 class DefaultController : public AssetController {
 
-	public:
-    DefaultController(Assets* assets, Asset* self, ActiveAssetsManager& aam);
-    ~DefaultController() override;
+public:
+    DefaultController(Asset* self, ActiveAssetsManager& aam);
+    ~DefaultController() override = default;
     void update(const Input& in) override;
 
-	private:
-    Assets* assets_ = nullptr;
-    Asset*  self_   = nullptr;
-    ActiveAssetsManager& aam_;
+private:
+    Asset*         self_ = nullptr;
     AnimationUpdate anim_;
 };

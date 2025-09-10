@@ -1,43 +1,15 @@
 #include "Vibble_controller.hpp"
 
 #include "asset/Asset.hpp"
-#include "core/AssetsManager.hpp"
-#include "core/active_assets_manager.hpp"
 #include "utils/input.hpp"
-#include "utils/area.hpp"
 
-#include <SDL.h>
-#include <algorithm>
-#include <cmath>
-#include <iostream>
 #include <string>
 
-VibbleController::VibbleController(Assets* assets, Asset* player, ActiveAssetsManager& aam)
-    : assets_(assets), player_(player), aam_(aam), anim_(player, aam, true) {}
+VibbleController::VibbleController(Asset* player, ActiveAssetsManager& aam)
+    : player_(player), anim_(player, aam, true) {}
 
 int VibbleController::get_dx() const { return dx_; }
 int VibbleController::get_dy() const { return dy_; }
-
-bool VibbleController::aabb(const Area& A, const Area& B) const {
-    auto [a_minx, a_miny, a_maxx, a_maxy] = A.get_bounds();
-    auto [b_minx, b_miny, b_maxx, b_maxy] = B.get_bounds();
-    return !(a_maxx < b_minx || b_maxx < a_minx ||
-             a_maxy < b_miny || b_maxy < a_miny);
-}
-
-bool VibbleController::pointInAABB(SDL_Point p, const Area& B) const {
-    auto [b_minx, b_miny, b_maxx, b_maxy] = B.get_bounds();
-    return (p.x >= b_minx && p.x <= b_maxx && p.y >= b_miny && p.y <= b_maxy);
-}
-
-bool VibbleController::canMove(int, int) {
-    // Placeholder collision check
-    return true;
-}
-
-void VibbleController::interaction() {
-    // Placeholder for interaction logic
-}
 
 void VibbleController::movement(const Input& input) {
     dx_ = dy_ = 0;
@@ -78,10 +50,6 @@ void VibbleController::movement(const Input& input) {
     }
 }
 
-void VibbleController::handle_teleport(const Input&) {
-    // Teleport logic disabled in this minimal implementation
-}
-
 void VibbleController::update(const Input& input) {
     dx_ = dy_ = 0;
 
@@ -89,6 +57,4 @@ void VibbleController::update(const Input& input) {
     movement(input);
 
     anim_.update();
-
-    interaction();
 }

@@ -1,38 +1,16 @@
 #include "Frog_controller.hpp"
-#include "utils/input.hpp"
 #include "asset/Asset.hpp"
-#include "asset/animation_update.hpp"
+#include "asset/asset_info.hpp"
 
-#include "utils/area.hpp"
-#include "core/active_assets_manager.hpp"
-#include "core/AssetsManager.hpp"
-
-#include <cmath>
-#include <random>
-#include <iostream>
-
-FrogController::FrogController(Assets* assets, Asset* self, ActiveAssetsManager& aam)
-: assets_(assets),
-  self_(self),
-  aam_(aam),
-  anim_(self, aam, true)
-{
-    rng_seed_ ^= reinterpret_cast<uintptr_t>(self_) + 0x9e3779b9u;
-    frames_until_think_ = rand_range(think_interval_min_, think_interval_max_);
-        anim_.set_idle(0,20,0);
-    
-}
-
-FrogController::~FrogController() {}
+FrogController::FrogController(Asset* self, ActiveAssetsManager& aam)
+    : self_(self), anim_(self, aam, true) {}
 
 void FrogController::update(const Input&) {
-    if (!self_ || !self_->info) { 
-    if (!self_ || !self_->info) { 
+    if (!self_ || !self_->info) {
         anim_.update();
-        return; 
+        return;
     }
 
-    // Pick an idle/default animation for safety
     auto pick_default = [&]() -> std::string {
         if (self_->info->animations.count("default")) return "default";
         if (self_->info->animations.count("Default")) return "Default";
@@ -45,12 +23,10 @@ void FrogController::update(const Input&) {
         std::string chosen = pick_default();
         if (!chosen.empty()) {
             anim_.set_animation_now(chosen);
-            anim_.update();
-            return;
         }
     }
 
-    // Default controller: just stay idle
     anim_.set_idle(0, 20, 3);
     anim_.update();
 }
+

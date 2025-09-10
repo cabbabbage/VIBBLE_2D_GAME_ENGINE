@@ -5,39 +5,26 @@
 #include "asset/animation_update.hpp"
 #include <SDL.h>
 
-class Assets;
 class Asset;
 class ActiveAssetsManager;
 class Input;
-class Area;
 
 class VibbleController : public AssetController {
 
-	public:
-    VibbleController(Assets* assets, Asset* player, ActiveAssetsManager& aam);
+public:
+    VibbleController(Asset* player, ActiveAssetsManager& aam);
     ~VibbleController() = default;
     void update(const Input& in) override;
     int get_dx() const;
     int get_dy() const;
 
-	private:
-    bool aabb(const Area& A, const Area& B) const;
-    bool pointInAABB(SDL_Point p, const Area& B) const;
+private:
     void movement(const Input& input);
-    bool canMove(int offset_x, int offset_y);
-    void interaction();
-    void handle_teleport(const Input& input);
 
-	private:
-    Assets* assets_ = nullptr;
-    Asset*  player_ = nullptr;
-    ActiveAssetsManager& aam_;
+    Asset*         player_ = nullptr;
     AnimationUpdate anim_;
-    int dx_ = 0;
-    int dy_ = 0;
-    SDL_Point teleport_point_{};
-    bool teleport_set_ = false;
-    Asset* marker_asset_ = nullptr;
+    int            dx_ = 0;
+    int            dy_ = 0;
 };
 
 #endif

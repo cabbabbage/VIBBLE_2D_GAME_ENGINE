@@ -1,13 +1,9 @@
 #include "default_controller.hpp"
 #include "asset/Asset.hpp"
 #include "asset/asset_info.hpp"
-#include "core/AssetsManager.hpp"
-#include "core/active_assets_manager.hpp"
 
-DefaultController::DefaultController(Assets* assets, Asset* self, ActiveAssetsManager& aam)
-: assets_(assets), self_(self), aam_(aam), anim_(self, aam, true) {}
-
-DefaultController::~DefaultController() = default;
+DefaultController::DefaultController(Asset* self, ActiveAssetsManager& aam)
+    : self_(self), anim_(self, aam, true) {}
 
 void DefaultController::update(const Input& /*in*/) {
     if (!self_ || !self_->info) { 
@@ -28,8 +24,6 @@ void DefaultController::update(const Input& /*in*/) {
         std::string chosen = pick_default();
         if (!chosen.empty()) {
             anim_.set_animation_now(chosen);
-            anim_.update();
-            return;
         }
     }
 

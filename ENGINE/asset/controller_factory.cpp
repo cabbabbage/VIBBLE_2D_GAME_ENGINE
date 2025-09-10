@@ -18,18 +18,18 @@ ControllerFactory::~ControllerFactory() = default;
 std::unique_ptr<AssetController>
 ControllerFactory::create_by_key(const std::string& key, Asset* self) const {
 	if (!assets_ || !self) return nullptr;
-	try {
-		if (key == "Davey_controller")
-		return std::make_unique<DaveyController>(assets_, self, aam_);
-		if (key == "Vibble_controller")
-		return std::make_unique<VibbleController>(assets_, self, aam_);
-		if (key == "Frog_controller")
-		return std::make_unique<FrogController>(assets_, self, aam_);
-		if (key == "Bomb_controller")
-		return std::make_unique<BombController>(assets_, self, aam_);
-	} catch (...) {
-	}
-	return std::make_unique<DefaultController>(assets_, self, aam_);
+        try {
+                if (key == "Davey_controller")
+                        return std::make_unique<DaveyController>(assets_, self, aam_);
+                if (key == "Vibble_controller")
+                        return std::make_unique<VibbleController>(self, aam_);
+                if (key == "Frog_controller")
+                        return std::make_unique<FrogController>(self, aam_);
+                if (key == "Bomb_controller")
+                        return std::make_unique<BombController>(assets_, self, aam_);
+        } catch (...) {
+        }
+        return std::make_unique<DefaultController>(self, aam_);
 }
 
 std::unique_ptr<AssetController>
@@ -39,5 +39,5 @@ ControllerFactory::create_for_asset(Asset* self) const {
 	if (!key.empty()) {
 		return create_by_key(key, self);
 	}
-	return std::make_unique<DefaultController>(assets_, self, aam_);
+        return std::make_unique<DefaultController>(self, aam_);
 }
