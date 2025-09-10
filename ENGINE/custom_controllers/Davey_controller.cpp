@@ -14,10 +14,13 @@ void DaveyController::update(const Input&) {
         return;
     }
 
-    if (Asset* player = assets_->player; player && Range::is_in_range(player, self_, 1000)) {
-        anim_.set_pursue(player, 20, 30);
-    } else {
-        anim_.set_idle(40, 80, 5);
+    try {
+        if (Asset* player = assets_->player; player && Range::is_in_range(player, self_, 1000)) {
+            anim_.set_pursue(player, 20, 30);
+        } else {
+            anim_.set_idle(40, 80, 5);
+        }
+    } catch (...) {
     }
 
     anim_.update();
