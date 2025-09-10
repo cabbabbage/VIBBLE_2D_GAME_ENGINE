@@ -42,20 +42,8 @@
       "max_number": 1,
       "min_number": 1,
       "name": "Vibble",
-      "position": "Random",
-      "spawn_id": "spn-225b40dd06f7",
-      "tag": false
-    },
-    {
-      "check_min_spacing": false,
-      "check_overlap": false,
-      "exact_position": null,
-      "inherited": false,
-      "max_number": 1,
-      "min_number": 1,
-      "name": "Grave_1",
       "position": "Center",
-      "spawn_id": "spn-c4dfd1fded20",
+      "spawn_id": "spn-225b40dd06f7",
       "tag": false
     }
   ],

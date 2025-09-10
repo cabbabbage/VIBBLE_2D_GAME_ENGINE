@@ -12,6 +12,8 @@ class ActiveAssetsManager;
 class AnimationUpdate {
 
 	public:
+    void advance();
+    void move();
     AnimationUpdate(Asset* self, ActiveAssetsManager& aam, bool confined);
     AnimationUpdate(Asset* self, ActiveAssetsManager& aam, bool confined, double directness_weight, double sparsity_weight);
     void set_idle(int min_target_distance, int max_target_distance, int rest_ratio);
@@ -20,12 +22,11 @@ class AnimationUpdate {
     void set_orbit(Asset* center, int min_radius, int max_radius, int keep_direction_ratio);
     void set_patrol(const std::vector<SDL_Point>& waypoints, bool loop, int hold_frames);
     void set_serpentine(Asset* final_target, int min_stride, int max_stride, int sway, int keep_side_ratio);
-    void move();
-    void update();
+
     void set_weights(double directness_weight, double sparsity_weight);
     void set_target(SDL_Point desired, const Asset* final_target);
     inline void set_traget(int desired_x, int desired_y, const Asset* final_target) { set_target(SDL_Point{ desired_x, desired_y }, final_target); }
-
+    void update(std::optional<std::string> force_anim = std::nullopt);
 	private:
     enum class Mode { None, Idle, Pursue, Run, Orbit, Patrol, Serpentine };
     bool can_move_by(int dx, int dy) const;
@@ -42,6 +43,8 @@ class AnimationUpdate {
     bool is_target_reached();
     int  min_move_len2() const;
     void clamp_to_room(int& x, int& y) const;
+ 
+
 
 	private:
     Asset* self_ = nullptr;

@@ -236,30 +236,6 @@ void Asset::update() {
     }
 }
 
-void Asset::change_animation_now(const std::string& name) {
-        if (!info || name.empty()) return;
-        auto it = info->animations.find(name);
-        if (it == info->animations.end()) return;
-        current_animation = name;
-        Animation& anim   = it->second;
-        anim.change(current_frame_index, static_frame);
-        frame_progress = 0.0f;
-        if ((anim.randomize || anim.rnd_start) && anim.frames.size() > 1) {
-                std::mt19937 g{ std::random_device{}() };
-                std::uniform_int_distribution<int> d(0, int(anim.frames.size()) - 1);
-                current_frame_index = d(g);
-        }
-        next_animation.clear();
-        // Let the AnimationUpdate decide on any follow-up animation when this
-        // one finishes.  Automatically queuing the on_end animation here would
-        // immediately skip the new animation on the next update.
-}
-
-void Asset::change_animation_qued(const std::string& name) {
-        if (!info) return;
-        next_animation = name;
-}
-
 std::string Asset::get_current_animation() const { return current_animation; }
 std::string Asset::get_type() const { return info ? info->type : ""; }
 

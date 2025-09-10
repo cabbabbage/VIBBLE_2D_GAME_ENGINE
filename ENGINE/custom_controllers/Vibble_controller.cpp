@@ -5,7 +5,6 @@
 #include "core/active_assets_manager.hpp"
 #include "utils/input.hpp"
 #include "utils/area.hpp"
-#include "asset/move.hpp"
 
 #include <SDL.h>
 #include <algorithm>
@@ -53,10 +52,13 @@ void VibbleController::movement(const Input& input) {
     int move_y = (down  ? 1 : 0) - (up    ? 1 : 0);
 
     const std::string current = player_->get_current_animation();
+
     if (move_x == 0 && move_y == 0) {
+        // idle → default
         if (current != "default" && player_->next_animation.empty()) {
-            if (player_->info && player_->info->animations.count("default"))
-                player_->change_animation_qued("default");
+            if (player_->info && player_->info->animations.count("default")) {
+                anim_.update("default"); // force immediately into idle default
+            }
         }
         return;
     }
@@ -67,9 +69,11 @@ void VibbleController::movement(const Input& input) {
         else if (move_y > 0) anim = "forward";
         else if (move_x < 0) anim = "left";
         else if (move_x > 0) anim = "right";
+
         if (!anim.empty() && anim != current && player_->next_animation.empty()) {
-            if (player_->info && player_->info->animations.count(anim))
-                player_->change_animation_qued(anim);
+            if (player_->info && player_->info->animations.count(anim)) {
+                anim_.update(anim); // immediately switch + apply movement for this frame
+            }
         }
     }
 }
@@ -79,9 +83,13 @@ void VibbleController::handle_teleport(const Input&) {
 }
 
 void VibbleController::update(const Input& input) {
-    anim_.update();
     dx_ = dy_ = 0;
+
+    // Decide movement direction + possibly force an animation switch
     movement(input);
+
+    // Step animation normally if nothing was forced this frame
+    anim_.update();
+
     interaction();
 }
-

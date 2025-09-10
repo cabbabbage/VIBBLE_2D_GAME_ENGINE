@@ -6,125 +6,49 @@
 #include "utils/area.hpp"
 #include "core/active_assets_manager.hpp"
 #include "core/AssetsManager.hpp"
+
 #include <cmath>
 #include <random>
 #include <iostream>
 
 FrogController::FrogController(Assets* assets, Asset* self, ActiveAssetsManager& aam)
 : assets_(assets),
-self_(self),
-aam_(aam),
-anim_(self, aam, true)
+  self_(self),
+  aam_(aam),
+  anim_(self, aam, true)
 {
-	rng_seed_ ^= reinterpret_cast<uintptr_t>(self_) + 0x9e3779b9u;
-	frames_until_think_ = rand_range(think_interval_min_, think_interval_max_);
+    rng_seed_ ^= reinterpret_cast<uintptr_t>(self_) + 0x9e3779b9u;
+    frames_until_think_ = rand_range(think_interval_min_, think_interval_max_);
 }
 
 FrogController::~FrogController() {}
 
-void FrogController::update(const Input& ) {
-    anim_.update();
-    if (self_ && self_->info) {
-        constexpr double pi = 3.14159265358979323846;
-        if (pursue_frames_left_ <= 0) {
-            int angle_deg = rand_range(0, 359);
-            double theta = (static_cast<double>(angle_deg) * pi) / 180.0;
-            int radius = 30;
-            pursue_target_x_ = self_->pos.x + static_cast<int>(std::llround(radius * std::cos(theta)));
-            pursue_target_y_ = self_->pos.y + static_cast<int>(std::llround(radius * std::sin(theta)));
-            pursue_frames_left_ = pursue_recalc_interval_;
-        } else {
-            pursue_frames_left_ -= 1;
-        }
-        if (frames_until_think_ > 0) {
-            frames_until_think_ -= 1;
-        } else {
-            think();
-            frames_until_think_ = rand_range(think_interval_min_, think_interval_max_);
+void FrogController::update(const Input&) {
+    if (!self_ || !self_->info) { 
+    if (!self_ || !self_->info) { 
+        anim_.update();
+        return; 
+    }
+
+    // Pick an idle/default animation for safety
+    auto pick_default = [&]() -> std::string {
+        if (self_->info->animations.count("default")) return "default";
+        if (self_->info->animations.count("Default")) return "Default";
+        return self_->info->animations.empty() ? std::string()
+                                               : self_->info->animations.begin()->first;
+    };
+
+    const std::string& cur = self_->get_current_animation();
+    if (cur.empty() && self_->next_animation.empty()) {
+        std::string chosen = pick_default();
+        if (!chosen.empty()) {
+            anim_.update(chosen); // immediately switch if no animation running
+            return;
         }
     }
-}
 
-void FrogController::think() {
-	if (!self_ || !self_->info) return;
-	const std::string cur = self_->get_current_animation();
-	if (coin(55)) {
-		if (cur != "default") {
-                        if (has_anim("default") && self_->next_animation.empty()) {
-                                        self_->change_animation_qued("default");
-                        } else {
-                        }
-		} else {
-		}
-		return;
+    // Default controller: just stay idle
+    anim_.set_idle(0, 20, 3);  
+    anim_.update();
 	}
-	if (!try_hop_any_dir()) {
-		if (cur != "default") {
-                        if (has_anim("default") && self_->next_animation.empty()) {
-                                        self_->change_animation_qued("default");
-                        } else {
-                        }
-		} else {
-		}
-	}
-}
-
-bool FrogController::try_hop_any_dir() {
-        if (!self_) return false;
-        const std::string before = self_->next_animation.empty() ? self_->get_current_animation()
-                                                                : self_->next_animation;
-        anim_.set_idle(0, 30, 3);
-        anim_.move();
-        const std::string after = self_->next_animation.empty() ? self_->get_current_animation()
-                                                               : self_->next_animation;
-        return after != before;
-}
-
-bool FrogController::canMove(int offset_x, int offset_y) {
-	if (!self_ || !self_->info) return false;
-	int test_x = self_->pos.x + offset_x;
-	int test_y = self_->pos.y + offset_y - self_->info->z_threshold;
-	for (Asset* a : aam_.getImpassableClosest()) {
-		if (!a || a == self_) continue;
-		Area obstacle = a->get_area("passability");
-		if (obstacle.contains_point({ test_x, test_y })) {
-			return false;
-		}
-	}
-	return true;
-}
-
-bool FrogController::has_anim(const char* name) const {
-	if (!self_ || !self_->info) return false;
-	return self_->info->animations.find(name) != self_->info->animations.end();
-}
-
-bool FrogController::aabb(const Area& A, const Area& B) const {
-	auto [a_minx, a_miny, a_maxx, a_maxy] = A.get_bounds();
-	auto [b_minx, b_miny, b_maxx, b_maxy] = B.get_bounds();
-	return !(a_maxx < b_minx || b_maxx < a_minx || a_maxy < b_miny || b_maxy < a_miny);
-}
-
-bool FrogController::pointInAABB(int x, int y, const Area& B) const {
-	auto [b_minx, b_miny, b_maxx, b_maxy] = B.get_bounds();
-	return (x >= b_minx && x <= b_maxx &&
-         y >= b_miny && y <= b_maxy);
-}
-
-int FrogController::randu() {
-	rng_seed_ = 1664525u * rng_seed_ + 1013904223u;
-	return int(rng_seed_ >> 1);
-}
-
-int FrogController::rand_range(int lo, int hi) {
-	if (hi < lo) { int t = lo; lo = hi; hi = t; }
-	int span = hi - lo + 1;
-	int r = randu();
-	return lo + (span > 0 ? (r % span) : 0);
-}
-
-bool FrogController::coin(int percent_true) {
-	if (percent_true <= 0) return false;
-	if (percent_true >= 100) return true;
-	return rand_range(0,99) < percent_true;
 }

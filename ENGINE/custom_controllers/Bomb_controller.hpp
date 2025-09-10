@@ -11,33 +11,32 @@ class Input;
 
 class BombController : public AssetController {
 
-	public:
+public:
     BombController(Assets* assets, Asset* self, ActiveAssetsManager& aam);
     ~BombController();
     void update(const Input& in) override;
 
-	private:
+private:
     void think_random();
     void pursue(Asset* player);
-    void explosion_if_close(Asset* player);
-    int randu();
-    int rand_range(int lo, int hi);
+    // Now returns true if explosion triggered (to stop further logic this frame)
+    bool explosion_if_close(Asset* player);
+
+    int  randu();
+    int  rand_range(int lo, int hi);
     bool coin(int percent_true);
 
-	private:
+private:
     Assets* assets_ = nullptr;
     Asset*  self_   = nullptr;
     ActiveAssetsManager& aam_;
     AnimationUpdate anim_;
-    int probe_              = 24;
-    int follow_radius_      = 1000;
-    int explosion_radius_   = 150;
-    int follow_radius_sq_   = follow_radius_ * follow_radius_;
+    int probe_               = 24;
+    int follow_radius_       = 1000;
+    int explosion_radius_    = 150;
+    int follow_radius_sq_    = follow_radius_ * follow_radius_;
     int explosion_radius_sq_ = explosion_radius_ * explosion_radius_;
-    unsigned int rng_seed_  = 0xB00B1Eu;
-    int  move_target_x_ = 0;
-    int  move_target_y_ = 0;
-    bool have_target_   = false;
+    unsigned int rng_seed_   = 0xB00B1Eu;
 };
 
 #endif
