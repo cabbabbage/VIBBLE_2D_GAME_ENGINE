@@ -55,9 +55,9 @@ void VibbleController::movement(const Input& input) {
 
     if (move_x == 0 && move_y == 0) {
         // idle → default
-        if (current != "default" && player_->next_animation.empty()) {
+        if (current != "default") {
             if (player_->info && player_->info->animations.count("default")) {
-                anim_.update("default"); // force immediately into idle default
+                anim_.set_animation_now("default");
             }
         }
         return;
@@ -70,9 +70,9 @@ void VibbleController::movement(const Input& input) {
         else if (move_x < 0) anim = "left";
         else if (move_x > 0) anim = "right";
 
-        if (!anim.empty() && anim != current && player_->next_animation.empty()) {
+        if (!anim.empty() && anim != current) {
             if (player_->info && player_->info->animations.count(anim)) {
-                anim_.update(anim); // immediately switch + apply movement for this frame
+                anim_.set_animation_now(anim);
             }
         }
     }
@@ -88,7 +88,6 @@ void VibbleController::update(const Input& input) {
     // Decide movement direction + possibly force an animation switch
     movement(input);
 
-    // Step animation normally if nothing was forced this frame
     anim_.update();
 
     interaction();

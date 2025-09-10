@@ -2,7 +2,7 @@
 #include "utils/input.hpp"
 #include "asset/Asset.hpp"
 #include "asset/animation_update.hpp"
-#include "asset/move.hpp"
+
 #include "utils/area.hpp"
 #include "core/active_assets_manager.hpp"
 #include "core/AssetsManager.hpp"
@@ -19,6 +19,8 @@ FrogController::FrogController(Assets* assets, Asset* self, ActiveAssetsManager&
 {
     rng_seed_ ^= reinterpret_cast<uintptr_t>(self_) + 0x9e3779b9u;
     frames_until_think_ = rand_range(think_interval_min_, think_interval_max_);
+        anim_.set_idle(0,20,0);
+    
 }
 
 FrogController::~FrogController() {}
@@ -39,16 +41,16 @@ void FrogController::update(const Input&) {
     };
 
     const std::string& cur = self_->get_current_animation();
-    if (cur.empty() && self_->next_animation.empty()) {
+    if (cur.empty()) {
         std::string chosen = pick_default();
         if (!chosen.empty()) {
-            anim_.update(chosen); // immediately switch if no animation running
+            anim_.set_animation_now(chosen);
+            anim_.update();
             return;
         }
     }
 
     // Default controller: just stay idle
-    anim_.set_idle(0, 20, 3);  
+    anim_.set_idle(0, 20, 3);
     anim_.update();
-	}
 }

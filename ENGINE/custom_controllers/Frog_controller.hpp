@@ -18,15 +18,13 @@ class FrogController : public AssetController {
     void update(const Input& in) override;
 
 	private:
-    void think();
-    bool try_hop_any_dir();
+
+
     bool canMove(int offset_x, int offset_y);
-    bool has_anim(const char* name) const;
+
     bool aabb(const Area& A, const Area& B) const;
-    bool pointInAABB(int x, int y, const Area& B) const;
-    int  randu();
-    int  rand_range(int lo, int hi);
-    bool coin(int percent_true);
+
+
 
 	private:
     Assets* assets_ = nullptr;

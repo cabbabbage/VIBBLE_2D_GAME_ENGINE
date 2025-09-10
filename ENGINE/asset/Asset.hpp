@@ -21,6 +21,7 @@ class view;
 class Assets;
 class Input;
 class AnimationUpdate;
+class AnimationFrame;
 
 struct StaticLight {
     LightSource* source = nullptr;
@@ -64,7 +65,7 @@ class Asset {
     void set_shading_group(int x);
     bool is_shading_group_set() const;
     int  get_shading_group() const;
-    int   current_frame_index = 0;
+    class AnimationFrame* current_frame = nullptr;
     SDL_Texture* get_final_texture() const;
     void set_final_texture(SDL_Texture* tex);
     void set_screen_position(SDL_Point s);

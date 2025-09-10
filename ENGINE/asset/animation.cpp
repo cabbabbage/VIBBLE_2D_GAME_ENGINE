@@ -57,32 +57,32 @@ void Animation::load(const std::string& trigger,
 	randomize = anim_json.value("randomize", false);
 	rnd_start = anim_json.value("rnd_start", false);
 	on_end_animation = anim_json.value("on_end", std::string{"default"});
-	total_dx = 0;
-	total_dy = 0;
-	movement.clear();
-	if (anim_json.contains("movement") && anim_json["movement"].is_array()) {
-		for (const auto& mv : anim_json["movement"]) {
-			if (!mv.is_array() || mv.size() < 2) continue;
-			FrameMovement fm;
-			try { fm.dx = mv[0].get<int>(); } catch (...) { fm.dx = 0; }
-			try { fm.dy = mv[1].get<int>(); } catch (...) { fm.dy = 0; }
-			if (mv.size() >= 3 && mv[2].is_boolean()) {
-					fm.sort_z_index = mv[2].get<bool>();
-			}
-			if (mv.size() >= 4 && mv[3].is_array() && mv[3].size() >= 3) {
-					auto clamp = [](int v) { return (v < 0) ? 0 : (v > 255 ? 255 : v); };
-					int r = 255, g = 255, b = 255;
-					try { r = clamp(mv[3][0].get<int>()); } catch (...) { r = 255; }
-					try { g = clamp(mv[3][1].get<int>()); } catch (...) { g = 255; }
-					try { b = clamp(mv[3][2].get<int>()); } catch (...) { b = 255; }
-					fm.rgb = SDL_Color{ static_cast<Uint8>(r), static_cast<Uint8>(g), static_cast<Uint8>(b), 255 };
-			}
-			movement.push_back(fm);
-			total_dx += fm.dx;
-			total_dy += fm.dy;
-		}
-	}
-	movment = !(total_dx == 0 && total_dy == 0);
+        total_dx = 0;
+        total_dy = 0;
+        frames_data.clear();
+        if (anim_json.contains("movement") && anim_json["movement"].is_array()) {
+                for (const auto& mv : anim_json["movement"]) {
+                        if (!mv.is_array() || mv.size() < 2) continue;
+                        AnimationFrame fm;
+                        try { fm.dx = mv[0].get<int>(); } catch (...) { fm.dx = 0; }
+                        try { fm.dy = mv[1].get<int>(); } catch (...) { fm.dy = 0; }
+                        if (mv.size() >= 3 && mv[2].is_boolean()) {
+                                        fm.z_resort = mv[2].get<bool>();
+                        }
+                        if (mv.size() >= 4 && mv[3].is_array() && mv[3].size() >= 3) {
+                                        auto clamp = [](int v) { return (v < 0) ? 0 : (v > 255 ? 255 : v); };
+                                        int r = 255, g = 255, b = 255;
+                                        try { r = clamp(mv[3][0].get<int>()); } catch (...) { r = 255; }
+                                        try { g = clamp(mv[3][1].get<int>()); } catch (...) { g = 255; }
+                                        try { b = clamp(mv[3][2].get<int>()); } catch (...) { b = 255; }
+                                        fm.rgb = SDL_Color{ static_cast<Uint8>(r), static_cast<Uint8>(g), static_cast<Uint8>(b), 255 };
+                        }
+                        frames_data.push_back(fm);
+                        total_dx += fm.dx;
+                        total_dy += fm.dy;
+                }
+        }
+        movment = !(total_dx == 0 && total_dy == 0);
 	if (source.kind == "animation" && !source.name.empty()) {
 		auto it = info.animations.find(source.name);
 		if (it != info.animations.end()) {
@@ -208,60 +208,44 @@ void Animation::load(const std::string& trigger,
 			std::reverse(frames.begin(), frames.end());
 		}
 	}
-	number_of_frames = static_cast<int>(frames.size());
-	if (trigger == "default" && !frames.empty()) {
-		base_sprite = frames[0];
-	}
+        number_of_frames = static_cast<int>(frames.size());
+        if (trigger == "default" && !frames.empty()) {
+                base_sprite = frames[0];
+        }
+
+        if (frames_data.size() < frames.size()) {
+                frames_data.resize(frames.size());
+        }
+        for (std::size_t i = 0; i < frames_data.size(); ++i) {
+                AnimationFrame& f = frames_data[i];
+                f.prev = (i > 0) ? &frames_data[i - 1] : nullptr;
+                f.next = (i + 1 < frames_data.size()) ? &frames_data[i + 1] : nullptr;
+                f.is_first = (i == 0);
+                f.is_last = (i + 1 == frames_data.size());
+        }
 }
 
-SDL_Texture* Animation::get_frame(int index) const {
-	if (index < 0 || index >= static_cast<int>(frames.size())) return nullptr;
-	return frames[index];
+SDL_Texture* Animation::get_frame(const AnimationFrame* frame) const {
+        if (!frame) return nullptr;
+        int index = index_of(frame);
+        if (index < 0 || index >= static_cast<int>(frames.size())) return nullptr;
+        return frames[index];
 }
 
-bool Animation::advance(int& index,
-                        float& progress,
-                        int& dx,
-                        int& dy,
-                        bool& resort_z) const
-{
-	if (frozen || frames.empty()) return false;
-	dx = 0;
-	dy = 0;
-	resort_z = false;
-	progress += speed_factor;
-	bool reached_end = false;
-	while (progress >= 1.0f) {
-		progress -= 1.0f;
-		++index;
-		if (index < number_of_frames) {
-			if (index < static_cast<int>(movement.size())) {
-					dx += movement[index].dx;
-					dy += movement[index].dy;
-					resort_z = resort_z || movement[index].sort_z_index;
-			}
-			continue;
-		}
-		if (loop && number_of_frames > 0) {
-			index = 0;
-			if (!movement.empty()) {
-					dx += movement[0].dx;
-					dy += movement[0].dy;
-					resort_z = resort_z || movement[0].sort_z_index;
-			}
-		} else {
-			reached_end = true;
-			index = number_of_frames > 0 ? number_of_frames - 1 : 0;
-			break;
-		}
-	}
-	return !reached_end;
+AnimationFrame* Animation::get_first_frame() {
+        if (frames_data.empty()) return nullptr;
+        return &frames_data[0];
 }
 
-void Animation::change(int& index, bool& static_flag) const {
-	if (frozen) return;
-	index = 0;
-	static_flag = is_static();
+int Animation::index_of(const AnimationFrame* frame) const {
+        if (!frame || frames_data.empty()) return 0;
+        return static_cast<int>(frame - frames_data.data());
+}
+
+void Animation::change(AnimationFrame*& frame, bool& static_flag) const {
+        if (frozen) return;
+        frame = const_cast<AnimationFrame*>(frames_data.empty() ? nullptr : &frames_data[0]);
+        static_flag = is_static();
 }
 
 void Animation::freeze() { frozen = true; }

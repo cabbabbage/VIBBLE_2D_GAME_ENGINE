@@ -24,15 +24,16 @@ void DefaultController::update(const Input& /*in*/) {
     };
 
     const std::string& cur = self_->get_current_animation();
-    if (cur.empty() && self_->next_animation.empty()) {
+    if (cur.empty()) {
         std::string chosen = pick_default();
         if (!chosen.empty()) {
-            anim_.update(chosen); // immediately switch if no animation running
+            anim_.set_animation_now(chosen);
+            anim_.update();
             return;
         }
     }
 
     // Default controller: just stay idle
-    anim_.set_idle(0, 20, 3);  
+    anim_.set_idle(0, 20, 3);
     anim_.update();
 }

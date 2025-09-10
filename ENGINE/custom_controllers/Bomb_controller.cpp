@@ -20,16 +20,16 @@ BombController::~BombController() {}
 void BombController::update(const Input&) {
     if (!self_ || !self_->info) return;
 
-    // If we are already in (or queued for) explosion, let AnimationUpdate handle it and bail.
-    if (self_->get_current_animation() == "explosion" || self_->next_animation == "explosion") {
-        anim_.update(); // step explosion animation
+    // If we are already exploding, let AnimationUpdate handle it and bail.
+    if (self_->get_current_animation() == "explosion") {
+        anim_.update();
         return;
     }
 
     // Try to explode if the player is close. If triggered, switch immediately (this frame) and return.
     Asset* player = assets_ ? assets_->player : nullptr;
     if (explosion_if_close(player)) {
-        return; // anim_.update("explosion") already applied movement this frame
+        return; // explosion animation already advanced this frame
     }
 
     // Decide behavior for this frame (pursue vs idle), then run a single animation update.
@@ -60,14 +60,14 @@ bool BombController::explosion_if_close(Asset* player) {
     if (!self_ || !player) return false;
 
     // Already handled upstream, but keep the guard in case of direct calls.
-    if (self_->get_current_animation() == "explosion" || self_->next_animation == "explosion") {
+    if (self_->get_current_animation() == "explosion") {
         return false;
     }
 
     const float d_sq = self_->distance_to_player_sq;
     if (d_sq <= static_cast<float>(explosion_radius_sq_)) {
-        // Immediate switch + movement for this frame using the new AnimationUpdate API.
-        anim_.update("explosion");
+        anim_.set_animation_now("explosion");
+        anim_.update();
         return true;
     }
 

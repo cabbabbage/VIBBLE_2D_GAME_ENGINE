@@ -3,19 +3,25 @@
 #include <string>
 #include <random>
 #include <vector>
+#include <optional>
 #include <SDL.h>
 #include "utils/area.hpp"
 
 class Asset;
 class ActiveAssetsManager;
+class AnimationFrame;
 
 class AnimationUpdate {
 
-	public:
-    void advance();
-    void move();
+        public:
     AnimationUpdate(Asset* self, ActiveAssetsManager& aam, bool confined);
     AnimationUpdate(Asset* self, ActiveAssetsManager& aam, bool confined, double directness_weight, double sparsity_weight);
+
+    // Controller API
+    void update();
+    void set_animation_now(const std::string& anim_id);
+    void set_animation_qued(const std::string& anim_id);
+
     void set_idle(int min_target_distance, int max_target_distance, int rest_ratio);
     void set_pursue(Asset* final_target, int min_target_distance, int max_target_distance);
     void set_run(Asset* threat, int min_target_distance, int max_target_distance);
@@ -26,8 +32,8 @@ class AnimationUpdate {
     void set_weights(double directness_weight, double sparsity_weight);
     void set_target(SDL_Point desired, const Asset* final_target);
     inline void set_traget(int desired_x, int desired_y, const Asset* final_target) { set_target(SDL_Point{ desired_x, desired_y }, final_target); }
-    void update(std::optional<std::string> force_anim = std::nullopt);
-	private:
+
+        private:
     enum class Mode { None, Idle, Pursue, Run, Orbit, Patrol, Serpentine };
     bool can_move_by(int dx, int dy) const;
     bool would_overlap_same_or_player(int dx, int dy) const;
@@ -43,10 +49,13 @@ class AnimationUpdate {
     bool is_target_reached();
     int  min_move_len2() const;
     void clamp_to_room(int& x, int& y) const;
- 
 
+    // Helpers for internal use
+    void switch_to(const std::string& anim_id);
+    bool advance(class AnimationFrame*& frame);
+    void get_animation();
 
-	private:
+        private:
     Asset* self_ = nullptr;
     ActiveAssetsManager& aam_;
     bool confined_ = true;
@@ -88,4 +97,10 @@ class AnimationUpdate {
     int serp_max_stride_ = 0;
     int serp_sway_ = 0;
     int serp_keep_ratio_ = 0;
+
+    // Animation control state
+    std::optional<std::string> queued_anim_;
+    bool forced_active_ = false;
+    Mode saved_mode_ = Mode::None;
+    bool mode_suspended_ = false;
 };

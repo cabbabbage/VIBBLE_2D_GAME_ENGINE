@@ -20,7 +20,6 @@ Asset::Asset(std::shared_ptr<AssetInfo> info_,
 : parent(parent_)
 , info(std::move(info_))
 , current_animation()
-, current_frame_index(0)
 , static_frame(false)
 , active(false)
 , pos(start_pos)
@@ -44,15 +43,21 @@ Asset::Asset(std::shared_ptr<AssetInfo> info_,
 	auto it = info->animations.find(start_id);
 	if (it == info->animations.end())
 	it = info->animations.find("default");
-	if (it != info->animations.end() && !it->second.frames.empty()) {
-		current_animation = it->first;
-		static_frame = (it->second.frames.size() == 1);
-		if ((it->second.randomize || it->second.rnd_start) && it->second.frames.size() > 1) {
-			std::mt19937 g{ std::random_device{}() };
-			std::uniform_int_distribution<int> d(0, int(it->second.frames.size()) - 1);
-			current_frame_index = d(g);
-		}
-	}
+                if (it != info->animations.end() && !it->second.frames.empty()) {
+                        current_animation = it->first;
+                        Animation& anim = it->second;
+                        static_frame = (anim.frames.size() == 1);
+                        current_frame = anim.get_first_frame();
+                        if ((anim.randomize || anim.rnd_start) && anim.frames.size() > 1) {
+                                std::mt19937 g{ std::random_device{}() };
+                                std::uniform_int_distribution<int> d(0, int(anim.frames.size()) - 1);
+                                int idx = d(g);
+                                AnimationFrame* f = anim.get_first_frame();
+                                while (idx-- > 0 && f && f->next) { f = f->next; }
+                                current_frame = f;
+                        }
+                }
+        }
 }
 
 Asset::~Asset() {
@@ -105,7 +110,7 @@ Asset::Asset(const Asset& o)
 , merged(o.merged)
 , selected(o.selected)
 , next_animation(o.next_animation)
-, current_frame_index(o.current_frame_index)
+, current_frame(o.current_frame)
 , frame_progress(o.frame_progress)
 , shading_group(o.shading_group)
 , shading_group_set(o.shading_group_set)
@@ -154,8 +159,8 @@ Asset& Asset::operator=(const Asset& o) {
 	merged               = o.merged;
 	selected             = o.selected;
 	next_animation       = o.next_animation;
-	current_frame_index  = o.current_frame_index;
-	frame_progress       = o.frame_progress;
+        current_frame        = o.current_frame;
+        frame_progress       = o.frame_progress;
 	shading_group        = o.shading_group;
 	shading_group_set    = o.shading_group_set;
 	final_texture        = o.final_texture;
@@ -179,14 +184,17 @@ void Asset::finalize_setup() {
 		if (it != info->animations.end() && !it->second.frames.empty()) {
 			current_animation = it->first;
 			Animation& anim = it->second;
-			anim.change(current_frame_index, static_frame);
-			frame_progress = 0.0f;
-			if ((anim.randomize || anim.rnd_start) && anim.frames.size() > 1) {
-					std::mt19937 rng{ std::random_device{}() };
-					std::uniform_int_distribution<int> dist(0, int(anim.frames.size()) - 1);
-					current_frame_index = dist(rng);
-			}
-		}
+                        anim.change(current_frame, static_frame);
+                        frame_progress = 0.0f;
+                        if ((anim.randomize || anim.rnd_start) && anim.frames.size() > 1) {
+                                        std::mt19937 rng{ std::random_device{}() };
+                                        std::uniform_int_distribution<int> dist(0, int(anim.frames.size()) - 1);
+                                        int idx = dist(rng);
+                                        AnimationFrame* f = anim.get_first_frame();
+                                        while (idx-- > 0 && f && f->next) { f = f->next; }
+                                        current_frame = f;
+                        }
+                }
 	}
 	for (Asset* child : children)
 	if (child) child->finalize_setup();
@@ -208,13 +216,16 @@ void Asset::finalize_setup() {
 bool Asset::get_merge(){ return merged; }
 
 SDL_Texture* Asset::get_current_frame() const {
-	auto itc = custom_frames.find(current_animation);
-	if (itc != custom_frames.end() && !itc->second.empty())
-	return itc->second[current_frame_index];
-	auto iti = info->animations.find(current_animation);
-	if (iti != info->animations.end())
-	return iti->second.get_frame(current_frame_index);
-	return nullptr;
+        auto itc = custom_frames.find(current_animation);
+        auto iti = info->animations.find(current_animation);
+        if (itc != custom_frames.end() && iti != info->animations.end() && current_frame) {
+        int idx = iti->second.index_of(current_frame);
+        if (idx >= 0 && idx < static_cast<int>(itc->second.size()))
+                return itc->second[idx];
+        }
+        if (iti != info->animations.end())
+        return iti->second.get_frame(current_frame);
+        return nullptr;
 }
 
 void Asset::set_position(SDL_Point p) {
@@ -240,24 +251,17 @@ std::string Asset::get_current_animation() const { return current_animation; }
 std::string Asset::get_type() const { return info ? info->type : ""; }
 
 bool Asset::is_current_animation_locked_in_progress() const {
-	if (!info) return false;
-	auto it = info->animations.find(current_animation);
-	if (it == info->animations.end()) return false;
-	const Animation& anim = it->second;
-	if (!anim.locked) return false;
-	int last = static_cast<int>(anim.frames.size()) - 1;
-	if (last < 0) return false;
-	return current_frame_index != last;
+        if (!info || !current_frame) return false;
+        auto it = info->animations.find(current_animation);
+        if (it == info->animations.end()) return false;
+        const Animation& anim = it->second;
+        if (!anim.locked) return false;
+        return !current_frame->is_last;
 }
 
 bool Asset::is_current_animation_last_frame() const {
-	if (!info) return false;
-	auto it = info->animations.find(current_animation);
-	if (it == info->animations.end()) return false;
-	const Animation& anim = it->second;
-	int last = static_cast<int>(anim.frames.size()) - 1;
-	if (last < 0) return true;
-	return current_frame_index >= last;
+        if (!current_frame) return false;
+        return current_frame->is_last;
 }
 
 bool Asset::is_current_animation_looping() const {
