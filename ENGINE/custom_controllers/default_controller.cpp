@@ -11,7 +11,8 @@ DefaultController::DefaultController(Assets* assets, Asset* self, ActiveAssetsMa
 DefaultController::~DefaultController() = default;
 
 void DefaultController::update(const Input& /*in*/) {
-    if (!self_ || !self_->info) { anim_.update(); return; }
+    anim_.update();
+    if (!self_ || !self_->info) { return; }
 
     auto pick_default = [&]() -> std::string {
         auto it = self_->info->animations.find("default");
@@ -27,14 +28,12 @@ void DefaultController::update(const Input& /*in*/) {
         if (self_->next_animation.empty()) {
             self_->change_animation_qued(pick_default());
         }
-        anim_.update();
         return;
     }
 
     // Only intervene when the current animation has finished, no next animation
     // is pending, and there is no specific on_end directive.
     if (!self_->is_current_animation_last_frame() || !self_->next_animation.empty()) {
-        anim_.update();
         return;
     }
 
@@ -42,7 +41,6 @@ void DefaultController::update(const Input& /*in*/) {
     if (it != self_->info->animations.end()) {
         const Animation& anim = it->second;
         if (!anim.on_end_animation.empty()) {
-            anim_.update();
             return; // AnimationUpdate will handle its on_end logic
         }
     }
@@ -51,5 +49,4 @@ void DefaultController::update(const Input& /*in*/) {
     if (!chosen.empty() && chosen != cur && self_->next_animation.empty()) {
         self_->change_animation_qued(chosen);
     }
-    anim_.update();
 }

@@ -10,7 +10,7 @@
       {
         "name": "Grass_FPS_2",
         "tag": false,
-        "percent": 37,
+        "percent": 36,
         "color": "#da2582"
       },
       {
@@ -22,7 +22,7 @@
       {
         "name": "Grass_1_FPS_2",
         "tag": false,
-        "percent": 37,
+        "percent": 36,
         "color": "#6193a3"
       },
       {
@@ -44,18 +44,6 @@
         "color": "#439315"
       },
       {
-        "name": "Davey",
-        "tag": false,
-        "percent": 2,
-        "color": "#75988a"
-      },
-      {
-        "name": "Frog",
-        "tag": false,
-        "percent": 1,
-        "color": "#eacc3a"
-      },
-      {
         "name": "Bush_FPS_2",
         "tag": false,
         "percent": 1,
@@ -66,6 +54,12 @@
         "tag": false,
         "percent": 1,
         "color": "#8d2f1d"
+      },
+      {
+        "name": "Davey",
+        "tag": false,
+        "percent": 5,
+        "color": "#241907"
       }
     ]
   }

@@ -11,18 +11,6 @@
       "position": "Intersection",
       "spawn_id": "spn-400a2bb2d100",
       "tag": false
-    },
-    {
-      "check_min_spacing": false,
-      "check_overlap": false,
-      "exact_position": null,
-      "inherited": false,
-      "max_number": 7,
-      "min_number": 7,
-      "name": "Bomb",
-      "position": "Random",
-      "spawn_id": "spn-f5f57855ceaa",
-      "tag": false
     }
   ],
   "batch_assets": {

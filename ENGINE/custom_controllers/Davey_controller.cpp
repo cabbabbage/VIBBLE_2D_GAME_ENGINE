@@ -14,10 +14,10 @@ DaveyController::DaveyController(Assets* assets, Asset* self, ActiveAssetsManage
 : assets_(assets), self_(self), aam_(aam), anim_(self, aam, true) {}
 
 void DaveyController::update(const Input& ) {
-        if (!self_ || !assets_ || !self_->info) { anim_.update(); return; }
+        anim_.update();
+        if (!self_ || !assets_ || !self_->info) { return; }
         Asset* player = assets_->player;
         if (!player) {
-                anim_.update();
                 return;
         }
         if (Range::is_in_range(player, self_, 1000)) {
@@ -26,8 +26,8 @@ void DaveyController::update(const Input& ) {
                 static thread_local std::mt19937 rng{std::random_device{}()};
                 if (pursue_frames_left_ <= 0) {
                         std::uniform_real_distribution<double> angle_dist(0.0, 2.0 * pi);
-			double theta = angle_dist(rng);
-			pursue_target_x_ = player->pos.x + static_cast<int>(std::llround(radius * std::cos(theta)));
+                        double theta = angle_dist(rng);
+                        pursue_target_x_ = player->pos.x + static_cast<int>(std::llround(radius * std::cos(theta)));
                         pursue_target_y_ = player->pos.y + static_cast<int>(std::llround(radius * std::sin(theta)));
                         pursue_frames_left_ = pursue_recalc_interval_;
                 } else {
@@ -39,5 +39,4 @@ void DaveyController::update(const Input& ) {
                 anim_.move();
         } else {
         }
-        anim_.update();
 }

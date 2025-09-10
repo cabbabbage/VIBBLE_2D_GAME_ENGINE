@@ -54,8 +54,10 @@ void VibbleController::movement(const Input& input) {
 
     const std::string current = player_->get_current_animation();
     if (move_x == 0 && move_y == 0) {
-        if (current != "default" && player_->next_animation.empty())
-            player_->change_animation_qued("default");
+        if (current != "default" && player_->next_animation.empty()) {
+            if (player_->info && player_->info->animations.count("default"))
+                player_->change_animation_qued("default");
+        }
         return;
     }
 
@@ -65,8 +67,10 @@ void VibbleController::movement(const Input& input) {
         else if (move_y > 0) anim = "forward";
         else if (move_x < 0) anim = "left";
         else if (move_x > 0) anim = "right";
-        if (!anim.empty() && anim != current && player_->next_animation.empty())
-            player_->change_animation_qued(anim);
+        if (!anim.empty() && anim != current && player_->next_animation.empty()) {
+            if (player_->info && player_->info->animations.count(anim))
+                player_->change_animation_qued(anim);
+        }
     }
 }
 
@@ -75,9 +79,9 @@ void VibbleController::handle_teleport(const Input&) {
 }
 
 void VibbleController::update(const Input& input) {
+    anim_.update();
     dx_ = dy_ = 0;
     movement(input);
     interaction();
-    anim_.update();
 }
 

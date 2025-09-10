@@ -17,18 +17,17 @@ BombController::BombController(Assets* assets, Asset* self, ActiveAssetsManager&
 BombController::~BombController() {}
 
 void BombController::update(const Input& ) {
-        if (!self_ || !self_->info) { anim_.update(); return; }
+        anim_.update();
+        if (!self_ || !self_->info) { return; }
         Asset* player = assets_ ? assets_->player : nullptr;
         explosion_if_close(player);
         if (self_->get_current_animation() == "explosion" || self_->next_animation == "explosion") {
-                anim_.update();
                 return;
         }
         if (player && self_->distance_to_player_sq <= static_cast<float>(follow_radius_sq_))
                 pursue(player);
         else
                 think_random();
-        anim_.update();
 }
 
 void BombController::think_random() {

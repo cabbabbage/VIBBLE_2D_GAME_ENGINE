@@ -614,6 +614,14 @@ void AnimationUpdate::update() {
 
     Animation& anim = it->second;
 
+    if (self_->current_frame_index < 0 ||
+        self_->current_frame_index >= anim.number_of_frames) {
+        if (anim.number_of_frames > 0)
+            self_->current_frame_index = std::clamp(self_->current_frame_index, 0, anim.number_of_frames - 1);
+        else
+            self_->current_frame_index = 0;
+    }
+
     if (self_->static_frame) {
         if (self_->next_animation.empty() && !anim.on_end_animation.empty()) {
             self_->next_animation = anim.on_end_animation;
