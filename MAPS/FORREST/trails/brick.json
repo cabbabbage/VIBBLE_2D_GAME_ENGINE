@@ -1,37 +1,50 @@
 {
-  "assets": [],
+  "assets": [
+    {
+      "check_min_spacing": false,
+      "check_overlap": false,
+      "exact_position": null,
+      "inherited": false,
+      "max_number": 1,
+      "min_number": 1,
+      "name": "Bomb",
+      "position": "Random",
+      "spawn_id": "spn-201a21be3548",
+      "tag": false
+    }
+  ],
   "batch_assets": {
-    "has_batch_assets": true,
-    "grid_spacing_min": 100,
-    "grid_spacing_max": 100,
-    "jitter_min": 0,
-    "jitter_max": 0,
     "batch_assets": [
       {
+        "color": "#CCCCCC",
         "name": "null",
-        "tag": false,
         "percent": 71,
-        "color": "#CCCCCC"
+        "tag": false
       },
       {
+        "color": "#2911cb",
         "name": "light",
-        "tag": true,
         "percent": 19,
-        "color": "#2911cb"
+        "tag": true
       },
       {
+        "color": "#1e4b95",
         "name": "flowers",
-        "tag": true,
         "percent": 8,
-        "color": "#1e4b95"
+        "tag": true
       },
       {
+        "color": "#62b3e9",
         "name": "candle",
-        "tag": false,
         "percent": 2,
-        "color": "#62b3e9"
+        "tag": false
       }
-    ]
+    ],
+    "grid_spacing_max": 100,
+    "grid_spacing_min": 100,
+    "has_batch_assets": true,
+    "jitter_max": 0,
+    "jitter_min": 0
   },
   "curvyness": 4,
   "inherits_map_assets": true,

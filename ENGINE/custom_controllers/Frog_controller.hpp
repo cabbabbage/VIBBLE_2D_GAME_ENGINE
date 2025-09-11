@@ -3,18 +3,20 @@
 
 #include "asset/asset_controller.hpp"
 
+class Assets;
 class Asset;
 class Input;
 
 class FrogController : public AssetController {
 
 public:
-    FrogController(Asset* self);
+    FrogController(Assets* assets, Asset* self);
     ~FrogController() override = default;
     void update(const Input& in) override;
 
 private:
-    Asset* self_ = nullptr;
+    Assets* assets_ = nullptr;
+    Asset*  self_   = nullptr;
 };
 
 #endif

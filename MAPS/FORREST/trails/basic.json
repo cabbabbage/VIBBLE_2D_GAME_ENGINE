@@ -11,34 +11,46 @@
       "position": "Intersection",
       "spawn_id": "spn-400a2bb2d100",
       "tag": false
+    },
+    {
+      "check_min_spacing": false,
+      "check_overlap": false,
+      "exact_position": null,
+      "inherited": false,
+      "max_number": 1,
+      "min_number": 1,
+      "name": "Bomb",
+      "position": "Random",
+      "spawn_id": "spn-903f62327b86",
+      "tag": false
     }
   ],
   "batch_assets": {
-    "has_batch_assets": true,
-    "grid_spacing_min": 100,
-    "grid_spacing_max": 100,
-    "jitter_min": 0,
-    "jitter_max": 0,
     "batch_assets": [
       {
+        "color": "#CCCCCC",
         "name": "null",
-        "tag": false,
         "percent": 82,
-        "color": "#CCCCCC"
+        "tag": false
       },
       {
+        "color": "#60d4f0",
         "name": "light",
-        "tag": true,
         "percent": 15,
-        "color": "#60d4f0"
+        "tag": true
       },
       {
+        "color": "#c327e3",
         "name": "flower_1",
-        "tag": false,
         "percent": 3,
-        "color": "#c327e3"
+        "tag": false
       }
-    ]
+    ],
+    "grid_spacing_max": 100,
+    "grid_spacing_min": 100,
+    "has_batch_assets": true,
+    "jitter_max": 0,
+    "jitter_min": 0
   },
   "curvyness": 4,
   "inherits_map_assets": true,

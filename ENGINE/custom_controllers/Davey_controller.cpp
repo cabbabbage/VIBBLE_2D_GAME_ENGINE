@@ -16,10 +16,22 @@ void DaveyController::update(const Input&) {
     }
 
     try {
-        if (Asset* player = assets_->player; player && Range::is_in_range(player, self_, 1000)) {
-            if (self_->anim_) self_->anim_->set_pursue(player, 20, 30);
+        Asset* player = assets_->player;
+        if (!player || !self_->anim_) return;
+
+        
+        const bool near   = Range::is_in_range(self_, player, 40);
+        const bool inView = Range::is_in_range(self_, player, 1000);
+
+        if (near) {
+            
+            self_->anim_->set_orbit_ccw(player, 40, 40);
+        } else if (inView) {
+            
+            self_->anim_->set_pursue(player, 20, 30);
         } else {
-            if (self_->anim_) self_->anim_->set_idle(40, 80, 5);
+            
+            self_->anim_->set_idle(40, 80, 5);
         }
     } catch (...) {
     }
