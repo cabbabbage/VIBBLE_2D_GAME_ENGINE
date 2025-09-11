@@ -210,7 +210,7 @@ void Asset::finalize_setup() {
                 << "\" at (" << child->pos.x << ", " << child->pos.y << ")\n";
 	}
         if (assets_ && !anim_) {
-                anim_ = std::make_unique<AnimationUpdate>(this, assets_->activeManager, true);
+                anim_ = std::make_unique<AnimationUpdate>(this, assets_->activeManager);
         }
         if (assets_ && !controller_) {
                 ControllerFactory cf(assets_);
@@ -221,16 +221,27 @@ void Asset::finalize_setup() {
 bool Asset::get_merge(){ return merged; }
 
 SDL_Texture* Asset::get_current_frame() const {
-        auto itc = custom_frames.find(current_animation);
+        if (!info) return nullptr;
         auto iti = info->animations.find(current_animation);
-        if (itc != custom_frames.end() && iti != info->animations.end() && current_frame) {
-        int idx = iti->second.index_of(current_frame);
-        if (idx >= 0 && idx < static_cast<int>(itc->second.size()))
+        if (iti == info->animations.end()) return nullptr;
+
+        const Animation& anim = iti->second;
+        // If our current_frame pointer doesn't belong to this animation anymore,
+        // fall back to the first frame to avoid invalid memory access.
+        int idx_anim = anim.index_of(current_frame);
+        if (idx_anim < 0) {
+            // Mutable fallback: this is logically const, but we need to heal the pointer.
+            const_cast<Asset*>(this)->current_frame = const_cast<AnimationFrame*>(anim.frames_data.empty() ? nullptr : &anim.frames_data[0]);
+            const_cast<Asset*>(this)->frame_progress = 0.0f;
+        }
+
+        auto itc = custom_frames.find(current_animation);
+        if (itc != custom_frames.end() && current_frame) {
+            int idx = anim.index_of(current_frame);
+            if (idx >= 0 && idx < static_cast<int>(itc->second.size()))
                 return itc->second[idx];
         }
-        if (iti != info->animations.end())
-        return iti->second.get_frame(current_frame);
-        return nullptr;
+        return anim.get_frame(current_frame);
 }
 
 void Asset::set_position(SDL_Point p) {
@@ -244,6 +255,29 @@ void Asset::update() {
     if (controller_ && assets_) {
         if (Input* in = assets_->get_input()) {
             controller_->update(*in);
+        }
+    }
+
+    // Heal desynced frame/animation state before advancing animations
+    if (anim_) {
+        auto iti = info->animations.find(current_animation);
+        if (iti == info->animations.end()) {
+            // Fallback to a safe animation if the current id is missing
+            auto def = info->animations.find("default");
+            if (def == info->animations.end()) def = info->animations.begin();
+            if (def != info->animations.end()) {
+                current_animation = def->first;
+                current_frame     = def->second.get_first_frame();
+                frame_progress    = 0.0f;
+                static_frame      = def->second.is_static();
+            }
+        } else {
+            Animation& anim = iti->second;
+            if (anim.index_of(current_frame) < 0) {
+                current_frame = anim.get_first_frame();
+                frame_progress = 0.0f;
+                static_frame = anim.is_static();
+            }
         }
     }
 
@@ -298,7 +332,7 @@ void Asset::add_child(Asset* child) {
 void Asset::set_assets(Assets* a) {
         assets_ = a;
         if (assets_ && !anim_) {
-                anim_ = std::make_unique<AnimationUpdate>(this, assets_->activeManager, true);
+                anim_ = std::make_unique<AnimationUpdate>(this, assets_->activeManager);
         }
         if (!controller_ && assets_) {
                 ControllerFactory cf(assets_);

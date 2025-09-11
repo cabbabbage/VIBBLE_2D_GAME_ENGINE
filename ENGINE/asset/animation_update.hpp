@@ -5,7 +5,6 @@
 #include <vector>
 #include <optional>
 #include <SDL.h>
-#include "utils/area.hpp"
 
 class Asset;
 class ActiveAssetsManager;
@@ -14,8 +13,8 @@ class AnimationFrame;
 class AnimationUpdate {
 
         public:
-    AnimationUpdate(Asset* self, ActiveAssetsManager& aam, bool confined);
-    AnimationUpdate(Asset* self, ActiveAssetsManager& aam, bool confined, double directness_weight, double sparsity_weight);
+    AnimationUpdate(Asset* self, ActiveAssetsManager& aam);
+    AnimationUpdate(Asset* self, ActiveAssetsManager& aam, double directness_weight, double sparsity_weight);
 
     // Controller API
     void update();
@@ -48,7 +47,6 @@ class AnimationUpdate {
     void transition_mode(Mode m);
     bool is_target_reached();
     int  min_move_len2() const;
-    void clamp_to_room(int& x, int& y) const;
 
     // Helpers for internal use
     void switch_to(const std::string& anim_id);
@@ -58,7 +56,6 @@ class AnimationUpdate {
         private:
     Asset* self_ = nullptr;
     ActiveAssetsManager& aam_;
-    bool confined_ = true;
     Mode mode_ = Mode::None;
     bool have_target_ = false;
     SDL_Point target_ {0, 0};
