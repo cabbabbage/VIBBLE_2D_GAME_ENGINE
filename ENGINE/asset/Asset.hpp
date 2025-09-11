@@ -16,11 +16,11 @@
 #include "utils/light_source.hpp"
 
 #include "asset_controller.hpp"
+#include "animation_update.hpp"
 
 class view;
 class Assets;
 class Input;
-class AnimationUpdate;
 class AnimationFrame;
 
 struct StaticLight {
@@ -114,7 +114,8 @@ class Asset {
     std::string spawn_id;
     std::string spawn_method;
     std::string next_animation;
-	private:
+    std::unique_ptr<AnimationUpdate> anim_;
+        private:
     friend class AnimationUpdate;
     friend class Move;
     view* window = nullptr;

@@ -120,6 +120,7 @@ Asset::Asset(const Asset& o)
 , spawn_id(o.spawn_id)
 , spawn_method(o.spawn_method)
 , controller_(nullptr)
+, anim_(nullptr)
 {
 }
 
@@ -166,10 +167,11 @@ Asset& Asset::operator=(const Asset& o) {
 	final_texture        = o.final_texture;
 	custom_frames        = o.custom_frames;
 	assets_              = o.assets_;
-	spawn_id             = o.spawn_id;
-	spawn_method         = o.spawn_method;
-	controller_.reset();
-	return *this;
+        spawn_id             = o.spawn_id;
+        spawn_method         = o.spawn_method;
+        controller_.reset();
+        anim_.reset();
+        return *this;
 }
 
 void Asset::finalize_setup() {
@@ -207,8 +209,11 @@ void Asset::finalize_setup() {
                 std::cout << "    - \"" << child->info->name
                 << "\" at (" << child->pos.x << ", " << child->pos.y << ")\n";
 	}
-        if (assets_) {
-                ControllerFactory cf(assets_, assets_->activeManager);
+        if (assets_ && !anim_) {
+                anim_ = std::make_unique<AnimationUpdate>(this, assets_->activeManager, true);
+        }
+        if (assets_ && !controller_) {
+                ControllerFactory cf(assets_);
                 controller_ = cf.create_for_asset(this);
         }
 }
@@ -242,8 +247,8 @@ void Asset::update() {
         }
     }
 
-    if (!dead) {
-        // Animation updates handled by controllers via AnimationUpdate
+    if (!dead && anim_) {
+        anim_->update();
     }
 }
 
@@ -291,11 +296,14 @@ void Asset::add_child(Asset* child) {
 }
 
 void Asset::set_assets(Assets* a) {
-	assets_ = a;
-	if (!controller_ && assets_) {
-		ControllerFactory cf(assets_, assets_->activeManager);
-		controller_ = cf.create_for_asset(this);
-	}
+        assets_ = a;
+        if (assets_ && !anim_) {
+                anim_ = std::make_unique<AnimationUpdate>(this, assets_->activeManager, true);
+        }
+        if (!controller_ && assets_) {
+                ControllerFactory cf(assets_);
+                controller_ = cf.create_for_asset(this);
+        }
 }
 
 void Asset::set_z_index() {

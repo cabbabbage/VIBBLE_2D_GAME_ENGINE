@@ -60,11 +60,9 @@ class CustomControllerManager:
         # --- generate files in expected controller format ---
         hpp = f"""#pragma once
 #include "asset_controller.hpp"
-#include "asset/animation_update.hpp"
 
 class Assets;
 class Asset;
-class ActiveAssetsManager;
 class Input;
 
 /*
@@ -74,7 +72,7 @@ class Input;
 */
 class {class_name} : public AssetController {{
 public:
-    {class_name}(Assets* assets, Asset* self, ActiveAssetsManager& aam);
+    {class_name}(Assets* assets, Asset* self);
     ~{class_name}() override = default;
 
     void update(const Input& in) override;
@@ -82,25 +80,22 @@ public:
 private:
     Assets* assets_ = nullptr;           // non owning
     Asset*  self_   = nullptr;           // non owning
-    AnimationUpdate anim_;
 }};
 """
         cpp = f"""#include "custom_controllers/{self.base_name}.hpp"
 
 #include "asset/Asset.hpp"
 #include "core/AssetsManager.hpp"
-#include "core/active_assets_manager.hpp"
-#include "asset/animation_update.hpp"
 
-{class_name}::{class_name}(Assets* assets, Asset* self, ActiveAssetsManager& aam)
+{class_name}::{class_name}(Assets* assets, Asset* self)
     : assets_(assets)
     , self_(self)
-    , anim_(self, aam, true)
 {{}}
 
 void {class_name}::update(const Input& /*in*/) {{
     // dummy controller
-    anim_.update();
+    if (self_ && self_->anim_)
+        self_->anim_->set_idle(0, 20, 3);
 }}
 """
         self.hpp.write_text(hpp, encoding="utf-8")
@@ -161,7 +156,7 @@ void {class_name}::update(const Input& /*in*/) {{
         # add branch in create_by_key
         key_branch = (
             f' if (key == "{self.base_name}")\n'
-            f'  return std::make_unique<{class_name}>(assets_, self, aam_);\n'
+            f'  return std::make_unique<{class_name}>(assets_, self);\n'
         )
 
         # find create_by_key(...) body

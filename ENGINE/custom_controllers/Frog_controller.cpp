@@ -2,12 +2,11 @@
 #include "asset/Asset.hpp"
 #include "asset/asset_info.hpp"
 
-FrogController::FrogController(Asset* self, ActiveAssetsManager& aam)
-    : self_(self), anim_(self, aam, true) {}
+FrogController::FrogController(Asset* self)
+    : self_(self) {}
 
 void FrogController::update(const Input&) {
     if (!self_ || !self_->info) {
-        anim_.update();
         return;
     }
 
@@ -21,12 +20,13 @@ void FrogController::update(const Input&) {
     const std::string& cur = self_->get_current_animation();
     if (cur.empty()) {
         std::string chosen = pick_default();
-        if (!chosen.empty()) {
-            anim_.set_animation_now(chosen);
+        if (!chosen.empty() && self_->anim_) {
+            self_->anim_->set_animation_now(chosen);
         }
     }
 
-    anim_.set_idle(0, 20, 3);
-    anim_.update();
+    if (self_->anim_) {
+        self_->anim_->set_idle(0, 20, 3);
+    }
 }
 
