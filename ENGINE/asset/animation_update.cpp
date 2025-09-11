@@ -511,10 +511,21 @@ void AnimationUpdate::ensure_serpentine_target(int min_stride,
 bool AnimationUpdate::advance(AnimationFrame*& frame) {
     try {
         if (!self_ || !self_->info || !frame) return true;
+        if (self_->static_frame) return true;
 
         auto it = self_->info->animations.find(self_->current_animation);
         if (it == self_->info->animations.end()) return true;
         Animation& anim = it->second;
+
+        // Validate that the current frame pointer belongs to the animation's
+        // frame buffer before using it. If it doesn't, reset to the first
+        // frame to avoid undefined behaviour from dereferencing an invalid
+        // pointer.
+        if (anim.index_of(frame) < 0) {
+            frame = anim.get_first_frame();
+            self_->frame_progress = 0.0f;
+            if (!frame) return true;
+        }
 
         self_->pos.x += frame->dx;
         self_->pos.y += frame->dy;
@@ -604,11 +615,11 @@ void AnimationUpdate::set_animation_now(const std::string& anim_id) {
     if (anim_id.empty()) return;
     if (self_->current_animation == anim_id) return;
     queued_anim_.reset();
-    forced_active_ = true;
     if (!mode_suspended_) { saved_mode_ = mode_; mode_suspended_ = true; }
     mode_ = Mode::None;
     have_target_ = false;
     switch_to(anim_id);
+    forced_active_ = !self_->static_frame;
 }
 
 void AnimationUpdate::set_animation_qued(const std::string& anim_id) {
@@ -630,9 +641,11 @@ void AnimationUpdate::update() {
                 if (queued_anim_) {
                     switch_to(*queued_anim_);
                     queued_anim_.reset();
-                    forced_active_ = true;
-                    advance(self_->current_frame);
-                    return;
+                    forced_active_ = !self_->static_frame;
+                    if (forced_active_) {
+                        advance(self_->current_frame);
+                        return;
+                    }
                 }
                 if (mode_suspended_) {
                     mode_ = saved_mode_;
@@ -653,7 +666,7 @@ void AnimationUpdate::update() {
         if (queued_anim_ && self_->is_current_animation_last_frame()) {
             switch_to(*queued_anim_);
             queued_anim_.reset();
-            forced_active_ = true;
+            forced_active_ = !self_->static_frame;
             bool cont = advance(self_->current_frame);
             if (!cont) {
                 forced_active_ = false;
