@@ -16,6 +16,7 @@ void DaveyController::update(const Input&) {
     }
 
     try {
+
         Asset* player = assets_->player;
         if (!player || !self_->anim_) return;
 
@@ -32,6 +33,7 @@ void DaveyController::update(const Input&) {
         } else {
             
             self_->anim_->set_idle(40, 80, 5);
+
         }
     } catch (...) {
     }

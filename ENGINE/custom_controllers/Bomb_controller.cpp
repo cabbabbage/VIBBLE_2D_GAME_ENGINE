@@ -4,6 +4,7 @@
 #include "utils/range_util.hpp"
 
 BombController::BombController(Assets* assets, Asset* self)
+
     : assets_(assets), self_(self) {
     if (self_ && self_->anim_) {
         self_->anim_->set_idle(40, 80, 5);
@@ -31,5 +32,6 @@ void BombController::update(const Input&) {
             self_->anim_->set_idle(40, 80, 5);
         }
     } catch (...) {
+
     }
 }

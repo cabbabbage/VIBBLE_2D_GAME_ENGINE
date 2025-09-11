@@ -59,7 +59,9 @@ class CustomControllerManager:
 
         # --- generate files in expected controller format ---
         hpp = f"""#pragma once
+
 #include "asset/asset_controller.hpp"
+
 
 class Assets;
 class Asset;
@@ -94,6 +96,7 @@ private:
 {{}}
 
 void {class_name}::update(const Input& /*in*/) {{
+
     if (!self_ || !self_->info) return;
 
     // Ensure a safe starting animation
@@ -116,6 +119,7 @@ void {class_name}::update(const Input& /*in*/) {{
     if (self_->anim_) {{
         self_->anim_->set_idle(0, 20, 3);
     }}
+
 }}
 """
         self.hpp.write_text(hpp, encoding="utf-8")
