@@ -49,6 +49,7 @@ class AssetInfo {
     bool flipable;
     std::vector<std::string> tags;
     bool has_light_source;
+    bool moving_asset = false;
     struct NamedArea {
     std::string name;
     std::unique_ptr<Area> area;

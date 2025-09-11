@@ -25,8 +25,13 @@ class AnimationUpdate {
     void set_pursue(Asset* final_target, int min_target_distance, int max_target_distance);
     void set_run(Asset* threat, int min_target_distance, int max_target_distance);
     void set_orbit(Asset* center, int min_radius, int max_radius, int keep_direction_ratio);
+    // Helpers to force orbit direction deterministically
+    void set_orbit_ccw(Asset* center, int min_radius, int max_radius);
+    void set_orbit_cw (Asset* center, int min_radius, int max_radius);
     void set_patrol(const std::vector<SDL_Point>& waypoints, bool loop, int hold_frames);
     void set_serpentine(Asset* final_target, int min_stride, int max_stride, int sway, int keep_side_ratio);
+    // Disable AI-directed motion; rely on current animation + on_end chaining
+    void set_mode_none();
 
     void set_weights(double directness_weight, double sparsity_weight);
     void set_target(SDL_Point desired, const Asset* final_target);
@@ -67,6 +72,8 @@ class AnimationUpdate {
     double orbit_angle_ = 0.0;
     int    orbit_radius_ = 0;
     bool   orbit_params_set_ = false;
+    bool   orbit_force_dir_ = false;
+    int    orbit_forced_dir_ = +1; // +1=CCW, -1=CW
     std::vector<SDL_Point> patrol_points_;
     std::size_t patrol_index_ = 0;
     bool patrol_loop_ = true;

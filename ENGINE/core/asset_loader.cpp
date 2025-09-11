@@ -53,11 +53,11 @@ renderer_(renderer)
 	std::vector<Asset*> link_candidates;
 	for (Room* room : rooms_) {
 		for (auto& asset_up : room->assets) {
-			if (auto* asset = asset_up.get()) {
-					if (asset->info && asset->info->type != "Player") {
-								link_candidates.push_back(asset);
-					}
-			}
+            if (auto* asset = asset_up.get()) {
+                if (asset->info && asset->info->type != "Player" && !asset->info->moving_asset) {
+                    link_candidates.push_back(asset);
+                }
+            }
 		}
 	}
 	auto neighbor_assets = group_neighboring_assets(link_candidates, 1000, 1000, "Child Linking");

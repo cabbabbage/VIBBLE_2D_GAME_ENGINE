@@ -53,6 +53,12 @@ void AnimationLoader::load(AssetInfo& info, SDL_Renderer* renderer) {
 			info.animations[trigger] = std::move(anim);
 		}
 	}
+	// Compute whether this asset has any movement across animations
+	info.moving_asset = false;
+	for (const auto& kv : info.animations) {
+		const Animation& a = kv.second;
+		if (a.movment || a.total_dx != 0 || a.total_dy != 0) { info.moving_asset = true; break; }
+	}
 	get_area_textures(info, renderer);
 }
 

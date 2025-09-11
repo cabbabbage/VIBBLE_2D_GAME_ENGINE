@@ -10,7 +10,7 @@
       {
         "name": "Grass_FPS_2",
         "tag": false,
-        "percent": 36,
+        "percent": 37,
         "color": "#da2582"
       },
       {
@@ -22,7 +22,7 @@
       {
         "name": "Grass_1_FPS_2",
         "tag": false,
-        "percent": 36,
+        "percent": 38,
         "color": "#6193a3"
       },
       {
@@ -58,8 +58,14 @@
       {
         "name": "Davey",
         "tag": false,
-        "percent": 5,
+        "percent": 1,
         "color": "#241907"
+      },
+      {
+        "name": "Frog",
+        "tag": false,
+        "percent": 1,
+        "color": "#3dea80"
       }
     ]
   }

@@ -165,7 +165,7 @@ SDL_Point AnimationUpdate::choose_balanced_target(SDL_Point desired, const Asset
             for (Asset* n : neighbors) {
                 if (!n || n == self_ || !n->info) continue;
                 if (final_target && n == final_target) continue;
-                if (n->info->has_tag("ground")) continue;
+                if (!n->info->passable) continue;
 
                 const double rvx = static_cast<double>(n->pos.x - sx);
                 const double rvy = static_cast<double>(n->pos.y - sy);
@@ -231,6 +231,7 @@ void AnimationUpdate::set_orbit(Asset* center, int min_radius, int max_radius, i
     orbit_min_radius_= min_radius;
     orbit_max_radius_= max_radius;
     orbit_keep_ratio_= keep_direction_ratio;
+    orbit_force_dir_ = false; // generic orbit does not force direction
     transition_mode(Mode::Orbit);
 }
 
@@ -251,6 +252,10 @@ void AnimationUpdate::set_serpentine(Asset* final_target, int min_stride, int ma
     serp_sway_        = sway;
     serp_keep_ratio_  = keep_side_ratio;
     transition_mode(Mode::Serpentine);
+}
+
+void AnimationUpdate::set_mode_none() {
+    transition_mode(Mode::None);
 }
 
 // -------------------------------
@@ -380,10 +385,15 @@ void AnimationUpdate::ensure_orbit_target(int min_radius, int max_radius, const 
 
     // direction pick/flip
     if (orbit_params_set_) {
-        const int denom = std::max(0, keep_direction_ratio) + 1;
-        if (rand_int(rng_, 0, denom - 1) == 0) orbit_dir_ = -orbit_dir_;
+        if (!orbit_force_dir_) {
+            const int denom = std::max(0, keep_direction_ratio) + 1;
+            if (rand_int(rng_, 0, denom - 1) == 0) orbit_dir_ = -orbit_dir_;
+        } else {
+            orbit_dir_ = (orbit_forced_dir_ >= 0) ? +1 : -1;
+        }
     } else {
-        orbit_dir_ = (rand_int(rng_, 0, 1) ? +1 : -1);
+        orbit_dir_ = orbit_force_dir_ ? ((orbit_forced_dir_ >= 0) ? +1 : -1)
+                                      : (rand_int(rng_, 0, 1) ? +1 : -1);
     }
 
     // radius
@@ -412,6 +422,26 @@ void AnimationUpdate::ensure_orbit_target(int min_radius, int max_radius, const 
 
     set_target(SDL_Point{nx, ny}, nullptr);
     orbit_angle_ = next_angle;
+}
+
+void AnimationUpdate::set_orbit_ccw(Asset* center, int min_radius, int max_radius) {
+    orbit_center_     = center;
+    orbit_min_radius_ = min_radius;
+    orbit_max_radius_ = max_radius;
+    orbit_keep_ratio_ = 1000000; // effectively keep direction
+    orbit_force_dir_  = true;
+    orbit_forced_dir_ = +1;
+    transition_mode(Mode::Orbit);
+}
+
+void AnimationUpdate::set_orbit_cw(Asset* center, int min_radius, int max_radius) {
+    orbit_center_     = center;
+    orbit_min_radius_ = min_radius;
+    orbit_max_radius_ = max_radius;
+    orbit_keep_ratio_ = 1000000;
+    orbit_force_dir_  = true;
+    orbit_forced_dir_ = -1;
+    transition_mode(Mode::Orbit);
 }
 
 void AnimationUpdate::ensure_patrol_target(const std::vector<SDL_Point>& waypoints,

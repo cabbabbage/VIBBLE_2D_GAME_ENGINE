@@ -22,7 +22,9 @@ ControllerFactory::create_by_key(const std::string& key, Asset* self) const {
                 if (key == "Vibble_controller")
                         return std::make_unique<VibbleController>(self);
                 if (key == "Frog_controller")
-                        return std::make_unique<FrogController>(self);
+
+                        return std::make_unique<FrogController>(assets_, self);
+
                 if (key == "Bomb_controller")
                         return std::make_unique<BombController>(assets_, self);
         } catch (...) {
