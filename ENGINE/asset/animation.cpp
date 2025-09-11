@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <filesystem>
 #include <iostream>
+#include <cstdint>
 namespace fs = std::filesystem;
 
 Animation::Animation() = default;
@@ -238,8 +239,16 @@ AnimationFrame* Animation::get_first_frame() {
 }
 
 int Animation::index_of(const AnimationFrame* frame) const {
-        if (!frame || frames_data.empty()) return 0;
-        return static_cast<int>(frame - frames_data.data());
+        if (!frame || frames_data.empty()) return -1;
+        const AnimationFrame* data = frames_data.data();
+        const std::uintptr_t base = reinterpret_cast<std::uintptr_t>(data);
+        const std::uintptr_t ptr  = reinterpret_cast<std::uintptr_t>(frame);
+        const std::uintptr_t end  = base + sizeof(AnimationFrame) * frames_data.size();
+        if (ptr < base || ptr >= end) return -1;
+        const std::uintptr_t offset = ptr - base;
+        if (offset % sizeof(AnimationFrame) != 0) return -1;
+        size_t index = offset / sizeof(AnimationFrame);
+        return static_cast<int>(index);
 }
 
 void Animation::change(AnimationFrame*& frame, bool& static_flag) const {

@@ -2,13 +2,12 @@
 #include "asset/Asset.hpp"
 #include "asset/asset_info.hpp"
 
-DefaultController::DefaultController(Asset* self, ActiveAssetsManager& aam)
-    : self_(self), anim_(self, aam, true) {}
+DefaultController::DefaultController(Asset* self)
+    : self_(self) {}
 
 void DefaultController::update(const Input& /*in*/) {
-    if (!self_ || !self_->info) { 
-        anim_.update();
-        return; 
+    if (!self_ || !self_->info) {
+        return;
     }
 
     // Pick an idle/default animation for safety
@@ -22,12 +21,13 @@ void DefaultController::update(const Input& /*in*/) {
     const std::string& cur = self_->get_current_animation();
     if (cur.empty()) {
         std::string chosen = pick_default();
-        if (!chosen.empty()) {
-            anim_.set_animation_now(chosen);
+        if (!chosen.empty() && self_->anim_) {
+            self_->anim_->set_animation_now(chosen);
         }
     }
 
     // Default controller: just stay idle
-    anim_.set_idle(0, 20, 3);
-    anim_.update();
+    if (self_->anim_) {
+        self_->anim_->set_idle(0, 20, 3);
+    }
 }

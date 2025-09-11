@@ -1,41 +1,48 @@
 @echo off
 setlocal enabledelayedexpansion
 
+rem Ensure the working directory is the repo root (folder of this script)
+pushd "%~dp0" >nul
+
 set "EXTRA_ARGS="
-set "TOOL_MODE=0"
 
-echo Cleaning previous CMake cache...
-rmdir /s /q build >nul 2>&1
-mkdir build
+echo [run.bat] Preparing build directory...
+if not exist build mkdir build
 
-echo Configuring project...
+echo [run.bat] Configuring (Visual Studio 2022, x64)...
+set "TOOLCHAIN_ARG="
+if exist "%cd%\vcpkg\scripts\buildsystems\vcpkg.cmake" set "TOOLCHAIN_ARG=-DCMAKE_TOOLCHAIN_FILE=%cd%\vcpkg\scripts\buildsystems\vcpkg.cmake"
 cmake -G "Visual Studio 17 2022" -A x64 ^
-  -DCMAKE_TOOLCHAIN_FILE="%cd%\\vcpkg\\scripts\\buildsystems\\vcpkg.cmake" ^
-  -DCMAKE_RUNTIME_OUTPUT_DIRECTORY="%cd%\\ENGINE" ^
-  -B build -S .
+  %TOOLCHAIN_ARG% ^
+  -DCMAKE_RUNTIME_OUTPUT_DIRECTORY="%cd%\ENGINE" ^
+  -S . -B build
 if errorlevel 1 (
-    echo ❌ CMake configuration failed.
-    pause & exit /b 1
+    echo [ERROR] CMake configuration failed.
+    popd & pause & exit /b 1
 )
 
-echo Building project...
-cmake --build build --config Release
+echo [run.bat] Building (RelWithDebInfo)...
+cmake --build build --config RelWithDebInfo -- /m
 if errorlevel 1 (
-    echo ❌ Build failed.
-    pause & exit /b 1
+    echo [ERROR] Build failed.
+    popd & pause & exit /b 1
 )
 
-set EXE1=%~dp0ENGINE\\Release\\engine.exe
-set EXE2=%~dp0build\\Release\\engine.exe
-
-echo Launching built game...
-if exist "%EXE1%" (
-    "%EXE1%" %EXTRA_ARGS%
-) else if exist "%EXE2%" (
-    "%EXE2%" %EXTRA_ARGS%
-) else (
-    echo Executable not found at "%EXE1%" or "%EXE2%"
+set "EXE=%cd%\ENGINE\engine.exe"
+if not exist "%EXE%" (
+    echo [WARN] Expected exe not found at "%EXE%". Trying alt locations...
+    if exist "%cd%\build\RelWithDebInfo\engine.exe" set "EXE=%cd%\build\RelWithDebInfo\engine.exe"
+    if exist "%cd%\build\Release\engine.exe" set "EXE=%cd%\build\Release\engine.exe"
 )
 
-pause
+if not exist "%EXE%" (
+    echo [ERROR] Executable not found. Build may have failed.
+    popd & pause & exit /b 1
+)
+
+echo [run.bat] Launching: "%EXE%"
+rem Run with repo root as working directory so relative paths (MAPS/, loading/, MISC_CONTENT/) resolve
+"%EXE%" %EXTRA_ARGS%
+
+popd >nul
 endlocal

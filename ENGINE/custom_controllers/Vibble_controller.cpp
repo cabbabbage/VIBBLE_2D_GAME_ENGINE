@@ -5,8 +5,8 @@
 
 #include <string>
 
-VibbleController::VibbleController(Asset* player, ActiveAssetsManager& aam)
-    : player_(player), anim_(player, aam, true) {}
+VibbleController::VibbleController(Asset* player)
+    : player_(player) {}
 
 int VibbleController::get_dx() const { return dx_; }
 int VibbleController::get_dy() const { return dy_; }
@@ -28,8 +28,8 @@ void VibbleController::movement(const Input& input) {
     if (move_x == 0 && move_y == 0) {
         // idle → default
         if (current != "default") {
-            if (player_->info && player_->info->animations.count("default")) {
-                anim_.set_animation_now("default");
+            if (player_->info && player_->info->animations.count("default") && player_->anim_) {
+                player_->anim_->set_animation_now("default");
             }
         }
         return;
@@ -43,8 +43,8 @@ void VibbleController::movement(const Input& input) {
         else if (move_x > 0) anim = "right";
 
         if (!anim.empty() && anim != current) {
-            if (player_->info && player_->info->animations.count(anim)) {
-                anim_.set_animation_now(anim);
+            if (player_->info && player_->info->animations.count(anim) && player_->anim_) {
+                player_->anim_->set_animation_now(anim);
             }
         }
     }
@@ -55,6 +55,4 @@ void VibbleController::update(const Input& input) {
 
     // Decide movement direction + possibly force an animation switch
     movement(input);
-
-    anim_.update();
 }

@@ -89,39 +89,39 @@ void MainApp::game_loop() {
 }
 
 static void run(SDL_Window* window, SDL_Renderer* renderer, int screen_w, int screen_h, bool rebuild_cache) {
-	(void)window;
-	while (true) {
-		MainMenu menu(renderer, screen_w, screen_h);
-		std::string chosen_map;
-		SDL_Event e;
-		bool choosing = true;
-		while (choosing) {
-			while (SDL_PollEvent(&e)) {
-					if (e.type == SDL_QUIT) { chosen_map = "QUIT"; choosing = false; break; }
-					std::string result = menu.handle_event(e);
-					if (result == "QUIT") { chosen_map = "QUIT"; choosing = false; break; }
-					if (!result.empty()) { chosen_map = result; choosing = false; break; }
-			}
-			SDL_SetRenderTarget(renderer, nullptr);
-			SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
-			SDL_RenderClear(renderer);
-			menu.render();
-			SDL_RenderPresent(renderer);
-			SDL_Delay(16);
-		}
-		if (chosen_map == "QUIT" || chosen_map.empty()) break;
-		menu.showLoadingScreen();
-		if (rebuild_cache) {
-			std::cout << "[Main] Rebuilding asset cache...\n";
-			RebuildAssets* rebuilder = new RebuildAssets(renderer, chosen_map);
-			delete rebuilder;
-			std::cout << "[Main] Asset cache rebuild complete.\n";
-		}
-		MenuUI app(renderer, screen_w, screen_h, chosen_map);
-		app.init();
-		if (app.wants_return_to_main_menu()) continue;
-		break;
-	}
+    (void)window;
+    while (true) {
+        MainMenu menu(renderer, screen_w, screen_h);
+        std::string chosen_map;
+        SDL_Event e;
+        bool choosing = true;
+        while (choosing) {
+            while (SDL_PollEvent(&e)) {
+                    if (e.type == SDL_QUIT) { chosen_map = "QUIT"; choosing = false; break; }
+                    std::string result = menu.handle_event(e);
+                    if (result == "QUIT") { chosen_map = "QUIT"; choosing = false; break; }
+                    if (!result.empty()) { chosen_map = result; choosing = false; break; }
+            }
+            SDL_SetRenderTarget(renderer, nullptr);
+            SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+            SDL_RenderClear(renderer);
+            menu.render();
+            SDL_RenderPresent(renderer);
+            SDL_Delay(16);
+        }
+        if (chosen_map == "QUIT" || chosen_map.empty()) break;
+        menu.showLoadingScreen();
+        if (rebuild_cache) {
+            std::cout << "[Main] Rebuilding asset cache...\n";
+            RebuildAssets* rebuilder = new RebuildAssets(renderer, chosen_map);
+            delete rebuilder;
+            std::cout << "[Main] Asset cache rebuild complete.\n";
+        }
+        MenuUI app(renderer, screen_w, screen_h, chosen_map);
+        app.init();
+        if (app.wants_return_to_main_menu()) continue;
+        break;
+    }
 }
 
 int main(int argc, char* argv[]) {

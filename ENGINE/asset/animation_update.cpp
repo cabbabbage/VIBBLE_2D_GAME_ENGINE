@@ -50,8 +50,8 @@ inline double angle_from_or_random(int vx, int vy, std::mt19937& rng) {
 // -------------------------------
 // Construction / mode management
 // -------------------------------
-AnimationUpdate::AnimationUpdate(Asset* self, ActiveAssetsManager& aam, bool confined)
-: self_(self), aam_(aam), confined_(confined)
+AnimationUpdate::AnimationUpdate(Asset* self, ActiveAssetsManager& aam)
+: self_(self), aam_(aam)
 {
     std::seed_seq seed{
         static_cast<unsigned>(reinterpret_cast<uintptr_t>(self) & 0xffffffffu),
@@ -62,9 +62,9 @@ AnimationUpdate::AnimationUpdate(Asset* self, ActiveAssetsManager& aam, bool con
     weight_sparse_ = 0.4;
 }
 
-AnimationUpdate::AnimationUpdate(Asset* self, ActiveAssetsManager& aam, bool confined,
+AnimationUpdate::AnimationUpdate(Asset* self, ActiveAssetsManager& aam,
                                  double directness_weight, double sparsity_weight)
-: self_(self), aam_(aam), confined_(confined),
+: self_(self), aam_(aam),
   weight_dir_(std::max(0.0, directness_weight)),
   weight_sparse_(std::max(0.0, sparsity_weight))
 {
@@ -82,18 +82,6 @@ void AnimationUpdate::transition_mode(Mode m) {
     if (m != Mode::Orbit)      orbit_params_set_ = false;
     if (m != Mode::Serpentine) serp_params_set_  = false;
     if (m != Mode::Patrol)     patrol_initialized_ = false;
-}
-
-// -------------------------------
-// Map / geometry helpers
-// -------------------------------
-void AnimationUpdate::clamp_to_room(int& x, int& y) const {
-    if (!confined_ || !self_) return;
-    Assets* assets = self_->get_assets();
-    if (!assets || !assets->current_room_ || !assets->current_room_->room_area) return;
-    auto [minx, miny, maxx, maxy] = assets->current_room_->room_area->get_bounds();
-    x = std::clamp(x, minx, maxx);
-    y = std::clamp(y, miny, maxy);
 }
 
 int AnimationUpdate::min_move_len2() const {
@@ -170,7 +158,6 @@ SDL_Point AnimationUpdate::choose_balanced_target(SDL_Point desired, const Asset
 
             int px = sx + static_cast<int>(std::llround(rr * std::cos(ang)));
             int py = sy + static_cast<int>(std::llround(rr * std::sin(ang)));
-            clamp_to_room(px, py);
 
             const double dir_norm = Range::get_distance(SDL_Point{px, py}, aim) / rline;
 
@@ -319,6 +306,12 @@ std::string AnimationUpdate::pick_best_animation_towards(SDL_Point target) const
     for (const auto& kv : all) {
         const std::string& id  = kv.first;
         const Animation& anim  = kv.second;
+        // Skip unusable animations
+        if (anim.number_of_frames <= 0 || anim.frames_data.empty()) continue;
+        if (!anim.frames.empty() && anim.frames_data.size() != anim.frames.size()) {
+            // Defensive: prefer animations with consistent buffers
+            continue;
+        }
         const int dx = anim.total_dx;
         const int dy = anim.total_dy;
         if (dx == 0 && dy == 0) continue;
@@ -348,7 +341,6 @@ void AnimationUpdate::ensure_idle_target(int min_dist, int max_dist) {
 
     int tx = cx + static_cast<int>(std::llround(r * std::cos(a)));
     int ty = cy + static_cast<int>(std::llround(r * std::sin(a)));
-    clamp_to_room(tx, ty);
     set_target(SDL_Point{tx, ty}, nullptr);
 }
 
@@ -364,7 +356,6 @@ void AnimationUpdate::ensure_pursue_target(int min_dist, int max_dist, const Ass
 
     int nx = cx + static_cast<int>(std::llround(r * std::cos(a)));
     int ny = cy + static_cast<int>(std::llround(r * std::sin(a)));
-    clamp_to_room(nx, ny);
     set_target(SDL_Point{nx, ny}, final_target);
 }
 
@@ -380,7 +371,6 @@ void AnimationUpdate::ensure_run_target(int min_dist, int max_dist, const Asset*
 
     int nx = cx + static_cast<int>(std::llround(r * std::cos(a)));
     int ny = cy + static_cast<int>(std::llround(r * std::sin(a)));
-    clamp_to_room(nx, ny);
     set_target(SDL_Point{nx, ny}, nullptr);
 }
 
@@ -419,7 +409,6 @@ void AnimationUpdate::ensure_orbit_target(int min_radius, int max_radius, const 
 
     int nx = cx + static_cast<int>(std::llround(std::cos(next_angle) * orbit_radius_));
     int ny = cy + static_cast<int>(std::llround(std::sin(next_angle) * orbit_radius_));
-    clamp_to_room(nx, ny);
 
     set_target(SDL_Point{nx, ny}, nullptr);
     orbit_angle_ = next_angle;
@@ -455,7 +444,6 @@ void AnimationUpdate::ensure_patrol_target(const std::vector<SDL_Point>& waypoin
 
     const SDL_Point wp = patrol_points_[patrol_index_];
     int nx = wp.x, ny = wp.y;
-    clamp_to_room(nx, ny);
     set_target(SDL_Point{nx, ny}, nullptr);
 }
 
@@ -502,7 +490,6 @@ void AnimationUpdate::ensure_serpentine_target(int min_stride,
     double oy = by + static_cast<double>(serp_side_) * static_cast<double>(sway) * pvy;
     int nx = static_cast<int>(std::llround(ox));
     int ny = static_cast<int>(std::llround(oy));
-    clamp_to_room(nx, ny);
 
     set_target(SDL_Point{nx, ny}, final_target);
     serp_params_set_ = true;
@@ -511,10 +498,26 @@ void AnimationUpdate::ensure_serpentine_target(int min_stride,
 bool AnimationUpdate::advance(AnimationFrame*& frame) {
     try {
         if (!self_ || !self_->info || !frame) return true;
+        if (self_->static_frame) return true;
 
         auto it = self_->info->animations.find(self_->current_animation);
         if (it == self_->info->animations.end()) return true;
         Animation& anim = it->second;
+
+        if (anim.number_of_frames <= 0 || anim.frames_data.empty()) {
+            // Nothing to advance; signal end so caller can transition
+            return false;
+        }
+
+        // Validate that the current frame pointer belongs to the animation's
+        // frame buffer before using it. If it doesn't, reset to the first
+        // frame to avoid undefined behaviour from dereferencing an invalid
+        // pointer.
+        if (anim.index_of(frame) < 0) {
+            frame = anim.get_first_frame();
+            self_->frame_progress = 0.0f;
+            if (!frame) return true;
+        }
 
         self_->pos.x += frame->dx;
         self_->pos.y += frame->dy;
@@ -522,7 +525,8 @@ bool AnimationUpdate::advance(AnimationFrame*& frame) {
         if ((frame->dx || frame->dy) && frame->z_resort) {
             self_->set_z_index();
             if (Assets* as = self_->get_assets()) {
-                as->activeManager.sortByZIndex();
+                // Defer sort to avoid mutating the active vector during iteration
+                as->activeManager.markNeedsSort();
             }
         }
 
@@ -554,15 +558,28 @@ void AnimationUpdate::switch_to(const std::string& id) {
         if (!self_ || !self_->info) return;
 
         auto it = self_->info->animations.find(id);
-        if (it == self_->info->animations.end()) return;
+        if (it == self_->info->animations.end()) {
+            // Fallback to default/first if requested id is missing
+            auto def = self_->info->animations.find("default");
+            if (def == self_->info->animations.end()) def = self_->info->animations.begin();
+            if (def == self_->info->animations.end()) return;
+            it = def;
+        }
 
         Animation& anim = it->second;
         if (anim.is_frozen()) return;
 
         AnimationFrame* new_frame = anim.get_first_frame();
-        if (!new_frame) return;
+        if (!new_frame) {
+            // Non-crashing fallback if animation has no frames
+            self_->current_animation = it->first;
+            self_->current_frame = nullptr;
+            self_->static_frame = true;
+            self_->frame_progress = 0.0f;
+            return;
+        }
 
-        self_->current_animation = id;
+        self_->current_animation = it->first;
         self_->current_frame = new_frame;
         self_->static_frame = anim.is_static();
         self_->frame_progress = 0.0f;
@@ -604,11 +621,11 @@ void AnimationUpdate::set_animation_now(const std::string& anim_id) {
     if (anim_id.empty()) return;
     if (self_->current_animation == anim_id) return;
     queued_anim_.reset();
-    forced_active_ = true;
     if (!mode_suspended_) { saved_mode_ = mode_; mode_suspended_ = true; }
     mode_ = Mode::None;
     have_target_ = false;
     switch_to(anim_id);
+    forced_active_ = !self_->static_frame;
 }
 
 void AnimationUpdate::set_animation_qued(const std::string& anim_id) {
@@ -630,9 +647,11 @@ void AnimationUpdate::update() {
                 if (queued_anim_) {
                     switch_to(*queued_anim_);
                     queued_anim_.reset();
-                    forced_active_ = true;
-                    advance(self_->current_frame);
-                    return;
+                    forced_active_ = !self_->static_frame;
+                    if (forced_active_) {
+                        advance(self_->current_frame);
+                        return;
+                    }
                 }
                 if (mode_suspended_) {
                     mode_ = saved_mode_;
@@ -653,7 +672,7 @@ void AnimationUpdate::update() {
         if (queued_anim_ && self_->is_current_animation_last_frame()) {
             switch_to(*queued_anim_);
             queued_anim_.reset();
-            forced_active_ = true;
+            forced_active_ = !self_->static_frame;
             bool cont = advance(self_->current_frame);
             if (!cont) {
                 forced_active_ = false;
