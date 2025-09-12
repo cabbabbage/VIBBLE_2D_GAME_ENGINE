@@ -13,7 +13,7 @@
 class FloatingCollapsible;
 class ButtonWidget;
 class DropdownWidget;
-class SliderWidget;
+class RangeSliderWidget;
 class Input;
 
 class AssetsConfig {
@@ -36,10 +36,8 @@ private:
         std::unique_ptr<ButtonWidget> label_w;
         std::unique_ptr<DMDropdown> dd_method;
         std::unique_ptr<DropdownWidget> dd_method_w;
-        std::unique_ptr<DMSlider> s_min;
-        std::unique_ptr<SliderWidget> s_min_w;
-        std::unique_ptr<DMSlider> s_max;
-        std::unique_ptr<SliderWidget> s_max_w;
+        std::unique_ptr<DMRangeSlider> s_range;
+        std::unique_ptr<RangeSliderWidget> s_range_w;
         std::unique_ptr<DMButton> b_delete;
         std::unique_ptr<ButtonWidget> b_delete_w;
     };

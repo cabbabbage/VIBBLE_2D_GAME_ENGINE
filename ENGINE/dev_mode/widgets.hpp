@@ -97,6 +97,37 @@ private:
     std::unique_ptr<DMTextBox> edit_box_;
 };
 
+class DMRangeSlider {
+public:
+    DMRangeSlider(int min_val, int max_val, int min_value, int max_value);
+    void set_rect(const SDL_Rect& r);
+    const SDL_Rect& rect() const { return rect_; }
+    void set_min_value(int v);
+    void set_max_value(int v);
+    int min_value() const { return min_value_; }
+    int max_value() const { return max_value_; }
+    bool handle_event(const SDL_Event& e);
+    void render(SDL_Renderer* r) const;
+    static int height() { return 40; }
+private:
+    SDL_Rect track_rect() const;
+    SDL_Rect min_knob_rect() const;
+    SDL_Rect max_knob_rect() const;
+    int value_for_x(int x) const;
+    void draw_text(SDL_Renderer* r, const std::string& s, int x, int y) const;
+    SDL_Rect rect_{0,0,200,40};
+    int min_ = 0;
+    int max_ = 100;
+    int min_value_ = 0;
+    int max_value_ = 100;
+    bool dragging_min_ = false;
+    bool dragging_max_ = false;
+    bool min_hovered_ = false;
+    bool max_hovered_ = false;
+    std::unique_ptr<DMTextBox> edit_min_;
+    std::unique_ptr<DMTextBox> edit_max_;
+};
+
 class DMDropdown {
 public:
     DMDropdown(const std::string& label, const std::vector<std::string>& options, int idx = 0);
@@ -105,7 +136,14 @@ public:
     int selected() const { return index_; }
     bool handle_event(const SDL_Event& e);
     void render(SDL_Renderer* r) const;
+    void render_options(SDL_Renderer* r) const;
+    bool expanded() const { return expanded_; }
     static int height() { return 32; }
+
+    // Returns currently expanded dropdown, or nullptr if none.
+    static DMDropdown* active_dropdown();
+    // Render options for the currently expanded dropdown (if any).
+    static void render_active_options(SDL_Renderer* r);
 private:
     SDL_Rect rect_{0,0,200,32};
     std::string label_;
@@ -113,6 +151,7 @@ private:
     int index_ = 0;
     bool hovered_ = false;
     bool expanded_ = false;
+    static DMDropdown* active_;
 };
 
 // ------------------------------------------------------------
@@ -188,6 +227,18 @@ public:
     void render(SDL_Renderer* r) const override { if (s_) s_->render(r); }
 private:
     DMSlider* s_ = nullptr; // non-owning
+};
+
+class RangeSliderWidget : public Widget {
+public:
+    explicit RangeSliderWidget(DMRangeSlider* s) : s_(s) {}
+    void set_rect(const SDL_Rect& r) override { if (s_) s_->set_rect(r); }
+    const SDL_Rect& rect() const override { return s_->rect(); }
+    int height_for_width(int /*w*/) const override { return DMRangeSlider::height(); }
+    bool handle_event(const SDL_Event& e) override { return s_ ? s_->handle_event(e) : false; }
+    void render(SDL_Renderer* r) const override { if (s_) s_->render(r); }
+private:
+    DMRangeSlider* s_ = nullptr; // non-owning
 };
 
 class DropdownWidget : public Widget {

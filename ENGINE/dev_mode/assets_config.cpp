@@ -69,10 +69,8 @@ void AssetsConfig::rebuild_entry_widgets() {
         e.label_w = std::make_unique<ButtonWidget>(e.label.get());
         e.dd_method = std::make_unique<DMDropdown>("Method", spawn_methods_, e.method);
         e.dd_method_w = std::make_unique<DropdownWidget>(e.dd_method.get());
-        e.s_min = std::make_unique<DMSlider>("Min", 0, 100, e.min);
-        e.s_min_w = std::make_unique<SliderWidget>(e.s_min.get());
-        e.s_max = std::make_unique<DMSlider>("Max", 0, 100, e.max);
-        e.s_max_w = std::make_unique<SliderWidget>(e.s_max.get());
+        e.s_range = std::make_unique<DMRangeSlider>(0, 100, e.min, e.max);
+        e.s_range_w = std::make_unique<RangeSliderWidget>(e.s_range.get());
         e.b_delete = std::make_unique<DMButton>("Delete", &DMStyles::DeleteButton(), 80, DMButton::height());
         e.b_delete_w = std::make_unique<ButtonWidget>(e.b_delete.get(), [this, &e]() {
             auto it = std::find_if(entries_.begin(), entries_.end(), [&e](const Entry& other){ return &other == &e; });
@@ -89,7 +87,8 @@ void AssetsConfig::rebuild_rows() {
     if (!panel_) return;
     FloatingCollapsible::Rows rows;
     for (auto& e : entries_) {
-        rows.push_back({ e.label_w.get(), e.dd_method_w.get(), e.s_min_w.get(), e.s_max_w.get(), e.b_delete_w.get() });
+        rows.push_back({ e.label_w.get(), e.dd_method_w.get(), e.b_delete_w.get() });
+        rows.push_back({ e.s_range_w.get() });
     }
     rows.push_back({ b_add_w_.get(), b_done_w_.get() });
     panel_->set_cell_width(120);
@@ -124,13 +123,14 @@ bool AssetsConfig::handle_event(const SDL_Event& e) {
     bool used = panel_->handle_event(e);
     for (auto& en : entries_) {
         if (en.dd_method) en.method = en.dd_method->selected();
-        if (en.s_min)    en.min    = en.s_min->value();
-        if (en.s_max)    en.max    = en.s_max->value();
+        if (en.s_range)  { en.min = en.s_range->min_value(); en.max = en.s_range->max_value(); }
     }
     return used;
 }
 
 void AssetsConfig::render(SDL_Renderer* r) const {
     if (search_.visible()) { search_.render(r); return; }
-    if (panel_ && panel_->is_visible()) panel_->render(r);
+    if (panel_ && panel_->is_visible()) {
+        panel_->render(r);
+    }
 }

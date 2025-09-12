@@ -13,6 +13,7 @@
 #include "dev_mode/asset_library_ui.hpp"
 #include "dev_mode/asset_info_ui.hpp"
 #include "dev_mode/area_overlay_editor.hpp"
+#include "dev_mode/widgets.hpp"
 
 #include <algorithm>
 #include <iostream>
@@ -376,6 +377,7 @@ void Assets::render_overlays(SDL_Renderer* renderer) {
     if (info_ui_ && info_ui_->is_visible()) {
         info_ui_->render(renderer, screen_width, screen_height);
     }
+    DMDropdown::render_active_options(renderer);
 }
 
 void Assets::toggle_asset_library() {
@@ -488,6 +490,10 @@ bool Assets::is_asset_info_editor_open() const {
 }
 
 void Assets::handle_sdl_event(const SDL_Event& e) {
+    if (auto* dd = DMDropdown::active_dropdown()) {
+        dd->handle_event(e);
+        return;
+    }
     if (area_editor_ && area_editor_->is_active()) {
         if (area_editor_->handle_event(e)) return;
     }

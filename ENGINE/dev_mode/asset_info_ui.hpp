@@ -9,6 +9,7 @@ class AssetInfo;
 class Input;
 class Area;
 class Assets;
+class AnimationsFloatingPanel;
 
 class AssetInfoUI {
 
@@ -44,4 +45,5 @@ class AssetInfoUI {
     mutable SDL_Rect panel_ {0,0,0,0};
     // Footer button: Configure Animations
     mutable std::unique_ptr<class DMButton> configure_btn_;
+    std::unique_ptr<AnimationsFloatingPanel> animations_panel_;
 };
