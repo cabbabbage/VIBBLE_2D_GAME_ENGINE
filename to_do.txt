@@ -1,0 +1,40 @@
+Game Code To-Do List
+====================
+
+SceneRenderer.cpp
+-----------------
+- Vertical Squash Rendering
+  Implement vertical squash scaling so that textures lower on the screen appear more
+  vertically compressed than those higher up.
+  - Taller assets should be squashed more to maintain perspective.
+
+AssetsManager (and related classes)
+-----------------------------------
+- Suspend Movement in Dev Mode
+  Add support for suspending all asset and player movement when Dev Mode is enabled.
+
+DevMouseControls
+----------------
+- Camera Zoom with Scroll Wheel
+  - Use mouse scroll wheel to control camera zoom.
+  - Introduce a zoom_scale_factor (better name than "zoom percent multiplier").
+  - Default value = 1.0.
+  - Scrolling up → increase zoom; scrolling down → decrease zoom.
+  - Final zoom = current_scale * zoom_scale_factor.
+
+AssetInfoUI
+-----------
+- Editor Window Toggle
+  Add a left-hand editor panel that can be toggled on/off when an open section requires it.
+
+AnimationUpdate.cpp
+-------------------
+- Movement Override Mode
+  Add support for a movement override mode that uses a vector of movement frames
+  to control animations directly.
+
+Camera.cpp
+----------
+- Zoom in on Asset
+  Add a function to zoom in on and pan to a specific asset.
+  - Behavior should respect the zoom_scale_factor.

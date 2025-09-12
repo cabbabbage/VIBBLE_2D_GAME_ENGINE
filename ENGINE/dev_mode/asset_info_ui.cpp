@@ -10,33 +10,15 @@
 #include "utils/input.hpp"
 #include "utils/area.hpp"
 
-#include "ui/styles.hpp"
-#include "ui/dev_styles.hpp"
-
 #include "asset_sections/CollapsibleSection.hpp"
-#include "asset_sections/Section_BasicInfo.hpp"
+#include "dm_styles.hpp"
 #include "asset_sections/Section_Areas.hpp"
-#include "asset_sections/Section_Dummy.hpp"
 
 AssetInfoUI::AssetInfoUI() {
-    sections_.push_back(std::make_unique<Section_BasicInfo>());
-
     auto areas = std::make_unique<Section_Areas>();
     areas_section_ = areas.get();
     areas_section_->set_open_editor_callback([this](const std::string& nm){ open_area_editor(nm); });
     sections_.push_back(std::move(areas));
-
-    sections_.push_back(std::make_unique<Section_Sizing>());
-    sections_.push_back(std::make_unique<Section_Passability>());
-    sections_.push_back(std::make_unique<Section_Spacing>());
-    sections_.push_back(std::make_unique<Section_Animations>());
-    sections_.push_back(std::make_unique<Section_ChildAssets>());
-    sections_.push_back(std::make_unique<Section_Tags>());
-    sections_.push_back(std::make_unique<Section_Lighting>());
-    sections_.push_back(std::make_unique<Section_Json>());
-
-    b_config_anim_ = std::make_unique<Button>(
-        "Configure Animations", &DevStyles::PrimaryButton(), 260, Button::height());
 }
 
 AssetInfoUI::~AssetInfoUI() = default;
@@ -64,22 +46,11 @@ void AssetInfoUI::layout_widgets(int screen_w, int screen_h) const {
     int maxw = panel_.w - 32;
     for (auto& s : sections_) {
         s->set_rect(SDL_Rect{ panel_.x + 16, y, maxw, 0 });
-        y += s->height() + 8;
+        y += s->height() + 16;
     }
 
-    if (b_config_anim_) {
-        int btn_h = Button::height();
-        b_config_anim_->set_rect(SDL_Rect{
-            panel_.x + 16,
-            panel_.y + panel_.h - btn_h - 16,
-            260, btn_h
-        });
-    }
-
-    int btn_space = Button::height() + 32;
-    int avail = panel_.h - btn_space;
     int total = y - (panel_.y + 16);
-    max_scroll_ = std::max(0, total - avail);
+    max_scroll_ = std::max(0, total - panel_.h);
 }
 
 void AssetInfoUI::update(const Input& input, int screen_w, int screen_h) {
@@ -108,14 +79,6 @@ void AssetInfoUI::handle_event(const SDL_Event& e) {
         return;
     }
 
-    if (b_config_anim_ && b_config_anim_->handle_event(e)) {
-        save_now();
-        std::string path = "SRC/" + info_->name + "/info.json";
-        std::string cmd = "python3 scripts/animation_ui.py \"" + path + "\"";
-        std::system(cmd.c_str());
-        return;
-    }
-
     for (auto& s : sections_) {
         if (s->handle_event(e)) return;
     }
@@ -127,12 +90,11 @@ void AssetInfoUI::render(SDL_Renderer* r, int screen_w, int screen_h) const {
     layout_widgets(screen_w, screen_h);
 
     SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
-    SDL_Color bg = Styles::Night(); bg.a = 160;
+    SDL_Color bg = DMStyles::PanelBG();
     SDL_SetRenderDrawColor(r, bg.r, bg.g, bg.b, bg.a);
     SDL_RenderFillRect(r, &panel_);
 
     for (auto& s : sections_) s->render(r);
-    if (b_config_anim_) b_config_anim_->render(r);
 
     last_renderer_ = r;
 }

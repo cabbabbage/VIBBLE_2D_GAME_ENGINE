@@ -1,7 +1,6 @@
 #pragma once
 
 #include "CollapsibleSection.hpp"
-#include "utils/text_style.hpp"
 
 // Simple placeholder section that only shows a header and 'Coming soon'
 class DummySection : public CollapsibleSection {
@@ -13,17 +12,17 @@ class DummySection : public CollapsibleSection {
       CollapsibleSection::layout();
       // Reserve a small placeholder height when expanded
       content_height_ = 28;
-      if (header_) header_->set_text(expanded_ ? title_ + " ▾" : title_ + " ▸");
+      if (header_) header_->set_text(expanded_ ? title_ + " ▲" : title_ + " ▼");
     }
 
     void render_content(SDL_Renderer* r) const override {
-      const TextStyle& s = TextStyles::SmallSecondary();
+      const DMLabelStyle& s = DMStyles::Label();
       TTF_Font* f = s.open_font(); if (!f) return;
-      SDL_Surface* surf = TTF_RenderText_Blended(f, "(Coming soon)", Styles::Mist());
+      SDL_Surface* surf = TTF_RenderUTF8_Blended(f, "(Coming soon)", s.color);
       if (surf) {
         SDL_Texture* tex = SDL_CreateTextureFromSurface(r, surf);
         if (tex) {
-          SDL_Rect dst{ rect_.x + 24, rect_.y + Button::height() + 6, surf->w, surf->h };
+          SDL_Rect dst{ rect_.x + 24, rect_.y + DMButton::height() + 6, surf->w, surf->h };
           SDL_RenderCopy(r, tex, nullptr, &dst);
           SDL_DestroyTexture(tex);
         }

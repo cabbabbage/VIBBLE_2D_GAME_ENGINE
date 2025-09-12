@@ -4,7 +4,6 @@
 #include <memory>
 #include <string>
 #include <vector>
-#include "ui/button.hpp"
 
 class AssetInfo;
 class Input;
@@ -33,7 +32,6 @@ class AssetInfoUI {
   private:
     bool visible_ = false;
     std::shared_ptr<AssetInfo> info_{};
-    std::unique_ptr<Button> b_config_anim_;
     mutable SDL_Renderer* last_renderer_ = nullptr;
     // Section-based UI
     std::vector<std::unique_ptr<class CollapsibleSection>> sections_;

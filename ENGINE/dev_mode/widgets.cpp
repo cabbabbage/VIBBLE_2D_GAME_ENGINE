@@ -1,0 +1,338 @@
+#include "widgets.hpp"
+#include <algorithm>
+#include <sstream>
+
+// -------- DMButton ---------
+DMButton::DMButton(const std::string& text, const DMButtonStyle* style, int w, int h)
+    : rect_{0,0,w,h}, text_(text), style_(style) {}
+
+void DMButton::set_rect(const SDL_Rect& r) { rect_ = r; }
+
+bool DMButton::handle_event(const SDL_Event& e) {
+    if (e.type == SDL_MOUSEMOTION) {
+        SDL_Point p{ e.motion.x, e.motion.y };
+        hovered_ = SDL_PointInRect(&p, &rect_);
+    } else if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
+        SDL_Point p{ e.button.x, e.button.y };
+        if (SDL_PointInRect(&p, &rect_)) { pressed_ = true; return true; }
+    } else if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
+        SDL_Point p{ e.button.x, e.button.y };
+        bool inside = SDL_PointInRect(&p, &rect_);
+        bool was = pressed_;
+        pressed_ = false;
+        return inside && was;
+    }
+    return false;
+}
+
+void DMButton::draw_label(SDL_Renderer* r, SDL_Color col) const {
+    if (!style_) return;
+    TTF_Font* f = TTF_OpenFont(style_->label.font_path.c_str(), style_->label.font_size);
+    if (!f) return;
+    SDL_Surface* surf = TTF_RenderUTF8_Blended(f, text_.c_str(), col);
+    if (surf) {
+        SDL_Texture* tex = SDL_CreateTextureFromSurface(r, surf);
+        if (tex) {
+            SDL_Rect dst{ rect_.x + (rect_.w - surf->w)/2, rect_.y + (rect_.h - surf->h)/2, surf->w, surf->h };
+            SDL_RenderCopy(r, tex, nullptr, &dst);
+            SDL_DestroyTexture(tex);
+        }
+        SDL_FreeSurface(surf);
+    }
+    TTF_CloseFont(f);
+}
+
+void DMButton::render(SDL_Renderer* r) const {
+    if (!style_) return;
+    SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
+    SDL_Color bg = pressed_ ? style_->press_bg : (hovered_ ? style_->hover_bg : style_->bg);
+    SDL_SetRenderDrawColor(r, bg.r, bg.g, bg.b, bg.a);
+    SDL_RenderFillRect(r, &rect_);
+    SDL_SetRenderDrawColor(r, style_->border.r, style_->border.g, style_->border.b, style_->border.a);
+    SDL_RenderDrawRect(r, &rect_);
+    draw_label(r, style_->text);
+}
+
+// -------- DMTextBox ---------
+DMTextBox::DMTextBox(const std::string& label, const std::string& value)
+    : label_(label), text_(value) {}
+
+void DMTextBox::set_rect(const SDL_Rect& r) { rect_ = r; }
+
+bool DMTextBox::handle_event(const SDL_Event& e) {
+    bool changed = false;
+    if (e.type == SDL_MOUSEMOTION) {
+        SDL_Point p{ e.motion.x, e.motion.y };
+        hovered_ = SDL_PointInRect(&p, &rect_);
+    } else if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
+        SDL_Point p{ e.button.x, e.button.y };
+        bool inside = SDL_PointInRect(&p, &rect_);
+        editing_ = inside;
+        if (editing_) SDL_StartTextInput(); else SDL_StopTextInput();
+    } else if (editing_ && e.type == SDL_TEXTINPUT) {
+        text_ += e.text.text; changed = true;
+    } else if (editing_ && e.type == SDL_KEYDOWN) {
+        if (e.key.keysym.sym == SDLK_BACKSPACE) {
+            if (!text_.empty()) { text_.pop_back(); changed = true; }
+        } else if (e.key.keysym.sym == SDLK_RETURN || e.key.keysym.sym == SDLK_KP_ENTER) {
+            editing_ = false; SDL_StopTextInput();
+        }
+    }
+    return changed;
+}
+
+void DMTextBox::draw_text(SDL_Renderer* r, const std::string& s, int x, int y, const DMLabelStyle& ls) const {
+    TTF_Font* f = TTF_OpenFont(ls.font_path.c_str(), ls.font_size);
+    if (!f) return;
+    std::string text = s;
+    int w = 0, h = 0;
+    TTF_SizeUTF8(f, text.c_str(), &w, &h);
+    while (w > rect_.w - 12 && !text.empty()) {
+        text.erase(text.begin());
+        TTF_SizeUTF8(f, text.c_str(), &w, &h);
+    }
+    SDL_Surface* surf = TTF_RenderUTF8_Blended(f, text.c_str(), ls.color);
+    if (surf) {
+        SDL_Texture* tex = SDL_CreateTextureFromSurface(r, surf);
+        if (tex) {
+            SDL_Rect dst{ x, y, surf->w, surf->h };
+            SDL_RenderCopy(r, tex, nullptr, &dst);
+            SDL_DestroyTexture(tex);
+        }
+        SDL_FreeSurface(surf);
+    }
+    TTF_CloseFont(f);
+}
+
+void DMTextBox::render(SDL_Renderer* r) const {
+    const DMTextBoxStyle& st = DMStyles::TextBox();
+    SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
+    SDL_SetRenderDrawColor(r, st.bg.r, st.bg.g, st.bg.b, st.bg.a);
+    SDL_RenderFillRect(r, &rect_);
+    SDL_Color border = (hovered_ || editing_) ? st.border_hover : st.border;
+    SDL_SetRenderDrawColor(r, border.r, border.g, border.b, border.a);
+    SDL_RenderDrawRect(r, &rect_);
+    draw_text(r, label_, rect_.x, rect_.y - st.label.font_size - 2, st.label);
+    DMLabelStyle valStyle{ st.label.font_path, st.label.font_size, st.text };
+    draw_text(r, text_, rect_.x + 6, rect_.y + (rect_.h - st.label.font_size)/2, valStyle);
+}
+
+// -------- DMCheckbox ---------
+DMCheckbox::DMCheckbox(const std::string& label, bool value)
+    : label_(label), value_(value) {}
+
+void DMCheckbox::set_rect(const SDL_Rect& r) { rect_ = r; }
+
+bool DMCheckbox::handle_event(const SDL_Event& e) {
+    if (e.type == SDL_MOUSEMOTION) {
+        SDL_Point p{ e.motion.x, e.motion.y };
+        hovered_ = SDL_PointInRect(&p, &rect_);
+    } else if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
+        SDL_Point p{ e.button.x, e.button.y };
+        if (SDL_PointInRect(&p, &rect_)) { value_ = !value_; return true; }
+    }
+    return false;
+}
+
+void DMCheckbox::draw_label(SDL_Renderer* r) const {
+    const DMCheckboxStyle& st = DMStyles::Checkbox();
+    TTF_Font* f = TTF_OpenFont(st.label.font_path.c_str(), st.label.font_size);
+    if (!f) return;
+    SDL_Surface* surf = TTF_RenderUTF8_Blended(f, label_.c_str(), st.label.color);
+    if (surf) {
+        SDL_Texture* tex = SDL_CreateTextureFromSurface(r, surf);
+        if (tex) {
+            SDL_Rect dst{ rect_.x + rect_.h + 6, rect_.y + (rect_.h - surf->h)/2, surf->w, surf->h };
+            SDL_RenderCopy(r, tex, nullptr, &dst);
+            SDL_DestroyTexture(tex);
+        }
+        SDL_FreeSurface(surf);
+    }
+    TTF_CloseFont(f);
+}
+
+void DMCheckbox::render(SDL_Renderer* r) const {
+    const DMCheckboxStyle& st = DMStyles::Checkbox();
+    SDL_Rect box{ rect_.x, rect_.y, rect_.h, rect_.h };
+    SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
+    SDL_SetRenderDrawColor(r, st.box_bg.r, st.box_bg.g, st.box_bg.b, st.box_bg.a);
+    SDL_RenderFillRect(r, &box);
+    SDL_SetRenderDrawColor(r, st.border.r, st.border.g, st.border.b, st.border.a);
+    SDL_RenderDrawRect(r, &box);
+    if (value_) {
+        SDL_SetRenderDrawColor(r, st.check.r, st.check.g, st.check.b, st.check.a);
+        SDL_Rect inner{ box.x + 4, box.y + 4, box.w - 8, box.h - 8 };
+        SDL_RenderFillRect(r, &inner);
+    }
+    draw_label(r);
+}
+
+// -------- DMSlider ---------
+DMSlider::DMSlider(const std::string& label, int min_val, int max_val, int value)
+    : label_(label), min_(min_val), max_(max_val), value_(value) {}
+
+void DMSlider::set_rect(const SDL_Rect& r) { rect_ = r; }
+
+void DMSlider::set_value(int v) { value_ = std::max(min_, std::min(max_, v)); }
+
+SDL_Rect DMSlider::track_rect() const {
+    return SDL_Rect{ rect_.x, rect_.y + rect_.h/2 - 4, rect_.w - 60, 8 };
+}
+
+SDL_Rect DMSlider::knob_rect() const {
+    SDL_Rect tr = track_rect();
+    int x = tr.x + (int)((value_ - min_) * (tr.w - 12) / (double)(max_ - min_));
+    return SDL_Rect{ x, tr.y - 4, 12, 16 };
+}
+
+int DMSlider::value_for_x(int x) const {
+    SDL_Rect tr = track_rect();
+    double t = (x - tr.x) / (double)(tr.w - 12);
+    int v = min_ + (int)std::round(t * (max_ - min_));
+    return std::max(min_, std::min(max_, v));
+}
+
+bool DMSlider::handle_event(const SDL_Event& e) {
+    if (edit_box_) {
+        if (edit_box_->handle_event(e)) {
+            int nv = std::stoi(edit_box_->value());
+            set_value(nv); return true;
+        }
+        if (!edit_box_->is_editing()) edit_box_.reset();
+    }
+    SDL_Rect krect = knob_rect();
+    if (e.type == SDL_MOUSEMOTION) {
+        SDL_Point p{ e.motion.x, e.motion.y };
+        knob_hovered_ = SDL_PointInRect(&p, &krect);
+        if (dragging_) { set_value(value_for_x(p.x)); return true; }
+    } else if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
+        SDL_Point p{ e.button.x, e.button.y };
+        if (SDL_PointInRect(&p, &krect)) { dragging_ = true; return true; }
+        SDL_Rect vr{ rect_.x + rect_.w - 60, rect_.y, 60, rect_.h };
+        if (SDL_PointInRect(&p, &vr)) {
+            edit_box_ = std::make_unique<DMTextBox>("", std::to_string(value_));
+            edit_box_->set_rect(vr);
+            edit_box_->handle_event(e);
+            return true;
+        }
+    } else if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
+        if (dragging_) { dragging_ = false; return true; }
+    }
+    return false;
+}
+
+void DMSlider::draw_text(SDL_Renderer* r, const std::string& s, int x, int y) const {
+    const DMSliderStyle& st = DMStyles::Slider();
+    TTF_Font* f = TTF_OpenFont(st.label.font_path.c_str(), st.label.font_size);
+    if (!f) return;
+    SDL_Surface* surf = TTF_RenderUTF8_Blended(f, s.c_str(), st.label.color);
+    if (surf) {
+        SDL_Texture* tex = SDL_CreateTextureFromSurface(r, surf);
+        if (tex) {
+            SDL_Rect dst{ x, y, surf->w, surf->h };
+            SDL_RenderCopy(r, tex, nullptr, &dst);
+            SDL_DestroyTexture(tex);
+        }
+        SDL_FreeSurface(surf);
+    }
+    TTF_CloseFont(f);
+}
+
+void DMSlider::render(SDL_Renderer* r) const {
+    const DMSliderStyle& st = DMStyles::Slider();
+    draw_text(r, label_, rect_.x, rect_.y - st.label.font_size - 2);
+    SDL_Rect tr = track_rect();
+    SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
+    SDL_SetRenderDrawColor(r, st.track_bg.r, st.track_bg.g, st.track_bg.b, st.track_bg.a);
+    SDL_RenderFillRect(r, &tr);
+    SDL_Rect fill{ tr.x, tr.y, (int)((value_ - min_) * tr.w / (double)(max_ - min_)), tr.h };
+    SDL_SetRenderDrawColor(r, st.track_fill.r, st.track_fill.g, st.track_fill.b, st.track_fill.a);
+    SDL_RenderFillRect(r, &fill);
+    SDL_Rect krect = knob_rect();
+    SDL_Color knob_col = knob_hovered_ || dragging_ ? st.knob_hover : st.knob;
+    SDL_Color kborder = knob_hovered_ || dragging_ ? st.knob_border_hover : st.knob_border;
+    SDL_SetRenderDrawColor(r, knob_col.r, knob_col.g, knob_col.b, knob_col.a);
+    SDL_RenderFillRect(r, &krect);
+    SDL_SetRenderDrawColor(r, kborder.r, kborder.g, kborder.b, kborder.a);
+    SDL_RenderDrawRect(r, &krect);
+    if (edit_box_) {
+        edit_box_->render(r);
+    } else {
+        draw_text(r, std::to_string(value_), rect_.x + rect_.w - 50, rect_.y + (rect_.h - st.value.font_size)/2);
+    }
+}
+
+// -------- DMDropdown ---------
+DMDropdown::DMDropdown(const std::string& label, const std::vector<std::string>& options, int idx)
+    : label_(label), options_(options), index_(idx) {}
+
+void DMDropdown::set_rect(const SDL_Rect& r) { rect_ = r; }
+
+bool DMDropdown::handle_event(const SDL_Event& e) {
+    if (e.type == SDL_MOUSEMOTION) {
+        SDL_Point p{ e.motion.x, e.motion.y };
+        hovered_ = SDL_PointInRect(&p, &rect_);
+    } else if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
+        SDL_Point p{ e.button.x, e.button.y };
+        if (SDL_PointInRect(&p, &rect_)) {
+            expanded_ = !expanded_; return true;
+        }
+        if (expanded_) {
+            for (size_t i=0;i<options_.size();++i) {
+                SDL_Rect opt{ rect_.x, rect_.y + rect_.h*(int)(i+1), rect_.w, rect_.h };
+                if (SDL_PointInRect(&p, &opt)) { index_ = (int)i; expanded_ = false; return true; }
+            }
+            expanded_ = false;
+        }
+    }
+    return false;
+}
+
+void DMDropdown::render(SDL_Renderer* r) const {
+    const DMTextBoxStyle& st = DMStyles::TextBox();
+    SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
+    SDL_SetRenderDrawColor(r, st.bg.r, st.bg.g, st.bg.b, st.bg.a);
+    SDL_RenderFillRect(r, &rect_);
+    SDL_Color border = hovered_ ? st.border_hover : st.border;
+    SDL_SetRenderDrawColor(r, border.r, border.g, border.b, border.a);
+    SDL_RenderDrawRect(r, &rect_);
+    DMLabelStyle labelStyle{ st.label.font_path, st.label.font_size, st.text };
+    TTF_Font* f = TTF_OpenFont(labelStyle.font_path.c_str(), labelStyle.font_size);
+    if (f) {
+        SDL_Surface* surf = TTF_RenderUTF8_Blended(f, options_.empty()?"":options_[index_].c_str(), labelStyle.color);
+        if (surf) {
+            SDL_Texture* tex = SDL_CreateTextureFromSurface(r, surf);
+            if (tex) {
+                SDL_Rect dst{ rect_.x + 6, rect_.y + (rect_.h - surf->h)/2, surf->w, surf->h };
+                SDL_RenderCopy(r, tex, nullptr, &dst);
+                SDL_DestroyTexture(tex);
+            }
+            SDL_FreeSurface(surf);
+        }
+        TTF_CloseFont(f);
+    }
+    if (expanded_) {
+        for (size_t i=0;i<options_.size();++i) {
+            SDL_Rect opt{ rect_.x, rect_.y + rect_.h*(int)(i+1), rect_.w, rect_.h };
+            SDL_SetRenderDrawColor(r, st.bg.r, st.bg.g, st.bg.b, st.bg.a);
+            SDL_RenderFillRect(r, &opt);
+            SDL_SetRenderDrawColor(r, border.r, border.g, border.b, border.a);
+            SDL_RenderDrawRect(r, &opt);
+            TTF_Font* f2 = TTF_OpenFont(labelStyle.font_path.c_str(), labelStyle.font_size);
+            if (f2) {
+                SDL_Surface* s2 = TTF_RenderUTF8_Blended(f2, options_[i].c_str(), labelStyle.color);
+                if (s2) {
+                    SDL_Texture* t2 = SDL_CreateTextureFromSurface(r, s2);
+                    if (t2) {
+                        SDL_Rect dst{ opt.x + 6, opt.y + (opt.h - s2->h)/2, s2->w, s2->h };
+                        SDL_RenderCopy(r, t2, nullptr, &dst);
+                        SDL_DestroyTexture(t2);
+                    }
+                    SDL_FreeSurface(s2);
+                }
+                TTF_CloseFont(f2);
+            }
+        }
+    }
+}
+
