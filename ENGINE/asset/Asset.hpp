@@ -18,7 +18,7 @@
 #include "asset_controller.hpp"
 #include "animation_update.hpp"
 
-class view;
+class camera;
 class Assets;
 class Input;
 class AnimationFrame;
@@ -71,7 +71,7 @@ class Asset {
     void set_screen_position(SDL_Point s);
     inline int get_screen_x() const { return screen_X; }
     inline int get_screen_y() const { return screen_Y; }
-    void set_view(view* v) { window = v; }
+    void set_camera(camera* v) { window = v; }
     void set_assets(Assets* a);
     Assets* get_assets() const { return assets_; }
     void deactivate();
@@ -118,7 +118,7 @@ class Asset {
         private:
     friend class AnimationUpdate;
     friend class Move;
-    view* window = nullptr;
+    camera* window = nullptr;
     bool highlighted = false;
     bool hidden = false;
     bool merged = false;

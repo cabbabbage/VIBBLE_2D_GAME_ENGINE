@@ -48,7 +48,16 @@ AssetLibrary::all() const {
 }
 
 void AssetLibrary::loadAllAnimations(SDL_Renderer* renderer) {
-	for (auto& [name, info] : info_by_name_) {
-		info->loadAnimations(renderer);
-	}
+    for (auto& [name, info] : info_by_name_) {
+        info->loadAnimations(renderer);
+    }
+}
+
+void AssetLibrary::loadAnimationsFor(SDL_Renderer* renderer, const std::unordered_set<std::string>& names) {
+    for (const auto& name : names) {
+        auto it = info_by_name_.find(name);
+        if (it != info_by_name_.end() && it->second) {
+            it->second->loadAnimations(renderer);
+        }
+    }
 }

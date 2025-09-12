@@ -29,7 +29,6 @@ class MainApp {
     SceneRenderer* scene_            = nullptr;
     Input*         input_            = nullptr;
     SDL_Texture* overlay_texture_    = nullptr;
-    SDL_Texture* minimap_texture_    = nullptr;
     bool dev_mode_ = false;
 };
 

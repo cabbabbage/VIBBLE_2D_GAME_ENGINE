@@ -1,9 +1,9 @@
 #include "asset_loader.hpp"
 #include <fstream>
 #include <iostream>
-#include <queue>
 #include <numeric>
 #include <unordered_map>
+#include <unordered_set>
 #include <cmath>
 #include <stdexcept>
 #include <SDL.h>
@@ -43,8 +43,19 @@ renderer_(renderer)
 {
 	load_map_json();
 	asset_library_ = std::make_unique<AssetLibrary>();
-	loadRooms();
-	asset_library_->loadAllAnimations(renderer_);
+    loadRooms();
+    {
+        // Load animations only for assets actually present in generated rooms
+        std::unordered_set<std::string> used;
+        for (Room* room : rooms_) {
+            for (const auto& aup : room->assets) {
+                if (const Asset* a = aup.get()) {
+                    if (a->info) used.insert(a->info->name);
+                }
+            }
+        }
+        asset_library_->loadAnimationsFor(renderer_, used);
+    }
 	finalizeAssets();
 	auto distant_boundary = collectDistantAssets(0,2000);
 	for(auto a : distant_boundary){
@@ -60,7 +71,7 @@ renderer_(renderer)
             }
 		}
 	}
-	auto neighbor_assets = group_neighboring_assets(link_candidates, 1000, 1000, "Child Linking");
+	auto neighbor_assets = group_neighboring_assets(link_candidates, 500, 500, "Child Linking");
 	link_by_child(neighbor_assets);
 }
 
@@ -214,11 +225,9 @@ std::vector<Asset> AssetLoader::extract_all_assets() {
 	return out;
 }
 
-std::vector<Asset> AssetLoader::createAssets(int screen_width, int screen_height) {
-	std::cout << "[AssetLoader] createAssets() start\n";
+std::vector<Asset> AssetLoader::createAssets() {
 	auto assetsVec = extract_all_assets();
-	std::cout << "[AssetLoader] extracted " << assetsVec.size() << " assets\n";
-	std::cout << "[AssetLoader] createAssets(): built vector of " << assetsVec.size() << " assets\n";
+	std::cout << "[AssetLoader] Created vector with " << assetsVec.size() << " assets\n";
 	return assetsVec;
 }
 
@@ -231,63 +240,6 @@ std::vector<Area> AssetLoader::getAllRoomAndTrailAreas() const {
 	return areas;
 }
 
-SDL_Texture* AssetLoader::createMinimap(int width, int height) {
-	if (!renderer_ || width <= 0 || height <= 0) return nullptr;
-	int scaleFactor = 2;
-	int render_width  = width  * scaleFactor;
-	int render_height = height * scaleFactor;
-	SDL_Texture* highres = SDL_CreateTexture( renderer_, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET, render_width, render_height );
-	if (!highres) {
-		std::cerr << "[Minimap] Failed to create high-res texture: " << SDL_GetError() << "\n";
-		return nullptr;
-	}
-	SDL_SetTextureBlendMode(highres, SDL_BLENDMODE_BLEND);
-	SDL_Texture* prev = SDL_GetRenderTarget(renderer_);
-	SDL_SetRenderTarget(renderer_, highres);
-	SDL_SetRenderDrawColor(renderer_, 0, 0, 0, 0);
-	SDL_RenderClear(renderer_);
-	float scaleX = float(render_width)  / float(map_radius_ * 2);
-	float scaleY = float(render_height) / float(map_radius_ * 2);
-	for (Room* room : rooms_) {
-		try {
-			auto [minx, miny, maxx, maxy] = room->room_area->get_bounds();
-			SDL_Rect r{ int(std::round(minx * scaleX)),
-					int(std::round(miny * scaleY)), int(std::round((maxx - minx) * scaleX)), int(std::round((maxy - miny) * scaleY)) };
-			if (room->room_name.find("trail") != std::string::npos) {
-					SDL_SetRenderDrawColor(renderer_, 0, 255, 0, 255);
-					int cx = int(std::round((minx + maxx) * 0.5 * scaleX));
-					int cy = int(std::round((miny + maxy) * 0.5 * scaleY));
-					for (Room* connected : room->connected_rooms) {
-								auto [tx1, ty1, tx2, ty2] = connected->room_area->get_bounds();
-								int tcx = int(std::round((tx1 + tx2) * 0.5 * scaleX));
-								int tcy = int(std::round((ty1 + ty2) * 0.5 * scaleY));
-								SDL_RenderDrawLine(renderer_, cx, cy, tcx, tcy);
-					}
-			} else {
-					SDL_SetRenderDrawColor(renderer_, 255, 0, 0, 255);
-					SDL_RenderFillRect(renderer_, &r);
-			}
-		} catch (const std::exception& e) {
-			std::cerr << "[Minimap] Skipping room with invalid bounds: " << e.what() << "\n";
-		}
-	}
-	SDL_SetRenderTarget(renderer_, prev);
-	SDL_Texture* final = SDL_CreateTexture( renderer_, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET, width, height );
-	if (!final) {
-		std::cerr << "[Minimap] Failed to create final texture: " << SDL_GetError() << "\n";
-		SDL_DestroyTexture(highres);
-		return nullptr;
-	}
-	SDL_SetRenderTarget(renderer_, final);
-	SDL_SetRenderDrawColor(renderer_, 0, 0, 0, 0);
-	SDL_RenderClear(renderer_);
-	SDL_Rect src{ 0, 0, render_width, render_height };
-	SDL_Rect dst{ 0, 0, width, height };
-	SDL_RenderCopy(renderer_, highres, &src, &dst);
-	SDL_SetRenderTarget(renderer_, prev);
-	SDL_DestroyTexture(highres);
-	return final;
-}
 
 void AssetLoader::load_map_json() {
 	std::ifstream f(map_path_ + "/map_info.json");

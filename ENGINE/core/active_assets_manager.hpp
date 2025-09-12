@@ -1,7 +1,7 @@
 #pragma once
 
 #include "asset/Asset.hpp"
-#include "utils/view.hpp"
+#include "render/camera.hpp"
 
 #include <vector>
 #include <cstddef>
@@ -10,7 +10,7 @@
 class ActiveAssetsManager {
 
 	public:
-    ActiveAssetsManager(int screen_width, int screen_height, view& v);
+    ActiveAssetsManager(int screen_width, int screen_height, camera& v);
     void initialize(std::vector<Asset*>& all_assets, Asset* player, int screen_center_x, int screen_center_y);
     void updateAssetVectors(Asset* player, int screen_center_x, int screen_center_y);
     void updateClosestAssets(Asset* player, std::size_t max_count);
@@ -30,7 +30,7 @@ class ActiveAssetsManager {
     void addActiveUnsorted(Asset* asset);
     int activate_counter_ = 0;
     int closest_counter_  = 0;
-    view& view_;
+    camera& camera_;
     int screen_width_;
     int screen_height_;
     std::vector<Asset*>* all_assets_;

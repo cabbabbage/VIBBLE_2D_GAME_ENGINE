@@ -4,8 +4,8 @@
 #include <cmath>
 #include "utils/range_util.hpp"
 
-ActiveAssetsManager::ActiveAssetsManager(int screen_width, int screen_height, view& v)
-: view_(v),
+ActiveAssetsManager::ActiveAssetsManager(int screen_width, int screen_height, camera& v)
+: camera_(v),
 screen_width_(screen_width),
 screen_height_(screen_height),
 all_assets_(nullptr)
@@ -130,9 +130,17 @@ void ActiveAssetsManager::updateActiveAssets(int cx, int cy)
                 if (a) a->active = false;
         }
 
-        const int buffer = 200;
-        const int half_w = screen_width_  / 2 + buffer;
-        const int half_h = screen_height_ / 2 + buffer;
+        const float scale     = std::max(0.0001f, camera_.get_scale());
+        const float inv_scale = 1.0f / scale;
+
+        const int visible_half_w_world = static_cast<int>( (static_cast<float>(screen_width_)  * 0.5f) / inv_scale );
+        const int visible_half_h_world = static_cast<int>( (static_cast<float>(screen_height_) * 0.5f) / inv_scale );
+
+        // Keep a fixed 200px on-screen margin, converted to world units.
+        const int buffer_world = static_cast<int>( 200.0f / inv_scale );
+
+        const int half_w = visible_half_w_world + buffer_world;
+        const int half_h = visible_half_h_world + buffer_world;
         const int left   = cx - half_w;
         const int right  = cx + half_w;
         const int top    = cy - half_h;

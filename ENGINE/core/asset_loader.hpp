@@ -20,9 +20,9 @@ class AssetLoader {
     std::vector<Asset*> collectDistantAssets(int fade_start_distance, int fade_end_distance);
     std::vector<std::vector<Asset*>> group_neighboring_assets( const std::vector<Asset*>& assets, int tile_width, int tile_height, const std::string& group_type);
     void link_by_child(const std::vector<std::vector<Asset*>>& groups);
-    std::vector<Asset> createAssets(int screen_width, int screen_height);
+    // Create a flat vector of all non-hidden assets.
+    std::vector<Asset> createAssets();
     std::vector<Area> getAllRoomAndTrailAreas() const;
-    SDL_Texture* createMinimap(int width, int height);
     AssetLibrary* getAssetLibrary() const { return asset_library_.get(); }
     const std::vector<Room*>& getRooms() const { return rooms_; }
     double getMapRadius() const { return map_radius_; }

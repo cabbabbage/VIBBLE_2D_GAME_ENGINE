@@ -2,7 +2,7 @@
 #include "controller_factory.hpp"
 #include "animation.hpp"
 #include "core/AssetsManager.hpp"
-#include "view.hpp"
+#include "render/camera.hpp"
 #include "utils/light_utils.hpp"
 #include <filesystem>
 #include <iostream>

@@ -233,11 +233,9 @@ void MenuUI::doExit() {
 
 void MenuUI::doRestart() {
 	std::cout << "[MenuUI] Restarting...\n";
-	if (minimap_texture_)  { SDL_DestroyTexture(minimap_texture_); minimap_texture_ = nullptr; }
 	if (game_assets_)      { delete game_assets_; game_assets_ = nullptr; }
 	try {
-		minimap_texture_ = loader_->createMinimap(200, 200);
-		auto all_assets = loader_->createAssets(screen_w_, screen_h_);
+		auto all_assets = loader_->createAssets();
 		Asset* player_ptr = nullptr;
 		for (auto& a : all_assets) {
 			if (a.info && a.info->type == "Player") { player_ptr = &a; break; }

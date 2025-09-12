@@ -30,7 +30,6 @@ class SceneRenderer {
     Parallax       parallax_;
     Global_Light_Source main_light_source_;
     SDL_Texture*   fullscreen_light_tex_;
-    SDL_Texture*   accumulation_tex_;
     RenderAsset    render_asset_;
     std::unique_ptr<LightMap> z_light_pass_;
     int            current_shading_group_ = 0;

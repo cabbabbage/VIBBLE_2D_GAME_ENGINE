@@ -120,11 +120,11 @@ namespace {
 			}
 		}
 		const double fit_scale = std::min(static_cast<double>(win_w) / tex_w, static_cast<double>(win_h) / tex_h);
-		double view_scale = std::min(1.0, fit_scale);
+		double camera_scale = std::min(1.0, fit_scale);
 		int pan_x = 0, pan_y = 0;
 		auto recompute_layout = [&](int& draw_w, int& draw_h, int& off_x, int& off_y){
-			draw_w = static_cast<int>(std::round(tex_w * view_scale));
-			draw_h = static_cast<int>(std::round(tex_h * view_scale));
+			draw_w = static_cast<int>(std::round(tex_w * camera_scale));
+			draw_h = static_cast<int>(std::round(tex_h * camera_scale));
 			off_x = (win_w - draw_w) / 2 + pan_x;
 			off_y = (win_h - draw_h) / 2 + pan_y;
 		};
@@ -154,11 +154,11 @@ namespace {
 								else if (e.key.keysym.sym == SDLK_MINUS) { brush = std::max(1, brush - 2); }
 								else if (e.key.keysym.sym == SDLK_c) { SDL_FillRect(mask, nullptr, SDL_MapRGBA(mask->format, 255, 0, 0, 0)); }
 								else if (e.key.keysym.sym == SDLK_f) {
-													view_scale = fit_scale;
+													camera_scale = fit_scale;
 													pan_x = pan_y = 0;
 													recompute_layout(draw_w, draw_h, off_x, off_y);
 								} else if (e.key.keysym.sym == SDLK_1) {
-													view_scale = 1.0;
+													camera_scale = 1.0;
 													pan_x = pan_y = 0;
 													recompute_layout(draw_w, draw_h, off_x, off_y);
 								}
@@ -181,17 +181,17 @@ namespace {
 								if (e.button.button == SDL_BUTTON_MIDDLE) panning = false;
 					} else if (e.type == SDL_MOUSEWHEEL) {
 								int mx, my; SDL_GetMouseState(&mx, &my);
-								double tx = (mx - off_x) / view_scale;
-								double ty = (my - off_y) / view_scale;
-								if (e.wheel.y > 0)      view_scale = std::min(10.0, view_scale * 1.1);
-								else if (e.wheel.y < 0) view_scale = std::max(0.05, view_scale / 1.1);
+								double tx = (mx - off_x) / camera_scale;
+								double ty = (my - off_y) / camera_scale;
+								if (e.wheel.y > 0)      camera_scale = std::min(10.0, camera_scale * 1.1);
+								else if (e.wheel.y < 0) camera_scale = std::max(0.05, camera_scale / 1.1);
 								int new_draw_w = 0, new_draw_h = 0, cx = 0, cy = 0;
-								new_draw_w = static_cast<int>(std::round(tex_w * view_scale));
-								new_draw_h = static_cast<int>(std::round(tex_h * view_scale));
+								new_draw_w = static_cast<int>(std::round(tex_w * camera_scale));
+								new_draw_h = static_cast<int>(std::round(tex_h * camera_scale));
 								cx = (win_w - new_draw_w) / 2;
 								cy = (win_h - new_draw_h) / 2;
-								pan_x = (int)std::lround((mx - tx * view_scale) - cx);
-								pan_y = (int)std::lround((my - ty * view_scale) - cy);
+								pan_x = (int)std::lround((mx - tx * camera_scale) - cx);
+								pan_y = (int)std::lround((my - ty * camera_scale) - cy);
 								recompute_layout(draw_w, draw_h, off_x, off_y);
 					} else if (e.type == SDL_MOUSEMOTION) {
 								int mx = e.motion.x;
@@ -202,8 +202,8 @@ namespace {
 													last_mx = mx; last_my = my;
 													recompute_layout(draw_w, draw_h, off_x, off_y);
 								}
-								int tx = static_cast<int>(std::round((mx - off_x) / view_scale));
-								int ty = static_cast<int>(std::round((my - off_y) / view_scale));
+								int tx = static_cast<int>(std::round((mx - off_x) / camera_scale));
+								int ty = static_cast<int>(std::round((my - off_y) / camera_scale));
 								if (tx >= 0 && tx < tex_w && ty >= 0 && ty < tex_h) {
 													bool er = erasing || (!draw_mode && drawing);
 													if (drawing) {
@@ -224,8 +224,8 @@ namespace {
 					std::vector<SDL_Point> pts;
 					pts.reserve(initial_area->get_points().size() + 1);
 					for (const auto& p : initial_area->get_points()) {
-								int sx = off_x + static_cast<int>(std::round((p.x - origin_x) * view_scale));
-								int sy = off_y + static_cast<int>(std::round((p.y - origin_y) * view_scale));
+								int sx = off_x + static_cast<int>(std::round((p.x - origin_x) * camera_scale));
+								int sy = off_y + static_cast<int>(std::round((p.y - origin_y) * camera_scale));
 								pts.push_back(SDL_Point{ sx, sy });
 					}
 					if (!pts.empty()) {

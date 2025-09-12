@@ -13,8 +13,7 @@
 static constexpr SDL_Color SLATE_COLOR = {69, 101, 74, 255};
 static constexpr float MIN_VISIBLE_SCREEN_RATIO = 0.015f;
 
-static int MOTION_BLUR_STRENGTH   = 150;
-static int MOTION_BLUR_PERSISTENCE = 200;
+// Motion blur disabled
 
 SceneRenderer::SceneRenderer(SDL_Renderer* renderer,
                              Assets* assets,
@@ -30,8 +29,7 @@ SceneRenderer::SceneRenderer(SDL_Renderer* renderer,
   main_light_source_(renderer, SDL_Point{ screen_width / 2, screen_height / 2 },
                      screen_width, SDL_Color{255, 255, 255, 255}, map_path),
   fullscreen_light_tex_(nullptr),
-  render_asset_(renderer, parallax_, main_light_source_, assets->player),
-  accumulation_tex_(nullptr)
+  render_asset_(renderer, parallax_, main_light_source_, assets->player)
 {
 	fullscreen_light_tex_ = SDL_CreateTexture(renderer_, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET, screen_width_, screen_height_);
 	if (fullscreen_light_tex_) {
@@ -47,13 +45,7 @@ SceneRenderer::SceneRenderer(SDL_Renderer* renderer,
 		          << SDL_GetError() << "\n";
 	}
 
-	accumulation_tex_ = SDL_CreateTexture(renderer_, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET, screen_width_, screen_height_);
-	if (!accumulation_tex_) {
-		std::cerr << "[SceneRenderer] Failed to create accumulation texture: "
-		          << SDL_GetError() << "\n";
-	} else {
-		SDL_SetTextureBlendMode(accumulation_tex_, SDL_BLENDMODE_BLEND);
-	}
+	// No accumulation texture; render directly to default target
 
 	z_light_pass_ = std::make_unique<LightMap>(renderer_, assets_, parallax_, main_light_source_, screen_width_, screen_height_, fullscreen_light_tex_);
 	main_light_source_.update();
@@ -103,16 +95,13 @@ void SceneRenderer::render() {
 
 	main_light_source_.update();
 
-	SDL_SetRenderTarget(renderer_, accumulation_tex_);
+	SDL_SetRenderTarget(renderer_, nullptr);
 	SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND);
-	SDL_SetTextureAlphaMod(accumulation_tex_, MOTION_BLUR_STRENGTH);
-	SDL_RenderCopy(renderer_, accumulation_tex_, nullptr, nullptr);
-	SDL_SetTextureAlphaMod(accumulation_tex_, 255);
-	SDL_SetRenderDrawColor(renderer_, SLATE_COLOR.r, SLATE_COLOR.g, SLATE_COLOR.b, MOTION_BLUR_PERSISTENCE);
-	SDL_RenderFillRect(renderer_, nullptr);
+	SDL_SetRenderDrawColor(renderer_, SLATE_COLOR.r, SLATE_COLOR.g, SLATE_COLOR.b, 255);
+	SDL_RenderClear(renderer_);
 
-	const auto& view_state = assets_->getView();
-	float scale = view_state.get_scale();
+	const auto& camera_state = assets_->getView();
+	float scale = camera_state.get_scale();
 	float inv_scale = 1.0f / scale;
 	int min_visible_w = static_cast<int>(screen_width_  * MIN_VISIBLE_SCREEN_RATIO);
 	int min_visible_h = static_cast<int>(screen_height_ * MIN_VISIBLE_SCREEN_RATIO);
@@ -166,7 +155,6 @@ void SceneRenderer::render() {
 	}
 
 	SDL_SetRenderTarget(renderer_, nullptr);
-	SDL_RenderCopy(renderer_, accumulation_tex_, nullptr, nullptr);
         z_light_pass_->render(debugging);
         if (assets_) {
                 assets_->render_overlays(renderer_);

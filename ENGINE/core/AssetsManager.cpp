@@ -8,6 +8,8 @@
 #include "dev_mode/dev_mouse_controls.hpp"
 #include "utils/input.hpp"
 #include "render/scene_renderer.hpp"
+#include "utils/area.hpp"
+#include <vector>
 #include "ui/asset_library_ui.hpp"
 #include "ui/asset_info_ui.hpp"
 
@@ -29,10 +31,19 @@ Assets::Assets(std::vector<Asset>&& loaded,
                int map_radius,
                SDL_Renderer* renderer,
                const std::string& map_path)
-    : window(screen_width_, screen_height_, view::Bounds{
-          -map_radius, map_radius,
-          -map_radius, map_radius
-      }),
+    : window(
+          screen_width_,
+          screen_height_,
+          Area(
+              "starting_camera",
+              std::vector<SDL_Point>{
+                  SDL_Point{-map_radius, -map_radius},
+                  SDL_Point{ map_radius, -map_radius},
+                  SDL_Point{ map_radius,  map_radius},
+                  SDL_Point{-map_radius,  map_radius}
+              }
+          )
+      ),
       activeManager(screen_width_, screen_height_, window),
       screen_width(screen_width_),
       screen_height(screen_height_),
@@ -227,7 +238,7 @@ void Assets::addAsset(const std::string& name, SDL_Point g) {
     std::cout << "[Assets::addAsset] all.size() now = " << all.size() << "\n";
 
     try {
-        set_view_recursive(newAsset, &window);
+        set_camera_recursive(newAsset, &window);
         set_assets_owner_recursive(newAsset, this);
         std::cout << "[Assets::addAsset] View set successfully\n";
         newAsset->finalize_setup();
@@ -287,7 +298,7 @@ Asset* Assets::spawn_asset(const std::string& name, SDL_Point world_pos) {
     std::cout << "[Assets::spawn_asset] all.size() now = " << all.size() << "\n";
 
     try {
-        set_view_recursive(newAsset, &window);
+        set_camera_recursive(newAsset, &window);
         set_assets_owner_recursive(newAsset, this);
         std::cout << "[Assets::spawn_asset] View set successfully\n";
         newAsset->finalize_setup();

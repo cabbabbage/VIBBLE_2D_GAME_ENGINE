@@ -2,11 +2,11 @@
 
 #include "Asset.hpp"
 
-inline void set_view_recursive(Asset* asset, view* v) {
+inline void set_camera_recursive(Asset* asset, camera* v) {
 	if (!asset) return;
-	asset->set_view(v);
+	asset->set_camera(v);
 	for (Asset* child : asset->children) {
-		set_view_recursive(child, v);
+		set_camera_recursive(child, v);
 	}
 }
 

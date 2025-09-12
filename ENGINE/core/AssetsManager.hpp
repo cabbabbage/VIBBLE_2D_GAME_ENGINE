@@ -1,6 +1,6 @@
 #pragma once
 
-#include "utils/view.hpp"
+#include "render/camera.hpp"
 #include "active_assets_manager.hpp"
 #include "asset/asset_library.hpp"
 #include <SDL.h>
@@ -38,15 +38,15 @@ class Assets {
     Asset* get_hovered_asset() const;
     const std::vector<Asset*>& getActive()  const { return active_assets; }
     const std::vector<Asset*>& getClosest() const { return closest_assets; }
-    view& getView() { return window; }
-    const view& getView() const { return window; }
+    camera& getView() { return window; }
+    const camera& getView() const { return window; }
     std::deque<std::unique_ptr<Asset>> owned_assets;
     std::vector<Asset*> all;
     Asset* player = nullptr;
     CurrentRoomFinder* finder_ = nullptr;
     Input* input = nullptr;
     DevMouseControls* dev_mouse = nullptr;
-    view window;
+    camera window;
     SceneRenderer* scene = nullptr;
     ActiveAssetsManager activeManager;
     int screen_width;

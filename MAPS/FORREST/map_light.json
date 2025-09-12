@@ -1,8 +1,8 @@
 {
-  "radius": 4336,
+  "radius": 2590,
   "intensity": 255,
   "orbit_radius": 2288,
-  "update_interval": 32,
+  "update_interval": 10,
   "mult": 0.0,
   "fall_off": 100,
   "base_color": [
