@@ -49,6 +49,7 @@ class AssetInfo {
     int original_canvas_height;
     bool flipable;
     std::vector<std::string> tags;
+    std::vector<std::string> anti_tags;
     bool has_light_source;
     bool moving_asset = false;
     struct NamedArea {
@@ -73,6 +74,9 @@ class AssetInfo {
     void set_tags(const std::vector<std::string> &t);
     void add_tag(const std::string &tag);
     void remove_tag(const std::string &tag);
+    void set_anti_tags(const std::vector<std::string> &t);
+    void add_anti_tag(const std::string &tag);
+    void remove_anti_tag(const std::string &tag);
     void set_passable(bool v);
     Area* find_area(const std::string& name);
     void upsert_area_from_editor(const class Area& area);

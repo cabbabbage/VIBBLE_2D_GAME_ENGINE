@@ -23,16 +23,26 @@ AssetInfo::AssetInfo(const std::string &asset_folder_name)
 	nlohmann::json data;
 	in >> data;
 	info_json_ = data;
-	tags.clear();
-	if (data.contains("tags") && data["tags"].is_array()) {
-		for (const auto &tag : data["tags"]) {
-			if (tag.is_string()) {
-					std::string str = tag.get<std::string>();
-					if (!str.empty())
-					tags.push_back(str);
-			}
-		}
-	}
+        tags.clear();
+        if (data.contains("tags") && data["tags"].is_array()) {
+                for (const auto &tag : data["tags"]) {
+                        if (tag.is_string()) {
+                                        std::string str = tag.get<std::string>();
+                                        if (!str.empty())
+                                        tags.push_back(str);
+                        }
+                }
+        }
+        anti_tags.clear();
+        if (data.contains("anti_tags") && data["anti_tags"].is_array()) {
+                for (const auto &tag : data["anti_tags"]) {
+                        if (tag.is_string()) {
+                                        std::string str = tag.get<std::string>();
+                                        if (!str.empty())
+                                        anti_tags.push_back(str);
+                        }
+                }
+        }
 	if (data.contains("animations") && data["animations"].is_object()) {
 		nlohmann::json new_anim = nlohmann::json::object();
 		for (auto it = data["animations"].begin(); it != data["animations"].end(); ++it) {
@@ -208,8 +218,28 @@ void AssetInfo::add_tag(const std::string &tag) {
 }
 
 void AssetInfo::remove_tag(const std::string &tag) {
-	tags.erase(std::remove(tags.begin(), tags.end(), tag), tags.end());
-	set_tags(tags);
+        tags.erase(std::remove(tags.begin(), tags.end(), tag), tags.end());
+        set_tags(tags);
+}
+
+void AssetInfo::set_anti_tags(const std::vector<std::string> &t) {
+        anti_tags = t;
+        nlohmann::json arr = nlohmann::json::array();
+        for (const auto &s : anti_tags)
+                arr.push_back(s);
+        info_json_["anti_tags"] = std::move(arr);
+}
+
+void AssetInfo::add_anti_tag(const std::string &tag) {
+        if (std::find(anti_tags.begin(), anti_tags.end(), tag) == anti_tags.end()) {
+                anti_tags.push_back(tag);
+        }
+        set_anti_tags(anti_tags);
+}
+
+void AssetInfo::remove_anti_tag(const std::string &tag) {
+        anti_tags.erase(std::remove(anti_tags.begin(), anti_tags.end(), tag), anti_tags.end());
+        set_anti_tags(anti_tags);
 }
 
 void AssetInfo::set_passable(bool v) {

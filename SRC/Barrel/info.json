@@ -46,7 +46,10 @@
             "speed_factor": 1
         }
     },
-    "anti_tags": [],
+    "anti_tags": [
+        "center",
+        "meadow"
+    ],
     "areas": [
         {
             "name": "impassable_area",
@@ -1968,7 +1971,7 @@
     ],
     "asset_name": "Barrel",
     "asset_type": "Object",
-    "can_invert": true,
+    "can_invert": false,
     "child_assets": [
         {
             "area_name": "child_area_0",
@@ -2039,10 +2042,48 @@
     },
     "start": "",
     "tags": [
-        "default",
-        "wood",
+        "barrel_child",
+        "black",
+        "blue",
+        "bone",
+        "book",
+        "booze",
+        "boundary",
+        "brown",
+        "child",
         "collision",
-        "impassable"
+        "crime",
+        "death",
+        "default",
+        "flowers",
+        "grave",
+        "graveyard",
+        "grey",
+        "group",
+        "healing",
+        "impassable",
+        "large",
+        "leafy",
+        "library",
+        "light",
+        "loot",
+        "medium",
+        "metal",
+        "mushroom",
+        "parent",
+        "plant",
+        "pretty",
+        "purple",
+        "red",
+        "rock",
+        "scary",
+        "skull",
+        "still",
+        "surface",
+        "water",
+        "white",
+        "wood",
+        "yellow"
     ],
     "update_radius": 1000,
     "z_threshold": 99
