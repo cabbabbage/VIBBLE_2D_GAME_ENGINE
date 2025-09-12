@@ -848,11 +848,12 @@
     "anti_tags": [],
     "asset_name": "Bomb",
     "asset_type": "Enemy",
-    "can_invert": false,
+    "can_invert": true,
     "custom_controller_key": "Bomb_controller",
     "duplicatable": false,
     "duplication_interval_max": 60,
     "duplication_interval_min": 30,
+    "has_shading": true,
     "impassable_area": null,
     "layout": {
         "__view": {
@@ -862,6 +863,17 @@
             "zoom": 1.0
         }
     },
+    "lighting_info": [
+        {
+            "factor": 100,
+            "falloff": 50,
+            "has_light_source": true,
+            "light_intensity": 255,
+            "radius": 64,
+            "x_radius": 0,
+            "y_radius": 0
+        }
+    ],
     "mappings": {},
     "max_child_depth": 2,
     "min_child_depth": 0,
@@ -875,7 +887,33 @@
     },
     "start": "",
     "tags": [
-        "passable"
+        "bluff",
+        "bone",
+        "book",
+        "flowers",
+        "grave",
+        "graveyard",
+        "green",
+        "grey",
+        "impassable",
+        "library",
+        "light",
+        "man-made",
+        "meadow",
+        "medium",
+        "moving",
+        "mushroom",
+        "orange",
+        "passable",
+        "purple",
+        "red",
+        "scary",
+        "skull",
+        "still",
+        "tall",
+        "white",
+        "wood",
+        "yellow"
     ],
     "update_radius": 1000,
     "z_threshold": 30

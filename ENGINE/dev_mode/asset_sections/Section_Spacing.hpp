@@ -26,22 +26,22 @@ class Section_Spacing : public CollapsibleSection {
 
     void layout() override {
       CollapsibleSection::layout();
-      int x = rect_.x + 16;
-      int y = rect_.y + DMButton::height() + 8;
-      int maxw = std::max(120, rect_.w - 32);
+      int x = rect_.x + DMSpacing::panel_padding();
+      int y = rect_.y + DMButton::height() + DMSpacing::header_gap();
+      int maxw = std::max(120, rect_.w - 2 * DMSpacing::panel_padding());
       int draw_y = y - scroll_;
 
       if (s_min_same_) {
         s_min_same_->set_rect(SDL_Rect{ x, draw_y, maxw, DMSlider::height() });
-        y += DMSlider::height() + 8;
+        y += DMSlider::height() + DMSpacing::item_gap();
         draw_y = y - scroll_;
       }
       if (s_min_all_) {
         s_min_all_->set_rect(SDL_Rect{ x, draw_y, maxw, DMSlider::height() });
-        y += DMSlider::height() + 8;
+        y += DMSlider::height() + DMSpacing::item_gap();
         draw_y = y - scroll_;
       }
-      content_height_ = std::max(0, y - (rect_.y + DMButton::height() + 8));
+      content_height_ = std::max(0, y - (rect_.y + DMButton::height() + DMSpacing::header_gap()));
     }
 
     bool handle_event(const SDL_Event& e) override {

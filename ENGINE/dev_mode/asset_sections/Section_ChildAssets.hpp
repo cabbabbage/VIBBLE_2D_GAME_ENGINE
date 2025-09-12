@@ -25,9 +25,9 @@ public:
 
     void layout() override {
         CollapsibleSection::layout();
-        int x = rect_.x + 12;
-        int y = rect_.y + DMButton::height() + 8;
-        int maxw = rect_.w - 24;
+        int x = rect_.x + DMSpacing::panel_padding();
+        int y = rect_.y + DMButton::height() + DMSpacing::header_gap();
+        int maxw = rect_.w - 2 * DMSpacing::panel_padding();
 
         // Detect if areas changed; rebuild dropdowns if needed
         if (info_) {
@@ -51,7 +51,7 @@ public:
             // Row label
             if (!r.lbl_) r.lbl_ = std::make_unique<DMButton>("Region " + std::to_string(i + 1), &DMStyles::HeaderButton(), 180, DMButton::height());
             r.lbl_->set_rect(SDL_Rect{ x, draw_base + used, 180, DMButton::height() });
-            used += DMButton::height() + 4;
+            used += DMButton::height() + DMSpacing::item_gap();
 
             // Area dropdown
             if (!r.dd_area) {
@@ -64,25 +64,25 @@ public:
             if (!r.s_z) r.s_z = std::make_unique<DMSlider>("Z Offset", -5000, 5000, r.z_offset);
             int slider_w = std::min(300, maxw);
             r.s_z->set_rect(SDL_Rect{ x + std::min(320, maxw), draw_base + used, slider_w, DMSlider::height() });
-            used += std::max(DMDropdown::height(), DMSlider::height()) + 6;
+            used += std::max(DMDropdown::height(), DMSlider::height()) + DMSpacing::item_gap();
 
             // Configure assets button
             if (!r.b_assets) r.b_assets = std::make_unique<DMButton>("Configure Assets", &DMStyles::ListButton(), 160, DMButton::height());
             r.b_assets->set_rect(SDL_Rect{ x, draw_base + used, 160, DMButton::height() });
-            used += DMButton::height() + 6;
+            used += DMButton::height() + DMSpacing::item_gap();
 
             // Buttons: Edit Area, Delete
             if (!r.b_edit_area) r.b_edit_area = std::make_unique<DMButton>("Edit Area", &DMStyles::ListButton(), 140, DMButton::height());
             if (!r.b_delete)    r.b_delete    = std::make_unique<DMButton>("Delete", &DMStyles::ListButton(), 120, DMButton::height());
             r.b_edit_area->set_rect(SDL_Rect{ x, draw_base + used, 160, DMButton::height() });
             r.b_delete->set_rect(SDL_Rect{ x + 170, draw_base + used, 120, DMButton::height() });
-            used += DMButton::height() + 10;
+            used += DMButton::height() + DMSpacing::item_gap();
         }
 
         // Footer actions
         if (b_add_) {
             b_add_->set_rect(SDL_Rect{ x, draw_base + used, std::min(260, maxw), DMButton::height() });
-            used += DMButton::height() + 8;
+            used += DMButton::height() + DMSpacing::item_gap();
         }
 
         content_height_ = std::max(0, used);

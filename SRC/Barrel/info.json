@@ -47,8 +47,17 @@
         }
     },
     "anti_tags": [
+        "any",
+        "backward",
         "center",
-        "meadow"
+        "forward",
+        "left",
+        "meadow",
+        "passable",
+        "player",
+        "right",
+        "spawn",
+        "start"
     ],
     "areas": [
         {
@@ -1864,131 +1873,27 @@
                     -4
                 ]
             ]
-        },
-        {
-            "name": "child_area_0",
-            "offset_x": 0,
-            "offset_y": 0,
-            "original_dimensions": [
-                772,
-                981
-            ],
-            "points": [
-                [
-                    81.81818226152215,
-                    9.090909140169128
-                ],
-                [
-                    245.45454678456647,
-                    9.090909140169128
-                ],
-                [
-                    81.81818226152215,
-                    18.181818280338256
-                ],
-                [
-                    245.45454678456647,
-                    18.181818280338256
-                ],
-                [
-                    81.81818226152215,
-                    27.272727420507383
-                ],
-                [
-                    254.5454559247356,
-                    27.272727420507383
-                ],
-                [
-                    81.81818226152215,
-                    36.36363656067651
-                ],
-                [
-                    263.63636506490474,
-                    36.36363656067651
-                ],
-                [
-                    272.72727420507385,
-                    36.36363656067651
-                ],
-                [
-                    72.72727312135302,
-                    45.45454570084564
-                ],
-                [
-                    72.72727312135302,
-                    54.54545484101477
-                ],
-                [
-                    54.54545484101477,
-                    63.6363639811839
-                ],
-                [
-                    63.6363639811839,
-                    63.6363639811839
-                ],
-                [
-                    45.45454570084564,
-                    72.72727312135302
-                ],
-                [
-                    36.36363656067651,
-                    81.81818226152215
-                ],
-                [
-                    36.36363656067651,
-                    90.90909140169128
-                ],
-                [
-                    27.272727420507383,
-                    100.00000054186042
-                ],
-                [
-                    27.272727420507383,
-                    109.09090968202953
-                ],
-                [
-                    27.272727420507383,
-                    118.18181882219866
-                ],
-                [
-                    27.272727420507383,
-                    127.2727279623678
-                ],
-                [
-                    18.181818280338256,
-                    136.36363710253693
-                ],
-                [
-                    18.181818280338256,
-                    145.45454624270604
-                ],
-                [
-                    9.090909140169128,
-                    154.5454553828752
-                ]
-            ]
         }
     ],
     "asset_name": "Barrel",
     "asset_type": "Object",
-    "can_invert": false,
+    "can_invert": true,
     "child_assets": [
         {
             "area_name": "child_area_0",
             "assets": [
                 {
-                    "check_min_spacing": false,
-                    "check_overlap": false,
-                    "exact_position": null,
-                    "inherited": false,
                     "max_number": 1,
                     "min_number": 1,
                     "name": "Axe",
-                    "position": "Center",
-                    "tag": false
+                    "position": "Exact"
                 }
             ],
             "z_offset": 1
+        },
+        {
+            "area_name": "",
+            "z_offset": 0
         }
     ],
     "duplicatable": false,
@@ -2014,7 +1919,37 @@
             "y_radius": 0
         },
         {
-            "falloff": 27,
+            "falloff": 0,
+            "flare": 1,
+            "flicker": 0,
+            "has_light_source": true,
+            "light_color": [
+                255,
+                255,
+                255
+            ],
+            "light_intensity": 0,
+            "offset_x": 0,
+            "offset_y": 0,
+            "radius": 0
+        },
+        {
+            "falloff": 0,
+            "flare": 1,
+            "flicker": 0,
+            "has_light_source": true,
+            "light_color": [
+                255,
+                255,
+                255
+            ],
+            "light_intensity": 0,
+            "offset_x": 0,
+            "offset_y": 0,
+            "radius": 0
+        },
+        {
+            "falloff": 0,
             "flare": 0,
             "flicker": 16,
             "has_light_source": true,
@@ -2038,53 +1973,73 @@
     "rnd_spawn_max": 400,
     "rnd_spawn_min": 300,
     "size_settings": {
-        "scale_percentage": 10.0
+        "scale_percentage": 25.0
     },
     "start": "",
     "tags": [
         "barrel_child",
         "black",
         "blue",
+        "bluff",
         "bone",
         "book",
         "booze",
         "boundary",
         "brown",
+        "bush",
+        "car",
         "child",
         "collision",
+        "cover",
         "crime",
         "death",
         "default",
+        "drinking",
         "flowers",
         "grave",
         "graveyard",
+        "green",
         "grey",
+        "ground",
         "group",
         "healing",
         "impassable",
+        "interaction",
         "large",
         "leafy",
         "library",
         "light",
         "loot",
+        "man-made",
         "medium",
         "metal",
+        "movement",
+        "moving",
         "mushroom",
+        "nature",
+        "orange",
         "parent",
+        "piss",
         "plant",
         "pretty",
         "purple",
         "red",
+        "rest",
         "rock",
         "scary",
         "skull",
+        "small",
+        "static",
         "still",
         "surface",
+        "tall",
+        "tree",
+        "valuable",
         "water",
         "white",
         "wood",
         "yellow"
     ],
     "update_radius": 1000,
-    "z_threshold": 99
+    "z_threshold": -250
 }

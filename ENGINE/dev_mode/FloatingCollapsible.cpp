@@ -42,6 +42,10 @@ FloatingCollapsible::FloatingCollapsible(const std::string& title, int x, int y)
     : title_(title) {
     rect_.x = x; rect_.y = y;
     header_btn_ = std::make_unique<DMButton>(title_, &DMStyles::HeaderButton(), 260, DMButton::height());
+    // Normalize default spacing to DMSpacing tokens
+    padding_ = DMSpacing::panel_padding();
+    row_gap_ = DMSpacing::item_gap();
+    col_gap_ = DMSpacing::item_gap();
     update_header_button();
 }
 
@@ -221,7 +225,7 @@ void FloatingCollapsible::layout(int screen_w, int screen_h) const {
     // Compute content geometry
     int content_w = header_rect_.w; // body matches header width inside padding
     int x0 = rect_.x + padding_;
-    int y0 = rect_.y + padding_ + header_rect_.h + 8; // space below header
+    int y0 = rect_.y + padding_ + header_rect_.h + DMSpacing::header_gap(); // space below header
 
     // Compute per-row heights (based on tallest item)
     row_heights_.clear();
@@ -294,8 +298,8 @@ int FloatingCollapsible::compute_row_width(int num_cols) const {
 }
 
 int FloatingCollapsible::available_height(int screen_h) const {
-    int bottom_space = 16; // margin from bottom of screen or work area
-    int base_y = rect_.y + padding_ + DMButton::height() + 8; // body top
+    int bottom_space = DMSpacing::section_gap(); // margin from bottom of screen or work area
+    int base_y = rect_.y + padding_ + DMButton::height() + DMSpacing::header_gap(); // body top
     int computed;
     int area_h = (work_area_.w > 0 && work_area_.h > 0) ? work_area_.h : screen_h;
     int area_y = (work_area_.w > 0 && work_area_.h > 0) ? work_area_.y : 0;

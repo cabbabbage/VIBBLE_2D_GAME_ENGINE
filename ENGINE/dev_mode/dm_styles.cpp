@@ -90,3 +90,9 @@ const SDL_Color &DMStyles::Border() {
   static const SDL_Color c = dm::rgba(90, 90, 90, 255);
   return c;
 }
+
+int DMSpacing::panel_padding() { return 16; }
+int DMSpacing::section_gap()   { return 16; }
+int DMSpacing::item_gap()      { return 8; }
+int DMSpacing::small_gap()     { return 4; }
+int DMSpacing::header_gap()    { return 8; }

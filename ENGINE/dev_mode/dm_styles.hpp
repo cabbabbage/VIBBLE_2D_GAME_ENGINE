@@ -73,3 +73,17 @@ public:
   static const SDL_Color &PanelBG();
   static const SDL_Color &Border();
 };
+
+// Consistent spacing tokens for dev-mode UI
+struct DMSpacing {
+  // Outer padding inside panels and floating boxes
+  static int panel_padding();    // default 16
+  // Gap between stacked sections or footer items
+  static int section_gap();      // default 16
+  // Gap between controls (vertical/horizontal)
+  static int item_gap();         // default 8
+  // Smaller gap for dense grids (chips, small labels)
+  static int small_gap();        // default 4
+  // Space below section header before content starts
+  static int header_gap();       // default 8
+};

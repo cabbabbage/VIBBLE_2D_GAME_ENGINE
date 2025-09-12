@@ -88,19 +88,19 @@
                     ]
                 ]
             ],
+            "movement_total": {
+                "dx": 0,
+                "dy": -40
+            },
             "number_of_frames": 8,
             "on_end": "default",
             "reverse_source": true,
             "source": {
                 "kind": "animation",
-                "path": "",
-                "name": "forward"
+                "name": "forward",
+                "path": ""
             },
-            "speed_factor": 1,
-            "movement_total": {
-                "dx": 0,
-                "dy": -40
-            }
+            "speed_factor": 1
         },
         "default": {
             "custom_animation_controller_hpp_path": "",
@@ -208,19 +208,19 @@
                     ]
                 ]
             ],
+            "movement_total": {
+                "dx": 0,
+                "dy": 40
+            },
             "number_of_frames": 8,
             "on_end": "default",
             "reverse_source": false,
             "source": {
                 "kind": "folder",
-                "path": "forward",
-                "name": null
+                "name": null,
+                "path": "forward"
             },
-            "speed_factor": 1,
-            "movement_total": {
-                "dx": 0,
-                "dy": 40
-            }
+            "speed_factor": 1
         },
         "left": {
             "custom_animation_controller_hpp_path": "",
@@ -304,19 +304,19 @@
                     ]
                 ]
             ],
+            "movement_total": {
+                "dx": -40,
+                "dy": 0
+            },
             "number_of_frames": 8,
             "on_end": "default",
             "reverse_source": false,
             "source": {
                 "kind": "folder",
-                "path": "left",
-                "name": null
+                "name": null,
+                "path": "left"
             },
-            "speed_factor": 1,
-            "movement_total": {
-                "dx": -40,
-                "dy": 0
-            }
+            "speed_factor": 1
         },
         "right": {
             "custom_animation_controller_hpp_path": "",
@@ -400,19 +400,19 @@
                     ]
                 ]
             ],
+            "movement_total": {
+                "dx": 40,
+                "dy": 0
+            },
             "number_of_frames": 8,
             "on_end": "default",
             "reverse_source": false,
             "source": {
                 "kind": "animation",
-                "path": "",
-                "name": "left"
+                "name": "left",
+                "path": ""
             },
-            "speed_factor": 1,
-            "movement_total": {
-                "dx": 40,
-                "dy": 0
-            }
+            "speed_factor": 1
         }
     },
     "anti_tags": [],
@@ -423,15 +423,40 @@
     "duplicatable": false,
     "duplication_interval_max": 60,
     "duplication_interval_min": 30,
+    "has_shading": false,
     "impassable_area": null,
     "layout": {
         "__view": {
             "geometry": "1920x1009+-13+-9",
-            "zoom": 1.0,
             "xview": 0.0,
-            "yview": 0.0
+            "yview": 0.0,
+            "zoom": 1.0
         }
     },
+    "lighting_info": [
+        {
+            "has_light_source": true,
+            "light_intensity": 0,
+            "radius": 0,
+            "x_radius": 0,
+            "y_radius": 0
+        },
+        {
+            "falloff": 100,
+            "flare": 0,
+            "flicker": 0,
+            "has_light_source": true,
+            "light_color": [
+                0,
+                255,
+                255
+            ],
+            "light_intensity": 129,
+            "offset_x": 0,
+            "offset_y": 0,
+            "radius": 514
+        }
+    ],
     "mappings": {},
     "max_child_depth": 2,
     "min_child_depth": 0,
@@ -442,34 +467,7 @@
         "scale_percentage": 15
     },
     "start": "default",
-    "tags": [
-        "passable"
-    ],
+    "tags": [],
     "update_radius": 1000,
-    "z_threshold": 64,
-    "has_shading": false,
-    "lighting_info": [
-        {
-            "has_light_source": true,
-            "light_intensity": 0,
-            "radius": 0,
-            "x_radius": 0,
-            "y_radius": 0
-        },
-        {
-            "has_light_source": true,
-            "light_intensity": 129,
-            "light_color": [
-                0,
-                255,
-                255
-            ],
-            "radius": 514,
-            "falloff": 100,
-            "flicker": 0,
-            "flare": 0,
-            "offset_x": 0,
-            "offset_y": 0
-        }
-    ]
+    "z_threshold": 64
 }

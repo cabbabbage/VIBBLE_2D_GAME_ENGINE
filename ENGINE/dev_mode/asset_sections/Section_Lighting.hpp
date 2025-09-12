@@ -51,40 +51,40 @@ public:
 
     void layout() override {
         CollapsibleSection::layout();
-        int x = rect_.x + 16;
-        int y = rect_.y + DMButton::height() + 8;
-        int maxw = rect_.w - 32;
+        int x = rect_.x + DMSpacing::panel_padding();
+        int y = rect_.y + DMButton::height() + DMSpacing::header_gap();
+        int maxw = rect_.w - 2 * DMSpacing::panel_padding();
         int draw_y = y - scroll_;
         if (c_has_shading_) {
             c_has_shading_->set_rect(SDL_Rect{ x, draw_y, maxw, DMCheckbox::height() });
-            y += DMCheckbox::height() + 8;
+            y += DMCheckbox::height() + DMSpacing::item_gap();
             draw_y = y - scroll_;
         }
         if (c_has_shading_ && c_has_shading_->value()) {
             int shade_start = y;
-            s_sh_intensity_->set_rect(SDL_Rect{ x, draw_y, maxw, DMSlider::height() }); y += DMSlider::height() + 8; draw_y = y - scroll_;
-            s_sh_radius_->set_rect   (SDL_Rect{ x, draw_y, maxw, DMSlider::height() }); y += DMSlider::height() + 8; draw_y = y - scroll_;
-            s_sh_x_radius_->set_rect (SDL_Rect{ x, draw_y, maxw, DMSlider::height() }); y += DMSlider::height() + 8; draw_y = y - scroll_;
-            s_sh_y_radius_->set_rect (SDL_Rect{ x, draw_y, maxw, DMSlider::height() }); y += DMSlider::height() + 8; draw_y = y - scroll_;
-            s_sh_falloff_->set_rect  (SDL_Rect{ x, draw_y, maxw, DMSlider::height() }); y += DMSlider::height() + 8; draw_y = y - scroll_;
-            s_sh_factor_->set_rect   (SDL_Rect{ x, draw_y, maxw, DMSlider::height() }); y += DMSlider::height() + 12; draw_y = y - scroll_;
+            s_sh_intensity_->set_rect(SDL_Rect{ x, draw_y, maxw, DMSlider::height() }); y += DMSlider::height() + DMSpacing::item_gap(); draw_y = y - scroll_;
+            s_sh_radius_->set_rect   (SDL_Rect{ x, draw_y, maxw, DMSlider::height() }); y += DMSlider::height() + DMSpacing::item_gap(); draw_y = y - scroll_;
+            s_sh_x_radius_->set_rect (SDL_Rect{ x, draw_y, maxw, DMSlider::height() }); y += DMSlider::height() + DMSpacing::item_gap(); draw_y = y - scroll_;
+            s_sh_y_radius_->set_rect (SDL_Rect{ x, draw_y, maxw, DMSlider::height() }); y += DMSlider::height() + DMSpacing::item_gap(); draw_y = y - scroll_;
+            s_sh_falloff_->set_rect  (SDL_Rect{ x, draw_y, maxw, DMSlider::height() }); y += DMSlider::height() + DMSpacing::item_gap(); draw_y = y - scroll_;
+            s_sh_factor_->set_rect   (SDL_Rect{ x, draw_y, maxw, DMSlider::height() }); y += DMSlider::height() + DMSpacing::item_gap(); draw_y = y - scroll_;
             shading_rect_ = SDL_Rect{ x - 4, shade_start - scroll_ - 4, maxw + 8, (y - shade_start) + 8 };
             if (shading_label_) {
                 int lbl_w = shading_label_->rect().w;
-                int lbl_x = rect_.x + 16 + (maxw - lbl_w) / 2;
+                int lbl_x = rect_.x + DMSpacing::panel_padding() + (maxw - lbl_w) / 2;
                 shading_label_->set_rect(SDL_Rect{ lbl_x, shading_rect_.y - DMButton::height(), lbl_w, DMButton::height() });
             }
         }
         for (size_t i = 0; i < rows_.size(); ++i) {
             auto& r = rows_[i];
             if (!r.lbl) r.lbl = std::make_unique<DMButton>("Light Source " + std::to_string(i+1), &DMStyles::HeaderButton(), 180, DMButton::height());
-            int lbl_x = rect_.x + 16 + (maxw - 180) / 2;
+            int lbl_x = rect_.x + DMSpacing::panel_padding() + (maxw - 180) / 2;
             r.lbl->set_rect(SDL_Rect{ lbl_x, draw_y, 180, DMButton::height() });
             if (r.b_delete) r.b_delete->set_rect(SDL_Rect{ x + maxw - 120, draw_y, 120, DMButton::height() });
-            y += DMButton::height() + 4; draw_y = y - scroll_;
-            r.s_intensity->set_rect(SDL_Rect{ x, draw_y, maxw, DMSlider::height() }); y += DMSlider::height() + 4; draw_y = y - scroll_;
-            r.s_radius->set_rect   (SDL_Rect{ x, draw_y, maxw, DMSlider::height() }); y += DMSlider::height() + 4; draw_y = y - scroll_;
-            r.s_falloff->set_rect  (SDL_Rect{ x, draw_y, maxw, DMSlider::height() }); y += DMSlider::height() + 4; draw_y = y - scroll_;
+            y += DMButton::height() + DMSpacing::item_gap(); draw_y = y - scroll_;
+            r.s_intensity->set_rect(SDL_Rect{ x, draw_y, maxw, DMSlider::height() }); y += DMSlider::height() + DMSpacing::item_gap(); draw_y = y - scroll_;
+            r.s_radius->set_rect   (SDL_Rect{ x, draw_y, maxw, DMSlider::height() }); y += DMSlider::height() + DMSpacing::item_gap(); draw_y = y - scroll_;
+            r.s_falloff->set_rect  (SDL_Rect{ x, draw_y, maxw, DMSlider::height() }); y += DMSlider::height() + DMSpacing::item_gap(); draw_y = y - scroll_;
             r.s_flicker->set_rect  (SDL_Rect{ x, draw_y, maxw, DMSlider::height() }); y += DMSlider::height() + 4; draw_y = y - scroll_;
             r.s_flare->set_rect    (SDL_Rect{ x, draw_y, maxw, DMSlider::height() }); y += DMSlider::height() + 4; draw_y = y - scroll_;
             r.s_offset_x->set_rect (SDL_Rect{ x, draw_y, maxw, DMSlider::height() }); y += DMSlider::height() + 4; draw_y = y - scroll_;
@@ -175,7 +175,8 @@ public:
             if (s_sh_y_radius_)  s_sh_y_radius_->render(r);
             if (s_sh_falloff_)   s_sh_falloff_->render(r);
             if (s_sh_factor_)    s_sh_factor_->render(r);
-            SDL_SetRenderDrawColor(r, 255, 0, 0, 255);
+            SDL_Color bc = DMStyles::Border();
+            SDL_SetRenderDrawColor(r, bc.r, bc.g, bc.b, bc.a);
             SDL_RenderDrawRect(r, &shading_rect_);
         }
         for (const auto& rrow : rows_) {

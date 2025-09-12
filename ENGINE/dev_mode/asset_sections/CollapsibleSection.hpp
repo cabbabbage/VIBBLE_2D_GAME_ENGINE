@@ -43,7 +43,7 @@ class CollapsibleSection {
       bool used = header_->handle_event(e);
       if (used && e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
         expanded_ = !expanded_;
-        header_->set_text(expanded_ ? title_ + " ▾" : title_ + " ▸");
+        header_->set_text(expanded_ ? title_ + " \xE2\x96\xB2" : title_ + " \xE2\x96\xBC");
       }
       if (expanded_ && e.type == SDL_MOUSEWHEEL) {
         int mx, my;
@@ -84,7 +84,7 @@ class CollapsibleSection {
     virtual void layout() {
       if (header_) {
         header_->set_rect(SDL_Rect{ rect_.x, rect_.y, rect_.w, DMButton::height() });
-        header_->set_text(expanded_ ? title_ + " ▾" : title_ + " ▸");
+        header_->set_text(expanded_ ? title_ + " \xE2\x96\xB2" : title_ + " \xE2\x96\xBC");
       }
       content_height_ = 0; // derived classes should set
     }
@@ -106,4 +106,5 @@ class CollapsibleSection {
     bool expanded_ = false;
     std::string title_;
 };
+
 

@@ -131,6 +131,7 @@ private:
 class DMDropdown {
 public:
     DMDropdown(const std::string& label, const std::vector<std::string>& options, int idx = 0);
+    ~DMDropdown();
     void set_rect(const SDL_Rect& r);
     const SDL_Rect& rect() const { return rect_; }
     int selected() const { return index_; }

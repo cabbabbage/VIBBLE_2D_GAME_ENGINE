@@ -475,6 +475,10 @@ void DMRangeSlider::render(SDL_Renderer* r) const {
 DMDropdown::DMDropdown(const std::string& label, const std::vector<std::string>& options, int idx)
     : label_(label), options_(options), index_(idx) {}
 
+DMDropdown::~DMDropdown() {
+    if (active_ == this) active_ = nullptr;
+}
+
 DMDropdown* DMDropdown::active_ = nullptr;
 
 DMDropdown* DMDropdown::active_dropdown() { return active_; }
@@ -535,7 +539,14 @@ void DMDropdown::render(SDL_Renderer* r) const {
     DMLabelStyle labelStyle{ st.label.font_path, st.label.font_size, st.text };
     TTF_Font* f = TTF_OpenFont(labelStyle.font_path.c_str(), labelStyle.font_size);
     if (f) {
-        SDL_Surface* surf = TTF_RenderUTF8_Blended(f, options_.empty()?"":options_[index_].c_str(), labelStyle.color);
+        int safe_idx = 0;
+        if (!options_.empty()) {
+            if (index_ < 0) safe_idx = 0;
+            else if (index_ >= (int)options_.size()) safe_idx = (int)options_.size() - 1;
+            else safe_idx = index_;
+        }
+        const char* display = options_.empty() ? "" : options_[safe_idx].c_str();
+        SDL_Surface* surf = TTF_RenderUTF8_Blended(f, display, labelStyle.color);
         if (surf) {
             SDL_Texture* tex = SDL_CreateTextureFromSurface(r, surf);
             if (tex) {
