@@ -1,3 +1,4 @@
+// moved to dev_mode
 #include "asset_info_ui.hpp"
 #include <algorithm>
 #include <sstream>
@@ -18,6 +19,11 @@
 #include "custom_controllers/default_controller.hpp"
 #include "custom_controllers/Frog_controller.hpp"
 #include "custom_controllers/Vibble_controller.hpp"
+// Sectionized Asset Info UI
+#include "ui/asset_sections/CollapsibleSection.hpp"
+#include "ui/asset_sections/Section_BasicInfo.hpp"
+#include "ui/asset_sections/Section_Areas.hpp"
+#include "ui/asset_sections/Section_Dummy.hpp"
 namespace {
 	std::string trim(const std::string& s) {
 		size_t b = s.find_first_not_of(" \t\n\r");
@@ -36,16 +42,9 @@ void AssetInfoUI::set_info(const std::shared_ptr<AssetInfo>& info) {
 }
 
 void AssetInfoUI::clear_info() {
-	info_.reset();
-	s_z_threshold_.reset();
-	s_min_same_type_.reset();
-	s_min_all_.reset();
-	s_scale_pct_.reset();
-	c_passable_.reset();
-	c_flipable_.reset();
-	t_type_.reset();
-	t_tags_.reset();
-	b_config_anim_.reset();
+    info_.reset();
+    sections_.clear();
+    b_config_area_.reset();
 }
 
 void AssetInfoUI::open()  { visible_ = true; }

@@ -125,12 +125,8 @@ void AssetInfo::load_base_properties(const nlohmann::json &data) {
 	flipable = data.value("can_invert", false);
 }
 
-void AssetInfo::load_lighting_info(const nlohmann::json &data) {
-	LightingLoader::load(*this, data);
-}
-
 bool AssetInfo::has_tag(const std::string &tag) const {
-	return std::find(tags.begin(), tags.end(), tag) != tags.end();
+    return std::find(tags.begin(), tags.end(), tag) != tags.end();
 }
 
 void AssetInfo::generate_lights(SDL_Renderer *renderer) {

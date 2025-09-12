@@ -25,11 +25,7 @@ Asset::Asset(std::shared_ptr<AssetInfo> info_,
 , pos(start_pos)
 , z_index(0)
 , z_offset(0)
-, player_speed(10)
-, is_lit(info->has_light_source)
 , alpha_percentage(1.0)
-, has_base_shadow(false)
-, spawn_area_local(spawn_area)
 , depth(depth_)
 , spawn_id(spawn_id_)
 , spawn_method(spawn_method_)
@@ -80,24 +76,15 @@ Asset::Asset(const Asset& o)
 , info(o.info)
 , current_animation(o.current_animation)
 , pos(o.pos)
-, screen_X(o.screen_X)
-, screen_Y(o.screen_Y)
 , z_index(o.z_index)
 , z_offset(o.z_offset)
-, player_speed(o.player_speed)
-, is_lit(o.is_lit)
-, has_base_shadow(o.has_base_shadow)
 , active(o.active)
 , flipped(o.flipped)
 , render_player_light(o.render_player_light)
 , alpha_percentage(o.alpha_percentage)
 , distance_to_player_sq(o.distance_to_player_sq)
-, spawn_area_local(o.spawn_area_local)
-, base_areas(o.base_areas)
-, areas(o.areas)
 , children(o.children)
 , static_lights(o.static_lights)
-, gradient_shadow(o.gradient_shadow)
 , depth(o.depth)
 , has_shading(o.has_shading)
 , dead(o.dead)
@@ -107,15 +94,12 @@ Asset::Asset(const Asset& o)
 , window(o.window)
 , highlighted(o.highlighted)
 , hidden(o.hidden)
-, merged(o.merged)
 , selected(o.selected)
-, next_animation(o.next_animation)
 , current_frame(o.current_frame)
 , frame_progress(o.frame_progress)
 , shading_group(o.shading_group)
 , shading_group_set(o.shading_group_set)
 , final_texture(o.final_texture)
-, custom_frames(o.custom_frames)
 , assets_(o.assets_)
 , spawn_id(o.spawn_id)
 , spawn_method(o.spawn_method)
@@ -130,24 +114,15 @@ Asset& Asset::operator=(const Asset& o) {
 	info                 = o.info;
 	current_animation    = o.current_animation;
     pos                  = o.pos;
-	screen_X             = o.screen_X;
-	screen_Y             = o.screen_Y;
 	z_index              = o.z_index;
 	z_offset             = o.z_offset;
-	player_speed         = o.player_speed;
-	is_lit               = o.is_lit;
-	has_base_shadow      = o.has_base_shadow;
 	active               = o.active;
 	flipped              = o.flipped;
 	render_player_light  = o.render_player_light;
 	alpha_percentage     = o.alpha_percentage;
         distance_to_player_sq = o.distance_to_player_sq;
-	spawn_area_local     = o.spawn_area_local;
-	base_areas           = o.base_areas;
-	areas                = o.areas;
 	children             = o.children;
 	static_lights        = o.static_lights;
-	gradient_shadow      = o.gradient_shadow;
 	depth                = o.depth;
 	has_shading          = o.has_shading;
 	dead                 = o.dead;
@@ -157,15 +132,12 @@ Asset& Asset::operator=(const Asset& o) {
 	window               = o.window;
 	highlighted          = o.highlighted;
 	hidden               = o.hidden;
-	merged               = o.merged;
 	selected             = o.selected;
-	next_animation       = o.next_animation;
         current_frame        = o.current_frame;
         frame_progress       = o.frame_progress;
 	shading_group        = o.shading_group;
 	shading_group_set    = o.shading_group_set;
 	final_texture        = o.final_texture;
-	custom_frames        = o.custom_frames;
 	assets_              = o.assets_;
         spawn_id             = o.spawn_id;
         spawn_method         = o.spawn_method;
@@ -218,8 +190,6 @@ void Asset::finalize_setup() {
         }
 }
 
-bool Asset::get_merge(){ return merged; }
-
 SDL_Texture* Asset::get_current_frame() const {
         if (!info) return nullptr;
         auto iti = info->animations.find(current_animation);
@@ -235,18 +205,7 @@ SDL_Texture* Asset::get_current_frame() const {
             const_cast<Asset*>(this)->frame_progress = 0.0f;
         }
 
-        auto itc = custom_frames.find(current_animation);
-        if (itc != custom_frames.end() && current_frame) {
-            int idx = anim.index_of(current_frame);
-            if (idx >= 0 && idx < static_cast<int>(itc->second.size()))
-                return itc->second[idx];
-        }
         return anim.get_frame(current_frame);
-}
-
-void Asset::set_position(SDL_Point p) {
-        pos = p;
-        set_z_index();
 }
 
 void Asset::update() {
@@ -287,7 +246,6 @@ void Asset::update() {
 }
 
 std::string Asset::get_current_animation() const { return current_animation; }
-std::string Asset::get_type() const { return info ? info->type : ""; }
 
 bool Asset::is_current_animation_locked_in_progress() const {
         if (!info || !current_frame) return false;
@@ -364,10 +322,6 @@ void Asset::set_z_offset(int z) {
 	std::cout << "Z offset set to " << z << " for asset " << info->name << "\n";
 }
 
-void Asset::recompute_z_index() {
-	set_z_index();
-}
-
 void Asset::set_flip() {
 	if (!info || !info->flipable) return;
 	std::mt19937 rng{ std::random_device{}() };
@@ -389,11 +343,6 @@ bool Asset::is_shading_group_set() const { return shading_group_set; }
 void Asset::set_shading_group(int x){
 	shading_group = x;
 	shading_group_set = true;
-}
-
-void Asset::set_screen_position(SDL_Point s) {
-    screen_X = s.x;
-    screen_Y = s.y;
 }
 
 void Asset::add_static_light_source(LightSource* light, SDL_Point world, Asset* owner) {

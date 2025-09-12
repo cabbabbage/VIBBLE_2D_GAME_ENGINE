@@ -5,7 +5,7 @@
 #include <random>
 #include "core/assetsManager.hpp"
 #include "global_light_source.hpp"
-#include "utils/parallax.hpp"
+#include "render/camera.hpp"
 
 class LightMap {
 
@@ -17,7 +17,7 @@ class LightMap {
     SDL_RendererFlip flip;
     bool apply_tint;
 	};
-    LightMap(SDL_Renderer* renderer, Assets* assets, Parallax& parallax, Global_Light_Source& main_light, int screen_width, int screen_height, SDL_Texture* fullscreen_light_tex);
+    LightMap(SDL_Renderer* renderer, Assets* assets, Global_Light_Source& main_light, int screen_width, int screen_height, SDL_Texture* fullscreen_light_tex);
     void render(bool debugging);
 
 	private:
@@ -28,7 +28,6 @@ class LightMap {
 	private:
     SDL_Renderer* renderer_;
     Assets* assets_;
-    Parallax& parallax_;
     Global_Light_Source& main_light_;
     int screen_width_;
     int screen_height_;

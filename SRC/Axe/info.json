@@ -10,30 +10,8 @@
   "animations": {
     "default": {
       "source": {
-        "kind": "animation",
-        "path": "",
-        "name": null
-      },
-      "flipped_source": false,
-      "reverse_source": false,
-      "locked": false,
-      "speed_factor": 1,
-      "number_of_frames": 2,
-      "movement": [
-        [
-          0,
-          0
-        ],
-        [
-          0,
-          0
-        ]
-      ]
-    },
-    "new_anim": {
-      "source": {
         "kind": "folder",
-        "path": "new_anim",
+        "path": "default",
         "name": null
       },
       "flipped_source": false,
@@ -46,12 +24,15 @@
           0,
           0
         ]
-      ]
+      ],
+      "loop": false,
+      "rnd_start": false,
+      "on_end": "default"
     }
   },
   "tags": [
-    "default",
-    "passable"
+    "passable",
+    "default"
   ],
   "min_same_type_distance": 0,
   "z_threshold": 5,
@@ -1941,5 +1922,15 @@
       "offset_x": 0,
       "offset_y": 0
     }
-  ]
+  ],
+  "mappings": {},
+  "layout": {
+    "__view": {
+      "geometry": "1100x780+208+208",
+      "zoom": 1.0,
+      "xview": 0.0,
+      "yview": 0.0
+    }
+  },
+  "start": ""
 }

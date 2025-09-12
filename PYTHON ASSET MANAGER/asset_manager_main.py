@@ -9,13 +9,10 @@ from asset_pages.basic_info import BasicInfoPage
 from asset_pages.size import SizePage
 from asset_pages.Animations import AnimationsPage
 from asset_pages.passa import PassabilityPage
-from asset_pages.overlay import ImageOverlayPage
 from asset_pages.child import ChildAssetsPage
 from asset_pages.spacing import SpacingThresholdPage
 from asset_pages.tags import TagsPage
-from asset_pages.blend_page import BlendModePage
 from asset_pages.edit_raw_json import EditRawJsonPage
-from asset_pages.shading import ShadingPage
 from asset_pages.lighting import LightingPage
 
 ASSET_DIR = "SRC"

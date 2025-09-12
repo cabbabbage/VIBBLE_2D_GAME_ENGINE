@@ -140,12 +140,10 @@ std::vector<Asset*> AssetLoader::collectDistantAssets(int fade_start_distance, i
 	for (Room* room : rooms_) {
 		for (auto& asset_up : room->assets) {
 			Asset* asset = asset_up.get();
-			if (!asset->info || asset->info->type != "boundary") {
-					asset->alpha_percentage = 1.0;
-					asset->has_base_shadow  = false;
-					asset->gradient_shadow  = true;
-					continue;
-			}
+            if (!asset->info || asset->info->type != "boundary") {
+                    asset->alpha_percentage = 1.0;
+                    continue;
+            }
 			bool is_inside = false;
 			for (const Area& zone : allZones) {
 					if (zone.contains_point({asset->pos.x, asset->pos.y})) {

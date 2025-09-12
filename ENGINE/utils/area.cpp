@@ -10,7 +10,6 @@
 #include <filesystem>
 #include <sstream>
 #include <optional>
-#include "parallax.hpp"
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
 #endif
@@ -335,11 +334,4 @@ void Area::scale(float factor) {
 	update_geometry_data();
 }
 
-void Area::apply_parallax(const Parallax& parallax) {
-        for (auto& p : points) {
-                SDL_Point scr = parallax.apply(p.x, p.y);
-                p.x  = scr.x;
-                p.y = scr.y;
-        }
-	update_geometry_data();
-}
+// Parallax functionality moved into camera mapping; Area no longer applies parallax directly.

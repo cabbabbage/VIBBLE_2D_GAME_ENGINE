@@ -10,8 +10,8 @@
 #include "render/scene_renderer.hpp"
 #include "utils/area.hpp"
 #include <vector>
-#include "ui/asset_library_ui.hpp"
-#include "ui/asset_info_ui.hpp"
+#include "dev_mode/asset_library_ui.hpp"
+#include "dev_mode/asset_info_ui.hpp"
 
 #include <algorithm>
 #include <iostream>
@@ -31,20 +31,21 @@ Assets::Assets(std::vector<Asset>&& loaded,
                int map_radius,
                SDL_Renderer* renderer,
                const std::string& map_path)
-    : window(
+    : camera(
           screen_width_,
           screen_height_,
           Area(
               "starting_camera",
               std::vector<SDL_Point>{
-                  SDL_Point{-map_radius, -map_radius},
-                  SDL_Point{ map_radius, -map_radius},
-                  SDL_Point{ map_radius,  map_radius},
-                  SDL_Point{-map_radius,  map_radius}
+                  // Reduce starting view extents to one third
+                  SDL_Point{-map_radius/3, -map_radius/3},
+                  SDL_Point{ map_radius/3, -map_radius/3},
+                  SDL_Point{ map_radius/3,  map_radius/3},
+                  SDL_Point{-map_radius/3,  map_radius/3}
               }
           )
       ),
-      activeManager(screen_width_, screen_height_, window),
+      activeManager(screen_width_, screen_height_, camera),
       screen_width(screen_width_),
       screen_height(screen_height_),
       library_(library)
@@ -60,7 +61,7 @@ Assets::Assets(std::vector<Asset>&& loaded,
 
     finder_ = new CurrentRoomFinder(rooms_, player);
     if (finder_) {
-        window.set_up_rooms(finder_);
+        camera.set_up_rooms(finder_);
     }
 
     scene = new SceneRenderer(renderer, this, screen_width_, screen_height_, map_path);
@@ -105,7 +106,7 @@ void Assets::update(const Input& input,
     activeManager.updateAssetVectors(player, screen_center_x, screen_center_y);
 
     current_room_ = finder_ ? finder_->getCurrentRoom() : nullptr;
-    window.update_zoom(current_room_, finder_, player);
+    camera.update_zoom(current_room_, finder_, player);
 
     dx = dy = 0;
 
@@ -238,7 +239,7 @@ void Assets::addAsset(const std::string& name, SDL_Point g) {
     std::cout << "[Assets::addAsset] all.size() now = " << all.size() << "\n";
 
     try {
-        set_camera_recursive(newAsset, &window);
+        set_camera_recursive(newAsset, &camera);
         set_assets_owner_recursive(newAsset, this);
         std::cout << "[Assets::addAsset] View set successfully\n";
         newAsset->finalize_setup();
@@ -298,7 +299,7 @@ Asset* Assets::spawn_asset(const std::string& name, SDL_Point world_pos) {
     std::cout << "[Assets::spawn_asset] all.size() now = " << all.size() << "\n";
 
     try {
-        set_camera_recursive(newAsset, &window);
+        set_camera_recursive(newAsset, &camera);
         set_assets_owner_recursive(newAsset, this);
         std::cout << "[Assets::spawn_asset] View set successfully\n";
         newAsset->finalize_setup();

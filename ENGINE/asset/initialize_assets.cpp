@@ -38,7 +38,7 @@ void InitializeAssets::initialize(Assets& assets,
 		}
 		auto newAsset = std::make_unique<Asset>(std::move(a));
 		Asset* raw = newAsset.get();
-		set_camera_recursive(raw, &assets.window);
+		set_camera_recursive(raw, &assets.camera);
 		set_assets_owner_recursive(raw, &assets);
 		assets.owned_assets.push_back(std::move(newAsset));
 		assets.all.push_back(raw);
@@ -58,7 +58,7 @@ void InitializeAssets::initialize(Assets& assets,
 	}
 	std::cout << "[InitializeAssets] All static sources set.\n";
     assets.activeManager.updateAssetVectors(assets.player, screen_center_x, screen_center_y);
-    assets.window.zoom_to_scale(1.0, 200);
+    assets.camera.zoom_to_scale(1.0, 200);
 }
 
 void InitializeAssets::find_player(Assets& assets) {

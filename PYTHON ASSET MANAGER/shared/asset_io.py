@@ -28,21 +28,34 @@ def load_info(info_path):
 
     children = []
     for item in info.get("child_assets", []):
-        if isinstance(item, dict) and ("area" in item or not item.get("json_path")):
+        # Already inline definition (preferred)
+        if isinstance(item, dict) and ("assets" in item or "area" in item) and not item.get("json_path"):
             children.append(item)
             continue
-        path = item.get("json_path") if isinstance(item, dict) else item
+        # Legacy: load from referenced json_path and inline assets
+        path = None
+        if isinstance(item, dict):
+            path = item.get("json_path")
+            base_entry = {k: v for k, v in item.items() if k != "json_path"}
+        else:
+            base_entry = {}
+            path = item
         if not path:
+            if base_entry:
+                children.append(base_entry)
             continue
         full = os.path.join(base_dir, path)
         try:
             with open(full, 'r') as cf:
                 child = json.load(cf)
-            entry = {k: v for k, v in child.items() if k not in ("assets",)}
-            entry["json_path"] = path
+            assets = child.get("assets", [])
+            entry = base_entry
+            entry["assets"] = assets
+            # Drop json_path to normalize to inline format
             children.append(entry)
         except Exception:
-            continue
+            # If file missing, keep whatever fields were present (minus json_path)
+            children.append(base_entry)
 
     if children:
         info["child_assets"] = children

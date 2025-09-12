@@ -16,6 +16,8 @@ class AreaUI(ttk.Frame):
 
         self.frames_source = None
         self.area_data = None
+        self._orig_img = None
+        self._tk_preview = None
 
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(1, weight=1)
@@ -30,11 +32,12 @@ class AreaUI(ttk.Frame):
         self.area_label = ttk.Label(header, text="(none)", style='Large.TLabel')
         self.area_label.grid(row=0, column=1, sticky="w", padx=12)
 
-        self.btn_configure = ttk.Button(header, text="Configure Area", command=self._configure_area)
+        self.btn_configure = ttk.Button(header, text="Edit Area", command=self._configure_area)
         self.btn_configure.grid(row=0, column=2, sticky="e", padx=12)
 
-        self.preview_canvas = tk.Canvas(self, bg='black', bd=2, relief='sunken')
+        self.preview_canvas = tk.Canvas(self, bg='black', bd=2, relief='sunken', highlightthickness=0)
         self.preview_canvas.grid(row=1, column=0, sticky='nsew', padx=12, pady=12)
+        self.preview_canvas.bind('<Configure>', lambda e: self._draw_preview())
 
         self.offset_x_range = Range(self, min_bound=-1000, max_bound=1000, set_min=0, set_max=0, force_fixed=True, label="Offset X")
         self.offset_x_range.grid(row=2, column=0, sticky='we', padx=12, pady=(2, 0))
@@ -43,6 +46,11 @@ class AreaUI(ttk.Frame):
         self.offset_y_range = Range(self, min_bound=-1000, max_bound=1000, set_min=0, set_max=0, force_fixed=True, label="Offset Y")
         self.offset_y_range.grid(row=3, column=0, sticky='we', padx=12, pady=(2, 10))
         self.offset_y_range.var_max.trace_add("write", lambda *_: self._update_offset('offset_y'))
+
+        # Zoom (% of fit)
+        self.zoom_range = Range(self, min_bound=5, max_bound=200, set_min=int(self.scale*100), set_max=int(self.scale*100), force_fixed=True, label="Zoom (%)")
+        self.zoom_range.grid(row=4, column=0, sticky='we', padx=12, pady=(0, 12))
+        self.zoom_range.var_max.trace_add("write", lambda *_: self._draw_preview())
 
         self._load_area_json()
         self._draw_preview()
@@ -75,7 +83,10 @@ class AreaUI(ttk.Frame):
         if not self.frames_source:
             messagebox.showerror("Error", "Set frames_source before configuring.")
             return
-        BoundaryConfigurator(self, base_folder=self.frames_source, callback=self._boundary_callback)
+        try:
+            BoundaryConfigurator(self, base_folder=self.frames_source, callback=self._boundary_callback, initial_area=self.area_data)
+        except TypeError:
+            BoundaryConfigurator(self, base_folder=self.frames_source, callback=self._boundary_callback)
 
     def _boundary_callback(self, geo):
         if isinstance(geo, list):

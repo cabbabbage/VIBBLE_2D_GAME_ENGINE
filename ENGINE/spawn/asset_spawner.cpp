@@ -7,6 +7,7 @@
 #include "methods/distributed_spawner.hpp"
 #include "methods/perimeter_spawner.hpp"
 #include "methods/distributed_batch_spawner.hpp"
+#include "methods/children_spawner.hpp"
 #include "check.hpp"
 #include <algorithm>
 #include <fstream>
@@ -14,6 +15,7 @@
 #include <filesystem>
 #include <sstream>
 #include <nlohmann/json.hpp>
+#include "utils/map_grid.hpp"
 namespace fs = std::filesystem;
 
 AssetSpawner::AssetSpawner(AssetLibrary* asset_library,
@@ -56,7 +58,7 @@ void AssetSpawner::spawn_children(const Area& spawn_area, AssetSpawnPlanner* pla
 		return;
 	}
 	logger_ = SpawnLogger("", "");
-	run_spawning(planner, spawn_area);
+	run_child_spawning(planner, spawn_area);
 }
 
 std::vector<std::unique_ptr<Asset>> AssetSpawner::extract_all_assets() {
@@ -67,9 +69,15 @@ void AssetSpawner::run_spawning(AssetSpawnPlanner* planner, const Area& area) {
 	asset_info_library_ = asset_library_->all();
 	spawn_queue_ = planner->get_spawn_queue();
 	auto batch_assets = planner->get_batch_spawn_assets();
-	int spacing = planner->get_batch_grid_spacing();
-	int jitter  = planner->get_batch_jitter();
-	SpawnContext ctx(rng_, checker_, logger_, exclusion_zones, asset_info_library_, all_, asset_library_);
+    int spacing = planner->get_batch_grid_spacing();
+    int jitter  = planner->get_batch_jitter();
+    // Create a map-wide grid covering this spawn area (shared across all methods)
+    auto [minx, miny, maxx, maxy] = area.get_bounds();
+    int w = std::max(0, maxx - minx);
+    int h = std::max(0, maxy - miny);
+    if (spacing <= 0) spacing = 100;
+    MapGrid grid(w, h, spacing, SDL_Point{minx, miny});
+    SpawnContext ctx(rng_, checker_, logger_, exclusion_zones, asset_info_library_, all_, asset_library_, &grid);
 	ExactSpawner exact;
 	CenterSpawner center;
 	RandomSpawner random;
@@ -94,5 +102,18 @@ void AssetSpawner::run_spawning(AssetSpawnPlanner* planner, const Area& area) {
 	}
 	if (!batch_assets.empty()) {
 		batch.spawn(batch_assets, &area, spacing, jitter, ctx);
+	}
+}
+
+void AssetSpawner::run_child_spawning(AssetSpawnPlanner* planner, const Area& area) {
+	asset_info_library_ = asset_library_->all();
+	spawn_queue_ = planner->get_spawn_queue();
+	// No grid for children; they can go anywhere inside the child area
+	SpawnContext ctx(rng_, checker_, logger_, exclusion_zones, asset_info_library_, all_, asset_library_, nullptr);
+	ChildrenSpawner childMethod;
+	for (auto& queue_item : spawn_queue_) {
+		logger_.start_timer();
+		if (!queue_item.info) continue;
+		childMethod.spawn(queue_item, &area, ctx);
 	}
 }

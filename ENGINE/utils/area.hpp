@@ -5,7 +5,6 @@
 #include <tuple>
 #include <optional>
 #include <SDL.h>
-#include "parallax.hpp"
 
 class Area {
 
@@ -14,7 +13,6 @@ class Area {
 
         public:
     SDL_Point pos{0, 0};
-    void apply_parallax(const Parallax& parallax);
 
 	public:
     explicit Area(const std::string& name);

@@ -27,17 +27,25 @@ void ExactSpawner::spawn(const SpawnInfo& item, const Area* area, SpawnContext& 
 	}
 	double rx = orig_w != 0 ? static_cast<double>(curr_w) / orig_w : 1.0;
 	double ry = orig_h != 0 ? static_cast<double>(curr_h) / orig_h : 1.0;
-	SDL_Point center = ctx.get_area_center(*area);
-	SDL_Point final_pos{
-		center.x + static_cast<int>(std::lround(dx * rx)),
-		center.y + static_cast<int>(std::lround(dy * ry))
-	};
+    SDL_Point center = ctx.get_area_center(*area);
+    SDL_Point final_pos{
+        center.x + static_cast<int>(std::lround(dx * rx)),
+        center.y + static_cast<int>(std::lround(dy * ry))
+    };
+    MapGrid::Point* snapped = nullptr;
+    if (auto* g = ctx.grid()) {
+        snapped = g->get_nearest_point(final_pos);
+        if (snapped) final_pos = snapped->pos;
+    }
 	if (ctx.checker().check(item.info, final_pos, ctx.exclusion_zones(), ctx.all_assets(),
 	                        item.check_overlap, item.check_min_spacing, false, 5)) {
 		ctx.logger().output_and_log(item.name, item.quantity, 0, 0, 0, "exact");
 		return;
 	}
-	ctx.spawnAsset(item.name, item.info, *area, final_pos, 0, nullptr, item.spawn_id, item.position);
-	ctx.logger().progress(item.info, 1, item.quantity);
+    auto* result = ctx.spawnAsset(item.name, item.info, *area, final_pos, 0, nullptr, item.spawn_id, item.position);
+    if (result && snapped && ctx.grid()) {
+        ctx.grid()->set_occupied(snapped, true);
+    }
+    ctx.logger().progress(item.info, 1, item.quantity);
 	ctx.logger().output_and_log(item.name, item.quantity, 1, 1, 1, "exact");
 }

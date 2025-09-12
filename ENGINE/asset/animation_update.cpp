@@ -82,6 +82,7 @@ void AnimationUpdate::transition_mode(Mode m) {
     if (m != Mode::Orbit)      orbit_params_set_ = false;
     if (m != Mode::Serpentine) serp_params_set_  = false;
     if (m != Mode::Patrol)     patrol_initialized_ = false;
+    if (m != Mode::ToPoint)    to_point_on_reach_ = nullptr;
 }
 
 int AnimationUpdate::min_move_len2() const {
@@ -165,7 +166,7 @@ SDL_Point AnimationUpdate::choose_balanced_target(SDL_Point desired, const Asset
             for (Asset* n : neighbors) {
                 if (!n || n == self_ || !n->info) continue;
                 if (final_target && n == final_target) continue;
-                if (!n->info->passable) continue;
+                if (n->info->passable) continue;
 
                 const double rvx = static_cast<double>(n->pos.x - sx);
                 const double rvy = static_cast<double>(n->pos.y - sy);
@@ -252,6 +253,12 @@ void AnimationUpdate::set_serpentine(Asset* final_target, int min_stride, int ma
     serp_sway_        = sway;
     serp_keep_ratio_  = keep_side_ratio;
     transition_mode(Mode::Serpentine);
+}
+
+void AnimationUpdate::set_to_point(SDL_Point final_point, std::function<void(AnimationUpdate&)> on_reached) {
+    to_point_goal_    = final_point;
+    to_point_on_reach_ = std::move(on_reached);
+    transition_mode(Mode::ToPoint);
 }
 
 void AnimationUpdate::set_mode_none() {
@@ -525,6 +532,26 @@ void AnimationUpdate::ensure_serpentine_target(int min_stride,
     serp_params_set_ = true;
 }
 
+void AnimationUpdate::ensure_to_point_target() {
+    if (!self_) return;
+    // Arrival tolerance = one minimal move step length
+    const double step = std::sqrt(static_cast<double>(min_move_len2()));
+    const double d = Range::get_distance(self_->pos, to_point_goal_);
+    if (d <= step) {
+        // Arrived – trigger follow-up mode if provided, else disable mode
+        auto cb = to_point_on_reach_;
+        to_point_on_reach_ = nullptr;
+        if (cb) {
+            cb(*this);
+        } else {
+            set_mode_none();
+        }
+        return;
+    }
+    // Keep selecting the next balanced local target towards the goal
+    set_target(to_point_goal_, nullptr);
+}
+
 bool AnimationUpdate::advance(AnimationFrame*& frame) {
     try {
         if (!self_ || !self_->info || !frame) return true;
@@ -714,6 +741,7 @@ void AnimationUpdate::update() {
         // Normal mode-driven update
         if (mode_ != Mode::None) {
             if (!self_->is_current_animation_locked_in_progress()) {
+                Mode mode_before = mode_;
                 if (!have_target_ || is_target_reached()) {
                     switch (mode_) {
                         case Mode::Idle:       ensure_idle_target(idle_min_dist_, idle_max_dist_); break;
@@ -722,7 +750,13 @@ void AnimationUpdate::update() {
                         case Mode::Orbit:      ensure_orbit_target(orbit_min_radius_, orbit_max_radius_, orbit_center_, orbit_keep_ratio_); break;
                         case Mode::Patrol:     ensure_patrol_target(patrol_points_, patrol_loop_, patrol_hold_frames_); break;
                         case Mode::Serpentine: ensure_serpentine_target(serp_min_stride_, serp_max_stride_, serp_sway_, serp_target_, serp_keep_ratio_); break;
+                        case Mode::ToPoint:    ensure_to_point_target(); break;
                         default: break;
+                    }
+                    // If ensure_* caused a mode change (e.g., ToPoint arrival),
+                    // skip selecting/advancing this frame to let new mode settle.
+                    if (mode_ != mode_before) {
+                        return;
                     }
                 }
 
