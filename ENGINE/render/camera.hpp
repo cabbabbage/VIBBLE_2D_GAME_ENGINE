@@ -12,13 +12,6 @@ class CurrentRoomFinder;
 class camera {
 
 	public:
-    struct Bounds {
-        int left;
-        int right;
-        int top;
-        int bottom;
-    };
-
     // Construct the camera with a starting zoom Area (map-space).
     // The starting area is adjusted to match the screen aspect ratio (cover).
     camera(int screen_width, int screen_height, const Area& starting_zoom);
@@ -36,12 +29,12 @@ class camera {
     const Area& get_base_zoom() const { return base_zoom_; }
     const Area& get_current_view() const { return current_view_; }
 
-    // Legacy-style helpers retained (derived from Areas)
-    Bounds   get_base_bounds() const;
-    Bounds   get_current_bounds() const;
-    SDL_Rect to_world_rect(int cx, int cy) const;
-    Area     get_camera_area(int /*cx*/, int /*cy*/) const; // returns current_view_
-    bool     is_point_in_bounds(int x, int y, int cx, int cy) const;
+    // Coordinate mapping
+    SDL_Point map_to_screen(SDL_Point world, float parallax_x = 0.0f, float parallax_y = 0.0f) const;
+    SDL_Point screen_to_map(SDL_Point screen, float parallax_x = 0.0f, float parallax_y = 0.0f) const;
+
+    // Area-first helpers
+    Area     get_camera_area() const { return current_view_; }
 
     // Screen center is the map-space focal point (e.g., player position).
     void      set_screen_center(SDL_Point p) { screen_center_ = p; }
@@ -70,9 +63,6 @@ class camera {
     Area       base_zoom_{"base_zoom"};   // Exactly screen_w x screen_h at zoom = 1
     Area       current_view_{"current_view"}; // Current map-space view
     SDL_Point  screen_center_{0, 0};
-
-    // Legacy-derived helpers (for compatibility)
-    Bounds     base_bounds_{};
 
     // Zoom state
     float      scale_        = 1.0f; // current_view width / base_zoom width

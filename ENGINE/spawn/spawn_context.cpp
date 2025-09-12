@@ -18,14 +18,16 @@ SpawnContext::SpawnContext(std::mt19937& rng,
                            std::vector<Area>& exclusion_zones,
                            std::unordered_map<std::string, std::shared_ptr<AssetInfo>>& asset_info_library,
                            std::vector<std::unique_ptr<Asset>>& all,
-                           AssetLibrary* asset_library)
+                           AssetLibrary* asset_library,
+                           MapGrid* grid)
 : rng_(rng),
 checker_(checker),
 logger_(logger),
 exclusion_zones_(exclusion_zones),
 asset_info_library_(asset_info_library),
 all_(all),
-asset_library_(asset_library)
+asset_library_(asset_library),
+grid_(grid)
 {}
 
 SpawnContext::Point SpawnContext::get_area_center(const Area& area) const {
@@ -66,49 +68,60 @@ Asset* SpawnContext::spawnAsset(const std::string& name,
 		std::random_device rd;
 		std::mt19937 g(rd());
 		std::shuffle(shuffled_children.begin(), shuffled_children.end(), g);
-		for (auto* childInfo : shuffled_children) {
-			Area* base_area = raw->info->find_area(childInfo->area_name);
-			if (!base_area) {
-					std::cout << "[Spawn]  Skipping child (area not found)\n";
-					continue;
-			}
-			const auto& childJsonPath = childInfo->json_path;
-			std::cout << "[Spawn]  Loading child JSON: " << childJsonPath << "\n";
-			if (!fs::exists(childJsonPath)) {
-					std::cerr << "[Spawn]  Child JSON not found: " << childJsonPath << "\n";
-					continue;
-			}
-			nlohmann::json j;
-			try {
-					std::ifstream in(childJsonPath);
-					in >> j;
-			} catch (const std::exception& e) {
-					std::cerr << "[Spawn]  Failed to parse child JSON: "
-					<< childJsonPath << " | " << e.what() << "\n";
-					continue;
-			}
-                        Area childArea = *base_area;
-                        childArea.align(SDL_Point{raw->pos.x, raw->pos.y});
-			if (raw->flipped) {
-					childArea.flip_horizontal(raw->pos.x);
-			}
-			AssetSpawnPlanner childPlanner(std::vector<nlohmann::json>{ j },
+        for (auto* childInfo : shuffled_children) {
+            Area* base_area = raw->info->find_area(childInfo->area_name);
+            if (!base_area) {
+                std::cout << "[Spawn]  Skipping child (area not found)\n";
+                continue;
+            }
+            nlohmann::json j;
+            bool have_inline = (childInfo->inline_assets.is_array() && !childInfo->inline_assets.empty());
+            if (have_inline) {
+                j["assets"] = childInfo->inline_assets;
+            } else {
+                const auto& childJsonPath = childInfo->json_path;
+                if (childJsonPath.empty()) {
+                    std::cout << "[Spawn]  No inline assets or json_path for child; skipping.\n";
+                    continue;
+                }
+                std::cout << "[Spawn]  Loading child JSON: " << childJsonPath << "\n";
+                if (!fs::exists(childJsonPath)) {
+                    std::cerr << "[Spawn]  Child JSON not found: " << childJsonPath << "\n";
+                    continue;
+                }
+                try {
+                    std::ifstream in(childJsonPath);
+                    in >> j;
+                } catch (const std::exception& e) {
+                    std::cerr << "[Spawn]  Failed to parse child JSON: "
+                    << childJsonPath << " | " << e.what() << "\n";
+                    continue;
+                }
+            }
+            Area childArea = *base_area;
+            childArea.align(SDL_Point{raw->pos.x, raw->pos.y});
+            if (raw->flipped) {
+                childArea.flip_horizontal(raw->pos.x);
+            }
+            AssetSpawnPlanner childPlanner(std::vector<nlohmann::json>{ j },
                                   childArea,
                                   *asset_library_,
-                                  std::vector<std::string>{ childJsonPath });
-			AssetSpawner childSpawner(asset_library_, exclusion_zones_);
-			childSpawner.spawn_children(childArea, &childPlanner);
-			auto kids = childSpawner.extract_all_assets();
-			std::cout << "[Spawn]  Spawned " << kids.size() << " children for \"" << raw->info->name << "\"\n";
-			for (auto& uptr : kids) {
-					if (!uptr || !uptr->info) continue;
-					uptr->set_z_offset(childInfo->z_offset);
-					uptr->parent = raw;
-					uptr->set_hidden(true);
-					std::cout << "[Spawn]    Adopting child \""
-					<< uptr->info->name << "\"\n";
-					all_.push_back(std::move(uptr));
-			}
+                                  std::vector<std::string>{});
+            AssetSpawner childSpawner(asset_library_, exclusion_zones_);
+            childSpawner.spawn_children(childArea, &childPlanner);
+            auto kids = childSpawner.extract_all_assets();
+            std::cout << "[Spawn]  Spawned " << kids.size() << " children for \"" << raw->info->name << "\"\n";
+            for (auto& uptr : kids) {
+                    if (!uptr || !uptr->info) continue;
+                    uptr->set_z_offset(childInfo->z_offset);
+                    uptr->parent = raw;
+                    uptr->set_hidden(false); // ensure children are visible/spawned
+                    // Link into parent's children list
+                    raw->children.push_back(uptr.get());
+                    std::cout << "[Spawn]    Adopting child \""
+                    << uptr->info->name << "\"\n";
+                    all_.push_back(std::move(uptr));
+            }
 		}
 	}
 	return raw;

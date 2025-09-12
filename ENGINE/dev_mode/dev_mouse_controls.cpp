@@ -3,7 +3,7 @@
 #include "asset/Asset.hpp"
 #include "core/AssetsManager.hpp"
 #include "utils/input.hpp"
-#include "utils/parallax.hpp"
+#include "render/camera.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -21,15 +21,12 @@ DevMouseControls::DevMouseControls(Input* m,
       player(player_),
       screen_w(screen_w_),
       screen_h(screen_h_),
-      parallax_(screen_w_, screen_h_),
       dragging_(false),
       drag_last_x_(0),
       drag_last_y_(0) {}
 
 void DevMouseControls::handle_mouse_input(const Input& input) {
-    if (player) {
-        parallax_.setReference(player->pos.x, player->pos.y);
-    }
+    // Camera centers on player via update_zoom; mapping uses camera directly
 
     if (input.isScancodeDown(SDL_SCANCODE_ESCAPE)) {
         selected_assets.clear();
@@ -111,7 +108,7 @@ void DevMouseControls::handle_hover() {
     const int mx = mouse->getX();
     const int my = mouse->getY();
 
-    parallax_.setReference(player->pos.x, player->pos.y);
+    // Camera centers on player via update_zoom
 
     Asset* nearest = nullptr;
     float nearest_d2 = std::numeric_limits<float>::max();
@@ -121,7 +118,7 @@ void DevMouseControls::handle_hover() {
         const std::string& t = a->info->type;
         if (t == "Boundary" || t == "boundary" || t == "Texture") continue;
 
-        SDL_Point scr = parallax_.apply(a->pos.x, a->pos.y);
+        SDL_Point scr = assets_->getView().map_to_screen(SDL_Point{a->pos.x, a->pos.y});
         float dx = float(mx - scr.x);
         float dy = float(my - scr.y);
         float d2 = dx * dx + dy * dy;
@@ -229,8 +226,7 @@ void DevMouseControls::update_highlighted_assets() {
 }
 
 SDL_Point DevMouseControls::compute_mouse_world(int mx_screen, int my_screen) const {
-    // Inverse of parallax projection based on current player reference
-    return parallax_.inverse(mx_screen, my_screen);
+    return assets_->getView().screen_to_map(SDL_Point{mx_screen, my_screen});
 }
 
 void DevMouseControls::purge_asset(Asset* a) {

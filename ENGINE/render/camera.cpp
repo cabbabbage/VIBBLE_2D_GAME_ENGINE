@@ -7,11 +7,6 @@
 #include <algorithm>
 #include <vector>
 
-static inline camera::Bounds rect_from_area(const Area& a) {
-    auto [minx, miny, maxx, maxy] = a.get_bounds();
-    return camera::Bounds{ minx, maxx, miny, maxy };
-}
-
 static inline int width_from_area(const Area& a) {
     int minx, miny, maxx, maxy;
     std::tie(minx, miny, maxx, maxy) = a.get_bounds();
@@ -50,7 +45,6 @@ camera::camera(int screen_width, int screen_height, const Area& starting_zoom)
     Area adjusted_start = convert_area_to_aspect(starting_zoom);
     SDL_Point start_center = adjusted_start.get_center();
     base_zoom_    = make_rect_area("base_zoom", start_center, screen_width_, screen_height_);
-    base_bounds_  = rect_from_area(base_zoom_);
 
     // Current view starts at the adjusted starting area.
     current_view_ = adjusted_start;
@@ -72,23 +66,6 @@ void camera::set_scale(float s) {
 }
 
 float camera::get_scale() const { return scale_; }
-
-camera::Bounds camera::get_base_bounds() const { return rect_from_area(base_zoom_); }
-
-camera::Bounds camera::get_current_bounds() const { return rect_from_area(current_view_); }
-
-SDL_Rect camera::to_world_rect(int, int) const {
-    Bounds b = get_current_bounds();
-    int x = b.left;
-    int y = b.top;
-    int w = (b.right - b.left);
-    int h = (b.bottom - b.top);
-    return SDL_Rect{ x, y, w, h };
-}
-
-Area camera::get_camera_area(int, int) const { return current_view_; }
-
-bool camera::is_point_in_bounds(int x, int y, int, int) const { return current_view_.contains_point({x, y}); }
 
 void camera::zoom_to_scale(double target_scale, int duration_steps) {
     double clamped = (target_scale > 0.0) ? target_scale : 0.0001;
@@ -214,4 +191,46 @@ void camera::recompute_current_view() {
     const int cur_h  = static_cast<int>(std::lround(static_cast<double>(base_h) * std::max(0.0001, static_cast<double>(scale_))))
                      ;
     current_view_    = make_rect_area("current_view", screen_center_, cur_w, cur_h);
+}
+
+SDL_Point camera::map_to_screen(SDL_Point world, float parallax_x, float parallax_y) const {
+    int left, top, right, bottom;
+    std::tie(left, top, right, bottom) = current_view_.get_bounds();
+    const double inv_scale = (scale_ > 0.000001f) ? (1.0 / static_cast<double>(scale_)) : 1e6;
+    const int view_w = right - left;
+    const int view_h = bottom - top;
+    int sx = static_cast<int>(std::lround((static_cast<double>(world.x - left)) * inv_scale));
+    int sy = static_cast<int>(std::lround((static_cast<double>(world.y - top)) * inv_scale));
+    if (parallax_x != 0.0f || parallax_y != 0.0f) {
+        const double half_w_world = std::max(1.0, static_cast<double>(view_w) * 0.5);
+        const double half_h_world = std::max(1.0, static_cast<double>(view_h) * 0.5);
+        const double ndx = (static_cast<double>(world.x - screen_center_.x)) / half_w_world; // [-inf..inf], usually ~[-1..1]
+        const double ndy = (static_cast<double>(world.y - screen_center_.y)) / half_h_world;
+        sx += static_cast<int>(std::lround(static_cast<double>(parallax_x) * ndx));
+        sy += static_cast<int>(std::lround(static_cast<double>(parallax_y) * ndy));
+    }
+    return SDL_Point{ sx, sy };
+}
+
+SDL_Point camera::screen_to_map(SDL_Point screen, float parallax_x, float parallax_y) const {
+    int left, top, right, bottom;
+    std::tie(left, top, right, bottom) = current_view_.get_bounds();
+    const double s = static_cast<double>(std::max(0.000001f, scale_));
+    // Initial estimate without parallax
+    double wx = static_cast<double>(left) + static_cast<double>(screen.x) * s;
+    double wy = static_cast<double>(top)  + static_cast<double>(screen.y) * s;
+    if (parallax_x != 0.0f || parallax_y != 0.0f) {
+        const int view_w = right - left;
+        const int view_h = bottom - top;
+        const double half_w_world = std::max(1.0, static_cast<double>(view_w) * 0.5);
+        const double half_h_world = std::max(1.0, static_cast<double>(view_h) * 0.5);
+        const double ndx0 = (wx - static_cast<double>(screen_center_.x)) / half_w_world;
+        const double ndy0 = (wy - static_cast<double>(screen_center_.y)) / half_h_world;
+        // Correct screen by subtracting estimated parallax offset, then remap
+        const double corr_sx = static_cast<double>(screen.x) - static_cast<double>(parallax_x) * ndx0;
+        const double corr_sy = static_cast<double>(screen.y) - static_cast<double>(parallax_y) * ndy0;
+        wx = static_cast<double>(left) + corr_sx * s;
+        wy = static_cast<double>(top)  + corr_sy * s;
+    }
+    return SDL_Point{ static_cast<int>(std::lround(wx)), static_cast<int>(std::lround(wy)) };
 }

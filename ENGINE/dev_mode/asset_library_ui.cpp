@@ -1,3 +1,4 @@
+// moved to dev_mode
 #include "asset_library_ui.hpp"
 #include <algorithm>
 #include <unordered_map>
@@ -5,12 +6,12 @@
 #include "asset/asset_library.hpp"
 #include "asset/asset_info.hpp"
 #include "asset/animation.hpp"
-#include "ui/styles.hpp"
+#include "dm_styles.hpp"
 namespace {
-	const SDL_Color kLibraryPanelBG = [](){ auto c = Styles::Slate(); auto cc = c; cc.a = 180; return cc; }();
-	const SDL_Color kTileBG        = [](){ auto c = Styles::Slate(); auto cc = c; cc.a = 140; return cc; }();
-	const SDL_Color kTileHL        = [](){ auto c = Styles::Gold();  auto cc = c; cc.a = 100; return cc; }();
-	const SDL_Color kTileBd        = [](){ auto c = Styles::Gold();  auto cc = c; cc.a = 200; return cc; }();
+        const SDL_Color kLibraryPanelBG = DMStyles::PanelBG();
+        const SDL_Color kTileBG        = dm::rgba(40,40,40,180);
+        const SDL_Color kTileHL        = dm::rgba(200,200,60,100);
+        const SDL_Color kTileBd        = DMStyles::Border();
 }
 
 AssetLibraryUI::AssetLibraryUI() {}

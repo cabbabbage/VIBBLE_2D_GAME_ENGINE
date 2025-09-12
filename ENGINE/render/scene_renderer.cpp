@@ -2,7 +2,7 @@
 #include "core/AssetsManager.hpp"
 #include "asset/Asset.hpp"
 #include "light_map.hpp"
-#include "utils/parallax.hpp"
+#include "render/camera.hpp"
 #include <algorithm>
 #include <cmath>
 #include <iostream>
@@ -25,11 +25,10 @@ SceneRenderer::SceneRenderer(SDL_Renderer* renderer,
   assets_(assets),
   screen_width_(screen_width),
   screen_height_(screen_height),
-  parallax_(screen_width, screen_height),
   main_light_source_(renderer, SDL_Point{ screen_width / 2, screen_height / 2 },
                      screen_width, SDL_Color{255, 255, 255, 255}, map_path),
   fullscreen_light_tex_(nullptr),
-  render_asset_(renderer, parallax_, main_light_source_, assets->player)
+  render_asset_(renderer, assets->getView(), main_light_source_, assets->player)
 {
 	fullscreen_light_tex_ = SDL_CreateTexture(renderer_, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET, screen_width_, screen_height_);
 	if (fullscreen_light_tex_) {
@@ -47,7 +46,7 @@ SceneRenderer::SceneRenderer(SDL_Renderer* renderer,
 
 	// No accumulation texture; render directly to default target
 
-	z_light_pass_ = std::make_unique<LightMap>(renderer_, assets_, parallax_, main_light_source_, screen_width_, screen_height_, fullscreen_light_tex_);
+	z_light_pass_ = std::make_unique<LightMap>(renderer_, assets_, main_light_source_, screen_width_, screen_height_, fullscreen_light_tex_);
 	main_light_source_.update();
 	z_light_pass_->render(debugging);
 }
@@ -67,19 +66,13 @@ bool SceneRenderer::shouldRegen(Asset* a) {
 
 SDL_Rect SceneRenderer::get_scaled_position_rect(Asset* a, int fw, int fh,
                                                  float inv_scale, int min_w, int min_h) {
-	static float smooth_inv_scale = 1.0f;
-	constexpr float lerp_speed = 0.08f;
-	smooth_inv_scale += (inv_scale - smooth_inv_scale) * lerp_speed;
-
-	int sw = static_cast<int>(fw * smooth_inv_scale);
-	int sh = static_cast<int>(fh * smooth_inv_scale);
+	int sw = static_cast<int>(fw * inv_scale);
+	int sh = static_cast<int>(fh * inv_scale);
 	if (sw < min_w && sh < min_h) {
 		return {0, 0, 0, 0};
 	}
 
-	SDL_Point cp = parallax_.apply(a->pos.x, a->pos.y);
-	cp.x = screen_width_ / 2 + static_cast<int>((cp.x - screen_width_ / 2) * smooth_inv_scale);
-	cp.y = screen_height_ / 2 + static_cast<int>((cp.y - screen_height_ / 2) * smooth_inv_scale);
+	SDL_Point cp = assets_->getView().map_to_screen(SDL_Point{a->pos.x, a->pos.y});
 	return SDL_Rect{ cp.x - sw / 2, cp.y - sh, sw, sh };
 }
 
@@ -89,9 +82,7 @@ void SceneRenderer::render() {
 
 	update_shading_groups();
 
-	int px = assets_->player ? assets_->player->pos.x : 0;
-	int py = assets_->player ? assets_->player->pos.y : 0;
-	parallax_.setReference(px, py);
+	// Camera already centers on player via update_zoom
 
 	main_light_source_.update();
 

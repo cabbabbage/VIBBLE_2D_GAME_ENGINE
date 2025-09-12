@@ -9,9 +9,10 @@
 #include <vector>
 
 struct ChildInfo {
-	std::string json_path;
-	std::string area_name;
-	int z_offset;
+    std::string json_path;
+    std::string area_name;
+    int z_offset;
+    nlohmann::json inline_assets; // optional: array of child asset entries
 };
 
 struct MappingOption {
@@ -79,7 +80,6 @@ class AssetInfo {
 
 	private:
     void load_base_properties(const nlohmann::json &data);
-    void load_lighting_info(const nlohmann::json &data);
     void generate_lights(SDL_Renderer *renderer);
     void load_areas(const nlohmann::json &data, float scale, int offset_x, int offset_y);
     void load_children(const nlohmann::json &data);

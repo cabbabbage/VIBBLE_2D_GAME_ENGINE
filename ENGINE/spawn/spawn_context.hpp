@@ -10,6 +10,7 @@
 #include "utils/area.hpp"
 #include "asset/asset_info.hpp"
 #include "spawn/check.hpp"
+#include "utils/map_grid.hpp"
 
 class Asset;
 class Area;
@@ -23,7 +24,14 @@ class SpawnContext {
 
 	public:
     using Point = SDL_Point;
-    SpawnContext(std::mt19937& rng, Check& checker, SpawnLogger& logger, std::vector<Area>& exclusion_zones, std::unordered_map<std::string, std::shared_ptr<AssetInfo>>& asset_info_library, std::vector<std::unique_ptr<Asset>>& all, AssetLibrary* asset_library);
+    SpawnContext(std::mt19937& rng,
+                 Check& checker,
+                 SpawnLogger& logger,
+                 std::vector<Area>& exclusion_zones,
+                 std::unordered_map<std::string, std::shared_ptr<AssetInfo>>& asset_info_library,
+                 std::vector<std::unique_ptr<Asset>>& all,
+                 AssetLibrary* asset_library,
+                 MapGrid* grid);
     Asset* spawnAsset(const std::string& name,
                       const std::shared_ptr<AssetInfo>& info,
                       const Area& area,
@@ -40,6 +48,7 @@ class SpawnContext {
     std::vector<Area>& exclusion_zones() { return exclusion_zones_; }
     std::unordered_map<std::string, std::shared_ptr<AssetInfo>>& info_library() { return asset_info_library_; }
     std::vector<std::unique_ptr<Asset>>& all_assets() { return all_; }
+    MapGrid* grid() { return grid_; }
 
 	private:
     std::mt19937& rng_;
@@ -49,4 +58,5 @@ class SpawnContext {
     std::unordered_map<std::string, std::shared_ptr<AssetInfo>>& asset_info_library_;
     std::vector<std::unique_ptr<Asset>>& all_;
     AssetLibrary* asset_library_;
+    MapGrid* grid_ = nullptr;
 };

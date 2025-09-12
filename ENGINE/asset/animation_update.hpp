@@ -5,6 +5,7 @@
 #include <vector>
 #include <optional>
 #include <SDL.h>
+#include <functional>
 
 class Asset;
 class ActiveAssetsManager;
@@ -30,6 +31,9 @@ class AnimationUpdate {
     void set_orbit_cw (Asset* center, int min_radius, int max_radius);
     void set_patrol(const std::vector<SDL_Point>& waypoints, bool loop, int hold_frames);
     void set_serpentine(Asset* final_target, int min_stride, int max_stride, int sway, int keep_side_ratio);
+    // Move towards a specific point, then switch via callback when reached
+    void set_to_point(SDL_Point final_point, std::function<void(AnimationUpdate&)> on_reached);
+    inline void set_to_point(int x, int y, std::function<void(AnimationUpdate&)> on_reached) { set_to_point(SDL_Point{ x, y }, std::move(on_reached)); }
     // Disable AI-directed motion; rely on current animation + on_end chaining
     void set_mode_none();
 
@@ -38,7 +42,7 @@ class AnimationUpdate {
     inline void set_traget(int desired_x, int desired_y, const Asset* final_target) { set_target(SDL_Point{ desired_x, desired_y }, final_target); }
 
         private:
-    enum class Mode { None, Idle, Pursue, Run, Orbit, Patrol, Serpentine };
+    enum class Mode { None, Idle, Pursue, Run, Orbit, Patrol, Serpentine, ToPoint };
     bool can_move_by(int dx, int dy) const;
     bool would_overlap_same_or_player(int dx, int dy) const;
     std::string pick_best_animation_towards(SDL_Point target) const;
@@ -48,6 +52,7 @@ class AnimationUpdate {
     void ensure_orbit_target(int min_radius, int max_radius, const Asset* center, int keep_direction_ratio);
     void ensure_patrol_target(const std::vector<SDL_Point>& waypoints, bool loop, int hold_frames);
     void ensure_serpentine_target(int min_stride, int max_stride, int sway, const Asset* final_target, int keep_side_ratio);
+    void ensure_to_point_target();
     SDL_Point choose_balanced_target(SDL_Point desired, const Asset* final_target) const;
     void transition_mode(Mode m);
     bool is_target_reached();
@@ -101,6 +106,10 @@ class AnimationUpdate {
     int serp_max_stride_ = 0;
     int serp_sway_ = 0;
     int serp_keep_ratio_ = 0;
+
+    // ToPoint state
+    SDL_Point to_point_goal_ {0, 0};
+    std::function<void(AnimationUpdate&)> to_point_on_reach_;
 
     // Animation control state
     std::optional<std::string> queued_anim_;

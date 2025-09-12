@@ -15,6 +15,7 @@ class ChildAssetsPage(ttk.Frame):
         super().__init__(parent)
         self.child_frames = []
         self.asset_path = None
+        self.parent_info = None
 
         self.FONT = ('Segoe UI', 14)
         self.FONT_BOLD = ('Segoe UI', 18, 'bold')
@@ -49,15 +50,27 @@ class ChildAssetsPage(ttk.Frame):
         frame.grid(row=idx, column=0, pady=10, sticky="ew")
         frame.columnconfigure(1, weight=1)
 
-        json_path = entry_data.get("json_path") if entry_data else None
-        z_offset = entry_data.get("z_offset", 0) if entry_data else 0
+        json_path = entry_data.get("json_path") if isinstance(entry_data, dict) else None
+        z_offset = entry_data.get("z_offset", 0) if isinstance(entry_data, dict) else 0
 
+        # Resolve area via area_name if present; otherwise accept inline area dict
+        area_name = entry_data.get("area_name") if isinstance(entry_data, dict) else None
+        area_data = None
         if isinstance(entry_data, dict):
-            area_data = {k: copy.deepcopy(v)
-                        for k, v in entry_data.items()
-                        if k not in ("json_path", "z_offset", "assets")}
-        else:
-            area_data = None
+            if area_name and isinstance(self.parent_info, dict):
+                # look up area by name in parent_info['areas']
+                for a in self.parent_info.get('areas', []):
+                    if isinstance(a, dict) and a.get('name') == area_name:
+                        # Keep only points for editing
+                        pts = a.get('points')
+                        if isinstance(pts, list):
+                            area_data = { 'points': copy.deepcopy(pts) }
+                        break
+            if area_data is None:
+                # Back-compat: if inline area present in child entry
+                area_data = {k: copy.deepcopy(v)
+                             for k, v in entry_data.items()
+                             if k not in ("json_path", "z_offset", "assets", "area_name")}
 
         ttk.Label(frame, text="Z Offset:").grid(row=0, column=0, sticky="w")
         z_var = tk.IntVar(value=z_offset)
@@ -65,7 +78,7 @@ class ChildAssetsPage(ttk.Frame):
             row=0, column=1, sticky="w", padx=6
         )
 
-        area_label = ttk.Label(frame, text="(none)" if not area_data else "Area defined")
+        area_label = ttk.Label(frame, text=(area_name or "(none)") if not area_data else (area_name or "Area defined"))
         area_label.grid(row=1, column=0, columnspan=2, sticky="w")
 
         # Buttons container (top-right)
@@ -98,7 +111,10 @@ class ChildAssetsPage(ttk.Frame):
             def save_callback(new_area):
                 entry['area_data'] = new_area
                 entry['area_edited'] = True
-                entry['area_label'].config(text="Area defined")
+                # If no name yet, propose one based on index
+                if not entry.get('area_name'):
+                    entry['area_name'] = f"child_area_{idx}"
+                entry['area_label'].config(text=entry.get('area_name') or "Area defined")
 
             editor = BoundaryConfigurator(self.winfo_toplevel(), base_folder, save_callback)
             editor.grab_set()
@@ -132,7 +148,8 @@ class ChildAssetsPage(ttk.Frame):
             "asset_editor": asset_editor,
             "area_data": area_data,
             "original_area_data": copy.deepcopy(area_data) if isinstance(area_data, dict) else None,
-            "area_edited": False
+            "area_edited": False,
+            "area_name": area_name
         }
 
         self.child_frames.append(entry)
@@ -165,25 +182,9 @@ class ChildAssetsPage(ttk.Frame):
             messagebox.showerror("Error", f"Failed to load parent info.json: {e}")
             return
 
-        new_children = []
-        for entry in self.child_frames:
-            child = {
-                "z_offset": entry["z_var"].get()
-            }
-            if entry.get("area_data"):
-                child["area"] = entry["area_data"]
-            if entry.get("json_path"):
-                child["json_path"] = entry["json_path"]
-            assets = entry.get("asset_editor").get_assets() if hasattr(entry.get("asset_editor"), 'get_assets') else []
-            if assets:
-                child["assets"] = assets
-            new_children.append(child)
-
-        data["child_assets"] = new_children
-        try:
-            save_info(self.asset_path, data)
-        except Exception as e:
-            messagebox.showerror("Error", f"Failed to update info.json: {e}")
+        # Delegate to save() which performs proper normalization
+        self.parent_info = data
+        self.save()
 
     def load(self, info_path):
         self.asset_path = info_path
@@ -193,6 +194,7 @@ class ChildAssetsPage(ttk.Frame):
 
         try:
             data = load_info(info_path)
+            self.parent_info = data
             for item in data.get("child_assets", []):
                 if isinstance(item, dict):
                     self._add_child_region(item)
@@ -211,29 +213,57 @@ class ChildAssetsPage(ttk.Frame):
     def save(self):
         if not self.asset_path:
             return
-        try:
-            parent = load_info(self.asset_path)
-        except Exception:
-            parent = {}
+        if not isinstance(self.parent_info, dict):
+            try:
+                self.parent_info = load_info(self.asset_path)
+            except Exception:
+                self.parent_info = {}
 
         out_children = []
-        for entry in self.child_frames:
+        base_dir = os.path.dirname(self.asset_path)
+
+        # Ensure areas list exists
+        if 'areas' not in self.parent_info or not isinstance(self.parent_info.get('areas'), list):
+            self.parent_info['areas'] = []
+
+        # Helper to upsert an area by name with given points
+        def upsert_area(area_name, points):
+            if not area_name or not isinstance(points, list):
+                return
+            # find existing
+            for a in self.parent_info['areas']:
+                if isinstance(a, dict) and a.get('name') == area_name:
+                    a['name'] = area_name
+                    a['points'] = points
+                    return
+            self.parent_info['areas'].append({ 'name': area_name, 'points': points })
+
+        for idx, entry in enumerate(self.child_frames):
             z_offset = entry['z_var'].get()
             assets = entry['asset_editor'].get_assets()
-            child = { 'z_offset': z_offset }
+            # Determine area name
+            area_name = entry.get('area_name') or f"child_area_{idx}"
+            entry['area_name'] = area_name
+            # Upsert area into parent areas if we have data
+            points = None
+            if isinstance(entry.get('area_data'), dict) and entry['area_data']:
+                points = entry['area_data'].get('points')
+            elif isinstance(entry.get('original_area_data'), dict) and entry['original_area_data']:
+                points = entry['original_area_data'].get('points')
+            if points:
+                upsert_area(area_name, points)
+
+            child = {
+                'z_offset': z_offset,
+                'area_name': area_name
+            }
             if assets:
                 child['assets'] = assets
-            if isinstance(entry.get('area_data'), dict) and entry['area_data']:
-                child['area'] = entry['area_data']
-            elif isinstance(entry.get('original_area_data'), dict):
-                child['area'] = entry['original_area_data']
-            if entry.get('json_path'):
-                child['json_path'] = entry['json_path']
             out_children.append(child)
 
-        parent['child_assets'] = out_children
+        self.parent_info['child_assets'] = out_children
         try:
-            save_info(self.asset_path, parent)
+            save_info(self.asset_path, self.parent_info)
             messagebox.showinfo("Saved", "Child asset regions saved.")
         except Exception as e:
             messagebox.showerror("Error", f"Failed to update parent info.json: {e}")

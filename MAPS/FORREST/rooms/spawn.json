@@ -30,7 +30,7 @@
       "max_number": 45,
       "min_number": 0,
       "name": "ground",
-      "position": "Random",
+      "position": "Entrance",
       "spawn_id": "spn-01c5db7657d6",
       "tag": true
     },
@@ -45,22 +45,34 @@
       "position": "Center",
       "spawn_id": "spn-225b40dd06f7",
       "tag": false
+    },
+    {
+      "check_min_spacing": false,
+      "check_overlap": false,
+      "exact_position": null,
+      "inherited": false,
+      "max_number": 10,
+      "min_number": 10,
+      "name": "Barrel",
+      "position": "Random",
+      "spawn_id": "spn-215d762337e0",
+      "tag": false
     }
   ],
   "batch_assets": {
-    "has_batch_assets": false,
-    "grid_spacing_min": 100,
-    "grid_spacing_max": 100,
-    "jitter_min": 0,
-    "jitter_max": 0,
     "batch_assets": [
       {
+        "color": "#CCCCCC",
         "name": "null",
-        "tag": false,
         "percent": 100,
-        "color": "#CCCCCC"
+        "tag": false
       }
-    ]
+    ],
+    "grid_spacing_max": 100,
+    "grid_spacing_min": 100,
+    "has_batch_assets": false,
+    "jitter_max": 0,
+    "jitter_min": 0
   },
   "curvyness": 1,
   "edge_smoothness": 100,

@@ -4,11 +4,10 @@
 #include <unordered_set>
 #include <algorithm>
 #include <SDL.h>
-#include "utils/parallax.hpp"
+#include "render/camera.hpp"
 
 class Asset;
 class Input;
-class Parallax;
 class Assets;
 
 class DevMouseControls {
@@ -47,7 +46,7 @@ class DevMouseControls {
     Asset* player;
     int screen_w;
     int screen_h;
-    Parallax parallax_;
+    
     Asset* hovered_asset = nullptr;
     std::vector<Asset*> selected_assets;
     std::vector<Asset*> highlighted_assets;

@@ -1,19 +1,17 @@
 #include "light_map.hpp"
-#include "utils/parallax.hpp"
+#include "render/camera.hpp"
 #include <algorithm>
 #include <random>
 #include <vector>
 #include <iostream>
 LightMap::LightMap(SDL_Renderer* renderer,
                    Assets* assets,
-                   Parallax& parallax,
                    Global_Light_Source& main_light,
                    int screen_width,
                    int screen_height,
                    SDL_Texture* fullscreen_light_tex)
 : renderer_(renderer),
 assets_(assets),
-parallax_(parallax),
 main_light_(main_light),
 screen_width_(screen_width),
 screen_height_(screen_height),
@@ -118,8 +116,6 @@ SDL_Rect LightMap::get_scaled_position_rect(SDL_Point pos, int fw, int fh,
 	if (sw < min_w && sh < min_h) {
 		return {0, 0, 0, 0};
 	}
-        SDL_Point cp = parallax_.apply(pos.x, pos.y);
-	cp.x = screen_width_ / 2 + static_cast<int>((cp.x - screen_width_ / 2) * inv_scale);
-	cp.y = screen_height_ / 2 + static_cast<int>((cp.y - screen_height_ / 2) * inv_scale);
-	return SDL_Rect{ cp.x - sw / 2, cp.y - sh / 2, sw, sh };
+        SDL_Point cp = assets_->getView().map_to_screen(pos);
+    return SDL_Rect{ cp.x - sw / 2, cp.y - sh / 2, sw, sh };
 }

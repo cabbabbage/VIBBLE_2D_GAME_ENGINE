@@ -28,6 +28,7 @@ class AssetSpawner {
 
 	private:
     void run_spawning(AssetSpawnPlanner* planner, const Area& area);
+    void run_child_spawning(AssetSpawnPlanner* planner, const Area& area);
     void spawn_all_children();
     std::vector<Area> exclusion_zones;
     AssetLibrary* asset_library_;

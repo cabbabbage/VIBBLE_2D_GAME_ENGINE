@@ -2,15 +2,15 @@
 
 #include <SDL.h>
 #include <string>
+#include "render/camera.hpp"
 
 class Asset;
 class Global_Light_Source;
-class Parallax;
 
 class RenderAsset {
 
 	public:
-    RenderAsset(SDL_Renderer* renderer, Parallax& parallax, Global_Light_Source& main_light, Asset* player);
+    RenderAsset(SDL_Renderer* renderer, camera& cam, Global_Light_Source& main_light, Asset* player);
     SDL_Texture* regenerateFinalTexture(Asset* a);
 
 	private:
@@ -22,6 +22,6 @@ class RenderAsset {
 
 	private:
     SDL_Renderer* renderer_;
-    Parallax& parallax_;
+    camera& cam_;
     Global_Light_Source& main_light_source_;
 };
