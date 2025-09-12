@@ -29,6 +29,16 @@ class Section_Areas : public CollapsibleSection {
 
     void layout() override {
       CollapsibleSection::layout();
+      // Refresh buttons if areas changed (count or names)
+      if (info_) {
+        bool needs = (buttons_.size() != info_->areas.size());
+        if (!needs) {
+          for (size_t i = 0; i < buttons_.size(); ++i) {
+            if (!buttons_[i] || buttons_[i]->text() != info_->areas[i].name) { needs = true; break; }
+          }
+        }
+        if (needs) rebuild_buttons();
+      }
       int x = rect_.x + 8;
       int y = rect_.y + DMButton::height() + 8;
       int inner_w = rect_.w - 16;

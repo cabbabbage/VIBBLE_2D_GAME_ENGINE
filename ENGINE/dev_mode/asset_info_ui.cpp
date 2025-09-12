@@ -14,13 +14,31 @@
 #include "dm_styles.hpp"
 #include "asset_sections/Section_BasicInfo.hpp"
 #include "asset_sections/Section_Areas.hpp"
+#include "asset_sections/Section_Spacing.hpp"
+#include "asset_sections/Section_ChildAssets.hpp"
+#include "widgets.hpp"
+#include <cstdlib>
+#include "core/AssetsManager.hpp"
 
 AssetInfoUI::AssetInfoUI() {
     sections_.push_back(std::make_unique<Section_BasicInfo>());
+    // Spacing section mirrors Python Spacing page
+    auto spacing = std::make_unique<Section_Spacing>();
+
+    sections_.push_back(std::move(spacing));
     auto areas = std::make_unique<Section_Areas>();
     areas_section_ = areas.get();
     areas_section_->set_open_editor_callback([this](const std::string& nm){ open_area_editor(nm); });
     sections_.push_back(std::move(areas));
+    // Child Assets section
+    {
+        auto children = std::make_unique<Section_ChildAssets>();
+        // Allow opening the boundary editor from inside the child section
+        children->set_open_area_editor_callback([this](const std::string& nm){ open_area_editor(nm); });
+        sections_.push_back(std::move(children));
+    }
+    // Configure Animations footer button
+    configure_btn_ = std::make_unique<DMButton>("Configure Animations", &DMStyles::CreateButton(), 220, DMButton::height());
 }
 
 AssetInfoUI::~AssetInfoUI() = default;
@@ -49,6 +67,12 @@ void AssetInfoUI::layout_widgets(int screen_w, int screen_h) const {
     for (auto& s : sections_) {
         s->set_rect(SDL_Rect{ panel_.x + 16, y, maxw, 0 });
         y += s->height() + 16;
+    }
+
+    // Footer button position after sections
+    if (configure_btn_) {
+        configure_btn_->set_rect(SDL_Rect{ panel_.x + 16, y, maxw, DMButton::height() });
+        y += DMButton::height() + 16;
     }
 
     int total = y - (panel_.y + 16);
@@ -84,6 +108,22 @@ void AssetInfoUI::handle_event(const SDL_Event& e) {
     for (auto& s : sections_) {
         if (s->handle_event(e)) return;
     }
+
+    // Footer action: launch Python Animation UI
+    if (configure_btn_ && configure_btn_->handle_event(e)) {
+        if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
+            if (info_) {
+                std::string path = info_->info_json_path();
+#ifdef _WIN32
+                std::string cmd = "cmd /c start \"\" py \"scripts/animation_ui.py\" \"" + path + "\"";
+#else
+                std::string cmd = "python3 scripts/animation_ui.py \"" + path + "\" &";
+#endif
+                std::system(cmd.c_str());
+            }
+        }
+        return;
+    }
 }
 
 void AssetInfoUI::render(SDL_Renderer* r, int screen_w, int screen_h) const {
@@ -98,6 +138,9 @@ void AssetInfoUI::render(SDL_Renderer* r, int screen_w, int screen_h) const {
 
     for (auto& s : sections_) s->render(r);
 
+    // Render footer button
+    if (configure_btn_) configure_btn_->render(r);
+
     last_renderer_ = r;
 }
 
@@ -106,67 +149,7 @@ void AssetInfoUI::save_now() const {
 }
 
 void AssetInfoUI::open_area_editor(const std::string& name) {
-    if (!info_ || !last_renderer_) return;
-
-    Area* base = nullptr;
-    for (auto& na : info_->areas) {
-        if (na.name == name && na.area) { base = na.area.get(); break; }
-    }
-
-    const int canvas_w = std::max(32, (int)std::lround(info_->original_canvas_width  * info_->scale_factor));
-    const int canvas_h = std::max(32, (int)std::lround(info_->original_canvas_height * info_->scale_factor));
-
-    auto pick_sprite = [&]() -> SDL_Texture* {
-        auto try_get = [&](const std::string& key) -> SDL_Texture* {
-            auto it = info_->animations.find(key);
-            if (it != info_->animations.end() && !it->second.frames.empty()) {
-                return it->second.frames.front();
-            }
-            return nullptr;
-        };
-        if (!info_->start_animation.empty()) {
-            if (auto t = try_get(info_->start_animation)) return t;
-        }
-        if (auto t = try_get("default")) return t;
-        for (auto& kv : info_->animations) {
-            if (!kv.second.frames.empty()) return kv.second.frames.front();
-        }
-        return nullptr;
-    };
-
-    try {
-        SDL_Texture* bg = SDL_CreateTexture(last_renderer_, SDL_PIXELFORMAT_RGBA8888,
-                                           SDL_TEXTUREACCESS_TARGET, canvas_w, canvas_h);
-        if (!bg) throw std::runtime_error("Failed to create editor canvas");
-        SDL_SetTextureBlendMode(bg, SDL_BLENDMODE_BLEND);
-        SDL_Texture* prev = SDL_GetRenderTarget(last_renderer_);
-        SDL_SetRenderTarget(last_renderer_, bg);
-        SDL_SetRenderDrawBlendMode(last_renderer_, SDL_BLENDMODE_BLEND);
-        SDL_SetRenderDrawColor(last_renderer_, 0, 0, 0, 0);
-        SDL_RenderClear(last_renderer_);
-        if (SDL_Texture* sprite = pick_sprite()) {
-            int sw = 0, sh = 0; (void)SDL_QueryTexture(sprite, nullptr, nullptr, &sw, &sh);
-            SDL_Rect dst{ std::max(0, (canvas_w - sw) / 2), std::max(0,  canvas_h - sh), sw, sh };
-            SDL_RenderCopy(last_renderer_, sprite, nullptr, &dst);
-        }
-        if (base) {
-            SDL_SetRenderDrawColor(last_renderer_, 0, 200, 255, 180);
-            std::vector<SDL_Point> pts; pts.reserve(base->get_points().size() + 1);
-            for (const auto& p : base->get_points()) {
-                pts.push_back(SDL_Point{ p.x, p.y });
-            }
-            if (!pts.empty()) {
-                pts.push_back(pts.front());
-                SDL_RenderDrawLines(last_renderer_, pts.data(), (int)pts.size());
-            }
-        }
-        SDL_SetRenderTarget(last_renderer_, prev);
-        Area edited(name, bg, last_renderer_);
-        info_->upsert_area_from_editor(edited);
-        SDL_DestroyTexture(bg);
-        if (areas_section_) areas_section_->rebuild_buttons();
-    } catch (...) {
-        // editor failure is non-fatal
-    }
+    if (!info_ || !assets_) return;
+    assets_->begin_area_edit_for_selected_asset(name);
 }
 

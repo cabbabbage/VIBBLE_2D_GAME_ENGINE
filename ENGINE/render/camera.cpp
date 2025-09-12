@@ -90,24 +90,37 @@ void camera::zoom_to_area(const Area& target_area, int duration_steps) {
 
 void camera::update() {
     if (!zooming_) {
-        // Still keep current_view centered if center changes externally
+        // No active animation; keep view consistent
         recompute_current_view();
         intro = false;
         return;
     }
+
+    // Advance animation
     ++steps_done_;
-    if (steps_done_ >= steps_total_) {
-        scale_ = static_cast<float>(target_scale_);
-        zooming_ = false;
-        steps_total_ = steps_done_ = 0;
-        start_scale_ = target_scale_;
-        recompute_current_view();
-        return;
-    }
-    double t = static_cast<double>(steps_done_) / static_cast<double>(steps_total_);
+    double t = static_cast<double>(steps_done_) / static_cast<double>(std::max(1, steps_total_));
+    t = std::clamp(t, 0.0, 1.0);
     double s = start_scale_ + (target_scale_ - start_scale_) * t;
     scale_ = static_cast<float>(std::max(0.0001, s));
+    if (pan_override_) {
+        const double cx = static_cast<double>(start_center_.x) + (static_cast<double>(target_center_.x) - static_cast<double>(start_center_.x)) * t;
+        const double cy = static_cast<double>(start_center_.y) + (static_cast<double>(target_center_.y) - static_cast<double>(start_center_.y)) * t;
+        screen_center_ = SDL_Point{ static_cast<int>(std::lround(cx)), static_cast<int>(std::lround(cy)) };
+    }
     recompute_current_view();
+
+    if (steps_done_ >= steps_total_) {
+        // Done
+        scale_ = static_cast<float>(target_scale_);
+        // If we were panning, snap to exact target center at the end
+        if (pan_override_) {
+            screen_center_ = target_center_;
+        }
+        zooming_ = false;
+        pan_override_ = false;
+        steps_total_ = steps_done_ = 0;
+        start_scale_ = target_scale_;
+    }
 }
 
 namespace {
@@ -138,11 +151,21 @@ void camera::set_up_rooms(CurrentRoomFinder* finder) {
 }
 
 void camera::update_zoom(Room* cur, CurrentRoomFinder* finder, Asset* player) {
-	if (!player || !finder || !starting_room_) return;
-	// Keep camera centered on player for now
-	screen_center_ = SDL_Point{ player->pos.x, player->pos.y };
-	update();
+    if (!player || !finder || !starting_room_) return;
+    // Keep camera centered on player, unless an explicit pan animation is active
+    if (!pan_override_) {
+        if (focus_override_) {
+            screen_center_ = focus_point_;
+        } else {
+            screen_center_ = SDL_Point{ player->pos.x, player->pos.y };
+        }
+    }
+    update();
 	if (!cur) return;
+	if (manual_zoom_override_) {
+		// Respect manual zoom override: do not compute or apply room-based zoom target
+		return;
+	}
 	Room* neigh = finder->getNeighboringRoom(cur);
 	if (!neigh) neigh = cur;
 	const double sa = compute_room_scale_from_area(cur);
@@ -193,6 +216,40 @@ void camera::recompute_current_view() {
     current_view_    = make_rect_area("current_view", screen_center_, cur_w, cur_h);
 }
 
+void camera::pan_and_zoom_to_point(SDL_Point world_pos, double zoom_scale_factor, int duration_steps) {
+    // Schedule a smooth pan+zoom toward the target point and target scale
+    set_focus_override(world_pos); // keep focus afterward
+    start_center_  = screen_center_;
+    target_center_ = world_pos;
+    double factor = (zoom_scale_factor > 0.0) ? zoom_scale_factor : 1.0;
+    start_scale_   = scale_;
+    target_scale_  = std::max(0.0001, static_cast<double>(scale_) * factor);
+    steps_total_   = std::max(1, duration_steps);
+    steps_done_    = 0;
+    zooming_       = true;
+    pan_override_  = true;
+    manual_zoom_override_ = true; // prevent room-logic from changing target mid-flight
+}
+
+void camera::pan_and_zoom_to_asset(const Asset* a, double zoom_scale_factor, int duration_steps) {
+    if (!a) return;
+    SDL_Point target{ a->pos.x, a->pos.y };
+    pan_and_zoom_to_point(target, zoom_scale_factor, duration_steps);
+}
+
+void camera::animate_zoom_multiply(double factor, int duration_steps) {
+    if (factor <= 0.0) factor = 1.0;
+    start_center_  = screen_center_; // no pan by default
+    target_center_ = screen_center_;
+    start_scale_   = scale_;
+    target_scale_  = std::max(0.0001, static_cast<double>(scale_) * factor);
+    steps_total_   = std::max(1, duration_steps);
+    steps_done_    = 0;
+    zooming_       = true;
+    pan_override_  = false;
+    manual_zoom_override_ = true;
+}
+
 SDL_Point camera::map_to_screen(SDL_Point world, float parallax_x, float parallax_y) const {
     int left, top, right, bottom;
     std::tie(left, top, right, bottom) = current_view_.get_bounds();
@@ -201,7 +258,7 @@ SDL_Point camera::map_to_screen(SDL_Point world, float parallax_x, float paralla
     const int view_h = bottom - top;
     int sx = static_cast<int>(std::lround((static_cast<double>(world.x - left)) * inv_scale));
     int sy = static_cast<int>(std::lround((static_cast<double>(world.y - top)) * inv_scale));
-    if (parallax_x != 0.0f || parallax_y != 0.0f) {
+    if (parallax_enabled_ && (parallax_x != 0.0f || parallax_y != 0.0f)) {
         const double half_w_world = std::max(1.0, static_cast<double>(view_w) * 0.5);
         const double half_h_world = std::max(1.0, static_cast<double>(view_h) * 0.5);
         const double ndx = (static_cast<double>(world.x - screen_center_.x)) / half_w_world; // [-inf..inf], usually ~[-1..1]
@@ -219,7 +276,7 @@ SDL_Point camera::screen_to_map(SDL_Point screen, float parallax_x, float parall
     // Initial estimate without parallax
     double wx = static_cast<double>(left) + static_cast<double>(screen.x) * s;
     double wy = static_cast<double>(top)  + static_cast<double>(screen.y) * s;
-    if (parallax_x != 0.0f || parallax_y != 0.0f) {
+    if (parallax_enabled_ && (parallax_x != 0.0f || parallax_y != 0.0f)) {
         const int view_w = right - left;
         const int view_h = bottom - top;
         const double half_w_world = std::max(1.0, static_cast<double>(view_w) * 0.5);

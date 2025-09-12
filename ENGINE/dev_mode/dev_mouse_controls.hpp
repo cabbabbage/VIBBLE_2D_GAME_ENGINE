@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include <vector>
 #include <unordered_set>
@@ -28,6 +28,10 @@ class DevMouseControls {
     const std::vector<Asset*>& get_selected_assets() const { return selected_assets; }
     const std::vector<Asset*>& get_highlighted_assets() const { return highlighted_assets; }
     Asset* get_hovered_asset() const { return hovered_asset; }
+    
+    // Zoom control configuration
+    void set_zoom_scale_factor(double f) { zoom_scale_factor_ = (f > 0.0) ? f : 1.0; }
+    double get_zoom_scale_factor() const { return zoom_scale_factor_; }
 
 	private:
     SDL_Point compute_mouse_world(int mx_screen, int my_screen) const;
@@ -50,9 +54,9 @@ class DevMouseControls {
     Asset* hovered_asset = nullptr;
     std::vector<Asset*> selected_assets;
     std::vector<Asset*> highlighted_assets;
-    bool waiting_spawn_selection_ = false;
-    int spawn_click_screen_x_ = 0;
-    int spawn_click_screen_y_ = 0;
-    int spawn_world_x_ = 0;
-    int spawn_world_y_ = 0;
+    // Asset library spawns handled by AssetLibraryUI (floating panel)
+
+    // Zoom configuration
+    double zoom_scale_factor_ = 1.1; // multiplicative factor per scroll step
 };
+

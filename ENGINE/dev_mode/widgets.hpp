@@ -5,6 +5,7 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include <functional>
 
 #include "dm_styles.hpp"
 
@@ -38,9 +39,12 @@ public:
     bool handle_event(const SDL_Event& e);
     void render(SDL_Renderer* r) const;
     bool is_editing() const { return editing_; }
+    // Compute preferred height for a given width (auto-wrap)
+    int preferred_height(int width) const;
     static int height() { return 32; }
 private:
     void draw_text(SDL_Renderer* r, const std::string& s, int x, int y, const DMLabelStyle& ls) const;
+    std::vector<std::string> wrap_lines(TTF_Font* f, const std::string& s, int max_width) const;
     SDL_Rect rect_{0,0,200,32};
     std::string label_;
     std::string text_;
@@ -111,3 +115,89 @@ private:
     bool expanded_ = false;
 };
 
+// ------------------------------------------------------------
+// Lightweight generic widget interface + adapters (formerly in ui_widget.hpp)
+// ------------------------------------------------------------
+
+// Lightweight generic widget interface for layout containers.
+// Non-owning wrappers let us use existing DM* widgets inside generic UIs.
+class Widget {
+public:
+    virtual ~Widget() = default;
+    virtual void set_rect(const SDL_Rect& r) = 0;
+    virtual const SDL_Rect& rect() const = 0;
+    virtual int height_for_width(int w) const = 0;
+    virtual bool handle_event(const SDL_Event& e) = 0;
+    virtual void render(SDL_Renderer* r) const = 0;
+};
+
+// ---- Adapters for existing dev-mode widgets ----
+
+class ButtonWidget : public Widget {
+public:
+    explicit ButtonWidget(DMButton* b, std::function<void()> on_click = {})
+        : b_(b), on_click_(std::move(on_click)) {}
+    void set_rect(const SDL_Rect& r) override { if (b_) b_->set_rect(r); }
+    const SDL_Rect& rect() const override { return b_->rect(); }
+    int height_for_width(int /*w*/) const override { return DMButton::height(); }
+    bool handle_event(const SDL_Event& e) override {
+        if (!b_) return false;
+        bool used = b_->handle_event(e);
+        if (used && on_click_ && e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
+            on_click_();
+        }
+        return used;
+    }
+    void render(SDL_Renderer* r) const override { if (b_) b_->render(r); }
+private:
+    DMButton* b_ = nullptr; // non-owning
+    std::function<void()> on_click_{};
+};
+
+class TextBoxWidget : public Widget {
+public:
+    explicit TextBoxWidget(DMTextBox* t) : t_(t) {}
+    void set_rect(const SDL_Rect& r) override { if (t_) t_->set_rect(r); }
+    const SDL_Rect& rect() const override { return t_->rect(); }
+    int height_for_width(int w) const override { return t_ ? t_->preferred_height(w) : DMTextBox::height(); }
+    bool handle_event(const SDL_Event& e) override { return t_ ? t_->handle_event(e) : false; }
+    void render(SDL_Renderer* r) const override { if (t_) t_->render(r); }
+private:
+    DMTextBox* t_ = nullptr; // non-owning
+};
+
+class CheckboxWidget : public Widget {
+public:
+    explicit CheckboxWidget(DMCheckbox* c) : c_(c) {}
+    void set_rect(const SDL_Rect& r) override { if (c_) c_->set_rect(r); }
+    const SDL_Rect& rect() const override { return c_->rect(); }
+    int height_for_width(int /*w*/) const override { return DMCheckbox::height(); }
+    bool handle_event(const SDL_Event& e) override { return c_ ? c_->handle_event(e) : false; }
+    void render(SDL_Renderer* r) const override { if (c_) c_->render(r); }
+private:
+    DMCheckbox* c_ = nullptr; // non-owning
+};
+
+class SliderWidget : public Widget {
+public:
+    explicit SliderWidget(DMSlider* s) : s_(s) {}
+    void set_rect(const SDL_Rect& r) override { if (s_) s_->set_rect(r); }
+    const SDL_Rect& rect() const override { return s_->rect(); }
+    int height_for_width(int /*w*/) const override { return DMSlider::height(); }
+    bool handle_event(const SDL_Event& e) override { return s_ ? s_->handle_event(e) : false; }
+    void render(SDL_Renderer* r) const override { if (s_) s_->render(r); }
+private:
+    DMSlider* s_ = nullptr; // non-owning
+};
+
+class DropdownWidget : public Widget {
+public:
+    explicit DropdownWidget(DMDropdown* d) : d_(d) {}
+    void set_rect(const SDL_Rect& r) override { if (d_) d_->set_rect(r); }
+    const SDL_Rect& rect() const override { return d_->rect(); }
+    int height_for_width(int /*w*/) const override { return DMDropdown::height(); }
+    bool handle_event(const SDL_Event& e) override { return d_ ? d_->handle_event(e) : false; }
+    void render(SDL_Renderer* r) const override { if (d_) d_->render(r); }
+private:
+    DMDropdown* d_ = nullptr; // non-owning
+};

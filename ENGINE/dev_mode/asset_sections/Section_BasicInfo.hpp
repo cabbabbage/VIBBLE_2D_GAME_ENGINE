@@ -21,6 +21,7 @@ class Section_BasicInfo : public CollapsibleSection {
       t_tags_  = std::make_unique<DMTextBox>("Tags (comma)", oss.str());
       int pct = std::max(0, (int)std::lround(info_->scale_factor * 100.0f));
       s_scale_pct_ = std::make_unique<DMSlider>("Scale (%)", 10, 400, pct);
+      s_zindex_    = std::make_unique<DMSlider>("Z Index Offset", -1000, 1000, info_->z_threshold);
       c_flipable_  = std::make_unique<DMCheckbox>("Flipable (can invert)", info_->flipable);
     }
 
@@ -30,15 +31,23 @@ class Section_BasicInfo : public CollapsibleSection {
       int y = rect_.y + DMButton::height() + 8;
       int maxw = std::max(120, rect_.w - 32);
       if (t_type_) {
-        t_type_->set_rect(SDL_Rect{ x, y, std::min(440, maxw), DMTextBox::height() });
-        y += DMTextBox::height() + 12;
+        int w = std::min(440, maxw);
+        int h = t_type_->preferred_height(w);
+        t_type_->set_rect(SDL_Rect{ x, y, w, h });
+        y += h + 12;
       }
       if (t_tags_) {
-        t_tags_->set_rect(SDL_Rect{ x, y, std::min(480, maxw), DMTextBox::height() });
-        y += DMTextBox::height() + 16;
+        int w = std::min(480, maxw);
+        int h = t_tags_->preferred_height(w);
+        t_tags_->set_rect(SDL_Rect{ x, y, w, h });
+        y += h + 16;
       }
       if (s_scale_pct_) {
         s_scale_pct_->set_rect(SDL_Rect{ x, y, maxw, DMSlider::height() });
+        y += DMSlider::height() + 8;
+      }
+      if (s_zindex_) {
+        s_zindex_->set_rect(SDL_Rect{ x, y, maxw, DMSlider::height() });
         y += DMSlider::height() + 8;
       }
       if (c_flipable_) {
@@ -67,6 +76,7 @@ class Section_BasicInfo : public CollapsibleSection {
         info_->set_tags(tags); changed = true;
       }
       if (s_scale_pct_ && s_scale_pct_->handle_event(e)) { info_->set_scale_percentage((float)s_scale_pct_->value()); changed = true; }
+      if (s_zindex_    && s_zindex_->handle_event(e))    { info_->set_z_threshold(s_zindex_->value()); changed = true; }
       if (c_flipable_  && c_flipable_->handle_event(e))  { info_->set_flipable(c_flipable_->value()); changed = true; }
       if (changed) (void)info_->update_info_json();
       return used || changed;
@@ -76,6 +86,7 @@ class Section_BasicInfo : public CollapsibleSection {
       if (t_type_)      t_type_->render(r);
       if (t_tags_)      t_tags_->render(r);
       if (s_scale_pct_) s_scale_pct_->render(r);
+      if (s_zindex_)    s_zindex_->render(r);
       if (c_flipable_)  c_flipable_->render(r);
     }
 
@@ -83,6 +94,7 @@ class Section_BasicInfo : public CollapsibleSection {
     std::unique_ptr<DMTextBox>  t_type_;
     std::unique_ptr<DMTextBox>  t_tags_;
     std::unique_ptr<DMSlider>   s_scale_pct_;
+    std::unique_ptr<DMSlider>   s_zindex_;
     std::unique_ptr<DMCheckbox> c_flipable_;
 };
 

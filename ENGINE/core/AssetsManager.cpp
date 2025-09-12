@@ -12,6 +12,7 @@
 #include <vector>
 #include "dev_mode/asset_library_ui.hpp"
 #include "dev_mode/asset_info_ui.hpp"
+#include "dev_mode/area_overlay_editor.hpp"
 
 #include <algorithm>
 #include <iostream>
@@ -79,6 +80,7 @@ Assets::~Assets() {
     delete dev_mouse;
     delete library_ui_;
     delete info_ui_;
+    delete area_editor_;
 }
 
 void Assets::set_input(Input* m) {
@@ -95,7 +97,8 @@ void Assets::set_input(Input* m) {
     } else {
         dev_mouse = nullptr;
     }
-
+    if (!area_editor_) area_editor_ = new AreaOverlayEditor();
+    if (area_editor_) area_editor_->attach_assets(this);
 }
 
 void Assets::update(const Input& input,
@@ -116,7 +119,10 @@ void Assets::update(const Input& input,
     active_assets  = activeManager.getActive();
     closest_assets = activeManager.getClosest();
 
-    if (player) player->update();        
+    // Suspend movement updates in Dev Mode
+    if (!dev_mode) {
+        if (player) player->update();
+    }
 
     if (player) {
         dx = player->pos.x - start_px;
@@ -135,15 +141,21 @@ void Assets::update(const Input& input,
             a->distance_to_player_sq = std::numeric_limits<float>::infinity();
         }
     }
-    for (Asset* a : active_assets) {
-        if (a && a != player)
-            a->update();
+    if (!dev_mode) {
+        for (Asset* a : active_assets) {
+            if (a && a != player)
+                a->update();
+        }
     }
 
     //activeManager.sortByZIndex();
 
     if (dev_mode && dev_mouse) {
-        bool ui_blocking = (library_ui_ && library_ui_->is_visible()) || (info_ui_ && info_ui_->is_visible());
+        bool lib_block = false;
+        if (library_ui_ && library_ui_->is_visible()) {
+            lib_block = library_ui_->is_input_blocking_at(input.getX(), input.getY());
+        }
+        bool ui_blocking = lib_block || (info_ui_ && info_ui_->is_visible()) || (area_editor_ && area_editor_->is_active());
         if (!ui_blocking) {
             dev_mouse->handle_mouse_input(input);
         }
@@ -163,8 +175,24 @@ void Assets::update(const Input& input,
 void Assets::set_dev_mode(bool mode) {
     dev_mode = mode;
     if (dev_mode) {
-        close_asset_library();
+        // Disable parallax effects while in dev mode to simplify editing
+        camera.set_parallax_enabled(false);
+        // Open library immediately (expanded) and pin to top-left
+        if (!library_ui_) library_ui_ = new AssetLibraryUI();
+        library_ui_->open();
+        library_ui_->set_position(10, 10);
+        library_ui_->set_expanded(true);
+        std::cout << "[Assets] Dev Mode ON. Asset Library opened at (10,10), expanded=1\n";
         close_asset_info_editor();
+    } else {
+        // Restore parallax when returning to player mode
+        camera.set_parallax_enabled(true);
+        // Leaving dev mode: close floating UIs
+        if (library_ui_) {
+            library_ui_->close();
+            std::cout << "[Assets] Dev Mode OFF. Asset Library closed.\n";
+        }
+        if (info_ui_) info_ui_->close();
     }
 
     if (input) input->clearClickBuffer();
@@ -340,7 +368,10 @@ void Assets::process_removals() {
 
 void Assets::render_overlays(SDL_Renderer* renderer) {
     if (library_ui_ && library_ui_->is_visible()) {
-        library_ui_->render(renderer, library_, screen_width, screen_height);
+        library_ui_->render(renderer, screen_width, screen_height);
+    }
+    if (area_editor_ && area_editor_->is_active()) {
+        area_editor_->render(renderer);
     }
     if (info_ui_ && info_ui_->is_visible()) {
         info_ui_->render(renderer, screen_width, screen_height);
@@ -366,11 +397,55 @@ bool Assets::is_asset_library_open() const {
 }
 
 void Assets::update_ui(const Input& input) {
+    // Keep UI panels updated
     if (library_ui_ && library_ui_->is_visible()) {
-        library_ui_->update(input, screen_width, screen_height, library_);
+        library_ui_->update(input, screen_width, screen_height, library_, *this);
+    }
+    if (area_editor_) {
+        const bool was = last_area_editor_active_;
+        const bool now = area_editor_->is_active();
+        if (now) {
+            area_editor_->update(input, screen_width, screen_height);
+        }
+        // Detect save-and-close completion
+        if (was && !now) {
+            if (area_editor_->consume_saved_flag() && reopen_info_after_area_edit_ && info_for_reopen_) {
+                // Reopen Asset Info for the same asset/info
+                open_asset_info_editor(info_for_reopen_);
+                reopen_info_after_area_edit_ = false;
+                info_for_reopen_.reset();
+            } else {
+                // If not saved or no pending reopen, just clear flags
+                reopen_info_after_area_edit_ = false;
+                info_for_reopen_.reset();
+            }
+        }
+        last_area_editor_active_ = now;
     }
     if (info_ui_ && info_ui_->is_visible()) {
         info_ui_->update(input, screen_width, screen_height);
+    }
+
+    // When editing (asset info open or area overlay active), lock the camera
+    // to the selected or hovered asset to avoid auto-zoom/pan drifting away.
+    const bool editing_overlay_active =
+        (area_editor_ && area_editor_->is_active()) ||
+        (info_ui_ && info_ui_->is_visible());
+
+    if (editing_overlay_active) {
+        Asset* focus = nullptr;
+        const auto& sel = get_selected_assets();
+        if (!sel.empty()) focus = sel.front();
+        if (!focus) focus = get_hovered_asset();
+        if (!focus) focus = player; // fallback to player
+        if (focus) {
+            camera.set_manual_zoom_override(true);
+            camera.set_focus_override(SDL_Point{ focus->pos.x, focus->pos.y });
+        }
+    } else {
+        // Return camera control to normal gameplay when editors are closed
+        camera.clear_focus_override();
+        camera.set_manual_zoom_override(false);
     }
 }
 
@@ -382,12 +457,30 @@ std::shared_ptr<AssetInfo> Assets::consume_selected_asset_from_library() {
 void Assets::open_asset_info_editor(const std::shared_ptr<AssetInfo>& info) {
     if (!info) return;
     if (!info_ui_) info_ui_ = new AssetInfoUI();
+    if (info_ui_) info_ui_->set_assets(this);
     info_ui_->set_info(info);
+    // If the asset library is open now, close it and remember to restore
+    reopen_library_on_info_close_ = is_asset_library_open();
+    if (reopen_library_on_info_close_) {
+        close_asset_library();
+    }
     info_ui_->open();
+}
+
+void Assets::open_asset_info_editor_for_asset(Asset* a) {
+    if (!a || !a->info) return;
+    // Pan and zoom to the asset before opening the editor
+    focus_camera_on_asset(a, 0.8, 25);
+    open_asset_info_editor(a->info);
 }
 
 void Assets::close_asset_info_editor() {
     if (info_ui_) info_ui_->close();
+    // Reopen the asset library if we closed it when opening this editor
+    if (reopen_library_on_info_close_) {
+        reopen_library_on_info_close_ = false;
+        open_asset_library();
+    }
 }
 
 bool Assets::is_asset_info_editor_open() const {
@@ -395,7 +488,44 @@ bool Assets::is_asset_info_editor_open() const {
 }
 
 void Assets::handle_sdl_event(const SDL_Event& e) {
+    if (area_editor_ && area_editor_->is_active()) {
+        if (area_editor_->handle_event(e)) return;
+    }
+    if (library_ui_ && library_ui_->is_visible()) {
+        library_ui_->handle_event(e);
+    }
     if (info_ui_ && info_ui_->is_visible()) {
         info_ui_->handle_event(e);
     }
+}
+
+void Assets::focus_camera_on_asset(Asset* a, double zoom_factor, int duration_steps) {
+    if (!a) return;
+    camera.set_manual_zoom_override(true);
+    camera.pan_and_zoom_to_asset(a, zoom_factor, duration_steps);
+}
+
+void Assets::begin_area_edit_for_selected_asset(const std::string& area_name) {
+    if (!area_editor_) {
+        area_editor_ = new AreaOverlayEditor();
+        area_editor_->attach_assets(this);
+    }
+    const auto& sel = get_selected_assets();
+    Asset* target = nullptr;
+    if (!sel.empty()) target = sel.front();
+    if (!target) target = get_hovered_asset();
+    if (!target || !target->info) return;
+    // Prepare to reopen Asset Info after successful save
+    if (info_ui_ && info_ui_->is_visible()) {
+        reopen_info_after_area_edit_ = true;
+        info_for_reopen_ = target->info;
+        // Do not reopen library when closing for area editing
+        reopen_library_on_info_close_ = false;
+        info_ui_->close();
+    } else {
+        reopen_info_after_area_edit_ = false;
+        info_for_reopen_.reset();
+    }
+    focus_camera_on_asset(target, 0.8, 20);
+    area_editor_->begin(target->info.get(), target, area_name);
 }

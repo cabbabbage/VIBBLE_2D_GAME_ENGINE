@@ -1,6 +1,7 @@
 #include "widgets.hpp"
 #include <algorithm>
 #include <sstream>
+#include <cctype>
 
 // -------- DMButton ---------
 DMButton::DMButton(const std::string& text, const DMButtonStyle* style, int w, int h)
@@ -84,22 +85,21 @@ bool DMTextBox::handle_event(const SDL_Event& e) {
 void DMTextBox::draw_text(SDL_Renderer* r, const std::string& s, int x, int y, const DMLabelStyle& ls) const {
     TTF_Font* f = TTF_OpenFont(ls.font_path.c_str(), ls.font_size);
     if (!f) return;
-    std::string text = s;
-    int w = 0, h = 0;
-    TTF_SizeUTF8(f, text.c_str(), &w, &h);
-    while (w > rect_.w - 12 && !text.empty()) {
-        text.erase(text.begin());
-        TTF_SizeUTF8(f, text.c_str(), &w, &h);
-    }
-    SDL_Surface* surf = TTF_RenderUTF8_Blended(f, text.c_str(), ls.color);
-    if (surf) {
-        SDL_Texture* tex = SDL_CreateTextureFromSurface(r, surf);
-        if (tex) {
-            SDL_Rect dst{ x, y, surf->w, surf->h };
-            SDL_RenderCopy(r, tex, nullptr, &dst);
-            SDL_DestroyTexture(tex);
+    const int content_w = std::max(1, rect_.w - 12);
+    auto lines = wrap_lines(f, s, content_w);
+    int line_y = y;
+    for (const auto& line : lines) {
+        SDL_Surface* surf = TTF_RenderUTF8_Blended(f, line.c_str(), ls.color);
+        if (surf) {
+            SDL_Texture* tex = SDL_CreateTextureFromSurface(r, surf);
+            if (tex) {
+                SDL_Rect dst{ x, line_y, surf->w, surf->h };
+                SDL_RenderCopy(r, tex, nullptr, &dst);
+                SDL_DestroyTexture(tex);
+            }
+            line_y += surf->h;
+            SDL_FreeSurface(surf);
         }
-        SDL_FreeSurface(surf);
     }
     TTF_CloseFont(f);
 }
@@ -114,7 +114,71 @@ void DMTextBox::render(SDL_Renderer* r) const {
     SDL_RenderDrawRect(r, &rect_);
     draw_text(r, label_, rect_.x, rect_.y - st.label.font_size - 2, st.label);
     DMLabelStyle valStyle{ st.label.font_path, st.label.font_size, st.text };
-    draw_text(r, text_, rect_.x + 6, rect_.y + (rect_.h - st.label.font_size)/2, valStyle);
+    // Multiline draw from top-left padding
+    draw_text(r, text_, rect_.x + 6, rect_.y + 6, valStyle);
+}
+
+std::vector<std::string> DMTextBox::wrap_lines(TTF_Font* f, const std::string& s, int max_width) const {
+    std::vector<std::string> out;
+    if (!f) return out;
+    // Split on existing newlines first
+    size_t start = 0;
+    auto push_wrapped = [&](const std::string& para) {
+        if (para.empty()) { out.emplace_back(""); return; }
+        // Greedy wrap by words, fallback to char wrap
+        size_t pos = 0;
+        while (pos < para.size()) {
+            size_t best_break = pos;
+            size_t last_space = std::string::npos;
+            std::string line;
+            for (size_t i = pos; i <= para.size(); ++i) {
+                std::string trial = para.substr(pos, i - pos);
+                int w=0,h=0; TTF_SizeUTF8(f, trial.c_str(), &w, &h);
+                if (w <= max_width) {
+                    best_break = i;
+                    if (i < para.size() && std::isspace((unsigned char)para[i])) last_space = i;
+                    if (i == para.size()) break;
+                } else {
+                    break;
+                }
+            }
+            size_t brk = best_break;
+            if (brk > pos && last_space != std::string::npos && last_space > pos) {
+                brk = last_space; // wrap at last space within bounds
+            }
+            if (brk == pos) { // cannot fit even one char, force one char
+                brk = std::min(para.size(), pos + 1);
+            }
+            std::string ln = para.substr(pos, brk - pos);
+            // trim trailing spaces
+            while (!ln.empty() && std::isspace((unsigned char)ln.back())) ln.pop_back();
+            out.push_back(ln);
+            // advance past any spaces
+            pos = brk;
+            while (pos < para.size() && std::isspace((unsigned char)para[pos])) ++pos;
+        }
+    };
+    while (true) {
+        size_t nl = s.find('\n', start);
+        if (nl == std::string::npos) { push_wrapped(s.substr(start)); break; }
+        push_wrapped(s.substr(start, nl - start));
+        start = nl + 1;
+    }
+    if (out.empty()) out.emplace_back("");
+    return out;
+}
+
+int DMTextBox::preferred_height(int width) const {
+    const DMTextBoxStyle& st = DMStyles::TextBox();
+    TTF_Font* f = TTF_OpenFont(st.label.font_path.c_str(), st.label.font_size);
+    if (!f) return DMTextBox::height();
+    int content_w = std::max(1, width - 12);
+    auto lines = wrap_lines(f, text_, content_w);
+    int fh=0; int fw=0; TTF_SizeUTF8(f, "Ag", &fw, &fh);
+    TTF_CloseFont(f);
+    int text_h = (int)lines.size() * std::max(1, fh);
+    // padding top/bottom ~ 12
+    return std::max(DMTextBox::height(), text_h + 12);
 }
 
 // -------- DMCheckbox ---------

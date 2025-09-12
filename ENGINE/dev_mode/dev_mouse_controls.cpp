@@ -28,6 +28,20 @@ DevMouseControls::DevMouseControls(Input* m,
 void DevMouseControls::handle_mouse_input(const Input& input) {
     // Camera centers on player via update_zoom; mapping uses camera directly
 
+    // Scroll wheel zoom: schedule smooth zoom animation to a new target scale
+    int wheelY = input.getScrollY();
+    if (wheelY != 0 && assets_) {
+        camera& cam = assets_->getView();
+        const double step = (zoom_scale_factor_ > 0.0) ? zoom_scale_factor_ : 1.0;
+        double eff = 1.0;
+        if (wheelY > 0)      eff = std::pow(step,  wheelY);
+        else if (wheelY < 0) eff = 1.0 / std::pow(step, -wheelY);
+        // Duration inversely proportional to magnitude of change
+        int base = 18;
+        int dur = std::max(6, base - 2 * std::min(6, std::abs(wheelY)));
+        cam.animate_zoom_multiply(eff, dur);
+    }
+
     if (input.isScancodeDown(SDL_SCANCODE_ESCAPE)) {
         selected_assets.clear();
         highlighted_assets.clear();
@@ -72,27 +86,7 @@ void DevMouseControls::handle_mouse_input(const Input& input) {
         dragging_ = false;
     }
 
-    // Right-click to open asset selection and record spawn point
-    if (mouse->wasClicked(Input::RIGHT) && assets_) {
-        spawn_click_screen_x_ = mx;
-        spawn_click_screen_y_ = my;
-        SDL_Point wp = compute_mouse_world(mx, my);
-        spawn_world_x_ = wp.x;
-        spawn_world_y_ = wp.y;
-        waiting_spawn_selection_ = true;
-        assets_->open_asset_library();
-    }
-
-    // If waiting for selection, check if a selection was made
-    if (waiting_spawn_selection_ && assets_) {
-        if (!assets_->is_asset_library_open()) {
-            auto chosen = assets_->consume_selected_asset_from_library();
-            if (chosen) {
-                assets_->spawn_asset(chosen->name, SDL_Point{spawn_world_x_, spawn_world_y_});
-            }
-            waiting_spawn_selection_ = false;
-        }
-    }
+    // Right-click asset library selection removed; library is a floating panel now
 
     handle_hover();
     handle_click(input);
@@ -181,7 +175,7 @@ void DevMouseControls::handle_click(const Input& input) {
         Uint32 now = SDL_GetTicks();
         if (last_click_asset_ == nearest && (now - last_click_time_ms_) <= 300) {
             if (assets_ && nearest->info) {
-                assets_->open_asset_info_editor(nearest->info);
+                assets_->open_asset_info_editor_for_asset(nearest);
             }
             last_click_time_ms_ = 0;
             last_click_asset_ = nullptr;
