@@ -13,6 +13,7 @@
 #include "asset_sections/CollapsibleSection.hpp"
 #include "dm_styles.hpp"
 #include "asset_sections/Section_BasicInfo.hpp"
+#include "asset_sections/Section_Lighting.hpp"
 #include "asset_sections/Section_Areas.hpp"
 #include "asset_sections/Section_Spacing.hpp"
 #include "asset_sections/Section_ChildAssets.hpp"
@@ -22,6 +23,8 @@
 
 AssetInfoUI::AssetInfoUI() {
     sections_.push_back(std::make_unique<Section_BasicInfo>());
+    // Lighting section
+    sections_.push_back(std::make_unique<Section_Lighting>());
     // Spacing section mirrors Python Spacing page
     auto spacing = std::make_unique<Section_Spacing>();
 
@@ -53,7 +56,10 @@ void AssetInfoUI::clear_info() {
     for (auto& s : sections_) s->set_info(nullptr);
 }
 
-void AssetInfoUI::open()  { visible_ = true; }
+void AssetInfoUI::open()  {
+    visible_ = true;
+    for (auto& s : sections_) s->set_expanded(false);
+}
 void AssetInfoUI::close() { visible_ = false; }
 void AssetInfoUI::toggle(){ visible_ = !visible_; }
 

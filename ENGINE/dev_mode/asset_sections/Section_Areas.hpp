@@ -44,11 +44,11 @@ class Section_Areas : public CollapsibleSection {
       int inner_w = rect_.w - 16;
       int used = 0;
       for (auto& b : buttons_) {
-        b->set_rect(SDL_Rect{ x, y + used, inner_w, DMButton::height() });
+        b->set_rect(SDL_Rect{ x, y + used - scroll_, inner_w, DMButton::height() });
         used += DMButton::height() + 8;
       }
       if (b_create_) {
-        b_create_->set_rect(SDL_Rect{ x, y + used, inner_w, DMButton::height() });
+        b_create_->set_rect(SDL_Rect{ x, y + used - scroll_, inner_w, DMButton::height() });
         used += DMButton::height() + 8;
       }
       content_height_ = std::max(0, used + 8);

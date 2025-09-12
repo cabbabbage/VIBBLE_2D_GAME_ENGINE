@@ -29,14 +29,17 @@ class Section_Spacing : public CollapsibleSection {
       int x = rect_.x + 16;
       int y = rect_.y + DMButton::height() + 8;
       int maxw = std::max(120, rect_.w - 32);
+      int draw_y = y - scroll_;
 
       if (s_min_same_) {
-        s_min_same_->set_rect(SDL_Rect{ x, y, maxw, DMSlider::height() });
+        s_min_same_->set_rect(SDL_Rect{ x, draw_y, maxw, DMSlider::height() });
         y += DMSlider::height() + 8;
+        draw_y = y - scroll_;
       }
       if (s_min_all_) {
-        s_min_all_->set_rect(SDL_Rect{ x, y, maxw, DMSlider::height() });
+        s_min_all_->set_rect(SDL_Rect{ x, draw_y, maxw, DMSlider::height() });
         y += DMSlider::height() + 8;
+        draw_y = y - scroll_;
       }
       content_height_ = std::max(0, y - (rect_.y + DMButton::height() + 8));
     }

@@ -9,6 +9,7 @@
 #include <iostream>
 #include <sstream>
 #include <random>
+#include <cmath>
 AssetInfo::AssetInfo(const std::string &asset_folder_name)
 : has_light_source(false) {
 	name = asset_folder_name;
@@ -344,6 +345,59 @@ void AssetInfo::set_children(const std::vector<ChildInfo>& new_children) {
         arr.push_back(std::move(entry));
     }
     info_json_["child_assets"] = std::move(arr);
+}
+
+void AssetInfo::set_lighting(bool has_shading_,
+                             const LightSource& shading,
+                             int shading_factor,
+                             const std::vector<LightSource>& lights) {
+    has_shading = has_shading_;
+    orbital_light_sources.clear();
+    light_sources = lights;
+    if (has_shading) {
+        orbital_light_sources.push_back(shading);
+    }
+    has_light_source = has_shading || !lights.empty();
+
+    nlohmann::json arr = nlohmann::json::array();
+    // Shading entry first
+    nlohmann::json shade_entry = nlohmann::json::object();
+    shade_entry["has_light_source"] = true;
+    if (has_shading) {
+        shade_entry["light_intensity"] = shading.intensity;
+        shade_entry["radius"] = shading.radius;
+        double f = shading_factor / 100.0;
+        int base_x = static_cast<int>(std::round(shading.x_radius / f));
+        int base_y = static_cast<int>(std::round(shading.y_radius / f));
+        shade_entry["x_radius"] = base_x;
+        shade_entry["y_radius"] = base_y;
+        shade_entry["falloff"] = shading.fall_off;
+        shade_entry["factor"] = shading_factor;
+    } else {
+        shade_entry["light_intensity"] = 0;
+        shade_entry["radius"] = 0;
+        shade_entry["x_radius"] = 0;
+        shade_entry["y_radius"] = 0;
+        shade_entry["falloff"] = 0;
+        shade_entry["factor"] = shading_factor;
+    }
+    arr.push_back(shade_entry);
+
+    for (const auto& l : lights) {
+        nlohmann::json j;
+        j["has_light_source"] = true;
+        j["light_intensity"] = l.intensity;
+        j["radius"] = l.radius;
+        j["falloff"] = l.fall_off;
+        j["flicker"] = l.flicker;
+        j["flare"] = l.flare;
+        j["offset_x"] = l.offset_x;
+        j["offset_y"] = l.offset_y;
+        j["light_color"] = { l.color.r, l.color.g, l.color.b };
+        arr.push_back(std::move(j));
+    }
+    info_json_["has_shading"] = has_shading;
+    info_json_["lighting_info"] = std::move(arr);
 }
 
 bool AssetInfo::remove_area(const std::string& name) {

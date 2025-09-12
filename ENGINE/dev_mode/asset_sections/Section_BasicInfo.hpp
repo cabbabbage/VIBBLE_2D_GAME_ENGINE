@@ -30,29 +30,35 @@ class Section_BasicInfo : public CollapsibleSection {
       int x = rect_.x + 16;
       int y = rect_.y + DMButton::height() + 8;
       int maxw = std::max(120, rect_.w - 32);
+      int draw_y = y - scroll_;
       if (t_type_) {
         int w = std::min(440, maxw);
         int h = t_type_->preferred_height(w);
-        t_type_->set_rect(SDL_Rect{ x, y, w, h });
+        t_type_->set_rect(SDL_Rect{ x, draw_y, w, h });
         y += h + 12;
+        draw_y = y - scroll_;
       }
       if (t_tags_) {
         int w = std::min(480, maxw);
         int h = t_tags_->preferred_height(w);
-        t_tags_->set_rect(SDL_Rect{ x, y, w, h });
+        t_tags_->set_rect(SDL_Rect{ x, draw_y, w, h });
         y += h + 16;
+        draw_y = y - scroll_;
       }
       if (s_scale_pct_) {
-        s_scale_pct_->set_rect(SDL_Rect{ x, y, maxw, DMSlider::height() });
+        s_scale_pct_->set_rect(SDL_Rect{ x, draw_y, maxw, DMSlider::height() });
         y += DMSlider::height() + 8;
+        draw_y = y - scroll_;
       }
       if (s_zindex_) {
-        s_zindex_->set_rect(SDL_Rect{ x, y, maxw, DMSlider::height() });
+        s_zindex_->set_rect(SDL_Rect{ x, draw_y, maxw, DMSlider::height() });
         y += DMSlider::height() + 8;
+        draw_y = y - scroll_;
       }
       if (c_flipable_) {
-        c_flipable_->set_rect(SDL_Rect{ x, y, maxw, DMCheckbox::height() });
+        c_flipable_->set_rect(SDL_Rect{ x, draw_y, maxw, DMCheckbox::height() });
         y += DMCheckbox::height() + 8;
+        draw_y = y - scroll_;
       }
       content_height_ = std::max(0, y - (rect_.y + DMButton::height() + 8));
     }

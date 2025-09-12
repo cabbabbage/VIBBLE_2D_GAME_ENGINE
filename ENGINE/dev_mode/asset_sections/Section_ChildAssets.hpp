@@ -45,11 +45,12 @@ public:
         }
 
         int used = 0;
+        int draw_base = y - scroll_;
         for (size_t i = 0; i < rows_.size(); ++i) {
             auto& r = rows_[i];
             // Row label
             if (!r.lbl_) r.lbl_ = std::make_unique<DMButton>("Region " + std::to_string(i + 1), &DMStyles::HeaderButton(), 180, DMButton::height());
-            r.lbl_->set_rect(SDL_Rect{ x, y + used, 180, DMButton::height() });
+            r.lbl_->set_rect(SDL_Rect{ x, draw_base + used, 180, DMButton::height() });
             used += DMButton::height() + 4;
 
             // Area dropdown
@@ -57,30 +58,30 @@ public:
                 r.options = area_names_with_none();
                 r.dd_area = std::make_unique<DMDropdown>("Area", r.options, find_index(r.options, r.area_name));
             }
-            r.dd_area->set_rect(SDL_Rect{ x, y + used, std::min(300, maxw), DMDropdown::height() });
+            r.dd_area->set_rect(SDL_Rect{ x, draw_base + used, std::min(300, maxw), DMDropdown::height() });
 
             // Z offset slider
             if (!r.s_z) r.s_z = std::make_unique<DMSlider>("Z Offset", -5000, 5000, r.z_offset);
             int slider_w = std::min(300, maxw);
-            r.s_z->set_rect(SDL_Rect{ x + std::min(320, maxw), y + used, slider_w, DMSlider::height() });
+            r.s_z->set_rect(SDL_Rect{ x + std::min(320, maxw), draw_base + used, slider_w, DMSlider::height() });
             used += std::max(DMDropdown::height(), DMSlider::height()) + 6;
 
             // Configure assets button
             if (!r.b_assets) r.b_assets = std::make_unique<DMButton>("Configure Assets", &DMStyles::ListButton(), 160, DMButton::height());
-            r.b_assets->set_rect(SDL_Rect{ x, y + used, 160, DMButton::height() });
+            r.b_assets->set_rect(SDL_Rect{ x, draw_base + used, 160, DMButton::height() });
             used += DMButton::height() + 6;
 
             // Buttons: Edit Area, Delete
             if (!r.b_edit_area) r.b_edit_area = std::make_unique<DMButton>("Edit Area", &DMStyles::ListButton(), 140, DMButton::height());
             if (!r.b_delete)    r.b_delete    = std::make_unique<DMButton>("Delete", &DMStyles::ListButton(), 120, DMButton::height());
-            r.b_edit_area->set_rect(SDL_Rect{ x, y + used, 160, DMButton::height() });
-            r.b_delete->set_rect(SDL_Rect{ x + 170, y + used, 120, DMButton::height() });
+            r.b_edit_area->set_rect(SDL_Rect{ x, draw_base + used, 160, DMButton::height() });
+            r.b_delete->set_rect(SDL_Rect{ x + 170, draw_base + used, 120, DMButton::height() });
             used += DMButton::height() + 10;
         }
 
         // Footer actions
         if (b_add_) {
-            b_add_->set_rect(SDL_Rect{ x, y + used, std::min(260, maxw), DMButton::height() });
+            b_add_->set_rect(SDL_Rect{ x, draw_base + used, std::min(260, maxw), DMButton::height() });
             used += DMButton::height() + 8;
         }
 

@@ -79,6 +79,11 @@ class AssetInfo {
     std::string pick_next_animation(const std::string& mapping_id) const;
     // Children editing (for dev-mode UI)
     void set_children(const std::vector<ChildInfo>& children);
+    // Lighting editing
+    void set_lighting(bool has_shading,
+                      const LightSource& shading,
+                      int shading_factor,
+                      const std::vector<LightSource>& lights);
     // Accessors
     std::string info_json_path() const { return info_json_path_; }
     std::string asset_dir_path() const { return dir_path_; }

@@ -1991,7 +1991,7 @@
     "duplicatable": false,
     "duplication_interval_max": 60,
     "duplication_interval_min": 30,
-    "has_shading": true,
+    "has_shading": false,
     "layout": {
         "__view": {
             "geometry": "1100x780+156+156",
@@ -2005,10 +2005,25 @@
             "factor": 100,
             "falloff": 0,
             "has_light_source": true,
+            "light_intensity": 0,
+            "radius": 0,
+            "x_radius": 0,
+            "y_radius": 0
+        },
+        {
+            "falloff": 27,
+            "flare": 0,
+            "flicker": 16,
+            "has_light_source": true,
+            "light_color": [
+                255,
+                255,
+                255
+            ],
             "light_intensity": 255,
-            "radius": 161,
-            "x_radius": 93,
-            "y_radius": 118
+            "offset_x": 0,
+            "offset_y": 0,
+            "radius": 520
         }
     ],
     "mappings": {},
