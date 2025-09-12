@@ -38,3 +38,59 @@ Camera.cpp
 - Zoom in on Asset
   Add a function to zoom in on and pan to a specific asset.
   - Behavior should respect the zoom_scale_factor.
+
+Audio.cpp
+---------
+- Audio Engine Implementation
+  Implement a basic audio engine to handle sound playback, management, and integration.
+
+AnimationConfig.py
+------------------
+- Animation Audio Integration
+  Add support for uploading and linking audio with animations.
+
+FireSpreading Class
+-------------------
+- Flammable Asset Behavior
+  Implement a fire-spreading system where flammable objects (defined by a "flammable" bool
+  in asset_info) can catch fire. Fire spreads via fire assets, and eventually transforms
+  or destroys affected objects.
+
+custom_controllers/DefaultController.cpp
+----------------------------------------
+- Event Animation Handlers
+  Add basic event-driven animation handlers such as:
+  - Interact
+  - Collide
+  - Other common gameplay events
+
+Trail Generation
+----------------
+- Multi-Path Connectivity
+  Modify trail generation so rooms can connect to more than just children.
+  Ideally every room should be accessible from the center via at least two distinct paths
+  (except rooms on the furthest radius).
+
+DevMode UI / AssetInfoUI
+------------------------
+- Python → C++ Migration
+  Add the remaining sections of logic currently in Python to the C++ Dev Mode UI,
+  ensuring they can be displayed inside AssetInfoUI.
+
+DevMouseControls (Click + Drag)
+-------------------------------
+- Context-Sensitive Drag
+  Adjust click-and-drag camera/asset logic so behavior differs based on spawn_id
+  and spawn_type.
+
+Room Save Logic
+---------------
+- Save Exact Positions
+  Update save-room logic to match the new version (inverse of how exact positions
+  are used when spawning).
+
+Main Character Animation
+------------------------
+- Flickering Fix
+  Fix issue where the main character’s animation occasionally flickers or fails
+  to render smoothly.

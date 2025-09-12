@@ -12,9 +12,11 @@
 
 #include "asset_sections/CollapsibleSection.hpp"
 #include "dm_styles.hpp"
+#include "asset_sections/Section_BasicInfo.hpp"
 #include "asset_sections/Section_Areas.hpp"
 
 AssetInfoUI::AssetInfoUI() {
+    sections_.push_back(std::make_unique<Section_BasicInfo>());
     auto areas = std::make_unique<Section_Areas>();
     areas_section_ = areas.get();
     areas_section_->set_open_editor_callback([this](const std::string& nm){ open_area_editor(nm); });

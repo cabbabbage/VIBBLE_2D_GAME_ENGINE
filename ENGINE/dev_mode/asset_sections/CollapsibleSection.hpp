@@ -30,12 +30,13 @@ class CollapsibleSection {
     virtual void update(const Input& /*input*/) {}
 
     virtual bool handle_event(const SDL_Event& e) {
-      if (header_ && header_->handle_event(e)) {
+      if (!header_) return false;
+      bool used = header_->handle_event(e);
+      if (used && e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
         expanded_ = !expanded_;
-        header_->set_text(expanded_ ? title_ + " ▲" : title_ + " ▼");
-        return true;
+        header_->set_text(expanded_ ? title_ + " ▾" : title_ + " ▸");
       }
-      return false;
+      return used;
     }
 
     virtual void render(SDL_Renderer* r) const {
@@ -55,7 +56,7 @@ class CollapsibleSection {
     virtual void layout() {
       if (header_) {
         header_->set_rect(SDL_Rect{ rect_.x, rect_.y, rect_.w, DMButton::height() });
-        header_->set_text(expanded_ ? title_ + " ▲" : title_ + " ▼");
+        header_->set_text(expanded_ ? title_ + " ▾" : title_ + " ▸");
       }
       content_height_ = 0; // derived classes should set
     }

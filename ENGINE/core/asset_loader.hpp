@@ -15,8 +15,9 @@ struct LayerSpec;
 
 class AssetLoader {
 
-	public:
+        public:
     AssetLoader(const std::string& map_dir, SDL_Renderer* renderer);
+    ~AssetLoader();
     std::vector<Asset*> collectDistantAssets(int fade_start_distance, int fade_end_distance);
     std::vector<std::vector<Asset*>> group_neighboring_assets( const std::vector<Asset*>& assets, int tile_width, int tile_height, const std::string& group_type);
     void link_by_child(const std::vector<std::vector<Asset*>>& groups);
