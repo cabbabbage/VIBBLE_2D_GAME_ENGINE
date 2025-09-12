@@ -1,6 +1,6 @@
 #pragma once
 
-#include "ui/asset_sections/CollapsibleSection.hpp"
+#include "CollapsibleSection.hpp"
 #include <memory>
 #include <sstream>
 #include "ui/slider.hpp"

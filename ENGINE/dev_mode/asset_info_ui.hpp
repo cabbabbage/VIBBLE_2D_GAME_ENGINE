@@ -3,15 +3,11 @@
 #include <SDL.h>
 #include <memory>
 #include <string>
-#include "ui/button.hpp"
-#include <functional>
 #include <vector>
+#include "ui/button.hpp"
 
 class AssetInfo;
 class Input;
-class Slider;
-class Checkbox;
-class TextBox;
 class Area;
 
 class AssetInfoUI {
@@ -29,17 +25,15 @@ class AssetInfoUI {
     void handle_event(const SDL_Event& e);
     void render(SDL_Renderer* r, int screen_w, int screen_h) const;
 
-	private:
-    void build_widgets();
+  private:
     void layout_widgets(int screen_w, int screen_h) const;
     void save_now() const;
     void open_area_editor(const std::string& name);
 
-	private:
+  private:
     bool visible_ = false;
     std::shared_ptr<AssetInfo> info_{};
-    std::unique_ptr<Button> b_close_;
-    std::unique_ptr<Button> b_config_area_;
+    std::unique_ptr<Button> b_config_anim_;
     mutable SDL_Renderer* last_renderer_ = nullptr;
     // Section-based UI
     std::vector<std::unique_ptr<class CollapsibleSection>> sections_;

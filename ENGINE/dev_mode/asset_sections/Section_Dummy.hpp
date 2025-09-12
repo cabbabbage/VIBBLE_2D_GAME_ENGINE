@@ -1,6 +1,6 @@
 #pragma once
 
-#include "ui/asset_sections/CollapsibleSection.hpp"
+#include "CollapsibleSection.hpp"
 #include "utils/text_style.hpp"
 
 // Simple placeholder section that only shows a header and 'Coming soon'
@@ -19,7 +19,7 @@ class DummySection : public CollapsibleSection {
     void render_content(SDL_Renderer* r) const override {
       const TextStyle& s = TextStyles::SmallSecondary();
       TTF_Font* f = s.open_font(); if (!f) return;
-      SDL_Surface* surf = TTF_RenderText_Blended(f, "(Coming soon)", Styles::Muted());
+      SDL_Surface* surf = TTF_RenderText_Blended(f, "(Coming soon)", Styles::Mist());
       if (surf) {
         SDL_Texture* tex = SDL_CreateTextureFromSurface(r, surf);
         if (tex) {

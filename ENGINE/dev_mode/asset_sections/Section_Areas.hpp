@@ -1,6 +1,6 @@
 #pragma once
 
-#include "ui/asset_sections/CollapsibleSection.hpp"
+#include "CollapsibleSection.hpp"
 #include <functional>
 #include <vector>
 #include "ui/text_box.hpp"
