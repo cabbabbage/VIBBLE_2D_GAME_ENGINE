@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <nlohmann/json.hpp>
 #include "asset/asset_info.hpp"
+#include "assets_config.hpp"
 
 class Section_ChildAssets : public CollapsibleSection {
 public:
@@ -20,7 +21,6 @@ public:
         rebuild_area_names();
         rebuild_rows_from_info();
         b_add_ = std::make_unique<DMButton>("Add Child Region", &DMStyles::CreateButton(), 220, DMButton::height());
-        b_open_python_ = std::make_unique<DMButton>("Open Python Child Editor", &DMStyles::ListButton(), 240, DMButton::height());
     }
 
     void layout() override {
@@ -65,18 +65,10 @@ public:
             r.s_z->set_rect(SDL_Rect{ x + std::min(320, maxw), y + used, slider_w, DMSlider::height() });
             used += std::max(DMDropdown::height(), DMSlider::height()) + 6;
 
-            // External JSON path (relative)
-            if (!r.t_json_path) r.t_json_path = std::make_unique<DMTextBox>("External JSON Path (optional)", r.json_path);
-            int tx_w = maxw;
-            int tx_h = r.t_json_path->preferred_height(tx_w);
-            r.t_json_path->set_rect(SDL_Rect{ x, y + used, tx_w, tx_h });
-            used += tx_h + 6;
-
-            // Inline assets JSON (single line or wrapped view)
-            if (!r.t_assets) r.t_assets = std::make_unique<DMTextBox>("Inline Assets JSON (optional)", r.assets_json);
-            int tj_h = r.t_assets->preferred_height(tx_w);
-            r.t_assets->set_rect(SDL_Rect{ x, y + used, tx_w, tj_h });
-            used += tj_h + 6;
+            // Configure assets button
+            if (!r.b_assets) r.b_assets = std::make_unique<DMButton>("Configure Assets", &DMStyles::ListButton(), 160, DMButton::height());
+            r.b_assets->set_rect(SDL_Rect{ x, y + used, 160, DMButton::height() });
+            used += DMButton::height() + 6;
 
             // Buttons: Edit Area, Delete
             if (!r.b_edit_area) r.b_edit_area = std::make_unique<DMButton>("Edit Area", &DMStyles::ListButton(), 140, DMButton::height());
@@ -91,15 +83,19 @@ public:
             b_add_->set_rect(SDL_Rect{ x, y + used, std::min(260, maxw), DMButton::height() });
             used += DMButton::height() + 8;
         }
-        if (b_open_python_) {
-            b_open_python_->set_rect(SDL_Rect{ x, y + used, std::min(320, maxw), DMButton::height() });
-            used += DMButton::height() + 8;
-        }
 
         content_height_ = std::max(0, used);
     }
 
+    void update(const Input& input) override {
+        CollapsibleSection::update(input);
+        if (assets_cfg_.visible()) assets_cfg_.update(input);
+    }
+
     bool handle_event(const SDL_Event& e) override {
+        if (assets_cfg_.visible()) {
+            return assets_cfg_.handle_event(e);
+        }
         bool used = CollapsibleSection::handle_event(e);
         if (!info_ || !expanded_) return used;
 
@@ -111,8 +107,20 @@ public:
             if (r.lbl_ && r.lbl_->handle_event(e)) used = true;
             if (r.dd_area && r.dd_area->handle_event(e)) { r.area_name = safe_get_option(r.options, r.dd_area->selected()); changed = true; used = true; }
             if (r.s_z && r.s_z->handle_event(e)) { r.z_offset = r.s_z->value(); changed = true; used = true; }
-            if (r.t_json_path && r.t_json_path->handle_event(e)) { r.json_path = r.t_json_path->value(); changed = true; used = true; }
-            if (r.t_assets && r.t_assets->handle_event(e)) { r.assets_json = r.t_assets->value(); changed = true; used = true; }
+            if (r.b_assets && r.b_assets->handle_event(e)) {
+                if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
+                    size_t idx = i;
+                    assets_cfg_.open(r.assets, [this, idx](const nlohmann::json& j){
+                        if (idx < rows_.size()) {
+                            rows_[idx].assets = j;
+                            commit_to_info();
+                            if (info_) (void)info_->update_info_json();
+                        }
+                    });
+                    assets_cfg_.set_position(rect_.x - 260, rect_.y);
+                    used = true;
+                }
+            }
             if (r.b_edit_area && r.b_edit_area->handle_event(e)) {
                 if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
                     std::string nm = r.area_name;
@@ -143,21 +151,6 @@ public:
                 changed = true; used = true;
             }
         }
-        if (b_open_python_ && b_open_python_->handle_event(e)) {
-            if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
-                // Launch the Python Asset Manager to the Child Assets page for convenience
-                if (info_) {
-                    std::string path = info_->info_json_path();
-#ifdef _WIN32
-                    std::string cmd = "cmd /c start \"\" py \"PYTHON ASSET MANAGER/asset_manager_main.py\"";
-#else
-                    std::string cmd = "python3 \"PYTHON ASSET MANAGER/asset_manager_main.py\" &";
-#endif
-                    std::system(cmd.c_str());
-                }
-                used = true;
-            }
-        }
 
         if (changed) {
             commit_to_info();
@@ -171,13 +164,12 @@ public:
             if (row.lbl_)       row.lbl_->render(r);
             if (row.dd_area)    row.dd_area->render(r);
             if (row.s_z)        row.s_z->render(r);
-            if (row.t_json_path)row.t_json_path->render(r);
-            if (row.t_assets)   row.t_assets->render(r);
+            if (row.b_assets)   row.b_assets->render(r);
             if (row.b_edit_area)row.b_edit_area->render(r);
             if (row.b_delete)   row.b_delete->render(r);
         }
         if (b_add_)        b_add_->render(r);
-        if (b_open_python_)b_open_python_->render(r);
+        if (assets_cfg_.visible()) assets_cfg_.render(r);
     }
 
 private:
@@ -186,13 +178,12 @@ private:
         std::string area_name;
         int z_offset = 0;
         std::string json_path; // relative
-        std::string assets_json; // raw JSON text (single line okay)
+        nlohmann::json assets = nlohmann::json::array();
         // Controls
         std::unique_ptr<DMButton>   lbl_;
         std::unique_ptr<DMDropdown> dd_area;
         std::unique_ptr<DMSlider>   s_z;
-        std::unique_ptr<DMTextBox>  t_json_path;
-        std::unique_ptr<DMTextBox>  t_assets;
+        std::unique_ptr<DMButton>   b_assets;
         std::unique_ptr<DMButton>   b_edit_area;
         std::unique_ptr<DMButton>   b_delete;
         // Choices
@@ -210,8 +201,8 @@ private:
             r.z_offset = c.z_offset;
             // json_path from loader is absolute; convert to relative if under asset dir
             r.json_path = make_relative(base_dir, c.json_path);
-            if (c.inline_assets.is_array() && !c.inline_assets.empty()) {
-                try { r.assets_json = c.inline_assets.dump(); } catch (...) { r.assets_json.clear(); }
+            if (c.inline_assets.is_array()) {
+                r.assets = c.inline_assets;
             }
             r.options = area_names_with_none();
             r.dd_area = std::make_unique<DMDropdown>("Area", r.options, find_index(r.options, r.area_name));
@@ -231,15 +222,7 @@ private:
             ci.area_name = r.area_name;
             ci.z_offset  = r.z_offset;
             // Inline assets
-            ci.inline_assets = nlohmann::json::array();
-            if (!r.assets_json.empty()) {
-                try {
-                    nlohmann::json parsed = nlohmann::json::parse(r.assets_json);
-                    if (parsed.is_array()) ci.inline_assets = std::move(parsed);
-                } catch (...) {
-                    // leave empty on parse error
-                }
-            }
+            ci.inline_assets = r.assets.is_array() ? r.assets : nlohmann::json::array();
             // json_path (store absolute internally for consistency; set_children will re-relativize)
             ci.json_path = r.json_path.empty() ? std::string{} : join_path(base_dir, r.json_path);
             out.push_back(std::move(ci));
@@ -305,6 +288,6 @@ private:
     std::vector<Row> rows_;
     std::vector<std::string> area_names_;
     std::unique_ptr<DMButton> b_add_;
-    std::unique_ptr<DMButton> b_open_python_;
+    AssetsConfig assets_cfg_;
     std::function<void(const std::string&)> open_area_editor_;
 };
