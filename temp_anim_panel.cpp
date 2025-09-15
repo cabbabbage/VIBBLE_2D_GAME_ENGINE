@@ -1,10 +1,10 @@
-#include "animations_editor_panel.hpp"
+﻿#include "animations_editor_panel.hpp"
 
 #include "FloatingCollapsible.hpp"
 #include "dm_styles.hpp"
 #include "widgets.hpp"
 
-#include <fstream>
+#include "asset/asset_info.hpp"
 #include "utils/input.hpp"
 #include "animation_utils.hpp"
 #include <SDL_image.h>
@@ -65,7 +65,59 @@ private:
     mutable std::string last_path_;
 };
 
-// Member helpers are defined below to avoid AssetInfo usage.
+// Resolve first frame image path for preview: follows one ref hop.
+static std::string first_frame_path(const AssetInfo& info, const nlohmann::json& source) {
+    try {
+        if (!source.is_object()) return {};
+        std::string kind = source.value("kind", std::string{"folder"});
+        if (kind == "animation") {
+            std::string ref = source.value("name", std::string{});
+            if (ref.empty()) return {};
+            nlohmann::json other = info.animation_payload(ref);
+            if (!other.is_object()) return {};
+            return first_frame_path(info, other.value("source", nlohmann::json::object()));
+        }
+        std::string rel = source.value("path", std::string{});
+        if (rel.empty()) return {};
+        fs::path dir = fs::path(info.asset_dir_path()) / rel;
+        auto images = animation::get_image_paths(dir);
+        if (images.empty()) return {};
+        return images.front().string();
+    } catch(...) { return {}; }
+}
+
+// Detect whether assigning current->ref would create a loop via source.kind=="animation" edges.
+static bool creates_cycle(const AssetInfo& info, const std::string& current, const std::string& ref) {
+    if (current.empty() || ref.empty()) return false;
+    if (current == ref) return true;
+    // Build a simple next map (one hop per anim)
+    std::unordered_map<std::string,std::string> next;
+    try {
+        auto names = info.animation_names();
+        for (const auto& nm : names) {
+            nlohmann::json p = info.animation_payload(nm);
+            if (!p.is_object()) continue;
+            auto src = p.value("source", nlohmann::json::object());
+            if (src.value("kind", std::string{}) == std::string{"animation"}) {
+                std::string rn = src.value("name", std::string{});
+                if (!rn.empty()) next[nm] = rn;
+            }
+        }
+    } catch(...) {}
+    // Temporarily add current->ref
+    next[current] = ref;
+    // Follow from current, detect loop
+    std::unordered_set<std::string> seen;
+    std::string x = current;
+    for (int steps=0; steps < 1000; ++steps) {
+        if (seen.count(x)) return true;
+        seen.insert(x);
+        auto it = next.find(x);
+        if (it == next.end()) return false;
+        x = it->second;
+    }
+    return true; // safety
+}
 
 AnimationsEditorPanel::AnimationsEditorPanel() {
     box_ = std::make_unique<FloatingCollapsible>("Animations", 32, 64);
@@ -76,11 +128,8 @@ AnimationsEditorPanel::AnimationsEditorPanel() {
 
 AnimationsEditorPanel::~AnimationsEditorPanel() = default;
 
-void AnimationsEditorPanel::set_asset_paths(const std::string& asset_dir_path,
-                                            const std::string& info_json_path) {
-    asset_dir_path_ = asset_dir_path;
-    info_json_path_ = info_json_path;
-    load_info_json();
+void AnimationsEditorPanel::set_info(const std::shared_ptr<AssetInfo>& info) {
+    info_ = info;
     if (is_open()) {
         rebuild_all_rows();
         if (box_) box_->set_rows(rows_);
@@ -99,22 +148,24 @@ void AnimationsEditorPanel::update(const Input& input, int screen_w, int screen_
     if (!is_open()) return;
     if (rebuild_requested_) {
         rebuild_requested_ = false;
-        rebuild_all_rows();
-        if (box_) box_->set_rows(rows_);
+        if (info_) {
+            rebuild_all_rows();
+            if (box_) box_->set_rows(rows_);
+        }
     }
     if (box_) box_->update(input, screen_w, screen_h);
     // Detect movement modal close and persist positions
     bool now_open = movement_modal_.is_open();
-    if (movement_was_open_ && !now_open && !movement_anim_name_.empty()) {
+    if (movement_was_open_ && !now_open && info_ && !movement_anim_name_.empty()) {
         // Write positions back to JSON for the animation we edited
-        nlohmann::json payload = animation_payload(movement_anim_name_);
+        nlohmann::json payload = info_->animation_payload(movement_anim_name_);
         if (!payload.is_object()) payload = nlohmann::json::object();
         nlohmann::json mv = nlohmann::json::array();
         const auto& pos = movement_modal_.positions();
         for (const auto& p : pos) mv.push_back(nlohmann::json::array({ p.first, p.second }));
         payload["movement"] = mv;
-        upsert_animation(movement_anim_name_, payload);
-        (void)save_info_json();
+        info_->upsert_animation(movement_anim_name_, payload);
+        (void)info_->update_info_json();
         // Rebuild rows to reflect any size changes
         rebuild_all_rows();
         if (box_) box_->set_rows(rows_);
@@ -126,7 +177,7 @@ void AnimationsEditorPanel::update(const Input& input, int screen_w, int screen_
 bool AnimationsEditorPanel::handle_event(const SDL_Event& e) {
     if (!is_open()) return false;
     if (movement_modal_.is_open() && movement_modal_.handle_event(e)) return true;
-    if (!box_) return false;
+    if (!box_ || !info_) return false;
     bool used = box_->handle_event(e);
 
     bool changed_any = false;
@@ -135,7 +186,7 @@ bool AnimationsEditorPanel::handle_event(const SDL_Event& e) {
         if (it->id_box) {
             std::string new_name = it->id_box->value();
             if (!new_name.empty() && new_name != it->name) {
-                if (rename_animation(it->name, new_name)) {
+                if (info_->rename_animation(it->name, new_name)) {
                     it->name = new_name; changed_any = true;
                 } else {
                     it->id_box->set_value(it->name);
@@ -157,7 +208,7 @@ bool AnimationsEditorPanel::handle_event(const SDL_Event& e) {
             auto names = current_names_sorted();
             std::string ref = (!names.empty() && it->ref_dd) ? names[clampi(it->ref_dd->selected(), 0, (int)names.size()-1)] : std::string{};
             // Guard against self or cycles
-            if (ref == it->name || creates_cycle(it->name, ref)) ref.clear();
+            if (ref == it->name || creates_cycle(*info_, it->name, ref)) ref.clear();
             src["name"] = ref; src["path"] = "";
         }
         payload["source"] = src;
@@ -169,7 +220,7 @@ bool AnimationsEditorPanel::handle_event(const SDL_Event& e) {
 
         int spd = it->speed_sl ? it->speed_sl->value() : 1; if (spd == 0) spd = 1; payload["speed_factor"] = spd;
 
-        int nframes = compute_frames_from_source(payload["source"]); if (nframes <= 0) nframes = 1; payload["number_of_frames"] = nframes;
+        int nframes = compute_frames_from_source(*info_, payload["source"]); if (nframes <= 0) nframes = 1; payload["number_of_frames"] = nframes;
         try {
             nlohmann::json mv = payload.value("movement", nlohmann::json::array());
             if (!mv.is_array()) mv = nlohmann::json::array();
@@ -188,8 +239,8 @@ bool AnimationsEditorPanel::handle_event(const SDL_Event& e) {
         }
 
         if (payload.dump() != it->last_payload.dump()) {
-            if (upsert_animation(it->name, payload)) {
-                (void)save_info_json();
+            if (info_->upsert_animation(it->name, payload)) {
+                (void)info_->update_info_json();
                 it->last_payload = payload; changed_any = true;
                 if (it->frames_label) {
                     std::ostringstream oss; oss << "Frames: " << nframes; it->frames_label->set_value(oss.str());
@@ -201,9 +252,9 @@ bool AnimationsEditorPanel::handle_event(const SDL_Event& e) {
     if (start_dd_) {
         auto names = current_names_sorted();
         int idx = clampi(start_dd_->selected(), 0, (int)names.size()-1);
-        std::string cur = get_start_animation_name();
+        std::string cur = info_->start_animation;
         if (!names.empty() && idx < (int)names.size() && names[idx] != cur) {
-            set_start_animation_name(names[idx]); (void)save_info_json(); changed_any = true;
+            info_->set_start_animation_name(names[idx]); (void)info_->update_info_json(); changed_any = true;
         }
     }
 
@@ -231,20 +282,20 @@ void AnimationsEditorPanel::render(SDL_Renderer* r, int screen_w, int screen_h) 
 }
 
 std::vector<std::string> AnimationsEditorPanel::current_names_sorted() const {
-    std::vector<std::string> names = animation_names(); std::sort(names.begin(), names.end()); return names;
+    std::vector<std::string> names; if (info_) names = info_->animation_names(); std::sort(names.begin(), names.end()); return names;
 }
 
-int AnimationsEditorPanel::compute_frames_from_source(const nlohmann::json& source) const {
+int AnimationsEditorPanel::compute_frames_from_source(const AssetInfo& info, const nlohmann::json& source) {
     try {
         if (!source.is_object()) return 1;
         std::string kind = source.value("kind", std::string{"folder"});
         if (kind == "animation") {
             std::string ref = source.value("name", std::string{}); if (ref.empty()) return 1;
-            nlohmann::json other = animation_payload(ref); if (!other.is_object()) return 1;
-            return compute_frames_from_source(other.value("source", nlohmann::json::object()));
+            nlohmann::json other = info.animation_payload(ref); if (!other.is_object()) return 1;
+            return compute_frames_from_source(info, other.value("source", nlohmann::json::object()));
         }
         std::string rel = source.value("path", std::string{});
-        fs::path dir = fs::path(asset_dir_path_) / rel; if (!fs::exists(dir) || !fs::is_directory(dir)) return 1;
+        fs::path dir = fs::path(info.asset_dir_path()) / rel; if (!fs::exists(dir) || !fs::is_directory(dir)) return 1;
         int count = 0; for (auto& e : fs::directory_iterator(dir)) { if (!e.is_regular_file()) continue; auto ext = e.path().extension().string(); std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower); if (ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".bmp" || ext == ".webp") ++count; }
         return std::max(1, count);
     } catch(...) { return 1; }
@@ -253,148 +304,6 @@ int AnimationsEditorPanel::compute_frames_from_source(const nlohmann::json& sour
 nlohmann::json AnimationsEditorPanel::default_payload(const std::string& name) {
     nlohmann::json p; p["source"] = nlohmann::json::object({{"kind","folder"},{"path",name},{"name",nullptr}});
     p["flipped_source"]=false; p["reverse_source"]=false; p["locked"]=false; p["rnd_start"]=false; p["loop"]=false; p["speed_factor"]=1; p["number_of_frames"]=1; p["movement"]=nlohmann::json::array({nlohmann::json::array({0,0})}); p["on_end"] = "default"; return p;
-}
-
-// ---------------- JSON/file helpers (no AssetInfo) ----------------
-
-bool AnimationsEditorPanel::load_info_json() {
-    info_json_ = nlohmann::json::object();
-    try {
-        std::ifstream in(info_json_path_);
-        if (in) {
-            in >> info_json_;
-        }
-    } catch (...) {
-        info_json_ = nlohmann::json::object();
-    }
-    // Ensure structure
-    if (!info_json_.contains("animations") || !info_json_["animations"].is_object()) {
-        info_json_["animations"] = nlohmann::json::object();
-    }
-    if (!info_json_.contains("start") || !info_json_["start"].is_string()) {
-        info_json_["start"] = std::string{};
-    }
-    return true;
-}
-
-bool AnimationsEditorPanel::save_info_json() const {
-    try {
-        std::ofstream out(info_json_path_);
-        if (!out) return false;
-        out << info_json_.dump(4);
-        return true;
-    } catch (...) { return false; }
-}
-
-std::vector<std::string> AnimationsEditorPanel::animation_names() const {
-    std::vector<std::string> names;
-    try {
-        if (info_json_.contains("animations") && info_json_["animations"].is_object()) {
-            for (auto it = info_json_["animations"].begin(); it != info_json_["animations"].end(); ++it) {
-                names.push_back(it.key());
-            }
-        }
-    } catch (...) {}
-    return names;
-}
-
-nlohmann::json AnimationsEditorPanel::animation_payload(const std::string& name) const {
-    try {
-        if (info_json_.contains("animations") && info_json_["animations"].is_object()) {
-            auto it = info_json_["animations"].find(name);
-            if (it != info_json_["animations"].end()) return *it;
-        }
-    } catch (...) {}
-    return nlohmann::json::object();
-}
-
-bool AnimationsEditorPanel::upsert_animation(const std::string& name, const nlohmann::json& payload) {
-    if (name.empty()) return false;
-    try {
-        if (!info_json_.contains("animations") || !info_json_["animations"].is_object()) info_json_["animations"] = nlohmann::json::object();
-        info_json_["animations"][name] = payload;
-        return true;
-    } catch (...) { return false; }
-}
-
-bool AnimationsEditorPanel::remove_animation(const std::string& name) {
-    bool removed = false;
-    try {
-        if (info_json_.contains("animations") && info_json_["animations"].is_object()) {
-            removed = info_json_["animations"].erase(name) > 0;
-        }
-        if (get_start_animation_name() == name) set_start_animation_name("");
-    } catch (...) { removed = false; }
-    return removed;
-}
-
-bool AnimationsEditorPanel::rename_animation(const std::string& old_name, const std::string& new_name) {
-    if (old_name.empty() || new_name.empty() || old_name == new_name) return false;
-    try {
-        nlohmann::json payload = animation_payload(old_name);
-        if (!payload.is_object()) return false;
-        upsert_animation(new_name, payload);
-        remove_animation(old_name);
-        if (get_start_animation_name() == old_name) set_start_animation_name(new_name);
-        return true;
-    } catch (...) { return false; }
-}
-
-std::string AnimationsEditorPanel::get_start_animation_name() const {
-    try { return info_json_.value("start", std::string{}); } catch (...) { return {}; }
-}
-
-void AnimationsEditorPanel::set_start_animation_name(const std::string& name) {
-    try { info_json_["start"] = name; } catch (...) {}
-}
-
-std::string AnimationsEditorPanel::first_frame_path(const nlohmann::json& source) const {
-    try {
-        if (!source.is_object()) return {};
-        std::string kind = source.value("kind", std::string{"folder"});
-        if (kind == "animation") {
-            std::string ref = source.value("name", std::string{});
-            if (ref.empty()) return {};
-            nlohmann::json other = animation_payload(ref);
-            if (!other.is_object()) return {};
-            return first_frame_path(other.value("source", nlohmann::json::object()));
-        }
-        std::string rel = source.value("path", std::string{});
-        if (rel.empty()) return {};
-        fs::path dir = fs::path(asset_dir_path_) / rel;
-        auto images = animation::get_image_paths(dir);
-        if (images.empty()) return {};
-        return images.front().string();
-    } catch (...) { return {}; }
-}
-
-bool AnimationsEditorPanel::creates_cycle(const std::string& current, const std::string& ref) const {
-    if (current.empty() || ref.empty()) return false;
-    if (current == ref) return true;
-    std::unordered_map<std::string, std::string> next;
-    try {
-        auto names = animation_names();
-        for (const auto& nm : names) {
-            nlohmann::json p = animation_payload(nm);
-            if (!p.is_object()) continue;
-            auto src = p.value("source", nlohmann::json::object());
-            if (src.value("kind", std::string{}) == std::string{"animation"}) {
-                std::string rn = src.value("name", std::string{});
-                if (!rn.empty()) next[nm] = rn;
-            }
-        }
-    } catch (...) {}
-    next[current] = ref;
-    std::unordered_set<std::string> seen;
-    std::string x = current;
-    for (int steps = 0; steps < 1000; ++steps) {
-        if (seen.count(x)) return true;
-        seen.insert(x);
-        auto it = next.find(x);
-        if (it == next.end()) return false;
-        x = it->second;
-    }
-    return true;
 }
 
 void AnimationsEditorPanel::rebuild_all_rows() {
@@ -406,37 +315,40 @@ void AnimationsEditorPanel::rebuild_all_rows() {
 }
 
 void AnimationsEditorPanel::rebuild_header_row() {
+    if (!info_) return;
     header_widgets_.clear();
     std::vector<Widget*> row;
     auto names = current_names_sorted();
-    int sel = 0; for (size_t i=0;i<names.size();++i) if (names[i] == get_start_animation_name()) { sel = (int)i; break; }
+    int sel = 0; for (size_t i=0;i<names.size();++i) if (names[i] == info_->start_animation) { sel = (int)i; break; }
     start_dd_ = std::make_unique<DMDropdown>("Start", names, sel);
     header_widgets_.push_back(std::make_unique<DropdownWidget>(start_dd_.get()));
     row.push_back(header_widgets_.back().get());
 
     new_btn_ = std::make_unique<DMButton>("New Animation", &DMStyles::CreateButton(), 160, DMButton::height());
     header_widgets_.push_back(std::make_unique<ButtonWidget>(new_btn_.get(), [this]() {
-        std::string base = "new_anim"; std::string nm = base; int i = 1; auto names = animation_names();
+        if (!info_) return;
+        std::string base = "new_anim"; std::string nm = base; int i = 1; auto names = info_->animation_names();
         auto exists = [&](const std::string& s){ return std::find(names.begin(), names.end(), s) != names.end(); };
         while (exists(nm)) nm = base + std::string("_") + std::to_string(i++);
-        auto p = default_payload(nm); p["number_of_frames"] = compute_frames_from_source(p["source"]);
-        upsert_animation(nm, p); save_info_json(); request_rebuild();
+        auto p = default_payload(nm); p["number_of_frames"] = compute_frames_from_source(*info_, p["source"]);
+        info_->upsert_animation(nm, p); info_->update_info_json(); request_rebuild();
     }));
     row.push_back(header_widgets_.back().get());
 
-    // New From Folder... convenience button (store button as member to keep it alive)
-    new_folder_btn_ = std::make_unique<DMButton>("New From Folder...", &DMStyles::ListButton(), 180, DMButton::height());
-    auto new_folder_btn_ptr = new_folder_btn_.get();
+    // New From Folder... convenience button
+    auto new_folder_btn = std::make_unique<DMButton>("New From Folder...", &DMStyles::ListButton(), 180, DMButton::height());
+    auto new_folder_btn_ptr = new_folder_btn.get();
     header_widgets_.push_back(std::make_unique<ButtonWidget>(new_folder_btn_ptr, [this]() {
+        if (!info_) return;
         // Create a unique name and default folder path = name
-        std::string base = "new_anim"; std::string nm = base; int i=1; auto names = animation_names();
+        std::string base = "new_anim"; std::string nm = base; int i=1; auto names = info_->animation_names();
         auto exists = [&](const std::string& s){ return std::find(names.begin(), names.end(), s) != names.end(); };
         while (exists(nm)) nm = base + std::string{"_"} + std::to_string(i++);
         std::string rel = nm; // default folder under asset dir
-        try { fs::create_directories(fs::path(asset_dir_path_) / rel); } catch(...) {}
+        try { fs::create_directories(fs::path(info_->asset_dir_path()) / rel); } catch(...) {}
         auto p = default_payload(nm); p["source"]["path"] = rel; p["source"]["kind"] = "folder"; p["source"]["name"] = nullptr;
-        p["number_of_frames"] = compute_frames_from_source(p["source"]);
-        upsert_animation(nm, p); save_info_json(); request_rebuild();
+        p["number_of_frames"] = compute_frames_from_source(*info_, p["source"]);
+        info_->upsert_animation(nm, p); info_->update_info_json(); request_rebuild();
     }));
     row.push_back(header_widgets_.back().get());
 
@@ -450,11 +362,12 @@ void AnimationsEditorPanel::rebuild_header_row() {
         // Button
         auto create_btn = std::make_unique<DMButton>("Create First Animation", &DMStyles::CreateButton(), 220, DMButton::height());
         header_widgets_.push_back(std::make_unique<ButtonWidget>(create_btn.get(), [this]() {
-            std::string base = "new_anim"; std::string nm = base; int i=1; auto names = animation_names();
+            if (!info_) return;
+            std::string base = "new_anim"; std::string nm = base; int i=1; auto names = info_->animation_names();
             auto exists = [&](const std::string& s){ return std::find(names.begin(), names.end(), s) != names.end(); };
             while (exists(nm)) nm = base + std::string{"_"} + std::to_string(i++);
             auto p = default_payload(nm);
-            upsert_animation(nm, p); (void)save_info_json(); request_rebuild();
+            info_->upsert_animation(nm, p); (void)info_->update_info_json(); request_rebuild();
         }));
         // Build row
         rows_.push_back(std::vector<Widget*>{ header_widgets_[1].get(), header_widgets_[2].get() });
@@ -464,9 +377,10 @@ void AnimationsEditorPanel::rebuild_header_row() {
 }
 
 void AnimationsEditorPanel::rebuild_animation_rows() {
-    auto names = animation_names(); std::sort(names.begin(), names.end());
+    if (!info_) return;
+    auto names = info_->animation_names(); std::sort(names.begin(), names.end());
     for (const auto& nm : names) {
-        auto ui = std::make_unique<AnimUI>(); ui->name = nm; ui->last_payload = animation_payload(nm); if (!ui->last_payload.is_object()) ui->last_payload = nlohmann::json::object();
+        auto ui = std::make_unique<AnimUI>(); ui->name = nm; ui->last_payload = info_->animation_payload(nm); if (!ui->last_payload.is_object()) ui->last_payload = nlohmann::json::object();
         nlohmann::json src = ui->last_payload.value("source", nlohmann::json::object());
         std::string kind = src.value("kind", std::string{"folder"}); std::string path = src.value("path", std::string{}); std::string ref = src.value("name", std::string{});
 
@@ -485,13 +399,13 @@ void AnimationsEditorPanel::rebuild_animation_rows() {
         ui->speed_sl = std::make_unique<DMSlider>("speed", -20, 20, spd);
         ui->movement_btn = std::make_unique<DMButton>("Edit Movement...", &DMStyles::HeaderButton(), 180, DMButton::height());
 
-        int nframes = compute_frames_from_source(src); std::ostringstream oss; oss << "Frames: " << nframes; ui->frames_label = std::make_unique<DMTextBox>("", oss.str());
+        int nframes = compute_frames_from_source(*info_, src); std::ostringstream oss; oss << "Frames: " << nframes; ui->frames_label = std::make_unique<DMTextBox>("", oss.str());
 
         // Row A
         auto w_id = std::make_unique<TextBoxWidget>(ui->id_box.get());
         Widget* w_id_ptr = w_id.get(); ui->row_widgets.push_back(std::move(w_id));
         auto w_del = std::make_unique<ButtonWidget>(ui->del_btn.get(), [this, nm]() {
-            remove_animation(nm); save_info_json(); request_rebuild();
+            if (!info_) return; info_->remove_animation(nm); info_->update_info_json(); request_rebuild();
         });
         Widget* w_del_ptr = w_del.get(); ui->row_widgets.push_back(std::move(w_del));
         rows_.push_back(std::vector<Widget*>{ w_id_ptr, w_del_ptr });
@@ -511,21 +425,22 @@ void AnimationsEditorPanel::rebuild_animation_rows() {
         if (kind_idx == 0) {
             ui->create_folder_btn = std::make_unique<DMButton>("Create Folder", &DMStyles::ListButton(), 160, DMButton::height());
             auto w_cf = std::make_unique<ButtonWidget>(ui->create_folder_btn.get(), [this, nm]() {
+                if (!info_) return;
                 // Find UI again to get path value
                 for (auto& it2 : items_) {
                     if (!it2 || it2->name != nm) continue;
                     std::string rel = it2->path_box ? it2->path_box->value() : std::string{};
                     if (rel.empty()) { rel = nm; if (it2->path_box) it2->path_box->set_value(rel); }
                     try {
-                        fs::path dir = fs::path(asset_dir_path_) / rel;
+                        fs::path dir = fs::path(info_->asset_dir_path()) / rel;
                         fs::create_directories(dir);
                     } catch(...) {}
                     // Persist path in JSON and request rebuild
-                    nlohmann::json payload = animation_payload(nm);
+                    nlohmann::json payload = info_->animation_payload(nm);
                     if (!payload.is_object()) payload = nlohmann::json::object();
                     nlohmann::json src = payload.value("source", nlohmann::json::object());
                     src["kind"] = "folder"; src["path"] = rel; src["name"] = nullptr; payload["source"] = src;
-                    upsert_animation(nm, payload); (void)save_info_json();
+                    info_->upsert_animation(nm, payload); (void)info_->update_info_json();
                     request_rebuild();
                     break;
                 }
@@ -533,9 +448,10 @@ void AnimationsEditorPanel::rebuild_animation_rows() {
             Widget* w_cf_ptr = w_cf.get(); ui->row_widgets.push_back(std::move(w_cf));
             // Thumbnail preview for folder
             auto thumb = std::make_unique<ThumbWidget>([this, nm, ui_ptr = ui.get()](){
+                if (!info_) return std::string{};
                 nlohmann::json s = ui_ptr->last_payload.value("source", nlohmann::json::object());
                 s["kind"] = "folder"; s["path"] = ui_ptr->path_box ? ui_ptr->path_box->value() : std::string{}; s["name"] = nullptr;
-                return first_frame_path(s);
+                return first_frame_path(*info_, s);
             }, 96);
             Widget* w_thumbp = thumb.get(); ui->row_widgets.push_back(std::move(thumb));
             rows_.push_back(std::vector<Widget*>{ w_cf_ptr, w_thumbp });
@@ -543,9 +459,10 @@ void AnimationsEditorPanel::rebuild_animation_rows() {
         else {
             // Thumbnail for ref kind
             auto thumb = std::make_unique<ThumbWidget>([this, ui_ptr = ui.get()](){
+                if (!info_) return std::string{};
                 nlohmann::json s = ui_ptr->last_payload.value("source", nlohmann::json::object());
                 s["kind"] = "animation"; // ensure
-                return first_frame_path(s);
+                return first_frame_path(*info_, s);
             }, 96);
             Widget* w_thumbp = thumb.get(); ui->row_widgets.push_back(std::move(thumb));
             rows_.push_back(std::vector<Widget*>{ w_thumbp });
@@ -560,7 +477,7 @@ void AnimationsEditorPanel::rebuild_animation_rows() {
         // Row D speed + movement + frames
         auto w_spd = std::make_unique<SliderWidget>(ui->speed_sl.get()); Widget* w_spdp = w_spd.get(); ui->row_widgets.push_back(std::move(w_spd));
         auto w_mov = std::make_unique<ButtonWidget>(ui->movement_btn.get(), [this, nm]() {
-            nlohmann::json payload = animation_payload(nm);
+            if (!info_) return; nlohmann::json payload = info_->animation_payload(nm);
             std::vector<animation::MovementModal::Position> pos; try { auto mv = payload.at("movement"); if (mv.is_array()) { for (auto& p : mv) { if (p.is_array() && p.size() >= 2) pos.emplace_back(p[0].get<int>(), p[1].get<int>()); } } } catch(...) {}
             movement_anim_name_ = nm;
             movement_modal_.open(pos);
@@ -580,13 +497,14 @@ void AnimationsEditorPanel::rebuild_animation_rows() {
 
         ui->dup_btn = std::make_unique<DMButton>("Duplicate", &DMStyles::ListButton(), 120, DMButton::height());
         auto w_dup = std::make_unique<ButtonWidget>(ui->dup_btn.get(), [this, nm]() {
+            if (!info_) return;
             // Generate unique name based on nm
             std::string base = nm + std::string{"_copy"};
-            std::string new_nm = base; int i=1; auto names = animation_names();
+            std::string new_nm = base; int i=1; auto names = info_->animation_names();
             auto exists = [&](const std::string& s){ return std::find(names.begin(), names.end(), s) != names.end(); };
             while (exists(new_nm)) new_nm = base + std::string{"_"} + std::to_string(i++);
-            nlohmann::json payload = animation_payload(nm);
-            upsert_animation(new_nm, payload); (void)save_info_json(); request_rebuild();
+            nlohmann::json payload = info_->animation_payload(nm);
+            info_->upsert_animation(new_nm, payload); (void)info_->update_info_json(); request_rebuild();
         });
         Widget* w_dupp = w_dup.get(); ui->row_widgets.push_back(std::move(w_dup));
         rows_.push_back(std::vector<Widget*>{ w_endp, w_dupp });
@@ -599,11 +517,12 @@ void AnimationsEditorPanel::rebuild_animation_rows() {
             // Compute button
             ui->compute_btn = std::make_unique<DMButton>("Compute Bounds", &DMStyles::ListButton(), 160, DMButton::height());
             auto w_comp = std::make_unique<ButtonWidget>(ui->compute_btn.get(), [this, nm]() {
-                nlohmann::json payload = animation_payload(nm);
+                if (!info_) return;
+                nlohmann::json payload = info_->animation_payload(nm);
                 auto src = payload.value("source", nlohmann::json::object());
                 std::string rel = src.value("path", std::string{});
                 if (rel.empty()) return;
-                fs::path dir = fs::path(asset_dir_path_) / rel;
+                fs::path dir = fs::path(info_->asset_dir_path()) / rel;
                 auto images = animation::get_image_paths(dir);
                 // Find this UI entry to read alpha slider and write results
                 for (auto& it2 : items_) {
@@ -628,14 +547,15 @@ void AnimationsEditorPanel::rebuild_animation_rows() {
             // Row G: Apply crop
             ui->crop_btn = std::make_unique<DMButton>("Apply Crop", &DMStyles::DeleteButton(), 140, DMButton::height());
             auto w_crop = std::make_unique<ButtonWidget>(ui->crop_btn.get(), [this, nm]() {
+                if (!info_) return;
                 // Find this UI entry
                 for (auto& it2 : items_) {
                     if (it2 && it2->name == nm) {
-                        nlohmann::json payload = animation_payload(nm);
+                        nlohmann::json payload = info_->animation_payload(nm);
                         auto src = payload.value("source", nlohmann::json::object());
                         std::string rel = src.value("path", std::string{});
                         if (rel.empty()) return;
-                        fs::path dir = fs::path(asset_dir_path_) / rel;
+                        fs::path dir = fs::path(info_->asset_dir_path()) / rel;
                         auto images = animation::get_image_paths(dir);
                         int thr = it2->alpha_sl ? it2->alpha_sl->value() : 0;
                         // Compute bounds if missing
@@ -655,3 +575,4 @@ void AnimationsEditorPanel::rebuild_animation_rows() {
         items_.push_back(std::move(ui));
     }
 }
+

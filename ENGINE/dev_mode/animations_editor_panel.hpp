@@ -17,16 +17,17 @@ class DMTextBox;
 class DMCheckbox;
 class DMSlider;
 class DMDropdown;
-class AssetInfo;
-
-// Fresh C++ version of the Animations editor, modelled after scripts/animation_ui.py
-// Shown as a FloatingCollapsible panel, launched from AssetInfoUI.
+// Fresh C++ version of the Animations editor, modelled after the Python UI.
+// This panel only reads/writes SRC/<asset>/info.json and manipulates image
+// files inside SRC/<asset> folders. It does NOT use AssetInfo.
 class AnimationsEditorPanel {
 public:
     AnimationsEditorPanel();
     ~AnimationsEditorPanel();
 
-    void set_info(const std::shared_ptr<AssetInfo>& info);
+    // Provide paths for the selected asset. The panel will only use these.
+    void set_asset_paths(const std::string& asset_dir_path,
+                         const std::string& info_json_path);
     void open();
     void close();
     bool is_open() const;
@@ -40,8 +41,19 @@ private:
     void rebuild_header_row();
     void rebuild_animation_rows();
     std::vector<std::string> current_names_sorted() const;
-    static int compute_frames_from_source(const AssetInfo& info, const nlohmann::json& source);
+    int compute_frames_from_source(const nlohmann::json& source) const;
     static nlohmann::json default_payload(const std::string& name);
+    bool save_info_json() const;
+    bool load_info_json();
+    std::vector<std::string> animation_names() const;
+    nlohmann::json animation_payload(const std::string& name) const;
+    bool upsert_animation(const std::string& name, const nlohmann::json& payload);
+    bool remove_animation(const std::string& name);
+    bool rename_animation(const std::string& old_name, const std::string& new_name);
+    std::string get_start_animation_name() const;
+    void set_start_animation_name(const std::string& name);
+    std::string first_frame_path(const nlohmann::json& source) const;
+    bool creates_cycle(const std::string& current, const std::string& ref) const;
 
     struct AnimUI {
         std::string name;
@@ -77,12 +89,16 @@ private:
     // Header controls
     std::unique_ptr<DMDropdown> start_dd_;
     std::unique_ptr<DMButton>   new_btn_;
+    std::unique_ptr<DMButton>   new_folder_btn_;
     mutable std::vector<std::unique_ptr<Widget>> header_widgets_;
 
     std::unique_ptr<FloatingCollapsible> box_;
     std::vector<std::unique_ptr<AnimUI>> items_;
     std::vector<std::vector<Widget*>> rows_;
-    std::shared_ptr<AssetInfo> info_;
+    // Context (paths and JSON cache)
+    std::string asset_dir_path_;
+    std::string info_json_path_;
+    nlohmann::json info_json_;
 
     // Modal editor for per-frame movement (ported from Python).
     animation::MovementModal movement_modal_;

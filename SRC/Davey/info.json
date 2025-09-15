@@ -1274,6 +1274,7 @@
         "default",
         "forward",
         "left",
+        "medium",
         "passable",
         "player",
         "right",
