@@ -13,15 +13,29 @@
 #include "dev_mode/asset_library_ui.hpp"
 #include "dev_mode/asset_info_ui.hpp"
 #include "dev_mode/room_configurator.hpp"
+#include "dev_mode/assets_config.hpp"
 #include "dev_mode/area_overlay_editor.hpp"
 #include "dev_mode/widgets.hpp"
+#include "room/room.hpp"
 
 #include <algorithm>
 #include <iostream>
 #include <memory>
 #include <limits>
+#include <random>
+#include <tuple>
+#include <cmath>
 #include <nlohmann/json.hpp>
 #include "utils/range_util.hpp"
+
+static std::string generate_spawn_id() {
+    static std::mt19937 rng(std::random_device{}());
+    static const char* hex = "0123456789abcdef";
+    std::uniform_int_distribution<int> dist(0, 15);
+    std::string s = "spn-";
+    for (int i = 0; i < 12; ++i) s.push_back(hex[dist(rng)]);
+    return s;
+}
 
 
 Assets::Assets(std::vector<Asset>&& loaded,
@@ -83,6 +97,7 @@ Assets::~Assets() {
     delete dev_mouse;
     delete library_ui_;
     delete info_ui_;
+    delete assets_cfg_ui_;
     delete area_editor_;
     delete room_cfg_ui_;
 }
@@ -194,14 +209,17 @@ void Assets::set_dev_mode(bool mode) {
     if (dev_mode) {
         // Disable parallax effects while in dev mode to simplify editing
         camera.set_parallax_enabled(false);
+        camera.set_manual_zoom_override(false);
         close_asset_info_editor();
     } else {
         // Restore parallax when returning to player mode
         camera.set_parallax_enabled(true);
+        camera.set_manual_zoom_override(false);
         // Leaving dev mode: close floating UIs
         if (library_ui_) library_ui_->close();
         if (room_cfg_ui_) room_cfg_ui_->close();
         if (info_ui_) info_ui_->close();
+        if (assets_cfg_ui_) assets_cfg_ui_->close_all_asset_configs();
     }
 
     if (input) input->clearClickBuffer();
@@ -380,6 +398,9 @@ void Assets::render_overlays(SDL_Renderer* renderer) {
     if (info_ui_ && info_ui_->is_visible()) {
         info_ui_->render(renderer, screen_width, screen_height);
     }
+    if (assets_cfg_ui_) {
+        assets_cfg_ui_->render(renderer);
+    }
     if (room_cfg_ui_ && room_cfg_ui_->any_panel_visible()) {
         room_cfg_ui_->render(renderer);
     }
@@ -454,13 +475,12 @@ void Assets::update_ui(const Input& input) {
     if (info_ui_ && info_ui_->is_visible()) {
         info_ui_->update(input, screen_width, screen_height);
     }
+    if (assets_cfg_ui_) {
+        assets_cfg_ui_->update(input);
+    }
 
-    // When editing (asset info open or area overlay active), lock the camera
-    // to the selected or hovered asset to avoid auto-zoom/pan drifting away.
-    const bool editing_overlay_active =
-        (area_editor_ && area_editor_->is_active()) ||
-        (info_ui_ && info_ui_->is_visible()) ||
-        (room_cfg_ui_ && room_cfg_ui_->any_panel_visible());
+    // When editing an area overlay, lock the camera to the selected or hovered asset.
+    const bool editing_overlay_active = (area_editor_ && area_editor_->is_active());
 
     if (editing_overlay_active) {
         Asset* focus = nullptr;
@@ -475,7 +495,6 @@ void Assets::update_ui(const Input& input) {
     } else {
         // Return camera control to normal gameplay when editors are closed
         camera.clear_focus_override();
-        camera.set_manual_zoom_override(false);
     }
 }
 
@@ -489,30 +508,75 @@ void Assets::open_asset_info_editor(const std::shared_ptr<AssetInfo>& info) {
     if (!info_ui_) info_ui_ = new AssetInfoUI();
     if (info_ui_) info_ui_->set_assets(this);
     info_ui_->set_info(info);
-    if (room_cfg_ui_) room_cfg_ui_->close_asset_configs();
     info_ui_->open();
 }
 
 void Assets::open_asset_info_editor_for_asset(Asset* a) {
     if (!a || !a->info) return;
-    // Pan and zoom to the asset before opening the editor
-    focus_camera_on_asset(a, 0.8, 25);
     open_asset_info_editor(a->info);
 }
 
 void Assets::open_asset_config_for_asset(Asset* a) {
     if (!a) return;
-    if (info_ui_) info_ui_->close();
-    if (!room_cfg_ui_) {
-        room_cfg_ui_ = new RoomConfigurator();
-    }
-    if (!room_cfg_ui_->visible()) {
-        room_cfg_ui_->open(current_room_);
-        room_cfg_ui_->set_position(10, 10);
+    if (!assets_cfg_ui_) {
+        assets_cfg_ui_ = new AssetsConfig();
+        if (current_room_) {
+            auto& assets_json = current_room_->assets_data()["assets"];
+            assets_cfg_ui_->load(assets_json, [this]() {
+                if (current_room_) current_room_->save_assets_json();
+            });
+        }
     }
     SDL_Point scr = camera.map_to_screen({a->pos.x, a->pos.y});
-    room_cfg_ui_->open_asset_config(a->spawn_id.empty() ? (a->info ? a->info->name : std::string{}) : a->spawn_id,
-                                    scr.x, scr.y);
+    std::string id = a->spawn_id.empty() ? (a->info ? a->info->name : std::string{}) : a->spawn_id;
+    assets_cfg_ui_->open_asset_config(id, scr.x, scr.y);
+}
+
+void Assets::finalize_asset_drag(Asset* a, const std::shared_ptr<AssetInfo>& info) {
+    if (!a || !info || !current_room_) return;
+    auto& root = current_room_->assets_data();
+    auto& arr = root["assets"];
+    if (!arr.is_array()) arr = nlohmann::json::array();
+    int width = 0, height = 0;
+    SDL_Point center{0,0};
+    if (current_room_->room_area) {
+        auto b = current_room_->room_area->get_bounds();
+        width = std::max(1, std::get<2>(b) - std::get<0>(b));
+        height = std::max(1, std::get<3>(b) - std::get<1>(b));
+        auto c = current_room_->room_area->get_center();
+        center.x = c.x; center.y = c.y;
+    }
+    auto clamp_int = [](int v){ return std::max(0, std::min(100, v)); };
+    int ep_x = 50, ep_y = 50;
+    if (width != 0 && height != 0) {
+        ep_x = clamp_int(static_cast<int>(std::lround(((double)(a->pos.x - center.x) / width) * 100.0 + 50.0)));
+        ep_y = clamp_int(static_cast<int>(std::lround(((double)(a->pos.y - center.y) / height) * 100.0 + 50.0)));
+    }
+    std::string spawn_id = generate_spawn_id();
+    nlohmann::json entry;
+    entry["name"] = info->name;
+    entry["spawn_id"] = spawn_id;
+    entry["min_number"] = 1;
+    entry["max_number"] = 1;
+    entry["position"] = "Exact Position";
+    entry["exact_position"] = nullptr;
+    entry["inherited"] = false;
+    entry["check_overlap"] = false;
+    entry["check_min_spacing"] = false;
+    entry["tag"] = false;
+    entry["ep_x_min"] = ep_x;
+    entry["ep_x_max"] = ep_x;
+    entry["ep_y_min"] = ep_y;
+    entry["ep_y_max"] = ep_y;
+    arr.push_back(entry);
+    current_room_->save_assets_json();
+    a->spawn_id = spawn_id;
+    a->spawn_method = "Exact Position";
+    if (assets_cfg_ui_) {
+        assets_cfg_ui_->load(arr, [this]() {
+            if (current_room_) current_room_->save_assets_json();
+        });
+    }
 }
 
 void Assets::close_asset_info_editor() {
@@ -544,6 +608,10 @@ void Assets::handle_sdl_event(const SDL_Event& e) {
         info_ui_->handle_event(e);
         handled = true;
     }
+    if (!handled && assets_cfg_ui_ && assets_cfg_ui_->any_visible() && assets_cfg_ui_->is_point_inside(mx, my)) {
+        assets_cfg_ui_->handle_event(e);
+        handled = true;
+    }
     if (!handled && room_cfg_ui_ && room_cfg_ui_->visible() && room_cfg_ui_->is_point_inside(mx, my)) {
         room_cfg_ui_->handle_event(e);
         handled = true;
@@ -555,11 +623,16 @@ void Assets::handle_sdl_event(const SDL_Event& e) {
     if (!handled) {
         if (info_ui_ && info_ui_->is_visible()) {
             info_ui_->handle_event(e);
+        } else if (assets_cfg_ui_ && assets_cfg_ui_->any_visible()) {
+            assets_cfg_ui_->handle_event(e);
         } else if (room_cfg_ui_ && room_cfg_ui_->any_panel_visible()) {
             room_cfg_ui_->handle_event(e);
         } else if (library_ui_ && library_ui_->is_visible()) {
             library_ui_->handle_event(e);
         }
+    }
+    if (handled && input && (e.type == SDL_MOUSEBUTTONDOWN || e.type == SDL_MOUSEBUTTONUP)) {
+        input->clearClickBuffer();
     }
 }
 

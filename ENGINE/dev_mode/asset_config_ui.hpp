@@ -19,9 +19,9 @@ class DMSlider;
 class DMButton;
 
 // UI panel for configuring a single asset entry in the spawn JSON
-class AssetConfig {
+class AssetConfigUI {
 public:
-    AssetConfig();
+    AssetConfigUI();
     void set_position(int x, int y);
     void load(const nlohmann::json& asset);
     void open_panel();
@@ -31,11 +31,13 @@ public:
     bool handle_event(const SDL_Event& e);
     void render(SDL_Renderer* r) const;
     nlohmann::json to_json() const;
+    bool is_point_inside(int x, int y) const;
 private:
     void rebuild_widgets();
     void rebuild_rows();
     std::unique_ptr<DockableCollapsible> panel_;
     std::vector<std::string> spawn_methods_;
+    std::string spawn_id_;
     std::string name_;
     int method_ = 0;
     int min_ = 0;

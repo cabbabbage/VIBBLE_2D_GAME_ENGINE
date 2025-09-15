@@ -14,7 +14,8 @@ class Input;
 class DMDropdown;
 class DMRangeSlider;
 class DMCheckbox;
-class AssetsConfig;
+class DMTextBox;
+class TextBoxWidget;
 class Room;
 
 // Top-level room configuration panel with room settings and asset list
@@ -32,14 +33,13 @@ public:
     bool handle_event(const SDL_Event& e);
     void render(SDL_Renderer* r) const;
     nlohmann::json build_json() const;
-    void open_asset_config(const std::string& id, int x, int y);
-    void close_asset_configs();
     bool is_point_inside(int x, int y) const;
 private:
     void rebuild_rows();
     std::unique_ptr<DockableCollapsible> panel_;
-    std::unique_ptr<AssetsConfig> assets_cfg_;
     std::vector<std::string> room_geom_options_;
+    Room* room_ = nullptr;
+    std::string room_name_;
     int room_w_min_ = 0;
     int room_w_max_ = 0;
     int room_h_min_ = 0;
@@ -57,4 +57,6 @@ private:
     std::unique_ptr<CheckboxWidget> room_spawn_cb_w_;
     std::unique_ptr<DMCheckbox> room_boss_cb_;
     std::unique_ptr<CheckboxWidget> room_boss_cb_w_;
+    std::unique_ptr<DMTextBox> room_name_lbl_;
+    std::unique_ptr<TextBoxWidget> room_name_lbl_w_;
 };

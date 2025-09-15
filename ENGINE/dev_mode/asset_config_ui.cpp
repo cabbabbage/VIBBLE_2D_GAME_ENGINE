@@ -1,9 +1,9 @@
-#include "asset_config.hpp"
+#include "asset_config_ui.hpp"
 #include "DockableCollapsible.hpp"
 #include "dm_styles.hpp"
 #include "utils/input.hpp"
 
-AssetConfig::AssetConfig() {
+AssetConfigUI::AssetConfigUI() {
     // Include "Exact Position" to match the runtime spawn options used by the
     // engine.  Without this, assets with that method would default to "Random"
     // when opened in the UI, leading to inconsistent behaviour and potential
@@ -16,12 +16,13 @@ AssetConfig::AssetConfig() {
     b_done_w_ = std::make_unique<ButtonWidget>(b_done_.get(), [this]() { close(); });
 }
 
-void AssetConfig::set_position(int x, int y) {
+void AssetConfigUI::set_position(int x, int y) {
     if (panel_) panel_->set_position(x, y);
 }
 
-void AssetConfig::load(const nlohmann::json& j) {
+void AssetConfigUI::load(const nlohmann::json& j) {
     name_.clear();
+    spawn_id_ = j.value("spawn_id", std::string{});
     if (j.contains("name") && j["name"].is_string()) name_ = j["name"].get<std::string>();
     else if (j.contains("tag") && j["tag"].is_string()) name_ = "#" + j["tag"].get<std::string>();
     method_ = 0;
@@ -44,17 +45,17 @@ void AssetConfig::load(const nlohmann::json& j) {
     rebuild_rows();
 }
 
-void AssetConfig::open_panel() {
+void AssetConfigUI::open_panel() {
     if (panel_) panel_->set_visible(true);
 }
 
-void AssetConfig::close() {
+void AssetConfigUI::close() {
     if (panel_) panel_->set_visible(false);
 }
 
-bool AssetConfig::visible() const { return panel_ && panel_->is_visible(); }
+bool AssetConfigUI::visible() const { return panel_ && panel_->is_visible(); }
 
-void AssetConfig::rebuild_widgets() {
+void AssetConfigUI::rebuild_widgets() {
     dd_method_ = std::make_unique<DMDropdown>("Method", spawn_methods_, method_);
     dd_method_w_ = std::make_unique<DropdownWidget>(dd_method_.get());
     s_range_ = std::make_unique<DMRangeSlider>(0, 100, min_, max_);
@@ -90,7 +91,7 @@ void AssetConfig::rebuild_widgets() {
     }
 }
 
-void AssetConfig::rebuild_rows() {
+void AssetConfigUI::rebuild_rows() {
     if (!panel_) return;
     DockableCollapsible::Rows rows;
     rows.push_back({ dd_method_w_.get(), b_done_w_.get() });
@@ -109,11 +110,11 @@ void AssetConfig::rebuild_rows() {
     Input dummy; panel_->update(dummy, 1920, 1080);
 }
 
-void AssetConfig::update(const Input& input) {
+void AssetConfigUI::update(const Input& input) {
     if (panel_ && panel_->is_visible()) panel_->update(input, 1920, 1080);
 }
 
-bool AssetConfig::handle_event(const SDL_Event& e) {
+bool AssetConfigUI::handle_event(const SDL_Event& e) {
     if (!panel_ || !panel_->is_visible()) return false;
     bool used = panel_->handle_event(e);
     int prev_method = method_;
@@ -131,12 +132,13 @@ bool AssetConfig::handle_event(const SDL_Event& e) {
     return used;
 }
 
-void AssetConfig::render(SDL_Renderer* r) const {
+void AssetConfigUI::render(SDL_Renderer* r) const {
     if (panel_ && panel_->is_visible()) panel_->render(r);
 }
 
-nlohmann::json AssetConfig::to_json() const {
+nlohmann::json AssetConfigUI::to_json() const {
     nlohmann::json j;
+    if (!spawn_id_.empty()) j["spawn_id"] = spawn_id_;
     if (!name_.empty() && name_[0] == '#') j["tag"] = name_.substr(1);
     else j["name"] = name_;
     j["position"] = spawn_methods_[method_];
@@ -158,4 +160,12 @@ nlohmann::json AssetConfig::to_json() const {
         j["percent_y_max"] = percent_y_max_;
     }
     return j;
+}
+
+bool AssetConfigUI::is_point_inside(int x, int y) const {
+    if (panel_ && panel_->is_visible()) {
+        SDL_Point p{ x, y };
+        return SDL_PointInRect(&p, &panel_->rect());
+    }
+    return false;
 }

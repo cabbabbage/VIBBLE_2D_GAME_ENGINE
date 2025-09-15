@@ -238,6 +238,7 @@ void AssetLibraryUI::update(const Input& input,
         drag_spawned_->pos.y = wp.y;
         if (!input.isDown(Input::LEFT)) {
             dragging_from_library_ = false;
+            assets.finalize_asset_drag(drag_spawned_, drag_info_);
             drag_spawned_ = nullptr; // leave asset in world
             drag_info_.reset();
         }

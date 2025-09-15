@@ -1,5 +1,5 @@
 #include "assets_config.hpp"
-#include "asset_config.hpp"
+#include "asset_config_ui.hpp"
 #include "DockableCollapsible.hpp"
 #include "dm_styles.hpp"
 #include "utils/input.hpp"
@@ -8,7 +8,9 @@ AssetsConfig::AssetsConfig() {}
 
 void AssetsConfig::open(const nlohmann::json& assets, std::function<void(const nlohmann::json&)> on_close) {
     on_close_ = std::move(on_close);
-    load(assets);
+    // make copy for standalone editing
+    temp_assets_ = assets;
+    load(temp_assets_, [](){});
     panel_ = std::make_unique<DockableCollapsible>("Assets", true, 32, 32);
     panel_->set_expanded(true);
     panel_->set_visible(true);
@@ -33,14 +35,20 @@ void AssetsConfig::set_position(int x, int y) {
     if (panel_) panel_->set_position(x, y);
 }
 
-void AssetsConfig::load(const nlohmann::json& assets) {
+void AssetsConfig::load(nlohmann::json& assets, std::function<void()> on_change) {
     entries_.clear();
+    assets_json_ = &assets;
+    on_change_ = std::move(on_change);
     if (!assets.is_array()) return;
     for (auto& it : assets) {
         Entry e;
-        if (it.contains("name") && it["name"].is_string()) e.id = it["name"].get<std::string>();
-        else if (it.contains("tag") && it["tag"].is_string()) e.id = "#" + it["tag"].get<std::string>();
-        e.cfg = std::make_unique<AssetConfig>();
+        e.id = it.value("spawn_id", std::string{});
+        if (e.id.empty()) {
+            if (it.contains("name") && it["name"].is_string()) e.id = it["name"].get<std::string>();
+            else if (it.contains("tag") && it["tag"].is_string()) e.id = "#" + it["tag"].get<std::string>();
+        }
+        e.json = &it;
+        e.cfg = std::make_unique<AssetConfigUI>();
         e.cfg->load(it);
         e.btn = std::make_unique<DMButton>(e.id, &DMStyles::HeaderButton(), 100, DMButton::height());
         auto* cfg_ptr = e.cfg.get();
@@ -75,7 +83,11 @@ bool AssetsConfig::handle_event(const SDL_Event& ev) {
     bool used = false;
     if (panel_ && panel_->is_visible()) used |= panel_->handle_event(ev);
     for (auto& e : entries_) {
-        if (e.cfg && e.cfg->handle_event(ev)) used = true;
+        if (e.cfg && e.cfg->handle_event(ev)) {
+            if (e.json) *e.json = e.cfg->to_json();
+            if (on_change_) on_change_();
+            used = true;
+        }
     }
     return used;
 }
@@ -88,6 +100,7 @@ void AssetsConfig::render(SDL_Renderer* r) const {
 }
 
 void AssetsConfig::open_asset_config(const std::string& id, int x, int y) {
+    close_all_asset_configs();
     for (auto& e : entries_) {
         if (e.id == id) {
             e.cfg->set_position(x, y);
@@ -106,7 +119,8 @@ void AssetsConfig::close_all_asset_configs() {
 nlohmann::json AssetsConfig::to_json() const {
     nlohmann::json arr = nlohmann::json::array();
     for (const auto& e : entries_) {
-        if (e.cfg) arr.push_back(e.cfg->to_json());
+        if (e.json) arr.push_back(*e.json);
+        else if (e.cfg) arr.push_back(e.cfg->to_json());
     }
     return arr;
 }
@@ -114,6 +128,15 @@ nlohmann::json AssetsConfig::to_json() const {
 bool AssetsConfig::any_visible() const {
     for (const auto& e : entries_) {
         if (e.cfg && e.cfg->visible()) return true;
+    }
+    return false;
+}
+
+bool AssetsConfig::is_point_inside(int x, int y) const {
+    SDL_Point p{ x, y };
+    if (panel_ && panel_->is_visible() && SDL_PointInRect(&p, &panel_->rect())) return true;
+    for (const auto& e : entries_) {
+        if (e.cfg && e.cfg->visible() && e.cfg->is_point_inside(x, y)) return true;
     }
     return false;
 }

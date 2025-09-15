@@ -65,6 +65,7 @@ public:
     // Rect of the whole floating panel
     const SDL_Rect& rect() const { return rect_; }
     int height() const { return rect_.h; }
+    bool is_point_inside(int x, int y) const;
 
 private:
     void layout(int screen_w, int screen_h) const;

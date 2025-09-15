@@ -159,6 +159,11 @@ bool DockableCollapsible::handle_event(const SDL_Event& e) {
     return false;
 }
 
+bool DockableCollapsible::is_point_inside(int x, int y) const {
+    SDL_Point p{ x, y };
+    return SDL_PointInRect(&p, &rect_);
+}
+
 void DockableCollapsible::render(SDL_Renderer* r) const {
     if (!visible_) return;
 

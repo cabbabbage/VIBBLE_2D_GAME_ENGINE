@@ -44,6 +44,8 @@ class Room {
     std::unique_ptr<AssetSpawnPlanner> planner;
     std::string type;
     nlohmann::json create_static_room_json(std::string name);
+    nlohmann::json& assets_data();
+    void save_assets_json() const;
 
 	private:
     nlohmann::json assets_json;

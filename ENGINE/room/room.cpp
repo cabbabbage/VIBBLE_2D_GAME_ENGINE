@@ -213,3 +213,14 @@ nlohmann::json Room::create_static_room_json(std::string name) {
 	out["assets"] = std::move(assets_arr);
 	return out;
 }
+
+nlohmann::json& Room::assets_data() {
+        return assets_json;
+}
+
+void Room::save_assets_json() const {
+        std::ofstream out(json_path);
+        if (out.is_open()) {
+                out << assets_json.dump(2);
+        }
+}

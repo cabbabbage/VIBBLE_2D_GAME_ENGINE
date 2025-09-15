@@ -140,24 +140,22 @@ void DevMouseControls::handle_hover() {
 
 void DevMouseControls::handle_click(const Input& input) {
     if (!mouse || !player) return;
-    // Right-click opens Asset Config for all selected assets
+    // Right-click opens Asset Info for the hovered asset
     if (mouse->wasClicked(Input::RIGHT)) {
         if (rclick_buffer_frames_ > 0) {
             rclick_buffer_frames_--;
             return;
         }
         rclick_buffer_frames_ = 2;
-        if (assets_) {
-            for (Asset* a : selected_assets) {
-                assets_->open_asset_config_for_asset(a);
-            }
+        if (assets_ && hovered_asset) {
+            assets_->open_asset_info_editor_for_asset(hovered_asset);
         }
         return;
     } else {
         rclick_buffer_frames_ = 0;
     }
 
-    // Left-click selects by spawn id and opens Asset Info for the clicked asset
+    // Left-click selects by spawn id and opens Asset Config for the clicked asset
     if (!mouse->wasClicked(Input::LEFT)) {
         click_buffer_frames_ = 0;
         return;
@@ -179,7 +177,7 @@ void DevMouseControls::handle_click(const Input& input) {
             selected_assets.push_back(nearest);
         }
         if (assets_) {
-            assets_->open_asset_info_editor_for_asset(nearest);
+            assets_->open_asset_config_for_asset(nearest);
         }
 
         Uint32 now = SDL_GetTicks();
