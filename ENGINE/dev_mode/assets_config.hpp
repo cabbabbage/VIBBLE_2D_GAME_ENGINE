@@ -30,6 +30,7 @@ public:
     void append_rows(DockableCollapsible::Rows& rows);
     void set_anchor(int x, int y);
     void open_asset_config(const std::string& id, int x, int y);
+    void close_all_asset_configs();
     nlohmann::json to_json() const;
     bool any_visible() const;
 private:

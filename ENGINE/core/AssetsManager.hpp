@@ -90,7 +90,6 @@ class Assets {
     AssetLibraryUI* library_ui_ = nullptr;
     AssetInfoUI*    info_ui_    = nullptr;
     AreaOverlayEditor* area_editor_ = nullptr;
-    bool reopen_library_on_info_close_ = false;
     // Area editor lifecycle helpers
     bool last_area_editor_active_ = false;
     bool reopen_info_after_area_edit_ = false;

@@ -43,9 +43,12 @@ void AssetsConfig::load(const nlohmann::json& assets) {
         e.cfg = std::make_unique<AssetConfig>();
         e.cfg->load(it);
         e.btn = std::make_unique<DMButton>(e.id, &DMStyles::HeaderButton(), 100, DMButton::height());
-        e.btn_w = std::make_unique<ButtonWidget>(e.btn.get(), [this, &e]() {
-            e.cfg->set_position(anchor_x_, anchor_y_);
-            e.cfg->open_panel();
+        auto* cfg_ptr = e.cfg.get();
+        e.btn_w = std::make_unique<ButtonWidget>(e.btn.get(), [this, cfg_ptr]() {
+            if (cfg_ptr) {
+                cfg_ptr->set_position(anchor_x_, anchor_y_);
+                cfg_ptr->open_panel();
+            }
         });
         entries_.push_back(std::move(e));
     }
@@ -91,6 +94,12 @@ void AssetsConfig::open_asset_config(const std::string& id, int x, int y) {
             e.cfg->open_panel();
             break;
         }
+    }
+}
+
+void AssetsConfig::close_all_asset_configs() {
+    for (auto& e : entries_) {
+        if (e.cfg) e.cfg->close();
     }
 }
 

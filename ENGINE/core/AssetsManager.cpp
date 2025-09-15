@@ -409,8 +409,8 @@ void Assets::update_ui(const Input& input) {
     if (library_ui_ && library_ui_->is_visible()) {
         library_ui_->update(input, screen_width, screen_height, library_, *this);
     }
-    // Room configurator visibility depends on dev mode and other UIs
-    if (dev_mode && !is_asset_library_open() && !is_asset_info_editor_open()) {
+    // Room configurator is visible alongside the asset library in dev mode
+    if (dev_mode && is_asset_library_open()) {
         if (!room_cfg_ui_) room_cfg_ui_ = new RoomConfigurator();
         if (!room_cfg_ui_->visible()) {
             nlohmann::json j;
@@ -419,8 +419,8 @@ void Assets::update_ui(const Input& input) {
             room_cfg_ui_->open(j);
             room_cfg_ui_->set_position(10, 10);
         }
-    } else {
-        if (room_cfg_ui_) room_cfg_ui_->close();
+    } else if (room_cfg_ui_) {
+        room_cfg_ui_->close();
     }
     if (area_editor_) {
         const bool was = last_area_editor_active_;
@@ -484,11 +484,7 @@ void Assets::open_asset_info_editor(const std::shared_ptr<AssetInfo>& info) {
     if (!info_ui_) info_ui_ = new AssetInfoUI();
     if (info_ui_) info_ui_->set_assets(this);
     info_ui_->set_info(info);
-    // If the asset library is open now, close it and remember to restore
-    reopen_library_on_info_close_ = is_asset_library_open();
-    if (reopen_library_on_info_close_) {
-        close_asset_library();
-    }
+    if (room_cfg_ui_) room_cfg_ui_->close_asset_configs();
     info_ui_->open();
 }
 
@@ -501,6 +497,7 @@ void Assets::open_asset_info_editor_for_asset(Asset* a) {
 
 void Assets::open_asset_config_for_asset(Asset* a) {
     if (!a) return;
+    if (info_ui_) info_ui_->close();
     if (!room_cfg_ui_) {
         room_cfg_ui_ = new RoomConfigurator();
         nlohmann::json j;
@@ -515,11 +512,6 @@ void Assets::open_asset_config_for_asset(Asset* a) {
 
 void Assets::close_asset_info_editor() {
     if (info_ui_) info_ui_->close();
-    // Reopen the asset library if we closed it when opening this editor
-    if (reopen_library_on_info_close_) {
-        reopen_library_on_info_close_ = false;
-        open_asset_library();
-    }
 }
 
 bool Assets::is_asset_info_editor_open() const {
@@ -565,8 +557,6 @@ void Assets::begin_area_edit_for_selected_asset(const std::string& area_name) {
     if (info_ui_ && info_ui_->is_visible()) {
         reopen_info_after_area_edit_ = true;
         info_for_reopen_ = target->info;
-        // Do not reopen library when closing for area editing
-        reopen_library_on_info_close_ = false;
         info_ui_->close();
     } else {
         reopen_info_after_area_edit_ = false;

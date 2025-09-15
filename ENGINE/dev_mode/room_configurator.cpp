@@ -12,6 +12,8 @@ RoomConfigurator::RoomConfigurator() {
     assets_cfg_ = std::make_unique<AssetsConfig>();
 }
 
+RoomConfigurator::~RoomConfigurator() = default;
+
 void RoomConfigurator::set_position(int x, int y) {
     if (panel_) panel_->set_position(x, y);
 }
@@ -117,4 +119,8 @@ nlohmann::json RoomConfigurator::build_json() const {
 
 void RoomConfigurator::open_asset_config(const std::string& id, int x, int y) {
     if (assets_cfg_) assets_cfg_->open_asset_config(id, x, y);
+}
+
+void RoomConfigurator::close_asset_configs() {
+    if (assets_cfg_) assets_cfg_->close_all_asset_configs();
 }

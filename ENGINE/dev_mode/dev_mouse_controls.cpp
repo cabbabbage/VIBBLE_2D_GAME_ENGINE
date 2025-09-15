@@ -140,8 +140,27 @@ void DevMouseControls::handle_hover() {
 
 void DevMouseControls::handle_click(const Input& input) {
     if (!mouse || !player) return;
+    // Right-click opens Asset Info for the hovered asset only
+    if (mouse->wasClicked(Input::RIGHT)) {
+        if (rclick_buffer_frames_ > 0) {
+            rclick_buffer_frames_--; // suppress duplicate handling
+            return;
+        }
+        rclick_buffer_frames_ = 2;
+        Asset* nearest = hovered_asset;
+        if (nearest) {
+            selected_assets.clear();
+            selected_assets.push_back(nearest);
+            if (assets_) {
+                assets_->open_asset_info_editor_for_asset(nearest);
+            }
+        }
+        return;
+    } else {
+        rclick_buffer_frames_ = 0; // allow next right click when button released
+    }
 
-    // Only handle a physical click once, even though wasClicked() spans frames
+    // Left-click selects by spawn id and opens Asset Config
     if (!mouse->wasClicked(Input::LEFT)) {
         click_buffer_frames_ = 0; // allow next click when buffer ends
         return;

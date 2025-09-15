@@ -20,6 +20,7 @@ class AssetsConfig;
 class RoomConfigurator {
 public:
     RoomConfigurator();
+    ~RoomConfigurator();
     void set_position(int x, int y);
     void open(const nlohmann::json& room_data);
     void close();
@@ -30,6 +31,7 @@ public:
     void render(SDL_Renderer* r) const;
     nlohmann::json build_json() const;
     void open_asset_config(const std::string& id, int x, int y);
+    void close_asset_configs();
 private:
     void rebuild_rows();
     std::unique_ptr<DockableCollapsible> panel_;
