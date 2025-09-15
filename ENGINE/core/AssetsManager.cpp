@@ -155,18 +155,31 @@ void Assets::update(const Input& input,
     //activeManager.sortByZIndex();
 
     if (dev_mode && dev_mouse) {
-        bool lib_block = false;
-        if (library_ui_ && library_ui_->is_visible()) {
-            lib_block = library_ui_->is_input_blocking_at(input.getX(), input.getY());
+        bool ui_blocking = false;
+        int mx = input.getX();
+        int my = input.getY();
+        if (info_ui_ && info_ui_->is_visible() && info_ui_->is_point_inside(mx, my)) {
+            ui_blocking = true;
+        } else if (room_cfg_ui_ && room_cfg_ui_->visible() && room_cfg_ui_->is_point_inside(mx, my)) {
+            ui_blocking = true;
+        } else if (library_ui_ && library_ui_->is_visible() && library_ui_->is_input_blocking_at(mx, my)) {
+            ui_blocking = true;
+        } else if (area_editor_ && area_editor_->is_active()) {
+            ui_blocking = true;
         }
-        bool ui_blocking = lib_block || (info_ui_ && info_ui_->is_visible()) || (area_editor_ && area_editor_->is_active());
         if (!ui_blocking) {
             dev_mouse->handle_mouse_input(input);
         }
     }
 
-    if (input.wasScancodePressed(SDL_SCANCODE_TAB)) {
-        toggle_asset_library();
+    bool ctrl = input.isScancodeDown(SDL_SCANCODE_LCTRL) || input.isScancodeDown(SDL_SCANCODE_RCTRL);
+    if (ctrl) {
+        if (input.wasScancodePressed(SDL_SCANCODE_A)) {
+            toggle_asset_library();
+        }
+        if (input.wasScancodePressed(SDL_SCANCODE_R)) {
+            toggle_room_config();
+        }
     }
 
     update_ui(input);
@@ -181,21 +194,13 @@ void Assets::set_dev_mode(bool mode) {
     if (dev_mode) {
         // Disable parallax effects while in dev mode to simplify editing
         camera.set_parallax_enabled(false);
-        // Open library immediately (expanded) and pin to top-left
-        if (!library_ui_) library_ui_ = new AssetLibraryUI();
-        library_ui_->open();
-        library_ui_->set_position(10, 10);
-        library_ui_->set_expanded(true);
-        std::cout << "[Assets] Dev Mode ON. Asset Library opened at (10,10), expanded=1\n";
         close_asset_info_editor();
     } else {
         // Restore parallax when returning to player mode
         camera.set_parallax_enabled(true);
         // Leaving dev mode: close floating UIs
-        if (library_ui_) {
-            library_ui_->close();
-            std::cout << "[Assets] Dev Mode OFF. Asset Library closed.\n";
-        }
+        if (library_ui_) library_ui_->close();
+        if (room_cfg_ui_) room_cfg_ui_->close();
         if (info_ui_) info_ui_->close();
     }
 
@@ -221,15 +226,10 @@ Asset* Assets::get_hovered_asset() const {
     return dev_mouse ? dev_mouse->get_hovered_asset() : nullptr;
 }
 
-nlohmann::json Assets::save_current_room(std::string room_name) {
-    if (!current_room_) {
-        throw std::runtime_error("[Assets] No current room to save!");
-    }
-
-    nlohmann::json j = current_room_->create_static_room_json(room_name);
-    j["room_name"] = room_name;
-
-    return j;
+nlohmann::json Assets::save_current_room(std::string /*room_name*/) {
+    // Placeholder stub until proper room-saving logic is reintroduced.
+    // For now, return an empty JSON object.
+    return nlohmann::json::object();
 }
 
 void Assets::addAsset(const std::string& name, SDL_Point g) {
@@ -404,23 +404,31 @@ bool Assets::is_asset_library_open() const {
     return library_ui_ && library_ui_->is_visible();
 }
 
+void Assets::toggle_room_config() {
+    if (!room_cfg_ui_) room_cfg_ui_ = new RoomConfigurator();
+    if (room_cfg_ui_->visible()) {
+        room_cfg_ui_->close();
+    } else {
+        room_cfg_ui_->open(current_room_);
+        room_cfg_ui_->set_position(10, 10);
+    }
+}
+
+void Assets::close_room_config() {
+    if (room_cfg_ui_) room_cfg_ui_->close();
+}
+
+bool Assets::is_room_config_open() const {
+    return room_cfg_ui_ && room_cfg_ui_->visible();
+}
+
 void Assets::update_ui(const Input& input) {
     // Keep UI panels updated
     if (library_ui_ && library_ui_->is_visible()) {
         library_ui_->update(input, screen_width, screen_height, library_, *this);
     }
-    // Room configurator is visible alongside the asset library in dev mode
-    if (dev_mode && is_asset_library_open()) {
-        if (!room_cfg_ui_) room_cfg_ui_ = new RoomConfigurator();
-        if (!room_cfg_ui_->visible()) {
-            nlohmann::json j;
-            if (current_room_) j = save_current_room(current_room_->room_name);
-            else j["assets"] = nlohmann::json::array();
-            room_cfg_ui_->open(j);
-            room_cfg_ui_->set_position(10, 10);
-        }
-    } else if (room_cfg_ui_) {
-        room_cfg_ui_->close();
+    if (room_cfg_ui_ && room_cfg_ui_->visible()) {
+        room_cfg_ui_->update(input);
     }
     if (area_editor_) {
         const bool was = last_area_editor_active_;
@@ -445,9 +453,6 @@ void Assets::update_ui(const Input& input) {
     }
     if (info_ui_ && info_ui_->is_visible()) {
         info_ui_->update(input, screen_width, screen_height);
-    }
-    if (room_cfg_ui_ && room_cfg_ui_->any_panel_visible()) {
-        room_cfg_ui_->update(input);
     }
 
     // When editing (asset info open or area overlay active), lock the camera
@@ -500,9 +505,9 @@ void Assets::open_asset_config_for_asset(Asset* a) {
     if (info_ui_) info_ui_->close();
     if (!room_cfg_ui_) {
         room_cfg_ui_ = new RoomConfigurator();
-        nlohmann::json j;
-        j["assets"] = nlohmann::json::array();
-        room_cfg_ui_->open(j);
+    }
+    if (!room_cfg_ui_->visible()) {
+        room_cfg_ui_->open(current_room_);
         room_cfg_ui_->set_position(10, 10);
     }
     SDL_Point scr = camera.map_to_screen({a->pos.x, a->pos.y});
@@ -526,14 +531,35 @@ void Assets::handle_sdl_event(const SDL_Event& e) {
     if (area_editor_ && area_editor_->is_active()) {
         if (area_editor_->handle_event(e)) return;
     }
-    if (library_ui_ && library_ui_->is_visible()) {
-        library_ui_->handle_event(e);
+    int mx = 0, my = 0;
+    if (e.type == SDL_MOUSEMOTION) {
+        mx = e.motion.x; my = e.motion.y;
+    } else if (e.type == SDL_MOUSEBUTTONDOWN || e.type == SDL_MOUSEBUTTONUP) {
+        mx = e.button.x; my = e.button.y;
+    } else if (e.type == SDL_MOUSEWHEEL) {
+        SDL_GetMouseState(&mx, &my);
     }
-    if (info_ui_ && info_ui_->is_visible()) {
+    bool handled = false;
+    if (!handled && info_ui_ && info_ui_->is_visible() && info_ui_->is_point_inside(mx, my)) {
         info_ui_->handle_event(e);
+        handled = true;
     }
-    if (room_cfg_ui_ && room_cfg_ui_->any_panel_visible()) {
+    if (!handled && room_cfg_ui_ && room_cfg_ui_->visible() && room_cfg_ui_->is_point_inside(mx, my)) {
         room_cfg_ui_->handle_event(e);
+        handled = true;
+    }
+    if (!handled && library_ui_ && library_ui_->is_visible() && library_ui_->is_input_blocking_at(mx, my)) {
+        library_ui_->handle_event(e);
+        handled = true;
+    }
+    if (!handled) {
+        if (info_ui_ && info_ui_->is_visible()) {
+            info_ui_->handle_event(e);
+        } else if (room_cfg_ui_ && room_cfg_ui_->any_panel_visible()) {
+            room_cfg_ui_->handle_event(e);
+        } else if (library_ui_ && library_ui_->is_visible()) {
+            library_ui_->handle_event(e);
+        }
     }
 }
 

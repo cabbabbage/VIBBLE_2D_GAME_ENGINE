@@ -3,6 +3,7 @@
 #include "DockableCollapsible.hpp"
 #include "dm_styles.hpp"
 #include "utils/input.hpp"
+#include "room/room.hpp"
 
 RoomConfigurator::RoomConfigurator() {
     room_geom_options_ = {"Rectangle", "Circle"};
@@ -23,10 +24,10 @@ void RoomConfigurator::open(const nlohmann::json& data) {
     if (data.is_object()) {
         if (data.contains("room")) {
             const auto& r = data["room"];
-            room_w_min_ = r.value("width_min", 0);
-            room_w_max_ = r.value("width_max", 0);
-            room_h_min_ = r.value("height_min", 0);
-            room_h_max_ = r.value("height_max", 0);
+            room_w_min_ = r.value("min_width", r.value("width_min", 0));
+            room_w_max_ = r.value("max_width", r.value("width_max", 0));
+            room_h_min_ = r.value("min_height", r.value("height_min", 0));
+            room_h_max_ = r.value("max_height", r.value("height_max", 0));
             std::string geom = r.value("geometry", room_geom_options_.front());
             for (size_t i=0;i<room_geom_options_.size();++i) if (room_geom_options_[i]==geom) room_geom_ = int(i);
             room_is_spawn_ = r.value("is_spawn", false);
@@ -40,6 +41,14 @@ void RoomConfigurator::open(const nlohmann::json& data) {
         panel_->set_visible(true);
         Input dummy; panel_->update(dummy, 1920, 1080);
     }
+}
+
+void RoomConfigurator::open(Room* room) {
+    nlohmann::json j;
+    if (room) {
+        j = room->create_static_room_json(room->room_name);
+    }
+    open(j);
 }
 
 void RoomConfigurator::close() {
@@ -106,10 +115,10 @@ nlohmann::json RoomConfigurator::build_json() const {
     nlohmann::json root;
     if (assets_cfg_) root["assets"] = assets_cfg_->to_json();
     nlohmann::json r;
-    r["width_min"] = room_w_min_;
-    r["width_max"] = room_w_max_;
-    r["height_min"] = room_h_min_;
-    r["height_max"] = room_h_max_;
+    r["min_width"] = room_w_min_;
+    r["max_width"] = room_w_max_;
+    r["min_height"] = room_h_min_;
+    r["max_height"] = room_h_max_;
     r["geometry"] = room_geom_options_[room_geom_];
     r["is_spawn"] = room_is_spawn_;
     r["is_boss"] = room_is_boss_;
@@ -123,4 +132,12 @@ void RoomConfigurator::open_asset_config(const std::string& id, int x, int y) {
 
 void RoomConfigurator::close_asset_configs() {
     if (assets_cfg_) assets_cfg_->close_all_asset_configs();
+}
+
+bool RoomConfigurator::is_point_inside(int x, int y) const {
+    if (panel_ && panel_->is_visible()) {
+        SDL_Point p{ x, y };
+        if (SDL_PointInRect(&p, &panel_->rect())) return true;
+    }
+    return false;
 }

@@ -4,7 +4,11 @@
 #include "utils/input.hpp"
 
 AssetConfig::AssetConfig() {
-    spawn_methods_ = {"Random","Center","Perimeter","Exact","Percent","Distributed"};
+    // Include "Exact Position" to match the runtime spawn options used by the
+    // engine.  Without this, assets with that method would default to "Random"
+    // when opened in the UI, leading to inconsistent behaviour and potential
+    // crashes when editing.
+    spawn_methods_ = {"Random","Center","Perimeter","Exact","Exact Position","Percent","Distributed"};
     panel_ = std::make_unique<DockableCollapsible>("Asset", true, 0, 0);
     panel_->set_expanded(true);
     panel_->set_visible(false);

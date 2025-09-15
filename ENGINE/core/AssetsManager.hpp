@@ -71,6 +71,9 @@ class Assets {
     void open_asset_library();
     void close_asset_library();
     bool is_asset_library_open() const;
+    void toggle_room_config();
+    void close_room_config();
+    bool is_room_config_open() const;
     void update_ui(const Input& input);
     std::shared_ptr<AssetInfo> consume_selected_asset_from_library();
     void open_asset_info_editor(const std::shared_ptr<AssetInfo>& info);

@@ -15,6 +15,7 @@ class DMDropdown;
 class DMRangeSlider;
 class DMCheckbox;
 class AssetsConfig;
+class Room;
 
 // Top-level room configuration panel with room settings and asset list
 class RoomConfigurator {
@@ -23,6 +24,7 @@ public:
     ~RoomConfigurator();
     void set_position(int x, int y);
     void open(const nlohmann::json& room_data);
+    void open(Room* room);
     void close();
     bool visible() const;
     bool any_panel_visible() const;
@@ -32,6 +34,7 @@ public:
     nlohmann::json build_json() const;
     void open_asset_config(const std::string& id, int x, int y);
     void close_asset_configs();
+    bool is_point_inside(int x, int y) const;
 private:
     void rebuild_rows();
     std::unique_ptr<DockableCollapsible> panel_;

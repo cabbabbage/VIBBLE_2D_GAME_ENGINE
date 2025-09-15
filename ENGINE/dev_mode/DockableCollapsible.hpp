@@ -79,9 +79,11 @@ protected:
 protected:
     std::string title_;
     mutable std::unique_ptr<DMButton> header_btn_;
+    mutable std::unique_ptr<DMButton> close_btn_;
     mutable SDL_Rect rect_{32,32,260,DMButton::height()+8};
     mutable SDL_Rect header_rect_{0,0,0,0};
     mutable SDL_Rect handle_rect_{0,0,0,0};
+    mutable SDL_Rect close_rect_{0,0,0,0};
     mutable SDL_Rect body_viewport_{0,0,0,0};
 
     Rows rows_;

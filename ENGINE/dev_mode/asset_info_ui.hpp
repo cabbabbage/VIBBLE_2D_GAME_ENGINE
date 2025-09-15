@@ -26,6 +26,7 @@ class AssetInfoUI {
     void handle_event(const SDL_Event& e);
     void render(SDL_Renderer* r, int screen_w, int screen_h) const;
     void set_assets(Assets* a) { assets_ = a; }
+    bool is_point_inside(int x, int y) const;
 
   private:
     void layout_widgets(int screen_w, int screen_h) const;

@@ -65,9 +65,9 @@ void DevMouseControls::handle_mouse_input(const Input& input) {
     const int my = mouse->getY();
 
     if (mouse->isDown(Input::LEFT) && !selected_assets.empty()) {
-        // Only allow dragging for Exact or Percent spawn methods
+        // Only allow dragging for Exact/Exact Position or Percent spawn methods
         const std::string& method = selected_assets.front()->spawn_method;
-        if (method == "Exact" || method == "Percent") {
+        if (method == "Exact" || method == "Exact Position" || method == "Percent") {
             if (!dragging_) {
                 dragging_ = true;
                 drag_last_x_ = mx;
@@ -140,37 +140,32 @@ void DevMouseControls::handle_hover() {
 
 void DevMouseControls::handle_click(const Input& input) {
     if (!mouse || !player) return;
-    // Right-click opens Asset Info for the hovered asset only
+    // Right-click opens Asset Config for all selected assets
     if (mouse->wasClicked(Input::RIGHT)) {
         if (rclick_buffer_frames_ > 0) {
-            rclick_buffer_frames_--; // suppress duplicate handling
+            rclick_buffer_frames_--;
             return;
         }
         rclick_buffer_frames_ = 2;
-        Asset* nearest = hovered_asset;
-        if (nearest) {
-            selected_assets.clear();
-            selected_assets.push_back(nearest);
-            if (assets_) {
-                assets_->open_asset_info_editor_for_asset(nearest);
+        if (assets_) {
+            for (Asset* a : selected_assets) {
+                assets_->open_asset_config_for_asset(a);
             }
         }
         return;
     } else {
-        rclick_buffer_frames_ = 0; // allow next right click when button released
+        rclick_buffer_frames_ = 0;
     }
 
-    // Left-click selects by spawn id and opens Asset Config
+    // Left-click selects by spawn id and opens Asset Info for the clicked asset
     if (!mouse->wasClicked(Input::LEFT)) {
-        click_buffer_frames_ = 0; // allow next click when buffer ends
+        click_buffer_frames_ = 0;
         return;
     }
     if (click_buffer_frames_ > 0) {
-        // Suppress duplicate handling for the same physical click
         click_buffer_frames_--;
         return;
     }
-    // Consume this click and suppress duplicates for a couple frames
     click_buffer_frames_ = 2;
 
     Asset* nearest = hovered_asset;
@@ -184,10 +179,9 @@ void DevMouseControls::handle_click(const Input& input) {
             selected_assets.push_back(nearest);
         }
         if (assets_) {
-            assets_->open_asset_config_for_asset(nearest);
+            assets_->open_asset_info_editor_for_asset(nearest);
         }
 
-        // Double-click detection retained for potential future use
         Uint32 now = SDL_GetTicks();
         if (last_click_asset_ == nearest && (now - last_click_time_ms_) <= 300) {
             last_click_time_ms_ = 0;
@@ -205,7 +199,20 @@ void DevMouseControls::handle_click(const Input& input) {
 
 void DevMouseControls::update_highlighted_assets() {
     highlighted_assets = selected_assets;
+    bool allow_hover_group = false;
     if (hovered_asset) {
+        if (selected_assets.empty()) {
+            allow_hover_group = true;
+        } else {
+            if (!hovered_asset->spawn_id.empty()) {
+                allow_hover_group = std::any_of(selected_assets.begin(), selected_assets.end(),
+                                                [&](Asset* a){ return a && a->spawn_id == hovered_asset->spawn_id; });
+            } else {
+                allow_hover_group = std::find(selected_assets.begin(), selected_assets.end(), hovered_asset) != selected_assets.end();
+            }
+        }
+    }
+    if (allow_hover_group) {
         for (Asset* a : active_assets) {
             if (!a) continue;
             if (!hovered_asset->spawn_id.empty() && a->spawn_id == hovered_asset->spawn_id) {

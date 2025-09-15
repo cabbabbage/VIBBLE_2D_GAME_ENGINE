@@ -157,6 +157,11 @@ void AssetInfoUI::render(SDL_Renderer* r, int screen_w, int screen_h) const {
     last_renderer_ = r;
 }
 
+bool AssetInfoUI::is_point_inside(int x, int y) const {
+    SDL_Point p{ x, y };
+    return visible_ && SDL_PointInRect(&p, &panel_);
+}
+
 void AssetInfoUI::save_now() const {
     if (info_) (void)info_->update_info_json();
 }
