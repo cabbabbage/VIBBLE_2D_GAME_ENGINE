@@ -254,7 +254,7 @@ void DockableCollapsible::layout(int screen_w, int screen_h) const {
     int y0 = rect_.y + padding_ + header_rect_.h + DMSpacing::header_gap();
 
     row_heights_.clear();
-    content_height_ = 0;
+    int computed_content_h = 0;
     for (const auto& row : rows_) {
         int n = (int)row.size();
         if (n <= 0) { row_heights_.push_back(0); continue; }
@@ -262,9 +262,14 @@ void DockableCollapsible::layout(int screen_w, int screen_h) const {
         int r_h = 0;
         for (auto* w : row) if (w) r_h = std::max(r_h, w->height_for_width(col_w));
         row_heights_.push_back(r_h);
-        content_height_ += r_h + row_gap_;
+        computed_content_h += r_h + row_gap_;
     }
-    if (!row_heights_.empty()) content_height_ -= row_gap_;
+    if (!row_heights_.empty()) computed_content_h -= row_gap_;
+    // When no rows are provided, subclasses may have already set content_height_
+    // during their own layout. Preserve that value instead of resetting it.
+    if (!rows_.empty()) {
+        content_height_ = computed_content_h;
+    }
 
     if (!expanded_) {
         body_viewport_h_ = 0;

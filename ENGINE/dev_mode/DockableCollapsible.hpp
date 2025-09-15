@@ -56,6 +56,9 @@ public:
     void set_col_gap(int g)    { col_gap_ = std::max(0, g); }
     void set_visible_height(int h) { visible_height_ = std::max(0, h); }
 
+    // Reset internal scroll position
+    void reset_scroll() const { scroll_ = 0; }
+
     // Event/update/render
     virtual void update(const Input& input, int screen_w, int screen_h);
     virtual bool handle_event(const SDL_Event& e);

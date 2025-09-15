@@ -507,12 +507,15 @@ void Assets::open_asset_info_editor(const std::shared_ptr<AssetInfo>& info) {
     if (!info) return;
     if (!info_ui_) info_ui_ = new AssetInfoUI();
     if (info_ui_) info_ui_->set_assets(this);
+    // Always clear previous data so the UI only shows the requested asset
+    info_ui_->clear_info();
     info_ui_->set_info(info);
     info_ui_->open();
 }
 
 void Assets::open_asset_info_editor_for_asset(Asset* a) {
     if (!a || !a->info) return;
+    std::cout << "Opening AssetInfoUI for asset: " << a->info->name << std::endl;
     open_asset_info_editor(a->info);
 }
 

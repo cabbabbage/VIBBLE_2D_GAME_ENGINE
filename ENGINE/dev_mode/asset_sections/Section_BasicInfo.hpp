@@ -24,9 +24,8 @@ class Section_BasicInfo : public DockableCollapsible {
     }
 
     void layout() override {
-      DockableCollapsible::layout();
       int x = rect_.x + DMSpacing::panel_padding();
-      int y = rect_.y + DMButton::height() + DMSpacing::header_gap();
+      int y = rect_.y + DMSpacing::panel_padding() + DMButton::height() + DMSpacing::header_gap();
       int maxw = std::max(120, rect_.w - 2 * DMSpacing::panel_padding());
       int draw_y = y - scroll_;
       if (t_type_) {
@@ -51,7 +50,8 @@ class Section_BasicInfo : public DockableCollapsible {
         y += DMCheckbox::height() + DMSpacing::item_gap();
         draw_y = y - scroll_;
       }
-      content_height_ = std::max(0, y - (rect_.y + DMButton::height() + DMSpacing::header_gap()));
+      content_height_ = std::max(0, y - (rect_.y + DMSpacing::panel_padding() + DMButton::height() + DMSpacing::header_gap()));
+      DockableCollapsible::layout();
     }
 
     bool handle_event(const SDL_Event& e) override {

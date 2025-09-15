@@ -32,7 +32,6 @@ class Section_Areas : public DockableCollapsible {
     }
 
     void layout() override {
-      DockableCollapsible::layout();
       // Refresh buttons if areas changed (count or names)
       if (info_) {
         bool needs = (buttons_.size() != info_->areas.size());
@@ -44,7 +43,7 @@ class Section_Areas : public DockableCollapsible {
         if (needs) rebuild_buttons();
       }
       int x = rect_.x + DMSpacing::panel_padding();
-      int y = rect_.y + DMButton::height() + DMSpacing::header_gap();
+      int y = rect_.y + DMSpacing::panel_padding() + DMButton::height() + DMSpacing::header_gap();
       int inner_w = rect_.w - 2 * DMSpacing::panel_padding();
       int used = 0;
       for (size_t i = 0; i < buttons_.size(); ++i) {
@@ -62,6 +61,7 @@ class Section_Areas : public DockableCollapsible {
         used += DMButton::height() + DMSpacing::item_gap();
       }
       content_height_ = std::max(0, used + DMSpacing::item_gap());
+      DockableCollapsible::layout();
     }
 
     bool handle_event(const SDL_Event& e) override {

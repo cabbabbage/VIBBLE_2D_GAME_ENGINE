@@ -24,9 +24,8 @@ public:
     }
 
     void layout() override {
-        DockableCollapsible::layout();
         int x = rect_.x + DMSpacing::panel_padding();
-        int y = rect_.y + DMButton::height() + DMSpacing::header_gap();
+        int y = rect_.y + DMSpacing::panel_padding() + DMButton::height() + DMSpacing::header_gap();
         int maxw = rect_.w - 2 * DMSpacing::panel_padding();
 
         // Detect if areas changed; rebuild dropdowns if needed
@@ -86,6 +85,7 @@ public:
         }
 
         content_height_ = std::max(0, used);
+        DockableCollapsible::layout();
     }
 
     void update(const Input& input, int screen_w, int screen_h) override {

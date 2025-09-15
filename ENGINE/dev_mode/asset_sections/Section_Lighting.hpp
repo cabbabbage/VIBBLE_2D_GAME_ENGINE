@@ -50,9 +50,8 @@ public:
     }
 
     void layout() override {
-        DockableCollapsible::layout();
         int x = rect_.x + DMSpacing::panel_padding();
-        int y = rect_.y + DMButton::height() + DMSpacing::header_gap();
+        int y = rect_.y + DMSpacing::panel_padding() + DMButton::height() + DMSpacing::header_gap();
         int maxw = rect_.w - 2 * DMSpacing::panel_padding();
         int draw_y = y - scroll_;
         if (c_has_shading_) {
@@ -97,7 +96,8 @@ public:
             b_add_->set_rect(SDL_Rect{ x, draw_y, std::min(260, maxw), DMButton::height() });
             y += DMButton::height() + 8; draw_y = y - scroll_;
         }
-        content_height_ = std::max(0, y - (rect_.y + DMButton::height() + 8));
+        content_height_ = std::max(0, y - (rect_.y + DMSpacing::panel_padding() + DMButton::height() + DMSpacing::header_gap()));
+        DockableCollapsible::layout();
     }
 
     bool handle_event(const SDL_Event& e) override {

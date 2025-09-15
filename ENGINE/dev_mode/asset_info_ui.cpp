@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
+#include <SDL_log.h>
 #include <stdexcept>
 #include <vector>
 
@@ -51,12 +52,29 @@ AssetInfoUI::~AssetInfoUI() = default;
 
 void AssetInfoUI::set_info(const std::shared_ptr<AssetInfo>& info) {
     info_ = info;
-    for (auto& s : sections_) s->set_info(info_);
+    // Reset panel scroll when a new asset is provided so widgets
+    // start at the top of the panel.
+    scroll_ = 0;
+    // Rebuild each section with the new asset info so that their
+    // controls reflect the current asset state. Without rebuilding
+    // the widgets remain uninitialized and the UI appears empty.
+    for (auto& s : sections_) {
+        s->set_info(info_);
+        s->reset_scroll();
+        s->build();
+    }
 }
 
 void AssetInfoUI::clear_info() {
     info_.reset();
-    for (auto& s : sections_) s->set_info(nullptr);
+    // Reset panel scroll and clear sections to remove stale widget
+    // state when no asset is selected.
+    scroll_ = 0;
+    for (auto& s : sections_) {
+        s->set_info(nullptr);
+        s->reset_scroll();
+        s->build();
+    }
 }
 
 void AssetInfoUI::open()  {
@@ -105,6 +123,9 @@ void AssetInfoUI::update(const Input& input, int screen_w, int screen_h) {
 
     for (auto& s : sections_) s->update(input, screen_w, screen_h);
 
+    // Recalculate layout in case sections expanded or collapsed this frame
+    layout_widgets(screen_w, screen_h);
+
     if (animations_panel_ && animations_panel_->is_open())
         animations_panel_->update(input, screen_w, screen_h);
 }
@@ -124,12 +145,19 @@ void AssetInfoUI::handle_event(const SDL_Event& e) {
         if (s->handle_event(e)) return;
     }
 
-    // Footer action: open C++ animations panel
+    // Footer action: launch Python animations UI script
     if (configure_btn_ && configure_btn_->handle_event(e)) {
         if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
-            if (animations_panel_) {
-                animations_panel_->set_asset_paths(info_->asset_dir_path(), info_->info_json_path());
-                animations_panel_->open();
+            if (info_) {
+                try {
+                    std::string cmd = std::string("python3 scripts/animation_ui.py \"") + info_->info_json_path() + "\"";
+                    int rc = std::system(cmd.c_str());
+                    if (rc != 0) {
+                        SDL_Log("animation_ui.py exited with code %d", rc);
+                    }
+                } catch (const std::exception& ex) {
+                    SDL_Log("Failed to launch animation_ui.py: %s", ex.what());
+                }
             }
         }
         return;
