@@ -22,6 +22,7 @@ class AssetLibraryUI;
 class AssetInfoUI;
 class AssetInfo;
 class AreaOverlayEditor;
+class RoomConfigurator;
 
 class Assets {
 
@@ -77,6 +78,8 @@ class Assets {
     void close_asset_info_editor();
     bool is_asset_info_editor_open() const;
     void handle_sdl_event(const SDL_Event& e);
+    // Asset config editing
+    void open_asset_config_for_asset(Asset* a);
 
     // Dev convenience: focus camera
     void focus_camera_on_asset(Asset* a, double zoom_factor = 0.8, int duration_steps = 25);
@@ -95,6 +98,7 @@ class Assets {
     std::vector<Asset*> removal_queue;
     void schedule_removal(Asset* a);
     void process_removals();
+    RoomConfigurator* room_cfg_ui_ = nullptr;
 
 	private:
     void addAsset(const std::string& name, SDL_Point g);

@@ -12,6 +12,7 @@
 #include <vector>
 #include "dev_mode/asset_library_ui.hpp"
 #include "dev_mode/asset_info_ui.hpp"
+#include "dev_mode/room_configurator.hpp"
 #include "dev_mode/area_overlay_editor.hpp"
 #include "dev_mode/widgets.hpp"
 
@@ -19,6 +20,7 @@
 #include <iostream>
 #include <memory>
 #include <limits>
+#include <nlohmann/json.hpp>
 #include "utils/range_util.hpp"
 
 
@@ -82,6 +84,7 @@ Assets::~Assets() {
     delete library_ui_;
     delete info_ui_;
     delete area_editor_;
+    delete room_cfg_ui_;
 }
 
 void Assets::set_input(Input* m) {
@@ -377,6 +380,9 @@ void Assets::render_overlays(SDL_Renderer* renderer) {
     if (info_ui_ && info_ui_->is_visible()) {
         info_ui_->render(renderer, screen_width, screen_height);
     }
+    if (room_cfg_ui_ && room_cfg_ui_->any_panel_visible()) {
+        room_cfg_ui_->render(renderer);
+    }
     DMDropdown::render_active_options(renderer);
 }
 
@@ -403,6 +409,19 @@ void Assets::update_ui(const Input& input) {
     if (library_ui_ && library_ui_->is_visible()) {
         library_ui_->update(input, screen_width, screen_height, library_, *this);
     }
+    // Room configurator visibility depends on dev mode and other UIs
+    if (dev_mode && !is_asset_library_open() && !is_asset_info_editor_open()) {
+        if (!room_cfg_ui_) room_cfg_ui_ = new RoomConfigurator();
+        if (!room_cfg_ui_->visible()) {
+            nlohmann::json j;
+            if (current_room_) j = save_current_room(current_room_->name);
+            else j["assets"] = nlohmann::json::array();
+            room_cfg_ui_->open(j);
+            room_cfg_ui_->set_position(10, 10);
+        }
+    } else {
+        if (room_cfg_ui_) room_cfg_ui_->close();
+    }
     if (area_editor_) {
         const bool was = last_area_editor_active_;
         const bool now = area_editor_->is_active();
@@ -427,12 +446,16 @@ void Assets::update_ui(const Input& input) {
     if (info_ui_ && info_ui_->is_visible()) {
         info_ui_->update(input, screen_width, screen_height);
     }
+    if (room_cfg_ui_ && room_cfg_ui_->any_panel_visible()) {
+        room_cfg_ui_->update(input);
+    }
 
     // When editing (asset info open or area overlay active), lock the camera
     // to the selected or hovered asset to avoid auto-zoom/pan drifting away.
     const bool editing_overlay_active =
         (area_editor_ && area_editor_->is_active()) ||
-        (info_ui_ && info_ui_->is_visible());
+        (info_ui_ && info_ui_->is_visible()) ||
+        (room_cfg_ui_ && room_cfg_ui_->any_panel_visible());
 
     if (editing_overlay_active) {
         Asset* focus = nullptr;
@@ -476,6 +499,19 @@ void Assets::open_asset_info_editor_for_asset(Asset* a) {
     open_asset_info_editor(a->info);
 }
 
+void Assets::open_asset_config_for_asset(Asset* a) {
+    if (!a) return;
+    if (!room_cfg_ui_) {
+        room_cfg_ui_ = new RoomConfigurator();
+        nlohmann::json j;
+        j["assets"] = nlohmann::json::array();
+        room_cfg_ui_->open(j);
+        room_cfg_ui_->set_position(10, 10);
+    }
+    SDL_Point scr = camera.map_to_screen({a->pos.x, a->pos.y});
+    room_cfg_ui_->open_asset_config(a->spawn_id.empty() ? a->name : a->spawn_id, scr.x, scr.y);
+}
+
 void Assets::close_asset_info_editor() {
     if (info_ui_) info_ui_->close();
     // Reopen the asset library if we closed it when opening this editor
@@ -502,6 +538,9 @@ void Assets::handle_sdl_event(const SDL_Event& e) {
     }
     if (info_ui_ && info_ui_->is_visible()) {
         info_ui_->handle_event(e);
+    }
+    if (room_cfg_ui_ && room_cfg_ui_->any_panel_visible()) {
+        room_cfg_ui_->handle_event(e);
     }
 }
 
