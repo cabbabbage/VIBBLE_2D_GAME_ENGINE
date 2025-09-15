@@ -25,6 +25,16 @@ class camera {
     Area  convert_area_to_aspect(const Area& in) const; // cover-fit to screen aspect
     void  zoom_to_area(const Area& target_area, int duration_steps);
 
+    // Dev/utility: focus and zoom helpers
+    void  set_manual_zoom_override(bool enabled) { manual_zoom_override_ = enabled; }
+    bool  is_manual_zoom_override() const { return manual_zoom_override_; }
+    void  set_focus_override(SDL_Point p) { focus_override_ = true; focus_point_ = p; }
+    void  clear_focus_override() { focus_override_ = false; }
+    void  pan_and_zoom_to_point(SDL_Point world_pos, double zoom_scale_factor, int duration_steps);
+    void  pan_and_zoom_to_asset(const Asset* a, double zoom_scale_factor, int duration_steps);
+    // Zoom animation without panning: multiply current target by factor over duration
+    void  animate_zoom_multiply(double factor, int duration_steps);
+
     // View accessors
     const Area& get_base_zoom() const { return base_zoom_; }
     const Area& get_current_view() const { return current_view_; }
@@ -32,6 +42,10 @@ class camera {
     // Coordinate mapping
     SDL_Point map_to_screen(SDL_Point world, float parallax_x = 0.0f, float parallax_y = 0.0f) const;
     SDL_Point screen_to_map(SDL_Point screen, float parallax_x = 0.0f, float parallax_y = 0.0f) const;
+
+    // Parallax global toggle (dev mode convenience)
+    void set_parallax_enabled(bool e) { parallax_enabled_ = e; }
+    bool parallax_enabled() const { return parallax_enabled_; }
 
     // Area-first helpers
     Area     get_camera_area() const { return current_view_; }
@@ -79,4 +93,17 @@ class camera {
 
     // Internal helpers
     void       recompute_current_view();
+
+    // Overrides (Dev Mode / focus)
+    bool       manual_zoom_override_ = false; // when true, update_zoom will not change target scale
+    bool       focus_override_ = false;       // when true, use focus_point_ instead of player position
+    SDL_Point  focus_point_{0, 0};
+
+    // Pan/zoom animation state
+    bool       pan_override_ = false;         // when true during animation, center is animated to target
+    SDL_Point  start_center_{0, 0};
+    SDL_Point  target_center_{0, 0};
+
+    // Global parallax toggle
+    bool       parallax_enabled_ = true;
 };

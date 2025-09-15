@@ -8,6 +8,8 @@
 class AssetInfo;
 class Input;
 class Area;
+class Assets;
+class AnimationsEditorPanel;
 
 class AssetInfoUI {
 
@@ -23,6 +25,7 @@ class AssetInfoUI {
     void update(const Input& input, int screen_w, int screen_h);
     void handle_event(const SDL_Event& e);
     void render(SDL_Renderer* r, int screen_w, int screen_h) const;
+    void set_assets(Assets* a) { assets_ = a; }
 
   private:
     void layout_widgets(int screen_w, int screen_h) const;
@@ -33,10 +36,14 @@ class AssetInfoUI {
     bool visible_ = false;
     std::shared_ptr<AssetInfo> info_{};
     mutable SDL_Renderer* last_renderer_ = nullptr;
+    Assets* assets_ = nullptr; // non-owning
     // Section-based UI
     std::vector<std::unique_ptr<class CollapsibleSection>> sections_;
     class Section_Areas* areas_section_ = nullptr; // non-owning ptr into sections_
     mutable int scroll_ = 0;
     mutable int max_scroll_ = 0;
     mutable SDL_Rect panel_ {0,0,0,0};
+    // Footer button: Configure Animations
+    mutable std::unique_ptr<class DMButton> configure_btn_;
+    std::unique_ptr<AnimationsEditorPanel> animations_panel_;
 };

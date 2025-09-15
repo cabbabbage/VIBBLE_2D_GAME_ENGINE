@@ -54,21 +54,20 @@ void MenuUI::game_loop() {
 			if (e.type == SDL_QUIT) {
 					quit = true;
 			}
-			if (e.type == SDL_KEYDOWN && e.key.keysym.sym == SDLK_ESCAPE && e.key.repeat == 0) {
-					bool esc_consumed = false;
-					if (game_assets_) {
-								if (game_assets_->is_asset_info_editor_open()) {
-													game_assets_->close_asset_info_editor();
-													esc_consumed = true;
-								} else if (game_assets_->is_asset_library_open()) {
-													game_assets_->close_asset_library();
-													esc_consumed = true;
-								}
-					}
-					if (!esc_consumed) {
-								toggleMenu();
-					}
-			}
+            if (e.type == SDL_KEYDOWN && e.key.keysym.sym == SDLK_ESCAPE && e.key.repeat == 0) {
+                    bool esc_consumed = false;
+                    if (game_assets_) {
+                                    if (game_assets_->is_asset_info_editor_open()) {
+                                                            // Close asset info editor; if it had closed the library, reopen it.
+                                                            game_assets_->close_asset_info_editor();
+                                                            esc_consumed = true;
+                                    }
+                                    // Note: ESC no longer closes the Asset Library.
+                    }
+                    if (!esc_consumed) {
+                                    toggleMenu();
+                    }
+            }
 			if (input_) input_->handleEvent(e);
 			if (game_assets_) game_assets_->handle_sdl_event(e);
 			if (menu_active_) handle_event(e);
@@ -255,10 +254,16 @@ void MenuUI::doSettings() {
 }
 
 void MenuUI::doToggleDevMode() {
-	dev_mode_local_ = !dev_mode_local_;
-	dev_mode_ = dev_mode_local_;
-	if (game_assets_) game_assets_->set_dev_mode(dev_mode_);
-	std::cout << "[MenuUI] Dev Mode = " << (dev_mode_ ? "ON" : "OFF") << "\n";
+    dev_mode_local_ = !dev_mode_local_;
+    dev_mode_ = dev_mode_local_;
+    if (game_assets_) game_assets_->set_dev_mode(dev_mode_);
+    std::cout << "[MenuUI] Dev Mode = " << (dev_mode_ ? "ON" : "OFF") << "\n";
+    // Close the menu immediately after switching modes
+    if (menu_active_) {
+        menu_active_ = false;
+        if (game_assets_) game_assets_->set_render_suppressed(false);
+        std::cout << "[MenuUI] Closing menu after mode switch\n";
+    }
 }
 
 void MenuUI::doSaveCurrentRoom() {

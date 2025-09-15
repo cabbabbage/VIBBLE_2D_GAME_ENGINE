@@ -21,6 +21,7 @@ class DevMouseControls;
 class AssetLibraryUI;
 class AssetInfoUI;
 class AssetInfo;
+class AreaOverlayEditor;
 
 class Assets {
 
@@ -72,13 +73,25 @@ class Assets {
     void update_ui(const Input& input);
     std::shared_ptr<AssetInfo> consume_selected_asset_from_library();
     void open_asset_info_editor(const std::shared_ptr<AssetInfo>& info);
+    void open_asset_info_editor_for_asset(Asset* a);
     void close_asset_info_editor();
     bool is_asset_info_editor_open() const;
     void handle_sdl_event(const SDL_Event& e);
 
+    // Dev convenience: focus camera
+    void focus_camera_on_asset(Asset* a, double zoom_factor = 0.8, int duration_steps = 25);
+    // Area editing
+    void begin_area_edit_for_selected_asset(const std::string& area_name);
+
 	private:
     AssetLibraryUI* library_ui_ = nullptr;
     AssetInfoUI*    info_ui_    = nullptr;
+    AreaOverlayEditor* area_editor_ = nullptr;
+    bool reopen_library_on_info_close_ = false;
+    // Area editor lifecycle helpers
+    bool last_area_editor_active_ = false;
+    bool reopen_info_after_area_edit_ = false;
+    std::shared_ptr<AssetInfo> info_for_reopen_{};
     std::vector<Asset*> removal_queue;
     void schedule_removal(Asset* a);
     void process_removals();

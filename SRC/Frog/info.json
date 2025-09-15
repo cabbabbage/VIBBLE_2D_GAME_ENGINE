@@ -577,7 +577,7 @@
     "anti_tags": [],
     "asset_name": "Frog",
     "asset_type": "Object",
-    "can_invert": false,
+    "can_invert": true,
     "custom_controller_key": "Frog_controller",
     "duplicatable": false,
     "duplication_interval_max": 60,
@@ -602,7 +602,17 @@
     },
     "start": "left",
     "tags": [
-        "passable"
+        "barrel_child",
+        "book",
+        "grave",
+        "graveyard",
+        "leafy",
+        "medium",
+        "passable",
+        "purple",
+        "red",
+        "scary",
+        "skull"
     ],
     "update_radius": 1000,
     "z_threshold": 0
