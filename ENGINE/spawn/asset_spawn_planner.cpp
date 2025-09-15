@@ -178,11 +178,15 @@ void AssetSpawnPlanner::parse_asset_spawns(const Area& area) {
 		s.border_shift = get_val("border_shift_min", "border_shift_max");
 		s.sector_center = get_val("sector_center_min", "sector_center_max");
 		s.sector_range = get_val("sector_range_min", "sector_range_max");
-		s.perimeter_offset.x = get_val("perimeter_x_offset_min", "perimeter_x_offset_max");
-		s.perimeter_offset.y = get_val("perimeter_y_offset_min", "perimeter_y_offset_max");
-		s.info = info;
-		spawn_queue_.push_back(s);
-	}
+                s.perimeter_offset.x = get_val("perimeter_x_offset_min", "perimeter_x_offset_max");
+                s.perimeter_offset.y = get_val("perimeter_y_offset_min", "perimeter_y_offset_max");
+                s.percent_x_min = asset.value("percent_x_min", 0);
+                s.percent_x_max = asset.value("percent_x_max", 0);
+                s.percent_y_min = asset.value("percent_y_min", 0);
+                s.percent_y_max = asset.value("percent_y_max", 0);
+                s.info = info;
+                spawn_queue_.push_back(s);
+        }
 }
 
 void AssetSpawnPlanner::parse_batch_assets() {

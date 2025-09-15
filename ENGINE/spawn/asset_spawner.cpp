@@ -8,6 +8,7 @@
 #include "methods/perimeter_spawner.hpp"
 #include "methods/distributed_batch_spawner.hpp"
 #include "methods/children_spawner.hpp"
+#include "methods/percent_spawner.hpp"
 #include "check.hpp"
 #include <algorithm>
 #include <fstream>
@@ -78,27 +79,30 @@ void AssetSpawner::run_spawning(AssetSpawnPlanner* planner, const Area& area) {
     if (spacing <= 0) spacing = 100;
     MapGrid grid(w, h, spacing, SDL_Point{minx, miny});
     SpawnContext ctx(rng_, checker_, logger_, exclusion_zones, asset_info_library_, all_, asset_library_, &grid);
-	ExactSpawner exact;
-	CenterSpawner center;
-	RandomSpawner random;
-	DistributedSpawner distributed;
-	PerimeterSpawner perimeter;
-	DistributedBatchSpawner batch;
+        ExactSpawner exact;
+        CenterSpawner center;
+        RandomSpawner random;
+        DistributedSpawner distributed;
+        PerimeterSpawner perimeter;
+        PercentSpawner percent;
+        DistributedBatchSpawner batch;
 	for (auto& queue_item : spawn_queue_) {
 		logger_.start_timer();
 		if (!queue_item.info) continue;
-		const std::string& pos = queue_item.position;
-		if (pos == "Exact Position") {
-			exact.spawn(queue_item, &area, ctx);
-		} else if (pos == "Center") {
-			center.spawn(queue_item, &area, ctx);
-		} else if (pos == "Perimeter") {
-			perimeter.spawn(queue_item, &area, ctx);
-		} else if (pos == "Distributed") {
-			distributed.spawn(queue_item, &area, ctx);
-		} else {
-			random.spawn(queue_item, &area, ctx);
-		}
+                const std::string& pos = queue_item.position;
+                if (pos == "Exact" || pos == "Exact Position") {
+                        exact.spawn(queue_item, &area, ctx);
+                } else if (pos == "Center") {
+                        center.spawn(queue_item, &area, ctx);
+                } else if (pos == "Perimeter") {
+                        perimeter.spawn(queue_item, &area, ctx);
+                } else if (pos == "Distributed") {
+                        distributed.spawn(queue_item, &area, ctx);
+                } else if (pos == "Percent") {
+                        percent.spawn(queue_item, &area, ctx);
+                } else {
+                        random.spawn(queue_item, &area, ctx);
+                }
 	}
 	if (!batch_assets.empty()) {
 		batch.spawn(batch_assets, &area, spacing, jitter, ctx);
