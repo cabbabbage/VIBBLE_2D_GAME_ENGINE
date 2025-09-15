@@ -1,6 +1,6 @@
 #include "assets_config.hpp"
 #include "asset_config.hpp"
-#include "FloatingCollapsible.hpp"
+#include "DockableCollapsible.hpp"
 #include "dm_styles.hpp"
 #include "utils/input.hpp"
 
@@ -9,7 +9,7 @@ AssetsConfig::AssetsConfig() {}
 void AssetsConfig::open(const nlohmann::json& assets, std::function<void(const nlohmann::json&)> on_close) {
     on_close_ = std::move(on_close);
     load(assets);
-    panel_ = std::make_unique<FloatingCollapsible>("Assets", 32, 32);
+    panel_ = std::make_unique<DockableCollapsible>("Assets", true, 32, 32);
     panel_->set_expanded(true);
     panel_->set_visible(true);
     b_done_ = std::make_unique<DMButton>("Done", &DMStyles::ListButton(), 80, DMButton::height());
@@ -17,7 +17,7 @@ void AssetsConfig::open(const nlohmann::json& assets, std::function<void(const n
         if (on_close_) on_close_(to_json());
         close();
     });
-    FloatingCollapsible::Rows rows;
+    DockableCollapsible::Rows rows;
     append_rows(rows);
     rows.push_back({ b_done_w_.get() });
     panel_->set_cell_width(120);
@@ -51,7 +51,7 @@ void AssetsConfig::load(const nlohmann::json& assets) {
     }
 }
 
-void AssetsConfig::append_rows(FloatingCollapsible::Rows& rows) {
+void AssetsConfig::append_rows(DockableCollapsible::Rows& rows) {
     for (auto& e : entries_) {
         rows.push_back({ e.btn_w.get() });
     }

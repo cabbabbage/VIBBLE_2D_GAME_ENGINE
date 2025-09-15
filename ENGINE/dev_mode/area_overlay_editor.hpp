@@ -9,7 +9,7 @@ class Assets;
 class Asset;
 class AssetInfo;
 class Input;
-class FloatingCollapsible;
+class DockableCollapsible;
 class DMButton;
 
 // Live, in-scene area editing overlay for dev mode.
@@ -71,7 +71,7 @@ private:
     bool drawing_ = false;
 
     // UI
-    std::unique_ptr<FloatingCollapsible> toolbox_;
+    std::unique_ptr<DockableCollapsible> toolbox_;
     std::unique_ptr<DMButton> btn_draw_;
     std::unique_ptr<DMButton> btn_erase_;
     std::unique_ptr<DMButton> btn_save_;

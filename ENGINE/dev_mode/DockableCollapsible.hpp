@@ -10,20 +10,23 @@
 
 class Input; // fwd
 
-// Draggable, collapsible floating container for dev-mode panels.
+// Collapsible container that can either float (draggable) or be docked
+// in a fixed rectangle. Used for dev-mode panels and AssetInfo sections.
 // - Rows: std::vector<std::vector<Widget*>>; each inner vector is a row
 // - Each row uses even column widths; row height = tallest widget in row
-// - Auto sizes width to the widest row
+// - Auto sizes width to the widest row when floating, otherwise uses
+//   the provided docked width
 // - Scrolls when content exceeds available height
-// - Header shows title + arrow and includes a drag handle area
+// - Header shows title + arrow and optionally includes a drag handle area
 // - Designed to render behind AssetInfoUI (call render() before AssetInfoUI)
-class FloatingCollapsible {
+class DockableCollapsible {
 public:
     using Row = std::vector<Widget*>;
     using Rows = std::vector<Row>;
 
-    explicit FloatingCollapsible(const std::string& title, int x = 32, int y = 32);
-    ~FloatingCollapsible();
+    explicit DockableCollapsible(const std::string& title, bool floatable = true,
+                                int x = 32, int y = 32);
+    ~DockableCollapsible();
 
     // Content rows are non-owning Widget* wrappers (see ui_widget.hpp adapters)
     void set_rows(const Rows& rows);
@@ -35,7 +38,8 @@ public:
     void set_expanded(bool e);
 
     // Position and bounds (work area is used for clamping and available height)
-    void set_position(int x, int y);
+    void set_position(int x, int y);              // used when floating
+    void set_rect(const SDL_Rect& r);             // used when docked
     SDL_Point position() const { return SDL_Point{rect_.x, rect_.y}; }
     void set_work_area(const SDL_Rect& area); // e.g., full screen or a sub-rect
 
@@ -44,6 +48,7 @@ public:
     void set_padding(int p)    { padding_ = std::max(0, p); }
     void set_row_gap(int g)    { row_gap_ = std::max(0, g); }
     void set_col_gap(int g)    { col_gap_ = std::max(0, g); }
+    void set_visible_height(int h) { visible_height_ = std::max(0, h); }
 
     // Event/update/render
     void update(const Input& input, int screen_w, int screen_h);
@@ -52,6 +57,7 @@ public:
 
     // Rect of the whole floating panel
     const SDL_Rect& rect() const { return rect_; }
+    int height() const { return rect_.h; }
 
 private:
     void layout(int screen_w, int screen_h) const;
@@ -59,6 +65,9 @@ private:
     int  compute_row_width(int num_cols) const;
     int  available_height(int screen_h) const;
     void clamp_to_bounds(int screen_w, int screen_h) const;
+
+protected:
+    virtual void layout();
 
 private:
     std::string title_;
@@ -73,10 +82,12 @@ private:
     mutable int content_height_ = 0;  // full content height (unclipped)
     mutable int widest_row_w_ = 0;    // computed panel width
     mutable int body_viewport_h_ = 0; // visible body height (clipped)
+    int visible_height_ = 300;        // docked mode max body height
 
     // Interaction
     bool visible_ = true;
     bool expanded_ = false;
+    bool floatable_ = true;
     bool dragging_ = false;
     SDL_Point drag_offset_{0,0};
     mutable int scroll_ = 0;

@@ -1,6 +1,6 @@
 #include "animations_editor_panel.hpp"
 
-#include "FloatingCollapsible.hpp"
+#include "DockableCollapsible.hpp"
 #include "dm_styles.hpp"
 #include "widgets.hpp"
 
@@ -68,7 +68,7 @@ private:
 // Member helpers are defined below to avoid AssetInfo usage.
 
 AnimationsEditorPanel::AnimationsEditorPanel() {
-    box_ = std::make_unique<FloatingCollapsible>("Animations", 32, 64);
+    box_ = std::make_unique<DockableCollapsible>("Animations", true, 32, 64);
     box_->set_expanded(true);
     // Start hidden; only show when user clicks "Configure Animations"
     box_->set_visible(false);

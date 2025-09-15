@@ -1,14 +1,14 @@
 #pragma once
 
-#include "CollapsibleSection.hpp"
+#include "../DockableCollapsible.hpp"
 #include <memory>
 #include <vector>
 #include "asset/asset_info.hpp"
 
 // Lighting configuration (shading + multiple light sources)
-class Section_Lighting : public CollapsibleSection {
+class Section_Lighting : public DockableCollapsible {
 public:
-    Section_Lighting() : CollapsibleSection("Lighting") {}
+    Section_Lighting() : DockableCollapsible("Lighting", false) {}
     ~Section_Lighting() override = default;
 
     void build() override {
@@ -50,7 +50,7 @@ public:
     }
 
     void layout() override {
-        CollapsibleSection::layout();
+        DockableCollapsible::layout();
         int x = rect_.x + DMSpacing::panel_padding();
         int y = rect_.y + DMButton::height() + DMSpacing::header_gap();
         int maxw = rect_.w - 2 * DMSpacing::panel_padding();
@@ -101,7 +101,7 @@ public:
     }
 
     bool handle_event(const SDL_Event& e) override {
-        bool used = CollapsibleSection::handle_event(e);
+        bool used = DockableCollapsible::handle_event(e);
         if (!info_ || !expanded_) return used;
         bool changed = false;
         if (c_has_shading_ && c_has_shading_->handle_event(e)) {

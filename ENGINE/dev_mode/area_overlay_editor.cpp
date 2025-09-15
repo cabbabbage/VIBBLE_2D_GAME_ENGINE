@@ -1,6 +1,6 @@
 #include "area_overlay_editor.hpp"
 
-#include "FloatingCollapsible.hpp"
+#include "DockableCollapsible.hpp"
 #include "widgets.hpp"
 #include "draw_utils.hpp"
 #include "dm_styles.hpp"
@@ -216,7 +216,7 @@ void AreaOverlayEditor::save_area() {
 
 void AreaOverlayEditor::ensure_toolbox() {
     if (toolbox_) return;
-    toolbox_ = std::make_unique<FloatingCollapsible>("Area Tools");
+    toolbox_ = std::make_unique<DockableCollapsible>("Area Tools", true);
     btn_draw_  = std::make_unique<DMButton>("Draw",  &DMStyles::CreateButton(), 180, DMButton::height());
     btn_erase_ = std::make_unique<DMButton>("Erase", &DMStyles::CreateButton(), 180, DMButton::height());
     btn_save_  = std::make_unique<DMButton>("Save",  &DMStyles::CreateButton(), 180, DMButton::height());
@@ -233,7 +233,7 @@ void AreaOverlayEditor::rebuild_toolbox_rows() {
     row1.push_back(owned_widgets_[0].get());
     row2.push_back(owned_widgets_[1].get());
     row3.push_back(owned_widgets_[2].get());
-    FloatingCollapsible::Rows rows;
+    DockableCollapsible::Rows rows;
     rows.push_back(row1);
     rows.push_back(row2);
     rows.push_back(row3);

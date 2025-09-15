@@ -10,10 +10,10 @@ class AssetInfo;
 class AssetLibrary;
 class Asset;
 class Assets;
-class FloatingCollapsible;
+class DockableCollapsible;
 class DMButton;
 
-// Floating asset library panel using FloatingCollapsible
+// Floating asset library panel using DockableCollapsible
 class AssetLibraryUI {
 
 	public:
@@ -43,7 +43,7 @@ class AssetLibraryUI {
     SDL_Texture* get_default_frame_texture(const AssetInfo& info) const;
 
 	private:
-    std::unique_ptr<FloatingCollapsible> floating_;
+    std::unique_ptr<DockableCollapsible> floating_;
     std::unique_ptr<DMButton> add_button_;
     std::unique_ptr<class ButtonWidget> add_button_widget_;
     std::vector<std::shared_ptr<AssetInfo>> items_;

@@ -1,15 +1,15 @@
 #pragma once
 
-#include "CollapsibleSection.hpp"
+#include "../DockableCollapsible.hpp"
 #include <functional>
 #include <vector>
 #include <algorithm>
 
 // Areas list + create/open editor
-class Section_Areas : public CollapsibleSection {
+class Section_Areas : public DockableCollapsible {
   public:
     Section_Areas()
-    : CollapsibleSection("Areas") {}
+    : DockableCollapsible("Areas", false) {}
 
     void set_open_editor_callback(std::function<void(const std::string&)> cb) { open_editor_ = std::move(cb); }
     void set_delete_callback(std::function<void(const std::string&)> cb) { on_delete_ = std::move(cb); }
@@ -32,7 +32,7 @@ class Section_Areas : public CollapsibleSection {
     }
 
     void layout() override {
-      CollapsibleSection::layout();
+      DockableCollapsible::layout();
       // Refresh buttons if areas changed (count or names)
       if (info_) {
         bool needs = (buttons_.size() != info_->areas.size());
@@ -65,7 +65,7 @@ class Section_Areas : public CollapsibleSection {
     }
 
     bool handle_event(const SDL_Event& e) override {
-      bool used = CollapsibleSection::handle_event(e);
+      bool used = DockableCollapsible::handle_event(e);
       if (!info_ || !expanded_) return used;
       for (size_t i = 0; i < buttons_.size(); ++i) {
         auto& b = buttons_[i];
