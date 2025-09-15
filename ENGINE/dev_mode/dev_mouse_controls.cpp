@@ -65,21 +65,25 @@ void DevMouseControls::handle_mouse_input(const Input& input) {
     const int my = mouse->getY();
 
     if (mouse->isDown(Input::LEFT) && !selected_assets.empty()) {
-        if (!dragging_) {
-            dragging_ = true;
-            drag_last_x_ = mx;
-            drag_last_y_ = my;
-        } else {
-            int dx = mx - drag_last_x_;
-            int dy = my - drag_last_y_;
-            if (dx != 0 || dy != 0) {
-                for (Asset* a : selected_assets) {
-                    if (!a) continue;
-                    a->pos.x += dx;
-                    a->pos.y += dy;
-                }
+        // Only allow dragging for Exact or Percent spawn methods
+        const std::string& method = selected_assets.front()->spawn_method;
+        if (method == "Exact" || method == "Percent") {
+            if (!dragging_) {
+                dragging_ = true;
                 drag_last_x_ = mx;
                 drag_last_y_ = my;
+            } else {
+                int dx = mx - drag_last_x_;
+                int dy = my - drag_last_y_;
+                if (dx != 0 || dy != 0) {
+                    for (Asset* a : selected_assets) {
+                        if (!a) continue;
+                        a->pos.x += dx;
+                        a->pos.y += dy;
+                    }
+                    drag_last_x_ = mx;
+                    drag_last_y_ = my;
+                }
             }
         }
     } else {
@@ -152,31 +156,21 @@ void DevMouseControls::handle_click(const Input& input) {
 
     Asset* nearest = hovered_asset;
     if (nearest) {
-        const bool ctrlHeld = input.isScancodeDown(SDL_SCANCODE_LCTRL) ||
-                              input.isScancodeDown(SDL_SCANCODE_RCTRL);
-        auto it = std::find(selected_assets.begin(), selected_assets.end(), nearest);
-
-        if (ctrlHeld) {
-            if (it == selected_assets.end()) {
-                selected_assets.push_back(nearest);
-            } else {
-                selected_assets.erase(it);
+        selected_assets.clear();
+        if (!nearest->spawn_id.empty()) {
+            for (Asset* a : active_assets) {
+                if (a && a->spawn_id == nearest->spawn_id) selected_assets.push_back(a);
             }
         } else {
-            if (it != selected_assets.end() && selected_assets.size() == 1) {
-                selected_assets.clear();
-            } else {
-                selected_assets.clear();
-                selected_assets.push_back(nearest);
-            }
+            selected_assets.push_back(nearest);
+        }
+        if (assets_) {
+            assets_->open_asset_config_for_asset(nearest);
         }
 
-        // Double-click detection: same asset within 300ms
+        // Double-click detection retained for potential future use
         Uint32 now = SDL_GetTicks();
         if (last_click_asset_ == nearest && (now - last_click_time_ms_) <= 300) {
-            if (assets_ && nearest->info) {
-                assets_->open_asset_info_editor_for_asset(nearest);
-            }
             last_click_time_ms_ = 0;
             last_click_asset_ = nullptr;
         } else {
@@ -184,11 +178,7 @@ void DevMouseControls::handle_click(const Input& input) {
             last_click_asset_ = nearest;
         }
     } else {
-        const bool ctrlHeld = input.isScancodeDown(SDL_SCANCODE_LCTRL) ||
-                              input.isScancodeDown(SDL_SCANCODE_RCTRL);
-        if (!ctrlHeld) {
-            selected_assets.clear();
-        }
+        selected_assets.clear();
         last_click_asset_ = nullptr;
         last_click_time_ms_ = 0;
     }
@@ -196,9 +186,17 @@ void DevMouseControls::handle_click(const Input& input) {
 
 void DevMouseControls::update_highlighted_assets() {
     highlighted_assets = selected_assets;
-    if (hovered_asset &&
-        std::find(highlighted_assets.begin(), highlighted_assets.end(), hovered_asset) == highlighted_assets.end()) {
-        highlighted_assets.push_back(hovered_asset);
+    if (hovered_asset) {
+        for (Asset* a : active_assets) {
+            if (!a) continue;
+            if (!hovered_asset->spawn_id.empty() && a->spawn_id == hovered_asset->spawn_id) {
+                if (std::find(highlighted_assets.begin(), highlighted_assets.end(), a) == highlighted_assets.end())
+                    highlighted_assets.push_back(a);
+            } else if (a == hovered_asset) {
+                if (std::find(highlighted_assets.begin(), highlighted_assets.end(), a) == highlighted_assets.end())
+                    highlighted_assets.push_back(a);
+            }
+        }
     }
 
     for (Asset* a : active_assets) {
