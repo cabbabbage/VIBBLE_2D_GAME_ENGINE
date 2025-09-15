@@ -42,42 +42,27 @@ class Section_Tags : public DockableCollapsible {
       int x = rect_.x + DMSpacing::panel_padding();
       int y = rect_.y + DMSpacing::panel_padding() + DMButton::height() + DMSpacing::header_gap();
       int maxw = std::max(120, rect_.w - 2 * DMSpacing::panel_padding());
-      int draw_y = y - scroll_;
+
       if (t_tags_) {
         int w = std::min(480, maxw);
         int h = t_tags_->preferred_height(w);
-        t_tags_->set_rect(SDL_Rect{ x, draw_y, w, h });
+        t_tags_->set_rect(SDL_Rect{ x, y - scroll_, w, h });
         y += h + DMSpacing::item_gap();
-        draw_y = y - scroll_;
       }
-      int btn_w = 120;
-      int btn_h = DMButton::height();
-      int per_row = std::max(1, maxw / (btn_w + DMSpacing::item_gap()));
-      for (size_t i=0;i<recommended_buttons_.size();++i) {
-        int row = i / per_row;
-        int col = i % per_row;
-        int rx = x + col * (btn_w + DMSpacing::item_gap());
-        int ry = y + row * (btn_h + DMSpacing::small_gap()) - scroll_;
-        recommended_buttons_[i]->set_rect(SDL_Rect{ rx, ry, btn_w, btn_h });
+      for (auto& b : recommended_buttons_) {
+        b->set_rect(SDL_Rect{ x, y - scroll_, maxw, DMButton::height() });
+        y += DMButton::height() + DMSpacing::item_gap();
       }
-      y += ((int)recommended_buttons_.size() + per_row - 1) / per_row * (btn_h + DMSpacing::small_gap());
-      y += DMSpacing::item_gap();
-      draw_y = y - scroll_;
       if (t_anti_tags_) {
         int w = std::min(480, maxw);
         int h = t_anti_tags_->preferred_height(w);
-        t_anti_tags_->set_rect(SDL_Rect{ x, draw_y, w, h });
-        y += h + DMSpacing::section_gap();
-        draw_y = y - scroll_;
+        t_anti_tags_->set_rect(SDL_Rect{ x, y - scroll_, w, h });
+        y += h + DMSpacing::item_gap();
       }
-      for (size_t i=0;i<anti_recommended_buttons_.size(); ++i) {
-        int row = i / per_row;
-        int col = i % per_row;
-        int rx = x + col * (btn_w + DMSpacing::item_gap());
-        int ry = y + row * (btn_h + DMSpacing::small_gap()) - scroll_;
-        anti_recommended_buttons_[i]->set_rect(SDL_Rect{ rx, ry, btn_w, btn_h });
+      for (auto& b : anti_recommended_buttons_) {
+        b->set_rect(SDL_Rect{ x, y - scroll_, maxw, DMButton::height() });
+        y += DMButton::height() + DMSpacing::item_gap();
       }
-      y += ((int)anti_recommended_buttons_.size() + per_row - 1) / per_row * (btn_h + DMSpacing::small_gap());
       content_height_ = std::max(0, y - (rect_.y + DMSpacing::panel_padding() + DMButton::height() + DMSpacing::header_gap()));
       DockableCollapsible::layout();
     }

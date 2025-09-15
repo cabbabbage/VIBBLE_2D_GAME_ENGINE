@@ -3622,7 +3622,7 @@
     ],
     "asset_name": "Barrel",
     "asset_type": "Object",
-    "can_invert": false,
+    "can_invert": true,
     "child_assets": [
         {
             "area_name": "",
@@ -3644,7 +3644,7 @@
     "duplicatable": false,
     "duplication_interval_max": 60,
     "duplication_interval_min": 30,
-    "has_shading": false,
+    "has_shading": true,
     "layout": {
         "__view": {
             "geometry": "1100x780+156+156",
@@ -3656,12 +3656,27 @@
     "lighting_info": [
         {
             "factor": 100,
-            "falloff": 0,
+            "falloff": 50,
             "has_light_source": true,
+            "light_intensity": 255,
+            "radius": 346,
+            "x_radius": 160,
+            "y_radius": 144
+        },
+        {
+            "falloff": 0,
+            "flare": 1,
+            "flicker": 0,
+            "has_light_source": true,
+            "light_color": [
+                255,
+                255,
+                255
+            ],
             "light_intensity": 0,
-            "radius": 0,
-            "x_radius": 0,
-            "y_radius": 0
+            "offset_x": 0,
+            "offset_y": 0,
+            "radius": 0
         }
     ],
     "mappings": {},
@@ -3673,7 +3688,7 @@
     "rnd_spawn_max": 400,
     "rnd_spawn_min": 300,
     "size_settings": {
-        "scale_percentage": 10.0
+        "scale_percentage": 48.0
     },
     "start": "",
     "tags": [

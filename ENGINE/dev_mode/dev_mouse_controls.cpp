@@ -100,6 +100,18 @@ void DevMouseControls::handle_mouse_input(const Input& input) {
     last_my = my;
 }
 
+void DevMouseControls::clear_selection() {
+    selected_assets.clear();
+    highlighted_assets.clear();
+    hovered_asset = nullptr;
+    dragging_ = false;
+    for (Asset* a : active_assets) {
+        if (!a) continue;
+        a->set_selected(false);
+        a->set_highlighted(false);
+    }
+}
+
 void DevMouseControls::handle_hover() {
     if (!mouse || !player) return;
 

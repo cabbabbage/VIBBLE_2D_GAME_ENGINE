@@ -29,6 +29,9 @@ class DevMouseControls {
     const std::vector<Asset*>& get_selected_assets() const { return selected_assets; }
     const std::vector<Asset*>& get_highlighted_assets() const { return highlighted_assets; }
     Asset* get_hovered_asset() const { return hovered_asset; }
+
+    // Clear all current selection/highlight state
+    void clear_selection();
     
     // Zoom control configuration
     void set_zoom_scale_factor(double f) { zoom_scale_factor_ = (f > 0.0) ? f : 1.0; }

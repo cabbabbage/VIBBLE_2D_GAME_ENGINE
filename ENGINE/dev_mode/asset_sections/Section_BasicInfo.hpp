@@ -27,29 +27,21 @@ class Section_BasicInfo : public DockableCollapsible {
       int x = rect_.x + DMSpacing::panel_padding();
       int y = rect_.y + DMSpacing::panel_padding() + DMButton::height() + DMSpacing::header_gap();
       int maxw = std::max(120, rect_.w - 2 * DMSpacing::panel_padding());
-      int draw_y = y - scroll_;
+
+      auto place = [&](auto& widget, int h, int w) {
+        if (!widget) return;
+        widget->set_rect(SDL_Rect{ x, y - scroll_, w, h });
+        y += h + DMSpacing::item_gap();
+      };
+
       if (t_type_) {
         int w = std::min(440, maxw);
         int h = t_type_->preferred_height(w);
-        t_type_->set_rect(SDL_Rect{ x, draw_y, w, h });
-        y += h + DMSpacing::item_gap();
-        draw_y = y - scroll_;
+        place(t_type_, h, w);
       }
-      if (s_scale_pct_) {
-        s_scale_pct_->set_rect(SDL_Rect{ x, draw_y, maxw, DMSlider::height() });
-        y += DMSlider::height() + DMSpacing::item_gap();
-        draw_y = y - scroll_;
-      }
-      if (s_zindex_) {
-        s_zindex_->set_rect(SDL_Rect{ x, draw_y, maxw, DMSlider::height() });
-        y += DMSlider::height() + DMSpacing::item_gap();
-        draw_y = y - scroll_;
-      }
-      if (c_flipable_) {
-        c_flipable_->set_rect(SDL_Rect{ x, draw_y, maxw, DMCheckbox::height() });
-        y += DMCheckbox::height() + DMSpacing::item_gap();
-        draw_y = y - scroll_;
-      }
+      place(s_scale_pct_, DMSlider::height(), maxw);
+      place(s_zindex_,    DMSlider::height(), maxw);
+      place(c_flipable_,  DMCheckbox::height(), maxw);
       content_height_ = std::max(0, y - (rect_.y + DMSpacing::panel_padding() + DMButton::height() + DMSpacing::header_gap()));
       DockableCollapsible::layout();
     }

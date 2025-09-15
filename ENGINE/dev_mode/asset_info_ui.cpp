@@ -23,11 +23,17 @@
 #include <cstdlib>
 #include "core/AssetsManager.hpp"
 #include "animations_editor_panel.hpp"
+#include "asset/Asset.hpp"
+#include "render/camera.hpp"
+#include "utils/light_source.hpp"
 
 AssetInfoUI::AssetInfoUI() {
     sections_.push_back(std::make_unique<Section_BasicInfo>());
     sections_.push_back(std::make_unique<Section_Tags>());
-    sections_.push_back(std::make_unique<Section_Lighting>());
+    auto lighting = std::make_unique<Section_Lighting>();
+    lighting->set_ui(this);
+    lighting_section_ = lighting.get();
+    sections_.push_back(std::move(lighting));
     auto spacing = std::make_unique<Section_Spacing>();
     sections_.push_back(std::move(spacing));
     auto areas = std::make_unique<Section_Areas>();
@@ -75,6 +81,7 @@ void AssetInfoUI::clear_info() {
         s->reset_scroll();
         s->build();
     }
+    target_asset_ = nullptr;
 }
 
 void AssetInfoUI::open()  {
@@ -183,6 +190,20 @@ void AssetInfoUI::render(SDL_Renderer* r, int screen_w, int screen_h) const {
         animations_panel_->render(r, screen_w, screen_h);
 
     last_renderer_ = r;
+}
+
+void AssetInfoUI::render_world_overlay(SDL_Renderer* r, const camera& cam) const {
+    if (!visible_ || !info_ || !lighting_section_ || !lighting_section_->is_expanded() || !lighting_section_->shading_enabled() || !target_asset_) return;
+    const LightSource& light = lighting_section_->shading_light();
+    if (light.x_radius <= 0 && light.y_radius <= 0) return;
+    SDL_SetRenderDrawColor(r, 255, 255, 0, 255);
+    for (int deg = 0; deg < 360; ++deg) {
+        double rad = deg * M_PI / 180.0;
+        int wx = target_asset_->pos.x + static_cast<int>(std::round(std::cos(rad) * light.x_radius));
+        int wy = target_asset_->pos.y + static_cast<int>(std::round(std::sin(rad) * light.y_radius));
+        SDL_Point p = cam.map_to_screen(SDL_Point{wx, wy});
+        SDL_RenderDrawPoint(r, p.x, p.y);
+    }
 }
 
 bool AssetInfoUI::is_point_inside(int x, int y) const {

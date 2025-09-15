@@ -396,6 +396,7 @@ void Assets::render_overlays(SDL_Renderer* renderer) {
         area_editor_->render(renderer);
     }
     if (info_ui_ && info_ui_->is_visible()) {
+        info_ui_->render_world_overlay(renderer, camera);
         info_ui_->render(renderer, screen_width, screen_height);
     }
     if (assets_cfg_ui_) {
@@ -510,13 +511,17 @@ void Assets::open_asset_info_editor(const std::shared_ptr<AssetInfo>& info) {
     // Always clear previous data so the UI only shows the requested asset
     info_ui_->clear_info();
     info_ui_->set_info(info);
+    info_ui_->set_target_asset(nullptr);
     info_ui_->open();
 }
 
 void Assets::open_asset_info_editor_for_asset(Asset* a) {
     if (!a || !a->info) return;
     std::cout << "Opening AssetInfoUI for asset: " << a->info->name << std::endl;
+    if (dev_mouse) dev_mouse->clear_selection();
+    focus_camera_on_asset(a, 0.8, 20);
     open_asset_info_editor(a->info);
+    if (info_ui_) info_ui_->set_target_asset(a);
 }
 
 void Assets::open_asset_config_for_asset(Asset* a) {
