@@ -41,6 +41,11 @@ void DockableCollapsible::set_rows(const Rows& rows) {
     rows_ = rows;
 }
 
+void DockableCollapsible::set_title(const std::string& title) {
+    title_ = title;
+    update_header_button();
+}
+
 void DockableCollapsible::set_expanded(bool e) {
     expanded_ = e;
     update_header_button();
@@ -182,6 +187,7 @@ void DockableCollapsible::render(SDL_Renderer* r) const {
             if (w) w->render(r);
         }
     }
+    render_content(r);
 
     if (was_clipping == SDL_TRUE) {
         SDL_RenderSetClipRect(r, &prev_clip);

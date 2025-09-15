@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../DockableCollapsible.hpp"
+#include "asset/asset_info.hpp"
 #include <algorithm>
 #include <cmath>
 #include <memory>

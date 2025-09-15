@@ -9,6 +9,7 @@
 #include "widgets.hpp"
 
 class Input; // fwd
+class AssetInfo; // fwd
 
 // Collapsible container that can either float (draggable) or be docked
 // in a fixed rectangle. Used for dev-mode panels and AssetInfo sections.
@@ -26,7 +27,12 @@ public:
 
     explicit DockableCollapsible(const std::string& title, bool floatable = true,
                                 int x = 32, int y = 32);
-    ~DockableCollapsible();
+    virtual ~DockableCollapsible();
+
+    // Basic metadata
+    void set_title(const std::string& title);
+    virtual void set_info(const std::shared_ptr<AssetInfo>& info) { info_ = info; }
+    virtual void build() {}
 
     // Content rows are non-owning Widget* wrappers (see ui_widget.hpp adapters)
     void set_rows(const Rows& rows);
@@ -51,9 +57,10 @@ public:
     void set_visible_height(int h) { visible_height_ = std::max(0, h); }
 
     // Event/update/render
-    void update(const Input& input, int screen_w, int screen_h);
-    bool handle_event(const SDL_Event& e);
-    void render(SDL_Renderer* r) const;
+    virtual void update(const Input& input, int screen_w, int screen_h);
+    virtual bool handle_event(const SDL_Event& e);
+    virtual void render(SDL_Renderer* r) const;
+    virtual void render_content(SDL_Renderer* r) const {}
 
     // Rect of the whole floating panel
     const SDL_Rect& rect() const { return rect_; }
@@ -69,7 +76,7 @@ private:
 protected:
     virtual void layout();
 
-private:
+protected:
     std::string title_;
     mutable std::unique_ptr<DMButton> header_btn_;
     mutable SDL_Rect rect_{32,32,260,DMButton::height()+8};
@@ -92,6 +99,7 @@ private:
     SDL_Point drag_offset_{0,0};
     mutable int scroll_ = 0;
     mutable int max_scroll_ = 0;
+    std::shared_ptr<AssetInfo> info_{};
 
     // Layout config
     int padding_   = 10;   // outer padding

@@ -414,7 +414,7 @@ void Assets::update_ui(const Input& input) {
         if (!room_cfg_ui_) room_cfg_ui_ = new RoomConfigurator();
         if (!room_cfg_ui_->visible()) {
             nlohmann::json j;
-            if (current_room_) j = save_current_room(current_room_->name);
+            if (current_room_) j = save_current_room(current_room_->room_name);
             else j["assets"] = nlohmann::json::array();
             room_cfg_ui_->open(j);
             room_cfg_ui_->set_position(10, 10);
@@ -509,7 +509,8 @@ void Assets::open_asset_config_for_asset(Asset* a) {
         room_cfg_ui_->set_position(10, 10);
     }
     SDL_Point scr = camera.map_to_screen({a->pos.x, a->pos.y});
-    room_cfg_ui_->open_asset_config(a->spawn_id.empty() ? a->name : a->spawn_id, scr.x, scr.y);
+    room_cfg_ui_->open_asset_config(a->spawn_id.empty() ? (a->info ? a->info->name : std::string{}) : a->spawn_id,
+                                    scr.x, scr.y);
 }
 
 void Assets::close_asset_info_editor() {
