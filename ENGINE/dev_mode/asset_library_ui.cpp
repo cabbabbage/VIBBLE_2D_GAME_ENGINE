@@ -11,7 +11,7 @@
 #include "dm_styles.hpp"
 #include <iostream>
 #include "core/AssetsManager.hpp"
-#include "FloatingCollapsible.hpp"
+#include "DockableCollapsible.hpp"
 #include "widgets.hpp"
 
 namespace {
@@ -106,7 +106,7 @@ struct AssetLibraryUI::AssetTileWidget : public Widget {
 };
 
 AssetLibraryUI::AssetLibraryUI() {
-    floating_ = std::make_unique<FloatingCollapsible>("Asset Library", 10, 10);
+    floating_ = std::make_unique<DockableCollapsible>("Asset Library", true, 10, 10);
     floating_->set_expanded(false); // start collapsed on left
     add_button_ = std::make_unique<DMButton>("Add New Asset", &DMStyles::CreateButton(), 200, DMButton::height());
     add_button_widget_ = std::make_unique<ButtonWidget>(add_button_.get(), [](){ /* hook later */ });
@@ -122,7 +122,7 @@ void AssetLibraryUI::toggle() {
 bool AssetLibraryUI::is_visible() const { return floating_ && floating_->is_visible(); }
 
 void AssetLibraryUI::open() {
-    if (!floating_) floating_ = std::make_unique<FloatingCollapsible>("Asset Library", 10, 10);
+    if (!floating_) floating_ = std::make_unique<DockableCollapsible>("Asset Library", true, 10, 10);
     if (floating_) {
         floating_->set_visible(true);
         floating_->set_expanded(true); // ensure it opens expanded when requested
@@ -185,7 +185,7 @@ SDL_Texture* AssetLibraryUI::get_default_frame_texture(const AssetInfo& info) co
 
 void AssetLibraryUI::rebuild_rows() {
     if (!floating_) return;
-    std::vector<FloatingCollapsible::Row> rows;
+    std::vector<DockableCollapsible::Row> rows;
     // First row: Add button
     if (add_button_widget_) rows.push_back({ add_button_widget_.get() });
     // Then tiles as one-per-row

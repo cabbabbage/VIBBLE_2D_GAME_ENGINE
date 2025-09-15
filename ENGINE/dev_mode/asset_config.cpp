@@ -1,11 +1,11 @@
 #include "asset_config.hpp"
-#include "FloatingCollapsible.hpp"
+#include "DockableCollapsible.hpp"
 #include "dm_styles.hpp"
 #include "utils/input.hpp"
 
 AssetConfig::AssetConfig() {
     spawn_methods_ = {"Random","Center","Perimeter","Exact","Percent","Distributed"};
-    panel_ = std::make_unique<FloatingCollapsible>("Asset", 0, 0);
+    panel_ = std::make_unique<DockableCollapsible>("Asset", true, 0, 0);
     panel_->set_expanded(true);
     panel_->set_visible(false);
     b_done_ = std::make_unique<DMButton>("Done", &DMStyles::ListButton(), 80, DMButton::height());
@@ -88,7 +88,7 @@ void AssetConfig::rebuild_widgets() {
 
 void AssetConfig::rebuild_rows() {
     if (!panel_) return;
-    FloatingCollapsible::Rows rows;
+    DockableCollapsible::Rows rows;
     rows.push_back({ dd_method_w_.get(), b_done_w_.get() });
     rows.push_back({ s_range_w_.get() });
     const std::string& m = spawn_methods_[method_];

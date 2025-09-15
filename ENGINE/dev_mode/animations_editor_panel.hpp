@@ -10,7 +10,7 @@
 #include "animation_utils.hpp"
 
 class Input;
-class FloatingCollapsible;
+class DockableCollapsible;
 class Widget;
 class DMButton;
 class DMTextBox;
@@ -92,7 +92,7 @@ private:
     std::unique_ptr<DMButton>   new_folder_btn_;
     mutable std::vector<std::unique_ptr<Widget>> header_widgets_;
 
-    std::unique_ptr<FloatingCollapsible> box_;
+    std::unique_ptr<DockableCollapsible> box_;
     std::vector<std::unique_ptr<AnimUI>> items_;
     std::vector<std::vector<Widget*>> rows_;
     // Context (paths and JSON cache)

@@ -1,5 +1,5 @@
 #include "search_assets.hpp"
-#include "FloatingCollapsible.hpp"
+#include "DockableCollapsible.hpp"
 #include "widgets.hpp"
 #include "dm_styles.hpp"
 #include "utils/input.hpp"
@@ -10,7 +10,7 @@
 #include <cctype>
 
 SearchAssets::SearchAssets() {
-    panel_ = std::make_unique<FloatingCollapsible>("Search Assets", 64, 64);
+    panel_ = std::make_unique<DockableCollapsible>("Search Assets", true, 64, 64);
     panel_->set_expanded(true);
     panel_->set_visible(false);
     query_ = std::make_unique<DMTextBox>("Search", "");
@@ -20,7 +20,7 @@ SearchAssets::SearchAssets() {
 }
 
 void SearchAssets::set_position(int x, int y) {
-    if (!panel_) panel_ = std::make_unique<FloatingCollapsible>("Search Assets", x, y);
+    if (!panel_) panel_ = std::make_unique<DockableCollapsible>("Search Assets", true, x, y);
     panel_->set_position(x, y);
 }
 
@@ -32,7 +32,7 @@ std::string SearchAssets::to_lower(std::string s) {
 void SearchAssets::open(Callback cb) {
     cb_ = std::move(cb);
     if (all_.empty()) load_assets();
-    if (!panel_) panel_ = std::make_unique<FloatingCollapsible>("Search Assets", 64, 64);
+    if (!panel_) panel_ = std::make_unique<DockableCollapsible>("Search Assets", true, 64, 64);
     panel_->set_visible(true);
     panel_->set_expanded(true);
     last_query_.clear();
@@ -90,7 +90,7 @@ void SearchAssets::filter_assets() {
     }
     buttons_.clear();
     button_widgets_.clear();
-    FloatingCollapsible::Rows rows;
+    DockableCollapsible::Rows rows;
     rows.push_back({ query_widget_.get() });
     for (const auto& r : results_) {
         auto b = std::make_unique<DMButton>(r.second ? ("#"+r.first) : r.first, &DMStyles::ListButton(), 200, DMButton::height());

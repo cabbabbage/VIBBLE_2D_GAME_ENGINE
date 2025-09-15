@@ -6,7 +6,7 @@
 #include <vector>
 #include <nlohmann/json.hpp>
 
-class FloatingCollapsible;
+class DockableCollapsible;
 class DropdownWidget;
 class RangeSliderWidget;
 class CheckboxWidget;
@@ -32,7 +32,7 @@ public:
     void open_asset_config(const std::string& id, int x, int y);
 private:
     void rebuild_rows();
-    std::unique_ptr<FloatingCollapsible> panel_;
+    std::unique_ptr<DockableCollapsible> panel_;
     std::unique_ptr<AssetsConfig> assets_cfg_;
     std::vector<std::string> room_geom_options_;
     int room_w_min_ = 0;

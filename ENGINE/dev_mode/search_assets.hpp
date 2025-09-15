@@ -6,7 +6,7 @@
 #include <string>
 #include <vector>
 
-class FloatingCollapsible;
+class DockableCollapsible;
 class DMTextBox;
 class DMButton;
 class TextBoxWidget;
@@ -29,7 +29,7 @@ private:
     void load_assets();
     void filter_assets();
     static std::string to_lower(std::string s);
-    std::unique_ptr<FloatingCollapsible> panel_;
+    std::unique_ptr<DockableCollapsible> panel_;
     std::unique_ptr<DMTextBox> query_;
     std::unique_ptr<TextBoxWidget> query_widget_;
     std::vector<std::unique_ptr<DMButton>> buttons_;

@@ -1,15 +1,15 @@
 #pragma once
 
-#include "CollapsibleSection.hpp"
+#include "../DockableCollapsible.hpp"
 
 // Simple placeholder section that only shows a header and 'Coming soon'
-class DummySection : public CollapsibleSection {
+class DummySection : public DockableCollapsible {
   public:
     explicit DummySection(const std::string& title)
-      : CollapsibleSection(title) {}
+      : DockableCollapsible(title, false) {}
 
     void layout() override {
-      CollapsibleSection::layout();
+      DockableCollapsible::layout();
       // Reserve a small placeholder height when expanded
       content_height_ = 28;
       if (header_) header_->set_text(expanded_ ? title_ + " ▲" : title_ + " ▼");

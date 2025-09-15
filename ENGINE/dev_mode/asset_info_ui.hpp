@@ -38,7 +38,7 @@ class AssetInfoUI {
     mutable SDL_Renderer* last_renderer_ = nullptr;
     Assets* assets_ = nullptr; // non-owning
     // Section-based UI
-    std::vector<std::unique_ptr<class CollapsibleSection>> sections_;
+    std::vector<std::unique_ptr<class DockableCollapsible>> sections_;
     class Section_Areas* areas_section_ = nullptr; // non-owning ptr into sections_
     mutable int scroll_ = 0;
     mutable int max_scroll_ = 0;

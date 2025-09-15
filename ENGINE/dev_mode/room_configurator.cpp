@@ -1,12 +1,12 @@
 #include "room_configurator.hpp"
 #include "assets_config.hpp"
-#include "FloatingCollapsible.hpp"
+#include "DockableCollapsible.hpp"
 #include "dm_styles.hpp"
 #include "utils/input.hpp"
 
 RoomConfigurator::RoomConfigurator() {
     room_geom_options_ = {"Rectangle", "Circle"};
-    panel_ = std::make_unique<FloatingCollapsible>("Room", 32, 32);
+    panel_ = std::make_unique<DockableCollapsible>("Room", true, 32, 32);
     panel_->set_expanded(true);
     panel_->set_visible(false);
     assets_cfg_ = std::make_unique<AssetsConfig>();
@@ -52,7 +52,7 @@ bool RoomConfigurator::any_panel_visible() const {
 
 void RoomConfigurator::rebuild_rows() {
     if (!panel_) return;
-    FloatingCollapsible::Rows rows;
+    DockableCollapsible::Rows rows;
     room_w_slider_ = std::make_unique<DMRangeSlider>(0, 1000, room_w_min_, room_w_max_);
     room_w_slider_w_ = std::make_unique<RangeSliderWidget>(room_w_slider_.get());
     room_h_slider_ = std::make_unique<DMRangeSlider>(0, 1000, room_h_min_, room_h_max_);

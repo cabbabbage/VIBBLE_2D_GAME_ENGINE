@@ -10,7 +10,7 @@
 #include "utils/input.hpp"
 #include "utils/area.hpp"
 
-#include "asset_sections/CollapsibleSection.hpp"
+#include "DockableCollapsible.hpp"
 #include "dm_styles.hpp"
 #include "asset_sections/Section_BasicInfo.hpp"
 #include "asset_sections/Section_Tags.hpp"
@@ -26,11 +26,8 @@
 AssetInfoUI::AssetInfoUI() {
     sections_.push_back(std::make_unique<Section_BasicInfo>());
     sections_.push_back(std::make_unique<Section_Tags>());
-    // Lighting section
     sections_.push_back(std::make_unique<Section_Lighting>());
-    // Spacing section mirrors Python Spacing page
     auto spacing = std::make_unique<Section_Spacing>();
-
     sections_.push_back(std::move(spacing));
     auto areas = std::make_unique<Section_Areas>();
     areas_section_ = areas.get();
@@ -42,13 +39,9 @@ AssetInfoUI::AssetInfoUI() {
         }
     });
     sections_.push_back(std::move(areas));
-    // Child Assets section
-    {
-        auto children = std::make_unique<Section_ChildAssets>();
-        // Allow opening the boundary editor from inside the child section
-        children->set_open_area_editor_callback([this](const std::string& nm){ open_area_editor(nm); });
-        sections_.push_back(std::move(children));
-    }
+    auto children = std::make_unique<Section_ChildAssets>();
+    children->set_open_area_editor_callback([this](const std::string& nm){ open_area_editor(nm); });
+    sections_.push_back(std::move(children));
     // Configure Animations footer button
     configure_btn_ = std::make_unique<DMButton>("Configure Animations", &DMStyles::CreateButton(), 220, DMButton::height());
     animations_panel_ = std::make_unique<AnimationsEditorPanel>();
@@ -110,7 +103,7 @@ void AssetInfoUI::update(const Input& input, int screen_w, int screen_h) {
         }
     }
 
-    for (auto& s : sections_) s->update(input);
+    for (auto& s : sections_) s->update(input, screen_w, screen_h);
 
     if (animations_panel_ && animations_panel_->is_open())
         animations_panel_->update(input, screen_w, screen_h);

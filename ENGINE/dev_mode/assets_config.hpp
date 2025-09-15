@@ -6,7 +6,7 @@
 #include <vector>
 #include <functional>
 #include <nlohmann/json.hpp>
-#include "FloatingCollapsible.hpp"
+#include "DockableCollapsible.hpp"
 class ButtonWidget;
 class DMButton;
 class Input;
@@ -27,7 +27,7 @@ public:
 
     // Embedding helpers for RoomConfigurator
     void load(const nlohmann::json& assets);
-    void append_rows(FloatingCollapsible::Rows& rows);
+    void append_rows(DockableCollapsible::Rows& rows);
     void set_anchor(int x, int y);
     void open_asset_config(const std::string& id, int x, int y);
     nlohmann::json to_json() const;
@@ -42,7 +42,7 @@ private:
     std::vector<Entry> entries_;
     int anchor_x_ = 0;
     int anchor_y_ = 0;
-    std::unique_ptr<FloatingCollapsible> panel_;
+    std::unique_ptr<DockableCollapsible> panel_;
     std::unique_ptr<DMButton> b_done_;
     std::unique_ptr<ButtonWidget> b_done_w_;
     std::function<void(const nlohmann::json&)> on_close_;

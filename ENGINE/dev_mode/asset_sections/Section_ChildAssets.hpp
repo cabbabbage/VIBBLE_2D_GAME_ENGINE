@@ -1,6 +1,6 @@
 #pragma once
 
-#include "CollapsibleSection.hpp"
+#include "../DockableCollapsible.hpp"
 #include <memory>
 #include <string>
 #include <vector>
@@ -9,10 +9,10 @@
 #include "asset/asset_info.hpp"
 #include "assets_config.hpp"
 
-class Section_ChildAssets : public CollapsibleSection {
+class Section_ChildAssets : public DockableCollapsible {
 public:
     Section_ChildAssets()
-    : CollapsibleSection("Child Assets") {}
+    : DockableCollapsible("Child Assets", false) {}
 
     void set_open_area_editor_callback(std::function<void(const std::string&)> cb) { open_area_editor_ = std::move(cb); }
 
@@ -24,7 +24,7 @@ public:
     }
 
     void layout() override {
-        CollapsibleSection::layout();
+        DockableCollapsible::layout();
         int x = rect_.x + DMSpacing::panel_padding();
         int y = rect_.y + DMButton::height() + DMSpacing::header_gap();
         int maxw = rect_.w - 2 * DMSpacing::panel_padding();
@@ -88,8 +88,8 @@ public:
         content_height_ = std::max(0, used);
     }
 
-    void update(const Input& input) override {
-        CollapsibleSection::update(input);
+    void update(const Input& input, int screen_w, int screen_h) override {
+        DockableCollapsible::update(input, screen_w, screen_h);
         if (assets_cfg_.visible()) assets_cfg_.update(input);
     }
 
@@ -97,7 +97,7 @@ public:
         if (assets_cfg_.visible()) {
             return assets_cfg_.handle_event(e);
         }
-        bool used = CollapsibleSection::handle_event(e);
+        bool used = DockableCollapsible::handle_event(e);
         if (!info_ || !expanded_) return used;
 
         bool changed = false;
