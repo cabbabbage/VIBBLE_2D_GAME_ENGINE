@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
+#include <string>
 #include <stdexcept>
 #include <vector>
 
@@ -21,7 +22,6 @@
 #include "widgets.hpp"
 #include <cstdlib>
 #include "core/AssetsManager.hpp"
-#include "animations_editor_panel.hpp"
 
 AssetInfoUI::AssetInfoUI() {
     sections_.push_back(std::make_unique<Section_BasicInfo>());
@@ -51,7 +51,6 @@ AssetInfoUI::AssetInfoUI() {
     }
     // Configure Animations footer button
     configure_btn_ = std::make_unique<DMButton>("Configure Animations", &DMStyles::CreateButton(), 220, DMButton::height());
-    animations_panel_ = std::make_unique<AnimationsEditorPanel>();
 }
 
 AssetInfoUI::~AssetInfoUI() = default;
@@ -111,16 +110,10 @@ void AssetInfoUI::update(const Input& input, int screen_w, int screen_h) {
     }
 
     for (auto& s : sections_) s->update(input);
-
-    if (animations_panel_ && animations_panel_->is_open())
-        animations_panel_->update(input, screen_w, screen_h);
 }
 
 void AssetInfoUI::handle_event(const SDL_Event& e) {
     if (!visible_ || !info_) return;
-
-    if (animations_panel_ && animations_panel_->is_open() && animations_panel_->handle_event(e))
-        return;
 
     if (e.type == SDL_KEYDOWN && e.key.keysym.sym == SDLK_ESCAPE) {
         close();
@@ -131,13 +124,11 @@ void AssetInfoUI::handle_event(const SDL_Event& e) {
         if (s->handle_event(e)) return;
     }
 
-    // Footer action: open C++ animations panel
+    // Footer action: launch Python animations UI
     if (configure_btn_ && configure_btn_->handle_event(e)) {
         if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
-            if (animations_panel_) {
-                animations_panel_->set_asset_paths(info_->asset_dir_path(), info_->info_json_path());
-                animations_panel_->open();
-            }
+            std::string cmd = "python3 scripts/animation_ui.py \"" + info_->info_json_path() + "\" &";
+            std::system(cmd.c_str());
         }
         return;
     }
@@ -157,9 +148,6 @@ void AssetInfoUI::render(SDL_Renderer* r, int screen_w, int screen_h) const {
 
     // Render footer button
     if (configure_btn_) configure_btn_->render(r);
-
-    if (animations_panel_ && animations_panel_->is_open())
-        animations_panel_->render(r, screen_w, screen_h);
 
     last_renderer_ = r;
 }
