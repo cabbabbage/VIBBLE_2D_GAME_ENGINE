@@ -9,6 +9,10 @@ try:
     from PIL import Image, ImageTk, ImageSequence
 except Exception:
     Image = ImageTk = ImageSequence = None
+try:
+    import simpleaudio as sa  # type: ignore
+except Exception:  # pragma: no cover - optional dependency
+    sa = None
 
 # ---------- file helpers ----------
 def is_numbered_png(filename: str) -> bool:
@@ -1123,6 +1127,25 @@ class AnimationsPanel:
         self.on_end_combo.bind("<<ComboboxSelected>>", lambda _e: self._apply_changes())
         self._refresh_on_end_options()
 
+        # Audio section
+        self.audio_frame = ttk.LabelFrame(body, text="Audio")
+        self.audio_frame.pack(fill="x", pady=4)
+        self.audio_name: Optional[str] = None
+        self.audio_volume_var = tk.IntVar(value=100)
+        self.audio_effects_var = tk.BooleanVar(value=False)
+        aud = self.payload.get("audio")
+        if isinstance(aud, dict) and aud.get("name"):
+            self.audio_name = str(aud.get("name"))
+            self.audio_volume_var.set(int(aud.get("volume", 100)))
+            self.audio_effects_var.set(bool(aud.get("effects", False)))
+            self._build_audio_controls(self.audio_frame)
+        else:
+            ttk.Button(
+                self.audio_frame,
+                text="Select Clip Audio",
+                command=self._select_audio,
+            ).pack(padx=4, pady=4, anchor="w")
+
     
     def get_frame(self) -> ttk.Frame:
         return self.frame
@@ -1227,6 +1250,16 @@ class AnimationsPanel:
         self.frames_var.set(int(self.payload.get("number_of_frames", 1)))
         self.on_end_var.set(str(self.payload.get("on_end", "default") or "default"))
         self._refresh_on_end_options()
+        aud = self.payload.get("audio")
+        self.audio_name = None
+        if isinstance(aud, dict) and aud.get("name"):
+            self.audio_name = str(aud.get("name"))
+            self.audio_volume_var.set(int(aud.get("volume", 100)))
+            self.audio_effects_var.set(bool(aud.get("effects", False)))
+            self._build_audio_controls(self.audio_frame)
+        else:
+            self._clear_audio_frame()
+
         self._refresh_preview()
         if self.on_changed:
             self.on_changed(self.node_id, self.payload)
@@ -1311,6 +1344,8 @@ class AnimationsPanel:
             mv[0] = [0, 0]
         payload["movement"] = mv
 
+        self._apply_audio_changes(notify=False)
+
         if self.on_changed:
             self.on_changed(self.node_id, payload)
         self._refresh_preview()
@@ -1327,7 +1362,125 @@ class AnimationsPanel:
         except Exception:
             pass
 
-    
+
+    def _clear_audio_frame(self) -> None:
+        for ch in list(self.audio_frame.winfo_children()):
+            try:
+                ch.destroy()
+            except Exception:
+                pass
+        ttk.Button(
+            self.audio_frame,
+            text="Select Clip Audio",
+            command=self._select_audio,
+        ).pack(padx=4, pady=4, anchor="w")
+
+    def _build_audio_controls(self, frame: tk.Widget) -> None:
+        for ch in list(frame.winfo_children()):
+            try:
+                ch.destroy()
+            except Exception:
+                pass
+        frame.columnconfigure(1, weight=1)
+        ttk.Label(frame, text=f"Clip: {self.audio_name}").grid(row=0, column=0, sticky="w", padx=4)
+        ttk.Button(frame, text="Play", command=self._play_audio).grid(row=0, column=1, sticky="w")
+        ttk.Label(frame, text="Volume").grid(row=1, column=0, sticky="e", padx=4)
+        ttk.Scale(
+            frame,
+            from_=0,
+            to=100,
+            variable=self.audio_volume_var,
+            orient="horizontal",
+            command=lambda _v: self._apply_audio_changes(),
+        ).grid(row=1, column=1, sticky="ew", padx=4)
+        ttk.Checkbutton(
+            frame,
+            text="Apply Effects",
+            variable=self.audio_effects_var,
+            command=self._apply_audio_changes,
+        ).grid(row=2, column=0, columnspan=2, sticky="w", padx=4)
+        btns = ttk.Frame(frame)
+        btns.grid(row=3, column=0, columnspan=2, sticky="w", padx=4, pady=(4, 0))
+        ttk.Button(btns, text="Replace Audio", command=self._replace_audio).pack(side="left")
+        ttk.Button(btns, text="Delete Audio", command=self._delete_audio).pack(side="left", padx=4)
+
+    def _select_audio(self):
+        file = filedialog.askopenfilename(filetypes=[("Audio", "*.wav *.mp3")])
+        if not file:
+            return
+        self._import_audio(file)
+
+    def _import_audio(self, src_path: str) -> None:
+        base = os.path.basename(src_path)
+        name, ext = os.path.splitext(base)
+        out_dir = self.asset_folder or ""
+        try:
+            os.makedirs(out_dir, exist_ok=True)
+            dest = os.path.join(out_dir, name + ".wav")
+            if ext.lower() == ".wav":
+                shutil.copy2(src_path, dest)
+            else:
+                try:
+                    subprocess.run(
+                        ["ffmpeg", "-y", "-i", src_path, dest],
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                        check=True,
+                    )
+                except Exception:
+                    shutil.copy2(src_path, dest)
+        except Exception as e:
+            messagebox.showerror("Audio Import", f"Failed to import audio: {e}")
+            return
+        self.audio_name = name
+        self.audio_volume_var.set(100)
+        self.audio_effects_var.set(False)
+        self._apply_audio_changes(notify=False)
+        self._build_audio_controls(self.audio_frame)
+        if self.on_changed:
+            self.on_changed(self.node_id, self.payload)
+
+    def _play_audio(self):
+        if not self.audio_name:
+            return
+        path = os.path.join(self.asset_folder or "", self.audio_name + ".wav")
+        try:
+            if sa:
+                sa.WaveObject.from_wave_file(path).play()
+            else:  # fallback to ffplay/aplay
+                subprocess.Popen(
+                    ["ffplay", "-nodisp", "-autoexit", path],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
+        except Exception as e:
+            messagebox.showerror("Play Audio", f"Failed to play audio: {e}")
+
+    def _replace_audio(self):
+        self._select_audio()
+
+    def _delete_audio(self):
+        self.audio_name = None
+        self.payload.pop("audio", None)
+        self._clear_audio_frame()
+        if self.on_changed:
+            self.on_changed(self.node_id, self.payload)
+
+    def _apply_audio_changes(self, *_args, notify: bool = True) -> None:
+        if self.audio_name:
+            vol = int(self.audio_volume_var.get())
+            vol = max(0, min(100, vol))
+            eff = bool(self.audio_effects_var.get())
+            self.payload["audio"] = {
+                "name": self.audio_name,
+                "volume": vol,
+                "effects": eff,
+            }
+        else:
+            self.payload.pop("audio", None)
+        if notify and self.on_changed:
+            self.on_changed(self.node_id, self.payload)
+
     @staticmethod
     def _coerce_payload(anim_name: str, p: Dict[str, Any]) -> Dict[str, Any]:
         p = dict(p or {})
@@ -1376,7 +1529,22 @@ class AnimationsPanel:
             val = "default"
         p["on_end"] = str(val)
 
-        
+        aud = p.get("audio")
+        if isinstance(aud, dict):
+            name = str(aud.get("name", "")).strip()
+            try:
+                vol = int(aud.get("volume", 100))
+            except Exception:
+                vol = 100
+            vol = max(0, min(100, vol))
+            eff = bool(aud.get("effects", False))
+            if name:
+                p["audio"] = {"name": name, "volume": vol, "effects": eff}
+            else:
+                p.pop("audio", None)
+        else:
+            p.pop("audio", None)
+
         return p
 
     def _refresh_on_end_options(self):
