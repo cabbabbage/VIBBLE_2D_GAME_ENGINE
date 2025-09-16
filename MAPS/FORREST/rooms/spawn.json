@@ -30,16 +30,11 @@
       "spawn_id": "spn-01c5db7657d6"
     },
     {
-      "check_min_spacing": false,
-      "check_overlap": false,
-      "exact_position": null,
-      "inherited": false,
       "max_number": 1,
       "min_number": 1,
       "name": "Vibble",
       "position": "Center",
-      "spawn_id": "spn-225b40dd06f7",
-      "tag": false
+      "spawn_id": "spn-225b40dd06f7"
     },
     {
       "border_shift_max": 92,

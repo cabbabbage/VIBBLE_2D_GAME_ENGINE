@@ -6,7 +6,6 @@
 #include <SDL.h>
 #include <string>
 #include <vector>
-#include <unordered_set>
 #include <memory>
 #include <deque>
 #include "room/room.hpp"
@@ -17,13 +16,8 @@ struct SDL_Renderer;
 class CurrentRoomFinder;
 class Room;
 class Input;
-class DevMouseControls;
-class AssetLibraryUI;
-class AssetInfoUI;
+class DevControls;
 class AssetInfo;
-class AreaOverlayEditor;
-class RoomConfigurator;
-class AssetsConfig;
 
 class Assets {
 
@@ -48,7 +42,7 @@ class Assets {
     Asset* player = nullptr;
     CurrentRoomFinder* finder_ = nullptr;
     Input* input = nullptr;
-    DevMouseControls* dev_mouse = nullptr;
+    DevControls* dev_controls_ = nullptr;
     camera camera;
     SceneRenderer* scene = nullptr;
     ActiveAssetsManager activeManager;
@@ -75,7 +69,6 @@ class Assets {
     void toggle_room_config();
     void close_room_config();
     bool is_room_config_open() const;
-    void update_ui(const Input& input);
     std::shared_ptr<AssetInfo> consume_selected_asset_from_library();
     void open_asset_info_editor(const std::shared_ptr<AssetInfo>& info);
     void open_asset_info_editor_for_asset(Asset* a);
@@ -91,19 +84,10 @@ class Assets {
     // Area editing
     void begin_area_edit_for_selected_asset(const std::string& area_name);
 
-	private:
-    AssetLibraryUI* library_ui_ = nullptr;
-    AssetInfoUI*    info_ui_    = nullptr;
-    AreaOverlayEditor* area_editor_ = nullptr;
-    // Area editor lifecycle helpers
-    bool last_area_editor_active_ = false;
-    bool reopen_info_after_area_edit_ = false;
-    std::shared_ptr<AssetInfo> info_for_reopen_{};
+        private:
     std::vector<Asset*> removal_queue;
     void schedule_removal(Asset* a);
     void process_removals();
-    RoomConfigurator* room_cfg_ui_ = nullptr;
-    AssetsConfig* assets_cfg_ui_ = nullptr;
 
 	private:
     void addAsset(const std::string& name, SDL_Point g);
