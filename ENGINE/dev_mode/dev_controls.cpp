@@ -92,16 +92,18 @@ void DevControls::set_enabled(bool enabled) {
 void DevControls::update(const Input& input) {
     if (!enabled_) return;
 
-    const bool ctrl_pressed = input.wasScancodePressed(SDL_SCANCODE_LCTRL) ||
-                              input.wasScancodePressed(SDL_SCANCODE_RCTRL);
+    const bool ctrl_pressed =
+        input.isScancodeDown(SDL_SCANCODE_LCTRL) ||
+        input.isScancodeDown(SDL_SCANCODE_RCTRL);
 
-    if (ctrl_pressed) {
+    if (ctrl_pressed && input.wasScancodePressed(SDL_SCANCODE_M)) {
         if (mode_ == Mode::MapEditor) {
             exit_map_editor_mode(false, true);
         } else {
             enter_map_editor_mode();
         }
     }
+
 
     if (mode_ == Mode::MapEditor) {
         if (map_editor_) {
