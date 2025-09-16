@@ -29,6 +29,8 @@ class camera {
     void  set_manual_zoom_override(bool enabled) { manual_zoom_override_ = enabled; }
     bool  is_manual_zoom_override() const { return manual_zoom_override_; }
     void  set_focus_override(SDL_Point p) { focus_override_ = true; focus_point_ = p; }
+    bool  has_focus_override() const { return focus_override_; }
+    SDL_Point get_focus_override_point() const { return focus_point_; }
     void  clear_focus_override() { focus_override_ = false; }
     void  pan_and_zoom_to_point(SDL_Point world_pos, double zoom_scale_factor, int duration_steps);
     void  pan_and_zoom_to_asset(const Asset* a, double zoom_scale_factor, int duration_steps);

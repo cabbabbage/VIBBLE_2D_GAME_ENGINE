@@ -75,6 +75,9 @@ Assets::Assets(std::vector<Asset>&& loaded,
         dev_controls_->set_player(player);
         dev_controls_->set_active_assets(active_assets);
         dev_controls_->set_current_room(current_room_);
+        dev_controls_->set_screen_dimensions(screen_width_, screen_height_);
+        dev_controls_->set_rooms(&rooms_);
+        dev_controls_->set_input(input);
     }
 
 }
@@ -95,6 +98,7 @@ void Assets::set_input(Input* m) {
         dev_controls_->set_active_assets(active_assets);
         dev_controls_->set_current_room(current_room_);
         dev_controls_->set_screen_dimensions(screen_width, screen_height);
+        dev_controls_->set_rooms(&rooms_);
     }
 }
 
@@ -105,8 +109,14 @@ void Assets::update(const Input& input,
 
     activeManager.updateAssetVectors(player, screen_center_x, screen_center_y);
 
-    current_room_ = finder_ ? finder_->getCurrentRoom() : nullptr;
-    camera.update_zoom(current_room_, finder_, player);
+    Room* detected_room = finder_ ? finder_->getCurrentRoom() : nullptr;
+    Room* active_room = detected_room;
+    if (dev_controls_) {
+        active_room = dev_controls_->resolve_current_room(detected_room);
+    }
+    current_room_ = active_room;
+
+    camera.update_zoom(active_room, finder_, player);
 
     dx = dy = 0;
 
@@ -152,8 +162,11 @@ void Assets::update(const Input& input,
         dev_controls_->set_active_assets(active_assets);
         dev_controls_->set_current_room(current_room_);
         dev_controls_->set_screen_dimensions(screen_width, screen_height);
-        dev_controls_->update(input);
-        dev_controls_->update_ui(input);
+        dev_controls_->set_rooms(&rooms_);
+        if (dev_mode) {
+            dev_controls_->update(input);
+            dev_controls_->update_ui(input);
+        }
     }
 
     if (scene && !suppress_render_) scene->render();
@@ -165,7 +178,9 @@ void Assets::set_dev_mode(bool mode) {
     dev_mode = mode;
     if (dev_controls_) {
         dev_controls_->set_enabled(mode);
-        if (!mode) {
+        if (mode) {
+            dev_controls_->resolve_current_room(current_room_);
+        } else {
             dev_controls_->clear_selection();
         }
     }
@@ -338,11 +353,15 @@ void Assets::render_overlays(SDL_Renderer* renderer) {
 }
 
 void Assets::toggle_asset_library() {
-    if (dev_controls_) dev_controls_->toggle_asset_library();
+    if (dev_controls_ && dev_mode) {
+        dev_controls_->toggle_asset_library();
+    }
 }
 
 void Assets::open_asset_library() {
-    if (dev_controls_) dev_controls_->open_asset_library();
+    if (dev_controls_ && dev_mode) {
+        dev_controls_->open_asset_library();
+    }
 }
 
 void Assets::close_asset_library() {
@@ -354,7 +373,9 @@ bool Assets::is_asset_library_open() const {
 }
 
 void Assets::toggle_room_config() {
-    if (dev_controls_) dev_controls_->toggle_room_config();
+    if (dev_controls_ && dev_mode) {
+        dev_controls_->toggle_room_config();
+    }
 }
 
 void Assets::close_room_config() {
@@ -366,24 +387,32 @@ bool Assets::is_room_config_open() const {
 }
 
 std::shared_ptr<AssetInfo> Assets::consume_selected_asset_from_library() {
-    if (!dev_controls_) return nullptr;
+    if (!dev_controls_ || !dev_mode) return nullptr;
     return dev_controls_->consume_selected_asset_from_library();
 }
 
 void Assets::open_asset_info_editor(const std::shared_ptr<AssetInfo>& info) {
-    if (dev_controls_) dev_controls_->open_asset_info_editor(info);
+    if (dev_controls_ && dev_mode) {
+        dev_controls_->open_asset_info_editor(info);
+    }
 }
 
 void Assets::open_asset_info_editor_for_asset(Asset* a) {
-    if (dev_controls_) dev_controls_->open_asset_info_editor_for_asset(a);
+    if (dev_controls_ && dev_mode) {
+        dev_controls_->open_asset_info_editor_for_asset(a);
+    }
 }
 
 void Assets::open_asset_config_for_asset(Asset* a) {
-    if (dev_controls_) dev_controls_->open_asset_config_for_asset(a);
+    if (dev_controls_ && dev_mode) {
+        dev_controls_->open_asset_config_for_asset(a);
+    }
 }
 
 void Assets::finalize_asset_drag(Asset* a, const std::shared_ptr<AssetInfo>& info) {
-    if (dev_controls_) dev_controls_->finalize_asset_drag(a, info);
+    if (dev_controls_ && dev_mode) {
+        dev_controls_->finalize_asset_drag(a, info);
+    }
 }
 
 void Assets::close_asset_info_editor() {
@@ -395,7 +424,9 @@ bool Assets::is_asset_info_editor_open() const {
 }
 
 void Assets::handle_sdl_event(const SDL_Event& e) {
-    if (dev_controls_) dev_controls_->handle_sdl_event(e);
+    if (dev_controls_ && dev_mode) {
+        dev_controls_->handle_sdl_event(e);
+    }
 }
 
 void Assets::focus_camera_on_asset(Asset* a, double zoom_factor, int duration_steps) {
@@ -403,5 +434,7 @@ void Assets::focus_camera_on_asset(Asset* a, double zoom_factor, int duration_st
 }
 
 void Assets::begin_area_edit_for_selected_asset(const std::string& area_name) {
-    if (dev_controls_) dev_controls_->begin_area_edit_for_selected_asset(area_name);
+    if (dev_controls_ && dev_mode) {
+        dev_controls_->begin_area_edit_for_selected_asset(area_name);
+    }
 }

@@ -56,11 +56,12 @@ class Assets {
     Room* current_room_ = nullptr;
     int num_groups_ = 4;
     bool dev_mode = false;
+
     AssetLibrary& library_;
     bool suppress_render_ = false;
     Asset* spawn_asset(const std::string& name, SDL_Point world_pos);
 
-	public:
+        public:
     void render_overlays(SDL_Renderer* renderer);
     void toggle_asset_library();
     void open_asset_library();
@@ -85,6 +86,7 @@ class Assets {
     void begin_area_edit_for_selected_asset(const std::string& area_name);
 
         private:
+private:
     std::vector<Asset*> removal_queue;
     void schedule_removal(Asset* a);
     void process_removals();
