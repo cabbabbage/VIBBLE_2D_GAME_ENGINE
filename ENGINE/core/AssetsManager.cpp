@@ -163,7 +163,12 @@ void Assets::update(const Input& input,
 
 void Assets::set_dev_mode(bool mode) {
     dev_mode = mode;
-    if (dev_controls_) dev_controls_->set_enabled(mode);
+    if (dev_controls_) {
+        dev_controls_->set_enabled(mode);
+        if (!mode) {
+            dev_controls_->clear_selection();
+        }
+    }
 }
 
 void Assets::set_render_suppressed(bool suppressed) {

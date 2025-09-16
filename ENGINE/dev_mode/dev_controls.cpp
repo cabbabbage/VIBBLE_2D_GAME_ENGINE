@@ -245,6 +245,8 @@ std::shared_ptr<AssetInfo> DevControls::consume_selected_asset_from_library() {
 
 void DevControls::open_asset_info_editor(const std::shared_ptr<AssetInfo>& info) {
     if (!info) return;
+    if (library_ui_) library_ui_->close();
+    if (assets_cfg_ui_) assets_cfg_ui_->close_all_asset_configs();
     if (!info_ui_) info_ui_ = std::make_unique<AssetInfoUI>();
     if (info_ui_) info_ui_->set_assets(assets_);
     if (info_ui_) {

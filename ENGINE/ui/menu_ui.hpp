@@ -19,9 +19,8 @@ class MenuUI : public MainApp {
     EXIT,
     RESTART,
     SETTINGS,
-    DEV_MODE_TOGGLE,
     SAVE_ROOM
-	};
+        };
     MenuUI(SDL_Renderer* renderer, int screen_w, int screen_h, const std::string& map_path);
     ~MenuUI();
     void init();
@@ -31,7 +30,6 @@ class MenuUI : public MainApp {
     void game_loop();
     void toggleMenu();
     void handle_event(const SDL_Event& e);
-    void update(bool dev_mode_now);
     void render();
     MenuAction consumeAction();
     void rebuildButtons();
@@ -57,7 +55,6 @@ class MenuUI : public MainApp {
     MenuAction action = MenuAction::NONE;
 	};
     bool menu_active_ = false;
-    bool dev_mode_local_ = false;
     MenuAction last_action_ = MenuAction::NONE;
     bool return_to_main_menu_ = false;
     SDL_Texture* background_tex_ = nullptr;

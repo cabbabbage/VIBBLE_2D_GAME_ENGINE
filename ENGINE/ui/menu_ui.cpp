@@ -32,10 +32,9 @@ MenuUI::MenuUI(SDL_Renderer* renderer,
 MenuUI::~MenuUI() = default;
 
 void MenuUI::init() {
-	setup();
-	dev_mode_local_ = dev_mode_;
-	rebuildButtons();
-	game_loop();
+        setup();
+        rebuildButtons();
+        game_loop();
 }
 
 bool MenuUI::wants_return_to_main_menu() const {
@@ -54,41 +53,45 @@ void MenuUI::game_loop() {
 			if (e.type == SDL_QUIT) {
 					quit = true;
 			}
-            if (e.type == SDL_KEYDOWN && e.key.keysym.sym == SDLK_ESCAPE && e.key.repeat == 0) {
-                    bool esc_consumed = false;
-                    if (game_assets_) {
-                                    if (game_assets_->is_asset_info_editor_open()) {
-                                                            // Close asset info editor; if it had closed the library, reopen it.
-                                                            game_assets_->close_asset_info_editor();
-                                                            esc_consumed = true;
-                                    }
-                                    // Note: ESC no longer closes the Asset Library.
-                    }
-                    if (!esc_consumed) {
-                                    toggleMenu();
-                    }
-            }
-			if (input_) input_->handleEvent(e);
-			if (game_assets_) game_assets_->handle_sdl_event(e);
-			if (menu_active_) handle_event(e);
-		}
-		if (game_assets_ && game_assets_->player) {
+                        if (e.type == SDL_KEYDOWN && e.key.keysym.sym == SDLK_ESCAPE && e.key.repeat == 0) {
+                                bool esc_consumed = false;
+                                if (game_assets_) {
+                                                if (game_assets_->is_asset_info_editor_open()) {
+                                                                // Close asset info editor; if it had closed the library, reopen it.
+                                                                game_assets_->close_asset_info_editor();
+                                                                esc_consumed = true;
+                                                }
+                                                // Note: ESC no longer closes the Asset Library.
+                                }
+                                if (!esc_consumed) {
+                                                toggleMenu();
+                                }
+                        }
+                        if (e.type == SDL_KEYDOWN && e.key.repeat == 0) {
+                                const bool ctrl_down = (e.key.keysym.mod & KMOD_CTRL) != 0;
+                                if (ctrl_down && e.key.keysym.sym == SDLK_d) {
+                                                doToggleDevMode();
+                                }
+                        }
+                        if (input_) input_->handleEvent(e);
+                        if (game_assets_) game_assets_->handle_sdl_event(e);
+                        if (menu_active_) handle_event(e);
+                }
+                if (game_assets_ && game_assets_->player) {
 			const int px = game_assets_->player->pos.x;
 			const int py = game_assets_->player->pos.y;
 			game_assets_->update(*input_, px, py);
 		}
-		if (menu_active_) {
-			update(dev_mode_local_);
-			render();
-			switch (consumeAction()) {
-					case MenuAction::EXIT:            doExit();         quit = true;        break;
-					case MenuAction::RESTART:         doRestart();      frame_count = 0;    break;
-					case MenuAction::SETTINGS:        doSettings();                         break;
-					case MenuAction::DEV_MODE_TOGGLE: doToggleDevMode(); rebuildButtons();   break;
-					case MenuAction::SAVE_ROOM:       doSaveCurrentRoom();                   break;
-					default: break;
-			}
-		}
+                if (menu_active_) {
+                        render();
+                        switch (consumeAction()) {
+                                        case MenuAction::EXIT:            doExit();         quit = true;        break;
+                                        case MenuAction::RESTART:         doRestart();      frame_count = 0;    break;
+                                        case MenuAction::SETTINGS:        doSettings();                         break;
+                                        case MenuAction::SAVE_ROOM:       doSaveCurrentRoom();                   break;
+                                        default: break;
+                        }
+                }
 		if (menu_active_) SDL_RenderPresent(renderer_);
 		++frame_count;
 		if (input_) input_->update();
@@ -112,16 +115,9 @@ void MenuUI::handle_event(const SDL_Event& e) {
 	}
 }
 
-void MenuUI::update(bool dev_mode_now) {
-	if (dev_mode_local_ != dev_mode_now) {
-		dev_mode_local_ = dev_mode_now;
-		rebuildButtons();
-	}
-}
-
 void MenuUI::render() {
-	SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND);
-	SDL_SetRenderDrawColor(renderer_, 0, 0, 0, 100);
+        SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND);
+        SDL_SetRenderDrawColor(renderer_, 0, 0, 0, 100);
 	SDL_Rect bg{0, 0, screen_w_, screen_h_};
 	SDL_RenderFillRect(renderer_, &bg);
 	drawVignette(110);
@@ -152,11 +148,10 @@ void MenuUI::rebuildButtons() {
 		start_y += btn_h + gap;
 		buttons_.push_back(MenuButton{ std::move(b), action });
 	};
-	addButton("End Run",            MenuAction::EXIT, true);
-	addButton("Restart Run",        MenuAction::RESTART);
-	addButton("Settings",           MenuAction::SETTINGS);
-	addButton(dev_mode_local_ ? "Switch to Player Mode" : "Switch to Dev Mode", MenuAction::DEV_MODE_TOGGLE);
-	addButton("Save Current Room",  MenuAction::SAVE_ROOM);
+        addButton("End Run",            MenuAction::EXIT, true);
+        addButton("Restart Run",        MenuAction::RESTART);
+        addButton("Settings",           MenuAction::SETTINGS);
+        addButton("Save Current Room",  MenuAction::SAVE_ROOM);
 }
 
 SDL_Point MenuUI::measureText(const LabelStyle& style, const std::string& s) const {
@@ -254,16 +249,15 @@ void MenuUI::doSettings() {
 }
 
 void MenuUI::doToggleDevMode() {
-    dev_mode_local_ = !dev_mode_local_;
-    dev_mode_ = dev_mode_local_;
-    if (game_assets_) game_assets_->set_dev_mode(dev_mode_);
-    std::cout << "[MenuUI] Dev Mode = " << (dev_mode_ ? "ON" : "OFF") << "\n";
-    // Close the menu immediately after switching modes
-    if (menu_active_) {
-        menu_active_ = false;
-        if (game_assets_) game_assets_->set_render_suppressed(false);
-        std::cout << "[MenuUI] Closing menu after mode switch\n";
-    }
+        dev_mode_ = !dev_mode_;
+        if (game_assets_) game_assets_->set_dev_mode(dev_mode_);
+        std::cout << "[MenuUI] Dev Mode = " << (dev_mode_ ? "ON" : "OFF") << "\n";
+        // Close the menu immediately after switching modes
+        if (menu_active_) {
+                menu_active_ = false;
+                if (game_assets_) game_assets_->set_render_suppressed(false);
+                std::cout << "[MenuUI] Closing menu after mode switch\n";
+        }
 }
 
 void MenuUI::doSaveCurrentRoom() {
