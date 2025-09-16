@@ -26,7 +26,9 @@ public:
     void render(SDL_Renderer* r) const;
 
     // Embedding helpers for RoomConfigurator or runtime editing
-    void load(nlohmann::json& assets, std::function<void()> on_change);
+    void load(nlohmann::json& assets,
+              std::function<void()> on_change,
+              std::function<void(const nlohmann::json&, const AssetConfigUI::ChangeSummary&)> on_entry_change = {});
     void append_rows(DockableCollapsible::Rows& rows);
     void set_anchor(int x, int y);
     void open_asset_config(const std::string& id, int x, int y);
@@ -45,6 +47,7 @@ private:
     std::vector<Entry> entries_;
     nlohmann::json* assets_json_ = nullptr;
     std::function<void()> on_change_;
+    std::function<void(const nlohmann::json&, const AssetConfigUI::ChangeSummary&)> on_entry_change_;
     nlohmann::json temp_assets_;
     int anchor_x_ = 0;
     int anchor_y_ = 0;

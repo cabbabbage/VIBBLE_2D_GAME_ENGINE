@@ -10,7 +10,7 @@ void AssetsConfig::open(const nlohmann::json& assets, std::function<void(const n
     on_close_ = std::move(on_close);
     // make copy for standalone editing
     temp_assets_ = assets;
-    load(temp_assets_, [](){});
+    load(temp_assets_, [](){}, {});
     panel_ = std::make_unique<DockableCollapsible>("Assets", true, 32, 32);
     panel_->set_expanded(true);
     panel_->set_visible(true);
@@ -35,10 +35,13 @@ void AssetsConfig::set_position(int x, int y) {
     if (panel_) panel_->set_position(x, y);
 }
 
-void AssetsConfig::load(nlohmann::json& assets, std::function<void()> on_change) {
+void AssetsConfig::load(nlohmann::json& assets,
+                        std::function<void()> on_change,
+                        std::function<void(const nlohmann::json&, const AssetConfigUI::ChangeSummary&)> on_entry_change) {
     entries_.clear();
     assets_json_ = &assets;
     on_change_ = std::move(on_change);
+    on_entry_change_ = std::move(on_entry_change);
     if (!assets.is_array()) return;
     for (auto& it : assets) {
         Entry e;
@@ -85,6 +88,14 @@ bool AssetsConfig::handle_event(const SDL_Event& ev) {
     for (auto& e : entries_) {
         if (e.cfg && e.cfg->handle_event(ev)) {
             if (e.json) *e.json = e.cfg->to_json();
+            if (on_entry_change_) {
+                auto summary = e.cfg->consume_change_summary();
+                if (summary.method_changed || summary.quantity_changed) {
+                    on_entry_change_(*e.json, summary);
+                }
+            } else {
+                e.cfg->consume_change_summary();
+            }
             if (on_change_) on_change_();
             used = true;
         }

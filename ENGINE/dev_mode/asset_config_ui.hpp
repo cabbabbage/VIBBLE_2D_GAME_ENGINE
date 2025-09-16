@@ -21,6 +21,16 @@ class DMButton;
 // UI panel for configuring a single asset entry in the spawn JSON
 class AssetConfigUI {
 public:
+    struct ChangeSummary {
+        bool method_changed = false;
+        bool quantity_changed = false;
+        std::string spawn_id;
+        std::string method;
+        std::string previous_method;
+        int min_number = 0;
+        int max_number = 0;
+    };
+
     AssetConfigUI();
     void set_position(int x, int y);
     void load(const nlohmann::json& asset);
@@ -32,9 +42,11 @@ public:
     void render(SDL_Renderer* r) const;
     nlohmann::json to_json() const;
     bool is_point_inside(int x, int y) const;
+    ChangeSummary consume_change_summary();
 private:
     void rebuild_widgets();
     void rebuild_rows();
+    bool method_forces_single_quantity(const std::string& method) const;
     std::unique_ptr<DockableCollapsible> panel_;
     std::vector<std::string> spawn_methods_;
     std::string spawn_id_;
@@ -74,4 +86,5 @@ private:
     std::unique_ptr<RangeSliderWidget> s_percent_y_w_;
     std::unique_ptr<DMButton> b_done_;
     std::unique_ptr<ButtonWidget> b_done_w_;
+    ChangeSummary pending_change_;
 };

@@ -99,3 +99,17 @@ void MapGrid::set_occupied(Point* pt, bool occ) {
     if (was != occ) free_count_ += occ ? -1 : 1;
 }
 
+MapGrid::Point* MapGrid::point_at(SDL_Point p) {
+    if (grid_.empty()) return nullptr;
+    int ix = 0;
+    int iy = 0;
+    to_grid_indices(p, ix, iy);
+    if (!in_bounds_idx(ix, iy)) return nullptr;
+    return &grid_[idx(ix, iy)];
+}
+
+void MapGrid::set_occupied_at(SDL_Point p, bool occ) {
+    Point* pt = point_at(p);
+    set_occupied(pt, occ);
+}
+

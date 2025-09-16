@@ -16,6 +16,10 @@ AssetConfigUI::AssetConfigUI() {
     b_done_w_ = std::make_unique<ButtonWidget>(b_done_.get(), [this]() { close(); });
 }
 
+bool AssetConfigUI::method_forces_single_quantity(const std::string& method) const {
+    return method == "Exact" || method == "Exact Position" || method == "Percent";
+}
+
 void AssetConfigUI::set_position(int x, int y) {
     if (panel_) panel_->set_position(x, y);
 }
@@ -41,6 +45,16 @@ void AssetConfigUI::load(const nlohmann::json& j) {
     percent_y_min_ = j.value("percent_y_min", j.value("percent_y_max", 0));
     percent_y_max_ = j.value("percent_y_max", percent_y_min_);
     if (panel_) panel_->set_title(name_);
+    const std::string& method_name = spawn_methods_[method_];
+    if (method_forces_single_quantity(method_name)) {
+        min_ = max_ = 1;
+    }
+    pending_change_ = {};
+    pending_change_.spawn_id = spawn_id_;
+    pending_change_.method = method_name;
+    pending_change_.previous_method = method_name;
+    pending_change_.min_number = min_;
+    pending_change_.max_number = max_;
     rebuild_widgets();
     rebuild_rows();
 }
@@ -58,8 +72,8 @@ bool AssetConfigUI::visible() const { return panel_ && panel_->is_visible(); }
 void AssetConfigUI::rebuild_widgets() {
     dd_method_ = std::make_unique<DMDropdown>("Method", spawn_methods_, method_);
     dd_method_w_ = std::make_unique<DropdownWidget>(dd_method_.get());
-    s_range_ = std::make_unique<DMRangeSlider>(0, 100, min_, max_);
-    s_range_w_ = std::make_unique<RangeSliderWidget>(s_range_.get());
+    s_range_.reset();
+    s_range_w_.reset();
     s_grid_spacing_.reset(); s_grid_spacing_w_.reset();
     s_jitter_.reset(); s_jitter_w_.reset();
     s_empty_.reset(); s_empty_w_.reset();
@@ -69,6 +83,10 @@ void AssetConfigUI::rebuild_widgets() {
     s_percent_x_.reset(); s_percent_x_w_.reset();
     s_percent_y_.reset(); s_percent_y_w_.reset();
     const std::string& m = spawn_methods_[method_];
+    if (!method_forces_single_quantity(m)) {
+        s_range_ = std::make_unique<DMRangeSlider>(0, 100, min_, max_);
+        s_range_w_ = std::make_unique<RangeSliderWidget>(s_range_.get());
+    }
     if (m == "Distributed") {
         s_grid_spacing_ = std::make_unique<DMSlider>("Grid", 0, 400, grid_spacing_);
         s_grid_spacing_w_ = std::make_unique<SliderWidget>(s_grid_spacing_.get());
@@ -95,7 +113,7 @@ void AssetConfigUI::rebuild_rows() {
     if (!panel_) return;
     DockableCollapsible::Rows rows;
     rows.push_back({ dd_method_w_.get(), b_done_w_.get() });
-    rows.push_back({ s_range_w_.get() });
+    if (s_range_w_) rows.push_back({ s_range_w_.get() });
     const std::string& m = spawn_methods_[method_];
     if (m == "Distributed") {
         rows.push_back({ s_grid_spacing_w_.get(), s_jitter_w_.get(), s_empty_w_.get() });
@@ -118,8 +136,33 @@ bool AssetConfigUI::handle_event(const SDL_Event& e) {
     if (!panel_ || !panel_->is_visible()) return false;
     bool used = panel_->handle_event(e);
     int prev_method = method_;
-    if (dd_method_) method_ = dd_method_->selected();
-    if (s_range_) { min_ = s_range_->min_value(); max_ = s_range_->max_value(); }
+    int prev_min = min_;
+    int prev_max = max_;
+    std::string prev_method_name = spawn_methods_[method_];
+
+    int new_method = method_;
+    if (dd_method_) new_method = dd_method_->selected();
+
+    int new_min = min_;
+    int new_max = max_;
+    if (s_range_) {
+        new_min = s_range_->min_value();
+        new_max = s_range_->max_value();
+    }
+
+    const std::string& method_name = spawn_methods_[new_method];
+    if (method_forces_single_quantity(method_name)) {
+        new_min = 1;
+        new_max = 1;
+    }
+
+    bool method_changed = (new_method != method_);
+    bool quantity_changed = (new_min != min_ || new_max != max_);
+
+    method_ = new_method;
+    min_ = new_min;
+    max_ = new_max;
+
     if (s_grid_spacing_) grid_spacing_ = s_grid_spacing_->value();
     if (s_jitter_) jitter_ = s_jitter_->value();
     if (s_empty_) empty_ = s_empty_->value();
@@ -128,7 +171,22 @@ bool AssetConfigUI::handle_event(const SDL_Event& e) {
     if (s_sector_range_) sector_range_ = s_sector_range_->value();
     if (s_percent_x_) { percent_x_min_ = s_percent_x_->min_value(); percent_x_max_ = s_percent_x_->max_value(); }
     if (s_percent_y_) { percent_y_min_ = s_percent_y_->min_value(); percent_y_max_ = s_percent_y_->max_value(); }
-    if (prev_method != method_) { rebuild_widgets(); rebuild_rows(); }
+    if (method_changed) {
+        pending_change_.previous_method = prev_method_name;
+        rebuild_widgets();
+        rebuild_rows();
+    }
+    if (method_changed || quantity_changed) {
+        pending_change_.method_changed = pending_change_.method_changed || method_changed;
+        pending_change_.quantity_changed = pending_change_.quantity_changed || quantity_changed;
+        pending_change_.spawn_id = spawn_id_;
+        pending_change_.method = method_name;
+        pending_change_.min_number = min_;
+        pending_change_.max_number = max_;
+        if (!method_changed) {
+            pending_change_.previous_method = prev_method_name;
+        }
+    }
     return used;
 }
 
@@ -168,4 +226,16 @@ bool AssetConfigUI::is_point_inside(int x, int y) const {
         return SDL_PointInRect(&p, &panel_->rect());
     }
     return false;
+}
+
+AssetConfigUI::ChangeSummary AssetConfigUI::consume_change_summary() {
+    ChangeSummary out = pending_change_;
+    pending_change_.method_changed = false;
+    pending_change_.quantity_changed = false;
+    pending_change_.spawn_id = spawn_id_;
+    pending_change_.method = spawn_methods_[method_];
+    pending_change_.previous_method = spawn_methods_[method_];
+    pending_change_.min_number = min_;
+    pending_change_.max_number = max_;
+    return out;
 }

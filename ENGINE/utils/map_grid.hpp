@@ -35,6 +35,14 @@ public:
     // Mark a grid point as occupied (no-op if null).
     void set_occupied(Point* pt, bool occ = true);
 
+    // Convenience: mark the grid point corresponding to a world coordinate
+    // as occupied.  The coordinate is clamped to the nearest valid grid cell.
+    void set_occupied_at(SDL_Point p, bool occ = true);
+
+    // Retrieve the grid point that corresponds to the provided world
+    // coordinate.  The coordinate is clamped to the nearest valid grid cell.
+    Point* point_at(SDL_Point p);
+
     // Number of unoccupied points remaining.
     int free_count() const { return free_count_; }
 

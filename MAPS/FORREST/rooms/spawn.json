@@ -37,9 +37,10 @@
       "spawn_id": "spn-225b40dd06f7"
     },
     {
-      "border_shift_max": 92,
-      "border_shift_min": 92,
-      "max_number": 23,
+      "border_shift": 100,
+      "border_shift_max": 100,
+      "border_shift_min": 100,
+      "max_number": 9,
       "min_number": 0,
       "name": "Barrel",
       "position": "Perimeter",

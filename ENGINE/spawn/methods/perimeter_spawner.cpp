@@ -72,20 +72,12 @@ void PerimeterSpawner::spawn(const SpawnInfo& item, const Area* area, SpawnConte
         x += item.perimeter_offset.x;
         y += item.perimeter_offset.y;
         ++attempts;
-                SDL_Point pos{x, y};
-                MapGrid::Point* snapped = nullptr;
-                if (auto* g = ctx.grid()) {
-                    snapped = g->get_nearest_point(pos);
-                    if (snapped) pos = snapped->pos;
-                }
-                if (ctx.checker().check(item.info, pos, ctx.exclusion_zones(), ctx.all_assets(),
+        SDL_Point pos{x, y};
+        if (ctx.checker().check(item.info, pos, ctx.exclusion_zones(), ctx.all_assets(),
       item.check_overlap, false, false, 5)) continue;
-                auto* result = ctx.spawnAsset(item.name, item.info, *area, pos, 0, nullptr, item.spawn_id, item.position);
-                if (result && snapped && ctx.grid()) {
-                    ctx.grid()->set_occupied(snapped, true);
-                }
-                ++placed;
-                ctx.logger().progress(item.info, placed, item.quantity);
+        ctx.spawnAsset(item.name, item.info, *area, pos, 0, nullptr, item.spawn_id, item.position);
+        ++placed;
+        ctx.logger().progress(item.info, placed, item.quantity);
 	}
 	ctx.logger().output_and_log(item.name, item.quantity, placed, attempts, item.quantity, "perimeter");
 }
