@@ -23,16 +23,11 @@
       "tag": false
     },
     {
-      "check_min_spacing": false,
-      "check_overlap": false,
-      "exact_position": null,
-      "inherited": false,
       "max_number": 45,
       "min_number": 0,
       "name": "ground",
-      "position": "Entrance",
-      "spawn_id": "spn-01c5db7657d6",
-      "tag": true
+      "position": "Random",
+      "spawn_id": "spn-01c5db7657d6"
     },
     {
       "check_min_spacing": false,
@@ -47,16 +42,30 @@
       "tag": false
     },
     {
-      "check_min_spacing": false,
-      "check_overlap": false,
-      "exact_position": null,
-      "inherited": false,
-      "max_number": 10,
-      "min_number": 10,
+      "border_shift_max": 92,
+      "border_shift_min": 92,
+      "max_number": 23,
+      "min_number": 0,
       "name": "Barrel",
-      "position": "Random",
-      "spawn_id": "spn-215d762337e0",
-      "tag": false
+      "position": "Perimeter",
+      "sector_center_max": 359,
+      "sector_center_min": 359,
+      "sector_range_max": 360,
+      "sector_range_min": 360,
+      "spawn_id": "spn-215d762337e0"
+    },
+    {
+      "border_shift_max": 100,
+      "border_shift_min": 100,
+      "max_number": 48,
+      "min_number": 16,
+      "name": "candle",
+      "position": "Perimeter",
+      "sector_center_max": 66,
+      "sector_center_min": 66,
+      "sector_range_max": 360,
+      "sector_range_min": 360,
+      "spawn_id": "spn-daa513dbdc5f"
     }
   ],
   "batch_assets": {
@@ -80,9 +89,9 @@
   "inherits_map_assets": false,
   "is_boss": false,
   "is_spawn": true,
-  "max_height": 761,
+  "max_height": 1000,
   "max_width": 1825,
-  "min_height": 761,
+  "min_height": 393,
   "min_width": 1825,
   "name": "spawn"
 }

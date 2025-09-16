@@ -28,6 +28,7 @@ DockableCollapsible::DockableCollapsible(const std::string& title, bool floatabl
     floatable_ = floatable;
     rect_.x = x; rect_.y = y;
     header_btn_ = std::make_unique<DMButton>(title_, &DMStyles::HeaderButton(), 260, DMButton::height());
+    close_btn_  = std::make_unique<DMButton>("X", &DMStyles::HeaderButton(), DMButton::height(), DMButton::height());
     // Normalize default spacing to DMSpacing tokens
     padding_ = DMSpacing::panel_padding();
     row_gap_ = DMSpacing::item_gap();
@@ -39,6 +40,11 @@ DockableCollapsible::~DockableCollapsible() = default;
 
 void DockableCollapsible::set_rows(const Rows& rows) {
     rows_ = rows;
+}
+
+void DockableCollapsible::set_title(const std::string& title) {
+    title_ = title;
+    update_header_button();
 }
 
 void DockableCollapsible::set_expanded(bool e) {
@@ -114,6 +120,13 @@ bool DockableCollapsible::handle_event(const SDL_Event& e) {
         }
     }
 
+    if (close_btn_ && close_btn_->handle_event(e)) {
+        if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
+            visible_ = false;
+        }
+        return true;
+    }
+
     // Header toggle (avoid when dragging area was used)
     if (header_btn_) {
         bool used = header_btn_->handle_event(e);
@@ -146,6 +159,11 @@ bool DockableCollapsible::handle_event(const SDL_Event& e) {
     return false;
 }
 
+bool DockableCollapsible::is_point_inside(int x, int y) const {
+    SDL_Point p{ x, y };
+    return SDL_PointInRect(&p, &rect_);
+}
+
 void DockableCollapsible::render(SDL_Renderer* r) const {
     if (!visible_) return;
 
@@ -159,6 +177,7 @@ void DockableCollapsible::render(SDL_Renderer* r) const {
     SDL_RenderDrawRect(r, &rect_);
 
     if (header_btn_) header_btn_->render(r);
+    if (close_btn_ && floatable_) close_btn_->render(r);
 
     if (floatable_) {
         // Drag handle grip
@@ -182,6 +201,7 @@ void DockableCollapsible::render(SDL_Renderer* r) const {
             if (w) w->render(r);
         }
     }
+    render_content(r);
 
     if (was_clipping == SDL_TRUE) {
         SDL_RenderSetClipRect(r, &prev_clip);
@@ -211,7 +231,14 @@ void DockableCollapsible::layout(int screen_w, int screen_h) const {
         header_rect_.w = std::max(100, rect_.w - 2*padding_);
     }
 
+    if (floatable_) {
+        close_rect_ = SDL_Rect{ header_rect_.x + header_rect_.w - DMButton::height(), header_rect_.y,
+                                DMButton::height(), DMButton::height() };
+        header_rect_.w -= DMButton::height();
+    }
+
     if (header_btn_) header_btn_->set_rect(header_rect_);
+    if (close_btn_ && floatable_) close_btn_->set_rect(close_rect_);
     update_header_button();
 
     // Drag handle area on the left of header
@@ -227,7 +254,7 @@ void DockableCollapsible::layout(int screen_w, int screen_h) const {
     int y0 = rect_.y + padding_ + header_rect_.h + DMSpacing::header_gap();
 
     row_heights_.clear();
-    content_height_ = 0;
+    int computed_content_h = 0;
     for (const auto& row : rows_) {
         int n = (int)row.size();
         if (n <= 0) { row_heights_.push_back(0); continue; }
@@ -235,9 +262,14 @@ void DockableCollapsible::layout(int screen_w, int screen_h) const {
         int r_h = 0;
         for (auto* w : row) if (w) r_h = std::max(r_h, w->height_for_width(col_w));
         row_heights_.push_back(r_h);
-        content_height_ += r_h + row_gap_;
+        computed_content_h += r_h + row_gap_;
     }
-    if (!row_heights_.empty()) content_height_ -= row_gap_;
+    if (!row_heights_.empty()) computed_content_h -= row_gap_;
+    // When no rows are provided, subclasses may have already set content_height_
+    // during their own layout. Preserve that value instead of resetting it.
+    if (!rows_.empty()) {
+        content_height_ = computed_content_h;
+    }
 
     if (!expanded_) {
         body_viewport_h_ = 0;
@@ -315,7 +347,13 @@ void DockableCollapsible::clamp_to_bounds(int screen_w, int screen_h) const {
     rect_.y = std::max(bounds.y, std::min(rect_.y, bounds.y + bounds.h - rect_.h));
     header_rect_.x = rect_.x + padding_;
     header_rect_.y = rect_.y + padding_;
+    if (floatable_) {
+        close_rect_ = SDL_Rect{ header_rect_.x + header_rect_.w - DMButton::height(), header_rect_.y,
+                                DMButton::height(), DMButton::height() };
+        header_rect_.w -= DMButton::height();
+    }
     if (header_btn_) header_btn_->set_rect(header_rect_);
+    if (close_btn_ && floatable_) close_btn_->set_rect(close_rect_);
     if (floatable_) {
         handle_rect_ = SDL_Rect{ header_rect_.x, header_rect_.y, std::min(24, header_rect_.w/6), header_rect_.h };
     }

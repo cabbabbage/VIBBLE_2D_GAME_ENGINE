@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
+#include <SDL_log.h>
 #include <stdexcept>
 #include <vector>
 
@@ -22,11 +23,17 @@
 #include <cstdlib>
 #include "core/AssetsManager.hpp"
 #include "animations_editor_panel.hpp"
+#include "asset/Asset.hpp"
+#include "render/camera.hpp"
+#include "utils/light_source.hpp"
 
 AssetInfoUI::AssetInfoUI() {
     sections_.push_back(std::make_unique<Section_BasicInfo>());
     sections_.push_back(std::make_unique<Section_Tags>());
-    sections_.push_back(std::make_unique<Section_Lighting>());
+    auto lighting = std::make_unique<Section_Lighting>();
+    lighting->set_ui(this);
+    lighting_section_ = lighting.get();
+    sections_.push_back(std::move(lighting));
     auto spacing = std::make_unique<Section_Spacing>();
     sections_.push_back(std::move(spacing));
     auto areas = std::make_unique<Section_Areas>();
@@ -51,12 +58,30 @@ AssetInfoUI::~AssetInfoUI() = default;
 
 void AssetInfoUI::set_info(const std::shared_ptr<AssetInfo>& info) {
     info_ = info;
-    for (auto& s : sections_) s->set_info(info_);
+    // Reset panel scroll when a new asset is provided so widgets
+    // start at the top of the panel.
+    scroll_ = 0;
+    // Rebuild each section with the new asset info so that their
+    // controls reflect the current asset state. Without rebuilding
+    // the widgets remain uninitialized and the UI appears empty.
+    for (auto& s : sections_) {
+        s->set_info(info_);
+        s->reset_scroll();
+        s->build();
+    }
 }
 
 void AssetInfoUI::clear_info() {
     info_.reset();
-    for (auto& s : sections_) s->set_info(nullptr);
+    // Reset panel scroll and clear sections to remove stale widget
+    // state when no asset is selected.
+    scroll_ = 0;
+    for (auto& s : sections_) {
+        s->set_info(nullptr);
+        s->reset_scroll();
+        s->build();
+    }
+    target_asset_ = nullptr;
 }
 
 void AssetInfoUI::open()  {
@@ -105,6 +130,9 @@ void AssetInfoUI::update(const Input& input, int screen_w, int screen_h) {
 
     for (auto& s : sections_) s->update(input, screen_w, screen_h);
 
+    // Recalculate layout in case sections expanded or collapsed this frame
+    layout_widgets(screen_w, screen_h);
+
     if (animations_panel_ && animations_panel_->is_open())
         animations_panel_->update(input, screen_w, screen_h);
 }
@@ -124,12 +152,19 @@ void AssetInfoUI::handle_event(const SDL_Event& e) {
         if (s->handle_event(e)) return;
     }
 
-    // Footer action: open C++ animations panel
+    // Footer action: launch Python animations UI script
     if (configure_btn_ && configure_btn_->handle_event(e)) {
         if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
-            if (animations_panel_) {
-                animations_panel_->set_asset_paths(info_->asset_dir_path(), info_->info_json_path());
-                animations_panel_->open();
+            if (info_) {
+                try {
+                    std::string cmd = std::string("python scripts/animation_ui.py \"") + info_->info_json_path() + "\"";
+                    int rc = std::system(cmd.c_str());
+                    if (rc != 0) {
+                        SDL_Log("animation_ui.py exited with code %d", rc);
+                    }
+                } catch (const std::exception& ex) {
+                    SDL_Log("Failed to launch animation_ui.py: %s", ex.what());
+                }
             }
         }
         return;
@@ -155,6 +190,25 @@ void AssetInfoUI::render(SDL_Renderer* r, int screen_w, int screen_h) const {
         animations_panel_->render(r, screen_w, screen_h);
 
     last_renderer_ = r;
+}
+
+void AssetInfoUI::render_world_overlay(SDL_Renderer* r, const camera& cam) const {
+    if (!visible_ || !info_ || !lighting_section_ || !lighting_section_->is_expanded() || !lighting_section_->shading_enabled() || !target_asset_) return;
+    const LightSource& light = lighting_section_->shading_light();
+    if (light.x_radius <= 0 && light.y_radius <= 0) return;
+    SDL_SetRenderDrawColor(r, 255, 255, 0, 255);
+    for (int deg = 0; deg < 360; ++deg) {
+        double rad = deg * M_PI / 180.0;
+        int wx = target_asset_->pos.x + static_cast<int>(std::round(std::cos(rad) * light.x_radius));
+        int wy = target_asset_->pos.y + static_cast<int>(std::round(std::sin(rad) * light.y_radius));
+        SDL_Point p = cam.map_to_screen(SDL_Point{wx, wy});
+        SDL_RenderDrawPoint(r, p.x, p.y);
+    }
+}
+
+bool AssetInfoUI::is_point_inside(int x, int y) const {
+    SDL_Point p{ x, y };
+    return visible_ && SDL_PointInRect(&p, &panel_);
 }
 
 void AssetInfoUI::save_now() const {

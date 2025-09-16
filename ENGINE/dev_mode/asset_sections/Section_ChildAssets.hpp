@@ -24,9 +24,8 @@ public:
     }
 
     void layout() override {
-        DockableCollapsible::layout();
         int x = rect_.x + DMSpacing::panel_padding();
-        int y = rect_.y + DMButton::height() + DMSpacing::header_gap();
+        int y = rect_.y + DMSpacing::panel_padding() + DMButton::height() + DMSpacing::header_gap();
         int maxw = rect_.w - 2 * DMSpacing::panel_padding();
 
         // Detect if areas changed; rebuild dropdowns if needed
@@ -44,48 +43,43 @@ public:
             }
         }
 
-        int used = 0;
-        int draw_base = y - scroll_;
         for (size_t i = 0; i < rows_.size(); ++i) {
             auto& r = rows_[i];
-            // Row label
             if (!r.lbl_) r.lbl_ = std::make_unique<DMButton>("Region " + std::to_string(i + 1), &DMStyles::HeaderButton(), 180, DMButton::height());
-            r.lbl_->set_rect(SDL_Rect{ x, draw_base + used, 180, DMButton::height() });
-            used += DMButton::height() + DMSpacing::item_gap();
+            r.lbl_->set_rect(SDL_Rect{ x, y - scroll_, maxw, DMButton::height() });
+            y += DMButton::height() + DMSpacing::item_gap();
 
-            // Area dropdown
             if (!r.dd_area) {
                 r.options = area_names_with_none();
                 r.dd_area = std::make_unique<DMDropdown>("Area", r.options, find_index(r.options, r.area_name));
             }
-            r.dd_area->set_rect(SDL_Rect{ x, draw_base + used, std::min(300, maxw), DMDropdown::height() });
+            r.dd_area->set_rect(SDL_Rect{ x, y - scroll_, maxw, DMDropdown::height() });
+            y += DMDropdown::height() + DMSpacing::item_gap();
 
-            // Z offset slider
             if (!r.s_z) r.s_z = std::make_unique<DMSlider>("Z Offset", -5000, 5000, r.z_offset);
-            int slider_w = std::min(300, maxw);
-            r.s_z->set_rect(SDL_Rect{ x + std::min(320, maxw), draw_base + used, slider_w, DMSlider::height() });
-            used += std::max(DMDropdown::height(), DMSlider::height()) + DMSpacing::item_gap();
+            r.s_z->set_rect(SDL_Rect{ x, y - scroll_, maxw, DMSlider::height() });
+            y += DMSlider::height() + DMSpacing::item_gap();
 
-            // Configure assets button
             if (!r.b_assets) r.b_assets = std::make_unique<DMButton>("Configure Assets", &DMStyles::ListButton(), 160, DMButton::height());
-            r.b_assets->set_rect(SDL_Rect{ x, draw_base + used, 160, DMButton::height() });
-            used += DMButton::height() + DMSpacing::item_gap();
+            r.b_assets->set_rect(SDL_Rect{ x, y - scroll_, maxw, DMButton::height() });
+            y += DMButton::height() + DMSpacing::item_gap();
 
-            // Buttons: Edit Area, Delete
             if (!r.b_edit_area) r.b_edit_area = std::make_unique<DMButton>("Edit Area", &DMStyles::ListButton(), 140, DMButton::height());
+            r.b_edit_area->set_rect(SDL_Rect{ x, y - scroll_, maxw, DMButton::height() });
+            y += DMButton::height() + DMSpacing::item_gap();
+
             if (!r.b_delete)    r.b_delete    = std::make_unique<DMButton>("Delete", &DMStyles::ListButton(), 120, DMButton::height());
-            r.b_edit_area->set_rect(SDL_Rect{ x, draw_base + used, 160, DMButton::height() });
-            r.b_delete->set_rect(SDL_Rect{ x + 170, draw_base + used, 120, DMButton::height() });
-            used += DMButton::height() + DMSpacing::item_gap();
+            r.b_delete->set_rect(SDL_Rect{ x, y - scroll_, maxw, DMButton::height() });
+            y += DMButton::height() + DMSpacing::item_gap();
         }
 
-        // Footer actions
         if (b_add_) {
-            b_add_->set_rect(SDL_Rect{ x, draw_base + used, std::min(260, maxw), DMButton::height() });
-            used += DMButton::height() + DMSpacing::item_gap();
+            b_add_->set_rect(SDL_Rect{ x, y - scroll_, maxw, DMButton::height() });
+            y += DMButton::height() + DMSpacing::item_gap();
         }
 
-        content_height_ = std::max(0, used);
+        content_height_ = std::max(0, y - (rect_.y + DMSpacing::panel_padding() + DMButton::height() + DMSpacing::header_gap()));
+        DockableCollapsible::layout();
     }
 
     void update(const Input& input, int screen_w, int screen_h) override {

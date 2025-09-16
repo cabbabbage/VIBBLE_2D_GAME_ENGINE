@@ -21,13 +21,17 @@ class DevMouseControls {
     void purge_asset(Asset* a);
     void reset_click_state() {
     click_buffer_frames_ = 0;
+    rclick_buffer_frames_ = 0;
     last_click_time_ms_ = 0;
     last_click_asset_ = nullptr;
     dragging_ = false;
-	}
+        }
     const std::vector<Asset*>& get_selected_assets() const { return selected_assets; }
     const std::vector<Asset*>& get_highlighted_assets() const { return highlighted_assets; }
     Asset* get_hovered_asset() const { return hovered_asset; }
+
+    // Clear all current selection/highlight state
+    void clear_selection();
     
     // Zoom control configuration
     void set_zoom_scale_factor(double f) { zoom_scale_factor_ = (f > 0.0) ? f : 1.0; }
@@ -41,8 +45,9 @@ class DevMouseControls {
     Uint32 last_click_time_ms_ = 0;
     Asset* last_click_asset_ = nullptr;
 
-	private:
+        private:
     int click_buffer_frames_ = 0;
+    int rclick_buffer_frames_ = 0;
     int hover_miss_frames_ = 0;
     Input* mouse;
     Assets* assets_ = nullptr;

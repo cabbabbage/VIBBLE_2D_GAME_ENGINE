@@ -48,9 +48,17 @@ class AreaUI(ttk.Frame):
         self.offset_y_range.var_max.trace_add("write", lambda *_: self._update_offset('offset_y'))
 
         # Zoom (% of fit)
-        self.zoom_range = Range(self, min_bound=5, max_bound=200, set_min=int(self.scale*100), set_max=int(self.scale*100), force_fixed=True, label="Zoom (%)")
-        self.zoom_range.grid(row=4, column=0, sticky='we', padx=12, pady=(0, 12))
-        self.zoom_range.var_max.trace_add("write", lambda *_: self._draw_preview())
+        self.zoom_range = Range(
+            self,
+            min_bound=5,
+            max_bound=200,
+            set_min=int(self.scale * 100),
+            set_max=int(self.scale * 100),
+            force_fixed=True,
+            label="Zoom (%)",
+        )
+        self.zoom_range.grid(row=4, column=0, sticky="we", padx=12, pady=(0, 12))
+        self.zoom_range.var_max.trace_add("write", lambda *_: self._on_zoom_change())
 
         self._load_area_json()
         self._draw_preview()
@@ -110,6 +118,7 @@ class AreaUI(ttk.Frame):
         self.area_data[key] = val
         if self.json_path:
             self._save_json()
+        self._draw_preview()
         self._trigger_autosave()
 
     def _save_json(self):
@@ -118,6 +127,11 @@ class AreaUI(ttk.Frame):
                 json.dump(self.area_data, f, indent=2)
         except Exception as e:
             print(f"[AreaUI] Failed to write json: {e}")
+
+    def _on_zoom_change(self):
+        """Update scale from zoom slider and redraw preview."""
+        self.scale = self.zoom_range.get()[0] / 100
+        self._draw_preview()
 
     def _draw_preview(self):
         if not self.area_data:
@@ -167,10 +181,10 @@ class AreaUI(ttk.Frame):
                 break
 
         comp = Image.alpha_composite(base, overlay)
-        self.tk_preview = ImageTk.PhotoImage(comp)
+        self._tk_preview = ImageTk.PhotoImage(comp)
 
         self.preview_canvas.delete("all")
         self.preview_canvas.config(width=disp[0], height=disp[1])
-        self.preview_canvas.create_image(0, 0, anchor='nw', image=self.tk_preview)
+        self.preview_canvas.create_image(0, 0, anchor='nw', image=self._tk_preview)
 
 

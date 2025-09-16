@@ -13,15 +13,29 @@
 #include "dev_mode/asset_library_ui.hpp"
 #include "dev_mode/asset_info_ui.hpp"
 #include "dev_mode/room_configurator.hpp"
+#include "dev_mode/assets_config.hpp"
 #include "dev_mode/area_overlay_editor.hpp"
 #include "dev_mode/widgets.hpp"
+#include "room/room.hpp"
 
 #include <algorithm>
 #include <iostream>
 #include <memory>
 #include <limits>
+#include <random>
+#include <tuple>
+#include <cmath>
 #include <nlohmann/json.hpp>
 #include "utils/range_util.hpp"
+
+static std::string generate_spawn_id() {
+    static std::mt19937 rng(std::random_device{}());
+    static const char* hex = "0123456789abcdef";
+    std::uniform_int_distribution<int> dist(0, 15);
+    std::string s = "spn-";
+    for (int i = 0; i < 12; ++i) s.push_back(hex[dist(rng)]);
+    return s;
+}
 
 
 Assets::Assets(std::vector<Asset>&& loaded,
@@ -83,6 +97,7 @@ Assets::~Assets() {
     delete dev_mouse;
     delete library_ui_;
     delete info_ui_;
+    delete assets_cfg_ui_;
     delete area_editor_;
     delete room_cfg_ui_;
 }
@@ -155,18 +170,31 @@ void Assets::update(const Input& input,
     //activeManager.sortByZIndex();
 
     if (dev_mode && dev_mouse) {
-        bool lib_block = false;
-        if (library_ui_ && library_ui_->is_visible()) {
-            lib_block = library_ui_->is_input_blocking_at(input.getX(), input.getY());
+        bool ui_blocking = false;
+        int mx = input.getX();
+        int my = input.getY();
+        if (info_ui_ && info_ui_->is_visible() && info_ui_->is_point_inside(mx, my)) {
+            ui_blocking = true;
+        } else if (room_cfg_ui_ && room_cfg_ui_->visible() && room_cfg_ui_->is_point_inside(mx, my)) {
+            ui_blocking = true;
+        } else if (library_ui_ && library_ui_->is_visible() && library_ui_->is_input_blocking_at(mx, my)) {
+            ui_blocking = true;
+        } else if (area_editor_ && area_editor_->is_active()) {
+            ui_blocking = true;
         }
-        bool ui_blocking = lib_block || (info_ui_ && info_ui_->is_visible()) || (area_editor_ && area_editor_->is_active());
         if (!ui_blocking) {
             dev_mouse->handle_mouse_input(input);
         }
     }
 
-    if (input.wasScancodePressed(SDL_SCANCODE_TAB)) {
-        toggle_asset_library();
+    bool ctrl = input.isScancodeDown(SDL_SCANCODE_LCTRL) || input.isScancodeDown(SDL_SCANCODE_RCTRL);
+    if (ctrl) {
+        if (input.wasScancodePressed(SDL_SCANCODE_A)) {
+            toggle_asset_library();
+        }
+        if (input.wasScancodePressed(SDL_SCANCODE_R)) {
+            toggle_room_config();
+        }
     }
 
     update_ui(input);
@@ -181,22 +209,17 @@ void Assets::set_dev_mode(bool mode) {
     if (dev_mode) {
         // Disable parallax effects while in dev mode to simplify editing
         camera.set_parallax_enabled(false);
-        // Open library immediately (expanded) and pin to top-left
-        if (!library_ui_) library_ui_ = new AssetLibraryUI();
-        library_ui_->open();
-        library_ui_->set_position(10, 10);
-        library_ui_->set_expanded(true);
-        std::cout << "[Assets] Dev Mode ON. Asset Library opened at (10,10), expanded=1\n";
+        camera.set_manual_zoom_override(false);
         close_asset_info_editor();
     } else {
         // Restore parallax when returning to player mode
         camera.set_parallax_enabled(true);
+        camera.set_manual_zoom_override(false);
         // Leaving dev mode: close floating UIs
-        if (library_ui_) {
-            library_ui_->close();
-            std::cout << "[Assets] Dev Mode OFF. Asset Library closed.\n";
-        }
+        if (library_ui_) library_ui_->close();
+        if (room_cfg_ui_) room_cfg_ui_->close();
         if (info_ui_) info_ui_->close();
+        if (assets_cfg_ui_) assets_cfg_ui_->close_all_asset_configs();
     }
 
     if (input) input->clearClickBuffer();
@@ -221,15 +244,10 @@ Asset* Assets::get_hovered_asset() const {
     return dev_mouse ? dev_mouse->get_hovered_asset() : nullptr;
 }
 
-nlohmann::json Assets::save_current_room(std::string room_name) {
-    if (!current_room_) {
-        throw std::runtime_error("[Assets] No current room to save!");
-    }
-
-    nlohmann::json j = current_room_->create_static_room_json(room_name);
-    j["room_name"] = room_name;
-
-    return j;
+nlohmann::json Assets::save_current_room(std::string /*room_name*/) {
+    // Placeholder stub until proper room-saving logic is reintroduced.
+    // For now, return an empty JSON object.
+    return nlohmann::json::object();
 }
 
 void Assets::addAsset(const std::string& name, SDL_Point g) {
@@ -378,7 +396,11 @@ void Assets::render_overlays(SDL_Renderer* renderer) {
         area_editor_->render(renderer);
     }
     if (info_ui_ && info_ui_->is_visible()) {
+        info_ui_->render_world_overlay(renderer, camera);
         info_ui_->render(renderer, screen_width, screen_height);
+    }
+    if (assets_cfg_ui_) {
+        assets_cfg_ui_->render(renderer);
     }
     if (room_cfg_ui_ && room_cfg_ui_->any_panel_visible()) {
         room_cfg_ui_->render(renderer);
@@ -404,23 +426,31 @@ bool Assets::is_asset_library_open() const {
     return library_ui_ && library_ui_->is_visible();
 }
 
+void Assets::toggle_room_config() {
+    if (!room_cfg_ui_) room_cfg_ui_ = new RoomConfigurator();
+    if (room_cfg_ui_->visible()) {
+        room_cfg_ui_->close();
+    } else {
+        room_cfg_ui_->open(current_room_);
+        room_cfg_ui_->set_position(10, 10);
+    }
+}
+
+void Assets::close_room_config() {
+    if (room_cfg_ui_) room_cfg_ui_->close();
+}
+
+bool Assets::is_room_config_open() const {
+    return room_cfg_ui_ && room_cfg_ui_->visible();
+}
+
 void Assets::update_ui(const Input& input) {
     // Keep UI panels updated
     if (library_ui_ && library_ui_->is_visible()) {
         library_ui_->update(input, screen_width, screen_height, library_, *this);
     }
-    // Room configurator visibility depends on dev mode and other UIs
-    if (dev_mode && !is_asset_library_open() && !is_asset_info_editor_open()) {
-        if (!room_cfg_ui_) room_cfg_ui_ = new RoomConfigurator();
-        if (!room_cfg_ui_->visible()) {
-            nlohmann::json j;
-            if (current_room_) j = save_current_room(current_room_->name);
-            else j["assets"] = nlohmann::json::array();
-            room_cfg_ui_->open(j);
-            room_cfg_ui_->set_position(10, 10);
-        }
-    } else {
-        if (room_cfg_ui_) room_cfg_ui_->close();
+    if (room_cfg_ui_ && room_cfg_ui_->visible()) {
+        room_cfg_ui_->update(input);
     }
     if (area_editor_) {
         const bool was = last_area_editor_active_;
@@ -446,16 +476,12 @@ void Assets::update_ui(const Input& input) {
     if (info_ui_ && info_ui_->is_visible()) {
         info_ui_->update(input, screen_width, screen_height);
     }
-    if (room_cfg_ui_ && room_cfg_ui_->any_panel_visible()) {
-        room_cfg_ui_->update(input);
+    if (assets_cfg_ui_) {
+        assets_cfg_ui_->update(input);
     }
 
-    // When editing (asset info open or area overlay active), lock the camera
-    // to the selected or hovered asset to avoid auto-zoom/pan drifting away.
-    const bool editing_overlay_active =
-        (area_editor_ && area_editor_->is_active()) ||
-        (info_ui_ && info_ui_->is_visible()) ||
-        (room_cfg_ui_ && room_cfg_ui_->any_panel_visible());
+    // When editing an area overlay, lock the camera to the selected or hovered asset.
+    const bool editing_overlay_active = (area_editor_ && area_editor_->is_active());
 
     if (editing_overlay_active) {
         Asset* focus = nullptr;
@@ -470,7 +496,6 @@ void Assets::update_ui(const Input& input) {
     } else {
         // Return camera control to normal gameplay when editors are closed
         camera.clear_focus_override();
-        camera.set_manual_zoom_override(false);
     }
 }
 
@@ -483,42 +508,87 @@ void Assets::open_asset_info_editor(const std::shared_ptr<AssetInfo>& info) {
     if (!info) return;
     if (!info_ui_) info_ui_ = new AssetInfoUI();
     if (info_ui_) info_ui_->set_assets(this);
+    // Always clear previous data so the UI only shows the requested asset
+    info_ui_->clear_info();
     info_ui_->set_info(info);
-    // If the asset library is open now, close it and remember to restore
-    reopen_library_on_info_close_ = is_asset_library_open();
-    if (reopen_library_on_info_close_) {
-        close_asset_library();
-    }
+    info_ui_->set_target_asset(nullptr);
     info_ui_->open();
 }
 
 void Assets::open_asset_info_editor_for_asset(Asset* a) {
     if (!a || !a->info) return;
-    // Pan and zoom to the asset before opening the editor
-    focus_camera_on_asset(a, 0.8, 25);
+    std::cout << "Opening AssetInfoUI for asset: " << a->info->name << std::endl;
+    if (dev_mouse) dev_mouse->clear_selection();
+    focus_camera_on_asset(a, 0.8, 20);
     open_asset_info_editor(a->info);
+    if (info_ui_) info_ui_->set_target_asset(a);
 }
 
 void Assets::open_asset_config_for_asset(Asset* a) {
     if (!a) return;
-    if (!room_cfg_ui_) {
-        room_cfg_ui_ = new RoomConfigurator();
-        nlohmann::json j;
-        j["assets"] = nlohmann::json::array();
-        room_cfg_ui_->open(j);
-        room_cfg_ui_->set_position(10, 10);
+    if (!assets_cfg_ui_) {
+        assets_cfg_ui_ = new AssetsConfig();
+        if (current_room_) {
+            auto& assets_json = current_room_->assets_data()["assets"];
+            assets_cfg_ui_->load(assets_json, [this]() {
+                if (current_room_) current_room_->save_assets_json();
+            });
+        }
     }
     SDL_Point scr = camera.map_to_screen({a->pos.x, a->pos.y});
-    room_cfg_ui_->open_asset_config(a->spawn_id.empty() ? a->name : a->spawn_id, scr.x, scr.y);
+    std::string id = a->spawn_id.empty() ? (a->info ? a->info->name : std::string{}) : a->spawn_id;
+    assets_cfg_ui_->open_asset_config(id, scr.x, scr.y);
+}
+
+void Assets::finalize_asset_drag(Asset* a, const std::shared_ptr<AssetInfo>& info) {
+    if (!a || !info || !current_room_) return;
+    auto& root = current_room_->assets_data();
+    auto& arr = root["assets"];
+    if (!arr.is_array()) arr = nlohmann::json::array();
+    int width = 0, height = 0;
+    SDL_Point center{0,0};
+    if (current_room_->room_area) {
+        auto b = current_room_->room_area->get_bounds();
+        width = std::max(1, std::get<2>(b) - std::get<0>(b));
+        height = std::max(1, std::get<3>(b) - std::get<1>(b));
+        auto c = current_room_->room_area->get_center();
+        center.x = c.x; center.y = c.y;
+    }
+    auto clamp_int = [](int v){ return std::max(0, std::min(100, v)); };
+    int ep_x = 50, ep_y = 50;
+    if (width != 0 && height != 0) {
+        ep_x = clamp_int(static_cast<int>(std::lround(((double)(a->pos.x - center.x) / width) * 100.0 + 50.0)));
+        ep_y = clamp_int(static_cast<int>(std::lround(((double)(a->pos.y - center.y) / height) * 100.0 + 50.0)));
+    }
+    std::string spawn_id = generate_spawn_id();
+    nlohmann::json entry;
+    entry["name"] = info->name;
+    entry["spawn_id"] = spawn_id;
+    entry["min_number"] = 1;
+    entry["max_number"] = 1;
+    entry["position"] = "Exact Position";
+    entry["exact_position"] = nullptr;
+    entry["inherited"] = false;
+    entry["check_overlap"] = false;
+    entry["check_min_spacing"] = false;
+    entry["tag"] = false;
+    entry["ep_x_min"] = ep_x;
+    entry["ep_x_max"] = ep_x;
+    entry["ep_y_min"] = ep_y;
+    entry["ep_y_max"] = ep_y;
+    arr.push_back(entry);
+    current_room_->save_assets_json();
+    a->spawn_id = spawn_id;
+    a->spawn_method = "Exact Position";
+    if (assets_cfg_ui_) {
+        assets_cfg_ui_->load(arr, [this]() {
+            if (current_room_) current_room_->save_assets_json();
+        });
+    }
 }
 
 void Assets::close_asset_info_editor() {
     if (info_ui_) info_ui_->close();
-    // Reopen the asset library if we closed it when opening this editor
-    if (reopen_library_on_info_close_) {
-        reopen_library_on_info_close_ = false;
-        open_asset_library();
-    }
 }
 
 bool Assets::is_asset_info_editor_open() const {
@@ -533,14 +603,44 @@ void Assets::handle_sdl_event(const SDL_Event& e) {
     if (area_editor_ && area_editor_->is_active()) {
         if (area_editor_->handle_event(e)) return;
     }
-    if (library_ui_ && library_ui_->is_visible()) {
-        library_ui_->handle_event(e);
+    int mx = 0, my = 0;
+    if (e.type == SDL_MOUSEMOTION) {
+        mx = e.motion.x; my = e.motion.y;
+    } else if (e.type == SDL_MOUSEBUTTONDOWN || e.type == SDL_MOUSEBUTTONUP) {
+        mx = e.button.x; my = e.button.y;
+    } else if (e.type == SDL_MOUSEWHEEL) {
+        SDL_GetMouseState(&mx, &my);
     }
-    if (info_ui_ && info_ui_->is_visible()) {
+    bool handled = false;
+    if (!handled && info_ui_ && info_ui_->is_visible() && info_ui_->is_point_inside(mx, my)) {
         info_ui_->handle_event(e);
+        handled = true;
     }
-    if (room_cfg_ui_ && room_cfg_ui_->any_panel_visible()) {
+    if (!handled && assets_cfg_ui_ && assets_cfg_ui_->any_visible() && assets_cfg_ui_->is_point_inside(mx, my)) {
+        assets_cfg_ui_->handle_event(e);
+        handled = true;
+    }
+    if (!handled && room_cfg_ui_ && room_cfg_ui_->visible() && room_cfg_ui_->is_point_inside(mx, my)) {
         room_cfg_ui_->handle_event(e);
+        handled = true;
+    }
+    if (!handled && library_ui_ && library_ui_->is_visible() && library_ui_->is_input_blocking_at(mx, my)) {
+        library_ui_->handle_event(e);
+        handled = true;
+    }
+    if (!handled) {
+        if (info_ui_ && info_ui_->is_visible()) {
+            info_ui_->handle_event(e);
+        } else if (assets_cfg_ui_ && assets_cfg_ui_->any_visible()) {
+            assets_cfg_ui_->handle_event(e);
+        } else if (room_cfg_ui_ && room_cfg_ui_->any_panel_visible()) {
+            room_cfg_ui_->handle_event(e);
+        } else if (library_ui_ && library_ui_->is_visible()) {
+            library_ui_->handle_event(e);
+        }
+    }
+    if (handled && input && (e.type == SDL_MOUSEBUTTONDOWN || e.type == SDL_MOUSEBUTTONUP)) {
+        input->clearClickBuffer();
     }
 }
 
@@ -564,8 +664,6 @@ void Assets::begin_area_edit_for_selected_asset(const std::string& area_name) {
     if (info_ui_ && info_ui_->is_visible()) {
         reopen_info_after_area_edit_ = true;
         info_for_reopen_ = target->info;
-        // Do not reopen library when closing for area editing
-        reopen_library_on_info_close_ = false;
         info_ui_->close();
     } else {
         reopen_info_after_area_edit_ = false;

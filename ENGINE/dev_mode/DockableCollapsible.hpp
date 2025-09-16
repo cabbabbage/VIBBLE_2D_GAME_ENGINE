@@ -9,6 +9,7 @@
 #include "widgets.hpp"
 
 class Input; // fwd
+class AssetInfo; // fwd
 
 // Collapsible container that can either float (draggable) or be docked
 // in a fixed rectangle. Used for dev-mode panels and AssetInfo sections.
@@ -26,7 +27,12 @@ public:
 
     explicit DockableCollapsible(const std::string& title, bool floatable = true,
                                 int x = 32, int y = 32);
-    ~DockableCollapsible();
+    virtual ~DockableCollapsible();
+
+    // Basic metadata
+    void set_title(const std::string& title);
+    virtual void set_info(const std::shared_ptr<AssetInfo>& info) { info_ = info; }
+    virtual void build() {}
 
     // Content rows are non-owning Widget* wrappers (see ui_widget.hpp adapters)
     void set_rows(const Rows& rows);
@@ -50,14 +56,19 @@ public:
     void set_col_gap(int g)    { col_gap_ = std::max(0, g); }
     void set_visible_height(int h) { visible_height_ = std::max(0, h); }
 
+    // Reset internal scroll position
+    void reset_scroll() const { scroll_ = 0; }
+
     // Event/update/render
-    void update(const Input& input, int screen_w, int screen_h);
-    bool handle_event(const SDL_Event& e);
-    void render(SDL_Renderer* r) const;
+    virtual void update(const Input& input, int screen_w, int screen_h);
+    virtual bool handle_event(const SDL_Event& e);
+    virtual void render(SDL_Renderer* r) const;
+    virtual void render_content(SDL_Renderer* r) const {}
 
     // Rect of the whole floating panel
     const SDL_Rect& rect() const { return rect_; }
     int height() const { return rect_.h; }
+    bool is_point_inside(int x, int y) const;
 
 private:
     void layout(int screen_w, int screen_h) const;
@@ -69,12 +80,14 @@ private:
 protected:
     virtual void layout();
 
-private:
+protected:
     std::string title_;
     mutable std::unique_ptr<DMButton> header_btn_;
+    mutable std::unique_ptr<DMButton> close_btn_;
     mutable SDL_Rect rect_{32,32,260,DMButton::height()+8};
     mutable SDL_Rect header_rect_{0,0,0,0};
     mutable SDL_Rect handle_rect_{0,0,0,0};
+    mutable SDL_Rect close_rect_{0,0,0,0};
     mutable SDL_Rect body_viewport_{0,0,0,0};
 
     Rows rows_;
@@ -82,7 +95,7 @@ private:
     mutable int content_height_ = 0;  // full content height (unclipped)
     mutable int widest_row_w_ = 0;    // computed panel width
     mutable int body_viewport_h_ = 0; // visible body height (clipped)
-    int visible_height_ = 300;        // docked mode max body height
+    int visible_height_ = 400;        // docked mode max body height
 
     // Interaction
     bool visible_ = true;
@@ -92,12 +105,13 @@ private:
     SDL_Point drag_offset_{0,0};
     mutable int scroll_ = 0;
     mutable int max_scroll_ = 0;
+    std::shared_ptr<AssetInfo> info_{};
 
     // Layout config
     int padding_   = 10;   // outer padding
     int row_gap_   = 8;    // vertical gap between rows
     int col_gap_   = 12;   // horizontal gap between items in a row
-    int cell_width_= 220;  // per-item width inside a row
+    int cell_width_= 280;  // per-item width inside a row
 
     // Optional bounds for clamping and available height decisions
     SDL_Rect work_area_{0,0,0,0};

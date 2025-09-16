@@ -23,6 +23,7 @@ class AssetInfoUI;
 class AssetInfo;
 class AreaOverlayEditor;
 class RoomConfigurator;
+class AssetsConfig;
 
 class Assets {
 
@@ -71,6 +72,9 @@ class Assets {
     void open_asset_library();
     void close_asset_library();
     bool is_asset_library_open() const;
+    void toggle_room_config();
+    void close_room_config();
+    bool is_room_config_open() const;
     void update_ui(const Input& input);
     std::shared_ptr<AssetInfo> consume_selected_asset_from_library();
     void open_asset_info_editor(const std::shared_ptr<AssetInfo>& info);
@@ -80,6 +84,7 @@ class Assets {
     void handle_sdl_event(const SDL_Event& e);
     // Asset config editing
     void open_asset_config_for_asset(Asset* a);
+    void finalize_asset_drag(Asset* a, const std::shared_ptr<AssetInfo>& info);
 
     // Dev convenience: focus camera
     void focus_camera_on_asset(Asset* a, double zoom_factor = 0.8, int duration_steps = 25);
@@ -90,7 +95,6 @@ class Assets {
     AssetLibraryUI* library_ui_ = nullptr;
     AssetInfoUI*    info_ui_    = nullptr;
     AreaOverlayEditor* area_editor_ = nullptr;
-    bool reopen_library_on_info_close_ = false;
     // Area editor lifecycle helpers
     bool last_area_editor_active_ = false;
     bool reopen_info_after_area_edit_ = false;
@@ -99,6 +103,7 @@ class Assets {
     void schedule_removal(Asset* a);
     void process_removals();
     RoomConfigurator* room_cfg_ui_ = nullptr;
+    AssetsConfig* assets_cfg_ui_ = nullptr;
 
 	private:
     void addAsset(const std::string& name, SDL_Point g);

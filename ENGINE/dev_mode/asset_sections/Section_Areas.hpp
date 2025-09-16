@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../DockableCollapsible.hpp"
+#include "widgets.hpp"
 #include <functional>
 #include <vector>
 #include <algorithm>
@@ -17,6 +18,7 @@ class Section_Areas : public DockableCollapsible {
     void build() override {
       rebuild_buttons();
       b_create_ = std::make_unique<DMButton>("New Area", &DMStyles::CreateButton(), 220, DMButton::height());
+      rebuild_rows();
     }
 
     void rebuild_buttons() {
@@ -32,8 +34,6 @@ class Section_Areas : public DockableCollapsible {
     }
 
     void layout() override {
-      DockableCollapsible::layout();
-      // Refresh buttons if areas changed (count or names)
       if (info_) {
         bool needs = (buttons_.size() != info_->areas.size());
         if (!needs) {
@@ -41,69 +41,62 @@ class Section_Areas : public DockableCollapsible {
             if (!buttons_[i] || buttons_[i]->text() != info_->areas[i].name) { needs = true; break; }
           }
         }
-        if (needs) rebuild_buttons();
+        if (needs) { rebuild_buttons(); rebuild_rows(); }
       }
-      int x = rect_.x + DMSpacing::panel_padding();
-      int y = rect_.y + DMButton::height() + DMSpacing::header_gap();
-      int inner_w = rect_.w - 2 * DMSpacing::panel_padding();
-      int used = 0;
-      for (size_t i = 0; i < buttons_.size(); ++i) {
-        auto& b = buttons_[i];
-        auto& d = (i < del_buttons_.size() ? del_buttons_[i] : dummy_del_);
-        int del_w = 120;
-        int spacing = DMSpacing::item_gap();
-        int main_w = std::max(0, inner_w - del_w - spacing);
-        if (b) b->set_rect(SDL_Rect{ x, y + used - scroll_, main_w, DMButton::height() });
-        if (d) d->set_rect(SDL_Rect{ x + main_w + spacing, y + used - scroll_, del_w, DMButton::height() });
-        used += DMButton::height() + DMSpacing::item_gap();
-      }
-      if (b_create_) {
-        b_create_->set_rect(SDL_Rect{ x, y + used - scroll_, inner_w, DMButton::height() });
-        used += DMButton::height() + DMSpacing::item_gap();
-      }
-      content_height_ = std::max(0, used + DMSpacing::item_gap());
+      DockableCollapsible::layout();
     }
 
     bool handle_event(const SDL_Event& e) override {
-      bool used = DockableCollapsible::handle_event(e);
-      if (!info_ || !expanded_) return used;
+      return DockableCollapsible::handle_event(e);
+    }
+
+    void render_content(SDL_Renderer* /*r*/) const override {}
+
+  private:
+    void rebuild_rows() {
+      widgets_.clear();
+      DockableCollapsible::Rows rows;
       for (size_t i = 0; i < buttons_.size(); ++i) {
         auto& b = buttons_[i];
         auto& d = (i < del_buttons_.size() ? del_buttons_[i] : dummy_del_);
-        if (d && d->handle_event(e)) {
-          // Prefer direct index -> name mapping to avoid races with text()
-          if (info_ && i < info_->areas.size() && on_delete_) on_delete_(info_->areas[i].name);
-          return true;
+        if (b) {
+          DMButton* bp = b.get();
+          std::string nm = bp->text();
+          auto bw = std::make_unique<ButtonWidget>(bp, [this, nm]() {
+            if (open_editor_) open_editor_(nm);
+          });
+          rows.push_back({ bw.get() });
+          widgets_.push_back(std::move(bw));
         }
-        if (b && b->handle_event(e)) {
-          if (open_editor_) open_editor_(b->text());
-          return true;
+        if (d) {
+          DMButton* dp = d.get();
+          std::string dn = (info_ && i < info_->areas.size()) ? info_->areas[i].name : std::string{};
+          auto dw = std::make_unique<ButtonWidget>(dp, [this, dn]() {
+            if (on_delete_) on_delete_(dn);
+            rebuild_buttons();
+            rebuild_rows();
+          });
+          rows.push_back({ dw.get() });
+          widgets_.push_back(std::move(dw));
         }
       }
-      if (b_create_ && b_create_->handle_event(e)) {
-        std::string nm = "area" + std::to_string(info_->areas.size() + 1);
-        if (open_editor_) open_editor_(nm);
-        return true;
+      if (b_create_) {
+        auto bw = std::make_unique<ButtonWidget>(b_create_.get(), [this]() {
+          std::string nm = "area" + std::to_string(info_ ? info_->areas.size() + 1 : 1);
+          if (open_editor_) open_editor_(nm);
+        });
+        rows.push_back({ bw.get() });
+        widgets_.push_back(std::move(bw));
       }
-      return used;
+      set_rows(rows);
     }
 
-    void render_content(SDL_Renderer* r) const override {
-      for (size_t i = 0; i < buttons_.size(); ++i) {
-        auto& b = buttons_[i];
-        if (b) b->render(r);
-        if (i < del_buttons_.size() && del_buttons_[i]) del_buttons_[i]->render(r);
-      }
-      if (b_create_) b_create_->render(r);
-    }
-
-  private:
     std::vector<std::unique_ptr<DMButton>> buttons_;
     std::vector<std::unique_ptr<DMButton>> del_buttons_;
     std::unique_ptr<DMButton>  b_create_;
     std::function<void(const std::string&)> open_editor_;
     std::function<void(const std::string&)> on_delete_;
-    // placeholder to avoid branching
     std::unique_ptr<DMButton> dummy_del_{};
+    std::vector<std::unique_ptr<Widget>> widgets_;
 };
 

@@ -3,12 +3,18 @@
 #include "../DockableCollapsible.hpp"
 #include <memory>
 #include <vector>
+#include <cmath>
+#include <algorithm>
 #include "asset/asset_info.hpp"
+#include "asset_info_methods/lighting_loader.hpp"
+
+class AssetInfoUI;
 
 // Lighting configuration (shading + multiple light sources)
 class Section_Lighting : public DockableCollapsible {
 public:
     Section_Lighting() : DockableCollapsible("Lighting", false) {}
+    void set_ui(AssetInfoUI* ui) { ui_ = ui; }
     ~Section_Lighting() override = default;
 
     void build() override {
@@ -50,54 +56,62 @@ public:
     }
 
     void layout() override {
-        DockableCollapsible::layout();
         int x = rect_.x + DMSpacing::panel_padding();
-        int y = rect_.y + DMButton::height() + DMSpacing::header_gap();
+        int y = rect_.y + DMSpacing::panel_padding() + DMButton::height() + DMSpacing::header_gap();
         int maxw = rect_.w - 2 * DMSpacing::panel_padding();
-        int draw_y = y - scroll_;
+
+        auto place = [&](auto& widget, int h) {
+            if (!widget) return;
+            widget->set_rect(SDL_Rect{ x, y - scroll_, maxw, h });
+            y += h + DMSpacing::item_gap();
+        };
+
         if (c_has_shading_) {
-            c_has_shading_->set_rect(SDL_Rect{ x, draw_y, maxw, DMCheckbox::height() });
-            y += DMCheckbox::height() + DMSpacing::item_gap();
-            draw_y = y - scroll_;
+            place(c_has_shading_, DMCheckbox::height());
         }
         if (c_has_shading_ && c_has_shading_->value()) {
             int shade_start = y;
-            s_sh_intensity_->set_rect(SDL_Rect{ x, draw_y, maxw, DMSlider::height() }); y += DMSlider::height() + DMSpacing::item_gap(); draw_y = y - scroll_;
-            s_sh_radius_->set_rect   (SDL_Rect{ x, draw_y, maxw, DMSlider::height() }); y += DMSlider::height() + DMSpacing::item_gap(); draw_y = y - scroll_;
-            s_sh_x_radius_->set_rect (SDL_Rect{ x, draw_y, maxw, DMSlider::height() }); y += DMSlider::height() + DMSpacing::item_gap(); draw_y = y - scroll_;
-            s_sh_y_radius_->set_rect (SDL_Rect{ x, draw_y, maxw, DMSlider::height() }); y += DMSlider::height() + DMSpacing::item_gap(); draw_y = y - scroll_;
-            s_sh_falloff_->set_rect  (SDL_Rect{ x, draw_y, maxw, DMSlider::height() }); y += DMSlider::height() + DMSpacing::item_gap(); draw_y = y - scroll_;
-            s_sh_factor_->set_rect   (SDL_Rect{ x, draw_y, maxw, DMSlider::height() }); y += DMSlider::height() + DMSpacing::item_gap(); draw_y = y - scroll_;
-            shading_rect_ = SDL_Rect{ x - 4, shade_start - scroll_ - 4, maxw + 8, (y - shade_start) + 8 };
             if (shading_label_) {
                 int lbl_w = shading_label_->rect().w;
                 int lbl_x = rect_.x + DMSpacing::panel_padding() + (maxw - lbl_w) / 2;
-                shading_label_->set_rect(SDL_Rect{ lbl_x, shading_rect_.y - DMButton::height(), lbl_w, DMButton::height() });
+                shading_label_->set_rect(SDL_Rect{ lbl_x, y - scroll_, lbl_w, DMButton::height() });
+                y += DMButton::height() + DMSpacing::item_gap();
             }
+            place(s_sh_intensity_, DMSlider::height());
+            place(s_sh_radius_,    DMSlider::height());
+            place(s_sh_x_radius_,  DMSlider::height());
+            place(s_sh_y_radius_,  DMSlider::height());
+            place(s_sh_falloff_,   DMSlider::height());
+            place(s_sh_factor_,    DMSlider::height());
+            shading_rect_ = SDL_Rect{ x - 4, shade_start - scroll_ - 4, maxw + 8, (y - shade_start) + 8 };
         }
+
         for (size_t i = 0; i < rows_.size(); ++i) {
             auto& r = rows_[i];
-            if (!r.lbl) r.lbl = std::make_unique<DMButton>("Light Source " + std::to_string(i+1), &DMStyles::HeaderButton(), 180, DMButton::height());
+            if (!r.lbl)
+                r.lbl = std::make_unique<DMButton>("Light Source " + std::to_string(i + 1), &DMStyles::HeaderButton(), 180, DMButton::height());
             int lbl_x = rect_.x + DMSpacing::panel_padding() + (maxw - 180) / 2;
-            r.lbl->set_rect(SDL_Rect{ lbl_x, draw_y, 180, DMButton::height() });
-            if (r.b_delete) r.b_delete->set_rect(SDL_Rect{ x + maxw - 120, draw_y, 120, DMButton::height() });
-            y += DMButton::height() + DMSpacing::item_gap(); draw_y = y - scroll_;
-            r.s_intensity->set_rect(SDL_Rect{ x, draw_y, maxw, DMSlider::height() }); y += DMSlider::height() + DMSpacing::item_gap(); draw_y = y - scroll_;
-            r.s_radius->set_rect   (SDL_Rect{ x, draw_y, maxw, DMSlider::height() }); y += DMSlider::height() + DMSpacing::item_gap(); draw_y = y - scroll_;
-            r.s_falloff->set_rect  (SDL_Rect{ x, draw_y, maxw, DMSlider::height() }); y += DMSlider::height() + DMSpacing::item_gap(); draw_y = y - scroll_;
-            r.s_flicker->set_rect  (SDL_Rect{ x, draw_y, maxw, DMSlider::height() }); y += DMSlider::height() + 4; draw_y = y - scroll_;
-            r.s_flare->set_rect    (SDL_Rect{ x, draw_y, maxw, DMSlider::height() }); y += DMSlider::height() + 4; draw_y = y - scroll_;
-            r.s_offset_x->set_rect (SDL_Rect{ x, draw_y, maxw, DMSlider::height() }); y += DMSlider::height() + 4; draw_y = y - scroll_;
-            r.s_offset_y->set_rect (SDL_Rect{ x, draw_y, maxw, DMSlider::height() }); y += DMSlider::height() + 4; draw_y = y - scroll_;
-            r.s_color_r->set_rect  (SDL_Rect{ x, draw_y, maxw, DMSlider::height() }); y += DMSlider::height() + 4; draw_y = y - scroll_;
-            r.s_color_g->set_rect  (SDL_Rect{ x, draw_y, maxw, DMSlider::height() }); y += DMSlider::height() + 4; draw_y = y - scroll_;
-            r.s_color_b->set_rect  (SDL_Rect{ x, draw_y, maxw, DMSlider::height() }); y += DMSlider::height() + 12; draw_y = y - scroll_;
+            r.lbl->set_rect(SDL_Rect{ lbl_x, y - scroll_, 180, DMButton::height() });
+            if (r.b_delete)
+                r.b_delete->set_rect(SDL_Rect{ x + maxw - 120, y - scroll_, 120, DMButton::height() });
+            y += DMButton::height() + DMSpacing::item_gap();
+            place(r.s_intensity, DMSlider::height());
+            place(r.s_radius,    DMSlider::height());
+            place(r.s_falloff,   DMSlider::height());
+            place(r.s_flicker,   DMSlider::height());
+            place(r.s_flare,     DMSlider::height());
+            place(r.s_offset_x,  DMSlider::height());
+            place(r.s_offset_y,  DMSlider::height());
+            place(r.s_color_r,   DMSlider::height());
+            place(r.s_color_g,   DMSlider::height());
+            place(r.s_color_b,   DMSlider::height());
         }
         if (b_add_) {
-            b_add_->set_rect(SDL_Rect{ x, draw_y, std::min(260, maxw), DMButton::height() });
-            y += DMButton::height() + 8; draw_y = y - scroll_;
+            b_add_->set_rect(SDL_Rect{ x, y - scroll_, std::min(260, maxw), DMButton::height() });
+            y += DMButton::height() + DMSpacing::item_gap();
         }
-        content_height_ = std::max(0, y - (rect_.y + DMButton::height() + 8));
+        content_height_ = std::max(0, y - (rect_.y + DMSpacing::panel_padding() + DMButton::height() + DMSpacing::header_gap()));
+        DockableCollapsible::layout();
     }
 
     bool handle_event(const SDL_Event& e) override {
@@ -160,7 +174,13 @@ public:
         }
         if (changed) {
             commit_to_info();
-            if (info_) (void)info_->update_info_json();
+            if (info_) {
+                (void)info_->update_info_json();
+                if (ui_) {
+                    SDL_Renderer* r = ui_->get_last_renderer();
+                    if (r) LightingLoader::generate_textures(*info_, r);
+                }
+            }
         }
         return used || changed;
     }
@@ -195,6 +215,9 @@ public:
         }
         if (b_add_) b_add_->render(r);
     }
+
+    bool shading_enabled() const { return c_has_shading_ && c_has_shading_->value(); }
+    const LightSource& shading_light() const { return shading_light_; }
 
 private:
     struct Row {
@@ -235,5 +258,6 @@ private:
 
     std::vector<Row> rows_;
     std::unique_ptr<DMButton> b_add_;
+    AssetInfoUI* ui_ = nullptr; // non-owning
 };
 

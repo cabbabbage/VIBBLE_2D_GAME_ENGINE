@@ -170,30 +170,32 @@ nlohmann::json Room::create_static_room_json(std::string name) {
 		cx = c.x;
 		cy = c.y;
 	}
-	for (const auto& uptr : assets) {
-		const Asset* a = uptr.get();
-		const int ax = a->pos.x;
-		const int ay = a->pos.y;
-		double norm_x = (width  != 0) ? (static_cast<double>(ax - cx) / static_cast<double>(width))  : 0.0;
-		double norm_y = (height != 0) ? (static_cast<double>(ay - cy) / static_cast<double>(height)) : 0.0;
-		int ep_x = clamp_int(static_cast<int>(std::lround(norm_x * 100.0 + 50.0)), 0, 100);
-		int ep_y = clamp_int(static_cast<int>(std::lround(norm_y * 100.0 + 50.0)), 0, 100);
-		json entry;
-		entry["name"] = a->info->name;
-		entry["min_number"] = 1;
-		entry["max_number"] = 1;
-		entry["position"] = "Exact Position";
-		entry["exact_position"] = nullptr;
-		entry["inherited"] = false;
-		entry["check_overlap"] = false;
-		entry["check_min_spacing"] = false;
-		entry["tag"] = false;
-		entry["ep_x_min"] = ep_x;
-		entry["ep_x_max"] = ep_x;
-		entry["ep_y_min"] = ep_y;
-		entry["ep_y_max"] = ep_y;
-		assets_arr.push_back(std::move(entry));
-	}
+        for (const auto& uptr : assets) {
+                const Asset* a = uptr.get();
+                if (!a || !a->info) continue; // skip assets lacking runtime info
+
+                const int ax = a->pos.x;
+                const int ay = a->pos.y;
+                double norm_x = (width  != 0) ? (static_cast<double>(ax - cx) / static_cast<double>(width))  : 0.0;
+                double norm_y = (height != 0) ? (static_cast<double>(ay - cy) / static_cast<double>(height)) : 0.0;
+                int ep_x = clamp_int(static_cast<int>(std::lround(norm_x * 100.0 + 50.0)), 0, 100);
+                int ep_y = clamp_int(static_cast<int>(std::lround(norm_y * 100.0 + 50.0)), 0, 100);
+                json entry;
+                entry["name"] = a->info->name;
+                entry["min_number"] = 1;
+                entry["max_number"] = 1;
+                entry["position"] = "Exact Position";
+                entry["exact_position"] = nullptr;
+                entry["inherited"] = false;
+                entry["check_overlap"] = false;
+                entry["check_min_spacing"] = false;
+                entry["tag"] = false;
+                entry["ep_x_min"] = ep_x;
+                entry["ep_x_max"] = ep_x;
+                entry["ep_y_min"] = ep_y;
+                entry["ep_y_max"] = ep_y;
+                assets_arr.push_back(std::move(entry));
+        }
 	if (is_spawn) {
 		json davey_entry = {
 			{"name", "Vibble"},
@@ -210,4 +212,15 @@ nlohmann::json Room::create_static_room_json(std::string name) {
 	}
 	out["assets"] = std::move(assets_arr);
 	return out;
+}
+
+nlohmann::json& Room::assets_data() {
+        return assets_json;
+}
+
+void Room::save_assets_json() const {
+        std::ofstream out(json_path);
+        if (out.is_open()) {
+                out << assets_json.dump(2);
+        }
 }
