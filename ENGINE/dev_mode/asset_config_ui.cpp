@@ -6,13 +6,13 @@
 
 AssetConfigUI::AssetConfigUI() {
     // Allowed spawn methods
-    spawn_methods_ = {"Random","Perimeter","Exact","Percent"};
+    spawn_methods_ = {"Random","Center","Perimeter","Exact","Percent"};
 
     // Include "Exact Position" to match the runtime spawn options used by the
     // engine.  Without this, assets with that method would default to "Random"
     // when opened in the UI, leading to inconsistent behaviour and potential
     // crashes when editing.
-    spawn_methods_ = {"Random","Center","Perimeter","Exact","Exact Position","Percent"};
+    spawn_methods_ = {"Random","Center","Perimeter","Exact","Percent"};
     panel_ = std::make_unique<DockableCollapsible>("Asset", true, 0, 0);
     panel_->set_expanded(true);
     panel_->set_visible(false);
