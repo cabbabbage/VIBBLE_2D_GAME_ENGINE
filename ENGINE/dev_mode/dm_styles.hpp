@@ -77,13 +77,13 @@ public:
 // Consistent spacing tokens for dev-mode UI
 struct DMSpacing {
   // Outer padding inside panels and floating boxes
-  static int panel_padding();    // default 16
+  static int panel_padding();    // default 24
   // Gap between stacked sections or footer items
-  static int section_gap();      // default 16
+  static int section_gap();      // default 24
   // Gap between controls (vertical/horizontal)
-  static int item_gap();         // default 8
+  static int item_gap();         // default 12
   // Smaller gap for dense grids (chips, small labels)
-  static int small_gap();        // default 4
+  static int small_gap();        // default 6
   // Space below section header before content starts
-  static int header_gap();       // default 8
+  static int header_gap();       // default 16
 };

@@ -95,7 +95,7 @@ protected:
     mutable int content_height_ = 0;  // full content height (unclipped)
     mutable int widest_row_w_ = 0;    // computed panel width
     mutable int body_viewport_h_ = 0; // visible body height (clipped)
-    int visible_height_ = 300;        // docked mode max body height
+    int visible_height_ = 400;        // docked mode max body height
 
     // Interaction
     bool visible_ = true;
@@ -111,7 +111,7 @@ protected:
     int padding_   = 10;   // outer padding
     int row_gap_   = 8;    // vertical gap between rows
     int col_gap_   = 12;   // horizontal gap between items in a row
-    int cell_width_= 220;  // per-item width inside a row
+    int cell_width_= 280;  // per-item width inside a row
 
     // Optional bounds for clamping and available height decisions
     SDL_Rect work_area_{0,0,0,0};

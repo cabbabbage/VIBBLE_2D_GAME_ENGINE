@@ -91,8 +91,8 @@ const SDL_Color &DMStyles::Border() {
   return c;
 }
 
-int DMSpacing::panel_padding() { return 16; }
-int DMSpacing::section_gap()   { return 16; }
-int DMSpacing::item_gap()      { return 8; }
-int DMSpacing::small_gap()     { return 4; }
-int DMSpacing::header_gap()    { return 8; }
+int DMSpacing::panel_padding() { return 24; }
+int DMSpacing::section_gap()   { return 24; }
+int DMSpacing::item_gap()      { return 12; }
+int DMSpacing::small_gap()     { return 6; }
+int DMSpacing::header_gap()    { return 16; }

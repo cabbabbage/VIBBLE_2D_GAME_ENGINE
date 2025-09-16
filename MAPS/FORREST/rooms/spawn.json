@@ -42,10 +42,10 @@
       "tag": false
     },
     {
-      "border_shift_max": 84,
-      "border_shift_min": 84,
-      "max_number": 10,
-      "min_number": 10,
+      "border_shift_max": 92,
+      "border_shift_min": 92,
+      "max_number": 23,
+      "min_number": 0,
       "name": "Barrel",
       "position": "Perimeter",
       "sector_center_max": 359,

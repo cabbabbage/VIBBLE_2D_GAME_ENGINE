@@ -157,7 +157,7 @@ void AssetInfoUI::handle_event(const SDL_Event& e) {
         if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
             if (info_) {
                 try {
-                    std::string cmd = std::string("python3 scripts/animation_ui.py \"") + info_->info_json_path() + "\"";
+                    std::string cmd = std::string("python scripts/animation_ui.py \"") + info_->info_json_path() + "\"";
                     int rc = std::system(cmd.c_str());
                     if (rc != 0) {
                         SDL_Log("animation_ui.py exited with code %d", rc);

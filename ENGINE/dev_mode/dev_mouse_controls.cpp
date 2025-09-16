@@ -254,7 +254,9 @@ void DevMouseControls::update_highlighted_assets() {
 }
 
 SDL_Point DevMouseControls::compute_mouse_world(int mx_screen, int my_screen) const {
-    return assets_->getView().screen_to_map(SDL_Point{mx_screen, my_screen});
+    // In dev mouse mode the cursor already operates in screen space, so avoid
+    // additional camera parallax correction or mapping.
+    return SDL_Point{mx_screen, my_screen};
 }
 
 void DevMouseControls::purge_asset(Asset* a) {

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../DockableCollapsible.hpp"
+#include "widgets.hpp"
 #include <nlohmann/json.hpp>
 #include <algorithm>
 #include <filesystem>
@@ -19,7 +20,8 @@ class Section_Tags : public DockableCollapsible {
     ~Section_Tags() override = default;
 
     void build() override {
-      if (!info_) return;
+      widgets_.clear();
+      if (!info_) { set_rows({}); return; }
       std::ostringstream oss;
       for (size_t i=0;i<info_->tags.size();++i) {
         oss << info_->tags[i];
@@ -36,77 +38,34 @@ class Section_Tags : public DockableCollapsible {
       t_anti_tags_ = std::make_unique<DMTextBox>("Anti-Tags (comma)", oss.str());
       scan_asset_tags();
       refresh_recommendations();
+      rebuild_rows();
     }
 
-    void layout() override {
-      int x = rect_.x + DMSpacing::panel_padding();
-      int y = rect_.y + DMSpacing::panel_padding() + DMButton::height() + DMSpacing::header_gap();
-      int maxw = std::max(120, rect_.w - 2 * DMSpacing::panel_padding());
-
-      if (t_tags_) {
-        int w = std::min(480, maxw);
-        int h = t_tags_->preferred_height(w);
-        t_tags_->set_rect(SDL_Rect{ x, y - scroll_, w, h });
-        y += h + DMSpacing::item_gap();
-      }
-      for (auto& b : recommended_buttons_) {
-        b->set_rect(SDL_Rect{ x, y - scroll_, maxw, DMButton::height() });
-        y += DMButton::height() + DMSpacing::item_gap();
-      }
-      if (t_anti_tags_) {
-        int w = std::min(480, maxw);
-        int h = t_anti_tags_->preferred_height(w);
-        t_anti_tags_->set_rect(SDL_Rect{ x, y - scroll_, w, h });
-        y += h + DMSpacing::item_gap();
-      }
-      for (auto& b : anti_recommended_buttons_) {
-        b->set_rect(SDL_Rect{ x, y - scroll_, maxw, DMButton::height() });
-        y += DMButton::height() + DMSpacing::item_gap();
-      }
-      content_height_ = std::max(0, y - (rect_.y + DMSpacing::panel_padding() + DMButton::height() + DMSpacing::header_gap()));
-      DockableCollapsible::layout();
-    }
+    void layout() override { DockableCollapsible::layout(); }
 
     bool handle_event(const SDL_Event& e) override {
       bool used = DockableCollapsible::handle_event(e);
       if (!info_) return used;
       bool changed = false;
-      if (t_tags_ && t_tags_->handle_event(e)) {
-        info_->set_tags(current_tags_vec());
+      auto tags_vec = current_tags_vec();
+      if (tags_vec != info_->tags) {
+        info_->set_tags(tags_vec);
         changed = true;
         refresh_recommendations();
+        rebuild_rows();
       }
-      for (auto& b : recommended_buttons_) {
-        if (b->handle_event(e)) {
-          if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
-            add_tag(b->text());
-          }
-          return true;
-        }
-      }
-      if (t_anti_tags_ && t_anti_tags_->handle_event(e)) {
-        info_->set_anti_tags(current_anti_vec());
+      auto anti_vec = current_anti_vec();
+      if (anti_vec != info_->anti_tags) {
+        info_->set_anti_tags(anti_vec);
         changed = true;
         refresh_recommendations();
-      }
-      for (auto& b : anti_recommended_buttons_) {
-        if (b->handle_event(e)) {
-          if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
-            add_anti_tag(b->text());
-          }
-          return true;
-        }
+        rebuild_rows();
       }
       if (changed) (void)info_->update_info_json();
       return used || changed;
     }
 
-    void render_content(SDL_Renderer* r) const override {
-      if (t_tags_) t_tags_->render(r);
-      for (auto& b : recommended_buttons_) b->render(r);
-      if (t_anti_tags_) t_anti_tags_->render(r);
-      for (auto& b : anti_recommended_buttons_) b->render(r);
-    }
+    void render_content(SDL_Renderer* /*r*/) const override {}
 
   private:
     // Scan existing assets for tag usage and anti-tag usage
@@ -300,6 +259,42 @@ class Section_Tags : public DockableCollapsible {
       tb->set_value(oss.str());
     }
 
+    void rebuild_rows() {
+      widgets_.clear();
+      DockableCollapsible::Rows rows;
+      if (t_tags_) {
+        auto w = std::make_unique<TextBoxWidget>(t_tags_.get());
+        rows.push_back({ w.get() });
+        widgets_.push_back(std::move(w));
+      }
+      for (auto& b : recommended_buttons_) {
+        DMButton* bp = b.get();
+        std::string tag = bp->text();
+        auto w = std::make_unique<ButtonWidget>(bp, [this, tag]() {
+          add_tag(tag);
+          rebuild_rows();
+        });
+        rows.push_back({ w.get() });
+        widgets_.push_back(std::move(w));
+      }
+      if (t_anti_tags_) {
+        auto w = std::make_unique<TextBoxWidget>(t_anti_tags_.get());
+        rows.push_back({ w.get() });
+        widgets_.push_back(std::move(w));
+      }
+      for (auto& b : anti_recommended_buttons_) {
+        DMButton* bp = b.get();
+        std::string tag = bp->text();
+        auto w = std::make_unique<ButtonWidget>(bp, [this, tag]() {
+          add_anti_tag(tag);
+          rebuild_rows();
+        });
+        rows.push_back({ w.get() });
+        widgets_.push_back(std::move(w));
+      }
+      set_rows(rows);
+    }
+
     std::unique_ptr<DMTextBox> t_tags_;
     std::unique_ptr<DMTextBox> t_anti_tags_;
     std::vector<std::unique_ptr<DMButton>> recommended_buttons_;
@@ -307,5 +302,6 @@ class Section_Tags : public DockableCollapsible {
     std::unordered_map<std::string, std::unordered_set<std::string>> asset_tag_map_;
     std::unordered_map<std::string, std::unordered_set<std::string>> asset_anti_tag_map_;
     std::unordered_map<std::string, int> tag_usage_;
+    std::vector<std::unique_ptr<Widget>> widgets_;
 };
 
