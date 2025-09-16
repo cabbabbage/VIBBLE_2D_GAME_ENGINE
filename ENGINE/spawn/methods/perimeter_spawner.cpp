@@ -11,12 +11,12 @@
 #include "spawn_logger.hpp"
 
 void PerimeterSpawner::spawn(const SpawnInfo& item, const Area* area, SpawnContext& ctx) {
-	if (!item.info || item.quantity <= 0 || !area) return;
+        if (!area || item.quantity <= 0 || !item.has_candidates()) return;
         using Point = SDL_Point;
-	const int Y_SHIFT = 200;
-	const auto& boundary = area->get_points();
-	if (boundary.size() < 2) return;
-	double cx = 0.0, cy = 0.0;
+        const int Y_SHIFT = 200;
+        const auto& boundary = area->get_points();
+        if (boundary.size() < 2) return;
+        double cx = 0.0, cy = 0.0;
         for (const auto& pt : boundary) { cx += pt.x; cy += pt.y; }
 	cx /= boundary.size();
 	cy /= boundary.size();
@@ -43,11 +43,11 @@ void PerimeterSpawner::spawn(const SpawnInfo& item, const Area* area, SpawnConte
 	double spacing = total_length / item.quantity;
 	double dist_accum = 0.0;
 	size_t seg_index = 0;
-	int angle_center = item.sector_center;
-	int angle_range  = item.sector_range;
-	int placed = 0, attempts = 0;
-	for (int i = 0; i < item.quantity; ++i) {
-		double target = i * spacing;
+        int angle_center = item.sector_center;
+        int angle_range  = item.sector_range;
+        int placed = 0, attempts = 0;
+        for (int i = 0; i < item.quantity; ++i) {
+                double target = i * spacing;
 		while (seg_index < segment_lengths.size() &&
          dist_accum + segment_lengths[seg_index] < target) {
 			dist_accum += segment_lengths[seg_index++];
@@ -68,16 +68,19 @@ void PerimeterSpawner::spawn(const SpawnInfo& item, const Area* area, SpawnConte
 		} else {
 			within_sector = (angle >= angle_start && angle <= angle_end);
 		}
-		if (!within_sector) continue;
+                if (!within_sector) continue;
         x += item.perimeter_offset.x;
         y += item.perimeter_offset.y;
         ++attempts;
         SDL_Point pos{x, y};
-        if (ctx.checker().check(item.info, pos, ctx.exclusion_zones(), ctx.all_assets(),
-      item.check_overlap, false, false, 5)) continue;
-        ctx.spawnAsset(item.name, item.info, *area, pos, 0, nullptr, item.spawn_id, item.position);
+        const SpawnCandidate* candidate = item.select_candidate(ctx.rng());
+        if (!candidate || candidate->is_null || !candidate->info) continue;
+        auto& info = candidate->info;
+        if (ctx.checker().check(info, pos, ctx.exclusion_zones(), ctx.all_assets(),
+                                item.check_overlap, false, false, 5)) continue;
+        ctx.spawnAsset(candidate->name, info, *area, pos, 0, nullptr, item.spawn_id, item.position);
         ++placed;
-        ctx.logger().progress(item.info, placed, item.quantity);
-	}
-	ctx.logger().output_and_log(item.name, item.quantity, placed, attempts, item.quantity, "perimeter");
+        ctx.logger().progress(info, placed, item.quantity);
+        }
+        ctx.logger().output_and_log(item.name, item.quantity, placed, attempts, item.quantity, "perimeter");
 }

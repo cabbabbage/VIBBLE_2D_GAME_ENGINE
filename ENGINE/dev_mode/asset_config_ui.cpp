@@ -8,6 +8,11 @@ AssetConfigUI::AssetConfigUI() {
     // Allowed spawn methods
     spawn_methods_ = {"Random","Perimeter","Exact","Percent"};
 
+    // Include "Exact Position" to match the runtime spawn options used by the
+    // engine.  Without this, assets with that method would default to "Random"
+    // when opened in the UI, leading to inconsistent behaviour and potential
+    // crashes when editing.
+    spawn_methods_ = {"Random","Center","Perimeter","Exact","Exact Position","Percent"};
     panel_ = std::make_unique<DockableCollapsible>("Asset", true, 0, 0);
     panel_->set_expanded(true);
     panel_->set_visible(false);
@@ -98,6 +103,11 @@ void AssetConfigUI::rebuild_widgets() {
     }
     if (m == "Perimeter") {
         s_border_ = std::make_unique<DMSlider>("Border%", 0, 100, entry_.value("border_shift", 0));
+        s_range_ = std::make_unique<DMRangeSlider>(0, 100, min_, max_);
+        s_range_w_ = std::make_unique<RangeSliderWidget>(s_range_.get());
+    }
+    if (m == "Perimeter") {
+        s_border_ = std::make_unique<DMSlider>("Border%", 0, 100, border_);
         s_border_w_ = std::make_unique<SliderWidget>(s_border_.get());
         s_sector_center_ = std::make_unique<DMSlider>("SectorC", 0, 359, entry_.value("sector_center", 0));
         s_sector_center_w_ = std::make_unique<SliderWidget>(s_sector_center_.get());
@@ -149,6 +159,14 @@ void AssetConfigUI::rebuild_rows() {
     if (s_percent_x_w_) rows.push_back({ s_percent_x_w_.get() });
     if (s_percent_y_w_) rows.push_back({ s_percent_y_w_.get() });
 
+    if (s_range_w_) rows.push_back({ s_range_w_.get() });
+    const std::string& m = spawn_methods_[method_];
+    if (m == "Perimeter") {
+        rows.push_back({ s_border_w_.get(), s_sector_center_w_.get(), s_sector_range_w_.get() });
+    } else if (m == "Percent") {
+        rows.push_back({ s_percent_x_w_.get() });
+        rows.push_back({ s_percent_y_w_.get() });
+    }
     panel_->set_cell_width(120);
     panel_->set_rows(rows);
 }
@@ -204,6 +222,28 @@ bool AssetConfigUI::handle_event(const SDL_Event& e) {
 
 void AssetConfigUI::render(SDL_Renderer* r) const {
     if (panel_ && panel_->is_visible()) panel_->render(r);
+}
+
+nlohmann::json AssetConfigUI::to_json() const {
+    nlohmann::json j;
+    if (!spawn_id_.empty()) j["spawn_id"] = spawn_id_;
+    if (!name_.empty() && name_[0] == '#') j["tag"] = name_.substr(1);
+    else j["name"] = name_;
+    j["position"] = spawn_methods_[method_];
+    j["min_number"] = min_;
+    j["max_number"] = max_;
+    const std::string& m = spawn_methods_[method_];
+    if (m == "Perimeter") {
+        j["border_shift_min"] = j["border_shift_max"] = border_;
+        j["sector_center_min"] = j["sector_center_max"] = sector_center_;
+        j["sector_range_min"] = j["sector_range_max"] = sector_range_;
+    } else if (m == "Percent") {
+        j["percent_x_min"] = percent_x_min_;
+        j["percent_x_max"] = percent_x_max_;
+        j["percent_y_min"] = percent_y_min_;
+        j["percent_y_max"] = percent_y_max_;
+    }
+    return j;
 }
 
 bool AssetConfigUI::is_point_inside(int x, int y) const {

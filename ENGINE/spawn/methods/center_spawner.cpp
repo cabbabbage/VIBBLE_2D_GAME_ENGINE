@@ -6,7 +6,7 @@
 #include "utils/area.hpp"
 #include "spawn_logger.hpp"
 void CenterSpawner::spawn(const SpawnInfo& item, const Area* area, SpawnContext& ctx) {
-	if (!item.info || !area) return;
+        if (!area || !item.has_candidates() || item.quantity <= 0) return;
     const int Y_SHIFT = 200;
         SDL_Point center = ctx.get_area_center(*area);
         center.y -= Y_SHIFT;
@@ -16,13 +16,23 @@ void CenterSpawner::spawn(const SpawnInfo& item, const Area* area, SpawnContext&
                 center = np->pos;
             }
         }
-        if (ctx.checker().check(item.info, center, ctx.exclusion_zones(), ctx.all_assets(),
-     item.check_overlap, item.check_min_spacing, false, 5)) {
-                ctx.logger().output_and_log(item.name, item.quantity, 0, 1, 1, "center");
-                return;
+        int attempts = 0;
+        int spawned = 0;
+        const int target_attempts = item.quantity;
+        while (attempts < target_attempts) {
+                const SpawnCandidate* candidate = item.select_candidate(ctx.rng());
+                ++attempts;
+                if (!candidate || candidate->is_null || !candidate->info) continue;
+                auto& info = candidate->info;
+                if (ctx.checker().check(info, center, ctx.exclusion_zones(), ctx.all_assets(),
+                                        item.check_overlap, item.check_min_spacing, false, 5)) {
+                        continue;
+                }
+                auto* result = ctx.spawnAsset(candidate->name, info, *area, center, 0, nullptr, item.spawn_id, item.position);
+                if (result) {
+                        ++spawned;
+                        ctx.logger().progress(info, spawned, target_attempts);
+                }
         }
-        auto* result = ctx.spawnAsset(item.name, item.info, *area, center, 0, nullptr, item.spawn_id, item.position);
-	int spawned = result ? 1 : 0;
-	ctx.logger().progress(item.info, spawned, item.quantity);
-    ctx.logger().output_and_log(item.name, item.quantity, spawned, 1, 1, "center");
+        ctx.logger().output_and_log(item.name, target_attempts, spawned, attempts, target_attempts, "center");
 }

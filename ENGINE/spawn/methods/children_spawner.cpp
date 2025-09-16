@@ -8,21 +8,26 @@
 #include "spawn_logger.hpp"
 
 void ChildrenSpawner::spawn(const SpawnInfo& item, const Area* area, SpawnContext& ctx) {
-    if (!item.info || !area) return;
+    if (!area || !item.has_candidates()) return;
     int quantity = item.quantity > 0 ? item.quantity : 1;
 
     int spawned = 0;
     int attempts = 0;
+    int slots_used = 0;
     int max_attempts = quantity * 50; // be generous within the child area
 
-    while (spawned < quantity && attempts < max_attempts) {
+    while (slots_used < quantity && attempts < max_attempts) {
         ++attempts;
         SDL_Point pos = ctx.get_point_within_area(*area);
         if (!area->contains_point(pos)) continue;
 
-        // Children are not subject to grid or spacing/min-distance rules.
-        // We still keep exclusion check disabled to allow any point in child area.
-        bool violate = ctx.checker().check(item.info,
+        const SpawnCandidate* candidate = item.select_candidate(ctx.rng());
+        if (!candidate || candidate->is_null || !candidate->info) {
+            ++slots_used;
+            continue;
+        }
+
+        bool violate = ctx.checker().check(candidate->info,
                                            pos,
                                            /*exclusion_areas*/ std::vector<Area>{},
                                            ctx.all_assets(),
@@ -32,11 +37,15 @@ void ChildrenSpawner::spawn(const SpawnInfo& item, const Area* area, SpawnContex
                                            /*num_neighbors*/ 0);
         if (violate) continue;
 
-        auto* result = ctx.spawnAsset(item.name, item.info, *area, pos, 0, nullptr, item.spawn_id, std::string("ChildRandom"));
-        if (result) {
-            ++spawned;
-            ctx.logger().progress(item.info, spawned, quantity);
+        auto* result = ctx.spawnAsset(candidate->name, candidate->info, *area, pos, 0, nullptr, item.spawn_id, std::string("ChildRandom"));
+        if (!result) {
+            ++slots_used;
+            continue;
         }
+
+        ++spawned;
+        ++slots_used;
+        ctx.logger().progress(candidate->info, spawned, quantity);
     }
     ctx.logger().output_and_log(item.name, quantity, spawned, attempts, max_attempts, "children_random");
 }

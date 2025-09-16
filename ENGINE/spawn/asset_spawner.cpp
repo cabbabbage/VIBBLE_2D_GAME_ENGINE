@@ -4,9 +4,7 @@
 #include "methods/exact_spawner.hpp"
 #include "methods/center_spawner.hpp"
 #include "methods/random_spawner.hpp"
-#include "methods/distributed_spawner.hpp"
 #include "methods/perimeter_spawner.hpp"
-#include "methods/distributed_batch_spawner.hpp"
 #include "methods/children_spawner.hpp"
 #include "methods/percent_spawner.hpp"
 #include "check.hpp"
@@ -68,10 +66,8 @@ std::vector<std::unique_ptr<Asset>> AssetSpawner::extract_all_assets() {
 
 void AssetSpawner::run_spawning(AssetSpawnPlanner* planner, const Area& area) {
 	asset_info_library_ = asset_library_->all();
-	spawn_queue_ = planner->get_spawn_queue();
-	auto batch_assets = planner->get_batch_spawn_assets();
-    int spacing = planner->get_batch_grid_spacing();
-    int jitter  = planner->get_batch_jitter();
+        spawn_queue_ = planner->get_spawn_queue();
+    int spacing = 100;
     // Create a map-wide grid covering this spawn area (shared across all methods)
     auto [minx, miny, maxx, maxy] = area.get_bounds();
     int w = std::max(0, maxx - minx);
@@ -82,13 +78,11 @@ void AssetSpawner::run_spawning(AssetSpawnPlanner* planner, const Area& area) {
         ExactSpawner exact;
         CenterSpawner center;
         RandomSpawner random;
-        DistributedSpawner distributed;
         PerimeterSpawner perimeter;
         PercentSpawner percent;
-        DistributedBatchSpawner batch;
-	for (auto& queue_item : spawn_queue_) {
-		logger_.start_timer();
-		if (!queue_item.info) continue;
+        for (auto& queue_item : spawn_queue_) {
+                logger_.start_timer();
+                if (!queue_item.has_candidates()) continue;
                 const std::string& pos = queue_item.position;
                 if (pos == "Exact" || pos == "Exact Position") {
                         exact.spawn(queue_item, &area, ctx);
@@ -96,28 +90,23 @@ void AssetSpawner::run_spawning(AssetSpawnPlanner* planner, const Area& area) {
                         center.spawn(queue_item, &area, ctx);
                 } else if (pos == "Perimeter") {
                         perimeter.spawn(queue_item, &area, ctx);
-                } else if (pos == "Distributed") {
-                        distributed.spawn(queue_item, &area, ctx);
                 } else if (pos == "Percent") {
                         percent.spawn(queue_item, &area, ctx);
                 } else {
                         random.spawn(queue_item, &area, ctx);
                 }
-	}
-	if (!batch_assets.empty()) {
-		batch.spawn(batch_assets, &area, spacing, jitter, ctx);
-	}
+        }
 }
 
 void AssetSpawner::run_child_spawning(AssetSpawnPlanner* planner, const Area& area) {
-	asset_info_library_ = asset_library_->all();
-	spawn_queue_ = planner->get_spawn_queue();
-	// No grid for children; they can go anywhere inside the child area
-	SpawnContext ctx(rng_, checker_, logger_, exclusion_zones, asset_info_library_, all_, asset_library_, nullptr);
-	ChildrenSpawner childMethod;
-	for (auto& queue_item : spawn_queue_) {
-		logger_.start_timer();
-		if (!queue_item.info) continue;
-		childMethod.spawn(queue_item, &area, ctx);
-	}
+        asset_info_library_ = asset_library_->all();
+        spawn_queue_ = planner->get_spawn_queue();
+        // No grid for children; they can go anywhere inside the child area
+        SpawnContext ctx(rng_, checker_, logger_, exclusion_zones, asset_info_library_, all_, asset_library_, nullptr);
+        ChildrenSpawner childMethod;
+        for (auto& queue_item : spawn_queue_) {
+                logger_.start_timer();
+                if (!queue_item.has_candidates()) continue;
+                childMethod.spawn(queue_item, &area, ctx);
+        }
 }

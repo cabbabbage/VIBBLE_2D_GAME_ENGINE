@@ -15,8 +15,6 @@
 #include "spawn/asset_spawn_planner.hpp"
 #include "spawn/check.hpp"
 #include "spawn/methods/center_spawner.hpp"
-#include "spawn/methods/distributed_batch_spawner.hpp"
-#include "spawn/methods/distributed_spawner.hpp"
 #include "spawn/methods/exact_spawner.hpp"
 #include "spawn/methods/perimeter_spawner.hpp"
 #include "spawn/methods/percent_spawner.hpp"
@@ -1094,9 +1092,6 @@ void RoomEditor::handle_spawn_config_change(const nlohmann::json& entry, const A
 std::unique_ptr<MapGrid> RoomEditor::build_room_grid(const std::string& ignore_spawn_id) const {
     if (!current_room_ || !current_room_->room_area) return nullptr;
     int spacing = 100;
-    if (current_room_->planner) {
-        spacing = current_room_->planner->get_batch_grid_spacing();
-    }
     if (spacing <= 0) spacing = 100;
     auto grid = std::make_unique<MapGrid>(MapGrid::from_area_bounds(*current_room_->room_area, spacing));
     if (!assets_) return grid;
@@ -1171,7 +1166,6 @@ void RoomEditor::respawn_spawn_group(const nlohmann::json& entry) {
     ExactSpawner exact;
     CenterSpawner center;
     RandomSpawner random;
-    DistributedSpawner distributed;
     PerimeterSpawner perimeter;
     PercentSpawner percent;
     const Area* area = current_room_->room_area.get();
@@ -1183,8 +1177,6 @@ void RoomEditor::respawn_spawn_group(const nlohmann::json& entry) {
             center.spawn(info, area, ctx);
         } else if (pos == "Perimeter") {
             perimeter.spawn(info, area, ctx);
-        } else if (pos == "Distributed") {
-            distributed.spawn(info, area, ctx);
         } else if (pos == "Percent") {
             percent.spawn(info, area, ctx);
         } else {
@@ -1305,10 +1297,8 @@ void RoomEditor::regenerate_current_room() {
     ExactSpawner exact;
     CenterSpawner center_spawn;
     RandomSpawner random;
-    DistributedSpawner distributed;
     PerimeterSpawner perimeter;
     PercentSpawner percent;
-    DistributedBatchSpawner batch_spawner;
     const Area* area_ptr = current_room_->room_area.get();
     const auto& queue = current_room_->planner->get_spawn_queue();
     for (const auto& info : queue) {
@@ -1319,19 +1309,11 @@ void RoomEditor::regenerate_current_room() {
             center_spawn.spawn(info, area_ptr, ctx);
         } else if (pos == "Perimeter") {
             perimeter.spawn(info, area_ptr, ctx);
-        } else if (pos == "Distributed") {
-            distributed.spawn(info, area_ptr, ctx);
         } else if (pos == "Percent") {
             percent.spawn(info, area_ptr, ctx);
         } else {
             random.spawn(info, area_ptr, ctx);
         }
-    }
-    auto batch_assets = current_room_->planner->get_batch_spawn_assets();
-    int batch_spacing = current_room_->planner->get_batch_grid_spacing();
-    int batch_jitter = current_room_->planner->get_batch_jitter();
-    if (!batch_assets.empty()) {
-        batch_spawner.spawn(batch_assets, area_ptr, batch_spacing, batch_jitter, ctx);
     }
     integrate_spawned_assets(spawned);
 

@@ -12,13 +12,6 @@
 
 constexpr double REPRESENTATIVE_SPAWN_AREA = 4096.0 * 4096.0;
 
-
-
-struct BatchSpawnInfo {
-	std::string name;
-	int percent = 0;
-};
-
 class AssetSpawnPlanner {
 
 	public:
@@ -27,13 +20,9 @@ class AssetSpawnPlanner {
                       AssetLibrary& asset_library,
                       const std::vector<std::string>& source_paths = {});
     const std::vector<SpawnInfo>& get_spawn_queue() const;
-    const std::vector<BatchSpawnInfo>& get_batch_spawn_assets() const;
-    int get_batch_grid_spacing() const;
-    int get_batch_jitter() const;
 
-	private:
+        private:
     void parse_asset_spawns(const Area& area);
-    void parse_batch_assets();
     void sort_spawn_queue();
     nlohmann::json resolve_asset_from_tag(const nlohmann::json& tag_entry);
     void persist_sources();
@@ -44,7 +33,4 @@ class AssetSpawnPlanner {
     std::vector<bool> source_changed_;
     AssetLibrary* asset_library_;
     std::vector<SpawnInfo> spawn_queue_;
-    std::vector<BatchSpawnInfo> batch_spawn_assets_;
-    int batch_grid_spacing_ = 100;
-    int batch_jitter_ = 0;
 };

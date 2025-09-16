@@ -165,7 +165,7 @@ class AssetEditor(tk.Frame):
             frame.position_var = position_var
             cb = ttk.Combobox(
                 content, textvariable=position_var, state='readonly',
-                values=["Random","Center","Perimeter","Entrance","Distributed","Exact Position","Intersection"]
+                values=["Random","Center","Perimeter","Entrance","Exact Position","Intersection"]
             )
             cb.pack(fill=tk.X, pady=(0,4))
             # Option container
