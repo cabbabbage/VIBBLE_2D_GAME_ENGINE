@@ -30,8 +30,6 @@ struct SpawnInfo {
         int empty_grid_spaces = 0;
         SDL_Point exact_point{ -1, -1 };
         int border_shift = 0;
-        int sector_center = 0;
-        int sector_range = 0;
         SDL_Point perimeter_offset{0, 0};
         int percent_x_min = 0;
         int percent_x_max = 0;

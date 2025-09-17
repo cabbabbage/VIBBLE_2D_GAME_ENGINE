@@ -4,7 +4,6 @@
 #include <cctype>
 #include <cmath>
 
-// -------- DMButton ---------
 DMButton::DMButton(const std::string& text, const DMButtonStyle* style, int w, int h)
     : rect_{0,0,w,h}, text_(text), style_(style) {}
 
@@ -55,16 +54,10 @@ void DMButton::render(SDL_Renderer* r) const {
     draw_label(r, style_->text);
 }
 
-
-
-
-// -------- DMTextBox ---------
 DMTextBox::DMTextBox(const std::string& label, const std::string& value)
     : label_(label), text_(value) {}
 
-void DMTextBox::set_rect(const SDL_Rect& r) {
-    rect_ = r;
-}
+void DMTextBox::set_rect(const SDL_Rect& r) { rect_ = r; }
 
 int DMTextBox::height_for_width(int w) const {
     int label_h = DMStyles::Label().font_size + DMSpacing::item_gap();
@@ -110,7 +103,7 @@ void DMTextBox::draw_text(SDL_Renderer* r, const std::string& s, int x, int y, c
                 SDL_RenderCopy(r, tex, nullptr, &dst);
                 SDL_DestroyTexture(tex);
             }
-            line_y += surf->h;
+            line_y += surf->h + DMSpacing::item_gap();
             SDL_FreeSurface(surf);
         }
     }
@@ -119,21 +112,17 @@ void DMTextBox::draw_text(SDL_Renderer* r, const std::string& s, int x, int y, c
 
 void DMTextBox::render(SDL_Renderer* r) const {
     const DMTextBoxStyle& st = DMStyles::TextBox();
-
-    // Draw label with extra vertical padding
     if (!label_.empty()) {
         DMLabelStyle lbl = DMStyles::Label();
         int label_y = rect_.y - (lbl.font_size + DMSpacing::item_gap());
         draw_text(r, label_, rect_.x, label_y, lbl);
     }
-
     SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
     SDL_SetRenderDrawColor(r, st.bg.r, st.bg.g, st.bg.b, st.bg.a);
     SDL_RenderFillRect(r, &rect_);
     SDL_Color border = (hovered_ || editing_) ? st.border_hover : st.border;
     SDL_SetRenderDrawColor(r, border.r, border.g, border.b, border.a);
     SDL_RenderDrawRect(r, &rect_);
-
     DMLabelStyle valStyle{ st.label.font_path, st.label.font_size, st.text };
     draw_text(r, text_, rect_.x + 6, rect_.y + 6, valStyle);
 }
@@ -155,9 +144,7 @@ std::vector<std::string> DMTextBox::wrap_lines(TTF_Font* f, const std::string& s
                     best_break = i;
                     if (i < para.size() && std::isspace((unsigned char)para[i])) last_space = i;
                     if (i == para.size()) break;
-                } else {
-                    break;
-                }
+                } else break;
             }
             size_t brk = best_break;
             if (brk > pos && last_space != std::string::npos && last_space > pos) brk = last_space;
@@ -185,11 +172,6 @@ int DMTextBox::preferred_height(int width) const {
     return label_h + box_h + DMSpacing::item_gap();
 }
 
-
-
-
-
-// -------- DMCheckbox ---------
 DMCheckbox::DMCheckbox(const std::string& label, bool value)
     : label_(label), value_(value) {}
 
@@ -239,7 +221,6 @@ void DMCheckbox::render(SDL_Renderer* r) const {
     draw_label(r);
 }
 
-// -------- DMSlider ---------
 DMSlider::DMSlider(const std::string& label, int min_val, int max_val, int value)
     : label_(label), min_(min_val), max_(max_val), value_(value) {}
 
@@ -312,7 +293,7 @@ void DMSlider::draw_text(SDL_Renderer* r, const std::string& s, int x, int y) co
 
 void DMSlider::render(SDL_Renderer* r) const {
     const DMSliderStyle& st = DMStyles::Slider();
-    draw_text(r, label_, rect_.x, rect_.y - st.label.font_size - 2);
+    draw_text(r, label_, rect_.x, rect_.y - st.label.font_size - DMSpacing::item_gap());
     SDL_Rect tr = track_rect();
     SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
     SDL_SetRenderDrawColor(r, st.track_bg.r, st.track_bg.g, st.track_bg.b, st.track_bg.a);
@@ -334,7 +315,6 @@ void DMSlider::render(SDL_Renderer* r) const {
     }
 }
 
-// -------- DMRangeSlider ---------
 DMRangeSlider::DMRangeSlider(int min_val, int max_val, int min_value, int max_value)
     : min_(min_val), max_(max_val) {
     if (min_ > max_) std::swap(min_, max_);
@@ -362,7 +342,6 @@ SDL_Rect DMRangeSlider::min_knob_rect() const {
     SDL_Rect tr = track_rect();
     int range = std::max(1, max_ - min_);
     int x = tr.x + (int)((min_value_ - min_) * (tr.w - 12) / (double)range);
-    // knob extends downward
     return SDL_Rect{ x, tr.y, 12, 16 };
 }
 
@@ -370,8 +349,7 @@ SDL_Rect DMRangeSlider::max_knob_rect() const {
     SDL_Rect tr = track_rect();
     int range = std::max(1, max_ - min_);
     int x = tr.x + (int)((max_value_ - min_) * (tr.w - 12) / (double)range);
-    // knob extends upward
-    return SDL_Rect{ x, tr.y - 16 + tr.h, 12, 16 };
+    return SDL_Rect{ x, tr.y - 16 + tr.h,    12, 16 };
 }
 
 int DMRangeSlider::value_for_x(int x) const {
@@ -398,10 +376,8 @@ bool DMRangeSlider::handle_event(const SDL_Event& e) {
         }
         if (!edit_max_->is_editing()) edit_max_.reset();
     }
-
     SDL_Rect kmin = min_knob_rect();
     SDL_Rect kmax = max_knob_rect();
-
     if (e.type == SDL_MOUSEMOTION) {
         SDL_Point p{ e.motion.x, e.motion.y };
         min_hovered_ = SDL_PointInRect(&p, &kmin);
@@ -454,37 +430,28 @@ void DMRangeSlider::draw_text(SDL_Renderer* r, const std::string& s, int x, int 
 void DMRangeSlider::render(SDL_Renderer* r) const {
     const DMSliderStyle& st = DMStyles::Slider();
     SDL_Rect tr = track_rect();
-
     SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
     SDL_SetRenderDrawColor(r, st.track_bg.r, st.track_bg.g, st.track_bg.b, st.track_bg.a);
     SDL_RenderFillRect(r, &tr);
-
     SDL_Rect kmin = min_knob_rect();
     SDL_Rect kmax = max_knob_rect();
-
     int fill_x = kmin.x + 6;
     int fill_w = (kmax.x + 6) - fill_x;
     SDL_Rect fill{ fill_x, tr.y, std::max(0, fill_w), tr.h };
     SDL_SetRenderDrawColor(r, st.track_fill.r, st.track_fill.g, st.track_fill.b, st.track_fill.a);
     SDL_RenderFillRect(r, &fill);
-
     SDL_Color col_min = (min_hovered_ || dragging_min_) ? st.knob_hover : st.knob;
     SDL_Color col_max = (max_hovered_ || dragging_max_) ? st.knob_hover : st.knob;
     SDL_Color border_min = (min_hovered_ || dragging_min_) ? st.knob_border_hover : st.knob_border;
     SDL_Color border_max = (max_hovered_ || dragging_max_) ? st.knob_border_hover : st.knob_border;
-
-    // draw min knob (downward)
     SDL_SetRenderDrawColor(r, col_min.r, col_min.g, col_min.b, col_min.a);
     SDL_RenderFillRect(r, &kmin);
     SDL_SetRenderDrawColor(r, border_min.r, border_min.g, border_min.b, border_min.a);
     SDL_RenderDrawRect(r, &kmin);
-
-    // draw max knob (upward)
     SDL_SetRenderDrawColor(r, col_max.r, col_max.g, col_max.b, col_max.a);
     SDL_RenderFillRect(r, &kmax);
     SDL_SetRenderDrawColor(r, border_max.r, border_max.g, border_max.b, border_max.a);
     SDL_RenderDrawRect(r, &kmax);
-
     if (edit_min_) {
         edit_min_->render(r);
     } else {
@@ -497,8 +464,6 @@ void DMRangeSlider::render(SDL_Renderer* r) const {
     }
 }
 
-
-// -------- DMDropdown ---------
 DMDropdown::DMDropdown(const std::string& label, const std::vector<std::string>& options, int idx)
     : label_(label), options_(options), index_(idx) {}
 
@@ -538,9 +503,8 @@ bool DMDropdown::handle_event(const SDL_Event& e) {
             if (active_ == this) active_ = nullptr;
             return true;
         }
-        return true; // swallow all other events while open
+        return true;
     }
-
     if (e.type == SDL_MOUSEMOTION) {
         SDL_Point p{ e.motion.x, e.motion.y };
         hovered_ = SDL_PointInRect(&p, &rect_);
