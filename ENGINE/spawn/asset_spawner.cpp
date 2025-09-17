@@ -37,16 +37,18 @@ void AssetSpawner::spawn(Room& room) {
 	room.add_room_assets(std::move(all_));
 }
 
-std::vector<std::unique_ptr<Asset>> AssetSpawner::spawn_boundary_from_file(const std::string& json_path, const Area& spawn_area) {
-	std::ifstream file(json_path);
-	if (!file.is_open()) {
-		std::cerr << "[BoundarySpawner] Failed to open file: " << json_path << "\n";
-		return {};
-	}
-	nlohmann::json boundary_json;
-	file >> boundary_json;
-	std::vector<nlohmann::json> json_sources{ boundary_json };
-	AssetSpawnPlanner planner(json_sources, spawn_area, *asset_library_, std::vector<std::string>{ json_path });
+std::vector<std::unique_ptr<Asset>> AssetSpawner::spawn_boundary_from_json(const nlohmann::json& boundary_json,
+                                                                          const Area& spawn_area,
+                                                                          const std::string& source_name) {
+        if (boundary_json.is_null()) {
+                return {};
+        }
+        std::vector<nlohmann::json> json_sources{ boundary_json };
+        std::vector<std::string> source_paths;
+        if (!source_name.empty()) {
+                source_paths.push_back(source_name);
+        }
+        AssetSpawnPlanner planner(json_sources, spawn_area, *asset_library_, source_paths);
 	logger_ = SpawnLogger("", "");
         boundary_mode_ = true;
         run_spawning(&planner, spawn_area);

@@ -43,8 +43,8 @@ AssetLoader::AssetLoader(const std::string& map_dir, SDL_Renderer* renderer)
 : map_path_(map_dir),
 renderer_(renderer)
 {
-	load_map_json();
-	asset_library_ = std::make_unique<AssetLibrary>();
+        load_map_json();
+        asset_library_ = std::make_unique<AssetLibrary>();
     loadRooms();
     {
         // Load animations only for assets actually present in generated rooms
@@ -193,11 +193,21 @@ std::vector<Asset*> AssetLoader::collectDistantAssets(int fade_start_distance, i
 }
 
 void AssetLoader::loadRooms() {
-	GenerateRooms generator(map_layers_, map_center_x_, map_center_y_, map_path_);
-	auto room_ptrs = generator.build(asset_library_.get(), map_radius_, map_boundary_file_);
-	for (auto& up : room_ptrs) {
-		rooms_.push_back(up.get());
-		all_rooms_.push_back(std::move(up));
+        GenerateRooms generator(map_layers_, map_center_x_, map_center_y_, map_path_, map_info_path_);
+        nlohmann::json empty_boundary = nlohmann::json::object();
+        nlohmann::json empty_rooms    = nlohmann::json::object();
+        nlohmann::json empty_trails   = nlohmann::json::object();
+        nlohmann::json empty_assets   = nlohmann::json::object();
+        auto room_ptrs = generator.build(
+                asset_library_.get(),
+                map_radius_,
+                map_boundary_data_ ? *map_boundary_data_ : empty_boundary,
+                rooms_data_        ? *rooms_data_        : empty_rooms,
+                trails_data_       ? *trails_data_       : empty_trails,
+                map_assets_data_   ? *map_assets_data_   : empty_assets);
+        for (auto& up : room_ptrs) {
+                rooms_.push_back(up.get());
+                all_rooms_.push_back(std::move(up));
 	}
 }
 
@@ -242,25 +252,29 @@ std::vector<Area> AssetLoader::getAllRoomAndTrailAreas() const {
 
 
 void AssetLoader::load_map_json() {
-	std::ifstream f(map_path_ + "/map_info.json");
-	if (!f) throw std::runtime_error("Failed to open map_info.json");
-	json j;
-	f >> j;
-	map_radius_        = j.value("map_radius", 0);
-	map_boundary_file_ = j.value("map_boundary", "");
-	map_center_x_ = map_center_y_ = map_radius_;
-	for (const auto& L : j["map_layers"]) {
-		LayerSpec spec;
-		spec.level     = L.value("level", 0);
-		spec.radius    = L.value("radius", 0);
-		spec.min_rooms = L.value("min_rooms", 0);
-		spec.max_rooms = L.value("max_rooms", 0);
-		for (const auto& R : L["rooms"]) {
-			RoomSpec rs;
-			rs.name = R.value("name", "unnamed");
-			rs.min_instances = R.value("min_instances", 1);
-			rs.max_instances = R.value("max_instances", 1);
-			if (R.contains("required_children") && R["required_children"].is_array()) {
+        map_info_path_ = map_path_ + "/map_info.json";
+        std::ifstream f(map_info_path_);
+        if (!f) throw std::runtime_error("Failed to open map_info.json");
+        json j;
+        f >> j;
+        map_info_json_ = std::move(j);
+        map_radius_        = map_info_json_.value("map_radius", 0.0);
+        map_center_x_ = map_center_y_ = map_radius_;
+        map_layers_.clear();
+        if (map_info_json_.contains("map_layers") && map_info_json_["map_layers"].is_array()) {
+                for (const auto& L : map_info_json_["map_layers"]) {
+                        LayerSpec spec;
+                        spec.level     = L.value("level", 0);
+                        spec.radius    = L.value("radius", 0);
+                        spec.min_rooms = L.value("min_rooms", 0);
+                        spec.max_rooms = L.value("max_rooms", 0);
+                        if (L.contains("rooms") && L["rooms"].is_array()) {
+                                for (const auto& R : L["rooms"]) {
+                        RoomSpec rs;
+                        rs.name = R.value("name", "unnamed");
+                        rs.min_instances = R.value("min_instances", 1);
+                        rs.max_instances = R.value("max_instances", 1);
+                        if (R.contains("required_children") && R["required_children"].is_array()) {
 					for (const auto& c : R["required_children"]) {
 								if (c.is_string()) {
 													rs.required_children.push_back(c.get<std::string>());
@@ -268,10 +282,19 @@ void AssetLoader::load_map_json() {
 													std::cerr << "[AssetLoader] Room '" << rs.name
 													<< "' has non-string entry in 'required_children'; skipping.\n";
 								}
-					}
-			}
-			spec.rooms.push_back(std::move(rs));
-		}
-		map_layers_.push_back(std::move(spec));
-	}
+                                        }
+                        }
+                                spec.rooms.push_back(std::move(rs));
+                        }
+                        map_layers_.push_back(std::move(spec));
+                }
+        }
+        map_assets_data_   = &map_info_json_["map_assets_data"];
+        if (!map_assets_data_->is_object()) *map_assets_data_ = nlohmann::json::object();
+        map_boundary_data_ = &map_info_json_["map_boundary_data"];
+        if (!map_boundary_data_->is_object()) *map_boundary_data_ = nlohmann::json::object();
+        rooms_data_        = &map_info_json_["rooms_data"];
+        if (!rooms_data_->is_object()) *rooms_data_ = nlohmann::json::object();
+        trails_data_       = &map_info_json_["trails_data"];
+        if (!trails_data_->is_object()) *trails_data_ = nlohmann::json::object();
 }

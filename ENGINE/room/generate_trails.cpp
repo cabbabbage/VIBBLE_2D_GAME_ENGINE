@@ -1,29 +1,26 @@
 #include "generate_trails.hpp"
 #include "trail_geometry.hpp"
-#include <fstream>
 #include <nlohmann/json.hpp>
-#include <filesystem>
 #include <cmath>
 #include <iostream>
 #include <unordered_set>
 #include <algorithm>
 using json = nlohmann::json;
-namespace fs = std::filesystem;
-
-GenerateTrails::GenerateTrails(const std::string& trail_dir)
-: rng_(std::random_device{}())
+GenerateTrails::GenerateTrails(nlohmann::json& trail_data)
+: rng_(std::random_device{}()),
+trails_data_(&trail_data)
 {
-	for (const auto& entry : fs::directory_iterator(trail_dir)) {
-		if (entry.path().extension() == ".json") {
-			available_assets_.push_back(entry.path().string());
-		}
-	}
-	if (testing) {
-		std::cout << "[GenerateTrails] Loaded " << available_assets_.size() << " trail assets\n";
-	}
-	if (available_assets_.empty()) {
-		throw std::runtime_error("[GenerateTrails] No JSON trail assets found");
-	}
+        if (trail_data.is_object()) {
+                for (auto it = trail_data.begin(); it != trail_data.end(); ++it) {
+                        available_assets_.push_back({ it.key(), &(*it) });
+                }
+        }
+        if (testing) {
+                std::cout << "[GenerateTrails] Loaded " << available_assets_.size() << " trail templates\n";
+        }
+        if (available_assets_.empty()) {
+                throw std::runtime_error("[GenerateTrails] No trail templates found in map_info.json");
+        }
 }
 
 void GenerateTrails::set_all_rooms_reference(const std::vector<Room*>& rooms) {
@@ -34,44 +31,66 @@ std::vector<std::unique_ptr<Room>> GenerateTrails::generate_trails(
                                                                        const std::vector<std::pair<Room*, Room*>>& room_pairs,
                                                                        const std::vector<Area>& existing_areas,
                                                                        const std::string& map_dir,
-                                                                       AssetLibrary* asset_lib)
+                                                                       const std::string& map_info_path,
+                                                                       AssetLibrary* asset_lib,
+                                                                       const nlohmann::json* map_assets_data,
+                                                                       double map_radius)
 {
-	trail_areas_.clear();
-	std::vector<std::unique_ptr<Room>> trail_rooms;
-	std::vector<Area> all_areas = existing_areas;
-	for (const auto& [a, b] : room_pairs) {
+        trail_areas_.clear();
+        std::vector<std::unique_ptr<Room>> trail_rooms;
+        std::vector<Area> all_areas = existing_areas;
+        for (const auto& [a, b] : room_pairs) {
 		if (testing) {
 			std::cout << "[GenerateTrails] Connecting: " << a->room_name
 			<< " <--> " << b->room_name << "\n";
 		}
-		bool success = false;
-		for (int attempts = 0; attempts < 1000 && !success; ++attempts) {
-			std::string path = pick_random_asset();
-			success = TrailGeometry::attempt_trail_connection( a, b, all_areas, map_dir, asset_lib, trail_rooms, 1, path, testing, rng_ );
-		}
-		if (!success && testing) {
-			std::cout << "[TrailGen] Failed to place trail between "
-			<< a->room_name << " and " << b->room_name << "\n";
-		}
-	}
-	circular_connection(trail_rooms, map_dir, asset_lib, all_areas);
-	find_and_connect_isolated(map_dir, asset_lib, all_areas, trail_rooms);
-	if (testing) {
-		std::cout << "[TrailGen] Total trail rooms created: " << trail_rooms.size() << "\n";
-	}
-	return trail_rooms;
+                bool success = false;
+                for (int attempts = 0; attempts < 1000 && !success; ++attempts) {
+                        if (const auto* asset_ref = pick_random_asset()) {
+                                success = TrailGeometry::attempt_trail_connection(
+                                        a,
+                                        b,
+                                        all_areas,
+                                        map_dir,
+                                        map_info_path,
+                                        asset_lib,
+                                        trail_rooms,
+                                        1,
+                                        asset_ref->data,
+                                        asset_ref->name,
+                                        map_assets_data,
+                                        map_radius,
+                                        testing,
+                                        rng_);
+                        }
+                }
+                if (!success && testing) {
+                        std::cout << "[TrailGen] Failed to place trail between "
+                        << a->room_name << " and " << b->room_name << "\n";
+                }
+        }
+        circular_connection(trail_rooms, map_dir, map_info_path, asset_lib, all_areas, map_assets_data, map_radius);
+        find_and_connect_isolated(map_dir, map_info_path, asset_lib, all_areas, trail_rooms, map_assets_data, map_radius);
+        if (testing) {
+                std::cout << "[TrailGen] Total trail rooms created: " << trail_rooms.size() << "\n";
+        }
+        return trail_rooms;
 }
 
-std::string GenerateTrails::pick_random_asset() {
-	std::uniform_int_distribution<size_t> dist(0, available_assets_.size() - 1);
-	return available_assets_[dist(rng_)];
+const GenerateTrails::TrailTemplateRef* GenerateTrails::pick_random_asset() {
+        if (available_assets_.empty()) return nullptr;
+        std::uniform_int_distribution<size_t> dist(0, available_assets_.size() - 1);
+        return &available_assets_[dist(rng_)];
 }
 
 void GenerateTrails::find_and_connect_isolated(
                                                    const std::string& map_dir,
+                                                   const std::string& map_info_path,
                                                    AssetLibrary* asset_lib,
                                                    std::vector<Area>& existing_areas,
-                                                   std::vector<std::unique_ptr<Room>>& trail_rooms)
+                                                   std::vector<std::unique_ptr<Room>>& trail_rooms,
+                                                   const nlohmann::json* map_assets_data,
+                                                   double map_radius)
 {
 	const int max_passes = 1000000;
 	int allowed_intersections = 0;
@@ -127,7 +146,7 @@ void GenerateTrails::find_and_connect_isolated(
              });
 			for (Room* roomA : sorted_group) {
 					std::vector<Room*> candidates;
-					for (Room* candidate : all_rooms_reference) {
+                                        for (Room* candidate : all_rooms_reference) {
 								if (candidate == roomA || connected_to_spawn.count(candidate)) continue;
 								bool illegal = std::any_of(illegal_connections.begin(), illegal_connections.end(),
 								[&](const std::pair<Room*, Room*>& p) {
@@ -154,20 +173,26 @@ void GenerateTrails::find_and_connect_isolated(
 								return a->connected_rooms.size() < b->connected_rooms.size();
                });
 					if (candidates.size() > 5) candidates.resize(5);
-					for (Room* roomB : candidates) {
-								for (int attempt = 0; attempt < 100; ++attempt) {
-													std::string path = pick_random_asset();
-													if (TrailGeometry::attempt_trail_connection(
+                                        for (Room* roomB : candidates) {
+                                                                for (int attempt = 0; attempt < 100; ++attempt) {
+                                                                                                        if (const auto* asset_ref = pick_random_asset()) {
+                                                                                                                if (TrailGeometry::attempt_trail_connection(
                  roomA, roomB, existing_areas, map_dir,
+                 map_info_path,
                  asset_lib, trail_rooms,
                  allowed_intersections,
-                 path, testing, rng_)) {
-																					any_connection_made = true;
-																					goto next_group;
-													}
-								}
-					}
-			}
+                 asset_ref->data,
+                 asset_ref->name,
+                 map_assets_data,
+                 map_radius,
+                 testing, rng_)) {
+                                                                                                                               any_connection_made = true;
+                                                                                                                               goto next_group;
+                                                                                                        }
+                                                                                                        }
+                                                                }
+                                        }
+                        }
 			next_group:;
 		}
 		if (!any_connection_made && testing) {
@@ -254,8 +279,11 @@ void GenerateTrails::remove_random_connection(std::vector<std::unique_ptr<Room>>
 void GenerateTrails::remove_and_connect(std::vector<std::unique_ptr<Room>>& trail_rooms,
                                         std::vector<std::pair<Room*, Room*>>& illegal_connections,
                                         const std::string& map_dir,
+                                        const std::string& map_info_path,
                                         AssetLibrary* asset_lib,
-                                        std::vector<Area>& existing_areas)
+                                        std::vector<Area>& existing_areas,
+                                        const nlohmann::json* map_assets_data,
+                                        double map_radius)
 {
 	Room* target = nullptr;
 	for (Room* room : all_rooms_reference) {
@@ -288,14 +316,17 @@ void GenerateTrails::remove_and_connect(std::vector<std::unique_ptr<Room>>& trai
 	illegal_connections.emplace_back(target, most_connected);
 	std::cout << "[Debug][remove_and_connect] Marked connection illegal: ('"
 	<< target->room_name << "', '" << most_connected->room_name << "')\n";
-	find_and_connect_isolated(map_dir, asset_lib, existing_areas, trail_rooms);
+        find_and_connect_isolated(map_dir, map_info_path, asset_lib, existing_areas, trail_rooms, map_assets_data, map_radius);
 	std::cout << "[Debug][remove_and_connect] Completed reconnect attempt for isolated groups.\n";
 }
 
 void GenerateTrails::circular_connection(std::vector<std::unique_ptr<Room>>& trail_rooms,
                                          const std::string& map_dir,
+                                         const std::string& map_info_path,
                                          AssetLibrary* asset_lib,
-                                         std::vector<Area>& existing_areas)
+                                         std::vector<Area>& existing_areas,
+                                         const nlohmann::json* map_assets_data,
+                                         double map_radius)
 {
 	if (all_rooms_reference.empty()) {
 		std::cout << "[Debug][circular_connection] No rooms available.\n";
@@ -353,19 +384,24 @@ void GenerateTrails::circular_connection(std::vector<std::unique_ptr<Room>>& tra
 		std::cout << "[Debug][circular_connection] Attempting to connect '"
 		<< current->room_name << "' -> '" << next->room_name << "'\n";
 		bool connected = false;
-		for (int attempt = 0; attempt < 1000; ++attempt) {
-			std::string path = pick_random_asset();
-			if (TrailGeometry::attempt_trail_connection(current, next, existing_areas, map_dir,
+                for (int attempt = 0; attempt < 1000; ++attempt) {
+                        if (const auto* asset_ref = pick_random_asset()) {
+                                if (TrailGeometry::attempt_trail_connection(current, next, existing_areas, map_dir,
+       map_info_path,
        asset_lib, trail_rooms,
        1,
-       path, testing, rng_)) {
-					std::cout << "[Debug][circular_connection] Connected on attempt "
-					<< attempt+1 << " using asset: " << path << "\n";
-					current = next;
-					connected = true;
-					break;
-			}
-		}
+       asset_ref->data,
+       asset_ref->name,
+       map_assets_data,
+       map_radius,
+       testing, rng_)) {
+                                        std::cout << "[Debug][circular_connection] Connected on attempt "
+                                        << attempt+1 << " using asset: " << asset_ref->name << "\n";
+                                        current = next;
+                                        connected = true;
+                                        break;
+                        }
+                }
 		if (!connected) {
 			std::cout << "[Debug][circular_connection] Failed to connect '"
 			<< current->room_name << "' -> '" << next->room_name << "' after 1000 attempts.\n";

@@ -9,6 +9,7 @@
 #include <random>
 #include <unordered_map>
 #include <SDL.h>
+#include <nlohmann/json.hpp>
 
 struct RoomSpec {
 	std::string name;
@@ -29,8 +30,17 @@ class GenerateRooms {
 
 	public:
     using Point = SDL_Point;
-    GenerateRooms(const std::vector<LayerSpec>& layers, int map_cx, int map_cy, const std::string& map_dir);
-    std::vector<std::unique_ptr<Room>> build(AssetLibrary* asset_lib, int map_radius, const std::string& boundary_json);
+    GenerateRooms(const std::vector<LayerSpec>& layers,
+                  int map_cx,
+                  int map_cy,
+                  const std::string& map_dir,
+                  const std::string& map_info_path);
+    std::vector<std::unique_ptr<Room>> build(AssetLibrary* asset_lib,
+                                             double map_radius,
+                                             const nlohmann::json& boundary_data,
+                                             nlohmann::json& rooms_data,
+                                             nlohmann::json& trails_data,
+                                             const nlohmann::json& map_assets_data);
     bool testing = false;
 
 	private:
@@ -45,5 +55,6 @@ class GenerateRooms {
     int map_center_x_;
     int map_center_y_;
     std::string map_path_;
+    std::string map_info_path_;
     std::mt19937 rng_;
 };

@@ -1312,12 +1312,12 @@ void RoomEditor::regenerate_current_room() {
     int height = std::max(1, dist_h(rng));
 
     int map_radius = 0;
+    nlohmann::json map_info_json;
     if (!current_room_->map_path.empty()) {
         std::ifstream map_info(current_room_->map_path + "/map_info.json");
         if (map_info.is_open()) {
-            nlohmann::json info;
-            map_info >> info;
-            map_radius = info.value("map_radius", 0);
+            map_info >> map_info_json;
+            map_radius = map_info_json.value("map_radius", 0);
         }
     }
     int map_w = map_radius > 0 ? map_radius * 2 : std::max(width * 2, 1);
@@ -1417,19 +1417,15 @@ void RoomEditor::regenerate_current_room() {
     if (old_area_copy && new_area_size < old_area_size) {
         std::vector<std::pair<std::string, int>> boundary_options;
         int boundary_spacing = 100;
-        if (!current_room_->map_path.empty()) {
-            std::ifstream boundary_file(current_room_->map_path + "/map_boundary.json");
-            if (boundary_file.is_open()) {
-                nlohmann::json boundary_json;
-                boundary_file >> boundary_json;
-                if (boundary_json.contains("batch_assets")) {
-                    const auto& batch = boundary_json["batch_assets"];
-                    boundary_spacing = (batch.value("grid_spacing_min", boundary_spacing) + batch.value("grid_spacing_max", boundary_spacing)) / 2;
-                    for (const auto& asset_entry : batch.value("batch_assets", std::vector<nlohmann::json>{})) {
-                        if (asset_entry.contains("name") && asset_entry["name"].is_string()) {
-                            int weight = asset_entry.value("percent", 1);
-                            boundary_options.emplace_back(asset_entry["name"].get<std::string>(), weight);
-                        }
+        if (map_info_json.contains("map_boundary_data") && map_info_json["map_boundary_data"].is_object()) {
+            const auto& boundary_json = map_info_json["map_boundary_data"];
+            if (boundary_json.contains("batch_assets")) {
+                const auto& batch = boundary_json["batch_assets"];
+                boundary_spacing = (batch.value("grid_spacing_min", boundary_spacing) + batch.value("grid_spacing_max", boundary_spacing)) / 2;
+                for (const auto& asset_entry : batch.value("batch_assets", std::vector<nlohmann::json>{})) {
+                    if (asset_entry.contains("name") && asset_entry["name"].is_string()) {
+                        int weight = asset_entry.value("percent", 1);
+                        boundary_options.emplace_back(asset_entry["name"].get<std::string>(), weight);
                     }
                 }
             }

@@ -23,7 +23,9 @@ class AssetSpawner {
     AssetSpawner(AssetLibrary* asset_library, std::vector<Area> exclusion_zones);
     void spawn(Room& room);
     void spawn_children(const Area& spawn_area, AssetSpawnPlanner* planner);
-    std::vector<std::unique_ptr<Asset>> spawn_boundary_from_file(const std::string& json_path, const Area& spawn_area);
+    std::vector<std::unique_ptr<Asset>> spawn_boundary_from_json(const nlohmann::json& boundary_json,
+                                                                 const Area& spawn_area,
+                                                                 const std::string& source_name);
     std::vector<std::unique_ptr<Asset>> extract_all_assets();
 
         private:
