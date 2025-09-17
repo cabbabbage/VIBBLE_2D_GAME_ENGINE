@@ -1620,66 +1620,36 @@ class CustomControllerManager:
         class_name = self._class_name()
 
         # --- generate files in expected controller format ---
-        hpp = f"""#pragma once
+        guard = re.sub(r"[^0-9A-Za-z]", "_", self.base_name).upper() + "_HPP"
+        hpp = f"""#ifndef {guard}
+#define {guard}
 
 #include "asset/asset_controller.hpp"
 
-class Assets;
 class Asset;
-class Input;
 
-/*
-  {class_name}
-  auto generated controller for asset "{self.asset_name}"
-  dummy behavior for now
-*/
 class {class_name} : public AssetController {{
-public:
-    {class_name}(Assets* assets, Asset* self);
-    ~{class_name}() override = default;
 
+public:
+    {class_name}(Asset* self);
+    ~{class_name}() override = default;
     void update(const Input& in) override;
 
 private:
-    Assets* assets_ = nullptr;           // non owning
-    Asset*  self_   = nullptr;           // non owning
+    Asset* self_ = nullptr;
 }};
+
+#endif
 """
-        cpp = f"""#include "custom_controllers/{self.base_name}.hpp"
+        cpp = f"""#include "{self.base_name}.hpp"
 
 #include "asset/Asset.hpp"
 #include "asset/asset_info.hpp"
-#include "core/AssetsManager.hpp"
 
-{class_name}::{class_name}(Assets* assets, Asset* self)
-    : assets_(assets)
-    , self_(self)
-{{}}
+{class_name}::{class_name}(Asset* self)
+    : self_(self) {{}}
 
 void {class_name}::update(const Input& /*in*/) {{
-
-    if (!self_ || !self_->info) return;
-
-    // Ensure a safe starting animation
-    auto pick_default = [&]() -> std::string {{
-        if (self_->info->animations.count("default")) return "default";
-        if (self_->info->animations.count("Default")) return "Default";
-        return self_->info->animations.empty() ? std::string()
-                                               : self_->info->animations.begin()->first;
-    }};
-
-    const std::string cur = self_->get_current_animation();
-    if (cur.empty()) {{
-        std::string chosen = pick_default();
-        if (!chosen.empty() && self_->anim_) {{
-            self_->anim_->set_animation_now(chosen);
-        }}
-    }}
-
-    // Default behavior: idle wander
-    if (self_->anim_) {{
-        self_->anim_->set_idle(0, 20, 3);
-    }}
 
 }}
 """

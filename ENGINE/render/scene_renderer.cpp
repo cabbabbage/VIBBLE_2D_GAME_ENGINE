@@ -79,14 +79,38 @@ bool SceneRenderer::shouldRegen(Asset* a) {
 
 SDL_Rect SceneRenderer::get_scaled_position_rect(Asset* a, int fw, int fh,
                                                  float inv_scale, int min_w, int min_h) {
-	int sw = static_cast<int>(fw * inv_scale);
-	int sh = static_cast<int>(fh * inv_scale);
-	if (sw < min_w && sh < min_h) {
-		return {0, 0, 0, 0};
-	}
+        float base_sw = static_cast<float>(fw) * inv_scale;
+        float base_sh = static_cast<float>(fh) * inv_scale;
 
-	SDL_Point cp = assets_->getView().map_to_screen(SDL_Point{a->pos.x, a->pos.y});
-	return SDL_Rect{ cp.x - sw / 2, cp.y - sh, sw, sh };
+        if (base_sw < min_w && base_sh < min_h) {
+                return {0, 0, 0, 0};
+        }
+
+        SDL_Point cp = assets_->getView().map_to_screen(SDL_Point{a->pos.x, a->pos.y});
+
+        float screen_y_ratio = static_cast<float>(cp.y) / static_cast<float>(screen_height_);
+        screen_y_ratio = std::clamp(screen_y_ratio, 0.0f, 1.0f);
+
+        float normalized_height = base_sh / static_cast<float>(screen_height_);
+        normalized_height = std::clamp(normalized_height, 0.0f, 1.0f);
+
+        constexpr float POSITION_SQUASH_STRENGTH = 0.45f;
+        constexpr float HEIGHT_SQUASH_STRENGTH = 0.35f;
+        float squash_amount = screen_y_ratio * POSITION_SQUASH_STRENGTH +
+                              normalized_height * HEIGHT_SQUASH_STRENGTH;
+        squash_amount = std::clamp(squash_amount, 0.0f, 0.6f);
+        float vertical_squash = 1.0f - squash_amount;
+
+        int sw = static_cast<int>(std::round(base_sw));
+        int sh = static_cast<int>(std::round(base_sh * vertical_squash));
+        sw = std::max(sw, 1);
+        sh = std::max(sh, 1);
+
+        if (sw < min_w && sh < min_h) {
+                return {0, 0, 0, 0};
+        }
+
+        return SDL_Rect{ cp.x - sw / 2, cp.y - sh, sw, sh };
 }
 
 void SceneRenderer::render() {
