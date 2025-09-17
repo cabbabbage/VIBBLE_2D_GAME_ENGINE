@@ -9,6 +9,9 @@
 #include "room/room.hpp"
 #include "utils/input.hpp"
 
+#include <algorithm>
+#include <cmath>
+
 DevControls::DevControls(Assets* owner, int screen_w, int screen_h)
     : assets_(owner),
       screen_w_(screen_w),
@@ -92,18 +95,21 @@ void DevControls::set_enabled(bool enabled) {
 void DevControls::update(const Input& input) {
     if (!enabled_) return;
 
-    const bool ctrl_pressed =
-        input.isScancodeDown(SDL_SCANCODE_LCTRL) ||
-        input.isScancodeDown(SDL_SCANCODE_RCTRL);
+    if (assets_) {
+        camera& cam = assets_->getView();
+        const double scale = std::max(0.0001, static_cast<double>(cam.get_scale()));
+        // Enter map mode once the camera sees roughly eight times the base area.
+        // Use an explicit constant instead of std::sqrt to avoid non-constexpr
+        // evaluation requirements on older standard libraries.
+        constexpr double kEnterScale = 2.8284271247461903;  // sqrt(8)
+        constexpr double kExitScale = kEnterScale * 0.85;
 
-    if (ctrl_pressed && input.wasScancodePressed(SDL_SCANCODE_M)) {
-        if (mode_ == Mode::MapEditor) {
-            exit_map_editor_mode(false, true);
-        } else {
+        if (mode_ != Mode::MapEditor && scale >= kEnterScale) {
             enter_map_editor_mode();
+        } else if (mode_ == Mode::MapEditor && scale < kExitScale) {
+            exit_map_editor_mode(false, true);
         }
     }
-
 
     if (mode_ == Mode::MapEditor) {
         if (map_editor_) {

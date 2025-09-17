@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "dev_mode/asset_config_ui.hpp"
+#include "dev_mode/pan_and_zoom.hpp"
 
 class Asset;
 class Input;
@@ -91,7 +92,8 @@ private:
     };
 
     void handle_mouse_input(const Input& input);
-    void handle_hover();
+    Asset* hit_test_asset(SDL_Point screen_point) const;
+    void update_hover_state(Asset* hit);
     void handle_click(const Input& input);
     void update_highlighted_assets();
     bool is_ui_blocking_input(int mx, int my) const;
@@ -162,4 +164,5 @@ private:
     double zoom_scale_factor_ = 1.1;
     std::unique_ptr<DMButton> regenerate_button_;
     SDL_Rect regenerate_button_rect_{0, 0, 0, 0};
+    PanAndZoom pan_zoom_;
 };

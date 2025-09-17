@@ -58,12 +58,7 @@ AssetInfoUI::~AssetInfoUI() = default;
 
 void AssetInfoUI::set_info(const std::shared_ptr<AssetInfo>& info) {
     info_ = info;
-    // Reset panel scroll when a new asset is provided so widgets
-    // start at the top of the panel.
     scroll_ = 0;
-    // Rebuild each section with the new asset info so that their
-    // controls reflect the current asset state. Without rebuilding
-    // the widgets remain uninitialized and the UI appears empty.
     for (auto& s : sections_) {
         s->set_info(info_);
         s->reset_scroll();
@@ -73,8 +68,6 @@ void AssetInfoUI::set_info(const std::shared_ptr<AssetInfo>& info) {
 
 void AssetInfoUI::clear_info() {
     info_.reset();
-    // Reset panel scroll and clear sections to remove stale widget
-    // state when no asset is selected.
     scroll_ = 0;
     for (auto& s : sections_) {
         s->set_info(nullptr);
@@ -103,7 +96,6 @@ void AssetInfoUI::layout_widgets(int screen_w, int screen_h) const {
         y += s->height() + DMSpacing::section_gap();
     }
 
-    // Footer button position after sections
     if (configure_btn_) {
         configure_btn_->set_rect(SDL_Rect{ panel_.x + DMSpacing::panel_padding(), y, maxw, DMButton::height() });
         y += DMButton::height() + DMSpacing::section_gap();
@@ -113,29 +105,7 @@ void AssetInfoUI::layout_widgets(int screen_w, int screen_h) const {
     max_scroll_ = std::max(0, total - panel_.h);
 }
 
-void AssetInfoUI::update(const Input& input, int screen_w, int screen_h) {
-    if (!visible_ || !info_) return;
-    layout_widgets(screen_w, screen_h);
 
-    int mx = input.getX();
-    int my = input.getY();
-    if (mx >= panel_.x && mx < panel_.x + panel_.w &&
-        my >= panel_.y && my < panel_.y + panel_.h) {
-        int dy = input.getScrollY();
-        if (dy != 0) {
-            scroll_ -= dy * 40;
-            scroll_ = std::max(0, std::min(max_scroll_, scroll_));
-        }
-    }
-
-    for (auto& s : sections_) s->update(input, screen_w, screen_h);
-
-    // Recalculate layout in case sections expanded or collapsed this frame
-    layout_widgets(screen_w, screen_h);
-
-    if (animations_panel_ && animations_panel_->is_open())
-        animations_panel_->update(input, screen_w, screen_h);
-}
 
 void AssetInfoUI::handle_event(const SDL_Event& e) {
     if (!visible_ || !info_) return;
@@ -152,7 +122,6 @@ void AssetInfoUI::handle_event(const SDL_Event& e) {
         if (s->handle_event(e)) return;
     }
 
-    // Footer action: launch Python animations UI script
     if (configure_btn_ && configure_btn_->handle_event(e)) {
         if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
             if (info_) {
@@ -171,6 +140,41 @@ void AssetInfoUI::handle_event(const SDL_Event& e) {
     }
 }
 
+
+
+void AssetInfoUI::update(const Input& input, int screen_w, int screen_h) {
+    if (!visible_ || !info_) return;
+    layout_widgets(screen_w, screen_h);
+
+    int mx = input.getX();
+    int my = input.getY();
+    if (mx >= panel_.x && mx < panel_.x + panel_.w &&
+        my >= panel_.y && my < panel_.y + panel_.h) {
+        int dy = input.getScrollY();
+        if (dy != 0) {
+            scroll_ -= dy * 40;
+            scroll_ = std::max(0, std::min(max_scroll_, scroll_));
+        }
+    }
+
+    for (auto& s : sections_) s->update(input, screen_w, screen_h);
+
+    // Accordion behavior: only one open at a time
+    for (size_t i = 0; i < sections_.size(); ++i) {
+        if (sections_[i]->is_expanded()) {
+            for (size_t j = 0; j < sections_.size(); ++j) {
+                if (i != j) sections_[j]->set_expanded(false);
+            }
+            break;
+        }
+    }
+
+    layout_widgets(screen_w, screen_h);
+
+    if (animations_panel_ && animations_panel_->is_open())
+        animations_panel_->update(input, screen_w, screen_h);
+}
+
 void AssetInfoUI::render(SDL_Renderer* r, int screen_w, int screen_h) const {
     if (!visible_ || !info_) return;
 
@@ -181,9 +185,10 @@ void AssetInfoUI::render(SDL_Renderer* r, int screen_w, int screen_h) const {
     SDL_SetRenderDrawColor(r, bg.r, bg.g, bg.b, bg.a);
     SDL_RenderFillRect(r, &panel_);
 
+    // Render sections (already offset by scroll_)
     for (auto& s : sections_) s->render(r);
 
-    // Render footer button
+    // Footer button
     if (configure_btn_) configure_btn_->render(r);
 
     if (animations_panel_ && animations_panel_->is_open())
@@ -191,6 +196,10 @@ void AssetInfoUI::render(SDL_Renderer* r, int screen_w, int screen_h) const {
 
     last_renderer_ = r;
 }
+
+
+
+
 
 void AssetInfoUI::render_world_overlay(SDL_Renderer* r, const camera& cam) const {
     if (!visible_ || !info_ || !lighting_section_ || !lighting_section_->is_expanded() || !lighting_section_->shading_enabled() || !target_asset_) return;
@@ -219,4 +228,3 @@ void AssetInfoUI::open_area_editor(const std::string& name) {
     if (!info_ || !assets_) return;
     assets_->begin_area_edit_for_selected_asset(name);
 }
-

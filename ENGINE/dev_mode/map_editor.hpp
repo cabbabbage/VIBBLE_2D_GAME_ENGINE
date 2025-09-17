@@ -4,6 +4,9 @@
 #include <SDL_ttf.h>
 
 #include <vector>
+#include <utility>
+
+#include "dev_mode/pan_and_zoom.hpp"
 
 class Assets;
 class Input;
@@ -67,4 +70,6 @@ private:
     TTF_Font* label_font_ = nullptr;
 
     Room* pending_selection_ = nullptr;
+    PanAndZoom pan_zoom_;
+    std::vector<std::pair<Room*, SDL_Rect>> label_rects_;
 };

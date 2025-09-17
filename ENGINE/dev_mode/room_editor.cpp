@@ -499,24 +499,11 @@ void RoomEditor::purge_asset(Asset* asset) {
 
 void RoomEditor::set_zoom_scale_factor(double factor) {
     zoom_scale_factor_ = (factor > 0.0) ? factor : 1.0;
+    pan_zoom_.set_zoom_scale_factor(zoom_scale_factor_);
 }
 
 void RoomEditor::handle_mouse_input(const Input& input) {
     camera& cam = assets_->getView();
-
-    const int wheel_y = input.getScrollY();
-    if (wheel_y != 0) {
-        const double step = (zoom_scale_factor_ > 0.0) ? zoom_scale_factor_ : 1.0;
-        double eff = 1.0;
-        if (wheel_y > 0) {
-            eff = std::pow(step, wheel_y);
-        } else if (wheel_y < 0) {
-            eff = 1.0 / std::pow(step, -wheel_y);
-        }
-        const int base = 18;
-        const int dur = std::max(6, base - 2 * std::min(6, std::abs(wheel_y)));
-        cam.animate_zoom_multiply(eff, dur);
-    }
 
     if (input.isScancodeDown(SDL_SCANCODE_ESCAPE)) {
         clear_selection();
@@ -528,13 +515,29 @@ void RoomEditor::handle_mouse_input(const Input& input) {
 
     const int mx = input_->getX();
     const int my = input_->getY();
+    const bool ui_blocked = is_ui_blocking_input(mx, my);
+
+    Asset* hit_asset = nullptr;
+    if (!ui_blocked) {
+        hit_asset = hit_test_asset(SDL_Point{mx, my});
+    }
+
+    pan_zoom_.handle_input(cam, input, ui_blocked || hit_asset != nullptr);
+
     SDL_Point world_mouse = cam.screen_to_map(SDL_Point{mx, my});
+
+    update_hover_state(hit_asset);
+
+    const bool pointer_over_selection = hovered_asset_ &&
+        (std::find(selected_assets_.begin(), selected_assets_.end(), hovered_asset_) != selected_assets_.end());
 
     if (input_->isDown(Input::LEFT) && !selected_assets_.empty()) {
         if (!dragging_) {
-            dragging_ = true;
-            drag_last_world_ = world_mouse;
-            begin_drag_session(world_mouse);
+            if (pointer_over_selection) {
+                dragging_ = true;
+                drag_last_world_ = world_mouse;
+                begin_drag_session(world_mouse);
+            }
         } else {
             update_drag_session(world_mouse);
         }
@@ -545,38 +548,56 @@ void RoomEditor::handle_mouse_input(const Input& input) {
         dragging_ = false;
     }
 
-    handle_hover();
     handle_click(input);
     update_highlighted_assets();
 }
 
-void RoomEditor::handle_hover() {
-    if (!input_ || !player_ || !active_assets_) return;
+Asset* RoomEditor::hit_test_asset(SDL_Point screen_point) const {
+    if (!active_assets_ || !assets_) return nullptr;
 
-    const int mx = input_->getX();
-    const int my = input_->getY();
+    const camera& cam = assets_->getView();
+    const float scale = std::max(0.0001f, cam.get_scale());
+    const float inv_scale = 1.0f / scale;
 
-    Asset* nearest = nullptr;
-    float nearest_d2 = std::numeric_limits<float>::max();
+    Asset* best = nullptr;
+    int best_screen_y = std::numeric_limits<int>::min();
+    int best_z_index = std::numeric_limits<int>::min();
 
     for (Asset* asset : *active_assets_) {
         if (!asset || !asset->info) continue;
         const std::string& type = asset->info->type;
         if (type == "Boundary" || type == "boundary" || type == "Texture") continue;
 
-        SDL_Point scr = assets_->getView().map_to_screen(SDL_Point{asset->pos.x, asset->pos.y});
-        const float dx = float(mx - scr.x);
-        const float dy = float(my - scr.y);
-        const float d2 = dx * dx + dy * dy;
+        SDL_Texture* tex = asset->get_final_texture();
+        int fw = asset->cached_w;
+        int fh = asset->cached_h;
+        if ((fw == 0 || fh == 0) && tex) {
+            SDL_QueryTexture(tex, nullptr, nullptr, &fw, &fh);
+        }
+        if (fw <= 0 || fh <= 0) continue;
 
-        if (d2 < nearest_d2) {
-            nearest_d2 = d2;
-            nearest = asset;
+        const SDL_Point center = cam.map_to_screen(SDL_Point{asset->pos.x, asset->pos.y});
+        const int sw = static_cast<int>(std::lround(static_cast<double>(fw) * inv_scale));
+        const int sh = static_cast<int>(std::lround(static_cast<double>(fh) * inv_scale));
+        if (sw <= 0 || sh <= 0) continue;
+
+        SDL_Rect rect{center.x - sw / 2, center.y - sh, sw, sh};
+        if (!SDL_PointInRect(&screen_point, &rect)) continue;
+
+        if (!best || center.y > best_screen_y ||
+            (center.y == best_screen_y && asset->z_index > best_z_index)) {
+            best = asset;
+            best_screen_y = center.y;
+            best_z_index = asset->z_index;
         }
     }
 
-    if (nearest) {
-        hovered_asset_ = nearest;
+    return best;
+}
+
+void RoomEditor::update_hover_state(Asset* hit) {
+    if (hit) {
+        hovered_asset_ = hit;
         hover_miss_frames_ = 0;
     } else {
         if (++hover_miss_frames_ >= 3) {

@@ -84,15 +84,29 @@ void MapEditor::exit(bool focus_player, bool restore_previous_state) {
 
 void MapEditor::update(const Input& input) {
     if (!enabled_) return;
+    if (!assets_) return;
+
+    camera& cam = assets_->getView();
+
+    SDL_Point screen_pt{input.getX(), input.getY()};
+    SDL_Point map_pt = cam.screen_to_map(screen_pt);
+
+    Room* area_hit = hit_test_room(map_pt);
+    Room* label_hit = nullptr;
+    for (const auto& entry : label_rects_) {
+        if (SDL_PointInRect(&screen_pt, &entry.second)) {
+            label_hit = entry.first;
+            break;
+        }
+    }
+
+    Room* hit = area_hit ? area_hit : label_hit;
+
+    pan_zoom_.handle_input(cam, input, hit != nullptr);
 
     if (input.wasClicked(Input::LEFT)) {
-        SDL_Point screen_pt{input.getX(), input.getY()};
-        if (assets_) {
-            SDL_Point map_pt = assets_->getView().screen_to_map(screen_pt);
-            Room* hit = hit_test_room(map_pt);
-            if (hit) {
-                pending_selection_ = hit;
-            }
+        if (hit) {
+            pending_selection_ = hit;
         }
     }
 }
@@ -106,6 +120,8 @@ void MapEditor::render(SDL_Renderer* renderer) {
     if (!label_font_) return;
 
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+
+    label_rects_.clear();
 
     for (Room* room : *rooms_) {
         if (!room || !room->room_area) continue;
@@ -247,6 +263,8 @@ void MapEditor::render_room_label(SDL_Renderer* renderer, Room* room) {
     SDL_Point center = room->room_area->get_center();
     SDL_Point screen_pt = assets_->getView().map_to_screen(center);
     SDL_Rect bg_rect = label_background_rect(text_surface, screen_pt);
+
+    label_rects_.emplace_back(room, bg_rect);
 
     SDL_SetRenderDrawColor(renderer, kLabelBg.r, kLabelBg.g, kLabelBg.b, kLabelBg.a);
     SDL_RenderFillRect(renderer, &bg_rect);
