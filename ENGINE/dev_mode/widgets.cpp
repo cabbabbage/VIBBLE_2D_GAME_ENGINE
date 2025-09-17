@@ -362,14 +362,16 @@ SDL_Rect DMRangeSlider::min_knob_rect() const {
     SDL_Rect tr = track_rect();
     int range = std::max(1, max_ - min_);
     int x = tr.x + (int)((min_value_ - min_) * (tr.w - 12) / (double)range);
-    return SDL_Rect{ x, tr.y - 4, 12, 16 };
+    // knob extends downward
+    return SDL_Rect{ x, tr.y, 12, 16 };
 }
 
 SDL_Rect DMRangeSlider::max_knob_rect() const {
     SDL_Rect tr = track_rect();
     int range = std::max(1, max_ - min_);
     int x = tr.x + (int)((max_value_ - min_) * (tr.w - 12) / (double)range);
-    return SDL_Rect{ x, tr.y - 4, 12, 16 };
+    // knob extends upward
+    return SDL_Rect{ x, tr.y - 16 + tr.h, 12, 16 };
 }
 
 int DMRangeSlider::value_for_x(int x) const {
@@ -471,19 +473,17 @@ void DMRangeSlider::render(SDL_Renderer* r) const {
     SDL_Color border_min = (min_hovered_ || dragging_min_) ? st.knob_border_hover : st.knob_border;
     SDL_Color border_max = (max_hovered_ || dragging_max_) ? st.knob_border_hover : st.knob_border;
 
+    // draw min knob (downward)
     SDL_SetRenderDrawColor(r, col_min.r, col_min.g, col_min.b, col_min.a);
     SDL_RenderFillRect(r, &kmin);
     SDL_SetRenderDrawColor(r, border_min.r, border_min.g, border_min.b, border_min.a);
     SDL_RenderDrawRect(r, &kmin);
 
+    // draw max knob (upward)
     SDL_SetRenderDrawColor(r, col_max.r, col_max.g, col_max.b, col_max.a);
     SDL_RenderFillRect(r, &kmax);
     SDL_SetRenderDrawColor(r, border_max.r, border_max.g, border_max.b, border_max.a);
     SDL_RenderDrawRect(r, &kmax);
-
-    // Tiny labels to differentiate min/max when overlapping
-    draw_text(r, "L", kmin.x, kmin.y - st.label.font_size);
-    draw_text(r, "R", kmax.x, kmax.y - st.label.font_size);
 
     if (edit_min_) {
         edit_min_->render(r);

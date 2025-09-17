@@ -42,13 +42,14 @@
           "name": "Booze_2"
         }
       ],
+      "chance_denominator": 100,
       "check_overlap": false,
       "display_name": "Booze_2",
       "enforce_spacing": false,
       "exact_position": null,
       "inherited": false,
-      "max_number": 20,
-      "min_number": 0,
+      "max_number": 213,
+      "min_number": 213,
       "position": "Random",
       "spawn_id": "spn-2986ab1d1671",
       "tag": false

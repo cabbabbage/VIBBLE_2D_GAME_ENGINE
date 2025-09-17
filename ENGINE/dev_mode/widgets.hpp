@@ -43,7 +43,7 @@ public:
     // Compute preferred height for a given width (auto-wrap)
     int preferred_height(int width) const;
     static int height() { return 32; }
-        int height_for_width(int w) const;
+    int height_for_width(int w) const;
 private:
     void draw_text(SDL_Renderer* r, const std::string& s, int x, int y, const DMLabelStyle& ls) const;
     std::vector<std::string> wrap_lines(TTF_Font* f, const std::string& s, int max_width) const;
