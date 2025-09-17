@@ -26,8 +26,9 @@ class AssetSpawner {
     std::vector<std::unique_ptr<Asset>> spawn_boundary_from_file(const std::string& json_path, const Area& spawn_area);
     std::vector<std::unique_ptr<Asset>> extract_all_assets();
 
-	private:
+        private:
     void run_spawning(AssetSpawnPlanner* planner, const Area& area);
+    void run_boundary_spawning(const Area& area);
     void run_child_spawning(AssetSpawnPlanner* planner, const Area& area);
     void spawn_all_children();
     std::vector<Area> exclusion_zones;
@@ -38,4 +39,5 @@ class AssetSpawner {
     std::vector<SpawnInfo> spawn_queue_;
     std::unordered_map<std::string, std::shared_ptr<AssetInfo>> asset_info_library_;
     std::vector<std::unique_ptr<Asset>> all_;
+    bool boundary_mode_ = false;
 };

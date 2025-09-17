@@ -12,19 +12,59 @@
   "name": "spawn",
   "spawn_groups": [
     {
-      "display_name": "Vibble",
-      "min_number": 1,
-      "max_number": 1,
-      "position": "Center",
-      "check_overlap": false,
-      "enforce_spacing": false,
       "candidates": [
         {
-          "name": "Vibble",
-          "chance": 100
+          "chance": 0,
+          "name": "null"
+        },
+        {
+          "chance": 100,
+          "name": "Vibble"
         }
       ],
+      "chance_denominator": 100,
+      "check_overlap": false,
+      "display_name": "Vibble",
+      "enforce_spacing": false,
+      "max_number": 1,
+      "min_number": 1,
+      "position": "Center",
       "spawn_id": "spn-225b40dd06f7"
+    },
+    {
+      "candidates": [
+        {
+          "chance": 0,
+          "name": "null"
+        },
+        {
+          "chance": 100,
+          "name": "candle"
+        }
+      ],
+      "chance_denominator": 100,
+      "check_overlap": false,
+      "display_name": "candle",
+      "dx": 159,
+      "dy": -152,
+      "enforce_spacing": false,
+      "max_number": 1,
+      "min_number": 1,
+      "origional_height": 1824,
+      "origional_width": 1824,
+      "percentage_shift_from_center": 0,
+      "perimeter_x_offset_max": 0,
+      "perimeter_x_offset_min": 0,
+      "perimeter_y_offset_max": 0,
+      "perimeter_y_offset_min": 0,
+      "position": "Perimeter",
+      "sector_center": 0,
+      "sector_center_max": 0,
+      "sector_center_min": 0,
+      "sector_range": 360,
+      "sector_range_max": 360,
+      "sector_range_min": 360,
+      "spawn_id": "spn-068b19268052"
     }
   ]
 }

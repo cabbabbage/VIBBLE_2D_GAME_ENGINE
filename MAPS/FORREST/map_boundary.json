@@ -1,8 +1,8 @@
 {
   "spawn_groups": [
     {
-      "min_number": 100000,
-      "max_number": 100000,
+      "min_number": 8000,
+      "max_number": 8000,
       "position": "Random",
       "check_overlap": false,
       "enforce_spacing": false,
