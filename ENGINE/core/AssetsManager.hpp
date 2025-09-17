@@ -105,10 +105,7 @@ private:
     void addAsset(const std::string& name, SDL_Point g);
     friend class SceneRenderer;
     friend class Asset;
-<<<<<<< ours
-=======
 
->>>>>>> theirs
     std::string map_path_;
     std::string map_info_path_;
     nlohmann::json map_info_json_;

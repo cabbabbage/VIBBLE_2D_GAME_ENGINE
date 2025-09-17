@@ -12,13 +12,10 @@
 
 #include <algorithm>
 #include <cmath>
-<<<<<<< ours
 #include <utility>
-=======
 #include <cctype>
 #include <limits>
 #include <string>
->>>>>>> theirs
 
 DevControls::DevControls(Assets* owner, int screen_w, int screen_h)
     : assets_(owner),
@@ -187,18 +184,15 @@ void DevControls::update_ui(const Input& input) {
 
 void DevControls::handle_sdl_event(const SDL_Event& event) {
     if (!enabled_) return;
-<<<<<<< ours
     if (map_light_panel_ && map_light_panel_->is_visible()) {
         if (map_light_panel_->handle_event(event)) {
             return;
         }
-=======
     if (mode_ == Mode::MapEditor) {
         if (map_mode_ui_ && map_mode_ui_->handle_event(event)) {
             return;
         }
         return;
->>>>>>> theirs
     }
     if (!can_use_room_editor_ui()) return;
     if (room_editor_) room_editor_->handle_sdl_event(event);
@@ -374,18 +368,6 @@ void DevControls::handle_map_selection() {
     exit_map_editor_mode(false, false);
 }
 
-<<<<<<< ours
-void DevControls::toggle_map_light_panel() {
-    if (!map_light_panel_ || !map_info_json_) {
-        return;
-    }
-    map_light_panel_->set_map_info(map_info_json_, map_light_save_cb_);
-    if (map_light_panel_->is_visible()) {
-        map_light_panel_->close();
-    } else {
-        map_light_panel_->open();
-    }
-=======
 bool DevControls::handle_map_mode_asset_click(const Input& input) {
     if (!map_mode_ui_ || !assets_) return false;
     if (map_click_cooldown_ > 0) return false;
@@ -462,6 +444,5 @@ Asset* DevControls::hit_test_boundary_asset(SDL_Point screen_point) const {
     }
 
     return best;
->>>>>>> theirs
 }
 

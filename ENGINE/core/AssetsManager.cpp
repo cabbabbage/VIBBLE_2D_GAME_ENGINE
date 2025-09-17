@@ -50,13 +50,11 @@ Assets::Assets(std::vector<Asset>&& loaded,
       activeManager(screen_width_, screen_height_, camera),
       screen_width(screen_width_),
       screen_height(screen_height_),
-<<<<<<< ours
       map_path_(map_path),
       map_info_path_(map_path + "/map_info.json"),
       library_(library)
 {
     load_map_info_json();
-=======
       library_(library),
       map_path_(map_path)
 {
@@ -80,7 +78,6 @@ Assets::Assets(std::vector<Asset>&& loaded,
         map_info_json_ = nlohmann::json::object();
     }
 
->>>>>>> theirs
     InitializeAssets::initialize(*this,
                                  std::move(loaded),
                                  std::move(rooms),
@@ -110,11 +107,8 @@ Assets::Assets(std::vector<Asset>&& loaded,
         dev_controls_->set_screen_dimensions(screen_width_, screen_height_);
         dev_controls_->set_rooms(&rooms_);
         dev_controls_->set_input(input);
-<<<<<<< ours
         dev_controls_->set_map_info(&map_info_json_, [this]() { on_map_light_changed(); });
-=======
         dev_controls_->set_map_context(&map_info_json_, map_path_);
->>>>>>> theirs
     }
 
 
