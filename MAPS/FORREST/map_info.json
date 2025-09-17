@@ -1,7 +1,5 @@
 {
   "map_name": "FORREST",
-  "map_assets": "map_assets.json",
-  "map_boundary": "map_boundary.json",
   "map_layers": [
     {
       "level": 0,

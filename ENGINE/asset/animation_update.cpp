@@ -583,7 +583,7 @@ bool AnimationUpdate::advance(AnimationFrame*& frame) {
             self_->set_z_index();
             if (Assets* as = self_->get_assets()) {
                 // Defer sort to avoid mutating the active vector during iteration
-                as->activeManager.markNeedsSort();
+                as->active_manager().markNeedsSort();
             }
         }
 

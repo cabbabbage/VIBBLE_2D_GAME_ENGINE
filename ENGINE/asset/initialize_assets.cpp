@@ -21,7 +21,7 @@ void InitializeAssets::initialize(Assets& assets,
                                   int )
 {
 	std::cout << "[InitializeAssets] Initializing Assets manager...\n";
-	assets.rooms_ = std::move(rooms);
+        assets.set_rooms(std::move(rooms));
 	assets.all.reserve(loaded.size());
 	while (!loaded.empty()) {
 		Asset a = std::move(loaded.back());
@@ -38,16 +38,15 @@ void InitializeAssets::initialize(Assets& assets,
 		}
 		auto newAsset = std::make_unique<Asset>(std::move(a));
 		Asset* raw = newAsset.get();
-		set_camera_recursive(raw, &assets.camera);
+                set_camera_recursive(raw, &assets.getView());
 		set_assets_owner_recursive(raw, &assets);
 		assets.owned_assets.push_back(std::move(newAsset));
 		assets.all.push_back(raw);
 		raw->finalize_setup();
 	}
 	find_player(assets);
-	assets.activeManager.initialize(assets.all, assets.player, screen_center_x, screen_center_y);
-	assets.active_assets  = assets.activeManager.getActive();
-	assets.closest_assets = assets.activeManager.getClosest();
+        assets.active_manager().initialize(assets.all, assets.player, screen_center_x, screen_center_y);
+        assets.refresh_active_asset_lists();
 	setup_shading_groups(assets);
 	std::cout << "[InitializeAssets] Initialization base complete. Total assets: "
 	<< assets.all.size() << "\n";
@@ -57,8 +56,9 @@ void InitializeAssets::initialize(Assets& assets,
 		std::cerr << "[InitializeAssets] light-gen failed: " << e.what() << "\n";
 	}
 	std::cout << "[InitializeAssets] All static sources set.\n";
-    assets.activeManager.updateAssetVectors(assets.player, screen_center_x, screen_center_y);
-    assets.camera.zoom_to_scale(1.0, 200);
+    assets.active_manager().updateAssetVectors(assets.player, screen_center_x, screen_center_y);
+    assets.refresh_active_asset_lists();
+    assets.getView().zoom_to_scale(1.0, 200);
 }
 
 void InitializeAssets::find_player(Assets& assets) {
@@ -119,10 +119,11 @@ void InitializeAssets::setup_static_sources(Assets& assets) {
 }
 
 void InitializeAssets::setup_shading_groups(Assets& assets) {
-	int group = 1;
-	for (Asset* a : assets.all) {
-		if (!a || !a->info) continue;
-		set_shading_group_recursive(*a, group, assets.num_groups_);
-		group = (group == assets.num_groups_) ? 1 : group + 1;
-	}
+        const int num_groups = std::max(1, assets.shading_group_count());
+        int group = 1;
+        for (Asset* a : assets.all) {
+                if (!a || !a->info) continue;
+                set_shading_group_recursive(*a, group, num_groups);
+                group = (group == num_groups) ? 1 : group + 1;
+        }
 }

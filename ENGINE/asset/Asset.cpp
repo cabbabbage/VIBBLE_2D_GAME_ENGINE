@@ -182,7 +182,7 @@ void Asset::finalize_setup() {
                 << "\" at (" << child->pos.x << ", " << child->pos.y << ")\n";
 	}
         if (assets_ && !anim_) {
-                anim_ = std::make_unique<AnimationUpdate>(this, assets_->activeManager);
+                anim_ = std::make_unique<AnimationUpdate>(this, assets_->active_manager());
         }
         if (assets_ && !controller_) {
                 ControllerFactory cf(assets_);
@@ -290,7 +290,7 @@ void Asset::add_child(Asset* child) {
 void Asset::set_assets(Assets* a) {
         assets_ = a;
         if (assets_ && !anim_) {
-                anim_ = std::make_unique<AnimationUpdate>(this, assets_->activeManager);
+                anim_ = std::make_unique<AnimationUpdate>(this, assets_->active_manager());
         }
         if (!controller_ && assets_) {
                 ControllerFactory cf(assets_);
@@ -312,7 +312,7 @@ void Asset::set_z_index() {
                 std::cerr << "[Asset::set_z_index] Exception: " << e.what() << "\n";
         }
         if (assets_ && z_index != old_z) {
-                assets_->activeManager.markNeedsSort();
+                assets_->active_manager().markNeedsSort();
         }
 }
 
@@ -392,7 +392,7 @@ void Asset::Delete() {
 	dead = true;
 	hidden = true;
 	if (assets_) {
-		assets_->activeManager.remove(this);
+            assets_->active_manager().remove(this);
 		assets_->schedule_removal(this);
 	}
 }

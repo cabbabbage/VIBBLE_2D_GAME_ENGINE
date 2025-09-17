@@ -77,6 +77,21 @@ public:
     const std::string& map_path() const { return map_path_; }
     const std::string& map_info_path() const { return map_info_path_; }
 
+    ActiveAssetsManager& active_manager() { return activeManager; }
+    const ActiveAssetsManager& active_manager() const { return activeManager; }
+
+    AssetLibrary& library();
+    const AssetLibrary& library() const;
+
+    void set_rooms(std::vector<Room*> rooms);
+    std::vector<Room*>& rooms();
+    const std::vector<Room*>& rooms() const;
+
+    void refresh_active_asset_lists();
+    void update_closest_assets(Asset* player, int max_count);
+
+    int shading_group_count() const { return num_groups_; }
+
     std::deque<std::unique_ptr<Asset>> owned_assets;
     std::vector<Asset*> all;
     Asset* player = nullptr;

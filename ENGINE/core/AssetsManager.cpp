@@ -265,6 +265,36 @@ Assets::~Assets() {
     delete dev_controls_;
 }
 
+AssetLibrary& Assets::library() {
+    return library_;
+}
+
+const AssetLibrary& Assets::library() const {
+    return library_;
+}
+
+void Assets::set_rooms(std::vector<Room*> rooms) {
+    rooms_ = std::move(rooms);
+}
+
+std::vector<Room*>& Assets::rooms() {
+    return rooms_;
+}
+
+const std::vector<Room*>& Assets::rooms() const {
+    return rooms_;
+}
+
+void Assets::refresh_active_asset_lists() {
+    active_assets  = activeManager.getActive();
+    closest_assets = activeManager.getClosest();
+}
+
+void Assets::update_closest_assets(Asset* player, int max_count) {
+    activeManager.updateClosestAssets(player, max_count);
+    closest_assets = activeManager.getClosest();
+}
+
 void Assets::set_input(Input* m) {
     input = m;
 

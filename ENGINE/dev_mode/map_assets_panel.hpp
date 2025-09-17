@@ -3,6 +3,7 @@
 #include <functional>
 #include <memory>
 #include <string>
+#include <nlohmann/json_fwd.hpp>
 
 #include "DockableCollapsible.hpp"
 
@@ -13,9 +14,8 @@ class DMCheckbox;
 class CheckboxWidget;
 class Widget;
 class Input;
-struct SDL_Event;
+union SDL_Event;
 struct SDL_Renderer;
-namespace nlohmann { class json; }
 
 // Floating dockable panel for editing map-wide and boundary spawn groups.
 class MapAssetsPanel : public DockableCollapsible {

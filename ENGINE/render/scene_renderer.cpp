@@ -134,7 +134,8 @@ void SceneRenderer::render() {
 	int min_visible_w = static_cast<int>(screen_width_  * MIN_VISIBLE_SCREEN_RATIO);
 	int min_visible_h = static_cast<int>(screen_height_ * MIN_VISIBLE_SCREEN_RATIO);
 
-	for (Asset* a : assets_->active_assets) {
+        const auto& active_assets = assets_->getActive();
+        for (Asset* a : active_assets) {
 		if (!a || !a->info) continue;
 
 		if (shouldRegen(a)) {

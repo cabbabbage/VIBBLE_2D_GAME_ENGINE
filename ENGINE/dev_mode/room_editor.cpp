@@ -150,7 +150,7 @@ void RoomEditor::update(const Input& input) {
 
 void RoomEditor::update_ui(const Input& input) {
     if (library_ui_ && library_ui_->is_visible()) {
-        library_ui_->update(input, screen_w_, screen_h_, assets_->library_, *assets_);
+        library_ui_->update(input, screen_w_, screen_h_, assets_->library(), *assets_);
     }
     if (room_cfg_ui_ && room_cfg_ui_->visible()) {
         room_cfg_ui_->update(input);
@@ -1213,11 +1213,10 @@ void RoomEditor::integrate_spawned_assets(std::vector<std::unique_ptr<Asset>>& s
         raw->finalize_setup();
         assets_->owned_assets.emplace_back(std::move(uptr));
         assets_->all.push_back(raw);
-        assets_->activeManager.activate(raw);
+        assets_->active_manager().activate(raw);
     }
-    assets_->activeManager.updateClosestAssets(assets_->player, 3);
-    assets_->active_assets = assets_->activeManager.getActive();
-    assets_->closest_assets = assets_->activeManager.getClosest();
+    assets_->refresh_active_asset_lists();
+    assets_->update_closest_assets(assets_->player, 3);
     spawned.clear();
 }
 
@@ -1249,17 +1248,17 @@ void RoomEditor::respawn_spawn_group(const nlohmann::json& entry) {
     root["spawn_groups"].push_back(entry);
     std::vector<nlohmann::json> sources{root};
     std::vector<std::string> paths;
-    AssetSpawnPlanner planner(sources, *current_room_->room_area, assets_->library_, paths);
+    AssetSpawnPlanner planner(sources, *current_room_->room_area, assets_->library(), paths);
     const auto& queue = planner.get_spawn_queue();
     if (queue.empty()) return;
 
-    std::unordered_map<std::string, std::shared_ptr<AssetInfo>> asset_info_library = assets_->library_.all();
+    std::unordered_map<std::string, std::shared_ptr<AssetInfo>> asset_info_library = assets_->library().all();
     std::vector<std::unique_ptr<Asset>> spawned;
     std::vector<Area> exclusion;
     std::mt19937 rng(std::random_device{}());
     Check checker(false);
     SpawnLogger logger("", "");
-    SpawnContext ctx(rng, checker, logger, exclusion, asset_info_library, spawned, &assets_->library_, grid ? grid.get() : nullptr);
+    SpawnContext ctx(rng, checker, logger, exclusion, asset_info_library, spawned, &assets_->library(), grid ? grid.get() : nullptr);
     ExactSpawner exact;
     CenterSpawner center;
     RandomSpawner random;
@@ -1381,16 +1380,16 @@ void RoomEditor::regenerate_current_room() {
     std::vector<nlohmann::json> planner_sources{room_json};
     std::vector<std::string> planner_paths;
     if (!current_room_->json_path.empty()) planner_paths.push_back(current_room_->json_path);
-    current_room_->planner = std::make_unique<AssetSpawnPlanner>(planner_sources, *current_room_->room_area, assets_->library_, planner_paths);
+    current_room_->planner = std::make_unique<AssetSpawnPlanner>(planner_sources, *current_room_->room_area, assets_->library(), planner_paths);
 
     auto grid = build_room_grid(std::string{});
-    std::unordered_map<std::string, std::shared_ptr<AssetInfo>> asset_info_library = assets_->library_.all();
+    std::unordered_map<std::string, std::shared_ptr<AssetInfo>> asset_info_library = assets_->library().all();
     std::vector<std::unique_ptr<Asset>> spawned;
     std::vector<Area> exclusion;
     Check checker(false);
     SpawnLogger logger("", "");
     std::mt19937 regen_rng(std::random_device{}());
-    SpawnContext ctx(regen_rng, checker, logger, exclusion, asset_info_library, spawned, &assets_->library_, grid ? grid.get() : nullptr);
+    SpawnContext ctx(regen_rng, checker, logger, exclusion, asset_info_library, spawned, &assets_->library(), grid ? grid.get() : nullptr);
     ExactSpawner exact;
     CenterSpawner center_spawn;
     RandomSpawner random;
@@ -1448,7 +1447,7 @@ void RoomEditor::regenerate_current_room() {
                     if (current_room_->room_area->contains_point(pt->pos)) continue;
                     int idx = pick(boundary_rng);
                     const std::string& asset_name = boundary_options[idx].first;
-                    auto info = assets_->library_.get(asset_name);
+                    auto info = assets_->library().get(asset_name);
                     if (!info) continue;
                     std::string spawn_id = generate_room_spawn_id();
                     Area spawn_area(asset_name, pt->pos, 1, 1, "Point", 1, 1, 1);
