@@ -386,20 +386,26 @@ void GenerateTrails::circular_connection(std::vector<std::unique_ptr<Room>>& tra
 		bool connected = false;
                 for (int attempt = 0; attempt < 1000; ++attempt) {
                         if (const auto* asset_ref = pick_random_asset()) {
-                                if (TrailGeometry::attempt_trail_connection(current, next, existing_areas, map_dir,
-       map_info_path,
-       asset_lib, trail_rooms,
-       1,
-       asset_ref->data,
-       asset_ref->name,
-       map_assets_data,
-       map_radius,
-       testing, rng_)) {
+                                if (TrailGeometry::attempt_trail_connection(current,
+                                                                             next,
+                                                                             existing_areas,
+                                                                             map_dir,
+                                                                             map_info_path,
+                                                                             asset_lib,
+                                                                             trail_rooms,
+                                                                             1,
+                                                                             asset_ref->data,
+                                                                             asset_ref->name,
+                                                                             map_assets_data,
+                                                                             map_radius,
+                                                                             testing,
+                                                                             rng_)) {
                                         std::cout << "[Debug][circular_connection] Connected on attempt "
-                                        << attempt+1 << " using asset: " << asset_ref->name << "\n";
+                                        << attempt + 1 << " using asset: " << asset_ref->name << "\n";
                                         current = next;
                                         connected = true;
                                         break;
+                                }
                         }
                 }
 		if (!connected) {

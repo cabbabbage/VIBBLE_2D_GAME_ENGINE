@@ -329,6 +329,25 @@ double DevControls::get_zoom_scale_factor() const {
     return room_editor_->get_zoom_scale_factor();
 }
 
+void DevControls::toggle_map_light_panel() {
+    if (!map_light_panel_) {
+        if (!map_info_json_) return;
+        map_light_panel_ = std::make_unique<MapLightPanel>(40, 40);
+    }
+
+    if (!map_light_panel_) return;
+
+    if (map_info_json_) {
+        map_light_panel_->set_map_info(map_info_json_, map_light_save_cb_);
+    }
+
+    if (map_light_panel_->is_visible()) {
+        map_light_panel_->close();
+    } else {
+        map_light_panel_->open();
+    }
+}
+
 bool DevControls::can_use_room_editor_ui() const {
     return enabled_ && mode_ == Mode::RoomEditor && room_editor_ && room_editor_->is_enabled();
 }
