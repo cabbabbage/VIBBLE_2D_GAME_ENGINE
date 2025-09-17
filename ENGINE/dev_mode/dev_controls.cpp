@@ -188,6 +188,7 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
         if (map_light_panel_->handle_event(event)) {
             return;
         }
+    }
     if (mode_ == Mode::MapEditor) {
         if (map_mode_ui_ && map_mode_ui_->handle_event(event)) {
             return;

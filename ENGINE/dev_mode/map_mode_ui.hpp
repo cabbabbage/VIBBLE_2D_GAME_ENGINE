@@ -10,7 +10,7 @@ class Input;
 class MapLightPanel;
 class MapAssetsPanel;
 struct SDL_Renderer;
-struct SDL_Event;
+union SDL_Event;
 
 // Coordinates interactions between map-mode floating panels (lighting, assets).
 class MapModeUI {

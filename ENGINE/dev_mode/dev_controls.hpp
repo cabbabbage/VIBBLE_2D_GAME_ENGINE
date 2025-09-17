@@ -2,11 +2,13 @@
 
 #include <SDL.h>
 
+#include <functional>
 #include <memory>
 #include <string>
 #include <vector>
 
-#include <functional>
+#include <nlohmann/json_fwd.hpp>
+
 #include "MapLightPanel.hpp"
 
 
@@ -37,6 +39,7 @@ public:
     void set_rooms(std::vector<Room*>* rooms);
 
     void set_map_info(nlohmann::json* map_info, MapLightPanel::SaveCallback on_save);
+    void set_map_context(nlohmann::json* map_info, const std::string& map_path);
 
 
     Room* resolve_current_room(Room* detected_room);
