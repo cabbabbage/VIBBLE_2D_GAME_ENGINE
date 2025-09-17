@@ -86,6 +86,11 @@ class Assets {
     // Area editing
     void begin_area_edit_for_selected_asset(const std::string& area_name);
 
+    nlohmann::json& map_info_json() { return map_info_json_; }
+    const nlohmann::json& map_info_json() const { return map_info_json_; }
+    const std::string& map_path() const { return map_path_; }
+    const std::string& map_info_path() const { return map_info_path_; }
+
         private:
 private:
     void load_map_info_json();
@@ -100,6 +105,10 @@ private:
     void addAsset(const std::string& name, SDL_Point g);
     friend class SceneRenderer;
     friend class Asset;
+<<<<<<< ours
+=======
+
+>>>>>>> theirs
     std::string map_path_;
     std::string map_info_path_;
     nlohmann::json map_info_json_;

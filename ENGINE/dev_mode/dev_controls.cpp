@@ -2,6 +2,7 @@
 
 #include "dev_mode/map_editor.hpp"
 #include "dev_mode/room_editor.hpp"
+#include "dev_mode/map_mode_ui.hpp"
 
 #include "asset/Asset.hpp"
 #include "core/AssetsManager.hpp"
@@ -11,7 +12,13 @@
 
 #include <algorithm>
 #include <cmath>
+<<<<<<< ours
 #include <utility>
+=======
+#include <cctype>
+#include <limits>
+#include <string>
+>>>>>>> theirs
 
 DevControls::DevControls(Assets* owner, int screen_w, int screen_h)
     : assets_(owner),
@@ -19,6 +26,7 @@ DevControls::DevControls(Assets* owner, int screen_w, int screen_h)
       screen_h_(screen_h) {
     room_editor_ = std::make_unique<RoomEditor>(assets_, screen_w_, screen_h_);
     map_editor_ = std::make_unique<MapEditor>(assets_);
+    map_mode_ui_ = std::make_unique<MapModeUI>(assets_);
 }
 
 DevControls::~DevControls() = default;
@@ -55,6 +63,7 @@ void DevControls::set_screen_dimensions(int width, int height) {
     screen_h_ = height;
     if (room_editor_) room_editor_->set_screen_dimensions(width, height);
     if (map_editor_) map_editor_->set_screen_dimensions(width, height);
+    if (map_mode_ui_) map_mode_ui_->set_screen_dimensions(width, height);
 }
 
 void DevControls::set_current_room(Room* room) {
@@ -65,6 +74,10 @@ void DevControls::set_current_room(Room* room) {
 void DevControls::set_rooms(std::vector<Room*>* rooms) {
     rooms_ = rooms;
     if (map_editor_) map_editor_->set_rooms(rooms);
+}
+
+void DevControls::set_map_context(nlohmann::json* map_info, const std::string& map_path) {
+    if (map_mode_ui_) map_mode_ui_->set_map_context(map_info, map_path);
 }
 
 Room* DevControls::resolve_current_room(Room* detected_room) {
@@ -132,9 +145,29 @@ void DevControls::update(const Input& input) {
     }
 
     if (mode_ == Mode::MapEditor) {
+        if (map_click_cooldown_ > 0) {
+            --map_click_cooldown_;
+        }
+        if (map_mode_ui_) {
+            if (input.wasScancodePressed(SDL_SCANCODE_LCTRL) ||
+                input.wasScancodePressed(SDL_SCANCODE_RCTRL)) {
+                map_mode_ui_->toggle_light_panel();
+            }
+        }
+        bool consumed = false;
         if (map_editor_) {
             map_editor_->update(input);
-            handle_map_selection();
+            if (map_mode_ui_) {
+                consumed = handle_map_mode_asset_click(input);
+            }
+            if (!consumed) {
+                handle_map_selection();
+            } else {
+                (void)map_editor_->consume_selected_room();
+            }
+        }
+        if (map_mode_ui_) {
+            map_mode_ui_->update(input);
         }
     } else if (room_editor_ && room_editor_->is_enabled()) {
         room_editor_->update(input);
@@ -154,10 +187,18 @@ void DevControls::update_ui(const Input& input) {
 
 void DevControls::handle_sdl_event(const SDL_Event& event) {
     if (!enabled_) return;
+<<<<<<< ours
     if (map_light_panel_ && map_light_panel_->is_visible()) {
         if (map_light_panel_->handle_event(event)) {
             return;
         }
+=======
+    if (mode_ == Mode::MapEditor) {
+        if (map_mode_ui_ && map_mode_ui_->handle_event(event)) {
+            return;
+        }
+        return;
+>>>>>>> theirs
     }
     if (!can_use_room_editor_ui()) return;
     if (room_editor_) room_editor_->handle_sdl_event(event);
@@ -168,6 +209,7 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
 
     if (mode_ == Mode::MapEditor) {
         if (map_editor_) map_editor_->render(renderer);
+        if (map_mode_ui_) map_mode_ui_->render(renderer);
     } else if (room_editor_) {
         room_editor_->render_overlays(renderer);
     }
@@ -313,6 +355,7 @@ void DevControls::exit_map_editor_mode(bool focus_player, bool restore_previous_
     if (mode_ != Mode::MapEditor) return;
 
     map_editor_->exit(focus_player, restore_previous_state);
+    if (map_mode_ui_) map_mode_ui_->close_all_panels();
     mode_ = Mode::RoomEditor;
     if (room_editor_ && enabled_) {
         room_editor_->set_enabled(true);
@@ -331,6 +374,7 @@ void DevControls::handle_map_selection() {
     exit_map_editor_mode(false, false);
 }
 
+<<<<<<< ours
 void DevControls::toggle_map_light_panel() {
     if (!map_light_panel_ || !map_info_json_) {
         return;
@@ -341,5 +385,83 @@ void DevControls::toggle_map_light_panel() {
     } else {
         map_light_panel_->open();
     }
+=======
+bool DevControls::handle_map_mode_asset_click(const Input& input) {
+    if (!map_mode_ui_ || !assets_) return false;
+    if (map_click_cooldown_ > 0) return false;
+    if (!input.wasClicked(Input::LEFT)) return false;
+
+    const int mx = input.getX();
+    const int my = input.getY();
+    if (map_mode_ui_->is_point_inside(mx, my)) return false;
+
+    Asset* hit = hit_test_boundary_asset(SDL_Point{mx, my});
+    if (!hit) return false;
+
+    map_mode_ui_->open_assets_panel();
+    map_click_cooldown_ = 2;
+    return true;
+}
+
+Asset* DevControls::hit_test_boundary_asset(SDL_Point screen_point) const {
+    if (!assets_) return nullptr;
+
+    const camera& cam = assets_->getView();
+    const float scale = std::max(0.0001f, cam.get_scale());
+    const float inv_scale = 1.0f / scale;
+
+    Asset* best = nullptr;
+    int best_screen_y = std::numeric_limits<int>::min();
+    int best_z_index = std::numeric_limits<int>::min();
+
+    for (Asset* asset : assets_->all) {
+        if (!asset || !asset->info) continue;
+        if (asset->is_hidden()) continue;
+
+        bool is_boundary = false;
+        if (!asset->spawn_method.empty()) {
+            std::string method = asset->spawn_method;
+            std::transform(method.begin(), method.end(), method.begin(),
+                           [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+            if (method == "boundary") {
+                is_boundary = true;
+            }
+        }
+        if (!is_boundary) {
+            std::string type = asset->info->type;
+            std::transform(type.begin(), type.end(), type.begin(),
+                           [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+            if (type == "boundary") {
+                is_boundary = true;
+            }
+        }
+        if (!is_boundary) continue;
+
+        SDL_Texture* tex = asset->get_final_texture();
+        int fw = asset->cached_w;
+        int fh = asset->cached_h;
+        if ((fw == 0 || fh == 0) && tex) {
+            SDL_QueryTexture(tex, nullptr, nullptr, &fw, &fh);
+        }
+        if (fw <= 0 || fh <= 0) continue;
+
+        SDL_Point center = cam.map_to_screen(SDL_Point{asset->pos.x, asset->pos.y});
+        int sw = static_cast<int>(std::lround(static_cast<double>(fw) * inv_scale));
+        int sh = static_cast<int>(std::lround(static_cast<double>(fh) * inv_scale));
+        if (sw <= 0 || sh <= 0) continue;
+
+        SDL_Rect rect{center.x - sw / 2, center.y - sh, sw, sh};
+        if (!SDL_PointInRect(&screen_point, &rect)) continue;
+
+        if (!best || center.y > best_screen_y ||
+            (center.y == best_screen_y && asset->z_index > best_z_index)) {
+            best = asset;
+            best_screen_y = center.y;
+            best_z_index = asset->z_index;
+        }
+    }
+
+    return best;
+>>>>>>> theirs
 }
 

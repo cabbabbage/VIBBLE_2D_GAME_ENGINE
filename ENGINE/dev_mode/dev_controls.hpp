@@ -5,8 +5,10 @@
 #include <memory>
 #include <string>
 #include <vector>
+
 #include <functional>
 #include "MapLightPanel.hpp"
+
 
 class Asset;
 class Input;
@@ -15,6 +17,7 @@ class AssetInfo;
 class Room;
 class RoomEditor;
 class MapEditor;
+class MapModeUI;
 
 class DevControls {
 public:
@@ -32,7 +35,9 @@ public:
     void set_screen_dimensions(int width, int height);
     void set_current_room(Room* room);
     void set_rooms(std::vector<Room*>* rooms);
+
     void set_map_info(nlohmann::json* map_info, MapLightPanel::SaveCallback on_save);
+
 
     Room* resolve_current_room(Room* detected_room);
 
@@ -83,7 +88,12 @@ private:
     void enter_map_editor_mode();
     void exit_map_editor_mode(bool focus_player, bool restore_previous_state);
     void handle_map_selection();
+<<<<<<< ours
     void toggle_map_light_panel();
+=======
+    bool handle_map_mode_asset_click(const Input& input);
+    Asset* hit_test_boundary_asset(SDL_Point screen_point) const;
+>>>>>>> theirs
 
 private:
     Assets* assets_ = nullptr;
@@ -102,8 +112,13 @@ private:
 
     std::unique_ptr<RoomEditor> room_editor_;
     std::unique_ptr<MapEditor> map_editor_;
+<<<<<<< ours
     std::unique_ptr<MapLightPanel> map_light_panel_;
     nlohmann::json* map_info_json_ = nullptr;
     MapLightPanel::SaveCallback map_light_save_cb_;
+=======
+    std::unique_ptr<MapModeUI> map_mode_ui_;
+    int map_click_cooldown_ = 0;
+>>>>>>> theirs
 };
 

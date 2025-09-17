@@ -17,6 +17,7 @@
 #include <iostream>
 #include <memory>
 #include <limits>
+#include <fstream>
 #include <nlohmann/json.hpp>
 #include "utils/range_util.hpp"
 
@@ -49,11 +50,37 @@ Assets::Assets(std::vector<Asset>&& loaded,
       activeManager(screen_width_, screen_height_, camera),
       screen_width(screen_width_),
       screen_height(screen_height_),
+<<<<<<< ours
       map_path_(map_path),
       map_info_path_(map_path + "/map_info.json"),
       library_(library)
 {
     load_map_info_json();
+=======
+      library_(library),
+      map_path_(map_path)
+{
+    if (!map_path_.empty()) {
+        map_info_path_ = map_path_ + "/map_info.json";
+        std::ifstream map_info_in(map_info_path_);
+        if (map_info_in) {
+            try {
+                map_info_in >> map_info_json_;
+                if (!map_info_json_.is_object()) {
+                    map_info_json_ = nlohmann::json::object();
+                }
+            } catch (const std::exception& ex) {
+                std::cerr << "[Assets] Failed to parse map_info.json: " << ex.what() << "\n";
+                map_info_json_ = nlohmann::json::object();
+            }
+        } else {
+            map_info_json_ = nlohmann::json::object();
+        }
+    } else {
+        map_info_json_ = nlohmann::json::object();
+    }
+
+>>>>>>> theirs
     InitializeAssets::initialize(*this,
                                  std::move(loaded),
                                  std::move(rooms),
@@ -83,7 +110,11 @@ Assets::Assets(std::vector<Asset>&& loaded,
         dev_controls_->set_screen_dimensions(screen_width_, screen_height_);
         dev_controls_->set_rooms(&rooms_);
         dev_controls_->set_input(input);
+<<<<<<< ours
         dev_controls_->set_map_info(&map_info_json_, [this]() { on_map_light_changed(); });
+=======
+        dev_controls_->set_map_context(&map_info_json_, map_path_);
+>>>>>>> theirs
     }
 
 
@@ -159,6 +190,7 @@ void Assets::set_input(Input* m) {
         dev_controls_->set_current_room(current_room_);
         dev_controls_->set_screen_dimensions(screen_width, screen_height);
         dev_controls_->set_rooms(&rooms_);
+        dev_controls_->set_map_context(&map_info_json_, map_path_);
     }
 }
 
