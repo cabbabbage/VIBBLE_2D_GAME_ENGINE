@@ -9,6 +9,7 @@
 
 class DockableCollapsible;
 class Widget;
+class LabelWidget;
 class DropdownWidget;
 class RangeSliderWidget;
 class SliderWidget;
@@ -28,6 +29,7 @@ class SearchAssets;
 class AssetConfigUI {
 public:
     AssetConfigUI();
+    ~AssetConfigUI();
 
     struct ChangeSummary {
         bool method_changed = false;
@@ -62,6 +64,7 @@ private:
         std::unique_ptr<TextBoxWidget> name_w;
         std::unique_ptr<SliderWidget> chance_w;
         std::unique_ptr<ButtonWidget> del_w;
+        std::unique_ptr<LabelWidget> chance_label;
     };
 
     void rebuild_widgets();
@@ -94,6 +97,7 @@ private:
     std::unique_ptr<DropdownWidget> dd_method_w_;
     std::unique_ptr<DMRangeSlider> s_minmax_;
     std::unique_ptr<RangeSliderWidget> s_minmax_w_;
+    std::unique_ptr<LabelWidget> s_minmax_label_;
 
     // Perimeter
     std::unique_ptr<DMSlider> s_border_;
@@ -106,18 +110,16 @@ private:
     std::unique_ptr<RangeSliderWidget> s_perimeter_offset_x_w_;
     std::unique_ptr<DMRangeSlider> s_perimeter_offset_y_;
     std::unique_ptr<RangeSliderWidget> s_perimeter_offset_y_w_;
+    std::unique_ptr<LabelWidget> s_perimeter_offset_x_label_;
+    std::unique_ptr<LabelWidget> s_perimeter_offset_y_label_;
 
     // Percent (read-only summary)
-    std::unique_ptr<DMTextBox> percent_x_box_;
-    std::unique_ptr<Widget> percent_x_w_;
-    std::unique_ptr<DMTextBox> percent_y_box_;
-    std::unique_ptr<Widget> percent_y_w_;
+    std::unique_ptr<LabelWidget> percent_x_label_;
+    std::unique_ptr<LabelWidget> percent_y_label_;
 
     // Exact offsets (read-only summary)
-    std::unique_ptr<DMTextBox> exact_offset_box_;
-    std::unique_ptr<Widget> exact_offset_w_;
-    std::unique_ptr<DMTextBox> exact_room_box_;
-    std::unique_ptr<Widget> exact_room_w_;
+    std::unique_ptr<LabelWidget> exact_offset_label_;
+    std::unique_ptr<LabelWidget> exact_room_label_;
 
     // Checkboxes
     std::unique_ptr<DMCheckbox> cb_overlap_;
@@ -135,4 +137,7 @@ private:
     std::string baseline_method_;
     int baseline_min_ = 0;
     int baseline_max_ = 0;
+
+    int total_chance() const;
+    void refresh_chance_labels(int total_chance);
 };

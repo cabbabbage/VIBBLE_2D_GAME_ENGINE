@@ -10,39 +10,74 @@
 #include <cstdlib>
 #include <utility>
 
-namespace {
-constexpr int kDefaultScreenW = 1920;
-constexpr int kDefaultScreenH = 1080;
-constexpr const char* kDragHint = "Drag in room view to update.";
-
-class ReadOnlyTextBoxWidget : public Widget {
+class LabelWidget : public Widget {
 public:
-    explicit ReadOnlyTextBoxWidget(DMTextBox* box) : box_(box) {}
+    explicit LabelWidget(std::string text) : text_(std::move(text)) {}
 
-    void set_rect(const SDL_Rect& r) override {
-        cached_rect_ = r;
-        if (box_) box_->set_rect(r);
-    }
+    void set_text(std::string text) { text_ = std::move(text); }
 
-    const SDL_Rect& rect() const override {
-        if (box_) return box_->rect();
-        return cached_rect_;
-    }
+    void set_rect(const SDL_Rect& r) override { rect_ = r; }
 
-    int height_for_width(int w) const override {
-        return box_ ? box_->preferred_height(w) : DMTextBox::height();
+    const SDL_Rect& rect() const override { return rect_; }
+
+    int height_for_width(int /*w*/) const override {
+        const DMLabelStyle& st = DMStyles::Label();
+        int line_height = st.font_size + 4;
+        int lines = 1;
+        for (char c : text_) {
+            if (c == '\n') ++lines;
+        }
+        return std::max(line_height, lines * line_height);
     }
 
     bool handle_event(const SDL_Event& /*e*/) override { return false; }
 
     void render(SDL_Renderer* r) const override {
-        if (box_) box_->render(r);
+        const DMLabelStyle& st = DMStyles::Label();
+        TTF_Font* font = st.open_font();
+        if (!font) return;
+        int base_height = st.font_size + 2;
+        int dummy_w = 0;
+        int dummy_h = 0;
+        if (TTF_SizeUTF8(font, "Ag", &dummy_w, &dummy_h) == 0) {
+            base_height = dummy_h + 2;
+        }
+        size_t start = 0;
+        int line = 0;
+        while (start <= text_.size()) {
+            size_t end = text_.find('\n', start);
+            std::string segment = (end == std::string::npos)
+                                      ? text_.substr(start)
+                                      : text_.substr(start, end - start);
+            if (!segment.empty()) {
+                SDL_Surface* surf = TTF_RenderUTF8_Blended(font, segment.c_str(), st.color);
+                if (surf) {
+                    SDL_Texture* tex = SDL_CreateTextureFromSurface(r, surf);
+                    if (tex) {
+                        SDL_Rect dst{ rect_.x, rect_.y + line * base_height, surf->w, surf->h };
+                        SDL_RenderCopy(r, tex, nullptr, &dst);
+                        SDL_DestroyTexture(tex);
+                    }
+                    SDL_FreeSurface(surf);
+                }
+            }
+            ++line;
+            if (end == std::string::npos) break;
+            start = end + 1;
+        }
+        TTF_CloseFont(font);
     }
 
 private:
-    DMTextBox* box_ = nullptr; // non-owning
-    SDL_Rect cached_rect_{0, 0, 0, 0};
+    SDL_Rect rect_{0, 0, 0, 0};
+    std::string text_;
 };
+
+AssetConfigUI::~AssetConfigUI() = default;
+
+namespace {
+constexpr int kDefaultScreenW = 1920;
+constexpr int kDefaultScreenH = 1080;
 
 int clamp_slider_value(int value, int min_value, int max_value) {
     return std::clamp(value, min_value, max_value);
@@ -148,7 +183,7 @@ std::string format_percent_summary(const nlohmann::json& entry,
     bool has_min = has_value(primary_min) || has_value(legacy_min);
     bool has_max = has_value(primary_max) || has_value(legacy_max);
     if (!has_min && !has_max) {
-        return std::string("Not set\n") + kDragHint;
+        return "Not set";
     }
     auto read_value = [&](const char* primary, const char* legacy) {
         if (primary && entry.contains(primary) && entry[primary].is_number_integer()) {
@@ -169,7 +204,7 @@ std::string format_percent_summary(const nlohmann::json& entry,
     std::string range = (min_val == max_val)
                             ? std::to_string(min_val) + "%"
                             : std::to_string(min_val) + "% - " + std::to_string(max_val) + "%";
-    return range + "\n" + kDragHint;
+    return range;
 }
 
 std::string format_exact_offset_summary(const nlohmann::json& entry) {
@@ -180,9 +215,9 @@ std::string format_exact_offset_summary(const nlohmann::json& entry) {
     int dy = has_dy ? entry["dy"].get<int>()
                     : (entry.contains("exact_dy") && entry["exact_dy"].is_number_integer() ? entry["exact_dy"].get<int>() : 0);
     if (!has_dx && !has_dy) {
-        return std::string("Not set\n") + kDragHint;
+        return "Not set";
     }
-    return "ΔX: " + std::to_string(dx) + "\nΔY: " + std::to_string(dy) + "\n" + kDragHint;
+    return "ΔX: " + std::to_string(dx) + "\nΔY: " + std::to_string(dy);
 }
 
 std::string format_exact_room_summary(const nlohmann::json& entry) {
@@ -398,6 +433,7 @@ void AssetConfigUI::rebuild_widgets() {
 
     s_minmax_.reset();
     s_minmax_w_.reset();
+    s_minmax_label_.reset();
     s_border_.reset();
     s_border_w_.reset();
     s_sector_center_.reset();
@@ -406,21 +442,20 @@ void AssetConfigUI::rebuild_widgets() {
     s_sector_range_w_.reset();
     s_perimeter_offset_x_.reset();
     s_perimeter_offset_x_w_.reset();
+    s_perimeter_offset_x_label_.reset();
     s_perimeter_offset_y_.reset();
     s_perimeter_offset_y_w_.reset();
-    percent_x_box_.reset();
-    percent_x_w_.reset();
-    percent_y_box_.reset();
-    percent_y_w_.reset();
-    exact_offset_box_.reset();
-    exact_offset_w_.reset();
-    exact_room_box_.reset();
-    exact_room_w_.reset();
+    s_perimeter_offset_y_label_.reset();
+    percent_x_label_.reset();
+    percent_y_label_.reset();
+    exact_offset_label_.reset();
+    exact_room_label_.reset();
 
     std::string method = spawn_methods_.empty() ? std::string{} : spawn_methods_[std::clamp(method_, 0, static_cast<int>(spawn_methods_.size() - 1))];
     if (!method_forces_single_quantity(method)) {
         int min_val = std::min(min_number_, max_number_);
         int max_val = std::max(min_number_, max_number_);
+        s_minmax_label_ = std::make_unique<LabelWidget>("Quantity (Min/Max)");
         s_minmax_ = std::make_unique<DMRangeSlider>(-100, 500, min_val, max_val);
         s_minmax_w_ = std::make_unique<RangeSliderWidget>(s_minmax_.get());
     }
@@ -449,24 +484,22 @@ void AssetConfigUI::rebuild_widgets() {
 
         auto [px_min, px_max] = read_range(entry_, "perimeter_x_offset_min", "perimeter_x_offset_max", read_single_value(entry_, "perimeter_x_offset", 0), read_single_value(entry_, "perimeter_x_offset", 0));
         auto [py_min, py_max] = read_range(entry_, "perimeter_y_offset_min", "perimeter_y_offset_max", read_single_value(entry_, "perimeter_y_offset", 0), read_single_value(entry_, "perimeter_y_offset", 0));
+        s_perimeter_offset_x_label_ = std::make_unique<LabelWidget>("Perimeter Offset X");
         s_perimeter_offset_x_ = std::make_unique<DMRangeSlider>(-2000, 2000, px_min, px_max);
         s_perimeter_offset_x_w_ = std::make_unique<RangeSliderWidget>(s_perimeter_offset_x_.get());
+        s_perimeter_offset_y_label_ = std::make_unique<LabelWidget>("Perimeter Offset Y");
         s_perimeter_offset_y_ = std::make_unique<DMRangeSlider>(-2000, 2000, py_min, py_max);
         s_perimeter_offset_y_w_ = std::make_unique<RangeSliderWidget>(s_perimeter_offset_y_.get());
     } else if (method == "Percent") {
-        percent_x_box_ = std::make_unique<DMTextBox>(
-            "Percent X",
-            format_percent_summary(entry_, "p_x_min", "p_x_max", "percent_x_min", "percent_x_max"));
-        percent_x_w_ = std::make_unique<ReadOnlyTextBoxWidget>(percent_x_box_.get());
-        percent_y_box_ = std::make_unique<DMTextBox>(
-            "Percent Y",
-            format_percent_summary(entry_, "p_y_min", "p_y_max", "percent_y_min", "percent_y_max"));
-        percent_y_w_ = std::make_unique<ReadOnlyTextBoxWidget>(percent_y_box_.get());
+        percent_x_label_ = std::make_unique<LabelWidget>(
+            "Percent X: " + format_percent_summary(entry_, "p_x_min", "p_x_max", "percent_x_min", "percent_x_max"));
+        percent_y_label_ = std::make_unique<LabelWidget>(
+            "Percent Y: " + format_percent_summary(entry_, "p_y_min", "p_y_max", "percent_y_min", "percent_y_max"));
     } else if (method == "Exact") {
-        exact_offset_box_ = std::make_unique<DMTextBox>("Exact Offset", format_exact_offset_summary(entry_));
-        exact_offset_w_ = std::make_unique<ReadOnlyTextBoxWidget>(exact_offset_box_.get());
-        exact_room_box_ = std::make_unique<DMTextBox>("Saved Room Size", format_exact_room_summary(entry_));
-        exact_room_w_ = std::make_unique<ReadOnlyTextBoxWidget>(exact_room_box_.get());
+        exact_offset_label_ = std::make_unique<LabelWidget>(
+            std::string("Exact Offset:\n") + format_exact_offset_summary(entry_));
+        exact_room_label_ = std::make_unique<LabelWidget>(
+            std::string("Saved Room Size:\n") + format_exact_room_summary(entry_));
     }
 
     candidates_.clear();
@@ -511,9 +544,8 @@ void AssetConfigUI::rebuild_widgets() {
 
             row.name_box = std::make_unique<DMTextBox>("Candidate", row.name);
             row.name_w = std::make_unique<TextBoxWidget>(row.name_box.get());
-            int slider_max = std::max(100, std::abs(row.chance) + 100);
-            slider_max = std::clamp(slider_max, 100, 2000);
-            row.chance_slider = std::make_unique<DMSlider>("Chance", 0, slider_max, clamp_slider_value(row.chance, 0, slider_max));
+            row.chance_label = std::make_unique<LabelWidget>("Chance (0 / 0)");
+            row.chance_slider = std::make_unique<DMSlider>("", 0, 100, clamp_slider_value(row.chance, 0, 100));
             row.chance_w = std::make_unique<SliderWidget>(row.chance_slider.get());
 
             if (!row.placeholder) {
@@ -538,7 +570,12 @@ void AssetConfigUI::rebuild_rows() {
     if (b_done_w_) header_row.push_back(b_done_w_.get());
     if (!header_row.empty()) rows.push_back(header_row);
 
-    if (s_minmax_w_) rows.push_back({ s_minmax_w_.get() });
+    if (s_minmax_label_ || s_minmax_w_) {
+        DockableCollapsible::Row quantity_row;
+        if (s_minmax_label_) quantity_row.push_back(s_minmax_label_.get());
+        if (s_minmax_w_) quantity_row.push_back(s_minmax_w_.get());
+        if (!quantity_row.empty()) rows.push_back(quantity_row);
+    }
 
     DockableCollapsible::Row toggles;
     if (cb_overlap_w_) toggles.push_back(cb_overlap_w_.get());
@@ -551,35 +588,51 @@ void AssetConfigUI::rebuild_rows() {
     if (s_sector_range_w_) perimeter_row.push_back(s_sector_range_w_.get());
     if (!perimeter_row.empty()) rows.push_back(perimeter_row);
 
-    if (s_perimeter_offset_x_w_) rows.push_back({ s_perimeter_offset_x_w_.get() });
-    if (s_perimeter_offset_y_w_) rows.push_back({ s_perimeter_offset_y_w_.get() });
+    if (s_perimeter_offset_x_label_ || s_perimeter_offset_x_w_) {
+        DockableCollapsible::Row offset_x_row;
+        if (s_perimeter_offset_x_label_) offset_x_row.push_back(s_perimeter_offset_x_label_.get());
+        if (s_perimeter_offset_x_w_) offset_x_row.push_back(s_perimeter_offset_x_w_.get());
+        if (!offset_x_row.empty()) rows.push_back(offset_x_row);
+    }
 
-    if (percent_x_w_ || percent_y_w_) {
+    if (s_perimeter_offset_y_label_ || s_perimeter_offset_y_w_) {
+        DockableCollapsible::Row offset_y_row;
+        if (s_perimeter_offset_y_label_) offset_y_row.push_back(s_perimeter_offset_y_label_.get());
+        if (s_perimeter_offset_y_w_) offset_y_row.push_back(s_perimeter_offset_y_w_.get());
+        if (!offset_y_row.empty()) rows.push_back(offset_y_row);
+    }
+
+    if (percent_x_label_ || percent_y_label_) {
         DockableCollapsible::Row percent_row;
-        if (percent_x_w_) percent_row.push_back(percent_x_w_.get());
-        if (percent_y_w_) percent_row.push_back(percent_y_w_.get());
+        if (percent_x_label_) percent_row.push_back(percent_x_label_.get());
+        if (percent_y_label_) percent_row.push_back(percent_y_label_.get());
         if (!percent_row.empty()) rows.push_back(percent_row);
     }
 
-    if (exact_offset_w_ || exact_room_w_) {
+    if (exact_offset_label_ || exact_room_label_) {
         DockableCollapsible::Row exact_row;
-        if (exact_offset_w_) exact_row.push_back(exact_offset_w_.get());
-        if (exact_room_w_) exact_row.push_back(exact_room_w_.get());
+        if (exact_offset_label_) exact_row.push_back(exact_offset_label_.get());
+        if (exact_room_label_) exact_row.push_back(exact_room_label_.get());
         if (!exact_row.empty()) rows.push_back(exact_row);
     }
 
     if (add_button_w_) rows.push_back({ add_button_w_.get() });
 
     for (auto& row : candidates_) {
-        DockableCollapsible::Row cand_row;
-        if (row.name_w) cand_row.push_back(row.name_w.get());
-        if (row.chance_w) cand_row.push_back(row.chance_w.get());
-        if (row.del_w) cand_row.push_back(row.del_w.get());
-        if (!cand_row.empty()) rows.push_back(cand_row);
+        DockableCollapsible::Row name_row;
+        if (row.name_w) name_row.push_back(row.name_w.get());
+        if (row.del_w) name_row.push_back(row.del_w.get());
+        if (!name_row.empty()) rows.push_back(name_row);
+
+        DockableCollapsible::Row chance_row;
+        if (row.chance_label) chance_row.push_back(row.chance_label.get());
+        if (row.chance_w) chance_row.push_back(row.chance_w.get());
+        if (!chance_row.empty()) rows.push_back(chance_row);
     }
 
     panel_->set_cell_width(200);
     panel_->set_rows(rows);
+    refresh_chance_labels(total_chance());
 }
 
 void AssetConfigUI::add_candidate(const std::string& raw_name, int chance) {
@@ -712,6 +765,10 @@ void AssetConfigUI::sync_json() {
             cand["chance"] = row.chance_slider->value();
         }
     }
+
+    int total = total_chance();
+    entry_["chance_denominator"] = total;
+    refresh_chance_labels(total);
 }
 
 void AssetConfigUI::update(const Input& input) {
@@ -771,4 +828,25 @@ AssetConfigUI::ChangeSummary AssetConfigUI::consume_change_summary() {
     baseline_max_ = max_number_;
     pending_summary_.method = baseline_method_;
     return result;
+}
+
+int AssetConfigUI::total_chance() const {
+    int total = 0;
+    for (const auto& row : candidates_) {
+        if (row.chance_slider) {
+            total += row.chance_slider->value();
+        }
+    }
+    return total;
+}
+
+void AssetConfigUI::refresh_chance_labels(int total_chance) {
+    if (total_chance < 0) total_chance = 0;
+    for (auto& row : candidates_) {
+        if (!row.chance_label) continue;
+        int numerator = row.chance_slider ? row.chance_slider->value() : 0;
+        std::string prefix = row.placeholder ? "Null chance" : "Chance";
+        prefix += " (" + std::to_string(numerator) + " / " + std::to_string(total_chance) + ")";
+        row.chance_label->set_text(std::move(prefix));
+    }
 }
