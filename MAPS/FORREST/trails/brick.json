@@ -1,51 +1,57 @@
 {
-  "assets": [
+  "spawn_groups": [
     {
-      "check_min_spacing": false,
       "check_overlap": false,
       "exact_position": null,
       "inherited": false,
       "max_number": 1,
       "min_number": 1,
-      "name": "Bomb",
       "position": "Random",
       "spawn_id": "spn-201a21be3548",
-      "tag": false
+      "tag": false,
+      "enforce_spacing": false,
+      "candidates": [
+        {
+          "name": "Bomb",
+          "chance": 100
+        }
+      ],
+      "display_name": "Bomb"
+    },
+    {
+      "min_number": 50,
+      "max_number": 100,
+      "position": "Random",
+      "check_overlap": false,
+      "enforce_spacing": false,
+      "candidates": [
+        {
+          "name": "null",
+          "chance": 71
+        },
+        {
+          "name": "light",
+          "tag": true,
+          "chance": 19
+        },
+        {
+          "name": "flowers",
+          "tag": true,
+          "chance": 8
+        },
+        {
+          "name": "candle",
+          "chance": 2
+        }
+      ],
+      "grid_spacing_min": 100,
+      "grid_spacing_max": 100,
+      "jitter_min": 0,
+      "jitter_max": 0,
+      "spawn_id": "spn-3d2aa7649187",
+      "display_name": "batch_brick"
     }
   ],
-  "batch_assets": {
-    "batch_assets": [
-      {
-        "color": "#CCCCCC",
-        "name": "null",
-        "percent": 71,
-        "tag": false
-      },
-      {
-        "color": "#2911cb",
-        "name": "light",
-        "percent": 19,
-        "tag": true
-      },
-      {
-        "color": "#1e4b95",
-        "name": "flowers",
-        "percent": 8,
-        "tag": true
-      },
-      {
-        "color": "#62b3e9",
-        "name": "candle",
-        "percent": 2,
-        "tag": false
-      }
-    ],
-    "grid_spacing_max": 100,
-    "grid_spacing_min": 100,
-    "has_batch_assets": true,
-    "jitter_max": 0,
-    "jitter_min": 0
-  },
   "curvyness": 4,
   "inherits_map_assets": true,
   "max_width": 800,

@@ -9,75 +9,95 @@
   "is_spawn": false,
   "is_boss": false,
   "inherits_map_assets": true,
-  "assets": [
+  "spawn_groups": [
     {
-      "name": "Booze_1",
       "min_number": 0,
       "max_number": 20,
       "position": "Random",
       "exact_position": null,
       "tag": false,
       "check_overlap": false,
-      "check_min_spacing": false
+      "enforce_spacing": false,
+      "spawn_id": "spn-26c939b951f1",
+      "candidates": [
+        {
+          "name": "Booze_1",
+          "chance": 100
+        }
+      ],
+      "display_name": "Booze_1"
     },
     {
-      "name": "Booze_2",
       "min_number": 0,
       "max_number": 20,
       "position": "Random",
       "exact_position": null,
       "tag": false,
       "check_overlap": false,
-      "check_min_spacing": false,
-      "inherited": false
+      "inherited": false,
+      "enforce_spacing": false,
+      "spawn_id": "spn-2986ab1d1671",
+      "candidates": [
+        {
+          "name": "Booze_2",
+          "chance": 100
+        }
+      ],
+      "display_name": "Booze_2"
     },
     {
-      "name": "candle",
       "min_number": 2,
       "max_number": 6,
       "position": "Center",
       "exact_position": null,
       "tag": false,
       "check_overlap": false,
-      "check_min_spacing": false,
-      "inherited": false
+      "inherited": false,
+      "enforce_spacing": false,
+      "spawn_id": "spn-917631945080",
+      "candidates": [
+        {
+          "name": "candle",
+          "chance": 100
+        }
+      ],
+      "display_name": "candle"
     },
     {
-      "name": "Barrel",
       "min_number": -36,
       "max_number": 15,
       "position": "Random",
       "exact_position": null,
       "tag": false,
       "check_overlap": false,
-      "check_min_spacing": false,
-      "inherited": false
+      "inherited": false,
+      "enforce_spacing": false,
+      "spawn_id": "spn-509d0b5b6739",
+      "candidates": [
+        {
+          "name": "Barrel",
+          "chance": 100
+        }
+      ],
+      "display_name": "Barrel"
     },
     {
-      "name": "Box",
       "min_number": -45,
       "max_number": 23,
       "position": "Random",
       "exact_position": null,
       "tag": false,
       "check_overlap": false,
-      "check_min_spacing": false,
-      "inherited": false
+      "inherited": false,
+      "enforce_spacing": false,
+      "spawn_id": "spn-ebb38f93ac8d",
+      "candidates": [
+        {
+          "name": "Box",
+          "chance": 100
+        }
+      ],
+      "display_name": "Box"
     }
-  ],
-  "batch_assets": {
-    "has_batch_assets": false,
-    "grid_spacing_min": 100,
-    "grid_spacing_max": 100,
-    "jitter_min": 0,
-    "jitter_max": 0,
-    "batch_assets": [
-      {
-        "name": "null",
-        "tag": false,
-        "percent": 100,
-        "color": "#CCCCCC"
-      }
-    ]
-  }
+  ]
 }

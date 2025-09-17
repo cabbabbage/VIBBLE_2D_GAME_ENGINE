@@ -1,57 +1,70 @@
 {
-  "assets": [
+  "spawn_groups": [
     {
-      "check_min_spacing": false,
       "check_overlap": false,
       "exact_position": null,
       "inherited": false,
       "max_number": 1,
       "min_number": 1,
-      "name": "candle",
       "position": "Intersection",
       "spawn_id": "spn-400a2bb2d100",
-      "tag": false
+      "tag": false,
+      "enforce_spacing": false,
+      "candidates": [
+        {
+          "name": "candle",
+          "chance": 100
+        }
+      ],
+      "display_name": "candle"
     },
     {
-      "check_min_spacing": false,
       "check_overlap": false,
       "exact_position": null,
       "inherited": false,
       "max_number": 1,
       "min_number": 1,
-      "name": "Bomb",
       "position": "Random",
       "spawn_id": "spn-903f62327b86",
-      "tag": false
+      "tag": false,
+      "enforce_spacing": false,
+      "candidates": [
+        {
+          "name": "Bomb",
+          "chance": 100
+        }
+      ],
+      "display_name": "Bomb"
+    },
+    {
+      "min_number": 50,
+      "max_number": 100,
+      "position": "Random",
+      "check_overlap": false,
+      "enforce_spacing": false,
+      "candidates": [
+        {
+          "name": "null",
+          "chance": 82
+        },
+        {
+          "name": "light",
+          "tag": true,
+          "chance": 15
+        },
+        {
+          "name": "flower_1",
+          "chance": 3
+        }
+      ],
+      "grid_spacing_min": 100,
+      "grid_spacing_max": 100,
+      "jitter_min": 0,
+      "jitter_max": 0,
+      "spawn_id": "spn-5db9c322ef41",
+      "display_name": "batch_basic"
     }
   ],
-  "batch_assets": {
-    "batch_assets": [
-      {
-        "color": "#CCCCCC",
-        "name": "null",
-        "percent": 82,
-        "tag": false
-      },
-      {
-        "color": "#60d4f0",
-        "name": "light",
-        "percent": 15,
-        "tag": true
-      },
-      {
-        "color": "#c327e3",
-        "name": "flower_1",
-        "percent": 3,
-        "tag": false
-      }
-    ],
-    "grid_spacing_max": 100,
-    "grid_spacing_min": 100,
-    "has_batch_assets": true,
-    "jitter_max": 0,
-    "jitter_min": 0
-  },
   "curvyness": 4,
   "inherits_map_assets": true,
   "max_width": 800,

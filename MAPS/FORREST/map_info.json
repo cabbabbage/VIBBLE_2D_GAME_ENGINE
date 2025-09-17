@@ -26,19 +26,19 @@
       "max_rooms": 3,
       "rooms": [
         {
-          "name": "manmade",
+          "name": "bar",
           "min_instances": 0,
           "max_instances": 1,
           "required_children": []
         },
         {
-          "name": "Grave_Yard",
+          "name": "bar",
           "min_instances": 0,
           "max_instances": 1,
           "required_children": []
         },
         {
-          "name": "flower",
+          "name": "bar",
           "min_instances": 0,
           "max_instances": 1,
           "required_children": []
@@ -53,19 +53,19 @@
       "max_rooms": 7,
       "rooms": [
         {
-          "name": "library",
+          "name": "bar",
           "min_instances": 0,
           "max_instances": 4,
           "required_children": []
         },
         {
-          "name": "KEY",
+          "name": "bar",
           "min_instances": 0,
           "max_instances": 4,
           "required_children": []
         },
         {
-          "name": "fountain",
+          "name": "bar",
           "min_instances": 0,
           "max_instances": 4,
           "required_children": []

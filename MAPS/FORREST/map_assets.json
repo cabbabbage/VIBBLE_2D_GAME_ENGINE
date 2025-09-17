@@ -1,72 +1,60 @@
 {
-  "assets": [],
-  "batch_assets": {
-    "has_batch_assets": true,
-    "grid_spacing_min": 110,
-    "grid_spacing_max": 110,
-    "jitter_min": 3,
-    "jitter_max": 3,
-    "batch_assets": [
-      {
-        "name": "Grass_FPS_2",
-        "tag": false,
-        "percent": 37,
-        "color": "#da2582"
-      },
-      {
-        "name": "null",
-        "tag": false,
-        "percent": 10,
-        "color": "#a49367"
-      },
-      {
-        "name": "Grass_1_FPS_2",
-        "tag": false,
-        "percent": 38,
-        "color": "#6193a3"
-      },
-      {
-        "name": "Small_Rock",
-        "tag": false,
-        "percent": 2,
-        "color": "#f0431a"
-      },
-      {
-        "name": "pretty",
-        "tag": true,
-        "percent": 1,
-        "color": "#6ce51b"
-      },
-      {
-        "name": "fog",
-        "tag": false,
-        "percent": 8,
-        "color": "#439315"
-      },
-      {
-        "name": "Bush_FPS_2",
-        "tag": false,
-        "percent": 1,
-        "color": "#0ca555"
-      },
-      {
-        "name": "Bush_1_FPS_2",
-        "tag": false,
-        "percent": 1,
-        "color": "#8d2f1d"
-      },
-      {
-        "name": "Davey",
-        "tag": false,
-        "percent": 1,
-        "color": "#241907"
-      },
-      {
-        "name": "Frog",
-        "tag": false,
-        "percent": 1,
-        "color": "#3dea80"
-      }
-    ]
-  }
+  "spawn_groups": [
+    {
+      "min_number": 50,
+      "max_number": 100,
+      "position": "Random",
+      "check_overlap": false,
+      "enforce_spacing": false,
+      "candidates": [
+        {
+          "name": "Grass_FPS_2",
+          "chance": 37
+        },
+        {
+          "name": "null",
+          "chance": 10
+        },
+        {
+          "name": "Grass_1_FPS_2",
+          "chance": 38
+        },
+        {
+          "name": "Small_Rock",
+          "chance": 2
+        },
+        {
+          "name": "pretty",
+          "tag": true,
+          "chance": 1
+        },
+        {
+          "name": "fog",
+          "chance": 8
+        },
+        {
+          "name": "Bush_FPS_2",
+          "chance": 1
+        },
+        {
+          "name": "Bush_1_FPS_2",
+          "chance": 1
+        },
+        {
+          "name": "Davey",
+          "chance": 1
+        },
+        {
+          "name": "Frog",
+          "chance": 1
+        }
+      ],
+      "grid_spacing_min": 110,
+      "grid_spacing_max": 110,
+      "jitter_min": 3,
+      "jitter_max": 3,
+      "spawn_id": "spn-5200d51e3675",
+      "display_name": "batch_map_assets"
+    }
+  ]
 }
