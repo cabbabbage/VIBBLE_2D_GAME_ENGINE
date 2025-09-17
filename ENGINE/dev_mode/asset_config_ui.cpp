@@ -1,123 +1,531 @@
 #include "asset_config_ui.hpp"
+
 #include "DockableCollapsible.hpp"
 #include "dm_styles.hpp"
-#include "utils/input.hpp"
 #include "search_assets.hpp"
+#include "utils/input.hpp"
+#include "widgets.hpp"
+
+#include <algorithm>
+#include <cstdlib>
+#include <utility>
+
+namespace {
+constexpr int kDefaultScreenW = 1920;
+constexpr int kDefaultScreenH = 1080;
+constexpr const char* kDragHint = "Drag in room view to update.";
+
+class ReadOnlyTextBoxWidget : public Widget {
+public:
+    explicit ReadOnlyTextBoxWidget(DMTextBox* box) : box_(box) {}
+
+    void set_rect(const SDL_Rect& r) override {
+        cached_rect_ = r;
+        if (box_) box_->set_rect(r);
+    }
+
+    const SDL_Rect& rect() const override {
+        if (box_) return box_->rect();
+        return cached_rect_;
+    }
+
+    int height_for_width(int w) const override {
+        return box_ ? box_->preferred_height(w) : DMTextBox::height();
+    }
+
+    bool handle_event(const SDL_Event& /*e*/) override { return false; }
+
+    void render(SDL_Renderer* r) const override {
+        if (box_) box_->render(r);
+    }
+
+private:
+    DMTextBox* box_ = nullptr; // non-owning
+    SDL_Rect cached_rect_{0, 0, 0, 0};
+};
+
+int clamp_slider_value(int value, int min_value, int max_value) {
+    return std::clamp(value, min_value, max_value);
+}
+
+std::pair<int, int> read_range(const nlohmann::json& src,
+                               const std::string& min_key,
+                               const std::string& max_key,
+                               int default_min,
+                               int default_max) {
+    int vmin = default_min;
+    int vmax = default_max;
+    if (src.contains(min_key) && src[min_key].is_number_integer()) {
+        vmin = src[min_key].get<int>();
+    }
+    if (src.contains(max_key) && src[max_key].is_number_integer()) {
+        vmax = src[max_key].get<int>();
+    }
+    if (!src.contains(min_key) && src.contains(max_key)) {
+        vmin = vmax;
+    }
+    if (!src.contains(max_key) && src.contains(min_key)) {
+        vmax = vmin;
+    }
+    return {vmin, vmax};
+}
+
+int read_single_value(const nlohmann::json& src,
+                      const std::string& key,
+                      int fallback) {
+    if (src.contains(key) && src[key].is_number_integer()) {
+        return src[key].get<int>();
+    }
+    return fallback;
+}
+
+std::string resolve_display_name(const nlohmann::json& entry) {
+    if (entry.contains("display_name") && entry["display_name"].is_string()) {
+        return entry["display_name"].get<std::string>();
+    }
+    if (entry.contains("name") && entry["name"].is_string()) {
+        return entry["name"].get<std::string>();
+    }
+    if (entry.contains("asset") && entry["asset"].is_string()) {
+        return entry["asset"].get<std::string>();
+    }
+    return std::string{};
+}
+
+bool candidate_represents_tag(const nlohmann::json& entry, std::string& name_out) {
+    if (entry.contains("name") && entry["name"].is_string()) {
+        const std::string value = entry["name"].get<std::string>();
+        if (!value.empty() && value.front() == '#') {
+            name_out = value;
+            return true;
+        }
+    }
+    if (entry.contains("tag")) {
+        const auto& tag = entry["tag"];
+        if (tag.is_boolean()) {
+            if (tag.get<bool>()) {
+                if (name_out.empty()) {
+                    name_out = resolve_display_name(entry);
+                }
+                return true;
+            }
+        } else if (tag.is_string()) {
+            name_out = tag.get<std::string>();
+            return true;
+        }
+    }
+    if (entry.contains("tag_name") && entry["tag_name"].is_string()) {
+        name_out = entry["tag_name"].get<std::string>();
+        return true;
+    }
+    return false;
+}
+
+int read_candidate_weight(const nlohmann::json& entry, int fallback = 100) {
+    if (entry.contains("chance") && entry["chance"].is_number_integer()) {
+        return entry["chance"].get<int>();
+    }
+    if (entry.contains("percent") && entry["percent"].is_number_integer()) {
+        return entry["percent"].get<int>();
+    }
+    if (entry.contains("weight") && entry["weight"].is_number_integer()) {
+        return entry["weight"].get<int>();
+    }
+    if (entry.contains("probability") && entry["probability"].is_number_integer()) {
+        return entry["probability"].get<int>();
+    }
+    return fallback;
+}
+
+std::string format_percent_summary(const nlohmann::json& entry,
+                                   const char* primary_min,
+                                   const char* primary_max,
+                                   const char* legacy_min,
+                                   const char* legacy_max) {
+    auto has_value = [&](const char* key) {
+        return key && entry.contains(key) && entry[key].is_number_integer();
+    };
+    bool has_min = has_value(primary_min) || has_value(legacy_min);
+    bool has_max = has_value(primary_max) || has_value(legacy_max);
+    if (!has_min && !has_max) {
+        return std::string("Not set\n") + kDragHint;
+    }
+    auto read_value = [&](const char* primary, const char* legacy) {
+        if (primary && entry.contains(primary) && entry[primary].is_number_integer()) {
+            return entry[primary].get<int>();
+        }
+        if (legacy && entry.contains(legacy) && entry[legacy].is_number_integer()) {
+            return entry[legacy].get<int>();
+        }
+        return 0;
+    };
+    int min_val = has_value(primary_min) || has_value(legacy_min)
+                      ? read_value(primary_min, legacy_min)
+                      : read_value(primary_max, legacy_max);
+    int max_val = has_value(primary_max) || has_value(legacy_max)
+                      ? read_value(primary_max, legacy_max)
+                      : min_val;
+    if (min_val > max_val) std::swap(min_val, max_val);
+    std::string range = (min_val == max_val)
+                            ? std::to_string(min_val) + "%"
+                            : std::to_string(min_val) + "% - " + std::to_string(max_val) + "%";
+    return range + "\n" + kDragHint;
+}
+
+std::string format_exact_offset_summary(const nlohmann::json& entry) {
+    bool has_dx = entry.contains("dx") && entry["dx"].is_number_integer();
+    bool has_dy = entry.contains("dy") && entry["dy"].is_number_integer();
+    int dx = has_dx ? entry["dx"].get<int>()
+                    : (entry.contains("exact_dx") && entry["exact_dx"].is_number_integer() ? entry["exact_dx"].get<int>() : 0);
+    int dy = has_dy ? entry["dy"].get<int>()
+                    : (entry.contains("exact_dy") && entry["exact_dy"].is_number_integer() ? entry["exact_dy"].get<int>() : 0);
+    if (!has_dx && !has_dy) {
+        return std::string("Not set\n") + kDragHint;
+    }
+    return "ΔX: " + std::to_string(dx) + "\nΔY: " + std::to_string(dy) + "\n" + kDragHint;
+}
+
+std::string format_exact_room_summary(const nlohmann::json& entry) {
+    bool has_w = entry.contains("origional_width") && entry["origional_width"].is_number_integer();
+    bool has_h = entry.contains("origional_height") && entry["origional_height"].is_number_integer();
+    if (!has_w && entry.contains("exact_origin_width") && entry["exact_origin_width"].is_number_integer()) {
+        has_w = true;
+    }
+    if (!has_h && entry.contains("exact_origin_height") && entry["exact_origin_height"].is_number_integer()) {
+        has_h = true;
+    }
+    if (!has_w && !has_h) {
+        return "Not recorded\nDrag to capture current room size.";
+    }
+    int w = entry.contains("origional_width") && entry["origional_width"].is_number_integer()
+                ? entry["origional_width"].get<int>()
+                : (entry.contains("exact_origin_width") && entry["exact_origin_width"].is_number_integer()
+                       ? entry["exact_origin_width"].get<int>()
+                       : 0);
+    int h = entry.contains("origional_height") && entry["origional_height"].is_number_integer()
+                ? entry["origional_height"].get<int>()
+                : (entry.contains("exact_origin_height") && entry["exact_origin_height"].is_number_integer()
+                       ? entry["exact_origin_height"].get<int>()
+                       : 0);
+    return "Width: " + std::to_string(w) + "\nHeight: " + std::to_string(h) + "\nCaptured when adjusting exact spawn.";
+}
+}
 
 AssetConfigUI::AssetConfigUI() {
-    // Allowed spawn methods
-    spawn_methods_ = {"Random","Center","Perimeter","Exact","Percent"};
-
-    // Include "Exact Position" to match the runtime spawn options used by the
-    // engine.  Without this, assets with that method would default to "Random"
-    // when opened in the UI, leading to inconsistent behaviour and potential
-    // crashes when editing.
-    spawn_methods_ = {"Random","Center","Perimeter","Exact","Percent"};
+    spawn_methods_ = {"Random", "Center", "Perimeter", "Exact", "Percent", "Entrance", "Exit"};
     panel_ = std::make_unique<DockableCollapsible>("Asset", true, 0, 0);
     panel_->set_expanded(true);
     panel_->set_visible(false);
 
-    b_done_ = std::make_unique<DMButton>("Done", &DMStyles::ListButton(), 80, DMButton::height());
+    b_done_ = std::make_unique<DMButton>("Done", &DMStyles::ListButton(), 96, DMButton::height());
     b_done_w_ = std::make_unique<ButtonWidget>(b_done_.get(), [this]() { close(); });
 
     add_button_ = std::make_unique<DMButton>("Add Candidate...", &DMStyles::CreateButton(), 180, DMButton::height());
     add_button_w_ = std::make_unique<ButtonWidget>(add_button_.get(), [this]() {
-        // Hook into SearchAssets; for now just stub
-        add_candidate("NewAsset", 100);
+        ensure_search();
+        if (!search_) return;
+        if (panel_) {
+            const SDL_Rect& r = panel_->rect();
+            search_->set_position(r.x + r.w + 16, r.y);
+        }
+        if (search_->visible()) {
+            search_->close();
+        } else {
+            search_->open([this](const std::string& value) {
+                add_candidate(value, 100);
+            });
+        }
     });
+
+    ensure_search();
+    pending_summary_.method = spawn_methods_.empty() ? std::string{} : spawn_methods_.front();
 }
 
 bool AssetConfigUI::method_forces_single_quantity(const std::string& method) const {
     return method == "Exact" || method == "Percent";
 }
 
-void AssetConfigUI::set_position(int x, int y) {
-    if (panel_) panel_->set_position(x, y);
+void AssetConfigUI::ensure_search() {
+    if (!search_) {
+        search_ = std::make_unique<SearchAssets>();
+    }
 }
 
-void AssetConfigUI::load(const nlohmann::json& j) {
-    spawn_id_ = j.value("spawn_id", std::string{});
-    entry_ = j;
+void AssetConfigUI::set_position(int x, int y) {
+    if (panel_) panel_->set_position(x, y);
+    if (search_ && search_->visible()) {
+        const SDL_Rect& r = panel_ ? panel_->rect() : SDL_Rect{x, y, 0, 0};
+        search_->set_position(r.x + r.w + 16, r.y);
+    }
+}
 
-    // Ensure candidates
+void AssetConfigUI::handle_method_change() {
+    if (!dd_method_) return;
+    int selected = dd_method_->selected();
+    if (selected < 0 || selected >= static_cast<int>(spawn_methods_.size())) {
+        selected = 0;
+    }
+    if (selected != method_) {
+        method_ = selected;
+        rebuild_widgets();
+        rebuild_rows();
+    }
+}
+
+void AssetConfigUI::load(const nlohmann::json& data) {
+    entry_ = data.is_object() ? data : nlohmann::json::object();
+    spawn_id_ = entry_.value("spawn_id", std::string{});
+
+    std::string method = entry_.value("position", spawn_methods_.front());
+    if (method == "Exact Position") {
+        method = "Exact";
+    }
+    auto it = std::find(spawn_methods_.begin(), spawn_methods_.end(), method);
+    if (it == spawn_methods_.end()) {
+        spawn_methods_.push_back(method);
+        method_ = static_cast<int>(spawn_methods_.size() - 1);
+    } else {
+        method_ = static_cast<int>(std::distance(spawn_methods_.begin(), it));
+    }
+
+    min_number_ = entry_.value("min_number", 1);
+    max_number_ = entry_.value("max_number", std::max(1, min_number_));
+    overlap_ = entry_.value("check_overlap", false);
+    spacing_ = entry_.value("enforce_spacing", entry_.value("check_min_spacing", false));
+
     if (!entry_.contains("candidates") || !entry_["candidates"].is_array()) {
         entry_["candidates"] = nlohmann::json::array();
     }
-    bool has_null = false;
-    for (auto& c : entry_["candidates"]) {
-        if (c["name"].is_null()) { has_null = true; break; }
+
+    auto& candidates = entry_["candidates"];
+    if (candidates.is_array()) {
+        bool has_null = false;
+        nlohmann::json::size_type null_index = 0;
+        for (nlohmann::json::size_type idx = 0; idx < candidates.size(); ++idx) {
+            const auto& cand = candidates[idx];
+            bool is_null_candidate = cand.is_null();
+            if (!is_null_candidate && cand.is_object()) {
+                std::string name = cand.value("name", cand.value("asset", std::string{}));
+                if (name == "null") is_null_candidate = true;
+            } else if (!is_null_candidate && cand.is_string()) {
+                is_null_candidate = cand.get<std::string>() == "null";
+            }
+            if (is_null_candidate) {
+                has_null = true;
+                null_index = idx;
+                break;
+            }
+        }
+        if (!has_null) {
+            nlohmann::json null_entry;
+            null_entry["name"] = "null";
+            null_entry["chance"] = 0;
+            candidates.insert(candidates.begin(), std::move(null_entry));
+        } else if (null_index != 0 && null_index < candidates.size()) {
+            auto null_entry = candidates[null_index];
+            candidates.erase(candidates.begin() + static_cast<nlohmann::json::difference_type>(null_index));
+            candidates.insert(candidates.begin(), std::move(null_entry));
+        }
     }
-    if (!has_null) {
-        entry_["candidates"].push_back({{"name", nullptr}, {"chance", 0}});
+
+    if (panel_) {
+        std::string title = spawn_id_;
+        if (title.empty()) {
+            if (entry_.contains("display_name") && entry_["display_name"].is_string()) {
+                title = entry_["display_name"].get<std::string>();
+            } else if (entry_.contains("name") && entry_["name"].is_string()) {
+                title = entry_["name"].get<std::string>();
+            }
+        }
+        if (title.empty()) {
+            const auto& arr = entry_["candidates"];
+            if (arr.is_array()) {
+                for (const auto& cand : arr) {
+                    std::string name;
+                    if (cand.is_object()) {
+                        name = cand.value("display_name", cand.value("label", std::string{}));
+                        if (name.empty()) name = cand.value("name", cand.value("asset", std::string{}));
+                    } else if (cand.is_string()) {
+                        name = cand.get<std::string>();
+                    }
+                    if (name == "null") continue;
+                    if (!name.empty()) {
+                        title = name;
+                        break;
+                    }
+                }
+            }
+        }
+        if (title.empty()) title = "Asset";
+        panel_->set_title(title);
     }
 
-    // Spawn method
-    method_ = 0;
-    std::string m = j.value("position", spawn_methods_.front());
-    for (size_t i=0; i<spawn_methods_.size(); ++i)
-        if (spawn_methods_[i]==m) method_ = int(i);
-
-    min_number_ = j.value("min_number", 1);
-    max_number_ = j.value("max_number", 1);
-    inherited_  = j.value("inherited", false);
-    overlap_    = j.value("check_overlap", false);
-    spacing_    = j.value("check_min_spacing", false);
-    tag_        = j.value("tag", false);
-    ep_x_min_   = j.value("ep_x_min", 50);
-    ep_x_max_   = j.value("ep_x_max", 50);
-    ep_y_min_   = j.value("ep_y_min", 50);
-    ep_y_max_   = j.value("ep_y_max", 50);
-
-    if (panel_) panel_->set_title(spawn_id_);
+    baseline_method_ = spawn_methods_.empty() ? std::string{} : spawn_methods_[method_];
+    baseline_min_ = min_number_;
+    baseline_max_ = max_number_;
+    pending_summary_ = {};
+    pending_summary_.method = baseline_method_;
 
     rebuild_widgets();
     rebuild_rows();
 }
 
 void AssetConfigUI::open_panel() {
-    if (panel_) panel_->set_visible(true);
+    if (!panel_) return;
+    panel_->set_visible(true);
+    panel_->set_expanded(true);
+    Input dummy;
+    panel_->update(dummy, kDefaultScreenW, kDefaultScreenH);
 }
 
 void AssetConfigUI::close() {
     if (panel_) panel_->set_visible(false);
+    if (search_) search_->close();
 }
 
-bool AssetConfigUI::visible() const { return panel_ && panel_->is_visible(); }
+bool AssetConfigUI::visible() const {
+    return (panel_ && panel_->is_visible()) || (search_ && search_->visible());
+}
 
 void AssetConfigUI::rebuild_widgets() {
     dd_method_ = std::make_unique<DMDropdown>("Method", spawn_methods_, method_);
     dd_method_w_ = std::make_unique<DropdownWidget>(dd_method_.get());
 
+    cb_overlap_ = std::make_unique<DMCheckbox>("Check Overlap", overlap_);
+    cb_overlap_w_ = std::make_unique<CheckboxWidget>(cb_overlap_.get());
+    cb_spacing_ = std::make_unique<DMCheckbox>("Check Min Spacing", spacing_);
+    cb_spacing_w_ = std::make_unique<CheckboxWidget>(cb_spacing_.get());
+
     s_minmax_.reset();
     s_minmax_w_.reset();
-    s_border_.reset(); s_border_w_.reset();
-    s_sector_center_.reset(); s_sector_center_w_.reset();
-    s_sector_range_.reset(); s_sector_range_w_.reset();
-    s_percent_x_.reset(); s_percent_x_w_.reset();
-    s_percent_y_.reset(); s_percent_y_w_.reset();
+    s_border_.reset();
+    s_border_w_.reset();
+    s_sector_center_.reset();
+    s_sector_center_w_.reset();
+    s_sector_range_.reset();
+    s_sector_range_w_.reset();
+    s_perimeter_offset_x_.reset();
+    s_perimeter_offset_x_w_.reset();
+    s_perimeter_offset_y_.reset();
+    s_perimeter_offset_y_w_.reset();
+    percent_x_box_.reset();
+    percent_x_w_.reset();
+    percent_y_box_.reset();
+    percent_y_w_.reset();
+    exact_offset_box_.reset();
+    exact_offset_w_.reset();
+    exact_room_box_.reset();
+    exact_room_w_.reset();
 
-    const std::string& m = spawn_methods_[method_];
-    if (!method_forces_single_quantity(m)) {
-        s_minmax_ = std::make_unique<DMRangeSlider>(0, 50, min_number_, max_number_);
+    std::string method = spawn_methods_.empty() ? std::string{} : spawn_methods_[std::clamp(method_, 0, static_cast<int>(spawn_methods_.size() - 1))];
+    if (!method_forces_single_quantity(method)) {
+        int min_val = std::min(min_number_, max_number_);
+        int max_val = std::max(min_number_, max_number_);
+        s_minmax_ = std::make_unique<DMRangeSlider>(-100, 500, min_val, max_val);
         s_minmax_w_ = std::make_unique<RangeSliderWidget>(s_minmax_.get());
     }
-    if (m == "Perimeter") {
-        s_border_ = std::make_unique<DMSlider>("Border%", 0, 100, entry_.value("border_shift", 0));
-        s_range_ = std::make_unique<DMRangeSlider>(0, 100, min_, max_);
-        s_range_w_ = std::make_unique<RangeSliderWidget>(s_range_.get());
-    }
-    if (m == "Perimeter") {
-        s_border_ = std::make_unique<DMSlider>("Border%", 0, 100, border_);
+
+    if (method == "Perimeter") {
+        int border = 0;
+        if (entry_.contains("percentage_shift_from_center") && entry_["percentage_shift_from_center"].is_number_integer()) {
+            border = entry_["percentage_shift_from_center"].get<int>();
+        } else {
+            border = clamp_slider_value(
+                read_single_value(entry_, "border_shift",
+                                   read_single_value(entry_, "border_shift_min",
+                                                     read_single_value(entry_, "border_shift_max", 0))),
+                0, 100);
+        }
+        s_border_ = std::make_unique<DMSlider>("Border Shift (%)", 0, 100, border);
         s_border_w_ = std::make_unique<SliderWidget>(s_border_.get());
-        s_sector_center_ = std::make_unique<DMSlider>("SectorC", 0, 359, entry_.value("sector_center", 0));
+
+        int sector_center = clamp_slider_value(read_single_value(entry_, "sector_center", read_single_value(entry_, "sector_center_min", read_single_value(entry_, "sector_center_max", 0))), 0, 359);
+        s_sector_center_ = std::make_unique<DMSlider>("Sector Center", 0, 359, sector_center);
         s_sector_center_w_ = std::make_unique<SliderWidget>(s_sector_center_.get());
-        s_sector_range_ = std::make_unique<DMSlider>("SectorR", 0, 360, entry_.value("sector_range", 360));
+
+        int sector_range = clamp_slider_value(read_single_value(entry_, "sector_range", read_single_value(entry_, "sector_range_min", read_single_value(entry_, "sector_range_max", 360))), 0, 360);
+        s_sector_range_ = std::make_unique<DMSlider>("Sector Range", 0, 360, sector_range);
         s_sector_range_w_ = std::make_unique<SliderWidget>(s_sector_range_.get());
-    } else if (m == "Percent") {
-        s_percent_x_ = std::make_unique<DMRangeSlider>(-100, 100, ep_x_min_, ep_x_max_);
-        s_percent_x_w_ = std::make_unique<RangeSliderWidget>(s_percent_x_.get());
-        s_percent_y_ = std::make_unique<DMRangeSlider>(-100, 100, ep_y_min_, ep_y_max_);
-        s_percent_y_w_ = std::make_unique<RangeSliderWidget>(s_percent_y_.get());
+
+        auto [px_min, px_max] = read_range(entry_, "perimeter_x_offset_min", "perimeter_x_offset_max", read_single_value(entry_, "perimeter_x_offset", 0), read_single_value(entry_, "perimeter_x_offset", 0));
+        auto [py_min, py_max] = read_range(entry_, "perimeter_y_offset_min", "perimeter_y_offset_max", read_single_value(entry_, "perimeter_y_offset", 0), read_single_value(entry_, "perimeter_y_offset", 0));
+        s_perimeter_offset_x_ = std::make_unique<DMRangeSlider>(-2000, 2000, px_min, px_max);
+        s_perimeter_offset_x_w_ = std::make_unique<RangeSliderWidget>(s_perimeter_offset_x_.get());
+        s_perimeter_offset_y_ = std::make_unique<DMRangeSlider>(-2000, 2000, py_min, py_max);
+        s_perimeter_offset_y_w_ = std::make_unique<RangeSliderWidget>(s_perimeter_offset_y_.get());
+    } else if (method == "Percent") {
+        percent_x_box_ = std::make_unique<DMTextBox>(
+            "Percent X",
+            format_percent_summary(entry_, "p_x_min", "p_x_max", "percent_x_min", "percent_x_max"));
+        percent_x_w_ = std::make_unique<ReadOnlyTextBoxWidget>(percent_x_box_.get());
+        percent_y_box_ = std::make_unique<DMTextBox>(
+            "Percent Y",
+            format_percent_summary(entry_, "p_y_min", "p_y_max", "percent_y_min", "percent_y_max"));
+        percent_y_w_ = std::make_unique<ReadOnlyTextBoxWidget>(percent_y_box_.get());
+    } else if (method == "Exact") {
+        exact_offset_box_ = std::make_unique<DMTextBox>("Exact Offset", format_exact_offset_summary(entry_));
+        exact_offset_w_ = std::make_unique<ReadOnlyTextBoxWidget>(exact_offset_box_.get());
+        exact_room_box_ = std::make_unique<DMTextBox>("Saved Room Size", format_exact_room_summary(entry_));
+        exact_room_w_ = std::make_unique<ReadOnlyTextBoxWidget>(exact_room_box_.get());
+    }
+
+    candidates_.clear();
+    auto& arr = entry_["candidates"];
+    if (arr.is_array()) {
+        for (nlohmann::json::size_type idx = 0; idx < arr.size(); ++idx) {
+            const auto& cand_json = arr[idx];
+            CandidateRow row;
+            row.index = static_cast<size_t>(idx);
+            bool has_explicit_weight = false;
+
+            if (cand_json.is_null()) {
+                row.placeholder = true;
+                row.name = "null";
+                row.chance = 0;
+            } else if (cand_json.is_object()) {
+                if ((cand_json.contains("chance") && cand_json["chance"].is_number_integer()) ||
+                    (cand_json.contains("percent") && cand_json["percent"].is_number_integer()) ||
+                    (cand_json.contains("weight") && cand_json["weight"].is_number_integer()) ||
+                    (cand_json.contains("probability") && cand_json["probability"].is_number_integer())) {
+                    has_explicit_weight = true;
+                }
+                std::string name = resolve_display_name(cand_json);
+                bool is_tag = candidate_represents_tag(cand_json, name);
+                if (name.empty()) name = "null";
+                row.name = is_tag ? (name.front() == '#' ? name : "#" + name) : name;
+                row.chance = read_candidate_weight(cand_json);
+            } else if (cand_json.is_string()) {
+                row.name = cand_json.get<std::string>();
+                row.chance = 100;
+            } else {
+                row.name = "null";
+                row.chance = 0;
+            }
+
+            if (row.name == "null") {
+                row.placeholder = true;
+                if (!has_explicit_weight) {
+                    row.chance = 0;
+                }
+            }
+
+            row.name_box = std::make_unique<DMTextBox>("Candidate", row.name);
+            row.name_w = std::make_unique<TextBoxWidget>(row.name_box.get());
+            int slider_max = std::max(100, std::abs(row.chance) + 100);
+            slider_max = std::clamp(slider_max, 100, 2000);
+            row.chance_slider = std::make_unique<DMSlider>("Chance", 0, slider_max, clamp_slider_value(row.chance, 0, slider_max));
+            row.chance_w = std::make_unique<SliderWidget>(row.chance_slider.get());
+
+            if (!row.placeholder) {
+                row.del_button = std::make_unique<DMButton>("X", &DMStyles::DeleteButton(), 40, DMButton::height());
+                size_t remove_index = row.index;
+                row.del_w = std::make_unique<ButtonWidget>(row.del_button.get(), [this, remove_index]() {
+                    remove_candidate(remove_index);
+                });
+            }
+
+            candidates_.push_back(std::move(row));
+        }
     }
 }
 
@@ -125,135 +533,242 @@ void AssetConfigUI::rebuild_rows() {
     if (!panel_) return;
     DockableCollapsible::Rows rows;
 
-    rows.push_back({ dd_method_w_.get(), b_done_w_.get() });
+    DockableCollapsible::Row header_row;
+    if (dd_method_w_) header_row.push_back(dd_method_w_.get());
+    if (b_done_w_) header_row.push_back(b_done_w_.get());
+    if (!header_row.empty()) rows.push_back(header_row);
 
-    // Candidate section
-    rows.push_back({ add_button_w_.get() });
-    candidates_.clear();
-    for (auto& c : entry_["candidates"]) {
-        CandidateRow row;
-        row.name = c["name"].is_null() ? "null" : c["name"].get<std::string>();
-        row.chance = c.value("chance", 0);
-
-        row.name_box = std::make_unique<DMTextBox>("Asset", row.name);
-        row.chance_slider = std::make_unique<DMSlider>("Chance", 0, 100, row.chance);
-        row.name_w = std::make_unique<TextBoxWidget>(row.name_box.get());
-        row.chance_w = std::make_unique<SliderWidget>(row.chance_slider.get());
-
-        if (!c["name"].is_null()) {
-            row.del_button = std::make_unique<DMButton>("X", &DMStyles::DeleteButton(), 40, DMButton::height());
-            row.del_w = std::make_unique<ButtonWidget>(row.del_button.get(), [this, nm=row.name]() {
-                remove_candidate(nm);
-            });
-            rows.push_back({ row.name_w.get(), row.chance_w.get(), row.del_w.get() });
-        } else {
-            rows.push_back({ row.name_w.get(), row.chance_w.get() });
-        }
-        candidates_.push_back(std::move(row));
-    }
-
-    // Other settings
     if (s_minmax_w_) rows.push_back({ s_minmax_w_.get() });
-    rows.push_back({ cb_inherited_w_.get(), cb_overlap_w_.get(), cb_spacing_w_.get(), cb_tag_w_.get() });
-    if (s_border_w_) rows.push_back({ s_border_w_.get(), s_sector_center_w_.get(), s_sector_range_w_.get() });
-    if (s_percent_x_w_) rows.push_back({ s_percent_x_w_.get() });
-    if (s_percent_y_w_) rows.push_back({ s_percent_y_w_.get() });
 
-    if (s_range_w_) rows.push_back({ s_range_w_.get() });
-    const std::string& m = spawn_methods_[method_];
-    if (m == "Perimeter") {
-        rows.push_back({ s_border_w_.get(), s_sector_center_w_.get(), s_sector_range_w_.get() });
-    } else if (m == "Percent") {
-        rows.push_back({ s_percent_x_w_.get() });
-        rows.push_back({ s_percent_y_w_.get() });
+    DockableCollapsible::Row toggles;
+    if (cb_overlap_w_) toggles.push_back(cb_overlap_w_.get());
+    if (cb_spacing_w_) toggles.push_back(cb_spacing_w_.get());
+    if (!toggles.empty()) rows.push_back(toggles);
+
+    DockableCollapsible::Row perimeter_row;
+    if (s_border_w_) perimeter_row.push_back(s_border_w_.get());
+    if (s_sector_center_w_) perimeter_row.push_back(s_sector_center_w_.get());
+    if (s_sector_range_w_) perimeter_row.push_back(s_sector_range_w_.get());
+    if (!perimeter_row.empty()) rows.push_back(perimeter_row);
+
+    if (s_perimeter_offset_x_w_) rows.push_back({ s_perimeter_offset_x_w_.get() });
+    if (s_perimeter_offset_y_w_) rows.push_back({ s_perimeter_offset_y_w_.get() });
+
+    if (percent_x_w_ || percent_y_w_) {
+        DockableCollapsible::Row percent_row;
+        if (percent_x_w_) percent_row.push_back(percent_x_w_.get());
+        if (percent_y_w_) percent_row.push_back(percent_y_w_.get());
+        if (!percent_row.empty()) rows.push_back(percent_row);
     }
-    panel_->set_cell_width(120);
+
+    if (exact_offset_w_ || exact_room_w_) {
+        DockableCollapsible::Row exact_row;
+        if (exact_offset_w_) exact_row.push_back(exact_offset_w_.get());
+        if (exact_room_w_) exact_row.push_back(exact_room_w_.get());
+        if (!exact_row.empty()) rows.push_back(exact_row);
+    }
+
+    if (add_button_w_) rows.push_back({ add_button_w_.get() });
+
+    for (auto& row : candidates_) {
+        DockableCollapsible::Row cand_row;
+        if (row.name_w) cand_row.push_back(row.name_w.get());
+        if (row.chance_w) cand_row.push_back(row.chance_w.get());
+        if (row.del_w) cand_row.push_back(row.del_w.get());
+        if (!cand_row.empty()) rows.push_back(cand_row);
+    }
+
+    panel_->set_cell_width(200);
     panel_->set_rows(rows);
 }
 
-void AssetConfigUI::add_candidate(const std::string& name, int chance) {
-    entry_["candidates"].push_back({{"name", name}, {"chance", chance}});
+void AssetConfigUI::add_candidate(const std::string& raw_name, int chance) {
+    if (!entry_.contains("candidates") || !entry_["candidates"].is_array()) {
+        entry_["candidates"] = nlohmann::json::array();
+    }
+    std::string name = raw_name;
+    if (name.empty()) name = "null";
+
+    nlohmann::json candidate;
+    candidate["name"] = name;
+    candidate["chance"] = chance;
+
+    entry_["candidates"].push_back(std::move(candidate));
+    rebuild_widgets();
     rebuild_rows();
     sync_json();
 }
 
-void AssetConfigUI::remove_candidate(const std::string& name) {
+void AssetConfigUI::remove_candidate(size_t index) {
+    if (!entry_.contains("candidates") || !entry_["candidates"].is_array()) return;
     auto& arr = entry_["candidates"];
-    arr.erase(std::remove_if(arr.begin(), arr.end(),
-        [&](nlohmann::json& c) {
-            return !c["name"].is_null() && c["name"] == name;
-        }), arr.end());
+    if (index >= arr.size()) return;
+    const auto& cand = arr[index];
+    bool is_placeholder = cand.is_null();
+    if (!is_placeholder && cand.is_object()) {
+        std::string name = cand.value("name", cand.value("asset", std::string{}));
+        if (name == "null") is_placeholder = true;
+    } else if (!is_placeholder && cand.is_string()) {
+        is_placeholder = cand.get<std::string>() == "null";
+    }
+    if (is_placeholder) return;
+    arr.erase(arr.begin() + static_cast<nlohmann::json::difference_type>(index));
+    rebuild_widgets();
     rebuild_rows();
     sync_json();
 }
 
 void AssetConfigUI::sync_json() {
-    for (size_t i=0; i<candidates_.size(); ++i) {
-        auto& c = entry_["candidates"][i];
-        c["name"] = candidates_[i].name_box->value();
-        c["chance"] = candidates_[i].chance_slider->value();
+    if (cb_overlap_) {
+        overlap_ = cb_overlap_->value();
+        entry_["check_overlap"] = overlap_;
     }
-    entry_["position"] = spawn_methods_[method_];
-    entry_["min_number"] = s_minmax_ ? s_minmax_->min_value() : 1;
-    entry_["max_number"] = s_minmax_ ? s_minmax_->max_value() : 1;
-    entry_["inherited"] = cb_inherited_ ? cb_inherited_->value() : false;
-    entry_["check_overlap"] = cb_overlap_ ? cb_overlap_->value() : false;
-    entry_["check_min_spacing"] = cb_spacing_ ? cb_spacing_->value() : false;
-    entry_["tag"] = cb_tag_ ? cb_tag_->value() : false;
-    if (s_border_) entry_["border_shift"] = s_border_->value();
-    if (s_sector_center_) entry_["sector_center"] = s_sector_center_->value();
-    if (s_sector_range_) entry_["sector_range"] = s_sector_range_->value();
-    if (s_percent_x_) { entry_["ep_x_min"] = s_percent_x_->min_value(); entry_["ep_x_max"] = s_percent_x_->max_value(); }
-    if (s_percent_y_) { entry_["ep_y_min"] = s_percent_y_->min_value(); entry_["ep_y_max"] = s_percent_y_->max_value(); }
+    if (cb_spacing_) {
+        spacing_ = cb_spacing_->value();
+        entry_["enforce_spacing"] = spacing_;
+        if (entry_.contains("check_min_spacing")) entry_.erase("check_min_spacing");
+    }
+
+    std::string method = spawn_methods_.empty() ? std::string{} : spawn_methods_[std::clamp(method_, 0, static_cast<int>(spawn_methods_.size() - 1))];
+    entry_["position"] = method;
+    pending_summary_.method = method;
+    if (!pending_summary_.method_changed && method != baseline_method_) {
+        pending_summary_.method_changed = true;
+    }
+
+    if (s_minmax_) {
+        min_number_ = s_minmax_->min_value();
+        max_number_ = s_minmax_->max_value();
+    }
+    entry_["min_number"] = min_number_;
+    entry_["max_number"] = max_number_;
+    if (!pending_summary_.quantity_changed && (min_number_ != baseline_min_ || max_number_ != baseline_max_)) {
+        pending_summary_.quantity_changed = true;
+    }
+
+    if (method == "Perimeter") {
+        if (s_border_) {
+            int value = s_border_->value();
+            entry_["percentage_shift_from_center"] = value;
+            if (entry_.contains("border_shift")) entry_.erase("border_shift");
+            if (entry_.contains("border_shift_min")) entry_.erase("border_shift_min");
+            if (entry_.contains("border_shift_max")) entry_.erase("border_shift_max");
+        }
+        if (s_sector_center_) {
+            int value = s_sector_center_->value();
+            entry_["sector_center"] = value;
+            entry_["sector_center_min"] = value;
+            entry_["sector_center_max"] = value;
+        }
+        if (s_sector_range_) {
+            int value = s_sector_range_->value();
+            entry_["sector_range"] = value;
+            entry_["sector_range_min"] = value;
+            entry_["sector_range_max"] = value;
+        }
+        if (s_perimeter_offset_x_) {
+            entry_["perimeter_x_offset_min"] = s_perimeter_offset_x_->min_value();
+            entry_["perimeter_x_offset_max"] = s_perimeter_offset_x_->max_value();
+        }
+        if (s_perimeter_offset_y_) {
+            entry_["perimeter_y_offset_min"] = s_perimeter_offset_y_->min_value();
+            entry_["perimeter_y_offset_max"] = s_perimeter_offset_y_->max_value();
+        }
+    }
+
+    if (!entry_.contains("candidates") || !entry_["candidates"].is_array()) {
+        entry_["candidates"] = nlohmann::json::array();
+    }
+
+    auto& arr = entry_["candidates"];
+    size_t real_candidate_count = 0;
+    CandidateRow* sole_candidate = nullptr;
+    for (auto& row : candidates_) {
+        if (!row.placeholder) {
+            ++real_candidate_count;
+            if (real_candidate_count == 1) {
+                sole_candidate = &row;
+            }
+        }
+    }
+    if (real_candidate_count == 1 && sole_candidate && sole_candidate->chance_slider) {
+        sole_candidate->chance_slider->set_value(100);
+    }
+
+    for (auto& row : candidates_) {
+        if (row.index >= arr.size()) continue;
+        auto& cand = arr[row.index];
+        if (!cand.is_object()) cand = nlohmann::json::object();
+
+        std::string name_value = row.name_box ? row.name_box->value() : row.name;
+        if (row.placeholder) {
+            name_value = "null";
+        }
+        if (name_value.empty()) name_value = "null";
+        cand["name"] = name_value;
+        if (cand.contains("tag")) cand.erase("tag");
+        if (cand.contains("tag_name")) cand.erase("tag_name");
+        if (row.chance_slider) {
+            cand["chance"] = row.chance_slider->value();
+        }
+    }
 }
 
 void AssetConfigUI::update(const Input& input) {
     if (panel_ && panel_->is_visible()) {
-        panel_->update(input, 1920, 1080);
-        method_ = dd_method_ ? dd_method_->selected() : 0;
+        panel_->update(input, kDefaultScreenW, kDefaultScreenH);
+        handle_method_change();
         sync_json();
+    }
+    if (search_ && search_->visible()) {
+        search_->update(input);
+        if (panel_) {
+            const SDL_Rect& r = panel_->rect();
+            search_->set_position(r.x + r.w + 16, r.y);
+        }
     }
 }
 
 bool AssetConfigUI::handle_event(const SDL_Event& e) {
-    if (!panel_ || !panel_->is_visible()) return false;
-    return panel_->handle_event(e);
+    bool used = false;
+    if (search_ && search_->visible()) {
+        used |= search_->handle_event(e);
+    }
+    if (panel_ && panel_->is_visible()) {
+        if (panel_->handle_event(e)) {
+            used = true;
+            handle_method_change();
+            sync_json();
+        }
+    }
+    return used;
 }
 
 void AssetConfigUI::render(SDL_Renderer* r) const {
     if (panel_ && panel_->is_visible()) panel_->render(r);
-}
-
-nlohmann::json AssetConfigUI::to_json() const {
-    nlohmann::json j;
-    if (!spawn_id_.empty()) j["spawn_id"] = spawn_id_;
-    if (!name_.empty() && name_[0] == '#') j["tag"] = name_.substr(1);
-    else j["name"] = name_;
-    j["position"] = spawn_methods_[method_];
-    j["min_number"] = min_;
-    j["max_number"] = max_;
-    const std::string& m = spawn_methods_[method_];
-    if (m == "Perimeter") {
-        j["border_shift_min"] = j["border_shift_max"] = border_;
-        j["sector_center_min"] = j["sector_center_max"] = sector_center_;
-        j["sector_range_min"] = j["sector_range_max"] = sector_range_;
-    } else if (m == "Percent") {
-        j["percent_x_min"] = percent_x_min_;
-        j["percent_x_max"] = percent_x_max_;
-        j["percent_y_min"] = percent_y_min_;
-        j["percent_y_max"] = percent_y_max_;
-    }
-    return j;
-}
-
-bool AssetConfigUI::is_point_inside(int x, int y) const {
-    if (panel_ && panel_->is_visible()) {
-        SDL_Point p{ x, y };
-        return SDL_PointInRect(&p, &panel_->rect());
-    }
-    return false;
+    if (search_ && search_->visible()) search_->render(r);
 }
 
 nlohmann::json AssetConfigUI::to_json() const {
     return entry_;
+}
+
+bool AssetConfigUI::is_point_inside(int x, int y) const {
+    if (panel_ && panel_->is_visible() && panel_->is_point_inside(x, y)) {
+        return true;
+    }
+    if (search_ && search_->visible() && search_->is_point_inside(x, y)) {
+        return true;
+    }
+    return false;
+}
+
+AssetConfigUI::ChangeSummary AssetConfigUI::consume_change_summary() {
+    ChangeSummary result = pending_summary_;
+    pending_summary_ = {};
+    baseline_method_ = spawn_methods_.empty() ? std::string{} : spawn_methods_[std::clamp(method_, 0, static_cast<int>(spawn_methods_.size() - 1))];
+    baseline_min_ = min_number_;
+    baseline_max_ = max_number_;
+    pending_summary_.method = baseline_method_;
+    return result;
 }

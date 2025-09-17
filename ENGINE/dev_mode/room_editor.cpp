@@ -46,6 +46,29 @@ std::string generate_room_spawn_id() {
     for (int i = 0; i < 12; ++i) s.push_back(hex[dist(rng)]);
     return s;
 }
+
+nlohmann::json& ensure_spawn_groups_array(nlohmann::json& root) {
+    if (root.contains("spawn_groups") && root["spawn_groups"].is_array()) {
+        return root["spawn_groups"];
+    }
+    if (root.contains("assets") && root["assets"].is_array()) {
+        root["spawn_groups"] = root["assets"];
+        root.erase("assets");
+        return root["spawn_groups"];
+    }
+    root["spawn_groups"] = nlohmann::json::array();
+    return root["spawn_groups"];
+}
+
+const nlohmann::json* find_spawn_groups_array(const nlohmann::json& root) {
+    if (root.contains("spawn_groups") && root["spawn_groups"].is_array()) {
+        return &root["spawn_groups"];
+    }
+    if (root.contains("assets") && root["assets"].is_array()) {
+        return &root["assets"];
+    }
+    return nullptr;
+}
 }
 
 RoomEditor::RoomEditor(Assets* owner, int screen_w, int screen_h)
@@ -77,6 +100,9 @@ void RoomEditor::set_screen_dimensions(int width, int height) {
 
 void RoomEditor::set_current_room(Room* room) {
     current_room_ = room;
+    if (current_room_) {
+        ensure_spawn_groups_array(current_room_->assets_data());
+    }
 }
 
 void RoomEditor::set_enabled(bool enabled) {
@@ -313,7 +339,7 @@ void RoomEditor::open_asset_config_for_asset(Asset* asset) {
     if (!assets_cfg_ui_) {
         assets_cfg_ui_ = std::make_unique<AssetsConfig>();
         if (current_room_) {
-            auto& assets_json = current_room_->assets_data()["assets"];
+            auto& assets_json = ensure_spawn_groups_array(current_room_->assets_data());
             auto on_change = [this]() {
                 if (current_room_) current_room_->save_assets_json();
             };
@@ -331,8 +357,7 @@ void RoomEditor::open_asset_config_for_asset(Asset* asset) {
 void RoomEditor::finalize_asset_drag(Asset* asset, const std::shared_ptr<AssetInfo>& info) {
     if (!asset || !info || !current_room_) return;
     auto& root = current_room_->assets_data();
-    auto& arr = root["assets"];
-    if (!arr.is_array()) arr = nlohmann::json::array();
+    auto& arr = ensure_spawn_groups_array(root);
 
     int width = 0;
     int height = 0;
@@ -346,34 +371,28 @@ void RoomEditor::finalize_asset_drag(Asset* asset, const std::shared_ptr<AssetIn
         center.y = c.y;
     }
 
-    auto clamp_int = [](int v) { return std::max(0, std::min(100, v)); };
-    int ep_x = 50;
-    int ep_y = 50;
-    if (width != 0 && height != 0) {
-        ep_x = clamp_int(static_cast<int>(std::lround(((double)(asset->pos.x - center.x) / width) * 100.0 + 50.0)));
-        ep_y = clamp_int(static_cast<int>(std::lround(((double)(asset->pos.y - center.y) / height) * 100.0 + 50.0)));
-    }
-
     std::string spawn_id = generate_room_spawn_id();
     nlohmann::json entry;
-    entry["name"] = info->name;
     entry["spawn_id"] = spawn_id;
     entry["min_number"] = 1;
     entry["max_number"] = 1;
-    entry["position"] = "Exact Position";
-    entry["exact_position"] = nullptr;
-    entry["inherited"] = false;
+    entry["position"] = "Exact";
     entry["check_overlap"] = false;
-    entry["check_min_spacing"] = false;
-    entry["tag"] = false;
-    entry["ep_x_min"] = ep_x;
-    entry["ep_x_max"] = ep_x;
-    entry["ep_y_min"] = ep_y;
-    entry["ep_y_max"] = ep_y;
+    entry["enforce_spacing"] = false;
+    entry["dx"] = asset->pos.x - center.x;
+    entry["dy"] = asset->pos.y - center.y;
+    if (width > 0) entry["origional_width"] = width;
+    if (height > 0) entry["origional_height"] = height;
+    entry["display_name"] = info->name;
+
+    entry["candidates"] = nlohmann::json::array();
+    entry["candidates"].push_back({{"name", "null"}, {"chance", 0}});
+    entry["candidates"].push_back({{"name", info->name}, {"chance", 100}});
+
     arr.push_back(entry);
     current_room_->save_assets_json();
     asset->spawn_id = spawn_id;
-    asset->spawn_method = "Exact Position";
+    asset->spawn_method = "Exact";
     if (assets_cfg_ui_) {
         auto on_change = [this]() {
             if (current_room_) current_room_->save_assets_json();
@@ -749,9 +768,7 @@ void RoomEditor::handle_delete_shortcut(const Input& input) {
     if (spawn_id.empty()) return;
 
     auto& root = current_room_->assets_data();
-    if (!root.contains("assets")) return;
-    auto& arr = root["assets"];
-    if (!arr.is_array()) return;
+    auto& arr = ensure_spawn_groups_array(root);
 
     auto it = std::remove_if(arr.begin(), arr.end(), [&](nlohmann::json& entry) {
         if (!entry.is_object()) return false;
@@ -835,7 +852,11 @@ void RoomEditor::begin_drag_session(const SDL_Point& world_mouse) {
         bool have_shift = false;
         if (!drag_spawn_id_.empty()) {
             if (nlohmann::json* entry = find_spawn_entry(drag_spawn_id_)) {
-                if (entry->contains("border_shift_min") && (*entry)["border_shift_min"].is_number()) {
+                if (entry->contains("percentage_shift_from_center") && (*entry)["percentage_shift_from_center"].is_number()) {
+                    border_shift = (*entry)["percentage_shift_from_center"].get<double>();
+                    have_shift = true;
+                }
+                if (!have_shift && entry->contains("border_shift_min") && (*entry)["border_shift_min"].is_number()) {
                     border_shift = (*entry)["border_shift_min"].get<double>();
                     have_shift = true;
                 }
@@ -1019,9 +1040,7 @@ void RoomEditor::reset_drag_state() {
 nlohmann::json* RoomEditor::find_spawn_entry(const std::string& spawn_id) {
     if (!current_room_ || spawn_id.empty()) return nullptr;
     auto& root = current_room_->assets_data();
-    if (!root.contains("assets")) return nullptr;
-    auto& arr = root["assets"];
-    if (!arr.is_array()) return nullptr;
+    auto& arr = ensure_spawn_groups_array(root);
     for (auto& entry : arr) {
         if (!entry.is_object()) continue;
         if (entry.contains("spawn_id") && entry["spawn_id"].is_string() &&
@@ -1050,9 +1069,7 @@ std::pair<int, int> RoomEditor::get_room_dimensions() const {
 void RoomEditor::refresh_assets_config_ui() {
     if (!assets_cfg_ui_ || !current_room_) return;
     auto& root = current_room_->assets_data();
-    if (!root.contains("assets")) return;
-    auto& arr = root["assets"];
-    if (!arr.is_array()) return;
+    auto& arr = ensure_spawn_groups_array(root);
     assets_cfg_ui_->close_all_asset_configs();
     auto on_change = [this]() {
         if (current_room_) current_room_->save_assets_json();
@@ -1148,8 +1165,8 @@ void RoomEditor::respawn_spawn_group(const nlohmann::json& entry) {
     auto grid = build_room_grid(spawn_id);
 
     nlohmann::json root;
-    root["assets"] = nlohmann::json::array();
-    root["assets"].push_back(entry);
+    root["spawn_groups"] = nlohmann::json::array();
+    root["spawn_groups"].push_back(entry);
     std::vector<nlohmann::json> sources{root};
     std::vector<std::string> paths;
     AssetSpawnPlanner planner(sources, *current_room_->room_area, assets_->library_, paths);
@@ -1238,8 +1255,8 @@ void RoomEditor::regenerate_current_room() {
     double new_area_size = new_area.get_area();
 
     std::unordered_set<std::string> spawn_ids;
-    if (room_json.contains("assets") && room_json["assets"].is_array()) {
-        for (const auto& item : room_json["assets"]) {
+    if (const nlohmann::json* groups = find_spawn_groups_array(room_json)) {
+        for (const auto& item : *groups) {
             if (item.contains("spawn_id") && item["spawn_id"].is_string()) {
                 spawn_ids.insert(item["spawn_id"].get<std::string>());
             }
@@ -1373,20 +1390,18 @@ void RoomEditor::regenerate_current_room() {
 void RoomEditor::update_exact_json(nlohmann::json& entry, const Asset& asset, SDL_Point center, int width, int height) {
     const int dx = asset.pos.x - center.x;
     const int dy = asset.pos.y - center.y;
-    entry["exact_dx"] = dx;
-    entry["exact_dy"] = dy;
-    if (width > 0) entry["exact_origin_width"] = width;
-    if (height > 0) entry["exact_origin_height"] = height;
-
-    if (width > 0 && height > 0) {
-        auto clamp_percent = [](int v) { return std::max(0, std::min(100, v)); };
-        int ep_x = clamp_percent(static_cast<int>(std::lround(((static_cast<double>(asset.pos.x - center.x) / width) * 100.0) + 50.0)));
-        int ep_y = clamp_percent(static_cast<int>(std::lround(((static_cast<double>(asset.pos.y - center.y) / height) * 100.0) + 50.0)));
-        entry["ep_x_min"] = ep_x;
-        entry["ep_x_max"] = ep_x;
-        entry["ep_y_min"] = ep_y;
-        entry["ep_y_max"] = ep_y;
-    }
+    entry["dx"] = dx;
+    entry["dy"] = dy;
+    if (width > 0) entry["origional_width"] = width;
+    if (height > 0) entry["origional_height"] = height;
+    if (entry.contains("exact_dx")) entry.erase("exact_dx");
+    if (entry.contains("exact_dy")) entry.erase("exact_dy");
+    if (entry.contains("exact_origin_width")) entry.erase("exact_origin_width");
+    if (entry.contains("exact_origin_height")) entry.erase("exact_origin_height");
+    if (entry.contains("ep_x_min")) entry.erase("ep_x_min");
+    if (entry.contains("ep_x_max")) entry.erase("ep_x_max");
+    if (entry.contains("ep_y_min")) entry.erase("ep_y_min");
+    if (entry.contains("ep_y_max")) entry.erase("ep_y_max");
 }
 
 void RoomEditor::update_percent_json(nlohmann::json& entry, const Asset& asset, SDL_Point center, int width, int height) {
@@ -1399,16 +1414,21 @@ void RoomEditor::update_percent_json(nlohmann::json& entry, const Asset& asset, 
     double dy = static_cast<double>(asset.pos.y - center.y);
     int percent_x = clamp_percent(static_cast<int>(std::lround((dx / half_w) * 100.0)));
     int percent_y = clamp_percent(static_cast<int>(std::lround((dy / half_h) * 100.0)));
-    entry["percent_x_min"] = percent_x;
-    entry["percent_x_max"] = percent_x;
-    entry["percent_y_min"] = percent_y;
-    entry["percent_y_max"] = percent_y;
+    entry["p_x_min"] = percent_x;
+    entry["p_x_max"] = percent_x;
+    entry["p_y_min"] = percent_y;
+    entry["p_y_max"] = percent_y;
+    if (entry.contains("percent_x_min")) entry.erase("percent_x_min");
+    if (entry.contains("percent_x_max")) entry.erase("percent_x_max");
+    if (entry.contains("percent_y_min")) entry.erase("percent_y_min");
+    if (entry.contains("percent_y_max")) entry.erase("percent_y_max");
 }
 
 void RoomEditor::update_perimeter_json(nlohmann::json& entry, double border_shift) {
     int value = static_cast<int>(std::lround(border_shift));
     value = std::max(0, std::min(100, value));
-    entry["border_shift_min"] = value;
-    entry["border_shift_max"] = value;
-    entry["border_shift"] = value;
+    entry["percentage_shift_from_center"] = value;
+    if (entry.contains("border_shift")) entry.erase("border_shift");
+    if (entry.contains("border_shift_min")) entry.erase("border_shift_min");
+    if (entry.contains("border_shift_max")) entry.erase("border_shift_max");
 }

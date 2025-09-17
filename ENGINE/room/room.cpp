@@ -163,12 +163,12 @@ nlohmann::json Room::create_static_room_json(std::string name) {
 	out["is_spawn"] = is_spawn;
 	out["is_boss"] = assets_json.value("is_boss", false);
 	out["inherits_map_assets"] = assets_json.value("inherits_map_assets", false);
-	json assets_arr = json::array();
-	int cx = 0, cy = 0;
-	if (room_area) {
-		auto c = room_area->get_center();
-		cx = c.x;
-		cy = c.y;
+        json spawn_groups = json::array();
+        int cx = 0, cy = 0;
+        if (room_area) {
+                auto c = room_area->get_center();
+                cx = c.x;
+                cy = c.y;
 	}
         for (const auto& uptr : assets) {
                 const Asset* a = uptr.get();
@@ -176,45 +176,136 @@ nlohmann::json Room::create_static_room_json(std::string name) {
 
                 const int ax = a->pos.x;
                 const int ay = a->pos.y;
-                double norm_x = (width  != 0) ? (static_cast<double>(ax - cx) / static_cast<double>(width))  : 0.0;
-                double norm_y = (height != 0) ? (static_cast<double>(ay - cy) / static_cast<double>(height)) : 0.0;
-                int ep_x = clamp_int(static_cast<int>(std::lround(norm_x * 100.0 + 50.0)), 0, 100);
-                int ep_y = clamp_int(static_cast<int>(std::lround(norm_y * 100.0 + 50.0)), 0, 100);
                 json entry;
-                entry["name"] = a->info->name;
                 entry["min_number"] = 1;
                 entry["max_number"] = 1;
-                entry["position"] = "Exact Position";
-                entry["exact_position"] = nullptr;
-                entry["inherited"] = false;
+                entry["position"] = "Exact";
                 entry["check_overlap"] = false;
-                entry["check_min_spacing"] = false;
-                entry["tag"] = false;
-                entry["ep_x_min"] = ep_x;
-                entry["ep_x_max"] = ep_x;
-                entry["ep_y_min"] = ep_y;
-                entry["ep_y_max"] = ep_y;
-                assets_arr.push_back(std::move(entry));
+                entry["enforce_spacing"] = false;
+                entry["dx"] = ax - cx;
+                entry["dy"] = ay - cy;
+                if (width > 0) entry["origional_width"] = width;
+                if (height > 0) entry["origional_height"] = height;
+                entry["display_name"] = a->info->name;
+                entry["candidates"] = json::array();
+                entry["candidates"].push_back({{"name", "null"}, {"chance", 0}});
+                entry["candidates"].push_back({{"name", a->info->name}, {"chance", 100}});
+                spawn_groups.push_back(std::move(entry));
         }
-	if (is_spawn) {
-		json davey_entry = {
-			{"name", "Vibble"},
-			{"min_number", 1},
-			{"max_number", 1},
-			{"position", "Center"},
-			{"exact_position", nullptr},
-			{"tag", false},
-			{"check_overlap", false},
-			{"check_min_spacing", false},
-			{"inherited", false}
-		};
-		assets_arr.push_back(std::move(davey_entry));
-	}
-	out["assets"] = std::move(assets_arr);
-	return out;
+        if (is_spawn) {
+                json davey_entry;
+                davey_entry["min_number"] = 1;
+                davey_entry["max_number"] = 1;
+                davey_entry["position"] = "Center";
+                davey_entry["check_overlap"] = false;
+                davey_entry["enforce_spacing"] = false;
+                davey_entry["display_name"] = "Vibble";
+                davey_entry["candidates"] = json::array();
+                davey_entry["candidates"].push_back({{"name", "null"}, {"chance", 0}});
+                davey_entry["candidates"].push_back({{"name", "Vibble"}, {"chance", 100}});
+                spawn_groups.push_back(std::move(davey_entry));
+        }
+        out["spawn_groups"] = std::move(spawn_groups);
+        return out;
 }
 
 nlohmann::json& Room::assets_data() {
+        if (assets_json.contains("assets") && assets_json["assets"].is_array() &&
+            (!assets_json.contains("spawn_groups") || !assets_json["spawn_groups"].is_array())) {
+                assets_json["spawn_groups"] = assets_json["assets"];
+                assets_json.erase("assets");
+        }
+        if (!assets_json.contains("spawn_groups") || !assets_json["spawn_groups"].is_array()) {
+                assets_json["spawn_groups"] = nlohmann::json::array();
+        }
+        auto& groups = assets_json["spawn_groups"];
+        for (auto& entry : groups) {
+                if (!entry.is_object()) continue;
+                if (entry.contains("position") && entry["position"].is_string() &&
+                    entry["position"].get<std::string>() == "Exact Position") {
+                        entry["position"] = "Exact";
+                }
+                if (entry.contains("check_min_spacing") && !entry.contains("enforce_spacing")) {
+                        entry["enforce_spacing"] = entry["check_min_spacing"];
+                        entry.erase("check_min_spacing");
+                }
+                if (entry.contains("exact_dx") && entry["exact_dx"].is_number()) {
+                        if (!entry.contains("dx")) entry["dx"] = entry["exact_dx"];
+                        entry.erase("exact_dx");
+                }
+                if (entry.contains("exact_dy") && entry["exact_dy"].is_number()) {
+                        if (!entry.contains("dy")) entry["dy"] = entry["exact_dy"];
+                        entry.erase("exact_dy");
+                }
+                if (entry.contains("exact_origin_width") && entry["exact_origin_width"].is_number_integer()) {
+                        if (!entry.contains("origional_width")) entry["origional_width"] = entry["exact_origin_width"];
+                        entry.erase("exact_origin_width");
+                }
+                if (entry.contains("exact_origin_height") && entry["exact_origin_height"].is_number_integer()) {
+                        if (!entry.contains("origional_height")) entry["origional_height"] = entry["exact_origin_height"];
+                        entry.erase("exact_origin_height");
+                }
+                if (entry.contains("percent_x_min") && entry["percent_x_min"].is_number()) {
+                        if (!entry.contains("p_x_min")) entry["p_x_min"] = entry["percent_x_min"];
+                        entry.erase("percent_x_min");
+                }
+                if (entry.contains("percent_x_max") && entry["percent_x_max"].is_number()) {
+                        if (!entry.contains("p_x_max")) entry["p_x_max"] = entry["percent_x_max"];
+                        entry.erase("percent_x_max");
+                }
+                if (entry.contains("percent_y_min") && entry["percent_y_min"].is_number()) {
+                        if (!entry.contains("p_y_min")) entry["p_y_min"] = entry["percent_y_min"];
+                        entry.erase("percent_y_min");
+                }
+                if (entry.contains("percent_y_max") && entry["percent_y_max"].is_number()) {
+                        if (!entry.contains("p_y_max")) entry["p_y_max"] = entry["percent_y_max"];
+                        entry.erase("percent_y_max");
+                }
+                if (entry.contains("border_shift") && entry["border_shift"].is_number()) {
+                        if (!entry.contains("percentage_shift_from_center")) entry["percentage_shift_from_center"] = entry["border_shift"];
+                        entry.erase("border_shift");
+                }
+                if (entry.contains("border_shift_min")) entry.erase("border_shift_min");
+                if (entry.contains("border_shift_max")) entry.erase("border_shift_max");
+                if (entry.contains("ep_x_min")) entry.erase("ep_x_min");
+                if (entry.contains("ep_x_max")) entry.erase("ep_x_max");
+                if (entry.contains("ep_y_min")) entry.erase("ep_y_min");
+                if (entry.contains("ep_y_max")) entry.erase("ep_y_max");
+                if (!entry.contains("candidates") || !entry["candidates"].is_array()) {
+                        entry["candidates"] = nlohmann::json::array();
+                }
+                auto& cand_arr = entry["candidates"];
+                bool has_null = false;
+                for (auto& cand : cand_arr) {
+                        if (cand.is_null()) {
+                                has_null = true;
+                                cand = nlohmann::json{{"name", "null"}, {"chance", 0}};
+                                continue;
+                        }
+                        if (cand.is_string()) {
+                                std::string value = cand.get<std::string>();
+                                nlohmann::json converted;
+                                converted["name"] = value;
+                                converted["chance"] = (value == "null") ? 0 : 100;
+                                cand = std::move(converted);
+                        }
+                        if (!cand.is_object()) continue;
+                        if (cand.contains("name") && cand["name"].is_string() && cand["name"].get<std::string>() == "null") {
+                                has_null = true;
+                        }
+                        if (!cand.contains("chance")) {
+                                cand["chance"] = cand.contains("name") && cand["name"].is_string() && cand["name"].get<std::string>() == "null" ? 0 : 100;
+                        }
+                        if (cand.contains("tag")) cand.erase("tag");
+                        if (cand.contains("tag_name")) cand.erase("tag_name");
+                }
+                if (!has_null) {
+                        nlohmann::json null_cand;
+                        null_cand["name"] = "null";
+                        null_cand["chance"] = 0;
+                        cand_arr.insert(cand_arr.begin(), std::move(null_cand));
+                }
+        }
         return assets_json;
 }
 

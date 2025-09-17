@@ -151,13 +151,13 @@ class AssetEditor(tk.Frame):
         # Positioning controls
         if self.positioning:
             frame.check_overlap_var = tk.BooleanVar(value=asset.get('check_overlap', False))
-            frame.check_min_spacing_var = tk.BooleanVar(value=asset.get('check_min_spacing', False))
+            frame.enforce_spacing_var = tk.BooleanVar(value=asset.get('enforce_spacing', asset.get('check_min_spacing', False)))
             ttk.Checkbutton(
                 content, text='Check Overlap', variable=frame.check_overlap_var,
                 style='Big.TCheckbutton', command=self.save_assets
             ).pack(anchor='w', pady=(6,0))
             ttk.Checkbutton(
-                content, text='Check Min Spacing', variable=frame.check_min_spacing_var,
+                content, text='Enforce Spacing', variable=frame.enforce_spacing_var,
                 style='Big.TCheckbutton', command=self.save_assets
             ).pack(anchor='w', pady=(0,6))
 
@@ -165,7 +165,7 @@ class AssetEditor(tk.Frame):
             frame.position_var = position_var
             cb = ttk.Combobox(
                 content, textvariable=position_var, state='readonly',
-                values=["Random","Center","Perimeter","Entrance","Exact Position","Intersection"]
+                values=["Random","Center","Perimeter","Entrance","Exact","Intersection"]
             )
             cb.pack(fill=tk.X, pady=(0,4))
             # Option container
@@ -280,10 +280,9 @@ class AssetEditor(tk.Frame):
                 "min_number": 0,
                 "max_number": 0,
                 "position": "Random",
-                "exact_position": None,
                 "tag": is_tag,
                 "check_overlap": False,
-                "check_min_spacing": False
+                "enforce_spacing": False
             }
             self.get_asset_list().append(new_asset)
             self._create_asset_widget(new_asset)
@@ -308,11 +307,9 @@ class AssetEditor(tk.Frame):
             data["max_number"] = f.range.get_max()
             if self.positioning and hasattr(f, "position_var"):
                 data["position"] = f.position_var.get()
-            # Keep any existing exact_position if you had one:
-            data["exact_position"] = data.get("exact_position", None)
             data["inherited"] = getattr(f, "inherited", data.get("inherited", False))
             data["check_overlap"] = f.check_overlap_var.get() if hasattr(f, "check_overlap_var") else False
-            data["check_min_spacing"] = f.check_min_spacing_var.get() if hasattr(f, "check_min_spacing_var") else False
+            data["enforce_spacing"] = f.enforce_spacing_var.get() if hasattr(f, "enforce_spacing_var") else False
             data["tag"] = getattr(f, "tag", data.get("tag", False))
             # 3) Overwrite any position-option ranges
             for key, rw in getattr(f, "position_options", {}).items():

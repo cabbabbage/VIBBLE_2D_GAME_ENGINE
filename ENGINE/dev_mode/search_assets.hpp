@@ -24,6 +24,7 @@ public:
     void update(const Input& input);
     bool handle_event(const SDL_Event& e);
     void render(SDL_Renderer* r) const;
+    bool is_point_inside(int x, int y) const;
 private:
     struct Asset { std::string name; std::vector<std::string> tags; };
     void load_assets();

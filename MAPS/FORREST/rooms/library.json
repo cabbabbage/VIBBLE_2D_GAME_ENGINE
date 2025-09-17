@@ -40,6 +40,8 @@
       "max_number": 1,
       "min_number": 1,
       "name": "Bench",
+      "origional_height": 2131,
+      "origional_width": 2296,
       "position": "Exact Position",
       "spawn_id": "spn-b21dbbfb8fc3",
       "tag": false

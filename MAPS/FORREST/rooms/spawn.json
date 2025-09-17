@@ -1,69 +1,4 @@
 {
-  "assets": [
-    {
-      "border_shift_max": 100,
-      "border_shift_min": 100,
-      "check_min_spacing": false,
-      "check_overlap": false,
-      "exact_position": null,
-      "inherited": false,
-      "max_number": 10,
-      "min_number": 10,
-      "name": "candle",
-      "perimeter_x_offset_max": 0,
-      "perimeter_x_offset_min": 0,
-      "perimeter_y_offset_max": 0,
-      "perimeter_y_offset_min": 0,
-      "position": "Perimeter",
-      "sector_center_max": 14,
-      "sector_center_min": 14,
-      "sector_range_max": 360,
-      "sector_range_min": 360,
-      "spawn_id": "spn-b591df91712f",
-      "tag": false
-    },
-    {
-      "max_number": 45,
-      "min_number": 0,
-      "name": "ground",
-      "position": "Random",
-      "spawn_id": "spn-01c5db7657d6"
-    },
-    {
-      "max_number": 1,
-      "min_number": 1,
-      "name": "Vibble",
-      "position": "Center",
-      "spawn_id": "spn-225b40dd06f7"
-    },
-    {
-      "border_shift": 100,
-      "border_shift_max": 100,
-      "border_shift_min": 100,
-      "max_number": 9,
-      "min_number": 0,
-      "name": "Barrel",
-      "position": "Perimeter",
-      "sector_center_max": 359,
-      "sector_center_min": 359,
-      "sector_range_max": 360,
-      "sector_range_min": 360,
-      "spawn_id": "spn-215d762337e0"
-    },
-    {
-      "border_shift_max": 100,
-      "border_shift_min": 100,
-      "max_number": 48,
-      "min_number": 16,
-      "name": "candle",
-      "position": "Perimeter",
-      "sector_center_max": 66,
-      "sector_center_min": 66,
-      "sector_range_max": 360,
-      "sector_range_min": 360,
-      "spawn_id": "spn-daa513dbdc5f"
-    }
-  ],
   "batch_assets": {
     "batch_assets": [
       {
@@ -89,5 +24,128 @@
   "max_width": 1825,
   "min_height": 393,
   "min_width": 1825,
-  "name": "spawn"
+  "name": "spawn",
+  "spawn_groups": [
+    {
+      "candidates": [
+        {
+          "chance": 0,
+          "name": "null"
+        }
+      ],
+      "check_overlap": false,
+      "enforce_spacing": false,
+      "exact_position": null,
+      "inherited": false,
+      "max_number": 10,
+      "min_number": 10,
+      "name": "candle",
+      "perimeter_x_offset_max": 0,
+      "perimeter_x_offset_min": 0,
+      "perimeter_y_offset_max": 0,
+      "perimeter_y_offset_min": 0,
+      "position": "Perimeter",
+      "sector_center_max": 14,
+      "sector_center_min": 14,
+      "sector_range_max": 360,
+      "sector_range_min": 360,
+      "spawn_id": "spn-b591df91712f",
+      "tag": false
+    },
+    {
+      "candidates": [
+        {
+          "chance": 0,
+          "name": "null"
+        }
+      ],
+      "max_number": 45,
+      "min_number": 0,
+      "name": "ground",
+      "position": "Random",
+      "spawn_id": "spn-01c5db7657d6"
+    },
+    {
+      "candidates": [
+        {
+          "chance": 0,
+          "name": "null"
+        }
+      ],
+      "max_number": 1,
+      "min_number": 1,
+      "name": "Vibble",
+      "position": "Center",
+      "spawn_id": "spn-225b40dd06f7"
+    },
+    {
+      "candidates": [
+        {
+          "chance": 0,
+          "name": "null"
+        }
+      ],
+      "max_number": 9,
+      "min_number": 0,
+      "name": "Barrel",
+      "percentage_shift_from_center": 100,
+      "position": "Perimeter",
+      "sector_center_max": 359,
+      "sector_center_min": 359,
+      "sector_range_max": 360,
+      "sector_range_min": 360,
+      "spawn_id": "spn-215d762337e0"
+    },
+    {
+      "candidates": [
+        {
+          "chance": 0,
+          "name": "null"
+        }
+      ],
+      "max_number": 48,
+      "min_number": 16,
+      "name": "candle",
+      "position": "Perimeter",
+      "sector_center_max": 66,
+      "sector_center_min": 66,
+      "sector_range_max": 360,
+      "sector_range_min": 360,
+      "spawn_id": "spn-daa513dbdc5f"
+    },
+    {
+      "candidates": [
+        {
+          "chance": 0,
+          "name": "null"
+        },
+        {
+          "chance": 100,
+          "name": "candle"
+        }
+      ],
+      "check_overlap": false,
+      "display_name": "candle",
+      "dx": -362,
+      "dy": -311,
+      "enforce_spacing": false,
+      "max_number": 1,
+      "min_number": 1,
+      "origional_height": 1824,
+      "origional_width": 1824,
+      "percentage_shift_from_center": 0,
+      "perimeter_x_offset_max": 373,
+      "perimeter_x_offset_min": 111,
+      "perimeter_y_offset_max": 0,
+      "perimeter_y_offset_min": 0,
+      "position": "Perimeter",
+      "sector_center": 0,
+      "sector_center_max": 0,
+      "sector_center_min": 0,
+      "sector_range": 360,
+      "sector_range_max": 360,
+      "sector_range_min": 360,
+      "spawn_id": "spn-709d950d6c19"
+    }
+  ]
 }

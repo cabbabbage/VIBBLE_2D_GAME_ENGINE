@@ -43,6 +43,7 @@
       "min_number": 10,
       "name": "lantern",
       "position": "Center",
+      "spawn_id": "spn-a533c10dc2bb",
       "tag": false
     },
     {

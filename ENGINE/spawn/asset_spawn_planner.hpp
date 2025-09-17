@@ -24,12 +24,18 @@ class AssetSpawnPlanner {
         private:
     void parse_asset_spawns(const Area& area);
     void sort_spawn_queue();
-    nlohmann::json resolve_asset_from_tag(const nlohmann::json& tag_entry);
+    std::string resolve_asset_from_tag(const std::string& tag);
+    nlohmann::json* get_source_entry(int source_index, int entry_index, const std::string& key);
     void persist_sources();
     nlohmann::json root_json_;
     std::vector<nlohmann::json> source_jsons_;
     std::vector<std::string> source_paths_;
-    std::vector<std::pair<int,int>> assets_provenance_;
+    struct SourceRef {
+        int source_index = -1;
+        int entry_index = -1;
+        std::string key;
+    };
+    std::vector<SourceRef> assets_provenance_;
     std::vector<bool> source_changed_;
     AssetLibrary* asset_library_;
     std::vector<SpawnInfo> spawn_queue_;

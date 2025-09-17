@@ -2,13 +2,13 @@
 
 
 MAPS/FORREST/rooms
-Vibble,1.000,23,23,center,0.090,23,-0.032
+Vibble,1.000,24,24,center,0.089,24,-0.028
 Bone_1,0.011,390,35330,random,9.517,30,-1.854
-Key,1.000,3,3,center,0.085,3,-0.002
-Bench,1.000,4,4,exact,0.479,4,0.179
+Key,1.000,5,5,center,0.076,5,-0.014
+Bench,1.000,9,9,exact,0.419,9,-0.040
 Lantern,0.003,5,1760,random,10.067,6,2.577
 Grass_FPS_2,1.000,7131,7131,distributed_batch,13.695,120,7.048
-Grass_1_FPS_2,1.000,439,439,distributed_batch,24.694,7,6.227
+Grass_1_FPS_2,1.000,137,137,random,6.353,1,0.000
 Small_Rock,1.000,3417,3417,distributed_batch,26.685,1040,12.768
 pretty,0.000,0,0,distributed_batch,34.374,1040,15.076
 fog,1.000,228,228,distributed_batch,47.541,24,12.078
@@ -22,11 +22,11 @@ flower_5,1.000,1,1,distributed,0.119,1,0.000
 flower_4,1.000,104,104,random,2.939,2,-0.285
 flower_1,1.000,1,1,center,0.055,1,0.000
 flower,1.000,1,1,center,0.125,1,0.000
-flowers,0.000,0,0,distributed_batch,6.958,130,1.311
-candle,0.007,7,1040,random,11.402,2,7.977
+flowers,0.000,0,126,random,0.226,5,-0.273
+candle,0.005,7,1500,random,4.592,3,1.260
 Grave_1,1.000,288,288,distributed_batch,12.971,16,-2.599
 Grave_2,1.000,63,63,distributed_batch,19.023,9,0.235
-Fountain,1.000,7,7,center,0.518,7,0.052
+Fountain,1.000,9,9,center,0.480,9,-0.188
 Barrel,1.000,5,5,distributed_batch,15.895,3,-0.869
 Big_Rock_Center,1.000,32,32,center,0.475,32,0.093
 Box,0.017,277,16371,random,4.645,66,1.069
@@ -50,12 +50,20 @@ Bone_Pile,0.016,395,24720,random,14.840,18,-7.151
 Rock,0.029,97,3392,random,17.481,9,16.394
 Book_Pile,0.020,32,1563,random,2.944,8,-0.074
 Bomb,0.036,13,360,random,19.011,1,0.000
+ground,0.000,0,8,random,0.320,1,0.000
+lantern,0.000,0,10,center,0.004,1,0.000
+bone,0.000,0,82,random,0.424,1,0.000
+center,0.000,0,1,center,0.002,1,0.000
+man-made,0.000,0,30,random,0.158,2,0.160
+light,0.000,0,37,random,0.557,3,-0.199
+wood,0.000,0,38,random,0.105,3,-0.080
+piss,0.000,0,77,random,4.744,1,0.000
 
 
 
 MAPS/FORREST/trails
-candle,1.000,1,1,random,0.093,1,0.000
-Bomb,0.959,1300,1356,random,0.148,1300,-0.051
+candle,1.000,6,6,random,0.090,6,0.023
+Bomb,0.959,1310,1366,random,0.148,1310,-0.074
 light,0.000,0,0,distributed_batch,8.956,1300,0.216
 flower_1,1.000,2141,2141,distributed_batch,14.954,639,-0.293
 Grass_FPS_2,1.000,53551,53551,distributed_batch,25.983,1300,1.258

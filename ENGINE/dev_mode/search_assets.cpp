@@ -123,3 +123,8 @@ void SearchAssets::update(const Input& input) {
 void SearchAssets::render(SDL_Renderer* r) const {
     if (panel_ && panel_->is_visible()) panel_->render(r);
 }
+
+bool SearchAssets::is_point_inside(int x, int y) const {
+    if (!panel_ || !panel_->is_visible()) return false;
+    return panel_->is_point_inside(x, y);
+}
