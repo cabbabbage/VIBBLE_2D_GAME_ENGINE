@@ -103,6 +103,9 @@ private:
     // For showing the current key label in content render
     mutable std::string current_key_label_;
 
+    // Non-owning wrappers registered with DockableCollapsible rows
+    std::vector<std::unique_ptr<Widget>> widget_wrappers_;
+
     // Internal flag to debounce bulk syncs
     bool needs_sync_to_json_ = false;
 };

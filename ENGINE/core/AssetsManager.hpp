@@ -8,6 +8,7 @@
 #include <vector>
 #include <memory>
 #include <deque>
+#include <nlohmann/json.hpp>
 #include "room/room.hpp"
 
 class Asset;
@@ -87,12 +88,19 @@ class Assets {
 
         private:
 private:
+    void load_map_info_json();
+    void save_map_info_json() const;
+    void apply_map_light_config();
+    void on_map_light_changed();
     std::vector<Asset*> removal_queue;
     void schedule_removal(Asset* a);
     void process_removals();
 
-	private:
+private:
     void addAsset(const std::string& name, SDL_Point g);
     friend class SceneRenderer;
     friend class Asset;
+    std::string map_path_;
+    std::string map_info_path_;
+    nlohmann::json map_info_json_;
 };

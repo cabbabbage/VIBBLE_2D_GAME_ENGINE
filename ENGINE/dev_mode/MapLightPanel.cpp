@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <sstream>
+#include <utility>
 
 #include "dev_mode/dm_styles.hpp" // optional, for colors if you want
 #include "utils/input.hpp"        // already used by DockableCollapsible
@@ -39,6 +40,7 @@ MapLightPanel::~MapLightPanel() = default;
 void MapLightPanel::set_map_info(json* map_info, SaveCallback on_save) {
     map_info_ = map_info;
     on_save_ = std::move(on_save);
+    current_key_index_ = 0;
     sync_ui_from_json();
 }
 
@@ -78,26 +80,64 @@ void MapLightPanel::build_ui() {
     key_b_     = std::make_unique<DMSlider>("Key B", 0, 255, 255);
     key_a_     = std::make_unique<DMSlider>("Key A", 0, 255, 255);
 
-    // Layout: rows of widgets (auto-scrolling handled by DockableCollapsible)
+    // Build wrapper widgets for the dockable rows
+    widget_wrappers_.clear();
+    widget_wrappers_.reserve(20);
+
+    auto add_widget = [this](std::unique_ptr<Widget> w) -> Widget* {
+        Widget* raw = w.get();
+        widget_wrappers_.push_back(std::move(w));
+        return raw;
+    };
+
     Rows rows;
 
     // Top numeric settings
-    rows.push_back({ radius_.get(), intensity_.get() });
-    rows.push_back({ orbit_radius_.get(), update_interval_.get() });
-    rows.push_back({ mult_x100_.get(), falloff_.get() });
-    rows.push_back({ min_opacity_.get(), max_opacity_.get() });
+    rows.push_back({
+        add_widget(std::make_unique<SliderWidget>(radius_.get())),
+        add_widget(std::make_unique<SliderWidget>(intensity_.get()))
+    });
+    rows.push_back({
+        add_widget(std::make_unique<SliderWidget>(orbit_radius_.get())),
+        add_widget(std::make_unique<SliderWidget>(update_interval_.get()))
+    });
+    rows.push_back({
+        add_widget(std::make_unique<SliderWidget>(mult_x100_.get())),
+        add_widget(std::make_unique<SliderWidget>(falloff_.get()))
+    });
+    rows.push_back({
+        add_widget(std::make_unique<SliderWidget>(min_opacity_.get())),
+        add_widget(std::make_unique<SliderWidget>(max_opacity_.get()))
+    });
 
     // Base color
-    rows.push_back({ base_r_.get(), base_g_.get() });
-    rows.push_back({ base_b_.get(), base_a_.get() });
+    rows.push_back({
+        add_widget(std::make_unique<SliderWidget>(base_r_.get())),
+        add_widget(std::make_unique<SliderWidget>(base_g_.get()))
+    });
+    rows.push_back({
+        add_widget(std::make_unique<SliderWidget>(base_b_.get())),
+        add_widget(std::make_unique<SliderWidget>(base_a_.get()))
+    });
 
     // Keys pager
-    rows.push_back({ prev_key_btn_.get(), next_key_btn_.get(), add_pair_btn_.get(), delete_btn_.get() });
+    rows.push_back({
+        add_widget(std::make_unique<ButtonWidget>(prev_key_btn_.get(), [this](){ select_prev_key(); })),
+        add_widget(std::make_unique<ButtonWidget>(next_key_btn_.get(), [this](){ select_next_key(); })),
+        add_widget(std::make_unique<ButtonWidget>(add_pair_btn_.get(), [this](){ add_key_pair_at_current_angle(); })),
+        add_widget(std::make_unique<ButtonWidget>(delete_btn_.get(), [this](){ delete_current_key(); }))
+    });
 
     // Key editor (angle + color)
-    rows.push_back({ key_angle_.get() });
-    rows.push_back({ key_r_.get(), key_g_.get() });
-    rows.push_back({ key_b_.get(), key_a_.get() });
+    rows.push_back({ add_widget(std::make_unique<SliderWidget>(key_angle_.get())) });
+    rows.push_back({
+        add_widget(std::make_unique<SliderWidget>(key_r_.get())),
+        add_widget(std::make_unique<SliderWidget>(key_g_.get()))
+    });
+    rows.push_back({
+        add_widget(std::make_unique<SliderWidget>(key_b_.get())),
+        add_widget(std::make_unique<SliderWidget>(key_a_.get()))
+    });
 
     set_rows(rows);
 }
@@ -352,57 +392,10 @@ void MapLightPanel::update(const Input& input) {
 bool MapLightPanel::handle_event(const SDL_Event& e) {
     if (!visible_) return false;
 
-    // First let base route to children
     bool used = DockableCollapsible::handle_event(e);
 
-    // Handle our buttons (they’re part of rows, so base already sent events to them;
-    // we just check their pressed state on mouse-up)
-    if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
-        // We rely on DMButton::handle_event returning true and Dockable already consuming,
-        // but we still need to check intent (no direct "wasPressed" API),
-        // so we re-check if pointer is over and assume activation. This is sufficient in practice
-        // because Dockable already did hit-tests.
-        // Simpler: if base consumed, we’ll just try to do the actions anyway.
-
-        // Prev / Next / Add Pair / Delete
-        // We’ll trigger on any click release inside panel; that’s acceptable for a dev tool.
-        // If you want stricter gating, wrap DMButton with an "armed" state.
-        SDL_Point mp{ e.button.x, e.button.y };
-        if (prev_key_btn_) {
-            // No exact "inside" check available here without storing rects.
-            // Rely on Dockable to have routed correctly; then allow both prev/next in used path.
-        }
-    }
-
-    // We *also* want direct, precise actions:
-    // The DMButton already consumed events; we can poll hover/pressed state if exposed.
-    // For portability, do simple re-hit-test:
-    auto try_button = [&](DMButton* btn, std::function<void()> action){
-        if (!btn) return;
-        // Approximate: if last event is mouse button up and within panel, trigger
-        if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
-            SDL_Point p{ e.button.x, e.button.y };
-            // use panel hit test to avoid false triggers outside panel
-            if (is_point_inside(p.x, p.y)) {
-                action();
-            }
-        }
-    };
-
-    // For a dev tool, we won’t overcomplicate input gating—triggering on release within panel is enough:
-    try_button(prev_key_btn_.get(),  [&]{ select_prev_key(); });
-    try_button(next_key_btn_.get(),  [&]{ select_next_key(); });
-    try_button(add_pair_btn_.get(),  [&]{ add_key_pair_at_current_angle(); });
-    try_button(delete_btn_.get(),    [&]{ delete_current_key(); });
-
-    // After any widget interaction, push back to JSON.
     if (used) {
         needs_sync_to_json_ = true;
-    }
-
-    // Also respond to ESC close if you want:
-    if (e.type == SDL_KEYDOWN && e.key.keysym.sym == SDLK_ESCAPE) {
-        // no-op; leave open
     }
 
     if (needs_sync_to_json_) {
@@ -431,9 +424,12 @@ void MapLightPanel::render_content(SDL_Renderer* r) const {
     // We’ll draw a tiny swatch for the current key color to the right of the angle slider.
     if (!map_info_) return;
 
-    const json& L = (*map_info_)["map_light_data"];
-    if (!L.contains("keys") || !L["keys"].is_array()) return;
-    const auto& keys = L["keys"];
+    auto light_it = map_info_->find("map_light_data");
+    if (light_it == map_info_->end() || !light_it->is_object()) return;
+    const json& L = *light_it;
+    auto keys_it = L.find("keys");
+    if (keys_it == L.end() || !keys_it->is_array()) return;
+    const auto& keys = *keys_it;
     if (keys.empty()) return;
 
     int r_out=255,g_out=255,b_out=255,a_out=255;

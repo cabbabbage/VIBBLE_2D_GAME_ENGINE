@@ -11,6 +11,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <utility>
 
 DevControls::DevControls(Assets* owner, int screen_w, int screen_h)
     : assets_(owner),
@@ -26,6 +27,17 @@ void DevControls::set_input(Input* input) {
     input_ = input;
     if (room_editor_) room_editor_->set_input(input);
     if (map_editor_) map_editor_->set_input(input);
+}
+
+void DevControls::set_map_info(nlohmann::json* map_info, MapLightPanel::SaveCallback on_save) {
+    map_info_json_ = map_info;
+    map_light_save_cb_ = std::move(on_save);
+    if (!map_light_panel_) {
+        map_light_panel_ = std::make_unique<MapLightPanel>(40, 40);
+    }
+    if (map_light_panel_) {
+        map_light_panel_->set_map_info(map_info_json_, map_light_save_cb_);
+    }
 }
 
 void DevControls::set_player(Asset* player) {
@@ -89,11 +101,19 @@ void DevControls::set_enabled(bool enabled) {
         if (room_editor_) {
             room_editor_->set_enabled(false);
         }
+        if (map_light_panel_) {
+            map_light_panel_->close();
+        }
     }
 }
 
 void DevControls::update(const Input& input) {
     if (!enabled_) return;
+
+    const bool ctrl = input.isScancodeDown(SDL_SCANCODE_LCTRL) || input.isScancodeDown(SDL_SCANCODE_RCTRL);
+    if (ctrl && input.wasScancodePressed(SDL_SCANCODE_L)) {
+        toggle_map_light_panel();
+    }
 
     if (assets_) {
         camera& cam = assets_->getView();
@@ -123,6 +143,9 @@ void DevControls::update(const Input& input) {
 
 void DevControls::update_ui(const Input& input) {
     if (!enabled_) return;
+    if (map_light_panel_) {
+        map_light_panel_->update(input);
+    }
     if (mode_ != Mode::RoomEditor) return;
     if (!room_editor_ || !room_editor_->is_enabled()) return;
 
@@ -131,6 +154,11 @@ void DevControls::update_ui(const Input& input) {
 
 void DevControls::handle_sdl_event(const SDL_Event& event) {
     if (!enabled_) return;
+    if (map_light_panel_ && map_light_panel_->is_visible()) {
+        if (map_light_panel_->handle_event(event)) {
+            return;
+        }
+    }
     if (!can_use_room_editor_ui()) return;
     if (room_editor_) room_editor_->handle_sdl_event(event);
 }
@@ -142,6 +170,9 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
         if (map_editor_) map_editor_->render(renderer);
     } else if (room_editor_) {
         room_editor_->render_overlays(renderer);
+    }
+    if (map_light_panel_ && map_light_panel_->is_visible()) {
+        map_light_panel_->render(renderer);
     }
 }
 
@@ -298,5 +329,17 @@ void DevControls::handle_map_selection() {
     set_current_room(selected);
     map_editor_->focus_on_room(selected);
     exit_map_editor_mode(false, false);
+}
+
+void DevControls::toggle_map_light_panel() {
+    if (!map_light_panel_ || !map_info_json_) {
+        return;
+    }
+    map_light_panel_->set_map_info(map_info_json_, map_light_save_cb_);
+    if (map_light_panel_->is_visible()) {
+        map_light_panel_->close();
+    } else {
+        map_light_panel_->open();
+    }
 }
 

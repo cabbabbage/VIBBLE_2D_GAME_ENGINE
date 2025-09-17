@@ -46,15 +46,28 @@ SceneRenderer::SceneRenderer(SDL_Renderer* renderer,
 
 	// No accumulation texture; render directly to default target
 
-	z_light_pass_ = std::make_unique<LightMap>(renderer_, assets_, main_light_source_, screen_width_, screen_height_, fullscreen_light_tex_);
-	main_light_source_.update();
-	z_light_pass_->render(debugging);
+        z_light_pass_ = std::make_unique<LightMap>(renderer_, assets_, main_light_source_, screen_width_, screen_height_, fullscreen_light_tex_);
+        main_light_source_.update();
+        z_light_pass_->render(debugging);
+}
+
+void SceneRenderer::apply_map_light_config(const nlohmann::json& data) {
+        main_light_source_.apply_config(data);
+        if (!renderer_ || !fullscreen_light_tex_) {
+                return;
+        }
+        SDL_Texture* prev = SDL_GetRenderTarget(renderer_);
+        SDL_SetRenderTarget(renderer_, fullscreen_light_tex_);
+        SDL_Color color = main_light_source_.get_current_color();
+        SDL_SetRenderDrawColor(renderer_, color.r, color.g, color.b, color.a);
+        SDL_RenderClear(renderer_);
+        SDL_SetRenderTarget(renderer_, prev);
 }
 
 void SceneRenderer::update_shading_groups() {
-	++current_shading_group_;
-	if (current_shading_group_ > num_groups_)
-		current_shading_group_ = 1;
+        ++current_shading_group_;
+        if (current_shading_group_ > num_groups_)
+                current_shading_group_ = 1;
 }
 
 bool SceneRenderer::shouldRegen(Asset* a) {

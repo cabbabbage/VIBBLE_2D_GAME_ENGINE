@@ -3,6 +3,7 @@
 #include <string>
 #include <memory>
 #include <SDL.h>
+#include <nlohmann/json.hpp>
 #include "light_map.hpp"
 #include "global_light_source.hpp"
 #include "render_asset.hpp"
@@ -16,6 +17,7 @@ class SceneRenderer {
 	public:
     SceneRenderer(SDL_Renderer* renderer, Assets* assets, int screen_width, int screen_height, const std::string& map_path);
     void render();
+    void apply_map_light_config(const nlohmann::json& data);
 
 	private:
     void update_shading_groups();

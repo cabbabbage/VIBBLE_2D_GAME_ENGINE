@@ -13,6 +13,7 @@
 #include "room/room.hpp"
 
 #include <algorithm>
+#include <fstream>
 #include <iostream>
 #include <memory>
 #include <limits>
@@ -48,8 +49,11 @@ Assets::Assets(std::vector<Asset>&& loaded,
       activeManager(screen_width_, screen_height_, camera),
       screen_width(screen_width_),
       screen_height(screen_height_),
+      map_path_(map_path),
+      map_info_path_(map_path + "/map_info.json"),
       library_(library)
 {
+    load_map_info_json();
     InitializeAssets::initialize(*this,
                                  std::move(loaded),
                                  std::move(rooms),
@@ -65,6 +69,7 @@ Assets::Assets(std::vector<Asset>&& loaded,
     }
 
     scene = new SceneRenderer(renderer, this, screen_width_, screen_height_, map_path);
+    apply_map_light_config();
 
     for (Asset* a : all) {
         if (a) a->set_assets(this);
@@ -78,10 +83,65 @@ Assets::Assets(std::vector<Asset>&& loaded,
         dev_controls_->set_screen_dimensions(screen_width_, screen_height_);
         dev_controls_->set_rooms(&rooms_);
         dev_controls_->set_input(input);
+        dev_controls_->set_map_info(&map_info_json_, [this]() { on_map_light_changed(); });
     }
 
+
+void Assets::load_map_info_json() {
+    map_info_json_ = nlohmann::json::object();
+    if (map_info_path_.empty()) {
+        return;
+    }
+    std::ifstream in(map_info_path_);
+    if (!in.is_open()) {
+        std::cerr << "[Assets] Failed to open map_info.json at " << map_info_path_ << "\n";
+        return;
+    }
+    try {
+        in >> map_info_json_;
+    } catch (const std::exception& e) {
+        std::cerr << "[Assets] Failed to parse map_info.json: " << e.what() << "\n";
+        map_info_json_ = nlohmann::json::object();
+    }
+    if (!map_info_json_.is_object()) {
+        map_info_json_ = nlohmann::json::object();
+    }
 }
 
+void Assets::save_map_info_json() const {
+    if (map_info_path_.empty()) {
+        return;
+    }
+    std::ofstream out(map_info_path_);
+    if (!out.is_open()) {
+        std::cerr << "[Assets] Failed to write map_info.json at " << map_info_path_ << "\n";
+        return;
+    }
+    try {
+        out << map_info_json_.dump(2);
+    } catch (const std::exception& e) {
+        std::cerr << "[Assets] Failed to serialize map_info.json: " << e.what() << "\n";
+    }
+}
+
+void Assets::apply_map_light_config() {
+    if (!scene) {
+        return;
+    }
+    if (!map_info_json_.is_object()) {
+        return;
+    }
+    auto it = map_info_json_.find("map_light_data");
+    if (it == map_info_json_.end() || !it->is_object()) {
+        return;
+    }
+    scene->apply_map_light_config(*it);
+}
+
+void Assets::on_map_light_changed() {
+    apply_map_light_config();
+    save_map_info_json();
+}
 
 Assets::~Assets() {
     delete scene;
