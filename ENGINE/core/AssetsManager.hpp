@@ -48,8 +48,8 @@ public:
 
     const std::vector<Asset*>& getActive() const { return active_assets; }
     const std::vector<Asset*>& getClosest() const { return closest_assets; }
-    camera& getView() { return camera; }
-    const camera& getView() const { return camera; }
+    camera& getView() { return camera_; }
+    const camera& getView() const { return camera_; }
 
     void render_overlays(SDL_Renderer* renderer);
     void toggle_asset_library();
@@ -119,7 +119,7 @@ private:
     CurrentRoomFinder* finder_ = nullptr;
     Input* input = nullptr;
     DevControls* dev_controls_ = nullptr;
-    camera camera;
+    camera camera_;
     SceneRenderer* scene = nullptr;
     ActiveAssetsManager activeManager;
     int screen_width;

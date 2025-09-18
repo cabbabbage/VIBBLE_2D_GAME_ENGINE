@@ -3,7 +3,7 @@
 #include <SDL.h>
 #include <vector>
 #include <random>
-#include "core/assetsManager.hpp"
+#include "core/AssetsManager.hpp"
 #include "global_light_source.hpp"
 #include "render/camera.hpp"
 

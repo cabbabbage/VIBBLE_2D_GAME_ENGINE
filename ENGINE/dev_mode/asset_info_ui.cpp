@@ -116,6 +116,29 @@ void AssetInfoUI::handle_event(const SDL_Event& e) {
     if (animations_panel_ && animations_panel_->is_open() && animations_panel_->handle_event(e))
         return;
 
+    bool pointer_inside = false;
+    const bool pointer_event =
+        (e.type == SDL_MOUSEBUTTONDOWN || e.type == SDL_MOUSEBUTTONUP || e.type == SDL_MOUSEMOTION);
+    if (pointer_event) {
+        SDL_Point p{
+            e.type == SDL_MOUSEMOTION ? e.motion.x : e.button.x,
+            e.type == SDL_MOUSEMOTION ? e.motion.y : e.button.y
+        };
+        pointer_inside = SDL_PointInRect(&p, &panel_);
+        if (!pointer_inside) {
+            return;
+        }
+    } else if (e.type == SDL_MOUSEWHEEL) {
+        int mx = 0;
+        int my = 0;
+        SDL_GetMouseState(&mx, &my);
+        SDL_Point p{mx, my};
+        pointer_inside = SDL_PointInRect(&p, &panel_);
+        if (!pointer_inside) {
+            return;
+        }
+    }
+
     if (e.type == SDL_KEYDOWN && e.key.keysym.sym == SDLK_ESCAPE) {
         close();
         return;
@@ -139,6 +162,10 @@ void AssetInfoUI::handle_event(const SDL_Event& e) {
                 }
             }
         }
+        return;
+    }
+
+    if (pointer_inside) {
         return;
     }
 }

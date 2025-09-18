@@ -3,7 +3,7 @@
 #include <random>
 #include <vector>
 #include <nlohmann/json.hpp>
-#include "Room.hpp"
+#include "room.hpp"
 #include "asset/asset_library.hpp"
 #include "utils/area.hpp"
 #include <iostream>

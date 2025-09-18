@@ -143,7 +143,9 @@ bool FullScreenCollapsible::handle_event(const SDL_Event& e) {
     }
     if (used) return true;
 
-    if (e.type == SDL_MOUSEBUTTONDOWN || e.type == SDL_MOUSEBUTTONUP || e.type == SDL_MOUSEMOTION) {
+    const bool pointer_event =
+        (e.type == SDL_MOUSEBUTTONDOWN || e.type == SDL_MOUSEBUTTONUP || e.type == SDL_MOUSEMOTION);
+    if (pointer_event) {
         SDL_Point p{
             e.type == SDL_MOUSEMOTION ? e.motion.x : e.button.x,
             e.type == SDL_MOUSEMOTION ? e.motion.y : e.button.y
@@ -151,11 +153,18 @@ bool FullScreenCollapsible::handle_event(const SDL_Event& e) {
         if (SDL_PointInRect(&p, &header_rect_)) {
             return true;
         }
+        if (expanded_ && SDL_PointInRect(&p, &content_rect_)) {
+            return true;
+        }
     } else if (e.type == SDL_MOUSEWHEEL) {
-        int mx, my;
+        int mx = 0;
+        int my = 0;
         SDL_GetMouseState(&mx, &my);
         SDL_Point p{mx, my};
         if (SDL_PointInRect(&p, &header_rect_)) {
+            return true;
+        }
+        if (expanded_ && SDL_PointInRect(&p, &content_rect_)) {
             return true;
         }
     }

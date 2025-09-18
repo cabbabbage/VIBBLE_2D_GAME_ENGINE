@@ -34,7 +34,7 @@ Assets::Assets(std::vector<Asset>&& loaded,
                int map_radius,
                SDL_Renderer* renderer,
                const std::string& map_path)
-    : camera(
+    : camera_(
           screen_width_,
           screen_height_,
           Area(
@@ -47,7 +47,7 @@ Assets::Assets(std::vector<Asset>&& loaded,
                   SDL_Point{-map_radius / 3,  map_radius / 3}
               })
       ),
-      activeManager(screen_width_, screen_height_, camera),
+      activeManager(screen_width_, screen_height_, camera_),
       screen_width(screen_width_),
       screen_height(screen_height_),
       library_(library),
@@ -67,7 +67,7 @@ Assets::Assets(std::vector<Asset>&& loaded,
 
     finder_ = new CurrentRoomFinder(rooms_, player);
     if (finder_) {
-        camera.set_up_rooms(finder_);
+        camera_.set_up_rooms(finder_);
     }
 
     scene = new SceneRenderer(renderer, this, screen_width_, screen_height_, map_path);
@@ -250,15 +250,15 @@ void Assets::load_camera_settings_from_json() {
     if (!camera_settings.is_object()) {
         camera_settings = nlohmann::json::object();
     }
-    camera.apply_camera_settings(camera_settings);
-    camera_settings = camera.camera_settings_to_json();
+    camera_.apply_camera_settings(camera_settings);
+    camera_settings = camera_.camera_settings_to_json();
 }
 
 void Assets::write_camera_settings_to_json() {
     if (!map_info_json_.is_object()) {
         return;
     }
-    map_info_json_["camera_settings"] = camera.camera_settings_to_json();
+    map_info_json_["camera_settings"] = camera_.camera_settings_to_json();
 }
 
 void Assets::on_camera_settings_changed() {
@@ -353,7 +353,7 @@ void Assets::update(const Input& input,
     }
     current_room_ = active_room;
 
-    camera.update_zoom(active_room, finder_, player);
+    camera_.update_zoom(active_room, finder_, player);
 
     dx = dy = 0;
 
@@ -486,7 +486,7 @@ void Assets::addAsset(const std::string& name, SDL_Point g) {
     std::cout << "[Assets::addAsset] all.size() now = " << all.size() << "\n";
 
     try {
-        set_camera_recursive(newAsset, &camera);
+        set_camera_recursive(newAsset, &camera_);
         set_assets_owner_recursive(newAsset, this);
         std::cout << "[Assets::addAsset] View set successfully\n";
         newAsset->finalize_setup();
@@ -546,7 +546,7 @@ Asset* Assets::spawn_asset(const std::string& name, SDL_Point world_pos) {
     std::cout << "[Assets::spawn_asset] all.size() now = " << all.size() << "\n";
 
     try {
-        set_camera_recursive(newAsset, &camera);
+        set_camera_recursive(newAsset, &camera_);
         set_assets_owner_recursive(newAsset, this);
         std::cout << "[Assets::spawn_asset] View set successfully\n";
         newAsset->finalize_setup();

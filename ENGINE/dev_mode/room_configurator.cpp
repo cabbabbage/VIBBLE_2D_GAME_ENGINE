@@ -5,17 +5,26 @@
 #include "room/room.hpp"
 #include "widgets.hpp"
 
+#include <algorithm>
+
 RoomConfigurator::RoomConfigurator() {
     room_geom_options_ = {"Square", "Circle"};
-    panel_ = std::make_unique<DockableCollapsible>("Room", true, 32, 32);
+    panel_ = std::make_unique<DockableCollapsible>("Room", false, 0, 0);
     panel_->set_expanded(true);
     panel_->set_visible(false);
+    panel_->set_show_header(false);
+    panel_->set_scroll_enabled(true);
 }
 
 RoomConfigurator::~RoomConfigurator() = default;
 
-void RoomConfigurator::set_position(int x, int y) {
-    if (panel_) panel_->set_position(x, y);
+void RoomConfigurator::set_bounds(const SDL_Rect& bounds) {
+    bounds_ = bounds;
+    if (!panel_) return;
+    panel_->set_rect(bounds_);
+    const int pad = DMSpacing::panel_padding();
+    int available = std::max(0, bounds_.h - 2 * pad);
+    panel_->set_available_height_override(available);
 }
 
 void RoomConfigurator::open(const nlohmann::json& data) {
@@ -33,7 +42,7 @@ void RoomConfigurator::open(const nlohmann::json& data) {
     rebuild_rows();
     if (panel_) {
         panel_->set_visible(true);
-        Input dummy; panel_->update(dummy, 1920, 1080);
+        panel_->set_expanded(true);
     }
 }
 
@@ -80,9 +89,10 @@ void RoomConfigurator::rebuild_rows() {
     panel_->set_rows(rows);
 }
 
-void RoomConfigurator::update(const Input& input) {
+void RoomConfigurator::update(const Input& input, int screen_w, int screen_h) {
     if (panel_ && panel_->is_visible()) {
-        panel_->update(input, 1920, 1080);
+        panel_->set_rect(bounds_);
+        panel_->update(input, screen_w, screen_h);
     }
     if (room_w_slider_) { room_w_min_ = room_w_slider_->min_value(); room_w_max_ = room_w_slider_->max_value(); }
     if (room_h_slider_) { room_h_min_ = room_h_slider_->min_value(); room_h_max_ = room_h_slider_->max_value(); }
@@ -130,9 +140,7 @@ nlohmann::json RoomConfigurator::build_json() const {
 }
 
 bool RoomConfigurator::is_point_inside(int x, int y) const {
-    if (panel_ && panel_->is_visible()) {
-        SDL_Point p{ x, y };
-        if (SDL_PointInRect(&p, &panel_->rect())) return true;
-    }
-    return false;
+    if (!panel_ || !panel_->is_visible()) return false;
+    SDL_Point p{x, y};
+    return SDL_PointInRect(&p, &panel_->rect());
 }

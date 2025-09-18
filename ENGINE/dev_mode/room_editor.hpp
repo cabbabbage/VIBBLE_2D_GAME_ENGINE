@@ -22,6 +22,7 @@ class AssetInfo;
 class Room;
 class MapGrid;
 class DMButton;
+class FullScreenCollapsible;
 
 class RoomEditor {
 public:
@@ -104,6 +105,8 @@ private:
     void update_area_editor_focus();
     void ensure_area_editor();
     void apply_area_editor_camera_override(bool enable);
+    void ensure_room_panel();
+    void ensure_room_configurator();
     void begin_drag_session(const SDL_Point& world_mouse, bool ctrl_modifier);
     void update_drag_session(const SDL_Point& world_mouse);
     void apply_perimeter_drag(const SDL_Point& world_mouse);
@@ -140,6 +143,7 @@ private:
     std::unique_ptr<AssetsConfig> assets_cfg_ui_;
     std::unique_ptr<AreaOverlayEditor> area_editor_;
     std::unique_ptr<RoomConfigurator> room_cfg_ui_;
+    std::unique_ptr<FullScreenCollapsible> room_panel_;
 
     bool last_area_editor_active_ = false;
     bool area_editor_override_active_ = false;

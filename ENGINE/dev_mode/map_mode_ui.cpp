@@ -346,10 +346,9 @@ void MapModeUI::update(const Input& input) {
 bool MapModeUI::handle_event(const SDL_Event& e) {
     ensure_panels();
     if (map_mode_active_ && footer_panel_ && footer_panel_->visible()) {
-        if (footer_panel_->handle_event(e)) {
-            return true;
-        }
-        if (handle_layers_footer_event(e)) {
+        bool footer_used = footer_panel_->handle_event(e);
+        bool layers_used = handle_layers_footer_event(e);
+        if (footer_used || layers_used) {
             return true;
         }
     } else {

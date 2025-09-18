@@ -1,5 +1,6 @@
 #include "room.hpp"
 #include "spawn/asset_spawner.hpp"
+#include "asset/asset_types.hpp"
 #include <fstream>
 #include <nlohmann/json.hpp>
 #include <stdexcept>
@@ -166,6 +167,7 @@ nlohmann::json Room::create_static_room_json(std::string name) {
                 cx = c.x;
                 cy = c.y;
 	}
+        bool has_player_asset = false;
         for (const auto& uptr : assets) {
                 const Asset* a = uptr.get();
                 if (!a || !a->info) continue; // skip assets lacking runtime info
@@ -187,8 +189,11 @@ nlohmann::json Room::create_static_room_json(std::string name) {
                 entry["candidates"].push_back({{"name", "null"}, {"chance", 0}});
                 entry["candidates"].push_back({{"name", a->info->name}, {"chance", 100}});
                 spawn_groups.push_back(std::move(entry));
+                if (a->info->type == asset_types::player) {
+                        has_player_asset = true;
+                }
         }
-        if (is_spawn) {
+        if (is_spawn && !has_player_asset) {
                 json davey_entry;
                 davey_entry["min_number"] = 1;
                 davey_entry["max_number"] = 1;

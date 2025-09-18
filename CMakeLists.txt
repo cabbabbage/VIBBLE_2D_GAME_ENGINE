@@ -63,7 +63,18 @@ endif()
 # ------------------------------------------
 # Dependencies (prefer vcpkg; with glad fallback)
 # ------------------------------------------
-find_package(nlohmann_json CONFIG REQUIRED)
+find_package(nlohmann_json CONFIG QUIET)
+if(NOT nlohmann_json_FOUND)
+    set(_NLOHMANN_JSON_DIR "${CMAKE_SOURCE_DIR}/external/nlohmann_json")
+    if(EXISTS "${_NLOHMANN_JSON_DIR}/include/nlohmann/json.hpp")
+        add_library(nlohmann_json INTERFACE)
+        add_library(nlohmann_json::nlohmann_json ALIAS nlohmann_json)
+        target_include_directories(nlohmann_json INTERFACE "${_NLOHMANN_JSON_DIR}/include")
+        message(STATUS "Using bundled nlohmann_json from ${_NLOHMANN_JSON_DIR}")
+    else()
+        message(FATAL_ERROR "nlohmann_json not found. Install the package or add it to ${_NLOHMANN_JSON_DIR}")
+    endif()
+endif()
 find_package(SDL2 CONFIG REQUIRED)
 find_package(SDL2_image CONFIG REQUIRED)
 find_package(SDL2_mixer CONFIG REQUIRED)
@@ -92,13 +103,14 @@ else()
         endif()
         message(STATUS "Using third_party glad subdirectory")
     else()
-        message(FATAL_ERROR
-            "glad not found.\n"
-            "Fix options:\n"
+        message(WARNING
+            "glad not found; continuing without glad.\n"
+            "Fix options (optional):\n"
             "  1) Install via vcpkg and pass the vcpkg toolchain to CMake (recommended):\n"
             "       vcpkg install glad:x64-windows\n"
             "       -DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake\n"
             "  2) Add glad sources to third_party/glad (with include/ and src/glad.c).")
+        set(GLAD_TARGET "")
     endif()
 endif()
 

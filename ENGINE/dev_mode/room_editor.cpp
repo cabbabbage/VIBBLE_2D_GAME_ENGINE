@@ -9,6 +9,7 @@
 #include "dev_mode/asset_info_ui.hpp"
 #include "dev_mode/asset_library_ui.hpp"
 #include "dev_mode/assets_config.hpp"
+#include "dev_mode/full_screen_collapsible.hpp"
 #include "dev_mode/room_configurator.hpp"
 #include "dev_mode/widgets.hpp"
 #include "render/camera.hpp"
@@ -76,6 +77,7 @@ RoomEditor::RoomEditor(Assets* owner, int screen_w, int screen_h)
     : assets_(owner), screen_w_(screen_w), screen_h_(screen_h) {
     regenerate_button_ = std::make_unique<DMButton>("Regenerate Current Room", &DMStyles::CreateButton(), 240, DMButton::height());
     position_regenerate_button();
+    ensure_room_panel();
 }
 
 RoomEditor::~RoomEditor() = default;
@@ -97,6 +99,12 @@ void RoomEditor::set_screen_dimensions(int width, int height) {
     screen_w_ = width;
     screen_h_ = height;
     position_regenerate_button();
+    if (room_panel_) {
+        room_panel_->set_bounds(screen_w_, screen_h_);
+    }
+    if (room_cfg_ui_ && room_panel_) {
+        room_cfg_ui_->set_bounds(room_panel_->content_rect());
+    }
 }
 
 void RoomEditor::set_current_room(Room* room) {
@@ -105,6 +113,11 @@ void RoomEditor::set_current_room(Room* room) {
     current_room_ = room;
     if (current_room_) {
         ensure_spawn_groups_array(current_room_->assets_data());
+    }
+
+    if (room_cfg_ui_ && room_panel_ && room_panel_->expanded()) {
+        room_cfg_ui_->open(current_room_);
+        room_cfg_ui_->set_bounds(room_panel_->content_rect());
     }
 
     if (enabled_ && room_changed && current_room_) {
@@ -116,6 +129,8 @@ void RoomEditor::set_enabled(bool enabled) {
     enabled_ = enabled;
     if (!assets_) return;
 
+    ensure_room_panel();
+
     camera& cam = assets_->getView();
     if (enabled_) {
         apply_area_editor_camera_override(false);
@@ -123,6 +138,10 @@ void RoomEditor::set_enabled(bool enabled) {
         cam.set_manual_zoom_override(false);
         close_asset_info_editor();
         focus_camera_on_room_center();
+        if (room_panel_) {
+            room_panel_->set_visible(true);
+            room_panel_->set_expanded(false);
+        }
     } else {
         apply_area_editor_camera_override(false);
         cam.set_parallax_enabled(true);
@@ -138,6 +157,13 @@ void RoomEditor::set_enabled(bool enabled) {
         reopen_info_after_area_edit_ = false;
         info_for_reopen_.reset();
         last_area_editor_active_ = false;
+        if (room_panel_) {
+            room_panel_->set_visible(false);
+            room_panel_->set_expanded(false);
+        }
+        if (room_cfg_ui_) {
+            room_cfg_ui_->close();
+        }
     }
 
     if (input_) input_->clearClickBuffer();
@@ -160,11 +186,25 @@ void RoomEditor::update(const Input& input) {
 }
 
 void RoomEditor::update_ui(const Input& input) {
+    ensure_room_panel();
+
     if (library_ui_ && library_ui_->is_visible()) {
         library_ui_->update(input, screen_w_, screen_h_, assets_->library(), *assets_);
     }
-    if (room_cfg_ui_ && room_cfg_ui_->visible()) {
-        room_cfg_ui_->update(input);
+    if (room_panel_ && room_panel_->visible()) {
+        room_panel_->set_bounds(screen_w_, screen_h_);
+        room_panel_->update(input);
+        if (room_cfg_ui_) {
+            if (room_panel_->expanded()) {
+                room_cfg_ui_->set_bounds(room_panel_->content_rect());
+                if (!room_cfg_ui_->visible()) {
+                    room_cfg_ui_->open(current_room_);
+                }
+                room_cfg_ui_->update(input, screen_w_, screen_h_);
+            } else if (room_cfg_ui_->visible()) {
+                room_cfg_ui_->close();
+            }
+        }
     }
 
     ensure_area_editor();
@@ -225,16 +265,23 @@ void RoomEditor::handle_sdl_event(const SDL_Event& event) {
     }
 
     bool handled = false;
+    if (!handled && room_panel_ && room_panel_->visible()) {
+        bool panel_used = room_panel_->handle_event(event);
+        bool config_used = false;
+        if (room_panel_->expanded()) {
+            ensure_room_configurator();
+            if (room_cfg_ui_) {
+                config_used = room_cfg_ui_->handle_event(event);
+            }
+        }
+        handled = panel_used || config_used;
+    }
     if (!handled && info_ui_ && info_ui_->is_visible() && info_ui_->is_point_inside(mx, my)) {
         info_ui_->handle_event(event);
         handled = true;
     }
     if (!handled && assets_cfg_ui_ && assets_cfg_ui_->any_visible() && assets_cfg_ui_->is_point_inside(mx, my)) {
         assets_cfg_ui_->handle_event(event);
-        handled = true;
-    }
-    if (!handled && room_cfg_ui_ && room_cfg_ui_->visible() && room_cfg_ui_->is_point_inside(mx, my)) {
-        room_cfg_ui_->handle_event(event);
         handled = true;
     }
     if (!handled && library_ui_ && library_ui_->is_visible() && library_ui_->is_input_blocking_at(mx, my)) {
@@ -247,8 +294,6 @@ void RoomEditor::handle_sdl_event(const SDL_Event& event) {
             info_ui_->handle_event(event);
         } else if (assets_cfg_ui_ && assets_cfg_ui_->any_visible()) {
             assets_cfg_ui_->handle_event(event);
-        } else if (room_cfg_ui_ && room_cfg_ui_->any_panel_visible()) {
-            room_cfg_ui_->handle_event(event);
         } else if (library_ui_ && library_ui_->is_visible()) {
             library_ui_->handle_event(event);
         }
@@ -285,8 +330,11 @@ void RoomEditor::render_overlays(SDL_Renderer* renderer) {
     if (assets_cfg_ui_) {
         assets_cfg_ui_->render(renderer);
     }
-    if (room_cfg_ui_ && room_cfg_ui_->any_panel_visible()) {
-        room_cfg_ui_->render(renderer);
+    if (room_panel_ && room_panel_->visible()) {
+        room_panel_->render(renderer);
+        if (room_panel_->expanded() && room_cfg_ui_ && room_cfg_ui_->visible()) {
+            room_cfg_ui_->render(renderer);
+        }
     }
     if (regenerate_button_ && enabled_) {
         regenerate_button_->set_rect(regenerate_button_rect_);
@@ -420,21 +468,22 @@ void RoomEditor::finalize_asset_drag(Asset* asset, const std::shared_ptr<AssetIn
 }
 
 void RoomEditor::toggle_room_config() {
-    if (!room_cfg_ui_) room_cfg_ui_ = std::make_unique<RoomConfigurator>();
-    if (room_cfg_ui_->visible()) {
-        room_cfg_ui_->close();
-    } else {
-        room_cfg_ui_->open(current_room_);
-        room_cfg_ui_->set_position(10, 10);
-    }
+    ensure_room_panel();
+    if (!room_panel_) return;
+    bool expand = !room_panel_->expanded();
+    room_panel_->set_visible(true);
+    room_panel_->set_expanded(expand);
 }
 
 void RoomEditor::close_room_config() {
+    if (room_panel_) {
+        room_panel_->set_expanded(false);
+    }
     if (room_cfg_ui_) room_cfg_ui_->close();
 }
 
 bool RoomEditor::is_room_config_open() const {
-    return room_cfg_ui_ && room_cfg_ui_->visible();
+    return room_panel_ && room_panel_->expanded();
 }
 
 void RoomEditor::begin_area_edit_for_selected_asset(const std::string& area_name) {
@@ -757,6 +806,9 @@ bool RoomEditor::is_ui_blocking_input(int mx, int my) const {
     if (info_ui_ && info_ui_->is_visible() && info_ui_->is_point_inside(mx, my)) {
         return true;
     }
+    if (room_panel_ && room_panel_->visible() && room_panel_->contains(mx, my)) {
+        return true;
+    }
     if (room_cfg_ui_ && room_cfg_ui_->visible() && room_cfg_ui_->is_point_inside(mx, my)) {
         return true;
     }
@@ -833,6 +885,43 @@ void RoomEditor::apply_area_editor_camera_override(bool enable) {
             cam.set_parallax_enabled(area_editor_prev_parallax_enabled_);
         }
         area_editor_override_active_ = false;
+    }
+}
+
+void RoomEditor::ensure_room_configurator() {
+    if (!room_cfg_ui_) {
+        room_cfg_ui_ = std::make_unique<RoomConfigurator>();
+    }
+    if (room_cfg_ui_ && room_panel_) {
+        room_cfg_ui_->set_bounds(room_panel_->content_rect());
+    }
+}
+
+void RoomEditor::ensure_room_panel() {
+    if (!room_panel_) {
+        room_panel_ = std::make_unique<FullScreenCollapsible>("Room Editor");
+        room_panel_->set_bounds(screen_w_, screen_h_);
+        room_panel_->set_visible(enabled_);
+        room_panel_->set_expanded(false);
+        room_panel_->set_on_toggle([this](bool expanded) {
+            ensure_room_configurator();
+            if (!room_cfg_ui_) return;
+            if (expanded) {
+                if (room_panel_) {
+                    room_cfg_ui_->set_bounds(room_panel_->content_rect());
+                }
+                room_cfg_ui_->open(current_room_);
+            } else {
+                room_cfg_ui_->close();
+            }
+        });
+    } else {
+        room_panel_->set_bounds(screen_w_, screen_h_);
+        room_panel_->set_visible(enabled_);
+    }
+    ensure_room_configurator();
+    if (room_panel_ && room_cfg_ui_ && !room_panel_->expanded()) {
+        room_cfg_ui_->close();
     }
 }
 

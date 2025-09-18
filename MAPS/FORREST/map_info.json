@@ -393,8 +393,8 @@
       "is_spawn": true,
       "max_height": 2479,
       "max_width": 2671,
-      "min_height": 1707,
-      "min_width": 1771,
+      "min_height": 100,
+      "min_width": 100,
       "name": "spawn",
       "spawn_groups": [
         {

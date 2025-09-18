@@ -23,13 +23,13 @@ class RoomConfigurator {
 public:
     RoomConfigurator();
     ~RoomConfigurator();
-    void set_position(int x, int y);
+    void set_bounds(const SDL_Rect& bounds);
     void open(const nlohmann::json& room_data);
     void open(Room* room);
     void close();
     bool visible() const;
     bool any_panel_visible() const;
-    void update(const Input& input);
+    void update(const Input& input, int screen_w, int screen_h);
     bool handle_event(const SDL_Event& e);
     void render(SDL_Renderer* r) const;
     nlohmann::json build_json() const;
@@ -37,6 +37,7 @@ public:
 private:
     void rebuild_rows();
     std::unique_ptr<DockableCollapsible> panel_;
+    SDL_Rect bounds_{0,0,0,0};
     std::vector<std::string> room_geom_options_;
     Room* room_ = nullptr;
     std::string room_name_;

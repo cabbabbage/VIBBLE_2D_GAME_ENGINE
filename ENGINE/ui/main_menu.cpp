@@ -38,34 +38,39 @@ void MainMenu::buildButtons() {
 	const int gap   = 18;
 	int y = (screen_h_ / 2) - 140;
 	const int x = (screen_w_ - btn_w) / 2;
-	try {
-		if (fs::exists("MAPS") && fs::is_directory("MAPS")) {
-			for (const auto& e : fs::directory_iterator("MAPS")) {
-					if (!e.is_directory()) continue;
-					const std::string label = e.path().filename().string();
-					Button b = Button::get_main_button(label);
-					b.set_rect(SDL_Rect{ x, y, btn_w, btn_h });
-					buttons_.push_back(std::move(b));
-					y += btn_h + gap;
-			}
-		}
-	} catch (const std::exception& ex) {
-		std::cerr << "[MainMenu] MAPS scan failed: " << ex.what() << "\n";
-	}
-	Button quit = Button::get_exit_button("QUIT GAME");
-	quit.set_rect(SDL_Rect{ x, y + 12, btn_w, btn_h });
-	buttons_.push_back(std::move(quit));
+        try {
+                if (fs::exists("MAPS") && fs::is_directory("MAPS")) {
+                        for (const auto& e : fs::directory_iterator("MAPS")) {
+                                        if (!e.is_directory()) continue;
+                                        const std::string label = e.path().filename().string();
+                                        Button b = Button::get_main_button(label);
+                                        b.set_rect(SDL_Rect{ x, y, btn_w, btn_h });
+                                        buttons_.push_back(std::move(b));
+                                        y += btn_h + gap;
+                        }
+                }
+        } catch (const std::exception& ex) {
+                std::cerr << "[MainMenu] MAPS scan failed: " << ex.what() << "\n";
+        }
+        Button create = Button::get_main_button("Create New Map");
+        create.set_rect(SDL_Rect{ x, y, btn_w, btn_h });
+        buttons_.push_back(std::move(create));
+        y += btn_h + gap;
+        Button quit = Button::get_exit_button("QUIT GAME");
+        quit.set_rect(SDL_Rect{ x, y + 12, btn_w, btn_h });
+        buttons_.push_back(std::move(quit));
 }
 
 std::string MainMenu::handle_event(const SDL_Event& e) {
-	for (auto& b : buttons_) {
-		if (b.handle_event(e)) {
-			const std::string lbl = b.text();
-			if (lbl == "QUIT GAME") return "QUIT";
-			return "MAPS/" + lbl;
-		}
-	}
-	return "";
+        for (auto& b : buttons_) {
+                if (b.handle_event(e)) {
+                        const std::string lbl = b.text();
+                        if (lbl == "QUIT GAME") return "QUIT";
+                        if (lbl == "Create New Map") return "CREATE_NEW_MAP";
+                        return "MAPS/" + lbl;
+                }
+        }
+        return "";
 }
 
 void MainMenu::render() {
