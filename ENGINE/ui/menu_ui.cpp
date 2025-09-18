@@ -237,25 +237,6 @@ void MenuUI::doExit() {
 void MenuUI::doRestart() {
 	std::cout << "[MenuUI] Restarting...\n";
 	if (game_assets_)      { delete game_assets_; game_assets_ = nullptr; }
-<<<<<<< ours
-        try {
-                auto all_assets = loader_->createAssets();
-                Asset* player_ptr = nullptr;
-                for (auto& a : all_assets) {
-                        if (a.info && a.info->type == "Player") { player_ptr = &a; break; }
-                }
-                const int start_x = player_ptr ? player_ptr->pos.x : 0;
-                const int start_y = player_ptr ? player_ptr->pos.y : 0;
-                game_assets_ = new Assets(std::move(all_assets), *loader_->getAssetLibrary(), player_ptr, loader_->getRooms(), screen_w_, screen_h_, start_x, start_y, static_cast<int>(loader_->getMapRadius() * 1.2), renderer_, map_path_);
-                if (!input_) input_ = new Input();
-                game_assets_->set_input(input_);
-                if (!player_ptr) {
-                        std::cout << "[MenuUI] No player asset found. Launching in Dev Mode.\n";
-                        dev_mode_ = true;
-                        game_assets_->set_dev_mode(true);
-                }
-        } catch (const std::exception& ex) {
-=======
 	try {
 		auto all_assets = loader_->createAssets();
 		Asset* player_ptr = nullptr;
@@ -267,7 +248,6 @@ void MenuUI::doRestart() {
 		if (!input_) input_ = new Input();
 		game_assets_->set_input(input_);
 	} catch (const std::exception& ex) {
->>>>>>> theirs
 		std::cerr << "[MenuUI] Restart failed: " << ex.what() << "\n";
 		return;
 	}

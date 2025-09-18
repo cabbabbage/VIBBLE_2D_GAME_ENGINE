@@ -48,23 +48,6 @@ void MainApp::setup() {
 	std::srand(static_cast<unsigned int>(std::time(nullptr)));
 	try {
 		loader_ = std::make_unique<AssetLoader>(map_path_, renderer_);
-<<<<<<< ours
-                auto all_assets = loader_->createAssets();
-                Asset* player_ptr = nullptr;
-                for (auto& a : all_assets) {
-                        if (a.info && a.info->type == "Player") { player_ptr = &a; break; }
-                }
-                const int start_x = player_ptr ? player_ptr->pos.x : 0;
-                const int start_y = player_ptr ? player_ptr->pos.y : 0;
-                game_assets_ = new Assets(std::move(all_assets), *loader_->getAssetLibrary(), player_ptr, loader_->getRooms(), screen_w_, screen_h_, start_x, start_y, static_cast<int>(loader_->getMapRadius() * 1.2), renderer_, map_path_);
-                input_ = new Input();
-                game_assets_->set_input(input_);
-                if (!player_ptr) {
-                        std::cout << "[Main] No player asset found. Launching in Dev Mode.\n";
-                        dev_mode_ = true;
-                        game_assets_->set_dev_mode(true);
-                }
-=======
 		auto all_assets = loader_->createAssets();
 		Asset* player_ptr = nullptr;
                 for (auto& a : all_assets) {
@@ -74,7 +57,6 @@ void MainApp::setup() {
 		game_assets_ = new Assets(std::move(all_assets), *loader_->getAssetLibrary(), player_ptr, loader_->getRooms(), screen_w_, screen_h_, player_ptr->pos.x, player_ptr->pos.y, static_cast<int>(loader_->getMapRadius() * 1.2), renderer_, map_path_);
 		input_ = new Input();
 		game_assets_->set_input(input_);
->>>>>>> theirs
 	} catch (const std::exception& e) {
 		std::cerr << "[MainApp] Setup error: " << e.what() << "\n";
 		throw;
