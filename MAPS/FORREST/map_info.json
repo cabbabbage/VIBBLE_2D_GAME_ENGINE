@@ -1,4 +1,18 @@
 {
+  "camera_settings": {
+    "realism_enabled": true,
+    "parallax_vertical_strength": 20.0,
+    "parallax_horizontal_strength": 0.0,
+    "parallax_zoom_influence": 1.0,
+    "squash_position_strength": 1.0,
+    "squash_height_strength": 1.0,
+    "squash_overall_strength": 0.45,
+    "squash_zoom_influence": 1.0,
+    "squash_curve_exponent": 1.35,
+    "stretch_top_strength": 0.55,
+    "max_squash_ratio": 0.6,
+    "render_distance_factor": 1.0
+  },
   "map_assets_data": {
     "spawn_groups": [
       {

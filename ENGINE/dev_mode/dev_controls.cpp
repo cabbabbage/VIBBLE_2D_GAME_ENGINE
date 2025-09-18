@@ -103,6 +103,7 @@ void DevControls::set_enabled(bool enabled) {
     enabled_ = enabled;
 
     if (enabled_) {
+        suspend_map_switch_ = false;
         mode_ = Mode::RoomEditor;
         Room* target = choose_room(current_room_ ? current_room_ : detected_room_);
         dev_selected_room_ = target;
@@ -111,6 +112,7 @@ void DevControls::set_enabled(bool enabled) {
         if (map_light_panel_) map_light_panel_->close();
         set_current_room(target);
     } else {
+        suspend_map_switch_ = false;
         if (map_editor_ && map_editor_->is_enabled()) {
             map_editor_->exit(true, false);
         }
@@ -142,7 +144,13 @@ void DevControls::update(const Input& input) {
         constexpr double kEnterScale = 2.8284271247461903;  // sqrt(8)
         constexpr double kExitScale = kEnterScale * 0.85;
 
-        if (mode_ != Mode::MapEditor && scale >= kEnterScale) {
+        if (suspend_map_switch_) {
+            if (!cam.zooming_ && scale < kEnterScale) {
+                suspend_map_switch_ = false;
+            }
+        }
+
+        if (!suspend_map_switch_ && mode_ != Mode::MapEditor && scale >= kEnterScale) {
             enter_map_editor_mode();
         } else if (mode_ == Mode::MapEditor && scale < kExitScale) {
             exit_map_editor_mode(false, true);
@@ -364,6 +372,7 @@ void DevControls::enter_map_editor_mode() {
     if (!map_editor_) return;
     if (mode_ == Mode::MapEditor) return;
 
+    suspend_map_switch_ = false;
     mode_ = Mode::MapEditor;
     map_editor_->set_input(input_);
     map_editor_->set_rooms(rooms_);
@@ -401,6 +410,7 @@ void DevControls::handle_map_selection() {
     set_current_room(selection.room);
     map_editor_->focus_on_room(selection.room);
     exit_map_editor_mode(false, false);
+    suspend_map_switch_ = true;
 }
 
 bool DevControls::handle_map_mode_asset_click(const Input& input) {

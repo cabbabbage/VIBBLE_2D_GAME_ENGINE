@@ -130,13 +130,9 @@ void ActiveAssetsManager::updateActiveAssets(int cx, int cy)
                 if (a) a->active = false;
         }
 
-        const float scale     = std::max(0.0001f, camera_.get_scale());
-        const float inv_scale = 1.0f / scale;
-
         // Use camera's current view area directly, then expand by a fixed on-screen margin
         auto [left, top, right, bottom] = camera_.get_current_view().get_bounds();
-        // Keep a fixed 200px on-screen margin, converted to world units.
-        const int buffer_world = static_cast<int>( 200.0f / inv_scale );
+        const int buffer_world = camera_.get_render_distance_world_margin();
         left   -= buffer_world;
         right  += buffer_world;
         top    -= buffer_world;

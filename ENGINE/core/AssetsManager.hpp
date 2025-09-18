@@ -101,10 +101,12 @@ public:
 
 private:
     void load_map_info_json();
-    void save_map_info_json() const;
+    void save_map_info_json();
     void apply_map_light_config();
     void on_map_light_changed();
     void hydrate_map_info_sections();
+    void load_camera_settings_from_json();
+    void write_camera_settings_to_json();
     void schedule_removal(Asset* a);
     void process_removals();
     void addAsset(const std::string& name, SDL_Point g);

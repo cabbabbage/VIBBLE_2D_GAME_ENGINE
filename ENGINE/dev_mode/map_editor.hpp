@@ -88,6 +88,8 @@ private:
     bool prev_manual_override_ = false;
     bool prev_focus_override_ = false;
     SDL_Point prev_focus_point_{0, 0};
+    bool has_entry_center_ = false;
+    SDL_Point entry_center_{0, 0};
 
     TTF_Font* label_font_ = nullptr;
 

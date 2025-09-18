@@ -61,6 +61,7 @@ void MapEditor::enter() {
     if (enabled_) return;
     enabled_ = true;
     pending_selection_ = Selection{};
+    has_entry_center_ = false;
 
     if (assets_) {
         camera& cam = assets_->getView();
@@ -71,6 +72,8 @@ void MapEditor::enter() {
         } else {
             prev_focus_point_ = SDL_Point{0, 0};
         }
+        entry_center_ = cam.get_screen_center();
+        has_entry_center_ = true;
     }
 
     compute_bounds();
@@ -78,6 +81,7 @@ void MapEditor::enter() {
 }
 
 void MapEditor::exit(bool focus_player, bool restore_previous_state) {
+    has_entry_center_ = false;
     if (!enabled_) {
         restore_camera_state(focus_player, restore_previous_state);
         return;
@@ -157,7 +161,7 @@ void MapEditor::focus_on_room(Room* room) {
     Area adjusted = cam.convert_area_to_aspect(*room->room_area);
     cam.set_manual_zoom_override(true);
     cam.set_focus_override(adjusted.get_center());
-    cam.zoom_to_area(adjusted, 35);
+    cam.zoom_to_area(adjusted, 20);
 }
 
 void MapEditor::ensure_font() {
@@ -227,8 +231,9 @@ void MapEditor::apply_camera_to_bounds() {
         int max_y = bounds_.max_y + kBoundsPadding;
 
         auto distance = [](int a, int b) { return (a > b) ? (a - b) : (b - a); };
-        SDL_Point center = has_spawn_center ? spawn_center
-                                            : SDL_Point{ (min_x + max_x) / 2, (min_y + max_y) / 2 };
+        SDL_Point bounds_center{ (min_x + max_x) / 2, (min_y + max_y) / 2 };
+        SDL_Point center = has_entry_center_ ? entry_center_
+                                             : (has_spawn_center ? spawn_center : bounds_center);
         int half_w = std::max({ distance(center.x, min_x), distance(center.x, max_x), 1 });
         int half_h = std::max({ distance(center.y, min_y), distance(center.y, max_y), 1 });
         int left = center.x - half_w;
@@ -245,6 +250,9 @@ void MapEditor::apply_camera_to_bounds() {
         Area area("map_bounds", pts);
         cam.set_focus_override(center);
         cam.zoom_to_area(area, 35);
+    } else if (has_entry_center_) {
+        cam.set_focus_override(entry_center_);
+        cam.zoom_to_scale(1.0, 20);
     } else if (has_spawn_center) {
         cam.set_focus_override(spawn_center);
         if (spawn_room && spawn_room->room_area) {

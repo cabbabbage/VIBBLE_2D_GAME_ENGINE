@@ -116,12 +116,14 @@ void Assets::load_map_info_json() {
     }
 
     hydrate_map_info_sections();
+    load_camera_settings_from_json();
 }
 
-void Assets::save_map_info_json() const {
+void Assets::save_map_info_json() {
     if (map_info_path_.empty()) {
         return;
     }
+    write_camera_settings_to_json();
     std::ofstream out(map_info_path_);
     if (!out.is_open()) {
         std::cerr << "[Assets] Failed to write map_info.json at " << map_info_path_ << "\n";
@@ -238,6 +240,25 @@ void Assets::hydrate_map_info_sections() {
     ensure_object("map_light_data");
     ensure_object("rooms_data");
     ensure_object("trails_data");
+}
+
+void Assets::load_camera_settings_from_json() {
+    if (!map_info_json_.is_object()) {
+        return;
+    }
+    nlohmann::json& camera_settings = map_info_json_["camera_settings"];
+    if (!camera_settings.is_object()) {
+        camera_settings = nlohmann::json::object();
+    }
+    camera.apply_camera_settings(camera_settings);
+    camera_settings = camera.camera_settings_to_json();
+}
+
+void Assets::write_camera_settings_to_json() {
+    if (!map_info_json_.is_object()) {
+        return;
+    }
+    map_info_json_["camera_settings"] = camera.camera_settings_to_json();
 }
 
 void Assets::apply_map_light_config() {

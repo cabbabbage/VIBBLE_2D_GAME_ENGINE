@@ -119,5 +119,6 @@ private:
     MapLightPanel::SaveCallback map_light_save_cb_;
     std::unique_ptr<MapModeUI> map_mode_ui_;
     int map_click_cooldown_ = 0;
+    bool suspend_map_switch_ = false;
 };
 

@@ -77,8 +77,13 @@ bool SceneRenderer::shouldRegen(Asset* a) {
 	       (!a->get_final_texture() || !a->static_frame || a->get_render_player_light());
 }
 
-SDL_Rect SceneRenderer::get_scaled_position_rect(Asset* a, int fw, int fh,
-                                                 float inv_scale, int min_w, int min_h) {
+SDL_Rect SceneRenderer::get_scaled_position_rect(Asset* a,
+                                                 int fw,
+                                                 int fh,
+                                                 float inv_scale,
+                                                 int min_w,
+                                                 int min_h,
+                                                 float reference_screen_height) {
         float base_sw = static_cast<float>(fw) * inv_scale;
         float base_sh = static_cast<float>(fh) * inv_scale;
 
@@ -86,23 +91,11 @@ SDL_Rect SceneRenderer::get_scaled_position_rect(Asset* a, int fw, int fh,
                 return {0, 0, 0, 0};
         }
 
-        SDL_Point cp = assets_->getView().map_to_screen(SDL_Point{a->pos.x, a->pos.y});
-
-        float screen_y_ratio = static_cast<float>(cp.y) / static_cast<float>(screen_height_);
-        screen_y_ratio = std::clamp(screen_y_ratio, 0.0f, 1.0f);
-
-        float normalized_height = base_sh / static_cast<float>(screen_height_);
-        normalized_height = std::clamp(normalized_height, 0.0f, 1.0f);
-
-        constexpr float POSITION_SQUASH_STRENGTH = 0.45f;
-        constexpr float HEIGHT_SQUASH_STRENGTH = 0.35f;
-        float squash_amount = screen_y_ratio * POSITION_SQUASH_STRENGTH +
-                              normalized_height * HEIGHT_SQUASH_STRENGTH;
-        squash_amount = std::clamp(squash_amount, 0.0f, 0.6f);
-        float vertical_squash = 1.0f - squash_amount;
+        const camera::RenderEffects effects = assets_->getView().compute_render_effects(
+            SDL_Point{a->pos.x, a->pos.y}, base_sh, reference_screen_height);
 
         int sw = static_cast<int>(std::round(base_sw));
-        int sh = static_cast<int>(std::round(base_sh * vertical_squash));
+        int sh = static_cast<int>(std::round(base_sh * effects.vertical_scale));
         sw = std::max(sw, 1);
         sh = std::max(sh, 1);
 
@@ -110,6 +103,7 @@ SDL_Rect SceneRenderer::get_scaled_position_rect(Asset* a, int fw, int fh,
                 return {0, 0, 0, 0};
         }
 
+        const SDL_Point& cp = effects.screen_position;
         return SDL_Rect{ cp.x - sw / 2, cp.y - sh, sw, sh };
 }
 
@@ -128,11 +122,34 @@ void SceneRenderer::render() {
 	SDL_SetRenderDrawColor(renderer_, SLATE_COLOR.r, SLATE_COLOR.g, SLATE_COLOR.b, 255);
 	SDL_RenderClear(renderer_);
 
-	const auto& camera_state = assets_->getView();
-	float scale = camera_state.get_scale();
-	float inv_scale = 1.0f / scale;
-	int min_visible_w = static_cast<int>(screen_width_  * MIN_VISIBLE_SCREEN_RATIO);
-	int min_visible_h = static_cast<int>(screen_height_ * MIN_VISIBLE_SCREEN_RATIO);
+        const auto& camera_state = assets_->getView();
+        float scale = camera_state.get_scale();
+        float inv_scale = 1.0f / scale;
+        int min_visible_w = static_cast<int>(screen_width_  * MIN_VISIBLE_SCREEN_RATIO);
+        int min_visible_h = static_cast<int>(screen_height_ * MIN_VISIBLE_SCREEN_RATIO);
+
+        float player_screen_height = 1.0f;
+        Asset* player_asset = assets_ ? assets_->player : nullptr;
+        if (player_asset) {
+                SDL_Texture* player_final = player_asset->get_final_texture();
+                SDL_Texture* player_frame = player_asset->get_current_frame();
+                int pw = player_asset->cached_w;
+                int ph = player_asset->cached_h;
+                if ((pw == 0 || ph == 0) && player_final) {
+                        SDL_QueryTexture(player_final, nullptr, nullptr, &pw, &ph);
+                }
+                if ((pw == 0 || ph == 0) && player_frame) {
+                        SDL_QueryTexture(player_frame, nullptr, nullptr, &pw, &ph);
+                }
+                if (pw != 0) player_asset->cached_w = pw;
+                if (ph != 0) player_asset->cached_h = ph;
+                if (ph > 0) {
+                        player_screen_height = static_cast<float>(ph) * inv_scale;
+                }
+        }
+        if (player_screen_height <= 0.0f) {
+                player_screen_height = 1.0f;
+        }
 
         const auto& active_assets = assets_->getActive();
         for (Asset* a : active_assets) {
@@ -154,7 +171,7 @@ void SceneRenderer::render() {
 			a->cached_h = fh;
 		}
 
-		SDL_Rect fb = get_scaled_position_rect(a, fw, fh, inv_scale, min_visible_w, min_visible_h);
+                SDL_Rect fb = get_scaled_position_rect(a, fw, fh, inv_scale, min_visible_w, min_visible_h, player_screen_height);
 		if (fb.w == 0 && fb.h == 0) continue;
 
 		if (a->is_highlighted()) {
