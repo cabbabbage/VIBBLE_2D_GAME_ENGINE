@@ -10,6 +10,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cstdlib>
 #include <string>
 #include <tuple>
 #include <vector>
@@ -211,26 +212,61 @@ void MapEditor::apply_camera_to_bounds() {
     camera& cam = assets_->getView();
     cam.set_manual_zoom_override(true);
 
+    Room* spawn_room = find_spawn_room();
+    SDL_Point spawn_center{0, 0};
+    bool has_spawn_center = false;
+    if (spawn_room && spawn_room->room_area) {
+        spawn_center = spawn_room->room_area->get_center();
+        has_spawn_center = true;
+    }
+
     if (has_bounds_) {
         int min_x = bounds_.min_x - kBoundsPadding;
         int min_y = bounds_.min_y - kBoundsPadding;
         int max_x = bounds_.max_x + kBoundsPadding;
         int max_y = bounds_.max_y + kBoundsPadding;
 
+        auto distance = [](int a, int b) { return (a > b) ? (a - b) : (b - a); };
+        SDL_Point center = has_spawn_center ? spawn_center
+                                            : SDL_Point{ (min_x + max_x) / 2, (min_y + max_y) / 2 };
+        int half_w = std::max({ distance(center.x, min_x), distance(center.x, max_x), 1 });
+        int half_h = std::max({ distance(center.y, min_y), distance(center.y, max_y), 1 });
+        int left = center.x - half_w;
+        int right = center.x + half_w;
+        int top = center.y - half_h;
+        int bottom = center.y + half_h;
+
         std::vector<SDL_Point> pts{
-            {min_x, min_y},
-            {max_x, min_y},
-            {max_x, max_y},
-            {min_x, max_y},
+            {left, top},
+            {right, top},
+            {right, bottom},
+            {left, bottom},
         };
         Area area("map_bounds", pts);
-        cam.set_focus_override(area.get_center());
-        cam.zoom_to_area(area, 35);
-    } else if (assets_->player) {
-        SDL_Point center{assets_->player->pos.x, assets_->player->pos.y};
         cam.set_focus_override(center);
+        cam.zoom_to_area(area, 35);
+    } else if (has_spawn_center) {
+        cam.set_focus_override(spawn_center);
+        if (spawn_room && spawn_room->room_area) {
+            Area adjusted = cam.convert_area_to_aspect(*spawn_room->room_area);
+            cam.zoom_to_area(adjusted, 35);
+        } else {
+            cam.zoom_to_scale(1.0, 20);
+        }
+    } else {
+        cam.set_focus_override(SDL_Point{0, 0});
         cam.zoom_to_scale(1.0, 20);
     }
+}
+
+Room* MapEditor::find_spawn_room() const {
+    if (!rooms_) return nullptr;
+    for (Room* room : *rooms_) {
+        if (room && room->is_spawn_room()) {
+            return room;
+        }
+    }
+    return nullptr;
 }
 
 void MapEditor::restore_camera_state(bool focus_player, bool restore_previous_state) {

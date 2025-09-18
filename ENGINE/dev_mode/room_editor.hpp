@@ -63,6 +63,7 @@ public:
 
     void begin_area_edit_for_selected_asset(const std::string& area_name);
     void focus_camera_on_asset(Asset* asset, double zoom_factor = 0.8, int duration_steps = 25);
+    void focus_camera_on_room_center(bool reframe_zoom = true);
 
     void reset_click_state();
     void clear_selection();

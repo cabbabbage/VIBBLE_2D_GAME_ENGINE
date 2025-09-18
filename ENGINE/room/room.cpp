@@ -141,7 +141,7 @@ void Room::bounds_to_size(const std::tuple<int,int,int,int>& b, int& w, int& h) 
 }
 
 nlohmann::json Room::create_static_room_json(std::string name) {
-	json out;
+        json out;
 	const std::string geometry = assets_json.value("geometry", "Square");
 	const int edge_smoothness = assets_json.value("edge_smoothness", 2);
 	int width = 0, height = 0;
@@ -303,6 +303,10 @@ nlohmann::json& Room::assets_data() {
                 }
         }
         return assets_json;
+}
+
+bool Room::is_spawn_room() const {
+        return assets_json.value("is_spawn", false);
 }
 
 void Room::save_assets_json() const {

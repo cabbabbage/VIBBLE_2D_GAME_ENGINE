@@ -151,39 +151,58 @@ void camera::set_up_rooms(CurrentRoomFinder* finder) {
 }
 
 void camera::update_zoom(Room* cur, CurrentRoomFinder* finder, Asset* player) {
-    if (!player || !finder || !starting_room_) return;
-    // Keep camera centered on player, unless an explicit pan animation is active
     if (!pan_override_) {
         if (focus_override_) {
             screen_center_ = focus_point_;
-        } else {
+        } else if (player) {
             screen_center_ = SDL_Point{ player->pos.x, player->pos.y };
+        } else if (cur && cur->room_area) {
+            screen_center_ = cur->room_area->get_center();
         }
     }
+
+    if (!starting_room_ && cur && cur->room_area) {
+        starting_room_ = cur;
+        Area adjusted = convert_area_to_aspect(*cur->room_area);
+        starting_area_ = adjusted.get_size();
+        if (starting_area_ <= 0.0) starting_area_ = 1.0;
+    }
+
     update();
-	if (!cur) return;
-	if (manual_zoom_override_) {
-		// Respect manual zoom override: do not compute or apply room-based zoom target
-		return;
-	}
-	Room* neigh = finder->getNeighboringRoom(cur);
-	if (!neigh) neigh = cur;
-	const double sa = compute_room_scale_from_area(cur);
-	const double sb = compute_room_scale_from_area(neigh);
-	auto [ax, ay] = cur->room_area->get_center();
-	auto [bx, by] = neigh->room_area->get_center();
-	const double pax = double(player->pos.x);
-	const double pay = double(player->pos.y);
-	const double vx = double(bx - ax);
-	const double vy = double(by - ay);
-	const double wx = double(pax - ax);
-	const double wy = double(pay - ay);
-	const double vlen2 = vx * vx + vy * vy;
-	double t = (vlen2 > 0.0) ? ((wx * vx + wy * vy) / vlen2) : 0.0;
-	t = std::clamp(t, 0.0, 1.0);
-	double target_zoom = (sa * (1.0 - t)) + (sb * t);
-	target_zoom = std::clamp(target_zoom, BASE_RATIO * 0.7, BASE_RATIO * 1.3);
-	zoom_to_scale(target_zoom, 35);
+
+    if (!cur) return;
+    if (manual_zoom_override_) {
+        // Respect manual zoom override: do not compute or apply room-based zoom target
+        return;
+    }
+
+    Room* neigh = nullptr;
+    if (finder) {
+        neigh = finder->getNeighboringRoom(cur);
+    }
+    if (!neigh) neigh = cur;
+
+    const double sa = compute_room_scale_from_area(cur);
+    const double sb = compute_room_scale_from_area(neigh);
+
+    double target_zoom = sa;
+    if (player && cur && cur->room_area && neigh && neigh->room_area) {
+        auto [ax, ay] = cur->room_area->get_center();
+        auto [bx, by] = neigh->room_area->get_center();
+        const double pax = double(player->pos.x);
+        const double pay = double(player->pos.y);
+        const double vx = double(bx - ax);
+        const double vy = double(by - ay);
+        const double wx = double(pax - ax);
+        const double wy = double(pay - ay);
+        const double vlen2 = vx * vx + vy * vy;
+        double t = (vlen2 > 0.0) ? ((wx * vx + wy * vy) / vlen2) : 0.0;
+        t = std::clamp(t, 0.0, 1.0);
+        target_zoom = (sa * (1.0 - t)) + (sb * t);
+    }
+
+    target_zoom = std::clamp(target_zoom, BASE_RATIO * 0.7, BASE_RATIO * 1.3);
+    zoom_to_scale(target_zoom, 35);
 }
 
 // Aspect conversion (cover)

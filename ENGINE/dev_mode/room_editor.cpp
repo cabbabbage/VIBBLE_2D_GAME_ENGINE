@@ -99,9 +99,15 @@ void RoomEditor::set_screen_dimensions(int width, int height) {
 }
 
 void RoomEditor::set_current_room(Room* room) {
+    const bool room_changed = (room != current_room_);
+
     current_room_ = room;
     if (current_room_) {
         ensure_spawn_groups_array(current_room_->assets_data());
+    }
+
+    if (enabled_ && room_changed && current_room_) {
+        focus_camera_on_room_center();
     }
 }
 
@@ -114,9 +120,11 @@ void RoomEditor::set_enabled(bool enabled) {
         cam.set_parallax_enabled(false);
         cam.set_manual_zoom_override(false);
         close_asset_info_editor();
+        focus_camera_on_room_center();
     } else {
         cam.set_parallax_enabled(true);
         cam.set_manual_zoom_override(false);
+        cam.clear_focus_override();
         if (library_ui_) library_ui_->close();
         if (room_cfg_ui_) room_cfg_ui_->close();
         if (info_ui_) info_ui_->close();
@@ -429,7 +437,6 @@ void RoomEditor::begin_area_edit_for_selected_asset(const std::string& area_name
     Asset* target = nullptr;
     if (!selected_assets_.empty()) target = selected_assets_.front();
     if (!target) target = hovered_asset_;
-    if (!target) target = player_;
     if (!target || !target->info) return;
 
     if (info_ui_ && info_ui_->is_visible()) {
@@ -450,6 +457,20 @@ void RoomEditor::focus_camera_on_asset(Asset* asset, double zoom_factor, int dur
     camera& cam = assets_->getView();
     cam.set_manual_zoom_override(true);
     cam.pan_and_zoom_to_asset(asset, zoom_factor, duration_steps);
+}
+
+void RoomEditor::focus_camera_on_room_center(bool reframe_zoom) {
+    if (!enabled_ || !assets_) return;
+    if (!current_room_ || !current_room_->room_area) return;
+
+    camera& cam = assets_->getView();
+    const SDL_Point center = current_room_->room_area->get_center();
+    cam.set_manual_zoom_override(true);
+    cam.set_focus_override(center);
+
+    if (reframe_zoom) {
+        cam.zoom_to_area(*current_room_->room_area, 25);
+    }
 }
 
 void RoomEditor::reset_click_state() {
@@ -511,7 +532,6 @@ void RoomEditor::handle_mouse_input(const Input& input) {
     }
 
     if (!input_) return;
-    if (!player_) return;
 
     const int mx = input_->getX();
     const int my = input_->getY();
@@ -609,7 +629,7 @@ void RoomEditor::update_hover_state(Asset* hit) {
 }
 
 void RoomEditor::handle_click(const Input& input) {
-    if (!input_ || !player_) return;
+    if (!input_) return;
 
     if (input_->wasClicked(Input::RIGHT)) {
         if (rclick_buffer_frames_ > 0) {
@@ -763,13 +783,14 @@ void RoomEditor::update_area_editor_focus() {
         Asset* focus = nullptr;
         if (!selected_assets_.empty()) focus = selected_assets_.front();
         if (!focus) focus = hovered_asset_;
-        if (!focus) focus = player_;
         if (focus) {
             cam.set_manual_zoom_override(true);
             cam.set_focus_override(SDL_Point{focus->pos.x, focus->pos.y});
+        } else {
+            focus_camera_on_room_center(false);
         }
     } else {
-        cam.clear_focus_override();
+        focus_camera_on_room_center(false);
     }
 }
 

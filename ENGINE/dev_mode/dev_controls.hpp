@@ -94,6 +94,8 @@ private:
     void toggle_map_light_panel();
     bool handle_map_mode_asset_click(const Input& input);
     Asset* hit_test_boundary_asset(SDL_Point screen_point) const;
+    Room* find_spawn_room() const;
+    Room* choose_room(Room* preferred) const;
 
 private:
     Assets* assets_ = nullptr;

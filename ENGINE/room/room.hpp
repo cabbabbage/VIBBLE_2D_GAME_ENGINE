@@ -57,6 +57,7 @@ class Room {
     nlohmann::json create_static_room_json(std::string name);
     nlohmann::json& assets_data();
     void save_assets_json() const;
+    bool is_spawn_room() const;
 
 	private:
     nlohmann::json assets_json;

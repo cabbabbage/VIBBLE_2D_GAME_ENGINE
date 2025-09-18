@@ -63,6 +63,7 @@ private:
     void render_room_label(SDL_Renderer* renderer, Room* room, LabelType type);
     SDL_Rect label_background_rect(const SDL_Surface* surface, SDL_Point screen_pos) const;
     bool is_trail_room(const Room* room) const;
+    Room* find_spawn_room() const;
 
 private:
     Assets* assets_ = nullptr;

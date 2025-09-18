@@ -65,7 +65,9 @@ void DevControls::set_screen_dimensions(int width, int height) {
 
 void DevControls::set_current_room(Room* room) {
     current_room_ = room;
-    if (room_editor_) room_editor_->set_current_room(room);
+    if (room_editor_) {
+        room_editor_->set_current_room(room);
+    }
 }
 
 void DevControls::set_rooms(std::vector<Room*>* rooms) {
@@ -79,17 +81,20 @@ void DevControls::set_map_context(nlohmann::json* map_info, const std::string& m
 
 Room* DevControls::resolve_current_room(Room* detected_room) {
     detected_room_ = detected_room;
+    Room* target = choose_room(detected_room_);
     if (!enabled_) {
         dev_selected_room_ = nullptr;
-        set_current_room(detected_room_);
+        set_current_room(target);
         return current_room_;
     }
 
     if (!dev_selected_room_) {
-        dev_selected_room_ = detected_room_;
+        dev_selected_room_ = choose_room(detected_room_);
     }
 
-    set_current_room(dev_selected_room_ ? dev_selected_room_ : detected_room_);
+    target = choose_room(dev_selected_room_);
+    dev_selected_room_ = target;
+    set_current_room(target);
     return current_room_;
 }
 
@@ -99,10 +104,12 @@ void DevControls::set_enabled(bool enabled) {
 
     if (enabled_) {
         mode_ = Mode::RoomEditor;
-        dev_selected_room_ = current_room_ ? current_room_ : detected_room_;
+        Room* target = choose_room(current_room_ ? current_room_ : detected_room_);
+        dev_selected_room_ = target;
         if (room_editor_) room_editor_->set_enabled(true);
         if (map_editor_) map_editor_->set_enabled(false);
         if (map_light_panel_) map_light_panel_->close();
+        set_current_room(target);
     } else {
         if (map_editor_ && map_editor_->is_enabled()) {
             map_editor_->exit(true, false);
@@ -472,5 +479,33 @@ Asset* DevControls::hit_test_boundary_asset(SDL_Point screen_point) const {
     }
 
     return best;
+}
+
+Room* DevControls::find_spawn_room() const {
+    if (!rooms_) return nullptr;
+    for (Room* room : *rooms_) {
+        if (room && room->is_spawn_room()) {
+            return room;
+        }
+    }
+    return nullptr;
+}
+
+Room* DevControls::choose_room(Room* preferred) const {
+    if (preferred) {
+        return preferred;
+    }
+    if (Room* spawn = find_spawn_room()) {
+        return spawn;
+    }
+    if (!rooms_) {
+        return nullptr;
+    }
+    for (Room* room : *rooms_) {
+        if (room && room->room_area) {
+            return room;
+        }
+    }
+    return nullptr;
 }
 

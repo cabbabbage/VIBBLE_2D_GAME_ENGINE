@@ -917,22 +917,6 @@ class SourcesElementPanel:
         self.folder_rel_var.set(rel)
         self.kind_var.set("folder")
 
-        # optionally write preview.gif if PIL present
-        if Image is not None:
-            try:
-                files = [f for f in sorted(os.listdir(out_dir)) if f.lower().endswith('.png')]
-                if files:
-                    frames = []
-                    for f in files:
-                        p = os.path.join(out_dir, f)
-                        im = Image.open(p).convert('RGBA')
-                        rgb = Image.new('RGB', im.size, (0,0,0))
-                        rgb.paste(im, mask=im.split()[3])
-                        frames.append(rgb.convert('P'))
-                    if frames:
-                        frames[0].save(os.path.join(out_dir, 'preview.gif'), save_all=True, append_images=frames[1:], loop=0, duration=1000//24, disposal=2)
-            except Exception:
-                pass
         self._apply_kind_visibility()
         self._notify()
 
