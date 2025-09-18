@@ -3,6 +3,7 @@
 #include "dev_mode/map_editor.hpp"
 #include "dev_mode/room_editor.hpp"
 #include "dev_mode/map_mode_ui.hpp"
+#include "dev_mode/camera_ui.hpp"
 
 #include "asset/Asset.hpp"
 #include "core/AssetsManager.hpp"
@@ -24,6 +25,10 @@ DevControls::DevControls(Assets* owner, int screen_w, int screen_h)
     room_editor_ = std::make_unique<RoomEditor>(assets_, screen_w_, screen_h_);
     map_editor_ = std::make_unique<MapEditor>(assets_);
     map_mode_ui_ = std::make_unique<MapModeUI>(assets_);
+    camera_panel_ = std::make_unique<CameraUIPanel>(assets_, 72, 72);
+    if (camera_panel_) {
+        camera_panel_->close();
+    }
 }
 
 DevControls::~DevControls() = default;
@@ -61,6 +66,8 @@ void DevControls::set_screen_dimensions(int width, int height) {
     if (room_editor_) room_editor_->set_screen_dimensions(width, height);
     if (map_editor_) map_editor_->set_screen_dimensions(width, height);
     if (map_mode_ui_) map_mode_ui_->set_screen_dimensions(width, height);
+    SDL_Rect bounds{0, 0, screen_w_, screen_h_};
+    if (camera_panel_) camera_panel_->set_work_area(bounds);
 }
 
 void DevControls::set_current_room(Room* room) {
@@ -110,6 +117,7 @@ void DevControls::set_enabled(bool enabled) {
         if (room_editor_) room_editor_->set_enabled(true);
         if (map_editor_) map_editor_->set_enabled(false);
         if (map_light_panel_) map_light_panel_->close();
+        if (camera_panel_) camera_panel_->set_assets(assets_);
         set_current_room(target);
     } else {
         suspend_map_switch_ = false;
@@ -124,6 +132,7 @@ void DevControls::set_enabled(bool enabled) {
         if (map_light_panel_) {
             map_light_panel_->close();
         }
+        close_camera_panel();
     }
 }
 
@@ -133,6 +142,9 @@ void DevControls::update(const Input& input) {
     const bool ctrl = input.isScancodeDown(SDL_SCANCODE_LCTRL) || input.isScancodeDown(SDL_SCANCODE_RCTRL);
     if (ctrl && input.wasScancodePressed(SDL_SCANCODE_L)) {
         toggle_map_light_panel();
+    }
+    if (ctrl && input.wasScancodePressed(SDL_SCANCODE_C)) {
+        toggle_camera_panel();
     }
 
     if (assets_) {
@@ -157,6 +169,10 @@ void DevControls::update(const Input& input) {
         }
     }
 
+    pointer_over_camera_panel_ =
+        camera_panel_ && camera_panel_->is_visible() &&
+        camera_panel_->is_point_inside(input.getX(), input.getY());
+
     if (mode_ == Mode::MapEditor) {
         if (map_click_cooldown_ > 0) {
             --map_click_cooldown_;
@@ -169,7 +185,9 @@ void DevControls::update(const Input& input) {
         }
         bool consumed = false;
         if (map_editor_) {
-            map_editor_->update(input);
+            if (!pointer_over_camera_panel_) {
+                map_editor_->update(input);
+            }
             if (map_mode_ui_) {
                 consumed = handle_map_mode_asset_click(input);
             }
@@ -183,7 +201,13 @@ void DevControls::update(const Input& input) {
             map_mode_ui_->update(input);
         }
     } else if (room_editor_ && room_editor_->is_enabled()) {
-        room_editor_->update(input);
+        if (!pointer_over_camera_panel_) {
+            room_editor_->update(input);
+        }
+    }
+
+    if (camera_panel_) {
+        camera_panel_->update(input, screen_w_, screen_h_);
     }
 }
 
@@ -200,11 +224,49 @@ void DevControls::update_ui(const Input& input) {
 
 void DevControls::handle_sdl_event(const SDL_Event& event) {
     if (!enabled_) return;
+
+    bool pointer_event_inside_camera = false;
+    if (camera_panel_ && camera_panel_->is_visible()) {
+        switch (event.type) {
+        case SDL_MOUSEMOTION:
+            pointer_event_inside_camera = camera_panel_->is_point_inside(event.motion.x, event.motion.y);
+            break;
+        case SDL_MOUSEBUTTONDOWN:
+        case SDL_MOUSEBUTTONUP:
+            pointer_event_inside_camera = camera_panel_->is_point_inside(event.button.x, event.button.y);
+            break;
+        case SDL_MOUSEWHEEL: {
+            int mx = 0;
+            int my = 0;
+            SDL_GetMouseState(&mx, &my);
+            pointer_event_inside_camera = camera_panel_->is_point_inside(mx, my);
+            break;
+        }
+        default:
+            break;
+        }
+    }
+
     if (map_light_panel_ && map_light_panel_->is_visible()) {
-        if (map_light_panel_->handle_event(event)) {
+        if (!pointer_event_inside_camera && map_light_panel_->handle_event(event)) {
             return;
         }
     }
+
+    if (camera_panel_ && camera_panel_->is_visible()) {
+        if (camera_panel_->handle_event(event)) {
+            return;
+        }
+    }
+
+    bool block_for_camera = pointer_event_inside_camera;
+    if ((event.type == SDL_KEYDOWN || event.type == SDL_KEYUP || event.type == SDL_TEXTINPUT) && pointer_over_camera_panel_) {
+        block_for_camera = true;
+    }
+    if (block_for_camera) {
+        return;
+    }
+
     if (mode_ == Mode::MapEditor) {
         if (map_mode_ui_ && map_mode_ui_->handle_event(event)) {
             return;
@@ -226,6 +288,9 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
     }
     if (map_light_panel_ && map_light_panel_->is_visible()) {
         map_light_panel_->render(renderer);
+    }
+    if (camera_panel_ && camera_panel_->is_visible()) {
+        camera_panel_->render(renderer);
     }
 }
 
@@ -364,6 +429,24 @@ void DevControls::toggle_map_light_panel() {
     }
 }
 
+void DevControls::toggle_camera_panel() {
+    if (!camera_panel_) {
+        return;
+    }
+    camera_panel_->set_assets(assets_);
+    if (camera_panel_->is_visible()) {
+        camera_panel_->close();
+    } else {
+        camera_panel_->open();
+    }
+}
+
+void DevControls::close_camera_panel() {
+    if (camera_panel_) {
+        camera_panel_->close();
+    }
+}
+
 bool DevControls::can_use_room_editor_ui() const {
     return enabled_ && mode_ == Mode::RoomEditor && room_editor_ && room_editor_->is_enabled();
 }
@@ -420,6 +503,10 @@ bool DevControls::handle_map_mode_asset_click(const Input& input) {
 
     const int mx = input.getX();
     const int my = input.getY();
+    if (camera_panel_ && camera_panel_->is_visible() &&
+        camera_panel_->is_point_inside(mx, my)) {
+        return false;
+    }
     if (map_mode_ui_->is_point_inside(mx, my)) return false;
 
     Asset* hit = hit_test_boundary_asset(SDL_Point{mx, my});

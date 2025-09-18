@@ -261,6 +261,15 @@ void Assets::write_camera_settings_to_json() {
     map_info_json_["camera_settings"] = camera.camera_settings_to_json();
 }
 
+void Assets::on_camera_settings_changed() {
+    write_camera_settings_to_json();
+    save_map_info_json();
+}
+
+void Assets::reload_camera_settings() {
+    load_camera_settings_from_json();
+}
+
 void Assets::apply_map_light_config() {
     if (!scene) {
         return;

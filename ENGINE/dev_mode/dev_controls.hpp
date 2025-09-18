@@ -20,6 +20,7 @@ class Room;
 class RoomEditor;
 class MapEditor;
 class MapModeUI;
+class CameraUIPanel;
 
 class DevControls {
 public:
@@ -92,6 +93,8 @@ private:
     void exit_map_editor_mode(bool focus_player, bool restore_previous_state);
     void handle_map_selection();
     void toggle_map_light_panel();
+    void toggle_camera_panel();
+    void close_camera_panel();
     bool handle_map_mode_asset_click(const Input& input);
     Asset* hit_test_boundary_asset(SDL_Point screen_point) const;
     Room* find_spawn_room() const;
@@ -118,6 +121,8 @@ private:
     nlohmann::json* map_info_json_ = nullptr;
     MapLightPanel::SaveCallback map_light_save_cb_;
     std::unique_ptr<MapModeUI> map_mode_ui_;
+    std::unique_ptr<CameraUIPanel> camera_panel_;
+    bool pointer_over_camera_panel_ = false;
     int map_click_cooldown_ = 0;
     bool suspend_map_switch_ = false;
 };

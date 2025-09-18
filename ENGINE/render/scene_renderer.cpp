@@ -87,15 +87,19 @@ SDL_Rect SceneRenderer::get_scaled_position_rect(Asset* a,
         float base_sw = static_cast<float>(fw) * inv_scale;
         float base_sh = static_cast<float>(fh) * inv_scale;
 
-        if (base_sw < min_w && base_sh < min_h) {
-                return {0, 0, 0, 0};
-        }
-
         const camera::RenderEffects effects = assets_->getView().compute_render_effects(
             SDL_Point{a->pos.x, a->pos.y}, base_sh, reference_screen_height);
 
-        int sw = static_cast<int>(std::round(base_sw));
-        int sh = static_cast<int>(std::round(base_sh * effects.vertical_scale));
+        float scaled_sw = base_sw * effects.distance_scale;
+        float scaled_sh = base_sh * effects.distance_scale;
+        float final_visible_h = scaled_sh * effects.vertical_scale;
+
+        if (scaled_sw < min_w && final_visible_h < min_h) {
+                return {0, 0, 0, 0};
+        }
+
+        int sw = static_cast<int>(std::round(scaled_sw));
+        int sh = static_cast<int>(std::round(final_visible_h));
         sw = std::max(sw, 1);
         sh = std::max(sh, 1);
 

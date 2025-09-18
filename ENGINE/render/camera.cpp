@@ -8,6 +8,10 @@
 #include <vector>
 #include <nlohmann/json.hpp>
 
+namespace {
+constexpr double kDegToRad = 3.14159265358979323846 / 180.0;
+}
+
 static inline int width_from_area(const Area& a) {
     int minx, miny, maxx, maxy;
     std::tie(minx, miny, maxx, maxy) = a.get_bounds();
@@ -373,6 +377,30 @@ camera::RenderEffects camera::compute_render_effects(SDL_Point world,
     } else {
         result.vertical_scale = std::min(1.0f + settings_.max_squash_ratio, 1.0f + squash_amount);
     }
+
+    const double angle_rad = static_cast<double>(settings_.perspective_angle_degrees) * kDegToRad;
+    const double axis_cos = std::cos(angle_rad);
+    const double axis_sin = std::sin(angle_rad);
+    double axis_projection = ndx * axis_cos + ndy * axis_sin;
+    axis_projection += static_cast<double>(settings_.distance_scale_offset);
+    axis_projection = std::clamp(axis_projection, -2.0, 2.0);
+
+    const double distance_exp = std::max(0.01, static_cast<double>(settings_.distance_scale_exponent));
+    double curved_projection = 0.0;
+    if (axis_projection >= 0.0) {
+        curved_projection = std::pow(axis_projection, distance_exp);
+    } else {
+        curved_projection = -std::pow(-axis_projection, distance_exp);
+    }
+
+    double base_distance_scale = 1.0 + curved_projection * static_cast<double>(settings_.distance_scale_strength);
+    const double perspective_zoom = 1.0 + (static_cast<double>(zoom_ratio) - 1.0) * static_cast<double>(settings_.perspective_zoom_influence);
+    double scaled_distance = 1.0 + (base_distance_scale - 1.0) * perspective_zoom;
+
+    const double min_scale = std::max(0.0, static_cast<double>(std::min(settings_.distance_scale_min, settings_.distance_scale_max)));
+    const double max_scale = std::max(min_scale + 0.0001, static_cast<double>(std::max(settings_.distance_scale_min, settings_.distance_scale_max)));
+    scaled_distance = std::clamp(scaled_distance, min_scale, max_scale);
+    result.distance_scale = static_cast<float>(scaled_distance);
     return result;
 }
 
@@ -411,11 +439,32 @@ void camera::apply_camera_settings(const nlohmann::json& data) {
     read_float("stretch_top_strength", settings_.stretch_top_strength);
     read_float("max_squash_ratio", settings_.max_squash_ratio);
     read_float("render_distance_factor", settings_.render_distance_factor);
+    read_float("perspective_angle_degrees", settings_.perspective_angle_degrees);
+    read_float("perspective_zoom_influence", settings_.perspective_zoom_influence);
+    read_float("distance_scale_strength", settings_.distance_scale_strength);
+    read_float("distance_scale_exponent", settings_.distance_scale_exponent);
+    read_float("distance_scale_offset", settings_.distance_scale_offset);
+    read_float("distance_scale_min", settings_.distance_scale_min);
+    read_float("distance_scale_max", settings_.distance_scale_max);
 
     settings_.max_squash_ratio = std::max(0.0f, settings_.max_squash_ratio);
     settings_.squash_curve_exponent = std::max(0.1f, settings_.squash_curve_exponent);
     settings_.stretch_top_strength = std::max(0.0f, settings_.stretch_top_strength);
     settings_.render_distance_factor = std::max(0.0f, settings_.render_distance_factor);
+    if (std::isfinite(settings_.perspective_angle_degrees)) {
+        settings_.perspective_angle_degrees = std::fmod(settings_.perspective_angle_degrees, 360.0f);
+        if (settings_.perspective_angle_degrees < 0.0f) {
+            settings_.perspective_angle_degrees += 360.0f;
+        }
+    } else {
+        settings_.perspective_angle_degrees = 90.0f;
+    }
+    settings_.perspective_zoom_influence = std::max(0.0f, settings_.perspective_zoom_influence);
+    settings_.distance_scale_strength = std::max(0.0f, settings_.distance_scale_strength);
+    settings_.distance_scale_exponent = std::max(0.01f, settings_.distance_scale_exponent);
+    settings_.distance_scale_offset = std::clamp(settings_.distance_scale_offset, -5.0f, 5.0f);
+    settings_.distance_scale_min = std::max(0.0f, settings_.distance_scale_min);
+    settings_.distance_scale_max = std::max(settings_.distance_scale_min, settings_.distance_scale_max);
 }
 
 nlohmann::json camera::camera_settings_to_json() const {
@@ -432,6 +481,13 @@ nlohmann::json camera::camera_settings_to_json() const {
     j["stretch_top_strength"] = settings_.stretch_top_strength;
     j["max_squash_ratio"] = settings_.max_squash_ratio;
     j["render_distance_factor"] = settings_.render_distance_factor;
+    j["perspective_angle_degrees"] = settings_.perspective_angle_degrees;
+    j["perspective_zoom_influence"] = settings_.perspective_zoom_influence;
+    j["distance_scale_strength"] = settings_.distance_scale_strength;
+    j["distance_scale_exponent"] = settings_.distance_scale_exponent;
+    j["distance_scale_offset"] = settings_.distance_scale_offset;
+    j["distance_scale_min"] = settings_.distance_scale_min;
+    j["distance_scale_max"] = settings_.distance_scale_max;
     return j;
 }
 

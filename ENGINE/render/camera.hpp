@@ -17,6 +17,8 @@ class camera {
         float parallax_vertical_strength = 20.0f;
         float parallax_horizontal_strength = 0.0f;
         float parallax_zoom_influence = 1.0f;
+        float perspective_angle_degrees = 90.0f;
+        float perspective_zoom_influence = 0.35f;
         float squash_position_strength = 1.0f;
         float squash_height_strength = 1.0f;
         float squash_overall_strength = 0.45f;
@@ -25,11 +27,17 @@ class camera {
         float stretch_top_strength = 0.55f;
         float max_squash_ratio = 0.6f;
         float render_distance_factor = 1.0f;
+        float distance_scale_strength = 0.2f;
+        float distance_scale_exponent = 1.0f;
+        float distance_scale_offset = 0.0f;
+        float distance_scale_min = 0.6f;
+        float distance_scale_max = 1.4f;
     };
 
     struct RenderEffects {
         SDL_Point screen_position{0, 0};
         float vertical_scale = 1.0f;
+        float distance_scale = 1.0f;
     };
 
     // Construct the camera with a starting zoom Area (map-space).
