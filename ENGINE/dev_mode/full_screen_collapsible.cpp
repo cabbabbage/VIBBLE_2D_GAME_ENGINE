@@ -43,6 +43,19 @@ void FullScreenCollapsible::set_bounds(int width, int height) {
     layout();
 }
 
+void FullScreenCollapsible::update_title_width() {
+    title_width_ = 0;
+    const DMLabelStyle& style = DMStyles::Label();
+    TTF_Font* font = style.open_font();
+    if (!font) return;
+    int w = 0;
+    int h = 0;
+    if (TTF_SizeUTF8(font, title_.c_str(), &w, &h) == 0) {
+        title_width_ = w;
+    }
+    TTF_CloseFont(font);
+}
+
 void FullScreenCollapsible::set_expanded(bool expanded) {
     if (expanded_ == expanded) return;
     expanded_ = expanded;
@@ -71,6 +84,18 @@ void FullScreenCollapsible::activate_button(const std::string& id) {
         if (btn.active != new_state) {
             btn.active = new_state;
             if (btn.on_toggle) {
+                btn.on_toggle(btn.active);
+            }
+        }
+    }
+}
+
+void FullScreenCollapsible::set_active_button(const std::string& id, bool trigger_callback) {
+    for (auto& btn : buttons_) {
+        const bool new_state = (!id.empty() && btn.id == id);
+        if (btn.active != new_state) {
+            btn.active = new_state;
+            if (trigger_callback && btn.on_toggle) {
                 btn.on_toggle(btn.active);
             }
         }
@@ -116,7 +141,25 @@ bool FullScreenCollapsible::handle_event(const SDL_Event& e) {
             }
         }
     }
-    return used;
+    if (used) return true;
+
+    if (e.type == SDL_MOUSEBUTTONDOWN || e.type == SDL_MOUSEBUTTONUP || e.type == SDL_MOUSEMOTION) {
+        SDL_Point p{
+            e.type == SDL_MOUSEMOTION ? e.motion.x : e.button.x,
+            e.type == SDL_MOUSEMOTION ? e.motion.y : e.button.y
+        };
+        if (SDL_PointInRect(&p, &header_rect_)) {
+            return true;
+        }
+    } else if (e.type == SDL_MOUSEWHEEL) {
+        int mx, my;
+        SDL_GetMouseState(&mx, &my);
+        SDL_Point p{mx, my};
+        if (SDL_PointInRect(&p, &header_rect_)) {
+            return true;
+        }
+    }
+    return false;
 }
 
 void FullScreenCollapsible::render(SDL_Renderer* renderer) const {
@@ -169,6 +212,7 @@ void FullScreenCollapsible::layout() {
     } else {
         content_rect_ = SDL_Rect{0, header_rect_.y + header_rect_.h, screen_w_, 0};
     }
+    update_title_width();
     layout_buttons();
     if (arrow_button_) {
         SDL_Rect rect{header_rect_.x + header_rect_.w - kArrowButtonWidth - DMSpacing::item_gap(),
@@ -182,17 +226,41 @@ void FullScreenCollapsible::layout() {
 
 void FullScreenCollapsible::layout_buttons() {
     int x = header_rect_.x + DMSpacing::item_gap();
+    if (title_width_ > 0) {
+        x += title_width_ + DMSpacing::item_gap();
+    }
     if (!buttons_.empty()) {
         x += DMSpacing::item_gap();
     }
-    int available = header_rect_.w - (kArrowButtonWidth + DMSpacing::item_gap() * 3);
+    int right_limit = header_rect_.x + header_rect_.w - (kArrowButtonWidth + DMSpacing::item_gap());
     const int button_gap = DMSpacing::small_gap();
+    bool out_of_space = false;
     for (auto& btn : buttons_) {
         if (!btn.widget) continue;
+        if (out_of_space || x >= right_limit) {
+            btn.widget->set_rect(SDL_Rect{0, 0, 0, 0});
+            continue;
+        }
         SDL_Rect rect{x, header_rect_.y + (kHeaderHeight - DMButton::height()) / 2, 120, DMButton::height()};
+        if (rect.x + rect.w > right_limit) {
+            btn.widget->set_rect(SDL_Rect{0, 0, 0, 0});
+            out_of_space = true;
+            continue;
+        }
         btn.widget->set_rect(rect);
         x += rect.w + button_gap;
-        if (x > available) break;
     }
+}
+
+bool FullScreenCollapsible::contains(int x, int y) const {
+    if (!visible_) return false;
+    SDL_Point p{x, y};
+    if (SDL_PointInRect(&p, &header_rect_)) {
+        return true;
+    }
+    if (expanded_ && SDL_PointInRect(&p, &content_rect_)) {
+        return true;
+    }
+    return false;
 }
 

@@ -124,6 +124,9 @@ void DevControls::set_enabled(bool enabled) {
         if (map_editor_ && map_editor_->is_enabled()) {
             map_editor_->exit(true, false);
         }
+        if (map_mode_ui_) {
+            map_mode_ui_->set_map_mode_active(false);
+        }
         mode_ = Mode::RoomEditor;
         dev_selected_room_ = nullptr;
         if (room_editor_) {
@@ -465,6 +468,7 @@ void DevControls::enter_map_editor_mode() {
     map_editor_->set_screen_dimensions(screen_w_, screen_h_);
     map_editor_->set_enabled(true);
     if (room_editor_) room_editor_->set_enabled(false);
+    if (map_mode_ui_) map_mode_ui_->set_map_mode_active(true);
 }
 
 void DevControls::exit_map_editor_mode(bool focus_player, bool restore_previous_state) {
@@ -473,6 +477,7 @@ void DevControls::exit_map_editor_mode(bool focus_player, bool restore_previous_
 
     map_editor_->exit(focus_player, restore_previous_state);
     if (map_mode_ui_) map_mode_ui_->close_all_panels();
+    if (map_mode_ui_) map_mode_ui_->set_map_mode_active(false);
     mode_ = Mode::RoomEditor;
     if (room_editor_ && enabled_) {
         room_editor_->set_enabled(true);

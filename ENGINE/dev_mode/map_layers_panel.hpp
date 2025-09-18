@@ -5,6 +5,8 @@
 #include <string>
 #include <vector>
 
+#include <SDL.h>
+
 #include <nlohmann/json_fwd.hpp>
 
 #include "DockableCollapsible.hpp"
@@ -29,6 +31,10 @@ public:
     void open();
     void close();
     bool is_visible() const;
+
+    void set_embedded_mode(bool embedded);
+    bool embedded_mode() const { return embedded_mode_; }
+    void set_embedded_bounds(const SDL_Rect& bounds);
 
     void update(const Input& input, int screen_w, int screen_h);
     bool handle_event(const SDL_Event& e);
@@ -95,4 +101,5 @@ private:
     bool dirty_ = false;
 
     std::shared_ptr<MapLayersController> controller_;
+    bool embedded_mode_ = false;
 };

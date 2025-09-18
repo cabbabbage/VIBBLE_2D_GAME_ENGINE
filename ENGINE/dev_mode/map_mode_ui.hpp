@@ -11,6 +11,7 @@ class MapLightPanel;
 class MapAssetsPanel;
 class MapLayersPanel;
 class MapLayersController;
+class FullScreenCollapsible;
 struct SDL_Renderer;
 union SDL_Event;
 
@@ -32,6 +33,8 @@ public:
     void toggle_layers_panel();
     void close_all_panels();
 
+    void set_map_mode_active(bool active);
+
     bool is_point_inside(int x, int y) const;
     bool is_any_panel_visible() const;
 
@@ -39,6 +42,14 @@ private:
     void ensure_panels();
     void sync_panel_map_info();
     bool save_map_info_to_disk() const;
+    void configure_footer_buttons();
+    enum class PanelType { None, Assets, Lights, Layers };
+    void set_active_panel(PanelType panel);
+    const char* panel_button_id(PanelType panel) const;
+    void update_layers_footer(const Input& input);
+    bool handle_layers_footer_event(const SDL_Event& e);
+    void render_layers_footer(SDL_Renderer* renderer) const;
+    bool should_show_layers_footer() const;
 
 private:
     Assets* assets_ = nullptr;
@@ -51,6 +62,12 @@ private:
     std::unique_ptr<MapAssetsPanel> assets_panel_;
     std::shared_ptr<MapLayersController> layers_controller_;
     std::unique_ptr<MapLayersPanel> layers_panel_;
+    std::unique_ptr<FullScreenCollapsible> footer_panel_;
+    bool footer_buttons_configured_ = false;
+    bool map_mode_active_ = false;
+    PanelType active_panel_ = PanelType::None;
+    bool layers_footer_requested_ = false;
+    bool layers_footer_visible_ = false;
 };
 
 

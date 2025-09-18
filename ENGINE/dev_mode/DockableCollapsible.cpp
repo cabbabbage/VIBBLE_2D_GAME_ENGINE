@@ -25,6 +25,9 @@ DockableCollapsible::DockableCollapsible(const std::string& title, bool floatabl
                                          int x, int y)
     : title_(title) {
     floatable_ = floatable;
+    show_header_ = true;
+    scroll_enabled_ = floatable;
+    available_height_override_ = -1;
     rect_.x = x; rect_.y = y;
     header_btn_ = std::make_unique<DMButton>(title_, &DMStyles::HeaderButton(), 260, DMButton::height());
     close_btn_  = std::make_unique<DMButton>("X", &DMStyles::HeaderButton(), DMButton::height(), DMButton::height());
@@ -50,6 +53,23 @@ void DockableCollapsible::set_expanded(bool e) {
     update_header_button();
 }
 
+void DockableCollapsible::set_show_header(bool show) {
+    if (show_header_ == show) return;
+    show_header_ = show;
+    if (!show_header_) {
+        expanded_ = true;
+        header_btn_.reset();
+        close_btn_.reset();
+    } else {
+        header_btn_ = std::make_unique<DMButton>(title_, &DMStyles::HeaderButton(), 260, DMButton::height());
+        if (floatable_) {
+            close_btn_ = std::make_unique<DMButton>("X", &DMStyles::HeaderButton(), DMButton::height(), DMButton::height());
+        }
+        update_header_button();
+    }
+    layout();
+}
+
 void DockableCollapsible::set_position(int x, int y) {
     if (!floatable_) return;
     rect_.x = x; rect_.y = y;
@@ -68,11 +88,9 @@ void DockableCollapsible::update(const Input& input, int screen_w, int screen_h)
     if (!visible_) return;
     layout(screen_w, screen_h);
 
-    if (!floatable_) return;
-
-    int mx = input.getX();
-    int my = input.getY();
-    if (expanded_ && body_viewport_.w > 0 && body_viewport_.h > 0) {
+    if (scroll_enabled_ && expanded_ && body_viewport_.w > 0 && body_viewport_.h > 0) {
+        int mx = input.getX();
+        int my = input.getY();
         if (mx >= body_viewport_.x && mx < body_viewport_.x + body_viewport_.w &&
             my >= body_viewport_.y && my < body_viewport_.y + body_viewport_.h) {
             int dy = input.getScrollY();
@@ -82,12 +100,17 @@ void DockableCollapsible::update(const Input& input, int screen_w, int screen_h)
             }
         }
     }
+
+    if (!floatable_ || !show_header_) return;
+
+    int mx = input.getX();
+    int my = input.getY();
 }
 
 bool DockableCollapsible::handle_event(const SDL_Event& e) {
     if (!visible_) return false;
 
-    if (floatable_) {
+    if (floatable_ && show_header_) {
         if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
             SDL_Point p{ e.button.x, e.button.y };
             if (SDL_PointInRect(&p, &handle_rect_)) {
@@ -108,7 +131,7 @@ bool DockableCollapsible::handle_event(const SDL_Event& e) {
         }
     }
 
-    if (e.type == SDL_MOUSEWHEEL && floatable_) {
+    if (e.type == SDL_MOUSEWHEEL && scroll_enabled_) {
         int mx, my;
         SDL_GetMouseState(&mx, &my);
         SDL_Point mouse_point{ mx, my };
@@ -175,7 +198,7 @@ void DockableCollapsible::render(SDL_Renderer* r) const {
     if (header_btn_) header_btn_->render(r);
     if (close_btn_ && floatable_) close_btn_->render(r);
 
-    if (floatable_) {
+    if (floatable_ && show_header_) {
         draw_grip(r, handle_rect_, DMStyles::Border());
     }
 
@@ -209,7 +232,7 @@ void DockableCollapsible::layout() {
 }
 
 void DockableCollapsible::layout(int screen_w, int screen_h) const {
-    header_rect_ = SDL_Rect{ rect_.x + padding_, rect_.y + padding_, 0, DMButton::height() };
+    header_rect_ = SDL_Rect{ rect_.x + padding_, rect_.y + padding_, 0, show_header_ ? DMButton::height() : 0 };
 
     if (floatable_) {
         widest_row_w_ = 2 * padding_;
@@ -218,10 +241,16 @@ void DockableCollapsible::layout(int screen_w, int screen_h) const {
             if (n <= 0) continue;
             widest_row_w_ = std::max(widest_row_w_, compute_row_width(n));
         }
-        header_rect_.w = std::max(std::max(260, widest_row_w_ - 2 * padding_), 100);
-        close_rect_ = SDL_Rect{ header_rect_.x + header_rect_.w - DMButton::height(), header_rect_.y,
-                                DMButton::height(), DMButton::height() };
-        header_rect_.w -= DMButton::height();
+        int base_w = std::max(std::max(260, widest_row_w_ - 2 * padding_), 100);
+        if (show_header_) {
+            header_rect_.w = base_w;
+            close_rect_ = SDL_Rect{ header_rect_.x + header_rect_.w - DMButton::height(), header_rect_.y,
+                                    DMButton::height(), DMButton::height() };
+            header_rect_.w -= DMButton::height();
+        } else {
+            header_rect_.w = rect_.w > 0 ? rect_.w - 2 * padding_ : base_w;
+            close_rect_ = SDL_Rect{0,0,0,0};
+        }
     } else {
         header_rect_.w = rect_.w - 2 * padding_;
     }
@@ -230,16 +259,17 @@ void DockableCollapsible::layout(int screen_w, int screen_h) const {
     if (close_btn_ && floatable_) close_btn_->set_rect(close_rect_);
     update_header_button();
 
-    if (floatable_) {
+    if (floatable_ && show_header_) {
         handle_rect_ = SDL_Rect{ header_rect_.x, header_rect_.y,
-                                 std::min(24, header_rect_.w / 6), header_rect_.h };
+                                 std::min(24, std::max(1, header_rect_.w) / 6), header_rect_.h };
     } else {
         handle_rect_ = SDL_Rect{ 0, 0, 0, 0 };
     }
 
     int content_w = header_rect_.w;
+    int header_gap = show_header_ ? DMSpacing::header_gap() : 0;
     int x0 = rect_.x + padding_;
-    int y0 = rect_.y + padding_ + header_rect_.h + DMSpacing::header_gap();
+    int y0 = rect_.y + padding_ + header_rect_.h + header_gap;
 
     row_heights_.clear();
     int computed_content_h = 0;
@@ -259,7 +289,7 @@ void DockableCollapsible::layout(int screen_w, int screen_h) const {
         body_viewport_h_ = 0;
         body_viewport_   = SDL_Rect{ x0, y0, content_w, 0 };
         rect_.w = 2 * padding_ + content_w;
-        rect_.h = padding_ + header_rect_.h + DMSpacing::header_gap() + padding_;
+        rect_.h = padding_ + header_rect_.h + header_gap + padding_;
         max_scroll_ = 0;
         scroll_     = 0;
         if (floatable_) clamp_to_bounds(screen_w, screen_h);
@@ -267,19 +297,23 @@ void DockableCollapsible::layout(int screen_w, int screen_h) const {
     }
 
     if (floatable_) {
-        body_viewport_h_ = std::max(0, std::min(content_height_, available_height(screen_h)));
+        int available_h = available_height(screen_h);
+        body_viewport_h_ = std::max(0, std::min(content_height_, available_h));
         max_scroll_      = std::max(0, content_height_ - body_viewport_h_);
         scroll_          = std::max(0, std::min(max_scroll_, scroll_));
     } else {
-        body_viewport_h_ = content_height_;
-        scroll_          = 0;
-        max_scroll_      = 0;
+        int available_h = (available_height_override_ >= 0)
+                              ? available_height_override_
+                              : content_height_;
+        body_viewport_h_ = std::max(0, std::min(content_height_, available_h));
+        max_scroll_      = std::max(0, content_height_ - body_viewport_h_);
+        scroll_          = std::max(0, std::min(max_scroll_, scroll_));
     }
 
     body_viewport_ = SDL_Rect{ x0, y0, content_w, body_viewport_h_ };
 
     rect_.w = 2 * padding_ + content_w;
-    rect_.h = padding_ + header_rect_.h + DMSpacing::header_gap() + body_viewport_h_ + padding_;
+    rect_.h = padding_ + header_rect_.h + header_gap + body_viewport_h_ + padding_;
 
     int y = y0 - scroll_;
     for (size_t ri = 0; ri < rows_.size(); ++ri) {
@@ -312,8 +346,13 @@ int DockableCollapsible::compute_row_width(int num_cols) const {
 }
 
 int DockableCollapsible::available_height(int screen_h) const {
+    if (available_height_override_ >= 0) {
+        return available_height_override_;
+    }
     int bottom_space = DMSpacing::section_gap();
-    int base_y = rect_.y + padding_ + DMButton::height() + DMSpacing::header_gap();
+    int header_h = show_header_ ? DMButton::height() : 0;
+    int header_gap = show_header_ ? DMSpacing::header_gap() : 0;
+    int base_y = rect_.y + padding_ + header_h + header_gap;
     int computed;
     int area_h = (work_area_.w > 0 && work_area_.h > 0) ? work_area_.h : screen_h;
     int area_y = (work_area_.w > 0 && work_area_.h > 0) ? work_area_.y : 0;
@@ -334,16 +373,18 @@ void DockableCollapsible::clamp_to_bounds(int screen_w, int screen_h) const {
     rect_.y = std::max(bounds.y, std::min(rect_.y, bounds.y + bounds.h - rect_.h));
     header_rect_.x = rect_.x + padding_;
     header_rect_.y = rect_.y + padding_;
-    if (floatable_) {
+    if (floatable_ && show_header_) {
         close_rect_ = SDL_Rect{ header_rect_.x + header_rect_.w - DMButton::height(), header_rect_.y,
                                 DMButton::height(), DMButton::height() };
         header_rect_.w -= DMButton::height();
+    } else {
+        close_rect_ = SDL_Rect{0,0,0,0};
     }
     if (header_btn_) header_btn_->set_rect(header_rect_);
     if (close_btn_ && floatable_) close_btn_->set_rect(close_rect_);
-    if (floatable_) {
+    if (floatable_ && show_header_) {
         handle_rect_ = SDL_Rect{ header_rect_.x, header_rect_.y, std::min(24, header_rect_.w/6), header_rect_.h };
     }
     body_viewport_.x = rect_.x + padding_;
-    body_viewport_.y = rect_.y + padding_ + header_rect_.h + DMSpacing::header_gap();
+    body_viewport_.y = rect_.y + padding_ + header_rect_.h + (show_header_ ? DMSpacing::header_gap() : 0);
 }

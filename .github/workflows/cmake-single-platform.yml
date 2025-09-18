@@ -33,35 +33,25 @@ jobs:
           git config --global http.postBuffer 524288000
           git config --global http.version HTTP/1.1 || true
 
-      # === Cache vcpkg installed packages ===
-      - name: Cache vcpkg
-        uses: actions/cache@v4
-        with:
-          path: vcpkg/installed
-          key: ${{ runner.os }}-vcpkg-${{ hashFiles('vcpkg.json') }}
-          restore-keys: |
-            ${{ runner.os }}-vcpkg-
-
       # === Bootstrap vcpkg ===
       - name: Bootstrap vcpkg
-        shell: pwsh
+        shell: bash
         run: |
           git clone https://github.com/microsoft/vcpkg.git
-          .\vcpkg\bootstrap-vcpkg.bat
+          ./vcpkg/bootstrap-vcpkg.sh
 
       # === Install dependencies from manifest with retry + binary caching ===
       - name: Install dependencies from vcpkg.json
-        shell: pwsh
+        shell: bash
         env:
           VCPKG_FEATURE_FLAGS: "manifests,registries,binarycaching"
           VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
         run: |
-          for ($i=1; $i -le 4; $i++) {
-            .\vcpkg\vcpkg.exe install --clean-after-build
-            if ($LASTEXITCODE -eq 0) { exit 0 }
+          for i in {1..4}; do
+            ./vcpkg/vcpkg install --clean-after-build && exit 0
             echo "vcpkg install failed (attempt $i). Sleeping 20s then retrying..."
-            Start-Sleep -Seconds 20
-          }
+            sleep 20
+          done
           echo "vcpkg install failed after retries." >&2
           exit 1
 

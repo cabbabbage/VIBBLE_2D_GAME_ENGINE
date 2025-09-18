@@ -938,6 +938,33 @@ bool MapLayersPanel::is_visible() const {
     return DockableCollapsible::is_visible();
 }
 
+void MapLayersPanel::set_embedded_mode(bool embedded) {
+    if (embedded_mode_ == embedded) return;
+    embedded_mode_ = embedded;
+    if (embedded_mode_) {
+        set_show_header(false);
+        set_scroll_enabled(true);
+        set_available_height_override(-1);
+        set_expanded(true);
+    } else {
+        set_show_header(true);
+        set_scroll_enabled(floatable_);
+        set_available_height_override(-1);
+    }
+}
+
+void MapLayersPanel::set_embedded_bounds(const SDL_Rect& bounds) {
+    set_rect(bounds);
+    if (embedded_mode_) {
+        int inner_height = std::max(0, bounds.h - 2 * padding_);
+        set_available_height_override(inner_height);
+        set_work_area(bounds);
+    } else {
+        set_available_height_override(-1);
+        set_work_area(SDL_Rect{0, 0, 0, 0});
+    }
+}
+
 void MapLayersPanel::update(const Input& input, int screen_w, int screen_h) {
     if (!is_visible()) return;
     DockableCollapsible::update(input, screen_w, screen_h);

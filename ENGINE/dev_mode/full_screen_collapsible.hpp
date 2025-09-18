@@ -44,6 +44,7 @@ public:
     // toggled active.
     void set_header_buttons(std::vector<HeaderButton> buttons);
     void activate_button(const std::string& id);
+    void set_active_button(const std::string& id, bool trigger_callback = false);
 
     // Update input state (for hover animations).
     void update(const Input& input);
@@ -52,10 +53,12 @@ public:
 
     const SDL_Rect& header_rect() const { return header_rect_; }
     const SDL_Rect& content_rect() const { return content_rect_; }
+    bool contains(int x, int y) const;
 
 private:
     void layout();
     void layout_buttons();
+    void update_title_width();
 
 private:
     std::string title_;
@@ -66,6 +69,7 @@ private:
 
     SDL_Rect header_rect_{0,0,0,0};
     SDL_Rect content_rect_{0,0,0,0};
+    int title_width_ = 0;
 
     std::unique_ptr<DMButton> arrow_button_;
     std::vector<HeaderButton> buttons_;

@@ -12,40 +12,36 @@ class ActiveAssetsManager;
 class AnimationFrame;
 
 class AnimationUpdate {
-
-        public:
+public:
     AnimationUpdate(Asset* self, ActiveAssetsManager& aam);
     AnimationUpdate(Asset* self, ActiveAssetsManager& aam, double directness_weight, double sparsity_weight);
 
-    // Controller API
     void update();
     void set_animation_now(const std::string& anim_id);
     void set_animation_qued(const std::string& anim_id);
-
+    void move(int x, int y);
     void set_idle(int min_target_distance, int max_target_distance, int rest_ratio);
     void set_pursue(Asset* final_target, int min_target_distance, int max_target_distance);
     void set_run(Asset* threat, int min_target_distance, int max_target_distance);
     void set_orbit(Asset* center, int min_radius, int max_radius, int keep_direction_ratio);
-    // Helpers to force orbit direction deterministically
     void set_orbit_ccw(Asset* center, int min_radius, int max_radius);
     void set_orbit_cw (Asset* center, int min_radius, int max_radius);
     void set_patrol(const std::vector<SDL_Point>& waypoints, bool loop, int hold_frames);
     void set_serpentine(Asset* final_target, int min_stride, int max_stride, int sway, int keep_side_ratio);
-    // Move towards a specific point, then switch via callback when reached
     void set_to_point(SDL_Point final_point, std::function<void(AnimationUpdate&)> on_reached);
     inline void set_to_point(int x, int y, std::function<void(AnimationUpdate&)> on_reached) { set_to_point(SDL_Point{ x, y }, std::move(on_reached)); }
-    // Disable AI-directed motion; rely on current animation + on_end chaining
     void set_mode_none();
 
     void set_weights(double directness_weight, double sparsity_weight);
     void set_target(SDL_Point desired, const Asset* final_target);
-    inline void set_traget(int desired_x, int desired_y, const Asset* final_target) { set_target(SDL_Point{ desired_x, desired_y }, final_target); }
+    inline void set_target(int desired_x, int desired_y, const Asset* final_target) { set_target(SDL_Point{ desired_x, desired_y }, final_target); }
 
-        private:
+private:
     enum class Mode { None, Idle, Pursue, Run, Orbit, Patrol, Serpentine, ToPoint };
+
     bool can_move_by(int dx, int dy) const;
     bool would_overlap_same_or_player(int dx, int dy) const;
-    std::string pick_best_animation_towards(SDL_Point target) const;
+    std::string pick_best_animation_towards(SDL_Point target);
     void ensure_idle_target(int min_dist, int max_dist);
     void ensure_pursue_target(int min_dist, int max_dist, const Asset* final_target);
     void ensure_run_target(int min_dist, int max_dist, const Asset* threat);
@@ -58,17 +54,17 @@ class AnimationUpdate {
     bool is_target_reached();
     int  min_move_len2() const;
 
-    // Helpers for internal use
     void switch_to(const std::string& anim_id);
-    bool advance(class AnimationFrame*& frame);
+    bool advance(AnimationFrame*& frame);
     void get_animation();
+    void get_new_target();
 
-        private:
+private:
     Asset* self_ = nullptr;
     ActiveAssetsManager& aam_;
     Mode mode_ = Mode::None;
     bool have_target_ = false;
-    SDL_Point target_ {0, 0};
+    SDL_Point target_{0, 0};
     mutable int cached_min_move_len2_ = -1;
     std::mt19937 rng_;
     double weight_dir_ = 0.6;
@@ -78,7 +74,7 @@ class AnimationUpdate {
     int    orbit_radius_ = 0;
     bool   orbit_params_set_ = false;
     bool   orbit_force_dir_ = false;
-    int    orbit_forced_dir_ = +1; // +1=CCW, -1=CW
+    int    orbit_forced_dir_ = +1;
     std::vector<SDL_Point> patrol_points_;
     std::size_t patrol_index_ = 0;
     bool patrol_loop_ = true;
@@ -106,12 +102,12 @@ class AnimationUpdate {
     int serp_max_stride_ = 0;
     int serp_sway_ = 0;
     int serp_keep_ratio_ = 0;
-
-    // ToPoint state
-    SDL_Point to_point_goal_ {0, 0};
+    int dx_ = 0;
+    int dy_ = 0;
+    bool override_movement = false;
+    bool moving = true;
+    SDL_Point to_point_goal_{0, 0};
     std::function<void(AnimationUpdate&)> to_point_on_reach_;
-
-    // Animation control state
     std::optional<std::string> queued_anim_;
     bool forced_active_ = false;
     Mode saved_mode_ = Mode::None;

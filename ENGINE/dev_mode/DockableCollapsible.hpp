@@ -43,6 +43,19 @@ public:
     bool is_expanded() const { return expanded_; }
     void set_expanded(bool e);
 
+    // Header visibility (when hidden, the panel remains expanded and only the
+    // body content is shown).
+    void set_show_header(bool show);
+    bool show_header() const { return show_header_; }
+
+    // Enable or disable scroll handling independent of floatable state.
+    void set_scroll_enabled(bool enabled) { scroll_enabled_ = enabled; }
+    bool scroll_enabled() const { return scroll_enabled_; }
+
+    // Override the computed available body height when expanded (use -1 to
+    // restore the default behaviour).
+    void set_available_height_override(int height) { available_height_override_ = height; }
+
     // Position and bounds (work area is used for clamping and available height)
     void set_position(int x, int y);              // used when floating
     void set_rect(const SDL_Rect& r);             // used when docked
@@ -115,4 +128,8 @@ protected:
 
     // Optional bounds for clamping and available height decisions
     SDL_Rect work_area_{0,0,0,0};
+
+    bool show_header_ = true;
+    bool scroll_enabled_ = true;
+    int available_height_override_ = -1;
 };
