@@ -9,8 +9,7 @@ class Assets;
 class Input;
 class MapLightPanel;
 class MapAssetsPanel;
-class TrailEditorPanel;
-class Room;
+class MapLayersPanel;
 struct SDL_Renderer;
 union SDL_Event;
 
@@ -29,7 +28,7 @@ public:
 
     void open_assets_panel();
     void toggle_light_panel();
-    void open_trail_editor(Room* trail_room);
+    void toggle_layers_panel();
     void close_all_panels();
 
     bool is_point_inside(int x, int y) const;
@@ -49,6 +48,9 @@ private:
 
     std::unique_ptr<MapLightPanel> light_panel_;
     std::unique_ptr<MapAssetsPanel> assets_panel_;
-    std::unique_ptr<TrailEditorPanel> trail_panel_;
+    std::unique_ptr<MapLayersPanel> layers_panel_;
 };
+
+
+
 

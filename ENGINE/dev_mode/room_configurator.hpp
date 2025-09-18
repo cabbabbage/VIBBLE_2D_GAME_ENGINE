@@ -40,10 +40,10 @@ private:
     std::vector<std::string> room_geom_options_;
     Room* room_ = nullptr;
     std::string room_name_;
-    int room_w_min_ = 0;
-    int room_w_max_ = 0;
-    int room_h_min_ = 0;
-    int room_h_max_ = 0;
+    int room_w_min_ = 1000;
+    int room_w_max_ = 10000;
+    int room_h_min_ = 1000;
+    int room_h_max_ = 10000;
     int room_geom_ = 0;
     bool room_is_spawn_ = false;
     bool room_is_boss_ = false;

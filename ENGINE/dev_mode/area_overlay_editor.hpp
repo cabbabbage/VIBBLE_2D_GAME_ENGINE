@@ -1,6 +1,7 @@
 #pragma once
 
 #include <SDL.h>
+
 #include <memory>
 #include <string>
 #include <vector>
@@ -11,6 +12,7 @@ class AssetInfo;
 class Input;
 class DockableCollapsible;
 class DMButton;
+class DMSlider;
 
 // Live, in-scene area editing overlay for dev mode.
 // - Renders the current area mask over the selected asset using camera mapping
@@ -23,20 +25,26 @@ public:
 
     void attach_assets(Assets* a) { assets_ = a; }
 
-    // Begin editing `area_name` for the first selected asset (or provided asset)
     bool begin(AssetInfo* info, Asset* asset, const std::string& area_name);
     void cancel();
     bool is_active() const { return active_; }
-    // Returns true exactly once after a successful save, then resets.
     bool consume_saved_flag() { bool v = saved_since_begin_; saved_since_begin_ = false; return v; }
-    Uint8 mask_alpha_; 
+    Uint8 mask_alpha_;
     void update(const Input& input, int screen_w, int screen_h);
     bool handle_event(const SDL_Event& e);
     void render(SDL_Renderer* r);
 
 private:
+    enum class Mode { Draw, Erase, Mask };
+
     void ensure_toolbox();
     void rebuild_toolbox_rows();
+    void set_mode(Mode mode);
+    void update_tool_button_states();
+    void reset_mask_crop_values();
+    bool generate_mask_from_asset(SDL_Renderer* renderer);
+    void apply_mask_crop();
+    void discard_autogen_base();
     void position_toolbox_left_of_asset(int screen_w, int screen_h);
     void clear_mask();
     void upload_mask();
@@ -66,7 +74,6 @@ private:
     int mask_origin_y_ = 0;
 
     // Edit state
-    enum class Mode { Draw, Erase };
     Mode mode_ = Mode::Draw;
     int brush_radius_ = 10;
     bool drawing_ = false;
@@ -75,8 +82,27 @@ private:
     std::unique_ptr<DockableCollapsible> toolbox_;
     std::unique_ptr<DMButton> btn_draw_;
     std::unique_ptr<DMButton> btn_erase_;
+    std::unique_ptr<DMButton> btn_mask_;
     std::unique_ptr<DMButton> btn_save_;
+    std::unique_ptr<DMSlider> brush_slider_;
+    std::unique_ptr<DMSlider> crop_left_slider_;
+    std::unique_ptr<DMSlider> crop_right_slider_;
+    std::unique_ptr<DMSlider> crop_top_slider_;
+    std::unique_ptr<DMSlider> crop_bottom_slider_;
     std::vector<std::unique_ptr<class Widget>> owned_widgets_;
+
+    int crop_left_px_ = 0;
+    int crop_right_px_ = 0;
+    int crop_top_px_ = 0;
+    int crop_bottom_px_ = 0;
+
+    int applied_crop_left_ = -1;
+    int applied_crop_right_ = -1;
+    int applied_crop_top_ = -1;
+    int applied_crop_bottom_ = -1;
+
+    SDL_Surface* mask_autogen_base_ = nullptr;
+    bool pending_mask_generation_ = false;
 
     bool saved_since_begin_ = false;
     bool toolbox_autoplace_done_ = false;
@@ -85,5 +111,3 @@ private:
     bool prev_camera_realism_enabled_ = true;
     bool prev_camera_parallax_enabled_ = true;
 };
-
-

@@ -182,6 +182,9 @@ void DevControls::update(const Input& input) {
                 input.wasScancodePressed(SDL_SCANCODE_RCTRL)) {
                 map_mode_ui_->toggle_light_panel();
             }
+            if (input.wasScancodePressed(SDL_SCANCODE_F8)) {
+                map_mode_ui_->toggle_layers_panel();
+            }
         }
         bool consumed = false;
         if (map_editor_) {
@@ -194,7 +197,7 @@ void DevControls::update(const Input& input) {
             if (!consumed) {
                 handle_map_selection();
             } else {
-                (void)map_editor_->consume_selection();
+                (void)map_editor_->consume_selected_room();
             }
         }
         if (map_mode_ui_) {
@@ -479,8 +482,10 @@ void DevControls::exit_map_editor_mode(bool focus_player, bool restore_previous_
 
 void DevControls::handle_map_selection() {
     if (!map_editor_) return;
+<<<<<<< ours
     auto selection = map_editor_->consume_selection();
     if (!selection.room) return;
+<<<<<<< ours
 
     if (selection.is_trail()) {
         if (map_mode_ui_) {
@@ -489,9 +494,27 @@ void DevControls::handle_map_selection() {
         return;
     }
 
+=======
+
+    if (selection.is_trail()) {
+        if (map_mode_ui_) {
+            map_mode_ui_->open_trail_editor(selection.room);
+        }
+        return;
+    }
+
+>>>>>>> theirs
     dev_selected_room_ = selection.room;
     set_current_room(selection.room);
     map_editor_->focus_on_room(selection.room);
+=======
+    Room* selected = map_editor_->consume_selected_room();
+    if (!selected) return;
+
+    dev_selected_room_ = selected;
+    set_current_room(selected);
+    map_editor_->focus_on_room(selected);
+>>>>>>> theirs
     exit_map_editor_mode(false, false);
     suspend_map_switch_ = true;
 }
@@ -605,4 +628,7 @@ Room* DevControls::choose_room(Room* preferred) const {
     }
     return nullptr;
 }
+
+
+
 

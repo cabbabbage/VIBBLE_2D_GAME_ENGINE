@@ -61,9 +61,9 @@ void RoomConfigurator::rebuild_rows() {
     DockableCollapsible::Rows rows;
     room_name_lbl_ = std::make_unique<DMTextBox>("Room", room_name_);
     room_name_lbl_w_ = std::make_unique<TextBoxWidget>(room_name_lbl_.get());
-    room_w_slider_ = std::make_unique<DMRangeSlider>(0, 1000, room_w_min_, room_w_max_);
+    room_w_slider_ = std::make_unique<DMRangeSlider>(1000, 10000, room_w_min_, room_w_max_);
     room_w_slider_w_ = std::make_unique<RangeSliderWidget>(room_w_slider_.get());
-    room_h_slider_ = std::make_unique<DMRangeSlider>(0, 1000, room_h_min_, room_h_max_);
+    room_h_slider_ = std::make_unique<DMRangeSlider>(1000, 10000, room_h_min_, room_h_max_);
     room_h_slider_w_ = std::make_unique<RangeSliderWidget>(room_h_slider_.get());
     room_geom_dd_ = std::make_unique<DMDropdown>("Geometry", room_geom_options_, room_geom_);
     room_geom_dd_w_ = std::make_unique<DropdownWidget>(room_geom_dd_.get());

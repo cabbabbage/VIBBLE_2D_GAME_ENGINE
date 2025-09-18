@@ -2,14 +2,14 @@
   "camera_settings": {
     "camera_angle_degrees": 81.0,
     "camera_height_at_zoom0": 20.5,
-    "camera_vertical_offset": 217.0,
+    "camera_vertical_offset": 359.0,
     "distance_scale_strength": 0.7999999523162842,
-    "parallax_strength": 1.5,
+    "parallax_strength": 2.25,
     "perspective_angle_degrees": 81.0,
     "realism_enabled": true,
     "render_distance": 660.0,
     "render_distance_factor": 3.299999952316284,
-    "squash_strength": 0.07999999821186066
+    "squash_strength": 0.12999999523162842
   },
   "map_assets_data": {
     "spawn_groups": [
@@ -387,14 +387,14 @@
     "spawn": {
       "curvyness": 1,
       "edge_smoothness": 100,
-      "geometry": "Square",
+      "geometry": "Circle",
       "inherits_map_assets": false,
       "is_boss": false,
       "is_spawn": true,
-      "max_height": 1000,
-      "max_width": 1000,
-      "min_height": 100,
-      "min_width": 100,
+      "max_height": 2479,
+      "max_width": 2671,
+      "min_height": 1707,
+      "min_width": 1771,
       "name": "spawn",
       "spawn_groups": [
         {

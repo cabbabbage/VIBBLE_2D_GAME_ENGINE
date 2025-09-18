@@ -30,22 +30,7 @@ public:
     void update(const Input& input);
     void render(SDL_Renderer* renderer);
 
-    struct Selection {
-        enum class Kind {
-            None,
-            RoomArea,
-            RoomLabel,
-            TrailArea,
-            TrailLabel,
-        };
-        Room* room = nullptr;
-        Kind kind = Kind::None;
-        bool is_trail() const {
-            return kind == Kind::TrailArea || kind == Kind::TrailLabel;
-        }
-    };
-
-    Selection consume_selection();
+    Room* consume_selected_room();
     void focus_on_room(Room* room);
 
 private:
@@ -55,15 +40,16 @@ private:
     void apply_camera_to_bounds();
     void restore_camera_state(bool focus_player, bool restore_previous_state);
     Room* hit_test_room(SDL_Point map_point) const;
-    enum class LabelType {
-        Room,
-        Trail,
-    };
-
-    void render_room_label(SDL_Renderer* renderer, Room* room, LabelType type);
+    void render_room_label(SDL_Renderer* renderer, Room* room);
     SDL_Rect label_background_rect(const SDL_Surface* surface, SDL_Point screen_pos) const;
+<<<<<<< ours
     bool is_trail_room(const Room* room) const;
+<<<<<<< ours
     Room* find_spawn_room() const;
+=======
+>>>>>>> theirs
+=======
+>>>>>>> theirs
 
 private:
     Assets* assets_ = nullptr;
@@ -93,12 +79,7 @@ private:
 
     TTF_Font* label_font_ = nullptr;
 
-    Selection pending_selection_{};
+    Room* pending_selection_ = nullptr;
     PanAndZoom pan_zoom_;
-    struct LabelEntry {
-        Room* room = nullptr;
-        SDL_Rect rect{0, 0, 0, 0};
-        LabelType type = LabelType::Room;
-    };
-    std::vector<LabelEntry> label_rects_;
+    std::vector<std::pair<Room*, SDL_Rect>> label_rects_;
 };
