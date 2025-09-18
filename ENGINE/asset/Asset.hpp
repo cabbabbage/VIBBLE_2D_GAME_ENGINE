@@ -19,6 +19,7 @@ class camera;
 class Assets;
 class Input;
 class AnimationFrame;
+class AssetInfoUI;
 
 struct StaticLight {
     LightSource* source = nullptr;
@@ -101,6 +102,7 @@ class Asset {
         private:
     friend class AnimationUpdate;
     friend class Move;
+    friend class AssetInfoUI;
     camera* window = nullptr;
     bool highlighted = false;
     bool hidden = false;
