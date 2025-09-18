@@ -10,6 +10,7 @@ class Input;
 class Area;
 class Assets;
 class AnimationsEditorPanel;
+class Section_BasicInfo;
 
 class AssetInfoUI {
 
@@ -28,8 +29,11 @@ class AssetInfoUI {
     void render_world_overlay(SDL_Renderer* r, const class camera& cam) const;
     void set_assets(Assets* a) { assets_ = a; }
     void set_target_asset(class Asset* a) { target_asset_ = a; }
+    class Asset* get_target_asset() const { return target_asset_; }
     bool is_point_inside(int x, int y) const;
     SDL_Renderer* get_last_renderer() const { return last_renderer_; }
+    void refresh_target_asset_scale();
+    void sync_target_z_threshold();
 
   private:
     void layout_widgets(int screen_w, int screen_h) const;
@@ -43,6 +47,7 @@ class AssetInfoUI {
     Assets* assets_ = nullptr; // non-owning
     // Section-based UI
     std::vector<std::unique_ptr<class DockableCollapsible>> sections_;
+    class Section_BasicInfo* basic_info_section_ = nullptr; // non-owning ptr
     class Section_Areas* areas_section_ = nullptr;     // non-owning ptr into sections_
     class Section_Lighting* lighting_section_ = nullptr; // non-owning ptr
     class Asset* target_asset_ = nullptr;               // asset being edited (non-owning)

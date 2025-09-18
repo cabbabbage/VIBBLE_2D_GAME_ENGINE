@@ -2,6 +2,7 @@
 
 #include "asset/Asset.hpp"
 #include "asset/asset_info.hpp"
+#include "asset/asset_types.hpp"
 #include "asset/asset_utils.hpp"
 #include "core/AssetsManager.hpp"
 #include "dev_mode/area_overlay_editor.hpp"
@@ -587,7 +588,7 @@ Asset* RoomEditor::hit_test_asset(SDL_Point screen_point) const {
     for (Asset* asset : *active_assets_) {
         if (!asset || !asset->info) continue;
         const std::string& type = asset->info->type;
-        if (type == "Boundary" || type == "boundary" || type == "Texture") continue;
+        if (type == asset_types::boundary || type == asset_types::texture) continue;
 
         SDL_Texture* tex = asset->get_final_texture();
         int fw = asset->cached_w;
@@ -1371,11 +1372,7 @@ void RoomEditor::regenerate_current_room() {
         if (!asset->spawn_id.empty() && spawn_ids.count(asset->spawn_id)) {
             remove = true;
         } else if (asset->info) {
-            std::string type = asset->info->type;
-            std::string lowered;
-            lowered.reserve(type.size());
-            for (char ch : type) lowered.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(ch))));
-            if (lowered == "boundary") {
+            if (asset->info->type == asset_types::boundary) {
                 SDL_Point pos{asset->pos.x, asset->pos.y};
                 bool inside_old = old_area_copy ? old_area_copy->contains_point(pos) : false;
                 bool inside_new = new_area.contains_point(pos);
@@ -1472,7 +1469,7 @@ void RoomEditor::regenerate_current_room() {
                     if (!info) continue;
                     std::string spawn_id = generate_room_spawn_id();
                     Area spawn_area(asset_name, pt->pos, 1, 1, "Point", 1, 1, 1);
-                    auto asset = std::make_unique<Asset>(info, spawn_area, pt->pos, 0, nullptr, spawn_id, std::string("Boundary"));
+                    auto asset = std::make_unique<Asset>(info, spawn_area, pt->pos, 0, nullptr, spawn_id, std::string(asset_types::boundary));
                     boundary_spawned.push_back(std::move(asset));
                 }
                 integrate_spawned_assets(boundary_spawned);

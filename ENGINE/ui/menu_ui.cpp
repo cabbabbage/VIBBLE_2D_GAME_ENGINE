@@ -2,6 +2,7 @@
 
 #include "ui/tinyfiledialogs.h"
 #include "asset_loader.hpp"
+#include "asset/asset_types.hpp"
 #include "scene_renderer.hpp"
 #include "AssetsManager.hpp"
 #include "input.hpp"
@@ -236,6 +237,7 @@ void MenuUI::doExit() {
 void MenuUI::doRestart() {
 	std::cout << "[MenuUI] Restarting...\n";
 	if (game_assets_)      { delete game_assets_; game_assets_ = nullptr; }
+<<<<<<< ours
         try {
                 auto all_assets = loader_->createAssets();
                 Asset* player_ptr = nullptr;
@@ -253,6 +255,19 @@ void MenuUI::doRestart() {
                         game_assets_->set_dev_mode(true);
                 }
         } catch (const std::exception& ex) {
+=======
+	try {
+		auto all_assets = loader_->createAssets();
+		Asset* player_ptr = nullptr;
+		for (auto& a : all_assets) {
+                    if (a.info && a.info->type == asset_types::player) { player_ptr = &a; break; }
+		}
+		if (!player_ptr) throw std::runtime_error("[MenuUI] No player asset found");
+		game_assets_ = new Assets(std::move(all_assets), *loader_->getAssetLibrary(), player_ptr, loader_->getRooms(), screen_w_, screen_h_, player_ptr->pos.x, player_ptr->pos.y, static_cast<int>(loader_->getMapRadius() * 1.2), renderer_, map_path_);
+		if (!input_) input_ = new Input();
+		game_assets_->set_input(input_);
+	} catch (const std::exception& ex) {
+>>>>>>> theirs
 		std::cerr << "[MenuUI] Restart failed: " << ex.what() << "\n";
 		return;
 	}

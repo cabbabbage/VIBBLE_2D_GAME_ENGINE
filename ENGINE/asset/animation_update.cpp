@@ -1,6 +1,7 @@
 #include "animation_update.hpp"
 #include "asset/Asset.hpp"
 #include "asset/asset_info.hpp"
+#include "asset/asset_types.hpp"
 #include "animation.hpp"
 #include "core/active_assets_manager.hpp"
 #include "core/AssetsManager.hpp"
@@ -293,8 +294,8 @@ bool AnimationUpdate::would_overlap_same_or_player(int dx, int dy) const {
     for (Asset* a : active) {
         if (!a || a == self_ || !a->info) continue;
 
-        const bool is_enemy  = (a->info->type == "enemy");
-        const bool is_player = (a->info->type == "Player");
+        const bool is_enemy  = (a->info->type == asset_types::enemy);
+        const bool is_player = (a->info->type == asset_types::player);
         if (!is_enemy && !is_player) continue;
 
         if (Range::get_distance(new_pos, a) < 40.0) {

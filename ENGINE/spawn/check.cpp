@@ -5,6 +5,7 @@
 #include <iostream>
 #include <SDL.h>
 #include "utils/range_util.hpp"
+#include "asset/asset_types.hpp"
 
 Check::Check(bool debug)
 : debug_(debug)
@@ -42,10 +43,10 @@ bool Check::check(const std::shared_ptr<AssetInfo>& info,
 			return true;
 		}
 	}
-	if (info->type == "boundary") {
-		if (debug_) std::cout << "[Check] boundary asset; skipping spacing and type distance checks.\n";
-		return false;
-	}
+        if (info->type == asset_types::boundary) {
+                if (debug_) std::cout << "[Check] boundary asset; skipping spacing and type distance checks.\n";
+                return false;
+        }
 	auto nearest = get_closest_assets(test_pos, num_neighbors, assets);
 	if (debug_) std::cout << "[Check] Found " << nearest.size() << " nearest assets.\n";
 	if (check_spacing && info->find_area("spacing_area")) {

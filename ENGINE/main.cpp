@@ -4,6 +4,7 @@
 #include "ui/main_menu.hpp"
 #include "ui/menu_ui.hpp"
 #include "asset_loader.hpp"
+#include "asset/asset_types.hpp"
 #include "scene_renderer.hpp"
 #include "AssetsManager.hpp"
 #include "input.hpp"
@@ -47,6 +48,7 @@ void MainApp::setup() {
 	std::srand(static_cast<unsigned int>(std::time(nullptr)));
 	try {
 		loader_ = std::make_unique<AssetLoader>(map_path_, renderer_);
+<<<<<<< ours
                 auto all_assets = loader_->createAssets();
                 Asset* player_ptr = nullptr;
                 for (auto& a : all_assets) {
@@ -62,6 +64,17 @@ void MainApp::setup() {
                         dev_mode_ = true;
                         game_assets_->set_dev_mode(true);
                 }
+=======
+		auto all_assets = loader_->createAssets();
+		Asset* player_ptr = nullptr;
+                for (auto& a : all_assets) {
+                        if (a.info && a.info->type == asset_types::player) { player_ptr = &a; break; }
+                }
+		if (!player_ptr) throw std::runtime_error("[Main] No player asset found");
+		game_assets_ = new Assets(std::move(all_assets), *loader_->getAssetLibrary(), player_ptr, loader_->getRooms(), screen_w_, screen_h_, player_ptr->pos.x, player_ptr->pos.y, static_cast<int>(loader_->getMapRadius() * 1.2), renderer_, map_path_);
+		input_ = new Input();
+		game_assets_->set_input(input_);
+>>>>>>> theirs
 	} catch (const std::exception& e) {
 		std::cerr << "[MainApp] Setup error: " << e.what() << "\n";
 		throw;

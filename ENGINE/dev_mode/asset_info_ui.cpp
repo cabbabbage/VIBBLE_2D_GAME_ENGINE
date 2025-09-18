@@ -28,7 +28,10 @@
 #include "utils/light_source.hpp"
 
 AssetInfoUI::AssetInfoUI() {
-    sections_.push_back(std::make_unique<Section_BasicInfo>());
+    auto basic = std::make_unique<Section_BasicInfo>();
+    basic_info_section_ = basic.get();
+    basic_info_section_->set_ui(this);
+    sections_.push_back(std::move(basic));
     sections_.push_back(std::make_unique<Section_Tags>());
     auto lighting = std::make_unique<Section_Lighting>();
     lighting->set_ui(this);
@@ -202,7 +205,13 @@ void AssetInfoUI::render(SDL_Renderer* r, int screen_w, int screen_h) const {
 
 
 void AssetInfoUI::render_world_overlay(SDL_Renderer* r, const camera& cam) const {
-    if (!visible_ || !info_ || !lighting_section_ || !lighting_section_->is_expanded() || !lighting_section_->shading_enabled() || !target_asset_) return;
+    if (!visible_ || !info_) return;
+
+    if (basic_info_section_ && basic_info_section_->is_expanded()) {
+        basic_info_section_->render_world_overlay(r, cam, target_asset_);
+    }
+
+    if (!lighting_section_ || !lighting_section_->is_expanded() || !lighting_section_->shading_enabled() || !target_asset_) return;
     const LightSource& light = lighting_section_->shading_light();
     if (light.x_radius <= 0 && light.y_radius <= 0) return;
     SDL_SetRenderDrawColor(r, 255, 255, 0, 255);
@@ -213,6 +222,22 @@ void AssetInfoUI::render_world_overlay(SDL_Renderer* r, const camera& cam) const
         SDL_Point p = cam.map_to_screen(SDL_Point{wx, wy});
         SDL_RenderDrawPoint(r, p.x, p.y);
     }
+}
+
+void AssetInfoUI::refresh_target_asset_scale() {
+    if (!info_ || !target_asset_) return;
+    SDL_Renderer* renderer = last_renderer_;
+    if (!renderer) return;
+    info_->loadAnimations(renderer);
+    target_asset_->finalize_setup();
+    target_asset_->set_final_texture(nullptr);
+    target_asset_->cached_w = 0;
+    target_asset_->cached_h = 0;
+}
+
+void AssetInfoUI::sync_target_z_threshold() {
+    if (!target_asset_) return;
+    target_asset_->set_z_index();
 }
 
 bool AssetInfoUI::is_point_inside(int x, int y) const {

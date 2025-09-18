@@ -9,6 +9,7 @@
 #include <SDL.h>
 #include "asset/Asset.hpp"
 #include "asset/asset_library.hpp"
+#include "asset/asset_types.hpp"
 #include "room/room.hpp"
 #include "utils/area.hpp"
 #include "room/generate_rooms.hpp"
@@ -67,7 +68,7 @@ renderer_(renderer)
 	for (Room* room : rooms_) {
 		for (auto& asset_up : room->assets) {
             if (auto* asset = asset_up.get()) {
-                if (asset->info && asset->info->type != "Player" && !asset->info->moving_asset) {
+                if (asset->info && asset->info->type != asset_types::player && !asset->info->moving_asset) {
                     link_candidates.push_back(asset);
                 }
             }
@@ -142,7 +143,7 @@ std::vector<Asset*> AssetLoader::collectDistantAssets(int fade_start_distance, i
 	for (Room* room : rooms_) {
 		for (auto& asset_up : room->assets) {
 			Asset* asset = asset_up.get();
-            if (!asset->info || asset->info->type != "boundary") {
+            if (!asset->info || asset->info->type != asset_types::boundary) {
                     asset->alpha_percentage = 1.0;
                     continue;
             }

@@ -2,6 +2,7 @@
 #include "AssetsManager.hpp"
 #include "Asset.hpp"
 #include "asset_info.hpp"
+#include "asset_types.hpp"
 #include "asset_utils.hpp"
 #include "active_assets_manager.hpp"
 #include "utils/range_util.hpp"
@@ -62,8 +63,8 @@ void InitializeAssets::initialize(Assets& assets,
 }
 
 void InitializeAssets::find_player(Assets& assets) {
-	for (Asset* asset : assets.all) {
-		if (asset && asset->info && asset->info->type == "Player") {
+        for (Asset* asset : assets.all) {
+                if (asset && asset->info && asset->info->type == asset_types::player) {
 			assets.player = asset;
 			std::cout << "[InitializeAssets] Found player asset: "
 			<< assets.player->info->name << "\n";

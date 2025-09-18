@@ -8,6 +8,7 @@
 #include "methods/children_spawner.hpp"
 #include "methods/percent_spawner.hpp"
 #include "check.hpp"
+#include "asset/asset_types.hpp"
 #include <algorithm>
 #include <fstream>
 #include <iostream>
@@ -113,6 +114,8 @@ void AssetSpawner::run_boundary_spawning(const Area& area) {
                 [&](const Area& zone) { return zone.contains_point(pt); });
         };
 
+        const std::string boundary_type{asset_types::boundary};
+
         for (auto& queue_item : spawn_queue_) {
                 logger_.start_timer();
                 if (!queue_item.has_candidates()) continue;
@@ -144,7 +147,7 @@ void AssetSpawner::run_boundary_spawning(const Area& area) {
                 }
 
                 if (eligible.empty()) {
-                        logger_.output_and_log(queue_item.name, 0, 0, 0, 0, "boundary");
+                        logger_.output_and_log(queue_item.name, 0, 0, 0, 0, boundary_type);
                         continue;
                 }
 
@@ -225,7 +228,7 @@ void AssetSpawner::run_boundary_spawning(const Area& area) {
                         }
                 }
 
-                ctx.logger().output_and_log(queue_item.name, desired, spawned, attempts, attempts, "boundary");
+                ctx.logger().output_and_log(queue_item.name, desired, spawned, attempts, attempts, boundary_type);
         }
 }
 
