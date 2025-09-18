@@ -12,6 +12,7 @@
 class Input;
 union SDL_Event;
 struct SDL_Renderer;
+class MapLayersController;
 
 // Floating dockable panel for editing map_layers in map_info.json.
 class MapLayersPanel : public DockableCollapsible {
@@ -23,6 +24,7 @@ public:
 
     void set_map_info(nlohmann::json* map_info, const std::string& map_path);
     void set_on_save(SaveCallback cb);
+    void set_controller(std::shared_ptr<MapLayersController> controller);
 
     void open();
     void close();
@@ -91,4 +93,6 @@ private:
     std::vector<std::string> available_rooms_;
     int selected_layer_ = -1;
     bool dirty_ = false;
+
+    std::shared_ptr<MapLayersController> controller_;
 };

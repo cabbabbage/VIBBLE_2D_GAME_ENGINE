@@ -2,6 +2,7 @@
 
 #include "MapLightPanel.hpp"
 #include "map_assets_panel.hpp"
+#include "map_layers_controller.hpp"
 #include "map_layers_panel.hpp"
 #include "core/AssetsManager.hpp"
 #include "utils/input.hpp"
@@ -46,8 +47,14 @@ void MapModeUI::ensure_panels() {
         assets_panel_ = std::make_unique<MapAssetsPanel>(kDefaultPanelX + 32, kDefaultPanelY + 32);
         assets_panel_->close();
     }
+    if (!layers_controller_) {
+        layers_controller_ = std::make_shared<MapLayersController>();
+    }
     if (!layers_panel_) {
         layers_panel_ = std::make_unique<MapLayersPanel>(kDefaultPanelX + 64, kDefaultPanelY + 64);
+        if (layers_controller_) {
+            layers_panel_->set_controller(layers_controller_);
+        }
         layers_panel_->close();
     }
 }
@@ -64,6 +71,9 @@ void MapModeUI::sync_panel_map_info() {
         assets_panel_->set_on_save([this]() { return save_map_info_to_disk(); });
     }
     if (layers_panel_) {
+        if (layers_controller_) {
+            layers_controller_->bind(map_info_, map_path_);
+        }
         layers_panel_->set_map_info(map_info_, map_path_);
         layers_panel_->set_on_save([this]() { return save_map_info_to_disk(); });
     }

@@ -1,0 +1,198 @@
+#include "full_screen_collapsible.hpp"
+
+#include "utils/input.hpp"
+
+#include <SDL_ttf.h>
+
+#include <algorithm>
+
+namespace {
+constexpr int kHeaderHeight = 40;
+constexpr int kArrowButtonWidth = 36;
+
+void draw_label(SDL_Renderer* renderer, const std::string& text, int x, int y) {
+    if (!renderer) return;
+    const DMLabelStyle& style = DMStyles::Label();
+    TTF_Font* font = style.open_font();
+    if (!font) return;
+    SDL_Surface* surf = TTF_RenderUTF8_Blended(font, text.c_str(), style.color);
+    if (!surf) {
+        TTF_CloseFont(font);
+        return;
+    }
+    SDL_Texture* tex = SDL_CreateTextureFromSurface(renderer, surf);
+    if (tex) {
+        SDL_Rect dst{x, y, surf->w, surf->h};
+        SDL_RenderCopy(renderer, tex, nullptr, &dst);
+        SDL_DestroyTexture(tex);
+    }
+    SDL_FreeSurface(surf);
+    TTF_CloseFont(font);
+}
+
+} // namespace
+
+FullScreenCollapsible::FullScreenCollapsible(std::string title)
+    : title_(std::move(title)) {
+    arrow_button_ = std::make_unique<DMButton>("▲", &DMStyles::HeaderButton(), kArrowButtonWidth, DMButton::height());
+}
+
+void FullScreenCollapsible::set_bounds(int width, int height) {
+    screen_w_ = width;
+    screen_h_ = height;
+    layout();
+}
+
+void FullScreenCollapsible::set_expanded(bool expanded) {
+    if (expanded_ == expanded) return;
+    expanded_ = expanded;
+    if (arrow_button_) {
+        arrow_button_->set_text(expanded_ ? "▼" : "▲");
+        arrow_button_->set_rect(SDL_Rect{header_rect_.x + header_rect_.w - kArrowButtonWidth - DMSpacing::item_gap(),
+                                         header_rect_.y + (kHeaderHeight - DMButton::height()) / 2,
+                                         kArrowButtonWidth,
+                                         DMButton::height()});
+    }
+    layout();
+    if (on_toggle_) on_toggle_(expanded_);
+}
+
+void FullScreenCollapsible::set_header_buttons(std::vector<HeaderButton> buttons) {
+    buttons_ = std::move(buttons);
+    for (auto& btn : buttons_) {
+        btn.widget = std::make_unique<DMButton>(btn.label, &DMStyles::HeaderButton(), 120, DMButton::height());
+    }
+    layout_buttons();
+}
+
+void FullScreenCollapsible::activate_button(const std::string& id) {
+    for (auto& btn : buttons_) {
+        const bool new_state = (btn.id == id);
+        if (btn.active != new_state) {
+            btn.active = new_state;
+            if (btn.on_toggle) {
+                btn.on_toggle(btn.active);
+            }
+        }
+    }
+}
+
+void FullScreenCollapsible::update(const Input&) {
+    // Header buttons rely on DMButton's internal hover state which is updated
+    // by handle_event(). Nothing to do here yet.
+}
+
+bool FullScreenCollapsible::handle_event(const SDL_Event& e) {
+    if (!visible_) return false;
+    bool used = false;
+    if (arrow_button_) {
+        if (arrow_button_->handle_event(e)) {
+            used = true;
+            if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
+                set_expanded(!expanded_);
+            }
+        }
+    }
+    for (auto& btn : buttons_) {
+        if (!btn.widget) continue;
+        if (btn.widget->handle_event(e)) {
+            used = true;
+            if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
+                const bool was_active = btn.active;
+                if (was_active) {
+                    btn.active = false;
+                    if (btn.on_toggle) btn.on_toggle(false);
+                } else {
+                    for (auto& other : buttons_) {
+                        if (&other == &btn) continue;
+                        if (other.active) {
+                            other.active = false;
+                            if (other.on_toggle) other.on_toggle(false);
+                        }
+                    }
+                    btn.active = true;
+                    if (btn.on_toggle) btn.on_toggle(true);
+                }
+            }
+        }
+    }
+    return used;
+}
+
+void FullScreenCollapsible::render(SDL_Renderer* renderer) const {
+    if (!visible_ || !renderer) return;
+    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+    const SDL_Color header_bg = DMStyles::PanelBG();
+    SDL_SetRenderDrawColor(renderer, header_bg.r, header_bg.g, header_bg.b, 240);
+    SDL_RenderFillRect(renderer, &header_rect_);
+    const SDL_Color border = DMStyles::Border();
+    SDL_SetRenderDrawColor(renderer, border.r, border.g, border.b, border.a);
+    SDL_RenderDrawRect(renderer, &header_rect_);
+
+    if (expanded_) {
+        SDL_Rect content = content_rect_;
+        SDL_SetRenderDrawColor(renderer, header_bg.r, header_bg.g, header_bg.b, 220);
+        SDL_RenderFillRect(renderer, &content);
+        SDL_SetRenderDrawColor(renderer, border.r, border.g, border.b, border.a);
+        SDL_RenderDrawRect(renderer, &content);
+    }
+
+    int text_x = header_rect_.x + DMSpacing::item_gap();
+    int text_y = header_rect_.y + (kHeaderHeight - DMStyles::Label().font_size) / 2;
+    draw_label(renderer, title_, text_x, text_y);
+
+    for (const auto& btn : buttons_) {
+        if (!btn.widget) continue;
+        if (btn.active) {
+            SDL_Rect rect = btn.widget->rect();
+            SDL_SetRenderDrawColor(renderer, 120, 160, 255, 80);
+            SDL_RenderFillRect(renderer, &rect);
+        }
+        btn.widget->render(renderer);
+    }
+
+    if (arrow_button_) {
+        arrow_button_->render(renderer);
+    }
+}
+
+void FullScreenCollapsible::layout() {
+    header_rect_.w = screen_w_;
+    header_rect_.h = kHeaderHeight;
+    header_rect_.x = 0;
+    header_rect_.y = expanded_ ? 0 : std::max(0, screen_h_ - kHeaderHeight);
+    if (expanded_) {
+        content_rect_.x = 0;
+        content_rect_.y = header_rect_.y + header_rect_.h;
+        content_rect_.w = screen_w_;
+        content_rect_.h = std::max(0, screen_h_ - header_rect_.h);
+    } else {
+        content_rect_ = SDL_Rect{0, header_rect_.y + header_rect_.h, screen_w_, 0};
+    }
+    layout_buttons();
+    if (arrow_button_) {
+        SDL_Rect rect{header_rect_.x + header_rect_.w - kArrowButtonWidth - DMSpacing::item_gap(),
+                      header_rect_.y + (kHeaderHeight - DMButton::height()) / 2,
+                      kArrowButtonWidth,
+                      DMButton::height()};
+        arrow_button_->set_rect(rect);
+        arrow_button_->set_text(expanded_ ? "▼" : "▲");
+    }
+}
+
+void FullScreenCollapsible::layout_buttons() {
+    int x = header_rect_.x + DMSpacing::item_gap();
+    if (!buttons_.empty()) {
+        x += DMSpacing::item_gap();
+    }
+    int available = header_rect_.w - (kArrowButtonWidth + DMSpacing::item_gap() * 3);
+    const int button_gap = DMSpacing::small_gap();
+    for (auto& btn : buttons_) {
+        if (!btn.widget) continue;
+        SDL_Rect rect{x, header_rect_.y + (kHeaderHeight - DMButton::height()) / 2, 120, DMButton::height()};
+        btn.widget->set_rect(rect);
+        x += rect.w + button_gap;
+        if (x > available) break;
+    }
+}
+

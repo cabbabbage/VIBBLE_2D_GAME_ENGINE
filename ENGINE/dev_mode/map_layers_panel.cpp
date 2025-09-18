@@ -1,6 +1,7 @@
 #include "map_layers_panel.hpp"
 
 #include "dm_styles.hpp"
+#include "map_layers_controller.hpp"
 #include "widgets.hpp"
 #include "utils/input.hpp"
 
@@ -106,383 +107,6 @@ int sum_candidate_field(const nlohmann::json& layer, const char* key) {
 
 using nlohmann::json;
 
-auto MapLayersPanel::layers_array() -> nlohmann::json& {
-    ensure_layers_array();
-    return (*map_info_)["map_layers"];
-}
-
-auto MapLayersPanel::layers_array() const -> const nlohmann::json& {
-    static json empty = json::array();
-    if (!map_info_ || !map_info_->contains("map_layers") || !(*map_info_)["map_layers"].is_array()) {
-        return empty;
-    }
-    return (*map_info_)["map_layers"];
-}
-
-MapLayersPanel::MapLayersPanel(int x, int y)
-    : DockableCollapsible("Map Layers", true, x, y) {
-    set_cell_width(220);
-    set_visible(false);
-    set_expanded(true);
-    canvas_widget_ = std::make_unique<LayerCanvasWidget>(this);
-    sidebar_widget_ = std::make_unique<PanelSidebarWidget>(this);
-    layer_config_ = std::make_unique<LayerConfigPanel>(this);
-    room_selector_ = std::make_unique<RoomSelectorPopup>(this);
-    rebuild_rows();
-}
-
-MapLayersPanel::~MapLayersPanel() = default;
-
-void MapLayersPanel::set_map_info(json* map_info, const std::string& map_path) {
-    map_info_ = map_info;
-    map_path_ = map_path;
-    ensure_layers_array();
-    ensure_layer_indices();
-    rebuild_available_rooms();
-    refresh_canvas();
-    if (layer_config_) layer_config_->close();
-    mark_clean();
-}
-
-void MapLayersPanel::set_on_save(SaveCallback cb) {
-    on_save_ = std::move(cb);
-}
-
-void MapLayersPanel::open() {
-    set_visible(true);
-    set_expanded(true);
-}
-
-void MapLayersPanel::close() {
-    set_visible(false);
-    if (layer_config_) layer_config_->close();
-    if (room_selector_) room_selector_->close();
-}
-
-bool MapLayersPanel::is_visible() const {
-    return DockableCollapsible::is_visible();
-}
-
-void MapLayersPanel::update(const Input& input, int screen_w, int screen_h) {
-    if (!is_visible()) return;
-    DockableCollapsible::update(input, screen_w, screen_h);
-    if (layer_config_) layer_config_->update(input, screen_w, screen_h);
-    if (room_selector_) room_selector_->update(input);
-}
-
-bool MapLayersPanel::handle_event(const SDL_Event& e) {
-    if (!is_visible()) return false;
-    bool used = DockableCollapsible::handle_event(e);
-    if (layer_config_ && layer_config_->is_visible()) {
-        used = layer_config_->handle_event(e) || used;
-    }
-    if (room_selector_ && room_selector_->visible()) {
-        used = room_selector_->handle_event(e) || used;
-    }
-    return used;
-}
-
-void MapLayersPanel::render(SDL_Renderer* renderer) const {
-    if (!is_visible()) return;
-    DockableCollapsible::render(renderer);
-    if (layer_config_ && layer_config_->is_visible()) {
-        layer_config_->render(renderer);
-    }
-    if (room_selector_ && room_selector_->visible()) {
-        room_selector_->render(renderer);
-    }
-}
-
-bool MapLayersPanel::is_point_inside(int x, int y) const {
-    if (!is_visible()) return false;
-    if (DockableCollapsible::is_point_inside(x, y)) return true;
-    if (layer_config_ && layer_config_->is_visible() && layer_config_->is_point_inside(x, y)) return true;
-    if (room_selector_ && room_selector_->visible() && room_selector_->is_point_inside(x, y)) return true;
-    return false;
-}
-
-void MapLayersPanel::select_layer(int index) {
-    selected_layer_ = index;
-    if (sidebar_widget_) sidebar_widget_->set_selected(index);
-    if (canvas_widget_) canvas_widget_->set_selected(index);
-}
-
-void MapLayersPanel::mark_dirty() {
-    dirty_ = true;
-    if (sidebar_widget_) sidebar_widget_->set_dirty(true);
-}
-
-void MapLayersPanel::mark_clean() {
-    dirty_ = false;
-    if (sidebar_widget_) sidebar_widget_->set_dirty(false);
-}
-
-void MapLayersPanel::ensure_layers_array() {
-    if (!map_info_) return;
-    if (!map_info_->contains("map_layers") || !(*map_info_)["map_layers"].is_array()) {
-        (*map_info_)["map_layers"] = json::array();
-    }
-}
-
-void MapLayersPanel::ensure_layer_indices() {
-    if (!map_info_) return;
-    auto& arr = layers_array();
-    for (size_t i = 0; i < arr.size(); ++i) {
-        if (!arr[i].is_object()) arr[i] = json::object();
-        arr[i]["level"] = static_cast<int>(i);
-        if (!arr[i].contains("name")) {
-            std::ostringstream oss;
-            oss << "layer_" << i;
-            arr[i]["name"] = oss.str();
-        }
-        if (!arr[i].contains("min_rooms")) arr[i]["min_rooms"] = 0;
-        if (!arr[i].contains("max_rooms")) arr[i]["max_rooms"] = 0;
-        if (!arr[i].contains("radius")) arr[i]["radius"] = 0;
-        if (!arr[i].contains("rooms") || !arr[i]["rooms"].is_array()) {
-            arr[i]["rooms"] = json::array();
-        }
-    }
-}
-
-nlohmann::json* MapLayersPanel::layer_at(int index) {
-    if (!map_info_) return nullptr;
-    auto& arr = layers_array();
-    if (index < 0 || index >= static_cast<int>(arr.size())) return nullptr;
-    return &arr[index];
-}
-
-const nlohmann::json* MapLayersPanel::layer_at(int index) const {
-    if (!map_info_) return nullptr;
-    const auto& arr = layers_array();
-    if (index < 0 || index >= static_cast<int>(arr.size())) return nullptr;
-    return &arr[index];
-}
-
-void MapLayersPanel::rebuild_rows() {
-    DockableCollapsible::Rows rows;
-    rows.push_back({ canvas_widget_.get(), sidebar_widget_.get() });
-    set_rows(rows);
-}
-
-void MapLayersPanel::rebuild_available_rooms() {
-    available_rooms_.clear();
-    if (!map_info_) return;
-    const auto rooms_it = map_info_->find("rooms_data");
-    if (rooms_it != map_info_->end() && rooms_it->is_object()) {
-        for (auto it = rooms_it->begin(); it != rooms_it->end(); ++it) {
-            available_rooms_.push_back(it.key());
-        }
-        std::sort(available_rooms_.begin(), available_rooms_.end());
-    }
-}
-
-void MapLayersPanel::refresh_canvas() {
-    if (canvas_widget_) canvas_widget_->refresh();
-}
-
-void MapLayersPanel::add_layer_internal() {
-    if (!map_info_) return;
-    auto& arr = layers_array();
-    const int idx = static_cast<int>(arr.size());
-    json new_layer = {
-        {"level", idx},
-        {"name", std::string("layer_") + std::to_string(idx)},
-        {"radius", 0},
-        {"min_rooms", 0},
-        {"max_rooms", 0},
-        {"rooms", json::array()}
-    };
-    arr.push_back(std::move(new_layer));
-    ensure_layer_indices();
-    refresh_canvas();
-    select_layer(idx);
-    mark_dirty();
-}
-
-void MapLayersPanel::delete_layer_internal(int index) {
-    if (!map_info_) return;
-    auto& arr = layers_array();
-    if (index < 0 || index >= static_cast<int>(arr.size())) return;
-    arr.erase(arr.begin() + index);
-    ensure_layer_indices();
-    refresh_canvas();
-    if (selected_layer_ >= static_cast<int>(arr.size())) {
-        select_layer(static_cast<int>(arr.size()) - 1);
-    }
-    mark_dirty();
-}
-
-void MapLayersPanel::open_layer_config_internal(int index) {
-    if (!layer_config_) return;
-    if (!map_info_) return;
-    auto* layer = layer_at(index);
-    if (!layer) return;
-    select_layer(index);
-    layer_config_->open(index, layer);
-}
-
-void MapLayersPanel::handle_layer_range_changed(int index, int min_rooms, int max_rooms) {
-    auto* layer = layer_at(index);
-    if (!layer) return;
-    (*layer)["min_rooms"] = min_rooms;
-    (*layer)["max_rooms"] = max_rooms;
-    mark_dirty();
-}
-
-void MapLayersPanel::handle_layer_name_changed(int index, const std::string& name) {
-    auto* layer = layer_at(index);
-    if (!layer) return;
-    (*layer)["name"] = name;
-    mark_dirty();
-    refresh_canvas();
-}
-
-void MapLayersPanel::handle_candidate_range_changed(int layer_index, int candidate_index, int min_instances, int max_instances) {
-    auto* layer = layer_at(layer_index);
-    if (!layer) return;
-    auto rooms_it = layer->find("rooms");
-    if (rooms_it == layer->end() || !rooms_it->is_array()) return;
-    if (candidate_index < 0 || candidate_index >= static_cast<int>(rooms_it->size())) return;
-    (*rooms_it)[candidate_index]["min_instances"] = min_instances;
-    (*rooms_it)[candidate_index]["max_instances"] = max_instances;
-    int min_sum = sum_candidate_field(*layer, "min_instances");
-    int max_sum = sum_candidate_field(*layer, "max_instances");
-    int current_min = layer->value("min_rooms", 0);
-    int current_max = layer->value("max_rooms", 0);
-    if (min_sum > current_min) {
-        (*layer)["min_rooms"] = min_sum;
-    }
-    if (current_max > max_sum) {
-        current_max = max_sum;
-        (*layer)["max_rooms"] = std::max(min_sum, current_max);
-    }
-    mark_dirty();
-}
-
-void MapLayersPanel::handle_candidate_removed(int layer_index, int candidate_index) {
-    auto* layer = layer_at(layer_index);
-    if (!layer) return;
-    auto rooms_it = layer->find("rooms");
-    if (rooms_it == layer->end() || !rooms_it->is_array()) return;
-    if (candidate_index < 0 || candidate_index >= static_cast<int>(rooms_it->size())) return;
-    rooms_it->erase(rooms_it->begin() + candidate_index);
-    mark_dirty();
-    if (layer_config_) layer_config_->refresh();
-}
-
-void MapLayersPanel::handle_candidate_child_added(int layer_index, int candidate_index, const std::string& child) {
-    auto* layer = layer_at(layer_index);
-    if (!layer) return;
-    auto rooms_it = layer->find("rooms");
-    if (rooms_it == layer->end() || !rooms_it->is_array()) return;
-    if (candidate_index < 0 || candidate_index >= static_cast<int>(rooms_it->size())) return;
-    auto& entry = (*rooms_it)[candidate_index];
-    auto& children = entry["required_children"];
-    if (!children.is_array()) children = json::array();
-    if (std::find(children.begin(), children.end(), child) == children.end()) {
-        children.push_back(child);
-        mark_dirty();
-    }
-}
-
-void MapLayersPanel::handle_candidate_child_removed(int layer_index, int candidate_index, const std::string& child) {
-    auto* layer = layer_at(layer_index);
-    if (!layer) return;
-    auto rooms_it = layer->find("rooms");
-    if (rooms_it == layer->end() || !rooms_it->is_array()) return;
-    if (candidate_index < 0 || candidate_index >= static_cast<int>(rooms_it->size())) return;
-    auto& entry = (*rooms_it)[candidate_index];
-    auto& children = entry["required_children"];
-    if (!children.is_array()) return;
-    auto it = std::find(children.begin(), children.end(), child);
-    if (it != children.end()) {
-        children.erase(it);
-        mark_dirty();
-    }
-}
-
-void MapLayersPanel::handle_candidate_added(int layer_index, const std::string& room_name) {
-    auto* layer = layer_at(layer_index);
-    if (!layer) return;
-    auto& rooms = (*layer)["rooms"];
-    if (!rooms.is_array()) rooms = json::array();
-    json candidate = {
-        {"name", room_name},
-        {"min_instances", 0},
-        {"max_instances", 0},
-        {"required_children", json::array()}
-    };
-    rooms.push_back(std::move(candidate));
-    mark_dirty();
-    if (layer_config_) layer_config_->refresh();
-}
-
-void MapLayersPanel::update_save_button_state() {
-    if (sidebar_widget_) sidebar_widget_->set_dirty(dirty_);
-}
-
-bool MapLayersPanel::save_layers_to_disk() {
-    if (!map_info_) return false;
-    if (on_save_) {
-        bool ok = on_save_();
-        if (ok) mark_clean();
-        return ok;
-    }
-    std::string path = map_path_.empty() ? std::string{} : (map_path_ + "/map_info.json");
-    if (path.empty()) return false;
-    std::ofstream out(path);
-    if (!out) {
-        std::cerr << "[MapLayersPanel] Failed to open " << path << " for writing\n";
-        return false;
-    }
-    try {
-        out << map_info_->dump(2);
-        mark_clean();
-        return true;
-    } catch (const std::exception& ex) {
-        std::cerr << "[MapLayersPanel] Serialize error: " << ex.what() << "\n";
-        return false;
-    }
-}
-
-bool MapLayersPanel::reload_layers_from_disk() {
-    std::string path = map_path_.empty() ? std::string{} : (map_path_ + "/map_info.json");
-    if (path.empty() || !map_info_) return false;
-    std::ifstream in(path);
-    if (!in) {
-        std::cerr << "[MapLayersPanel] Failed to open " << path << " for reading\n";
-        return false;
-    }
-    try {
-        json fresh;
-        in >> fresh;
-        *map_info_ = std::move(fresh);
-        ensure_layers_array();
-        ensure_layer_indices();
-        rebuild_available_rooms();
-        refresh_canvas();
-        if (layer_config_) layer_config_->close();
-        mark_clean();
-        return true;
-    } catch (const std::exception& ex) {
-        std::cerr << "[MapLayersPanel] Parse error: " << ex.what() << "\n";
-        return false;
-    }
-}
-
-void MapLayersPanel::ensure_layer_config_valid() {
-    if (!layer_config_ || !layer_config_->is_visible()) return;
-    if (selected_layer_ < 0 || !layer_at(selected_layer_)) {
-        layer_config_->close();
-    }
-}
-
-void MapLayersPanel::request_room_selection(const std::function<void(const std::string&)>& cb) {
-    if (!room_selector_) return;
-    if (available_rooms_.empty()) rebuild_available_rooms();
-    room_selector_->open(available_rooms_, cb);
-}
-
 // -----------------------------------------------------------------------------
 // LayerCanvasWidget implementation
 // -----------------------------------------------------------------------------
@@ -503,7 +127,9 @@ public:
     void render(SDL_Renderer* renderer) const override;
 
 private:
-    void sync_from_widgets();
+    struct CircleInfo {
+        int index = -1;
+        int radius_px = 0;
         SDL_Color color{128, 128, 128, 255};
         std::string label;
     };
@@ -937,8 +563,7 @@ void MapLayersPanel::LayerConfigPanel::open(int layer_index, json* layer) {
     name_cache_ = layer_->value("name", std::string("layer_") + std::to_string(layer_index));
     min_rooms_cache_ = layer_->value("min_rooms", 0);
     max_rooms_cache_ = layer_->value("max_rooms", 0);
-    rebuild_rows();
-    rebuild_candidates();
+    refresh();
     set_title(std::string("Layer: ") + name_cache_);
     set_visible(true);
     set_expanded(true);
@@ -1246,14 +871,391 @@ void MapLayersPanel::RoomCandidateWidget::render(SDL_Renderer* renderer) const {
     }
 }
 
+auto MapLayersPanel::layers_array() -> nlohmann::json& {
+    ensure_layers_array();
+    return (*map_info_)["map_layers"];
+}
 
+auto MapLayersPanel::layers_array() const -> const nlohmann::json& {
+    static json empty = json::array();
+    if (!map_info_ || !map_info_->contains("map_layers") || !(*map_info_)["map_layers"].is_array()) {
+        return empty;
+    }
+    return (*map_info_)["map_layers"];
+}
 
+MapLayersPanel::MapLayersPanel(int x, int y)
+    : DockableCollapsible("Map Layers", true, x, y) {
+    set_cell_width(220);
+    set_visible(false);
+    set_expanded(true);
+    canvas_widget_ = std::make_unique<LayerCanvasWidget>(this);
+    sidebar_widget_ = std::make_unique<PanelSidebarWidget>(this);
+    layer_config_ = std::make_unique<LayerConfigPanel>(this);
+    room_selector_ = std::make_unique<RoomSelectorPopup>(this);
+    rebuild_rows();
+}
 
+MapLayersPanel::~MapLayersPanel() = default;
 
+void MapLayersPanel::set_map_info(json* map_info, const std::string& map_path) {
+    map_info_ = map_info;
+    map_path_ = map_path;
+    if (controller_) {
+        controller_->bind(map_info, map_path);
+    }
+    ensure_layers_array();
+    ensure_layer_indices();
+    rebuild_available_rooms();
+    refresh_canvas();
+    if (layer_config_) layer_config_->close();
+    mark_clean();
+}
 
+void MapLayersPanel::set_on_save(SaveCallback cb) {
+    on_save_ = std::move(cb);
+}
 
+void MapLayersPanel::set_controller(std::shared_ptr<MapLayersController> controller) {
+    controller_ = std::move(controller);
+    if (controller_ && map_info_) {
+        controller_->bind(map_info_, map_path_);
+    }
+}
 
+void MapLayersPanel::open() {
+    set_visible(true);
+    set_expanded(true);
+}
 
+void MapLayersPanel::close() {
+    set_visible(false);
+    if (layer_config_) layer_config_->close();
+    if (room_selector_) room_selector_->close();
+}
 
+bool MapLayersPanel::is_visible() const {
+    return DockableCollapsible::is_visible();
+}
+
+void MapLayersPanel::update(const Input& input, int screen_w, int screen_h) {
+    if (!is_visible()) return;
+    DockableCollapsible::update(input, screen_w, screen_h);
+    if (layer_config_) layer_config_->update(input, screen_w, screen_h);
+    if (room_selector_) room_selector_->update(input);
+}
+
+bool MapLayersPanel::handle_event(const SDL_Event& e) {
+    if (!is_visible()) return false;
+    bool used = DockableCollapsible::handle_event(e);
+    if (layer_config_ && layer_config_->is_visible()) {
+        used = layer_config_->handle_event(e) || used;
+    }
+    if (room_selector_ && room_selector_->visible()) {
+        used = room_selector_->handle_event(e) || used;
+    }
+    return used;
+}
+
+void MapLayersPanel::render(SDL_Renderer* renderer) const {
+    if (!is_visible()) return;
+    DockableCollapsible::render(renderer);
+    if (layer_config_ && layer_config_->is_visible()) {
+        layer_config_->render(renderer);
+    }
+    if (room_selector_ && room_selector_->visible()) {
+        room_selector_->render(renderer);
+    }
+}
+
+bool MapLayersPanel::is_point_inside(int x, int y) const {
+    if (!is_visible()) return false;
+    if (DockableCollapsible::is_point_inside(x, y)) return true;
+    if (layer_config_ && layer_config_->is_visible() && layer_config_->is_point_inside(x, y)) return true;
+    if (room_selector_ && room_selector_->visible() && room_selector_->is_point_inside(x, y)) return true;
+    return false;
+}
+
+void MapLayersPanel::select_layer(int index) {
+    selected_layer_ = index;
+    if (sidebar_widget_) sidebar_widget_->set_selected(index);
+    if (canvas_widget_) canvas_widget_->set_selected(index);
+}
+
+void MapLayersPanel::mark_dirty() {
+    dirty_ = true;
+    if (sidebar_widget_) sidebar_widget_->set_dirty(true);
+}
+
+void MapLayersPanel::mark_clean() {
+    dirty_ = false;
+    if (sidebar_widget_) sidebar_widget_->set_dirty(false);
+}
+
+void MapLayersPanel::ensure_layers_array() {
+    if (!map_info_) return;
+    if (!map_info_->contains("map_layers") || !(*map_info_)["map_layers"].is_array()) {
+        (*map_info_)["map_layers"] = json::array();
+    }
+}
+
+void MapLayersPanel::ensure_layer_indices() {
+    if (!map_info_) return;
+    auto& arr = layers_array();
+    for (size_t i = 0; i < arr.size(); ++i) {
+        if (!arr[i].is_object()) arr[i] = json::object();
+        arr[i]["level"] = static_cast<int>(i);
+        if (!arr[i].contains("name")) {
+            std::ostringstream oss;
+            oss << "layer_" << i;
+            arr[i]["name"] = oss.str();
+        }
+        if (!arr[i].contains("min_rooms")) arr[i]["min_rooms"] = 0;
+        if (!arr[i].contains("max_rooms")) arr[i]["max_rooms"] = 0;
+        if (!arr[i].contains("radius")) arr[i]["radius"] = 0;
+        if (!arr[i].contains("rooms") || !arr[i]["rooms"].is_array()) {
+            arr[i]["rooms"] = json::array();
+        }
+    }
+}
+
+nlohmann::json* MapLayersPanel::layer_at(int index) {
+    if (!map_info_) return nullptr;
+    auto& arr = layers_array();
+    if (index < 0 || index >= static_cast<int>(arr.size())) return nullptr;
+    return &arr[index];
+}
+
+const nlohmann::json* MapLayersPanel::layer_at(int index) const {
+    if (!map_info_) return nullptr;
+    const auto& arr = layers_array();
+    if (index < 0 || index >= static_cast<int>(arr.size())) return nullptr;
+    return &arr[index];
+}
+
+void MapLayersPanel::rebuild_rows() {
+    DockableCollapsible::Rows rows;
+    rows.push_back({ canvas_widget_.get(), sidebar_widget_.get() });
+    set_rows(rows);
+}
+
+void MapLayersPanel::rebuild_available_rooms() {
+    available_rooms_.clear();
+    if (!map_info_) return;
+    const auto rooms_it = map_info_->find("rooms_data");
+    if (rooms_it != map_info_->end() && rooms_it->is_object()) {
+        for (auto it = rooms_it->begin(); it != rooms_it->end(); ++it) {
+            available_rooms_.push_back(it.key());
+        }
+        std::sort(available_rooms_.begin(), available_rooms_.end());
+    }
+}
+
+void MapLayersPanel::refresh_canvas() {
+    if (canvas_widget_) canvas_widget_->refresh();
+}
+
+void MapLayersPanel::add_layer_internal() {
+    if (!map_info_) return;
+    auto& arr = layers_array();
+    const int idx = static_cast<int>(arr.size());
+    json new_layer = {
+        {"level", idx},
+        {"name", std::string("layer_") + std::to_string(idx)},
+        {"radius", 0},
+        {"min_rooms", 0},
+        {"max_rooms", 0},
+        {"rooms", json::array()}
+    };
+    arr.push_back(std::move(new_layer));
+    ensure_layer_indices();
+    refresh_canvas();
+    select_layer(idx);
+    mark_dirty();
+}
+
+void MapLayersPanel::delete_layer_internal(int index) {
+    if (!map_info_) return;
+    auto& arr = layers_array();
+    if (index < 0 || index >= static_cast<int>(arr.size())) return;
+    arr.erase(arr.begin() + index);
+    ensure_layer_indices();
+    refresh_canvas();
+    if (selected_layer_ >= static_cast<int>(arr.size())) {
+        select_layer(static_cast<int>(arr.size()) - 1);
+    }
+    mark_dirty();
+}
+
+void MapLayersPanel::open_layer_config_internal(int index) {
+    if (!layer_config_) return;
+    if (!map_info_) return;
+    auto* layer = layer_at(index);
+    if (!layer) return;
+    select_layer(index);
+    layer_config_->open(index, layer);
+}
+
+void MapLayersPanel::handle_layer_range_changed(int index, int min_rooms, int max_rooms) {
+    auto* layer = layer_at(index);
+    if (!layer) return;
+    (*layer)["min_rooms"] = min_rooms;
+    (*layer)["max_rooms"] = max_rooms;
+    mark_dirty();
+}
+
+void MapLayersPanel::handle_layer_name_changed(int index, const std::string& name) {
+    auto* layer = layer_at(index);
+    if (!layer) return;
+    (*layer)["name"] = name;
+    mark_dirty();
+    refresh_canvas();
+}
+
+void MapLayersPanel::handle_candidate_range_changed(int layer_index, int candidate_index, int min_instances, int max_instances) {
+    auto* layer = layer_at(layer_index);
+    if (!layer) return;
+    auto rooms_it = layer->find("rooms");
+    if (rooms_it == layer->end() || !rooms_it->is_array()) return;
+    if (candidate_index < 0 || candidate_index >= static_cast<int>(rooms_it->size())) return;
+    (*rooms_it)[candidate_index]["min_instances"] = min_instances;
+    (*rooms_it)[candidate_index]["max_instances"] = max_instances;
+    int min_sum = sum_candidate_field(*layer, "min_instances");
+    int max_sum = sum_candidate_field(*layer, "max_instances");
+    int current_min = layer->value("min_rooms", 0);
+    int current_max = layer->value("max_rooms", 0);
+    if (min_sum > current_min) {
+        (*layer)["min_rooms"] = min_sum;
+    }
+    if (current_max > max_sum) {
+        current_max = max_sum;
+        (*layer)["max_rooms"] = std::max(min_sum, current_max);
+    }
+    mark_dirty();
+}
+
+void MapLayersPanel::handle_candidate_removed(int layer_index, int candidate_index) {
+    auto* layer = layer_at(layer_index);
+    if (!layer) return;
+    auto rooms_it = layer->find("rooms");
+    if (rooms_it == layer->end() || !rooms_it->is_array()) return;
+    if (candidate_index < 0 || candidate_index >= static_cast<int>(rooms_it->size())) return;
+    rooms_it->erase(rooms_it->begin() + candidate_index);
+    mark_dirty();
+    if (layer_config_) layer_config_->refresh();
+}
+
+void MapLayersPanel::handle_candidate_child_added(int layer_index, int candidate_index, const std::string& child) {
+    auto* layer = layer_at(layer_index);
+    if (!layer) return;
+    auto rooms_it = layer->find("rooms");
+    if (rooms_it == layer->end() || !rooms_it->is_array()) return;
+    if (candidate_index < 0 || candidate_index >= static_cast<int>(rooms_it->size())) return;
+    auto& entry = (*rooms_it)[candidate_index];
+    auto& children = entry["required_children"];
+    if (!children.is_array()) children = json::array();
+    if (std::find(children.begin(), children.end(), child) == children.end()) {
+        children.push_back(child);
+        mark_dirty();
+    }
+}
+
+void MapLayersPanel::handle_candidate_child_removed(int layer_index, int candidate_index, const std::string& child) {
+    auto* layer = layer_at(layer_index);
+    if (!layer) return;
+    auto rooms_it = layer->find("rooms");
+    if (rooms_it == layer->end() || !rooms_it->is_array()) return;
+    if (candidate_index < 0 || candidate_index >= static_cast<int>(rooms_it->size())) return;
+    auto& entry = (*rooms_it)[candidate_index];
+    auto& children = entry["required_children"];
+    if (!children.is_array()) return;
+    auto it = std::find(children.begin(), children.end(), child);
+    if (it != children.end()) {
+        children.erase(it);
+        mark_dirty();
+    }
+}
+
+void MapLayersPanel::handle_candidate_added(int layer_index, const std::string& room_name) {
+    auto* layer = layer_at(layer_index);
+    if (!layer) return;
+    auto& rooms = (*layer)["rooms"];
+    if (!rooms.is_array()) rooms = json::array();
+    json candidate = {
+        {"name", room_name},
+        {"min_instances", 0},
+        {"max_instances", 0},
+        {"required_children", json::array()}
+    };
+    rooms.push_back(std::move(candidate));
+    mark_dirty();
+    if (layer_config_) layer_config_->refresh();
+}
+
+void MapLayersPanel::update_save_button_state() {
+    if (sidebar_widget_) sidebar_widget_->set_dirty(dirty_);
+}
+
+bool MapLayersPanel::save_layers_to_disk() {
+    if (!map_info_) return false;
+    if (on_save_) {
+        bool ok = on_save_();
+        if (ok) mark_clean();
+        return ok;
+    }
+    std::string path = map_path_.empty() ? std::string{} : (map_path_ + "/map_info.json");
+    if (path.empty()) return false;
+    std::ofstream out(path);
+    if (!out) {
+        std::cerr << "[MapLayersPanel] Failed to open " << path << " for writing\n";
+        return false;
+    }
+    try {
+        out << map_info_->dump(2);
+        mark_clean();
+        return true;
+    } catch (const std::exception& ex) {
+        std::cerr << "[MapLayersPanel] Serialize error: " << ex.what() << "\n";
+        return false;
+    }
+}
+
+bool MapLayersPanel::reload_layers_from_disk() {
+    std::string path = map_path_.empty() ? std::string{} : (map_path_ + "/map_info.json");
+    if (path.empty() || !map_info_) return false;
+    std::ifstream in(path);
+    if (!in) {
+        std::cerr << "[MapLayersPanel] Failed to open " << path << " for reading\n";
+        return false;
+    }
+    try {
+        json fresh;
+        in >> fresh;
+        *map_info_ = std::move(fresh);
+        ensure_layers_array();
+        ensure_layer_indices();
+        rebuild_available_rooms();
+        refresh_canvas();
+        if (layer_config_) layer_config_->close();
+        mark_clean();
+        return true;
+    } catch (const std::exception& ex) {
+        std::cerr << "[MapLayersPanel] Parse error: " << ex.what() << "\n";
+        return false;
+    }
+}
+
+void MapLayersPanel::ensure_layer_config_valid() {
+    if (!layer_config_ || !layer_config_->is_visible()) return;
+    if (selected_layer_ < 0 || !layer_at(selected_layer_)) {
+        layer_config_->close();
+    }
+}
+
+void MapLayersPanel::request_room_selection(const std::function<void(const std::string&)>& cb) {
+    if (!room_selector_) return;
+    if (available_rooms_.empty()) rebuild_available_rooms();
+    room_selector_->open(available_rooms_, cb);
+}
 
 

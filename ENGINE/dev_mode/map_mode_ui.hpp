@@ -10,6 +10,7 @@ class Input;
 class MapLightPanel;
 class MapAssetsPanel;
 class MapLayersPanel;
+class MapLayersController;
 struct SDL_Renderer;
 union SDL_Event;
 
@@ -48,6 +49,7 @@ private:
 
     std::unique_ptr<MapLightPanel> light_panel_;
     std::unique_ptr<MapAssetsPanel> assets_panel_;
+    std::shared_ptr<MapLayersController> layers_controller_;
     std::unique_ptr<MapLayersPanel> layers_panel_;
 };
 

@@ -42,14 +42,7 @@ private:
     Room* hit_test_room(SDL_Point map_point) const;
     void render_room_label(SDL_Renderer* renderer, Room* room);
     SDL_Rect label_background_rect(const SDL_Surface* surface, SDL_Point screen_pos) const;
-<<<<<<< ours
-    bool is_trail_room(const Room* room) const;
-<<<<<<< ours
     Room* find_spawn_room() const;
-=======
->>>>>>> theirs
-=======
->>>>>>> theirs
 
 private:
     Assets* assets_ = nullptr;

@@ -9,14 +9,6 @@
 #include "utils/input.hpp"
 
 #include <algorithm>
-<<<<<<< ours
-#include <cctype>
-<<<<<<< ours
-#include <cstdlib>
-=======
->>>>>>> theirs
-=======
->>>>>>> theirs
 #include <string>
 #include <tuple>
 #include <vector>
@@ -63,15 +55,8 @@ void MapEditor::set_enabled(bool enabled) {
 void MapEditor::enter() {
     if (enabled_) return;
     enabled_ = true;
-<<<<<<< ours
-    pending_selection_ = Selection{};
-<<<<<<< ours
-    has_entry_center_ = false;
-=======
->>>>>>> theirs
-=======
     pending_selection_ = nullptr;
->>>>>>> theirs
+    has_entry_center_ = false;
 
     if (assets_) {
         camera& cam = assets_->getView();
