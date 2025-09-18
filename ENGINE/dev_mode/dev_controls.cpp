@@ -102,6 +102,7 @@ void DevControls::set_enabled(bool enabled) {
         dev_selected_room_ = current_room_ ? current_room_ : detected_room_;
         if (room_editor_) room_editor_->set_enabled(true);
         if (map_editor_) map_editor_->set_enabled(false);
+        if (map_light_panel_) map_light_panel_->close();
     } else {
         if (map_editor_ && map_editor_->is_enabled()) {
             map_editor_->exit(true, false);

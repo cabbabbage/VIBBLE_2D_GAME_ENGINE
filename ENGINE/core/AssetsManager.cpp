@@ -630,6 +630,12 @@ bool Assets::is_asset_info_editor_open() const {
     return dev_controls_ && dev_controls_->is_asset_info_editor_open();
 }
 
+void Assets::clear_editor_selection() {
+    if (dev_controls_ && dev_mode) {
+        dev_controls_->clear_selection();
+    }
+}
+
 void Assets::handle_sdl_event(const SDL_Event& e) {
     if (dev_controls_ && dev_mode) {
         dev_controls_->handle_sdl_event(e);

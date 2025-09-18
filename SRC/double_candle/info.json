@@ -1,0 +1,37 @@
+{
+  "asset_name": "double_candle",
+  "asset_type": "Object",
+  "animations": {
+    "default": {
+      "source": {
+        "kind": "folder",
+        "path": "default",
+        "name": null
+      },
+      "flipped_source": false,
+      "reverse_source": false,
+      "locked": false,
+      "rnd_start": false,
+      "speed_factor": 1,
+      "number_of_frames": 1,
+      "movement": [
+        [
+          0,
+          0
+        ]
+      ],
+      "on_end": "default",
+      "loop": false
+    }
+  },
+  "start": "default",
+  "mappings": {},
+  "layout": {
+    "__view": {
+      "geometry": "1536x889+154+-23",
+      "zoom": 1.0,
+      "xview": 0.0,
+      "yview": 0.0
+    }
+  }
+}

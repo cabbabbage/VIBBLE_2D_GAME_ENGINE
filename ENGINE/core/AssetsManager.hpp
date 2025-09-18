@@ -65,6 +65,7 @@ public:
     void open_asset_info_editor_for_asset(Asset* a);
     void close_asset_info_editor();
     bool is_asset_info_editor_open() const;
+    void clear_editor_selection();
     void handle_sdl_event(const SDL_Event& e);
     void open_asset_config_for_asset(Asset* a);
     void finalize_asset_drag(Asset* a, const std::shared_ptr<AssetInfo>& info);
