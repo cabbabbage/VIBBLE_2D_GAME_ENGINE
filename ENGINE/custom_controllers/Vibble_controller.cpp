@@ -23,10 +23,18 @@ void VibbleController::movement(const Input& input) {
     int move_x = (right ? 1 : 0) - (left ? 1 : 0);
     int move_y = (down  ? 1 : 0) - (up    ? 1 : 0);
 
+    if (move_x != 0 && move_y != 0) {
+        // Prefer vertical motion when both axes are pressed
+        move_x = 0;
+    }
+
+    dx_ = move_x;
+    dy_ = move_y;
+
     const std::string current = player_->get_current_animation();
 
     if (move_x == 0 && move_y == 0) {
-        // idle → default
+        // idle -> default animation
         if (current != "default") {
             if (player_->info && player_->info->animations.count("default") && player_->anim_) {
                 player_->anim_->set_animation_now("default");
@@ -35,17 +43,15 @@ void VibbleController::movement(const Input& input) {
         return;
     }
 
-    if (!(move_x != 0 && move_y != 0)) {
-        std::string anim;
-        if      (move_y < 0) anim = "backward";
-        else if (move_y > 0) anim = "forward";
-        else if (move_x < 0) anim = "left";
-        else if (move_x > 0) anim = "right";
+    std::string anim;
+    if      (move_y < 0) anim = "backward";
+    else if (move_y > 0) anim = "forward";
+    else if (move_x < 0) anim = "left";
+    else if (move_x > 0) anim = "right";
 
-        if (!anim.empty() && anim != current) {
-            if (player_->info && player_->info->animations.count(anim) && player_->anim_) {
-                player_->anim_->set_animation_now(anim);
-            }
+    if (!anim.empty() && anim != current) {
+        if (player_->info && player_->info->animations.count(anim) && player_->anim_) {
+            player_->anim_->set_animation_now(anim);
         }
     }
 }

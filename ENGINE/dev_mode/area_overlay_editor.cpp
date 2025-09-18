@@ -1,4 +1,4 @@
-#include "area_overlay_editor.hpp"
+﻿#include "area_overlay_editor.hpp"
 
 #include "DockableCollapsible.hpp"
 #include "widgets.hpp"
@@ -48,6 +48,7 @@ AreaOverlayEditor::AreaOverlayEditor()
     : mask_alpha_(kDefaultMaskAlpha) {}
 
 AreaOverlayEditor::~AreaOverlayEditor() {
+    apply_camera_override(false);
     if (mask_) SDL_FreeSurface(mask_);
     if (mask_tex_) SDL_DestroyTexture(mask_tex_);
 }
@@ -78,6 +79,7 @@ bool AreaOverlayEditor::begin(AssetInfo* info, Asset* asset, const std::string& 
     upload_mask();
 
     ensure_toolbox();
+    apply_camera_override(true);
     active_ = true;
     drawing_ = false;
     mode_ = Mode::Draw;
@@ -88,6 +90,7 @@ bool AreaOverlayEditor::begin(AssetInfo* info, Asset* asset, const std::string& 
 
 void AreaOverlayEditor::cancel() {
     active_ = false;
+    apply_camera_override(false);
 }
 
 void AreaOverlayEditor::clear_mask() {
@@ -195,23 +198,22 @@ std::vector<SDL_Point> AreaOverlayEditor::extract_edge_points(int step) const {
     return out;
 }
 
-void AreaOverlayEditor::save_area() {
-    if (!info_) return;
-    // Trace polygon from mask and save as new area (pivot: center-bottom)
-    std::vector<SDL_Point> pts = trace_polygon_from_mask();
-    if (pts.empty()) { cancel(); return; }
-    // Convert from surface -> local coords
-    for (auto& p : pts) { p.x += mask_origin_x_; p.y += mask_origin_y_; }
-    // Build area in local canvas coords
-    Area edited(area_name_, pts);
-    // Set pivot at canvas center-bottom (to match loader/writer conventions)
-    edited.pos.x = canvas_w_ / 2;
-    edited.pos.y = canvas_h_;
-    edited.update_geometry_data();
-    info_->upsert_area_from_editor(edited);
-    (void)info_->update_info_json();
-    saved_since_begin_ = true;
-    cancel();
+void AreaOverlayEditor::apply_camera_override(bool enable) {
+    if (!assets_) return;
+    camera& cam = assets_->getView();
+    if (enable) {
+        if (camera_override_active_) return;
+        prev_camera_realism_enabled_ = cam.realism_enabled();
+        prev_camera_parallax_enabled_ = cam.parallax_enabled();
+        cam.set_realism_enabled(false);
+        cam.set_parallax_enabled(false);
+        camera_override_active_ = true;
+    } else {
+        if (!camera_override_active_) return;
+        cam.set_realism_enabled(prev_camera_realism_enabled_);
+        cam.set_parallax_enabled(prev_camera_parallax_enabled_);
+        camera_override_active_ = false;
+    }
 }
 
 void AreaOverlayEditor::ensure_toolbox() {
@@ -403,4 +405,108 @@ std::vector<SDL_Point> AreaOverlayEditor::trace_polygon_from_mask() const {
     }
     SDL_UnlockSurface(mask_);
     return out;
+}
+
+void AreaOverlayEditor::save_area() {
+    if (!info_) {
+        return;
+    }
+    if (!mask_) {
+        bool removed = info_->remove_area(area_name_);
+        if (removed) {
+            (void)info_->update_info_json();
+            saved_since_begin_ = true;
+        }
+        cancel();
+        return;
+    }
+
+    bool has_alpha = false;
+    int min_sx = mask_->w;
+    int min_sy = mask_->h;
+    int max_sx = -1;
+    int max_sy = -1;
+
+    if (SDL_LockSurface(mask_) == 0) {
+        const Uint8* pixels = static_cast<const Uint8*>(mask_->pixels);
+        const int pitch = mask_->pitch;
+        for (int y = 0; y < mask_->h; ++y) {
+            const Uint32* row = reinterpret_cast<const Uint32*>(pixels + y * pitch);
+            for (int x = 0; x < mask_->w; ++x) {
+                Uint8 r, g, b, a;
+                SDL_GetRGBA(row[x], mask_->format, &r, &g, &b, &a);
+                if (a > 0) {
+                    has_alpha = true;
+                    min_sx = std::min(min_sx, x);
+                    min_sy = std::min(min_sy, y);
+                    max_sx = std::max(max_sx, x);
+                    max_sy = std::max(max_sy, y);
+                }
+            }
+        }
+        SDL_UnlockSurface(mask_);
+    }
+
+    if (!has_alpha) {
+        bool removed = info_->remove_area(area_name_);
+        if (removed) {
+            (void)info_->update_info_json();
+            saved_since_begin_ = true;
+        }
+        cancel();
+        return;
+    }
+
+    auto polygon = trace_polygon_from_mask();
+    if (polygon.size() < 3) {
+        // Fallback to axis-aligned bounds when polygon tracing returns too few points.
+        int rect_max_sx = max_sx;
+        int rect_max_sy = max_sy;
+        if (min_sx == rect_max_sx) rect_max_sx = min_sx + 1;
+        if (min_sy == rect_max_sy) rect_max_sy = min_sy + 1;
+        polygon.clear();
+        polygon.push_back(SDL_Point{ min_sx, min_sy });
+        polygon.push_back(SDL_Point{ rect_max_sx, min_sy });
+        polygon.push_back(SDL_Point{ rect_max_sx, rect_max_sy });
+        polygon.push_back(SDL_Point{ min_sx, rect_max_sy });
+    }
+
+    std::vector<Area::Point> area_points;
+    area_points.reserve(polygon.size());
+    for (const auto& p : polygon) {
+        area_points.push_back(SDL_Point{ p.x + mask_origin_x_, p.y + mask_origin_y_ });
+    }
+
+    if (area_points.size() >= 2) {
+        const auto& first = area_points.front();
+        const auto& last = area_points.back();
+        if (first.x == last.x && first.y == last.y) {
+            area_points.pop_back();
+        }
+    }
+
+    if (area_points.size() < 3) {
+        int min_lx = min_sx + mask_origin_x_;
+        int min_ly = min_sy + mask_origin_y_;
+        int max_lx = max_sx + mask_origin_x_;
+        int max_ly = max_sy + mask_origin_y_;
+        if (min_lx == max_lx) max_lx = min_lx + 1;
+        if (min_ly == max_ly) max_ly = min_ly + 1;
+        area_points.clear();
+        area_points.push_back(SDL_Point{ min_lx, min_ly });
+        area_points.push_back(SDL_Point{ max_lx, min_ly });
+        area_points.push_back(SDL_Point{ max_lx, max_ly });
+        area_points.push_back(SDL_Point{ min_lx, max_ly });
+    }
+
+    if (area_points.size() < 3) {
+        cancel();
+        return;
+    }
+
+    Area area(area_name_, area_points);
+    info_->upsert_area_from_editor(area);
+    (void)info_->update_info_json();
+    saved_since_begin_ = true;
+    cancel();
 }

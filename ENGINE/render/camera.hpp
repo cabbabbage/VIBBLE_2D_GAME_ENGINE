@@ -14,24 +14,13 @@ class camera {
 
         public:
     struct RealismSettings {
-        float parallax_vertical_strength = 20.0f;
-        float parallax_horizontal_strength = 0.0f;
-        float parallax_zoom_influence = 1.0f;
-        float perspective_angle_degrees = 90.0f;
-        float perspective_zoom_influence = 0.35f;
-        float squash_position_strength = 1.0f;
-        float squash_height_strength = 1.0f;
-        float squash_overall_strength = 0.45f;
-        float squash_zoom_influence = 1.0f;
-        float squash_curve_exponent = 1.35f;
-        float stretch_top_strength = 0.55f;
-        float max_squash_ratio = 0.6f;
-        float render_distance_factor = 1.0f;
-        float distance_scale_strength = 0.2f;
-        float distance_scale_exponent = 1.0f;
-        float distance_scale_offset = 0.0f;
-        float distance_scale_min = 0.6f;
-        float distance_scale_max = 1.4f;
+        float render_distance = 800.0f;           // world-space margin for activating assets
+        float parallax_strength = 12.0f;          // multiplier for parallax offset
+        float squash_strength = 0.35f;            // multiplier for vertical squashing
+        float distance_scale_strength = 0.3f;     // multiplier for distance-based scaling
+        float camera_angle_degrees = 55.0f;       // camera pitch relative to the ground plane
+        float camera_height_at_zoom0 = 18.0f;     // camera height above ground at base zoom
+        float camera_vertical_offset = 0.0f;      // world-space offset from screen center for distance math
     };
 
     struct RenderEffects {
@@ -156,3 +145,4 @@ class camera {
     bool       realism_enabled_ = true;
     RealismSettings settings_{};
 };
+

@@ -13,6 +13,41 @@
 #include "dev_mode/widgets.hpp"
 #include "utils/input.hpp"
 
+class SectionLabelWidget : public Widget {
+public:
+    explicit SectionLabelWidget(std::string text)
+        : text_(std::move(text)) {}
+
+    void set_rect(const SDL_Rect& r) override { rect_ = r; }
+    const SDL_Rect& rect() const override { return rect_; }
+
+    int height_for_width(int) const override {
+        return DMCheckbox::height();
+    }
+
+    bool handle_event(const SDL_Event&) override { return false; }
+
+    void render(SDL_Renderer* renderer) const override {
+        const DMLabelStyle& style = DMStyles::Label();
+        TTF_Font* font = TTF_OpenFont(style.font_path.c_str(), style.font_size);
+        if (!font) return;
+        SDL_Surface* surf = TTF_RenderUTF8_Blended(font, text_.c_str(), style.color);
+        if (surf) {
+            SDL_Texture* tex = SDL_CreateTextureFromSurface(renderer, surf);
+            if (tex) {
+                SDL_Rect dst{ rect_.x, rect_.y, surf->w, surf->h };
+                SDL_RenderCopy(renderer, tex, nullptr, &dst);
+                SDL_DestroyTexture(tex);
+            }
+            SDL_FreeSurface(surf);
+        }
+        TTF_CloseFont(font);
+    }
+
+private:
+    std::string text_;
+    SDL_Rect rect_{0, 0, 0, 0};
+};
 class FloatSliderWidget : public Widget {
 public:
     FloatSliderWidget(std::string label,
@@ -240,37 +275,23 @@ void CameraUIPanel::sync_from_camera() {
     if (!assets_) return;
     camera& cam = assets_->getView();
     last_settings_ = cam.realism_settings();
-    last_realism_enabled_ = cam.realism_enabled();
-    last_parallax_enabled_ = cam.parallax_enabled();
+    bool effects_enabled = cam.realism_enabled() && cam.parallax_enabled();
+    last_realism_enabled_ = effects_enabled;
 
-    if (realism_checkbox_) realism_checkbox_->set_value(last_realism_enabled_);
-    if (parallax_checkbox_) parallax_checkbox_->set_value(last_parallax_enabled_);
+    if (effects_checkbox_) effects_checkbox_->set_value(effects_enabled);
 
-    if (parallax_vertical_slider_) parallax_vertical_slider_->set_value(last_settings_.parallax_vertical_strength);
-    if (parallax_horizontal_slider_) parallax_horizontal_slider_->set_value(last_settings_.parallax_horizontal_strength);
-    if (parallax_zoom_slider_) parallax_zoom_slider_->set_value(last_settings_.parallax_zoom_influence);
-    if (perspective_angle_slider_) perspective_angle_slider_->set_value(last_settings_.perspective_angle_degrees);
-    if (perspective_zoom_slider_) perspective_zoom_slider_->set_value(last_settings_.perspective_zoom_influence);
+    if (render_distance_slider_) render_distance_slider_->set_value(last_settings_.render_distance);
+    if (parallax_strength_slider_) parallax_strength_slider_->set_value(last_settings_.parallax_strength);
+    if (squash_strength_slider_) squash_strength_slider_->set_value(last_settings_.squash_strength);
     if (distance_strength_slider_) distance_strength_slider_->set_value(last_settings_.distance_scale_strength);
-    if (distance_exponent_slider_) distance_exponent_slider_->set_value(last_settings_.distance_scale_exponent);
-    if (distance_offset_slider_) distance_offset_slider_->set_value(last_settings_.distance_scale_offset);
-    if (distance_min_slider_) distance_min_slider_->set_value(last_settings_.distance_scale_min);
-    if (distance_max_slider_) distance_max_slider_->set_value(last_settings_.distance_scale_max);
-    if (squash_position_slider_) squash_position_slider_->set_value(last_settings_.squash_position_strength);
-    if (squash_height_slider_) squash_height_slider_->set_value(last_settings_.squash_height_strength);
-    if (squash_overall_slider_) squash_overall_slider_->set_value(last_settings_.squash_overall_strength);
-    if (squash_zoom_slider_) squash_zoom_slider_->set_value(last_settings_.squash_zoom_influence);
-    if (squash_curve_slider_) squash_curve_slider_->set_value(last_settings_.squash_curve_exponent);
-    if (stretch_top_slider_) stretch_top_slider_->set_value(last_settings_.stretch_top_strength);
-    if (max_squash_slider_) max_squash_slider_->set_value(last_settings_.max_squash_ratio);
-    if (render_distance_slider_) render_distance_slider_->set_value(last_settings_.render_distance_factor);
+    if (angle_slider_) angle_slider_->set_value(last_settings_.camera_angle_degrees);
+    if (height_slider_) height_slider_->set_value(last_settings_.camera_height_at_zoom0);
+    if (vertical_offset_slider_) vertical_offset_slider_->set_value(last_settings_.camera_vertical_offset);
 }
 
 void CameraUIPanel::build_ui() {
-    realism_checkbox_ = std::make_unique<DMCheckbox>("Realism Enabled", true);
-    parallax_checkbox_ = std::make_unique<DMCheckbox>("Parallax Enabled", true);
-    realism_widget_ = std::make_unique<CheckboxWidget>(realism_checkbox_.get());
-    parallax_widget_ = std::make_unique<CheckboxWidget>(parallax_checkbox_.get());
+    effects_checkbox_ = std::make_unique<DMCheckbox>("Perspective Effects", true);
+    effects_widget_ = std::make_unique<CheckboxWidget>(effects_checkbox_.get());
 
     load_button_ = std::make_unique<DMButton>("Load", &DMStyles::HeaderButton(), 110, DMButton::height());
     save_button_ = std::make_unique<DMButton>("Save", &DMStyles::HeaderButton(), 110, DMButton::height());
@@ -279,66 +300,48 @@ void CameraUIPanel::build_ui() {
     save_widget_ = std::make_unique<ButtonWidget>(save_button_.get(), [this]() { save_to_json(); });
     reset_widget_ = std::make_unique<ButtonWidget>(reset_button_.get(), [this]() { reset_to_defaults(); });
 
-    parallax_vertical_slider_ = std::make_unique<FloatSliderWidget>("Parallax Vertical", -500.0f, 500.0f, 0.5f, 0.0f, 2);
-    parallax_horizontal_slider_ = std::make_unique<FloatSliderWidget>("Parallax Horizontal", -500.0f, 500.0f, 0.5f, 0.0f, 2);
-    parallax_zoom_slider_ = std::make_unique<FloatSliderWidget>("Parallax Zoom Influence", 0.0f, 3.0f, 0.01f, 1.0f, 2);
-    perspective_angle_slider_ = std::make_unique<FloatSliderWidget>("Perspective Angle", 0.0f, 360.0f, 1.0f, 90.0f, 1);
-    perspective_zoom_slider_ = std::make_unique<FloatSliderWidget>("Perspective Zoom Influence", 0.0f, 3.0f, 0.01f, 0.35f, 2);
-    distance_strength_slider_ = std::make_unique<FloatSliderWidget>("Distance Scale Strength", 0.0f, 3.0f, 0.01f, 0.2f, 2);
-    distance_exponent_slider_ = std::make_unique<FloatSliderWidget>("Distance Scale Exponent", 0.01f, 5.0f, 0.01f, 1.0f, 2);
-    distance_offset_slider_ = std::make_unique<FloatSliderWidget>("Distance Offset", -2.0f, 2.0f, 0.01f, 0.0f, 2);
-    distance_min_slider_ = std::make_unique<FloatSliderWidget>("Distance Scale Min", 0.1f, 3.0f, 0.01f, 0.6f, 2);
-    distance_max_slider_ = std::make_unique<FloatSliderWidget>("Distance Scale Max", 0.1f, 4.0f, 0.01f, 1.4f, 2);
-    squash_position_slider_ = std::make_unique<FloatSliderWidget>("Squash Position Strength", 0.0f, 5.0f, 0.01f, 1.0f, 2);
-    squash_height_slider_ = std::make_unique<FloatSliderWidget>("Squash Height Strength", 0.0f, 5.0f, 0.01f, 1.0f, 2);
-    squash_overall_slider_ = std::make_unique<FloatSliderWidget>("Squash Overall Strength", 0.0f, 3.0f, 0.01f, 0.45f, 2);
-    squash_zoom_slider_ = std::make_unique<FloatSliderWidget>("Squash Zoom Influence", 0.0f, 3.0f, 0.01f, 1.0f, 2);
-    squash_curve_slider_ = std::make_unique<FloatSliderWidget>("Squash Curve Exponent", 0.1f, 5.0f, 0.01f, 1.35f, 2);
-    stretch_top_slider_ = std::make_unique<FloatSliderWidget>("Stretch Top Strength", 0.0f, 3.0f, 0.01f, 0.55f, 2);
-    max_squash_slider_ = std::make_unique<FloatSliderWidget>("Max Squash Ratio", 0.0f, 1.5f, 0.01f, 0.6f, 2);
-    render_distance_slider_ = std::make_unique<FloatSliderWidget>("Render Distance Factor", 0.0f, 5.0f, 0.01f, 1.0f, 2);
+    camera::RealismSettings defaults;
+
+    render_section_label_ = std::make_unique<SectionLabelWidget>("Render Distance");
+    realism_section_label_ = std::make_unique<SectionLabelWidget>("Perspective Realism");
+    position_section_label_ = std::make_unique<SectionLabelWidget>("Camera Position");
+
+    render_distance_slider_ = std::make_unique<FloatSliderWidget>("Render Distance (world units)", 0.0f, 4000.0f, 10.0f, defaults.render_distance, 0);
+    parallax_strength_slider_ = std::make_unique<FloatSliderWidget>("Parallax Strength", 0.0f, 50.0f, 0.25f, defaults.parallax_strength, 2);
+    squash_strength_slider_ = std::make_unique<FloatSliderWidget>("Squash Strength", 0.0f, 1.0f, 0.01f, defaults.squash_strength, 2);
+    distance_strength_slider_ = std::make_unique<FloatSliderWidget>("Distance Scaling Strength", 0.0f, 1.0f, 0.01f, defaults.distance_scale_strength, 2);
+    angle_slider_ = std::make_unique<FloatSliderWidget>("Camera Angle (deg)", 1.0f, 89.0f, 1.0f, defaults.camera_angle_degrees, 0);
+    height_slider_ = std::make_unique<FloatSliderWidget>("Height at Zoom 0 (m)", 1.0f, 100.0f, 0.5f, defaults.camera_height_at_zoom0, 2);
+    vertical_offset_slider_ = std::make_unique<FloatSliderWidget>("Camera Y Offset", -400.0f, 400.0f, 1.0f, defaults.camera_vertical_offset, 0);
 
     rebuild_rows();
 }
 
 void CameraUIPanel::rebuild_rows() {
     Rows rows;
-    rows.push_back({ realism_widget_.get(), parallax_widget_.get() });
+    rows.push_back({ effects_widget_.get() });
+    rows.push_back({ render_section_label_.get() });
+    rows.push_back({ render_distance_slider_.get() });
+    rows.push_back({ realism_section_label_.get() });
+    rows.push_back({ parallax_strength_slider_.get(), squash_strength_slider_.get() });
+    rows.push_back({ distance_strength_slider_.get() });
+    rows.push_back({ position_section_label_.get() });
+    rows.push_back({ angle_slider_.get(), height_slider_.get() });
+    rows.push_back({ vertical_offset_slider_.get() });
     rows.push_back({ load_widget_.get(), save_widget_.get(), reset_widget_.get() });
-    rows.push_back({ parallax_vertical_slider_.get(), parallax_horizontal_slider_.get() });
-    rows.push_back({ parallax_zoom_slider_.get(), perspective_zoom_slider_.get() });
-    rows.push_back({ perspective_angle_slider_.get(), distance_strength_slider_.get() });
-    rows.push_back({ distance_exponent_slider_.get(), distance_offset_slider_.get() });
-    rows.push_back({ distance_min_slider_.get(), distance_max_slider_.get() });
-    rows.push_back({ squash_position_slider_.get(), squash_height_slider_.get() });
-    rows.push_back({ squash_overall_slider_.get(), squash_zoom_slider_.get() });
-    rows.push_back({ squash_curve_slider_.get(), stretch_top_slider_.get() });
-    rows.push_back({ max_squash_slider_.get(), render_distance_slider_.get() });
     set_rows(rows);
 }
 
 void CameraUIPanel::reset_to_defaults() {
     camera::RealismSettings defaults;
-    if (realism_checkbox_) realism_checkbox_->set_value(true);
-    if (parallax_checkbox_) parallax_checkbox_->set_value(true);
-    if (parallax_vertical_slider_) parallax_vertical_slider_->set_value(defaults.parallax_vertical_strength);
-    if (parallax_horizontal_slider_) parallax_horizontal_slider_->set_value(defaults.parallax_horizontal_strength);
-    if (parallax_zoom_slider_) parallax_zoom_slider_->set_value(defaults.parallax_zoom_influence);
-    if (perspective_angle_slider_) perspective_angle_slider_->set_value(defaults.perspective_angle_degrees);
-    if (perspective_zoom_slider_) perspective_zoom_slider_->set_value(defaults.perspective_zoom_influence);
+    if (effects_checkbox_) effects_checkbox_->set_value(true);
+    if (render_distance_slider_) render_distance_slider_->set_value(defaults.render_distance);
+    if (parallax_strength_slider_) parallax_strength_slider_->set_value(defaults.parallax_strength);
+    if (squash_strength_slider_) squash_strength_slider_->set_value(defaults.squash_strength);
     if (distance_strength_slider_) distance_strength_slider_->set_value(defaults.distance_scale_strength);
-    if (distance_exponent_slider_) distance_exponent_slider_->set_value(defaults.distance_scale_exponent);
-    if (distance_offset_slider_) distance_offset_slider_->set_value(defaults.distance_scale_offset);
-    if (distance_min_slider_) distance_min_slider_->set_value(defaults.distance_scale_min);
-    if (distance_max_slider_) distance_max_slider_->set_value(defaults.distance_scale_max);
-    if (squash_position_slider_) squash_position_slider_->set_value(defaults.squash_position_strength);
-    if (squash_height_slider_) squash_height_slider_->set_value(defaults.squash_height_strength);
-    if (squash_overall_slider_) squash_overall_slider_->set_value(defaults.squash_overall_strength);
-    if (squash_zoom_slider_) squash_zoom_slider_->set_value(defaults.squash_zoom_influence);
-    if (squash_curve_slider_) squash_curve_slider_->set_value(defaults.squash_curve_exponent);
-    if (stretch_top_slider_) stretch_top_slider_->set_value(defaults.stretch_top_strength);
-    if (max_squash_slider_) max_squash_slider_->set_value(defaults.max_squash_ratio);
-    if (render_distance_slider_) render_distance_slider_->set_value(defaults.render_distance_factor);
+    if (angle_slider_) angle_slider_->set_value(defaults.camera_angle_degrees);
+    if (height_slider_) height_slider_->set_value(defaults.camera_height_at_zoom0);
+    if (vertical_offset_slider_) vertical_offset_slider_->set_value(defaults.camera_vertical_offset);
     apply_settings_if_needed();
 }
 
@@ -358,92 +361,57 @@ void CameraUIPanel::reload_from_json() {
 void CameraUIPanel::apply_settings_if_needed() {
     if (!assets_) return;
     camera::RealismSettings settings = read_settings_from_ui();
-    const bool realism_enabled = realism_checkbox_ ? realism_checkbox_->value() : last_realism_enabled_;
-    const bool parallax_enabled = parallax_checkbox_ ? parallax_checkbox_->value() : last_parallax_enabled_;
+    const bool effects_enabled = effects_checkbox_ ? effects_checkbox_->value() : last_realism_enabled_;
 
     auto differs = [](float a, float b) {
         return std::fabs(a - b) > 0.0001f;
     };
 
-    bool changed = realism_enabled != last_realism_enabled_ ||
-                   parallax_enabled != last_parallax_enabled_;
-
+    bool changed = effects_enabled != last_realism_enabled_;
     const camera::RealismSettings& prev = last_settings_;
-    changed = changed || differs(settings.parallax_vertical_strength, prev.parallax_vertical_strength) ||
-              differs(settings.parallax_horizontal_strength, prev.parallax_horizontal_strength) ||
-              differs(settings.parallax_zoom_influence, prev.parallax_zoom_influence) ||
-              differs(settings.perspective_angle_degrees, prev.perspective_angle_degrees) ||
-              differs(settings.perspective_zoom_influence, prev.perspective_zoom_influence) ||
+    changed = changed || differs(settings.render_distance, prev.render_distance) ||
+              differs(settings.parallax_strength, prev.parallax_strength) ||
+              differs(settings.squash_strength, prev.squash_strength) ||
               differs(settings.distance_scale_strength, prev.distance_scale_strength) ||
-              differs(settings.distance_scale_exponent, prev.distance_scale_exponent) ||
-              differs(settings.distance_scale_offset, prev.distance_scale_offset) ||
-              differs(settings.distance_scale_min, prev.distance_scale_min) ||
-              differs(settings.distance_scale_max, prev.distance_scale_max) ||
-              differs(settings.squash_position_strength, prev.squash_position_strength) ||
-              differs(settings.squash_height_strength, prev.squash_height_strength) ||
-              differs(settings.squash_overall_strength, prev.squash_overall_strength) ||
-              differs(settings.squash_zoom_influence, prev.squash_zoom_influence) ||
-              differs(settings.squash_curve_exponent, prev.squash_curve_exponent) ||
-              differs(settings.stretch_top_strength, prev.stretch_top_strength) ||
-              differs(settings.max_squash_ratio, prev.max_squash_ratio) ||
-              differs(settings.render_distance_factor, prev.render_distance_factor);
+              differs(settings.camera_angle_degrees, prev.camera_angle_degrees) ||
+              differs(settings.camera_height_at_zoom0, prev.camera_height_at_zoom0) ||
+              differs(settings.camera_vertical_offset, prev.camera_vertical_offset);
 
     if (changed) {
-        apply_settings_to_camera(settings, realism_enabled, parallax_enabled);
+        apply_settings_to_camera(settings, effects_enabled);
     }
 }
 
 void CameraUIPanel::apply_settings_to_camera(const camera::RealismSettings& settings,
-                                             bool realism_enabled,
-                                             bool parallax_enabled) {
+                                             bool effects_enabled) {
     if (!assets_) return;
     camera& cam = assets_->getView();
     cam.set_realism_settings(settings);
-    cam.set_realism_enabled(realism_enabled);
-    cam.set_parallax_enabled(parallax_enabled);
+    cam.set_realism_enabled(effects_enabled);
+    cam.set_parallax_enabled(effects_enabled);
     last_settings_ = settings;
-    last_realism_enabled_ = realism_enabled;
-    last_parallax_enabled_ = parallax_enabled;
+    last_realism_enabled_ = effects_enabled;
 }
 
 camera::RealismSettings CameraUIPanel::read_settings_from_ui() const {
     camera::RealismSettings settings{};
-    if (parallax_vertical_slider_) settings.parallax_vertical_strength = parallax_vertical_slider_->value();
-    if (parallax_horizontal_slider_) settings.parallax_horizontal_strength = parallax_horizontal_slider_->value();
-    if (parallax_zoom_slider_) settings.parallax_zoom_influence = parallax_zoom_slider_->value();
-    if (perspective_angle_slider_) settings.perspective_angle_degrees = perspective_angle_slider_->value();
-    if (perspective_zoom_slider_) settings.perspective_zoom_influence = perspective_zoom_slider_->value();
-    if (distance_strength_slider_) settings.distance_scale_strength = distance_strength_slider_->value();
-    if (distance_exponent_slider_) settings.distance_scale_exponent = std::max(0.01f, distance_exponent_slider_->value());
-    if (distance_offset_slider_) settings.distance_scale_offset = std::clamp(distance_offset_slider_->value(), -5.0f, 5.0f);
-    float dist_min = distance_min_slider_ ? distance_min_slider_->value() : settings.distance_scale_min;
-    float dist_max = distance_max_slider_ ? distance_max_slider_->value() : settings.distance_scale_max;
-    if (dist_min > dist_max) std::swap(dist_min, dist_max);
-    settings.distance_scale_min = std::max(0.0f, dist_min);
-    settings.distance_scale_max = std::max(settings.distance_scale_min, dist_max);
-    if (squash_position_slider_) settings.squash_position_strength = squash_position_slider_->value();
-    if (squash_height_slider_) settings.squash_height_strength = squash_height_slider_->value();
-    if (squash_overall_slider_) settings.squash_overall_strength = squash_overall_slider_->value();
-    if (squash_zoom_slider_) settings.squash_zoom_influence = squash_zoom_slider_->value();
-    if (squash_curve_slider_) settings.squash_curve_exponent = std::max(0.1f, squash_curve_slider_->value());
-    if (stretch_top_slider_) settings.stretch_top_strength = std::max(0.0f, stretch_top_slider_->value());
-    if (max_squash_slider_) settings.max_squash_ratio = std::max(0.0f, max_squash_slider_->value());
-    if (render_distance_slider_) settings.render_distance_factor = std::max(0.0f, render_distance_slider_->value());
-
-    if (std::isfinite(settings.perspective_angle_degrees)) {
-        settings.perspective_angle_degrees = std::fmod(settings.perspective_angle_degrees, 360.0f);
-        if (settings.perspective_angle_degrees < 0.0f) {
-            settings.perspective_angle_degrees += 360.0f;
-        }
-    } else {
-        settings.perspective_angle_degrees = 90.0f;
-    }
-
-    settings.distance_scale_exponent = std::max(0.01f, settings.distance_scale_exponent);
-    settings.distance_scale_strength = std::max(0.0f, settings.distance_scale_strength);
-    settings.perspective_zoom_influence = std::max(0.0f, settings.perspective_zoom_influence);
-    settings.render_distance_factor = std::max(0.0f, settings.render_distance_factor);
-
+    if (render_distance_slider_) settings.render_distance = std::max(0.0f, render_distance_slider_->value());
+    if (parallax_strength_slider_) settings.parallax_strength = std::max(0.0f, parallax_strength_slider_->value());
+    if (squash_strength_slider_) settings.squash_strength = std::max(0.0f, squash_strength_slider_->value());
+    if (distance_strength_slider_) settings.distance_scale_strength = std::max(0.0f, distance_strength_slider_->value());
+    if (angle_slider_) settings.camera_angle_degrees = std::clamp(angle_slider_->value(), 1.0f, 89.0f);
+    if (height_slider_) settings.camera_height_at_zoom0 = std::max(0.1f, height_slider_->value());
+    if (vertical_offset_slider_) settings.camera_vertical_offset = vertical_offset_slider_->value();
     return settings;
 }
+
+
+
+
+
+
+
+
+
+
 

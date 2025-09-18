@@ -103,6 +103,7 @@ private:
     void handle_delete_shortcut(const Input& input);
     void update_area_editor_focus();
     void ensure_area_editor();
+    void apply_area_editor_camera_override(bool enable);
     void begin_drag_session(const SDL_Point& world_mouse, bool ctrl_modifier);
     void update_drag_session(const SDL_Point& world_mouse);
     void apply_perimeter_drag(const SDL_Point& world_mouse);
@@ -141,8 +142,12 @@ private:
     std::unique_ptr<RoomConfigurator> room_cfg_ui_;
 
     bool last_area_editor_active_ = false;
+    bool area_editor_override_active_ = false;
+    bool area_editor_prev_realism_enabled_ = true;
+    bool area_editor_prev_parallax_enabled_ = true;
     bool reopen_info_after_area_edit_ = false;
     std::shared_ptr<AssetInfo> info_for_reopen_;
+    Asset* info_target_for_reopen_ = nullptr;
 
     Asset* hovered_asset_ = nullptr;
     std::vector<Asset*> selected_assets_;
@@ -170,3 +175,5 @@ private:
     SDL_Rect regenerate_button_rect_{0, 0, 0, 0};
     PanAndZoom pan_zoom_;
 };
+
+

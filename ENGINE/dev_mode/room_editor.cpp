@@ -118,11 +118,13 @@ void RoomEditor::set_enabled(bool enabled) {
 
     camera& cam = assets_->getView();
     if (enabled_) {
+        apply_area_editor_camera_override(false);
         cam.set_parallax_enabled(false);
         cam.set_manual_zoom_override(false);
         close_asset_info_editor();
         focus_camera_on_room_center();
     } else {
+        apply_area_editor_camera_override(false);
         cam.set_parallax_enabled(true);
         cam.set_manual_zoom_override(false);
         cam.clear_focus_override();
@@ -169,10 +171,14 @@ void RoomEditor::update_ui(const Input& input) {
     if (area_editor_) {
         const bool was = last_area_editor_active_;
         const bool now = area_editor_->is_active();
+        if (!was && now) {
+            apply_area_editor_camera_override(true);
+        }
         if (now) {
             area_editor_->update(input, screen_w_, screen_h_);
         }
         if (was && !now) {
+            apply_area_editor_camera_override(false);
             if (area_editor_->consume_saved_flag() && reopen_info_after_area_edit_ && info_for_reopen_) {
                 open_asset_info_editor(info_for_reopen_);
                 reopen_info_after_area_edit_ = false;
@@ -438,19 +444,25 @@ void RoomEditor::begin_area_edit_for_selected_asset(const std::string& area_name
     Asset* target = nullptr;
     if (!selected_assets_.empty()) target = selected_assets_.front();
     if (!target) target = hovered_asset_;
+    if (!target && info_ui_) target = info_ui_->get_target_asset();
     if (!target || !target->info) return;
 
     if (info_ui_ && info_ui_->is_visible()) {
         reopen_info_after_area_edit_ = true;
         info_for_reopen_ = target->info;
+        info_target_for_reopen_ = target;
         info_ui_->close();
     } else {
         reopen_info_after_area_edit_ = false;
         info_for_reopen_.reset();
+        info_target_for_reopen_ = nullptr;
     }
 
     focus_camera_on_asset(target, 0.8, 20);
-    area_editor_->begin(target->info.get(), target, area_name);
+    if (area_editor_->begin(target->info.get(), target, area_name)) {
+        apply_area_editor_camera_override(true);
+        last_area_editor_active_ = true;
+    }
 }
 
 void RoomEditor::focus_camera_on_asset(Asset* asset, double zoom_factor, int duration_steps) {
@@ -799,6 +811,28 @@ void RoomEditor::ensure_area_editor() {
     if (!area_editor_) {
         area_editor_ = std::make_unique<AreaOverlayEditor>();
         if (area_editor_) area_editor_->attach_assets(assets_);
+    }
+}
+
+void RoomEditor::apply_area_editor_camera_override(bool enable) {
+    if (enable) {
+        if (area_editor_override_active_) return;
+        if (assets_) {
+            camera& cam = assets_->getView();
+            area_editor_prev_realism_enabled_ = cam.realism_enabled();
+            area_editor_prev_parallax_enabled_ = cam.parallax_enabled();
+            cam.set_realism_enabled(false);
+            cam.set_parallax_enabled(false);
+        }
+        area_editor_override_active_ = true;
+    } else {
+        if (!area_editor_override_active_) return;
+        if (assets_) {
+            camera& cam = assets_->getView();
+            cam.set_realism_enabled(area_editor_prev_realism_enabled_);
+            cam.set_parallax_enabled(area_editor_prev_parallax_enabled_);
+        }
+        area_editor_override_active_ = false;
     }
 }
 
@@ -1534,3 +1568,5 @@ void RoomEditor::update_perimeter_center_json(nlohmann::json& entry, SDL_Point o
     entry["perimeter_y_offset_min"] = offset.y;
     entry["perimeter_y_offset_max"] = offset.y;
 }
+
+

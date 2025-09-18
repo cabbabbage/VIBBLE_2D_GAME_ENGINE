@@ -41,6 +41,7 @@ private:
     void clear_mask();
     void upload_mask();
     void stamp(int cx, int cy, int radius, bool erase);
+    void apply_camera_override(bool enable);
     void ensure_mask_contains(int lx, int ly, int radius);
     void init_mask_from_existing_area();
     std::vector<SDL_Point> extract_edge_points(int step = 1) const;
@@ -79,4 +80,10 @@ private:
 
     bool saved_since_begin_ = false;
     bool toolbox_autoplace_done_ = false;
+
+    bool camera_override_active_ = false;
+    bool prev_camera_realism_enabled_ = true;
+    bool prev_camera_parallax_enabled_ = true;
 };
+
+

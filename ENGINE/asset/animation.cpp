@@ -61,6 +61,7 @@ void Animation::load(const std::string& trigger,
         total_dx = 0;
         total_dy = 0;
         frames_data.clear();
+        bool movement_specified = false;
         if (anim_json.contains("movement") && anim_json["movement"].is_array()) {
                 for (const auto& mv : anim_json["movement"]) {
                         if (!mv.is_array() || mv.size() < 2) continue;
@@ -78,12 +79,14 @@ void Animation::load(const std::string& trigger,
                                         try { b = clamp(mv[3][2].get<int>()); } catch (...) { b = 255; }
                                         fm.rgb = SDL_Color{ static_cast<Uint8>(r), static_cast<Uint8>(g), static_cast<Uint8>(b), 255 };
                         }
+                        if (fm.dx != 0 || fm.dy != 0 || mv.size() >= 3) {
+                                movement_specified = true;
+                        }
                         frames_data.push_back(fm);
                         total_dx += fm.dx;
                         total_dy += fm.dy;
                 }
         }
-        movment = !(total_dx == 0 && total_dy == 0);
 	if (source.kind == "animation" && !source.name.empty()) {
 		auto it = info.animations.find(source.name);
 		if (it != info.animations.end()) {
@@ -209,6 +212,41 @@ void Animation::load(const std::string& trigger,
 			std::reverse(frames.begin(), frames.end());
 		}
 	}
+        if (!movement_specified && source.kind == "animation" && !source.name.empty()) {
+                auto it = info.animations.find(source.name);
+                if (it != info.animations.end()) {
+                        const auto& src_frames_data = it->second.frames_data;
+                        if (!src_frames_data.empty()) {
+                                const std::size_t count = src_frames_data.size();
+                                frames_data.assign(count, AnimationFrame{});
+                                total_dx = 0;
+                                total_dy = 0;
+                                for (std::size_t i = 0; i < count; ++i) {
+                                        std::size_t src_index = reverse_source ? (count - 1 - i) : i;
+                                        if (src_index >= src_frames_data.size()) {
+                                                continue;
+                                        }
+                                        AnimationFrame dest;
+                                        dest.dx = src_frames_data[src_index].dx;
+                                        dest.dy = src_frames_data[src_index].dy;
+                                        dest.z_resort = src_frames_data[src_index].z_resort;
+                                        dest.rgb = src_frames_data[src_index].rgb;
+                                        if (reverse_source) {
+                                                dest.dx = -dest.dx;
+                                                dest.dy = -dest.dy;
+                                        }
+                                        if (flipped_source) {
+                                                dest.dx = -dest.dx;
+                                        }
+                                        frames_data[i] = dest;
+                                        total_dx += dest.dx;
+                                        total_dy += dest.dy;
+                                }
+                                movement_specified = true;
+                        }
+                }
+        }
+        movment = !(total_dx == 0 && total_dy == 0);
         number_of_frames = static_cast<int>(frames.size());
         if (trigger == "default" && !frames.empty()) {
                 base_sprite = frames[0];

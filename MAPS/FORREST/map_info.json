@@ -1,17 +1,15 @@
 {
   "camera_settings": {
+    "camera_angle_degrees": 81.0,
+    "camera_height_at_zoom0": 20.5,
+    "camera_vertical_offset": 217.0,
+    "distance_scale_strength": 0.7999999523162842,
+    "parallax_strength": 1.5,
+    "perspective_angle_degrees": 81.0,
     "realism_enabled": true,
-    "parallax_vertical_strength": 20.0,
-    "parallax_horizontal_strength": 0.0,
-    "parallax_zoom_influence": 1.0,
-    "squash_position_strength": 1.0,
-    "squash_height_strength": 1.0,
-    "squash_overall_strength": 0.45,
-    "squash_zoom_influence": 1.0,
-    "squash_curve_exponent": 1.35,
-    "stretch_top_strength": 0.55,
-    "max_squash_ratio": 0.6,
-    "render_distance_factor": 1.0
+    "render_distance": 660.0,
+    "render_distance_factor": 3.299999952316284,
+    "squash_strength": 0.07999999821186066
   },
   "map_assets_data": {
     "spawn_groups": [
