@@ -1042,8 +1042,8 @@ class AnimationsPanel:
 
         self.payload = self._coerce_payload(self.node_id, payload)
         self._sync_frames_from_source()
+        self._sync_movement_from_source()
 
-        
         self.frame = tk.LabelFrame(parent, text=self.node_id, bd=6, relief=tk.GROOVE)
         self._build_ui()
         self._refresh_preview()
@@ -1116,7 +1116,9 @@ class AnimationsPanel:
         mvf = ttk.LabelFrame(body, text="Movement")
         mvf.pack(fill="x", pady=4)
         ttk.Label(mvf, text="Edit per-frame movement vectors").grid(row=0, column=0, sticky="w", padx=4)
-        ttk.Button(mvf, text="Edit Movement...", command=self._open_movement_modal).grid(row=0, column=1, sticky="e", padx=4)
+        self.edit_movement_btn = ttk.Button(mvf, text="Edit Movement...", command=self._open_movement_modal)
+        self.edit_movement_btn.grid(row=0, column=1, sticky="e", padx=4)
+        self._update_movement_button_state()
 
         
         oef = ttk.LabelFrame(body, text="On End")
@@ -1235,7 +1237,8 @@ class AnimationsPanel:
     def set_payload(self, new_payload: Dict[str, Any]) -> None:
         self.payload = self._coerce_payload(self.node_id, new_payload)
         self._sync_frames_from_source()
-        
+        self._sync_movement_from_source()
+
         self.sources_panel.set_values(self.payload.get("source", {}))
 
         self.flipped_var.set(bool(self.payload.get("flipped_source", False)))
@@ -1248,6 +1251,7 @@ class AnimationsPanel:
             pass
         self.speed_var.set(int(self.payload.get("speed_factor", 1)))
         self.frames_var.set(int(self.payload.get("number_of_frames", 1)))
+        self._update_movement_button_state()
         self.on_end_var.set(str(self.payload.get("on_end", "default") or "default"))
         self._refresh_on_end_options()
         aud = self.payload.get("audio")
@@ -1288,7 +1292,149 @@ class AnimationsPanel:
         if self.on_delete:
             self.on_delete(self.node_id)
 
+    def _is_movement_editable(self) -> bool:
+        src = self.payload.get("source", {})
+        if not isinstance(src, dict):
+            return True
+        return src.get("kind") != "animation"
+
+    def _update_movement_button_state(self) -> None:
+        btn = getattr(self, "edit_movement_btn", None)
+        if btn is None:
+            return
+        editable = self._is_movement_editable()
+        try:
+            if editable:
+                btn.state(["!disabled"])
+            else:
+                btn.state(["disabled"])
+        except Exception:
+            try:
+                btn.configure(state="normal" if editable else "disabled")
+            except Exception:
+                pass
+
+    @staticmethod
+    def _flip_movement_item(item: Any) -> List[Any]:
+        if isinstance(item, (list, tuple)):
+            new_item = list(item)
+        else:
+            new_item = [0, 0]
+        if len(new_item) < 2:
+            new_item.extend([0] * (2 - len(new_item)))
+        try:
+            new_item[0] = -int(new_item[0])
+        except Exception:
+            new_item[0] = 0
+        try:
+            new_item[1] = int(new_item[1])
+        except Exception:
+            new_item[1] = 0
+        return new_item
+
+    @staticmethod
+    def _normalize_movement_list(mv: List[List[Any]], frame_count: int) -> List[List[Any]]:
+        if frame_count <= 0:
+            return []
+        normalized: List[List[Any]] = []
+        for i in range(frame_count):
+            if i < len(mv) and isinstance(mv[i], (list, tuple)):
+                item = list(mv[i])
+            else:
+                item = [0, 0]
+            if len(item) < 2:
+                item.extend([0] * (2 - len(item)))
+            try:
+                item[0] = int(item[0])
+            except Exception:
+                item[0] = 0
+            try:
+                item[1] = int(item[1])
+            except Exception:
+                item[1] = 0
+            normalized.append(item)
+        if normalized:
+            normalized[0][0] = 0
+            normalized[0][1] = 0
+        return normalized
+
+    def _update_movement_total(self) -> None:
+        mv = self.payload.get("movement")
+        if not isinstance(mv, list):
+            self.payload.pop("movement_total", None)
+            return
+        dx = 0
+        dy = 0
+        for item in mv:
+            if not isinstance(item, (list, tuple)) or len(item) < 2:
+                continue
+            try:
+                dx += int(item[0])
+            except Exception:
+                pass
+            try:
+                dy += int(item[1])
+            except Exception:
+                pass
+        self.payload["movement_total"] = {"dx": int(dx), "dy": int(dy)}
+
+    def _derive_movement_from_source(self) -> Optional[List[List[Any]]]:
+        src = self.payload.get("source", {})
+        if not isinstance(src, dict) or src.get("kind") != "animation":
+            return None
+        if not callable(self.resolve_animation_payload):
+            return None
+        visited: Set[str] = {self.node_id}
+        current_payload: Dict[str, Any] = self.payload
+        total_flip = False
+        while True:
+            current_src = dict(current_payload.get("source") or {})
+            if current_src.get("kind") != "animation":
+                base_payload = current_payload
+                break
+            total_flip ^= bool(current_payload.get("flipped_source", False))
+            raw_target = current_src.get("name") or current_src.get("path") or ""
+            target = str(raw_target).strip()
+            if not target or target in visited:
+                return None
+            visited.add(target)
+            try:
+                resolved_payload = self.resolve_animation_payload(target)
+            except Exception:
+                resolved_payload = None
+            if not isinstance(resolved_payload, dict):
+                return None
+            current_payload = resolved_payload
+        base_movement = base_payload.get("movement")
+        if not isinstance(base_movement, list):
+            return None
+        try:
+            movement_copy = copy.deepcopy(base_movement)
+        except Exception:
+            movement_copy = [list(item) if isinstance(item, (list, tuple)) else [0, 0] for item in base_movement]
+        if total_flip:
+            movement_copy = [self._flip_movement_item(item) for item in movement_copy]
+        return movement_copy
+
+    def _sync_movement_from_source(self) -> None:
+        if self._is_movement_editable():
+            return
+        derived = self._derive_movement_from_source()
+        if derived is None:
+            return
+        try:
+            frame_count = int(self.payload.get("number_of_frames", len(derived)))
+        except Exception:
+            frame_count = len(derived)
+        if frame_count <= 0:
+            frame_count = len(derived)
+        movement = self._normalize_movement_list(derived, frame_count)
+        self.payload["movement"] = movement
+        self._update_movement_total()
+
     def _open_movement_modal(self):
+        if not self._is_movement_editable():
+            return
         parent = self.frame.winfo_toplevel()
         n = self._compute_frames_from_source(self.payload.get("source", {}))
         MovementModal(
@@ -1343,6 +1489,10 @@ class AnimationsPanel:
         if n >= 1:
             mv[0] = [0, 0]
         payload["movement"] = mv
+
+        self._sync_movement_from_source()
+        self._update_movement_total()
+        self._update_movement_button_state()
 
         self._apply_audio_changes(notify=False)
 
@@ -1829,8 +1979,12 @@ def ensure_sections(d: Dict[str, Any]) -> None:
     # keep for compatibility; not used by this UI
     if "mappings" not in d or not isinstance(d["mappings"], dict):
         d["mappings"] = {}
-    if "layout" not in d or not isinstance(d["layout"], dict):
-        d["layout"] = {}
+    # legacy layout data is no longer persisted
+    if "layout" in d:
+        try:
+            d.pop("layout", None)
+        except Exception:
+            pass
     # optional start field
     if "start" not in d:
         d["start"] = ""
@@ -1854,9 +2008,8 @@ class AnimationConfiguratorAppSingle:
 
         ensure_sections(self.data)
 
-        # managers: undo + view persistence
+        # managers: undo history
         self.history = HistoryManager(limit=200)
-        self.view_state = ViewStateManager()
         self.history.snapshot(self.data)
 
         # Actions bar
@@ -1938,18 +2091,7 @@ class AnimationConfiguratorAppSingle:
         except Exception:
             self.preview_provider = None
 
-        # apply geometry if saved
-        try:
-            view = self.data.get("layout", {}).get("__view", {})
-            if isinstance(view, dict):
-                geom = view.get("geometry")
-                if geom:
-                    self.win.geometry(str(geom))
-        except Exception:
-            pass
-
         self.rebuild_list()
-        self._restore_view_state()
 
     # ----- helpers for cropping -----
     def _anim_source_folder(self, anim_payload: Dict[str, Any]) -> Optional[Path]:
@@ -2049,8 +2191,6 @@ class AnimationConfiguratorAppSingle:
         if not (self.data and self.info_path):
             return
         try:
-            # persist view state
-            self._save_view_state_to_data()
             write_json(self.info_path, self.data)
             self.status.set(f"Saved {self.info_path}")
         except Exception as e:
@@ -2226,21 +2366,6 @@ class AnimationConfiguratorAppSingle:
         self.rebuild_list()
 
     # ----- view persistence + undo -----
-    def _save_view_state_to_data(self):
-        try:
-            layout = self.data.setdefault("layout", {})
-            layout["__view"] = self.view_state.capture(self.win, self.scroll_canvas)
-        except Exception:
-            pass
-
-    def _restore_view_state(self):
-        try:
-            view = self.data.get("layout", {}).get("__view", {})
-            if isinstance(view, dict):
-                self.win.after(50, lambda v=view: self.view_state.apply(self.win, self.scroll_canvas, v))
-        except Exception:
-            pass
-
     def _snapshot(self):
         try:
             if self.data is not None:
@@ -2256,14 +2381,12 @@ class AnimationConfiguratorAppSingle:
             self.data = snap
             write_json(self.info_path, self.data)
             self.rebuild_list()
-            self._restore_view_state()
             self.status.set("Undid last change")
         except Exception:
             pass
 
     def _on_close(self):
         try:
-            self._save_view_state_to_data()
             self.save_current()
         finally:
             try:

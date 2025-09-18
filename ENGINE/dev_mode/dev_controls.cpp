@@ -161,7 +161,7 @@ void DevControls::update(const Input& input) {
             if (!consumed) {
                 handle_map_selection();
             } else {
-                (void)map_editor_->consume_selected_room();
+                (void)map_editor_->consume_selection();
             }
         }
         if (map_mode_ui_) {
@@ -380,12 +380,19 @@ void DevControls::exit_map_editor_mode(bool focus_player, bool restore_previous_
 
 void DevControls::handle_map_selection() {
     if (!map_editor_) return;
-    Room* selected = map_editor_->consume_selected_room();
-    if (!selected) return;
+    auto selection = map_editor_->consume_selection();
+    if (!selection.room) return;
 
-    dev_selected_room_ = selected;
-    set_current_room(selected);
-    map_editor_->focus_on_room(selected);
+    if (selection.is_trail()) {
+        if (map_mode_ui_) {
+            map_mode_ui_->open_trail_editor(selection.room);
+        }
+        return;
+    }
+
+    dev_selected_room_ = selection.room;
+    set_current_room(selection.room);
+    map_editor_->focus_on_room(selection.room);
     exit_map_editor_mode(false, false);
 }
 
