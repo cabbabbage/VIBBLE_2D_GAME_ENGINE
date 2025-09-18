@@ -99,20 +99,6 @@ private:
     std::unique_ptr<RangeSliderWidget> s_minmax_w_;
     std::unique_ptr<LabelWidget> s_minmax_label_;
 
-    // Perimeter
-    std::unique_ptr<DMSlider> s_border_;
-    std::unique_ptr<SliderWidget> s_border_w_;
-    std::unique_ptr<DMSlider> s_sector_center_;
-    std::unique_ptr<SliderWidget> s_sector_center_w_;
-    std::unique_ptr<DMSlider> s_sector_range_;
-    std::unique_ptr<SliderWidget> s_sector_range_w_;
-    std::unique_ptr<DMRangeSlider> s_perimeter_offset_x_;
-    std::unique_ptr<RangeSliderWidget> s_perimeter_offset_x_w_;
-    std::unique_ptr<DMRangeSlider> s_perimeter_offset_y_;
-    std::unique_ptr<RangeSliderWidget> s_perimeter_offset_y_w_;
-    std::unique_ptr<LabelWidget> s_perimeter_offset_x_label_;
-    std::unique_ptr<LabelWidget> s_perimeter_offset_y_label_;
-
     // Percent (read-only summary)
     std::unique_ptr<LabelWidget> percent_x_label_;
     std::unique_ptr<LabelWidget> percent_y_label_;

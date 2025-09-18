@@ -3,6 +3,7 @@
 #include <string>
 #include <vector>
 #include <memory>
+#include <nlohmann/json.hpp>
 
 class Asset;
 class Assets;
@@ -38,7 +39,12 @@ class AssetLoader {
     double map_center_x_ = 0.0;
     double map_center_y_ = 0.0;
     double map_radius_   = 0.0;
-    std::string map_boundary_file_;
+    std::string map_info_path_;
+    nlohmann::json map_info_json_;
+    nlohmann::json* map_assets_data_   = nullptr;
+    nlohmann::json* map_boundary_data_ = nullptr;
+    nlohmann::json* rooms_data_        = nullptr;
+    nlohmann::json* trails_data_       = nullptr;
     void load_map_json();
     void loadRooms();
     void finalizeAssets();

@@ -1,5 +1,6 @@
 #include "asset_info.hpp"
 #include "asset_info_methods/animation_loader.hpp"
+#include "asset/asset_types.hpp"
 #include "asset_info_methods/area_loader.hpp"
 #include "asset_info_methods/child_loader.hpp"
 #include "asset_info_methods/lighting_loader.hpp"
@@ -123,10 +124,10 @@ void AssetInfo::loadAnimations(SDL_Renderer *renderer) {
 }
 
 void AssetInfo::load_base_properties(const nlohmann::json &data) {
-	type = data.value("asset_type", "Object");
-	if (type == "Player") {
-		std::cout << "[AssetInfo] Player asset '" << name << "' loaded\n\n";
-	}
+        type = asset_types::canonicalize(data.value("asset_type", std::string{asset_types::object}));
+        if (type == asset_types::player) {
+                std::cout << "[AssetInfo] Player asset '" << name << "' loaded\n\n";
+        }
 	start_animation = data.value("start", std::string{"default"});
 	z_threshold = data.value("z_threshold", 0);
 	passable = has_tag("passable");
@@ -157,8 +158,9 @@ bool AssetInfo::update_info_json() const {
 }
 
 void AssetInfo::set_asset_type(const std::string &t) {
-	type = t;
-	info_json_["asset_type"] = t;
+        std::string canonical = asset_types::canonicalize(t);
+        type = canonical;
+        info_json_["asset_type"] = canonical;
 }
 
 void AssetInfo::set_z_threshold(int z) {

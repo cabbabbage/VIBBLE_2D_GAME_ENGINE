@@ -6,23 +6,26 @@
 #include "asset/asset_info.hpp"
 #include "asset/asset_utils.hpp"
 #include "dev_mode/dev_controls.hpp"
-#include "utils/input.hpp"
 #include "render/scene_renderer.hpp"
-#include "utils/area.hpp"
-#include <vector>
 #include "room/room.hpp"
+#include "utils/area.hpp"
+#include "utils/input.hpp"
+#include "utils/range_util.hpp"
 
 #include <algorithm>
+#include <filesystem>
+#include <fstream>
 #include <iostream>
-#include <memory>
 #include <limits>
+#include <memory>
 #include <nlohmann/json.hpp>
-#include "utils/range_util.hpp"
+#include <system_error>
+#include <vector>
 
 
 Assets::Assets(std::vector<Asset>&& loaded,
                AssetLibrary& library,
-               Asset* ,
+               Asset*,
                std::vector<Room*> rooms,
                int screen_width_,
                int screen_height_,
@@ -38,18 +41,21 @@ Assets::Assets(std::vector<Asset>&& loaded,
               "starting_camera",
               std::vector<SDL_Point>{
                   // Reduce starting view extents to one third
-                  SDL_Point{-map_radius/3, -map_radius/3},
-                  SDL_Point{ map_radius/3, -map_radius/3},
-                  SDL_Point{ map_radius/3,  map_radius/3},
-                  SDL_Point{-map_radius/3,  map_radius/3}
-              }
-          )
+                  SDL_Point{-map_radius / 3, -map_radius / 3},
+                  SDL_Point{ map_radius / 3, -map_radius / 3},
+                  SDL_Point{ map_radius / 3,  map_radius / 3},
+                  SDL_Point{-map_radius / 3,  map_radius / 3}
+              })
       ),
       activeManager(screen_width_, screen_height_, camera),
       screen_width(screen_width_),
       screen_height(screen_height_),
-      library_(library)
+      library_(library),
+      map_path_(map_path),
+      map_info_path_(map_path_.empty() ? std::string{} : (map_path_ + "/map_info.json"))
 {
+    load_map_info_json();
+
     InitializeAssets::initialize(*this,
                                  std::move(loaded),
                                  std::move(rooms),
@@ -65,6 +71,7 @@ Assets::Assets(std::vector<Asset>&& loaded,
     }
 
     scene = new SceneRenderer(renderer, this, screen_width_, screen_height_, map_path);
+    apply_map_light_config();
 
     for (Asset* a : all) {
         if (a) a->set_assets(this);
@@ -78,15 +85,244 @@ Assets::Assets(std::vector<Asset>&& loaded,
         dev_controls_->set_screen_dimensions(screen_width_, screen_height_);
         dev_controls_->set_rooms(&rooms_);
         dev_controls_->set_input(input);
+        dev_controls_->set_map_info(&map_info_json_, [this]() { on_map_light_changed(); });
+        dev_controls_->set_map_context(&map_info_json_, map_path_);
     }
 
 }
 
 
+void Assets::load_map_info_json() {
+    map_info_json_ = nlohmann::json::object();
+    if (map_info_path_.empty()) {
+        return;
+    }
+
+    std::ifstream in(map_info_path_);
+    if (!in.is_open()) {
+        std::cerr << "[Assets] Failed to open map_info.json at " << map_info_path_ << "\n";
+        return;
+    }
+
+    try {
+        in >> map_info_json_;
+    } catch (const std::exception& e) {
+        std::cerr << "[Assets] Failed to parse map_info.json: " << e.what() << "\n";
+        map_info_json_ = nlohmann::json::object();
+    }
+
+    if (!map_info_json_.is_object()) {
+        map_info_json_ = nlohmann::json::object();
+    }
+
+    hydrate_map_info_sections();
+    load_camera_settings_from_json();
+}
+
+void Assets::save_map_info_json() {
+    if (map_info_path_.empty()) {
+        return;
+    }
+    write_camera_settings_to_json();
+    std::ofstream out(map_info_path_);
+    if (!out.is_open()) {
+        std::cerr << "[Assets] Failed to write map_info.json at " << map_info_path_ << "\n";
+        return;
+    }
+    try {
+        out << map_info_json_.dump(2);
+    } catch (const std::exception& e) {
+        std::cerr << "[Assets] Failed to serialize map_info.json: " << e.what() << "\n";
+    }
+}
+
+void Assets::hydrate_map_info_sections() {
+    if (!map_info_json_.is_object()) {
+        return;
+    }
+    if (map_path_.empty()) {
+        return;
+    }
+
+    const auto hydrate_from_file = [&](const char* legacy_key, const char* merged_key) {
+        if (map_info_json_.contains(merged_key)) {
+            return;
+        }
+        auto it = map_info_json_.find(legacy_key);
+        if (it == map_info_json_.end() || !it->is_string()) {
+            return;
+        }
+        const std::string file_path = map_path_ + "/" + it->get<std::string>();
+        std::ifstream section(file_path);
+        if (!section.is_open()) {
+            std::cerr << "[Assets] Legacy map section missing: " << file_path << "\n";
+            return;
+        }
+        try {
+            nlohmann::json data;
+            section >> data;
+            map_info_json_[merged_key] = std::move(data);
+        } catch (const std::exception& ex) {
+            std::cerr << "[Assets] Failed to hydrate " << merged_key << " from "
+                      << file_path << ": " << ex.what() << "\n";
+        }
+    };
+
+    hydrate_from_file("map_assets", "map_assets_data");
+    hydrate_from_file("map_boundary", "map_boundary_data");
+    hydrate_from_file("map_light", "map_light_data");
+
+    const auto hydrate_directory = [&](const char* merged_key, const char* directory_name) {
+        if (map_info_json_.contains(merged_key) && map_info_json_[merged_key].is_object()) {
+            return;
+        }
+
+        const std::filesystem::path dir = std::filesystem::path(map_path_) / directory_name;
+        if (!std::filesystem::exists(dir) || !std::filesystem::is_directory(dir)) {
+            return;
+        }
+
+        std::error_code ec;
+        std::filesystem::directory_iterator it(dir, ec);
+        if (ec) {
+            std::cerr << "[Assets] Failed to scan legacy directory " << dir << ": "
+                      << ec.message() << "\n";
+            return;
+        }
+
+        nlohmann::json merged = nlohmann::json::object();
+        for (const auto& entry : it) {
+            if (!entry.is_regular_file()) {
+                continue;
+            }
+            const auto& path = entry.path();
+            if (path.extension() != ".json") {
+                continue;
+            }
+            std::ifstream in(path);
+            if (!in.is_open()) {
+                std::cerr << "[Assets] Failed to open legacy section " << path << "\n";
+                continue;
+            }
+            try {
+                nlohmann::json section;
+                in >> section;
+                merged[path.stem().string()] = std::move(section);
+            } catch (const std::exception& ex) {
+                std::cerr << "[Assets] Failed to hydrate " << merged_key << " entry from "
+                          << path << ": " << ex.what() << "\n";
+            }
+        }
+
+        if (!merged.is_object()) {
+            merged = nlohmann::json::object();
+        }
+        map_info_json_[merged_key] = std::move(merged);
+    };
+
+    hydrate_directory("rooms_data", "rooms");
+    hydrate_directory("trails_data", "trails");
+
+    const auto ensure_object = [&](const char* key) {
+        auto it = map_info_json_.find(key);
+        if (it == map_info_json_.end()) {
+            map_info_json_[key] = nlohmann::json::object();
+            return;
+        }
+        if (!it->is_object()) {
+            std::cerr << "[Assets] map_info." << key << " expected to be an object. Resetting." << "\n";
+            *it = nlohmann::json::object();
+        }
+    };
+
+    ensure_object("map_assets_data");
+    ensure_object("map_boundary_data");
+    ensure_object("map_light_data");
+    ensure_object("rooms_data");
+    ensure_object("trails_data");
+}
+
+void Assets::load_camera_settings_from_json() {
+    if (!map_info_json_.is_object()) {
+        return;
+    }
+    nlohmann::json& camera_settings = map_info_json_["camera_settings"];
+    if (!camera_settings.is_object()) {
+        camera_settings = nlohmann::json::object();
+    }
+    camera.apply_camera_settings(camera_settings);
+    camera_settings = camera.camera_settings_to_json();
+}
+
+void Assets::write_camera_settings_to_json() {
+    if (!map_info_json_.is_object()) {
+        return;
+    }
+    map_info_json_["camera_settings"] = camera.camera_settings_to_json();
+}
+
+void Assets::on_camera_settings_changed() {
+    write_camera_settings_to_json();
+    save_map_info_json();
+}
+
+void Assets::reload_camera_settings() {
+    load_camera_settings_from_json();
+}
+
+void Assets::apply_map_light_config() {
+    if (!scene) {
+        return;
+    }
+    if (!map_info_json_.is_object()) {
+        return;
+    }
+    auto it = map_info_json_.find("map_light_data");
+    if (it == map_info_json_.end() || !it->is_object()) {
+        return;
+    }
+    scene->apply_map_light_config(*it);
+}
+
+void Assets::on_map_light_changed() {
+    apply_map_light_config();
+    save_map_info_json();
+}
+
 Assets::~Assets() {
     delete scene;
     delete finder_;
     delete dev_controls_;
+}
+
+AssetLibrary& Assets::library() {
+    return library_;
+}
+
+const AssetLibrary& Assets::library() const {
+    return library_;
+}
+
+void Assets::set_rooms(std::vector<Room*> rooms) {
+    rooms_ = std::move(rooms);
+}
+
+std::vector<Room*>& Assets::rooms() {
+    return rooms_;
+}
+
+const std::vector<Room*>& Assets::rooms() const {
+    return rooms_;
+}
+
+void Assets::refresh_active_asset_lists() {
+    active_assets  = activeManager.getActive();
+    closest_assets = activeManager.getClosest();
+}
+
+void Assets::update_closest_assets(Asset* player, int max_count) {
+    activeManager.updateClosestAssets(player, max_count);
+    closest_assets = activeManager.getClosest();
 }
 
 void Assets::set_input(Input* m) {
@@ -99,6 +335,7 @@ void Assets::set_input(Input* m) {
         dev_controls_->set_current_room(current_room_);
         dev_controls_->set_screen_dimensions(screen_width, screen_height);
         dev_controls_->set_rooms(&rooms_);
+        dev_controls_->set_map_context(&map_info_json_, map_path_);
     }
 }
 
@@ -421,6 +658,12 @@ void Assets::close_asset_info_editor() {
 
 bool Assets::is_asset_info_editor_open() const {
     return dev_controls_ && dev_controls_->is_asset_info_editor_open();
+}
+
+void Assets::clear_editor_selection() {
+    if (dev_controls_ && dev_mode) {
+        dev_controls_->clear_selection();
+    }
 }
 
 void Assets::handle_sdl_event(const SDL_Event& e) {

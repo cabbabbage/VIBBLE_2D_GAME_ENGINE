@@ -40,9 +40,10 @@ void LightMap::collect_layers(std::vector<LightEntry>& out, std::mt19937& rng) {
 	constexpr int min_visible_w = 1;
 	constexpr int min_visible_h = 1;
 	Uint8 main_alpha = main_light_.get_current_color().a;
-	if (out.capacity() < assets_->active_assets.size() + 3) {
-		out.reserve(assets_->active_assets.size() + 3);
-	}
+        const auto& active = assets_->getActive();
+        if (out.capacity() < active.size() + 3) {
+                out.reserve(active.size() + 3);
+        }
 	if (fullscreen_light_tex_) {
 		out.push_back({ fullscreen_light_tex_, { 0, 0, screen_width_, screen_height_ },
 			static_cast<Uint8>(main_alpha / 2), SDL_FLIP_NONE, false });
@@ -57,7 +58,7 @@ void LightMap::collect_layers(std::vector<LightEntry>& out, std::mt19937& rng) {
 		}
 	}
         const float main_brightness = static_cast<float>(main_light_.get_brightness());
-        for (Asset* a : assets_->active_assets) {
+        for (Asset* a : active) {
                 if (!a || !a->info || !a->info->has_light_source) continue;
                 for (auto& light : a->info->light_sources) {
                         if (!light.texture) continue;

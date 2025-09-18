@@ -303,8 +303,6 @@ void AssetSpawnPlanner::parse_asset_spawns(const Area& area) {
                 s.exact_point.x = get_val("ep_x_min", "ep_x_max", -1);
                 s.exact_point.y = get_val("ep_y_min", "ep_y_max", -1);
                 s.border_shift = asset.value("percentage_shift_from_center", get_val("border_shift_min", "border_shift_max", asset.value("border_shift", 0)));
-                s.sector_center = get_val("sector_center_min", "sector_center_max", asset.value("sector_center", 0));
-                s.sector_range = get_val("sector_range_min", "sector_range_max", asset.value("sector_range", 0));
                 s.perimeter_offset.x = get_val("perimeter_x_offset_min", "perimeter_x_offset_max", asset.value("perimeter_x_offset", 0));
                 s.perimeter_offset.y = get_val("perimeter_y_offset_min", "perimeter_y_offset_max", asset.value("perimeter_y_offset", 0));
                 s.percent_x_min = asset.value("p_x_min", asset.value("percent_x_min", 0));

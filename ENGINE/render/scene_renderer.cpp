@@ -46,15 +46,28 @@ SceneRenderer::SceneRenderer(SDL_Renderer* renderer,
 
 	// No accumulation texture; render directly to default target
 
-	z_light_pass_ = std::make_unique<LightMap>(renderer_, assets_, main_light_source_, screen_width_, screen_height_, fullscreen_light_tex_);
-	main_light_source_.update();
-	z_light_pass_->render(debugging);
+        z_light_pass_ = std::make_unique<LightMap>(renderer_, assets_, main_light_source_, screen_width_, screen_height_, fullscreen_light_tex_);
+        main_light_source_.update();
+        z_light_pass_->render(debugging);
+}
+
+void SceneRenderer::apply_map_light_config(const nlohmann::json& data) {
+        main_light_source_.apply_config(data);
+        if (!renderer_ || !fullscreen_light_tex_) {
+                return;
+        }
+        SDL_Texture* prev = SDL_GetRenderTarget(renderer_);
+        SDL_SetRenderTarget(renderer_, fullscreen_light_tex_);
+        SDL_Color color = main_light_source_.get_current_color();
+        SDL_SetRenderDrawColor(renderer_, color.r, color.g, color.b, color.a);
+        SDL_RenderClear(renderer_);
+        SDL_SetRenderTarget(renderer_, prev);
 }
 
 void SceneRenderer::update_shading_groups() {
-	++current_shading_group_;
-	if (current_shading_group_ > num_groups_)
-		current_shading_group_ = 1;
+        ++current_shading_group_;
+        if (current_shading_group_ > num_groups_)
+                current_shading_group_ = 1;
 }
 
 bool SceneRenderer::shouldRegen(Asset* a) {
@@ -64,16 +77,38 @@ bool SceneRenderer::shouldRegen(Asset* a) {
 	       (!a->get_final_texture() || !a->static_frame || a->get_render_player_light());
 }
 
-SDL_Rect SceneRenderer::get_scaled_position_rect(Asset* a, int fw, int fh,
-                                                 float inv_scale, int min_w, int min_h) {
-	int sw = static_cast<int>(fw * inv_scale);
-	int sh = static_cast<int>(fh * inv_scale);
-	if (sw < min_w && sh < min_h) {
-		return {0, 0, 0, 0};
-	}
+SDL_Rect SceneRenderer::get_scaled_position_rect(Asset* a,
+                                                 int fw,
+                                                 int fh,
+                                                 float inv_scale,
+                                                 int min_w,
+                                                 int min_h,
+                                                 float reference_screen_height) {
+        float base_sw = static_cast<float>(fw) * inv_scale;
+        float base_sh = static_cast<float>(fh) * inv_scale;
 
-	SDL_Point cp = assets_->getView().map_to_screen(SDL_Point{a->pos.x, a->pos.y});
-	return SDL_Rect{ cp.x - sw / 2, cp.y - sh, sw, sh };
+        const camera::RenderEffects effects = assets_->getView().compute_render_effects(
+            SDL_Point{a->pos.x, a->pos.y}, base_sh, reference_screen_height);
+
+        float scaled_sw = base_sw * effects.distance_scale;
+        float scaled_sh = base_sh * effects.distance_scale;
+        float final_visible_h = scaled_sh * effects.vertical_scale;
+
+        if (scaled_sw < min_w && final_visible_h < min_h) {
+                return {0, 0, 0, 0};
+        }
+
+        int sw = static_cast<int>(std::round(scaled_sw));
+        int sh = static_cast<int>(std::round(final_visible_h));
+        sw = std::max(sw, 1);
+        sh = std::max(sh, 1);
+
+        if (sw < min_w && sh < min_h) {
+                return {0, 0, 0, 0};
+        }
+
+        const SDL_Point& cp = effects.screen_position;
+        return SDL_Rect{ cp.x - sw / 2, cp.y - sh, sw, sh };
 }
 
 void SceneRenderer::render() {
@@ -91,13 +126,37 @@ void SceneRenderer::render() {
 	SDL_SetRenderDrawColor(renderer_, SLATE_COLOR.r, SLATE_COLOR.g, SLATE_COLOR.b, 255);
 	SDL_RenderClear(renderer_);
 
-	const auto& camera_state = assets_->getView();
-	float scale = camera_state.get_scale();
-	float inv_scale = 1.0f / scale;
-	int min_visible_w = static_cast<int>(screen_width_  * MIN_VISIBLE_SCREEN_RATIO);
-	int min_visible_h = static_cast<int>(screen_height_ * MIN_VISIBLE_SCREEN_RATIO);
+        const auto& camera_state = assets_->getView();
+        float scale = camera_state.get_scale();
+        float inv_scale = 1.0f / scale;
+        int min_visible_w = static_cast<int>(screen_width_  * MIN_VISIBLE_SCREEN_RATIO);
+        int min_visible_h = static_cast<int>(screen_height_ * MIN_VISIBLE_SCREEN_RATIO);
 
-	for (Asset* a : assets_->active_assets) {
+        float player_screen_height = 1.0f;
+        Asset* player_asset = assets_ ? assets_->player : nullptr;
+        if (player_asset) {
+                SDL_Texture* player_final = player_asset->get_final_texture();
+                SDL_Texture* player_frame = player_asset->get_current_frame();
+                int pw = player_asset->cached_w;
+                int ph = player_asset->cached_h;
+                if ((pw == 0 || ph == 0) && player_final) {
+                        SDL_QueryTexture(player_final, nullptr, nullptr, &pw, &ph);
+                }
+                if ((pw == 0 || ph == 0) && player_frame) {
+                        SDL_QueryTexture(player_frame, nullptr, nullptr, &pw, &ph);
+                }
+                if (pw != 0) player_asset->cached_w = pw;
+                if (ph != 0) player_asset->cached_h = ph;
+                if (ph > 0) {
+                        player_screen_height = static_cast<float>(ph) * inv_scale;
+                }
+        }
+        if (player_screen_height <= 0.0f) {
+                player_screen_height = 1.0f;
+        }
+
+        const auto& active_assets = assets_->getActive();
+        for (Asset* a : active_assets) {
 		if (!a || !a->info) continue;
 
 		if (shouldRegen(a)) {
@@ -116,7 +175,7 @@ void SceneRenderer::render() {
 			a->cached_h = fh;
 		}
 
-		SDL_Rect fb = get_scaled_position_rect(a, fw, fh, inv_scale, min_visible_w, min_visible_h);
+                SDL_Rect fb = get_scaled_position_rect(a, fw, fh, inv_scale, min_visible_w, min_visible_h, player_screen_height);
 		if (fb.w == 0 && fb.h == 0) continue;
 
 		if (a->is_highlighted()) {

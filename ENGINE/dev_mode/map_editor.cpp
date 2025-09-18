@@ -9,6 +9,8 @@
 #include "utils/input.hpp"
 
 #include <algorithm>
+#include <cctype>
+#include <cstdlib>
 #include <string>
 #include <tuple>
 #include <vector>
@@ -20,6 +22,9 @@ constexpr int kLabelVerticalOffset = 32;
 const SDL_Color kLabelBg{0, 0, 0, 180};
 const SDL_Color kLabelBorder{255, 255, 255, 80};
 const SDL_Color kLabelText{240, 240, 240, 255};
+const SDL_Color kTrailLabelBg{18, 52, 18, 192};
+const SDL_Color kTrailLabelBorder{144, 220, 144, 110};
+const SDL_Color kTrailLabelText{220, 252, 220, 255};
 }
 
 MapEditor::MapEditor(Assets* owner)
@@ -55,7 +60,8 @@ void MapEditor::set_enabled(bool enabled) {
 void MapEditor::enter() {
     if (enabled_) return;
     enabled_ = true;
-    pending_selection_ = nullptr;
+    pending_selection_ = Selection{};
+    has_entry_center_ = false;
 
     if (assets_) {
         camera& cam = assets_->getView();
@@ -66,6 +72,8 @@ void MapEditor::enter() {
         } else {
             prev_focus_point_ = SDL_Point{0, 0};
         }
+        entry_center_ = cam.get_screen_center();
+        has_entry_center_ = true;
     }
 
     compute_bounds();
@@ -73,26 +81,50 @@ void MapEditor::enter() {
 }
 
 void MapEditor::exit(bool focus_player, bool restore_previous_state) {
+    has_entry_center_ = false;
     if (!enabled_) {
         restore_camera_state(focus_player, restore_previous_state);
         return;
     }
     enabled_ = false;
     restore_camera_state(focus_player, restore_previous_state);
-    pending_selection_ = nullptr;
+    pending_selection_ = Selection{};
 }
 
 void MapEditor::update(const Input& input) {
     if (!enabled_) return;
+    if (!assets_) return;
+
+    camera& cam = assets_->getView();
+
+    SDL_Point screen_pt{input.getX(), input.getY()};
+    SDL_Point map_pt = cam.screen_to_map(screen_pt);
+
+    Room* area_hit = hit_test_room(map_pt);
+    const LabelEntry* label_hit = nullptr;
+    for (const auto& entry : label_rects_) {
+        if (SDL_PointInRect(&screen_pt, &entry.rect)) {
+            label_hit = &entry;
+            break;
+        }
+    }
+
+    Room* hit = area_hit ? area_hit : (label_hit ? label_hit->room : nullptr);
+
+    pan_zoom_.handle_input(cam, input, hit != nullptr);
 
     if (input.wasClicked(Input::LEFT)) {
-        SDL_Point screen_pt{input.getX(), input.getY()};
-        if (assets_) {
-            SDL_Point map_pt = assets_->getView().screen_to_map(screen_pt);
-            Room* hit = hit_test_room(map_pt);
-            if (hit) {
-                pending_selection_ = hit;
-            }
+        pending_selection_ = Selection{};
+        if (label_hit && label_hit->room) {
+            pending_selection_.room = label_hit->room;
+            pending_selection_.kind = (label_hit->type == LabelType::Trail)
+                                          ? Selection::Kind::TrailLabel
+                                          : Selection::Kind::RoomLabel;
+        } else if (area_hit) {
+            pending_selection_.room = area_hit;
+            pending_selection_.kind = is_trail_room(area_hit)
+                                          ? Selection::Kind::TrailArea
+                                          : Selection::Kind::RoomArea;
         }
     }
 }
@@ -107,15 +139,18 @@ void MapEditor::render(SDL_Renderer* renderer) {
 
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
 
+    label_rects_.clear();
+
     for (Room* room : *rooms_) {
         if (!room || !room->room_area) continue;
-        render_room_label(renderer, room);
+        LabelType type = is_trail_room(room) ? LabelType::Trail : LabelType::Room;
+        render_room_label(renderer, room, type);
     }
 }
 
-Room* MapEditor::consume_selected_room() {
-    Room* out = pending_selection_;
-    pending_selection_ = nullptr;
+MapEditor::Selection MapEditor::consume_selection() {
+    Selection out = pending_selection_;
+    pending_selection_ = Selection{};
     return out;
 }
 
@@ -126,7 +161,7 @@ void MapEditor::focus_on_room(Room* room) {
     Area adjusted = cam.convert_area_to_aspect(*room->room_area);
     cam.set_manual_zoom_override(true);
     cam.set_focus_override(adjusted.get_center());
-    cam.zoom_to_area(adjusted, 35);
+    cam.zoom_to_area(adjusted, 20);
 }
 
 void MapEditor::ensure_font() {
@@ -181,26 +216,65 @@ void MapEditor::apply_camera_to_bounds() {
     camera& cam = assets_->getView();
     cam.set_manual_zoom_override(true);
 
+    Room* spawn_room = find_spawn_room();
+    SDL_Point spawn_center{0, 0};
+    bool has_spawn_center = false;
+    if (spawn_room && spawn_room->room_area) {
+        spawn_center = spawn_room->room_area->get_center();
+        has_spawn_center = true;
+    }
+
     if (has_bounds_) {
         int min_x = bounds_.min_x - kBoundsPadding;
         int min_y = bounds_.min_y - kBoundsPadding;
         int max_x = bounds_.max_x + kBoundsPadding;
         int max_y = bounds_.max_y + kBoundsPadding;
 
+        auto distance = [](int a, int b) { return (a > b) ? (a - b) : (b - a); };
+        SDL_Point bounds_center{ (min_x + max_x) / 2, (min_y + max_y) / 2 };
+        SDL_Point center = has_entry_center_ ? entry_center_
+                                             : (has_spawn_center ? spawn_center : bounds_center);
+        int half_w = std::max({ distance(center.x, min_x), distance(center.x, max_x), 1 });
+        int half_h = std::max({ distance(center.y, min_y), distance(center.y, max_y), 1 });
+        int left = center.x - half_w;
+        int right = center.x + half_w;
+        int top = center.y - half_h;
+        int bottom = center.y + half_h;
+
         std::vector<SDL_Point> pts{
-            {min_x, min_y},
-            {max_x, min_y},
-            {max_x, max_y},
-            {min_x, max_y},
+            {left, top},
+            {right, top},
+            {right, bottom},
+            {left, bottom},
         };
         Area area("map_bounds", pts);
-        cam.set_focus_override(area.get_center());
-        cam.zoom_to_area(area, 35);
-    } else if (assets_->player) {
-        SDL_Point center{assets_->player->pos.x, assets_->player->pos.y};
         cam.set_focus_override(center);
+        cam.zoom_to_area(area, 35);
+    } else if (has_entry_center_) {
+        cam.set_focus_override(entry_center_);
+        cam.zoom_to_scale(1.0, 20);
+    } else if (has_spawn_center) {
+        cam.set_focus_override(spawn_center);
+        if (spawn_room && spawn_room->room_area) {
+            Area adjusted = cam.convert_area_to_aspect(*spawn_room->room_area);
+            cam.zoom_to_area(adjusted, 35);
+        } else {
+            cam.zoom_to_scale(1.0, 20);
+        }
+    } else {
+        cam.set_focus_override(SDL_Point{0, 0});
         cam.zoom_to_scale(1.0, 20);
     }
+}
+
+Room* MapEditor::find_spawn_room() const {
+    if (!rooms_) return nullptr;
+    for (Room* room : *rooms_) {
+        if (room && room->is_spawn_room()) {
+            return room;
+        }
+    }
+    return nullptr;
 }
 
 void MapEditor::restore_camera_state(bool focus_player, bool restore_previous_state) {
@@ -236,21 +310,33 @@ Room* MapEditor::hit_test_room(SDL_Point map_point) const {
     return nullptr;
 }
 
-void MapEditor::render_room_label(SDL_Renderer* renderer, Room* room) {
+void MapEditor::render_room_label(SDL_Renderer* renderer, Room* room, LabelType type) {
     if (!room || !room->room_area || !assets_) return;
     if (!label_font_) return;
 
-    const std::string& name = room->room_name.empty() ? std::string("<unnamed>") : room->room_name;
-    SDL_Surface* text_surface = TTF_RenderUTF8_Blended(label_font_, name.c_str(), kLabelText);
+    std::string name = room->room_name.empty() ? std::string("<unnamed>") : room->room_name;
+    SDL_Color text_color = kLabelText;
+    SDL_Color bg_color = kLabelBg;
+    SDL_Color border_color = kLabelBorder;
+    if (type == LabelType::Trail) {
+        text_color = kTrailLabelText;
+        bg_color = kTrailLabelBg;
+        border_color = kTrailLabelBorder;
+        name = std::string("Trail: ") + name;
+    }
+
+    SDL_Surface* text_surface = TTF_RenderUTF8_Blended(label_font_, name.c_str(), text_color);
     if (!text_surface) return;
 
     SDL_Point center = room->room_area->get_center();
     SDL_Point screen_pt = assets_->getView().map_to_screen(center);
     SDL_Rect bg_rect = label_background_rect(text_surface, screen_pt);
 
-    SDL_SetRenderDrawColor(renderer, kLabelBg.r, kLabelBg.g, kLabelBg.b, kLabelBg.a);
+    label_rects_.push_back(LabelEntry{room, bg_rect, type});
+
+    SDL_SetRenderDrawColor(renderer, bg_color.r, bg_color.g, bg_color.b, bg_color.a);
     SDL_RenderFillRect(renderer, &bg_rect);
-    SDL_SetRenderDrawColor(renderer, kLabelBorder.r, kLabelBorder.g, kLabelBorder.b, kLabelBorder.a);
+    SDL_SetRenderDrawColor(renderer, border_color.r, border_color.g, border_color.b, border_color.a);
     SDL_RenderDrawRect(renderer, &bg_rect);
 
     SDL_Texture* text_tex = SDL_CreateTextureFromSurface(renderer, text_surface);
@@ -283,4 +369,20 @@ SDL_Rect MapEditor::label_background_rect(const SDL_Surface* surface, SDL_Point 
         rect.y = std::min(rect.y, screen_h_ - rect.h);
     }
     return rect;
+}
+
+bool MapEditor::is_trail_room(const Room* room) const {
+    if (!room) return false;
+    std::string type = room->type;
+    std::transform(type.begin(), type.end(), type.begin(), [](unsigned char c) {
+        return static_cast<char>(std::tolower(c));
+    });
+    if (type == "trail") {
+        return true;
+    }
+    const std::string& directory = room->room_directory;
+    if (directory.find("trails_data") != std::string::npos) {
+        return true;
+    }
+    return false;
 }

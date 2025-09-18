@@ -1,6 +1,7 @@
 #include "render_asset.hpp"
 #include "global_light_source.hpp"
 #include "asset/Asset.hpp"
+#include "asset/asset_types.hpp"
 #include "core/AssetsManager.hpp"
 #include "utils/light_utils.hpp"
 #include "render/camera.hpp"
@@ -62,7 +63,7 @@ SDL_Texture* RenderAsset::regenerateFinalTexture(Asset* a) {
 	SDL_RenderClear(renderer_);
 	const float c = a->alpha_percentage;
 	int alpha_mod = (c >= 1.0f) ? 255 : int(main_alpha * c);
-	if (a->info->type == "Player") alpha_mod = std::min(255, alpha_mod * 3);
+        if (a->info->type == asset_types::player) alpha_mod = std::min(255, alpha_mod * 3);
 	SDL_SetTextureColorMod(base, 255, 255, 255);
 	SDL_RenderCopy(renderer_, base, nullptr, nullptr);
 	SDL_SetTextureColorMod(base, 255, 255, 255);

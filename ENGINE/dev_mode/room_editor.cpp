@@ -2,6 +2,7 @@
 
 #include "asset/Asset.hpp"
 #include "asset/asset_info.hpp"
+#include "asset/asset_types.hpp"
 #include "asset/asset_utils.hpp"
 #include "core/AssetsManager.hpp"
 #include "dev_mode/area_overlay_editor.hpp"
@@ -99,9 +100,15 @@ void RoomEditor::set_screen_dimensions(int width, int height) {
 }
 
 void RoomEditor::set_current_room(Room* room) {
+    const bool room_changed = (room != current_room_);
+
     current_room_ = room;
     if (current_room_) {
         ensure_spawn_groups_array(current_room_->assets_data());
+    }
+
+    if (enabled_ && room_changed && current_room_) {
+        focus_camera_on_room_center();
     }
 }
 
@@ -114,9 +121,11 @@ void RoomEditor::set_enabled(bool enabled) {
         cam.set_parallax_enabled(false);
         cam.set_manual_zoom_override(false);
         close_asset_info_editor();
+        focus_camera_on_room_center();
     } else {
         cam.set_parallax_enabled(true);
         cam.set_manual_zoom_override(false);
+        cam.clear_focus_override();
         if (library_ui_) library_ui_->close();
         if (room_cfg_ui_) room_cfg_ui_->close();
         if (info_ui_) info_ui_->close();
@@ -150,7 +159,7 @@ void RoomEditor::update(const Input& input) {
 
 void RoomEditor::update_ui(const Input& input) {
     if (library_ui_ && library_ui_->is_visible()) {
-        library_ui_->update(input, screen_w_, screen_h_, assets_->library_, *assets_);
+        library_ui_->update(input, screen_w_, screen_h_, assets_->library(), *assets_);
     }
     if (room_cfg_ui_ && room_cfg_ui_->visible()) {
         room_cfg_ui_->update(input);
@@ -429,7 +438,6 @@ void RoomEditor::begin_area_edit_for_selected_asset(const std::string& area_name
     Asset* target = nullptr;
     if (!selected_assets_.empty()) target = selected_assets_.front();
     if (!target) target = hovered_asset_;
-    if (!target) target = player_;
     if (!target || !target->info) return;
 
     if (info_ui_ && info_ui_->is_visible()) {
@@ -450,6 +458,20 @@ void RoomEditor::focus_camera_on_asset(Asset* asset, double zoom_factor, int dur
     camera& cam = assets_->getView();
     cam.set_manual_zoom_override(true);
     cam.pan_and_zoom_to_asset(asset, zoom_factor, duration_steps);
+}
+
+void RoomEditor::focus_camera_on_room_center(bool reframe_zoom) {
+    if (!enabled_ || !assets_) return;
+    if (!current_room_ || !current_room_->room_area) return;
+
+    camera& cam = assets_->getView();
+    const SDL_Point center = current_room_->room_area->get_center();
+    cam.set_manual_zoom_override(true);
+    cam.set_focus_override(center);
+
+    if (reframe_zoom) {
+        cam.zoom_to_area(*current_room_->room_area, 25);
+    }
 }
 
 void RoomEditor::reset_click_state() {
@@ -499,24 +521,11 @@ void RoomEditor::purge_asset(Asset* asset) {
 
 void RoomEditor::set_zoom_scale_factor(double factor) {
     zoom_scale_factor_ = (factor > 0.0) ? factor : 1.0;
+    pan_zoom_.set_zoom_scale_factor(zoom_scale_factor_);
 }
 
 void RoomEditor::handle_mouse_input(const Input& input) {
     camera& cam = assets_->getView();
-
-    const int wheel_y = input.getScrollY();
-    if (wheel_y != 0) {
-        const double step = (zoom_scale_factor_ > 0.0) ? zoom_scale_factor_ : 1.0;
-        double eff = 1.0;
-        if (wheel_y > 0) {
-            eff = std::pow(step, wheel_y);
-        } else if (wheel_y < 0) {
-            eff = 1.0 / std::pow(step, -wheel_y);
-        }
-        const int base = 18;
-        const int dur = std::max(6, base - 2 * std::min(6, std::abs(wheel_y)));
-        cam.animate_zoom_multiply(eff, dur);
-    }
 
     if (input.isScancodeDown(SDL_SCANCODE_ESCAPE)) {
         clear_selection();
@@ -524,17 +533,33 @@ void RoomEditor::handle_mouse_input(const Input& input) {
     }
 
     if (!input_) return;
-    if (!player_) return;
 
     const int mx = input_->getX();
     const int my = input_->getY();
+    const bool ui_blocked = is_ui_blocking_input(mx, my);
+
+    Asset* hit_asset = nullptr;
+    if (!ui_blocked) {
+        hit_asset = hit_test_asset(SDL_Point{mx, my});
+    }
+
+    pan_zoom_.handle_input(cam, input, ui_blocked || hit_asset != nullptr);
+
     SDL_Point world_mouse = cam.screen_to_map(SDL_Point{mx, my});
+
+    update_hover_state(hit_asset);
+
+    const bool pointer_over_selection = hovered_asset_ &&
+        (std::find(selected_assets_.begin(), selected_assets_.end(), hovered_asset_) != selected_assets_.end());
+    const bool ctrl_modifier = input.isScancodeDown(SDL_SCANCODE_LCTRL) || input.isScancodeDown(SDL_SCANCODE_RCTRL);
 
     if (input_->isDown(Input::LEFT) && !selected_assets_.empty()) {
         if (!dragging_) {
-            dragging_ = true;
-            drag_last_world_ = world_mouse;
-            begin_drag_session(world_mouse);
+            if (pointer_over_selection) {
+                dragging_ = true;
+                drag_last_world_ = world_mouse;
+                begin_drag_session(world_mouse, ctrl_modifier);
+            }
         } else {
             update_drag_session(world_mouse);
         }
@@ -545,38 +570,56 @@ void RoomEditor::handle_mouse_input(const Input& input) {
         dragging_ = false;
     }
 
-    handle_hover();
     handle_click(input);
     update_highlighted_assets();
 }
 
-void RoomEditor::handle_hover() {
-    if (!input_ || !player_ || !active_assets_) return;
+Asset* RoomEditor::hit_test_asset(SDL_Point screen_point) const {
+    if (!active_assets_ || !assets_) return nullptr;
 
-    const int mx = input_->getX();
-    const int my = input_->getY();
+    const camera& cam = assets_->getView();
+    const float scale = std::max(0.0001f, cam.get_scale());
+    const float inv_scale = 1.0f / scale;
 
-    Asset* nearest = nullptr;
-    float nearest_d2 = std::numeric_limits<float>::max();
+    Asset* best = nullptr;
+    int best_screen_y = std::numeric_limits<int>::min();
+    int best_z_index = std::numeric_limits<int>::min();
 
     for (Asset* asset : *active_assets_) {
         if (!asset || !asset->info) continue;
         const std::string& type = asset->info->type;
-        if (type == "Boundary" || type == "boundary" || type == "Texture") continue;
+        if (type == asset_types::boundary || type == asset_types::texture) continue;
 
-        SDL_Point scr = assets_->getView().map_to_screen(SDL_Point{asset->pos.x, asset->pos.y});
-        const float dx = float(mx - scr.x);
-        const float dy = float(my - scr.y);
-        const float d2 = dx * dx + dy * dy;
+        SDL_Texture* tex = asset->get_final_texture();
+        int fw = asset->cached_w;
+        int fh = asset->cached_h;
+        if ((fw == 0 || fh == 0) && tex) {
+            SDL_QueryTexture(tex, nullptr, nullptr, &fw, &fh);
+        }
+        if (fw <= 0 || fh <= 0) continue;
 
-        if (d2 < nearest_d2) {
-            nearest_d2 = d2;
-            nearest = asset;
+        const SDL_Point center = cam.map_to_screen(SDL_Point{asset->pos.x, asset->pos.y});
+        const int sw = static_cast<int>(std::lround(static_cast<double>(fw) * inv_scale));
+        const int sh = static_cast<int>(std::lround(static_cast<double>(fh) * inv_scale));
+        if (sw <= 0 || sh <= 0) continue;
+
+        SDL_Rect rect{center.x - sw / 2, center.y - sh, sw, sh};
+        if (!SDL_PointInRect(&screen_point, &rect)) continue;
+
+        if (!best || center.y > best_screen_y ||
+            (center.y == best_screen_y && asset->z_index > best_z_index)) {
+            best = asset;
+            best_screen_y = center.y;
+            best_z_index = asset->z_index;
         }
     }
 
-    if (nearest) {
-        hovered_asset_ = nearest;
+    return best;
+}
+
+void RoomEditor::update_hover_state(Asset* hit) {
+    if (hit) {
+        hovered_asset_ = hit;
         hover_miss_frames_ = 0;
     } else {
         if (++hover_miss_frames_ >= 3) {
@@ -587,7 +630,7 @@ void RoomEditor::handle_hover() {
 }
 
 void RoomEditor::handle_click(const Input& input) {
-    if (!input_ || !player_) return;
+    if (!input_) return;
 
     if (input_->wasClicked(Input::RIGHT)) {
         if (rclick_buffer_frames_ > 0) {
@@ -741,13 +784,14 @@ void RoomEditor::update_area_editor_focus() {
         Asset* focus = nullptr;
         if (!selected_assets_.empty()) focus = selected_assets_.front();
         if (!focus) focus = hovered_asset_;
-        if (!focus) focus = player_;
         if (focus) {
             cam.set_manual_zoom_override(true);
             cam.set_focus_override(SDL_Point{focus->pos.x, focus->pos.y});
+        } else {
+            focus_camera_on_room_center(false);
         }
     } else {
-        cam.clear_focus_override();
+        focus_camera_on_room_center(false);
     }
 }
 
@@ -797,11 +841,12 @@ void RoomEditor::handle_delete_shortcut(const Input& input) {
     clear_selection();
 }
 
-void RoomEditor::begin_drag_session(const SDL_Point& world_mouse) {
+void RoomEditor::begin_drag_session(const SDL_Point& world_mouse, bool ctrl_modifier) {
     drag_mode_ = DragMode::None;
     drag_states_.clear();
     drag_spawn_id_.clear();
     drag_perimeter_base_radius_ = 0.0;
+    drag_perimeter_start_offset_ = SDL_Point{0, 0};
     drag_moved_ = false;
     drag_room_center_ = get_room_center();
     drag_last_world_ = world_mouse;
@@ -820,9 +865,28 @@ void RoomEditor::begin_drag_session(const SDL_Point& world_mouse) {
     } else if (method == "Percent") {
         drag_mode_ = DragMode::Percent;
     } else if (method == "Perimeter") {
-        drag_mode_ = DragMode::Perimeter;
+        drag_mode_ = ctrl_modifier ? DragMode::PerimeterCenter : DragMode::Perimeter;
     } else {
         drag_mode_ = DragMode::Free;
+    }
+
+    if (!drag_spawn_id_.empty()) {
+        if (nlohmann::json* entry = find_spawn_entry(drag_spawn_id_)) {
+            auto read_offset = [&](const char* single_key, const char* min_key, const char* max_key) -> int {
+                if (entry->contains(single_key) && (*entry)[single_key].is_number_integer()) {
+                    return (*entry)[single_key].get<int>();
+                }
+                if (entry->contains(min_key) && (*entry)[min_key].is_number_integer()) {
+                    return (*entry)[min_key].get<int>();
+                }
+                if (entry->contains(max_key) && (*entry)[max_key].is_number_integer()) {
+                    return (*entry)[max_key].get<int>();
+                }
+                return 0;
+            };
+            drag_perimeter_start_offset_.x = read_offset("perimeter_x_offset", "perimeter_x_offset_min", "perimeter_x_offset_max");
+            drag_perimeter_start_offset_.y = read_offset("perimeter_y_offset", "perimeter_y_offset_min", "perimeter_y_offset_max");
+        }
     }
 
     drag_states_.reserve(selected_assets_.size());
@@ -873,7 +937,14 @@ void RoomEditor::begin_drag_session(const SDL_Point& world_mouse) {
         double shift_ratio = 1.0 - border_shift / 100.0;
         if (shift_ratio <= 0.0) shift_ratio = 0.0001;
         double reference = 0.0;
-        if (!drag_states_.empty()) reference = drag_states_.front().start_distance;
+        const DraggedAssetState* anchor_state = nullptr;
+        for (const auto& state : drag_states_) {
+            if (state.asset == drag_anchor_asset_) {
+                anchor_state = &state;
+                break;
+            }
+        }
+        if (anchor_state) reference = anchor_state->start_distance;
         if (reference <= 0.0) {
             double dx = static_cast<double>(primary->pos.x - drag_room_center_.x);
             double dy = static_cast<double>(primary->pos.y - drag_room_center_.y);
@@ -916,12 +987,20 @@ void RoomEditor::update_drag_session(const SDL_Point& world_mouse) {
 void RoomEditor::apply_perimeter_drag(const SDL_Point& world_mouse) {
     if (drag_states_.empty()) return;
 
-    const DraggedAssetState& ref = drag_states_.front();
-    double reference_length = ref.start_distance;
-    SDL_FPoint dir = ref.direction;
+    const DraggedAssetState* ref = nullptr;
+    for (const auto& state : drag_states_) {
+        if (state.asset == drag_anchor_asset_) {
+            ref = &state;
+            break;
+        }
+    }
+    if (!ref) ref = &drag_states_.front();
+
+    double reference_length = ref->start_distance;
+    SDL_FPoint dir = ref->direction;
     if (reference_length <= 1e-6) {
-        double dx = static_cast<double>(ref.asset->pos.x - drag_room_center_.x);
-        double dy = static_cast<double>(ref.asset->pos.y - drag_room_center_.y);
+        double dx = static_cast<double>(ref->asset->pos.x - drag_room_center_.x);
+        double dy = static_cast<double>(ref->asset->pos.y - drag_room_center_.y);
         reference_length = std::hypot(dx, dy);
         if (reference_length > 1e-6) {
             dir.x = static_cast<float>(dx / reference_length);
@@ -1007,8 +1086,30 @@ void RoomEditor::finalize_drag_session() {
                         if (ratio < 0.0) ratio = 0.0;
                         if (ratio > 1.0) ratio = 1.0;
                         double border_shift = (1.0 - ratio) * 100.0;
-                        update_perimeter_json(*entry, border_shift);
+                        update_perimeter_border_json(*entry, border_shift);
                         json_modified = true;
+                    }
+                    break;
+                case DragMode::PerimeterCenter:
+                    if (drag_moved_) {
+                        SDL_Point delta{0, 0};
+                        const DraggedAssetState* anchor_state = nullptr;
+                        for (const auto& state : drag_states_) {
+                            if (state.asset == drag_anchor_asset_) {
+                                anchor_state = &state;
+                                break;
+                            }
+                        }
+                        if (anchor_state && anchor_state->asset) {
+                            delta.x = anchor_state->asset->pos.x - anchor_state->start_pos.x;
+                            delta.y = anchor_state->asset->pos.y - anchor_state->start_pos.y;
+                        }
+                        if (delta.x != 0 || delta.y != 0) {
+                            SDL_Point new_offset{drag_perimeter_start_offset_.x + delta.x,
+                                                 drag_perimeter_start_offset_.y + delta.y};
+                            update_perimeter_center_json(*entry, new_offset);
+                            json_modified = true;
+                        }
                     }
                     break;
                 default:
@@ -1033,6 +1134,7 @@ void RoomEditor::reset_drag_state() {
     drag_last_world_ = SDL_Point{0, 0};
     drag_room_center_ = SDL_Point{0, 0};
     drag_perimeter_base_radius_ = 0.0;
+    drag_perimeter_start_offset_ = SDL_Point{0, 0};
     drag_moved_ = false;
     drag_spawn_id_.clear();
 }
@@ -1133,11 +1235,10 @@ void RoomEditor::integrate_spawned_assets(std::vector<std::unique_ptr<Asset>>& s
         raw->finalize_setup();
         assets_->owned_assets.emplace_back(std::move(uptr));
         assets_->all.push_back(raw);
-        assets_->activeManager.activate(raw);
+        assets_->active_manager().activate(raw);
     }
-    assets_->activeManager.updateClosestAssets(assets_->player, 3);
-    assets_->active_assets = assets_->activeManager.getActive();
-    assets_->closest_assets = assets_->activeManager.getClosest();
+    assets_->refresh_active_asset_lists();
+    assets_->update_closest_assets(assets_->player, 3);
     spawned.clear();
 }
 
@@ -1169,17 +1270,17 @@ void RoomEditor::respawn_spawn_group(const nlohmann::json& entry) {
     root["spawn_groups"].push_back(entry);
     std::vector<nlohmann::json> sources{root};
     std::vector<std::string> paths;
-    AssetSpawnPlanner planner(sources, *current_room_->room_area, assets_->library_, paths);
+    AssetSpawnPlanner planner(sources, *current_room_->room_area, assets_->library(), paths);
     const auto& queue = planner.get_spawn_queue();
     if (queue.empty()) return;
 
-    std::unordered_map<std::string, std::shared_ptr<AssetInfo>> asset_info_library = assets_->library_.all();
+    std::unordered_map<std::string, std::shared_ptr<AssetInfo>> asset_info_library = assets_->library().all();
     std::vector<std::unique_ptr<Asset>> spawned;
     std::vector<Area> exclusion;
     std::mt19937 rng(std::random_device{}());
     Check checker(false);
     SpawnLogger logger("", "");
-    SpawnContext ctx(rng, checker, logger, exclusion, asset_info_library, spawned, &assets_->library_, grid ? grid.get() : nullptr);
+    SpawnContext ctx(rng, checker, logger, exclusion, asset_info_library, spawned, &assets_->library(), grid ? grid.get() : nullptr);
     ExactSpawner exact;
     CenterSpawner center;
     RandomSpawner random;
@@ -1232,12 +1333,12 @@ void RoomEditor::regenerate_current_room() {
     int height = std::max(1, dist_h(rng));
 
     int map_radius = 0;
+    nlohmann::json map_info_json;
     if (!current_room_->map_path.empty()) {
         std::ifstream map_info(current_room_->map_path + "/map_info.json");
         if (map_info.is_open()) {
-            nlohmann::json info;
-            map_info >> info;
-            map_radius = info.value("map_radius", 0);
+            map_info >> map_info_json;
+            map_radius = map_info_json.value("map_radius", 0);
         }
     }
     int map_w = map_radius > 0 ? map_radius * 2 : std::max(width * 2, 1);
@@ -1271,11 +1372,7 @@ void RoomEditor::regenerate_current_room() {
         if (!asset->spawn_id.empty() && spawn_ids.count(asset->spawn_id)) {
             remove = true;
         } else if (asset->info) {
-            std::string type = asset->info->type;
-            std::string lowered;
-            lowered.reserve(type.size());
-            for (char ch : type) lowered.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(ch))));
-            if (lowered == "boundary") {
+            if (asset->info->type == asset_types::boundary) {
                 SDL_Point pos{asset->pos.x, asset->pos.y};
                 bool inside_old = old_area_copy ? old_area_copy->contains_point(pos) : false;
                 bool inside_new = new_area.contains_point(pos);
@@ -1301,16 +1398,16 @@ void RoomEditor::regenerate_current_room() {
     std::vector<nlohmann::json> planner_sources{room_json};
     std::vector<std::string> planner_paths;
     if (!current_room_->json_path.empty()) planner_paths.push_back(current_room_->json_path);
-    current_room_->planner = std::make_unique<AssetSpawnPlanner>(planner_sources, *current_room_->room_area, assets_->library_, planner_paths);
+    current_room_->planner = std::make_unique<AssetSpawnPlanner>(planner_sources, *current_room_->room_area, assets_->library(), planner_paths);
 
     auto grid = build_room_grid(std::string{});
-    std::unordered_map<std::string, std::shared_ptr<AssetInfo>> asset_info_library = assets_->library_.all();
+    std::unordered_map<std::string, std::shared_ptr<AssetInfo>> asset_info_library = assets_->library().all();
     std::vector<std::unique_ptr<Asset>> spawned;
     std::vector<Area> exclusion;
     Check checker(false);
     SpawnLogger logger("", "");
     std::mt19937 regen_rng(std::random_device{}());
-    SpawnContext ctx(regen_rng, checker, logger, exclusion, asset_info_library, spawned, &assets_->library_, grid ? grid.get() : nullptr);
+    SpawnContext ctx(regen_rng, checker, logger, exclusion, asset_info_library, spawned, &assets_->library(), grid ? grid.get() : nullptr);
     ExactSpawner exact;
     CenterSpawner center_spawn;
     RandomSpawner random;
@@ -1337,19 +1434,15 @@ void RoomEditor::regenerate_current_room() {
     if (old_area_copy && new_area_size < old_area_size) {
         std::vector<std::pair<std::string, int>> boundary_options;
         int boundary_spacing = 100;
-        if (!current_room_->map_path.empty()) {
-            std::ifstream boundary_file(current_room_->map_path + "/map_boundary.json");
-            if (boundary_file.is_open()) {
-                nlohmann::json boundary_json;
-                boundary_file >> boundary_json;
-                if (boundary_json.contains("batch_assets")) {
-                    const auto& batch = boundary_json["batch_assets"];
-                    boundary_spacing = (batch.value("grid_spacing_min", boundary_spacing) + batch.value("grid_spacing_max", boundary_spacing)) / 2;
-                    for (const auto& asset_entry : batch.value("batch_assets", std::vector<nlohmann::json>{})) {
-                        if (asset_entry.contains("name") && asset_entry["name"].is_string()) {
-                            int weight = asset_entry.value("percent", 1);
-                            boundary_options.emplace_back(asset_entry["name"].get<std::string>(), weight);
-                        }
+        if (map_info_json.contains("map_boundary_data") && map_info_json["map_boundary_data"].is_object()) {
+            const auto& boundary_json = map_info_json["map_boundary_data"];
+            if (boundary_json.contains("batch_assets")) {
+                const auto& batch = boundary_json["batch_assets"];
+                boundary_spacing = (batch.value("grid_spacing_min", boundary_spacing) + batch.value("grid_spacing_max", boundary_spacing)) / 2;
+                for (const auto& asset_entry : batch.value("batch_assets", std::vector<nlohmann::json>{})) {
+                    if (asset_entry.contains("name") && asset_entry["name"].is_string()) {
+                        int weight = asset_entry.value("percent", 1);
+                        boundary_options.emplace_back(asset_entry["name"].get<std::string>(), weight);
                     }
                 }
             }
@@ -1372,11 +1465,11 @@ void RoomEditor::regenerate_current_room() {
                     if (current_room_->room_area->contains_point(pt->pos)) continue;
                     int idx = pick(boundary_rng);
                     const std::string& asset_name = boundary_options[idx].first;
-                    auto info = assets_->library_.get(asset_name);
+                    auto info = assets_->library().get(asset_name);
                     if (!info) continue;
                     std::string spawn_id = generate_room_spawn_id();
                     Area spawn_area(asset_name, pt->pos, 1, 1, "Point", 1, 1, 1);
-                    auto asset = std::make_unique<Asset>(info, spawn_area, pt->pos, 0, nullptr, spawn_id, std::string("Boundary"));
+                    auto asset = std::make_unique<Asset>(info, spawn_area, pt->pos, 0, nullptr, spawn_id, std::string(asset_types::boundary));
                     boundary_spawned.push_back(std::move(asset));
                 }
                 integrate_spawned_assets(boundary_spawned);
@@ -1424,11 +1517,20 @@ void RoomEditor::update_percent_json(nlohmann::json& entry, const Asset& asset, 
     if (entry.contains("percent_y_max")) entry.erase("percent_y_max");
 }
 
-void RoomEditor::update_perimeter_json(nlohmann::json& entry, double border_shift) {
+void RoomEditor::update_perimeter_border_json(nlohmann::json& entry, double border_shift) {
     int value = static_cast<int>(std::lround(border_shift));
     value = std::max(0, std::min(100, value));
     entry["percentage_shift_from_center"] = value;
     if (entry.contains("border_shift")) entry.erase("border_shift");
     if (entry.contains("border_shift_min")) entry.erase("border_shift_min");
     if (entry.contains("border_shift_max")) entry.erase("border_shift_max");
+}
+
+void RoomEditor::update_perimeter_center_json(nlohmann::json& entry, SDL_Point offset) {
+    entry["perimeter_x_offset"] = offset.x;
+    entry["perimeter_x_offset_min"] = offset.x;
+    entry["perimeter_x_offset_max"] = offset.x;
+    entry["perimeter_y_offset"] = offset.y;
+    entry["perimeter_y_offset_min"] = offset.y;
+    entry["perimeter_y_offset_max"] = offset.y;
 }

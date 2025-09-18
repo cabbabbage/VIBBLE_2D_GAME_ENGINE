@@ -66,9 +66,11 @@ SDL_Texture* GenerateLight::generate(SDL_Renderer* renderer,
 	}
 	Uint32* pixels = static_cast<Uint32*>(surf->pixels);
 	SDL_PixelFormat* fmt = surf->format;
-        float falloff_ratio = 1.0f - falloff / 100.0f;
-        float white_core_ratio  = falloff_ratio * falloff_ratio;
-        float white_core_radius = radius * white_core_ratio;
+        float falloff_norm = std::clamp(static_cast<float>(falloff) / 100.0f, 0.0f, 1.0f);
+        float falloff_ratio = 1.0f - falloff_norm;
+        float fade_exponent = 0.6f + 3.4f * falloff_norm;
+        float white_core_ratio  = 0.2f + falloff_ratio * 0.6f;
+        float white_core_radius = static_cast<float>(radius) * white_core_ratio;
 	std::mt19937 rng(std::random_device{}());
 	std::uniform_real_distribution<float> angle_dist(0.0f, 2.0f * float(M_PI));
 	std::uniform_real_distribution<float> spread_dist(0.2f, 0.6f);
@@ -109,7 +111,8 @@ SDL_Texture* GenerateLight::generate(SDL_Renderer* renderer,
 					}
 			}
 			ray_boost = std::clamp(ray_boost, 1.0f, 1.1f);
-                        float alpha_ratio = std::pow(1.0f - (dist * inv_radius), 1.4f);
+                        float base_gradient = std::max(0.0f, 1.0f - (dist * inv_radius));
+                        float alpha_ratio  = std::pow(base_gradient, fade_exponent);
 			alpha_ratio = std::clamp(alpha_ratio * ray_boost, 0.0f, 1.0f);
 			Uint8 alpha = static_cast<Uint8>(std::min(255.0f, intensity * alpha_ratio * 1.6f));
 			SDL_Color final_color;

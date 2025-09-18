@@ -1,0 +1,209 @@
+#include "map_mode_ui.hpp"
+
+#include "MapLightPanel.hpp"
+#include "map_assets_panel.hpp"
+#include "trail_editor_panel.hpp"
+#include "room/room.hpp"
+#include "core/AssetsManager.hpp"
+#include "utils/input.hpp"
+
+#include <SDL.h>
+#include <fstream>
+#include <iostream>
+#include <nlohmann/json.hpp>
+
+namespace {
+constexpr int kDefaultPanelX = 48;
+constexpr int kDefaultPanelY = 48;
+}
+
+MapModeUI::MapModeUI(Assets* assets)
+    : assets_(assets) {}
+
+MapModeUI::~MapModeUI() = default;
+
+void MapModeUI::set_map_context(nlohmann::json* map_info, const std::string& map_path) {
+    map_info_ = map_info;
+    map_path_ = map_path;
+    sync_panel_map_info();
+}
+
+void MapModeUI::set_screen_dimensions(int w, int h) {
+    screen_w_ = w;
+    screen_h_ = h;
+    ensure_panels();
+    SDL_Rect bounds{0, 0, screen_w_, screen_h_};
+    if (light_panel_) light_panel_->set_work_area(bounds);
+    if (assets_panel_) assets_panel_->set_work_area(bounds);
+    if (trail_panel_) trail_panel_->set_work_area(bounds);
+}
+
+void MapModeUI::ensure_panels() {
+    if (!light_panel_) {
+        light_panel_ = std::make_unique<MapLightPanel>(kDefaultPanelX, kDefaultPanelY);
+        light_panel_->close();
+    }
+    if (!assets_panel_) {
+        assets_panel_ = std::make_unique<MapAssetsPanel>(kDefaultPanelX + 32, kDefaultPanelY + 32);
+        assets_panel_->close();
+    }
+    if (!trail_panel_) {
+        trail_panel_ = std::make_unique<TrailEditorPanel>(kDefaultPanelX + 64, kDefaultPanelY + 64);
+        trail_panel_->set_on_save([this]() { return save_map_info_to_disk(); });
+        trail_panel_->close();
+    }
+}
+
+void MapModeUI::sync_panel_map_info() {
+    if (!map_info_) return;
+    ensure_panels();
+    if (light_panel_) {
+        light_panel_->set_map_info(map_info_, [this]() { save_map_info_to_disk(); });
+    }
+    if (assets_panel_) {
+        assets_panel_->set_map_info(map_info_, map_path_);
+        assets_panel_->set_on_save([this]() { return save_map_info_to_disk(); });
+    }
+    if (trail_panel_) {
+        trail_panel_->set_on_save([this]() { return save_map_info_to_disk(); });
+    }
+}
+
+void MapModeUI::update(const Input& input) {
+    ensure_panels();
+    if (light_panel_ && light_panel_->is_visible()) {
+        light_panel_->update(input);
+    }
+    if (assets_panel_ && assets_panel_->is_visible()) {
+        assets_panel_->update(input, screen_w_, screen_h_);
+    }
+    if (trail_panel_ && trail_panel_->is_visible()) {
+        trail_panel_->update(input, screen_w_, screen_h_);
+    }
+}
+
+bool MapModeUI::handle_event(const SDL_Event& e) {
+    ensure_panels();
+    bool used = false;
+    if (assets_panel_ && assets_panel_->is_visible()) {
+        used |= assets_panel_->handle_event(e);
+    }
+    if (light_panel_ && light_panel_->is_visible()) {
+        used |= light_panel_->handle_event(e);
+    }
+    if (trail_panel_ && trail_panel_->is_visible()) {
+        used |= trail_panel_->handle_event(e);
+    }
+    return used;
+}
+
+void MapModeUI::render(SDL_Renderer* renderer) const {
+    if (assets_panel_ && assets_panel_->is_visible()) {
+        assets_panel_->render(renderer);
+    }
+    if (light_panel_ && light_panel_->is_visible()) {
+        light_panel_->render(renderer);
+    }
+    if (trail_panel_ && trail_panel_->is_visible()) {
+        trail_panel_->render(renderer);
+    }
+}
+
+void MapModeUI::open_assets_panel() {
+    ensure_panels();
+    if (light_panel_) light_panel_->close();
+    if (trail_panel_) trail_panel_->close();
+    if (assets_panel_) {
+        assets_panel_->open();
+    }
+}
+
+void MapModeUI::toggle_light_panel() {
+    ensure_panels();
+    if (!light_panel_) return;
+    if (light_panel_->is_visible()) {
+        light_panel_->close();
+    } else {
+        if (assets_panel_) assets_panel_->close();
+        if (trail_panel_) trail_panel_->close();
+        light_panel_->open();
+    }
+}
+
+void MapModeUI::open_trail_editor(Room* trail_room) {
+    ensure_panels();
+    if (!trail_panel_) return;
+
+    if (assets_panel_) assets_panel_->close();
+    if (light_panel_) light_panel_->close();
+
+    nlohmann::json* entry = nullptr;
+    if (map_info_) {
+        if (!map_info_->contains("trails_data") || !(*map_info_)["trails_data"].is_object()) {
+            (*map_info_)["trails_data"] = nlohmann::json::object();
+        }
+        nlohmann::json& trails = (*map_info_)["trails_data"];
+        std::string key = trail_room && !trail_room->room_name.empty() ? trail_room->room_name : std::string("trail");
+        entry = &trails[key];
+        if (!entry->is_object()) {
+            if (trail_room) {
+                *entry = trail_room->assets_data();
+            } else {
+                *entry = nlohmann::json::object();
+            }
+        }
+    }
+
+    std::string id = trail_room && !trail_room->room_name.empty() ? trail_room->room_name : std::string("trail");
+    trail_panel_->open(id, entry, trail_room);
+}
+
+void MapModeUI::close_all_panels() {
+    if (light_panel_) light_panel_->close();
+    if (assets_panel_) assets_panel_->close();
+    if (trail_panel_) trail_panel_->close();
+}
+
+bool MapModeUI::is_point_inside(int x, int y) const {
+    if (light_panel_ && light_panel_->is_visible() && light_panel_->is_point_inside(x, y)) {
+        return true;
+    }
+    if (assets_panel_ && assets_panel_->is_visible() && assets_panel_->is_point_inside(x, y)) {
+        return true;
+    }
+    if (trail_panel_ && trail_panel_->is_visible() && trail_panel_->is_point_inside(x, y)) {
+        return true;
+    }
+    return false;
+}
+
+bool MapModeUI::is_any_panel_visible() const {
+    return (light_panel_ && light_panel_->is_visible()) ||
+           (assets_panel_ && assets_panel_->is_visible()) ||
+           (trail_panel_ && trail_panel_->is_visible());
+}
+
+bool MapModeUI::save_map_info_to_disk() const {
+    if (!map_info_) return false;
+    std::string path = map_path_.empty() ? std::string{} : (map_path_ + "/map_info.json");
+    if (path.empty()) {
+        if (assets_) {
+            path = assets_->map_info_path();
+        }
+    }
+    if (path.empty()) return false;
+
+    std::ofstream out(path);
+    if (!out) {
+        std::cerr << "[MapModeUI] Failed to open " << path << " for writing\n";
+        return false;
+    }
+    try {
+        out << map_info_->dump(2);
+        return true;
+    } catch (const std::exception& ex) {
+        std::cerr << "[MapModeUI] Failed to serialize map_info.json: " << ex.what() << "\n";
+        return false;
+    }
+}
+

@@ -3,6 +3,7 @@
 #include <SDL.h>
 #include <algorithm>
 #include <vector>
+#include <nlohmann/json.hpp>
 #include "utils/area.hpp"
 
 class Asset;
@@ -11,7 +12,34 @@ class CurrentRoomFinder;
 
 class camera {
 
-	public:
+        public:
+    struct RealismSettings {
+        float parallax_vertical_strength = 20.0f;
+        float parallax_horizontal_strength = 0.0f;
+        float parallax_zoom_influence = 1.0f;
+        float perspective_angle_degrees = 90.0f;
+        float perspective_zoom_influence = 0.35f;
+        float squash_position_strength = 1.0f;
+        float squash_height_strength = 1.0f;
+        float squash_overall_strength = 0.45f;
+        float squash_zoom_influence = 1.0f;
+        float squash_curve_exponent = 1.35f;
+        float stretch_top_strength = 0.55f;
+        float max_squash_ratio = 0.6f;
+        float render_distance_factor = 1.0f;
+        float distance_scale_strength = 0.2f;
+        float distance_scale_exponent = 1.0f;
+        float distance_scale_offset = 0.0f;
+        float distance_scale_min = 0.6f;
+        float distance_scale_max = 1.4f;
+    };
+
+    struct RenderEffects {
+        SDL_Point screen_position{0, 0};
+        float vertical_scale = 1.0f;
+        float distance_scale = 1.0f;
+    };
+
     // Construct the camera with a starting zoom Area (map-space).
     // The starting area is adjusted to match the screen aspect ratio (cover).
     camera(int screen_width, int screen_height, const Area& starting_zoom);
@@ -45,9 +73,26 @@ class camera {
     SDL_Point map_to_screen(SDL_Point world, float parallax_x = 0.0f, float parallax_y = 0.0f) const;
     SDL_Point screen_to_map(SDL_Point screen, float parallax_x = 0.0f, float parallax_y = 0.0f) const;
 
+    // Asset rendering helpers
+    RenderEffects compute_render_effects(SDL_Point world,
+                                         float asset_screen_height,
+                                         float reference_screen_height) const;
+
     // Parallax global toggle (dev mode convenience)
     void set_parallax_enabled(bool e) { parallax_enabled_ = e; }
     bool parallax_enabled() const { return parallax_enabled_; }
+
+    void set_realism_enabled(bool enabled) { realism_enabled_ = enabled; }
+    bool realism_enabled() const { return realism_enabled_; }
+
+    void set_realism_settings(const RealismSettings& settings) { settings_ = settings; }
+    RealismSettings& realism_settings() { return settings_; }
+    const RealismSettings& realism_settings() const { return settings_; }
+
+    void apply_camera_settings(const nlohmann::json& data);
+    nlohmann::json camera_settings_to_json() const;
+
+    int get_render_distance_world_margin() const;
 
     // Area-first helpers
     Area     get_camera_area() const { return current_view_; }
@@ -108,4 +153,6 @@ class camera {
 
     // Global parallax toggle
     bool       parallax_enabled_ = true;
+    bool       realism_enabled_ = true;
+    RealismSettings settings_{};
 };

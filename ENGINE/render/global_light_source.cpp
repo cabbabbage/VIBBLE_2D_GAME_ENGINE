@@ -26,54 +26,103 @@ pos_{0,0},
 frame_counter_(0),
 light_brightness(255)
 {
-	radius_          = float(screen_width) * 3.0f;
-	intensity_       = 255.0f;
-	mult_            = 0.4f;
-	fall_off_        = 1.0f;
-	orbit_radius     = screen_width / 4;
-	update_interval_ = 2;
+        set_defaults(screen_width, fallback_base_color);
+        if (!load_from_map_light(map_path)) {
+                build_texture();
+                set_light_brightness();
+        }
+}
 
-	std::ifstream in(map_path + "/map_light.json");
-	if (!in.is_open()) {
-		throw std::runtime_error("[MapLight] Failed to open map_light.json");
-	}
-	json j; in >> j;
+void Global_Light_Source::set_defaults(int screen_width, SDL_Color fallback_base_color) {
+        radius_          = float(screen_width) * 3.0f;
+        intensity_       = 255.0f;
+        mult_            = 0.4f;
+        fall_off_        = 1.0f;
+        orbit_radius     = std::max(1, screen_width / 4);
+        update_interval_ = 2;
+        base_color_      = fallback_base_color;
+        current_color_   = fallback_base_color;
+        key_colors_.clear();
+        key_colors_.push_back({0.0f, fallback_base_color});
+}
 
-	for (auto& key : {"radius","intensity","orbit_radius","update_interval","mult","fall_off","base_color","keys"}) {
-		if (!j.contains(key))
-		throw std::runtime_error(std::string("[MapLight] Missing field: ") + key);
-	}
+bool Global_Light_Source::load_from_map_light(const std::string& map_path) {
+        if (map_path.empty()) {
+                return false;
+        }
+        std::ifstream in(map_path + "/map_light.json");
+        if (!in.is_open()) {
+                std::cerr << "[MapLight] Failed to open map_light.json in " << map_path << "\n";
+                return false;
+        }
+        json j;
+        try {
+                in >> j;
+        } catch (const std::exception& e) {
+                std::cerr << "[MapLight] Failed to parse map_light.json: " << e.what() << "\n";
+                return false;
+        }
+        apply_config(j);
+        return true;
+}
 
-	radius_          = j["radius"].get<float>();
-	intensity_       = j["intensity"].get<float>();
-	orbit_radius     = j["orbit_radius"].get<int>();
-	update_interval_ = j["update_interval"].get<int>();
-	mult_            = j["mult"].get<float>();
-	fall_off_        = j["fall_off"].get<float>();
+void Global_Light_Source::apply_config(const json& data) {
+        if (!data.is_object()) {
+                return;
+        }
 
-	auto& bc = j["base_color"];
-	if (!bc.is_array() || bc.size() < 3)
-	throw std::runtime_error("[MapLight] Invalid base_color");
-	base_color_.r = bc[0]; base_color_.g = bc[1]; base_color_.b = bc[2];
-	if (bc.size() > 3)
-	base_color_.a = static_cast<Uint8>(bc[3].get<int>());
-	else
-	base_color_.a = 255;
+        radius_        = data.value("radius", radius_);
+        intensity_     = data.value("intensity", intensity_);
+        orbit_radius   = data.value("orbit_radius", orbit_radius);
+        update_interval_= std::max(1, data.value("update_interval", update_interval_));
+        mult_          = std::clamp(data.value("mult", mult_), 0.0f, 1.0f);
+        fall_off_      = data.value("fall_off", fall_off_);
 
-	current_color_ = base_color_;
-	key_colors_.clear();
-	for (auto& entry : j["keys"]) {
-		if (!entry.is_array() || entry.size()!=2)
-		throw std::runtime_error("[MapLight] Invalid key entry");
-		float deg = entry[0].get<float>();
-		auto& col = entry[1];
-		if (!col.is_array() || col.size()!=4)
-		throw std::runtime_error("[MapLight] Invalid key color");
-		SDL_Color c{ Uint8(col[0]), Uint8(col[1]), Uint8(col[2]), Uint8(col[3]) };
-		key_colors_.push_back({deg,c});
-	}
+        const auto bc_it = data.find("base_color");
+        if (bc_it != data.end() && bc_it->is_array() && bc_it->size() >= 3) {
+                base_color_.r = static_cast<Uint8>(std::clamp((*bc_it)[0].get<int>(), 0, 255));
+                base_color_.g = static_cast<Uint8>(std::clamp((*bc_it)[1].get<int>(), 0, 255));
+                base_color_.b = static_cast<Uint8>(std::clamp((*bc_it)[2].get<int>(), 0, 255));
+                if (bc_it->size() >= 4) {
+                        base_color_.a = static_cast<Uint8>(std::clamp((*bc_it)[3].get<int>(), 0, 255));
+                } else {
+                        base_color_.a = 255;
+                }
+        }
 
-	build_texture();
+        key_colors_.clear();
+        const auto keys_it = data.find("keys");
+        if (keys_it != data.end() && keys_it->is_array()) {
+                for (const auto& entry : *keys_it) {
+                        if (!entry.is_array() || entry.size() != 2) continue;
+                        float deg = 0.0f;
+                        try {
+                                deg = static_cast<float>(entry[0].get<double>());
+                        } catch (...) {
+                                continue;
+                        }
+                        const auto& col = entry[1];
+                        if (!col.is_array() || col.size() < 4) continue;
+                        SDL_Color c{
+                                static_cast<Uint8>(std::clamp(col[0].get<int>(), 0, 255)),
+                                static_cast<Uint8>(std::clamp(col[1].get<int>(), 0, 255)),
+                                static_cast<Uint8>(std::clamp(col[2].get<int>(), 0, 255)),
+                                static_cast<Uint8>(std::clamp(col[3].get<int>(), 0, 255))
+                        };
+                        key_colors_.push_back({deg, c});
+                }
+        }
+        if (key_colors_.empty()) {
+                key_colors_.push_back({0.0f, base_color_});
+        } else {
+                std::sort(key_colors_.begin(), key_colors_.end(), [](const KeyEntry& a, const KeyEntry& b) {
+                        return a.degree < b.degree;
+                });
+        }
+
+        current_color_ = base_color_;
+        build_texture();
+        set_light_brightness();
 }
 
 void Global_Light_Source::update() {

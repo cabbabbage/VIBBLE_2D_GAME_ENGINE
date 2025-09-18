@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <unordered_map>
 #include <functional>
+#include <thread>
+#include <cstdlib>
 #include "utils/input.hpp"
 #include "asset/asset_library.hpp"
 #include "asset/asset_info.hpp"
@@ -12,6 +14,7 @@
 #include <iostream>
 #include <fstream>
 #include <filesystem>
+#include <SDL_ttf.h>
 #include "core/AssetsManager.hpp"
 #include "DockableCollapsible.hpp"
 #include "widgets.hpp"
@@ -21,6 +24,22 @@ namespace {
     const SDL_Color kTileHL  = dm::rgba(200,200,60,100);
     const SDL_Color kTileBd  = DMStyles::Border();
     namespace fs = std::filesystem;
+
+    TTF_Font* load_font(int size) {
+        static std::unordered_map<int, TTF_Font*> cache;
+        auto it = cache.find(size);
+        if (it != cache.end()) return it->second;
+
+        const DMLabelStyle& label = DMStyles::Label();
+        TTF_Font* font = TTF_OpenFont(label.font_path.c_str(), size);
+        if (!font) {
+            std::cerr << "[AssetLibraryUI] Failed to load font '" << label.font_path
+                      << "' size " << size << ": " << TTF_GetError() << "\n";
+            return nullptr;
+        }
+        cache.emplace(size, font);
+        return font;
+    }
 
     bool create_new_asset_on_disk(const std::string& name) {
         if (name.empty()) return false;
@@ -37,18 +56,35 @@ namespace {
             }
             fs::create_directory(dir);
 
-            std::ofstream out(dir / "info.json");
+            fs::path info_path = dir / "info.json";
+            std::ofstream out(info_path);
             if (!out.is_open()) {
                 std::cerr << "[AssetLibraryUI] Failed to create info.json for '" << name << "'\n";
                 return false;
             }
             out << "{\n"
-                << "    \"asset_name\": \"" << name << "\",\n"
-                << "    \"asset_type\": \"Object\"\n"
+                << "  \"asset_name\": \"" << name << "\",\n"
+                << "  \"asset_type\": \"Object\",\n"
+                << "  \"animations\": {},\n"
+                << "  \"start\": \"\"\n"
                 << "}\n";
             out.close();
 
             std::cout << "[AssetLibraryUI] Created new asset '" << name << "' at " << dir << "\n";
+
+            const std::string info_arg = info_path.lexically_normal().generic_string();
+            std::thread launcher([info_arg]() {
+                try {
+                    std::string cmd = std::string("python scripts/animation_ui.py \"") + info_arg + "\"";
+                    int rc = std::system(cmd.c_str());
+                    if (rc != 0) {
+                        std::cerr << "[AssetLibraryUI] animation_ui.py exited with code " << rc << "\n";
+                    }
+                } catch (const std::exception& ex) {
+                    std::cerr << "[AssetLibraryUI] Failed to launch animation_ui.py: " << ex.what() << "\n";
+                }
+            });
+            launcher.detach();
             return true;
         } catch (const std::exception& e) {
             std::cerr << "[AssetLibraryUI] Exception creating asset '" << name
@@ -65,18 +101,24 @@ struct AssetLibraryUI::AssetTileWidget : public Widget {
     bool hovered = false;
     bool pressed = false;
     bool started_drag = false;
+    bool right_pressed = false;
     int  press_x = 0, press_y = 0;
     std::function<void(const std::shared_ptr<AssetInfo>&)> on_click;
+    std::function<void(const std::shared_ptr<AssetInfo>&)> on_right_click;
     std::function<void(const std::shared_ptr<AssetInfo>&)> on_begin_drag;
 
     explicit AssetTileWidget(std::shared_ptr<AssetInfo> i,
                              std::function<void(const std::shared_ptr<AssetInfo>&)> click,
+                             std::function<void(const std::shared_ptr<AssetInfo>&)> right_click,
                              std::function<void(const std::shared_ptr<AssetInfo>&)> begin_drag)
-        : info(std::move(i)), on_click(std::move(click)), on_begin_drag(std::move(begin_drag)) {}
+        : info(std::move(i)),
+          on_click(std::move(click)),
+          on_right_click(std::move(right_click)),
+          on_begin_drag(std::move(begin_drag)) {}
 
     void set_rect(const SDL_Rect& r) override { rect_ = r; }
     const SDL_Rect& rect() const override { return rect_; }
-    int height_for_width(int /*w*/) const override { return 160; }
+    int height_for_width(int /*w*/) const override { return 200; }
 
     bool handle_event(const SDL_Event& e) override {
         if (e.type == SDL_MOUSEMOTION) {
@@ -91,19 +133,38 @@ struct AssetLibraryUI::AssetTileWidget : public Widget {
                     return true;
                 }
             }
-        } else if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
+        } else if (e.type == SDL_MOUSEBUTTONDOWN) {
             SDL_Point p{ e.button.x, e.button.y };
-            if (SDL_PointInRect(&p, &rect_)) { pressed = true; press_x = p.x; press_y = p.y; return true; }
-        } else if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
+            if (!SDL_PointInRect(&p, &rect_)) return false;
+            if (e.button.button == SDL_BUTTON_LEFT) {
+                pressed = true;
+                press_x = p.x;
+                press_y = p.y;
+                return true;
+            }
+            if (e.button.button == SDL_BUTTON_RIGHT) {
+                right_pressed = true;
+                return true;
+            }
+        } else if (e.type == SDL_MOUSEBUTTONUP) {
             SDL_Point p{ e.button.x, e.button.y };
             bool inside = SDL_PointInRect(&p, &rect_);
-            bool was = pressed;
-            bool dragged = started_drag;
-            pressed = false;
-            started_drag = false;
-            if (inside && was && !dragged) {
-                if (on_click) on_click(info);
-                return true;
+            if (e.button.button == SDL_BUTTON_LEFT) {
+                bool was = pressed;
+                bool dragged = started_drag;
+                pressed = false;
+                started_drag = false;
+                if (inside && was && !dragged) {
+                    if (on_click) on_click(info);
+                    return true;
+                }
+            } else if (e.button.button == SDL_BUTTON_RIGHT) {
+                bool was = right_pressed;
+                right_pressed = false;
+                if (inside && was) {
+                    if (on_right_click) on_right_click(info);
+                    return true;
+                }
             }
         }
         return false;
@@ -113,7 +174,34 @@ struct AssetLibraryUI::AssetTileWidget : public Widget {
         SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
         SDL_SetRenderDrawColor(r, kTileBG.r, kTileBG.g, kTileBG.b, kTileBG.a);
         SDL_RenderFillRect(r, &rect_);
+        const int pad = 8;
+        const int label_h = 24;
+        SDL_Rect label_rect{ rect_.x + pad, rect_.y + pad, rect_.w - 2 * pad, label_h };
+
         const AssetInfo* in = info.get();
+        std::string label_text = (in && !in->name.empty()) ? in->name : "(Unnamed)";
+        TTF_Font* label_font = load_font(15);
+        std::string render_label = label_text;
+        if (label_font) {
+            int tw = 0;
+            int th = 0;
+            const std::string ellipsis = "...";
+            if (TTF_SizeUTF8(label_font, render_label.c_str(), &tw, &th) == 0 && tw > label_rect.w) {
+                std::string base = label_text;
+                while (!base.empty()) {
+                    base.pop_back();
+                    std::string candidate = base + ellipsis;
+                    if (TTF_SizeUTF8(label_font, candidate.c_str(), &tw, &th) == 0 && tw <= label_rect.w) {
+                        render_label = std::move(candidate);
+                        break;
+                    }
+                }
+                if (base.empty()) {
+                    render_label = ellipsis;
+                }
+            }
+        }
+
         if (in) {
             SDL_Texture* tex = nullptr;
             auto it = in->animations.find("default");
@@ -123,12 +211,23 @@ struct AssetLibraryUI::AssetTileWidget : public Widget {
             if (tex) {
                 int tw=0, th=0; SDL_QueryTexture(tex, nullptr, nullptr, &tw, &th);
                 if (tw > 0 && th > 0) {
-                    int pad = 6;
-                    float scale = std::min( (rect_.w - 2*pad) / float(tw), (rect_.h - 2*pad) / float(th) );
-                    int dw = int(tw * scale);
-                    int dh = int(th * scale);
-                    SDL_Rect dst{ rect_.x + (rect_.w - dw)/2, rect_.y + (rect_.h - dh)/2, dw, dh };
-                    SDL_RenderCopy(r, tex, nullptr, &dst);
+                    SDL_Rect image_rect{ rect_.x + pad,
+                                         label_rect.y + label_rect.h + pad,
+                                         rect_.w - 2 * pad,
+                                         rect_.h - (label_rect.h + 3 * pad) };
+                    image_rect.h = std::max(image_rect.h, 0);
+                    if (image_rect.w > 0 && image_rect.h > 0) {
+                        float scale = std::min(image_rect.w / float(tw), image_rect.h / float(th));
+                        if (scale > 0.0f) {
+                            int dw = int(tw * scale);
+                            int dh = int(th * scale);
+                            SDL_Rect dst{ image_rect.x + (image_rect.w - dw) / 2,
+                                          image_rect.y + (image_rect.h - dh) / 2,
+                                          dw,
+                                          dh };
+                            SDL_RenderCopy(r, tex, nullptr, &dst);
+                        }
+                    }
                 }
             }
         }
@@ -140,6 +239,21 @@ struct AssetLibraryUI::AssetTileWidget : public Widget {
         SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
         SDL_SetRenderDrawColor(r, kTileBd.r, kTileBd.g, kTileBd.b, kTileBd.a);
         SDL_RenderDrawRect(r, &rect_);
+        if (label_font) {
+            SDL_Color text_color = DMStyles::Label().color;
+            SDL_Surface* surf = TTF_RenderUTF8_Blended(label_font, render_label.c_str(), text_color);
+            if (surf) {
+                SDL_Texture* tex = SDL_CreateTextureFromSurface(r, surf);
+                SDL_FreeSurface(surf);
+                if (tex) {
+                    int dw = 0, dh = 0;
+                    SDL_QueryTexture(tex, nullptr, nullptr, &dw, &dh);
+                    SDL_Rect dst{ label_rect.x, label_rect.y + (label_rect.h - dh) / 2, dw, dh };
+                    SDL_RenderCopy(r, tex, nullptr, &dst);
+                    SDL_DestroyTexture(tex);
+                }
+            }
+        }
     }
 };
 
@@ -196,8 +310,22 @@ void AssetLibraryUI::rebuild_rows() {
     if (!floating_) return;
     std::vector<DockableCollapsible::Row> rows;
     if (add_button_widget_) rows.push_back({ add_button_widget_.get() });
-    for (auto& tw : tiles_) rows.push_back({ tw.get() });
-    floating_->set_cell_width(220);
+
+    DockableCollapsible::Row current_row;
+    current_row.reserve(2);
+    for (auto& tw : tiles_) {
+        current_row.push_back(tw.get());
+        if (current_row.size() == 2) {
+            rows.push_back(current_row);
+            current_row.clear();
+        }
+    }
+    if (!current_row.empty()) {
+        rows.push_back(current_row);
+    }
+
+    floating_->set_cell_width(210);
+    floating_->set_col_gap(18);
     floating_->set_rows(rows);
 }
 
@@ -215,7 +343,13 @@ void AssetLibraryUI::update(const Input& input,
         for (auto& inf : items_) {
             tiles_.push_back(std::make_unique<AssetTileWidget>(
                 inf,
-                [&assets](const std::shared_ptr<AssetInfo>& info){ assets.open_asset_info_editor(info); },
+                [this, &assets](const std::shared_ptr<AssetInfo>& info){
+                    assets.open_asset_info_editor(info);
+                    close();
+                },
+                [this](const std::shared_ptr<AssetInfo>&){
+                    close();
+                },
                 [this, &assets](const std::shared_ptr<AssetInfo>& info){
                     drag_info_ = info;
                     int mx = 0, my = 0; SDL_GetMouseState(&mx, &my);
@@ -230,6 +364,13 @@ void AssetLibraryUI::update(const Input& input,
 
     floating_->set_work_area(SDL_Rect{0,0,screen_w,screen_h});
     floating_->update(input, screen_w, screen_h);
+
+    if (floating_->is_visible() && floating_->is_expanded()) {
+        SDL_Point cursor{ input.getX(), input.getY() };
+        if (SDL_PointInRect(&cursor, &floating_->rect())) {
+            assets.clear_editor_selection();
+        }
+    }
 
     if (dragging_from_library_ && drag_spawned_) {
         int mx = input.getX();
@@ -265,26 +406,69 @@ void AssetLibraryUI::render(SDL_Renderer* r, int screen_w, int screen_h) const {
         SDL_SetRenderDrawColor(r, 255,255,255,255);
         SDL_RenderDrawRect(r, &box);
 
-        // --- NEW: render the typed text ---
-        if (!new_asset_name_.empty()) {
-            static TTF_Font* font = nullptr;
-            if (!font) {
-                font = TTF_OpenFont("assets/fonts/DejaVuSans.ttf", 18);
-            }
-            if (font) {
-                SDL_Color white{255, 255, 255, 255};
-                SDL_Surface* surf = TTF_RenderUTF8_Blended(font, new_asset_name_.c_str(), white);
-                if (surf) {
-                    SDL_Texture* tex = SDL_CreateTextureFromSurface(r, surf);
-                    SDL_FreeSurface(surf);
-                    if (tex) {
-                        int tw, th;
-                        SDL_QueryTexture(tex, nullptr, nullptr, &tw, &th);
-                        SDL_Rect dst{ box.x + 10, box.y + (box.h - th)/2, tw, th };
-                        SDL_RenderCopy(r, tex, nullptr, &dst);
-                        SDL_DestroyTexture(tex);
+        SDL_Rect input_rect{ box.x + 8, box.y + 8, box.w - 16, box.h - 16 };
+        SDL_SetRenderDrawColor(r, 35,35,35,230);
+        SDL_RenderFillRect(r, &input_rect);
+        SDL_SetRenderDrawColor(r, 90,90,90,255);
+        SDL_RenderDrawRect(r, &input_rect);
+
+        const int text_padding = 12;
+        TTF_Font* font = load_font(18);
+        if (font) {
+            std::string display = new_asset_name_.empty() ? "Enter asset name..." : new_asset_name_;
+            SDL_Color color = new_asset_name_.empty()
+                                ? SDL_Color{180, 180, 180, 255}
+                                : SDL_Color{255, 255, 255, 255};
+            int available_w = input_rect.w - 2 * text_padding;
+            int tw = 0;
+            int th = 0;
+            std::string render_text = display;
+            if (TTF_SizeUTF8(font, render_text.c_str(), &tw, &th) == 0 && tw > available_w) {
+                const std::string ellipsis = "...";
+                std::string base = display;
+                while (!base.empty()) {
+                    base.pop_back();
+                    std::string candidate = base + ellipsis;
+                    if (TTF_SizeUTF8(font, candidate.c_str(), &tw, &th) == 0 && tw <= available_w) {
+                        render_text = std::move(candidate);
+                        break;
                     }
                 }
+                if (base.empty()) {
+                    render_text = ellipsis;
+                    (void)TTF_SizeUTF8(font, render_text.c_str(), &tw, &th);
+                }
+            } else {
+                (void)TTF_SizeUTF8(font, render_text.c_str(), &tw, &th);
+            }
+
+            SDL_Surface* surf = TTF_RenderUTF8_Blended(font, render_text.c_str(), color);
+            if (surf) {
+                SDL_Texture* tex = SDL_CreateTextureFromSurface(r, surf);
+                SDL_FreeSurface(surf);
+                if (tex) {
+                    SDL_Rect dst{ input_rect.x + text_padding,
+                                  input_rect.y + (input_rect.h - th) / 2,
+                                  tw,
+                                  th };
+                    SDL_RenderCopy(r, tex, nullptr, &dst);
+                    SDL_DestroyTexture(tex);
+                }
+            }
+
+            if (!new_asset_name_.empty()) {
+                int caret_w = 0;
+                int caret_h = 0;
+                if (TTF_SizeUTF8(font, new_asset_name_.c_str(), &caret_w, &caret_h) != 0 || caret_w > available_w) {
+                    caret_w = std::min(tw, available_w);
+                    caret_h = th;
+                }
+                if (caret_h <= 0) caret_h = th;
+                int caret_x = input_rect.x + text_padding + std::min(caret_w, available_w);
+                int caret_top = input_rect.y + (input_rect.h - caret_h) / 2;
+                int caret_bottom = caret_top + caret_h;
+                SDL_SetRenderDrawColor(r, color.r, color.g, color.b, color.a);
+                SDL_RenderDrawLine(r, caret_x + 1, caret_top, caret_x + 1, caret_bottom);
             }
         }
     }

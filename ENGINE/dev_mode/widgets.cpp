@@ -4,7 +4,6 @@
 #include <cctype>
 #include <cmath>
 
-// -------- DMButton ---------
 DMButton::DMButton(const std::string& text, const DMButtonStyle* style, int w, int h)
     : rect_{0,0,w,h}, text_(text), style_(style) {}
 
@@ -55,11 +54,16 @@ void DMButton::render(SDL_Renderer* r) const {
     draw_label(r, style_->text);
 }
 
-// -------- DMTextBox ---------
 DMTextBox::DMTextBox(const std::string& label, const std::string& value)
     : label_(label), text_(value) {}
 
 void DMTextBox::set_rect(const SDL_Rect& r) { rect_ = r; }
+
+int DMTextBox::height_for_width(int w) const {
+    int label_h = DMStyles::Label().font_size + DMSpacing::item_gap();
+    int box_h   = DMButton::height();
+    return label_h + box_h + DMSpacing::item_gap();
+}
 
 bool DMTextBox::handle_event(const SDL_Event& e) {
     bool changed = false;
@@ -72,7 +76,8 @@ bool DMTextBox::handle_event(const SDL_Event& e) {
         editing_ = inside;
         if (editing_) SDL_StartTextInput(); else SDL_StopTextInput();
     } else if (editing_ && e.type == SDL_TEXTINPUT) {
-        text_ += e.text.text; changed = true;
+        text_ += e.text.text;
+        changed = true;
     } else if (editing_ && e.type == SDL_KEYDOWN) {
         if (e.key.keysym.sym == SDLK_BACKSPACE) {
             if (!text_.empty()) { text_.pop_back(); changed = true; }
@@ -98,7 +103,7 @@ void DMTextBox::draw_text(SDL_Renderer* r, const std::string& s, int x, int y, c
                 SDL_RenderCopy(r, tex, nullptr, &dst);
                 SDL_DestroyTexture(tex);
             }
-            line_y += surf->h;
+            line_y += surf->h + DMSpacing::item_gap();
             SDL_FreeSurface(surf);
         }
     }
@@ -107,31 +112,31 @@ void DMTextBox::draw_text(SDL_Renderer* r, const std::string& s, int x, int y, c
 
 void DMTextBox::render(SDL_Renderer* r) const {
     const DMTextBoxStyle& st = DMStyles::TextBox();
+    if (!label_.empty()) {
+        DMLabelStyle lbl = DMStyles::Label();
+        int label_y = rect_.y - (lbl.font_size + DMSpacing::item_gap());
+        draw_text(r, label_, rect_.x, label_y, lbl);
+    }
     SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
     SDL_SetRenderDrawColor(r, st.bg.r, st.bg.g, st.bg.b, st.bg.a);
     SDL_RenderFillRect(r, &rect_);
     SDL_Color border = (hovered_ || editing_) ? st.border_hover : st.border;
     SDL_SetRenderDrawColor(r, border.r, border.g, border.b, border.a);
     SDL_RenderDrawRect(r, &rect_);
-    draw_text(r, label_, rect_.x, rect_.y - st.label.font_size - 2, st.label);
     DMLabelStyle valStyle{ st.label.font_path, st.label.font_size, st.text };
-    // Multiline draw from top-left padding
     draw_text(r, text_, rect_.x + 6, rect_.y + 6, valStyle);
 }
 
 std::vector<std::string> DMTextBox::wrap_lines(TTF_Font* f, const std::string& s, int max_width) const {
     std::vector<std::string> out;
     if (!f) return out;
-    // Split on existing newlines first
     size_t start = 0;
     auto push_wrapped = [&](const std::string& para) {
         if (para.empty()) { out.emplace_back(""); return; }
-        // Greedy wrap by words, fallback to char wrap
         size_t pos = 0;
         while (pos < para.size()) {
             size_t best_break = pos;
             size_t last_space = std::string::npos;
-            std::string line;
             for (size_t i = pos; i <= para.size(); ++i) {
                 std::string trial = para.substr(pos, i - pos);
                 int w=0,h=0; TTF_SizeUTF8(f, trial.c_str(), &w, &h);
@@ -139,22 +144,14 @@ std::vector<std::string> DMTextBox::wrap_lines(TTF_Font* f, const std::string& s
                     best_break = i;
                     if (i < para.size() && std::isspace((unsigned char)para[i])) last_space = i;
                     if (i == para.size()) break;
-                } else {
-                    break;
-                }
+                } else break;
             }
             size_t brk = best_break;
-            if (brk > pos && last_space != std::string::npos && last_space > pos) {
-                brk = last_space; // wrap at last space within bounds
-            }
-            if (brk == pos) { // cannot fit even one char, force one char
-                brk = std::min(para.size(), pos + 1);
-            }
+            if (brk > pos && last_space != std::string::npos && last_space > pos) brk = last_space;
+            if (brk == pos) brk = std::min(para.size(), pos + 1);
             std::string ln = para.substr(pos, brk - pos);
-            // trim trailing spaces
             while (!ln.empty() && std::isspace((unsigned char)ln.back())) ln.pop_back();
             out.push_back(ln);
-            // advance past any spaces
             pos = brk;
             while (pos < para.size() && std::isspace((unsigned char)para[pos])) ++pos;
         }
@@ -170,19 +167,11 @@ std::vector<std::string> DMTextBox::wrap_lines(TTF_Font* f, const std::string& s
 }
 
 int DMTextBox::preferred_height(int width) const {
-    const DMTextBoxStyle& st = DMStyles::TextBox();
-    TTF_Font* f = TTF_OpenFont(st.label.font_path.c_str(), st.label.font_size);
-    if (!f) return DMTextBox::height();
-    int content_w = std::max(1, width - 12);
-    auto lines = wrap_lines(f, text_, content_w);
-    int fh=0; int fw=0; TTF_SizeUTF8(f, "Ag", &fw, &fh);
-    TTF_CloseFont(f);
-    int text_h = (int)lines.size() * std::max(1, fh);
-    // padding top/bottom ~ 12
-    return std::max(DMTextBox::height(), text_h + 12);
+    int label_h = DMStyles::Label().font_size + DMSpacing::item_gap();
+    int box_h   = DMButton::height();
+    return label_h + box_h + DMSpacing::item_gap();
 }
 
-// -------- DMCheckbox ---------
 DMCheckbox::DMCheckbox(const std::string& label, bool value)
     : label_(label), value_(value) {}
 
@@ -232,7 +221,6 @@ void DMCheckbox::render(SDL_Renderer* r) const {
     draw_label(r);
 }
 
-// -------- DMSlider ---------
 DMSlider::DMSlider(const std::string& label, int min_val, int max_val, int value)
     : label_(label), min_(min_val), max_(max_val), value_(value) {}
 
@@ -305,7 +293,7 @@ void DMSlider::draw_text(SDL_Renderer* r, const std::string& s, int x, int y) co
 
 void DMSlider::render(SDL_Renderer* r) const {
     const DMSliderStyle& st = DMStyles::Slider();
-    draw_text(r, label_, rect_.x, rect_.y - st.label.font_size - 2);
+    draw_text(r, label_, rect_.x, rect_.y - st.label.font_size - DMSpacing::item_gap());
     SDL_Rect tr = track_rect();
     SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
     SDL_SetRenderDrawColor(r, st.track_bg.r, st.track_bg.g, st.track_bg.b, st.track_bg.a);
@@ -327,9 +315,12 @@ void DMSlider::render(SDL_Renderer* r) const {
     }
 }
 
-// -------- DMRangeSlider ---------
 DMRangeSlider::DMRangeSlider(int min_val, int max_val, int min_value, int max_value)
-    : min_(min_val), max_(max_val), min_value_(min_value), max_value_(max_value) {}
+    : min_(min_val), max_(max_val) {
+    if (min_ > max_) std::swap(min_, max_);
+    set_min_value(min_value);
+    set_max_value(max_value);
+}
 
 void DMRangeSlider::set_rect(const SDL_Rect& r) { rect_ = r; }
 
@@ -349,19 +340,21 @@ SDL_Rect DMRangeSlider::track_rect() const {
 
 SDL_Rect DMRangeSlider::min_knob_rect() const {
     SDL_Rect tr = track_rect();
-    int x = tr.x + (int)((min_value_ - min_) * (tr.w - 12) / (double)(max_ - min_));
-    return SDL_Rect{ x, tr.y - 4, 12, 16 };
+    int range = std::max(1, max_ - min_);
+    int x = tr.x + (int)((min_value_ - min_) * (tr.w - 12) / (double)range);
+    return SDL_Rect{ x, tr.y, 12, 16 };
 }
 
 SDL_Rect DMRangeSlider::max_knob_rect() const {
     SDL_Rect tr = track_rect();
-    int x = tr.x + (int)((max_value_ - min_) * (tr.w - 12) / (double)(max_ - min_));
-    return SDL_Rect{ x, tr.y - 4, 12, 16 };
+    int range = std::max(1, max_ - min_);
+    int x = tr.x + (int)((max_value_ - min_) * (tr.w - 12) / (double)range);
+    return SDL_Rect{ x, tr.y - 16 + tr.h,    12, 16 };
 }
 
 int DMRangeSlider::value_for_x(int x) const {
     SDL_Rect tr = track_rect();
-    double t = (x - tr.x) / (double)(tr.w - 12);
+    double t = (x - tr.x) / (double)(std::max(1, tr.w - 12));
     int v = min_ + (int)std::round(t * (max_ - min_));
     return std::max(min_, std::min(max_, v));
 }
@@ -370,7 +363,7 @@ bool DMRangeSlider::handle_event(const SDL_Event& e) {
     if (edit_min_) {
         if (edit_min_->handle_event(e)) {
             int nv = std::stoi(edit_min_->value());
-            if (nv <= max_value_) set_min_value(nv);
+            set_min_value(nv);
             return true;
         }
         if (!edit_min_->is_editing()) edit_min_.reset();
@@ -378,7 +371,7 @@ bool DMRangeSlider::handle_event(const SDL_Event& e) {
     if (edit_max_) {
         if (edit_max_->handle_event(e)) {
             int nv = std::stoi(edit_max_->value());
-            if (nv >= min_value_) set_max_value(nv);
+            set_max_value(nv);
             return true;
         }
         if (!edit_max_->is_editing()) edit_max_.reset();
@@ -389,8 +382,8 @@ bool DMRangeSlider::handle_event(const SDL_Event& e) {
         SDL_Point p{ e.motion.x, e.motion.y };
         min_hovered_ = SDL_PointInRect(&p, &kmin);
         max_hovered_ = SDL_PointInRect(&p, &kmax);
-        if (dragging_min_) { int nv = value_for_x(p.x); if (nv <= max_value_) set_min_value(nv); return true; }
-        if (dragging_max_) { int nv = value_for_x(p.x); if (nv >= min_value_) set_max_value(nv); return true; }
+        if (dragging_min_) { set_min_value(value_for_x(p.x)); return true; }
+        if (dragging_max_) { set_max_value(value_for_x(p.x)); return true; }
     } else if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
         SDL_Point p{ e.button.x, e.button.y };
         if (SDL_PointInRect(&p, &kmin)) { dragging_min_ = true; return true; }
@@ -471,7 +464,6 @@ void DMRangeSlider::render(SDL_Renderer* r) const {
     }
 }
 
-// -------- DMDropdown ---------
 DMDropdown::DMDropdown(const std::string& label, const std::vector<std::string>& options, int idx)
     : label_(label), options_(options), index_(idx) {}
 
@@ -511,9 +503,8 @@ bool DMDropdown::handle_event(const SDL_Event& e) {
             if (active_ == this) active_ = nullptr;
             return true;
         }
-        return true; // swallow all other events while open
+        return true;
     }
-
     if (e.type == SDL_MOUSEMOTION) {
         SDL_Point p{ e.motion.x, e.motion.y };
         hovered_ = SDL_PointInRect(&p, &rect_);

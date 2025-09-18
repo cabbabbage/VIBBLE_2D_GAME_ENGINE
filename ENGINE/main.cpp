@@ -4,6 +4,7 @@
 #include "ui/main_menu.hpp"
 #include "ui/menu_ui.hpp"
 #include "asset_loader.hpp"
+#include "asset/asset_types.hpp"
 #include "scene_renderer.hpp"
 #include "AssetsManager.hpp"
 #include "input.hpp"
@@ -49,9 +50,9 @@ void MainApp::setup() {
 		loader_ = std::make_unique<AssetLoader>(map_path_, renderer_);
 		auto all_assets = loader_->createAssets();
 		Asset* player_ptr = nullptr;
-		for (auto& a : all_assets) {
-			if (a.info && a.info->type == "Player") { player_ptr = &a; break; }
-		}
+                for (auto& a : all_assets) {
+                        if (a.info && a.info->type == asset_types::player) { player_ptr = &a; break; }
+                }
 		if (!player_ptr) throw std::runtime_error("[Main] No player asset found");
 		game_assets_ = new Assets(std::move(all_assets), *loader_->getAssetLibrary(), player_ptr, loader_->getRooms(), screen_w_, screen_h_, player_ptr->pos.x, player_ptr->pos.y, static_cast<int>(loader_->getMapRadius() * 1.2), renderer_, map_path_);
 		input_ = new Input();
@@ -74,11 +75,21 @@ void MainApp::game_loop() {
 			if (input_) input_->handleEvent(e);
 			if (game_assets_) game_assets_->handle_sdl_event(e);
 		}
-		if (game_assets_ && game_assets_->player) {
-			const int px = game_assets_->player->pos.x;
-			const int py = game_assets_->player->pos.y;
-			game_assets_->update(*input_, px, py);
-		}
+                if (game_assets_) {
+                        int px = 0;
+                        int py = 0;
+                        if (game_assets_->player) {
+                                px = game_assets_->player->pos.x;
+                                py = game_assets_->player->pos.y;
+                        } else {
+                                SDL_Point focus = game_assets_->getView().get_screen_center();
+                                px = focus.x;
+                                py = focus.y;
+                        }
+                        if (input_) {
+                                game_assets_->update(*input_, px, py);
+                        }
+                }
 		++frame_count;
 		if (input_) input_->update();
 		Uint32 elapsed = SDL_GetTicks() - start;

@@ -2,6 +2,7 @@
 
 #include "ui/tinyfiledialogs.h"
 #include "asset_loader.hpp"
+#include "asset/asset_types.hpp"
 #include "scene_renderer.hpp"
 #include "AssetsManager.hpp"
 #include "input.hpp"
@@ -77,18 +78,27 @@ void MenuUI::game_loop() {
                         if (game_assets_) game_assets_->handle_sdl_event(e);
                         if (menu_active_) handle_event(e);
                 }
-                if (game_assets_ && game_assets_->player) {
-			const int px = game_assets_->player->pos.x;
-			const int py = game_assets_->player->pos.y;
-			game_assets_->update(*input_, px, py);
-		}
+                if (game_assets_) {
+                        int px = 0;
+                        int py = 0;
+                        if (game_assets_->player) {
+                                px = game_assets_->player->pos.x;
+                                py = game_assets_->player->pos.y;
+                        } else {
+                                SDL_Point focus = game_assets_->getView().get_screen_center();
+                                px = focus.x;
+                                py = focus.y;
+                        }
+                        if (input_) {
+                                game_assets_->update(*input_, px, py);
+                        }
+                }
                 if (menu_active_) {
                         render();
                         switch (consumeAction()) {
                                         case MenuAction::EXIT:            doExit();         quit = true;        break;
                                         case MenuAction::RESTART:         doRestart();      frame_count = 0;    break;
                                         case MenuAction::SETTINGS:        doSettings();                         break;
-                                        case MenuAction::SAVE_ROOM:       doSaveCurrentRoom();                   break;
                                         default: break;
                         }
                 }
@@ -151,7 +161,6 @@ void MenuUI::rebuildButtons() {
         addButton("End Run",            MenuAction::EXIT, true);
         addButton("Restart Run",        MenuAction::RESTART);
         addButton("Settings",           MenuAction::SETTINGS);
-        addButton("Save Current Room",  MenuAction::SAVE_ROOM);
 }
 
 SDL_Point MenuUI::measureText(const LabelStyle& style, const std::string& s) const {
@@ -232,7 +241,7 @@ void MenuUI::doRestart() {
 		auto all_assets = loader_->createAssets();
 		Asset* player_ptr = nullptr;
 		for (auto& a : all_assets) {
-			if (a.info && a.info->type == "Player") { player_ptr = &a; break; }
+                    if (a.info && a.info->type == asset_types::player) { player_ptr = &a; break; }
 		}
 		if (!player_ptr) throw std::runtime_error("[MenuUI] No player asset found");
 		game_assets_ = new Assets(std::move(all_assets), *loader_->getAssetLibrary(), player_ptr, loader_->getRooms(), screen_w_, screen_h_, player_ptr->pos.x, player_ptr->pos.y, static_cast<int>(loader_->getMapRadius() * 1.2), renderer_, map_path_);
@@ -258,36 +267,4 @@ void MenuUI::doToggleDevMode() {
                 if (game_assets_) game_assets_->set_render_suppressed(false);
                 std::cout << "[MenuUI] Closing menu after mode switch\n";
         }
-}
-
-void MenuUI::doSaveCurrentRoom() {
-	std::cout << "[MenuUI] Save Current Room requested\n";
-	std::string save_path;
-	std::string room_name;
-	std::string abs_map_path = fs::absolute(map_path_).string();
-	const char* folder = tinyfd_selectFolderDialog( "Select folder to save room copy", abs_map_path.c_str() );
-	if (!folder) {
-		std::cout << "[MenuUI] No folder selected.\n";
-		return;
-	}
-	const char* new_name = tinyfd_inputBox("Room Name", "Enter a name for the room copy:", "");
-	if (!new_name || std::string(new_name).empty()) {
-		std::cout << "[MenuUI] No room name entered.\n";
-		return;
-	}
-	room_name = new_name;
-	save_path = std::string(folder) + "/" + room_name + ".json";
-	std::cout << "[MenuUI] Saving room '" << room_name << "' to " << save_path << "\n";
-	try {
-		nlohmann::json room_json = game_assets_->save_current_room(room_name);
-		std::ofstream out(save_path, std::ios::trunc);
-		if (!out.is_open()) {
-			throw std::runtime_error("Failed to open file for writing: " + save_path);
-		}
-		out << room_json.dump(4);
-		out.close();
-		std::cout << "[MenuUI] Room saved successfully.\n";
-	} catch (const std::exception& e) {
-		std::cerr << "[MenuUI] Failed to save room: " << e.what() << "\n";
-	}
 }

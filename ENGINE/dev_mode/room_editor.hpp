@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "dev_mode/asset_config_ui.hpp"
+#include "dev_mode/pan_and_zoom.hpp"
 
 class Asset;
 class Input;
@@ -62,6 +63,7 @@ public:
 
     void begin_area_edit_for_selected_asset(const std::string& area_name);
     void focus_camera_on_asset(Asset* asset, double zoom_factor = 0.8, int duration_steps = 25);
+    void focus_camera_on_room_center(bool reframe_zoom = true);
 
     void reset_click_state();
     void clear_selection();
@@ -81,6 +83,7 @@ private:
         Exact,
         Percent,
         Perimeter,
+        PerimeterCenter,
     };
 
     struct DraggedAssetState {
@@ -91,7 +94,8 @@ private:
     };
 
     void handle_mouse_input(const Input& input);
-    void handle_hover();
+    Asset* hit_test_asset(SDL_Point screen_point) const;
+    void update_hover_state(Asset* hit);
     void handle_click(const Input& input);
     void update_highlighted_assets();
     bool is_ui_blocking_input(int mx, int my) const;
@@ -99,7 +103,7 @@ private:
     void handle_delete_shortcut(const Input& input);
     void update_area_editor_focus();
     void ensure_area_editor();
-    void begin_drag_session(const SDL_Point& world_mouse);
+    void begin_drag_session(const SDL_Point& world_mouse, bool ctrl_modifier);
     void update_drag_session(const SDL_Point& world_mouse);
     void apply_perimeter_drag(const SDL_Point& world_mouse);
     void finalize_drag_session();
@@ -110,7 +114,8 @@ private:
     void refresh_assets_config_ui();
     void update_exact_json(nlohmann::json& entry, const Asset& asset, SDL_Point center, int width, int height);
     void update_percent_json(nlohmann::json& entry, const Asset& asset, SDL_Point center, int width, int height);
-    void update_perimeter_json(nlohmann::json& entry, double border_shift);
+    void update_perimeter_border_json(nlohmann::json& entry, double border_shift);
+    void update_perimeter_center_json(nlohmann::json& entry, SDL_Point offset);
     void handle_spawn_config_change(const nlohmann::json& entry, const AssetConfigUI::ChangeSummary& summary);
     void respawn_spawn_group(const nlohmann::json& entry);
     std::unique_ptr<MapGrid> build_room_grid(const std::string& ignore_spawn_id) const;
@@ -150,6 +155,7 @@ private:
     SDL_Point drag_last_world_{0, 0};
     SDL_Point drag_room_center_{0, 0};
     double drag_perimeter_base_radius_ = 0.0;
+    SDL_Point drag_perimeter_start_offset_{0, 0};
     bool drag_moved_ = false;
     std::string drag_spawn_id_;
     Uint32 last_click_time_ms_ = 0;
@@ -162,4 +168,5 @@ private:
     double zoom_scale_factor_ = 1.1;
     std::unique_ptr<DMButton> regenerate_button_;
     SDL_Rect regenerate_button_rect_{0, 0, 0, 0};
+    PanAndZoom pan_zoom_;
 };

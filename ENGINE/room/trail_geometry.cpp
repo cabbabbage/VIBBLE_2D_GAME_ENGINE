@@ -2,17 +2,13 @@
 #include <cmath>
 #include <random>
 #include <vector>
-#include <fstream>
 #include <nlohmann/json.hpp>
-#include <filesystem>
 #include "Room.hpp"
 #include "asset/asset_library.hpp"
 #include "utils/area.hpp"
 #include <iostream>
 #include <limits>
 using json = nlohmann::json;
-namespace fs = std::filesystem;
-
 std::vector<SDL_Point> TrailGeometry::build_centerline(const SDL_Point& start,
                                                        const SDL_Point& end,
                                                        int curvyness,
@@ -118,30 +114,34 @@ bool TrailGeometry::attempt_trail_connection(Room* a,
                                              Room* b,
                                              std::vector<Area>& existing_areas,
                                              const std::string& map_dir,
+                                             const std::string& map_info_path,
                                              AssetLibrary* asset_lib,
                                              std::vector<std::unique_ptr<Room>>& trail_rooms,
                                              int allowed_intersections,
-                                             const std::string& path,
+                                             nlohmann::json* trail_config,
+                                             const std::string& trail_name,
+                                             const nlohmann::json* map_assets_data,
+                                             double map_radius,
                                              bool testing,
                                              std::mt19937& rng)
 {
-	std::ifstream in(path);
-	if (!in.is_open()) {
-		if (testing) std::cout << "[TrailGen] Failed to open asset: " << path << "\n";
-		return false;
-	}
-	json config;
-	in >> config;
-	const int min_width = config.value("min_width", 40);
-	const int max_width = config.value("max_width", 80);
-	const int curvyness = config.value("curvyness", 2);
-	const std::string name = config.value("name", "trail_segment");
-	const double width = static_cast<double>( std::uniform_int_distribution<int>(min_width, max_width)(rng));
-	if (testing) {
-		std::cout << "[TrailGen] Using asset: " << path
-		<< "  width=" << width
-		<< "  curvyness=" << curvyness << "\n";
-	}
+        if (!trail_config) {
+                if (testing) {
+                        std::cout << "[TrailGen] Missing trail configuration for '" << trail_name << "'\n";
+                }
+                return false;
+        }
+        json& config = *trail_config;
+        const int min_width = config.value("min_width", 40);
+        const int max_width = config.value("max_width", 80);
+        const int curvyness = config.value("curvyness", 2);
+        const std::string name = config.value("name", trail_name.empty() ? std::string("trail_segment") : trail_name);
+        const double width = static_cast<double>( std::uniform_int_distribution<int>(min_width, max_width)(rng));
+        if (testing) {
+                std::cout << "[TrailGen] Using trail template: " << name
+                << "  width=" << width
+                << "  curvyness=" << curvyness << "\n";
+        }
 	const SDL_Point a_center = a->room_area->get_center();
 	const SDL_Point b_center = b->room_area->get_center();
 	const double overshoot = 100.0;
@@ -239,8 +239,20 @@ bool TrailGeometry::attempt_trail_connection(Room* a,
 			continue;
 		}
 
-		std::string room_dir = fs::path(path).parent_path().string();
-		auto trail_room = std::make_unique<Room>( a->map_origin, "trail", name, nullptr, room_dir, map_dir, asset_lib, &candidate );
+                auto trail_room = std::make_unique<Room>(
+                        a->map_origin,
+                        "trail",
+                        name,
+                        nullptr,
+                        map_dir,
+                        map_info_path,
+                        asset_lib,
+                        &candidate,
+                        trail_config,
+                        map_assets_data,
+                        map_radius,
+                        "trails_data"
+                );
 		a->add_connecting_room(trail_room.get());
 		b->add_connecting_room(trail_room.get());
 		trail_room->add_connecting_room(a);

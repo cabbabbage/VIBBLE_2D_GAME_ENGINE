@@ -434,18 +434,6 @@ void AssetConfigUI::rebuild_widgets() {
     s_minmax_.reset();
     s_minmax_w_.reset();
     s_minmax_label_.reset();
-    s_border_.reset();
-    s_border_w_.reset();
-    s_sector_center_.reset();
-    s_sector_center_w_.reset();
-    s_sector_range_.reset();
-    s_sector_range_w_.reset();
-    s_perimeter_offset_x_.reset();
-    s_perimeter_offset_x_w_.reset();
-    s_perimeter_offset_x_label_.reset();
-    s_perimeter_offset_y_.reset();
-    s_perimeter_offset_y_w_.reset();
-    s_perimeter_offset_y_label_.reset();
     percent_x_label_.reset();
     percent_y_label_.reset();
     exact_offset_label_.reset();
@@ -461,35 +449,7 @@ void AssetConfigUI::rebuild_widgets() {
     }
 
     if (method == "Perimeter") {
-        int border = 0;
-        if (entry_.contains("percentage_shift_from_center") && entry_["percentage_shift_from_center"].is_number_integer()) {
-            border = entry_["percentage_shift_from_center"].get<int>();
-        } else {
-            border = clamp_slider_value(
-                read_single_value(entry_, "border_shift",
-                                   read_single_value(entry_, "border_shift_min",
-                                                     read_single_value(entry_, "border_shift_max", 0))),
-                0, 100);
-        }
-        s_border_ = std::make_unique<DMSlider>("Border Shift (%)", 0, 100, border);
-        s_border_w_ = std::make_unique<SliderWidget>(s_border_.get());
-
-        int sector_center = clamp_slider_value(read_single_value(entry_, "sector_center", read_single_value(entry_, "sector_center_min", read_single_value(entry_, "sector_center_max", 0))), 0, 359);
-        s_sector_center_ = std::make_unique<DMSlider>("Sector Center", 0, 359, sector_center);
-        s_sector_center_w_ = std::make_unique<SliderWidget>(s_sector_center_.get());
-
-        int sector_range = clamp_slider_value(read_single_value(entry_, "sector_range", read_single_value(entry_, "sector_range_min", read_single_value(entry_, "sector_range_max", 360))), 0, 360);
-        s_sector_range_ = std::make_unique<DMSlider>("Sector Range", 0, 360, sector_range);
-        s_sector_range_w_ = std::make_unique<SliderWidget>(s_sector_range_.get());
-
-        auto [px_min, px_max] = read_range(entry_, "perimeter_x_offset_min", "perimeter_x_offset_max", read_single_value(entry_, "perimeter_x_offset", 0), read_single_value(entry_, "perimeter_x_offset", 0));
-        auto [py_min, py_max] = read_range(entry_, "perimeter_y_offset_min", "perimeter_y_offset_max", read_single_value(entry_, "perimeter_y_offset", 0), read_single_value(entry_, "perimeter_y_offset", 0));
-        s_perimeter_offset_x_label_ = std::make_unique<LabelWidget>("Perimeter Offset X");
-        s_perimeter_offset_x_ = std::make_unique<DMRangeSlider>(-2000, 2000, px_min, px_max);
-        s_perimeter_offset_x_w_ = std::make_unique<RangeSliderWidget>(s_perimeter_offset_x_.get());
-        s_perimeter_offset_y_label_ = std::make_unique<LabelWidget>("Perimeter Offset Y");
-        s_perimeter_offset_y_ = std::make_unique<DMRangeSlider>(-2000, 2000, py_min, py_max);
-        s_perimeter_offset_y_w_ = std::make_unique<RangeSliderWidget>(s_perimeter_offset_y_.get());
+        // Perimeter placement uses in-scene interactions for configuration.
     } else if (method == "Percent") {
         percent_x_label_ = std::make_unique<LabelWidget>(
             "Percent X: " + format_percent_summary(entry_, "p_x_min", "p_x_max", "percent_x_min", "percent_x_max"));
@@ -581,26 +541,6 @@ void AssetConfigUI::rebuild_rows() {
     if (cb_overlap_w_) toggles.push_back(cb_overlap_w_.get());
     if (cb_spacing_w_) toggles.push_back(cb_spacing_w_.get());
     if (!toggles.empty()) rows.push_back(toggles);
-
-    DockableCollapsible::Row perimeter_row;
-    if (s_border_w_) perimeter_row.push_back(s_border_w_.get());
-    if (s_sector_center_w_) perimeter_row.push_back(s_sector_center_w_.get());
-    if (s_sector_range_w_) perimeter_row.push_back(s_sector_range_w_.get());
-    if (!perimeter_row.empty()) rows.push_back(perimeter_row);
-
-    if (s_perimeter_offset_x_label_ || s_perimeter_offset_x_w_) {
-        DockableCollapsible::Row offset_x_row;
-        if (s_perimeter_offset_x_label_) offset_x_row.push_back(s_perimeter_offset_x_label_.get());
-        if (s_perimeter_offset_x_w_) offset_x_row.push_back(s_perimeter_offset_x_w_.get());
-        if (!offset_x_row.empty()) rows.push_back(offset_x_row);
-    }
-
-    if (s_perimeter_offset_y_label_ || s_perimeter_offset_y_w_) {
-        DockableCollapsible::Row offset_y_row;
-        if (s_perimeter_offset_y_label_) offset_y_row.push_back(s_perimeter_offset_y_label_.get());
-        if (s_perimeter_offset_y_w_) offset_y_row.push_back(s_perimeter_offset_y_w_.get());
-        if (!offset_y_row.empty()) rows.push_back(offset_y_row);
-    }
 
     if (percent_x_label_ || percent_y_label_) {
         DockableCollapsible::Row percent_row;
@@ -697,36 +637,6 @@ void AssetConfigUI::sync_json() {
     entry_["max_number"] = max_number_;
     if (!pending_summary_.quantity_changed && (min_number_ != baseline_min_ || max_number_ != baseline_max_)) {
         pending_summary_.quantity_changed = true;
-    }
-
-    if (method == "Perimeter") {
-        if (s_border_) {
-            int value = s_border_->value();
-            entry_["percentage_shift_from_center"] = value;
-            if (entry_.contains("border_shift")) entry_.erase("border_shift");
-            if (entry_.contains("border_shift_min")) entry_.erase("border_shift_min");
-            if (entry_.contains("border_shift_max")) entry_.erase("border_shift_max");
-        }
-        if (s_sector_center_) {
-            int value = s_sector_center_->value();
-            entry_["sector_center"] = value;
-            entry_["sector_center_min"] = value;
-            entry_["sector_center_max"] = value;
-        }
-        if (s_sector_range_) {
-            int value = s_sector_range_->value();
-            entry_["sector_range"] = value;
-            entry_["sector_range_min"] = value;
-            entry_["sector_range_max"] = value;
-        }
-        if (s_perimeter_offset_x_) {
-            entry_["perimeter_x_offset_min"] = s_perimeter_offset_x_->min_value();
-            entry_["perimeter_x_offset_max"] = s_perimeter_offset_x_->max_value();
-        }
-        if (s_perimeter_offset_y_) {
-            entry_["perimeter_y_offset_min"] = s_perimeter_offset_y_->min_value();
-            entry_["perimeter_y_offset_max"] = s_perimeter_offset_y_->max_value();
-        }
     }
 
     if (!entry_.contains("candidates") || !entry_["candidates"].is_array()) {

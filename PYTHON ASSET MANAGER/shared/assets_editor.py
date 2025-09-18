@@ -205,49 +205,8 @@ class AssetEditor(tk.Frame):
 
                 # Perimeter placement controls
                 if pos == "Perimeter":
-                    # Sector selection around the area's center (degrees)
-                    add_range(
-                        key="sector_center",
-                        label="Sector Center (deg)",
-                        min_bound=0,
-                        max_bound=359,
-                        default_min=0,
-                        default_max=0
-                    )
-                    add_range(
-                        key="sector_range",
-                        label="Sector Range (deg)",
-                        min_bound=0,
-                        max_bound=360,
-                        default_min=360,
-                        default_max=360
-                    )
-                    # Shift the perimeter inward/outward as a percent of radius
-                    add_range(
-                        key="border_shift",
-                        label="Border Shift (%)",
-                        min_bound=0,
-                        max_bound=100,
-                        default_min=0,
-                        default_max=0
-                    )
-                    # Pixel offsets from computed perimeter point
-                    add_range(
-                        key="perimeter_x_offset",
-                        label="X Offset (px)",
-                        min_bound=-2000,
-                        max_bound=2000,
-                        default_min=0,
-                        default_max=0
-                    )
-                    add_range(
-                        key="perimeter_y_offset",
-                        label="Y Offset (px)",
-                        min_bound=-2000,
-                        max_bound=2000,
-                        default_min=0,
-                        default_max=0
-                    )
+                    # Perimeter placement is configured directly in the room editor.
+                    pass
 
                 # Save after rebuilding option UI so current values persist
                 self.save_assets()

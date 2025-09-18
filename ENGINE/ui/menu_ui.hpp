@@ -18,8 +18,7 @@ class MenuUI : public MainApp {
     NONE = 0,
     EXIT,
     RESTART,
-    SETTINGS,
-    SAVE_ROOM
+    SETTINGS
         };
     MenuUI(SDL_Renderer* renderer, int screen_w, int screen_h, const std::string& map_path);
     ~MenuUI();
@@ -47,7 +46,6 @@ class MenuUI : public MainApp {
     void doRestart();
     void doSettings();
     void doToggleDevMode();
-    void doSaveCurrentRoom();
 
 	private:
     struct MenuButton {

@@ -12,11 +12,13 @@ using json = nlohmann::json;
 GenerateRooms::GenerateRooms(const std::vector<LayerSpec>& layers,
                              int map_cx,
                              int map_cy,
-                             const std::string& map_dir)
+                             const std::string& map_dir,
+                             const std::string& map_info_path)
 : map_layers_(layers),
 map_center_x_(map_cx),
 map_center_y_(map_cy),
 map_path_(map_dir),
+map_info_path_(map_info_path),
 rng_(std::random_device{}())
 {}
 
@@ -53,26 +55,38 @@ std::vector<RoomSpec> GenerateRooms::get_children_from_layer(const LayerSpec& la
 }
 
 std::vector<std::unique_ptr<Room>> GenerateRooms::build(AssetLibrary* asset_lib,
-                                                        int map_radius,
-                                                        const std::string& boundary_json) {
-	std::vector<std::unique_ptr<Room>> all_rooms;
-	if (map_layers_.empty()) return all_rooms;
-	const auto& root_spec = map_layers_[0].rooms[0];
-	if (testing) {
-		std::cout << "[GenerateRooms] Creating root room: " << root_spec.name << "\n";
-	}
+                                                        double map_radius,
+                                                        const nlohmann::json& boundary_data,
+                                                        nlohmann::json& rooms_data,
+                                                        nlohmann::json& trails_data,
+                                                        const nlohmann::json& map_assets_data) {
+        std::vector<std::unique_ptr<Room>> all_rooms;
+        if (map_layers_.empty()) return all_rooms;
+        const auto& root_spec = map_layers_[0].rooms[0];
+        if (testing) {
+                std::cout << "[GenerateRooms] Creating root room: " << root_spec.name << "\n";
+        }
+        auto get_room_data = [&](const std::string& name) -> nlohmann::json* {
+                if (!rooms_data.is_object()) return nullptr;
+                return &rooms_data[name];
+        };
+        auto* map_assets_ptr = &map_assets_data;
         auto root = std::make_unique<Room>(
                                         Room::Point{ map_center_x_, map_center_y_ },
                                         "room",
                                         root_spec.name,
                                         nullptr,
-                                        map_path_ + "/rooms",
                                         map_path_,
+                                        map_info_path_,
                                         asset_lib,
-                                        nullptr
+                                        nullptr,
+                                        get_room_data(root_spec.name),
+                                        map_assets_ptr,
+                                        map_radius,
+                                        "rooms_data"
  );
-	root->layer = 0;
-	all_rooms.push_back(std::move(root));
+        root->layer = 0;
+        all_rooms.push_back(std::move(root));
 	std::vector<Room*> current_parents = { all_rooms[0].get() };
 	std::vector<Sector> current_sectors = { { current_parents[0], 0.0f, 2 * M_PI } };
 	for (size_t li = 1; li < map_layers_.size(); ++li) {
@@ -97,7 +111,20 @@ std::vector<std::unique_ptr<Room>> GenerateRooms::build(AssetLibrary* asset_lib,
 								std::cout << "[GenerateRooms] Placing layer-1 child " << children_specs[i].name
 								<< " at angle " << angle << " → (" << pos.x << ", " << pos.y << ")\n";
 					}
-                                        auto child = std::make_unique<Room>( Room::Point{ pos.x, pos.y }, "room", children_specs[i].name, current_parents[0], map_path_ + "/rooms", map_path_, asset_lib, nullptr );
+                                        auto child = std::make_unique<Room>(
+                                                Room::Point{ pos.x, pos.y },
+                                                "room",
+                                                children_specs[i].name,
+                                                current_parents[0],
+                                                map_path_,
+                                                map_info_path_,
+                                                asset_lib,
+                                                nullptr,
+                                                get_room_data(children_specs[i].name),
+                                                map_assets_ptr,
+                                                map_radius,
+                                                "rooms_data"
+                                        );
 					child->layer = layer.level;
 					if (!next_parents.empty()) {
 								next_parents.back()->set_sibling_right(child.get());
@@ -148,7 +175,20 @@ std::vector<std::unique_ptr<Room>> GenerateRooms::build(AssetLibrary* asset_lib,
 													<< " under parent " << parent->room_name
 													<< " at angle " << angle << " → (" << pos.x << ", " << pos.y << ")\n";
 								}
-                                                            auto child = std::make_unique<Room>( Room::Point{ pos.x, pos.y }, "room", kids[i].name, parent, map_path_ + "/rooms", map_path_, asset_lib, nullptr );
+                                                            auto child = std::make_unique<Room>(
+                                                                    Room::Point{ pos.x, pos.y },
+                                                                    "room",
+                                                                    kids[i].name,
+                                                                    parent,
+                                                                    map_path_,
+                                                                    map_info_path_,
+                                                                    asset_lib,
+                                                                    nullptr,
+                                                                    get_room_data(kids[i].name),
+                                                                    map_assets_ptr,
+                                                                    map_radius,
+                                                                    "rooms_data"
+                                                            );
 								child->layer = layer.level;
 								if (!next_parents.empty()) {
 													next_parents.back()->set_sibling_right(child.get());
@@ -178,22 +218,35 @@ std::vector<std::unique_ptr<Room>> GenerateRooms::build(AssetLibrary* asset_lib,
 		std::cout << "[GenerateRooms] Total rooms created (pre-trail): " << all_rooms.size() << "\n";
 		std::cout << "[GenerateRooms] Beginning trail generation...\n";
 	}
-	if (all_rooms.size() > 1) {
-		GenerateTrails trailgen(map_path_ + "/trails");
-		auto trail_objects = trailgen.generate_trails(connections, existing_areas, map_path_, asset_lib);
-		for (auto& t : trail_objects) {
-			all_rooms.push_back(std::move(t));
-		}
-	}
+        if (all_rooms.size() > 1) {
+                GenerateTrails trailgen(trails_data);
+                std::vector<Room*> room_refs;
+                room_refs.reserve(all_rooms.size());
+                for (auto& room_ptr : all_rooms) {
+                        room_refs.push_back(room_ptr.get());
+                }
+                trailgen.set_all_rooms_reference(room_refs);
+                auto trail_objects = trailgen.generate_trails(
+                        connections,
+                        existing_areas,
+                        map_path_,
+                        map_info_path_,
+                        asset_lib,
+                        map_assets_ptr,
+                        map_radius);
+                for (auto& t : trail_objects) {
+                        all_rooms.push_back(std::move(t));
+                }
+        }
 	if (testing) {
 		std::cout << "[GenerateRooms] Trail generation complete. Total rooms now: " << all_rooms.size() << "\n";
 	}
-	if (!boundary_json.empty()) {
-		std::cout << "[Boundary] Starting boundary asset spawning...\n";
-		std::vector<Area> exclusion_zones;
-		for (const auto& r : all_rooms) {
-			exclusion_zones.push_back(*r->room_area);
-		}
+        if (!boundary_data.is_null() && !boundary_data.empty()) {
+                std::cout << "[Boundary] Starting boundary asset spawning...\n";
+                std::vector<Area> exclusion_zones;
+                for (const auto& r : all_rooms) {
+                        exclusion_zones.push_back(*r->room_area);
+                }
 		std::cout << "[Boundary] Collected " << exclusion_zones.size() << " exclusion zones from existing rooms.\n";
 		int cx = map_radius;
 		int cy = map_radius;
@@ -202,7 +255,10 @@ std::vector<std::unique_ptr<Room>> GenerateRooms::build(AssetLibrary* asset_lib,
 		Area area("Map", center, diameter, diameter, "Circle", 1, diameter, diameter);
 		std::cout << "[Boundary] Created circular boundary area with diameter " << diameter << "\n";
 		AssetSpawner spawner(asset_lib, exclusion_zones);
-		std::vector<std::unique_ptr<Asset>> boundary_assets = spawner.spawn_boundary_from_file(map_path_ + "/" + boundary_json, area);
+                std::vector<std::unique_ptr<Asset>> boundary_assets = spawner.spawn_boundary_from_json(
+                        boundary_data,
+                        area,
+                        map_info_path_ + "::map_boundary_data");
 		std::cout << "[Boundary] Extracted " << boundary_assets.size() << " spawned boundary assets\n";
 		int assigned_count = 0;
 		for (auto& asset_ptr : boundary_assets) {

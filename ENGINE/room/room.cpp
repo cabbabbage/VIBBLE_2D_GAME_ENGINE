@@ -6,63 +6,67 @@
 #include <random>
 #include <algorithm>
 #include <iostream>
+#include <cmath>
 using json = nlohmann::json;
 
 Room::Room(Point origin,
            std::string type_,
            const std::string& room_def_name,
            Room* parent,
-           const std::string& room_dir,
            const std::string& map_dir,
+           const std::string& map_info_path,
            AssetLibrary* asset_lib,
-           Area* precomputed_area
+           Area* precomputed_area,
+           nlohmann::json* room_data,
+           const nlohmann::json* map_assets_data,
+           double map_radius,
+           const std::string& data_section
 )
 : map_origin(origin),
 parent(parent),
 room_name(room_def_name),
-room_directory(room_dir),
+room_directory(map_info_path + "::" + data_section),
 map_path(map_dir),
-json_path(room_dir + "/" + room_def_name + ".json"),
+json_path(map_info_path + "::" + data_section + "::" + room_def_name),
 room_area(nullptr),
-type(type_)
+type(type_),
+room_data_ptr_(room_data),
+map_assets_data_ptr_(map_assets_data),
+map_info_path_(map_info_path),
+data_section_(data_section)
 {
-	if (testing) {
-		std::cout << "[Room] Created room: " << room_name
-		<< " at (" << origin.first << ", " << origin.second << ")"
-		<< (parent ? " with parent\n" : " (no parent)\n");
-	}
-	std::ifstream in(json_path);
-	if (!in.is_open()) {
-		throw std::runtime_error("[Room] Failed to open room JSON: " + json_path);
-	}
-	json J;
-	in >> J;
-	assets_json = J;
-	int map_radius = 0;
-	{
-		std::ifstream minf(map_path + "/map_info.json");
-		if (minf.is_open()) {
-			json m;
-			minf >> m;
-			map_radius = m.value("map_radius", 0);
-		} else if (testing) {
-			std::cerr << "[Room] Warning: could not open map_info.json at " << map_path << "\n";
-		}
-	}
-	int map_w = map_radius * 2;
-	int map_h = map_radius * 2;
-	if (precomputed_area) {
-		if (testing) {
-			std::cout << "[Room] Using precomputed area for: " << room_name << "\n";
-		}
-		room_area = std::make_unique<Area>(room_name, precomputed_area->get_points());
-	} else {
-		int min_w = J.value("min_width", 64);
-		int max_w = J.value("max_width", 64);
-		int min_h = J.value("min_height", 64);
-		int max_h = J.value("max_height", 64);
-		int edge_smoothness = J.value("edge_smoothness", 2);
-		std::string geometry = J.value("geometry", "square");
+        if (testing) {
+                std::cout << "[Room] Created room: " << room_name
+                << " at (" << origin.first << ", " << origin.second << ")"
+                << (parent ? " with parent\n" : " (no parent)\n");
+        }
+        if (room_data_ptr_) {
+                if (room_data_ptr_->is_null()) {
+                        *room_data_ptr_ = json::object();
+                }
+                if (room_data_ptr_->is_object()) {
+                        assets_json = *room_data_ptr_;
+                }
+        }
+        if (!assets_json.is_object()) {
+                assets_json = json::object();
+        }
+        int map_radius_int = static_cast<int>(std::round(map_radius));
+        if (map_radius_int < 0) map_radius_int = 0;
+        int map_w = map_radius_int * 2;
+        int map_h = map_radius_int * 2;
+        if (precomputed_area) {
+                if (testing) {
+                        std::cout << "[Room] Using precomputed area for: " << room_name << "\n";
+                }
+                room_area = std::make_unique<Area>(room_name, precomputed_area->get_points());
+        } else {
+                int min_w = assets_json.value("min_width", 64);
+                int max_w = assets_json.value("max_width", 64);
+                int min_h = assets_json.value("min_height", 64);
+                int max_h = assets_json.value("max_height", 64);
+                int edge_smoothness = assets_json.value("edge_smoothness", 2);
+                std::string geometry = assets_json.value("geometry", "square");
 		if (!geometry.empty()) geometry[0] = std::toupper(geometry[0]);
 		static std::mt19937 rng(std::random_device{}());
 		int width = std::uniform_int_distribution<>(min_w, max_w)(rng);
@@ -79,23 +83,15 @@ type(type_)
 	std::vector<json> json_sources;
 	std::vector<std::string> source_paths;
 	json_sources.push_back(assets_json);
-	source_paths.push_back(json_path);
-	if (assets_json.value("inherits_map_assets", false)) {
-		const std::string map_assets_path = map_path + "/map_assets.json";
-		std::ifstream map_in(map_assets_path);
-		if (map_in.is_open()) {
-			json map_assets;
-			map_in >> map_assets;
-			json_sources.push_back(map_assets);
-			source_paths.push_back(map_assets_path);
-		} else if (testing) {
-			std::cerr << "[Room] Warning: inherits_map_assets is true, but map_assets.json not found in " << map_path << "\n";
-		}
-	}
-	planner = std::make_unique<AssetSpawnPlanner>( json_sources, *room_area, *asset_lib, source_paths );
-	std::vector<Area> exclusion;
-	AssetSpawner spawner(asset_lib, exclusion);
-	spawner.spawn(*this);
+        source_paths.push_back(json_path);
+        if (assets_json.value("inherits_map_assets", false) && map_assets_data_ptr_) {
+                json_sources.push_back(*map_assets_data_ptr_);
+                source_paths.push_back(map_info_path_ + "::map_assets_data");
+        }
+        planner = std::make_unique<AssetSpawnPlanner>( json_sources, *room_area, *asset_lib, source_paths );
+        std::vector<Area> exclusion;
+        AssetSpawner spawner(asset_lib, exclusion);
+        spawner.spawn(*this);
 }
 
 void Room::set_sibling_left(Room* left_room) {
@@ -145,7 +141,7 @@ void Room::bounds_to_size(const std::tuple<int,int,int,int>& b, int& w, int& h) 
 }
 
 nlohmann::json Room::create_static_room_json(std::string name) {
-	json out;
+        json out;
 	const std::string geometry = assets_json.value("geometry", "Square");
 	const int edge_smoothness = assets_json.value("edge_smoothness", 2);
 	int width = 0, height = 0;
@@ -309,9 +305,32 @@ nlohmann::json& Room::assets_data() {
         return assets_json;
 }
 
+bool Room::is_spawn_room() const {
+        return assets_json.value("is_spawn", false);
+}
+
 void Room::save_assets_json() const {
-        std::ofstream out(json_path);
+        if (room_data_ptr_) {
+                *room_data_ptr_ = assets_json;
+        }
+        if (map_info_path_.empty() || data_section_.empty()) {
+                return;
+        }
+        nlohmann::json map_info_json;
+        std::ifstream in(map_info_path_);
+        if (in.is_open()) {
+                in >> map_info_json;
+        }
+        if (!map_info_json.is_object()) {
+                map_info_json = nlohmann::json::object();
+        }
+        nlohmann::json& section = map_info_json[data_section_];
+        if (!section.is_object()) {
+                section = nlohmann::json::object();
+        }
+        section[room_name] = assets_json;
+        std::ofstream out(map_info_path_);
         if (out.is_open()) {
-                out << assets_json.dump(2);
+                out << map_info_json.dump(2);
         }
 }

@@ -9,6 +9,7 @@
 #include <SDL.h>
 #include "asset/Asset.hpp"
 #include "asset/asset_library.hpp"
+#include "asset/asset_types.hpp"
 #include "room/room.hpp"
 #include "utils/area.hpp"
 #include "room/generate_rooms.hpp"
@@ -43,8 +44,8 @@ AssetLoader::AssetLoader(const std::string& map_dir, SDL_Renderer* renderer)
 : map_path_(map_dir),
 renderer_(renderer)
 {
-	load_map_json();
-	asset_library_ = std::make_unique<AssetLibrary>();
+        load_map_json();
+        asset_library_ = std::make_unique<AssetLibrary>();
     loadRooms();
     {
         // Load animations only for assets actually present in generated rooms
@@ -67,7 +68,7 @@ renderer_(renderer)
 	for (Room* room : rooms_) {
 		for (auto& asset_up : room->assets) {
             if (auto* asset = asset_up.get()) {
-                if (asset->info && asset->info->type != "Player" && !asset->info->moving_asset) {
+                if (asset->info && asset->info->type != asset_types::player && !asset->info->moving_asset) {
                     link_candidates.push_back(asset);
                 }
             }
@@ -142,7 +143,7 @@ std::vector<Asset*> AssetLoader::collectDistantAssets(int fade_start_distance, i
 	for (Room* room : rooms_) {
 		for (auto& asset_up : room->assets) {
 			Asset* asset = asset_up.get();
-            if (!asset->info || asset->info->type != "boundary") {
+            if (!asset->info || asset->info->type != asset_types::boundary) {
                     asset->alpha_percentage = 1.0;
                     continue;
             }
@@ -193,11 +194,21 @@ std::vector<Asset*> AssetLoader::collectDistantAssets(int fade_start_distance, i
 }
 
 void AssetLoader::loadRooms() {
-	GenerateRooms generator(map_layers_, map_center_x_, map_center_y_, map_path_);
-	auto room_ptrs = generator.build(asset_library_.get(), map_radius_, map_boundary_file_);
-	for (auto& up : room_ptrs) {
-		rooms_.push_back(up.get());
-		all_rooms_.push_back(std::move(up));
+        GenerateRooms generator(map_layers_, map_center_x_, map_center_y_, map_path_, map_info_path_);
+        nlohmann::json empty_boundary = nlohmann::json::object();
+        nlohmann::json empty_rooms    = nlohmann::json::object();
+        nlohmann::json empty_trails   = nlohmann::json::object();
+        nlohmann::json empty_assets   = nlohmann::json::object();
+        auto room_ptrs = generator.build(
+                asset_library_.get(),
+                map_radius_,
+                map_boundary_data_ ? *map_boundary_data_ : empty_boundary,
+                rooms_data_        ? *rooms_data_        : empty_rooms,
+                trails_data_       ? *trails_data_       : empty_trails,
+                map_assets_data_   ? *map_assets_data_   : empty_assets);
+        for (auto& up : room_ptrs) {
+                rooms_.push_back(up.get());
+                all_rooms_.push_back(std::move(up));
 	}
 }
 
@@ -242,36 +253,61 @@ std::vector<Area> AssetLoader::getAllRoomAndTrailAreas() const {
 
 
 void AssetLoader::load_map_json() {
-	std::ifstream f(map_path_ + "/map_info.json");
-	if (!f) throw std::runtime_error("Failed to open map_info.json");
-	json j;
-	f >> j;
-	map_radius_        = j.value("map_radius", 0);
-	map_boundary_file_ = j.value("map_boundary", "");
-	map_center_x_ = map_center_y_ = map_radius_;
-	for (const auto& L : j["map_layers"]) {
-		LayerSpec spec;
-		spec.level     = L.value("level", 0);
-		spec.radius    = L.value("radius", 0);
-		spec.min_rooms = L.value("min_rooms", 0);
-		spec.max_rooms = L.value("max_rooms", 0);
-		for (const auto& R : L["rooms"]) {
-			RoomSpec rs;
-			rs.name = R.value("name", "unnamed");
-			rs.min_instances = R.value("min_instances", 1);
-			rs.max_instances = R.value("max_instances", 1);
-			if (R.contains("required_children") && R["required_children"].is_array()) {
-					for (const auto& c : R["required_children"]) {
-								if (c.is_string()) {
-													rs.required_children.push_back(c.get<std::string>());
-								} else {
-													std::cerr << "[AssetLoader] Room '" << rs.name
-													<< "' has non-string entry in 'required_children'; skipping.\n";
-								}
-					}
-			}
-			spec.rooms.push_back(std::move(rs));
-		}
-		map_layers_.push_back(std::move(spec));
-	}
+        map_info_path_ = map_path_ + "/map_info.json";
+        std::ifstream f(map_info_path_);
+        if (!f) throw std::runtime_error("Failed to open map_info.json");
+
+        json j;
+        f >> j;
+        map_info_json_ = std::move(j);
+
+        map_radius_     = map_info_json_.value("map_radius", 0.0);
+        map_center_x_   = map_center_y_ = map_radius_;
+        map_layers_.clear();
+
+        auto layers_it = map_info_json_.find("map_layers");
+        if (layers_it != map_info_json_.end() && layers_it->is_array()) {
+                for (const auto& layer_entry : *layers_it) {
+                        LayerSpec spec;
+                        spec.level     = layer_entry.value("level", 0);
+                        spec.radius    = layer_entry.value("radius", 0);
+                        spec.min_rooms = layer_entry.value("min_rooms", 0);
+                        spec.max_rooms = layer_entry.value("max_rooms", 0);
+
+                        auto rooms_it = layer_entry.find("rooms");
+                        if (rooms_it != layer_entry.end() && rooms_it->is_array()) {
+                                for (const auto& room_entry : *rooms_it) {
+                                        RoomSpec rs;
+                                        rs.name          = room_entry.value("name", "unnamed");
+                                        rs.min_instances = room_entry.value("min_instances", 1);
+                                        rs.max_instances = room_entry.value("max_instances", 1);
+
+                                        auto required_it = room_entry.find("required_children");
+                                        if (required_it != room_entry.end() && required_it->is_array()) {
+                                                for (const auto& child : *required_it) {
+                                                        if (child.is_string()) {
+                                                                rs.required_children.push_back(child.get<std::string>());
+                                                        } else {
+                                                                std::cerr << "[AssetLoader] Room '" << rs.name
+                                                                          << "' has non-string entry in 'required_children'; skipping.\n";
+                                                        }
+                                                }
+                                        }
+
+                                        spec.rooms.push_back(std::move(rs));
+                                }
+                        }
+
+                        map_layers_.push_back(std::move(spec));
+                }
+        }
+
+        map_assets_data_   = &map_info_json_["map_assets_data"];
+        if (!map_assets_data_->is_object()) *map_assets_data_ = nlohmann::json::object();
+        map_boundary_data_ = &map_info_json_["map_boundary_data"];
+        if (!map_boundary_data_->is_object()) *map_boundary_data_ = nlohmann::json::object();
+        rooms_data_        = &map_info_json_["rooms_data"];
+        if (!rooms_data_->is_object()) *rooms_data_ = nlohmann::json::object();
+        trails_data_       = &map_info_json_["trails_data"];
+        if (!trails_data_->is_object()) *trails_data_ = nlohmann::json::object();
 }

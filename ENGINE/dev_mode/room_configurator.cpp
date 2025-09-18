@@ -6,7 +6,7 @@
 #include "widgets.hpp"
 
 RoomConfigurator::RoomConfigurator() {
-    room_geom_options_ = {"Rectangle", "Circle"};
+    room_geom_options_ = {"Square", "Circle"};
     panel_ = std::make_unique<DockableCollapsible>("Room", true, 32, 32);
     panel_->set_expanded(true);
     panel_->set_visible(false);
