@@ -165,9 +165,24 @@ nlohmann::json build_default_map_info(const std::string& map_name) {
     layer["rooms"] = nlohmann::json::array({spawn_spec});
     map_info["map_layers"] = nlohmann::json::array({layer});
 
+    nlohmann::json default_light = nlohmann::json::object({
+        {"radius", 0},
+        {"intensity", 255},
+        {"orbit_radius", 0},
+        {"update_interval", 10},
+        {"mult", 0.0},
+        {"fall_off", 100},
+        {"min_opacity", 0},
+        {"max_opacity", 255},
+        {"base_color", nlohmann::json::array({255, 255, 255, 255})},
+        {"keys", nlohmann::json::array({
+            nlohmann::json::array({0.0, nlohmann::json::array({255, 255, 255, 255})})
+        })}
+    });
+
     map_info["map_assets_data"] = nlohmann::json::object();
     map_info["map_boundary_data"] = nlohmann::json::object();
-    map_info["map_light_data"] = nlohmann::json::object();
+    map_info["map_light_data"] = std::move(default_light);
     map_info["trails_data"] = nlohmann::json::object();
 
     nlohmann::json spawn_room;

@@ -46,9 +46,18 @@ void MapLightPanel::set_map_info(json* map_info, SaveCallback on_save) {
 
 // --------------------- Visibility ------------------------
 
-void MapLightPanel::open()   { set_visible(true);  }
+void MapLightPanel::open()   {
+    set_visible(true);
+    set_expanded(true);
+}
 void MapLightPanel::close()  { set_visible(false); }
-void MapLightPanel::toggle() { set_visible(!visible_); }
+void MapLightPanel::toggle() {
+    if (is_visible()) {
+        close();
+    } else {
+        open();
+    }
+}
 bool MapLightPanel::is_visible() const { return visible_; }
 
 // --------------------- UI Build --------------------------
@@ -162,6 +171,17 @@ nlohmann::json& MapLightPanel::ensure_light() {
     if (!L.contains("fall_off"))       L["fall_off"] = 100;
     if (!L.contains("min_opacity"))    L["min_opacity"] = 0;
     if (!L.contains("max_opacity"))    L["max_opacity"] = 255;
+    {
+        int min_o = 0;
+        int max_o = 255;
+        try { min_o = L.at("min_opacity").get<int>(); } catch(...) {}
+        try { max_o = L.at("max_opacity").get<int>(); } catch(...) {}
+        min_o = clamp_int(min_o, 0, 255);
+        max_o = clamp_int(max_o, 0, 255);
+        if (min_o > max_o) std::swap(min_o, max_o);
+        L["min_opacity"] = min_o;
+        L["max_opacity"] = max_o;
+    }
 
     if (!L.contains("base_color") || !L["base_color"].is_array() || L["base_color"].size() < 4) {
         L["base_color"] = {255,255,255,255};
@@ -254,8 +274,11 @@ void MapLightPanel::sync_json_from_ui() {
     L["update_interval"]= update_interval_->value();
     L["mult"]           = (double)mult_x100_->value() / 100.0;
     L["fall_off"]       = falloff_->value();
-    L["min_opacity"]    = min_opacity_->value();
-    L["max_opacity"]    = max_opacity_->value();
+    int min_o = clamp_int(min_opacity_->value(), 0, 255);
+    int max_o = clamp_int(max_opacity_->value(), 0, 255);
+    if (min_o > max_o) std::swap(min_o, max_o);
+    L["min_opacity"]    = min_o;
+    L["max_opacity"]    = max_o;
 
     L["base_color"]     = json::array({ base_r_->value(), base_g_->value(), base_b_->value(), base_a_->value() });
 
@@ -380,11 +403,11 @@ void MapLightPanel::delete_current_key() {
 
 // --------------------- Panel lifecycle -------------------
 
-void MapLightPanel::update(const Input& input) {
+void MapLightPanel::update(const Input& input, int screen_w, int screen_h) {
     if (!visible_) return;
 
     // Let base handle layout/scrolling math
-    DockableCollapsible::update(input, /*screen_w*/0, /*screen_h*/0);
+    DockableCollapsible::update(input, screen_w, screen_h);
 
     // Nothing else needed here; edits are detected in handle_event, then we sync-json-on-change.
 }

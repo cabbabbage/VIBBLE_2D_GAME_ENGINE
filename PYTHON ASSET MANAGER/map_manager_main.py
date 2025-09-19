@@ -198,11 +198,20 @@ class MapManagerApp(tk.Toplevel):
                 messagebox.showerror("Exists", f"Map '{safe}' already exists.")
                 continue
             os.makedirs(folder, exist_ok=True)
+            created = set()
             for cls in TABS.values():
-                p = os.path.join(folder, cls.get_json_filename())
-                if not os.path.exists(p):
-                    with open(p, "w") as f:
-                        json.dump({}, f)
+                filename = cls.get_json_filename()
+                if filename in created:
+                    continue
+                created.add(filename)
+                path = os.path.join(folder, filename)
+                if os.path.exists(path):
+                    continue
+                contents = {}
+                if filename == MapLightPage.get_json_filename():
+                    contents = {"map_light_data": MapLightPage.default_map_light_data()}
+                with open(path, "w") as f:
+                    json.dump(contents, f, indent=2)
             break
         self._refresh_map_list()
         self.map_buttons[safe].invoke()

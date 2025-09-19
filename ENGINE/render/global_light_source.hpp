@@ -33,6 +33,8 @@ class Global_Light_Source {
     void set_defaults(int screen_width, SDL_Color fallback_base_color);
     void build_texture();
     void set_light_brightness();
+    Uint8 clamp_alpha(Uint8 value) const;
+    SDL_Color clamp_color_alpha(SDL_Color color) const;
     SDL_Color compute_color_from_horizon() const;
 
 	private:
@@ -52,6 +54,8 @@ class Global_Light_Source {
     float fall_off_;
     int   orbit_radius;
     int   update_interval_;
+    int   min_opacity_;
+    int   max_opacity_;
     std::vector<KeyEntry> key_colors_;
     int cached_w_ = 0;
     int cached_h_ = 0;

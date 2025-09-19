@@ -137,6 +137,13 @@ bool FullScreenCollapsible::handle_event(const SDL_Event& e) {
             }
         }
     }
+
+    if (expanded_ && content_event_handler_) {
+        if (content_event_handler_(e)) {
+            used = true;
+        }
+    }
+
     if (used) return true;
 
     const bool pointer_event =
@@ -150,7 +157,9 @@ bool FullScreenCollapsible::handle_event(const SDL_Event& e) {
             return true;
         }
         if (expanded_ && SDL_PointInRect(&p, &content_rect_)) {
-            return true;
+            // Allow callers to route events to embedded widgets while keeping
+            // containment checks for input blocking elsewhere.
+            return false;
         }
     } else if (e.type == SDL_MOUSEWHEEL) {
         int mx = 0;
@@ -161,7 +170,7 @@ bool FullScreenCollapsible::handle_event(const SDL_Event& e) {
             return true;
         }
         if (expanded_ && SDL_PointInRect(&p, &content_rect_)) {
-            return true;
+            return false;
         }
     }
     return false;

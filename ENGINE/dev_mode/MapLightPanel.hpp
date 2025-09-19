@@ -32,7 +32,7 @@ public:
     bool is_visible() const;
 
     // Standard dev-mode panel API
-    void update(const Input& input);
+    void update(const Input& input, int screen_w = 0, int screen_h = 0);
     bool handle_event(const SDL_Event& e);
     void render(SDL_Renderer* r) const;
 

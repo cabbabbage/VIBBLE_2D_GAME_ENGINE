@@ -486,7 +486,7 @@ void MapModeUI::update(const Input& input) {
         }
         if (auto* lights = dynamic_cast<MapLightPanel*>(panel)) {
             if (lights->is_visible()) {
-                lights->update(input);
+                lights->update(input, screen_w_, screen_h_);
             }
             continue;
         }

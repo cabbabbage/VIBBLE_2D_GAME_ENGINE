@@ -1,4 +1,5 @@
 # === File: pages/map_light_page.py ===
+import copy
 import os
 import json
 import tkinter as tk
@@ -7,21 +8,28 @@ from map_pages.key_color import ColorKeyCircleEditor
 from shared.range import Range
 
 DEFAULTS = {
-    "radius": 1920,
+    "radius": 0,
     "intensity": 255,
-    "orbit_radius": 150,
-    "update_interval": 2,
-    "mult": 0.4,
-    "fall_off": 1.0,
+    "orbit_radius": 0,
+    "update_interval": 10,
+    "mult": 0.0,
+    "fall_off": 100,
+    "min_opacity": 0,
+    "max_opacity": 255,
     "base_color": [255, 255, 255, 255],
-    "keys": []
+    "keys": [[0.0, [255, 255, 255, 255]]]
 }
+
+
+def _default_light_data():
+    return copy.deepcopy(DEFAULTS)
 
 class MapLightPage(tk.Frame):
     def __init__(self, parent):
         super().__init__(parent, bg='#1e1e1e')
         self.json_path = None
-        self.data = DEFAULTS.copy()
+        self.data = _default_light_data()
+        self.full_map_info = {}
         self._suspend_save = False
 
         title = tk.Label(self, text="Map Lighting", font=("Segoe UI", 20, "bold"),
@@ -115,9 +123,64 @@ class MapLightPage(tk.Frame):
         if not json_path:
             return
         self.json_path = json_path
-        self.data = DEFAULTS.copy()
-        if isinstance(data, dict):
-            self.data.update(data)
+        self.full_map_info = data if isinstance(data, dict) else {}
+        raw_light = {}
+        if isinstance(self.full_map_info, dict):
+            raw_light = self.full_map_info.get("map_light_data", {})
+            if not isinstance(raw_light, dict):
+                raw_light = {}
+
+        merged = _default_light_data()
+        for key, value in raw_light.items():
+            if key == "keys":
+                continue
+            merged[key] = value
+
+        base_color = merged.get("base_color", DEFAULTS["base_color"])
+        if not isinstance(base_color, (list, tuple)) or len(base_color) < 4:
+            base_color = DEFAULTS["base_color"]
+        merged["base_color"] = [int(x) for x in list(base_color)[:4]]
+
+        numeric_defaults = {
+            "radius": DEFAULTS["radius"],
+            "intensity": DEFAULTS["intensity"],
+            "orbit_radius": DEFAULTS["orbit_radius"],
+            "update_interval": DEFAULTS["update_interval"],
+            "fall_off": DEFAULTS["fall_off"],
+            "min_opacity": DEFAULTS["min_opacity"],
+            "max_opacity": DEFAULTS["max_opacity"],
+        }
+        for key, fallback in numeric_defaults.items():
+            try:
+                merged[key] = int(float(merged.get(key, fallback)))
+            except (TypeError, ValueError):
+                merged[key] = fallback
+
+        try:
+            merged["mult"] = float(merged.get("mult", DEFAULTS["mult"]))
+        except (TypeError, ValueError):
+            merged["mult"] = DEFAULTS["mult"]
+        merged["mult"] = max(0.0, min(1.0, merged["mult"]))
+
+        clamps = {
+            "radius": (0, 20000),
+            "intensity": (0, 255),
+            "orbit_radius": (0, 20000),
+            "fall_off": (0, 100),
+            "min_opacity": (0, 255),
+            "max_opacity": (0, 255),
+        }
+        for key, (lo, hi) in clamps.items():
+            merged[key] = max(lo, min(hi, merged.get(key, lo)))
+        merged["update_interval"] = max(1, min(120, merged.get("update_interval", DEFAULTS["update_interval"])))
+
+        keys = raw_light.get("keys") if isinstance(raw_light, dict) else None
+        if isinstance(keys, list) and keys:
+            merged["keys"] = copy.deepcopy(keys)
+        else:
+            merged["keys"] = [[0.0, list(merged["base_color"][:4])]]
+
+        self.data = merged
         self._suspend_save = True
 
         self.radius_range.set(self.data["radius"], self.data["radius"])
@@ -146,13 +209,32 @@ class MapLightPage(tk.Frame):
     def _save_json(self):
         if not self.json_path:
             return
+        serialized = _default_light_data()
+        serialized.update(self.data)
+        serialized["base_color"] = list(serialized["base_color"][:4])
+        serialized["keys"] = copy.deepcopy(self.data.get("keys", DEFAULTS["keys"]))
+        if not serialized["keys"]:
+            serialized["keys"] = [[0.0, list(serialized["base_color"][:4])]]
+        try:
+            with open(self.json_path, "r") as f:
+                full = json.load(f)
+                if not isinstance(full, dict):
+                    full = {}
+        except Exception:
+            full = {}
+        full["map_light_data"] = serialized
         try:
             with open(self.json_path, "w") as f:
-                json.dump(self.data, f, indent=2)
+                json.dump(full, f, indent=2)
+            self.full_map_info = full
         except Exception as e:
             messagebox.showerror("Save Failed", str(e))
 
     @staticmethod
     def get_json_filename():
-        return "map_light.json"
+        return "map_info.json"
+
+    @staticmethod
+    def default_map_light_data():
+        return _default_light_data()
 

@@ -364,7 +364,7 @@ camera::RenderEffects camera::compute_render_effects(SDL_Point world,
             const double screen_bias      = 0.5 + 0.5 * std::tanh(dy / SY);
             const double zoom_attenuation = camera_height / (camera_height + height_at_zoom1 + EPS);
             const double ref_h            = (reference_screen_height > EPS) ? reference_screen_height : 1.0;
-            const double height_factor    = static_cast<double>(asset_screen_height) / ref_h;
+            const double height_factor    = std::pow((static_cast<double>(asset_screen_height) / ref_h),0.9);
 
             const double squash = foreshorten_strength * screen_bias * zoom_attenuation * height_factor;
             const double new_vertical_scale = std::clamp(1.0 - squash, 0.1, 1.0);

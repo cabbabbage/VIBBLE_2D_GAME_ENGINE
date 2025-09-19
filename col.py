@@ -10,7 +10,7 @@ def load_json(path):
         return json.load(f)
 
 def main():
-    # Load base map_info
+    # Load base map_info (already contains map_light_data since legacy files were merged)
     map_info = load_json(os.path.join(ROOT, "map_info.json"))
 
     # Merge in map_assets
@@ -18,9 +18,6 @@ def main():
 
     # Merge in map_boundary
     map_info["map_boundary_data"] = load_json(os.path.join(ROOT, "map_boundary.json"))
-
-    # Merge in map_light
-    map_info["map_light_data"] = load_json(os.path.join(ROOT, "map_light.json"))
 
     # Merge rooms
     rooms_dir = os.path.join(ROOT, "rooms")

@@ -293,7 +293,7 @@ void DevControls::update(const Input& input) {
 void DevControls::update_ui(const Input& input) {
     if (!enabled_) return;
     if (map_light_panel_) {
-        map_light_panel_->update(input);
+        map_light_panel_->update(input, screen_w_, screen_h_);
     }
     if (mode_ != Mode::RoomEditor) return;
     if (!room_editor_ || !room_editor_->is_enabled()) return;

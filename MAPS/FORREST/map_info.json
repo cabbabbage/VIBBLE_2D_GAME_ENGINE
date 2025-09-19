@@ -2,11 +2,11 @@
   "camera_settings": {
     "distance_scale_strength": 0.029999999329447746,
     "foreshorten_strength": 0.03999999910593033,
-    "height_at_zoom1": 528.0,
-    "parallax_strength": 13.5,
+    "height_at_zoom1": 713.0,
+    "parallax_strength": 19.75,
     "realism_enabled": true,
     "render_distance": 970.0,
-    "tripod_distance_y": -1075.0
+    "tripod_distance_y": -1250.0
   },
   "map_assets_data": {
     "spawn_groups": [
@@ -171,8 +171,8 @@
   "map_light_data": {
     "base_color": [
       255,
-      255,
-      255,
+      246,
+      248,
       255
     ],
     "fall_off": 100,
@@ -193,34 +193,34 @@
           255,
           128,
           255,
-          0
+          129
         ]
       ],
       [
         180.0,
         [
           255,
-          0,
-          0,
-          0
+          50,
+          50,
+          30
         ]
       ],
       [
-        276.26,
+        276.0,
         [
           255,
           128,
           255,
-          0
+          129
         ]
       ]
     ],
     "max_opacity": 255,
     "min_opacity": 0,
-    "mult": 0.0,
-    "orbit_radius": 2288,
-    "radius": 2590,
-    "update_interval": 10
+    "mult": 0.32,
+    "orbit_radius": 1523,
+    "radius": 6667,
+    "update_interval": 30
   },
   "map_name": "FORREST",
   "map_radius": 10628.639402604544,
@@ -542,8 +542,13 @@
     },
     "brick": {
       "curvyness": 4,
+      "geometry": "Square",
       "inherits_map_assets": true,
-      "max_width": 800,
+      "is_boss": false,
+      "is_spawn": false,
+      "max_height": 1000,
+      "max_width": 1000,
+      "min_height": 100,
       "min_width": 100,
       "name": "brick",
       "spawn_groups": [

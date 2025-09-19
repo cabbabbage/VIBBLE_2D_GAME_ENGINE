@@ -275,15 +275,23 @@ void RoomEditor::handle_sdl_event(const SDL_Event& event) {
 
     bool handled = false;
     if (!handled && room_panel_ && room_panel_->visible()) {
-        bool config_used = false;
-        if (room_panel_->expanded()) {
-            ensure_room_configurator();
-            if (room_cfg_ui_) {
-                config_used = room_cfg_ui_->handle_event(event);
+        bool panel_used = room_panel_->handle_event(event);
+        if (!panel_used) {
+            const bool pointer_event =
+                (event.type == SDL_MOUSEBUTTONDOWN || event.type == SDL_MOUSEBUTTONUP ||
+                 event.type == SDL_MOUSEMOTION);
+            if (pointer_event) {
+                SDL_Point p{mx, my};
+                if (room_panel_->contains(p.x, p.y)) {
+                    panel_used = true;
+                }
+            } else if (event.type == SDL_MOUSEWHEEL) {
+                if (room_panel_->contains(mx, my)) {
+                    panel_used = true;
+                }
             }
         }
-        bool panel_used = room_panel_->handle_event(event);
-        handled = panel_used || config_used;
+        handled = panel_used;
     }
     if (!handled && info_ui_ && info_ui_->is_visible() && info_ui_->is_point_inside(mx, my)) {
         info_ui_->handle_event(event);
@@ -923,6 +931,13 @@ void RoomEditor::ensure_room_panel() {
     } else {
         room_panel_->set_bounds(screen_w_, screen_h_);
         room_panel_->set_visible(enabled_);
+    }
+    if (room_panel_) {
+        room_panel_->set_content_event_handler([this](const SDL_Event& event) {
+            ensure_room_configurator();
+            if (!room_cfg_ui_) return false;
+            return room_cfg_ui_->handle_event(event);
+        });
     }
     ensure_room_configurator();
     if (room_panel_ && room_cfg_ui_ && !room_panel_->expanded()) {

@@ -42,6 +42,13 @@ public:
     // arrow button.
     void set_on_toggle(std::function<void(bool)> cb) { on_toggle_ = std::move(cb); }
 
+    // Optional callback that receives events targeting the expanded content
+    // area. If provided, handle_event() will invoke it before deciding
+    // whether to swallow the event itself.
+    void set_content_event_handler(std::function<bool(const SDL_Event&)> cb) {
+        content_event_handler_ = std::move(cb);
+    }
+
     // Header buttons are mutually exclusive. Setting them replaces any
     // existing buttons. The provided callbacks are invoked when a button is
     // toggled active.
@@ -79,5 +86,6 @@ private:
     std::vector<HeaderButton> buttons_;
 
     std::function<void(bool)> on_toggle_;
+    std::function<bool(const SDL_Event&)> content_event_handler_;
 };
 

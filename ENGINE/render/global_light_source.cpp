@@ -40,10 +40,12 @@ void Global_Light_Source::set_defaults(int screen_width, SDL_Color fallback_base
         fall_off_        = 1.0f;
         orbit_radius     = std::max(1, screen_width / 4);
         update_interval_ = 2;
-        base_color_      = fallback_base_color;
-        current_color_   = fallback_base_color;
+        base_color_      = clamp_color_alpha(fallback_base_color);
+        current_color_   = base_color_;
+        min_opacity_     = 0;
+        max_opacity_     = 255;
         key_colors_.clear();
-        key_colors_.push_back({0.0f, fallback_base_color});
+        key_colors_.push_back({0.0f, base_color_});
 }
 
 bool Global_Light_Source::load_from_map_light(const std::string& map_path) {
@@ -85,6 +87,12 @@ void Global_Light_Source::apply_config(const json& data) {
         mult_          = std::clamp(data.value("mult", mult_), 0.0f, 1.0f);
         fall_off_      = data.value("fall_off", fall_off_);
 
+        min_opacity_ = std::clamp(data.value("min_opacity", min_opacity_), 0, 255);
+        max_opacity_ = std::clamp(data.value("max_opacity", max_opacity_), 0, 255);
+        if (min_opacity_ > max_opacity_) {
+                std::swap(min_opacity_, max_opacity_);
+        }
+
         const auto bc_it = data.find("base_color");
         if (bc_it != data.end() && bc_it->is_array() && bc_it->size() >= 3) {
                 base_color_.r = static_cast<Uint8>(std::clamp((*bc_it)[0].get<int>(), 0, 255));
@@ -96,6 +104,7 @@ void Global_Light_Source::apply_config(const json& data) {
                         base_color_.a = 255;
                 }
         }
+        base_color_ = clamp_color_alpha(base_color_);
 
         key_colors_.clear();
         const auto keys_it = data.find("keys");
@@ -116,7 +125,7 @@ void Global_Light_Source::apply_config(const json& data) {
                                 static_cast<Uint8>(std::clamp(col[2].get<int>(), 0, 255)),
                                 static_cast<Uint8>(std::clamp(col[3].get<int>(), 0, 255))
                         };
-                        key_colors_.push_back({deg, c});
+                        key_colors_.push_back({deg, clamp_color_alpha(c)});
                 }
         }
         if (key_colors_.empty()) {
@@ -127,7 +136,7 @@ void Global_Light_Source::apply_config(const json& data) {
                 });
         }
 
-        current_color_ = base_color_;
+        current_color_ = clamp_color_alpha(base_color_);
         build_texture();
         set_light_brightness();
 }
@@ -169,16 +178,18 @@ SDL_Texture* Global_Light_Source::get_texture() const {
 }
 
 void Global_Light_Source::set_light_brightness() {
-	constexpr int OFF = 245, FULL = 100;
-	int a = current_color_.a;
-	if (a >= OFF) {
-		light_brightness = 0;
-	} else if (a <= FULL) {
-		light_brightness = 255;
-	} else {
-		float r = float(OFF - a) / float(OFF - FULL);
-		light_brightness = int(r * 255.0f);
-	}
+        const int alpha = static_cast<int>(current_color_.a);
+        if (alpha <= min_opacity_) {
+                light_brightness = 255;
+                return;
+        }
+        if (alpha >= max_opacity_) {
+                light_brightness = 0;
+                return;
+        }
+        const int range = std::max(1, max_opacity_ - min_opacity_);
+        const float scaled = static_cast<float>(max_opacity_ - alpha) / static_cast<float>(range);
+        light_brightness = static_cast<int>(std::clamp(scaled * 255.0f, 0.0f, 255.0f));
 }
 
 void Global_Light_Source::build_texture() {
@@ -200,8 +211,8 @@ void Global_Light_Source::build_texture() {
 }
 
 SDL_Color Global_Light_Source::compute_color_from_horizon() const {
-	float deg = std::fmod(angle_ * (180.0f/float(M_PI)) + 270.0f, 360.0f);
-	if (deg < 0) deg += 360.0f;
+        float deg = std::fmod(angle_ * (180.0f/float(M_PI)) + 270.0f, 360.0f);
+        if (deg < 0) deg += 360.0f;
 
 	auto lerp = [](Uint8 A, Uint8 B, float t){
 		return Uint8(A + (B - A) * t);
@@ -215,33 +226,44 @@ SDL_Color Global_Light_Source::compute_color_from_horizon() const {
 		auto &K0 = key_colors_[i], &K1 = key_colors_[i+1];
 		if (deg >= K0.degree && deg <= K1.degree) {
 			float t = (deg - K0.degree) / (K1.degree - K0.degree);
-			return {
-				lerp(K0.color.r, K1.color.r, t),
-				lerp(K0.color.g, K1.color.g, t),
-				lerp(K0.color.b, K1.color.b, t),
-				lerp(K0.color.a, K1.color.a, t)
-			};
-		}
-	}
+                        return clamp_color_alpha({
+                                lerp(K0.color.r, K1.color.r, t),
+                                lerp(K0.color.g, K1.color.g, t),
+                                lerp(K0.color.b, K1.color.b, t),
+                                lerp(K0.color.a, K1.color.a, t)
+                        });
+                }
+        }
 
-	auto &KL = key_colors_.back(), &KF = key_colors_.front();
-	float span = 360.0f - KL.degree + KF.degree;
-	float t = (deg < KF.degree) ? (deg + 360.0f - KL.degree) / span : (deg - KL.degree) / span;
+        auto &KL = key_colors_.back(), &KF = key_colors_.front();
+        float span = 360.0f - KL.degree + KF.degree;
+        float t = (deg < KF.degree) ? (deg + 360.0f - KL.degree) / span : (deg - KL.degree) / span;
 
-	return {
-		lerp(KL.color.r, KF.color.r, t),
-		lerp(KL.color.g, KF.color.g, t),
-		lerp(KL.color.b, KF.color.b, t),
-		lerp(KL.color.a, KF.color.a, t)
-	};
+        return clamp_color_alpha({
+                lerp(KL.color.r, KF.color.r, t),
+                lerp(KL.color.g, KF.color.g, t),
+                lerp(KL.color.b, KF.color.b, t),
+                lerp(KL.color.a, KF.color.a, t)
+        });
 }
 
 SDL_Color Global_Light_Source::get_current_color() const {
-	return current_color_;
+        return current_color_;
 }
 
 int Global_Light_Source::get_brightness() const {
-	return light_brightness;
+        return light_brightness;
+}
+
+Uint8 Global_Light_Source::clamp_alpha(Uint8 value) const {
+        int v = static_cast<int>(value);
+        v = std::clamp(v, min_opacity_, max_opacity_);
+        return static_cast<Uint8>(v);
+}
+
+SDL_Color Global_Light_Source::clamp_color_alpha(SDL_Color color) const {
+        color.a = clamp_alpha(color.a);
+        return color;
 }
 
 Global_Light_Source::~Global_Light_Source() {
