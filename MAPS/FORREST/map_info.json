@@ -5,7 +5,7 @@
     "height_at_zoom1": 713.0,
     "parallax_strength": 19.75,
     "realism_enabled": true,
-    "render_distance": 970.0,
+    "render_distance": 700.0,
     "tripod_distance_y": -1250.0
   },
   "map_assets_data": {

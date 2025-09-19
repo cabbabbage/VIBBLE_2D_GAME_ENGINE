@@ -16,6 +16,17 @@ const DMButtonStyle &DMStyles::HeaderButton() {
   return s;
 }
 
+const DMButtonStyle &DMStyles::AccentButton() {
+  static const DMButtonStyle s{
+      {dm::FONT_PATH, 18, dm::rgba(235, 240, 255, 255)},
+      dm::rgba(40, 80, 150, 140),
+      dm::rgba(60, 110, 190, 180),
+      dm::rgba(80, 130, 210, 220),
+      dm::rgba(30, 70, 130, 200),
+      dm::rgba(235, 240, 255, 255)};
+  return s;
+}
+
 const DMButtonStyle &DMStyles::ListButton() {
   static const DMButtonStyle s{
       {dm::FONT_PATH, 16, dm::rgba(230, 230, 230, 255)},

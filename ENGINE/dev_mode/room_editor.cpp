@@ -33,6 +33,7 @@
 #include <cctype>
 #include <limits>
 #include <random>
+#include <optional>
 #include <tuple>
 #include <unordered_map>
 #include <unordered_set>
@@ -280,21 +281,6 @@ void RoomEditor::handle_sdl_event(const SDL_Event& event) {
             ensure_room_configurator();
             if (room_cfg_ui_) {
                 panel_used = room_cfg_ui_->handle_event(event);
-            }
-        }
-        if (!panel_used) {
-            const bool pointer_event =
-                (event.type == SDL_MOUSEBUTTONDOWN || event.type == SDL_MOUSEBUTTONUP ||
-                 event.type == SDL_MOUSEMOTION);
-            if (pointer_event) {
-                SDL_Point p{mx, my};
-                if (room_panel_->contains(p.x, p.y)) {
-                    panel_used = true;
-                }
-            } else if (event.type == SDL_MOUSEWHEEL) {
-                if (room_panel_->contains(mx, my)) {
-                    panel_used = true;
-                }
             }
         }
         handled = panel_used;
@@ -1344,17 +1330,40 @@ void RoomEditor::refresh_room_panel_buttons() {
     if (!room_panel_) return;
 
     std::vector<FullScreenCollapsible::HeaderButton> buttons;
+    std::optional<FullScreenCollapsible::HeaderButton> map_mode_button;
+    std::vector<FullScreenCollapsible::HeaderButton> trailing_buttons;
 
     FullScreenCollapsible::HeaderButton regenerate;
     regenerate.id = "regenerate";
     regenerate.label = "Regenerate Room";
     regenerate.momentary = true;
+    regenerate.style_override = &DMStyles::DeleteButton();
     regenerate.on_toggle = [this](bool) {
         regenerate_current_room();
         rebuild_room_spawn_id_cache();
         sync_room_panel_button_states();
     };
     buttons.push_back(std::move(regenerate));
+
+    for (const auto& button : floating_panel_buttons_) {
+        FullScreenCollapsible::HeaderButton header_btn;
+        header_btn.id = button.id;
+        header_btn.label = button.label;
+        if (button.is_active) {
+            header_btn.active = button.is_active();
+        }
+        header_btn.on_toggle = button.set_active;
+        if (button.id == "map_mode") {
+            header_btn.style_override = &DMStyles::AccentButton();
+            map_mode_button = std::move(header_btn);
+        } else {
+            trailing_buttons.push_back(std::move(header_btn));
+        }
+    }
+
+    if (map_mode_button) {
+        buttons.push_back(std::move(*map_mode_button));
+    }
 
     FullScreenCollapsible::HeaderButton library;
     library.id = "asset_library";
@@ -1370,14 +1379,7 @@ void RoomEditor::refresh_room_panel_buttons() {
     };
     buttons.push_back(std::move(library));
 
-    for (const auto& button : floating_panel_buttons_) {
-        FullScreenCollapsible::HeaderButton header_btn;
-        header_btn.id = button.id;
-        header_btn.label = button.label;
-        if (button.is_active) {
-            header_btn.active = button.is_active();
-        }
-        header_btn.on_toggle = button.set_active;
+    for (auto& header_btn : trailing_buttons) {
         buttons.push_back(std::move(header_btn));
     }
 

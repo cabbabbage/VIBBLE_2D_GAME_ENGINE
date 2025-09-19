@@ -73,7 +73,8 @@ void FullScreenCollapsible::set_expanded(bool expanded) {
 void FullScreenCollapsible::set_header_buttons(std::vector<HeaderButton> buttons) {
     buttons_ = std::move(buttons);
     for (auto& btn : buttons_) {
-        btn.widget = std::make_unique<DMButton>(btn.label, &DMStyles::HeaderButton(), 120, DMButton::height());
+        const DMButtonStyle* style = btn.style_override ? btn.style_override : &DMStyles::HeaderButton();
+        btn.widget = std::make_unique<DMButton>(btn.label, style, 120, DMButton::height());
     }
     layout_buttons();
 }
@@ -173,7 +174,10 @@ bool FullScreenCollapsible::handle_event(const SDL_Event& e) {
     }
 
     if (in_content) {
-        return true;
+        if (!pointer_event) {
+            return true;
+        }
+        return false;
     }
 
     return false;
@@ -250,22 +254,93 @@ void FullScreenCollapsible::layout_buttons() {
         x += DMSpacing::item_gap();
     }
     int right_limit = header_rect_.x + header_rect_.w - (kArrowButtonWidth + DMSpacing::item_gap());
-    const int button_gap = DMSpacing::small_gap();
-    bool out_of_space = false;
+    int available = right_limit - x;
+    const int min_gap = DMSpacing::small_gap();
+    const int preferred_width = 120;
+    const int min_width = 80;
+
+    std::vector<HeaderButton*> visible;
+    visible.reserve(buttons_.size());
     for (auto& btn : buttons_) {
-        if (!btn.widget) continue;
-        if (out_of_space || x >= right_limit) {
-            btn.widget->set_rect(SDL_Rect{0, 0, 0, 0});
-            continue;
+        if (btn.widget) {
+            visible.push_back(&btn);
         }
-        SDL_Rect rect{x, header_rect_.y + (kHeaderHeight - DMButton::height()) / 2, 120, DMButton::height()};
-        if (rect.x + rect.w > right_limit) {
-            btn.widget->set_rect(SDL_Rect{0, 0, 0, 0});
-            out_of_space = true;
-            continue;
+    }
+
+    if (visible.empty()) {
+        return;
+    }
+
+    if (available <= 0) {
+        for (auto* btn : visible) {
+            btn->widget->set_rect(SDL_Rect{0, 0, 0, 0});
         }
-        btn.widget->set_rect(rect);
-        x += rect.w + button_gap;
+        return;
+    }
+
+    const int count = static_cast<int>(visible.size());
+    const int header_y = header_rect_.y + (kHeaderHeight - DMButton::height()) / 2;
+
+    const int total_default = count * preferred_width + (count + 1) * min_gap;
+    if (total_default <= available) {
+        int gap_total = available - count * preferred_width;
+        int base_gap = gap_total / (count + 1);
+        int extra_gap = gap_total % (count + 1);
+        int current_x = x;
+        for (int i = 0; i < count; ++i) {
+            current_x += base_gap;
+            if (extra_gap > 0) {
+                ++current_x;
+                --extra_gap;
+            }
+            SDL_Rect rect{current_x, header_y, preferred_width, DMButton::height()};
+            visible[i]->widget->set_rect(rect);
+            current_x += preferred_width;
+        }
+        return;
+    }
+
+    int gap = min_gap;
+    int content_space = available - (count + 1) * gap;
+    if (content_space <= 0) {
+        for (auto* btn : visible) {
+            btn->widget->set_rect(SDL_Rect{0, 0, 0, 0});
+        }
+        return;
+    }
+
+    int width = content_space / count;
+    if (width > preferred_width) {
+        width = preferred_width;
+    } else if (width < min_width) {
+        width = std::max(min_width, width);
+    }
+
+    int remaining = available - (count * width + (count + 1) * gap);
+    if (remaining < 0) {
+        // Reduce width uniformly to fit the available area while keeping gaps equal.
+        int adjustable_space = available - (count + 1) * gap;
+        if (adjustable_space <= 0) {
+            for (auto* btn : visible) {
+                btn->widget->set_rect(SDL_Rect{0, 0, 0, 0});
+            }
+            return;
+        }
+        width = adjustable_space / count;
+        remaining = adjustable_space % count;
+    }
+
+    int current_x = x + gap;
+    int extra_width = remaining;
+    for (int i = 0; i < count; ++i) {
+        int button_width = width;
+        if (extra_width > 0) {
+            ++button_width;
+            --extra_width;
+        }
+        SDL_Rect rect{current_x, header_y, button_width, DMButton::height()};
+        visible[i]->widget->set_rect(rect);
+        current_x += button_width + gap;
     }
 }
 
