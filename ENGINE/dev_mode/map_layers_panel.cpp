@@ -11,7 +11,9 @@
 #include <algorithm>
 #include <cctype>
 #include <cmath>
+#include <cstdint>
 #include <fstream>
+#include <functional>
 #include <iostream>
 #include <numeric>
 #include <random>
@@ -191,6 +193,37 @@ std::vector<PreviewRoomSpec> build_children_pool(const PreviewLayerSpec& layer, 
         expandable.erase(expandable.begin() + static_cast<long>(idx));
     }
     return pool;
+}
+
+uint32_t compute_preview_seed(const std::vector<PreviewLayerSpec>& layers, const std::string& map_path) {
+    uint64_t seed = 0x9e3779b97f4a7c15ull;
+    auto mix = [&seed](uint64_t value) {
+        seed ^= value + 0x9e3779b97f4a7c15ull + (seed << 6) + (seed >> 2);
+    };
+
+    if (!map_path.empty()) {
+        mix(static_cast<uint64_t>(std::hash<std::string>{}(map_path)));
+    }
+
+    for (const auto& layer : layers) {
+        mix(static_cast<uint64_t>(static_cast<int64_t>(std::llround(layer.radius * 1000.0))));
+        mix(static_cast<uint64_t>((static_cast<uint32_t>(layer.min_rooms) << 16) ^ static_cast<uint32_t>(layer.max_rooms)));
+        mix(static_cast<uint64_t>(static_cast<uint32_t>(layer.level)));
+        for (const auto& room : layer.rooms) {
+            mix(static_cast<uint64_t>(std::hash<std::string>{}(room.name)));
+            mix(static_cast<uint64_t>((static_cast<uint32_t>(room.min_instances) << 16) ^ static_cast<uint32_t>(room.max_instances)));
+            for (const auto& child : room.required_children) {
+                mix(static_cast<uint64_t>(std::hash<std::string>{}(child)));
+            }
+        }
+    }
+
+    seed ^= (seed >> 33);
+    uint32_t result = static_cast<uint32_t>(seed ^ (seed >> 32));
+    if (result == 0) {
+        result = 0x6d5a56e9u;
+    }
+    return result;
 }
 
 } // namespace
@@ -417,6 +450,7 @@ private:
     std::unique_ptr<DMButton> reload_button_;
     std::unique_ptr<DMButton> config_button_;
     std::unique_ptr<DMButton> delete_button_;
+    std::unique_ptr<DMButton> preview_button_;
     bool dirty_ = false;
     int selected_layer_ = -1;
 };
@@ -428,6 +462,7 @@ MapLayersPanel::PanelSidebarWidget::PanelSidebarWidget(MapLayersPanel* owner)
     reload_button_ = std::make_unique<DMButton>("Reload", &DMStyles::HeaderButton(), 140, DMButton::height());
     config_button_ = std::make_unique<DMButton>("Open Config", &DMStyles::HeaderButton(), 140, DMButton::height());
     delete_button_ = std::make_unique<DMButton>("Delete Layer", &DMStyles::DeleteButton(), 140, DMButton::height());
+    preview_button_ = std::make_unique<DMButton>("Generate Preview", &DMStyles::HeaderButton(), 140, DMButton::height());
 }
 
 void MapLayersPanel::PanelSidebarWidget::set_dirty(bool dirty) {
@@ -442,6 +477,8 @@ void MapLayersPanel::PanelSidebarWidget::set_rect(const SDL_Rect& r) {
     const int spacing = DMSpacing::item_gap();
     SDL_Rect button_rect{ rect_.x + spacing, rect_.y + spacing, rect_.w - spacing * 2, DMButton::height() };
     if (add_button_) add_button_->set_rect(button_rect);
+    button_rect.y += DMButton::height() + spacing;
+    if (preview_button_) preview_button_->set_rect(button_rect);
     button_rect.y += DMButton::height() + spacing;
     if (config_button_) config_button_->set_rect(button_rect);
     button_rect.y += DMButton::height() + spacing;
@@ -463,6 +500,11 @@ bool MapLayersPanel::PanelSidebarWidget::handle_event(const SDL_Event& e) {
         }
     };
     handle_btn(add_button_, [this]() { if (owner_) owner_->add_layer_internal(); });
+    handle_btn(preview_button_, [this]() {
+        if (!owner_) return;
+        owner_->request_preview_regeneration();
+        owner_->regenerate_preview();
+    });
     handle_btn(save_button_, [this]() { if (owner_) owner_->save_layers_to_disk(); });
     handle_btn(reload_button_, [this]() { if (owner_) owner_->reload_layers_from_disk(); });
     handle_btn(config_button_, [this]() { if (owner_ && selected_layer_ >= 0) owner_->open_layer_config_internal(selected_layer_); });
@@ -478,6 +520,7 @@ void MapLayersPanel::PanelSidebarWidget::render(SDL_Renderer* renderer) const {
     SDL_SetRenderDrawColor(renderer, 64, 64, 64, 255);
     SDL_RenderDrawRect(renderer, &rect_);
     if (add_button_) add_button_->render(renderer);
+    if (preview_button_) preview_button_->render(renderer);
     if (config_button_) config_button_->render(renderer);
     if (delete_button_) delete_button_->render(renderer);
     if (save_button_) save_button_->render(renderer);
@@ -1264,6 +1307,10 @@ void MapLayersPanel::regenerate_preview() {
     PreviewNode* root_ptr = root_node.get();
     preview_nodes_.push_back(std::move(root_node));
 
+    std::unordered_map<PreviewNode*, PreviewNode*> last_child_for_parent;
+    std::unordered_map<int, std::vector<PreviewNode*>> nodes_by_level;
+    nodes_by_level[root_ptr->layer].push_back(root_ptr);
+
     struct PreviewSector {
         PreviewNode* node = nullptr;
         float start = 0.0f;
@@ -1272,7 +1319,8 @@ void MapLayersPanel::regenerate_preview() {
 
     std::vector<PreviewNode*> current_parents{ root_ptr };
     std::vector<PreviewSector> current_sectors{ PreviewSector{ root_ptr, 0.0f, static_cast<float>(kTau) } };
-    std::mt19937 rng(std::random_device{}());
+    uint32_t seed = compute_preview_seed(layer_specs, map_path_);
+    std::mt19937 rng(seed);
 
     for (size_t li = 1; li < layer_specs.size(); ++li) {
         const auto& layer_spec = layer_specs[li];
@@ -1296,7 +1344,21 @@ void MapLayersPanel::regenerate_preview() {
             node->name = spec.name.empty() ? std::string("<room>") : spec.name;
             PreviewNode* ptr = node.get();
             preview_nodes_.push_back(std::move(node));
-            preview_edges_.push_back(PreviewEdge{ parent, ptr, SDL_Color{200, 200, 200, 255} });
+            ptr->parent = parent;
+            if (parent) {
+                parent->children.push_back(ptr);
+                auto it = last_child_for_parent.find(parent);
+                if (it != last_child_for_parent.end()) {
+                    PreviewNode* prev = it->second;
+                    if (prev) {
+                        prev->right_sibling = ptr;
+                        ptr->left_sibling = prev;
+                    }
+                }
+                last_child_for_parent[parent] = ptr;
+            }
+            preview_edges_.push_back(PreviewEdge{ parent, ptr, SDL_Color{200, 200, 200, 255}, false });
+            nodes_by_level[layer_spec.level].push_back(ptr);
             next_parents.push_back(ptr);
             next_sectors.push_back(PreviewSector{ ptr, angle - spread * 0.5f, spread });
         };
@@ -1368,6 +1430,48 @@ void MapLayersPanel::regenerate_preview() {
 
         current_parents = std::move(next_parents);
         current_sectors = std::move(next_sectors);
+    }
+
+    SDL_Color trail_color{120, 170, 240, 180};
+    for (const auto& node_uptr : preview_nodes_) {
+        if (!node_uptr) continue;
+        PreviewNode* parent = node_uptr.get();
+        if (parent->children.size() > 1) {
+            for (size_t i = 0; i + 1 < parent->children.size(); ++i) {
+                preview_edges_.push_back(PreviewEdge{ parent->children[i], parent->children[i + 1], trail_color, true });
+            }
+            if (parent->children.size() > 2) {
+                preview_edges_.push_back(PreviewEdge{ parent->children.back(), parent->children.front(), trail_color, true });
+            }
+        }
+    }
+
+    for (auto& [level, nodes] : nodes_by_level) {
+        if (nodes.size() <= 1) continue;
+        std::sort(nodes.begin(), nodes.end(), [](const PreviewNode* a, const PreviewNode* b) {
+            double angle_a = std::atan2(a->center.y, a->center.x);
+            double angle_b = std::atan2(b->center.y, b->center.x);
+            return angle_a < angle_b;
+        });
+        for (size_t i = 0; i + 1 < nodes.size(); ++i) {
+            if (nodes[i]->parent == nodes[i + 1]->parent) continue;
+            preview_edges_.push_back(PreviewEdge{ nodes[i], nodes[i + 1], trail_color, true });
+        }
+        if (nodes.size() > 2 && nodes.back()->parent != nodes.front()->parent) {
+            preview_edges_.push_back(PreviewEdge{ nodes.back(), nodes.front(), trail_color, true });
+        }
+    }
+
+    double node_extent = 0.0;
+    for (const auto& node_uptr : preview_nodes_) {
+        if (!node_uptr) continue;
+        const PreviewNode* node = node_uptr.get();
+        double distance = std::sqrt(node->center.x * node->center.x + node->center.y * node->center.y);
+        double half_diag = 0.5 * std::sqrt(node->width * node->width + node->height * node->height);
+        node_extent = std::max(node_extent, distance + half_diag);
+    }
+    if (node_extent > preview_extent_) {
+        preview_extent_ = node_extent;
     }
 
     if (canvas_widget_) {
@@ -1637,6 +1741,8 @@ bool MapLayersPanel::reload_layers_from_disk() {
         rebuild_available_rooms();
         refresh_canvas();
         if (layer_config_) layer_config_->close();
+        request_preview_regeneration();
+        regenerate_preview();
         mark_clean();
         return true;
     } catch (const std::exception& ex) {

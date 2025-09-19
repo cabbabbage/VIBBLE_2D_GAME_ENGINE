@@ -98,11 +98,16 @@ private:
         int layer = 0;
         SDL_Color color{255, 255, 255, 255};
         std::string name;
+        PreviewNode* parent = nullptr;
+        PreviewNode* left_sibling = nullptr;
+        PreviewNode* right_sibling = nullptr;
+        std::vector<PreviewNode*> children;
     };
     struct PreviewEdge {
         const PreviewNode* from = nullptr;
         const PreviewNode* to = nullptr;
         SDL_Color color{180, 180, 180, 255};
+        bool is_trail = false;
     };
 
     nlohmann::json* map_info_ = nullptr;

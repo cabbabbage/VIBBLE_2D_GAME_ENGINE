@@ -137,7 +137,7 @@ void LoadingScreen::draw_frame() {
 	if(title_font){int tw,th; TTF_SizeText(title_font,"LOADING...",&tw,&th); int tx=(screen_w_-tw)/2;
 		draw_text(title_font,"LOADING...",tx,40,white); TTF_CloseFont(title_font);}
 	render_scaled_center(tex,screen_w_/3,screen_h_/3,screen_w_/2,screen_h_/2);
-\tTTF_Font* body_font=TTF_OpenFont(mono_font.c_str(),26);
+        TTF_Font* body_font=TTF_OpenFont(mono_font.c_str(),26);
 	SDL_Rect msg_rect{screen_w_/3,(screen_h_*2)/3,screen_w_/3,screen_h_/4};
 	if(body_font && !message_.empty()){render_justified_text(body_font,message_,msg_rect,white); TTF_CloseFont(body_font);}
 	SDL_DestroyTexture(tex);
