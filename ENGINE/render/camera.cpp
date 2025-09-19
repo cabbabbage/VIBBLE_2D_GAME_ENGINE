@@ -319,28 +319,42 @@ camera::RenderEffects camera::compute_render_effects(SDL_Point world,
 
         const double pan_x = pan_offset_x_;
 
-    const double parallax_strength = std::max(0.0f, settings_.parallax_strength);
-    if (parallax_enabled_ && parallax_strength > 0.0 && camera_height > EPS) {
-        constexpr double KV = 0.25;
-        constexpr double SV = 200.0;
-        const double vertical_bias = 1.0 + KV * std::tanh(dy / SV);
-        double zoom_gain = (height_at_zoom1 > EPS)
-                            ? (height_at_zoom1 / (camera_height + EPS))
-                            : 1.0;
+        // --- Parallax ---
+        const double parallax_strength = std::max(0.0f, settings_.parallax_strength);
+        if (parallax_enabled_ && parallax_strength > 0.0 && camera_height > EPS) {
+            // Distance of this asset from vertical screen center (normalized -1..1)
+            const int view_height = height_from_area(current_view_);
+            const double ndy = (static_cast<double>(world.y) - base_y) / (view_height * 0.5);
 
-        zoom_gain = std::pow(zoom_gain, 1.5);  // equivalent to squaring
+            // Assets at vertical center = 0 offset.
+            // Positive ndy = below center -> outward, negative ndy = above center -> inward.
+            // Bias stronger near bottom with tanh shaping
+            constexpr double KV = 0.25;
+            constexpr double SY = 200.0;
+            const double vertical_bias = 1.0 + KV * std::tanh(ndy * (view_height / SY));
 
-        // Normalized dx from camera center (-1..1 if inside view)
-        const int view_width = width_from_area(current_view_);
-        const double ndx = (static_cast<double>(world.x) - base_x) / (view_width * 0.5);
+            // Zoom amplifies effect
+            double zoom_gain = (height_at_zoom1 > EPS)
+                                ? (height_at_zoom1 / (camera_height + EPS))
+                                : 1.0;
+            zoom_gain = std::pow(zoom_gain, 1.5); // nonlinear boost
 
-        double parallax_px = parallax_strength * ndx *
-                            pixels_per_world * vertical_bias * zoom_gain;
+            // Normalized horizontal offset from screen center (-1..1)
+            const int view_width = width_from_area(current_view_);
+            const double ndx = (static_cast<double>(world.x) - base_x) / (view_width * 0.5);
 
-        const double max_offset = 4000.0;
-        parallax_px = std::clamp(parallax_px, -max_offset, max_offset);
-        result.screen_position.x += static_cast<int>(std::lround(parallax_px));
-    }
+            // Combine X position and vertical bias to calculate parallax
+            double parallax_px = parallax_strength *
+                                ndx * ndy * // <- ties X offset with vertical placement
+                                pixels_per_world * vertical_bias * zoom_gain;
+
+            // Clamp to prevent wild swings
+            const double max_offset = 4000.0;
+            parallax_px = std::clamp(parallax_px, -max_offset, max_offset);
+
+            result.screen_position.x += static_cast<int>(std::lround(parallax_px));
+        }
+
 
 
         // --- Foreshortening (vertical squash) ---
