@@ -1,12 +1,12 @@
 {
   "camera_settings": {
-    "distance_scale_strength": 0.04999999701976776,
-    "foreshorten_strength": 0.0,
-    "height_at_zoom1": 380.0,
-    "parallax_strength": 39.0,
-    "realism_enabled": false,
-    "render_distance": 660.0,
-    "tripod_distance_y": -525.0
+    "distance_scale_strength": 0.029999999329447746,
+    "foreshorten_strength": 0.03999999910593033,
+    "height_at_zoom1": 528.0,
+    "parallax_strength": 13.5,
+    "realism_enabled": true,
+    "render_distance": 970.0,
+    "tripod_distance_y": -1075.0
   },
   "map_assets_data": {
     "spawn_groups": [
@@ -455,8 +455,13 @@
   "trails_data": {
     "basic": {
       "curvyness": 4,
+      "geometry": "Square",
       "inherits_map_assets": true,
-      "max_width": 800,
+      "is_boss": false,
+      "is_spawn": false,
+      "max_height": 1000,
+      "max_width": 1000,
+      "min_height": 100,
       "min_width": 100,
       "name": "basic",
       "spawn_groups": [

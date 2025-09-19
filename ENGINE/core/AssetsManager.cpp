@@ -238,6 +238,30 @@ void Assets::hydrate_map_info_sections() {
     ensure_object("map_assets_data");
     ensure_object("map_boundary_data");
     ensure_object("map_light_data");
+    // Populate defaults for map_light_data when missing, so editors and renderer have sane values.
+    {
+        nlohmann::json& L = map_info_json_["map_light_data"];
+        if (!L.is_object()) {
+            map_info_json_["map_light_data"] = nlohmann::json::object();
+        }
+        nlohmann::json& D = map_info_json_["map_light_data"];
+        if (!D.contains("radius"))          D["radius"] = 0;
+        if (!D.contains("intensity"))       D["intensity"] = 255;
+        if (!D.contains("orbit_radius"))    D["orbit_radius"] = 0;
+        if (!D.contains("update_interval")) D["update_interval"] = 10;
+        if (!D.contains("mult"))            D["mult"] = 0.0;
+        if (!D.contains("fall_off"))        D["fall_off"] = 100;
+        if (!D.contains("min_opacity"))     D["min_opacity"] = 0;
+        if (!D.contains("max_opacity"))     D["max_opacity"] = 255;
+        if (!D.contains("base_color") || !D["base_color"].is_array() || D["base_color"].size() < 4) {
+            D["base_color"] = nlohmann::json::array({255, 255, 255, 255});
+        }
+        if (!D.contains("keys") || !D["keys"].is_array() || D["keys"].empty()) {
+            // Default one key at 0 degrees using the base color
+            D["keys"] = nlohmann::json::array();
+            D["keys"].push_back(nlohmann::json::array({ 0.0, D["base_color"] }));
+        }
+    }
     ensure_object("rooms_data");
     ensure_object("trails_data");
 }

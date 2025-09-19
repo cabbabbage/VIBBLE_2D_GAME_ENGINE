@@ -408,7 +408,22 @@
             "y_radius": 0
         },
         {
-            "falloff": 38,
+            "falloff": 0,
+            "flare": 1,
+            "flicker": 0,
+            "has_light_source": true,
+            "light_color": [
+                255,
+                255,
+                255
+            ],
+            "light_intensity": 0,
+            "offset_x": 0,
+            "offset_y": 0,
+            "radius": 0
+        },
+        {
+            "falloff": 0,
             "flare": 0,
             "flicker": 16,
             "has_light_source": true,

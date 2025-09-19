@@ -219,12 +219,18 @@ void MapAssetsPanel::ensure_configs_loaded() {
 
     auto on_change = [this]() { mark_dirty(); };
     json& assets_root = ensure_map_assets();
+    bool created_assets_default = ensure_at_least_one_spawn_group(assets_root);
     json& assets_array = ensure_spawn_groups(assets_root);
     map_assets_cfg_->load(assets_array, on_change);
 
     json& boundary_root = ensure_map_boundary();
+    bool created_boundary_default = ensure_at_least_one_spawn_group(boundary_root);
     json& boundary_array = ensure_spawn_groups(boundary_root);
     boundary_cfg_->load(boundary_array, on_change);
+
+    if (created_assets_default || created_boundary_default) {
+        mark_dirty();
+    }
 }
 
 json& MapAssetsPanel::ensure_map_assets() {
@@ -256,6 +262,27 @@ json& MapAssetsPanel::ensure_spawn_groups(json& root) {
     }
     root["spawn_groups"] = json::array();
     return root["spawn_groups"];
+}
+
+bool MapAssetsPanel::ensure_at_least_one_spawn_group(json& root) {
+    // Ensure the array exists (and migrate legacy key if present)
+    json& arr = ensure_spawn_groups(root);
+    if (!arr.is_array() || !arr.empty()) return false;
+
+    // Heuristic: boundary root has the inherits flag
+    const bool is_boundary = root.contains("inherits_map_assets");
+
+    json entry = json::object();
+    entry["display_name"] = is_boundary ? "batch_map_boundary" : "batch_map_assets";
+    entry["position"] = "Random";
+    entry["min_number"] = 1;
+    entry["max_number"] = 1;
+    entry["check_overlap"] = false;
+    entry["enforce_spacing"] = false;
+    entry["candidates"] = json::array();
+
+    arr.push_back(std::move(entry));
+    return true;
 }
 
 void MapAssetsPanel::refresh_checkbox_from_json() {

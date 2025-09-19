@@ -275,7 +275,6 @@ void RoomEditor::handle_sdl_event(const SDL_Event& event) {
 
     bool handled = false;
     if (!handled && room_panel_ && room_panel_->visible()) {
-        bool panel_used = room_panel_->handle_event(event);
         bool config_used = false;
         if (room_panel_->expanded()) {
             ensure_room_configurator();
@@ -283,6 +282,7 @@ void RoomEditor::handle_sdl_event(const SDL_Event& event) {
                 config_used = room_cfg_ui_->handle_event(event);
             }
         }
+        bool panel_used = room_panel_->handle_event(event);
         handled = panel_used || config_used;
     }
     if (!handled && info_ui_ && info_ui_->is_visible() && info_ui_->is_point_inside(mx, my)) {

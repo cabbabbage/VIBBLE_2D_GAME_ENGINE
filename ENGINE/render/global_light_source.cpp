@@ -50,19 +50,26 @@ bool Global_Light_Source::load_from_map_light(const std::string& map_path) {
         if (map_path.empty()) {
                 return false;
         }
-        std::ifstream in(map_path + "/map_light.json");
+        // Map light configuration now lives inside map_info.json under key "map_light_data".
+        std::ifstream in(map_path + "/map_info.json");
         if (!in.is_open()) {
-                std::cerr << "[MapLight] Failed to open map_light.json in " << map_path << "\n";
+                std::cerr << "[MapLight] Failed to open map_info.json in " << map_path << "\n";
                 return false;
         }
         json j;
         try {
                 in >> j;
         } catch (const std::exception& e) {
-                std::cerr << "[MapLight] Failed to parse map_light.json: " << e.what() << "\n";
+                std::cerr << "[MapLight] Failed to parse map_info.json: " << e.what() << "\n";
                 return false;
         }
-        apply_config(j);
+        auto it = j.find("map_light_data");
+        if (it == j.end() || !it->is_object()) {
+                // No map light data present; allow caller to fall back to defaults.
+                std::cerr << "[MapLight] map_info.json has no valid map_light_data object. Using defaults.\n";
+                return false;
+        }
+        apply_config(*it);
         return true;
 }
 

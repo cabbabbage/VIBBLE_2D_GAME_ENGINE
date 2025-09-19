@@ -43,6 +43,9 @@ private:
     nlohmann::json& ensure_map_assets();
     nlohmann::json& ensure_map_boundary();
     static nlohmann::json& ensure_spawn_groups(nlohmann::json& root);
+    // Ensures the spawn_groups array exists and has at least one entry.
+    // Returns true if a default entry was created.
+    static bool ensure_at_least_one_spawn_group(nlohmann::json& root);
     void refresh_checkbox_from_json();
     void handle_inherits_checkbox_change();
     void mark_dirty();

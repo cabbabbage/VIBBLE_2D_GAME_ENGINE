@@ -1274,7 +1274,12 @@
         "crime",
         "default",
         "drinking",
+        "grey",
+        "light",
+        "man-made",
+        "moving",
         "passable",
+        "plant",
         "small"
     ],
     "update_radius": 1000,

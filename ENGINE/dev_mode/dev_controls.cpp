@@ -239,7 +239,7 @@ void DevControls::update(const Input& input) {
     if (!enabled_) return;
 
     const bool ctrl = input.isScancodeDown(SDL_SCANCODE_LCTRL) || input.isScancodeDown(SDL_SCANCODE_RCTRL);
-    if (ctrl && input.wasScancodePressed(SDL_SCANCODE_L)) {
+    if (ctrl && input.wasScancodePressed(SDL_SCANCODE_M)) {
         toggle_map_light_panel();
     }
     if (ctrl && input.wasScancodePressed(SDL_SCANCODE_C)) {
@@ -254,8 +254,7 @@ void DevControls::update(const Input& input) {
             --map_click_cooldown_;
         }
         if (map_mode_ui_) {
-            if (input.wasScancodePressed(SDL_SCANCODE_LCTRL) ||
-                input.wasScancodePressed(SDL_SCANCODE_RCTRL)) {
+            if (ctrl && input.wasScancodePressed(SDL_SCANCODE_M)) {
                 map_mode_ui_->toggle_light_panel();
             }
             if (input.wasScancodePressed(SDL_SCANCODE_F8)) {

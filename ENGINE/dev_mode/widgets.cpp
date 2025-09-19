@@ -60,7 +60,7 @@ DMTextBox::DMTextBox(const std::string& label, const std::string& value)
 void DMTextBox::set_rect(const SDL_Rect& r) { rect_ = r; }
 
 int DMTextBox::height_for_width(int w) const {
-    int label_h = DMStyles::Label().font_size + DMSpacing::item_gap();
+    int label_h = DMStyles::Label().font_size + DMSpacing::item_gap() -10;
     int box_h   = DMButton::height();
     return label_h + box_h + DMSpacing::item_gap();
 }
@@ -293,7 +293,7 @@ void DMSlider::draw_text(SDL_Renderer* r, const std::string& s, int x, int y) co
 
 void DMSlider::render(SDL_Renderer* r) const {
     const DMSliderStyle& st = DMStyles::Slider();
-    draw_text(r, label_, rect_.x, rect_.y - st.label.font_size - DMSpacing::item_gap());
+    draw_text(r, label_, rect_.x, rect_.y - st.label.font_size + DMSpacing::item_gap()-2);
     SDL_Rect tr = track_rect();
     SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
     SDL_SetRenderDrawColor(r, st.track_bg.r, st.track_bg.g, st.track_bg.b, st.track_bg.a);

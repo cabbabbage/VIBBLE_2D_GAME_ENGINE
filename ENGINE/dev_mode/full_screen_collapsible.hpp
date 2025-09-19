@@ -23,6 +23,8 @@ public:
         bool active = false;
         std::function<void(bool active)> on_toggle;
         bool momentary = false;
+        // Optional style override for this button (defaults to HeaderButton style)
+        const DMButtonStyle* style_override = nullptr;
         std::unique_ptr<DMButton> widget;
     };
 
