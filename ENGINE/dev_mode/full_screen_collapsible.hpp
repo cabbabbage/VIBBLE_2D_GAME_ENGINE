@@ -22,6 +22,7 @@ public:
         std::string label;
         bool active = false;
         std::function<void(bool active)> on_toggle;
+        bool momentary = false;
         std::unique_ptr<DMButton> widget;
     };
 
@@ -45,6 +46,7 @@ public:
     void set_header_buttons(std::vector<HeaderButton> buttons);
     void activate_button(const std::string& id);
     void set_active_button(const std::string& id, bool trigger_callback = false);
+    void set_button_active_state(const std::string& id, bool active);
 
     // Update input state (for hover animations).
     void update(const Input& input);

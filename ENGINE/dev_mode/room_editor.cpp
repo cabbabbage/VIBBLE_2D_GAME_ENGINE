@@ -75,9 +75,9 @@ const nlohmann::json* find_spawn_groups_array(const nlohmann::json& root) {
 
 RoomEditor::RoomEditor(Assets* owner, int screen_w, int screen_h)
     : assets_(owner), screen_w_(screen_w), screen_h_(screen_h) {
-    regenerate_button_ = std::make_unique<DMButton>("Regenerate Current Room", &DMStyles::CreateButton(), 240, DMButton::height());
-    position_regenerate_button();
     ensure_room_panel();
+    refresh_room_panel_buttons();
+    rebuild_room_spawn_id_cache();
 }
 
 RoomEditor::~RoomEditor() = default;
@@ -98,7 +98,6 @@ void RoomEditor::set_active_assets(std::vector<Asset*>& actives) {
 void RoomEditor::set_screen_dimensions(int width, int height) {
     screen_w_ = width;
     screen_h_ = height;
-    position_regenerate_button();
     if (room_panel_) {
         room_panel_->set_bounds(screen_w_, screen_h_);
     }
@@ -114,6 +113,8 @@ void RoomEditor::set_current_room(Room* room) {
     if (current_room_) {
         ensure_spawn_groups_array(current_room_->assets_data());
     }
+    rebuild_room_spawn_id_cache();
+    sync_room_panel_button_states();
 
     if (room_cfg_ui_ && room_panel_ && room_panel_->expanded()) {
         room_cfg_ui_->open(current_room_);
@@ -166,11 +167,13 @@ void RoomEditor::set_enabled(bool enabled) {
         }
     }
 
+    sync_room_panel_button_states();
     if (input_) input_->clearClickBuffer();
 }
 
 void RoomEditor::update(const Input& input) {
     handle_shortcuts(input);
+    sync_room_panel_button_states();
 
     if (!enabled_) return;
     if (!input_ || !active_assets_) return;
@@ -187,6 +190,7 @@ void RoomEditor::update(const Input& input) {
 
 void RoomEditor::update_ui(const Input& input) {
     ensure_room_panel();
+    sync_room_panel_button_states();
 
     if (library_ui_ && library_ui_->is_visible()) {
         library_ui_->update(input, screen_w_, screen_h_, assets_->library(), *assets_);
@@ -299,15 +303,6 @@ void RoomEditor::handle_sdl_event(const SDL_Event& event) {
         }
     }
 
-    if (enabled_ && regenerate_button_) {
-        regenerate_button_->set_rect(regenerate_button_rect_);
-        bool clicked = regenerate_button_->handle_event(event);
-        if (clicked && event.type == SDL_MOUSEBUTTONUP && event.button.button == SDL_BUTTON_LEFT) {
-            regenerate_current_room();
-            if (input_) input_->clearClickBuffer();
-        }
-    }
-
     if (handled && input_) {
         if (event.type == SDL_MOUSEBUTTONDOWN || event.type == SDL_MOUSEBUTTONUP) {
             input_->clearClickBuffer();
@@ -336,25 +331,24 @@ void RoomEditor::render_overlays(SDL_Renderer* renderer) {
             room_cfg_ui_->render(renderer);
         }
     }
-    if (regenerate_button_ && enabled_) {
-        regenerate_button_->set_rect(regenerate_button_rect_);
-        regenerate_button_->render(renderer);
-    }
     DMDropdown::render_active_options(renderer);
 }
 
 void RoomEditor::toggle_asset_library() {
     if (!library_ui_) library_ui_ = std::make_unique<AssetLibraryUI>();
     library_ui_->toggle();
+    sync_room_panel_button_states();
 }
 
 void RoomEditor::open_asset_library() {
     if (!library_ui_) library_ui_ = std::make_unique<AssetLibraryUI>();
     library_ui_->open();
+    sync_room_panel_button_states();
 }
 
 void RoomEditor::close_asset_library() {
     if (library_ui_) library_ui_->close();
+    sync_room_panel_button_states();
 }
 
 bool RoomEditor::is_asset_library_open() const {
@@ -465,6 +459,7 @@ void RoomEditor::finalize_asset_drag(Asset* asset, const std::shared_ptr<AssetIn
         };
         assets_cfg_ui_->load(arr, std::move(on_change), std::move(on_entry));
     }
+    rebuild_room_spawn_id_cache();
 }
 
 void RoomEditor::toggle_room_config() {
@@ -647,9 +642,7 @@ Asset* RoomEditor::hit_test_asset(SDL_Point screen_point) const {
     int best_z_index = std::numeric_limits<int>::min();
 
     for (Asset* asset : *active_assets_) {
-        if (!asset || !asset->info) continue;
-        const std::string& type = asset->info->type;
-        if (type == asset_types::boundary || type == asset_types::texture) continue;
+        if (!asset_belongs_to_room(asset)) continue;
 
         SDL_Texture* tex = asset->get_final_texture();
         int fw = asset->cached_w;
@@ -727,12 +720,15 @@ void RoomEditor::handle_click(const Input& input) {
         }
         if (select_group && !nearest->spawn_id.empty() && active_assets_) {
             for (Asset* asset : *active_assets_) {
-                if (asset && asset->spawn_id == nearest->spawn_id) {
+                if (!asset_belongs_to_room(asset)) continue;
+                if (asset->spawn_id == nearest->spawn_id) {
                     selected_assets_.push_back(asset);
                 }
             }
         } else {
-            selected_assets_.push_back(nearest);
+            if (asset_belongs_to_room(nearest)) {
+                selected_assets_.push_back(nearest);
+            }
         }
         open_asset_config_for_asset(nearest);
 
@@ -771,7 +767,7 @@ void RoomEditor::update_highlighted_assets() {
 
     if (allow_hover_group) {
         for (Asset* asset : *active_assets_) {
-            if (!asset) continue;
+            if (!asset_belongs_to_room(asset)) continue;
             if (!hovered_asset_->spawn_id.empty() && asset->spawn_id == hovered_asset_->spawn_id) {
                 if (std::find(highlighted_assets_.begin(), highlighted_assets_.end(), asset) == highlighted_assets_.end()) {
                     highlighted_assets_.push_back(asset);
@@ -923,6 +919,7 @@ void RoomEditor::ensure_room_panel() {
     if (room_panel_ && room_cfg_ui_ && !room_panel_->expanded()) {
         room_cfg_ui_->close();
     }
+    refresh_room_panel_buttons();
 }
 
 void RoomEditor::handle_delete_shortcut(const Input& input) {
@@ -947,7 +944,8 @@ void RoomEditor::handle_delete_shortcut(const Input& input) {
 
     std::vector<Asset*> to_delete;
     for (Asset* asset : *active_assets_) {
-        if (asset && asset->spawn_id == spawn_id) {
+        if (!asset_belongs_to_room(asset)) continue;
+        if (asset->spawn_id == spawn_id) {
             to_delete.push_back(asset);
         }
     }
@@ -962,6 +960,7 @@ void RoomEditor::handle_delete_shortcut(const Input& input) {
     }
 
     clear_selection();
+    rebuild_room_spawn_id_cache();
 }
 
 void RoomEditor::begin_drag_session(const SDL_Point& world_mouse, bool ctrl_modifier) {
@@ -1303,19 +1302,109 @@ void RoomEditor::refresh_assets_config_ui() {
         handle_spawn_config_change(entry, summary);
     };
     assets_cfg_ui_->load(arr, std::move(on_change), std::move(on_entry));
+    rebuild_room_spawn_id_cache();
 }
 
-void RoomEditor::position_regenerate_button() {
-    if (!regenerate_button_) return;
-    int button_w = regenerate_button_->rect().w;
-    int button_h = regenerate_button_->rect().h;
-    if (button_w <= 0) button_w = 240;
-    if (button_h <= 0) button_h = DMButton::height();
-    int x = 16;
-    int y = screen_h_ - button_h - 16;
-    if (y < 0) y = 0;
-    regenerate_button_rect_ = SDL_Rect{x, y, button_w, button_h};
-    regenerate_button_->set_rect(regenerate_button_rect_);
+void RoomEditor::set_floating_panel_buttons(std::vector<FloatingPanelButton> buttons) {
+    floating_panel_buttons_ = std::move(buttons);
+    refresh_room_panel_buttons();
+}
+
+void RoomEditor::refresh_room_panel_buttons() {
+    if (!room_panel_) return;
+
+    std::vector<FullScreenCollapsible::HeaderButton> buttons;
+
+    FullScreenCollapsible::HeaderButton regenerate;
+    regenerate.id = "regenerate";
+    regenerate.label = "Regenerate Room";
+    regenerate.momentary = true;
+    regenerate.on_toggle = [this](bool) {
+        regenerate_current_room();
+        rebuild_room_spawn_id_cache();
+        sync_room_panel_button_states();
+    };
+    buttons.push_back(std::move(regenerate));
+
+    FullScreenCollapsible::HeaderButton library;
+    library.id = "asset_library";
+    library.label = "Asset Library";
+    library.active = is_asset_library_open();
+    library.on_toggle = [this](bool active) {
+        if (active) {
+            open_asset_library();
+        } else {
+            close_asset_library();
+        }
+        sync_room_panel_button_states();
+    };
+    buttons.push_back(std::move(library));
+
+    for (const auto& button : floating_panel_buttons_) {
+        FullScreenCollapsible::HeaderButton header_btn;
+        header_btn.id = button.id;
+        header_btn.label = button.label;
+        if (button.is_active) {
+            header_btn.active = button.is_active();
+        }
+        header_btn.on_toggle = button.set_active;
+        buttons.push_back(std::move(header_btn));
+    }
+
+    room_panel_->set_header_buttons(std::move(buttons));
+    sync_room_panel_button_states();
+}
+
+void RoomEditor::sync_room_panel_button_states() {
+    if (!room_panel_) return;
+
+    room_panel_->set_button_active_state("regenerate", false);
+    room_panel_->set_button_active_state("asset_library", is_asset_library_open());
+
+    for (const auto& button : floating_panel_buttons_) {
+        const bool active = button.is_active ? button.is_active() : false;
+        room_panel_->set_button_active_state(button.id, active);
+    }
+}
+
+void RoomEditor::rebuild_room_spawn_id_cache() {
+    room_spawn_ids_.clear();
+    if (!current_room_) return;
+    auto& root = current_room_->assets_data();
+    auto& arr = ensure_spawn_groups_array(root);
+    for (const auto& entry : arr) {
+        if (!entry.is_object()) continue;
+        if (entry.contains("spawn_id") && entry["spawn_id"].is_string()) {
+            room_spawn_ids_.insert(entry["spawn_id"].get<std::string>());
+        }
+    }
+}
+
+bool RoomEditor::is_room_spawn_id(const std::string& spawn_id) const {
+    if (spawn_id.empty()) return false;
+    return room_spawn_ids_.find(spawn_id) != room_spawn_ids_.end();
+}
+
+bool RoomEditor::asset_belongs_to_room(const Asset* asset) const {
+    if (!asset || !asset->info) return false;
+
+    const std::string& type = asset->info->type;
+    if (type == asset_types::boundary || type == asset_types::texture) {
+        return false;
+    }
+
+    if (!asset->spawn_method.empty()) {
+        std::string method = asset->spawn_method;
+        std::transform(method.begin(), method.end(), method.begin(), [](unsigned char c) {
+            return static_cast<char>(std::tolower(c));
+        });
+        if (method == "boundary") {
+            return false;
+        }
+    }
+
+    if (asset->spawn_id.empty()) return false;
+    return is_room_spawn_id(asset->spawn_id);
 }
 
 void RoomEditor::handle_spawn_config_change(const nlohmann::json& entry, const AssetConfigUI::ChangeSummary& summary) {
@@ -1339,6 +1428,7 @@ std::unique_ptr<MapGrid> RoomEditor::build_room_grid(const std::string& ignore_s
     if (!assets_) return grid;
     for (Asset* asset : assets_->all) {
         if (!asset || asset->dead) continue;
+        if (!asset_belongs_to_room(asset)) continue;
         if (!asset->spawn_id.empty() && asset->spawn_id == ignore_spawn_id) continue;
         SDL_Point pos{asset->pos.x, asset->pos.y};
         if (current_room_->room_area && !current_room_->room_area->contains_point(pos)) continue;
@@ -1374,6 +1464,7 @@ void RoomEditor::respawn_spawn_group(const nlohmann::json& entry) {
     std::vector<Asset*> to_remove;
     for (Asset* asset : assets_->all) {
         if (!asset || asset->dead) continue;
+        if (!asset_belongs_to_room(asset)) continue;
         if (asset == player_) continue;
         if (asset->spawn_id == spawn_id) {
             to_remove.push_back(asset);
@@ -1601,6 +1692,7 @@ void RoomEditor::regenerate_current_room() {
     }
 
     refresh_assets_config_ui();
+    sync_room_panel_button_states();
 }
 
 void RoomEditor::update_exact_json(nlohmann::json& entry, const Asset& asset, SDL_Point center, int width, int height) {

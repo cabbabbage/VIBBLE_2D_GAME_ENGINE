@@ -123,20 +123,16 @@ bool FullScreenCollapsible::handle_event(const SDL_Event& e) {
         if (btn.widget->handle_event(e)) {
             used = true;
             if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
-                const bool was_active = btn.active;
-                if (was_active) {
-                    btn.active = false;
-                    if (btn.on_toggle) btn.on_toggle(false);
-                } else {
-                    for (auto& other : buttons_) {
-                        if (&other == &btn) continue;
-                        if (other.active) {
-                            other.active = false;
-                            if (other.on_toggle) other.on_toggle(false);
-                        }
-                    }
-                    btn.active = true;
+                if (btn.momentary) {
                     if (btn.on_toggle) btn.on_toggle(true);
+                    btn.active = false;
+                } else {
+                    if (btn.active) {
+                        btn.active = false;
+                        if (btn.on_toggle) btn.on_toggle(false);
+                    } else {
+                        set_active_button(btn.id, true);
+                    }
                 }
             }
         }
@@ -258,6 +254,17 @@ void FullScreenCollapsible::layout_buttons() {
         }
         btn.widget->set_rect(rect);
         x += rect.w + button_gap;
+    }
+}
+
+void FullScreenCollapsible::set_button_active_state(const std::string& id, bool active) {
+    for (auto& btn : buttons_) {
+        if (btn.id == id) {
+            btn.active = active && !btn.momentary;
+            if (btn.momentary && active) {
+                btn.active = false;
+            }
+        }
     }
 }
 

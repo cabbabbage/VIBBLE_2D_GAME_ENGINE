@@ -15,12 +15,12 @@ class camera {
         public:
     struct RealismSettings {
         float render_distance = 800.0f;           // world-space margin for activating assets
-        float parallax_strength = 12.0f;          // multiplier for parallax offset
-        float squash_strength = 0.35f;            // multiplier for vertical squashing
+        float parallax_strength = 12.0f;          // multiplier for parallax offset along the tripod axis
+        float foreshorten_strength = 0.35f;       // multiplier for vertical foreshortening
         float distance_scale_strength = 0.3f;     // multiplier for distance-based scaling
-        float camera_angle_degrees = 55.0f;       // camera pitch relative to the ground plane
-        float camera_height_at_zoom0 = 18.0f;     // camera height above ground at base zoom
-        float camera_vertical_offset = 0.0f;      // world-space offset from screen center for distance math
+        float height_at_zoom1 = 18.0f;            // camera height above ground plane when zoom_norm = 1
+        float tripod_distance_y = 0.0f;           // pixels between target and tripod base along -Y
+        float camera_vertical_offset = 0.0f;      // world-space offset applied after realism (converted to screen px)
     };
 
     struct RenderEffects {

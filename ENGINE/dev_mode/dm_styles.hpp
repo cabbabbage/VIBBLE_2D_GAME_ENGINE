@@ -82,6 +82,8 @@ struct DMSpacing {
   static int section_gap();      // default 24
   // Gap between controls (vertical/horizontal)
   static int item_gap();         // default 12
+  // Space between a widget label and its control
+  static int label_gap();        // default 6
   // Smaller gap for dense grids (chips, small labels)
   static int small_gap();        // default 6
   // Space below section header before content starts

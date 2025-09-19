@@ -47,6 +47,7 @@ public:
 private:
     void draw_text(SDL_Renderer* r, const std::string& s, int x, int y, const DMLabelStyle& ls) const;
     std::vector<std::string> wrap_lines(TTF_Font* f, const std::string& s, int max_width) const;
+    SDL_Rect box_rect() const;
     SDL_Rect rect_{0,0,200,32};
     std::string label_;
     std::string text_;
@@ -83,8 +84,12 @@ public:
     int value() const { return value_; }
     bool handle_event(const SDL_Event& e);
     void render(SDL_Renderer* r) const;
+    int preferred_height() const;
     static int height() { return 40; }
 private:
+    int label_space() const;
+    SDL_Rect content_rect() const;
+    SDL_Rect value_rect() const;
     SDL_Rect track_rect() const;
     SDL_Rect knob_rect() const;
     int value_for_x(int x) const;
@@ -141,6 +146,7 @@ public:
     void render(SDL_Renderer* r) const;
     void render_options(SDL_Renderer* r) const;
     bool expanded() const { return expanded_; }
+    int preferred_height() const;
     static int height() { return 32; }
 
     // Returns currently expanded dropdown, or nullptr if none.
@@ -148,6 +154,8 @@ public:
     // Render options for the currently expanded dropdown (if any).
     static void render_active_options(SDL_Renderer* r);
 private:
+    int label_space() const;
+    SDL_Rect box_rect() const;
     SDL_Rect rect_{0,0,200,32};
     std::string label_;
     std::vector<std::string> options_;
@@ -225,7 +233,7 @@ public:
     explicit SliderWidget(DMSlider* s) : s_(s) {}
     void set_rect(const SDL_Rect& r) override { if (s_) s_->set_rect(r); }
     const SDL_Rect& rect() const override { return s_->rect(); }
-    int height_for_width(int /*w*/) const override { return DMSlider::height(); }
+    int height_for_width(int /*w*/) const override { return s_ ? s_->preferred_height() : DMSlider::height(); }
     bool handle_event(const SDL_Event& e) override { return s_ ? s_->handle_event(e) : false; }
     void render(SDL_Renderer* r) const override { if (s_) s_->render(r); }
 private:
@@ -249,7 +257,7 @@ public:
     explicit DropdownWidget(DMDropdown* d) : d_(d) {}
     void set_rect(const SDL_Rect& r) override { if (d_) d_->set_rect(r); }
     const SDL_Rect& rect() const override { return d_->rect(); }
-    int height_for_width(int /*w*/) const override { return DMDropdown::height(); }
+    int height_for_width(int /*w*/) const override { return d_ ? d_->preferred_height() : DMDropdown::height(); }
     bool handle_event(const SDL_Event& e) override { return d_ ? d_->handle_event(e) : false; }
     void render(SDL_Renderer* r) const override { if (d_) d_->render(r); }
 private:

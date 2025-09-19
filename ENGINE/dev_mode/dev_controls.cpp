@@ -29,6 +29,7 @@ DevControls::DevControls(Assets* owner, int screen_w, int screen_h)
     if (camera_panel_) {
         camera_panel_->close();
     }
+    configure_room_editor_header_buttons();
 }
 
 DevControls::~DevControls() = default;
@@ -48,6 +49,7 @@ void DevControls::set_map_info(nlohmann::json* map_info, MapLightPanel::SaveCall
     if (map_light_panel_) {
         map_light_panel_->set_map_info(map_info_json_, map_light_save_cb_);
     }
+    configure_room_editor_header_buttons();
 }
 
 void DevControls::set_player(Asset* player) {
@@ -416,6 +418,64 @@ double DevControls::get_zoom_scale_factor() const {
     return room_editor_->get_zoom_scale_factor();
 }
 
+void DevControls::configure_room_editor_header_buttons() {
+    if (!room_editor_) return;
+
+    std::vector<RoomEditor::FloatingPanelButton> buttons;
+
+    RoomEditor::FloatingPanelButton lighting;
+    lighting.id = "lighting";
+    lighting.label = "Lighting";
+    lighting.is_active = [this]() {
+        return map_light_panel_ && map_light_panel_->is_visible();
+    };
+    lighting.set_active = [this](bool active) {
+        if (active) {
+            if (!map_light_panel_) {
+                if (!map_info_json_) {
+                    if (room_editor_) room_editor_->sync_room_panel_button_states();
+                    return;
+                }
+                map_light_panel_ = std::make_unique<MapLightPanel>(40, 40);
+                map_light_panel_->set_map_info(map_info_json_, map_light_save_cb_);
+            }
+        }
+        if (!map_light_panel_) {
+            if (room_editor_) room_editor_->sync_room_panel_button_states();
+            return;
+        }
+        if (map_light_panel_->is_visible() != active) {
+            toggle_map_light_panel();
+        } else if (room_editor_) {
+            room_editor_->sync_room_panel_button_states();
+        }
+    };
+    buttons.push_back(std::move(lighting));
+
+    RoomEditor::FloatingPanelButton camera;
+    camera.id = "camera";
+    camera.label = "Camera";
+    camera.is_active = [this]() {
+        return camera_panel_ && camera_panel_->is_visible();
+    };
+    camera.set_active = [this](bool active) {
+        if (!camera_panel_) {
+            if (room_editor_) room_editor_->sync_room_panel_button_states();
+            return;
+        }
+        camera_panel_->set_assets(assets_);
+        if (camera_panel_->is_visible() != active) {
+            toggle_camera_panel();
+        } else if (room_editor_) {
+            room_editor_->sync_room_panel_button_states();
+        }
+    };
+    buttons.push_back(std::move(camera));
+
+    room_editor_->set_floating_panel_buttons(std::move(buttons));
+    room_editor_->sync_room_panel_button_states();
+}
+
 void DevControls::toggle_map_light_panel() {
     if (!map_light_panel_) {
         if (!map_info_json_) return;
@@ -433,6 +493,7 @@ void DevControls::toggle_map_light_panel() {
     } else {
         map_light_panel_->open();
     }
+    if (room_editor_) room_editor_->sync_room_panel_button_states();
 }
 
 void DevControls::toggle_camera_panel() {
@@ -445,6 +506,7 @@ void DevControls::toggle_camera_panel() {
     } else {
         camera_panel_->open();
     }
+    if (room_editor_) room_editor_->sync_room_panel_button_states();
 }
 
 void DevControls::close_camera_panel() {

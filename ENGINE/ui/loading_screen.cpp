@@ -4,6 +4,7 @@
 #include <sstream>
 #include <random>
 #include <iostream>
+#include "font_paths.hpp"
 namespace fs = std::filesystem;
 
 LoadingScreen::LoadingScreen(SDL_Renderer* renderer, int screen_w, int screen_h)
@@ -130,12 +131,13 @@ void LoadingScreen::draw_frame() {
 	SDL_FreeSurface(surf);
 	if (!tex) return;
 	SDL_SetRenderDrawColor(renderer_,0,0,0,255); SDL_RenderClear(renderer_);
-	TTF_Font* title_font=TTF_OpenFont("C:/Windows/Fonts/consola.ttf",48);
+	const std::string mono_font = ui_fonts::monospace();
+	TTF_Font* title_font=TTF_OpenFont(mono_font.c_str(),48);
 	SDL_Color white={255,255,255,255};
 	if(title_font){int tw,th; TTF_SizeText(title_font,"LOADING...",&tw,&th); int tx=(screen_w_-tw)/2;
 		draw_text(title_font,"LOADING...",tx,40,white); TTF_CloseFont(title_font);}
 	render_scaled_center(tex,screen_w_/3,screen_h_/3,screen_w_/2,screen_h_/2);
-	TTF_Font* body_font=TTF_OpenFont("C:/Windows/Fonts/consola.ttf",26);
+\tTTF_Font* body_font=TTF_OpenFont(mono_font.c_str(),26);
 	SDL_Rect msg_rect{screen_w_/3,(screen_h_*2)/3,screen_w_/3,screen_h_/4};
 	if(body_font && !message_.empty()){render_justified_text(body_font,message_,msg_rect,white); TTF_CloseFont(body_font);}
 	SDL_DestroyTexture(tex);

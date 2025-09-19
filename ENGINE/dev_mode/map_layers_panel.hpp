@@ -85,8 +85,26 @@ private:
     bool reload_layers_from_disk();
     void ensure_layer_config_valid();
     void request_room_selection(const std::function<void(const std::string&)>& cb);
+    void request_preview_regeneration();
+    void regenerate_preview();
+    double compute_map_radius_from_layers();
 
 private:
+    struct PreviewNode {
+        SDL_FPoint center{0.0f, 0.0f};
+        double width = 0.0;
+        double height = 0.0;
+        bool is_circle = false;
+        int layer = 0;
+        SDL_Color color{255, 255, 255, 255};
+        std::string name;
+    };
+    struct PreviewEdge {
+        const PreviewNode* from = nullptr;
+        const PreviewNode* to = nullptr;
+        SDL_Color color{180, 180, 180, 255};
+    };
+
     nlohmann::json* map_info_ = nullptr;
     std::string map_path_;
     SaveCallback on_save_;
@@ -95,6 +113,11 @@ private:
     std::unique_ptr<PanelSidebarWidget> sidebar_widget_;
     std::unique_ptr<LayerConfigPanel> layer_config_;
     std::unique_ptr<RoomSelectorPopup> room_selector_;
+
+    std::vector<std::unique_ptr<PreviewNode>> preview_nodes_;
+    std::vector<PreviewEdge> preview_edges_;
+    double preview_extent_ = 0.0;
+    bool preview_dirty_ = true;
 
     std::vector<std::string> available_rooms_;
     int selected_layer_ = -1;

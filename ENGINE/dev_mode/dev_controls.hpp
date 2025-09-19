@@ -95,6 +95,7 @@ private:
     void toggle_map_light_panel();
     void toggle_camera_panel();
     void close_camera_panel();
+    void configure_room_editor_header_buttons();
     bool handle_map_mode_asset_click(const Input& input);
     Asset* hit_test_boundary_asset(SDL_Point screen_point) const;
     Room* find_spawn_room() const;

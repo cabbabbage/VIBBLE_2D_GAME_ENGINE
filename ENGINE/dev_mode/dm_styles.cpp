@@ -94,5 +94,6 @@ const SDL_Color &DMStyles::Border() {
 int DMSpacing::panel_padding() { return 24; }
 int DMSpacing::section_gap()   { return 24; }
 int DMSpacing::item_gap()      { return 12; }
+int DMSpacing::label_gap()    { return 6; }
 int DMSpacing::small_gap()     { return 6; }
 int DMSpacing::header_gap()    { return 16; }

@@ -59,14 +59,14 @@ private:
     std::unique_ptr<ButtonWidget> reset_widget_;
 
     std::unique_ptr<SectionLabelWidget> render_section_label_;
-    std::unique_ptr<SectionLabelWidget> realism_section_label_;
+    std::unique_ptr<SectionLabelWidget> perspective_section_label_;
     std::unique_ptr<SectionLabelWidget> position_section_label_;
 
     std::unique_ptr<FloatSliderWidget> render_distance_slider_;
+    std::unique_ptr<FloatSliderWidget> tripod_distance_slider_;
+    std::unique_ptr<FloatSliderWidget> height_zoom1_slider_;
     std::unique_ptr<FloatSliderWidget> parallax_strength_slider_;
-    std::unique_ptr<FloatSliderWidget> squash_strength_slider_;
+    std::unique_ptr<FloatSliderWidget> foreshorten_strength_slider_;
     std::unique_ptr<FloatSliderWidget> distance_strength_slider_;
-    std::unique_ptr<FloatSliderWidget> angle_slider_;
-    std::unique_ptr<FloatSliderWidget> height_slider_;
     std::unique_ptr<FloatSliderWidget> vertical_offset_slider_;
 };

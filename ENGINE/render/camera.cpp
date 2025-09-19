@@ -8,9 +8,6 @@
 #include <vector>
 #include <nlohmann/json.hpp>
 
-namespace {
-constexpr double kDegToRad = 3.14159265358979323846 / 180.0;
-}
 
 static inline int width_from_area(const Area& a) {
     int minx, miny, maxx, maxy;
@@ -324,67 +321,62 @@ camera::RenderEffects camera::compute_render_effects(SDL_Point world,
     result.vertical_scale  = 1.0f;
     result.distance_scale  = 1.0f;
 
-    if (!realism_enabled_) {
-        return result;
-    }
-
     const double safe_scale = std::max(0.0001, static_cast<double>(scale_));
-    const float zoom_ratio = static_cast<float>(1.0 / safe_scale);
+    const double world_to_screen = 1.0 / safe_scale;
 
-    float base_height = std::isfinite(settings_.camera_height_at_zoom0)
-                            ? settings_.camera_height_at_zoom0
-                            : 18.0f;
-    base_height = std::max(0.1f, base_height);
-    const float effective_height = base_height / std::max(0.1f, zoom_ratio);
-    const float camera_height = std::max(0.1f, effective_height);
+    if (realism_enabled_) {
+        const float raw_scale = std::isfinite(scale_) ? scale_ : 0.0f;
+        const float zoom_norm = std::clamp(raw_scale, 0.0f, 1.0f);
+        const float base_height = std::isfinite(settings_.height_at_zoom1)
+                                      ? std::max(0.0f, settings_.height_at_zoom1)
+                                      : 0.0f;
+        const double camera_height = static_cast<double>(base_height) * static_cast<double>(zoom_norm);
 
-    float angle_deg = std::isfinite(settings_.camera_angle_degrees)
-                          ? settings_.camera_angle_degrees
-                          : 55.0f;
-    angle_deg = std::clamp(angle_deg, 1.0f, 89.0f);
-    const float angle_rad = angle_deg * static_cast<float>(kDegToRad);
-    const float sin_pitch = std::sin(angle_rad);
-    const float cos_pitch = std::cos(angle_rad);
-    const float angle_factor = std::max(0.0f, cos_pitch);
+        const double tripod_distance = std::isfinite(settings_.tripod_distance_y)
+                                           ? static_cast<double>(settings_.tripod_distance_y)
+                                           : 0.0;
+        const double base_x = static_cast<double>(screen_center_.x);
+        const double base_y = static_cast<double>(screen_center_.y) - tripod_distance;
 
-    const float pivot_x = static_cast<float>(screen_center_.x);
-    const float pivot_y = static_cast<float>(screen_center_.y) + settings_.camera_vertical_offset;
+        const double dx = static_cast<double>(world.x) - base_x;
+        const double dy = static_cast<double>(world.y) - base_y;
 
-    const float dx_world = static_cast<float>(world.x) - pivot_x;
-    const float dy_world = static_cast<float>(world.y) - pivot_y;
+        const double r = std::hypot(dx, dy);
+        const double d = std::hypot(r, camera_height);
 
-    float distance = std::sqrt(dx_world * dx_world + dy_world * dy_world + camera_height * camera_height);
-    if (!std::isfinite(distance) || distance < 0.001f) {
-        distance = 0.001f;
+        const double sin_pitch = (d > 0.0) ? (camera_height / d) : 0.0;
+        const double cos_pitch = (d > 0.0) ? (r / d) : 1.0;
+
+        const double denom = r + camera_height;
+        const double t = (denom > 0.0) ? (r / denom) : 0.0;
+
+        const float parallax_strength = std::max(0.0f, settings_.parallax_strength);
+        if (parallax_enabled_ && parallax_strength > 0.0f && d > 0.0) {
+            const double parallax_pixels_y =
+                static_cast<double>(parallax_strength) * sin_pitch * dy * world_to_screen;
+            result.screen_position.y += static_cast<int>(std::lround(parallax_pixels_y));
+        }
+
+        const float foreshorten_strength = std::max(0.0f, settings_.foreshorten_strength);
+        if (foreshorten_strength > 0.0f) {
+            const double foreshorten = static_cast<double>(foreshorten_strength) * t * cos_pitch;
+            const double scaled = std::clamp(1.0 - foreshorten, 0.1, 1.0);
+            result.vertical_scale = static_cast<float>(scaled);
+        }
+
+        const float distance_strength = std::max(0.0f, settings_.distance_scale_strength);
+        if (distance_strength > 0.0f) {
+            const double bias = 0.5 - t;
+            const double scale = 1.0 + static_cast<double>(distance_strength) * cos_pitch * bias;
+            const double clamped_scale = std::clamp(scale, 0.35, 2.0);
+            result.distance_scale = static_cast<float>(clamped_scale);
+        }
     }
 
-    float depth = dy_world * cos_pitch + camera_height * sin_pitch;
-    if (!std::isfinite(depth) || depth < 0.001f) {
-        depth = 0.001f;
-    }
-
-    const float world_to_screen = static_cast<float>(1.0 / safe_scale);
-    const float parallax_strength = std::max(0.0f, settings_.parallax_strength);
-    if (parallax_enabled_ && parallax_strength > 0.0f && angle_factor > 0.0f) {
-        const float attenuation = camera_height / distance;
-        const float parallax_pixels_y = parallax_strength * angle_factor * attenuation * dy_world * world_to_screen;
-        result.screen_position.y += static_cast<int>(std::lround(parallax_pixels_y));
-    }
-
-    float depth_ratio = depth / (depth + camera_height);
-    depth_ratio = std::clamp(depth_ratio, 0.0f, 1.0f);
-
-    const float squash_strength = std::max(0.0f, settings_.squash_strength);
-    if (squash_strength > 0.0f && angle_factor > 0.0f) {
-        const float squash_amount = squash_strength * angle_factor * depth_ratio;
-        result.vertical_scale = std::max(0.1f, 1.0f - squash_amount);
-    }
-
-    const float distance_strength = std::max(0.0f, settings_.distance_scale_strength);
-    if (distance_strength > 0.0f && angle_factor > 0.0f) {
-        const float signed_offset = (1.0f - depth_ratio) - 0.5f;
-        const float scale = 1.0f + distance_strength * angle_factor * signed_offset;
-        result.distance_scale = std::clamp(scale, 0.35f, 2.0f);
+    if (settings_.camera_vertical_offset != 0.0f) {
+        const double offset_pixels =
+            static_cast<double>(settings_.camera_vertical_offset) * world_to_screen;
+        result.screen_position.y += static_cast<int>(std::lround(offset_pixels));
     }
 
     (void)asset_screen_height;
@@ -392,6 +384,7 @@ camera::RenderEffects camera::compute_render_effects(SDL_Point world,
 
     return result;
 }
+
 
 void camera::apply_camera_settings(const nlohmann::json& data) {
     if (!data.is_object()) {
@@ -438,22 +431,26 @@ void camera::apply_camera_settings(const nlohmann::json& data) {
         }
     }
 
-    bool has_squash = try_read_float("squash_strength", settings_.squash_strength);
-    if (!has_squash) {
+    bool has_foreshorten = try_read_float("foreshorten_strength", settings_.foreshorten_strength);
+    if (!has_foreshorten) {
         float legacy_squash = 0.0f;
-        if (try_read_float("squash_overall_strength", legacy_squash)) {
-            settings_.squash_strength = std::max(0.0f, legacy_squash);
+        if (try_read_float("squash_strength", legacy_squash) ||
+            try_read_float("squash_overall_strength", legacy_squash)) {
+            settings_.foreshorten_strength = std::max(0.0f, legacy_squash);
         }
     }
 
     try_read_float("distance_scale_strength", settings_.distance_scale_strength);
 
-    bool has_angle = try_read_float("camera_angle_degrees", settings_.camera_angle_degrees);
-    if (!has_angle) {
-        try_read_float("perspective_angle_degrees", settings_.camera_angle_degrees);
+    bool has_height = try_read_float("height_at_zoom1", settings_.height_at_zoom1);
+    if (!has_height) {
+        float legacy_height = 0.0f;
+        if (try_read_float("camera_height_at_zoom0", legacy_height)) {
+            settings_.height_at_zoom1 = std::max(0.0f, legacy_height);
+        }
     }
 
-    try_read_float("camera_height_at_zoom0", settings_.camera_height_at_zoom0);
+    try_read_float("tripod_distance_y", settings_.tripod_distance_y);
     try_read_float("camera_vertical_offset", settings_.camera_vertical_offset);
 
     if (!std::isfinite(settings_.render_distance) || settings_.render_distance < 0.0f) {
@@ -462,41 +459,48 @@ void camera::apply_camera_settings(const nlohmann::json& data) {
         settings_.render_distance = std::max(0.0f, settings_.render_distance);
     }
 
-    settings_.parallax_strength = std::isfinite(settings_.parallax_strength) ? std::max(0.0f, settings_.parallax_strength) : 0.0f;
-    settings_.squash_strength = std::isfinite(settings_.squash_strength) ? std::max(0.0f, settings_.squash_strength) : 0.0f;
+    settings_.parallax_strength = std::isfinite(settings_.parallax_strength)
+        ? std::max(0.0f, settings_.parallax_strength)
+        : 0.0f;
+
+    settings_.foreshorten_strength = std::isfinite(settings_.foreshorten_strength)
+        ? std::max(0.0f, settings_.foreshorten_strength)
+        : 0.0f;
+
     settings_.distance_scale_strength = std::isfinite(settings_.distance_scale_strength)
         ? std::max(0.0f, settings_.distance_scale_strength)
         : 0.0f;
 
-    if (!std::isfinite(settings_.camera_height_at_zoom0) || settings_.camera_height_at_zoom0 < 0.1f) {
-        settings_.camera_height_at_zoom0 = 18.0f;
+    if (!std::isfinite(settings_.height_at_zoom1) || settings_.height_at_zoom1 < 0.0f) {
+        settings_.height_at_zoom1 = 18.0f;
+    }
+
+    if (!std::isfinite(settings_.tripod_distance_y)) {
+        settings_.tripod_distance_y = 0.0f;
+    } else {
+        settings_.tripod_distance_y = std::clamp(settings_.tripod_distance_y, -2000.0f, 2000.0f);
     }
 
     if (!std::isfinite(settings_.camera_vertical_offset)) {
         settings_.camera_vertical_offset = 0.0f;
     }
-
-    if (!std::isfinite(settings_.camera_angle_degrees)) {
-        settings_.camera_angle_degrees = 55.0f;
-    }
-    settings_.camera_angle_degrees = std::clamp(settings_.camera_angle_degrees, 1.0f, 89.0f);
 }
+
 
 nlohmann::json camera::camera_settings_to_json() const {
     nlohmann::json j = nlohmann::json::object();
     j["realism_enabled"] = realism_enabled_;
     j["render_distance"] = settings_.render_distance;
     j["parallax_strength"] = settings_.parallax_strength;
-    j["squash_strength"] = settings_.squash_strength;
+    j["foreshorten_strength"] = settings_.foreshorten_strength;
     j["distance_scale_strength"] = settings_.distance_scale_strength;
-    j["camera_angle_degrees"] = settings_.camera_angle_degrees;
-    j["camera_height_at_zoom0"] = settings_.camera_height_at_zoom0;
+    j["height_at_zoom1"] = settings_.height_at_zoom1;
+    j["tripod_distance_y"] = settings_.tripod_distance_y;
     j["camera_vertical_offset"] = settings_.camera_vertical_offset;
-    // Legacy keys for backwards compatibility with older configs
     j["render_distance_factor"] = settings_.render_distance / 200.0f;
-    j["perspective_angle_degrees"] = settings_.camera_angle_degrees;
     return j;
 }
+
 
 int camera::get_render_distance_world_margin() const {
     const double margin = std::max(0.0, static_cast<double>(settings_.render_distance));

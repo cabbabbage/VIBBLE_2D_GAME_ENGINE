@@ -1,9 +1,11 @@
 #pragma once
 
 #include <SDL.h>
+#include <functional>
 #include <memory>
 #include <nlohmann/json_fwd.hpp>
 #include <string>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -75,7 +77,15 @@ public:
     Asset* get_hovered_asset() const { return hovered_asset_; }
 
     void set_zoom_scale_factor(double factor);
-    double get_zoom_scale_factor() const { return zoom_scale_factor_; }
+    struct FloatingPanelButton {
+        std::string id;
+        std::string label;
+        std::function<void(bool)> set_active;
+        std::function<bool()> is_active;
+    };
+
+    void set_floating_panel_buttons(std::vector<FloatingPanelButton> buttons);
+    void sync_room_panel_button_states();
 
 private:
     enum class DragMode {
@@ -125,7 +135,6 @@ private:
     std::unique_ptr<MapGrid> build_room_grid(const std::string& ignore_spawn_id) const;
     void integrate_spawned_assets(std::vector<std::unique_ptr<Asset>>& spawned);
     void regenerate_current_room();
-    void position_regenerate_button();
 
 private:
     Assets* assets_ = nullptr;
@@ -175,9 +184,14 @@ private:
     int hover_miss_frames_ = 0;
 
     double zoom_scale_factor_ = 1.1;
-    std::unique_ptr<DMButton> regenerate_button_;
-    SDL_Rect regenerate_button_rect_{0, 0, 0, 0};
     PanAndZoom pan_zoom_;
+    std::vector<FloatingPanelButton> floating_panel_buttons_;
+    std::unordered_set<std::string> room_spawn_ids_;
+
+    void refresh_room_panel_buttons();
+    void rebuild_room_spawn_id_cache();
+    bool is_room_spawn_id(const std::string& spawn_id) const;
+    bool asset_belongs_to_room(const Asset* asset) const;
 };
 
 

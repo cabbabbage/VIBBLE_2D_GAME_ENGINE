@@ -9,11 +9,14 @@
 #include <SDL_ttf.h>
 
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <fstream>
 #include <iostream>
 #include <numeric>
+#include <random>
 #include <sstream>
+#include <unordered_map>
 
 #include <nlohmann/json.hpp>
 
@@ -103,6 +106,93 @@ int sum_candidate_field(const nlohmann::json& layer, const char* key) {
     return sum;
 }
 
+struct RoomGeometry {
+    double max_width = 0.0;
+    double max_height = 0.0;
+    bool is_circle = false;
+};
+
+RoomGeometry fetch_room_geometry(const nlohmann::json* rooms_data, const std::string& room_name) {
+    RoomGeometry geom;
+    if (!rooms_data || !rooms_data->is_object()) return geom;
+    auto it = rooms_data->find(room_name);
+    if (it == rooms_data->end() || !it->is_object()) return geom;
+    const auto& room = *it;
+    geom.max_width = room.value("max_width", room.value("min_width", 0.0));
+    geom.max_height = room.value("max_height", room.value("min_height", 0.0));
+    std::string geometry = room.value("geometry", std::string());
+    if (!geometry.empty()) {
+        std::string lowered;
+        lowered.reserve(geometry.size());
+        for (char ch : geometry) {
+            lowered.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(ch))));
+        }
+        if (lowered == "circle") {
+            geom.is_circle = true;
+        }
+    }
+    if (geom.max_width <= 0.0 && geom.max_height <= 0.0) {
+        geom.max_width = 100.0;
+        geom.max_height = 100.0;
+    } else if (geom.max_width <= 0.0) {
+        geom.max_width = geom.max_height;
+    } else if (geom.max_height <= 0.0) {
+        geom.max_height = geom.max_width;
+    }
+    return geom;
+}
+
+double room_extent_for_radius(const RoomGeometry& geom) {
+    double w = std::max(0.0, geom.max_width);
+    double h = std::max(0.0, geom.max_height);
+    if (geom.is_circle) {
+        return w * 0.5;
+    }
+    double diag = std::sqrt(w * w + h * h);
+    return diag * 0.5;
+}
+
+struct PreviewRoomSpec {
+    std::string name;
+    int min_instances = 0;
+    int max_instances = 0;
+    std::vector<std::string> required_children;
+};
+
+struct PreviewLayerSpec {
+    int level = 0;
+    double radius = 0.0;
+    int min_rooms = 0;
+    int max_rooms = 0;
+    std::vector<PreviewRoomSpec> rooms;
+};
+
+std::vector<PreviewRoomSpec> build_children_pool(const PreviewLayerSpec& layer, std::mt19937& rng) {
+    std::vector<PreviewRoomSpec> pool;
+    std::vector<PreviewRoomSpec> expandable;
+    int min_rooms = std::max(0, layer.min_rooms);
+    int max_rooms = std::max(min_rooms, layer.max_rooms);
+    if (max_rooms <= 0) return pool;
+    std::uniform_int_distribution<int> dist(min_rooms, max_rooms);
+    int target = dist(rng);
+    for (const auto& room : layer.rooms) {
+        for (int i = 0; i < room.min_instances; ++i) {
+            pool.push_back(room);
+        }
+        int extra = std::max(0, room.max_instances - room.min_instances);
+        for (int i = 0; i < extra; ++i) {
+            expandable.push_back(room);
+        }
+    }
+    while (static_cast<int>(pool.size()) < target && !expandable.empty()) {
+        std::uniform_int_distribution<size_t> pick(0, expandable.size() - 1);
+        size_t idx = pick(rng);
+        pool.push_back(expandable[idx]);
+        expandable.erase(expandable.begin() + static_cast<long>(idx));
+    }
+    return pool;
+}
+
 } // namespace
 
 using nlohmann::json;
@@ -181,13 +271,16 @@ bool MapLayersPanel::LayerCanvasWidget::handle_event(const SDL_Event& e) {
     const int center_x = rect_.x + rect_.w / 2;
     const int center_y = rect_.y + rect_.h / 2;
     const int draw_radius_max = std::max(8, std::min(rect_.w, rect_.h) / 2 - kCanvasPadding);
+    double display_extent = std::max(max_radius, owner_->preview_extent_);
+    if (display_extent <= 0.0) display_extent = 1.0;
+    double scale = static_cast<double>(draw_radius_max) / display_extent;
+
     int hit_index = -1;
     for (const auto& info : circles_) {
         const json* layer = owner_->layer_at(info.index);
         if (!layer) continue;
         int current_radius = layer->value("radius", 0);
-        double norm = max_radius > 0.0 ? (static_cast<double>(current_radius) / max_radius) : 0.0;
-        int pixel_radius = static_cast<int>(std::lround(norm * draw_radius_max));
+        int pixel_radius = static_cast<int>(std::lround(current_radius * scale));
         pixel_radius = std::max(12, pixel_radius);
         const int dx = p.x - center_x;
         const int dy = p.y - center_y;
@@ -229,14 +322,16 @@ void MapLayersPanel::LayerCanvasWidget::render(SDL_Renderer* renderer) const {
     const int center_x = rect_.x + rect_.w / 2;
     const int center_y = rect_.y + rect_.h / 2;
     const int draw_radius_max = std::max(8, std::min(rect_.w, rect_.h) / 2 - kCanvasPadding);
+    double display_extent = std::max(max_radius, owner_->preview_extent_);
+    if (display_extent <= 0.0) display_extent = 1.0;
+    double scale = static_cast<double>(draw_radius_max) / display_extent;
 
     const DMLabelStyle label_style = DMStyles::Label();
     for (const auto& info : circles_) {
         const json* layer = owner_->layer_at(info.index);
         if (!layer) continue;
         int radius_value = layer->value("radius", 0);
-        double norm = max_radius > 0.0 ? (static_cast<double>(radius_value) / max_radius) : 0.0;
-        int pixel_radius = static_cast<int>(std::lround(norm * draw_radius_max));
+        int pixel_radius = static_cast<int>(std::lround(radius_value * scale));
         pixel_radius = std::max(12, pixel_radius);
         SDL_Color col = info.color;
         int thickness = (info.index == selected_index_) ? 6 : 3;
@@ -244,6 +339,47 @@ void MapLayersPanel::LayerCanvasWidget::render(SDL_Renderer* renderer) const {
         std::ostringstream oss;
         oss << info.label << " (" << radius_value << ")";
         draw_text(renderer, oss.str(), center_x - pixel_radius + 8, center_y - pixel_radius - 18, label_style);
+    }
+
+    if (!owner_->preview_edges_.empty()) {
+        for (const auto& edge : owner_->preview_edges_) {
+            if (!edge.from || !edge.to) continue;
+            SDL_Point from_pt{
+                static_cast<int>(std::lround(center_x + edge.from->center.x * scale)),
+                static_cast<int>(std::lround(center_y + edge.from->center.y * scale))
+            };
+            SDL_Point to_pt{
+                static_cast<int>(std::lround(center_x + edge.to->center.x * scale)),
+                static_cast<int>(std::lround(center_y + edge.to->center.y * scale))
+            };
+            SDL_Color col = edge.color;
+            SDL_SetRenderDrawColor(renderer, col.r, col.g, col.b, col.a);
+            SDL_RenderDrawLine(renderer, from_pt.x, from_pt.y, to_pt.x, to_pt.y);
+        }
+    }
+
+    if (!owner_->preview_nodes_.empty()) {
+        for (const auto& node_uptr : owner_->preview_nodes_) {
+            if (!node_uptr) continue;
+            const PreviewNode* node = node_uptr.get();
+            SDL_Point center_pt{
+                static_cast<int>(std::lround(center_x + node->center.x * scale)),
+                static_cast<int>(std::lround(center_y + node->center.y * scale))
+            };
+            SDL_Color col = node->color;
+            SDL_SetRenderDrawColor(renderer, col.r, col.g, col.b, 220);
+            if (node->is_circle) {
+                int radius = static_cast<int>(std::lround(std::max(2.0, (node->width * 0.5) * scale)));
+                draw_circle(renderer, center_pt.x, center_pt.y, radius, col, 2);
+            } else {
+                int half_w = static_cast<int>(std::lround(std::max(2.0, (node->width * 0.5) * scale)));
+                int half_h = static_cast<int>(std::lround(std::max(2.0, (node->height * 0.5) * scale)));
+                SDL_Rect room_rect{ center_pt.x - half_w, center_pt.y - half_h, half_w * 2, half_h * 2 };
+                SDL_RenderDrawRect(renderer, &room_rect);
+            }
+            SDL_SetRenderDrawColor(renderer, 255, 255, 255, 60);
+            SDL_RenderDrawPoint(renderer, center_pt.x, center_pt.y);
+        }
     }
 
     if (selected_index_ >= 0) {
@@ -909,6 +1045,7 @@ void MapLayersPanel::set_map_info(json* map_info, const std::string& map_path) {
     rebuild_available_rooms();
     refresh_canvas();
     if (layer_config_) layer_config_->close();
+    request_preview_regeneration();
     mark_clean();
 }
 
@@ -966,6 +1103,9 @@ void MapLayersPanel::set_embedded_bounds(const SDL_Rect& bounds) {
 }
 
 void MapLayersPanel::update(const Input& input, int screen_w, int screen_h) {
+    if (preview_dirty_) {
+        regenerate_preview();
+    }
     if (!is_visible()) return;
     DockableCollapsible::update(input, screen_w, screen_h);
     if (layer_config_) layer_config_->update(input, screen_w, screen_h);
@@ -1003,6 +1143,238 @@ bool MapLayersPanel::is_point_inside(int x, int y) const {
     return false;
 }
 
+void MapLayersPanel::request_preview_regeneration() {
+    preview_dirty_ = true;
+}
+
+double MapLayersPanel::compute_map_radius_from_layers() {
+    if (!map_info_) return 0.0;
+    const auto& layers = layers_array();
+    if (!layers.is_array() || layers.empty()) {
+        return 0.0;
+    }
+    const nlohmann::json* rooms_data = nullptr;
+    auto rooms_it = map_info_->find("rooms_data");
+    if (rooms_it != map_info_->end() && rooms_it->is_object()) {
+        rooms_data = &(*rooms_it);
+    }
+    double fallback_radius = 0.0;
+    double max_extent = 0.0;
+    for (const auto& layer : layers) {
+        if (!layer.is_object()) continue;
+        double layer_radius = layer.value("radius", 0.0);
+        fallback_radius = std::max(fallback_radius, layer_radius);
+        double largest_room = 0.0;
+        auto rooms_array_it = layer.find("rooms");
+        if (rooms_array_it != layer.end() && rooms_array_it->is_array()) {
+            for (const auto& candidate : *rooms_array_it) {
+                if (!candidate.is_object()) continue;
+                std::string room_name = candidate.value("name", std::string());
+                if (room_name.empty()) continue;
+                RoomGeometry geom = fetch_room_geometry(rooms_data, room_name);
+                largest_room = std::max(largest_room, room_extent_for_radius(geom));
+            }
+        }
+        max_extent = std::max(max_extent, layer_radius + largest_room);
+    }
+    if (max_extent <= 0.0) {
+        max_extent = fallback_radius;
+    }
+    if (max_extent <= 0.0) {
+        max_extent = 1.0;
+    }
+    double current = map_info_->value("map_radius", 0.0);
+    if (std::fabs(current - max_extent) > 0.5) {
+        (*map_info_)["map_radius"] = max_extent;
+        dirty_ = true;
+        if (sidebar_widget_) sidebar_widget_->set_dirty(true);
+        update_save_button_state();
+    }
+    return max_extent;
+}
+
+void MapLayersPanel::regenerate_preview() {
+    preview_dirty_ = false;
+    preview_nodes_.clear();
+    preview_edges_.clear();
+
+    double computed_radius = compute_map_radius_from_layers();
+    preview_extent_ = std::max(computed_radius, 1.0);
+
+    const auto& layers = layers_array();
+    if (!layers.is_array() || layers.empty()) {
+        if (canvas_widget_) canvas_widget_->refresh();
+        return;
+    }
+
+    std::vector<PreviewLayerSpec> layer_specs;
+    layer_specs.reserve(layers.size());
+    for (const auto& layer_json : layers) {
+        if (!layer_json.is_object()) continue;
+        PreviewLayerSpec spec;
+        spec.level = layer_json.value("level", static_cast<int>(layer_specs.size()));
+        spec.radius = layer_json.value("radius", 0.0);
+        spec.min_rooms = layer_json.value("min_rooms", 0);
+        spec.max_rooms = layer_json.value("max_rooms", spec.min_rooms);
+        auto rooms_it = layer_json.find("rooms");
+        if (rooms_it != layer_json.end() && rooms_it->is_array()) {
+            for (const auto& candidate : *rooms_it) {
+                if (!candidate.is_object()) continue;
+                PreviewRoomSpec room_spec;
+                room_spec.name = candidate.value("name", std::string());
+                room_spec.min_instances = candidate.value("min_instances", 0);
+                room_spec.max_instances = candidate.value("max_instances", room_spec.min_instances);
+                auto required_it = candidate.find("required_children");
+                if (required_it != candidate.end() && required_it->is_array()) {
+                    for (const auto& child : *required_it) {
+                        if (child.is_string()) {
+                            room_spec.required_children.push_back(child.get<std::string>());
+                        }
+                    }
+                }
+                spec.rooms.push_back(std::move(room_spec));
+            }
+        }
+        layer_specs.push_back(std::move(spec));
+    }
+
+    if (layer_specs.empty() || layer_specs.front().rooms.empty()) {
+        if (canvas_widget_) canvas_widget_->refresh();
+        return;
+    }
+
+    const nlohmann::json* rooms_data = nullptr;
+    if (map_info_) {
+        auto it = map_info_->find("rooms_data");
+        if (it != map_info_->end() && it->is_object()) {
+            rooms_data = &(*it);
+        }
+    }
+
+    const PreviewRoomSpec& root_spec = layer_specs.front().rooms.front();
+    RoomGeometry root_geom = fetch_room_geometry(rooms_data, root_spec.name);
+    auto root_node = std::make_unique<PreviewNode>();
+    root_node->center = SDL_FPoint{0.0f, 0.0f};
+    root_node->width = root_geom.max_width;
+    root_node->height = root_geom.max_height;
+    root_node->is_circle = root_geom.is_circle;
+    root_node->layer = layer_specs.front().level;
+    root_node->color = level_color(root_node->layer);
+    root_node->name = root_spec.name.empty() ? std::string("<root>") : root_spec.name;
+    PreviewNode* root_ptr = root_node.get();
+    preview_nodes_.push_back(std::move(root_node));
+
+    struct PreviewSector {
+        PreviewNode* node = nullptr;
+        float start = 0.0f;
+        float span = static_cast<float>(kTau);
+    };
+
+    std::vector<PreviewNode*> current_parents{ root_ptr };
+    std::vector<PreviewSector> current_sectors{ PreviewSector{ root_ptr, 0.0f, static_cast<float>(kTau) } };
+    std::mt19937 rng(std::random_device{}());
+
+    for (size_t li = 1; li < layer_specs.size(); ++li) {
+        const auto& layer_spec = layer_specs[li];
+        auto children = build_children_pool(layer_spec, rng);
+        double radius = layer_spec.radius;
+        std::vector<PreviewSector> next_sectors;
+        std::vector<PreviewNode*> next_parents;
+
+        auto create_child = [&](PreviewNode* parent, const PreviewRoomSpec& spec, float angle, float spread) {
+            RoomGeometry geom = fetch_room_geometry(rooms_data, spec.name);
+            auto node = std::make_unique<PreviewNode>();
+            node->center = SDL_FPoint{
+                static_cast<float>(std::cos(angle) * radius),
+                static_cast<float>(std::sin(angle) * radius)
+            };
+            node->width = geom.max_width;
+            node->height = geom.max_height;
+            node->is_circle = geom.is_circle;
+            node->layer = layer_spec.level;
+            node->color = level_color(layer_spec.level);
+            node->name = spec.name.empty() ? std::string("<room>") : spec.name;
+            PreviewNode* ptr = node.get();
+            preview_nodes_.push_back(std::move(node));
+            preview_edges_.push_back(PreviewEdge{ parent, ptr, SDL_Color{200, 200, 200, 255} });
+            next_parents.push_back(ptr);
+            next_sectors.push_back(PreviewSector{ ptr, angle - spread * 0.5f, spread });
+        };
+
+        if (li == 1) {
+            if (!children.empty()) {
+                std::shuffle(children.begin(), children.end(), rng);
+                float slice = static_cast<float>(kTau / children.size());
+                float buffer = slice * 0.05f;
+                float spread = std::max(slice - buffer * 2.0f, 0.01f);
+                for (size_t idx = 0; idx < children.size(); ++idx) {
+                    float angle = static_cast<float>(idx) * slice + buffer;
+                    create_child(root_ptr, children[idx], angle, spread);
+                }
+            }
+        } else {
+            if (current_sectors.empty()) continue;
+
+            std::unordered_map<PreviewNode*, std::vector<PreviewRoomSpec>> assignments;
+            const auto& prev_layer = layer_specs[li - 1];
+            for (const auto& sector : current_sectors) {
+                for (const auto& prev_room : prev_layer.rooms) {
+                    if (sector.node->name == prev_room.name) {
+                        for (const auto& child : prev_room.required_children) {
+                            PreviewRoomSpec required;
+                            required.name = child;
+                            required.min_instances = 1;
+                            required.max_instances = 1;
+                            assignments[sector.node].push_back(required);
+                        }
+                    }
+                }
+            }
+
+            std::vector<PreviewNode*> parent_order;
+            parent_order.reserve(current_sectors.size());
+            for (const auto& sector : current_sectors) {
+                parent_order.push_back(sector.node);
+                assignments.try_emplace(sector.node);
+            }
+
+            if (!parent_order.empty()) {
+                std::vector<int> counts(parent_order.size(), 0);
+                for (const auto& child_spec : children) {
+                    auto min_it = std::min_element(counts.begin(), counts.end());
+                    size_t parent_index = static_cast<size_t>(std::distance(counts.begin(), min_it));
+                    PreviewNode* parent = parent_order[parent_index];
+                    assignments[parent].push_back(child_spec);
+                    counts[parent_index] += 1;
+                }
+            }
+
+            for (const auto& sector : current_sectors) {
+                auto assignment_it = assignments.find(sector.node);
+                if (assignment_it == assignments.end()) continue;
+                auto kids = assignment_it->second;
+                if (kids.empty()) continue;
+                std::shuffle(kids.begin(), kids.end(), rng);
+                float slice = kids.size() > 0 ? sector.span / static_cast<float>(kids.size()) : sector.span;
+                if (slice <= 0.0f) slice = sector.span;
+                float buffer = slice * 0.05f;
+                float spread = std::max(slice - buffer * 2.0f, 0.01f);
+                for (size_t idx = 0; idx < kids.size(); ++idx) {
+                    float angle = sector.start + static_cast<float>(idx) * slice + buffer;
+                    create_child(sector.node, kids[idx], angle, spread);
+                }
+            }
+        }
+
+        current_parents = std::move(next_parents);
+        current_sectors = std::move(next_sectors);
+    }
+
+    if (canvas_widget_) {
+        canvas_widget_->refresh();
+    }
+}
+
 void MapLayersPanel::select_layer(int index) {
     selected_layer_ = index;
     if (sidebar_widget_) sidebar_widget_->set_selected(index);
@@ -1012,6 +1384,7 @@ void MapLayersPanel::select_layer(int index) {
 void MapLayersPanel::mark_dirty() {
     dirty_ = true;
     if (sidebar_widget_) sidebar_widget_->set_dirty(true);
+    request_preview_regeneration();
 }
 
 void MapLayersPanel::mark_clean() {

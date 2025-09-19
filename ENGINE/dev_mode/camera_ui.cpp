@@ -281,13 +281,14 @@ void CameraUIPanel::sync_from_camera() {
     if (effects_checkbox_) effects_checkbox_->set_value(effects_enabled);
 
     if (render_distance_slider_) render_distance_slider_->set_value(last_settings_.render_distance);
+    if (tripod_distance_slider_) tripod_distance_slider_->set_value(last_settings_.tripod_distance_y);
+    if (height_zoom1_slider_) height_zoom1_slider_->set_value(last_settings_.height_at_zoom1);
     if (parallax_strength_slider_) parallax_strength_slider_->set_value(last_settings_.parallax_strength);
-    if (squash_strength_slider_) squash_strength_slider_->set_value(last_settings_.squash_strength);
+    if (foreshorten_strength_slider_) foreshorten_strength_slider_->set_value(last_settings_.foreshorten_strength);
     if (distance_strength_slider_) distance_strength_slider_->set_value(last_settings_.distance_scale_strength);
-    if (angle_slider_) angle_slider_->set_value(last_settings_.camera_angle_degrees);
-    if (height_slider_) height_slider_->set_value(last_settings_.camera_height_at_zoom0);
     if (vertical_offset_slider_) vertical_offset_slider_->set_value(last_settings_.camera_vertical_offset);
 }
+
 
 void CameraUIPanel::build_ui() {
     effects_checkbox_ = std::make_unique<DMCheckbox>("Perspective Effects", true);
@@ -303,47 +304,50 @@ void CameraUIPanel::build_ui() {
     camera::RealismSettings defaults;
 
     render_section_label_ = std::make_unique<SectionLabelWidget>("Render Distance");
-    realism_section_label_ = std::make_unique<SectionLabelWidget>("Perspective Realism");
+    perspective_section_label_ = std::make_unique<SectionLabelWidget>("Perspective");
     position_section_label_ = std::make_unique<SectionLabelWidget>("Camera Position");
 
     render_distance_slider_ = std::make_unique<FloatSliderWidget>("Render Distance (world units)", 0.0f, 4000.0f, 10.0f, defaults.render_distance, 0);
+    tripod_distance_slider_ = std::make_unique<FloatSliderWidget>("Tripod Distance (Y)", -2000.0f, 2000.0f, 5.0f, defaults.tripod_distance_y, 0);
+    height_zoom1_slider_ = std::make_unique<FloatSliderWidget>("Height @ Zoom = 1 (px)", 0.0f, 400.0f, 1.0f, defaults.height_at_zoom1, 0);
     parallax_strength_slider_ = std::make_unique<FloatSliderWidget>("Parallax Strength", 0.0f, 50.0f, 0.25f, defaults.parallax_strength, 2);
-    squash_strength_slider_ = std::make_unique<FloatSliderWidget>("Squash Strength", 0.0f, 1.0f, 0.01f, defaults.squash_strength, 2);
+    foreshorten_strength_slider_ = std::make_unique<FloatSliderWidget>("Vertical Foreshortening Strength", 0.0f, 1.0f, 0.01f, defaults.foreshorten_strength, 2);
     distance_strength_slider_ = std::make_unique<FloatSliderWidget>("Distance Scaling Strength", 0.0f, 1.0f, 0.01f, defaults.distance_scale_strength, 2);
-    angle_slider_ = std::make_unique<FloatSliderWidget>("Camera Angle (deg)", 1.0f, 89.0f, 1.0f, defaults.camera_angle_degrees, 0);
-    height_slider_ = std::make_unique<FloatSliderWidget>("Height at Zoom 0 (m)", 1.0f, 100.0f, 0.5f, defaults.camera_height_at_zoom0, 2);
     vertical_offset_slider_ = std::make_unique<FloatSliderWidget>("Camera Y Offset", -400.0f, 400.0f, 1.0f, defaults.camera_vertical_offset, 0);
 
     rebuild_rows();
 }
+
 
 void CameraUIPanel::rebuild_rows() {
     Rows rows;
     rows.push_back({ effects_widget_.get() });
     rows.push_back({ render_section_label_.get() });
     rows.push_back({ render_distance_slider_.get() });
-    rows.push_back({ realism_section_label_.get() });
-    rows.push_back({ parallax_strength_slider_.get(), squash_strength_slider_.get() });
+    rows.push_back({ perspective_section_label_.get() });
+    rows.push_back({ tripod_distance_slider_.get(), height_zoom1_slider_.get() });
+    rows.push_back({ parallax_strength_slider_.get(), foreshorten_strength_slider_.get() });
     rows.push_back({ distance_strength_slider_.get() });
     rows.push_back({ position_section_label_.get() });
-    rows.push_back({ angle_slider_.get(), height_slider_.get() });
     rows.push_back({ vertical_offset_slider_.get() });
     rows.push_back({ load_widget_.get(), save_widget_.get(), reset_widget_.get() });
     set_rows(rows);
 }
 
+
 void CameraUIPanel::reset_to_defaults() {
     camera::RealismSettings defaults;
     if (effects_checkbox_) effects_checkbox_->set_value(true);
     if (render_distance_slider_) render_distance_slider_->set_value(defaults.render_distance);
+    if (tripod_distance_slider_) tripod_distance_slider_->set_value(defaults.tripod_distance_y);
+    if (height_zoom1_slider_) height_zoom1_slider_->set_value(defaults.height_at_zoom1);
     if (parallax_strength_slider_) parallax_strength_slider_->set_value(defaults.parallax_strength);
-    if (squash_strength_slider_) squash_strength_slider_->set_value(defaults.squash_strength);
+    if (foreshorten_strength_slider_) foreshorten_strength_slider_->set_value(defaults.foreshorten_strength);
     if (distance_strength_slider_) distance_strength_slider_->set_value(defaults.distance_scale_strength);
-    if (angle_slider_) angle_slider_->set_value(defaults.camera_angle_degrees);
-    if (height_slider_) height_slider_->set_value(defaults.camera_height_at_zoom0);
     if (vertical_offset_slider_) vertical_offset_slider_->set_value(defaults.camera_vertical_offset);
     apply_settings_if_needed();
 }
+
 
 void CameraUIPanel::save_to_json() {
     if (!assets_) return;
@@ -370,17 +374,18 @@ void CameraUIPanel::apply_settings_if_needed() {
     bool changed = effects_enabled != last_realism_enabled_;
     const camera::RealismSettings& prev = last_settings_;
     changed = changed || differs(settings.render_distance, prev.render_distance) ||
+              differs(settings.tripod_distance_y, prev.tripod_distance_y) ||
+              differs(settings.height_at_zoom1, prev.height_at_zoom1) ||
               differs(settings.parallax_strength, prev.parallax_strength) ||
-              differs(settings.squash_strength, prev.squash_strength) ||
+              differs(settings.foreshorten_strength, prev.foreshorten_strength) ||
               differs(settings.distance_scale_strength, prev.distance_scale_strength) ||
-              differs(settings.camera_angle_degrees, prev.camera_angle_degrees) ||
-              differs(settings.camera_height_at_zoom0, prev.camera_height_at_zoom0) ||
               differs(settings.camera_vertical_offset, prev.camera_vertical_offset);
 
     if (changed) {
         apply_settings_to_camera(settings, effects_enabled);
     }
 }
+
 
 void CameraUIPanel::apply_settings_to_camera(const camera::RealismSettings& settings,
                                              bool effects_enabled) {
@@ -396,14 +401,15 @@ void CameraUIPanel::apply_settings_to_camera(const camera::RealismSettings& sett
 camera::RealismSettings CameraUIPanel::read_settings_from_ui() const {
     camera::RealismSettings settings{};
     if (render_distance_slider_) settings.render_distance = std::max(0.0f, render_distance_slider_->value());
+    if (tripod_distance_slider_) settings.tripod_distance_y = std::clamp(tripod_distance_slider_->value(), -2000.0f, 2000.0f);
+    if (height_zoom1_slider_) settings.height_at_zoom1 = std::max(0.0f, height_zoom1_slider_->value());
     if (parallax_strength_slider_) settings.parallax_strength = std::max(0.0f, parallax_strength_slider_->value());
-    if (squash_strength_slider_) settings.squash_strength = std::max(0.0f, squash_strength_slider_->value());
+    if (foreshorten_strength_slider_) settings.foreshorten_strength = std::max(0.0f, foreshorten_strength_slider_->value());
     if (distance_strength_slider_) settings.distance_scale_strength = std::max(0.0f, distance_strength_slider_->value());
-    if (angle_slider_) settings.camera_angle_degrees = std::clamp(angle_slider_->value(), 1.0f, 89.0f);
-    if (height_slider_) settings.camera_height_at_zoom0 = std::max(0.1f, height_slider_->value());
     if (vertical_offset_slider_) settings.camera_vertical_offset = vertical_offset_slider_->value();
     return settings;
 }
+
 
 
 
