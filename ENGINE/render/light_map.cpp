@@ -4,6 +4,7 @@
 #include <random>
 #include <vector>
 #include <iostream>
+#include <cmath>
 LightMap::LightMap(SDL_Renderer* renderer,
                    Assets* assets,
                    Global_Light_Source& main_light,
@@ -112,11 +113,23 @@ SDL_Texture* LightMap::build_lowres_mask(const std::vector<LightEntry>& layers,
 
 SDL_Rect LightMap::get_scaled_position_rect(SDL_Point pos, int fw, int fh,
                                             float inv_scale, int min_w, int min_h) {
-	int sw = static_cast<int>(fw * inv_scale);
-	int sh = static_cast<int>(fh * inv_scale);
-	if (sw < min_w && sh < min_h) {
-		return {0, 0, 0, 0};
-	}
-        SDL_Point cp = assets_->getView().map_to_screen(pos);
-    return SDL_Rect{ cp.x - sw / 2, cp.y - sh / 2, sw, sh };
+        float base_sw = static_cast<float>(fw) * inv_scale;
+        float base_sh = static_cast<float>(fh) * inv_scale;
+        if (base_sw < static_cast<float>(min_w) && base_sh < static_cast<float>(min_h)) {
+                return {0, 0, 0, 0};
+        }
+        const camera::RenderEffects effects = assets_->getView().compute_render_effects(pos, base_sh, base_sh);
+        float scaled_sw = base_sw * effects.distance_scale;
+        float scaled_sh = base_sh * effects.distance_scale;
+        float final_visible_h = scaled_sh * effects.vertical_scale;
+        if (scaled_sw < static_cast<float>(min_w) && final_visible_h < static_cast<float>(min_h)) {
+                return {0, 0, 0, 0};
+        }
+        int sw = std::max(1, static_cast<int>(std::lround(scaled_sw)));
+        int sh = std::max(1, static_cast<int>(std::lround(final_visible_h)));
+        if (sw < min_w && sh < min_h) {
+                return {0, 0, 0, 0};
+        }
+        SDL_Point cp = effects.screen_position;
+        return SDL_Rect{ cp.x - sw / 2, cp.y - sh / 2, sw, sh };
 }

@@ -60,7 +60,6 @@ private:
 
     std::unique_ptr<SectionLabelWidget> render_section_label_;
     std::unique_ptr<SectionLabelWidget> perspective_section_label_;
-    std::unique_ptr<SectionLabelWidget> position_section_label_;
 
     std::unique_ptr<FloatSliderWidget> render_distance_slider_;
     std::unique_ptr<FloatSliderWidget> tripod_distance_slider_;
@@ -68,5 +67,4 @@ private:
     std::unique_ptr<FloatSliderWidget> parallax_strength_slider_;
     std::unique_ptr<FloatSliderWidget> foreshorten_strength_slider_;
     std::unique_ptr<FloatSliderWidget> distance_strength_slider_;
-    std::unique_ptr<FloatSliderWidget> vertical_offset_slider_;
 };

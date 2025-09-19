@@ -1,14 +1,13 @@
 {
   "camera_settings": {
+    "distance_scale_strength": 0.26999998092651367,
+    "foreshorten_strength": 0.009999999776482582,
+    "height_at_zoom1": 378.0,
+    "parallax_strength": 29.75,
     "realism_enabled": true,
     "render_distance": 660.0,
     "render_distance_factor": 3.299999952316284,
-    "parallax_strength": 2.25,
-    "foreshorten_strength": 0.12999999523162842,
-    "distance_scale_strength": 0.7999999523162842,
-    "height_at_zoom1": 20.5,
-    "tripod_distance_y": 0.0,
-    "camera_vertical_offset": 359.0
+    "tripod_distance_y": 165.0
   },
   "map_assets_data": {
     "spawn_groups": [

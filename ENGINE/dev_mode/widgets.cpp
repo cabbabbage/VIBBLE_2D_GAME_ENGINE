@@ -315,6 +315,10 @@ void DMSlider::render(SDL_Renderer* r) const {
     }
 }
 
+int DMSlider::preferred_height() const {
+    return DMSlider::height();
+}
+
 DMRangeSlider::DMRangeSlider(int min_val, int max_val, int min_value, int max_value)
     : min_(min_val), max_(max_val) {
     if (min_ > max_) std::swap(min_, max_);
@@ -576,5 +580,9 @@ void DMDropdown::render_options(SDL_Renderer* r) const {
             TTF_CloseFont(f2);
         }
     }
+}
+
+int DMDropdown::preferred_height() const {
+    return DMDropdown::height();
 }
 

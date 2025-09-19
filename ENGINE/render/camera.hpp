@@ -15,12 +15,11 @@ class camera {
         public:
     struct RealismSettings {
         float render_distance = 800.0f;           // world-space margin for activating assets
-        float parallax_strength = 12.0f;          // multiplier for parallax offset along the tripod axis
+        float parallax_strength = 12.0f;          // multiplier for parallax offset based on horizontal pan
         float foreshorten_strength = 0.35f;       // multiplier for vertical foreshortening
         float distance_scale_strength = 0.3f;     // multiplier for distance-based scaling
         float height_at_zoom1 = 18.0f;            // camera height above ground plane when zoom_norm = 1
-        float tripod_distance_y = 0.0f;           // pixels between target and tripod base along -Y
-        float camera_vertical_offset = 0.0f;      // world-space offset applied after realism (converted to screen px)
+        float tripod_distance_y = 0.0f;           // ground-plane offset between target and tripod base along Y
     };
 
     struct RenderEffects {
@@ -59,8 +58,8 @@ class camera {
     const Area& get_current_view() const { return current_view_; }
 
     // Coordinate mapping
-    SDL_Point map_to_screen(SDL_Point world, float parallax_x = 0.0f, float parallax_y = 0.0f) const;
-    SDL_Point screen_to_map(SDL_Point screen, float parallax_x = 0.0f, float parallax_y = 0.0f) const;
+    SDL_Point map_to_screen(SDL_Point world, float parallax_x = 0.0f, float parallax_y = 0.0f) const; // parallax_y ignored
+    SDL_Point screen_to_map(SDL_Point screen, float parallax_x = 0.0f, float parallax_y = 0.0f) const; // parallax_y ignored
 
     // Asset rendering helpers
     RenderEffects compute_render_effects(SDL_Point world,
@@ -87,7 +86,7 @@ class camera {
     Area     get_camera_area() const { return current_view_; }
 
     // Screen center is the map-space focal point (e.g., player position).
-    void      set_screen_center(SDL_Point p) { screen_center_ = p; }
+    void      set_screen_center(SDL_Point p);
     SDL_Point get_screen_center() const { return screen_center_; }
 
     // Animation update
@@ -113,6 +112,9 @@ class camera {
     Area       base_zoom_{"base_zoom"};   // Exactly screen_w x screen_h at zoom = 1
     Area       current_view_{"current_view"}; // Current map-space view
     SDL_Point  screen_center_{0, 0};
+    bool       screen_center_initialized_ = false;
+    double     pan_offset_x_ = 0.0;
+    double     pan_offset_y_ = 0.0;
 
     // Zoom state
     float      scale_        = 1.0f; // current_view width / base_zoom width

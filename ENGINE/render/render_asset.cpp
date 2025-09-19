@@ -33,7 +33,9 @@ SDL_Texture* RenderAsset::render_shadow_mask(Asset* a, int bw, int bh) {
 		SDL_RenderCopy(renderer_, base, nullptr, nullptr);
 		SDL_SetTextureColorMod(base, 255, 255, 255);
 	}
-	SDL_Point parallax_pos = cam_.map_to_screen(SDL_Point{a->pos.x, a->pos.y});
+        const camera::RenderEffects effects =
+            cam_.compute_render_effects(SDL_Point{a->pos.x, a->pos.y}, 0.0f, 0.0f);
+        SDL_Point parallax_pos = effects.screen_position;
 	SDL_Rect bounds{ parallax_pos.x - bw / 2, parallax_pos.y - bh, bw, bh };
 	const Uint8 light_alpha = static_cast<Uint8>(main_light_source_.get_brightness());
 	render_shadow_received_static_lights(a, bounds, light_alpha);
@@ -89,7 +91,7 @@ void RenderAsset::render_shadow_moving_lights(Asset* a, const SDL_Rect& bounds, 
 		const int world_ly = p->pos.y + light.offset_y;
 		const double factor = LightUtils::calculate_static_alpha_percentage(a, p);
 		const Uint8 inten = static_cast<Uint8>(alpha * factor);
-		SDL_Point pnt = cam_.map_to_screen(SDL_Point{world_lx, world_ly});
+                SDL_Point pnt = cam_.compute_render_effects(SDL_Point{world_lx, world_ly}, 0.0f, 0.0f).screen_position;
 		int lw = light.cached_w, lh = light.cached_h;
 		if (lw == 0 || lh == 0) {
 			SDL_QueryTexture(light.texture, nullptr, nullptr, &lw, &lh);
@@ -115,7 +117,11 @@ void RenderAsset::render_shadow_orbital_lights(Asset* a, const SDL_Rect& bounds,
 		if (!light.texture || light.x_radius <= 0 || light.y_radius <= 0) continue;
 		const float lx = a->pos.x + std::cos(angle) * light.x_radius;
 		const float ly = a->pos.y - std::sin(angle) * light.y_radius;
-		SDL_Point pnt = cam_.map_to_screen(SDL_Point{static_cast<int>(std::round(lx)), static_cast<int>(std::round(ly))});
+                SDL_Point pnt = cam_.compute_render_effects(
+                                        SDL_Point{static_cast<int>(std::round(lx)), static_cast<int>(std::round(ly))},
+                                        0.0f,
+                                        0.0f)
+                                        .screen_position;
 		int lw = light.cached_w, lh = light.cached_h;
 		if (lw == 0 || lh == 0) {
 			SDL_QueryTexture(light.texture, nullptr, nullptr, &lw, &lh);
@@ -138,7 +144,11 @@ void RenderAsset::render_shadow_received_static_lights(Asset* a, const SDL_Rect&
 	static std::mt19937 flicker_rng{ std::random_device{}() };
 	for (const auto& sl : a->static_lights) {
 		if (!sl.source || !sl.source->texture) continue;
-		SDL_Point pnt = cam_.map_to_screen(SDL_Point{a->pos.x + sl.offset.x, a->pos.y + sl.offset.y});
+                SDL_Point pnt = cam_.compute_render_effects(
+                                        SDL_Point{a->pos.x + sl.offset.x, a->pos.y + sl.offset.y},
+                                        0.0f,
+                                        0.0f)
+                                        .screen_position;
 		int lw = sl.source->cached_w, lh = sl.source->cached_h;
 		if (lw == 0 || lh == 0) {
 			SDL_QueryTexture(sl.source->texture, nullptr, nullptr, &lw, &lh);

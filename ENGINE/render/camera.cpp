@@ -51,6 +51,9 @@ camera::camera(int screen_width, int screen_height, const Area& starting_zoom)
     // Current view starts at the adjusted starting area.
     current_view_ = adjusted_start;
     screen_center_ = start_center;
+    screen_center_initialized_ = true;
+    pan_offset_x_ = 0.0;
+    pan_offset_y_ = 0.0;
 
     const int base_w = width_from_area(base_zoom_);
     const int curr_w = width_from_area(current_view_);
@@ -60,11 +63,27 @@ camera::camera(int screen_width, int screen_height, const Area& starting_zoom)
     start_scale_ = target_scale_ = scale_;
 }
 
+void camera::set_screen_center(SDL_Point p) {
+    if (!screen_center_initialized_) {
+        screen_center_ = p;
+        screen_center_initialized_ = true;
+        pan_offset_x_ = 0.0;
+        pan_offset_y_ = 0.0;
+        return;
+    }
+
+    const double dx = static_cast<double>(p.x) - static_cast<double>(screen_center_.x);
+    const double dy = static_cast<double>(p.y) - static_cast<double>(screen_center_.y);
+    pan_offset_x_ += dx;
+    pan_offset_y_ += dy;
+    screen_center_ = p;
+}
+
 void camera::set_scale(float s) {
-	scale_ = (s > 0.0f) ? s : 0.0001f;
-	zooming_ = false;
-	steps_total_ = steps_done_ = 0;
-	start_scale_ = target_scale_ = scale_;
+        scale_ = (s > 0.0f) ? s : 0.0001f;
+        zooming_ = false;
+        steps_total_ = steps_done_ = 0;
+        start_scale_ = target_scale_ = scale_;
 }
 
 float camera::get_scale() const { return scale_; }
@@ -107,7 +126,8 @@ void camera::update() {
     if (pan_override_) {
         const double cx = static_cast<double>(start_center_.x) + (static_cast<double>(target_center_.x) - static_cast<double>(start_center_.x)) * t;
         const double cy = static_cast<double>(start_center_.y) + (static_cast<double>(target_center_.y) - static_cast<double>(start_center_.y)) * t;
-        screen_center_ = SDL_Point{ static_cast<int>(std::lround(cx)), static_cast<int>(std::lround(cy)) };
+        SDL_Point new_center{ static_cast<int>(std::lround(cx)), static_cast<int>(std::lround(cy)) };
+        set_screen_center(new_center);
     }
     recompute_current_view();
 
@@ -116,7 +136,7 @@ void camera::update() {
         scale_ = static_cast<float>(target_scale_);
         // If we were panning, snap to exact target center at the end
         if (pan_override_) {
-            screen_center_ = target_center_;
+            set_screen_center(target_center_);
         }
         zooming_ = false;
         pan_override_ = false;
@@ -153,13 +173,16 @@ void camera::set_up_rooms(CurrentRoomFinder* finder) {
 }
 
 void camera::update_zoom(Room* cur, CurrentRoomFinder* finder, Asset* player) {
+    pan_offset_x_ = 0.0;
+    pan_offset_y_ = 0.0;
+
     if (!pan_override_) {
         if (focus_override_) {
-            screen_center_ = focus_point_;
+            set_screen_center(focus_point_);
         } else if (player) {
-            screen_center_ = SDL_Point{ player->pos.x, player->pos.y };
+            set_screen_center(SDL_Point{ player->pos.x, player->pos.y });
         } else if (cur && cur->room_area) {
-            screen_center_ = cur->room_area->get_center();
+            set_screen_center(cur->room_area->get_center());
         }
     }
 
@@ -272,43 +295,36 @@ void camera::animate_zoom_multiply(double factor, int duration_steps) {
 }
 
 SDL_Point camera::map_to_screen(SDL_Point world, float parallax_x, float parallax_y) const {
+    (void)parallax_y;
     int left, top, right, bottom;
     std::tie(left, top, right, bottom) = current_view_.get_bounds();
     const double inv_scale = (scale_ > 0.000001f) ? (1.0 / static_cast<double>(scale_)) : 1e6;
     const int view_w = right - left;
-    const int view_h = bottom - top;
     int sx = static_cast<int>(std::lround((static_cast<double>(world.x - left)) * inv_scale));
     int sy = static_cast<int>(std::lround((static_cast<double>(world.y - top)) * inv_scale));
-    if (parallax_enabled_ && (parallax_x != 0.0f || parallax_y != 0.0f)) {
+    if (parallax_enabled_ && parallax_x != 0.0f) {
         const double half_w_world = std::max(1.0, static_cast<double>(view_w) * 0.5);
-        const double half_h_world = std::max(1.0, static_cast<double>(view_h) * 0.5);
         const double ndx = (static_cast<double>(world.x - screen_center_.x)) / half_w_world; // [-inf..inf], usually ~[-1..1]
-        const double ndy = (static_cast<double>(world.y - screen_center_.y)) / half_h_world;
         sx += static_cast<int>(std::lround(static_cast<double>(parallax_x) * ndx));
-        sy += static_cast<int>(std::lround(static_cast<double>(parallax_y) * ndy));
     }
     return SDL_Point{ sx, sy };
 }
 
 SDL_Point camera::screen_to_map(SDL_Point screen, float parallax_x, float parallax_y) const {
+    (void)parallax_y;
     int left, top, right, bottom;
     std::tie(left, top, right, bottom) = current_view_.get_bounds();
     const double s = static_cast<double>(std::max(0.000001f, scale_));
     // Initial estimate without parallax
     double wx = static_cast<double>(left) + static_cast<double>(screen.x) * s;
     double wy = static_cast<double>(top)  + static_cast<double>(screen.y) * s;
-    if (parallax_enabled_ && (parallax_x != 0.0f || parallax_y != 0.0f)) {
+    if (parallax_enabled_ && parallax_x != 0.0f) {
         const int view_w = right - left;
-        const int view_h = bottom - top;
         const double half_w_world = std::max(1.0, static_cast<double>(view_w) * 0.5);
-        const double half_h_world = std::max(1.0, static_cast<double>(view_h) * 0.5);
         const double ndx0 = (wx - static_cast<double>(screen_center_.x)) / half_w_world;
-        const double ndy0 = (wy - static_cast<double>(screen_center_.y)) / half_h_world;
         // Correct screen by subtracting estimated parallax offset, then remap
         const double corr_sx = static_cast<double>(screen.x) - static_cast<double>(parallax_x) * ndx0;
-        const double corr_sy = static_cast<double>(screen.y) - static_cast<double>(parallax_y) * ndy0;
         wx = static_cast<double>(left) + corr_sx * s;
-        wy = static_cast<double>(top)  + corr_sy * s;
     }
     return SDL_Point{ static_cast<int>(std::lround(wx)), static_cast<int>(std::lround(wy)) };
 }
@@ -321,62 +337,67 @@ camera::RenderEffects camera::compute_render_effects(SDL_Point world,
     result.vertical_scale  = 1.0f;
     result.distance_scale  = 1.0f;
 
-    const double safe_scale = std::max(0.0001, static_cast<double>(scale_));
-    const double world_to_screen = 1.0 / safe_scale;
+    const double safe_scale = std::max(1e-6, static_cast<double>(scale_));
+    const double pixels_per_world = 1.0 / safe_scale;
 
     if (realism_enabled_) {
-        const float raw_scale = std::isfinite(scale_) ? scale_ : 0.0f;
-        const float zoom_norm = std::clamp(raw_scale, 0.0f, 1.0f);
-        const float base_height = std::isfinite(settings_.height_at_zoom1)
-                                      ? std::max(0.0f, settings_.height_at_zoom1)
-                                      : 0.0f;
-        const double camera_height = static_cast<double>(base_height) * static_cast<double>(zoom_norm);
+        const double raw_scale = std::isfinite(scale_) ? static_cast<double>(scale_) : 0.0;
+        const double zoom_norm = std::clamp(raw_scale, 0.0, 1.0);
+        const double height_at_zoom1 = std::isfinite(settings_.height_at_zoom1)
+                                           ? std::max(0.0f, settings_.height_at_zoom1)
+                                           : 0.0f;
+        const double camera_height = height_at_zoom1 * zoom_norm;
 
         const double tripod_distance = std::isfinite(settings_.tripod_distance_y)
-                                           ? static_cast<double>(settings_.tripod_distance_y)
-                                           : 0.0;
+                                            ? static_cast<double>(settings_.tripod_distance_y)
+                                            : 0.0;
+
         const double base_x = static_cast<double>(screen_center_.x);
         const double base_y = static_cast<double>(screen_center_.y) - tripod_distance;
 
         const double dx = static_cast<double>(world.x) - base_x;
         const double dy = static_cast<double>(world.y) - base_y;
-
         const double r = std::hypot(dx, dy);
-        const double d = std::hypot(r, camera_height);
 
-        const double sin_pitch = (d > 0.0) ? (camera_height / d) : 0.0;
-        const double cos_pitch = (d > 0.0) ? (r / d) : 1.0;
+        constexpr double EPS = 1e-6;
+        const double denom = std::max(EPS, camera_height + r);
+        const double nearness_weight = (camera_height > EPS) ? (camera_height / denom) : 0.0;
+        const double depth_t = (camera_height > EPS) ? (r / denom) : 0.0;
 
-        const double denom = r + camera_height;
-        const double t = (denom > 0.0) ? (r / denom) : 0.0;
+        const double pan_x = pan_offset_x_;
 
-        const float parallax_strength = std::max(0.0f, settings_.parallax_strength);
-        if (parallax_enabled_ && parallax_strength > 0.0f && d > 0.0) {
-            const double parallax_pixels_y =
-                static_cast<double>(parallax_strength) * sin_pitch * dy * world_to_screen;
-            result.screen_position.y += static_cast<int>(std::lround(parallax_pixels_y));
+        const double parallax_strength = std::max(0.0f, settings_.parallax_strength);
+        if (parallax_enabled_ && parallax_strength > 0.0 && camera_height > EPS && std::abs(pan_x) > EPS) {
+            constexpr double KV = 0.25;
+            constexpr double SV = 200.0;
+            const double vertical_bias = 1.0 + KV * std::tanh(dy / SV);
+            const double zoom_gain = (height_at_zoom1 > EPS)
+                                         ? (height_at_zoom1 / (camera_height + EPS))
+                                         : 1.0;
+            double parallax_px = pixels_per_world * parallax_strength * pan_x * nearness_weight * vertical_bias * zoom_gain;
+            const double max_offset = 4000.0;
+            parallax_px = std::clamp(parallax_px, -max_offset, max_offset);
+            result.screen_position.x += static_cast<int>(std::lround(parallax_px));
         }
 
-        const float foreshorten_strength = std::max(0.0f, settings_.foreshorten_strength);
-        if (foreshorten_strength > 0.0f) {
-            const double foreshorten = static_cast<double>(foreshorten_strength) * t * cos_pitch;
-            const double scaled = std::clamp(1.0 - foreshorten, 0.1, 1.0);
-            result.vertical_scale = static_cast<float>(scaled);
+        const double foreshorten_strength = std::max(0.0f, settings_.foreshorten_strength);
+        if (foreshorten_strength > 0.0 && camera_height > EPS) {
+            constexpr double SY = 200.0;
+            const double screen_bias = 0.5 + 0.5 * std::tanh(dy / SY);
+            const double zoom_attenuation = camera_height / (camera_height + height_at_zoom1 + EPS);
+            const double squash = foreshorten_strength * depth_t * screen_bias * zoom_attenuation;
+            const double scale_y = std::clamp(1.0 - squash, 0.1, 1.0);
+            result.vertical_scale = static_cast<float>(scale_y);
         }
 
-        const float distance_strength = std::max(0.0f, settings_.distance_scale_strength);
-        if (distance_strength > 0.0f) {
-            const double bias = 0.5 - t;
-            const double scale = 1.0 + static_cast<double>(distance_strength) * cos_pitch * bias;
-            const double clamped_scale = std::clamp(scale, 0.35, 2.0);
-            result.distance_scale = static_cast<float>(clamped_scale);
+        const double distance_strength = std::max(0.0f, settings_.distance_scale_strength);
+        if (distance_strength > 0.0) {
+            const double r_ref = 400.0;
+            const double base_scale = (camera_height + r_ref) / (camera_height + r + EPS);
+            double distance_scale = 1.0 + (base_scale - 1.0) * distance_strength;
+            distance_scale = std::clamp(distance_scale, 0.35, 2.0);
+            result.distance_scale = static_cast<float>(distance_scale);
         }
-    }
-
-    if (settings_.camera_vertical_offset != 0.0f) {
-        const double offset_pixels =
-            static_cast<double>(settings_.camera_vertical_offset) * world_to_screen;
-        result.screen_position.y += static_cast<int>(std::lround(offset_pixels));
     }
 
     (void)asset_screen_height;
@@ -450,8 +471,10 @@ void camera::apply_camera_settings(const nlohmann::json& data) {
         }
     }
 
-    try_read_float("tripod_distance_y", settings_.tripod_distance_y);
-    try_read_float("camera_vertical_offset", settings_.camera_vertical_offset);
+    bool has_tripod = try_read_float("tripod_distance_y", settings_.tripod_distance_y);
+    if (!has_tripod) {
+        try_read_float("camera_distance_y", settings_.tripod_distance_y);
+    }
 
     if (!std::isfinite(settings_.render_distance) || settings_.render_distance < 0.0f) {
         settings_.render_distance = 800.0f;
@@ -481,9 +504,6 @@ void camera::apply_camera_settings(const nlohmann::json& data) {
         settings_.tripod_distance_y = std::clamp(settings_.tripod_distance_y, -2000.0f, 2000.0f);
     }
 
-    if (!std::isfinite(settings_.camera_vertical_offset)) {
-        settings_.camera_vertical_offset = 0.0f;
-    }
 }
 
 
@@ -496,7 +516,6 @@ nlohmann::json camera::camera_settings_to_json() const {
     j["distance_scale_strength"] = settings_.distance_scale_strength;
     j["height_at_zoom1"] = settings_.height_at_zoom1;
     j["tripod_distance_y"] = settings_.tripod_distance_y;
-    j["camera_vertical_offset"] = settings_.camera_vertical_offset;
     j["render_distance_factor"] = settings_.render_distance / 200.0f;
     return j;
 }
