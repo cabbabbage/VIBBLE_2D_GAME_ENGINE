@@ -109,6 +109,24 @@ void FullScreenCollapsible::update(const Input&) {
 
 bool FullScreenCollapsible::handle_event(const SDL_Event& e) {
     if (!visible_) return false;
+
+    const bool pointer_event =
+        (e.type == SDL_MOUSEBUTTONDOWN || e.type == SDL_MOUSEBUTTONUP || e.type == SDL_MOUSEMOTION);
+    const bool wheel_event = (e.type == SDL_MOUSEWHEEL);
+
+    SDL_Point pointer{0, 0};
+    if (pointer_event) {
+        pointer.x = (e.type == SDL_MOUSEMOTION) ? e.motion.x : e.button.x;
+        pointer.y = (e.type == SDL_MOUSEMOTION) ? e.motion.y : e.button.y;
+    } else if (wheel_event) {
+        SDL_GetMouseState(&pointer.x, &pointer.y);
+    }
+
+    const bool in_header =
+        (pointer_event || wheel_event) && SDL_PointInRect(&pointer, &header_rect_);
+    const bool in_content =
+        expanded_ && (pointer_event || wheel_event) && SDL_PointInRect(&pointer, &content_rect_);
+
     bool used = false;
     if (arrow_button_) {
         if (arrow_button_->handle_event(e)) {
@@ -138,41 +156,26 @@ bool FullScreenCollapsible::handle_event(const SDL_Event& e) {
         }
     }
 
-    if (expanded_ && content_event_handler_) {
-        if (content_event_handler_(e)) {
+    if (!used && expanded_ && content_event_handler_) {
+        const bool route_pointer = in_content;
+        const bool route_other = !pointer_event && !wheel_event;
+        if ((route_pointer || route_other) && content_event_handler_(e)) {
             used = true;
         }
     }
 
-    if (used) return true;
-
-    const bool pointer_event =
-        (e.type == SDL_MOUSEBUTTONDOWN || e.type == SDL_MOUSEBUTTONUP || e.type == SDL_MOUSEMOTION);
-    if (pointer_event) {
-        SDL_Point p{
-            e.type == SDL_MOUSEMOTION ? e.motion.x : e.button.x,
-            e.type == SDL_MOUSEMOTION ? e.motion.y : e.button.y
-        };
-        if (SDL_PointInRect(&p, &header_rect_)) {
-            return true;
-        }
-        if (expanded_ && SDL_PointInRect(&p, &content_rect_)) {
-            // Allow callers to route events to embedded widgets while keeping
-            // containment checks for input blocking elsewhere.
-            return false;
-        }
-    } else if (e.type == SDL_MOUSEWHEEL) {
-        int mx = 0;
-        int my = 0;
-        SDL_GetMouseState(&mx, &my);
-        SDL_Point p{mx, my};
-        if (SDL_PointInRect(&p, &header_rect_)) {
-            return true;
-        }
-        if (expanded_ && SDL_PointInRect(&p, &content_rect_)) {
-            return false;
-        }
+    if (used) {
+        return true;
     }
+
+    if (in_header) {
+        return true;
+    }
+
+    if (in_content) {
+        return true;
+    }
+
     return false;
 }
 

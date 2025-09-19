@@ -276,6 +276,12 @@ void RoomEditor::handle_sdl_event(const SDL_Event& event) {
     bool handled = false;
     if (!handled && room_panel_ && room_panel_->visible()) {
         bool panel_used = room_panel_->handle_event(event);
+        if (!panel_used && room_panel_->expanded()) {
+            ensure_room_configurator();
+            if (room_cfg_ui_) {
+                panel_used = room_cfg_ui_->handle_event(event);
+            }
+        }
         if (!panel_used) {
             const bool pointer_event =
                 (event.type == SDL_MOUSEBUTTONDOWN || event.type == SDL_MOUSEBUTTONUP ||
