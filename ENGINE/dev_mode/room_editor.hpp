@@ -25,6 +25,7 @@ class Room;
 class MapGrid;
 class DMButton;
 class FullScreenCollapsible;
+class MapAssetsPanel;
 
 class RoomEditor {
 public:
@@ -36,6 +37,7 @@ public:
     void set_active_assets(std::vector<Asset*>& actives);
     void set_screen_dimensions(int width, int height);
     void set_current_room(Room* room);
+    void set_map_assets_panel(MapAssetsPanel* panel);
 
     void set_enabled(bool enabled);
     bool is_enabled() const { return enabled_; }
@@ -154,6 +156,7 @@ private:
     std::unique_ptr<AreaOverlayEditor> area_editor_;
     std::unique_ptr<RoomConfigurator> room_cfg_ui_;
     std::unique_ptr<FullScreenCollapsible> room_panel_;
+    MapAssetsPanel* shared_map_assets_panel_ = nullptr;
 
     bool last_area_editor_active_ = false;
     bool area_editor_override_active_ = false;

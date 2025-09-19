@@ -305,9 +305,9 @@ void CameraUIPanel::build_ui() {
     render_section_label_ = std::make_unique<SectionLabelWidget>("Render Distance");
     perspective_section_label_ = std::make_unique<SectionLabelWidget>("Perspective");
     render_distance_slider_ = std::make_unique<FloatSliderWidget>("Render Distance (world units)", 0.0f, 4000.0f, 10.0f, defaults.render_distance, 0);
-    tripod_distance_slider_ = std::make_unique<FloatSliderWidget>("Tripod Distance (Y)", -2000.0f, 2000.0f, 5.0f, defaults.tripod_distance_y, 0);
-    height_zoom1_slider_ = std::make_unique<FloatSliderWidget>("Height @ Zoom = 1 (px)", 0.0f, 400.0f, 1.0f, defaults.height_at_zoom1, 0);
-    parallax_strength_slider_ = std::make_unique<FloatSliderWidget>("Parallax Strength", 0.0f, 50.0f, 0.25f, defaults.parallax_strength, 2);
+    tripod_distance_slider_ = std::make_unique<FloatSliderWidget>("Tripod Distance (Y)", -2000.0f, 0.0f, 5.0f, defaults.tripod_distance_y, 0);
+    height_zoom1_slider_ = std::make_unique<FloatSliderWidget>("Height @ Zoom = 1 (px)", 0.0f, 1000.0f, 1.0f, defaults.height_at_zoom1, 0);
+    parallax_strength_slider_ = std::make_unique<FloatSliderWidget>("Parallax Strength", 0.0f, 100.0f, 0.25f, defaults.parallax_strength, 2);
     foreshorten_strength_slider_ = std::make_unique<FloatSliderWidget>("Vertical Foreshortening Strength", 0.0f, 1.0f, 0.01f, defaults.foreshorten_strength, 2);
     distance_strength_slider_ = std::make_unique<FloatSliderWidget>("Distance Scaling Strength", 0.0f, 1.0f, 0.01f, defaults.distance_scale_strength, 2);
 

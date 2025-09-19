@@ -16,6 +16,12 @@ public:
     bool wasClicked(Button b) const;
     void clearClickBuffer();
 
+    void consumeMouseButton(Button b);
+    void consumeAllMouseButtons();
+    void consumeScroll();
+    void consumeMotion();
+    void consumeEvent(const SDL_Event& e);
+
     int getX() const { return x_; }
     int getY() const { return y_; }
     int getDX() const { return dx_; }

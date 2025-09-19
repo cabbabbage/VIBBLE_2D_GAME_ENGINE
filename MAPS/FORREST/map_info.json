@@ -1,13 +1,12 @@
 {
   "camera_settings": {
-    "distance_scale_strength": 0.26999998092651367,
-    "foreshorten_strength": 0.009999999776482582,
-    "height_at_zoom1": 378.0,
-    "parallax_strength": 29.75,
-    "realism_enabled": true,
+    "distance_scale_strength": 0.04999999701976776,
+    "foreshorten_strength": 0.0,
+    "height_at_zoom1": 380.0,
+    "parallax_strength": 39.0,
+    "realism_enabled": false,
     "render_distance": 660.0,
-    "render_distance_factor": 3.299999952316284,
-    "tripod_distance_y": 165.0
+    "tripod_distance_y": -525.0
   },
   "map_assets_data": {
     "spawn_groups": [
@@ -234,8 +233,8 @@
       "is_spawn": false,
       "max_height": 2500,
       "max_width": 2500,
-      "min_height": 1997,
-      "min_width": 1942,
+      "min_height": 100,
+      "min_width": 100,
       "name": "bar",
       "spawn_groups": [
         {

@@ -48,6 +48,7 @@ private:
     int room_geom_ = 0;
     bool room_is_spawn_ = false;
     bool room_is_boss_ = false;
+    bool room_inherits_assets_ = false;
     std::unique_ptr<DMRangeSlider> room_w_slider_;
     std::unique_ptr<RangeSliderWidget> room_w_slider_w_;
     std::unique_ptr<DMRangeSlider> room_h_slider_;
@@ -58,6 +59,8 @@ private:
     std::unique_ptr<CheckboxWidget> room_spawn_cb_w_;
     std::unique_ptr<DMCheckbox> room_boss_cb_;
     std::unique_ptr<CheckboxWidget> room_boss_cb_w_;
+    std::unique_ptr<DMCheckbox> room_inherit_cb_;
+    std::unique_ptr<CheckboxWidget> room_inherit_cb_w_;
     std::unique_ptr<DMTextBox> room_name_lbl_;
     std::unique_ptr<TextBoxWidget> room_name_lbl_w_;
 };

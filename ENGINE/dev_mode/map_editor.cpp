@@ -43,6 +43,10 @@ void MapEditor::set_screen_dimensions(int width, int height) {
     screen_h_ = height;
 }
 
+void MapEditor::set_ui_blocker(std::function<bool(int, int)> blocker) {
+    ui_blocker_ = std::move(blocker);
+}
+
 void MapEditor::set_enabled(bool enabled) {
     if (enabled == enabled_) return;
     if (enabled) {
@@ -94,6 +98,7 @@ void MapEditor::update(const Input& input) {
 
     SDL_Point screen_pt{input.getX(), input.getY()};
     SDL_Point map_pt = cam.screen_to_map(screen_pt);
+    const bool pointer_over_ui = ui_blocker_ ? ui_blocker_(screen_pt.x, screen_pt.y) : false;
 
     Room* area_hit = hit_test_room(map_pt);
     Room* label_hit = nullptr;
@@ -106,7 +111,11 @@ void MapEditor::update(const Input& input) {
 
     Room* hit = area_hit ? area_hit : label_hit;
 
-    pan_zoom_.handle_input(cam, input, hit != nullptr);
+    pan_zoom_.handle_input(cam, input, pointer_over_ui || hit != nullptr);
+
+    if (pointer_over_ui) {
+        return;
+    }
 
     if (input.wasClicked(Input::LEFT)) {
         if (hit) {

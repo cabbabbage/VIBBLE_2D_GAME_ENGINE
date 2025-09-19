@@ -1,7 +1,9 @@
 #pragma once
 
+#include <functional>
 #include <memory>
 #include <string>
+#include <vector>
 
 #include <nlohmann/json_fwd.hpp>
 
@@ -12,6 +14,7 @@ class MapAssetsPanel;
 class MapLayersPanel;
 class MapLayersController;
 class FullScreenCollapsible;
+class DockableCollapsible;
 struct SDL_Renderer;
 union SDL_Event;
 
@@ -23,6 +26,8 @@ public:
 
     void set_map_context(nlohmann::json* map_info, const std::string& map_path);
     void set_screen_dimensions(int w, int h);
+    void set_shared_assets_panel(const std::shared_ptr<MapAssetsPanel>& panel);
+    void set_room_editor_callback(std::function<void()> cb);
 
     void update(const Input& input);
     bool handle_event(const SDL_Event& e);
@@ -50,6 +55,13 @@ private:
     bool handle_layers_footer_event(const SDL_Event& e);
     void render_layers_footer(SDL_Renderer* renderer) const;
     bool should_show_layers_footer() const;
+    void track_floating_panel(DockableCollapsible* panel);
+    void rebuild_floating_stack();
+    void bring_panel_to_front(DockableCollapsible* panel);
+    bool handle_floating_panel_event(const SDL_Event& e, bool& used);
+    bool pointer_inside_floating_panel(int x, int y) const;
+    bool is_pointer_event(const SDL_Event& e) const;
+    SDL_Point event_point(const SDL_Event& e) const;
 
 private:
     Assets* assets_ = nullptr;
@@ -59,7 +71,8 @@ private:
     int screen_h_ = 1080;
 
     std::unique_ptr<MapLightPanel> light_panel_;
-    std::unique_ptr<MapAssetsPanel> assets_panel_;
+    std::shared_ptr<MapAssetsPanel> assets_panel_;
+    bool owns_assets_panel_ = false;
     std::shared_ptr<MapLayersController> layers_controller_;
     std::unique_ptr<MapLayersPanel> layers_panel_;
     std::unique_ptr<FullScreenCollapsible> footer_panel_;
@@ -68,6 +81,8 @@ private:
     PanelType active_panel_ = PanelType::None;
     bool layers_footer_requested_ = false;
     bool layers_footer_visible_ = false;
+    std::vector<DockableCollapsible*> floating_panels_;
+    std::function<void()> request_room_editor_cb_;
 };
 
 

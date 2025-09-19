@@ -12,6 +12,12 @@
 #include <nlohmann/json.hpp>
 
 namespace {
+
+SDL_Color lighten(SDL_Color color, int delta) {
+    auto clamp = [](int v) { return static_cast<Uint8>(std::clamp(v, 0, 255)); };
+    return SDL_Color{clamp(color.r + delta), clamp(color.g + delta), clamp(color.b + delta), color.a};
+}
+
 class SimpleLabel : public Widget {
 public:
     explicit SimpleLabel(std::string text) : text_(std::move(text)) {}
@@ -22,29 +28,63 @@ public:
     const SDL_Rect& rect() const override { return rect_; }
     int height_for_width(int /*w*/) const override {
         const DMLabelStyle& st = DMStyles::Label();
-        return st.font_size + 6;
+        return st.font_size + DMSpacing::small_gap() * 2;
     }
     bool handle_event(const SDL_Event&) override { return false; }
     void render(SDL_Renderer* renderer) const override {
+        if (!renderer) return;
         const DMLabelStyle& st = DMStyles::Label();
         TTF_Font* font = st.open_font();
         if (!font) return;
         SDL_Surface* surf = TTF_RenderUTF8_Blended(font, text_.c_str(), st.color);
-        if (surf) {
-            SDL_Texture* tex = SDL_CreateTextureFromSurface(renderer, surf);
-            if (tex) {
-                SDL_Rect dst{rect_.x, rect_.y, surf->w, surf->h};
-                SDL_RenderCopy(renderer, tex, nullptr, &dst);
-                SDL_DestroyTexture(tex);
-            }
-            SDL_FreeSurface(surf);
+        if (!surf) {
+            TTF_CloseFont(font);
+            return;
         }
+        SDL_Texture* tex = SDL_CreateTextureFromSurface(renderer, surf);
+        const int padding = DMSpacing::small_gap();
+        SDL_Rect bg{rect_.x, rect_.y, rect_.w, height_for_width(rect_.w)};
+        bg.w = std::max(bg.w, surf->w + padding * 2);
+        SDL_Color base = DMStyles::PanelBG();
+        SDL_Color accent = lighten(base, 18);
+        SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+        SDL_SetRenderDrawColor(renderer, accent.r, accent.g, accent.b, 220);
+        SDL_RenderFillRect(renderer, &bg);
+        SDL_Color border = DMStyles::Border();
+        SDL_SetRenderDrawColor(renderer, border.r, border.g, border.b, border.a);
+        SDL_RenderDrawRect(renderer, &bg);
+        if (tex) {
+            SDL_Rect dst{rect_.x + padding, rect_.y + (bg.h - surf->h) / 2, surf->w, surf->h};
+            SDL_RenderCopy(renderer, tex, nullptr, &dst);
+            SDL_DestroyTexture(tex);
+        }
+        SDL_FreeSurface(surf);
         TTF_CloseFont(font);
     }
 
 private:
     SDL_Rect rect_{0, 0, 0, 0};
     std::string text_;
+};
+
+class DividerWidget : public Widget {
+public:
+    DividerWidget() = default;
+
+    void set_rect(const SDL_Rect& r) override { rect_ = r; }
+    const SDL_Rect& rect() const override { return rect_; }
+    int height_for_width(int) const override { return std::max(2, DMSpacing::small_gap()); }
+    bool handle_event(const SDL_Event&) override { return false; }
+    void render(SDL_Renderer* renderer) const override {
+        if (!renderer) return;
+        SDL_Color border = DMStyles::Border();
+        SDL_SetRenderDrawColor(renderer, border.r, border.g, border.b, border.a);
+        int y = rect_.y + rect_.h / 2;
+        SDL_RenderDrawLine(renderer, rect_.x, y, rect_.x + rect_.w, y);
+    }
+
+private:
+    SDL_Rect rect_{0, 0, 0, 0};
 };
 
 constexpr int kAnchorOffset = 16;
@@ -56,7 +96,10 @@ MapAssetsPanel::MapAssetsPanel(int x, int y)
     : DockableCollapsible("Map Assets", true, x, y) {
     set_expanded(true);
     set_visible(false);
-    set_cell_width(240);
+    set_padding(DMSpacing::panel_padding());
+    set_row_gap(DMSpacing::item_gap());
+    set_col_gap(DMSpacing::item_gap());
+    set_cell_width(260);
     map_assets_cfg_ = std::make_unique<AssetsConfig>();
     boundary_cfg_ = std::make_unique<AssetsConfig>();
     inherits_checkbox_ = std::make_unique<DMCheckbox>("Inherit Map Assets", false);
@@ -69,6 +112,8 @@ MapAssetsPanel::MapAssetsPanel(int x, int y)
     close_button_widget_ = std::make_unique<ButtonWidget>(close_button_.get(), [this]() { this->close(); });
     map_label_ = std::make_unique<SimpleLabel>("Map-wide Spawn Groups");
     boundary_label_ = std::make_unique<SimpleLabel>("Boundary Spawn Groups");
+    map_divider_ = std::make_unique<DividerWidget>();
+    footer_divider_ = std::make_unique<DividerWidget>();
 }
 
 MapAssetsPanel::~MapAssetsPanel() = default;
@@ -149,9 +194,13 @@ void MapAssetsPanel::rebuild_rows() {
     if (map_label_) rows.push_back({ map_label_.get() });
     if (map_assets_cfg_) map_assets_cfg_->append_rows(rows);
 
+    if (map_divider_) rows.push_back({ map_divider_.get() });
+
     if (boundary_label_) rows.push_back({ boundary_label_.get() });
     if (inherits_widget_) rows.push_back({ inherits_widget_.get() });
     if (boundary_cfg_) boundary_cfg_->append_rows(rows);
+
+    if (footer_divider_) rows.push_back({ footer_divider_.get() });
 
     DockableCollapsible::Row actions;
     if (save_button_widget_) actions.push_back(save_button_widget_.get());

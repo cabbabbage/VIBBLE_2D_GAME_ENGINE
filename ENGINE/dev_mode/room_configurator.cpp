@@ -38,6 +38,7 @@ void RoomConfigurator::open(const nlohmann::json& data) {
         for (size_t i=0;i<room_geom_options_.size();++i) if (room_geom_options_[i]==geom) room_geom_ = int(i);
         room_is_spawn_ = data.value("is_spawn", false);
         room_is_boss_ = data.value("is_boss", false);
+        room_inherits_assets_ = data.value("inherits_map_assets", false);
     }
     rebuild_rows();
     if (panel_) {
@@ -80,11 +81,13 @@ void RoomConfigurator::rebuild_rows() {
     room_spawn_cb_w_ = std::make_unique<CheckboxWidget>(room_spawn_cb_.get());
     room_boss_cb_ = std::make_unique<DMCheckbox>("Boss", room_is_boss_);
     room_boss_cb_w_ = std::make_unique<CheckboxWidget>(room_boss_cb_.get());
+    room_inherit_cb_ = std::make_unique<DMCheckbox>("Inherit Map Assets", room_inherits_assets_);
+    room_inherit_cb_w_ = std::make_unique<CheckboxWidget>(room_inherit_cb_.get());
     rows.push_back({ room_name_lbl_w_.get() });
     rows.push_back({ room_w_slider_w_.get() });
     rows.push_back({ room_h_slider_w_.get() });
     rows.push_back({ room_geom_dd_w_.get() });
-    rows.push_back({ room_spawn_cb_w_.get(), room_boss_cb_w_.get() });
+    rows.push_back({ room_spawn_cb_w_.get(), room_boss_cb_w_.get(), room_inherit_cb_w_.get() });
     panel_->set_cell_width(120);
     panel_->set_rows(rows);
 }
@@ -99,6 +102,7 @@ void RoomConfigurator::update(const Input& input, int screen_w, int screen_h) {
     if (room_geom_dd_) room_geom_ = room_geom_dd_->selected();
     room_is_spawn_ = room_spawn_cb_ && room_spawn_cb_->value();
     room_is_boss_ = room_boss_cb_ && room_boss_cb_->value();
+    room_inherits_assets_ = room_inherit_cb_ && room_inherit_cb_->value();
     if (room_is_spawn_ && room_is_boss_) {
         room_is_boss_ = false;
         if (room_boss_cb_) room_boss_cb_->set_value(false);
@@ -112,6 +116,7 @@ void RoomConfigurator::update(const Input& input, int screen_w, int screen_h) {
         r["geometry"] = room_geom_options_[room_geom_];
         r["is_spawn"] = room_is_spawn_;
         r["is_boss"] = room_is_boss_;
+        r["inherits_map_assets"] = room_inherits_assets_;
         room_->save_assets_json();
     }
 }
@@ -135,6 +140,7 @@ nlohmann::json RoomConfigurator::build_json() const {
     r["geometry"] = room_geom_options_[room_geom_];
     r["is_spawn"] = room_is_spawn_;
     r["is_boss"] = room_is_boss_;
+    r["inherits_map_assets"] = room_inherits_assets_;
     r["name"] = room_name_;
     return r;
 }

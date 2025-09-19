@@ -3,8 +3,9 @@
 #include <SDL.h>
 #include <SDL_ttf.h>
 
-#include <vector>
+#include <functional>
 #include <utility>
+#include <vector>
 
 #include "dev_mode/pan_and_zoom.hpp"
 
@@ -20,6 +21,7 @@ public:
     void set_input(Input* input);
     void set_rooms(std::vector<Room*>* rooms);
     void set_screen_dimensions(int width, int height);
+    void set_ui_blocker(std::function<bool(int, int)> blocker);
 
     void enter();
     void exit(bool focus_player, bool restore_previous_state = true);
@@ -48,6 +50,7 @@ private:
     Assets* assets_ = nullptr;
     Input* input_ = nullptr;
     std::vector<Room*>* rooms_ = nullptr;
+    std::function<bool(int, int)> ui_blocker_;
 
     int screen_w_ = 0;
     int screen_h_ = 0;

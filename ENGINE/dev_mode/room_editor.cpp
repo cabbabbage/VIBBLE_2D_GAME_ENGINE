@@ -9,6 +9,7 @@
 #include "dev_mode/asset_info_ui.hpp"
 #include "dev_mode/asset_library_ui.hpp"
 #include "dev_mode/assets_config.hpp"
+#include "dev_mode/map_assets_panel.hpp"
 #include "dev_mode/full_screen_collapsible.hpp"
 #include "dev_mode/room_configurator.hpp"
 #include "dev_mode/widgets.hpp"
@@ -104,6 +105,10 @@ void RoomEditor::set_screen_dimensions(int width, int height) {
     if (room_cfg_ui_ && room_panel_) {
         room_cfg_ui_->set_bounds(room_panel_->content_rect());
     }
+}
+
+void RoomEditor::set_map_assets_panel(MapAssetsPanel* panel) {
+    shared_map_assets_panel_ = panel;
 }
 
 void RoomEditor::set_current_room(Room* room) {
@@ -806,6 +811,10 @@ bool RoomEditor::is_ui_blocking_input(int mx, int my) const {
         return true;
     }
     if (room_cfg_ui_ && room_cfg_ui_->visible() && room_cfg_ui_->is_point_inside(mx, my)) {
+        return true;
+    }
+    if (shared_map_assets_panel_ && shared_map_assets_panel_->is_visible() &&
+        shared_map_assets_panel_->is_point_inside(mx, my)) {
         return true;
     }
     if (library_ui_ && library_ui_->is_visible() && library_ui_->is_input_blocking_at(mx, my)) {

@@ -72,6 +72,9 @@ private:
     std::unique_ptr<DMButton> close_button_;
     std::unique_ptr<ButtonWidget> close_button_widget_;
 
+    std::unique_ptr<Widget> map_divider_;
+    std::unique_ptr<Widget> footer_divider_;
+
     bool dirty_ = false;
 };
 

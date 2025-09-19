@@ -1,5 +1,18 @@
 #include "input.hpp"
 
+namespace {
+Input::Button to_button(Uint8 sdl_button) {
+    switch (sdl_button) {
+    case SDL_BUTTON_LEFT:   return Input::LEFT;
+    case SDL_BUTTON_RIGHT:  return Input::RIGHT;
+    case SDL_BUTTON_MIDDLE: return Input::MIDDLE;
+    case SDL_BUTTON_X1:     return Input::X1;
+    case SDL_BUTTON_X2:     return Input::X2;
+    default:                return Input::COUNT;
+    }
+}
+} // namespace
+
 void Input::handleEvent(const SDL_Event& e) {
     switch (e.type) {
     case SDL_MOUSEMOTION:
@@ -12,19 +25,12 @@ void Input::handleEvent(const SDL_Event& e) {
     case SDL_MOUSEBUTTONDOWN:
     case SDL_MOUSEBUTTONUP: {
         bool down = (e.type == SDL_MOUSEBUTTONDOWN);
-        int idx = -1;
-        switch (e.button.button) {
-            case SDL_BUTTON_LEFT:   idx = LEFT;   break;
-            case SDL_BUTTON_RIGHT:  idx = RIGHT;  break;
-            case SDL_BUTTON_MIDDLE: idx = MIDDLE; break;
-            case SDL_BUTTON_X1:     idx = X1;     break;
-            case SDL_BUTTON_X2:     idx = X2;     break;
-        }
-        if (idx >= 0) {
-            buttons_[idx] = down;
+        Button button = to_button(e.button.button);
+        if (button != COUNT) {
+            buttons_[button] = down;
             if (!down) {
                 // small click window
-                clickBuffer_[idx] = 3;
+                clickBuffer_[button] = 3;
             }
         }
         break;
@@ -75,6 +81,51 @@ bool Input::wasClicked(Button b) const {
 void Input::clearClickBuffer() {
     for (int i = 0; i < COUNT; ++i) {
         clickBuffer_[i] = 0;
+    }
+}
+
+void Input::consumeMouseButton(Button b) {
+    if (b < 0 || b >= COUNT) return;
+    buttons_[b] = prevButtons_[b];
+    pressed_[b] = false;
+    released_[b] = false;
+    clickBuffer_[b] = 0;
+}
+
+void Input::consumeAllMouseButtons() {
+    for (int i = 0; i < COUNT; ++i) {
+        consumeMouseButton(static_cast<Button>(i));
+    }
+}
+
+void Input::consumeScroll() {
+    scrollX_ = 0;
+    scrollY_ = 0;
+}
+
+void Input::consumeMotion() {
+    dx_ = 0;
+    dy_ = 0;
+}
+
+void Input::consumeEvent(const SDL_Event& e) {
+    switch (e.type) {
+    case SDL_MOUSEBUTTONDOWN:
+    case SDL_MOUSEBUTTONUP: {
+        Button button = to_button(e.button.button);
+        if (button != COUNT) {
+            consumeMouseButton(button);
+        }
+        break;
+    }
+    case SDL_MOUSEWHEEL:
+        consumeScroll();
+        break;
+    case SDL_MOUSEMOTION:
+        consumeMotion();
+        break;
+    default:
+        break;
     }
 }
 
