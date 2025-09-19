@@ -77,6 +77,7 @@ public:
     Asset* get_hovered_asset() const { return hovered_asset_; }
 
     void set_zoom_scale_factor(double factor);
+    double get_zoom_scale_factor() const { return zoom_scale_factor_; }
     struct FloatingPanelButton {
         std::string id;
         std::string label;
