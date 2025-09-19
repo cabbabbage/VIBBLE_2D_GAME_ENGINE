@@ -21,10 +21,21 @@ RoomConfigurator::~RoomConfigurator() = default;
 void RoomConfigurator::set_bounds(const SDL_Rect& bounds) {
     bounds_ = bounds;
     if (!panel_) return;
-    panel_->set_rect(bounds_);
     const int pad = DMSpacing::panel_padding();
-    int available = std::max(0, bounds_.h - 2 * pad);
-    panel_->set_available_height_override(available);
+    const int available = std::max(0, bounds_.h - 2 * pad);
+
+    // When the fullscreen panel is collapsed we receive a zero-height
+    // content rect. Propagating that directly would clamp the docked panel's
+    // viewport to zero pixels which prevents it from ever receiving mouse
+    // events. Pre-setting the available height override ensures the
+    // subsequent layout uses a sensible size once the panel expands.
+    if (available > 0) {
+        panel_->set_available_height_override(available);
+    } else {
+        panel_->set_available_height_override(-1);
+    }
+
+    panel_->set_rect(bounds_);
 }
 
 void RoomConfigurator::open(const nlohmann::json& data) {

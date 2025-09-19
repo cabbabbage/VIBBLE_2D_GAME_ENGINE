@@ -251,15 +251,15 @@ void RoomEditor::update_ui(const Input& input) {
     update_area_editor_focus();
 }
 
-void RoomEditor::handle_sdl_event(const SDL_Event& event) {
+bool RoomEditor::handle_sdl_event(const SDL_Event& event) {
     if (auto* dropdown = DMDropdown::active_dropdown()) {
         dropdown->handle_event(event);
-        return;
+        return true;
     }
 
     ensure_area_editor();
     if (area_editor_ && area_editor_->is_active()) {
-        if (area_editor_->handle_event(event)) return;
+        if (area_editor_->handle_event(event)) return true;
     }
 
     int mx = 0;
@@ -275,7 +275,7 @@ void RoomEditor::handle_sdl_event(const SDL_Event& event) {
     }
 
     bool handled = false;
-    if (!handled && room_panel_ && room_panel_->visible()) {
+    if (room_panel_ && room_panel_->visible()) {
         bool panel_used = room_panel_->handle_event(event);
         if (!panel_used && room_panel_->expanded()) {
             ensure_room_configurator();
@@ -313,6 +313,14 @@ void RoomEditor::handle_sdl_event(const SDL_Event& event) {
             input_->clearClickBuffer();
         }
     }
+    return handled;
+}
+
+bool RoomEditor::is_room_panel_blocking_point(int x, int y) const {
+    if (!room_panel_ || !room_panel_->visible()) {
+        return false;
+    }
+    return room_panel_->contains(x, y);
 }
 
 void RoomEditor::render_overlays(SDL_Renderer* renderer) {

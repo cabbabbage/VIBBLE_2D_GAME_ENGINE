@@ -1,0 +1,36 @@
+{
+    "animations": {
+        "default": {
+            "flipped_source": false,
+            "locked": false,
+            "loop": false,
+            "movement": [
+                [
+                    0,
+                    0
+                ]
+            ],
+            "movement_total": {
+                "dx": 0,
+                "dy": 0
+            },
+            "number_of_frames": 1,
+            "on_end": "default",
+            "reverse_source": false,
+            "rnd_start": false,
+            "source": {
+                "kind": "folder",
+                "name": null,
+                "path": "default"
+            },
+            "speed_factor": 1
+        }
+    },
+    "asset_name": "candle_3",
+    "asset_type": "Object",
+    "mappings": {},
+    "size_settings": {
+        "scale_percentage": 6.0
+    },
+    "start": "default"
+}

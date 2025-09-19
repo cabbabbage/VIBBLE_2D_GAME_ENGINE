@@ -62,7 +62,7 @@ inline void Section_BasicInfo::build() {
     type_options_ = asset_types::all_as_strings();
     dd_type_ = std::make_unique<DMDropdown>("Type", type_options_, find_index(type_options_, info_->type));
     int pct = std::max(0, static_cast<int>(std::lround(info_->scale_factor * 100.0f)));
-    s_scale_pct_ = std::make_unique<DMSlider>("Scale (%)", 10, 400, pct);
+    s_scale_pct_ = std::make_unique<DMSlider>("Scale (%)", 1, 400, pct);
     s_zindex_    = std::make_unique<DMSlider>("Z Index Offset", -1000, 1000, info_->z_threshold);
     c_flipable_  = std::make_unique<DMCheckbox>("Flipable (can invert)", info_->flipable);
 

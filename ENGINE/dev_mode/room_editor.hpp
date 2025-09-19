@@ -44,7 +44,8 @@ public:
 
     void update(const Input& input);
     void update_ui(const Input& input);
-    void handle_sdl_event(const SDL_Event& event);
+    bool handle_sdl_event(const SDL_Event& event);
+    bool is_room_panel_blocking_point(int x, int y) const;
     void render_overlays(SDL_Renderer* renderer);
 
     void toggle_asset_library();

@@ -170,13 +170,24 @@ bool DevControls::handle_shared_assets_event(const SDL_Event& event) {
     if (!map_assets_panel_ || !map_assets_panel_->is_visible()) {
         return false;
     }
+    const bool pointer_event = is_pointer_event(event);
+    const bool wheel_event = (event.type == SDL_MOUSEWHEEL);
+    SDL_Point pointer{0, 0};
+    if (pointer_event || wheel_event) {
+        pointer = event_point(event);
+        if (room_editor_ && room_editor_->is_room_panel_blocking_point(pointer.x, pointer.y)) {
+            return false;
+        }
+    }
     if (map_assets_panel_->handle_event(event)) {
         if (input_) input_->consumeEvent(event);
         return true;
     }
-    if (is_pointer_event(event) || event.type == SDL_MOUSEWHEEL) {
-        SDL_Point p = event_point(event);
-        if (map_assets_panel_->is_point_inside(p.x, p.y)) {
+    if (pointer_event || wheel_event) {
+        if (room_editor_ && room_editor_->is_room_panel_blocking_point(pointer.x, pointer.y)) {
+            return false;
+        }
+        if (map_assets_panel_->is_point_inside(pointer.x, pointer.y)) {
             if (input_) input_->consumeEvent(event);
             return true;
         }
@@ -304,8 +315,41 @@ void DevControls::update_ui(const Input& input) {
 void DevControls::handle_sdl_event(const SDL_Event& event) {
     if (!enabled_) return;
 
+    const bool pointer_event = is_pointer_event(event);
+    const bool wheel_event = (event.type == SDL_MOUSEWHEEL);
+    SDL_Point pointer{0, 0};
+    if (pointer_event || wheel_event) {
+        pointer = event_point(event);
+    }
+
+    const bool can_route_room_editor = (mode_ != Mode::MapEditor) && can_use_room_editor_ui() && room_editor_;
+    const bool pointer_over_room_panel = can_route_room_editor && (pointer_event || wheel_event) &&
+        room_editor_->is_room_panel_blocking_point(pointer.x, pointer.y);
+
+    auto route_room_editor = [&](bool consume_event) {
+        if (!can_route_room_editor) {
+            return false;
+        }
+        if (room_editor_->handle_sdl_event(event)) {
+            if (consume_event && input_) {
+                input_->consumeEvent(event);
+            }
+            return true;
+        }
+        return false;
+    };
+
+    bool attempted_room_editor = false;
+
+    if (pointer_over_room_panel) {
+        attempted_room_editor = true;
+        if (route_room_editor(true)) {
+            return;
+        }
+    }
+
     bool pointer_event_inside_camera = false;
-    if (camera_panel_ && camera_panel_->is_visible()) {
+    if (!pointer_over_room_panel && camera_panel_ && camera_panel_->is_visible()) {
         switch (event.type) {
         case SDL_MOUSEMOTION:
             pointer_event_inside_camera = camera_panel_->is_point_inside(event.motion.x, event.motion.y);
@@ -326,21 +370,20 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
         }
     }
 
-    if (map_light_panel_ && map_light_panel_->is_visible()) {
+    if (!pointer_over_room_panel && map_light_panel_ && map_light_panel_->is_visible()) {
         if (!pointer_event_inside_camera && map_light_panel_->handle_event(event)) {
             if (input_) input_->consumeEvent(event);
             return;
         }
-        if (!pointer_event_inside_camera && (is_pointer_event(event) || event.type == SDL_MOUSEWHEEL)) {
-            SDL_Point p = event_point(event);
-            if (map_light_panel_->is_point_inside(p.x, p.y)) {
+        if (!pointer_event_inside_camera && (pointer_event || wheel_event)) {
+            if (map_light_panel_->is_point_inside(pointer.x, pointer.y)) {
                 if (input_) input_->consumeEvent(event);
                 return;
             }
         }
     }
 
-    if (camera_panel_ && camera_panel_->is_visible()) {
+    if (!pointer_over_room_panel && camera_panel_ && camera_panel_->is_visible()) {
         if (camera_panel_->handle_event(event)) {
             if (input_) input_->consumeEvent(event);
             return;
@@ -356,8 +399,10 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
         return;
     }
 
-    if (handle_shared_assets_event(event)) {
-        return;
+    if (!pointer_over_room_panel) {
+        if (handle_shared_assets_event(event)) {
+            return;
+        }
     }
 
     if (mode_ == Mode::MapEditor) {
@@ -365,17 +410,21 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
             if (input_) input_->consumeEvent(event);
             return;
         }
-        if (map_mode_ui_ && (is_pointer_event(event) || event.type == SDL_MOUSEWHEEL)) {
-            SDL_Point p = event_point(event);
-            if (map_mode_ui_->is_point_inside(p.x, p.y)) {
+        if (map_mode_ui_ && (pointer_event || wheel_event)) {
+            if (map_mode_ui_->is_point_inside(pointer.x, pointer.y)) {
                 if (input_) input_->consumeEvent(event);
                 return;
             }
         }
         return;
     }
-    if (!can_use_room_editor_ui()) return;
-    if (room_editor_) room_editor_->handle_sdl_event(event);
+
+    if (!attempted_room_editor) {
+        attempted_room_editor = true;
+        if (route_room_editor(false)) {
+            return;
+        }
+    }
 }
 
 void DevControls::render_overlays(SDL_Renderer* renderer) {

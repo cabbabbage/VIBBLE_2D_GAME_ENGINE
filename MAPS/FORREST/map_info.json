@@ -1,11 +1,11 @@
 {
   "camera_settings": {
-    "distance_scale_strength": 0.029999999329447746,
+    "distance_scale_strength": 0.03999999910593033,
     "foreshorten_strength": 0.03999999910593033,
     "height_at_zoom1": 713.0,
     "parallax_strength": 19.75,
     "realism_enabled": true,
-    "render_distance": 700.0,
+    "render_distance": 1010.0,
     "tripod_distance_y": -1250.0
   },
   "map_assets_data": {
@@ -202,7 +202,7 @@
           255,
           50,
           50,
-          30
+          24
         ]
       ],
       [
@@ -211,7 +211,7 @@
           255,
           128,
           255,
-          129
+          165
         ]
       ]
     ],
@@ -220,7 +220,7 @@
     "mult": 0.32,
     "orbit_radius": 1523,
     "radius": 6667,
-    "update_interval": 30
+    "update_interval": 18
   },
   "map_name": "FORREST",
   "map_radius": 10628.639402604544,
@@ -402,26 +402,6 @@
             },
             {
               "chance": 100,
-              "name": "Vibble"
-            }
-          ],
-          "chance_denominator": 100,
-          "check_overlap": false,
-          "display_name": "Vibble",
-          "enforce_spacing": false,
-          "max_number": 1,
-          "min_number": 1,
-          "position": "Center",
-          "spawn_id": "spn-225b40dd06f7"
-        },
-        {
-          "candidates": [
-            {
-              "chance": 0,
-              "name": "null"
-            },
-            {
-              "chance": 100,
               "name": "candle"
             }
           ],
@@ -448,6 +428,89 @@
           "sector_range_max": 360,
           "sector_range_min": 360,
           "spawn_id": "spn-068b19268052"
+        },
+        {
+          "candidates": [
+            {
+              "chance": 0,
+              "name": "null"
+            },
+            {
+              "chance": 100,
+              "name": "candle"
+            },
+            {
+              "chance": 100,
+              "name": "candle_3"
+            }
+          ],
+          "chance_denominator": 200,
+          "check_overlap": false,
+          "display_name": "candle",
+          "dx": -202,
+          "dy": -196,
+          "enforce_spacing": false,
+          "max_number": 21,
+          "min_number": 21,
+          "origional_height": 1502,
+          "origional_width": 1502,
+          "percentage_shift_from_center": 79,
+          "perimeter_x_offset": 16,
+          "perimeter_x_offset_max": 16,
+          "perimeter_x_offset_min": 16,
+          "perimeter_y_offset": 58,
+          "perimeter_y_offset_max": 58,
+          "perimeter_y_offset_min": 58,
+          "position": "Perimeter",
+          "spawn_id": "spn-ef4cef773211"
+        },
+        {
+          "candidates": [
+            {
+              "chance": 0,
+              "name": "null"
+            },
+            {
+              "chance": 100,
+              "name": "Vibble"
+            }
+          ],
+          "chance_denominator": 100,
+          "check_overlap": false,
+          "display_name": "Vibble",
+          "dx": -6,
+          "dy": -116,
+          "enforce_spacing": false,
+          "max_number": 1,
+          "min_number": 1,
+          "origional_height": 1414,
+          "origional_width": 1414,
+          "position": "Exact",
+          "spawn_id": "spn-565905956af8"
+        },
+        {
+          "candidates": [
+            {
+              "chance": 0,
+              "name": "null"
+            },
+            {
+              "chance": 100,
+              "name": "Grave_1"
+            }
+          ],
+          "chance_denominator": 100,
+          "check_overlap": false,
+          "display_name": "Grave_1",
+          "dx": 45,
+          "dy": -336,
+          "enforce_spacing": false,
+          "max_number": 1,
+          "min_number": 1,
+          "origional_height": 2218,
+          "origional_width": 2218,
+          "position": "Center",
+          "spawn_id": "spn-953cf9373e2b"
         }
       ]
     }
