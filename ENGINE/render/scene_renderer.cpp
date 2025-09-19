@@ -121,7 +121,7 @@ void SceneRenderer::render() {
     static int   kPostBlurRadiusPx = 6;   // blur radius at full-res
     static Uint8 kPostOverlayAlpha = 80;  // 0..255
     // 0=BLEND, 1=ADD, 2=MOD, 3=MUL(if supported)
-    static int   kPostBlendModeSel = 1;
+    static int   kPostBlendModeSel = 0;
     // Downscale factor: 1=no scale, 2=quarter pixels, 3=~1/9 pixels, etc.
     static int   kPostDownscale    = 4;   // try 2..4 for a good speed/quality tradeoff
     // ===========================================================
