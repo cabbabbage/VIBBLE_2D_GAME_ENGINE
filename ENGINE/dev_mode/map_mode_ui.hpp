@@ -15,12 +15,22 @@ class MapLayersPanel;
 class MapLayersController;
 class FullScreenCollapsible;
 class DockableCollapsible;
+struct DMButtonStyle;
 struct SDL_Renderer;
 union SDL_Event;
 
 // Coordinates interactions between map-mode floating panels (lighting, assets).
 class MapModeUI {
 public:
+    struct HeaderButtonConfig {
+        std::string id;
+        std::string label;
+        bool active = false;
+        bool momentary = false;
+        const DMButtonStyle* style_override = nullptr;
+        std::function<void(bool)> on_toggle;
+    };
+
     explicit MapModeUI(Assets* assets);
     ~MapModeUI();
 
@@ -40,6 +50,11 @@ public:
 
     void set_map_mode_active(bool active);
 
+    FullScreenCollapsible* get_footer_panel() const;
+    void set_footer_always_visible(bool on);
+    void set_additional_header_buttons(std::vector<HeaderButtonConfig> buttons);
+    void set_additional_button_state(const std::string& id, bool active);
+
     bool is_point_inside(int x, int y) const;
     bool is_any_panel_visible() const;
 
@@ -48,6 +63,8 @@ private:
     void sync_panel_map_info();
     bool save_map_info_to_disk() const;
     void configure_footer_buttons();
+    void sync_footer_button_states();
+    void update_footer_visibility();
     enum class PanelType { None, Assets, Lights, Layers };
     void set_active_panel(PanelType panel);
     const char* panel_button_id(PanelType panel) const;
@@ -78,6 +95,8 @@ private:
     std::unique_ptr<FullScreenCollapsible> footer_panel_;
     bool footer_buttons_configured_ = false;
     bool map_mode_active_ = false;
+    bool footer_always_visible_ = false;
+    std::vector<HeaderButtonConfig> additional_buttons_;
     PanelType active_panel_ = PanelType::None;
     bool layers_footer_requested_ = false;
     bool layers_footer_visible_ = false;

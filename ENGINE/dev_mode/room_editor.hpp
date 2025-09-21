@@ -24,7 +24,6 @@ class AssetInfo;
 class Room;
 class MapGrid;
 class DMButton;
-class FullScreenCollapsible;
 class MapAssetsPanel;
 
 class RoomEditor {
@@ -38,6 +37,7 @@ public:
     void set_screen_dimensions(int width, int height);
     void set_current_room(Room* room);
     void set_map_assets_panel(MapAssetsPanel* panel);
+    void set_room_config_visible(bool visible);
 
     void set_enabled(bool enabled);
     bool is_enabled() const { return enabled_; }
@@ -66,6 +66,7 @@ public:
     void toggle_room_config();
     void close_room_config();
     bool is_room_config_open() const;
+    void regenerate_room();
 
     void begin_area_edit_for_selected_asset(const std::string& area_name);
     void focus_camera_on_asset(Asset* asset, double zoom_factor = 0.8, int duration_steps = 25);
@@ -81,16 +82,6 @@ public:
 
     void set_zoom_scale_factor(double factor);
     double get_zoom_scale_factor() const { return zoom_scale_factor_; }
-    struct FloatingPanelButton {
-        std::string id;
-        std::string label;
-        std::function<void(bool)> set_active;
-        std::function<bool()> is_active;
-    };
-
-    void set_floating_panel_buttons(std::vector<FloatingPanelButton> buttons);
-    void sync_room_panel_button_states();
-
 private:
     enum class DragMode {
         None,
@@ -119,8 +110,8 @@ private:
     void update_area_editor_focus();
     void ensure_area_editor();
     void apply_area_editor_camera_override(bool enable);
-    void ensure_room_panel();
     void ensure_room_configurator();
+    void update_room_config_bounds();
     void begin_drag_session(const SDL_Point& world_mouse, bool ctrl_modifier);
     void update_drag_session(const SDL_Point& world_mouse);
     void apply_perimeter_drag(const SDL_Point& world_mouse);
@@ -156,7 +147,7 @@ private:
     std::unique_ptr<AssetsConfig> assets_cfg_ui_;
     std::unique_ptr<AreaOverlayEditor> area_editor_;
     std::unique_ptr<RoomConfigurator> room_cfg_ui_;
-    std::unique_ptr<FullScreenCollapsible> room_panel_;
+    SDL_Rect room_config_bounds_{0, 0, 0, 0};
     MapAssetsPanel* shared_map_assets_panel_ = nullptr;
 
     bool last_area_editor_active_ = false;
@@ -190,10 +181,7 @@ private:
 
     double zoom_scale_factor_ = 1.1;
     PanAndZoom pan_zoom_;
-    std::vector<FloatingPanelButton> floating_panel_buttons_;
     std::unordered_set<std::string> room_spawn_ids_;
-
-    void refresh_room_panel_buttons();
     void rebuild_room_spawn_id_cache();
     bool is_room_spawn_id(const std::string& spawn_id) const;
     bool asset_belongs_to_room(const Asset* asset) const;
