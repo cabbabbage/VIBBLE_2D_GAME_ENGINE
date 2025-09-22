@@ -92,6 +92,9 @@ SpawnGroupConfigUI::~SpawnGroupConfigUI() = default;
 namespace {
 constexpr int kDefaultScreenW = 1920;
 constexpr int kDefaultScreenH = 1080;
+constexpr int kPerimeterRadiusMin = 0;
+constexpr int kPerimeterRadiusMax = 10000;
+constexpr int kPerimeterDefaultRadius = 50;
 
 int clamp_slider_value(int value, int min_value, int max_value) {
     return std::clamp(value, min_value, max_value);
@@ -354,12 +357,29 @@ SDL_Point SpawnGroupConfigUI::position() const {
 
 void SpawnGroupConfigUI::handle_method_change() {
     if (!dd_method_) return;
+    std::string previous_method;
+    if (!spawn_methods_.empty()) {
+        int prev_index = std::clamp(method_, 0, static_cast<int>(spawn_methods_.size()) - 1);
+        previous_method = spawn_methods_[prev_index];
+    }
     int selected = dd_method_->selected();
     if (selected < 0 || selected >= static_cast<int>(spawn_methods_.size())) {
         selected = 0;
     }
     if (selected != method_) {
         method_ = selected;
+        std::string new_method;
+        if (!spawn_methods_.empty()) {
+            int clamped_index = std::clamp(method_, 0, static_cast<int>(spawn_methods_.size()) - 1);
+            new_method = spawn_methods_[clamped_index];
+        }
+        if (new_method == "Perimeter" && previous_method != "Perimeter" && perimeter_radius_ <= 0) {
+            perimeter_radius_ = kPerimeterDefaultRadius;
+            entry_["radius"] = perimeter_radius_;
+            if (entry_.contains("perimeter_radius")) {
+                entry_.erase("perimeter_radius");
+            }
+        }
         rebuild_widgets();
         rebuild_rows();
     }
@@ -385,6 +405,8 @@ void SpawnGroupConfigUI::load(const nlohmann::json& data) {
     max_number_ = read_single_value(entry_, "max_number", std::max(1, min_number_));
     overlap_ = entry_.value("check_overlap", false);
     spacing_ = entry_.value("enforce_spacing", entry_.value("check_min_spacing", false));
+    perimeter_radius_ = read_single_value(entry_, "radius", entry_.value("perimeter_radius", 0));
+    if (perimeter_radius_ < 0) perimeter_radius_ = 0;
 
     if (!entry_.contains("candidates") || !entry_["candidates"].is_array()) {
         entry_["candidates"] = nlohmann::json::array();
@@ -496,6 +518,8 @@ void SpawnGroupConfigUI::rebuild_widgets() {
     s_minmax_.reset();
     s_minmax_w_.reset();
     s_minmax_label_.reset();
+    perimeter_radius_slider_.reset();
+    perimeter_radius_widget_.reset();
     percent_x_label_.reset();
     percent_y_label_.reset();
     exact_offset_label_.reset();
@@ -520,7 +544,10 @@ void SpawnGroupConfigUI::rebuild_widgets() {
     }
 
     if (method == "Perimeter") {
-        // Perimeter placement uses in-scene interactions for configuration.
+        perimeter_radius_ = clamp_slider_value(perimeter_radius_, kPerimeterRadiusMin, kPerimeterRadiusMax);
+        perimeter_radius_slider_ = std::make_unique<DMSlider>(
+            "Perimeter Radius", kPerimeterRadiusMin, kPerimeterRadiusMax, perimeter_radius_);
+        perimeter_radius_widget_ = std::make_unique<SliderWidget>(perimeter_radius_slider_.get());
     } else if (method == "Percent") {
         percent_x_label_ = std::make_unique<LabelWidget>(
             "Percent X: " + format_percent_summary(entry_, "p_x_min", "p_x_max", "percent_x_min", "percent_x_max"));
@@ -616,6 +643,10 @@ void SpawnGroupConfigUI::rebuild_rows() {
     if (cb_overlap_w_) toggles.push_back(cb_overlap_w_.get());
     if (cb_spacing_w_) toggles.push_back(cb_spacing_w_.get());
     if (!toggles.empty()) rows.push_back(toggles);
+
+    if (perimeter_radius_widget_) {
+        rows.push_back({ perimeter_radius_widget_.get() });
+    }
 
     if (percent_x_label_ || percent_y_label_) {
         DockableCollapsible::Row percent_row;
@@ -717,6 +748,22 @@ void SpawnGroupConfigUI::sync_json() {
     pending_summary_.method = method;
     if (!pending_summary_.method_changed && method != baseline_method_) {
         pending_summary_.method_changed = true;
+    }
+
+    if (perimeter_radius_slider_) {
+        perimeter_radius_ = clamp_slider_value(perimeter_radius_slider_->value(),
+                                               kPerimeterRadiusMin,
+                                               kPerimeterRadiusMax);
+        perimeter_radius_slider_->set_value(perimeter_radius_);
+        entry_["radius"] = perimeter_radius_;
+        if (entry_.contains("perimeter_radius")) {
+            entry_.erase("perimeter_radius");
+        }
+    } else if (method == "Perimeter") {
+        entry_["radius"] = std::max(perimeter_radius_, 0);
+        if (entry_.contains("perimeter_radius")) {
+            entry_.erase("perimeter_radius");
+        }
     }
 
     if (s_minmax_) {

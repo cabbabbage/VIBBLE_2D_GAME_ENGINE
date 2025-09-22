@@ -20,6 +20,7 @@ class Assets;
 class Input;
 class AnimationFrame;
 class AssetInfoUI;
+class RenderAsset;
 
 struct StaticLight {
     LightSource* source = nullptr;
@@ -103,6 +104,7 @@ class Asset {
     friend class AnimationUpdate;
     friend class Move;
     friend class AssetInfoUI;
+    friend class RenderAsset;
     camera* window = nullptr;
     bool highlighted = false;
     bool hidden = false;
@@ -116,6 +118,17 @@ class Asset {
     SDL_Texture* final_texture = nullptr;
     Assets* assets_ = nullptr;
     std::unique_ptr<AssetController>   controller_;
+
+    struct DownscaleCacheEntry {
+        float        scale   = 1.0f;
+        int          width   = 0;
+        int          height  = 0;
+        SDL_Texture* texture = nullptr;
+    };
+
+    void clear_downscale_cache();
+
+    std::vector<DownscaleCacheEntry> downscale_cache_;
 };
 
 #endif

@@ -11,6 +11,8 @@
 #include <cmath>
 #include <sstream>
 #include <utility>
+#include <optional>
+#include <initializer_list>
 
 namespace {
 class RoomConfigLabel : public Widget {
@@ -107,6 +109,37 @@ int parse_json_int(const nlohmann::json& object, const std::string& key, int fal
     }
     return fallback;
 }
+
+std::optional<int> read_json_int(const nlohmann::json& object, const std::string& key) {
+    if (!object.is_object() || !object.contains(key)) {
+        return std::nullopt;
+    }
+    const auto& value = object[key];
+    if (value.is_number_integer()) {
+        return value.get<int>();
+    }
+    if (value.is_number_float()) {
+        return static_cast<int>(std::lround(value.get<double>()));
+    }
+    if (value.is_string()) {
+        try {
+            return std::stoi(value.get<std::string>());
+        } catch (...) {
+        }
+    }
+    return std::nullopt;
+}
+
+std::optional<int> find_dimension_value(const nlohmann::json& object,
+                                       std::initializer_list<const char*> keys) {
+    for (const char* key : keys) {
+        if (!key) continue;
+        if (auto value = read_json_int(object, key)) {
+            return value;
+        }
+    }
+    return std::nullopt;
+}
 } // namespace
 
 RoomConfigurator::RoomConfigurator()
@@ -180,6 +213,13 @@ void RoomConfigurator::load_from_json(const nlohmann::json& data) {
         loaded_json_ = nlohmann::json::object();
     }
 
+    spawn_groups_from_assets_ = false;
+    if (loaded_json_.contains("spawn_groups") && loaded_json_["spawn_groups"].is_array()) {
+        spawn_groups_from_assets_ = false;
+    } else if (loaded_json_.contains("assets") && loaded_json_["assets"].is_array()) {
+        spawn_groups_from_assets_ = true;
+    }
+
     room_name_ = loaded_json_.value("name", loaded_json_.value("room_name", std::string{}));
 
     int fallback_w_min = room_w_min_;
@@ -218,6 +258,107 @@ void RoomConfigurator::load_from_json(const nlohmann::json& data) {
     room_is_spawn_ = loaded_json_.value("is_spawn", false);
     room_is_boss_ = loaded_json_.value("is_boss", false);
     room_inherits_assets_ = loaded_json_.value("inherits_map_assets", false);
+}
+
+bool RoomConfigurator::refresh_spawn_groups(const nlohmann::json& data) {
+    if (!loaded_json_.is_object()) {
+        loaded_json_ = nlohmann::json::object();
+    }
+
+    bool data_has_spawn_groups = data.is_object() && data.contains("spawn_groups") && data["spawn_groups"].is_array();
+    bool data_has_assets = data.is_object() && data.contains("assets") && data["assets"].is_array();
+
+    if (data_has_spawn_groups) {
+        spawn_groups_from_assets_ = false;
+    } else if (data_has_assets) {
+        spawn_groups_from_assets_ = true;
+    }
+
+    int new_w_min = room_w_min_;
+    int new_w_max = room_w_max_;
+    int new_h_min = room_h_min_;
+    int new_h_max = room_h_max_;
+
+    bool have_w_min = false;
+    bool have_w_max = false;
+    bool have_h_min = false;
+    bool have_h_max = false;
+
+    if (auto value = find_dimension_value(data, {"min_width", "width_min"})) {
+        new_w_min = *value;
+        have_w_min = true;
+    }
+    if (auto value = find_dimension_value(data, {"max_width", "width_max"})) {
+        new_w_max = *value;
+        have_w_max = true;
+    }
+    if (auto value = find_dimension_value(data, {"min_height", "height_min"})) {
+        new_h_min = *value;
+        have_h_min = true;
+    }
+    if (auto value = find_dimension_value(data, {"max_height", "height_max"})) {
+        new_h_max = *value;
+        have_h_max = true;
+    }
+
+    if (new_w_min > new_w_max) std::swap(new_w_min, new_w_max);
+    if (new_h_min > new_h_max) std::swap(new_h_min, new_h_max);
+
+    bool dims_changed = (new_w_min != room_w_min_) || (new_w_max != room_w_max_) ||
+                        (new_h_min != room_h_min_) || (new_h_max != room_h_max_);
+
+    room_w_min_ = new_w_min;
+    room_w_max_ = new_w_max;
+    room_h_min_ = new_h_min;
+    room_h_max_ = new_h_max;
+
+    if (have_w_min || have_w_max || dims_changed) {
+        loaded_json_["min_width"] = room_w_min_;
+        loaded_json_["width_min"] = room_w_min_;
+        loaded_json_["max_width"] = room_w_max_;
+        loaded_json_["width_max"] = room_w_max_;
+    }
+    if (have_h_min || have_h_max || dims_changed) {
+        loaded_json_["min_height"] = room_h_min_;
+        loaded_json_["height_min"] = room_h_min_;
+        loaded_json_["max_height"] = room_h_max_;
+        loaded_json_["height_max"] = room_h_max_;
+    }
+
+    const char* target_key = spawn_groups_from_assets_ ? "assets" : "spawn_groups";
+    nlohmann::json new_groups = nlohmann::json::array();
+    if (data_has_spawn_groups) {
+        new_groups = data["spawn_groups"];
+    } else if (data_has_assets) {
+        new_groups = data["assets"];
+    }
+
+    nlohmann::json& target = loaded_json_[target_key];
+    bool groups_changed = !target.is_array() || target != new_groups;
+    if (groups_changed) {
+        target = new_groups;
+        if (spawn_groups_from_assets_) {
+            if (loaded_json_.contains("spawn_groups")) {
+                loaded_json_.erase("spawn_groups");
+            }
+        } else if (loaded_json_.contains("assets")) {
+            loaded_json_.erase("assets");
+        }
+    }
+    if (groups_changed) {
+        rebuild_rows();
+        return true;
+    }
+    if (dims_changed) {
+        rebuild_rows();
+        return true;
+    }
+    return false;
+}
+
+bool RoomConfigurator::refresh_spawn_groups(Room* room) {
+    const nlohmann::json& source = room ? room->assets_data() : empty_object();
+    return refresh_spawn_groups(source);
 }
 
 std::string RoomConfigurator::selected_geometry() const {

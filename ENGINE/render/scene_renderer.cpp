@@ -195,24 +195,31 @@ void SceneRenderer::render() {
         SDL_Rect fb = get_scaled_position_rect(a, fw, fh, inv_scale, min_visible_w, min_visible_h, player_screen_height);
         if (fb.w == 0 && fb.h == 0) continue;
 
+        SDL_Texture* draw_tex = render_asset_.texture_for_scale(a, final_tex, fw, fh, fb.w, fb.h);
+        SDL_Texture* mod_target = draw_tex ? draw_tex : final_tex;
+
         if (a->is_highlighted()) {
             SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_ADD);
             SDL_SetRenderDrawColor(renderer_, 200, 5, 5, 100);
             SDL_Rect outline = fb; outline.x -= 2; outline.y -= 2; outline.w += 4; outline.h += 4;
             SDL_RenderFillRect(renderer_, &outline);
-            SDL_SetTextureColorMod(final_tex, 255, 200, 200);
+            SDL_SetTextureColorMod(mod_target, 255, 200, 200);
         } else if (a->is_selected()) {
             SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_ADD);
             SDL_SetRenderDrawColor(renderer_, 5, 5, 200, 100);
             SDL_Rect outline = fb; outline.x -= 2; outline.y -= 2; outline.w += 4; outline.h += 4;
             SDL_RenderFillRect(renderer_, &outline);
-            SDL_SetTextureColorMod(final_tex, 255, 200, 200);
+            SDL_SetTextureColorMod(mod_target, 255, 200, 200);
         } else {
-            SDL_SetTextureColorMod(final_tex, 255, 255, 255);
+            SDL_SetTextureColorMod(mod_target, 255, 255, 255);
         }
 
-        SDL_RenderCopyEx(renderer_, final_tex, nullptr, &fb, 0, nullptr, a->flipped ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE);
-        SDL_SetTextureColorMod(final_tex, 255, 255, 255);
+        SDL_RenderCopyEx(renderer_, draw_tex ? draw_tex : final_tex, nullptr, &fb, 0, nullptr,
+                         a->flipped ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE);
+        SDL_SetTextureColorMod(mod_target, 255, 255, 255);
+        if (draw_tex && draw_tex != final_tex) {
+            SDL_SetTextureColorMod(final_tex, 255, 255, 255);
+        }
     }
 
     // ----- LIGHTS / OVERLAYS -----
@@ -272,10 +279,18 @@ void SceneRenderer::render() {
                         }
 
                         Uint8* dst_px = small_px + y * small_pitch + x * 4;
-                        dst_px[0] = static_cast<Uint8>(r / sample_count);
-                        dst_px[1] = static_cast<Uint8>(g / sample_count);
-                        dst_px[2] = static_cast<Uint8>(b / sample_count);
-                        dst_px[3] = static_cast<Uint8>(a / sample_count);
+                        static float kPreBlurBrighten = 1.25f; // 1.0 = no change
+
+                        int R = static_cast<int>(std::lround((r / sample_count) * kPreBlurBrighten));
+                        int G = static_cast<int>(std::lround((g / sample_count) * kPreBlurBrighten));
+                        int B = static_cast<int>(std::lround((b / sample_count) * kPreBlurBrighten));
+                        int A = static_cast<int>(a / sample_count);
+
+                        dst_px[0] = static_cast<Uint8>(std::min(R, 255));
+                        dst_px[1] = static_cast<Uint8>(std::min(G, 255));
+                        dst_px[2] = static_cast<Uint8>(std::min(B, 255));
+                        dst_px[3] = static_cast<Uint8>(A);
+
                     }
                 }
 

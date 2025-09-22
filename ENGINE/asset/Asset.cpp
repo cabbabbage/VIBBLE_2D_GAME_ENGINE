@@ -57,18 +57,19 @@ Asset::Asset(std::shared_ptr<AssetInfo> info_,
 }
 
 Asset::~Asset() {
-	if (parent) {
-		auto& vec = parent->children;
-		vec.erase(std::remove(vec.begin(), vec.end(), this), vec.end());
-		parent = nullptr;
-	}
-	for (Asset* c : children) {
-		if (c && c->parent == this) c->parent = nullptr;
-	}
-	if (final_texture) {
-		SDL_DestroyTexture(final_texture);
-		final_texture = nullptr;
-	}
+        if (parent) {
+                auto& vec = parent->children;
+                vec.erase(std::remove(vec.begin(), vec.end(), this), vec.end());
+                parent = nullptr;
+        }
+        for (Asset* c : children) {
+                if (c && c->parent == this) c->parent = nullptr;
+        }
+        clear_downscale_cache();
+        if (final_texture) {
+                SDL_DestroyTexture(final_texture);
+                final_texture = nullptr;
+        }
 }
 
 Asset::Asset(const Asset& o)
@@ -109,10 +110,11 @@ Asset::Asset(const Asset& o)
 }
 
 Asset& Asset::operator=(const Asset& o) {
-	if (this == &o) return *this;
-	parent               = o.parent;
-	info                 = o.info;
-	current_animation    = o.current_animation;
+        if (this == &o) return *this;
+        clear_downscale_cache();
+        parent               = o.parent;
+        info                 = o.info;
+        current_animation    = o.current_animation;
     pos                  = o.pos;
 	z_index              = o.z_index;
 	z_offset             = o.z_offset;
@@ -137,8 +139,8 @@ Asset& Asset::operator=(const Asset& o) {
         frame_progress       = o.frame_progress;
 	shading_group        = o.shading_group;
 	shading_group_set    = o.shading_group_set;
-	final_texture        = o.final_texture;
-	assets_              = o.assets_;
+        final_texture        = o.final_texture;
+        assets_              = o.assets_;
         spawn_id             = o.spawn_id;
         spawn_method         = o.spawn_method;
         controller_.reset();
@@ -330,10 +332,11 @@ void Asset::set_flip() {
 }
 
 void Asset::set_final_texture(SDL_Texture* tex) {
-	if (final_texture) SDL_DestroyTexture(final_texture);
-	final_texture = tex;
-	if (tex) SDL_QueryTexture(tex, nullptr, nullptr, &cached_w, &cached_h);
-	else     cached_w = cached_h = 0;
+        clear_downscale_cache();
+        if (final_texture) SDL_DestroyTexture(final_texture);
+        final_texture = tex;
+        if (tex) SDL_QueryTexture(tex, nullptr, nullptr, &cached_w, &cached_h);
+        else     cached_w = cached_h = 0;
 }
 
 SDL_Texture* Asset::get_final_texture() const { return final_texture; }
@@ -373,10 +376,21 @@ Area Asset::get_area(const std::string& name) const {
 }
 
 void Asset::deactivate() {
-	if (final_texture) {
-		SDL_DestroyTexture(final_texture);
-		final_texture = nullptr;
-	}
+        clear_downscale_cache();
+        if (final_texture) {
+                SDL_DestroyTexture(final_texture);
+                final_texture = nullptr;
+        }
+}
+
+void Asset::clear_downscale_cache() {
+        for (auto& entry : downscale_cache_) {
+                if (entry.texture) {
+                        SDL_DestroyTexture(entry.texture);
+                        entry.texture = nullptr;
+                }
+        }
+        downscale_cache_.clear();
 }
 
 void Asset::set_hidden(bool state){ hidden = state; }

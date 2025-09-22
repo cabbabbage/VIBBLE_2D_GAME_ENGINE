@@ -100,12 +100,15 @@ private:
     int max_number_ = 1;
     bool overlap_ = false;
     bool spacing_ = false;
+    int perimeter_radius_ = 0;
     // Method widgets
     std::unique_ptr<DMDropdown> dd_method_;
     std::unique_ptr<DropdownWidget> dd_method_w_;
     std::unique_ptr<DMRangeSlider> s_minmax_;
     std::unique_ptr<RangeSliderWidget> s_minmax_w_;
     std::unique_ptr<LabelWidget> s_minmax_label_;
+    std::unique_ptr<DMSlider> perimeter_radius_slider_;
+    std::unique_ptr<SliderWidget> perimeter_radius_widget_;
 
     // Percent (read-only summary)
     std::unique_ptr<LabelWidget> percent_x_label_;

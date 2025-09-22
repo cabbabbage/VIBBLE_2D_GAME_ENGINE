@@ -30,6 +30,8 @@ public:
     void set_bounds(const SDL_Rect& bounds);
     void open(const nlohmann::json& room_data);
     void open(Room* room);
+    bool refresh_spawn_groups(const nlohmann::json& room_data);
+    bool refresh_spawn_groups(Room* room);
     void close();
     bool visible() const;
     bool any_panel_visible() const;
@@ -55,11 +57,12 @@ private:
     Room* room_ = nullptr;
     nlohmann::json loaded_json_;
     std::string room_name_;
-    int room_w_min_ = 1000;
+    int room_w_min_ = 1500;
     int room_w_max_ = 10000;
-    int room_h_min_ = 1000;
+    int room_h_min_ = 1500;
     int room_h_max_ = 10000;
     int room_geom_ = 0;
+    bool spawn_groups_from_assets_ = false;
     bool room_is_spawn_ = false;
     bool room_is_boss_ = false;
     bool room_inherits_assets_ = false;

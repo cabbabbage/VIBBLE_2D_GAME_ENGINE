@@ -50,6 +50,10 @@ private:
     void ensure_serpentine_target(int min_stride, int max_stride, int sway, const Asset* final_target, int keep_side_ratio);
     void ensure_to_point_target();
     SDL_Point choose_balanced_target(SDL_Point desired, const Asset* final_target) const;
+    SDL_Point sanitize_target(SDL_Point desired, const Asset* final_target) const;
+    SDL_Point bottom_middle(SDL_Point pos) const;
+    bool point_in_impassable(SDL_Point pt, const Asset* ignored) const;
+    bool path_blocked(SDL_Point from, SDL_Point to, const Asset* ignored) const;
     void transition_mode(Mode m);
     bool is_target_reached();
     int  min_move_len2() const;
@@ -105,6 +109,8 @@ private:
     int dx_ = 0;
     int dy_ = 0;
     bool override_movement = false;
+    bool suppress_movement_ = false;
+    bool blocked_last_step_ = false;
     bool moving = true;
     SDL_Point to_point_goal_{0, 0};
     std::function<void(AnimationUpdate&)> to_point_on_reach_;

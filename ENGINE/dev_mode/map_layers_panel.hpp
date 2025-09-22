@@ -10,6 +10,7 @@
 #include <nlohmann/json_fwd.hpp>
 
 #include "DockableCollapsible.hpp"
+#include "room_selector_popup.hpp"
 
 class Input;
 union SDL_Event;
@@ -51,15 +52,12 @@ private:
     class LayerCanvasWidget;
     class PanelSidebarWidget;
     class LayerConfigPanel;
-    class RoomSelectorPopup;
     class RoomCandidateWidget;
 
     friend class LayerCanvasWidget;
     friend class PanelSidebarWidget;
     friend class LayerConfigPanel;
     friend class RoomCandidateWidget;
-    friend class RoomSelectorPopup;
-
     void ensure_layers_array();
     void ensure_layer_indices();
     nlohmann::json& layers_array();

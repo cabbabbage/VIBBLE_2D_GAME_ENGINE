@@ -569,8 +569,11 @@ class MapLayersPanel::PanelSidebarWidget : public Widget {
 public:
     explicit PanelSidebarWidget(MapLayersPanel* owner);
 
+    void set_layer_config(LayerConfigPanel* panel);
+    void refresh_config_button();
+
     void set_dirty(bool dirty);
-    void set_selected(int index) { selected_layer_ = index; }
+    void set_selected(int index) { selected_layer_ = index; refresh_config_button(); }
 
     void set_rect(const SDL_Rect& r) override;
     const SDL_Rect& rect() const override { return rect_; }
@@ -580,6 +583,7 @@ public:
 
 private:
     MapLayersPanel* owner_ = nullptr;
+    LayerConfigPanel* config_panel_ = nullptr;
     SDL_Rect rect_{0,0,0,0};
     std::unique_ptr<DMButton> add_button_;
     std::unique_ptr<DMButton> new_room_button_;
@@ -603,6 +607,17 @@ MapLayersPanel::PanelSidebarWidget::PanelSidebarWidget(MapLayersPanel* owner)
     preview_button_ = std::make_unique<DMButton>("Generate Preview", &DMStyles::HeaderButton(), 140, DMButton::height());
 }
 
+void MapLayersPanel::PanelSidebarWidget::set_layer_config(LayerConfigPanel* panel) {
+    config_panel_ = panel;
+    refresh_config_button();
+}
+
+void MapLayersPanel::PanelSidebarWidget::refresh_config_button() {
+    if (!config_button_) return;
+    const bool showing = config_panel_ && config_panel_->is_visible();
+    config_button_->set_text(showing ? "Hide Config" : "Open Config");
+}
+
 void MapLayersPanel::PanelSidebarWidget::set_dirty(bool dirty) {
     dirty_ = dirty;
     if (save_button_) {
@@ -613,23 +628,38 @@ void MapLayersPanel::PanelSidebarWidget::set_dirty(bool dirty) {
 void MapLayersPanel::PanelSidebarWidget::set_rect(const SDL_Rect& r) {
     rect_ = r;
     const int spacing = DMSpacing::item_gap();
-    SDL_Rect button_rect{ rect_.x + spacing, rect_.y + spacing, rect_.w - spacing * 2, DMButton::height() };
-    if (add_button_) add_button_->set_rect(button_rect);
-    button_rect.y += DMButton::height() + spacing;
-    if (new_room_button_) new_room_button_->set_rect(button_rect);
-    button_rect.y += DMButton::height() + spacing;
-    if (preview_button_) preview_button_->set_rect(button_rect);
-    button_rect.y += DMButton::height() + spacing;
-    if (config_button_) config_button_->set_rect(button_rect);
-    button_rect.y += DMButton::height() + spacing;
-    if (delete_button_) delete_button_->set_rect(button_rect);
-    button_rect.y += DMButton::height() + spacing * 2;
-    if (save_button_) save_button_->set_rect(button_rect);
-    button_rect.y += DMButton::height() + spacing;
-    if (reload_button_) reload_button_->set_rect(button_rect);
+    const int button_width = rect_.w - spacing * 2;
+    int y = rect_.y + spacing;
+    auto place_button = [&](std::unique_ptr<DMButton>& btn) {
+        if (!btn) return;
+        btn->set_rect(SDL_Rect{ rect_.x + spacing, y, button_width, DMButton::height() });
+        y += DMButton::height() + spacing;
+    };
+
+    place_button(add_button_);
+    place_button(new_room_button_);
+    place_button(preview_button_);
+    place_button(config_button_);
+    place_button(delete_button_);
+    y += spacing; // extra breathing room before save/reload
+    place_button(save_button_);
+    place_button(reload_button_);
+
+    int config_top = y;
+    int config_height = std::max(0, rect_.y + rect_.h - config_top - spacing);
+    if (config_panel_) {
+        SDL_Rect config_rect{ rect_.x + spacing, config_top, button_width, config_height };
+        config_panel_->set_rect(config_rect);
+        const int panel_padding = DMSpacing::panel_padding();
+        int available = std::max(0, config_height - panel_padding * 2);
+        config_panel_->set_available_height_override(available);
+        config_panel_->set_cell_width(std::max(160, button_width - panel_padding * 2));
+    }
+    refresh_config_button();
 }
 
 bool MapLayersPanel::PanelSidebarWidget::handle_event(const SDL_Event& e) {
+    refresh_config_button();
     bool used = false;
     auto handle_btn = [&](std::unique_ptr<DMButton>& btn, const std::function<void()>& cb) {
         if (btn && btn->handle_event(e)) {
@@ -648,8 +678,21 @@ bool MapLayersPanel::PanelSidebarWidget::handle_event(const SDL_Event& e) {
     });
     handle_btn(save_button_, [this]() { if (owner_) owner_->save_layers_to_disk(); });
     handle_btn(reload_button_, [this]() { if (owner_) owner_->reload_layers_from_disk(); });
-    handle_btn(config_button_, [this]() { if (owner_ && selected_layer_ >= 0) owner_->open_layer_config_internal(selected_layer_); });
+    handle_btn(config_button_, [this]() {
+        if (!owner_) return;
+        if (!config_panel_) {
+            if (selected_layer_ >= 0) owner_->open_layer_config_internal(selected_layer_);
+            return;
+        }
+        if (config_panel_->is_visible()) {
+            config_panel_->close();
+        } else if (selected_layer_ >= 0) {
+            owner_->open_layer_config_internal(selected_layer_);
+        }
+        refresh_config_button();
+    });
     handle_btn(delete_button_, [this]() { if (owner_ && selected_layer_ >= 0) owner_->delete_layer_internal(selected_layer_); });
+    refresh_config_button();
     return used;
 }
 
@@ -667,367 +710,6 @@ void MapLayersPanel::PanelSidebarWidget::render(SDL_Renderer* renderer) const {
     if (delete_button_) delete_button_->render(renderer);
     if (save_button_) save_button_->render(renderer);
     if (reload_button_) reload_button_->render(renderer);
-}
-
-// -----------------------------------------------------------------------------
-// RoomSelectorPopup implementation
-// -----------------------------------------------------------------------------
-
-class MapLayersPanel::RoomSelectorPopup {
-public:
-    explicit RoomSelectorPopup(MapLayersPanel* owner);
-    void open(const std::vector<std::string>& rooms, std::function<void(const std::string&)> cb);
-    void set_rooms(const std::vector<std::string>& rooms);
-    void close();
-    bool visible() const { return visible_; }
-    void update(const Input& input);
-    bool handle_event(const SDL_Event& e);
-    void render(SDL_Renderer* renderer) const;
-    bool is_point_inside(int x, int y) const;
-
-private:
-    void rebuild_room_buttons();
-    void ensure_geometry() const;
-    void layout_widgets() const;
-    void begin_create_room();
-    void cancel_create_room();
-    void finalize_create_room();
-    void scroll_by(int delta);
-
-    MapLayersPanel* owner_ = nullptr;
-    bool visible_ = false;
-    mutable SDL_Rect rect_{0,0,280,320};
-    std::vector<std::unique_ptr<DMButton>> buttons_;
-    std::vector<std::string> rooms_;
-    std::function<void(const std::string&)> callback_;
-    std::unique_ptr<DMButton> create_room_button_;
-    std::unique_ptr<DMButton> confirm_button_;
-    std::unique_ptr<DMButton> cancel_button_;
-    std::unique_ptr<DMTextBox> name_input_;
-    bool creating_room_ = false;
-    mutable bool geometry_dirty_ = true;
-    mutable int content_height_ = 0;
-    mutable SDL_Rect content_clip_{0,0,0,0};
-    mutable int max_scroll_ = 0;
-    mutable int scroll_offset_ = 0;
-};
-
-MapLayersPanel::RoomSelectorPopup::RoomSelectorPopup(MapLayersPanel* owner)
-    : owner_(owner) {
-    create_room_button_ = std::make_unique<DMButton>("Create New Room", &DMStyles::CreateButton(), 220, DMButton::height());
-    confirm_button_ = std::make_unique<DMButton>("Create", &DMStyles::CreateButton(), 120, DMButton::height());
-    cancel_button_ = std::make_unique<DMButton>("Cancel", &DMStyles::HeaderButton(), 120, DMButton::height());
-    geometry_dirty_ = true;
-}
-
-void MapLayersPanel::RoomSelectorPopup::open(const std::vector<std::string>& rooms, std::function<void(const std::string&)> cb) {
-    callback_ = std::move(cb);
-    creating_room_ = false;
-    name_input_.reset();
-    scroll_offset_ = 0;
-    geometry_dirty_ = true;
-    set_rooms(rooms);
-    if (owner_) {
-        const SDL_Rect& panel_rect = owner_->rect();
-        rect_.x = panel_rect.x + panel_rect.w + 16;
-        rect_.y = panel_rect.y;
-    }
-    visible_ = true;
-    ensure_geometry();
-}
-
-void MapLayersPanel::RoomSelectorPopup::set_rooms(const std::vector<std::string>& rooms) {
-    rooms_ = rooms;
-    rebuild_room_buttons();
-    geometry_dirty_ = true;
-}
-
-void MapLayersPanel::RoomSelectorPopup::rebuild_room_buttons() {
-    buttons_.clear();
-    const int margin = DMSpacing::item_gap();
-    int button_width = rect_.w - margin * 2;
-    if (button_width <= 0) {
-        button_width = 220;
-    } else {
-        button_width = std::max(button_width, 220);
-    }
-    for (const auto& room : rooms_) {
-        auto btn = std::make_unique<DMButton>(room, &DMStyles::ListButton(), button_width, DMButton::height());
-        buttons_.push_back(std::move(btn));
-    }
-}
-
-void MapLayersPanel::RoomSelectorPopup::ensure_geometry() const {
-    if (!geometry_dirty_) return;
-    const int margin = DMSpacing::item_gap();
-    rect_.w = std::max(rect_.w, 220 + margin * 2);
-    const int content_width = std::max(0, rect_.w - margin * 2);
-    const int button_height = DMButton::height();
-    const int spacing = DMSpacing::small_gap();
-
-    int total = margin;
-    if (!rooms_.empty()) {
-        total += static_cast<int>(rooms_.size()) * (button_height + spacing);
-        total -= spacing;
-    }
-    total += DMSpacing::item_gap();
-    total += button_height;
-    if (creating_room_) {
-        total += spacing;
-        int input_height = DMTextBox::height();
-        if (name_input_) {
-            input_height = name_input_->preferred_height(content_width);
-        }
-        total += input_height;
-        total += spacing;
-        total += button_height;
-    }
-    total += margin;
-
-    content_height_ = total;
-    const int min_height = button_height * 3 + margin * 2;
-    const int max_height = 520;
-    rect_.h = std::min(std::max(content_height_, min_height), max_height);
-
-    content_clip_ = SDL_Rect{ rect_.x + margin, rect_.y + margin,
-                               std::max(0, rect_.w - margin * 2), std::max(0, rect_.h - margin * 2) };
-    max_scroll_ = std::max(0, content_height_ - rect_.h);
-    if (scroll_offset_ > max_scroll_) scroll_offset_ = max_scroll_;
-    if (scroll_offset_ < 0) scroll_offset_ = 0;
-    geometry_dirty_ = false;
-}
-
-void MapLayersPanel::RoomSelectorPopup::layout_widgets() const {
-    ensure_geometry();
-    const int margin = DMSpacing::item_gap();
-    const int spacing = DMSpacing::small_gap();
-    const int button_height = DMButton::height();
-    const int content_width = std::max(0, rect_.w - margin * 2);
-
-    int y = rect_.y + margin - scroll_offset_;
-    for (size_t i = 0; i < buttons_.size(); ++i) {
-        auto& btn = buttons_[i];
-        if (!btn) continue;
-        btn->set_rect(SDL_Rect{ rect_.x + margin, y, content_width, button_height });
-        y += button_height;
-        if (i + 1 < buttons_.size()) {
-            y += spacing;
-        }
-    }
-
-    y += DMSpacing::item_gap();
-    if (create_room_button_) {
-        create_room_button_->set_rect(SDL_Rect{ rect_.x + margin, y, content_width, DMButton::height() });
-    }
-    y += DMButton::height();
-
-    if (creating_room_) {
-        y += spacing;
-        if (name_input_) {
-            name_input_->set_rect(SDL_Rect{ rect_.x + margin, y, content_width, DMTextBox::height() });
-            const SDL_Rect input_rect = name_input_->rect();
-            y = input_rect.y + input_rect.h;
-        }
-        y += spacing;
-        int left_w = std::max(1, (content_width - spacing) / 2);
-        int right_w = std::max(1, content_width - left_w - spacing);
-        if (left_w + right_w + spacing > content_width) {
-            right_w = std::max(1, content_width - left_w - spacing);
-        }
-        int button_y = y;
-        if (confirm_button_) {
-            confirm_button_->set_rect(SDL_Rect{ rect_.x + margin, button_y, left_w, DMButton::height() });
-        }
-        if (cancel_button_) {
-            cancel_button_->set_rect(SDL_Rect{ rect_.x + margin + left_w + spacing, button_y, right_w, DMButton::height() });
-        }
-        y += DMButton::height();
-    }
-}
-
-void MapLayersPanel::RoomSelectorPopup::begin_create_room() {
-    std::string suggestion = owner_ ? owner_->suggest_room_name() : std::string("room");
-    name_input_ = std::make_unique<DMTextBox>("Room Name", suggestion);
-    creating_room_ = true;
-    geometry_dirty_ = true;
-    ensure_geometry();
-    scroll_offset_ = max_scroll_;
-    SDL_StartTextInput();
-}
-
-void MapLayersPanel::RoomSelectorPopup::cancel_create_room() {
-    if (creating_room_) {
-        SDL_StopTextInput();
-    }
-    creating_room_ = false;
-    name_input_.reset();
-    geometry_dirty_ = true;
-}
-
-void MapLayersPanel::RoomSelectorPopup::finalize_create_room() {
-    if (!creating_room_) return;
-    std::string desired = name_input_ ? name_input_->value() : std::string();
-    std::string created;
-    if (owner_) {
-        created = owner_->create_new_room(desired);
-    }
-    if (created.empty()) {
-        return;
-    }
-    SDL_StopTextInput();
-    creating_room_ = false;
-    name_input_.reset();
-    geometry_dirty_ = true;
-    if (callback_) {
-        callback_(created);
-    }
-    close();
-}
-
-void MapLayersPanel::RoomSelectorPopup::scroll_by(int delta) {
-    if (delta == 0) return;
-    ensure_geometry();
-    int new_offset = scroll_offset_ + delta;
-    if (new_offset < 0) new_offset = 0;
-    if (new_offset > max_scroll_) new_offset = max_scroll_;
-    scroll_offset_ = new_offset;
-}
-
-void MapLayersPanel::RoomSelectorPopup::close() {
-    SDL_StopTextInput();
-    visible_ = false;
-    callback_ = nullptr;
-    creating_room_ = false;
-    name_input_.reset();
-    scroll_offset_ = 0;
-    geometry_dirty_ = true;
-}
-
-void MapLayersPanel::RoomSelectorPopup::update(const Input&) {
-    if (!visible_) return;
-    ensure_geometry();
-}
-
-bool MapLayersPanel::RoomSelectorPopup::handle_event(const SDL_Event& e) {
-    if (!visible_) return false;
-    ensure_geometry();
-    if (e.type == SDL_MOUSEBUTTONDOWN || e.type == SDL_MOUSEBUTTONUP || e.type == SDL_MOUSEMOTION) {
-        SDL_Point p{ e.type == SDL_MOUSEMOTION ? e.motion.x : e.button.x,
-                     e.type == SDL_MOUSEMOTION ? e.motion.y : e.button.y };
-        if (!SDL_PointInRect(&p, &rect_)) {
-            if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
-                close();
-            }
-            return false;
-        }
-    }
-
-    bool used = false;
-    if (e.type == SDL_MOUSEWHEEL) {
-        SDL_Point mouse_pos{0, 0};
-        SDL_GetMouseState(&mouse_pos.x, &mouse_pos.y);
-        if (SDL_PointInRect(&mouse_pos, &content_clip_)) {
-            const int step = DMButton::height() + DMSpacing::small_gap();
-            scroll_by(-e.wheel.y * step);
-            used = true;
-        }
-    }
-
-    layout_widgets();
-
-    if (create_room_button_ && create_room_button_->handle_event(e)) {
-        used = true;
-        if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
-            begin_create_room();
-        }
-    }
-
-    if (creating_room_) {
-        if (name_input_ && name_input_->handle_event(e)) {
-            used = true;
-            geometry_dirty_ = true;
-        }
-        if (confirm_button_ && confirm_button_->handle_event(e)) {
-            used = true;
-            if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
-                finalize_create_room();
-                return true;
-            }
-        }
-        if (cancel_button_ && cancel_button_->handle_event(e)) {
-            used = true;
-            if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
-                cancel_create_room();
-                return true;
-            }
-        }
-        if (e.type == SDL_KEYDOWN) {
-            if (e.key.keysym.sym == SDLK_RETURN || e.key.keysym.sym == SDLK_KP_ENTER) {
-                finalize_create_room();
-                return true;
-            }
-            if (e.key.keysym.sym == SDLK_ESCAPE) {
-                cancel_create_room();
-                return true;
-            }
-        }
-    }
-
-    for (size_t i = 0; i < buttons_.size(); ++i) {
-        auto& btn = buttons_[i];
-        if (!btn) continue;
-        if (btn->handle_event(e)) {
-            used = true;
-            if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
-                if (callback_) callback_(rooms_[i]);
-                close();
-                return true;
-            }
-        }
-    }
-    return used;
-}
-
-void MapLayersPanel::RoomSelectorPopup::render(SDL_Renderer* renderer) const {
-    if (!visible_ || !renderer) return;
-    ensure_geometry();
-    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-    SDL_SetRenderDrawColor(renderer, 24,24,24,240);
-    SDL_RenderFillRect(renderer, &rect_);
-    SDL_SetRenderDrawColor(renderer, 90,90,90,255);
-    SDL_RenderDrawRect(renderer, &rect_);
-
-    SDL_Rect prev_clip;
-    SDL_RenderGetClipRect(renderer, &prev_clip);
-#if SDL_VERSION_ATLEAST(2,0,4)
-    const SDL_bool was_clipping = SDL_RenderIsClipEnabled(renderer);
-#else
-    const SDL_bool was_clipping = (prev_clip.w != 0 || prev_clip.h != 0) ? SDL_TRUE : SDL_FALSE;
-#endif
-    SDL_RenderSetClipRect(renderer, &content_clip_);
-
-    layout_widgets();
-    for (const auto& btn : buttons_) {
-        if (btn) btn->render(renderer);
-    }
-    if (create_room_button_) create_room_button_->render(renderer);
-    if (creating_room_) {
-        if (name_input_) name_input_->render(renderer);
-        if (confirm_button_) confirm_button_->render(renderer);
-        if (cancel_button_) cancel_button_->render(renderer);
-    }
-
-    if (was_clipping == SDL_TRUE) {
-        SDL_RenderSetClipRect(renderer, &prev_clip);
-    } else {
-        SDL_RenderSetClipRect(renderer, nullptr);
-    }
-}
-
-bool MapLayersPanel::RoomSelectorPopup::is_point_inside(int x, int y) const {
-    if (!visible_) return false;
-    SDL_Point p{ x, y };
-    return SDL_PointInRect(&p, &rect_);
 }
 
 // -----------------------------------------------------------------------------
@@ -1089,6 +771,7 @@ public:
     void refresh();
 
     MapLayersPanel* panel_owner() const { return owner_; }
+    int current_layer() const { return layer_index_; }
 
 private:
     void sync_from_widgets();
@@ -1119,10 +802,16 @@ private:
 };
 
 MapLayersPanel::LayerConfigPanel::LayerConfigPanel(MapLayersPanel* owner)
-    : DockableCollapsible("Layer", true, owner ? owner->rect().x + owner->rect().w + 32 : 420, owner ? owner->rect().y : 120),
+    : DockableCollapsible("Layer", false, 0, 0),
       owner_(owner) {
     set_visible(false);
     set_expanded(true);
+    set_show_header(false);
+    set_close_button_enabled(false);
+    set_scroll_enabled(true);
+    set_padding(DMSpacing::panel_padding());
+    set_row_gap(DMSpacing::item_gap());
+    set_col_gap(DMSpacing::item_gap());
     set_cell_width(320);
 }
 
@@ -1137,12 +826,20 @@ void MapLayersPanel::LayerConfigPanel::open(int layer_index, json* layer) {
     set_title(std::string("Layer: ") + name_cache_);
     set_visible(true);
     set_expanded(true);
+    reset_scroll();
+    if (owner_ && owner_->sidebar_widget_) {
+        owner_->sidebar_widget_->refresh_config_button();
+    }
 }
 
 void MapLayersPanel::LayerConfigPanel::close() {
     set_visible(false);
+    layer_index_ = -1;
     layer_ = nullptr;
     candidate_widgets_.clear();
+    if (owner_ && owner_->sidebar_widget_) {
+        owner_->sidebar_widget_->refresh_config_button();
+    }
 }
 
 bool MapLayersPanel::LayerConfigPanel::is_visible() const {
@@ -1459,10 +1156,18 @@ MapLayersPanel::MapLayersPanel(int x, int y)
     set_cell_width(220);
     set_visible(false);
     set_expanded(true);
+    layer_config_ = std::make_unique<LayerConfigPanel>(this);
     canvas_widget_ = std::make_unique<LayerCanvasWidget>(this);
     sidebar_widget_ = std::make_unique<PanelSidebarWidget>(this);
-    layer_config_ = std::make_unique<LayerConfigPanel>(this);
-    room_selector_ = std::make_unique<RoomSelectorPopup>(this);
+    if (sidebar_widget_) {
+        sidebar_widget_->set_layer_config(layer_config_.get());
+    }
+    room_selector_ = std::make_unique<RoomSelectorPopup>();
+    if (room_selector_) {
+        room_selector_->set_create_callbacks(
+            [this]() { return this->suggest_room_name(); },
+            [this](const std::string& desired) { return this->create_new_room(desired); });
+    }
     rebuild_rows();
 }
 
@@ -1543,7 +1248,11 @@ void MapLayersPanel::update(const Input& input, int screen_w, int screen_h) {
     if (!is_visible()) return;
     DockableCollapsible::update(input, screen_w, screen_h);
     if (layer_config_) layer_config_->update(input, screen_w, screen_h);
-    if (room_selector_) room_selector_->update(input);
+    if (room_selector_) {
+        SDL_Rect anchor = sidebar_widget_ ? sidebar_widget_->rect() : rect();
+        room_selector_->set_anchor_rect(anchor);
+        room_selector_->update(input);
+    }
 }
 
 bool MapLayersPanel::handle_event(const SDL_Event& e) {
@@ -1874,6 +1583,17 @@ void MapLayersPanel::select_layer(int index) {
     selected_layer_ = index;
     if (sidebar_widget_) sidebar_widget_->set_selected(index);
     if (canvas_widget_) canvas_widget_->set_selected(index);
+    if (layer_config_ && layer_config_->is_visible()) {
+        if (index >= 0) {
+            if (auto* layer = layer_at(index)) {
+                layer_config_->open(index, layer);
+            } else {
+                layer_config_->close();
+            }
+        } else {
+            layer_config_->close();
+        }
+    }
 }
 
 void MapLayersPanel::mark_dirty() {
@@ -2256,6 +1976,8 @@ void MapLayersPanel::ensure_layer_config_valid() {
 void MapLayersPanel::request_room_selection(const std::function<void(const std::string&)>& cb) {
     if (!room_selector_) return;
     if (available_rooms_.empty()) rebuild_available_rooms();
+    SDL_Rect anchor = sidebar_widget_ ? sidebar_widget_->rect() : rect();
+    room_selector_->set_anchor_rect(anchor);
     room_selector_->open(available_rooms_, cb);
 }
 

@@ -169,8 +169,68 @@ SDL_Point AnimationUpdate::choose_balanced_target(SDL_Point desired, const Asset
     return best;
 }
 
+SDL_Point AnimationUpdate::bottom_middle(SDL_Point pos) const {
+    if (!self_ || !self_->info) return pos;
+    return SDL_Point{ pos.x, pos.y - self_->info->z_threshold };
+}
+
+bool AnimationUpdate::point_in_impassable(SDL_Point pt, const Asset* ignored) const {
+    const auto& obstacles = aam_.getImpassableClosest();
+    for (Asset* a : obstacles) {
+        if (!a || a == self_ || a == ignored || !a->info) continue;
+        Area obstacle = a->get_area("passability");
+        if (obstacle.contains_point(pt)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool AnimationUpdate::path_blocked(SDL_Point from, SDL_Point to, const Asset* ignored) const {
+    if (from.x == to.x && from.y == to.y) {
+        return point_in_impassable(to, ignored);
+    }
+    const double dist = Range::get_distance(from, to);
+    const double step_len = std::max(1.0, std::sqrt(static_cast<double>(min_move_len2())));
+    const int steps = std::max(1, static_cast<int>(std::ceil(dist / step_len)));
+    for (int i = 1; i <= steps; ++i) {
+        const double t = static_cast<double>(i) / static_cast<double>(steps);
+        const int sx = static_cast<int>(std::lround(from.x + (to.x - from.x) * t));
+        const int sy = static_cast<int>(std::lround(from.y + (to.y - from.y) * t));
+        if (point_in_impassable(SDL_Point{ sx, sy }, ignored)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+SDL_Point AnimationUpdate::sanitize_target(SDL_Point desired, const Asset* final_target) const {
+    if (!self_ || !self_->info) return desired;
+    SDL_Point origin = bottom_middle(self_->pos);
+    auto is_valid = [&](SDL_Point candidate) {
+        SDL_Point bottom = bottom_middle(candidate);
+        if (point_in_impassable(bottom, final_target)) return false;
+        if (path_blocked(origin, bottom, final_target)) return false;
+        return true;
+    };
+    if (is_valid(desired)) return desired;
+    const int base_step = std::max(1, static_cast<int>(std::lround(std::sqrt(static_cast<double>(min_move_len2())))));
+    const int max_attempts = 12;
+    for (int attempt = 1; attempt <= max_attempts; ++attempt) {
+        const int offset = base_step * attempt;
+        for (int dir : {-1, 1}) {
+            SDL_Point candidate{ desired.x + dir * offset, desired.y };
+            if (is_valid(candidate)) {
+                return candidate;
+            }
+        }
+    }
+    return desired;
+}
+
 void AnimationUpdate::set_target(SDL_Point desired, const Asset* final_target) {
-    target_ = choose_balanced_target(desired, final_target);
+    SDL_Point chosen = choose_balanced_target(desired, final_target);
+    target_ = sanitize_target(chosen, final_target);
     have_target_ = true;
 }
 
@@ -245,16 +305,9 @@ void AnimationUpdate::set_mode_none() {
 
 bool AnimationUpdate::can_move_by(int dx, int dy) const {
     if (!self_ || !self_->info) return false;
-    const int test_x = self_->pos.x + dx;
-    const int test_y = self_->pos.y + dy - self_->info->z_threshold;
-    for (Asset* a : aam_.getImpassableClosest()) {
-        if (!a || a == self_) continue;
-        Area obstacle = a->get_area("passability");
-        if (obstacle.contains_point({ test_x, test_y })) {
-            return false;
-        }
-    }
-    return true;
+    SDL_Point next{ self_->pos.x + dx, self_->pos.y + dy };
+    SDL_Point bottom = bottom_middle(next);
+    return !point_in_impassable(bottom, nullptr);
 }
 
 bool AnimationUpdate::would_overlap_same_or_player(int dx, int dy) const {
@@ -493,6 +546,7 @@ void AnimationUpdate::ensure_to_point_target() {
 
 bool AnimationUpdate::advance(AnimationFrame*& frame) {
     try {
+        blocked_last_step_ = false;
         if (!self_ || !self_->info || !frame || self_->static_frame) return true;
         auto it = self_->info->animations.find(self_->current_animation);
         if (it == self_->info->animations.end()) return true;
@@ -505,10 +559,18 @@ bool AnimationUpdate::advance(AnimationFrame*& frame) {
             self_->frame_progress = 0.0f;
             if (!frame) return true;
         }
-        const bool use_override = override_movement && can_move_by(dx_, dy_);
+        const bool use_override = override_movement;
         const int move_dx = use_override ? dx_ : frame->dx;
         const int move_dy = use_override ? dy_ : frame->dy;
-        if ((move_dx | move_dy) != 0) {
+        const bool attempted_move = ((move_dx | move_dy) != 0);
+        bool blocked = false;
+        if (attempted_move && !suppress_movement_) {
+            if (!can_move_by(move_dx, move_dy)) {
+                blocked = true;
+                blocked_last_step_ = true;
+            }
+        }
+        if (attempted_move && !blocked && !suppress_movement_) {
             self_->pos.x += move_dx;
             self_->pos.y += move_dy;
             if (frame->z_resort) {
@@ -519,6 +581,7 @@ bool AnimationUpdate::advance(AnimationFrame*& frame) {
             }
         }
         override_movement = false;
+        suppress_movement_ = false;
         bool reached_end = false;
         self_->frame_progress += anim.speed_factor;
         while (self_->frame_progress >= 1.0f) {
@@ -687,7 +750,17 @@ void AnimationUpdate::update() {
                     switch_to(next_anim);
                 }
             }
-            advance(self_->current_frame);
+            bool cont = advance(self_->current_frame);
+            if (blocked_last_step_) {
+                blocked_last_step_ = false;
+                moving = false;
+                have_target_ = false;
+                get_new_target();
+                return;
+            }
+            if (!cont) {
+                get_animation();
+            }
             return;
         }
         ManualState& manual = manual_state(this);
@@ -788,7 +861,9 @@ void AnimationUpdate::update() {
 
             manual.last_was_moving = true;
         }
+        suppress_movement_ = manual.active;
         bool cont = advance(self_->current_frame);
+        blocked_last_step_ = false;
         if (!cont) {
             get_animation();
         }

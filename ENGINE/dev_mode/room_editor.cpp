@@ -1943,7 +1943,10 @@ void RoomEditor::open_spawn_group_editor_by_id(const std::string& spawn_id) {
 
 void RoomEditor::reopen_room_configurator() {
     if (!room_cfg_ui_) return;
-    if (room_config_dock_open_) {
+    if (!room_config_dock_open_) {
+        return;
+    }
+    if (!room_cfg_ui_->refresh_spawn_groups(current_room_)) {
         room_cfg_ui_->open(current_room_);
     }
 }

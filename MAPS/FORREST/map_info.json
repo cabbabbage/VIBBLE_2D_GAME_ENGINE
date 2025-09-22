@@ -200,9 +200,9 @@
         180.0,
         [
           255,
-          50,
-          50,
-          24
+          237,
+          248,
+          73
         ]
       ],
       [
@@ -216,9 +216,9 @@
       ]
     ],
     "max_opacity": 255,
-    "min_opacity": 0,
+    "min_opacity": 68,
     "mult": 0.32,
-    "orbit_radius": 1523,
+    "orbit_radius": 782,
     "radius": 6667,
     "update_interval": 45
   },
@@ -384,20 +384,46 @@
     "spawn": {
       "curvyness": 1,
       "edge_smoothness": 100,
-      "geometry": "Square",
-      "height_max": 2479,
-      "height_min": 100,
+      "geometry": "Circle",
+      "height_max": 3420,
+      "height_min": 1325,
       "inherits_map_assets": false,
       "is_boss": false,
       "is_spawn": true,
-      "max_height": 2479,
-      "max_width": 2671,
-      "min_height": 100,
-      "min_width": 100,
+      "max_height": 3420,
+      "max_width": 3612,
+      "min_height": 1325,
+      "min_width": 1376,
       "name": "spawn",
-      "spawn_groups": [],
-      "width_max": 2671,
-      "width_min": 100
+      "spawn_groups": [
+        {
+          "candidates": [
+            {
+              "chance": 0,
+              "name": "null"
+            },
+            {
+              "chance": 100,
+              "name": "candle"
+            }
+          ],
+          "chance_denominator": 100,
+          "check_overlap": false,
+          "display_name": "candle",
+          "dx": -332,
+          "dy": -167,
+          "enforce_spacing": false,
+          "max_number": 2,
+          "min_number": 2,
+          "origional_height": 3180,
+          "origional_width": 3180,
+          "position": "Perimeter",
+          "radius": 261,
+          "spawn_id": "spn-7d847a71ac07"
+        }
+      ],
+      "width_max": 3612,
+      "width_min": 1376
     }
   },
   "trails_data": {
