@@ -5,6 +5,8 @@
 #include <string>
 #include <vector>
 
+#include "dev_mode/asset_info_sections.hpp"
+
 class AssetInfo;
 class Input;
 class Area;
@@ -36,6 +38,7 @@ class AssetInfoUI {
     SDL_Renderer* get_last_renderer() const { return last_renderer_; }
     void refresh_target_asset_scale();
     void sync_target_z_threshold();
+    void request_apply_section(AssetInfoSectionId section_id);
 
   private:
     void layout_widgets(int screen_w, int screen_h) const;
@@ -43,6 +46,8 @@ class AssetInfoUI {
     float compute_player_screen_height(const class camera& cam) const;
     void save_now() const;
     void open_area_editor(const std::string& name);
+    bool apply_section_to_assets(AssetInfoSectionId section_id, const std::vector<std::string>& asset_names);
+    static const char* section_display_name(AssetInfoSectionId section_id);
 
   private:
     bool visible_ = false;
@@ -59,6 +64,7 @@ class AssetInfoUI {
     mutable int max_scroll_ = 0;
     mutable SDL_Rect panel_ {0,0,0,0};
     mutable SDL_Rect scroll_region_{0,0,0,0};
+    mutable SDL_Rect name_label_rect_{0,0,0,0};
     // Footer button: Configure Animations
     mutable std::unique_ptr<class DMButton> configure_btn_;
     std::unique_ptr<AnimationsEditorPanel> animations_panel_;
@@ -66,4 +72,5 @@ class AssetInfoUI {
     bool camera_override_active_ = false;
     bool prev_camera_realism_enabled_ = false;
     bool prev_camera_parallax_enabled_ = false;
+    std::unique_ptr<class ApplySettingsModal> apply_modal_;
 };

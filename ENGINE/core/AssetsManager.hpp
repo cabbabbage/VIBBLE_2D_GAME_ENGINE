@@ -46,7 +46,7 @@ public:
     const std::vector<Asset*>& get_highlighted_assets() const;
     Asset* get_hovered_asset() const;
 
-    const std::vector<Asset*>& getActive() const { return active_assets; }
+    const std::vector<Asset*>& getActive() const { return filtered_active_assets; }
     const std::vector<Asset*>& getClosest() const { return closest_assets; }
     camera& getView() { return camera_; }
     const camera& getView() const { return camera_; }
@@ -112,6 +112,7 @@ private:
     void schedule_removal(Asset* a);
     void process_removals();
     void addAsset(const std::string& name, SDL_Point g);
+    void update_filtered_active_assets();
 
     friend class SceneRenderer;
     friend class Asset;
@@ -127,6 +128,7 @@ private:
     int dx = 0;
     int dy = 0;
     std::vector<Asset*> active_assets;
+    std::vector<Asset*> filtered_active_assets;
     std::vector<Asset*> closest_assets;
     std::vector<Room*> rooms_;
     Room* current_room_ = nullptr;

@@ -7,6 +7,7 @@
 #include <algorithm>
 #include "asset/asset_info.hpp"
 #include "asset_info_methods/lighting_loader.hpp"
+#include "dev_mode/asset_info_sections.hpp"
 
 class AssetInfoUI;
 
@@ -56,6 +57,9 @@ public:
             rows_.push_back(std::move(r));
         }
         b_add_ = std::make_unique<DMButton>("Add New Light Source", &DMStyles::CreateButton(), 220, DMButton::height());
+        if (!apply_btn_) {
+            apply_btn_ = std::make_unique<DMButton>("Apply Settings", &DMStyles::AccentButton(), 200, DMButton::height());
+        }
     }
 
     void layout() override {
@@ -113,6 +117,10 @@ public:
         }
         if (b_add_) {
             b_add_->set_rect(SDL_Rect{ x, y - scroll_, std::min(260, maxw), DMButton::height() });
+            y += DMButton::height() + DMSpacing::item_gap();
+        }
+        if (apply_btn_) {
+            apply_btn_->set_rect(SDL_Rect{ x, y - scroll_, std::min(260, maxw), DMButton::height() });
             y += DMButton::height() + DMSpacing::item_gap();
         }
         content_height_ = std::max(0, y - (rect_.y + DMSpacing::panel_padding() + DMButton::height() + DMSpacing::header_gap()));
@@ -199,6 +207,12 @@ public:
                 used = true;
             }
         }
+        if (apply_btn_ && apply_btn_->handle_event(e)) {
+            if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
+                if (ui_) ui_->request_apply_section(AssetInfoSectionId::Lighting);
+            }
+            return true;
+        }
         if (changed) {
             commit_to_info();
             if (info_) {
@@ -243,6 +257,7 @@ public:
             if (rrow.s_color_b)   rrow.s_color_b->render(r);
         }
         if (b_add_) b_add_->render(r);
+        if (apply_btn_) apply_btn_->render(r);
     }
 
     bool shading_enabled() const { return c_has_shading_ && c_has_shading_->value(); }
@@ -289,6 +304,7 @@ private:
 
     std::vector<Row> rows_;
     std::unique_ptr<DMButton> b_add_;
+    std::unique_ptr<DMButton> apply_btn_;
     AssetInfoUI* ui_ = nullptr; // non-owning
 };
 

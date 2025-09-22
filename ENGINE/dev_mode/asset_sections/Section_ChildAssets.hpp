@@ -8,6 +8,9 @@
 #include <nlohmann/json.hpp>
 #include "asset/asset_info.hpp"
 #include "spawn_groups_config.hpp"
+#include "dev_mode/asset_info_sections.hpp"
+
+class AssetInfoUI;
 
 class Section_ChildAssets : public DockableCollapsible {
 public:
@@ -15,12 +18,16 @@ public:
     : DockableCollapsible("Child Assets", false) {}
 
     void set_open_area_editor_callback(std::function<void(const std::string&)> cb) { open_area_editor_ = std::move(cb); }
+    void set_ui(AssetInfoUI* ui) { ui_ = ui; }
 
     void build() override {
         rows_.clear();
         rebuild_area_names();
         rebuild_rows_from_info();
         b_add_ = std::make_unique<DMButton>("Add Child Region", &DMStyles::CreateButton(), 220, DMButton::height());
+        if (!apply_btn_) {
+            apply_btn_ = std::make_unique<DMButton>("Apply Settings", &DMStyles::AccentButton(), 180, DMButton::height());
+        }
     }
 
     void layout() override {
@@ -75,6 +82,10 @@ public:
 
         if (b_add_) {
             b_add_->set_rect(SDL_Rect{ x, y - scroll_, maxw, DMButton::height() });
+            y += DMButton::height() + DMSpacing::item_gap();
+        }
+        if (apply_btn_) {
+            apply_btn_->set_rect(SDL_Rect{ x, y - scroll_, maxw, DMButton::height() });
             y += DMButton::height() + DMSpacing::item_gap();
         }
 
@@ -147,6 +158,13 @@ public:
             }
         }
 
+        if (apply_btn_ && apply_btn_->handle_event(e)) {
+            if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
+                if (ui_) ui_->request_apply_section(AssetInfoSectionId::ChildAssets);
+            }
+            return true;
+        }
+
         if (changed) {
             commit_to_info();
             (void)info_->update_info_json();
@@ -164,6 +182,7 @@ public:
             if (row.b_delete)   row.b_delete->render(r);
         }
         if (b_add_)        b_add_->render(r);
+        if (apply_btn_)    apply_btn_->render(r);
         if (spawn_groups_cfg_.visible()) spawn_groups_cfg_.render(r);
     }
 
@@ -283,6 +302,8 @@ private:
     std::vector<Row> rows_;
     std::vector<std::string> area_names_;
     std::unique_ptr<DMButton> b_add_;
+    std::unique_ptr<DMButton> apply_btn_;
     SpawnGroupsConfig spawn_groups_cfg_;
     std::function<void(const std::string&)> open_area_editor_;
+    AssetInfoUI* ui_ = nullptr; // non-owning
 };

@@ -9,6 +9,7 @@
 #include "widgets.hpp"
 
 #include "asset/Asset.hpp"
+#include "asset/asset_types.hpp"
 #include "core/AssetsManager.hpp"
 #include "render/camera.hpp"
 #include "room/room.hpp"
@@ -18,6 +19,9 @@
 #include <utility>
 #include <cctype>
 #include <string>
+#include <unordered_map>
+#include <unordered_set>
+#include <nlohmann/json.hpp>
 
 namespace {
 bool is_pointer_event(const SDL_Event& e) {
@@ -185,6 +189,8 @@ DevControls::DevControls(Assets* owner, int screen_w, int screen_h)
         room_editor_->set_shared_fullscreen_panel(map_mode_ui_->get_footer_panel());
     }
     configure_header_button_sets();
+    initialize_asset_filters();
+    layout_filter_header();
 }
 
 DevControls::~DevControls() = default;
@@ -202,6 +208,7 @@ void DevControls::set_map_info(nlohmann::json* map_info, MapLightPanel::SaveCall
         map_mode_ui_->set_light_save_callback(map_light_save_cb_);
         map_mode_ui_->set_map_context(map_info_json_, map_path_);
     }
+    rebuild_map_asset_spawn_ids();
     configure_header_button_sets();
 }
 
@@ -223,6 +230,7 @@ void DevControls::set_screen_dimensions(int width, int height) {
     if (map_mode_ui_) map_mode_ui_->set_screen_dimensions(width, height);
     SDL_Rect bounds{0, 0, screen_w_, screen_h_};
     if (camera_panel_) camera_panel_->set_work_area(bounds);
+    layout_filter_header();
 }
 
 void DevControls::set_current_room(Room* room) {
@@ -231,6 +239,7 @@ void DevControls::set_current_room(Room* room) {
     if (room_editor_) {
         room_editor_->set_current_room(room);
     }
+    rebuild_current_room_spawn_ids();
 }
 
 void DevControls::set_rooms(std::vector<Room*>* rooms) {
@@ -239,9 +248,11 @@ void DevControls::set_rooms(std::vector<Room*>* rooms) {
 }
 
 void DevControls::set_map_context(nlohmann::json* map_info, const std::string& map_path) {
+    map_info_json_ = map_info;
     map_path_ = map_path;
     if (map_mode_ui_) map_mode_ui_->set_map_context(map_info, map_path);
     if (map_mode_ui_) map_mode_ui_->set_light_save_callback(map_light_save_cb_);
+    rebuild_map_asset_spawn_ids();
     configure_header_button_sets();
 }
 
@@ -256,6 +267,9 @@ bool DevControls::is_pointer_over_dev_ui(int x, int y) const {
         return true;
     }
     if (regenerate_popup_ && regenerate_popup_->visible() && regenerate_popup_->is_point_inside(x, y)) {
+        return true;
+    }
+    if (enabled_ && is_point_inside_filter_header(x, y)) {
         return true;
     }
     return false;
@@ -325,6 +339,9 @@ void DevControls::set_enabled(bool enabled) {
     }
 
     sync_header_button_states();
+    if (!enabled_) {
+        reset_asset_filters();
+    }
 }
 
 void DevControls::update(const Input& input) {
@@ -384,6 +401,17 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
     SDL_Point pointer{0, 0};
     if (pointer_event || wheel_event) {
         pointer = event_point(event);
+    }
+
+    if (pointer_event) {
+        if (handle_filter_header_event(event)) {
+            if (input_) input_->consumeEvent(event);
+            return;
+        }
+    }
+    if ((pointer_event || wheel_event) && enabled_ && is_point_inside_filter_header(pointer.x, pointer.y)) {
+        if (input_) input_->consumeEvent(event);
+        return;
     }
 
     if (regenerate_popup_ && regenerate_popup_->visible()) {
@@ -490,6 +518,7 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
     if (regenerate_popup_ && regenerate_popup_->visible()) {
         regenerate_popup_->render(renderer);
     }
+    render_filter_header(renderer);
 }
 
 void DevControls::toggle_asset_library() {
@@ -983,6 +1012,234 @@ Room* DevControls::choose_room(Room* preferred) const {
         }
     }
     return nullptr;
+}
+
+void DevControls::filter_active_assets(std::vector<Asset*>& assets) const {
+    if (!enabled_) return;
+    assets.erase(
+        std::remove_if(assets.begin(), assets.end(),
+                       [this](Asset* asset) { return !passes_asset_filters(asset); }),
+        assets.end());
+}
+
+void DevControls::initialize_asset_filters() {
+    filter_entries_.clear();
+    filter_state_.type_filters.clear();
+
+    FilterEntry map_entry;
+    map_entry.id = "map_assets";
+    map_entry.kind = FilterKind::MapAssets;
+    map_entry.checkbox = std::make_unique<DMCheckbox>("Map Assets", true);
+    filter_entries_.push_back(std::move(map_entry));
+
+    FilterEntry room_entry;
+    room_entry.id = "current_room";
+    room_entry.kind = FilterKind::CurrentRoom;
+    room_entry.checkbox = std::make_unique<DMCheckbox>("Current Room", true);
+    filter_entries_.push_back(std::move(room_entry));
+
+    for (const std::string& type : asset_types::all_as_strings()) {
+        FilterEntry entry;
+        entry.id = type;
+        entry.kind = FilterKind::Type;
+        entry.checkbox = std::make_unique<DMCheckbox>(format_type_label(type), true);
+        filter_state_.type_filters[type] = true;
+        filter_entries_.push_back(std::move(entry));
+    }
+
+    filter_state_.map_assets = true;
+    filter_state_.current_room = true;
+    sync_filter_state_from_ui();
+}
+
+void DevControls::layout_filter_header() {
+    const int margin = DMSpacing::item_gap();
+    const int height = DMCheckbox::height();
+    const int width = 180;
+
+    if (screen_w_ <= 0) {
+        filter_header_rect_ = SDL_Rect{0, 0, 0, 0};
+        return;
+    }
+
+    filter_header_rect_ = SDL_Rect{0, 0, screen_w_, height + margin * 2};
+    int x = margin;
+    int y = margin;
+    for (auto& entry : filter_entries_) {
+        if (!entry.checkbox) continue;
+        SDL_Rect rect{x, y, width, height};
+        entry.checkbox->set_rect(rect);
+        x += width + margin;
+    }
+}
+
+void DevControls::render_filter_header(SDL_Renderer* renderer) const {
+    if (!enabled_ || !renderer) return;
+    if (filter_header_rect_.w <= 0 || filter_header_rect_.h <= 0) return;
+
+    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+    SDL_Color bg = DMStyles::PanelBG();
+    SDL_Rect rect = filter_header_rect_;
+    SDL_SetRenderDrawColor(renderer, bg.r, bg.g, bg.b, 220);
+    SDL_RenderFillRect(renderer, &rect);
+
+    SDL_Color border = DMStyles::Border();
+    SDL_SetRenderDrawColor(renderer, border.r, border.g, border.b, border.a);
+    SDL_RenderDrawRect(renderer, &rect);
+
+    for (const auto& entry : filter_entries_) {
+        if (entry.checkbox) {
+            entry.checkbox->render(renderer);
+        }
+    }
+}
+
+bool DevControls::handle_filter_header_event(const SDL_Event& event) {
+    if (!enabled_) return false;
+    bool used = false;
+    for (auto& entry : filter_entries_) {
+        if (!entry.checkbox) continue;
+        if (entry.checkbox->handle_event(event)) {
+            used = true;
+        }
+    }
+    if (used) {
+        sync_filter_state_from_ui();
+    }
+    return used;
+}
+
+bool DevControls::is_point_inside_filter_header(int x, int y) const {
+    if (!enabled_) return false;
+    SDL_Point p{x, y};
+    return SDL_PointInRect(&p, &filter_header_rect_);
+}
+
+void DevControls::sync_filter_state_from_ui() {
+    for (auto& entry : filter_entries_) {
+        if (!entry.checkbox) continue;
+        const bool value = entry.checkbox->value();
+        switch (entry.kind) {
+        case FilterKind::MapAssets:
+            filter_state_.map_assets = value;
+            break;
+        case FilterKind::CurrentRoom:
+            filter_state_.current_room = value;
+            break;
+        case FilterKind::Type:
+            filter_state_.type_filters[entry.id] = value;
+            break;
+        }
+    }
+}
+
+void DevControls::reset_asset_filters() {
+    for (auto& entry : filter_entries_) {
+        if (entry.checkbox) {
+            entry.checkbox->set_value(true);
+        }
+    }
+    filter_state_.map_assets = true;
+    filter_state_.current_room = true;
+    for (auto& kv : filter_state_.type_filters) {
+        kv.second = true;
+    }
+    sync_filter_state_from_ui();
+}
+
+void DevControls::rebuild_map_asset_spawn_ids() {
+    map_asset_spawn_ids_.clear();
+    if (!map_info_json_) return;
+    try {
+        auto it = map_info_json_->find("map_assets_data");
+        if (it != map_info_json_->end()) {
+            collect_spawn_ids(*it, map_asset_spawn_ids_);
+        }
+    } catch (...) {
+    }
+}
+
+void DevControls::rebuild_current_room_spawn_ids() {
+    current_room_spawn_ids_.clear();
+    if (!current_room_) return;
+    try {
+        nlohmann::json& data = current_room_->assets_data();
+        collect_spawn_ids(data, current_room_spawn_ids_);
+    } catch (...) {
+    }
+}
+
+void DevControls::collect_spawn_ids(const nlohmann::json& node, std::unordered_set<std::string>& out) {
+    if (node.is_object()) {
+        auto sg = node.find("spawn_groups");
+        if (sg != node.end() && sg->is_array()) {
+            for (const auto& entry : *sg) {
+                if (!entry.is_object()) continue;
+                auto id_it = entry.find("spawn_id");
+                if (id_it != entry.end() && id_it->is_string()) {
+                    out.insert(id_it->get<std::string>());
+                }
+            }
+        }
+        for (const auto& item : node.items()) {
+            if (item.key() == "spawn_groups") continue;
+            collect_spawn_ids(item.value(), out);
+        }
+    } else if (node.is_array()) {
+        for (const auto& element : node) {
+            collect_spawn_ids(element, out);
+        }
+    }
+}
+
+bool DevControls::type_filter_enabled(const std::string& type) const {
+    auto it = filter_state_.type_filters.find(type);
+    if (it == filter_state_.type_filters.end()) {
+        return true;
+    }
+    return it->second;
+}
+
+bool DevControls::is_map_asset(const Asset* asset) const {
+    if (!asset) return false;
+    if (asset->spawn_id.empty()) return false;
+    return map_asset_spawn_ids_.find(asset->spawn_id) != map_asset_spawn_ids_.end();
+}
+
+bool DevControls::is_current_room_asset(const Asset* asset, bool already_map_asset) const {
+    if (!asset || already_map_asset) return false;
+    if (!asset->info) return false;
+    std::string type = asset_types::canonicalize(asset->info->type);
+    if (type == asset_types::boundary) return false;
+    if (asset->spawn_id.empty()) return false;
+    return current_room_spawn_ids_.find(asset->spawn_id) != current_room_spawn_ids_.end();
+}
+
+bool DevControls::passes_asset_filters(Asset* asset) const {
+    if (!asset) return false;
+    if (!asset->info) return true;
+    std::string type = asset_types::canonicalize(asset->info->type);
+    if (!type_filter_enabled(type)) {
+        return false;
+    }
+    const bool map_asset = is_map_asset(asset);
+    if (map_asset && !filter_state_.map_assets) {
+        return false;
+    }
+    if (is_current_room_asset(asset, map_asset) && !filter_state_.current_room) {
+        return false;
+    }
+    return true;
+}
+
+std::string DevControls::format_type_label(const std::string& type) const {
+    if (type.empty()) return std::string{};
+    std::string label = type;
+    for (char& ch : label) {
+        ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+    }
+    label[0] = static_cast<char>(std::toupper(static_cast<unsigned char>(label[0])));
+    return label;
 }
 
 

@@ -2,6 +2,7 @@
 
 #include "../DockableCollapsible.hpp"
 #include "widgets.hpp"
+#include "dev_mode/asset_info_sections.hpp"
 #include <nlohmann/json.hpp>
 #include <algorithm>
 #include <filesystem>
@@ -14,10 +15,14 @@
 #include <vector>
 
 // Collapsible section to edit tags and anti-tags for an asset.
+class AssetInfoUI;
+
 class Section_Tags : public DockableCollapsible {
   public:
     Section_Tags() : DockableCollapsible("Tags", false) { set_visible_height(480); }
     ~Section_Tags() override = default;
+
+    void set_ui(AssetInfoUI* ui) { ui_ = ui; }
 
     void build() override {
       widgets_.clear();
@@ -292,6 +297,14 @@ class Section_Tags : public DockableCollapsible {
         rows.push_back({ w.get() });
         widgets_.push_back(std::move(w));
       }
+      if (!apply_btn_) {
+        apply_btn_ = std::make_unique<DMButton>("Apply Settings", &DMStyles::AccentButton(), 180, DMButton::height());
+      }
+      auto w_apply = std::make_unique<ButtonWidget>(apply_btn_.get(), [this]() {
+        if (ui_) ui_->request_apply_section(AssetInfoSectionId::Tags);
+      });
+      rows.push_back({ w_apply.get() });
+      widgets_.push_back(std::move(w_apply));
       set_rows(rows);
     }
 
@@ -303,5 +316,7 @@ class Section_Tags : public DockableCollapsible {
     std::unordered_map<std::string, std::unordered_set<std::string>> asset_anti_tag_map_;
     std::unordered_map<std::string, int> tag_usage_;
     std::vector<std::unique_ptr<Widget>> widgets_;
+    std::unique_ptr<DMButton> apply_btn_;
+    AssetInfoUI* ui_ = nullptr; // non-owning
 };
 

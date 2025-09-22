@@ -6,6 +6,7 @@
 #include "asset/asset_types.hpp"
 #include "render/camera.hpp"
 #include "widgets.hpp"
+#include "dev_mode/asset_info_sections.hpp"
 #include <algorithm>
 #include <cmath>
 #include <memory>
@@ -36,6 +37,7 @@ class Section_BasicInfo : public DockableCollapsible {
     std::unique_ptr<DMSlider>    s_scale_pct_;
     std::unique_ptr<DMSlider>    s_zindex_;
     std::unique_ptr<DMCheckbox>  c_flipable_;
+    std::unique_ptr<DMButton>    apply_btn_;
     std::vector<std::unique_ptr<Widget>> widgets_;
     std::vector<std::string> type_options_;
     AssetInfoUI* ui_ = nullptr; // non-owning
@@ -84,6 +86,15 @@ inline void Section_BasicInfo::build() {
     auto w_flip = std::make_unique<CheckboxWidget>(c_flipable_.get());
     rows.push_back({ w_flip.get() });
     widgets_.push_back(std::move(w_flip));
+
+    if (!apply_btn_) {
+        apply_btn_ = std::make_unique<DMButton>("Apply Settings", &DMStyles::AccentButton(), 180, DMButton::height());
+    }
+    auto w_apply = std::make_unique<ButtonWidget>(apply_btn_.get(), [this]() {
+        if (ui_) ui_->request_apply_section(AssetInfoSectionId::BasicInfo);
+    });
+    rows.push_back({ w_apply.get() });
+    widgets_.push_back(std::move(w_apply));
 
     set_rows(rows);
 }

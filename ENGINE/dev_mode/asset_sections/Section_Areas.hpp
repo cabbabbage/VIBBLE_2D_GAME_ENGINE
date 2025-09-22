@@ -2,11 +2,14 @@
 
 #include "../DockableCollapsible.hpp"
 #include "widgets.hpp"
+#include "dev_mode/asset_info_sections.hpp"
 #include <functional>
 #include <vector>
 #include <algorithm>
 
 // Areas list + create/open editor
+class AssetInfoUI;
+
 class Section_Areas : public DockableCollapsible {
   public:
     Section_Areas()
@@ -14,10 +17,14 @@ class Section_Areas : public DockableCollapsible {
 
     void set_open_editor_callback(std::function<void(const std::string&)> cb) { open_editor_ = std::move(cb); }
     void set_delete_callback(std::function<void(const std::string&)> cb) { on_delete_ = std::move(cb); }
+    void set_ui(AssetInfoUI* ui) { ui_ = ui; }
 
     void build() override {
       rebuild_buttons();
       b_create_ = std::make_unique<DMButton>("New Area", &DMStyles::CreateButton(), 220, DMButton::height());
+      if (!apply_btn_) {
+        apply_btn_ = std::make_unique<DMButton>("Apply Settings", &DMStyles::AccentButton(), 180, DMButton::height());
+      }
       rebuild_rows();
     }
 
@@ -88,15 +95,24 @@ class Section_Areas : public DockableCollapsible {
         rows.push_back({ bw.get() });
         widgets_.push_back(std::move(bw));
       }
+      if (apply_btn_) {
+        auto aw = std::make_unique<ButtonWidget>(apply_btn_.get(), [this]() {
+          if (ui_) ui_->request_apply_section(AssetInfoSectionId::Areas);
+        });
+        rows.push_back({ aw.get() });
+        widgets_.push_back(std::move(aw));
+      }
       set_rows(rows);
     }
 
     std::vector<std::unique_ptr<DMButton>> buttons_;
     std::vector<std::unique_ptr<DMButton>> del_buttons_;
     std::unique_ptr<DMButton>  b_create_;
+    std::unique_ptr<DMButton>  apply_btn_;
     std::function<void(const std::string&)> open_editor_;
     std::function<void(const std::string&)> on_delete_;
     std::unique_ptr<DMButton> dummy_del_{};
     std::vector<std::unique_ptr<Widget>> widgets_;
+    AssetInfoUI* ui_ = nullptr; // non-owning
 };
 

@@ -77,10 +77,12 @@ Assets::Assets(std::vector<Asset>&& loaded,
         if (a) a->set_assets(this);
     }
 
+    update_filtered_active_assets();
+
     dev_controls_ = new DevControls(this, screen_width_, screen_height_);
     if (dev_controls_) {
         dev_controls_->set_player(player);
-        dev_controls_->set_active_assets(active_assets);
+        dev_controls_->set_active_assets(filtered_active_assets);
         dev_controls_->set_current_room(current_room_);
         dev_controls_->set_screen_dimensions(screen_width_, screen_height_);
         dev_controls_->set_rooms(&rooms_);
@@ -342,6 +344,14 @@ const std::vector<Room*>& Assets::rooms() const {
 void Assets::refresh_active_asset_lists() {
     active_assets  = activeManager.getActive();
     closest_assets = activeManager.getClosest();
+    update_filtered_active_assets();
+}
+
+void Assets::update_filtered_active_assets() {
+    filtered_active_assets = active_assets;
+    if (dev_controls_ && dev_mode) {
+        dev_controls_->filter_active_assets(filtered_active_assets);
+    }
 }
 
 void Assets::update_closest_assets(Asset* player, int max_count) {
@@ -353,9 +363,10 @@ void Assets::set_input(Input* m) {
     input = m;
 
     if (dev_controls_) {
+        update_filtered_active_assets();
         dev_controls_->set_input(m);
         dev_controls_->set_player(player);
-        dev_controls_->set_active_assets(active_assets);
+        dev_controls_->set_active_assets(filtered_active_assets);
         dev_controls_->set_current_room(current_room_);
         dev_controls_->set_screen_dimensions(screen_width, screen_height);
         dev_controls_->set_rooms(&rooms_);
@@ -420,7 +431,7 @@ void Assets::update(const Input& input,
 
     if (dev_controls_) {
         dev_controls_->set_player(player);
-        dev_controls_->set_active_assets(active_assets);
+        dev_controls_->set_active_assets(filtered_active_assets);
         dev_controls_->set_current_room(current_room_);
         dev_controls_->set_screen_dimensions(screen_width, screen_height);
         dev_controls_->set_rooms(&rooms_);
@@ -445,6 +456,7 @@ void Assets::set_dev_mode(bool mode) {
             dev_controls_->clear_selection();
         }
     }
+    update_filtered_active_assets();
 }
 
 void Assets::set_render_suppressed(bool suppressed) {
@@ -523,6 +535,7 @@ void Assets::addAsset(const std::string& name, SDL_Point g) {
     activeManager.updateClosestAssets(player, 3);
     active_assets  = activeManager.getActive();
     closest_assets = activeManager.getClosest();
+    update_filtered_active_assets();
 
     std::cout << "[Assets::addAsset] Active assets=" << active_assets.size()
               << ", Closest=" << closest_assets.size() << "\n";
@@ -583,6 +596,7 @@ Asset* Assets::spawn_asset(const std::string& name, SDL_Point world_pos) {
     activeManager.updateClosestAssets(player, 3);
     active_assets  = activeManager.getActive();
     closest_assets = activeManager.getClosest();
+    update_filtered_active_assets();
 
     std::cout << "[Assets::spawn_asset] Active assets=" << active_assets.size()
               << ", Closest=" << closest_assets.size() << "\n";

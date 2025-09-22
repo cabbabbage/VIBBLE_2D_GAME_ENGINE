@@ -113,10 +113,14 @@ void RenderAsset::render_shadow_moving_lights(Asset* a, const SDL_Rect& bounds, 
 void RenderAsset::render_shadow_orbital_lights(Asset* a, const SDL_Rect& bounds, Uint8 alpha) {
 	if (!a || !a->info) return;
 	const float angle = main_light_source_.get_angle();
-	for (auto& light : a->info->orbital_light_sources) {
-		if (!light.texture || light.x_radius <= 0 || light.y_radius <= 0) continue;
-                const float lx = a->pos.x + light.offset_x + std::cos(angle) * light.x_radius;
-                const float ly = a->pos.y + light.offset_y - std::sin(angle) * light.y_radius;
+        for (auto& light : a->info->orbital_light_sources) {
+                if (!light.texture || light.x_radius <= 0 || light.y_radius <= 0) continue;
+                const bool flipped = a->flipped;
+                const float offset_x = flipped ? -static_cast<float>(light.offset_x) : static_cast<float>(light.offset_x);
+                float orbit_x = std::cos(angle) * light.x_radius;
+                if (flipped) orbit_x = -orbit_x;
+                const float lx = static_cast<float>(a->pos.x) + offset_x + orbit_x;
+                const float ly = static_cast<float>(a->pos.y) + light.offset_y - std::sin(angle) * light.y_radius;
                 SDL_Point pnt = cam_.compute_render_effects(
                                         SDL_Point{static_cast<int>(std::round(lx)), static_cast<int>(std::round(ly))},
                                         0.0f,

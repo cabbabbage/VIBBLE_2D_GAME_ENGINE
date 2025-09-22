@@ -43,12 +43,15 @@ public:
                                    std::function<void(const std::string&)> on_delete,
                                    std::function<void()> on_add);
 private:
+    void load_from_json(const nlohmann::json& data);
     void apply_bounds_if_needed();
     void rebuild_rows();
+    std::string selected_geometry() const;
     SDL_Rect bounds_{0,0,0,0};
     SDL_Rect applied_bounds_{-1,-1,0,0};
     std::vector<std::string> room_geom_options_;
     Room* room_ = nullptr;
+    nlohmann::json loaded_json_;
     std::string room_name_;
     int room_w_min_ = 1000;
     int room_w_max_ = 10000;
@@ -86,6 +89,7 @@ private:
     std::function<void(const std::string&)> on_spawn_duplicate_;
     std::function<void(const std::string&)> on_spawn_delete_;
     std::function<void()> on_spawn_add_;
+    std::unique_ptr<Widget> room_section_label_;
     std::unique_ptr<Widget> spawn_groups_label_;
     std::vector<std::unique_ptr<SpawnGroupRow>> spawn_rows_;
     std::unique_ptr<DMButton> add_group_btn_;

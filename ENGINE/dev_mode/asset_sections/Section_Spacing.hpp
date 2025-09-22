@@ -2,16 +2,21 @@
 
 #include "../DockableCollapsible.hpp"
 #include "widgets.hpp"
+#include "dev_mode/asset_info_sections.hpp"
 #include <algorithm>
 #include <memory>
 #include <string>
 #include <functional>
 
 // Spacing configuration: distance sliders only
+class AssetInfoUI;
+
 class Section_Spacing : public DockableCollapsible {
   public:
     Section_Spacing() : DockableCollapsible("Spacing", false) {}
     ~Section_Spacing() override = default;
+
+    void set_ui(AssetInfoUI* ui) { ui_ = ui; }
 
     void build() override {
       widgets_.clear();
@@ -33,6 +38,15 @@ class Section_Spacing : public DockableCollapsible {
       auto w_all = std::make_unique<SliderWidget>(s_min_all_.get());
       rows.push_back({ w_all.get() });
       widgets_.push_back(std::move(w_all));
+
+      if (!apply_btn_) {
+        apply_btn_ = std::make_unique<DMButton>("Apply Settings", &DMStyles::AccentButton(), 180, DMButton::height());
+      }
+      auto w_apply = std::make_unique<ButtonWidget>(apply_btn_.get(), [this]() {
+        if (ui_) ui_->request_apply_section(AssetInfoSectionId::Spacing);
+      });
+      rows.push_back({ w_apply.get() });
+      widgets_.push_back(std::move(w_apply));
 
       set_rows(rows);
     }
@@ -66,4 +80,6 @@ class Section_Spacing : public DockableCollapsible {
     std::unique_ptr<DMSlider> s_min_same_;
     std::unique_ptr<DMSlider> s_min_all_;
     std::vector<std::unique_ptr<Widget>> widgets_;
+    std::unique_ptr<DMButton> apply_btn_;
+    AssetInfoUI* ui_ = nullptr; // non-owning
 };
