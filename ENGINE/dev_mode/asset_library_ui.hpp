@@ -54,9 +54,7 @@ private:
     Assets* assets_owner_ = nullptr;
     mutable std::unordered_set<std::string> preview_attempted_;
 
-    class Asset* drag_spawned_ = nullptr;
-    std::shared_ptr<AssetInfo> drag_info_{};
-    bool dragging_from_library_ = false;
+    std::shared_ptr<AssetInfo> pending_selection_{};
 
     bool showing_create_popup_ = false;
     std::string new_asset_name_;

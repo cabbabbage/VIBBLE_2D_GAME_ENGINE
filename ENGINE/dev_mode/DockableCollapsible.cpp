@@ -27,6 +27,7 @@ DockableCollapsible::DockableCollapsible(const std::string& title, bool floatabl
                                          int x, int y)
     : title_(title) {
     floatable_ = floatable;
+    close_button_enabled_ = floatable;
     show_header_ = true;
     scroll_enabled_ = floatable;
     available_height_override_ = -1;
@@ -49,6 +50,7 @@ void DockableCollapsible::set_visible(bool v) {
     if (!visible_) {
         dragging_ = false;
         FloatingDockableManager::instance().notify_panel_closed(this);
+        if (on_close_) on_close_();
     }
 }
 
@@ -75,10 +77,27 @@ void DockableCollapsible::set_show_header(bool show) {
         close_btn_.reset();
     } else {
         header_btn_ = std::make_unique<DMButton>(title_, &DMStyles::HeaderButton(), 260, DMButton::height());
-        if (floatable_) {
+        if (floatable_ || close_button_enabled_) {
             close_btn_ = std::make_unique<DMButton>("X", &DMStyles::HeaderButton(), DMButton::height(), DMButton::height());
         }
         update_header_button();
+    }
+    layout();
+}
+
+void DockableCollapsible::set_close_button_enabled(bool enabled) {
+    if (close_button_enabled_ == enabled) {
+        return;
+    }
+    close_button_enabled_ = enabled;
+    if (show_header_) {
+        if (floatable_ || close_button_enabled_) {
+            if (!close_btn_) {
+                close_btn_ = std::make_unique<DMButton>("X", &DMStyles::HeaderButton(), DMButton::height(), DMButton::height());
+            }
+        } else {
+            close_btn_.reset();
+        }
     }
     layout();
 }
@@ -146,7 +165,7 @@ bool DockableCollapsible::handle_event(const SDL_Event& e) {
         }
     }
 
-    if (close_btn_ && close_btn_->handle_event(e)) {
+    if ((floatable_ || close_button_enabled_) && close_btn_ && close_btn_->handle_event(e)) {
         if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
             set_visible(false);
         }
@@ -231,7 +250,7 @@ void DockableCollapsible::render(SDL_Renderer* r) const {
     SDL_RenderDrawRect(r, &rect_);
 
     if (header_btn_) header_btn_->render(r);
-    if (close_btn_ && floatable_) close_btn_->render(r);
+    if (close_btn_ && (floatable_ || close_button_enabled_)) close_btn_->render(r);
 
     if (floatable_ && show_header_) {
         draw_grip(r, handle_rect_, DMStyles::Border());
@@ -269,6 +288,7 @@ void DockableCollapsible::layout() {
 void DockableCollapsible::layout(int screen_w, int screen_h) const {
     header_rect_ = SDL_Rect{ rect_.x + padding_, rect_.y + padding_, 0, show_header_ ? DMButton::height() : 0 };
 
+    const bool show_close = floatable_ || close_button_enabled_;
     if (floatable_) {
         widest_row_w_ = 2 * padding_;
         for (const auto& row : rows_) {
@@ -279,19 +299,30 @@ void DockableCollapsible::layout(int screen_w, int screen_h) const {
         int base_w = std::max(std::max(260, widest_row_w_ - 2 * padding_), 100);
         if (show_header_) {
             header_rect_.w = base_w;
-            close_rect_ = SDL_Rect{ header_rect_.x + header_rect_.w - DMButton::height(), header_rect_.y,
-                                    DMButton::height(), DMButton::height() };
-            header_rect_.w -= DMButton::height();
+            if (show_close) {
+                close_rect_ = SDL_Rect{ header_rect_.x + header_rect_.w - DMButton::height(), header_rect_.y,
+                                        DMButton::height(), DMButton::height() };
+                header_rect_.w -= DMButton::height();
+            } else {
+                close_rect_ = SDL_Rect{0,0,0,0};
+            }
         } else {
             header_rect_.w = rect_.w > 0 ? rect_.w - 2 * padding_ : base_w;
             close_rect_ = SDL_Rect{0,0,0,0};
         }
     } else {
         header_rect_.w = rect_.w - 2 * padding_;
+        if (show_header_ && show_close) {
+            close_rect_ = SDL_Rect{ rect_.x + rect_.w - padding_ - DMButton::height(), rect_.y + padding_,
+                                    DMButton::height(), DMButton::height() };
+            header_rect_.w = std::max(0, header_rect_.w - DMButton::height());
+        } else {
+            close_rect_ = SDL_Rect{0,0,0,0};
+        }
     }
 
     if (header_btn_) header_btn_->set_rect(header_rect_);
-    if (close_btn_ && floatable_) close_btn_->set_rect(close_rect_);
+    if (close_btn_ && show_close) close_btn_->set_rect(close_rect_);
     update_header_button();
 
     if (floatable_ && show_header_) {
@@ -408,15 +439,24 @@ void DockableCollapsible::clamp_to_bounds(int screen_w, int screen_h) const {
     rect_.y = std::max(bounds.y, std::min(rect_.y, bounds.y + bounds.h - rect_.h));
     header_rect_.x = rect_.x + padding_;
     header_rect_.y = rect_.y + padding_;
+    const bool show_close = floatable_ || close_button_enabled_;
     if (floatable_ && show_header_) {
-        close_rect_ = SDL_Rect{ header_rect_.x + header_rect_.w - DMButton::height(), header_rect_.y,
+        if (show_close) {
+            close_rect_ = SDL_Rect{ header_rect_.x + header_rect_.w - DMButton::height(), header_rect_.y,
+                                    DMButton::height(), DMButton::height() };
+            header_rect_.w -= DMButton::height();
+        } else {
+            close_rect_ = SDL_Rect{0,0,0,0};
+        }
+    } else if (!floatable_ && show_header_ && show_close) {
+        close_rect_ = SDL_Rect{ rect_.x + rect_.w - padding_ - DMButton::height(), rect_.y + padding_,
                                 DMButton::height(), DMButton::height() };
-        header_rect_.w -= DMButton::height();
+        header_rect_.w = std::max(0, header_rect_.w - DMButton::height());
     } else {
         close_rect_ = SDL_Rect{0,0,0,0};
     }
     if (header_btn_) header_btn_->set_rect(header_rect_);
-    if (close_btn_ && floatable_) close_btn_->set_rect(close_rect_);
+    if (close_btn_ && show_close) close_btn_->set_rect(close_rect_);
     if (floatable_ && show_header_) {
         handle_rect_ = SDL_Rect{ header_rect_.x, header_rect_.y, std::min(24, header_rect_.w/6), header_rect_.h };
     }

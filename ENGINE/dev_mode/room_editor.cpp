@@ -109,6 +109,10 @@ void RoomEditor::set_screen_dimensions(int width, int height) {
 void RoomEditor::set_room_config_visible(bool visible) {
     ensure_room_configurator();
     if (!room_cfg_ui_) return;
+    if (visible && active_modal_ == ActiveModal::AssetInfo) {
+        pulse_active_modal_header();
+        return;
+    }
     if (visible) {
         if (spawn_groups_cfg_ui_) {
             spawn_groups_cfg_ui_->close_all();
@@ -117,6 +121,9 @@ void RoomEditor::set_room_config_visible(bool visible) {
         room_cfg_ui_->open(current_room_);
     }
     room_config_dock_open_ = visible;
+    if (!visible) {
+        room_config_fullscreen_visible_ = false;
+    }
     if (!visible && shared_fullscreen_panel_ && shared_fullscreen_panel_->expanded()) {
         shared_fullscreen_panel_->set_expanded(false);
     }
@@ -221,6 +228,39 @@ void RoomEditor::update_ui(const Input& input) {
     if (library_ui_ && library_ui_->is_visible()) {
         library_ui_->update(input, screen_w_, screen_h_, assets_->library(), *assets_);
     }
+
+    if (library_ui_) {
+        if (auto selected = library_ui_->consume_selection()) {
+            bool spawned_asset = false;
+            if (pending_spawn_world_pos_) {
+                SDL_Point world = *pending_spawn_world_pos_;
+                pending_spawn_world_pos_.reset();
+                if (current_room_ && assets_) {
+                    bool inside_room = !current_room_->room_area ||
+                                       current_room_->room_area->contains_point(world);
+                    if (inside_room) {
+                        if (Asset* spawned = assets_->spawn_asset(selected->name, world)) {
+                            finalize_asset_drag(spawned, selected);
+                            selected_assets_.clear();
+                            selected_assets_.push_back(spawned);
+                            hovered_asset_ = spawned;
+                            update_highlighted_assets();
+                            spawned_asset = true;
+                        }
+                    }
+                }
+            }
+            if (!spawned_asset) {
+                pending_spawn_world_pos_.reset();
+                open_asset_info_editor(selected);
+            }
+        }
+    }
+
+    if (pending_spawn_world_pos_ && (!library_ui_ || !library_ui_->is_visible())) {
+        pending_spawn_world_pos_.reset();
+    }
+
     if (room_cfg_ui_ && room_cfg_ui_->visible()) {
         room_cfg_ui_->update(input, screen_w_, screen_h_);
         update_spawn_groups_config_anchor();
@@ -478,6 +518,7 @@ void RoomEditor::open_asset_library() {
 
 void RoomEditor::close_asset_library() {
     if (library_ui_) library_ui_->close();
+    pending_spawn_world_pos_.reset();
 }
 
 bool RoomEditor::is_asset_library_open() const {
@@ -499,6 +540,9 @@ void RoomEditor::open_asset_info_editor(const std::shared_ptr<AssetInfo>& info) 
     if (spawn_groups_cfg_ui_) {
         spawn_groups_cfg_ui_->close_all();
         spawn_groups_cfg_ui_->close();
+    }
+    if (room_config_dock_open_ || room_config_fullscreen_visible_) {
+        set_room_config_visible(false);
     }
     if (!info_ui_) info_ui_ = std::make_unique<AssetInfoUI>();
     if (info_ui_) info_ui_->set_assets(assets_);
@@ -937,6 +981,11 @@ void RoomEditor::update_hover_state(Asset* hit) {
 void RoomEditor::handle_click(const Input& input) {
     if (!input_) return;
 
+    SDL_Point world_mouse{0, 0};
+    if (assets_) {
+        world_mouse = assets_->getView().screen_to_map(SDL_Point{input_->getX(), input_->getY()});
+    }
+
     if (input_->wasClicked(Input::RIGHT)) {
         if (rclick_buffer_frames_ > 0) {
             --rclick_buffer_frames_;
@@ -945,6 +994,18 @@ void RoomEditor::handle_click(const Input& input) {
         rclick_buffer_frames_ = 2;
         if (hovered_asset_) {
             open_asset_info_editor_for_asset(hovered_asset_);
+        } else {
+            bool inside_room = true;
+            if (current_room_ && current_room_->room_area) {
+                inside_room = current_room_->room_area->contains_point(world_mouse);
+            }
+            if (inside_room) {
+                pending_spawn_world_pos_ = world_mouse;
+                open_asset_library();
+                if (!is_asset_library_open()) {
+                    pending_spawn_world_pos_.reset();
+                }
+            }
         }
         return;
     } else {
@@ -1147,6 +1208,14 @@ void RoomEditor::ensure_room_configurator() {
     if (room_cfg_ui_) {
         room_cfg_ui_->set_bounds(room_config_bounds_);
         room_cfg_ui_->set_work_area(SDL_Rect{0, 0, screen_w_, screen_h_});
+        room_cfg_ui_->set_on_close([this]() {
+            room_config_dock_open_ = false;
+            room_config_fullscreen_visible_ = false;
+            if (shared_fullscreen_panel_ && shared_fullscreen_panel_->expanded()) {
+                shared_fullscreen_panel_->set_expanded(false);
+            }
+            update_spawn_groups_config_anchor();
+        });
         room_cfg_ui_->set_spawn_group_callbacks(
             [this](const std::string& spawn_id) {
                 if (active_modal_ == ActiveModal::AssetInfo) {
@@ -1202,7 +1271,8 @@ void RoomEditor::configure_shared_panel() {
     }
     shared_fullscreen_panel_->set_bounds(screen_w_, screen_h_);
     shared_fullscreen_panel_->set_on_toggle([this](bool expanded) {
-        room_config_fullscreen_visible_ = expanded;
+        const bool allow_fullscreen = room_config_dock_open_;
+        room_config_fullscreen_visible_ = expanded && allow_fullscreen;
         refresh_room_config_visibility();
         update_spawn_groups_config_anchor();
     });
@@ -1214,11 +1284,14 @@ void RoomEditor::configure_shared_panel() {
 void RoomEditor::update_room_config_layout_for_fullscreen() {
     const bool expanded = shared_fullscreen_panel_ && shared_fullscreen_panel_->visible() &&
                           shared_fullscreen_panel_->expanded();
-    if (room_config_fullscreen_visible_ != expanded) {
-        room_config_fullscreen_visible_ = expanded;
+    const bool should_show_fullscreen = expanded && room_config_dock_open_;
+    if (room_config_fullscreen_visible_ != should_show_fullscreen) {
+        room_config_fullscreen_visible_ = should_show_fullscreen;
         refresh_room_config_visibility();
-    } else if (expanded) {
+    } else if (should_show_fullscreen) {
         refresh_room_config_visibility();
+    } else if (!room_config_dock_open_ && room_config_fullscreen_visible_) {
+        room_config_fullscreen_visible_ = false;
     }
 }
 
@@ -1229,6 +1302,15 @@ void RoomEditor::refresh_room_config_visibility() {
     }
     DockableCollapsible* panel = room_cfg_ui_.get();
     if (!panel) {
+        return;
+    }
+    if (!room_config_dock_open_) {
+        room_config_fullscreen_visible_ = false;
+    }
+    if (active_modal_ == ActiveModal::AssetInfo) {
+        room_config_fullscreen_visible_ = false;
+        room_cfg_ui_->close();
+        update_spawn_groups_config_anchor();
         return;
     }
     const bool show = room_config_dock_open_ || room_config_fullscreen_visible_;

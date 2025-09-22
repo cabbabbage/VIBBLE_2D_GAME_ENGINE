@@ -220,6 +220,7 @@ private:
     int click_buffer_frames_ = 0;
     int rclick_buffer_frames_ = 0;
     int hover_miss_frames_ = 0;
+    std::optional<SDL_Point> pending_spawn_world_pos_{};
 
     double zoom_scale_factor_ = 1.1;
     PanAndZoom pan_zoom_;

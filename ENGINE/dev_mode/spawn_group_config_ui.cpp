@@ -279,13 +279,9 @@ SpawnGroupConfigUI::SpawnGroupConfigUI() {
             const SDL_Rect& r = panel_->rect();
             search_->set_position(r.x + r.w + 16, r.y);
         }
-        if (search_->visible()) {
-            search_->close();
-        } else {
-            search_->open([this](const std::string& value) {
-                add_candidate(value, 100);
-            });
-        }
+        search_->open([this](const std::string& value) {
+            add_candidate(value, 100);
+        });
     });
 
     ensure_search();

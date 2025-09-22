@@ -48,6 +48,9 @@ public:
     void set_show_header(bool show);
     bool show_header() const { return show_header_; }
 
+    // Allow showing a close button even when the panel is not floatable
+    void set_close_button_enabled(bool enabled);
+
     // Enable or disable scroll handling independent of floatable state.
     void set_scroll_enabled(bool enabled) { scroll_enabled_ = enabled; }
     bool scroll_enabled() const { return scroll_enabled_; }
@@ -83,6 +86,8 @@ public:
     int height() const { return rect_.h; }
     bool is_point_inside(int x, int y) const;
 
+    void set_on_close(std::function<void()> cb) { on_close_ = std::move(cb); }
+
 private:
     void layout(int screen_w, int screen_h) const;
     void update_header_button() const;
@@ -114,6 +119,7 @@ protected:
     bool visible_ = true;
     bool expanded_ = false;
     bool floatable_ = true;
+    bool close_button_enabled_ = false;
     bool dragging_ = false;
     SDL_Point drag_offset_{0,0};
     mutable int scroll_ = 0;
@@ -132,4 +138,6 @@ protected:
     bool show_header_ = true;
     bool scroll_enabled_ = true;
     int available_height_override_ = -1;
+
+    std::function<void()> on_close_{};
 };

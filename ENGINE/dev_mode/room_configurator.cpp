@@ -90,6 +90,7 @@ const nlohmann::json& empty_object() {
 
 RoomConfigurator::RoomConfigurator()
     : DockableCollapsible("Room Config", true, 0, 0) {
+    set_close_button_enabled(true);
     if (room_geom_options_.empty()) {
         room_geom_options_ = {"Square", "Circle"};
     }
@@ -160,10 +161,15 @@ void RoomConfigurator::load_from_json(const nlohmann::json& data) {
 
     room_name_ = loaded_json_.value("name", loaded_json_.value("room_name", std::string{}));
 
-    room_w_min_ = loaded_json_.value("min_width", loaded_json_.value("width_min", 1000));
-    room_w_max_ = loaded_json_.value("max_width", loaded_json_.value("width_max", 10000));
-    room_h_min_ = loaded_json_.value("min_height", loaded_json_.value("height_min", 1000));
-    room_h_max_ = loaded_json_.value("max_height", loaded_json_.value("height_max", 10000));
+    int fallback_w_min = room_w_min_;
+    int fallback_w_max = room_w_max_;
+    int fallback_h_min = room_h_min_;
+    int fallback_h_max = room_h_max_;
+
+    room_w_min_ = loaded_json_.value("min_width", loaded_json_.value("width_min", fallback_w_min));
+    room_w_max_ = loaded_json_.value("max_width", loaded_json_.value("width_max", std::max(fallback_w_min, fallback_w_max)));
+    room_h_min_ = loaded_json_.value("min_height", loaded_json_.value("height_min", fallback_h_min));
+    room_h_max_ = loaded_json_.value("max_height", loaded_json_.value("height_max", std::max(fallback_h_min, fallback_h_max)));
 
     if (room_w_min_ > room_w_max_) std::swap(room_w_min_, room_w_max_);
     if (room_h_min_ > room_h_max_) std::swap(room_h_min_, room_h_max_);

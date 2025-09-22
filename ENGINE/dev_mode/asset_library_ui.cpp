@@ -104,23 +104,18 @@ struct AssetLibraryUI::AssetTileWidget : public Widget {
     SDL_Rect rect_{0,0,0,0};
     bool hovered = false;
     bool pressed = false;
-    bool started_drag = false;
     bool right_pressed = false;
-    int  press_x = 0, press_y = 0;
     std::function<void(const std::shared_ptr<AssetInfo>&)> on_click;
     std::function<void(const std::shared_ptr<AssetInfo>&)> on_right_click;
-    std::function<void(const std::shared_ptr<AssetInfo>&)> on_begin_drag;
 
     explicit AssetTileWidget(AssetLibraryUI* owner_ptr,
                              std::shared_ptr<AssetInfo> i,
                              std::function<void(const std::shared_ptr<AssetInfo>&)> click,
-                             std::function<void(const std::shared_ptr<AssetInfo>&)> right_click,
-                             std::function<void(const std::shared_ptr<AssetInfo>&)> begin_drag)
+                             std::function<void(const std::shared_ptr<AssetInfo>&)> right_click)
         : owner(owner_ptr),
           info(std::move(i)),
           on_click(std::move(click)),
-          on_right_click(std::move(right_click)),
-          on_begin_drag(std::move(begin_drag)) {}
+          on_right_click(std::move(right_click)) {}
 
     void set_rect(const SDL_Rect& r) override { rect_ = r; }
     const SDL_Rect& rect() const override { return rect_; }
@@ -130,22 +125,11 @@ struct AssetLibraryUI::AssetTileWidget : public Widget {
         if (e.type == SDL_MOUSEMOTION) {
             SDL_Point p{ e.motion.x, e.motion.y };
             hovered = SDL_PointInRect(&p, &rect_);
-            if (pressed && !started_drag) {
-                int mdx = std::abs(e.motion.x - press_x);
-                int mdy = std::abs(e.motion.y - press_y);
-                if (mdx + mdy >= 6) {
-                    started_drag = true;
-                    if (on_begin_drag) on_begin_drag(info);
-                    return true;
-                }
-            }
         } else if (e.type == SDL_MOUSEBUTTONDOWN) {
             SDL_Point p{ e.button.x, e.button.y };
             if (!SDL_PointInRect(&p, &rect_)) return false;
             if (e.button.button == SDL_BUTTON_LEFT) {
                 pressed = true;
-                press_x = p.x;
-                press_y = p.y;
                 return true;
             }
             if (e.button.button == SDL_BUTTON_RIGHT) {
@@ -157,10 +141,8 @@ struct AssetLibraryUI::AssetTileWidget : public Widget {
             bool inside = SDL_PointInRect(&p, &rect_);
             if (e.button.button == SDL_BUTTON_LEFT) {
                 bool was = pressed;
-                bool dragged = started_drag;
                 pressed = false;
-                started_drag = false;
-                if (inside && was && !dragged) {
+                if (inside && was) {
                     if (on_click) on_click(info);
                     return true;
                 }
@@ -299,7 +281,7 @@ void AssetLibraryUI::close() {
 }
 
 bool AssetLibraryUI::is_input_blocking() const {
-    return (floating_ && floating_->is_expanded()) || dragging_from_library_ || showing_create_popup_;
+    return (floating_ && floating_->is_expanded()) || showing_create_popup_;
 }
 
 void AssetLibraryUI::ensure_items(AssetLibrary& lib) {
@@ -415,22 +397,17 @@ void AssetLibraryUI::update(const Input& input,
             tiles_.push_back(std::make_unique<AssetTileWidget>(
                 this,
                 inf,
-                [this, &assets](const std::shared_ptr<AssetInfo>& info){
-                    assets.open_asset_info_editor(info);
-                    close();
-                },
-                [this](const std::shared_ptr<AssetInfo>&){
+                [this](const std::shared_ptr<AssetInfo>& info){
+                    if (info) {
+                        pending_selection_ = info;
+                    }
                     close();
                 },
                 [this, &assets](const std::shared_ptr<AssetInfo>& info){
                     if (info) {
-                        (void)get_default_frame_texture(*info);
+                        assets.open_asset_info_editor(info);
                     }
-                    drag_info_ = info;
-                    int mx = 0, my = 0; SDL_GetMouseState(&mx, &my);
-                    SDL_Point wp = assets.getView().screen_to_map(SDL_Point{mx,my});
-                    drag_spawned_ = assets.spawn_asset(info->name, wp);
-                    dragging_from_library_ = drag_spawned_ != nullptr;
+                    close();
                 }
             ));
         }
@@ -444,20 +421,6 @@ void AssetLibraryUI::update(const Input& input,
         SDL_Point cursor{ input.getX(), input.getY() };
         if (SDL_PointInRect(&cursor, &floating_->rect())) {
             assets.clear_editor_selection();
-        }
-    }
-
-    if (dragging_from_library_ && drag_spawned_) {
-        int mx = input.getX();
-        int my = input.getY();
-        SDL_Point wp = assets.getView().screen_to_map(SDL_Point{mx,my});
-        drag_spawned_->pos.x = wp.x;
-        drag_spawned_->pos.y = wp.y;
-        if (!input.isDown(Input::LEFT)) {
-            dragging_from_library_ = false;
-            assets.finalize_asset_drag(drag_spawned_, drag_info_);
-            drag_spawned_ = nullptr;
-            drag_info_.reset();
         }
     }
 
@@ -576,12 +539,13 @@ void AssetLibraryUI::handle_event(const SDL_Event& e) {
 
 
 std::shared_ptr<AssetInfo> AssetLibraryUI::consume_selection() {
-    return nullptr;
+    auto selection = pending_selection_;
+    pending_selection_.reset();
+    return selection;
 }
 
 
 bool AssetLibraryUI::is_input_blocking_at(int mx, int my) const {
-    if (dragging_from_library_) return true;
     if (!floating_ || !floating_->is_visible() || !floating_->is_expanded())
         return false;
     SDL_Point p{ mx, my };
@@ -589,5 +553,5 @@ bool AssetLibraryUI::is_input_blocking_at(int mx, int my) const {
 }
 
 bool AssetLibraryUI::is_dragging_asset() const {
-    return dragging_from_library_;
+    return false;
 }
