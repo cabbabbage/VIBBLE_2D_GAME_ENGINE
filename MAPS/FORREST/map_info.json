@@ -480,7 +480,7 @@
           "display_name": "Grave_1",
           "dx": 45,
           "dy": -336,
-          "enforce_spacing": false,
+          "enforce_spacing": true,
           "max_number": 1,
           "min_number": 1,
           "origional_height": 2218,
