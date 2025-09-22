@@ -71,6 +71,7 @@ private:
     void rebuild_available_rooms();
     void refresh_canvas();
     void add_layer_internal();
+    void add_room_to_selected_layer();
     void delete_layer_internal(int index);
     void open_layer_config_internal(int index);
     void handle_layer_range_changed(int index, int min_rooms, int max_rooms);
@@ -88,6 +89,8 @@ private:
     void request_preview_regeneration();
     void regenerate_preview();
     double compute_map_radius_from_layers();
+    int append_layer_entry(const std::string& display_name = {});
+    bool ensure_child_room_exists(int parent_layer_index, const std::string& child, bool* layer_created = nullptr);
 
 private:
     struct PreviewNode {

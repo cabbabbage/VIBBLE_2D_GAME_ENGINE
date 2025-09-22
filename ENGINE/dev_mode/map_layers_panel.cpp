@@ -27,6 +27,7 @@ constexpr int kCanvasPreferredHeight = 320;
 constexpr int kCanvasPadding = 16;
 constexpr int kRoomRangeMaxDefault = 64;
 constexpr int kCandidateRangeMaxDefault = 128;
+constexpr int kLayerRadiusStepDefault = 512;
 constexpr double kTau = 6.28318530717958647692;
 
 SDL_Color hsv_to_rgb(double h, double s, double v) {
@@ -97,15 +98,21 @@ void draw_text(SDL_Renderer* r, const std::string& text, int x, int y, const DML
     TTF_CloseFont(font);
 }
 
-int sum_candidate_field(const nlohmann::json& layer, const char* key) {
-    if (!layer.is_object()) return 0;
-    const auto it = layer.find("rooms");
-    if (it == layer.end() || !it->is_array()) return 0;
-    int sum = 0;
-    for (const auto& entry : *it) {
-        sum += entry.value(key, 0);
+void draw_text_centered(SDL_Renderer* r, const std::string& text, int x, int y, const DMLabelStyle& style) {
+    if (!r) return;
+    TTF_Font* font = style.open_font();
+    if (!font) return;
+    SDL_Surface* surf = TTF_RenderUTF8_Blended(font, text.c_str(), style.color);
+    if (surf) {
+        SDL_Texture* tex = SDL_CreateTextureFromSurface(r, surf);
+        if (tex) {
+            SDL_Rect dst{ x - surf->w / 2, y - surf->h / 2, surf->w, surf->h };
+            SDL_RenderCopy(r, tex, nullptr, &dst);
+            SDL_DestroyTexture(tex);
+        }
+        SDL_FreeSurface(surf);
     }
-    return sum;
+    TTF_CloseFont(font);
 }
 
 struct RoomGeometry {
@@ -152,6 +159,48 @@ double room_extent_for_radius(const RoomGeometry& geom) {
     }
     double diag = std::sqrt(w * w + h * h);
     return diag * 0.5;
+}
+
+int compute_next_layer_radius(const nlohmann::json& layers) {
+    int max_radius = 0;
+    bool has_layer = false;
+    if (layers.is_array()) {
+        for (const auto& layer : layers) {
+            if (!layer.is_object()) continue;
+            has_layer = true;
+            max_radius = std::max(max_radius, layer.value("radius", 0));
+        }
+    }
+    if (!has_layer) return 0;
+    int step = std::max(kLayerRadiusStepDefault, max_radius / 3);
+    if (max_radius <= 0) {
+        return kLayerRadiusStepDefault;
+    }
+    return max_radius + step;
+}
+
+void clamp_layer_room_ranges(nlohmann::json& layer) {
+    if (!layer.is_object()) return;
+    int min_rooms = std::max(0, layer.value("min_rooms", 0));
+    int max_rooms = std::max(min_rooms, layer.value("max_rooms", min_rooms));
+    layer["min_rooms"] = std::min(min_rooms, kRoomRangeMaxDefault);
+    layer["max_rooms"] = std::min(std::max(min_rooms, max_rooms), kRoomRangeMaxDefault);
+
+    int min_sum = 0;
+    int max_sum = 0;
+    const auto rooms_it = layer.find("rooms");
+    if (rooms_it != layer.end() && rooms_it->is_array()) {
+        for (const auto& candidate : *rooms_it) {
+            min_sum += std::max(0, candidate.value("min_instances", 0));
+            max_sum += std::max(0, candidate.value("max_instances", 0));
+        }
+    }
+    if (min_sum > layer["min_rooms"].get<int>()) {
+        layer["min_rooms"] = min_sum;
+    }
+    if (layer["max_rooms"].get<int>() > max_sum && max_sum > 0) {
+        layer["max_rooms"] = std::max(layer["min_rooms"].get<int>(), max_sum);
+    }
 }
 
 struct PreviewRoomSpec {
@@ -412,6 +461,22 @@ void MapLayersPanel::LayerCanvasWidget::render(SDL_Renderer* renderer) const {
             }
             SDL_SetRenderDrawColor(renderer, 255, 255, 255, 60);
             SDL_RenderDrawPoint(renderer, center_pt.x, center_pt.y);
+
+            double extent_units = node->is_circle ? node->width * 0.5
+                                                  : 0.5 * std::sqrt(node->width * node->width + node->height * node->height);
+            double extent_pixels = std::max(2.0, extent_units * scale);
+            double length = std::sqrt(node->center.x * node->center.x + node->center.y * node->center.y);
+            double dir_x = 0.0;
+            double dir_y = -1.0;
+            if (length > 1e-3) {
+                dir_x = node->center.x / length;
+                dir_y = node->center.y / length;
+            }
+            double offset = extent_pixels + 14.0;
+            int label_x = static_cast<int>(std::lround(center_pt.x + dir_x * offset));
+            int label_y = static_cast<int>(std::lround(center_pt.y + dir_y * offset));
+            std::string room_label = node->name.empty() ? std::string("<room>") : node->name;
+            draw_text_centered(renderer, room_label, label_x, label_y, label_style);
         }
     }
 
@@ -446,6 +511,7 @@ private:
     MapLayersPanel* owner_ = nullptr;
     SDL_Rect rect_{0,0,0,0};
     std::unique_ptr<DMButton> add_button_;
+    std::unique_ptr<DMButton> new_room_button_;
     std::unique_ptr<DMButton> save_button_;
     std::unique_ptr<DMButton> reload_button_;
     std::unique_ptr<DMButton> config_button_;
@@ -458,6 +524,7 @@ private:
 MapLayersPanel::PanelSidebarWidget::PanelSidebarWidget(MapLayersPanel* owner)
     : owner_(owner) {
     add_button_ = std::make_unique<DMButton>("Add Layer", &DMStyles::CreateButton(), 140, DMButton::height());
+    new_room_button_ = std::make_unique<DMButton>("New Room", &DMStyles::CreateButton(), 140, DMButton::height());
     save_button_ = std::make_unique<DMButton>("Save", &DMStyles::HeaderButton(), 140, DMButton::height());
     reload_button_ = std::make_unique<DMButton>("Reload", &DMStyles::HeaderButton(), 140, DMButton::height());
     config_button_ = std::make_unique<DMButton>("Open Config", &DMStyles::HeaderButton(), 140, DMButton::height());
@@ -477,6 +544,8 @@ void MapLayersPanel::PanelSidebarWidget::set_rect(const SDL_Rect& r) {
     const int spacing = DMSpacing::item_gap();
     SDL_Rect button_rect{ rect_.x + spacing, rect_.y + spacing, rect_.w - spacing * 2, DMButton::height() };
     if (add_button_) add_button_->set_rect(button_rect);
+    button_rect.y += DMButton::height() + spacing;
+    if (new_room_button_) new_room_button_->set_rect(button_rect);
     button_rect.y += DMButton::height() + spacing;
     if (preview_button_) preview_button_->set_rect(button_rect);
     button_rect.y += DMButton::height() + spacing;
@@ -500,6 +569,7 @@ bool MapLayersPanel::PanelSidebarWidget::handle_event(const SDL_Event& e) {
         }
     };
     handle_btn(add_button_, [this]() { if (owner_) owner_->add_layer_internal(); });
+    handle_btn(new_room_button_, [this]() { if (owner_) owner_->add_room_to_selected_layer(); });
     handle_btn(preview_button_, [this]() {
         if (!owner_) return;
         owner_->request_preview_regeneration();
@@ -520,6 +590,7 @@ void MapLayersPanel::PanelSidebarWidget::render(SDL_Renderer* renderer) const {
     SDL_SetRenderDrawColor(renderer, 64, 64, 64, 255);
     SDL_RenderDrawRect(renderer, &rect_);
     if (add_button_) add_button_->render(renderer);
+    if (new_room_button_) new_room_button_->render(renderer);
     if (preview_button_) preview_button_->render(renderer);
     if (config_button_) config_button_->render(renderer);
     if (delete_button_) delete_button_->render(renderer);
@@ -1559,23 +1630,98 @@ void MapLayersPanel::refresh_canvas() {
     if (canvas_widget_) canvas_widget_->refresh();
 }
 
-void MapLayersPanel::add_layer_internal() {
-    if (!map_info_) return;
+int MapLayersPanel::append_layer_entry(const std::string& display_name) {
+    if (!map_info_) return -1;
     auto& arr = layers_array();
     const int idx = static_cast<int>(arr.size());
+    std::string name = display_name.empty() ? std::string("layer_") + std::to_string(idx) : display_name;
+    int radius = arr.empty() ? 0 : compute_next_layer_radius(arr);
     json new_layer = {
         {"level", idx},
-        {"name", std::string("layer_") + std::to_string(idx)},
-        {"radius", 0},
+        {"name", name},
+        {"radius", arr.empty() ? 0 : radius},
         {"min_rooms", 0},
         {"max_rooms", 0},
         {"rooms", json::array()}
     };
     arr.push_back(std::move(new_layer));
     ensure_layer_indices();
+    return idx;
+}
+
+void MapLayersPanel::add_layer_internal() {
+    if (!map_info_) return;
+    const int idx = append_layer_entry();
+    if (idx < 0) return;
     refresh_canvas();
     select_layer(idx);
     mark_dirty();
+}
+
+void MapLayersPanel::add_room_to_selected_layer() {
+    if (selected_layer_ < 0) return;
+    int layer_index = selected_layer_;
+    request_room_selection([this, layer_index](const std::string& room) {
+        this->handle_candidate_added(layer_index, room);
+    });
+}
+
+bool MapLayersPanel::ensure_child_room_exists(int parent_layer_index, const std::string& child, bool* layer_created) {
+    if (layer_created) *layer_created = false;
+    if (!map_info_) return false;
+    if (child.empty()) return false;
+
+    auto& arr = layers_array();
+    int child_layer_index = parent_layer_index + 1;
+    bool modified = false;
+    bool new_layer = false;
+
+    if (child_layer_index >= static_cast<int>(arr.size())) {
+        int appended_index = append_layer_entry();
+        if (appended_index < 0) return false;
+        child_layer_index = appended_index;
+        new_layer = true;
+        modified = true;
+    }
+
+    if (layer_created) *layer_created = new_layer;
+
+    json* child_layer = layer_at(child_layer_index);
+    if (!child_layer) return modified;
+    auto& rooms = (*child_layer)["rooms"];
+    if (!rooms.is_array()) {
+        rooms = json::array();
+        modified = true;
+    }
+
+    auto it = std::find_if(rooms.begin(), rooms.end(), [&](const json& entry) {
+        return entry.is_object() && entry.value("name", std::string()) == child;
+    });
+    if (it == rooms.end()) {
+        json candidate = {
+            {"name", child},
+            {"min_instances", 1},
+            {"max_instances", 1},
+            {"required_children", json::array()}
+        };
+        rooms.push_back(std::move(candidate));
+        modified = true;
+    } else {
+        json& entry = *it;
+        int min_inst = entry.value("min_instances", 0);
+        int max_inst = entry.value("max_instances", min_inst);
+        if (min_inst < 1) {
+            entry["min_instances"] = 1;
+            modified = true;
+        }
+        if (max_inst < 1) {
+            entry["max_instances"] = 1;
+            modified = true;
+        }
+    }
+
+    clamp_layer_room_ranges(*child_layer);
+    return modified;
 }
 
 void MapLayersPanel::delete_layer_internal(int index) {
@@ -1624,17 +1770,7 @@ void MapLayersPanel::handle_candidate_range_changed(int layer_index, int candida
     if (candidate_index < 0 || candidate_index >= static_cast<int>(rooms_it->size())) return;
     (*rooms_it)[candidate_index]["min_instances"] = min_instances;
     (*rooms_it)[candidate_index]["max_instances"] = max_instances;
-    int min_sum = sum_candidate_field(*layer, "min_instances");
-    int max_sum = sum_candidate_field(*layer, "max_instances");
-    int current_min = layer->value("min_rooms", 0);
-    int current_max = layer->value("max_rooms", 0);
-    if (min_sum > current_min) {
-        (*layer)["min_rooms"] = min_sum;
-    }
-    if (current_max > max_sum) {
-        current_max = max_sum;
-        (*layer)["max_rooms"] = std::max(min_sum, current_max);
-    }
+    clamp_layer_room_ranges(*layer);
     mark_dirty();
 }
 
@@ -1645,6 +1781,7 @@ void MapLayersPanel::handle_candidate_removed(int layer_index, int candidate_ind
     if (rooms_it == layer->end() || !rooms_it->is_array()) return;
     if (candidate_index < 0 || candidate_index >= static_cast<int>(rooms_it->size())) return;
     rooms_it->erase(rooms_it->begin() + candidate_index);
+    clamp_layer_room_ranges(*layer);
     mark_dirty();
     if (layer_config_) layer_config_->refresh();
 }
@@ -1658,9 +1795,19 @@ void MapLayersPanel::handle_candidate_child_added(int layer_index, int candidate
     auto& entry = (*rooms_it)[candidate_index];
     auto& children = entry["required_children"];
     if (!children.is_array()) children = json::array();
+    bool changed = false;
     if (std::find(children.begin(), children.end(), child) == children.end()) {
         children.push_back(child);
+        changed = true;
+    }
+    bool layer_created = false;
+    bool child_changed = ensure_child_room_exists(layer_index, child, &layer_created);
+    if (layer_created) {
+        refresh_canvas();
+    }
+    if (changed || child_changed) {
         mark_dirty();
+        if (layer_config_) layer_config_->refresh();
     }
 }
 
@@ -1687,11 +1834,12 @@ void MapLayersPanel::handle_candidate_added(int layer_index, const std::string& 
     if (!rooms.is_array()) rooms = json::array();
     json candidate = {
         {"name", room_name},
-        {"min_instances", 0},
-        {"max_instances", 0},
+        {"min_instances", 1},
+        {"max_instances", 1},
         {"required_children", json::array()}
     };
     rooms.push_back(std::move(candidate));
+    clamp_layer_room_ranges(*layer);
     mark_dirty();
     if (layer_config_) layer_config_->refresh();
 }

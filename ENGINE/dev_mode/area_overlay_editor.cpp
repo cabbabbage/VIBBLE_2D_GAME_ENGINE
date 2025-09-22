@@ -40,6 +40,35 @@ namespace {
         }
         return inside;
     }
+
+    static float compute_reference_screen_height(const Assets* assets, const camera& cam) {
+        if (!assets) return 1.0f;
+        Asset* player = assets->player;
+        if (!player) return 1.0f;
+
+        SDL_Texture* player_final = player->get_final_texture();
+        SDL_Texture* player_frame = player->get_current_frame();
+        int pw = player->cached_w;
+        int ph = player->cached_h;
+        if ((pw == 0 || ph == 0) && player_final) {
+            SDL_QueryTexture(player_final, nullptr, nullptr, &pw, &ph);
+        }
+        if ((pw == 0 || ph == 0) && player_frame) {
+            SDL_QueryTexture(player_frame, nullptr, nullptr, &pw, &ph);
+        }
+        if (pw != 0) player->cached_w = pw;
+        if (ph != 0) player->cached_h = ph;
+
+        float scale = cam.get_scale();
+        if (scale <= 0.0f) return 1.0f;
+        float inv_scale = 1.0f / scale;
+
+        if (ph > 0) {
+            float screen_h = static_cast<float>(ph) * inv_scale;
+            if (screen_h > 0.0f) return screen_h;
+        }
+        return 1.0f;
+    }
 }
 
 constexpr Uint8 kDefaultMaskAlpha = 128;
@@ -639,13 +668,46 @@ void AreaOverlayEditor::render(SDL_Renderer* r) {
         pending_mask_generation_ = false;
     }
 
-    float scale = assets_->getView().get_scale();
-    if (scale <= 0.00001f) scale = 0.00001f;
+    camera& cam = assets_->getView();
+    float scale = cam.get_scale();
+    if (scale <= 0.0f) return;
+    float inv_scale = 1.0f / scale;
+
+    if (mask_->w <= 0 || mask_->h <= 0) return;
+
+    float base_sw = static_cast<float>(mask_->w) * inv_scale;
+    float base_sh = static_cast<float>(mask_->h) * inv_scale;
+    if (base_sw <= 0.0f || base_sh <= 0.0f) return;
+
+    float reference_screen_height = compute_reference_screen_height(assets_, cam);
+    if (reference_screen_height <= 0.0f) reference_screen_height = 1.0f;
+
+    const camera::RenderEffects effects = cam.compute_render_effects(
+        SDL_Point{ asset_->pos.x, asset_->pos.y }, base_sh, reference_screen_height);
+
+    float scaled_sw = base_sw * effects.distance_scale;
+    float scaled_sh = base_sh * effects.distance_scale;
+    float final_visible_h = scaled_sh * effects.vertical_scale;
+
+    int sw = std::max(1, static_cast<int>(std::round(scaled_sw)));
+    int sh = std::max(1, static_cast<int>(std::round(final_visible_h)));
+    if (sw <= 0 || sh <= 0) return;
+
     int pivot_x = canvas_w_ / 2;
     int pivot_y = canvas_h_;
-    SDL_Point top_left_world{ asset_->pos.x + (mask_origin_x_ - pivot_x), asset_->pos.y + (mask_origin_y_ - pivot_y) };
-    SDL_Point tl = assets_->getView().map_to_screen(top_left_world);
-    SDL_Rect dst{ tl.x, tl.y, static_cast<int>(std::lround(mask_->w / scale)), static_cast<int>(std::lround(mask_->h / scale)) };
+    int offset_x_px = mask_origin_x_ - pivot_x;
+    int offset_y_px = mask_origin_y_ - pivot_y;
+
+    float offset_x_screen = static_cast<float>(offset_x_px) * inv_scale * effects.distance_scale;
+    float offset_y_screen = static_cast<float>(offset_y_px) * inv_scale * effects.distance_scale * effects.vertical_scale;
+
+    const SDL_Point& base = effects.screen_position;
+    SDL_Rect dst{
+        base.x + static_cast<int>(std::round(offset_x_screen)),
+        base.y + static_cast<int>(std::round(offset_y_screen)),
+        sw,
+        sh
+    };
 
     if (!mask_tex_) {
         mask_tex_ = SDL_CreateTexture(r, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_STREAMING, mask_->w, mask_->h);

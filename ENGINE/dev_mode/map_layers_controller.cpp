@@ -13,6 +13,25 @@ using nlohmann::json;
 namespace {
 constexpr int kDefaultRoomRangeMax = 64;
 constexpr int kDefaultCandidateRangeMax = 128;
+constexpr int kDefaultLayerRadiusStep = 512;
+
+int next_layer_radius(const json& layers) {
+    int max_radius = 0;
+    bool has_layer = false;
+    if (layers.is_array()) {
+        for (const auto& layer : layers) {
+            if (!layer.is_object()) continue;
+            has_layer = true;
+            max_radius = std::max(max_radius, layer.value("radius", 0));
+        }
+    }
+    if (!has_layer) return 0;
+    int step = std::max(kDefaultLayerRadiusStep, max_radius / 3);
+    if (max_radius <= 0) {
+        return kDefaultLayerRadiusStep;
+    }
+    return max_radius + step;
+}
 }
 
 void MapLayersController::bind(json* map_info, std::string map_path) {
@@ -129,10 +148,11 @@ int MapLayersController::create_layer(const std::string& display_name) {
     ensure_initialized();
     auto& arr = (*map_info_)["map_layers"];
     const int idx = static_cast<int>(arr.size());
+    int radius = arr.empty() ? 0 : next_layer_radius(arr);
     json layer = {
         {"level", idx},
         {"name", display_name.empty() ? std::string("layer_") + std::to_string(idx) : display_name},
-        {"radius", 0},
+        {"radius", arr.empty() ? 0 : radius},
         {"min_rooms", 0},
         {"max_rooms", 0},
         {"rooms", json::array()}
@@ -217,8 +237,8 @@ bool MapLayersController::add_candidate(int layer_index, const std::string& room
     if (room_name.empty()) return false;
     json candidate = {
         {"name", room_name},
-        {"min_instances", 0},
-        {"max_instances", 0},
+        {"min_instances", 1},
+        {"max_instances", 1},
         {"required_children", json::array()}
     };
     rooms.push_back(std::move(candidate));
@@ -269,12 +289,80 @@ bool MapLayersController::add_candidate_child(int layer_index, int candidate_ind
     auto& candidate = rooms[candidate_index];
     auto& required = candidate["required_children"];
     if (!required.is_array()) required = json::array();
-    auto it = std::find(required.begin(), required.end(), child_room);
-    if (it != required.end()) return false;
-    required.push_back(child_room);
-    dirty_ = true;
-    notify();
-    return true;
+    bool changed = false;
+    if (std::find(required.begin(), required.end(), child_room) == required.end()) {
+        required.push_back(child_room);
+        changed = true;
+    }
+
+    auto& layers_arr = (*map_info_)["map_layers"];
+    if (!layers_arr.is_array()) layers_arr = json::array();
+    int child_layer_index = layer_index + 1;
+    bool layer_added = false;
+
+    if (child_layer_index >= static_cast<int>(layers_arr.size())) {
+        int new_level = static_cast<int>(layers_arr.size());
+        int radius = layers_arr.empty() ? 0 : next_layer_radius(layers_arr);
+        json child_layer = {
+            {"level", new_level},
+            {"name", std::string("layer_") + std::to_string(new_level)},
+            {"radius", layers_arr.empty() ? 0 : radius},
+            {"min_rooms", 0},
+            {"max_rooms", 0},
+            {"rooms", json::array()}
+        };
+        layers_arr.push_back(std::move(child_layer));
+        child_layer_index = new_level;
+        layer_added = true;
+    }
+
+    json& child_layer = layers_arr[child_layer_index];
+    if (!child_layer.is_object()) child_layer = json::object();
+    auto& child_rooms = child_layer["rooms"];
+    if (!child_rooms.is_array()) child_rooms = json::array();
+
+    bool child_layer_changed = false;
+    auto child_it = std::find_if(child_rooms.begin(), child_rooms.end(), [&](const json& entry) {
+        return entry.is_object() && entry.value("name", std::string()) == child_room;
+    });
+    if (child_it == child_rooms.end()) {
+        json child_candidate = {
+            {"name", child_room},
+            {"min_instances", 1},
+            {"max_instances", 1},
+            {"required_children", json::array()}
+        };
+        child_rooms.push_back(std::move(child_candidate));
+        child_layer_changed = true;
+    } else {
+        json& entry = *child_it;
+        int min_inst = entry.value("min_instances", 0);
+        int max_inst = entry.value("max_instances", min_inst);
+        if (min_inst < 1) {
+            entry["min_instances"] = 1;
+            child_layer_changed = true;
+        }
+        if (max_inst < 1) {
+            entry["max_instances"] = 1;
+            child_layer_changed = true;
+        }
+    }
+
+    clamp_layer_ranges(child_layer);
+    if (layer_added) {
+        ensure_layer_indices();
+    }
+
+    if (child_layer_changed) changed = true;
+    if (layer_added) changed = true;
+
+    clamp_layer_ranges(*layer_json);
+
+    if (changed) {
+        dirty_ = true;
+        notify();
+    }
+    return changed;
 }
 
 bool MapLayersController::remove_candidate_child(int layer_index, int candidate_index, const std::string& child_room) {

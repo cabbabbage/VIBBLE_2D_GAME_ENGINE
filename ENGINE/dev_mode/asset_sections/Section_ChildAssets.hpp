@@ -84,7 +84,7 @@ public:
 
     void update(const Input& input, int screen_w, int screen_h) override {
         DockableCollapsible::update(input, screen_w, screen_h);
-        if (assets_cfg_.visible()) assets_cfg_.update(input);
+        if (assets_cfg_.visible()) assets_cfg_.update(input, screen_w, screen_h);
     }
 
     bool handle_event(const SDL_Event& e) override {
