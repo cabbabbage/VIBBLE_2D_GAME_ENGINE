@@ -7,6 +7,7 @@
 #include "dev_mode/full_screen_collapsible.hpp"
 #include "dev_mode/camera_ui.hpp"
 #include "dm_styles.hpp"
+#include "widgets.hpp"
 
 #include "asset/Asset.hpp"
 #include "core/AssetsManager.hpp"
@@ -38,9 +39,134 @@ SDL_Point event_point(const SDL_Event& e) {
     SDL_GetMouseState(&mx, &my);
     return SDL_Point{mx, my};
 }
+} // namespace
 
 constexpr double kMapModeEnterScale = 2.4;
-} // namespace
+
+class RegenerateRoomPopup {
+public:
+    using Callback = std::function<void(Room*)>;
+
+    void open(std::vector<std::pair<std::string, Room*>> rooms,
+              Callback cb,
+              int screen_w,
+              int screen_h) {
+        rooms_ = std::move(rooms);
+        callback_ = std::move(cb);
+        buttons_.clear();
+        if (rooms_.empty()) {
+            visible_ = false;
+            return;
+        }
+        const int margin = DMSpacing::item_gap();
+        const int button_height = DMButton::height();
+        const int spacing = DMSpacing::small_gap();
+        const int button_width = std::max(220, screen_w / 6);
+        rect_.w = button_width + margin * 2;
+        rect_.h = margin + static_cast<int>(rooms_.size()) * (button_height + spacing);
+        rect_.h += margin - spacing;
+        const int max_height = std::max(240, screen_h - DMSpacing::panel_padding() * 2);
+        if (rect_.h > max_height) {
+            rect_.h = max_height;
+        }
+        rect_.x = std::max(16, screen_w - rect_.w - DMSpacing::panel_padding());
+        rect_.y = DMSpacing::panel_padding();
+
+        buttons_.reserve(rooms_.size());
+        for (const auto& entry : rooms_) {
+            auto btn = std::make_unique<DMButton>(entry.first, &DMStyles::ListButton(), button_width, button_height);
+            buttons_.push_back(std::move(btn));
+        }
+        visible_ = true;
+    }
+
+    void close() {
+        visible_ = false;
+        callback_ = nullptr;
+    }
+
+    bool visible() const { return visible_; }
+
+    void update(const Input&) {}
+
+    bool handle_event(const SDL_Event& e) {
+        if (!visible_) return false;
+        if (e.type == SDL_KEYDOWN && e.key.keysym.sym == SDLK_ESCAPE) {
+            close();
+            return true;
+        }
+        if (e.type == SDL_MOUSEBUTTONDOWN || e.type == SDL_MOUSEBUTTONUP || e.type == SDL_MOUSEMOTION) {
+            SDL_Point p{ e.type == SDL_MOUSEMOTION ? e.motion.x : e.button.x,
+                         e.type == SDL_MOUSEMOTION ? e.motion.y : e.button.y };
+            if (!SDL_PointInRect(&p, &rect_)) {
+                if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
+                    close();
+                }
+                return false;
+            }
+        }
+
+        bool used = false;
+        SDL_Rect btn_rect{ rect_.x + DMSpacing::item_gap(),
+                           rect_.y + DMSpacing::item_gap(),
+                           rect_.w - DMSpacing::item_gap() * 2,
+                           DMButton::height() };
+        for (size_t i = 0; i < buttons_.size(); ++i) {
+            auto& btn = buttons_[i];
+            if (!btn) continue;
+            btn->set_rect(btn_rect);
+            if (btn->handle_event(e)) {
+                used = true;
+                if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
+                    if (callback_) callback_(rooms_[i].second);
+                    close();
+                }
+            }
+            btn_rect.y += DMButton::height() + DMSpacing::small_gap();
+            if (btn_rect.y + DMButton::height() > rect_.y + rect_.h - DMSpacing::item_gap()) {
+                break;
+            }
+        }
+        return used;
+    }
+
+    void render(SDL_Renderer* renderer) const {
+        if (!visible_ || !renderer) return;
+        SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+        SDL_Color bg = DMStyles::PanelBG();
+        SDL_SetRenderDrawColor(renderer, bg.r, bg.g, bg.b, bg.a);
+        SDL_RenderFillRect(renderer, &rect_);
+        SDL_Color border = DMStyles::Border();
+        SDL_SetRenderDrawColor(renderer, border.r, border.g, border.b, border.a);
+        SDL_RenderDrawRect(renderer, &rect_);
+        SDL_Rect btn_rect{ rect_.x + DMSpacing::item_gap(),
+                           rect_.y + DMSpacing::item_gap(),
+                           rect_.w - DMSpacing::item_gap() * 2,
+                           DMButton::height() };
+        for (const auto& btn : buttons_) {
+            if (!btn) continue;
+            btn->set_rect(btn_rect);
+            btn->render(renderer);
+            btn_rect.y += DMButton::height() + DMSpacing::small_gap();
+            if (btn_rect.y > rect_.y + rect_.h - DMSpacing::item_gap()) {
+                break;
+            }
+        }
+    }
+
+    bool is_point_inside(int x, int y) const {
+        if (!visible_) return false;
+        SDL_Point p{x, y};
+        return SDL_PointInRect(&p, &rect_);
+    }
+
+private:
+    bool visible_ = false;
+    SDL_Rect rect_{0, 0, 280, 320};
+    std::vector<std::pair<std::string, Room*>> rooms_;
+    std::vector<std::unique_ptr<DMButton>> buttons_;
+    Callback callback_;
+};
 
 DevControls::DevControls(Assets* owner, int screen_w, int screen_h)
     : assets_(owner),
@@ -116,6 +242,7 @@ void DevControls::set_screen_dimensions(int width, int height) {
 
 void DevControls::set_current_room(Room* room) {
     current_room_ = room;
+    if (regenerate_popup_) regenerate_popup_->close();
     if (room_editor_) {
         room_editor_->set_current_room(room);
     }
@@ -168,11 +295,17 @@ bool DevControls::is_pointer_over_dev_ui(int x, int y) const {
     if (map_mode_ui_ && map_mode_ui_->is_point_inside(x, y)) {
         return true;
     }
+    if (regenerate_popup_ && regenerate_popup_->visible() && regenerate_popup_->is_point_inside(x, y)) {
+        return true;
+    }
     return false;
 }
 
 bool DevControls::handle_shared_assets_event(const SDL_Event& event) {
     if (mode_ == Mode::MapEditor) {
+        return false;
+    }
+    if (is_modal_blocking_panels()) {
         return false;
     }
     if (!map_assets_panel_ || !map_assets_panel_->is_visible()) {
@@ -314,6 +447,9 @@ void DevControls::update(const Input& input) {
     if (camera_panel_) {
         camera_panel_->update(input, screen_w_, screen_h_);
     }
+    if (regenerate_popup_ && regenerate_popup_->visible()) {
+        regenerate_popup_->update(input);
+    }
     if (map_mode_ui_) {
         map_mode_ui_->update(input);
     }
@@ -337,6 +473,17 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
     SDL_Point pointer{0, 0};
     if (pointer_event || wheel_event) {
         pointer = event_point(event);
+    }
+
+    if (regenerate_popup_ && regenerate_popup_->visible()) {
+        if (regenerate_popup_->handle_event(event)) {
+            if (input_) input_->consumeEvent(event);
+            return;
+        }
+        if ((pointer_event || wheel_event) && regenerate_popup_->is_point_inside(pointer.x, pointer.y)) {
+            if (input_) input_->consumeEvent(event);
+            return;
+        }
     }
 
     const bool can_route_room_editor = (mode_ != Mode::MapEditor) && can_use_room_editor_ui() && room_editor_;
@@ -451,6 +598,9 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
     }
     if (camera_panel_ && camera_panel_->is_visible()) {
         camera_panel_->render(renderer);
+    }
+    if (regenerate_popup_ && regenerate_popup_->visible()) {
+        regenerate_popup_->render(renderer);
     }
 }
 
@@ -614,6 +764,11 @@ void DevControls::configure_header_button_sets() {
         }
         const bool currently_open = map_mode_ui_->is_assets_panel_visible();
         if (active && !currently_open) {
+            if (is_modal_blocking_panels()) {
+                pulse_modal_header();
+                sync_header_button_states();
+                return;
+            }
             map_mode_ui_->open_assets_panel();
         } else if (!active && currently_open) {
             map_mode_ui_->close_all_panels();
@@ -633,6 +788,11 @@ void DevControls::configure_header_button_sets() {
         }
         const bool currently_open = map_mode_ui_->is_light_panel_visible();
         if (active != currently_open) {
+            if (active && !currently_open && is_modal_blocking_panels()) {
+                pulse_modal_header();
+                sync_header_button_states();
+                return;
+            }
             map_mode_ui_->toggle_light_panel();
         }
         sync_header_button_states();
@@ -680,6 +840,26 @@ void DevControls::configure_header_button_sets() {
     };
     room_buttons.push_back(std::move(regenerate_btn));
 
+    MapModeUI::HeaderButtonConfig regenerate_other_btn;
+    regenerate_other_btn.id = "regenerate_other";
+    regenerate_other_btn.label = "Regenerate Other Room";
+    regenerate_other_btn.momentary = true;
+    regenerate_other_btn.style_override = &DMStyles::DeleteButton();
+    regenerate_other_btn.on_toggle = [this](bool) {
+        if (!room_editor_) {
+            sync_header_button_states();
+            return;
+        }
+        if (is_modal_blocking_panels()) {
+            pulse_modal_header();
+            sync_header_button_states();
+            return;
+        }
+        open_regenerate_room_popup();
+        sync_header_button_states();
+    };
+    room_buttons.push_back(std::move(regenerate_other_btn));
+
     map_mode_ui_->set_mode_button_sets(std::move(map_buttons), std::move(room_buttons));
     sync_header_button_states();
 }
@@ -700,6 +880,7 @@ void DevControls::sync_header_button_states() {
     map_mode_ui_->set_button_state(MapModeUI::HeaderMode::Room, "lights", lights_open);
     map_mode_ui_->set_button_state(MapModeUI::HeaderMode::Map, "lights", lights_open);
     map_mode_ui_->set_button_state(MapModeUI::HeaderMode::Room, "regenerate", false);
+    map_mode_ui_->set_button_state(MapModeUI::HeaderMode::Room, "regenerate_other", false);
 }
 
 void DevControls::close_all_floating_panels() {
@@ -717,6 +898,9 @@ void DevControls::close_all_floating_panels() {
     if (map_assets_panel_) {
         map_assets_panel_->close();
     }
+    if (regenerate_popup_) {
+        regenerate_popup_->close();
+    }
     sync_header_button_states();
 }
 
@@ -732,8 +916,76 @@ void DevControls::maybe_update_mode_from_zoom() {
     }
 }
 
+bool DevControls::is_modal_blocking_panels() const {
+    return room_editor_ && room_editor_->has_active_modal();
+}
+
+void DevControls::pulse_modal_header() {
+    if (room_editor_) {
+        room_editor_->pulse_active_modal_header();
+    }
+}
+
+void DevControls::open_regenerate_room_popup() {
+    if (!can_use_room_editor_ui()) return;
+    if (!rooms_ || rooms_->empty()) {
+        if (regenerate_popup_) regenerate_popup_->close();
+        return;
+    }
+
+    std::vector<std::pair<std::string, Room*>> entries;
+    entries.reserve(rooms_->size());
+    for (Room* room : *rooms_) {
+        if (!room || room == current_room_) continue;
+        if (!room->room_area) continue;
+        if (!room->type.empty()) {
+            std::string lowered = room->type;
+            std::transform(lowered.begin(), lowered.end(), lowered.begin(),
+                           [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+            if (lowered == "trail") {
+                continue;
+            }
+        }
+        std::string name = room->room_name.empty() ? std::string("<unnamed>") : room->room_name;
+        entries.emplace_back(std::move(name), room);
+    }
+
+    if (entries.empty()) {
+        if (regenerate_popup_) regenerate_popup_->close();
+        return;
+    }
+
+    std::sort(entries.begin(), entries.end(), [](const auto& a, const auto& b) {
+        std::string la = a.first;
+        std::string lb = b.first;
+        std::transform(la.begin(), la.end(), la.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+        std::transform(lb.begin(), lb.end(), lb.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+        return la < lb;
+    });
+
+    if (!regenerate_popup_) {
+        regenerate_popup_ = std::make_unique<RegenerateRoomPopup>();
+    }
+
+    regenerate_popup_->open(entries,
+                            [this](Room* selected) {
+                                if (!selected || !room_editor_) return;
+                                room_editor_->regenerate_room_from_template(selected);
+                                if (regenerate_popup_) regenerate_popup_->close();
+                                sync_header_button_states();
+                            },
+                            screen_w_,
+                            screen_h_);
+}
+
 void DevControls::toggle_map_light_panel() {
     if (!map_mode_ui_) {
+        return;
+    }
+    const bool currently_open = map_mode_ui_->is_light_panel_visible();
+    if (!currently_open && is_modal_blocking_panels()) {
+        pulse_modal_header();
+        sync_header_button_states();
         return;
     }
     map_mode_ui_->toggle_light_panel();
@@ -748,6 +1000,11 @@ void DevControls::toggle_camera_panel() {
     if (camera_panel_->is_visible()) {
         camera_panel_->close();
     } else {
+        if (is_modal_blocking_panels()) {
+            pulse_modal_header();
+            sync_header_button_states();
+            return;
+        }
         camera_panel_->open();
     }
     sync_header_button_states();
@@ -818,6 +1075,15 @@ bool DevControls::handle_map_mode_asset_click(const Input& input) {
 
     const int mx = input.getX();
     const int my = input.getY();
+    if (Room* trail = hit_test_trail(SDL_Point{mx, my})) {
+        map_click_cooldown_ = 2;
+        if (is_modal_blocking_panels()) {
+            pulse_modal_header();
+            return true;
+        }
+        map_mode_ui_->open_layers_panel();
+        return true;
+    }
     if (camera_panel_ && camera_panel_->is_visible() &&
         camera_panel_->is_point_inside(mx, my)) {
         return false;
@@ -827,9 +1093,33 @@ bool DevControls::handle_map_mode_asset_click(const Input& input) {
     Asset* hit = hit_test_boundary_asset(SDL_Point{mx, my});
     if (!hit) return false;
 
+    if (is_modal_blocking_panels()) {
+        pulse_modal_header();
+        map_click_cooldown_ = 2;
+        return true;
+    }
     map_mode_ui_->open_assets_panel();
     map_click_cooldown_ = 2;
     return true;
+}
+
+Room* DevControls::hit_test_trail(SDL_Point screen_point) const {
+    if (!assets_ || !rooms_) return nullptr;
+    const camera& cam = assets_->getView();
+    SDL_Point map_point = cam.screen_to_map(screen_point);
+    for (Room* room : *rooms_) {
+        if (!room || !room->room_area) continue;
+        if (room == current_room_) continue;
+        if (room->type.empty()) continue;
+        std::string type = room->type;
+        std::transform(type.begin(), type.end(), type.begin(),
+                       [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+        if (type != "trail") continue;
+        if (room->room_area->contains_point(map_point)) {
+            return room;
+        }
+    }
+    return nullptr;
 }
 
 Asset* DevControls::hit_test_boundary_asset(SDL_Point screen_point) const {

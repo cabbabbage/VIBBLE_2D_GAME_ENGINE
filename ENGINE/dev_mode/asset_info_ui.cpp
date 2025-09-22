@@ -20,7 +20,6 @@
 #include "asset_sections/Section_Spacing.hpp"
 #include "asset_sections/Section_ChildAssets.hpp"
 #include "widgets.hpp"
-#include <cstdlib>
 #include "core/AssetsManager.hpp"
 #include "animations_editor_panel.hpp"
 #include "asset/Asset.hpp"
@@ -199,6 +198,10 @@ void AssetInfoUI::update(const Input& input, int screen_w, int screen_h) {
         }
     }
 
+    if (pulse_frames_ > 0) {
+        --pulse_frames_;
+    }
+
     layout_widgets(screen_w, screen_h);
 
     if (animations_panel_ && animations_panel_->is_open())
@@ -215,6 +218,13 @@ void AssetInfoUI::render(SDL_Renderer* r, int screen_w, int screen_h) const {
     SDL_SetRenderDrawColor(r, bg.r, bg.g, bg.b, bg.a);
     SDL_RenderFillRect(r, &panel_);
 
+    if (pulse_frames_ > 0) {
+        Uint8 alpha = static_cast<Uint8>(std::clamp(pulse_frames_ * 12, 0, 180));
+        SDL_Rect header_rect{panel_.x, panel_.y, panel_.w, DMButton::height()};
+        SDL_SetRenderDrawColor(r, 255, 220, 64, alpha);
+        SDL_RenderFillRect(r, &header_rect);
+    }
+
     // Render sections (already offset by scroll_)
     for (auto& s : sections_) s->render(r);
 
@@ -225,6 +235,10 @@ void AssetInfoUI::render(SDL_Renderer* r, int screen_w, int screen_h) const {
         animations_panel_->render(r, screen_w, screen_h);
 
     last_renderer_ = r;
+}
+
+void AssetInfoUI::pulse_header() {
+    pulse_frames_ = 20;
 }
 
 

@@ -661,6 +661,11 @@ void MapModeUI::open_assets_panel() {
     set_active_panel(PanelType::Assets);
 }
 
+void MapModeUI::open_layers_panel() {
+    ensure_panels();
+    set_active_panel(PanelType::Layers);
+}
+
 
 void MapModeUI::toggle_light_panel() {
     ensure_panels();

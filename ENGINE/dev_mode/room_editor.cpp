@@ -112,6 +112,10 @@ void RoomEditor::set_map_assets_panel(MapAssetsPanel* panel) {
 }
 
 void RoomEditor::set_room_config_visible(bool visible) {
+    if (visible && active_modal_ == ActiveModal::AssetInfo) {
+        pulse_active_modal_header();
+        return;
+    }
     ensure_room_configurator();
     if (!room_cfg_ui_) return;
     if (visible) {
@@ -132,9 +136,14 @@ void RoomEditor::set_current_room(Room* room) {
 
     current_room_ = room;
     if (current_room_) {
-        ensure_spawn_groups_array(current_room_->assets_data());
+        auto& assets_json = current_room_->assets_data();
+        auto& groups = ensure_spawn_groups_array(assets_json);
+        if (sanitize_perimeter_spawn_groups(groups)) {
+            current_room_->save_assets_json();
+        }
     }
     rebuild_room_spawn_id_cache();
+    refresh_assets_config_ui();
 
     if (room_cfg_ui_) {
         room_cfg_ui_->open(current_room_);
@@ -149,6 +158,9 @@ void RoomEditor::set_current_room(Room* room) {
 void RoomEditor::set_enabled(bool enabled) {
     enabled_ = enabled;
     if (!assets_) return;
+    if (!enabled_) {
+        active_modal_ = ActiveModal::None;
+    }
 
     camera& cam = assets_->getView();
     if (enabled_) {
@@ -212,6 +224,7 @@ void RoomEditor::update_ui(const Input& input) {
     }
     if (room_cfg_ui_ && room_cfg_ui_->visible()) {
         room_cfg_ui_->update(input, screen_w_, screen_h_);
+        update_assets_config_anchor();
     }
 
     ensure_area_editor();
@@ -240,8 +253,11 @@ void RoomEditor::update_ui(const Input& input) {
 
     if (info_ui_ && info_ui_->is_visible()) {
         info_ui_->update(input, screen_w_, screen_h_);
+    } else if (active_modal_ == ActiveModal::AssetInfo) {
+        active_modal_ = ActiveModal::None;
     }
     if (assets_cfg_ui_) {
+        update_assets_config_anchor();
         assets_cfg_ui_->update(input);
     }
 
@@ -347,6 +363,46 @@ void RoomEditor::render_overlays(SDL_Renderer* renderer) {
     if (assets_cfg_ui_) {
         assets_cfg_ui_->render(renderer);
     }
+    if (renderer && assets_ && current_room_ && current_room_->room_area) {
+        auto overlay = compute_perimeter_overlay_for_drag();
+        if (!overlay) {
+            std::string spawn_id;
+            if (hovered_asset_ && hovered_asset_->spawn_method == "Perimeter" && !hovered_asset_->spawn_id.empty()) {
+                spawn_id = hovered_asset_->spawn_id;
+            } else {
+                for (Asset* asset : selected_assets_) {
+                    if (!asset) continue;
+                    if (asset->spawn_method == "Perimeter" && !asset->spawn_id.empty()) {
+                        spawn_id = asset->spawn_id;
+                        break;
+                    }
+                }
+            }
+            if (!spawn_id.empty()) {
+                overlay = compute_perimeter_overlay_for_spawn(spawn_id);
+            }
+        }
+        if (overlay && overlay->radius > 0.0) {
+            const camera& cam = assets_->getView();
+            const double scale = std::max(0.0001, static_cast<double>(cam.get_scale()));
+            const double inv_scale = 1.0 / scale;
+            SDL_Point screen_center = cam.map_to_screen(overlay->center);
+            int radius_px = static_cast<int>(std::lround(overlay->radius * inv_scale));
+            radius_px = std::max(1, radius_px);
+            SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+            SDL_SetRenderDrawColor(renderer, 32, 200, 255, 210);
+            const int segments = std::clamp(radius_px * 4, 64, 720);
+            for (int i = 0; i < segments; ++i) {
+                double angle = (static_cast<double>(i) / static_cast<double>(segments)) * 2.0 * M_PI;
+                int px = screen_center.x + static_cast<int>(std::lround(std::cos(angle) * static_cast<double>(radius_px)));
+                int py = screen_center.y + static_cast<int>(std::lround(std::sin(angle) * static_cast<double>(radius_px)));
+                SDL_RenderDrawPoint(renderer, px, py);
+            }
+            const int cross = std::max(6, radius_px / 4);
+            SDL_RenderDrawLine(renderer, screen_center.x - cross, screen_center.y, screen_center.x + cross, screen_center.y);
+            SDL_RenderDrawLine(renderer, screen_center.x, screen_center.y - cross, screen_center.x, screen_center.y + cross);
+        }
+    }
     if (room_cfg_ui_ && room_cfg_ui_->visible() && (!room_config_fullscreen_visible_ || room_config_dock_open_)) {
         room_cfg_ui_->render(renderer);
     }
@@ -365,11 +421,20 @@ void RoomEditor::render_room_config_fullscreen(SDL_Renderer* renderer) {
 
 void RoomEditor::toggle_asset_library() {
     if (!library_ui_) library_ui_ = std::make_unique<AssetLibraryUI>();
+    const bool currently_open = library_ui_ && library_ui_->is_visible();
+    if (!currently_open && active_modal_ == ActiveModal::AssetInfo) {
+        pulse_active_modal_header();
+        return;
+    }
     library_ui_->toggle();
 }
 
 void RoomEditor::open_asset_library() {
     if (!library_ui_) library_ui_ = std::make_unique<AssetLibraryUI>();
+    if (active_modal_ == ActiveModal::AssetInfo && (!library_ui_ || !library_ui_->is_visible())) {
+        pulse_active_modal_header();
+        return;
+    }
     library_ui_->open();
 }
 
@@ -398,6 +463,7 @@ void RoomEditor::open_asset_info_editor(const std::shared_ptr<AssetInfo>& info) 
         info_ui_->set_target_asset(nullptr);
         info_ui_->open();
     }
+    active_modal_ = ActiveModal::AssetInfo;
 }
 
 void RoomEditor::open_asset_info_editor_for_asset(Asset* asset) {
@@ -411,29 +477,36 @@ void RoomEditor::open_asset_info_editor_for_asset(Asset* asset) {
 
 void RoomEditor::close_asset_info_editor() {
     if (info_ui_) info_ui_->close();
+    if (active_modal_ == ActiveModal::AssetInfo) {
+        active_modal_ = ActiveModal::None;
+    }
 }
 
 bool RoomEditor::is_asset_info_editor_open() const {
     return info_ui_ && info_ui_->is_visible();
 }
 
+bool RoomEditor::has_active_modal() const {
+    return active_modal_ != ActiveModal::None;
+}
+
+void RoomEditor::pulse_active_modal_header() {
+    if (active_modal_ == ActiveModal::AssetInfo && info_ui_) {
+        info_ui_->pulse_header();
+    }
+}
+
 void RoomEditor::open_asset_config_for_asset(Asset* asset) {
     if (!asset) return;
-    if (!assets_cfg_ui_) {
-        assets_cfg_ui_ = std::make_unique<AssetsConfig>();
-        if (current_room_) {
-            auto& assets_json = ensure_spawn_groups_array(current_room_->assets_data());
-            auto on_change = [this]() {
-                if (current_room_) current_room_->save_assets_json();
-            };
-            auto on_entry = [this](const nlohmann::json& entry, const AssetConfigUI::ChangeSummary& summary) {
-                handle_spawn_config_change(entry, summary);
-            };
-            assets_cfg_ui_->load(assets_json, std::move(on_change), std::move(on_entry));
-        }
+    if (active_modal_ == ActiveModal::AssetInfo) {
+        pulse_active_modal_header();
+        return;
     }
+    ensure_assets_config_ui();
+    if (!assets_cfg_ui_) return;
     SDL_Point scr = assets_->getView().map_to_screen({asset->pos.x, asset->pos.y});
     std::string id = asset->spawn_id.empty() ? (asset->info ? asset->info->name : std::string{}) : asset->spawn_id;
+    update_assets_config_anchor();
     assets_cfg_ui_->open_asset_config(id, scr.x, scr.y);
 }
 
@@ -502,6 +575,68 @@ bool RoomEditor::is_room_config_open() const {
 
 void RoomEditor::regenerate_room() {
     regenerate_current_room();
+}
+
+void RoomEditor::regenerate_room_from_template(Room* source_room) {
+    if (!assets_ || !current_room_ || !source_room) return;
+    auto& target_root = current_room_->assets_data();
+    auto& target_groups = ensure_spawn_groups_array(target_root);
+    target_groups = nlohmann::json::array();
+
+    const nlohmann::json* source_groups = find_spawn_groups_array(source_room->assets_data());
+    if (source_groups) {
+        for (const auto& entry : *source_groups) {
+            if (!entry.is_object()) continue;
+            nlohmann::json clone = entry;
+            clone["spawn_id"] = generate_room_spawn_id();
+            target_groups.push_back(clone);
+        }
+    }
+
+    sanitize_perimeter_spawn_groups(target_groups);
+    current_room_->save_assets_json();
+
+    if (assets_) {
+        std::vector<Asset*> to_remove;
+        for (Asset* asset : assets_->all) {
+            if (!asset || asset->dead) continue;
+            if (asset == player_) continue;
+            bool belongs = asset_belongs_to_room(asset);
+            if (!belongs && current_room_->room_area) {
+                SDL_Point pos{asset->pos.x, asset->pos.y};
+                if (current_room_->room_area->contains_point(pos)) {
+                    belongs = true;
+                }
+            }
+            if (belongs) {
+                to_remove.push_back(asset);
+            }
+        }
+        for (Asset* asset : to_remove) {
+            purge_asset(asset);
+            auto& all = assets_->all;
+            all.erase(std::remove(all.begin(), all.end(), asset), all.end());
+            asset->Delete();
+        }
+    }
+
+    rebuild_room_spawn_id_cache();
+    refresh_assets_config_ui();
+    reopen_room_configurator();
+
+    if (const nlohmann::json* new_groups = find_spawn_groups_array(target_root)) {
+        for (const auto& entry : *new_groups) {
+            if (!entry.is_object()) continue;
+            respawn_spawn_group(entry);
+        }
+    }
+
+    if (assets_) {
+        assets_->refresh_active_asset_lists();
+        if (assets_->player) {
+            assets_->update_closest_assets(assets_->player, 3);
+        }
+    }
 }
 
 void RoomEditor::begin_area_edit_for_selected_asset(const std::string& area_name) {
@@ -822,8 +957,13 @@ void RoomEditor::update_highlighted_assets() {
 }
 
 bool RoomEditor::is_ui_blocking_input(int mx, int my) const {
-    if (info_ui_ && info_ui_->is_visible() && info_ui_->is_point_inside(mx, my)) {
-        return true;
+    if (info_ui_ && info_ui_->is_visible()) {
+        if (active_modal_ == ActiveModal::AssetInfo) {
+            return true;
+        }
+        if (info_ui_->is_point_inside(mx, my)) {
+            return true;
+        }
     }
     if (room_cfg_ui_ && room_cfg_ui_->visible() && room_cfg_ui_->is_point_inside(mx, my)) {
         return true;
@@ -917,6 +1057,37 @@ void RoomEditor::ensure_room_configurator() {
         if (auto* panel = room_cfg_ui_->panel()) {
             panel->set_work_area(SDL_Rect{0, 0, screen_w_, screen_h_});
         }
+        room_cfg_ui_->set_spawn_group_callbacks(
+            [this](const std::string& spawn_id) {
+                if (active_modal_ == ActiveModal::AssetInfo) {
+                    pulse_active_modal_header();
+                    return;
+                }
+                open_spawn_group_editor_by_id(spawn_id);
+            },
+            [this](const std::string& spawn_id) {
+                if (active_modal_ == ActiveModal::AssetInfo) {
+                    pulse_active_modal_header();
+                    return;
+                }
+                duplicate_spawn_group_internal(spawn_id);
+            },
+            [this](const std::string& spawn_id) {
+                delete_spawn_group_internal(spawn_id);
+            },
+            [this]() {
+                if (active_modal_ == ActiveModal::AssetInfo) {
+                    pulse_active_modal_header();
+                    return;
+                }
+                add_spawn_group_internal();
+            });
+    }
+}
+
+void RoomEditor::ensure_assets_config_ui() {
+    if (!assets_cfg_ui_) {
+        assets_cfg_ui_ = std::make_unique<AssetsConfig>();
     }
 }
 
@@ -1016,36 +1187,8 @@ void RoomEditor::handle_delete_shortcut(const Input& input) {
     const std::string& spawn_id = primary->spawn_id;
     if (spawn_id.empty()) return;
 
-    auto& root = current_room_->assets_data();
-    auto& arr = ensure_spawn_groups_array(root);
-
-    auto it = std::remove_if(arr.begin(), arr.end(), [&](nlohmann::json& entry) {
-        if (!entry.is_object()) return false;
-        if (!entry.contains("spawn_id") || !entry["spawn_id"].is_string()) return false;
-        return entry["spawn_id"].get<std::string>() == spawn_id;
-    });
-    bool removed_json = (it != arr.end());
-    arr.erase(it, arr.end());
-
-    std::vector<Asset*> to_delete;
-    for (Asset* asset : *active_assets_) {
-        if (!asset_belongs_to_room(asset)) continue;
-        if (asset->spawn_id == spawn_id) {
-            to_delete.push_back(asset);
-        }
-    }
-    for (Asset* asset : to_delete) {
-        purge_asset(asset);
-        if (asset) asset->Delete();
-    }
-
-    if (removed_json) {
-        current_room_->save_assets_json();
-        refresh_assets_config_ui();
-    }
-
+    delete_spawn_group_internal(spawn_id);
     clear_selection();
-    rebuild_room_spawn_id_cache();
 }
 
 void RoomEditor::begin_drag_session(const SDL_Point& world_mouse, bool ctrl_modifier) {
@@ -1072,6 +1215,11 @@ void RoomEditor::begin_drag_session(const SDL_Point& world_mouse, bool ctrl_modi
         drag_mode_ = DragMode::Percent;
     } else if (method == "Perimeter") {
         drag_mode_ = ctrl_modifier ? DragMode::PerimeterCenter : DragMode::Perimeter;
+    } else if (method == "Random") {
+        drag_mode_ = DragMode::None;
+        dragging_ = false;
+        drag_states_.clear();
+        return;
     } else {
         drag_mode_ = DragMode::Free;
     }
@@ -1371,18 +1519,293 @@ std::pair<int, int> RoomEditor::get_room_dimensions() const {
 }
 
 void RoomEditor::refresh_assets_config_ui() {
-    if (!assets_cfg_ui_ || !current_room_) return;
+    if (!current_room_) return;
+    ensure_assets_config_ui();
+    if (!assets_cfg_ui_) return;
     auto& root = current_room_->assets_data();
     auto& arr = ensure_spawn_groups_array(root);
     assets_cfg_ui_->close_all_asset_configs();
+    if (sanitize_perimeter_spawn_groups(arr) && current_room_) {
+        current_room_->save_assets_json();
+    }
     auto on_change = [this]() {
-        if (current_room_) current_room_->save_assets_json();
+        if (!current_room_) return;
+        auto& root = current_room_->assets_data();
+        auto& arr = ensure_spawn_groups_array(root);
+        const bool sanitized = sanitize_perimeter_spawn_groups(arr);
+        current_room_->save_assets_json();
+        if (sanitized) {
+            refresh_assets_config_ui();
+        }
     };
     auto on_entry = [this](const nlohmann::json& entry, const AssetConfigUI::ChangeSummary& summary) {
         handle_spawn_config_change(entry, summary);
     };
     assets_cfg_ui_->load(arr, std::move(on_change), std::move(on_entry));
+    update_assets_config_anchor();
     rebuild_room_spawn_id_cache();
+}
+
+void RoomEditor::update_assets_config_anchor() {
+    if (!assets_cfg_ui_ || !room_cfg_ui_) return;
+    if (auto* panel = room_cfg_ui_->panel()) {
+        const SDL_Rect& rect = panel->rect();
+        assets_cfg_ui_->set_anchor(rect.x + rect.w + 16, rect.y);
+    }
+}
+
+void RoomEditor::sanitize_perimeter_spawn_groups() {
+    if (!current_room_) return;
+    auto& root = current_room_->assets_data();
+    auto& arr = ensure_spawn_groups_array(root);
+    if (sanitize_perimeter_spawn_groups(arr)) {
+        current_room_->save_assets_json();
+    }
+}
+
+bool RoomEditor::sanitize_perimeter_spawn_groups(nlohmann::json& groups) {
+    if (!groups.is_array()) return false;
+    bool changed = false;
+    for (auto& entry : groups) {
+        if (!entry.is_object()) continue;
+        std::string method = entry.value("position", std::string{});
+        if (method == "Exact Position") {
+            method = "Exact";
+        }
+        if (method != "Perimeter") continue;
+        int min_number = entry.value("min_number", entry.value("max_number", 2));
+        int max_number = entry.value("max_number", min_number);
+        if (min_number < 2) {
+            min_number = 2;
+            changed = true;
+        }
+        if (max_number < 2) {
+            max_number = 2;
+            changed = true;
+        }
+        if (max_number < min_number) {
+            max_number = min_number;
+            changed = true;
+        }
+        if (!entry.contains("min_number") || !entry["min_number"].is_number_integer() ||
+            entry["min_number"].get<int>() != min_number) {
+            entry["min_number"] = min_number;
+        }
+        if (!entry.contains("max_number") || !entry["max_number"].is_number_integer() ||
+            entry["max_number"].get<int>() != max_number) {
+            entry["max_number"] = max_number;
+        }
+    }
+    return changed;
+}
+
+std::optional<RoomEditor::PerimeterOverlay> RoomEditor::compute_perimeter_overlay_for_drag() {
+    if (!dragging_) return std::nullopt;
+    if (drag_mode_ != DragMode::Perimeter && drag_mode_ != DragMode::PerimeterCenter) {
+        return std::nullopt;
+    }
+    Asset* reference = drag_anchor_asset_;
+    if (!reference) {
+        for (const auto& state : drag_states_) {
+            if (state.asset) {
+                reference = state.asset;
+                break;
+            }
+        }
+    }
+    if (!reference) return std::nullopt;
+    PerimeterOverlay overlay;
+    overlay.center = drag_perimeter_circle_center_;
+    double dx = static_cast<double>(reference->pos.x - overlay.center.x);
+    double dy = static_cast<double>(reference->pos.y - overlay.center.y);
+    overlay.radius = std::hypot(dx, dy);
+    if (!std::isfinite(overlay.radius) || overlay.radius <= 0.0) {
+        return std::nullopt;
+    }
+    return overlay;
+}
+
+std::optional<RoomEditor::PerimeterOverlay> RoomEditor::compute_perimeter_overlay_for_spawn(const std::string& spawn_id) {
+    if (spawn_id.empty() || !current_room_) return std::nullopt;
+    auto& root = current_room_->assets_data();
+    auto& arr = ensure_spawn_groups_array(root);
+    nlohmann::json* entry = nullptr;
+    for (auto& item : arr) {
+        if (!item.is_object()) continue;
+        if (item.contains("spawn_id") && item["spawn_id"].is_string() && item["spawn_id"].get<std::string>() == spawn_id) {
+            entry = &item;
+            break;
+        }
+    }
+    if (!entry) return std::nullopt;
+    std::string method = entry->value("position", std::string{});
+    if (method == "Exact Position") method = "Exact";
+    if (method != "Perimeter") return std::nullopt;
+    PerimeterOverlay overlay;
+    overlay.center = get_room_center();
+    auto [room_w, room_h] = get_room_dimensions();
+    int orig_w = std::max(1, entry->value("origional_width", room_w));
+    int orig_h = std::max(1, entry->value("origional_height", room_h));
+    int stored_dx = entry->value("dx", 0);
+    int stored_dy = entry->value("dy", 0);
+    double rx = (orig_w != 0) ? static_cast<double>(room_w) / static_cast<double>(orig_w) : 1.0;
+    double ry = (orig_h != 0) ? static_cast<double>(room_h) / static_cast<double>(orig_h) : 1.0;
+    overlay.center.x += static_cast<int>(std::lround(static_cast<double>(stored_dx) * rx));
+    overlay.center.y += static_cast<int>(std::lround(static_cast<double>(stored_dy) * ry));
+    overlay.radius = entry->value("radius", 0.0);
+    if (overlay.radius <= 0.0 && active_assets_) {
+        for (Asset* asset : *active_assets_) {
+            if (!asset || asset->spawn_id != spawn_id) continue;
+            double dx = static_cast<double>(asset->pos.x - overlay.center.x);
+            double dy = static_cast<double>(asset->pos.y - overlay.center.y);
+            overlay.radius = std::hypot(dx, dy);
+            if (overlay.radius > 0.0) break;
+        }
+    }
+    if (!std::isfinite(overlay.radius) || overlay.radius <= 0.0) {
+        return std::nullopt;
+    }
+    return overlay;
+}
+
+void RoomEditor::add_spawn_group_internal() {
+    if (!current_room_) return;
+    auto& root = current_room_->assets_data();
+    auto& arr = ensure_spawn_groups_array(root);
+    nlohmann::json entry;
+    entry["spawn_id"] = generate_room_spawn_id();
+    entry["display_name"] = "New Spawn";
+    entry["position"] = "Exact";
+    entry["min_number"] = 1;
+    entry["max_number"] = 1;
+    entry["check_overlap"] = false;
+    entry["enforce_spacing"] = false;
+    entry["chance_denominator"] = 100;
+    entry["candidates"] = nlohmann::json::array();
+    entry["candidates"].push_back({{"name", "null"}, {"chance", 0}});
+    arr.push_back(entry);
+    sanitize_perimeter_spawn_groups(arr);
+    current_room_->save_assets_json();
+    rebuild_room_spawn_id_cache();
+    refresh_assets_config_ui();
+    reopen_room_configurator();
+    open_spawn_group_editor_by_id(entry["spawn_id"].get<std::string>());
+}
+
+void RoomEditor::duplicate_spawn_group_internal(const std::string& spawn_id) {
+    if (!current_room_ || spawn_id.empty()) return;
+    auto& root = current_room_->assets_data();
+    auto& arr = ensure_spawn_groups_array(root);
+    nlohmann::json* original = nullptr;
+    for (auto& item : arr) {
+        if (!item.is_object()) continue;
+        if (item.contains("spawn_id") && item["spawn_id"].is_string() && item["spawn_id"].get<std::string>() == spawn_id) {
+            original = &item;
+            break;
+        }
+    }
+    if (!original) return;
+    nlohmann::json duplicate = *original;
+    std::string new_id = generate_room_spawn_id();
+    duplicate["spawn_id"] = new_id;
+    if (duplicate.contains("display_name") && duplicate["display_name"].is_string()) {
+        std::string name = duplicate["display_name"].get<std::string>();
+        duplicate["display_name"] = name + " Copy";
+    }
+    arr.push_back(duplicate);
+    if (sanitize_perimeter_spawn_groups(arr)) {
+        // ensure duplicate reflects sanitized values
+        for (auto& item : arr) {
+            if (!item.is_object()) continue;
+            if (item.contains("spawn_id") && item["spawn_id"].is_string() && item["spawn_id"].get<std::string>() == new_id) {
+                duplicate = item;
+                break;
+            }
+        }
+    }
+    current_room_->save_assets_json();
+    rebuild_room_spawn_id_cache();
+    refresh_assets_config_ui();
+    if (nlohmann::json* fresh = find_spawn_entry(new_id)) {
+        respawn_spawn_group(*fresh);
+    }
+    reopen_room_configurator();
+    open_spawn_group_editor_by_id(new_id);
+}
+
+void RoomEditor::delete_spawn_group_internal(const std::string& spawn_id) {
+    if (!remove_spawn_group_by_id(spawn_id)) {
+        return;
+    }
+    if (current_room_) {
+        current_room_->save_assets_json();
+    }
+    rebuild_room_spawn_id_cache();
+    refresh_assets_config_ui();
+    reopen_room_configurator();
+    if (assets_) {
+        assets_->refresh_active_asset_lists();
+        if (assets_->player) {
+            assets_->update_closest_assets(assets_->player, 3);
+        }
+    }
+}
+
+bool RoomEditor::remove_spawn_group_by_id(const std::string& spawn_id) {
+    if (spawn_id.empty() || !current_room_) return false;
+    auto& root = current_room_->assets_data();
+    auto& arr = ensure_spawn_groups_array(root);
+    auto it = std::remove_if(arr.begin(), arr.end(), [&](nlohmann::json& entry) {
+        if (!entry.is_object()) return false;
+        if (!entry.contains("spawn_id") || !entry["spawn_id"].is_string()) return false;
+        return entry["spawn_id"].get<std::string>() == spawn_id;
+    });
+    if (it == arr.end()) {
+        return false;
+    }
+    arr.erase(it, arr.end());
+
+    if (assets_) {
+        std::vector<Asset*> to_delete;
+        for (Asset* asset : assets_->all) {
+            if (!asset || asset->dead) continue;
+            if (asset == player_) continue;
+            if (asset->spawn_id == spawn_id) {
+                to_delete.push_back(asset);
+            }
+        }
+        for (Asset* asset : to_delete) {
+            purge_asset(asset);
+            auto& all = assets_->all;
+            all.erase(std::remove(all.begin(), all.end(), asset), all.end());
+            asset->Delete();
+        }
+    }
+    return true;
+}
+
+void RoomEditor::open_spawn_group_editor_by_id(const std::string& spawn_id) {
+    if (spawn_id.empty()) return;
+    ensure_assets_config_ui();
+    if (!assets_cfg_ui_) return;
+    update_assets_config_anchor();
+    int anchor_x = room_config_bounds_.x + room_config_bounds_.w + 16;
+    int anchor_y = room_config_bounds_.y;
+    if (room_cfg_ui_) {
+        if (auto* panel = room_cfg_ui_->panel()) {
+            const SDL_Rect& rect = panel->rect();
+            anchor_x = rect.x + rect.w + 16;
+            anchor_y = rect.y;
+        }
+    }
+    assets_cfg_ui_->open_asset_config(spawn_id, anchor_x, anchor_y);
+}
+
+void RoomEditor::reopen_room_configurator() {
+    if (!room_cfg_ui_) return;
+    if (room_config_dock_open_ || room_config_fullscreen_visible_) {
+        room_cfg_ui_->open(current_room_);
+    }
 }
 
 void RoomEditor::rebuild_room_spawn_id_cache() {

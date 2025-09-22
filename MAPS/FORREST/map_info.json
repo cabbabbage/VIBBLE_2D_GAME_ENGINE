@@ -223,7 +223,7 @@
     "update_interval": 18
   },
   "map_name": "FORREST",
-  "map_radius": 10628.639402604544,
+  "map_radius": 8610.0,
   "rooms_data": {
     "bar": {
       "edge_smoothness": 0,
@@ -411,8 +411,8 @@
           "dx": 159,
           "dy": -152,
           "enforce_spacing": false,
-          "max_number": 1,
-          "min_number": 1,
+          "max_number": 2,
+          "min_number": 2,
           "origional_height": 1824,
           "origional_width": 1824,
           "percentage_shift_from_center": 0,
@@ -511,6 +511,29 @@
           "origional_width": 2218,
           "position": "Center",
           "spawn_id": "spn-953cf9373e2b"
+        },
+        {
+          "candidates": [
+            {
+              "chance": 0,
+              "name": "null"
+            },
+            {
+              "chance": 100,
+              "name": "candle"
+            }
+          ],
+          "check_overlap": false,
+          "display_name": "candle",
+          "dx": -76,
+          "dy": -68,
+          "enforce_spacing": false,
+          "max_number": 1,
+          "min_number": 1,
+          "origional_height": 520,
+          "origional_width": 520,
+          "position": "Exact",
+          "spawn_id": "spn-440166410452"
         }
       ]
     }

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <SDL.h>
+#include <functional>
 #include <memory>
 #include <string>
 #include <vector>
@@ -10,13 +11,16 @@ class DockableCollapsible;
 class DropdownWidget;
 class RangeSliderWidget;
 class CheckboxWidget;
+class ButtonWidget;
 class Input;
 class DMDropdown;
 class DMRangeSlider;
 class DMCheckbox;
 class DMTextBox;
+class DMButton;
 class TextBoxWidget;
 class Room;
+class Widget;
 
 // Top-level room configuration panel with room settings and asset list
 class RoomConfigurator {
@@ -36,6 +40,10 @@ public:
     bool is_point_inside(int x, int y) const;
     DockableCollapsible* panel();
     const DockableCollapsible* panel() const;
+    void set_spawn_group_callbacks(std::function<void(const std::string&)> on_edit,
+                                   std::function<void(const std::string&)> on_duplicate,
+                                   std::function<void(const std::string&)> on_delete,
+                                   std::function<void()> on_add);
 private:
     void rebuild_rows();
     std::unique_ptr<DockableCollapsible> panel_;
@@ -65,4 +73,23 @@ private:
     std::unique_ptr<CheckboxWidget> room_inherit_cb_w_;
     std::unique_ptr<DMTextBox> room_name_lbl_;
     std::unique_ptr<TextBoxWidget> room_name_lbl_w_;
+    struct SpawnGroupRow {
+        std::string spawn_id;
+        std::unique_ptr<Widget> summary;
+        std::unique_ptr<DMButton> edit_btn;
+        std::unique_ptr<ButtonWidget> edit_btn_w;
+        std::unique_ptr<DMButton> duplicate_btn;
+        std::unique_ptr<ButtonWidget> duplicate_btn_w;
+        std::unique_ptr<DMButton> delete_btn;
+        std::unique_ptr<ButtonWidget> delete_btn_w;
+    };
+    std::function<void(const std::string&)> on_spawn_edit_;
+    std::function<void(const std::string&)> on_spawn_duplicate_;
+    std::function<void(const std::string&)> on_spawn_delete_;
+    std::function<void()> on_spawn_add_;
+    std::unique_ptr<Widget> spawn_groups_label_;
+    std::vector<std::unique_ptr<SpawnGroupRow>> spawn_rows_;
+    std::unique_ptr<DMButton> add_group_btn_;
+    std::unique_ptr<ButtonWidget> add_group_btn_w_;
+    std::unique_ptr<Widget> empty_spawn_label_;
 };

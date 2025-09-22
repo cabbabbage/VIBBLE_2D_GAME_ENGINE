@@ -27,6 +27,7 @@ class AssetInfoUI {
     void handle_event(const SDL_Event& e);
     void render(SDL_Renderer* r, int screen_w, int screen_h) const;
     void render_world_overlay(SDL_Renderer* r, const class camera& cam) const;
+    void pulse_header();
     void set_assets(Assets* a) { assets_ = a; }
     void set_target_asset(class Asset* a) { target_asset_ = a; }
     class Asset* get_target_asset() const { return target_asset_; }
@@ -57,4 +58,5 @@ class AssetInfoUI {
     // Footer button: Configure Animations
     mutable std::unique_ptr<class DMButton> configure_btn_;
     std::unique_ptr<AnimationsEditorPanel> animations_panel_;
+    int pulse_frames_ = 0;
 };

@@ -5,7 +5,65 @@
 #include "room/room.hpp"
 #include "widgets.hpp"
 
+#include <SDL_ttf.h>
+
 #include <algorithm>
+#include <sstream>
+
+namespace {
+class SpawnSummaryWidget : public Widget {
+public:
+    explicit SpawnSummaryWidget(std::string text) : text_(std::move(text)) {}
+
+    void set_text(std::string text) { text_ = std::move(text); }
+
+    void set_rect(const SDL_Rect& r) override { rect_ = r; }
+    const SDL_Rect& rect() const override { return rect_; }
+
+    int height_for_width(int /*w*/) const override {
+        const DMLabelStyle& st = DMStyles::Label();
+        return st.font_size + DMSpacing::small_gap() * 2;
+    }
+
+    bool handle_event(const SDL_Event&) override { return false; }
+
+    void render(SDL_Renderer* renderer) const override {
+        if (!renderer) return;
+        const DMLabelStyle& st = DMStyles::Label();
+        TTF_Font* font = st.open_font();
+        if (!font) return;
+        SDL_Surface* surf = TTF_RenderUTF8_Blended(font, text_.c_str(), st.color);
+        if (!surf) {
+            TTF_CloseFont(font);
+            return;
+        }
+        SDL_Texture* tex = SDL_CreateTextureFromSurface(renderer, surf);
+        SDL_Rect dst = rect_;
+        dst.h = surf->h;
+        dst.w = surf->w;
+        if (tex) {
+            SDL_RenderCopy(renderer, tex, nullptr, &dst);
+            SDL_DestroyTexture(tex);
+        }
+        SDL_FreeSurface(surf);
+        TTF_CloseFont(font);
+    }
+
+private:
+    SDL_Rect rect_{0, 0, 0, 0};
+    std::string text_;
+};
+
+std::string build_spawn_summary(int index, const nlohmann::json& entry) {
+    std::string display = entry.value("display_name", entry.value("name", entry.value("spawn_id", std::string{"Spawn"})));
+    std::string method = entry.value("position", std::string{"Unknown"});
+    int min_q = entry.value("min_number", entry.value("max_number", 0));
+    int max_q = entry.value("max_number", min_q);
+    std::ostringstream ss;
+    ss << index << ". " << display << " — " << method << " (" << min_q << "-" << max_q << ")";
+    return ss.str();
+}
+} // namespace
 
 RoomConfigurator::RoomConfigurator() {
     room_geom_options_ = {"Square", "Circle"};
@@ -80,6 +138,12 @@ bool RoomConfigurator::any_panel_visible() const {
 void RoomConfigurator::rebuild_rows() {
     if (!panel_) return;
     DockableCollapsible::Rows rows;
+    spawn_rows_.clear();
+    spawn_groups_label_.reset();
+    add_group_btn_.reset();
+    add_group_btn_w_.reset();
+    empty_spawn_label_.reset();
+
     room_name_lbl_ = std::make_unique<DMTextBox>("Room", room_name_);
     room_name_lbl_w_ = std::make_unique<TextBoxWidget>(room_name_lbl_.get());
     room_w_slider_ = std::make_unique<DMRangeSlider>(1000, 10000, room_w_min_, room_w_max_);
@@ -99,7 +163,77 @@ void RoomConfigurator::rebuild_rows() {
     rows.push_back({ room_h_slider_w_.get() });
     rows.push_back({ room_geom_dd_w_.get() });
     rows.push_back({ room_spawn_cb_w_.get(), room_boss_cb_w_.get(), room_inherit_cb_w_.get() });
-    panel_->set_cell_width(120);
+
+    spawn_groups_label_ = std::make_unique<SpawnSummaryWidget>("Spawn Groups");
+    if (spawn_groups_label_) {
+        rows.push_back({ spawn_groups_label_.get() });
+    }
+
+    bool have_groups = false;
+    if (room_) {
+        const auto& data = room_->assets_data();
+        if (data.contains("spawn_groups") && data["spawn_groups"].is_array()) {
+            const auto& groups = data["spawn_groups"];
+            int index = 1;
+            for (const auto& entry : groups) {
+                if (!entry.is_object()) continue;
+                std::string spawn_id = entry.value("spawn_id", std::string{});
+                if (spawn_id.empty()) continue;
+                auto row = std::make_unique<SpawnGroupRow>();
+                row->spawn_id = spawn_id;
+                row->summary = std::make_unique<SpawnSummaryWidget>(build_spawn_summary(index, entry));
+                row->edit_btn = std::make_unique<DMButton>("Edit", &DMStyles::HeaderButton(), 72, DMButton::height());
+                if (row->edit_btn) {
+                    std::string id_copy = spawn_id;
+                    row->edit_btn_w = std::make_unique<ButtonWidget>(row->edit_btn.get(), [this, id_copy]() {
+                        if (on_spawn_edit_) on_spawn_edit_(id_copy);
+                    });
+                }
+                row->duplicate_btn = std::make_unique<DMButton>("Duplicate", &DMStyles::HeaderButton(), 96, DMButton::height());
+                if (row->duplicate_btn) {
+                    std::string id_copy = spawn_id;
+                    row->duplicate_btn_w = std::make_unique<ButtonWidget>(row->duplicate_btn.get(), [this, id_copy]() {
+                        if (on_spawn_duplicate_) on_spawn_duplicate_(id_copy);
+                    });
+                }
+                row->delete_btn = std::make_unique<DMButton>("Delete", &DMStyles::DeleteButton(), 80, DMButton::height());
+                if (row->delete_btn) {
+                    std::string id_copy = spawn_id;
+                    row->delete_btn_w = std::make_unique<ButtonWidget>(row->delete_btn.get(), [this, id_copy]() {
+                        if (on_spawn_delete_) on_spawn_delete_(id_copy);
+                    });
+                }
+                DockableCollapsible::Row spawn_row;
+                if (row->summary) spawn_row.push_back(row->summary.get());
+                if (row->edit_btn_w) spawn_row.push_back(row->edit_btn_w.get());
+                if (row->duplicate_btn_w) spawn_row.push_back(row->duplicate_btn_w.get());
+                if (row->delete_btn_w) spawn_row.push_back(row->delete_btn_w.get());
+                if (!spawn_row.empty()) {
+                    rows.push_back(spawn_row);
+                    spawn_rows_.push_back(std::move(row));
+                    have_groups = true;
+                    ++index;
+                }
+            }
+        }
+    }
+
+    if (!have_groups) {
+        empty_spawn_label_ = std::make_unique<SpawnSummaryWidget>("No spawn groups configured.");
+        if (empty_spawn_label_) {
+            rows.push_back({ empty_spawn_label_.get() });
+        }
+    }
+
+    add_group_btn_ = std::make_unique<DMButton>("Add Group", &DMStyles::CreateButton(), 120, DMButton::height());
+    if (add_group_btn_) {
+        add_group_btn_w_ = std::make_unique<ButtonWidget>(add_group_btn_.get(), [this]() {
+            if (on_spawn_add_) on_spawn_add_();
+        });
+        rows.push_back({ add_group_btn_w_.get() });
+    }
+
+    panel_->set_cell_width(180);
     panel_->set_rows(rows);
 }
 
@@ -165,3 +299,13 @@ bool RoomConfigurator::is_point_inside(int x, int y) const {
 DockableCollapsible* RoomConfigurator::panel() { return panel_.get(); }
 
 const DockableCollapsible* RoomConfigurator::panel() const { return panel_.get(); }
+
+void RoomConfigurator::set_spawn_group_callbacks(std::function<void(const std::string&)> on_edit,
+                                                 std::function<void(const std::string&)> on_duplicate,
+                                                 std::function<void(const std::string&)> on_delete,
+                                                 std::function<void()> on_add) {
+    on_spawn_edit_ = std::move(on_edit);
+    on_spawn_duplicate_ = std::move(on_duplicate);
+    on_spawn_delete_ = std::move(on_delete);
+    on_spawn_add_ = std::move(on_add);
+}

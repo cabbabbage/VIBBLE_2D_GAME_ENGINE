@@ -440,9 +440,18 @@ void AssetConfigUI::rebuild_widgets() {
     exact_room_label_.reset();
 
     std::string method = spawn_methods_.empty() ? std::string{} : spawn_methods_[std::clamp(method_, 0, static_cast<int>(spawn_methods_.size() - 1))];
+    if (method == "Perimeter") {
+        if (min_number_ < 2) min_number_ = 2;
+        if (max_number_ < 2) max_number_ = 2;
+        if (max_number_ < min_number_) max_number_ = min_number_;
+    }
     if (!method_forces_single_quantity(method)) {
         int min_val = std::min(min_number_, max_number_);
         int max_val = std::max(min_number_, max_number_);
+        if (method == "Perimeter") {
+            min_val = std::max(min_val, 2);
+            max_val = std::max(max_val, 2);
+        }
         s_minmax_label_ = std::make_unique<LabelWidget>("Quantity (Min/Max)");
         s_minmax_ = std::make_unique<DMRangeSlider>(-100, 500, min_val, max_val);
         s_minmax_w_ = std::make_unique<RangeSliderWidget>(s_minmax_.get());
@@ -632,6 +641,22 @@ void AssetConfigUI::sync_json() {
     if (s_minmax_) {
         min_number_ = s_minmax_->min_value();
         max_number_ = s_minmax_->max_value();
+    }
+    if (method == "Perimeter") {
+        if (min_number_ < 2) {
+            min_number_ = 2;
+            if (s_minmax_) s_minmax_->set_min_value(min_number_);
+        }
+        if (max_number_ < 2) {
+            max_number_ = 2;
+        }
+        if (max_number_ < min_number_) {
+            max_number_ = min_number_;
+        }
+        if (s_minmax_) {
+            s_minmax_->set_min_value(min_number_);
+            s_minmax_->set_max_value(max_number_);
+        }
     }
     entry_["min_number"] = min_number_;
     entry_["max_number"] = max_number_;

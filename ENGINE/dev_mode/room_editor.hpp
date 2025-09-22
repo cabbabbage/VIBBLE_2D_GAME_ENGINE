@@ -4,6 +4,7 @@
 #include <functional>
 #include <memory>
 #include <nlohmann/json_fwd.hpp>
+#include <optional>
 #include <string>
 #include <unordered_set>
 #include <utility>
@@ -62,6 +63,8 @@ public:
     void open_asset_info_editor_for_asset(Asset* asset);
     void close_asset_info_editor();
     bool is_asset_info_editor_open() const;
+    bool has_active_modal() const;
+    void pulse_active_modal_header();
 
     void open_asset_config_for_asset(Asset* asset);
     void finalize_asset_drag(Asset* asset, const std::shared_ptr<AssetInfo>& info);
@@ -70,6 +73,7 @@ public:
     void close_room_config();
     bool is_room_config_open() const;
     void regenerate_room();
+    void regenerate_room_from_template(Room* source_room);
 
     void begin_area_edit_for_selected_asset(const std::string& area_name);
     void focus_camera_on_asset(Asset* asset, double zoom_factor = 0.8, int duration_steps = 25);
@@ -95,6 +99,16 @@ private:
         PerimeterCenter,
     };
 
+    enum class ActiveModal {
+        None,
+        AssetInfo,
+    };
+
+    struct PerimeterOverlay {
+        SDL_Point center{0, 0};
+        double radius = 0.0;
+    };
+
     struct DraggedAssetState {
         Asset* asset = nullptr;
         SDL_Point start_pos{0, 0};
@@ -114,6 +128,7 @@ private:
     void ensure_area_editor();
     void apply_area_editor_camera_override(bool enable);
     void ensure_room_configurator();
+    void ensure_assets_config_ui();
     void update_room_config_bounds();
     void begin_drag_session(const SDL_Point& world_mouse, bool ctrl_modifier);
     void update_drag_session(const SDL_Point& world_mouse);
@@ -124,6 +139,7 @@ private:
     SDL_Point get_room_center() const;
     std::pair<int, int> get_room_dimensions() const;
     void refresh_assets_config_ui();
+    void update_assets_config_anchor();
     void update_exact_json(nlohmann::json& entry, const Asset& asset, SDL_Point center, int width, int height);
     void update_percent_json(nlohmann::json& entry, const Asset& asset, SDL_Point center, int width, int height);
     void save_perimeter_json(nlohmann::json& entry, int dx, int dy, int orig_w, int orig_h, int radius);
@@ -136,6 +152,16 @@ private:
     void refresh_room_config_visibility();
     void update_room_config_layout_for_fullscreen();
     bool handle_shared_panel_event(const SDL_Event& event);
+    void sanitize_perimeter_spawn_groups();
+    bool sanitize_perimeter_spawn_groups(nlohmann::json& groups);
+    std::optional<PerimeterOverlay> compute_perimeter_overlay_for_drag();
+    std::optional<PerimeterOverlay> compute_perimeter_overlay_for_spawn(const std::string& spawn_id);
+    void add_spawn_group_internal();
+    void duplicate_spawn_group_internal(const std::string& spawn_id);
+    void delete_spawn_group_internal(const std::string& spawn_id);
+    bool remove_spawn_group_by_id(const std::string& spawn_id);
+    void open_spawn_group_editor_by_id(const std::string& spawn_id);
+    void reopen_room_configurator();
 
 private:
     Assets* assets_ = nullptr;
@@ -158,6 +184,7 @@ private:
     FullScreenCollapsible* shared_fullscreen_panel_ = nullptr;
     bool room_config_dock_open_ = false;
     bool room_config_fullscreen_visible_ = false;
+    ActiveModal active_modal_ = ActiveModal::None;
 
     bool last_area_editor_active_ = false;
     bool area_editor_override_active_ = false;
