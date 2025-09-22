@@ -346,7 +346,40 @@ bool RoomEditor::is_room_panel_blocking_point(int x, int y) const {
 }
 
 bool RoomEditor::is_room_ui_blocking_point(int x, int y) const {
-    return is_ui_blocking_input(x, y);
+    if (!enabled_) {
+        return false;
+    }
+
+    if (info_ui_ && info_ui_->is_visible() && info_ui_->is_point_inside(x, y)) {
+        return true;
+    }
+
+    if (room_cfg_ui_ && room_cfg_ui_->visible() && room_cfg_ui_->is_point_inside(x, y)) {
+        return true;
+    }
+
+    if (spawn_groups_cfg_ui_ && spawn_groups_cfg_ui_->any_visible() &&
+        spawn_groups_cfg_ui_->is_point_inside(x, y)) {
+        return true;
+    }
+
+    if (library_ui_ && library_ui_->is_visible() && library_ui_->is_input_blocking_at(x, y)) {
+        return true;
+    }
+
+    if (area_editor_ && area_editor_->is_active()) {
+        return true;
+    }
+
+    if (shared_fullscreen_panel_ && shared_fullscreen_panel_->visible() && room_config_fullscreen_visible_) {
+        SDL_Point p{x, y};
+        const SDL_Rect content = shared_fullscreen_panel_->content_rect();
+        if (SDL_PointInRect(&p, &content)) {
+            return true;
+        }
+    }
+
+    return false;
 }
 
 void RoomEditor::render_overlays(SDL_Renderer* renderer) {

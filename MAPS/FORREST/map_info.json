@@ -638,6 +638,7 @@
               "name": "Bench"
             }
           ],
+          "chance_denominator": 100,
           "check_overlap": false,
           "display_name": "Bench",
           "dx": -689,
@@ -898,6 +899,98 @@
           "min_number": 50,
           "position": "Random",
           "spawn_id": "spn-3d2aa7649187"
+        },
+        {
+          "candidates": [
+            {
+              "chance": 0,
+              "name": "null"
+            },
+            {
+              "chance": 100,
+              "name": "Barrel"
+            }
+          ],
+          "check_overlap": false,
+          "display_name": "Barrel",
+          "dx": -1563,
+          "dy": -848,
+          "enforce_spacing": false,
+          "max_number": 1,
+          "min_number": 1,
+          "origional_height": 2599,
+          "origional_width": 1775,
+          "position": "Exact",
+          "spawn_id": "spn-35fee3a72043"
+        },
+        {
+          "candidates": [
+            {
+              "chance": 0,
+              "name": "null"
+            },
+            {
+              "chance": 100,
+              "name": "Barrel"
+            }
+          ],
+          "check_overlap": false,
+          "display_name": "Barrel",
+          "dx": -1616,
+          "dy": -715,
+          "enforce_spacing": false,
+          "max_number": 1,
+          "min_number": 1,
+          "origional_height": 2599,
+          "origional_width": 1775,
+          "position": "Exact",
+          "spawn_id": "spn-233f0a2a3fef"
+        },
+        {
+          "candidates": [
+            {
+              "chance": 0,
+              "name": "null"
+            },
+            {
+              "chance": 100,
+              "name": "Bench"
+            }
+          ],
+          "check_overlap": false,
+          "display_name": "Bench",
+          "dx": -2215,
+          "dy": -293,
+          "enforce_spacing": false,
+          "max_number": 1,
+          "min_number": 1,
+          "origional_height": 2599,
+          "origional_width": 1775,
+          "position": "Exact",
+          "spawn_id": "spn-fc951d94b564"
+        },
+        {
+          "candidates": [
+            {
+              "chance": 0,
+              "name": "null"
+            },
+            {
+              "chance": 100,
+              "name": "Bench"
+            }
+          ],
+          "check_overlap": false,
+          "display_name": "Bench",
+          "dx": -1880,
+          "dy": -280,
+          "enforce_spacing": false,
+          "max_number": 1,
+          "min_number": 1,
+          "origional_height": 2599,
+          "origional_width": 1775,
+          "position": "Exact",
+          "spawn_id": "spn-bec35a597882"
         }
       ]
     }
