@@ -347,6 +347,10 @@ void Assets::refresh_active_asset_lists() {
     update_filtered_active_assets();
 }
 
+void Assets::refresh_filtered_active_assets() {
+    update_filtered_active_assets();
+}
+
 void Assets::update_filtered_active_assets() {
     filtered_active_assets = active_assets;
     if (dev_controls_ && dev_mode) {

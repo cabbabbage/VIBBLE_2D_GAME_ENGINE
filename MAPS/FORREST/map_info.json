@@ -143,7 +143,7 @@
     {
       "level": 2,
       "max_rooms": 7,
-      "min_rooms": 7,
+      "min_rooms": 3,
       "name": "layer_2",
       "radius": 7360,
       "rooms": [
@@ -480,7 +480,7 @@
           "display_name": "Grave_1",
           "dx": 45,
           "dy": -336,
-          "enforce_spacing": true,
+          "enforce_spacing": false,
           "max_number": 1,
           "min_number": 1,
           "origional_height": 2218,
@@ -534,52 +534,6 @@
           "origional_width": 2480,
           "position": "Exact",
           "spawn_id": "spn-dfee57eec2c4"
-        },
-        {
-          "candidates": [
-            {
-              "chance": 0,
-              "name": "null"
-            },
-            {
-              "chance": 100,
-              "name": "Tree_Dark"
-            }
-          ],
-          "check_overlap": false,
-          "display_name": "Tree_Dark",
-          "dx": -818,
-          "dy": -386,
-          "enforce_spacing": false,
-          "max_number": 1,
-          "min_number": 1,
-          "origional_height": 2480,
-          "origional_width": 2480,
-          "position": "Exact",
-          "spawn_id": "spn-40f0d9ae419e"
-        },
-        {
-          "candidates": [
-            {
-              "chance": 0,
-              "name": "null"
-            },
-            {
-              "chance": 100,
-              "name": "Tree_Dark"
-            }
-          ],
-          "check_overlap": false,
-          "display_name": "Tree_Dark",
-          "dx": -794,
-          "dy": -387,
-          "enforce_spacing": false,
-          "max_number": 1,
-          "min_number": 1,
-          "origional_height": 2480,
-          "origional_width": 2480,
-          "position": "Exact",
-          "spawn_id": "spn-cf993460b1d8"
         },
         {
           "candidates": [

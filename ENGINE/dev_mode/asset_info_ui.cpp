@@ -1,6 +1,7 @@
 #include "asset_info_ui.hpp"
 
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <cstdlib>
 #include <filesystem>
@@ -31,6 +32,7 @@
 #include "asset/Asset.hpp"
 #include "render/camera.hpp"
 #include "utils/light_source.hpp"
+#include "search_assets.hpp"
 
 namespace {
 
@@ -56,250 +58,42 @@ void render_label_text(SDL_Renderer* renderer, const std::string& text, int x, i
 
 } // namespace
 
-class ApplySettingsModal {
-public:
-    using ApplyCallback = std::function<bool(const std::vector<std::string>&)>;
+namespace {
 
-    void open(AssetInfoSectionId, std::string heading, ApplyCallback cb) {
-        heading_ = std::move(heading);
-        callback_ = std::move(cb);
-        visible_ = true;
-        scroll_offset_ = 0;
-        entries_.clear();
-        load_entries();
-        if (!apply_btn_) {
-            apply_btn_ = std::make_unique<DMButton>("Apply", &DMStyles::AccentButton(), 120, DMButton::height());
-        }
-        if (!cancel_btn_) {
-            cancel_btn_ = std::make_unique<DMButton>("Cancel", &DMStyles::ListButton(), 120, DMButton::height());
-        }
+std::string to_lower_copy(std::string s) {
+    for (auto& c : s) {
+        c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
     }
+    return s;
+}
 
-    void close() {
-        visible_ = false;
-        callback_ = nullptr;
-    }
+std::string resolve_asset_directory(const std::string& selection) {
+    namespace fs = std::filesystem;
+    fs::path root{"SRC"};
+    if (!fs::exists(root) || !fs::is_directory(root)) return {};
 
-    bool is_open() const { return visible_; }
-
-    void update(const Input&, int screen_w, int screen_h) {
-        if (!visible_) return;
-        screen_w_ = screen_w;
-        screen_h_ = screen_h;
-        layout();
-    }
-
-    bool handle_event(const SDL_Event& e) {
-        if (!visible_) return false;
-        layout();
-
-        const bool pointer_event =
-            (e.type == SDL_MOUSEBUTTONDOWN || e.type == SDL_MOUSEBUTTONUP || e.type == SDL_MOUSEMOTION);
-        const bool wheel_event = (e.type == SDL_MOUSEWHEEL);
-        SDL_Point pointer{0, 0};
-        if (pointer_event) {
-            pointer.x = (e.type == SDL_MOUSEMOTION) ? e.motion.x : e.button.x;
-            pointer.y = (e.type == SDL_MOUSEMOTION) ? e.motion.y : e.button.y;
-        } else if (wheel_event) {
-            SDL_GetMouseState(&pointer.x, &pointer.y);
+    const std::string target = to_lower_copy(selection);
+    for (const auto& dir : fs::directory_iterator(root)) {
+        if (!dir.is_directory()) continue;
+        const std::string folder = dir.path().filename().string();
+        if (to_lower_copy(folder) == target) {
+            return folder;
         }
-
-        const bool inside_panel = SDL_PointInRect(&pointer, &panel_rect_);
-        const bool inside_list = SDL_PointInRect(&pointer, &list_rect_);
-
-        if (pointer_event && !inside_panel && e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
-            close();
-            return true;
-        }
-
-        if (e.type == SDL_KEYDOWN && e.key.keysym.sym == SDLK_ESCAPE) {
-            close();
-            return true;
-        }
-
-        if (apply_btn_ && apply_btn_->handle_event(e)) {
-            if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
-                if (callback_) {
-                    if (callback_(selected_assets())) {
-                        close();
-                    }
-                } else {
-                    close();
-                }
-            }
-            return true;
-        }
-
-        if (cancel_btn_ && cancel_btn_->handle_event(e)) {
-            if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
-                close();
-            }
-            return true;
-        }
-
-        if (wheel_event && inside_list) {
-            scroll_by(-e.wheel.y * 40);
-            return true;
-        }
-
-        bool used = false;
-        if (inside_panel || (!pointer_event && !wheel_event)) {
-            for (auto& entry : entries_) {
-                if (entry.checkbox && entry.checkbox->handle_event(e)) {
-                    used = true;
-                    break;
-                }
-            }
-        }
-
-        if (used) return true;
-        if (pointer_event && inside_panel) return true;
-        if (wheel_event && inside_panel) return true;
-        return used;
-    }
-
-    void render(SDL_Renderer* renderer) const {
-        if (!visible_ || !renderer) return;
-        layout();
-
-        SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 160);
-        SDL_RenderFillRect(renderer, nullptr);
-
-        const SDL_Color bg = DMStyles::PanelBG();
-        SDL_SetRenderDrawColor(renderer, bg.r, bg.g, bg.b, bg.a);
-        SDL_RenderFillRect(renderer, &panel_rect_);
-        const SDL_Color border = DMStyles::Border();
-        SDL_SetRenderDrawColor(renderer, border.r, border.g, border.b, border.a);
-        SDL_RenderDrawRect(renderer, &panel_rect_);
-
-        render_label_text(renderer, heading_, heading_rect_.x, heading_rect_.y);
-
-        if (apply_btn_) apply_btn_->render(renderer);
-        if (cancel_btn_) cancel_btn_->render(renderer);
-
-        SDL_Rect prev_clip;
-        SDL_RenderGetClipRect(renderer, &prev_clip);
-        SDL_RenderSetClipRect(renderer, &list_rect_);
-        for (const auto& entry : entries_) {
-            if (entry.checkbox) entry.checkbox->render(renderer);
-        }
-        SDL_RenderSetClipRect(renderer, &prev_clip);
-    }
-
-private:
-    struct Entry {
-        std::string name;
-        std::unique_ptr<DMCheckbox> checkbox;
-    };
-
-    void load_entries() {
-        namespace fs = std::filesystem;
-        fs::path src_root{"SRC"};
+        fs::path info_path = dir.path() / "info.json";
+        if (!fs::exists(info_path)) continue;
         try {
-            if (fs::exists(src_root)) {
-                for (const auto& dir : fs::directory_iterator(src_root)) {
-                    if (!dir.is_directory()) continue;
-                    fs::path info_path = dir.path() / "info.json";
-                    if (!fs::exists(info_path)) continue;
-                    Entry entry;
-                    entry.name = dir.path().filename().string();
-                    entry.checkbox = std::make_unique<DMCheckbox>(entry.name, false);
-                    entries_.push_back(std::move(entry));
-                }
+            std::ifstream in(info_path);
+            nlohmann::json j;
+            in >> j;
+            std::string asset_name = j.value("asset_name", folder);
+            if (to_lower_copy(asset_name) == target) {
+                return folder;
             }
         } catch (...) {
-            entries_.clear();
-        }
-        std::sort(entries_.begin(), entries_.end(), [](const Entry& a, const Entry& b) {
-            return a.name < b.name;
-        });
-    }
-
-    void layout() const {
-        if (!visible_ || screen_w_ <= 0 || screen_h_ <= 0) return;
-        const int padding = DMSpacing::panel_padding();
-        const int max_panel_w = std::max(260, std::min(screen_w_ - 2 * padding, 520));
-        const int max_panel_h = std::max(240, std::min(screen_h_ - 2 * padding, 640));
-        panel_rect_.w = std::clamp(max_panel_w, 260, std::max(260, screen_w_ - 2 * padding));
-        panel_rect_.h = std::clamp(max_panel_h, 240, std::max(240, screen_h_ - 2 * padding));
-        panel_rect_.x = (screen_w_ - panel_rect_.w) / 2;
-        panel_rect_.y = (screen_h_ - panel_rect_.h) / 2;
-
-        heading_rect_ = SDL_Rect{ panel_rect_.x + padding,
-                                  panel_rect_.y + padding,
-                                  panel_rect_.w - 2 * padding,
-                                  DMStyles::Label().font_size + 4 };
-        int y = heading_rect_.y + heading_rect_.h + DMSpacing::item_gap();
-
-        if (apply_btn_) {
-            apply_btn_->set_rect(SDL_Rect{ panel_rect_.x + padding, y, 120, DMButton::height() });
-        }
-        if (cancel_btn_) {
-            int cancel_x = panel_rect_.x + padding;
-            if (apply_btn_) cancel_x = apply_btn_->rect().x + apply_btn_->rect().w + DMSpacing::item_gap();
-            cancel_btn_->set_rect(SDL_Rect{ cancel_x, y, 120, DMButton::height() });
-        }
-        y += DMButton::height() + DMSpacing::item_gap();
-
-        list_rect_ = SDL_Rect{ panel_rect_.x + padding,
-                               y,
-                               panel_rect_.w - 2 * padding,
-                               panel_rect_.h - (y - panel_rect_.y) - padding };
-        if (list_rect_.h < 0) list_rect_.h = 0;
-
-        int entry_y = list_rect_.y - scroll_offset_;
-        for (auto& entry : entries_) {
-            if (!entry.checkbox) continue;
-            entry.checkbox->set_rect(SDL_Rect{ list_rect_.x, entry_y, list_rect_.w, DMCheckbox::height() });
-            entry_y += DMCheckbox::height() + DMSpacing::item_gap();
-        }
-        int total_height = entry_y - (list_rect_.y - scroll_offset_);
-        max_scroll_ = std::max(0, total_height - list_rect_.h);
-        if (scroll_offset_ > max_scroll_) {
-            scroll_offset_ = max_scroll_;
-            entry_y = list_rect_.y - scroll_offset_;
-            for (auto& entry : entries_) {
-                if (!entry.checkbox) continue;
-                entry.checkbox->set_rect(SDL_Rect{ list_rect_.x, entry_y, list_rect_.w, DMCheckbox::height() });
-                entry_y += DMCheckbox::height() + DMSpacing::item_gap();
-            }
         }
     }
-
-    void scroll_by(int delta) {
-        if (delta == 0) return;
-        scroll_offset_ = std::clamp(scroll_offset_ + delta, 0, max_scroll_);
-        layout();
-    }
-
-    std::vector<std::string> selected_assets() const {
-        std::vector<std::string> names;
-        for (const auto& entry : entries_) {
-            if (entry.checkbox && entry.checkbox->value()) {
-                names.push_back(entry.name);
-            }
-        }
-        return names;
-    }
-
-private:
-    std::string heading_;
-    ApplyCallback callback_{};
-    std::vector<Entry> entries_;
-    std::unique_ptr<DMButton> apply_btn_;
-    std::unique_ptr<DMButton> cancel_btn_;
-    mutable SDL_Rect panel_rect_{0,0,0,0};
-    mutable SDL_Rect heading_rect_{0,0,0,0};
-    mutable SDL_Rect list_rect_{0,0,0,0};
-    mutable int scroll_offset_ = 0;
-    mutable int max_scroll_ = 0;
-    int screen_w_ = 0;
-    int screen_h_ = 0;
-    bool visible_ = false;
-};
-
-namespace {
+    return {};
+}
 
 bool load_json_file(const std::filesystem::path& path, nlohmann::json& out) {
     std::ifstream in(path);
@@ -444,7 +238,7 @@ void AssetInfoUI::set_assets(Assets* a) {
 void AssetInfoUI::set_info(const std::shared_ptr<AssetInfo>& info) {
     info_ = info;
     scroll_ = 0;
-    if (apply_modal_) apply_modal_->close();
+    if (asset_selector_) asset_selector_->close();
     for (auto& s : sections_) {
         s->set_info(info_);
         s->reset_scroll();
@@ -455,7 +249,7 @@ void AssetInfoUI::set_info(const std::shared_ptr<AssetInfo>& info) {
 void AssetInfoUI::clear_info() {
     info_.reset();
     scroll_ = 0;
-    if (apply_modal_) apply_modal_->close();
+    if (asset_selector_) asset_selector_->close();
     for (auto& s : sections_) {
         s->set_info(nullptr);
         s->reset_scroll();
@@ -473,7 +267,7 @@ void AssetInfoUI::close() {
     if (!visible_) return;
     apply_camera_override(false);
     visible_ = false;
-    if (apply_modal_) apply_modal_->close();
+    if (asset_selector_) asset_selector_->close();
 }
 void AssetInfoUI::toggle(){
     if (visible_) {
@@ -534,9 +328,37 @@ void AssetInfoUI::layout_widgets(int screen_w, int screen_h) const {
 
 
 void AssetInfoUI::handle_event(const SDL_Event& e) {
-    if (apply_modal_ && apply_modal_->is_open()) {
-        if (apply_modal_->handle_event(e)) return;
-        if (apply_modal_->is_open()) return;
+    const bool pointer_event =
+        (e.type == SDL_MOUSEBUTTONDOWN || e.type == SDL_MOUSEBUTTONUP || e.type == SDL_MOUSEMOTION);
+    const bool wheel_event = (e.type == SDL_MOUSEWHEEL);
+    SDL_Point pointer{0, 0};
+    if (pointer_event) {
+        pointer.x = (e.type == SDL_MOUSEMOTION) ? e.motion.x : e.button.x;
+        pointer.y = (e.type == SDL_MOUSEMOTION) ? e.motion.y : e.button.y;
+    }
+
+    if (asset_selector_ && asset_selector_->visible()) {
+        if (asset_selector_->handle_event(e)) return;
+        if (e.type == SDL_KEYDOWN && e.key.keysym.sym == SDLK_ESCAPE) {
+            asset_selector_->close();
+            return;
+        }
+        if (pointer_event) {
+            if (asset_selector_->is_point_inside(pointer.x, pointer.y)) {
+                return;
+            }
+            if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
+                asset_selector_->close();
+                return;
+            }
+        } else if (wheel_event) {
+            int mx = 0;
+            int my = 0;
+            SDL_GetMouseState(&mx, &my);
+            if (asset_selector_->is_point_inside(mx, my)) {
+                return;
+            }
+        }
     }
 
     if (!visible_ || !info_) return;
@@ -545,18 +367,12 @@ void AssetInfoUI::handle_event(const SDL_Event& e) {
         return;
 
     bool pointer_inside = false;
-    const bool pointer_event =
-        (e.type == SDL_MOUSEBUTTONDOWN || e.type == SDL_MOUSEBUTTONUP || e.type == SDL_MOUSEMOTION);
     if (pointer_event) {
-        SDL_Point p{
-            e.type == SDL_MOUSEMOTION ? e.motion.x : e.button.x,
-            e.type == SDL_MOUSEMOTION ? e.motion.y : e.button.y
-        };
-        pointer_inside = SDL_PointInRect(&p, &panel_);
+        pointer_inside = SDL_PointInRect(&pointer, &panel_);
         if (!pointer_inside) {
             return;
         }
-    } else if (e.type == SDL_MOUSEWHEEL) {
+    } else if (wheel_event) {
         int mx = 0;
         int my = 0;
         SDL_GetMouseState(&mx, &my);
@@ -567,7 +383,7 @@ void AssetInfoUI::handle_event(const SDL_Event& e) {
         }
     }
 
-    if (e.type == SDL_MOUSEWHEEL) {
+    if (wheel_event) {
         scroll_ -= e.wheel.y * 40;
         scroll_ = std::max(0, std::min(max_scroll_, scroll_));
         return;
@@ -610,9 +426,13 @@ void AssetInfoUI::update(const Input& input, int screen_w, int screen_h) {
     if (!visible_ || !info_) return;
     layout_widgets(screen_w, screen_h);
 
-    if (apply_modal_ && apply_modal_->is_open()) {
-        apply_modal_->update(input, screen_w, screen_h);
-        return;
+    if (asset_selector_ && asset_selector_->visible()) {
+        asset_selector_->update(input);
+        int search_width = 280;
+        int search_x = panel_.x - search_width - DMSpacing::panel_padding();
+        if (search_x < DMSpacing::panel_padding()) search_x = DMSpacing::panel_padding();
+        int search_y = panel_.y + DMSpacing::panel_padding();
+        asset_selector_->set_position(search_x, search_y);
     }
 
     int mx = input.getX();
@@ -693,8 +513,8 @@ void AssetInfoUI::render(SDL_Renderer* r, int screen_w, int screen_h) const {
     if (animations_panel_ && animations_panel_->is_open())
         animations_panel_->render(r, screen_w, screen_h);
 
-    if (apply_modal_ && apply_modal_->is_open())
-        apply_modal_->render(r);
+    if (asset_selector_ && asset_selector_->visible())
+        asset_selector_->render(r);
 
     last_renderer_ = r;
 }
@@ -797,13 +617,28 @@ void AssetInfoUI::sync_target_z_threshold() {
 
 void AssetInfoUI::request_apply_section(AssetInfoSectionId section_id) {
     if (!info_) return;
-    if (!apply_modal_) apply_modal_ = std::make_unique<ApplySettingsModal>();
-    std::string heading = "Apply ";
-    heading += section_display_name(section_id);
-    heading += " Settings";
-    apply_modal_->open(section_id, heading, [this, section_id](const std::vector<std::string>& assets) {
-        return apply_section_to_assets(section_id, assets);
+    if (!asset_selector_) asset_selector_ = std::make_unique<SearchAssets>();
+    if (!asset_selector_) return;
+
+    asset_selector_->open([this, section_id](const std::string& selection) {
+        if (selection.empty()) return;
+        if (!selection.empty() && selection.front() == '#') return;
+        std::string folder = resolve_asset_directory(selection);
+        if (folder.empty()) {
+            SDL_Log("Unable to resolve asset directory for '%s'", selection.c_str());
+            return;
+        }
+        std::vector<std::string> assets{folder};
+        (void)apply_section_to_assets(section_id, assets);
     });
+
+    if (panel_.w > 0) {
+        int search_width = 280;
+        int search_x = panel_.x - search_width - DMSpacing::panel_padding();
+        if (search_x < DMSpacing::panel_padding()) search_x = DMSpacing::panel_padding();
+        int search_y = panel_.y + DMSpacing::panel_padding();
+        asset_selector_->set_position(search_x, search_y);
+    }
 }
 
 bool AssetInfoUI::apply_section_to_assets(AssetInfoSectionId section_id, const std::vector<std::string>& asset_names) {
@@ -818,16 +653,24 @@ bool AssetInfoUI::apply_section_to_assets(AssetInfoSectionId section_id, const s
 
     bool all_success = true;
     for (const auto& name : asset_names) {
-        std::filesystem::path path = std::filesystem::path("SRC") / name / "info.json";
-        nlohmann::json target;
-        if (!load_json_file(path, target)) {
+        try {
+            std::filesystem::path path = std::filesystem::path("SRC") / name / "info.json";
+            nlohmann::json target;
+            if (!load_json_file(path, target)) {
+                all_success = false;
+                continue;
+            }
+            if (!copy_section_from_source(section_id, source, target)) {
+                continue;
+            }
+            if (!write_json_file(path, target)) {
+                all_success = false;
+            }
+        } catch (const std::exception& ex) {
+            SDL_Log("Failed to apply settings to %s: %s", name.c_str(), ex.what());
             all_success = false;
-            continue;
-        }
-        if (!copy_section_from_source(section_id, source, target)) {
-            continue;
-        }
-        if (!write_json_file(path, target)) {
+        } catch (...) {
+            SDL_Log("Failed to apply settings to %s due to unknown error.", name.c_str());
             all_success = false;
         }
     }
@@ -853,8 +696,11 @@ const char* AssetInfoUI::section_display_name(AssetInfoSectionId section_id) {
 }
 
 bool AssetInfoUI::is_point_inside(int x, int y) const {
+    if (!visible_) return false;
     SDL_Point p{ x, y };
-    return visible_ && SDL_PointInRect(&p, &panel_);
+    if (SDL_PointInRect(&p, &panel_)) return true;
+    if (asset_selector_ && asset_selector_->visible() && asset_selector_->is_point_inside(x, y)) return true;
+    return false;
 }
 
 void AssetInfoUI::save_now() const {

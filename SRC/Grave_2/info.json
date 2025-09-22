@@ -1,23 +1,8 @@
 {
-    "asset_name": "Grave_2",
-    "asset_type": "Object",
-    "duplicatable": false,
-    "duplication_interval_min": 30,
-    "duplication_interval_max": 60,
-    "min_child_depth": 0,
-    "max_child_depth": 2,
     "animations": {
         "default": {
-            "source": {
-                "kind": "folder",
-                "path": "default",
-                "name": null
-            },
             "flipped_source": false,
-            "reverse_source": false,
             "locked": false,
-            "speed_factor": 1,
-            "number_of_frames": 2,
             "movement": [
                 [
                     0,
@@ -27,27 +12,17 @@
                     0,
                     0
                 ]
-            ]
+            ],
+            "number_of_frames": 2,
+            "reverse_source": false,
+            "source": {
+                "kind": "folder",
+                "name": null,
+                "path": "default"
+            },
+            "speed_factor": 1
         }
     },
-    "tags": [
-        "death",
-        "still",
-        "man-made",
-        "grey",
-        "scary",
-        "impassable",
-        "graveyard",
-        "default",
-        "medium",
-        "grave"
-    ],
-    "z_threshold": 30,
-    "size_settings": {
-        "scale_percentage": 17
-    },
-    "rnd_spawn_min": 300,
-    "rnd_spawn_max": 400,
     "anti_tags": [
         "black",
         "bone",
@@ -74,23 +49,15 @@
         "white",
         "wood"
     ],
-    "has_shading": true,
-    "lighting_info": [
-        {
-            "has_light_source": true,
-            "light_intensity": 255,
-            "radius": 114,
-            "y_radius": 84,
-            "x_radius": 61,
-            "falloff": 0,
-            "factor": 100
-        }
-    ],
-    "min_same_type_distance": 0,
-    "min_distance_all": 0,
     "areas": [
         {
             "name": "impassable_area",
+            "offset_x": 0,
+            "offset_y": 0,
+            "original_dimensions": [
+                370,
+                511
+            ],
             "points": [
                 [
                     -180.5,
@@ -708,16 +675,16 @@
                     -24.5,
                     0.0
                 ]
-            ],
+            ]
+        },
+        {
+            "name": "spacing_area",
+            "offset_x": 0,
+            "offset_y": 0,
             "original_dimensions": [
                 370,
                 511
             ],
-            "offset_x": 0,
-            "offset_y": 0
-        },
-        {
-            "name": "spacing_area",
             "points": [
                 [
                     -39.0,
@@ -4519,13 +4486,48 @@
                     -25.0,
                     -1.0
                 ]
-            ],
-            "original_dimensions": [
-                370,
-                511
-            ],
-            "offset_x": 0,
-            "offset_y": 0
+            ]
         }
-    ]
+    ],
+    "asset_name": "Grave_2",
+    "asset_type": "Object",
+    "duplicatable": false,
+    "duplication_interval_max": 60,
+    "duplication_interval_min": 30,
+    "has_shading": true,
+    "lighting_info": [
+        {
+            "factor": 100,
+            "falloff": 0,
+            "has_light_source": true,
+            "light_intensity": 255,
+            "offset_x": -8,
+            "offset_y": -68,
+            "radius": 504,
+            "x_radius": 59,
+            "y_radius": 71
+        }
+    ],
+    "max_child_depth": 2,
+    "min_child_depth": 0,
+    "min_distance_all": 0,
+    "min_same_type_distance": 0,
+    "rnd_spawn_max": 400,
+    "rnd_spawn_min": 300,
+    "size_settings": {
+        "scale_percentage": 17
+    },
+    "tags": [
+        "death",
+        "still",
+        "man-made",
+        "grey",
+        "scary",
+        "impassable",
+        "graveyard",
+        "default",
+        "medium",
+        "grave"
+    ],
+    "z_threshold": 30
 }

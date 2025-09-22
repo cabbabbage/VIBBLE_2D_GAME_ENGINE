@@ -131,6 +131,7 @@ private:
     bool handle_filter_header_event(const SDL_Event& event);
     bool is_point_inside_filter_header(int x, int y) const;
     void sync_filter_state_from_ui();
+    void refresh_active_asset_filters();
     void reset_asset_filters();
     void rebuild_map_asset_spawn_ids();
     void rebuild_current_room_spawn_ids();

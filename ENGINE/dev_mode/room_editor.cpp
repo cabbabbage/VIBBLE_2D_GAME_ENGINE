@@ -163,7 +163,10 @@ void RoomEditor::set_enabled(bool enabled) {
         close_asset_info_editor();
         focus_camera_on_room_center();
         ensure_room_configurator();
-        set_room_config_visible(true);
+        if (room_cfg_ui_) {
+            room_cfg_ui_->open(current_room_);
+            refresh_room_config_visibility();
+        }
         configure_shared_panel();
         if (shared_fullscreen_panel_) {
             shared_fullscreen_panel_->set_expanded(false);
@@ -495,12 +498,9 @@ void RoomEditor::pulse_active_modal_header() {
 
 void RoomEditor::open_spawn_group_for_asset(Asset* asset) {
     if (!asset) return;
-    ensure_spawn_groups_config_ui();
-    if (!spawn_groups_cfg_ui_) return;
     std::string id = asset->spawn_id.empty() ? (asset->info ? asset->info->name : std::string{}) : asset->spawn_id;
-    update_spawn_groups_config_anchor();
-    SDL_Point anchor = spawn_groups_anchor_point();
-    spawn_groups_cfg_ui_->open_spawn_group(id, anchor.x, anchor.y);
+    if (id.empty()) return;
+    open_spawn_group_editor_by_id(id);
 }
 
 void RoomEditor::finalize_asset_drag(Asset* asset, const std::shared_ptr<AssetInfo>& info) {
@@ -1820,6 +1820,8 @@ void RoomEditor::open_spawn_group_editor_by_id(const std::string& spawn_id) {
     if (spawn_id.empty()) return;
     ensure_spawn_groups_config_ui();
     if (!spawn_groups_cfg_ui_) return;
+    close_asset_info_editor();
+    close_asset_library();
     update_spawn_groups_config_anchor();
     SDL_Point anchor = spawn_groups_anchor_point();
     spawn_groups_cfg_ui_->open_spawn_group(spawn_id, anchor.x, anchor.y);

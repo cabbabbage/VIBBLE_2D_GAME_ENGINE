@@ -13,6 +13,7 @@ class Area;
 class Assets;
 class AnimationsEditorPanel;
 class Section_BasicInfo;
+class SearchAssets;
 
 class AssetInfoUI {
 
@@ -72,5 +73,5 @@ class AssetInfoUI {
     bool camera_override_active_ = false;
     bool prev_camera_realism_enabled_ = false;
     bool prev_camera_parallax_enabled_ = false;
-    std::unique_ptr<class ApplySettingsModal> apply_modal_;
+    std::unique_ptr<SearchAssets> asset_selector_;
 };

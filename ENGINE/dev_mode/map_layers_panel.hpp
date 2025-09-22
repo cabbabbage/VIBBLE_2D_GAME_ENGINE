@@ -72,6 +72,8 @@ private:
     void refresh_canvas();
     void add_layer_internal();
     void add_room_to_selected_layer();
+    std::string create_new_room(const std::string& desired_name);
+    std::string suggest_room_name() const;
     void delete_layer_internal(int index);
     void open_layer_config_internal(int index);
     void handle_layer_range_changed(int index, int min_rooms, int max_rooms);

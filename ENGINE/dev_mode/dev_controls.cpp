@@ -1016,6 +1016,8 @@ Room* DevControls::choose_room(Room* preferred) const {
 
 void DevControls::filter_active_assets(std::vector<Asset*>& assets) const {
     if (!enabled_) return;
+    if (mode_ != Mode::RoomEditor) return;
+    if (!room_editor_ || !room_editor_->is_enabled()) return;
     assets.erase(
         std::remove_if(assets.begin(), assets.end(),
                        [this](Asset* asset) { return !passes_asset_filters(asset); }),
@@ -1062,15 +1064,28 @@ void DevControls::layout_filter_header() {
         return;
     }
 
-    filter_header_rect_ = SDL_Rect{0, 0, screen_w_, height + margin * 2};
     int x = margin;
     int y = margin;
+    int max_right = 0;
     for (auto& entry : filter_entries_) {
         if (!entry.checkbox) continue;
         SDL_Rect rect{x, y, width, height};
         entry.checkbox->set_rect(rect);
+        max_right = std::max(max_right, rect.x + rect.w);
         x += width + margin;
     }
+
+    if (max_right == 0) {
+        filter_header_rect_ = SDL_Rect{0, 0, 0, 0};
+        return;
+    }
+
+    int total_width = max_right + margin;
+    if (total_width > screen_w_) {
+        total_width = screen_w_;
+    }
+
+    filter_header_rect_ = SDL_Rect{0, 0, total_width, height + margin * 2};
 }
 
 void DevControls::render_filter_header(SDL_Renderer* renderer) const {
@@ -1111,6 +1126,7 @@ bool DevControls::handle_filter_header_event(const SDL_Event& event) {
 
 bool DevControls::is_point_inside_filter_header(int x, int y) const {
     if (!enabled_) return false;
+    if (filter_header_rect_.w <= 0 || filter_header_rect_.h <= 0) return false;
     SDL_Point p{x, y};
     return SDL_PointInRect(&p, &filter_header_rect_);
 }
@@ -1131,6 +1147,7 @@ void DevControls::sync_filter_state_from_ui() {
             break;
         }
     }
+    refresh_active_asset_filters();
 }
 
 void DevControls::reset_asset_filters() {
@@ -1147,6 +1164,15 @@ void DevControls::reset_asset_filters() {
     sync_filter_state_from_ui();
 }
 
+void DevControls::refresh_active_asset_filters() {
+    if (!assets_) {
+        return;
+    }
+    assets_->refresh_filtered_active_assets();
+    auto& filtered = assets_->mutable_filtered_active_assets();
+    set_active_assets(filtered);
+}
+
 void DevControls::rebuild_map_asset_spawn_ids() {
     map_asset_spawn_ids_.clear();
     if (!map_info_json_) return;
@@ -1157,6 +1183,7 @@ void DevControls::rebuild_map_asset_spawn_ids() {
         }
     } catch (...) {
     }
+    refresh_active_asset_filters();
 }
 
 void DevControls::rebuild_current_room_spawn_ids() {
@@ -1167,6 +1194,7 @@ void DevControls::rebuild_current_room_spawn_ids() {
         collect_spawn_ids(data, current_room_spawn_ids_);
     } catch (...) {
     }
+    refresh_active_asset_filters();
 }
 
 void DevControls::collect_spawn_ids(const nlohmann::json& node, std::unordered_set<std::string>& out) {
