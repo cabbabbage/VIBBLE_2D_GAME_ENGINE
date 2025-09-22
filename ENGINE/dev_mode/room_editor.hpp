@@ -49,7 +49,6 @@ public:
     bool is_room_panel_blocking_point(int x, int y) const;
     bool is_room_ui_blocking_point(int x, int y) const;
     void render_overlays(SDL_Renderer* renderer);
-    void render_room_config_fullscreen(SDL_Renderer* renderer);
 
     void toggle_asset_library();
     void open_asset_library();
@@ -152,8 +151,6 @@ private:
     void regenerate_current_room();
     void configure_shared_panel();
     void refresh_room_config_visibility();
-    void update_room_config_layout_for_fullscreen();
-    bool handle_shared_panel_event(const SDL_Event& event);
     void sanitize_perimeter_spawn_groups();
     bool sanitize_perimeter_spawn_groups(nlohmann::json& groups);
     std::optional<PerimeterOverlay> compute_perimeter_overlay_for_drag();
@@ -184,7 +181,6 @@ private:
     SDL_Rect room_config_bounds_{0, 0, 0, 0};
     FullScreenCollapsible* shared_fullscreen_panel_ = nullptr;
     bool room_config_dock_open_ = false;
-    bool room_config_fullscreen_visible_ = false;
     ActiveModal active_modal_ = ActiveModal::None;
 
     bool last_area_editor_active_ = false;

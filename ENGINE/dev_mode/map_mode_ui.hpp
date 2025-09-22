@@ -67,6 +67,7 @@ public:
 
     bool is_point_inside(int x, int y) const;
     bool is_any_panel_visible() const;
+    bool is_layers_footer_visible() const;
 
 private:
     void ensure_panels();

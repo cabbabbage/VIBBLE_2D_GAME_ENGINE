@@ -8,6 +8,18 @@
 #include <cstdint>
 namespace fs = std::filesystem;
 
+namespace {
+#if SDL_VERSION_ATLEAST(2,0,12)
+void apply_scale_mode(SDL_Texture* tex, const AssetInfo& info) {
+        if (tex) {
+                SDL_SetTextureScaleMode(tex, info.smooth_scaling ? SDL_ScaleModeBest : SDL_ScaleModeNearest);
+        }
+}
+#else
+void apply_scale_mode(SDL_Texture*, const AssetInfo&) {}
+#endif
+}
+
 Animation::Animation() = default;
 
 void Animation::load(const std::string& trigger,
@@ -99,7 +111,8 @@ void Animation::load(const std::string& trigger,
 					}
 					SDL_Texture* dst = SDL_CreateTexture(renderer, fmt, SDL_TEXTUREACCESS_TARGET, w, h);
 					if (!dst) continue;
-					SDL_SetTextureBlendMode(dst, SDL_BLENDMODE_BLEND);
+                                        SDL_SetTextureBlendMode(dst, SDL_BLENDMODE_BLEND);
+                                        apply_scale_mode(dst, info);
 					SDL_SetRenderTarget(renderer, dst);
 					SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
 					SDL_RenderClear(renderer);
@@ -174,14 +187,15 @@ void Animation::load(const std::string& trigger,
 			cache.save_metadata(meta_file, new_meta);
 		}
 		for (SDL_Surface* surf : surfaces) {
-			SDL_Texture* tex = cache.surface_to_texture(renderer, surf);
-			SDL_FreeSurface(surf);
-			if (!tex) {
-					std::cerr << "[Animation] Failed to create texture for '" << trigger << "'\n";
-					continue;
-			}
-			frames.push_back(tex);
-		}
+                        SDL_Texture* tex = cache.surface_to_texture(renderer, surf);
+                        SDL_FreeSurface(surf);
+                        if (!tex) {
+                                        std::cerr << "[Animation] Failed to create texture for '" << trigger << "'\n";
+                                        continue;
+                        }
+                        apply_scale_mode(tex, info);
+                        frames.push_back(tex);
+                }
 		if (flipped_source && !frames.empty()) {
 			std::vector<SDL_Texture*> flipped;
 			flipped.reserve(frames.size());
@@ -194,14 +208,15 @@ void Animation::load(const std::string& trigger,
 					}
 					SDL_Texture* dst = SDL_CreateTexture(renderer, fmt, SDL_TEXTUREACCESS_TARGET, w, h);
 					if (!dst) { flipped.push_back(nullptr); continue; }
-					SDL_SetTextureBlendMode(dst, SDL_BLENDMODE_BLEND);
-					SDL_SetRenderTarget(renderer, dst);
-					SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
-					SDL_RenderClear(renderer);
-					SDL_Rect r{0, 0, w, h};
-					SDL_RenderCopyEx(renderer, src, nullptr, &r, 0.0, nullptr, SDL_FLIP_HORIZONTAL);
-					SDL_SetRenderTarget(renderer, nullptr);
-					flipped.push_back(dst);
+                                        SDL_SetTextureBlendMode(dst, SDL_BLENDMODE_BLEND);
+                                        SDL_SetRenderTarget(renderer, dst);
+                                        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
+                                        SDL_RenderClear(renderer);
+                                        SDL_Rect r{0, 0, w, h};
+                                        SDL_RenderCopyEx(renderer, src, nullptr, &r, 0.0, nullptr, SDL_FLIP_HORIZONTAL);
+                                        SDL_SetRenderTarget(renderer, nullptr);
+                                        apply_scale_mode(dst, info);
+                                        flipped.push_back(dst);
 			}
 			for (SDL_Texture* t : frames) {
 					if (t) SDL_DestroyTexture(t);

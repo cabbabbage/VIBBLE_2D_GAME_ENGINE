@@ -82,10 +82,15 @@ SDL_Surface* CacheManager::load_and_scale_surface(const std::string& path, float
 }
 
 SDL_Texture* CacheManager::surface_to_texture(SDL_Renderer* renderer, SDL_Surface* surface) {
-	if (!renderer || !surface) return nullptr;
-	SDL_Texture* tex = SDL_CreateTextureFromSurface(renderer, surface);
-	if (tex) SDL_SetTextureBlendMode(tex, SDL_BLENDMODE_BLEND);
-	return tex;
+        if (!renderer || !surface) return nullptr;
+        SDL_Texture* tex = SDL_CreateTextureFromSurface(renderer, surface);
+        if (tex) {
+                SDL_SetTextureBlendMode(tex, SDL_BLENDMODE_BLEND);
+                #if SDL_VERSION_ATLEAST(2,0,12)
+                SDL_SetTextureScaleMode(tex, SDL_ScaleModeBest);
+                #endif
+        }
+        return tex;
 }
 
 std::vector<SDL_Texture*> CacheManager::surfaces_to_textures(SDL_Renderer* renderer, const std::vector<SDL_Surface*>& surfaces) {

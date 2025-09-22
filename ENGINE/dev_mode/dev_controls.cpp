@@ -526,9 +526,6 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
         room_editor_->render_overlays(renderer);
     }
     if (map_mode_ui_) map_mode_ui_->render(renderer);
-    if (room_editor_) {
-        room_editor_->render_room_config_fullscreen(renderer);
-    }
     if (camera_panel_ && camera_panel_->is_visible()) {
         camera_panel_->render(renderer);
     }
@@ -668,6 +665,9 @@ void DevControls::configure_header_button_sets() {
         camera_btn.label = "Camera";
         camera_btn.active = camera_panel_ && camera_panel_->is_visible();
         camera_btn.on_toggle = [this](bool active) {
+            if (room_editor_) {
+                room_editor_->close_room_config();
+            }
             if (!camera_panel_) {
                 sync_header_button_states();
                 return;
@@ -691,6 +691,9 @@ void DevControls::configure_header_button_sets() {
     to_room_btn.momentary = true;
     to_room_btn.style_override = &DMStyles::AccentButton();
     to_room_btn.on_toggle = [this](bool) {
+        if (room_editor_) {
+            room_editor_->close_room_config();
+        }
         if (mode_ == Mode::MapEditor) {
             exit_map_editor_mode(false, true);
         }
@@ -706,6 +709,9 @@ void DevControls::configure_header_button_sets() {
     to_map_btn.momentary = true;
     to_map_btn.style_override = &DMStyles::AccentButton();
     to_map_btn.on_toggle = [this](bool) {
+        if (room_editor_) {
+            room_editor_->close_room_config();
+        }
         if (mode_ != Mode::MapEditor) {
             enter_map_editor_mode();
         }
@@ -718,6 +724,9 @@ void DevControls::configure_header_button_sets() {
     lights_btn.label = "Lighting";
     lights_btn.active = map_mode_ui_ && map_mode_ui_->is_light_panel_visible();
     lights_btn.on_toggle = [this](bool active) {
+        if (room_editor_) {
+            room_editor_->close_room_config();
+        }
         if (!map_mode_ui_) {
             sync_header_button_states();
             return;
@@ -754,6 +763,7 @@ void DevControls::configure_header_button_sets() {
     library_btn.active = room_editor_ && room_editor_->is_asset_library_open();
     library_btn.on_toggle = [this](bool active) {
         if (!room_editor_) return;
+        room_editor_->close_room_config();
         if (active) {
             room_editor_->open_asset_library();
         } else {
@@ -770,6 +780,7 @@ void DevControls::configure_header_button_sets() {
     regenerate_btn.style_override = &DMStyles::DeleteButton();
     regenerate_btn.on_toggle = [this](bool) {
         if (room_editor_) {
+            room_editor_->close_room_config();
             room_editor_->regenerate_room();
         }
         sync_header_button_states();
@@ -786,6 +797,7 @@ void DevControls::configure_header_button_sets() {
             sync_header_button_states();
             return;
         }
+        room_editor_->close_room_config();
         if (is_modal_blocking_panels()) {
             pulse_modal_header();
             sync_header_button_states();

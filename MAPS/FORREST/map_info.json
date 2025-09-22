@@ -395,72 +395,7 @@
       "min_height": 100,
       "min_width": 100,
       "name": "spawn",
-      "spawn_groups": [
-        {
-          "candidates": [
-            {
-              "chance": 0,
-              "name": "null"
-            },
-            {
-              "chance": 100,
-              "name": "Vibble"
-            }
-          ],
-          "chance_denominator": 100,
-          "check_overlap": false,
-          "display_name": "Vibble",
-          "dx": -141,
-          "dy": -173,
-          "enforce_spacing": false,
-          "max_number": 213,
-          "min_number": 2,
-          "origional_height": 1692,
-          "origional_width": 1692,
-          "position": "Perimeter",
-          "spawn_id": "spn-85325b070ab9"
-        },
-        {
-          "candidates": [
-            {
-              "chance": 0,
-              "name": "null"
-            }
-          ],
-          "chance_denominator": 0,
-          "check_overlap": false,
-          "display_name": "New Spawn",
-          "enforce_spacing": false,
-          "max_number": 1,
-          "min_number": 1,
-          "position": "Exact",
-          "spawn_id": "spn-11f4825c4d92"
-        },
-        {
-          "candidates": [
-            {
-              "chance": 0,
-              "name": "null"
-            },
-            {
-              "chance": 100,
-              "name": "Barrel"
-            }
-          ],
-          "chance_denominator": 100,
-          "check_overlap": false,
-          "display_name": "Barrel",
-          "dx": 332,
-          "dy": 277,
-          "enforce_spacing": false,
-          "max_number": 15,
-          "min_number": 2,
-          "origional_height": 1480,
-          "origional_width": 2150,
-          "position": "Perimeter",
-          "spawn_id": "spn-2728a1bf5020"
-        }
-      ],
+      "spawn_groups": [],
       "width_max": 2671,
       "width_min": 100
     }

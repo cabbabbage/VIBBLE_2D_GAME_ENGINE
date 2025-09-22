@@ -9,6 +9,7 @@
 #include <random>
 #include <tuple>
 #include <vector>
+#include <cstdint>
 
 static constexpr SDL_Color SLATE_COLOR = {69, 101, 74, 255};
 static constexpr float MIN_VISIBLE_SCREEN_RATIO = 0.015f;
@@ -141,8 +142,8 @@ void SceneRenderer::render() {
     }
     const int blur_radius_full = std::max(0, kPostBlurRadiusPx);
     const int ds               = std::max(1, kPostDownscale);
-    const int small_w          = std::max(1, screen_width_  / ds);
-    const int small_h          = std::max(1, screen_height_ / ds);
+    const int small_w          = std::max(1, (screen_width_  + ds - 1) / ds);
+    const int small_h          = std::max(1, (screen_height_ + ds - 1) / ds);
     // Scale blur radius into the downsampled space so the look roughly matches
     const int blur_radius_small = std::max(0, blur_radius_full / ds);
 
@@ -226,27 +227,55 @@ void SceneRenderer::render() {
         if (full && SDL_RenderReadPixels(renderer_, nullptr, SDL_PIXELFORMAT_RGBA8888, full->pixels, full->pitch) == 0) {
             Uint8* full_px = static_cast<Uint8*>(full->pixels);
             const int full_pitch = full->pitch;
-            SDL_PixelFormat* full_fmt = full->format;
-
-            // 2) Downscale on CPU (nearest-neighbor for speed)
+            // 2) Downscale on CPU with box filtering to avoid aliasing
             SDL_Surface* small = SDL_CreateRGBSurfaceWithFormat(0, small_w, small_h, 32, SDL_PIXELFORMAT_RGBA8888);
             if (small) {
                 Uint8* small_px = static_cast<Uint8*>(small->pixels);
                 const int small_pitch = small->pitch;
                 SDL_PixelFormat* small_fmt = small->format;
-
-                auto full_at = [&](int x, int y) -> Uint32 {
-                    return *reinterpret_cast<Uint32*>(full_px + y * full_pitch + x * 4);
-                };
                 auto small_set = [&](int x, int y, Uint32 v) {
                     *reinterpret_cast<Uint32*>(small_px + y * small_pitch + x * 4) = v;
                 };
 
+                const int max_w_index = std::max(0, screen_width_ - 1);
+                const int max_h_index = std::max(0, screen_height_ - 1);
                 for (int y = 0; y < small_h; ++y) {
-                    int sy = std::min(screen_height_ - 1, y * ds);
+                    int y0 = std::min(y * ds, max_h_index);
+                    int y1 = std::min(screen_height_, y0 + ds);
+                    if (y1 <= y0) {
+                        y1 = std::min(screen_height_, y0 + 1);
+                    }
                     for (int x = 0; x < small_w; ++x) {
-                        int sx = std::min(screen_width_ - 1, x * ds);
-                        small_set(x, y, full_at(sx, sy));
+                        int x0 = std::min(x * ds, max_w_index);
+                        int x1 = std::min(screen_width_, x0 + ds);
+                        if (x1 <= x0) {
+                            x1 = std::min(screen_width_, x0 + 1);
+                        }
+
+                        const int sample_w = std::max(1, x1 - x0);
+                        const int sample_h = std::max(1, y1 - y0);
+                        const int sample_count = sample_w * sample_h;
+
+                        uint64_t r = 0;
+                        uint64_t g = 0;
+                        uint64_t b = 0;
+                        uint64_t a = 0;
+                        for (int yy = y0; yy < y1; ++yy) {
+                            const Uint8* src_row = full_px + yy * full_pitch + x0 * 4;
+                            for (int xx = x0; xx < x1; ++xx) {
+                                r += src_row[0];
+                                g += src_row[1];
+                                b += src_row[2];
+                                a += src_row[3];
+                                src_row += 4;
+                            }
+                        }
+
+                        Uint8* dst_px = small_px + y * small_pitch + x * 4;
+                        dst_px[0] = static_cast<Uint8>(r / sample_count);
+                        dst_px[1] = static_cast<Uint8>(g / sample_count);
+                        dst_px[2] = static_cast<Uint8>(b / sample_count);
+                        dst_px[3] = static_cast<Uint8>(a / sample_count);
                     }
                 }
 
@@ -303,6 +332,9 @@ void SceneRenderer::render() {
                 if (blur_small_tex) {
                     SDL_SetTextureBlendMode(blur_small_tex, kPostBlendMode);
                     SDL_SetTextureAlphaMod(blur_small_tex, kPostOverlayAlpha);
+                    #if SDL_VERSION_ATLEAST(2,0,12)
+                    SDL_SetTextureScaleMode(blur_small_tex, SDL_ScaleModeBest);
+                    #endif
 
                     // Upscale to full-screen; rely on renderer scaling
                     // (Optionally enable linear scaling once at init: SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "1");)

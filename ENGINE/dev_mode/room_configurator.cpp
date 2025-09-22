@@ -8,6 +8,7 @@
 #include <SDL_ttf.h>
 
 #include <algorithm>
+#include <cmath>
 #include <sstream>
 #include <utility>
 
@@ -85,6 +86,26 @@ std::pair<int, int> compute_slider_range(int min_value, int max_value) {
 const nlohmann::json& empty_object() {
     static const nlohmann::json kEmpty = nlohmann::json::object();
     return kEmpty;
+}
+
+int parse_json_int(const nlohmann::json& object, const std::string& key, int fallback) {
+    if (!object.contains(key)) {
+        return fallback;
+    }
+    const auto& value = object[key];
+    if (value.is_number_integer()) {
+        return value.get<int>();
+    }
+    if (value.is_number_float()) {
+        return static_cast<int>(std::lround(value.get<double>()));
+    }
+    if (value.is_string()) {
+        try {
+            return std::stoi(value.get<std::string>());
+        } catch (...) {
+        }
+    }
+    return fallback;
 }
 } // namespace
 
@@ -166,10 +187,17 @@ void RoomConfigurator::load_from_json(const nlohmann::json& data) {
     int fallback_h_min = room_h_min_;
     int fallback_h_max = room_h_max_;
 
-    room_w_min_ = loaded_json_.value("min_width", loaded_json_.value("width_min", fallback_w_min));
-    room_w_max_ = loaded_json_.value("max_width", loaded_json_.value("width_max", std::max(fallback_w_min, fallback_w_max)));
-    room_h_min_ = loaded_json_.value("min_height", loaded_json_.value("height_min", fallback_h_min));
-    room_h_max_ = loaded_json_.value("max_height", loaded_json_.value("height_max", std::max(fallback_h_min, fallback_h_max)));
+    const int default_w_max = std::max(fallback_w_min, fallback_w_max);
+    const int default_h_max = std::max(fallback_h_min, fallback_h_max);
+
+    room_w_min_ = parse_json_int(loaded_json_, "min_width",
+                                 parse_json_int(loaded_json_, "width_min", fallback_w_min));
+    room_w_max_ = parse_json_int(loaded_json_, "max_width",
+                                 parse_json_int(loaded_json_, "width_max", default_w_max));
+    room_h_min_ = parse_json_int(loaded_json_, "min_height",
+                                 parse_json_int(loaded_json_, "height_min", fallback_h_min));
+    room_h_max_ = parse_json_int(loaded_json_, "max_height",
+                                 parse_json_int(loaded_json_, "height_max", default_h_max));
 
     if (room_w_min_ > room_w_max_) std::swap(room_w_min_, room_w_max_);
     if (room_h_min_ > room_h_max_) std::swap(room_h_min_, room_h_max_);

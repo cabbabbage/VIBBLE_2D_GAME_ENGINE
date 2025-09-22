@@ -316,12 +316,16 @@ void run(SDL_Window* window, SDL_Renderer* renderer, int screen_w, int screen_h,
 int main(int argc, char* argv[]) {
 	std::cout << "[Main] Starting game engine...\n";
 	const bool rebuild_cache = (argc > 1 && argv[1] && std::string(argv[1]) == "-r");
-	if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) < 0) {
-		std::cerr << "SDL_Init failed: " << SDL_GetError() << "\n"; return 1;
-	}
-	if (Mix_OpenAudio(44100, MIX_DEFAULT_FORMAT, 2, 2048) < 0) {
-		std::cerr << "Mix_OpenAudio failed: " << Mix_GetError() << "\n"; SDL_Quit(); return 1;
-	}
+        if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) < 0) {
+                std::cerr << "SDL_Init failed: " << SDL_GetError() << "\n"; return 1;
+        }
+        if (SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "2") != SDL_TRUE) {
+                SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "1");
+        }
+        std::cout << "[Main] Requested high quality texture filtering.\n";
+        if (Mix_OpenAudio(44100, MIX_DEFAULT_FORMAT, 2, 2048) < 0) {
+                std::cerr << "Mix_OpenAudio failed: " << Mix_GetError() << "\n"; SDL_Quit(); return 1;
+        }
 	if (TTF_Init() < 0) {
 		std::cerr << "TTF_Init failed: " << TTF_GetError() << "\n"; SDL_Quit(); return 1;
 	}

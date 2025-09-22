@@ -662,6 +662,10 @@ bool MapModeUI::is_any_panel_visible() const {
     return layers_footer_visible_;
 }
 
+bool MapModeUI::is_layers_footer_visible() const {
+    return layers_footer_visible_;
+}
+
 
 bool MapModeUI::save_map_info_to_disk() const {
     if (!map_info_) return false;

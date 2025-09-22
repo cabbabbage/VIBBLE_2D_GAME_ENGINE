@@ -46,6 +46,7 @@ class AssetInfo {
     int min_same_type_distance;
     int min_distance_all;
     float scale_factor;
+    bool smooth_scaling = true;
     int original_canvas_width;
     int original_canvas_height;
     bool flipable;
@@ -72,6 +73,7 @@ class AssetInfo {
     void set_flipable(bool v);
     void set_scale_factor(float factor);
     void set_scale_percentage(float percent);
+    void set_scale_filter(bool smooth);
     void set_tags(const std::vector<std::string> &t);
     void add_tag(const std::string &tag);
     void remove_tag(const std::string &tag);

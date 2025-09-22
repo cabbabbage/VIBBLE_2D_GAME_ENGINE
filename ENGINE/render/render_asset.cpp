@@ -56,10 +56,15 @@ SDL_Texture* RenderAsset::regenerateFinalTexture(Asset* a) {
 	const Uint8 main_alpha = main_light_source_.get_current_color().a;
 	int bw = a->cached_w, bh = a->cached_h;
 	if (bw == 0 || bh == 0) SDL_QueryTexture(base, nullptr, nullptr, &bw, &bh);
-	SDL_Texture* final_tex = SDL_CreateTexture(renderer_, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET, bw, bh);
-	if (!final_tex) return nullptr;
-	SDL_SetTextureBlendMode(final_tex, SDL_BLENDMODE_BLEND);
-	SDL_Texture* prev_target = SDL_GetRenderTarget(renderer_);
+        SDL_Texture* final_tex = SDL_CreateTexture(renderer_, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET, bw, bh);
+        if (!final_tex) return nullptr;
+        SDL_SetTextureBlendMode(final_tex, SDL_BLENDMODE_BLEND);
+        #if SDL_VERSION_ATLEAST(2,0,12)
+        SDL_SetTextureScaleMode(
+            final_tex,
+            (a && a->info && !a->info->smooth_scaling) ? SDL_ScaleModeNearest : SDL_ScaleModeBest);
+        #endif
+        SDL_Texture* prev_target = SDL_GetRenderTarget(renderer_);
 	SDL_SetRenderTarget(renderer_, final_tex);
 	SDL_SetRenderDrawColor(renderer_, 0, 0, 0, 0);
 	SDL_RenderClear(renderer_);

@@ -8,7 +8,9 @@
 #include "widgets.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <cstdlib>
+#include <optional>
 #include <utility>
 #include <SDL_ttf.h>
 
@@ -95,6 +97,22 @@ int clamp_slider_value(int value, int min_value, int max_value) {
     return std::clamp(value, min_value, max_value);
 }
 
+std::optional<int> parse_int_like(const nlohmann::json& value) {
+    if (value.is_number_integer()) {
+        return value.get<int>();
+    }
+    if (value.is_number_float()) {
+        return static_cast<int>(std::lround(value.get<double>()));
+    }
+    if (value.is_string()) {
+        try {
+            return std::stoi(value.get<std::string>());
+        } catch (...) {
+        }
+    }
+    return std::nullopt;
+}
+
 std::pair<int, int> read_range(const nlohmann::json& src,
                                const std::string& min_key,
                                const std::string& max_key,
@@ -102,11 +120,15 @@ std::pair<int, int> read_range(const nlohmann::json& src,
                                int default_max) {
     int vmin = default_min;
     int vmax = default_max;
-    if (src.contains(min_key) && src[min_key].is_number_integer()) {
-        vmin = src[min_key].get<int>();
+    if (src.contains(min_key)) {
+        if (auto parsed = parse_int_like(src[min_key])) {
+            vmin = *parsed;
+        }
     }
-    if (src.contains(max_key) && src[max_key].is_number_integer()) {
-        vmax = src[max_key].get<int>();
+    if (src.contains(max_key)) {
+        if (auto parsed = parse_int_like(src[max_key])) {
+            vmax = *parsed;
+        }
     }
     if (!src.contains(min_key) && src.contains(max_key)) {
         vmin = vmax;
@@ -120,8 +142,11 @@ std::pair<int, int> read_range(const nlohmann::json& src,
 int read_single_value(const nlohmann::json& src,
                       const std::string& key,
                       int fallback) {
-    if (src.contains(key) && src[key].is_number_integer()) {
-        return src[key].get<int>();
+    if (!src.contains(key)) {
+        return fallback;
+    }
+    if (auto parsed = parse_int_like(src[key])) {
+        return *parsed;
     }
     return fallback;
 }
@@ -182,6 +207,20 @@ int read_candidate_weight(const nlohmann::json& entry, int fallback = 100) {
         return entry["probability"].get<int>();
     }
     return fallback;
+}
+
+bool is_placeholder_candidate(const nlohmann::json& candidate) {
+    if (candidate.is_null()) {
+        return true;
+    }
+    if (candidate.is_object()) {
+        std::string name = candidate.value("name", candidate.value("asset", std::string{}));
+        return name == "null";
+    }
+    if (candidate.is_string()) {
+        return candidate.get<std::string>() == "null";
+    }
+    return false;
 }
 
 std::string format_percent_summary(const nlohmann::json& entry,
@@ -342,8 +381,8 @@ void SpawnGroupConfigUI::load(const nlohmann::json& data) {
         method_ = static_cast<int>(std::distance(spawn_methods_.begin(), it));
     }
 
-    min_number_ = entry_.value("min_number", 1);
-    max_number_ = entry_.value("max_number", std::max(1, min_number_));
+    min_number_ = read_single_value(entry_, "min_number", 1);
+    max_number_ = read_single_value(entry_, "max_number", std::max(1, min_number_));
     overlap_ = entry_.value("check_overlap", false);
     spacing_ = entry_.value("enforce_spacing", entry_.value("check_min_spacing", false));
 
@@ -356,25 +395,19 @@ void SpawnGroupConfigUI::load(const nlohmann::json& data) {
         bool has_null = false;
         nlohmann::json::size_type null_index = 0;
         for (nlohmann::json::size_type idx = 0; idx < candidates.size(); ++idx) {
-            const auto& cand = candidates[idx];
-            bool is_null_candidate = cand.is_null();
-            if (!is_null_candidate && cand.is_object()) {
-                std::string name = cand.value("name", cand.value("asset", std::string{}));
-                if (name == "null") is_null_candidate = true;
-            } else if (!is_null_candidate && cand.is_string()) {
-                is_null_candidate = cand.get<std::string>() == "null";
-            }
-            if (is_null_candidate) {
+            if (is_placeholder_candidate(candidates[idx])) {
                 has_null = true;
                 null_index = idx;
                 break;
             }
         }
         if (!has_null) {
-            nlohmann::json null_entry;
-            null_entry["name"] = "null";
-            null_entry["chance"] = 0;
-            candidates.insert(candidates.begin(), std::move(null_entry));
+            if (candidates.empty()) {
+                nlohmann::json null_entry;
+                null_entry["name"] = "null";
+                null_entry["chance"] = 0;
+                candidates.insert(candidates.begin(), std::move(null_entry));
+            }
         } else if (null_index != 0 && null_index < candidates.size()) {
             auto null_entry = candidates[null_index];
             candidates.erase(candidates.begin() + static_cast<nlohmann::json::difference_type>(null_index));
@@ -621,14 +654,35 @@ void SpawnGroupConfigUI::add_candidate(const std::string& raw_name, int chance) 
     if (!entry_.contains("candidates") || !entry_["candidates"].is_array()) {
         entry_["candidates"] = nlohmann::json::array();
     }
+    auto& arr = entry_["candidates"];
     std::string name = raw_name;
     if (name.empty()) name = "null";
+    const bool placeholder = (name == "null");
+
+    if (!placeholder && arr.is_array()) {
+        bool has_real_candidate = false;
+        for (const auto& existing : arr) {
+            if (!is_placeholder_candidate(existing)) {
+                has_real_candidate = true;
+                break;
+            }
+        }
+        if (!has_real_candidate) {
+            nlohmann::json filtered = nlohmann::json::array();
+            for (const auto& existing : arr) {
+                if (!is_placeholder_candidate(existing)) {
+                    filtered.push_back(existing);
+                }
+            }
+            arr = std::move(filtered);
+        }
+    }
 
     nlohmann::json candidate;
     candidate["name"] = name;
-    candidate["chance"] = chance;
+    candidate["chance"] = placeholder ? 0 : clamp_slider_value(chance, 0, 100);
 
-    entry_["candidates"].push_back(std::move(candidate));
+    arr.push_back(std::move(candidate));
     rebuild_widgets();
     rebuild_rows();
     sync_json();
@@ -639,13 +693,7 @@ void SpawnGroupConfigUI::remove_candidate(size_t index) {
     auto& arr = entry_["candidates"];
     if (index >= arr.size()) return;
     const auto& cand = arr[index];
-    bool is_placeholder = cand.is_null();
-    if (!is_placeholder && cand.is_object()) {
-        std::string name = cand.value("name", cand.value("asset", std::string{}));
-        if (name == "null") is_placeholder = true;
-    } else if (!is_placeholder && cand.is_string()) {
-        is_placeholder = cand.get<std::string>() == "null";
-    }
+    bool is_placeholder = is_placeholder_candidate(cand);
     if (is_placeholder) return;
     arr.erase(arr.begin() + static_cast<nlohmann::json::difference_type>(index));
     rebuild_widgets();

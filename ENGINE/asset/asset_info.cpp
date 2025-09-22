@@ -11,6 +11,7 @@
 #include <sstream>
 #include <random>
 #include <cmath>
+#include <cctype>
 AssetInfo::AssetInfo(const std::string &asset_folder_name)
 : has_light_source(false) {
 	name = asset_folder_name;
@@ -44,10 +45,10 @@ AssetInfo::AssetInfo(const std::string &asset_folder_name)
                         }
                 }
         }
-	if (data.contains("animations") && data["animations"].is_object()) {
-		nlohmann::json new_anim = nlohmann::json::object();
-		for (auto it = data["animations"].begin(); it != data["animations"].end(); ++it) {
-			const std::string trig = it.key();
+        if (data.contains("animations") && data["animations"].is_object()) {
+                nlohmann::json new_anim = nlohmann::json::object();
+                for (auto it = data["animations"].begin(); it != data["animations"].end(); ++it) {
+                        const std::string trig = it.key();
 			const auto &anim_json = it.value();
 			nlohmann::json converted = anim_json;
 			if (!anim_json.contains("source")) {
@@ -84,14 +85,27 @@ AssetInfo::AssetInfo(const std::string &asset_folder_name)
 			}
 			mappings[id] = map;
 		}
-		info_json_["mappings"] = data["mappings"];
-	}
-	load_base_properties(data);
-	LightingLoader::load(*this, data);
-	const auto &ss = data.value("size_settings", nlohmann::json::object());
-	scale_factor = ss.value("scale_percentage", 100.0f) / 100.0f;
-	int scaled_canvas_w = static_cast<int>(original_canvas_width * scale_factor);
-	int scaled_canvas_h = static_cast<int>(original_canvas_height * scale_factor);
+                info_json_["mappings"] = data["mappings"];
+        }
+        smooth_scaling = true;
+        if (has_tag("pixel_art") || has_tag("preserve_pixels")) {
+                smooth_scaling = false;
+        }
+        load_base_properties(data);
+        LightingLoader::load(*this, data);
+        const auto &ss = data.value("size_settings", nlohmann::json::object());
+        scale_factor = ss.value("scale_percentage", 100.0f) / 100.0f;
+        if (ss.contains("scale_filter")) {
+                std::string filter = ss.value("scale_filter", std::string{});
+                for (char& ch : filter) {
+                        ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+                }
+                if (!filter.empty()) {
+                        smooth_scaling = !(filter == "nearest" || filter == "point" || filter == "none");
+                }
+        }
+        int scaled_canvas_w = static_cast<int>(original_canvas_width * scale_factor);
+        int scaled_canvas_h = static_cast<int>(original_canvas_height * scale_factor);
 	int offset_x = (scaled_canvas_w - 0) / 2;
 	int offset_y = (scaled_canvas_h - 0);
 	load_areas(data, scale_factor, offset_x, offset_y);
@@ -195,12 +209,21 @@ void AssetInfo::set_scale_factor(float factor) {
 }
 
 void AssetInfo::set_scale_percentage(float percent) {
-	scale_factor = percent / 100.0f;
-	if (!info_json_.contains("size_settings") ||
-	!info_json_["size_settings"].is_object()) {
-		info_json_["size_settings"] = nlohmann::json::object();
-	}
-	info_json_["size_settings"]["scale_percentage"] = percent;
+        scale_factor = percent / 100.0f;
+        if (!info_json_.contains("size_settings") ||
+        !info_json_["size_settings"].is_object()) {
+                info_json_["size_settings"] = nlohmann::json::object();
+        }
+        info_json_["size_settings"]["scale_percentage"] = percent;
+}
+
+void AssetInfo::set_scale_filter(bool smooth) {
+        smooth_scaling = smooth;
+        if (!info_json_.contains("size_settings") ||
+        !info_json_["size_settings"].is_object()) {
+                info_json_["size_settings"] = nlohmann::json::object();
+        }
+        info_json_["size_settings"]["scale_filter"] = smooth ? "linear" : "nearest";
 }
 
 void AssetInfo::set_tags(const std::vector<std::string> &t) {
