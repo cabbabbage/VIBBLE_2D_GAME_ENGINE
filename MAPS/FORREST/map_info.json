@@ -385,6 +385,8 @@
       "curvyness": 1,
       "edge_smoothness": 100,
       "geometry": "Circle",
+      "height_max": 2479,
+      "height_min": 100,
       "inherits_map_assets": false,
       "is_boss": false,
       "is_spawn": true,
@@ -402,150 +404,10 @@
             },
             {
               "chance": 100,
-              "name": "candle"
-            }
-          ],
-          "chance_denominator": 100,
-          "check_overlap": false,
-          "display_name": "candle",
-          "dx": 159,
-          "dy": -152,
-          "enforce_spacing": false,
-          "max_number": 2,
-          "min_number": 2,
-          "origional_height": 1824,
-          "origional_width": 1824,
-          "percentage_shift_from_center": 0,
-          "perimeter_x_offset_max": 0,
-          "perimeter_x_offset_min": 0,
-          "perimeter_y_offset_max": 0,
-          "perimeter_y_offset_min": 0,
-          "position": "Perimeter",
-          "sector_center": 0,
-          "sector_center_max": 0,
-          "sector_center_min": 0,
-          "sector_range": 360,
-          "sector_range_max": 360,
-          "sector_range_min": 360,
-          "spawn_id": "spn-068b19268052"
-        },
-        {
-          "candidates": [
-            {
-              "chance": 0,
-              "name": "null"
-            },
-            {
-              "chance": 100,
-              "name": "candle"
-            },
-            {
-              "chance": 100,
-              "name": "candle_3"
-            }
-          ],
-          "chance_denominator": 200,
-          "check_overlap": false,
-          "display_name": "candle",
-          "dx": -202,
-          "dy": -196,
-          "enforce_spacing": false,
-          "max_number": 21,
-          "min_number": 21,
-          "origional_height": 1502,
-          "origional_width": 1502,
-          "percentage_shift_from_center": 79,
-          "perimeter_x_offset": 16,
-          "perimeter_x_offset_max": 16,
-          "perimeter_x_offset_min": 16,
-          "perimeter_y_offset": 58,
-          "perimeter_y_offset_max": 58,
-          "perimeter_y_offset_min": 58,
-          "position": "Perimeter",
-          "spawn_id": "spn-ef4cef773211"
-        },
-        {
-          "candidates": [
-            {
-              "chance": 0,
-              "name": "null"
-            },
-            {
-              "chance": 100,
-              "name": "Grave_1"
-            }
-          ],
-          "chance_denominator": 100,
-          "check_overlap": false,
-          "display_name": "Grave_1",
-          "dx": 45,
-          "dy": -336,
-          "enforce_spacing": false,
-          "max_number": 1,
-          "min_number": 1,
-          "origional_height": 2218,
-          "origional_width": 2218,
-          "position": "Center",
-          "spawn_id": "spn-953cf9373e2b"
-        },
-        {
-          "candidates": [
-            {
-              "chance": 0,
-              "name": "null"
-            },
-            {
-              "chance": 100,
-              "name": "candle"
-            }
-          ],
-          "chance_denominator": 100,
-          "check_overlap": false,
-          "display_name": "candle",
-          "dx": -76,
-          "dy": -68,
-          "enforce_spacing": false,
-          "max_number": 1,
-          "min_number": 1,
-          "origional_height": 520,
-          "origional_width": 520,
-          "position": "Exact",
-          "spawn_id": "spn-440166410452"
-        },
-        {
-          "candidates": [
-            {
-              "chance": 0,
-              "name": "null"
-            },
-            {
-              "chance": 100,
-              "name": "Tree"
-            }
-          ],
-          "check_overlap": false,
-          "display_name": "Tree",
-          "dx": -1016,
-          "dy": -432,
-          "enforce_spacing": false,
-          "max_number": 1,
-          "min_number": 1,
-          "origional_height": 2480,
-          "origional_width": 2480,
-          "position": "Exact",
-          "spawn_id": "spn-dfee57eec2c4"
-        },
-        {
-          "candidates": [
-            {
-              "chance": 0,
-              "name": "null"
-            },
-            {
-              "chance": 100,
               "name": "Vibble"
             }
           ],
+          "chance_denominator": 100,
           "check_overlap": false,
           "display_name": "Vibble",
           "dx": -803,
@@ -566,90 +428,37 @@
             },
             {
               "chance": 100,
-              "name": "Barrel"
-            }
-          ],
-          "check_overlap": false,
-          "display_name": "Barrel",
-          "dx": -762,
-          "dy": -368,
-          "enforce_spacing": false,
-          "max_number": 1,
-          "min_number": 1,
-          "origional_height": 1156,
-          "origional_width": 1156,
-          "position": "Exact",
-          "spawn_id": "spn-045e8e87bd1c"
-        },
-        {
-          "candidates": [
-            {
-              "chance": 0,
-              "name": "null"
-            },
-            {
-              "chance": 100,
-              "name": "Barrel"
-            }
-          ],
-          "check_overlap": false,
-          "display_name": "Barrel",
-          "dx": -496,
-          "dy": -228,
-          "enforce_spacing": false,
-          "max_number": 1,
-          "min_number": 1,
-          "origional_height": 810,
-          "origional_width": 810,
-          "position": "Exact",
-          "spawn_id": "spn-fe094087f567"
-        },
-        {
-          "candidates": [
-            {
-              "chance": 0,
-              "name": "null"
-            },
-            {
-              "chance": 100,
-              "name": "Big_Rock"
-            }
-          ],
-          "check_overlap": false,
-          "display_name": "Big_Rock",
-          "dx": -537,
-          "dy": -82,
-          "enforce_spacing": false,
-          "max_number": 1,
-          "min_number": 1,
-          "origional_height": 810,
-          "origional_width": 810,
-          "position": "Exact",
-          "spawn_id": "spn-70e30fe221d2"
-        },
-        {
-          "candidates": [
-            {
-              "chance": 0,
-              "name": "null"
-            },
-            {
-              "chance": 100,
-              "name": "Bench"
+              "name": "Vibble"
             }
           ],
           "chance_denominator": 100,
           "check_overlap": false,
-          "display_name": "Bench",
-          "dx": -689,
-          "dy": -75,
+          "display_name": "Vibble Copy",
+          "dx": -803,
+          "dy": -176,
           "enforce_spacing": false,
           "max_number": 1,
           "min_number": 1,
-          "origional_height": 810,
-          "origional_width": 810,
+          "origional_height": 2480,
+          "origional_width": 2480,
           "position": "Exact",
-          "spawn_id": "spn-5594c145cf8f"
+          "spawn_id": "spn-be2e40a0b7a9"
+        },
+        {
+          "candidates": [
+            {
+              "chance": 0,
+              "name": "null"
+            }
+          ],
+          "chance_denominator": 0,
+          "check_overlap": false,
+          "display_name": "New Spawn",
+          "enforce_spacing": false,
+          "max_number": 2,
+          "min_number": 2,
+          "position": "Perimeter",
+          "spawn_id": "spn-0f680baa7d18"
         },
         {
           "candidates": [
@@ -659,91 +468,24 @@
             },
             {
               "chance": 100,
-              "name": "Bench"
+              "name": "candle"
             }
           ],
           "check_overlap": false,
-          "display_name": "Bench",
-          "dx": -742,
-          "dy": -97,
+          "display_name": "candle",
+          "dx": -1129,
+          "dy": -444,
           "enforce_spacing": false,
           "max_number": 1,
           "min_number": 1,
-          "origional_height": 810,
-          "origional_width": 810,
+          "origional_height": 2070,
+          "origional_width": 2070,
           "position": "Exact",
-          "spawn_id": "spn-44ea88e4be77"
-        },
-        {
-          "candidates": [
-            {
-              "chance": 0,
-              "name": "null"
-            },
-            {
-              "chance": 100,
-              "name": "Axe"
-            }
-          ],
-          "check_overlap": false,
-          "display_name": "Axe",
-          "dx": -937,
-          "dy": -394,
-          "enforce_spacing": false,
-          "max_number": 1,
-          "min_number": 1,
-          "origional_height": 1258,
-          "origional_width": 1258,
-          "position": "Exact",
-          "spawn_id": "spn-98999f752f6c"
-        },
-        {
-          "candidates": [
-            {
-              "chance": 0,
-              "name": "null"
-            },
-            {
-              "chance": 100,
-              "name": "Axe"
-            }
-          ],
-          "check_overlap": false,
-          "display_name": "Axe",
-          "dx": -943,
-          "dy": -359,
-          "enforce_spacing": false,
-          "max_number": 1,
-          "min_number": 1,
-          "origional_height": 1258,
-          "origional_width": 1258,
-          "position": "Exact",
-          "spawn_id": "spn-d279db8810cf"
-        },
-        {
-          "candidates": [
-            {
-              "chance": 0,
-              "name": "null"
-            },
-            {
-              "chance": 100,
-              "name": "Barrel"
-            }
-          ],
-          "check_overlap": false,
-          "display_name": "Barrel",
-          "dx": -630,
-          "dy": -318,
-          "enforce_spacing": false,
-          "max_number": 1,
-          "min_number": 1,
-          "origional_height": 1258,
-          "origional_width": 1258,
-          "position": "Exact",
-          "spawn_id": "spn-2c7a1130cab3"
+          "spawn_id": "spn-f5b494d0e6a7"
         }
-      ]
+      ],
+      "width_max": 2671,
+      "width_min": 100
     }
   },
   "trails_data": {
@@ -837,13 +579,15 @@
     "brick": {
       "curvyness": 4,
       "geometry": "Square",
+      "height_max": 1000,
+      "height_min": 371,
       "inherits_map_assets": true,
       "is_boss": false,
       "is_spawn": false,
       "max_height": 1000,
-      "max_width": 1000,
-      "min_height": 100,
-      "min_width": 100,
+      "max_width": 1148,
+      "min_height": 371,
+      "min_width": 307,
       "name": "brick",
       "spawn_groups": [
         {
@@ -992,7 +736,9 @@
           "position": "Exact",
           "spawn_id": "spn-bec35a597882"
         }
-      ]
+      ],
+      "width_max": 1148,
+      "width_min": 307
     }
   }
 }

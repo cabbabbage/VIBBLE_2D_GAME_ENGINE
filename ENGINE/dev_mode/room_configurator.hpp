@@ -47,8 +47,10 @@ private:
     void apply_bounds_if_needed();
     void rebuild_rows();
     std::string selected_geometry() const;
+    bool should_rebuild_with(const nlohmann::json& data) const;
     SDL_Rect bounds_{0,0,0,0};
     SDL_Rect applied_bounds_{-1,-1,0,0};
+    bool using_docked_bounds_ = false;
     std::vector<std::string> room_geom_options_;
     Room* room_ = nullptr;
     nlohmann::json loaded_json_;

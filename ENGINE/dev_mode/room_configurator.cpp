@@ -81,10 +81,15 @@ std::pair<int, int> compute_slider_range(int min_value, int max_value) {
     slider_max = std::min(200000, slider_max);
     return {slider_min, slider_max};
 }
+
+const nlohmann::json& empty_object() {
+    static const nlohmann::json kEmpty = nlohmann::json::object();
+    return kEmpty;
+}
 } // namespace
 
 RoomConfigurator::RoomConfigurator()
-    : DockableCollapsible("Room Config", false, 0, 0) {
+    : DockableCollapsible("Room Config", true, 0, 0) {
     if (room_geom_options_.empty()) {
         room_geom_options_ = {"Square", "Circle"};
     }
@@ -103,11 +108,28 @@ RoomConfigurator::~RoomConfigurator() = default;
 
 void RoomConfigurator::set_bounds(const SDL_Rect& bounds) {
     bounds_ = bounds;
+    const bool docked = bounds_.w > 0 && bounds_.h > 0;
+    if (using_docked_bounds_ != docked) {
+        using_docked_bounds_ = docked;
+        floatable_ = !docked;
+        set_show_header(show_header());
+    }
     applied_bounds_ = SDL_Rect{-1, -1, 0, 0};
     apply_bounds_if_needed();
 }
 
 void RoomConfigurator::apply_bounds_if_needed() {
+    if (!using_docked_bounds_) {
+        if (bounds_.w > 0 && bounds_.h > 0) {
+            set_work_area(bounds_);
+        } else {
+            set_work_area(SDL_Rect{0, 0, 0, 0});
+        }
+        set_available_height_override(-1);
+        applied_bounds_ = bounds_;
+        return;
+    }
+
     if (bounds_.w <= 0 || bounds_.h <= 0) {
         set_available_height_override(-1);
         set_work_area(SDL_Rect{0, 0, 0, 0});
@@ -172,27 +194,51 @@ std::string RoomConfigurator::selected_geometry() const {
     return room_geom_options_[idx];
 }
 
+bool RoomConfigurator::should_rebuild_with(const nlohmann::json& data) const {
+    if (!is_visible()) {
+        return true;
+    }
+    if (!loaded_json_.is_object()) {
+        return true;
+    }
+    const nlohmann::json& normalized = data.is_object() ? data : empty_object();
+    return loaded_json_ != normalized;
+}
+
 void RoomConfigurator::open(const nlohmann::json& data) {
     room_ = nullptr;
+    const bool was_visible = is_visible();
+    if (!should_rebuild_with(data)) {
+        set_visible(true);
+        if (!was_visible) set_expanded(true);
+        apply_bounds_if_needed();
+        return;
+    }
     load_from_json(data);
     rebuild_rows();
     reset_scroll();
     set_visible(true);
-    set_expanded(true);
+    if (!was_visible) set_expanded(true);
     apply_bounds_if_needed();
 }
 
 void RoomConfigurator::open(Room* room) {
+    Room* previous_room = room_;
+    const bool same_room = (room == previous_room);
+    const nlohmann::json& source = room ? room->assets_data() : empty_object();
     room_ = room;
-    if (room) {
-        load_from_json(room->assets_data());
-    } else {
-        load_from_json(nlohmann::json::object());
+    const bool was_visible = is_visible();
+    if (same_room && !should_rebuild_with(source)) {
+        set_visible(true);
+        if (!was_visible) set_expanded(true);
+        apply_bounds_if_needed();
+        return;
     }
+    load_from_json(source);
     rebuild_rows();
     reset_scroll();
     set_visible(true);
-    set_expanded(true);
+    if (!was_visible) set_expanded(true);
     apply_bounds_if_needed();
 }
 

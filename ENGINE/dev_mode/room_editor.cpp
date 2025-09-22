@@ -110,6 +110,10 @@ void RoomEditor::set_room_config_visible(bool visible) {
     ensure_room_configurator();
     if (!room_cfg_ui_) return;
     if (visible) {
+        if (spawn_groups_cfg_ui_) {
+            spawn_groups_cfg_ui_->close_all();
+            spawn_groups_cfg_ui_->close();
+        }
         room_cfg_ui_->open(current_room_);
     }
     room_config_dock_open_ = visible;
@@ -492,6 +496,10 @@ std::shared_ptr<AssetInfo> RoomEditor::consume_selected_asset_from_library() {
 void RoomEditor::open_asset_info_editor(const std::shared_ptr<AssetInfo>& info) {
     if (!info) return;
     if (library_ui_) library_ui_->close();
+    if (spawn_groups_cfg_ui_) {
+        spawn_groups_cfg_ui_->close_all();
+        spawn_groups_cfg_ui_->close();
+    }
     if (!info_ui_) info_ui_ = std::make_unique<AssetInfoUI>();
     if (info_ui_) info_ui_->set_assets(assets_);
     if (info_ui_) {
@@ -1920,6 +1928,7 @@ void RoomEditor::open_spawn_group_editor_by_id(const std::string& spawn_id) {
     ensure_spawn_groups_config_ui();
     if (!spawn_groups_cfg_ui_) return;
     close_asset_info_editor();
+    close_room_config();
     close_asset_library();
     update_spawn_groups_config_anchor();
     SDL_Point anchor = spawn_groups_anchor_point();

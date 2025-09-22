@@ -2,10 +2,18 @@
 #include "spawn_group_config_ui.hpp"
 #include "dm_styles.hpp"
 #include "utils/input.hpp"
+#include "FloatingDockableManager.hpp"
 
 namespace {
 constexpr int kStandaloneWidth = 1920;
 constexpr int kStandaloneHeight = 1080;
+
+nlohmann::json normalize_spawn_assets(const nlohmann::json& assets) {
+    if (assets.is_array()) {
+        return assets;
+    }
+    return nlohmann::json::array();
+}
 }
 
 SpawnGroupsConfig::SpawnGroupsConfig()
@@ -15,10 +23,37 @@ SpawnGroupsConfig::SpawnGroupsConfig()
     set_cell_width(120);
 }
 
+bool SpawnGroupsConfig::should_rebuild_with(const nlohmann::json& normalized_assets) const {
+    if (!is_visible()) {
+        return true;
+    }
+    if (!entries_loaded_) {
+        return true;
+    }
+    if (last_loaded_source_ != &temp_assets_) {
+        return true;
+    }
+    return loaded_snapshot_ != normalized_assets;
+}
+
 void SpawnGroupsConfig::open(const nlohmann::json& assets, std::function<void(const nlohmann::json&)> on_close) {
     on_close_ = std::move(on_close);
+    FloatingDockableManager::instance().open_floating(
+        "Spawn Groups", this, [this]() {
+            this->close_all();
+            this->close();
+        });
     // make copy for standalone editing
-    temp_assets_ = assets;
+    nlohmann::json normalized = normalize_spawn_assets(assets);
+    if (!should_rebuild_with(normalized)) {
+        set_visible(true);
+        set_expanded(true);
+        Input dummy;
+        update(dummy, kStandaloneWidth, kStandaloneHeight);
+        return;
+    }
+
+    temp_assets_ = normalized;
     load(temp_assets_, [](){}, {});
     if (!b_done_) {
         b_done_ = std::make_unique<DMButton>("Done", &DMStyles::ListButton(), 80, DMButton::height());
@@ -47,12 +82,34 @@ void SpawnGroupsConfig::load(nlohmann::json& assets,
                         std::function<void()> on_change,
                         std::function<void(const nlohmann::json&, const SpawnGroupConfigUI::ChangeSummary&)> on_entry_change,
                         ConfigureEntryCallback configure_entry) {
-    entries_.clear();
+    nlohmann::json normalized = normalize_spawn_assets(assets);
+    const bool source_changed = (last_loaded_source_ != &assets);
+    const bool content_changed = (loaded_snapshot_ != normalized);
+
     assets_json_ = &assets;
     on_change_ = std::move(on_change);
     on_entry_change_ = std::move(on_entry_change);
     configure_entry_ = std::move(configure_entry);
-    if (!assets.is_array()) return;
+    last_loaded_source_ = &assets;
+
+    if (entries_loaded_ && !source_changed && !content_changed) {
+        if (configure_entry_) {
+            for (auto& entry : entries_) {
+                if (entry.cfg && entry.json) {
+                    configure_entry_(*entry.cfg, *entry.json);
+                }
+            }
+        }
+        return;
+    }
+
+    entries_.clear();
+    if (!assets.is_array()) {
+        loaded_snapshot_ = std::move(normalized);
+        entries_loaded_ = true;
+        return;
+    }
+
     for (auto& it : assets) {
         Entry e;
         e.id = it.value("spawn_id", std::string{});
@@ -76,6 +133,8 @@ void SpawnGroupsConfig::load(nlohmann::json& assets,
         });
         entries_.push_back(std::move(e));
     }
+    loaded_snapshot_ = std::move(normalized);
+    entries_loaded_ = true;
 }
 
 void SpawnGroupsConfig::append_rows(DockableCollapsible::Rows& rows) {

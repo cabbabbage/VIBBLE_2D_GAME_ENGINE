@@ -49,6 +49,7 @@ public:
     bool any_visible() const;
     bool is_point_inside(int x, int y) const;
 private:
+    bool should_rebuild_with(const nlohmann::json& normalized_assets) const;
     struct Entry {
         std::string id;
         std::unique_ptr<SpawnGroupConfigUI> cfg;
@@ -62,6 +63,9 @@ private:
     std::function<void(const nlohmann::json&, const SpawnGroupConfigUI::ChangeSummary&)> on_entry_change_;
     ConfigureEntryCallback configure_entry_;
     nlohmann::json temp_assets_;
+    nlohmann::json loaded_snapshot_;
+    nlohmann::json* last_loaded_source_ = nullptr;
+    bool entries_loaded_ = false;
     int anchor_x_ = 0;
     int anchor_y_ = 0;
     std::unique_ptr<DMButton> b_done_;
