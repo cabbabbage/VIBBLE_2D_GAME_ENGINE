@@ -25,11 +25,13 @@ struct SpawnInfo {
     std::string spawn_id;
     int quantity = 0;
     bool check_spacing = false;
+    bool check_min_spacing = false;
 
     // Exact & Perimeter share dx/dy semantics (relative to room center; scaled by orig size)
     SDL_Point exact_offset{0, 0};
     int exact_origin_w = 0;
     int exact_origin_h = 0;
+    SDL_Point exact_point{-1, -1};
 
     // Perimeter-only (fixed ring radius)
     int perimeter_radius = 0;

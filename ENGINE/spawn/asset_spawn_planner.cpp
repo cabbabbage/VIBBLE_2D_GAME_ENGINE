@@ -215,21 +215,35 @@ void AssetSpawnPlanner::parse_asset_spawns(const Area& area) {
         if (candidates.empty()) continue;
 
         // --- Build SpawnInfo (minimal fields only) ---
+        auto average_range = [&](const std::string& lo_key, const std::string& hi_key, int fallback) {
+            int lo = asset.value(lo_key, fallback);
+            int hi = asset.value(hi_key, fallback);
+            if (lo == fallback && hi != fallback) return hi;
+            if (hi == fallback && lo != fallback) return lo;
+            return (lo + hi) / 2;
+        };
+
         SpawnInfo s{};
-        s.name       = display_name;
-        s.position   = position;
-        s.spawn_id   = spawn_id;
-        s.quantity   = quantity;
-        s.check_spacing = asset.value("check_spacing", false);
+        s.name     = display_name;
+        s.position = position;
+        s.spawn_id = spawn_id;
+        s.quantity = quantity;
+
+        s.check_spacing     = asset.value("check_spacing", asset.value("check_overlap", false));
+        s.check_min_spacing = asset.value("enforce_spacing", asset.value("check_min_spacing", false));
 
         // Exact & Perimeter share dx/dy semantics (relative to room center; scaled by orig size)
-        s.exact_offset.x = asset.value("dx", 0);
-        s.exact_offset.y = asset.value("dy", 0);
-        s.exact_origin_w = asset.value("origional_width",  0);
-        s.exact_origin_h = asset.value("origional_height", 0);
+        s.exact_offset.x = asset.value("dx", asset.value("exact_dx", 0));
+        s.exact_offset.y = asset.value("dy", asset.value("exact_dy", 0));
+        s.exact_origin_w = asset.value("origional_width",  asset.value("exact_origin_width", 0));
+        s.exact_origin_h = asset.value("origional_height", asset.value("exact_origin_height", 0));
+        s.exact_point.x  = asset.value("ep_x", average_range("ep_x_min", "ep_x_max", -1));
+        s.exact_point.y  = asset.value("ep_y", average_range("ep_y_min", "ep_y_max", -1));
 
-        // New Perimeter-only radius
-        s.perimeter_radius = (position == "Perimeter") ? asset.value("radius", 0) : 0;
+        // New perimeter schema prefers radius, but support legacy keys as fallback.
+        if (position == "Perimeter") {
+            s.perimeter_radius = asset.value("radius", asset.value("perimeter_radius", 0));
+        }
 
         s.candidates = std::move(candidates);
         spawn_queue_.push_back(std::move(s));

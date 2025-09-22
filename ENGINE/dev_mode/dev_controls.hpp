@@ -96,8 +96,8 @@ private:
     void toggle_map_light_panel();
     void toggle_camera_panel();
     void close_camera_panel();
-    void configure_map_mode_header_buttons();
-    void sync_map_mode_header_button_states();
+    void configure_header_button_sets();
+    void sync_header_button_states();
     bool handle_map_mode_asset_click(const Input& input);
     Asset* hit_test_boundary_asset(SDL_Point screen_point) const;
     Room* find_spawn_room() const;
@@ -105,6 +105,8 @@ private:
     void ensure_map_assets_panel();
     bool is_pointer_over_dev_ui(int x, int y) const;
     bool handle_shared_assets_event(const SDL_Event& event);
+    void close_all_floating_panels();
+    void maybe_update_mode_from_zoom();
 
 private:
     Assets* assets_ = nullptr;
@@ -123,7 +125,6 @@ private:
 
     std::unique_ptr<RoomEditor> room_editor_;
     std::unique_ptr<MapEditor> map_editor_;
-    std::unique_ptr<MapLightPanel> map_light_panel_;
     nlohmann::json* map_info_json_ = nullptr;
     MapLightPanel::SaveCallback map_light_save_cb_;
     std::unique_ptr<MapModeUI> map_mode_ui_;

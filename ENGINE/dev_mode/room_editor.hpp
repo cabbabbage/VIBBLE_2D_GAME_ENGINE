@@ -25,6 +25,7 @@ class Room;
 class MapGrid;
 class DMButton;
 class MapAssetsPanel;
+class FullScreenCollapsible;
 
 class RoomEditor {
 public:
@@ -38,6 +39,7 @@ public:
     void set_current_room(Room* room);
     void set_map_assets_panel(MapAssetsPanel* panel);
     void set_room_config_visible(bool visible);
+    void set_shared_fullscreen_panel(FullScreenCollapsible* panel);
 
     void set_enabled(bool enabled);
     bool is_enabled() const { return enabled_; }
@@ -47,6 +49,7 @@ public:
     bool handle_sdl_event(const SDL_Event& event);
     bool is_room_panel_blocking_point(int x, int y) const;
     void render_overlays(SDL_Renderer* renderer);
+    void render_room_config_fullscreen(SDL_Renderer* renderer);
 
     void toggle_asset_library();
     void open_asset_library();
@@ -123,13 +126,16 @@ private:
     void refresh_assets_config_ui();
     void update_exact_json(nlohmann::json& entry, const Asset& asset, SDL_Point center, int width, int height);
     void update_percent_json(nlohmann::json& entry, const Asset& asset, SDL_Point center, int width, int height);
-    void update_perimeter_border_json(nlohmann::json& entry, double border_shift);
-    void update_perimeter_center_json(nlohmann::json& entry, SDL_Point offset);
+    void save_perimeter_json(nlohmann::json& entry, int dx, int dy, int orig_w, int orig_h, int radius);
     void handle_spawn_config_change(const nlohmann::json& entry, const AssetConfigUI::ChangeSummary& summary);
     void respawn_spawn_group(const nlohmann::json& entry);
     std::unique_ptr<MapGrid> build_room_grid(const std::string& ignore_spawn_id) const;
     void integrate_spawned_assets(std::vector<std::unique_ptr<Asset>>& spawned);
     void regenerate_current_room();
+    void configure_shared_panel();
+    void refresh_room_config_visibility();
+    void update_room_config_layout_for_fullscreen();
+    bool handle_shared_panel_event(const SDL_Event& event);
 
 private:
     Assets* assets_ = nullptr;
@@ -149,6 +155,9 @@ private:
     std::unique_ptr<RoomConfigurator> room_cfg_ui_;
     SDL_Rect room_config_bounds_{0, 0, 0, 0};
     MapAssetsPanel* shared_map_assets_panel_ = nullptr;
+    FullScreenCollapsible* shared_fullscreen_panel_ = nullptr;
+    bool room_config_dock_open_ = false;
+    bool room_config_fullscreen_visible_ = false;
 
     bool last_area_editor_active_ = false;
     bool area_editor_override_active_ = false;
@@ -168,8 +177,13 @@ private:
     std::vector<DraggedAssetState> drag_states_;
     SDL_Point drag_last_world_{0, 0};
     SDL_Point drag_room_center_{0, 0};
+    SDL_Point drag_perimeter_circle_center_{0, 0};
     double drag_perimeter_base_radius_ = 0.0;
-    SDL_Point drag_perimeter_start_offset_{0, 0};
+    SDL_Point drag_perimeter_center_offset_world_{0, 0};
+    int drag_perimeter_orig_w_ = 0;
+    int drag_perimeter_orig_h_ = 0;
+    int drag_perimeter_curr_w_ = 0;
+    int drag_perimeter_curr_h_ = 0;
     bool drag_moved_ = false;
     std::string drag_spawn_id_;
     Uint32 last_click_time_ms_ = 0;

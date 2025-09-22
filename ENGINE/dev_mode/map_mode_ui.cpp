@@ -6,7 +6,6 @@
 #include "map_assets_panel.hpp"
 #include "map_layers_controller.hpp"
 #include "map_layers_panel.hpp"
-#include "MapLightPanel.hpp"
 #include "core/AssetsManager.hpp"
 #include "utils/input.hpp"
 
@@ -16,6 +15,7 @@
 #include <fstream>
 #include <iostream>
 #include <vector>
+#include <utility>
 #include <nlohmann/json.hpp>
 
 namespace {
@@ -24,7 +24,6 @@ constexpr int kDefaultPanelY = 48;
 constexpr const char* kButtonIdLayers = "layers";
 constexpr const char* kButtonIdLights = "lights";
 constexpr const char* kButtonIdAssets = "assets";
-constexpr const char* kButtonIdRoomEditor = "room_editor";
 }
 
 MapModeUI::MapModeUI(Assets* assets)
@@ -56,17 +55,13 @@ void MapModeUI::set_shared_assets_panel(const std::shared_ptr<MapAssetsPanel>& p
     sync_panel_map_info();
 }
 
-void MapModeUI::set_room_editor_callback(std::function<void()> cb) {
-    request_room_editor_cb_ = std::move(cb);
-}
-
 void MapModeUI::set_map_mode_active(bool active) {
     map_mode_active_ = active;
     if (active) {
         footer_buttons_configured_ = false;
     }
     ensure_panels();
-    if (footer_panel_ && active) {
+    if (footer_panel_) {
         footer_panel_->set_expanded(false);
     }
     update_footer_visibility();
@@ -84,19 +79,43 @@ void MapModeUI::set_footer_always_visible(bool on) {
     update_footer_visibility();
 }
 
-void MapModeUI::set_additional_header_buttons(std::vector<HeaderButtonConfig> buttons) {
-    additional_buttons_ = std::move(buttons);
+void MapModeUI::set_mode_button_sets(std::vector<HeaderButtonConfig> map_buttons,
+                                     std::vector<HeaderButtonConfig> room_buttons) {
+    map_mode_buttons_ = std::move(map_buttons);
+    room_mode_buttons_ = std::move(room_buttons);
     footer_buttons_configured_ = false;
     ensure_panels();
 }
 
-void MapModeUI::set_additional_button_state(const std::string& id, bool active) {
-    auto it = std::find_if(additional_buttons_.begin(), additional_buttons_.end(),
-                           [&](const HeaderButtonConfig& cfg) { return cfg.id == id; });
-    if (it != additional_buttons_.end()) {
-        it->active = active;
+void MapModeUI::set_header_mode(HeaderMode mode) {
+    if (header_mode_ == mode) {
+        return;
     }
-    if (footer_panel_) {
+    header_mode_ = mode;
+    footer_buttons_configured_ = false;
+    ensure_panels();
+    sync_footer_button_states();
+}
+
+MapModeUI::HeaderButtonConfig* MapModeUI::find_button(HeaderMode mode, const std::string& id) {
+    auto& list = (mode == HeaderMode::Map) ? map_mode_buttons_ : room_mode_buttons_;
+    auto it = std::find_if(list.begin(), list.end(),
+                           [&](const HeaderButtonConfig& cfg) { return cfg.id == id; });
+    if (it == list.end()) {
+        return nullptr;
+    }
+    return &(*it);
+}
+
+void MapModeUI::set_button_state(const std::string& id, bool active) {
+    set_button_state(header_mode_, id, active);
+}
+
+void MapModeUI::set_button_state(HeaderMode mode, const std::string& id, bool active) {
+    if (HeaderButtonConfig* cfg = find_button(mode, id)) {
+        cfg->active = active;
+    }
+    if (footer_panel_ && mode == header_mode_) {
         footer_panel_->set_button_active_state(id, active);
     }
 }
@@ -269,77 +288,99 @@ void MapModeUI::configure_footer_buttons() {
 
     std::vector<FullScreenCollapsible::HeaderButton> buttons;
 
-    FullScreenCollapsible::HeaderButton room_btn;
-    room_btn.id = kButtonIdRoomEditor;
-    room_btn.label = "Room Editor";
-    room_btn.momentary = true;
-    room_btn.on_toggle = [this](bool) {
-        if (request_room_editor_cb_) {
-            request_room_editor_cb_();
+    auto append_custom = [&](std::vector<HeaderButtonConfig>& configs, HeaderMode mode) {
+        for (auto& config : configs) {
+            FullScreenCollapsible::HeaderButton extra;
+            extra.id = config.id;
+            extra.label = config.label;
+            extra.active = config.active;
+            extra.momentary = config.momentary;
+            extra.style_override = config.style_override;
+            auto* cfg_ptr = &config;
+            extra.on_toggle = [this, cfg_ptr, mode](bool active) {
+                if (cfg_ptr->on_toggle) {
+                    cfg_ptr->on_toggle(active);
+                }
+                if (cfg_ptr->momentary) {
+                    set_button_state(mode, cfg_ptr->id, false);
+                } else {
+                    set_button_state(mode, cfg_ptr->id, active);
+                }
+            };
+            buttons.push_back(std::move(extra));
         }
     };
-    buttons.push_back(std::move(room_btn));
 
-    FullScreenCollapsible::HeaderButton layers_btn;
-    layers_btn.id = kButtonIdLayers;
-    layers_btn.label = "Layers";
-    layers_btn.on_toggle = [this](bool active) {
-        if (active) {
-            set_active_panel(PanelType::Layers);
-        } else if (active_panel_ == PanelType::Layers) {
-            set_active_panel(PanelType::None);
-        }
-    };
-    buttons.push_back(std::move(layers_btn));
+    if (header_mode_ == HeaderMode::Map) {
+        FullScreenCollapsible::HeaderButton layers_btn;
+        layers_btn.id = kButtonIdLayers;
+        layers_btn.label = "Layers";
+        layers_btn.on_toggle = [this](bool active) {
+            if (active) {
+                set_active_panel(PanelType::Layers);
+            } else if (active_panel_ == PanelType::Layers) {
+                set_active_panel(PanelType::None);
+            }
+        };
+        buttons.push_back(std::move(layers_btn));
 
-    FullScreenCollapsible::HeaderButton lights_btn;
-    lights_btn.id = kButtonIdLights;
-    lights_btn.label = "Lighting";
-    lights_btn.on_toggle = [this](bool active) {
-        if (active) {
-            set_active_panel(PanelType::Lights);
-        } else if (active_panel_ == PanelType::Lights) {
-            set_active_panel(PanelType::None);
-        }
-    };
-    buttons.push_back(std::move(lights_btn));
+        FullScreenCollapsible::HeaderButton lights_btn;
+        lights_btn.id = kButtonIdLights;
+        lights_btn.label = "Lighting";
+        lights_btn.on_toggle = [this](bool active) {
+            if (active) {
+                set_active_panel(PanelType::Lights);
+            } else if (active_panel_ == PanelType::Lights) {
+                set_active_panel(PanelType::None);
+            }
+        };
+        buttons.push_back(std::move(lights_btn));
 
-    FullScreenCollapsible::HeaderButton assets_btn;
-    assets_btn.id = kButtonIdAssets;
-    assets_btn.label = "Map Assets";
-    assets_btn.on_toggle = [this](bool active) {
-        if (active) {
-            set_active_panel(PanelType::Assets);
-        } else if (active_panel_ == PanelType::Assets) {
-            set_active_panel(PanelType::None);
-        }
-    };
-    buttons.push_back(std::move(assets_btn));
+        FullScreenCollapsible::HeaderButton assets_btn;
+        assets_btn.id = kButtonIdAssets;
+        assets_btn.label = "Map Assets";
+        assets_btn.on_toggle = [this](bool active) {
+            if (active) {
+                set_active_panel(PanelType::Assets);
+            } else if (active_panel_ == PanelType::Assets) {
+                set_active_panel(PanelType::None);
+            }
+        };
+        buttons.push_back(std::move(assets_btn));
 
-    for (const auto& config : additional_buttons_) {
-        FullScreenCollapsible::HeaderButton extra;
-        extra.id = config.id;
-        extra.label = config.label;
-        extra.active = config.active;
-        extra.momentary = config.momentary;
-        extra.style_override = config.style_override;
-        extra.on_toggle = config.on_toggle;
-        buttons.push_back(std::move(extra));
+        append_custom(map_mode_buttons_, HeaderMode::Map);
+    } else {
+        append_custom(room_mode_buttons_, HeaderMode::Room);
     }
 
     footer_panel_->set_header_buttons(std::move(buttons));
     footer_buttons_configured_ = true;
     sync_footer_button_states();
-    for (const auto& config : additional_buttons_) {
-        footer_panel_->set_button_active_state(config.id, config.active);
+    if (header_mode_ == HeaderMode::Map) {
+        for (const auto& config : map_mode_buttons_) {
+            footer_panel_->set_button_active_state(config.id, config.active);
+        }
+    } else {
+        for (const auto& config : room_mode_buttons_) {
+            footer_panel_->set_button_active_state(config.id, config.active);
+        }
     }
 }
 
 void MapModeUI::sync_footer_button_states() {
     if (!footer_panel_) return;
-    footer_panel_->set_button_active_state(kButtonIdLayers, active_panel_ == PanelType::Layers);
-    footer_panel_->set_button_active_state(kButtonIdLights, active_panel_ == PanelType::Lights);
-    footer_panel_->set_button_active_state(kButtonIdAssets, active_panel_ == PanelType::Assets);
+    if (header_mode_ == HeaderMode::Map) {
+        footer_panel_->set_button_active_state(kButtonIdLayers, active_panel_ == PanelType::Layers);
+        footer_panel_->set_button_active_state(kButtonIdLights, active_panel_ == PanelType::Lights);
+        footer_panel_->set_button_active_state(kButtonIdAssets, active_panel_ == PanelType::Assets);
+        for (const auto& config : map_mode_buttons_) {
+            footer_panel_->set_button_active_state(config.id, config.active);
+        }
+    } else {
+        for (const auto& config : room_mode_buttons_) {
+            footer_panel_->set_button_active_state(config.id, config.active);
+        }
+    }
 }
 
 void MapModeUI::update_footer_visibility() {
@@ -502,7 +543,11 @@ void MapModeUI::sync_panel_map_info() {
     if (!map_info_) return;
     ensure_panels();
     if (light_panel_) {
-        light_panel_->set_map_info(map_info_, [this]() { save_map_info_to_disk(); });
+        LightSaveCallback callback = light_save_callback_;
+        if (!callback) {
+            callback = [this]() { save_map_info_to_disk(); };
+        }
+        light_panel_->set_map_info(map_info_, callback);
     }
     if (assets_panel_) {
         assets_panel_->set_map_info(map_info_, map_path_);
@@ -603,7 +648,7 @@ void MapModeUI::render(SDL_Renderer* renderer) const {
             panel->render(renderer);
         }
     }
-    if (map_mode_active_ && footer_panel_ && footer_panel_->visible()) {
+    if (footer_panel_ && footer_panel_->visible()) {
         footer_panel_->render(renderer);
         render_layers_footer(renderer);
     } else {
@@ -641,11 +686,32 @@ void MapModeUI::close_all_panels() {
 }
 
 
+bool MapModeUI::is_assets_panel_visible() const {
+    return assets_panel_ && assets_panel_->is_visible();
+}
+
+bool MapModeUI::is_light_panel_visible() const {
+    return light_panel_ && light_panel_->is_visible();
+}
+
+void MapModeUI::set_light_save_callback(LightSaveCallback cb) {
+    light_save_callback_ = std::move(cb);
+    ensure_panels();
+    if (light_panel_) {
+        LightSaveCallback callback = light_save_callback_;
+        if (!callback) {
+            callback = [this]() { save_map_info_to_disk(); };
+        }
+        light_panel_->set_map_info(map_info_, callback);
+    }
+}
+
+
 bool MapModeUI::is_point_inside(int x, int y) const {
     if (pointer_inside_floating_panel(x, y)) {
         return true;
     }
-    if (map_mode_active_ && footer_panel_ && footer_panel_->visible() && footer_panel_->contains(x, y)) {
+    if (footer_panel_ && footer_panel_->visible() && footer_panel_->contains(x, y)) {
         return true;
     }
     if (layers_footer_visible_ && layers_panel_ && layers_panel_->is_point_inside(x, y)) {

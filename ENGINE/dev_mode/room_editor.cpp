@@ -10,6 +10,7 @@
 #include "dev_mode/asset_library_ui.hpp"
 #include "dev_mode/assets_config.hpp"
 #include "dev_mode/map_assets_panel.hpp"
+#include "dev_mode/full_screen_collapsible.hpp"
 #include "dev_mode/room_configurator.hpp"
 #include "dev_mode/widgets.hpp"
 #include "render/camera.hpp"
@@ -27,6 +28,7 @@
 #include "utils/map_grid.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <iostream>
 #include <cctype>
@@ -98,9 +100,11 @@ void RoomEditor::set_screen_dimensions(int width, int height) {
     screen_w_ = width;
     screen_h_ = height;
     update_room_config_bounds();
-    if (room_cfg_ui_) {
+    if (room_cfg_ui_ && room_config_dock_open_) {
         room_cfg_ui_->set_bounds(room_config_bounds_);
     }
+    configure_shared_panel();
+    refresh_room_config_visibility();
 }
 
 void RoomEditor::set_map_assets_panel(MapAssetsPanel* panel) {
@@ -110,12 +114,17 @@ void RoomEditor::set_map_assets_panel(MapAssetsPanel* panel) {
 void RoomEditor::set_room_config_visible(bool visible) {
     ensure_room_configurator();
     if (!room_cfg_ui_) return;
-    room_cfg_ui_->set_bounds(room_config_bounds_);
     if (visible) {
         room_cfg_ui_->open(current_room_);
-    } else {
-        room_cfg_ui_->close();
     }
+    room_config_dock_open_ = visible;
+    refresh_room_config_visibility();
+}
+
+void RoomEditor::set_shared_fullscreen_panel(FullScreenCollapsible* panel) {
+    shared_fullscreen_panel_ = panel;
+    configure_shared_panel();
+    update_room_config_layout_for_fullscreen();
 }
 
 void RoomEditor::set_current_room(Room* room) {
@@ -126,11 +135,10 @@ void RoomEditor::set_current_room(Room* room) {
         ensure_spawn_groups_array(current_room_->assets_data());
     }
     rebuild_room_spawn_id_cache();
-    sync_room_panel_button_states();
 
-    if (room_cfg_ui_ && room_cfg_ui_->visible()) {
+    if (room_cfg_ui_) {
         room_cfg_ui_->open(current_room_);
-        room_cfg_ui_->set_bounds(room_config_bounds_);
+        refresh_room_config_visibility();
     }
 
     if (enabled_ && room_changed && current_room_) {
@@ -151,6 +159,11 @@ void RoomEditor::set_enabled(bool enabled) {
         focus_camera_on_room_center();
         ensure_room_configurator();
         set_room_config_visible(true);
+        configure_shared_panel();
+        if (shared_fullscreen_panel_) {
+            shared_fullscreen_panel_->set_expanded(false);
+        }
+        update_room_config_layout_for_fullscreen();
     } else {
         apply_area_editor_camera_override(false);
         cam.set_parallax_enabled(true);
@@ -166,6 +179,11 @@ void RoomEditor::set_enabled(bool enabled) {
         info_for_reopen_.reset();
         last_area_editor_active_ = false;
         set_room_config_visible(false);
+        room_config_fullscreen_visible_ = false;
+        if (shared_fullscreen_panel_) {
+            shared_fullscreen_panel_->set_expanded(false);
+        }
+        refresh_room_config_visibility();
     }
 
     if (input_) input_->clearClickBuffer();
@@ -188,11 +206,11 @@ void RoomEditor::update(const Input& input) {
 }
 
 void RoomEditor::update_ui(const Input& input) {
+    update_room_config_layout_for_fullscreen();
     if (library_ui_ && library_ui_->is_visible()) {
         library_ui_->update(input, screen_w_, screen_h_, assets_->library(), *assets_);
     }
     if (room_cfg_ui_ && room_cfg_ui_->visible()) {
-        room_cfg_ui_->set_bounds(room_config_bounds_);
         room_cfg_ui_->update(input, screen_w_, screen_h_);
     }
 
@@ -289,11 +307,27 @@ bool RoomEditor::handle_sdl_event(const SDL_Event& event) {
 }
 
 bool RoomEditor::is_room_panel_blocking_point(int x, int y) const {
-    if (!enabled_) {
+    if (!enabled_ && !room_config_fullscreen_visible_) {
         return false;
     }
-    if (room_cfg_ui_ && room_cfg_ui_->visible() && room_cfg_ui_->is_point_inside(x, y)) {
+    if (shared_fullscreen_panel_ && shared_fullscreen_panel_->visible()) {
+        SDL_Point p{x, y};
+        const SDL_Rect& header = shared_fullscreen_panel_->header_rect();
+        if (SDL_PointInRect(&p, &header)) {
+            return false;
+        }
+    }
+    if (room_cfg_ui_ && room_config_dock_open_ && room_cfg_ui_->visible() && room_cfg_ui_->is_point_inside(x, y)) {
         return true;
+    }
+    if (shared_fullscreen_panel_ && shared_fullscreen_panel_->visible()) {
+        SDL_Point p{x, y};
+        if (room_config_fullscreen_visible_) {
+            SDL_Rect content = shared_fullscreen_panel_->content_rect();
+            if (SDL_PointInRect(&p, &content)) {
+                return true;
+            }
+        }
     }
     return false;
 }
@@ -313,10 +347,20 @@ void RoomEditor::render_overlays(SDL_Renderer* renderer) {
     if (assets_cfg_ui_) {
         assets_cfg_ui_->render(renderer);
     }
-    if (room_cfg_ui_ && room_cfg_ui_->visible()) {
+    if (room_cfg_ui_ && room_cfg_ui_->visible() && (!room_config_fullscreen_visible_ || room_config_dock_open_)) {
         room_cfg_ui_->render(renderer);
     }
     DMDropdown::render_active_options(renderer);
+}
+
+void RoomEditor::render_room_config_fullscreen(SDL_Renderer* renderer) {
+    if (!room_config_fullscreen_visible_) {
+        return;
+    }
+    ensure_room_configurator();
+    if (room_cfg_ui_ && room_cfg_ui_->visible()) {
+        room_cfg_ui_->render(renderer);
+    }
 }
 
 void RoomEditor::toggle_asset_library() {
@@ -453,7 +497,7 @@ void RoomEditor::close_room_config() {
 }
 
 bool RoomEditor::is_room_config_open() const {
-    return room_cfg_ui_ && room_cfg_ui_->visible();
+    return room_config_dock_open_;
 }
 
 void RoomEditor::regenerate_room() {
@@ -870,6 +914,9 @@ void RoomEditor::ensure_room_configurator() {
     }
     if (room_cfg_ui_) {
         room_cfg_ui_->set_bounds(room_config_bounds_);
+        if (auto* panel = room_cfg_ui_->panel()) {
+            panel->set_work_area(SDL_Rect{0, 0, screen_w_, screen_h_});
+        }
     }
 }
 
@@ -882,9 +929,82 @@ void RoomEditor::update_room_config_bounds() {
     const int x = std::max(margin, screen_w_ - width - margin);
     const int y = margin;
     room_config_bounds_ = SDL_Rect{x, y, width, height};
-    if (room_cfg_ui_) {
+    if (room_cfg_ui_ && room_config_dock_open_) {
         room_cfg_ui_->set_bounds(room_config_bounds_);
     }
+    refresh_room_config_visibility();
+}
+
+void RoomEditor::configure_shared_panel() {
+    if (!shared_fullscreen_panel_) {
+        return;
+    }
+    shared_fullscreen_panel_->set_bounds(screen_w_, screen_h_);
+    shared_fullscreen_panel_->set_content_event_handler([this](const SDL_Event& event) {
+        return handle_shared_panel_event(event);
+    });
+    shared_fullscreen_panel_->set_on_toggle([this](bool) {
+        update_room_config_layout_for_fullscreen();
+    });
+    update_room_config_layout_for_fullscreen();
+}
+
+void RoomEditor::update_room_config_layout_for_fullscreen() {
+    const bool expanded = shared_fullscreen_panel_ && shared_fullscreen_panel_->visible() &&
+                          shared_fullscreen_panel_->expanded();
+    if (room_config_fullscreen_visible_ != expanded) {
+        room_config_fullscreen_visible_ = expanded;
+        if (room_config_fullscreen_visible_) {
+            ensure_room_configurator();
+            if (room_cfg_ui_) {
+                room_cfg_ui_->open(current_room_);
+            }
+        }
+    }
+    refresh_room_config_visibility();
+}
+
+void RoomEditor::refresh_room_config_visibility() {
+    ensure_room_configurator();
+    if (!room_cfg_ui_) {
+        return;
+    }
+    DockableCollapsible* panel = room_cfg_ui_->panel();
+    if (!panel) {
+        return;
+    }
+
+    const bool show_fullscreen = room_config_fullscreen_visible_ && shared_fullscreen_panel_ &&
+                                 shared_fullscreen_panel_->visible() && shared_fullscreen_panel_->expanded() &&
+                                 shared_fullscreen_panel_->content_rect().w > 0 &&
+                                 shared_fullscreen_panel_->content_rect().h > 0;
+    const bool show_dock = room_config_dock_open_;
+
+    if (show_fullscreen) {
+        SDL_Rect content = shared_fullscreen_panel_->content_rect();
+        room_cfg_ui_->set_bounds(content);
+        panel->set_show_header(false);
+        panel->set_expanded(true);
+        panel->set_visible(true);
+    } else if (show_dock) {
+        room_cfg_ui_->set_bounds(room_config_bounds_);
+        panel->set_show_header(true);
+        panel->set_expanded(true);
+        panel->set_visible(true);
+    } else {
+        room_cfg_ui_->close();
+    }
+}
+
+bool RoomEditor::handle_shared_panel_event(const SDL_Event& event) {
+    if (!room_config_fullscreen_visible_) {
+        return false;
+    }
+    ensure_room_configurator();
+    if (!room_cfg_ui_) {
+        return false;
+    }
+    return room_cfg_ui_->handle_event(event);
 }
 
 void RoomEditor::handle_delete_shortcut(const Input& input) {
@@ -933,7 +1053,6 @@ void RoomEditor::begin_drag_session(const SDL_Point& world_mouse, bool ctrl_modi
     drag_states_.clear();
     drag_spawn_id_.clear();
     drag_perimeter_base_radius_ = 0.0;
-    drag_perimeter_start_offset_ = SDL_Point{0, 0};
     drag_moved_ = false;
     drag_room_center_ = get_room_center();
     drag_last_world_ = world_mouse;
@@ -957,22 +1076,42 @@ void RoomEditor::begin_drag_session(const SDL_Point& world_mouse, bool ctrl_modi
         drag_mode_ = DragMode::Free;
     }
 
+    auto [room_w, room_h] = get_room_dimensions();
+    drag_perimeter_curr_w_ = room_w;
+    drag_perimeter_curr_h_ = room_h;
+    drag_perimeter_orig_w_ = std::max(1, room_w);
+    drag_perimeter_orig_h_ = std::max(1, room_h);
+    drag_perimeter_center_offset_world_ = SDL_Point{0, 0};
+    drag_perimeter_circle_center_ = drag_room_center_;
+
     if (!drag_spawn_id_.empty()) {
         if (nlohmann::json* entry = find_spawn_entry(drag_spawn_id_)) {
-            auto read_offset = [&](const char* single_key, const char* min_key, const char* max_key) -> int {
-                if (entry->contains(single_key) && (*entry)[single_key].is_number_integer()) {
-                    return (*entry)[single_key].get<int>();
-                }
-                if (entry->contains(min_key) && (*entry)[min_key].is_number_integer()) {
-                    return (*entry)[min_key].get<int>();
-                }
-                if (entry->contains(max_key) && (*entry)[max_key].is_number_integer()) {
-                    return (*entry)[max_key].get<int>();
-                }
-                return 0;
-            };
-            drag_perimeter_start_offset_.x = read_offset("perimeter_x_offset", "perimeter_x_offset_min", "perimeter_x_offset_max");
-            drag_perimeter_start_offset_.y = read_offset("perimeter_y_offset", "perimeter_y_offset_min", "perimeter_y_offset_max");
+            drag_perimeter_orig_w_ = std::max(1, entry->value("origional_width", drag_perimeter_curr_w_));
+            drag_perimeter_orig_h_ = std::max(1, entry->value("origional_height", drag_perimeter_curr_h_));
+            const int stored_dx = entry->value("dx", 0);
+            const int stored_dy = entry->value("dy", 0);
+            const double rx = static_cast<double>(std::max(1, drag_perimeter_curr_w_)) /
+                              static_cast<double>(std::max(1, drag_perimeter_orig_w_));
+            const double ry = static_cast<double>(std::max(1, drag_perimeter_curr_h_)) /
+                              static_cast<double>(std::max(1, drag_perimeter_orig_h_));
+            drag_perimeter_center_offset_world_.x = static_cast<int>(std::lround(static_cast<double>(stored_dx) * rx));
+            drag_perimeter_center_offset_world_.y = static_cast<int>(std::lround(static_cast<double>(stored_dy) * ry));
+            drag_perimeter_circle_center_.x = drag_room_center_.x + drag_perimeter_center_offset_world_.x;
+            drag_perimeter_circle_center_.y = drag_room_center_.y + drag_perimeter_center_offset_world_.y;
+            if ((*entry).contains("radius") && (*entry)["radius"].is_number_integer()) {
+                drag_perimeter_base_radius_ = std::max(0, (*entry)["radius"].get<int>());
+            }
+        }
+    }
+
+    if (drag_mode_ == DragMode::Perimeter || drag_mode_ == DragMode::PerimeterCenter) {
+        if (drag_perimeter_base_radius_ <= 0.0) {
+            double dx = static_cast<double>(primary->pos.x - drag_perimeter_circle_center_.x);
+            double dy = static_cast<double>(primary->pos.y - drag_perimeter_circle_center_.y);
+            drag_perimeter_base_radius_ = std::hypot(dx, dy);
+        }
+        if (!std::isfinite(drag_perimeter_base_radius_) || drag_perimeter_base_radius_ <= 0.0) {
+            drag_perimeter_base_radius_ = 0.0;
         }
     }
 
@@ -983,8 +1122,8 @@ void RoomEditor::begin_drag_session(const SDL_Point& world_mouse, bool ctrl_modi
         state.asset = asset;
         state.start_pos = asset->pos;
         if (drag_mode_ == DragMode::Perimeter) {
-            double dx = static_cast<double>(asset->pos.x - drag_room_center_.x);
-            double dy = static_cast<double>(asset->pos.y - drag_room_center_.y);
+            double dx = static_cast<double>(asset->pos.x - drag_perimeter_circle_center_.x);
+            double dy = static_cast<double>(asset->pos.y - drag_perimeter_circle_center_.y);
             double len = std::hypot(dx, dy);
             state.start_distance = len;
             if (len > 1e-6) {
@@ -998,50 +1137,6 @@ void RoomEditor::begin_drag_session(const SDL_Point& world_mouse, bool ctrl_modi
         drag_states_.push_back(state);
     }
 
-    if (drag_mode_ == DragMode::Perimeter) {
-        double border_shift = 0.0;
-        bool have_shift = false;
-        if (!drag_spawn_id_.empty()) {
-            if (nlohmann::json* entry = find_spawn_entry(drag_spawn_id_)) {
-                if (entry->contains("percentage_shift_from_center") && (*entry)["percentage_shift_from_center"].is_number()) {
-                    border_shift = (*entry)["percentage_shift_from_center"].get<double>();
-                    have_shift = true;
-                }
-                if (!have_shift && entry->contains("border_shift_min") && (*entry)["border_shift_min"].is_number()) {
-                    border_shift = (*entry)["border_shift_min"].get<double>();
-                    have_shift = true;
-                }
-                if (!have_shift && entry->contains("border_shift_max") && (*entry)["border_shift_max"].is_number()) {
-                    border_shift = (*entry)["border_shift_max"].get<double>();
-                    have_shift = true;
-                }
-                if (!have_shift && entry->contains("border_shift") && (*entry)["border_shift"].is_number()) {
-                    border_shift = (*entry)["border_shift"].get<double>();
-                    have_shift = true;
-                }
-            }
-        }
-        double shift_ratio = 1.0 - border_shift / 100.0;
-        if (shift_ratio <= 0.0) shift_ratio = 0.0001;
-        double reference = 0.0;
-        const DraggedAssetState* anchor_state = nullptr;
-        for (const auto& state : drag_states_) {
-            if (state.asset == drag_anchor_asset_) {
-                anchor_state = &state;
-                break;
-            }
-        }
-        if (anchor_state) reference = anchor_state->start_distance;
-        if (reference <= 0.0) {
-            double dx = static_cast<double>(primary->pos.x - drag_room_center_.x);
-            double dy = static_cast<double>(primary->pos.y - drag_room_center_.y);
-            reference = std::hypot(dx, dy);
-        }
-        drag_perimeter_base_radius_ = reference / shift_ratio;
-        if (!std::isfinite(drag_perimeter_base_radius_) || drag_perimeter_base_radius_ <= 0.0) {
-            drag_perimeter_base_radius_ = reference;
-        }
-    }
 }
 
 void RoomEditor::update_drag_session(const SDL_Point& world_mouse) {
@@ -1067,6 +1162,12 @@ void RoomEditor::update_drag_session(const SDL_Point& world_mouse) {
         state.asset->pos.x += delta.x;
         state.asset->pos.y += delta.y;
     }
+    if (drag_mode_ == DragMode::PerimeterCenter) {
+        drag_perimeter_circle_center_.x += delta.x;
+        drag_perimeter_circle_center_.y += delta.y;
+        drag_perimeter_center_offset_world_.x += delta.x;
+        drag_perimeter_center_offset_world_.y += delta.y;
+    }
     drag_last_world_ = world_mouse;
     drag_moved_ = true;
 }
@@ -1086,8 +1187,8 @@ void RoomEditor::apply_perimeter_drag(const SDL_Point& world_mouse) {
     double reference_length = ref->start_distance;
     SDL_FPoint dir = ref->direction;
     if (reference_length <= 1e-6) {
-        double dx = static_cast<double>(ref->asset->pos.x - drag_room_center_.x);
-        double dy = static_cast<double>(ref->asset->pos.y - drag_room_center_.y);
+        double dx = static_cast<double>(ref->asset->pos.x - drag_perimeter_circle_center_.x);
+        double dy = static_cast<double>(ref->asset->pos.y - drag_perimeter_circle_center_.y);
         reference_length = std::hypot(dx, dy);
         if (reference_length > 1e-6) {
             dir.x = static_cast<float>(dx / reference_length);
@@ -1096,13 +1197,15 @@ void RoomEditor::apply_perimeter_drag(const SDL_Point& world_mouse) {
     }
     if (reference_length <= 1e-6) reference_length = 1.0;
 
-    double target = (world_mouse.x - drag_room_center_.x) * dir.x +
-                    (world_mouse.y - drag_room_center_.y) * dir.y;
+    double base_radius = drag_perimeter_base_radius_;
+    if (base_radius <= 1e-6) base_radius = reference_length;
+
+    double target = (world_mouse.x - drag_perimeter_circle_center_.x) * dir.x +
+                    (world_mouse.y - drag_perimeter_circle_center_.y) * dir.y;
     double new_length = std::max(0.0, target);
-    double ratio = new_length / reference_length;
+    double ratio = base_radius > 1e-6 ? new_length / base_radius : 0.0;
     if (!std::isfinite(ratio)) ratio = 0.0;
     if (ratio < 0.0) ratio = 0.0;
-    if (ratio > 1.0) ratio = 1.0;
 
     bool changed = false;
     for (auto& state : drag_states_) {
@@ -1110,8 +1213,8 @@ void RoomEditor::apply_perimeter_drag(const SDL_Point& world_mouse) {
         double base = state.start_distance;
         SDL_FPoint state_dir = state.direction;
         if (base <= 0.0 || (state_dir.x == 0.0f && state_dir.y == 0.0f)) {
-            double dx = static_cast<double>(state.asset->pos.x - drag_room_center_.x);
-            double dy = static_cast<double>(state.asset->pos.y - drag_room_center_.y);
+            double dx = static_cast<double>(state.asset->pos.x - drag_perimeter_circle_center_.x);
+            double dy = static_cast<double>(state.asset->pos.y - drag_perimeter_circle_center_.y);
             double len = std::hypot(dx, dy);
             if (base <= 0.0) base = len;
             if (len > 1e-6) {
@@ -1120,8 +1223,8 @@ void RoomEditor::apply_perimeter_drag(const SDL_Point& world_mouse) {
             }
         }
         double desired = base * ratio;
-        int new_x = drag_room_center_.x + static_cast<int>(std::lround(state_dir.x * desired));
-        int new_y = drag_room_center_.y + static_cast<int>(std::lround(state_dir.y * desired));
+        int new_x = drag_perimeter_circle_center_.x + static_cast<int>(std::lround(state_dir.x * desired));
+        int new_y = drag_perimeter_circle_center_.y + static_cast<int>(std::lround(state_dir.y * desired));
         if (state.asset->pos.x != new_x || state.asset->pos.y != new_y) {
             state.asset->pos.x = new_x;
             state.asset->pos.y = new_y;
@@ -1165,38 +1268,45 @@ void RoomEditor::finalize_drag_session() {
                     }
                     break;
                 case DragMode::Perimeter:
-                    if (drag_moved_ && drag_perimeter_base_radius_ > 0.0) {
-                        double dist = std::hypot(static_cast<double>(primary->pos.x - center.x),
-                                                 static_cast<double>(primary->pos.y - center.y));
-                        double ratio = drag_perimeter_base_radius_ > 0.0 ? dist / drag_perimeter_base_radius_ : 1.0;
-                        if (!std::isfinite(ratio)) ratio = 0.0;
-                        if (ratio < 0.0) ratio = 0.0;
-                        if (ratio > 1.0) ratio = 1.0;
-                        double border_shift = (1.0 - ratio) * 100.0;
-                        update_perimeter_border_json(*entry, border_shift);
+                    if (drag_moved_) {
+                        const int curr_w = std::max(1, drag_perimeter_curr_w_ > 0 ? drag_perimeter_curr_w_ : width);
+                        const int curr_h = std::max(1, drag_perimeter_curr_h_ > 0 ? drag_perimeter_curr_h_ : height);
+                        const int orig_w = std::max(1, drag_perimeter_orig_w_ > 0 ? drag_perimeter_orig_w_ : curr_w);
+                        const int orig_h = std::max(1, drag_perimeter_orig_h_ > 0 ? drag_perimeter_orig_h_ : curr_h);
+                        const double rx = static_cast<double>(curr_w) / static_cast<double>(std::max(1, orig_w));
+                        const double ry = static_cast<double>(curr_h) / static_cast<double>(std::max(1, orig_h));
+                        const int dx = (rx != 0.0)
+                                           ? static_cast<int>(std::lround(static_cast<double>(drag_perimeter_center_offset_world_.x) / rx))
+                                           : 0;
+                        const int dy = (ry != 0.0)
+                                           ? static_cast<int>(std::lround(static_cast<double>(drag_perimeter_center_offset_world_.y) / ry))
+                                           : 0;
+                        const double dist = std::hypot(static_cast<double>(primary->pos.x - drag_perimeter_circle_center_.x),
+                                                        static_cast<double>(primary->pos.y - drag_perimeter_circle_center_.y));
+                        const int radius = static_cast<int>(std::lround(dist));
+                        save_perimeter_json(*entry, dx, dy, orig_w, orig_h, radius);
                         json_modified = true;
                     }
                     break;
                 case DragMode::PerimeterCenter:
                     if (drag_moved_) {
-                        SDL_Point delta{0, 0};
-                        const DraggedAssetState* anchor_state = nullptr;
-                        for (const auto& state : drag_states_) {
-                            if (state.asset == drag_anchor_asset_) {
-                                anchor_state = &state;
-                                break;
-                            }
-                        }
-                        if (anchor_state && anchor_state->asset) {
-                            delta.x = anchor_state->asset->pos.x - anchor_state->start_pos.x;
-                            delta.y = anchor_state->asset->pos.y - anchor_state->start_pos.y;
-                        }
-                        if (delta.x != 0 || delta.y != 0) {
-                            SDL_Point new_offset{drag_perimeter_start_offset_.x + delta.x,
-                                                 drag_perimeter_start_offset_.y + delta.y};
-                            update_perimeter_center_json(*entry, new_offset);
-                            json_modified = true;
-                        }
+                        const int curr_w = std::max(1, drag_perimeter_curr_w_ > 0 ? drag_perimeter_curr_w_ : width);
+                        const int curr_h = std::max(1, drag_perimeter_curr_h_ > 0 ? drag_perimeter_curr_h_ : height);
+                        const int orig_w = std::max(1, drag_perimeter_orig_w_ > 0 ? drag_perimeter_orig_w_ : curr_w);
+                        const int orig_h = std::max(1, drag_perimeter_orig_h_ > 0 ? drag_perimeter_orig_h_ : curr_h);
+                        const double rx = static_cast<double>(curr_w) / static_cast<double>(std::max(1, orig_w));
+                        const double ry = static_cast<double>(curr_h) / static_cast<double>(std::max(1, orig_h));
+                        const int dx = (rx != 0.0)
+                                           ? static_cast<int>(std::lround(static_cast<double>(drag_perimeter_center_offset_world_.x) / rx))
+                                           : 0;
+                        const int dy = (ry != 0.0)
+                                           ? static_cast<int>(std::lround(static_cast<double>(drag_perimeter_center_offset_world_.y) / ry))
+                                           : 0;
+                        const double dist = std::hypot(static_cast<double>(primary->pos.x - drag_perimeter_circle_center_.x),
+                                                        static_cast<double>(primary->pos.y - drag_perimeter_circle_center_.y));
+                        const int radius = static_cast<int>(std::lround(dist));
+                        save_perimeter_json(*entry, dx, dy, orig_w, orig_h, radius);
+                        json_modified = true;
                     }
                     break;
                 default:
@@ -1220,8 +1330,13 @@ void RoomEditor::reset_drag_state() {
     drag_states_.clear();
     drag_last_world_ = SDL_Point{0, 0};
     drag_room_center_ = SDL_Point{0, 0};
+    drag_perimeter_circle_center_ = SDL_Point{0, 0};
     drag_perimeter_base_radius_ = 0.0;
-    drag_perimeter_start_offset_ = SDL_Point{0, 0};
+    drag_perimeter_center_offset_world_ = SDL_Point{0, 0};
+    drag_perimeter_orig_w_ = 0;
+    drag_perimeter_orig_h_ = 0;
+    drag_perimeter_curr_w_ = 0;
+    drag_perimeter_curr_h_ = 0;
     drag_moved_ = false;
     drag_spawn_id_.clear();
 }
@@ -1595,7 +1710,6 @@ void RoomEditor::regenerate_current_room() {
     }
 
     refresh_assets_config_ui();
-    sync_room_panel_button_states();
 }
 
 void RoomEditor::update_exact_json(nlohmann::json& entry, const Asset& asset, SDL_Point center, int width, int height) {
@@ -1635,22 +1749,37 @@ void RoomEditor::update_percent_json(nlohmann::json& entry, const Asset& asset, 
     if (entry.contains("percent_y_max")) entry.erase("percent_y_max");
 }
 
-void RoomEditor::update_perimeter_border_json(nlohmann::json& entry, double border_shift) {
-    int value = static_cast<int>(std::lround(border_shift));
-    value = std::max(0, std::min(100, value));
-    entry["percentage_shift_from_center"] = value;
-    if (entry.contains("border_shift")) entry.erase("border_shift");
-    if (entry.contains("border_shift_min")) entry.erase("border_shift_min");
-    if (entry.contains("border_shift_max")) entry.erase("border_shift_max");
-}
-
-void RoomEditor::update_perimeter_center_json(nlohmann::json& entry, SDL_Point offset) {
-    entry["perimeter_x_offset"] = offset.x;
-    entry["perimeter_x_offset_min"] = offset.x;
-    entry["perimeter_x_offset_max"] = offset.x;
-    entry["perimeter_y_offset"] = offset.y;
-    entry["perimeter_y_offset_min"] = offset.y;
-    entry["perimeter_y_offset_max"] = offset.y;
+void RoomEditor::save_perimeter_json(nlohmann::json& entry, int dx, int dy, int orig_w, int orig_h, int radius) {
+    entry["dx"] = dx;
+    entry["dy"] = dy;
+    entry["origional_width"] = orig_w;
+    entry["origional_height"] = orig_h;
+    entry["radius"] = radius;
+    static const std::array<const char*, 11> legacy_keys = {
+        "percentage_shift_from_center",
+        "percentage_shift_from_center_min",
+        "percentage_shift_from_center_max",
+        "border_shift_min",
+        "border_shift_max",
+        "perimeter_x_offset",
+        "perimeter_x_offset_min",
+        "perimeter_x_offset_max",
+        "perimeter_y_offset",
+        "perimeter_y_offset_min",
+        "perimeter_y_offset_max"
+    };
+    for (const char* key : legacy_keys) {
+        if (entry.contains(key)) {
+            entry.erase(key);
+        }
+    }
+    for (auto it = entry.begin(); it != entry.end(); ) {
+        if (it.key().rfind("sector_", 0) == 0) {
+            it = entry.erase(it);
+        } else {
+            ++it;
+        }
+    }
 }
 
 

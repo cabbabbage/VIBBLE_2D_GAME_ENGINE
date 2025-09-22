@@ -120,8 +120,8 @@ void AssetSpawner::run_boundary_spawning(const Area& area) {
                 logger_.start_timer();
                 if (!queue_item.has_candidates()) continue;
 
-                const int spacing = queue_item.grid_spacing > 0 ? queue_item.grid_spacing : 100;
-                MapGrid grid = MapGrid::from_area_bounds(area, spacing);
+                constexpr int kBoundarySpacing = 100;
+                MapGrid grid = MapGrid::from_area_bounds(area, kBoundarySpacing);
                 SpawnContext ctx(rng_, checker_, logger_, exclusion_zones, asset_info_library_, all_, asset_library_, &grid);
 
                 std::vector<int> base_weights;
@@ -157,32 +157,9 @@ void AssetSpawner::run_boundary_spawning(const Area& area) {
                 int spawned = 0;
                 int attempts = 0;
 
-                std::uniform_int_distribution<int> jitter_dist(
-                        queue_item.jitter > 0 ? -queue_item.jitter : 0,
-                        queue_item.jitter > 0 ? queue_item.jitter : 0);
-
                 for (auto* gp : eligible) {
                         if (!gp) continue;
                         SDL_Point spawn_pos = gp->pos;
-
-                        if (queue_item.jitter > 0) {
-                                const int max_jitter_attempts = 5;
-                                bool placed = false;
-                                for (int i = 0; i < max_jitter_attempts; ++i) {
-                                        SDL_Point jittered{
-                                                spawn_pos.x + jitter_dist(ctx.rng()),
-                                                spawn_pos.y + jitter_dist(ctx.rng())
-                                        };
-                                        if (!area.contains_point(jittered)) continue;
-                                        if (point_in_exclusion(jittered)) continue;
-                                        spawn_pos = jittered;
-                                        placed = true;
-                                        break;
-                                }
-                                if (!placed) {
-                                        if (!area.contains_point(spawn_pos) || point_in_exclusion(spawn_pos)) continue;
-                                }
-                        }
 
                         bool success = false;
                         std::vector<int> attempt_weights = base_weights;

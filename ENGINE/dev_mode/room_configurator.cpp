@@ -9,10 +9,10 @@
 
 RoomConfigurator::RoomConfigurator() {
     room_geom_options_ = {"Square", "Circle"};
-    panel_ = std::make_unique<DockableCollapsible>("Room", false, 0, 0);
+    panel_ = std::make_unique<DockableCollapsible>("Room", true, 32, 32);
     panel_->set_expanded(true);
     panel_->set_visible(false);
-    panel_->set_show_header(false);
+    panel_->set_show_header(true);
     panel_->set_scroll_enabled(true);
 }
 
@@ -161,3 +161,7 @@ bool RoomConfigurator::is_point_inside(int x, int y) const {
     SDL_Point p{x, y};
     return SDL_PointInRect(&p, &panel_->rect());
 }
+
+DockableCollapsible* RoomConfigurator::panel() { return panel_.get(); }
+
+const DockableCollapsible* RoomConfigurator::panel() const { return panel_.get(); }

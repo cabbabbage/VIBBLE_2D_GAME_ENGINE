@@ -34,6 +34,8 @@ public:
     void render(SDL_Renderer* r) const;
     nlohmann::json build_json() const;
     bool is_point_inside(int x, int y) const;
+    DockableCollapsible* panel();
+    const DockableCollapsible* panel() const;
 private:
     void rebuild_rows();
     std::unique_ptr<DockableCollapsible> panel_;
