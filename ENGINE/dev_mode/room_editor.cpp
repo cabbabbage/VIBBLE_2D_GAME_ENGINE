@@ -447,6 +447,10 @@ bool RoomEditor::is_asset_library_open() const {
     return library_ui_ && library_ui_->is_visible();
 }
 
+bool RoomEditor::is_library_drag_active() const {
+    return library_ui_ && library_ui_->is_visible() && library_ui_->is_dragging_asset();
+}
+
 std::shared_ptr<AssetInfo> RoomEditor::consume_selected_asset_from_library() {
     if (!library_ui_) return nullptr;
     return library_ui_->consume_selection();
@@ -702,6 +706,43 @@ void RoomEditor::clear_selection() {
     }
 }
 
+void RoomEditor::clear_highlighted_assets() {
+    highlighted_assets_.clear();
+    if (!active_assets_) {
+        selected_assets_.clear();
+        hovered_asset_ = nullptr;
+        return;
+    }
+    auto erase_if_inactive = [this](Asset* asset) {
+        if (!asset) return true;
+        auto it = std::find(active_assets_->begin(), active_assets_->end(), asset);
+        if (it == active_assets_->end()) {
+            asset->set_highlighted(false);
+            asset->set_selected(false);
+            return true;
+        }
+        return false;
+    };
+
+    selected_assets_.erase(
+        std::remove_if(selected_assets_.begin(), selected_assets_.end(), erase_if_inactive),
+        selected_assets_.end());
+
+    if (hovered_asset_ && erase_if_inactive(hovered_asset_)) {
+        hovered_asset_ = nullptr;
+        hover_miss_frames_ = 0;
+    }
+
+    for (Asset* asset : *active_assets_) {
+        if (!asset) {
+            continue;
+        }
+        asset->set_highlighted(false);
+        const bool is_selected = std::find(selected_assets_.begin(), selected_assets_.end(), asset) != selected_assets_.end();
+        asset->set_selected(is_selected);
+    }
+}
+
 void RoomEditor::purge_asset(Asset* asset) {
     if (!asset) return;
     if (hovered_asset_ == asset) hovered_asset_ = nullptr;
@@ -744,40 +785,59 @@ void RoomEditor::handle_mouse_input(const Input& input) {
     const int mx = input_->getX();
     const int my = input_->getY();
     const bool ui_blocked = is_ui_blocking_input(mx, my);
+    const bool library_modal_block =
+        library_ui_ && library_ui_->is_visible() && library_ui_->is_input_blocking();
+    const bool suppress_hover_and_drag = library_modal_block;
+    const bool suppress_clicks = library_modal_block;
 
     Asset* hit_asset = nullptr;
-    if (!ui_blocked) {
+    if (!ui_blocked && !suppress_hover_and_drag) {
         hit_asset = hit_test_asset(SDL_Point{mx, my});
     }
 
-    pan_zoom_.handle_input(cam, input, ui_blocked || hit_asset != nullptr);
+    const bool block_pan = ui_blocked || (!suppress_hover_and_drag && hit_asset != nullptr);
+    pan_zoom_.handle_input(cam, input, block_pan);
 
     SDL_Point world_mouse = cam.screen_to_map(SDL_Point{mx, my});
 
-    update_hover_state(hit_asset);
-
-    const bool pointer_over_selection = hovered_asset_ &&
-        (std::find(selected_assets_.begin(), selected_assets_.end(), hovered_asset_) != selected_assets_.end());
-    const bool ctrl_modifier = input.isScancodeDown(SDL_SCANCODE_LCTRL) || input.isScancodeDown(SDL_SCANCODE_RCTRL);
-
-    if (input_->isDown(Input::LEFT) && !selected_assets_.empty()) {
-        if (!dragging_) {
-            if (pointer_over_selection) {
-                dragging_ = true;
-                drag_last_world_ = world_mouse;
-                begin_drag_session(world_mouse, ctrl_modifier);
-            }
-        } else {
-            update_drag_session(world_mouse);
-        }
-    } else {
+    if (suppress_hover_and_drag) {
         if (dragging_) {
             finalize_drag_session();
+            dragging_ = false;
         }
-        dragging_ = false;
+        hovered_asset_ = nullptr;
+        hover_miss_frames_ = 3;
+    } else {
+        update_hover_state(hit_asset);
+
+        const bool pointer_over_selection = hovered_asset_ &&
+            (std::find(selected_assets_.begin(), selected_assets_.end(), hovered_asset_) != selected_assets_.end());
+        const bool ctrl_modifier = input.isScancodeDown(SDL_SCANCODE_LCTRL) || input.isScancodeDown(SDL_SCANCODE_RCTRL);
+
+        if (input_->isDown(Input::LEFT) && !selected_assets_.empty()) {
+            if (!dragging_) {
+                if (pointer_over_selection) {
+                    dragging_ = true;
+                    drag_last_world_ = world_mouse;
+                    begin_drag_session(world_mouse, ctrl_modifier);
+                }
+            } else {
+                update_drag_session(world_mouse);
+            }
+        } else {
+            if (dragging_) {
+                finalize_drag_session();
+            }
+            dragging_ = false;
+        }
     }
 
-    handle_click(input);
+    if (!suppress_clicks) {
+        handle_click(input);
+    } else {
+        click_buffer_frames_ = 0;
+        rclick_buffer_frames_ = 0;
+    }
     update_highlighted_assets();
 }
 
@@ -951,6 +1011,12 @@ void RoomEditor::update_highlighted_assets() {
 bool RoomEditor::is_ui_blocking_input(int mx, int my) const {
     if (info_ui_ && info_ui_->is_visible()) {
         if (info_ui_->is_point_inside(mx, my)) {
+            return true;
+        }
+    }
+    if (shared_fullscreen_panel_ && shared_fullscreen_panel_->visible()) {
+        SDL_Point p{mx, my};
+        if (SDL_PointInRect(&p, &shared_fullscreen_panel_->header_rect())) {
             return true;
         }
     }

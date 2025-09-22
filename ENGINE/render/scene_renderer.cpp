@@ -51,6 +51,10 @@ SceneRenderer::SceneRenderer(SDL_Renderer* renderer,
         z_light_pass_->render(debugging);
 }
 
+SDL_Renderer* SceneRenderer::get_renderer() const {
+    return renderer_;
+}
+
 void SceneRenderer::apply_map_light_config(const nlohmann::json& data) {
         main_light_source_.apply_config(data);
         if (!renderer_ || !fullscreen_light_tex_) {

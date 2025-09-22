@@ -55,6 +55,7 @@ public:
     void open_asset_library();
     void close_asset_library();
     bool is_asset_library_open() const;
+    bool is_library_drag_active() const;
 
     std::shared_ptr<AssetInfo> consume_selected_asset_from_library();
 
@@ -80,6 +81,7 @@ public:
 
     void reset_click_state();
     void clear_selection();
+    void clear_highlighted_assets();
     void purge_asset(Asset* asset);
 
     const std::vector<Asset*>& get_selected_assets() const { return selected_assets_; }

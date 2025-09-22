@@ -32,6 +32,8 @@ public:
 
     void set_bounds(int width, int height);
 
+    void set_header_height(int height);
+
     void set_visible(bool visible) { visible_ = visible; }
     bool visible() const { return visible_; }
 
@@ -75,6 +77,7 @@ private:
     std::string title_;
     int screen_w_ = 0;
     int screen_h_ = 0;
+    int header_height_ = 0;
     bool visible_ = true;
     bool expanded_ = false;
 

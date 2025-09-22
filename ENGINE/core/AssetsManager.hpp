@@ -54,6 +54,7 @@ public:
     const camera& getView() const { return camera_; }
 
     void render_overlays(SDL_Renderer* renderer);
+    SDL_Renderer* renderer() const;
     void toggle_asset_library();
     void open_asset_library();
     void close_asset_library();

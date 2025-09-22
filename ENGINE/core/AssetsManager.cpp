@@ -631,6 +631,10 @@ void Assets::render_overlays(SDL_Renderer* renderer) {
     if (dev_controls_) dev_controls_->render_overlays(renderer);
 }
 
+SDL_Renderer* Assets::renderer() const {
+    return scene ? scene->get_renderer() : nullptr;
+}
+
 void Assets::toggle_asset_library() {
     if (dev_controls_ && dev_mode) {
         dev_controls_->toggle_asset_library();

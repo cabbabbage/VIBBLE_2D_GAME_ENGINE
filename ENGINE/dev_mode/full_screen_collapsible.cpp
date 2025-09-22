@@ -7,7 +7,7 @@
 #include <algorithm>
 
 namespace {
-constexpr int kHeaderHeight = 40;
+constexpr int kDefaultHeaderHeight = 40;
 constexpr int kArrowButtonWidth = 36;
 
 void draw_label(SDL_Renderer* renderer, const std::string& text, int x, int y) {
@@ -33,13 +33,23 @@ void draw_label(SDL_Renderer* renderer, const std::string& text, int x, int y) {
 } // namespace
 
 FullScreenCollapsible::FullScreenCollapsible(std::string title)
-    : title_(std::move(title)) {
+    : title_(std::move(title)),
+      header_height_(kDefaultHeaderHeight) {
     arrow_button_ = std::make_unique<DMButton>("▲", &DMStyles::HeaderButton(), kArrowButtonWidth, DMButton::height());
 }
 
 void FullScreenCollapsible::set_bounds(int width, int height) {
     screen_w_ = width;
     screen_h_ = height;
+    layout();
+}
+
+void FullScreenCollapsible::set_header_height(int height) {
+    const int clamped = std::max(height, kDefaultHeaderHeight);
+    if (clamped == header_height_) {
+        return;
+    }
+    header_height_ = clamped;
     layout();
 }
 
@@ -61,8 +71,12 @@ void FullScreenCollapsible::set_expanded(bool expanded) {
     expanded_ = expanded;
     if (arrow_button_) {
         arrow_button_->set_text(expanded_ ? "▼" : "▲");
+        int arrow_y = header_rect_.y + DMSpacing::item_gap();
+        if (header_rect_.h <= DMButton::height() + DMSpacing::item_gap() * 2) {
+            arrow_y = header_rect_.y + (header_rect_.h - DMButton::height()) / 2;
+        }
         arrow_button_->set_rect(SDL_Rect{header_rect_.x + header_rect_.w - kArrowButtonWidth - DMSpacing::item_gap(),
-                                         header_rect_.y + (kHeaderHeight - DMButton::height()) / 2,
+                                         arrow_y,
                                          kArrowButtonWidth,
                                          DMButton::height()});
     }
@@ -202,7 +216,10 @@ void FullScreenCollapsible::render(SDL_Renderer* renderer) const {
     }
 
     int text_x = header_rect_.x + DMSpacing::item_gap();
-    int text_y = header_rect_.y + (kHeaderHeight - DMStyles::Label().font_size) / 2;
+    int text_y = header_rect_.y + (header_rect_.h - DMStyles::Label().font_size) / 2;
+    if (header_rect_.h > DMStyles::Label().font_size + DMSpacing::item_gap() * 2) {
+        text_y = header_rect_.y + DMSpacing::item_gap();
+    }
     draw_label(renderer, title_, text_x, text_y);
 
     for (const auto& btn : buttons_) {
@@ -222,9 +239,9 @@ void FullScreenCollapsible::render(SDL_Renderer* renderer) const {
 
 void FullScreenCollapsible::layout() {
     header_rect_.w = screen_w_;
-    header_rect_.h = kHeaderHeight;
+    header_rect_.h = header_height_;
     header_rect_.x = 0;
-    header_rect_.y = expanded_ ? 0 : std::max(0, screen_h_ - kHeaderHeight);
+    header_rect_.y = expanded_ ? 0 : std::max(0, screen_h_ - header_rect_.h);
     if (expanded_) {
         content_rect_.x = 0;
         content_rect_.y = header_rect_.y + header_rect_.h;
@@ -236,8 +253,13 @@ void FullScreenCollapsible::layout() {
     update_title_width();
     layout_buttons();
     if (arrow_button_) {
+        int arrow_y = header_rect_.y + DMSpacing::item_gap();
+        const int centered_y = header_rect_.y + (header_rect_.h - DMButton::height()) / 2;
+        if (header_rect_.h <= DMButton::height() + DMSpacing::item_gap() * 2) {
+            arrow_y = centered_y;
+        }
         SDL_Rect rect{header_rect_.x + header_rect_.w - kArrowButtonWidth - DMSpacing::item_gap(),
-                      header_rect_.y + (kHeaderHeight - DMButton::height()) / 2,
+                      arrow_y,
                       kArrowButtonWidth,
                       DMButton::height()};
         arrow_button_->set_rect(rect);
@@ -305,7 +327,10 @@ void FullScreenCollapsible::layout_buttons() {
         total_width += width;
     }
 
-    const int y = header_rect_.y + (kHeaderHeight - DMButton::height()) / 2;
+    int y = header_rect_.y + DMSpacing::item_gap();
+    if (header_rect_.h <= DMButton::height() + DMSpacing::item_gap() * 2) {
+        y = header_rect_.y + (header_rect_.h - DMButton::height()) / 2;
+    }
 
     if (visible.empty()) {
         return;

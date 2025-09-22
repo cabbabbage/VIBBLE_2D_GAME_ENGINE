@@ -18,6 +18,7 @@ class SceneRenderer {
     SceneRenderer(SDL_Renderer* renderer, Assets* assets, int screen_width, int screen_height, const std::string& map_path);
     void render();
     void apply_map_light_config(const nlohmann::json& data);
+    SDL_Renderer* get_renderer() const;
 
 	private:
     void update_shading_groups();

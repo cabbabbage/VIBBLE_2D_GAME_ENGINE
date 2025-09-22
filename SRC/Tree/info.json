@@ -7071,12 +7071,12 @@
     "lighting_info": [
         {
             "factor": 100,
-            "falloff": 100,
+            "falloff": 0,
             "has_light_source": true,
             "light_intensity": 255,
-            "radius": 1788,
-            "x_radius": 237,
-            "y_radius": 203
+            "radius": 726,
+            "x_radius": 378,
+            "y_radius": 605
         }
     ],
     "mappings": {},

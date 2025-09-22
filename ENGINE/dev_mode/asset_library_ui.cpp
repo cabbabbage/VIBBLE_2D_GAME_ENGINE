@@ -5,6 +5,7 @@
 #include <functional>
 #include <thread>
 #include <cstdlib>
+#include <cstdint>
 #include "utils/input.hpp"
 #include "asset/asset_library.hpp"
 #include "asset/asset_info.hpp"
@@ -18,6 +19,8 @@
 #include "core/AssetsManager.hpp"
 #include "DockableCollapsible.hpp"
 #include "widgets.hpp"
+
+#include <cstdint>   // for std::uintptr_t
 
 namespace {
     const SDL_Color kTileBG  = dm::rgba(40,40,40,180);
@@ -96,6 +99,7 @@ namespace {
 
 // ---------------- Asset Tile ----------------
 struct AssetLibraryUI::AssetTileWidget : public Widget {
+    AssetLibraryUI* owner = nullptr;
     std::shared_ptr<AssetInfo> info;
     SDL_Rect rect_{0,0,0,0};
     bool hovered = false;
@@ -107,11 +111,13 @@ struct AssetLibraryUI::AssetTileWidget : public Widget {
     std::function<void(const std::shared_ptr<AssetInfo>&)> on_right_click;
     std::function<void(const std::shared_ptr<AssetInfo>&)> on_begin_drag;
 
-    explicit AssetTileWidget(std::shared_ptr<AssetInfo> i,
+    explicit AssetTileWidget(AssetLibraryUI* owner_ptr,
+                             std::shared_ptr<AssetInfo> i,
                              std::function<void(const std::shared_ptr<AssetInfo>&)> click,
                              std::function<void(const std::shared_ptr<AssetInfo>&)> right_click,
                              std::function<void(const std::shared_ptr<AssetInfo>&)> begin_drag)
-        : info(std::move(i)),
+        : owner(owner_ptr),
+          info(std::move(i)),
           on_click(std::move(click)),
           on_right_click(std::move(right_click)),
           on_begin_drag(std::move(begin_drag)) {}
@@ -203,11 +209,13 @@ struct AssetLibraryUI::AssetTileWidget : public Widget {
         }
 
         if (in) {
-            SDL_Texture* tex = nullptr;
-            auto it = in->animations.find("default");
-            if (it == in->animations.end()) it = in->animations.find("start");
-            if (it == in->animations.end() && !in->animations.empty()) it = in->animations.begin();
-            if (it != in->animations.end() && !it->second.frames.empty()) tex = it->second.frames.front();
+            SDL_Texture* tex = owner ? owner->get_default_frame_texture(*in) : nullptr;
+            if (!tex) {
+                auto it = in->animations.find("default");
+                if (it == in->animations.end()) it = in->animations.find("start");
+                if (it == in->animations.end() && !in->animations.empty()) it = in->animations.begin();
+                if (it != in->animations.end() && !it->second.frames.empty()) tex = it->second.frames.front();
+            }
             if (tex) {
                 int tw=0, th=0; SDL_QueryTexture(tex, nullptr, nullptr, &tw, &th);
                 if (tw > 0 && th > 0) {
@@ -329,6 +337,68 @@ void AssetLibraryUI::rebuild_rows() {
     floating_->set_rows(rows);
 }
 
+SDL_Texture* AssetLibraryUI::get_default_frame_texture(const AssetInfo& info) const {
+    auto find_frame = [](const AssetInfo& inf, const std::string& key) -> SDL_Texture* {
+        if (key.empty()) return nullptr;
+        auto it = inf.animations.find(key);
+        if (it != inf.animations.end() && !it->second.frames.empty()) {
+            return it->second.frames.front();
+        }
+        return nullptr;
+    };
+
+    if (SDL_Texture* tex = find_frame(info, "default")) {
+        return tex;
+    }
+    if (SDL_Texture* tex = find_frame(info, info.start_animation)) {
+        return tex;
+    }
+    if (SDL_Texture* tex = find_frame(info, "start")) {
+        return tex;
+    }
+    for (const auto& kv : info.animations) {
+        if (!kv.second.frames.empty()) {
+            return kv.second.frames.front();
+        }
+    }
+
+    if (!assets_owner_) {
+        return nullptr;
+    }
+    SDL_Renderer* renderer = assets_owner_->renderer();
+    if (!renderer) {
+        return nullptr;
+    }
+
+
+    std::string cache_key = info.name;
+    if (cache_key.empty()) {
+        auto addr = reinterpret_cast<std::uintptr_t>(&info);
+        cache_key = "<unnamed@" + std::to_string(addr) + ">";
+    }
+
+    if (preview_attempted_.insert(cache_key).second) {
+        auto& mutable_info = const_cast<AssetInfo&>(info);
+        mutable_info.loadAnimations(renderer);
+    }
+
+    if (SDL_Texture* tex = find_frame(info, "default")) {
+        return tex;
+    }
+    if (SDL_Texture* tex = find_frame(info, info.start_animation)) {
+        return tex;
+    }
+    if (SDL_Texture* tex = find_frame(info, "start")) {
+        return tex;
+    }
+    for (const auto& kv : info.animations) {
+        if (!kv.second.frames.empty()) {
+            return kv.second.frames.front();
+        }
+    }
+    return nullptr;
+}
+
 void AssetLibraryUI::update(const Input& input,
                             int screen_w,
                             int screen_h,
@@ -336,12 +406,14 @@ void AssetLibraryUI::update(const Input& input,
                             Assets& assets)
 {
     if (!floating_) return;
+    assets_owner_ = &assets;
     ensure_items(lib);
 
     if (tiles_.empty()) {
         tiles_.reserve(items_.size());
         for (auto& inf : items_) {
             tiles_.push_back(std::make_unique<AssetTileWidget>(
+                this,
                 inf,
                 [this, &assets](const std::shared_ptr<AssetInfo>& info){
                     assets.open_asset_info_editor(info);
@@ -351,6 +423,9 @@ void AssetLibraryUI::update(const Input& input,
                     close();
                 },
                 [this, &assets](const std::shared_ptr<AssetInfo>& info){
+                    if (info) {
+                        (void)get_default_frame_texture(*info);
+                    }
                     drag_info_ = info;
                     int mx = 0, my = 0; SDL_GetMouseState(&mx, &my);
                     SDL_Point wp = assets.getView().screen_to_map(SDL_Point{mx,my});
@@ -511,4 +586,8 @@ bool AssetLibraryUI::is_input_blocking_at(int mx, int my) const {
         return false;
     SDL_Point p{ mx, my };
     return SDL_PointInRect(&p, &floating_->rect());
+}
+
+bool AssetLibraryUI::is_dragging_asset() const {
+    return dragging_from_library_;
 }

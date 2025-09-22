@@ -21,6 +21,8 @@
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
+#include <limits>
+#include <vector>
 #include <nlohmann/json.hpp>
 
 namespace {
@@ -382,6 +384,19 @@ void DevControls::update(const Input& input) {
         map_mode_ui_->update(input);
     }
 
+    layout_filter_header();
+
+    if (room_editor_ && room_editor_->is_enabled()) {
+        FullScreenCollapsible* footer = map_mode_ui_ ? map_mode_ui_->get_footer_panel() : nullptr;
+        if (footer && footer->visible()) {
+            const SDL_Rect& header = footer->header_rect();
+            SDL_Point pointer{input.getX(), input.getY()};
+            if (header.w > 0 && header.h > 0 && SDL_PointInRect(&pointer, &header)) {
+                room_editor_->clear_highlighted_assets();
+            }
+        }
+    }
+
     sync_header_button_states();
 }
 
@@ -395,6 +410,8 @@ void DevControls::update_ui(const Input& input) {
 
 void DevControls::handle_sdl_event(const SDL_Event& event) {
     if (!enabled_) return;
+
+    layout_filter_header();
 
     const bool pointer_event = is_pointer_event(event);
     const bool wheel_event = (event.type == SDL_MOUSEWHEEL);
@@ -1031,7 +1048,7 @@ void DevControls::initialize_asset_filters() {
     FilterEntry map_entry;
     map_entry.id = "map_assets";
     map_entry.kind = FilterKind::MapAssets;
-    map_entry.checkbox = std::make_unique<DMCheckbox>("Map Assets", true);
+    map_entry.checkbox = std::make_unique<DMCheckbox>("Map Assets", false);
     filter_entries_.push_back(std::move(map_entry));
 
     FilterEntry room_entry;
@@ -1044,63 +1061,155 @@ void DevControls::initialize_asset_filters() {
         FilterEntry entry;
         entry.id = type;
         entry.kind = FilterKind::Type;
-        entry.checkbox = std::make_unique<DMCheckbox>(format_type_label(type), true);
-        filter_state_.type_filters[type] = true;
+        const bool default_enabled =
+            (type == asset_types::npc) || (type == asset_types::object);
+        entry.checkbox = std::make_unique<DMCheckbox>(format_type_label(type), default_enabled);
+        filter_state_.type_filters[type] = default_enabled;
         filter_entries_.push_back(std::move(entry));
     }
 
-    filter_state_.map_assets = true;
+    filter_state_.map_assets = false;
     filter_state_.current_room = true;
     sync_filter_state_from_ui();
 }
 
 void DevControls::layout_filter_header() {
-    const int margin = DMSpacing::item_gap();
-    const int height = DMCheckbox::height();
-    const int width = 180;
+    filter_header_rect_ = SDL_Rect{0, 0, 0, 0};
 
-    if (screen_w_ <= 0) {
-        filter_header_rect_ = SDL_Rect{0, 0, 0, 0};
+    auto reset_checkbox_rects = [this]() {
+        for (auto& entry : filter_entries_) {
+            if (entry.checkbox) {
+                entry.checkbox->set_rect(SDL_Rect{0, 0, 0, 0});
+            }
+        }
+    };
+
+    if (screen_w_ <= 0 || screen_h_ <= 0) {
+        reset_checkbox_rects();
         return;
     }
 
-    int x = margin;
-    int y = margin;
-    int max_right = 0;
+    FullScreenCollapsible* footer = map_mode_ui_ ? map_mode_ui_->get_footer_panel() : nullptr;
+    if (!footer) {
+        reset_checkbox_rects();
+        return;
+    }
+
+    const int margin_x = DMSpacing::item_gap();
+    const int margin_y = DMSpacing::item_gap();
+    const int row_gap = DMSpacing::small_gap();
+    const int checkbox_width = 180;
+    const int checkbox_height = DMCheckbox::height();
+
+    const int available_width = std::max(0, screen_w_ - margin_x * 2);
+    if (available_width <= 0) {
+        reset_checkbox_rects();
+        return;
+    }
+
+    std::vector<std::vector<FilterEntry*>> rows;
+    rows.emplace_back();
     for (auto& entry : filter_entries_) {
-        if (!entry.checkbox) continue;
-        SDL_Rect rect{x, y, width, height};
-        entry.checkbox->set_rect(rect);
-        max_right = std::max(max_right, rect.x + rect.w);
-        x += width + margin;
+        if (!entry.checkbox) {
+            continue;
+        }
+        auto& current_row = rows.back();
+        int current_row_width = 0;
+        if (!current_row.empty()) {
+            current_row_width = static_cast<int>(current_row.size()) * checkbox_width +
+                                static_cast<int>(current_row.size() - 1) * margin_x;
+        }
+        int width_with_new = current_row_width + checkbox_width;
+        if (!current_row.empty()) {
+            width_with_new += margin_x;
+        }
+        if (!current_row.empty() && width_with_new > available_width) {
+            rows.emplace_back();
+        }
+        rows.back().push_back(&entry);
     }
 
-    if (max_right == 0) {
-        filter_header_rect_ = SDL_Rect{0, 0, 0, 0};
+    if (!rows.empty() && rows.back().empty()) {
+        rows.pop_back();
+    }
+
+    int row_count = 0;
+    for (const auto& row : rows) {
+        if (!row.empty()) {
+            ++row_count;
+        }
+    }
+
+    if (row_count == 0) {
+        reset_checkbox_rects();
         return;
     }
 
-    int total_width = max_right + margin;
-    if (total_width > screen_w_) {
-        total_width = screen_w_;
+    const int checkbox_rows_height = row_count * checkbox_height + (row_count - 1) * row_gap;
+    const int desired_header_height = margin_y + DMButton::height() + row_gap + checkbox_rows_height + margin_y;
+    footer->set_header_height(desired_header_height);
+
+    SDL_Rect header = footer->header_rect();
+    if (header.w <= 0 || header.h <= 0) {
+        reset_checkbox_rects();
+        return;
     }
 
-    filter_header_rect_ = SDL_Rect{0, 0, total_width, height + margin * 2};
+    int y = header.y + margin_y + DMButton::height() + row_gap;
+    int min_x = std::numeric_limits<int>::max();
+    int min_y = std::numeric_limits<int>::max();
+    int max_x = std::numeric_limits<int>::min();
+    int max_y = std::numeric_limits<int>::min();
+
+    const int left_limit = header.x + margin_x;
+    const int right_limit = header.x + header.w - margin_x;
+
+    for (const auto& row : rows) {
+        if (row.empty()) {
+            continue;
+        }
+
+        const int row_width = static_cast<int>(row.size()) * checkbox_width +
+                              static_cast<int>(row.size() - 1) * margin_x;
+        int x = header.x + (header.w - row_width) / 2;
+        if (row_width > (right_limit - left_limit)) {
+            x = left_limit;
+        } else {
+            x = std::max(x, left_limit);
+            if (x + row_width > right_limit) {
+                x = right_limit - row_width;
+            }
+        }
+
+        for (FilterEntry* entry : row) {
+            if (!entry || !entry->checkbox) {
+                continue;
+            }
+
+            SDL_Rect rect{x, y, checkbox_width, checkbox_height};
+            entry->checkbox->set_rect(rect);
+
+            min_x = std::min(min_x, rect.x);
+            min_y = std::min(min_y, rect.y);
+            max_x = std::max(max_x, rect.x + rect.w);
+            max_y = std::max(max_y, rect.y + rect.h);
+
+            x += checkbox_width + margin_x;
+        }
+
+        y += checkbox_height + row_gap;
+    }
+
+    if (max_x > min_x && max_y > min_y) {
+        filter_header_rect_ = SDL_Rect{min_x, min_y, max_x - min_x, max_y - min_y};
+    } else {
+        filter_header_rect_ = SDL_Rect{0, 0, 0, 0};
+    }
 }
 
 void DevControls::render_filter_header(SDL_Renderer* renderer) const {
     if (!enabled_ || !renderer) return;
     if (filter_header_rect_.w <= 0 || filter_header_rect_.h <= 0) return;
-
-    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-    SDL_Color bg = DMStyles::PanelBG();
-    SDL_Rect rect = filter_header_rect_;
-    SDL_SetRenderDrawColor(renderer, bg.r, bg.g, bg.b, 220);
-    SDL_RenderFillRect(renderer, &rect);
-
-    SDL_Color border = DMStyles::Border();
-    SDL_SetRenderDrawColor(renderer, border.r, border.g, border.b, border.a);
-    SDL_RenderDrawRect(renderer, &rect);
 
     for (const auto& entry : filter_entries_) {
         if (entry.checkbox) {
@@ -1111,6 +1220,7 @@ void DevControls::render_filter_header(SDL_Renderer* renderer) const {
 
 bool DevControls::handle_filter_header_event(const SDL_Event& event) {
     if (!enabled_) return false;
+    if (filter_header_rect_.w <= 0 || filter_header_rect_.h <= 0) return false;
     bool used = false;
     for (auto& entry : filter_entries_) {
         if (!entry.checkbox) continue;
@@ -1126,9 +1236,16 @@ bool DevControls::handle_filter_header_event(const SDL_Event& event) {
 
 bool DevControls::is_point_inside_filter_header(int x, int y) const {
     if (!enabled_) return false;
-    if (filter_header_rect_.w <= 0 || filter_header_rect_.h <= 0) return false;
     SDL_Point p{x, y};
-    return SDL_PointInRect(&p, &filter_header_rect_);
+    for (const auto& entry : filter_entries_) {
+        if (!entry.checkbox) continue;
+        const SDL_Rect& rect = entry.checkbox->rect();
+        if (rect.w <= 0 || rect.h <= 0) continue;
+        if (SDL_PointInRect(&p, &rect)) {
+            return true;
+        }
+    }
+    return false;
 }
 
 void DevControls::sync_filter_state_from_ui() {
@@ -1171,6 +1288,19 @@ void DevControls::refresh_active_asset_filters() {
     assets_->refresh_filtered_active_assets();
     auto& filtered = assets_->mutable_filtered_active_assets();
     set_active_assets(filtered);
+    if (room_editor_) {
+        room_editor_->clear_highlighted_assets();
+    }
+    if (assets_) {
+        const auto& active = assets_->getActive();
+        for (Asset* asset : active) {
+            if (!asset) continue;
+            if (!passes_asset_filters(asset)) {
+                asset->set_highlighted(false);
+                asset->set_selected(false);
+            }
+        }
+    }
 }
 
 void DevControls::rebuild_map_asset_spawn_ids() {

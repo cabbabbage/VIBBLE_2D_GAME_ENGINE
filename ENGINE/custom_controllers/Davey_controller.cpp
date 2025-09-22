@@ -11,30 +11,39 @@ DaveyController::DaveyController(Assets* assets, Asset* self)
 }
 
 void DaveyController::update(const Input&) {
-    if (!self_ || !assets_ || !self_->info) {
+    if (!self_ || !self_->anim_) {
+        return;
+    }
+
+    if (!assets_ || !self_->info) {
+        self_->anim_->set_idle(40, 80, 5);
         return;
     }
 
     try {
-
         Asset* player = assets_->player;
-        if (!player || !self_->anim_) return;
-
-        
-        const bool near   = Range::is_in_range(self_, player, 40);
-        const bool inView = Range::is_in_range(self_, player, 1000);
-
-        if (near) {
-            
-            self_->anim_->set_orbit_ccw(player, 40, 40);
-        } else if (inView) {
-            
-            self_->anim_->set_pursue(player, 20, 30);
-        } else {
-            
+        if (!player || player == self_) {
             self_->anim_->set_idle(40, 80, 5);
+            return;
+        }
 
+        const double distance = Range::get_distance(self_, player);
+
+        constexpr int orbit_radius      = 44;
+        constexpr int chase_trigger     = 360;
+        constexpr int pursue_min_stride = 28;
+        constexpr int pursue_max_stride = 56;
+
+        if (distance <= static_cast<double>(orbit_radius)) {
+            self_->anim_->set_weights(0.9, 0.1);
+            self_->anim_->set_orbit_ccw(player, orbit_radius, orbit_radius);
+        } else if (distance <= static_cast<double>(chase_trigger)) {
+            self_->anim_->set_weights(1.0, 0.0);
+            self_->anim_->set_pursue(player, pursue_min_stride, pursue_max_stride);
+        } else {
+            self_->anim_->set_idle(40, 90, 10);
         }
     } catch (...) {
+        self_->anim_->set_idle(40, 80, 5);
     }
 }

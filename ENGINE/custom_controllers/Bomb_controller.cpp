@@ -12,26 +12,37 @@ BombController::BombController(Assets* assets, Asset* self)
 }
 
 void BombController::update(const Input&) {
-    if (!self_ || !assets_ || !self_->info) {
+    if (!self_ || !self_->anim_) {
+        return;
+    }
+
+    if (!assets_ || !self_->info) {
+        self_->anim_->set_idle(40, 80, 5);
         return;
     }
 
     try {
         Asset* player = assets_->player;
-        if (!player || !self_->anim_) return;
+        if (!player || player == self_) {
+            self_->anim_->set_idle(40, 80, 5);
+            return;
+        }
 
-        const bool near   = Range::is_in_range(self_, player, 40);
-        const bool inView = Range::is_in_range(self_, player, 1000);
+        const double distance = Range::get_distance(self_, player);
 
-        if (near) {
+        constexpr int detonation_radius = 54;
+        constexpr int charge_min_dist   = 24;
+        constexpr int charge_max_dist   = 48;
+
+        if (distance <= static_cast<double>(detonation_radius)) {
             self_->anim_->set_animation_now("explosion");
             self_->anim_->set_mode_none();
-        } else if (inView) {
-            self_->anim_->set_pursue(player, 20, 30);
-        } else {
-            self_->anim_->set_idle(40, 80, 5);
+            return;
         }
-    } catch (...) {
 
+        self_->anim_->set_weights(1.0, 0.0);
+        self_->anim_->set_pursue(player, charge_min_dist, charge_max_dist);
+    } catch (...) {
+        self_->anim_->set_idle(40, 80, 5);
     }
 }

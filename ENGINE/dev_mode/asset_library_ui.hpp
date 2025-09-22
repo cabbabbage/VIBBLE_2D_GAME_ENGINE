@@ -4,6 +4,7 @@
 #include <vector>
 #include <string>
 #include <memory>
+#include <unordered_set>
 
 class Input;
 class AssetInfo;
@@ -27,6 +28,7 @@ public:
     bool is_expanded() const;
     bool is_input_blocking() const;
     bool is_input_blocking_at(int mx, int my) const;
+    bool is_dragging_asset() const;
 
     void update(const Input& input, int screen_w, int screen_h, AssetLibrary& lib, Assets& assets);
     void render(SDL_Renderer* r, int screen_w, int screen_h) const;
@@ -48,6 +50,9 @@ private:
 
     struct AssetTileWidget;
     std::vector<std::unique_ptr<AssetTileWidget>> tiles_;
+
+    Assets* assets_owner_ = nullptr;
+    mutable std::unordered_set<std::string> preview_attempted_;
 
     class Asset* drag_spawned_ = nullptr;
     std::shared_ptr<AssetInfo> drag_info_{};

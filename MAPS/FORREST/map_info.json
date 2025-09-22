@@ -1,12 +1,12 @@
 {
   "camera_settings": {
-    "distance_scale_strength": 0.12999999523162842,
-    "foreshorten_strength": 0.07000000029802322,
-    "height_at_zoom1": 713.0,
-    "parallax_strength": 19.75,
+    "distance_scale_strength": 0.04999999701976776,
+    "foreshorten_strength": 0.07999999821186066,
+    "height_at_zoom1": 503.0,
+    "parallax_strength": 24.0,
     "realism_enabled": true,
-    "render_distance": 910.0,
-    "tripod_distance_y": -1250.0
+    "render_distance": 950.0,
+    "tripod_distance_y": -1170.0
   },
   "map_assets_data": {
     "spawn_groups": [
@@ -220,7 +220,7 @@
     "mult": 0.32,
     "orbit_radius": 1523,
     "radius": 6667,
-    "update_interval": 1
+    "update_interval": 45
   },
   "map_name": "FORREST",
   "map_radius": 8610.0,
@@ -557,6 +557,190 @@
           "origional_width": 2480,
           "position": "Exact",
           "spawn_id": "spn-85325b070ab9"
+        },
+        {
+          "candidates": [
+            {
+              "chance": 0,
+              "name": "null"
+            },
+            {
+              "chance": 100,
+              "name": "Barrel"
+            }
+          ],
+          "check_overlap": false,
+          "display_name": "Barrel",
+          "dx": -762,
+          "dy": -368,
+          "enforce_spacing": false,
+          "max_number": 1,
+          "min_number": 1,
+          "origional_height": 1156,
+          "origional_width": 1156,
+          "position": "Exact",
+          "spawn_id": "spn-045e8e87bd1c"
+        },
+        {
+          "candidates": [
+            {
+              "chance": 0,
+              "name": "null"
+            },
+            {
+              "chance": 100,
+              "name": "Barrel"
+            }
+          ],
+          "check_overlap": false,
+          "display_name": "Barrel",
+          "dx": -496,
+          "dy": -228,
+          "enforce_spacing": false,
+          "max_number": 1,
+          "min_number": 1,
+          "origional_height": 810,
+          "origional_width": 810,
+          "position": "Exact",
+          "spawn_id": "spn-fe094087f567"
+        },
+        {
+          "candidates": [
+            {
+              "chance": 0,
+              "name": "null"
+            },
+            {
+              "chance": 100,
+              "name": "Big_Rock"
+            }
+          ],
+          "check_overlap": false,
+          "display_name": "Big_Rock",
+          "dx": -537,
+          "dy": -82,
+          "enforce_spacing": false,
+          "max_number": 1,
+          "min_number": 1,
+          "origional_height": 810,
+          "origional_width": 810,
+          "position": "Exact",
+          "spawn_id": "spn-70e30fe221d2"
+        },
+        {
+          "candidates": [
+            {
+              "chance": 0,
+              "name": "null"
+            },
+            {
+              "chance": 100,
+              "name": "Bench"
+            }
+          ],
+          "check_overlap": false,
+          "display_name": "Bench",
+          "dx": -689,
+          "dy": -75,
+          "enforce_spacing": false,
+          "max_number": 1,
+          "min_number": 1,
+          "origional_height": 810,
+          "origional_width": 810,
+          "position": "Exact",
+          "spawn_id": "spn-5594c145cf8f"
+        },
+        {
+          "candidates": [
+            {
+              "chance": 0,
+              "name": "null"
+            },
+            {
+              "chance": 100,
+              "name": "Bench"
+            }
+          ],
+          "check_overlap": false,
+          "display_name": "Bench",
+          "dx": -742,
+          "dy": -97,
+          "enforce_spacing": false,
+          "max_number": 1,
+          "min_number": 1,
+          "origional_height": 810,
+          "origional_width": 810,
+          "position": "Exact",
+          "spawn_id": "spn-44ea88e4be77"
+        },
+        {
+          "candidates": [
+            {
+              "chance": 0,
+              "name": "null"
+            },
+            {
+              "chance": 100,
+              "name": "Axe"
+            }
+          ],
+          "check_overlap": false,
+          "display_name": "Axe",
+          "dx": -937,
+          "dy": -394,
+          "enforce_spacing": false,
+          "max_number": 1,
+          "min_number": 1,
+          "origional_height": 1258,
+          "origional_width": 1258,
+          "position": "Exact",
+          "spawn_id": "spn-98999f752f6c"
+        },
+        {
+          "candidates": [
+            {
+              "chance": 0,
+              "name": "null"
+            },
+            {
+              "chance": 100,
+              "name": "Axe"
+            }
+          ],
+          "check_overlap": false,
+          "display_name": "Axe",
+          "dx": -943,
+          "dy": -359,
+          "enforce_spacing": false,
+          "max_number": 1,
+          "min_number": 1,
+          "origional_height": 1258,
+          "origional_width": 1258,
+          "position": "Exact",
+          "spawn_id": "spn-d279db8810cf"
+        },
+        {
+          "candidates": [
+            {
+              "chance": 0,
+              "name": "null"
+            },
+            {
+              "chance": 100,
+              "name": "Barrel"
+            }
+          ],
+          "check_overlap": false,
+          "display_name": "Barrel",
+          "dx": -630,
+          "dy": -318,
+          "enforce_spacing": false,
+          "max_number": 1,
+          "min_number": 1,
+          "origional_height": 1258,
+          "origional_width": 1258,
+          "position": "Exact",
+          "spawn_id": "spn-2c7a1130cab3"
         }
       ]
     }
