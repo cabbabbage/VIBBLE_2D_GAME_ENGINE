@@ -42,6 +42,7 @@ class AssetInfo {
     int z_threshold;
     bool passable;
     bool has_shading;
+    int shading_factor = 100;
     int min_same_type_distance;
     int min_distance_all;
     float scale_factor;

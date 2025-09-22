@@ -6599,13 +6599,15 @@
     "has_shading": true,
     "lighting_info": [
         {
-            "factor": 87,
+            "factor": 100,
             "falloff": 0,
             "has_light_source": true,
-            "light_intensity": 219,
-            "radius": 720,
-            "x_radius": 449,
-            "y_radius": 380
+            "light_intensity": 255,
+            "offset_x": 0,
+            "offset_y": -644,
+            "radius": 966,
+            "x_radius": 589,
+            "y_radius": 614
         }
     ],
     "max_child_depth": 4,

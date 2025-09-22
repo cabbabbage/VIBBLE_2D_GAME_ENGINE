@@ -1,4 +1,4 @@
-#include "asset_config_ui.hpp"
+#include "spawn_group_config_ui.hpp"
 
 #include "DockableCollapsible.hpp"
 #include "FloatingDockableManager.hpp"
@@ -10,12 +10,20 @@
 #include <algorithm>
 #include <cstdlib>
 #include <utility>
+#include <SDL_ttf.h>
 
 class LabelWidget : public Widget {
 public:
-    explicit LabelWidget(std::string text) : text_(std::move(text)) {}
+    explicit LabelWidget(std::string text)
+        : text_(std::move(text)),
+          color_(DMStyles::Label().color) {}
 
     void set_text(std::string text) { text_ = std::move(text); }
+
+    void set_color(SDL_Color color) {
+        color_ = color;
+        has_override_color_ = true;
+    }
 
     void set_rect(const SDL_Rect& r) override { rect_ = r; }
 
@@ -35,6 +43,7 @@ public:
 
     void render(SDL_Renderer* r) const override {
         const DMLabelStyle& st = DMStyles::Label();
+        SDL_Color color = has_override_color_ ? color_ : st.color;
         TTF_Font* font = st.open_font();
         if (!font) return;
         int base_height = st.font_size + 2;
@@ -51,7 +60,7 @@ public:
                                       ? text_.substr(start)
                                       : text_.substr(start, end - start);
             if (!segment.empty()) {
-                SDL_Surface* surf = TTF_RenderUTF8_Blended(font, segment.c_str(), st.color);
+                SDL_Surface* surf = TTF_RenderUTF8_Blended(font, segment.c_str(), color);
                 if (surf) {
                     SDL_Texture* tex = SDL_CreateTextureFromSurface(r, surf);
                     if (tex) {
@@ -72,9 +81,11 @@ public:
 private:
     SDL_Rect rect_{0, 0, 0, 0};
     std::string text_;
+    SDL_Color color_{255, 255, 255, 255};
+    bool has_override_color_ = false;
 };
 
-AssetConfigUI::~AssetConfigUI() = default;
+SpawnGroupConfigUI::~SpawnGroupConfigUI() = default;
 
 namespace {
 constexpr int kDefaultScreenW = 1920;
@@ -247,11 +258,15 @@ std::string format_exact_room_summary(const nlohmann::json& entry) {
 }
 }
 
-AssetConfigUI::AssetConfigUI() {
+SpawnGroupConfigUI::SpawnGroupConfigUI() {
     spawn_methods_ = {"Random", "Center", "Perimeter", "Exact", "Percent", "Entrance", "Exit"};
-    panel_ = std::make_unique<DockableCollapsible>("Asset", true, 0, 0);
+    panel_ = std::make_unique<DockableCollapsible>("Spawn Group", true, 0, 0);
     panel_->set_expanded(true);
     panel_->set_visible(false);
+
+    ownership_text_ = "Room: Unknown";
+    ownership_color_ = DMStyles::Label().color;
+    has_ownership_color_ = false;
 
     b_done_ = std::make_unique<DMButton>("Done", &DMStyles::ListButton(), 96, DMButton::height());
     b_done_w_ = std::make_unique<ButtonWidget>(b_done_.get(), [this]() { close(); });
@@ -277,17 +292,17 @@ AssetConfigUI::AssetConfigUI() {
     pending_summary_.method = spawn_methods_.empty() ? std::string{} : spawn_methods_.front();
 }
 
-bool AssetConfigUI::method_forces_single_quantity(const std::string& method) const {
+bool SpawnGroupConfigUI::method_forces_single_quantity(const std::string& method) const {
     return method == "Exact" || method == "Percent";
 }
 
-void AssetConfigUI::ensure_search() {
+void SpawnGroupConfigUI::ensure_search() {
     if (!search_) {
         search_ = std::make_unique<SearchAssets>();
     }
 }
 
-void AssetConfigUI::set_position(int x, int y) {
+void SpawnGroupConfigUI::set_position(int x, int y) {
     if (panel_) panel_->set_position(x, y);
     if (search_ && search_->visible()) {
         const SDL_Rect& r = panel_ ? panel_->rect() : SDL_Rect{x, y, 0, 0};
@@ -295,14 +310,14 @@ void AssetConfigUI::set_position(int x, int y) {
     }
 }
 
-SDL_Point AssetConfigUI::position() const {
+SDL_Point SpawnGroupConfigUI::position() const {
     if (panel_) {
         return panel_->position();
     }
     return SDL_Point{0, 0};
 }
 
-void AssetConfigUI::handle_method_change() {
+void SpawnGroupConfigUI::handle_method_change() {
     if (!dd_method_) return;
     int selected = dd_method_->selected();
     if (selected < 0 || selected >= static_cast<int>(spawn_methods_.size())) {
@@ -315,7 +330,7 @@ void AssetConfigUI::handle_method_change() {
     }
 }
 
-void AssetConfigUI::load(const nlohmann::json& data) {
+void SpawnGroupConfigUI::load(const nlohmann::json& data) {
     entry_ = data.is_object() ? data : nlohmann::json::object();
     spawn_id_ = entry_.value("spawn_id", std::string{});
 
@@ -413,7 +428,7 @@ void AssetConfigUI::load(const nlohmann::json& data) {
     rebuild_rows();
 }
 
-void AssetConfigUI::open_panel() {
+void SpawnGroupConfigUI::open_panel() {
     if (!panel_) return;
     FloatingDockableManager::instance().open_floating("Asset Config", panel_.get(), [this]() { this->close(); });
     panel_->set_visible(true);
@@ -422,16 +437,25 @@ void AssetConfigUI::open_panel() {
     panel_->update(dummy, kDefaultScreenW, kDefaultScreenH);
 }
 
-void AssetConfigUI::close() {
+void SpawnGroupConfigUI::close() {
     if (panel_) panel_->set_visible(false);
     if (search_) search_->close();
 }
 
-bool AssetConfigUI::visible() const {
+bool SpawnGroupConfigUI::visible() const {
     return (panel_ && panel_->is_visible()) || (search_ && search_->visible());
 }
 
-void AssetConfigUI::rebuild_widgets() {
+void SpawnGroupConfigUI::rebuild_widgets() {
+    if (!ownership_text_.empty()) {
+        ownership_label_ = std::make_unique<LabelWidget>(ownership_text_);
+        if (has_ownership_color_) {
+            ownership_label_->set_color(ownership_color_);
+        }
+    } else {
+        ownership_label_.reset();
+    }
+
     dd_method_ = std::make_unique<DMDropdown>("Method", spawn_methods_, method_);
     dd_method_w_ = std::make_unique<DropdownWidget>(dd_method_.get());
 
@@ -539,9 +563,13 @@ void AssetConfigUI::rebuild_widgets() {
     }
 }
 
-void AssetConfigUI::rebuild_rows() {
+void SpawnGroupConfigUI::rebuild_rows() {
     if (!panel_) return;
     DockableCollapsible::Rows rows;
+
+    if (ownership_label_) {
+        rows.push_back({ ownership_label_.get() });
+    }
 
     DockableCollapsible::Row header_row;
     if (dd_method_w_) header_row.push_back(dd_method_w_.get());
@@ -593,7 +621,7 @@ void AssetConfigUI::rebuild_rows() {
     refresh_chance_labels(total_chance());
 }
 
-void AssetConfigUI::add_candidate(const std::string& raw_name, int chance) {
+void SpawnGroupConfigUI::add_candidate(const std::string& raw_name, int chance) {
     if (!entry_.contains("candidates") || !entry_["candidates"].is_array()) {
         entry_["candidates"] = nlohmann::json::array();
     }
@@ -610,7 +638,7 @@ void AssetConfigUI::add_candidate(const std::string& raw_name, int chance) {
     sync_json();
 }
 
-void AssetConfigUI::remove_candidate(size_t index) {
+void SpawnGroupConfigUI::remove_candidate(size_t index) {
     if (!entry_.contains("candidates") || !entry_["candidates"].is_array()) return;
     auto& arr = entry_["candidates"];
     if (index >= arr.size()) return;
@@ -629,7 +657,7 @@ void AssetConfigUI::remove_candidate(size_t index) {
     sync_json();
 }
 
-void AssetConfigUI::sync_json() {
+void SpawnGroupConfigUI::sync_json() {
     if (cb_overlap_) {
         overlap_ = cb_overlap_->value();
         entry_["check_overlap"] = overlap_;
@@ -715,7 +743,7 @@ void AssetConfigUI::sync_json() {
     refresh_chance_labels(total);
 }
 
-void AssetConfigUI::update(const Input& input) {
+void SpawnGroupConfigUI::update(const Input& input) {
     if (panel_ && panel_->is_visible()) {
         panel_->update(input, kDefaultScreenW, kDefaultScreenH);
         handle_method_change();
@@ -730,7 +758,7 @@ void AssetConfigUI::update(const Input& input) {
     }
 }
 
-bool AssetConfigUI::handle_event(const SDL_Event& e) {
+bool SpawnGroupConfigUI::handle_event(const SDL_Event& e) {
     bool used = false;
     if (search_ && search_->visible()) {
         used |= search_->handle_event(e);
@@ -745,16 +773,16 @@ bool AssetConfigUI::handle_event(const SDL_Event& e) {
     return used;
 }
 
-void AssetConfigUI::render(SDL_Renderer* r) const {
+void SpawnGroupConfigUI::render(SDL_Renderer* r) const {
     if (panel_ && panel_->is_visible()) panel_->render(r);
     if (search_ && search_->visible()) search_->render(r);
 }
 
-nlohmann::json AssetConfigUI::to_json() const {
+nlohmann::json SpawnGroupConfigUI::to_json() const {
     return entry_;
 }
 
-bool AssetConfigUI::is_point_inside(int x, int y) const {
+bool SpawnGroupConfigUI::is_point_inside(int x, int y) const {
     if (panel_ && panel_->is_visible() && panel_->is_point_inside(x, y)) {
         return true;
     }
@@ -764,7 +792,7 @@ bool AssetConfigUI::is_point_inside(int x, int y) const {
     return false;
 }
 
-AssetConfigUI::ChangeSummary AssetConfigUI::consume_change_summary() {
+SpawnGroupConfigUI::ChangeSummary SpawnGroupConfigUI::consume_change_summary() {
     ChangeSummary result = pending_summary_;
     pending_summary_ = {};
     baseline_method_ = spawn_methods_.empty() ? std::string{} : spawn_methods_[std::clamp(method_, 0, static_cast<int>(spawn_methods_.size() - 1))];
@@ -774,7 +802,20 @@ AssetConfigUI::ChangeSummary AssetConfigUI::consume_change_summary() {
     return result;
 }
 
-int AssetConfigUI::total_chance() const {
+void SpawnGroupConfigUI::set_ownership_label(const std::string& label, SDL_Color color) {
+    ownership_text_ = label;
+    ownership_color_ = color;
+    has_ownership_color_ = true;
+    if (ownership_label_) {
+        ownership_label_->set_text(ownership_text_);
+        ownership_label_->set_color(ownership_color_);
+    }
+    if (panel_) {
+        rebuild_rows();
+    }
+}
+
+int SpawnGroupConfigUI::total_chance() const {
     int total = 0;
     for (const auto& row : candidates_) {
         if (row.chance_slider) {
@@ -784,7 +825,7 @@ int AssetConfigUI::total_chance() const {
     return total;
 }
 
-void AssetConfigUI::refresh_chance_labels(int total_chance) {
+void SpawnGroupConfigUI::refresh_chance_labels(int total_chance) {
     if (total_chance < 0) total_chance = 0;
     for (auto& row : candidates_) {
         if (!row.chance_label) continue;

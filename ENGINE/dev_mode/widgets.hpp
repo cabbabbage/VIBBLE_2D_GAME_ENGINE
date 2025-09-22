@@ -45,10 +45,15 @@ public:
     static int height() { return 32; }
     int height_for_width(int w) const;
 private:
-    void draw_text(SDL_Renderer* r, const std::string& s, int x, int y, const DMLabelStyle& ls) const;
+    void draw_text(SDL_Renderer* r, const std::string& s, int x, int y, int max_width, const DMLabelStyle& ls) const;
     std::vector<std::string> wrap_lines(TTF_Font* f, const std::string& s, int max_width) const;
+    int compute_label_height(int width) const;
     SDL_Rect box_rect() const;
+    SDL_Rect label_rect() const;
     SDL_Rect rect_{0,0,200,32};
+    SDL_Rect box_rect_{0,0,200,32};
+    SDL_Rect label_rect_{0,0,0,0};
+    int label_height_ = 0;
     std::string label_;
     std::string text_;
     bool hovered_ = false;
@@ -84,8 +89,8 @@ public:
     int value() const { return value_; }
     bool handle_event(const SDL_Event& e);
     void render(SDL_Renderer* r) const;
-    int preferred_height() const;
-    static int height() { return 40; }
+    int preferred_height(int width) const;
+    static int height();
 private:
     int label_space() const;
     SDL_Rect content_rect() const;
@@ -94,7 +99,11 @@ private:
     SDL_Rect knob_rect() const;
     int value_for_x(int x) const;
     void draw_text(SDL_Renderer* r, const std::string& s, int x, int y) const;
+    int compute_label_height(int width) const;
     SDL_Rect rect_{0,0,200,40};
+    SDL_Rect content_rect_{0,0,200,40};
+    SDL_Rect label_rect_{0,0,0,0};
+    int label_height_ = 0;
     std::string label_;
     int min_ = 0;
     int max_ = 100;
@@ -115,14 +124,16 @@ public:
     int max_value() const { return max_value_; }
     bool handle_event(const SDL_Event& e);
     void render(SDL_Renderer* r) const;
-    static int height() { return 40; }
+    static int height();
 private:
     SDL_Rect track_rect() const;
     SDL_Rect min_knob_rect() const;
     SDL_Rect max_knob_rect() const;
     int value_for_x(int x) const;
     void draw_text(SDL_Renderer* r, const std::string& s, int x, int y) const;
+    SDL_Rect content_rect() const;
     SDL_Rect rect_{0,0,200,40};
+    SDL_Rect content_rect_{0,0,200,40};
     int min_ = 0;
     int max_ = 100;
     int min_value_ = 0;
@@ -146,8 +157,8 @@ public:
     void render(SDL_Renderer* r) const;
     void render_options(SDL_Renderer* r) const;
     bool expanded() const { return expanded_; }
-    int preferred_height() const;
-    static int height() { return 32; }
+    int preferred_height(int width) const;
+    static int height();
 
     // Returns currently expanded dropdown, or nullptr if none.
     static DMDropdown* active_dropdown();
@@ -155,8 +166,13 @@ public:
     static void render_active_options(SDL_Renderer* r);
 private:
     int label_space() const;
+    int compute_label_height(int width) const;
     SDL_Rect box_rect() const;
+    SDL_Rect label_rect() const;
     SDL_Rect rect_{0,0,200,32};
+    SDL_Rect box_rect_{0,0,200,32};
+    SDL_Rect label_rect_{0,0,0,0};
+    int label_height_ = 0;
     std::string label_;
     std::vector<std::string> options_;
     int index_ = 0;
@@ -233,7 +249,7 @@ public:
     explicit SliderWidget(DMSlider* s) : s_(s) {}
     void set_rect(const SDL_Rect& r) override { if (s_) s_->set_rect(r); }
     const SDL_Rect& rect() const override { return s_->rect(); }
-    int height_for_width(int /*w*/) const override { return s_ ? s_->preferred_height() : DMSlider::height(); }
+    int height_for_width(int w) const override { return s_ ? s_->preferred_height(w) : DMSlider::height(); }
     bool handle_event(const SDL_Event& e) override { return s_ ? s_->handle_event(e) : false; }
     void render(SDL_Renderer* r) const override { if (s_) s_->render(r); }
 private:
@@ -257,7 +273,7 @@ public:
     explicit DropdownWidget(DMDropdown* d) : d_(d) {}
     void set_rect(const SDL_Rect& r) override { if (d_) d_->set_rect(r); }
     const SDL_Rect& rect() const override { return d_->rect(); }
-    int height_for_width(int /*w*/) const override { return d_ ? d_->preferred_height() : DMDropdown::height(); }
+    int height_for_width(int w) const override { return d_ ? d_->preferred_height(w) : DMDropdown::height(); }
     bool handle_event(const SDL_Event& e) override { return d_ ? d_->handle_event(e) : false; }
     void render(SDL_Renderer* r) const override { if (d_) d_->render(r); }
 private:

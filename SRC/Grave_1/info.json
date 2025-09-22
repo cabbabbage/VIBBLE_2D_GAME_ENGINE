@@ -4410,7 +4410,9 @@
             "falloff": 0,
             "has_light_source": true,
             "light_intensity": 255,
-            "radius": 98,
+            "offset_x": -8,
+            "offset_y": -68,
+            "radius": 504,
             "x_radius": 59,
             "y_radius": 71
         }
@@ -4423,7 +4425,7 @@
     "rnd_spawn_max": 400,
     "rnd_spawn_min": 300,
     "size_settings": {
-        "scale_percentage": 17
+        "scale_percentage": 27.0
     },
     "tags": [
         "death",
@@ -4438,5 +4440,5 @@
         "still"
     ],
     "update_radius": 1000,
-    "z_threshold": 40
+    "z_threshold": -8
 }

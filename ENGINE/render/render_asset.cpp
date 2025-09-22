@@ -115,8 +115,8 @@ void RenderAsset::render_shadow_orbital_lights(Asset* a, const SDL_Rect& bounds,
 	const float angle = main_light_source_.get_angle();
 	for (auto& light : a->info->orbital_light_sources) {
 		if (!light.texture || light.x_radius <= 0 || light.y_radius <= 0) continue;
-		const float lx = a->pos.x + std::cos(angle) * light.x_radius;
-		const float ly = a->pos.y - std::sin(angle) * light.y_radius;
+                const float lx = a->pos.x + light.offset_x + std::cos(angle) * light.x_radius;
+                const float ly = a->pos.y + light.offset_y - std::sin(angle) * light.y_radius;
                 SDL_Point pnt = cam_.compute_render_effects(
                                         SDL_Point{static_cast<int>(std::round(lx)), static_cast<int>(std::round(ly))},
                                         0.0f,

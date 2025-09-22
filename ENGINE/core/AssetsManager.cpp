@@ -664,9 +664,9 @@ void Assets::open_asset_info_editor_for_asset(Asset* a) {
     }
 }
 
-void Assets::open_asset_config_for_asset(Asset* a) {
+void Assets::open_spawn_group_for_asset(Asset* a) {
     if (dev_controls_ && dev_mode) {
-        dev_controls_->open_asset_config_for_asset(a);
+        dev_controls_->open_spawn_group_for_asset(a);
     }
 }
 

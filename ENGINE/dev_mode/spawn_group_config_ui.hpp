@@ -25,11 +25,11 @@ class DMTextBox;
 class DMCheckbox;
 class SearchAssets;
 
-// UI panel for configuring a single asset entry in the spawn JSON
-class AssetConfigUI {
+// UI panel for configuring a single spawn group entry in the spawn JSON
+class SpawnGroupConfigUI {
 public:
-    AssetConfigUI();
-    ~AssetConfigUI();
+    SpawnGroupConfigUI();
+    ~SpawnGroupConfigUI();
 
     struct ChangeSummary {
         bool method_changed = false;
@@ -50,6 +50,8 @@ public:
     nlohmann::json to_json() const;
     bool is_point_inside(int x, int y) const;
     ChangeSummary consume_change_summary();
+
+    void set_ownership_label(const std::string& label, SDL_Color color);
 
 private:
     struct CandidateRow {
@@ -86,6 +88,11 @@ private:
     std::vector<CandidateRow> candidates_;
     std::unique_ptr<DMButton> add_button_;
     std::unique_ptr<ButtonWidget> add_button_w_;
+
+    std::unique_ptr<LabelWidget> ownership_label_;
+    std::string ownership_text_;
+    SDL_Color ownership_color_{255, 255, 255, 255};
+    bool has_ownership_color_ = false;
 
     // Common config
     int method_ = 0;

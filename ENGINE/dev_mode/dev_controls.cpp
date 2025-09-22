@@ -2,7 +2,6 @@
 
 #include "dev_mode/map_editor.hpp"
 #include "dev_mode/room_editor.hpp"
-#include "dev_mode/map_assets_panel.hpp"
 #include "dev_mode/map_mode_ui.hpp"
 #include "dev_mode/full_screen_collapsible.hpp"
 #include "dev_mode/camera_ui.hpp"
@@ -16,10 +15,8 @@
 #include "utils/input.hpp"
 
 #include <algorithm>
-#include <cmath>
 #include <utility>
 #include <cctype>
-#include <limits>
 #include <string>
 
 namespace {
@@ -180,17 +177,12 @@ DevControls::DevControls(Assets* owner, int screen_w, int screen_h)
     if (map_editor_) {
         map_editor_->set_ui_blocker([this](int x, int y) { return is_pointer_over_dev_ui(x, y); });
     }
-    ensure_map_assets_panel();
     if (map_mode_ui_) {
-        map_mode_ui_->set_shared_assets_panel(map_assets_panel_);
         map_mode_ui_->set_footer_always_visible(true);
         map_mode_ui_->set_header_mode(MapModeUI::HeaderMode::Room);
     }
-    if (room_editor_) {
-        room_editor_->set_map_assets_panel(map_assets_panel_.get());
-        if (map_mode_ui_) {
-            room_editor_->set_shared_fullscreen_panel(map_mode_ui_->get_footer_panel());
-        }
+    if (room_editor_ && map_mode_ui_) {
+        room_editor_->set_shared_fullscreen_panel(map_mode_ui_->get_footer_panel());
     }
     configure_header_button_sets();
 }
@@ -209,10 +201,6 @@ void DevControls::set_map_info(nlohmann::json* map_info, MapLightPanel::SaveCall
     if (map_mode_ui_) {
         map_mode_ui_->set_light_save_callback(map_light_save_cb_);
         map_mode_ui_->set_map_context(map_info_json_, map_path_);
-    }
-    ensure_map_assets_panel();
-    if (map_assets_panel_) {
-        map_assets_panel_->set_map_info(map_info_json_, map_path_);
     }
     configure_header_button_sets();
 }
@@ -235,7 +223,6 @@ void DevControls::set_screen_dimensions(int width, int height) {
     if (map_mode_ui_) map_mode_ui_->set_screen_dimensions(width, height);
     SDL_Rect bounds{0, 0, screen_w_, screen_h_};
     if (camera_panel_) camera_panel_->set_work_area(bounds);
-    if (map_assets_panel_) map_assets_panel_->set_work_area(bounds);
 }
 
 void DevControls::set_current_room(Room* room) {
@@ -255,36 +242,11 @@ void DevControls::set_map_context(nlohmann::json* map_info, const std::string& m
     map_path_ = map_path;
     if (map_mode_ui_) map_mode_ui_->set_map_context(map_info, map_path);
     if (map_mode_ui_) map_mode_ui_->set_light_save_callback(map_light_save_cb_);
-    ensure_map_assets_panel();
     configure_header_button_sets();
-}
-
-void DevControls::ensure_map_assets_panel() {
-    if (!map_assets_panel_) {
-        map_assets_panel_ = std::make_shared<MapAssetsPanel>(72, 72);
-        map_assets_panel_->close();
-    }
-    if (!map_assets_panel_) {
-        return;
-    }
-    SDL_Rect bounds{0, 0, screen_w_, screen_h_};
-    map_assets_panel_->set_work_area(bounds);
-    if (map_info_json_) {
-        map_assets_panel_->set_map_info(map_info_json_, map_path_);
-    }
-    if (map_mode_ui_) {
-        map_mode_ui_->set_shared_assets_panel(map_assets_panel_);
-    }
-    if (room_editor_) {
-        room_editor_->set_map_assets_panel(map_assets_panel_.get());
-    }
 }
 
 bool DevControls::is_pointer_over_dev_ui(int x, int y) const {
     if (camera_panel_ && camera_panel_->is_visible() && camera_panel_->is_point_inside(x, y)) {
-        return true;
-    }
-    if (map_assets_panel_ && map_assets_panel_->is_visible() && map_assets_panel_->is_point_inside(x, y)) {
         return true;
     }
     if (room_editor_ && room_editor_->is_room_ui_blocking_point(x, y)) {
@@ -295,41 +257,6 @@ bool DevControls::is_pointer_over_dev_ui(int x, int y) const {
     }
     if (regenerate_popup_ && regenerate_popup_->visible() && regenerate_popup_->is_point_inside(x, y)) {
         return true;
-    }
-    return false;
-}
-
-bool DevControls::handle_shared_assets_event(const SDL_Event& event) {
-    if (mode_ == Mode::MapEditor) {
-        return false;
-    }
-    if (is_modal_blocking_panels()) {
-        return false;
-    }
-    if (!map_assets_panel_ || !map_assets_panel_->is_visible()) {
-        return false;
-    }
-    const bool pointer_event = is_pointer_event(event);
-    const bool wheel_event = (event.type == SDL_MOUSEWHEEL);
-    SDL_Point pointer{0, 0};
-    if (pointer_event || wheel_event) {
-        pointer = event_point(event);
-        if (room_editor_ && room_editor_->is_room_ui_blocking_point(pointer.x, pointer.y)) {
-            return false;
-        }
-    }
-    if (map_assets_panel_->handle_event(event)) {
-        if (input_) input_->consumeEvent(event);
-        return true;
-    }
-    if (pointer_event || wheel_event) {
-        if (room_editor_ && room_editor_->is_room_ui_blocking_point(pointer.x, pointer.y)) {
-            return false;
-        }
-        if (map_assets_panel_->is_point_inside(pointer.x, pointer.y)) {
-            if (input_) input_->consumeEvent(event);
-            return true;
-        }
     }
     return false;
 }
@@ -415,32 +342,16 @@ void DevControls::update(const Input& input) {
         camera_panel_->is_point_inside(input.getX(), input.getY());
 
     if (mode_ == Mode::MapEditor) {
-        if (map_click_cooldown_ > 0) {
-            --map_click_cooldown_;
+        if (map_mode_ui_ && input.wasScancodePressed(SDL_SCANCODE_F8)) {
+            map_mode_ui_->toggle_layers_panel();
         }
-        if (map_mode_ui_) {
-            if (input.wasScancodePressed(SDL_SCANCODE_F8)) {
-                map_mode_ui_->toggle_layers_panel();
-            }
-        }
-        bool consumed = false;
         if (map_editor_) {
             map_editor_->update(input);
-            if (map_mode_ui_) {
-                consumed = handle_map_mode_asset_click(input);
-            }
-            if (!consumed) {
-                handle_map_selection();
-            } else {
-                (void)map_editor_->consume_selected_room();
-            }
+            handle_map_selection();
         }
     } else if (room_editor_ && room_editor_->is_enabled()) {
         if (!pointer_over_camera_panel_) {
             room_editor_->update(input);
-        }
-        if (map_assets_panel_ && map_assets_panel_->is_visible()) {
-            map_assets_panel_->update(input, screen_w_, screen_h_);
         }
     }
 
@@ -536,12 +447,6 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
         return;
     }
 
-    if (!pointer_over_room_ui) {
-        if (handle_shared_assets_event(event)) {
-            return;
-        }
-    }
-
     if (!pointer_over_room_ui && map_mode_ui_) {
         if (map_mode_ui_->handle_event(event)) {
             if (input_) input_->consumeEvent(event);
@@ -574,9 +479,6 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
         if (map_editor_) map_editor_->render(renderer);
     } else if (room_editor_) {
         room_editor_->render_overlays(renderer);
-        if (map_assets_panel_ && map_assets_panel_->is_visible()) {
-            map_assets_panel_->render(renderer);
-        }
     }
     if (map_mode_ui_) map_mode_ui_->render(renderer);
     if (room_editor_) {
@@ -636,9 +538,9 @@ bool DevControls::is_asset_info_editor_open() const {
     return room_editor_->is_asset_info_editor_open();
 }
 
-void DevControls::open_asset_config_for_asset(Asset* asset) {
+void DevControls::open_spawn_group_for_asset(Asset* asset) {
     if (!can_use_room_editor_ui()) return;
-    room_editor_->open_asset_config_for_asset(asset);
+    room_editor_->open_spawn_group_for_asset(asset);
 }
 
 void DevControls::finalize_asset_drag(Asset* asset, const std::shared_ptr<AssetInfo>& info) {
@@ -765,30 +667,6 @@ void DevControls::configure_header_button_sets() {
     };
     room_buttons.push_back(std::move(to_map_btn));
 
-    MapModeUI::HeaderButtonConfig assets_btn;
-    assets_btn.id = "assets";
-    assets_btn.label = "Map Assets";
-    assets_btn.active = map_mode_ui_ && map_mode_ui_->is_assets_panel_visible();
-    assets_btn.on_toggle = [this](bool active) {
-        if (!map_mode_ui_) {
-            sync_header_button_states();
-            return;
-        }
-        const bool currently_open = map_mode_ui_->is_assets_panel_visible();
-        if (active && !currently_open) {
-            if (is_modal_blocking_panels()) {
-                pulse_modal_header();
-                sync_header_button_states();
-                return;
-            }
-            map_mode_ui_->open_assets_panel();
-        } else if (!active && currently_open) {
-            map_mode_ui_->close_all_panels();
-        }
-        sync_header_button_states();
-    };
-    room_buttons.push_back(std::move(assets_btn));
-
     MapModeUI::HeaderButtonConfig lights_btn;
     lights_btn.id = "lights";
     lights_btn.label = "Lighting";
@@ -885,9 +763,6 @@ void DevControls::sync_header_button_states() {
     const bool camera_open = camera_panel_ && camera_panel_->is_visible();
     map_mode_ui_->set_button_state(MapModeUI::HeaderMode::Room, "camera", camera_open);
     map_mode_ui_->set_button_state(MapModeUI::HeaderMode::Map, "camera", camera_open);
-    const bool assets_open = map_mode_ui_->is_assets_panel_visible();
-    map_mode_ui_->set_button_state(MapModeUI::HeaderMode::Room, "assets", assets_open);
-    map_mode_ui_->set_button_state(MapModeUI::HeaderMode::Map, "assets", assets_open);
     const bool lights_open = map_mode_ui_->is_light_panel_visible();
     map_mode_ui_->set_button_state(MapModeUI::HeaderMode::Room, "lights", lights_open);
     map_mode_ui_->set_button_state(MapModeUI::HeaderMode::Map, "lights", lights_open);
@@ -908,9 +783,6 @@ void DevControls::close_all_floating_panels() {
     }
     if (map_mode_ui_) {
         map_mode_ui_->close_all_panels();
-    }
-    if (map_assets_panel_) {
-        map_assets_panel_->close();
     }
     if (regenerate_popup_) {
         regenerate_popup_->close();
@@ -1083,121 +955,6 @@ void DevControls::handle_map_selection() {
     dev_selected_room_ = selected;
     set_current_room(selected);
     exit_map_editor_mode(false, false);
-}
-
-bool DevControls::handle_map_mode_asset_click(const Input& input) {
-    if (!map_mode_ui_ || !assets_) return false;
-    if (map_click_cooldown_ > 0) return false;
-    if (!input.wasClicked(Input::LEFT)) return false;
-
-    const int mx = input.getX();
-    const int my = input.getY();
-    if (Room* trail = hit_test_trail(SDL_Point{mx, my})) {
-        map_click_cooldown_ = 2;
-        if (is_modal_blocking_panels()) {
-            pulse_modal_header();
-            return true;
-        }
-        map_mode_ui_->open_layers_panel();
-        return true;
-    }
-    if (camera_panel_ && camera_panel_->is_visible() &&
-        camera_panel_->is_point_inside(mx, my)) {
-        return false;
-    }
-    if (map_mode_ui_->is_point_inside(mx, my)) return false;
-
-    Asset* hit = hit_test_boundary_asset(SDL_Point{mx, my});
-    if (!hit) return false;
-
-    if (is_modal_blocking_panels()) {
-        pulse_modal_header();
-        map_click_cooldown_ = 2;
-        return true;
-    }
-    map_mode_ui_->open_assets_panel();
-    map_click_cooldown_ = 2;
-    return true;
-}
-
-Room* DevControls::hit_test_trail(SDL_Point screen_point) const {
-    if (!assets_ || !rooms_) return nullptr;
-    const camera& cam = assets_->getView();
-    SDL_Point map_point = cam.screen_to_map(screen_point);
-    for (Room* room : *rooms_) {
-        if (!room || !room->room_area) continue;
-        if (room == current_room_) continue;
-        if (room->type.empty()) continue;
-        std::string type = room->type;
-        std::transform(type.begin(), type.end(), type.begin(),
-                       [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-        if (type != "trail") continue;
-        if (room->room_area->contains_point(map_point)) {
-            return room;
-        }
-    }
-    return nullptr;
-}
-
-Asset* DevControls::hit_test_boundary_asset(SDL_Point screen_point) const {
-    if (!assets_) return nullptr;
-
-    const camera& cam = assets_->getView();
-    const float scale = std::max(0.0001f, cam.get_scale());
-    const float inv_scale = 1.0f / scale;
-
-    Asset* best = nullptr;
-    int best_screen_y = std::numeric_limits<int>::min();
-    int best_z_index = std::numeric_limits<int>::min();
-
-    for (Asset* asset : assets_->all) {
-        if (!asset || !asset->info) continue;
-        if (asset->is_hidden()) continue;
-
-        bool is_boundary = false;
-        if (!asset->spawn_method.empty()) {
-            std::string method = asset->spawn_method;
-            std::transform(method.begin(), method.end(), method.begin(),
-                           [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-            if (method == "boundary") {
-                is_boundary = true;
-            }
-        }
-        if (!is_boundary) {
-            std::string type = asset->info->type;
-            std::transform(type.begin(), type.end(), type.begin(),
-                           [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-            if (type == "boundary") {
-                is_boundary = true;
-            }
-        }
-        if (!is_boundary) continue;
-
-        SDL_Texture* tex = asset->get_final_texture();
-        int fw = asset->cached_w;
-        int fh = asset->cached_h;
-        if ((fw == 0 || fh == 0) && tex) {
-            SDL_QueryTexture(tex, nullptr, nullptr, &fw, &fh);
-        }
-        if (fw <= 0 || fh <= 0) continue;
-
-        SDL_Point center = cam.map_to_screen(SDL_Point{asset->pos.x, asset->pos.y});
-        int sw = static_cast<int>(std::lround(static_cast<double>(fw) * inv_scale));
-        int sh = static_cast<int>(std::lround(static_cast<double>(fh) * inv_scale));
-        if (sw <= 0 || sh <= 0) continue;
-
-        SDL_Rect rect{center.x - sw / 2, center.y - sh, sw, sh};
-        if (!SDL_PointInRect(&screen_point, &rect)) continue;
-
-        if (!best || center.y > best_screen_y ||
-            (center.y == best_screen_y && asset->z_index > best_z_index)) {
-            best = asset;
-            best_screen_y = center.y;
-            best_z_index = asset->z_index;
-        }
-    }
-
-    return best;
 }
 
 Room* DevControls::find_spawn_room() const {

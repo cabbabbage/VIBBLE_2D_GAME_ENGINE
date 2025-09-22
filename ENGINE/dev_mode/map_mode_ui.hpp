@@ -12,7 +12,6 @@
 class Assets;
 class Input;
 class MapLightPanel;
-class MapAssetsPanel;
 class MapLayersPanel;
 class MapLayersController;
 class FullScreenCollapsible;
@@ -21,7 +20,7 @@ struct DMButtonStyle;
 struct SDL_Renderer;
 union SDL_Event;
 
-// Coordinates interactions between map-mode floating panels (lighting, assets).
+// Coordinates interactions between map-mode floating panels (lighting, layers).
 class MapModeUI {
 public:
     enum class HeaderMode { Map, Room };
@@ -40,19 +39,16 @@ public:
 
     void set_map_context(nlohmann::json* map_info, const std::string& map_path);
     void set_screen_dimensions(int w, int h);
-    void set_shared_assets_panel(const std::shared_ptr<MapAssetsPanel>& panel);
 
     void update(const Input& input);
     bool handle_event(const SDL_Event& e);
     void render(SDL_Renderer* renderer) const;
 
-    void open_assets_panel();
     void open_layers_panel();
     void toggle_light_panel();
     void toggle_layers_panel();
     void close_all_panels();
 
-    bool is_assets_panel_visible() const;
     bool is_light_panel_visible() const;
     using LightSaveCallback = std::function<void()>;
 
@@ -79,7 +75,7 @@ private:
     void configure_footer_buttons();
     void sync_footer_button_states();
     void update_footer_visibility();
-    enum class PanelType { None, Assets, Lights, Layers };
+    enum class PanelType { None, Lights, Layers };
     void set_active_panel(PanelType panel);
     const char* panel_button_id(PanelType panel) const;
     void update_layers_footer(const Input& input);
@@ -103,8 +99,6 @@ private:
     int screen_h_ = 1080;
 
     std::unique_ptr<MapLightPanel> light_panel_;
-    std::shared_ptr<MapAssetsPanel> assets_panel_;
-    bool owns_assets_panel_ = false;
     std::shared_ptr<MapLayersController> layers_controller_;
     std::unique_ptr<MapLayersPanel> layers_panel_;
     std::unique_ptr<FullScreenCollapsible> footer_panel_;

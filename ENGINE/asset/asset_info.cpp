@@ -384,6 +384,7 @@ void AssetInfo::set_lighting(bool has_shading_,
                              int shading_factor,
                              const std::vector<LightSource>& lights) {
     has_shading = has_shading_;
+    this->shading_factor = shading_factor;
     orbital_light_sources.clear();
     light_sources = lights;
     if (has_shading) {
@@ -398,12 +399,16 @@ void AssetInfo::set_lighting(bool has_shading_,
     if (has_shading) {
         shade_entry["light_intensity"] = shading.intensity;
         shade_entry["radius"] = shading.radius;
-        double f = shading_factor / 100.0;
+        const double f = std::max(0.01, static_cast<double>(shading_factor) / 100.0);
         int base_x = static_cast<int>(std::round(shading.x_radius / f));
         int base_y = static_cast<int>(std::round(shading.y_radius / f));
+        int base_off_x = static_cast<int>(std::round(shading.offset_x / f));
+        int base_off_y = static_cast<int>(std::round(shading.offset_y / f));
         shade_entry["x_radius"] = base_x;
         shade_entry["y_radius"] = base_y;
         shade_entry["falloff"] = shading.fall_off;
+        shade_entry["offset_x"] = base_off_x;
+        shade_entry["offset_y"] = base_off_y;
         shade_entry["factor"] = shading_factor;
     } else {
         shade_entry["light_intensity"] = 0;
@@ -411,6 +416,8 @@ void AssetInfo::set_lighting(bool has_shading_,
         shade_entry["x_radius"] = 0;
         shade_entry["y_radius"] = 0;
         shade_entry["falloff"] = 0;
+        shade_entry["offset_x"] = 0;
+        shade_entry["offset_y"] = 0;
         shade_entry["factor"] = shading_factor;
     }
     arr.push_back(shade_entry);

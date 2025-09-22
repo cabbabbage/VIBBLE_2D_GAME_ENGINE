@@ -21,7 +21,6 @@ class RoomEditor;
 class MapEditor;
 class MapModeUI;
 class CameraUIPanel;
-class MapAssetsPanel;
 class RegenerateRoomPopup;
 
 class DevControls {
@@ -68,7 +67,7 @@ public:
     void close_asset_info_editor();
     bool is_asset_info_editor_open() const;
 
-    void open_asset_config_for_asset(Asset* asset);
+    void open_spawn_group_for_asset(Asset* asset);
     void finalize_asset_drag(Asset* asset, const std::shared_ptr<AssetInfo>& info);
 
     void toggle_room_config();
@@ -99,14 +98,9 @@ private:
     void close_camera_panel();
     void configure_header_button_sets();
     void sync_header_button_states();
-    bool handle_map_mode_asset_click(const Input& input);
-    Asset* hit_test_boundary_asset(SDL_Point screen_point) const;
-    Room* hit_test_trail(SDL_Point screen_point) const;
     Room* find_spawn_room() const;
     Room* choose_room(Room* preferred) const;
-    void ensure_map_assets_panel();
     bool is_pointer_over_dev_ui(int x, int y) const;
-    bool handle_shared_assets_event(const SDL_Event& event);
     void close_all_floating_panels();
     void maybe_update_mode_from_zoom();
     void open_regenerate_room_popup();
@@ -134,10 +128,8 @@ private:
     MapLightPanel::SaveCallback map_light_save_cb_;
     std::unique_ptr<MapModeUI> map_mode_ui_;
     std::unique_ptr<CameraUIPanel> camera_panel_;
-    std::shared_ptr<MapAssetsPanel> map_assets_panel_;
     std::unique_ptr<RegenerateRoomPopup> regenerate_popup_;
     std::string map_path_;
     bool pointer_over_camera_panel_ = false;
-    int map_click_cooldown_ = 0;
 };
 

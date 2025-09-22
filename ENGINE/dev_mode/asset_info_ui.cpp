@@ -114,21 +114,38 @@ void AssetInfoUI::layout_widgets(int screen_w, int screen_h) const {
     int panel_x = (screen_w * 2) / 3;
     int panel_w = screen_w - panel_x;
     panel_ = SDL_Rect{ panel_x, 0, panel_w, screen_h };
+    const int padding = DMSpacing::panel_padding();
+    const int gap = DMSpacing::section_gap();
+    const int content_x = panel_.x + padding;
+    const int content_w = panel_.w - 2 * padding;
+    const int content_top = panel_.y + padding;
 
-    int y = panel_.y + DMSpacing::panel_padding() - scroll_;
-    int maxw = panel_.w - 2 * DMSpacing::panel_padding();
-    for (auto& s : sections_) {
-        s->set_rect(SDL_Rect{ panel_.x + DMSpacing::panel_padding(), y, maxw, 0 });
-        y += s->height() + DMSpacing::section_gap();
+    auto layout_with_scroll = [&](int scroll_value) {
+        int y = content_top;
+        for (auto& s : sections_) {
+            s->set_rect(SDL_Rect{ content_x, y - scroll_value, content_w, 0 });
+            y += s->height() + gap;
+        }
+        if (configure_btn_) {
+            configure_btn_->set_rect(SDL_Rect{ content_x, y - scroll_value, content_w, DMButton::height() });
+            y += DMButton::height() + gap;
+        }
+        return y;
+    };
+
+    int end_y = layout_with_scroll(scroll_);
+    int content_height = end_y - content_top;
+    int visible_height = panel_.h - padding;
+    max_scroll_ = std::max(0, content_height - std::max(0, visible_height));
+    int clamped = std::max(0, std::min(max_scroll_, scroll_));
+    if (clamped != scroll_) {
+        scroll_ = clamped;
+        end_y = layout_with_scroll(scroll_);
+        content_height = end_y - content_top;
+        max_scroll_ = std::max(0, content_height - std::max(0, visible_height));
     }
 
-    if (configure_btn_) {
-        configure_btn_->set_rect(SDL_Rect{ panel_.x + DMSpacing::panel_padding(), y, maxw, DMButton::height() });
-        y += DMButton::height() + DMSpacing::section_gap();
-    }
-
-    int total = y - (panel_.y + DMSpacing::panel_padding());
-    max_scroll_ = std::max(0, total - panel_.h);
+    scroll_region_ = panel_;
 }
 
 
@@ -160,6 +177,12 @@ void AssetInfoUI::handle_event(const SDL_Event& e) {
         if (!pointer_inside) {
             return;
         }
+    }
+
+    if (e.type == SDL_MOUSEWHEEL) {
+        scroll_ -= e.wheel.y * 40;
+        scroll_ = std::max(0, std::min(max_scroll_, scroll_));
+        return;
     }
 
     if (e.type == SDL_KEYDOWN && e.key.keysym.sym == SDLK_ESCAPE) {
@@ -201,8 +224,8 @@ void AssetInfoUI::update(const Input& input, int screen_w, int screen_h) {
 
     int mx = input.getX();
     int my = input.getY();
-    if (mx >= panel_.x && mx < panel_.x + panel_.w &&
-        my >= panel_.y && my < panel_.y + panel_.h) {
+    if (mx >= scroll_region_.x && mx < scroll_region_.x + scroll_region_.w &&
+        my >= scroll_region_.y && my < scroll_region_.y + scroll_region_.h) {
         int dy = input.getScrollY();
         if (dy != 0) {
             scroll_ -= dy * 40;
@@ -249,11 +272,26 @@ void AssetInfoUI::render(SDL_Renderer* r, int screen_w, int screen_h) const {
         SDL_RenderFillRect(r, &header_rect);
     }
 
+    SDL_Rect prev_clip;
+    SDL_RenderGetClipRect(r, &prev_clip);
+#if SDL_VERSION_ATLEAST(2,0,4)
+    const SDL_bool was_clipping = SDL_RenderIsClipEnabled(r);
+#else
+    const SDL_bool was_clipping = (prev_clip.w != 0 || prev_clip.h != 0) ? SDL_TRUE : SDL_FALSE;
+#endif
+    SDL_RenderSetClipRect(r, &panel_);
+
     // Render sections (already offset by scroll_)
     for (auto& s : sections_) s->render(r);
 
     // Footer button
     if (configure_btn_) configure_btn_->render(r);
+
+    if (was_clipping == SDL_TRUE) {
+        SDL_RenderSetClipRect(r, &prev_clip);
+    } else {
+        SDL_RenderSetClipRect(r, nullptr);
+    }
 
     if (animations_panel_ && animations_panel_->is_open())
         animations_panel_->render(r, screen_w, screen_h);
@@ -329,8 +367,8 @@ void AssetInfoUI::render_world_overlay(SDL_Renderer* r, const camera& cam) const
     SDL_SetRenderDrawColor(r, 255, 255, 0, 255);
     for (int deg = 0; deg < 360; ++deg) {
         double rad = deg * M_PI / 180.0;
-        int wx = target_asset_->pos.x + static_cast<int>(std::round(std::cos(rad) * light.x_radius));
-        int wy = target_asset_->pos.y + static_cast<int>(std::round(std::sin(rad) * light.y_radius));
+        int wx = target_asset_->pos.x + light.offset_x + static_cast<int>(std::round(std::cos(rad) * light.x_radius));
+        int wy = target_asset_->pos.y + light.offset_y + static_cast<int>(std::round(std::sin(rad) * light.y_radius));
         SDL_Point p = cam.map_to_screen(SDL_Point{wx, wy});
         SDL_RenderDrawPoint(r, p.x, p.y);
     }

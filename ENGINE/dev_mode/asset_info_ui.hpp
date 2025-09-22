@@ -58,6 +58,7 @@ class AssetInfoUI {
     mutable int scroll_ = 0;
     mutable int max_scroll_ = 0;
     mutable SDL_Rect panel_ {0,0,0,0};
+    mutable SDL_Rect scroll_region_{0,0,0,0};
     // Footer button: Configure Animations
     mutable std::unique_ptr<class DMButton> configure_btn_;
     std::unique_ptr<AnimationsEditorPanel> animations_panel_;

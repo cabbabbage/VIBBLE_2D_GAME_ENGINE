@@ -7,7 +7,7 @@
 #include <algorithm>
 #include <nlohmann/json.hpp>
 #include "asset/asset_info.hpp"
-#include "assets_config.hpp"
+#include "spawn_groups_config.hpp"
 
 class Section_ChildAssets : public DockableCollapsible {
 public:
@@ -84,12 +84,12 @@ public:
 
     void update(const Input& input, int screen_w, int screen_h) override {
         DockableCollapsible::update(input, screen_w, screen_h);
-        if (assets_cfg_.visible()) assets_cfg_.update(input, screen_w, screen_h);
+        if (spawn_groups_cfg_.visible()) spawn_groups_cfg_.update(input, screen_w, screen_h);
     }
 
     bool handle_event(const SDL_Event& e) override {
-        if (assets_cfg_.visible()) {
-            return assets_cfg_.handle_event(e);
+        if (spawn_groups_cfg_.visible()) {
+            return spawn_groups_cfg_.handle_event(e);
         }
         bool used = DockableCollapsible::handle_event(e);
         if (!info_ || !expanded_) return used;
@@ -105,14 +105,14 @@ public:
             if (r.b_assets && r.b_assets->handle_event(e)) {
                 if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
                     size_t idx = i;
-                    assets_cfg_.open(r.assets, [this, idx](const nlohmann::json& j){
+                    spawn_groups_cfg_.open(r.assets, [this, idx](const nlohmann::json& j){
                         if (idx < rows_.size()) {
                             rows_[idx].assets = j;
                             commit_to_info();
                             if (info_) (void)info_->update_info_json();
                         }
                     });
-                    assets_cfg_.set_position(rect_.x - 260, rect_.y);
+                    spawn_groups_cfg_.set_position(rect_.x - 260, rect_.y);
                     used = true;
                 }
             }
@@ -164,7 +164,7 @@ public:
             if (row.b_delete)   row.b_delete->render(r);
         }
         if (b_add_)        b_add_->render(r);
-        if (assets_cfg_.visible()) assets_cfg_.render(r);
+        if (spawn_groups_cfg_.visible()) spawn_groups_cfg_.render(r);
     }
 
 private:
@@ -283,6 +283,6 @@ private:
     std::vector<Row> rows_;
     std::vector<std::string> area_names_;
     std::unique_ptr<DMButton> b_add_;
-    AssetsConfig assets_cfg_;
+    SpawnGroupsConfig spawn_groups_cfg_;
     std::function<void(const std::string&)> open_area_editor_;
 };

@@ -4,6 +4,17 @@
 #include <cctype>
 #include <cmath>
 
+namespace {
+constexpr int kBoxTopPadding = 5;
+constexpr int kBoxBottomPadding = 5;
+constexpr int kLabelControlGap = 5;
+constexpr int kTextboxHorizontalPadding = 6;
+constexpr int kSliderControlHeight = 40;
+constexpr int kSliderValueWidth = 60;
+constexpr int kRangeLabelWidth = 40;
+constexpr int kDropdownControlHeight = 32;
+}
+
 DMButton::DMButton(const std::string& text, const DMButtonStyle* style, int w, int h)
     : rect_{0,0,w,h}, text_(text), style_(style) {}
 
@@ -57,22 +68,30 @@ void DMButton::render(SDL_Renderer* r) const {
 DMTextBox::DMTextBox(const std::string& label, const std::string& value)
     : label_(label), text_(value) {}
 
-void DMTextBox::set_rect(const SDL_Rect& r) { rect_ = r; }
+void DMTextBox::set_rect(const SDL_Rect& r) {
+    rect_ = r;
+    label_height_ = compute_label_height(rect_.w);
+    int y = rect_.y + kBoxTopPadding;
+    label_rect_ = SDL_Rect{ rect_.x, y, rect_.w, label_height_ };
+    int control_y = y + label_height_ + (label_height_ > 0 ? kLabelControlGap : 0);
+    int available = rect_.h - (control_y - rect_.y) - kBoxBottomPadding;
+    int control_h = std::max(DMTextBox::height(), available);
+    box_rect_ = SDL_Rect{ rect_.x, control_y, rect_.w, control_h };
+    rect_.h = (box_rect_.y - rect_.y) + box_rect_.h + kBoxBottomPadding;
+}
 
 int DMTextBox::height_for_width(int w) const {
-    int label_h = DMStyles::Label().font_size + DMSpacing::item_gap() -10;
-    int box_h   = DMButton::height();
-    return label_h + box_h + DMSpacing::item_gap();
+    return preferred_height(w);
 }
 
 bool DMTextBox::handle_event(const SDL_Event& e) {
     bool changed = false;
     if (e.type == SDL_MOUSEMOTION) {
         SDL_Point p{ e.motion.x, e.motion.y };
-        hovered_ = SDL_PointInRect(&p, &rect_);
+        hovered_ = SDL_PointInRect(&p, &box_rect_);
     } else if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
         SDL_Point p{ e.button.x, e.button.y };
-        bool inside = SDL_PointInRect(&p, &rect_);
+        bool inside = SDL_PointInRect(&p, &box_rect_);
         editing_ = inside;
         if (editing_) SDL_StartTextInput(); else SDL_StopTextInput();
     } else if (editing_ && e.type == SDL_TEXTINPUT) {
@@ -88,13 +107,15 @@ bool DMTextBox::handle_event(const SDL_Event& e) {
     return changed;
 }
 
-void DMTextBox::draw_text(SDL_Renderer* r, const std::string& s, int x, int y, const DMLabelStyle& ls) const {
+void DMTextBox::draw_text(SDL_Renderer* r, const std::string& s, int x, int y, int max_width, const DMLabelStyle& ls) const {
     TTF_Font* f = TTF_OpenFont(ls.font_path.c_str(), ls.font_size);
     if (!f) return;
-    const int content_w = std::max(1, rect_.w - 12);
+    const int content_w = std::max(1, max_width);
     auto lines = wrap_lines(f, s, content_w);
     int line_y = y;
-    for (const auto& line : lines) {
+    const int gap = DMSpacing::small_gap();
+    for (size_t i = 0; i < lines.size(); ++i) {
+        const auto& line = lines[i];
         SDL_Surface* surf = TTF_RenderUTF8_Blended(f, line.c_str(), ls.color);
         if (surf) {
             SDL_Texture* tex = SDL_CreateTextureFromSurface(r, surf);
@@ -103,7 +124,8 @@ void DMTextBox::draw_text(SDL_Renderer* r, const std::string& s, int x, int y, c
                 SDL_RenderCopy(r, tex, nullptr, &dst);
                 SDL_DestroyTexture(tex);
             }
-            line_y += surf->h + DMSpacing::item_gap();
+            line_y += surf->h;
+            if (i + 1 < lines.size()) line_y += gap;
             SDL_FreeSurface(surf);
         }
     }
@@ -112,19 +134,20 @@ void DMTextBox::draw_text(SDL_Renderer* r, const std::string& s, int x, int y, c
 
 void DMTextBox::render(SDL_Renderer* r) const {
     const DMTextBoxStyle& st = DMStyles::TextBox();
-    if (!label_.empty()) {
+    if (!label_.empty() && label_height_ > 0) {
         DMLabelStyle lbl = DMStyles::Label();
-        int label_y = rect_.y - (lbl.font_size + DMSpacing::item_gap());
-        draw_text(r, label_, rect_.x, label_y, lbl);
+        draw_text(r, label_, label_rect_.x, label_rect_.y, label_rect_.w, lbl);
     }
     SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
     SDL_SetRenderDrawColor(r, st.bg.r, st.bg.g, st.bg.b, st.bg.a);
-    SDL_RenderFillRect(r, &rect_);
+    SDL_RenderFillRect(r, &box_rect_);
     SDL_Color border = (hovered_ || editing_) ? st.border_hover : st.border;
     SDL_SetRenderDrawColor(r, border.r, border.g, border.b, border.a);
-    SDL_RenderDrawRect(r, &rect_);
+    SDL_RenderDrawRect(r, &box_rect_);
     DMLabelStyle valStyle{ st.label.font_path, st.label.font_size, st.text };
-    draw_text(r, text_, rect_.x + 6, rect_.y + 6, valStyle);
+    draw_text(r, text_, box_rect_.x + kTextboxHorizontalPadding,
+              box_rect_.y + kTextboxHorizontalPadding,
+              std::max(1, box_rect_.w - 2 * kTextboxHorizontalPadding), valStyle);
 }
 
 std::vector<std::string> DMTextBox::wrap_lines(TTF_Font* f, const std::string& s, int max_width) const {
@@ -167,9 +190,35 @@ std::vector<std::string> DMTextBox::wrap_lines(TTF_Font* f, const std::string& s
 }
 
 int DMTextBox::preferred_height(int width) const {
-    int label_h = DMStyles::Label().font_size + DMSpacing::item_gap();
-    int box_h   = DMButton::height();
-    return label_h + box_h + DMSpacing::item_gap();
+    int label_h = compute_label_height(width);
+    int box_h   = DMTextBox::height();
+    return kBoxTopPadding + label_h + (label_h > 0 ? kLabelControlGap : 0) + box_h + kBoxBottomPadding;
+}
+
+int DMTextBox::compute_label_height(int width) const {
+    if (label_.empty()) return 0;
+    DMLabelStyle lbl = DMStyles::Label();
+    TTF_Font* f = TTF_OpenFont(lbl.font_path.c_str(), lbl.font_size);
+    if (!f) return lbl.font_size;
+    auto lines = wrap_lines(f, label_, std::max(1, width));
+    int total = 0;
+    const int gap = DMSpacing::small_gap();
+    for (size_t i = 0; i < lines.size(); ++i) {
+        int w = 0, h = 0;
+        TTF_SizeUTF8(f, lines[i].c_str(), &w, &h);
+        total += h;
+        if (i + 1 < lines.size()) total += gap;
+    }
+    TTF_CloseFont(f);
+    return total;
+}
+
+SDL_Rect DMTextBox::box_rect() const {
+    return box_rect_;
+}
+
+SDL_Rect DMTextBox::label_rect() const {
+    return label_rect_;
 }
 
 DMCheckbox::DMCheckbox(const std::string& label, bool value)
@@ -224,24 +273,55 @@ void DMCheckbox::render(SDL_Renderer* r) const {
 DMSlider::DMSlider(const std::string& label, int min_val, int max_val, int value)
     : label_(label), min_(min_val), max_(max_val), value_(value) {}
 
-void DMSlider::set_rect(const SDL_Rect& r) { rect_ = r; }
+void DMSlider::set_rect(const SDL_Rect& r) {
+    rect_ = r;
+    label_height_ = compute_label_height(rect_.w);
+    int y = rect_.y + kBoxTopPadding;
+    label_rect_ = SDL_Rect{ rect_.x, y, rect_.w, label_height_ };
+    int content_y = y + label_height_ + (label_height_ > 0 ? kLabelControlGap : 0);
+    int available = rect_.h - (content_y - rect_.y) - kBoxBottomPadding;
+    int content_h = std::max(kSliderControlHeight, available);
+    content_rect_ = SDL_Rect{ rect_.x, content_y, rect_.w, content_h };
+    if (edit_box_) {
+        edit_box_->set_rect(value_rect());
+    }
+    rect_.h = (content_rect_.y - rect_.y) + content_rect_.h + kBoxBottomPadding;
+}
 
 void DMSlider::set_value(int v) { value_ = std::max(min_, std::min(max_, v)); }
 
+int DMSlider::label_space() const {
+    return label_height_;
+}
+
+SDL_Rect DMSlider::content_rect() const {
+    return content_rect_;
+}
+
+SDL_Rect DMSlider::value_rect() const {
+    int width = std::min(kSliderValueWidth, content_rect_.w);
+    int x = content_rect_.x + std::max(0, content_rect_.w - width);
+    return SDL_Rect{ x, content_rect_.y, width, content_rect_.h };
+}
+
 SDL_Rect DMSlider::track_rect() const {
-    return SDL_Rect{ rect_.x, rect_.y + rect_.h/2 - 4, rect_.w - 60, 8 };
+    int track_width = std::max(0, content_rect_.w - kSliderValueWidth);
+    return SDL_Rect{ content_rect_.x, content_rect_.y + content_rect_.h/2 - 4, track_width, 8 };
 }
 
 SDL_Rect DMSlider::knob_rect() const {
     SDL_Rect tr = track_rect();
-    int x = tr.x + (int)((value_ - min_) * (tr.w - 12) / (double)(max_ - min_));
+    int usable = std::max(1, tr.w - 12);
+    int x = tr.x + (int)((value_ - min_) * usable / (double)(std::max(1, max_ - min_)));
     return SDL_Rect{ x, tr.y - 4, 12, 16 };
 }
 
 int DMSlider::value_for_x(int x) const {
     SDL_Rect tr = track_rect();
-    double t = (x - tr.x) / (double)(tr.w - 12);
-    int v = min_ + (int)std::round(t * (max_ - min_));
+    int usable = std::max(1, tr.w - 12);
+    double t = (x - tr.x) / (double)usable;
+    int range = std::max(1, max_ - min_);
+    int v = min_ + (int)std::round(t * range);
     return std::max(min_, std::min(max_, v));
 }
 
@@ -261,7 +341,7 @@ bool DMSlider::handle_event(const SDL_Event& e) {
     } else if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
         SDL_Point p{ e.button.x, e.button.y };
         if (SDL_PointInRect(&p, &krect)) { dragging_ = true; return true; }
-        SDL_Rect vr{ rect_.x + rect_.w - 60, rect_.y, 60, rect_.h };
+        SDL_Rect vr = value_rect();
         if (SDL_PointInRect(&p, &vr)) {
             edit_box_ = std::make_unique<DMTextBox>("", std::to_string(value_));
             edit_box_->set_rect(vr);
@@ -293,12 +373,15 @@ void DMSlider::draw_text(SDL_Renderer* r, const std::string& s, int x, int y) co
 
 void DMSlider::render(SDL_Renderer* r) const {
     const DMSliderStyle& st = DMStyles::Slider();
-    draw_text(r, label_, rect_.x, rect_.y - st.label.font_size + DMSpacing::item_gap()-2);
+    if (!label_.empty() && label_height_ > 0) {
+        draw_text(r, label_, label_rect_.x, label_rect_.y);
+    }
     SDL_Rect tr = track_rect();
     SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
     SDL_SetRenderDrawColor(r, st.track_bg.r, st.track_bg.g, st.track_bg.b, st.track_bg.a);
     SDL_RenderFillRect(r, &tr);
-    SDL_Rect fill{ tr.x, tr.y, (int)((value_ - min_) * tr.w / (double)(max_ - min_)), tr.h };
+    int range = std::max(1, max_ - min_);
+    SDL_Rect fill{ tr.x, tr.y, (int)((value_ - min_) * tr.w / (double)range), tr.h };
     SDL_SetRenderDrawColor(r, st.track_fill.r, st.track_fill.g, st.track_fill.b, st.track_fill.a);
     SDL_RenderFillRect(r, &fill);
     SDL_Rect krect = knob_rect();
@@ -311,12 +394,32 @@ void DMSlider::render(SDL_Renderer* r) const {
     if (edit_box_) {
         edit_box_->render(r);
     } else {
-        draw_text(r, std::to_string(value_), rect_.x + rect_.w - 50, rect_.y + (rect_.h - st.value.font_size)/2);
+        SDL_Rect vr = value_rect();
+        draw_text(r, std::to_string(value_), vr.x + 6, vr.y + (vr.h - st.value.font_size) / 2);
     }
 }
 
-int DMSlider::preferred_height() const {
-    return DMSlider::height();
+int DMSlider::preferred_height(int width) const {
+    int label_h = compute_label_height(width);
+    return kBoxTopPadding + label_h + (label_h > 0 ? kLabelControlGap : 0) + kSliderControlHeight + kBoxBottomPadding;
+}
+
+int DMSlider::compute_label_height(int width) const {
+    if (label_.empty()) return 0;
+    const DMSliderStyle& st = DMStyles::Slider();
+    TTF_Font* f = TTF_OpenFont(st.label.font_path.c_str(), st.label.font_size);
+    if (!f) return st.label.font_size;
+    int text_w = 0;
+    int text_h = 0;
+    TTF_SizeUTF8(f, label_.c_str(), &text_w, &text_h);
+    TTF_CloseFont(f);
+    (void)width;
+    return text_h;
+}
+
+int DMSlider::height() {
+    const DMSliderStyle& st = DMStyles::Slider();
+    return kBoxTopPadding + st.label.font_size + kLabelControlGap + kSliderControlHeight + kBoxBottomPadding;
 }
 
 DMRangeSlider::DMRangeSlider(int min_val, int max_val, int min_value, int max_value)
@@ -326,7 +429,14 @@ DMRangeSlider::DMRangeSlider(int min_val, int max_val, int min_value, int max_va
     set_max_value(max_value);
 }
 
-void DMRangeSlider::set_rect(const SDL_Rect& r) { rect_ = r; }
+void DMRangeSlider::set_rect(const SDL_Rect& r) {
+    rect_ = r;
+    int content_h = std::max(kSliderControlHeight, rect_.h - (kBoxTopPadding + kBoxBottomPadding));
+    content_rect_ = SDL_Rect{ rect_.x, rect_.y + kBoxTopPadding, rect_.w, content_h };
+    if (edit_min_) edit_min_->set_rect(SDL_Rect{ content_rect_.x, content_rect_.y, kRangeLabelWidth, content_rect_.h });
+    if (edit_max_) edit_max_->set_rect(SDL_Rect{ content_rect_.x + content_rect_.w - kRangeLabelWidth, content_rect_.y, kRangeLabelWidth, content_rect_.h });
+    rect_.h = (content_rect_.y - rect_.y) + content_rect_.h + kBoxBottomPadding;
+}
 
 void DMRangeSlider::set_min_value(int v) {
     min_value_ = std::max(min_, std::min(max_, v));
@@ -338,8 +448,13 @@ void DMRangeSlider::set_max_value(int v) {
     if (max_value_ < min_value_) max_value_ = min_value_;
 }
 
+SDL_Rect DMRangeSlider::content_rect() const {
+    return content_rect_;
+}
+
 SDL_Rect DMRangeSlider::track_rect() const {
-    return SDL_Rect{ rect_.x + 40, rect_.y + rect_.h/2 - 4, rect_.w - 80, 8 };
+    int width = std::max(0, content_rect_.w - 2 * kRangeLabelWidth);
+    return SDL_Rect{ content_rect_.x + kRangeLabelWidth, content_rect_.y + content_rect_.h/2 - 4, width, 8 };
 }
 
 SDL_Rect DMRangeSlider::min_knob_rect() const {
@@ -392,8 +507,8 @@ bool DMRangeSlider::handle_event(const SDL_Event& e) {
         SDL_Point p{ e.button.x, e.button.y };
         if (SDL_PointInRect(&p, &kmin)) { dragging_min_ = true; return true; }
         if (SDL_PointInRect(&p, &kmax)) { dragging_max_ = true; return true; }
-        SDL_Rect min_label{ rect_.x, rect_.y, 40, rect_.h };
-        SDL_Rect max_label{ rect_.x + rect_.w - 40, rect_.y, 40, rect_.h };
+        SDL_Rect min_label{ content_rect_.x, content_rect_.y, kRangeLabelWidth, content_rect_.h };
+        SDL_Rect max_label{ content_rect_.x + content_rect_.w - kRangeLabelWidth, content_rect_.y, kRangeLabelWidth, content_rect_.h };
         if (e.button.clicks >= 2) {
             if (SDL_PointInRect(&p, &min_label)) {
                 edit_min_ = std::make_unique<DMTextBox>("", std::to_string(min_value_));
@@ -456,16 +571,22 @@ void DMRangeSlider::render(SDL_Renderer* r) const {
     SDL_RenderFillRect(r, &kmax);
     SDL_SetRenderDrawColor(r, border_max.r, border_max.g, border_max.b, border_max.a);
     SDL_RenderDrawRect(r, &kmax);
+    SDL_Rect min_label{ content_rect_.x, content_rect_.y, kRangeLabelWidth, content_rect_.h };
+    SDL_Rect max_label{ content_rect_.x + content_rect_.w - kRangeLabelWidth, content_rect_.y, kRangeLabelWidth, content_rect_.h };
     if (edit_min_) {
         edit_min_->render(r);
     } else {
-        draw_text(r, std::to_string(min_value_), rect_.x, rect_.y + (rect_.h - st.value.font_size)/2);
+        draw_text(r, std::to_string(min_value_), min_label.x + 4, min_label.y + (min_label.h - st.value.font_size) / 2);
     }
     if (edit_max_) {
         edit_max_->render(r);
     } else {
-        draw_text(r, std::to_string(max_value_), rect_.x + rect_.w - 40, rect_.y + (rect_.h - st.value.font_size)/2);
+        draw_text(r, std::to_string(max_value_), max_label.x + 4, max_label.y + (max_label.h - st.value.font_size) / 2);
     }
+}
+
+int DMRangeSlider::height() {
+    return kBoxTopPadding + kSliderControlHeight + kBoxBottomPadding;
 }
 
 DMDropdown::DMDropdown(const std::string& label, const std::vector<std::string>& options, int idx)
@@ -483,19 +604,29 @@ void DMDropdown::render_active_options(SDL_Renderer* r) {
     if (active_) active_->render_options(r);
 }
 
-void DMDropdown::set_rect(const SDL_Rect& r) { rect_ = r; }
+void DMDropdown::set_rect(const SDL_Rect& r) {
+    rect_ = r;
+    label_height_ = compute_label_height(rect_.w);
+    int y = rect_.y + kBoxTopPadding;
+    label_rect_ = SDL_Rect{ rect_.x, y, rect_.w, label_height_ };
+    int box_y = y + label_height_ + (label_height_ > 0 ? kLabelControlGap : 0);
+    int available = rect_.h - (box_y - rect_.y) - kBoxBottomPadding;
+    int box_h = std::max(kDropdownControlHeight, available);
+    box_rect_ = SDL_Rect{ rect_.x, box_y, rect_.w, box_h };
+    rect_.h = (box_rect_.y - rect_.y) + box_rect_.h + kBoxBottomPadding;
+}
 
 bool DMDropdown::handle_event(const SDL_Event& e) {
     if (expanded_) {
         if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
             SDL_Point p{ e.button.x, e.button.y };
-            if (SDL_PointInRect(&p, &rect_)) {
+            if (SDL_PointInRect(&p, &box_rect_)) {
                 expanded_ = false;
                 if (active_ == this) active_ = nullptr;
                 return true;
             }
             for (size_t i = 0; i < options_.size(); ++i) {
-                SDL_Rect opt{ rect_.x, rect_.y + rect_.h * (int)(i + 1), rect_.w, rect_.h };
+                SDL_Rect opt{ box_rect_.x, box_rect_.y + box_rect_.h * (int)(i + 1), box_rect_.w, box_rect_.h };
                 if (SDL_PointInRect(&p, &opt)) {
                     index_ = (int)i;
                     expanded_ = false;
@@ -511,10 +642,10 @@ bool DMDropdown::handle_event(const SDL_Event& e) {
     }
     if (e.type == SDL_MOUSEMOTION) {
         SDL_Point p{ e.motion.x, e.motion.y };
-        hovered_ = SDL_PointInRect(&p, &rect_);
+        hovered_ = SDL_PointInRect(&p, &box_rect_);
     } else if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
         SDL_Point p{ e.button.x, e.button.y };
-        if (SDL_PointInRect(&p, &rect_)) {
+        if (SDL_PointInRect(&p, &box_rect_)) {
             expanded_ = true;
             active_ = this;
             return true;
@@ -527,10 +658,27 @@ void DMDropdown::render(SDL_Renderer* r) const {
     const DMTextBoxStyle& st = DMStyles::TextBox();
     SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
     SDL_SetRenderDrawColor(r, st.bg.r, st.bg.g, st.bg.b, st.bg.a);
-    SDL_RenderFillRect(r, &rect_);
+    SDL_RenderFillRect(r, &box_rect_);
+    if (!label_.empty() && label_height_ > 0) {
+        DMLabelStyle lbl = DMStyles::Label();
+        TTF_Font* f = TTF_OpenFont(lbl.font_path.c_str(), lbl.font_size);
+        if (f) {
+            SDL_Surface* surf = TTF_RenderUTF8_Blended(f, label_.c_str(), lbl.color);
+            if (surf) {
+                SDL_Texture* tex = SDL_CreateTextureFromSurface(r, surf);
+                if (tex) {
+                    SDL_Rect dst{ label_rect_.x, label_rect_.y, surf->w, surf->h };
+                    SDL_RenderCopy(r, tex, nullptr, &dst);
+                    SDL_DestroyTexture(tex);
+                }
+                SDL_FreeSurface(surf);
+            }
+            TTF_CloseFont(f);
+        }
+    }
     SDL_Color border = hovered_ ? st.border_hover : st.border;
     SDL_SetRenderDrawColor(r, border.r, border.g, border.b, border.a);
-    SDL_RenderDrawRect(r, &rect_);
+    SDL_RenderDrawRect(r, &box_rect_);
     DMLabelStyle labelStyle{ st.label.font_path, st.label.font_size, st.text };
     TTF_Font* f = TTF_OpenFont(labelStyle.font_path.c_str(), labelStyle.font_size);
     if (f) {
@@ -545,7 +693,7 @@ void DMDropdown::render(SDL_Renderer* r) const {
         if (surf) {
             SDL_Texture* tex = SDL_CreateTextureFromSurface(r, surf);
             if (tex) {
-                SDL_Rect dst{ rect_.x + 6, rect_.y + (rect_.h - surf->h)/2, surf->w, surf->h };
+                SDL_Rect dst{ box_rect_.x + 6, box_rect_.y + (box_rect_.h - surf->h)/2, surf->w, surf->h };
                 SDL_RenderCopy(r, tex, nullptr, &dst);
                 SDL_DestroyTexture(tex);
             }
@@ -560,7 +708,7 @@ void DMDropdown::render_options(SDL_Renderer* r) const {
     SDL_Color border = hovered_ ? st.border_hover : st.border;
     DMLabelStyle labelStyle{ st.label.font_path, st.label.font_size, st.text };
     for (size_t i=0;i<options_.size();++i) {
-        SDL_Rect opt{ rect_.x, rect_.y + rect_.h*(int)(i+1), rect_.w, rect_.h };
+        SDL_Rect opt{ box_rect_.x, box_rect_.y + box_rect_.h*(int)(i+1), box_rect_.w, box_rect_.h };
         SDL_SetRenderDrawColor(r, st.bg.r, st.bg.g, st.bg.b, st.bg.a);
         SDL_RenderFillRect(r, &opt);
         SDL_SetRenderDrawColor(r, border.r, border.g, border.b, border.a);
@@ -582,7 +730,32 @@ void DMDropdown::render_options(SDL_Renderer* r) const {
     }
 }
 
-int DMDropdown::preferred_height() const {
-    return DMDropdown::height();
+int DMDropdown::preferred_height(int width) const {
+    int label_h = compute_label_height(width);
+    return kBoxTopPadding + label_h + (label_h > 0 ? kLabelControlGap : 0) + kDropdownControlHeight + kBoxBottomPadding;
 }
+
+int DMDropdown::compute_label_height(int width) const {
+    if (label_.empty()) return 0;
+    DMLabelStyle lbl = DMStyles::Label();
+    TTF_Font* f = TTF_OpenFont(lbl.font_path.c_str(), lbl.font_size);
+    if (!f) return lbl.font_size;
+    int text_w = 0;
+    int text_h = 0;
+    TTF_SizeUTF8(f, label_.c_str(), &text_w, &text_h);
+    TTF_CloseFont(f);
+    (void)width;
+    return text_h;
+}
+
+int DMDropdown::height() {
+    DMLabelStyle lbl = DMStyles::Label();
+    return kBoxTopPadding + lbl.font_size + kLabelControlGap + kDropdownControlHeight + kBoxBottomPadding;
+}
+
+int DMDropdown::label_space() const { return label_height_; }
+
+SDL_Rect DMDropdown::box_rect() const { return box_rect_; }
+
+SDL_Rect DMDropdown::label_rect() const { return label_rect_; }
 

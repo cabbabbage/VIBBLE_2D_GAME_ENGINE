@@ -9,15 +9,15 @@
 #include <functional>
 #include <nlohmann/json.hpp>
 #include "DockableCollapsible.hpp"
-#include "asset_config_ui.hpp"
+#include "spawn_group_config_ui.hpp"
 class ButtonWidget;
 class DMButton;
 class Input;
 
-// Manages a collection of AssetConfig panels for an assets array
-class AssetsConfig : public DockableCollapsible {
+// Manages a collection of spawn group panels for an assets array
+class SpawnGroupsConfig : public DockableCollapsible {
 public:
-    AssetsConfig();
+    SpawnGroupsConfig();
     // Standalone panel controls
     void open(const nlohmann::json& assets, std::function<void(const nlohmann::json&)> on_close);
     void close();
@@ -28,27 +28,30 @@ public:
     void render(SDL_Renderer* r) const;
 
     // Embedding helpers for RoomConfigurator or runtime editing
+    using ConfigureEntryCallback = std::function<void(SpawnGroupConfigUI&, const nlohmann::json&)>;
+
     void load(nlohmann::json& assets,
               std::function<void()> on_change,
-              std::function<void(const nlohmann::json&, const AssetConfigUI::ChangeSummary&)> on_entry_change = {});
+              std::function<void(const nlohmann::json&, const SpawnGroupConfigUI::ChangeSummary&)> on_entry_change = {},
+              ConfigureEntryCallback configure_entry = {});
     void append_rows(DockableCollapsible::Rows& rows);
     void set_anchor(int x, int y);
-    void open_asset_config(const std::string& id, int x, int y);
-    void close_all_asset_configs();
-    struct OpenConfigState {
+    void open_spawn_group(const std::string& id, int x, int y);
+    void close_all();
+    struct OpenSpawnGroupState {
         std::string id;
         SDL_Point position{0, 0};
         size_t index = std::numeric_limits<size_t>::max();
     };
-    std::optional<OpenConfigState> capture_open_config() const;
-    void restore_open_config(const OpenConfigState& state);
+    std::optional<OpenSpawnGroupState> capture_open_spawn_group() const;
+    void restore_open_spawn_group(const OpenSpawnGroupState& state);
     nlohmann::json to_json() const;
     bool any_visible() const;
     bool is_point_inside(int x, int y) const;
 private:
     struct Entry {
         std::string id;
-        std::unique_ptr<AssetConfigUI> cfg;
+        std::unique_ptr<SpawnGroupConfigUI> cfg;
         nlohmann::json* json = nullptr;
         std::unique_ptr<DMButton> btn;
         std::unique_ptr<ButtonWidget> btn_w;
@@ -56,7 +59,8 @@ private:
     std::vector<Entry> entries_;
     nlohmann::json* assets_json_ = nullptr;
     std::function<void()> on_change_;
-    std::function<void(const nlohmann::json&, const AssetConfigUI::ChangeSummary&)> on_entry_change_;
+    std::function<void(const nlohmann::json&, const SpawnGroupConfigUI::ChangeSummary&)> on_entry_change_;
+    ConfigureEntryCallback configure_entry_;
     nlohmann::json temp_assets_;
     int anchor_x_ = 0;
     int anchor_y_ = 0;
