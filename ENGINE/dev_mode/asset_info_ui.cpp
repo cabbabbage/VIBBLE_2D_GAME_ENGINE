@@ -54,6 +54,8 @@ void render_label_text(SDL_Renderer* renderer, const std::string& text, int x, i
     TTF_CloseFont(font);
 }
 
+} // namespace
+
 class ApplySettingsModal {
 public:
     using ApplyCallback = std::function<bool(const std::vector<std::string>&)>;
@@ -296,6 +298,8 @@ private:
     int screen_h_ = 0;
     bool visible_ = false;
 };
+
+namespace {
 
 bool load_json_file(const std::filesystem::path& path, nlohmann::json& out) {
     std::ifstream in(path);
