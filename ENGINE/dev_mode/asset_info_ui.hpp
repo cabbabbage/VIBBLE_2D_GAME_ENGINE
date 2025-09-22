@@ -28,7 +28,8 @@ class AssetInfoUI {
     void render(SDL_Renderer* r, int screen_w, int screen_h) const;
     void render_world_overlay(SDL_Renderer* r, const class camera& cam) const;
     void pulse_header();
-    void set_assets(Assets* a) { assets_ = a; }
+    void set_assets(Assets* a);
+    Assets* assets() const { return assets_; }
     void set_target_asset(class Asset* a) { target_asset_ = a; }
     class Asset* get_target_asset() const { return target_asset_; }
     bool is_point_inside(int x, int y) const;
@@ -38,6 +39,8 @@ class AssetInfoUI {
 
   private:
     void layout_widgets(int screen_w, int screen_h) const;
+    void apply_camera_override(bool enable);
+    float compute_player_screen_height(const class camera& cam) const;
     void save_now() const;
     void open_area_editor(const std::string& name);
 
@@ -59,4 +62,7 @@ class AssetInfoUI {
     mutable std::unique_ptr<class DMButton> configure_btn_;
     std::unique_ptr<AnimationsEditorPanel> animations_panel_;
     int pulse_frames_ = 0;
+    bool camera_override_active_ = false;
+    bool prev_camera_realism_enabled_ = false;
+    bool prev_camera_parallax_enabled_ = false;
 };

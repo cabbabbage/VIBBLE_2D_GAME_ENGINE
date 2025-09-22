@@ -49,6 +49,7 @@ public:
     void update_ui(const Input& input);
     bool handle_sdl_event(const SDL_Event& event);
     bool is_room_panel_blocking_point(int x, int y) const;
+    bool is_room_ui_blocking_point(int x, int y) const;
     void render_overlays(SDL_Renderer* renderer);
     void render_room_config_fullscreen(SDL_Renderer* renderer);
 

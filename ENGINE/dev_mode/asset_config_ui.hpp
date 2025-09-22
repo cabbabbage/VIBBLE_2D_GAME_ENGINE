@@ -38,6 +38,7 @@ public:
     };
 
     void set_position(int x, int y);
+    SDL_Point position() const;
     void load(const nlohmann::json& asset);
     void open_panel();
     void close();

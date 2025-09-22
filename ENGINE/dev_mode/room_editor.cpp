@@ -165,7 +165,6 @@ void RoomEditor::set_enabled(bool enabled) {
     camera& cam = assets_->getView();
     if (enabled_) {
         apply_area_editor_camera_override(false);
-        cam.set_parallax_enabled(false);
         cam.set_manual_zoom_override(false);
         close_asset_info_editor();
         focus_camera_on_room_center();
@@ -178,7 +177,6 @@ void RoomEditor::set_enabled(bool enabled) {
         update_room_config_layout_for_fullscreen();
     } else {
         apply_area_editor_camera_override(false);
-        cam.set_parallax_enabled(true);
         cam.set_manual_zoom_override(false);
         cam.clear_focus_override();
         if (library_ui_) library_ui_->close();
@@ -258,7 +256,7 @@ void RoomEditor::update_ui(const Input& input) {
     }
     if (assets_cfg_ui_) {
         update_assets_config_anchor();
-        assets_cfg_ui_->update(input);
+        assets_cfg_ui_->update(input, screen_w_, screen_h_);
     }
 
     update_area_editor_focus();
@@ -287,31 +285,49 @@ bool RoomEditor::handle_sdl_event(const SDL_Event& event) {
         SDL_GetMouseState(&mx, &my);
     }
 
+    const bool pointer_event =
+        (event.type == SDL_MOUSEBUTTONDOWN || event.type == SDL_MOUSEBUTTONUP || event.type == SDL_MOUSEMOTION);
+    const bool wheel_event = (event.type == SDL_MOUSEWHEEL);
+    const bool pointer_based = pointer_event || wheel_event;
+
     bool handled = false;
-    if (room_cfg_ui_ && room_cfg_ui_->visible()) {
-        handled = room_cfg_ui_->handle_event(event);
-    }
-    if (!handled && info_ui_ && info_ui_->is_visible() && info_ui_->is_point_inside(mx, my)) {
-        info_ui_->handle_event(event);
-        handled = true;
-    }
-    if (!handled && assets_cfg_ui_ && assets_cfg_ui_->any_visible() && assets_cfg_ui_->is_point_inside(mx, my)) {
-        assets_cfg_ui_->handle_event(event);
-        handled = true;
-    }
-    if (!handled && library_ui_ && library_ui_->is_visible() && library_ui_->is_input_blocking_at(mx, my)) {
-        library_ui_->handle_event(event);
-        handled = true;
+    bool pointer_claimed = false;
+
+    if (pointer_based) {
+        if (assets_cfg_ui_ && assets_cfg_ui_->any_visible() && assets_cfg_ui_->is_point_inside(mx, my)) {
+            pointer_claimed = true;
+            handled = assets_cfg_ui_->handle_event(event);
+            if (!handled) {
+                handled = true;
+            }
+        } else if (info_ui_ && info_ui_->is_visible() && info_ui_->is_point_inside(mx, my)) {
+            pointer_claimed = true;
+            info_ui_->handle_event(event);
+            handled = true;
+        } else if (room_cfg_ui_ && room_cfg_ui_->visible() && room_cfg_ui_->is_point_inside(mx, my)) {
+            pointer_claimed = true;
+            handled = room_cfg_ui_->handle_event(event);
+            if (!handled) {
+                handled = true;
+            }
+        } else if (library_ui_ && library_ui_->is_visible() && library_ui_->is_input_blocking_at(mx, my)) {
+            pointer_claimed = true;
+            library_ui_->handle_event(event);
+            handled = true;
+        }
     }
 
-    if (!handled) {
-        if (info_ui_ && info_ui_->is_visible()) {
-            info_ui_->handle_event(event);
-        } else if (assets_cfg_ui_ && assets_cfg_ui_->any_visible()) {
-            assets_cfg_ui_->handle_event(event);
-        } else if (library_ui_ && library_ui_->is_visible()) {
-            library_ui_->handle_event(event);
-        }
+    if (!handled && room_cfg_ui_ && room_cfg_ui_->visible() && (!pointer_based || !pointer_claimed)) {
+        handled = room_cfg_ui_->handle_event(event);
+    }
+    if (!handled && info_ui_ && info_ui_->is_visible() && (!pointer_based || !pointer_claimed)) {
+        info_ui_->handle_event(event);
+        handled = true;
+    } else if (!handled && assets_cfg_ui_ && assets_cfg_ui_->any_visible() && (!pointer_based || !pointer_claimed)) {
+        handled = assets_cfg_ui_->handle_event(event);
+    } else if (!handled && library_ui_ && library_ui_->is_visible() && (!pointer_based || !pointer_claimed)) {
+        library_ui_->handle_event(event);
+        handled = true;
     }
 
     if (handled && input_) {
@@ -346,6 +362,10 @@ bool RoomEditor::is_room_panel_blocking_point(int x, int y) const {
         }
     }
     return false;
+}
+
+bool RoomEditor::is_room_ui_blocking_point(int x, int y) const {
+    return is_ui_blocking_input(x, y);
 }
 
 void RoomEditor::render_overlays(SDL_Renderer* renderer) {
@@ -1054,9 +1074,7 @@ void RoomEditor::ensure_room_configurator() {
     }
     if (room_cfg_ui_) {
         room_cfg_ui_->set_bounds(room_config_bounds_);
-        if (auto* panel = room_cfg_ui_->panel()) {
-            panel->set_work_area(SDL_Rect{0, 0, screen_w_, screen_h_});
-        }
+        room_cfg_ui_->set_work_area(SDL_Rect{0, 0, screen_w_, screen_h_});
         room_cfg_ui_->set_spawn_group_callbacks(
             [this](const std::string& spawn_id) {
                 if (active_modal_ == ActiveModal::AssetInfo) {
@@ -1140,7 +1158,7 @@ void RoomEditor::refresh_room_config_visibility() {
     if (!room_cfg_ui_) {
         return;
     }
-    DockableCollapsible* panel = room_cfg_ui_->panel();
+    DockableCollapsible* panel = room_cfg_ui_.get();
     if (!panel) {
         return;
     }
@@ -1524,7 +1542,11 @@ void RoomEditor::refresh_assets_config_ui() {
     if (!assets_cfg_ui_) return;
     auto& root = current_room_->assets_data();
     auto& arr = ensure_spawn_groups_array(root);
-    assets_cfg_ui_->close_all_asset_configs();
+    std::optional<AssetsConfig::OpenConfigState> reopen_state;
+    if (assets_cfg_ui_) {
+        reopen_state = assets_cfg_ui_->capture_open_config();
+        assets_cfg_ui_->close_all_asset_configs();
+    }
     if (sanitize_perimeter_spawn_groups(arr) && current_room_) {
         current_room_->save_assets_json();
     }
@@ -1543,13 +1565,16 @@ void RoomEditor::refresh_assets_config_ui() {
     };
     assets_cfg_ui_->load(arr, std::move(on_change), std::move(on_entry));
     update_assets_config_anchor();
+    if (reopen_state) {
+        assets_cfg_ui_->restore_open_config(*reopen_state);
+    }
     rebuild_room_spawn_id_cache();
 }
 
 void RoomEditor::update_assets_config_anchor() {
     if (!assets_cfg_ui_ || !room_cfg_ui_) return;
-    if (auto* panel = room_cfg_ui_->panel()) {
-        const SDL_Rect& rect = panel->rect();
+    if (room_cfg_ui_) {
+        const SDL_Rect& rect = room_cfg_ui_->rect();
         assets_cfg_ui_->set_anchor(rect.x + rect.w + 16, rect.y);
     }
 }
@@ -1792,11 +1817,9 @@ void RoomEditor::open_spawn_group_editor_by_id(const std::string& spawn_id) {
     int anchor_x = room_config_bounds_.x + room_config_bounds_.w + 16;
     int anchor_y = room_config_bounds_.y;
     if (room_cfg_ui_) {
-        if (auto* panel = room_cfg_ui_->panel()) {
-            const SDL_Rect& rect = panel->rect();
-            anchor_x = rect.x + rect.w + 16;
-            anchor_y = rect.y;
-        }
+        const SDL_Rect& rect = room_cfg_ui_->rect();
+        anchor_x = rect.x + rect.w + 16;
+        anchor_y = rect.y;
     }
     assets_cfg_ui_->open_asset_config(spawn_id, anchor_x, anchor_y);
 }

@@ -24,7 +24,10 @@ class Section_BasicInfo : public DockableCollapsible {
     void layout() override { DockableCollapsible::layout(); }
     bool handle_event(const SDL_Event& e) override;
     void render_content(SDL_Renderer* r) const override {}
-    void render_world_overlay(SDL_Renderer* r, const camera& cam, const Asset* target) const;
+    void render_world_overlay(SDL_Renderer* r,
+                              const camera& cam,
+                              const Asset* target,
+                              float reference_screen_height) const;
 
   private:
     static int find_index(const std::vector<std::string>& opts, const std::string& value);
@@ -129,7 +132,10 @@ inline bool Section_BasicInfo::handle_event(const SDL_Event& e) {
     return used || changed;
 }
 
-inline void Section_BasicInfo::render_world_overlay(SDL_Renderer* r, const camera& cam, const Asset* target) const {
+inline void Section_BasicInfo::render_world_overlay(SDL_Renderer* r,
+                                                    const camera& cam,
+                                                    const Asset* target,
+                                                    float reference_screen_height) const {
     if (!is_expanded() || !target || !target->info) return;
 
     SDL_Texture* tex = target->get_final_texture();
@@ -149,11 +155,22 @@ inline void Section_BasicInfo::render_world_overlay(SDL_Renderer* r, const camer
     float scale = cam.get_scale();
     if (scale <= 0.0f) return;
     float inv_scale = 1.0f / scale;
-    int sw = static_cast<int>(std::round(fw * inv_scale));
-    int sh = static_cast<int>(std::round(fh * inv_scale));
+    float base_sw = static_cast<float>(fw) * inv_scale;
+    float base_sh = static_cast<float>(fh) * inv_scale;
+    if (base_sw <= 0.0f || base_sh <= 0.0f) return;
+
+    const auto effects = cam.compute_render_effects(
+        SDL_Point{target->pos.x, target->pos.y}, base_sh, reference_screen_height <= 0.0f ? 1.0f : reference_screen_height);
+
+    float scaled_sw = base_sw * effects.distance_scale;
+    float scaled_sh = base_sh * effects.distance_scale;
+    float final_visible_h = scaled_sh * effects.vertical_scale;
+
+    int sw = std::max(1, static_cast<int>(std::round(scaled_sw)));
+    int sh = std::max(1, static_cast<int>(std::round(final_visible_h)));
     if (sw <= 0 || sh <= 0) return;
 
-    SDL_Point base = cam.map_to_screen(SDL_Point{target->pos.x, target->pos.y});
+    const SDL_Point& base = effects.screen_position;
     SDL_Rect bounds{ base.x - sw / 2, base.y - sh, sw, sh };
 
     int z_world_y = target->pos.y + target->info->z_threshold;

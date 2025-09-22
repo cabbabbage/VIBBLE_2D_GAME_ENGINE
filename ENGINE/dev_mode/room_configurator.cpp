@@ -1,5 +1,4 @@
 #include "room_configurator.hpp"
-#include "DockableCollapsible.hpp"
 #include "dm_styles.hpp"
 #include "utils/input.hpp"
 #include "room/room.hpp"
@@ -65,35 +64,42 @@ std::string build_spawn_summary(int index, const nlohmann::json& entry) {
 }
 } // namespace
 
-RoomConfigurator::RoomConfigurator() {
+RoomConfigurator::RoomConfigurator()
+    : DockableCollapsible("Room", true, 32, 32) {
     room_geom_options_ = {"Square", "Circle"};
-    panel_ = std::make_unique<DockableCollapsible>("Room", true, 32, 32);
-    panel_->set_expanded(true);
-    panel_->set_visible(false);
-    panel_->set_show_header(true);
-    panel_->set_scroll_enabled(true);
+    set_expanded(true);
+    set_visible(false);
+    set_show_header(true);
+    set_scroll_enabled(true);
+    set_cell_width(180);
 }
 
 RoomConfigurator::~RoomConfigurator() = default;
 
 void RoomConfigurator::set_bounds(const SDL_Rect& bounds) {
     bounds_ = bounds;
-    if (!panel_) return;
-    const int pad = DMSpacing::panel_padding();
-    const int available = std::max(0, bounds_.h - 2 * pad);
+    applied_bounds_ = SDL_Rect{-1, -1, 0, 0};
+    apply_bounds_if_needed();
+}
 
-    // When the fullscreen panel is collapsed we receive a zero-height
-    // content rect. Propagating that directly would clamp the docked panel's
-    // viewport to zero pixels which prevents it from ever receiving mouse
-    // events. Pre-setting the available height override ensures the
-    // subsequent layout uses a sensible size once the panel expands.
-    if (available > 0) {
-        panel_->set_available_height_override(available);
-    } else {
-        panel_->set_available_height_override(-1);
+void RoomConfigurator::apply_bounds_if_needed() {
+    if (bounds_.w <= 0 || bounds_.h <= 0) {
+        set_available_height_override(-1);
+        set_work_area(SDL_Rect{0, 0, 0, 0});
+        applied_bounds_ = SDL_Rect{-1, -1, 0, 0};
+        return;
+    }
+    if (applied_bounds_.x == bounds_.x && applied_bounds_.y == bounds_.y &&
+        applied_bounds_.w == bounds_.w && applied_bounds_.h == bounds_.h) {
+        return;
     }
 
-    panel_->set_rect(bounds_);
+    const int pad = DMSpacing::panel_padding();
+    const int available = std::max(0, bounds_.h - 2 * pad);
+    set_available_height_override(available > 0 ? available : -1);
+    set_work_area(bounds_);
+    DockableCollapsible::set_rect(bounds_);
+    applied_bounds_ = bounds_;
 }
 
 void RoomConfigurator::open(const nlohmann::json& data) {
@@ -110,10 +116,8 @@ void RoomConfigurator::open(const nlohmann::json& data) {
         room_inherits_assets_ = data.value("inherits_map_assets", false);
     }
     rebuild_rows();
-    if (panel_) {
-        panel_->set_visible(true);
-        panel_->set_expanded(true);
-    }
+    set_visible(true);
+    set_expanded(true);
 }
 
 void RoomConfigurator::open(Room* room) {
@@ -125,18 +129,15 @@ void RoomConfigurator::open(Room* room) {
     open(j);
 }
 
-void RoomConfigurator::close() {
-    if (panel_) panel_->set_visible(false);
-}
+void RoomConfigurator::close() { set_visible(false); }
 
-bool RoomConfigurator::visible() const { return panel_ && panel_->is_visible(); }
+bool RoomConfigurator::visible() const { return is_visible(); }
 
 bool RoomConfigurator::any_panel_visible() const {
     return visible();
 }
 
 void RoomConfigurator::rebuild_rows() {
-    if (!panel_) return;
     DockableCollapsible::Rows rows;
     spawn_rows_.clear();
     spawn_groups_label_.reset();
@@ -233,14 +234,14 @@ void RoomConfigurator::rebuild_rows() {
         rows.push_back({ add_group_btn_w_.get() });
     }
 
-    panel_->set_cell_width(180);
-    panel_->set_rows(rows);
+    set_cell_width(180);
+    set_rows(rows);
 }
 
 void RoomConfigurator::update(const Input& input, int screen_w, int screen_h) {
-    if (panel_ && panel_->is_visible()) {
-        panel_->set_rect(bounds_);
-        panel_->update(input, screen_w, screen_h);
+    if (is_visible()) {
+        apply_bounds_if_needed();
+        DockableCollapsible::update(input, screen_w, screen_h);
     }
     if (room_w_slider_) { room_w_min_ = room_w_slider_->min_value(); room_w_max_ = room_w_slider_->max_value(); }
     if (room_h_slider_) { room_h_min_ = room_h_slider_->min_value(); room_h_max_ = room_h_slider_->max_value(); }
@@ -268,12 +269,15 @@ void RoomConfigurator::update(const Input& input, int screen_w, int screen_h) {
 
 bool RoomConfigurator::handle_event(const SDL_Event& e) {
     bool used = false;
-    if (panel_ && panel_->is_visible()) used |= panel_->handle_event(e);
+    if (is_visible()) {
+        apply_bounds_if_needed();
+        used |= DockableCollapsible::handle_event(e);
+    }
     return used;
 }
 
 void RoomConfigurator::render(SDL_Renderer* r) const {
-    if (panel_ && panel_->is_visible()) panel_->render(r);
+    if (is_visible()) DockableCollapsible::render(r);
 }
 
 nlohmann::json RoomConfigurator::build_json() const {
@@ -291,14 +295,9 @@ nlohmann::json RoomConfigurator::build_json() const {
 }
 
 bool RoomConfigurator::is_point_inside(int x, int y) const {
-    if (!panel_ || !panel_->is_visible()) return false;
-    SDL_Point p{x, y};
-    return SDL_PointInRect(&p, &panel_->rect());
+    if (!is_visible()) return false;
+    return DockableCollapsible::is_point_inside(x, y);
 }
-
-DockableCollapsible* RoomConfigurator::panel() { return panel_.get(); }
-
-const DockableCollapsible* RoomConfigurator::panel() const { return panel_.get(); }
 
 void RoomConfigurator::set_spawn_group_callbacks(std::function<void(const std::string&)> on_edit,
                                                  std::function<void(const std::string&)> on_duplicate,

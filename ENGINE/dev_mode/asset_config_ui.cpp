@@ -294,6 +294,13 @@ void AssetConfigUI::set_position(int x, int y) {
     }
 }
 
+SDL_Point AssetConfigUI::position() const {
+    if (panel_) {
+        return panel_->position();
+    }
+    return SDL_Point{0, 0};
+}
+
 void AssetConfigUI::handle_method_change() {
     if (!dd_method_) return;
     int selected = dd_method_->selected();

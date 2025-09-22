@@ -1,0 +1,90 @@
+{
+  "camera_settings": {},
+  "map_assets_data": {},
+  "map_boundary_data": {},
+  "map_layers": [
+    {
+      "level": 0,
+      "max_rooms": 1,
+      "min_rooms": 1,
+      "radius": 1500,
+      "rooms": [
+        {
+          "max_instances": 1,
+          "min_instances": 1,
+          "name": "spawn",
+          "required_children": []
+        }
+      ]
+    }
+  ],
+  "map_light_data": {
+    "base_color": [
+      255,
+      255,
+      255,
+      255
+    ],
+    "fall_off": 100,
+    "intensity": 255,
+    "keys": [
+      [
+        0.0,
+        [
+          255,
+          255,
+          255,
+          255
+        ]
+      ]
+    ],
+    "max_opacity": 255,
+    "min_opacity": 0,
+    "mult": 0.0,
+    "orbit_radius": 0,
+    "radius": 0,
+    "update_interval": 10
+  },
+  "map_name": "HOME",
+  "map_radius": 1500,
+  "rooms_data": {
+    "spawn": {
+      "edge_smoothness": 2,
+      "geometry": "Circle",
+      "inherits_map_assets": false,
+      "is_boss": false,
+      "is_spawn": true,
+      "max_height": 3000,
+      "max_width": 3000,
+      "min_height": 100,
+      "min_width": 100,
+      "name": "spawn",
+      "spawn_groups": [
+        {
+          "candidates": [
+            {
+              "chance": 0,
+              "name": "null"
+            },
+            {
+              "chance": 100,
+              "name": "Mushroom_3"
+            }
+          ],
+          "check_overlap": false,
+          "display_name": "Mushroom_3",
+          "dx": -1624,
+          "dy": -903,
+          "enforce_spacing": false,
+          "max_number": 1,
+          "min_number": 1,
+          "origional_height": 3000,
+          "origional_width": 3000,
+          "position": "Exact",
+          "spawn_id": "spn-d198c6257fd4"
+        }
+      ]
+    }
+  },
+  "trails_data": {}
+}

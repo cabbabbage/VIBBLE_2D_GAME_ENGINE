@@ -2,6 +2,8 @@
 
 #include <SDL.h>
 #include <memory>
+#include <optional>
+#include <limits>
 #include <string>
 #include <vector>
 #include <functional>
@@ -13,7 +15,7 @@ class DMButton;
 class Input;
 
 // Manages a collection of AssetConfig panels for an assets array
-class AssetsConfig {
+class AssetsConfig : public DockableCollapsible {
 public:
     AssetsConfig();
     // Standalone panel controls
@@ -21,7 +23,7 @@ public:
     void close();
     bool visible() const;
     void set_position(int x, int y);
-    void update(const Input& input);
+    void update(const Input& input, int screen_w, int screen_h);
     bool handle_event(const SDL_Event& e);
     void render(SDL_Renderer* r) const;
 
@@ -33,6 +35,13 @@ public:
     void set_anchor(int x, int y);
     void open_asset_config(const std::string& id, int x, int y);
     void close_all_asset_configs();
+    struct OpenConfigState {
+        std::string id;
+        SDL_Point position{0, 0};
+        size_t index = std::numeric_limits<size_t>::max();
+    };
+    std::optional<OpenConfigState> capture_open_config() const;
+    void restore_open_config(const OpenConfigState& state);
     nlohmann::json to_json() const;
     bool any_visible() const;
     bool is_point_inside(int x, int y) const;
@@ -51,7 +60,6 @@ private:
     nlohmann::json temp_assets_;
     int anchor_x_ = 0;
     int anchor_y_ = 0;
-    std::unique_ptr<DockableCollapsible> panel_;
     std::unique_ptr<DMButton> b_done_;
     std::unique_ptr<ButtonWidget> b_done_w_;
     std::function<void(const nlohmann::json&)> on_close_;

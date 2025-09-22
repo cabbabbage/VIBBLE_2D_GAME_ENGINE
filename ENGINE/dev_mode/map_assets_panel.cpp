@@ -150,8 +150,8 @@ void MapAssetsPanel::update(const Input& input, int screen_w, int screen_h) {
     int anchor_y = r.y;
     if (map_assets_cfg_) map_assets_cfg_->set_anchor(anchor_x, anchor_y);
     if (boundary_cfg_) boundary_cfg_->set_anchor(anchor_x, anchor_y);
-    if (map_assets_cfg_) map_assets_cfg_->update(input);
-    if (boundary_cfg_) boundary_cfg_->update(input);
+    if (map_assets_cfg_) map_assets_cfg_->update(input, screen_w, screen_h);
+    if (boundary_cfg_) boundary_cfg_->update(input, screen_w, screen_h);
 }
 
 bool MapAssetsPanel::handle_event(const SDL_Event& e) {

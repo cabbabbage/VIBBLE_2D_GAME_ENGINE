@@ -467,5 +467,5 @@
         "yellow"
     ],
     "update_radius": 1000,
-    "z_threshold": 64
+    "z_threshold": 17
 }

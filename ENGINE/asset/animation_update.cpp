@@ -14,6 +14,7 @@
 #include <random>
 #include <string>
 #include <iostream>
+#include <unordered_map>
 
 namespace {
 inline void normalize_minmax(int& mn, int& mx) {
@@ -36,6 +37,21 @@ inline int rand_int(std::mt19937& rng, int lo, int hi) {
 inline double angle_from_or_random(int vx, int vy, std::mt19937& rng) {
     if (vx == 0 && vy == 0) return rand_angle(rng);
     return std::atan2(static_cast<double>(vy), static_cast<double>(vx));
+}
+
+struct ManualState {
+    int manual_dx = 0;
+    int manual_dy = 0;
+    int last_dir_x = 0;
+    int last_dir_y = 1;
+    std::string last_anim = "default";
+    bool last_was_moving = false;
+    bool active = false;
+};
+
+ManualState& manual_state(AnimationUpdate* updater) {
+    static std::unordered_map<AnimationUpdate*, ManualState> states;
+    return states[updater];
 }
 }
 
@@ -599,6 +615,14 @@ void AnimationUpdate::move(int x, int y) {
     dx_ = x;
     dy_ = y;
     override_movement = true;
+    ManualState& manual = manual_state(this);
+    manual.active = true;
+    manual.manual_dx = x;
+    manual.manual_dy = y;
+    if ((x | y) != 0) {
+        manual.last_dir_x = x;
+        manual.last_dir_y = y;
+    }
 }
 
 void AnimationUpdate::set_animation_qued(const std::string& anim_id) {
@@ -665,6 +689,104 @@ void AnimationUpdate::update() {
             }
             advance(self_->current_frame);
             return;
+        }
+        ManualState& manual = manual_state(this);
+        if (manual.active) {
+            const int mdx = manual.manual_dx;
+            const int mdy = manual.manual_dy;
+            const bool moving_now = (mdx != 0 || mdy != 0);
+            auto has_anim = [&](const char* id) {
+                if (!self_->info) return false;
+                return self_->info->animations.find(id) != self_->info->animations.end();
+            };
+            auto choose_anim = [&](int dx, int dy) -> std::string {
+                if (dx == 0 && dy == 0) return {};
+                const int abs_x = std::abs(dx);
+                const int abs_y = std::abs(dy);
+                auto pick_horizontal = [&]() -> std::string {
+                    if (dx > 0) return has_anim("right") ? std::string("right") : std::string{};
+                    if (dx < 0) return has_anim("left") ? std::string("left") : std::string{};
+                    return std::string{};
+                };
+                auto pick_vertical = [&]() -> std::string {
+                    if (dy > 0) return has_anim("forward") ? std::string("forward") : std::string{};
+                    if (dy < 0) return has_anim("backward") ? std::string("backward") : std::string{};
+                    return std::string{};
+                };
+                if (abs_x > abs_y) {
+                    std::string horiz = pick_horizontal();
+                    if (!horiz.empty()) return horiz;
+                } else if (abs_y > abs_x) {
+                    std::string vert = pick_vertical();
+                    if (!vert.empty()) return vert;
+                } else {
+                    const int last_abs_x = std::abs(manual.last_dir_x);
+                    const int last_abs_y = std::abs(manual.last_dir_y);
+                    if (last_abs_x > last_abs_y) {
+                        std::string horiz = pick_horizontal();
+                        if (!horiz.empty()) return horiz;
+                    } else if (last_abs_y > last_abs_x) {
+                        std::string vert = pick_vertical();
+                        if (!vert.empty()) return vert;
+                    } else if (!manual.last_anim.empty() && manual.last_anim != "default" && has_anim(manual.last_anim.c_str())) {
+                        return manual.last_anim;
+                    }
+                }
+                std::string vert = pick_vertical();
+                if (!vert.empty()) return vert;
+                std::string horiz = pick_horizontal();
+                if (!horiz.empty()) return horiz;
+                return has_anim("default") ? std::string("default") : std::string{};
+            };
+
+            std::string desired_anim;
+            if (moving_now) {
+                desired_anim = choose_anim(mdx, mdy);
+                if (!desired_anim.empty()) {
+                    if (desired_anim != "default" || manual.last_anim.empty()) {
+                        manual.last_anim = desired_anim;
+                    }
+                }
+            } else {
+                desired_anim = manual.last_anim;
+                if (!desired_anim.empty() && desired_anim != "default" && !has_anim(desired_anim.c_str())) {
+                    desired_anim.clear();
+                }
+                if (desired_anim.empty() || desired_anim == "default") {
+                    if (manual.last_anim != "default") {
+                        std::string fallback = choose_anim(manual.last_dir_x, manual.last_dir_y);
+                        if (!fallback.empty()) {
+                            desired_anim = fallback;
+                            manual.last_anim = fallback;
+                        }
+                    }
+                    if (desired_anim.empty() && has_anim("default")) {
+                        desired_anim = "default";
+                    }
+                }
+            }
+
+            if (!desired_anim.empty() && self_->current_animation != desired_anim) {
+                switch_to(desired_anim);
+            } else if (!moving_now && manual.last_was_moving) {
+                auto it = self_->info->animations.find(self_->current_animation);
+                if (it != self_->info->animations.end()) {
+                    Animation& anim = it->second;
+                    AnimationFrame* first = anim.get_first_frame();
+                    if (first) {
+                        self_->current_frame = first;
+                        self_->frame_progress = 0.0f;
+                    }
+                }
+            }
+
+            if (!moving_now) {
+                override_movement = false;
+                manual.last_was_moving = false;
+                return;
+            }
+
+            manual.last_was_moving = true;
         }
         bool cont = advance(self_->current_frame);
         if (!cont) {

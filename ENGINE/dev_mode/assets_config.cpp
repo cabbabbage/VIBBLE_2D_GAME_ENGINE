@@ -1,39 +1,47 @@
 #include "assets_config.hpp"
 #include "asset_config_ui.hpp"
-#include "DockableCollapsible.hpp"
 #include "dm_styles.hpp"
 #include "utils/input.hpp"
 
-AssetsConfig::AssetsConfig() {}
+namespace {
+constexpr int kStandaloneWidth = 1920;
+constexpr int kStandaloneHeight = 1080;
+}
+
+AssetsConfig::AssetsConfig()
+    : DockableCollapsible("Assets", true, 32, 32) {
+    set_expanded(true);
+    set_visible(false);
+    set_cell_width(120);
+}
 
 void AssetsConfig::open(const nlohmann::json& assets, std::function<void(const nlohmann::json&)> on_close) {
     on_close_ = std::move(on_close);
     // make copy for standalone editing
     temp_assets_ = assets;
     load(temp_assets_, [](){}, {});
-    panel_ = std::make_unique<DockableCollapsible>("Assets", true, 32, 32);
-    panel_->set_expanded(true);
-    panel_->set_visible(true);
-    b_done_ = std::make_unique<DMButton>("Done", &DMStyles::ListButton(), 80, DMButton::height());
-    b_done_w_ = std::make_unique<ButtonWidget>(b_done_.get(), [this]() {
-        if (on_close_) on_close_(to_json());
-        close();
-    });
+    if (!b_done_) {
+        b_done_ = std::make_unique<DMButton>("Done", &DMStyles::ListButton(), 80, DMButton::height());
+        b_done_w_ = std::make_unique<ButtonWidget>(b_done_.get(), [this]() {
+            if (on_close_) on_close_(to_json());
+            close();
+        });
+    }
     DockableCollapsible::Rows rows;
     append_rows(rows);
-    rows.push_back({ b_done_w_.get() });
-    panel_->set_cell_width(120);
-    panel_->set_rows(rows);
-    Input dummy; panel_->update(dummy, 1920, 1080);
+    if (b_done_w_) rows.push_back({ b_done_w_.get() });
+    set_rows(rows);
+    set_visible(true);
+    set_expanded(true);
+    Input dummy;
+    update(dummy, kStandaloneWidth, kStandaloneHeight);
 }
 
-void AssetsConfig::close() { if (panel_) panel_->set_visible(false); }
+void AssetsConfig::close() { set_visible(false); }
 
-bool AssetsConfig::visible() const { return panel_ && panel_->is_visible(); }
+bool AssetsConfig::visible() const { return is_visible(); }
 
-void AssetsConfig::set_position(int x, int y) {
-    if (panel_) panel_->set_position(x, y);
-}
+void AssetsConfig::set_position(int x, int y) { DockableCollapsible::set_position(x, y); }
 
 void AssetsConfig::load(nlohmann::json& assets,
                         std::function<void()> on_change,
@@ -72,11 +80,26 @@ void AssetsConfig::append_rows(DockableCollapsible::Rows& rows) {
 }
 
 void AssetsConfig::set_anchor(int x, int y) {
-    anchor_x_ = x; anchor_y_ = y;
+    const int dx = x - anchor_x_;
+    const int dy = y - anchor_y_;
+    anchor_x_ = x;
+    anchor_y_ = y;
+    if (dx == 0 && dy == 0) {
+        return;
+    }
+    for (auto& e : entries_) {
+        if (!e.cfg || !e.cfg->visible()) {
+            continue;
+        }
+        SDL_Point pos = e.cfg->position();
+        e.cfg->set_position(pos.x + dx, pos.y + dy);
+    }
 }
 
-void AssetsConfig::update(const Input& input) {
-    if (panel_ && panel_->is_visible()) panel_->update(input, 1920, 1080);
+void AssetsConfig::update(const Input& input, int screen_w, int screen_h) {
+    if (is_visible()) {
+        DockableCollapsible::update(input, screen_w, screen_h);
+    }
     for (auto& e : entries_) {
         if (e.cfg) e.cfg->update(input);
     }
@@ -84,7 +107,7 @@ void AssetsConfig::update(const Input& input) {
 
 bool AssetsConfig::handle_event(const SDL_Event& ev) {
     bool used = false;
-    if (panel_ && panel_->is_visible()) used |= panel_->handle_event(ev);
+    if (is_visible()) used |= DockableCollapsible::handle_event(ev);
     for (auto& e : entries_) {
         if (e.cfg && e.cfg->handle_event(ev)) {
             if (e.json) *e.json = e.cfg->to_json();
@@ -104,7 +127,7 @@ bool AssetsConfig::handle_event(const SDL_Event& ev) {
 }
 
 void AssetsConfig::render(SDL_Renderer* r) const {
-    if (panel_ && panel_->is_visible()) panel_->render(r);
+    if (is_visible()) DockableCollapsible::render(r);
     for (const auto& e : entries_) {
         if (e.cfg) e.cfg->render(r);
     }
@@ -127,6 +150,41 @@ void AssetsConfig::close_all_asset_configs() {
     }
 }
 
+std::optional<AssetsConfig::OpenConfigState> AssetsConfig::capture_open_config() const {
+    for (size_t i = 0; i < entries_.size(); ++i) {
+        const auto& e = entries_[i];
+        if (!e.cfg) continue;
+        if (e.cfg->visible()) {
+            AssetsConfig::OpenConfigState state;
+            state.id = e.id;
+            state.position = e.cfg->position();
+            state.index = i;
+            return state;
+        }
+    }
+    return std::nullopt;
+}
+
+void AssetsConfig::restore_open_config(const OpenConfigState& state) {
+    if (!state.id.empty()) {
+        open_asset_config(state.id, state.position.x, state.position.y);
+        for (const auto& entry : entries_) {
+            if (entry.cfg && entry.cfg->visible()) {
+                return;
+            }
+        }
+    }
+    if (state.index < entries_.size()) {
+        auto& entry = entries_[state.index];
+        if (!entry.cfg) {
+            return;
+        }
+        close_all_asset_configs();
+        entry.cfg->set_position(state.position.x, state.position.y);
+        entry.cfg->open_panel();
+    }
+}
+
 nlohmann::json AssetsConfig::to_json() const {
     nlohmann::json arr = nlohmann::json::array();
     for (const auto& e : entries_) {
@@ -137,6 +195,9 @@ nlohmann::json AssetsConfig::to_json() const {
 }
 
 bool AssetsConfig::any_visible() const {
+    if (is_visible()) {
+        return true;
+    }
     for (const auto& e : entries_) {
         if (e.cfg && e.cfg->visible()) return true;
     }
@@ -144,8 +205,7 @@ bool AssetsConfig::any_visible() const {
 }
 
 bool AssetsConfig::is_point_inside(int x, int y) const {
-    SDL_Point p{ x, y };
-    if (panel_ && panel_->is_visible() && SDL_PointInRect(&p, &panel_->rect())) return true;
+    if (is_visible() && DockableCollapsible::is_point_inside(x, y)) return true;
     for (const auto& e : entries_) {
         if (e.cfg && e.cfg->visible() && e.cfg->is_point_inside(x, y)) return true;
     }

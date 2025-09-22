@@ -56,7 +56,20 @@ AssetInfoUI::AssetInfoUI() {
     animations_panel_ = std::make_unique<AnimationsEditorPanel>();
 }
 
-AssetInfoUI::~AssetInfoUI() = default;
+AssetInfoUI::~AssetInfoUI() {
+    apply_camera_override(false);
+}
+
+void AssetInfoUI::set_assets(Assets* a) {
+    if (assets_ == a) return;
+    if (camera_override_active_) {
+        apply_camera_override(false);
+    }
+    assets_ = a;
+    if (visible_) {
+        apply_camera_override(true);
+    }
+}
 
 void AssetInfoUI::set_info(const std::shared_ptr<AssetInfo>& info) {
     info_ = info;
@@ -81,10 +94,21 @@ void AssetInfoUI::clear_info() {
 
 void AssetInfoUI::open()  {
     visible_ = true;
+    apply_camera_override(true);
     for (auto& s : sections_) s->set_expanded(false);
 }
-void AssetInfoUI::close() { visible_ = false; }
-void AssetInfoUI::toggle(){ visible_ = !visible_; }
+void AssetInfoUI::close() {
+    if (!visible_) return;
+    apply_camera_override(false);
+    visible_ = false;
+}
+void AssetInfoUI::toggle(){
+    if (visible_) {
+        close();
+    } else {
+        open();
+    }
+}
 
 void AssetInfoUI::layout_widgets(int screen_w, int screen_h) const {
     int panel_x = (screen_w * 2) / 3;
@@ -241,6 +265,51 @@ void AssetInfoUI::pulse_header() {
     pulse_frames_ = 20;
 }
 
+void AssetInfoUI::apply_camera_override(bool enable) {
+    if (!assets_) return;
+    camera& cam = assets_->getView();
+    if (enable) {
+        if (camera_override_active_) return;
+        prev_camera_realism_enabled_ = cam.realism_enabled();
+        prev_camera_parallax_enabled_ = cam.parallax_enabled();
+        cam.set_realism_enabled(false);
+        cam.set_parallax_enabled(false);
+        camera_override_active_ = true;
+    } else {
+        if (!camera_override_active_) return;
+        cam.set_realism_enabled(prev_camera_realism_enabled_);
+        cam.set_parallax_enabled(prev_camera_parallax_enabled_);
+        camera_override_active_ = false;
+    }
+}
+
+float AssetInfoUI::compute_player_screen_height(const camera& cam) const {
+    if (!assets_ || !assets_->player) return 1.0f;
+    Asset* player_asset = assets_->player;
+    if (!player_asset) return 1.0f;
+
+    SDL_Texture* player_final = player_asset->get_final_texture();
+    SDL_Texture* player_frame = player_asset->get_current_frame();
+    int pw = player_asset->cached_w;
+    int ph = player_asset->cached_h;
+    if ((pw == 0 || ph == 0) && player_final) {
+        SDL_QueryTexture(player_final, nullptr, nullptr, &pw, &ph);
+    }
+    if ((pw == 0 || ph == 0) && player_frame) {
+        SDL_QueryTexture(player_frame, nullptr, nullptr, &pw, &ph);
+    }
+    if (pw != 0) player_asset->cached_w = pw;
+    if (ph != 0) player_asset->cached_h = ph;
+
+    float scale = cam.get_scale();
+    float inv_scale = (scale > 0.0f) ? (1.0f / scale) : 1.0f;
+    if (ph > 0) {
+        float screen_h = static_cast<float>(ph) * inv_scale;
+        return screen_h > 0.0f ? screen_h : 1.0f;
+    }
+    return 1.0f;
+}
+
 
 
 
@@ -248,8 +317,10 @@ void AssetInfoUI::pulse_header() {
 void AssetInfoUI::render_world_overlay(SDL_Renderer* r, const camera& cam) const {
     if (!visible_ || !info_) return;
 
+    float reference_screen_height = compute_player_screen_height(cam);
+
     if (basic_info_section_ && basic_info_section_->is_expanded()) {
-        basic_info_section_->render_world_overlay(r, cam, target_asset_);
+        basic_info_section_->render_world_overlay(r, cam, target_asset_, reference_screen_height);
     }
 
     if (!lighting_section_ || !lighting_section_->is_expanded() || !lighting_section_->shading_enabled() || !target_asset_) return;

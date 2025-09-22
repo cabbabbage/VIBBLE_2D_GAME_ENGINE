@@ -7,7 +7,7 @@
 #include <vector>
 #include <nlohmann/json.hpp>
 
-class DockableCollapsible;
+#include "DockableCollapsible.hpp"
 class DropdownWidget;
 class RangeSliderWidget;
 class CheckboxWidget;
@@ -23,7 +23,7 @@ class Room;
 class Widget;
 
 // Top-level room configuration panel with room settings and asset list
-class RoomConfigurator {
+class RoomConfigurator : public DockableCollapsible {
 public:
     RoomConfigurator();
     ~RoomConfigurator();
@@ -38,16 +38,15 @@ public:
     void render(SDL_Renderer* r) const;
     nlohmann::json build_json() const;
     bool is_point_inside(int x, int y) const;
-    DockableCollapsible* panel();
-    const DockableCollapsible* panel() const;
     void set_spawn_group_callbacks(std::function<void(const std::string&)> on_edit,
                                    std::function<void(const std::string&)> on_duplicate,
                                    std::function<void(const std::string&)> on_delete,
                                    std::function<void()> on_add);
 private:
+    void apply_bounds_if_needed();
     void rebuild_rows();
-    std::unique_ptr<DockableCollapsible> panel_;
     SDL_Rect bounds_{0,0,0,0};
+    SDL_Rect applied_bounds_{-1,-1,0,0};
     std::vector<std::string> room_geom_options_;
     Room* room_ = nullptr;
     std::string room_name_;

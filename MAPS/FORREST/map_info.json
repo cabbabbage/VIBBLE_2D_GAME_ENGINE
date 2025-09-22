@@ -1,7 +1,7 @@
 {
   "camera_settings": {
-    "distance_scale_strength": 0.03999999910593033,
-    "foreshorten_strength": 0.03999999910593033,
+    "distance_scale_strength": 0.12999999523162842,
+    "foreshorten_strength": 0.07000000029802322,
     "height_at_zoom1": 713.0,
     "parallax_strength": 19.75,
     "realism_enabled": true,
@@ -523,6 +523,7 @@
               "name": "candle"
             }
           ],
+          "chance_denominator": 100,
           "check_overlap": false,
           "display_name": "candle",
           "dx": -76,

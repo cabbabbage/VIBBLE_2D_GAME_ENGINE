@@ -289,7 +289,7 @@ void MapModeUI::configure_footer_buttons() {
     std::vector<FullScreenCollapsible::HeaderButton> buttons;
 
     auto append_custom = [&](std::vector<HeaderButtonConfig>& configs, HeaderMode mode) {
-        for (auto& config : configs) {
+        auto append_button = [&](HeaderButtonConfig& config) {
             FullScreenCollapsible::HeaderButton extra;
             extra.id = config.id;
             extra.label = config.label;
@@ -308,10 +308,23 @@ void MapModeUI::configure_footer_buttons() {
                 }
             };
             buttons.push_back(std::move(extra));
+        };
+
+        for (auto& config : configs) {
+            if (config.id == "switch_mode") {
+                append_button(config);
+            }
+        }
+        for (auto& config : configs) {
+            if (config.id != "switch_mode") {
+                append_button(config);
+            }
         }
     };
 
     if (header_mode_ == HeaderMode::Map) {
+        append_custom(map_mode_buttons_, HeaderMode::Map);
+
         FullScreenCollapsible::HeaderButton layers_btn;
         layers_btn.id = kButtonIdLayers;
         layers_btn.label = "Layers";
@@ -347,8 +360,6 @@ void MapModeUI::configure_footer_buttons() {
             }
         };
         buttons.push_back(std::move(assets_btn));
-
-        append_custom(map_mode_buttons_, HeaderMode::Map);
     } else {
         append_custom(room_mode_buttons_, HeaderMode::Room);
     }
