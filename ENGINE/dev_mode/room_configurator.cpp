@@ -1,4 +1,5 @@
 #include "room_configurator.hpp"
+#include "FloatingDockableManager.hpp"
 #include "dm_styles.hpp"
 #include "utils/input.hpp"
 #include "room/room.hpp"
@@ -116,6 +117,7 @@ void RoomConfigurator::open(const nlohmann::json& data) {
         room_inherits_assets_ = data.value("inherits_map_assets", false);
     }
     rebuild_rows();
+    FloatingDockableManager::instance().open_floating("Room Config", this, [this]() { this->close(); });
     set_visible(true);
     set_expanded(true);
 }

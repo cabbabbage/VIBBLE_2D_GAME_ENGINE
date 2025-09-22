@@ -39,7 +39,7 @@ public:
 
     // Visibility and collapse state
     bool is_visible() const { return visible_; }
-    void set_visible(bool v) { visible_ = v; }
+    void set_visible(bool v);
     bool is_expanded() const { return expanded_; }
     void set_expanded(bool e);
 

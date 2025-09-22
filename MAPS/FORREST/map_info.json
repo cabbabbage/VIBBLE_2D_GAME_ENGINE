@@ -173,7 +173,7 @@
       255,
       246,
       248,
-      255
+      247
     ],
     "fall_off": 100,
     "intensity": 255,
@@ -220,7 +220,7 @@
     "mult": 0.32,
     "orbit_radius": 1523,
     "radius": 6667,
-    "update_interval": 18
+    "update_interval": 6
   },
   "map_name": "FORREST",
   "map_radius": 8610.0,
@@ -472,30 +472,6 @@
             },
             {
               "chance": 100,
-              "name": "Vibble"
-            }
-          ],
-          "chance_denominator": 100,
-          "check_overlap": false,
-          "display_name": "Vibble",
-          "dx": -6,
-          "dy": -116,
-          "enforce_spacing": false,
-          "max_number": 1,
-          "min_number": 1,
-          "origional_height": 1414,
-          "origional_width": 1414,
-          "position": "Exact",
-          "spawn_id": "spn-565905956af8"
-        },
-        {
-          "candidates": [
-            {
-              "chance": 0,
-              "name": "null"
-            },
-            {
-              "chance": 100,
               "name": "Grave_1"
             }
           ],
@@ -535,6 +511,98 @@
           "origional_width": 520,
           "position": "Exact",
           "spawn_id": "spn-440166410452"
+        },
+        {
+          "candidates": [
+            {
+              "chance": 0,
+              "name": "null"
+            },
+            {
+              "chance": 100,
+              "name": "Tree"
+            }
+          ],
+          "check_overlap": false,
+          "display_name": "Tree",
+          "dx": -1016,
+          "dy": -432,
+          "enforce_spacing": false,
+          "max_number": 1,
+          "min_number": 1,
+          "origional_height": 2480,
+          "origional_width": 2480,
+          "position": "Exact",
+          "spawn_id": "spn-dfee57eec2c4"
+        },
+        {
+          "candidates": [
+            {
+              "chance": 0,
+              "name": "null"
+            },
+            {
+              "chance": 100,
+              "name": "Tree_Dark"
+            }
+          ],
+          "check_overlap": false,
+          "display_name": "Tree_Dark",
+          "dx": -818,
+          "dy": -386,
+          "enforce_spacing": false,
+          "max_number": 1,
+          "min_number": 1,
+          "origional_height": 2480,
+          "origional_width": 2480,
+          "position": "Exact",
+          "spawn_id": "spn-40f0d9ae419e"
+        },
+        {
+          "candidates": [
+            {
+              "chance": 0,
+              "name": "null"
+            },
+            {
+              "chance": 100,
+              "name": "Tree_Dark"
+            }
+          ],
+          "check_overlap": false,
+          "display_name": "Tree_Dark",
+          "dx": -794,
+          "dy": -387,
+          "enforce_spacing": false,
+          "max_number": 1,
+          "min_number": 1,
+          "origional_height": 2480,
+          "origional_width": 2480,
+          "position": "Exact",
+          "spawn_id": "spn-cf993460b1d8"
+        },
+        {
+          "candidates": [
+            {
+              "chance": 0,
+              "name": "null"
+            },
+            {
+              "chance": 100,
+              "name": "Vibble"
+            }
+          ],
+          "check_overlap": false,
+          "display_name": "Vibble",
+          "dx": -803,
+          "dy": -176,
+          "enforce_spacing": false,
+          "max_number": 1,
+          "min_number": 1,
+          "origional_height": 2480,
+          "origional_width": 2480,
+          "position": "Exact",
+          "spawn_id": "spn-85325b070ab9"
         }
       ]
     }

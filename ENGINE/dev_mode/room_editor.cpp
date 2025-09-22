@@ -1852,20 +1852,6 @@ bool RoomEditor::is_room_spawn_id(const std::string& spawn_id) const {
 bool RoomEditor::asset_belongs_to_room(const Asset* asset) const {
     if (!asset || !asset->info) return false;
 
-    const std::string& type = asset->info->type;
-    if (type == asset_types::boundary || type == asset_types::texture) {
-        return false;
-    }
-
-    if (!asset->spawn_method.empty()) {
-        std::string method = asset->spawn_method;
-        std::transform(method.begin(), method.end(), method.begin(), [](unsigned char c) {
-            return static_cast<char>(std::tolower(c));
-        });
-        if (method == "boundary") {
-            return false;
-        }
-    }
 
     if (asset->spawn_id.empty()) return false;
     return is_room_spawn_id(asset->spawn_id);

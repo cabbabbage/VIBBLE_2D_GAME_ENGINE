@@ -1,5 +1,7 @@
 #include "DockableCollapsible.hpp"
 
+#include "FloatingDockableManager.hpp"
+
 #include <algorithm>
 #include <cmath>
 #include <string>
@@ -38,6 +40,17 @@ DockableCollapsible::DockableCollapsible(const std::string& title, bool floatabl
 }
 
 DockableCollapsible::~DockableCollapsible() = default;
+
+void DockableCollapsible::set_visible(bool v) {
+    if (visible_ == v) {
+        return;
+    }
+    visible_ = v;
+    if (!visible_) {
+        dragging_ = false;
+        FloatingDockableManager::instance().notify_panel_closed(this);
+    }
+}
 
 void DockableCollapsible::set_rows(const Rows& rows) {
     rows_ = rows;
@@ -110,88 +123,90 @@ void DockableCollapsible::update(const Input& input, int screen_w, int screen_h)
 bool DockableCollapsible::handle_event(const SDL_Event& e) {
     if (!visible_) return false;
 
-    if (floatable_ && show_header_) {
-        if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
-            SDL_Point p{ e.button.x, e.button.y };
-            if (SDL_PointInRect(&p, &handle_rect_)) {
-                dragging_ = true;
-                drag_offset_.x = p.x - rect_.x;
-                drag_offset_.y = p.y - rect_.y;
-                return true;
-            }
-        } else if (e.type == SDL_MOUSEMOTION) {
-            if (dragging_) {
-                int nx = e.motion.x - drag_offset_.x;
-                int ny = e.motion.y - drag_offset_.y;
-                rect_.x = nx; rect_.y = ny;
-                return true;
-            }
-        } else if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
-            if (dragging_) { dragging_ = false; return true; }
+    const bool pointer_event =
+        (e.type == SDL_MOUSEBUTTONDOWN || e.type == SDL_MOUSEBUTTONUP || e.type == SDL_MOUSEMOTION);
+    SDL_Point pointer_pos{0, 0};
+    if (pointer_event) {
+        if (e.type == SDL_MOUSEMOTION) {
+            pointer_pos = SDL_Point{e.motion.x, e.motion.y};
+        } else {
+            pointer_pos = SDL_Point{e.button.x, e.button.y};
         }
     }
 
-    if (e.type == SDL_MOUSEWHEEL && scroll_enabled_) {
-        int mx, my;
-        SDL_GetMouseState(&mx, &my);
-        SDL_Point mouse_point{ mx, my };
-        if (expanded_ && SDL_PointInRect(&mouse_point, &body_viewport_)) {
-            scroll_ -= e.wheel.y * 40;
-            scroll_ = std::max(0, std::min(max_scroll_, scroll_));
+    if (floatable_ && show_header_ && dragging_) {
+        if (e.type == SDL_MOUSEMOTION) {
+            rect_.x = e.motion.x - drag_offset_.x;
+            rect_.y = e.motion.y - drag_offset_.y;
+            return true;
+        }
+        if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
+            dragging_ = false;
             return true;
         }
     }
 
     if (close_btn_ && close_btn_->handle_event(e)) {
         if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
-            visible_ = false;
+            set_visible(false);
         }
         return true;
     }
 
     if (header_btn_) {
-        bool used = header_btn_->handle_event(e);
-        if (used && e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
-            expanded_ = !expanded_;
-            update_header_button();
+        if (header_btn_->handle_event(e)) {
+            if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
+                expanded_ = !expanded_;
+                update_header_button();
+            }
             return true;
         }
-        if (used) return true;
     }
 
-    if (expanded_) {
-        if (e.type == SDL_MOUSEBUTTONDOWN || e.type == SDL_MOUSEBUTTONUP || e.type == SDL_MOUSEMOTION) {
-            SDL_Point p{
-                e.type == SDL_MOUSEMOTION ? e.motion.x : e.button.x,
-                e.type == SDL_MOUSEMOTION ? e.motion.y : e.button.y
-            };
-            if (!SDL_PointInRect(&p, &body_viewport_)) {
-                return false;
-            }
+    if (expanded_ && scroll_enabled_ && e.type == SDL_MOUSEWHEEL) {
+        SDL_Point mouse_point{0, 0};
+        SDL_GetMouseState(&mouse_point.x, &mouse_point.y);
+        if (SDL_PointInRect(&mouse_point, &body_viewport_)) {
+            scroll_ -= e.wheel.y * 40;
+            scroll_ = std::max(0, std::min(max_scroll_, scroll_));
+            return true;
         }
+    }
+
+    bool forward_to_children = expanded_;
+    if (forward_to_children && pointer_event) {
+        forward_to_children = SDL_PointInRect(&pointer_pos, &body_viewport_);
+    }
+
+    if (forward_to_children) {
         for (auto& row : rows_) {
             for (auto* w : row) {
-                if (w && w->handle_event(e)) return true;
+                if (w && w->handle_event(e)) {
+                    return true;
+                }
             }
         }
     }
 
-    const bool is_pointer_event =
-        (e.type == SDL_MOUSEBUTTONDOWN || e.type == SDL_MOUSEBUTTONUP || e.type == SDL_MOUSEMOTION);
-    if (is_pointer_event) {
-        SDL_Point p{
-            e.type == SDL_MOUSEMOTION ? e.motion.x : e.button.x,
-            e.type == SDL_MOUSEMOTION ? e.motion.y : e.button.y
-        };
-        if (SDL_PointInRect(&p, &rect_)) {
-            return true;
+    if (floatable_ && show_header_) {
+        if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
+            SDL_Point p{e.button.x, e.button.y};
+            if (SDL_PointInRect(&p, &handle_rect_)) {
+                dragging_ = true;
+                drag_offset_.x = p.x - rect_.x;
+                drag_offset_.y = p.y - rect_.y;
+                return true;
+            }
         }
-    } else if (e.type == SDL_MOUSEWHEEL) {
-        int mx = 0;
-        int my = 0;
-        SDL_GetMouseState(&mx, &my);
-        SDL_Point p{mx, my};
-        if (SDL_PointInRect(&p, &rect_)) {
+    }
+
+    if (e.type == SDL_KEYDOWN && e.key.keysym.sym == SDLK_ESCAPE && floatable_) {
+        set_visible(false);
+        return true;
+    }
+
+    if (pointer_event && SDL_PointInRect(&pointer_pos, &rect_)) {
+        if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
             return true;
         }
     }

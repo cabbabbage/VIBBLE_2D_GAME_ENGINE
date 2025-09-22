@@ -1,6 +1,7 @@
 #include "asset_config_ui.hpp"
 
 #include "DockableCollapsible.hpp"
+#include "FloatingDockableManager.hpp"
 #include "dm_styles.hpp"
 #include "search_assets.hpp"
 #include "utils/input.hpp"
@@ -414,6 +415,7 @@ void AssetConfigUI::load(const nlohmann::json& data) {
 
 void AssetConfigUI::open_panel() {
     if (!panel_) return;
+    FloatingDockableManager::instance().open_floating("Asset Config", panel_.get(), [this]() { this->close(); });
     panel_->set_visible(true);
     panel_->set_expanded(true);
     Input dummy;

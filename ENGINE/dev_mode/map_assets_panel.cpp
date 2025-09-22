@@ -1,5 +1,6 @@
 #include "map_assets_panel.hpp"
 
+#include "FloatingDockableManager.hpp"
 #include "assets_config.hpp"
 #include "dm_styles.hpp"
 #include "utils/input.hpp"
@@ -132,6 +133,7 @@ void MapAssetsPanel::set_on_save(SaveCallback cb) {
 void MapAssetsPanel::open() {
     if (!map_info_) return;
     rebuild_rows();
+    FloatingDockableManager::instance().open_floating("Map Assets Config", this, [this]() { this->close(); });
     set_visible(true);
     set_expanded(true);
 }
