@@ -2,6 +2,7 @@
 
 #include <string>
 #include <memory>
+#include <vector>
 #include <SDL.h>
 #include <nlohmann/json.hpp>
 #include "light_map.hpp"
@@ -16,6 +17,7 @@ class SceneRenderer {
 
 	public:
     SceneRenderer(SDL_Renderer* renderer, Assets* assets, int screen_width, int screen_height, const std::string& map_path);
+    ~SceneRenderer();
     void render();
     void apply_map_light_config(const nlohmann::json& data);
     SDL_Renderer* get_renderer() const;
@@ -43,5 +45,10 @@ class SceneRenderer {
     int            current_shading_group_ = 0;
     int            num_groups_ = 20;
     bool           debugging = false;
+
+    SDL_Surface*   postprocess_full_surface_ = nullptr;
+    SDL_Surface*   postprocess_small_surface_ = nullptr;
+    std::vector<Uint32> blur_row_buffer_;
+    std::vector<Uint32> blur_col_buffer_;
     
 };

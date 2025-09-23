@@ -10,9 +10,25 @@
 #include <tuple>
 #include <vector>
 #include <cstdint>
+#include <cstring>
 
 static constexpr SDL_Color SLATE_COLOR = {69, 101, 74, 255};
 static constexpr float MIN_VISIBLE_SCREEN_RATIO = 0.015f;
+
+namespace {
+
+bool ensure_surface(SDL_Surface*& surface, int width, int height) {
+        if (surface && (surface->w != width || surface->h != height)) {
+                SDL_FreeSurface(surface);
+                surface = nullptr;
+        }
+        if (!surface) {
+                surface = SDL_CreateRGBSurfaceWithFormat(0, width, height, 32, SDL_PIXELFORMAT_RGBA8888);
+        }
+        return surface != nullptr;
+}
+
+}
 
 // Motion blur disabled
 
@@ -50,6 +66,21 @@ SceneRenderer::SceneRenderer(SDL_Renderer* renderer,
         z_light_pass_ = std::make_unique<LightMap>(renderer_, assets_, main_light_source_, screen_width_, screen_height_, fullscreen_light_tex_);
         main_light_source_.update();
         z_light_pass_->render(debugging);
+}
+
+SceneRenderer::~SceneRenderer() {
+        if (fullscreen_light_tex_) {
+                SDL_DestroyTexture(fullscreen_light_tex_);
+                fullscreen_light_tex_ = nullptr;
+        }
+        if (postprocess_full_surface_) {
+                SDL_FreeSurface(postprocess_full_surface_);
+                postprocess_full_surface_ = nullptr;
+        }
+        if (postprocess_small_surface_) {
+                SDL_FreeSurface(postprocess_small_surface_);
+                postprocess_small_surface_ = nullptr;
+        }
 }
 
 SDL_Renderer* SceneRenderer::get_renderer() const {
@@ -229,17 +260,16 @@ void SceneRenderer::render() {
 
     // ----- POST: DOWNSCALE -> BLUR (SMALL) -> UPSCALE OVERLAY -----
     if ((blur_radius_full > 0 || kPostOverlayAlpha > 0) && (kPostOverlayAlpha > 0)) {
-        // 1) Read back full backbuffer once
-        SDL_Surface* full = SDL_CreateRGBSurfaceWithFormat(0, screen_width_, screen_height_, 32, SDL_PIXELFORMAT_RGBA8888);
-        if (full && SDL_RenderReadPixels(renderer_, nullptr, SDL_PIXELFORMAT_RGBA8888, full->pixels, full->pitch) == 0) {
-            Uint8* full_px = static_cast<Uint8*>(full->pixels);
-            const int full_pitch = full->pitch;
-            // 2) Downscale on CPU with box filtering to avoid aliasing
-            SDL_Surface* small = SDL_CreateRGBSurfaceWithFormat(0, small_w, small_h, 32, SDL_PIXELFORMAT_RGBA8888);
-            if (small) {
-                Uint8* small_px = static_cast<Uint8*>(small->pixels);
-                const int small_pitch = small->pitch;
-                SDL_PixelFormat* small_fmt = small->format;
+        if (ensure_surface(postprocess_full_surface_, screen_width_, screen_height_) &&
+            SDL_RenderReadPixels(renderer_, nullptr, SDL_PIXELFORMAT_RGBA8888,
+                                 postprocess_full_surface_->pixels, postprocess_full_surface_->pitch) == 0) {
+            Uint8* full_px = static_cast<Uint8*>(postprocess_full_surface_->pixels);
+            const int full_pitch = postprocess_full_surface_->pitch;
+
+            if (ensure_surface(postprocess_small_surface_, small_w, small_h)) {
+                Uint8* small_px = static_cast<Uint8*>(postprocess_small_surface_->pixels);
+                const int small_pitch = postprocess_small_surface_->pitch;
+                SDL_PixelFormat* small_fmt = postprocess_small_surface_->format;
                 auto small_set = [&](int x, int y, Uint32 v) {
                     *reinterpret_cast<Uint32*>(small_px + y * small_pitch + x * 4) = v;
                 };
@@ -294,13 +324,13 @@ void SceneRenderer::render() {
                     }
                 }
 
-                // 3) Blur in the downsampled space (separable box blur)
                 if (blur_radius_small > 0) {
-                    // Horizontal
-                    std::vector<Uint32> row(small_w);
+                    blur_row_buffer_.resize(static_cast<size_t>(small_w));
+                    blur_col_buffer_.resize(static_cast<size_t>(small_h));
+
+                    Uint32* row = blur_row_buffer_.data();
                     for (int y = 0; y < small_h; ++y) {
-                        for (int x = 0; x < small_w; ++x)
-                            row[x] = *reinterpret_cast<Uint32*>(small_px + y * small_pitch + x * 4);
+                        std::memcpy(row, small_px + y * small_pitch, static_cast<size_t>(small_w) * sizeof(Uint32));
                         for (int x = 0; x < small_w; ++x) {
                             int x0 = std::max(0, x - blur_radius_small);
                             int x1 = std::min(small_w - 1, x + blur_radius_small);
@@ -318,11 +348,12 @@ void SceneRenderer::render() {
                             small_set(x, y, SDL_MapRGBA(small_fmt, R,G,B,A));
                         }
                     }
-                    // Vertical
-                    std::vector<Uint32> col(small_h);
+
+                    Uint32* col = blur_col_buffer_.data();
                     for (int x = 0; x < small_w; ++x) {
-                        for (int y = 0; y < small_h; ++y)
+                        for (int y = 0; y < small_h; ++y) {
                             col[y] = *reinterpret_cast<Uint32*>(small_px + y * small_pitch + x * 4);
+                        }
                         for (int y = 0; y < small_h; ++y) {
                             int y0 = std::max(0, y - blur_radius_small);
                             int y1 = std::min(small_h - 1, y + blur_radius_small);
@@ -342,8 +373,7 @@ void SceneRenderer::render() {
                     }
                 }
 
-                // 4) Create texture from small surface and composite scaled-up
-                SDL_Texture* blur_small_tex = SDL_CreateTextureFromSurface(renderer_, small);
+                SDL_Texture* blur_small_tex = SDL_CreateTextureFromSurface(renderer_, postprocess_small_surface_);
                 if (blur_small_tex) {
                     SDL_SetTextureBlendMode(blur_small_tex, kPostBlendMode);
                     SDL_SetTextureAlphaMod(blur_small_tex, kPostOverlayAlpha);
@@ -351,16 +381,12 @@ void SceneRenderer::render() {
                     SDL_SetTextureScaleMode(blur_small_tex, SDL_ScaleModeBest);
                     #endif
 
-                    // Upscale to full-screen; rely on renderer scaling
-                    // (Optionally enable linear scaling once at init: SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "1");)
                     SDL_Rect dst{0, 0, screen_width_, screen_height_};
                     SDL_RenderCopy(renderer_, blur_small_tex, nullptr, &dst);
                     SDL_DestroyTexture(blur_small_tex);
                 }
-                SDL_FreeSurface(small);
             }
         }
-        if (full) SDL_FreeSurface(full);
     }
 
     // ----- PRESENT -----
