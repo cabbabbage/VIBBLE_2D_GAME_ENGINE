@@ -1,8 +1,5 @@
 #include "active_assets_manager.hpp"
 #include <algorithm>
-#include <queue>
-#include <cmath>
-#include "utils/range_util.hpp"
 
 ActiveAssetsManager::ActiveAssetsManager(int screen_width, int screen_height, camera& v)
 : camera_(v),
@@ -55,36 +52,41 @@ void ActiveAssetsManager::updateClosestAssets(Asset* player, std::size_t max_cou
 
 	if (!player || active_assets_.empty() || max_count == 0) return;
 
-        struct Pair { double dist; Asset* a; };
-        auto cmp = [](const Pair& L, const Pair& R){ return L.dist < R.dist; };
-        std::priority_queue<Pair, std::vector<Pair>, decltype(cmp)> heap(cmp);
+        struct DistAsset {
+                double dist2;
+                Asset* asset;
+        };
 
-        const int px = player->pos.x;
-        const int py = player->pos.y;
+        const double px = static_cast<double>(player->pos.x);
+        const double py = static_cast<double>(player->pos.y);
+
+        std::vector<DistAsset> best;
+        best.reserve(std::min<std::size_t>(max_count, active_assets_.size()));
+
+        auto insert_sorted = [&best](DistAsset entry) {
+                auto it = std::upper_bound(best.begin(), best.end(), entry.dist2,
+                [](double lhs, const DistAsset& rhs) { return lhs < rhs.dist2; });
+                best.insert(it, entry);
+        };
 
         for (Asset* a : active_assets_) {
                 if (!a || a == player) continue;
-                double d = Range::get_distance(a, SDL_Point{px, py});
-                if (heap.size() < max_count) {
-                        heap.push({d, a});
-                } else if (d < heap.top().dist) {
-                        heap.pop();
-                        heap.push({d, a});
+                const double dx = static_cast<double>(a->pos.x) - px;
+                const double dy = static_cast<double>(a->pos.y) - py;
+                const double dist2 = dx * dx + dy * dy;
+
+                if (best.size() < max_count) {
+                        insert_sorted({dist2, a});
+                } else if (!best.empty() && dist2 < best.back().dist2) {
+                        insert_sorted({dist2, a});
+                        best.pop_back();
                 }
         }
 
-	closest_assets_.reserve(heap.size());
-	while (!heap.empty()) {
-		closest_assets_.push_back(heap.top().a);
-		heap.pop();
-	}
-
-        std::sort(closest_assets_.begin(), closest_assets_.end(),
-        [&](Asset* A, Asset* B){
-                double dA = Range::get_distance(A, SDL_Point{px, py});
-                double dB = Range::get_distance(B, SDL_Point{px, py});
-                return dA < dB;
-        });
+        closest_assets_.reserve(best.size());
+        for (const DistAsset& entry : best) {
+                closest_assets_.push_back(entry.asset);
+        }
 
 	for (Asset* a : closest_assets_) {
 		if (!a) continue;
