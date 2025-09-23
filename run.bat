@@ -194,8 +194,12 @@ exit /b 0
 
 :ensure_prereqs
 call :log "Checking build prerequisites..."
-call :require_winget
-if errorlevel 1 exit /b 1
+if defined CI_MODE (
+  call :log "CI mode detected - skipping winget requirement."
+) else (
+  call :require_winget
+  if errorlevel 1 exit /b 1
+)
 call :ensure_tool git Git.Git git.exe "%ProgramFiles%\Git\bin" "%ProgramFiles%\Git\cmd" "%ProgramFiles(x86)%\Git\bin" "%ProgramFiles(x86)%\Git\cmd"
 if errorlevel 1 exit /b 1
 call :ensure_tool cmake Kitware.CMake cmake.exe "%ProgramFiles%\CMake\bin" "%ProgramFiles(x86)%\CMake\bin"
@@ -328,14 +332,18 @@ if defined NODE_VER (
   for /f "tokens=2 delims=v." %%A in ("!NODE_VER!") do set "NODE_MAJOR=%%A"
   if defined NODE_MAJOR (
     if !NODE_MAJOR! LSS 18 (
-      call :warn "Detected Node.js !NODE_VER!. Installing latest LTS version..."
-      winget install --id OpenJS.NodeJS.LTS --silent --accept-package-agreements --accept-source-agreements --scope %INSTALL_SCOPE% --exact
-      if errorlevel 1 (
-        call :error "Failed to upgrade Node.js."
-        exit /b 1
+      if defined WINGET_AVAILABLE (
+        call :warn "Detected Node.js !NODE_VER!. Installing latest LTS version..."
+        winget install --id OpenJS.NodeJS.LTS --silent --accept-package-agreements --accept-source-agreements --scope %INSTALL_SCOPE% --exact
+        if errorlevel 1 (
+          call :error "Failed to upgrade Node.js."
+          exit /b 1
+        )
+        call :append_if_exists "%LocalAppData%\Programs\nodejs"
+        call :append_if_exists "%AppData%\npm"
+      ) else (
+        call :warn "Detected Node.js !NODE_VER! but winget is unavailable to perform an automatic upgrade."
       )
-      call :append_if_exists "%LocalAppData%\Programs\nodejs"
-      call :append_if_exists "%AppData%\npm"
     )
   )
 )
