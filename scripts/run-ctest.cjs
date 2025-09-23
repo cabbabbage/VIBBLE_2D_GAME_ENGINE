@@ -4,7 +4,13 @@ const path = require('path');
 const fs = require('fs');
 
 if (process.platform !== 'win32') {
-  console.error('[ctest] This helper is intended to run on Windows.');
+  const message = `[ctest] Skipping Windows-only ctest helper on ${process.platform}.`;
+  if (process.env.CI === 'true' || process.env.CI === '1') {
+    console.log(message);
+    process.exit(0);
+  }
+
+  console.error(`${message} Run this command from Windows to exercise CTest.`);
   process.exit(1);
 }
 
