@@ -2,13 +2,59 @@
 const { spawn } = require('child_process');
 const path = require('path');
 
+const args = process.argv.slice(2);
+
+const toBoolean = (value) => {
+  if (typeof value === 'boolean') {
+    return value;
+  }
+
+  if (typeof value === 'number') {
+    return value !== 0;
+  }
+
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase();
+    return normalized === 'true' || normalized === '1' || normalized === 'yes';
+  }
+
+  return false;
+};
+
+const isCiLike = (() => {
+  if (args.includes('--ci')) {
+    return true;
+  }
+
+  const ciEnvKeys = [
+    'CI',
+    'CONTINUOUS_INTEGRATION',
+    'BUILD_ID',
+    'BUILD_NUMBER',
+    'RUN_ID',
+    'GITHUB_ACTIONS'
+  ];
+
+  return ciEnvKeys.some((key) => toBoolean(process.env[key]));
+})();
+
+if (toBoolean(process.env.GITHUB_ACTIONS)) {
+  console.log('[bootstrap] Skipping bootstrap on GitHub Actions CI environment.');
+  process.exit(0);
+}
+
 if (process.platform !== 'win32') {
-  console.error('[bootstrap] This project must be bootstrapped from Windows.');
+  const reason = `[bootstrap] Skipping Windows-specific bootstrap on ${process.platform}.`;
+  if (isCiLike) {
+    console.log(reason);
+    process.exit(0);
+  }
+
+  console.error(`${reason} Run this command from Windows to configure the project.`);
   process.exit(1);
 }
 
 const scriptPath = path.resolve(__dirname, '..', 'run.bat');
-const args = process.argv.slice(2);
 
 const command = [
   `"${scriptPath}"`,
