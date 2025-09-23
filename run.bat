@@ -91,6 +91,26 @@ if not exist "%EXE%" (
   popd & pause & exit /b 1
 )
 
+rem ----------------------------------------------------
+rem Create Desktop Shortcut to engine.exe
+rem ----------------------------------------------------
+set "DESKTOP=%USERPROFILE%\Desktop"
+set "SHORTCUT=%DESKTOP%\VI.lnk"
+set "ICONFILE=%cd%\MISC_CONTENT\vibble.ico"
+
+rem Extract just the folder path of the exe
+for %%I in ("%EXE%") do set "EXE_DIR=%%~dpI"
+
+echo [run.bat] Creating Desktop shortcut...
+
+powershell -Command ^
+  "$s=(New-Object -COM WScript.Shell).CreateShortcut('%SHORTCUT%');" ^
+  "$s.TargetPath='%EXE%';" ^
+  "$s.WorkingDirectory='%EXE_DIR%';" ^
+  "$s.IconLocation='%ICONFILE%';" ^
+  "$s.Save()"
+
+
 echo [run.bat] Launching: "%EXE%"
 "%EXE%" %EXTRA_ARGS%
 

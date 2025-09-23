@@ -386,14 +386,14 @@
       "edge_smoothness": 100,
       "geometry": "Circle",
       "height_max": 3420,
-      "height_min": 1325,
-      "inherits_map_assets": false,
+      "height_min": 100,
+      "inherits_map_assets": true,
       "is_boss": false,
       "is_spawn": true,
       "max_height": 3420,
       "max_width": 3612,
-      "min_height": 1325,
-      "min_width": 1376,
+      "min_height": 100,
+      "min_width": 100,
       "name": "spawn",
       "spawn_groups": [
         {
@@ -420,10 +420,34 @@
           "position": "Perimeter",
           "radius": 261,
           "spawn_id": "spn-7d847a71ac07"
+        },
+        {
+          "candidates": [
+            {
+              "chance": 0,
+              "name": "null"
+            },
+            {
+              "chance": 100,
+              "name": "Vibble"
+            }
+          ],
+          "chance_denominator": 100,
+          "check_overlap": false,
+          "display_name": "Vibble",
+          "dx": 69,
+          "dy": -38,
+          "enforce_spacing": false,
+          "max_number": 1,
+          "min_number": 1,
+          "origional_height": 2220,
+          "origional_width": 2220,
+          "position": "Exact",
+          "spawn_id": "spn-8d7485752933"
         }
       ],
       "width_max": 3612,
-      "width_min": 1376
+      "width_min": 100
     }
   },
   "trails_data": {
