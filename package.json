@@ -1,0 +1,15 @@
+{
+  "name": "vibble-2d-game-engine",
+  "version": "0.1.0",
+  "description": "Developer convenience scripts for the VIBBLE 2D Game Engine.",
+  "private": true,
+  "scripts": {
+    "configure": "cmake -G Ninja -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_RUNTIME_OUTPUT_DIRECTORY=./ENGINE",
+    "build": "cmake --build build --config RelWithDebInfo",
+    "start": "run.bat",
+    "clean": "node -e \"const fs=require('fs');try{fs.rmSync('build',{recursive:true,force:true});}catch(e){}\""
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
