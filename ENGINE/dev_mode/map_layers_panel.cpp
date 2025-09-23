@@ -607,93 +607,11 @@ MapLayersPanel::PanelSidebarWidget::PanelSidebarWidget(MapLayersPanel* owner)
     preview_button_ = std::make_unique<DMButton>("Generate Preview", &DMStyles::HeaderButton(), 140, DMButton::height());
 }
 
-void MapLayersPanel::PanelSidebarWidget::set_layer_config(LayerConfigPanel* panel) {
-    config_panel_ = panel;
-    refresh_config_button();
-}
-
-void MapLayersPanel::PanelSidebarWidget::refresh_config_button() {
-    if (!config_button_) return;
-    const bool showing = config_panel_ && config_panel_->is_visible();
-    config_button_->set_text(showing ? "Hide Config" : "Open Config");
-}
-
 void MapLayersPanel::PanelSidebarWidget::set_dirty(bool dirty) {
     dirty_ = dirty;
     if (save_button_) {
         save_button_->set_text(dirty ? "Save *" : "Save");
     }
-}
-
-void MapLayersPanel::PanelSidebarWidget::set_rect(const SDL_Rect& r) {
-    rect_ = r;
-    const int spacing = DMSpacing::item_gap();
-    const int button_width = rect_.w - spacing * 2;
-    int y = rect_.y + spacing;
-    auto place_button = [&](std::unique_ptr<DMButton>& btn) {
-        if (!btn) return;
-        btn->set_rect(SDL_Rect{ rect_.x + spacing, y, button_width, DMButton::height() });
-        y += DMButton::height() + spacing;
-    };
-
-    place_button(add_button_);
-    place_button(new_room_button_);
-    place_button(preview_button_);
-    place_button(config_button_);
-    place_button(delete_button_);
-    y += spacing; // extra breathing room before save/reload
-    place_button(save_button_);
-    place_button(reload_button_);
-
-    int config_top = y;
-    int config_height = std::max(0, rect_.y + rect_.h - config_top - spacing);
-    if (config_panel_) {
-        SDL_Rect config_rect{ rect_.x + spacing, config_top, button_width, config_height };
-        config_panel_->set_rect(config_rect);
-        const int panel_padding = DMSpacing::panel_padding();
-        int available = std::max(0, config_height - panel_padding * 2);
-        config_panel_->set_available_height_override(available);
-        config_panel_->set_cell_width(std::max(160, button_width - panel_padding * 2));
-    }
-    refresh_config_button();
-}
-
-bool MapLayersPanel::PanelSidebarWidget::handle_event(const SDL_Event& e) {
-    refresh_config_button();
-    bool used = false;
-    auto handle_btn = [&](std::unique_ptr<DMButton>& btn, const std::function<void()>& cb) {
-        if (btn && btn->handle_event(e)) {
-            if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
-                cb();
-            }
-            used = true;
-        }
-    };
-    handle_btn(add_button_, [this]() { if (owner_) owner_->add_layer_internal(); });
-    handle_btn(new_room_button_, [this]() { if (owner_) owner_->add_room_to_selected_layer(); });
-    handle_btn(preview_button_, [this]() {
-        if (!owner_) return;
-        owner_->request_preview_regeneration();
-        owner_->regenerate_preview();
-    });
-    handle_btn(save_button_, [this]() { if (owner_) owner_->save_layers_to_disk(); });
-    handle_btn(reload_button_, [this]() { if (owner_) owner_->reload_layers_from_disk(); });
-    handle_btn(config_button_, [this]() {
-        if (!owner_) return;
-        if (!config_panel_) {
-            if (selected_layer_ >= 0) owner_->open_layer_config_internal(selected_layer_);
-            return;
-        }
-        if (config_panel_->is_visible()) {
-            config_panel_->close();
-        } else if (selected_layer_ >= 0) {
-            owner_->open_layer_config_internal(selected_layer_);
-        }
-        refresh_config_button();
-    });
-    handle_btn(delete_button_, [this]() { if (owner_ && selected_layer_ >= 0) owner_->delete_layer_internal(selected_layer_); });
-    refresh_config_button();
-    return used;
 }
 
 void MapLayersPanel::PanelSidebarWidget::render(SDL_Renderer* renderer) const {
@@ -800,6 +718,88 @@ private:
 
     std::vector<std::unique_ptr<RoomCandidateWidget>> candidate_widgets_;
 };
+
+void MapLayersPanel::PanelSidebarWidget::set_layer_config(LayerConfigPanel* panel) {
+    config_panel_ = panel;
+    refresh_config_button();
+}
+
+void MapLayersPanel::PanelSidebarWidget::refresh_config_button() {
+    if (!config_button_) return;
+    const bool showing = config_panel_ && config_panel_->is_visible();
+    config_button_->set_text(showing ? "Hide Config" : "Open Config");
+}
+
+void MapLayersPanel::PanelSidebarWidget::set_rect(const SDL_Rect& r) {
+    rect_ = r;
+    const int spacing = DMSpacing::item_gap();
+    const int button_width = rect_.w - spacing * 2;
+    int y = rect_.y + spacing;
+    auto place_button = [&](std::unique_ptr<DMButton>& btn) {
+        if (!btn) return;
+        btn->set_rect(SDL_Rect{ rect_.x + spacing, y, button_width, DMButton::height() });
+        y += DMButton::height() + spacing;
+    };
+
+    place_button(add_button_);
+    place_button(new_room_button_);
+    place_button(preview_button_);
+    place_button(config_button_);
+    place_button(delete_button_);
+    y += spacing; // extra breathing room before save/reload
+    place_button(save_button_);
+    place_button(reload_button_);
+
+    int config_top = y;
+    int config_height = std::max(0, rect_.y + rect_.h - config_top - spacing);
+    if (config_panel_) {
+        SDL_Rect config_rect{ rect_.x + spacing, config_top, button_width, config_height };
+        config_panel_->set_rect(config_rect);
+        const int panel_padding = DMSpacing::panel_padding();
+        int available = std::max(0, config_height - panel_padding * 2);
+        config_panel_->set_available_height_override(available);
+        config_panel_->set_cell_width(std::max(160, button_width - panel_padding * 2));
+    }
+    refresh_config_button();
+}
+
+bool MapLayersPanel::PanelSidebarWidget::handle_event(const SDL_Event& e) {
+    refresh_config_button();
+    bool used = false;
+    auto handle_btn = [&](std::unique_ptr<DMButton>& btn, const std::function<void()>& cb) {
+        if (btn && btn->handle_event(e)) {
+            if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
+                cb();
+            }
+            used = true;
+        }
+    };
+    handle_btn(add_button_, [this]() { if (owner_) owner_->add_layer_internal(); });
+    handle_btn(new_room_button_, [this]() { if (owner_) owner_->add_room_to_selected_layer(); });
+    handle_btn(preview_button_, [this]() {
+        if (!owner_) return;
+        owner_->request_preview_regeneration();
+        owner_->regenerate_preview();
+    });
+    handle_btn(save_button_, [this]() { if (owner_) owner_->save_layers_to_disk(); });
+    handle_btn(reload_button_, [this]() { if (owner_) owner_->reload_layers_from_disk(); });
+    handle_btn(config_button_, [this]() {
+        if (!owner_) return;
+        if (!config_panel_) {
+            if (selected_layer_ >= 0) owner_->open_layer_config_internal(selected_layer_);
+            return;
+        }
+        if (config_panel_->is_visible()) {
+            config_panel_->close();
+        } else if (selected_layer_ >= 0) {
+            owner_->open_layer_config_internal(selected_layer_);
+        }
+        refresh_config_button();
+    });
+    handle_btn(delete_button_, [this]() { if (owner_ && selected_layer_ >= 0) owner_->delete_layer_internal(selected_layer_); });
+    refresh_config_button();
+    return used;
+}
 
 MapLayersPanel::LayerConfigPanel::LayerConfigPanel(MapLayersPanel* owner)
     : DockableCollapsible("Layer", false, 0, 0),

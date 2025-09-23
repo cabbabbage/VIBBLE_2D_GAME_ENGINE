@@ -39,6 +39,10 @@ public:
 private:
     enum class Mode { None, Idle, Pursue, Run, Orbit, Patrol, Serpentine, ToPoint };
 
+    SDL_Point bottom_point(SDL_Point pos) const;
+    bool point_hits_impassable(const SDL_Point& pt) const;
+    bool path_blocked(SDL_Point from, SDL_Point to) const;
+    SDL_Point sanitize_target(SDL_Point desired) const;
     bool can_move_by(int dx, int dy) const;
     bool would_overlap_same_or_player(int dx, int dy) const;
     std::string pick_best_animation_towards(SDL_Point target);
