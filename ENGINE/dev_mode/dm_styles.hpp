@@ -72,6 +72,7 @@ public:
   static const DMCheckboxStyle &Checkbox();
   static const DMSliderStyle &Slider();
   static const SDL_Color &PanelBG();
+  static const SDL_Color &PanelHeader();
   static const SDL_Color &Border();
 };
 

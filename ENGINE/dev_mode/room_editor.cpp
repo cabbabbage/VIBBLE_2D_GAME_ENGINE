@@ -13,6 +13,7 @@
 #include "dev_mode/full_screen_collapsible.hpp"
 #include "dev_mode/room_configurator.hpp"
 #include "dev_mode/widgets.hpp"
+#include "dm_styles.hpp"
 #include "render/camera.hpp"
 #include "room/room.hpp"
 #include "spawn/asset_spawn_planner.hpp"
@@ -419,7 +420,8 @@ void RoomEditor::render_overlays(SDL_Renderer* renderer) {
             int radius_px = static_cast<int>(std::lround(overlay->radius * inv_scale));
             radius_px = std::max(1, radius_px);
             SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-            SDL_SetRenderDrawColor(renderer, 32, 200, 255, 210);
+            const SDL_Color accent = DMStyles::AccentButton().hover_bg;
+            SDL_SetRenderDrawColor(renderer, accent.r, accent.g, accent.b, 210);
             const int segments = std::clamp(radius_px * 4, 64, 720);
             for (int i = 0; i < segments; ++i) {
                 double angle = (static_cast<double>(i) / static_cast<double>(segments)) * 2.0 * M_PI;

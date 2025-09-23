@@ -165,9 +165,11 @@ void RoomSelectorPopup::render(SDL_Renderer* renderer) const {
     if (!visible_ || !renderer) return;
     ensure_geometry();
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-    SDL_SetRenderDrawColor(renderer, 24, 24, 24, 240);
+    const SDL_Color bg = DMStyles::PanelBG();
+    SDL_SetRenderDrawColor(renderer, bg.r, bg.g, bg.b, bg.a);
     SDL_RenderFillRect(renderer, &rect_);
-    SDL_SetRenderDrawColor(renderer, 90, 90, 90, 255);
+    const SDL_Color border = DMStyles::Border();
+    SDL_SetRenderDrawColor(renderer, border.r, border.g, border.b, border.a);
     SDL_RenderDrawRect(renderer, &rect_);
 
     SDL_Rect prev_clip{};

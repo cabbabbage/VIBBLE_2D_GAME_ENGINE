@@ -23,8 +23,8 @@
 #include <cstdint>   // for std::uintptr_t
 
 namespace {
-    const SDL_Color kTileBG  = dm::rgba(40,40,40,180);
-    const SDL_Color kTileHL  = dm::rgba(200,200,60,100);
+    const SDL_Color kTileBG  = dm::rgba(24, 36, 56, 210);
+    const SDL_Color kTileHL  = dm::rgba(59, 130, 246, 110);
     const SDL_Color kTileBd  = DMStyles::Border();
     namespace fs = std::filesystem;
 
@@ -439,15 +439,18 @@ void AssetLibraryUI::render(SDL_Renderer* r, int screen_w, int screen_h) const {
     if (showing_create_popup_) {
         SDL_Rect box{ screen_w/2 - 150, screen_h/2 - 40, 300, 80 };
         SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
-        SDL_SetRenderDrawColor(r, 20,20,20,220);
+        const SDL_Color panel_bg = DMStyles::PanelBG();
+        SDL_SetRenderDrawColor(r, panel_bg.r, panel_bg.g, panel_bg.b, panel_bg.a);
         SDL_RenderFillRect(r, &box);
-        SDL_SetRenderDrawColor(r, 255,255,255,255);
+        const SDL_Color panel_border = DMStyles::Border();
+        SDL_SetRenderDrawColor(r, panel_border.r, panel_border.g, panel_border.b, panel_border.a);
         SDL_RenderDrawRect(r, &box);
 
         SDL_Rect input_rect{ box.x + 8, box.y + 8, box.w - 16, box.h - 16 };
-        SDL_SetRenderDrawColor(r, 35,35,35,230);
+        const DMTextBoxStyle& textbox = DMStyles::TextBox();
+        SDL_SetRenderDrawColor(r, textbox.bg.r, textbox.bg.g, textbox.bg.b, textbox.bg.a);
         SDL_RenderFillRect(r, &input_rect);
-        SDL_SetRenderDrawColor(r, 90,90,90,255);
+        SDL_SetRenderDrawColor(r, textbox.border.r, textbox.border.g, textbox.border.b, textbox.border.a);
         SDL_RenderDrawRect(r, &input_rect);
 
         const int text_padding = 12;
@@ -455,8 +458,8 @@ void AssetLibraryUI::render(SDL_Renderer* r, int screen_w, int screen_h) const {
         if (font) {
             std::string display = new_asset_name_.empty() ? "Enter asset name..." : new_asset_name_;
             SDL_Color color = new_asset_name_.empty()
-                                ? SDL_Color{180, 180, 180, 255}
-                                : SDL_Color{255, 255, 255, 255};
+                                ? textbox.label.color
+                                : textbox.text;
             int available_w = input_rect.w - 2 * text_padding;
             int tw = 0;
             int th = 0;

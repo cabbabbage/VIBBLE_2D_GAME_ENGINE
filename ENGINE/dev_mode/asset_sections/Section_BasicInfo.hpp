@@ -7,6 +7,7 @@
 #include "render/camera.hpp"
 #include "widgets.hpp"
 #include "dev_mode/asset_info_sections.hpp"
+#include "dm_styles.hpp"
 #include <algorithm>
 #include <cmath>
 #include <memory>
@@ -188,7 +189,8 @@ inline void Section_BasicInfo::render_world_overlay(SDL_Renderer* r,
     SDL_Point z_screen = cam.map_to_screen(SDL_Point{target->pos.x, z_world_y});
 
     SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
-    SDL_SetRenderDrawColor(r, 255, 0, 0, 200);
+    const SDL_Color accent = DMStyles::DeleteButton().hover_bg;
+    SDL_SetRenderDrawColor(r, accent.r, accent.g, accent.b, 200);
     SDL_RenderDrawLine(r, bounds.x, z_screen.y, bounds.x + bounds.w, z_screen.y);
 }
 
