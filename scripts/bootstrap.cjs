@@ -2,13 +2,21 @@
 const { spawn } = require('child_process');
 const path = require('path');
 
+const args = process.argv.slice(2);
+const isCiLike = process.env.CI === 'true' || process.env.CI === '1' || args.includes('--ci');
+
 if (process.platform !== 'win32') {
-  console.error('[bootstrap] This project must be bootstrapped from Windows.');
+  const reason = `[bootstrap] Skipping Windows-specific bootstrap on ${process.platform}.`;
+  if (isCiLike) {
+    console.log(reason);
+    process.exit(0);
+  }
+
+  console.error(`${reason} Run this command from Windows to configure the project.`);
   process.exit(1);
 }
 
 const scriptPath = path.resolve(__dirname, '..', 'run.bat');
-const args = process.argv.slice(2);
 
 const command = [
   `"${scriptPath}"`,
