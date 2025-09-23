@@ -388,3 +388,13 @@ bool FullScreenCollapsible::contains(int x, int y) const {
     return false;
 }
 
+const FullScreenCollapsible::HeaderButton* FullScreenCollapsible::find_button(const std::string& id) const {
+    auto it = std::find_if(buttons_.begin(), buttons_.end(), [&](const HeaderButton& btn) {
+        return btn.id == id;
+    });
+    if (it == buttons_.end()) {
+        return nullptr;
+    }
+    return &(*it);
+}
+

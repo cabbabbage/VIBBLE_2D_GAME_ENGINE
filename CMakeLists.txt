@@ -157,3 +157,28 @@ target_link_libraries(engine
 if(MSVC)
     target_link_options(engine PRIVATE "$<$<CONFIG:Debug>:/INCREMENTAL>")
 endif()
+
+enable_testing()
+
+add_executable(dev_mode_ui_tests
+    tests/dev_mode/full_screen_collapsible_tests.cpp
+    ENGINE/dev_mode/full_screen_collapsible.cpp
+    ENGINE/dev_mode/widgets.cpp
+    ENGINE/dev_mode/dm_styles.cpp
+    ENGINE/utils/input.cpp
+)
+target_include_directories(dev_mode_ui_tests PRIVATE
+    ${CMAKE_SOURCE_DIR}/external
+    ${CMAKE_SOURCE_DIR}/ENGINE
+    ${CMAKE_SOURCE_DIR}/ENGINE/dev_mode
+    ${CMAKE_SOURCE_DIR}/ENGINE/utils
+)
+target_link_libraries(dev_mode_ui_tests PRIVATE
+    nlohmann_json::nlohmann_json
+    SDL2::SDL2
+    SDL2_image::SDL2_image
+    SDL2_mixer::SDL2_mixer
+    SDL2_ttf::SDL2_ttf
+)
+target_compile_definitions(dev_mode_ui_tests PRIVATE SDL_MAIN_HANDLED)
+add_test(NAME dev_mode_ui_tests COMMAND dev_mode_ui_tests)
