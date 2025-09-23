@@ -461,9 +461,11 @@ bool MapLayersPanel::LayerCanvasWidget::handle_event(const SDL_Event& e) {
 void MapLayersPanel::LayerCanvasWidget::render(SDL_Renderer* renderer) const {
     if (!renderer) return;
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-    SDL_SetRenderDrawColor(renderer, 18, 18, 18, 200);
+    const SDL_Color bg = DMStyles::PanelBG();
+    SDL_SetRenderDrawColor(renderer, bg.r, bg.g, bg.b, bg.a);
     SDL_RenderFillRect(renderer, &rect_);
-    SDL_SetRenderDrawColor(renderer, 64, 64, 64, 255);
+    const SDL_Color border = DMStyles::Border();
+    SDL_SetRenderDrawColor(renderer, border.r, border.g, border.b, border.a);
     SDL_RenderDrawRect(renderer, &rect_);
     if (!owner_ || circles_.empty()) return;
 
@@ -532,7 +534,8 @@ void MapLayersPanel::LayerCanvasWidget::render(SDL_Renderer* renderer) const {
                 SDL_Rect room_rect{ center_pt.x - half_w, center_pt.y - half_h, half_w * 2, half_h * 2 };
                 SDL_RenderDrawRect(renderer, &room_rect);
             }
-            SDL_SetRenderDrawColor(renderer, 255, 255, 255, 60);
+            const SDL_Color accent = DMStyles::AccentButton().hover_bg;
+            SDL_SetRenderDrawColor(renderer, accent.r, accent.g, accent.b, 120);
             SDL_RenderDrawPoint(renderer, center_pt.x, center_pt.y);
 
             double extent_units = node->is_circle ? node->width * 0.5
@@ -622,9 +625,11 @@ void MapLayersPanel::PanelSidebarWidget::set_dirty(bool dirty) {
 void MapLayersPanel::PanelSidebarWidget::render(SDL_Renderer* renderer) const {
     if (!renderer) return;
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-    SDL_SetRenderDrawColor(renderer, 14, 14, 14, 220);
+    const SDL_Color bg = DMStyles::PanelBG();
+    SDL_SetRenderDrawColor(renderer, bg.r, bg.g, bg.b, bg.a);
     SDL_RenderFillRect(renderer, &rect_);
-    SDL_SetRenderDrawColor(renderer, 64, 64, 64, 255);
+    const SDL_Color border = DMStyles::Border();
+    SDL_SetRenderDrawColor(renderer, border.r, border.g, border.b, border.a);
     SDL_RenderDrawRect(renderer, &rect_);
     if (add_button_) add_button_->render(renderer);
     if (new_room_button_) new_room_button_->render(renderer);
@@ -1114,9 +1119,11 @@ void MapLayersPanel::RoomCandidateWidget::render(SDL_Renderer* renderer) const {
     if (!renderer || !candidate_) return;
     SDL_Rect bg = rect_;
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-    SDL_SetRenderDrawColor(renderer, 28, 28, 28, 220);
+    const SDL_Color row_bg = DMStyles::PanelHeader();
+    SDL_SetRenderDrawColor(renderer, row_bg.r, row_bg.g, row_bg.b, row_bg.a);
     SDL_RenderFillRect(renderer, &bg);
-    SDL_SetRenderDrawColor(renderer, 80, 80, 80, 255);
+    const SDL_Color border = DMStyles::Border();
+    SDL_SetRenderDrawColor(renderer, border.r, border.g, border.b, border.a);
     SDL_RenderDrawRect(renderer, &bg);
 
     const DMLabelStyle label = DMStyles::Label();
@@ -1126,9 +1133,10 @@ void MapLayersPanel::RoomCandidateWidget::render(SDL_Renderer* renderer) const {
     if (delete_button_) delete_button_->render(renderer);
 
     for (const auto& chip : child_chips_) {
-        SDL_SetRenderDrawColor(renderer, 36, 36, 36, 240);
+        const DMButtonStyle& chip_style = DMStyles::ListButton();
+        SDL_SetRenderDrawColor(renderer, chip_style.bg.r, chip_style.bg.g, chip_style.bg.b, chip_style.bg.a);
         SDL_RenderFillRect(renderer, &chip.rect);
-        SDL_SetRenderDrawColor(renderer, 90, 90, 90, 255);
+        SDL_SetRenderDrawColor(renderer, chip_style.border.r, chip_style.border.g, chip_style.border.b, chip_style.border.a);
         SDL_RenderDrawRect(renderer, &chip.rect);
         draw_text(renderer, chip.name, chip.rect.x + 6, chip.rect.y + (chip.rect.h - label.font_size) / 2, label);
         if (chip.remove_button) chip.remove_button->render(renderer);

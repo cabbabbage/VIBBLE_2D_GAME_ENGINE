@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <climits>
 #include <cctype>
+#include "dm_styles.hpp"
 
 namespace fs = std::filesystem;
 
@@ -230,7 +231,8 @@ void MovementModal::render(SDL_Renderer* r) {
     Position pos{0,0};
     if(current_frame_ < (int)positions_.size())
         pos = positions_[current_frame_];
-    SDL_SetRenderDrawColor(r, 255, 0, 0, 255);
+    const SDL_Color accent = DMStyles::AccentButton().hover_bg;
+    SDL_SetRenderDrawColor(r, accent.r, accent.g, accent.b, 255);
     SDL_RenderDrawLine(r, pos.first - 5, pos.second, pos.first + 5, pos.second);
     SDL_RenderDrawLine(r, pos.first, pos.second - 5, pos.first, pos.second + 5);
 }

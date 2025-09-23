@@ -53,7 +53,8 @@ public:
         SDL_Rect dst{ rect_.x + (rect_.w - dw)/2, rect_.y + (rect_.h - dh)/2, dw, dh };
         SDL_RenderCopy(r, tex_, nullptr, &dst);
         // Border
-        SDL_SetRenderDrawColor(r, 90, 90, 90, 255);
+        const SDL_Color border = DMStyles::Border();
+        SDL_SetRenderDrawColor(r, border.r, border.g, border.b, border.a);
         SDL_RenderDrawRect(r, &rect_);
     }
     void invalidate() { last_path_.clear(); }

@@ -200,7 +200,7 @@ bool FullScreenCollapsible::handle_event(const SDL_Event& e) {
 void FullScreenCollapsible::render(SDL_Renderer* renderer) const {
     if (!visible_ || !renderer) return;
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-    const SDL_Color header_bg = DMStyles::PanelBG();
+    const SDL_Color header_bg = DMStyles::PanelHeader();
     SDL_SetRenderDrawColor(renderer, header_bg.r, header_bg.g, header_bg.b, 240);
     SDL_RenderFillRect(renderer, &header_rect_);
     const SDL_Color border = DMStyles::Border();
@@ -209,7 +209,8 @@ void FullScreenCollapsible::render(SDL_Renderer* renderer) const {
 
     if (expanded_) {
         SDL_Rect content = content_rect_;
-        SDL_SetRenderDrawColor(renderer, header_bg.r, header_bg.g, header_bg.b, 220);
+        const SDL_Color content_bg = DMStyles::PanelBG();
+        SDL_SetRenderDrawColor(renderer, content_bg.r, content_bg.g, content_bg.b, 220);
         SDL_RenderFillRect(renderer, &content);
         SDL_SetRenderDrawColor(renderer, border.r, border.g, border.b, border.a);
         SDL_RenderDrawRect(renderer, &content);
@@ -226,7 +227,8 @@ void FullScreenCollapsible::render(SDL_Renderer* renderer) const {
         if (!btn.widget) continue;
         if (btn.active) {
             SDL_Rect rect = btn.widget->rect();
-            SDL_SetRenderDrawColor(renderer, 120, 160, 255, 80);
+            const SDL_Color accent = DMStyles::AccentButton().hover_bg;
+            SDL_SetRenderDrawColor(renderer, accent.r, accent.g, accent.b, 96);
             SDL_RenderFillRect(renderer, &rect);
         }
         btn.widget->render(renderer);

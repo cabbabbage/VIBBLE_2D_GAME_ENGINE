@@ -482,7 +482,8 @@ void MapLightPanel::render_content(SDL_Renderer* r) const {
     SDL_SetRenderDrawColor(r, r_out, g_out, b_out, a_out);
     SDL_RenderFillRect(r, &swatch);
 
-    SDL_SetRenderDrawColor(r, 20, 20, 20, 220);
+    const SDL_Color border = DMStyles::Border();
+    SDL_SetRenderDrawColor(r, border.r, border.g, border.b, border.a);
     SDL_RenderDrawRect(r, &swatch);
 
     // A subtle label line above (optional): we won’t render text here to avoid font deps.

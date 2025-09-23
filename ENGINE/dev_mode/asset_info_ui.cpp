@@ -485,7 +485,8 @@ void AssetInfoUI::render(SDL_Renderer* r, int screen_w, int screen_h) const {
     if (pulse_frames_ > 0) {
         Uint8 alpha = static_cast<Uint8>(std::clamp(pulse_frames_ * 12, 0, 180));
         SDL_Rect header_rect{panel_.x, panel_.y, panel_.w, DMButton::height()};
-        SDL_SetRenderDrawColor(r, 255, 220, 64, alpha);
+        const SDL_Color accent = DMStyles::AccentButton().hover_bg;
+        SDL_SetRenderDrawColor(r, accent.r, accent.g, accent.b, alpha);
         SDL_RenderFillRect(r, &header_rect);
     }
 
@@ -584,7 +585,8 @@ void AssetInfoUI::render_world_overlay(SDL_Renderer* r, const camera& cam) const
     if (!lighting_section_ || !lighting_section_->is_expanded() || !lighting_section_->shading_enabled() || !target_asset_) return;
     const LightSource& light = lighting_section_->shading_light();
     if (light.x_radius <= 0 && light.y_radius <= 0) return;
-    SDL_SetRenderDrawColor(r, 255, 255, 0, 255);
+    const SDL_Color accent = DMStyles::AccentButton().hover_bg;
+    SDL_SetRenderDrawColor(r, accent.r, accent.g, accent.b, 255);
     const bool flipped = target_asset_->flipped;
     const int base_offset_x = flipped ? -light.offset_x : light.offset_x;
     for (int deg = 0; deg < 360; ++deg) {
