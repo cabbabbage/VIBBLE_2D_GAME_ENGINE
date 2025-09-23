@@ -28,9 +28,11 @@
     },
     "asset_name": "candle_3",
     "asset_type": "Object",
+    "can_invert": true,
     "mappings": {},
     "size_settings": {
-        "scale_percentage": 6.0
+        "scale_percentage": 7.0
     },
-    "start": "default"
+    "start": "default",
+    "z_threshold": -4
 }

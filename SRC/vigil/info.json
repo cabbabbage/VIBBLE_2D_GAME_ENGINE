@@ -1,0 +1,33 @@
+{
+  "asset_name": "vigil",
+  "asset_type": "Object",
+  "animations": {
+    "default": {
+      "source": {
+        "kind": "folder",
+        "path": "default",
+        "name": null
+      },
+      "flipped_source": false,
+      "reverse_source": false,
+      "locked": false,
+      "rnd_start": false,
+      "speed_factor": 1,
+      "number_of_frames": 1,
+      "movement": [
+        [
+          0,
+          0
+        ]
+      ],
+      "on_end": "default",
+      "loop": false,
+      "movement_total": {
+        "dx": 0,
+        "dy": 0
+      }
+    }
+  },
+  "start": "default",
+  "mappings": {}
+}

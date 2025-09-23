@@ -178,7 +178,7 @@
     "rnd_spawn_max": 400,
     "rnd_spawn_min": 300,
     "size_settings": {
-        "scale_percentage": 4.0
+        "scale_percentage": 7.0
     },
     "tags": [
         "barrel_child",

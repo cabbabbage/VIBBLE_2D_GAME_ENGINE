@@ -252,6 +252,30 @@
           "position": "Perimeter",
           "radius": 8731,
           "spawn_id": "spn-a5463d62c0e4"
+        },
+        {
+          "candidates": [
+            {
+              "chance": 48,
+              "name": "null"
+            },
+            {
+              "chance": 100,
+              "name": "Barrel"
+            }
+          ],
+          "chance_denominator": 148,
+          "check_overlap": false,
+          "display_name": "Barrel",
+          "dx": 4,
+          "dy": 369,
+          "enforce_spacing": false,
+          "max_number": 1,
+          "min_number": 1,
+          "origional_height": 3000,
+          "origional_width": 3000,
+          "position": "Random",
+          "spawn_id": "spn-cf89e79f4e88"
         }
       ],
       "width_max": 4985,
