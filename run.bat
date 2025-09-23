@@ -7,23 +7,81 @@ rem ==================================================
 
 pushd "%~dp0" >nul
 
+set "EXIT_CODE=0"
 set "RUN_ENGINE=1"
 set "CREATE_SHORTCUT=1"
 set "CI_MODE="
-for %%A in (%*) do (
-  if /I "%%~A"=="--skip-run" set "RUN_ENGINE=0"
-  if /I "%%~A"=="--no-shortcut" set "CREATE_SHORTCUT=0"
-  if /I "%%~A"=="--ci" set "CI_MODE=1"
+set "REUSE_BUILD="
+set "SKIP_CONFIGURE="
+set "SKIP_BUILD="
+set "FORCE_GENERATOR="
+
+call :print_banner
+
+:parse_arguments
+if "%~1"=="" goto :post_parse
+set "ARG=%~1"
+if /I "%ARG%"=="--help" (
+  call :show_help
+  goto :cleanup
 )
+if /I "%ARG%"=="--skip-run" (
+  set "RUN_ENGINE=0"
+  shift
+  goto :parse_arguments
+)
+if /I "%ARG%"=="--no-shortcut" (
+  set "CREATE_SHORTCUT=0"
+  shift
+  goto :parse_arguments
+)
+if /I "%ARG%"=="--ci" (
+  set "CI_MODE=1"
+  set "RUN_ENGINE=0"
+  set "CREATE_SHORTCUT=0"
+  set "REUSE_BUILD=1"
+  shift
+  goto :parse_arguments
+)
+if /I "%ARG%"=="--reuse-build" (
+  set "REUSE_BUILD=1"
+  shift
+  goto :parse_arguments
+)
+if /I "%ARG%"=="--configure-only" (
+  set "SKIP_BUILD=1"
+  shift
+  goto :parse_arguments
+)
+if /I "%ARG%"=="--build-only" (
+  set "SKIP_CONFIGURE=1"
+  set "REUSE_BUILD=1"
+  shift
+  goto :parse_arguments
+)
+if /I "%ARG%"=="--generator" (
+  if "%~2"=="" (
+    call :error "Missing generator value for --generator."
+    set "EXIT_CODE=1"
+    goto :cleanup
+  )
+  set "FORCE_GENERATOR=%~2"
+  shift
+  shift
+  goto :parse_arguments
+)
+call :warn "Unrecognized option: %ARG%"
+shift
+goto :parse_arguments
+
+:post_parse
 if defined CI set "CI_MODE=1"
 if defined CI_MODE (
   set "RUN_ENGINE=0"
   set "CREATE_SHORTCUT=0"
 )
+if defined SKIP_CONFIGURE set "REUSE_BUILD=1"
 
-set "EXIT_CODE=0"
-
-call :log "Starting VIBBLE environment bootstrap..."
 call :detect_admin
 if errorlevel 1 goto :fail
 
@@ -39,11 +97,19 @@ if errorlevel 1 goto :fail
 call :setup_vcpkg
 if errorlevel 1 goto :fail
 
-call :configure_cmake
-if errorlevel 1 goto :fail
+if not defined SKIP_CONFIGURE (
+  call :configure_cmake
+  if errorlevel 1 goto :fail
+) else (
+  call :log "Skipping configure step per --build-only."
+)
 
-call :build_cmake
-if errorlevel 1 goto :fail
+if not defined SKIP_BUILD (
+  call :build_cmake
+  if errorlevel 1 goto :fail
+) else (
+  call :log "Skipping build step per --configure-only."
+)
 
 if "%CREATE_SHORTCUT%"=="1" (
   call :create_shortcut
@@ -51,6 +117,7 @@ if "%CREATE_SHORTCUT%"=="1" (
 
 if "%RUN_ENGINE%"=="1" (
   call :launch_engine
+  if errorlevel 1 goto :fail
 )
 
 goto :cleanup
@@ -68,6 +135,25 @@ endlocal & exit /b %EXIT_CODE%
 rem --------------------------------------------------
 rem Helper routines
 rem --------------------------------------------------
+
+:print_banner
+echo ==================================================
+echo  VIBBLE 2D ENGINE BOOTSTRAP
+echo ==================================================
+exit /b 0
+
+:show_help
+echo Usage: run.bat [options]
+echo.
+echo   --ci               Run in CI-friendly mode (no shortcut, no launch, reuse build)
+echo   --skip-run         Do not launch the engine after building
+echo   --no-shortcut      Skip creating the desktop shortcut
+echo   --reuse-build      Reuse the existing build directory instead of recreating it
+echo   --configure-only   Configure CMake but do not build
+echo   --build-only       Build using an existing configuration
+echo   --generator NAME   Force a specific CMake generator
+echo   --help             Show this help message
+exit /b 0
 
 :log
 if "%~1"=="" goto :eof
@@ -88,181 +174,173 @@ exit /b 0
 net session >nul 2>&1
 if errorlevel 1 (
   set "ADMIN_PRIV="
+  set "INSTALL_SCOPE=user"
   call :log "Running without administrative privileges. Installs will use per-user scope when possible."
 ) else (
   set "ADMIN_PRIV=1"
+  set "INSTALL_SCOPE=machine"
   call :log "Administrator privileges detected."
 )
 exit /b 0
 
+:require_winget
+where winget >nul 2>&1
+if errorlevel 1 (
+  call :error "winget is required but was not found. Install the Microsoft App Installer from the Microsoft Store and retry."
+  exit /b 1
+)
+set "WINGET_AVAILABLE=1"
+exit /b 0
+
 :ensure_prereqs
 call :log "Checking build prerequisites..."
-call :ensure_tool git Git.Git "%ProgramFiles%\Git\bin" "%ProgramFiles%\Git\cmd" "%ProgramFiles(x86)%\Git\bin" "%ProgramFiles(x86)%\Git\cmd"
+call :require_winget
 if errorlevel 1 exit /b 1
-call :ensure_tool cmake Kitware.CMake "%ProgramFiles%\CMake\bin" "%ProgramFiles(x86)%\CMake\bin"
+call :ensure_tool git Git.Git git.exe "%ProgramFiles%\Git\bin" "%ProgramFiles%\Git\cmd" "%ProgramFiles(x86)%\Git\bin" "%ProgramFiles(x86)%\Git\cmd"
 if errorlevel 1 exit /b 1
-call :ensure_tool ninja Ninja-build.Ninja "%ProgramFiles%\Ninja" "%ProgramFiles(x86)%\Ninja" "%ProgramFiles%\CMake\bin"
+call :ensure_tool cmake Kitware.CMake cmake.exe "%ProgramFiles%\CMake\bin" "%ProgramFiles(x86)%\CMake\bin"
 if errorlevel 1 exit /b 1
-call :ensure_tool python Python.Python.3.12 "%LocalAppData%\Programs\Python\Python312" "%LocalAppData%\Programs\Python\Python311" "%ProgramFiles%\Python312" "%ProgramFiles%\Python311"
+call :ensure_tool ninja Ninja-build.Ninja ninja.exe "%ProgramFiles%\Ninja" "%ProgramFiles(x86)%\Ninja" "%ProgramFiles%\CMake\bin"
 if errorlevel 1 exit /b 1
-call :ensure_tool node OpenJS.NodeJS.LTS "%ProgramFiles%\nodejs" "%LocalAppData%\Programs\nodejs" "%ProgramFiles(x86)%\nodejs"
+call :ensure_python
 if errorlevel 1 exit /b 1
-call :ensure_vs
+call :ensure_node
 if errorlevel 1 exit /b 1
 exit /b 0
 
 :ensure_tool
-set "TOOL=%~1"
+set "TOOL_NAME=%~1"
 set "WINGET_ID=%~2"
-set "arg3=%~3"
-set "arg4=%~4"
-set "arg5=%~5"
-set "arg6=%~6"
-set "arg7=%~7"
-set "arg8=%~8"
-set "arg9=%~9"
-call :log "Checking for %TOOL%..."
-where %TOOL% >nul 2>&1
-if not errorlevel 1 (
-  call :log "%TOOL% is available."
-  exit /b 0
-)
-for %%I in (3 4 5 6 7 8 9) do (
-  set "HINT=!arg%%I!"
-  if defined HINT call :append_if_exists "!HINT!"
-)
-where %TOOL% >nul 2>&1
-if not errorlevel 1 (
-  call :log "%TOOL% found after updating PATH."
-  exit /b 0
-)
-if defined CI_MODE (
-  call :error "%TOOL% is required but unavailable in CI mode."
+set "COMMAND_HINT=%~3"
+set "PATH_HINT1=%~4"
+set "PATH_HINT2=%~5"
+set "PATH_HINT3=%~6"
+set "PATH_HINT4=%~7"
+set "PATH_HINT5=%~8"
+if "%COMMAND_HINT%"=="" set "COMMAND_HINT=%TOOL_NAME%"
+where %COMMAND_HINT% >nul 2>&1
+if not errorlevel 1 goto :tool_append_paths
+if not defined WINGET_AVAILABLE (
+  call :error "%TOOL_NAME% not found and winget is unavailable to install it."
   exit /b 1
 )
-if "%WINGET_ID%"=="" (
-  call :error "No automatic installer mapped for %TOOL%. Install manually and re-run."
-  exit /b 1
-)
-call :install_via_winget "%WINGET_ID%"
-if errorlevel 1 exit /b 1
-where %TOOL% >nul 2>&1
-if not errorlevel 1 (
-  call :log "%TOOL% installed successfully."
-  exit /b 0
-)
-for %%I in (3 4 5 6 7 8 9) do (
-  set "HINT=!arg%%I!"
-  if defined HINT call :append_if_exists "!HINT!"
-)
-where %TOOL% >nul 2>&1
-if not errorlevel 1 (
-  call :log "%TOOL% installed and added to PATH."
-  exit /b 0
-)
-call :warn "%TOOL% may require a terminal restart for PATH updates to apply."
-exit /b 1
-
-:append_if_exists
-set "CAND=%~1"
-if "%CAND%"=="" exit /b 0
-if not exist "%CAND%" exit /b 0
-echo %PATH% | find /I "%CAND%" >nul
-if not errorlevel 1 exit /b 0
-call :log "Adding to PATH for this session: %CAND%"
-set "PATH=%CAND%;%PATH%"
-exit /b 0
-
-:ensure_winget
-where winget >nul 2>&1
+call :log "%TOOL_NAME% not found. Installing via winget (%WINGET_ID%)..."
+winget install --id %WINGET_ID% --silent --accept-package-agreements --accept-source-agreements --scope %INSTALL_SCOPE% --exact
 if errorlevel 1 (
-  call :warn "winget not available. Install 'App Installer' from the Microsoft Store or install tools manually."
+  call :error "Failed to install %TOOL_NAME% via winget."
   exit /b 1
+)
+for %%D in ("%PATH_HINT1%" "%PATH_HINT2%" "%PATH_HINT3%" "%PATH_HINT4%" "%PATH_HINT5%") do (
+  if not "%%~D"=="" call :append_if_exists "%%~D"
+)
+where %COMMAND_HINT% >nul 2>&1
+if errorlevel 1 (
+  call :error "%TOOL_NAME% was installed but is not on PATH. Restart your terminal or add it manually."
+  exit /b 1
+)
+goto :tool_append_paths
+
+:tool_append_paths
+for %%D in ("%PATH_HINT1%" "%PATH_HINT2%" "%PATH_HINT3%" "%PATH_HINT4%" "%PATH_HINT5%") do (
+  if not "%%~D"=="" call :append_if_exists "%%~D"
 )
 exit /b 0
 
-:install_via_winget
-if defined CI_MODE (
-  call :error "winget installs are disabled while running in CI mode."
+:ensure_python
+call :find_python
+if not defined PYTHON_EXE (
+  if defined WINGET_AVAILABLE (
+    call :log "Python 3 not detected. Installing via winget..."
+    winget install --id Python.Python.3.12 --silent --accept-package-agreements --accept-source-agreements --scope %INSTALL_SCOPE% --exact
+    if errorlevel 1 (
+      call :error "Failed to install Python using winget."
+      exit /b 1
+    )
+    call :append_if_exists "%LocalAppData%\Programs\Python\Python312"
+    call :append_if_exists "%LocalAppData%\Programs\Python\Python312\Scripts"
+  )
+  call :find_python
+)
+if not defined PYTHON_EXE (
+  call :error "Python executable not found on PATH after installation."
   exit /b 1
 )
-call :ensure_winget
-if errorlevel 1 exit /b 1
-set "PACKAGE_ID=%~1"
-set "FLAGS=--silent --accept-package-agreements --accept-source-agreements --exact"
-if not defined ADMIN_PRIV set "FLAGS=%FLAGS% --scope user"
-call :log "Installing %PACKAGE_ID% via winget..."
-winget install --id "%PACKAGE_ID%" %FLAGS%
+call %PYTHON_EXE% -c "import sys; sys.exit(0 if sys.version_info >= (3,10) else 1)" >nul 2>&1
 if errorlevel 1 (
-  call :error "winget failed to install %PACKAGE_ID%."
-  exit /b 1
-)
-exit /b 0
-
-:ensure_vs
-call :log "Ensuring Microsoft C++ Build Tools are available..."
-call :locate_vs_dev_cmd
-if defined VS_DEV_CMD goto :load_vs_env
-if defined CI_MODE (
-  call :error "MSVC Build Tools not detected in CI environment."
-  exit /b 1
-)
-if not defined ADMIN_PRIV (
-  call :error "MSVC Build Tools not detected. Run this script as administrator or install Visual Studio Build Tools manually."
-  exit /b 1
-)
-call :log "Installing Visual Studio 2022 Build Tools (this may take a while)..."
-call :install_visual_studio
-if errorlevel 1 exit /b 1
-call :locate_vs_dev_cmd
-if not defined VS_DEV_CMD (
-  call :error "VsDevCmd.bat still not found after installation."
-  exit /b 1
-)
-
-:load_vs_env
-call :log "Loading MSVC environment..."
-call "%VS_DEV_CMD%" -arch=x64 >nul
-if errorlevel 1 (
-  call :error "Failed to load MSVC environment."
-  exit /b 1
-)
-where cl >nul 2>&1
-if errorlevel 1 (
-  call :error "MSVC compiler (cl.exe) not available even after environment setup."
-  exit /b 1
-)
-call :log "MSVC compiler ready."
-exit /b 0
-
-:install_visual_studio
-call :ensure_winget
-if errorlevel 1 exit /b 1
-if not defined ADMIN_PRIV (
-  call :error "Administrator privileges are required to install Visual Studio Build Tools."
-  exit /b 1
-)
-set "FLAGS=--silent --accept-package-agreements --accept-source-agreements --exact"
-call :log "Downloading and installing Microsoft.VisualStudio.2022.BuildTools via winget..."
-winget install --id "Microsoft.VisualStudio.2022.BuildTools" %FLAGS% --override "--add Microsoft.VisualStudio.Workload.NativeDesktop --includeRecommended --passive --norestart"
-if errorlevel 1 (
-  call :error "winget was unable to install Microsoft.VisualStudio.2022.BuildTools."
-  exit /b 1
-)
-exit /b 0
-
-:locate_vs_dev_cmd
-set "VS_DEV_CMD="
-for %%E in (BuildTools Community Professional Enterprise) do (
-  if exist "%ProgramFiles(x86)%\Microsoft Visual Studio\2022\%%E\Common7\Tools\VsDevCmd.bat" set "VS_DEV_CMD=%ProgramFiles(x86)%\Microsoft Visual Studio\2022\%%E\Common7\Tools\VsDevCmd.bat"
-)
-if not defined VS_DEV_CMD if exist "%ProgramFiles%\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat" set "VS_DEV_CMD=%ProgramFiles%\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat"
-if not defined VS_DEV_CMD if exist "%ProgramFiles(x86)%\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat" set "VS_DEV_CMD=%ProgramFiles(x86)%\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat"
-if not defined VS_DEV_CMD if exist "%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" (
-  for /f "usebackq tokens=* delims=" %%V in (`"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -requires Microsoft.Component.MSBuild -find Common7\Tools\VsDevCmd.bat 2^>nul`) do (
-    if exist "%%~V" set "VS_DEV_CMD=%%~V"
+  call :warn "Python version is older than 3.10. Attempting to install Python 3.12 via winget..."
+  winget install --id Python.Python.3.12 --silent --accept-package-agreements --accept-source-agreements --scope %INSTALL_SCOPE% --exact
+  if errorlevel 1 (
+    call :error "Unable to upgrade Python."
+    exit /b 1
+  )
+  call :append_if_exists "%LocalAppData%\Programs\Python\Python312"
+  call :append_if_exists "%LocalAppData%\Programs\Python\Python312\Scripts"
+  call :find_python
+  if not defined PYTHON_EXE (
+    call :error "Python executable not found after upgrade."
+    exit /b 1
+  )
+  call %PYTHON_EXE% -c "import sys; sys.exit(0 if sys.version_info >= (3,10) else 1)" >nul 2>&1
+  if errorlevel 1 (
+    call :error "Python upgrade did not succeed."
+    exit /b 1
   )
 )
+exit /b 0
+
+:find_python
+set "PYTHON_EXE="
+for %%C in (python python3) do (
+  if not defined PYTHON_EXE (
+    where %%C >nul 2>&1
+    if not errorlevel 1 set "PYTHON_EXE=%%C"
+  )
+)
+if not defined PYTHON_EXE (
+  where py >nul 2>&1
+  if not errorlevel 1 set "PYTHON_EXE=py -3"
+)
+exit /b 0
+
+:ensure_node
+where node >nul 2>&1
+if errorlevel 1 (
+  if defined WINGET_AVAILABLE (
+    call :log "Node.js not detected. Installing via winget..."
+    winget install --id OpenJS.NodeJS.LTS --silent --accept-package-agreements --accept-source-agreements --scope %INSTALL_SCOPE% --exact
+    if errorlevel 1 (
+      call :error "Failed to install Node.js using winget."
+      exit /b 1
+    )
+  )
+  call :append_if_exists "%LocalAppData%\Programs\nodejs"
+  call :append_if_exists "%AppData%\npm"
+  where node >nul 2>&1
+)
+if errorlevel 1 (
+  call :error "Node.js executable not found on PATH after installation."
+  exit /b 1
+)
+set "NODE_VER="
+set "NODE_MAJOR="
+for /f "usebackq tokens=1" %%V in (`node --version 2^>nul`) do set "NODE_VER=%%V"
+if defined NODE_VER (
+  for /f "tokens=2 delims=v." %%A in ("!NODE_VER!") do set "NODE_MAJOR=%%A"
+  if defined NODE_MAJOR (
+    if !NODE_MAJOR! LSS 18 (
+      call :warn "Detected Node.js !NODE_VER!. Installing latest LTS version..."
+      winget install --id OpenJS.NodeJS.LTS --silent --accept-package-agreements --accept-source-agreements --scope %INSTALL_SCOPE% --exact
+      if errorlevel 1 (
+        call :error "Failed to upgrade Node.js."
+        exit /b 1
+      )
+      call :append_if_exists "%LocalAppData%\Programs\nodejs"
+      call :append_if_exists "%AppData%\npm"
+    )
+  )
+)
+call :append_if_exists "%LocalAppData%\Programs\nodejs"
+call :append_if_exists "%AppData%\npm"
 exit /b 0
 
 :setup_python
@@ -271,19 +349,19 @@ if not exist requirements.txt (
   exit /b 0
 )
 call :log "Installing Python dependencies..."
-python -m pip install --upgrade pip
+call %PYTHON_EXE% -m pip install --upgrade pip >nul 2>&1
 if errorlevel 1 (
-  call :warn "Failed to upgrade pip system-wide. Retrying with --user scope..."
-  python -m pip install --user --upgrade pip
+  call :warn "Failed to upgrade pip globally. Retrying with --user scope..."
+  call %PYTHON_EXE% -m pip install --user --upgrade pip
   if errorlevel 1 (
     call :error "Failed to upgrade pip."
     exit /b 1
   )
 )
-python -m pip install -r requirements.txt
+call %PYTHON_EXE% -m pip install -r requirements.txt
 if errorlevel 1 (
   call :warn "Python dependency installation failed. Retrying with --user scope..."
-  python -m pip install --user -r requirements.txt
+  call %PYTHON_EXE% -m pip install --user -r requirements.txt
   if errorlevel 1 (
     call :error "Python dependency installation failed."
     exit /b 1
@@ -305,17 +383,39 @@ if not exist package.json (
   call :log "No package.json found. Skipping npm install."
   exit /b 0
 )
-call :log "Installing Node.js dependencies (npm install)..."
-call npm install
+if defined CI_MODE (
+  call :log "Installing Node.js dependencies (npm ci)..."
+  call npm ci --no-audit --no-fund
+) else (
+  call :log "Installing Node.js dependencies (npm install)..."
+  call npm install --no-audit --no-fund
+)
 if errorlevel 1 (
-  call :error "npm install failed."
+  call :error "npm dependency installation failed."
   exit /b 1
 )
 exit /b 0
 
 :setup_vcpkg
-set "VCPKG_ROOT=%cd%\vcpkg"
-if not exist "%VCPKG_ROOT%\" (
+set "PREFERRED_VCPKG=%cd%\external\vcpkg"
+if defined VCPKG_ROOT (
+  set "VCPKG_ROOT=%VCPKG_ROOT%"
+  call :log "Using VCPKG_ROOT from environment: %VCPKG_ROOT%"
+) else (
+  if exist "%PREFERRED_VCPKG%\vcpkg.exe" (
+    set "VCPKG_ROOT=%PREFERRED_VCPKG%"
+  ) else if exist "%cd%\vcpkg\vcpkg.exe" (
+    set "VCPKG_ROOT=%cd%\vcpkg"
+  ) else (
+    set "VCPKG_ROOT=%PREFERRED_VCPKG%"
+  )
+)
+call :log "vcpkg directory: %VCPKG_ROOT%"
+if not exist "%VCPKG_ROOT%" (
+  mkdir "%VCPKG_ROOT%" >nul 2>&1
+)
+if not exist "%VCPKG_ROOT%\.git" (
+  if exist "%VCPKG_ROOT%\vcpkg.exe" goto :vcpkg_bootstrap
   call :log "Cloning vcpkg into %VCPKG_ROOT%..."
   git clone https://github.com/microsoft/vcpkg.git "%VCPKG_ROOT%"
   if errorlevel 1 (
@@ -323,12 +423,12 @@ if not exist "%VCPKG_ROOT%\" (
     exit /b 1
   )
 ) else (
-  if exist "%VCPKG_ROOT%\.git" (
-    call :log "Updating existing vcpkg checkout..."
-    git -C "%VCPKG_ROOT%" pull --ff-only
-    if errorlevel 1 call :warn "Unable to update vcpkg (continuing with local copy)."
-  )
+  call :log "Updating existing vcpkg checkout..."
+  git -C "%VCPKG_ROOT%" pull --ff-only
+  if errorlevel 1 call :warn "Unable to update vcpkg (continuing with local copy)."
 )
+
+:vcpkg_bootstrap
 if not exist "%VCPKG_ROOT%\vcpkg.exe" (
   call :log "Bootstrapping vcpkg (this may take a moment)..."
   call "%VCPKG_ROOT%\bootstrap-vcpkg.bat" -disableMetrics
@@ -337,13 +437,12 @@ if not exist "%VCPKG_ROOT%\vcpkg.exe" (
     exit /b 1
   )
 )
-call :append_if_exists "%VCPKG_ROOT%"
 set "VCPKG_ROOT=%VCPKG_ROOT%"
 set "VCPKG_DEFAULT_TRIPLET=x64-windows"
-set "VCPKG_FEATURE_FLAGS=manifests,registries,binarycaching"
+if not defined VCPKG_FEATURE_FLAGS set "VCPKG_FEATURE_FLAGS=manifests,registries,binarycaching"
 if exist vcpkg.json (
   call :log "Installing C/C++ dependencies via vcpkg manifest..."
-  "%VCPKG_ROOT%\vcpkg.exe" install --clean-after-build
+  "%VCPKG_ROOT%\vcpkg.exe" install --x-wait-for-lock --clean-after-build
   if errorlevel 1 (
     call :error "vcpkg install failed."
     exit /b 1
@@ -351,22 +450,40 @@ if exist vcpkg.json (
 )
 exit /b 0
 
+:detect_generator
+if defined FORCE_GENERATOR (
+  set "CMAKE_GENERATOR=%FORCE_GENERATOR%"
+  exit /b 0
+)
+where ninja >nul 2>&1
+if not errorlevel 1 (
+  set "CMAKE_GENERATOR=Ninja"
+  exit /b 0
+)
+set "CMAKE_GENERATOR=Visual Studio 17 2022"
+exit /b 0
+
 :configure_cmake
-call :log "Preparing build directory..."
-if exist build (
-  call :log "Removing existing build directory to avoid stale cache..."
-  rmdir /s /q build 2>nul
-)
-mkdir build 2>nul
-if not exist build (
-  call :error "Unable to create build directory."
-  exit /b 1
-)
+call :detect_generator
+set "BUILD_DIR=%cd%\build"
 set "RUNTIME_DIR=%cd%\ENGINE"
+if not defined REUSE_BUILD (
+  if exist "%BUILD_DIR%" (
+    call :log "Removing existing build directory..."
+    rmdir /s /q "%BUILD_DIR%" 2>nul
+  )
+)
+if not exist "%BUILD_DIR%" (
+  mkdir "%BUILD_DIR%" >nul 2>&1
+  if errorlevel 1 (
+    call :error "Unable to create build directory."
+    exit /b 1
+  )
+)
 set "TOOLCHAIN_ARG="
 if exist "%VCPKG_ROOT%\scripts\buildsystems\vcpkg.cmake" set "TOOLCHAIN_ARG=-DCMAKE_TOOLCHAIN_FILE=%VCPKG_ROOT%\scripts\buildsystems\vcpkg.cmake"
-call :log "Configuring CMake project (Ninja generator)..."
-cmake -G "Ninja" -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_RUNTIME_OUTPUT_DIRECTORY="%RUNTIME_DIR%" %TOOLCHAIN_ARG%
+call :log "Configuring CMake project (%CMAKE_GENERATOR%)..."
+cmake -S . -B "%BUILD_DIR%" -G "%CMAKE_GENERATOR%" -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_RUNTIME_OUTPUT_DIRECTORY="%RUNTIME_DIR%" %TOOLCHAIN_ARG%
 if errorlevel 1 (
   call :error "CMake configuration failed."
   exit /b 1
@@ -374,8 +491,13 @@ if errorlevel 1 (
 exit /b 0
 
 :build_cmake
+set "BUILD_DIR=%cd%\build"
+if not exist "%BUILD_DIR%" (
+  call :error "Build directory not found. Run configuration first or use --reuse-build with an existing build."
+  exit /b 1
+)
 call :log "Building project (RelWithDebInfo)..."
-cmake --build build --config RelWithDebInfo
+cmake --build "%BUILD_DIR%" --config RelWithDebInfo
 if errorlevel 1 (
   call :error "Build failed."
   exit /b 1
@@ -427,3 +549,9 @@ if not "%GAME_EXIT%"=="0" (
 )
 exit /b 0
 
+:append_if_exists
+if "%~1"=="" exit /b 0
+if exist "%~1" (
+  set "PATH=%~1;%PATH%"
+)
+exit /b 0

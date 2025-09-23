@@ -16,21 +16,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python 3.12
-        uses: actions/setup-python@v5
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
         with:
-          python-version: '3.12'
+          node-version: '18'
 
-      - name: Ensure Ninja is available
-        uses: seanmiddleditch/gha-setup-ninja@v1
-
-      - name: Install and build via run.bat
+      - name: Bootstrap toolchain and build
         shell: cmd
-        run: |
-          call run.bat --ci --skip-run --no-shortcut
+        run: npm run bootstrap:ci
 
       - name: Run ctest
         shell: cmd
-        run: |
-          cd build
-          ctest --build-config RelWithDebInfo --output-on-failure
+        run: npm run ctest

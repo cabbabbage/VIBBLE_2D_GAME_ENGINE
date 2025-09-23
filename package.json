@@ -4,10 +4,14 @@
   "description": "Developer convenience scripts for the VIBBLE 2D Game Engine.",
   "private": true,
   "scripts": {
-    "configure": "cmake -G Ninja -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_RUNTIME_OUTPUT_DIRECTORY=./ENGINE",
-    "build": "cmake --build build --config RelWithDebInfo",
-    "start": "run.bat",
-    "clean": "node -e \"const fs=require('fs');try{fs.rmSync('build',{recursive:true,force:true});}catch(e){}\""
+    "bootstrap": "node ./scripts/bootstrap.cjs",
+    "bootstrap:ci": "node ./scripts/bootstrap.cjs --ci --skip-run --no-shortcut",
+    "configure": "node ./scripts/bootstrap.cjs --configure-only",
+    "build": "node ./scripts/bootstrap.cjs --reuse-build --skip-run --no-shortcut",
+    "ctest": "node ./scripts/run-ctest.cjs",
+    "test": "npm run bootstrap:ci && npm run ctest",
+    "clean": "node -e \"const fs=require('fs');try{fs.rmSync('build',{recursive:true,force:true});}catch(e){}\"",
+    "start": "npm run bootstrap"
   },
   "engines": {
     "node": ">=18.0.0"
