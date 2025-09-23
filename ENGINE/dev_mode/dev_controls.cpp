@@ -1317,16 +1317,8 @@ void DevControls::handle_map_selection() {
         return static_cast<char>(std::tolower(c));
     });
     const bool is_trail = (type == "trail");
-<<<<<<< ours
-<<<<<<< ours
     if (is_trail) {
         open_trail_config(selected);
-=======
-    if (is_trail && !filter_state_.trails) {
->>>>>>> theirs
-=======
-    if (is_trail) {
->>>>>>> theirs
         return;
     }
 
@@ -1335,6 +1327,9 @@ void DevControls::handle_map_selection() {
     dev_selected_room_ = selected;
     set_current_room(selected);
     exit_map_editor_mode(false, false);
+    if (room_editor_) {
+        room_editor_->open_room_config();
+    }
 }
 
 Room* DevControls::find_spawn_room() const {

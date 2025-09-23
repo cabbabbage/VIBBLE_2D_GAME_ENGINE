@@ -2,4 +2,7 @@
 
 
 MAPS/HOME/map_info.json::rooms_data
-Mushroom_3,1.000,1,1,exact,0.072,1,0.000
+Mushroom_3,1.000,5,5,exact,0.050,5,-0.001
+Vibble,1.000,3,3,center,0.045,3,0.010
+batch_map_assets,0.868,190,219,random,3.709,3,0.184
+Barrel,1.000,2,2,exact,0.457,2,-0.044

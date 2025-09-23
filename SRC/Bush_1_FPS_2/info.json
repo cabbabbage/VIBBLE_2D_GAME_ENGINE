@@ -12,7 +12,7 @@
       "reverse_source": false,
       "locked": false,
       "speed_factor": 1,
-      "number_of_frames": 81,
+      "number_of_frames": 80,
       "movement": [
         [
           0,
@@ -333,12 +333,15 @@
         [
           0,
           0
-        ],
-        [
-          0,
-          0
         ]
-      ]
+      ],
+      "loop": false,
+      "rnd_start": true,
+      "on_end": "reverse",
+      "movement_total": {
+        "dx": 0,
+        "dy": 0
+      }
     }
   },
   "impassable_area": null,
@@ -7055,5 +7058,7 @@
       "offset_x": 0,
       "offset_y": 0
     }
-  ]
+  ],
+  "mappings": {},
+  "start": ""
 }

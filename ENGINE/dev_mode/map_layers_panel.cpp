@@ -1262,15 +1262,12 @@ void MapLayersPanel::update(const Input& input, int screen_w, int screen_h) {
     if (room_selector_) {
         room_selector_->set_screen_bounds(screen_bounds_);
     }
-<<<<<<< ours
-=======
     if (room_configurator_) {
         room_configurator_->set_work_area(screen_bounds_);
         if (room_configurator_->visible()) {
             room_configurator_->set_bounds(compute_room_config_bounds());
         }
     }
->>>>>>> theirs
     if (!is_visible()) return;
     DockableCollapsible::update(input, screen_w, screen_h);
     if (layer_config_) layer_config_->update(input, screen_w, screen_h);
