@@ -98,19 +98,18 @@ set "DESKTOP=%USERPROFILE%\Desktop"
 set "SHORTCUT=%DESKTOP%\VI.lnk"
 set "ICONFILE=%cd%\MISC_CONTENT\vibble.ico"
 
-rem Extract just the folder path of the exe
-for %%I in ("%EXE%") do set "EXE_DIR=%%~dpI"
-
-echo [run.bat] Creating Desktop shortcut...
+rem Repo root (same as where run.bat started)
+set "ROOT_DIR=%~dp0"
 
 powershell -Command ^
   "$s=(New-Object -COM WScript.Shell).CreateShortcut('%SHORTCUT%');" ^
   "$s.TargetPath='%EXE%';" ^
-  "$s.WorkingDirectory='%EXE_DIR%';" ^
+  "$s.WorkingDirectory='%ROOT_DIR%';" ^
   "$s.IconLocation='%ICONFILE%';" ^
   "$s.Save()"
 
 
+echo pwd
 echo [run.bat] Launching: "%EXE%"
 "%EXE%" %EXTRA_ARGS%
 

@@ -133,4 +133,5 @@ private:
 
     std::shared_ptr<MapLayersController> controller_;
     bool embedded_mode_ = false;
+    SDL_Rect screen_bounds_{0, 0, 0, 0};
 };

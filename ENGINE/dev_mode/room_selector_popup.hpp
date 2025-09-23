@@ -23,6 +23,7 @@ public:
     ~RoomSelectorPopup();
 
     void set_anchor_rect(const SDL_Rect& rect);
+    void set_screen_bounds(const SDL_Rect& bounds);
     void set_create_callbacks(SuggestRoomFn suggest_cb, CreateRoomFn create_cb);
 
     void open(const std::vector<std::string>& rooms, RoomCallback cb);
@@ -45,10 +46,11 @@ private:
     void cancel_create_room();
     void finalize_create_room();
     void scroll_by(int delta);
-    void position_from_anchor();
+    void position_from_anchor() const;
 
     SDL_Rect anchor_rect_{0, 0, 0, 0};
     mutable SDL_Rect rect_{0, 0, 280, 320};
+    SDL_Rect screen_bounds_{0, 0, 0, 0};
 
     bool visible_ = false;
     std::vector<std::unique_ptr<DMButton>> buttons_;

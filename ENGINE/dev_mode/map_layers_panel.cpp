@@ -1245,6 +1245,10 @@ void MapLayersPanel::update(const Input& input, int screen_w, int screen_h) {
     if (preview_dirty_) {
         regenerate_preview();
     }
+    screen_bounds_ = SDL_Rect{ 0, 0, std::max(0, screen_w), std::max(0, screen_h) };
+    if (room_selector_) {
+        room_selector_->set_screen_bounds(screen_bounds_);
+    }
     if (!is_visible()) return;
     DockableCollapsible::update(input, screen_w, screen_h);
     if (layer_config_) layer_config_->update(input, screen_w, screen_h);
@@ -1977,6 +1981,7 @@ void MapLayersPanel::request_room_selection(const std::function<void(const std::
     if (!room_selector_) return;
     if (available_rooms_.empty()) rebuild_available_rooms();
     SDL_Rect anchor = sidebar_widget_ ? sidebar_widget_->rect() : rect();
+    room_selector_->set_screen_bounds(screen_bounds_);
     room_selector_->set_anchor_rect(anchor);
     room_selector_->open(available_rooms_, cb);
 }

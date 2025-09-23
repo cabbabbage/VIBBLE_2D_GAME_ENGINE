@@ -29,6 +29,17 @@ void RoomSelectorPopup::set_anchor_rect(const SDL_Rect& rect) {
     geometry_dirty_ = true;
 }
 
+void RoomSelectorPopup::set_screen_bounds(const SDL_Rect& bounds) {
+    if (screen_bounds_.x == bounds.x && screen_bounds_.y == bounds.y &&
+        screen_bounds_.w == bounds.w && screen_bounds_.h == bounds.h) {
+        return;
+    }
+    screen_bounds_ = bounds;
+    if (visible_) {
+        position_from_anchor();
+    }
+}
+
 void RoomSelectorPopup::set_create_callbacks(SuggestRoomFn suggest_cb, CreateRoomFn create_cb) {
     suggest_room_fn_ = std::move(suggest_cb);
     create_room_fn_ = std::move(create_cb);
@@ -245,6 +256,7 @@ void RoomSelectorPopup::ensure_geometry() const {
     if (scroll_offset_ > max_scroll_) scroll_offset_ = max_scroll_;
     if (scroll_offset_ < 0) scroll_offset_ = 0;
     geometry_dirty_ = false;
+    position_from_anchor();
 }
 
 void RoomSelectorPopup::layout_widgets() const {
@@ -344,7 +356,17 @@ void RoomSelectorPopup::scroll_by(int delta) {
     scroll_offset_ = new_offset;
 }
 
-void RoomSelectorPopup::position_from_anchor() {
+void RoomSelectorPopup::position_from_anchor() const {
+    if (screen_bounds_.w > 0 && screen_bounds_.h > 0) {
+        const int centered_x = screen_bounds_.x + (screen_bounds_.w - rect_.w) / 2;
+        const int centered_y = screen_bounds_.y + (screen_bounds_.h - rect_.h) / 2;
+        const int max_x = screen_bounds_.x + std::max(0, screen_bounds_.w - rect_.w);
+        const int max_y = screen_bounds_.y + std::max(0, screen_bounds_.h - rect_.h);
+        rect_.x = std::clamp(centered_x, screen_bounds_.x, max_x);
+        rect_.y = std::clamp(centered_y, screen_bounds_.y, max_y);
+        return;
+    }
+
     rect_.x = anchor_rect_.x + anchor_rect_.w + DMSpacing::item_gap();
     rect_.y = anchor_rect_.y;
 }

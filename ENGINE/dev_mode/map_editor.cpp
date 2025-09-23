@@ -20,6 +20,9 @@ constexpr int kLabelVerticalOffset = 32;
 const SDL_Color kLabelBg{0, 0, 0, 180};
 const SDL_Color kLabelBorder{255, 255, 255, 80};
 const SDL_Color kLabelText{240, 240, 240, 255};
+const SDL_Color kTrailLabelBg{10, 70, 30, 200};
+const SDL_Color kTrailLabelBorder{60, 190, 110, 200};
+const SDL_Color kTrailLabelText{210, 255, 220, 255};
 }
 
 MapEditor::MapEditor(Assets* owner)
@@ -309,7 +312,16 @@ void MapEditor::render_room_label(SDL_Renderer* renderer, Room* room) {
     if (!label_font_) return;
 
     const std::string& name = room->room_name.empty() ? std::string("<unnamed>") : room->room_name;
-    SDL_Surface* text_surface = TTF_RenderUTF8_Blended(label_font_, name.c_str(), kLabelText);
+    bool is_trail = false;
+    if (!room->type.empty()) {
+        std::string lowered = room->type;
+        std::transform(lowered.begin(), lowered.end(), lowered.begin(),
+                       [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+        is_trail = (lowered == "trail");
+    }
+
+    const SDL_Color& text_color = is_trail ? kTrailLabelText : kLabelText;
+    SDL_Surface* text_surface = TTF_RenderUTF8_Blended(label_font_, name.c_str(), text_color);
     if (!text_surface) return;
 
     SDL_Point center = room->room_area->get_center();
@@ -318,9 +330,12 @@ void MapEditor::render_room_label(SDL_Renderer* renderer, Room* room) {
 
     label_rects_.emplace_back(room, bg_rect);
 
-    SDL_SetRenderDrawColor(renderer, kLabelBg.r, kLabelBg.g, kLabelBg.b, kLabelBg.a);
+    const SDL_Color& bg_color = is_trail ? kTrailLabelBg : kLabelBg;
+    const SDL_Color& border_color = is_trail ? kTrailLabelBorder : kLabelBorder;
+
+    SDL_SetRenderDrawColor(renderer, bg_color.r, bg_color.g, bg_color.b, bg_color.a);
     SDL_RenderFillRect(renderer, &bg_rect);
-    SDL_SetRenderDrawColor(renderer, kLabelBorder.r, kLabelBorder.g, kLabelBorder.b, kLabelBorder.a);
+    SDL_SetRenderDrawColor(renderer, border_color.r, border_color.g, border_color.b, border_color.a);
     SDL_RenderDrawRect(renderer, &bg_rect);
 
     SDL_Texture* text_tex = SDL_CreateTextureFromSurface(renderer, text_surface);

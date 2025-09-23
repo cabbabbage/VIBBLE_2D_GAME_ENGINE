@@ -3,6 +3,8 @@
 #include "dev_mode/map_editor.hpp"
 #include "dev_mode/room_editor.hpp"
 #include "dev_mode/map_mode_ui.hpp"
+#include "dev_mode/room_configurator.hpp"
+#include "dev_mode/spawn_groups_config.hpp"
 #include "dev_mode/full_screen_collapsible.hpp"
 #include "dev_mode/camera_ui.hpp"
 #include "dm_styles.hpp"
@@ -22,6 +24,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <limits>
+#include <random>
 #include <vector>
 #include <nlohmann/json.hpp>
 
@@ -41,6 +44,64 @@ SDL_Point event_point(const SDL_Event& e) {
     int my = 0;
     SDL_GetMouseState(&mx, &my);
     return SDL_Point{mx, my};
+}
+
+std::string generate_spawn_id() {
+    static std::mt19937 rng(std::random_device{}());
+    static const char* hex = "0123456789abcdef";
+    std::uniform_int_distribution<int> dist(0, 15);
+    std::string s = "spn-";
+    for (int i = 0; i < 12; ++i) s.push_back(hex[dist(rng)]);
+    return s;
+}
+
+nlohmann::json& ensure_spawn_groups_array(nlohmann::json& root) {
+    if (root.contains("spawn_groups") && root["spawn_groups"].is_array()) {
+        return root["spawn_groups"];
+    }
+    if (root.contains("assets") && root["assets"].is_array()) {
+        root["spawn_groups"] = root["assets"];
+        root.erase("assets");
+        return root["spawn_groups"];
+    }
+    root["spawn_groups"] = nlohmann::json::array();
+    return root["spawn_groups"];
+}
+
+bool sanitize_perimeter_spawn_groups(nlohmann::json& groups) {
+    if (!groups.is_array()) return false;
+    bool changed = false;
+    for (auto& entry : groups) {
+        if (!entry.is_object()) continue;
+        std::string method = entry.value("position", std::string{});
+        if (method == "Exact Position") {
+            method = "Exact";
+        }
+        if (method != "Perimeter") continue;
+        int min_number = entry.value("min_number", entry.value("max_number", 2));
+        int max_number = entry.value("max_number", min_number);
+        if (min_number < 2) {
+            min_number = 2;
+            changed = true;
+        }
+        if (max_number < 2) {
+            max_number = 2;
+            changed = true;
+        }
+        if (max_number < min_number) {
+            max_number = min_number;
+            changed = true;
+        }
+        if (!entry.contains("min_number") || !entry["min_number"].is_number_integer() ||
+            entry["min_number"].get<int>() != min_number) {
+            entry["min_number"] = min_number;
+        }
+        if (!entry.contains("max_number") || !entry["max_number"].is_number_integer() ||
+            entry["max_number"].get<int>() != max_number) {
+            entry["max_number"] = max_number;
+        }
+    }
+    return changed;
 }
 } // namespace
 
@@ -193,6 +254,7 @@ DevControls::DevControls(Assets* owner, int screen_w, int screen_h)
     configure_header_button_sets();
     initialize_asset_filters();
     layout_filter_header();
+    update_trail_ui_bounds();
 }
 
 DevControls::~DevControls() = default;
@@ -232,6 +294,7 @@ void DevControls::set_screen_dimensions(int width, int height) {
     if (map_mode_ui_) map_mode_ui_->set_screen_dimensions(width, height);
     SDL_Rect bounds{0, 0, screen_w_, screen_h_};
     if (camera_panel_) camera_panel_->set_work_area(bounds);
+    update_trail_ui_bounds();
     layout_filter_header();
 }
 
@@ -263,6 +326,9 @@ bool DevControls::is_pointer_over_dev_ui(int x, int y) const {
         return true;
     }
     if (room_editor_ && room_editor_->is_room_ui_blocking_point(x, y)) {
+        return true;
+    }
+    if (is_point_inside_trail_ui(x, y)) {
         return true;
     }
     if (map_mode_ui_ && map_mode_ui_->is_point_inside(x, y)) {
@@ -383,6 +449,7 @@ void DevControls::update(const Input& input) {
     if (map_mode_ui_) {
         map_mode_ui_->update(input);
     }
+    update_trail_ui(input);
 
     layout_filter_header();
 
@@ -505,6 +572,11 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
         }
     }
 
+    if (handle_trail_ui_event(event)) {
+        if (input_) input_->consumeEvent(event);
+        return;
+    }
+
     if (mode_ == Mode::MapEditor) {
         return;
     }
@@ -526,6 +598,7 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
         room_editor_->render_overlays(renderer);
     }
     if (map_mode_ui_) map_mode_ui_->render(renderer);
+    render_trail_ui(renderer);
     if (camera_panel_ && camera_panel_->is_visible()) {
         camera_panel_->render(renderer);
     }
@@ -775,7 +848,7 @@ void DevControls::configure_header_button_sets() {
 
     MapModeUI::HeaderButtonConfig regenerate_btn;
     regenerate_btn.id = "regenerate";
-    regenerate_btn.label = "Regenerate Room";
+    regenerate_btn.label = "Regen Room";
     regenerate_btn.momentary = true;
     regenerate_btn.style_override = &DMStyles::DeleteButton();
     regenerate_btn.on_toggle = [this](bool) {
@@ -789,7 +862,7 @@ void DevControls::configure_header_button_sets() {
 
     MapModeUI::HeaderButtonConfig regenerate_other_btn;
     regenerate_other_btn.id = "regenerate_other";
-    regenerate_other_btn.label = "Regenerate Other Room";
+    regenerate_other_btn.label = "Regen Other";
     regenerate_other_btn.momentary = true;
     regenerate_other_btn.style_override = &DMStyles::DeleteButton();
     regenerate_other_btn.on_toggle = [this](bool) {
@@ -842,6 +915,7 @@ void DevControls::close_all_floating_panels() {
     if (map_mode_ui_) {
         map_mode_ui_->close_all_panels();
     }
+    close_trail_config();
     if (regenerate_popup_) {
         regenerate_popup_->close();
     }
@@ -858,6 +932,243 @@ void DevControls::pulse_modal_header() {
     if (room_editor_) {
         room_editor_->pulse_active_modal_header();
     }
+}
+
+void DevControls::ensure_trail_ui() {
+    if (!trail_config_ui_) {
+        trail_config_ui_ = std::make_unique<RoomConfigurator>();
+        if (trail_config_ui_) {
+            trail_config_ui_->set_on_close([this]() { close_trail_config(); });
+            trail_config_ui_->set_spawn_group_callbacks(
+                [this](const std::string& id) { open_trail_spawn_group_editor(id); },
+                [this](const std::string& id) { duplicate_trail_spawn_group(id); },
+                [this](const std::string& id) { delete_trail_spawn_group(id); },
+                [this]() { add_trail_spawn_group(); });
+        }
+    }
+    if (!trail_spawn_groups_ui_) {
+        trail_spawn_groups_ui_ = std::make_unique<SpawnGroupsConfig>();
+    }
+    if (trail_config_ui_) {
+        trail_config_ui_->set_bounds(trail_config_bounds_);
+        trail_config_ui_->set_work_area(SDL_Rect{0, 0, screen_w_, screen_h_});
+    }
+    if (trail_spawn_groups_ui_) {
+        SDL_Point anchor{trail_config_bounds_.x + trail_config_bounds_.w + 16, trail_config_bounds_.y};
+        trail_spawn_groups_ui_->set_anchor(anchor.x, anchor.y);
+    }
+}
+
+void DevControls::update_trail_ui_bounds() {
+    const int margin = 48;
+    const int max_width = std::max(320, screen_w_ - 2 * margin);
+    const int desired_width = std::max(360, screen_w_ / 3);
+    const int width = std::min(max_width, desired_width);
+    const int height = std::max(240, screen_h_ - 2 * margin);
+    const int x = std::max(margin, screen_w_ - width - margin);
+    const int y = margin;
+    trail_config_bounds_ = SDL_Rect{x, y, width, height};
+    if (trail_config_ui_) {
+        trail_config_ui_->set_bounds(trail_config_bounds_);
+        trail_config_ui_->set_work_area(SDL_Rect{0, 0, screen_w_, screen_h_});
+    }
+    if (trail_spawn_groups_ui_) {
+        SDL_Point anchor{x + width + 16, y};
+        trail_spawn_groups_ui_->set_anchor(anchor.x, anchor.y);
+    }
+}
+
+void DevControls::open_trail_config(Room* trail) {
+    if (!trail) return;
+    ensure_trail_ui();
+    active_trail_ = trail;
+    update_trail_ui_bounds();
+    if (trail_config_ui_) {
+        trail_config_ui_->open(trail);
+        trail_config_ui_->set_bounds(trail_config_bounds_);
+    }
+    refresh_trail_spawn_groups_ui();
+}
+
+void DevControls::close_trail_config() {
+    active_trail_ = nullptr;
+    if (trail_spawn_groups_ui_) {
+        trail_spawn_groups_ui_->close_all();
+        trail_spawn_groups_ui_->close();
+    }
+    if (trail_config_ui_) {
+        trail_config_ui_->close();
+    }
+}
+
+bool DevControls::is_trail_config_open() const {
+    return trail_config_ui_ && trail_config_ui_->visible();
+}
+
+void DevControls::update_trail_ui(const Input& input) {
+    if (trail_config_ui_ && trail_config_ui_->visible()) {
+        trail_config_ui_->update(input, screen_w_, screen_h_);
+    }
+    if (trail_spawn_groups_ui_) {
+        trail_spawn_groups_ui_->update(input, screen_w_, screen_h_);
+    }
+}
+
+bool DevControls::handle_trail_ui_event(const SDL_Event& event) {
+    bool used = false;
+    if (trail_spawn_groups_ui_ && trail_spawn_groups_ui_->handle_event(event)) {
+        used = true;
+    }
+    if (trail_config_ui_ && trail_config_ui_->handle_event(event)) {
+        used = true;
+    }
+    if (used) {
+        return true;
+    }
+    if (is_pointer_event(event) || event.type == SDL_MOUSEWHEEL) {
+        SDL_Point p = event_point(event);
+        if (is_point_inside_trail_ui(p.x, p.y)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void DevControls::render_trail_ui(SDL_Renderer* renderer) {
+    if (trail_config_ui_) trail_config_ui_->render(renderer);
+    if (trail_spawn_groups_ui_) trail_spawn_groups_ui_->render(renderer);
+}
+
+bool DevControls::is_point_inside_trail_ui(int x, int y) const {
+    if (trail_config_ui_ && trail_config_ui_->is_point_inside(x, y)) {
+        return true;
+    }
+    if (trail_spawn_groups_ui_ && trail_spawn_groups_ui_->is_point_inside(x, y)) {
+        return true;
+    }
+    return false;
+}
+
+void DevControls::refresh_trail_spawn_groups_ui() {
+    if (!active_trail_) return;
+    ensure_trail_ui();
+    if (!trail_spawn_groups_ui_) return;
+    auto& root = active_trail_->assets_data();
+    auto& groups = ensure_spawn_groups_array(root);
+    auto reopen = trail_spawn_groups_ui_->capture_open_spawn_group();
+    trail_spawn_groups_ui_->close_all();
+    const bool sanitized = sanitize_perimeter_spawn_groups(groups);
+    if (sanitized) {
+        active_trail_->save_assets_json();
+    }
+    auto on_change = [this]() {
+        if (!active_trail_) return;
+        auto& root = active_trail_->assets_data();
+        auto& arr = ensure_spawn_groups_array(root);
+        const bool changed = sanitize_perimeter_spawn_groups(arr);
+        active_trail_->save_assets_json();
+        if (trail_config_ui_) trail_config_ui_->refresh_spawn_groups(active_trail_);
+        if (changed) {
+            refresh_trail_spawn_groups_ui();
+        }
+    };
+    auto on_entry_change = [this](const nlohmann::json&, const SpawnGroupConfigUI::ChangeSummary&) {
+        if (!active_trail_) return;
+        active_trail_->save_assets_json();
+        if (trail_config_ui_) trail_config_ui_->refresh_spawn_groups(active_trail_);
+    };
+    trail_spawn_groups_ui_->load(groups, on_change, on_entry_change, {});
+    if (trail_config_ui_) {
+        trail_config_ui_->refresh_spawn_groups(active_trail_);
+    }
+    if (reopen) {
+        trail_spawn_groups_ui_->restore_open_spawn_group(*reopen);
+    }
+}
+
+void DevControls::open_trail_spawn_group_editor(const std::string& spawn_id) {
+    if (spawn_id.empty()) return;
+    ensure_trail_ui();
+    if (!trail_spawn_groups_ui_) return;
+    SDL_Point anchor{trail_config_bounds_.x + trail_config_bounds_.w + 16, trail_config_bounds_.y};
+    trail_spawn_groups_ui_->set_anchor(anchor.x, anchor.y);
+    trail_spawn_groups_ui_->open_spawn_group(spawn_id, anchor.x, anchor.y);
+}
+
+void DevControls::duplicate_trail_spawn_group(const std::string& spawn_id) {
+    if (spawn_id.empty() || !active_trail_) return;
+    auto& root = active_trail_->assets_data();
+    auto& groups = ensure_spawn_groups_array(root);
+    nlohmann::json* original = find_trail_spawn_entry(spawn_id);
+    if (!original) return;
+    nlohmann::json duplicate = *original;
+    std::string new_id = generate_spawn_id();
+    duplicate["spawn_id"] = new_id;
+    if (duplicate.contains("display_name") && duplicate["display_name"].is_string()) {
+        duplicate["display_name"] = duplicate["display_name"].get<std::string>() + " Copy";
+    }
+    groups.push_back(duplicate);
+    sanitize_perimeter_spawn_groups(groups);
+    active_trail_->save_assets_json();
+    refresh_trail_spawn_groups_ui();
+    open_trail_spawn_group_editor(new_id);
+}
+
+void DevControls::delete_trail_spawn_group(const std::string& spawn_id) {
+    if (spawn_id.empty() || !active_trail_) return;
+    auto& root = active_trail_->assets_data();
+    auto& groups = ensure_spawn_groups_array(root);
+    auto it = std::remove_if(groups.begin(), groups.end(), [&](nlohmann::json& entry) {
+        if (!entry.is_object()) return false;
+        if (!entry.contains("spawn_id") || !entry["spawn_id"].is_string()) return false;
+        return entry["spawn_id"].get<std::string>() == spawn_id;
+    });
+    if (it == groups.end()) return;
+    groups.erase(it, groups.end());
+    sanitize_perimeter_spawn_groups(groups);
+    active_trail_->save_assets_json();
+    if (trail_spawn_groups_ui_) {
+        trail_spawn_groups_ui_->close_all();
+    }
+    refresh_trail_spawn_groups_ui();
+}
+
+void DevControls::add_trail_spawn_group() {
+    if (!active_trail_) return;
+    auto& root = active_trail_->assets_data();
+    auto& groups = ensure_spawn_groups_array(root);
+    nlohmann::json entry;
+    entry["spawn_id"] = generate_spawn_id();
+    entry["display_name"] = "New Spawn";
+    entry["position"] = "Exact";
+    entry["min_number"] = 1;
+    entry["max_number"] = 1;
+    entry["check_overlap"] = false;
+    entry["enforce_spacing"] = false;
+    entry["chance_denominator"] = 100;
+    entry["candidates"] = nlohmann::json::array();
+    entry["candidates"].push_back({{"name", "null"}, {"chance", 0}});
+    groups.push_back(entry);
+    sanitize_perimeter_spawn_groups(groups);
+    active_trail_->save_assets_json();
+    refresh_trail_spawn_groups_ui();
+    if (entry.contains("spawn_id") && entry["spawn_id"].is_string()) {
+        open_trail_spawn_group_editor(entry["spawn_id"].get<std::string>());
+    }
+}
+
+nlohmann::json* DevControls::find_trail_spawn_entry(const std::string& spawn_id) {
+    if (!active_trail_ || spawn_id.empty()) return nullptr;
+    auto& root = active_trail_->assets_data();
+    auto& groups = ensure_spawn_groups_array(root);
+    for (auto& entry : groups) {
+        if (!entry.is_object()) continue;
+        if (!entry.contains("spawn_id") || !entry["spawn_id"].is_string()) continue;
+        if (entry["spawn_id"].get<std::string>() == spawn_id) {
+            return &entry;
+        }
+    }
+    return nullptr;
 }
 
 void DevControls::open_regenerate_room_popup() {
@@ -1007,8 +1318,11 @@ void DevControls::handle_map_selection() {
     });
     const bool is_trail = (type == "trail");
     if (is_trail) {
+        open_trail_config(selected);
         return;
     }
+
+    close_trail_config();
 
     dev_selected_room_ = selected;
     set_current_room(selected);

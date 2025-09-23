@@ -90,26 +90,6 @@ const nlohmann::json& empty_object() {
     return kEmpty;
 }
 
-int parse_json_int(const nlohmann::json& object, const std::string& key, int fallback) {
-    if (!object.contains(key)) {
-        return fallback;
-    }
-    const auto& value = object[key];
-    if (value.is_number_integer()) {
-        return value.get<int>();
-    }
-    if (value.is_number_float()) {
-        return static_cast<int>(std::lround(value.get<double>()));
-    }
-    if (value.is_string()) {
-        try {
-            return std::stoi(value.get<std::string>());
-        } catch (...) {
-        }
-    }
-    return fallback;
-}
-
 std::optional<int> read_json_int(const nlohmann::json& object, const std::string& key) {
     if (!object.is_object() || !object.contains(key)) {
         return std::nullopt;
@@ -227,17 +207,35 @@ void RoomConfigurator::load_from_json(const nlohmann::json& data) {
     int fallback_h_min = room_h_min_;
     int fallback_h_max = room_h_max_;
 
-    const int default_w_max = std::max(fallback_w_min, fallback_w_max);
-    const int default_h_max = std::max(fallback_h_min, fallback_h_max);
+    if (auto value = find_dimension_value(loaded_json_,
+                                         {"min_width", "width_min", "minWidth", "widthMin"})) {
+        room_w_min_ = *value;
+    } else {
+        room_w_min_ = fallback_w_min;
+    }
 
-    room_w_min_ = parse_json_int(loaded_json_, "min_width",
-                                 parse_json_int(loaded_json_, "width_min", fallback_w_min));
-    room_w_max_ = parse_json_int(loaded_json_, "max_width",
-                                 parse_json_int(loaded_json_, "width_max", default_w_max));
-    room_h_min_ = parse_json_int(loaded_json_, "min_height",
-                                 parse_json_int(loaded_json_, "height_min", fallback_h_min));
-    room_h_max_ = parse_json_int(loaded_json_, "max_height",
-                                 parse_json_int(loaded_json_, "height_max", default_h_max));
+    int width_fallback = std::max(room_w_min_, fallback_w_max);
+    if (auto value = find_dimension_value(loaded_json_,
+                                         {"max_width", "width_max", "maxWidth", "widthMax"})) {
+        room_w_max_ = *value;
+    } else {
+        room_w_max_ = width_fallback;
+    }
+
+    if (auto value = find_dimension_value(loaded_json_,
+                                         {"min_height", "height_min", "minHeight", "heightMin"})) {
+        room_h_min_ = *value;
+    } else {
+        room_h_min_ = fallback_h_min;
+    }
+
+    int height_fallback = std::max(room_h_min_, fallback_h_max);
+    if (auto value = find_dimension_value(loaded_json_,
+                                         {"max_height", "height_max", "maxHeight", "heightMax"})) {
+        room_h_max_ = *value;
+    } else {
+        room_h_max_ = height_fallback;
+    }
 
     if (room_w_min_ > room_w_max_) std::swap(room_w_min_, room_w_max_);
     if (room_h_min_ > room_h_max_) std::swap(room_h_min_, room_h_max_);
@@ -284,19 +282,19 @@ bool RoomConfigurator::refresh_spawn_groups(const nlohmann::json& data) {
     bool have_h_min = false;
     bool have_h_max = false;
 
-    if (auto value = find_dimension_value(data, {"min_width", "width_min"})) {
+    if (auto value = find_dimension_value(data, {"min_width", "width_min", "minWidth", "widthMin"})) {
         new_w_min = *value;
         have_w_min = true;
     }
-    if (auto value = find_dimension_value(data, {"max_width", "width_max"})) {
+    if (auto value = find_dimension_value(data, {"max_width", "width_max", "maxWidth", "widthMax"})) {
         new_w_max = *value;
         have_w_max = true;
     }
-    if (auto value = find_dimension_value(data, {"min_height", "height_min"})) {
+    if (auto value = find_dimension_value(data, {"min_height", "height_min", "minHeight", "heightMin"})) {
         new_h_min = *value;
         have_h_min = true;
     }
-    if (auto value = find_dimension_value(data, {"max_height", "height_max"})) {
+    if (auto value = find_dimension_value(data, {"max_height", "height_max", "maxHeight", "heightMax"})) {
         new_h_max = *value;
         have_h_max = true;
     }

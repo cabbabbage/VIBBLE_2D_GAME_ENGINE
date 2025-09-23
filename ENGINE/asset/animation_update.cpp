@@ -861,7 +861,15 @@ void AnimationUpdate::update() {
 
             manual.last_was_moving = true;
         }
-        suppress_movement_ = manual.active;
+        // Manual control should allow the override movement to actually update the
+        // asset position. Previously we set `suppress_movement_` to
+        // `manual.active`, which is always true inside this branch and therefore
+        // prevented any positional changes from occurring. As a consequence,
+        // assets controlled via `AnimationUpdate::move` (e.g. the player and
+        // custom controllers that rely on manual movement) never moved despite
+        // providing non-zero deltas. Clearing the suppression flag here ensures
+        // that the overridden deltas are applied during `advance`.
+        suppress_movement_ = false;
         bool cont = advance(self_->current_frame);
         blocked_last_step_ = false;
         if (!cont) {

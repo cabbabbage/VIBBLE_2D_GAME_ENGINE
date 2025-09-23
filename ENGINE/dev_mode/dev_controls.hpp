@@ -25,6 +25,8 @@ class MapModeUI;
 class CameraUIPanel;
 class RegenerateRoomPopup;
 class DMCheckbox;
+class RoomConfigurator;
+class SpawnGroupsConfig;
 
 class DevControls {
 public:
@@ -171,5 +173,26 @@ private:
     SDL_Rect filter_header_rect_{0, 0, 0, 0};
     std::unordered_set<std::string> map_asset_spawn_ids_;
     std::unordered_set<std::string> current_room_spawn_ids_;
+
+    std::unique_ptr<RoomConfigurator> trail_config_ui_;
+    std::unique_ptr<SpawnGroupsConfig> trail_spawn_groups_ui_;
+    Room* active_trail_ = nullptr;
+    SDL_Rect trail_config_bounds_{0, 0, 0, 0};
+
+    void ensure_trail_ui();
+    void update_trail_ui_bounds();
+    void open_trail_config(Room* trail);
+    void close_trail_config();
+    bool is_trail_config_open() const;
+    void update_trail_ui(const Input& input);
+    bool handle_trail_ui_event(const SDL_Event& event);
+    void render_trail_ui(SDL_Renderer* renderer);
+    bool is_point_inside_trail_ui(int x, int y) const;
+    void refresh_trail_spawn_groups_ui();
+    void open_trail_spawn_group_editor(const std::string& spawn_id);
+    void duplicate_trail_spawn_group(const std::string& spawn_id);
+    void delete_trail_spawn_group(const std::string& spawn_id);
+    void add_trail_spawn_group();
+    nlohmann::json* find_trail_spawn_entry(const std::string& spawn_id);
 };
 
