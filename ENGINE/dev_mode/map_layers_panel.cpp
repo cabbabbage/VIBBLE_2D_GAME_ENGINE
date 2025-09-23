@@ -2,6 +2,7 @@
 
 #include "dm_styles.hpp"
 #include "map_layers_controller.hpp"
+#include "room_configurator.hpp"
 #include "widgets.hpp"
 #include "utils/input.hpp"
 
@@ -17,8 +18,10 @@
 #include <iostream>
 #include <numeric>
 #include <random>
+#include <limits>
 #include <sstream>
 #include <unordered_map>
+#include <utility>
 
 #include <nlohmann/json.hpp>
 
@@ -427,6 +430,12 @@ bool MapLayersPanel::LayerCanvasWidget::handle_event(const SDL_Event& e) {
     double display_extent = std::max(max_radius, owner_->preview_extent_);
     if (display_extent <= 0.0) display_extent = 1.0;
     double scale = static_cast<double>(draw_radius_max) / display_extent;
+
+    if (e.button.button == SDL_BUTTON_LEFT) {
+        if (owner_->handle_preview_room_click(p.x, p.y, center_x, center_y, scale)) {
+            return true;
+        }
+    }
 
     int hit_index = -1;
     for (const auto& info : circles_) {
@@ -1184,6 +1193,8 @@ void MapLayersPanel::set_map_info(json* map_info, const std::string& map_path) {
     rebuild_available_rooms();
     refresh_canvas();
     if (layer_config_) layer_config_->close();
+    if (room_configurator_) room_configurator_->close();
+    active_room_config_key_.clear();
     request_preview_regeneration();
     mark_clean();
 }
@@ -1208,6 +1219,8 @@ void MapLayersPanel::close() {
     set_visible(false);
     if (layer_config_) layer_config_->close();
     if (room_selector_) room_selector_->close();
+    if (room_configurator_) room_configurator_->close();
+    active_room_config_key_.clear();
 }
 
 bool MapLayersPanel::is_visible() const {
@@ -1249,6 +1262,15 @@ void MapLayersPanel::update(const Input& input, int screen_w, int screen_h) {
     if (room_selector_) {
         room_selector_->set_screen_bounds(screen_bounds_);
     }
+<<<<<<< ours
+=======
+    if (room_configurator_) {
+        room_configurator_->set_work_area(screen_bounds_);
+        if (room_configurator_->visible()) {
+            room_configurator_->set_bounds(compute_room_config_bounds());
+        }
+    }
+>>>>>>> theirs
     if (!is_visible()) return;
     DockableCollapsible::update(input, screen_w, screen_h);
     if (layer_config_) layer_config_->update(input, screen_w, screen_h);
@@ -1257,11 +1279,28 @@ void MapLayersPanel::update(const Input& input, int screen_w, int screen_h) {
         room_selector_->set_anchor_rect(anchor);
         room_selector_->update(input);
     }
+    if (room_configurator_) {
+        room_configurator_->update(input, screen_w, screen_h);
+        if (room_configurator_->visible() && !active_room_config_key_.empty()) {
+            if (auto* entry = ensure_room_entry(active_room_config_key_)) {
+                nlohmann::json updated = room_configurator_->build_json();
+                if (!entry->is_object() || *entry != updated) {
+                    *entry = std::move(updated);
+                    mark_dirty();
+                    request_preview_regeneration();
+                }
+            }
+        }
+    }
 }
 
 bool MapLayersPanel::handle_event(const SDL_Event& e) {
     if (!is_visible()) return false;
-    bool used = DockableCollapsible::handle_event(e);
+    bool used = false;
+    if (room_configurator_ && room_configurator_->visible()) {
+        used = room_configurator_->handle_event(e) || used;
+    }
+    used = DockableCollapsible::handle_event(e) || used;
     if (layer_config_ && layer_config_->is_visible()) {
         used = layer_config_->handle_event(e) || used;
     }
@@ -1280,6 +1319,9 @@ void MapLayersPanel::render(SDL_Renderer* renderer) const {
     if (room_selector_ && room_selector_->visible()) {
         room_selector_->render(renderer);
     }
+    if (room_configurator_ && room_configurator_->visible()) {
+        room_configurator_->render(renderer);
+    }
 }
 
 bool MapLayersPanel::is_point_inside(int x, int y) const {
@@ -1287,6 +1329,7 @@ bool MapLayersPanel::is_point_inside(int x, int y) const {
     if (DockableCollapsible::is_point_inside(x, y)) return true;
     if (layer_config_ && layer_config_->is_visible() && layer_config_->is_point_inside(x, y)) return true;
     if (room_selector_ && room_selector_->visible() && room_selector_->is_point_inside(x, y)) return true;
+    if (room_configurator_ && room_configurator_->visible() && room_configurator_->is_point_inside(x, y)) return true;
     return false;
 }
 
@@ -1581,6 +1624,162 @@ void MapLayersPanel::regenerate_preview() {
     if (canvas_widget_) {
         canvas_widget_->refresh();
     }
+}
+
+bool MapLayersPanel::handle_preview_room_click(int px, int py, int center_x, int center_y, double scale) {
+    if (preview_nodes_.empty()) {
+        return false;
+    }
+
+    const PreviewNode* best_node = nullptr;
+    double best_score = std::numeric_limits<double>::max();
+    const double tolerance = 6.0;
+
+    for (const auto& node_uptr : preview_nodes_) {
+        const PreviewNode* node = node_uptr.get();
+        if (!node) continue;
+        if (node->name.empty() || node->name == "<room>") continue;
+
+        int node_cx = static_cast<int>(std::lround(center_x + node->center.x * scale));
+        int node_cy = static_cast<int>(std::lround(center_y + node->center.y * scale));
+        double dx = static_cast<double>(px - node_cx);
+        double dy = static_cast<double>(py - node_cy);
+        bool hit = false;
+        double score = 0.0;
+
+        if (node->is_circle) {
+            double radius_px = std::max(8.0, (node->width * 0.5) * scale);
+            double dist = std::hypot(dx, dy);
+            if (dist <= radius_px + tolerance) {
+                hit = true;
+                score = dist;
+            }
+        } else {
+            double half_w = std::max(8.0, (node->width * 0.5) * scale);
+            double half_h = std::max(8.0, (node->height * 0.5) * scale);
+            if (std::fabs(dx) <= half_w + tolerance && std::fabs(dy) <= half_h + tolerance) {
+                hit = true;
+                double norm_w = half_w > 0.0 ? std::fabs(dx) / half_w : 0.0;
+                double norm_h = half_h > 0.0 ? std::fabs(dy) / half_h : 0.0;
+                score = std::max(norm_w, norm_h);
+            }
+        }
+
+        if (hit && (!best_node || score < best_score)) {
+            best_node = node;
+            best_score = score;
+        }
+    }
+
+    if (!best_node) {
+        return false;
+    }
+
+    open_room_config_for(best_node->name);
+    return true;
+}
+
+void MapLayersPanel::open_room_config_for(const std::string& room_name) {
+    if (room_name.empty()) {
+        return;
+    }
+    ensure_room_configurator();
+    if (!room_configurator_) {
+        return;
+    }
+    nlohmann::json* entry = ensure_room_entry(room_name);
+    if (!entry) {
+        return;
+    }
+    active_room_config_key_ = room_name;
+    room_configurator_->set_work_area(screen_bounds_);
+    room_configurator_->set_bounds(compute_room_config_bounds());
+    room_configurator_->open(*entry);
+}
+
+void MapLayersPanel::ensure_room_configurator() {
+    if (!room_configurator_) {
+        room_configurator_ = std::make_unique<RoomConfigurator>();
+        if (room_configurator_) {
+            room_configurator_->set_show_header(true);
+            room_configurator_->set_on_close([this]() {
+                active_room_config_key_.clear();
+            });
+            room_configurator_->set_spawn_group_callbacks(
+                [](const std::string&) {},
+                [](const std::string&) {},
+                [](const std::string&) {},
+                []() {}
+            );
+        }
+    }
+}
+
+nlohmann::json* MapLayersPanel::ensure_room_entry(const std::string& room_name) {
+    if (!map_info_) {
+        return nullptr;
+    }
+    if (room_name.empty()) {
+        return nullptr;
+    }
+    nlohmann::json& rooms_data = (*map_info_)["rooms_data"];
+    if (!rooms_data.is_object()) {
+        rooms_data = nlohmann::json::object();
+    }
+    auto it = rooms_data.find(room_name);
+    if (it == rooms_data.end() || !it->is_object()) {
+        rooms_data[room_name] = make_default_room_json(room_name);
+        it = rooms_data.find(room_name);
+        mark_dirty();
+        rebuild_available_rooms();
+        request_preview_regeneration();
+    }
+    return &rooms_data[room_name];
+}
+
+SDL_Rect MapLayersPanel::compute_room_config_bounds() const {
+    SDL_Rect bounds = screen_bounds_;
+    const int margin = 48;
+
+    int width = std::max(360, bounds.w / 3);
+    if (bounds.w > margin * 2) {
+        int max_width = bounds.w - margin * 2;
+        width = std::min(width, max_width);
+    } else {
+        width = bounds.w;
+    }
+
+    int height = std::max(320, bounds.h - margin * 2);
+    if (bounds.h > margin * 2) {
+        int max_height = bounds.h - margin * 2;
+        height = std::min(height, max_height);
+    } else {
+        height = bounds.h;
+    }
+
+    if (width <= 0) width = std::max(1, bounds.w);
+    if (height <= 0) height = std::max(1, bounds.h);
+
+    int x = bounds.x + bounds.w - width - margin;
+    if (bounds.w <= margin * 2) {
+        x = bounds.x;
+    } else if (x < bounds.x + margin) {
+        x = bounds.x + margin;
+    }
+
+    int y = bounds.y + margin;
+    if (bounds.h <= margin * 2) {
+        y = bounds.y;
+    }
+
+    if (x + width > bounds.x + bounds.w) {
+        x = bounds.x + bounds.w - width;
+    }
+    if (y + height > bounds.y + bounds.h) {
+        y = bounds.y + bounds.h - height;
+    }
+
+    return SDL_Rect{x, y, width, height};
 }
 
 void MapLayersPanel::select_layer(int index) {

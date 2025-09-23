@@ -173,6 +173,8 @@ private:
     SDL_Rect filter_header_rect_{0, 0, 0, 0};
     std::unordered_set<std::string> map_asset_spawn_ids_;
     std::unordered_set<std::string> current_room_spawn_ids_;
+<<<<<<< ours
+<<<<<<< ours
 
     std::unique_ptr<RoomConfigurator> trail_config_ui_;
     std::unique_ptr<SpawnGroupsConfig> trail_spawn_groups_ui_;
@@ -194,5 +196,11 @@ private:
     void delete_trail_spawn_group(const std::string& spawn_id);
     void add_trail_spawn_group();
     nlohmann::json* find_trail_spawn_entry(const std::string& spawn_id);
+=======
+    std::unordered_set<std::string> trail_spawn_ids_;
+    std::unordered_map<std::string, Room*> trail_spawn_id_to_room_;
+>>>>>>> theirs
+=======
+>>>>>>> theirs
 };
 

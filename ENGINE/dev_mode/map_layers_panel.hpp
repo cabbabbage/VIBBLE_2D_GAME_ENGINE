@@ -16,6 +16,7 @@ class Input;
 union SDL_Event;
 struct SDL_Renderer;
 class MapLayersController;
+class RoomConfigurator;
 
 // Floating dockable panel for editing map_layers in map_info.json.
 class MapLayersPanel : public DockableCollapsible {
@@ -91,6 +92,11 @@ private:
     double compute_map_radius_from_layers();
     int append_layer_entry(const std::string& display_name = {});
     bool ensure_child_room_exists(int parent_layer_index, const std::string& child, bool* layer_created = nullptr);
+    bool handle_preview_room_click(int px, int py, int center_x, int center_y, double scale);
+    void open_room_config_for(const std::string& room_name);
+    void ensure_room_configurator();
+    nlohmann::json* ensure_room_entry(const std::string& room_name);
+    SDL_Rect compute_room_config_bounds() const;
 
 private:
     struct PreviewNode {
@@ -121,11 +127,13 @@ private:
     std::unique_ptr<PanelSidebarWidget> sidebar_widget_;
     std::unique_ptr<LayerConfigPanel> layer_config_;
     std::unique_ptr<RoomSelectorPopup> room_selector_;
+    std::unique_ptr<RoomConfigurator> room_configurator_;
 
     std::vector<std::unique_ptr<PreviewNode>> preview_nodes_;
     std::vector<PreviewEdge> preview_edges_;
     double preview_extent_ = 0.0;
     bool preview_dirty_ = true;
+    std::string active_room_config_key_;
 
     std::vector<std::string> available_rooms_;
     int selected_layer_ = -1;
