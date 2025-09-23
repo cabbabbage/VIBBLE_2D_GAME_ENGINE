@@ -3,6 +3,7 @@
 #include <SDL.h>
 
 #include <memory>
+#include <nlohmann/json_fwd.hpp>
 #include <string>
 
 class Input;
@@ -11,8 +12,6 @@ class SDL_Renderer;
 
 class RoomConfigurator;
 class SpawnGroupsConfig;
-
-namespace nlohmann { class json; }
 
 class TrailEditorSuite {
 public:
