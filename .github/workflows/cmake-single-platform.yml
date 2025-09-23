@@ -40,6 +40,18 @@ jobs:
           git clone https://github.com/microsoft/vcpkg.git
           ./vcpkg/bootstrap-vcpkg.sh
 
+      - name: Add Ninja to PATH
+        shell: pwsh
+        run: |
+          $ninjaPath = Get-ChildItem -Path "$env:GITHUB_WORKSPACE\vcpkg\downloads\tools" -Recurse -Filter ninja.exe -ErrorAction SilentlyContinue | Select-Object -First 1
+          if ($ninjaPath) {
+            $ninjaDir = $ninjaPath.DirectoryName
+            Write-Host "Adding Ninja directory to PATH: $ninjaDir"
+            Add-Content -Path $env:GITHUB_PATH -Value $ninjaDir
+          } else {
+            Write-Host "Ninja executable not found in vcpkg downloads."
+          }
+
       # === Install dependencies from manifest with retry + binary caching ===
       - name: Install dependencies from vcpkg.json
         shell: bash
