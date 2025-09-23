@@ -64,6 +64,9 @@ public:
     bool handle_event(const SDL_Event& e);
     void render(SDL_Renderer* renderer) const;
 
+    const std::vector<HeaderButton>& header_buttons() const { return buttons_; }
+    const HeaderButton* find_button(const std::string& id) const;
+
     const SDL_Rect& header_rect() const { return header_rect_; }
     const SDL_Rect& content_rect() const { return content_rect_; }
     bool contains(int x, int y) const;

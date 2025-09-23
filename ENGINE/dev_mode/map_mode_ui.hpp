@@ -65,6 +65,9 @@ public:
     void set_button_state(HeaderMode mode, const std::string& id, bool active);
     HeaderMode header_mode() const { return header_mode_; }
 
+    const std::vector<HeaderButtonConfig>& map_mode_button_configs() const { return map_mode_buttons_; }
+    const std::vector<HeaderButtonConfig>& room_mode_button_configs() const { return room_mode_buttons_; }
+
     bool is_point_inside(int x, int y) const;
     bool is_any_panel_visible() const;
     bool is_layers_footer_visible() const;
