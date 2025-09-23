@@ -6,6 +6,8 @@
 #include <nlohmann/json_fwd.hpp>
 #include <string>
 
+#include <nlohmann/json_fwd.hpp>
+
 class Input;
 class Room;
 class SDL_Renderer;

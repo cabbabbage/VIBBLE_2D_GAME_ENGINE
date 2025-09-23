@@ -152,7 +152,7 @@ std::vector<std::unique_ptr<Room>> GenerateRooms::build(AssetLibrary* asset_lib,
 																																		std::cout << "[GenerateRooms] Adding required child " << cname
 																																		<< " for parent " << rs.name << "\n";
 																					}
-																					assignments[sec.room].push_back({cname,1,1,{}});
+                                                                                                                               assignments[sec.room].push_back({cname, 1, {}});
 													}
 								}
 					}

@@ -136,6 +136,8 @@
             "falloff": 0,
             "has_light_source": true,
             "light_intensity": 0,
+            "offset_x": 0,
+            "offset_y": 0,
             "radius": 0,
             "x_radius": 0,
             "y_radius": 0
@@ -146,29 +148,29 @@
             "flicker": 0,
             "has_light_source": true,
             "light_color": [
-                255,
+                130,
                 255,
                 255
             ],
             "light_intensity": 0,
-            "offset_x": 0,
-            "offset_y": 0,
+            "offset_x": -1605,
+            "offset_y": -1337,
             "radius": 0
         },
         {
-            "falloff": 0,
+            "falloff": 35,
             "flare": 36,
-            "flicker": 3,
+            "flicker": 11,
             "has_light_source": true,
             "light_color": [
                 97,
                 219,
                 183
             ],
-            "light_intensity": 210,
-            "offset_x": -245,
-            "offset_y": -30,
-            "radius": 543
+            "light_intensity": 138,
+            "offset_x": 23,
+            "offset_y": -70,
+            "radius": 1058
         }
     ],
     "max_child_depth": 2,

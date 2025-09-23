@@ -9,12 +9,12 @@
 #include <unordered_set>
 #include <vector>
 
+#include <nlohmann/json_fwd.hpp>
+
 class Asset;
 class DMCheckbox;
 class FullScreenCollapsible;
 class Room;
-
-namespace nlohmann { class json; }
 
 class AssetFilterBar {
 public:

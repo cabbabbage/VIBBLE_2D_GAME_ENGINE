@@ -1,9 +1,9 @@
 {
   "camera_settings": {
     "distance_scale_strength": 0.05999999865889549,
-    "foreshorten_strength": 0.07000000029802322,
+    "foreshorten_strength": 0.04999999701976776,
     "height_at_zoom1": 503.0,
-    "parallax_strength": 17.25,
+    "parallax_strength": 19.5,
     "realism_enabled": true,
     "render_distance": 950.0,
     "tripod_distance_y": -795.0
@@ -219,14 +219,14 @@
       "edge_smoothness": 0,
       "geometry": "Circle",
       "height_max": 2500,
-      "height_min": 100,
+      "height_min": 2002,
       "inherits_map_assets": true,
       "is_boss": false,
       "is_spawn": false,
       "max_height": 2500,
       "max_width": 2500,
-      "min_height": 100,
-      "min_width": 100,
+      "min_height": 2002,
+      "min_width": 2037,
       "name": "bar",
       "spawn_groups": [
         {
@@ -355,7 +355,7 @@
         }
       ],
       "width_max": 2500,
-      "width_min": 100
+      "width_min": 2037
     },
     "spawn": {
       "curvyness": 1,
@@ -517,14 +517,14 @@
       "curvyness": 4,
       "geometry": "Square",
       "height_max": 1000,
-      "height_min": 519,
+      "height_min": 100,
       "inherits_map_assets": true,
       "is_boss": false,
       "is_spawn": false,
       "max_height": 1000,
       "max_width": 1115,
-      "min_height": 519,
-      "min_width": 757,
+      "min_height": 100,
+      "min_width": 100,
       "name": "brick",
       "spawn_groups": [
         {
@@ -552,7 +552,7 @@
         }
       ],
       "width_max": 1115,
-      "width_min": 757
+      "width_min": 100
     }
   }
 }
