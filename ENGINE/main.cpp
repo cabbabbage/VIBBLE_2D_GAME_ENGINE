@@ -155,11 +155,9 @@ nlohmann::json build_default_map_info(const std::string& map_name) {
     nlohmann::json layer;
     layer["level"] = 0;
     layer["radius"] = kSpawnRadius;
-    layer["min_rooms"] = 1;
     layer["max_rooms"] = 1;
     nlohmann::json spawn_spec;
     spawn_spec["name"] = "spawn";
-    spawn_spec["min_instances"] = 1;
     spawn_spec["max_instances"] = 1;
     spawn_spec["required_children"] = nlohmann::json::array();
     layer["rooms"] = nlohmann::json::array({spawn_spec});

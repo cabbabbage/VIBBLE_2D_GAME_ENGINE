@@ -12,18 +12,16 @@
 #include <nlohmann/json.hpp>
 
 struct RoomSpec {
-	std::string name;
-	int min_instances;
-	int max_instances;
-	std::vector<std::string> required_children;
+        std::string name;
+        int max_instances;
+        std::vector<std::string> required_children;
 };
 
 struct LayerSpec {
-	int level;
-	int radius;
-	int min_rooms;
-	int max_rooms;
-	std::vector<RoomSpec> rooms;
+        int level;
+        int radius;
+        int max_rooms;
+        std::vector<RoomSpec> rooms;
 };
 
 class GenerateRooms {

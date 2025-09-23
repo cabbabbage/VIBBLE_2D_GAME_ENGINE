@@ -29,29 +29,36 @@ SDL_Point GenerateRooms::polar_to_cartesian(int cx, int cy, int radius, float an
 }
 
 std::vector<RoomSpec> GenerateRooms::get_children_from_layer(const LayerSpec& layer) {
-	std::vector<RoomSpec> pool;
-	std::vector<RoomSpec> expandable;
-	std::uniform_int_distribution<int> dist(layer.min_rooms, layer.max_rooms);
-	int target = dist(rng_);
-	if (testing) {
-		std::cout << "[GenerateRooms] Building layer " << layer.level << " with target " << target << " rooms\n";
-	}
-	for (const auto& r : layer.rooms) {
-		if (testing) {
-			std::cout << "[GenerateRooms] Room type: " << r.name
-			<< " min: " << r.min_instances
-			<< " max: " << r.max_instances << "\n";
-		}
-		for (int i = 0; i < r.min_instances; ++i) pool.push_back(r);
-		for (int i = 0; i < r.max_instances - r.min_instances; ++i) expandable.push_back(r);
-	}
-	while ((int)pool.size() < target && !expandable.empty()) {
-		std::uniform_int_distribution<size_t> idx_dist(0, expandable.size() - 1);
-		size_t idx = idx_dist(rng_);
-		pool.push_back(expandable[idx]);
-		expandable.erase(expandable.begin() + idx);
-	}
-	return pool;
+        std::vector<RoomSpec> result;
+        const int target = std::max(0, layer.max_rooms);
+        if (testing) {
+                std::cout << "[GenerateRooms] Building layer " << layer.level
+                          << " targeting " << target << " rooms\n";
+        }
+
+        if (target == 0) return result;
+
+        std::vector<RoomSpec> candidates;
+        for (const auto& r : layer.rooms) {
+                const int max_instances = std::max(0, r.max_instances);
+                if (testing) {
+                        std::cout << "[GenerateRooms] Room type: " << r.name
+                                  << " count: " << max_instances << "\n";
+                }
+                for (int i = 0; i < max_instances; ++i) {
+                        candidates.push_back(r);
+                }
+        }
+
+        if (candidates.empty()) return result;
+
+        std::shuffle(candidates.begin(), candidates.end(), rng_);
+        if (static_cast<int>(candidates.size()) <= target) {
+                return candidates;
+        }
+
+        result.insert(result.end(), candidates.begin(), candidates.begin() + target);
+        return result;
 }
 
 std::vector<std::unique_ptr<Room>> GenerateRooms::build(AssetLibrary* asset_lib,

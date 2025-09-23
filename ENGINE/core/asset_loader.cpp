@@ -271,7 +271,6 @@ void AssetLoader::load_map_json() {
                         LayerSpec spec;
                         spec.level     = layer_entry.value("level", 0);
                         spec.radius    = layer_entry.value("radius", 0);
-                        spec.min_rooms = layer_entry.value("min_rooms", 0);
                         spec.max_rooms = layer_entry.value("max_rooms", 0);
 
                         auto rooms_it = layer_entry.find("rooms");
@@ -279,7 +278,6 @@ void AssetLoader::load_map_json() {
                                 for (const auto& room_entry : *rooms_it) {
                                         RoomSpec rs;
                                         rs.name          = room_entry.value("name", "unnamed");
-                                        rs.min_instances = room_entry.value("min_instances", 1);
                                         rs.max_instances = room_entry.value("max_instances", 1);
 
                                         auto required_it = room_entry.find("required_children");

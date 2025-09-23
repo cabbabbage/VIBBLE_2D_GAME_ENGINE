@@ -617,6 +617,10 @@ void RoomEditor::toggle_room_config() {
     set_room_config_visible(!is_room_config_open());
 }
 
+void RoomEditor::open_room_config() {
+    set_room_config_visible(true);
+}
+
 void RoomEditor::close_room_config() {
     set_room_config_visible(false);
 }

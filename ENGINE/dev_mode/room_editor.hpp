@@ -69,6 +69,7 @@ public:
     void finalize_asset_drag(Asset* asset, const std::shared_ptr<AssetInfo>& info);
 
     void toggle_room_config();
+    void open_room_config();
     void close_room_config();
     bool is_room_config_open() const;
     void regenerate_room();

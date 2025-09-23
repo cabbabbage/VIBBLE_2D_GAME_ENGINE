@@ -75,9 +75,9 @@ private:
     std::string suggest_room_name() const;
     void delete_layer_internal(int index);
     void open_layer_config_internal(int index);
-    void handle_layer_range_changed(int index, int min_rooms, int max_rooms);
+    void handle_layer_count_changed(int index, int max_rooms);
     void handle_layer_name_changed(int index, const std::string& name);
-    void handle_candidate_range_changed(int layer_index, int candidate_index, int min_instances, int max_instances);
+    void handle_candidate_count_changed(int layer_index, int candidate_index, int max_instances);
     void handle_candidate_removed(int layer_index, int candidate_index);
     void handle_candidate_child_added(int layer_index, int candidate_index, const std::string& child);
     void handle_candidate_child_removed(int layer_index, int candidate_index, const std::string& child);

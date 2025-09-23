@@ -253,33 +253,29 @@ int compute_next_layer_radius(const nlohmann::json& layers) {
     return max_radius + step;
 }
 
-void clamp_layer_room_ranges(nlohmann::json& layer) {
+void clamp_layer_room_counts(nlohmann::json& layer) {
     if (!layer.is_object()) return;
-    int min_rooms = std::max(0, layer.value("min_rooms", 0));
-    int max_rooms = std::max(min_rooms, layer.value("max_rooms", min_rooms));
-    layer["min_rooms"] = std::min(min_rooms, kRoomRangeMaxDefault);
-    layer["max_rooms"] = std::min(std::max(min_rooms, max_rooms), kRoomRangeMaxDefault);
+    int max_rooms = std::max(0, layer.value("max_rooms", 0));
+    layer["max_rooms"] = std::min(max_rooms, kRoomRangeMaxDefault);
 
-    int min_sum = 0;
     int max_sum = 0;
     const auto rooms_it = layer.find("rooms");
     if (rooms_it != layer.end() && rooms_it->is_array()) {
-        for (const auto& candidate : *rooms_it) {
-            min_sum += std::max(0, candidate.value("min_instances", 0));
-            max_sum += std::max(0, candidate.value("max_instances", 0));
+        for (auto& candidate : *rooms_it) {
+            if (!candidate.is_object()) continue;
+            if (candidate.contains("min_instances")) candidate.erase("min_instances");
+            int max_inst = std::max(0, candidate.value("max_instances", 0));
+            candidate["max_instances"] = std::min(max_inst, kCandidateRangeMaxDefault);
+            max_sum += candidate["max_instances"].get<int>();
         }
     }
-    if (min_sum > layer["min_rooms"].get<int>()) {
-        layer["min_rooms"] = min_sum;
-    }
-    if (layer["max_rooms"].get<int>() > max_sum && max_sum > 0) {
-        layer["max_rooms"] = std::max(layer["min_rooms"].get<int>(), max_sum);
+    if (max_sum > 0 && layer["max_rooms"].get<int>() > max_sum) {
+        layer["max_rooms"] = max_sum;
     }
 }
 
 struct PreviewRoomSpec {
     std::string name;
-    int min_instances = 0;
     int max_instances = 0;
     std::vector<std::string> required_children;
 };
@@ -287,35 +283,32 @@ struct PreviewRoomSpec {
 struct PreviewLayerSpec {
     int level = 0;
     double radius = 0.0;
-    int min_rooms = 0;
     int max_rooms = 0;
     std::vector<PreviewRoomSpec> rooms;
 };
 
 std::vector<PreviewRoomSpec> build_children_pool(const PreviewLayerSpec& layer, std::mt19937& rng) {
-    std::vector<PreviewRoomSpec> pool;
-    std::vector<PreviewRoomSpec> expandable;
-    int min_rooms = std::max(0, layer.min_rooms);
-    int max_rooms = std::max(min_rooms, layer.max_rooms);
-    if (max_rooms <= 0) return pool;
-    std::uniform_int_distribution<int> dist(min_rooms, max_rooms);
-    int target = dist(rng);
+    std::vector<PreviewRoomSpec> result;
+    const int target = std::max(0, layer.max_rooms);
+    if (target == 0) return result;
+
+    std::vector<PreviewRoomSpec> candidates;
     for (const auto& room : layer.rooms) {
-        for (int i = 0; i < room.min_instances; ++i) {
-            pool.push_back(room);
-        }
-        int extra = std::max(0, room.max_instances - room.min_instances);
-        for (int i = 0; i < extra; ++i) {
-            expandable.push_back(room);
+        const int count = std::max(0, room.max_instances);
+        for (int i = 0; i < count; ++i) {
+            candidates.push_back(room);
         }
     }
-    while (static_cast<int>(pool.size()) < target && !expandable.empty()) {
-        std::uniform_int_distribution<size_t> pick(0, expandable.size() - 1);
-        size_t idx = pick(rng);
-        pool.push_back(expandable[idx]);
-        expandable.erase(expandable.begin() + static_cast<long>(idx));
+
+    if (candidates.empty()) return result;
+
+    std::shuffle(candidates.begin(), candidates.end(), rng);
+    if (static_cast<int>(candidates.size()) <= target) {
+        return candidates;
     }
-    return pool;
+
+    result.insert(result.end(), candidates.begin(), candidates.begin() + target);
+    return result;
 }
 
 uint32_t compute_preview_seed(const std::vector<PreviewLayerSpec>& layers, const std::string& map_path) {
@@ -330,11 +323,11 @@ uint32_t compute_preview_seed(const std::vector<PreviewLayerSpec>& layers, const
 
     for (const auto& layer : layers) {
         mix(static_cast<uint64_t>(static_cast<int64_t>(std::llround(layer.radius * 1000.0))));
-        mix(static_cast<uint64_t>((static_cast<uint32_t>(layer.min_rooms) << 16) ^ static_cast<uint32_t>(layer.max_rooms)));
+        mix(static_cast<uint64_t>(static_cast<uint32_t>(layer.max_rooms)));
         mix(static_cast<uint64_t>(static_cast<uint32_t>(layer.level)));
         for (const auto& room : layer.rooms) {
             mix(static_cast<uint64_t>(std::hash<std::string>{}(room.name)));
-            mix(static_cast<uint64_t>((static_cast<uint32_t>(room.min_instances) << 16) ^ static_cast<uint32_t>(room.max_instances)));
+            mix(static_cast<uint64_t>(static_cast<uint32_t>(room.max_instances)));
             for (const auto& child : room.required_children) {
                 mix(static_cast<uint64_t>(std::hash<std::string>{}(child)));
             }
@@ -584,6 +577,8 @@ public:
     void set_dirty(bool dirty);
     void set_selected(int index) { selected_layer_ = index; refresh_config_button(); }
 
+    const SDL_Rect& config_rect() const { return config_rect_; }
+
     void set_rect(const SDL_Rect& r) override;
     const SDL_Rect& rect() const override { return rect_; }
     int height_for_width(int w) const override { return std::max(kCanvasPreferredHeight, w); }
@@ -603,6 +598,7 @@ private:
     std::unique_ptr<DMButton> preview_button_;
     bool dirty_ = false;
     int selected_layer_ = -1;
+    SDL_Rect config_rect_{0,0,0,0};
 };
 
 MapLayersPanel::PanelSidebarWidget::PanelSidebarWidget(MapLayersPanel* owner)
@@ -675,12 +671,11 @@ private:
     json* candidate_ = nullptr;
     SDL_Rect rect_{0,0,0,0};
 
-    std::unique_ptr<DMRangeSlider> range_slider_;
+    std::unique_ptr<DMSlider> count_slider_;
     std::unique_ptr<DMButton> add_child_button_;
     std::unique_ptr<DMButton> delete_button_;
 
-    int min_cache_ = 0;
-    int max_cache_ = 0;
+    int count_cache_ = 0;
     std::vector<ChildChip> child_chips_;
 };
 
@@ -711,9 +706,8 @@ private:
     std::unique_ptr<TextBoxWidget> name_widget_;
     std::string name_cache_;
 
-    std::unique_ptr<DMRangeSlider> room_range_slider_;
-    std::unique_ptr<RangeSliderWidget> room_range_widget_;
-    int min_rooms_cache_ = 0;
+    std::unique_ptr<DMSlider> room_count_slider_;
+    std::unique_ptr<SliderWidget> room_count_widget_;
     int max_rooms_cache_ = 0;
 
     std::unique_ptr<DMButton> add_candidate_btn_;
@@ -761,9 +755,9 @@ void MapLayersPanel::PanelSidebarWidget::set_rect(const SDL_Rect& r) {
 
     int config_top = y;
     int config_height = std::max(0, rect_.y + rect_.h - config_top - spacing);
+    config_rect_ = SDL_Rect{ rect_.x + spacing, config_top, button_width, config_height };
     if (config_panel_) {
-        SDL_Rect config_rect{ rect_.x + spacing, config_top, button_width, config_height };
-        config_panel_->set_rect(config_rect);
+        config_panel_->set_rect(config_rect_);
         const int panel_padding = DMSpacing::panel_padding();
         int available = std::max(0, config_height - panel_padding * 2);
         config_panel_->set_available_height_override(available);
@@ -829,7 +823,7 @@ void MapLayersPanel::LayerConfigPanel::open(int layer_index, json* layer) {
     layer_index_ = layer_index;
     layer_ = layer;
     name_cache_ = layer_->value("name", std::string("layer_") + std::to_string(layer_index));
-    min_rooms_cache_ = layer_->value("min_rooms", 0);
+    if (layer_->contains("min_rooms")) layer_->erase("min_rooms");
     max_rooms_cache_ = layer_->value("max_rooms", 0);
     refresh();
     set_title(std::string("Layer: ") + name_cache_);
@@ -898,7 +892,6 @@ bool MapLayersPanel::LayerConfigPanel::is_point_inside(int x, int y) const {
 void MapLayersPanel::LayerConfigPanel::refresh() {
     if (layer_) {
         name_cache_ = layer_->value("name", name_cache_);
-        min_rooms_cache_ = layer_->value("min_rooms", min_rooms_cache_);
         max_rooms_cache_ = layer_->value("max_rooms", max_rooms_cache_);
     }
 
@@ -908,10 +901,11 @@ void MapLayersPanel::LayerConfigPanel::refresh() {
     name_widget_ = std::make_unique<TextBoxWidget>(name_box_.get());
     rows.push_back({ name_widget_.get() });
 
-    const int slider_max = std::max(kRoomRangeMaxDefault, std::max(min_rooms_cache_, max_rooms_cache_) + 8);
-    room_range_slider_ = std::make_unique<DMRangeSlider>(0, slider_max, min_rooms_cache_, std::max(min_rooms_cache_, max_rooms_cache_));
-    room_range_widget_ = std::make_unique<RangeSliderWidget>(room_range_slider_.get());
-    rows.push_back({ room_range_widget_.get() });
+    max_rooms_cache_ = std::max(0, max_rooms_cache_);
+    const int slider_max = std::max(kRoomRangeMaxDefault, max_rooms_cache_ + 8);
+    room_count_slider_ = std::make_unique<DMSlider>("Room Count", 0, slider_max, max_rooms_cache_);
+    room_count_widget_ = std::make_unique<SliderWidget>(room_count_slider_.get());
+    rows.push_back({ room_count_widget_.get() });
 
     add_candidate_btn_ = std::make_unique<DMButton>("Add Room", &DMStyles::CreateButton(), 160, DMButton::height());
     add_candidate_widget_ = std::make_unique<ButtonWidget>(add_candidate_btn_.get(), [this]() {
@@ -965,15 +959,13 @@ void MapLayersPanel::LayerConfigPanel::sync_from_widgets() {
             set_title(std::string("Layer: ") + name_cache_);
         }
     }
-    if (room_range_slider_) {
-        int new_min = room_range_slider_->min_value();
-        int new_max = room_range_slider_->max_value();
-        if (new_min != min_rooms_cache_ || new_max != max_rooms_cache_) {
-            min_rooms_cache_ = new_min;
-            max_rooms_cache_ = std::max(new_min, new_max);
-            (*layer_)["min_rooms"] = min_rooms_cache_;
+    if (room_count_slider_) {
+        int new_value = room_count_slider_->value();
+        if (new_value != max_rooms_cache_) {
+            max_rooms_cache_ = new_value;
             (*layer_)["max_rooms"] = max_rooms_cache_;
-            if (owner_) owner_->handle_layer_range_changed(layer_index_, min_rooms_cache_, max_rooms_cache_);
+            if (layer_->contains("min_rooms")) layer_->erase("min_rooms");
+            if (owner_) owner_->handle_layer_count_changed(layer_index_, max_rooms_cache_);
         }
     }
     json& rooms = (*layer_)["rooms"];
@@ -990,19 +982,18 @@ void MapLayersPanel::LayerConfigPanel::sync_from_widgets() {
 
 MapLayersPanel::RoomCandidateWidget::RoomCandidateWidget(LayerConfigPanel* owner, int layer_index, int candidate_index, json* candidate)
     : owner_(owner), layer_index_(layer_index), candidate_index_(candidate_index), candidate_(candidate) {
-    range_slider_ = std::make_unique<DMRangeSlider>(0, kCandidateRangeMaxDefault, 0, 0);
+    count_slider_ = std::make_unique<DMSlider>("Instances", 0, kCandidateRangeMaxDefault, 0);
     add_child_button_ = std::make_unique<DMButton>("Add Child", &DMStyles::HeaderButton(), 120, DMButton::height());
     delete_button_ = std::make_unique<DMButton>("Delete", &DMStyles::DeleteButton(), 120, DMButton::height());
 }
 
 void MapLayersPanel::RoomCandidateWidget::refresh_from_json() {
     if (!candidate_) return;
-    const int min_v = candidate_->value("min_instances", 0);
-    const int max_v = candidate_->value("max_instances", 0);
-    min_cache_ = min_v;
-    max_cache_ = std::max(min_v, max_v);
-    const int slider_max = std::max(kCandidateRangeMaxDefault, max_cache_ + 8);
-    range_slider_ = std::make_unique<DMRangeSlider>(0, slider_max, min_cache_, max_cache_);
+    if (candidate_->contains("min_instances")) candidate_->erase("min_instances");
+    const int count = std::max(0, candidate_->value("max_instances", 0));
+    count_cache_ = count;
+    const int slider_max = std::max(kCandidateRangeMaxDefault, count_cache_ + 8);
+    count_slider_ = std::make_unique<DMSlider>("Instances", 0, slider_max, count_cache_);
     child_chips_.clear();
     auto children_it = candidate_->find("required_children");
     if (children_it != candidate_->end() && children_it->is_array()) {
@@ -1017,16 +1008,13 @@ void MapLayersPanel::RoomCandidateWidget::refresh_from_json() {
 
 void MapLayersPanel::RoomCandidateWidget::update() {
     if (!candidate_) return;
-    if (range_slider_) {
-        int new_min = range_slider_->min_value();
-        int new_max = range_slider_->max_value();
-        if (new_min != min_cache_ || new_max != max_cache_) {
-            min_cache_ = new_min;
-            max_cache_ = std::max(new_min, new_max);
-            (*candidate_)["min_instances"] = min_cache_;
-            (*candidate_)["max_instances"] = max_cache_;
+    if (count_slider_) {
+        int new_value = count_slider_->value();
+        if (new_value != count_cache_) {
+            count_cache_ = new_value;
+            (*candidate_)["max_instances"] = count_cache_;
             if (owner_ && owner_->panel_owner()) {
-                owner_->panel_owner()->handle_candidate_range_changed(layer_index_, candidate_index_, min_cache_, max_cache_);
+                owner_->panel_owner()->handle_candidate_count_changed(layer_index_, candidate_index_, count_cache_);
             }
         }
     }
@@ -1035,8 +1023,8 @@ void MapLayersPanel::RoomCandidateWidget::update() {
 void MapLayersPanel::RoomCandidateWidget::set_rect(const SDL_Rect& r) {
     rect_ = r;
     const int spacing = DMSpacing::item_gap();
-    SDL_Rect slider_rect{ rect_.x + spacing, rect_.y + spacing + DMButton::height() + spacing, rect_.w - spacing * 2, DMRangeSlider::height() };
-    if (range_slider_) range_slider_->set_rect(slider_rect);
+    SDL_Rect slider_rect{ rect_.x + spacing, rect_.y + spacing + DMButton::height() + spacing, rect_.w - spacing * 2, DMSlider::height() };
+    if (count_slider_) count_slider_->set_rect(slider_rect);
     SDL_Rect buttons_rect{ rect_.x + spacing, slider_rect.y + slider_rect.h + spacing, 120, DMButton::height() };
     if (add_child_button_) add_child_button_->set_rect(buttons_rect);
     buttons_rect.x += add_child_button_->rect().w + spacing;
@@ -1066,7 +1054,7 @@ void MapLayersPanel::RoomCandidateWidget::set_rect(const SDL_Rect& r) {
 
 int MapLayersPanel::RoomCandidateWidget::height_for_width(int w) const {
     const int spacing = DMSpacing::item_gap();
-    int height = spacing + DMButton::height() + spacing + DMRangeSlider::height() + spacing + DMButton::height() + spacing;
+    int height = spacing + DMButton::height() + spacing + DMSlider::height() + spacing + DMButton::height() + spacing;
     int chips_needed = static_cast<int>(child_chips_.size());
     if (chips_needed > 0) {
         const int chip_height = DMButton::height();
@@ -1080,7 +1068,7 @@ int MapLayersPanel::RoomCandidateWidget::height_for_width(int w) const {
 
 bool MapLayersPanel::RoomCandidateWidget::handle_event(const SDL_Event& e) {
     bool used = false;
-    if (range_slider_ && range_slider_->handle_event(e)) {
+    if (count_slider_ && count_slider_->handle_event(e)) {
         used = true;
     }
     if (add_child_button_ && add_child_button_->handle_event(e)) {
@@ -1133,7 +1121,7 @@ void MapLayersPanel::RoomCandidateWidget::render(SDL_Renderer* renderer) const {
 
     const DMLabelStyle label = DMStyles::Label();
     draw_text(renderer, candidate_->value("name", "room"), rect_.x + DMSpacing::item_gap(), rect_.y + DMSpacing::item_gap() - (label.font_size + 4), label);
-    if (range_slider_) range_slider_->render(renderer);
+    if (count_slider_) count_slider_->render(renderer);
     if (add_child_button_) add_child_button_->render(renderer);
     if (delete_button_) delete_button_->render(renderer);
 
@@ -1401,16 +1389,14 @@ void MapLayersPanel::regenerate_preview() {
         PreviewLayerSpec spec;
         spec.level = layer_json.value("level", static_cast<int>(layer_specs.size()));
         spec.radius = layer_json.value("radius", 0.0);
-        spec.min_rooms = layer_json.value("min_rooms", 0);
-        spec.max_rooms = layer_json.value("max_rooms", spec.min_rooms);
+        spec.max_rooms = layer_json.value("max_rooms", 0);
         auto rooms_it = layer_json.find("rooms");
         if (rooms_it != layer_json.end() && rooms_it->is_array()) {
             for (const auto& candidate : *rooms_it) {
                 if (!candidate.is_object()) continue;
                 PreviewRoomSpec room_spec;
                 room_spec.name = candidate.value("name", std::string());
-                room_spec.min_instances = candidate.value("min_instances", 0);
-                room_spec.max_instances = candidate.value("max_instances", room_spec.min_instances);
+                room_spec.max_instances = candidate.value("max_instances", 0);
                 auto required_it = candidate.find("required_children");
                 if (required_it != candidate.end() && required_it->is_array()) {
                     for (const auto& child : *required_it) {
@@ -1529,7 +1515,6 @@ void MapLayersPanel::regenerate_preview() {
                         for (const auto& child : prev_room.required_children) {
                             PreviewRoomSpec required;
                             required.name = child;
-                            required.min_instances = 1;
                             required.max_instances = 1;
                             assignments[sector.node].push_back(required);
                         }
@@ -1735,6 +1720,12 @@ nlohmann::json* MapLayersPanel::ensure_room_entry(const std::string& room_name) 
 }
 
 SDL_Rect MapLayersPanel::compute_room_config_bounds() const {
+    if (sidebar_widget_) {
+        const SDL_Rect& dock = sidebar_widget_->config_rect();
+        if (dock.w > 0 && dock.h > 0) {
+            return dock;
+        }
+    }
     SDL_Rect bounds = screen_bounds_;
     const int margin = 48;
 
@@ -1825,7 +1816,7 @@ void MapLayersPanel::ensure_layer_indices() {
             oss << "layer_" << i;
             arr[i]["name"] = oss.str();
         }
-        if (!arr[i].contains("min_rooms")) arr[i]["min_rooms"] = 0;
+        if (arr[i].contains("min_rooms")) arr[i].erase("min_rooms");
         if (!arr[i].contains("max_rooms")) arr[i]["max_rooms"] = 0;
         if (!arr[i].contains("radius")) arr[i]["radius"] = 0;
         if (!arr[i].contains("rooms") || !arr[i]["rooms"].is_array()) {
@@ -1883,7 +1874,6 @@ int MapLayersPanel::append_layer_entry(const std::string& display_name) {
         {"level", idx},
         {"name", name},
         {"radius", arr.empty() ? 0 : radius},
-        {"min_rooms", 0},
         {"max_rooms", 0},
         {"rooms", json::array()}
     };
@@ -1967,7 +1957,6 @@ bool MapLayersPanel::ensure_child_room_exists(int parent_layer_index, const std:
     if (it == rooms.end()) {
         json candidate = {
             {"name", child},
-            {"min_instances", 1},
             {"max_instances", 1},
             {"required_children", json::array()}
         };
@@ -1975,19 +1964,18 @@ bool MapLayersPanel::ensure_child_room_exists(int parent_layer_index, const std:
         modified = true;
     } else {
         json& entry = *it;
-        int min_inst = entry.value("min_instances", 0);
-        int max_inst = entry.value("max_instances", min_inst);
-        if (min_inst < 1) {
-            entry["min_instances"] = 1;
+        if (entry.contains("min_instances")) {
+            entry.erase("min_instances");
             modified = true;
         }
+        int max_inst = entry.value("max_instances", 0);
         if (max_inst < 1) {
             entry["max_instances"] = 1;
             modified = true;
         }
     }
 
-    clamp_layer_room_ranges(*child_layer);
+    clamp_layer_room_counts(*child_layer);
     return modified;
 }
 
@@ -2013,11 +2001,12 @@ void MapLayersPanel::open_layer_config_internal(int index) {
     layer_config_->open(index, layer);
 }
 
-void MapLayersPanel::handle_layer_range_changed(int index, int min_rooms, int max_rooms) {
+void MapLayersPanel::handle_layer_count_changed(int index, int max_rooms) {
     auto* layer = layer_at(index);
     if (!layer) return;
-    (*layer)["min_rooms"] = min_rooms;
-    (*layer)["max_rooms"] = max_rooms;
+    (*layer)["max_rooms"] = std::max(0, max_rooms);
+    if (layer->contains("min_rooms")) layer->erase("min_rooms");
+    clamp_layer_room_counts(*layer);
     mark_dirty();
 }
 
@@ -2029,15 +2018,16 @@ void MapLayersPanel::handle_layer_name_changed(int index, const std::string& nam
     refresh_canvas();
 }
 
-void MapLayersPanel::handle_candidate_range_changed(int layer_index, int candidate_index, int min_instances, int max_instances) {
+void MapLayersPanel::handle_candidate_count_changed(int layer_index, int candidate_index, int max_instances) {
     auto* layer = layer_at(layer_index);
     if (!layer) return;
     auto rooms_it = layer->find("rooms");
     if (rooms_it == layer->end() || !rooms_it->is_array()) return;
     if (candidate_index < 0 || candidate_index >= static_cast<int>(rooms_it->size())) return;
-    (*rooms_it)[candidate_index]["min_instances"] = min_instances;
-    (*rooms_it)[candidate_index]["max_instances"] = max_instances;
-    clamp_layer_room_ranges(*layer);
+    auto& entry = (*rooms_it)[candidate_index];
+    entry["max_instances"] = std::max(0, max_instances);
+    if (entry.contains("min_instances")) entry.erase("min_instances");
+    clamp_layer_room_counts(*layer);
     mark_dirty();
 }
 
@@ -2048,7 +2038,7 @@ void MapLayersPanel::handle_candidate_removed(int layer_index, int candidate_ind
     if (rooms_it == layer->end() || !rooms_it->is_array()) return;
     if (candidate_index < 0 || candidate_index >= static_cast<int>(rooms_it->size())) return;
     rooms_it->erase(rooms_it->begin() + candidate_index);
-    clamp_layer_room_ranges(*layer);
+    clamp_layer_room_counts(*layer);
     mark_dirty();
     if (layer_config_) layer_config_->refresh();
 }
@@ -2101,12 +2091,11 @@ void MapLayersPanel::handle_candidate_added(int layer_index, const std::string& 
     if (!rooms.is_array()) rooms = json::array();
     json candidate = {
         {"name", room_name},
-        {"min_instances", 1},
         {"max_instances", 1},
         {"required_children", json::array()}
     };
     rooms.push_back(std::move(candidate));
-    clamp_layer_room_ranges(*layer);
+    clamp_layer_room_counts(*layer);
     mark_dirty();
     if (layer_config_) layer_config_->refresh();
 }
