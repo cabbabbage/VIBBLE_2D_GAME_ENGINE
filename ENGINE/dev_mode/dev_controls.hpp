@@ -12,6 +12,8 @@
 #include <nlohmann/json_fwd.hpp>
 
 #include "MapLightPanel.hpp"
+#include "asset_filter_bar.hpp"
+#include "trail_editor_suite.hpp"
 
 
 class Asset;
@@ -24,9 +26,6 @@ class MapEditor;
 class MapModeUI;
 class CameraUIPanel;
 class RegenerateRoomPopup;
-class DMCheckbox;
-class RoomConfigurator;
-class SpawnGroupsConfig;
 
 class DevControls {
 public:
@@ -114,35 +113,9 @@ private:
     bool is_modal_blocking_panels() const;
     void pulse_modal_header();
 
-    enum class FilterKind { MapAssets, CurrentRoom, Type };
-    struct FilterEntry {
-        std::string id;
-        FilterKind kind;
-        std::unique_ptr<class DMCheckbox> checkbox;
-    };
-
-    struct FilterState {
-        bool map_assets = true;
-        bool current_room = true;
-        std::unordered_map<std::string, bool> type_filters;
-    };
-
-    void initialize_asset_filters();
-    void layout_filter_header();
-    void render_filter_header(SDL_Renderer* renderer) const;
-    bool handle_filter_header_event(const SDL_Event& event);
-    bool is_point_inside_filter_header(int x, int y) const;
-    void sync_filter_state_from_ui();
     void refresh_active_asset_filters();
     void reset_asset_filters();
-    void rebuild_map_asset_spawn_ids();
-    void rebuild_current_room_spawn_ids();
-    static void collect_spawn_ids(const nlohmann::json& node, std::unordered_set<std::string>& out);
-    bool type_filter_enabled(const std::string& type) const;
-    bool is_map_asset(const Asset* asset) const;
-    bool is_current_room_asset(const Asset* asset, bool already_map_asset) const;
     bool passes_asset_filters(Asset* asset) const;
-    std::string format_type_label(const std::string& type) const;
 
 private:
     Assets* assets_ = nullptr;
@@ -168,31 +141,7 @@ private:
     std::unique_ptr<RegenerateRoomPopup> regenerate_popup_;
     std::string map_path_;
     bool pointer_over_camera_panel_ = false;
-    std::vector<FilterEntry> filter_entries_;
-    FilterState filter_state_;
-    SDL_Rect filter_header_rect_{0, 0, 0, 0};
-    std::unordered_set<std::string> map_asset_spawn_ids_;
-    std::unordered_set<std::string> current_room_spawn_ids_;
-
-    std::unique_ptr<RoomConfigurator> trail_config_ui_;
-    std::unique_ptr<SpawnGroupsConfig> trail_spawn_groups_ui_;
-    Room* active_trail_ = nullptr;
-    SDL_Rect trail_config_bounds_{0, 0, 0, 0};
-
-    void ensure_trail_ui();
-    void update_trail_ui_bounds();
-    void open_trail_config(Room* trail);
-    void close_trail_config();
-    bool is_trail_config_open() const;
-    void update_trail_ui(const Input& input);
-    bool handle_trail_ui_event(const SDL_Event& event);
-    void render_trail_ui(SDL_Renderer* renderer);
-    bool is_point_inside_trail_ui(int x, int y) const;
-    void refresh_trail_spawn_groups_ui();
-    void open_trail_spawn_group_editor(const std::string& spawn_id);
-    void duplicate_trail_spawn_group(const std::string& spawn_id);
-    void delete_trail_spawn_group(const std::string& spawn_id);
-    void add_trail_spawn_group();
-    nlohmann::json* find_trail_spawn_entry(const std::string& spawn_id);
+    std::unique_ptr<TrailEditorSuite> trail_suite_;
+    AssetFilterBar asset_filter_;
 };
 

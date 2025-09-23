@@ -9,6 +9,7 @@
 #include "dev_mode/asset_info_ui.hpp"
 #include "dev_mode/asset_library_ui.hpp"
 #include "dev_mode/spawn_groups_config.hpp"
+#include "dev_mode/spawn_group_utils.hpp"
 #include "dev_mode/full_screen_collapsible.hpp"
 #include "dev_mode/room_configurator.hpp"
 #include "dev_mode/widgets.hpp"
@@ -40,39 +41,9 @@
 
 #include <nlohmann/json.hpp>
 
-namespace {
-std::string generate_room_spawn_id() {
-    static std::mt19937 rng(std::random_device{}());
-    static const char* hex = "0123456789abcdef";
-    std::uniform_int_distribution<int> dist(0, 15);
-    std::string s = "spn-";
-    for (int i = 0; i < 12; ++i) s.push_back(hex[dist(rng)]);
-    return s;
-}
-
-nlohmann::json& ensure_spawn_groups_array(nlohmann::json& root) {
-    if (root.contains("spawn_groups") && root["spawn_groups"].is_array()) {
-        return root["spawn_groups"];
-    }
-    if (root.contains("assets") && root["assets"].is_array()) {
-        root["spawn_groups"] = root["assets"];
-        root.erase("assets");
-        return root["spawn_groups"];
-    }
-    root["spawn_groups"] = nlohmann::json::array();
-    return root["spawn_groups"];
-}
-
-const nlohmann::json* find_spawn_groups_array(const nlohmann::json& root) {
-    if (root.contains("spawn_groups") && root["spawn_groups"].is_array()) {
-        return &root["spawn_groups"];
-    }
-    if (root.contains("assets") && root["assets"].is_array()) {
-        return &root["assets"];
-    }
-    return nullptr;
-}
-}
+using devmode::spawn::ensure_spawn_groups_array;
+using devmode::spawn::find_spawn_groups_array;
+using devmode::spawn::generate_spawn_id;
 
 RoomEditor::RoomEditor(Assets* owner, int screen_w, int screen_h)
     : assets_(owner), screen_w_(screen_w), screen_h_(screen_h) {
@@ -579,7 +550,7 @@ void RoomEditor::finalize_asset_drag(Asset* asset, const std::shared_ptr<AssetIn
         center.y = c.y;
     }
 
-    std::string spawn_id = generate_room_spawn_id();
+    std::string spawn_id = generate_spawn_id();
     nlohmann::json entry;
     entry["spawn_id"] = spawn_id;
     entry["min_number"] = 1;
@@ -644,7 +615,7 @@ void RoomEditor::regenerate_room_from_template(Room* source_room) {
         for (const auto& entry : *source_groups) {
             if (!entry.is_object()) continue;
             nlohmann::json clone = entry;
-            clone["spawn_id"] = generate_room_spawn_id();
+            clone["spawn_id"] = generate_spawn_id();
             target_groups.push_back(clone);
         }
     }
@@ -1713,39 +1684,7 @@ void RoomEditor::sanitize_perimeter_spawn_groups() {
 }
 
 bool RoomEditor::sanitize_perimeter_spawn_groups(nlohmann::json& groups) {
-    if (!groups.is_array()) return false;
-    bool changed = false;
-    for (auto& entry : groups) {
-        if (!entry.is_object()) continue;
-        std::string method = entry.value("position", std::string{});
-        if (method == "Exact Position") {
-            method = "Exact";
-        }
-        if (method != "Perimeter") continue;
-        int min_number = entry.value("min_number", entry.value("max_number", 2));
-        int max_number = entry.value("max_number", min_number);
-        if (min_number < 2) {
-            min_number = 2;
-            changed = true;
-        }
-        if (max_number < 2) {
-            max_number = 2;
-            changed = true;
-        }
-        if (max_number < min_number) {
-            max_number = min_number;
-            changed = true;
-        }
-        if (!entry.contains("min_number") || !entry["min_number"].is_number_integer() ||
-            entry["min_number"].get<int>() != min_number) {
-            entry["min_number"] = min_number;
-        }
-        if (!entry.contains("max_number") || !entry["max_number"].is_number_integer() ||
-            entry["max_number"].get<int>() != max_number) {
-            entry["max_number"] = max_number;
-        }
-    }
-    return changed;
+    return devmode::spawn::sanitize_perimeter_spawn_groups(groups);
 }
 
 std::optional<RoomEditor::PerimeterOverlay> RoomEditor::compute_perimeter_overlay_for_drag() {
@@ -1822,7 +1761,7 @@ void RoomEditor::add_spawn_group_internal() {
     auto& root = current_room_->assets_data();
     auto& arr = ensure_spawn_groups_array(root);
     nlohmann::json entry;
-    entry["spawn_id"] = generate_room_spawn_id();
+    entry["spawn_id"] = generate_spawn_id();
     entry["display_name"] = "New Spawn";
     entry["position"] = "Exact";
     entry["min_number"] = 1;
@@ -1855,7 +1794,7 @@ void RoomEditor::duplicate_spawn_group_internal(const std::string& spawn_id) {
     }
     if (!original) return;
     nlohmann::json duplicate = *original;
-    std::string new_id = generate_room_spawn_id();
+    std::string new_id = generate_spawn_id();
     duplicate["spawn_id"] = new_id;
     if (duplicate.contains("display_name") && duplicate["display_name"].is_string()) {
         std::string name = duplicate["display_name"].get<std::string>();
@@ -2251,7 +2190,7 @@ void RoomEditor::regenerate_current_room() {
                     const std::string& asset_name = boundary_options[idx].first;
                     auto info = assets_->library().get(asset_name);
                     if (!info) continue;
-                    std::string spawn_id = generate_room_spawn_id();
+                    std::string spawn_id = generate_spawn_id();
                     Area spawn_area(asset_name, pt->pos, 1, 1, "Point", 1, 1, 1);
                     auto asset = std::make_unique<Asset>(info, spawn_area, pt->pos, 0, nullptr, spawn_id, std::string(asset_types::boundary));
                     boundary_spawned.push_back(std::move(asset));
