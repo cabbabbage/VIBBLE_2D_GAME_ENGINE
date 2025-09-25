@@ -2135,5 +2135,5 @@
         "wood"
     ],
     "update_radius": 1000,
-    "z_threshold": 91
+    "z_threshold": -8
 }
