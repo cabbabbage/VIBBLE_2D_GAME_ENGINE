@@ -2,13 +2,50 @@
 #include "asset/asset_info.hpp"
 #include "utils/cache_manager.hpp"
 #include <SDL_image.h>
+#include <SDL_mixer.h>
 #include <algorithm>
+#include <cstdint>
 #include <filesystem>
 #include <iostream>
-#include <cstdint>
+#include <memory>
+#include <unordered_map>
 namespace fs = std::filesystem;
 
 namespace {
+#if SDL_VERSION_ATLEAST(2,0,12)
+void apply_scale_mode(SDL_Texture* tex, const AssetInfo& info);
+#endif
+
+using AudioCache = std::unordered_map<std::string, std::weak_ptr<Mix_Chunk>>;
+
+AudioCache& get_audio_cache() {
+        static AudioCache cache;
+        return cache;
+}
+
+std::shared_ptr<Mix_Chunk> load_audio_clip(const std::string& path) {
+        if (path.empty()) return {};
+        auto& cache = get_audio_cache();
+        auto it = cache.find(path);
+        if (it != cache.end()) {
+                if (auto existing = it->second.lock()) {
+                        return existing;
+                }
+        }
+        if (!std::filesystem::exists(path)) {
+                std::cerr << "[Animation] Audio file not found: " << path << "\n";
+                return {};
+        }
+        Mix_Chunk* raw = Mix_LoadWAV(path.c_str());
+        if (!raw) {
+                std::cerr << "[Animation] Failed to load audio '" << path << "': " << Mix_GetError() << "\n";
+                return {};
+        }
+        std::shared_ptr<Mix_Chunk> chunk(raw, Mix_FreeChunk);
+        cache[path] = chunk;
+        return chunk;
+}
+
 #if SDL_VERSION_ATLEAST(2,0,12)
 void apply_scale_mode(SDL_Texture* tex, const AssetInfo& info) {
         if (tex) {
@@ -35,9 +72,9 @@ void Animation::load(const std::string& trigger,
                      int& original_canvas_width,
                      int& original_canvas_height)
 {
-	CacheManager cache;
-	if (anim_json.contains("source")) {
-		const auto& s = anim_json["source"];
+        CacheManager cache;
+        if (anim_json.contains("source")) {
+                const auto& s = anim_json["source"];
 		try {
 			if (s.contains("kind") && s["kind"].is_string())
 			source.kind = s["kind"].get<std::string>();
@@ -73,6 +110,7 @@ void Animation::load(const std::string& trigger,
         total_dx = 0;
         total_dy = 0;
         frames_data.clear();
+        audio_clip = AudioClip{};
         bool movement_specified = false;
         if (anim_json.contains("movement") && anim_json["movement"].is_array()) {
                 for (const auto& mv : anim_json["movement"]) {
@@ -261,6 +299,42 @@ void Animation::load(const std::string& trigger,
                         }
                 }
         }
+        const bool has_audio_json = anim_json.contains("audio") && anim_json["audio"].is_object();
+        const nlohmann::json* audio_json = has_audio_json ? &anim_json["audio"] : nullptr;
+        auto clamp_volume = [](int value) {
+                if (value < 0) return 0;
+                if (value > 100) return 100;
+                return value;
+        };
+        if (audio_json) {
+                audio_clip.volume = clamp_volume(audio_json->value("volume", audio_clip.volume));
+                audio_clip.effects = audio_json->value("effects", audio_clip.effects);
+                try {
+                        std::string clip_name = audio_json->value("name", std::string{});
+                        if (!clip_name.empty()) {
+                                audio_clip.name = clip_name;
+                                std::filesystem::path clip_path = std::filesystem::path(dir_path) / (clip_name + ".wav");
+                                audio_clip.path = clip_path.lexically_normal().string();
+                                audio_clip.chunk = load_audio_clip(audio_clip.path);
+                        }
+                } catch (...) {
+                        // ignore malformed audio payloads
+                }
+        }
+        if (!audio_clip.chunk && source.kind == "animation" && !source.name.empty()) {
+                auto it = info.animations.find(source.name);
+                if (it != info.animations.end()) {
+                        audio_clip = it->second.audio_clip;
+                        if (audio_json) {
+                                if (audio_json->contains("volume")) {
+                                        audio_clip.volume = clamp_volume(audio_json->value("volume", audio_clip.volume));
+                                }
+                                if (audio_json->contains("effects")) {
+                                        audio_clip.effects = audio_json->value("effects", audio_clip.effects);
+                                }
+                        }
+                }
+        }
         movment = !(total_dx == 0 && total_dy == 0);
         number_of_frames = static_cast<int>(frames.size());
         if (trigger == "default" && !frames.empty()) {
@@ -315,3 +389,7 @@ void Animation::freeze() { frozen = true; }
 bool Animation::is_frozen() const { return frozen; }
 
 bool Animation::is_static() const { return frames.size() <= 1; }
+
+bool Animation::has_audio() const { return static_cast<bool>(audio_clip.chunk); }
+
+Mix_Chunk* Animation::audio_chunk() const { return audio_clip.chunk.get(); }
