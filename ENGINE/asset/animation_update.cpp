@@ -176,11 +176,28 @@ SDL_Point AnimationUpdate::bottom_middle(SDL_Point pos) const {
 }
 
 bool AnimationUpdate::point_in_impassable(SDL_Point pt, const Asset* ignored) const {
-    const auto& obstacles = aam_.getImpassableClosest();
-    for (Asset* a : obstacles) {
+    // Only test the closest relevant asset; use a robust lookup of the
+    // impassable/collision area and rely on Asset::get_area to align + scale.
+    Asset* closest = nullptr;
+    double best_d2 = std::numeric_limits<double>::infinity();
+
+    const auto& active = aam_.getActive();
+    for (Asset* a : active) {
         if (!a || a == self_ || a == ignored || !a->info) continue;
-        Area obstacle = a->get_area("passability");
-        if (obstacle.contains_point(pt)) {
+        if (a->info->passable) continue; // Only consider impassable-tagged assets
+        const double dx = static_cast<double>(a->pos.x - pt.x);
+        const double dy = static_cast<double>(a->pos.y - pt.y);
+        const double d2 = dx*dx + dy*dy;
+        if (d2 < best_d2) { best_d2 = d2; closest = a; }
+    }
+
+    if (!closest) return false;
+
+    // Try known area names in order of likelihood
+    static const char* kNames[] = { "impassable_area", "passability", "collision_area" };
+    for (const char* nm : kNames) {
+        Area obstacle = closest->get_area(nm);
+        if (obstacle.get_points().size() >= 3 && obstacle.contains_point(pt)) {
             return true;
         }
     }
@@ -342,10 +359,12 @@ std::string AnimationUpdate::pick_best_animation_towards(SDL_Point target) {
         if (!anim.frames.empty() && anim.frames_data.size() != anim.frames.size()) continue;
         const int dx = anim.total_dx;
         const int dy = anim.total_dy;
+        // When moving, consider any animation that results in movement (dx, dy not both zero).
+        // When idle, consider only animations that have no movement (dx == 0 && dy == 0).
         if (moving) {
-            if (dx == 0 || dy == 0) continue;
-        } else {
             if (dx == 0 && dy == 0) continue;
+        } else {
+            if (dx != 0 || dy != 0) continue;
         }
         if (!can_move_by(dx, dy)) continue;
         if (would_overlap_same_or_player(dx, dy)) continue;

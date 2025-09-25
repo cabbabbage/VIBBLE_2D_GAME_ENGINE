@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cctype>
 #include <sstream>
 #include <utility>
 #include <optional>
@@ -256,6 +257,31 @@ void RoomConfigurator::load_from_json(const nlohmann::json& data) {
     room_is_spawn_ = loaded_json_.value("is_spawn", false);
     room_is_boss_ = loaded_json_.value("is_boss", false);
     room_inherits_assets_ = loaded_json_.value("inherits_map_assets", false);
+
+    // Determine if this configurator is editing a trail (as opposed to a standard room)
+    is_trail_context_ = false;
+    if (room_) {
+        const std::string& dir = room_->room_directory;
+        if (dir.find("trails_data") != std::string::npos) {
+            is_trail_context_ = true;
+        }
+    }
+
+    // Edge smoothness (0-101 per request; Area clamps to 0..100 internally)
+    edge_smoothness_ = loaded_json_.value("edge_smoothness", 2);
+    if (edge_smoothness_ < 0) edge_smoothness_ = 0;
+    if (edge_smoothness_ > 101) edge_smoothness_ = 101;
+
+    // Curvyness (only relevant for trails; show if present)
+    if (loaded_json_.contains("curvyness")) {
+        if (auto cv = read_json_int(loaded_json_, "curvyness")) {
+            curvyness_ = std::max(0, *cv);
+        } else {
+            curvyness_ = 2;
+        }
+    } else {
+        curvyness_ = 2;
+    }
 }
 
 bool RoomConfigurator::refresh_spawn_groups(const nlohmann::json& data) {
@@ -437,28 +463,91 @@ void RoomConfigurator::rebuild_rows() {
     room_name_lbl_w_ = std::make_unique<TextBoxWidget>(room_name_lbl_.get());
     rows.push_back({ room_name_lbl_w_.get() });
 
-    auto width_bounds = compute_slider_range(room_w_min_, room_w_max_);
-    room_w_slider_ = std::make_unique<DMRangeSlider>(width_bounds.first, width_bounds.second, room_w_min_, room_w_max_);
-    room_w_slider_w_ = std::make_unique<RangeSliderWidget>(room_w_slider_.get());
-    rows.push_back({ room_w_slider_w_.get() });
+    bool allow_dimension_sliders = true;
+    if (!room_name_.empty()) {
+        std::string lowered = room_name_;
+        std::transform(lowered.begin(), lowered.end(), lowered.begin(),
+                       [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
+        if (lowered == "spawn") {
+            allow_dimension_sliders = false;
+        }
+    }
 
-    auto height_bounds = compute_slider_range(room_h_min_, room_h_max_);
-    room_h_slider_ = std::make_unique<DMRangeSlider>(height_bounds.first, height_bounds.second, room_h_min_, room_h_max_);
-    room_h_slider_w_ = std::make_unique<RangeSliderWidget>(room_h_slider_.get());
-    rows.push_back({ room_h_slider_w_.get() });
+    if (allow_dimension_sliders) {
+        // Width range label + slider
+        room_w_label_ = std::make_unique<RoomConfigLabel>("Width (Min/Max)");
+        rows.push_back({ room_w_label_.get() });
+        auto width_bounds = compute_slider_range(room_w_min_, room_w_max_);
+        room_w_slider_ = std::make_unique<DMRangeSlider>(width_bounds.first, width_bounds.second, room_w_min_, room_w_max_);
+        room_w_slider_w_ = std::make_unique<RangeSliderWidget>(room_w_slider_.get());
+        rows.push_back({ room_w_slider_w_.get() });
+
+        // Height range label + slider (hide in trail config)
+        if (!is_trail_context_) {
+            room_h_label_ = std::make_unique<RoomConfigLabel>("Height (Min/Max)");
+            rows.push_back({ room_h_label_.get() });
+            auto height_bounds = compute_slider_range(room_h_min_, room_h_max_);
+            room_h_slider_ = std::make_unique<DMRangeSlider>(height_bounds.first, height_bounds.second, room_h_min_, room_h_max_);
+            room_h_slider_w_ = std::make_unique<RangeSliderWidget>(room_h_slider_.get());
+            rows.push_back({ room_h_slider_w_.get() });
+        } else {
+            room_h_slider_.reset();
+            room_h_slider_w_.reset();
+            room_h_label_.reset();
+        }
+    } else {
+        room_w_slider_.reset();
+        room_w_slider_w_.reset();
+        room_h_slider_.reset();
+        room_h_slider_w_.reset();
+    }
 
     int geom_index = room_geom_options_.empty() ? 0 : std::clamp(room_geom_, 0, static_cast<int>(room_geom_options_.size()) - 1);
-    room_geom_dd_ = std::make_unique<DMDropdown>("Geometry", room_geom_options_, geom_index);
-    room_geom_dd_w_ = std::make_unique<DropdownWidget>(room_geom_dd_.get());
-    rows.push_back({ room_geom_dd_w_.get() });
+    if (!is_trail_context_) {
+        room_geom_dd_ = std::make_unique<DMDropdown>("Geometry", room_geom_options_, geom_index);
+        room_geom_dd_w_ = std::make_unique<DropdownWidget>(room_geom_dd_.get());
+        rows.push_back({ room_geom_dd_w_.get() });
+    } else {
+        room_geom_dd_.reset();
+        room_geom_dd_w_.reset();
+    }
 
-    room_spawn_cb_ = std::make_unique<DMCheckbox>("Spawn", room_is_spawn_);
-    room_spawn_cb_w_ = std::make_unique<CheckboxWidget>(room_spawn_cb_.get());
-    room_boss_cb_ = std::make_unique<DMCheckbox>("Boss", room_is_boss_);
-    room_boss_cb_w_ = std::make_unique<CheckboxWidget>(room_boss_cb_.get());
-    room_inherit_cb_ = std::make_unique<DMCheckbox>("Inherit Map Assets", room_inherits_assets_);
-    room_inherit_cb_w_ = std::make_unique<CheckboxWidget>(room_inherit_cb_.get());
-    rows.push_back({ room_spawn_cb_w_.get(), room_boss_cb_w_.get(), room_inherit_cb_w_.get() });
+    // Edge Smoothness slider (always visible in Room Config)
+    edge_smoothness_sl_ = std::make_unique<DMSlider>("Edge Smoothness", 0, 101, edge_smoothness_);
+    edge_smoothness_w_ = std::make_unique<SliderWidget>(edge_smoothness_sl_.get());
+    rows.push_back({ edge_smoothness_w_.get() });
+
+    // Curvyness slider for trails
+    bool show_curvy = is_trail_context_;
+    if (show_curvy) {
+        curvyness_sl_ = std::make_unique<DMSlider>("Curvyness", 0, 16, curvyness_);
+        curvyness_w_ = std::make_unique<SliderWidget>(curvyness_sl_.get());
+        rows.push_back({ curvyness_w_.get() });
+    } else {
+        curvyness_sl_.reset();
+        curvyness_w_.reset();
+    }
+
+    room_spawn_cb_.reset();
+    room_spawn_cb_w_.reset();
+    room_boss_cb_.reset();
+    room_boss_cb_w_.reset();
+    room_inherit_cb_.reset();
+    room_inherit_cb_w_.reset();
+    // Only keep Inherit Map Assets in trail config; show all three in room config
+    if (!is_trail_context_) {
+        room_spawn_cb_ = std::make_unique<DMCheckbox>("Spawn", room_is_spawn_);
+        room_spawn_cb_w_ = std::make_unique<CheckboxWidget>(room_spawn_cb_.get());
+        room_boss_cb_ = std::make_unique<DMCheckbox>("Boss", room_is_boss_);
+        room_boss_cb_w_ = std::make_unique<CheckboxWidget>(room_boss_cb_.get());
+        room_inherit_cb_ = std::make_unique<DMCheckbox>("Inherit Map Assets", room_inherits_assets_);
+        room_inherit_cb_w_ = std::make_unique<CheckboxWidget>(room_inherit_cb_.get());
+        rows.push_back({ room_spawn_cb_w_.get(), room_boss_cb_w_.get(), room_inherit_cb_w_.get() });
+    } else {
+        room_inherit_cb_ = std::make_unique<DMCheckbox>("Inherit Map Assets", room_inherits_assets_);
+        room_inherit_cb_w_ = std::make_unique<CheckboxWidget>(room_inherit_cb_.get());
+        rows.push_back({ room_inherit_cb_w_.get() });
+    }
 
     spawn_groups_label_ = std::make_unique<RoomConfigLabel>("Spawn Groups");
     rows.push_back({ spawn_groups_label_.get() });
@@ -577,6 +666,24 @@ void RoomConfigurator::update(const Input& input, int screen_w, int screen_h) {
         }
     }
 
+    if (edge_smoothness_sl_) {
+        int v = edge_smoothness_sl_->value();
+        v = std::clamp(v, 0, 101);
+        if (v != edge_smoothness_) {
+            edge_smoothness_ = v;
+            changed = true;
+        }
+    }
+
+    if (curvyness_sl_) {
+        int v = curvyness_sl_->value();
+        v = std::max(0, v);
+        if (v != curvyness_) {
+            curvyness_ = v;
+            changed = true;
+        }
+    }
+
     bool spawn_val = room_spawn_cb_ && room_spawn_cb_->value();
     if (spawn_val != room_is_spawn_) {
         room_is_spawn_ = spawn_val;
@@ -620,6 +727,10 @@ void RoomConfigurator::update(const Input& input, int screen_w, int screen_h) {
         loaded_json_["is_spawn"] = room_is_spawn_;
         loaded_json_["is_boss"] = room_is_boss_;
         loaded_json_["inherits_map_assets"] = room_inherits_assets_;
+        loaded_json_["edge_smoothness"] = edge_smoothness_;
+        if (curvyness_sl_) {
+            loaded_json_["curvyness"] = curvyness_;
+        }
 
         if (room_) {
             auto& r = room_->assets_data();
@@ -636,6 +747,10 @@ void RoomConfigurator::update(const Input& input, int screen_w, int screen_h) {
             r["is_spawn"] = room_is_spawn_;
             r["is_boss"] = room_is_boss_;
             r["inherits_map_assets"] = room_inherits_assets_;
+            r["edge_smoothness"] = edge_smoothness_;
+            if (curvyness_sl_) {
+                r["curvyness"] = curvyness_;
+            }
             room_->save_assets_json();
         }
     }
@@ -669,6 +784,10 @@ nlohmann::json RoomConfigurator::build_json() const {
     result["is_spawn"] = room_is_spawn_;
     result["is_boss"] = room_is_boss_;
     result["inherits_map_assets"] = room_inherits_assets_;
+    result["edge_smoothness"] = edge_smoothness_;
+    if (curvyness_sl_) {
+        result["curvyness"] = curvyness_;
+    }
     return result;
 }
 

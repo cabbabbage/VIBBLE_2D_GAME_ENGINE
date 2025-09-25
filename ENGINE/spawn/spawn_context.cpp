@@ -77,6 +77,8 @@ Asset* SpawnContext::spawnAsset(const std::string& name,
             nlohmann::json j;
             bool have_inline = (childInfo->inline_assets.is_array() && !childInfo->inline_assets.empty());
             if (have_inline) {
+                // Support both legacy key ("assets") and canonical key ("spawn_groups")
+                j["spawn_groups"] = childInfo->inline_assets;
                 j["assets"] = childInfo->inline_assets;
             } else {
                 const auto& childJsonPath = childInfo->json_path;

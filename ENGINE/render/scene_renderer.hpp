@@ -51,4 +51,9 @@ class SceneRenderer {
     std::vector<Uint32> blur_row_buffer_;
     std::vector<Uint32> blur_col_buffer_;
     
+    // GPU-based postprocess targets (faster fullscreen blur overlay)
+    SDL_Texture*   scene_target_tex_    = nullptr;  // full-res scene render target
+    SDL_Texture*   post_small_tex_a_    = nullptr;  // downscaled intermediate A
+    SDL_Texture*   post_small_tex_b_    = nullptr;  // downscaled intermediate B (ping-pong)
+    
 };

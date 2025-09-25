@@ -7,7 +7,7 @@
 #include <algorithm>
 #include <nlohmann/json.hpp>
 #include "asset/asset_info.hpp"
-#include "spawn_groups_config.hpp"
+#include "dev_mode/spawn_groups_config.hpp"
 #include "dev_mode/asset_info_sections.hpp"
 
 class AssetInfoUI;
@@ -96,6 +96,14 @@ public:
     void update(const Input& input, int screen_w, int screen_h) override {
         DockableCollapsible::update(input, screen_w, screen_h);
         if (spawn_groups_cfg_.visible()) spawn_groups_cfg_.update(input, screen_w, screen_h);
+        // Defer opening the area editor to avoid re-entrancy/crashes when
+        // the AssetInfo panel closes itself during the callback.
+        if (pending_open_area_ && open_area_editor_) {
+            pending_open_area_ = false;
+            std::string nm = pending_area_name_;
+            pending_area_name_.clear();
+            open_area_editor_(nm);
+        }
     }
 
     bool handle_event(const SDL_Event& e) override {
@@ -130,8 +138,11 @@ public:
             if (r.b_edit_area && r.b_edit_area->handle_event(e)) {
                 if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
                     std::string nm = r.area_name;
+                    if (nm == "(none)") nm.clear();
                     if (nm.empty()) nm = std::string("child_area_") + std::to_string(i+1);
-                    if (open_area_editor_) open_area_editor_(nm);
+                    // Defer opening to next update() to prevent re-entrancy
+                    pending_area_name_ = nm;
+                    pending_open_area_ = true;
                     used = true;
                 }
             }
@@ -306,4 +317,7 @@ private:
     SpawnGroupsConfig spawn_groups_cfg_;
     std::function<void(const std::string&)> open_area_editor_;
     AssetInfoUI* ui_ = nullptr; // non-owning
+    // Deferred area editor open state (avoid re-entrancy crash)
+    bool pending_open_area_ = false;
+    std::string pending_area_name_;
 };

@@ -1,1 +1,20 @@
 
+
+
+
+MAPS/FORREST/map_info.json::rooms_data
+Vibble,1.000,11,11,exact,0.046,11,0.004
+candle,1.000,22,22,perimeter,0.069,11,-0.013
+batch_map_assets,0.585,21327,36426,mapwide_batch,31.465,33,-5.420
+flower_1,1.000,3030,3030,perimeter,0.561,110,-0.294
+Booze_2,0.000,0,17615,random,1.622,110,-0.577
+Barrel,0.024,637,26028,random,10.783,68,11.044
+Box,0.024,576,23763,random,5.865,107,-0.309
+
+
+
+MAPS/FORREST/map_info.json::trails_data
+Bomb,1.000,110,110,random,0.082,110,-0.019
+batch_map_assets,0.637,11052,17342,mapwide_batch,15.855,30,-2.781
+batch_basic,0.034,136,4030,random,1.619,53,-0.059
+candle,0.698,37,53,random,0.070,53,-0.054

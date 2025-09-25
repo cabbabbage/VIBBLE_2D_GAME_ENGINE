@@ -1083,18 +1083,25 @@ bool MapLayersPanel::RoomCandidateWidget::handle_event(const SDL_Event& e) {
                     if (owner_ && owner_->panel_owner()) {
                         owner_->panel_owner()->handle_candidate_child_added(layer_index_, candidate_index_, child);
                         this->refresh_from_json();
+                        // The owner refresh rebuilds widgets/rows; return early to
+                        // avoid iterating over potentially invalidated state.
                         owner_->refresh();
                     }
                 });
             }
         }
         used = true;
+        // Adding a child triggers UI rebuild via callback; stop processing.
+        return true;
     }
     if (delete_button_ && delete_button_->handle_event(e)) {
         if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
             if (owner_ && owner_->panel_owner()) {
                 owner_->panel_owner()->handle_candidate_removed(layer_index_, candidate_index_);
+                // Owner refresh rebuilds rows; return immediately to avoid
+                // accessing invalidated widgets.
                 owner_->refresh();
+                return true;
             }
         }
         used = true;
@@ -1106,7 +1113,10 @@ bool MapLayersPanel::RoomCandidateWidget::handle_event(const SDL_Event& e) {
                 if (owner_ && owner_->panel_owner()) {
                     owner_->panel_owner()->handle_candidate_child_removed(layer_index_, candidate_index_, chip.name);
                     this->refresh_from_json();
+                    // Refresh rebuilds widgets; return to prevent iterating
+                    // over a mutated chips list.
                     owner_->refresh();
+                    return true;
                 }
             }
             used = true;
@@ -1673,10 +1683,18 @@ void MapLayersPanel::open_room_config_for(const std::string& room_name) {
     if (room_name.empty()) {
         return;
     }
+    if (layer_config_) {
+        layer_config_->close();
+    }
+    if (sidebar_widget_) {
+        sidebar_widget_->refresh_config_button();
+    }
     ensure_room_configurator();
     if (!room_configurator_) {
         return;
     }
+    room_configurator_->close();
+    active_room_config_key_.clear();
     nlohmann::json* entry = ensure_room_entry(room_name);
     if (!entry) {
         return;
@@ -2003,6 +2021,13 @@ void MapLayersPanel::delete_layer_internal(int index) {
 void MapLayersPanel::open_layer_config_internal(int index) {
     if (!layer_config_) return;
     if (!map_info_) return;
+
+    if (room_configurator_) {
+        room_configurator_->close();
+    }
+    active_room_config_key_.clear();
+    layer_config_->close();
+
     auto* layer = layer_at(index);
     if (!layer) return;
     select_layer(index);

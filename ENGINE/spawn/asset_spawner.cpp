@@ -94,6 +94,82 @@ void AssetSpawner::run_spawning(AssetSpawnPlanner* planner, const Area& area) {
                 logger_.start_timer();
                 if (!queue_item.has_candidates()) continue;
                 const std::string& pos = queue_item.position;
+
+                // Map-wide batch spawning: ignore quantity and fill all available grid points
+                // Detect via display name convention used in map_info.json (e.g., "batch_map_assets").
+                // This mirrors boundary spawning behavior but without exclusion zones.
+                if (queue_item.name == "batch_map_assets") {
+                        // Build weights for candidates (ensure non-zero sums)
+                        std::vector<int> base_weights;
+                        base_weights.reserve(queue_item.candidates.size());
+                        bool has_positive_weight = false;
+                        for (const auto& cand : queue_item.candidates) {
+                                int weight = cand.weight;
+                                if (weight < 0) weight = 0;
+                                if (weight > 0) has_positive_weight = true;
+                                base_weights.push_back(weight);
+                        }
+                        if (!has_positive_weight && !base_weights.empty()) {
+                                std::fill(base_weights.begin(), base_weights.end(), 1);
+                        }
+
+                        auto grid_points = grid.get_all_points_in_area(area);
+                        if (grid_points.empty()) {
+                                logger_.output_and_log(queue_item.name, 0, 0, 0, 0, "mapwide_batch");
+                                continue;
+                        }
+                        std::shuffle(grid_points.begin(), grid_points.end(), ctx.rng());
+
+                        const int desired = static_cast<int>(grid_points.size());
+                        int spawned = 0;
+                        int attempts = 0;
+                        for (auto* gp : grid_points) {
+                                if (!gp) continue;
+                                SDL_Point spawn_pos{ gp->pos.x, gp->pos.y };
+                                bool placed = false;
+                                std::vector<int> attempt_weights = base_weights;
+                                const size_t max_candidate_attempts = queue_item.candidates.size();
+                                for (size_t attempt = 0; attempt < max_candidate_attempts; ++attempt) {
+                                        int total_weight = std::accumulate(attempt_weights.begin(), attempt_weights.end(), 0);
+                                        if (total_weight <= 0) break;
+                                        std::discrete_distribution<size_t> dist(attempt_weights.begin(), attempt_weights.end());
+                                        size_t idx = dist(ctx.rng());
+                                        if (idx >= queue_item.candidates.size()) break;
+                                        if (attempt_weights[idx] <= 0) {
+                                                attempt_weights[idx] = 0;
+                                                continue;
+                                        }
+                                        ++attempts;
+                                        const SpawnCandidate& candidate = queue_item.candidates[idx];
+                                        // If the selected candidate is null, consume this grid point and move on.
+                                        if (candidate.is_null || !candidate.info) {
+                                                grid.set_occupied(gp, true);
+                                                placed = true; // grid space considered occupied
+                                                break;
+                                        }
+                                        if (ctx.checker().check(candidate.info, spawn_pos, ctx.exclusion_zones(), ctx.all_assets(), true, true, true, 5)) {
+                                                attempt_weights[idx] = 0;
+                                                continue;
+                                        }
+                                        auto* result = ctx.spawnAsset(candidate.name, candidate.info, area, spawn_pos, 0, nullptr,
+                                                                      queue_item.spawn_id, queue_item.position);
+                                        if (!result) {
+                                                attempt_weights[idx] = 0;
+                                                continue;
+                                        }
+                                        grid.set_occupied(gp, true);
+                                        ++spawned;
+                                        ctx.logger().progress(candidate.info, spawned, desired);
+                                        placed = true;
+                                        break;
+                                }
+                                if (!placed) {
+                                        grid.set_occupied(gp, true);
+                                }
+                        }
+                        ctx.logger().output_and_log(queue_item.name, desired, spawned, attempts, attempts, "mapwide_batch");
+                        continue;
+                }
                 if (pos == "Exact" || pos == "Exact Position") {
                         exact.spawn(queue_item, &area, ctx);
                 } else if (pos == "Center") {
@@ -176,9 +252,10 @@ void AssetSpawner::run_boundary_spawning(const Area& area) {
                                 }
                                 ++attempts;
                                 const SpawnCandidate& candidate = queue_item.candidates[idx];
+                                // If the selected candidate is null, consume this grid point and move on.
                                 if (candidate.is_null || !candidate.info) {
-                                        attempt_weights[idx] = 0;
-                                        continue;
+                                        grid.set_occupied(gp, true);
+                                        break;
                                 }
 
                                 if (ctx.checker().check(candidate.info, spawn_pos, ctx.exclusion_zones(), ctx.all_assets(), true, true, true, 5)) {

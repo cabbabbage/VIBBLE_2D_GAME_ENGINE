@@ -1816,11 +1816,13 @@
     "lighting_info": [
         {
             "factor": 100,
-            "falloff": 0,
+            "falloff": 10,
             "has_light_source": true,
             "light_intensity": 255,
-            "radius": 726,
-            "x_radius": 378,
+            "offset_x": 0,
+            "offset_y": -898,
+            "radius": 581,
+            "x_radius": 958,
             "y_radius": 605
         }
     ],

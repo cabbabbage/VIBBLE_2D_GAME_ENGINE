@@ -28,9 +28,11 @@ void LightMap::render(bool debugging) {
 	const int downscale = 4;
 	const int low_w = screen_width_  / downscale;
 	const int low_h = screen_height_ / downscale;
+	SDL_Texture* prev_target = SDL_GetRenderTarget(renderer_);
 	SDL_Texture* lowres_mask = build_lowres_mask(z_lights, low_w, low_h, downscale);
 	SDL_SetTextureBlendMode(lowres_mask, SDL_BLENDMODE_MOD);
-	SDL_SetRenderTarget(renderer_, nullptr);
+	// Composite onto whatever target was active before building the mask
+	SDL_SetRenderTarget(renderer_, prev_target);
 	SDL_RenderCopy(renderer_, lowres_mask, nullptr, nullptr);
 	SDL_DestroyTexture(lowres_mask);
 	if (debugging) std::cout << "[render_asset_lights_z] end\n";

@@ -6600,14 +6600,14 @@
     "lighting_info": [
         {
             "factor": 100,
-            "falloff": 0,
+            "falloff": 10,
             "has_light_source": true,
             "light_intensity": 255,
             "offset_x": 0,
-            "offset_y": -644,
-            "radius": 966,
-            "x_radius": 589,
-            "y_radius": 614
+            "offset_y": -898,
+            "radius": 581,
+            "x_radius": 958,
+            "y_radius": 605
         }
     ],
     "max_child_depth": 4,

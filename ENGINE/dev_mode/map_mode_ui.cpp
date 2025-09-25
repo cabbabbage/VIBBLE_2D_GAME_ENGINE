@@ -246,6 +246,13 @@ void MapModeUI::ensure_panels() {
         footer_panel_->set_bounds(screen_w_, screen_h_);
         footer_panel_->set_visible(footer_always_visible_ || map_mode_active_);
         footer_panel_->set_expanded(false);
+        // Route content events to the embedded layers panel when visible.
+        footer_panel_->set_content_event_handler([this](const SDL_Event& e) -> bool {
+            if (layers_footer_visible_ && layers_panel_) {
+                return layers_panel_->handle_event(e);
+            }
+            return false;
+        });
         footer_buttons_configured_ = false;
     }
     if (footer_panel_ && !footer_buttons_configured_) {

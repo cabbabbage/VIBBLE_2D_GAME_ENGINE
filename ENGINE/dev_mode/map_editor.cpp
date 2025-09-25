@@ -112,7 +112,7 @@ void MapEditor::update(const Input& input) {
         }
     }
 
-    Room* hit = area_hit ? area_hit : label_hit;
+    Room* hit = label_hit ? label_hit : area_hit;
 
     pan_zoom_.handle_input(cam, input, pointer_over_ui || hit != nullptr);
 
@@ -123,6 +123,9 @@ void MapEditor::update(const Input& input) {
     if (input.wasClicked(Input::LEFT)) {
         if (hit) {
             pending_selection_ = hit;
+            if (input_) {
+                input_->consumeMouseButton(Input::LEFT);
+            }
         }
     }
 }

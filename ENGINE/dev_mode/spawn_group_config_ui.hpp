@@ -53,6 +53,13 @@ public:
 
     void set_ownership_label(const std::string& label, SDL_Color color);
 
+    // Dev-only: lock spawn method to a fixed value and prevent changing it.
+    void lock_method_to(const std::string& method);
+    // Dev-only: hide quantity controls; quantity will be ignored by batch spawners.
+    void set_quantity_hidden(bool hidden);
+    // Allow external close callback (e.g., to persist changes when panel closes).
+    void set_on_close(std::function<void()> cb);
+
 private:
     struct CandidateRow {
         std::string name;
@@ -117,6 +124,7 @@ private:
     // Exact offsets (read-only summary)
     std::unique_ptr<LabelWidget> exact_offset_label_;
     std::unique_ptr<LabelWidget> exact_room_label_;
+    std::unique_ptr<LabelWidget> locked_method_label_;
 
     // Checkboxes
     std::unique_ptr<DMCheckbox> cb_overlap_;
@@ -134,6 +142,11 @@ private:
     std::string baseline_method_;
     int baseline_min_ = 0;
     int baseline_max_ = 0;
+
+    // Dev locks/visibility
+    bool method_locked_ = false;
+    std::string forced_method_;
+    bool quantity_hidden_ = false;
 
     int total_chance() const;
     void refresh_chance_labels(int total_chance);

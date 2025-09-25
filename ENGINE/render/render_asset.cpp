@@ -206,25 +206,35 @@ SDL_Texture* RenderAsset::texture_for_scale(Asset* asset,
 }
 
 void RenderAsset::render_shadow_moving_lights(Asset* a, const SDL_Rect& bounds, Uint8 alpha) {
-	if (!p || !p->info) return;
+	if (!p || !p->info || !a) return;
 	for (auto& light : p->info->light_sources) {
 		if (!light.texture) continue;
 		const int world_lx = p->pos.x + light.offset_x;
 		const int world_ly = p->pos.y + light.offset_y;
 		const double factor = LightUtils::calculate_static_alpha_percentage(a, p);
 		const Uint8 inten = static_cast<Uint8>(alpha * factor);
-                SDL_Point pnt = cam_.compute_render_effects(SDL_Point{world_lx, world_ly}, 0.0f, 0.0f).screen_position;
+
+		// Compute local (asset-space) placement so zoom/parallax do not affect the mask.
+		const int dx_world = world_lx - a->pos.x;
+		const int dy_world = world_ly - a->pos.y;
+
 		int lw = light.cached_w, lh = light.cached_h;
 		if (lw == 0 || lh == 0) {
 			SDL_QueryTexture(light.texture, nullptr, nullptr, &lw, &lh);
 			light.cached_w = lw;
 			light.cached_h = lh;
 		}
-		SDL_Rect dst {
-			pnt.x - bounds.x - lw / 2,
-			pnt.y - bounds.y - lh / 2,
-			lw, lh
+
+		const int bw = bounds.w;
+		const int bh = bounds.h;
+		SDL_Rect dst{
+			// Anchor is bottom-center of the asset in mask space.
+			(bw / 2) + dx_world - (lw / 2),
+			bh + dy_world - (lh / 2),
+			lw,
+			lh
 		};
+
 		SDL_SetTextureBlendMode(light.texture, SDL_BLENDMODE_ADD);
 		SDL_SetTextureAlphaMod(light.texture, inten);
 		SDL_RenderCopy(renderer_, light.texture, nullptr, &dst);
@@ -235,30 +245,35 @@ void RenderAsset::render_shadow_moving_lights(Asset* a, const SDL_Rect& bounds, 
 void RenderAsset::render_shadow_orbital_lights(Asset* a, const SDL_Rect& bounds, Uint8 alpha) {
 	if (!a || !a->info) return;
 	const float angle = main_light_source_.get_angle();
-        for (auto& light : a->info->orbital_light_sources) {
-                if (!light.texture || light.x_radius <= 0 || light.y_radius <= 0) continue;
-                const bool flipped = a->flipped;
-                const float offset_x = flipped ? -static_cast<float>(light.offset_x) : static_cast<float>(light.offset_x);
-                float orbit_x = std::cos(angle) * light.x_radius;
-                if (flipped) orbit_x = -orbit_x;
-                const float lx = static_cast<float>(a->pos.x) + offset_x + orbit_x;
-                const float ly = static_cast<float>(a->pos.y) + light.offset_y - std::sin(angle) * light.y_radius;
-                SDL_Point pnt = cam_.compute_render_effects(
-                                        SDL_Point{static_cast<int>(std::round(lx)), static_cast<int>(std::round(ly))},
-                                        0.0f,
-                                        0.0f)
-                                        .screen_position;
+	for (auto& light : a->info->orbital_light_sources) {
+		if (!light.texture || light.x_radius <= 0 || light.y_radius <= 0) continue;
+		const bool flipped = a->flipped;
+		const float offset_x = flipped ? -static_cast<float>(light.offset_x) : static_cast<float>(light.offset_x);
+		float orbit_x = std::cos(angle) * light.x_radius;
+		if (flipped) orbit_x = -orbit_x;
+		const float lx = static_cast<float>(a->pos.x) + offset_x + orbit_x;
+		const float ly = static_cast<float>(a->pos.y) + light.offset_y - std::sin(angle) * light.y_radius;
+
+		// Local (asset-space) offset to keep path/look invariant with zoom.
+		const int dx_world = static_cast<int>(std::lround(lx)) - a->pos.x;
+		const int dy_world = static_cast<int>(std::lround(ly)) - a->pos.y;
+
 		int lw = light.cached_w, lh = light.cached_h;
 		if (lw == 0 || lh == 0) {
 			SDL_QueryTexture(light.texture, nullptr, nullptr, &lw, &lh);
 			light.cached_w = lw;
 			light.cached_h = lh;
 		}
-		SDL_Rect dst {
-			pnt.x - lw / 2 - bounds.x,
-			pnt.y - lh / 2 - bounds.y,
-			lw, lh
+
+		const int bw = bounds.w;
+		const int bh = bounds.h;
+		SDL_Rect dst{
+			(bw / 2) + dx_world - (lw / 2),
+			bh + dy_world - (lh / 2),
+			lw,
+			lh
 		};
+
 		SDL_SetTextureBlendMode(light.texture, SDL_BLENDMODE_ADD);
 		SDL_SetTextureAlphaMod(light.texture, alpha);
 		SDL_RenderCopy(renderer_, light.texture, nullptr, &dst);
@@ -270,22 +285,27 @@ void RenderAsset::render_shadow_received_static_lights(Asset* a, const SDL_Rect&
 	static std::mt19937 flicker_rng{ std::random_device{}() };
 	for (const auto& sl : a->static_lights) {
 		if (!sl.source || !sl.source->texture) continue;
-                SDL_Point pnt = cam_.compute_render_effects(
-                                        SDL_Point{a->pos.x + sl.offset.x, a->pos.y + sl.offset.y},
-                                        0.0f,
-                                        0.0f)
-                                        .screen_position;
+
+		// Local (asset-space) offset of this static light contribution.
+		const int dx_world = sl.offset.x;
+		const int dy_world = sl.offset.y;
+
 		int lw = sl.source->cached_w, lh = sl.source->cached_h;
 		if (lw == 0 || lh == 0) {
 			SDL_QueryTexture(sl.source->texture, nullptr, nullptr, &lw, &lh);
 			sl.source->cached_w = lw;
 			sl.source->cached_h = lh;
 		}
-		SDL_Rect dst {
-			pnt.x - lw / 2 - bounds.x,
-			pnt.y - lh / 2 - bounds.y,
-			lw, lh
+
+		const int bw = bounds.w;
+		const int bh = bounds.h;
+		SDL_Rect dst{
+			(bw / 2) + dx_world - (lw / 2),
+			bh + dy_world - (lh / 2),
+			lw,
+			lh
 		};
+
 		SDL_SetTextureBlendMode(sl.source->texture, SDL_BLENDMODE_ADD);
 		float base_alpha = static_cast<float>(alpha) * sl.alpha_percentage;
 		if (sl.source->flicker > 0) {

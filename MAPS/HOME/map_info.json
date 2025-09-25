@@ -4,8 +4,8 @@
     "foreshorten_strength": 0.07000000029802322,
     "height_at_zoom1": 294.0,
     "parallax_strength": 14.0,
-    "realism_enabled": true,
-    "render_distance": 1380.0,
+    "realism_enabled": false,
+    "render_distance": 1670.0,
     "tripod_distance_y": -1045.0
   },
   "map_assets_data": {
@@ -53,8 +53,8 @@
         "grid_spacing_min": 110,
         "jitter_max": 3,
         "jitter_min": 3,
-        "max_number": 100,
-        "min_number": 50,
+        "max_number": 500,
+        "min_number": 500,
         "position": "Random",
         "spawn_id": "spn-5200d51e3675"
       }
@@ -101,13 +101,11 @@
     {
       "level": 0,
       "max_rooms": 1,
-      "min_rooms": 1,
       "name": "layer_0",
       "radius": 1500,
       "rooms": [
         {
           "max_instances": 1,
-          "min_instances": 1,
           "name": "spawn",
           "required_children": []
         }
@@ -142,143 +140,23 @@
     "update_interval": 10
   },
   "map_name": "HOME",
-  "map_radius": 1500,
+  "map_radius": 18000,
   "rooms_data": {
     "spawn": {
-      "edge_smoothness": 2,
+      "edge_smoothness": 1000,
       "geometry": "Circle",
-      "height_max": 4968,
-      "height_min": 100,
+      "height_max": 15000,
+      "height_min": 15000,
       "inherits_map_assets": true,
       "is_boss": false,
       "is_spawn": true,
-      "max_height": 4968,
-      "max_width": 4985,
+      "max_height": 15000,
+      "max_width": 15000,
       "min_height": 100,
       "min_width": 100,
       "name": "spawn",
-      "spawn_groups": [
-        {
-          "candidates": [
-            {
-              "chance": 0,
-              "name": "null"
-            },
-            {
-              "chance": 100,
-              "name": "Mushroom_3"
-            }
-          ],
-          "check_overlap": false,
-          "display_name": "Mushroom_3",
-          "dx": -1624,
-          "dy": -903,
-          "enforce_spacing": false,
-          "max_number": 1,
-          "min_number": 1,
-          "origional_height": 3000,
-          "origional_width": 3000,
-          "position": "Exact",
-          "spawn_id": "spn-d198c6257fd4"
-        },
-        {
-          "candidates": [
-            {
-              "chance": 0,
-              "name": "null"
-            },
-            {
-              "chance": 100,
-              "name": "Vibble"
-            }
-          ],
-          "chance_denominator": 100,
-          "check_overlap": false,
-          "display_name": "Vibble",
-          "dx": -120,
-          "dy": 51,
-          "enforce_spacing": true,
-          "max_number": 1,
-          "min_number": 1,
-          "origional_height": 2060,
-          "origional_width": 2135,
-          "position": "Center",
-          "spawn_id": "spn-59a302da8da3"
-        },
-        {
-          "candidates": [
-            {
-              "chance": 0,
-              "name": "null"
-            },
-            {
-              "chance": 100,
-              "name": "Barrel"
-            }
-          ],
-          "check_overlap": false,
-          "display_name": "Barrel",
-          "dx": -1252,
-          "dy": 217,
-          "enforce_spacing": false,
-          "max_number": 1,
-          "min_number": 1,
-          "origional_height": 3000,
-          "origional_width": 3000,
-          "position": "Exact",
-          "spawn_id": "spn-6fe92ba8c2fc"
-        },
-        {
-          "candidates": [
-            {
-              "chance": 0,
-              "name": "null"
-            },
-            {
-              "chance": 100,
-              "name": "Tree"
-            }
-          ],
-          "chance_denominator": 100,
-          "check_overlap": false,
-          "display_name": "Tree",
-          "dx": -334,
-          "dy": 513,
-          "enforce_spacing": false,
-          "max_number": 98,
-          "min_number": 2,
-          "origional_height": 2876,
-          "origional_width": 2817,
-          "position": "Perimeter",
-          "radius": 8731,
-          "spawn_id": "spn-a5463d62c0e4"
-        },
-        {
-          "candidates": [
-            {
-              "chance": 48,
-              "name": "null"
-            },
-            {
-              "chance": 100,
-              "name": "Barrel"
-            }
-          ],
-          "chance_denominator": 148,
-          "check_overlap": false,
-          "display_name": "Barrel",
-          "dx": 4,
-          "dy": 369,
-          "enforce_spacing": false,
-          "max_number": 1,
-          "min_number": 1,
-          "origional_height": 3000,
-          "origional_width": 3000,
-          "position": "Random",
-          "spawn_id": "spn-cf89e79f4e88"
-        }
-      ],
-      "width_max": 4985,
+      "spawn_groups": [],
+      "width_max": 11090,
       "width_min": 100
     }
   },

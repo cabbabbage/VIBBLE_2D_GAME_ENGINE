@@ -288,7 +288,8 @@ void RoomSelectorPopup::layout_widgets() const {
     if (creating_room_) {
         y += spacing;
         if (name_input_) {
-            name_input_->set_rect(SDL_Rect{ rect_.x + margin, y, content_width, DMTextBox::height() });
+            const int input_h = name_input_->preferred_height(content_width);
+            name_input_->set_rect(SDL_Rect{ rect_.x + margin, y, content_width, input_h });
             const SDL_Rect input_rect = name_input_->rect();
             y = input_rect.y + input_rect.h;
         }

@@ -640,11 +640,26 @@ void Assets::schedule_removal(Asset* a) {
 void Assets::process_removals() {
     if (removal_queue.empty()) return;
     for (Asset* a : removal_queue) {
+        // Remove from ownership so the destructor runs and memory is freed
         auto it = std::find_if(owned_assets.begin(), owned_assets.end(),
                                [a](const std::unique_ptr<Asset>& p){ return p.get() == a; });
         if (it != owned_assets.end()) {
             owned_assets.erase(it);
         }
+
+        // Purge all raw pointers to this asset from engine-maintained lists
+        auto erase_ptr = [a](auto& vec) {
+            vec.erase(std::remove(vec.begin(), vec.end(), a), vec.end());
+        };
+        erase_ptr(all);
+        erase_ptr(active_assets);
+        erase_ptr(filtered_active_assets);
+        erase_ptr(closest_assets);
+    }
+    // Clear any stale selections in Dev Mode that may reference removed assets
+    if (dev_controls_ && dev_mode) {
+        dev_controls_->clear_selection();
+        dev_controls_->set_active_assets(filtered_active_assets);
     }
     removal_queue.clear();
 }
@@ -747,5 +762,12 @@ void Assets::focus_camera_on_asset(Asset* a, double zoom_factor, int duration_st
 void Assets::begin_area_edit_for_selected_asset(const std::string& area_name) {
     if (dev_controls_ && dev_mode) {
         dev_controls_->begin_area_edit_for_selected_asset(area_name);
+    }
+}
+
+void Assets::set_editor_current_room(Room* room) {
+    current_room_ = room;
+    if (dev_controls_) {
+        dev_controls_->set_current_room(room);
     }
 }

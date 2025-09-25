@@ -22,6 +22,7 @@
 #include <string>
 #include <limits>
 #include <vector>
+#include <fstream>
 #include <nlohmann/json.hpp>
 
 using devmode::sdl::event_point;
@@ -231,6 +232,9 @@ void DevControls::set_screen_dimensions(int width, int height) {
 
 void DevControls::set_current_room(Room* room) {
     current_room_ = room;
+    // Keep the developer-selected room in sync so subsequent
+    // resolve_current_room() preserves this choice.
+    dev_selected_room_ = room;
     if (regenerate_popup_) regenerate_popup_->close();
     if (room_editor_) {
         room_editor_->set_current_room(room);
@@ -383,6 +387,12 @@ void DevControls::update(const Input& input) {
     if (map_mode_ui_) {
         map_mode_ui_->update(input);
     }
+    if (map_assets_modal_ && map_assets_modal_->visible()) {
+        map_assets_modal_->update(input);
+    }
+    if (boundary_assets_modal_ && boundary_assets_modal_->visible()) {
+        boundary_assets_modal_->update(input);
+    }
     if (trail_suite_) {
         trail_suite_->update(input);
     }
@@ -441,6 +451,28 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
     if ((pointer_event || wheel_event) && trail_suite_ && trail_suite_->contains_point(pointer.x, pointer.y)) {
         if (input_) input_->consumeEvent(event);
         return;
+    }
+
+    // Route to new modals (map mode)
+    if (map_assets_modal_ && map_assets_modal_->visible()) {
+        if (map_assets_modal_->handle_event(event)) {
+            if (input_) input_->consumeEvent(event);
+            return;
+        }
+        if ((pointer_event || wheel_event) && map_assets_modal_->is_point_inside(pointer.x, pointer.y)) {
+            if (input_) input_->consumeEvent(event);
+            return;
+        }
+    }
+    if (boundary_assets_modal_ && boundary_assets_modal_->visible()) {
+        if (boundary_assets_modal_->handle_event(event)) {
+            if (input_) input_->consumeEvent(event);
+            return;
+        }
+        if ((pointer_event || wheel_event) && boundary_assets_modal_->is_point_inside(pointer.x, pointer.y)) {
+            if (input_) input_->consumeEvent(event);
+            return;
+        }
     }
 
     if (regenerate_popup_ && regenerate_popup_->visible()) {
@@ -538,6 +570,12 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
         room_editor_->render_overlays(renderer);
     }
     if (map_mode_ui_) map_mode_ui_->render(renderer);
+    if (map_assets_modal_ && map_assets_modal_->visible()) {
+        map_assets_modal_->render(renderer);
+    }
+    if (boundary_assets_modal_ && boundary_assets_modal_->visible()) {
+        boundary_assets_modal_->render(renderer);
+    }
     if (trail_suite_) trail_suite_->render(renderer);
     if (camera_panel_ && camera_panel_->is_visible()) {
         camera_panel_->render(renderer);
@@ -716,6 +754,40 @@ void DevControls::configure_header_button_sets() {
 
     map_buttons.push_back(make_camera_button());
 
+    // Map Mode: Map Assets modal button
+    {
+        MapModeUI::HeaderButtonConfig map_assets_btn;
+        map_assets_btn.id = "map_assets";
+        map_assets_btn.label = "Map Assets";
+        map_assets_btn.active = (map_assets_modal_ && map_assets_modal_->visible());
+        map_assets_btn.on_toggle = [this](bool active) {
+            if (active) {
+                toggle_map_assets_modal();
+            } else {
+                if (map_assets_modal_) map_assets_modal_->close();
+            }
+            sync_header_button_states();
+        };
+        map_buttons.push_back(std::move(map_assets_btn));
+    }
+
+    // Map Mode: Boundary Assets modal button
+    {
+        MapModeUI::HeaderButtonConfig boundary_btn;
+        boundary_btn.id = "map_boundary";
+        boundary_btn.label = "Boundary Assets";
+        boundary_btn.active = (boundary_assets_modal_ && boundary_assets_modal_->visible());
+        boundary_btn.on_toggle = [this](bool active) {
+            if (active) {
+                toggle_boundary_assets_modal();
+            } else {
+                if (boundary_assets_modal_) boundary_assets_modal_->close();
+            }
+            sync_header_button_states();
+        };
+        map_buttons.push_back(std::move(boundary_btn));
+    }
+
     MapModeUI::HeaderButtonConfig to_map_btn;
     to_map_btn.id = "switch_mode";
     to_map_btn.label = "Map Mode";
@@ -843,6 +915,11 @@ void DevControls::sync_header_button_states() {
     map_mode_ui_->set_button_state(MapModeUI::HeaderMode::Room, "regenerate_other", false);
     map_mode_ui_->set_button_state(MapModeUI::HeaderMode::Room, "switch_mode", false);
     map_mode_ui_->set_button_state(MapModeUI::HeaderMode::Map, "switch_mode", false);
+    // New modals in Map Mode header
+    const bool map_assets_open = map_assets_modal_ && map_assets_modal_->visible();
+    const bool boundary_open = boundary_assets_modal_ && boundary_assets_modal_->visible();
+    map_mode_ui_->set_button_state(MapModeUI::HeaderMode::Map, "map_assets", map_assets_open);
+    map_mode_ui_->set_button_state(MapModeUI::HeaderMode::Map, "map_boundary", boundary_open);
 }
 
 void DevControls::close_all_floating_panels() {
@@ -857,6 +934,8 @@ void DevControls::close_all_floating_panels() {
     if (map_mode_ui_) {
         map_mode_ui_->close_all_panels();
     }
+    if (map_assets_modal_) map_assets_modal_->close();
+    if (boundary_assets_modal_) boundary_assets_modal_->close();
     if (trail_suite_) {
         trail_suite_->close();
     }
@@ -876,6 +955,46 @@ void DevControls::pulse_modal_header() {
     if (room_editor_) {
         room_editor_->pulse_active_modal_header();
     }
+}
+
+void DevControls::toggle_map_assets_modal() {
+    if (!assets_) return;
+    if (!map_assets_modal_) map_assets_modal_ = std::make_unique<SingleSpawnGroupModal>();
+    auto save = [this]() {
+        try {
+            const std::string& path = assets_->map_info_path();
+            if (!path.empty()) {
+                std::ofstream out(path);
+                if (out.is_open()) {
+                    out << assets_->map_info_json().dump(2);
+                    out.close();
+                }
+            }
+        } catch (...) {}
+    };
+    auto& map_json = assets_->map_info_json();
+    SDL_Color color{200, 200, 255, 255};
+    map_assets_modal_->open(map_json, "map_assets_data", "batch_map_assets", "Map-wide", color, save);
+}
+
+void DevControls::toggle_boundary_assets_modal() {
+    if (!assets_) return;
+    if (!boundary_assets_modal_) boundary_assets_modal_ = std::make_unique<SingleSpawnGroupModal>();
+    auto save = [this]() {
+        try {
+            const std::string& path = assets_->map_info_path();
+            if (!path.empty()) {
+                std::ofstream out(path);
+                if (out.is_open()) {
+                    out << assets_->map_info_json().dump(2);
+                    out.close();
+                }
+            }
+        } catch (...) {}
+    };
+    auto& map_json = assets_->map_info_json();
+    SDL_Color color{255, 200, 120, 255};
+    boundary_assets_modal_->open(map_json, "map_boundary_data", "batch_map_boundary", "Boundary", color, save);
 }
 
 

@@ -2,7 +2,6 @@
 
 #include "DockableCollapsible.hpp"
 #include "widgets.hpp"
-#include "draw_utils.hpp"
 #include "dm_styles.hpp"
 
 #include "core/AssetsManager.hpp"
@@ -117,19 +116,15 @@ bool AreaOverlayEditor::begin(AssetInfo* info, Asset* asset, const std::string& 
 
     ensure_toolbox();
 
-    const int max_brush = std::max(16, std::max(canvas_w_, canvas_h_));
-    brush_slider_ = std::make_unique<DMSlider>("Brush Size", 1, max_brush, brush_radius_);
     crop_left_slider_ = std::make_unique<DMSlider>("Crop Left", 0, canvas_w_, 0);
     crop_right_slider_ = std::make_unique<DMSlider>("Crop Right", 0, canvas_w_, 0);
     crop_top_slider_ = std::make_unique<DMSlider>("Crop Top", 0, canvas_h_, 0);
     crop_bottom_slider_ = std::make_unique<DMSlider>("Crop Bottom", 0, canvas_h_, 0);
     reset_mask_crop_values();
-    if (brush_slider_) brush_slider_->set_value(std::max(1, brush_radius_));
-
-    set_mode(Mode::Draw);
+    set_mode(Mode::Mask);
 
     active_ = true;
-    drawing_ = false;
+    
     saved_since_begin_ = false;
     toolbox_autoplace_done_ = false;
 
@@ -138,7 +133,6 @@ bool AreaOverlayEditor::begin(AssetInfo* info, Asset* asset, const std::string& 
 
 void AreaOverlayEditor::cancel() {
     active_ = false;
-    drawing_ = false;
     pending_mask_generation_ = false;
 }
 
@@ -152,13 +146,6 @@ void AreaOverlayEditor::upload_mask() {
     if (mask_tex_) {
         SDL_UpdateTexture(mask_tex_, nullptr, mask_->pixels, mask_->pitch);
     }
-}
-
-void AreaOverlayEditor::stamp(int cx, int cy, int radius, bool erase) {
-    if (!mask_) return;
-    Uint32 col = SDL_MapRGBA(mask_->format, 255, 0, 0, erase ? 0 : 255);
-    dm_draw::stamp_circle(mask_, cx, cy, radius, col);
-    upload_mask();
 }
 
 void AreaOverlayEditor::ensure_mask_contains(int lx, int ly, int radius) {
@@ -221,16 +208,23 @@ void AreaOverlayEditor::init_mask_from_existing_area() {
     ensure_mask_contains(minx, miny, 2);
     ensure_mask_contains(maxx, maxy, 2);
 
+    // Only rasterize within the polygon bounding box to avoid freezing on large canvases
+    const int x0 = std::max(0, minx - mask_origin_x_);
+    const int y0 = std::max(0, miny - mask_origin_y_);
+    const int x1 = std::min(mask_->w - 1, maxx - mask_origin_x_);
+    const int y1 = std::min(mask_->h - 1, maxy - mask_origin_y_);
+
     SDL_LockSurface(mask_);
     Uint8* pixels = static_cast<Uint8*>(mask_->pixels);
     const int pitch = mask_->pitch;
-    for (int y = 0; y < mask_->h; ++y) {
-        for (int x = 0; x < mask_->w; ++x) {
-            int lx = x + mask_origin_x_;
-            int ly = y + mask_origin_y_;
-            bool inside = point_in_poly(lx, ly, pts);
-            Uint32* p = reinterpret_cast<Uint32*>(pixels + y * pitch) + x;
-            *p = SDL_MapRGBA(mask_->format, 255, 0, 0, inside ? 255 : 0);
+
+    for (int y = y0; y <= y1; ++y) {
+        Uint32* row = reinterpret_cast<Uint32*>(pixels + y * pitch);
+        for (int x = x0; x <= x1; ++x) {
+            const int lx = x + mask_origin_x_;
+            const int ly = y + mask_origin_y_;
+            const bool inside = point_in_poly(lx, ly, pts);
+            row[x] = SDL_MapRGBA(mask_->format, 255, 0, 0, inside ? 255 : 0);
         }
     }
     SDL_UnlockSurface(mask_);
@@ -264,8 +258,6 @@ std::vector<SDL_Point> AreaOverlayEditor::extract_edge_points(int step) const {
 void AreaOverlayEditor::ensure_toolbox() {
     if (toolbox_) return;
     toolbox_ = std::make_unique<DockableCollapsible>("Area Tools", true);
-    btn_draw_  = std::make_unique<DMButton>("Draw",  &DMStyles::CreateButton(), 180, DMButton::height());
-    btn_erase_ = std::make_unique<DMButton>("Erase", &DMStyles::CreateButton(), 180, DMButton::height());
     btn_mask_  = std::make_unique<DMButton>("Mask",  &DMStyles::CreateButton(), 180, DMButton::height());
     btn_save_  = std::make_unique<DMButton>("Save",  &DMStyles::CreateButton(), 180, DMButton::height());
     rebuild_toolbox_rows();
@@ -277,17 +269,7 @@ void AreaOverlayEditor::rebuild_toolbox_rows() {
     owned_widgets_.clear();
     DockableCollapsible::Rows rows;
 
-    if (btn_draw_ && btn_erase_ && btn_mask_ && btn_save_) {
-        owned_widgets_.push_back(std::make_unique<ButtonWidget>(btn_draw_.get(), [this]() {
-            set_mode(Mode::Draw);
-        }));
-        Widget* draw_widget = owned_widgets_.back().get();
-
-        owned_widgets_.push_back(std::make_unique<ButtonWidget>(btn_erase_.get(), [this]() {
-            set_mode(Mode::Erase);
-        }));
-        Widget* erase_widget = owned_widgets_.back().get();
-
+    if (btn_mask_ && btn_save_) {
         owned_widgets_.push_back(std::make_unique<ButtonWidget>(btn_mask_.get(), [this]() {
             discard_autogen_base();
             reset_mask_crop_values();
@@ -296,16 +278,11 @@ void AreaOverlayEditor::rebuild_toolbox_rows() {
         }));
         Widget* mask_widget = owned_widgets_.back().get();
 
-        rows.push_back({ draw_widget, erase_widget, mask_widget });
+        rows.push_back({ mask_widget });
 
         owned_widgets_.push_back(std::make_unique<ButtonWidget>(btn_save_.get(), [this]() {
             save_area();
         }));
-        rows.push_back({ owned_widgets_.back().get() });
-    }
-
-    if (mode_ == Mode::Draw && brush_slider_) {
-        owned_widgets_.push_back(std::make_unique<SliderWidget>(brush_slider_.get()));
         rows.push_back({ owned_widgets_.back().get() });
     }
 
@@ -327,24 +304,13 @@ void AreaOverlayEditor::rebuild_toolbox_rows() {
     }
 
     toolbox_->set_rows(rows);
-    update_tool_button_states();
 }
 
 void AreaOverlayEditor::set_mode(Mode mode) {
     mode_ = mode;
-    if (mode_ == Mode::Mask) {
-        drawing_ = false;
-    }
-    update_tool_button_states();
     if (toolbox_) {
         rebuild_toolbox_rows();
     }
-}
-
-void AreaOverlayEditor::update_tool_button_states() {
-    if (btn_draw_)  btn_draw_->set_text(mode_ == Mode::Draw  ? "[Draw]"  : "Draw");
-    if (btn_erase_) btn_erase_->set_text(mode_ == Mode::Erase ? "[Erase]" : "Erase");
-    if (btn_mask_)  btn_mask_->set_text(mode_ == Mode::Mask  ? "[Mask]"  : "Mask");
 }
 
 void AreaOverlayEditor::reset_mask_crop_values() {
@@ -571,11 +537,6 @@ void AreaOverlayEditor::update(const Input& input, int screen_w, int screen_h) {
     }
     if (toolbox_) toolbox_->update(input, screen_w, screen_h);
 
-    if (brush_slider_) {
-        int slider_value = std::max(1, brush_slider_->value());
-        brush_radius_ = slider_value;
-    }
-
     if (mode_ == Mode::Mask && mask_autogen_base_) {
         int left = crop_left_slider_ ? crop_left_slider_->value() : 0;
         int right = crop_right_slider_ ? crop_right_slider_->value() : 0;
@@ -590,36 +551,7 @@ void AreaOverlayEditor::update(const Input& input, int screen_w, int screen_h) {
         }
     }
 
-    const int mx = input.getX();
-    const int my = input.getY();
-    SDL_Point mouse_point{mx, my};
-    const bool over_toolbox = (toolbox_ && SDL_PointInRect(&mouse_point, &toolbox_->rect()));
-    const bool painting_enabled = (mode_ == Mode::Draw || mode_ == Mode::Erase);
-
-    if (painting_enabled && input.isDown(Input::LEFT) && !over_toolbox) {
-        drawing_ = true;
-    } else if (!input.isDown(Input::LEFT) || over_toolbox || !painting_enabled) {
-        drawing_ = false;
-    }
-
-    if (!painting_enabled) {
-        drawing_ = false;
-    }
-
-    if (drawing_) {
-        SDL_Point world = assets_->getView().screen_to_map(SDL_Point{mx, my});
-        int dxp = world.x - asset_->pos.x;
-        int dyp = world.y - asset_->pos.y;
-        if (asset_->flipped) dxp = -dxp;
-        int lx = (canvas_w_ / 2) + dxp;
-        int ly = (canvas_h_) + dyp;
-        ensure_mask_contains(lx, ly, brush_radius_);
-        int sx = lx - mask_origin_x_;
-        int sy = ly - mask_origin_y_;
-        if (sx >= 0 && sx < mask_->w && sy >= 0 && sy < mask_->h) {
-            stamp(sx, sy, brush_radius_, mode_ == Mode::Erase);
-        }
-    }
+    // No drawing mode in mask-only editor
 }
 
 bool AreaOverlayEditor::handle_event(const SDL_Event& e) {
@@ -652,10 +584,23 @@ void AreaOverlayEditor::render(SDL_Renderer* r) {
     if (scale <= 0.0f) return;
     float inv_scale = 1.0f / scale;
 
-    if (mask_->w <= 0 || mask_->h <= 0) return;
+    // Compute on-screen rect based on the asset's current frame dimensions
+    int fw = asset_->cached_w;
+    int fh = asset_->cached_h;
+    if ((fw == 0 || fh == 0)) {
+        if (SDL_Texture* final_tex = asset_->get_final_texture()) {
+            SDL_QueryTexture(final_tex, nullptr, nullptr, &fw, &fh);
+        }
+        if ((fw == 0 || fh == 0)) {
+            if (SDL_Texture* base_tex = asset_->get_current_frame()) {
+                SDL_QueryTexture(base_tex, nullptr, nullptr, &fw, &fh);
+            }
+        }
+    }
+    if (fw <= 0 || fh <= 0) return;
 
-    float base_sw = static_cast<float>(mask_->w) * inv_scale;
-    float base_sh = static_cast<float>(mask_->h) * inv_scale;
+    float base_sw = static_cast<float>(fw) * inv_scale;
+    float base_sh = static_cast<float>(fh) * inv_scale;
     if (base_sw <= 0.0f || base_sh <= 0.0f) return;
 
     float reference_screen_height = compute_reference_screen_height(assets_, cam);

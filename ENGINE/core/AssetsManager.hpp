@@ -78,6 +78,10 @@ public:
     void focus_camera_on_asset(Asset* a, double zoom_factor = 0.8, int duration_steps = 25);
     void begin_area_edit_for_selected_asset(const std::string& area_name);
 
+    // Dev Mode: explicitly set the current room selection
+    // (updates DevControls and related UIs).
+    void set_editor_current_room(Room* room);
+
     nlohmann::json& map_info_json() { return map_info_json_; }
     const nlohmann::json& map_info_json() const { return map_info_json_; }
     const std::string& map_path() const { return map_path_; }

@@ -356,6 +356,7 @@ SDL_Point SpawnGroupConfigUI::position() const {
 }
 
 void SpawnGroupConfigUI::handle_method_change() {
+    if (method_locked_) return; // ignore UI changes when locked
     if (!dd_method_) return;
     std::string previous_method;
     if (!spawn_methods_.empty()) {
@@ -392,6 +393,9 @@ void SpawnGroupConfigUI::load(const nlohmann::json& data) {
     std::string method = entry_.value("position", spawn_methods_.front());
     if (method == "Exact Position") {
         method = "Exact";
+    }
+    if (method_locked_ && !forced_method_.empty()) {
+        method = forced_method_;
     }
     auto it = std::find(spawn_methods_.begin(), spawn_methods_.end(), method);
     if (it == spawn_methods_.end()) {
@@ -507,8 +511,17 @@ void SpawnGroupConfigUI::rebuild_widgets() {
         ownership_label_.reset();
     }
 
-    dd_method_ = std::make_unique<DMDropdown>("Method", spawn_methods_, method_);
-    dd_method_w_ = std::make_unique<DropdownWidget>(dd_method_.get());
+    dd_method_.reset();
+    dd_method_w_.reset();
+    locked_method_label_.reset();
+    if (method_locked_) {
+        // Show read-only method info
+        std::string forced = (!forced_method_.empty() ? forced_method_ : (spawn_methods_.empty() ? std::string{} : spawn_methods_[std::clamp(method_, 0, static_cast<int>(spawn_methods_.size() - 1))]));
+        locked_method_label_ = std::make_unique<LabelWidget>(std::string("Method: ") + forced + " (locked)");
+    } else {
+        dd_method_ = std::make_unique<DMDropdown>("Method", spawn_methods_, method_);
+        dd_method_w_ = std::make_unique<DropdownWidget>(dd_method_.get());
+    }
 
     cb_overlap_ = std::make_unique<DMCheckbox>("Check Overlap", overlap_);
     cb_overlap_w_ = std::make_unique<CheckboxWidget>(cb_overlap_.get());
@@ -531,7 +544,7 @@ void SpawnGroupConfigUI::rebuild_widgets() {
         if (max_number_ < 2) max_number_ = 2;
         if (max_number_ < min_number_) max_number_ = min_number_;
     }
-    if (!method_forces_single_quantity(method)) {
+    if (!quantity_hidden_ && !method_forces_single_quantity(method)) {
         int min_val = std::min(min_number_, max_number_);
         int max_val = std::max(min_number_, max_number_);
         if (method == "Perimeter") {
@@ -629,6 +642,7 @@ void SpawnGroupConfigUI::rebuild_rows() {
 
     DockableCollapsible::Row header_row;
     if (dd_method_w_) header_row.push_back(dd_method_w_.get());
+    else if (locked_method_label_) header_row.push_back(locked_method_label_.get());
     if (b_done_w_) header_row.push_back(b_done_w_.get());
     if (!header_row.empty()) rows.push_back(header_row);
 
@@ -717,6 +731,34 @@ void SpawnGroupConfigUI::add_candidate(const std::string& raw_name, int chance) 
     rebuild_widgets();
     rebuild_rows();
     sync_json();
+}
+
+void SpawnGroupConfigUI::lock_method_to(const std::string& method) {
+    method_locked_ = true;
+    forced_method_ = method;
+    // Adjust entry and internal state immediately
+    if (!forced_method_.empty()) {
+        entry_["position"] = forced_method_;
+        auto it = std::find(spawn_methods_.begin(), spawn_methods_.end(), forced_method_);
+        if (it == spawn_methods_.end()) {
+            spawn_methods_.push_back(forced_method_);
+            method_ = static_cast<int>(spawn_methods_.size() - 1);
+        } else {
+            method_ = static_cast<int>(std::distance(spawn_methods_.begin(), it));
+        }
+    }
+    rebuild_widgets();
+    rebuild_rows();
+}
+
+void SpawnGroupConfigUI::set_quantity_hidden(bool hidden) {
+    quantity_hidden_ = hidden;
+    rebuild_widgets();
+    rebuild_rows();
+}
+
+void SpawnGroupConfigUI::set_on_close(std::function<void()> cb) {
+    if (panel_) panel_->set_on_close(std::move(cb));
 }
 
 void SpawnGroupConfigUI::remove_candidate(size_t index) {

@@ -35,12 +35,11 @@ public:
     void render(SDL_Renderer* r);
 
 private:
-    enum class Mode { Draw, Erase, Mask };
+    enum class Mode { Mask };
 
     void ensure_toolbox();
     void rebuild_toolbox_rows();
     void set_mode(Mode mode);
-    void update_tool_button_states();
     void reset_mask_crop_values();
     bool generate_mask_from_asset(SDL_Renderer* renderer);
     void apply_mask_crop();
@@ -48,7 +47,6 @@ private:
     void position_toolbox_left_of_asset(int screen_w, int screen_h);
     void clear_mask();
     void upload_mask();
-    void stamp(int cx, int cy, int radius, bool erase);
     void ensure_mask_contains(int lx, int ly, int radius);
     void init_mask_from_existing_area();
     std::vector<SDL_Point> extract_edge_points(int step = 1) const;
@@ -73,17 +71,12 @@ private:
     int mask_origin_y_ = 0;
 
     // Edit state
-    Mode mode_ = Mode::Draw;
-    int brush_radius_ = 10;
-    bool drawing_ = false;
+    Mode mode_ = Mode::Mask;
 
     // UI
     std::unique_ptr<DockableCollapsible> toolbox_;
-    std::unique_ptr<DMButton> btn_draw_;
-    std::unique_ptr<DMButton> btn_erase_;
     std::unique_ptr<DMButton> btn_mask_;
     std::unique_ptr<DMButton> btn_save_;
-    std::unique_ptr<DMSlider> brush_slider_;
     std::unique_ptr<DMSlider> crop_left_slider_;
     std::unique_ptr<DMSlider> crop_right_slider_;
     std::unique_ptr<DMSlider> crop_top_slider_;

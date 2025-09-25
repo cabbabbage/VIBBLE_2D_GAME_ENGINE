@@ -10,6 +10,7 @@
 #include "DockableCollapsible.hpp"
 class DropdownWidget;
 class RangeSliderWidget;
+class SliderWidget;
 class CheckboxWidget;
 class ButtonWidget;
 class Input;
@@ -66,12 +67,21 @@ private:
     bool room_is_spawn_ = false;
     bool room_is_boss_ = false;
     bool room_inherits_assets_ = false;
+    bool is_trail_context_ = false;
+    int edge_smoothness_ = 2;
+    int curvyness_ = 2;
     std::unique_ptr<DMRangeSlider> room_w_slider_;
     std::unique_ptr<RangeSliderWidget> room_w_slider_w_;
     std::unique_ptr<DMRangeSlider> room_h_slider_;
     std::unique_ptr<RangeSliderWidget> room_h_slider_w_;
+    std::unique_ptr<Widget> room_w_label_;
+    std::unique_ptr<Widget> room_h_label_;
     std::unique_ptr<DMDropdown> room_geom_dd_;
     std::unique_ptr<DropdownWidget> room_geom_dd_w_;
+    std::unique_ptr<DMSlider> edge_smoothness_sl_;
+    std::unique_ptr<SliderWidget> edge_smoothness_w_;
+    std::unique_ptr<DMSlider> curvyness_sl_;
+    std::unique_ptr<SliderWidget> curvyness_w_;
     std::unique_ptr<DMCheckbox> room_spawn_cb_;
     std::unique_ptr<CheckboxWidget> room_spawn_cb_w_;
     std::unique_ptr<DMCheckbox> room_boss_cb_;

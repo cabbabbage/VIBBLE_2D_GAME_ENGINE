@@ -133,10 +133,10 @@ bool TrailGeometry::attempt_trail_connection(Room* a,
         }
         json& config = *trail_config;
         const int min_width = config.value("min_width", 40);
-        const int max_width = config.value("max_width", 80);
+        const int max_width = config.value("max_width", min_width);
         const int curvyness = config.value("curvyness", 2);
         const std::string name = config.value("name", trail_name.empty() ? std::string("trail_segment") : trail_name);
-        const double width = static_cast<double>( std::uniform_int_distribution<int>(min_width, max_width)(rng));
+        const double width = static_cast<double>(std::max(min_width, max_width));
         if (testing) {
                 std::cout << "[TrailGen] Using trail template: " << name
                 << "  width=" << width

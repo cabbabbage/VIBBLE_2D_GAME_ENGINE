@@ -4,7 +4,6 @@
 #include <fstream>
 #include <nlohmann/json.hpp>
 #include <stdexcept>
-#include <random>
 #include <algorithm>
 #include <iostream>
 #include <cmath>
@@ -63,15 +62,14 @@ data_section_(data_section)
                 room_area = std::make_unique<Area>(room_name, precomputed_area->get_points());
         } else {
                 int min_w = assets_json.value("min_width", 64);
-                int max_w = assets_json.value("max_width", 64);
+                int max_w = assets_json.value("max_width", min_w);
                 int min_h = assets_json.value("min_height", 64);
-                int max_h = assets_json.value("max_height", 64);
+                int max_h = assets_json.value("max_height", min_h);
                 int edge_smoothness = assets_json.value("edge_smoothness", 2);
                 std::string geometry = assets_json.value("geometry", "square");
-		if (!geometry.empty()) geometry[0] = std::toupper(geometry[0]);
-		static std::mt19937 rng(std::random_device{}());
-		int width = std::uniform_int_distribution<>(min_w, max_w)(rng);
-		int height = std::uniform_int_distribution<>(min_h, max_h)(rng);
+                if (!geometry.empty()) geometry[0] = std::toupper(geometry[0]);
+                int width = std::max(min_w, max_w);
+                int height = std::max(min_h, max_h);
 		if (testing) {
 			std::cout << "[Room] Creating area from JSON: " << room_name
 			<< " (" << width << "x" << height << ")"

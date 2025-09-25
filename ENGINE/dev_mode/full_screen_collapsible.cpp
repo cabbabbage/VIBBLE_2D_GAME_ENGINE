@@ -188,10 +188,10 @@ bool FullScreenCollapsible::handle_event(const SDL_Event& e) {
     }
 
     if (in_content) {
-        if (!pointer_event) {
-            return true;
-        }
-        return false;
+        // When expanded, the content area should capture mouse input to
+        // prevent click-through interactions with underlying views.
+        // Always swallow events occurring within the content rect.
+        return true;
     }
 
     return false;

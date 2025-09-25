@@ -12,6 +12,7 @@
 #include "dev_mode/spawn_group_utils.hpp"
 #include "dev_mode/full_screen_collapsible.hpp"
 #include "dev_mode/room_configurator.hpp"
+#include "dev_mode/FloatingDockableManager.hpp"
 #include "dev_mode/widgets.hpp"
 #include "dm_styles.hpp"
 #include "render/camera.hpp"
@@ -121,7 +122,9 @@ void RoomEditor::set_current_room(Room* room) {
         refresh_room_config_visibility();
     }
 
-    if (enabled_ && room_changed && current_room_) {
+    // Only auto-center when not in room editor mode; entering room mode
+    // handles initial framing separately in set_enabled(true).
+    if (!enabled_ && room_changed && current_room_) {
         focus_camera_on_room_center();
     }
 }
@@ -827,8 +830,7 @@ void RoomEditor::handle_mouse_input(const Input& input) {
         hit_asset = hit_test_asset(SDL_Point{mx, my});
     }
 
-    const bool block_pan = ui_blocked || (!suppress_hover_and_drag && hit_asset != nullptr);
-    pan_zoom_.handle_input(cam, input, block_pan);
+    pan_zoom_.handle_input(cam, input, true);
 
     SDL_Point world_mouse = cam.screen_to_map(SDL_Point{mx, my});
 
@@ -1001,8 +1003,42 @@ void RoomEditor::handle_click(const Input& input) {
         }
     } else {
         selected_assets_.clear();
+        highlighted_assets_.clear();
         last_click_asset_ = nullptr;
         last_click_time_ms_ = 0;
+
+        const bool asset_info_open = (active_modal_ == ActiveModal::AssetInfo);
+        const bool floating_modal_open = FloatingDockableManager::instance().active_panel() != nullptr;
+        // Allow recentering even if library or spawn config panels are open,
+        // as long as the click isn't over their UI regions (handled earlier).
+        const bool area_editor_active = area_editor_ && area_editor_->is_active();
+
+        bool inside_room = true;
+        if (current_room_ && current_room_->room_area) {
+            inside_room = current_room_->room_area->contains_point(world_mouse);
+        }
+
+        // If clicked in another room's area, switch current room first.
+        if (!inside_room && assets_) {
+            for (Room* r : assets_->rooms()) {
+                if (!r || r == current_room_ || !r->room_area) continue;
+                if (r->room_area->contains_point(world_mouse)) {
+                    // Update global dev selection + editor context
+                    assets_->set_editor_current_room(r);
+                    inside_room = true; // allow pan below
+                    break;
+                }
+            }
+        }
+
+        if (inside_room && !asset_info_open && !floating_modal_open &&
+            !area_editor_active && hovered_asset_ == nullptr) {
+            if (assets_) {
+                camera& cam = assets_->getView();
+                // Smoothly pan to the clicked location without changing zoom.
+                cam.pan_and_zoom_to_point(world_mouse, 1.0, 16);
+            }
+        }
     }
 }
 
@@ -1111,11 +1147,8 @@ void RoomEditor::update_area_editor_focus() {
         if (focus) {
             cam.set_manual_zoom_override(true);
             cam.set_focus_override(SDL_Point{focus->pos.x, focus->pos.y});
-        } else {
-            focus_camera_on_room_center(false);
         }
-    } else {
-        focus_camera_on_room_center(false);
+        // If no focus asset while editing, leave camera as-is.
     }
 }
 

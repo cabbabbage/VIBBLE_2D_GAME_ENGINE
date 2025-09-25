@@ -11,6 +11,7 @@
 #include <vector>
 #include <cstdint>
 #include <cstring>
+#include <initializer_list>
 
 static constexpr SDL_Color SLATE_COLOR = {69, 101, 74, 255};
 static constexpr float MIN_VISIBLE_SCREEN_RATIO = 0.015f;
@@ -72,6 +73,18 @@ SceneRenderer::~SceneRenderer() {
         if (fullscreen_light_tex_) {
                 SDL_DestroyTexture(fullscreen_light_tex_);
                 fullscreen_light_tex_ = nullptr;
+        }
+        if (scene_target_tex_) {
+                SDL_DestroyTexture(scene_target_tex_);
+                scene_target_tex_ = nullptr;
+        }
+        if (post_small_tex_a_) {
+                SDL_DestroyTexture(post_small_tex_a_);
+                post_small_tex_a_ = nullptr;
+        }
+        if (post_small_tex_b_) {
+                SDL_DestroyTexture(post_small_tex_b_);
+                post_small_tex_b_ = nullptr;
         }
         if (postprocess_full_surface_) {
                 SDL_FreeSurface(postprocess_full_surface_);
@@ -178,11 +191,33 @@ void SceneRenderer::render() {
     // Scale blur radius into the downsampled space so the look roughly matches
     const int blur_radius_small = std::max(0, blur_radius_full / ds);
 
-    // ----- CLEAR BACKBUFFER -----
-    SDL_SetRenderTarget(renderer_, nullptr);
-    SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND);
-    SDL_SetRenderDrawColor(renderer_, SLATE_COLOR.r, SLATE_COLOR.g, SLATE_COLOR.b, 255);
-    SDL_RenderClear(renderer_);
+    // ----- ENSURE GPU RENDER TARGETS & CLEAR SCENE -----
+    auto ensure_target = [&](SDL_Texture*& tex, int w, int h) {
+        int tw = 0, th = 0; Uint32 fmt = 0; int access = 0;
+        if (tex && SDL_QueryTexture(tex, &fmt, &access, &tw, &th) == 0) {
+            if (tw == w && th == h && access == SDL_TEXTUREACCESS_TARGET) return true;
+            SDL_DestroyTexture(tex); tex = nullptr;
+        }
+        tex = SDL_CreateTexture(renderer_, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET, w, h);
+        if (!tex) return false;
+        SDL_SetTextureBlendMode(tex, SDL_BLENDMODE_BLEND);
+        #if SDL_VERSION_ATLEAST(2,0,12)
+        SDL_SetTextureScaleMode(tex, SDL_ScaleModeBest);
+        #endif
+        return true;
+    };
+    if (!ensure_target(scene_target_tex_, screen_width_, screen_height_)) {
+        // Fallback: clear backbuffer and render directly (no post-process)
+        SDL_SetRenderTarget(renderer_, nullptr);
+        SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND);
+        SDL_SetRenderDrawColor(renderer_, SLATE_COLOR.r, SLATE_COLOR.g, SLATE_COLOR.b, 255);
+        SDL_RenderClear(renderer_);
+    } else {
+        SDL_SetRenderTarget(renderer_, scene_target_tex_);
+        SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND);
+        SDL_SetRenderDrawColor(renderer_, SLATE_COLOR.r, SLATE_COLOR.g, SLATE_COLOR.b, 255);
+        SDL_RenderClear(renderer_);
+    }
 
     // ----- WORLD RENDER -----
     const auto& camera_state = assets_->getView();
@@ -254,138 +289,79 @@ void SceneRenderer::render() {
     }
 
     // ----- LIGHTS / OVERLAYS -----
-    SDL_SetRenderTarget(renderer_, nullptr);
+    SDL_SetRenderTarget(renderer_, scene_target_tex_);
     z_light_pass_->render(debugging);
     if (assets_) assets_->render_overlays(renderer_);
 
-    // ----- POST: DOWNSCALE -> BLUR (SMALL) -> UPSCALE OVERLAY -----
-    if ((blur_radius_full > 0 || kPostOverlayAlpha > 0) && (kPostOverlayAlpha > 0)) {
-        if (ensure_surface(postprocess_full_surface_, screen_width_, screen_height_) &&
-            SDL_RenderReadPixels(renderer_, nullptr, SDL_PIXELFORMAT_RGBA8888,
-                                 postprocess_full_surface_->pixels, postprocess_full_surface_->pitch) == 0) {
-            Uint8* full_px = static_cast<Uint8*>(postprocess_full_surface_->pixels);
-            const int full_pitch = postprocess_full_surface_->pitch;
+    // ----- POST: DOWNSCALE (GPU) -> MULTI-TAP BLUR -> UPSCALE OVERLAY -----
+    if (kPostOverlayAlpha > 0 && scene_target_tex_) {
+        auto ensure_small_targets = [&]() {
+            return ensure_target(post_small_tex_a_, small_w, small_h) && ensure_target(post_small_tex_b_, small_w, small_h);
+        };
+        if (ensure_small_targets()) {
+            // Downscale scene into A
+            SDL_SetRenderTarget(renderer_, post_small_tex_a_);
+            SDL_SetRenderDrawColor(renderer_, 0, 0, 0, 0);
+            SDL_RenderClear(renderer_);
+            SDL_Rect dst_small{0, 0, small_w, small_h};
+            SDL_RenderCopy(renderer_, scene_target_tex_, nullptr, &dst_small);
 
-            if (ensure_surface(postprocess_small_surface_, small_w, small_h)) {
-                Uint8* small_px = static_cast<Uint8*>(postprocess_small_surface_->pixels);
-                const int small_pitch = postprocess_small_surface_->pitch;
-                SDL_PixelFormat* small_fmt = postprocess_small_surface_->format;
-                auto small_set = [&](int x, int y, Uint32 v) {
-                    *reinterpret_cast<Uint32*>(small_px + y * small_pitch + x * 4) = v;
-                };
-
-                const int max_w_index = std::max(0, screen_width_ - 1);
-                const int max_h_index = std::max(0, screen_height_ - 1);
-                for (int y = 0; y < small_h; ++y) {
-                    int y0 = std::min(y * ds, max_h_index);
-                    int y1 = std::min(screen_height_, y0 + ds);
-                    if (y1 <= y0) {
-                        y1 = std::min(screen_height_, y0 + 1);
-                    }
-                    for (int x = 0; x < small_w; ++x) {
-                        int x0 = std::min(x * ds, max_w_index);
-                        int x1 = std::min(screen_width_, x0 + ds);
-                        if (x1 <= x0) {
-                            x1 = std::min(screen_width_, x0 + 1);
-                        }
-
-                        const int sample_w = std::max(1, x1 - x0);
-                        const int sample_h = std::max(1, y1 - y0);
-                        const int sample_count = sample_w * sample_h;
-
-                        uint64_t r = 0;
-                        uint64_t g = 0;
-                        uint64_t b = 0;
-                        uint64_t a = 0;
-                        for (int yy = y0; yy < y1; ++yy) {
-                            const Uint8* src_row = full_px + yy * full_pitch + x0 * 4;
-                            for (int xx = x0; xx < x1; ++xx) {
-                                r += src_row[0];
-                                g += src_row[1];
-                                b += src_row[2];
-                                a += src_row[3];
-                                src_row += 4;
-                            }
-                        }
-
-                        Uint8* dst_px = small_px + y * small_pitch + x * 4;
-                        static float kPreBlurBrighten = 1.25f; // 1.0 = no change
-
-                        int R = static_cast<int>(std::lround((r / sample_count) * kPreBlurBrighten));
-                        int G = static_cast<int>(std::lround((g / sample_count) * kPreBlurBrighten));
-                        int B = static_cast<int>(std::lround((b / sample_count) * kPreBlurBrighten));
-                        int A = static_cast<int>(a / sample_count);
-
-                        dst_px[0] = static_cast<Uint8>(std::min(R, 255));
-                        dst_px[1] = static_cast<Uint8>(std::min(G, 255));
-                        dst_px[2] = static_cast<Uint8>(std::min(B, 255));
-                        dst_px[3] = static_cast<Uint8>(A);
-
+            // Multi-tap blur passes using additive accumulation
+            auto blur_once = [&](SDL_Texture* src, SDL_Texture* dst, int step_px) {
+                SDL_SetRenderTarget(renderer_, dst);
+                SDL_SetRenderDrawColor(renderer_, 0, 0, 0, 0);
+                SDL_RenderClear(renderer_);
+                SDL_SetTextureBlendMode(src, SDL_BLENDMODE_ADD);
+                const int taps = 9; // center + 8 neighbors
+                const Uint8 tap_alpha = static_cast<Uint8>(std::max(1, 255 / taps));
+                SDL_SetTextureAlphaMod(src, tap_alpha);
+                for (int dy : std::initializer_list<int>{-step_px, 0, step_px}) {
+                    for (int dx : std::initializer_list<int>{-step_px, 0, step_px}) {
+                        SDL_Rect dd{dx, dy, small_w, small_h};
+                        SDL_RenderCopy(renderer_, src, nullptr, &dd);
                     }
                 }
+                SDL_SetTextureAlphaMod(src, 255);
+                SDL_SetTextureBlendMode(src, SDL_BLENDMODE_BLEND);
+            };
 
-                if (blur_radius_small > 0) {
-                    blur_row_buffer_.resize(static_cast<size_t>(small_w));
-                    blur_col_buffer_.resize(static_cast<size_t>(small_h));
-
-                    Uint32* row = blur_row_buffer_.data();
-                    for (int y = 0; y < small_h; ++y) {
-                        std::memcpy(row, small_px + y * small_pitch, static_cast<size_t>(small_w) * sizeof(Uint32));
-                        for (int x = 0; x < small_w; ++x) {
-                            int x0 = std::max(0, x - blur_radius_small);
-                            int x1 = std::min(small_w - 1, x + blur_radius_small);
-                            int cnt = (x1 - x0 + 1);
-                            uint32_t r=0,g=0,b=0,a=0;
-                            for (int xi = x0; xi <= x1; ++xi) {
-                                Uint8 rr,gg,bb,aa;
-                                SDL_GetRGBA(row[xi], small_fmt, &rr,&gg,&bb,&aa);
-                                r+=rr; g+=gg; b+=bb; a+=aa;
-                            }
-                            Uint8 R = static_cast<Uint8>(r / cnt);
-                            Uint8 G = static_cast<Uint8>(g / cnt);
-                            Uint8 B = static_cast<Uint8>(b / cnt);
-                            Uint8 A = static_cast<Uint8>(a / cnt);
-                            small_set(x, y, SDL_MapRGBA(small_fmt, R,G,B,A));
-                        }
-                    }
-
-                    Uint32* col = blur_col_buffer_.data();
-                    for (int x = 0; x < small_w; ++x) {
-                        for (int y = 0; y < small_h; ++y) {
-                            col[y] = *reinterpret_cast<Uint32*>(small_px + y * small_pitch + x * 4);
-                        }
-                        for (int y = 0; y < small_h; ++y) {
-                            int y0 = std::max(0, y - blur_radius_small);
-                            int y1 = std::min(small_h - 1, y + blur_radius_small);
-                            int cnt = (y1 - y0 + 1);
-                            uint32_t r=0,g=0,b=0,a=0;
-                            for (int yi = y0; yi <= y1; ++yi) {
-                                Uint8 rr,gg,bb,aa;
-                                SDL_GetRGBA(col[yi], small_fmt, &rr,&gg,&bb,&aa);
-                                r+=rr; g+=gg; b+=bb; a+=aa;
-                            }
-                            Uint8 R = static_cast<Uint8>(r / cnt);
-                            Uint8 G = static_cast<Uint8>(g / cnt);
-                            Uint8 B = static_cast<Uint8>(b / cnt);
-                            Uint8 A = static_cast<Uint8>(a / cnt);
-                            small_set(x, y, SDL_MapRGBA(small_fmt, R,G,B,A));
-                        }
-                    }
-                }
-
-                SDL_Texture* blur_small_tex = SDL_CreateTextureFromSurface(renderer_, postprocess_small_surface_);
-                if (blur_small_tex) {
-                    SDL_SetTextureBlendMode(blur_small_tex, kPostBlendMode);
-                    SDL_SetTextureAlphaMod(blur_small_tex, kPostOverlayAlpha);
-                    #if SDL_VERSION_ATLEAST(2,0,12)
-                    SDL_SetTextureScaleMode(blur_small_tex, SDL_ScaleModeBest);
-                    #endif
-
-                    SDL_Rect dst{0, 0, screen_width_, screen_height_};
-                    SDL_RenderCopy(renderer_, blur_small_tex, nullptr, &dst);
-                    SDL_DestroyTexture(blur_small_tex);
-                }
+            SDL_Texture* a = post_small_tex_a_;
+            SDL_Texture* b = post_small_tex_b_;
+            int passes = std::max(0, blur_radius_small);
+            passes = std::min(passes, 4); // clamp to keep work bounded
+            for (int i = 0; i < passes; ++i) {
+                int step = 1 << i; // 1,2,4,8...
+                blur_once(a, b, step);
+                std::swap(a, b);
             }
+            SDL_Texture* blurred_small = (passes % 2 == 0) ? post_small_tex_a_ : post_small_tex_b_;
+
+            // Compose to backbuffer: scene + blurred overlay
+            SDL_SetRenderTarget(renderer_, nullptr);
+            SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND);
+            SDL_SetRenderDrawColor(renderer_, 0, 0, 0, 255);
+            SDL_RenderClear(renderer_);
+            SDL_RenderCopy(renderer_, scene_target_tex_, nullptr, nullptr);
+            SDL_SetTextureBlendMode(blurred_small, kPostBlendMode);
+            SDL_SetTextureAlphaMod(blurred_small, kPostOverlayAlpha);
+            #if SDL_VERSION_ATLEAST(2,0,12)
+            SDL_SetTextureScaleMode(blurred_small, SDL_ScaleModeBest);
+            #endif
+            SDL_RenderCopy(renderer_, blurred_small, nullptr, nullptr);
+        } else {
+            // Fallback: present scene only
+            SDL_SetRenderTarget(renderer_, nullptr);
+            SDL_SetRenderDrawColor(renderer_, 0, 0, 0, 255);
+            SDL_RenderClear(renderer_);
+            SDL_RenderCopy(renderer_, scene_target_tex_, nullptr, nullptr);
+        }
+    } else {
+        // No overlay -> present the scene directly
+        SDL_SetRenderTarget(renderer_, nullptr);
+        SDL_SetRenderDrawColor(renderer_, 0, 0, 0, 255);
+        SDL_RenderClear(renderer_);
+        if (scene_target_tex_) {
+            SDL_RenderCopy(renderer_, scene_target_tex_, nullptr, nullptr);
         }
     }
 

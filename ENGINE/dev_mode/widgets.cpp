@@ -328,8 +328,14 @@ int DMSlider::value_for_x(int x) const {
 bool DMSlider::handle_event(const SDL_Event& e) {
     if (edit_box_) {
         if (edit_box_->handle_event(e)) {
-            int nv = std::stoi(edit_box_->value());
-            set_value(nv); return true;
+            // Parse cautiously to avoid crashes on invalid input
+            try {
+                int nv = std::stoi(edit_box_->value());
+                set_value(nv);
+            } catch (...) {
+                // Ignore invalid numeric input; keep previous value
+            }
+            return true;
         }
         if (!edit_box_->is_editing()) edit_box_.reset();
     }
@@ -425,8 +431,10 @@ int DMSlider::height() {
 DMRangeSlider::DMRangeSlider(int min_val, int max_val, int min_value, int max_value)
     : min_(min_val), max_(max_val) {
     if (min_ > max_) std::swap(min_, max_);
-    set_min_value(min_value);
+    // Initialize with correct dependency order to avoid clamping new min against
+    // the default max_ (100) before the intended max is applied.
     set_max_value(max_value);
+    set_min_value(min_value);
 }
 
 void DMRangeSlider::set_rect(const SDL_Rect& r) {
@@ -481,16 +489,24 @@ int DMRangeSlider::value_for_x(int x) const {
 bool DMRangeSlider::handle_event(const SDL_Event& e) {
     if (edit_min_) {
         if (edit_min_->handle_event(e)) {
-            int nv = std::stoi(edit_min_->value());
-            set_min_value(nv);
+            try {
+                int nv = std::stoi(edit_min_->value());
+                set_min_value(nv);
+            } catch (...) {
+                // Ignore invalid input
+            }
             return true;
         }
         if (!edit_min_->is_editing()) edit_min_.reset();
     }
     if (edit_max_) {
         if (edit_max_->handle_event(e)) {
-            int nv = std::stoi(edit_max_->value());
-            set_max_value(nv);
+            try {
+                int nv = std::stoi(edit_max_->value());
+                set_max_value(nv);
+            } catch (...) {
+                // Ignore invalid input
+            }
             return true;
         }
         if (!edit_max_->is_editing()) edit_max_.reset();

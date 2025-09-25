@@ -5,16 +5,8 @@
 #include <random>
 #include <algorithm>
 #include <iomanip>
+#include "dev_mode/spawn_group_utils.hpp"
 namespace fs = std::filesystem;
-
-static std::string generate_spawn_id() {
-    static std::mt19937 rng(std::random_device{}());
-    static const char* hex = "0123456789abcdef";
-    std::uniform_int_distribution<int> dist(0, 15);
-    std::string s = "spn-";
-    for (int i = 0; i < 12; ++i) s.push_back(hex[dist(rng)]);
-    return s;
-}
 
 AssetSpawnPlanner::AssetSpawnPlanner(const std::vector<nlohmann::json>& json_sources,
                                      const Area& area,
@@ -28,14 +20,18 @@ AssetSpawnPlanner::AssetSpawnPlanner(const std::vector<nlohmann::json>& json_sou
     }
     source_changed_.assign(source_jsons_.size(), false);
 
-    // Merge only spawn_groups from all sources (order preserved)
+    // Merge only spawn_groups from all sources (order preserved).
+    // Accept legacy payloads that use the key "assets" by normalizing
+    // to "spawn_groups" via devmode::spawn::ensure_spawn_groups_array.
     nlohmann::json merged;
     merged["spawn_groups"] = nlohmann::json::array();
     for (size_t si = 0; si < source_jsons_.size(); ++si) {
-        const auto& js = source_jsons_[si];
-        if (!js.contains("spawn_groups") || !js["spawn_groups"].is_array()) continue;
-        for (size_t ai = 0; ai < js["spawn_groups"].size(); ++ai) {
-            merged["spawn_groups"].push_back(js["spawn_groups"][ai]);
+        // Make a mutable copy so we can normalize legacy keys safely
+        nlohmann::json js = source_jsons_[si];
+        auto& groups = devmode::spawn::ensure_spawn_groups_array(js);
+        if (!groups.is_array()) continue;
+        for (size_t ai = 0; ai < groups.size(); ++ai) {
+            merged["spawn_groups"].push_back(groups[ai]);
             SourceRef ref;
             ref.source_index = static_cast<int>(si);
             ref.entry_index  = static_cast<int>(ai);
@@ -70,7 +66,7 @@ void AssetSpawnPlanner::parse_asset_spawns(const Area& area) {
         // --- spawn_id (persist back into source) ---
         std::string spawn_id = get_opt_str(asset, "spawn_id");
         if (spawn_id.empty()) {
-            spawn_id = generate_spawn_id();
+            spawn_id = devmode::spawn::generate_spawn_id();
             entry["spawn_id"] = spawn_id;
             asset["spawn_id"] = spawn_id;
             if (idx < assets_provenance_.size()) {

@@ -14,6 +14,7 @@
 #include "MapLightPanel.hpp"
 #include "asset_filter_bar.hpp"
 #include "trail_editor_suite.hpp"
+#include "map_assets_modals.hpp"
 
 
 class Asset;
@@ -102,6 +103,9 @@ private:
     void toggle_map_light_panel();
     void toggle_camera_panel();
     void close_camera_panel();
+    // Map mode: spawn group modals
+    void toggle_map_assets_modal();
+    void toggle_boundary_assets_modal();
     void configure_header_button_sets();
     void sync_header_button_states();
     Room* find_spawn_room() const;
@@ -143,5 +147,9 @@ private:
     bool pointer_over_camera_panel_ = false;
     std::unique_ptr<TrailEditorSuite> trail_suite_;
     AssetFilterBar asset_filter_;
+
+    // Map/Boundary spawn group modals (single-group batch editors)
+    std::unique_ptr<SingleSpawnGroupModal> map_assets_modal_;
+    std::unique_ptr<SingleSpawnGroupModal> boundary_assets_modal_;
 };
 

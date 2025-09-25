@@ -22,6 +22,7 @@ class Section_Areas : public DockableCollapsible {
     void build() override {
       rebuild_buttons();
       b_create_ = std::make_unique<DMButton>("New Area", &DMStyles::CreateButton(), 220, DMButton::height());
+      b_confirm_create_ = std::make_unique<DMButton>("Create", &DMStyles::CreateButton(), 140, DMButton::height());
       if (!apply_btn_) {
         apply_btn_ = std::make_unique<DMButton>("Apply Settings", &DMStyles::AccentButton(), 180, DMButton::height());
       }
@@ -57,6 +58,15 @@ class Section_Areas : public DockableCollapsible {
       return DockableCollapsible::handle_event(e);
     }
 
+    void update(const Input& input, int screen_w, int screen_h) override {
+      DockableCollapsible::update(input, screen_w, screen_h);
+      if (pending_open_ && open_editor_) {
+        pending_open_ = false;
+        open_editor_(pending_name_);
+        pending_name_.clear();
+      }
+    }
+
     void render_content(SDL_Renderer* /*r*/) const override {}
 
   private:
@@ -70,7 +80,9 @@ class Section_Areas : public DockableCollapsible {
           DMButton* bp = b.get();
           std::string nm = bp->text();
           auto bw = std::make_unique<ButtonWidget>(bp, [this, nm]() {
-            if (open_editor_) open_editor_(nm);
+            // Defer opening the editor to avoid re-entrancy while handling events
+            pending_name_ = nm;
+            pending_open_ = true;
           });
           rows.push_back({ bw.get() });
           widgets_.push_back(std::move(bw));
@@ -89,11 +101,37 @@ class Section_Areas : public DockableCollapsible {
       }
       if (b_create_) {
         auto bw = std::make_unique<ButtonWidget>(b_create_.get(), [this]() {
-          std::string nm = "area" + std::to_string(info_ ? info_->areas.size() + 1 : 1);
-          if (open_editor_) open_editor_(nm);
+          // Toggle prompt to enter a name
+          create_prompt_open_ = true;
+          if (!new_area_name_box_) new_area_name_box_ = std::make_unique<DMTextBox>("Area Name", "");
+          if (new_area_name_box_) new_area_name_box_->set_value("");
+          rebuild_rows();
         });
         rows.push_back({ bw.get() });
         widgets_.push_back(std::move(bw));
+      }
+
+      if (create_prompt_open_) {
+        if (!new_area_name_box_) new_area_name_box_ = std::make_unique<DMTextBox>("Area Name", "");
+        auto tw = std::make_unique<TextBoxWidget>(new_area_name_box_.get());
+        widgets_.push_back(std::move(tw));
+        Widget* text_widget = widgets_.back().get();
+
+          auto cw = std::make_unique<ButtonWidget>(b_confirm_create_.get(), [this]() {
+          if (!open_editor_) return;
+          std::string name = new_area_name_box_ ? new_area_name_box_->value() : std::string{};
+          if (name.empty()) {
+            // Fallback default
+            name = "area" + std::to_string(info_ ? info_->areas.size() + 1 : 1);
+          }
+          create_prompt_open_ = false;
+          rebuild_rows();
+          pending_name_ = name;
+          pending_open_ = true;
+        });
+        widgets_.push_back(std::move(cw));
+        Widget* create_widget = widgets_.back().get();
+        rows.push_back({ text_widget, create_widget });
       }
       if (apply_btn_) {
         auto aw = std::make_unique<ButtonWidget>(apply_btn_.get(), [this]() {
@@ -108,11 +146,16 @@ class Section_Areas : public DockableCollapsible {
     std::vector<std::unique_ptr<DMButton>> buttons_;
     std::vector<std::unique_ptr<DMButton>> del_buttons_;
     std::unique_ptr<DMButton>  b_create_;
+    std::unique_ptr<DMButton>  b_confirm_create_;
     std::unique_ptr<DMButton>  apply_btn_;
     std::function<void(const std::string&)> open_editor_;
     std::function<void(const std::string&)> on_delete_;
     std::unique_ptr<DMButton> dummy_del_{};
     std::vector<std::unique_ptr<Widget>> widgets_;
     AssetInfoUI* ui_ = nullptr; // non-owning
+    bool create_prompt_open_ = false;
+    std::unique_ptr<DMTextBox> new_area_name_box_;
+    bool pending_open_ = false;
+    std::string pending_name_;
 };
 

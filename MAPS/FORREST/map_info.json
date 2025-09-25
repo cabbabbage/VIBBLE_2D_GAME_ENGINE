@@ -13,15 +13,15 @@
       {
         "candidates": [
           {
-            "chance": 10,
+            "chance": 100,
             "name": "null"
           },
           {
-            "chance": 37,
+            "chance": 25,
             "name": "Grass_FPS_2"
           },
           {
-            "chance": 38,
+            "chance": 20,
             "name": "Grass_1_FPS_2"
           },
           {
@@ -29,7 +29,7 @@
             "name": "Small_Rock"
           },
           {
-            "chance": 8,
+            "chance": 1,
             "name": "fog"
           },
           {
@@ -45,7 +45,7 @@
             "name": "Frog"
           }
         ],
-        "chance_denominator": 98,
+        "chance_denominator": 151,
         "check_overlap": false,
         "display_name": "batch_map_assets",
         "enforce_spacing": false,
@@ -192,7 +192,7 @@
           255,
           237,
           248,
-          73
+          45
         ]
       ],
       [
@@ -206,11 +206,11 @@
       ]
     ],
     "max_opacity": 255,
-    "min_opacity": 68,
+    "min_opacity": 23,
     "mult": 0.32,
     "orbit_radius": 782,
     "radius": 6667,
-    "update_interval": 45
+    "update_interval": 4
   },
   "map_name": "FORREST",
   "map_radius": 8610.0,
@@ -219,14 +219,14 @@
       "edge_smoothness": 0,
       "geometry": "Circle",
       "height_max": 2500,
-      "height_min": 100,
+      "height_min": 1072,
       "inherits_map_assets": true,
       "is_boss": false,
       "is_spawn": false,
       "max_height": 2500,
-      "max_width": 2500,
-      "min_height": 100,
-      "min_width": 100,
+      "max_width": 2897,
+      "min_height": 1072,
+      "min_width": 1755,
       "name": "bar",
       "spawn_groups": [
         {
@@ -246,29 +246,6 @@
           "min_number": 100,
           "position": "Random",
           "spawn_id": "spn-2986ab1d1671",
-          "tag": false
-        },
-        {
-          "candidates": [
-            {
-              "chance": 0,
-              "name": "null"
-            },
-            {
-              "chance": 100,
-              "name": "Barrel"
-            }
-          ],
-          "chance_denominator": 100,
-          "check_overlap": false,
-          "display_name": "Barrel",
-          "enforce_spacing": false,
-          "exact_position": null,
-          "inherited": false,
-          "max_number": 15,
-          "min_number": -36,
-          "position": "Random",
-          "spawn_id": "spn-509d0b5b6739",
           "tag": false
         },
         {
@@ -352,10 +329,34 @@
           "position": "Perimeter",
           "radius": 801,
           "spawn_id": "spn-05dbb178991c"
+        },
+        {
+          "candidates": [
+            {
+              "chance": 0,
+              "name": "null"
+            },
+            {
+              "chance": 100,
+              "name": "Barrel"
+            }
+          ],
+          "chance_denominator": 100,
+          "check_overlap": false,
+          "display_name": "Barrel",
+          "dx": -21,
+          "dy": -294,
+          "enforce_spacing": false,
+          "max_number": 136,
+          "min_number": 1,
+          "origional_height": 3117,
+          "origional_width": 2772,
+          "position": "Random",
+          "spawn_id": "spn-6fcf66cb001b"
         }
       ],
-      "width_max": 2500,
-      "width_min": 100
+      "width_max": 2897,
+      "width_min": 1755
     },
     "spawn": {
       "curvyness": 1,
@@ -429,13 +430,15 @@
     "basic": {
       "curvyness": 4,
       "geometry": "Square",
+      "height_max": 1221,
+      "height_min": 100,
       "inherits_map_assets": true,
       "is_boss": false,
       "is_spawn": false,
-      "max_height": 1000,
-      "max_width": 1000,
+      "max_height": 1221,
+      "max_width": 1208,
       "min_height": 100,
-      "min_width": 100,
+      "min_width": 470,
       "name": "basic",
       "spawn_groups": [
         {
@@ -511,10 +514,13 @@
           "position": "Random",
           "spawn_id": "spn-5db9c322ef41"
         }
-      ]
+      ],
+      "width_max": 1208,
+      "width_min": 470
     },
     "brick": {
       "curvyness": 4,
+      "edge_smoothness": 101,
       "geometry": "Square",
       "height_max": 1000,
       "height_min": 100,
@@ -524,7 +530,7 @@
       "max_height": 1000,
       "max_width": 1115,
       "min_height": 100,
-      "min_width": 100,
+      "min_width": 705,
       "name": "brick",
       "spawn_groups": [
         {
@@ -552,7 +558,7 @@
         }
       ],
       "width_max": 1115,
-      "width_min": 100
+      "width_min": 705
     }
   }
 }
