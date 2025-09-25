@@ -219,14 +219,14 @@
       "edge_smoothness": 0,
       "geometry": "Circle",
       "height_max": 2500,
-      "height_min": 2002,
+      "height_min": 100,
       "inherits_map_assets": true,
       "is_boss": false,
       "is_spawn": false,
       "max_height": 2500,
       "max_width": 2500,
-      "min_height": 2002,
-      "min_width": 2037,
+      "min_height": 100,
+      "min_width": 100,
       "name": "bar",
       "spawn_groups": [
         {
@@ -355,7 +355,7 @@
         }
       ],
       "width_max": 2500,
-      "width_min": 2037
+      "width_min": 100
     },
     "spawn": {
       "curvyness": 1,
