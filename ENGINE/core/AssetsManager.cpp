@@ -5,6 +5,7 @@
 #include "asset/Asset.hpp"
 #include "asset/asset_info.hpp"
 #include "asset/asset_utils.hpp"
+#include "audio/audio_engine.hpp"
 #include "dev_mode/dev_controls.hpp"
 #include "render/scene_renderer.hpp"
 #include "room/room.hpp"
@@ -13,6 +14,7 @@
 #include "utils/range_util.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -344,6 +346,23 @@ const std::vector<Room*>& Assets::rooms() const {
 void Assets::refresh_active_asset_lists() {
     active_assets  = activeManager.getActive();
     closest_assets = activeManager.getClosest();
+
+    SDL_Point camera_focus = camera_.get_screen_center();
+    auto update_audio_metrics = [&](Asset* asset) {
+        if (!asset) return;
+        const float dx = static_cast<float>(asset->pos.x - camera_focus.x);
+        const float dy = static_cast<float>(asset->pos.y - camera_focus.y);
+        asset->distance_from_camera = std::sqrt(dx * dx + dy * dy);
+        asset->angle_from_camera = std::atan2(dy, dx);
+    };
+    if (player) {
+        update_audio_metrics(player);
+    }
+    for (Asset* asset : active_assets) {
+        update_audio_metrics(asset);
+    }
+
+    AudioEngine::instance().update();
     update_filtered_active_assets();
 }
 
@@ -393,6 +412,9 @@ void Assets::update(const Input& input,
     current_room_ = active_room;
 
     camera_.update_zoom(active_room, finder_, player);
+
+    AudioEngine& audio_engine = AudioEngine::instance();
+    audio_engine.set_effect_max_distance(static_cast<float>(std::max(1, camera_.get_render_distance_world_margin())));
 
     dx = dy = 0;
 

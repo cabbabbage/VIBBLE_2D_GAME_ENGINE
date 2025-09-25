@@ -9,6 +9,7 @@
 #include "scene_renderer.hpp"
 #include "AssetsManager.hpp"
 #include "input.hpp"
+#include "audio/audio_engine.hpp"
 #include <SDL.h>
 #include <SDL_image.h>
 #include <SDL_mixer.h>
@@ -40,9 +41,10 @@ MainApp::MainApp(const std::string& map_path, SDL_Renderer* renderer, int screen
 : map_path_(map_path), renderer_(renderer), screen_w_(screen_w), screen_h_(screen_h) {}
 
 MainApp::~MainApp() {
-	if (overlay_texture_)  SDL_DestroyTexture(overlay_texture_);
-	delete game_assets_;
-	delete input_;
+        AudioEngine::instance().shutdown();
+        if (overlay_texture_)  SDL_DestroyTexture(overlay_texture_);
+        delete game_assets_;
+        delete input_;
 }
 
 void MainApp::init() {
@@ -71,6 +73,7 @@ void MainApp::setup() {
                 if (game_assets_) {
                         game_assets_->set_dev_mode(dev_mode_);
                 }
+                AudioEngine::instance().update();
         } catch (const std::exception& e) {
                 std::cerr << "[MainApp] Setup error: " << e.what() << "\n";
                 throw;

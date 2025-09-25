@@ -85,6 +85,8 @@ Asset::Asset(const Asset& o)
 , render_player_light(o.render_player_light)
 , alpha_percentage(o.alpha_percentage)
 , distance_to_player_sq(o.distance_to_player_sq)
+, distance_from_camera(o.distance_from_camera)
+, angle_from_camera(o.angle_from_camera)
 , children(o.children)
 , static_lights(o.static_lights)
 , depth(o.depth)
@@ -124,6 +126,8 @@ Asset& Asset::operator=(const Asset& o) {
 	render_player_light  = o.render_player_light;
 	alpha_percentage     = o.alpha_percentage;
         distance_to_player_sq = o.distance_to_player_sq;
+        distance_from_camera = o.distance_from_camera;
+        angle_from_camera = o.angle_from_camera;
 	children             = o.children;
 	static_lights        = o.static_lights;
 	depth                = o.depth;

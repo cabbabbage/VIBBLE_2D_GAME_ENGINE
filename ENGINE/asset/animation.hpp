@@ -13,7 +13,16 @@ struct Mix_Chunk;
 
 class Animation {
 
-        public:
+public:
+    struct AudioClip {
+        std::string name;
+        std::string path;
+        int volume = 100;
+        bool effects = false;
+        std::shared_ptr<Mix_Chunk> chunk;
+    };
+
+public:
     Animation();
     void load(const std::string& trigger, const nlohmann::json& anim_json, class AssetInfo& info, const std::string& dir_path, const std::string& root_cache, float scale_factor, SDL_Renderer* renderer, SDL_Texture*& base_sprite, int& scaled_sprite_w, int& scaled_sprite_h, int& original_canvas_width, int& original_canvas_height);
     SDL_Texture* get_frame(const AnimationFrame* frame) const;
@@ -25,6 +34,7 @@ class Animation {
     bool is_static() const;
     bool has_audio() const;
     Mix_Chunk* audio_chunk() const;
+    const AudioClip* audio_data() const;
     struct Source {
     std::string kind;
     std::string path;
@@ -46,13 +56,6 @@ class Animation {
     bool randomize = false;
     bool loop = true;
     bool frozen = false;
-    struct AudioClip {
-    std::string name;
-    std::string path;
-    int volume = 100;
-    bool effects = false;
-    std::shared_ptr<Mix_Chunk> chunk;
-    } audio_clip;
-
-        private:
+private:
+    AudioClip audio_clip;
 };

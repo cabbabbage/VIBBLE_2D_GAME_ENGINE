@@ -393,3 +393,10 @@ bool Animation::is_static() const { return frames.size() <= 1; }
 bool Animation::has_audio() const { return static_cast<bool>(audio_clip.chunk); }
 
 Mix_Chunk* Animation::audio_chunk() const { return audio_clip.chunk.get(); }
+
+const Animation::AudioClip* Animation::audio_data() const {
+        if (!audio_clip.chunk) {
+                return nullptr;
+        }
+        return &audio_clip;
+}

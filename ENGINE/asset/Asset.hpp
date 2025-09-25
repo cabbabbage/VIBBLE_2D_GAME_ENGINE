@@ -88,6 +88,8 @@ class Asset {
     bool render_player_light = false;
     double alpha_percentage = 1.0;
     float distance_to_player_sq = std::numeric_limits<float>::infinity();
+    float distance_from_camera = 0.0f;
+    float angle_from_camera = 0.0f;
     // Removed unused spawn_area_local/base_areas/areas
     std::vector<Asset*> children;
     std::vector<StaticLight> static_lights;
