@@ -77,7 +77,6 @@ AreaOverlayEditor::AreaOverlayEditor()
     : mask_alpha_(kDefaultMaskAlpha) {}
 
 AreaOverlayEditor::~AreaOverlayEditor() {
-    apply_camera_override(false);
     if (mask_) SDL_FreeSurface(mask_);
     if (mask_tex_) SDL_DestroyTexture(mask_tex_);
     discard_autogen_base();
@@ -128,7 +127,6 @@ bool AreaOverlayEditor::begin(AssetInfo* info, Asset* asset, const std::string& 
     if (brush_slider_) brush_slider_->set_value(std::max(1, brush_radius_));
 
     set_mode(Mode::Draw);
-    apply_camera_override(true);
 
     active_ = true;
     drawing_ = false;
@@ -142,7 +140,6 @@ void AreaOverlayEditor::cancel() {
     active_ = false;
     drawing_ = false;
     pending_mask_generation_ = false;
-    apply_camera_override(false);
 }
 
 void AreaOverlayEditor::clear_mask() {
@@ -262,24 +259,6 @@ std::vector<SDL_Point> AreaOverlayEditor::extract_edge_points(int step) const {
     }
     SDL_UnlockSurface(mask_);
     return out;
-}
-
-void AreaOverlayEditor::apply_camera_override(bool enable) {
-    if (!assets_) return;
-    camera& cam = assets_->getView();
-    if (enable) {
-        if (camera_override_active_) return;
-        prev_camera_realism_enabled_ = cam.realism_enabled();
-        prev_camera_parallax_enabled_ = cam.parallax_enabled();
-        cam.set_realism_enabled(false);
-        cam.set_parallax_enabled(false);
-        camera_override_active_ = true;
-    } else {
-        if (!camera_override_active_) return;
-        cam.set_realism_enabled(prev_camera_realism_enabled_);
-        cam.set_parallax_enabled(prev_camera_parallax_enabled_);
-        camera_override_active_ = false;
-    }
 }
 
 void AreaOverlayEditor::ensure_toolbox() {
@@ -693,18 +672,31 @@ void AreaOverlayEditor::render(SDL_Renderer* r) {
     int sh = std::max(1, static_cast<int>(std::round(final_visible_h)));
     if (sw <= 0 || sh <= 0) return;
 
-    int pivot_x = canvas_w_ / 2;
-    int pivot_y = canvas_h_;
-    int offset_x_px = mask_origin_x_ - pivot_x;
-    int offset_y_px = mask_origin_y_ - pivot_y;
+    const int pivot_x = canvas_w_ / 2;
+    const int pivot_y = canvas_h_;
 
-    float offset_x_screen = static_cast<float>(offset_x_px) * inv_scale * effects.distance_scale;
-    float offset_y_screen = static_cast<float>(offset_y_px) * inv_scale * effects.distance_scale * effects.vertical_scale;
+    const float local_bottom_center_x = static_cast<float>(mask_origin_x_) + static_cast<float>(mask_->w) * 0.5f;
+    const float local_bottom_center_y = static_cast<float>(mask_origin_y_) + static_cast<float>(mask_->h);
+
+    float offset_x_local = local_bottom_center_x - static_cast<float>(pivot_x);
+    float offset_y_local = local_bottom_center_y - static_cast<float>(pivot_y);
+
+    if (asset_->flipped) {
+        offset_x_local = -offset_x_local;
+    }
+
+    const float offset_x_screen = offset_x_local * inv_scale * effects.distance_scale;
+    const float offset_y_screen = offset_y_local * inv_scale * effects.distance_scale * effects.vertical_scale;
 
     const SDL_Point& base = effects.screen_position;
+    SDL_Point bottom_center{
+        base.x + static_cast<int>(std::lround(offset_x_screen)),
+        base.y + static_cast<int>(std::lround(offset_y_screen))
+    };
+
     SDL_Rect dst{
-        base.x + static_cast<int>(std::round(offset_x_screen)),
-        base.y + static_cast<int>(std::round(offset_y_screen)),
+        bottom_center.x - sw / 2,
+        bottom_center.y - sh,
         sw,
         sh
     };

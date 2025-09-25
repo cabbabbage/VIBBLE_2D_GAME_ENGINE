@@ -3,115 +3,103 @@ setlocal enabledelayedexpansion
 
 rem =========================
 rem VIBBLE Engine - run.bat
-rem Ninja-only build script
+rem Local build + run using CMakePresets + auto-vcpkg
 rem =========================
 
-rem Always start in repo root
 pushd "%~dp0" >nul
 
+set "BUILD_CONFIG=RelWithDebInfo"
 set "EXTRA_ARGS="
 
-echo [run.bat] Preparing build directory...
-if exist build\NUL (
-  rem If you ever switch compilers/generators, a stale cache hurts; keep it simple:
-  echo [run.bat] Cleaning stale build/ ...
-  rmdir /s /q build 2>nul
+rem ----------------------------------------------------
+rem Ensure vcpkg exists (clone if missing)
+rem ----------------------------------------------------
+set "LOCAL_VCPKG=%cd%\vcpkg"
+if not exist "%LOCAL_VCPKG%\scripts\buildsystems\vcpkg.cmake" (
+    echo [run.bat] vcpkg not found, cloning...
+    git clone --depth 1 https://github.com/microsoft/vcpkg.git "%LOCAL_VCPKG%"
+    if errorlevel 1 (
+        echo [ERROR] Failed to clone vcpkg repository.
+        goto :fail
+    )
+    pushd "%LOCAL_VCPKG%" >nul
+    call bootstrap-vcpkg.bat -disableMetrics
+    if errorlevel 1 (
+        popd >nul
+        echo [ERROR] vcpkg bootstrap failed.
+        goto :fail
+    )
+    popd >nul
 )
-mkdir build 2>nul
 
 rem ----------------------------------------------------
-rem FORCE Ninja (no Visual Studio generator anywhere)
+rem Install manifest dependencies (SDL2, etc.) from vcpkg.json
 rem ----------------------------------------------------
-set "GENERATOR=Ninja"
-set "CMAKE_GENERATOR=%GENERATOR%"
-set "ARCH_ARG="
-echo [run.bat] Forcing generator: %GENERATOR%
-
-rem ----------------------------------------------------
-rem Ensure MSVC toolchain env is loaded if installed
-rem (vcpkg requires a Windows toolchain; Ninja is just the build driver)
-rem ----------------------------------------------------
-set "VS_DEV_CMD="
-for %%E in (BuildTools Community Professional Enterprise) do (
-  if exist "%ProgramFiles(x86)%\Microsoft Visual Studio\2022\%%E\Common7\Tools\VsDevCmd.bat" (
-    set "VS_DEV_CMD=%ProgramFiles(x86)%\Microsoft Visual Studio\2022\%%E\Common7\Tools\VsDevCmd.bat"
-    goto :found_vs
-  )
-)
-:found_vs
-if not "%VS_DEV_CMD%"=="" (
-  echo [run.bat] Loading MSVC environment: "%VS_DEV_CMD%" (x64)
-  call "%VS_DEV_CMD%" -arch=x64 >nul
+if exist "%LOCAL_VCPKG%\vcpkg.exe" (
+    echo [run.bat] Resolving manifest dependencies with vcpkg...
+    "%LOCAL_VCPKG%\vcpkg.exe" install --triplet x64-windows --feature-flags=manifests,binarycaching
+    if errorlevel 1 (
+        echo [ERROR] vcpkg install failed.
+        goto :fail
+    )
 ) else (
-  echo [run.bat] NOTE: MSVC Build Tools not detected. vcpkg/cmake will fail until they are installed.
+    echo [ERROR] vcpkg.exe not found after bootstrap.
+    goto :fail
 )
 
 rem ----------------------------------------------------
-rem Toolchain (vcpkg manifest mode)
+rem Configure + Build via CMakePresets.json
+rem Requires a preset named "windows-vcpkg" and a build preset "windows-vcpkg-release"
 rem ----------------------------------------------------
-set "TOOLCHAIN_ARG="
-if exist "%cd%\vcpkg\scripts\buildsystems\vcpkg.cmake" (
-  set "TOOLCHAIN_ARG=-DCMAKE_TOOLCHAIN_FILE=%cd%\vcpkg\scripts\buildsystems\vcpkg.cmake"
-  set "VCPKG_FEATURE_FLAGS=manifests"
+if not exist "%cd%\CMakePresets.json" (
+    echo [ERROR] CMakePresets.json not found in repo root.
+    goto :fail
+)
+
+echo [run.bat] Configuring with preset: windows-vcpkg
+cmake --preset windows-vcpkg
+if errorlevel 1 goto :fail
+
+echo [run.bat] Building with preset: windows-vcpkg-release (%BUILD_CONFIG%)
+cmake --build --preset windows-vcpkg-release --config %BUILD_CONFIG%
+if errorlevel 1 goto :fail
+
+rem ----------------------------------------------------
+rem Locate exe (handle both Ninja and VS generators, and optional RUNTIME_OUTPUT dir)
+rem ----------------------------------------------------
+set "EXE="
+if exist "%cd%\ENGINE\engine.exe" set "EXE=%cd%\ENGINE\engine.exe"
+if not defined EXE if exist "%cd%\build\%BUILD_CONFIG%\engine.exe" set "EXE=%cd%\build\%BUILD_CONFIG%\engine.exe"
+if not defined EXE if exist "%cd%\build\engine.exe" set "EXE=%cd%\build\engine.exe"
+
+if not defined EXE (
+    echo [ERROR] Executable not found in ENGINE\, build\%BUILD_CONFIG%\ or build\ .
+    goto :fail
 )
 
 rem ----------------------------------------------------
-rem Configure (single-config generator → set CMAKE_BUILD_TYPE)
-rem ----------------------------------------------------
-echo [run.bat] Configuring (%GENERATOR%)...
-cmake -G "%GENERATOR%" ^
-  %TOOLCHAIN_ARG% ^
-  -DCMAKE_BUILD_TYPE=RelWithDebInfo ^
-  -DCMAKE_RUNTIME_OUTPUT_DIRECTORY="%cd%\ENGINE" ^
-  -S . -B build
-if errorlevel 1 (
-  echo [ERROR] CMake configuration failed.
-  popd & pause & exit /b 1
-)
-
-rem ----------------------------------------------------
-rem Build (Ninja ignores --config; kept harmless)
-rem ----------------------------------------------------
-echo [run.bat] Building (RelWithDebInfo)...
-cmake --build build --config RelWithDebInfo
-if errorlevel 1 (
-  echo [ERROR] Build failed.
-  popd & pause & exit /b 1
-)
-
-rem ----------------------------------------------------
-rem Locate exe
-rem ----------------------------------------------------
-set "EXE=%cd%\ENGINE\engine.exe"
-if not exist "%EXE%" (
-  if exist "%cd%\build\engine.exe" set "EXE=%cd%\build\engine.exe"
-)
-if not exist "%EXE%" (
-  echo [ERROR] Executable not found. Build may have failed.
-  popd & pause & exit /b 1
-)
-
-rem ----------------------------------------------------
-rem Create Desktop Shortcut to engine.exe
+rem Create Desktop Shortcut
 rem ----------------------------------------------------
 set "DESKTOP=%USERPROFILE%\Desktop"
 set "SHORTCUT=%DESKTOP%\VI.lnk"
 set "ICONFILE=%cd%\MISC_CONTENT\vibble.ico"
-
-rem Repo root (same as where run.bat started)
 set "ROOT_DIR=%~dp0"
 
-powershell -Command ^
+powershell -NoProfile -ExecutionPolicy Bypass -Command ^
   "$s=(New-Object -COM WScript.Shell).CreateShortcut('%SHORTCUT%');" ^
   "$s.TargetPath='%EXE%';" ^
   "$s.WorkingDirectory='%ROOT_DIR%';" ^
   "$s.IconLocation='%ICONFILE%';" ^
   "$s.Save()"
 
-
-echo pwd
 echo [run.bat] Launching: "%EXE%"
 "%EXE%" %EXTRA_ARGS%
 
 popd >nul
-endlocal
+exit /b 0
+
+:fail
+echo [run.bat] Build failed.
+popd >nul
+pause
+exit /b 1

@@ -305,27 +305,38 @@ void AssetInfo::upsert_area_from_editor(const Area& area) {
 	int scaled_canvas_h = static_cast<int>(original_canvas_height * scale);
 	int offset_x = (scaled_canvas_w - 0) / 2;
 	int offset_y = (scaled_canvas_h - 0);
-	nlohmann::json points = nlohmann::json::array();
-	for (const auto& p : area.get_points()) {
-		double rel_x = (static_cast<double>(p.x) - static_cast<double>(offset_x)) / static_cast<double>(scale);
-		double rel_y = (static_cast<double>(p.y) - static_cast<double>(offset_y)) / static_cast<double>(scale);
-		points.push_back({ rel_x, rel_y });
-	}
-	bool json_found = false;
-	for (auto& entry : info_json_["areas"]) {
-		if (entry.is_object() && entry.value("name", std::string{}) == area.get_name()) {
-			entry["name"] = area.get_name();
-			entry["points"] = std::move(points);
-			json_found = true;
-			break;
-		}
-	}
-	if (!json_found) {
-		nlohmann::json entry;
-		entry["name"] = area.get_name();
-		entry["points"] = std::move(points);
-		info_json_["areas"].push_back(std::move(entry));
-	}
+        nlohmann::json points = nlohmann::json::array();
+        for (const auto& p : area.get_points()) {
+                double rel_x = (static_cast<double>(p.x) - static_cast<double>(offset_x)) / static_cast<double>(scale);
+                double rel_y = (static_cast<double>(p.y) - static_cast<double>(offset_y)) / static_cast<double>(scale);
+                points.push_back({ rel_x, rel_y });
+        }
+        const int original_w = original_canvas_width;
+        const int original_h = original_canvas_height;
+        nlohmann::json original_dims = nlohmann::json::array({ original_w, original_h });
+        constexpr int kDefaultOffsetX = 0;
+        constexpr int kDefaultOffsetY = 0;
+        bool json_found = false;
+        for (auto& entry : info_json_["areas"]) {
+                if (entry.is_object() && entry.value("name", std::string{}) == area.get_name()) {
+                        entry["name"] = area.get_name();
+                        entry["points"] = points;
+                        entry["original_dimensions"] = original_dims;
+                        entry["offset_x"] = kDefaultOffsetX;
+                        entry["offset_y"] = kDefaultOffsetY;
+                        json_found = true;
+                        break;
+                }
+        }
+        if (!json_found) {
+                nlohmann::json entry;
+                entry["name"] = area.get_name();
+                entry["points"] = points;
+                entry["original_dimensions"] = original_dims;
+                entry["offset_x"] = kDefaultOffsetX;
+                entry["offset_y"] = kDefaultOffsetY;
+                info_json_["areas"].push_back(std::move(entry));
+        }
 }
 
 

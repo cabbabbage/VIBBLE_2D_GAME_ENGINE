@@ -8,6 +8,7 @@
 #include <iostream>
 #include <random>
 #include <algorithm>
+#include <cmath>
 #include <SDL.h>
 
 Asset::Asset(std::shared_ptr<AssetInfo> info_,
@@ -363,16 +364,40 @@ void Asset::set_render_player_light(bool value) { render_player_light = value; }
 bool Asset::get_render_player_light() const { return render_player_light; }
 
 Area Asset::get_area(const std::string& name) const {
-	Area result(name);
-	if (info) {
-		Area* a = info->find_area(name + "_area");
-		if (a) result = *a;	
-	}
-	float scale = (window ? window->get_scale() : 1.0f);
-	float inv   = (scale != 0.0f) ? 1.0f / scale : 1.0f;
-	result.scale(inv);
-	if (flipped) result.flip_horizontal();
-	return result;
+        if (!info) {
+                return Area(name);
+        }
+
+        Area* base = info->find_area(name);
+        if (!base) {
+                base = info->find_area(name + "_area");
+        }
+        if (!base) {
+                return Area(name);
+        }
+
+        const auto& local_pts = base->get_points();
+        if (local_pts.empty()) {
+                return Area(base->get_name());
+        }
+
+        const float scale_factor = (info->scale_factor > 0.0f) ? info->scale_factor : 1.0f;
+        const int pivot_x = static_cast<int>(std::lround(info->original_canvas_width * scale_factor * 0.5f));
+        const int pivot_y = static_cast<int>(std::lround(info->original_canvas_height * scale_factor));
+
+        std::vector<SDL_Point> world_pts;
+        world_pts.reserve(local_pts.size());
+        for (const auto& lp : local_pts) {
+                int local_dx = lp.x - pivot_x;
+                if (flipped) {
+                        local_dx = -local_dx;
+                }
+                const int world_x = pos.x + local_dx;
+                const int world_y = pos.y + (lp.y - pivot_y);
+                world_pts.push_back(SDL_Point{ world_x, world_y });
+        }
+
+        return Area(base->get_name(), world_pts);
 }
 
 void Asset::deactivate() {

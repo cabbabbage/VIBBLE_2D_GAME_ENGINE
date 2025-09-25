@@ -186,8 +186,6 @@ private:
 
     bool last_area_editor_active_ = false;
     bool area_editor_override_active_ = false;
-    bool area_editor_prev_realism_enabled_ = true;
-    bool area_editor_prev_parallax_enabled_ = true;
     bool reopen_info_after_area_edit_ = false;
     std::shared_ptr<AssetInfo> info_for_reopen_;
     Asset* info_target_for_reopen_ = nullptr;

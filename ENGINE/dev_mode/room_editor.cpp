@@ -1127,25 +1127,7 @@ void RoomEditor::ensure_area_editor() {
 }
 
 void RoomEditor::apply_area_editor_camera_override(bool enable) {
-    if (enable) {
-        if (area_editor_override_active_) return;
-        if (assets_) {
-            camera& cam = assets_->getView();
-            area_editor_prev_realism_enabled_ = cam.realism_enabled();
-            area_editor_prev_parallax_enabled_ = cam.parallax_enabled();
-            cam.set_realism_enabled(false);
-            cam.set_parallax_enabled(false);
-        }
-        area_editor_override_active_ = true;
-    } else {
-        if (!area_editor_override_active_) return;
-        if (assets_) {
-            camera& cam = assets_->getView();
-            cam.set_realism_enabled(area_editor_prev_realism_enabled_);
-            cam.set_parallax_enabled(area_editor_prev_parallax_enabled_);
-        }
-        area_editor_override_active_ = false;
-    }
+    area_editor_override_active_ = enable;
 }
 
 void RoomEditor::ensure_room_configurator() {
