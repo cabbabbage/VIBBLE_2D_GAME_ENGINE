@@ -439,7 +439,7 @@
     "rnd_spawn_max": 400,
     "rnd_spawn_min": 300,
     "size_settings": {
-        "scale_percentage": 15
+        "scale_percentage": 18.0
     },
     "start": "default",
     "tags": [
@@ -461,5 +461,5 @@
         "yellow"
     ],
     "update_radius": 1000,
-    "z_threshold": -4
+    "z_threshold": -17
 }

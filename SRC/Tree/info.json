@@ -7071,14 +7071,14 @@
     "lighting_info": [
         {
             "factor": 100,
-            "falloff": 10,
+            "falloff": 52,
             "has_light_source": true,
             "light_intensity": 255,
             "offset_x": 0,
-            "offset_y": -898,
-            "radius": 581,
-            "x_radius": 958,
-            "y_radius": 605
+            "offset_y": -178,
+            "radius": 1606,
+            "x_radius": 496,
+            "y_radius": 1008
         }
     ],
     "mappings": {},

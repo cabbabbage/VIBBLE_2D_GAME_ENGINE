@@ -3680,12 +3680,12 @@
     "lighting_info": [
         {
             "factor": 100,
-            "falloff": 0,
+            "falloff": 13,
             "has_light_source": true,
             "light_intensity": 255,
             "offset_x": 0,
             "offset_y": -85,
-            "radius": 142,
+            "radius": 225,
             "x_radius": 131,
             "y_radius": 89
         }

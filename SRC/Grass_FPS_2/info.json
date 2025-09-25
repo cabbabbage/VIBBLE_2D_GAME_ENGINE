@@ -5770,5 +5770,5 @@
         "plant"
     ],
     "update_radius": 1000,
-    "z_threshold": 23
+    "z_threshold": -216
 }
