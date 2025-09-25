@@ -5,6 +5,7 @@
 #include "animation.hpp"
 #include "core/active_assets_manager.hpp"
 #include "core/AssetsManager.hpp"
+#include "audio/audio_engine.hpp"
 #include "utils/area.hpp"
 #include "utils/range_util.hpp"
 #include <SDL.h>
@@ -629,6 +630,9 @@ void AnimationUpdate::switch_to(const std::string& id) {
         self_->current_frame = new_frame;
         self_->static_frame = anim.is_static();
         self_->frame_progress = 0.0f;
+        if (anim.has_audio()) {
+            AudioEngine::instance().play_now(anim, *self_);
+        }
     } catch (const std::exception& e) {
         std::cerr << "[AnimationUpdate::switch_to] " << e.what() << "\n";
     } catch (...) {
@@ -654,6 +658,9 @@ void AnimationUpdate::get_animation() {
             self_->current_frame = start;
             self_->static_frame = anim.is_static();
             self_->frame_progress = 0.0f;
+            if (anim.has_audio()) {
+                AudioEngine::instance().play_now(anim, *self_);
+            }
         }
     } catch (const std::exception& e) {
         std::cerr << "[AnimationUpdate::get_animation] " << e.what() << "\n";

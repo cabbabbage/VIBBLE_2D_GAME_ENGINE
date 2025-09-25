@@ -10,6 +10,7 @@
 #include "asset/Asset.hpp"
 #include "asset/asset_library.hpp"
 #include "asset/asset_types.hpp"
+#include "audio/audio_engine.hpp"
 #include "room/room.hpp"
 #include "utils/area.hpp"
 #include "room/generate_rooms.hpp"
@@ -45,6 +46,7 @@ AssetLoader::AssetLoader(const std::string& map_dir, SDL_Renderer* renderer)
 renderer_(renderer)
 {
         load_map_json();
+        AudioEngine::instance().init(map_path_);
         asset_library_ = std::make_unique<AssetLibrary>();
     loadRooms();
     {
