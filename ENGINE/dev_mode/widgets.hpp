@@ -230,14 +230,17 @@ private:
 
 class TextBoxWidget : public Widget {
 public:
-    explicit TextBoxWidget(DMTextBox* t) : t_(t) {}
+    explicit TextBoxWidget(DMTextBox* t, bool full_row = false)
+        : t_(t), full_row_(full_row) {}
     void set_rect(const SDL_Rect& r) override { if (t_) t_->set_rect(r); }
     const SDL_Rect& rect() const override { return t_->rect(); }
     int height_for_width(int w) const override { return t_ ? t_->preferred_height(w) : DMTextBox::height(); }
     bool handle_event(const SDL_Event& e) override { return t_ ? t_->handle_event(e) : false; }
     void render(SDL_Renderer* r) const override { if (t_) t_->render(r); }
+    bool wants_full_row() const override { return full_row_; }
 private:
     DMTextBox* t_ = nullptr; // non-owning
+    bool full_row_ = false;
 };
 
 class CheckboxWidget : public Widget {

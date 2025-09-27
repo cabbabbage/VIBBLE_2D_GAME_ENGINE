@@ -273,6 +273,16 @@ nlohmann::json SpawnGroupsConfig::to_json() const {
     return arr;
 }
 
+bool SpawnGroupsConfig::is_open(const std::string& id) const {
+    if (id.empty()) return false;
+    for (const auto& e : entries_) {
+        if (e.cfg && e.id == id && e.cfg->visible()) {
+            return true;
+        }
+    }
+    return false;
+}
+
 bool SpawnGroupsConfig::any_visible() const {
     if (is_visible()) {
         return true;
@@ -290,3 +300,4 @@ bool SpawnGroupsConfig::is_point_inside(int x, int y) const {
     }
     return false;
 }
+

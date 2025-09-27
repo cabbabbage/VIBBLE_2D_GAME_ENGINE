@@ -6,6 +6,8 @@
 #include <thread>
 #include <cstdlib>
 #include <cstdint>
+#include <sstream>
+#include <cctype>
 #include "utils/input.hpp"
 #include "asset/asset_library.hpp"
 #include "asset/asset_info.hpp"
@@ -252,6 +254,9 @@ AssetLibraryUI::AssetLibraryUI() {
     floating_ = std::make_unique<DockableCollapsible>("Asset Library", true, 10, 10);
     floating_->set_expanded(false);
 
+    search_box_ = std::make_unique<DMTextBox>("Search", "");
+    search_widget_ = std::make_unique<TextBoxWidget>(search_box_.get(), true);
+
     add_button_ = std::make_unique<DMButton>("Create New Asset", &DMStyles::CreateButton(), 200, DMButton::height());
     add_button_widget_ = std::make_unique<ButtonWidget>(add_button_.get(), [this](){
         showing_create_popup_ = true;
@@ -294,11 +299,13 @@ void AssetLibraryUI::ensure_items(AssetLibrary& lib) {
         return (a ? a->name : "") < (b ? b->name : "");
     });
     items_cached_ = true;
+    filter_dirty_ = true;
 }
 
 void AssetLibraryUI::rebuild_rows() {
     if (!floating_) return;
     std::vector<DockableCollapsible::Row> rows;
+    if (search_widget_) rows.push_back({ search_widget_.get() });
     if (add_button_widget_) rows.push_back({ add_button_widget_.get() });
 
     DockableCollapsible::Row current_row;
@@ -317,6 +324,79 @@ void AssetLibraryUI::rebuild_rows() {
     floating_->set_cell_width(210);
     floating_->set_col_gap(18);
     floating_->set_rows(rows);
+}
+
+bool AssetLibraryUI::matches_query(const AssetInfo& info, const std::string& query) const {
+    if (query.empty()) return true;
+
+    auto to_lower_copy = [](std::string s) {
+        for (auto& c : s) {
+            c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+        }
+        return s;
+    };
+
+    std::istringstream ss(query);
+    std::string token;
+    std::string name_lower = to_lower_copy(info.name);
+
+    while (ss >> token) {
+        if (token.empty()) continue;
+
+        if (token.front() == '#') {
+            std::string tag = token.substr(1);
+            if (tag.empty()) continue;
+            std::string needle = to_lower_copy(tag);
+            bool tag_match = std::any_of(info.tags.begin(), info.tags.end(), [&](const std::string& t){
+                return to_lower_copy(t).find(needle) != std::string::npos;
+            });
+            if (!tag_match) {
+                return false;
+            }
+        } else {
+            std::string needle = to_lower_copy(token);
+            if (needle.empty()) continue;
+            bool in_name = name_lower.find(needle) != std::string::npos;
+            if (!in_name) {
+                bool in_tags = std::any_of(info.tags.begin(), info.tags.end(), [&](const std::string& t){
+                    return to_lower_copy(t).find(needle) != std::string::npos;
+                });
+                if (!in_tags) {
+                    return false;
+                }
+            }
+        }
+    }
+
+    return true;
+}
+
+void AssetLibraryUI::refresh_tiles(Assets& assets) {
+    tiles_.clear();
+    tiles_.reserve(items_.size());
+
+    for (auto& inf : items_) {
+        if (!inf) continue;
+        if (!matches_query(*inf, search_query_)) continue;
+        tiles_.push_back(std::make_unique<AssetTileWidget>(
+            this,
+            inf,
+            [this](const std::shared_ptr<AssetInfo>& info){
+                if (info) {
+                    pending_selection_ = info;
+                }
+                close();
+            },
+            [this, &assets](const std::shared_ptr<AssetInfo>& info){
+                if (info) {
+                    assets.open_asset_info_editor(info);
+                }
+                close();
+            }
+        ));
+    }
+
+    rebuild_rows();
 }
 
 SDL_Texture* AssetLibraryUI::get_default_frame_texture(const AssetInfo& info) const {
@@ -391,27 +471,20 @@ void AssetLibraryUI::update(const Input& input,
     assets_owner_ = &assets;
     ensure_items(lib);
 
-    if (tiles_.empty()) {
-        tiles_.reserve(items_.size());
-        for (auto& inf : items_) {
-            tiles_.push_back(std::make_unique<AssetTileWidget>(
-                this,
-                inf,
-                [this](const std::shared_ptr<AssetInfo>& info){
-                    if (info) {
-                        pending_selection_ = info;
-                    }
-                    close();
-                },
-                [this, &assets](const std::shared_ptr<AssetInfo>& info){
-                    if (info) {
-                        assets.open_asset_info_editor(info);
-                    }
-                    close();
-                }
-            ));
+    if (search_box_) {
+        std::string current = search_box_->value();
+        if (current != search_query_) {
+            search_query_ = std::move(current);
+            filter_dirty_ = true;
         }
-        rebuild_rows();
+    }
+
+    if (filter_dirty_) {
+        filter_dirty_ = false;
+        if (floating_) {
+            floating_->reset_scroll();
+        }
+        refresh_tiles(assets);
     }
 
     floating_->set_work_area(SDL_Rect{0,0,screen_w,screen_h});
@@ -426,7 +499,7 @@ void AssetLibraryUI::update(const Input& input,
 
     if (showing_create_popup_) {
         SDL_StartTextInput();
-    } else {
+    } else if (!(search_box_ && search_box_->is_editing())) {
         SDL_StopTextInput();
     }
 }
@@ -525,6 +598,7 @@ void AssetLibraryUI::handle_event(const SDL_Event& e) {
                 if (create_new_asset_on_disk(new_asset_name_)) {
                     items_cached_ = false;
                     tiles_.clear();
+                    filter_dirty_ = true;
                 }
                 showing_create_popup_ = false;
             } else if (e.key.keysym.sym == SDLK_ESCAPE) {

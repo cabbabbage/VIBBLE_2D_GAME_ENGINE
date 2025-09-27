@@ -110,13 +110,7 @@ private:
         double radius = 0.0;
     };
 
-    struct DraggedAssetState {
-        Asset* asset = nullptr;
-        SDL_Point start_pos{0, 0};
-        SDL_FPoint direction{0.0f, 0.0f};
-        double start_distance = 0.0;
-    };
-
+    struct PendingSpawnGroupOpen {\r\n        std::string id;\r\n        SDL_Point position{0, 0};\r\n        int retry_frames = 0;\r\n        int remaining_attempts = 3;\r\n        bool awaiting_confirmation = false;\r\n    };\r\n\r\n    struct DraggedAssetState {\r\n        Asset* asset = nullptr;\r\n        SDL_Point start_pos{0, 0};\r\n        SDL_FPoint direction{0.0f, 0.0f};\r\n        double start_distance = 0.0;\r\n    };\r\n
     void handle_mouse_input(const Input& input);
     Asset* hit_test_asset(SDL_Point screen_point) const;
     void update_hover_state(Asset* hit);
@@ -224,5 +218,7 @@ private:
     bool is_room_spawn_id(const std::string& spawn_id) const;
     bool asset_belongs_to_room(const Asset* asset) const;
 };
+
+
 
 

@@ -131,16 +131,31 @@ SDL_Texture* RenderAsset::texture_for_scale(Asset* asset,
                 return base_tex;
         }
 
+        if (asset->last_scaled_texture_ && asset->last_scaled_source_ == base_tex &&
+            asset->last_scaled_w_ == target_w && asset->last_scaled_h_ == target_h &&
+            std::abs(asset->last_scaled_camera_scale_ - camera_scale) <= 0.0001f) {
+                return asset->last_scaled_texture_;
+        }
+
+        auto remember_result = [&](SDL_Texture* tex) {
+                asset->last_scaled_source_       = base_tex;
+                asset->last_scaled_texture_      = tex;
+                asset->last_scaled_w_            = target_w;
+                asset->last_scaled_h_            = target_h;
+                asset->last_scaled_camera_scale_ = camera_scale;
+                return tex ? tex : base_tex;
+        };
+
         const float ratio_w = static_cast<float>(target_w) / static_cast<float>(base_w);
         const float ratio_h = static_cast<float>(target_h) / static_cast<float>(base_h);
         float ratio = std::min(ratio_w, ratio_h);
         if (camera_scale > 2.0f) {
                 const float extra_zoom = std::min(camera_scale - 2.0f, 10.0f);
-                const float bias = static_cast<float>(std::pow(0.5f, extra_zoom));
+                const float bias = static_cast<float>(std::exp2(-extra_zoom));
                 ratio *= std::max(0.0001f, bias);
         }
         if (ratio >= 0.95f) {
-                return base_tex;
+                return remember_result(base_tex);
         }
 
         int levels = 0;
@@ -157,7 +172,7 @@ SDL_Texture* RenderAsset::texture_for_scale(Asset* asset,
         }
 
         if (levels <= 0) {
-                return base_tex;
+                return remember_result(base_tex);
         }
 
         Uint32 format = SDL_PIXELFORMAT_RGBA8888;
@@ -184,7 +199,8 @@ SDL_Texture* RenderAsset::texture_for_scale(Asset* asset,
                 if (it == asset->downscale_cache_.end() || !it->texture || it->width != next_w || it->height != next_h) {
                         SDL_Texture* created = create_half_scale(renderer_, current_tex, format, current_w, current_h);
                         if (!created) {
-                                return (level == 0) ? base_tex : current_tex;
+                                SDL_Texture* fallback = (level == 0) ? base_tex : current_tex;
+                                return remember_result(fallback);
                         }
                         Asset::DownscaleCacheEntry entry;
                         entry.scale   = next_scale;
@@ -208,7 +224,7 @@ SDL_Texture* RenderAsset::texture_for_scale(Asset* asset,
                 current_scale = next_scale;
         }
 
-        return current_tex ? current_tex : base_tex;
+        return remember_result(current_tex ? current_tex : base_tex);
 }
 
 void RenderAsset::render_shadow_moving_lights(Asset* a, const SDL_Rect& bounds, Uint8 alpha) {

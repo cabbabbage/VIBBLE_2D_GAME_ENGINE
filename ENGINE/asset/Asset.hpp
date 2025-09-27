@@ -131,6 +131,12 @@ class Asset {
     void clear_downscale_cache();
 
     std::vector<DownscaleCacheEntry> downscale_cache_;
+
+    SDL_Texture* last_scaled_texture_      = nullptr;
+    SDL_Texture* last_scaled_source_       = nullptr;
+    int          last_scaled_w_            = 0;
+    int          last_scaled_h_            = 0;
+    float        last_scaled_camera_scale_ = -1.0f;
 };
 
 #endif

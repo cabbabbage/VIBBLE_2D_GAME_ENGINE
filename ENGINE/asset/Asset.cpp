@@ -109,6 +109,11 @@ Asset::Asset(const Asset& o)
 , spawn_method(o.spawn_method)
 , controller_(nullptr)
 , anim_(nullptr)
+, last_scaled_texture_(nullptr)
+, last_scaled_source_(nullptr)
+, last_scaled_w_(0)
+, last_scaled_h_(0)
+, last_scaled_camera_scale_(-1.0f)
 {
 }
 
@@ -150,6 +155,11 @@ Asset& Asset::operator=(const Asset& o) {
         spawn_method         = o.spawn_method;
         controller_.reset();
         anim_.reset();
+        last_scaled_texture_      = nullptr;
+        last_scaled_source_       = nullptr;
+        last_scaled_w_            = 0;
+        last_scaled_h_            = 0;
+        last_scaled_camera_scale_ = -1.0f;
         return *this;
 }
 
@@ -420,6 +430,11 @@ void Asset::clear_downscale_cache() {
                 }
         }
         downscale_cache_.clear();
+        last_scaled_texture_      = nullptr;
+        last_scaled_source_       = nullptr;
+        last_scaled_w_            = 0;
+        last_scaled_h_            = 0;
+        last_scaled_camera_scale_ = -1.0f;
 }
 
 void Asset::set_hidden(bool state){ hidden = state; }

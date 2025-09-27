@@ -13,6 +13,8 @@ class Asset;
 class Assets;
 class DockableCollapsible;
 class DMButton;
+class DMTextBox;
+class TextBoxWidget;
 
 class AssetLibraryUI {
 public:
@@ -39,14 +41,20 @@ public:
 private:
     void ensure_items(AssetLibrary& lib);
     void rebuild_rows();
+    void refresh_tiles(Assets& assets);
+    bool matches_query(const AssetInfo& info, const std::string& query) const;
     SDL_Texture* get_default_frame_texture(const AssetInfo& info) const;
 
 private:
     std::unique_ptr<DockableCollapsible> floating_;
     std::unique_ptr<DMButton> add_button_;
     std::unique_ptr<class ButtonWidget> add_button_widget_;
+    std::unique_ptr<DMTextBox> search_box_;
+    std::unique_ptr<TextBoxWidget> search_widget_;
     std::vector<std::shared_ptr<AssetInfo>> items_;
     bool items_cached_ = false;
+    std::string search_query_;
+    bool filter_dirty_ = true;
 
     struct AssetTileWidget;
     std::vector<std::unique_ptr<AssetTileWidget>> tiles_;

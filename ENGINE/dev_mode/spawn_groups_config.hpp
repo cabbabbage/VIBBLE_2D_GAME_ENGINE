@@ -38,6 +38,7 @@ public:
     void set_anchor(int x, int y);
     void open_spawn_group(const std::string& id, int x, int y);
     void close_all();
+    bool is_open(const std::string& id) const;
     struct OpenSpawnGroupState {
         std::string id;
         SDL_Point position{0, 0};
@@ -74,3 +75,4 @@ private:
     void hide_temporarily();
     bool suppress_close_actions_ = false;
 };
+
