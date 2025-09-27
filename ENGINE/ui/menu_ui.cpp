@@ -102,7 +102,7 @@ void MenuUI::game_loop() {
                                         default: break;
                         }
                 }
-		if (menu_active_) SDL_RenderPresent(renderer_);
+                SDL_RenderPresent(renderer_);
 		++frame_count;
 		if (input_) input_->update();
 		Uint32 elapsed = SDL_GetTicks() - start;

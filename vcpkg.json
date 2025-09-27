@@ -1,7 +1,7 @@
 {
   "name": "tarot-game",
   "version-string": "0.1.0",
-  "builtin-baseline": "9a98f93671f984351377044210854900bfd73171",
+  "builtin-baseline": "2e6fcc44573d091af0321f99c89b212997a76f1f",
   "dependencies": [
     "nlohmann-json",
     "sdl2",
