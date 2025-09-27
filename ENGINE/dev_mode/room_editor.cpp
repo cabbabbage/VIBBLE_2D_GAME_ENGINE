@@ -737,7 +737,7 @@ void RoomEditor::focus_camera_on_room_center(bool reframe_zoom) {
     cam.set_focus_override(center);
 
     if (reframe_zoom) {
-        cam.zoom_to_area(*current_room_->room_area, 25);
+        cam.zoom_to_area(*current_room_->room_area, 5);
     }
 }
 

@@ -447,13 +447,12 @@ bool MapModeUI::handle_layers_footer_event(const SDL_Event& e) {
     if (!footer_panel_ || !map_mode_active_ || !footer_panel_->visible()) return false;
 
     SDL_Rect header = footer_panel_->header_rect();
+    SDL_Point p = event_point(e);
     if (is_mouse_button_or_motion(e)) {
-        SDL_Point p = event_point(e);
         if (SDL_PointInRect(&p, &header)) {
             return true;
         }
     } else if (e.type == SDL_MOUSEWHEEL) {
-        SDL_Point p = event_point(e);
         if (SDL_PointInRect(&p, &header)) {
             return true;
         }
@@ -463,21 +462,20 @@ bool MapModeUI::handle_layers_footer_event(const SDL_Event& e) {
         return false;
     }
 
-    if (layers_panel_->handle_event(e)) {
-        return true;
+    SDL_Rect content = footer_panel_->content_rect();
+    const bool pointer_event = is_mouse_button_or_motion(e);
+    const bool wheel_event = (e.type == SDL_MOUSEWHEEL);
+    const bool pointer_in_content = pointer_event && SDL_PointInRect(&p, &content);
+    const bool wheel_in_content = wheel_event && SDL_PointInRect(&p, &content);
+
+    if ((pointer_event && !pointer_in_content) || (wheel_event && !wheel_in_content)) {
+        if (layers_panel_->handle_event(e)) {
+            return true;
+        }
     }
 
-    SDL_Rect content = footer_panel_->content_rect();
-    if (is_mouse_button_or_motion(e)) {
-        SDL_Point p = event_point(e);
-        if (SDL_PointInRect(&p, &content)) {
-            return true;
-        }
-    } else if (e.type == SDL_MOUSEWHEEL) {
-        SDL_Point p = event_point(e);
-        if (SDL_PointInRect(&p, &content)) {
-            return true;
-        }
+    if (pointer_in_content || wheel_in_content) {
+        return true;
     }
 
     return false;

@@ -500,21 +500,25 @@ nlohmann::json make_default_room_json(const std::string& name) {
 
     room["name"] = name;
 
-    room["min_width"] = 256;
+    constexpr int kDefaultRoomMin = 1500;
 
-    room["max_width"] = 256;
+    constexpr int kDefaultRoomMax = 10000;
 
-    room["width_min"] = 256;
+    room["min_width"] = kDefaultRoomMin;
 
-    room["width_max"] = 256;
+    room["max_width"] = kDefaultRoomMax;
 
-    room["min_height"] = 256;
+    room["width_min"] = kDefaultRoomMin;
 
-    room["max_height"] = 256;
+    room["width_max"] = kDefaultRoomMax;
 
-    room["height_min"] = 256;
+    room["min_height"] = kDefaultRoomMin;
 
-    room["height_max"] = 256;
+    room["max_height"] = kDefaultRoomMax;
+
+    room["height_min"] = kDefaultRoomMin;
+
+    room["height_max"] = kDefaultRoomMax;
 
     room["edge_smoothness"] = 2;
 

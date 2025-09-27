@@ -96,6 +96,7 @@ private:
     std::unique_ptr<DockableCollapsible> panel_;
     std::vector<std::string> spawn_methods_;
     std::string spawn_id_;
+    std::string panel_title_;
     nlohmann::json entry_;
 
     // Candidate rows
@@ -165,6 +166,10 @@ private:
     std::vector<CloseCallbackEntry> close_callbacks_;
     size_t next_close_callback_id_ = 1;
     std::string floating_stack_key_;
+    SDL_Point last_known_position_{0, 0};
+    SDL_Point pending_anchor_position_{0, 0};
+    bool has_pending_anchor_position_ = false;
+    bool has_custom_position_ = false;
 
     int total_chance() const;
     void refresh_chance_labels(int total_chance);
