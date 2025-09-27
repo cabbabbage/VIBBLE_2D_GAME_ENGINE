@@ -208,7 +208,7 @@ void SceneRenderer::render() {
         SDL_Rect fb = get_scaled_position_rect(a, fw, fh, inv_scale, min_visible_w, min_visible_h, player_screen_height);
         if (fb.w == 0 && fb.h == 0) continue;
 
-        SDL_Texture* draw_tex = render_asset_.texture_for_scale(a, final_tex, fw, fh, fb.w, fb.h);
+        SDL_Texture* draw_tex = render_asset_.texture_for_scale(a, final_tex, fw, fh, fb.w, fb.h, scale);
         SDL_Texture* mod_target = draw_tex ? draw_tex : final_tex;
 
         SDL_Texture* base_tex = draw_tex ? draw_tex : final_tex;

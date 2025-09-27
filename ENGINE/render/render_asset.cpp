@@ -125,14 +125,20 @@ SDL_Texture* RenderAsset::texture_for_scale(Asset* asset,
                                             int base_w,
                                             int base_h,
                                             int target_w,
-                                            int target_h) {
+                                            int target_h,
+                                            float camera_scale) {
         if (!asset || !base_tex || base_w <= 0 || base_h <= 0 || target_w <= 0 || target_h <= 0) {
                 return base_tex;
         }
 
         const float ratio_w = static_cast<float>(target_w) / static_cast<float>(base_w);
         const float ratio_h = static_cast<float>(target_h) / static_cast<float>(base_h);
-        const float ratio = std::min(ratio_w, ratio_h);
+        float ratio = std::min(ratio_w, ratio_h);
+        if (camera_scale > 2.0f) {
+                const float extra_zoom = std::min(camera_scale - 2.0f, 10.0f);
+                const float bias = static_cast<float>(std::pow(0.5f, extra_zoom));
+                ratio *= std::max(0.0001f, bias);
+        }
         if (ratio >= 0.95f) {
                 return base_tex;
         }

@@ -527,7 +527,6 @@ bool MapLayersPanel::LayerCanvasWidget::handle_event(const SDL_Event& e) {
     return false;
 }
 
-}
 
 void MapLayersPanel::LayerCanvasWidget::render(SDL_Renderer* renderer) const {
     if (!renderer) return;
@@ -573,7 +572,7 @@ void MapLayersPanel::LayerCanvasWidget::render(SDL_Renderer* renderer) const {
         bool layer_clicked = (info.index == clicked_layer);
         bool layer_hovered = (info.index == hovered_layer);
         if (layer_clicked) {
-            col = mix_color(col, clicked_layer_color, 0.85f);
+            col = clicked_layer_color;
         } else if (layer_hovered) {
             col = lighten_color(col, 0.35f);
         }
@@ -616,7 +615,7 @@ void MapLayersPanel::LayerCanvasWidget::render(SDL_Renderer* renderer) const {
             bool room_clicked = (!clicked_room.empty() && clicked_room == node->name);
             bool room_hovered = (!hovered_room.empty() && hovered_room == node->name);
             if (room_clicked) {
-                outline = mix_color(outline, clicked_room_color, 0.85f);
+                outline = clicked_room_color;
             } else if (room_hovered) {
                 outline = lighten_color(outline, 0.45f);
             }
@@ -679,7 +678,6 @@ void MapLayersPanel::LayerCanvasWidget::render(SDL_Renderer* renderer) const {
     }
 }
 
-}
 
 // -----------------------------------------------------------------------------
 // PanelSidebarWidget implementation
@@ -1504,6 +1502,8 @@ void MapLayersPanel::set_map_info(json* map_info, const std::string& map_path) {
     }
     if (room_configurator_) room_configurator_->close();
     active_room_config_key_.clear();
+    update_click_target(-1, std::string());
+    clear_hover_target();
     request_preview_regeneration();
     mark_clean();
 }
@@ -1533,6 +1533,8 @@ void MapLayersPanel::close() {
     if (room_selector_) room_selector_->close();
     if (room_configurator_) room_configurator_->close();
     active_room_config_key_.clear();
+    update_click_target(-1, std::string());
+    clear_hover_target();
 }
 
 bool MapLayersPanel::is_visible() const {
@@ -1581,6 +1583,7 @@ void MapLayersPanel::update(const Input& input, int screen_w, int screen_h) {
         }
     }
     if (!is_visible()) {
+        clear_hover_target();
         if (layer_config_) layer_config_->ensure_cleanup();
         return;
     }
@@ -1708,6 +1711,8 @@ void MapLayersPanel::regenerate_preview() {
     const auto& layers = layers_array();
     if (!layers.is_array() || layers.empty()) {
         if (canvas_widget_) canvas_widget_->refresh();
+        update_click_target(-1, std::string());
+        clear_hover_target();
         return;
     }
 
@@ -1935,6 +1940,27 @@ void MapLayersPanel::regenerate_preview() {
     if (canvas_widget_) {
         canvas_widget_->refresh();
     }
+
+    int layer_count = layers.is_array() ? static_cast<int>(layers.size()) : 0;
+    if (clicked_layer_index_ >= layer_count) clicked_layer_index_ = -1;
+    if (hovered_layer_index_ >= layer_count) hovered_layer_index_ = -1;
+
+    auto room_exists = [&](const std::string& key) {
+        if (key.empty()) return true;
+        for (const auto& node_uptr : preview_nodes_) {
+            const PreviewNode* node = node_uptr.get();
+            if (!node) continue;
+            if (node->name == key) return true;
+        }
+        return false;
+    };
+
+    if (!room_exists(clicked_room_key_)) {
+        clicked_room_key_.clear();
+    }
+    if (!room_exists(hovered_room_key_)) {
+        hovered_room_key_.clear();
+    }
 }
 
 bool MapLayersPanel::handle_preview_room_click(int px, int py, int center_x, int center_y, double scale) {
@@ -2035,7 +2061,6 @@ void MapLayersPanel::clear_hover_target() {
     hovered_room_key_.clear();
 }
 
-}
 
 void MapLayersPanel::open_room_config_for(const std::string& room_name) {
     if (room_name.empty()) {
@@ -2056,8 +2081,8 @@ void MapLayersPanel::open_room_config_for(const std::string& room_name) {
     }
     active_room_config_key_ = room_name;
     room_configurator_->set_work_area(screen_bounds_);
-    room_configurator_->set_bounds(compute_room_config_bounds());
     room_configurator_->open(*entry);
+    room_configurator_->set_bounds(compute_room_config_bounds());
 }
 
 void MapLayersPanel::ensure_room_configurator() {

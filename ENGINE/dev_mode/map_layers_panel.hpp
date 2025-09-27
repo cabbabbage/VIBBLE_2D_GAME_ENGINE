@@ -54,6 +54,8 @@ private:
     class PanelSidebarWidget;
     class LayerConfigPanel;
     class RoomCandidateWidget;
+    struct PreviewNode;
+    struct PreviewEdge;
 
     friend class LayerCanvasWidget;
     friend class PanelSidebarWidget;

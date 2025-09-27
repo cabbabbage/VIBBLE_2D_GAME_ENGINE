@@ -17,7 +17,8 @@ class RenderAsset {
                                    int base_w,
                                    int base_h,
                                    int target_w,
-                                   int target_h);
+                                   int target_h,
+                                   float camera_scale);
 
 	private:
     Asset* p;
