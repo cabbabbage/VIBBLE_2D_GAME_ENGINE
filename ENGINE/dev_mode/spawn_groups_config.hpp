@@ -65,7 +65,6 @@ private:
         nlohmann::json* json = nullptr;
         std::unique_ptr<DMButton> btn;
         std::unique_ptr<ButtonWidget> btn_w;
-        size_t on_close_callback_id = 0;
     };
     std::vector<Entry> entries_;
     nlohmann::json* assets_json_ = nullptr;
@@ -81,13 +80,6 @@ private:
     std::unique_ptr<DMButton> b_done_;
     std::unique_ptr<ButtonWidget> b_done_w_;
     std::function<void(const nlohmann::json&)> on_close_;
-    void hide_temporarily();
-    bool suppress_close_actions_ = false;
-    bool restore_parent_visibility_pending_ = false;
-    bool restore_parent_expanded_state_ = false;
-    bool suppress_restore_on_close_ = false;
-    void handle_entry_closed(Entry& entry);
     void open_entry(Entry& entry, int x, int y);
-    std::string floating_stack_key_;
 };
 

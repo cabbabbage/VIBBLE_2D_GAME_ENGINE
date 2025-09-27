@@ -5,7 +5,6 @@
 #include "FloatingDockableManager.hpp"
 
 #include <algorithm>
-#include <sstream>
 
 namespace {
 constexpr int kStandaloneWidth = 1920;
@@ -23,32 +22,19 @@ nlohmann::json normalize_spawn_assets(const nlohmann::json& assets) {
 SpawnGroupsConfig::SpawnGroupsConfig(bool floatable)
     : DockableCollapsible("Spawn Groups", floatable, 32, 32),
       floatable_mode_(floatable) {
-    std::ostringstream oss;
-    oss << "spawn_groups_" << this;
-    floating_stack_key_ = oss.str();
     set_expanded(true);
-    if (floatable_mode_) {
-        set_visible(false);
-        set_work_area(SDL_Rect{0, 0, 0, 0});
-        set_on_close([this]() {
-            if (!suppress_close_actions_) {
-                close_all();
-            }
-        });
-    } else {
-        set_visible(false);
+    set_visible(false);
+    if (!floatable_mode_) {
         set_show_header(false);
         set_scroll_enabled(true);
+    } else {
+        set_work_area(SDL_Rect{0, 0, 0, 0});
     }
     set_cell_width(120);
     set_available_height_override(kSpawnGroupsMaxHeight);
     set_work_area(SDL_Rect{0, 0, 0, 0});
-    set_on_close([this]() {
-        if (!suppress_close_actions_) {
-            restore_parent_visibility_pending_ = false;
-            restore_parent_expanded_state_ = false;
-            close_all();
-        }
+    DockableCollapsible::set_on_close([this]() {
+        close_all();
     });
 }
 
@@ -72,9 +58,8 @@ void SpawnGroupsConfig::open(const nlohmann::json& assets, std::function<void(co
     on_close_ = std::move(on_close);
     FloatingDockableManager::instance().open_floating(
         "Spawn Groups", this, [this]() {
-            this->hide_temporarily();
-        },
-        floating_stack_key_);
+            this->set_visible(false);
+        });
     // make copy for standalone editing
     nlohmann::json normalized = normalize_spawn_assets(assets);
     const bool was_visible = is_visible();
@@ -155,7 +140,6 @@ void SpawnGroupsConfig::load(nlohmann::json& assets,
         }
         e.json = &it;
         e.cfg = std::make_unique<SpawnGroupConfigUI>();
-        e.cfg->set_floating_stack_key(floating_stack_key_);
         e.cfg->load(it);
         if (configure_entry_) {
             configure_entry_(*e.cfg, it);
@@ -245,13 +229,6 @@ void SpawnGroupsConfig::render(SDL_Renderer* r) const {
 }
 
 void SpawnGroupsConfig::open_spawn_group(const std::string& id, int x, int y) {
-    bool parent_visible = is_visible();
-    if (parent_visible) {
-        restore_parent_expanded_state_ = is_expanded();
-    }
-    restore_parent_visibility_pending_ = parent_visible || restore_parent_visibility_pending_;
-
-    hide_temporarily();
     close_all();
     for (auto& e : entries_) {
         if (e.id == id) {
@@ -266,57 +243,17 @@ void SpawnGroupsConfig::request_open_spawn_group(const std::string& id, int x, i
 }
 
 void SpawnGroupsConfig::close_all() {
-    bool previous = suppress_restore_on_close_;
-    suppress_restore_on_close_ = true;
     for (auto& e : entries_) {
         if (e.cfg) e.cfg->close();
     }
-    suppress_restore_on_close_ = previous;
 }
 
 void SpawnGroupsConfig::open_entry(Entry& entry, int x, int y) {
     if (!entry.cfg) {
         return;
     }
-    if (entry.on_close_callback_id != 0) {
-        entry.cfg->remove_on_close_callback(entry.on_close_callback_id);
-        entry.on_close_callback_id = 0;
-    }
-    if (restore_parent_visibility_pending_) {
-        Entry* entry_ptr = &entry;
-        entry.on_close_callback_id = entry.cfg->add_on_close_callback([this, entry_ptr]() {
-            this->handle_entry_closed(*entry_ptr);
-        });
-    }
     entry.cfg->set_position(x, y);
     entry.cfg->open_panel();
-}
-
-void SpawnGroupsConfig::hide_temporarily() {
-    bool previous = suppress_close_actions_;
-    suppress_close_actions_ = true;
-    DockableCollapsible::set_visible(false);
-    suppress_close_actions_ = previous;
-}
-
-void SpawnGroupsConfig::handle_entry_closed(Entry& entry) {
-    if (entry.cfg && entry.on_close_callback_id != 0) {
-        entry.cfg->remove_on_close_callback(entry.on_close_callback_id);
-        entry.on_close_callback_id = 0;
-    }
-    if (suppress_restore_on_close_) {
-        return;
-    }
-    if (!restore_parent_visibility_pending_) {
-        return;
-    }
-    restore_parent_visibility_pending_ = false;
-    bool expand = restore_parent_expanded_state_;
-    FloatingDockableManager::instance().open_floating(
-        "Spawn Groups", this, [this]() { this->hide_temporarily(); });
-    set_visible(true);
-    set_expanded(expand);
-    restore_parent_expanded_state_ = is_expanded();
 }
 
 std::optional<SpawnGroupsConfig::OpenSpawnGroupState> SpawnGroupsConfig::capture_open_spawn_group() const {
