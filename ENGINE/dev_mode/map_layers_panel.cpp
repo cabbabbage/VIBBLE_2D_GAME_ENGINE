@@ -23,6 +23,7 @@
 #include <sstream>
 #include <unordered_map>
 #include <utility>
+#include <tuple>
 
 #include <nlohmann/json.hpp>
 
@@ -120,6 +121,32 @@ void draw_text_centered(SDL_Renderer* r, const std::string& text, int x, int y, 
         SDL_FreeSurface(surf);
     }
     TTF_CloseFont(font);
+}
+
+Uint8 lerp_channel(Uint8 from, Uint8 to, float t) {
+    t = std::clamp(t, 0.0f, 1.0f);
+    float value = static_cast<float>(from) + (static_cast<float>(to) - static_cast<float>(from)) * t;
+    value = std::clamp(value, 0.0f, 255.0f);
+    return static_cast<Uint8>(std::lround(value));
+}
+
+SDL_Color mix_color(SDL_Color from, SDL_Color to, float t) {
+    return SDL_Color{
+        lerp_channel(from.r, to.r, t),
+        lerp_channel(from.g, to.g, t),
+        lerp_channel(from.b, to.b, t),
+        lerp_channel(from.a, to.a, t)
+    };
+}
+
+SDL_Color lighten_color(SDL_Color color, float amount) {
+    SDL_Color white{255, 255, 255, color.a};
+    return mix_color(color, white, amount);
+}
+
+SDL_Color apply_alpha(SDL_Color color, Uint8 alpha) {
+    color.a = alpha;
+    return color;
 }
 
 struct RoomGeometry {
@@ -415,24 +442,65 @@ void MapLayersPanel::LayerCanvasWidget::refresh() {
 
 bool MapLayersPanel::LayerCanvasWidget::handle_event(const SDL_Event& e) {
     if (!owner_) return false;
+
+    auto compute_metrics = [&]() -> std::tuple<bool, int, int, double> {
+        if (circles_.empty()) return { false, 0, 0, 1.0 };
+        const auto& arr = owner_->layers_array();
+        if (arr.empty()) return { false, 0, 0, 1.0 };
+        double max_radius = 1.0;
+        for (const auto& layer : arr) {
+            if (layer.is_object()) {
+                max_radius = std::max(max_radius, static_cast<double>(layer.value("radius", 0)));
+            }
+        }
+        const int center_x = rect_.x + rect_.w / 2;
+        const int center_y = rect_.y + rect_.h / 2;
+        const int draw_radius_max = std::max(8, std::min(rect_.w, rect_.h) / 2 - kCanvasPadding);
+        if (draw_radius_max <= 0) {
+            return { false, 0, 0, 1.0 };
+        }
+        double display_extent = std::max(max_radius, owner_->preview_extent_);
+        if (display_extent <= 0.0) display_extent = 1.0;
+        double scale = static_cast<double>(draw_radius_max) / display_extent;
+        if (scale <= 0.0) {
+            return { false, 0, 0, 1.0 };
+        }
+        return { true, center_x, center_y, scale };
+    };
+
+    auto update_hover = [&](const SDL_Point& p, int center_x, int center_y, double scale) {
+        const PreviewNode* hovered_room = owner_->find_room_at(p.x, p.y, center_x, center_y, scale);
+        int hovered_layer = hovered_room ? hovered_room->layer
+                                         : owner_->find_layer_at(p.x, p.y, center_x, center_y, scale);
+        owner_->update_hover_target(hovered_layer, hovered_room ? hovered_room->name : std::string());
+    };
+
+    if (e.type == SDL_MOUSEMOTION) {
+        SDL_Point p{ e.motion.x, e.motion.y };
+        if (!SDL_PointInRect(&p, &rect_)) {
+            owner_->clear_hover_target();
+            return false;
+        }
+        auto [ok, cx, cy, scale] = compute_metrics();
+        if (!ok) {
+            owner_->clear_hover_target();
+            return false;
+        }
+        update_hover(p, cx, cy, scale);
+        return false;
+    }
+
     if (e.type != SDL_MOUSEBUTTONUP) return false;
     SDL_Point p{ e.button.x, e.button.y };
-    if (!SDL_PointInRect(&p, &rect_)) return false;
-    if (circles_.empty()) return false;
-
-    const auto& arr = owner_->layers_array();
-    double max_radius = 1.0;
-    for (const auto& layer : arr) {
-        if (layer.is_object()) {
-            max_radius = std::max(max_radius, static_cast<double>(layer.value("radius", 0)));
-        }
+    if (!SDL_PointInRect(&p, &rect_)) {
+        owner_->clear_hover_target();
+        return false;
     }
-    const int center_x = rect_.x + rect_.w / 2;
-    const int center_y = rect_.y + rect_.h / 2;
-    const int draw_radius_max = std::max(8, std::min(rect_.w, rect_.h) / 2 - kCanvasPadding);
-    double display_extent = std::max(max_radius, owner_->preview_extent_);
-    if (display_extent <= 0.0) display_extent = 1.0;
-    double scale = static_cast<double>(draw_radius_max) / display_extent;
+    auto [ok, center_x, center_y, scale] = compute_metrics();
+    if (!ok) {
+        owner_->clear_hover_target();
+        return false;
+    }
 
     if (e.button.button == SDL_BUTTON_LEFT) {
         if (owner_->handle_preview_room_click(p.x, p.y, center_x, center_y, scale)) {
@@ -440,32 +508,25 @@ bool MapLayersPanel::LayerCanvasWidget::handle_event(const SDL_Event& e) {
         }
     }
 
-    int hit_index = -1;
-    for (const auto& info : circles_) {
-        const json* layer = owner_->layer_at(info.index);
-        if (!layer) continue;
-        int current_radius = layer->value("radius", 0);
-        int pixel_radius = static_cast<int>(std::lround(current_radius * scale));
-        pixel_radius = std::max(12, pixel_radius);
-        const int dx = p.x - center_x;
-        const int dy = p.y - center_y;
-        const double dist = std::sqrt(static_cast<double>(dx * dx + dy * dy));
-        const double tolerance = 12.0;
-        if (std::fabs(dist - pixel_radius) <= tolerance || dist < pixel_radius * 0.85) {
-            hit_index = info.index;
-            break;
-        }
+    int hit_index = owner_->find_layer_at(p.x, p.y, center_x, center_y, scale);
+    if (hit_index < 0) {
+        owner_->update_hover_target(-1, std::string());
+        return false;
     }
-    if (hit_index < 0) return false;
+
     if (e.button.button == SDL_BUTTON_LEFT) {
+        owner_->update_click_target(hit_index, std::string());
         owner_->select_layer(hit_index);
         return true;
     }
     if (e.button.button == SDL_BUTTON_RIGHT) {
+        owner_->update_click_target(hit_index, std::string());
         owner_->open_layer_config_internal(hit_index);
         return true;
     }
     return false;
+}
+
 }
 
 void MapLayersPanel::LayerCanvasWidget::render(SDL_Renderer* renderer) const {
@@ -494,6 +555,14 @@ void MapLayersPanel::LayerCanvasWidget::render(SDL_Renderer* renderer) const {
     double scale = static_cast<double>(draw_radius_max) / display_extent;
 
     const DMLabelStyle label_style = DMStyles::Label();
+    const int hovered_layer = owner_->hovered_layer_index_;
+    const int clicked_layer = owner_->clicked_layer_index_;
+    const std::string& hovered_room = owner_->hovered_room_key_;
+    const std::string& clicked_room = owner_->clicked_room_key_;
+    const SDL_Color hover_accent = DMStyles::AccentButton().hover_bg;
+    const SDL_Color clicked_layer_color = DMStyles::DeleteButton().bg;
+    const SDL_Color clicked_room_color = DMStyles::DeleteButton().bg;
+
     for (const auto& info : circles_) {
         const json* layer = owner_->layer_at(info.index);
         if (!layer) continue;
@@ -501,7 +570,17 @@ void MapLayersPanel::LayerCanvasWidget::render(SDL_Renderer* renderer) const {
         int pixel_radius = static_cast<int>(std::lround(radius_value * scale));
         pixel_radius = std::max(12, pixel_radius);
         SDL_Color col = info.color;
-        int thickness = (info.index == selected_index_) ? 6 : 3;
+        bool layer_clicked = (info.index == clicked_layer);
+        bool layer_hovered = (info.index == hovered_layer);
+        if (layer_clicked) {
+            col = mix_color(col, clicked_layer_color, 0.85f);
+        } else if (layer_hovered) {
+            col = lighten_color(col, 0.35f);
+        }
+        int thickness = 3;
+        if (info.index == selected_index_) thickness = 6;
+        if (layer_hovered) thickness = std::max(thickness, 5);
+        if (layer_clicked) thickness = std::max(thickness, 6);
         draw_circle(renderer, center_x, center_y, pixel_radius, col, thickness);
         std::ostringstream oss;
         oss << info.label << " (" << radius_value << ")";
@@ -533,19 +612,33 @@ void MapLayersPanel::LayerCanvasWidget::render(SDL_Renderer* renderer) const {
                 static_cast<int>(std::lround(center_x + node->center.x * scale)),
                 static_cast<int>(std::lround(center_y + node->center.y * scale))
             };
-            SDL_Color col = node->color;
-            SDL_SetRenderDrawColor(renderer, col.r, col.g, col.b, 220);
+            SDL_Color outline = node->color;
+            bool room_clicked = (!clicked_room.empty() && clicked_room == node->name);
+            bool room_hovered = (!hovered_room.empty() && hovered_room == node->name);
+            if (room_clicked) {
+                outline = mix_color(outline, clicked_room_color, 0.85f);
+            } else if (room_hovered) {
+                outline = lighten_color(outline, 0.45f);
+            }
+
             if (node->is_circle) {
                 int radius = static_cast<int>(std::lround(std::max(2.0, (node->width * 0.5) * scale)));
-                draw_circle(renderer, center_pt.x, center_pt.y, radius, col, 2);
+                draw_circle(renderer, center_pt.x, center_pt.y, radius, outline, room_clicked ? 4 : (room_hovered ? 3 : 2));
             } else {
                 int half_w = static_cast<int>(std::lround(std::max(2.0, (node->width * 0.5) * scale)));
                 int half_h = static_cast<int>(std::lround(std::max(2.0, (node->height * 0.5) * scale)));
                 SDL_Rect room_rect{ center_pt.x - half_w, center_pt.y - half_h, half_w * 2, half_h * 2 };
+                if (room_clicked || room_hovered) {
+                    SDL_Color fill = room_clicked ? apply_alpha(clicked_room_color, 90) : apply_alpha(hover_accent, 80);
+                    SDL_SetRenderDrawColor(renderer, fill.r, fill.g, fill.b, fill.a);
+                    SDL_RenderFillRect(renderer, &room_rect);
+                }
+                SDL_SetRenderDrawColor(renderer, outline.r, outline.g, outline.b, 220);
                 SDL_RenderDrawRect(renderer, &room_rect);
             }
+
             const SDL_Color accent = DMStyles::AccentButton().hover_bg;
-            SDL_SetRenderDrawColor(renderer, accent.r, accent.g, accent.b, 120);
+            SDL_SetRenderDrawColor(renderer, accent.r, accent.g, accent.b, room_clicked ? 180 : 120);
             SDL_RenderDrawPoint(renderer, center_pt.x, center_pt.y);
 
             double extent_units = node->is_circle ? node->width * 0.5
@@ -562,7 +655,17 @@ void MapLayersPanel::LayerCanvasWidget::render(SDL_Renderer* renderer) const {
             int label_x = static_cast<int>(std::lround(center_pt.x + dir_x * offset));
             int label_y = static_cast<int>(std::lround(center_pt.y + dir_y * offset));
             std::string room_label = node->name.empty() ? std::string("<room>") : node->name;
-            draw_text_centered(renderer, room_label, label_x, label_y, label_style);
+            if (room_clicked) {
+                DMLabelStyle clicked_label = DMStyles::Label();
+                clicked_label.color = clicked_room_color;
+                draw_text_centered(renderer, room_label, label_x, label_y, clicked_label);
+            } else if (room_hovered) {
+                DMLabelStyle hover_label = DMStyles::Label();
+                hover_label.color = mix_color(hover_label.color, hover_accent, 0.5f);
+                draw_text_centered(renderer, room_label, label_x, label_y, hover_label);
+            } else {
+                draw_text_centered(renderer, room_label, label_x, label_y, label_style);
+            }
         }
     }
 
@@ -574,6 +677,8 @@ void MapLayersPanel::LayerCanvasWidget::render(SDL_Renderer* renderer) const {
             draw_text(renderer, oss.str(), rect_.x + 12, rect_.y + rect_.h - 28, label_style);
         }
     }
+}
+
 }
 
 // -----------------------------------------------------------------------------
@@ -1833,8 +1938,19 @@ void MapLayersPanel::regenerate_preview() {
 }
 
 bool MapLayersPanel::handle_preview_room_click(int px, int py, int center_x, int center_y, double scale) {
-    if (preview_nodes_.empty()) {
+    const PreviewNode* node = find_room_at(px, py, center_x, center_y, scale);
+    if (!node) {
         return false;
+    }
+
+    update_click_target(node->layer, node->name);
+    open_room_config_for(node->name);
+    return true;
+}
+
+const MapLayersPanel::PreviewNode* MapLayersPanel::find_room_at(int px, int py, int center_x, int center_y, double scale) const {
+    if (preview_nodes_.empty()) {
+        return nullptr;
     }
 
     const PreviewNode* best_node = nullptr;
@@ -1877,12 +1993,48 @@ bool MapLayersPanel::handle_preview_room_click(int px, int py, int center_x, int
         }
     }
 
-    if (!best_node) {
-        return false;
-    }
+    return best_node;
+}
 
-    open_room_config_for(best_node->name);
-    return true;
+int MapLayersPanel::find_layer_at(int px, int py, int center_x, int center_y, double scale) const {
+    const auto& layers = layers_array();
+    if (!layers.is_array() || layers.empty()) return -1;
+
+    const double tolerance = 12.0;
+    for (size_t i = 0; i < layers.size(); ++i) {
+        const auto& layer_json = layers[i];
+        if (!layer_json.is_object()) continue;
+        int current_radius = layer_json.value("radius", 0);
+        int pixel_radius = static_cast<int>(std::lround(current_radius * scale));
+        pixel_radius = std::max(12, pixel_radius);
+        const int dx = px - center_x;
+        const int dy = py - center_y;
+        const double dist = std::sqrt(static_cast<double>(dx * dx + dy * dy));
+        if (std::fabs(dist - pixel_radius) <= tolerance || dist < pixel_radius * 0.85) {
+            return static_cast<int>(i);
+        }
+    }
+    return -1;
+}
+
+void MapLayersPanel::update_hover_target(int layer_index, const std::string& room_key) {
+    if (hovered_layer_index_ == layer_index && hovered_room_key_ == room_key) {
+        return;
+    }
+    hovered_layer_index_ = layer_index;
+    hovered_room_key_ = room_key;
+}
+
+void MapLayersPanel::update_click_target(int layer_index, const std::string& room_key) {
+    clicked_layer_index_ = layer_index;
+    clicked_room_key_ = room_key;
+}
+
+void MapLayersPanel::clear_hover_target() {
+    hovered_layer_index_ = -1;
+    hovered_room_key_.clear();
+}
+
 }
 
 void MapLayersPanel::open_room_config_for(const std::string& room_name) {

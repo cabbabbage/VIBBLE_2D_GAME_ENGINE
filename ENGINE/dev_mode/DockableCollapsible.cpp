@@ -10,6 +10,10 @@
 #include "utils/input.hpp"
 
 namespace {
+    // Fixed inner width (excluding padding) applied to every floating panel so
+    // that all floating DockableCollapsible instances share the same size.
+    constexpr int kFloatingPanelContentWidth = 360;
+
     void draw_grip(SDL_Renderer* r, const SDL_Rect& area, SDL_Color col) {
         const int lines = 3;
         const int gap   = 3;
@@ -32,11 +36,14 @@ DockableCollapsible::DockableCollapsible(const std::string& title, bool floatabl
     scroll_enabled_ = floatable;
     available_height_override_ = -1;
     rect_.x = x; rect_.y = y;
-    header_btn_ = std::make_unique<DMButton>(title_, &DMStyles::HeaderButton(), 260, DMButton::height());
+    header_btn_ = std::make_unique<DMButton>(title_, &DMStyles::HeaderButton(), kFloatingPanelContentWidth, DMButton::height());
     close_btn_  = std::make_unique<DMButton>("X", &DMStyles::HeaderButton(), DMButton::height(), DMButton::height());
     padding_ = DMSpacing::panel_padding();
     row_gap_ = DMSpacing::item_gap();
     col_gap_ = DMSpacing::item_gap();
+    if (floatable_) {
+        rect_.w = 2 * padding_ + kFloatingPanelContentWidth;
+    }
     update_header_button();
 }
 
@@ -76,7 +83,8 @@ void DockableCollapsible::set_show_header(bool show) {
         header_btn_.reset();
         close_btn_.reset();
     } else {
-        header_btn_ = std::make_unique<DMButton>(title_, &DMStyles::HeaderButton(), 260, DMButton::height());
+        int header_w = floatable_ ? kFloatingPanelContentWidth : 260;
+        header_btn_ = std::make_unique<DMButton>(title_, &DMStyles::HeaderButton(), header_w, DMButton::height());
         if (floatable_ || close_button_enabled_) {
             close_btn_ = std::make_unique<DMButton>("X", &DMStyles::HeaderButton(), DMButton::height(), DMButton::height());
         }
@@ -346,29 +354,26 @@ void DockableCollapsible::layout(int screen_w, int screen_h) const {
         return layout_rows;
     }();
 
+    int header_total_w = 0;
     if (floatable_) {
-        widest_row_w_ = 2 * padding_;
-        for (const auto& row : layout_rows) {
-            int n = (int)row.size();
-            if (n <= 0) continue;
-            widest_row_w_ = std::max(widest_row_w_, compute_row_width(n));
-        }
-        int base_w = std::max(std::max(260, widest_row_w_ - 2 * padding_), 100);
+        header_total_w = kFloatingPanelContentWidth;
+        widest_row_w_ = 2 * padding_ + header_total_w;
         if (show_header_) {
-            header_rect_.w = base_w;
             if (show_close) {
-                close_rect_ = SDL_Rect{ header_rect_.x + header_rect_.w - DMButton::height(), header_rect_.y,
+                header_rect_.w = std::max(0, header_total_w - DMButton::height());
+                close_rect_ = SDL_Rect{ header_rect_.x + header_rect_.w, header_rect_.y,
                                         DMButton::height(), DMButton::height() };
-                header_rect_.w -= DMButton::height();
             } else {
+                header_rect_.w = header_total_w;
                 close_rect_ = SDL_Rect{0,0,0,0};
             }
         } else {
-            header_rect_.w = rect_.w > 0 ? rect_.w - 2 * padding_ : base_w;
+            header_rect_.w = header_total_w;
             close_rect_ = SDL_Rect{0,0,0,0};
         }
     } else {
-        header_rect_.w = rect_.w - 2 * padding_;
+        header_total_w = std::max(0, rect_.w - 2 * padding_);
+        header_rect_.w = header_total_w;
         if (show_header_ && show_close) {
             close_rect_ = SDL_Rect{ rect_.x + rect_.w - padding_ - DMButton::height(), rect_.y + padding_,
                                     DMButton::height(), DMButton::height() };
@@ -379,18 +384,18 @@ void DockableCollapsible::layout(int screen_w, int screen_h) const {
     }
 
     if (header_btn_) header_btn_->set_rect(header_rect_);
-    if (close_btn_ && show_close) close_btn_->set_rect(close_rect_);
+    if (close_btn_) close_btn_->set_rect(close_rect_);
     update_header_button();
 
     if (show_header_) {
         // Enlarge the draggable grip area to make it easier to grab
-        int grip_w = std::max(32, std::min(80, std::max(1, header_rect_.w) / 3));
+        int grip_w = std::max(32, std::min(80, std::max(1, header_total_w) / 3));
         handle_rect_ = SDL_Rect{ header_rect_.x, header_rect_.y, grip_w, header_rect_.h };
     } else {
         handle_rect_ = SDL_Rect{ 0, 0, 0, 0 };
     }
 
-    int content_w = header_rect_.w;
+    int content_w = header_total_w;
     int header_gap = show_header_ ? DMSpacing::header_gap() : 0;
     int x0 = rect_.x + padding_;
     int y0 = rect_.y + padding_ + header_rect_.h + header_gap;
