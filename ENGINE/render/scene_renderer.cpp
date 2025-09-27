@@ -226,29 +226,69 @@ void SceneRenderer::render() {
         SDL_Texture* mod_target = draw_tex ? draw_tex : final_tex;
 
         SDL_Texture* base_tex = draw_tex ? draw_tex : final_tex;
-        if (a->is_highlighted() || a->is_selected()) {
-            const SDL_Color outline_color = a->is_highlighted() ? SDL_Color{255, 255, 255, 255}
-                                                               : SDL_Color{255, 230, 0, 255};
-            SDL_SetTextureColorMod(base_tex, outline_color.r, outline_color.g, outline_color.b);
-            SDL_SetTextureAlphaMod(base_tex, outline_color.a);
-            SDL_SetTextureBlendMode(base_tex, SDL_BLENDMODE_BLEND);
+        const bool is_highlighted = a->is_highlighted();
+        const bool is_selected   = a->is_selected();
 
-            constexpr int outline_thickness = 10;
-            for (int dist = 1; dist <= outline_thickness; ++dist) {
-                const std::array<SDL_Point, 8> offsets{
-                    SDL_Point{-dist, 0}, SDL_Point{dist, 0}, SDL_Point{0, -dist}, SDL_Point{0, dist},
-                    SDL_Point{-dist, -dist}, SDL_Point{dist, -dist}, SDL_Point{-dist, dist}, SDL_Point{dist, dist}};
-                for (const SDL_Point& offset : offsets) {
-                    SDL_Rect outline_rect = fb;
-                    outline_rect.x += offset.x;
-                    outline_rect.y += offset.y;
-                    SDL_RenderCopyEx(renderer_, base_tex, nullptr, &outline_rect, 0, nullptr,
-                                     a->flipped ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE);
-                }
+        if (is_highlighted || is_selected) {
+            SDL_BlendMode previous_blend_mode = SDL_BLENDMODE_BLEND;
+            SDL_GetTextureBlendMode(base_tex, &previous_blend_mode);
+
+            Uint8 prev_r = 255, prev_g = 255, prev_b = 255, prev_a = 255;
+            SDL_GetTextureColorMod(base_tex, &prev_r, &prev_g, &prev_b);
+            SDL_GetTextureAlphaMod(base_tex, &prev_a);
+
+            SDL_Rect glow_rect = fb;
+            const int min_dimension = std::max(1, std::min(fb.w, fb.h));
+            const int glow_margin = std::max(
+                8, static_cast<int>(std::round(min_dimension * 0.2f)));
+            glow_rect.x -= glow_margin;
+            glow_rect.y -= glow_margin;
+            glow_rect.w += glow_margin * 2;
+            glow_rect.h += glow_margin * 2;
+
+            const float pulse = 0.45f + 0.55f * std::sin(render_call_count * 0.18f);
+
+            auto apply_tinted_copy = [&](const SDL_Color& color, SDL_Rect rect) {
+                SDL_SetTextureColorMod(base_tex, color.r, color.g, color.b);
+                SDL_SetTextureAlphaMod(base_tex, color.a);
+                SDL_RenderCopyEx(renderer_, base_tex, nullptr, &rect, 0, nullptr,
+                                 a->flipped ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE);
+            };
+
+            SDL_SetTextureBlendMode(base_tex, SDL_BLENDMODE_ADD);
+
+            const Uint8 base_alpha = static_cast<Uint8>(std::clamp(160.f + 70.f * pulse, 0.f, 255.f));
+            SDL_Color outer_color = is_highlighted
+                                        ? SDL_Color{90, 220, 255, base_alpha}
+                                        : SDL_Color{255, 185, 60, base_alpha};
+            if (is_highlighted && is_selected) {
+                outer_color = SDL_Color{255, 255, 255,
+                                        static_cast<Uint8>(std::clamp(190.f + 60.f * pulse, 0.f, 255.f))};
             }
 
-            SDL_SetTextureColorMod(base_tex, 255, 255, 255);
-            SDL_SetTextureAlphaMod(base_tex, 255);
+            const int offset = glow_margin / 2;
+            for (SDL_Point pt : {SDL_Point{0, 0}, SDL_Point{offset, 0}, SDL_Point{-offset, 0},
+                                 SDL_Point{0, offset}, SDL_Point{0, -offset},
+                                 SDL_Point{offset, offset}, SDL_Point{-offset, offset},
+                                 SDL_Point{offset, -offset}, SDL_Point{-offset, -offset}}) {
+                SDL_Rect rect = glow_rect;
+                rect.x += pt.x;
+                rect.y += pt.y;
+                apply_tinted_copy(outer_color, rect);
+            }
+
+            if (is_selected) {
+                SDL_SetTextureBlendMode(base_tex, SDL_BLENDMODE_BLEND);
+                Uint8 inner_alpha = static_cast<Uint8>(std::clamp(150.f + 80.f * pulse, 0.f, 255.f));
+                SDL_Color inner_color = is_highlighted
+                                            ? SDL_Color{255, 245, 200, inner_alpha}
+                                            : SDL_Color{255, 215, 120, inner_alpha};
+                apply_tinted_copy(inner_color, fb);
+            }
+
+            SDL_SetTextureColorMod(base_tex, prev_r, prev_g, prev_b);
+            SDL_SetTextureAlphaMod(base_tex, prev_a);
+            SDL_SetTextureBlendMode(base_tex, previous_blend_mode);
         } else {
             SDL_SetTextureColorMod(mod_target, 255, 255, 255);
         }

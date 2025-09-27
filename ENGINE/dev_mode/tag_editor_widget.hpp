@@ -42,7 +42,8 @@ private:
     void layout_if_needed() const;
     int layout(int width, int origin_x, int origin_y, bool apply);
     int layout_grid(std::vector<Chip>& chips, int width, int origin_x, int start_y, bool apply,
-                    size_t visible_count = std::numeric_limits<size_t>::max());
+                    size_t visible_count = std::numeric_limits<size_t>::max(),
+                    const std::vector<size_t>* display_order = nullptr);
     static int label_height();
     void draw_label(SDL_Renderer* r, const std::string& text, const SDL_Rect& rect) const;
 
@@ -59,13 +60,18 @@ private:
     void notify_changed();
     void reset_toggle_state();
     void update_toggle_labels();
+    void update_search_filter();
+    void clear_search();
+    void add_search_text_as_tag();
+    static bool event_targets_rect(const SDL_Event& e, const SDL_Rect& rect);
 
     SDL_Rect rect_{0,0,0,0};
     mutable bool layout_dirty_ = true;
 
     std::set<std::string> tags_;
     std::set<std::string> anti_tags_;
-    std::vector<std::string> recommended_;
+    std::vector<std::string> recommended_tags_;
+    std::vector<std::string> recommended_anti_;
 
     mutable SDL_Rect tags_label_rect_{0,0,0,0};
     mutable SDL_Rect anti_label_rect_{0,0,0,0};
@@ -76,11 +82,16 @@ private:
     std::vector<Chip> anti_chips_;
     std::vector<Chip> rec_tag_chips_;
     std::vector<Chip> rec_anti_chips_;
+    std::vector<size_t> filtered_tag_order_;
 
     bool show_all_tag_recs_ = false;
     bool show_all_anti_recs_ = false;
     std::unique_ptr<DMButton> show_more_tags_btn_;
     std::unique_ptr<DMButton> show_more_anti_btn_;
+    std::unique_ptr<DMTextBox> tag_search_box_;
+    std::unique_ptr<DMButton> add_tag_btn_;
+    std::string search_input_;
+    std::string search_query_;
 
     std::function<void(const std::vector<std::string>&,
                        const std::vector<std::string>&)> on_changed_;

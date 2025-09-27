@@ -216,7 +216,7 @@
   "map_radius": 8808.5,
   "rooms_data": {
     "bar": {
-      "edge_smoothness": 0,
+      "edge_smoothness": 101,
       "geometry": "Circle",
       "height_max": 2500,
       "height_min": 1072,
@@ -347,7 +347,7 @@
           "dx": -21,
           "dy": -294,
           "enforce_spacing": false,
-          "max_number": 136,
+          "max_number": 174,
           "min_number": 1,
           "origional_height": 3117,
           "origional_width": 2772,

@@ -15,6 +15,15 @@ constexpr int kDefaultRoomRangeMax = 64;
 constexpr int kDefaultCandidateRangeMax = 128;
 constexpr int kDefaultLayerRadiusStep = 512;
 
+inline int clamp_candidate_min(int value) {
+    return std::clamp(value, 0, kDefaultCandidateRangeMax);
+}
+
+inline int clamp_candidate_max(int min_value, int max_value) {
+    const int clamped_min = clamp_candidate_min(min_value);
+    return std::clamp(max_value, clamped_min, kDefaultCandidateRangeMax);
+}
+
 int next_layer_radius(const json& layers) {
     int max_radius = 0;
     bool has_layer = false;
@@ -233,6 +242,7 @@ bool MapLayersController::add_candidate(int layer_index, const std::string& room
     if (room_name.empty()) return false;
     json candidate = {
         {"name", room_name},
+        {"min_instances", 0},
         {"max_instances", 1},
         {"required_children", json::array()}
     };
@@ -263,7 +273,9 @@ bool MapLayersController::set_candidate_instance_count(int layer_index, int cand
     auto& rooms = (*layer_json)["rooms"];
     if (!rooms.is_array() || candidate_index < 0 || candidate_index >= static_cast<int>(rooms.size())) return false;
     auto& candidate = rooms[candidate_index];
-    candidate["max_instances"] = std::max(0, max_instances);
+    int current_min = clamp_candidate_min(candidate.value("min_instances", 0));
+    candidate["min_instances"] = current_min;
+    candidate["max_instances"] = clamp_candidate_max(current_min, max_instances);
     clamp_layer_counts(*layer_json);
     dirty_ = true;
     notify();
@@ -318,6 +330,7 @@ bool MapLayersController::add_candidate_child(int layer_index, int candidate_ind
     if (child_it == child_rooms.end()) {
         json child_candidate = {
             {"name", child_room},
+            {"min_instances", 0},
             {"max_instances", 1},
             {"required_children", json::array()}
         };
@@ -325,9 +338,14 @@ bool MapLayersController::add_candidate_child(int layer_index, int candidate_ind
         child_layer_changed = true;
     } else {
         json& entry = *child_it;
-        int max_inst = entry.value("max_instances", 0);
-        if (max_inst < 1) {
-            entry["max_instances"] = 1;
+        int current_min = clamp_candidate_min(entry.value("min_instances", 0));
+        int current_max = clamp_candidate_max(current_min, entry.value("max_instances", 1));
+        if (entry.value("min_instances", -1) != current_min) {
+            entry["min_instances"] = current_min;
+            child_layer_changed = true;
+        }
+        if (entry.value("max_instances", -1) != current_max) {
+            entry["max_instances"] = current_max;
             child_layer_changed = true;
         }
     }
@@ -401,13 +419,15 @@ void MapLayersController::ensure_layer_indices() {
         for (auto& candidate : rooms) {
             if (!candidate.is_object()) candidate = json::object();
             if (!candidate.contains("name")) candidate["name"] = "";
+            if (!candidate.contains("min_instances")) candidate["min_instances"] = 0;
             if (!candidate.contains("max_instances")) candidate["max_instances"] = 0;
             if (!candidate.contains("required_children") || !candidate["required_children"].is_array()) {
                 candidate["required_children"] = json::array();
             }
-            if (candidate.contains("min_instances")) candidate.erase("min_instances");
-            int max_inst = std::max(0, candidate.value("max_instances", 0));
-            candidate["max_instances"] = std::min(max_inst, kDefaultCandidateRangeMax);
+            int min_inst = clamp_candidate_min(candidate.value("min_instances", 0));
+            int max_inst = clamp_candidate_max(min_inst, candidate.value("max_instances", min_inst));
+            candidate["min_instances"] = min_inst;
+            candidate["max_instances"] = max_inst;
         }
     }
 }
@@ -444,18 +464,25 @@ void MapLayersController::clamp_layer_counts(json& layer) const {
     int max_rooms = std::max(0, layer.value("max_rooms", 0));
     layer["max_rooms"] = std::min(max_rooms, kDefaultRoomRangeMax);
 
+    int min_sum = 0;
     int max_sum = 0;
     const auto rooms_it = layer.find("rooms");
     if (rooms_it != layer.end() && rooms_it->is_array()) {
         for (auto& candidate : *rooms_it) {
             if (!candidate.is_object()) continue;
-            int max_inst = std::max(0, candidate.value("max_instances", 0));
-            candidate["max_instances"] = std::min(max_inst, kDefaultCandidateRangeMax);
-            max_sum += candidate["max_instances"].get<int>();
+            int min_inst = clamp_candidate_min(candidate.value("min_instances", 0));
+            int max_inst = clamp_candidate_max(min_inst, candidate.value("max_instances", min_inst));
+            candidate["min_instances"] = min_inst;
+            candidate["max_instances"] = max_inst;
+            min_sum += min_inst;
+            max_sum += max_inst;
         }
     }
-    if (max_sum > 0 && layer["max_rooms"].get<int>() > max_sum) {
-        layer["max_rooms"] = max_sum;
+    int clamped_total = layer["max_rooms"].get<int>();
+    clamped_total = std::max(clamped_total, min_sum);
+    if (max_sum > 0) {
+        clamped_total = std::min(clamped_total, max_sum);
     }
+    layer["max_rooms"] = clamped_total;
 }
 

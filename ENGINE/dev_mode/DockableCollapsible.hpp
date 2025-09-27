@@ -121,6 +121,8 @@ protected:
     bool floatable_ = true;
     bool close_button_enabled_ = false;
     bool dragging_ = false;
+    bool header_dragging_via_button_ = false;
+    bool header_btn_drag_moved_ = false;
     SDL_Point drag_offset_{0,0};
     mutable int scroll_ = 0;
     mutable int max_scroll_ = 0;

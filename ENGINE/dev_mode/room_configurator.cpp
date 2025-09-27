@@ -613,21 +613,6 @@ void RoomConfigurator::rebuild_rows() {
         rows.push_back({ room_inherit_cb_w_.get() });
     }
 
-    room_tags_label_ = std::make_unique<RoomConfigLabel>("Tags");
-    rows.push_back({ room_tags_label_.get() });
-
-    room_tags_editor_ = std::make_unique<TagEditorWidget>();
-    room_tags_editor_->set_tags(room_tags_, room_anti_tags_);
-    room_tags_editor_->set_on_changed([this](const std::vector<std::string>& tags,
-                                            const std::vector<std::string>& anti_tags) {
-        if (tags != room_tags_ || anti_tags != room_anti_tags_) {
-            room_tags_ = tags;
-            room_anti_tags_ = anti_tags;
-            tags_dirty_ = true;
-        }
-    });
-    rows.push_back({ room_tags_editor_.get() });
-
     spawn_groups_label_ = std::make_unique<RoomConfigLabel>("Spawn Groups");
     rows.push_back({ spawn_groups_label_.get() });
 
@@ -696,6 +681,21 @@ void RoomConfigurator::rebuild_rows() {
         });
         rows.push_back({ add_group_btn_w_.get() });
     }
+
+    room_tags_label_ = std::make_unique<RoomConfigLabel>("Tags");
+    rows.push_back({ room_tags_label_.get() });
+
+    room_tags_editor_ = std::make_unique<TagEditorWidget>();
+    room_tags_editor_->set_tags(room_tags_, room_anti_tags_);
+    room_tags_editor_->set_on_changed([this](const std::vector<std::string>& tags,
+                                            const std::vector<std::string>& anti_tags) {
+        if (tags != room_tags_ || anti_tags != room_anti_tags_) {
+            room_tags_ = tags;
+            room_anti_tags_ = anti_tags;
+            tags_dirty_ = true;
+        }
+    });
+    rows.push_back({ room_tags_editor_.get() });
 
     set_rows(rows);
 }

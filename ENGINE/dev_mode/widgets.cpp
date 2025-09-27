@@ -521,8 +521,26 @@ bool DMRangeSlider::handle_event(const SDL_Event& e) {
         if (dragging_max_) { set_max_value(value_for_x(p.x)); return true; }
     } else if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
         SDL_Point p{ e.button.x, e.button.y };
-        if (SDL_PointInRect(&p, &kmin)) { dragging_min_ = true; return true; }
-        if (SDL_PointInRect(&p, &kmax)) { dragging_max_ = true; return true; }
+        const bool min_hit = SDL_PointInRect(&p, &kmin);
+        const bool max_hit = SDL_PointInRect(&p, &kmax);
+        if (min_hit && max_hit) {
+            auto center = [](const SDL_Rect& r) {
+                return SDL_Point{ r.x + r.w / 2, r.y + r.h / 2 };
+            };
+            const SDL_Point min_center = center(kmin);
+            const SDL_Point max_center = center(kmax);
+            const auto sqr = [](int v) { return v * v; };
+            const int min_dist = sqr(p.x - min_center.x) + sqr(p.y - min_center.y);
+            const int max_dist = sqr(p.x - max_center.x) + sqr(p.y - max_center.y);
+            if (min_dist <= max_dist) {
+                dragging_min_ = true;
+            } else {
+                dragging_max_ = true;
+            }
+            return true;
+        }
+        if (min_hit) { dragging_min_ = true; return true; }
+        if (max_hit) { dragging_max_ = true; return true; }
         SDL_Rect min_label{ content_rect_.x, content_rect_.y, kRangeLabelWidth, content_rect_.h };
         SDL_Rect max_label{ content_rect_.x + content_rect_.w - kRangeLabelWidth, content_rect_.y, kRangeLabelWidth, content_rect_.h };
         if (e.button.clicks >= 2) {

@@ -119,7 +119,15 @@
             "speed_factor": 1
         }
     },
-    "anti_tags": [],
+    "anti_tags": [
+        "book",
+        "center",
+        "impassable",
+        "nature",
+        "plant",
+        "still",
+        "wood"
+    ],
     "areas": [],
     "asset_name": "candle",
     "asset_type": "Object",
@@ -183,6 +191,12 @@
         "scale_percentage": 7.0
     },
     "tags": [
+        "default",
+        "light",
+        "man-made",
+        "orange",
+        "passable",
+        "small",
         "yellow"
     ],
     "z_threshold": -4

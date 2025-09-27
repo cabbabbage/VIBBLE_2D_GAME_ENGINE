@@ -153,16 +153,21 @@ bool DockableCollapsible::handle_event(const SDL_Event& e) {
         }
     }
 
-    // Start dragging from the header grip area before other header interactions
-    if (show_header_) {
-        if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
-            SDL_Point p{e.button.x, e.button.y};
-            if (SDL_PointInRect(&p, &handle_rect_)) {
-                dragging_ = true;
-                drag_offset_.x = p.x - rect_.x;
-                drag_offset_.y = p.y - rect_.y;
-                return true;
+    // Start dragging from the header button or grip area before other header interactions
+    if (show_header_ && e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
+        SDL_Point p{e.button.x, e.button.y};
+        const bool on_header_button = header_btn_ && SDL_PointInRect(&p, &header_rect_);
+        const bool on_handle = SDL_PointInRect(&p, &handle_rect_);
+        if (floatable_ && (on_header_button || on_handle)) {
+            dragging_ = true;
+            drag_offset_.x = p.x - rect_.x;
+            drag_offset_.y = p.y - rect_.y;
+            header_dragging_via_button_ = on_header_button;
+            header_btn_drag_moved_ = false;
+            if (on_header_button && header_btn_) {
+                header_btn_->handle_event(e);
             }
+            return true;
         }
     }
 
@@ -170,10 +175,26 @@ bool DockableCollapsible::handle_event(const SDL_Event& e) {
         if (e.type == SDL_MOUSEMOTION) {
             rect_.x = e.motion.x - drag_offset_.x;
             rect_.y = e.motion.y - drag_offset_.y;
+            if (header_dragging_via_button_) {
+                header_btn_drag_moved_ = true;
+            }
             return true;
         }
         if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
+            bool dragged_via_button = header_dragging_via_button_;
+            bool drag_moved = header_btn_drag_moved_;
             dragging_ = false;
+            header_dragging_via_button_ = false;
+            header_btn_drag_moved_ = false;
+            if (dragged_via_button && header_btn_) {
+                header_btn_->handle_event(e);
+                SDL_Point p{e.button.x, e.button.y};
+                if (!drag_moved && SDL_PointInRect(&p, &header_rect_)) {
+                    expanded_ = !expanded_;
+                    update_header_button();
+                }
+                return true;
+            }
             return true;
         }
     }
@@ -216,18 +237,6 @@ bool DockableCollapsible::handle_event(const SDL_Event& e) {
                 if (w && w->handle_event(e)) {
                     return true;
                 }
-            }
-        }
-    }
-
-    if (floatable_ && show_header_) {
-        if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
-            SDL_Point p{e.button.x, e.button.y};
-            if (SDL_PointInRect(&p, &handle_rect_)) {
-                dragging_ = true;
-                drag_offset_.x = p.x - rect_.x;
-                drag_offset_.y = p.y - rect_.y;
-                return true;
             }
         }
     }

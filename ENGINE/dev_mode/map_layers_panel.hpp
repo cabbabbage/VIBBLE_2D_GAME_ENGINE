@@ -82,7 +82,8 @@ private:
     std::vector<std::string> available_rooms_for_layer(int layer_index) const; // filtered per constraints
     void handle_layer_count_changed(int index, int max_rooms);
     void handle_layer_name_changed(int index, const std::string& name);
-    void handle_candidate_count_changed(int layer_index, int candidate_index, int max_instances);
+    void handle_candidate_min_changed(int layer_index, int candidate_index, int min_instances);
+    void handle_candidate_max_changed(int layer_index, int candidate_index, int max_instances);
     void handle_candidate_removed(int layer_index, int candidate_index);
     void handle_candidate_child_added(int layer_index, int candidate_index, const std::string& child);
     void handle_candidate_child_removed(int layer_index, int candidate_index, const std::string& child);
