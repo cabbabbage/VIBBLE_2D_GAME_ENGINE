@@ -63,6 +63,8 @@ private:
     SDL_Rect applied_bounds_{-1,-1,0,0};
     SDL_Point preferred_position_{32, 32};
     bool has_custom_position_ = false;
+    SDL_Point floating_position_{32, 32};
+    bool docked_mode_ = false;
     std::vector<std::string> room_geom_options_;
     Room* room_ = nullptr;
     nlohmann::json loaded_json_;

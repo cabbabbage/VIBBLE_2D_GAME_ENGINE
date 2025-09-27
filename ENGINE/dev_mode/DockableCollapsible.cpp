@@ -126,6 +126,18 @@ void DockableCollapsible::set_rect(const SDL_Rect& r) {
     layout();
 }
 
+void DockableCollapsible::set_floatable(bool floatable) {
+    if (floatable_ == floatable) {
+        return;
+    }
+    floatable_ = floatable;
+    dragging_ = false;
+    header_dragging_via_button_ = false;
+    header_btn_drag_moved_ = false;
+    pointer_block_frames_ = 0;
+    layout();
+}
+
 void DockableCollapsible::set_work_area(const SDL_Rect& area) {
     work_area_ = area;
     if (work_area_.w > 0) last_screen_w_ = work_area_.w;

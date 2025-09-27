@@ -133,6 +133,7 @@
     "asset_type": "Object",
     "blend_mode": "SDL_BLENDMODE_BLEND",
     "can_invert": true,
+    "child_assets": [],
     "duplicatable": false,
     "duplication_interval_max": 60,
     "duplication_interval_min": 30,

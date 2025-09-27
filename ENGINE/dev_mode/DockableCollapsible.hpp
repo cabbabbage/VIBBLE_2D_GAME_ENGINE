@@ -63,6 +63,8 @@ public:
     void set_position(int x, int y);              // used when floating
     void set_rect(const SDL_Rect& r);             // used when docked
     SDL_Point position() const { return SDL_Point{rect_.x, rect_.y}; }
+    void set_floatable(bool floatable);
+    bool is_floatable() const { return floatable_; }
     void set_work_area(const SDL_Rect& area); // e.g., full screen or a sub-rect
 
     // Layout configuration
