@@ -19,6 +19,8 @@ public:
     SearchAssets();
     void set_position(int x, int y);
     void set_screen_dimensions(int width, int height);
+    void set_floating_stack_key(std::string key);
+    void set_anchor_position(int x, int y);
     void open(Callback cb);
     void close();
     bool visible() const;
@@ -31,6 +33,8 @@ private:
     void load_assets();
     void filter_assets();
     static std::string to_lower(std::string s);
+    void apply_position(int x, int y);
+    void ensure_visible_position();
     std::unique_ptr<DockableCollapsible> panel_;
     std::unique_ptr<DMTextBox> query_;
     std::unique_ptr<TextBoxWidget> query_widget_;
@@ -42,4 +46,9 @@ private:
     std::string last_query_;
     int screen_w_ = 1920;
     int screen_h_ = 1080;
+    SDL_Point last_known_position_{64, 64};
+    SDL_Point pending_position_{64, 64};
+    bool has_pending_position_ = false;
+    bool has_custom_position_ = false;
+    std::string floating_stack_key_;
 };

@@ -1,5 +1,6 @@
 #include "search_assets.hpp"
 #include "DockableCollapsible.hpp"
+#include "FloatingDockableManager.hpp"
 #include "widgets.hpp"
 #include "dm_styles.hpp"
 #include "utils/input.hpp"
@@ -8,22 +9,67 @@
 #include <fstream>
 #include <set>
 #include <cctype>
+#include <algorithm>
 
 SearchAssets::SearchAssets() {
     panel_ = std::make_unique<DockableCollapsible>("Search Assets", true, 64, 64);
     panel_->set_expanded(true);
     panel_->set_visible(false);
     panel_->set_work_area(SDL_Rect{0, 0, screen_w_, screen_h_});
+    panel_->set_close_button_enabled(true);
+    panel_->set_scroll_enabled(true);
+    panel_->reset_scroll();
     query_ = std::make_unique<DMTextBox>("Search", "");
     query_widget_ = std::make_unique<TextBoxWidget>(query_.get());
     panel_->set_rows({ { query_widget_.get() } });
     panel_->set_cell_width(260);
+    last_known_position_ = panel_->position();
+    pending_position_ = last_known_position_;
+    has_pending_position_ = true;
+}
+
+void SearchAssets::apply_position(int x, int y) {
+    if (!panel_) {
+        panel_ = std::make_unique<DockableCollapsible>("Search Assets", true, x, y);
+        panel_->set_expanded(true);
+        panel_->set_visible(false);
+        panel_->set_work_area(SDL_Rect{0, 0, screen_w_, screen_h_});
+        panel_->set_close_button_enabled(true);
+        panel_->set_scroll_enabled(true);
+        panel_->reset_scroll();
+        panel_->set_cell_width(260);
+        if (!query_) {
+            query_ = std::make_unique<DMTextBox>("Search", "");
+            query_widget_ = std::make_unique<TextBoxWidget>(query_.get());
+            panel_->set_rows({ { query_widget_.get() } });
+        }
+    }
+    panel_->set_work_area(SDL_Rect{0, 0, screen_w_, screen_h_});
+    panel_->set_position(x, y);
 }
 
 void SearchAssets::set_position(int x, int y) {
-    if (!panel_) panel_ = std::make_unique<DockableCollapsible>("Search Assets", true, x, y);
-    panel_->set_work_area(SDL_Rect{0, 0, screen_w_, screen_h_});
-    panel_->set_position(x, y);
+    pending_position_ = SDL_Point{x, y};
+    has_pending_position_ = true;
+    has_custom_position_ = false;
+    apply_position(x, y);
+    ensure_visible_position();
+    if (panel_) {
+        last_known_position_ = panel_->position();
+    }
+}
+
+void SearchAssets::set_anchor_position(int x, int y) {
+    pending_position_ = SDL_Point{x, y};
+    has_pending_position_ = true;
+    if (has_custom_position_) {
+        return;
+    }
+    apply_position(x, y);
+    ensure_visible_position();
+    if (panel_) {
+        last_known_position_ = panel_->position();
+    }
 }
 
 void SearchAssets::set_screen_dimensions(int width, int height) {
@@ -37,7 +83,17 @@ void SearchAssets::set_screen_dimensions(int width, int height) {
         panel_->set_work_area(SDL_Rect{0, 0, screen_w_, screen_h_});
         SDL_Point pos = panel_->position();
         panel_->set_position(pos.x, pos.y);
+        ensure_visible_position();
+        last_known_position_ = panel_->position();
+        if (!has_custom_position_) {
+            pending_position_ = last_known_position_;
+            has_pending_position_ = true;
+        }
     }
+}
+
+void SearchAssets::set_floating_stack_key(std::string key) {
+    floating_stack_key_ = std::move(key);
 }
 
 std::string SearchAssets::to_lower(std::string s) {
@@ -48,16 +104,45 @@ std::string SearchAssets::to_lower(std::string s) {
 void SearchAssets::open(Callback cb) {
     cb_ = std::move(cb);
     if (all_.empty()) load_assets();
-    if (!panel_) panel_ = std::make_unique<DockableCollapsible>("Search Assets", true, 64, 64);
-    panel_->set_work_area(SDL_Rect{0, 0, screen_w_, screen_h_});
+    SDL_Point target = last_known_position_;
+    if (has_custom_position_) {
+        target = last_known_position_;
+    } else if (has_pending_position_) {
+        target = pending_position_;
+    }
+    apply_position(target.x, target.y);
+    ensure_visible_position();
+    if (!floating_stack_key_.empty()) {
+        FloatingDockableManager::instance().open_floating(
+            "Search Assets",
+            panel_.get(),
+            [this]() { this->close(); },
+            floating_stack_key_);
+    }
     panel_->set_visible(true);
     panel_->set_expanded(true);
+    panel_->reset_scroll();
+    Input dummy;
+    panel_->update(dummy, screen_w_, screen_h_);
+    ensure_visible_position();
+    last_known_position_ = panel_->position();
+    if (!has_custom_position_) {
+        pending_position_ = last_known_position_;
+        has_pending_position_ = true;
+    }
     last_query_.clear();
     filter_assets();
 }
 
 void SearchAssets::close() {
-    if (panel_) panel_->set_visible(false);
+    if (panel_) {
+        last_known_position_ = panel_->position();
+        if (!has_custom_position_) {
+            pending_position_ = last_known_position_;
+            has_pending_position_ = true;
+        }
+        panel_->set_visible(false);
+    }
     cb_ = nullptr;
 }
 
@@ -128,14 +213,28 @@ void SearchAssets::filter_assets() {
 
 bool SearchAssets::handle_event(const SDL_Event& e) {
     if (!panel_ || !panel_->is_visible()) return false;
+    SDL_Point before = panel_->position();
     bool used = panel_->handle_event(e);
+    SDL_Point after = panel_->position();
+    if (after.x != before.x || after.y != before.y) {
+        has_custom_position_ = true;
+        last_known_position_ = after;
+        ensure_visible_position();
+    }
     std::string q = query_ ? query_->value() : "";
     if (q != last_query_) { last_query_ = q; filter_assets(); }
     return used;
 }
 
 void SearchAssets::update(const Input& input) {
-    if (panel_ && panel_->is_visible()) panel_->update(input, screen_w_, screen_h_);
+    if (panel_ && panel_->is_visible()) {
+        panel_->update(input, screen_w_, screen_h_);
+        last_known_position_ = panel_->position();
+        if (!has_custom_position_) {
+            pending_position_ = last_known_position_;
+            has_pending_position_ = true;
+        }
+    }
 }
 
 void SearchAssets::render(SDL_Renderer* r) const {
@@ -145,4 +244,53 @@ void SearchAssets::render(SDL_Renderer* r) const {
 bool SearchAssets::is_point_inside(int x, int y) const {
     if (!panel_ || !panel_->is_visible()) return false;
     return panel_->is_point_inside(x, y);
+}
+
+void SearchAssets::ensure_visible_position() {
+    if (!panel_) {
+        return;
+    }
+    if (screen_w_ <= 0 && screen_h_ <= 0) {
+        return;
+    }
+    SDL_Rect rect = panel_->rect();
+    if ((rect.w <= 0 || rect.h <= 0) && (screen_w_ > 0 || screen_h_ > 0)) {
+        Input dummy;
+        panel_->update(dummy, screen_w_, screen_h_);
+        rect = panel_->rect();
+    }
+    const int margin = 12;
+    bool adjusted = false;
+    int x = rect.x;
+    int y = rect.y;
+    if (screen_w_ > 0) {
+        int max_x = std::max(margin, screen_w_ - rect.w - margin);
+        if (rect.w >= screen_w_ - margin * 2) {
+            max_x = margin;
+        }
+        int clamped = std::clamp(x, margin, max_x);
+        if (clamped != x) {
+            x = clamped;
+            adjusted = true;
+        }
+    }
+    if (screen_h_ > 0) {
+        int max_y = std::max(margin, screen_h_ - rect.h - margin);
+        if (rect.h >= screen_h_ - margin * 2) {
+            max_y = margin;
+        }
+        int clamped = std::clamp(y, margin, max_y);
+        if (clamped != y) {
+            y = clamped;
+            adjusted = true;
+        }
+    }
+    if (adjusted) {
+        panel_->set_position(x, y);
+        last_known_position_ = panel_->position();
+        if (!has_custom_position_) {
+            pending_position_ = last_known_position_;
+            has_pending_position_ = true;
+        }
+    }
 }

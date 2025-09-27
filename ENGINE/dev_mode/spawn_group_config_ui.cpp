@@ -304,14 +304,15 @@ std::string format_exact_room_summary(const nlohmann::json& entry) {
 SpawnGroupConfigUI::SpawnGroupConfigUI() {
     spawn_methods_ = {"Random", "Center", "Perimeter", "Exact", "Percent", "Entrance", "Exit"};
     panel_title_ = "Spawn Group";
-    panel_ = std::make_unique<DockableCollapsible>(panel_title_, true, 0, 0);
-    panel_->set_expanded(true);
-    panel_->set_visible(false);
-    panel_->set_available_height_override(kSpawnConfigMaxHeight);
-    panel_->set_work_area(SDL_Rect{0, 0, screen_w_, screen_h_});
-    last_known_position_ = panel_->position();
-    pending_anchor_position_ = last_known_position_;
-    has_pending_anchor_position_ = true;
+    ensure_panel();
+    if (panel_) {
+        panel_->set_expanded(true);
+        panel_->set_visible(false);
+        panel_->reset_scroll();
+        last_known_position_ = panel_->position();
+        pending_anchor_position_ = last_known_position_;
+        has_pending_anchor_position_ = true;
+    }
 
     ownership_text_ = "Room: Unknown";
     ownership_color_ = DMStyles::Label().color;
@@ -324,6 +325,8 @@ SpawnGroupConfigUI::SpawnGroupConfigUI() {
     add_button_w_ = std::make_unique<ButtonWidget>(add_button_.get(), [this]() {
         ensure_search();
         if (!search_) return;
+        ensure_panel();
+        ensure_visible_position();
         if (panel_) {
             const SDL_Rect& r = panel_->rect();
             int desired_x = r.x + r.w + 16;
@@ -356,7 +359,84 @@ bool SpawnGroupConfigUI::method_forces_single_quantity(const std::string& method
 void SpawnGroupConfigUI::ensure_search() {
     if (!search_) {
         search_ = std::make_unique<SearchAssets>();
-        search_->set_screen_dimensions(screen_w_, screen_h_);
+    }
+    search_->set_screen_dimensions(screen_w_, screen_h_);
+    search_->set_floating_stack_key(floating_stack_key_);
+    if (panel_) {
+        const SDL_Rect& r = panel_->rect();
+        if (r.w > 0 || r.h > 0) {
+            search_->set_anchor_position(r.x + r.w + 16, r.y);
+        }
+    }
+}
+
+void SpawnGroupConfigUI::ensure_panel() {
+    if (!panel_) {
+        SDL_Point initial = has_custom_position_ ? last_known_position_ : pending_anchor_position_;
+        panel_ = std::make_unique<DockableCollapsible>(
+            panel_title_.empty() ? "Spawn Group" : panel_title_,
+            true,
+            initial.x,
+            initial.y);
+        panel_->set_expanded(true);
+        panel_->set_visible(false);
+    }
+    panel_->set_available_height_override(kSpawnConfigMaxHeight);
+    panel_->set_work_area(SDL_Rect{0, 0, screen_w_, screen_h_});
+    panel_->set_show_header(true);
+    panel_->set_close_button_enabled(true);
+    panel_->set_scroll_enabled(true);
+    if (!panel_title_.empty()) {
+        panel_->set_title(panel_title_);
+    }
+}
+
+void SpawnGroupConfigUI::ensure_visible_position() {
+    if (!panel_) {
+        return;
+    }
+    if (screen_w_ <= 0 && screen_h_ <= 0) {
+        return;
+    }
+    SDL_Rect rect = panel_->rect();
+    if ((rect.w <= 0 || rect.h <= 0) && (screen_w_ > 0 || screen_h_ > 0)) {
+        Input dummy;
+        panel_->update(dummy, screen_w_, screen_h_);
+        rect = panel_->rect();
+    }
+    const int margin = 12;
+    bool adjusted = false;
+    int x = rect.x;
+    int y = rect.y;
+    if (screen_w_ > 0) {
+        int max_x = std::max(margin, screen_w_ - rect.w - margin);
+        if (rect.w >= screen_w_ - margin * 2) {
+            max_x = margin;
+        }
+        int clamped = std::clamp(x, margin, max_x);
+        if (clamped != x) {
+            x = clamped;
+            adjusted = true;
+        }
+    }
+    if (screen_h_ > 0) {
+        int max_y = std::max(margin, screen_h_ - rect.h - margin);
+        if (rect.h >= screen_h_ - margin * 2) {
+            max_y = margin;
+        }
+        int clamped = std::clamp(y, margin, max_y);
+        if (clamped != y) {
+            y = clamped;
+            adjusted = true;
+        }
+    }
+    if (adjusted) {
+        panel_->set_position(x, y);
+        last_known_position_ = panel_->position();
+        if (!has_custom_position_) {
+            pending_anchor_position_ = last_known_position_;
+            has_pending_anchor_position_ = true;
+        }
     }
 }
 
@@ -367,10 +447,12 @@ void SpawnGroupConfigUI::set_screen_dimensions(int width, int height) {
     if (height > 0) {
         screen_h_ = height;
     }
+    ensure_panel();
     if (panel_) {
         panel_->set_work_area(SDL_Rect{0, 0, screen_w_, screen_h_});
         SDL_Point pos = panel_->position();
         panel_->set_position(pos.x, pos.y);
+        ensure_visible_position();
         last_known_position_ = panel_->position();
         if (!has_custom_position_) {
             pending_anchor_position_ = last_known_position_;
@@ -379,19 +461,26 @@ void SpawnGroupConfigUI::set_screen_dimensions(int width, int height) {
     }
     if (search_) {
         search_->set_screen_dimensions(screen_w_, screen_h_);
+        search_->set_floating_stack_key(floating_stack_key_);
     }
 }
 
 void SpawnGroupConfigUI::set_position(int x, int y) {
     pending_anchor_position_ = SDL_Point{x, y};
     has_pending_anchor_position_ = true;
+    ensure_panel();
     if (panel_ && !has_custom_position_) {
         panel_->set_position(x, y);
+        ensure_visible_position();
         last_known_position_ = panel_->position();
     }
-    if (search_ && search_->visible()) {
+    if (search_) {
         const SDL_Rect& r = panel_ ? panel_->rect() : SDL_Rect{x, y, 0, 0};
-        search_->set_position(r.x + r.w + 16, r.y);
+        if (search_->visible()) {
+            search_->set_position(r.x + r.w + 16, r.y);
+        } else {
+            search_->set_anchor_position(r.x + r.w + 16, r.y);
+        }
     }
 }
 
@@ -436,6 +525,7 @@ void SpawnGroupConfigUI::handle_method_change() {
 void SpawnGroupConfigUI::load(const nlohmann::json& data) {
     entry_ = data.is_object() ? data : nlohmann::json::object();
     spawn_id_ = entry_.value("spawn_id", std::string{});
+    ensure_panel();
 
     std::string method = entry_.value("position", spawn_methods_.front());
     if (method == "Exact Position") {
@@ -532,6 +622,7 @@ void SpawnGroupConfigUI::load(const nlohmann::json& data) {
 }
 
 void SpawnGroupConfigUI::open_panel() {
+    ensure_panel();
     if (!panel_) return;
     const bool was_visible = panel_->is_visible();
     if (!was_visible) {
@@ -541,6 +632,7 @@ void SpawnGroupConfigUI::open_panel() {
             panel_->set_position(pending_anchor_position_.x, pending_anchor_position_.y);
             last_known_position_ = panel_->position();
         }
+        ensure_visible_position();
     }
     std::string stack_name = panel_title_;
     if (stack_name.empty()) {
@@ -563,10 +655,14 @@ void SpawnGroupConfigUI::open_panel() {
     }
     Input dummy;
     panel_->update(dummy, screen_w_, screen_h_);
+    ensure_visible_position();
     last_known_position_ = panel_->position();
     if (!has_custom_position_) {
         pending_anchor_position_ = last_known_position_;
         has_pending_anchor_position_ = true;
+    }
+    if (search_) {
+        search_->set_floating_stack_key(floating_stack_key_);
     }
 }
 
@@ -881,6 +977,9 @@ void SpawnGroupConfigUI::clear_on_close_callbacks() {
 
 void SpawnGroupConfigUI::set_floating_stack_key(std::string key) {
     floating_stack_key_ = std::move(key);
+    if (search_) {
+        search_->set_floating_stack_key(floating_stack_key_);
+    }
 }
 
 void SpawnGroupConfigUI::remove_candidate(size_t index) {
@@ -1013,7 +1112,7 @@ void SpawnGroupConfigUI::update(const Input& input) {
         search_->update(input);
         if (panel_) {
             const SDL_Rect& r = panel_->rect();
-            search_->set_position(r.x + r.w + 16, r.y);
+            search_->set_anchor_position(r.x + r.w + 16, r.y);
         }
     }
 }

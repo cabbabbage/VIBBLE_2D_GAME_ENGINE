@@ -91,6 +91,8 @@ private:
     void remove_candidate(size_t index);
     bool method_forces_single_quantity(const std::string& method) const;
     void ensure_search();
+    void ensure_panel();
+    void ensure_visible_position();
     void handle_method_change();
 
     std::unique_ptr<DockableCollapsible> panel_;

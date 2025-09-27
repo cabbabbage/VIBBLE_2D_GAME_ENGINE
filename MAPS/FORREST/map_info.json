@@ -444,7 +444,7 @@
           "dx": -332,
           "dy": -167,
           "enforce_spacing": false,
-          "max_number": 34,
+          "max_number": 78,
           "min_number": 2,
           "origional_height": 3180,
           "origional_width": 3180,
@@ -474,46 +474,6 @@
           "origional_width": 1248,
           "position": "Exact",
           "spawn_id": "spn-6d19915360f2"
-        },
-        {
-          "candidates": [
-            {
-              "chance": 0,
-              "name": "null"
-            },
-            {
-              "chance": 100,
-              "name": "candle"
-            }
-          ],
-          "chance_denominator": 100,
-          "check_overlap": false,
-          "display_name": "candle",
-          "dx": 103,
-          "dy": -120,
-          "enforce_spacing": false,
-          "max_number": 1,
-          "min_number": 1,
-          "origional_height": 3612,
-          "origional_width": 3612,
-          "position": "Exact",
-          "spawn_id": "spn-43e9c88b6824"
-        },
-        {
-          "candidates": [
-            {
-              "chance": 0,
-              "name": "null"
-            }
-          ],
-          "chance_denominator": 0,
-          "check_overlap": false,
-          "display_name": "New Spawn",
-          "enforce_spacing": false,
-          "max_number": 1,
-          "min_number": 1,
-          "position": "Exact",
-          "spawn_id": "spn-28062b711301"
         }
       ],
       "width_max": 3612,
