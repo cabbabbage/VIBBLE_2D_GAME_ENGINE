@@ -969,6 +969,13 @@ bool SpawnGroupConfigUI::is_point_inside(int x, int y) const {
     return false;
 }
 
+SDL_Rect SpawnGroupConfigUI::rect() const {
+    if (panel_) {
+        return panel_->rect();
+    }
+    return SDL_Rect{0, 0, 0, 0};
+}
+
 SpawnGroupConfigUI::ChangeSummary SpawnGroupConfigUI::consume_change_summary() {
     ChangeSummary result = pending_summary_;
     pending_summary_ = {};

@@ -5,7 +5,7 @@
     "height_at_zoom1": 547.0,
     "parallax_strength": 32.25,
     "realism_enabled": true,
-    "render_distance": 190.0,
+    "render_distance": 1210.0,
     "tripod_distance_y": -855.0
   },
   "map_assets_data": {
@@ -216,8 +216,8 @@
     "min_opacity": 23,
     "mult": 0.32,
     "orbit_radius": 782,
-    "radius": 6667,
-    "update_interval": 4
+    "radius": 747,
+    "update_interval": 53
   },
   "map_name": "FORREST",
   "map_radius": 8808.5,

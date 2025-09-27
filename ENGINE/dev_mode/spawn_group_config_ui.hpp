@@ -49,6 +49,7 @@ public:
     void render(SDL_Renderer* r) const;
     nlohmann::json to_json() const;
     bool is_point_inside(int x, int y) const;
+    SDL_Rect rect() const;
     ChangeSummary consume_change_summary();
 
     void set_ownership_label(const std::string& label, SDL_Color color);

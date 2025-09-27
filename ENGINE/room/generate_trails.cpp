@@ -351,9 +351,11 @@ void GenerateTrails::circular_connection(std::vector<std::unique_ptr<Room>>& tra
 		lineage_set.insert(r);
 		if (r->layer == 0) break;
 	}
-	Room* current = outermost;
-	int fail_counter = 0;
-	while (!lineage_set.count(current) && fail_counter < 10) {
+        Room* current = outermost;
+        int fail_counter = 0;
+        bool first_iteration = true;
+        while ((first_iteration || !lineage_set.count(current)) && fail_counter < 10) {
+                first_iteration = false;
 		std::vector<Room*> candidates;
 		auto add_candidate = [&](Room* r) {
 			if (!r || r->layer <= 1) return;

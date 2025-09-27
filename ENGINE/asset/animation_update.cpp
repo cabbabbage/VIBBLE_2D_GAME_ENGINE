@@ -15,6 +15,7 @@
 #include <random>
 #include <string>
 #include <iostream>
+#include <unordered_map>
 
 namespace {
 inline void normalize_minmax(int& mn, int& mx) {
@@ -39,7 +40,20 @@ inline double angle_from_or_random(int vx, int vy, std::mt19937& rng) {
     return std::atan2(static_cast<double>(vy), static_cast<double>(vx));
 }
 
-using ManualState = AnimationUpdate::ManualState;
+struct ManualState {
+    int manual_dx = 0;
+    int manual_dy = 0;
+    int last_dir_x = 0;
+    int last_dir_y = 1;
+    std::string last_anim = "default";
+    bool last_was_moving = false;
+    bool active = false;
+};
+
+ManualState& manual_state(AnimationUpdate* updater) {
+    static std::unordered_map<AnimationUpdate*, ManualState> states;
+    return states[updater];
+}
 }
 
 AnimationUpdate::AnimationUpdate(Asset* self, ActiveAssetsManager& aam)
@@ -136,7 +150,6 @@ SDL_Point AnimationUpdate::choose_balanced_target(SDL_Point desired, const Asset
             for (Asset* n : neighbors) {
                 if (!n || n == self_ || !n->info) continue;
                 if (final_target && n == final_target) continue;
-                if (n->info->type == asset_types::texture) continue;
                 if (n->info->passable) continue;
                 const double rvx = static_cast<double>(n->pos.x - sx);
                 const double rvy = static_cast<double>(n->pos.y - sy);
@@ -171,7 +184,6 @@ bool AnimationUpdate::point_in_impassable(SDL_Point pt, const Asset* ignored) co
     const auto& active = aam_.getActive();
     for (Asset* a : active) {
         if (!a || a == self_ || a == ignored || !a->info) continue;
-        if (a->info->type == asset_types::texture) continue;
         if (a->info->passable) continue; // Only consider impassable-tagged assets
         const double dx = static_cast<double>(a->pos.x - pt.x);
         const double dy = static_cast<double>(a->pos.y - pt.y);
@@ -692,7 +704,7 @@ void AnimationUpdate::move(int x, int y) {
     dx_ = x;
     dy_ = y;
     override_movement = true;
-    ManualState& manual = manual_state_;
+    ManualState& manual = manual_state(this);
     manual.active = true;
     manual.manual_dx = x;
     manual.manual_dy = y;
@@ -777,7 +789,7 @@ void AnimationUpdate::update() {
             }
             return;
         }
-        ManualState& manual = manual_state_;
+        ManualState& manual = manual_state(this);
         if (manual.active) {
             const int mdx = manual.manual_dx;
             const int mdy = manual.manual_dy;

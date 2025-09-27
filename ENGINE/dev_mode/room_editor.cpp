@@ -88,6 +88,7 @@ void RoomEditor::set_room_config_visible(bool visible) {
     }
     if (visible) {
         if (spawn_groups_cfg_ui_) {
+            clear_active_spawn_group_target();
             spawn_groups_cfg_ui_->close_all();
             spawn_groups_cfg_ui_->close();
         }
@@ -105,6 +106,10 @@ void RoomEditor::set_shared_fullscreen_panel(FullScreenCollapsible* panel) {
 
 void RoomEditor::set_current_room(Room* room) {
     const bool room_changed = (room != current_room_);
+
+    if (room != current_room_) {
+        clear_active_spawn_group_target();
+    }
 
     current_room_ = room;
     if (current_room_) {
@@ -157,7 +162,11 @@ void RoomEditor::set_enabled(bool enabled) {
         cam.clear_focus_override();
         if (library_ui_) library_ui_->close();
         if (info_ui_) info_ui_->close();
-        if (spawn_groups_cfg_ui_) spawn_groups_cfg_ui_->close_all();
+        if (spawn_groups_cfg_ui_) {
+            clear_active_spawn_group_target();
+            spawn_groups_cfg_ui_->close_all();
+            spawn_groups_cfg_ui_->close();
+        }
         if (area_editor_) area_editor_->cancel();
         clear_selection();
         reset_click_state();
@@ -267,6 +276,8 @@ void RoomEditor::update_ui(const Input& input) {
         update_spawn_groups_config_anchor();
         spawn_groups_cfg_ui_->update(input, screen_w_, screen_h_);
     }
+
+    process_pending_spawn_group_open();
 
     update_area_editor_focus();
 }
@@ -489,6 +500,7 @@ void RoomEditor::open_asset_info_editor(const std::shared_ptr<AssetInfo>& info) 
     if (!info) return;
     if (library_ui_) library_ui_->close();
     if (spawn_groups_cfg_ui_) {
+        clear_active_spawn_group_target();
         spawn_groups_cfg_ui_->close_all();
         spawn_groups_cfg_ui_->close();
     }
@@ -1608,7 +1620,10 @@ void RoomEditor::refresh_spawn_groups_config_ui() {
     std::optional<SpawnGroupsConfig::OpenSpawnGroupState> reopen_state;
     if (spawn_groups_cfg_ui_) {
         reopen_state = spawn_groups_cfg_ui_->capture_open_spawn_group();
+        const bool previous = suppress_spawn_group_close_clear_;
+        suppress_spawn_group_close_clear_ = true;
         spawn_groups_cfg_ui_->close_all();
+        suppress_spawn_group_close_clear_ = previous;
     }
     if (sanitize_perimeter_spawn_groups(arr) && current_room_) {
         current_room_->save_assets_json();
@@ -1666,6 +1681,10 @@ void RoomEditor::refresh_spawn_groups_config_ui() {
             label = "Map-wide";
         }
         ui.set_ownership_label(label, color);
+        const std::string callback_id = spawn_id;
+        ui.add_on_close_callback([this, callback_id]() {
+            this->handle_spawn_group_panel_closed(callback_id);
+        });
     };
 
     spawn_groups_cfg_ui_->load(arr, std::move(on_change), std::move(on_entry), std::move(configure_entry));
@@ -1693,6 +1712,24 @@ SDL_Point RoomEditor::spawn_groups_anchor_point() const {
     int anchor_x = reference.x + reference.w + 16;
     int anchor_y = reference.y;
     return SDL_Point{anchor_x, anchor_y};
+}
+
+void RoomEditor::handle_spawn_group_panel_closed(const std::string& spawn_id) {
+    if (suppress_spawn_group_close_clear_) {
+        return;
+    }
+    if (!active_spawn_group_id_) {
+        return;
+    }
+    if (!spawn_id.empty() && spawn_id != *active_spawn_group_id_) {
+        return;
+    }
+    clear_active_spawn_group_target();
+}
+
+void RoomEditor::clear_active_spawn_group_target() {
+    active_spawn_group_id_.reset();
+    pending_spawn_group_open_.reset();
 }
 
 void RoomEditor::sanitize_perimeter_spawn_groups() {
@@ -1849,6 +1886,9 @@ void RoomEditor::delete_spawn_group_internal(const std::string& spawn_id) {
     if (current_room_) {
         current_room_->save_assets_json();
     }
+    if (active_spawn_group_id_ && *active_spawn_group_id_ == spawn_id) {
+        clear_active_spawn_group_target();
+    }
     rebuild_room_spawn_id_cache();
     refresh_spawn_groups_config_ui();
     reopen_room_configurator();
@@ -1901,8 +1941,77 @@ void RoomEditor::open_spawn_group_editor_by_id(const std::string& spawn_id) {
     close_room_config();
     close_asset_library();
     update_spawn_groups_config_anchor();
+    active_spawn_group_id_ = spawn_id;
     SDL_Point anchor = spawn_groups_anchor_point();
     spawn_groups_cfg_ui_->request_open_spawn_group(spawn_id, anchor.x, anchor.y);
+
+    PendingSpawnGroupOpen pending;
+    pending.id = spawn_id;
+    pending.position = anchor;
+    pending.retry_frames = 0;
+    pending.remaining_attempts = 6;
+    pending.awaiting_confirmation = true;
+    pending_spawn_group_open_ = pending;
+}
+
+void RoomEditor::process_pending_spawn_group_open() {
+    if (active_spawn_group_id_ && spawn_groups_cfg_ui_) {
+        if (!pending_spawn_group_open_ && !spawn_groups_cfg_ui_->is_open(*active_spawn_group_id_)) {
+            PendingSpawnGroupOpen pending;
+            pending.id = *active_spawn_group_id_;
+            pending.position = spawn_groups_anchor_point();
+            pending.retry_frames = 0;
+            pending.remaining_attempts = 6;
+            pending.awaiting_confirmation = false;
+            pending_spawn_group_open_ = pending;
+        }
+    }
+
+    if (!pending_spawn_group_open_) {
+        return;
+    }
+    if (!spawn_groups_cfg_ui_) {
+        pending_spawn_group_open_.reset();
+        return;
+    }
+
+    auto& pending = *pending_spawn_group_open_;
+    if (pending.id.empty()) {
+        pending_spawn_group_open_.reset();
+        return;
+    }
+
+    if (spawn_groups_cfg_ui_->is_open(pending.id)) {
+        pending_spawn_group_open_.reset();
+        return;
+    }
+
+    if (pending.awaiting_confirmation) {
+        pending.awaiting_confirmation = false;
+        pending.retry_frames = 2;
+        return;
+    }
+
+    if (pending.retry_frames > 0) {
+        --pending.retry_frames;
+        return;
+    }
+
+    if (pending.remaining_attempts <= 0) {
+        if (active_spawn_group_id_ && *active_spawn_group_id_ == pending.id) {
+            pending.remaining_attempts = 6;
+        } else {
+            pending_spawn_group_open_.reset();
+            return;
+        }
+    }
+
+    SDL_Point anchor = spawn_groups_anchor_point();
+    pending.position = anchor;
+    spawn_groups_cfg_ui_->request_open_spawn_group(pending.id, anchor.x, anchor.y);
+    pending.retry_frames = 2;
+    pending.awaiting_confirmation = true;
+    --pending.remaining_attempts;
 }
 
 void RoomEditor::reopen_room_configurator() {

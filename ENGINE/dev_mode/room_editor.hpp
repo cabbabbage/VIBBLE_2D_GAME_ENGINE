@@ -149,6 +149,8 @@ private:
     void refresh_spawn_groups_config_ui();
     void update_spawn_groups_config_anchor();
     SDL_Point spawn_groups_anchor_point() const;
+    void handle_spawn_group_panel_closed(const std::string& spawn_id);
+    void clear_active_spawn_group_target();
     void update_exact_json(nlohmann::json& entry, const Asset& asset, SDL_Point center, int width, int height);
     void update_percent_json(nlohmann::json& entry, const Asset& asset, SDL_Point center, int width, int height);
     void save_perimeter_json(nlohmann::json& entry, int dx, int dy, int orig_w, int orig_h, int radius);
@@ -169,6 +171,7 @@ private:
     bool remove_spawn_group_by_id(const std::string& spawn_id);
     void open_spawn_group_editor_by_id(const std::string& spawn_id);
     void reopen_room_configurator();
+    void process_pending_spawn_group_open();
 
 private:
     Assets* assets_ = nullptr;
@@ -223,6 +226,9 @@ private:
     int rclick_buffer_frames_ = 0;
     int hover_miss_frames_ = 0;
     std::optional<SDL_Point> pending_spawn_world_pos_{};
+    std::optional<PendingSpawnGroupOpen> pending_spawn_group_open_{};
+    std::optional<std::string> active_spawn_group_id_{};
+    bool suppress_spawn_group_close_clear_ = false;
 
     double zoom_scale_factor_ = 1.1;
     PanAndZoom pan_zoom_;

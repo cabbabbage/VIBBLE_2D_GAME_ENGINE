@@ -227,6 +227,8 @@ void DevControls::set_screen_dimensions(int width, int height) {
     if (camera_panel_) camera_panel_->set_work_area(bounds);
     if (trail_suite_) trail_suite_->set_screen_dimensions(width, height);
     asset_filter_.set_screen_dimensions(width, height);
+    if (map_assets_modal_) map_assets_modal_->set_screen_dimensions(width, height);
+    if (boundary_assets_modal_) boundary_assets_modal_->set_screen_dimensions(width, height);
     asset_filter_.ensure_layout();
 }
 
@@ -959,7 +961,13 @@ void DevControls::pulse_modal_header() {
 
 void DevControls::toggle_map_assets_modal() {
     if (!assets_) return;
-    if (!map_assets_modal_) map_assets_modal_ = std::make_unique<SingleSpawnGroupModal>();
+    if (!map_assets_modal_) {
+        map_assets_modal_ = std::make_unique<SingleSpawnGroupModal>();
+        map_assets_modal_->set_screen_dimensions(screen_w_, screen_h_);
+        map_assets_modal_->set_floating_stack_key("map_assets_modal");
+    } else {
+        map_assets_modal_->set_screen_dimensions(screen_w_, screen_h_);
+    }
     auto save = [this]() {
         try {
             const std::string& path = assets_->map_info_path();
@@ -979,7 +987,13 @@ void DevControls::toggle_map_assets_modal() {
 
 void DevControls::toggle_boundary_assets_modal() {
     if (!assets_) return;
-    if (!boundary_assets_modal_) boundary_assets_modal_ = std::make_unique<SingleSpawnGroupModal>();
+    if (!boundary_assets_modal_) {
+        boundary_assets_modal_ = std::make_unique<SingleSpawnGroupModal>();
+        boundary_assets_modal_->set_screen_dimensions(screen_w_, screen_h_);
+        boundary_assets_modal_->set_floating_stack_key("boundary_assets_modal");
+    } else {
+        boundary_assets_modal_->set_screen_dimensions(screen_w_, screen_h_);
+    }
     auto save = [this]() {
         try {
             const std::string& path = assets_->map_info_path();

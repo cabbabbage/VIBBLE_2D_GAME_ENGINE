@@ -51,12 +51,15 @@
 
      auto& groups = (*section_)["spawn_groups"];
      json entry = groups[0];
-     if (!cfg_) cfg_ = std::make_unique<SpawnGroupConfigUI>();
-     cfg_->load(entry);
-     cfg_->set_ownership_label(ownership_label, ownership_color);
-     cfg_->lock_method_to("Random");
-     cfg_->set_quantity_hidden(true);
-     cfg_->set_on_close([this]() {
+    if (!cfg_) cfg_ = std::make_unique<SpawnGroupConfigUI>();
+    if (!stack_key_.empty()) {
+        cfg_->set_floating_stack_key(stack_key_);
+    }
+    cfg_->load(entry);
+    cfg_->set_ownership_label(ownership_label, ownership_color);
+    cfg_->lock_method_to("Random");
+    cfg_->set_quantity_hidden(true);
+    cfg_->set_on_close([this]() {
          if (!this->map_info_ || !this->section_) return;
          // Persist back into the section JSON
          json updated = cfg_->to_json();
@@ -74,15 +77,16 @@
                      groups.push_back(std::move(first));
                  }
              }
-         }
-         if (on_save_) on_save_();
-     });
-     cfg_->open_panel();
- }
+        }
+        if (on_save_) on_save_();
+    });
+    cfg_->open_panel();
+    ensure_visible_position();
+}
 
- void SingleSpawnGroupModal::close() {
-     if (cfg_) cfg_->close();
- }
+void SingleSpawnGroupModal::close() {
+    if (cfg_) cfg_->close();
+}
 
  bool SingleSpawnGroupModal::visible() const {
      return cfg_ && cfg_->visible();
@@ -101,8 +105,52 @@
      if (cfg_) cfg_->render(r);
  }
 
- bool SingleSpawnGroupModal::is_point_inside(int x, int y) const {
-     if (!cfg_) return false;
-     return cfg_->is_point_inside(x, y);
- }
+bool SingleSpawnGroupModal::is_point_inside(int x, int y) const {
+    if (!cfg_) return false;
+    return cfg_->is_point_inside(x, y);
+}
+
+void SingleSpawnGroupModal::set_screen_dimensions(int width, int height) {
+    screen_w_ = std::max(width, 0);
+    screen_h_ = std::max(height, 0);
+    ensure_visible_position();
+}
+
+void SingleSpawnGroupModal::set_floating_stack_key(std::string key) {
+    stack_key_ = std::move(key);
+    if (cfg_ && !stack_key_.empty()) {
+        cfg_->set_floating_stack_key(stack_key_);
+    }
+}
+
+void SingleSpawnGroupModal::ensure_visible_position() {
+    if (!cfg_) return;
+    SDL_Rect rect = cfg_->rect();
+    if (rect.w <= 0) rect.w = 420;
+    if (rect.h <= 0) rect.h = 540;
+    const int margin = 16;
+    const bool have_w = screen_w_ > 0;
+    const bool have_h = screen_h_ > 0;
+    int max_x = have_w ? std::max(margin, screen_w_ - rect.w - margin) : 0;
+    int max_y = have_h ? std::max(margin, screen_h_ - rect.h - margin) : 0;
+    SDL_Point pos = cfg_->position();
+    bool reposition = !position_initialized_;
+    if (have_w && (pos.x < margin || pos.x > max_x)) reposition = true;
+    if (have_h && (pos.y < margin || pos.y > max_y)) reposition = true;
+    if (!reposition) return;
+    int x = pos.x;
+    int y = pos.y;
+    if (have_w) {
+        int centered = screen_w_ / 2 - rect.w / 2;
+        x = std::clamp(centered, margin, max_x);
+    }
+    if (have_h) {
+        int centered = screen_h_ / 2 - rect.h / 2;
+        y = std::clamp(centered, margin, max_y);
+    }
+    if (have_w || have_h) {
+        cfg_->set_position(x, y);
+        position_initialized_ = true;
+    }
+}
 
