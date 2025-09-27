@@ -54,6 +54,7 @@ void SingleSpawnGroupModal::open(json& map_info,
     if (!stack_key_.empty()) {
         cfg_->set_floating_stack_key(stack_key_);
     }
+    cfg_->set_screen_dimensions(screen_w_, screen_h_);
     cfg_->load(entry);
     cfg_->set_ownership_label(ownership_label, ownership_color);
     cfg_->lock_method_to("Random");
@@ -112,6 +113,9 @@ bool SingleSpawnGroupModal::is_point_inside(int x, int y) const {
 void SingleSpawnGroupModal::set_screen_dimensions(int width, int height) {
     screen_w_ = std::max(width, 0);
     screen_h_ = std::max(height, 0);
+    if (cfg_) {
+        cfg_->set_screen_dimensions(screen_w_, screen_h_);
+    }
     ensure_visible_position();
 }
 

@@ -306,7 +306,7 @@ SpawnGroupConfigUI::SpawnGroupConfigUI() {
     panel_->set_expanded(true);
     panel_->set_visible(false);
     panel_->set_available_height_override(kSpawnConfigMaxHeight);
-    panel_->set_work_area(SDL_Rect{0, 0, 0, 0});
+    panel_->set_work_area(SDL_Rect{0, 0, screen_w_, screen_h_});
 
     ownership_text_ = "Room: Unknown";
     ownership_color_ = DMStyles::Label().color;
@@ -339,6 +339,24 @@ bool SpawnGroupConfigUI::method_forces_single_quantity(const std::string& method
 void SpawnGroupConfigUI::ensure_search() {
     if (!search_) {
         search_ = std::make_unique<SearchAssets>();
+        search_->set_screen_dimensions(screen_w_, screen_h_);
+    }
+}
+
+void SpawnGroupConfigUI::set_screen_dimensions(int width, int height) {
+    if (width > 0) {
+        screen_w_ = width;
+    }
+    if (height > 0) {
+        screen_h_ = height;
+    }
+    if (panel_) {
+        panel_->set_work_area(SDL_Rect{0, 0, screen_w_, screen_h_});
+        SDL_Point pos = panel_->position();
+        panel_->set_position(pos.x, pos.y);
+    }
+    if (search_) {
+        search_->set_screen_dimensions(screen_w_, screen_h_);
     }
 }
 
@@ -495,7 +513,7 @@ void SpawnGroupConfigUI::open_panel() {
         panel_->reset_scroll();
     }
     Input dummy;
-    panel_->update(dummy, kDefaultScreenW, kDefaultScreenH);
+    panel_->update(dummy, screen_w_, screen_h_);
 }
 
 void SpawnGroupConfigUI::close() {
@@ -921,7 +939,7 @@ void SpawnGroupConfigUI::sync_json() {
 
 void SpawnGroupConfigUI::update(const Input& input) {
     if (panel_ && panel_->is_visible()) {
-        panel_->update(input, kDefaultScreenW, kDefaultScreenH);
+        panel_->update(input, screen_w_, screen_h_);
         handle_method_change();
         sync_json();
     }

@@ -18,6 +18,7 @@ public:
     using Callback = std::function<void(const std::string&)>;
     SearchAssets();
     void set_position(int x, int y);
+    void set_screen_dimensions(int width, int height);
     void open(Callback cb);
     void close();
     bool visible() const;
@@ -39,4 +40,6 @@ private:
     std::vector<Asset> all_;
     std::vector<std::pair<std::string,bool>> results_; // bool:true if tag
     std::string last_query_;
+    int screen_w_ = 1920;
+    int screen_h_ = 1080;
 };

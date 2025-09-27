@@ -32,7 +32,7 @@ SpawnGroupsConfig::SpawnGroupsConfig(bool floatable)
     }
     set_cell_width(120);
     set_available_height_override(kSpawnGroupsMaxHeight);
-    set_work_area(SDL_Rect{0, 0, 0, 0});
+    set_work_area(SDL_Rect{0, 0, screen_w_, screen_h_});
     DockableCollapsible::set_on_close([this]() {
         close_all();
     });
@@ -67,7 +67,7 @@ void SpawnGroupsConfig::open(const nlohmann::json& assets, std::function<void(co
         set_visible(true);
         if (!was_visible) set_expanded(true);
         Input dummy;
-        update(dummy, kStandaloneWidth, kStandaloneHeight);
+        update(dummy, screen_w_, screen_h_);
         return;
     }
 
@@ -87,7 +87,7 @@ void SpawnGroupsConfig::open(const nlohmann::json& assets, std::function<void(co
     set_visible(true);
     if (!was_visible) set_expanded(true);
     Input dummy;
-    update(dummy, kStandaloneWidth, kStandaloneHeight);
+    update(dummy, screen_w_, screen_h_);
 }
 
 void SpawnGroupsConfig::close() { DockableCollapsible::set_visible(false); }
@@ -95,6 +95,21 @@ void SpawnGroupsConfig::close() { DockableCollapsible::set_visible(false); }
 bool SpawnGroupsConfig::visible() const { return is_visible(); }
 
 void SpawnGroupsConfig::set_position(int x, int y) { DockableCollapsible::set_position(x, y); }
+
+void SpawnGroupsConfig::set_screen_dimensions(int width, int height) {
+    if (width > 0) {
+        screen_w_ = width;
+    }
+    if (height > 0) {
+        screen_h_ = height;
+    }
+    set_work_area(SDL_Rect{0, 0, screen_w_, screen_h_});
+    for (auto& e : entries_) {
+        if (e.cfg) {
+            e.cfg->set_screen_dimensions(screen_w_, screen_h_);
+        }
+    }
+}
 
 void SpawnGroupsConfig::load(nlohmann::json& assets,
                         std::function<void()> on_change,
@@ -140,6 +155,7 @@ void SpawnGroupsConfig::load(nlohmann::json& assets,
         }
         e.json = &it;
         e.cfg = std::make_unique<SpawnGroupConfigUI>();
+        e.cfg->set_screen_dimensions(screen_w_, screen_h_);
         e.cfg->load(it);
         if (configure_entry_) {
             configure_entry_(*e.cfg, it);
@@ -179,6 +195,13 @@ void SpawnGroupsConfig::set_anchor(int x, int y) {
 }
 
 void SpawnGroupsConfig::update(const Input& input, int screen_w, int screen_h) {
+    if (screen_w > 0) {
+        screen_w_ = screen_w;
+    }
+    if (screen_h > 0) {
+        screen_h_ = screen_h;
+    }
+    set_work_area(SDL_Rect{0, 0, screen_w_, screen_h_});
     if (pending_open_) {
         if (entries_loaded_) {
             auto request = *pending_open_;
@@ -193,10 +216,13 @@ void SpawnGroupsConfig::update(const Input& input, int screen_w, int screen_h) {
         }
     }
     if (is_visible()) {
-        DockableCollapsible::update(input, screen_w, screen_h);
+        DockableCollapsible::update(input, screen_w_, screen_h_);
     }
     for (auto& e : entries_) {
-        if (e.cfg) e.cfg->update(input);
+        if (e.cfg) {
+            e.cfg->set_screen_dimensions(screen_w_, screen_h_);
+            e.cfg->update(input);
+        }
     }
 }
 
@@ -252,6 +278,7 @@ void SpawnGroupsConfig::open_entry(Entry& entry, int x, int y) {
     if (!entry.cfg) {
         return;
     }
+    entry.cfg->set_screen_dimensions(screen_w_, screen_h_);
     entry.cfg->set_position(x, y);
     entry.cfg->open_panel();
 }

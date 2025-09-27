@@ -40,6 +40,7 @@ public:
     void set_position(int x, int y);
     SDL_Point position() const;
     void load(const nlohmann::json& asset);
+    void set_screen_dimensions(int width, int height);
     void open_panel();
     void close();
     bool visible() const;
@@ -148,6 +149,9 @@ private:
     std::string baseline_method_;
     int baseline_min_ = 0;
     int baseline_max_ = 0;
+
+    int screen_w_ = 1920;
+    int screen_h_ = 1080;
 
     // Dev locks/visibility
     bool method_locked_ = false;

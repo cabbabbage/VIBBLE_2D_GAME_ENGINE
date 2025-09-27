@@ -13,6 +13,7 @@ SearchAssets::SearchAssets() {
     panel_ = std::make_unique<DockableCollapsible>("Search Assets", true, 64, 64);
     panel_->set_expanded(true);
     panel_->set_visible(false);
+    panel_->set_work_area(SDL_Rect{0, 0, screen_w_, screen_h_});
     query_ = std::make_unique<DMTextBox>("Search", "");
     query_widget_ = std::make_unique<TextBoxWidget>(query_.get());
     panel_->set_rows({ { query_widget_.get() } });
@@ -21,7 +22,22 @@ SearchAssets::SearchAssets() {
 
 void SearchAssets::set_position(int x, int y) {
     if (!panel_) panel_ = std::make_unique<DockableCollapsible>("Search Assets", true, x, y);
+    panel_->set_work_area(SDL_Rect{0, 0, screen_w_, screen_h_});
     panel_->set_position(x, y);
+}
+
+void SearchAssets::set_screen_dimensions(int width, int height) {
+    if (width > 0) {
+        screen_w_ = width;
+    }
+    if (height > 0) {
+        screen_h_ = height;
+    }
+    if (panel_) {
+        panel_->set_work_area(SDL_Rect{0, 0, screen_w_, screen_h_});
+        SDL_Point pos = panel_->position();
+        panel_->set_position(pos.x, pos.y);
+    }
 }
 
 std::string SearchAssets::to_lower(std::string s) {
@@ -33,6 +49,7 @@ void SearchAssets::open(Callback cb) {
     cb_ = std::move(cb);
     if (all_.empty()) load_assets();
     if (!panel_) panel_ = std::make_unique<DockableCollapsible>("Search Assets", true, 64, 64);
+    panel_->set_work_area(SDL_Rect{0, 0, screen_w_, screen_h_});
     panel_->set_visible(true);
     panel_->set_expanded(true);
     last_query_.clear();
@@ -105,7 +122,8 @@ void SearchAssets::filter_assets() {
         rows.push_back({ button_widgets_.back().get() });
     }
     panel_->set_rows(rows);
-    Input dummy; panel_->update(dummy, 1920, 1080);
+    Input dummy;
+    panel_->update(dummy, screen_w_, screen_h_);
 }
 
 bool SearchAssets::handle_event(const SDL_Event& e) {
@@ -117,7 +135,7 @@ bool SearchAssets::handle_event(const SDL_Event& e) {
 }
 
 void SearchAssets::update(const Input& input) {
-    if (panel_ && panel_->is_visible()) panel_->update(input, 1920, 1080);
+    if (panel_ && panel_->is_visible()) panel_->update(input, screen_w_, screen_h_);
 }
 
 void SearchAssets::render(SDL_Renderer* r) const {

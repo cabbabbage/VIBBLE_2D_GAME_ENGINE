@@ -77,6 +77,9 @@ void RoomEditor::set_screen_dimensions(int width, int height) {
     }
     configure_shared_panel();
     refresh_room_config_visibility();
+    if (spawn_groups_cfg_ui_) {
+        spawn_groups_cfg_ui_->set_screen_dimensions(screen_w_, screen_h_);
+    }
 }
 
 void RoomEditor::set_room_config_visible(bool visible) {
@@ -273,6 +276,7 @@ void RoomEditor::update_ui(const Input& input) {
         active_modal_ = ActiveModal::None;
     }
     if (spawn_groups_cfg_ui_) {
+        spawn_groups_cfg_ui_->set_screen_dimensions(screen_w_, screen_h_);
         update_spawn_groups_config_anchor();
         spawn_groups_cfg_ui_->update(input, screen_w_, screen_h_);
     }

@@ -149,6 +149,7 @@ SDL_Point AnimationUpdate::choose_balanced_target(SDL_Point desired, const Asset
             double sum = 0.0; int cnt = 0;
             for (Asset* n : neighbors) {
                 if (!n || n == self_ || !n->info) continue;
+                if (n->info->type == asset_types::texture) continue;
                 if (final_target && n == final_target) continue;
                 if (n->info->passable) continue;
                 const double rvx = static_cast<double>(n->pos.x - sx);
@@ -184,6 +185,7 @@ bool AnimationUpdate::point_in_impassable(SDL_Point pt, const Asset* ignored) co
     const auto& active = aam_.getActive();
     for (Asset* a : active) {
         if (!a || a == self_ || a == ignored || !a->info) continue;
+        if (a->info->type == asset_types::texture) continue;
         if (a->info->passable) continue; // Only consider impassable-tagged assets
         const double dx = static_cast<double>(a->pos.x - pt.x);
         const double dy = static_cast<double>(a->pos.y - pt.y);

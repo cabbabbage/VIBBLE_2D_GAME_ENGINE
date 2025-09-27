@@ -17,11 +17,11 @@
             "name": "null"
           },
           {
-            "chance": 25,
+            "chance": 73,
             "name": "Grass_FPS_2"
           },
           {
-            "chance": 20,
+            "chance": 71,
             "name": "Grass_1_FPS_2"
           },
           {
@@ -29,7 +29,7 @@
             "name": "Small_Rock"
           },
           {
-            "chance": 1,
+            "chance": 48,
             "name": "fog"
           },
           {
@@ -45,7 +45,7 @@
             "name": "Frog"
           }
         ],
-        "chance_denominator": 151,
+        "chance_denominator": 297,
         "check_overlap": false,
         "display_name": "batch_map_assets",
         "enforce_spacing": false,
@@ -70,19 +70,19 @@
             "name": "null"
           },
           {
-            "chance": 31,
+            "chance": 22,
             "name": "Tree"
           },
           {
-            "chance": 35,
+            "chance": 38,
             "name": "Tree_Dark"
           },
           {
-            "chance": 34,
+            "chance": 38,
             "name": "Tree_Darker"
           }
         ],
-        "chance_denominator": 100,
+        "chance_denominator": 98,
         "check_overlap": false,
         "display_name": "batch_map_boundary",
         "enforce_spacing": false,

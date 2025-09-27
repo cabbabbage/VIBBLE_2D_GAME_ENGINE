@@ -23,6 +23,7 @@ public:
     void close();
     bool visible() const;
     void set_position(int x, int y);
+    void set_screen_dimensions(int width, int height);
     void update(const Input& input, int screen_w, int screen_h);
     bool handle_event(const SDL_Event& e);
     void render(SDL_Renderer* r) const;
@@ -81,5 +82,7 @@ private:
     std::unique_ptr<ButtonWidget> b_done_w_;
     std::function<void(const nlohmann::json&)> on_close_;
     void open_entry(Entry& entry, int x, int y);
+    int screen_w_ = 1920;
+    int screen_h_ = 1080;
 };
 
