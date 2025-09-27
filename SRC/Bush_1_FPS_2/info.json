@@ -7030,6 +7030,7 @@
     ],
     "asset_name": "Bush_1_FPS_2",
     "asset_type": "Object",
+    "can_invert": true,
     "duplicatable": false,
     "duplication_interval_max": 60,
     "duplication_interval_min": 30,
@@ -7060,6 +7061,7 @@
     },
     "start": "",
     "tags": [
+        "nature",
         "passable"
     ],
     "z_threshold": 30

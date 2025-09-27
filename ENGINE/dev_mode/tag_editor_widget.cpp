@@ -506,71 +506,67 @@ int TagEditorWidget::layout(int width, int origin_x, int origin_y, bool apply) {
             rec_tags_label_rect_ = SDL_Rect{ origin_x, y, width, label_h };
         }
         y += label_h + label_gap;
+
+        if (!tag_search_box_) {
+            tag_search_box_ = std::make_unique<DMTextBox>("Search Tags", search_input_);
+        }
+        if (!add_tag_btn_) {
+            add_tag_btn_ = std::make_unique<DMButton>("+", &DMStyles::CreateButton(), 36, DMTextBox::height());
+        }
+        tag_search_box_->set_value(search_input_);
+
+        int controls_y = y;
+        int button_gap = DMSpacing::small_gap();
+        int desired_button = std::min(48, std::max(28, width / 5 + 20));
+        int button_width = std::min(width, desired_button);
+        int min_search = 60;
+        int search_width = width - button_width - button_gap;
+        if (search_width < min_search) {
+            int deficit = min_search - search_width;
+            button_width = std::max(24, button_width - deficit);
+            if (button_width > width) button_width = width;
+            search_width = width - button_width - button_gap;
+        }
+        if (search_width < 0) {
+            search_width = 0;
+            button_width = width;
+        }
+        if (apply) {
+            if (search_width > 0) {
+                tag_search_box_->set_rect(SDL_Rect{ origin_x, controls_y, search_width, DMTextBox::height() });
+            } else {
+                tag_search_box_->set_rect(SDL_Rect{0,0,0,0});
+            }
+            int add_x = origin_x + (search_width > 0 ? search_width + button_gap : 0);
+            int final_button_width = std::min(width, std::max(24, button_width));
+            add_tag_btn_->set_rect(SDL_Rect{ add_x, controls_y, final_button_width, DMTextBox::height() });
+        }
+        int results_spacing = DMSpacing::item_gap();
+        y = controls_y + DMTextBox::height() + results_spacing;
+
         size_t matches = filtered_tag_order_.empty() && search_query_.empty()
                               ? rec_tag_chips_.size()
                               : filtered_tag_order_.size();
         size_t visible_tags = show_all_tag_recs_ ? matches : std::min(kRecommendationPreviewCount, matches);
-        y = layout_grid(rec_tag_chips_, width, origin_x, y, apply, visible_tags,
-                        filtered_tag_order_.empty() && search_query_.empty() ? nullptr : &filtered_tag_order_);
+        const auto* display_order = filtered_tag_order_.empty() && search_query_.empty()
+                                        ? nullptr
+                                        : &filtered_tag_order_;
+        y = layout_grid(rec_tag_chips_, width, origin_x, y, apply, visible_tags, display_order);
 
-        bool show_tag_toggle = show_all_tag_recs_ || rec_tag_chips_.size() > kRecommendationPreviewCount;
+        bool show_tag_toggle = matches > visible_tags || show_all_tag_recs_;
         int toggle_gap = DMSpacing::small_gap();
         if (show_tag_toggle) {
             if (!show_more_tags_btn_) {
                 show_more_tags_btn_ = make_button("Show More", DMStyles::ListButton(), kRecommendChipWidth);
             }
-            int control_y = y + toggle_gap;
-            if (show_all_tag_recs_) {
-                if (!tag_search_box_) {
-                    tag_search_box_ = std::make_unique<DMTextBox>("Search Tags", search_input_);
-                }
-                if (!add_tag_btn_) {
-                    add_tag_btn_ = std::make_unique<DMButton>("+", &DMStyles::CreateButton(), 36, DMTextBox::height());
-                }
-                tag_search_box_->set_value(search_input_);
-                int button_gap = DMSpacing::small_gap();
-                int desired_button = std::min(48, std::max(28, width / 5 + 20));
-                int button_width = std::min(width, desired_button);
-                int min_search = 60;
-                int search_width = width - button_width - button_gap;
-                if (search_width < min_search) {
-                    int deficit = min_search - search_width;
-                    button_width = std::max(24, button_width - deficit);
-                    if (button_width > width) button_width = width;
-                    search_width = width - button_width - button_gap;
-                }
-                if (search_width < 0) {
-                    search_width = 0;
-                    button_width = width;
-                }
-                if (apply) {
-                    if (search_width > 0) {
-                        tag_search_box_->set_rect(SDL_Rect{ origin_x, control_y, search_width, DMTextBox::height() });
-                    } else {
-                        tag_search_box_->set_rect(SDL_Rect{0,0,0,0});
-                    }
-                    int add_x = origin_x + (search_width > 0 ? search_width + button_gap : 0);
-                    int final_button_width = std::min(width, std::max(24, button_width));
-                    add_tag_btn_->set_rect(SDL_Rect{ add_x, control_y, final_button_width, DMTextBox::height() });
-                }
-                control_y += DMTextBox::height();
-                control_y += DMSpacing::small_gap();
-            } else if (apply) {
-                if (tag_search_box_) tag_search_box_->set_rect(SDL_Rect{0,0,0,0});
-                if (add_tag_btn_) add_tag_btn_->set_rect(SDL_Rect{0,0,0,0});
-            }
             if (apply) {
                 update_toggle_labels();
                 int button_w = std::max(80, std::min(width, kRecommendChipWidth));
-                show_more_tags_btn_->set_rect(SDL_Rect{ origin_x, control_y, button_w, DMButton::height() });
+                show_more_tags_btn_->set_rect(SDL_Rect{ origin_x, y + toggle_gap, button_w, DMButton::height() });
             }
-            y = control_y + DMButton::height();
-        } else {
-            if (apply) {
-                if (show_more_tags_btn_) show_more_tags_btn_->set_rect(SDL_Rect{0,0,0,0});
-                if (tag_search_box_) tag_search_box_->set_rect(SDL_Rect{0,0,0,0});
-                if (add_tag_btn_) add_tag_btn_->set_rect(SDL_Rect{0,0,0,0});
-            }
+            y += toggle_gap + DMButton::height();
+        } else if (apply) {
+            if (show_more_tags_btn_) show_more_tags_btn_->set_rect(SDL_Rect{0,0,0,0});
         }
         y += section_gap;
     } else if (apply) {
