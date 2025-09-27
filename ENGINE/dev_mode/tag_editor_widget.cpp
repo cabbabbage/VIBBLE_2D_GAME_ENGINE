@@ -2,9 +2,9 @@
 
 #include "dm_styles.hpp"
 #include "tag_library.hpp"
+#include "tag_utils.hpp"
 
 #include <algorithm>
-#include <cctype>
 
 namespace {
 constexpr int kChipWidth = 132;
@@ -14,14 +14,6 @@ std::unique_ptr<DMButton> make_button(const std::string& text, const DMButtonSty
     return std::make_unique<DMButton>(text, &style, width, DMButton::height());
 }
 
-std::string trim_lower(const std::string& input) {
-    auto first = std::find_if_not(input.begin(), input.end(), [](unsigned char c) { return std::isspace(c); });
-    auto last = std::find_if_not(input.rbegin(), input.rend(), [](unsigned char c) { return std::isspace(c); }).base();
-    std::string out;
-    if (first < last) out.assign(first, last);
-    std::transform(out.begin(), out.end(), out.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-    return out;
-}
 }
 
 TagEditorWidget::TagEditorWidget() = default;
@@ -338,7 +330,7 @@ void TagEditorWidget::remove_anti_tag(const std::string& value) {
 }
 
 std::string TagEditorWidget::normalize(const std::string& value) {
-    return trim_lower(value);
+    return tag_utils::normalize(value);
 }
 
 void TagEditorWidget::notify_changed() {

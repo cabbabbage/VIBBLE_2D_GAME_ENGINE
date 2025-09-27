@@ -186,6 +186,9 @@
         "barrel_child",
         "bone",
         "book",
+        "booze",
+        "brown",
+        "child",
         "cover",
         "death",
         "default",
@@ -215,6 +218,7 @@
         "skull",
         "small",
         "still",
+        "tall",
         "white",
         "wood",
         "yellow"

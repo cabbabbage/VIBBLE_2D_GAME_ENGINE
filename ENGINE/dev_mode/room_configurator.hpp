@@ -22,6 +22,7 @@ class DMButton;
 class TextBoxWidget;
 class Room;
 class Widget;
+class TagEditorWidget;
 
 // Top-level room configuration panel with room settings and asset list
 class RoomConfigurator : public DockableCollapsible {
@@ -55,6 +56,8 @@ private:
     void rebuild_rows();
     std::string selected_geometry() const;
     bool should_rebuild_with(const nlohmann::json& data) const;
+    void load_tags_from_json(const nlohmann::json& data);
+    void write_tags_to_json(nlohmann::json& object) const;
     SDL_Rect bounds_{0,0,0,0};
     SDL_Rect applied_bounds_{-1,-1,0,0};
     bool using_docked_bounds_ = false;
@@ -94,6 +97,11 @@ private:
     std::unique_ptr<CheckboxWidget> room_inherit_cb_w_;
     std::unique_ptr<DMTextBox> room_name_lbl_;
     std::unique_ptr<TextBoxWidget> room_name_lbl_w_;
+    std::unique_ptr<Widget> room_tags_label_;
+    std::unique_ptr<TagEditorWidget> room_tags_editor_;
+    std::vector<std::string> room_tags_;
+    std::vector<std::string> room_anti_tags_;
+    bool tags_dirty_ = false;
     struct SpawnGroupRow {
         std::string spawn_id;
         std::unique_ptr<Widget> summary;

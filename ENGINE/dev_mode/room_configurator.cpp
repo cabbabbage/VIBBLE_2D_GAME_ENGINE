@@ -1,6 +1,8 @@
 #include "room_configurator.hpp"
 
 #include "dm_styles.hpp"
+#include "tag_editor_widget.hpp"
+#include "tag_utils.hpp"
 #include "room/room.hpp"
 #include "utils/input.hpp"
 #include "widgets.hpp"
@@ -14,6 +16,7 @@
 #include <utility>
 #include <optional>
 #include <initializer_list>
+#include <set>
 
 namespace {
 class RoomConfigLabel : public Widget {
@@ -282,6 +285,65 @@ void RoomConfigurator::load_from_json(const nlohmann::json& data) {
     } else {
         curvyness_ = 2;
     }
+
+    load_tags_from_json(loaded_json_);
+}
+
+void RoomConfigurator::load_tags_from_json(const nlohmann::json& data) {
+    tags_dirty_ = false;
+    std::set<std::string> include;
+    std::set<std::string> exclude;
+
+    auto read_array = [&](const nlohmann::json& arr, std::set<std::string>& dest) {
+        if (!arr.is_array()) return;
+        for (const auto& entry : arr) {
+            if (!entry.is_string()) continue;
+            std::string normalized = tag_utils::normalize(entry.get<std::string>());
+            if (!normalized.empty()) dest.insert(std::move(normalized));
+        }
+    };
+
+    if (data.is_object()) {
+        if (data.contains("tags")) {
+            const auto& tags_section = data["tags"];
+            if (tags_section.is_object()) {
+                if (tags_section.contains("include")) read_array(tags_section["include"], include);
+                if (tags_section.contains("tags")) read_array(tags_section["tags"], include);
+                if (tags_section.contains("exclude")) read_array(tags_section["exclude"], exclude);
+                if (tags_section.contains("anti_tags")) read_array(tags_section["anti_tags"], exclude);
+            } else if (tags_section.is_array()) {
+                read_array(tags_section, include);
+            }
+        }
+        if (data.contains("anti_tags")) {
+            read_array(data["anti_tags"], exclude);
+        }
+    }
+
+    room_tags_.assign(include.begin(), include.end());
+    room_anti_tags_.assign(exclude.begin(), exclude.end());
+}
+
+void RoomConfigurator::write_tags_to_json(nlohmann::json& object) const {
+    if (!object.is_object()) {
+        object = nlohmann::json::object();
+    }
+
+    if (room_tags_.empty() && room_anti_tags_.empty()) {
+        object.erase("tags");
+        object.erase("anti_tags");
+        return;
+    }
+
+    nlohmann::json section = nlohmann::json::object();
+    if (!room_tags_.empty()) {
+        section["include"] = room_tags_;
+    }
+    if (!room_anti_tags_.empty()) {
+        section["exclude"] = room_anti_tags_;
+    }
+    object["tags"] = std::move(section);
+    object.erase("anti_tags");
 }
 
 bool RoomConfigurator::refresh_spawn_groups(const nlohmann::json& data) {
@@ -455,6 +517,8 @@ void RoomConfigurator::rebuild_rows() {
     add_group_btn_w_.reset();
     empty_spawn_label_.reset();
     room_section_label_.reset();
+    room_tags_label_.reset();
+    room_tags_editor_.reset();
 
     room_section_label_ = std::make_unique<RoomConfigLabel>("Room Settings");
     rows.push_back({ room_section_label_.get() });
@@ -549,6 +613,21 @@ void RoomConfigurator::rebuild_rows() {
         rows.push_back({ room_inherit_cb_w_.get() });
     }
 
+    room_tags_label_ = std::make_unique<RoomConfigLabel>("Tags");
+    rows.push_back({ room_tags_label_.get() });
+
+    room_tags_editor_ = std::make_unique<TagEditorWidget>();
+    room_tags_editor_->set_tags(room_tags_, room_anti_tags_);
+    room_tags_editor_->set_on_changed([this](const std::vector<std::string>& tags,
+                                            const std::vector<std::string>& anti_tags) {
+        if (tags != room_tags_ || anti_tags != room_anti_tags_) {
+            room_tags_ = tags;
+            room_anti_tags_ = anti_tags;
+            tags_dirty_ = true;
+        }
+    });
+    rows.push_back({ room_tags_editor_.get() });
+
     spawn_groups_label_ = std::make_unique<RoomConfigLabel>("Spawn Groups");
     rows.push_back({ spawn_groups_label_.get() });
 
@@ -628,6 +707,10 @@ void RoomConfigurator::update(const Input& input, int screen_w, int screen_h) {
     }
 
     bool changed = false;
+    if (tags_dirty_) {
+        tags_dirty_ = false;
+        changed = true;
+    }
 
     if (room_name_lbl_) {
         std::string new_name = room_name_lbl_->value();
@@ -743,6 +826,7 @@ void RoomConfigurator::update(const Input& input, int screen_w, int screen_h) {
         if (curvyness_sl_) {
             loaded_json_["curvyness"] = curvyness_;
         }
+        write_tags_to_json(loaded_json_);
 
         if (room_) {
             auto& r = room_->assets_data();
@@ -763,6 +847,7 @@ void RoomConfigurator::update(const Input& input, int screen_w, int screen_h) {
             if (curvyness_sl_) {
                 r["curvyness"] = curvyness_;
             }
+            write_tags_to_json(r);
             room_->save_assets_json();
         }
     }
@@ -800,6 +885,7 @@ nlohmann::json RoomConfigurator::build_json() const {
     if (curvyness_sl_) {
         result["curvyness"] = curvyness_;
     }
+    write_tags_to_json(result);
     return result;
 }
 

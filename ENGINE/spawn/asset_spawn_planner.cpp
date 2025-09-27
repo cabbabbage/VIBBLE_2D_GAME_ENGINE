@@ -98,7 +98,7 @@ void AssetSpawnPlanner::parse_asset_spawns(const Area& area) {
         if (max_num < min_num) std::swap(max_num, min_num);
         int quantity = std::uniform_int_distribution<int>(min_num, max_num)(rng);
 
-        // --- ensure orig room size for Exact/Perimeter (needed for dx/dy scaling) ---
+        // --- ensure orig room size for Exact/Perimeter ---
         const bool need_orig = (position == "Exact" || position == "Perimeter");
         if (need_orig) {
             auto [minx, miny, maxx, maxy] = area.get_bounds();
@@ -123,7 +123,7 @@ void AssetSpawnPlanner::parse_asset_spawns(const Area& area) {
             }
         }
 
-        // --- candidates (top-level only); fallback = current asset name with 100% ---
+        // --- candidates ---
         std::vector<nlohmann::json> cand_jsons;
         if (asset.contains("candidates") && asset["candidates"].is_array()) {
             for (const auto& c : asset["candidates"]) cand_jsons.push_back(c);
@@ -260,6 +260,14 @@ void AssetSpawnPlanner::parse_asset_spawns(const Area& area) {
             drafts.push_back(std::move(draft));
         }
 
+        // NEW: collect all active candidate tags
+        std::unordered_set<std::string> candidate_tags;
+        for (const auto& d : drafts) {
+            if (d.use_tag && !d.tag.empty() && d.weight > 0) {
+                candidate_tags.insert(d.tag);
+            }
+        }
+
         for (const auto& draft : drafts) {
             SpawnCandidate c{};
             c.weight = draft.weight;
@@ -269,7 +277,12 @@ void AssetSpawnPlanner::parse_asset_spawns(const Area& area) {
                 std::string tag = !draft.tag.empty() ? draft.tag : sanitize_key(draft.original_name);
                 if (!tag.empty() && draft.weight > 0) {
                     try {
-                        resolved_name = resolve_asset_from_tag(tag, &blocked_tags, &blocked_assets);
+                        resolved_name = resolve_asset_from_tag(
+                            tag,
+                            &blocked_tags,
+                            &blocked_assets,
+                            &candidate_tags   // NEW: pass candidate tags
+                        );
                     } catch (...) {
                         resolved_name.clear();
                     }
@@ -318,7 +331,7 @@ void AssetSpawnPlanner::parse_asset_spawns(const Area& area) {
         }
         if (candidates.empty()) continue;
 
-        // --- Build SpawnInfo (minimal fields only) ---
+        // --- Build SpawnInfo ---
         auto average_range = [&](const std::string& lo_key, const std::string& hi_key, int fallback) {
             int lo = asset.value(lo_key, fallback);
             int hi = asset.value(hi_key, fallback);
@@ -336,7 +349,6 @@ void AssetSpawnPlanner::parse_asset_spawns(const Area& area) {
         s.check_spacing     = asset.value("check_spacing", asset.value("check_overlap", false));
         s.check_min_spacing = asset.value("enforce_spacing", asset.value("check_min_spacing", false));
 
-        // Exact & Perimeter share dx/dy semantics (relative to room center; scaled by orig size)
         s.exact_offset.x = asset.value("dx", asset.value("exact_dx", 0));
         s.exact_offset.y = asset.value("dy", asset.value("exact_dy", 0));
         s.exact_origin_w = asset.value("origional_width",  asset.value("exact_origin_width", 0));
@@ -344,7 +356,6 @@ void AssetSpawnPlanner::parse_asset_spawns(const Area& area) {
         s.exact_point.x  = asset.value("ep_x", average_range("ep_x_min", "ep_x_max", -1));
         s.exact_point.y  = asset.value("ep_y", average_range("ep_y_min", "ep_y_max", -1));
 
-        // New perimeter schema prefers radius, but support legacy keys as fallback.
         if (position == "Perimeter") {
             s.perimeter_radius = asset.value("radius", asset.value("perimeter_radius", 0));
         }
@@ -353,6 +364,7 @@ void AssetSpawnPlanner::parse_asset_spawns(const Area& area) {
         spawn_queue_.push_back(std::move(s));
     }
 }
+
 
 void AssetSpawnPlanner::sort_spawn_queue() {
     // Simple, explicit order
@@ -399,17 +411,25 @@ nlohmann::json* AssetSpawnPlanner::get_source_entry(int source_index, int entry_
         return nullptr;
     }
 }
-
 std::string AssetSpawnPlanner::resolve_asset_from_tag(
     const std::string& tag,
     const std::unordered_set<std::string>* banned_tags,
-    const std::unordered_set<std::string>* banned_assets) {
+    const std::unordered_set<std::string>* banned_assets,
+    const std::unordered_set<std::string>* candidate_tags)   // NEW: pass in all active candidate tags
+{
     static std::mt19937 rng(std::random_device{}());
-    if (tag.empty()) throw std::runtime_error("Empty tag provided to resolve_asset_from_tag");
+    if (tag.empty()) {
+        throw std::runtime_error("Empty tag provided to resolve_asset_from_tag");
+    }
+
     std::vector<std::string> matches;
     for (const auto& [name, info] : asset_library_->all()) {
         if (!info || !info->has_tag(tag)) continue;
+
+        // Skip if this asset is explicitly blocked
         if (banned_assets && banned_assets->count(name) > 0) continue;
+
+        // Skip if it conflicts with banned tags
         if (banned_tags && !banned_tags->empty()) {
             bool skip = false;
             for (const auto& blocked : *banned_tags) {
@@ -422,9 +442,26 @@ std::string AssetSpawnPlanner::resolve_asset_from_tag(
             }
             if (skip) continue;
         }
+
+        // NEW: Skip if this asset has any anti_tag that collides with another active candidate tag
+        if (candidate_tags && !candidate_tags->empty()) {
+            bool skip = false;
+            for (const auto& anti : info->anti_tags) {
+                if (candidate_tags->count(anti) > 0 && anti != tag) {
+                    skip = true;
+                    break;
+                }
+            }
+            if (skip) continue;
+        }
+
         matches.push_back(name);
     }
-    if (matches.empty()) throw std::runtime_error("No assets found for tag: " + tag);
+
+    if (matches.empty()) {
+        throw std::runtime_error("No assets found for tag: " + tag);
+    }
+
     std::uniform_int_distribution<size_t> dist(0, matches.size() - 1);
     return matches[dist(rng)];
 }

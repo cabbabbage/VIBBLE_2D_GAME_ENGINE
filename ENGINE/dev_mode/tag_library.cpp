@@ -1,21 +1,10 @@
 #include "tag_library.hpp"
 
 #include <algorithm>
-#include <cctype>
 #include <fstream>
 #include <unordered_set>
 
-namespace {
-std::string trim_lower(std::string value) {
-    auto is_space = [](unsigned char c) { return std::isspace(c) != 0; };
-    value.erase(value.begin(), std::find_if(value.begin(), value.end(), [&](unsigned char c) { return !is_space(c); }));
-    value.erase(std::find_if(value.rbegin(), value.rend(), [&](unsigned char c) { return !is_space(c); }).base(), value.end());
-    std::transform(value.begin(), value.end(), value.begin(), [](unsigned char c) {
-        return static_cast<char>(std::tolower(c));
-    });
-    return value;
-}
-}
+#include "tag_utils.hpp"
 
 TagLibrary& TagLibrary::instance() {
     static TagLibrary lib;
@@ -83,7 +72,7 @@ void TagLibrary::load_from_disk() {
         auto comma = line.find_first_of(",;\t");
         std::string token = comma == std::string::npos ? line : line.substr(0, comma);
         if (!token.empty() && token.front() == '#') continue;
-        auto value = trim_lower(token);
+        auto value = tag_utils::normalize(token);
         if (value.empty()) continue;
         if (unique.insert(value).second) {
             ordered.push_back(std::move(value));
