@@ -123,6 +123,7 @@ protected:
     bool floatable_ = true;
     bool close_button_enabled_ = false;
     bool dragging_ = false;
+    int pointer_block_frames_ = 0;
     bool header_dragging_via_button_ = false;
     bool header_btn_drag_moved_ = false;
     SDL_Point drag_offset_{0,0};

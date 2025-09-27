@@ -9,7 +9,7 @@
 
 class ActiveAssetsManager {
 
-	public:
+        public:
     ActiveAssetsManager(int screen_width, int screen_height, camera& v);
     void initialize(std::vector<Asset*>& all_assets, Asset* player, int screen_center_x, int screen_center_y);
     void updateAssetVectors(Asset* player, int screen_center_x, int screen_center_y);
@@ -46,4 +46,11 @@ class ActiveAssetsManager {
     std::vector<Asset*> interactive_assets_;
     bool needs_sort_ = false;
     mutable bool combined_dirty_ = true;
+    struct ClosestEntry {
+        double distance_sq;
+        Asset* asset;
+    };
+    std::vector<Asset*> prev_textures_;
+    std::vector<Asset*> prev_others_;
+    std::vector<ClosestEntry> closest_buffer_;
 };

@@ -16,8 +16,20 @@ assets_(assets),
 main_light_(main_light),
 screen_width_(screen_width),
 screen_height_(screen_height),
-fullscreen_light_tex_(fullscreen_light_tex)
+fullscreen_light_tex_(fullscreen_light_tex),
+lowres_mask_tex_(nullptr),
+lowres_w_(0),
+lowres_h_(0)
 {}
+
+LightMap::~LightMap() {
+        if (lowres_mask_tex_) {
+                SDL_DestroyTexture(lowres_mask_tex_);
+                lowres_mask_tex_ = nullptr;
+                lowres_w_ = 0;
+                lowres_h_ = 0;
+        }
+}
 
 void LightMap::render(bool debugging) {
 	if (debugging) std::cout << "[render_asset_lights_z] start\n";
@@ -25,17 +37,20 @@ void LightMap::render(bool debugging) {
 	static std::vector<LightEntry> z_lights;
 	z_lights.clear();
 	collect_layers(z_lights, flicker_rng);
-	const int downscale = 4;
-	const int low_w = screen_width_  / downscale;
-	const int low_h = screen_height_ / downscale;
-	SDL_Texture* prev_target = SDL_GetRenderTarget(renderer_);
-	SDL_Texture* lowres_mask = build_lowres_mask(z_lights, low_w, low_h, downscale);
-	SDL_SetTextureBlendMode(lowres_mask, SDL_BLENDMODE_MOD);
-	// Composite onto whatever target was active before building the mask
-	SDL_SetRenderTarget(renderer_, prev_target);
-	SDL_RenderCopy(renderer_, lowres_mask, nullptr, nullptr);
-	SDL_DestroyTexture(lowres_mask);
-	if (debugging) std::cout << "[render_asset_lights_z] end\n";
+        const int downscale = 4;
+        const int low_w = std::max(1, screen_width_  / downscale);
+        const int low_h = std::max(1, screen_height_ / downscale);
+        SDL_Texture* prev_target = SDL_GetRenderTarget(renderer_);
+        SDL_Texture* lowres_mask = build_lowres_mask(z_lights, low_w, low_h, downscale);
+        if (lowres_mask) {
+                SDL_SetTextureBlendMode(lowres_mask, SDL_BLENDMODE_MOD);
+                // Composite onto whatever target was active before building the mask
+                SDL_SetRenderTarget(renderer_, prev_target);
+                SDL_RenderCopy(renderer_, lowres_mask, nullptr, nullptr);
+        } else {
+                SDL_SetRenderTarget(renderer_, prev_target);
+        }
+        if (debugging) std::cout << "[render_asset_lights_z] end\n";
 }
 
 void LightMap::collect_layers(std::vector<LightEntry>& out, std::mt19937& rng) {
@@ -90,14 +105,42 @@ void LightMap::collect_layers(std::vector<LightEntry>& out, std::mt19937& rng) {
         }
 }
 
+SDL_Texture* LightMap::ensure_lowres_target(int low_w, int low_h) {
+        if (low_w <= 0 || low_h <= 0) {
+                return nullptr;
+        }
+        if (lowres_mask_tex_ && (lowres_w_ != low_w || lowres_h_ != low_h)) {
+                SDL_DestroyTexture(lowres_mask_tex_);
+                lowres_mask_tex_ = nullptr;
+        }
+        if (!lowres_mask_tex_) {
+                lowres_mask_tex_ = SDL_CreateTexture(renderer_, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET, low_w, low_h);
+                if (!lowres_mask_tex_) {
+                        lowres_w_ = 0;
+                        lowres_h_ = 0;
+                        return nullptr;
+                }
+                SDL_SetTextureBlendMode(lowres_mask_tex_, SDL_BLENDMODE_NONE);
+#if SDL_VERSION_ATLEAST(2,0,12)
+                SDL_SetTextureScaleMode(lowres_mask_tex_, SDL_ScaleModeBest);
+#endif
+                lowres_w_ = low_w;
+                lowres_h_ = low_h;
+        }
+        return lowres_mask_tex_;
+}
+
 SDL_Texture* LightMap::build_lowres_mask(const std::vector<LightEntry>& layers,
                                          int low_w, int low_h, int downscale) {
-	SDL_Texture* lowres_mask = SDL_CreateTexture(renderer_, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET, low_w, low_h);
-	SDL_SetTextureBlendMode(lowres_mask, SDL_BLENDMODE_NONE);
-	SDL_SetRenderTarget(renderer_, lowres_mask);
-	SDL_SetRenderDrawColor(renderer_, 0, 0, 0, 200);
-	SDL_RenderClear(renderer_);
-	SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_ADD);
+        SDL_Texture* lowres_mask = ensure_lowres_target(low_w, low_h);
+        if (!lowres_mask) {
+                return nullptr;
+        }
+        SDL_SetRenderTarget(renderer_, lowres_mask);
+        SDL_SetTextureBlendMode(lowres_mask, SDL_BLENDMODE_NONE);
+        SDL_SetRenderDrawColor(renderer_, 0, 0, 0, 200);
+        SDL_RenderClear(renderer_);
+        SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_ADD);
 	for (auto& e : layers) {
 		SDL_SetTextureBlendMode(e.tex, SDL_BLENDMODE_ADD);
 		SDL_SetTextureAlphaMod(e.tex, e.alpha);

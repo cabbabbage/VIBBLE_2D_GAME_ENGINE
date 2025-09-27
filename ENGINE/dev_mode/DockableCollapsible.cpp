@@ -54,6 +54,11 @@ void DockableCollapsible::set_visible(bool v) {
         return;
     }
     visible_ = v;
+    if (visible_) {
+        pointer_block_frames_ = 2;
+    } else {
+        pointer_block_frames_ = 0;
+    }
     if (!visible_) {
         dragging_ = false;
         FloatingDockableManager::instance().notify_panel_closed(this);
@@ -129,6 +134,9 @@ void DockableCollapsible::set_work_area(const SDL_Rect& area) {
 
 void DockableCollapsible::update(const Input& input, int screen_w, int screen_h) {
     if (!visible_) return;
+    if (pointer_block_frames_ > 0) {
+        --pointer_block_frames_;
+    }
     layout(screen_w, screen_h);
 
     if (scroll_enabled_ && expanded_ && body_viewport_.w > 0 && body_viewport_.h > 0) {
@@ -161,6 +169,9 @@ bool DockableCollapsible::handle_event(const SDL_Event& e) {
             pointer_pos = SDL_Point{e.motion.x, e.motion.y};
         } else {
             pointer_pos = SDL_Point{e.button.x, e.button.y};
+        }
+        if ((e.type == SDL_MOUSEBUTTONDOWN || e.type == SDL_MOUSEBUTTONUP) && pointer_block_frames_ > 0) {
+            return false;
         }
     }
 

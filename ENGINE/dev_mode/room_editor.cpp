@@ -1902,7 +1902,7 @@ void RoomEditor::open_spawn_group_editor_by_id(const std::string& spawn_id) {
     close_asset_library();
     update_spawn_groups_config_anchor();
     SDL_Point anchor = spawn_groups_anchor_point();
-    spawn_groups_cfg_ui_->open_spawn_group(spawn_id, anchor.x, anchor.y);
+    spawn_groups_cfg_ui_->request_open_spawn_group(spawn_id, anchor.x, anchor.y);
 }
 
 void RoomEditor::reopen_room_configurator() {

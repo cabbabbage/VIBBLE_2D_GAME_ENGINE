@@ -44,71 +44,86 @@ void ActiveAssetsManager::markNeedsSort() {
 
 void ActiveAssetsManager::updateClosestAssets(Asset* player, std::size_t max_count)
 {
-	for (auto* a : closest_assets_) {
-		if (a) a->set_render_player_light(false);
-	}
-	closest_assets_.clear();
-	impassable_assets_.clear();
+        for (auto* a : closest_assets_) {
+                if (a) a->set_render_player_light(false);
+        }
+        closest_assets_.clear();
+        impassable_assets_.clear();
+        interactive_assets_.clear();
 
-	if (!player || active_assets_.empty() || max_count == 0) return;
-
-        struct DistAsset {
-                double dist2;
-                Asset* asset;
-        };
+        if (!player || max_count == 0) return;
 
         const double px = static_cast<double>(player->pos.x);
         const double py = static_cast<double>(player->pos.y);
 
-        std::vector<DistAsset> best;
-        best.reserve(std::min<std::size_t>(max_count, active_assets_.size()));
+        const std::size_t available = textures_.size() + others_.size();
+        if (available == 0) return;
 
-        auto insert_sorted = [&best](DistAsset entry) {
-                auto it = std::upper_bound(best.begin(), best.end(), entry.dist2,
-                [](double lhs, const DistAsset& rhs) { return lhs < rhs.dist2; });
-                best.insert(it, entry);
+        max_count = std::min<std::size_t>(max_count, available);
+
+        closest_buffer_.clear();
+        closest_buffer_.reserve(max_count);
+
+        std::size_t worst_index = 0;
+        auto recompute_worst = [&]() {
+                if (closest_buffer_.empty()) return;
+                worst_index = 0;
+                double worst = closest_buffer_[0].distance_sq;
+                for (std::size_t i = 1; i < closest_buffer_.size(); ++i) {
+                        if (closest_buffer_[i].distance_sq > worst) {
+                                worst = closest_buffer_[i].distance_sq;
+                                worst_index = i;
+                        }
+                }
         };
 
-        // Distance does not depend on sort; iterate both buckets.
-        for (Asset* a : textures_) {
-                if (!a || a == player) continue;
+        auto consider = [&](Asset* a) {
+                if (!a || a == player) return;
                 const double dx = static_cast<double>(a->pos.x) - px;
                 const double dy = static_cast<double>(a->pos.y) - py;
                 const double dist2 = dx * dx + dy * dy;
 
-                if (best.size() < max_count) {
-                        insert_sorted({dist2, a});
-                } else if (!best.empty() && dist2 < best.back().dist2) {
-                        insert_sorted({dist2, a});
-                        best.pop_back();
+                if (closest_buffer_.size() < max_count) {
+                        closest_buffer_.push_back({dist2, a});
+                        recompute_worst();
+                        return;
                 }
+
+                if (closest_buffer_.empty() || dist2 >= closest_buffer_[worst_index].distance_sq) return;
+
+                closest_buffer_[worst_index] = {dist2, a};
+                recompute_worst();
+        };
+
+        for (Asset* a : textures_) {
+                consider(a);
         }
         for (Asset* a : others_) {
-                if (!a || a == player) continue;
-                const double dx = static_cast<double>(a->pos.x) - px;
-                const double dy = static_cast<double>(a->pos.y) - py;
-                const double dist2 = dx * dx + dy * dy;
+                consider(a);
+        }
 
-                if (best.size() < max_count) {
-                        insert_sorted({dist2, a});
-                } else if (!best.empty() && dist2 < best.back().dist2) {
-                        insert_sorted({dist2, a});
-                        best.pop_back();
+        if (closest_buffer_.empty()) return;
+
+        std::sort(closest_buffer_.begin(), closest_buffer_.end(),
+        [](const ClosestEntry& lhs, const ClosestEntry& rhs) {
+                return lhs.distance_sq < rhs.distance_sq;
+        });
+
+        closest_assets_.reserve(closest_buffer_.size());
+        for (const ClosestEntry& entry : closest_buffer_) {
+                Asset* a = entry.asset;
+                if (!a) continue;
+                closest_assets_.push_back(a);
+                a->set_render_player_light(true);
+                if (a->info) {
+                        if (!a->info->passable) {
+                                impassable_assets_.push_back(a);
+                        }
+                        if (a->info->has_tag("interactive")) {
+                                interactive_assets_.push_back(a);
+                        }
                 }
         }
-
-        closest_assets_.reserve(best.size());
-        for (const DistAsset& entry : best) {
-                closest_assets_.push_back(entry.asset);
-        }
-
-	for (Asset* a : closest_assets_) {
-		if (!a) continue;
-		a->set_render_player_light(true);
-		if (a->info && !a->info->passable) {
-			impassable_assets_.push_back(a);
-		}
-	}
 }
 
 void ActiveAssetsManager::activate(Asset* asset)
@@ -153,13 +168,16 @@ void ActiveAssetsManager::updateActiveAssets(int cx, int cy)
 {
         if (!all_assets_) return;
 
-        // Snapshot currently active assets (both buckets) to detect deactivations.
-        std::vector<Asset*> prev_active;
-        prev_active.reserve(textures_.size() + others_.size());
-        prev_active.insert(prev_active.end(), textures_.begin(), textures_.end());
-        prev_active.insert(prev_active.end(), others_.begin(), others_.end());
+        // Move current buckets aside so we can reuse their storage while tracking deactivations.
+        prev_textures_.clear();
+        prev_others_.clear();
+        prev_textures_.swap(textures_);
+        prev_others_.swap(others_);
 
-        for (Asset* a : prev_active) {
+        for (Asset* a : prev_textures_) {
+                if (a) a->active = false;
+        }
+        for (Asset* a : prev_others_) {
                 if (a) a->active = false;
         }
 
@@ -173,6 +191,8 @@ void ActiveAssetsManager::updateActiveAssets(int cx, int cy)
 
         textures_.clear();
         others_.clear();
+        textures_.reserve(prev_textures_.size());
+        others_.reserve(prev_others_.size());
         combined_dirty_ = true;
 
         for (Asset* a : *all_assets_) {
@@ -184,13 +204,21 @@ void ActiveAssetsManager::updateActiveAssets(int cx, int cy)
                 }
         }
 
-        for (Asset* old_a : prev_active) {
+        for (Asset* old_a : prev_textures_) {
+                if (old_a && !old_a->active) {
+                        old_a->deactivate();
+                }
+        }
+        for (Asset* old_a : prev_others_) {
                 if (old_a && !old_a->active) {
                         old_a->deactivate();
                 }
         }
 
         needs_sort_ = true;
+
+        prev_textures_.clear();
+        prev_others_.clear();
 }
 
 void ActiveAssetsManager::sortByZIndex()

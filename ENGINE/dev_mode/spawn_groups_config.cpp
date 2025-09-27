@@ -4,6 +4,7 @@
 #include "utils/input.hpp"
 #include "FloatingDockableManager.hpp"
 
+#include <algorithm>
 #include <sstream>
 
 namespace {
@@ -149,6 +150,9 @@ void SpawnGroupsConfig::load(nlohmann::json& assets,
             if (it.contains("name") && it["name"].is_string()) e.id = it["name"].get<std::string>();
             else if (it.contains("tag") && it["tag"].is_string()) e.id = "#" + it["tag"].get<std::string>();
         }
+        if (e.id.empty()) {
+            e.id = std::string("Spawn Group ") + std::to_string(entries_.size() + 1);
+        }
         e.json = &it;
         e.cfg = std::make_unique<SpawnGroupConfigUI>();
         e.cfg->set_floating_stack_key(floating_stack_key_);
@@ -157,13 +161,9 @@ void SpawnGroupsConfig::load(nlohmann::json& assets,
             configure_entry_(*e.cfg, it);
         }
         e.btn = std::make_unique<DMButton>(e.id, &DMStyles::HeaderButton(), 100, DMButton::height());
-        auto* cfg_ptr = e.cfg.get();
-        e.btn_w = std::make_unique<ButtonWidget>(e.btn.get(), [this, cfg_ptr]() {
-            if (cfg_ptr) {
-                this->hide_temporarily();
-                cfg_ptr->set_position(anchor_x_, anchor_y_);
-                cfg_ptr->open_panel();
-            }
+        std::string id_copy = e.id;
+        e.btn_w = std::make_unique<ButtonWidget>(e.btn.get(), [this, id_copy]() {
+            this->request_open_spawn_group(id_copy, anchor_x_, anchor_y_);
         });
         entries_.push_back(std::move(e));
     }
@@ -195,6 +195,19 @@ void SpawnGroupsConfig::set_anchor(int x, int y) {
 }
 
 void SpawnGroupsConfig::update(const Input& input, int screen_w, int screen_h) {
+    if (pending_open_) {
+        if (entries_loaded_) {
+            auto request = *pending_open_;
+            auto it = std::find_if(entries_.begin(), entries_.end(),
+                                   [&request](const Entry& entry) { return entry.id == request.id; });
+            if (it != entries_.end()) {
+                pending_open_.reset();
+                open_spawn_group(request.id, request.x, request.y);
+            } else {
+                pending_open_.reset();
+            }
+        }
+    }
     if (is_visible()) {
         DockableCollapsible::update(input, screen_w, screen_h);
     }
@@ -246,6 +259,10 @@ void SpawnGroupsConfig::open_spawn_group(const std::string& id, int x, int y) {
             break;
         }
     }
+}
+
+void SpawnGroupsConfig::request_open_spawn_group(const std::string& id, int x, int y) {
+    pending_open_ = PendingOpenRequest{id, x, y};
 }
 
 void SpawnGroupsConfig::close_all() {

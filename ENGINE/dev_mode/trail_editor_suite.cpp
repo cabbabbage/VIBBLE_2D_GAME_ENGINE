@@ -198,7 +198,7 @@ void TrailEditorSuite::open_spawn_group_editor(const std::string& id) {
     }
     SDL_Point anchor{config_bounds_.x + config_bounds_.w + 16, config_bounds_.y};
     spawn_groups_->set_anchor(anchor.x, anchor.y);
-    spawn_groups_->open_spawn_group(id, anchor.x, anchor.y);
+    spawn_groups_->request_open_spawn_group(id, anchor.x, anchor.y);
 }
 
 void TrailEditorSuite::duplicate_spawn_group(const std::string& id) {

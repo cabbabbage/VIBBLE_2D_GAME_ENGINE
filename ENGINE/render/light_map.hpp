@@ -9,27 +9,38 @@
 
 class LightMap {
 
-	public:
-    struct LightEntry {
-    SDL_Texture* tex;
-    SDL_Rect dst;
-    Uint8 alpha;
-    SDL_RendererFlip flip;
-    bool apply_tint;
-	};
-    LightMap(SDL_Renderer* renderer, Assets* assets, Global_Light_Source& main_light, int screen_width, int screen_height, SDL_Texture* fullscreen_light_tex);
-    void render(bool debugging);
+public:
+        struct LightEntry {
+                SDL_Texture* tex;
+                SDL_Rect dst;
+                Uint8 alpha;
+                SDL_RendererFlip flip;
+                bool apply_tint;
+        };
+        LightMap(SDL_Renderer* renderer,
+                 Assets* assets,
+                 Global_Light_Source& main_light,
+                 int screen_width,
+                 int screen_height,
+                 SDL_Texture* fullscreen_light_tex);
+        ~LightMap();
 
-	private:
-    void collect_layers(std::vector<LightEntry>& out, std::mt19937& rng);
-    SDL_Texture* build_lowres_mask(const std::vector<LightEntry>& layers, int low_w, int low_h, int downscale);
-    SDL_Rect get_scaled_position_rect(SDL_Point pos, int fw, int fh, float inv_scale, int min_w, int min_h);
+        void render(bool debugging);
 
-	private:
-    SDL_Renderer* renderer_;
-    Assets* assets_;
-    Global_Light_Source& main_light_;
-    int screen_width_;
-    int screen_height_;
-    SDL_Texture* fullscreen_light_tex_;
+private:
+        void collect_layers(std::vector<LightEntry>& out, std::mt19937& rng);
+        SDL_Texture* build_lowres_mask(const std::vector<LightEntry>& layers, int low_w, int low_h, int downscale);
+        SDL_Rect get_scaled_position_rect(SDL_Point pos, int fw, int fh, float inv_scale, int min_w, int min_h);
+        SDL_Texture* ensure_lowres_target(int low_w, int low_h);
+
+private:
+        SDL_Renderer* renderer_;
+        Assets* assets_;
+        Global_Light_Source& main_light_;
+        int screen_width_;
+        int screen_height_;
+        SDL_Texture* fullscreen_light_tex_;
+        SDL_Texture* lowres_mask_tex_ = nullptr;
+        int lowres_w_ = 0;
+        int lowres_h_ = 0;
 };

@@ -37,6 +37,7 @@ public:
     void append_rows(DockableCollapsible::Rows& rows);
     void set_anchor(int x, int y);
     void open_spawn_group(const std::string& id, int x, int y);
+    void request_open_spawn_group(const std::string& id, int x, int y);
     void close_all();
     bool is_open(const std::string& id) const;
     struct OpenSpawnGroupState {
@@ -52,6 +53,12 @@ public:
 private:
     bool floatable_mode_ = true;
     bool should_rebuild_with(const nlohmann::json& normalized_assets) const;
+    struct PendingOpenRequest {
+        std::string id;
+        int x = 0;
+        int y = 0;
+    };
+    std::optional<PendingOpenRequest> pending_open_;
     struct Entry {
         std::string id;
         std::unique_ptr<SpawnGroupConfigUI> cfg;

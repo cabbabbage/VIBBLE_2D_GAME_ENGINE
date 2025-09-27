@@ -9,7 +9,7 @@ namespace LightUtils {
 		constexpr int FADE_ABOVE = 180;
 		constexpr int FADE_BELOW = -30;
 		constexpr double MIN_OPACITY = 0.15;
-		constexpr double MAX_OPACITY = 0.9;
+		constexpr double MAX_OPACITY = 0.7;
 		int delta_y = light_world_y - asset_y;
 		double factor;
 		if (delta_y <= -FADE_ABOVE) {
