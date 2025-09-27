@@ -72,7 +72,7 @@ void SpawnGroupsConfig::open(const nlohmann::json& assets, std::function<void(co
     }
 
     temp_assets_ = normalized;
-    load(temp_assets_, [](){}, {});
+    load(temp_assets_, [](){});
     if (!b_done_) {
         b_done_ = std::make_unique<DMButton>("Done", &DMStyles::ListButton(), 80, DMButton::height());
         b_done_w_ = std::make_unique<ButtonWidget>(b_done_.get(), [this]() {

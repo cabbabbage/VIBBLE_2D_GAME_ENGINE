@@ -5,27 +5,31 @@
 #include <memory>
 #include <string>
 #include <vector>
+
 #include <nlohmann/json.hpp>
 
 #include "DockableCollapsible.hpp"
-class Widget;
-class LabelWidget;
+
+class Input;
+class ButtonWidget;
+class CheckboxWidget;
 class DropdownWidget;
+class LabelWidget;
 class RangeSliderWidget;
 class SliderWidget;
-class ButtonWidget;
 class TextBoxWidget;
-class CheckboxWidget;
-class Input;
+class DMButton;
+class DMCheckbox;
 class DMDropdown;
 class DMRangeSlider;
 class DMSlider;
-class DMButton;
 class DMTextBox;
-class DMCheckbox;
-class SearchAssets;
 
-// UI panel for configuring a single spawn group entry in the spawn JSON
+// Panel for configuring a spawn group. The original implementation grew a
+// large amount of bespoke layout code which ended up bypassing the
+// DockableCollapsible behaviours (floating, collapsing and scrolling). This
+// rewrite keeps the same external interface but rebuilds the internals using
+// DockableCollapsible rows so the panel behaves like the other dev-mode UIs.
 class SpawnGroupsConfigPanel : public DockableCollapsible {
 public:
     SpawnGroupsConfigPanel(int start_x = 32, int start_y = 32);
@@ -47,21 +51,18 @@ public:
     void set_position(int x, int y);
     SDL_Point position() const;
 
-    void update(const Input& input, int screen_w, int screen_h);
+    void update(const Input& input, int screen_w, int screen_h) override;
+    bool handle_event(const SDL_Event& e) override;
+    void render(SDL_Renderer* r) const override;
     nlohmann::json to_json() const;
     bool is_point_inside(int x, int y) const;
     SDL_Rect rect() const;
     ChangeSummary consume_change_summary();
 
     void set_ownership_label(const std::string& label, SDL_Color color);
-
-    // Dev-only: lock spawn method to a fixed value and prevent changing it.
     void lock_method_to(const std::string& method);
-    // Dev-only: hide quantity controls; quantity will be ignored by batch spawners.
     void set_quantity_hidden(bool hidden);
-    // Allow external close callback (e.g., to persist changes when panel closes).
     void set_on_close(std::function<void()> cb);
-    // Register an additional close callback and return a handle for later removal.
     size_t add_on_close_callback(std::function<void()> cb);
     void remove_on_close_callback(size_t handle);
     void clear_on_close_callbacks();
@@ -69,84 +70,59 @@ public:
 
 private:
     struct CandidateRow {
-        std::string name;
-        int chance = 0;
-        size_t index = 0;
-        bool placeholder = false;
-
         std::unique_ptr<DMTextBox> name_box;
+        std::unique_ptr<TextBoxWidget> name_widget;
         std::unique_ptr<DMSlider> chance_slider;
-        std::unique_ptr<DMButton> del_button;
-
-        std::unique_ptr<TextBoxWidget> name_w;
-        std::unique_ptr<SliderWidget> chance_w;
-        std::unique_ptr<ButtonWidget> del_w;
-        std::unique_ptr<LabelWidget> chance_label;
+        std::unique_ptr<SliderWidget> chance_widget;
+        std::unique_ptr<DMButton> remove_button;
+        std::unique_ptr<ButtonWidget> remove_widget;
+        std::string last_name;
+        int last_chance = 0;
     };
 
-    void rebuild_widgets();
-    void rebuild_rows();
-    void sync_json();
+    void rebuild_layout();
+    void rebuild_method_widget();
+    void rebuild_quantity_widget();
+    void rebuild_perimeter_widget();
+    void rebuild_candidate_summary();
+    void ensure_candidate_controls();
+    void sync_from_widgets();
+    void sync_candidates();
     void add_candidate(const std::string& name, int chance);
-    void remove_candidate(size_t index);
-    bool method_forces_single_quantity(const std::string& method) const;
-    void ensure_search();
-    void ensure_visible_position();
-    void handle_method_change();
-    void dispatch_save_if_needed();
+    void remove_candidate(const CandidateRow* row);
+    void clamp_to_screen();
+    void dispatch_save();
 
     std::vector<std::string> spawn_methods_;
+    nlohmann::json entry_;
     std::string spawn_id_;
     std::string panel_title_;
-    nlohmann::json entry_;
 
-    // Candidate rows
-    std::vector<CandidateRow> candidates_;
-    std::unique_ptr<DMButton> add_button_;
-    std::unique_ptr<ButtonWidget> add_button_w_;
-
+    std::unique_ptr<LabelWidget> header_label_;
     std::unique_ptr<LabelWidget> ownership_label_;
-    std::string ownership_text_;
-    SDL_Color ownership_color_{255, 255, 255, 255};
-    bool has_ownership_color_ = false;
-
-    // Common config
-    int method_ = 0;
-    int min_number_ = 1;
-    int max_number_ = 1;
-    bool overlap_ = false;
-    bool spacing_ = false;
-    int perimeter_radius_ = 0;
-    // Method widgets
-    std::unique_ptr<DMDropdown> dd_method_;
-    std::unique_ptr<DropdownWidget> dd_method_w_;
-    std::unique_ptr<DMRangeSlider> s_minmax_;
-    std::unique_ptr<RangeSliderWidget> s_minmax_w_;
-    std::unique_ptr<LabelWidget> s_minmax_label_;
-    std::unique_ptr<DMSlider> perimeter_radius_slider_;
-    std::unique_ptr<SliderWidget> perimeter_radius_widget_;
-
-    // Percent (read-only summary)
-    std::unique_ptr<LabelWidget> percent_x_label_;
-    std::unique_ptr<LabelWidget> percent_y_label_;
-
-    // Exact offsets (read-only summary)
-    std::unique_ptr<LabelWidget> exact_offset_label_;
-    std::unique_ptr<LabelWidget> exact_room_label_;
     std::unique_ptr<LabelWidget> locked_method_label_;
+    std::unique_ptr<LabelWidget> quantity_label_;
+    std::unique_ptr<LabelWidget> candidate_summary_label_;
 
-    // Checkboxes
-    std::unique_ptr<DMCheckbox> cb_overlap_;
-    std::unique_ptr<CheckboxWidget> cb_overlap_w_;
-    std::unique_ptr<DMCheckbox> cb_spacing_;
-    std::unique_ptr<CheckboxWidget> cb_spacing_w_;
+    std::unique_ptr<DMDropdown> method_dropdown_;
+    std::unique_ptr<DropdownWidget> method_widget_;
+    std::unique_ptr<DMRangeSlider> quantity_slider_;
+    std::unique_ptr<RangeSliderWidget> quantity_widget_;
+    std::unique_ptr<DMCheckbox> overlap_checkbox_;
+    std::unique_ptr<CheckboxWidget> overlap_widget_;
+    std::unique_ptr<DMCheckbox> spacing_checkbox_;
+    std::unique_ptr<CheckboxWidget> spacing_widget_;
+    std::unique_ptr<DMSlider> perimeter_slider_;
+    std::unique_ptr<SliderWidget> perimeter_widget_;
+    std::unique_ptr<DMButton> add_candidate_button_;
+    std::unique_ptr<ButtonWidget> add_candidate_widget_;
+    std::unique_ptr<DMButton> done_button_;
+    std::unique_ptr<ButtonWidget> done_widget_;
 
-    // Done button
-    std::unique_ptr<DMButton> b_done_;
-    std::unique_ptr<ButtonWidget> b_done_w_;
+    std::vector<std::unique_ptr<CandidateRow>> candidates_;
 
-    std::unique_ptr<SearchAssets> search_;
     std::function<void(const nlohmann::json&)> on_save_callback_;
+    std::function<void()> on_close_callback_;
     bool save_dispatched_ = false;
 
     ChangeSummary pending_summary_;
@@ -154,13 +130,22 @@ private:
     int baseline_min_ = 0;
     int baseline_max_ = 0;
 
+    int method_index_ = 0;
+    int quantity_min_ = 1;
+    int quantity_max_ = 1;
+    bool overlap_enabled_ = false;
+    bool spacing_enabled_ = false;
+    int perimeter_radius_ = 0;
+
     int screen_w_ = 1920;
     int screen_h_ = 1080;
 
-    // Dev locks/visibility
     bool method_locked_ = false;
     std::string forced_method_;
     bool quantity_hidden_ = false;
+    std::string ownership_text_;
+    SDL_Color ownership_color_{255, 255, 255, 255};
+    bool has_ownership_color_ = false;
 
     struct CloseCallbackEntry {
         size_t id = 0;
@@ -169,12 +154,8 @@ private:
     std::vector<CloseCallbackEntry> close_callbacks_;
     size_t next_close_callback_id_ = 1;
     std::string floating_stack_key_;
-    SDL_Point last_known_position_{0, 0};
-    SDL_Point pending_anchor_position_{0, 0};
-    bool has_pending_anchor_position_ = false;
-    bool has_custom_position_ = false;
 
-    int total_chance() const;
-    void refresh_chance_labels(int total_chance);
-    void bind_on_close_callbacks();
+    void notify_close_listeners();
 };
+
+using SpawnGroupConfigUI [[deprecated("Use SpawnGroupsConfigPanel instead")]] = SpawnGroupsConfigPanel;
