@@ -9,6 +9,7 @@
 namespace {
 constexpr int kChipWidth = 132;
 constexpr int kRecommendChipWidth = 148;
+constexpr size_t kRecommendationPreviewCount = 5;
 
 std::unique_ptr<DMButton> make_button(const std::string& text, const DMButtonStyle& style, int width) {
     return std::make_unique<DMButton>(text, &style, width, DMButton::height());
@@ -35,6 +36,7 @@ void TagEditorWidget::set_tags(const std::vector<std::string>& tags,
     }
     refresh_recommendations();
     rebuild_buttons();
+    reset_toggle_state();
     mark_dirty();
 }
 
@@ -77,6 +79,26 @@ bool TagEditorWidget::handle_event(const SDL_Event& e) {
     for (const auto& chip : rec_anti_chips_) {
         handle_chip_click(chip, e, [this](const std::string& value) { add_anti_tag(value); }, used);
     }
+    if (show_more_tags_btn_ && show_more_tags_btn_->rect().w > 0) {
+        if (show_more_tags_btn_->handle_event(e)) {
+            used = true;
+            if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
+                show_all_tag_recs_ = !show_all_tag_recs_;
+                update_toggle_labels();
+                mark_dirty();
+            }
+        }
+    }
+    if (show_more_anti_btn_ && show_more_anti_btn_->rect().w > 0) {
+        if (show_more_anti_btn_->handle_event(e)) {
+            used = true;
+            if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
+                show_all_anti_recs_ = !show_all_anti_recs_;
+                update_toggle_labels();
+                mark_dirty();
+            }
+        }
+    }
     return used;
 }
 
@@ -100,6 +122,12 @@ void TagEditorWidget::render(SDL_Renderer* r) const {
     }
     for (const auto& chip : rec_anti_chips_) {
         if (chip.button) chip.button->render(r);
+    }
+    if (show_more_tags_btn_ && show_more_tags_btn_->rect().w > 0) {
+        show_more_tags_btn_->render(r);
+    }
+    if (show_more_anti_btn_ && show_more_anti_btn_->rect().w > 0) {
+        show_more_anti_btn_->render(r);
     }
 }
 
@@ -187,30 +215,78 @@ int TagEditorWidget::layout(int width, int origin_x, int origin_y, bool apply) {
     y += section_gap;
 
     if (!recommended_.empty()) {
+        size_t visible_tags = show_all_tag_recs_ ? rec_tag_chips_.size()
+                                                 : std::min(kRecommendationPreviewCount, rec_tag_chips_.size());
+        size_t visible_anti = show_all_anti_recs_ ? rec_anti_chips_.size()
+                                                  : std::min(kRecommendationPreviewCount, rec_anti_chips_.size());
+
         if (apply) {
             rec_tags_label_rect_ = SDL_Rect{ origin_x, y, width, label_h };
         }
         y += label_h + label_gap;
-        y = layout_grid(rec_tag_chips_, width, origin_x, y, apply);
+        y = layout_grid(rec_tag_chips_, width, origin_x, y, apply, visible_tags);
+
+        bool show_tag_toggle = rec_tag_chips_.size() > kRecommendationPreviewCount;
+        if (show_tag_toggle) {
+            if (!show_more_tags_btn_) {
+                show_more_tags_btn_ = make_button("Show More", DMStyles::ListButton(), kRecommendChipWidth);
+            }
+            int toggle_gap = DMSpacing::small_gap();
+            if (apply) {
+                update_toggle_labels();
+                int button_w = std::max(80, std::min(width, kRecommendChipWidth));
+                show_more_tags_btn_->set_rect(SDL_Rect{ origin_x, y + toggle_gap, button_w, DMButton::height() });
+            }
+            y += toggle_gap + DMButton::height();
+        } else if (apply && show_more_tags_btn_) {
+            show_more_tags_btn_->set_rect(SDL_Rect{0,0,0,0});
+        }
         y += section_gap;
 
         if (apply) {
             rec_anti_label_rect_ = SDL_Rect{ origin_x, y, width, label_h };
         }
         y += label_h + label_gap;
-        y = layout_grid(rec_anti_chips_, width, origin_x, y, apply);
+        y = layout_grid(rec_anti_chips_, width, origin_x, y, apply, visible_anti);
+
+        bool show_anti_toggle = rec_anti_chips_.size() > kRecommendationPreviewCount;
+        if (show_anti_toggle) {
+            if (!show_more_anti_btn_) {
+                show_more_anti_btn_ = make_button("Show More", DMStyles::ListButton(), kRecommendChipWidth);
+            }
+            int toggle_gap = DMSpacing::small_gap();
+            if (apply) {
+                update_toggle_labels();
+                int button_w = std::max(80, std::min(width, kRecommendChipWidth));
+                show_more_anti_btn_->set_rect(SDL_Rect{ origin_x, y + toggle_gap, button_w, DMButton::height() });
+            }
+            y += toggle_gap + DMButton::height();
+        } else if (apply && show_more_anti_btn_) {
+            show_more_anti_btn_->set_rect(SDL_Rect{0,0,0,0});
+        }
         y += section_gap;
     } else if (apply) {
         rec_tags_label_rect_ = SDL_Rect{0,0,0,0};
         rec_anti_label_rect_ = SDL_Rect{0,0,0,0};
+        if (show_more_tags_btn_) show_more_tags_btn_->set_rect(SDL_Rect{0,0,0,0});
+        if (show_more_anti_btn_) show_more_anti_btn_->set_rect(SDL_Rect{0,0,0,0});
     }
 
     y += pad;
     return y - origin_y;
 }
 
-int TagEditorWidget::layout_grid(std::vector<Chip>& chips, int width, int origin_x, int start_y, bool apply) {
-    if (chips.empty()) return start_y;
+int TagEditorWidget::layout_grid(std::vector<Chip>& chips, int width, int origin_x, int start_y, bool apply,
+                                size_t visible_count) {
+    size_t count = std::min(visible_count, chips.size());
+    if (count == 0) {
+        if (apply) {
+            for (auto& chip : chips) {
+                if (chip.button) chip.button->set_rect(SDL_Rect{0,0,0,0});
+            }
+        }
+        return start_y;
+    }
     const int gap = DMSpacing::small_gap();
     int chip_width = &chips == &rec_tag_chips_ || &chips == &rec_anti_chips_ ? kRecommendChipWidth : kChipWidth;
     chip_width = std::min(chip_width, width);
@@ -218,7 +294,7 @@ int TagEditorWidget::layout_grid(std::vector<Chip>& chips, int width, int origin
     int columns = std::max(1, (width + gap) / (chip_width + gap));
     int chip_height = DMButton::height();
 
-    for (size_t i = 0; i < chips.size(); ++i) {
+    for (size_t i = 0; i < count; ++i) {
         int row = static_cast<int>(i / columns);
         int col = static_cast<int>(i % columns);
         int x = origin_x + col * (chip_width + gap);
@@ -228,7 +304,15 @@ int TagEditorWidget::layout_grid(std::vector<Chip>& chips, int width, int origin
         }
     }
 
-    int rows = static_cast<int>((chips.size() + columns - 1) / columns);
+    if (apply && count < chips.size()) {
+        for (size_t i = count; i < chips.size(); ++i) {
+            if (chips[i].button) {
+                chips[i].button->set_rect(SDL_Rect{0,0,0,0});
+            }
+        }
+    }
+
+    int rows = static_cast<int>((count + columns - 1) / columns);
     if (rows <= 0) return start_y;
     int total_height = rows * chip_height + (rows - 1) * gap;
     return start_y + total_height;
@@ -336,4 +420,21 @@ std::string TagEditorWidget::normalize(const std::string& value) {
 void TagEditorWidget::notify_changed() {
     if (!on_changed_) return;
     on_changed_(tags(), anti_tags());
+}
+
+void TagEditorWidget::reset_toggle_state() {
+    show_all_tag_recs_ = false;
+    show_all_anti_recs_ = false;
+    update_toggle_labels();
+    if (show_more_tags_btn_) show_more_tags_btn_->set_rect(SDL_Rect{0,0,0,0});
+    if (show_more_anti_btn_) show_more_anti_btn_->set_rect(SDL_Rect{0,0,0,0});
+}
+
+void TagEditorWidget::update_toggle_labels() {
+    if (show_more_tags_btn_) {
+        show_more_tags_btn_->set_text(show_all_tag_recs_ ? "Show Less" : "Show More");
+    }
+    if (show_more_anti_btn_) {
+        show_more_anti_btn_->set_text(show_all_anti_recs_ ? "Show Less" : "Show More");
+    }
 }

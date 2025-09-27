@@ -5,6 +5,7 @@
 #include <set>
 #include <string>
 #include <vector>
+#include <limits>
 
 #include "widgets.hpp"
 
@@ -40,7 +41,8 @@ private:
     void mark_dirty();
     void layout_if_needed() const;
     int layout(int width, int origin_x, int origin_y, bool apply);
-    int layout_grid(std::vector<Chip>& chips, int width, int origin_x, int start_y, bool apply);
+    int layout_grid(std::vector<Chip>& chips, int width, int origin_x, int start_y, bool apply,
+                    size_t visible_count = std::numeric_limits<size_t>::max());
     static int label_height();
     void draw_label(SDL_Renderer* r, const std::string& text, const SDL_Rect& rect) const;
 
@@ -55,6 +57,8 @@ private:
     static std::string normalize(const std::string& value);
 
     void notify_changed();
+    void reset_toggle_state();
+    void update_toggle_labels();
 
     SDL_Rect rect_{0,0,0,0};
     mutable bool layout_dirty_ = true;
@@ -72,6 +76,11 @@ private:
     std::vector<Chip> anti_chips_;
     std::vector<Chip> rec_tag_chips_;
     std::vector<Chip> rec_anti_chips_;
+
+    bool show_all_tag_recs_ = false;
+    bool show_all_anti_recs_ = false;
+    std::unique_ptr<DMButton> show_more_tags_btn_;
+    std::unique_ptr<DMButton> show_more_anti_btn_;
 
     std::function<void(const std::vector<std::string>&,
                        const std::vector<std::string>&)> on_changed_;

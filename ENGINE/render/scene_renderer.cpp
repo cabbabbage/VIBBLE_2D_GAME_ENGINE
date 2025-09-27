@@ -11,6 +11,7 @@
 #include <vector>
 #include <cstdint>
 #include <initializer_list>
+#include <array>
 
 static constexpr SDL_Color SLATE_COLOR = {69, 101, 74, 255};
 static constexpr float MIN_VISIBLE_SCREEN_RATIO = 0.015f;
@@ -224,27 +225,41 @@ void SceneRenderer::render() {
         SDL_Texture* draw_tex = render_asset_.texture_for_scale(a, final_tex, fw, fh, fb.w, fb.h);
         SDL_Texture* mod_target = draw_tex ? draw_tex : final_tex;
 
-        if (a->is_highlighted()) {
-            SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_ADD);
-            SDL_SetRenderDrawColor(renderer_, 200, 5, 5, 100);
-            SDL_Rect outline = fb; outline.x -= 2; outline.y -= 2; outline.w += 4; outline.h += 4;
-            SDL_RenderFillRect(renderer_, &outline);
-            SDL_SetTextureColorMod(mod_target, 255, 200, 200);
-        } else if (a->is_selected()) {
-            SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_ADD);
-            SDL_SetRenderDrawColor(renderer_, 5, 5, 200, 100);
-            SDL_Rect outline = fb; outline.x -= 2; outline.y -= 2; outline.w += 4; outline.h += 4;
-            SDL_RenderFillRect(renderer_, &outline);
-            SDL_SetTextureColorMod(mod_target, 255, 200, 200);
+        SDL_Texture* base_tex = draw_tex ? draw_tex : final_tex;
+        if (a->is_highlighted() || a->is_selected()) {
+            const SDL_Color outline_color = a->is_highlighted() ? SDL_Color{255, 255, 255, 255}
+                                                               : SDL_Color{255, 230, 0, 255};
+            SDL_SetTextureColorMod(base_tex, outline_color.r, outline_color.g, outline_color.b);
+            SDL_SetTextureAlphaMod(base_tex, outline_color.a);
+            SDL_SetTextureBlendMode(base_tex, SDL_BLENDMODE_BLEND);
+
+            constexpr int outline_thickness = 10;
+            for (int dist = 1; dist <= outline_thickness; ++dist) {
+                const std::array<SDL_Point, 8> offsets{
+                    SDL_Point{-dist, 0}, SDL_Point{dist, 0}, SDL_Point{0, -dist}, SDL_Point{0, dist},
+                    SDL_Point{-dist, -dist}, SDL_Point{dist, -dist}, SDL_Point{-dist, dist}, SDL_Point{dist, dist}};
+                for (const SDL_Point& offset : offsets) {
+                    SDL_Rect outline_rect = fb;
+                    outline_rect.x += offset.x;
+                    outline_rect.y += offset.y;
+                    SDL_RenderCopyEx(renderer_, base_tex, nullptr, &outline_rect, 0, nullptr,
+                                     a->flipped ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE);
+                }
+            }
+
+            SDL_SetTextureColorMod(base_tex, 255, 255, 255);
+            SDL_SetTextureAlphaMod(base_tex, 255);
         } else {
             SDL_SetTextureColorMod(mod_target, 255, 255, 255);
         }
 
-        SDL_RenderCopyEx(renderer_, draw_tex ? draw_tex : final_tex, nullptr, &fb, 0, nullptr,
+        SDL_RenderCopyEx(renderer_, base_tex, nullptr, &fb, 0, nullptr,
                          a->flipped ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE);
         SDL_SetTextureColorMod(mod_target, 255, 255, 255);
+        SDL_SetTextureAlphaMod(mod_target, 255);
         if (draw_tex && draw_tex != final_tex) {
             SDL_SetTextureColorMod(final_tex, 255, 255, 255);
+            SDL_SetTextureAlphaMod(final_tex, 255);
         }
     }
 
