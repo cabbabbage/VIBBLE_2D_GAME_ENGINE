@@ -14,20 +14,23 @@ public:
     DMButton(const std::string& text, const DMButtonStyle* style, int w, int h);
     void set_rect(const SDL_Rect& r);
     const SDL_Rect& rect() const { return rect_; }
-    void set_text(const std::string& t) { text_ = t; }
+    void set_text(const std::string& t);
     const std::string& text() const { return text_; }
     bool handle_event(const SDL_Event& e);
     void render(SDL_Renderer* r) const;
     bool is_hovered() const { return hovered_; }
     static int height() { return 28; }
+    int preferred_width() const { return preferred_width_; }
 
 private:
     void draw_label(SDL_Renderer* r, SDL_Color col) const;
+    void update_preferred_width();
     SDL_Rect rect_{0,0,200,28};
     std::string text_;
     bool hovered_ = false;
     bool pressed_ = false;
     const DMButtonStyle* style_ = nullptr;
+    int preferred_width_ = 0;
 };
 
 class DMTextBox {

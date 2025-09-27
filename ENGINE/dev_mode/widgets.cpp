@@ -14,12 +14,44 @@ constexpr int kSliderControlHeight = 40;
 constexpr int kSliderValueWidth = 60;
 constexpr int kRangeLabelWidth = 40;
 constexpr int kDropdownControlHeight = 32;
+constexpr int kButtonHorizontalPadding = 24; // total horizontal padding applied to button text
 }
 
 DMButton::DMButton(const std::string& text, const DMButtonStyle* style, int w, int h)
-    : rect_{0,0,w,h}, text_(text), style_(style) {}
+    : rect_{0,0,w,h}, text_(text), style_(style) {
+    update_preferred_width();
+    rect_.w = std::max(rect_.w, preferred_width_);
+}
 
-void DMButton::set_rect(const SDL_Rect& r) { rect_ = r; }
+void DMButton::set_rect(const SDL_Rect& r) {
+    rect_ = r;
+    rect_.w = std::max(rect_.w, preferred_width_);
+}
+
+void DMButton::set_text(const std::string& t) {
+    text_ = t;
+    update_preferred_width();
+    rect_.w = std::max(rect_.w, preferred_width_);
+}
+
+void DMButton::update_preferred_width() {
+    if (!style_) {
+        preferred_width_ = rect_.w;
+        return;
+    }
+    TTF_Font* f = TTF_OpenFont(style_->label.font_path.c_str(), style_->label.font_size);
+    if (!f) {
+        preferred_width_ = rect_.w;
+        return;
+    }
+    int text_w = 0;
+    int text_h = 0;
+    if (TTF_SizeUTF8(f, text_.c_str(), &text_w, &text_h) != 0) {
+        text_w = 0;
+    }
+    TTF_CloseFont(f);
+    preferred_width_ = std::max(text_w + kButtonHorizontalPadding, kButtonHorizontalPadding);
+}
 
 bool DMButton::handle_event(const SDL_Event& e) {
     if (e.type == SDL_MOUSEMOTION) {
