@@ -69,7 +69,21 @@ void ActiveAssetsManager::updateClosestAssets(Asset* player, std::size_t max_cou
                 best.insert(it, entry);
         };
 
-        for (Asset* a : active_assets_) {
+        // Distance does not depend on sort; iterate both buckets.
+        for (Asset* a : textures_) {
+                if (!a || a == player) continue;
+                const double dx = static_cast<double>(a->pos.x) - px;
+                const double dy = static_cast<double>(a->pos.y) - py;
+                const double dist2 = dx * dx + dy * dy;
+
+                if (best.size() < max_count) {
+                        insert_sorted({dist2, a});
+                } else if (!best.empty() && dist2 < best.back().dist2) {
+                        insert_sorted({dist2, a});
+                        best.pop_back();
+                }
+        }
+        for (Asset* a : others_) {
                 if (!a || a == player) continue;
                 const double dx = static_cast<double>(a->pos.x) - px;
                 const double dy = static_cast<double>(a->pos.y) - py;
@@ -101,32 +115,49 @@ void ActiveAssetsManager::activate(Asset* asset)
 {
         if (!asset || asset->active) return;
         asset->active = true;
-	auto it = std::lower_bound(
-	active_assets_.begin(), active_assets_.end(), asset,
-	[](Asset* A, Asset* B) { return A->z_index < B->z_index; });
-	active_assets_.insert(it, asset);
 
-	for (Asset* c : asset->children) {
-		if (c && !c->dead && c->info) {
-			activate(c);
-		}
-	}
+        if (is_texture(asset)) {
+                textures_.push_back(asset);
+        } else if (!needs_sort_) {
+                auto it = std::lower_bound(others_.begin(), others_.end(), asset,
+                                           [](Asset* A, Asset* B) { return A->z_index < B->z_index; });
+                others_.insert(it, asset);
+        } else {
+                others_.push_back(asset);
+        }
+        combined_dirty_ = true;
+
+        for (Asset* c : asset->children) {
+                if (c && !c->dead && c->info) {
+                        activate(c);
+                }
+        }
 }
 
 void ActiveAssetsManager::remove(Asset* asset)
 {
-	if (!asset || !asset->active) return;
-	asset->active = false;
-	auto it = std::remove(active_assets_.begin(), active_assets_.end(), asset);
-        active_assets_.erase(it, active_assets_.end());
+        if (!asset || !asset->active) return;
+        asset->active = false;
+
+        if (is_texture(asset)) {
+                auto it = std::find(textures_.begin(), textures_.end(), asset);
+                if (it != textures_.end()) textures_.erase(it);
+        } else {
+                auto it = std::find(others_.begin(), others_.end(), asset);
+                if (it != others_.end()) others_.erase(it);
+        }
+        combined_dirty_ = true;
 }
 
 void ActiveAssetsManager::updateActiveAssets(int cx, int cy)
 {
         if (!all_assets_) return;
 
+        // Snapshot currently active assets (both buckets) to detect deactivations.
         std::vector<Asset*> prev_active;
-        prev_active.swap(active_assets_);
+        prev_active.reserve(textures_.size() + others_.size());
+        prev_active.insert(prev_active.end(), textures_.begin(), textures_.end());
+        prev_active.insert(prev_active.end(), others_.begin(), others_.end());
 
         for (Asset* a : prev_active) {
                 if (a) a->active = false;
@@ -139,6 +170,10 @@ void ActiveAssetsManager::updateActiveAssets(int cx, int cy)
         right  += buffer_world;
         top    -= buffer_world;
         bottom += buffer_world;
+
+        textures_.clear();
+        others_.clear();
+        combined_dirty_ = true;
 
         for (Asset* a : *all_assets_) {
                 if (!a) continue;
@@ -161,25 +196,53 @@ void ActiveAssetsManager::updateActiveAssets(int cx, int cy)
 void ActiveAssetsManager::sortByZIndex()
 {
         if (!needs_sort_) return;
-        std::sort(active_assets_.begin(), active_assets_.end(),
+
+        // Textures bucket remains unsorted.
+        std::sort(others_.begin(), others_.end(),
         [](Asset* A, Asset* B) {
                 if (A->z_index != B->z_index) return A->z_index < B->z_index;
                 if (A->pos.y != B->pos.y)     return A->pos.y < B->pos.y;
                 if (A->pos.x != B->pos.x)     return A->pos.x < B->pos.x;
-           return A < B;
-           });
+                return A < B;
+        });
+
         needs_sort_ = false;
+        combined_dirty_ = true;
 }
 
 void ActiveAssetsManager::addActiveUnsorted(Asset* asset)
 {
         if (!asset || asset->active) return;
         asset->active = true;
-        active_assets_.push_back(asset);
+        if (is_texture(asset)) {
+                textures_.push_back(asset);
+        } else {
+                others_.push_back(asset);
+        }
+        combined_dirty_ = true;
 
         for (Asset* c : asset->children) {
                 if (c && !c->dead && c->info) {
                         addActiveUnsorted(c);
                 }
         }
+}
+
+bool ActiveAssetsManager::is_texture(const Asset* a) {
+        return a && a->info && a->info->type == "texture";
+}
+
+void ActiveAssetsManager::rebuild_combined_if_needed() const {
+        if (!combined_dirty_) return;
+        active_assets_.clear();
+        active_assets_.reserve(textures_.size() + others_.size());
+        active_assets_.insert(active_assets_.end(), textures_.begin(), textures_.end());
+        active_assets_.insert(active_assets_.end(), others_.begin(), others_.end());
+        combined_dirty_ = false;
+}
+
+const std::vector<Asset*>& ActiveAssetsManager::getActive() const {
+        const_cast<ActiveAssetsManager*>(this)->sortByZIndex();
+        rebuild_combined_if_needed();
+        return active_assets_;
 }

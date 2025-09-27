@@ -7,9 +7,6 @@
 #include <algorithm>
 
 RoomSelectorPopup::RoomSelectorPopup() {
-    create_room_button_ = std::make_unique<DMButton>("Create New Room", &DMStyles::CreateButton(), 220, DMButton::height());
-    confirm_button_ = std::make_unique<DMButton>("Create", &DMStyles::CreateButton(), 120, DMButton::height());
-    cancel_button_ = std::make_unique<DMButton>("Cancel", &DMStyles::HeaderButton(), 120, DMButton::height());
     geometry_dirty_ = true;
 }
 
@@ -47,8 +44,6 @@ void RoomSelectorPopup::set_create_callbacks(SuggestRoomFn suggest_cb, CreateRoo
 
 void RoomSelectorPopup::open(const std::vector<std::string>& rooms, RoomCallback cb) {
     callback_ = std::move(cb);
-    creating_room_ = false;
-    name_input_.reset();
     scroll_offset_ = 0;
     geometry_dirty_ = true;
     set_rooms(rooms);
@@ -64,13 +59,8 @@ void RoomSelectorPopup::set_rooms(const std::vector<std::string>& rooms) {
 }
 
 void RoomSelectorPopup::close() {
-    if (creating_room_) {
-        SDL_StopTextInput();
-    }
     visible_ = false;
     callback_ = nullptr;
-    creating_room_ = false;
-    name_input_.reset();
     scroll_offset_ = 0;
     geometry_dirty_ = true;
 }
@@ -108,43 +98,7 @@ bool RoomSelectorPopup::handle_event(const SDL_Event& e) {
 
     layout_widgets();
 
-    if (create_room_button_ && create_room_button_->handle_event(e)) {
-        used = true;
-        if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
-            begin_create_room();
-        }
-    }
-
-    if (creating_room_) {
-        if (name_input_ && name_input_->handle_event(e)) {
-            used = true;
-            geometry_dirty_ = true;
-        }
-        if (confirm_button_ && confirm_button_->handle_event(e)) {
-            used = true;
-            if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
-                finalize_create_room();
-                return true;
-            }
-        }
-        if (cancel_button_ && cancel_button_->handle_event(e)) {
-            used = true;
-            if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
-                cancel_create_room();
-                return true;
-            }
-        }
-        if (e.type == SDL_KEYDOWN) {
-            if (e.key.keysym.sym == SDLK_RETURN || e.key.keysym.sym == SDLK_KP_ENTER) {
-                finalize_create_room();
-                return true;
-            }
-            if (e.key.keysym.sym == SDLK_ESCAPE) {
-                cancel_create_room();
-                return true;
-            }
-        }
-    }
+    // Create-new flow removed from selector
 
     for (size_t i = 0; i < buttons_.size(); ++i) {
         auto& btn = buttons_[i];
@@ -185,12 +139,7 @@ void RoomSelectorPopup::render(SDL_Renderer* renderer) const {
     for (const auto& btn : buttons_) {
         if (btn) btn->render(renderer);
     }
-    if (create_room_button_) create_room_button_->render(renderer);
-    if (creating_room_) {
-        if (name_input_) name_input_->render(renderer);
-        if (confirm_button_) confirm_button_->render(renderer);
-        if (cancel_button_) cancel_button_->render(renderer);
-    }
+    // Create-new controls removed
 
     if (was_clipping == SDL_TRUE) {
         SDL_RenderSetClipRect(renderer, &prev_clip);
@@ -233,18 +182,7 @@ void RoomSelectorPopup::ensure_geometry() const {
         total += static_cast<int>(rooms_.size()) * (button_height + spacing);
         total -= spacing;
     }
-    total += DMSpacing::item_gap();
-    total += button_height;
-    if (creating_room_) {
-        total += spacing;
-        int input_height = DMTextBox::height();
-        if (name_input_) {
-            input_height = name_input_->preferred_height(content_width);
-        }
-        total += input_height;
-        total += spacing;
-        total += button_height;
-    }
+    // No create-new section appended
     total += margin;
 
     content_height_ = total;
@@ -279,76 +217,10 @@ void RoomSelectorPopup::layout_widgets() const {
         }
     }
 
-    y += DMSpacing::item_gap();
-    if (create_room_button_) {
-        create_room_button_->set_rect(SDL_Rect{ rect_.x + margin, y, content_width, DMButton::height() });
-    }
-    y += DMButton::height();
-
-    if (creating_room_) {
-        y += spacing;
-        if (name_input_) {
-            const int input_h = name_input_->preferred_height(content_width);
-            name_input_->set_rect(SDL_Rect{ rect_.x + margin, y, content_width, input_h });
-            const SDL_Rect input_rect = name_input_->rect();
-            y = input_rect.y + input_rect.h;
-        }
-        y += spacing;
-        int left_w = std::max(1, (content_width - spacing) / 2);
-        int right_w = std::max(1, content_width - left_w - spacing);
-        if (left_w + right_w + spacing > content_width) {
-            right_w = std::max(1, content_width - left_w - spacing);
-        }
-        int button_y = y;
-        if (confirm_button_) {
-            confirm_button_->set_rect(SDL_Rect{ rect_.x + margin, button_y, left_w, DMButton::height() });
-        }
-        if (cancel_button_) {
-            cancel_button_->set_rect(SDL_Rect{ rect_.x + margin + left_w + spacing, button_y, right_w, DMButton::height() });
-        }
-        y += DMButton::height();
-    }
+    // No create-new layout below list
 }
 
-void RoomSelectorPopup::begin_create_room() {
-    std::string suggestion = suggest_room_fn_ ? suggest_room_fn_() : std::string("room");
-    if (suggestion.empty()) suggestion = "room";
-    name_input_ = std::make_unique<DMTextBox>("Room Name", suggestion);
-    creating_room_ = true;
-    geometry_dirty_ = true;
-    ensure_geometry();
-    scroll_offset_ = max_scroll_;
-    SDL_StartTextInput();
-}
-
-void RoomSelectorPopup::cancel_create_room() {
-    if (creating_room_) {
-        SDL_StopTextInput();
-    }
-    creating_room_ = false;
-    name_input_.reset();
-    geometry_dirty_ = true;
-}
-
-void RoomSelectorPopup::finalize_create_room() {
-    if (!creating_room_) return;
-    std::string desired = name_input_ ? name_input_->value() : std::string();
-    std::string created;
-    if (create_room_fn_) {
-        created = create_room_fn_(desired);
-    }
-    if (created.empty()) {
-        return;
-    }
-    SDL_StopTextInput();
-    creating_room_ = false;
-    name_input_.reset();
-    geometry_dirty_ = true;
-    if (callback_) {
-        callback_(created);
-    }
-    close();
-}
+// create-room flow removed
 
 void RoomSelectorPopup::scroll_by(int delta) {
     if (delta == 0) return;

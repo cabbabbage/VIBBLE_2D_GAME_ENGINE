@@ -5731,7 +5731,7 @@
         }
     ],
     "asset_name": "Grass_FPS_2",
-    "asset_type": "Object",
+    "asset_type": "texture",
     "can_invert": true,
     "duplicatable": false,
     "duplication_interval_max": 60,

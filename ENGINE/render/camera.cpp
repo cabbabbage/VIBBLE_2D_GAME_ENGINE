@@ -282,9 +282,11 @@ SDL_Point camera::screen_to_map(SDL_Point screen, float, float) const {
     return SDL_Point{ static_cast<int>(std::lround(wx)), static_cast<int>(std::lround(wy)) };
 }
 
-camera::RenderEffects camera::compute_render_effects(SDL_Point world,
-                                                     float asset_screen_height,
-                                                     float reference_screen_height) const {
+camera::RenderEffects camera::compute_render_effects(
+    SDL_Point world,
+    float asset_screen_height,
+    float reference_screen_height) const
+{
     RenderEffects result;
     result.screen_position = map_to_screen(world);
     result.vertical_scale  = 1.0f;
@@ -293,98 +295,117 @@ camera::RenderEffects camera::compute_render_effects(SDL_Point world,
     const double safe_scale       = std::max(1e-6, static_cast<double>(scale_));
     const double pixels_per_world = 1.0 / safe_scale;
 
-    if (realism_enabled_) {
-        const double raw_scale      = std::isfinite(scale_) ? static_cast<double>(scale_) : 0.0;
-        const double zoom_norm      = std::clamp(raw_scale, 0.0, 1.0);
-        const double height_at_zoom1 = std::isfinite(settings_.height_at_zoom1)
-                                           ? std::max(0.0f, settings_.height_at_zoom1)
-                                           : 0.0f;
-        const double camera_height  = height_at_zoom1 * zoom_norm;
+    if (!realism_enabled_) {
+        return result;
+    }
 
-        const double tripod_distance = std::isfinite(settings_.tripod_distance_y)
-                                            ? static_cast<double>(settings_.tripod_distance_y)
-                                            : 0.0;
+    // --- Tunable constants ---
+    constexpr double EPS              = 1e-6;
+    constexpr double SY               = 200.0;
+    constexpr double PARALLAX_KV      = 0.25;
+    constexpr double PARALLAX_STEEPEN = 1.5;
+    constexpr double PARALLAX_MAX     = 4000.0;
+    constexpr double SQUASH_HEIGHT_WT = 0.3;   // weight of height-based squash
+    constexpr double SQUASH_BASE_WT   = 1.0 - SQUASH_HEIGHT_WT;
+    constexpr double ZOOM_ATTEN_WT    = 0.8;
+    constexpr double DIST_EXPONENT    = 3;   // modulation strength by squash
+    constexpr double DIST_MIN         = 0.3;
+    constexpr double DIST_MAX         = 1.3;
+    constexpr double DY_WEIGHT        = 1.2;
+    constexpr double RANGE_COMPRESS   = 2.0;
+    constexpr double R_REF            = 400.0;
 
-        const double base_x = static_cast<double>(screen_center_.x);
-        const double base_y = static_cast<double>(screen_center_.y) - tripod_distance;
+    // --- Camera setup ---
+    const double raw_scale      = std::isfinite(scale_) ? static_cast<double>(scale_) : 0.0;
+    const double zoom_norm      = std::clamp(raw_scale, 0.0, 1.0);
+    const double height_at_zoom1 = std::isfinite(settings_.height_at_zoom1)
+                                       ? std::max(0.0f, settings_.height_at_zoom1)
+                                       : 0.0f;
+    const double camera_height  = height_at_zoom1 * zoom_norm;
 
-        const double dx = static_cast<double>(world.x) - base_x;
-        const double dy = static_cast<double>(world.y) - base_y;
-        const double r  = std::hypot(dx, dy);
+    const double tripod_distance = std::isfinite(settings_.tripod_distance_y)
+                                        ? static_cast<double>(settings_.tripod_distance_y)
+                                        : 0.0;
 
-        constexpr double EPS = 1e-6;
-        const double denom           = std::max(EPS, camera_height + r);
-        const double nearness_weight = (camera_height > EPS) ? (camera_height / denom) : 0.0;
-        const double depth_t         = (camera_height > EPS) ? (r / denom) : 0.0;
+    const double base_x = static_cast<double>(screen_center_.x);
+    const double base_y = static_cast<double>(screen_center_.y) - tripod_distance;
 
-        const double pan_x = pan_offset_x_;
+    const double dx = static_cast<double>(world.x) - base_x;
+    const double dy = static_cast<double>(world.y) - base_y;
+    const double r  = std::hypot(dx, dy);
 
-        // --- Parallax ---
+    const double zoom_attenuation = (camera_height > EPS)
+        ? camera_height / (camera_height + height_at_zoom1 + EPS)
+        : 1.0;
+
+    const double screen_bias = 0.5 + 0.5 * std::tanh(dy / SY);
+
+    // --- Parallax ---
+    if (parallax_enabled_) {
         const double parallax_strength = std::max(0.0f, settings_.parallax_strength);
-        if (parallax_enabled_ && parallax_strength > 0.0 && camera_height > EPS) {
-            // Distance of this asset from vertical screen center (normalized -1..1)
+        if (parallax_strength > 0.0 && camera_height > EPS) {
             const int view_height = height_from_area(current_view_);
-            const double ndy = (static_cast<double>(world.y) - base_y) / (view_height * 0.5);
+            const int view_width  = width_from_area(current_view_);
 
-            // Assets at vertical center = 0 offset.
-            // Positive ndy = below center -> outward, negative ndy = above center -> inward.
-            // Bias stronger near bottom with tanh shaping
-            constexpr double KV = 0.25;
-            constexpr double SY = 200.0;
-            const double vertical_bias = 1.0 + KV * std::tanh(ndy * (view_height / SY));
+            const double ndy = dy / (view_height * 0.5);
+            const double ndx = dx / (view_width  * 0.5);
 
-            // Zoom amplifies effect
+            const double vertical_bias = 1.0 + PARALLAX_KV *
+                                         std::tanh(ndy * (view_height / SY) * PARALLAX_STEEPEN);
+
             double zoom_gain = (height_at_zoom1 > EPS)
                                 ? (height_at_zoom1 / (camera_height + EPS))
                                 : 1.0;
-            zoom_gain = std::pow(zoom_gain, 1.5); // nonlinear boost
+            if (zoom_gain >= 1.0) {
+                zoom_gain = std::pow(zoom_gain, 1.5);
+            }
 
-            // Normalized horizontal offset from screen center (-1..1)
-            const int view_width = width_from_area(current_view_);
-            const double ndx = (static_cast<double>(world.x) - base_x) / (view_width * 0.5);
-
-            // Combine X position and vertical bias to calculate parallax
             double parallax_px = parallax_strength *
-                                ndx * ndy * // <- ties X offset with vertical placement
-                                pixels_per_world * vertical_bias * zoom_gain;
+                                 ndx * ndy *
+                                 pixels_per_world * vertical_bias * zoom_gain;
 
-            // Clamp to prevent wild swings
-            const double max_offset = 4000.0;
-            parallax_px = std::clamp(parallax_px, -max_offset, max_offset);
-
+            parallax_px = std::clamp(parallax_px, -PARALLAX_MAX, PARALLAX_MAX);
             result.screen_position.x += static_cast<int>(std::lround(parallax_px));
         }
+    }
 
-
-
-        // --- Foreshortening (vertical squash) ---
+    // --- Foreshortening ---
+    {
         const double foreshorten_strength = std::max(0.0f, settings_.foreshorten_strength);
         if (foreshorten_strength > 0.0 && camera_height > EPS) {
-            constexpr double SY = 200.0;
-            const double screen_bias      = 0.5 + 0.5 * std::tanh(dy / SY);
-            const double zoom_attenuation = camera_height / (camera_height + height_at_zoom1 + EPS);
-            const double ref_h            = (reference_screen_height > EPS) ? reference_screen_height : 1.0;
-            const double height_factor    = std::pow((static_cast<double>(asset_screen_height) / ref_h),0.9);
+            const double ref_h = (reference_screen_height > EPS) ? reference_screen_height : 1.0;
 
-            const double squash = foreshorten_strength * screen_bias * zoom_attenuation * height_factor;
+            const double squash_base   = foreshorten_strength * screen_bias *
+                                         (zoom_attenuation * ZOOM_ATTEN_WT);
+            const double height_factor = std::sqrt(static_cast<double>(asset_screen_height) / ref_h);
+            const double squash_height = squash_base * height_factor;
+
+            const double squash = SQUASH_BASE_WT * squash_base +
+                                  SQUASH_HEIGHT_WT * squash_height;
+
             const double new_vertical_scale = std::clamp(1.0 - squash, 0.1, 1.0);
             result.vertical_scale = static_cast<float>(new_vertical_scale);
         }
+    }
 
-        // --- Distance scaling ---
+    // --- Distance scaling ---
+    {
         const double distance_strength = std::max(0.0f, settings_.distance_scale_strength);
         if (distance_strength > 0.0) {
-            const double r_ref = 400.0;
-
-            constexpr double DY_WEIGHT = 1.2;
-            const double r_weighted    = std::hypot(dx, dy * DY_WEIGHT);
-
-            constexpr double RANGE_COMPRESS = 2.0;
+            const double r_weighted   = std::hypot(dx, dy * DY_WEIGHT);
             const double r_normalized = r_weighted / RANGE_COMPRESS;
 
-            const double base_scale = (camera_height + r_ref) / (camera_height + r_normalized + EPS);
-            double distance_scale   = 1.0 + (base_scale - 1.0) * distance_strength;
-            distance_scale = std::clamp(distance_scale, 0.35, 2.0);
+            const double base_scale = std::sqrt(
+                (camera_height + R_REF) / (camera_height + r_normalized + EPS)
+            );
+
+            double distance_scale = 1.0 + (base_scale - 1.0) * distance_strength;
+
+            const double squash_factor = static_cast<double>(result.vertical_scale);
+            distance_scale = 1.0 + (distance_scale - 1.0) *
+                             std::pow(squash_factor, DIST_EXPONENT);
+
+            distance_scale = std::clamp(distance_scale, DIST_MIN, DIST_MAX);
             result.distance_scale = static_cast<float>(distance_scale);
         }
     }

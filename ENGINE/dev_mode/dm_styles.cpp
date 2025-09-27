@@ -19,6 +19,12 @@ const SDL_Color kAccentPress       = dm::rgba(29, 78, 216, 235);
 const SDL_Color kAccentBorder      = dm::rgba(30, 64, 175, 255);
 const SDL_Color kAccentText        = dm::rgba(240, 249, 255, 255);
 
+const SDL_Color kWarnBg            = dm::rgba(234, 179, 8, 235);   // amber 500
+const SDL_Color kWarnHover         = dm::rgba(250, 204, 21, 245);  // amber 400
+const SDL_Color kWarnPress         = dm::rgba(202, 138, 4, 235);   // amber 600
+const SDL_Color kWarnBorder        = dm::rgba(161, 98, 7, 255);
+const SDL_Color kWarnText          = dm::rgba(30, 30, 30, 255);
+
 const SDL_Color kListBg            = dm::rgba(20, 30, 49, 210);
 const SDL_Color kListHover         = dm::rgba(31, 45, 70, 230);
 const SDL_Color kListPress         = dm::rgba(41, 56, 85, 240);
@@ -78,6 +84,17 @@ const DMButtonStyle &DMStyles::AccentButton() {
       kAccentPress,
       kAccentBorder,
       kAccentText};
+  return s;
+}
+
+const DMButtonStyle &DMStyles::WarnButton() {
+  static const DMButtonStyle s{
+      {dm::FONT_PATH, 18, kWarnText},
+      kWarnBg,
+      kWarnHover,
+      kWarnPress,
+      kWarnBorder,
+      kWarnText};
   return s;
 }
 

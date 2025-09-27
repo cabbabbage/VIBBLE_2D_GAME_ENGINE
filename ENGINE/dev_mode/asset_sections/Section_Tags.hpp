@@ -14,7 +14,7 @@
 #include <set>
 #include <vector>
 
-// Collapsible section to edit tags and anti-tags for an asset.
+// Collapsible section to edit tags for an asset.
 class AssetInfoUI;
 
 class Section_Tags : public DockableCollapsible {
@@ -33,14 +33,6 @@ class Section_Tags : public DockableCollapsible {
         if (i+1<info_->tags.size()) oss << ", ";
       }
       t_tags_ = std::make_unique<DMTextBox>("Tags (comma)", oss.str());
-      oss.str(""); oss.clear();
-      if (!info_->anti_tags.empty()) {
-        for (size_t i=0;i<info_->anti_tags.size();++i) {
-          oss << info_->anti_tags[i];
-          if (i+1<info_->anti_tags.size()) oss << ", ";
-        }
-      }
-      t_anti_tags_ = std::make_unique<DMTextBox>("Anti-Tags (comma)", oss.str());
       scan_asset_tags();
       refresh_recommendations();
       rebuild_rows();
@@ -59,13 +51,6 @@ class Section_Tags : public DockableCollapsible {
         refresh_recommendations();
         rebuild_rows();
       }
-      auto anti_vec = current_anti_vec();
-      if (anti_vec != info_->anti_tags) {
-        info_->set_anti_tags(anti_vec);
-        changed = true;
-        refresh_recommendations();
-        rebuild_rows();
-      }
       if (changed) (void)info_->update_info_json();
       return used || changed;
     }
@@ -73,11 +58,10 @@ class Section_Tags : public DockableCollapsible {
     void render_content(SDL_Renderer* /*r*/) const override {}
 
   private:
-    // Scan existing assets for tag usage and anti-tag usage
+    // Scan existing assets for tag usage
     void scan_asset_tags() {
       using namespace std::filesystem;
       asset_tag_map_.clear();
-      asset_anti_tag_map_.clear();
       tag_usage_.clear();
       path src{"SRC"};
       if (!exists(src)) return;
@@ -99,17 +83,6 @@ class Section_Tags : public DockableCollapsible {
           }
         }
         if (!tags.empty()) asset_tag_map_[dir.path().filename().string()] = std::move(tags);
-        std::unordered_set<std::string> antis;
-        if (data.contains("anti_tags") && data["anti_tags"].is_array()) {
-          for (auto& t : data["anti_tags"]) {
-            if (t.is_string()) {
-              std::string s = t.get<std::string>();
-              std::transform(s.begin(), s.end(), s.begin(), ::tolower);
-              antis.insert(s);
-            }
-          }
-        }
-        if (!antis.empty()) asset_anti_tag_map_[dir.path().filename().string()] = std::move(antis);
       }
     }
 
@@ -118,13 +91,6 @@ class Section_Tags : public DockableCollapsible {
     }
     std::vector<std::string> current_tags_vec() const {
       auto s = current_tags();
-      return std::vector<std::string>(s.begin(), s.end());
-    }
-    std::set<std::string> current_anti_tags() const {
-      return parse_csv(t_anti_tags_ ? t_anti_tags_->value() : std::string{});
-    }
-    std::vector<std::string> current_anti_vec() const {
-      auto s = current_anti_tags();
       return std::vector<std::string>(s.begin(), s.end());
     }
     static std::set<std::string> parse_csv(const std::string& s) {
@@ -179,56 +145,14 @@ class Section_Tags : public DockableCollapsible {
       return recs;
     }
 
-    std::vector<std::string> find_anti_recommendations(size_t limit, const std::set<std::string>& exclude) const {
-      auto current = current_anti_tags();
-      auto current_tags_set = current_tags();
-      std::set<std::string> full_ex = exclude;
-      full_ex.insert(current.begin(), current.end());
-      full_ex.insert(current_tags_set.begin(), current_tags_set.end());
-      std::unordered_map<std::string,int> scores;
-      for (const auto& [_, antis] : asset_anti_tag_map_) {
-        int shared = 0;
-        for (const auto& t : antis) if (current.count(t)) ++shared;
-        if (shared) {
-          for (const auto& t : antis) {
-            if (!full_ex.count(t)) scores[t] += shared;
-          }
-        }
-      }
-      std::vector<std::pair<std::string,int>> vec(scores.begin(), scores.end());
-      std::sort(vec.begin(), vec.end(), [&](auto& a, auto& b){
-        if (a.second != b.second) return a.second > b.second;
-        int au = tag_usage_.count(a.first) ? tag_usage_.at(a.first) : 0;
-        int bu = tag_usage_.count(b.first) ? tag_usage_.at(b.first) : 0;
-        return au > bu;
-      });
-      std::vector<std::string> recs;
-      for (auto& p : vec) recs.push_back(p.first);
-      std::set<std::string> used(recs.begin(), recs.end());
-      used.insert(full_ex.begin(), full_ex.end());
-      std::vector<std::pair<std::string,int>> usage(tag_usage_.begin(), tag_usage_.end());
-      std::sort(usage.begin(), usage.end(), [](auto& a, auto& b){ return a.second > b.second; });
-      for (auto& u : usage) {
-        if (!used.count(u.first)) { recs.push_back(u.first); used.insert(u.first); if (recs.size()>=limit) break; }
-      }
-      if (recs.size()>limit) recs.resize(limit);
-      return recs;
-    }
-
     void refresh_recommendations() {
       recommended_buttons_.clear();
-      anti_recommended_buttons_.clear();
       auto current = current_tags();
-      auto anti_current = current_anti_tags();
-      auto tag_recs = find_recommendations(30, anti_current);
-      auto anti_recs = find_anti_recommendations(10, current);
+      std::set<std::string> no_exclude;
+      auto tag_recs = find_recommendations(30, no_exclude);
       for (const auto& t : tag_recs) {
         auto b = std::make_unique<DMButton>(t, &DMStyles::ListButton(), 120, DMButton::height());
         recommended_buttons_.push_back(std::move(b));
-      }
-      for (const auto& t : anti_recs) {
-        auto b = std::make_unique<DMButton>(t, &DMStyles::ListButton(), 120, DMButton::height());
-        anti_recommended_buttons_.push_back(std::move(b));
       }
     }
 
@@ -237,16 +161,6 @@ class Section_Tags : public DockableCollapsible {
       if (tags.insert(tag).second) {
         update_text_box(t_tags_.get(), tags);
         info_->set_tags(std::vector<std::string>(tags.begin(), tags.end()));
-        (void)info_->update_info_json();
-        refresh_recommendations();
-      }
-    }
-
-    void add_anti_tag(const std::string& tag) {
-      auto tags = current_anti_tags();
-      if (tags.insert(tag).second) {
-        update_text_box(t_anti_tags_.get(), tags);
-        info_->set_anti_tags(std::vector<std::string>(tags.begin(), tags.end()));
         (void)info_->update_info_json();
         refresh_recommendations();
       }
@@ -282,21 +196,6 @@ class Section_Tags : public DockableCollapsible {
         rows.push_back({ w.get() });
         widgets_.push_back(std::move(w));
       }
-      if (t_anti_tags_) {
-        auto w = std::make_unique<TextBoxWidget>(t_anti_tags_.get());
-        rows.push_back({ w.get() });
-        widgets_.push_back(std::move(w));
-      }
-      for (auto& b : anti_recommended_buttons_) {
-        DMButton* bp = b.get();
-        std::string tag = bp->text();
-        auto w = std::make_unique<ButtonWidget>(bp, [this, tag]() {
-          add_anti_tag(tag);
-          rebuild_rows();
-        });
-        rows.push_back({ w.get() });
-        widgets_.push_back(std::move(w));
-      }
       if (!apply_btn_) {
         apply_btn_ = std::make_unique<DMButton>("Apply Settings", &DMStyles::AccentButton(), 180, DMButton::height());
       }
@@ -309,11 +208,8 @@ class Section_Tags : public DockableCollapsible {
     }
 
     std::unique_ptr<DMTextBox> t_tags_;
-    std::unique_ptr<DMTextBox> t_anti_tags_;
     std::vector<std::unique_ptr<DMButton>> recommended_buttons_;
-    std::vector<std::unique_ptr<DMButton>> anti_recommended_buttons_;
     std::unordered_map<std::string, std::unordered_set<std::string>> asset_tag_map_;
-    std::unordered_map<std::string, std::unordered_set<std::string>> asset_anti_tag_map_;
     std::unordered_map<std::string, int> tag_usage_;
     std::vector<std::unique_ptr<Widget>> widgets_;
     std::unique_ptr<DMButton> apply_btn_;

@@ -575,10 +575,9 @@ public:
     explicit PanelSidebarWidget(MapLayersPanel* owner);
 
     void set_layer_config(LayerConfigPanel* panel);
-    void refresh_config_button();
 
     void set_dirty(bool dirty);
-    void set_selected(int index) { selected_layer_ = index; refresh_config_button(); }
+    void set_selected(int index) { selected_layer_ = index; }
 
     const SDL_Rect& config_rect() const { return config_rect_; }
 
@@ -594,9 +593,7 @@ private:
     SDL_Rect rect_{0,0,0,0};
     std::unique_ptr<DMButton> add_button_;
     std::unique_ptr<DMButton> new_room_button_;
-    std::unique_ptr<DMButton> save_button_;
     std::unique_ptr<DMButton> reload_button_;
-    std::unique_ptr<DMButton> config_button_;
     std::unique_ptr<DMButton> delete_button_;
     std::unique_ptr<DMButton> preview_button_;
     bool dirty_ = false;
@@ -608,18 +605,13 @@ MapLayersPanel::PanelSidebarWidget::PanelSidebarWidget(MapLayersPanel* owner)
     : owner_(owner) {
     add_button_ = std::make_unique<DMButton>("Add Layer", &DMStyles::CreateButton(), 140, DMButton::height());
     new_room_button_ = std::make_unique<DMButton>("New Room", &DMStyles::CreateButton(), 140, DMButton::height());
-    save_button_ = std::make_unique<DMButton>("Save", &DMStyles::HeaderButton(), 140, DMButton::height());
     reload_button_ = std::make_unique<DMButton>("Reload", &DMStyles::HeaderButton(), 140, DMButton::height());
-    config_button_ = std::make_unique<DMButton>("Open Config", &DMStyles::HeaderButton(), 140, DMButton::height());
     delete_button_ = std::make_unique<DMButton>("Delete Layer", &DMStyles::DeleteButton(), 140, DMButton::height());
-    preview_button_ = std::make_unique<DMButton>("Generate Preview", &DMStyles::HeaderButton(), 140, DMButton::height());
+    preview_button_ = std::make_unique<DMButton>("Generate Preview", &DMStyles::WarnButton(), 140, DMButton::height());
 }
 
 void MapLayersPanel::PanelSidebarWidget::set_dirty(bool dirty) {
     dirty_ = dirty;
-    if (save_button_) {
-        save_button_->set_text(dirty ? "Save *" : "Save");
-    }
 }
 
 void MapLayersPanel::PanelSidebarWidget::render(SDL_Renderer* renderer) const {
@@ -634,9 +626,7 @@ void MapLayersPanel::PanelSidebarWidget::render(SDL_Renderer* renderer) const {
     if (add_button_) add_button_->render(renderer);
     if (new_room_button_) new_room_button_->render(renderer);
     if (preview_button_) preview_button_->render(renderer);
-    if (config_button_) config_button_->render(renderer);
     if (delete_button_) delete_button_->render(renderer);
-    if (save_button_) save_button_->render(renderer);
     if (reload_button_) reload_button_->render(renderer);
 }
 
@@ -650,7 +640,7 @@ void MapLayersPanel::PanelSidebarWidget::render(SDL_Renderer* renderer) const {
 
 class MapLayersPanel::RoomCandidateWidget : public Widget {
 public:
-    RoomCandidateWidget(LayerConfigPanel* owner, int layer_index, int candidate_index, json* candidate);
+    RoomCandidateWidget(LayerConfigPanel* owner, int layer_index, int candidate_index, json* candidate, bool editable);
 
     void refresh_from_json();
     void update();
@@ -674,6 +664,7 @@ private:
     int layer_index_ = -1;
     int candidate_index_ = -1;
     json* candidate_ = nullptr;
+    bool editable_ = true;
     SDL_Rect rect_{0,0,0,0};
 
     std::unique_ptr<DMSlider> count_slider_;
@@ -706,6 +697,7 @@ private:
     MapLayersPanel* owner_ = nullptr;
     int layer_index_ = -1;
     json* layer_ = nullptr;
+    bool locked_ = false;
 
     std::unique_ptr<DMTextBox> name_box_;
     std::unique_ptr<TextBoxWidget> name_widget_;
@@ -727,39 +719,40 @@ private:
     std::vector<std::unique_ptr<RoomCandidateWidget>> candidate_widgets_;
 };
 
-void MapLayersPanel::PanelSidebarWidget::set_layer_config(LayerConfigPanel* panel) {
-    config_panel_ = panel;
-    refresh_config_button();
-}
-
-void MapLayersPanel::PanelSidebarWidget::refresh_config_button() {
-    if (!config_button_) return;
-    const bool showing = config_panel_ && config_panel_->is_visible();
-    config_button_->set_text(showing ? "Hide Config" : "Open Config");
-}
+void MapLayersPanel::PanelSidebarWidget::set_layer_config(LayerConfigPanel* panel) { config_panel_ = panel; }
 
 void MapLayersPanel::PanelSidebarWidget::set_rect(const SDL_Rect& r) {
     rect_ = r;
     const int spacing = DMSpacing::item_gap();
-    const int button_width = rect_.w - spacing * 2;
+    const int col_gap = spacing;
+    const int row_gap = spacing;
+    const int columns = 2;
+    const int col_width = std::max(1, (rect_.w - spacing * 2 - col_gap * (columns - 1)) / columns);
+    const int btn_h = DMButton::height();
+
+    // Layout buttons in a 2xN grid (top-right control area)
+    std::vector<DMButton*> btns;
+    if (add_button_) btns.push_back(add_button_.get());
+    if (new_room_button_) btns.push_back(new_room_button_.get());
+    if (preview_button_) btns.push_back(preview_button_.get());
+    if (delete_button_) btns.push_back(delete_button_.get());
+    if (reload_button_) btns.push_back(reload_button_.get());
+
     int y = rect_.y + spacing;
-    auto place_button = [&](std::unique_ptr<DMButton>& btn) {
-        if (!btn) return;
-        btn->set_rect(SDL_Rect{ rect_.x + spacing, y, button_width, DMButton::height() });
-        y += DMButton::height() + spacing;
-    };
+    for (size_t i = 0; i < btns.size(); ++i) {
+        const int row = static_cast<int>(i / columns);
+        const int col = static_cast<int>(i % columns);
+        const int x = rect_.x + spacing + col * (col_width + col_gap);
+        const int w = (col == columns - 1) ? (rect_.x + rect_.w - spacing - x) : col_width;
+        btns[i]->set_rect(SDL_Rect{ x, rect_.y + spacing + row * (btn_h + row_gap), w, btn_h });
+        y = rect_.y + spacing + (row + 1) * (btn_h + row_gap);
+    }
 
-    place_button(add_button_);
-    place_button(new_room_button_);
-    place_button(preview_button_);
-    place_button(config_button_);
-    place_button(delete_button_);
-    y += spacing; // extra breathing room before save/reload
-    place_button(save_button_);
-    place_button(reload_button_);
-
-    int config_top = y;
-    int config_height = std::max(0, rect_.y + rect_.h - config_top - spacing);
+    // Config panel area occupies the rest
+    const int button_area_bottom = y;
+    const int button_width = rect_.w - spacing * 2;
+    const int config_top = button_area_bottom;
+    const int config_height = std::max(0, rect_.y + rect_.h - config_top - spacing);
     config_rect_ = SDL_Rect{ rect_.x + spacing, config_top, button_width, config_height };
     if (config_panel_) {
         config_panel_->set_rect(config_rect_);
@@ -768,11 +761,9 @@ void MapLayersPanel::PanelSidebarWidget::set_rect(const SDL_Rect& r) {
         config_panel_->set_available_height_override(available);
         config_panel_->set_cell_width(std::max(160, button_width - panel_padding * 2));
     }
-    refresh_config_button();
 }
 
 bool MapLayersPanel::PanelSidebarWidget::handle_event(const SDL_Event& e) {
-    refresh_config_button();
     bool used = false;
     auto handle_btn = [&](std::unique_ptr<DMButton>& btn, const std::function<void()>& cb) {
         if (btn && btn->handle_event(e)) {
@@ -789,23 +780,8 @@ bool MapLayersPanel::PanelSidebarWidget::handle_event(const SDL_Event& e) {
         owner_->request_preview_regeneration();
         owner_->regenerate_preview();
     });
-    handle_btn(save_button_, [this]() { if (owner_) owner_->save_layers_to_disk(); });
     handle_btn(reload_button_, [this]() { if (owner_) owner_->reload_layers_from_disk(); });
-    handle_btn(config_button_, [this]() {
-        if (!owner_) return;
-        if (!config_panel_) {
-            if (selected_layer_ >= 0) owner_->open_layer_config_internal(selected_layer_);
-            return;
-        }
-        if (config_panel_->is_visible()) {
-            config_panel_->close();
-        } else if (selected_layer_ >= 0) {
-            owner_->open_layer_config_internal(selected_layer_);
-        }
-        refresh_config_button();
-    });
     handle_btn(delete_button_, [this]() { if (owner_ && selected_layer_ >= 0) owner_->delete_layer_internal(selected_layer_); });
-    refresh_config_button();
     return used;
 }
 
@@ -827,6 +803,7 @@ void MapLayersPanel::LayerConfigPanel::open(int layer_index, json* layer) {
     if (!layer) return;
     layer_index_ = layer_index;
     layer_ = layer;
+    locked_ = owner_ ? owner_->is_layer_locked(layer_index_) : false;
     name_cache_ = layer_->value("name", std::string("layer_") + std::to_string(layer_index));
     if (layer_->contains("min_rooms")) layer_->erase("min_rooms");
     max_rooms_cache_ = layer_->value("max_rooms", 0);
@@ -835,9 +812,6 @@ void MapLayersPanel::LayerConfigPanel::open(int layer_index, json* layer) {
     set_visible(true);
     set_expanded(true);
     reset_scroll();
-    if (owner_ && owner_->sidebar_widget_) {
-        owner_->sidebar_widget_->refresh_config_button();
-    }
 }
 
 void MapLayersPanel::LayerConfigPanel::close() {
@@ -845,9 +819,6 @@ void MapLayersPanel::LayerConfigPanel::close() {
     layer_index_ = -1;
     layer_ = nullptr;
     candidate_widgets_.clear();
-    if (owner_ && owner_->sidebar_widget_) {
-        owner_->sidebar_widget_->refresh_config_button();
-    }
 }
 
 bool MapLayersPanel::LayerConfigPanel::is_visible() const {
@@ -902,36 +873,52 @@ void MapLayersPanel::LayerConfigPanel::refresh() {
 
     DockableCollapsible::Rows rows;
 
-    name_box_ = std::make_unique<DMTextBox>("Layer Name", name_cache_);
-    name_widget_ = std::make_unique<TextBoxWidget>(name_box_.get());
-    rows.push_back({ name_widget_.get() });
+    if (!locked_) {
+        name_box_ = std::make_unique<DMTextBox>("Layer Name", name_cache_);
+        name_widget_ = std::make_unique<TextBoxWidget>(name_box_.get());
+        rows.push_back({ name_widget_.get() });
 
-    max_rooms_cache_ = std::max(0, max_rooms_cache_);
-    const int slider_max = std::max(kRoomRangeMaxDefault, max_rooms_cache_ + 8);
-    room_count_slider_ = std::make_unique<DMSlider>("Room Count", 0, slider_max, max_rooms_cache_);
-    room_count_widget_ = std::make_unique<SliderWidget>(room_count_slider_.get());
-    rows.push_back({ room_count_widget_.get() });
+        max_rooms_cache_ = std::max(0, max_rooms_cache_);
+        const int slider_max = std::max(kRoomRangeMaxDefault, max_rooms_cache_ + 8);
+        room_count_slider_ = std::make_unique<DMSlider>("Room Count", 0, slider_max, max_rooms_cache_);
+        room_count_widget_ = std::make_unique<SliderWidget>(room_count_slider_.get());
+        rows.push_back({ room_count_widget_.get() });
 
-    add_candidate_btn_ = std::make_unique<DMButton>("Add Room", &DMStyles::CreateButton(), 160, DMButton::height());
-    add_candidate_widget_ = std::make_unique<ButtonWidget>(add_candidate_btn_.get(), [this]() {
-        if (!owner_) return;
-        owner_->request_room_selection([this](const std::string& room) {
+        add_candidate_btn_ = std::make_unique<DMButton>("Add Room", &DMStyles::CreateButton(), 160, DMButton::height());
+        add_candidate_widget_ = std::make_unique<ButtonWidget>(add_candidate_btn_.get(), [this]() {
             if (!owner_) return;
-            owner_->handle_candidate_added(layer_index_, room);
+            owner_->request_room_selection_for_layer(layer_index_, [this](const std::string& room) {
+                if (!owner_) return;
+                owner_->handle_candidate_added(layer_index_, room);
+            });
         });
-    });
-    rows.push_back({ add_candidate_widget_.get() });
+        rows.push_back({ add_candidate_widget_.get() });
 
-    delete_layer_btn_ = std::make_unique<DMButton>("Delete Layer", &DMStyles::DeleteButton(), 140, DMButton::height());
-    delete_layer_widget_ = std::make_unique<ButtonWidget>(delete_layer_btn_.get(), [this]() {
-        if (owner_) owner_->delete_layer_internal(layer_index_);
-        this->close();
-    });
+        delete_layer_btn_ = std::make_unique<DMButton>("Delete Layer", &DMStyles::DeleteButton(), 140, DMButton::height());
+        delete_layer_widget_ = std::make_unique<ButtonWidget>(delete_layer_btn_.get(), [this]() {
+            if (owner_) owner_->delete_layer_internal(layer_index_);
+            this->close();
+        });
+    } else {
+        // Locked layer: no editing controls, only Close button
+        name_box_.reset();
+        name_widget_.reset();
+        room_count_slider_.reset();
+        room_count_widget_.reset();
+        add_candidate_btn_.reset();
+        add_candidate_widget_.reset();
+        delete_layer_btn_.reset();
+        delete_layer_widget_.reset();
+    }
 
     close_btn_ = std::make_unique<DMButton>("Close", &DMStyles::HeaderButton(), 120, DMButton::height());
     close_widget_ = std::make_unique<ButtonWidget>(close_btn_.get(), [this]() { this->close(); });
 
-    rows.push_back({ delete_layer_widget_.get(), close_widget_.get() });
+    if (!locked_) {
+        rows.push_back({ delete_layer_widget_.get(), close_widget_.get() });
+    } else {
+        rows.push_back({ close_widget_.get() });
+    }
 
     candidate_widgets_.clear();
     if (layer_ && layer_->contains("rooms")) {
@@ -939,7 +926,7 @@ void MapLayersPanel::LayerConfigPanel::refresh() {
         if (rooms.is_array()) {
             for (size_t i = 0; i < rooms.size(); ++i) {
                 json& entry = rooms[i];
-                auto widget = std::make_unique<RoomCandidateWidget>(this, layer_index_, static_cast<int>(i), &entry);
+                auto widget = std::make_unique<RoomCandidateWidget>(this, layer_index_, static_cast<int>(i), &entry, !locked_);
                 widget->refresh_from_json();
                 candidate_widgets_.push_back(std::move(widget));
                 rows.push_back({ candidate_widgets_.back().get() });
@@ -955,7 +942,7 @@ void MapLayersPanel::LayerConfigPanel::refresh() {
 
 void MapLayersPanel::LayerConfigPanel::sync_from_widgets() {
     if (!layer_) return;
-    if (name_box_) {
+    if (!locked_ && name_box_) {
         const std::string current = name_box_->value();
         if (current != name_cache_) {
             name_cache_ = current;
@@ -964,7 +951,7 @@ void MapLayersPanel::LayerConfigPanel::sync_from_widgets() {
             set_title(std::string("Layer: ") + name_cache_);
         }
     }
-    if (room_count_slider_) {
+    if (!locked_ && room_count_slider_) {
         int new_value = room_count_slider_->value();
         if (new_value != max_rooms_cache_) {
             max_rooms_cache_ = new_value;
@@ -985,11 +972,13 @@ void MapLayersPanel::LayerConfigPanel::sync_from_widgets() {
 // RoomCandidateWidget implementation
 // -----------------------------------------------------------------------------
 
-MapLayersPanel::RoomCandidateWidget::RoomCandidateWidget(LayerConfigPanel* owner, int layer_index, int candidate_index, json* candidate)
-    : owner_(owner), layer_index_(layer_index), candidate_index_(candidate_index), candidate_(candidate) {
-    count_slider_ = std::make_unique<DMSlider>("Instances", 0, kCandidateRangeMaxDefault, 0);
-    add_child_button_ = std::make_unique<DMButton>("Add Child", &DMStyles::HeaderButton(), 120, DMButton::height());
-    delete_button_ = std::make_unique<DMButton>("Delete", &DMStyles::DeleteButton(), 120, DMButton::height());
+MapLayersPanel::RoomCandidateWidget::RoomCandidateWidget(LayerConfigPanel* owner, int layer_index, int candidate_index, json* candidate, bool editable)
+    : owner_(owner), layer_index_(layer_index), candidate_index_(candidate_index), candidate_(candidate), editable_(editable) {
+    if (editable_) {
+        count_slider_ = std::make_unique<DMSlider>("Instances", 0, kCandidateRangeMaxDefault, 0);
+        add_child_button_ = std::make_unique<DMButton>("Add Child", &DMStyles::HeaderButton(), 120, DMButton::height());
+        delete_button_ = std::make_unique<DMButton>("Delete", &DMStyles::DeleteButton(), 120, DMButton::height());
+    }
 }
 
 void MapLayersPanel::RoomCandidateWidget::refresh_from_json() {
@@ -997,15 +986,21 @@ void MapLayersPanel::RoomCandidateWidget::refresh_from_json() {
     if (candidate_->contains("min_instances")) candidate_->erase("min_instances");
     const int count = std::max(0, candidate_->value("max_instances", 0));
     count_cache_ = count;
-    const int slider_max = std::max(kCandidateRangeMaxDefault, count_cache_ + 8);
-    count_slider_ = std::make_unique<DMSlider>("Instances", 0, slider_max, count_cache_);
+    if (editable_) {
+        const int slider_max = std::max(kCandidateRangeMaxDefault, count_cache_ + 8);
+        count_slider_ = std::make_unique<DMSlider>("Instances", 0, slider_max, count_cache_);
+    } else {
+        count_slider_.reset();
+    }
     child_chips_.clear();
     auto children_it = candidate_->find("required_children");
     if (children_it != candidate_->end() && children_it->is_array()) {
         for (const auto& child : *children_it) {
             ChildChip chip;
             chip.name = child.get<std::string>();
-            chip.remove_button = std::make_unique<DMButton>("x", &DMStyles::DeleteButton(), 24, DMButton::height());
+            if (editable_) {
+                chip.remove_button = std::make_unique<DMButton>("x", &DMStyles::DeleteButton(), 24, DMButton::height());
+            }
             child_chips_.push_back(std::move(chip));
         }
     }
@@ -1032,7 +1027,7 @@ void MapLayersPanel::RoomCandidateWidget::set_rect(const SDL_Rect& r) {
     if (count_slider_) count_slider_->set_rect(slider_rect);
     SDL_Rect buttons_rect{ rect_.x + spacing, slider_rect.y + slider_rect.h + spacing, 120, DMButton::height() };
     if (add_child_button_) add_child_button_->set_rect(buttons_rect);
-    buttons_rect.x += add_child_button_->rect().w + spacing;
+    if (add_child_button_) buttons_rect.x += add_child_button_->rect().w + spacing;
     if (delete_button_) delete_button_->set_rect(buttons_rect);
     int chip_y = buttons_rect.y + DMButton::height() + spacing;
     int chip_x = rect_.x + spacing;
@@ -1059,7 +1054,7 @@ void MapLayersPanel::RoomCandidateWidget::set_rect(const SDL_Rect& r) {
 
 int MapLayersPanel::RoomCandidateWidget::height_for_width(int w) const {
     const int spacing = DMSpacing::item_gap();
-    int height = spacing + DMButton::height() + spacing + DMSlider::height() + spacing + DMButton::height() + spacing;
+    int height = spacing + DMButton::height() + spacing + (count_slider_ ? DMSlider::height() : 0) + spacing + (add_child_button_ || delete_button_ ? DMButton::height() : 0) + spacing;
     int chips_needed = static_cast<int>(child_chips_.size());
     if (chips_needed > 0) {
         const int chip_height = DMButton::height();
@@ -1079,7 +1074,7 @@ bool MapLayersPanel::RoomCandidateWidget::handle_event(const SDL_Event& e) {
     if (add_child_button_ && add_child_button_->handle_event(e)) {
         if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
             if (owner_ && owner_->panel_owner()) {
-                owner_->panel_owner()->request_room_selection([this](const std::string& child) {
+                owner_->panel_owner()->request_room_selection_for_layer(layer_index_, [this](const std::string& child) {
                     if (owner_ && owner_->panel_owner()) {
                         owner_->panel_owner()->handle_candidate_child_added(layer_index_, candidate_index_, child);
                         this->refresh_from_json();
@@ -1686,9 +1681,6 @@ void MapLayersPanel::open_room_config_for(const std::string& room_name) {
     if (layer_config_) {
         layer_config_->close();
     }
-    if (sidebar_widget_) {
-        sidebar_widget_->refresh_config_button();
-    }
     ensure_room_configurator();
     if (!room_configurator_) {
         return;
@@ -1719,6 +1711,15 @@ void MapLayersPanel::ensure_room_configurator() {
                 [](const std::string&) {},
                 []() {}
             );
+            room_configurator_->set_on_room_renamed([this](const std::string& old_name, const std::string& desired) -> std::string {
+                std::string final_name = this->rename_room_everywhere(old_name, desired);
+                this->rebuild_available_rooms();
+                this->request_preview_regeneration();
+                this->regenerate_preview();
+                this->mark_dirty();
+                this->active_room_config_key_ = final_name;
+                return final_name;
+            });
         }
     }
 }
@@ -1877,6 +1878,8 @@ void MapLayersPanel::rebuild_available_rooms() {
     const auto rooms_it = map_info_->find("rooms_data");
     if (rooms_it != map_info_->end() && rooms_it->is_object()) {
         for (auto it = rooms_it->begin(); it != rooms_it->end(); ++it) {
+            // Hide generic placeholder key "room" from selection UI
+            if (it.key() == "room") continue;
             available_rooms_.push_back(it.key());
         }
         std::sort(available_rooms_.begin(), available_rooms_.end());
@@ -1918,11 +1921,12 @@ void MapLayersPanel::add_layer_internal() {
 }
 
 void MapLayersPanel::add_room_to_selected_layer() {
-    if (selected_layer_ < 0) return;
-    int layer_index = selected_layer_;
-    request_room_selection([this, layer_index](const std::string& room) {
-        this->handle_candidate_added(layer_index, room);
-    });
+    // Create a new room entry and open its configurator in the panel area
+    std::string suggested = suggest_room_name();
+    std::string created = create_new_room(suggested);
+    if (!created.empty()) {
+        open_room_config_for(created);
+    }
 }
 
 std::string MapLayersPanel::create_new_room(const std::string& desired_name) {
@@ -2007,6 +2011,7 @@ bool MapLayersPanel::ensure_child_room_exists(int parent_layer_index, const std:
 
 void MapLayersPanel::delete_layer_internal(int index) {
     if (!map_info_) return;
+    if (is_layer_locked(index)) return;
     auto& arr = layers_array();
     if (index < 0 || index >= static_cast<int>(arr.size())) return;
     arr.erase(arr.begin() + index);
@@ -2049,6 +2054,56 @@ void MapLayersPanel::handle_layer_name_changed(int index, const std::string& nam
     (*layer)["name"] = name;
     mark_dirty();
     refresh_canvas();
+}
+
+std::string MapLayersPanel::rename_room_everywhere(const std::string& old_key, const std::string& desired_key) {
+    if (!map_info_) return desired_key;
+    if (old_key.empty()) return desired_key;
+    std::string trimmed = trim_copy_local(desired_key);
+    std::string base = sanitize_room_key(trimmed);
+    if (base.empty()) base = desired_key.empty() ? old_key : desired_key;
+
+    auto& map_info = *map_info_;
+    auto rdit = map_info.find("rooms_data");
+    if (rdit == map_info.end() || !rdit->is_object()) return old_key;
+    auto& rooms_data = (*map_info_)["rooms_data"];
+    if (!rooms_data.contains(old_key)) return old_key;
+
+    std::string final_key = base;
+    if (final_key != old_key) {
+        nlohmann::json entry = rooms_data[old_key];
+        rooms_data.erase(old_key);
+        final_key = make_unique_room_key(rooms_data, final_key);
+        rooms_data[final_key] = std::move(entry);
+    }
+
+    // Ensure internal 'name' matches the key
+    if (rooms_data[final_key].is_object()) {
+        rooms_data[final_key]["name"] = final_key;
+    }
+
+    // Update references in all layers (names and required_children)
+    auto lit = map_info.find("map_layers");
+    if (lit != map_info.end() && lit->is_array()) {
+        for (auto& layer : *lit) {
+            auto rooms_it = layer.find("rooms");
+            if (rooms_it == layer.end() || !rooms_it->is_array()) continue;
+            for (auto& entry : *rooms_it) {
+                if (!entry.is_object()) continue;
+                if (entry.value("name", std::string()) == old_key) entry["name"] = final_key;
+                auto& children = entry["required_children"];
+                if (children.is_array()) {
+                    for (auto& c : children) {
+                        if (c.is_string() && c.get<std::string>() == old_key) c = final_key;
+                    }
+                }
+            }
+        }
+    }
+
+    if (active_room_config_key_ == old_key) active_room_config_key_ = final_key;
+    refresh_canvas();
+    return final_key;
 }
 
 void MapLayersPanel::handle_candidate_count_changed(int layer_index, int candidate_index, int max_instances) {
@@ -2120,6 +2175,16 @@ void MapLayersPanel::handle_candidate_child_removed(int layer_index, int candida
 void MapLayersPanel::handle_candidate_added(int layer_index, const std::string& room_name) {
     auto* layer = layer_at(layer_index);
     if (!layer) return;
+    // Enforce constraints: do not allow editing of locked (spawn) layer, and
+    // prevent adding spawn rooms to other layers.
+    if (is_layer_locked(layer_index)) {
+        return;
+    }
+    if (is_spawn_room(room_name)) {
+        const int spawn_idx = find_spawn_layer_index();
+        const bool allowed_here = (spawn_idx < 0 && layer_index == 0) || (spawn_idx == layer_index);
+        if (!allowed_here) return;
+    }
     auto& rooms = (*layer)["rooms"];
     if (!rooms.is_array()) rooms = json::array();
     json candidate = {
@@ -2195,13 +2260,58 @@ void MapLayersPanel::ensure_layer_config_valid() {
     }
 }
 
-void MapLayersPanel::request_room_selection(const std::function<void(const std::string&)>& cb) {
+bool MapLayersPanel::is_spawn_room(const std::string& room_key) const {
+    if (!map_info_) return false;
+    auto it = map_info_->find("rooms_data");
+    if (it == map_info_->end() || !it->is_object()) return false;
+    auto rit = it->find(room_key);
+    if (rit == it->end() || !rit->is_object()) return false;
+    return rit->value("is_spawn", false);
+}
+
+int MapLayersPanel::find_spawn_layer_index() const {
+    if (!map_info_) return -1;
+    const auto& arr = layers_array();
+    if (!arr.is_array()) return -1;
+    for (int i = 0; i < static_cast<int>(arr.size()); ++i) {
+        const auto& layer = arr[i];
+        auto rooms_it = layer.find("rooms");
+        if (rooms_it == layer.end() || !rooms_it->is_array()) continue;
+        for (const auto& entry : *rooms_it) {
+            if (!entry.is_object()) continue;
+            std::string name = entry.value("name", std::string());
+            if (!name.empty() && is_spawn_room(name)) return i;
+        }
+    }
+    return -1;
+}
+
+bool MapLayersPanel::is_layer_locked(int index) const {
+    const int spawn_idx = find_spawn_layer_index();
+    return spawn_idx >= 0 && index == spawn_idx;
+}
+
+std::vector<std::string> MapLayersPanel::available_rooms_for_layer(int layer_index) const {
+    std::vector<std::string> out = available_rooms_;
+    const int spawn_idx = find_spawn_layer_index();
+    const bool allow_spawn_here = (spawn_idx < 0 && layer_index == 0) || (spawn_idx == layer_index);
+    if (!allow_spawn_here) {
+        // Filter out spawn rooms from disallowed layers
+        out.erase(std::remove_if(out.begin(), out.end(), [this](const std::string& key) {
+            return is_spawn_room(key);
+        }), out.end());
+    }
+    return out;
+}
+
+void MapLayersPanel::request_room_selection_for_layer(int layer_index, const std::function<void(const std::string&)>& cb) {
     if (!room_selector_) return;
     if (available_rooms_.empty()) rebuild_available_rooms();
     SDL_Rect anchor = sidebar_widget_ ? sidebar_widget_->rect() : rect();
     room_selector_->set_screen_bounds(screen_bounds_);
     room_selector_->set_anchor_rect(anchor);
-    room_selector_->open(available_rooms_, cb);
+    const auto list = available_rooms_for_layer(layer_index);
+    room_selector_->open(list, cb);
 }
 
 

@@ -4,6 +4,7 @@
 #include <vector>
 #include <string>
 #include <filesystem>
+#include <unordered_set>
 #include <SDL.h>
 #include "asset/asset_info.hpp"
 #include "asset/asset_library.hpp"
@@ -24,7 +25,9 @@ class AssetSpawnPlanner {
         private:
     void parse_asset_spawns(const Area& area);
     void sort_spawn_queue();
-    std::string resolve_asset_from_tag(const std::string& tag);
+    std::string resolve_asset_from_tag(const std::string& tag,
+                                       const std::unordered_set<std::string>* banned_tags = nullptr,
+                                       const std::unordered_set<std::string>* banned_assets = nullptr);
     nlohmann::json* get_source_entry(int source_index, int entry_index, const std::string& key);
     void persist_sources();
     nlohmann::json root_json_;

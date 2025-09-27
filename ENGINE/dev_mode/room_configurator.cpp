@@ -632,7 +632,19 @@ void RoomConfigurator::update(const Input& input, int screen_w, int screen_h) {
     if (room_name_lbl_) {
         std::string new_name = room_name_lbl_->value();
         if (new_name != room_name_) {
-            room_name_ = std::move(new_name);
+            const std::string old_name = room_name_;
+            std::string final_name = new_name;
+            if (on_room_renamed_) {
+                try {
+                    final_name = on_room_renamed_(old_name, new_name);
+                } catch (...) {
+                    final_name = new_name;
+                }
+            }
+            if (final_name != new_name && room_name_lbl_) {
+                room_name_lbl_->set_value(final_name);
+            }
+            room_name_ = std::move(final_name);
             changed = true;
         }
     }

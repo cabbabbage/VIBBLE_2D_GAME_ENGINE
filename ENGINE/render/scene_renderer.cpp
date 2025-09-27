@@ -10,26 +10,12 @@
 #include <tuple>
 #include <vector>
 #include <cstdint>
-#include <cstring>
 #include <initializer_list>
 
 static constexpr SDL_Color SLATE_COLOR = {69, 101, 74, 255};
 static constexpr float MIN_VISIBLE_SCREEN_RATIO = 0.015f;
 
-namespace {
-
-bool ensure_surface(SDL_Surface*& surface, int width, int height) {
-        if (surface && (surface->w != width || surface->h != height)) {
-                SDL_FreeSurface(surface);
-                surface = nullptr;
-        }
-        if (!surface) {
-                surface = SDL_CreateRGBSurfaceWithFormat(0, width, height, 32, SDL_PIXELFORMAT_RGBA8888);
-        }
-        return surface != nullptr;
-}
-
-}
+namespace { }
 
 // Motion blur disabled
 
@@ -86,14 +72,7 @@ SceneRenderer::~SceneRenderer() {
                 SDL_DestroyTexture(post_small_tex_b_);
                 post_small_tex_b_ = nullptr;
         }
-        if (postprocess_full_surface_) {
-                SDL_FreeSurface(postprocess_full_surface_);
-                postprocess_full_surface_ = nullptr;
-        }
-        if (postprocess_small_surface_) {
-                SDL_FreeSurface(postprocess_small_surface_);
-                postprocess_small_surface_ = nullptr;
-        }
+        // CPU surfaces were removed in favor of GPU textures for postprocess.
 }
 
 SDL_Renderer* SceneRenderer::get_renderer() const {
@@ -167,29 +146,10 @@ void SceneRenderer::render() {
     main_light_source_.update();
 
     // ====== Tunable post-process params (hook to your UI) ======
-    static int   kPostBlurRadiusPx = 5;   // blur radius at full-res
-    static Uint8 kPostOverlayAlpha = 60;  // 0..255
-    // 0=BLEND, 1=ADD, 2=MOD, 3=MUL(if supported)
-    static int   kPostBlendModeSel = 0;
-    // Downscale factor: 1=no scale, 2=quarter pixels, 3=~1/9 pixels, etc.
-    static int   kPostDownscale    = 6;   // try 2..4 for a good speed/quality tradeoff
-    // ===========================================================
-
-    SDL_BlendMode kPostBlendMode = SDL_BLENDMODE_BLEND;
-    switch (kPostBlendModeSel) {
-        case 1: kPostBlendMode = SDL_BLENDMODE_ADD; break;
-        case 2: kPostBlendMode = SDL_BLENDMODE_MOD; break;
-        #ifdef SDL_BLENDMODE_MUL
-        case 3: kPostBlendMode = SDL_BLENDMODE_MUL; break;
-        #endif
-        default: kPostBlendMode = SDL_BLENDMODE_BLEND; break;
-    }
+    static int   kPostBlurRadiusPx = 2;   // blur radius at full-res
+    static Uint8 kPostOverlayAlpha = 255;  // 0..255
+    // Full-resolution blur (no downscale, no blend-mode selection)
     const int blur_radius_full = std::max(0, kPostBlurRadiusPx);
-    const int ds               = std::max(1, kPostDownscale);
-    const int small_w          = std::max(1, (screen_width_  + ds - 1) / ds);
-    const int small_h          = std::max(1, (screen_height_ + ds - 1) / ds);
-    // Scale blur radius into the downsampled space so the look roughly matches
-    const int blur_radius_small = std::max(0, blur_radius_full / ds);
 
     // ----- ENSURE GPU RENDER TARGETS & CLEAR SCENE -----
     auto ensure_target = [&](SDL_Texture*& tex, int w, int h) {
@@ -293,75 +253,42 @@ void SceneRenderer::render() {
     z_light_pass_->render(debugging);
     if (assets_) assets_->render_overlays(renderer_);
 
-    // ----- POST: DOWNSCALE (GPU) -> MULTI-TAP BLUR -> UPSCALE OVERLAY -----
-    if (kPostOverlayAlpha > 0 && scene_target_tex_) {
-        auto ensure_small_targets = [&]() {
-            return ensure_target(post_small_tex_a_, small_w, small_h) && ensure_target(post_small_tex_b_, small_w, small_h);
-        };
-        if (ensure_small_targets()) {
-            // Downscale scene into A
-            SDL_SetRenderTarget(renderer_, post_small_tex_a_);
-            SDL_SetRenderDrawColor(renderer_, 0, 0, 0, 0);
-            SDL_RenderClear(renderer_);
-            SDL_Rect dst_small{0, 0, small_w, small_h};
-            SDL_RenderCopy(renderer_, scene_target_tex_, nullptr, &dst_small);
-
-            // Multi-tap blur passes using additive accumulation
-            auto blur_once = [&](SDL_Texture* src, SDL_Texture* dst, int step_px) {
-                SDL_SetRenderTarget(renderer_, dst);
-                SDL_SetRenderDrawColor(renderer_, 0, 0, 0, 0);
-                SDL_RenderClear(renderer_);
-                SDL_SetTextureBlendMode(src, SDL_BLENDMODE_ADD);
-                const int taps = 9; // center + 8 neighbors
-                const Uint8 tap_alpha = static_cast<Uint8>(std::max(1, 255 / taps));
-                SDL_SetTextureAlphaMod(src, tap_alpha);
-                for (int dy : std::initializer_list<int>{-step_px, 0, step_px}) {
-                    for (int dx : std::initializer_list<int>{-step_px, 0, step_px}) {
-                        SDL_Rect dd{dx, dy, small_w, small_h};
-                        SDL_RenderCopy(renderer_, src, nullptr, &dd);
-                    }
-                }
-                SDL_SetTextureAlphaMod(src, 255);
-                SDL_SetTextureBlendMode(src, SDL_BLENDMODE_BLEND);
-            };
-
-            SDL_Texture* a = post_small_tex_a_;
-            SDL_Texture* b = post_small_tex_b_;
-            int passes = std::max(0, blur_radius_small);
-            passes = std::min(passes, 4); // clamp to keep work bounded
-            for (int i = 0; i < passes; ++i) {
-                int step = 1 << i; // 1,2,4,8...
-                blur_once(a, b, step);
-                std::swap(a, b);
-            }
-            SDL_Texture* blurred_small = (passes % 2 == 0) ? post_small_tex_a_ : post_small_tex_b_;
-
-            // Compose to backbuffer: scene + blurred overlay
-            SDL_SetRenderTarget(renderer_, nullptr);
-            SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND);
-            SDL_SetRenderDrawColor(renderer_, 0, 0, 0, 255);
-            SDL_RenderClear(renderer_);
-            SDL_RenderCopy(renderer_, scene_target_tex_, nullptr, nullptr);
-            SDL_SetTextureBlendMode(blurred_small, kPostBlendMode);
-            SDL_SetTextureAlphaMod(blurred_small, kPostOverlayAlpha);
-            #if SDL_VERSION_ATLEAST(2,0,12)
-            SDL_SetTextureScaleMode(blurred_small, SDL_ScaleModeBest);
-            #endif
-            SDL_RenderCopy(renderer_, blurred_small, nullptr, nullptr);
-        } else {
-            // Fallback: present scene only
-            SDL_SetRenderTarget(renderer_, nullptr);
-            SDL_SetRenderDrawColor(renderer_, 0, 0, 0, 255);
-            SDL_RenderClear(renderer_);
-            SDL_RenderCopy(renderer_, scene_target_tex_, nullptr, nullptr);
-        }
-    } else {
-        // No overlay -> present the scene directly
+    // ----- POST: DIRECT MULTI-TAP BLEND ON BACKBUFFER (no render targets) -----
+    if (scene_target_tex_) {
         SDL_SetRenderTarget(renderer_, nullptr);
+        SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND);
         SDL_SetRenderDrawColor(renderer_, 0, 0, 0, 255);
         SDL_RenderClear(renderer_);
-        if (scene_target_tex_) {
-            SDL_RenderCopy(renderer_, scene_target_tex_, nullptr, nullptr);
+
+        // Base: dimmed original
+        Uint8 base_alpha = static_cast<Uint8>(255 - kPostOverlayAlpha);
+        SDL_SetTextureBlendMode(scene_target_tex_, SDL_BLENDMODE_BLEND);
+        SDL_SetTextureAlphaMod(scene_target_tex_, base_alpha);
+        SDL_RenderCopy(renderer_, scene_target_tex_, nullptr, nullptr);
+
+        // Overlay: blurred approximation via multi-tap offsets of the same texture
+        if (kPostOverlayAlpha > 0) {
+            const int r = std::max(0, blur_radius_full);
+            if (r > 0) {
+                const int step = std::max(1, r / 2);
+                const int taps = 9; // 3x3 grid
+                const Uint8 tap_alpha = static_cast<Uint8>(std::max(1, kPostOverlayAlpha / taps));
+                SDL_SetTextureAlphaMod(scene_target_tex_, tap_alpha);
+                for (int dy : std::initializer_list<int>{-step, 0, step}) {
+                    for (int dx : std::initializer_list<int>{-step, 0, step}) {
+                        SDL_Rect dd{dx, dy, screen_width_, screen_height_};
+                        SDL_RenderCopy(renderer_, scene_target_tex_, nullptr, &dd);
+                    }
+                }
+                SDL_SetTextureAlphaMod(scene_target_tex_, 255);
+            } else {
+                // If radius is 0, just blend a single extra pass at full alpha
+                SDL_SetTextureAlphaMod(scene_target_tex_, kPostOverlayAlpha);
+                SDL_RenderCopy(renderer_, scene_target_tex_, nullptr, nullptr);
+                SDL_SetTextureAlphaMod(scene_target_tex_, 255);
+            }
+        } else {
+            SDL_SetTextureAlphaMod(scene_target_tex_, 255);
         }
     }
 

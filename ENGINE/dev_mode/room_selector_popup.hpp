@@ -42,9 +42,6 @@ private:
     void rebuild_room_buttons();
     void ensure_geometry() const;
     void layout_widgets() const;
-    void begin_create_room();
-    void cancel_create_room();
-    void finalize_create_room();
     void scroll_by(int delta);
     void position_from_anchor() const;
 
@@ -57,12 +54,7 @@ private:
     std::vector<std::string> rooms_;
     RoomCallback callback_{};
 
-    std::unique_ptr<DMButton> create_room_button_;
-    std::unique_ptr<DMButton> confirm_button_;
-    std::unique_ptr<DMButton> cancel_button_;
-    std::unique_ptr<DMTextBox> name_input_;
-
-    bool creating_room_ = false;
+    // Creation flow removed from selector; only picks existing rooms.
     mutable bool geometry_dirty_ = true;
     mutable int content_height_ = 0;
     mutable SDL_Rect content_clip_{0, 0, 0, 0};

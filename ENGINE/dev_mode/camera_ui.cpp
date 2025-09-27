@@ -294,10 +294,8 @@ void CameraUIPanel::build_ui() {
     effects_widget_ = std::make_unique<CheckboxWidget>(effects_checkbox_.get());
 
     load_button_ = std::make_unique<DMButton>("Load", &DMStyles::HeaderButton(), 110, DMButton::height());
-    save_button_ = std::make_unique<DMButton>("Save", &DMStyles::HeaderButton(), 110, DMButton::height());
     reset_button_ = std::make_unique<DMButton>("Reset", &DMStyles::HeaderButton(), 110, DMButton::height());
     load_widget_ = std::make_unique<ButtonWidget>(load_button_.get(), [this]() { reload_from_json(); });
-    save_widget_ = std::make_unique<ButtonWidget>(save_button_.get(), [this]() { save_to_json(); });
     reset_widget_ = std::make_unique<ButtonWidget>(reset_button_.get(), [this]() { reset_to_defaults(); });
 
     camera::RealismSettings defaults;
@@ -324,7 +322,7 @@ void CameraUIPanel::rebuild_rows() {
     rows.push_back({ tripod_distance_slider_.get(), height_zoom1_slider_.get() });
     rows.push_back({ parallax_strength_slider_.get(), foreshorten_strength_slider_.get() });
     rows.push_back({ distance_strength_slider_.get() });
-    rows.push_back({ load_widget_.get(), save_widget_.get(), reset_widget_.get() });
+    rows.push_back({ load_widget_.get(), reset_widget_.get() });
     set_rows(rows);
 }
 
@@ -341,12 +339,6 @@ void CameraUIPanel::reset_to_defaults() {
     apply_settings_if_needed();
 }
 
-
-void CameraUIPanel::save_to_json() {
-    if (!assets_) return;
-    apply_settings_if_needed();
-    assets_->on_camera_settings_changed();
-}
 
 void CameraUIPanel::reload_from_json() {
     if (!assets_) return;
@@ -375,6 +367,8 @@ void CameraUIPanel::apply_settings_if_needed() {
 
     if (changed) {
         apply_settings_to_camera(settings, effects_enabled);
+        // Auto-save on change (no Save button in dev mode)
+        assets_->on_camera_settings_changed();
     }
 }
 

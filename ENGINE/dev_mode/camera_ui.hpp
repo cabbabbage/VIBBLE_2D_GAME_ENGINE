@@ -35,7 +35,6 @@ private:
     void build_ui();
     void rebuild_rows();
     void reset_to_defaults();
-    void save_to_json();
     void reload_from_json();
     void apply_settings_if_needed();
     void apply_settings_to_camera(const camera::RealismSettings& settings,
@@ -52,10 +51,8 @@ private:
     std::unique_ptr<CheckboxWidget> effects_widget_;
 
     std::unique_ptr<DMButton> load_button_;
-    std::unique_ptr<DMButton> save_button_;
     std::unique_ptr<DMButton> reset_button_;
     std::unique_ptr<ButtonWidget> load_widget_;
-    std::unique_ptr<ButtonWidget> save_widget_;
     std::unique_ptr<ButtonWidget> reset_widget_;
 
     std::unique_ptr<SectionLabelWidget> render_section_label_;

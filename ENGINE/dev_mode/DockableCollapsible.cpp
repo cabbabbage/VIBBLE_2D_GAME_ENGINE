@@ -133,7 +133,7 @@ void DockableCollapsible::update(const Input& input, int screen_w, int screen_h)
         }
     }
 
-    if (!floatable_ || !show_header_) return;
+    if (!show_header_) return;
 
     int mx = input.getX();
     int my = input.getY();
@@ -153,7 +153,20 @@ bool DockableCollapsible::handle_event(const SDL_Event& e) {
         }
     }
 
-    if (floatable_ && show_header_ && dragging_) {
+    // Start dragging from the header grip area before other header interactions
+    if (show_header_) {
+        if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
+            SDL_Point p{e.button.x, e.button.y};
+            if (SDL_PointInRect(&p, &handle_rect_)) {
+                dragging_ = true;
+                drag_offset_.x = p.x - rect_.x;
+                drag_offset_.y = p.y - rect_.y;
+                return true;
+            }
+        }
+    }
+
+    if (show_header_ && dragging_) {
         if (e.type == SDL_MOUSEMOTION) {
             rect_.x = e.motion.x - drag_offset_.x;
             rect_.y = e.motion.y - drag_offset_.y;
@@ -252,7 +265,7 @@ void DockableCollapsible::render(SDL_Renderer* r) const {
     if (header_btn_) header_btn_->render(r);
     if (close_btn_ && (floatable_ || close_button_enabled_)) close_btn_->render(r);
 
-    if (floatable_ && show_header_) {
+    if (show_header_) {
         draw_grip(r, handle_rect_, DMStyles::Border());
     }
 
@@ -325,9 +338,10 @@ void DockableCollapsible::layout(int screen_w, int screen_h) const {
     if (close_btn_ && show_close) close_btn_->set_rect(close_rect_);
     update_header_button();
 
-    if (floatable_ && show_header_) {
-        handle_rect_ = SDL_Rect{ header_rect_.x, header_rect_.y,
-                                 std::min(24, std::max(1, header_rect_.w) / 6), header_rect_.h };
+    if (show_header_) {
+        // Enlarge the draggable grip area to make it easier to grab
+        int grip_w = std::max(32, std::min(80, std::max(1, header_rect_.w) / 3));
+        handle_rect_ = SDL_Rect{ header_rect_.x, header_rect_.y, grip_w, header_rect_.h };
     } else {
         handle_rect_ = SDL_Rect{ 0, 0, 0, 0 };
     }
@@ -457,8 +471,9 @@ void DockableCollapsible::clamp_to_bounds(int screen_w, int screen_h) const {
     }
     if (header_btn_) header_btn_->set_rect(header_rect_);
     if (close_btn_ && show_close) close_btn_->set_rect(close_rect_);
-    if (floatable_ && show_header_) {
-        handle_rect_ = SDL_Rect{ header_rect_.x, header_rect_.y, std::min(24, header_rect_.w/6), header_rect_.h };
+    if (show_header_) {
+        int grip_w = std::max(32, std::min(80, std::max(1, header_rect_.w) / 3));
+        handle_rect_ = SDL_Rect{ header_rect_.x, header_rect_.y, grip_w, header_rect_.h };
     }
     body_viewport_.x = rect_.x + padding_;
     body_viewport_.y = rect_.y + padding_ + header_rect_.h + (show_header_ ? DMSpacing::header_gap() : 0);

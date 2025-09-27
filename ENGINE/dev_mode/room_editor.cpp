@@ -238,6 +238,11 @@ void RoomEditor::update_ui(const Input& input) {
         }
         if (now) {
             area_editor_->update(input, screen_w_, screen_h_);
+            // Allow zooming while the area editor is active (panning remains blocked)
+            if (assets_) {
+                camera& cam = assets_->getView();
+                pan_zoom_.handle_input(cam, input, true);
+            }
         }
         if (was && !now) {
             apply_area_editor_camera_override(false);

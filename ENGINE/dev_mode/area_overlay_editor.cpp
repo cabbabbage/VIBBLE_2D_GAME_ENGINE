@@ -258,6 +258,8 @@ std::vector<SDL_Point> AreaOverlayEditor::extract_edge_points(int step) const {
 void AreaOverlayEditor::ensure_toolbox() {
     if (toolbox_) return;
     toolbox_ = std::make_unique<DockableCollapsible>("Area Tools", true);
+    // Make the toolbox visible and expanded by default so users see controls immediately
+    toolbox_->set_expanded(true);
     btn_mask_  = std::make_unique<DMButton>("Mask",  &DMStyles::CreateButton(), 180, DMButton::height());
     btn_save_  = std::make_unique<DMButton>("Save",  &DMStyles::CreateButton(), 180, DMButton::height());
     rebuild_toolbox_rows();
@@ -568,104 +570,112 @@ bool AreaOverlayEditor::handle_event(const SDL_Event& e) {
 }
 
 void AreaOverlayEditor::render(SDL_Renderer* r) {
-    if (!active_ || !assets_ || !asset_ || !mask_) return;
+    if (!active_) return;
 
-    if (pending_mask_generation_) {
-        if (!generate_mask_from_asset(r)) {
-            std::cerr << "[AreaOverlayEditor] Failed to generate mask from asset for mask tool" << "\n";
-        } else if (mode_ == Mode::Mask) {
-            apply_mask_crop();
-        }
-        pending_mask_generation_ = false;
-    }
+    if (assets_ && asset_ && mask_ && r) {
+        do {
+            if (pending_mask_generation_) {
+                if (!generate_mask_from_asset(r)) {
+                    std::cerr << "[AreaOverlayEditor] Failed to generate mask from asset for mask tool" << "";
 
-    camera& cam = assets_->getView();
-    float scale = cam.get_scale();
-    if (scale <= 0.0f) return;
-    float inv_scale = 1.0f / scale;
-
-    // Compute on-screen rect based on the asset's current frame dimensions
-    int fw = asset_->cached_w;
-    int fh = asset_->cached_h;
-    if ((fw == 0 || fh == 0)) {
-        if (SDL_Texture* final_tex = asset_->get_final_texture()) {
-            SDL_QueryTexture(final_tex, nullptr, nullptr, &fw, &fh);
-        }
-        if ((fw == 0 || fh == 0)) {
-            if (SDL_Texture* base_tex = asset_->get_current_frame()) {
-                SDL_QueryTexture(base_tex, nullptr, nullptr, &fw, &fh);
+                } else if (mode_ == Mode::Mask) {
+                    apply_mask_crop();
+                }
+                pending_mask_generation_ = false;
             }
-        }
+
+            camera& cam = assets_->getView();
+            float scale = cam.get_scale();
+            if (scale <= 0.0f) break;
+            const float inv_scale = 1.0f / scale;
+
+            int fw = asset_->cached_w;
+            int fh = asset_->cached_h;
+            if (fw == 0 || fh == 0) {
+                if (SDL_Texture* final_tex = asset_->get_final_texture()) {
+                    SDL_QueryTexture(final_tex, nullptr, nullptr, &fw, &fh);
+                }
+                if (fw == 0 || fh == 0) {
+                    if (SDL_Texture* base_tex = asset_->get_current_frame()) {
+                        SDL_QueryTexture(base_tex, nullptr, nullptr, &fw, &fh);
+                    }
+                }
+            }
+            if (fw == 0 || fh == 0) {
+                fw = std::max(1, canvas_w_);
+                fh = std::max(1, canvas_h_);
+            }
+
+            float base_sw = static_cast<float>(fw) * inv_scale;
+            float base_sh = static_cast<float>(fh) * inv_scale;
+            if (base_sw <= 0.0f || base_sh <= 0.0f) break;
+
+            float reference_screen_height = compute_reference_screen_height(assets_, cam);
+            if (reference_screen_height <= 0.0f) reference_screen_height = 1.0f;
+
+            const camera::RenderEffects effects = cam.compute_render_effects(
+                SDL_Point{ asset_->pos.x, asset_->pos.y }, base_sh, reference_screen_height);
+
+            float scaled_sw = base_sw * effects.distance_scale;
+            float scaled_sh = base_sh * effects.distance_scale;
+            float final_visible_h = scaled_sh * effects.vertical_scale;
+
+            int sw = std::max(1, static_cast<int>(std::lround(scaled_sw)));
+            int sh = std::max(1, static_cast<int>(std::lround(final_visible_h)));
+            if (sw <= 0 || sh <= 0) break;
+
+            const int pivot_x = canvas_w_ / 2;
+            const int pivot_y = canvas_h_;
+
+            const float local_bottom_center_x = static_cast<float>(mask_origin_x_) + static_cast<float>(mask_->w) * 0.5f;
+            const float local_bottom_center_y = static_cast<float>(mask_origin_y_) + static_cast<float>(mask_->h);
+
+            float offset_x_local = local_bottom_center_x - static_cast<float>(pivot_x);
+            float offset_y_local = local_bottom_center_y - static_cast<float>(pivot_y);
+
+            if (asset_->flipped) {
+                offset_x_local = -offset_x_local;
+            }
+
+            const float offset_x_screen = offset_x_local * inv_scale * effects.distance_scale;
+            const float offset_y_screen = offset_y_local * inv_scale * effects.distance_scale * effects.vertical_scale;
+
+            const SDL_Point& base = effects.screen_position;
+            SDL_Point bottom_center{
+                base.x + static_cast<int>(std::lround(offset_x_screen)),
+                base.y + static_cast<int>(std::lround(offset_y_screen))
+            };
+
+            SDL_Rect dst{
+                bottom_center.x - sw / 2,
+                bottom_center.y - sh,
+                sw,
+                sh
+            };
+
+            if (!mask_tex_) {
+                mask_tex_ = SDL_CreateTexture(r, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_STREAMING, mask_->w, mask_->h);
+                if (!mask_tex_) break;
+                upload_mask();
+            }
+            int tex_w = 0, tex_h = 0;
+            SDL_QueryTexture(mask_tex_, nullptr, nullptr, &tex_w, &tex_h);
+            if (tex_w != mask_->w || tex_h != mask_->h) {
+                SDL_DestroyTexture(mask_tex_);
+                mask_tex_ = SDL_CreateTexture(r, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_STREAMING, mask_->w, mask_->h);
+                if (!mask_tex_) break;
+                upload_mask();
+            }
+
+            SDL_SetTextureBlendMode(mask_tex_, SDL_BLENDMODE_BLEND);
+            SDL_SetTextureAlphaMod(mask_tex_, mask_alpha_);
+            SDL_RenderCopyEx(r, mask_tex_, nullptr, &dst, 0.0, nullptr, asset_->flipped ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE);
+        } while (false);
     }
-    if (fw <= 0 || fh <= 0) return;
-
-    float base_sw = static_cast<float>(fw) * inv_scale;
-    float base_sh = static_cast<float>(fh) * inv_scale;
-    if (base_sw <= 0.0f || base_sh <= 0.0f) return;
-
-    float reference_screen_height = compute_reference_screen_height(assets_, cam);
-    if (reference_screen_height <= 0.0f) reference_screen_height = 1.0f;
-
-    const camera::RenderEffects effects = cam.compute_render_effects(
-        SDL_Point{ asset_->pos.x, asset_->pos.y }, base_sh, reference_screen_height);
-
-    float scaled_sw = base_sw * effects.distance_scale;
-    float scaled_sh = base_sh * effects.distance_scale;
-    float final_visible_h = scaled_sh * effects.vertical_scale;
-
-    int sw = std::max(1, static_cast<int>(std::round(scaled_sw)));
-    int sh = std::max(1, static_cast<int>(std::round(final_visible_h)));
-    if (sw <= 0 || sh <= 0) return;
-
-    const int pivot_x = canvas_w_ / 2;
-    const int pivot_y = canvas_h_;
-
-    const float local_bottom_center_x = static_cast<float>(mask_origin_x_) + static_cast<float>(mask_->w) * 0.5f;
-    const float local_bottom_center_y = static_cast<float>(mask_origin_y_) + static_cast<float>(mask_->h);
-
-    float offset_x_local = local_bottom_center_x - static_cast<float>(pivot_x);
-    float offset_y_local = local_bottom_center_y - static_cast<float>(pivot_y);
-
-    if (asset_->flipped) {
-        offset_x_local = -offset_x_local;
-    }
-
-    const float offset_x_screen = offset_x_local * inv_scale * effects.distance_scale;
-    const float offset_y_screen = offset_y_local * inv_scale * effects.distance_scale * effects.vertical_scale;
-
-    const SDL_Point& base = effects.screen_position;
-    SDL_Point bottom_center{
-        base.x + static_cast<int>(std::lround(offset_x_screen)),
-        base.y + static_cast<int>(std::lround(offset_y_screen))
-    };
-
-    SDL_Rect dst{
-        bottom_center.x - sw / 2,
-        bottom_center.y - sh,
-        sw,
-        sh
-    };
-
-    if (!mask_tex_) {
-        mask_tex_ = SDL_CreateTexture(r, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_STREAMING, mask_->w, mask_->h);
-        if (!mask_tex_) return;
-        upload_mask();
-    }
-    int tex_w = 0, tex_h = 0;
-    SDL_QueryTexture(mask_tex_, nullptr, nullptr, &tex_w, &tex_h);
-    if (tex_w != mask_->w || tex_h != mask_->h) {
-        SDL_DestroyTexture(mask_tex_);
-        mask_tex_ = SDL_CreateTexture(r, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_STREAMING, mask_->w, mask_->h);
-        if (!mask_tex_) return;
-        upload_mask();
-    }
-
-    SDL_SetTextureBlendMode(mask_tex_, SDL_BLENDMODE_BLEND);
-    SDL_SetTextureAlphaMod(mask_tex_, mask_alpha_);
-    SDL_RenderCopyEx(r, mask_tex_, nullptr, &dst, 0.0, nullptr, asset_->flipped ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE);
 
     if (toolbox_) toolbox_->render(r);
 }
+
 
 std::vector<SDL_Point> AreaOverlayEditor::trace_polygon_from_mask() const {
     std::vector<SDL_Point> poly;
