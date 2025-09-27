@@ -1,5 +1,6 @@
 #include "FloatingDockableManager.hpp"
 
+#include <algorithm>
 #include <utility>
 
 #include "DockableCollapsible.hpp"
@@ -43,14 +44,25 @@ void FloatingDockableManager::open_floating(const std::string& name,
         if (current_.panel) {
             ActiveEntry previous = std::move(current_);
             current_ = ActiveEntry{};
-            close_entry(previous.close_callback, previous.panel);
+            if (previous.panel != panel) {
+                close_entry(previous.close_callback, previous.panel);
+            }
         }
         while (!stack_.empty()) {
             ActiveEntry entry = std::move(stack_.back());
             stack_.pop_back();
+            if (entry.panel == panel) {
+                continue;
+            }
             close_entry(entry.close_callback, entry.panel);
         }
     } else if (current_.panel) {
+        // Prevent duplicate references to the same panel inside the stack.
+        stack_.erase(std::remove_if(stack_.begin(), stack_.end(),
+                                    [panel](const ActiveEntry& entry) {
+                                        return entry.panel == panel;
+                                    }),
+                     stack_.end());
         stack_.push_back(std::move(current_));
         current_ = ActiveEntry{};
     }
@@ -75,10 +87,9 @@ void FloatingDockableManager::notify_panel_closed(const DockableCollapsible* pan
         return;
     }
 
-    for (auto it = stack_.begin(); it != stack_.end(); ++it) {
-        if (it->panel == panel) {
-            stack_.erase(it);
-            break;
-        }
-    }
+    stack_.erase(std::remove_if(stack_.begin(), stack_.end(),
+                                [panel](const ActiveEntry& entry) {
+                                    return entry.panel == panel;
+                                }),
+                 stack_.end());
 }

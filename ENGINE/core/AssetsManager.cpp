@@ -43,10 +43,10 @@ Assets::Assets(std::vector<Asset>&& loaded,
               "starting_camera",
               std::vector<SDL_Point>{
                   // Reduce starting view extents to one third
-                  SDL_Point{-map_radius / 3, -map_radius / 3},
-                  SDL_Point{ map_radius / 3, -map_radius / 3},
-                  SDL_Point{ map_radius / 3,  map_radius / 3},
-                  SDL_Point{-map_radius / 3,  map_radius / 3}
+                  SDL_Point{-10,-10},
+                  SDL_Point{ 10,-10},
+                  SDL_Point{ 10,10},
+                  SDL_Point{-10, 10}
               })
       ),
       activeManager(screen_width_, screen_height_, camera_),
@@ -80,18 +80,6 @@ Assets::Assets(std::vector<Asset>&& loaded,
     }
 
     update_filtered_active_assets();
-
-    dev_controls_ = new DevControls(this, screen_width_, screen_height_);
-    if (dev_controls_) {
-        dev_controls_->set_player(player);
-        dev_controls_->set_active_assets(filtered_active_assets);
-        dev_controls_->set_current_room(current_room_);
-        dev_controls_->set_screen_dimensions(screen_width_, screen_height_);
-        dev_controls_->set_rooms(&rooms_);
-        dev_controls_->set_input(input);
-        dev_controls_->set_map_info(&map_info_json_, [this]() { on_map_light_changed(); });
-        dev_controls_->set_map_context(&map_info_json_, map_path_);
-    }
 
 }
 
@@ -371,10 +359,33 @@ void Assets::refresh_filtered_active_assets() {
 }
 
 void Assets::update_filtered_active_assets() {
-    filtered_active_assets = active_assets;
-    if (dev_controls_ && dev_mode) {
-        dev_controls_->filter_active_assets(filtered_active_assets);
+    if (!dev_controls_ || !dev_controls_->is_enabled()) {
+        filtered_active_assets.clear();
+        return;
     }
+
+    filtered_active_assets = active_assets;
+    dev_controls_->filter_active_assets(filtered_active_assets);
+}
+
+void Assets::ensure_dev_controls() {
+    if (dev_controls_) {
+        return;
+    }
+
+    dev_controls_ = new DevControls(this, screen_width, screen_height);
+    if (!dev_controls_) {
+        return;
+    }
+
+    dev_controls_->set_player(player);
+    dev_controls_->set_active_assets(filtered_active_assets);
+    dev_controls_->set_current_room(current_room_);
+    dev_controls_->set_screen_dimensions(screen_width, screen_height);
+    dev_controls_->set_rooms(&rooms_);
+    dev_controls_->set_input(input);
+    dev_controls_->set_map_info(&map_info_json_, [this]() { on_map_light_changed(); });
+    dev_controls_->set_map_context(&map_info_json_, map_path_);
 }
 
 void Assets::update_closest_assets(Asset* player, int max_count) {
@@ -386,14 +397,15 @@ void Assets::set_input(Input* m) {
     input = m;
 
     if (dev_controls_) {
-        update_filtered_active_assets();
         dev_controls_->set_input(m);
-        dev_controls_->set_player(player);
-        dev_controls_->set_active_assets(filtered_active_assets);
-        dev_controls_->set_current_room(current_room_);
-        dev_controls_->set_screen_dimensions(screen_width, screen_height);
-        dev_controls_->set_rooms(&rooms_);
-        dev_controls_->set_map_context(&map_info_json_, map_path_);
+        if (dev_controls_->is_enabled()) {
+            dev_controls_->set_player(player);
+            dev_controls_->set_active_assets(filtered_active_assets);
+            dev_controls_->set_current_room(current_room_);
+            dev_controls_->set_screen_dimensions(screen_width, screen_height);
+            dev_controls_->set_rooms(&rooms_);
+            dev_controls_->set_map_context(&map_info_json_, map_path_);
+        }
     }
 }
 
@@ -406,7 +418,7 @@ void Assets::update(const Input& input,
 
     Room* detected_room = finder_ ? finder_->getCurrentRoom() : nullptr;
     Room* active_room = detected_room;
-    if (dev_controls_) {
+    if (dev_controls_ && dev_controls_->is_enabled()) {
         active_room = dev_controls_->resolve_current_room(detected_room);
     }
     current_room_ = active_room;
@@ -453,16 +465,14 @@ void Assets::update(const Input& input,
         }
     }
 
-    if (dev_controls_) {
+    if (dev_controls_ && dev_controls_->is_enabled()) {
         dev_controls_->set_player(player);
         dev_controls_->set_active_assets(filtered_active_assets);
         dev_controls_->set_current_room(current_room_);
         dev_controls_->set_screen_dimensions(screen_width, screen_height);
         dev_controls_->set_rooms(&rooms_);
-        if (dev_mode) {
-            dev_controls_->update(input);
-            dev_controls_->update_ui(input);
-        }
+        dev_controls_->update(input);
+        dev_controls_->update_ui(input);
     }
 
     if (scene && !suppress_render_) scene->render();
@@ -472,15 +482,28 @@ void Assets::update(const Input& input,
 
 void Assets::set_dev_mode(bool mode) {
     dev_mode = mode;
-    if (dev_controls_) {
-        dev_controls_->set_enabled(mode);
-        if (mode) {
+    if (dev_mode) {
+        ensure_dev_controls();
+        if (dev_controls_) {
+            dev_controls_->set_enabled(true);
+            dev_controls_->set_player(player);
+            dev_controls_->set_active_assets(filtered_active_assets);
+            dev_controls_->set_current_room(current_room_);
+            dev_controls_->set_screen_dimensions(screen_width, screen_height);
+            dev_controls_->set_rooms(&rooms_);
+            dev_controls_->set_input(input);
+            dev_controls_->set_map_info(&map_info_json_, [this]() { on_map_light_changed(); });
+            dev_controls_->set_map_context(&map_info_json_, map_path_);
             dev_controls_->resolve_current_room(current_room_);
-        } else {
+        }
+        refresh_filtered_active_assets();
+    } else {
+        if (dev_controls_) {
+            dev_controls_->set_enabled(false);
             dev_controls_->clear_selection();
         }
+        filtered_active_assets.clear();
     }
-    update_filtered_active_assets();
 }
 
 void Assets::set_render_suppressed(bool suppressed) {
@@ -489,16 +512,22 @@ void Assets::set_render_suppressed(bool suppressed) {
 
 const std::vector<Asset*>& Assets::get_selected_assets() const {
     static std::vector<Asset*> empty;
-    return dev_controls_ ? dev_controls_->get_selected_assets() : empty;
+    return (dev_controls_ && dev_controls_->is_enabled())
+               ? dev_controls_->get_selected_assets()
+               : empty;
 }
 
 const std::vector<Asset*>& Assets::get_highlighted_assets() const {
     static std::vector<Asset*> empty;
-    return dev_controls_ ? dev_controls_->get_highlighted_assets() : empty;
+    return (dev_controls_ && dev_controls_->is_enabled())
+               ? dev_controls_->get_highlighted_assets()
+               : empty;
 }
 
 Asset* Assets::get_hovered_asset() const {
-    return dev_controls_ ? dev_controls_->get_hovered_asset() : nullptr;
+    return (dev_controls_ && dev_controls_->is_enabled())
+               ? dev_controls_->get_hovered_asset()
+               : nullptr;
 }
 
 nlohmann::json Assets::save_current_room(std::string /*room_name*/) {
@@ -655,7 +684,7 @@ void Assets::process_removals() {
         erase_ptr(closest_assets);
     }
     // Clear any stale selections in Dev Mode that may reference removed assets
-    if (dev_controls_ && dev_mode) {
+    if (dev_controls_ && dev_controls_->is_enabled()) {
         dev_controls_->clear_selection();
         dev_controls_->set_active_assets(filtered_active_assets);
     }
@@ -663,7 +692,9 @@ void Assets::process_removals() {
 }
 
 void Assets::render_overlays(SDL_Renderer* renderer) {
-    if (dev_controls_) dev_controls_->render_overlays(renderer);
+    if (dev_controls_ && dev_controls_->is_enabled()) {
+        dev_controls_->render_overlays(renderer);
+    }
 }
 
 SDL_Renderer* Assets::renderer() const {
@@ -671,94 +702,105 @@ SDL_Renderer* Assets::renderer() const {
 }
 
 void Assets::toggle_asset_library() {
-    if (dev_controls_ && dev_mode) {
+    if (dev_controls_ && dev_controls_->is_enabled()) {
         dev_controls_->toggle_asset_library();
     }
 }
 
 void Assets::open_asset_library() {
-    if (dev_controls_ && dev_mode) {
+    if (dev_controls_ && dev_controls_->is_enabled()) {
         dev_controls_->open_asset_library();
     }
 }
 
 void Assets::close_asset_library() {
-    if (dev_controls_) dev_controls_->close_asset_library();
+    if (dev_controls_ && dev_controls_->is_enabled()) {
+        dev_controls_->close_asset_library();
+    }
 }
 
 bool Assets::is_asset_library_open() const {
-    return dev_controls_ && dev_controls_->is_asset_library_open();
+    return dev_controls_ && dev_controls_->is_enabled()
+           && dev_controls_->is_asset_library_open();
 }
 
 void Assets::toggle_room_config() {
-    if (dev_controls_ && dev_mode) {
+    if (dev_controls_ && dev_controls_->is_enabled()) {
         dev_controls_->toggle_room_config();
     }
 }
 
 void Assets::close_room_config() {
-    if (dev_controls_) dev_controls_->close_room_config();
+    if (dev_controls_ && dev_controls_->is_enabled()) {
+        dev_controls_->close_room_config();
+    }
 }
 
 bool Assets::is_room_config_open() const {
-    return dev_controls_ && dev_controls_->is_room_config_open();
+    return dev_controls_ && dev_controls_->is_enabled()
+           && dev_controls_->is_room_config_open();
 }
 
 std::shared_ptr<AssetInfo> Assets::consume_selected_asset_from_library() {
-    if (!dev_controls_ || !dev_mode) return nullptr;
+    if (!dev_controls_ || !dev_controls_->is_enabled()) return nullptr;
     return dev_controls_->consume_selected_asset_from_library();
 }
 
 void Assets::open_asset_info_editor(const std::shared_ptr<AssetInfo>& info) {
-    if (dev_controls_ && dev_mode) {
+    if (dev_controls_ && dev_controls_->is_enabled()) {
         dev_controls_->open_asset_info_editor(info);
     }
 }
 
 void Assets::open_asset_info_editor_for_asset(Asset* a) {
-    if (dev_controls_ && dev_mode) {
+    if (dev_controls_ && dev_controls_->is_enabled()) {
         dev_controls_->open_asset_info_editor_for_asset(a);
     }
 }
 
 void Assets::open_spawn_group_for_asset(Asset* a) {
-    if (dev_controls_ && dev_mode) {
+    if (dev_controls_ && dev_controls_->is_enabled()) {
         dev_controls_->open_spawn_group_for_asset(a);
     }
 }
 
 void Assets::finalize_asset_drag(Asset* a, const std::shared_ptr<AssetInfo>& info) {
-    if (dev_controls_ && dev_mode) {
+    if (dev_controls_ && dev_controls_->is_enabled()) {
         dev_controls_->finalize_asset_drag(a, info);
     }
 }
 
 void Assets::close_asset_info_editor() {
-    if (dev_controls_) dev_controls_->close_asset_info_editor();
+    if (dev_controls_ && dev_controls_->is_enabled()) {
+        dev_controls_->close_asset_info_editor();
+    }
 }
 
 bool Assets::is_asset_info_editor_open() const {
-    return dev_controls_ && dev_controls_->is_asset_info_editor_open();
+    return dev_controls_ && dev_controls_->is_enabled()
+           && dev_controls_->is_asset_info_editor_open();
 }
 
 void Assets::clear_editor_selection() {
-    if (dev_controls_ && dev_mode) {
+    if (dev_controls_ && dev_controls_->is_enabled()) {
         dev_controls_->clear_selection();
     }
 }
 
 void Assets::handle_sdl_event(const SDL_Event& e) {
-    if (dev_controls_ && dev_mode) {
+    if (dev_controls_ && dev_controls_->is_enabled()) {
         dev_controls_->handle_sdl_event(e);
     }
 }
 
 void Assets::focus_camera_on_asset(Asset* a, double zoom_factor, int duration_steps) {
-    if (dev_controls_) dev_controls_->focus_camera_on_asset(a, zoom_factor, duration_steps);
+    if (dev_controls_ && dev_controls_->is_enabled()) {
+        dev_controls_->focus_camera_on_asset(a, zoom_factor, duration_steps);
+    }
 }
 
 void Assets::begin_area_edit_for_selected_asset(const std::string& area_name) {
-    if (dev_controls_ && dev_mode) {
+    if (dev_controls_ && dev_controls_->is_enabled()) {
         dev_controls_->begin_area_edit_for_selected_asset(area_name);
     }
 }

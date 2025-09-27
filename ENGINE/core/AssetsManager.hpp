@@ -121,6 +121,7 @@ private:
     void process_removals();
     void addAsset(const std::string& name, SDL_Point g);
     void update_filtered_active_assets();
+    void ensure_dev_controls();
 
     friend class SceneRenderer;
     friend class Asset;
