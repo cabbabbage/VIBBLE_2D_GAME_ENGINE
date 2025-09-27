@@ -1,12 +1,40 @@
 # VIBBLE - 2D Game Engine
 
-Lightweight, data-driven 2D engine built on SDL2 with a controller-based AI and a flexible animation system.
+<p align="center">
+  <img src="MISC_CONTENT/promo2.png" alt="VIBBLE promo art" width="720" />
+</p>
 
-## Project Flow & Data Model
+<p align="center">
+  <strong>VIBBLE</strong> is a lightweight, data-driven 2D engine built on SDL2 with a controller-based AI and a flexible animation system.
+</p>
+
+<p align="center">
+  <a href="https://cmake.org/" target="_blank"><img src="https://img.shields.io/badge/CMake-%3E%3D%203.16-informational?style=for-the-badge&logo=cmake" alt="CMake badge" /></a>
+  <a href="https://www.libsdl.org/" target="_blank"><img src="https://img.shields.io/badge/SDL2-powered-blue?style=for-the-badge&logo=SDL" alt="SDL2 badge" /></a>
+  <img src="https://img.shields.io/badge/Platform-Windows%2010%2B-8A2BE2?style=for-the-badge&logo=windows" alt="Windows badge" />
+</p>
+
+---
+
+## ✨ Why VIBBLE feels different
+
+| Feature | What makes it shine |
+| --- | --- |
+| 🎛️ **Controller-first AI** | Tiny controller classes orchestrate complex behaviors by driving a shared `AnimationUpdate` brain. |
+| 🧠 **Smart animation flow** | Trigger-based animations with per-frame motion, on-end mapping, and runtime-safe switching keep characters expressive. |
+| 🗺️ **Data-driven content** | Drop assets into `SRC/<AssetName>` and rooms into `MAPS/<MapName>`—no recompiles needed. |
+| 💡 **Atmospheric lighting** | Software lights and orbital sources layer mood directly into your scenes. |
+| ⚡ **Active asset culling** | `ActiveAssetsManager` ensures only nearby, relevant assets consume update/render time. |
+
+> “Make a room, sprinkle props, link a controller, and watch the scene come alive.”
+
+---
+
+## 🧬 Project Flow & Data Model
 
 This is the complete flow from content to pixels each frame, and how core data types relate to each other.
 
-### Loading, Spawning, and Data Culling
+### 🚪 Loading, Spawning, and Data Culling
 - Load map: the app starts in a menu; you pick a folder under `MAPS/<MapName>`. `AssetLoader` reads `map_info.json`, builds rooms and trails, and loads asset types from `SRC/*/info.json` into shared definitions (`AssetInfo`).
 - Build assets: `InitializeAssets` turns `AssetInfo` into live `Asset` instances, assigns each an `AssetController` via `ControllerFactory`, and wires an `AnimationUpdate` for movement/animation control.
 - Spawning details:
@@ -14,11 +42,11 @@ This is the complete flow from content to pixels each frame, and how core data t
   - Static/background props may be clustered by proximity and linked as children (“child linking”). Moving assets are excluded from linking.
 - Culling: `ActiveAssetsManager` maintains a list of active assets around the player and sorts them by z-index; it also tracks a small set of “closest” assets for interaction.
 
-### Shared Definitions vs. Runtime Instances
+### 🧱 Shared Definitions vs. Runtime Instances
 - All runtime `Asset` instances with the same asset name share the same `std::shared_ptr<AssetInfo>` (definition). The definition is immutable at runtime and contains animations, areas, lights, and metadata.
 - Each `Asset` holds its own state (position, z, current animation/frame, controller, AnimationUpdate state, children, etc.).
 
-### Classes & Relationships
+### 🕸️ Classes & Relationships
 - `AssetInfo` (definition, shared across instances of the same name)
   - Identity: `name`, `type`, `start_animation`, `z_threshold`, `tags`, `flipable`, `scale_factor`.
   - Animations: `std::map<std::string, Animation>` keyed by trigger/id.
@@ -48,7 +76,7 @@ This is the complete flow from content to pixels each frame, and how core data t
   - Controller-facing API: `set_idle`, `set_pursue`, `set_run`, `set_orbit`/`set_orbit_ccw`/`set_orbit_cw`, `set_patrol`, `set_serpentine`, `set_animation_now`, `set_animation_qued`, `set_mode_none`.
   - Each update: picks the best animation toward the current target, advances frames, applies per-frame movement, respects `locked`/`loop`, and safely switches animations.
 
-### Runtime Ownership Tree
+### 🌳 Runtime Ownership Tree
 ```
 MainApp
 └─ Assets
@@ -89,13 +117,13 @@ AnimationFrame
 
 ---
 
-## Quick Start
+## 🚀 Quick Start
 
-Requirements
+**Requirements**
 - Windows + Visual Studio 2022 (CMake generator), CMake >= 3.16
 - SDL2, SDL2_image, SDL2_mixer, SDL2_ttf (via vcpkg toolchain or system installs)
 
-Build & Run
+**Build & Run**
 - From the repo root:
   - `./run.bat`  (configures, builds RelWithDebInfo, runs with correct working dir)
   - Or manually:
@@ -103,10 +131,10 @@ Build & Run
     - `cmake --build build --config RelWithDebInfo -j`
     - `./ENGINE/engine.exe`
 
-Important
+**Important**
 - Always run from the repo root so relative paths resolve (`MAPS/`, `SRC/`, `MISC_CONTENT/`, `loading/`).
 
-## What's Inside
+## 🗂️ What's Inside
 
 - Data-driven content: assets under `SRC/<AssetName>`, maps under `MAPS/<MapName>`.
 - AnimationUpdate: one API to control both movement targeting and animation selection.
@@ -114,14 +142,14 @@ Important
 - ActiveAssetsManager: activates/sorts nearby assets for efficient updates.
 - SceneRenderer: z-layered sprite rendering, software lighting and shading.
 
-## Folder Structure
+## 🗃️ Folder Structure
 
 - `ENGINE/` - core engine code (assets, controllers, rendering, UI)
 - `MAPS/`   - map folders with `map_info.json` and room/trail data
 - `SRC/`    - assets with `info.json`, frames, areas, and lights
 - `scripts/` and `PYTHON ASSET MANAGER/` - authoring tools and helpers
 
-## Runtime Architecture (Concise)
+## 🧠 Runtime Architecture (Concise)
 
 Startup
 - `engine.exe` → main menu → select `MAPS/<MapName>`

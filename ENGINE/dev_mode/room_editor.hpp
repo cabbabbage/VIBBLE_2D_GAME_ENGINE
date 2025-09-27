@@ -1,11 +1,11 @@
 #pragma once
 
+#include <string>
 #include <SDL.h>
 #include <functional>
 #include <memory>
 #include <nlohmann/json_fwd.hpp>
 #include <optional>
-#include <string>
 #include <unordered_set>
 #include <utility>
 #include <vector>
@@ -110,7 +110,20 @@ private:
         double radius = 0.0;
     };
 
-    struct PendingSpawnGroupOpen {\r\n        std::string id;\r\n        SDL_Point position{0, 0};\r\n        int retry_frames = 0;\r\n        int remaining_attempts = 3;\r\n        bool awaiting_confirmation = false;\r\n    };\r\n\r\n    struct DraggedAssetState {\r\n        Asset* asset = nullptr;\r\n        SDL_Point start_pos{0, 0};\r\n        SDL_FPoint direction{0.0f, 0.0f};\r\n        double start_distance = 0.0;\r\n    };\r\n
+    struct PendingSpawnGroupOpen {
+        std::string id;
+        SDL_Point position{0, 0};
+        int retry_frames = 0;
+        int remaining_attempts = 3;
+        bool awaiting_confirmation = false;
+    };
+
+    struct DraggedAssetState {
+        Asset*     asset     = nullptr;   // pointer to the dragged asset (nullable)
+        SDL_Point  start_pos {0, 0};      // screen/world position at drag start
+        SDL_FPoint direction {0.0f, 0.0f}; // normalized drag direction or delta
+        bool       active    = false;     // is a drag in progress?
+    };
     void handle_mouse_input(const Input& input);
     Asset* hit_test_asset(SDL_Point screen_point) const;
     void update_hover_state(Asset* hit);

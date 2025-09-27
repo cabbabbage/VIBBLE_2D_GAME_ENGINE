@@ -1344,11 +1344,11 @@ void RoomEditor::begin_drag_session(const SDL_Point& world_mouse, bool ctrl_modi
         DraggedAssetState state;
         state.asset = asset;
         state.start_pos = asset->pos;
+        state.active = true;
         if (drag_mode_ == DragMode::Perimeter) {
             double dx = static_cast<double>(asset->pos.x - drag_perimeter_circle_center_.x);
             double dy = static_cast<double>(asset->pos.y - drag_perimeter_circle_center_.y);
             double len = std::hypot(dx, dy);
-            state.start_distance = len;
             if (len > 1e-6) {
                 state.direction.x = static_cast<float>(dx / len);
                 state.direction.y = static_cast<float>(dy / len);
@@ -1407,7 +1407,13 @@ void RoomEditor::apply_perimeter_drag(const SDL_Point& world_mouse) {
     }
     if (!ref) ref = &drag_states_.front();
 
-    double reference_length = ref->start_distance;
+    auto compute_start_distance = [this](const DraggedAssetState& state) {
+        double dx = static_cast<double>(state.start_pos.x - drag_perimeter_circle_center_.x);
+        double dy = static_cast<double>(state.start_pos.y - drag_perimeter_circle_center_.y);
+        return std::hypot(dx, dy);
+    };
+
+    double reference_length = compute_start_distance(*ref);
     SDL_FPoint dir = ref->direction;
     if (reference_length <= 1e-6) {
         double dx = static_cast<double>(ref->asset->pos.x - drag_perimeter_circle_center_.x);
@@ -1433,7 +1439,7 @@ void RoomEditor::apply_perimeter_drag(const SDL_Point& world_mouse) {
     bool changed = false;
     for (auto& state : drag_states_) {
         if (!state.asset) continue;
-        double base = state.start_distance;
+        double base = compute_start_distance(state);
         SDL_FPoint state_dir = state.direction;
         if (base <= 0.0 || (state_dir.x == 0.0f && state_dir.y == 0.0f)) {
             double dx = static_cast<double>(state.asset->pos.x - drag_perimeter_circle_center_.x);
