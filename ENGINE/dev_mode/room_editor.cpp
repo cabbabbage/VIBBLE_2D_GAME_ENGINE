@@ -602,7 +602,7 @@ void RoomEditor::finalize_asset_drag(Asset* asset, const std::shared_ptr<AssetIn
         auto on_change = [this]() {
             if (current_room_) current_room_->save_assets_json();
         };
-        auto on_entry = [this](const nlohmann::json& e, const SpawnGroupConfigUI::ChangeSummary& summary) {
+        auto on_entry = [this](const nlohmann::json& e, const SpawnGroupsConfigPanel::ChangeSummary& summary) {
             handle_spawn_config_change(e, summary);
         };
         spawn_groups_cfg_ui_->load(arr, std::move(on_change), std::move(on_entry));
@@ -1642,10 +1642,10 @@ void RoomEditor::refresh_spawn_groups_config_ui() {
             refresh_spawn_groups_config_ui();
         }
     };
-    auto on_entry = [this](const nlohmann::json& entry, const SpawnGroupConfigUI::ChangeSummary& summary) {
+    auto on_entry = [this](const nlohmann::json& entry, const SpawnGroupsConfigPanel::ChangeSummary& summary) {
         handle_spawn_config_change(entry, summary);
     };
-    auto configure_entry = [this](SpawnGroupConfigUI& ui, const nlohmann::json& entry) {
+    auto configure_entry = [this](SpawnGroupsConfigPanel& ui, const nlohmann::json& entry) {
         const std::string spawn_id = entry.value("spawn_id", std::string{});
         const bool room_spawn = !spawn_id.empty() && is_room_spawn_id(spawn_id);
 
@@ -2050,7 +2050,7 @@ bool RoomEditor::asset_belongs_to_room(const Asset* /*asset*/) const {
     return true;
 }
 
-void RoomEditor::handle_spawn_config_change(const nlohmann::json& entry, const SpawnGroupConfigUI::ChangeSummary& summary) {
+void RoomEditor::handle_spawn_config_change(const nlohmann::json& entry, const SpawnGroupsConfigPanel::ChangeSummary& summary) {
     if (!summary.method_changed && !summary.quantity_changed) return;
     bool respawn = summary.method_changed;
     if (!respawn && summary.quantity_changed) {

@@ -3196,12 +3196,6 @@ void MapLayersPanel::set_embedded_bounds(const SDL_Rect& bounds) {
 
 void MapLayersPanel::update(const Input& input, int screen_w, int screen_h) {
 
-    if (preview_dirty_) {
-
-        regenerate_preview();
-
-    }
-
     screen_bounds_ = SDL_Rect{ 0, 0, std::max(0, screen_w), std::max(0, screen_h) };
 
     if (room_selector_) {
@@ -4271,8 +4265,6 @@ void MapLayersPanel::ensure_room_configurator() {
                 this->rebuild_available_rooms();
 
                 this->request_preview_regeneration();
-
-                this->regenerate_preview();
 
                 this->mark_dirty();
 
@@ -5391,8 +5383,6 @@ bool MapLayersPanel::reload_layers_from_disk() {
         }
 
         request_preview_regeneration();
-
-        regenerate_preview();
 
         mark_clean();
 

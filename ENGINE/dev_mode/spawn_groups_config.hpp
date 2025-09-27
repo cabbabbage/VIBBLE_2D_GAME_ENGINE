@@ -29,11 +29,11 @@ public:
     void render(SDL_Renderer* r) const;
 
     // Embedding helpers for RoomConfigurator or runtime editing
-    using ConfigureEntryCallback = std::function<void(SpawnGroupConfigUI&, const nlohmann::json&)>;
+    using ConfigureEntryCallback = std::function<void(SpawnGroupsConfigPanel&, const nlohmann::json&)>;
 
     void load(nlohmann::json& assets,
               std::function<void()> on_change,
-              std::function<void(const nlohmann::json&, const SpawnGroupConfigUI::ChangeSummary&)> on_entry_change = {},
+              std::function<void(const nlohmann::json&, const SpawnGroupsConfigPanel::ChangeSummary&)> on_entry_change = {},
               ConfigureEntryCallback configure_entry = {});
     void append_rows(DockableCollapsible::Rows& rows);
     void set_anchor(int x, int y);
@@ -62,7 +62,7 @@ private:
     std::optional<PendingOpenRequest> pending_open_;
     struct Entry {
         std::string id;
-        std::unique_ptr<SpawnGroupConfigUI> cfg;
+        std::unique_ptr<SpawnGroupsConfigPanel> cfg;
         nlohmann::json* json = nullptr;
         std::unique_ptr<DMButton> btn;
         std::unique_ptr<ButtonWidget> btn_w;
@@ -70,7 +70,7 @@ private:
     std::vector<Entry> entries_;
     nlohmann::json* assets_json_ = nullptr;
     std::function<void()> on_change_;
-    std::function<void(const nlohmann::json&, const SpawnGroupConfigUI::ChangeSummary&)> on_entry_change_;
+    std::function<void(const nlohmann::json&, const SpawnGroupsConfigPanel::ChangeSummary&)> on_entry_change_;
     ConfigureEntryCallback configure_entry_;
     nlohmann::json temp_assets_;
     nlohmann::json loaded_snapshot_;

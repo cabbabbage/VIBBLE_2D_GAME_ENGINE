@@ -167,7 +167,7 @@ void TrailEditorSuite::rebuild_spawn_groups_ui() {
         }
     };
 
-    auto on_entry_change = [this](const nlohmann::json&, const SpawnGroupConfigUI::ChangeSummary& summary) {
+    auto on_entry_change = [this](const nlohmann::json&, const SpawnGroupsConfigPanel::ChangeSummary& summary) {
         if (!active_trail_) {
             return;
         }

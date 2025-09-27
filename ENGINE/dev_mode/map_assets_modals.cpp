@@ -50,37 +50,32 @@ void SingleSpawnGroupModal::open(json& map_info,
 
     auto& groups = (*section_)["spawn_groups"];
     json entry = groups[0];
-    if (!cfg_) cfg_ = std::make_unique<SpawnGroupConfigUI>();
+    if (!cfg_) cfg_ = std::make_unique<SpawnGroupsConfigPanel>();
     if (!stack_key_.empty()) {
         cfg_->set_floating_stack_key(stack_key_);
     }
     cfg_->set_screen_dimensions(screen_w_, screen_h_);
-    cfg_->load(entry);
-    cfg_->set_ownership_label(ownership_label, ownership_color);
-    cfg_->lock_method_to("Random");
-    cfg_->set_quantity_hidden(true);
-    cfg_->set_on_close([this]() {
+    cfg_->open(entry, [this](const json& updated) {
         if (!this->map_info_ || !this->section_) return;
-        // Persist back into the section JSON
-        json updated = cfg_->to_json();
         auto& groups = (*section_)["spawn_groups"];
-        if (groups.is_array()) {
-            if (groups.empty()) {
+        if (!groups.is_array()) {
+            groups = json::array();
+        }
+        if (groups.empty()) {
+            groups.push_back(updated);
+        } else {
+            groups[0] = updated;
+            if (groups.size() > 1) {
+                json first = groups[0];
                 groups = json::array();
-                groups.push_back(updated);
-            } else {
-                groups[0] = updated;
-                // Ensure only one group remains
-                if (groups.size() > 1) {
-                    json first = groups[0];
-                    groups = json::array();
-                    groups.push_back(std::move(first));
-                }
+                groups.push_back(std::move(first));
             }
         }
         if (on_save_) on_save_();
     });
-    cfg_->open_panel();
+    cfg_->set_ownership_label(ownership_label, ownership_color);
+    cfg_->lock_method_to("Random");
+    cfg_->set_quantity_hidden(true);
     ensure_visible_position();
 }
 
@@ -93,7 +88,7 @@ bool SingleSpawnGroupModal::visible() const {
 }
 
 void SingleSpawnGroupModal::update(const Input& input) {
-    if (cfg_) cfg_->update(input);
+    if (cfg_) cfg_->update(input, screen_w_, screen_h_);
 }
 
 bool SingleSpawnGroupModal::handle_event(const SDL_Event& e) {

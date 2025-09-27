@@ -8,9 +8,9 @@
 
  class Input;
  struct SDL_Renderer;
- class SpawnGroupConfigUI;
+ class SpawnGroupsConfigPanel;
 
- // Simple wrapper around a single SpawnGroupConfigUI used as a floating modal
+ // Simple wrapper around a single SpawnGroupsConfigPanel used as a floating modal
  // to edit exactly one spawn group entry under a specific map_info section.
  class SingleSpawnGroupModal {
  public:
@@ -49,7 +49,7 @@ private:
     nlohmann::json* section_ = nullptr;
     SaveCallback on_save_{};
 
-    std::unique_ptr<SpawnGroupConfigUI> cfg_;
+    std::unique_ptr<SpawnGroupsConfigPanel> cfg_;
 
     int screen_w_ = 1920;
     int screen_h_ = 1080;

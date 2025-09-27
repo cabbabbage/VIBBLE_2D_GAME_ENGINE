@@ -113,7 +113,7 @@ void SpawnGroupsConfig::set_screen_dimensions(int width, int height) {
 
 void SpawnGroupsConfig::load(nlohmann::json& assets,
                         std::function<void()> on_change,
-                        std::function<void(const nlohmann::json&, const SpawnGroupConfigUI::ChangeSummary&)> on_entry_change,
+                        std::function<void(const nlohmann::json&, const SpawnGroupsConfigPanel::ChangeSummary&)> on_entry_change,
                         ConfigureEntryCallback configure_entry) {
     nlohmann::json normalized = normalize_spawn_assets(assets);
     const bool source_changed = (last_loaded_source_ != &assets);
@@ -154,7 +154,7 @@ void SpawnGroupsConfig::load(nlohmann::json& assets,
             e.id = std::string("Spawn Group ") + std::to_string(entries_.size() + 1);
         }
         e.json = &it;
-        e.cfg = std::make_unique<SpawnGroupConfigUI>();
+        e.cfg = std::make_unique<SpawnGroupsConfigPanel>();
         e.cfg->set_screen_dimensions(screen_w_, screen_h_);
         e.cfg->load(it);
         if (configure_entry_) {
@@ -221,7 +221,7 @@ void SpawnGroupsConfig::update(const Input& input, int screen_w, int screen_h) {
     for (auto& e : entries_) {
         if (e.cfg) {
             e.cfg->set_screen_dimensions(screen_w_, screen_h_);
-            e.cfg->update(input);
+            e.cfg->update(input, screen_w_, screen_h_);
         }
     }
 }
@@ -280,7 +280,20 @@ void SpawnGroupsConfig::open_entry(Entry& entry, int x, int y) {
     }
     entry.cfg->set_screen_dimensions(screen_w_, screen_h_);
     entry.cfg->set_position(x, y);
-    entry.cfg->open_panel();
+    SpawnGroupsConfigPanel* cfg_ptr = entry.cfg.get();
+    nlohmann::json* json_ptr = entry.json;
+    entry.cfg->open(json_ptr ? *json_ptr : nlohmann::json::object(), [this, cfg_ptr, json_ptr](const nlohmann::json& updated) {
+        if (json_ptr) *json_ptr = updated;
+        if (on_entry_change_ && json_ptr) {
+            auto summary = cfg_ptr->consume_change_summary();
+            if (summary.method_changed || summary.quantity_changed) {
+                on_entry_change_(*json_ptr, summary);
+            }
+        } else {
+            cfg_ptr->consume_change_summary();
+        }
+        if (on_change_) on_change_();
+    });
 }
 
 std::optional<SpawnGroupsConfig::OpenSpawnGroupState> SpawnGroupsConfig::capture_open_spawn_group() const {

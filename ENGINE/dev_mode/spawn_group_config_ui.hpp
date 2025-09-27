@@ -7,7 +7,7 @@
 #include <vector>
 #include <nlohmann/json.hpp>
 
-class DockableCollapsible;
+#include "DockableCollapsible.hpp"
 class Widget;
 class LabelWidget;
 class DropdownWidget;
@@ -26,10 +26,10 @@ class DMCheckbox;
 class SearchAssets;
 
 // UI panel for configuring a single spawn group entry in the spawn JSON
-class SpawnGroupConfigUI {
+class SpawnGroupsConfigPanel : public DockableCollapsible {
 public:
-    SpawnGroupConfigUI();
-    ~SpawnGroupConfigUI();
+    SpawnGroupsConfigPanel(int start_x = 32, int start_y = 32);
+    ~SpawnGroupsConfigPanel();
 
     struct ChangeSummary {
         bool method_changed = false;
@@ -37,17 +37,17 @@ public:
         std::string method;
     };
 
-    void set_position(int x, int y);
-    SDL_Point position() const;
     void load(const nlohmann::json& asset);
+    void open(const nlohmann::json& data, std::function<void(const nlohmann::json&)> on_save);
     void set_screen_dimensions(int width, int height);
     void open_panel();
     void close();
     bool visible() const;
+    bool is_open() const;
+    void set_position(int x, int y);
+    SDL_Point position() const;
 
-    void update(const Input& input);
-    bool handle_event(const SDL_Event& e);
-    void render(SDL_Renderer* r) const;
+    void update(const Input& input, int screen_w, int screen_h);
     nlohmann::json to_json() const;
     bool is_point_inside(int x, int y) const;
     SDL_Rect rect() const;
@@ -91,11 +91,10 @@ private:
     void remove_candidate(size_t index);
     bool method_forces_single_quantity(const std::string& method) const;
     void ensure_search();
-    void ensure_panel();
     void ensure_visible_position();
     void handle_method_change();
+    void dispatch_save_if_needed();
 
-    std::unique_ptr<DockableCollapsible> panel_;
     std::vector<std::string> spawn_methods_;
     std::string spawn_id_;
     std::string panel_title_;
@@ -147,6 +146,8 @@ private:
     std::unique_ptr<ButtonWidget> b_done_w_;
 
     std::unique_ptr<SearchAssets> search_;
+    std::function<void(const nlohmann::json&)> on_save_callback_;
+    bool save_dispatched_ = false;
 
     ChangeSummary pending_summary_;
     std::string baseline_method_;
