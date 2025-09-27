@@ -160,10 +160,11 @@ void RoomConfigurator::set_bounds(const SDL_Rect& bounds) {
             FloatingDockableManager::instance().notify_panel_closed(this);
             set_floatable(false);
             set_close_button_enabled(false);
+            set_scroll_enabled(true);
             has_custom_position_ = false;
         } else {
             set_floatable(true);
-            set_close_button_enabled(false);
+            set_close_button_enabled(true);
             preferred_position_ = floating_position_;
         }
         docked_mode_ = want_docked;
@@ -205,8 +206,43 @@ void RoomConfigurator::apply_bounds_if_needed() {
     set_cell_width(cell_width);
     int override_h = available > 0 ? std::min(available, kMaxFloatingHeight) : kMaxFloatingHeight;
     set_available_height_override(override_h);
+    set_visible_height(available > 0 ? available : override_h);
     DockableCollapsible::set_rect(bounds_);
     applied_bounds_ = bounds_;
+}
+
+void RoomConfigurator::undock_from_sidebar(const SDL_Point& grab_point) {
+    if (!docked_mode_) {
+        return;
+    }
+
+    const int offset_x = grab_point.x - bounds_.x;
+    const int offset_y = grab_point.y - bounds_.y;
+    const int max_header_width = kRoomConfigPanelContentWidth;
+    const int clamped_offset_x = std::max(0, std::min(offset_x, max_header_width - 1));
+    int new_x = grab_point.x - clamped_offset_x;
+    int new_y = grab_point.y - std::max(0, std::min(offset_y, DMButton::height() - 1));
+
+    docked_mode_ = false;
+    bounds_ = SDL_Rect{0, 0, 0, 0};
+    applied_bounds_ = SDL_Rect{-1, -1, 0, 0};
+    set_floatable(true);
+    set_close_button_enabled(true);
+    set_available_height_override(kMaxFloatingHeight);
+
+    if (!has_custom_position_) {
+        preferred_position_ = floating_position_;
+    }
+
+    floating_position_ = SDL_Point{new_x, new_y};
+    preferred_position_ = floating_position_;
+    has_custom_position_ = true;
+    set_position(new_x, new_y);
+    SDL_Point clamped = position();
+    floating_position_ = clamped;
+    preferred_position_ = clamped;
+    FloatingDockableManager::instance().open_floating(
+        "Room Config", this, [this]() { this->close(); });
 }
 
 void RoomConfigurator::load_from_json(const nlohmann::json& data) {
@@ -884,6 +920,12 @@ bool RoomConfigurator::handle_event(const SDL_Event& e) {
     bool used = false;
     if (is_visible()) {
         apply_bounds_if_needed();
+        if (docked_mode_ && e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
+            SDL_Point p{e.button.x, e.button.y};
+            if (SDL_PointInRect(&p, &header_rect_) || SDL_PointInRect(&p, &handle_rect_)) {
+                undock_from_sidebar(p);
+            }
+        }
         SDL_Point before = position();
         used |= DockableCollapsible::handle_event(e);
         SDL_Point after = position();

@@ -53,6 +53,7 @@ public:
 private:
     void load_from_json(const nlohmann::json& data);
     void apply_bounds_if_needed();
+    void undock_from_sidebar(const SDL_Point& grab_point);
     void rebuild_rows();
     std::string selected_geometry() const;
     bool should_rebuild_with(const nlohmann::json& data) const;

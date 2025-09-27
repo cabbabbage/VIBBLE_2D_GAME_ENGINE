@@ -326,7 +326,19 @@ SpawnGroupConfigUI::SpawnGroupConfigUI() {
         if (!search_) return;
         if (panel_) {
             const SDL_Rect& r = panel_->rect();
-            search_->set_position(r.x + r.w + 16, r.y);
+            int desired_x = r.x + r.w + 16;
+            int desired_y = r.y;
+            const int search_w = 320;
+            const int search_h = 400;
+            if (screen_w_ > 0) {
+                int max_x = std::max(0, screen_w_ - search_w);
+                desired_x = std::clamp(desired_x, 0, max_x);
+            }
+            if (screen_h_ > 0) {
+                int max_y = std::max(0, screen_h_ - search_h);
+                desired_y = std::clamp(desired_y, 0, max_y);
+            }
+            search_->set_position(desired_x, desired_y);
         }
         search_->open([this](const std::string& value) {
             add_candidate(value, 100);
