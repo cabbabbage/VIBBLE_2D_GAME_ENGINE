@@ -3655,24 +3655,7 @@
     "asset_name": "Barrel",
     "asset_type": "Object",
     "can_invert": true,
-    "child_assets": [
-        {
-            "area_name": "",
-            "assets": [
-                {
-                    "max_number": 1,
-                    "min_number": 1,
-                    "name": "Axe",
-                    "position": "Exact"
-                }
-            ],
-            "z_offset": 1
-        },
-        {
-            "area_name": "",
-            "z_offset": 0
-        }
-    ],
+    "child_assets": [],
     "duplicatable": false,
     "duplication_interval_max": 60,
     "duplication_interval_min": 30,

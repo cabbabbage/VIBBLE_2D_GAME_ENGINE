@@ -5,7 +5,7 @@
     "height_at_zoom1": 547.0,
     "parallax_strength": 32.25,
     "realism_enabled": true,
-    "render_distance": 950.0,
+    "render_distance": 540.0,
     "tripod_distance_y": -855.0
   },
   "map_assets_data": {
@@ -474,6 +474,29 @@
           "origional_width": 1248,
           "position": "Exact",
           "spawn_id": "spn-6d19915360f2"
+        },
+        {
+          "candidates": [
+            {
+              "chance": 0,
+              "name": "null"
+            },
+            {
+              "chance": 100,
+              "name": "candle"
+            }
+          ],
+          "check_overlap": false,
+          "display_name": "candle",
+          "dx": 103,
+          "dy": -120,
+          "enforce_spacing": false,
+          "max_number": 1,
+          "min_number": 1,
+          "origional_height": 3612,
+          "origional_width": 3612,
+          "position": "Exact",
+          "spawn_id": "spn-43e9c88b6824"
         }
       ],
       "width_max": 3612,

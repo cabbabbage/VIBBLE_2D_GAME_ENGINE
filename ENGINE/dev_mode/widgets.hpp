@@ -107,6 +107,7 @@ private:
     SDL_Rect rect_{0,0,200,40};
     SDL_Rect content_rect_{0,0,200,40};
     SDL_Rect label_rect_{0,0,0,0};
+    SDL_Rect value_rect_{0,0,0,0};
     int label_height_ = 0;
     std::string label_;
     int min_ = 0;
@@ -138,6 +139,8 @@ private:
     SDL_Rect content_rect() const;
     SDL_Rect rect_{0,0,200,40};
     SDL_Rect content_rect_{0,0,200,40};
+    SDL_Rect min_value_rect_{0,0,0,0};
+    SDL_Rect max_value_rect_{0,0,0,0};
     int min_ = 0;
     int max_ = 100;
     int min_value_ = 0;

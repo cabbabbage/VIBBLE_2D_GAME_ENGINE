@@ -12,10 +12,21 @@ constexpr int kLabelControlGap = 5;
 constexpr int kTextboxHorizontalPadding = 6;
 constexpr int kSliderControlHeight = 40;
 constexpr int kSliderValueWidth = 60;
-constexpr int kRangeLabelWidth = 40;
 constexpr int kDropdownControlHeight = 32;
 constexpr int kButtonHorizontalPadding = 24; // total horizontal padding applied to button text
+
+int slider_value_height() {
+    const DMSliderStyle& st = DMStyles::Slider();
+    return std::max(DMTextBox::height(), st.value.font_size + DMSpacing::small_gap());
 }
+
+int range_value_width(int total_width) {
+    int candidate = total_width / 4;
+    candidate = std::max(candidate, 64);
+    candidate = std::min(candidate, std::max(64, total_width / 2));
+    return candidate;
+}
+} // namespace
 
 DMButton::DMButton(const std::string& text, const DMButtonStyle* style, int w, int h)
     : rect_{0,0,w,h}, text_(text), style_(style) {
@@ -374,15 +385,44 @@ DMSlider::DMSlider(const std::string& label, int min_val, int max_val, int value
 void DMSlider::set_rect(const SDL_Rect& r) {
     rect_ = r;
     label_height_ = compute_label_height(rect_.w);
-    int y = rect_.y + kBoxTopPadding;
-    label_rect_ = SDL_Rect{ rect_.x, y, rect_.w, label_height_ };
-    int content_y = y + label_height_ + (label_height_ > 0 ? kLabelControlGap : 0);
+    const int header_height = std::max(label_height_, slider_value_height());
+    const int header_y = rect_.y + kBoxTopPadding;
+    const int value_gap = DMSpacing::small_gap();
+
+    int value_w = std::min(kSliderValueWidth, rect_.w);
+    value_w = std::max(0, std::min(value_w, rect_.w));
+
+    int label_w = std::max(0, rect_.w - value_w - value_gap);
+    if (label_w <= 0) {
+        value_w = std::min(rect_.w, value_w);
+        label_w = std::max(0, rect_.w - value_w);
+    }
+    if (label_height_ <= 0 || label_.empty()) {
+        label_w = 0;
+    }
+
+    int label_y = header_y + (header_height - label_height_) / 2;
+    label_rect_ = SDL_Rect{ rect_.x, label_y, label_w, label_height_ };
+
+    int value_y = header_y + (header_height - slider_value_height()) / 2;
+    int value_x = rect_.x + rect_.w - std::max(value_w, 0);
+    if (label_height_ > 0 && label_w > 0) {
+        value_x = rect_.x + label_w + value_gap;
+    }
+    value_rect_ = SDL_Rect{ value_x, value_y, std::max(value_w, 0), slider_value_height() };
+    if (value_rect_.x + value_rect_.w > rect_.x + rect_.w) {
+        value_rect_.x = rect_.x + rect_.w - value_rect_.w;
+    }
+
+    int content_y = header_y + header_height + kLabelControlGap;
     int available = rect_.h - (content_y - rect_.y) - kBoxBottomPadding;
     int content_h = std::max(kSliderControlHeight, available);
     content_rect_ = SDL_Rect{ rect_.x, content_y, rect_.w, content_h };
+
     if (edit_box_) {
-        edit_box_->set_rect(value_rect());
+        edit_box_->set_rect(value_rect_);
     }
+
     rect_.h = (content_rect_.y - rect_.y) + content_rect_.h + kBoxBottomPadding;
 }
 
@@ -397,13 +437,11 @@ SDL_Rect DMSlider::content_rect() const {
 }
 
 SDL_Rect DMSlider::value_rect() const {
-    int width = std::min(kSliderValueWidth, content_rect_.w);
-    int x = content_rect_.x + std::max(0, content_rect_.w - width);
-    return SDL_Rect{ x, content_rect_.y, width, content_rect_.h };
+    return value_rect_;
 }
 
 SDL_Rect DMSlider::track_rect() const {
-    int track_width = std::max(0, content_rect_.w - kSliderValueWidth);
+    int track_width = std::max(0, content_rect_.w);
     return SDL_Rect{ content_rect_.x, content_rect_.y + content_rect_.h/2 - 4, track_width, 8 };
 }
 
@@ -505,7 +543,8 @@ void DMSlider::render(SDL_Renderer* r) const {
 
 int DMSlider::preferred_height(int width) const {
     int label_h = compute_label_height(width);
-    return kBoxTopPadding + label_h + (label_h > 0 ? kLabelControlGap : 0) + kSliderControlHeight + kBoxBottomPadding;
+    int header_h = std::max(label_h, slider_value_height());
+    return kBoxTopPadding + header_h + kLabelControlGap + kSliderControlHeight + kBoxBottomPadding;
 }
 
 int DMSlider::compute_label_height(int width) const {
@@ -537,11 +576,28 @@ DMRangeSlider::DMRangeSlider(int min_val, int max_val, int min_value, int max_va
 
 void DMRangeSlider::set_rect(const SDL_Rect& r) {
     rect_ = r;
-    int content_h = std::max(kSliderControlHeight, rect_.h - (kBoxTopPadding + kBoxBottomPadding));
-    content_rect_ = SDL_Rect{ rect_.x, rect_.y + kBoxTopPadding, rect_.w, content_h };
-    if (edit_min_) edit_min_->set_rect(SDL_Rect{ content_rect_.x, content_rect_.y, kRangeLabelWidth, content_rect_.h });
-    if (edit_max_) edit_max_->set_rect(SDL_Rect{ content_rect_.x + content_rect_.w - kRangeLabelWidth, content_rect_.y, kRangeLabelWidth, content_rect_.h });
+    const int header_height = slider_value_height();
+    const int header_y = rect_.y + kBoxTopPadding;
+    const int gap = DMSpacing::small_gap();
+
+    int total_width = std::max(0, rect_.w);
+    int available_each = std::max(0, (total_width - gap) / 2);
+    int desired = std::min(range_value_width(rect_.w), available_each);
+    int label_w = std::max(available_each / 2, desired);
+    label_w = std::min(label_w, available_each);
+
+    min_value_rect_ = SDL_Rect{ rect_.x, header_y, label_w, header_height };
+    max_value_rect_ = SDL_Rect{ rect_.x + total_width - label_w, header_y, label_w, header_height };
+
+    int content_y = header_y + header_height + kLabelControlGap;
+    int available = rect_.h - (content_y - rect_.y) - kBoxBottomPadding;
+    int content_h = std::max(kSliderControlHeight, available);
+    content_rect_ = SDL_Rect{ rect_.x, content_y, rect_.w, content_h };
+
     rect_.h = (content_rect_.y - rect_.y) + content_rect_.h + kBoxBottomPadding;
+
+    if (edit_min_) edit_min_->set_rect(min_value_rect_);
+    if (edit_max_) edit_max_->set_rect(max_value_rect_);
 }
 
 void DMRangeSlider::set_min_value(int v) {
@@ -559,8 +615,8 @@ SDL_Rect DMRangeSlider::content_rect() const {
 }
 
 SDL_Rect DMRangeSlider::track_rect() const {
-    int width = std::max(0, content_rect_.w - 2 * kRangeLabelWidth);
-    return SDL_Rect{ content_rect_.x + kRangeLabelWidth, content_rect_.y + content_rect_.h/2 - 4, width, 8 };
+    int width = std::max(0, content_rect_.w);
+    return SDL_Rect{ content_rect_.x, content_rect_.y + content_rect_.h/2 - 4, width, 8 };
 }
 
 SDL_Rect DMRangeSlider::min_knob_rect() const {
@@ -639,17 +695,15 @@ bool DMRangeSlider::handle_event(const SDL_Event& e) {
         }
         if (min_hit) { dragging_min_ = true; return true; }
         if (max_hit) { dragging_max_ = true; return true; }
-        SDL_Rect min_label{ content_rect_.x, content_rect_.y, kRangeLabelWidth, content_rect_.h };
-        SDL_Rect max_label{ content_rect_.x + content_rect_.w - kRangeLabelWidth, content_rect_.y, kRangeLabelWidth, content_rect_.h };
         if (e.button.clicks >= 2) {
-            if (SDL_PointInRect(&p, &min_label)) {
+            if (SDL_PointInRect(&p, &min_value_rect_)) {
                 edit_min_ = std::make_unique<DMTextBox>("", std::to_string(min_value_));
-                edit_min_->set_rect(min_label);
+                edit_min_->set_rect(min_value_rect_);
                 edit_min_->handle_event(e);
                 return true;
-            } else if (SDL_PointInRect(&p, &max_label)) {
+            } else if (SDL_PointInRect(&p, &max_value_rect_)) {
                 edit_max_ = std::make_unique<DMTextBox>("", std::to_string(max_value_));
-                edit_max_->set_rect(max_label);
+                edit_max_->set_rect(max_value_rect_);
                 edit_max_->handle_event(e);
                 return true;
             }
@@ -703,22 +757,33 @@ void DMRangeSlider::render(SDL_Renderer* r) const {
     SDL_RenderFillRect(r, &kmax);
     SDL_SetRenderDrawColor(r, border_max.r, border_max.g, border_max.b, border_max.a);
     SDL_RenderDrawRect(r, &kmax);
-    SDL_Rect min_label{ content_rect_.x, content_rect_.y, kRangeLabelWidth, content_rect_.h };
-    SDL_Rect max_label{ content_rect_.x + content_rect_.w - kRangeLabelWidth, content_rect_.y, kRangeLabelWidth, content_rect_.h };
     if (edit_min_) {
         edit_min_->render(r);
     } else {
-        draw_text(r, std::to_string(min_value_), min_label.x + 4, min_label.y + (min_label.h - st.value.font_size) / 2);
+        int text_y = min_value_rect_.y + (min_value_rect_.h - st.value.font_size) / 2;
+        draw_text(r, std::to_string(min_value_), min_value_rect_.x + 4, text_y);
     }
     if (edit_max_) {
         edit_max_->render(r);
     } else {
-        draw_text(r, std::to_string(max_value_), max_label.x + 4, max_label.y + (max_label.h - st.value.font_size) / 2);
+        std::string value = std::to_string(max_value_);
+        int text_x = max_value_rect_.x + 4;
+        int text_y = max_value_rect_.y + (max_value_rect_.h - st.value.font_size) / 2;
+        TTF_Font* f = TTF_OpenFont(st.label.font_path.c_str(), st.label.font_size);
+        if (f) {
+            int tw = 0;
+            int th = 0;
+            if (TTF_SizeUTF8(f, value.c_str(), &tw, &th) == 0) {
+                text_x = std::max(max_value_rect_.x + 4, max_value_rect_.x + max_value_rect_.w - tw - 4);
+            }
+            TTF_CloseFont(f);
+        }
+        draw_text(r, value, text_x, text_y);
     }
 }
 
 int DMRangeSlider::height() {
-    return kBoxTopPadding + kSliderControlHeight + kBoxBottomPadding;
+    return kBoxTopPadding + slider_value_height() + kLabelControlGap + kSliderControlHeight + kBoxBottomPadding;
 }
 
 DMDropdown::DMDropdown(const std::string& label, const std::vector<std::string>& options, int idx)

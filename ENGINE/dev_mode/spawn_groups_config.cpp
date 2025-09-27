@@ -24,6 +24,11 @@ SpawnGroupsConfig::SpawnGroupsConfig()
     set_cell_width(120);
     set_available_height_override(kSpawnGroupsMaxHeight);
     set_work_area(SDL_Rect{0, 0, 0, 0});
+    set_on_close([this]() {
+        if (!suppress_close_actions_) {
+            close_all();
+        }
+    });
 }
 
 bool SpawnGroupsConfig::should_rebuild_with(const nlohmann::json& normalized_assets) const {
@@ -43,8 +48,7 @@ void SpawnGroupsConfig::open(const nlohmann::json& assets, std::function<void(co
     on_close_ = std::move(on_close);
     FloatingDockableManager::instance().open_floating(
         "Spawn Groups", this, [this]() {
-            this->close_all();
-            this->close();
+            this->hide_temporarily();
         });
     // make copy for standalone editing
     nlohmann::json normalized = normalize_spawn_assets(assets);
@@ -76,7 +80,7 @@ void SpawnGroupsConfig::open(const nlohmann::json& assets, std::function<void(co
     update(dummy, kStandaloneWidth, kStandaloneHeight);
 }
 
-void SpawnGroupsConfig::close() { set_visible(false); }
+void SpawnGroupsConfig::close() { DockableCollapsible::set_visible(false); }
 
 bool SpawnGroupsConfig::visible() const { return is_visible(); }
 
@@ -216,6 +220,13 @@ void SpawnGroupsConfig::close_all() {
     for (auto& e : entries_) {
         if (e.cfg) e.cfg->close();
     }
+}
+
+void SpawnGroupsConfig::hide_temporarily() {
+    bool previous = suppress_close_actions_;
+    suppress_close_actions_ = true;
+    DockableCollapsible::set_visible(false);
+    suppress_close_actions_ = previous;
 }
 
 std::optional<SpawnGroupsConfig::OpenSpawnGroupState> SpawnGroupsConfig::capture_open_spawn_group() const {

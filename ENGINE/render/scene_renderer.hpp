@@ -46,9 +46,6 @@ class SceneRenderer {
     int            num_groups_ = 20;
     bool           debugging = false;
 
-    // GPU-based postprocess targets (faster fullscreen blur overlay)
     SDL_Texture*   scene_target_tex_    = nullptr;  // full-res scene render target
-    SDL_Texture*   post_small_tex_a_    = nullptr;  // downscaled intermediate A
-    SDL_Texture*   post_small_tex_b_    = nullptr;  // downscaled intermediate B (ping-pong)
     
 };

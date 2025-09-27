@@ -67,7 +67,7 @@ public:
             r.s_z->set_rect(SDL_Rect{ x, y - scroll_, maxw, DMSlider::height() });
             y += DMSlider::height() + DMSpacing::item_gap();
 
-            if (!r.b_assets) r.b_assets = std::make_unique<DMButton>("Configure Assets", &DMStyles::ListButton(), 160, DMButton::height());
+            if (!r.b_assets) r.b_assets = std::make_unique<DMButton>("Configure Children", &DMStyles::ListButton(), 160, DMButton::height());
             r.b_assets->set_rect(SDL_Rect{ x, y - scroll_, maxw, DMButton::height() });
             y += DMButton::height() + DMSpacing::item_gap();
 
@@ -95,7 +95,7 @@ public:
 
     void update(const Input& input, int screen_w, int screen_h) override {
         DockableCollapsible::update(input, screen_w, screen_h);
-        if (spawn_groups_cfg_.visible()) spawn_groups_cfg_.update(input, screen_w, screen_h);
+        if (spawn_groups_cfg_.any_visible()) spawn_groups_cfg_.update(input, screen_w, screen_h);
         // Defer opening the area editor to avoid re-entrancy/crashes when
         // the AssetInfo panel closes itself during the callback.
         if (pending_open_area_ && open_area_editor_) {
@@ -107,7 +107,7 @@ public:
     }
 
     bool handle_event(const SDL_Event& e) override {
-        if (spawn_groups_cfg_.visible()) {
+        if (spawn_groups_cfg_.any_visible()) {
             return spawn_groups_cfg_.handle_event(e);
         }
         bool used = DockableCollapsible::handle_event(e);
@@ -131,7 +131,9 @@ public:
                             if (info_) (void)info_->update_info_json();
                         }
                     });
-                    spawn_groups_cfg_.set_position(rect_.x - 260, rect_.y);
+                    const SDL_Point anchor = spawn_groups_anchor();
+                    spawn_groups_cfg_.set_anchor(anchor.x, anchor.y);
+                    spawn_groups_cfg_.set_position(anchor.x, anchor.y);
                     used = true;
                 }
             }
@@ -194,7 +196,7 @@ public:
         }
         if (b_add_)        b_add_->render(r);
         if (apply_btn_)    apply_btn_->render(r);
-        if (spawn_groups_cfg_.visible()) spawn_groups_cfg_.render(r);
+        if (spawn_groups_cfg_.any_visible()) spawn_groups_cfg_.render(r);
     }
 
 private:
@@ -216,6 +218,18 @@ private:
     };
 
 private:
+    SDL_Point spawn_groups_anchor() const {
+        int panel_w = spawn_groups_cfg_.rect().w;
+        if (panel_w <= 0) panel_w = 260;
+        const int gap = DMSpacing::section_gap();
+        int x = rect_.x - panel_w - gap;
+        if (x < 0) {
+            x = rect_.x + rect_.w + gap;
+        }
+        int y = rect_.y;
+        return SDL_Point{ x, y };
+    }
+
     void rebuild_rows_from_info() {
         rows_.clear();
         if (!info_) return;

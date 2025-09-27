@@ -99,6 +99,11 @@ private:
     int append_layer_entry(const std::string& display_name = {});
     bool ensure_child_room_exists(int parent_layer_index, const std::string& child, bool* layer_created = nullptr);
     bool handle_preview_room_click(int px, int py, int center_x, int center_y, double scale);
+    const PreviewNode* find_room_at(int px, int py, int center_x, int center_y, double scale) const;
+    int find_layer_at(int px, int py, int center_x, int center_y, double scale) const;
+    void update_hover_target(int layer_index, const std::string& room_key);
+    void update_click_target(int layer_index, const std::string& room_key);
+    void clear_hover_target();
     void open_room_config_for(const std::string& room_name);
     void ensure_room_configurator();
     nlohmann::json* ensure_room_entry(const std::string& room_name);
@@ -146,6 +151,11 @@ private:
     std::vector<std::string> available_rooms_;
     int selected_layer_ = -1;
     bool dirty_ = false;
+
+    int hovered_layer_index_ = -1;
+    std::string hovered_room_key_;
+    int clicked_layer_index_ = -1;
+    std::string clicked_room_key_;
 
     std::shared_ptr<MapLayersController> controller_;
     bool embedded_mode_ = false;

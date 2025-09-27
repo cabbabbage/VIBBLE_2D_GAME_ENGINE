@@ -94,6 +94,8 @@ private:
     int  compute_row_width(int num_cols) const;
     int  available_height(int screen_h) const;
     void clamp_to_bounds(int screen_w, int screen_h) const;
+    void clamp_position_only(int screen_w, int screen_h) const;
+    void update_geometry_after_move() const;
 
 protected:
     virtual void layout();
@@ -142,4 +144,7 @@ protected:
     int available_height_override_ = -1;
 
     std::function<void()> on_close_{};
+
+    mutable int last_screen_w_ = 0;
+    mutable int last_screen_h_ = 0;
 };

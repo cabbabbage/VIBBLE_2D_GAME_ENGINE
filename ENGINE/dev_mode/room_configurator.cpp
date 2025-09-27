@@ -20,6 +20,8 @@
 #include <set>
 
 namespace {
+constexpr int kRoomConfigPanelContentWidth = 360;
+constexpr int kRoomConfigPanelMinWidth = 260;
 class RoomConfigLabel : public Widget {
 public:
     explicit RoomConfigLabel(std::string text) : text_(std::move(text)) {}
@@ -141,7 +143,7 @@ RoomConfigurator::RoomConfigurator()
     set_padding(DMSpacing::panel_padding());
     set_row_gap(DMSpacing::item_gap());
     set_col_gap(DMSpacing::item_gap());
-    set_cell_width(260);
+    set_cell_width(kRoomConfigPanelContentWidth);
     set_available_height_override(kMaxFloatingHeight);
     set_work_area(SDL_Rect{0, 0, 0, 0});
 }
@@ -176,7 +178,14 @@ void RoomConfigurator::apply_bounds_if_needed() {
 
     const int pad = DMSpacing::panel_padding();
     const int available = std::max(0, bounds_.h - 2 * pad);
-    const int cell_width = std::max(180, bounds_.w - 2 * pad);
+    const int available_width = std::max(0, bounds_.w - 2 * pad);
+    int cell_width = kRoomConfigPanelContentWidth;
+    if (available_width > 0) {
+        cell_width = std::min(kRoomConfigPanelContentWidth, available_width);
+        if (available_width >= kRoomConfigPanelMinWidth) {
+            cell_width = std::max(kRoomConfigPanelMinWidth, cell_width);
+        }
+    }
     set_cell_width(cell_width);
     int override_h = available > 0 ? std::min(available, kMaxFloatingHeight) : kMaxFloatingHeight;
     set_available_height_override(override_h);

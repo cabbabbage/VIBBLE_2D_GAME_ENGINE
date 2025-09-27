@@ -71,4 +71,6 @@ private:
     std::unique_ptr<DMButton> b_done_;
     std::unique_ptr<ButtonWidget> b_done_w_;
     std::function<void(const nlohmann::json&)> on_close_;
+    void hide_temporarily();
+    bool suppress_close_actions_ = false;
 };

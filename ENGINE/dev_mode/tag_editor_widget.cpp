@@ -503,12 +503,10 @@ int TagEditorWidget::layout(int width, int origin_x, int origin_y, bool apply) {
 
     if (has_tag_recs) {
         if (apply) {
-            rec_tags_label_rect_ = SDL_Rect{ origin_x, y, width, label_h };
+            rec_tags_label_rect_ = SDL_Rect{0, 0, 0, 0};
         }
-        y += label_h + label_gap;
-
         if (!tag_search_box_) {
-            tag_search_box_ = std::make_unique<DMTextBox>("Search Tags", search_input_);
+            tag_search_box_ = std::make_unique<DMTextBox>("", search_input_);
         }
         if (!add_tag_btn_) {
             add_tag_btn_ = std::make_unique<DMButton>("+", &DMStyles::CreateButton(), 36, DMTextBox::height());
@@ -531,18 +529,31 @@ int TagEditorWidget::layout(int width, int origin_x, int origin_y, bool apply) {
             search_width = 0;
             button_width = width;
         }
+        int search_height = 0;
+        if (search_width > 0) {
+            search_height = std::max(tag_search_box_->height_for_width(search_width), DMTextBox::height());
+        }
+        int button_height = DMButton::height();
+        int button_offset = 0;
+        if (search_width > 0 && search_height > DMTextBox::height()) {
+            button_offset = (search_height - DMTextBox::height()) / 2;
+        }
         if (apply) {
             if (search_width > 0) {
-                tag_search_box_->set_rect(SDL_Rect{ origin_x, controls_y, search_width, DMTextBox::height() });
+                tag_search_box_->set_rect(SDL_Rect{ origin_x, controls_y, search_width, search_height });
             } else {
                 tag_search_box_->set_rect(SDL_Rect{0,0,0,0});
             }
             int add_x = origin_x + (search_width > 0 ? search_width + button_gap : 0);
             int final_button_width = std::min(width, std::max(24, button_width));
-            add_tag_btn_->set_rect(SDL_Rect{ add_x, controls_y, final_button_width, DMTextBox::height() });
+            int button_y = controls_y + button_offset;
+            add_tag_btn_->set_rect(SDL_Rect{ add_x, button_y, final_button_width, button_height });
         }
         int results_spacing = DMSpacing::item_gap();
-        y = controls_y + DMTextBox::height() + results_spacing;
+        int controls_bottom = controls_y + search_height;
+        int button_bottom = controls_y + button_offset + button_height;
+        int total_height = std::max(controls_bottom, button_bottom);
+        y = total_height + results_spacing;
 
         size_t matches = filtered_tag_order_.empty() && search_query_.empty()
                               ? rec_tag_chips_.size()
@@ -557,7 +568,7 @@ int TagEditorWidget::layout(int width, int origin_x, int origin_y, bool apply) {
         int toggle_gap = DMSpacing::small_gap();
         if (show_tag_toggle) {
             if (!show_more_tags_btn_) {
-                show_more_tags_btn_ = make_button("Show More", DMStyles::ListButton(), kRecommendChipWidth);
+                show_more_tags_btn_ = make_button("Show More", DMStyles::WarnButton(), kRecommendChipWidth);
             }
             if (apply) {
                 update_toggle_labels();
@@ -588,7 +599,7 @@ int TagEditorWidget::layout(int width, int origin_x, int origin_y, bool apply) {
         bool show_anti_toggle = show_all_anti_recs_ || rec_anti_chips_.size() > kRecommendationPreviewCount;
         if (show_anti_toggle) {
             if (!show_more_anti_btn_) {
-                show_more_anti_btn_ = make_button("Show More", DMStyles::ListButton(), kRecommendChipWidth);
+                show_more_anti_btn_ = make_button("Show More", DMStyles::WarnButton(), kRecommendChipWidth);
             }
             int toggle_gap = DMSpacing::small_gap();
             if (apply) {

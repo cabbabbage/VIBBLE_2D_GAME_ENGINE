@@ -749,6 +749,8 @@ public:
     void render(SDL_Renderer* renderer) const;
     bool is_point_inside(int x, int y) const;
     void refresh();
+    void request_refresh();
+    void ensure_cleanup();
 
     MapLayersPanel* panel_owner() const { return owner_; }
     int current_layer() const { return layer_index_; }
@@ -763,6 +765,8 @@ private:
     int layer_index_ = -1;
     json* layer_ = nullptr;
     bool locked_ = false;
+    bool cleanup_pending_ = false;
+    bool refresh_pending_ = false;
 
     std::unique_ptr<DMTextBox> name_box_;
     std::unique_ptr<TextBoxWidget> name_widget_;
@@ -872,6 +876,8 @@ void MapLayersPanel::LayerConfigPanel::open(int layer_index, json* layer) {
     layer_index_ = layer_index;
     layer_ = layer;
     locked_ = owner_ ? owner_->is_layer_locked(layer_index_) : false;
+    cleanup_pending_ = false;
+    refresh_pending_ = false;
     name_cache_ = layer_->value("name", std::string("layer_") + std::to_string(layer_index));
     if (layer_->contains("min_rooms")) layer_->erase("min_rooms");
     max_rooms_cache_ = layer_->value("max_rooms", 0);
@@ -884,9 +890,36 @@ void MapLayersPanel::LayerConfigPanel::open(int layer_index, json* layer) {
 
 void MapLayersPanel::LayerConfigPanel::close() {
     set_visible(false);
+    cleanup_pending_ = true;
+    refresh_pending_ = false;
+}
+
+void MapLayersPanel::LayerConfigPanel::ensure_cleanup() {
+    if (!cleanup_pending_) {
+        return;
+    }
+    cleanup_pending_ = false;
+    refresh_pending_ = false;
     layer_index_ = -1;
     layer_ = nullptr;
+    locked_ = false;
+    name_box_.reset();
+    name_widget_.reset();
+    name_cache_.clear();
+    total_room_widget_.reset();
+    room_count_slider_.reset();
+    room_count_widget_.reset();
+    max_rooms_cache_ = 0;
+    total_rooms_min_cache_ = 0;
+    total_rooms_max_cache_ = 0;
+    add_candidate_btn_.reset();
+    add_candidate_widget_.reset();
+    close_btn_.reset();
+    close_widget_.reset();
+    delete_layer_btn_.reset();
+    delete_layer_widget_.reset();
     candidate_widgets_.clear();
+    set_rows({});
 }
 
 bool MapLayersPanel::LayerConfigPanel::is_visible() const {
@@ -909,6 +942,10 @@ bool MapLayersPanel::LayerConfigPanel::handle_event(const SDL_Event& e) {
         if (widget && widget->handle_event(e)) {
             used = true;
         }
+    }
+    if (refresh_pending_) {
+        refresh_pending_ = false;
+        refresh();
     }
     return used;
 }
@@ -934,6 +971,7 @@ bool MapLayersPanel::LayerConfigPanel::is_point_inside(int x, int y) const {
 }
 
 void MapLayersPanel::LayerConfigPanel::refresh() {
+    refresh_pending_ = false;
     if (layer_) {
         name_cache_ = layer_->value("name", name_cache_);
         max_rooms_cache_ = layer_->value("max_rooms", max_rooms_cache_);
@@ -1018,6 +1056,10 @@ void MapLayersPanel::LayerConfigPanel::refresh() {
 
 
 
+
+void MapLayersPanel::LayerConfigPanel::request_refresh() {
+    refresh_pending_ = true;
+}
 
 void MapLayersPanel::LayerConfigPanel::sync_from_widgets() {
     if (!layer_) return;
@@ -1237,7 +1279,7 @@ bool MapLayersPanel::RoomCandidateWidget::handle_event(const SDL_Event& e) {
                         this->refresh_from_json();
                         // The owner refresh rebuilds widgets/rows; return early to
                         // avoid iterating over potentially invalidated state.
-                        owner_->refresh();
+                        owner_->request_refresh();
                     }
                 });
             }
@@ -1252,7 +1294,7 @@ bool MapLayersPanel::RoomCandidateWidget::handle_event(const SDL_Event& e) {
                 owner_->panel_owner()->handle_candidate_removed(layer_index_, candidate_index_);
                 // Owner refresh rebuilds rows; return immediately to avoid
                 // accessing invalidated widgets.
-                owner_->refresh();
+                owner_->request_refresh();
                 return true;
             }
         }
@@ -1267,7 +1309,7 @@ bool MapLayersPanel::RoomCandidateWidget::handle_event(const SDL_Event& e) {
                     this->refresh_from_json();
                     // Refresh rebuilds widgets; return to prevent iterating
                     // over a mutated chips list.
-                    owner_->refresh();
+                    owner_->request_refresh();
                     return true;
                 }
             }
@@ -1351,7 +1393,10 @@ void MapLayersPanel::set_map_info(json* map_info, const std::string& map_path) {
     ensure_layer_indices();
     rebuild_available_rooms();
     refresh_canvas();
-    if (layer_config_) layer_config_->close();
+    if (layer_config_) {
+        layer_config_->close();
+        layer_config_->ensure_cleanup();
+    }
     if (room_configurator_) room_configurator_->close();
     active_room_config_key_.clear();
     request_preview_regeneration();
@@ -1376,7 +1421,10 @@ void MapLayersPanel::open() {
 
 void MapLayersPanel::close() {
     set_visible(false);
-    if (layer_config_) layer_config_->close();
+    if (layer_config_) {
+        layer_config_->close();
+        layer_config_->ensure_cleanup();
+    }
     if (room_selector_) room_selector_->close();
     if (room_configurator_) room_configurator_->close();
     active_room_config_key_.clear();
@@ -1427,7 +1475,10 @@ void MapLayersPanel::update(const Input& input, int screen_w, int screen_h) {
             room_configurator_->set_bounds(compute_room_config_bounds());
         }
     }
-    if (!is_visible()) return;
+    if (!is_visible()) {
+        if (layer_config_) layer_config_->ensure_cleanup();
+        return;
+    }
     DockableCollapsible::update(input, screen_w, screen_h);
     if (layer_config_) layer_config_->update(input, screen_w, screen_h);
     if (room_selector_) {
@@ -1448,6 +1499,7 @@ void MapLayersPanel::update(const Input& input, int screen_w, int screen_h) {
             }
         }
     }
+    if (layer_config_) layer_config_->ensure_cleanup();
 }
 
 bool MapLayersPanel::handle_event(const SDL_Event& e) {
@@ -1459,6 +1511,7 @@ bool MapLayersPanel::handle_event(const SDL_Event& e) {
     used = DockableCollapsible::handle_event(e) || used;
     if (layer_config_ && layer_config_->is_visible()) {
         used = layer_config_->handle_event(e) || used;
+        layer_config_->ensure_cleanup();
     }
     if (room_selector_ && room_selector_->visible()) {
         used = room_selector_->handle_event(e) || used;
@@ -1965,9 +2018,11 @@ void MapLayersPanel::select_layer(int index) {
                 layer_config_->open(index, layer);
             } else {
                 layer_config_->close();
+                layer_config_->ensure_cleanup();
             }
         } else {
             layer_config_->close();
+            layer_config_->ensure_cleanup();
         }
     }
 }
@@ -2192,6 +2247,7 @@ void MapLayersPanel::open_layer_config_internal(int index) {
     }
     active_room_config_key_.clear();
     layer_config_->close();
+    layer_config_->ensure_cleanup();
 
     auto* layer = layer_at(index);
     if (!layer) return;
@@ -2422,7 +2478,10 @@ bool MapLayersPanel::reload_layers_from_disk() {
         ensure_layer_indices();
         rebuild_available_rooms();
         refresh_canvas();
-        if (layer_config_) layer_config_->close();
+        if (layer_config_) {
+            layer_config_->close();
+            layer_config_->ensure_cleanup();
+        }
         request_preview_regeneration();
         regenerate_preview();
         mark_clean();
@@ -2437,6 +2496,7 @@ void MapLayersPanel::ensure_layer_config_valid() {
     if (!layer_config_ || !layer_config_->is_visible()) return;
     if (selected_layer_ < 0 || !layer_at(selected_layer_)) {
         layer_config_->close();
+        layer_config_->ensure_cleanup();
     }
 }
 
@@ -2493,5 +2553,6 @@ void MapLayersPanel::request_room_selection_for_layer(int layer_index, const std
     const auto list = available_rooms_for_layer(layer_index);
     room_selector_->open(list, cb);
 }
+
 
 
