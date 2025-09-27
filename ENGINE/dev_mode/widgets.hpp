@@ -35,7 +35,7 @@ public:
     DMTextBox(const std::string& label, const std::string& value);
     void set_rect(const SDL_Rect& r);
     const SDL_Rect& rect() const { return rect_; }
-    void set_value(const std::string& v) { text_ = v; }
+    void set_value(const std::string& v);
     const std::string& value() const { return text_; }
     bool handle_event(const SDL_Event& e);
     void render(SDL_Renderer* r) const;
@@ -58,6 +58,7 @@ private:
     std::string text_;
     bool hovered_ = false;
     bool editing_ = false;
+    size_t caret_pos_ = 0;
 };
 
 class DMCheckbox {
@@ -195,6 +196,7 @@ public:
     virtual int height_for_width(int w) const = 0;
     virtual bool handle_event(const SDL_Event& e) = 0;
     virtual void render(SDL_Renderer* r) const = 0;
+    virtual bool wants_full_row() const { return false; }
 };
 
 // ---- Adapters for existing dev-mode widgets ----
@@ -252,6 +254,7 @@ public:
     int height_for_width(int w) const override { return s_ ? s_->preferred_height(w) : DMSlider::height(); }
     bool handle_event(const SDL_Event& e) override { return s_ ? s_->handle_event(e) : false; }
     void render(SDL_Renderer* r) const override { if (s_) s_->render(r); }
+    bool wants_full_row() const override { return true; }
 private:
     DMSlider* s_ = nullptr; // non-owning
 };
@@ -264,6 +267,7 @@ public:
     int height_for_width(int /*w*/) const override { return DMRangeSlider::height(); }
     bool handle_event(const SDL_Event& e) override { return s_ ? s_->handle_event(e) : false; }
     void render(SDL_Renderer* r) const override { if (s_) s_->render(r); }
+    bool wants_full_row() const override { return true; }
 private:
     DMRangeSlider* s_ = nullptr; // non-owning
 };

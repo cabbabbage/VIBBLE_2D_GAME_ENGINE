@@ -24,11 +24,14 @@ class TextBox {
 
 	private:
     void draw_text(SDL_Renderer* r, const std::string& s, int x, int y, SDL_Color col) const;
+    void render_caret(SDL_Renderer* r) const;
+    size_t caret_index_from_x(int mouse_x) const;
 
-	private:
+        private:
     SDL_Rect rect_{0,0,420,36};
     std::string label_;
     std::string text_;
     bool hovered_ = false;
     bool editing_ = false;
+    size_t caret_pos_ = 0;
 };

@@ -1,6 +1,7 @@
 #include "room_configurator.hpp"
 
 #include "dm_styles.hpp"
+#include "FloatingDockableManager.hpp"
 #include "tag_editor_widget.hpp"
 #include "tag_utils.hpp"
 #include "room/room.hpp"
@@ -141,38 +142,31 @@ RoomConfigurator::RoomConfigurator()
     set_row_gap(DMSpacing::item_gap());
     set_col_gap(DMSpacing::item_gap());
     set_cell_width(260);
+    set_available_height_override(kMaxFloatingHeight);
+    set_work_area(SDL_Rect{0, 0, 0, 0});
 }
 
 RoomConfigurator::~RoomConfigurator() = default;
 
 void RoomConfigurator::set_bounds(const SDL_Rect& bounds) {
     bounds_ = bounds;
-    const bool docked = bounds_.w > 0 && bounds_.h > 0;
-    if (using_docked_bounds_ != docked) {
-        using_docked_bounds_ = docked;
-        floatable_ = !docked;
-        set_show_header(show_header());
-    }
     applied_bounds_ = SDL_Rect{-1, -1, 0, 0};
+    if (bounds_.w > 0 && bounds_.h > 0) {
+        preferred_position_ = SDL_Point{bounds_.x, bounds_.y};
+    }
     apply_bounds_if_needed();
 }
 
 void RoomConfigurator::apply_bounds_if_needed() {
-    if (!using_docked_bounds_) {
-        if (bounds_.w > 0 && bounds_.h > 0) {
-            set_work_area(bounds_);
-        } else {
-            set_work_area(SDL_Rect{0, 0, 0, 0});
-        }
-        set_available_height_override(-1);
-        applied_bounds_ = bounds_;
-        return;
-    }
-
     if (bounds_.w <= 0 || bounds_.h <= 0) {
-        set_available_height_override(-1);
-        set_work_area(SDL_Rect{0, 0, 0, 0});
-        applied_bounds_ = SDL_Rect{-1, -1, 0, 0};
+        if (applied_bounds_.x != bounds_.x || applied_bounds_.y != bounds_.y ||
+            applied_bounds_.w != bounds_.w || applied_bounds_.h != bounds_.h) {
+            set_available_height_override(kMaxFloatingHeight);
+            applied_bounds_ = bounds_;
+            if (!has_custom_position_) {
+                set_position(preferred_position_.x, preferred_position_.y);
+            }
+        }
         return;
     }
     if (applied_bounds_.x == bounds_.x && applied_bounds_.y == bounds_.y &&
@@ -183,10 +177,14 @@ void RoomConfigurator::apply_bounds_if_needed() {
     const int pad = DMSpacing::panel_padding();
     const int available = std::max(0, bounds_.h - 2 * pad);
     const int cell_width = std::max(180, bounds_.w - 2 * pad);
-    set_available_height_override(available > 0 ? available : -1);
     set_cell_width(cell_width);
-    set_work_area(bounds_);
-    DockableCollapsible::set_rect(bounds_);
+    int override_h = available > 0 ? std::min(available, kMaxFloatingHeight) : kMaxFloatingHeight;
+    set_available_height_override(override_h);
+    if (!has_custom_position_) {
+        set_position(bounds_.x, bounds_.y);
+    } else {
+        preferred_position_ = SDL_Point{bounds_.x, bounds_.y};
+    }
     applied_bounds_ = bounds_;
 }
 
@@ -468,6 +466,8 @@ bool RoomConfigurator::should_rebuild_with(const nlohmann::json& data) const {
 
 void RoomConfigurator::open(const nlohmann::json& data) {
     room_ = nullptr;
+    FloatingDockableManager::instance().open_floating(
+        "Room Config", this, [this]() { this->close(); });
     const bool was_visible = is_visible();
     if (!should_rebuild_with(data)) {
         set_visible(true);
@@ -488,6 +488,8 @@ void RoomConfigurator::open(Room* room) {
     const bool same_room = (room == previous_room);
     const nlohmann::json& source = room ? room->assets_data() : empty_object();
     room_ = room;
+    FloatingDockableManager::instance().open_floating(
+        "Room Config", this, [this]() { this->close(); });
     const bool was_visible = is_visible();
     if (same_room && !should_rebuild_with(source)) {
         set_visible(true);
@@ -857,7 +859,12 @@ bool RoomConfigurator::handle_event(const SDL_Event& e) {
     bool used = false;
     if (is_visible()) {
         apply_bounds_if_needed();
+        SDL_Point before = position();
         used |= DockableCollapsible::handle_event(e);
+        SDL_Point after = position();
+        if (after.x != before.x || after.y != before.y) {
+            has_custom_position_ = true;
+        }
     }
     return used;
 }

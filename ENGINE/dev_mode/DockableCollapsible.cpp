@@ -311,9 +311,37 @@ void DockableCollapsible::layout(int screen_w, int screen_h) const {
     header_rect_ = SDL_Rect{ rect_.x + padding_, rect_.y + padding_, 0, show_header_ ? DMButton::height() : 0 };
 
     const bool show_close = floatable_ || close_button_enabled_;
+    auto layout_rows = [this]() {
+        std::vector<std::vector<Widget*>> layout_rows;
+        layout_rows.reserve(rows_.size());
+        for (const auto& row : rows_) {
+            std::vector<Widget*> current;
+            bool inserted_any = false;
+            for (auto* w : row) {
+                if (w && w->wants_full_row()) {
+                    if (!current.empty()) {
+                        layout_rows.push_back(current);
+                        current.clear();
+                    }
+                    layout_rows.push_back({ w });
+                    inserted_any = true;
+                } else {
+                    current.push_back(w);
+                    inserted_any = true;
+                }
+            }
+            if (!current.empty()) {
+                layout_rows.push_back(std::move(current));
+            } else if (!inserted_any) {
+                layout_rows.push_back({});
+            }
+        }
+        return layout_rows;
+    }();
+
     if (floatable_) {
         widest_row_w_ = 2 * padding_;
-        for (const auto& row : rows_) {
+        for (const auto& row : layout_rows) {
             int n = (int)row.size();
             if (n <= 0) continue;
             widest_row_w_ = std::max(widest_row_w_, compute_row_width(n));
@@ -362,7 +390,7 @@ void DockableCollapsible::layout(int screen_w, int screen_h) const {
 
     row_heights_.clear();
     int computed_content_h = 0;
-    for (const auto& row : rows_) {
+    for (const auto& row : layout_rows) {
         int n = (int)row.size();
         if (n <= 0) { row_heights_.push_back(0); continue; }
         int col_w = std::max(1, (content_w - (n - 1) * col_gap_) / n);
@@ -372,7 +400,7 @@ void DockableCollapsible::layout(int screen_w, int screen_h) const {
         computed_content_h += r_h + row_gap_;
     }
     if (!row_heights_.empty()) computed_content_h -= row_gap_;
-    if (!rows_.empty()) content_height_ = computed_content_h;
+    if (!layout_rows.empty()) content_height_ = computed_content_h;
 
     if (!expanded_) {
         body_viewport_h_ = 0;
@@ -405,8 +433,8 @@ void DockableCollapsible::layout(int screen_w, int screen_h) const {
     rect_.h = padding_ + header_rect_.h + header_gap + body_viewport_h_ + padding_;
 
     int y = y0 - scroll_;
-    for (size_t ri = 0; ri < rows_.size(); ++ri) {
-        const auto& row = rows_[ri];
+    for (size_t ri = 0; ri < layout_rows.size(); ++ri) {
+        const auto& row = layout_rows[ri];
         int n = (int)row.size();
         if (n <= 0) continue;
         int col_w = std::max(1, (content_w - (n - 1) * col_gap_) / n);

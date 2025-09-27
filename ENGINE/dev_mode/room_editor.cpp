@@ -1239,10 +1239,6 @@ void RoomEditor::refresh_room_config_visibility() {
     if (!room_cfg_ui_) {
         return;
     }
-    DockableCollapsible* panel = room_cfg_ui_.get();
-    if (!panel) {
-        return;
-    }
     if (active_modal_ == ActiveModal::AssetInfo) {
         room_cfg_ui_->close();
         update_spawn_groups_config_anchor();
@@ -1250,9 +1246,6 @@ void RoomEditor::refresh_room_config_visibility() {
     }
     if (room_config_dock_open_) {
         room_cfg_ui_->set_bounds(room_config_bounds_);
-        panel->set_show_header(true);
-        panel->set_expanded(true);
-        panel->set_visible(true);
         room_cfg_ui_->open(current_room_);
     } else {
         room_cfg_ui_->close();

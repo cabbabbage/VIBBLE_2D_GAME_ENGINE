@@ -2,6 +2,7 @@
 
 #include "dm_styles.hpp"
 #include "map_layers_controller.hpp"
+#include "map_layers_common.hpp"
 #include "room_configurator.hpp"
 #include "widgets.hpp"
 #include "utils/input.hpp"
@@ -29,17 +30,10 @@ namespace {
 constexpr int kCanvasPreferredHeight = 320;
 constexpr int kCanvasPadding = 16;
 constexpr int kRoomRangeMaxDefault = 64;
-constexpr int kCandidateRangeMaxDefault = 128;
 
-inline int clamp_candidate_min(int value) {
-    return std::clamp(value, 0, kCandidateRangeMaxDefault);
-}
-
-inline int clamp_candidate_max(int min_value, int max_value) {
-    const int clamped_min = clamp_candidate_min(min_value);
-    const int clamped_max = std::clamp(max_value, clamped_min, kCandidateRangeMaxDefault);
-    return clamped_max;
-}
+using map_layers::kCandidateRangeMax;
+using map_layers::clamp_candidate_max;
+using map_layers::clamp_candidate_min;
 constexpr int kLayerRadiusStepDefault = 512;
 constexpr double kTau = 6.28318530717958647692;
 
@@ -1102,8 +1096,8 @@ void MapLayersPanel::LayerConfigPanel::refresh_total_summary() {
 MapLayersPanel::RoomCandidateWidget::RoomCandidateWidget(LayerConfigPanel* owner, int layer_index, int candidate_index, json* candidate, bool editable)
     : owner_(owner), layer_index_(layer_index), candidate_index_(candidate_index), candidate_(candidate), editable_(editable) {
     if (editable_) {
-        min_slider_ = std::make_unique<DMSlider>("Min Instances", 0, kCandidateRangeMaxDefault, 0);
-        max_slider_ = std::make_unique<DMSlider>("Max Instances", 0, kCandidateRangeMaxDefault, 0);
+        min_slider_ = std::make_unique<DMSlider>("Min Instances", 0, kCandidateRangeMax, 0);
+        max_slider_ = std::make_unique<DMSlider>("Max Instances", 0, kCandidateRangeMax, 0);
         add_child_button_ = std::make_unique<DMButton>("Add Child", &DMStyles::HeaderButton(), 120, DMButton::height());
         delete_button_ = std::make_unique<DMButton>("Delete", &DMStyles::DeleteButton(), 120, DMButton::height());
     }
@@ -1118,7 +1112,7 @@ void MapLayersPanel::RoomCandidateWidget::refresh_from_json() {
     (*candidate_)["min_instances"] = min_count_cache_;
     (*candidate_)["max_instances"] = max_count_cache_;
     if (editable_) {
-        const int slider_max = std::max(kCandidateRangeMaxDefault, max_count_cache_ + 8);
+        const int slider_max = std::max(kCandidateRangeMax, max_count_cache_ + 8);
         min_slider_ = std::make_unique<DMSlider>("Min Instances", 0, slider_max, min_count_cache_);
         max_slider_ = std::make_unique<DMSlider>("Max Instances", 0, slider_max, max_count_cache_);
     } else {

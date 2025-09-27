@@ -1,5 +1,7 @@
 #include "map_layers_controller.hpp"
 
+#include "map_layers_common.hpp"
+
 #include <algorithm>
 #include <cctype>
 #include <fstream>
@@ -12,17 +14,10 @@ using nlohmann::json;
 
 namespace {
 constexpr int kDefaultRoomRangeMax = 64;
-constexpr int kDefaultCandidateRangeMax = 128;
 constexpr int kDefaultLayerRadiusStep = 512;
 
-inline int clamp_candidate_min(int value) {
-    return std::clamp(value, 0, kDefaultCandidateRangeMax);
-}
-
-inline int clamp_candidate_max(int min_value, int max_value) {
-    const int clamped_min = clamp_candidate_min(min_value);
-    return std::clamp(max_value, clamped_min, kDefaultCandidateRangeMax);
-}
+using map_layers::clamp_candidate_max;
+using map_layers::clamp_candidate_min;
 
 int next_layer_radius(const json& layers) {
     int max_radius = 0;

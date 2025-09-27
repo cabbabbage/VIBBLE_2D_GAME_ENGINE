@@ -106,6 +106,7 @@
       "rooms": [
         {
           "max_instances": 1,
+          "min_instances": 0,
           "name": "spawn",
           "required_children": []
         }
@@ -119,16 +120,19 @@
       "rooms": [
         {
           "max_instances": 1,
+          "min_instances": 0,
           "name": "bar",
           "required_children": []
         },
         {
           "max_instances": 1,
+          "min_instances": 0,
           "name": "bar",
           "required_children": []
         },
         {
           "max_instances": 1,
+          "min_instances": 0,
           "name": "bar",
           "required_children": []
         }
@@ -142,16 +146,19 @@
       "rooms": [
         {
           "max_instances": 4,
+          "min_instances": 0,
           "name": "bar",
           "required_children": []
         },
         {
           "max_instances": 4,
+          "min_instances": 0,
           "name": "bar",
           "required_children": []
         },
         {
           "max_instances": 4,
+          "min_instances": 0,
           "name": "bar",
           "required_children": []
         }
@@ -442,7 +449,7 @@
           "origional_height": 3180,
           "origional_width": 3180,
           "position": "Perimeter",
-          "radius": 261,
+          "radius": 0,
           "spawn_id": "spn-7d847a71ac07"
         },
         {

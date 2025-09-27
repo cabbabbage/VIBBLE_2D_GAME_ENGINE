@@ -3,6 +3,7 @@
 #include <sstream>
 #include <cctype>
 #include <cmath>
+#include <cstring>
 
 namespace {
 constexpr int kBoxTopPadding = 5;
@@ -66,7 +67,7 @@ void DMButton::render(SDL_Renderer* r) const {
 }
 
 DMTextBox::DMTextBox(const std::string& label, const std::string& value)
-    : label_(label), text_(value) {}
+    : label_(label), text_(value), caret_pos_(value.size()) {}
 
 void DMTextBox::set_rect(const SDL_Rect& r) {
     rect_ = r;
@@ -78,6 +79,11 @@ void DMTextBox::set_rect(const SDL_Rect& r) {
     int control_h = std::max(DMTextBox::height(), available);
     box_rect_ = SDL_Rect{ rect_.x, control_y, rect_.w, control_h };
     rect_.h = (box_rect_.y - rect_.y) + box_rect_.h + kBoxBottomPadding;
+}
+
+void DMTextBox::set_value(const std::string& v) {
+    text_ = v;
+    caret_pos_ = std::min(caret_pos_, text_.size());
 }
 
 int DMTextBox::height_for_width(int w) const {
@@ -92,16 +98,43 @@ bool DMTextBox::handle_event(const SDL_Event& e) {
     } else if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
         SDL_Point p{ e.button.x, e.button.y };
         bool inside = SDL_PointInRect(&p, &box_rect_);
-        editing_ = inside;
-        if (editing_) SDL_StartTextInput(); else SDL_StopTextInput();
+        if (inside) {
+            if (!editing_) {
+                editing_ = true;
+                SDL_StartTextInput();
+            }
+            caret_pos_ = text_.size();
+        } else if (editing_) {
+            editing_ = false;
+            SDL_StopTextInput();
+        }
     } else if (editing_ && e.type == SDL_TEXTINPUT) {
-        text_ += e.text.text;
+        text_.insert(caret_pos_, e.text.text);
+        caret_pos_ += std::strlen(e.text.text);
         changed = true;
     } else if (editing_ && e.type == SDL_KEYDOWN) {
         if (e.key.keysym.sym == SDLK_BACKSPACE) {
-            if (!text_.empty()) { text_.pop_back(); changed = true; }
+            if (caret_pos_ > 0 && !text_.empty()) {
+                size_t erase_pos = caret_pos_ - 1;
+                text_.erase(erase_pos, 1);
+                caret_pos_ = erase_pos;
+                changed = true;
+            }
         } else if (e.key.keysym.sym == SDLK_RETURN || e.key.keysym.sym == SDLK_KP_ENTER) {
             editing_ = false; SDL_StopTextInput();
+        } else if (e.key.keysym.sym == SDLK_DELETE) {
+            if (caret_pos_ < text_.size()) {
+                text_.erase(caret_pos_, 1);
+                changed = true;
+            }
+        } else if (e.key.keysym.sym == SDLK_LEFT) {
+            if (caret_pos_ > 0) --caret_pos_;
+        } else if (e.key.keysym.sym == SDLK_RIGHT) {
+            if (caret_pos_ < text_.size()) ++caret_pos_;
+        } else if (e.key.keysym.sym == SDLK_HOME) {
+            caret_pos_ = 0;
+        } else if (e.key.keysym.sym == SDLK_END) {
+            caret_pos_ = text_.size();
         }
     }
     return changed;
@@ -148,6 +181,39 @@ void DMTextBox::render(SDL_Renderer* r) const {
     draw_text(r, text_, box_rect_.x + kTextboxHorizontalPadding,
               box_rect_.y + kTextboxHorizontalPadding,
               std::max(1, box_rect_.w - 2 * kTextboxHorizontalPadding), valStyle);
+    if (editing_) {
+        TTF_Font* f = TTF_OpenFont(valStyle.font_path.c_str(), valStyle.font_size);
+        if (f) {
+            int max_width = std::max(1, box_rect_.w - 2 * kTextboxHorizontalPadding);
+            size_t caret_index = std::min(caret_pos_, text_.size());
+            std::string prefix = text_.substr(0, caret_index);
+            auto lines = wrap_lines(f, prefix, max_width);
+            int caret_x = box_rect_.x + kTextboxHorizontalPadding;
+            int caret_y = box_rect_.y + kTextboxHorizontalPadding;
+            int caret_height = TTF_FontHeight(f);
+            const int gap = DMSpacing::small_gap();
+            if (!lines.empty()) {
+                for (size_t i = 0; i < lines.size(); ++i) {
+                    const std::string& line = lines[i];
+                    int w = 0, h = 0;
+                    if (!line.empty()) {
+                        TTF_SizeUTF8(f, line.c_str(), &w, &h);
+                    } else {
+                        w = 0; h = TTF_FontHeight(f);
+                    }
+                    if (i + 1 < lines.size()) {
+                        caret_y += h + gap;
+                    } else {
+                        caret_x += w;
+                        caret_height = (h > 0) ? h : TTF_FontHeight(f);
+                    }
+                }
+            }
+            SDL_SetRenderDrawColor(r, st.text.r, st.text.g, st.text.b, st.text.a);
+            SDL_RenderDrawLine(r, caret_x, caret_y, caret_x, caret_y + caret_height);
+            TTF_CloseFont(f);
+        }
+    }
 }
 
 std::vector<std::string> DMTextBox::wrap_lines(TTF_Font* f, const std::string& s, int max_width) const {

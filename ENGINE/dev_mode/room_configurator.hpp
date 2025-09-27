@@ -58,9 +58,11 @@ private:
     bool should_rebuild_with(const nlohmann::json& data) const;
     void load_tags_from_json(const nlohmann::json& data);
     void write_tags_to_json(nlohmann::json& object) const;
+    static constexpr int kMaxFloatingHeight = 640;
     SDL_Rect bounds_{0,0,0,0};
     SDL_Rect applied_bounds_{-1,-1,0,0};
-    bool using_docked_bounds_ = false;
+    SDL_Point preferred_position_{32, 32};
+    bool has_custom_position_ = false;
     std::vector<std::string> room_geom_options_;
     Room* room_ = nullptr;
     nlohmann::json loaded_json_;

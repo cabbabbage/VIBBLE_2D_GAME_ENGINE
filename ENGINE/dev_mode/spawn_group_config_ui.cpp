@@ -95,6 +95,7 @@ constexpr int kDefaultScreenH = 1080;
 constexpr int kPerimeterRadiusMin = 0;
 constexpr int kPerimeterRadiusMax = 10000;
 constexpr int kPerimeterDefaultRadius = 50;
+constexpr int kSpawnConfigMaxHeight = 560;
 
 int clamp_slider_value(int value, int min_value, int max_value) {
     return std::clamp(value, min_value, max_value);
@@ -305,6 +306,8 @@ SpawnGroupConfigUI::SpawnGroupConfigUI() {
     panel_ = std::make_unique<DockableCollapsible>("Spawn Group", true, 0, 0);
     panel_->set_expanded(true);
     panel_->set_visible(false);
+    panel_->set_available_height_override(kSpawnConfigMaxHeight);
+    panel_->set_work_area(SDL_Rect{0, 0, 0, 0});
 
     ownership_text_ = "Room: Unknown";
     ownership_color_ = DMStyles::Label().color;
@@ -486,8 +489,11 @@ void SpawnGroupConfigUI::load(const nlohmann::json& data) {
 void SpawnGroupConfigUI::open_panel() {
     if (!panel_) return;
     FloatingDockableManager::instance().open_floating("Asset Config", panel_.get(), [this]() { this->close(); });
+    const bool was_visible = panel_->is_visible();
     panel_->set_visible(true);
-    panel_->set_expanded(true);
+    if (!was_visible) {
+        panel_->set_expanded(true);
+    }
     Input dummy;
     panel_->update(dummy, kDefaultScreenW, kDefaultScreenH);
 }

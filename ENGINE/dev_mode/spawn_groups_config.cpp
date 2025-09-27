@@ -7,6 +7,7 @@
 namespace {
 constexpr int kStandaloneWidth = 1920;
 constexpr int kStandaloneHeight = 1080;
+constexpr int kSpawnGroupsMaxHeight = 560;
 
 nlohmann::json normalize_spawn_assets(const nlohmann::json& assets) {
     if (assets.is_array()) {
@@ -21,6 +22,8 @@ SpawnGroupsConfig::SpawnGroupsConfig()
     set_expanded(true);
     set_visible(false);
     set_cell_width(120);
+    set_available_height_override(kSpawnGroupsMaxHeight);
+    set_work_area(SDL_Rect{0, 0, 0, 0});
 }
 
 bool SpawnGroupsConfig::should_rebuild_with(const nlohmann::json& normalized_assets) const {
@@ -45,9 +48,10 @@ void SpawnGroupsConfig::open(const nlohmann::json& assets, std::function<void(co
         });
     // make copy for standalone editing
     nlohmann::json normalized = normalize_spawn_assets(assets);
+    const bool was_visible = is_visible();
     if (!should_rebuild_with(normalized)) {
         set_visible(true);
-        set_expanded(true);
+        if (!was_visible) set_expanded(true);
         Input dummy;
         update(dummy, kStandaloneWidth, kStandaloneHeight);
         return;
@@ -67,7 +71,7 @@ void SpawnGroupsConfig::open(const nlohmann::json& assets, std::function<void(co
     if (b_done_w_) rows.push_back({ b_done_w_.get() });
     set_rows(rows);
     set_visible(true);
-    set_expanded(true);
+    if (!was_visible) set_expanded(true);
     Input dummy;
     update(dummy, kStandaloneWidth, kStandaloneHeight);
 }
