@@ -17,7 +17,7 @@ class Input;
 // Manages a collection of spawn group panels for an assets array
 class SpawnGroupsConfig : public DockableCollapsible {
 public:
-    SpawnGroupsConfig();
+    explicit SpawnGroupsConfig(bool floatable = true);
     // Standalone panel controls
     void open(const nlohmann::json& assets, std::function<void(const nlohmann::json&)> on_close);
     void close();
@@ -50,6 +50,7 @@ public:
     bool any_visible() const;
     bool is_point_inside(int x, int y) const;
 private:
+    bool floatable_mode_ = true;
     bool should_rebuild_with(const nlohmann::json& normalized_assets) const;
     struct Entry {
         std::string id;
@@ -57,6 +58,7 @@ private:
         nlohmann::json* json = nullptr;
         std::unique_ptr<DMButton> btn;
         std::unique_ptr<ButtonWidget> btn_w;
+        size_t on_close_callback_id = 0;
     };
     std::vector<Entry> entries_;
     nlohmann::json* assets_json_ = nullptr;
@@ -74,5 +76,10 @@ private:
     std::function<void(const nlohmann::json&)> on_close_;
     void hide_temporarily();
     bool suppress_close_actions_ = false;
+    bool restore_parent_visibility_pending_ = false;
+    bool restore_parent_expanded_state_ = false;
+    bool suppress_restore_on_close_ = false;
+    void handle_entry_closed(Entry& entry);
+    void open_entry(Entry& entry, int x, int y);
 };
 

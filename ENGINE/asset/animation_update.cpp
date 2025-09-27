@@ -15,7 +15,6 @@
 #include <random>
 #include <string>
 #include <iostream>
-#include <unordered_map>
 
 namespace {
 inline void normalize_minmax(int& mn, int& mx) {
@@ -40,20 +39,7 @@ inline double angle_from_or_random(int vx, int vy, std::mt19937& rng) {
     return std::atan2(static_cast<double>(vy), static_cast<double>(vx));
 }
 
-struct ManualState {
-    int manual_dx = 0;
-    int manual_dy = 0;
-    int last_dir_x = 0;
-    int last_dir_y = 1;
-    std::string last_anim = "default";
-    bool last_was_moving = false;
-    bool active = false;
-};
-
-ManualState& manual_state(AnimationUpdate* updater) {
-    static std::unordered_map<AnimationUpdate*, ManualState> states;
-    return states[updater];
-}
+using ManualState = AnimationUpdate::ManualState;
 }
 
 AnimationUpdate::AnimationUpdate(Asset* self, ActiveAssetsManager& aam)
@@ -706,7 +692,7 @@ void AnimationUpdate::move(int x, int y) {
     dx_ = x;
     dy_ = y;
     override_movement = true;
-    ManualState& manual = manual_state(this);
+    ManualState& manual = manual_state_;
     manual.active = true;
     manual.manual_dx = x;
     manual.manual_dy = y;
@@ -791,7 +777,7 @@ void AnimationUpdate::update() {
             }
             return;
         }
-        ManualState& manual = manual_state(this);
+        ManualState& manual = manual_state_;
         if (manual.active) {
             const int mdx = manual.manual_dx;
             const int mdy = manual.manual_dy;

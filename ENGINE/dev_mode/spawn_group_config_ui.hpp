@@ -59,6 +59,10 @@ public:
     void set_quantity_hidden(bool hidden);
     // Allow external close callback (e.g., to persist changes when panel closes).
     void set_on_close(std::function<void()> cb);
+    // Register an additional close callback and return a handle for later removal.
+    size_t add_on_close_callback(std::function<void()> cb);
+    void remove_on_close_callback(size_t handle);
+    void clear_on_close_callbacks();
 
 private:
     struct CandidateRow {
@@ -148,6 +152,14 @@ private:
     std::string forced_method_;
     bool quantity_hidden_ = false;
 
+    struct CloseCallbackEntry {
+        size_t id = 0;
+        std::function<void()> cb;
+    };
+    std::vector<CloseCallbackEntry> close_callbacks_;
+    size_t next_close_callback_id_ = 1;
+
     int total_chance() const;
     void refresh_chance_labels(int total_chance);
+    void bind_on_close_callbacks();
 };

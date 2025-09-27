@@ -4,6 +4,6 @@
 MAPS/HOME/map_info.json::rooms_data
 Mushroom_3,1.000,7,7,exact,0.052,7,-0.013
 Vibble,1.000,5,5,center,0.046,5,-0.004
-batch_map_assets,0.890,771,866,random,227.681,6,1344.207
+batch_map_assets,0.735,15180,20667,mapwide_batch,4606.958,1,0.000
 Barrel,0.000,0,1,random,0.019,1,0.000
 Tree,1.000,116,116,perimeter,1.346,2,-0.292

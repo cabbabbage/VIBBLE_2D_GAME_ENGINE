@@ -35,14 +35,23 @@ public:
     void set_weights(double directness_weight, double sparsity_weight);
     void set_target(SDL_Point desired, const Asset* final_target);
     inline void set_target(int desired_x, int desired_y, const Asset* final_target) { set_target(SDL_Point{ desired_x, desired_y }, final_target); }
-
+    struct ManualState {
+        int  manual_dx       = 0;
+        int  manual_dy       = 0;
+        int  last_dir_x      = 0;
+        int  last_dir_y      = 1;
+        std::string last_anim = "default";
+        bool last_was_moving = false;
+        bool active          = false;
+    };
 private:
     enum class Mode { None, Idle, Pursue, Run, Orbit, Patrol, Serpentine, ToPoint };
 
-    SDL_Point bottom_point(SDL_Point pos) const;
-    bool point_hits_impassable(const SDL_Point& pt) const;
-    bool path_blocked(SDL_Point from, SDL_Point to) const;
-    SDL_Point sanitize_target(SDL_Point desired) const;
+
+    SDL_Point bottom_middle(SDL_Point pos) const;
+    bool point_in_impassable(SDL_Point pt, const Asset* ignored) const;
+    bool path_blocked(SDL_Point from, SDL_Point to, const Asset* ignored) const;
+    SDL_Point sanitize_target(SDL_Point desired, const Asset* final_target) const;
     bool can_move_by(int dx, int dy) const;
     bool would_overlap_same_or_player(int dx, int dy) const;
     std::string pick_best_animation_towards(SDL_Point target);
@@ -54,10 +63,6 @@ private:
     void ensure_serpentine_target(int min_stride, int max_stride, int sway, const Asset* final_target, int keep_side_ratio);
     void ensure_to_point_target();
     SDL_Point choose_balanced_target(SDL_Point desired, const Asset* final_target) const;
-    SDL_Point sanitize_target(SDL_Point desired, const Asset* final_target) const;
-    SDL_Point bottom_middle(SDL_Point pos) const;
-    bool point_in_impassable(SDL_Point pt, const Asset* ignored) const;
-    bool path_blocked(SDL_Point from, SDL_Point to, const Asset* ignored) const;
     void transition_mode(Mode m);
     bool is_target_reached();
     int  min_move_len2() const;
@@ -122,4 +127,5 @@ private:
     bool forced_active_ = false;
     Mode saved_mode_ = Mode::None;
     bool mode_suspended_ = false;
+    ManualState manual_state_{};
 };

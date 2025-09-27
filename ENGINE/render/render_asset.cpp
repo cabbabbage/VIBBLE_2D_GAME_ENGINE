@@ -53,38 +53,72 @@ SDL_Texture* RenderAsset::regenerateFinalTexture(Asset* a) {
         if (!a) return nullptr;
         SDL_Texture* base = a->get_current_frame();
         if (!base) return nullptr;
-        const Uint8 main_alpha = main_light_source_.get_current_color().a;
-	int bw = a->cached_w, bh = a->cached_h;
-	if (bw == 0 || bh == 0) SDL_QueryTexture(base, nullptr, nullptr, &bw, &bh);
-        SDL_Texture* final_tex = SDL_CreateTexture(renderer_, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET, bw, bh);
-        if (!final_tex) return nullptr;
+
+        int bw = a->cached_w, bh = a->cached_h;
+        if (bw == 0 || bh == 0) {
+                SDL_QueryTexture(base, nullptr, nullptr, &bw, &bh);
+        }
+
+        SDL_Texture* existing_final = a->get_final_texture();
+        SDL_Texture* final_tex      = existing_final;
+        bool          reuse_texture = true;
+
+        if (final_tex) {
+                int query_w = 0, query_h = 0;
+                Uint32 fmt = 0; int access = 0;
+                if (SDL_QueryTexture(final_tex, &fmt, &access, &query_w, &query_h) != 0 ||
+                    access != SDL_TEXTUREACCESS_TARGET || query_w != bw || query_h != bh) {
+                        reuse_texture = false;
+                }
+        } else {
+                reuse_texture = false;
+        }
+
+        if (!reuse_texture) {
+                final_tex = SDL_CreateTexture(renderer_, SDL_PIXELFORMAT_RGBA8888,
+                                              SDL_TEXTUREACCESS_TARGET, bw, bh);
+                if (!final_tex) {
+                        return nullptr;
+                }
+        }
+
         SDL_SetTextureBlendMode(final_tex, SDL_BLENDMODE_BLEND);
         #if SDL_VERSION_ATLEAST(2,0,12)
         SDL_SetTextureScaleMode(
             final_tex,
             (a && a->info && !a->info->smooth_scaling) ? SDL_ScaleModeNearest : SDL_ScaleModeBest);
         #endif
+
+        a->clear_downscale_cache();
+
         SDL_Texture* prev_target = SDL_GetRenderTarget(renderer_);
-	SDL_SetRenderTarget(renderer_, final_tex);
-	SDL_SetRenderDrawColor(renderer_, 0, 0, 0, 0);
-	SDL_RenderClear(renderer_);
-	const float c = a->alpha_percentage;
-	int alpha_mod = (c >= 1.0f) ? 255 : int(main_alpha * c);
-        if (a->info->type == asset_types::player) alpha_mod = std::min(255, alpha_mod * 3);
-	SDL_SetTextureColorMod(base, 255, 255, 255);
-	SDL_RenderCopy(renderer_, base, nullptr, nullptr);
-	SDL_SetTextureColorMod(base, 255, 255, 255);
-	if (a->has_shading) {
-		if (SDL_Texture* mask = render_shadow_mask(a, bw, bh)) {
-			SDL_SetRenderTarget(renderer_, final_tex);
-			SDL_SetTextureBlendMode(mask, SDL_BLENDMODE_MOD);
-			SDL_RenderCopy(renderer_, mask, nullptr, nullptr);
-			SDL_DestroyTexture(mask);
-		}
-	}
-	SDL_SetRenderTarget(renderer_, prev_target);
-	a->cached_w = bw;
-	a->cached_h = bh;
+        SDL_SetRenderTarget(renderer_, final_tex);
+        SDL_SetRenderDrawColor(renderer_, 0, 0, 0, 0);
+        SDL_RenderClear(renderer_);
+
+        const Uint8 main_alpha = main_light_source_.get_current_color().a;
+        const float  c         = a->alpha_percentage;
+        int alpha_mod = (c >= 1.0f) ? 255 : int(main_alpha * c);
+        if (a->info->type == asset_types::player) {
+                alpha_mod = std::min(255, alpha_mod * 3);
+        }
+
+        SDL_SetTextureColorMod(base, 255, 255, 255);
+        SDL_RenderCopy(renderer_, base, nullptr, nullptr);
+        SDL_SetTextureColorMod(base, 255, 255, 255);
+
+        if (a->has_shading) {
+                if (SDL_Texture* mask = render_shadow_mask(a, bw, bh)) {
+                        SDL_SetRenderTarget(renderer_, final_tex);
+                        SDL_SetTextureBlendMode(mask, SDL_BLENDMODE_MOD);
+                        SDL_RenderCopy(renderer_, mask, nullptr, nullptr);
+                        SDL_DestroyTexture(mask);
+                }
+        }
+
+        SDL_SetRenderTarget(renderer_, prev_target);
+        a->cached_w = bw;
+        a->cached_h = bh;
         return final_tex;
 }
 

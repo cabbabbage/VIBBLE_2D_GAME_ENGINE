@@ -764,7 +764,40 @@ void SpawnGroupConfigUI::set_quantity_hidden(bool hidden) {
 }
 
 void SpawnGroupConfigUI::set_on_close(std::function<void()> cb) {
-    if (panel_) panel_->set_on_close(std::move(cb));
+    close_callbacks_.clear();
+    next_close_callback_id_ = 1;
+    if (cb) {
+        close_callbacks_.push_back({next_close_callback_id_++, std::move(cb)});
+    }
+    bind_on_close_callbacks();
+}
+
+size_t SpawnGroupConfigUI::add_on_close_callback(std::function<void()> cb) {
+    if (!cb) {
+        return 0;
+    }
+    size_t id = next_close_callback_id_++;
+    close_callbacks_.push_back({id, std::move(cb)});
+    bind_on_close_callbacks();
+    return id;
+}
+
+void SpawnGroupConfigUI::remove_on_close_callback(size_t handle) {
+    if (handle == 0) {
+        return;
+    }
+    auto it = std::remove_if(close_callbacks_.begin(), close_callbacks_.end(),
+                             [handle](const CloseCallbackEntry& entry) { return entry.id == handle; });
+    if (it != close_callbacks_.end()) {
+        close_callbacks_.erase(it, close_callbacks_.end());
+        bind_on_close_callbacks();
+    }
+}
+
+void SpawnGroupConfigUI::clear_on_close_callbacks() {
+    close_callbacks_.clear();
+    next_close_callback_id_ = 1;
+    bind_on_close_callbacks();
 }
 
 void SpawnGroupConfigUI::remove_candidate(size_t index) {
@@ -973,4 +1006,22 @@ void SpawnGroupConfigUI::refresh_chance_labels(int total_chance) {
         prefix += " (" + std::to_string(numerator) + " / " + std::to_string(total_chance) + ")";
         row.chance_label->set_text(std::move(prefix));
     }
+}
+
+void SpawnGroupConfigUI::bind_on_close_callbacks() {
+    if (!panel_) {
+        return;
+    }
+    if (close_callbacks_.empty()) {
+        panel_->set_on_close({});
+        return;
+    }
+    panel_->set_on_close([this]() {
+        auto callbacks = close_callbacks_;
+        for (const auto& entry : callbacks) {
+            if (entry.cb) {
+                entry.cb();
+            }
+        }
+    });
 }

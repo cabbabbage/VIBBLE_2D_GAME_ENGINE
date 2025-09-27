@@ -17,15 +17,30 @@ nlohmann::json normalize_spawn_assets(const nlohmann::json& assets) {
 }
 }
 
-SpawnGroupsConfig::SpawnGroupsConfig()
-    : DockableCollapsible("Spawn Groups", true, 32, 32) {
+SpawnGroupsConfig::SpawnGroupsConfig(bool floatable)
+    : DockableCollapsible("Spawn Groups", floatable, 32, 32),
+      floatable_mode_(floatable) {
     set_expanded(true);
-    set_visible(false);
+    if (floatable_mode_) {
+        set_visible(false);
+        set_work_area(SDL_Rect{0, 0, 0, 0});
+        set_on_close([this]() {
+            if (!suppress_close_actions_) {
+                close_all();
+            }
+        });
+    } else {
+        set_visible(false);
+        set_show_header(false);
+        set_scroll_enabled(true);
+    }
     set_cell_width(120);
     set_available_height_override(kSpawnGroupsMaxHeight);
     set_work_area(SDL_Rect{0, 0, 0, 0});
     set_on_close([this]() {
         if (!suppress_close_actions_) {
+            restore_parent_visibility_pending_ = false;
+            restore_parent_expanded_state_ = false;
             close_all();
         }
     });
@@ -45,6 +60,9 @@ bool SpawnGroupsConfig::should_rebuild_with(const nlohmann::json& normalized_ass
 }
 
 void SpawnGroupsConfig::open(const nlohmann::json& assets, std::function<void(const nlohmann::json&)> on_close) {
+    if (!floatable_mode_) {
+        return;
+    }
     on_close_ = std::move(on_close);
     FloatingDockableManager::instance().open_floating(
         "Spawn Groups", this, [this]() {
@@ -206,20 +224,46 @@ void SpawnGroupsConfig::render(SDL_Renderer* r) const {
 }
 
 void SpawnGroupsConfig::open_spawn_group(const std::string& id, int x, int y) {
+    bool parent_visible = is_visible();
+    if (parent_visible) {
+        restore_parent_expanded_state_ = is_expanded();
+    }
+    restore_parent_visibility_pending_ = parent_visible || restore_parent_visibility_pending_;
+
     close_all();
     for (auto& e : entries_) {
         if (e.id == id) {
-            e.cfg->set_position(x, y);
-            e.cfg->open_panel();
+            open_entry(e, x, y);
             break;
         }
     }
 }
 
 void SpawnGroupsConfig::close_all() {
+    bool previous = suppress_restore_on_close_;
+    suppress_restore_on_close_ = true;
     for (auto& e : entries_) {
         if (e.cfg) e.cfg->close();
     }
+    suppress_restore_on_close_ = previous;
+}
+
+void SpawnGroupsConfig::open_entry(Entry& entry, int x, int y) {
+    if (!entry.cfg) {
+        return;
+    }
+    if (entry.on_close_callback_id != 0) {
+        entry.cfg->remove_on_close_callback(entry.on_close_callback_id);
+        entry.on_close_callback_id = 0;
+    }
+    if (restore_parent_visibility_pending_) {
+        Entry* entry_ptr = &entry;
+        entry.on_close_callback_id = entry.cfg->add_on_close_callback([this, entry_ptr]() {
+            this->handle_entry_closed(*entry_ptr);
+        });
+    }
+    entry.cfg->set_position(x, y);
+    entry.cfg->open_panel();
 }
 
 void SpawnGroupsConfig::hide_temporarily() {
@@ -227,6 +271,26 @@ void SpawnGroupsConfig::hide_temporarily() {
     suppress_close_actions_ = true;
     DockableCollapsible::set_visible(false);
     suppress_close_actions_ = previous;
+}
+
+void SpawnGroupsConfig::handle_entry_closed(Entry& entry) {
+    if (entry.cfg && entry.on_close_callback_id != 0) {
+        entry.cfg->remove_on_close_callback(entry.on_close_callback_id);
+        entry.on_close_callback_id = 0;
+    }
+    if (suppress_restore_on_close_) {
+        return;
+    }
+    if (!restore_parent_visibility_pending_) {
+        return;
+    }
+    restore_parent_visibility_pending_ = false;
+    bool expand = restore_parent_expanded_state_;
+    FloatingDockableManager::instance().open_floating(
+        "Spawn Groups", this, [this]() { this->hide_temporarily(); });
+    set_visible(true);
+    set_expanded(expand);
+    restore_parent_expanded_state_ = is_expanded();
 }
 
 std::optional<SpawnGroupsConfig::OpenSpawnGroupState> SpawnGroupsConfig::capture_open_spawn_group() const {
@@ -259,8 +323,7 @@ void SpawnGroupsConfig::restore_open_spawn_group(const OpenSpawnGroupState& stat
             return;
         }
         close_all();
-        entry.cfg->set_position(state.position.x, state.position.y);
-        entry.cfg->open_panel();
+        open_entry(entry, state.position.x, state.position.y);
     }
 }
 

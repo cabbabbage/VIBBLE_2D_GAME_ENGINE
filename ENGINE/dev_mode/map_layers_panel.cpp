@@ -2854,6 +2854,32 @@ bool MapLayersPanel::RoomCandidateWidget::handle_event(const SDL_Event& e) {
 
     }
 
+    if (!used && e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
+
+        SDL_Point click_point{ e.button.x, e.button.y };
+
+        if (SDL_PointInRect(&click_point, &rect_)) {
+
+            if (owner_ && owner_->panel_owner() && candidate_) {
+
+                const std::string room_key = candidate_->value("name", std::string());
+
+                if (!room_key.empty()) {
+
+                    owner_->panel_owner()->update_click_target(layer_index_, room_key);
+
+                    owner_->panel_owner()->open_room_config_for(room_key);
+
+                }
+
+            }
+
+            return true;
+
+        }
+
+    }
+
     return used;
 
 }
@@ -4662,7 +4688,13 @@ void MapLayersPanel::add_room_to_selected_layer() {
 
     std::string suggested = suggest_room_name();
 
-    create_new_room(suggested, true);
+    std::string new_room_key = create_new_room(suggested, true);
+
+    if (!new_room_key.empty() && selected_layer_ >= 0) {
+
+        update_click_target(selected_layer_, new_room_key);
+
+    }
 
 }
 

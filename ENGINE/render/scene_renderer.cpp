@@ -201,8 +201,13 @@ void SceneRenderer::render() {
 
         SDL_Texture* final_tex = a->get_final_texture();
         if (shouldRegen(a)) {
+            SDL_Texture* previous_final = final_tex;
             final_tex = render_asset_.regenerateFinalTexture(a);
-            a->set_final_texture(final_tex);
+            if (!final_tex) {
+                final_tex = previous_final;
+            } else if (final_tex != previous_final) {
+                a->set_final_texture(final_tex);
+            }
         }
         if (!final_tex) continue;
 

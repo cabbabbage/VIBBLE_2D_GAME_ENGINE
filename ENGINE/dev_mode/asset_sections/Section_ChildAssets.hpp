@@ -67,9 +67,16 @@ public:
             r.s_z->set_rect(SDL_Rect{ x, y - scroll_, maxw, DMSlider::height() });
             y += DMSlider::height() + DMSpacing::item_gap();
 
-            if (!r.b_assets) r.b_assets = std::make_unique<DMButton>("Configure Children", &DMStyles::ListButton(), 160, DMButton::height());
-            r.b_assets->set_rect(SDL_Rect{ x, y - scroll_, maxw, DMButton::height() });
-            y += DMButton::height() + DMSpacing::item_gap();
+            ensure_spawn_config(r);
+            configure_spawn_config(r);
+            const int spawn_top = y;
+            layout_spawn_config(r, x, y, maxw);
+            if (!r.spawn_rows.empty()) {
+                const SDL_Point anchor = spawn_groups_anchor_at(spawn_top - scroll_);
+                if (r.spawn_cfg) {
+                    r.spawn_cfg->set_anchor(anchor.x, anchor.y);
+                }
+            }
 
             if (!r.b_edit_area) r.b_edit_area = std::make_unique<DMButton>("Edit Area", &DMStyles::ListButton(), 140, DMButton::height());
             r.b_edit_area->set_rect(SDL_Rect{ x, y - scroll_, maxw, DMButton::height() });
@@ -95,7 +102,11 @@ public:
 
     void update(const Input& input, int screen_w, int screen_h) override {
         DockableCollapsible::update(input, screen_w, screen_h);
-        if (spawn_groups_cfg_.any_visible()) spawn_groups_cfg_.update(input, screen_w, screen_h);
+        for (auto& row : rows_) {
+            if (row.spawn_cfg) {
+                row.spawn_cfg->update(input, screen_w, screen_h);
+            }
+        }
         // Defer opening the area editor to avoid re-entrancy/crashes when
         // the AssetInfo panel closes itself during the callback.
         if (pending_open_area_ && open_area_editor_) {
@@ -107,11 +118,14 @@ public:
     }
 
     bool handle_event(const SDL_Event& e) override {
-        if (spawn_groups_cfg_.any_visible()) {
-            return spawn_groups_cfg_.handle_event(e);
-        }
         bool used = DockableCollapsible::handle_event(e);
-        if (!info_ || !expanded_) return used;
+        bool spawn_used = false;
+        for (auto& row : rows_) {
+            if (row.spawn_cfg && row.spawn_cfg->handle_event(e)) {
+                spawn_used = true;
+            }
+        }
+        if (!info_ || !expanded_) return used || spawn_used;
 
         bool changed = false;
 
@@ -121,20 +135,11 @@ public:
             if (r.lbl_ && r.lbl_->handle_event(e)) used = true;
             if (r.dd_area && r.dd_area->handle_event(e)) { r.area_name = safe_get_option(r.options, r.dd_area->selected()); changed = true; used = true; }
             if (r.s_z && r.s_z->handle_event(e)) { r.z_offset = r.s_z->value(); changed = true; used = true; }
-            if (r.b_assets && r.b_assets->handle_event(e)) {
-                if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
-                    size_t idx = i;
-                    spawn_groups_cfg_.open(r.assets, [this, idx](const nlohmann::json& j){
-                        if (idx < rows_.size()) {
-                            rows_[idx].assets = j;
-                            commit_to_info();
-                            if (info_) (void)info_->update_info_json();
-                        }
-                    });
-                    const SDL_Point anchor = spawn_groups_anchor();
-                    spawn_groups_cfg_.set_anchor(anchor.x, anchor.y);
-                    spawn_groups_cfg_.set_position(anchor.x, anchor.y);
-                    used = true;
+            for (auto& widget_row : r.spawn_rows) {
+                for (Widget* w : widget_row) {
+                    if (w && w->handle_event(e)) {
+                        used = true;
+                    }
                 }
             }
             if (r.b_edit_area && r.b_edit_area->handle_event(e)) {
@@ -150,6 +155,9 @@ public:
             }
             if (r.b_delete && r.b_delete->handle_event(e)) {
                 if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
+                    if (r.spawn_cfg) {
+                        r.spawn_cfg->close_all();
+                    }
                     rows_.erase(rows_.begin() + i);
                     changed = true; used = true;
                     break; // indices invalidated, rebuild next frame
@@ -166,6 +174,7 @@ public:
                 r.z_offset = 0;
                 r.dd_area = std::make_unique<DMDropdown>("Area", r.options, 0);
                 r.s_z = std::make_unique<DMSlider>("Z Offset", -5000, 5000, 0);
+                ensure_spawn_config(r);
                 rows_.push_back(std::move(r));
                 changed = true; used = true;
             }
@@ -182,7 +191,7 @@ public:
             commit_to_info();
             (void)info_->update_info_json();
         }
-        return used || changed;
+        return used || changed || spawn_used;
     }
 
     void render_content(SDL_Renderer* r) const override {
@@ -190,13 +199,28 @@ public:
             if (row.lbl_)       row.lbl_->render(r);
             if (row.dd_area)    row.dd_area->render(r);
             if (row.s_z)        row.s_z->render(r);
-            if (row.b_assets)   row.b_assets->render(r);
+            for (const auto& widget_row : row.spawn_rows) {
+                for (Widget* w : widget_row) {
+                    if (w) w->render(r);
+                }
+            }
             if (row.b_edit_area)row.b_edit_area->render(r);
             if (row.b_delete)   row.b_delete->render(r);
         }
         if (b_add_)        b_add_->render(r);
         if (apply_btn_)    apply_btn_->render(r);
-        if (spawn_groups_cfg_.any_visible()) spawn_groups_cfg_.render(r);
+    }
+
+    void render(SDL_Renderer* r) const override {
+        if (!is_visible()) {
+            return;
+        }
+        DockableCollapsible::render(r);
+        for (const auto& row : rows_) {
+            if (row.spawn_cfg) {
+                row.spawn_cfg->render(r);
+            }
+        }
     }
 
 private:
@@ -210,23 +234,24 @@ private:
         std::unique_ptr<DMButton>   lbl_;
         std::unique_ptr<DMDropdown> dd_area;
         std::unique_ptr<DMSlider>   s_z;
-        std::unique_ptr<DMButton>   b_assets;
         std::unique_ptr<DMButton>   b_edit_area;
         std::unique_ptr<DMButton>   b_delete;
+        std::unique_ptr<SpawnGroupsConfig> spawn_cfg;
+        DockableCollapsible::Rows spawn_rows;
         // Choices
         std::vector<std::string> options;
     };
 
 private:
-    SDL_Point spawn_groups_anchor() const {
-        int panel_w = spawn_groups_cfg_.rect().w;
-        if (panel_w <= 0) panel_w = 260;
+    SDL_Point spawn_groups_anchor_at(int screen_y) const {
+        constexpr int kPanelContentWidth = 360;
+        const int panel_w = 2 * DMSpacing::panel_padding() + kPanelContentWidth;
         const int gap = DMSpacing::section_gap();
         int x = rect_.x - panel_w - gap;
         if (x < 0) {
             x = rect_.x + rect_.w + gap;
         }
-        int y = rect_.y;
+        int y = std::max(0, screen_y);
         return SDL_Point{ x, y };
     }
 
@@ -249,6 +274,58 @@ private:
             // Text boxes and buttons are built in layout (lazy)
             rows_.push_back(std::move(r));
         }
+    }
+
+    void ensure_spawn_config(Row& r) {
+        if (!r.spawn_cfg) {
+            r.spawn_cfg = std::make_unique<SpawnGroupsConfig>(false);
+            r.spawn_cfg->set_visible(false);
+            r.spawn_cfg->set_scroll_enabled(true);
+        }
+    }
+
+    void configure_spawn_config(Row& r) {
+        if (!r.spawn_cfg) return;
+        r.spawn_cfg->load(r.assets, [this]() {
+            commit_to_info();
+            if (info_) (void)info_->update_info_json();
+        });
+        r.spawn_rows.clear();
+        r.spawn_cfg->append_rows(r.spawn_rows);
+    }
+
+    void layout_spawn_config(Row& r, int x, int& y, int maxw) {
+        const int gap = DMSpacing::item_gap();
+        int curr_y = y;
+        for (auto& widget_row : r.spawn_rows) {
+            if (widget_row.empty()) continue;
+            int row_height = 0;
+            for (Widget* w : widget_row) {
+                if (!w) continue;
+                row_height = std::max(row_height, w->height_for_width(maxw));
+            }
+            if (row_height <= 0) {
+                row_height = DMButton::height();
+            }
+            int remaining = maxw;
+            int col_x = x;
+            const int cols = static_cast<int>(widget_row.size());
+            for (int c = 0; c < cols; ++c) {
+                Widget* w = widget_row[c];
+                if (!w) continue;
+                const int remaining_cols = cols - c;
+                int width = remaining;
+                if (remaining_cols > 1) {
+                    width = std::max(40, (remaining - gap * (remaining_cols - 1)) / remaining_cols);
+                }
+                SDL_Rect wr{ col_x, curr_y - scroll_, width, row_height };
+                w->set_rect(wr);
+                col_x += width + gap;
+                remaining = std::max(0, maxw - (col_x - x));
+            }
+            curr_y += row_height + gap;
+        }
+        y = curr_y;
     }
 
     void commit_to_info() {
@@ -328,7 +405,6 @@ private:
     std::vector<std::string> area_names_;
     std::unique_ptr<DMButton> b_add_;
     std::unique_ptr<DMButton> apply_btn_;
-    SpawnGroupsConfig spawn_groups_cfg_;
     std::function<void(const std::string&)> open_area_editor_;
     AssetInfoUI* ui_ = nullptr; // non-owning
     // Deferred area editor open state (avoid re-entrancy crash)
