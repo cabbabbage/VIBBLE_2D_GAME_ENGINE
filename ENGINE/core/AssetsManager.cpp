@@ -453,7 +453,7 @@ void Assets::update(const Input& input,
         }
     }
 
-    //activeManager.sortByZIndex();
+    activeManager.sortByZIndex();
 
     if (dev_controls_) {
         dev_controls_->set_player(player);

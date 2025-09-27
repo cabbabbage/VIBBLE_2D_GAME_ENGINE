@@ -63,6 +63,7 @@ public:
     size_t add_on_close_callback(std::function<void()> cb);
     void remove_on_close_callback(size_t handle);
     void clear_on_close_callbacks();
+    void set_floating_stack_key(std::string key);
 
 private:
     struct CandidateRow {
@@ -158,6 +159,7 @@ private:
     };
     std::vector<CloseCallbackEntry> close_callbacks_;
     size_t next_close_callback_id_ = 1;
+    std::string floating_stack_key_;
 
     int total_chance() const;
     void refresh_chance_labels(int total_chance);

@@ -81,5 +81,6 @@ private:
     bool suppress_restore_on_close_ = false;
     void handle_entry_closed(Entry& entry);
     void open_entry(Entry& entry, int x, int y);
+    std::string floating_stack_key_;
 };
 

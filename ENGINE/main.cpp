@@ -81,7 +81,7 @@ void MainApp::setup() {
 }
 
 void MainApp::game_loop() {
-        constexpr int FRAME_MS = 1000 / 30;
+        constexpr int FRAME_MS = 1000 / 24;
         bool quit = false;
         SDL_Event e;
         int frame_count = 0;

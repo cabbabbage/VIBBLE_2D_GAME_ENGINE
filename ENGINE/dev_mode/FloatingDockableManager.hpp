@@ -2,6 +2,7 @@
 
 #include <functional>
 #include <string>
+#include <vector>
 
 class DockableCollapsible;
 
@@ -20,7 +21,8 @@ public:
     // this call succeeds.
     void open_floating(const std::string& name,
                        DockableCollapsible* panel,
-                       CloseCallback close_callback = {});
+                       CloseCallback close_callback = {},
+                       const std::string& stack_key = {});
 
     // Notify the manager that a panel has been closed (either by the user or as
     // part of a teardown). The manager clears its active reference so future
@@ -37,7 +39,9 @@ private:
         std::string name;
         DockableCollapsible* panel = nullptr;
         CloseCallback close_callback;
+        std::string stack_key;
     };
 
     ActiveEntry current_{};
+    std::vector<ActiveEntry> stack_;
 };

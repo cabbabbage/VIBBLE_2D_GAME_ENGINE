@@ -488,7 +488,8 @@ void SpawnGroupConfigUI::load(const nlohmann::json& data) {
 
 void SpawnGroupConfigUI::open_panel() {
     if (!panel_) return;
-    FloatingDockableManager::instance().open_floating("Asset Config", panel_.get(), [this]() { this->close(); });
+    FloatingDockableManager::instance().open_floating(
+        "Asset Config", panel_.get(), [this]() { this->close(); }, floating_stack_key_);
     const bool was_visible = panel_->is_visible();
     panel_->set_visible(true);
     if (!was_visible) {
@@ -798,6 +799,10 @@ void SpawnGroupConfigUI::clear_on_close_callbacks() {
     close_callbacks_.clear();
     next_close_callback_id_ = 1;
     bind_on_close_callbacks();
+}
+
+void SpawnGroupConfigUI::set_floating_stack_key(std::string key) {
+    floating_stack_key_ = std::move(key);
 }
 
 void SpawnGroupConfigUI::remove_candidate(size_t index) {

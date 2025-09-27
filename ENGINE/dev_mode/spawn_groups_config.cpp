@@ -4,6 +4,8 @@
 #include "utils/input.hpp"
 #include "FloatingDockableManager.hpp"
 
+#include <sstream>
+
 namespace {
 constexpr int kStandaloneWidth = 1920;
 constexpr int kStandaloneHeight = 1080;
@@ -20,6 +22,9 @@ nlohmann::json normalize_spawn_assets(const nlohmann::json& assets) {
 SpawnGroupsConfig::SpawnGroupsConfig(bool floatable)
     : DockableCollapsible("Spawn Groups", floatable, 32, 32),
       floatable_mode_(floatable) {
+    std::ostringstream oss;
+    oss << "spawn_groups_" << this;
+    floating_stack_key_ = oss.str();
     set_expanded(true);
     if (floatable_mode_) {
         set_visible(false);
@@ -67,7 +72,8 @@ void SpawnGroupsConfig::open(const nlohmann::json& assets, std::function<void(co
     FloatingDockableManager::instance().open_floating(
         "Spawn Groups", this, [this]() {
             this->hide_temporarily();
-        });
+        },
+        floating_stack_key_);
     // make copy for standalone editing
     nlohmann::json normalized = normalize_spawn_assets(assets);
     const bool was_visible = is_visible();
@@ -145,6 +151,7 @@ void SpawnGroupsConfig::load(nlohmann::json& assets,
         }
         e.json = &it;
         e.cfg = std::make_unique<SpawnGroupConfigUI>();
+        e.cfg->set_floating_stack_key(floating_stack_key_);
         e.cfg->load(it);
         if (configure_entry_) {
             configure_entry_(*e.cfg, it);
@@ -153,6 +160,7 @@ void SpawnGroupsConfig::load(nlohmann::json& assets,
         auto* cfg_ptr = e.cfg.get();
         e.btn_w = std::make_unique<ButtonWidget>(e.btn.get(), [this, cfg_ptr]() {
             if (cfg_ptr) {
+                this->hide_temporarily();
                 cfg_ptr->set_position(anchor_x_, anchor_y_);
                 cfg_ptr->open_panel();
             }
@@ -230,6 +238,7 @@ void SpawnGroupsConfig::open_spawn_group(const std::string& id, int x, int y) {
     }
     restore_parent_visibility_pending_ = parent_visible || restore_parent_visibility_pending_;
 
+    hide_temporarily();
     close_all();
     for (auto& e : entries_) {
         if (e.id == id) {
