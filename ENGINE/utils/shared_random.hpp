@@ -1,6 +1,7 @@
 class SharedRandom {
     uint64_t seed;
-    
+    std::mt19937_64 rng;
+
     public:
         SharedRandom();
         SharedRandom(uint64_t seed);

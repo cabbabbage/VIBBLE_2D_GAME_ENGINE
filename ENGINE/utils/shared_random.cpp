@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
+#include <random>
 #include <cmath>
 
     SharedRandom::SharedRandom() 
@@ -10,21 +11,26 @@
         : seed(seed_) {}
 
     int SharedRandom::randRange(int min, int max) {
-        return 0;
+        std::uniform_int_distribution<> distribution(min, max);
+        return distribution(gen);
     }
 
     float SharedRandom::randFloat(float min, float max) {
-        return 0.0f;
+        std::uniform_real_distribution<float> distribution(min, max);
+        return distribution(rng);
     }
 
     bool SharedRandom::coinFlip() {
-        return true;
+        std::bernoulli_distribution distribution(0.5);
+        return distribution(rng);
     }
 
     std::vector<int> SharedRandom::choice(const std::vector<int>& vec) {
-        std::vector<int> v = {0};
-        return v;
+        if(vec.empty()) return {};
+        int i = randRange(0, vec.size() - 1);
+        return {vec[index]};
     }
+    
 /**
  * Summary
 Add a centralized random number generator so all randomness in the engine uses the same seed. 
