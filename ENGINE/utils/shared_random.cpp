@@ -8,11 +8,11 @@
     SharedRandom::SharedRandom() 
         : SharedRandom(static_cast<uint64_t>(time(NULL))) {}
     SharedRandom::SharedRandom(uint64_t seed_) 
-        : seed(seed_) {}
+        : seed(seed_), rng(seed_) {}
 
     int SharedRandom::randRange(int min, int max) {
         std::uniform_int_distribution<> distribution(min, max);
-        return distribution(gen);
+        return distribution(rng);
     }
 
     float SharedRandom::randFloat(float min, float max) {
@@ -28,9 +28,9 @@
     std::vector<int> SharedRandom::choice(const std::vector<int>& vec) {
         if(vec.empty()) return {};
         int i = randRange(0, vec.size() - 1);
-        return {vec[index]};
+        return {vec[i]};
     }
-    
+
 /**
  * Summary
 Add a centralized random number generator so all randomness in the engine uses the same seed. 
