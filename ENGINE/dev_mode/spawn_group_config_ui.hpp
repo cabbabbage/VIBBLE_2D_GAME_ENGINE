@@ -24,6 +24,7 @@ class DMDropdown;
 class DMRangeSlider;
 class DMSlider;
 class DMTextBox;
+class SearchAssets;
 
 // Panel for configuring a spawn group. The original implementation grew a
 // large amount of bespoke layout code which ended up bypassing the
@@ -120,6 +121,8 @@ private:
     std::unique_ptr<ButtonWidget> done_widget_;
 
     std::vector<std::unique_ptr<CandidateRow>> candidates_;
+
+    std::unique_ptr<SearchAssets> asset_search_;
 
     std::function<void(const nlohmann::json&)> on_save_callback_;
     std::function<void()> on_close_callback_;

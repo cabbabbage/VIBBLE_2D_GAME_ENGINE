@@ -3,6 +3,7 @@
 #include "DockableCollapsible.hpp"
 #include "dm_styles.hpp"
 #include "widgets.hpp"
+#include "search_assets.hpp"
 
 #include <algorithm>
 #include <utility>
@@ -142,9 +143,29 @@ SpawnGroupsConfigPanel::SpawnGroupsConfigPanel(int start_x, int start_y)
 
     add_candidate_button_ = std::make_unique<DMButton>("Add Candidate", &DMStyles::CreateButton(), 150, DMButton::height());
     add_candidate_widget_ = std::make_unique<ButtonWidget>(add_candidate_button_.get(), [this]() {
-        add_candidate("", 0);
-        rebuild_layout();
-        sync_candidates();
+        if (!asset_search_) {
+            asset_search_ = std::make_unique<SearchAssets>();
+        }
+        if (!asset_search_) {
+            return;
+        }
+        asset_search_->set_screen_dimensions(screen_w_, screen_h_);
+        SDL_Point pos = position();
+        SDL_Rect bounds = rect();
+        int anchor_x = pos.x + bounds.w + DMSpacing::item_gap();
+        int anchor_y = pos.y + DMSpacing::panel_padding();
+        asset_search_->set_anchor_position(anchor_x, anchor_y);
+        asset_search_->open([this](const std::string& selection) {
+            if (selection.empty()) {
+                return;
+            }
+            if (!selection.empty() && selection.front() == '#') {
+                return;
+            }
+            add_candidate(selection, 0);
+            rebuild_layout();
+            sync_candidates();
+        });
     });
 
     done_button_ = std::make_unique<DMButton>("Save & Close", &DMStyles::ListButton(), 140, DMButton::height());
@@ -460,6 +481,9 @@ void SpawnGroupsConfigPanel::set_screen_dimensions(int width, int height) {
     if (screen_w_ <= 0) screen_w_ = kDefaultScreenW;
     if (screen_h_ <= 0) screen_h_ = kDefaultScreenH;
     set_work_area(SDL_Rect{0, 0, screen_w_, screen_h_});
+    if (asset_search_) {
+        asset_search_->set_screen_dimensions(screen_w_, screen_h_);
+    }
     clamp_to_screen();
 }
 
@@ -484,6 +508,9 @@ void SpawnGroupsConfigPanel::close() {
     }
     dispatch_save();
     set_visible(false);
+    if (asset_search_) {
+        asset_search_->close();
+    }
     notify_close_listeners();
 }
 
@@ -494,6 +521,13 @@ bool SpawnGroupsConfigPanel::is_open() const { return is_visible(); }
 void SpawnGroupsConfigPanel::set_position(int x, int y) {
     DockableCollapsible::set_position(x, y);
     clamp_to_screen();
+    if (asset_search_) {
+        SDL_Point pos = DockableCollapsible::position();
+        SDL_Rect bounds = rect();
+        int anchor_x = pos.x + bounds.w + DMSpacing::item_gap();
+        int anchor_y = pos.y + DMSpacing::panel_padding();
+        asset_search_->set_anchor_position(anchor_x, anchor_y);
+    }
 }
 
 SDL_Point SpawnGroupsConfigPanel::position() const { return DockableCollapsible::position(); }
@@ -514,9 +548,44 @@ void SpawnGroupsConfigPanel::update(const Input& input, int screen_w, int screen
     if (screen_h > 0) screen_h_ = screen_h;
     DockableCollapsible::update(input, screen_w_, screen_h_);
     sync_from_widgets();
+    if (asset_search_) {
+        asset_search_->update(input);
+    }
 }
 
 bool SpawnGroupsConfigPanel::handle_event(const SDL_Event& e) {
+    if (asset_search_ && asset_search_->visible()) {
+        if (asset_search_->handle_event(e)) {
+            return true;
+        }
+
+        switch (e.type) {
+        case SDL_MOUSEMOTION: {
+            if (asset_search_->is_point_inside(e.motion.x, e.motion.y)) {
+                return true;
+            }
+            break;
+        }
+        case SDL_MOUSEBUTTONDOWN:
+        case SDL_MOUSEBUTTONUP: {
+            if (asset_search_->is_point_inside(e.button.x, e.button.y)) {
+                return true;
+            }
+            break;
+        }
+        case SDL_MOUSEWHEEL: {
+            int mx = 0;
+            int my = 0;
+            SDL_GetMouseState(&mx, &my);
+            if (asset_search_->is_point_inside(mx, my)) {
+                return true;
+            }
+            break;
+        }
+        default:
+            break;
+        }
+    }
     if (DockableCollapsible::handle_event(e)) {
         return true;
     }
@@ -526,12 +595,21 @@ bool SpawnGroupsConfigPanel::handle_event(const SDL_Event& e) {
 void SpawnGroupsConfigPanel::render(SDL_Renderer* r) const {
     DockableCollapsible::render(r);
     DMDropdown::render_active_options(r);
+    if (asset_search_) {
+        asset_search_->render(r);
+    }
 }
 
 nlohmann::json SpawnGroupsConfigPanel::to_json() const { return entry_; }
 
 bool SpawnGroupsConfigPanel::is_point_inside(int x, int y) const {
-    return DockableCollapsible::is_point_inside(x, y);
+    if (DockableCollapsible::is_point_inside(x, y)) {
+        return true;
+    }
+    if (asset_search_ && asset_search_->visible() && asset_search_->is_point_inside(x, y)) {
+        return true;
+    }
+    return false;
 }
 
 SDL_Rect SpawnGroupsConfigPanel::rect() const { return DockableCollapsible::rect(); }
