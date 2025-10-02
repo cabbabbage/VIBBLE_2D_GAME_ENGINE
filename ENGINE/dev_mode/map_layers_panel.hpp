@@ -121,6 +121,7 @@ private:
         bool is_circle = false;
         int layer = 0;
         SDL_Color color{255, 255, 255, 255};
+        std::vector<SDL_FPoint> outline;
         std::string name;
         PreviewNode* parent = nullptr;
         PreviewNode* left_sibling = nullptr;

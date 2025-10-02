@@ -300,6 +300,28 @@ SDL_Color apply_alpha(SDL_Color color, Uint8 alpha) {
 
 
 
+uint32_t mix_geometry_seed(uint32_t base, const std::string& key) {
+
+    uint64_t value = static_cast<uint64_t>(base);
+
+    value ^= static_cast<uint64_t>(std::hash<std::string>{}(key));
+
+    value ^= value >> 33;
+
+    value *= 0xff51afd7ed558ccdull;
+
+    value ^= value >> 33;
+
+    value *= 0xc4ceb9fe1a85ec53ull;
+
+    value ^= value >> 33;
+
+    return static_cast<uint32_t>(value & 0xffffffffu);
+
+}
+
+
+
 struct RoomGeometry {
 
     double max_width = 0.0;
@@ -308,11 +330,13 @@ struct RoomGeometry {
 
     bool is_circle = false;
 
+    std::vector<SDL_FPoint> outline;
+
 };
 
 
 
-RoomGeometry fetch_room_geometry(const nlohmann::json* rooms_data, const std::string& room_name) {
+RoomGeometry fetch_room_geometry(const nlohmann::json* rooms_data, const std::string& room_name, uint32_t seed = 0) {
 
     RoomGeometry geom;
 
@@ -324,11 +348,30 @@ RoomGeometry fetch_room_geometry(const nlohmann::json* rooms_data, const std::st
 
     const auto& room = *it;
 
-    geom.max_width = room.value("max_width", room.value("min_width", 0.0));
+    auto extract_dimension = [&room](const char* primary, const char* fallback1,
+                                     const char* fallback2, const char* fallback3) -> double {
 
-    geom.max_height = room.value("max_height", room.value("min_height", 0.0));
+        if (room.contains(primary)) return room.value(primary, 0.0);
+
+        if (room.contains(fallback1)) return room.value(fallback1, 0.0);
+
+        if (room.contains(fallback2)) return room.value(fallback2, 0.0);
+
+        if (room.contains(fallback3)) return room.value(fallback3, 0.0);
+
+        return 0.0;
+
+    };
+
+    geom.max_width = extract_dimension("max_width", "width_max", "min_width", "width_min");
+
+    geom.max_height = extract_dimension("max_height", "height_max", "min_height", "height_min");
 
     std::string geometry = room.value("geometry", std::string());
+
+    int edge_smoothness = room.value("edge_smoothness", 75);
+
+    edge_smoothness = std::clamp(edge_smoothness, 0, 100);
 
     if (!geometry.empty()) {
 
@@ -348,6 +391,8 @@ RoomGeometry fetch_room_geometry(const nlohmann::json* rooms_data, const std::st
 
         }
 
+        geometry = std::move(lowered);
+
     }
 
     if (geom.max_width <= 0.0 && geom.max_height <= 0.0) {
@@ -363,6 +408,98 @@ RoomGeometry fetch_room_geometry(const nlohmann::json* rooms_data, const std::st
     } else if (geom.max_height <= 0.0) {
 
         geom.max_height = geom.max_width;
+
+    }
+
+    geom.outline.clear();
+
+    const double width = std::max(geom.max_width, 1.0);
+
+    const double height = std::max(geom.max_height, 1.0);
+
+    const bool use_randomness = (seed != 0);
+
+    uint32_t local_seed = use_randomness ? mix_geometry_seed(seed, room_name) : 0u;
+
+    if (geom.is_circle || geometry == "circle") {
+
+        const double radius = std::max(width, height) * 0.5;
+
+        if (radius > 0.0) {
+
+            const int segments = std::max(12, 6 + edge_smoothness * 2);
+
+            const double max_dev = 0.20 * (100 - edge_smoothness) / 100.0;
+
+            std::mt19937 rng(local_seed == 0u ? 0x6d5a56e9u : local_seed);
+
+            std::uniform_real_distribution<double> dist(1.0 - max_dev, 1.0 + max_dev);
+
+            geom.outline.reserve(segments);
+
+            for (int i = 0; i < segments; ++i) {
+
+                const double theta = (static_cast<double>(i) / segments) * kTau;
+
+                double scale = 1.0;
+
+                if (use_randomness) {
+
+                    scale = dist(rng);
+
+                }
+
+                const double r = radius * scale;
+
+                geom.outline.push_back(SDL_FPoint{
+
+                    static_cast<float>(std::cos(theta) * r),
+
+                    static_cast<float>(std::sin(theta) * r)
+
+                });
+
+            }
+
+        }
+
+    } else if (geometry == "point") {
+
+        geom.outline.push_back(SDL_FPoint{0.0f, 0.0f});
+
+    } else {
+
+        const double half_w = width * 0.5;
+
+        const double half_h = height * 0.5;
+
+        const double max_dev = 0.25 * (100 - edge_smoothness) / 100.0;
+
+        std::mt19937 rng(local_seed == 0u ? 0x6d5a56e9u : local_seed);
+
+        std::uniform_real_distribution<double> xoff(-max_dev * width, max_dev * width);
+
+        std::uniform_real_distribution<double> yoff(-max_dev * height, max_dev * height);
+
+        auto jitter = [&](double base, std::uniform_real_distribution<double>& dist) {
+
+            if (!use_randomness) return base;
+
+            return base + dist(rng);
+
+        };
+
+        geom.outline = {
+
+            SDL_FPoint{ static_cast<float>(jitter(-half_w, xoff)), static_cast<float>(jitter(-half_h, yoff)) },
+
+            SDL_FPoint{ static_cast<float>(jitter( half_w, xoff)), static_cast<float>(jitter(-half_h, yoff)) },
+
+            SDL_FPoint{ static_cast<float>(jitter( half_w, xoff)), static_cast<float>(jitter( half_h, yoff)) },
+
+            SDL_FPoint{ static_cast<float>(jitter(-half_w, xoff)), static_cast<float>(jitter( half_h, yoff)) }
+
+        };
 
     }
 
@@ -1290,7 +1427,57 @@ void MapLayersPanel::LayerCanvasWidget::render(SDL_Renderer* renderer) const {
 
             }
 
+            if (!node->outline.empty()) {
 
+                SDL_Color geom_color = lighten_color(outline, 0.25f);
+
+                if (room_clicked) {
+
+                    geom_color = clicked_room_color;
+
+                } else if (room_hovered) {
+
+                    geom_color = lighten_color(geom_color, 0.3f);
+
+                }
+
+                geom_color.a = static_cast<Uint8>(room_clicked ? 255 : 200);
+
+                std::vector<SDL_Point> polygon;
+
+                polygon.reserve(node->outline.size() + 1);
+
+                for (const auto& offset : node->outline) {
+
+                    double world_x = node->center.x + offset.x;
+
+                    double world_y = node->center.y + offset.y;
+
+                    polygon.push_back(SDL_Point{
+
+                        static_cast<int>(std::lround(center_x + world_x * scale)),
+
+                        static_cast<int>(std::lround(center_y + world_y * scale))
+
+                    });
+
+                }
+
+                SDL_SetRenderDrawColor(renderer, geom_color.r, geom_color.g, geom_color.b, geom_color.a);
+
+                if (polygon.size() == 1) {
+
+                    SDL_RenderDrawPoint(renderer, polygon.front().x, polygon.front().y);
+
+                } else if (polygon.size() >= 2) {
+
+                    polygon.push_back(polygon.front());
+
+                    SDL_RenderDrawLines(renderer, polygon.data(), static_cast<int>(polygon.size()));
+
+                }
+
+            }
 
             const SDL_Color accent = DMStyles::AccentButton().hover_bg;
 
@@ -3570,7 +3757,9 @@ void MapLayersPanel::regenerate_preview() {
 
     const PreviewRoomSpec& root_spec = layer_specs.front().rooms.front();
 
-    RoomGeometry root_geom = fetch_room_geometry(rooms_data, root_spec.name);
+    uint32_t seed = compute_preview_seed(layer_specs, map_path_);
+
+    RoomGeometry root_geom = fetch_room_geometry(rooms_data, root_spec.name, seed);
 
     auto root_node = std::make_unique<PreviewNode>();
 
@@ -3581,6 +3770,7 @@ void MapLayersPanel::regenerate_preview() {
     root_node->height = root_geom.max_height;
 
     root_node->is_circle = root_geom.is_circle;
+    root_node->outline = std::move(root_geom.outline);
 
     root_node->layer = layer_specs.front().level;
 
@@ -3618,8 +3808,6 @@ void MapLayersPanel::regenerate_preview() {
 
     std::vector<PreviewSector> current_sectors{ PreviewSector{ root_ptr, 0.0f, static_cast<float>(kTau) } };
 
-    uint32_t seed = compute_preview_seed(layer_specs, map_path_);
-
     std::mt19937 rng(seed);
 
 
@@ -3640,7 +3828,7 @@ void MapLayersPanel::regenerate_preview() {
 
         auto create_child = [&](PreviewNode* parent, const PreviewRoomSpec& spec, float angle, float spread) {
 
-            RoomGeometry geom = fetch_room_geometry(rooms_data, spec.name);
+            RoomGeometry geom = fetch_room_geometry(rooms_data, spec.name, seed);
 
             auto node = std::make_unique<PreviewNode>();
 
@@ -3657,6 +3845,8 @@ void MapLayersPanel::regenerate_preview() {
             node->height = geom.max_height;
 
             node->is_circle = geom.is_circle;
+
+            node->outline = std::move(geom.outline);
 
             node->layer = layer_spec.level;
 
