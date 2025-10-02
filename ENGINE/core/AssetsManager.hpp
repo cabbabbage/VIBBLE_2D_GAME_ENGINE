@@ -1,7 +1,7 @@
 #pragma once
 
 #include "render/camera.hpp"
-#include "active_assets_manager.hpp"
+#include "asset_list.hpp"
 #include "asset/asset_library.hpp"
 #include <SDL.h>
 #include <string>
@@ -87,9 +87,6 @@ public:
     const std::string& map_path() const { return map_path_; }
     const std::string& map_info_path() const { return map_info_path_; }
 
-    ActiveAssetsManager& active_manager() { return activeManager; }
-    const ActiveAssetsManager& active_manager() const { return activeManager; }
-
     AssetLibrary& library();
     const AssetLibrary& library() const;
 
@@ -100,6 +97,8 @@ public:
     void refresh_active_asset_lists();
     void refresh_filtered_active_assets();
     void update_closest_assets(Asset* player, int max_count);
+    void mark_active_assets_dirty();
+    void initialize_active_assets(SDL_Point center);
 
     int shading_group_count() const { return num_groups_; }
 
@@ -131,7 +130,6 @@ private:
     DevControls* dev_controls_ = nullptr;
     camera camera_;
     SceneRenderer* scene = nullptr;
-    ActiveAssetsManager activeManager;
     int screen_width;
     int screen_height;
     int dx = 0;
@@ -150,4 +148,16 @@ private:
     std::string map_path_;
     std::string map_info_path_;
     nlohmann::json map_info_json_;
+    std::unique_ptr<AssetList> active_asset_list_;
+    bool active_assets_dirty_ = true;
+
+    struct ClosestEntry {
+        double distance_sq;
+        Asset* asset;
+    };
+    std::vector<ClosestEntry> closest_buffer_;
+
+    void rebuild_active_assets_if_needed();
+    void update_active_assets(SDL_Point center);
+    int active_search_radius() const;
 };

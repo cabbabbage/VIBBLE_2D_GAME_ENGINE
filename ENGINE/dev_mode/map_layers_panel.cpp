@@ -1615,6 +1615,7 @@ private:
 
     SDL_Rect rect_{0,0,0,0};
 
+    std::unique_ptr<DMButton> save_button_;
     std::unique_ptr<DMButton> add_button_;
 
     std::unique_ptr<DMButton> new_room_button_;
@@ -1639,6 +1640,7 @@ MapLayersPanel::PanelSidebarWidget::PanelSidebarWidget(MapLayersPanel* owner)
 
     : owner_(owner) {
 
+    save_button_ = std::make_unique<DMButton>("Save", &DMStyles::HeaderButton(), 140, DMButton::height());
     add_button_ = std::make_unique<DMButton>("Add Layer", &DMStyles::CreateButton(), 140, DMButton::height());
 
     new_room_button_ = std::make_unique<DMButton>("New Room", &DMStyles::CreateButton(), 140, DMButton::height());
@@ -1656,6 +1658,10 @@ MapLayersPanel::PanelSidebarWidget::PanelSidebarWidget(MapLayersPanel* owner)
 void MapLayersPanel::PanelSidebarWidget::set_dirty(bool dirty) {
 
     dirty_ = dirty;
+
+    if (save_button_) {
+        save_button_->set_text(dirty_ ? "Save*" : "Save");
+    }
 
 }
 
@@ -1679,6 +1685,7 @@ void MapLayersPanel::PanelSidebarWidget::render(SDL_Renderer* renderer) const {
 
     SDL_RenderDrawRect(renderer, &rect_);
 
+    if (save_button_) save_button_->render(renderer);
     if (add_button_) add_button_->render(renderer);
 
     if (new_room_button_) new_room_button_->render(renderer);
@@ -2021,6 +2028,7 @@ void MapLayersPanel::PanelSidebarWidget::set_rect(const SDL_Rect& r) {
 
     std::vector<DMButton*> btns;
 
+    if (save_button_) btns.push_back(save_button_.get());
     if (add_button_) btns.push_back(add_button_.get());
 
     if (new_room_button_) btns.push_back(new_room_button_.get());
@@ -2103,6 +2111,11 @@ bool MapLayersPanel::PanelSidebarWidget::handle_event(const SDL_Event& e) {
 
     };
 
+    handle_btn(save_button_, [this]() {
+        if (owner_) {
+            owner_->save_layers_to_disk();
+        }
+    });
     handle_btn(add_button_, [this]() { if (owner_) owner_->add_layer_internal(); });
 
     handle_btn(new_room_button_, [this]() { if (owner_) owner_->add_room_to_selected_layer(); });
@@ -3181,6 +3194,8 @@ MapLayersPanel::MapLayersPanel(int x, int y)
 
         sidebar_widget_->set_layer_config(layer_config_.get());
 
+        sidebar_widget_->set_dirty(dirty_);
+
     }
 
     room_selector_ = std::make_unique<RoomSelectorPopup>();
@@ -3626,8 +3641,6 @@ double MapLayersPanel::compute_map_radius_from_layers() {
         (*map_info_)["map_radius"] = max_extent;
 
         dirty_ = true;
-
-        if (sidebar_widget_) sidebar_widget_->set_dirty(true);
 
         update_save_button_state();
 
@@ -4660,9 +4673,9 @@ void MapLayersPanel::mark_dirty() {
 
     dirty_ = true;
 
-    if (sidebar_widget_) sidebar_widget_->set_dirty(true);
-
     request_preview_regeneration();
+
+    update_save_button_state();
 
 }
 
@@ -4672,7 +4685,7 @@ void MapLayersPanel::mark_clean() {
 
     dirty_ = false;
 
-    if (sidebar_widget_) sidebar_widget_->set_dirty(false);
+    update_save_button_state();
 
 }
 

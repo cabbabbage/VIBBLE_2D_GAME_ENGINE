@@ -4,7 +4,6 @@
 #include "asset_info.hpp"
 #include "asset_types.hpp"
 #include "asset_utils.hpp"
-#include "active_assets_manager.hpp"
 #include "utils/range_util.hpp"
 #include <algorithm>
 #include <iostream>
@@ -46,18 +45,18 @@ void InitializeAssets::initialize(Assets& assets,
 		raw->finalize_setup();
 	}
 	find_player(assets);
-        assets.active_manager().initialize(assets.all, assets.player, screen_center_x, screen_center_y);
+        assets.initialize_active_assets(SDL_Point{screen_center_x, screen_center_y});
         assets.refresh_active_asset_lists();
-	setup_shading_groups(assets);
-	std::cout << "[InitializeAssets] Initialization base complete. Total assets: "
-	<< assets.all.size() << "\n";
-	try {
-		setup_static_sources(assets);
-	} catch (const std::length_error& e) {
-		std::cerr << "[InitializeAssets] light-gen failed: " << e.what() << "\n";
-	}
-	std::cout << "[InitializeAssets] All static sources set.\n";
-    assets.active_manager().updateAssetVectors(assets.player, screen_center_x, screen_center_y);
+        setup_shading_groups(assets);
+        std::cout << "[InitializeAssets] Initialization base complete. Total assets: "
+        << assets.all.size() << "\n";
+        try {
+                setup_static_sources(assets);
+        } catch (const std::length_error& e) {
+                std::cerr << "[InitializeAssets] light-gen failed: " << e.what() << "\n";
+        }
+        std::cout << "[InitializeAssets] All static sources set.\n";
+    assets.mark_active_assets_dirty();
     assets.refresh_active_asset_lists();
     assets.getView().zoom_to_scale(1.0, 200);
 }

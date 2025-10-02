@@ -49,7 +49,6 @@ Assets::Assets(std::vector<Asset>&& loaded,
                   SDL_Point{-10, 10}
               })
       ),
-      activeManager(screen_width_, screen_height_, camera_),
       screen_width(screen_width_),
       screen_height(screen_height_),
       library_(library),
@@ -332,8 +331,8 @@ const std::vector<Room*>& Assets::rooms() const {
 }
 
 void Assets::refresh_active_asset_lists() {
-    active_assets  = activeManager.getActive();
-    closest_assets = activeManager.getClosest();
+    rebuild_active_assets_if_needed();
+    update_closest_assets(player, 3);
 
     SDL_Point camera_focus = camera_.get_screen_center();
     auto update_audio_metrics = [&](Asset* asset) {
@@ -389,8 +388,95 @@ void Assets::ensure_dev_controls() {
 }
 
 void Assets::update_closest_assets(Asset* player, int max_count) {
-    activeManager.updateClosestAssets(player, max_count);
-    closest_assets = activeManager.getClosest();
+    for (Asset* asset : closest_assets) {
+        if (asset) {
+            asset->set_render_player_light(false);
+        }
+    }
+    closest_assets.clear();
+
+    if (!player || max_count <= 0) {
+        return;
+    }
+
+    rebuild_active_assets_if_needed();
+
+    const double px = static_cast<double>(player->pos.x);
+    const double py = static_cast<double>(player->pos.y);
+
+    const std::size_t available = active_assets.size();
+    if (available == 0) {
+        return;
+    }
+
+    max_count = static_cast<int>(std::min<std::size_t>(static_cast<std::size_t>(max_count), available));
+    if (max_count <= 0) {
+        return;
+    }
+
+    closest_buffer_.clear();
+    closest_buffer_.reserve(static_cast<std::size_t>(max_count));
+
+    std::size_t worst_index = 0;
+    auto recompute_worst = [&]() {
+        if (closest_buffer_.empty()) {
+            return;
+        }
+        worst_index = 0;
+        double worst = closest_buffer_[0].distance_sq;
+        for (std::size_t i = 1; i < closest_buffer_.size(); ++i) {
+            if (closest_buffer_[i].distance_sq > worst) {
+                worst = closest_buffer_[i].distance_sq;
+                worst_index = i;
+            }
+        }
+    };
+
+    auto consider = [&](Asset* asset) {
+        if (!asset || asset == player) {
+            return;
+        }
+
+        const double dx = static_cast<double>(asset->pos.x) - px;
+        const double dy = static_cast<double>(asset->pos.y) - py;
+        const double dist2 = dx * dx + dy * dy;
+
+        if (closest_buffer_.size() < static_cast<std::size_t>(max_count)) {
+            closest_buffer_.push_back({dist2, asset});
+            recompute_worst();
+            return;
+        }
+
+        if (closest_buffer_.empty() || dist2 >= closest_buffer_[worst_index].distance_sq) {
+            return;
+        }
+
+        closest_buffer_[worst_index] = {dist2, asset};
+        recompute_worst();
+    };
+
+    for (Asset* asset : active_assets) {
+        consider(asset);
+    }
+
+    if (closest_buffer_.empty()) {
+        return;
+    }
+
+    std::sort(closest_buffer_.begin(), closest_buffer_.end(),
+              [](const ClosestEntry& lhs, const ClosestEntry& rhs) {
+                  return lhs.distance_sq < rhs.distance_sq;
+              });
+
+    closest_assets.reserve(closest_buffer_.size());
+    for (const ClosestEntry& entry : closest_buffer_) {
+        Asset* asset = entry.asset;
+        if (!asset) {
+            continue;
+        }
+        closest_assets.push_back(asset);
+        asset->set_render_player_light(true);
+    }
 }
 
 void Assets::set_input(Input* m) {
@@ -413,8 +499,8 @@ void Assets::update(const Input& input,
                     int screen_center_x,
                     int screen_center_y)
 {
-
-    activeManager.updateAssetVectors(player, screen_center_x, screen_center_y);
+    (void)screen_center_x;
+    (void)screen_center_y;
 
     Room* detected_room = finder_ ? finder_->getCurrentRoom() : nullptr;
     Room* active_room = detected_room;
@@ -425,6 +511,10 @@ void Assets::update(const Input& input,
 
     camera_.update_zoom(active_room, finder_, player);
 
+    update_active_assets(camera_.get_screen_center());
+    rebuild_active_assets_if_needed();
+    update_closest_assets(player, 3);
+
     AudioEngine& audio_engine = AudioEngine::instance();
     audio_engine.set_effect_max_distance(static_cast<float>(std::max(1, camera_.get_render_distance_world_margin())));
 
@@ -432,9 +522,6 @@ void Assets::update(const Input& input,
 
     int start_px = player ? player->pos.x : 0;
     int start_py = player ? player->pos.y : 0;
-
-    active_assets  = activeManager.getActive();
-    closest_assets = activeManager.getClosest();
 
     // Suspend movement updates in Dev Mode
     if (!dev_mode) {
@@ -584,10 +671,9 @@ void Assets::addAsset(const std::string& name, SDL_Point g) {
         std::cerr << "[Assets::addAsset][Exception] " << e.what() << "\n";
     }
 
-    activeManager.activate(newAsset);
-    activeManager.updateClosestAssets(player, 3);
-    active_assets  = activeManager.getActive();
-    closest_assets = activeManager.getClosest();
+    initialize_active_assets(camera_.get_screen_center());
+    rebuild_active_assets_if_needed();
+    update_closest_assets(player, 3);
     update_filtered_active_assets();
 
     std::cout << "[Assets::addAsset] Active assets=" << active_assets.size()
@@ -645,10 +731,9 @@ Asset* Assets::spawn_asset(const std::string& name, SDL_Point world_pos) {
         std::cerr << "[Assets::spawn_asset][Exception] " << e.what() << "\n";
     }
 
-    activeManager.activate(newAsset);
-    activeManager.updateClosestAssets(player, 3);
-    active_assets  = activeManager.getActive();
-    closest_assets = activeManager.getClosest();
+    initialize_active_assets(camera_.get_screen_center());
+    rebuild_active_assets_if_needed();
+    update_closest_assets(player, 3);
     update_filtered_active_assets();
 
     std::cout << "[Assets::spawn_asset] Active assets=" << active_assets.size()
@@ -658,6 +743,53 @@ Asset* Assets::spawn_asset(const std::string& name, SDL_Point world_pos) {
               << "' at (" << world_pos.x << ", " << world_pos.y << ")\n";
 
     return newAsset;
+}
+
+void Assets::mark_active_assets_dirty() {
+    active_assets_dirty_ = true;
+}
+
+void Assets::initialize_active_assets(SDL_Point center) {
+    const int radius = active_search_radius();
+    active_asset_list_ = std::make_unique<AssetList>(
+        all,
+        center,
+        radius,
+        std::vector<std::string>{},
+        std::vector<std::string>{},
+        std::vector<std::string>{},
+        SortMode::ZIndexAsc);
+    active_assets_dirty_ = true;
+}
+
+void Assets::update_active_assets(SDL_Point center) {
+    if (!active_asset_list_) {
+        initialize_active_assets(center);
+        return;
+    }
+
+    active_asset_list_->set_center(center);
+    active_asset_list_->set_search_radius(active_search_radius());
+    active_asset_list_->update();
+    active_assets_dirty_ = true;
+}
+
+void Assets::rebuild_active_assets_if_needed() {
+    if (!active_asset_list_) {
+        initialize_active_assets(camera_.get_screen_center());
+    }
+
+    if (!active_asset_list_ || !active_assets_dirty_) {
+        return;
+    }
+
+    active_assets.clear();
+    active_asset_list_->full_list(active_assets);
+    active_assets_dirty_ = false;
+}
+
+int Assets::active_search_radius() const {
+    return std::max(1, camera_.get_render_distance_world_margin());
 }
 
 void Assets::schedule_removal(Asset* a) {
@@ -689,6 +821,11 @@ void Assets::process_removals() {
         dev_controls_->set_active_assets(filtered_active_assets);
     }
     removal_queue.clear();
+
+    initialize_active_assets(camera_.get_screen_center());
+    rebuild_active_assets_if_needed();
+    update_closest_assets(player, 3);
+    update_filtered_active_assets();
 }
 
 void Assets::render_overlays(SDL_Renderer* renderer) {

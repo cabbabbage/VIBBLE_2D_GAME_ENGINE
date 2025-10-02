@@ -261,22 +261,27 @@ void AssetList::rebuild_from_scratch() {
 
     SDL_Point center = resolve_center();
 
-    for (Asset* asset : source_candidates_) {
+    auto process_asset = [&](auto&& self, Asset* asset) -> void {
         if (asset == nullptr) {
-            continue;
+            return;
         }
 
         if (!has_all_required_tags(asset, required_tags_)) {
-            list_always_ineligible_.push_back(asset);
-            list_always_ineligible_lookup_.insert(asset);
-            continue;
+            if (!contains_asset(list_always_ineligible_lookup_, asset)) {
+                list_always_ineligible_.push_back(asset);
+                list_always_ineligible_lookup_.insert(asset);
+            }
+        } else if (Range::is_in_range(center, asset, search_radius_)) {
+            route_asset_to_section(asset);
         }
 
-        if (!Range::is_in_range(center, asset, search_radius_)) {
-            continue;
+        for (Asset* child : asset->children) {
+            self(self, child);
         }
+    };
 
-        route_asset_to_section(asset);
+    for (Asset* asset : source_candidates_) {
+        process_asset(process_asset, asset);
     }
 
     sort_middle_section();
@@ -390,21 +395,27 @@ void AssetList::get_delta_area_assets(SDL_Point prev_center,
                                       int curr_radius,
                                       const std::vector<Asset*>& candidates,
                                       std::vector<Asset*>& out_changed) const {
-    for (Asset* asset : candidates) {
+    auto evaluate_asset = [&](auto&& self, Asset* asset) -> void {
         if (asset == nullptr) {
-            continue;
+            return;
         }
 
-        if (contains_asset(list_always_ineligible_lookup_, asset)) {
-            continue;
+        if (!contains_asset(list_always_ineligible_lookup_, asset)) {
+            bool was_inside = Range::is_in_range(prev_center, asset, prev_radius);
+            bool now_inside = Range::is_in_range(curr_center, asset, curr_radius);
+            if (was_inside != now_inside) {
+                out_changed.push_back(asset);
+                delta_inside_flags_.push_back(now_inside);
+            }
         }
 
-        bool was_inside = Range::is_in_range(prev_center, asset, prev_radius);
-        bool now_inside = Range::is_in_range(curr_center, asset, curr_radius);
-        if (was_inside != now_inside) {
-            out_changed.push_back(asset);
-            delta_inside_flags_.push_back(now_inside);
+        for (Asset* child : asset->children) {
+            self(self, child);
         }
+    };
+
+    for (Asset* asset : candidates) {
+        evaluate_asset(evaluate_asset, asset);
     }
 }
 

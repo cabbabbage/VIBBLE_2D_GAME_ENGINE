@@ -2091,8 +2091,8 @@ void RoomEditor::integrate_spawned_assets(std::vector<std::unique_ptr<Asset>>& s
         raw->finalize_setup();
         assets_->owned_assets.emplace_back(std::move(uptr));
         assets_->all.push_back(raw);
-        assets_->active_manager().activate(raw);
     }
+    assets_->initialize_active_assets(assets_->getView().get_screen_center());
     assets_->refresh_active_asset_lists();
     assets_->update_closest_assets(assets_->player, 3);
     spawned.clear();

@@ -3,7 +3,6 @@
 #include "asset/asset_info.hpp"
 #include "asset/asset_types.hpp"
 #include "animation.hpp"
-#include "core/active_assets_manager.hpp"
 #include "core/AssetsManager.hpp"
 #include "audio/audio_engine.hpp"
 #include "utils/area.hpp"
@@ -56,8 +55,11 @@ ManualState& manual_state(AnimationUpdate* updater) {
 }
 }
 
-AnimationUpdate::AnimationUpdate(Asset* self, ActiveAssetsManager& aam)
-: self_(self), aam_(aam) {
+AnimationUpdate::AnimationUpdate(Asset* self, Assets* assets)
+: self_(self), assets_owner_(assets) {
+    if (!assets_owner_ && self_) {
+        assets_owner_ = self_->get_assets();
+    }
     std::seed_seq seed{
         static_cast<unsigned>(reinterpret_cast<uintptr_t>(self) & 0xffffffffu),
         static_cast<unsigned>((reinterpret_cast<uintptr_t>(self) >> 32) & 0xffffffffu)
@@ -67,9 +69,9 @@ AnimationUpdate::AnimationUpdate(Asset* self, ActiveAssetsManager& aam)
     weight_sparse_ = 0.4;
 }
 
-AnimationUpdate::AnimationUpdate(Asset* self, ActiveAssetsManager& aam,
+AnimationUpdate::AnimationUpdate(Asset* self, Assets* assets,
                                  double directness_weight, double sparsity_weight)
-: self_(self), aam_(aam),
+: self_(self), assets_owner_(assets),
   weight_dir_(std::max(0.0, directness_weight)),
   weight_sparse_(std::max(0.0, sparsity_weight)) {
     std::seed_seq seed{
@@ -77,6 +79,9 @@ AnimationUpdate::AnimationUpdate(Asset* self, ActiveAssetsManager& aam,
         static_cast<unsigned>((reinterpret_cast<uintptr_t>(self) >> 32) & 0xffffffffu)
     };
     rng_.seed(seed);
+    if (!assets_owner_ && self_) {
+        assets_owner_ = self_->get_assets();
+    }
 }
 
 void AnimationUpdate::transition_mode(Mode m) {
@@ -127,7 +132,8 @@ SDL_Point AnimationUpdate::choose_balanced_target(SDL_Point desired, const Asset
     const double base_angle  = std::atan2(static_cast<double>(dy0), static_cast<double>(dx0));
     double base_radius = std::sqrt(static_cast<double>(dx0*dx0 + dy0*dy0));
     if (base_radius < 1.0) base_radius = 1.0;
-    const auto& active = aam_.getActive();
+    static const std::vector<Asset*> kEmptyAssets;
+    const std::vector<Asset*>& active = assets_owner_ ? assets_owner_->getActive() : kEmptyAssets;
     std::vector<Asset*> neighbors;
     neighbors.reserve(active.size());
     Range::get_in_range(SDL_Point{sx, sy}, 300, active, neighbors);
@@ -182,7 +188,8 @@ bool AnimationUpdate::point_in_impassable(SDL_Point pt, const Asset* ignored) co
     Asset* closest = nullptr;
     double best_d2 = std::numeric_limits<double>::infinity();
 
-    const auto& active = aam_.getActive();
+    static const std::vector<Asset*> kEmptyAssets;
+    const std::vector<Asset*>& active = assets_owner_ ? assets_owner_->getActive() : kEmptyAssets;
     for (Asset* a : active) {
         if (!a || a == self_ || a == ignored || !a->info) continue;
         if (a->info->type == asset_types::texture) continue;
@@ -333,7 +340,8 @@ bool AnimationUpdate::can_move_by(int dx, int dy) const {
 bool AnimationUpdate::would_overlap_same_or_player(int dx, int dy) const {
     if (!self_ || !self_->info) return true;
     const SDL_Point new_pos{ self_->pos.x + dx, self_->pos.y + dy };
-    const auto& active = aam_.getActive();
+    static const std::vector<Asset*> kEmptyAssets;
+    const std::vector<Asset*>& active = assets_owner_ ? assets_owner_->getActive() : kEmptyAssets;
     for (Asset* a : active) {
         if (!a || a == self_ || !a->info) continue;
         const bool is_enemy  = (a->info->type == asset_types::enemy);
@@ -597,8 +605,12 @@ bool AnimationUpdate::advance(AnimationFrame*& frame) {
             self_->pos.y += move_dy;
             if (frame->z_resort) {
                 self_->set_z_index();
-                if (Assets* as = self_->get_assets()) {
-                    as->active_manager().markNeedsSort();
+                Assets* as = assets_owner_;
+                if (!as && self_) {
+                    as = self_->get_assets();
+                }
+                if (as) {
+                    as->mark_active_assets_dirty();
                 }
             }
         }
