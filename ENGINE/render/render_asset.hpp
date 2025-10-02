@@ -6,11 +6,12 @@
 
 class Asset;
 class Global_Light_Source;
+class Assets;
 
 class RenderAsset {
 
-	public:
-    RenderAsset(SDL_Renderer* renderer, camera& cam, Global_Light_Source& main_light, Asset* player);
+        public:
+    RenderAsset(SDL_Renderer* renderer, Assets* assets, camera& cam, Global_Light_Source& main_light, Asset* player);
     SDL_Texture* regenerateFinalTexture(Asset* a);
     SDL_Texture* texture_for_scale(Asset* asset,
                                    SDL_Texture* base_tex,
@@ -29,6 +30,7 @@ class RenderAsset {
 
 	private:
     SDL_Renderer* renderer_;
+    Assets* assets_ = nullptr;
     camera& cam_;
     Global_Light_Source& main_light_source_;
 };

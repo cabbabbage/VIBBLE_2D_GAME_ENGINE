@@ -23,6 +23,7 @@
 #include <nlohmann/json.hpp>
 #include <system_error>
 #include <vector>
+#include <SDL.h>
 
 
 Assets::Assets(std::vector<Asset>&& loaded,
@@ -568,8 +569,18 @@ void Assets::update(const Input& input,
 }
 
 void Assets::set_dev_mode(bool mode) {
+    const bool changed = (dev_mode != mode);
     dev_mode = mode;
+
+    if (scene) {
+        scene->set_low_quality_rendering(dev_mode);
+    }
+
     if (dev_mode) {
+        SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "0");
+        if (changed) {
+            std::cout << "[Assets] Dev Mode enabled: forcing lowest render quality.\n";
+        }
         ensure_dev_controls();
         if (dev_controls_) {
             dev_controls_->set_enabled(true);
@@ -585,6 +596,10 @@ void Assets::set_dev_mode(bool mode) {
         }
         refresh_filtered_active_assets();
     } else {
+        SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "2");
+        if (changed) {
+            std::cout << "[Assets] Dev Mode disabled: restoring high render quality.\n";
+        }
         if (dev_controls_) {
             dev_controls_->set_enabled(false);
             dev_controls_->clear_selection();

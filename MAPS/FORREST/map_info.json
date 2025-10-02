@@ -114,7 +114,7 @@
     },
     {
       "level": 1,
-      "max_rooms": 3,
+      "max_rooms": 2,
       "name": "layer_1",
       "radius": 3167,
       "rooms": [
@@ -125,15 +125,9 @@
           "required_children": []
         },
         {
-          "max_instances": 1,
+          "max_instances": 2,
           "min_instances": 0,
-          "name": "bar",
-          "required_children": []
-        },
-        {
-          "max_instances": 1,
-          "min_instances": 0,
-          "name": "bar",
+          "name": "garden",
           "required_children": []
         }
       ]
@@ -411,6 +405,23 @@
       ],
       "width_max": 2897,
       "width_min": 1755
+    },
+    "garden": {
+      "edge_smoothness": 2,
+      "geometry": "Square",
+      "height_max": 1971,
+      "height_min": 1044,
+      "inherits_map_assets": false,
+      "is_boss": false,
+      "is_spawn": false,
+      "max_height": 1971,
+      "max_width": 1903,
+      "min_height": 1044,
+      "min_width": 1095,
+      "name": "garden",
+      "spawn_groups": [],
+      "width_max": 1903,
+      "width_min": 1095
     },
     "spawn": {
       "curvyness": 1,

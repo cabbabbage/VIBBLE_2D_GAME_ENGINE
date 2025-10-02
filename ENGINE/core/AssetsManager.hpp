@@ -100,6 +100,8 @@ public:
     void mark_active_assets_dirty();
     void initialize_active_assets(SDL_Point center);
 
+    bool is_dev_mode() const { return dev_mode; }
+
     int shading_group_count() const { return num_groups_; }
 
     std::deque<std::unique_ptr<Asset>> owned_assets;

@@ -21,8 +21,9 @@ class SceneRenderer {
     void render();
     void apply_map_light_config(const nlohmann::json& data);
     SDL_Renderer* get_renderer() const;
+    void set_low_quality_rendering(bool low_quality);
 
-	private:
+        private:
     void update_shading_groups();
     bool shouldRegen(Asset* a);
     SDL_Rect get_scaled_position_rect(Asset* a,
@@ -45,7 +46,8 @@ class SceneRenderer {
     int            current_shading_group_ = 0;
     int            num_groups_ = 20;
     bool           debugging = false;
+    bool           low_quality_mode_ = false;
 
     SDL_Texture*   scene_target_tex_    = nullptr;  // full-res scene render target
-    
+
 };

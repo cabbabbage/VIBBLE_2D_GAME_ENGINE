@@ -11,10 +11,12 @@
 #include <iostream>
 
 RenderAsset::RenderAsset(SDL_Renderer* renderer,
+                         Assets* assets,
                          camera& cam,
                          Global_Light_Source& main_light,
                          Asset* player)
 : renderer_(renderer),
+assets_(assets),
 cam_(cam),
 main_light_source_(main_light),
 p(player) {}
@@ -82,11 +84,14 @@ SDL_Texture* RenderAsset::regenerateFinalTexture(Asset* a) {
                 }
         }
 
+        const bool low_quality = assets_ && assets_->is_dev_mode();
+
         SDL_SetTextureBlendMode(final_tex, SDL_BLENDMODE_BLEND);
         #if SDL_VERSION_ATLEAST(2,0,12)
         SDL_SetTextureScaleMode(
             final_tex,
-            (a && a->info && !a->info->smooth_scaling) ? SDL_ScaleModeNearest : SDL_ScaleModeBest);
+            low_quality ? SDL_ScaleModeNearest
+                        : ((a && a->info && !a->info->smooth_scaling) ? SDL_ScaleModeNearest : SDL_ScaleModeBest));
         #endif
 
         a->clear_downscale_cache();
@@ -107,7 +112,7 @@ SDL_Texture* RenderAsset::regenerateFinalTexture(Asset* a) {
         SDL_RenderCopy(renderer_, base, nullptr, nullptr);
         SDL_SetTextureColorMod(base, 255, 255, 255);
 
-        if (a->has_shading) {
+        if (a->has_shading && !low_quality) {
                 if (SDL_Texture* mask = render_shadow_mask(a, bw, bh)) {
                         SDL_SetRenderTarget(renderer_, final_tex);
                         SDL_SetTextureBlendMode(mask, SDL_BLENDMODE_MOD);
@@ -128,7 +133,8 @@ SDL_Texture* create_half_scale(SDL_Renderer* renderer,
                                SDL_Texture* source,
                                Uint32 format,
                                int src_w,
-                               int src_h) {
+                               int src_h,
+                               bool low_quality) {
         if (!renderer || !source || src_w <= 0 || src_h <= 0) {
                 return nullptr;
         }
@@ -140,7 +146,7 @@ SDL_Texture* create_half_scale(SDL_Renderer* renderer,
         }
         SDL_SetTextureBlendMode(half, SDL_BLENDMODE_BLEND);
         #if SDL_VERSION_ATLEAST(2,0,12)
-        SDL_SetTextureScaleMode(half, SDL_ScaleModeBest);
+        SDL_SetTextureScaleMode(half, low_quality ? SDL_ScaleModeNearest : SDL_ScaleModeBest);
         #endif
         SDL_Texture* prev_target = SDL_GetRenderTarget(renderer);
         SDL_SetRenderTarget(renderer, half);
@@ -179,6 +185,11 @@ SDL_Texture* RenderAsset::texture_for_scale(Asset* asset,
                 asset->last_scaled_camera_scale_ = camera_scale;
                 return tex ? tex : base_tex;
         };
+
+        const bool low_quality = assets_ && assets_->is_dev_mode();
+        if (low_quality) {
+                return remember_result(base_tex);
+        }
 
         const float ratio_w = static_cast<float>(target_w) / static_cast<float>(base_w);
         const float ratio_h = static_cast<float>(target_h) / static_cast<float>(base_h);
@@ -231,7 +242,7 @@ SDL_Texture* RenderAsset::texture_for_scale(Asset* asset,
                                        });
 
                 if (it == asset->downscale_cache_.end() || !it->texture || it->width != next_w || it->height != next_h) {
-                        SDL_Texture* created = create_half_scale(renderer_, current_tex, format, current_w, current_h);
+                        SDL_Texture* created = create_half_scale(renderer_, current_tex, format, current_w, current_h, low_quality);
                         if (!created) {
                                 SDL_Texture* fallback = (level == 0) ? base_tex : current_tex;
                                 return remember_result(fallback);
