@@ -15,18 +15,17 @@ public:
     void update(const Input& in) override;
 
 private:
-    void think_random();
-    void pursue(Asset* player);
+    enum class State { Idle, Pursuing, Detonating };
 
-    bool explosion_if_close(Asset* player);
+    void enter_idle(int rest_ratio);
+    void enter_pursue(Asset* target);
+    void trigger_explosion();
 
     Assets* assets_ = nullptr;
     Asset*  self_   = nullptr;
-    int     probe_               = 24;
-    int     follow_radius_       = 1000;
-    int     explosion_radius_    = 150;
-    int     follow_radius_sq_    = follow_radius_ * follow_radius_;
-    int     explosion_radius_sq_ = explosion_radius_ * explosion_radius_;
+    State state_ = State::Idle;
+    int idle_ratio_ = 5;
+    Asset* current_target_ = nullptr;
 };
 
 #endif

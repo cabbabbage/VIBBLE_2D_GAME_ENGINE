@@ -14,7 +14,7 @@
 #include <SDL.h>
 
 namespace {
-constexpr int kNeighborSearchRadius = 100;
+
 }
 
 Asset::Asset(std::shared_ptr<AssetInfo> info_,
@@ -211,6 +211,7 @@ void Asset::finalize_setup() {
                 ControllerFactory cf(assets_);
                 controller_ = cf.create_for_asset(this);
         }
+        NeighborSearchRadius = info->NeighborSearchRadius;
 }
 
 SDL_Texture* Asset::get_current_frame() const {
@@ -384,7 +385,7 @@ void Asset::update_neighbor_lists(bool force_update) {
         neighbors = std::make_unique<AssetList>(
             *active,
             this,
-            kNeighborSearchRadius,
+            info->NeighborSearchRadius,
             std::vector<std::string>{},
             std::vector<std::string>{},
             std::vector<std::string>{},
@@ -395,7 +396,7 @@ void Asset::update_neighbor_lists(bool force_update) {
             auto imp_child = std::make_unique<AssetList>(
                 *neighbors,
                 this,
-                kNeighborSearchRadius,
+                info->NeighborSearchRadius,
                 std::vector<std::string>{},
                 std::vector<std::string>{},
                 std::vector<std::string>{},
@@ -407,13 +408,13 @@ void Asset::update_neighbor_lists(bool force_update) {
         }
     } else if (neighbors) {
         neighbors->set_center(this);
-        neighbors->set_search_radius(kNeighborSearchRadius);
+        neighbors->set_search_radius(info->NeighborSearchRadius);
         neighbors->update();
         if (!impassable_naighbors) {
             auto imp_child = std::make_unique<AssetList>(
                 *neighbors,
                 this,
-                kNeighborSearchRadius,
+                info->NeighborSearchRadius,
                 std::vector<std::string>{},
                 std::vector<std::string>{},
                 std::vector<std::string>{},

@@ -52,6 +52,8 @@ public:
 
     std::vector<Asset*> get_union(const AssetList& other, const std::vector<std::string>& required_tags) const;
 
+    int search_radius() const { return search_radius_; }
+
 private:
     SDL_Point resolve_center() const;
     void rebuild_from_scratch();

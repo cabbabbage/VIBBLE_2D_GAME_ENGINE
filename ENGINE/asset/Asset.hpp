@@ -72,7 +72,7 @@ class Asset {
     AssetList* get_impassable_naighbors();
     const AssetList* get_impassable_naighbors() const;
     void deactivate();
-
+    int NeighborSearchRadius;
     void set_hidden(bool state);
     bool is_hidden();
     void Delete();

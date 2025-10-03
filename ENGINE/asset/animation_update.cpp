@@ -67,21 +67,31 @@ AnimationUpdate::AnimationUpdate(Asset* self, Assets* assets)
     std::seed_seq seed{
         static_cast<unsigned>(reinterpret_cast<uintptr_t>(self) & 0xffffffffu), static_cast<unsigned>((reinterpret_cast<uintptr_t>(self) >> 32) & 0xffffffffu) };
     rng_.seed(seed);
-    weight_dir_    = 0.6;
-    weight_sparse_ = 0.4;
+    path_bias_ = 0.75;
+    int def_max = 100;
+    if (self_ && self_->get_neighbors_list()) {
+        def_max = std::max(1, self_->get_neighbors_list()->search_radius());
+    }
+    max_current_target_dist = def_max;
+    min_current_target_dist = std::max(1, static_cast<int>(std::floor(min_factor * def_max)));
 }
 
 AnimationUpdate::AnimationUpdate(Asset* self, Assets* assets,
-                                 double directness_weight, double sparsity_weight)
-: self_(self), assets_owner_(assets),
-  weight_dir_(std::max(0.0, directness_weight)),
-  weight_sparse_(std::max(0.0, sparsity_weight)) {
+                                 double path_bias)
+: self_(self), assets_owner_(assets) {
+    path_bias_ = std::clamp(path_bias, 0.0, 1.0);
     std::seed_seq seed{
         static_cast<unsigned>(reinterpret_cast<uintptr_t>(self) & 0xffffffffu), static_cast<unsigned>((reinterpret_cast<uintptr_t>(self) >> 32) & 0xffffffffu) };
     rng_.seed(seed);
     if (!assets_owner_ && self_) {
         assets_owner_ = self_->get_assets();
     }
+    int def_max = 100;
+    if (self_ && self_->get_neighbors_list()) {
+        def_max = std::max(1, self_->get_neighbors_list()->search_radius());
+    }
+    max_current_target_dist = def_max;
+    min_current_target_dist = std::max(1, static_cast<int>(std::floor(min_factor * def_max)));
 }
 
 void AnimationUpdate::transition_mode(Mode m) {
@@ -117,198 +127,142 @@ bool AnimationUpdate::is_target_reached() {
     return d <= step;
 }
 
-SDL_Point AnimationUpdate::choose_balanced_target(SDL_Point desired, const Asset* final_target) const {
-    if (!self_) return desired;
-    const int sx = self_->pos.x;
-    const int sy = self_->pos.y;
-    SDL_Point aim = desired;
-    if (final_target) { aim.x = final_target->pos.x; aim.y = final_target->pos.y; }
-    double fvx = static_cast<double>(aim.x - sx);
-    double fvy = static_cast<double>(aim.y - sy);
-    double flen = std::sqrt(fvx*fvx + fvy*fvy);
-    if (flen > 1e-6) { fvx /= flen; fvy /= flen; } else { fvx = 1.0; fvy = 0.0; }
-    const int dx0 = desired.x - sx;
-    const int dy0 = desired.y - sy;
-    const double base_angle  = std::atan2(static_cast<double>(dy0), static_cast<double>(dx0));
-    double base_radius = std::sqrt(static_cast<double>(dx0*dx0 + dy0*dy0));
-    if (base_radius < 1.0) base_radius = 1.0;
-    const AssetList* neighbor_list = self_->get_neighbors_list();
-    std::vector<Asset*> fallback;
-    if (!neighbor_list && assets_owner_) {
-        const auto& active = assets_owner_->getActive();
-        Range::get_in_range(SDL_Point{sx, sy}, 300, active, fallback);
-    }
-    static const double ang_offsets[] = { -0.6, -0.4, -0.25, -0.12, 0.0, 0.12, 0.25, 0.4, 0.6 };
-    static const double rad_scales[]  = { 0.9, 1.0, 1.1 };
-    SDL_Point best = desired;
-    double best_cost = std::numeric_limits<double>::infinity();
-    const double rline = std::max(1.0, Range::get_distance(SDL_Point{sx, sy}, aim));
-    const double sparse_cap = 300.0;
-    const double w_dir   = std::max(0.0, weight_dir_);
-    const double w_sparse= std::max(0.0, weight_sparse_);
-    for (double dth : ang_offsets) {
-        for (double rs : rad_scales) {
-            const double ang = base_angle + dth;
-            const double rr  = base_radius * rs;
-            int px = sx + static_cast<int>(std::llround(rr * std::cos(ang)));
-            int py = sy + static_cast<int>(std::llround(rr * std::sin(ang)));
-            const double dir_norm = Range::get_distance(SDL_Point{px, py}, aim) / rline;
-            double sum = 0.0; int cnt = 0;
-            auto consider = [&](Asset* n) {
-                if (!n || n == self_ || !n->info) return;
-                if (n->info->type == asset_types::texture) return;
-                if (final_target && n == final_target) return;
-                if (n->info->passable) return;
-                const double rvx = static_cast<double>(n->pos.x - sx);
-                const double rvy = static_cast<double>(n->pos.y - sy);
-                if (rvx*fvx + rvy*fvy <= 0.0) return;
-                const double d = Range::get_distance(SDL_Point{px, py}, n);
-                sum += std::min(d, sparse_cap);
-                ++cnt;
-            };
-            if (neighbor_list) {
-                for (Asset* n : neighbor_list->top_unsorted()) consider(n);
-                for (Asset* n : neighbor_list->middle_sorted()) consider(n);
-                for (Asset* n : neighbor_list->bottom_unsorted()) consider(n);
-            } else {
-                for (Asset* n : fallback) consider(n);
-            }
-            const double avg_sparse = (cnt > 0) ? (sum / cnt) : sparse_cap;
-            const double sparse_norm = avg_sparse / sparse_cap;
-            const double cost = w_dir * dir_norm - w_sparse * sparse_norm;
-            if (cost < best_cost) {
-                best_cost = cost;
-                best = SDL_Point{px, py};
-            }
-        }
-    }
-    return best;
-}
-
-SDL_Point AnimationUpdate::bottom_middle(SDL_Point pos) const {
-    if (!self_ || !self_->info) return pos;
-    return SDL_Point{ pos.x, pos.y - self_->info->z_threshold };
-}
-
-bool AnimationUpdate::point_in_impassable(SDL_Point pt, const Asset* ignored) const {
-
-    Asset* closest = nullptr;
-    double best_d2 = std::numeric_limits<double>::infinity();
-
-    const AssetList* impassable = self_->get_impassable_naighbors();
-    if (impassable) {
-        auto try_candidate = [&](Asset* a) {
-            if (!a || a == self_ || a == ignored || !a->info) return;
-            if (a->info->type == asset_types::texture) return;
-            if (a->info->passable) return;
-            const double dx = static_cast<double>(a->pos.x - pt.x);
-            const double dy = static_cast<double>(a->pos.y - pt.y);
-            const double d2 = dx*dx + dy*dy;
-            if (d2 < best_d2) { best_d2 = d2; closest = a; }
-        };
-        for (Asset* a : impassable->top_unsorted()) try_candidate(a);
-        for (Asset* a : impassable->middle_sorted()) try_candidate(a);
-        for (Asset* a : impassable->bottom_unsorted()) try_candidate(a);
-    } else if (assets_owner_) {
-        const auto& active = assets_owner_->getActive();
-        for (Asset* a : active) {
-            if (!a || a == self_ || a == ignored || !a->info) continue;
-            if (a->info->type == asset_types::texture) continue;
-            if (a->info->passable) continue;
-            const double dx = static_cast<double>(a->pos.x - pt.x);
-            const double dy = static_cast<double>(a->pos.y - pt.y);
-            const double d2 = dx*dx + dy*dy;
-            if (d2 < best_d2) { best_d2 = d2; closest = a; }
-        }
-    }
-
-    if (!closest) return false;
-
-    static const char* kNames[] = { "impassable_area", "passability", "collision_area" };
-    for (const char* nm : kNames) {
-        Area obstacle = closest->get_area(nm);
-        if (obstacle.get_points().size() >= 3 && obstacle.contains_point(pt)) {
-            return true;
-        }
-    }
-    return false;
-}
-
-bool AnimationUpdate::path_blocked(SDL_Point from, SDL_Point to, const Asset* ignored) const {
-    if (from.x == to.x && from.y == to.y) {
-        return point_in_impassable(to, ignored);
-    }
-    const double dist = Range::get_distance(from, to);
-    const double step_len = std::max(1.0, std::sqrt(static_cast<double>(min_move_len2())));
-    const int steps = std::max(1, static_cast<int>(std::ceil(dist / step_len)));
-    for (int i = 1; i <= steps; ++i) {
-        const double t = static_cast<double>(i) / static_cast<double>(steps);
-        const int sx = static_cast<int>(std::lround(from.x + (to.x - from.x) * t));
-        const int sy = static_cast<int>(std::lround(from.y + (to.y - from.y) * t));
-        if (point_in_impassable(SDL_Point{ sx, sy }, ignored)) {
-            return true;
-        }
-    }
-    return false;
-}
-
-SDL_Point AnimationUpdate::sanitize_target(SDL_Point desired, const Asset* final_target) const {
-    if (!self_ || !self_->info) return desired;
-    SDL_Point origin = bottom_middle(self_->pos);
-    auto is_valid = [&](SDL_Point candidate) {
-        SDL_Point bottom = bottom_middle(candidate);
-        if (point_in_impassable(bottom, final_target)) return false;
-        if (path_blocked(origin, bottom, final_target)) return false;
-        return true;
-};
-    if (is_valid(desired)) return desired;
-    const int base_step = std::max(1, static_cast<int>(std::lround(std::sqrt(static_cast<double>(min_move_len2())))));
-    const int max_attempts = 12;
-    for (int attempt = 1; attempt <= max_attempts; ++attempt) {
-        const int offset = base_step * attempt;
-        for (int dir : {-1, 1}) {
-            SDL_Point candidate{ desired.x + dir * offset, desired.y };
-            if (is_valid(candidate)) {
-                return candidate;
-            }
-        }
-    }
-    return desired;
-}
-
 void AnimationUpdate::set_target(SDL_Point desired, const Asset* final_target) {
-    SDL_Point chosen = choose_balanced_target(desired, final_target);
-    target_ = sanitize_target(chosen, final_target);
-    have_target_ = true;
+    if (!self_) return;
+
+    normalize_minmax(min_current_target_dist, max_current_target_dist);
+
+    const SDL_Point origin = self_->pos;
+    const SDL_Point aim    = final_target ? final_target->pos : desired;
+
+    double dir_x = static_cast<double>(desired.x - origin.x);
+    double dir_y = static_cast<double>(desired.y - origin.y);
+    double dir_len = std::hypot(dir_x, dir_y);
+    if (dir_len < 1e-6) {
+        const double angle = rand_angle(rng_);
+        dir_x = std::cos(angle);
+        dir_y = std::sin(angle);
+        dir_len = 1.0;
+    }
+
+    const double min_step = static_cast<double>(min_current_target_dist);
+    const double max_step = static_cast<double>(max_current_target_dist);
+    const double desired_step = std::clamp(dir_len, min_step, max_step);
+    const double bias = std::clamp(path_bias_, 0.0, 1.0);
+
+    struct Vec2 { double x; double y; };
+    const Vec2 forward{ dir_x / dir_len, dir_y / dir_len };
+    const Vec2 lateral{ -forward.y, forward.x };
+
+    auto make_point = [&](double forward_weight, double lateral_weight) -> SDL_Point {
+        double vx = forward.x * forward_weight + lateral.x * lateral_weight;
+        double vy = forward.y * forward_weight + lateral.y * lateral_weight;
+        double vlen = std::hypot(vx, vy);
+        if (vlen < 1e-6) {
+            vx = forward.x;
+            vy = forward.y;
+            vlen = 1.0;
+        }
+        const double scale = desired_step / vlen;
+        return SDL_Point{
+            origin.x + static_cast<int>(std::llround(vx * scale)),
+            origin.y + static_cast<int>(std::llround(vy * scale))
+        };
+    };
+
+    struct Candidate { SDL_Point point; double cost; };
+    std::vector<Candidate> candidates;
+    candidates.reserve(8);
+
+    auto add_candidate = [&](double fw, double lw, double penalty) {
+        SDL_Point pt = make_point(fw, lw);
+        double cost = Range::get_distance(pt, aim) + penalty * (1.0 - bias) * desired_step;
+        candidates.push_back(Candidate{ pt, cost });
+    };
+
+    add_candidate(1.0, 0.0, 0.0);
+    add_candidate(0.9,  0.35, 1.0);
+    add_candidate(0.9, -0.35, 1.0);
+    add_candidate(0.75,  0.65, 2.0);
+    add_candidate(0.75, -0.65, 2.0);
+    add_candidate(0.4,   1.0,  3.0);
+    add_candidate(0.4,  -1.0,  3.0);
+
+    double final_dx = static_cast<double>(aim.x - origin.x);
+    double final_dy = static_cast<double>(aim.y - origin.y);
+    double final_len = std::hypot(final_dx, final_dy);
+    if (final_len >= 1e-6) {
+        const double clamp_len = std::clamp(final_len, min_step, max_step);
+        const double scale = clamp_len / final_len;
+        SDL_Point direct_goal{
+            origin.x + static_cast<int>(std::llround(final_dx * scale)),
+            origin.y + static_cast<int>(std::llround(final_dy * scale))
+        };
+        double cost = Range::get_distance(direct_goal, aim);
+        candidates.push_back(Candidate{ direct_goal, cost });
+    }
+
+    const double random_angle = rand_angle(rng_);
+    SDL_Point random_pt{
+        origin.x + static_cast<int>(std::llround(desired_step * std::cos(random_angle))),
+        origin.y + static_cast<int>(std::llround(desired_step * std::sin(random_angle)))
+    };
+    double random_cost = Range::get_distance(random_pt, aim) + 4.0 * (1.0 - bias) * desired_step;
+    candidates.push_back(Candidate{ random_pt, random_cost });
+
+    std::sort(candidates.begin(), candidates.end(), [](const Candidate& a, const Candidate& b) {
+        if (a.cost == b.cost) {
+            if (a.point.x == b.point.x) return a.point.y < b.point.y;
+            return a.point.x < b.point.x;
+        }
+        return a.cost < b.cost;
+    });
+    candidates.erase(std::unique(candidates.begin(), candidates.end(), [](const Candidate& lhs, const Candidate& rhs) {
+        return lhs.point.x == rhs.point.x && lhs.point.y == rhs.point.y;
+    }), candidates.end());
+
+    const SDL_Point bottom_origin = bottom_middle(origin);
+    for (const Candidate& c : candidates) {
+        const SDL_Point bottom_candidate = bottom_middle(c.point);
+        if (point_in_impassable(bottom_candidate, final_target)) continue;
+        if (path_blocked(bottom_origin, bottom_candidate, final_target)) continue;
+        target_ = c.point;
+        have_target_ = true;
+        moving = (Range::get_distance(origin, target_) > 1.0);
+        return;
+    }
+
+    if (!candidates.empty()) {
+        target_ = candidates.front().point;
+        have_target_ = true;
+        moving = (Range::get_distance(origin, target_) > 1.0);
+        return;
+    }
+
+    target_ = origin;
+    have_target_ = false;
+    moving = false;
 }
 
-void AnimationUpdate::set_weights(double directness_weight, double sparsity_weight) {
-    weight_dir_    = std::max(0.0, directness_weight);
-    weight_sparse_ = std::max(0.0, sparsity_weight);
+void AnimationUpdate::set_path_bias(double bias) {
+    path_bias_ = std::clamp(bias, 0.0, 1.0);
 }
 
-void AnimationUpdate::set_idle(int min_target_distance, int max_target_distance, int rest_ratio) {
+void AnimationUpdate::set_idle(int rest_ratio) {
     if (mode_ == Mode::Idle) return;
-    if (max_target_distance < min_target_distance) std::swap(min_target_distance, max_target_distance);
-    idle_min_dist_   = std::max(0, min_target_distance);
-    idle_max_dist_   = std::max(0, max_target_distance);
     idle_rest_ratio_ = std::clamp(rest_ratio, 0, 100);
     transition_mode(Mode::Idle);
 }
 
-void AnimationUpdate::set_pursue(Asset* final_target, int min_target_distance, int max_target_distance) {
+void AnimationUpdate::set_pursue(Asset* final_target) {
     if (mode_ == Mode::Pursue) return;
     pursue_target_   = final_target;
-    pursue_min_dist_ = min_target_distance;
-    pursue_max_dist_ = max_target_distance;
     transition_mode(Mode::Pursue);
 }
 
-void AnimationUpdate::set_run(Asset* threat, int min_target_distance, int max_target_distance) {
+void AnimationUpdate::set_run(Asset* threat) {
     if (mode_ == Mode::Run) return;
     run_threat_   = threat;
-    run_min_dist_ = min_target_distance;
-    run_max_dist_ = max_target_distance;
     transition_mode(Mode::Run);
 }
 
@@ -331,11 +285,9 @@ void AnimationUpdate::set_patrol(const std::vector<SDL_Point>& waypoints, bool l
     transition_mode(Mode::Patrol);
 }
 
-void AnimationUpdate::set_serpentine(Asset* final_target, int min_stride, int max_stride, int sway, int keep_side_ratio) {
+void AnimationUpdate::set_serpentine(Asset* final_target, int sway, int keep_side_ratio) {
     if (mode_ == Mode::Serpentine) return;
     serp_target_      = final_target;
-    serp_min_stride_  = min_stride;
-    serp_max_stride_  = max_stride;
     serp_sway_        = sway;
     serp_keep_ratio_  = keep_side_ratio;
     transition_mode(Mode::Serpentine);
@@ -422,51 +374,57 @@ std::string AnimationUpdate::pick_best_animation_towards(SDL_Point target) {
     return best_id;
 }
 
-void AnimationUpdate::ensure_idle_target(int min_dist, int max_dist) {
+void AnimationUpdate::ensure_idle_target() {
     if (!self_) return;
-    if (!self_->is_current_animation_last_frame()) return;
-    normalize_minmax(min_dist, max_dist);
+    normalize_minmax(min_current_target_dist, max_current_target_dist);
     const int rest_pct = std::clamp(idle_rest_ratio_, 0, 100);
     const double roll = rand_real(rng_, 0.0, 100.0);
     if (roll < static_cast<double>(rest_pct)) {
+        have_target_ = false;
         moving = false;
         return;
     }
     const int cx = self_->pos.x;
     const int cy = self_->pos.y;
     const double a = rand_angle(rng_);
-    const double r = rand_real(rng_, static_cast<double>(min_dist), static_cast<double>(max_dist));
+    const double r = rand_real(rng_, static_cast<double>(min_current_target_dist), static_cast<double>(max_current_target_dist));
     const int tx = cx + static_cast<int>(std::llround(r * std::cos(a)));
     const int ty = cy + static_cast<int>(std::llround(r * std::sin(a)));
     moving = true;
     set_target(SDL_Point{ tx, ty }, nullptr);
 }
 
-void AnimationUpdate::ensure_pursue_target(int min_dist, int max_dist, const Asset* final_target) {
+
+
+
+void AnimationUpdate::ensure_pursue_target( const Asset* final_target) {
     if (!self_ || !final_target) return;
-    normalize_minmax(min_dist, max_dist);
+    normalize_minmax(min_current_target_dist, max_current_target_dist);
     const int cx = self_->pos.x, cy = self_->pos.y;
     const int tx = final_target->pos.x, ty = final_target->pos.y;
     const double a = angle_from_or_random(tx - cx, ty - cy, rng_);
-    const double r = rand_real(rng_, static_cast<double>(min_dist), static_cast<double>(max_dist));
+    const double r = rand_real(rng_, static_cast<double>(min_current_target_dist), static_cast<double>(max_current_target_dist));
     int nx = cx + static_cast<int>(std::llround(r * std::cos(a)));
     int ny = cy + static_cast<int>(std::llround(r * std::sin(a)));
     set_target(SDL_Point{nx, ny}, final_target);
 }
 
-void AnimationUpdate::ensure_run_target(int min_dist, int max_dist, const Asset* threat) {
+void AnimationUpdate::ensure_run_target( const Asset* threat) {
     if (!self_ || !threat) return;
-    normalize_minmax(min_dist, max_dist);
+    normalize_minmax(min_current_target_dist, max_current_target_dist);
     const int cx = self_->pos.x, cy = self_->pos.y;
     const int tx = threat->pos.x, ty = threat->pos.y;
     const double a = angle_from_or_random(cx - tx, cy - ty, rng_);
-    const double r = rand_real(rng_, static_cast<double>(min_dist), static_cast<double>(max_dist));
+    const double r = rand_real(rng_, static_cast<double>(min_current_target_dist), static_cast<double>(max_current_target_dist));
     int nx = cx + static_cast<int>(std::llround(r * std::cos(a)));
     int ny = cy + static_cast<int>(std::llround(r * std::sin(a)));
     set_target(SDL_Point{nx, ny}, nullptr);
 }
 
 void AnimationUpdate::ensure_orbit_target(int min_radius, int max_radius, const Asset* center, int keep_direction_ratio) {
+    
+    //this needs to handle min/min_current_target_dist for setting current target point that lies on the radius
+    
     if (!self_ || !center) return;
     normalize_minmax(min_radius, max_radius);
     if (orbit_params_set_) {
@@ -490,9 +448,10 @@ void AnimationUpdate::ensure_orbit_target(int min_radius, int max_radius, const 
         orbit_angle_ = angle_from_or_random(vx, vy, rng_);
         orbit_params_set_ = true;
     }
-    const double step_len = std::max(1.0, std::sqrt(static_cast<double>(min_move_len2())));
-    double dtheta = step_len / std::max(1, orbit_radius_);
-    if (dtheta < 0.08) dtheta = 0.08;
+    // Set the angular step so that the arc length stays within [min,max] current target step range.
+    int step_len_px = rand_int(rng_, std::max(1, min_current_target_dist), std::max(min_current_target_dist, max_current_target_dist));
+    double dtheta = static_cast<double>(step_len_px) / std::max(1, orbit_radius_);
+    if (dtheta < 0.08) dtheta = 0.08; // ensure some motion
     const double next_angle = orbit_angle_ + static_cast<double>(orbit_dir_) * dtheta;
     int nx = cx + static_cast<int>(std::llround(std::cos(next_angle) * orbit_radius_));
     int ny = cy + static_cast<int>(std::llround(std::sin(next_angle) * orbit_radius_));
@@ -500,29 +459,10 @@ void AnimationUpdate::ensure_orbit_target(int min_radius, int max_radius, const 
     orbit_angle_ = next_angle;
 }
 
-void AnimationUpdate::set_orbit_ccw(Asset* center, int min_radius, int max_radius) {
-    orbit_center_     = center;
-    orbit_min_radius_ = min_radius;
-    orbit_max_radius_ = max_radius;
-    orbit_keep_ratio_ = 1000000;
-    orbit_force_dir_  = true;
-    orbit_forced_dir_ = +1;
-    transition_mode(Mode::Orbit);
-}
-
-void AnimationUpdate::set_orbit_cw(Asset* center, int min_radius, int max_radius) {
-    orbit_center_     = center;
-    orbit_min_radius_ = min_radius;
-    orbit_max_radius_ = max_radius;
-    orbit_keep_ratio_ = 1000000;
-    orbit_force_dir_  = true;
-    orbit_forced_dir_ = -1;
-    transition_mode(Mode::Orbit);
-}
-
 void AnimationUpdate::ensure_patrol_target(const std::vector<SDL_Point>& waypoints,
                                            bool loop,
-                                           int hold_frames) {
+                                           int hold_frames) 
+                                           {
     if (!self_ || waypoints.empty()) return;
     if (!patrol_initialized_ || patrol_points_.size() != waypoints.size()) {
         patrol_points_      = waypoints;
@@ -545,17 +485,27 @@ void AnimationUpdate::ensure_patrol_target(const std::vector<SDL_Point>& waypoin
         patrol_hold_left_ = patrol_hold_frames_;
     }
     const SDL_Point wp = patrol_points_[patrol_index_];
-    int nx = wp.x, ny = wp.y;
-    set_target(SDL_Point{nx, ny}, nullptr);
+    // Move toward waypoint in steps limited by [min,max] target step range
+    const int sx = self_->pos.x, sy = self_->pos.y;
+    const int vx = wp.x - sx,    vy = wp.y - sy;
+    const double dist = std::sqrt(static_cast<double>(vx)*vx + static_cast<double>(vy)*vy);
+    int take = static_cast<int>(std::round(std::clamp(dist, static_cast<double>(min_current_target_dist), static_cast<double>(max_current_target_dist))));
+    if (dist > 1e-6) {
+        const double s = static_cast<double>(take) / dist;
+        int nx = sx + static_cast<int>(std::llround(static_cast<double>(vx) * s));
+        int ny = sy + static_cast<int>(std::llround(static_cast<double>(vy) * s));
+        set_target(SDL_Point{nx, ny}, nullptr);
+    } else {
+        set_target(wp, nullptr);
+    }
 }
 
-void AnimationUpdate::ensure_serpentine_target(int min_stride,
-                                               int max_stride,
-                                               int sway,
+void AnimationUpdate::ensure_serpentine_target(int sway,
                                                const Asset* final_target,
-                                               int keep_side_ratio) {
+                                               int keep_side_ratio) 
+                                            {
     if (!self_ || !final_target) return;
-    normalize_minmax(min_stride, max_stride);
+    normalize_minmax(min_current_target_dist, max_current_target_dist);
     sway = std::max(0, sway);
     const int cx = self_->pos.x, cy = self_->pos.y;
     const int tx = final_target->pos.x, ty = final_target->pos.y;
@@ -567,7 +517,7 @@ void AnimationUpdate::ensure_serpentine_target(int min_stride,
     } else {
         serp_side_ = (rand_int(rng_, 0, 1) ? +1 : -1);
     }
-    serp_stride_ = rand_int(rng_, min_stride, max_stride);
+    serp_stride_ = rand_int(rng_, std::max(1, min_current_target_dist), std::max(min_current_target_dist, max_current_target_dist));
     const double bx = static_cast<double>(cx) + static_cast<double>(serp_stride_) * std::cos(a);
     const double by = static_cast<double>(cy) + static_cast<double>(serp_stride_) * std::sin(a);
     double pvx, pvy;
@@ -614,6 +564,98 @@ bool AnimationUpdate::advance(AnimationFrame*& frame) {
         if (anim.frames_data.empty() || anim.number_of_frames <= 0) {
             return false;
         }
+        if (anim.index_of(frame) < 0) {
+            frame = anim.get_first_frame();
+            self_->frame_progress = 0.0f;
+            if (!frame) return true;
+        }
+
+        float speed = anim.speed_factor;
+        if (!std::isfinite(speed)) speed = 1.0f;
+        double abs_speed = std::abs(static_cast<double>(speed));
+        if (abs_speed < 1e-6) {
+            abs_speed = 1.0;
+            speed = 1.0f;
+        }
+        int interval = 1;
+        float progress_increment = 1.0f;
+        if (abs_speed > 1.0) {
+            interval = std::max(1, static_cast<int>(std::lround(abs_speed)));
+            progress_increment = 1.0f;
+        } else {
+            progress_increment = static_cast<float>(abs_speed);
+            if (progress_increment <= 0.0f) {
+                progress_increment = 1.0f;
+            }
+        }
+        if (slow_frame_interval_ != interval) {
+            slow_frame_interval_ = interval;
+            slow_frame_counter_ = 0;
+        }
+        if (slow_frame_interval_ > 1) {
+            if (slow_frame_counter_ > 0) {
+                --slow_frame_counter_;
+                override_movement = false;
+                suppress_movement_ = false;
+                return true;
+            }
+            slow_frame_counter_ = slow_frame_interval_ - 1;
+        } else {
+            slow_frame_counter_ = 0;
+        }
+
+        const bool use_override = override_movement;
+        const int move_dx = use_override ? dx_ : frame->dx;
+        const int move_dy = use_override ? dy_ : frame->dy;
+        const bool attempted_move = ((move_dx | move_dy) != 0);
+        bool blocked = false;
+        if (attempted_move && !suppress_movement_) {
+            if (!can_move_by(move_dx, move_dy)) {
+                blocked = true;
+                blocked_last_step_ = true;
+            }
+        }
+        if (attempted_move && !blocked && !suppress_movement_) {
+            self_->pos.x += move_dx;
+            self_->pos.y += move_dy;
+            if (frame->z_resort) {
+                self_->set_z_index();
+                Assets* as = assets_owner_;
+                if (!as && self_) {
+                    as = self_->get_assets();
+                }
+                if (as) {
+                    as->mark_active_assets_dirty();
+                }
+            }
+        }
+        override_movement = false;
+        suppress_movement_ = false;
+        bool reached_end = false;
+        self_->frame_progress += progress_increment;
+        while (self_->frame_progress >= 1.0f) {
+            self_->frame_progress -= 1.0f;
+            if (frame->next) {
+                frame = frame->next;
+            } else if (anim.loop) {
+                frame = anim.get_first_frame();
+            } else {
+                reached_end = true;
+                break;
+            }
+        }
+        self_->current_frame = frame;
+        return !reached_end;
+    } catch (const std::exception& e) {
+        std::cerr << "[AnimationUpdate::advance] " << e.what() << "
+";
+    } catch (...) {
+        std::cerr << "[AnimationUpdate::advance] unknown exception
+";
+    }
+    return false;
+}
+
         if (anim.index_of(frame) < 0) {
             frame = anim.get_first_frame();
             self_->frame_progress = 0.0f;
@@ -687,12 +729,16 @@ void AnimationUpdate::switch_to(const std::string& id) {
             self_->current_frame = nullptr;
             self_->static_frame = true;
             self_->frame_progress = 0.0f;
+            slow_frame_interval_ = 1;
+            slow_frame_counter_ = 0;
             return;
         }
         self_->current_animation = it->first;
         self_->current_frame = new_frame;
         self_->static_frame = anim.is_static();
         self_->frame_progress = 0.0f;
+        slow_frame_interval_ = 1;
+        slow_frame_counter_ = 0;
         if (anim.has_audio()) {
             AudioEngine::instance().play_now(anim, *self_);
         }
@@ -812,6 +858,18 @@ void AnimationUpdate::update() {
                     if (mode_ != mode_before) {
                         return;
                     }
+                }
+                if (!have_target_) {
+                    moving = false;
+                    const std::string cur = self_->get_current_animation();
+                    if (cur != "default") {
+                        switch_to("default");
+                    }
+                    bool cont_idle = advance(self_->current_frame);
+                    if (!cont_idle) {
+                        get_animation();
+                    }
+                    return;
                 }
                 std::string next_anim = (!moving) ? std::string("default") : pick_best_animation_towards(target_);
                 moving = true;
@@ -947,12 +1005,12 @@ void AnimationUpdate::update() {
 
 void AnimationUpdate::get_new_target() {
     switch (mode_) {
-        case Mode::Idle:       ensure_idle_target(idle_min_dist_, idle_max_dist_); break;
-        case Mode::Pursue:     ensure_pursue_target(pursue_min_dist_, pursue_max_dist_, pursue_target_); break;
-        case Mode::Run:        ensure_run_target(run_min_dist_, run_max_dist_, run_threat_); break;
+        case Mode::Idle:       ensure_idle_target(); break;
+        case Mode::Pursue:     ensure_pursue_target(pursue_target_); break;
+        case Mode::Run:        ensure_run_target(run_threat_); break;
         case Mode::Orbit:      ensure_orbit_target(orbit_min_radius_, orbit_max_radius_, orbit_center_, orbit_keep_ratio_); break;
         case Mode::Patrol:     ensure_patrol_target(patrol_points_, patrol_loop_, patrol_hold_frames_); break;
-        case Mode::Serpentine: ensure_serpentine_target(serp_min_stride_, serp_max_stride_, serp_sway_, serp_target_, serp_keep_ratio_); break;
+        case Mode::Serpentine: ensure_serpentine_target(serp_sway_, serp_target_, serp_keep_ratio_); break;
         case Mode::ToPoint:    ensure_to_point_target(); break;
         default: break;
     }

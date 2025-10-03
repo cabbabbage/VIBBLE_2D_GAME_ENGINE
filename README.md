@@ -179,7 +179,7 @@ Mode setters
 - `set_orbit(center, min_radius, max_radius, keep_direction_ratio)`
 - `set_orbit_ccw(center, min_radius, max_radius)` / `set_orbit_cw(center, min_radius, max_radius)`
 - `set_patrol(waypoints, loop, hold_frames)`
-- `set_serpentine(final_target, min_stride, max_stride, sway, keep_side_ratio)`
+- `set_serpentine(final_target, sway, keep_side_ratio)`
 - `set_mode_none()` - no AI targeting; just advance and follow `on_end` mapping
 
 Animation overrides

@@ -84,6 +84,7 @@ class AssetInfo {
     Area* find_area(const std::string& name);
     void upsert_area_from_editor(const class Area& area);
     std::string pick_next_animation(const std::string& mapping_id) const;
+    int NeighborSearchRadius = 500;
 
     void set_children(const std::vector<ChildInfo>& children);
 
