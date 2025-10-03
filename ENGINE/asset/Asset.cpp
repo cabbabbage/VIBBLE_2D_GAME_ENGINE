@@ -213,11 +213,10 @@ SDL_Texture* Asset::get_current_frame() const {
         if (iti == info->animations.end()) return nullptr;
 
         const Animation& anim = iti->second;
-        // If our current_frame pointer doesn't belong to this animation anymore,
-        // fall back to the first frame to avoid invalid memory access.
+
         int idx_anim = anim.index_of(current_frame);
         if (idx_anim < 0) {
-            // Mutable fallback: this is logically const, but we need to heal the pointer.
+
             const_cast<Asset*>(this)->current_frame = const_cast<AnimationFrame*>(anim.frames_data.empty() ? nullptr : &anim.frames_data[0]);
             const_cast<Asset*>(this)->frame_progress = 0.0f;
         }
@@ -234,11 +233,10 @@ void Asset::update() {
         }
     }
 
-    // Heal desynced frame/animation state before advancing animations
     if (anim_) {
         auto iti = info->animations.find(current_animation);
         if (iti == info->animations.end()) {
-            // Fallback to a safe animation if the current id is missing
+
             auto def = info->animations.find("default");
             if (def == info->animations.end()) def = info->animations.begin();
             if (def != info->animations.end()) {
@@ -372,7 +370,6 @@ void Asset::add_static_light_source(LightSource* light, SDL_Point world, Asset* 
     sl.alpha_percentage = LightUtils::calculate_static_alpha_percentage(this, owner);
     static_lights.push_back(sl);
 }
-
 
 void Asset::set_render_player_light(bool value) { render_player_light = value; }
 bool Asset::get_render_player_light() const { return render_player_light; }

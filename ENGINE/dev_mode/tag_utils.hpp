@@ -24,5 +24,5 @@ inline std::string normalize(std::string_view input) {
     return out;
 }
 
-}  // namespace tag_utils
+}
 

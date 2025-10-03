@@ -160,7 +160,7 @@ int MapLayersController::create_layer(const std::string& display_name) {
         {"min_rooms", 0},
         {"max_rooms", 0},
         {"rooms", json::array()}
-    };
+};
     arr.push_back(std::move(layer));
     ensure_layer_indices();
     dirty_ = true;
@@ -230,7 +230,7 @@ bool MapLayersController::add_candidate(int layer_index, const std::string& room
         {"min_instances", 0},
         {"max_instances", 1},
         {"required_children", json::array()}
-    };
+};
     rooms.push_back(std::move(candidate));
     clamp_layer_counts(*layer_json);
     dirty_ = true;
@@ -297,7 +297,7 @@ bool MapLayersController::add_candidate_child(int layer_index, int candidate_ind
             {"radius", layers_arr.empty() ? 0 : radius},
             {"max_rooms", 0},
             {"rooms", json::array()}
-        };
+};
         layers_arr.push_back(std::move(child_layer));
         child_layer_index = new_level;
         layer_added = true;
@@ -318,7 +318,7 @@ bool MapLayersController::add_candidate_child(int layer_index, int candidate_ind
             {"min_instances", 0},
             {"max_instances", 1},
             {"required_children", json::array()}
-        };
+};
         child_rooms.push_back(std::move(child_candidate));
         child_layer_changed = true;
     } else {

@@ -60,7 +60,7 @@ void SpawnGroupsConfig::open(const nlohmann::json& assets, std::function<void(co
         "Spawn Groups", this, [this]() {
             this->set_visible(false);
         });
-    // make copy for standalone editing
+
     nlohmann::json normalized = normalize_spawn_assets(assets);
     const bool was_visible = is_visible();
     if (!should_rebuild_with(normalized)) {

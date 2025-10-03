@@ -112,7 +112,7 @@ void InitializeAssets::setup_static_sources(Assets& assets) {
 		for (Asset* child : owner.children) {
 			if (child) recurse(*child);
 		}
-	};
+};
 	for (Asset* owner : assets.all)
 	if (owner)
 	recurse(*owner);

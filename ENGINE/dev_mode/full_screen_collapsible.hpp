@@ -13,9 +13,6 @@
 
 class Input;
 
-// Full-screen variant of DockableCollapsible that pins its header to the
-// bottom of the screen when collapsed and expands to reveal a content region
-// stretching to the top when opened.
 class FullScreenCollapsible {
 public:
     struct HeaderButton {
@@ -24,10 +21,10 @@ public:
         bool active = false;
         std::function<void(bool active)> on_toggle;
         bool momentary = false;
-        // Optional style override for this button (defaults to HeaderButton style)
+
         const DMButtonStyle* style_override = nullptr;
         std::unique_ptr<DMButton> widget;
-    };
+};
 
     explicit FullScreenCollapsible(std::string title);
 
@@ -41,26 +38,17 @@ public:
     void set_expanded(bool expanded);
     bool expanded() const { return expanded_; }
 
-    // Callback invoked whenever the expanded/collapsed state changes via the
-    // arrow button.
     void set_on_toggle(std::function<void(bool)> cb) { on_toggle_ = std::move(cb); }
 
-    // Optional callback that receives events targeting the expanded content
-    // area. If provided, handle_event() will invoke it before deciding
-    // whether to swallow the event itself.
     void set_content_event_handler(std::function<bool(const SDL_Event&)> cb) {
         content_event_handler_ = std::move(cb);
     }
 
-    // Header buttons are mutually exclusive. Setting them replaces any
-    // existing buttons. The provided callbacks are invoked when a button is
-    // toggled active.
     void set_header_buttons(std::vector<HeaderButton> buttons);
     void activate_button(const std::string& id);
     void set_active_button(const std::string& id, bool trigger_callback = false);
     void set_button_active_state(const std::string& id, bool active);
 
-    // Update input state (for hover animations).
     void update(const Input& input);
     bool handle_event(const SDL_Event& e);
     void render(SDL_Renderer* renderer) const;

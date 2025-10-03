@@ -17,7 +17,7 @@ public:
 private:
     void think_random();
     void pursue(Asset* player);
-    // Now returns true if explosion triggered (to stop further logic this frame)
+
     bool explosion_if_close(Asset* player);
 
     Assets* assets_ = nullptr;

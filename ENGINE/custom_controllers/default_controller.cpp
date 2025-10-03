@@ -5,6 +5,6 @@
 DefaultController::DefaultController(Asset* self)
     : self_(self) {}
 
-void DefaultController::update(const Input& /*in*/) {
+void DefaultController::update(const Input& ) {
 
 }

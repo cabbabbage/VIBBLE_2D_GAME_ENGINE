@@ -22,7 +22,7 @@ class AssetLoader {
     std::vector<Asset*> collectDistantAssets(int fade_start_distance, int fade_end_distance);
     std::vector<std::vector<Asset*>> group_neighboring_assets( const std::vector<Asset*>& assets, int tile_width, int tile_height, const std::string& group_type);
     void link_by_child(const std::vector<std::vector<Asset*>>& groups);
-    // Create a flat vector of all non-hidden assets.
+
     std::vector<Asset> createAssets();
     std::vector<Area> getAllRoomAndTrailAreas() const;
     AssetLibrary* getAssetLibrary() const { return asset_library_.get(); }

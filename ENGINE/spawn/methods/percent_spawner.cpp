@@ -42,9 +42,7 @@ void PercentSpawner::spawn(const SpawnInfo& item, const Area* area, SpawnContext
         const double offset_y = (py / 100.0) * (h / 2.0);
 
         SDL_Point final_pos{
-            center.x + static_cast<int>(std::lround(offset_x)),
-            center.y + static_cast<int>(std::lround(offset_y))
-        };
+            center.x + static_cast<int>(std::lround(offset_x)), center.y + static_cast<int>(std::lround(offset_y)) };
 
         MapGrid::Point* snapped = ctx.grid() ? ctx.grid()->get_nearest_point(final_pos) : nullptr;
         if (snapped) {
@@ -60,7 +58,7 @@ void PercentSpawner::spawn(const SpawnInfo& item, const Area* area, SpawnContext
         auto& info = candidate->info;
         if (ctx.checker().check(info, final_pos, ctx.exclusion_zones(), ctx.all_assets(),
                                 item.check_spacing, item.check_min_spacing,
-                                /*allow_retry*/ false, /*tries*/ 5)) {
+                                 false,  5)) {
             continue;
         }
 

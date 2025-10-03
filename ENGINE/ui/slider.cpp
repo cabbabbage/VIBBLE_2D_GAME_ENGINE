@@ -12,8 +12,6 @@
 
 #include "ui/widget_spacing.hpp"
 
-
-
 Slider::Slider(const std::string& label, int min_val, int max_val)
 
 : label_(label), min_(std::min(min_val, max_val)), max_(std::max(min_val, max_val))
@@ -23,8 +21,6 @@ Slider::Slider(const std::string& label, int min_val, int max_val)
 	value_ = min_;
 
 }
-
-
 
 Slider::Slider(const std::string& label, int min_val, int max_val, int current_val)
 
@@ -36,27 +32,19 @@ Slider::Slider(const std::string& label, int min_val, int max_val, int current_v
 
 }
 
-
-
 void Slider::set_position(SDL_Point p) {
 
         rect_.x = p.x; rect_.y = p.y;
 
 }
 
-
-
 void Slider::set_rect(const SDL_Rect& r) { rect_ = r; }
 
 const SDL_Rect& Slider::rect() const { return rect_; }
 
-
-
 void Slider::set_label(const std::string& text) { label_ = text; }
 
 const std::string& Slider::label() const { return label_; }
-
-
 
 void Slider::set_range(int min_val, int max_val) {
 
@@ -68,13 +56,9 @@ void Slider::set_range(int min_val, int max_val) {
 
 }
 
-
-
 int Slider::min() const { return min_; }
 
 int Slider::max() const { return max_; }
-
-
 
 void Slider::set_value(int v) {
 
@@ -82,17 +66,11 @@ void Slider::set_value(int v) {
 
 }
 
-
-
 int Slider::value() const { return value_; }
-
-
 
 int Slider::width()  { return 520; }
 
 int Slider::height() { return 64;  }
-
-
 
 SDL_Rect Slider::track_rect() const {
 
@@ -109,8 +87,6 @@ SDL_Rect Slider::track_rect() const {
 	return t;
 
 }
-
-
 
 SDL_Rect Slider::knob_rect_for_value(int v) const {
 
@@ -132,8 +108,6 @@ SDL_Rect Slider::knob_rect_for_value(int v) const {
 
 }
 
-
-
 int Slider::value_for_x(int mouse_x) const {
 
 	const SDL_Rect tr = track_rect();
@@ -149,8 +123,6 @@ int Slider::value_for_x(int mouse_x) const {
 	return std::max(min_, std::min(max_, v));
 
 }
-
-
 
 bool Slider::handle_event(const SDL_Event& e) {
 
@@ -206,8 +178,6 @@ bool Slider::handle_event(const SDL_Event& e) {
 
 }
 
-
-
 static void fill_rect(SDL_Renderer* r, const SDL_Rect& rc, SDL_Color c) {
 
 	SDL_SetRenderDrawColor(r, c.r, c.g, c.b, c.a);
@@ -216,8 +186,6 @@ static void fill_rect(SDL_Renderer* r, const SDL_Rect& rc, SDL_Color c) {
 
 }
 
-
-
 static void stroke_rect(SDL_Renderer* r, const SDL_Rect& rc, SDL_Color c) {
 
 	SDL_SetRenderDrawColor(r, c.r, c.g, c.b, 255);
@@ -225,8 +193,6 @@ static void stroke_rect(SDL_Renderer* r, const SDL_Rect& rc, SDL_Color c) {
 	SDL_RenderDrawRect(r, &rc);
 
 }
-
-
 
 void Slider::draw_track(SDL_Renderer* r) const {
 
@@ -254,8 +220,6 @@ void Slider::draw_track(SDL_Renderer* r) const {
 
 }
 
-
-
 void Slider::draw_knob(SDL_Renderer* r, const SDL_Rect& krect, bool hovered) const {
 
 	SDL_Color knobCol = style_ ? (hovered ? style_->knob_fill_hover : style_->knob_fill) : (hovered ? Styles::Fog() : Styles::Ivory());
@@ -274,51 +238,83 @@ void Slider::draw_knob(SDL_Renderer* r, const SDL_Rect& krect, bool hovered) con
 
 }
 
+void Slider::draw_text(SDL_Renderer* r) const {
 
+    const TextStyle& labelStyle = style_ ? style_->label_style : TextStyles::SmallMain();
 
-void Slider::draw_text(SDL_Renderer* r) const {
-    const TextStyle& labelStyle = style_ ? style_->label_style : TextStyles::SmallMain();
-    const TextStyle& valueStyle = style_ ? style_->value_style : TextStyles::SmallSecondary();
-    int label_top = rect_.y - ui_spacing::kLabelGap;
-    bool label_rendered = false;
-    if (!label_.empty()) {
-        if (TTF_Font* font = labelStyle.open_font()) {
-            if (SDL_Surface* surf = TTF_RenderText_Blended(font, label_.c_str(), labelStyle.color)) {
-                label_top = rect_.y - surf->h - ui_spacing::kLabelGap;
-                label_rendered = true;
-                if (SDL_Texture* tex = SDL_CreateTextureFromSurface(r, surf)) {
-                    SDL_Rect dst{ rect_.x + ui_spacing::kLabelHorizontalInset, label_top, surf->w, surf->h };
-                    SDL_RenderCopy(r, tex, nullptr, &dst);
-                    SDL_DestroyTexture(tex);
-                }
-                SDL_FreeSurface(surf);
-            }
-            TTF_CloseFont(font);
-        }
-    }
-    const std::string value_text = std::to_string(value_);
-    if (!value_text.empty()) {
-        if (TTF_Font* font = valueStyle.open_font()) {
-            if (SDL_Surface* surf = TTF_RenderText_Blended(font, value_text.c_str(), valueStyle.color)) {
-                int value_y = label_rendered ? label_top : rect_.y - surf->h - ui_spacing::kLabelGap;
-                if (SDL_Texture* tex = SDL_CreateTextureFromSurface(r, surf)) {
-                    int value_x = rect_.x + rect_.w - ui_spacing::kValueRightInset;
-                    value_x = std::min(value_x, rect_.x + rect_.w - surf->w - ui_spacing::kLabelHorizontalInset);
-                    value_x = std::max(value_x, rect_.x + ui_spacing::kLabelHorizontalInset);
-                    SDL_Rect dst{ value_x, value_y, surf->w, surf->h };
-                    SDL_RenderCopy(r, tex, nullptr, &dst);
-                    SDL_DestroyTexture(tex);
-                }
-                SDL_FreeSurface(surf);
-            }
-            TTF_CloseFont(font);
-        }
-    }
-}
-
+    const TextStyle& valueStyle = style_ ? style_->value_style : TextStyles::SmallSecondary();
 
+    int label_top = rect_.y - ui_spacing::kLabelGap;
 
+    bool label_rendered = false;
 
+    if (!label_.empty()) {
+
+        if (TTF_Font* font = labelStyle.open_font()) {
+
+            if (SDL_Surface* surf = TTF_RenderText_Blended(font, label_.c_str(), labelStyle.color)) {
+
+                label_top = rect_.y - surf->h - ui_spacing::kLabelGap;
+
+                label_rendered = true;
+
+                if (SDL_Texture* tex = SDL_CreateTextureFromSurface(r, surf)) {
+
+                    SDL_Rect dst{ rect_.x + ui_spacing::kLabelHorizontalInset, label_top, surf->w, surf->h };
+
+                    SDL_RenderCopy(r, tex, nullptr, &dst);
+
+                    SDL_DestroyTexture(tex);
+
+                }
+
+                SDL_FreeSurface(surf);
+
+            }
+
+            TTF_CloseFont(font);
+
+        }
+
+    }
+
+    const std::string value_text = std::to_string(value_);
+
+    if (!value_text.empty()) {
+
+        if (TTF_Font* font = valueStyle.open_font()) {
+
+            if (SDL_Surface* surf = TTF_RenderText_Blended(font, value_text.c_str(), valueStyle.color)) {
+
+                int value_y = label_rendered ? label_top : rect_.y - surf->h - ui_spacing::kLabelGap;
+
+                if (SDL_Texture* tex = SDL_CreateTextureFromSurface(r, surf)) {
+
+                    int value_x = rect_.x + rect_.w - ui_spacing::kValueRightInset;
+
+                    value_x = std::min(value_x, rect_.x + rect_.w - surf->w - ui_spacing::kLabelHorizontalInset);
+
+                    value_x = std::max(value_x, rect_.x + ui_spacing::kLabelHorizontalInset);
+
+                    SDL_Rect dst{ value_x, value_y, surf->w, surf->h };
+
+                    SDL_RenderCopy(r, tex, nullptr, &dst);
+
+                    SDL_DestroyTexture(tex);
+
+                }
+
+                SDL_FreeSurface(surf);
+
+            }
+
+            TTF_CloseFont(font);
+
+        }
+
+    }
+
+}
 
 void Slider::render(SDL_Renderer* renderer) const {
 

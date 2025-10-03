@@ -62,7 +62,7 @@ private:
         int min_y = 0;
         int max_x = 0;
         int max_y = 0;
-    };
+};
 
     bool has_bounds_ = false;
     Bounds bounds_{};

@@ -246,7 +246,7 @@ void MapEditor::apply_camera_to_bounds() {
             {right, top},
             {right, bottom},
             {left, bottom},
-        };
+};
         Area area("map_bounds", pts);
         cam.set_focus_override(center);
         cam.zoom_to_area(area, 35);

@@ -25,11 +25,7 @@ class AssetSpawnPlanner {
         private:
     void parse_asset_spawns(const Area& area);
     void sort_spawn_queue();
-    std::string resolve_asset_from_tag(
-        const std::string& tag,
-        const std::unordered_set<std::string>* banned_tags,
-        const std::unordered_set<std::string>* banned_assets,
-        const std::unordered_set<std::string>* candidate_tags);
+    std::string resolve_asset_from_tag( const std::string& tag, const std::unordered_set<std::string>* banned_tags, const std::unordered_set<std::string>* banned_assets, const std::unordered_set<std::string>* candidate_tags);
     nlohmann::json* get_source_entry(int source_index, int entry_index, const std::string& key);
     void persist_sources();
     nlohmann::json root_json_;
@@ -39,7 +35,7 @@ class AssetSpawnPlanner {
         int source_index = -1;
         int entry_index = -1;
         std::string key;
-    };
+};
     std::vector<SourceRef> assets_provenance_;
     std::vector<bool> source_changed_;
     AssetLibrary* asset_library_;

@@ -16,7 +16,6 @@
 #include "trail_editor_suite.hpp"
 #include "map_assets_modals.hpp"
 
-
 class Asset;
 class Input;
 class Assets;
@@ -33,7 +32,7 @@ public:
     enum class Mode {
         RoomEditor,
         MapEditor
-    };
+};
 
     DevControls(Assets* owner, int screen_w, int screen_h);
     ~DevControls();
@@ -47,7 +46,6 @@ public:
 
     void set_map_info(nlohmann::json* map_info, MapLightPanel::SaveCallback on_save);
     void set_map_context(nlohmann::json* map_info, const std::string& map_path);
-
 
     Room* resolve_current_room(Room* detected_room);
 
@@ -103,7 +101,7 @@ private:
     void toggle_map_light_panel();
     void toggle_camera_panel();
     void close_camera_panel();
-    // Map mode: spawn group modals
+
     void toggle_map_assets_modal();
     void toggle_boundary_assets_modal();
     void configure_header_button_sets();
@@ -148,7 +146,6 @@ private:
     std::unique_ptr<TrailEditorSuite> trail_suite_;
     AssetFilterBar asset_filter_;
 
-    // Map/Boundary spawn group modals (single-group batch editors)
     std::unique_ptr<SingleSpawnGroupModal> map_assets_modal_;
     std::unique_ptr<SingleSpawnGroupModal> boundary_assets_modal_;
 };

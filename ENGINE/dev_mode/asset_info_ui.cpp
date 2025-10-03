@@ -56,7 +56,7 @@ void render_label_text(SDL_Renderer* renderer, const std::string& text, int x, i
     TTF_CloseFont(font);
 }
 
-} // namespace
+}
 
 namespace {
 
@@ -143,7 +143,7 @@ bool copy_section_from_source(AssetInfoSectionId section_id, const nlohmann::jso
             return true;
         }
         return false;
-    };
+};
 
     switch (section_id) {
         case AssetInfoSectionId::BasicInfo: {
@@ -182,7 +182,7 @@ bool copy_section_from_source(AssetInfoSectionId section_id, const nlohmann::jso
     return changed;
 }
 
-} // namespace
+}
 
 AssetInfoUI::AssetInfoUI() {
     auto basic = std::make_unique<Section_BasicInfo>();
@@ -214,7 +214,7 @@ AssetInfoUI::AssetInfoUI() {
     children->set_open_area_editor_callback([this](const std::string& nm){ open_area_editor(nm); });
     children->set_ui(this);
     sections_.push_back(std::move(children));
-    // Configure Animations footer button
+
     configure_btn_ = std::make_unique<DMButton>("Configure Animations", &DMStyles::CreateButton(), 220, DMButton::height());
     animations_panel_ = std::make_unique<AnimationsEditorPanel>();
 }
@@ -302,7 +302,7 @@ void AssetInfoUI::layout_widgets(int screen_w, int screen_h) const {
             y += DMButton::height() + gap;
         }
         return y;
-    };
+};
 
     int end_y = layout_with_scroll(scroll_);
     int content_height = end_y - scroll_start;
@@ -320,11 +320,8 @@ void AssetInfoUI::layout_widgets(int screen_w, int screen_h) const {
         panel_.x,
         name_label_rect_.y + name_label_rect_.h,
         panel_.w,
-        std::max(0, panel_.h - (name_label_rect_.y + name_label_rect_.h))
-    };
+        std::max(0, panel_.h - (name_label_rect_.y + name_label_rect_.h)) };
 }
-
-
 
 void AssetInfoUI::handle_event(const SDL_Event& e) {
     const bool pointer_event =
@@ -419,8 +416,6 @@ void AssetInfoUI::handle_event(const SDL_Event& e) {
     }
 }
 
-
-
 void AssetInfoUI::update(const Input& input, int screen_w, int screen_h) {
     if (!visible_ || !info_) return;
     layout_widgets(screen_w, screen_h);
@@ -447,7 +442,6 @@ void AssetInfoUI::update(const Input& input, int screen_w, int screen_h) {
 
     for (auto& s : sections_) s->update(input, screen_w, screen_h);
 
-    // Accordion behavior: only one open at a time
     for (size_t i = 0; i < sections_.size(); ++i) {
         if (sections_[i]->is_expanded()) {
             for (size_t j = 0; j < sections_.size(); ++j) {
@@ -498,10 +492,8 @@ void AssetInfoUI::render(SDL_Renderer* r, int screen_w, int screen_h) const {
 #endif
     SDL_RenderSetClipRect(r, &panel_);
 
-    // Render sections (already offset by scroll_)
     for (auto& s : sections_) s->render(r);
 
-    // Footer button
     if (configure_btn_) configure_btn_->render(r);
 
     if (was_clipping == SDL_TRUE) {
@@ -567,10 +559,6 @@ float AssetInfoUI::compute_player_screen_height(const camera& cam) const {
     }
     return 1.0f;
 }
-
-
-
-
 
 void AssetInfoUI::render_world_overlay(SDL_Renderer* r, const camera& cam) const {
     if (!visible_ || !info_) return;

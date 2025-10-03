@@ -334,4 +334,3 @@ void Area::scale(float factor) {
 	update_geometry_data();
 }
 
-// Parallax functionality moved into camera mapping; Area no longer applies parallax directly.

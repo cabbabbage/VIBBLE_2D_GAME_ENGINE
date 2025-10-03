@@ -26,4 +26,4 @@ inline void stamp_circle(SDL_Surface* surf, int cx, int cy, int r, Uint32 color)
     SDL_UnlockSurface(surf);
 }
 
-} // namespace dm_draw
+}

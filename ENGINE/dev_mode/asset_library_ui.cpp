@@ -1,4 +1,4 @@
-// moved to dev_mode
+
 #include "asset_library_ui.hpp"
 #include <algorithm>
 #include <unordered_map>
@@ -22,7 +22,7 @@
 #include "DockableCollapsible.hpp"
 #include "widgets.hpp"
 
-#include <cstdint>   // for std::uintptr_t
+#include <cstdint>
 
 namespace {
     const SDL_Color kTileBG  = dm::rgba(24, 36, 56, 210);
@@ -99,7 +99,6 @@ namespace {
     }
 }
 
-// ---------------- Asset Tile ----------------
 struct AssetLibraryUI::AssetTileWidget : public Widget {
     AssetLibraryUI* owner = nullptr;
     std::shared_ptr<AssetInfo> info;
@@ -121,7 +120,7 @@ struct AssetLibraryUI::AssetTileWidget : public Widget {
 
     void set_rect(const SDL_Rect& r) override { rect_ = r; }
     const SDL_Rect& rect() const override { return rect_; }
-    int height_for_width(int /*w*/) const override { return 200; }
+    int height_for_width(int ) const override { return 200; }
 
     bool handle_event(const SDL_Event& e) override {
         if (e.type == SDL_MOUSEMOTION) {
@@ -214,9 +213,7 @@ struct AssetLibraryUI::AssetTileWidget : public Widget {
                             int dw = int(tw * scale);
                             int dh = int(th * scale);
                             SDL_Rect dst{ image_rect.x + (image_rect.w - dw) / 2,
-                                          image_rect.y + (image_rect.h - dh) / 2,
-                                          dw,
-                                          dh };
+                                          image_rect.y + (image_rect.h - dh) / 2, dw, dh };
                             SDL_RenderCopy(r, tex, nullptr, &dst);
                         }
                     }
@@ -249,7 +246,6 @@ struct AssetLibraryUI::AssetTileWidget : public Widget {
     }
 };
 
-// ---------------- AssetLibraryUI ----------------
 AssetLibraryUI::AssetLibraryUI() {
     floating_ = std::make_unique<DockableCollapsible>("Asset Library", true, 10, 10);
     floating_->set_expanded(false);
@@ -334,7 +330,7 @@ bool AssetLibraryUI::matches_query(const AssetInfo& info, const std::string& que
             c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
         }
         return s;
-    };
+};
 
     std::istringstream ss(query);
     std::string token;
@@ -407,7 +403,7 @@ SDL_Texture* AssetLibraryUI::get_default_frame_texture(const AssetInfo& info) co
             return it->second.frames.front();
         }
         return nullptr;
-    };
+};
 
     if (SDL_Texture* tex = find_frame(info, "default")) {
         return tex;
@@ -431,7 +427,6 @@ SDL_Texture* AssetLibraryUI::get_default_frame_texture(const AssetInfo& info) co
     if (!renderer) {
         return nullptr;
     }
-
 
     std::string cache_key = info.name;
     if (cache_key.empty()) {
@@ -504,7 +499,6 @@ void AssetLibraryUI::update(const Input& input,
     }
 }
 
-
 void AssetLibraryUI::render(SDL_Renderer* r, int screen_w, int screen_h) const {
     if (!floating_) return;
     floating_->render(r);
@@ -530,9 +524,7 @@ void AssetLibraryUI::render(SDL_Renderer* r, int screen_w, int screen_h) const {
         TTF_Font* font = load_font(18);
         if (font) {
             std::string display = new_asset_name_.empty() ? "Enter asset name..." : new_asset_name_;
-            SDL_Color color = new_asset_name_.empty()
-                                ? textbox.label.color
-                                : textbox.text;
+            SDL_Color color = new_asset_name_.empty() ? textbox.label.color : textbox.text;
             int available_w = input_rect.w - 2 * text_padding;
             int tw = 0;
             int th = 0;
@@ -562,9 +554,7 @@ void AssetLibraryUI::render(SDL_Renderer* r, int screen_w, int screen_h) const {
                 SDL_FreeSurface(surf);
                 if (tex) {
                     SDL_Rect dst{ input_rect.x + text_padding,
-                                  input_rect.y + (input_rect.h - th) / 2,
-                                  tw,
-                                  th };
+                                  input_rect.y + (input_rect.h - th) / 2, tw, th };
                     SDL_RenderCopy(r, tex, nullptr, &dst);
                     SDL_DestroyTexture(tex);
                 }
@@ -587,7 +577,6 @@ void AssetLibraryUI::render(SDL_Renderer* r, int screen_w, int screen_h) const {
         }
     }
 }
-
 
 void AssetLibraryUI::handle_event(const SDL_Event& e) {
     if (!floating_) return;
@@ -614,13 +603,11 @@ void AssetLibraryUI::handle_event(const SDL_Event& e) {
     floating_->handle_event(e);
 }
 
-
 std::shared_ptr<AssetInfo> AssetLibraryUI::consume_selection() {
     auto selection = pending_selection_;
     pending_selection_.reset();
     return selection;
 }
-
 
 bool AssetLibraryUI::is_input_blocking_at(int mx, int my) const {
     if (!floating_ || !floating_->is_visible() || !floating_->is_expanded())

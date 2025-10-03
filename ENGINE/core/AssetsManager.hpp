@@ -22,17 +22,7 @@ class AssetInfo;
 
 class Assets {
 public:
-    Assets(std::vector<Asset>&& loaded,
-           AssetLibrary& library,
-           Asset*,
-           std::vector<Room*> rooms,
-           int screen_width,
-           int screen_height,
-           int screen_center_x,
-           int screen_center_y,
-           int map_radius,
-           SDL_Renderer* renderer,
-           const std::string& map_path);
+    Assets(std::vector<Asset>&& loaded, AssetLibrary& library, Asset*, std::vector<Room*> rooms, int screen_width, int screen_height, int screen_center_x, int screen_center_y, int map_radius, SDL_Renderer* renderer, const std::string& map_path);
     ~Assets();
 
     nlohmann::json save_current_room(std::string room_name);
@@ -78,8 +68,6 @@ public:
     void focus_camera_on_asset(Asset* a, double zoom_factor = 0.8, int duration_steps = 25);
     void begin_area_edit_for_selected_asset(const std::string& area_name);
 
-    // Dev Mode: explicitly set the current room selection
-    // (updates DevControls and related UIs).
     void set_editor_current_room(Room* room);
 
     nlohmann::json& map_info_json() { return map_info_json_; }
@@ -156,7 +144,7 @@ private:
     struct ClosestEntry {
         double distance_sq;
         Asset* asset;
-    };
+};
     std::vector<ClosestEntry> closest_buffer_;
 
     void rebuild_active_assets_if_needed();

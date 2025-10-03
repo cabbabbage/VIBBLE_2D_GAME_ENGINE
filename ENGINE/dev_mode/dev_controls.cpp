@@ -93,9 +93,7 @@ public:
 
         bool used = false;
         SDL_Rect btn_rect{ rect_.x + DMSpacing::item_gap(),
-                           rect_.y + DMSpacing::item_gap(),
-                           rect_.w - DMSpacing::item_gap() * 2,
-                           DMButton::height() };
+                           rect_.y + DMSpacing::item_gap(), rect_.w - DMSpacing::item_gap() * 2, DMButton::height() };
         for (size_t i = 0; i < buttons_.size(); ++i) {
             auto& btn = buttons_[i];
             if (!btn) continue;
@@ -125,9 +123,7 @@ public:
         SDL_SetRenderDrawColor(renderer, border.r, border.g, border.b, border.a);
         SDL_RenderDrawRect(renderer, &rect_);
         SDL_Rect btn_rect{ rect_.x + DMSpacing::item_gap(),
-                           rect_.y + DMSpacing::item_gap(),
-                           rect_.w - DMSpacing::item_gap() * 2,
-                           DMButton::height() };
+                           rect_.y + DMSpacing::item_gap(), rect_.w - DMSpacing::item_gap() * 2, DMButton::height() };
         for (const auto& btn : buttons_) {
             if (!btn) continue;
             btn->set_rect(btn_rect);
@@ -234,8 +230,7 @@ void DevControls::set_screen_dimensions(int width, int height) {
 
 void DevControls::set_current_room(Room* room) {
     current_room_ = room;
-    // Keep the developer-selected room in sync so subsequent
-    // resolve_current_room() preserves this choice.
+
     dev_selected_room_ = room;
     if (regenerate_popup_) regenerate_popup_->close();
     if (room_editor_) {
@@ -363,8 +358,7 @@ void DevControls::update(const Input& input) {
         toggle_camera_panel();
     }
     pointer_over_camera_panel_ =
-        camera_panel_ && camera_panel_->is_visible() &&
-        camera_panel_->is_point_inside(input.getX(), input.getY());
+        camera_panel_ && camera_panel_->is_visible() && camera_panel_->is_point_inside(input.getX(), input.getY());
 
     if (mode_ == Mode::MapEditor) {
         if (map_mode_ui_ && input.wasScancodePressed(SDL_SCANCODE_F8)) {
@@ -455,7 +449,6 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
         return;
     }
 
-    // Route to new modals (map mode)
     if (map_assets_modal_ && map_assets_modal_->visible()) {
         if (map_assets_modal_->handle_event(event)) {
             if (input_) input_->consumeEvent(event);
@@ -489,8 +482,7 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
     }
 
     const bool can_route_room_editor = (mode_ != Mode::MapEditor) && can_use_room_editor_ui() && room_editor_;
-    const bool pointer_over_room_ui = can_route_room_editor && (pointer_event || wheel_event) &&
-        room_editor_->is_room_ui_blocking_point(pointer.x, pointer.y);
+    const bool pointer_over_room_ui = can_route_room_editor && (pointer_event || wheel_event) && room_editor_->is_room_ui_blocking_point(pointer.x, pointer.y);
 
     if (pointer_over_room_ui) {
         room_editor_->handle_sdl_event(event);
@@ -731,9 +723,9 @@ void DevControls::configure_header_button_sets() {
             } else {
                 sync_header_button_states();
             }
-        };
+};
         return camera_btn;
-    };
+};
 
     std::vector<MapModeUI::HeaderButtonConfig> map_buttons;
     std::vector<MapModeUI::HeaderButtonConfig> room_buttons;
@@ -751,12 +743,11 @@ void DevControls::configure_header_button_sets() {
             exit_map_editor_mode(false, true);
         }
         sync_header_button_states();
-    };
+};
     map_buttons.push_back(std::move(to_room_btn));
 
     map_buttons.push_back(make_camera_button());
 
-    // Map Mode: Map Assets modal button
     {
         MapModeUI::HeaderButtonConfig map_assets_btn;
         map_assets_btn.id = "map_assets";
@@ -769,11 +760,10 @@ void DevControls::configure_header_button_sets() {
                 if (map_assets_modal_) map_assets_modal_->close();
             }
             sync_header_button_states();
-        };
+};
         map_buttons.push_back(std::move(map_assets_btn));
     }
 
-    // Map Mode: Boundary Assets modal button
     {
         MapModeUI::HeaderButtonConfig boundary_btn;
         boundary_btn.id = "map_boundary";
@@ -786,7 +776,7 @@ void DevControls::configure_header_button_sets() {
                 if (boundary_assets_modal_) boundary_assets_modal_->close();
             }
             sync_header_button_states();
-        };
+};
         map_buttons.push_back(std::move(boundary_btn));
     }
 
@@ -803,7 +793,7 @@ void DevControls::configure_header_button_sets() {
             enter_map_editor_mode();
         }
         sync_header_button_states();
-    };
+};
     room_buttons.push_back(std::move(to_map_btn));
 
     MapModeUI::HeaderButtonConfig lights_btn;
@@ -828,7 +818,7 @@ void DevControls::configure_header_button_sets() {
             map_mode_ui_->toggle_light_panel();
         }
         sync_header_button_states();
-    };
+};
     room_buttons.push_back(std::move(lights_btn));
 
     room_buttons.push_back(make_camera_button());
@@ -841,7 +831,7 @@ void DevControls::configure_header_button_sets() {
         if (!room_editor_) return;
         room_editor_->set_room_config_visible(active);
         sync_header_button_states();
-    };
+};
     room_buttons.push_back(std::move(room_config_btn));
 
     MapModeUI::HeaderButtonConfig library_btn;
@@ -857,7 +847,7 @@ void DevControls::configure_header_button_sets() {
             room_editor_->close_asset_library();
         }
         sync_header_button_states();
-    };
+};
     room_buttons.push_back(std::move(library_btn));
 
     MapModeUI::HeaderButtonConfig regenerate_btn;
@@ -871,7 +861,7 @@ void DevControls::configure_header_button_sets() {
             room_editor_->regenerate_room();
         }
         sync_header_button_states();
-    };
+};
     room_buttons.push_back(std::move(regenerate_btn));
 
     MapModeUI::HeaderButtonConfig regenerate_other_btn;
@@ -892,7 +882,7 @@ void DevControls::configure_header_button_sets() {
         }
         open_regenerate_room_popup();
         sync_header_button_states();
-    };
+};
     room_buttons.push_back(std::move(regenerate_other_btn));
 
     map_mode_ui_->set_mode_button_sets(std::move(map_buttons), std::move(room_buttons));
@@ -917,7 +907,7 @@ void DevControls::sync_header_button_states() {
     map_mode_ui_->set_button_state(MapModeUI::HeaderMode::Room, "regenerate_other", false);
     map_mode_ui_->set_button_state(MapModeUI::HeaderMode::Room, "switch_mode", false);
     map_mode_ui_->set_button_state(MapModeUI::HeaderMode::Map, "switch_mode", false);
-    // New modals in Map Mode header
+
     const bool map_assets_open = map_assets_modal_ && map_assets_modal_->visible();
     const bool boundary_open = boundary_assets_modal_ && boundary_assets_modal_->visible();
     map_mode_ui_->set_button_state(MapModeUI::HeaderMode::Map, "map_assets", map_assets_open);
@@ -979,7 +969,7 @@ void DevControls::toggle_map_assets_modal() {
                 }
             }
         } catch (...) {}
-    };
+};
     auto& map_json = assets_->map_info_json();
     SDL_Color color{200, 200, 255, 255};
     map_assets_modal_->open(map_json, "map_assets_data", "batch_map_assets", "Map-wide", color, save);
@@ -1005,12 +995,11 @@ void DevControls::toggle_boundary_assets_modal() {
                 }
             }
         } catch (...) {}
-    };
+};
     auto& map_json = assets_->map_info_json();
     SDL_Color color{255, 200, 120, 255};
     boundary_assets_modal_->open(map_json, "map_boundary_data", "batch_map_boundary", "Boundary", color, save);
 }
-
 
 void DevControls::open_regenerate_room_popup() {
     if (!can_use_room_editor_ui()) return;
@@ -1247,7 +1236,4 @@ bool DevControls::passes_asset_filters(Asset* asset) const {
     }
     return asset_filter_.passes(*asset);
 }
-
-
-
 

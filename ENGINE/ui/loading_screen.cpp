@@ -76,7 +76,7 @@ void LoadingScreen::render_justified_text(TTF_Font* font, const std::string& tex
 			wsum+=w; if(i+1<ws.size()) wsum+=space_w;
 		}
 		return wsum;
-	};
+};
 	for (auto& word:words){
 		auto test=cur; test.push_back(word);
 		if(width_of(test)<=rect.w || cur.empty()) cur=std::move(test);

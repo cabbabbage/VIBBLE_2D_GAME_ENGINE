@@ -83,5 +83,5 @@ bool sanitize_perimeter_spawn_groups(nlohmann::json& groups) {
     return changed;
 }
 
-} // namespace devmode::spawn
+}
 

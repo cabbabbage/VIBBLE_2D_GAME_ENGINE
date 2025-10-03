@@ -119,7 +119,7 @@ std::string fallback_spawn_id(const nlohmann::json& entry) {
 }
 
 SpawnGroupsConfigPanel::SpawnGroupsConfigPanel(int start_x, int start_y)
-    : DockableCollapsible("Spawn Group", /*floatable=*/true, start_x, start_y) {
+    : DockableCollapsible("Spawn Group", true, start_x, start_y) {
     spawn_methods_ = {"Random", "Center", "Perimeter", "Exact", "Percent", "Entrance", "Exit"};
     panel_title_ = "Spawn Group";
     set_visible(false);

@@ -18,7 +18,6 @@ struct SDL_Renderer;
 class MapLayersController;
 class RoomConfigurator;
 
-// Floating dockable panel for editing map_layers in map_info.json.
 class MapLayersPanel : public DockableCollapsible {
 public:
     using SaveCallback = std::function<bool()>;
@@ -77,11 +76,11 @@ private:
     std::string suggest_room_name() const;
     void delete_layer_internal(int index);
     void open_layer_config_internal(int index);
-    // Layer constraints/helpers
+
     bool is_spawn_room(const std::string& room_key) const;
-    int find_spawn_layer_index() const; // first layer that contains a spawn room, or -1
-    bool is_layer_locked(int index) const; // initial spawn layer is locked from editing
-    std::vector<std::string> available_rooms_for_layer(int layer_index) const; // filtered per constraints
+    int find_spawn_layer_index() const;
+    bool is_layer_locked(int index) const;
+    std::vector<std::string> available_rooms_for_layer(int layer_index) const;
     void handle_layer_name_changed(int index, const std::string& name);
     void handle_candidate_min_changed(int layer_index, int candidate_index, int min_instances);
     void handle_candidate_max_changed(int layer_index, int candidate_index, int max_instances);
@@ -109,7 +108,7 @@ private:
     void ensure_room_configurator();
     nlohmann::json* ensure_room_entry(const std::string& room_name);
     SDL_Rect compute_room_config_bounds() const;
-    // Rename room key across rooms_data and map_layers references (including children). Returns final applied key.
+
     std::string rename_room_everywhere(const std::string& old_key, const std::string& desired_key);
 
 private:
@@ -126,13 +125,13 @@ private:
         PreviewNode* left_sibling = nullptr;
         PreviewNode* right_sibling = nullptr;
         std::vector<PreviewNode*> children;
-    };
+};
     struct PreviewEdge {
         const PreviewNode* from = nullptr;
         const PreviewNode* to = nullptr;
         SDL_Color color{180, 180, 180, 255};
         bool is_trail = false;
-    };
+};
 
     nlohmann::json* map_info_ = nullptr;
     std::string map_path_;

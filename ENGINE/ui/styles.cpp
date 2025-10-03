@@ -18,72 +18,37 @@ static const SDL_Color kMist      = make_color(140,160,160,255);
 static const SDL_Color kIvory     = make_color(200,200,255,200);
 
 static const LabelStyle kLabelTitle{
-    ui_fonts::decorative_bold(),
-    74,
-    kGold
-};
+    ui_fonts::decorative_bold(), 74, kGold };
 
 static const LabelStyle kLabelMain{
-    ui_fonts::decorative_bold(),
-    32,
-    kIvory
-};
+    ui_fonts::decorative_bold(), 32, kIvory };
 
 static const LabelStyle kLabelSecondary{
-    ui_fonts::serif_regular(),
-    30,
-    kGold
-};
+    ui_fonts::serif_regular(), 30, kGold };
 
 static const LabelStyle kLabelSmallMain{
-    ui_fonts::serif_regular(),
-    30,
-    kFog
-};
+    ui_fonts::serif_regular(), 30, kFog };
 
 static const LabelStyle kLabelSmallSecondary{
-    ui_fonts::serif_italic(),
-    30,
-    kMist
-};
+    ui_fonts::serif_italic(), 30, kMist };
 
 static const LabelStyle kLabelExit{
-    ui_fonts::decorative_bold(),
-    32,
-    make_color(210,170,60,255)
-};
+    ui_fonts::decorative_bold(), 32, make_color(210,170,60,255) };
 
 static SDL_Color brighten(SDL_Color c, int r=20, int g=20, int b=10) {
     auto clamp255 = [](int v){ return std::max(0, std::min(255, v)); };
-    return make_color(Uint8(clamp255(int(c.r) + r)),
-                      Uint8(clamp255(int(c.g) + g)),
-                      Uint8(clamp255(int(c.b) + b)),
-                      c.a);
+    return make_color(Uint8(clamp255(int(c.r) + r)), Uint8(clamp255(int(c.g) + g)), Uint8(clamp255(int(c.b) + b)), c.a);
 }
 
 static const ButtonStyle kMainDecoButton{
     kLabelMain,
     kSlate,
-    make_color(kCoal.r, kCoal.g, kCoal.b, 200),
-    kGold,
-    kGoldDim,
-    kTeal,
-    make_color(kGold.r, kGold.g, kGold.b, 45),
-    kLabelMain.color,
-    brighten(kLabelMain.color)
-};
+    make_color(kCoal.r, kCoal.g, kCoal.b, 200), kGold, kGoldDim, kTeal, make_color(kGold.r, kGold.g, kGold.b, 45), kLabelMain.color, brighten(kLabelMain.color) };
 
 static const ButtonStyle kExitDecoButton{
     kLabelExit,
     kSlate,
-    make_color(kCoal.r, kCoal.g, kCoal.b, 200),
-    kGold,
-    kGoldDim,
-    kTeal,
-    make_color(kGold.r, kGold.g, kGold.b, 45),
-    kLabelExit.color,
-    brighten(kLabelExit.color)
-};
+    make_color(kCoal.r, kCoal.g, kCoal.b, 200), kGold, kGoldDim, kTeal, make_color(kGold.r, kGold.g, kGold.b, 45), kLabelExit.color, brighten(kLabelExit.color) };
 
 const SDL_Color& Styles::Gold()      { return kGold; }
 const SDL_Color& Styles::GoldDim()   { return kGoldDim; }

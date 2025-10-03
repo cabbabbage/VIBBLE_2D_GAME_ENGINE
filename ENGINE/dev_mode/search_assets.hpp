@@ -42,7 +42,7 @@ private:
     std::vector<std::unique_ptr<ButtonWidget>> button_widgets_;
     Callback cb_;
     std::vector<Asset> all_;
-    std::vector<std::pair<std::string,bool>> results_; // bool:true if tag
+    std::vector<std::pair<std::string,bool>> results_;
     std::string last_query_;
     int screen_w_ = 1920;
     int screen_h_ = 1080;

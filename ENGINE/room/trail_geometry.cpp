@@ -159,16 +159,12 @@ bool TrailGeometry::attempt_trail_connection(Room* a,
 		double ux = dx / len;
 		double uy = dy / len;
 		SDL_Point outside{
-			static_cast<int>(std::lround(edge.x + ux * overshoot)),
-			static_cast<int>(std::lround(edge.y + uy * overshoot))
-		};
+			static_cast<int>(std::lround(edge.x + ux * overshoot)), static_cast<int>(std::lround(edge.y + uy * overshoot)) };
 		SDL_Point interior{
-			static_cast<int>(std::lround(edge.x - ux * min_interior_depth)),
-			static_cast<int>(std::lround(edge.y - uy * min_interior_depth))
-		};
+			static_cast<int>(std::lround(edge.x - ux * min_interior_depth)), static_cast<int>(std::lround(edge.y - uy * min_interior_depth)) };
 		auto is_inside = [&](const SDL_Point& p)->bool{
 			return area->contains_point(p);
-		};
+};
 		if (!is_inside(interior)) {
 			const int max_fix_steps = 1024;
 			const double step = 2.0;
@@ -189,15 +185,13 @@ bool TrailGeometry::attempt_trail_connection(Room* a,
 			}
 		}
 		return std::make_tuple(interior, edge, outside);
-	};
+};
 
 	SDL_Point a_interior, a_edge, a_outside;
-	std::tie(a_interior, a_edge, a_outside) =
-	    make_edge_triplet(a_center, b_center, a->room_area.get());
+	std::tie(a_interior, a_edge, a_outside) = make_edge_triplet(a_center, b_center, a->room_area.get());
 
 	SDL_Point b_interior, b_edge, b_outside;
-	std::tie(b_interior, b_edge, b_outside) =
-	    make_edge_triplet(b_center, a_center, b->room_area.get());
+	std::tie(b_interior, b_edge, b_outside) = make_edge_triplet(b_center, a_center, b->room_area.get());
 
 	auto [aminx, aminy, amaxx, amaxy] = a->room_area->get_bounds();
 	auto [bminx, bminy, bmaxx, bmaxy] = b->room_area->get_bounds();
@@ -239,20 +233,7 @@ bool TrailGeometry::attempt_trail_connection(Room* a,
 			continue;
 		}
 
-                auto trail_room = std::make_unique<Room>(
-                        a->map_origin,
-                        "trail",
-                        name,
-                        nullptr,
-                        map_dir,
-                        map_info_path,
-                        asset_lib,
-                        &candidate,
-                        trail_config,
-                        map_assets_data,
-                        map_radius,
-                        "trails_data"
-                );
+                auto trail_room = std::make_unique<Room>( a->map_origin, "trail", name, nullptr, map_dir, map_info_path, asset_lib, &candidate, trail_config, map_assets_data, map_radius, "trails_data" );
 		a->add_connecting_room(trail_room.get());
 		b->add_connecting_room(trail_room.get());
 		trail_room->add_connecting_room(a);

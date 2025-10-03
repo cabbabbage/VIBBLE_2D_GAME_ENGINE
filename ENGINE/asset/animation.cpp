@@ -305,7 +305,7 @@ void Animation::load(const std::string& trigger,
                 if (value < 0) return 0;
                 if (value > 100) return 100;
                 return value;
-        };
+};
         if (audio_json) {
                 audio_clip.volume = clamp_volume(audio_json->value("volume", audio_clip.volume));
                 audio_clip.effects = audio_json->value("effects", audio_clip.effects);
@@ -318,7 +318,7 @@ void Animation::load(const std::string& trigger,
                                 audio_clip.chunk = load_audio_clip(audio_clip.path);
                         }
                 } catch (...) {
-                        // ignore malformed audio payloads
+
                 }
         }
         if (!audio_clip.chunk && source.kind == "animation" && !source.name.empty()) {

@@ -18,7 +18,7 @@
 #include <stdexcept>
 
 namespace {
-    // Point in polygon (even-odd) for integer coords
+
     static bool point_in_poly(int px, int py, const std::vector<SDL_Point>& poly) {
         bool inside = false;
         size_t n = poly.size();
@@ -124,7 +124,7 @@ bool AreaOverlayEditor::begin(AssetInfo* info, Asset* asset, const std::string& 
     set_mode(Mode::Mask);
 
     active_ = true;
-    
+
     saved_since_begin_ = false;
     toolbox_autoplace_done_ = false;
 
@@ -208,7 +208,6 @@ void AreaOverlayEditor::init_mask_from_existing_area() {
     ensure_mask_contains(minx, miny, 2);
     ensure_mask_contains(maxx, maxy, 2);
 
-    // Only rasterize within the polygon bounding box to avoid freezing on large canvases
     const int x0 = std::max(0, minx - mask_origin_x_);
     const int y0 = std::max(0, miny - mask_origin_y_);
     const int x1 = std::min(mask_->w - 1, maxx - mask_origin_x_);
@@ -241,7 +240,7 @@ std::vector<SDL_Point> AreaOverlayEditor::extract_edge_points(int step) const {
         Uint8 r, g, b, a;
         SDL_GetRGBA(*p, mask_->format, &r, &g, &b, &a);
         return a;
-    };
+};
     for (int y = 1; y < mask_->h - 1; y += step) {
         for (int x = 1; x < mask_->w - 1; x += step) {
             Uint8 a = getA(x, y);
@@ -258,7 +257,7 @@ std::vector<SDL_Point> AreaOverlayEditor::extract_edge_points(int step) const {
 void AreaOverlayEditor::ensure_toolbox() {
     if (toolbox_) return;
     toolbox_ = std::make_unique<DockableCollapsible>("Area Tools", true);
-    // Make the toolbox visible and expanded by default so users see controls immediately
+
     toolbox_->set_expanded(true);
     btn_mask_  = std::make_unique<DMButton>("Mask",  &DMStyles::CreateButton(), 180, DMButton::height());
     btn_save_  = std::make_unique<DMButton>("Save",  &DMStyles::CreateButton(), 180, DMButton::height());
@@ -553,7 +552,6 @@ void AreaOverlayEditor::update(const Input& input, int screen_w, int screen_h) {
         }
     }
 
-    // No drawing mode in mask-only editor
 }
 
 bool AreaOverlayEditor::handle_event(const SDL_Event& e) {
@@ -642,16 +640,14 @@ void AreaOverlayEditor::render(SDL_Renderer* r) {
 
             const SDL_Point& base = effects.screen_position;
             SDL_Point bottom_center{
-                base.x + static_cast<int>(std::lround(offset_x_screen)),
-                base.y + static_cast<int>(std::lround(offset_y_screen))
-            };
+                base.x + static_cast<int>(std::lround(offset_x_screen)), base.y + static_cast<int>(std::lround(offset_y_screen)) };
 
             SDL_Rect dst{
                 bottom_center.x - sw / 2,
                 bottom_center.y - sh,
                 sw,
                 sh
-            };
+};
 
             if (!mask_tex_) {
                 mask_tex_ = SDL_CreateTexture(r, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_STREAMING, mask_->w, mask_->h);
@@ -676,7 +672,6 @@ void AreaOverlayEditor::render(SDL_Renderer* r) {
     if (toolbox_) toolbox_->render(r);
 }
 
-
 std::vector<SDL_Point> AreaOverlayEditor::trace_polygon_from_mask() const {
     std::vector<SDL_Point> poly;
     if (!mask_) return poly;
@@ -690,7 +685,7 @@ std::vector<SDL_Point> AreaOverlayEditor::trace_polygon_from_mask() const {
         (void)r; (void)g; (void)b;
         SDL_GetRGBA(*p, mask_->format, &r, &g, &b, &a);
         return a;
-    };
+};
     int sx = -1, sy = -1;
     for (int y = 0; y < mask_->h && sy < 0; ++y) {
         for (int x = 0; x < mask_->w; ++x) {
@@ -712,7 +707,7 @@ std::vector<SDL_Point> AreaOverlayEditor::trace_polygon_from_mask() const {
     auto neighbor_index = [&](int cx, int cy, int nx, int ny) -> int {
         for (int i = 0; i < 8; ++i) if (cx + ndx[i] == nx && cy + ndy[i] == ny) return i;
         return 0;
-    };
+};
     constexpr int POLYGON_TRACE_GUARD_LIMIT = 200000;
     int px = sx - 1, py = sy;
     int cx = sx, cy = sy;

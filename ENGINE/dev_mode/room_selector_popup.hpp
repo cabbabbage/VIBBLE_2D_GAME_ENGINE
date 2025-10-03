@@ -11,8 +11,6 @@ class DMButton;
 class DMTextBox;
 class Input;
 
-// Generic popup widget for selecting rooms from a list. Supports
-// creating new rooms via callbacks and scrollable lists of entries.
 class RoomSelectorPopup {
 public:
     using RoomCallback = std::function<void(const std::string&)>;
@@ -54,7 +52,6 @@ private:
     std::vector<std::string> rooms_;
     RoomCallback callback_{};
 
-    // Creation flow removed from selector; only picks existing rooms.
     mutable bool geometry_dirty_ = true;
     mutable int content_height_ = 0;
     mutable SDL_Rect content_clip_{0, 0, 0, 0};

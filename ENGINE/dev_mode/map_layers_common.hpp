@@ -15,5 +15,5 @@ inline int clamp_candidate_max(int min_value, int max_value) {
     return std::clamp(max_value, clamped_min, kCandidateRangeMax);
 }
 
-}  // namespace map_layers
+}
 

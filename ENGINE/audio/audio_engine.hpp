@@ -40,7 +40,7 @@ private:
 
         MusicPtr music;
         std::string file_path;
-    };
+};
 
     void play_next_track_locked();
     void handle_music_finished();

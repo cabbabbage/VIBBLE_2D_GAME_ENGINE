@@ -156,12 +156,7 @@ void AssetList::update() {
 
     delta_buffer_.clear();
     delta_inside_flags_.clear();
-    get_delta_area_assets(previous_center_point_,
-                          previous_search_radius_,
-                          current_center,
-                          search_radius_,
-                          source_candidates_,
-                          delta_buffer_);
+    get_delta_area_assets(previous_center_point_, previous_search_radius_, current_center, search_radius_, source_candidates_, delta_buffer_);
 
     for (std::size_t i = 0; i < delta_buffer_.size(); ++i) {
         Asset* asset = delta_buffer_[i];
@@ -209,9 +204,7 @@ std::vector<Asset*> AssetList::get_union(const AssetList& other,
     result.reserve(list_top_unsorted_.size() + list_middle_sorted_.size() + list_bottom_unsorted_.size());
 
     std::unordered_set<Asset*> other_assets;
-    other_assets.reserve(other.list_top_unsorted_.size() +
-                         other.list_middle_sorted_.size() +
-                         other.list_bottom_unsorted_.size());
+    other_assets.reserve(other.list_top_unsorted_.size() + other.list_middle_sorted_.size() + other.list_bottom_unsorted_.size());
 
     for (Asset* asset : other.list_top_unsorted_) {
         other_assets.insert(asset);
@@ -228,7 +221,7 @@ std::vector<Asset*> AssetList::get_union(const AssetList& other,
             has_all_required_tags(asset, required_tags)) {
             result.push_back(asset);
         }
-    };
+};
 
     for (Asset* asset : list_top_unsorted_) {
         consider(asset);
@@ -278,7 +271,7 @@ void AssetList::rebuild_from_scratch() {
         for (Asset* child : asset->children) {
             self(self, child);
         }
-    };
+};
 
     for (Asset* asset : source_candidates_) {
         process_asset(process_asset, asset);
@@ -321,7 +314,7 @@ void AssetList::remove_from_all_sections(Asset* a) {
 
     auto remover = [a](std::vector<Asset*>& vec) {
         vec.erase(std::remove(vec.begin(), vec.end(), a), vec.end());
-    };
+};
 
     remover(list_top_unsorted_);
     remover(list_middle_sorted_);
@@ -412,7 +405,7 @@ void AssetList::get_delta_area_assets(SDL_Point prev_center,
         for (Asset* child : asset->children) {
             self(self, child);
         }
-    };
+};
 
     for (Asset* asset : candidates) {
         evaluate_asset(evaluate_asset, asset);

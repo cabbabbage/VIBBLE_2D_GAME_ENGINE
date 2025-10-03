@@ -12,7 +12,7 @@ struct ChildInfo {
     std::string json_path;
     std::string area_name;
     int z_offset;
-    nlohmann::json inline_assets; // optional: array of child asset entries
+    nlohmann::json inline_assets;
 };
 
 struct MappingOption {
@@ -57,7 +57,7 @@ class AssetInfo {
     struct NamedArea {
     std::string name;
     std::unique_ptr<Area> area;
-	};
+};
     std::vector<NamedArea> areas;
     std::map<std::string, Animation> animations;
     std::map<std::string, Mapping> mappings;
@@ -84,31 +84,26 @@ class AssetInfo {
     Area* find_area(const std::string& name);
     void upsert_area_from_editor(const class Area& area);
     std::string pick_next_animation(const std::string& mapping_id) const;
-    // Children editing (for dev-mode UI)
+
     void set_children(const std::vector<ChildInfo>& children);
-    // Lighting editing
-    void set_lighting(bool has_shading,
-                      const LightSource& shading,
-                      int shading_factor,
-                      const std::vector<LightSource>& lights);
-    // Accessors
+
+    void set_lighting(bool has_shading, const LightSource& shading, int shading_factor, const std::vector<LightSource>& lights);
+
     std::string info_json_path() const { return info_json_path_; }
     std::string asset_dir_path() const { return dir_path_; }
-    // Remove a named area from memory and JSON, returns true if removed
+
     bool remove_area(const std::string& name);
 
-    // --- Animations editing helpers for dev-mode UI ---
-    // Names in animations map (JSON order not guaranteed)
     std::vector<std::string> animation_names() const;
-    // Return a copy of the animation payload JSON (empty object if missing)
+
     nlohmann::json animation_payload(const std::string& name) const;
-    // Create or update an animation payload (writes to info_json_ and anims_json_)
+
     bool upsert_animation(const std::string& name, const nlohmann::json& payload);
-    // Remove an animation by name (updates JSON containers)
+
     bool remove_animation(const std::string& name);
-    // Rename an animation key (preserves payload). Also updates start if needed
+
     bool rename_animation(const std::string& old_name, const std::string& new_name);
-    // Update start animation string; empty allowed
+
     void set_start_animation_name(const std::string& name);
 
 	private:

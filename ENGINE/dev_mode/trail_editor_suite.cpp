@@ -165,7 +165,7 @@ void TrailEditorSuite::rebuild_spawn_groups_ui() {
         if (configurator_) {
             configurator_->refresh_spawn_groups(active_trail_);
         }
-    };
+};
 
     auto on_entry_change = [this](const nlohmann::json&, const SpawnGroupsConfigPanel::ChangeSummary& summary) {
         if (!active_trail_) {
@@ -181,7 +181,7 @@ void TrailEditorSuite::rebuild_spawn_groups_ui() {
         if (sanitized || summary.method_changed || summary.quantity_changed) {
             rebuild_spawn_groups_ui();
         }
-    };
+};
 
     spawn_groups_->load(groups, on_change, on_entry_change, {});
     if (configurator_) {

@@ -33,7 +33,6 @@ double Range::distance_xy(double ax, double ay, double bx, double by) {
     return std::sqrt(dx * dx + dy * dy);
 }
 
-
 bool Range::is_in_range(const Asset* a, const Asset* b, int radius) {
     double ax, ay, bx, by;
     if (!xy(a, ax, ay) || !xy(b, bx, by)) return false;

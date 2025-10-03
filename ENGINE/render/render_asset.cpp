@@ -77,8 +77,7 @@ SDL_Texture* RenderAsset::regenerateFinalTexture(Asset* a) {
         }
 
         if (!reuse_texture) {
-                final_tex = SDL_CreateTexture(renderer_, SDL_PIXELFORMAT_RGBA8888,
-                                              SDL_TEXTUREACCESS_TARGET, bw, bh);
+                final_tex = SDL_CreateTexture(renderer_, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET, bw, bh);
                 if (!final_tex) {
                         return nullptr;
                 }
@@ -88,10 +87,7 @@ SDL_Texture* RenderAsset::regenerateFinalTexture(Asset* a) {
 
         SDL_SetTextureBlendMode(final_tex, SDL_BLENDMODE_BLEND);
         #if SDL_VERSION_ATLEAST(2,0,12)
-        SDL_SetTextureScaleMode(
-            final_tex,
-            low_quality ? SDL_ScaleModeNearest
-                        : ((a && a->info && !a->info->smooth_scaling) ? SDL_ScaleModeNearest : SDL_ScaleModeBest));
+        SDL_SetTextureScaleMode( final_tex, low_quality ? SDL_ScaleModeNearest : ((a && a->info && !a->info->smooth_scaling) ? SDL_ScaleModeNearest : SDL_ScaleModeBest));
         #endif
 
         a->clear_downscale_cache();
@@ -158,7 +154,7 @@ SDL_Texture* create_half_scale(SDL_Renderer* renderer,
         return half;
 }
 
-} // namespace
+}
 
 SDL_Texture* RenderAsset::texture_for_scale(Asset* asset,
                                             SDL_Texture* base_tex,
@@ -184,7 +180,7 @@ SDL_Texture* RenderAsset::texture_for_scale(Asset* asset,
                 asset->last_scaled_h_            = target_h;
                 asset->last_scaled_camera_scale_ = camera_scale;
                 return tex ? tex : base_tex;
-        };
+};
 
         const bool low_quality = assets_ && assets_->is_dev_mode();
         if (low_quality) {
@@ -281,7 +277,6 @@ void RenderAsset::render_shadow_moving_lights(Asset* a, const SDL_Rect& bounds, 
 		const double factor = LightUtils::calculate_static_alpha_percentage(a, p);
 		const Uint8 inten = static_cast<Uint8>(alpha * factor);
 
-		// Compute local (asset-space) placement so zoom/parallax do not affect the mask.
 		const int dx_world = world_lx - a->pos.x;
 		const int dy_world = world_ly - a->pos.y;
 
@@ -295,12 +290,8 @@ void RenderAsset::render_shadow_moving_lights(Asset* a, const SDL_Rect& bounds, 
 		const int bw = bounds.w;
 		const int bh = bounds.h;
 		SDL_Rect dst{
-			// Anchor is bottom-center of the asset in mask space.
-			(bw / 2) + dx_world - (lw / 2),
-			bh + dy_world - (lh / 2),
-			lw,
-			lh
-		};
+
+			(bw / 2) + dx_world - (lw / 2), bh + dy_world - (lh / 2), lw, lh };
 
 		SDL_SetTextureBlendMode(light.texture, SDL_BLENDMODE_ADD);
 		SDL_SetTextureAlphaMod(light.texture, inten);
@@ -321,7 +312,6 @@ void RenderAsset::render_shadow_orbital_lights(Asset* a, const SDL_Rect& bounds,
 		const float lx = static_cast<float>(a->pos.x) + offset_x + orbit_x;
 		const float ly = static_cast<float>(a->pos.y) + light.offset_y - std::sin(angle) * light.y_radius;
 
-		// Local (asset-space) offset to keep path/look invariant with zoom.
 		const int dx_world = static_cast<int>(std::lround(lx)) - a->pos.x;
 		const int dy_world = static_cast<int>(std::lround(ly)) - a->pos.y;
 
@@ -335,11 +325,7 @@ void RenderAsset::render_shadow_orbital_lights(Asset* a, const SDL_Rect& bounds,
 		const int bw = bounds.w;
 		const int bh = bounds.h;
 		SDL_Rect dst{
-			(bw / 2) + dx_world - (lw / 2),
-			bh + dy_world - (lh / 2),
-			lw,
-			lh
-		};
+			(bw / 2) + dx_world - (lw / 2), bh + dy_world - (lh / 2), lw, lh };
 
 		SDL_SetTextureBlendMode(light.texture, SDL_BLENDMODE_ADD);
 		SDL_SetTextureAlphaMod(light.texture, alpha);
@@ -353,7 +339,6 @@ void RenderAsset::render_shadow_received_static_lights(Asset* a, const SDL_Rect&
 	for (const auto& sl : a->static_lights) {
 		if (!sl.source || !sl.source->texture) continue;
 
-		// Local (asset-space) offset of this static light contribution.
 		const int dx_world = sl.offset.x;
 		const int dy_world = sl.offset.y;
 
@@ -367,11 +352,7 @@ void RenderAsset::render_shadow_received_static_lights(Asset* a, const SDL_Rect&
 		const int bw = bounds.w;
 		const int bh = bounds.h;
 		SDL_Rect dst{
-			(bw / 2) + dx_world - (lw / 2),
-			bh + dy_world - (lh / 2),
-			lw,
-			lh
-		};
+			(bw / 2) + dx_world - (lw / 2), bh + dy_world - (lh / 2), lw, lh };
 
 		SDL_SetTextureBlendMode(sl.source->texture, SDL_BLENDMODE_ADD);
 		float base_alpha = static_cast<float>(alpha) * sl.alpha_percentage;

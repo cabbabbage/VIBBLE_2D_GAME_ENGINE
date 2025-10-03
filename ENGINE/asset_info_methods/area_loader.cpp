@@ -24,7 +24,7 @@ void AreaLoader::load(AssetInfo& info,
             return std::numeric_limits<int>::max();
         }
         return static_cast<int>(rounded);
-    };
+};
 
     int default_offset_x = offset_x;
     int default_offset_y = offset_y;

@@ -24,7 +24,6 @@ class Room;
 class Widget;
 class TagEditorWidget;
 
-// Top-level room configuration panel with room settings and asset list
 class RoomConfigurator : public DockableCollapsible {
 public:
     RoomConfigurator();
@@ -42,11 +41,8 @@ public:
     void render(SDL_Renderer* r) const;
     nlohmann::json build_json() const;
     bool is_point_inside(int x, int y) const;
-    void set_spawn_group_callbacks(std::function<void(const std::string&)> on_edit,
-                                   std::function<void(const std::string&)> on_duplicate,
-                                   std::function<void(const std::string&)> on_delete,
-                                   std::function<void()> on_add);
-    // Called when user changes the room name in the UI. Returns canonical name actually used.
+    void set_spawn_group_callbacks(std::function<void(const std::string&)> on_edit, std::function<void(const std::string&)> on_duplicate, std::function<void(const std::string&)> on_delete, std::function<void()> on_add);
+
     void set_on_room_renamed(std::function<std::string(const std::string&, const std::string&)> cb) {
         on_room_renamed_ = std::move(cb);
     }
@@ -116,7 +112,7 @@ private:
         std::unique_ptr<ButtonWidget> duplicate_btn_w;
         std::unique_ptr<DMButton> delete_btn;
         std::unique_ptr<ButtonWidget> delete_btn_w;
-    };
+};
     std::function<void(const std::string&)> on_spawn_edit_;
     std::function<void(const std::string&)> on_spawn_duplicate_;
     std::function<void(const std::string&)> on_spawn_delete_;

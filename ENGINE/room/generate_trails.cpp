@@ -47,21 +47,7 @@ std::vector<std::unique_ptr<Room>> GenerateTrails::generate_trails(
                 bool success = false;
                 for (int attempts = 0; attempts < 1000 && !success; ++attempts) {
                         if (const auto* asset_ref = pick_random_asset()) {
-                                success = TrailGeometry::attempt_trail_connection(
-                                        a,
-                                        b,
-                                        all_areas,
-                                        map_dir,
-                                        map_info_path,
-                                        asset_lib,
-                                        trail_rooms,
-                                        1,
-                                        asset_ref->data,
-                                        asset_ref->name,
-                                        map_assets_data,
-                                        map_radius,
-                                        testing,
-                                        rng_);
+                                success = TrailGeometry::attempt_trail_connection( a, b, all_areas, map_dir, map_info_path, asset_lib, trail_rooms, 1, asset_ref->data, asset_ref->name, map_assets_data, map_radius, testing, rng_);
                         }
                 }
                 if (!success && testing) {
@@ -104,7 +90,7 @@ void GenerateTrails::find_and_connect_isolated(
 			for (Room* neighbor : room->connected_rooms) {
 					self(neighbor, self);
 			}
-		};
+};
 		auto collect_group = [&](Room* room, std::vector<Room*>& group, auto&& self) -> void {
 			if (!room || visited.count(room) || connected_to_spawn.count(room)) return;
 			visited.insert(room);
@@ -112,7 +98,7 @@ void GenerateTrails::find_and_connect_isolated(
 			for (Room* neighbor : room->connected_rooms) {
 					self(neighbor, group, self);
 			}
-		};
+};
 		for (Room* room : all_rooms_reference) {
 			if (room && room->layer == 0) {
 					mark_connected(room, mark_connected);
@@ -163,7 +149,7 @@ void GenerateTrails::find_and_connect_isolated(
 																					if (dfs(neighbor)) return true;
 													}
 													return false;
-								};
+};
 								if (dfs(candidate)) {
 													candidates.push_back(candidate);
 								}
@@ -362,7 +348,7 @@ void GenerateTrails::circular_connection(std::vector<std::unique_ptr<Room>>& tra
 			if (std::find(current->connected_rooms.begin(), current->connected_rooms.end(), r) != current->connected_rooms.end())
 			return;
 			candidates.push_back(r);
-		};
+};
 		add_candidate(current->right_sibling);
 		if (current->right_sibling) {
 			add_candidate(current->right_sibling->parent);

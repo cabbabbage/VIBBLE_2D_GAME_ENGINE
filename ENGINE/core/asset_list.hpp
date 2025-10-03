@@ -17,37 +17,13 @@ enum class SortMode {
 
 class AssetList {
 public:
-    AssetList(const std::vector<Asset*>& source_candidates,
-              SDL_Point list_center,
-              int search_radius,
-              const std::vector<std::string>& required_tags,
-              const std::vector<std::string>& top_bucket_tags,
-              const std::vector<std::string>& bottom_bucket_tags,
-              SortMode sort_mode);
+    AssetList(const std::vector<Asset*>& source_candidates, SDL_Point list_center, int search_radius, const std::vector<std::string>& required_tags, const std::vector<std::string>& top_bucket_tags, const std::vector<std::string>& bottom_bucket_tags, SortMode sort_mode);
 
-    AssetList(const std::vector<Asset*>& source_candidates,
-              Asset* center_asset,
-              int search_radius,
-              const std::vector<std::string>& required_tags,
-              const std::vector<std::string>& top_bucket_tags,
-              const std::vector<std::string>& bottom_bucket_tags,
-              SortMode sort_mode);
+    AssetList(const std::vector<Asset*>& source_candidates, Asset* center_asset, int search_radius, const std::vector<std::string>& required_tags, const std::vector<std::string>& top_bucket_tags, const std::vector<std::string>& bottom_bucket_tags, SortMode sort_mode);
 
-    AssetList(const AssetList& parent_list,
-              SDL_Point list_center,
-              int search_radius,
-              const std::vector<std::string>& required_tags,
-              const std::vector<std::string>& top_bucket_tags,
-              const std::vector<std::string>& bottom_bucket_tags,
-              SortMode sort_mode);
+    AssetList(const AssetList& parent_list, SDL_Point list_center, int search_radius, const std::vector<std::string>& required_tags, const std::vector<std::string>& top_bucket_tags, const std::vector<std::string>& bottom_bucket_tags, SortMode sort_mode);
 
-    AssetList(const AssetList& parent_list,
-              Asset* center_asset,
-              int search_radius,
-              const std::vector<std::string>& required_tags,
-              const std::vector<std::string>& top_bucket_tags,
-              const std::vector<std::string>& bottom_bucket_tags,
-              SortMode sort_mode);
+    AssetList(const AssetList& parent_list, Asset* center_asset, int search_radius, const std::vector<std::string>& required_tags, const std::vector<std::string>& top_bucket_tags, const std::vector<std::string>& bottom_bucket_tags, SortMode sort_mode);
 
     void add_child(std::unique_ptr<AssetList> child);
     const std::vector<std::unique_ptr<AssetList>>& children() const;
@@ -61,15 +37,12 @@ public:
     void set_center(Asset* a);
     void set_search_radius(int r);
     void set_sort_mode(SortMode m);
-    void set_tags(const std::vector<std::string>& required_tags,
-                  const std::vector<std::string>& top_bucket_tags,
-                  const std::vector<std::string>& bottom_bucket_tags);
+    void set_tags(const std::vector<std::string>& required_tags, const std::vector<std::string>& top_bucket_tags, const std::vector<std::string>& bottom_bucket_tags);
 
     void update();
     void update(SDL_Point new_center);
 
-    std::vector<Asset*> get_union(const AssetList& other,
-                                  const std::vector<std::string>& required_tags) const;
+    std::vector<Asset*> get_union(const AssetList& other, const std::vector<std::string>& required_tags) const;
 
 private:
     SDL_Point resolve_center() const;
@@ -80,12 +53,7 @@ private:
     bool has_any_tag(const Asset* a, const std::vector<std::string>& tags) const;
     void sort_middle_section();
 
-    void get_delta_area_assets(SDL_Point prev_center,
-                               int prev_radius,
-                               SDL_Point curr_center,
-                               int curr_radius,
-                               const std::vector<Asset*>& candidates,
-                               std::vector<Asset*>& out_changed) const;
+    void get_delta_area_assets(SDL_Point prev_center, int prev_radius, SDL_Point curr_center, int curr_radius, const std::vector<Asset*>& candidates, std::vector<Asset*>& out_changed) const;
 
     std::vector<Asset*> source_candidates_;
     SDL_Point           center_point_{};

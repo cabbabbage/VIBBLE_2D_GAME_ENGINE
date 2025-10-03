@@ -6,7 +6,7 @@
 #include <string>
 #include <vector>
 
-#include <SDL.h>                 // for SDL_Point
+#include <SDL.h>
 #include "utils/area.hpp"
 #include "asset/asset_info.hpp"
 
@@ -19,7 +19,7 @@ struct SpawnCandidate {
 };
 
 struct SpawnInfo {
-    // Common
+
     std::string name;
     std::string position;
     std::string spawn_id;
@@ -27,16 +27,13 @@ struct SpawnInfo {
     bool check_spacing = false;
     bool check_min_spacing = false;
 
-    // Exact & Perimeter share dx/dy semantics (relative to room center; scaled by orig size)
     SDL_Point exact_offset{0, 0};
     int exact_origin_w = 0;
     int exact_origin_h = 0;
     SDL_Point exact_point{-1, -1};
 
-    // Perimeter-only (fixed ring radius)
     int perimeter_radius = 0;
 
-    // Candidates
     std::vector<SpawnCandidate> candidates;
 
     bool has_candidates() const { return !candidates.empty(); }

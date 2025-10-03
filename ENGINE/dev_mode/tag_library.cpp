@@ -68,7 +68,7 @@ void TagLibrary::load_from_disk() {
     std::string line;
     while (std::getline(in, line)) {
         if (line.empty()) continue;
-        // If the CSV has multiple columns, take the first one.
+
         auto comma = line.find_first_of(",;\t");
         std::string token = comma == std::string::npos ? line : line.substr(0, comma);
         if (!token.empty() && token.front() == '#') continue;

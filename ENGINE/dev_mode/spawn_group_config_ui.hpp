@@ -26,11 +26,6 @@ class DMSlider;
 class DMTextBox;
 class SearchAssets;
 
-// Panel for configuring a spawn group. The original implementation grew a
-// large amount of bespoke layout code which ended up bypassing the
-// DockableCollapsible behaviours (floating, collapsing and scrolling). This
-// rewrite keeps the same external interface but rebuilds the internals using
-// DockableCollapsible rows so the panel behaves like the other dev-mode UIs.
 class SpawnGroupsConfigPanel : public DockableCollapsible {
 public:
     SpawnGroupsConfigPanel(int start_x = 32, int start_y = 32);
@@ -40,7 +35,7 @@ public:
         bool method_changed = false;
         bool quantity_changed = false;
         std::string method;
-    };
+};
 
     void load(const nlohmann::json& asset);
     void open(const nlohmann::json& data, std::function<void(const nlohmann::json&)> on_save);
@@ -79,7 +74,7 @@ private:
         std::unique_ptr<ButtonWidget> remove_widget;
         std::string last_name;
         int last_chance = 0;
-    };
+};
 
     void rebuild_layout();
     void rebuild_method_widget();
@@ -153,7 +148,7 @@ private:
     struct CloseCallbackEntry {
         size_t id = 0;
         std::function<void()> cb;
-    };
+};
     std::vector<CloseCallbackEntry> close_callbacks_;
     size_t next_close_callback_id_ = 1;
     std::string floating_stack_key_;

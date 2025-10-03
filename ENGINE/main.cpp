@@ -227,11 +227,7 @@ std::optional<std::string> create_new_map_interactively() {
 
         auto sanitized = sanitize_map_name(response);
         if (!sanitized) {
-            tinyfd_messageBox("Invalid Map Name",
-                              "Map names may only contain letters, numbers, underscores, or hyphens.",
-                              "ok",
-                              "error",
-                              0);
+            tinyfd_messageBox("Invalid Map Name", "Map names may only contain letters, numbers, underscores, or hyphens.", "ok", "error", 0);
             continue;
         }
 
@@ -268,7 +264,7 @@ std::optional<std::string> create_new_map_interactively() {
     }
 }
 
-} // namespace
+}
 
 void run(SDL_Window* window, SDL_Renderer* renderer, int screen_w, int screen_h, bool rebuild_cache) {
     (void)window;

@@ -11,7 +11,6 @@
 
 class AssetInfoUI;
 
-// Lighting configuration (shading + multiple light sources)
 class Section_Lighting : public DockableCollapsible {
 public:
     Section_Lighting() : DockableCollapsible("Lighting", false) {}
@@ -71,7 +70,7 @@ public:
             if (!widget) return;
             widget->set_rect(SDL_Rect{ x, y - scroll_, maxw, h });
             y += h + DMSpacing::item_gap();
-        };
+};
 
         if (c_has_shading_) {
             place(c_has_shading_, DMCheckbox::height());
@@ -150,7 +149,7 @@ public:
                     auto scale_clamped = [&](int value, int min_v, int max_v) {
                         double scaled = std::round(static_cast<double>(value) * ratio);
                         return static_cast<int>(std::clamp(scaled, static_cast<double>(min_v), static_cast<double>(max_v)));
-                    };
+};
                     shading_light_.x_radius = scale_clamped(shading_light_.x_radius, 0, 2000);
                     shading_light_.y_radius = scale_clamped(shading_light_.y_radius, 0, 2000);
                     shading_light_.offset_x = scale_clamped(shading_light_.offset_x, -2000, 2000);
@@ -278,14 +277,13 @@ private:
         std::unique_ptr<DMSlider> s_color_r;
         std::unique_ptr<DMSlider> s_color_g;
         std::unique_ptr<DMSlider> s_color_b;
-    };
+};
 
     void commit_to_info() {
         if (!info_) return;
         std::vector<LightSource> lights;
         for (const auto& r : rows_) lights.push_back(r.light);
-        info_->set_lighting(c_has_shading_ ? c_has_shading_->value() : false,
-                            shading_light_, shading_factor_, lights);
+        info_->set_lighting(c_has_shading_ ? c_has_shading_->value() : false, shading_light_, shading_factor_, lights);
     }
 
     LightSource shading_light_{};
@@ -305,6 +303,6 @@ private:
     std::vector<Row> rows_;
     std::unique_ptr<DMButton> b_add_;
     std::unique_ptr<DMButton> apply_btn_;
-    AssetInfoUI* ui_ = nullptr; // non-owning
+    AssetInfoUI* ui_ = nullptr;
 };
 

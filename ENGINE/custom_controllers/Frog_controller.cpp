@@ -3,7 +3,6 @@
 #include "core/AssetsManager.hpp"
 #include "utils/range_util.hpp"
 
-
 FrogController::FrogController(Assets* assets, Asset* self)
     : assets_(assets), self_(self) {
     if (self_ && self_->anim_) {

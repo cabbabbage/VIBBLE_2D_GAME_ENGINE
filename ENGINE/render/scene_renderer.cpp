@@ -24,8 +24,6 @@ constexpr std::array<SDL_Point, 9> HIGHLIGHT_OFFSETS = {
 };
 }
 
-// Motion blur disabled
-
 SceneRenderer::SceneRenderer(SDL_Renderer* renderer,
                              Assets* assets,
                              int screen_width,
@@ -56,8 +54,6 @@ SceneRenderer::SceneRenderer(SDL_Renderer* renderer,
 		          << SDL_GetError() << "\n";
 	}
 
-	// No accumulation texture; render directly to default target
-
         z_light_pass_ = std::make_unique<LightMap>(renderer_, assets_, main_light_source_, screen_width_, screen_height_, fullscreen_light_tex_);
         main_light_source_.update();
         if (!low_quality_mode_ && z_light_pass_) {
@@ -74,7 +70,7 @@ SceneRenderer::~SceneRenderer() {
                 SDL_DestroyTexture(scene_target_tex_);
                 scene_target_tex_ = nullptr;
         }
-        // CPU surfaces were removed in favor of GPU textures for postprocess.
+
 }
 
 SDL_Renderer* SceneRenderer::get_renderer() const {
@@ -107,8 +103,7 @@ void SceneRenderer::update_shading_groups() {
 bool SceneRenderer::shouldRegen(Asset* a) {
 	if (!a->get_final_texture()) { return true; }
 	return (a->get_shading_group() > 0 &&
-	        a->get_shading_group() == current_shading_group_) ||
-	       (!a->get_final_texture() || !a->static_frame || a->get_render_player_light());
+	        a->get_shading_group() == current_shading_group_) || (!a->get_final_texture() || !a->static_frame || a->get_render_player_light());
 }
 
 SDL_Rect SceneRenderer::get_scaled_position_rect(Asset* a,
@@ -151,7 +146,6 @@ void SceneRenderer::render() {
     update_shading_groups();
     main_light_source_.update();
 
-    // ----- ENSURE GPU RENDER TARGETS & CLEAR SCENE -----
     auto ensure_target = [&](SDL_Texture*& tex, int w, int h) {
         if (low_quality_mode_) {
             if (tex) {
@@ -172,9 +166,9 @@ void SceneRenderer::render() {
         SDL_SetTextureScaleMode(tex, low_quality_mode_ ? SDL_ScaleModeNearest : SDL_ScaleModeBest);
         #endif
         return true;
-    };
+};
     if (!ensure_target(scene_target_tex_, screen_width_, screen_height_)) {
-        // Fallback: clear backbuffer and render directly (no post-process)
+
         SDL_SetRenderTarget(renderer_, nullptr);
         SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND);
         SDL_SetRenderDrawColor(renderer_, SLATE_COLOR.r, SLATE_COLOR.g, SLATE_COLOR.b, 255);
@@ -186,7 +180,6 @@ void SceneRenderer::render() {
         SDL_RenderClear(renderer_);
     }
 
-    // ----- WORLD RENDER -----
     const auto& camera_state = assets_->getView();
     float scale = camera_state.get_scale();
     float inv_scale = 1.0f / scale;
@@ -251,8 +244,7 @@ void SceneRenderer::render() {
 
             SDL_Rect glow_rect = fb;
             const int min_dimension = std::max(1, std::min(fb.w, fb.h));
-            const int glow_margin = std::max(
-                8, static_cast<int>(std::round(min_dimension * 0.2f)));
+            const int glow_margin = std::max( 8, static_cast<int>(std::round(min_dimension * 0.2f)));
             glow_rect.x -= glow_margin;
             glow_rect.y -= glow_margin;
             glow_rect.w += glow_margin * 2;
@@ -262,7 +254,7 @@ void SceneRenderer::render() {
                 SDL_SetTextureColorMod(mod_target, color.r, color.g, color.b);
                 SDL_SetTextureAlphaMod(mod_target, color.a);
                 SDL_RenderCopyEx(renderer_, mod_target, nullptr, &rect, 0, nullptr, flip_mode);
-            };
+};
 
             SDL_SetTextureBlendMode(mod_target, SDL_BLENDMODE_ADD);
 
@@ -308,7 +300,6 @@ void SceneRenderer::render() {
         }
     }
 
-    // ----- LIGHTS / OVERLAYS -----
     SDL_SetRenderTarget(renderer_, scene_target_tex_);
     if (!low_quality_mode_ && z_light_pass_) {
         z_light_pass_->render(debugging);
@@ -326,6 +317,4 @@ void SceneRenderer::render() {
         SDL_RenderCopy(renderer_, scene_target_tex_, nullptr, nullptr);
     }
 
-    // Presenting is handled by the main loop; leave the composed frame on the
-    // current render target and let the caller decide when to swap buffers.
 }

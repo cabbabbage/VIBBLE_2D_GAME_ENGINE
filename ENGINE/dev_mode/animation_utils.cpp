@@ -123,7 +123,6 @@ int crop_images_with_bounds(const std::vector<fs::path>& image_paths,
     return count;
 }
 
-// HistoryManager -------------------------------------------------
 HistoryManager::HistoryManager(size_t limit) : limit_(limit) {}
 
 void HistoryManager::snapshot(const nlohmann::json& data) {
@@ -143,7 +142,6 @@ std::optional<nlohmann::json> HistoryManager::undo() {
     return last;
 }
 
-// ViewStateManager -----------------------------------------------
 ViewState ViewStateManager::capture(const IViewWindow& win, const IViewCanvas& canvas) const {
     ViewState st;
     st.geometry = win.geometry();
@@ -160,7 +158,6 @@ void ViewStateManager::apply(IViewWindow& win, IViewCanvas& canvas, const ViewSt
     canvas.set_yview(state.yview);
 }
 
-// MovementModal --------------------------------------------------
 MovementModal::MovementModal() : history_(200) {}
 
 void MovementModal::open(const std::vector<Position>& positions) {
@@ -237,5 +234,5 @@ void MovementModal::render(SDL_Renderer* r) {
     SDL_RenderDrawLine(r, pos.first, pos.second - 5, pos.first, pos.second + 5);
 }
 
-} // namespace animation
+}
 

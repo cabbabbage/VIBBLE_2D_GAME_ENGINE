@@ -7,7 +7,6 @@
 #include <SDL.h>
 #include <limits>
 
-
 #include "utils/area.hpp"
 #include "asset_info.hpp"
 #include "utils/light_source.hpp"
@@ -28,7 +27,6 @@ struct StaticLight {
     double alpha_percentage = 1.0;
 };
 
-
 class Asset {
 
 	public:
@@ -46,7 +44,7 @@ class Asset {
     Asset& operator=(Asset&&) noexcept = default;
     ~Asset();
     void finalize_setup();
-    // Position is updated directly by animation/controller logic
+
     void update();
     SDL_Texture* get_current_frame() const;
     std::string get_current_animation() const;
@@ -54,7 +52,7 @@ class Asset {
     bool is_current_animation_last_frame() const;
     bool is_current_animation_looping() const;
     void add_child(Asset* child);
-    // Children are publicly accessible; accessor removed as unused
+
     void add_static_light_source(LightSource* light, SDL_Point world, Asset* owner);
     void set_render_player_light(bool value);
     bool get_render_player_light() const;
@@ -69,7 +67,7 @@ class Asset {
     void set_assets(Assets* a);
     Assets* get_assets() const { return assets_; }
     void deactivate();
-    // merged flag and getter removed as unused
+
     void set_hidden(bool state);
     bool is_hidden();
     void Delete();
@@ -90,7 +88,7 @@ class Asset {
     float distance_to_player_sq = std::numeric_limits<float>::infinity();
     float distance_from_camera = 0.0f;
     float angle_from_camera = 0.0f;
-    // Removed unused spawn_area_local/base_areas/areas
+
     std::vector<Asset*> children;
     std::vector<StaticLight> static_lights;
     int depth = 0;
@@ -126,7 +124,7 @@ class Asset {
         int          width   = 0;
         int          height  = 0;
         SDL_Texture* texture = nullptr;
-    };
+};
 
     void clear_downscale_cache();
 

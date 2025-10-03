@@ -25,7 +25,6 @@
 #include <vector>
 #include <SDL.h>
 
-
 Assets::Assets(std::vector<Asset>&& loaded,
                AssetLibrary& library,
                Asset*,
@@ -43,7 +42,7 @@ Assets::Assets(std::vector<Asset>&& loaded,
           Area(
               "starting_camera",
               std::vector<SDL_Point>{
-                  // Reduce starting view extents to one third
+
                   SDL_Point{-10,-10},
                   SDL_Point{ 10,-10},
                   SDL_Point{ 10,10},
@@ -58,14 +57,7 @@ Assets::Assets(std::vector<Asset>&& loaded,
 {
     load_map_info_json();
 
-    InitializeAssets::initialize(*this,
-                                 std::move(loaded),
-                                 std::move(rooms),
-                                 screen_width_,
-                                 screen_height_,
-                                 screen_center_x,
-                                 screen_center_y,
-                                 map_radius);
+    InitializeAssets::initialize(*this, std::move(loaded), std::move(rooms), screen_width_, screen_height_, screen_center_x, screen_center_y, map_radius);
 
     finder_ = new CurrentRoomFinder(rooms_, player);
     if (finder_) {
@@ -82,7 +74,6 @@ Assets::Assets(std::vector<Asset>&& loaded,
     update_filtered_active_assets();
 
 }
-
 
 void Assets::load_map_info_json() {
     map_info_json_ = nlohmann::json::object();
@@ -158,7 +149,7 @@ void Assets::hydrate_map_info_sections() {
             std::cerr << "[Assets] Failed to hydrate " << merged_key << " from "
                       << file_path << ": " << ex.what() << "\n";
         }
-    };
+};
 
     hydrate_from_file("map_assets", "map_assets_data");
     hydrate_from_file("map_boundary", "map_boundary_data");
@@ -210,7 +201,7 @@ void Assets::hydrate_map_info_sections() {
             merged = nlohmann::json::object();
         }
         map_info_json_[merged_key] = std::move(merged);
-    };
+};
 
     hydrate_directory("rooms_data", "rooms");
     hydrate_directory("trails_data", "trails");
@@ -225,12 +216,12 @@ void Assets::hydrate_map_info_sections() {
             std::cerr << "[Assets] map_info." << key << " expected to be an object. Resetting." << "\n";
             *it = nlohmann::json::object();
         }
-    };
+};
 
     ensure_object("map_assets_data");
     ensure_object("map_boundary_data");
     ensure_object("map_light_data");
-    // Populate defaults for map_light_data when missing, so editors and renderer have sane values.
+
     {
         nlohmann::json& L = map_info_json_["map_light_data"];
         if (!L.is_object()) {
@@ -249,7 +240,7 @@ void Assets::hydrate_map_info_sections() {
             D["base_color"] = nlohmann::json::array({255, 255, 255, 255});
         }
         if (!D.contains("keys") || !D["keys"].is_array() || D["keys"].empty()) {
-            // Default one key at 0 degrees using the base color
+
             D["keys"] = nlohmann::json::array();
             D["keys"].push_back(nlohmann::json::array({ 0.0, D["base_color"] }));
         }
@@ -342,7 +333,7 @@ void Assets::refresh_active_asset_lists() {
         const float dy = static_cast<float>(asset->pos.y - camera_focus.y);
         asset->distance_from_camera = std::sqrt(dx * dx + dy * dy);
         asset->angle_from_camera = std::atan2(dy, dx);
-    };
+};
     if (player) {
         update_audio_metrics(player);
     }
@@ -431,7 +422,7 @@ void Assets::update_closest_assets(Asset* player, int max_count) {
                 worst_index = i;
             }
         }
-    };
+};
 
     auto consider = [&](Asset* asset) {
         if (!asset || asset == player) {
@@ -454,7 +445,7 @@ void Assets::update_closest_assets(Asset* player, int max_count) {
 
         closest_buffer_[worst_index] = {dist2, asset};
         recompute_worst();
-    };
+};
 
     for (Asset* asset : active_assets) {
         consider(asset);
@@ -524,7 +515,6 @@ void Assets::update(const Input& input,
     int start_px = player ? player->pos.x : 0;
     int start_py = player ? player->pos.y : 0;
 
-    // Suspend movement updates in Dev Mode
     if (!dev_mode) {
         if (player) player->update();
     }
@@ -615,26 +605,22 @@ void Assets::set_render_suppressed(bool suppressed) {
 const std::vector<Asset*>& Assets::get_selected_assets() const {
     static std::vector<Asset*> empty;
     return (dev_controls_ && dev_controls_->is_enabled())
-               ? dev_controls_->get_selected_assets()
-               : empty;
+               ? dev_controls_->get_selected_assets() : empty;
 }
 
 const std::vector<Asset*>& Assets::get_highlighted_assets() const {
     static std::vector<Asset*> empty;
     return (dev_controls_ && dev_controls_->is_enabled())
-               ? dev_controls_->get_highlighted_assets()
-               : empty;
+               ? dev_controls_->get_highlighted_assets() : empty;
 }
 
 Asset* Assets::get_hovered_asset() const {
     return (dev_controls_ && dev_controls_->is_enabled())
-               ? dev_controls_->get_hovered_asset()
-               : nullptr;
+               ? dev_controls_->get_hovered_asset() : nullptr;
 }
 
-nlohmann::json Assets::save_current_room(std::string /*room_name*/) {
-    // Placeholder stub until proper room-saving logic is reintroduced.
-    // For now, return an empty JSON object.
+nlohmann::json Assets::save_current_room(std::string ) {
+
     return nlohmann::json::object();
 }
 
@@ -651,8 +637,7 @@ void Assets::addAsset(const std::string& name, SDL_Point g) {
               << "' at " << info << "\n";
 
     Area spawn_area(name, SDL_Point{g.x, g.y}, 1, 1, "Point", 1, 1, 1);
-    std::cout << "[Assets::addAsset] Created Area '" << spawn_area.get_name()
-              << "' at (" << g.x << ", " << g.y << ")\n";
+    std::cout << "[Assets::addAsset] Created Area '" << spawn_area.get_name() << "' at (" << g.x << ", " << g.y << ")\n";
 
     size_t prev_size = owned_assets.size();
 
@@ -670,8 +655,7 @@ void Assets::addAsset(const std::string& name, SDL_Point g) {
         return;
     }
     std::cout << "[Assets::addAsset][Debug] New Asset allocated at " << newAsset
-              << " (info=" << (newAsset->info ? newAsset->info->name : "<null>")
-              << ")\n";
+              << " (info=" << (newAsset->info ? newAsset->info->name : "<null>") << ")\n";
 
     all.push_back(newAsset);
     std::cout << "[Assets::addAsset] all.size() now = " << all.size() << "\n";
@@ -691,8 +675,7 @@ void Assets::addAsset(const std::string& name, SDL_Point g) {
     update_closest_assets(player, 3);
     update_filtered_active_assets();
 
-    std::cout << "[Assets::addAsset] Active assets=" << active_assets.size()
-              << ", Closest=" << closest_assets.size() << "\n";
+    std::cout << "[Assets::addAsset] Active assets=" << active_assets.size() << ", Closest=" << closest_assets.size() << "\n";
 
     std::cout << "[Assets::addAsset] Successfully added asset '" << name
               << "' at (" << g.x << ", " << g.y << ")\n";
@@ -711,12 +694,10 @@ Asset* Assets::spawn_asset(const std::string& name, SDL_Point world_pos) {
               << "' at " << info << "\n";
 
     Area spawn_area(name, SDL_Point{world_pos.x, world_pos.y}, 1, 1, "Point", 1, 1, 1);
-    std::cout << "[Assets::spawn_asset] Created Area '" << spawn_area.get_name()
-              << "' at (" << world_pos.x << ", " << world_pos.y << ")\n";
+    std::cout << "[Assets::spawn_asset] Created Area '" << spawn_area.get_name() << "' at (" << world_pos.x << ", " << world_pos.y << ")\n";
 
     size_t prev_size = owned_assets.size();
-    owned_assets.emplace_back(
-        std::make_unique<Asset>(info, spawn_area, world_pos, 0, nullptr));
+    owned_assets.emplace_back( std::make_unique<Asset>(info, spawn_area, world_pos, 0, nullptr));
 
     if (owned_assets.size() <= prev_size) {
         std::cerr << "[Assets::spawn_asset][Error] owned_assets did not grow!\n";
@@ -730,8 +711,7 @@ Asset* Assets::spawn_asset(const std::string& name, SDL_Point world_pos) {
     }
 
     std::cout << "[Assets::spawn_asset][Debug] New Asset allocated at " << newAsset
-              << " (info=" << (newAsset->info ? newAsset->info->name : "<null>")
-              << ")\n";
+              << " (info=" << (newAsset->info ? newAsset->info->name : "<null>") << ")\n";
 
     all.push_back(newAsset);
     std::cout << "[Assets::spawn_asset] all.size() now = " << all.size() << "\n";
@@ -751,8 +731,7 @@ Asset* Assets::spawn_asset(const std::string& name, SDL_Point world_pos) {
     update_closest_assets(player, 3);
     update_filtered_active_assets();
 
-    std::cout << "[Assets::spawn_asset] Active assets=" << active_assets.size()
-              << ", Closest=" << closest_assets.size() << "\n";
+    std::cout << "[Assets::spawn_asset] Active assets=" << active_assets.size() << ", Closest=" << closest_assets.size() << "\n";
 
     std::cout << "[Assets::spawn_asset] Successfully spawned asset '" << name
               << "' at (" << world_pos.x << ", " << world_pos.y << ")\n";
@@ -814,23 +793,22 @@ void Assets::schedule_removal(Asset* a) {
 void Assets::process_removals() {
     if (removal_queue.empty()) return;
     for (Asset* a : removal_queue) {
-        // Remove from ownership so the destructor runs and memory is freed
+
         auto it = std::find_if(owned_assets.begin(), owned_assets.end(),
                                [a](const std::unique_ptr<Asset>& p){ return p.get() == a; });
         if (it != owned_assets.end()) {
             owned_assets.erase(it);
         }
 
-        // Purge all raw pointers to this asset from engine-maintained lists
         auto erase_ptr = [a](auto& vec) {
             vec.erase(std::remove(vec.begin(), vec.end(), a), vec.end());
-        };
+};
         erase_ptr(all);
         erase_ptr(active_assets);
         erase_ptr(filtered_active_assets);
         erase_ptr(closest_assets);
     }
-    // Clear any stale selections in Dev Mode that may reference removed assets
+
     if (dev_controls_ && dev_controls_->is_enabled()) {
         dev_controls_->clear_selection();
         dev_controls_->set_active_assets(filtered_active_assets);
@@ -872,8 +850,7 @@ void Assets::close_asset_library() {
 }
 
 bool Assets::is_asset_library_open() const {
-    return dev_controls_ && dev_controls_->is_enabled()
-           && dev_controls_->is_asset_library_open();
+    return dev_controls_ && dev_controls_->is_enabled() && dev_controls_->is_asset_library_open();
 }
 
 void Assets::toggle_room_config() {
@@ -889,8 +866,7 @@ void Assets::close_room_config() {
 }
 
 bool Assets::is_room_config_open() const {
-    return dev_controls_ && dev_controls_->is_enabled()
-           && dev_controls_->is_room_config_open();
+    return dev_controls_ && dev_controls_->is_enabled() && dev_controls_->is_room_config_open();
 }
 
 std::shared_ptr<AssetInfo> Assets::consume_selected_asset_from_library() {
@@ -929,8 +905,7 @@ void Assets::close_asset_info_editor() {
 }
 
 bool Assets::is_asset_info_editor_open() const {
-    return dev_controls_ && dev_controls_->is_enabled()
-           && dev_controls_->is_asset_info_editor_open();
+    return dev_controls_ && dev_controls_->is_enabled() && dev_controls_->is_asset_info_editor_open();
 }
 
 void Assets::clear_editor_selection() {

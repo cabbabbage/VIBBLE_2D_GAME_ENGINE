@@ -32,12 +32,12 @@ MapGrid::Point* MapGrid::get_nearest_point(SDL_Point p) {
     if (free_count_ <= 0) return nullptr;
     int cx, cy;
     to_grid_indices(p, cx, cy);
-    // If the seed is free, return it
+
     if (!grid_[idx(cx, cy)].occupied) return &grid_[idx(cx, cy)];
-    // Expand search in Manhattan rings
+
     const int max_r = std::max(cols_, rows_);
     for (int r = 1; r <= max_r; ++r) {
-        // iterate the perimeter of the square ring at radius r
+
         for (int dx = -r; dx <= r; ++dx) {
             const int ix1 = cx + dx;
             const int iy1 = cy - r;

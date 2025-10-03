@@ -26,10 +26,7 @@ class Section_BasicInfo : public DockableCollapsible {
     void layout() override { DockableCollapsible::layout(); }
     bool handle_event(const SDL_Event& e) override;
     void render_content(SDL_Renderer* r) const override {}
-    void render_world_overlay(SDL_Renderer* r,
-                              const camera& cam,
-                              const Asset* target,
-                              float reference_screen_height) const;
+    void render_world_overlay(SDL_Renderer* r, const camera& cam, const Asset* target, float reference_screen_height) const;
 
   private:
     static int find_index(const std::vector<std::string>& opts, const std::string& value);
@@ -41,7 +38,7 @@ class Section_BasicInfo : public DockableCollapsible {
     std::unique_ptr<DMButton>    apply_btn_;
     std::vector<std::unique_ptr<Widget>> widgets_;
     std::vector<std::string> type_options_;
-    AssetInfoUI* ui_ = nullptr; // non-owning
+    AssetInfoUI* ui_ = nullptr;
 };
 
 inline Section_BasicInfo::Section_BasicInfo()

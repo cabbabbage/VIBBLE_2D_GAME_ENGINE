@@ -26,13 +26,7 @@ class SceneRenderer {
         private:
     void update_shading_groups();
     bool shouldRegen(Asset* a);
-    SDL_Rect get_scaled_position_rect(Asset* a,
-                                      int fw,
-                                      int fh,
-                                      float inv_scale,
-                                      int min_w,
-                                      int min_h,
-                                      float reference_screen_height);
+    SDL_Rect get_scaled_position_rect(Asset* a, int fw, int fh, float inv_scale, int min_w, int min_h, float reference_screen_height);
 
     std::string    map_path_;
     SDL_Renderer*  renderer_;
@@ -48,6 +42,6 @@ class SceneRenderer {
     bool           debugging = false;
     bool           low_quality_mode_ = false;
 
-    SDL_Texture*   scene_target_tex_    = nullptr;  // full-res scene render target
+    SDL_Texture*   scene_target_tex_    = nullptr;
 
 };

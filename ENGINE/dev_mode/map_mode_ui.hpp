@@ -20,7 +20,6 @@ struct DMButtonStyle;
 struct SDL_Renderer;
 union SDL_Event;
 
-// Coordinates interactions between map-mode floating panels (lighting, layers).
 class MapModeUI {
 public:
     enum class HeaderMode { Map, Room };
@@ -32,7 +31,7 @@ public:
         bool momentary = false;
         const DMButtonStyle* style_override = nullptr;
         std::function<void(bool)> on_toggle;
-    };
+};
 
     explicit MapModeUI(Assets* assets);
     ~MapModeUI();
@@ -58,8 +57,7 @@ public:
 
     FullScreenCollapsible* get_footer_panel() const;
     void set_footer_always_visible(bool on);
-    void set_mode_button_sets(std::vector<HeaderButtonConfig> map_buttons,
-                              std::vector<HeaderButtonConfig> room_buttons);
+    void set_mode_button_sets(std::vector<HeaderButtonConfig> map_buttons, std::vector<HeaderButtonConfig> room_buttons);
     void set_header_mode(HeaderMode mode);
     void set_button_state(const std::string& id, bool active);
     void set_button_state(HeaderMode mode, const std::string& id, bool active);
@@ -118,7 +116,4 @@ private:
     std::vector<DockableCollapsible*> floating_panels_;
     LightSaveCallback light_save_callback_;
 };
-
-
-
 

@@ -37,8 +37,7 @@ private:
     void reset_to_defaults();
     void reload_from_json();
     void apply_settings_if_needed();
-    void apply_settings_to_camera(const camera::RealismSettings& settings,
-                                  bool effects_enabled);
+    void apply_settings_to_camera(const camera::RealismSettings& settings, bool effects_enabled);
     camera::RealismSettings read_settings_from_ui() const;
 
 private:

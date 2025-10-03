@@ -41,5 +41,5 @@ inline std::vector<std::string> all_as_strings() {
     return result;
 }
 
-} // namespace asset_types
+}
 

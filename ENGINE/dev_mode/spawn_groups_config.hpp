@@ -14,11 +14,10 @@ class ButtonWidget;
 class DMButton;
 class Input;
 
-// Manages a collection of spawn group panels for an assets array
 class SpawnGroupsConfig : public DockableCollapsible {
 public:
     explicit SpawnGroupsConfig(bool floatable = true);
-    // Standalone panel controls
+
     void open(const nlohmann::json& assets, std::function<void(const nlohmann::json&)> on_close);
     void close();
     bool visible() const;
@@ -28,7 +27,6 @@ public:
     bool handle_event(const SDL_Event& e);
     void render(SDL_Renderer* r) const;
 
-    // Embedding helpers for RoomConfigurator or runtime editing
     using ConfigureEntryCallback = std::function<void(SpawnGroupsConfigPanel&, const nlohmann::json&)>;
 
     void load(nlohmann::json& assets,
@@ -45,7 +43,7 @@ public:
         std::string id;
         SDL_Point position{0, 0};
         size_t index = std::numeric_limits<size_t>::max();
-    };
+};
     std::optional<OpenSpawnGroupState> capture_open_spawn_group() const;
     void restore_open_spawn_group(const OpenSpawnGroupState& state);
     nlohmann::json to_json() const;
@@ -58,7 +56,7 @@ private:
         std::string id;
         int x = 0;
         int y = 0;
-    };
+};
     std::optional<PendingOpenRequest> pending_open_;
     struct Entry {
         std::string id;
@@ -66,7 +64,7 @@ private:
         nlohmann::json* json = nullptr;
         std::unique_ptr<DMButton> btn;
         std::unique_ptr<ButtonWidget> btn_w;
-    };
+};
     std::vector<Entry> entries_;
     nlohmann::json* assets_json_ = nullptr;
     std::function<void()> on_change_;

@@ -17,18 +17,7 @@ class Room {
 
 	public:
     typedef std::pair<int, int> Point;
-    Room(Point origin,
-         std::string type_,
-         const std::string& room_def_name,
-         Room* parent,
-         const std::string& map_dir,
-         const std::string& map_info_path,
-         AssetLibrary* asset_lib,
-         Area* precomputed_area,
-         nlohmann::json* room_data,
-         const nlohmann::json* map_assets_data,
-         double map_radius,
-         const std::string& data_section);
+    Room(Point origin, std::string type_, const std::string& room_def_name, Room* parent, const std::string& map_dir, const std::string& map_info_path, AssetLibrary* asset_lib, Area* precomputed_area, nlohmann::json* room_data, const nlohmann::json* map_assets_data, double map_radius, const std::string& data_section);
     void set_sibling_left(Room* left_room);
     void set_sibling_right(Room* right_room);
     void add_connecting_room(Room* room);

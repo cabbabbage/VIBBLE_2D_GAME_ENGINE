@@ -55,7 +55,7 @@ void Checkbox::render(SDL_Renderer* r) const {
 		rect_.y + 3,
 		box_size,
 		box_size
-	};
+};
 	SDL_Color bg = Styles::Slate(); bg.a = 160;
 	SDL_SetRenderDrawColor(r, bg.r, bg.g, bg.b, bg.a);
 	SDL_RenderFillRect(r, &box);

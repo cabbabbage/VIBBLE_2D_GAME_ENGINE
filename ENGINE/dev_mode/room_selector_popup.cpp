@@ -98,8 +98,6 @@ bool RoomSelectorPopup::handle_event(const SDL_Event& e) {
 
     layout_widgets();
 
-    // Create-new flow removed from selector
-
     for (size_t i = 0; i < buttons_.size(); ++i) {
         auto& btn = buttons_[i];
         if (!btn) continue;
@@ -139,7 +137,6 @@ void RoomSelectorPopup::render(SDL_Renderer* renderer) const {
     for (const auto& btn : buttons_) {
         if (btn) btn->render(renderer);
     }
-    // Create-new controls removed
 
     if (was_clipping == SDL_TRUE) {
         SDL_RenderSetClipRect(renderer, &prev_clip);
@@ -182,7 +179,7 @@ void RoomSelectorPopup::ensure_geometry() const {
         total += static_cast<int>(rooms_.size()) * (button_height + spacing);
         total -= spacing;
     }
-    // No create-new section appended
+
     total += margin;
 
     content_height_ = total;
@@ -217,10 +214,7 @@ void RoomSelectorPopup::layout_widgets() const {
         }
     }
 
-    // No create-new layout below list
 }
-
-// create-room flow removed
 
 void RoomSelectorPopup::scroll_by(int delta) {
     if (delta == 0) return;

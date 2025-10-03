@@ -103,4 +103,4 @@ inline std::string monospace() {
 #endif
 }
 
-} // namespace ui_fonts
+}

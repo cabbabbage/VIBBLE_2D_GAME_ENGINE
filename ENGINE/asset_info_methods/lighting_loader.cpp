@@ -16,7 +16,7 @@ void LightingLoader::load(AssetInfo& info, const json& data) {
         struct ParsedLight {
                 LightSource light;
                 int factor_percent = 100;
-        };
+};
         auto parse_light = [](const json& l) -> std::optional<ParsedLight> {
                 if (!l.is_object() || !l.value("has_light_source", false))
                 return std::nullopt;
@@ -44,7 +44,7 @@ void LightingLoader::load(AssetInfo& info, const json& data) {
                         light.color.b = l["light_color"][2].get<int>();
                 }
                 return parsed;
-        };
+};
         auto append_light = [&](const ParsedLight& parsed) {
                 info.has_light_source = true;
                 const LightSource& light = parsed.light;
@@ -56,7 +56,7 @@ void LightingLoader::load(AssetInfo& info, const json& data) {
                 } else {
                         info.light_sources.push_back(light);
                 }
-        };
+};
         if (linfo.is_array()) {
                 for (const auto& l : linfo) {
                         auto maybe = parse_light(l);

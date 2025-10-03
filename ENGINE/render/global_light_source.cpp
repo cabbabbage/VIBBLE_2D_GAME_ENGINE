@@ -52,7 +52,7 @@ bool Global_Light_Source::load_from_map_light(const std::string& map_path) {
         if (map_path.empty()) {
                 return false;
         }
-        // Map light configuration now lives inside map_info.json under key "map_light_data".
+
         std::ifstream in(map_path + "/map_info.json");
         if (!in.is_open()) {
                 std::cerr << "[MapLight] Failed to open map_info.json in " << map_path << "\n";
@@ -67,7 +67,7 @@ bool Global_Light_Source::load_from_map_light(const std::string& map_path) {
         }
         auto it = j.find("map_light_data");
         if (it == j.end() || !it->is_object()) {
-                // No map light data present; allow caller to fall back to defaults.
+
                 std::cerr << "[MapLight] map_info.json has no valid map_light_data object. Using defaults.\n";
                 return false;
         }
@@ -120,11 +120,7 @@ void Global_Light_Source::apply_config(const json& data) {
                         const auto& col = entry[1];
                         if (!col.is_array() || col.size() < 4) continue;
                         SDL_Color c{
-                                static_cast<Uint8>(std::clamp(col[0].get<int>(), 0, 255)),
-                                static_cast<Uint8>(std::clamp(col[1].get<int>(), 0, 255)),
-                                static_cast<Uint8>(std::clamp(col[2].get<int>(), 0, 255)),
-                                static_cast<Uint8>(std::clamp(col[3].get<int>(), 0, 255))
-                        };
+                                static_cast<Uint8>(std::clamp(col[0].get<int>(), 0, 255)), static_cast<Uint8>(std::clamp(col[1].get<int>(), 0, 255)), static_cast<Uint8>(std::clamp(col[2].get<int>(), 0, 255)), static_cast<Uint8>(std::clamp(col[3].get<int>(), 0, 255)) };
                         key_colors_.push_back({deg, clamp_color_alpha(c)});
                 }
         }
@@ -216,7 +212,7 @@ SDL_Color Global_Light_Source::compute_color_from_horizon() const {
 
 	auto lerp = [](Uint8 A, Uint8 B, float t){
 		return Uint8(A + (B - A) * t);
-	};
+};
 
 	if (key_colors_.size() < 2) {
 		return key_colors_.empty() ? base_color_ : key_colors_.front().color;
