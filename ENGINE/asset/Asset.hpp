@@ -20,6 +20,7 @@ class Input;
 class AnimationFrame;
 class AssetInfoUI;
 class RenderAsset;
+class AssetList;
 
 struct StaticLight {
     LightSource* source = nullptr;
@@ -66,8 +67,12 @@ class Asset {
     void set_camera(camera* v) { window = v; }
     void set_assets(Assets* a);
     Assets* get_assets() const { return assets_; }
+    AssetList* get_neighbors_list();
+    const AssetList* get_neighbors_list() const;
+    AssetList* get_impassable_naighbors();
+    const AssetList* get_impassable_naighbors() const;
     void deactivate();
-
+    int NeighborSearchRadius;
     void set_hidden(bool state);
     bool is_hidden();
     void Delete();
@@ -92,7 +97,7 @@ class Asset {
     std::vector<Asset*> children;
     std::vector<StaticLight> static_lights;
     int depth = 0;
-    bool has_shading = false;
+    bool is_shaded = false;
     bool dead = false;
     bool static_frame = true;
     int cached_w = 0;
@@ -118,6 +123,11 @@ class Asset {
     SDL_Texture* final_texture = nullptr;
     Assets* assets_ = nullptr;
     std::unique_ptr<AssetController>   controller_;
+    std::unique_ptr<AssetList> neighbors;
+    AssetList* impassable_naighbors = nullptr; // non-owning child of neighbors
+    SDL_Point last_neighbor_origin_{ std::numeric_limits<int>::min(), std::numeric_limits<int>::min() };
+    bool neighbor_lists_initialized_ = false;
+    void update_neighbor_lists(bool force_update);
 
     struct DownscaleCacheEntry {
         float        scale   = 1.0f;

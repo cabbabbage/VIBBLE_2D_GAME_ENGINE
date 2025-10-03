@@ -77,7 +77,7 @@ void LightMap::collect_layers(std::vector<LightEntry>& out, std::mt19937& rng) {
 	}
         const float main_brightness = static_cast<float>(main_light_.get_brightness());
         for (Asset* a : active) {
-                if (!a || !a->info || !a->info->has_light_source) continue;
+                if (!a || !a->info || !a->info->is_light_source) continue;
                 for (auto& light : a->info->light_sources) {
                         if (!light.texture) continue;
                         int offX = a->flipped ? -light.offset_x : light.offset_x;

@@ -13,20 +13,60 @@
 #include "asset/asset_types.hpp"
 #include "core/AssetsManager.hpp"
 #include "render/camera.hpp"
-#include "room/room.hpp"
+#include "map_generation/room.hpp"
 #include "utils/input.hpp"
 
 #include <algorithm>
 #include <utility>
 #include <cctype>
 #include <string>
-#include <limits>
 #include <vector>
 #include <fstream>
 #include <nlohmann/json.hpp>
 
 using devmode::sdl::event_point;
 using devmode::sdl::is_pointer_event;
+
+namespace {
+
+std::string to_lower_copy(std::string value) {
+    std::transform(value.begin(), value.end(), value.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    return value;
+}
+
+bool is_trail_room(const Room* room) {
+    if (!room || room->type.empty()) {
+        return false;
+    }
+    return to_lower_copy(room->type) == "trail";
+}
+
+template <class Modal>
+bool consume_modal_event(Modal* modal,
+                         const SDL_Event& event,
+                         const SDL_Point& pointer,
+                         bool pointer_relevant,
+                         Input* input) {
+    if (!modal || !modal->visible()) {
+        return false;
+    }
+    if (modal->handle_event(event)) {
+        if (input) {
+            input->consumeEvent(event);
+        }
+        return true;
+    }
+    if (pointer_relevant && modal->is_point_inside(pointer.x, pointer.y)) {
+        if (input) {
+            input->consumeEvent(event);
+        }
+        return true;
+    }
+    return false;
+}
+
+}  // namespace
 
 class RegenerateRoomPopup {
 public:
@@ -44,16 +84,15 @@ public:
             return;
         }
         const int margin = DMSpacing::item_gap();
-        const int button_height = DMButton::height();
         const int spacing = DMSpacing::small_gap();
+        const int button_height = DMButton::height();
         const int button_width = std::max(220, screen_w / 6);
         rect_.w = button_width + margin * 2;
-        rect_.h = margin + static_cast<int>(rooms_.size()) * (button_height + spacing);
-        rect_.h += margin - spacing;
+        const int total_buttons = static_cast<int>(rooms_.size());
+        const int content_height = total_buttons * button_height + std::max(0, total_buttons - 1) * spacing;
+        rect_.h = margin * 2 + content_height;
         const int max_height = std::max(240, screen_h - DMSpacing::panel_padding() * 2);
-        if (rect_.h > max_height) {
-            rect_.h = max_height;
-        }
+        rect_.h = std::min(rect_.h, max_height);
         rect_.x = std::max(16, screen_w - rect_.w - DMSpacing::panel_padding());
         rect_.y = DMSpacing::panel_padding();
 
@@ -92,8 +131,11 @@ public:
         }
 
         bool used = false;
-        SDL_Rect btn_rect{ rect_.x + DMSpacing::item_gap(),
-                           rect_.y + DMSpacing::item_gap(), rect_.w - DMSpacing::item_gap() * 2, DMButton::height() };
+        const int margin = DMSpacing::item_gap();
+        const int spacing = DMSpacing::small_gap();
+        const int button_height = DMButton::height();
+        SDL_Rect btn_rect{ rect_.x + margin, rect_.y + margin, rect_.w - margin * 2, button_height };
+        const int bottom = rect_.y + rect_.h - margin;
         for (size_t i = 0; i < buttons_.size(); ++i) {
             auto& btn = buttons_[i];
             if (!btn) continue;
@@ -105,8 +147,8 @@ public:
                     close();
                 }
             }
-            btn_rect.y += DMButton::height() + DMSpacing::small_gap();
-            if (btn_rect.y + DMButton::height() > rect_.y + rect_.h - DMSpacing::item_gap()) {
+            btn_rect.y += button_height + spacing;
+            if (btn_rect.y + button_height > bottom) {
                 break;
             }
         }
@@ -122,14 +164,17 @@ public:
         SDL_Color border = DMStyles::Border();
         SDL_SetRenderDrawColor(renderer, border.r, border.g, border.b, border.a);
         SDL_RenderDrawRect(renderer, &rect_);
-        SDL_Rect btn_rect{ rect_.x + DMSpacing::item_gap(),
-                           rect_.y + DMSpacing::item_gap(), rect_.w - DMSpacing::item_gap() * 2, DMButton::height() };
+        const int margin = DMSpacing::item_gap();
+        const int spacing = DMSpacing::small_gap();
+        const int button_height = DMButton::height();
+        SDL_Rect btn_rect{ rect_.x + margin, rect_.y + margin, rect_.w - margin * 2, button_height };
+        const int bottom = rect_.y + rect_.h - margin;
         for (const auto& btn : buttons_) {
             if (!btn) continue;
             btn->set_rect(btn_rect);
             btn->render(renderer);
-            btn_rect.y += DMButton::height() + DMSpacing::small_gap();
-            if (btn_rect.y > rect_.y + rect_.h - DMSpacing::item_gap()) {
+            btn_rect.y += button_height + spacing;
+            if (btn_rect.y > bottom) {
                 break;
             }
         }
@@ -424,71 +469,54 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
 
     const bool pointer_event = is_pointer_event(event);
     const bool wheel_event = (event.type == SDL_MOUSEWHEEL);
+    const bool pointer_relevant = pointer_event || wheel_event;
     SDL_Point pointer{0, 0};
-    if (pointer_event || wheel_event) {
+    if (pointer_relevant) {
         pointer = event_point(event);
     }
 
-    if (pointer_event) {
-        if (asset_filter_.handle_event(event)) {
-            if (input_) input_->consumeEvent(event);
-            return;
+    auto consume = [&](bool used) {
+        if (used && input_) {
+            input_->consumeEvent(event);
         }
+        return used;
+    };
+
+    if (pointer_event && consume(asset_filter_.handle_event(event))) {
+        return;
     }
-    if ((pointer_event || wheel_event) && enabled_ && asset_filter_.contains_point(pointer.x, pointer.y)) {
-        if (input_) input_->consumeEvent(event);
+    if (pointer_relevant && enabled_ && asset_filter_.contains_point(pointer.x, pointer.y)) {
+        consume(true);
         return;
     }
 
-    if (trail_suite_ && trail_suite_->handle_event(event)) {
-        if (input_) input_->consumeEvent(event);
-        return;
-    }
-    if ((pointer_event || wheel_event) && trail_suite_ && trail_suite_->contains_point(pointer.x, pointer.y)) {
-        if (input_) input_->consumeEvent(event);
-        return;
-    }
-
-    if (map_assets_modal_ && map_assets_modal_->visible()) {
-        if (map_assets_modal_->handle_event(event)) {
-            if (input_) input_->consumeEvent(event);
+    if (trail_suite_ && trail_suite_->is_open()) {
+        if (consume(trail_suite_->handle_event(event))) {
             return;
         }
-        if ((pointer_event || wheel_event) && map_assets_modal_->is_point_inside(pointer.x, pointer.y)) {
-            if (input_) input_->consumeEvent(event);
-            return;
-        }
-    }
-    if (boundary_assets_modal_ && boundary_assets_modal_->visible()) {
-        if (boundary_assets_modal_->handle_event(event)) {
-            if (input_) input_->consumeEvent(event);
-            return;
-        }
-        if ((pointer_event || wheel_event) && boundary_assets_modal_->is_point_inside(pointer.x, pointer.y)) {
-            if (input_) input_->consumeEvent(event);
+        if (pointer_relevant && trail_suite_->contains_point(pointer.x, pointer.y)) {
+            consume(true);
             return;
         }
     }
 
-    if (regenerate_popup_ && regenerate_popup_->visible()) {
-        if (regenerate_popup_->handle_event(event)) {
-            if (input_) input_->consumeEvent(event);
-            return;
-        }
-        if ((pointer_event || wheel_event) && regenerate_popup_->is_point_inside(pointer.x, pointer.y)) {
-            if (input_) input_->consumeEvent(event);
-            return;
-        }
+    if (consume_modal_event(map_assets_modal_.get(), event, pointer, pointer_relevant, input_)) {
+        return;
+    }
+    if (consume_modal_event(boundary_assets_modal_.get(), event, pointer, pointer_relevant, input_)) {
+        return;
+    }
+    if (consume_modal_event(regenerate_popup_.get(), event, pointer, pointer_relevant, input_)) {
+        return;
     }
 
     const bool can_route_room_editor = (mode_ != Mode::MapEditor) && can_use_room_editor_ui() && room_editor_;
-    const bool pointer_over_room_ui = can_route_room_editor && (pointer_event || wheel_event) && room_editor_->is_room_ui_blocking_point(pointer.x, pointer.y);
+    const bool pointer_over_room_ui = can_route_room_editor && pointer_relevant &&
+                                      room_editor_->is_room_ui_blocking_point(pointer.x, pointer.y);
 
     if (pointer_over_room_ui) {
         room_editor_->handle_sdl_event(event);
-        if (input_) {
-            input_->consumeEvent(event);
-        }
+        consume(true);
         return;
     }
 
@@ -515,8 +543,7 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
     }
 
     if (camera_panel_ && camera_panel_->is_visible()) {
-        if (camera_panel_->handle_event(event)) {
-            if (input_) input_->consumeEvent(event);
+        if (consume(camera_panel_->handle_event(event))) {
             return;
         }
     }
@@ -526,20 +553,17 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
         block_for_camera = true;
     }
     if (block_for_camera) {
-        if (input_) input_->consumeEvent(event);
+        consume(true);
         return;
     }
 
     if (!pointer_over_room_ui && map_mode_ui_) {
-        if (map_mode_ui_->handle_event(event)) {
-            if (input_) input_->consumeEvent(event);
+        if (consume(map_mode_ui_->handle_event(event))) {
             return;
         }
-        if (pointer_event || wheel_event) {
-            if (map_mode_ui_->is_point_inside(pointer.x, pointer.y)) {
-                if (input_) input_->consumeEvent(event);
-                return;
-            }
+        if (pointer_relevant && map_mode_ui_->is_point_inside(pointer.x, pointer.y)) {
+            consume(true);
+            return;
         }
     }
 
@@ -548,9 +572,7 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
     }
 
     if (can_route_room_editor && room_editor_->handle_sdl_event(event)) {
-        if (input_) {
-            input_->consumeEvent(event);
-        }
+        consume(true);
         return;
     }
 }
@@ -958,18 +980,7 @@ void DevControls::toggle_map_assets_modal() {
     } else {
         map_assets_modal_->set_screen_dimensions(screen_w_, screen_h_);
     }
-    auto save = [this]() {
-        try {
-            const std::string& path = assets_->map_info_path();
-            if (!path.empty()) {
-                std::ofstream out(path);
-                if (out.is_open()) {
-                    out << assets_->map_info_json().dump(2);
-                    out.close();
-                }
-            }
-        } catch (...) {}
-};
+    auto save = [this]() { persist_map_info_to_disk(); };
     auto& map_json = assets_->map_info_json();
     SDL_Color color{200, 200, 255, 255};
     map_assets_modal_->open(map_json, "map_assets_data", "batch_map_assets", "Map-wide", color, save);
@@ -984,18 +995,7 @@ void DevControls::toggle_boundary_assets_modal() {
     } else {
         boundary_assets_modal_->set_screen_dimensions(screen_w_, screen_h_);
     }
-    auto save = [this]() {
-        try {
-            const std::string& path = assets_->map_info_path();
-            if (!path.empty()) {
-                std::ofstream out(path);
-                if (out.is_open()) {
-                    out << assets_->map_info_json().dump(2);
-                    out.close();
-                }
-            }
-        } catch (...) {}
-};
+    auto save = [this]() { persist_map_info_to_disk(); };
     auto& map_json = assets_->map_info_json();
     SDL_Color color{255, 200, 120, 255};
     boundary_assets_modal_->open(map_json, "map_boundary_data", "batch_map_boundary", "Boundary", color, save);
@@ -1013,13 +1013,8 @@ void DevControls::open_regenerate_room_popup() {
     for (Room* room : *rooms_) {
         if (!room || room == current_room_) continue;
         if (!room->room_area) continue;
-        if (!room->type.empty()) {
-            std::string lowered = room->type;
-            std::transform(lowered.begin(), lowered.end(), lowered.begin(),
-                           [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-            if (lowered == "trail") {
-                continue;
-            }
+        if (is_trail_room(room)) {
+            continue;
         }
         std::string name = room->room_name.empty() ? std::string("<unnamed>") : room->room_name;
         entries.emplace_back(std::move(name), room);
@@ -1031,11 +1026,7 @@ void DevControls::open_regenerate_room_popup() {
     }
 
     std::sort(entries.begin(), entries.end(), [](const auto& a, const auto& b) {
-        std::string la = a.first;
-        std::string lb = b.first;
-        std::transform(la.begin(), la.end(), la.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-        std::transform(lb.begin(), lb.end(), lb.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-        return la < lb;
+        return to_lower_copy(a.first) < to_lower_copy(b.first);
     });
 
     if (!regenerate_popup_) {
@@ -1142,12 +1133,7 @@ void DevControls::handle_map_selection() {
     if (!selected) return;
 
     map_editor_->focus_on_room(selected);
-    std::string type = selected->type;
-    std::transform(type.begin(), type.end(), type.begin(), [](unsigned char c) {
-        return static_cast<char>(std::tolower(c));
-    });
-    const bool is_trail = (type == "trail");
-    if (is_trail) {
+    if (is_trail_room(selected)) {
         if (trail_suite_) {
             trail_suite_->open(selected);
         }
@@ -1235,5 +1221,23 @@ bool DevControls::passes_asset_filters(Asset* asset) const {
         return false;
     }
     return asset_filter_.passes(*asset);
+}
+
+void DevControls::persist_map_info_to_disk() const {
+    if (!assets_) {
+        return;
+    }
+    try {
+        const std::string& path = assets_->map_info_path();
+        if (path.empty()) {
+            return;
+        }
+        std::ofstream out(path);
+        if (!out.is_open()) {
+            return;
+        }
+        out << assets_->map_info_json().dump(2);
+    } catch (...) {
+    }
 }
 

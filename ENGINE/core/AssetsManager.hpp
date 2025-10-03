@@ -9,7 +9,7 @@
 #include <memory>
 #include <deque>
 #include <nlohmann/json.hpp>
-#include "room/room.hpp"
+#include "map_generation/room.hpp"
 
 class Asset;
 class SceneRenderer;

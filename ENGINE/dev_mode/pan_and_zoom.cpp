@@ -20,7 +20,7 @@ void PanAndZoom::handle_input(camera& cam, const Input& input, bool pan_blocked)
         } else if (wheel_y < 0) {
             eff = 1.0 / std::pow(step, -wheel_y);
         }
-        const int base = 18;
+        const int base = 10;
         const int dur = std::max(6, base - 2 * std::min(6, std::abs(wheel_y)));
         cam.animate_zoom_multiply(eff, dur);
     }

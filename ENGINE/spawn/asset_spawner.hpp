@@ -8,7 +8,7 @@
 #include <nlohmann/json.hpp>
 #include "utils/area.hpp"
 #include "asset/Asset.hpp"
-#include "room/room.hpp"
+#include "map_generation/room.hpp"
 #include "asset/asset_info.hpp"
 #include "asset/asset_library.hpp"
 #include "asset_spawn_planner.hpp"

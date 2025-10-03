@@ -4,7 +4,7 @@
 #include "FloatingDockableManager.hpp"
 #include "tag_editor_widget.hpp"
 #include "tag_utils.hpp"
-#include "room/room.hpp"
+#include "map_generation/room.hpp"
 #include "utils/input.hpp"
 #include "widgets.hpp"
 
@@ -126,6 +126,26 @@ std::optional<int> find_dimension_value(const nlohmann::json& object,
         }
     }
     return std::nullopt;
+}
+
+std::optional<int> read_radius_value(const nlohmann::json& object) {
+    if (!object.is_object()) {
+        return std::nullopt;
+    }
+    if (auto value = read_json_int(object, "radius")) {
+        return std::max(0, *value);
+    }
+    return std::nullopt;
+}
+
+int infer_radius_from_dimensions(int w_min, int w_max, int h_min, int h_max) {
+    int diameter = 0;
+    diameter = std::max(diameter, std::max(w_min, w_max));
+    diameter = std::max(diameter, std::max(h_min, h_max));
+    if (diameter <= 0) {
+        return 0;
+    }
+    return std::max(0, diameter / 2);
 }
 }
 
@@ -312,6 +332,25 @@ void RoomConfigurator::load_from_json(const nlohmann::json& data) {
         room_geom_ = 0;
     }
 
+    bool geometry_is_circle = false;
+    if (!geom.empty()) {
+        std::string lowered = geom;
+        std::transform(lowered.begin(), lowered.end(), lowered.begin(), [](unsigned char ch) {
+            return static_cast<char>(std::tolower(ch));
+        });
+        geometry_is_circle = (lowered == "circle");
+    }
+
+    room_radius_ = 0;
+    if (geometry_is_circle) {
+        if (auto radius_value = read_radius_value(loaded_json_)) {
+            room_radius_ = *radius_value;
+        } else {
+            room_radius_ = infer_radius_from_dimensions(room_w_min_, room_w_max_, room_h_min_, room_h_max_);
+        }
+        if (room_radius_ < 0) room_radius_ = 0;
+    }
+
     room_is_spawn_ = loaded_json_.value("is_spawn", false);
     room_is_boss_ = loaded_json_.value("is_boss", false);
     room_inherits_assets_ = loaded_json_.value("inherits_map_assets", false);
@@ -444,22 +483,62 @@ bool RoomConfigurator::refresh_spawn_groups(const nlohmann::json& data) {
 
     bool dims_changed = (new_w_min != room_w_min_) || (new_w_max != room_w_max_) || (new_h_min != room_h_min_) || (new_h_max != room_h_max_);
 
+    std::string geometry = selected_geometry();
+    std::string lowered_geom;
+    lowered_geom.reserve(geometry.size());
+    for (char ch : geometry) {
+        lowered_geom.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(ch))));
+    }
+    bool is_circle_geom = (lowered_geom == "circle");
+
+    int new_radius = room_radius_;
+    bool radius_changed = false;
+    if (is_circle_geom) {
+        if (auto radius_value = read_radius_value(data)) {
+            new_radius = *radius_value;
+            radius_changed = (new_radius != room_radius_);
+        } else if (dims_changed || room_radius_ <= 0) {
+            int inferred = infer_radius_from_dimensions(new_w_min, new_w_max, new_h_min, new_h_max);
+            if (inferred != room_radius_) {
+                new_radius = inferred;
+                radius_changed = true;
+            }
+        }
+    }
+
     room_w_min_ = new_w_min;
     room_w_max_ = new_w_max;
     room_h_min_ = new_h_min;
     room_h_max_ = new_h_max;
-
-    if (have_w_min || have_w_max || dims_changed) {
-        loaded_json_["min_width"] = room_w_min_;
-        loaded_json_["width_min"] = room_w_min_;
-        loaded_json_["max_width"] = room_w_max_;
-        loaded_json_["width_max"] = room_w_max_;
+    if (is_circle_geom && new_radius >= 0) {
+        room_radius_ = new_radius;
     }
-    if (have_h_min || have_h_max || dims_changed) {
-        loaded_json_["min_height"] = room_h_min_;
-        loaded_json_["height_min"] = room_h_min_;
-        loaded_json_["max_height"] = room_h_max_;
-        loaded_json_["height_max"] = room_h_max_;
+
+    if (is_circle_geom) {
+        int diameter = std::max(0, room_radius_) * 2;
+        loaded_json_["radius"] = room_radius_;
+        loaded_json_["min_width"] = diameter;
+        loaded_json_["width_min"] = diameter;
+        loaded_json_["max_width"] = diameter;
+        loaded_json_["width_max"] = diameter;
+        loaded_json_["min_height"] = diameter;
+        loaded_json_["height_min"] = diameter;
+        loaded_json_["max_height"] = diameter;
+        loaded_json_["height_max"] = diameter;
+    } else {
+        if (have_w_min || have_w_max || dims_changed) {
+            loaded_json_["min_width"] = room_w_min_;
+            loaded_json_["width_min"] = room_w_min_;
+            loaded_json_["max_width"] = room_w_max_;
+            loaded_json_["width_max"] = room_w_max_;
+        }
+        if (have_h_min || have_h_max || dims_changed) {
+            loaded_json_["min_height"] = room_h_min_;
+            loaded_json_["height_min"] = room_h_min_;
+            loaded_json_["max_height"] = room_h_max_;
+            loaded_json_["height_max"] = room_h_max_;
+        }
+        loaded_json_.erase("radius");
     }
 
     const char* target_key = spawn_groups_from_assets_ ? "assets" : "spawn_groups";
@@ -482,11 +561,13 @@ bool RoomConfigurator::refresh_spawn_groups(const nlohmann::json& data) {
             loaded_json_.erase("assets");
         }
     }
+    bool dims_or_radius_changed = dims_changed || radius_changed;
+
     if (groups_changed) {
         rebuild_rows();
         return true;
     }
-    if (dims_changed) {
+    if (dims_or_radius_changed) {
         rebuild_rows();
         return true;
     }
@@ -598,30 +679,58 @@ void RoomConfigurator::rebuild_rows() {
 
     if (allow_dimension_sliders) {
 
-        room_w_label_ = std::make_unique<RoomConfigLabel>("Width (Min/Max)");
-        rows.push_back({ room_w_label_.get() });
-        auto width_bounds = compute_slider_range(room_w_min_, room_w_max_);
-        room_w_slider_ = std::make_unique<DMRangeSlider>(width_bounds.first, width_bounds.second, room_w_min_, room_w_max_);
-        room_w_slider_w_ = std::make_unique<RangeSliderWidget>(room_w_slider_.get());
-        rows.push_back({ room_w_slider_w_.get() });
+        std::string geom_name = selected_geometry();
+        std::string lowered_geom;
+        lowered_geom.reserve(geom_name.size());
+        for (char ch : geom_name) {
+            lowered_geom.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(ch))));
+        }
+        bool is_circle_geom = (lowered_geom == "circle");
 
-        if (!is_trail_context_) {
-            room_h_label_ = std::make_unique<RoomConfigLabel>("Height (Min/Max)");
-            rows.push_back({ room_h_label_.get() });
-            auto height_bounds = compute_slider_range(room_h_min_, room_h_max_);
-            room_h_slider_ = std::make_unique<DMRangeSlider>(height_bounds.first, height_bounds.second, room_h_min_, room_h_max_);
-            room_h_slider_w_ = std::make_unique<RangeSliderWidget>(room_h_slider_.get());
-            rows.push_back({ room_h_slider_w_.get() });
-        } else {
+        if (is_circle_geom) {
+            room_w_label_.reset();
+            room_w_slider_.reset();
+            room_w_slider_w_.reset();
+            room_h_label_.reset();
             room_h_slider_.reset();
             room_h_slider_w_.reset();
-            room_h_label_.reset();
+
+            int radius_value = std::max(0, room_radius_);
+            auto radius_bounds = compute_slider_range(radius_value, radius_value);
+            room_radius_slider_ = std::make_unique<DMSlider>("Radius", radius_bounds.first, radius_bounds.second, radius_value);
+            room_radius_slider_w_ = std::make_unique<SliderWidget>(room_radius_slider_.get());
+            rows.push_back({ room_radius_slider_w_.get() });
+        } else {
+            room_radius_slider_.reset();
+            room_radius_slider_w_.reset();
+
+            room_w_label_ = std::make_unique<RoomConfigLabel>("Width (Min/Max)");
+            rows.push_back({ room_w_label_.get() });
+            auto width_bounds = compute_slider_range(room_w_min_, room_w_max_);
+            room_w_slider_ = std::make_unique<DMRangeSlider>(width_bounds.first, width_bounds.second, room_w_min_, room_w_max_);
+            room_w_slider_w_ = std::make_unique<RangeSliderWidget>(room_w_slider_.get());
+            rows.push_back({ room_w_slider_w_.get() });
+
+            if (!is_trail_context_) {
+                room_h_label_ = std::make_unique<RoomConfigLabel>("Height (Min/Max)");
+                rows.push_back({ room_h_label_.get() });
+                auto height_bounds = compute_slider_range(room_h_min_, room_h_max_);
+                room_h_slider_ = std::make_unique<DMRangeSlider>(height_bounds.first, height_bounds.second, room_h_min_, room_h_max_);
+                room_h_slider_w_ = std::make_unique<RangeSliderWidget>(room_h_slider_.get());
+                rows.push_back({ room_h_slider_w_.get() });
+            } else {
+                room_h_slider_.reset();
+                room_h_slider_w_.reset();
+                room_h_label_.reset();
+            }
         }
     } else {
         room_w_slider_.reset();
         room_w_slider_w_.reset();
         room_h_slider_.reset();
         room_h_slider_w_.reset();
+        room_radius_slider_.reset();
+        room_radius_slider_w_.reset();
     }
 
     int geom_index = room_geom_options_.empty() ? 0 : std::clamp(room_geom_, 0, static_cast<int>(room_geom_options_.size()) - 1);
@@ -808,12 +917,21 @@ void RoomConfigurator::update(const Input& input, int screen_w, int screen_h) {
         }
     }
 
+    if (room_radius_slider_) {
+        int new_radius = std::max(0, room_radius_slider_->value());
+        if (new_radius != room_radius_) {
+            room_radius_ = new_radius;
+            changed = true;
+        }
+    }
+
     if (room_geom_dd_ && !room_geom_options_.empty()) {
         int selected = room_geom_dd_->selected();
         selected = std::clamp(selected, 0, static_cast<int>(room_geom_options_.size()) - 1);
         if (selected != room_geom_) {
             room_geom_ = selected;
             changed = true;
+            rebuild_rows();
         }
     }
 
@@ -865,15 +983,38 @@ void RoomConfigurator::update(const Input& input, int screen_w, int screen_h) {
         if (!loaded_json_.is_object()) {
             loaded_json_ = nlohmann::json::object();
         }
+        std::string geometry = selected_geometry();
+        std::string lowered_geom;
+        lowered_geom.reserve(geometry.size());
+        for (char ch : geometry) {
+            lowered_geom.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(ch))));
+        }
+        bool is_circle_geom = (lowered_geom == "circle");
         loaded_json_["name"] = room_name_;
-        loaded_json_["min_width"] = room_w_min_;
-        loaded_json_["max_width"] = room_w_max_;
-        loaded_json_["width_min"] = room_w_min_;
-        loaded_json_["width_max"] = room_w_max_;
-        loaded_json_["min_height"] = room_h_min_;
-        loaded_json_["max_height"] = room_h_max_;
-        loaded_json_["height_min"] = room_h_min_;
-        loaded_json_["height_max"] = room_h_max_;
+        if (is_circle_geom) {
+            int diameter = std::max(0, room_radius_) * 2;
+            room_w_min_ = room_w_max_ = diameter;
+            room_h_min_ = room_h_max_ = diameter;
+            loaded_json_["radius"] = room_radius_;
+            loaded_json_["min_width"] = diameter;
+            loaded_json_["max_width"] = diameter;
+            loaded_json_["width_min"] = diameter;
+            loaded_json_["width_max"] = diameter;
+            loaded_json_["min_height"] = diameter;
+            loaded_json_["max_height"] = diameter;
+            loaded_json_["height_min"] = diameter;
+            loaded_json_["height_max"] = diameter;
+        } else {
+            loaded_json_.erase("radius");
+            loaded_json_["min_width"] = room_w_min_;
+            loaded_json_["max_width"] = room_w_max_;
+            loaded_json_["width_min"] = room_w_min_;
+            loaded_json_["width_max"] = room_w_max_;
+            loaded_json_["min_height"] = room_h_min_;
+            loaded_json_["max_height"] = room_h_max_;
+            loaded_json_["height_min"] = room_h_min_;
+            loaded_json_["height_max"] = room_h_max_;
+        }
         loaded_json_["geometry"] = selected_geometry();
         loaded_json_["is_spawn"] = room_is_spawn_;
         loaded_json_["is_boss"] = room_is_boss_;
@@ -887,14 +1028,30 @@ void RoomConfigurator::update(const Input& input, int screen_w, int screen_h) {
         if (room_) {
             auto& r = room_->assets_data();
             r["name"] = room_name_;
-            r["min_width"] = room_w_min_;
-            r["max_width"] = room_w_max_;
-            r["width_min"] = room_w_min_;
-            r["width_max"] = room_w_max_;
-            r["min_height"] = room_h_min_;
-            r["max_height"] = room_h_max_;
-            r["height_min"] = room_h_min_;
-            r["height_max"] = room_h_max_;
+            if (is_circle_geom) {
+                int diameter = std::max(0, room_radius_) * 2;
+                r["radius"] = room_radius_;
+                r["min_width"] = diameter;
+                r["max_width"] = diameter;
+                r["width_min"] = diameter;
+                r["width_max"] = diameter;
+                r["min_height"] = diameter;
+                r["max_height"] = diameter;
+                r["height_min"] = diameter;
+                r["height_max"] = diameter;
+            } else {
+                if (r.contains("radius")) {
+                    r.erase("radius");
+                }
+                r["min_width"] = room_w_min_;
+                r["max_width"] = room_w_max_;
+                r["width_min"] = room_w_min_;
+                r["width_max"] = room_w_max_;
+                r["min_height"] = room_h_min_;
+                r["max_height"] = room_h_max_;
+                r["height_min"] = room_h_min_;
+                r["height_max"] = room_h_max_;
+            }
             r["geometry"] = selected_geometry();
             r["is_spawn"] = room_is_spawn_;
             r["is_boss"] = room_is_boss_;
@@ -939,14 +1096,35 @@ void RoomConfigurator::render(SDL_Renderer* r) const {
 nlohmann::json RoomConfigurator::build_json() const {
     nlohmann::json result = loaded_json_.is_object() ? loaded_json_ : nlohmann::json::object();
     result["name"] = room_name_;
-    result["min_width"] = room_w_min_;
-    result["max_width"] = room_w_max_;
-    result["width_min"] = room_w_min_;
-    result["width_max"] = room_w_max_;
-    result["min_height"] = room_h_min_;
-    result["max_height"] = room_h_max_;
-    result["height_min"] = room_h_min_;
-    result["height_max"] = room_h_max_;
+    std::string geometry = selected_geometry();
+    std::string lowered_geom;
+    lowered_geom.reserve(geometry.size());
+    for (char ch : geometry) {
+        lowered_geom.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(ch))));
+    }
+    bool is_circle_geom = (lowered_geom == "circle");
+    if (is_circle_geom) {
+        int diameter = std::max(0, room_radius_) * 2;
+        result["radius"] = room_radius_;
+        result["min_width"] = diameter;
+        result["max_width"] = diameter;
+        result["width_min"] = diameter;
+        result["width_max"] = diameter;
+        result["min_height"] = diameter;
+        result["max_height"] = diameter;
+        result["height_min"] = diameter;
+        result["height_max"] = diameter;
+    } else {
+        result.erase("radius");
+        result["min_width"] = room_w_min_;
+        result["max_width"] = room_w_max_;
+        result["width_min"] = room_w_min_;
+        result["width_max"] = room_w_max_;
+        result["min_height"] = room_h_min_;
+        result["max_height"] = room_h_max_;
+        result["height_min"] = room_h_min_;
+        result["height_max"] = room_h_max_;
+    }
     result["geometry"] = selected_geometry();
     result["is_spawn"] = room_is_spawn_;
     result["is_boss"] = room_is_boss_;

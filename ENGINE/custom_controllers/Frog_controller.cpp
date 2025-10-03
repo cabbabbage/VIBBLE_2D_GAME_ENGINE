@@ -2,12 +2,40 @@
 #include "asset/Asset.hpp"
 #include "core/AssetsManager.hpp"
 #include "utils/range_util.hpp"
-
+#include <algorithm>
 FrogController::FrogController(Assets* assets, Asset* self)
     : assets_(assets), self_(self) {
     if (self_ && self_->anim_) {
-        self_->anim_->set_idle(40, 80, 5);
+        self_->anim_->set_idle(idle_ratio_);
+        state_ = State::Idle;
+        last_run_target_ = nullptr;
     }
+}
+
+void FrogController::enter_idle(int rest_ratio) {
+    if (!self_ || !self_->anim_) {
+        return;
+    }
+    const int clamped = std::clamp(rest_ratio, 0, 100);
+    if (state_ == State::Idle && idle_ratio_ == clamped) {
+        return;
+    }
+    idle_ratio_ = clamped;
+    state_ = State::Idle;
+    last_run_target_ = nullptr;
+    self_->anim_->set_idle(clamped);
+}
+
+void FrogController::enter_run(Asset* threat) {
+    if (!self_ || !self_->anim_) {
+        return;
+    }
+    if (state_ == State::Running && last_run_target_ == threat) {
+        return;
+    }
+    state_ = State::Running;
+    last_run_target_ = threat;
+    self_->anim_->set_run(threat);
 }
 
 void FrogController::update(const Input&) {
@@ -16,33 +44,26 @@ void FrogController::update(const Input&) {
     }
 
     if (!assets_ || !self_->info) {
-        self_->anim_->set_idle(40, 80, 5);
+        enter_idle(5);
         return;
     }
 
     try {
         Asset* player = assets_->player;
         if (!player || player == self_) {
-            self_->anim_->set_idle(40, 80, 5);
+            enter_idle(35);
             return;
         }
 
         const double distance = Range::get_distance(self_, player);
+        constexpr double flee_trigger = 20.0;
 
-        constexpr int flee_trigger   = 72;
-        constexpr int alert_trigger  = 260;
-        constexpr int flee_min_range = 96;
-        constexpr int flee_max_range = 160;
-
-        if (distance <= static_cast<double>(flee_trigger)) {
-            self_->anim_->set_weights(1.0, 0.0);
-            self_->anim_->set_run(player, flee_min_range, flee_max_range);
-        } else if (distance <= static_cast<double>(alert_trigger)) {
-            self_->anim_->set_idle(16, 48, 35);
+        if (distance <= flee_trigger) {
+            enter_run(player);
         } else {
-            self_->anim_->set_idle(48, 96, 60);
+            enter_idle(35);
         }
     } catch (...) {
-        self_->anim_->set_idle(40, 80, 5);
+        enter_idle(35);
     }
 }

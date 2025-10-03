@@ -68,13 +68,35 @@ data_section_(data_section)
                 int edge_smoothness = assets_json.value("edge_smoothness", 2);
                 std::string geometry = assets_json.value("geometry", "square");
                 if (!geometry.empty()) geometry[0] = std::toupper(geometry[0]);
+                auto infer_radius_from_dims = [](int w_min, int w_max, int h_min, int h_max) {
+                        int diameter = 0;
+                        diameter = std::max(diameter, std::max(w_min, w_max));
+                        diameter = std::max(diameter, std::max(h_min, h_max));
+                        if (diameter <= 0) return 0;
+                        return std::max(1, diameter / 2);
+                };
+                std::string lowered_geometry = geometry;
+                std::transform(lowered_geometry.begin(), lowered_geometry.end(), lowered_geometry.begin(), [](unsigned char ch) {
+                        return static_cast<char>(std::tolower(ch));
+                });
+                if (lowered_geometry == "circle") {
+                        int radius = assets_json.value("radius", -1);
+                        if (radius <= 0) {
+                                radius = infer_radius_from_dims(min_w, max_w, min_h, max_h);
+                        }
+                        if (radius <= 0) {
+                                radius = 1;
+                        }
+                        min_w = max_w = min_h = max_h = radius * 2;
+                        assets_json["radius"] = radius;
+                }
                 int width = std::max(min_w, max_w);
                 int height = std::max(min_h, max_h);
-		if (testing) {
-			std::cout << "[Room] Creating area from JSON: " << room_name
-			<< " (" << width << "x" << height << ")"
-			<< " at (" << map_origin.first << ", " << map_origin.second << ")"
-			<< ", geometry: " << geometry
+                if (testing) {
+                        std::cout << "[Room] Creating area from JSON: " << room_name
+                        << " (" << width << "x" << height << ")"
+                        << " at (" << map_origin.first << ", " << map_origin.second << ")"
+                        << ", geometry: " << geometry
 			<< ", map radius: " << map_radius << "\n";
 		}
                 room_area = std::make_unique<Area>(room_name, SDL_Point{map_origin.first, map_origin.second}, width, height, geometry, edge_smoothness, map_w, map_h);
@@ -148,14 +170,23 @@ nlohmann::json Room::create_static_room_json(std::string name) {
 		bounds_to_size(room_area->get_bounds(), width, height);
 	}
 	out["name"] = std::move(name);
-	out["min_width"] = width;
-	out["max_width"] = width;
-	out["min_height"] = height;
-	out["max_height"] = height;
-	out["edge_smoothness"] = edge_smoothness;
-	out["geometry"] = geometry;
-	bool is_spawn = assets_json.value("is_spawn", false);
-	out["is_spawn"] = is_spawn;
+        out["min_width"] = width;
+        out["max_width"] = width;
+        out["min_height"] = height;
+        out["max_height"] = height;
+        out["edge_smoothness"] = edge_smoothness;
+        out["geometry"] = geometry;
+        std::string lowered_geom = geometry;
+        std::transform(lowered_geom.begin(), lowered_geom.end(), lowered_geom.begin(), [](unsigned char ch) {
+                return static_cast<char>(std::tolower(ch));
+        });
+        if (lowered_geom == "circle") {
+                out["radius"] = std::max(0, width / 2);
+        } else {
+                out.erase("radius");
+        }
+        bool is_spawn = assets_json.value("is_spawn", false);
+        out["is_spawn"] = is_spawn;
 	out["is_boss"] = assets_json.value("is_boss", false);
 	out["inherits_map_assets"] = assets_json.value("inherits_map_assets", false);
         json spawn_groups = json::array();

@@ -120,6 +120,8 @@ private:
     bool passes_asset_filters(Asset* asset) const;
 
 private:
+    void persist_map_info_to_disk() const;
+
     Assets* assets_ = nullptr;
     Input* input_ = nullptr;
     std::vector<Asset*>* active_assets_ = nullptr;

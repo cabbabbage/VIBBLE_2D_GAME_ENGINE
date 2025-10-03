@@ -16,7 +16,7 @@
 #include "dev_mode/widgets.hpp"
 #include "dm_styles.hpp"
 #include "render/camera.hpp"
-#include "room/room.hpp"
+#include "map_generation/room.hpp"
 #include "spawn/asset_spawn_planner.hpp"
 #include "spawn/check.hpp"
 #include "spawn/methods/center_spawner.hpp"
@@ -2165,10 +2165,55 @@ void RoomEditor::regenerate_current_room() {
     std::mt19937 rng(std::random_device{}());
     if (min_w > max_w) std::swap(min_w, max_w);
     if (min_h > max_h) std::swap(min_h, max_h);
-    std::uniform_int_distribution<int> dist_w(min_w, max_w);
-    std::uniform_int_distribution<int> dist_h(min_h, max_h);
-    int width = std::max(1, dist_w(rng));
-    int height = std::max(1, dist_h(rng));
+    std::string lowered_geom = geometry;
+    std::transform(lowered_geom.begin(), lowered_geom.end(), lowered_geom.begin(), [](unsigned char ch) {
+        return static_cast<char>(std::tolower(ch));
+    });
+    int width = 0;
+    int height = 0;
+    if (lowered_geom == "circle") {
+        auto infer_radius = [&](int w_min, int w_max, int h_min, int h_max) {
+            int diameter = 0;
+            diameter = std::max(diameter, std::max(w_min, w_max));
+            diameter = std::max(diameter, std::max(h_min, h_max));
+            if (diameter <= 0) return 0;
+            return std::max(1, diameter / 2);
+        };
+        int radius_value = room_json.value("radius", -1);
+        int min_radius = radius_value;
+        int max_radius = radius_value;
+        if (radius_value <= 0) {
+            int inferred = infer_radius(min_w, max_w, min_h, max_h);
+            min_radius = inferred;
+            max_radius = inferred;
+        }
+        if (min_radius <= 0) {
+            min_radius = infer_radius(min_w, max_w, min_h, max_h);
+        }
+        if (max_radius <= 0) {
+            max_radius = infer_radius(min_w, max_w, min_h, max_h);
+        }
+        if (min_radius <= 0) min_radius = 1;
+        if (max_radius < min_radius) max_radius = min_radius;
+        std::uniform_int_distribution<int> dist_r(min_radius, max_radius);
+        int chosen_radius = std::max(1, dist_r(rng));
+        width = height = chosen_radius * 2;
+        room_json["radius"] = chosen_radius;
+        room_json["min_width"] = width;
+        room_json["max_width"] = width;
+        room_json["width_min"] = width;
+        room_json["width_max"] = width;
+        room_json["min_height"] = height;
+        room_json["max_height"] = height;
+        room_json["height_min"] = height;
+        room_json["height_max"] = height;
+    } else {
+        std::uniform_int_distribution<int> dist_w(min_w, max_w);
+        std::uniform_int_distribution<int> dist_h(min_h, max_h);
+        width = std::max(1, dist_w(rng));
+        height = std::max(1, dist_h(rng));
+        room_json.erase("radius");
+    }
 
     int map_radius = 0;
     nlohmann::json map_info_json;

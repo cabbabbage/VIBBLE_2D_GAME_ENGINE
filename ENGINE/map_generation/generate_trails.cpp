@@ -4,8 +4,87 @@
 #include <cmath>
 #include <iostream>
 #include <unordered_set>
+#include <unordered_map>
 #include <algorithm>
+#include <numeric>
+#include <cstdint>
+#include <limits>
 using json = nlohmann::json;
+
+namespace {
+
+constexpr int kNearestNeighborCount = 4;
+constexpr double kLoopConnectionChance = 0.35;
+constexpr double kLoopCapRatio = 0.25;
+
+struct DisjointSet {
+    explicit DisjointSet(size_t count) : parent(count), rank(count, 0) {
+        std::iota(parent.begin(), parent.end(), 0);
+    }
+
+    size_t find(size_t x) {
+        if (parent[x] != x) {
+            parent[x] = find(parent[x]);
+        }
+        return parent[x];
+    }
+
+    bool unite(size_t a, size_t b) {
+        size_t root_a = find(a);
+        size_t root_b = find(b);
+        if (root_a == root_b) {
+            return false;
+        }
+        if (rank[root_a] < rank[root_b]) {
+            std::swap(root_a, root_b);
+        }
+        parent[root_b] = root_a;
+        if (rank[root_a] == rank[root_b]) {
+            ++rank[root_a];
+        }
+        return true;
+    }
+
+    std::vector<size_t> parent;
+    std::vector<int> rank;
+};
+
+struct PointerPairHash {
+    size_t operator()(const std::pair<Room*, Room*>& value) const noexcept {
+        auto a = reinterpret_cast<std::uintptr_t>(value.first);
+        auto b = reinterpret_cast<std::uintptr_t>(value.second);
+        return std::hash<std::uintptr_t>{}(a) ^ (std::hash<std::uintptr_t>{}(b) << 1);
+    }
+};
+
+struct PointerPairEqual {
+    bool operator()(const std::pair<Room*, Room*>& lhs, const std::pair<Room*, Room*>& rhs) const noexcept {
+        return lhs.first == rhs.first && lhs.second == rhs.second;
+    }
+};
+
+std::pair<Room*, Room*> canonical_pair(Room* a, Room* b) {
+    if (!a || !b) {
+        return {nullptr, nullptr};
+    }
+    if (a > b) {
+        std::swap(a, b);
+    }
+    return {a, b};
+}
+
+std::pair<double, double> room_center(Room* room) {
+    if (!room) {
+        return {0.0, 0.0};
+    }
+    if (room->room_area) {
+        SDL_Point c = room->room_area->get_center();
+        return {static_cast<double>(c.x), static_cast<double>(c.y)};
+    }
+    return {static_cast<double>(room->map_origin.first), static_cast<double>(room->map_origin.second)};
+}
+
+} // namespace
 GenerateTrails::GenerateTrails(nlohmann::json& trail_data)
 : rng_(std::random_device{}()),
 trails_data_(&trail_data)
@@ -39,11 +118,18 @@ std::vector<std::unique_ptr<Room>> GenerateTrails::generate_trails(
         trail_areas_.clear();
         std::vector<std::unique_ptr<Room>> trail_rooms;
         std::vector<Area> all_areas = existing_areas;
-        for (const auto& [a, b] : room_pairs) {
-		if (testing) {
-			std::cout << "[GenerateTrails] Connecting: " << a->room_name
-			<< " <--> " << b->room_name << "\n";
-		}
+        auto connection_plan = plan_maze_connections(all_rooms_reference, room_pairs);
+        if (testing) {
+                std::cout << "[GenerateTrails] Planned " << connection_plan.size()
+                          << " trail connections (" << room_pairs.size()
+                          << " forced).\n";
+        }
+        for (const auto& [a, b] : connection_plan) {
+                if (!a || !b) continue;
+                if (testing) {
+                        std::cout << "[GenerateTrails] Connecting: " << a->room_name
+                        << " <--> " << b->room_name << "\n";
+                }
                 bool success = false;
                 for (int attempts = 0; attempts < 1000 && !success; ++attempts) {
                         if (const auto* asset_ref = pick_random_asset()) {
@@ -55,7 +141,6 @@ std::vector<std::unique_ptr<Room>> GenerateTrails::generate_trails(
                         << a->room_name << " and " << b->room_name << "\n";
                 }
         }
-        circular_connection(trail_rooms, map_dir, map_info_path, asset_lib, all_areas, map_assets_data, map_radius);
         find_and_connect_isolated(map_dir, map_info_path, asset_lib, all_areas, trail_rooms, map_assets_data, map_radius);
         if (testing) {
                 std::cout << "[TrailGen] Total trail rooms created: " << trail_rooms.size() << "\n";
@@ -67,6 +152,186 @@ const GenerateTrails::TrailTemplateRef* GenerateTrails::pick_random_asset() {
         if (available_assets_.empty()) return nullptr;
         std::uniform_int_distribution<size_t> dist(0, available_assets_.size() - 1);
         return &available_assets_[dist(rng_)];
+}
+
+std::vector<std::pair<Room*, Room*>> GenerateTrails::plan_maze_connections(
+        const std::vector<Room*>& rooms,
+        const std::vector<std::pair<Room*, Room*>>& forced_connections) {
+
+        std::vector<std::pair<Room*, Room*>> planned;
+        if (rooms.empty()) {
+                return planned;
+        }
+
+        std::vector<Room*> unique_rooms;
+        unique_rooms.reserve(rooms.size());
+        std::unordered_set<Room*> seen;
+        seen.reserve(rooms.size());
+        for (Room* room : rooms) {
+                if (!room) continue;
+                if (seen.insert(room).second) {
+                        unique_rooms.push_back(room);
+                }
+        }
+
+        if (unique_rooms.size() < 2) {
+                return planned;
+        }
+
+        std::unordered_map<Room*, size_t> index;
+        index.reserve(unique_rooms.size());
+        for (size_t i = 0; i < unique_rooms.size(); ++i) {
+                index[unique_rooms[i]] = i;
+        }
+
+        DisjointSet dsu(unique_rooms.size());
+        std::unordered_set<std::pair<Room*, Room*>, PointerPairHash, PointerPairEqual> blocked_pairs;
+        blocked_pairs.reserve(unique_rooms.size() * kNearestNeighborCount + forced_connections.size());
+
+        for (const auto& edge : forced_connections) {
+                Room* a = edge.first;
+                Room* b = edge.second;
+                if (!a || !b) continue;
+                auto ia = index.find(a);
+                auto ib = index.find(b);
+                if (ia == index.end() || ib == index.end()) continue;
+                dsu.unite(ia->second, ib->second);
+                auto key = canonical_pair(a, b);
+                if (!key.first || !key.second) continue;
+                if (blocked_pairs.insert(key).second) {
+                        planned.emplace_back(a, b);
+                }
+        }
+
+        struct CandidateEdge {
+                Room* a = nullptr;
+                Room* b = nullptr;
+                double distance = 0.0;
+                double jitter = 0.0;
+        };
+
+        std::vector<CandidateEdge> candidates;
+        candidates.reserve(unique_rooms.size() * kNearestNeighborCount);
+
+        for (size_t i = 0; i < unique_rooms.size(); ++i) {
+                Room* a = unique_rooms[i];
+                if (!a) continue;
+                auto [ax, ay] = room_center(a);
+                std::vector<std::pair<double, size_t>> neighbors;
+                neighbors.reserve(unique_rooms.size());
+                for (size_t j = 0; j < unique_rooms.size(); ++j) {
+                        if (i == j) continue;
+                        Room* b = unique_rooms[j];
+                        if (!b) continue;
+                        auto [bx, by] = room_center(b);
+                        double dx = ax - bx;
+                        double dy = ay - by;
+                        double dist = std::hypot(dx, dy);
+                        neighbors.emplace_back(dist, j);
+                }
+                std::sort(neighbors.begin(), neighbors.end(),
+                          [](const auto& lhs, const auto& rhs) {
+                                  return lhs.first < rhs.first;
+                          });
+                const int limit = std::min<int>(kNearestNeighborCount, static_cast<int>(neighbors.size()));
+                for (int n = 0; n < limit; ++n) {
+                        Room* b = unique_rooms[neighbors[n].second];
+                        auto key = canonical_pair(a, b);
+                        if (!key.first || !key.second) continue;
+                        if (!blocked_pairs.insert(key).second) continue;
+                        candidates.push_back(CandidateEdge{ a, b, neighbors[n].first, 0.0 });
+                }
+        }
+
+        std::uniform_real_distribution<double> jitter_dist(0.0, 1.0);
+        for (auto& candidate : candidates) {
+                candidate.jitter = jitter_dist(rng_);
+        }
+        std::sort(candidates.begin(), candidates.end(), [](const CandidateEdge& lhs, const CandidateEdge& rhs) {
+                double lw = lhs.distance + lhs.jitter * 25.0;
+                double rw = rhs.distance + rhs.jitter * 25.0;
+                if (lw == rw) {
+                        if (lhs.a == rhs.a) return lhs.b < rhs.b;
+                        return lhs.a < rhs.a;
+                }
+                return lw < rw;
+        });
+
+        std::uniform_real_distribution<double> loop_dist(0.0, 1.0);
+        size_t loop_cap = static_cast<size_t>(std::ceil(unique_rooms.size() * kLoopCapRatio));
+        if (loop_cap == 0 && unique_rooms.size() > 2) {
+                loop_cap = 1;
+        }
+        size_t loops_added = 0;
+
+        for (const auto& candidate : candidates) {
+                Room* a = candidate.a;
+                Room* b = candidate.b;
+                if (!a || !b) continue;
+                auto ia = index.find(a);
+                auto ib = index.find(b);
+                if (ia == index.end() || ib == index.end()) continue;
+                if (dsu.unite(ia->second, ib->second)) {
+                        planned.emplace_back(a, b);
+                } else if (loops_added < loop_cap && loop_dist(rng_) < kLoopConnectionChance) {
+                        planned.emplace_back(a, b);
+                        ++loops_added;
+                }
+        }
+
+        auto rebuild_components = [&]() {
+                std::unordered_map<size_t, std::vector<size_t>> components;
+                components.reserve(unique_rooms.size());
+                for (size_t i = 0; i < unique_rooms.size(); ++i) {
+                        components[dsu.find(i)].push_back(i);
+                }
+                return components;
+        };
+
+        auto components = rebuild_components();
+        while (components.size() > 1) {
+                std::vector<std::vector<size_t>> groups;
+                groups.reserve(components.size());
+                for (auto& entry : components) {
+                        groups.push_back(std::move(entry.second));
+                }
+                const auto& base_group = groups.front();
+                if (base_group.empty()) {
+                        break;
+                }
+                double best_dist = std::numeric_limits<double>::max();
+                size_t best_a = base_group.front();
+                size_t best_b = base_group.front();
+                for (size_t idx_a : base_group) {
+                        auto [ax, ay] = room_center(unique_rooms[idx_a]);
+                        for (size_t g = 1; g < groups.size(); ++g) {
+                                for (size_t idx_b : groups[g]) {
+                                        auto [bx, by] = room_center(unique_rooms[idx_b]);
+                                        double dist = std::hypot(ax - bx, ay - by);
+                                        if (dist < best_dist) {
+                                                best_dist = dist;
+                                                best_a = idx_a;
+                                                best_b = idx_b;
+                                        }
+                                }
+                        }
+                }
+                if (best_dist == std::numeric_limits<double>::max()) {
+                        break;
+                }
+                Room* a = unique_rooms[best_a];
+                Room* b = unique_rooms[best_b];
+                if (!a || !b) {
+                        break;
+                }
+                if (blocked_pairs.insert(canonical_pair(a, b)).second) {
+                        planned.emplace_back(a, b);
+                }
+                dsu.unite(best_a, best_b);
+                components = rebuild_components();
+        }
+
+        return planned;
 }
 
 void GenerateTrails::find_and_connect_isolated(

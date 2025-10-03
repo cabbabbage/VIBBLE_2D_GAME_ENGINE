@@ -70,6 +70,7 @@ private:
     int room_w_max_ = 10000;
     int room_h_min_ = 1500;
     int room_h_max_ = 10000;
+    int room_radius_ = 0;
     int room_geom_ = 0;
     bool spawn_groups_from_assets_ = false;
     bool room_is_spawn_ = false;
@@ -82,6 +83,8 @@ private:
     std::unique_ptr<RangeSliderWidget> room_w_slider_w_;
     std::unique_ptr<DMRangeSlider> room_h_slider_;
     std::unique_ptr<RangeSliderWidget> room_h_slider_w_;
+    std::unique_ptr<DMSlider> room_radius_slider_;
+    std::unique_ptr<SliderWidget> room_radius_slider_w_;
     std::unique_ptr<Widget> room_w_label_;
     std::unique_ptr<Widget> room_h_label_;
     std::unique_ptr<DMDropdown> room_geom_dd_;

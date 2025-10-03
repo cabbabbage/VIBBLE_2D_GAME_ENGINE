@@ -173,13 +173,13 @@ Child Linking
 Controllers are tiny: they never advance frames; they only call AnimationUpdate.
 
 Mode setters
-- `set_idle(min_dist, max_dist, rest_ratio)`
+- `set_idle(rest_ratio)` – convert a 0–100 rest ratio into loop counts internally before picking the next idle target; use `set_idle(rest_loop_min, rest_loop_max)` for explicit loop control.
 - `set_pursue(final_target, min_dist, max_dist)`
 - `set_run(threat, min_dist, max_dist)`
 - `set_orbit(center, min_radius, max_radius, keep_direction_ratio)`
 - `set_orbit_ccw(center, min_radius, max_radius)` / `set_orbit_cw(center, min_radius, max_radius)`
 - `set_patrol(waypoints, loop, hold_frames)`
-- `set_serpentine(final_target, min_stride, max_stride, sway, keep_side_ratio)`
+- `set_serpentine(final_target, sway, keep_side_ratio)`
 - `set_mode_none()` - no AI targeting; just advance and follow `on_end` mapping
 
 Animation overrides
@@ -189,14 +189,14 @@ Animation overrides
 Examples
 ```cpp
 // Default idle (Frog-like)
-if (self_->anim_) self_->anim_->set_idle(0, 20, 3);
+if (self_->anim_) self_->anim_->set_idle(1, 3);
 
 // Chaser with close CCW orbit at ~40px (Davey)
 bool near   = Range::is_in_range(self_, player, 40);
 bool inView = Range::is_in_range(self_, player, 1000);
 if (near)           self_->anim_->set_orbit_ccw(player, 40, 40);
 else if (inView)    self_->anim_->set_pursue(player, 20, 30);
-else                self_->anim_->set_idle(40, 80, 5);
+else                self_->anim_->set_idle(2, 4);
 
 // Bomber: explode near player; otherwise chase/idle
 if (Range::is_in_range(self_, player, 40)) {
@@ -205,7 +205,7 @@ if (Range::is_in_range(self_, player, 40)) {
 } else if (Range::is_in_range(self_, player, 1000)) {
   self_->anim_->set_pursue(player, 20, 30);
 } else {
-  self_->anim_->set_idle(40, 80, 5);
+  self_->anim_->set_idle(2, 4);
 }
 ```
 

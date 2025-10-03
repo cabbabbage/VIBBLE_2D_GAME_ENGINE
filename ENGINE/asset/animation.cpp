@@ -98,11 +98,6 @@ void Animation::load(const std::string& trigger,
 	reverse_source = anim_json.value("reverse_source", false);
 	locked         = anim_json.value("locked", false);
 	speed_factor   = anim_json.value("speed_factor", 1.0f);
-	if (speed_factor < 0.0f) {
-		float mag = -speed_factor;
-		if (mag < 0.0001f) mag = 0.0001f;
-		speed_factor = 1.0f / mag;
-	}
 	loop      = anim_json.value("loop", false);
 	randomize = anim_json.value("randomize", false);
 	rnd_start = anim_json.value("rnd_start", false);

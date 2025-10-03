@@ -1,11 +1,11 @@
 {
   "camera_settings": {
-    "distance_scale_strength": 0.3400000035762787,
+    "distance_scale_strength": 0.10999999940395355,
     "foreshorten_strength": 0.10999999940395355,
     "height_at_zoom1": 547.0,
-    "parallax_strength": 32.25,
+    "parallax_strength": 18.75,
     "realism_enabled": true,
-    "render_distance": 1210.0,
+    "render_distance": 2120.0,
     "tripod_distance_y": -855.0
   },
   "map_assets_data": {
@@ -118,7 +118,7 @@
       "max_rooms": 3,
       "min_rooms": 0,
       "name": "layer_1",
-      "radius": 3255,
+      "radius": 3319,
       "rooms": [
         {
           "max_instances": 1,
@@ -143,17 +143,25 @@
     {
       "level": 2,
       "max_rooms": 8,
-      "min_rooms": 0,
+      "min_rooms": 3,
       "name": "layer_2",
-      "radius": 6152,
+      "radius": 6280,
       "rooms": [
         {
           "max_instances": 8,
-          "min_instances": 0,
+          "min_instances": 3,
           "name": "bar",
           "required_children": []
         }
       ]
+    },
+    {
+      "level": 3,
+      "max_rooms": 0,
+      "min_rooms": 0,
+      "name": "layer_3",
+      "radius": 8437,
+      "rooms": []
     }
   ],
   "map_light_data": {
@@ -211,7 +219,7 @@
     "update_interval": 53
   },
   "map_name": "FORREST",
-  "map_radius": 7600.5,
+  "map_radius": 7728.5,
   "rooms_data": {
     "bar": {
       "edge_smoothness": 101,
@@ -404,21 +412,21 @@
       "width_min": 1755
     },
     "fountain": {
-      "edge_smoothness": 2,
+      "edge_smoothness": 93,
       "geometry": "Square",
-      "height_max": 1937,
-      "height_min": 1500,
+      "height_max": 2099,
+      "height_min": 1779,
       "inherits_map_assets": true,
       "is_boss": false,
       "is_spawn": false,
-      "max_height": 1937,
-      "max_width": 1971,
-      "min_height": 1500,
-      "min_width": 1500,
+      "max_height": 2099,
+      "max_width": 2151,
+      "min_height": 1779,
+      "min_width": 1810,
       "name": "fountain",
       "spawn_groups": [],
-      "width_max": 1971,
-      "width_min": 1500
+      "width_max": 2151,
+      "width_min": 1810
     },
     "garden": {
       "edge_smoothness": 2,

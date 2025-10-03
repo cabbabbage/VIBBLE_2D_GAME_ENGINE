@@ -1,6 +1,6 @@
 #include "rebuild_assets.hpp"
 #include "asset/asset_library.hpp"
-#include "room/generate_rooms.hpp"
+#include "map_generation/generate_rooms.hpp"
 #include <filesystem>
 #include <iostream>
 #include <cstdlib>

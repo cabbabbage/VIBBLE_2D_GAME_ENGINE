@@ -116,6 +116,7 @@ private:
         SDL_FPoint center{0.0f, 0.0f};
         double width = 0.0;
         double height = 0.0;
+        double radius = 0.0;
         bool is_circle = false;
         int layer = 0;
         SDL_Color color{255, 255, 255, 255};

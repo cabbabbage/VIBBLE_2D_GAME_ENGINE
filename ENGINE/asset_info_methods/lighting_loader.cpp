@@ -6,7 +6,7 @@
 using nlohmann::json;
 
 void LightingLoader::load(AssetInfo& info, const json& data) {
-        info.has_light_source = false;
+        info.is_light_source = false;
         info.light_sources.clear();
         info.orbital_light_sources.clear();
         info.shading_factor = 100;
@@ -46,7 +46,7 @@ void LightingLoader::load(AssetInfo& info, const json& data) {
                 return parsed;
 };
         auto append_light = [&](const ParsedLight& parsed) {
-                info.has_light_source = true;
+                info.is_light_source = true;
                 const LightSource& light = parsed.light;
                 if (light.x_radius > 0 || light.y_radius > 0) {
                         if (info.orbital_light_sources.empty()) {
