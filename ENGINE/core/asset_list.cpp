@@ -101,6 +101,56 @@ AssetList::AssetList(const AssetList& parent_list,
     rebuild_from_scratch();
 }
 
+AssetList::AssetList(const AssetList& parent_list,
+                     SDL_Point list_center,
+                     int search_radius,
+                     const std::vector<std::string>& required_tags,
+                     const std::vector<std::string>& top_bucket_tags,
+                     const std::vector<std::string>& bottom_bucket_tags,
+                     SortMode sort_mode,
+                     std::function<bool(const Asset*)> eligibility_filter,
+                     bool inherit_parent_view)
+    : source_candidates_(parent_list.source_candidates_),
+      center_point_(list_center),
+      center_asset_(nullptr),
+      search_radius_(search_radius),
+      required_tags_(required_tags),
+      top_bucket_tags_(top_bucket_tags),
+      bottom_bucket_tags_(bottom_bucket_tags),
+      sort_mode_(sort_mode),
+      eligibility_filter_(std::move(eligibility_filter)),
+      previous_center_point_(list_center),
+      previous_search_radius_(search_radius),
+      parent_provider_(&parent_list),
+      inherit_parent_view_(inherit_parent_view) {
+    rebuild_from_scratch();
+}
+
+AssetList::AssetList(const AssetList& parent_list,
+                     Asset* center_asset,
+                     int search_radius,
+                     const std::vector<std::string>& required_tags,
+                     const std::vector<std::string>& top_bucket_tags,
+                     const std::vector<std::string>& bottom_bucket_tags,
+                     SortMode sort_mode,
+                     std::function<bool(const Asset*)> eligibility_filter,
+                     bool inherit_parent_view)
+    : source_candidates_(parent_list.source_candidates_),
+      center_point_(center_asset ? center_asset->pos : SDL_Point{0, 0}),
+      center_asset_(center_asset),
+      search_radius_(search_radius),
+      required_tags_(required_tags),
+      top_bucket_tags_(top_bucket_tags),
+      bottom_bucket_tags_(bottom_bucket_tags),
+      sort_mode_(sort_mode),
+      eligibility_filter_(std::move(eligibility_filter)),
+      previous_center_point_(resolve_center()),
+      previous_search_radius_(search_radius),
+      parent_provider_(&parent_list),
+      inherit_parent_view_(inherit_parent_view) {
+    rebuild_from_scratch();
+}
+
 void AssetList::add_child(std::unique_ptr<AssetList> child) {
     if (child) {
         children_.push_back(std::move(child));
@@ -164,7 +214,7 @@ void AssetList::update() {
 
     delta_buffer_.clear();
     delta_inside_flags_.clear();
-    get_delta_area_assets(previous_center_point_, previous_search_radius_, current_center, search_radius_, source_candidates_, delta_buffer_);
+    get_delta_area_assets(previous_center_point_, previous_search_radius_, current_center, search_radius_, delta_buffer_);
 
     for (std::size_t i = 0; i < delta_buffer_.size(); ++i) {
         Asset* asset = delta_buffer_[i];
@@ -271,7 +321,7 @@ void AssetList::rebuild_from_scratch() {
 
     SDL_Point center = resolve_center();
 
-    auto process_asset = [&](auto&& self, Asset* asset) -> void {
+    for_each_candidate([&](Asset* asset) {
         if (asset == nullptr) {
             return;
         }
@@ -281,23 +331,21 @@ void AssetList::rebuild_from_scratch() {
                 list_always_ineligible_.push_back(asset);
                 list_always_ineligible_lookup_.insert(asset);
             }
-        } else if (!has_all_required_tags(asset, required_tags_)) {
+            return;
+        }
+
+        if (!has_all_required_tags(asset, required_tags_)) {
             if (!contains_asset(list_always_ineligible_lookup_, asset)) {
                 list_always_ineligible_.push_back(asset);
                 list_always_ineligible_lookup_.insert(asset);
             }
-        } else if (Range::is_in_range(center, asset, search_radius_)) {
+            return;
+        }
+
+        if (Range::is_in_range(center, asset, search_radius_)) {
             route_asset_to_section(asset);
         }
-
-        for (Asset* child : asset->children) {
-            self(self, child);
-        }
-};
-
-    for (Asset* asset : source_candidates_) {
-        process_asset(process_asset, asset);
-    }
+    });
 
     sort_middle_section();
 
@@ -419,13 +467,11 @@ void AssetList::get_delta_area_assets(SDL_Point prev_center,
                                       int prev_radius,
                                       SDL_Point curr_center,
                                       int curr_radius,
-                                      const std::vector<Asset*>& candidates,
                                       std::vector<Asset*>& out_changed) const {
-    auto evaluate_asset = [&](auto&& self, Asset* asset) -> void {
+    for_each_candidate([&](Asset* asset) {
         if (asset == nullptr) {
             return;
         }
-
         if (!contains_asset(list_always_ineligible_lookup_, asset)) {
             bool was_inside = Range::is_in_range(prev_center, asset, prev_radius);
             bool now_inside = Range::is_in_range(curr_center, asset, curr_radius);
@@ -434,14 +480,33 @@ void AssetList::get_delta_area_assets(SDL_Point prev_center,
                 delta_inside_flags_.push_back(now_inside);
             }
         }
+    });
+}
 
+void AssetList::for_each_candidate(const std::function<void(Asset*)>& f) const {
+    if (!f) return;
+    auto process_asset = [&](auto&& self, Asset* asset) -> void {
+        if (asset == nullptr) return;
+        f(asset);
         for (Asset* child : asset->children) {
             self(self, child);
         }
-};
+    };
 
-    for (Asset* asset : candidates) {
-        evaluate_asset(evaluate_asset, asset);
+    if (inherit_parent_view_ && parent_provider_) {
+        for (Asset* a : parent_provider_->top_unsorted()) {
+            process_asset(process_asset, a);
+        }
+        for (Asset* a : parent_provider_->middle_sorted()) {
+            process_asset(process_asset, a);
+        }
+        for (Asset* a : parent_provider_->bottom_unsorted()) {
+            process_asset(process_asset, a);
+        }
+    } else {
+        for (Asset* a : source_candidates_) {
+            process_asset(process_asset, a);
+        }
     }
 }
 

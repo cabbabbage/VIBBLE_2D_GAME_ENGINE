@@ -331,15 +331,15 @@ void Asset::set_assets(Assets* a) {
             controller_ = cf.create_for_asset(this);
     }
     neighbors.reset();
-    impassable_naighbors.reset();
+    impassable_naighbors = nullptr;
     neighbor_lists_initialized_ = false;
     last_neighbor_origin_ = SDL_Point{ std::numeric_limits<int>::min(), std::numeric_limits<int>::min() };
 }
 
 AssetList* Asset::get_neighbors_list() { return neighbors.get(); }
 const AssetList* Asset::get_neighbors_list() const { return neighbors.get(); }
-AssetList* Asset::get_impassable_naighbors() { return impassable_naighbors.get(); }
-const AssetList* Asset::get_impassable_naighbors() const { return impassable_naighbors.get(); }
+AssetList* Asset::get_impassable_naighbors() { return impassable_naighbors; }
+const AssetList* Asset::get_impassable_naighbors() const { return impassable_naighbors; }
 
 void Asset::update_neighbor_lists(bool force_update) {
     if (!assets_ || !info || !info->moving_asset) {
@@ -372,7 +372,6 @@ void Asset::update_neighbor_lists(bool force_update) {
     };
 
     const bool rebuild_neighbors = force_update || !neighbors;
-    const bool rebuild_impassable = force_update || !impassable_naighbors;
 
     if (!rebuild_neighbors && !force_update) {
         if (neighbor_lists_initialized_ && last_neighbor_origin_.x == pos.x && last_neighbor_origin_.y == pos.y) {
@@ -391,29 +390,39 @@ void Asset::update_neighbor_lists(bool force_update) {
             std::vector<std::string>{},
             SortMode::ZIndexAsc,
             base_filter);
+
+        if (neighbors) {
+            auto imp_child = std::make_unique<AssetList>(
+                *neighbors,
+                this,
+                kNeighborSearchRadius,
+                std::vector<std::string>{},
+                std::vector<std::string>{},
+                std::vector<std::string>{},
+                SortMode::ZIndexAsc,
+                impassable_filter,
+                true /* inherit parent view */);
+            impassable_naighbors = imp_child.get();
+            neighbors->add_child(std::move(imp_child));
+        }
     } else if (neighbors) {
         neighbors->set_center(this);
         neighbors->set_search_radius(kNeighborSearchRadius);
         neighbors->update();
-    }
-
-    if (rebuild_impassable) {
-        if (!neighbors) {
-            return;
+        if (!impassable_naighbors) {
+            auto imp_child = std::make_unique<AssetList>(
+                *neighbors,
+                this,
+                kNeighborSearchRadius,
+                std::vector<std::string>{},
+                std::vector<std::string>{},
+                std::vector<std::string>{},
+                SortMode::ZIndexAsc,
+                impassable_filter,
+                true /* inherit parent view */);
+            impassable_naighbors = imp_child.get();
+            neighbors->add_child(std::move(imp_child));
         }
-        impassable_naighbors = std::make_unique<AssetList>(
-            *neighbors,
-            this,
-            kNeighborSearchRadius,
-            std::vector<std::string>{},
-            std::vector<std::string>{},
-            std::vector<std::string>{},
-            SortMode::ZIndexAsc,
-            impassable_filter);
-    } else if (impassable_naighbors) {
-        impassable_naighbors->set_center(this);
-        impassable_naighbors->set_search_radius(kNeighborSearchRadius);
-        impassable_naighbors->update();
     }
 
     last_neighbor_origin_ = pos;

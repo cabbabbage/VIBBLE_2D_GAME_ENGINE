@@ -124,7 +124,7 @@ class Asset {
     Assets* assets_ = nullptr;
     std::unique_ptr<AssetController>   controller_;
     std::unique_ptr<AssetList> neighbors;
-    std::unique_ptr<AssetList> impassable_naighbors;
+    AssetList* impassable_naighbors = nullptr; // non-owning child of neighbors
     SDL_Point last_neighbor_origin_{ std::numeric_limits<int>::min(), std::numeric_limits<int>::min() };
     bool neighbor_lists_initialized_ = false;
     void update_neighbor_lists(bool force_update);

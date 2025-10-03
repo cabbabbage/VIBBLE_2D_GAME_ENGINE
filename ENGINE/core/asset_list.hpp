@@ -26,6 +26,13 @@ public:
 
     AssetList(const AssetList& parent_list, Asset* center_asset, int search_radius, const std::vector<std::string>& required_tags, const std::vector<std::string>& top_bucket_tags, const std::vector<std::string>& bottom_bucket_tags, SortMode sort_mode, std::function<bool(const Asset*)> eligibility_filter = nullptr);
 
+    // Variant that allows using the parent's current filtered contents as the candidate set
+    // instead of the original source candidates. This avoids re-scanning the entire pool when
+    // building a refined child list (e.g., impassable neighbors from general neighbors).
+    AssetList(const AssetList& parent_list, SDL_Point list_center, int search_radius, const std::vector<std::string>& required_tags, const std::vector<std::string>& top_bucket_tags, const std::vector<std::string>& bottom_bucket_tags, SortMode sort_mode, std::function<bool(const Asset*)> eligibility_filter, bool inherit_parent_view);
+
+    AssetList(const AssetList& parent_list, Asset* center_asset, int search_radius, const std::vector<std::string>& required_tags, const std::vector<std::string>& top_bucket_tags, const std::vector<std::string>& bottom_bucket_tags, SortMode sort_mode, std::function<bool(const Asset*)> eligibility_filter, bool inherit_parent_view);
+
     void add_child(std::unique_ptr<AssetList> child);
     const std::vector<std::unique_ptr<AssetList>>& children() const;
 
@@ -55,7 +62,9 @@ private:
     void sort_middle_section();
     bool is_asset_eligible(const Asset* a) const;
 
-    void get_delta_area_assets(SDL_Point prev_center, int prev_radius, SDL_Point curr_center, int curr_radius, const std::vector<Asset*>& candidates, std::vector<Asset*>& out_changed) const;
+    void get_delta_area_assets(SDL_Point prev_center, int prev_radius, SDL_Point curr_center, int curr_radius, std::vector<Asset*>& out_changed) const;
+
+    void for_each_candidate(const std::function<void(Asset*)>& f) const;
 
     std::vector<Asset*> source_candidates_;
     SDL_Point           center_point_{};
@@ -82,5 +91,9 @@ private:
 
     std::vector<Asset*> delta_buffer_;
     mutable std::vector<bool> delta_inside_flags_;
+
+    // Optional view of a parent list's current filtered contents as our candidate set.
+    const AssetList* parent_provider_ = nullptr;
+    bool inherit_parent_view_ = false;
 };
 

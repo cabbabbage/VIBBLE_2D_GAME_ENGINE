@@ -56,17 +56,7 @@ ManualState& manual_state(AnimationUpdate* updater) {
     return states[updater];
 }
 
-void gather_from_list(const AssetList* list, std::vector<Asset*>& out) {
-    if (!list) {
-        return;
-    }
-    const auto& top = list->top_unsorted();
-    out.insert(out.end(), top.begin(), top.end());
-    const auto& mid = list->middle_sorted();
-    out.insert(out.end(), mid.begin(), mid.end());
-    const auto& bot = list->bottom_unsorted();
-    out.insert(out.end(), bot.begin(), bot.end());
-}
+// No extraction helpers: iterate AssetList sections directly where needed.
 }
 
 AnimationUpdate::AnimationUpdate(Asset* self, Assets* assets)
@@ -142,13 +132,11 @@ SDL_Point AnimationUpdate::choose_balanced_target(SDL_Point desired, const Asset
     const double base_angle  = std::atan2(static_cast<double>(dy0), static_cast<double>(dx0));
     double base_radius = std::sqrt(static_cast<double>(dx0*dx0 + dy0*dy0));
     if (base_radius < 1.0) base_radius = 1.0;
-    std::vector<Asset*> neighbors;
     const AssetList* neighbor_list = self_->get_neighbors_list();
-    if (neighbor_list) {
-        gather_from_list(neighbor_list, neighbors);
-    } else if (assets_owner_) {
+    std::vector<Asset*> fallback;
+    if (!neighbor_list && assets_owner_) {
         const auto& active = assets_owner_->getActive();
-        Range::get_in_range(SDL_Point{sx, sy}, 300, active, neighbors);
+        Range::get_in_range(SDL_Point{sx, sy}, 300, active, fallback);
     }
     static const double ang_offsets[] = { -0.6, -0.4, -0.25, -0.12, 0.0, 0.12, 0.25, 0.4, 0.6 };
     static const double rad_scales[]  = { 0.9, 1.0, 1.1 };
@@ -166,17 +154,24 @@ SDL_Point AnimationUpdate::choose_balanced_target(SDL_Point desired, const Asset
             int py = sy + static_cast<int>(std::llround(rr * std::sin(ang)));
             const double dir_norm = Range::get_distance(SDL_Point{px, py}, aim) / rline;
             double sum = 0.0; int cnt = 0;
-            for (Asset* n : neighbors) {
-                if (!n || n == self_ || !n->info) continue;
-                if (n->info->type == asset_types::texture) continue;
-                if (final_target && n == final_target) continue;
-                if (n->info->passable) continue;
+            auto consider = [&](Asset* n) {
+                if (!n || n == self_ || !n->info) return;
+                if (n->info->type == asset_types::texture) return;
+                if (final_target && n == final_target) return;
+                if (n->info->passable) return;
                 const double rvx = static_cast<double>(n->pos.x - sx);
                 const double rvy = static_cast<double>(n->pos.y - sy);
-                if (rvx*fvx + rvy*fvy <= 0.0) continue;
+                if (rvx*fvx + rvy*fvy <= 0.0) return;
                 const double d = Range::get_distance(SDL_Point{px, py}, n);
                 sum += std::min(d, sparse_cap);
                 ++cnt;
+            };
+            if (neighbor_list) {
+                for (Asset* n : neighbor_list->top_unsorted()) consider(n);
+                for (Asset* n : neighbor_list->middle_sorted()) consider(n);
+                for (Asset* n : neighbor_list->bottom_unsorted()) consider(n);
+            } else {
+                for (Asset* n : fallback) consider(n);
             }
             const double avg_sparse = (cnt > 0) ? (sum / cnt) : sparse_cap;
             const double sparse_norm = avg_sparse / sparse_cap;
@@ -200,23 +195,31 @@ bool AnimationUpdate::point_in_impassable(SDL_Point pt, const Asset* ignored) co
     Asset* closest = nullptr;
     double best_d2 = std::numeric_limits<double>::infinity();
 
-    std::vector<Asset*> candidates;
     const AssetList* impassable = self_->get_impassable_naighbors();
     if (impassable) {
-        gather_from_list(impassable, candidates);
+        auto try_candidate = [&](Asset* a) {
+            if (!a || a == self_ || a == ignored || !a->info) return;
+            if (a->info->type == asset_types::texture) return;
+            if (a->info->passable) return;
+            const double dx = static_cast<double>(a->pos.x - pt.x);
+            const double dy = static_cast<double>(a->pos.y - pt.y);
+            const double d2 = dx*dx + dy*dy;
+            if (d2 < best_d2) { best_d2 = d2; closest = a; }
+        };
+        for (Asset* a : impassable->top_unsorted()) try_candidate(a);
+        for (Asset* a : impassable->middle_sorted()) try_candidate(a);
+        for (Asset* a : impassable->bottom_unsorted()) try_candidate(a);
     } else if (assets_owner_) {
         const auto& active = assets_owner_->getActive();
-        candidates.insert(candidates.end(), active.begin(), active.end());
-    }
-
-    for (Asset* a : candidates) {
-        if (!a || a == self_ || a == ignored || !a->info) continue;
-        if (a->info->type == asset_types::texture) continue;
-        if (a->info->passable) continue;
-        const double dx = static_cast<double>(a->pos.x - pt.x);
-        const double dy = static_cast<double>(a->pos.y - pt.y);
-        const double d2 = dx*dx + dy*dy;
-        if (d2 < best_d2) { best_d2 = d2; closest = a; }
+        for (Asset* a : active) {
+            if (!a || a == self_ || a == ignored || !a->info) continue;
+            if (a->info->type == asset_types::texture) continue;
+            if (a->info->passable) continue;
+            const double dx = static_cast<double>(a->pos.x - pt.x);
+            const double dy = static_cast<double>(a->pos.y - pt.y);
+            const double d2 = dx*dx + dy*dy;
+            if (d2 < best_d2) { best_d2 = d2; closest = a; }
+        }
     }
 
     if (!closest) return false;
@@ -358,21 +361,26 @@ bool AnimationUpdate::can_move_by(int dx, int dy) const {
 bool AnimationUpdate::would_overlap_same_or_player(int dx, int dy) const {
     if (!self_ || !self_->info) return true;
     const SDL_Point new_pos{ self_->pos.x + dx, self_->pos.y + dy };
-    std::vector<Asset*> candidates;
     const AssetList* neighbor_list = self_->get_neighbors_list();
     if (neighbor_list) {
-        gather_from_list(neighbor_list, candidates);
+        auto check = [&](Asset* a) {
+            if (!a || a == self_ || !a->info) return false;
+            const bool is_enemy  = (a->info->type == asset_types::enemy);
+            const bool is_player = (a->info->type == asset_types::player);
+            if (!is_enemy && !is_player) return false;
+            return Range::get_distance(new_pos, a) < 40.0;
+        };
+        for (Asset* a : neighbor_list->top_unsorted()) { if (check(a)) return true; }
+        for (Asset* a : neighbor_list->middle_sorted()) { if (check(a)) return true; }
+        for (Asset* a : neighbor_list->bottom_unsorted()) { if (check(a)) return true; }
     } else if (assets_owner_) {
         const auto& active = assets_owner_->getActive();
-        candidates.insert(candidates.end(), active.begin(), active.end());
-    }
-    for (Asset* a : candidates) {
-        if (!a || a == self_ || !a->info) continue;
-        const bool is_enemy  = (a->info->type == asset_types::enemy);
-        const bool is_player = (a->info->type == asset_types::player);
-        if (!is_enemy && !is_player) continue;
-        if (Range::get_distance(new_pos, a) < 40.0) {
-            return true;
+        for (Asset* a : active) {
+            if (!a || a == self_ || !a->info) continue;
+            const bool is_enemy  = (a->info->type == asset_types::enemy);
+            const bool is_player = (a->info->type == asset_types::player);
+            if (!is_enemy && !is_player) continue;
+            if (Range::get_distance(new_pos, a) < 40.0) return true;
         }
     }
     return false;
