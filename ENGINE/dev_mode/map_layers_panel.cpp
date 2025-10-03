@@ -64,7 +64,9 @@ using map_layers::clamp_candidate_min;
 
 constexpr int kLayerRadiusStepDefault = 512;
 
-constexpr double kLayerRadiusSpacingPadding = 64.0;
+constexpr double kLayerEdgeBuffer = 400.0;
+
+constexpr double kMapRadiusOuterPadding = 800.0;
 
 constexpr double kTau = 6.28318530717958647692;
 
@@ -687,11 +689,11 @@ int compute_next_layer_radius(const nlohmann::json& layers) {
 
     if (max_radius <= 0) {
 
-        return kLayerRadiusStepDefault + static_cast<int>(std::ceil(kLayerRadiusSpacingPadding));
+        return kLayerRadiusStepDefault + static_cast<int>(std::ceil(kLayerEdgeBuffer));
 
     }
 
-    return max_radius + step + static_cast<int>(std::ceil(kLayerRadiusSpacingPadding));
+    return max_radius + step + static_cast<int>(std::ceil(kLayerEdgeBuffer));
 
 }
 
@@ -3167,15 +3169,17 @@ double MapLayersPanel::compute_map_radius_from_layers() {
 
     }
 
+    double padded_extent = max_extent + kMapRadiusOuterPadding;
+
     double current = map_info_->value("map_radius", 0.0);
 
-    if (std::fabs(current - max_extent) > 0.5) {
+    if (std::fabs(current - padded_extent) > 0.5) {
 
-        (*map_info_)["map_radius"] = max_extent;
+        (*map_info_)["map_radius"] = padded_extent;
 
     }
 
-    return max_extent;
+    return padded_extent;
 
 }
 
@@ -3255,9 +3259,9 @@ void MapLayersPanel::recalculate_radii_from_layer(int layer_index) {
 
             double prev_extent = extents[i - 1];
 
-            double separation = prev_extent + largest + kLayerRadiusSpacingPadding;
+            double separation = prev_extent + largest + kLayerEdgeBuffer;
 
-            double minimum_step = static_cast<double>(kLayerRadiusStepDefault) + kLayerRadiusSpacingPadding;
+            double minimum_step = static_cast<double>(kLayerRadiusStepDefault) + kLayerEdgeBuffer;
 
             separation = std::max(separation, minimum_step);
 
@@ -4378,6 +4382,8 @@ void MapLayersPanel::add_layer_internal() {
     refresh_canvas();
 
     select_layer(idx);
+
+    compute_map_radius_from_layers();
 
     mark_dirty();
 
