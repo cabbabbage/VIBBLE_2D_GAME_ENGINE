@@ -21,6 +21,7 @@ public:
     void set_animation_qued(const std::string& anim_id);
     void move(int x, int y);
     void set_idle(int rest_ratio);
+    void set_idle(int rest_loop_min, int rest_loop_max);
     void set_pursue(Asset* final_target);
     void set_run(Asset* threat);
     void set_orbit(Asset* center, int min_radius, int max_radius, int keep_direction_ratio);
@@ -85,7 +86,9 @@ private:
     int  serp_side_ = +1;
     int  serp_stride_ = 0;
     bool serp_params_set_ = false;
-    int idle_rest_ratio_ = 0;
+    int idle_rest_loop_min_ = 0;
+    int idle_rest_loop_max_ = 0;
+    int idle_rest_loops_left_ = 0;
     const Asset* pursue_target_ = nullptr;
     const Asset* run_threat_ = nullptr;
     const Asset* orbit_center_ = nullptr;

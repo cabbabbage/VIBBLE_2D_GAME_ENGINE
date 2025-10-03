@@ -1,14 +1,17 @@
 #pragma once
 
 #include "../DockableCollapsible.hpp"
+#include "../widgets.hpp"
 #include <memory>
 #include <string>
 #include <vector>
 #include <algorithm>
 #include <nlohmann/json.hpp>
+#include <fstream>
 #include "asset/asset_info.hpp"
 #include "dev_mode/spawn_groups_config.hpp"
 #include "dev_mode/asset_info_sections.hpp"
+#include "dev_mode/spawn_group_utils.hpp"
 
 class AssetInfoUI;
 
@@ -65,6 +68,38 @@ public:
             if (!r.s_z) r.s_z = std::make_unique<DMSlider>("Z Offset", -5000, 5000, r.z_offset);
             r.s_z->set_rect(SDL_Rect{ x, y - scroll_, maxw, DMSlider::height() });
             y += DMSlider::height() + DMSpacing::item_gap();
+
+            // Config Source controls
+            if (!r.dd_source) {
+                r.source_options = { "Inline", "External (file)" };
+                int sel = r.use_external ? 1 : 0;
+                r.dd_source = std::make_unique<DMDropdown>("Config Source", r.source_options, sel);
+            }
+            if (r.dd_source) {
+                r.dd_source->set_rect(SDL_Rect{ x, y - scroll_, maxw, DMDropdown::height() });
+                y += DMDropdown::height() + DMSpacing::item_gap();
+            }
+
+            // External file row: path + Load/Save
+            const bool ext_mode = (r.dd_source && r.dd_source->selected() == 1);
+            if (ext_mode) {
+                if (!r.path_box) r.path_box = std::make_unique<DMTextBox>("JSON Path (relative)", r.json_path);
+                if (!r.path_widget) r.path_widget = std::make_unique<TextBoxWidget>(r.path_box.get());
+                if (!r.b_load) r.b_load = std::make_unique<DMButton>("Load From File", &DMStyles::ListButton(), 160, DMButton::height());
+                if (!r.b_save) r.b_save = std::make_unique<DMButton>("Save To File", &DMStyles::AccentButton(), 140, DMButton::height());
+
+                int row_h = std::max({ r.path_widget ? r.path_widget->height_for_width(maxw) : DMButton::height(), DMButton::height() });
+                int col_x = x;
+                int path_w = std::max(120, (maxw * 3) / 5);
+                int btn_w_total = std::max(0, maxw - path_w - DMSpacing::item_gap() * 2);
+                int btn_w = std::max(100, btn_w_total / 2);
+                if (r.path_widget) r.path_widget->set_rect(SDL_Rect{ col_x, y - scroll_, path_w, row_h });
+                col_x += path_w + DMSpacing::item_gap();
+                if (r.b_load) r.b_load->set_rect(SDL_Rect{ col_x, y - scroll_, btn_w, DMButton::height() });
+                col_x += btn_w + DMSpacing::item_gap();
+                if (r.b_save) r.b_save->set_rect(SDL_Rect{ col_x, y - scroll_, btn_w, DMButton::height() });
+                y += row_h + DMSpacing::item_gap();
+            }
 
             ensure_spawn_config(r);
             configure_spawn_config(r);
@@ -132,6 +167,72 @@ public:
             if (r.lbl_ && r.lbl_->handle_event(e)) used = true;
             if (r.dd_area && r.dd_area->handle_event(e)) { r.area_name = safe_get_option(r.options, r.dd_area->selected()); changed = true; used = true; }
             if (r.s_z && r.s_z->handle_event(e)) { r.z_offset = r.s_z->value(); changed = true; used = true; }
+            if (r.dd_source && r.dd_source->handle_event(e)) {
+                bool now_external = (r.dd_source->selected() == 1);
+                if (now_external != r.use_external) {
+                    r.use_external = now_external;
+                    changed = true; used = true;
+                }
+            }
+            if (r.path_widget && r.path_widget->handle_event(e)) {
+                std::string new_path = r.path_box ? r.path_box->value() : std::string{};
+                if (new_path != r.json_path) { r.json_path = new_path; changed = true; }
+                used = true;
+            }
+            if (r.b_load && r.b_load->handle_event(e)) {
+                if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
+                    const std::string base_dir = parent_dir(info_->info_json_path());
+                    if (!r.json_path.empty()) {
+                        try {
+                            const std::string full = join_path(base_dir, r.json_path);
+                            nlohmann::json file_json;
+                            {
+                                std::ifstream in(full);
+                                if (in) {
+                                    in >> file_json;
+                                } else {
+                                    file_json = nlohmann::json::object();
+                                }
+                            }
+                            auto& arr = devmode::spawn::ensure_spawn_groups_array(file_json);
+                            (void)devmode::spawn::sanitize_perimeter_spawn_groups(arr);
+                            r.assets = arr;
+                            configure_spawn_config(r);
+                            changed = true; used = true;
+                        } catch (...) {
+                        }
+                    }
+                }
+            }
+            if (r.b_save && r.b_save->handle_event(e)) {
+                if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
+                    const std::string base_dir = parent_dir(info_->info_json_path());
+                    if (!r.json_path.empty()) {
+                        try {
+                            const std::string full = join_path(base_dir, r.json_path);
+                            nlohmann::json file_json;
+                            {
+                                std::ifstream in(full);
+                                if (in) {
+                                    in >> file_json;
+                                    if (!file_json.is_object()) file_json = nlohmann::json::object();
+                                } else {
+                                    file_json = nlohmann::json::object();
+                                }
+                            }
+                            auto& arr = devmode::spawn::ensure_spawn_groups_array(file_json);
+                            arr = (r.assets.is_array() ? r.assets : nlohmann::json::array());
+                            (void)devmode::spawn::sanitize_perimeter_spawn_groups(arr);
+                            std::ofstream out(full);
+                            if (out) {
+                                out << file_json.dump(4);
+                            }
+                            used = true;
+                        } catch (...) {
+                        }
+                    }
+                }
+            }
             for (auto& widget_row : r.spawn_rows) {
                 for (Widget* w : widget_row) {
                     if (w && w->handle_event(e)) {
@@ -195,6 +296,10 @@ public:
             if (row.lbl_)       row.lbl_->render(r);
             if (row.dd_area)    row.dd_area->render(r);
             if (row.s_z)        row.s_z->render(r);
+            if (row.dd_source)  row.dd_source->render(r);
+            if (row.path_widget) row.path_widget->render(r);
+            if (row.b_load)     row.b_load->render(r);
+            if (row.b_save)     row.b_save->render(r);
             for (const auto& widget_row : row.spawn_rows) {
                 for (Widget* w : widget_row) {
                     if (w) w->render(r);
@@ -230,13 +335,20 @@ private:
         std::unique_ptr<DMButton>   lbl_;
         std::unique_ptr<DMDropdown> dd_area;
         std::unique_ptr<DMSlider>   s_z;
+        std::unique_ptr<DMDropdown> dd_source;
+        std::unique_ptr<DMTextBox>  path_box;
+        std::unique_ptr<TextBoxWidget> path_widget;
+        std::unique_ptr<DMButton>   b_load;
+        std::unique_ptr<DMButton>   b_save;
         std::unique_ptr<DMButton>   b_edit_area;
         std::unique_ptr<DMButton>   b_delete;
         std::unique_ptr<SpawnGroupsConfig> spawn_cfg;
         DockableCollapsible::Rows spawn_rows;
 
         std::vector<std::string> options;
-};
+        std::vector<std::string> source_options;
+        bool use_external = false;
+    };
 
 private:
     SDL_Point spawn_groups_anchor_at(int screen_y) const {
@@ -261,12 +373,21 @@ private:
             r.z_offset = c.z_offset;
 
             r.json_path = make_relative(base_dir, c.json_path);
+            r.use_external = !r.json_path.empty();
             if (c.inline_assets.is_array()) {
                 r.assets = c.inline_assets;
             }
             r.options = area_names_with_none();
             r.dd_area = std::make_unique<DMDropdown>("Area", r.options, find_index(r.options, r.area_name));
             r.s_z = std::make_unique<DMSlider>("Z Offset", -5000, 5000, r.z_offset);
+            r.source_options = { "Inline", "External (file)" };
+            r.dd_source = std::make_unique<DMDropdown>("Config Source", r.source_options, r.use_external ? 1 : 0);
+            if (r.use_external) {
+                r.path_box = std::make_unique<DMTextBox>("JSON Path (relative)", r.json_path);
+                r.path_widget = std::make_unique<TextBoxWidget>(r.path_box.get());
+                r.b_load = std::make_unique<DMButton>("Load From File", &DMStyles::ListButton(), 160, DMButton::height());
+                r.b_save = std::make_unique<DMButton>("Save To File", &DMStyles::AccentButton(), 140, DMButton::height());
+            }
 
             rows_.push_back(std::move(r));
         }
@@ -334,9 +455,14 @@ private:
             ci.area_name = r.area_name;
             ci.z_offset  = r.z_offset;
 
-            ci.inline_assets = r.assets.is_array() ? r.assets : nlohmann::json::array();
-
-            ci.json_path = r.json_path.empty() ? std::string{} : join_path(base_dir, r.json_path);
+            const bool external = (r.dd_source && r.dd_source->selected() == 1);
+            if (external) {
+                ci.inline_assets = nlohmann::json::array();
+                ci.json_path = r.json_path.empty() ? std::string{} : join_path(base_dir, r.json_path);
+            } else {
+                ci.inline_assets = r.assets.is_array() ? r.assets : nlohmann::json::array();
+                ci.json_path.clear();
+            }
             out.push_back(std::move(ci));
         }
         info_->set_children(out);

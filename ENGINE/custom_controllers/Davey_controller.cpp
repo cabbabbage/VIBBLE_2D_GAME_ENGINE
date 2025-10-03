@@ -4,7 +4,6 @@
 #include "utils/range_util.hpp"
 #include <algorithm>
 #include <cmath>
-
 DaveyController::DaveyController(Assets* assets, Asset* self)
     : assets_(assets), self_(self) {
     if (self_ && self_->anim_) {

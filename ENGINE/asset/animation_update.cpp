@@ -313,9 +313,28 @@ void AnimationUpdate::set_path_bias(double bias) {
 }
 
 void AnimationUpdate::set_idle(int rest_ratio) {
-    if (mode_ == Mode::Idle) return;
-    idle_rest_ratio_ = std::clamp(rest_ratio, 0, 100);
-    transition_mode(Mode::Idle);
+    const int clamped = std::clamp(rest_ratio, 0, 100);
+    int loop_min = 0;
+    int loop_max = 0;
+    if (clamped > 0) {
+        loop_max = std::max(1, clamped / 10);
+        loop_min = std::max(0, loop_max - 1);
+    }
+    set_idle(loop_min, loop_max);
+}
+
+void AnimationUpdate::set_idle(int rest_loop_min, int rest_loop_max) {
+    const int normalized_min = std::max(0, std::min(rest_loop_min, rest_loop_max));
+    const int normalized_max = std::max(normalized_min, std::max(rest_loop_min, rest_loop_max));
+    const bool range_changed = (idle_rest_loop_min_ != normalized_min) || (idle_rest_loop_max_ != normalized_max);
+    idle_rest_loop_min_ = normalized_min;
+    idle_rest_loop_max_ = normalized_max;
+    if (mode_ != Mode::Idle || range_changed) {
+        idle_rest_loops_left_ = 0;
+    }
+    if (mode_ != Mode::Idle) {
+        transition_mode(Mode::Idle);
+    }
 }
 
 void AnimationUpdate::set_pursue(Asset* final_target) {
@@ -441,13 +460,21 @@ std::string AnimationUpdate::pick_best_animation_towards(SDL_Point target) {
 void AnimationUpdate::ensure_idle_target() {
     if (!self_) return;
     normalize_minmax(min_current_target_dist, max_current_target_dist);
-    const int rest_pct = std::clamp(idle_rest_ratio_, 0, 100);
-    const double roll = rand_real(rng_, 0.0, 100.0);
-    if (roll < static_cast<double>(rest_pct)) {
+
+    if (have_target_ && is_target_reached()) {
+        have_target_ = false;
+        moving = false;
+        const int rest_min = std::min(idle_rest_loop_min_, idle_rest_loop_max_);
+        const int rest_max = std::max(idle_rest_loop_min_, idle_rest_loop_max_);
+        idle_rest_loops_left_ = rand_int(rng_, rest_min, rest_max);
+    }
+
+    if (idle_rest_loops_left_ > 0) {
         have_target_ = false;
         moving = false;
         return;
     }
+
     const int cx = self_->pos.x;
     const int cy = self_->pos.y;
     const double a = rand_angle(rng_);
@@ -636,6 +663,14 @@ bool AnimationUpdate::advance(AnimationFrame*& frame) {
 
         float speed = anim.speed_factor;
         if (!std::isfinite(speed)) speed = 1.0f;
+        const bool single_frame = (anim.number_of_frames <= 1) || (anim.frames_data.size() <= 1);
+        int single_frame_interval = 1;
+        if (single_frame) {
+            if (speed < 0.0f) {
+                single_frame_interval = std::max(1, static_cast<int>(std::lround(-speed)));
+            }
+            speed = 1.0f;
+        }
         double abs_speed = std::abs(static_cast<double>(speed));
         if (abs_speed < 1e-6) {
             abs_speed = 1.0;
@@ -643,7 +678,10 @@ bool AnimationUpdate::advance(AnimationFrame*& frame) {
         }
         int interval = 1;
         float progress_increment = 1.0f;
-        if (abs_speed > 1.0) {
+        if (single_frame && single_frame_interval > 1) {
+            interval = single_frame_interval;
+            progress_increment = 1.0f;
+        } else if (abs_speed > 1.0) {
             interval = std::max(1, static_cast<int>(std::lround(abs_speed)));
             progress_increment = 1.0f;
         } else {
@@ -697,18 +735,32 @@ bool AnimationUpdate::advance(AnimationFrame*& frame) {
         suppress_movement_ = false;
         bool reached_end = false;
         self_->frame_progress += progress_increment;
+        bool completed_loop = false;
         while (self_->frame_progress >= 1.0f) {
             self_->frame_progress -= 1.0f;
             if (frame->next) {
                 frame = frame->next;
             } else if (anim.loop) {
                 frame = anim.get_first_frame();
+                completed_loop = true;
             } else {
                 reached_end = true;
                 break;
             }
         }
         self_->current_frame = frame;
+        if (completed_loop && mode_ == Mode::Idle && !moving && idle_rest_loops_left_ > 0) {
+            bool count_loop = true;
+            if (self_->info) {
+                auto it_def = self_->info->animations.find("default");
+                if (it_def != self_->info->animations.end()) {
+                    count_loop = (self_->current_animation == "default");
+                }
+            }
+            if (count_loop) {
+                --idle_rest_loops_left_;
+            }
+        }
         return !reached_end;
     } catch (const std::exception& e) {
         std::cerr << "[AnimationUpdate::advance] " << e.what() << "\n";
