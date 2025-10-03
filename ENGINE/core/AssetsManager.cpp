@@ -5,7 +5,6 @@
 #include "asset/Asset.hpp"
 #include "asset/asset_info.hpp"
 #include "asset/asset_utils.hpp"
-#include "asset/asset_types.hpp"
 #include "audio/audio_engine.hpp"
 #include "dev_mode/dev_controls.hpp"
 #include "render/scene_renderer.hpp"
@@ -25,10 +24,6 @@
 #include <system_error>
 #include <vector>
 #include <SDL.h>
-
-namespace {
-constexpr int kNeighborRadiusSq = Assets::kNeighborRadius * Assets::kNeighborRadius;
-}
 
 Assets::Assets(std::vector<Asset>&& loaded,
                AssetLibrary& library,
@@ -329,7 +324,6 @@ const std::vector<Room*>& Assets::rooms() const {
 
 void Assets::refresh_active_asset_lists() {
     rebuild_active_assets_if_needed();
-    refresh_all_moving_neighbors();
     update_closest_assets(player, 3);
 
     SDL_Point camera_focus = camera_.get_screen_center();
@@ -363,86 +357,6 @@ void Assets::update_filtered_active_assets() {
 
     filtered_active_assets = active_assets;
     dev_controls_->filter_active_assets(filtered_active_assets);
-}
-
-void Assets::update_neighbors_for_asset(Asset* asset) {
-    update_neighbors_for_asset_internal(asset, true);
-}
-
-void Assets::update_neighbors_for_asset_internal(Asset* asset, bool update_related) {
-    if (!asset) {
-        return;
-    }
-
-    asset->neighbors.clear();
-    asset->impassable_neighbors.clear();
-
-    if (!asset->info || !asset->info->moving_asset) {
-        return;
-    }
-
-    const SDL_Point center = asset->pos;
-    std::vector<Asset*> related;
-    if (update_related) {
-        related.reserve(8);
-    }
-
-    for (Asset* other : active_assets) {
-        if (!other || other == asset || !other->info) {
-            continue;
-        }
-        if (other->info->type == asset_types::texture) {
-            continue;
-        }
-        const long dx = static_cast<long>(other->pos.x) - static_cast<long>(center.x);
-        const long dy = static_cast<long>(other->pos.y) - static_cast<long>(center.y);
-        const long dist2 = dx * dx + dy * dy;
-        if (dist2 > kNeighborRadiusSq) {
-            continue;
-        }
-        asset->neighbors.push_back(other);
-        if (!other->info->passable) {
-            asset->impassable_neighbors.push_back(other);
-        }
-        if (update_related && other->info->moving_asset) {
-            related.push_back(other);
-        }
-    }
-
-    if (update_related) {
-        for (Asset* neighbor : related) {
-            update_neighbors_for_asset_internal(neighbor, false);
-        }
-    }
-}
-
-void Assets::refresh_all_moving_neighbors() {
-    for (Asset* asset : active_assets) {
-        if (!asset) {
-            continue;
-        }
-        if (!asset->info || !asset->info->moving_asset) {
-            asset->neighbors.clear();
-            asset->impassable_neighbors.clear();
-            continue;
-        }
-        update_neighbors_for_asset_internal(asset, false);
-    }
-}
-
-void Assets::remove_from_neighbor_lists(Asset* asset) {
-    if (!asset) {
-        return;
-    }
-    for (Asset* candidate : all) {
-        if (!candidate || candidate == asset || !candidate->info || !candidate->info->moving_asset) {
-            continue;
-        }
-        auto& list = candidate->neighbors;
-        list.erase(std::remove(list.begin(), list.end(), asset), list.end());
-        auto& impassable = candidate->impassable_neighbors;
-        impassable.erase(std::remove(impassable.begin(), impassable.end(), asset), impassable.end());
-    }
 }
 
 void Assets::ensure_dev_controls() {
@@ -760,7 +674,6 @@ void Assets::addAsset(const std::string& name, SDL_Point g) {
     rebuild_active_assets_if_needed();
     update_closest_assets(player, 3);
     update_filtered_active_assets();
-    refresh_all_moving_neighbors();
 
     std::cout << "[Assets::addAsset] Active assets=" << active_assets.size() << ", Closest=" << closest_assets.size() << "\n";
 
@@ -817,7 +730,6 @@ Asset* Assets::spawn_asset(const std::string& name, SDL_Point world_pos) {
     rebuild_active_assets_if_needed();
     update_closest_assets(player, 3);
     update_filtered_active_assets();
-    refresh_all_moving_neighbors();
 
     std::cout << "[Assets::spawn_asset] Active assets=" << active_assets.size() << ", Closest=" << closest_assets.size() << "\n";
 
@@ -881,7 +793,6 @@ void Assets::schedule_removal(Asset* a) {
 void Assets::process_removals() {
     if (removal_queue.empty()) return;
     for (Asset* a : removal_queue) {
-        remove_from_neighbor_lists(a);
 
         auto it = std::find_if(owned_assets.begin(), owned_assets.end(),
                                [a](const std::unique_ptr<Asset>& p){ return p.get() == a; });
@@ -907,7 +818,6 @@ void Assets::process_removals() {
     initialize_active_assets(camera_.get_screen_center());
     rebuild_active_assets_if_needed();
     update_closest_assets(player, 3);
-    refresh_all_moving_neighbors();
     update_filtered_active_assets();
 }
 

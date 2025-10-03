@@ -90,8 +90,6 @@ class Asset {
     float angle_from_camera = 0.0f;
 
     std::vector<Asset*> children;
-    std::vector<Asset*> neighbors;
-    std::vector<Asset*> impassable_neighbors;
     std::vector<StaticLight> static_lights;
     int depth = 0;
     bool is_shaded = false;

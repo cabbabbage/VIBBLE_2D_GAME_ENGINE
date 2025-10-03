@@ -22,8 +22,6 @@ class AssetInfo;
 
 class Assets {
 public:
-    static constexpr int kNeighborRadius = 512;
-
     Assets(std::vector<Asset>&& loaded, AssetLibrary& library, Asset*, std::vector<Room*> rooms, int screen_width, int screen_height, int screen_center_x, int screen_center_y, int map_radius, SDL_Renderer* renderer, const std::string& map_path);
     ~Assets();
 
@@ -90,8 +88,6 @@ public:
     void mark_active_assets_dirty();
     void initialize_active_assets(SDL_Point center);
 
-    void update_neighbors_for_asset(Asset* asset);
-
     bool is_dev_mode() const { return dev_mode; }
 
     int shading_group_count() const { return num_groups_; }
@@ -115,9 +111,6 @@ private:
     void addAsset(const std::string& name, SDL_Point g);
     void update_filtered_active_assets();
     void ensure_dev_controls();
-    void refresh_all_moving_neighbors();
-    void remove_from_neighbor_lists(Asset* asset);
-    void update_neighbors_for_asset_internal(Asset* asset, bool update_related);
 
     friend class SceneRenderer;
     friend class Asset;
