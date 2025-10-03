@@ -11,6 +11,7 @@
 #include <limits>
 #include <cmath>
 #include <algorithm>
+#include <vector>
 #include <random>
 #include <string>
 #include <iostream>
@@ -52,6 +53,50 @@ struct ManualState {
 ManualState& manual_state(AnimationUpdate* updater) {
     static std::unordered_map<AnimationUpdate*, ManualState> states;
     return states[updater];
+}
+
+const std::vector<Asset*>& gather_neighbors(Asset* asset, Assets* owner, SDL_Point center) {
+    static std::vector<Asset*> fallback;
+    fallback.clear();
+    if (!owner) return fallback;
+    const std::vector<Asset*>& active = owner->getActive();
+    if (active.empty()) return fallback;
+    Range::get_in_range(center, Assets::kNeighborRadius, active, fallback);
+    fallback.erase(std::remove_if(fallback.begin(), fallback.end(), [](Asset* candidate) {
+        return !candidate || !candidate->info || candidate->info->type == asset_types::texture;
+    }), fallback.end());
+    return fallback;
+}
+
+const std::vector<Asset*>& gather_impassable_neighbors(Asset* asset, Assets* owner, SDL_Point center) {
+    static std::vector<Asset*> fallback;
+    fallback.clear();
+    const auto& base = gather_neighbors(asset, owner, center);
+    fallback.reserve(base.size());
+    for (Asset* candidate : base) {
+        if (candidate && candidate->info && !candidate->info->passable) {
+            fallback.push_back(candidate);
+        }
+    }
+    return fallback;
+}
+
+const std::vector<Asset*>& neighbors_for_asset(Asset* asset, Assets* owner, SDL_Point center) {
+    if (asset && asset->info && asset->info->moving_asset) {
+        if (!asset->neighbors.empty() || !owner) {
+            return asset->neighbors;
+        }
+    }
+    return gather_neighbors(asset, owner, center);
+}
+
+const std::vector<Asset*>& impassable_neighbors_for_asset(Asset* asset, Assets* owner, SDL_Point center) {
+    if (asset && asset->info && asset->info->moving_asset) {
+        if (!asset->impassable_neighbors.empty() || !owner) {
+            return asset->impassable_neighbors;
+        }
+    }
+    return gather_impassable_neighbors(asset, owner, center);
 }
 }
 
@@ -128,11 +173,7 @@ SDL_Point AnimationUpdate::choose_balanced_target(SDL_Point desired, const Asset
     const double base_angle  = std::atan2(static_cast<double>(dy0), static_cast<double>(dx0));
     double base_radius = std::sqrt(static_cast<double>(dx0*dx0 + dy0*dy0));
     if (base_radius < 1.0) base_radius = 1.0;
-    static const std::vector<Asset*> kEmptyAssets;
-    const std::vector<Asset*>& active = assets_owner_ ? assets_owner_->getActive() : kEmptyAssets;
-    std::vector<Asset*> neighbors;
-    neighbors.reserve(active.size());
-    Range::get_in_range(SDL_Point{sx, sy}, 300, active, neighbors);
+    const std::vector<Asset*>& neighbors = neighbors_for_asset(self_, assets_owner_, SDL_Point{sx, sy});
     static const double ang_offsets[] = { -0.6, -0.4, -0.25, -0.12, 0.0, 0.12, 0.25, 0.4, 0.6 };
     static const double rad_scales[]  = { 0.9, 1.0, 1.1 };
     SDL_Point best = desired;
@@ -151,7 +192,6 @@ SDL_Point AnimationUpdate::choose_balanced_target(SDL_Point desired, const Asset
             double sum = 0.0; int cnt = 0;
             for (Asset* n : neighbors) {
                 if (!n || n == self_ || !n->info) continue;
-                if (n->info->type == asset_types::texture) continue;
                 if (final_target && n == final_target) continue;
                 if (n->info->passable) continue;
                 const double rvx = static_cast<double>(n->pos.x - sx);
@@ -183,12 +223,18 @@ bool AnimationUpdate::point_in_impassable(SDL_Point pt, const Asset* ignored) co
     Asset* closest = nullptr;
     double best_d2 = std::numeric_limits<double>::infinity();
 
-    static const std::vector<Asset*> kEmptyAssets;
-    const std::vector<Asset*>& active = assets_owner_ ? assets_owner_->getActive() : kEmptyAssets;
-    for (Asset* a : active) {
+    Assets* owner = assets_owner_;
+    if (!owner && self_) {
+        owner = self_->get_assets();
+    }
+    const double dist_to_pt = self_ ? Range::get_distance(self_->pos, pt) : 0.0;
+    const bool use_cached = (self_ && self_->info && self_->info->moving_asset && dist_to_pt <= static_cast<double>(Assets::kNeighborRadius));
+    const std::vector<Asset*>& candidates = use_cached
+        ? self_->impassable_neighbors
+        : impassable_neighbors_for_asset(self_, owner, pt);
+
+    for (Asset* a : candidates) {
         if (!a || a == self_ || a == ignored || !a->info) continue;
-        if (a->info->type == asset_types::texture) continue;
-        if (a->info->passable) continue;
         const double dx = static_cast<double>(a->pos.x - pt.x);
         const double dy = static_cast<double>(a->pos.y - pt.y);
         const double d2 = dx*dx + dy*dy;
@@ -334,9 +380,12 @@ bool AnimationUpdate::can_move_by(int dx, int dy) const {
 bool AnimationUpdate::would_overlap_same_or_player(int dx, int dy) const {
     if (!self_ || !self_->info) return true;
     const SDL_Point new_pos{ self_->pos.x + dx, self_->pos.y + dy };
-    static const std::vector<Asset*> kEmptyAssets;
-    const std::vector<Asset*>& active = assets_owner_ ? assets_owner_->getActive() : kEmptyAssets;
-    for (Asset* a : active) {
+    Assets* owner = assets_owner_;
+    if (!owner && self_) {
+        owner = self_->get_assets();
+    }
+    const std::vector<Asset*>& candidates = neighbors_for_asset(self_, owner, new_pos);
+    for (Asset* a : candidates) {
         if (!a || a == self_ || !a->info) continue;
         const bool is_enemy  = (a->info->type == asset_types::enemy);
         const bool is_player = (a->info->type == asset_types::player);
@@ -592,15 +641,18 @@ bool AnimationUpdate::advance(AnimationFrame*& frame) {
                 blocked_last_step_ = true;
             }
         }
+        Assets* as = assets_owner_;
+        if (!as && self_) {
+            as = self_->get_assets();
+        }
         if (attempted_move && !blocked && !suppress_movement_) {
             self_->pos.x += move_dx;
             self_->pos.y += move_dy;
+            if (as && self_->info && self_->info->moving_asset) {
+                as->update_neighbors_for_asset(self_);
+            }
             if (frame->z_resort) {
                 self_->set_z_index();
-                Assets* as = assets_owner_;
-                if (!as && self_) {
-                    as = self_->get_assets();
-                }
                 if (as) {
                     as->mark_active_assets_dirty();
                 }

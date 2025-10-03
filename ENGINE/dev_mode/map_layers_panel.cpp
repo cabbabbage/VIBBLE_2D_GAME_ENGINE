@@ -64,6 +64,8 @@ using map_layers::clamp_candidate_min;
 
 constexpr int kLayerRadiusStepDefault = 512;
 
+constexpr double kLayerRadiusSpacingPadding = 64.0;
+
 constexpr double kTau = 6.28318530717958647692;
 
 SDL_Color hsv_to_rgb(double h, double s, double v) {
@@ -645,11 +647,11 @@ int compute_next_layer_radius(const nlohmann::json& layers) {
 
     if (max_radius <= 0) {
 
-        return kLayerRadiusStepDefault;
+        return kLayerRadiusStepDefault + static_cast<int>(std::ceil(kLayerRadiusSpacingPadding));
 
     }
 
-    return max_radius + step;
+    return max_radius + step + static_cast<int>(std::ceil(kLayerRadiusSpacingPadding));
 
 }
 
@@ -1129,7 +1131,31 @@ void MapLayersPanel::LayerCanvasWidget::render(SDL_Renderer* renderer) const {
 
     double scale = static_cast<double>(draw_radius_max) / display_extent;
 
+    double map_radius_value = 0.0;
+
+    if (owner_->map_info_) {
+
+        map_radius_value = owner_->map_info_->value("map_radius", 0.0);
+
+    }
+
+    const int map_radius_pixels = map_radius_value > 0.0 ? std::max(12, static_cast<int>(std::lround(map_radius_value * scale))) : 0;
+
     const DMLabelStyle label_style = DMStyles::Label();
+
+    if (map_radius_pixels > 0) {
+
+        SDL_Color map_radius_color = lighten_color(DMStyles::AccentButton().bg, 0.1f);
+
+        draw_circle(renderer, center_x, center_y, map_radius_pixels, map_radius_color, 2);
+
+        std::ostringstream map_label;
+
+        map_label << "Map Radius (" << static_cast<int>(std::lround(map_radius_value)) << ")";
+
+        draw_text(renderer, map_label.str(), rect_.x + 12, rect_.y + 12, label_style);
+
+    }
 
     const int hovered_layer = owner_->hovered_layer_index_;
 
@@ -2561,8 +2587,6 @@ bool MapLayersPanel::RoomCandidateWidget::handle_event(const SDL_Event& e) {
 
                     owner_->panel_owner()->update_click_target(layer_index_, room_key);
 
-                    owner_->panel_owner()->open_room_config_for(room_key);
-
                 }
 
             }
@@ -2750,6 +2774,28 @@ void MapLayersPanel::set_controller(std::shared_ptr<MapLayersController> control
 }
 
 void MapLayersPanel::open() {
+
+    if (!is_visible()) {
+
+        if (map_info_) {
+
+            recalculate_radii_from_layer(0);
+
+            compute_map_radius_from_layers();
+
+            regenerate_preview();
+
+            refresh_canvas();
+
+        }
+
+    } else if (preview_dirty_) {
+
+        regenerate_preview();
+
+        refresh_canvas();
+
+    }
 
     set_visible(true);
 
@@ -3165,9 +3211,11 @@ void MapLayersPanel::recalculate_radii_from_layer(int layer_index) {
 
             double prev_extent = extents[i - 1];
 
-            double separation = prev_extent + largest;
+            double separation = prev_extent + largest + kLayerRadiusSpacingPadding;
 
-            separation = std::max(separation, static_cast<double>(kLayerRadiusStepDefault));
+            double minimum_step = static_cast<double>(kLayerRadiusStepDefault) + kLayerRadiusSpacingPadding;
+
+            separation = std::max(separation, minimum_step);
 
             double minimum = prev_radius + separation;
 
@@ -3671,8 +3719,6 @@ bool MapLayersPanel::handle_preview_room_click(int px, int py, int center_x, int
     }
 
     update_click_target(node->layer, node->name);
-
-    open_room_config_for(node->name);
 
     return true;
 

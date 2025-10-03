@@ -118,7 +118,7 @@
       "max_rooms": 3,
       "min_rooms": 0,
       "name": "layer_1",
-      "radius": 3255,
+      "radius": 3319,
       "rooms": [
         {
           "max_instances": 1,
@@ -143,13 +143,13 @@
     {
       "level": 2,
       "max_rooms": 8,
-      "min_rooms": 0,
+      "min_rooms": 3,
       "name": "layer_2",
-      "radius": 6152,
+      "radius": 6280,
       "rooms": [
         {
           "max_instances": 8,
-          "min_instances": 0,
+          "min_instances": 3,
           "name": "bar",
           "required_children": []
         }
@@ -211,7 +211,7 @@
     "update_interval": 53
   },
   "map_name": "FORREST",
-  "map_radius": 7600.5,
+  "map_radius": 7728.5,
   "rooms_data": {
     "bar": {
       "edge_smoothness": 101,

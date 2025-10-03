@@ -87,8 +87,10 @@ Asset::Asset(const Asset& o)
 , distance_to_player_sq(o.distance_to_player_sq)
 , distance_from_camera(o.distance_from_camera)
 , angle_from_camera(o.angle_from_camera)
-, children(o.children)
-, static_lights(o.static_lights)
+    , children(o.children)
+    , neighbors()
+    , impassable_neighbors()
+    , static_lights(o.static_lights)
 , depth(o.depth)
 , is_shaded(o.is_shaded)
 , dead(o.dead)
@@ -133,8 +135,10 @@ Asset& Asset::operator=(const Asset& o) {
         distance_to_player_sq = o.distance_to_player_sq;
         distance_from_camera = o.distance_from_camera;
         angle_from_camera = o.angle_from_camera;
-	children             = o.children;
-	static_lights        = o.static_lights;
+        children             = o.children;
+        neighbors.clear();
+        impassable_neighbors.clear();
+        static_lights        = o.static_lights;
 	depth                = o.depth;
         is_shaded            = o.is_shaded;
 	dead                 = o.dead;
