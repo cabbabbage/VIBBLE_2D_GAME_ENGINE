@@ -14,7 +14,8 @@
 #include <cmath>
 #include <cctype>
 AssetInfo::AssetInfo(const std::string &asset_folder_name)
-: has_light_source(false) {
+: is_shaded(false)
+, is_light_source(false) {
 	name = asset_folder_name;
 	dir_path_ = "SRC/" + asset_folder_name;
 	std::string info_path = dir_path_ + "/info.json";
@@ -146,7 +147,7 @@ void AssetInfo::load_base_properties(const nlohmann::json &data) {
 	start_animation = data.value("start", std::string{"default"});
 	z_threshold = data.value("z_threshold", 0);
 	passable = has_tag("passable");
-	has_shading = data.value("has_shading", false);
+        is_shaded = data.value("has_shading", false);
 	min_same_type_distance = data.value("min_same_type_distance", 0);
 	min_distance_all = data.value("min_distance_all", 0);
 	flipable = data.value("can_invert", false);
@@ -445,24 +446,24 @@ void AssetInfo::set_children(const std::vector<ChildInfo>& new_children) {
     info_json_["child_assets"] = std::move(arr);
 }
 
-void AssetInfo::set_lighting(bool has_shading_,
+void AssetInfo::set_lighting(bool is_shaded_,
                              const LightSource& shading,
                              int shading_factor,
                              const std::vector<LightSource>& lights) {
-    has_shading = has_shading_;
+    is_shaded = is_shaded_;
     this->shading_factor = shading_factor;
     orbital_light_sources.clear();
     light_sources = lights;
-    if (has_shading) {
+    if (is_shaded) {
         orbital_light_sources.push_back(shading);
     }
-    has_light_source = has_shading || !lights.empty();
+    is_light_source = is_shaded || !lights.empty();
 
     nlohmann::json arr = nlohmann::json::array();
 
     nlohmann::json shade_entry = nlohmann::json::object();
     shade_entry["has_light_source"] = true;
-    if (has_shading) {
+    if (is_shaded) {
         shade_entry["light_intensity"] = shading.intensity;
         shade_entry["radius"] = shading.radius;
         const double f = std::max(0.01, static_cast<double>(shading_factor) / 100.0);
@@ -501,7 +502,7 @@ void AssetInfo::set_lighting(bool has_shading_,
         j["light_color"] = { l.color.r, l.color.g, l.color.b };
         arr.push_back(std::move(j));
     }
-    info_json_["has_shading"] = has_shading;
+    info_json_["has_shading"] = is_shaded;
     info_json_["lighting_info"] = std::move(arr);
 }
 

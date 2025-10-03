@@ -22,7 +22,7 @@ public:
         shading_factor_ = 100;
         if (!info_) return;
         shading_factor_ = std::clamp(info_->shading_factor, 1, 200);
-        c_has_shading_ = std::make_unique<DMCheckbox>("Has Shading", info_->has_shading);
+        c_is_shaded_ = std::make_unique<DMCheckbox>("Has Shading", info_->is_shaded);
         shading_label_ = std::make_unique<DMButton>("Shading Source", &DMStyles::HeaderButton(), 150, DMButton::height());
         if (!info_->orbital_light_sources.empty()) {
             shading_light_ = info_->orbital_light_sources[0];
@@ -72,10 +72,10 @@ public:
             y += h + DMSpacing::item_gap();
 };
 
-        if (c_has_shading_) {
-            place(c_has_shading_, DMCheckbox::height());
+        if (c_is_shaded_) {
+            place(c_is_shaded_, DMCheckbox::height());
         }
-        if (c_has_shading_ && c_has_shading_->value()) {
+        if (c_is_shaded_ && c_is_shaded_->value()) {
             int shade_start = y;
             if (shading_label_) {
                 int lbl_w = shading_label_->rect().w;
@@ -130,10 +130,10 @@ public:
         bool used = DockableCollapsible::handle_event(e);
         if (!info_ || !expanded_) return used;
         bool changed = false;
-        if (c_has_shading_ && c_has_shading_->handle_event(e)) {
+        if (c_is_shaded_ && c_is_shaded_->handle_event(e)) {
             changed = true;
         }
-        if (c_has_shading_ && c_has_shading_->value()) {
+        if (c_is_shaded_ && c_is_shaded_->value()) {
             if (s_sh_intensity_ && s_sh_intensity_->handle_event(e)) { shading_light_.intensity = s_sh_intensity_->value(); changed = true; }
             if (s_sh_radius_    && s_sh_radius_->handle_event(e))    { shading_light_.radius = s_sh_radius_->value(); changed = true; }
             if (s_sh_x_radius_  && s_sh_x_radius_->handle_event(e))  { shading_light_.x_radius = s_sh_x_radius_->value(); changed = true; }
@@ -226,8 +226,8 @@ public:
     }
 
     void render_content(SDL_Renderer* r) const override {
-        if (c_has_shading_) c_has_shading_->render(r);
-        if (c_has_shading_ && c_has_shading_->value()) {
+        if (c_is_shaded_) c_is_shaded_->render(r);
+        if (c_is_shaded_ && c_is_shaded_->value()) {
             if (shading_label_) shading_label_->render(r);
             if (s_sh_intensity_) s_sh_intensity_->render(r);
             if (s_sh_radius_)    s_sh_radius_->render(r);
@@ -259,7 +259,7 @@ public:
         if (apply_btn_) apply_btn_->render(r);
     }
 
-    bool shading_enabled() const { return c_has_shading_ && c_has_shading_->value(); }
+    bool shading_enabled() const { return c_is_shaded_ && c_is_shaded_->value(); }
     const LightSource& shading_light() const { return shading_light_; }
 
 private:
@@ -283,14 +283,14 @@ private:
         if (!info_) return;
         std::vector<LightSource> lights;
         for (const auto& r : rows_) lights.push_back(r.light);
-        info_->set_lighting(c_has_shading_ ? c_has_shading_->value() : false, shading_light_, shading_factor_, lights);
+        info_->set_lighting(c_is_shaded_ ? c_is_shaded_->value() : false, shading_light_, shading_factor_, lights);
     }
 
     LightSource shading_light_{};
     int shading_factor_ = 100;
     std::unique_ptr<DMButton> shading_label_;
     SDL_Rect shading_rect_{0,0,0,0};
-    std::unique_ptr<DMCheckbox> c_has_shading_;
+    std::unique_ptr<DMCheckbox> c_is_shaded_;
     std::unique_ptr<DMSlider> s_sh_intensity_;
     std::unique_ptr<DMSlider> s_sh_radius_;
     std::unique_ptr<DMSlider> s_sh_x_radius_;

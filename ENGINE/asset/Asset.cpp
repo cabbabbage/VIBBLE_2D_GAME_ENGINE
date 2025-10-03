@@ -33,9 +33,9 @@ Asset::Asset(std::shared_ptr<AssetInfo> info_,
 {
 	set_flip();
 	set_z_index();
-	if (info) {
-		try { has_shading = info->has_shading; } catch (...) { has_shading = false; }
-	}
+        if (info) {
+                try { is_shaded = info->is_shaded; } catch (...) { is_shaded = false; }
+        }
         std::string start_id = info->start_animation.empty() ? std::string{"default"} : info->start_animation;
         auto it = info->animations.find(start_id);
         if (it == info->animations.end()) {
@@ -90,7 +90,7 @@ Asset::Asset(const Asset& o)
 , children(o.children)
 , static_lights(o.static_lights)
 , depth(o.depth)
-, has_shading(o.has_shading)
+, is_shaded(o.is_shaded)
 , dead(o.dead)
 , static_frame(o.static_frame)
 , cached_w(o.cached_w)
@@ -136,7 +136,7 @@ Asset& Asset::operator=(const Asset& o) {
 	children             = o.children;
 	static_lights        = o.static_lights;
 	depth                = o.depth;
-	has_shading          = o.has_shading;
+        is_shaded            = o.is_shaded;
 	dead                 = o.dead;
 	static_frame         = o.static_frame;
 	cached_w             = o.cached_w;

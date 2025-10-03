@@ -41,7 +41,7 @@ class AssetInfo {
     std::string start_animation;
     int z_threshold;
     bool passable;
-    bool has_shading;
+    bool is_shaded = false;
     int shading_factor = 100;
     int min_same_type_distance;
     int min_distance_all;
@@ -52,7 +52,7 @@ class AssetInfo {
     bool flipable;
     std::vector<std::string> tags;
     std::vector<std::string> anti_tags;
-    bool has_light_source;
+    bool is_light_source = false;
     bool moving_asset = false;
     struct NamedArea {
     std::string name;
@@ -87,7 +87,7 @@ class AssetInfo {
 
     void set_children(const std::vector<ChildInfo>& children);
 
-    void set_lighting(bool has_shading, const LightSource& shading, int shading_factor, const std::vector<LightSource>& lights);
+    void set_lighting(bool is_shaded, const LightSource& shading, int shading_factor, const std::vector<LightSource>& lights);
 
     std::string info_json_path() const { return info_json_path_; }
     std::string asset_dir_path() const { return dir_path_; }

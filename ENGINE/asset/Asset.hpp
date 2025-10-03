@@ -92,7 +92,7 @@ class Asset {
     std::vector<Asset*> children;
     std::vector<StaticLight> static_lights;
     int depth = 0;
-    bool has_shading = false;
+    bool is_shaded = false;
     bool dead = false;
     bool static_frame = true;
     int cached_w = 0;
