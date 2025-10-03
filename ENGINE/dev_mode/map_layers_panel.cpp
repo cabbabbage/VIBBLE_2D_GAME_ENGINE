@@ -2183,8 +2183,6 @@ void MapLayersPanel::LayerConfigPanel::ensure_cleanup() {
 
     total_room_widget_.reset();
 
-    range_slider_.reset();
-
     total_rooms_min_cache_ = 0;
 
     total_rooms_max_cache_ = 0;
@@ -2382,8 +2380,6 @@ void MapLayersPanel::LayerConfigPanel::refresh() {
         name_box_.reset();
 
         name_widget_.reset();
-
-        range_slider_.reset();
 
         add_candidate_btn_.reset();
 

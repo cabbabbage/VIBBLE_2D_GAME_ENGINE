@@ -101,6 +101,7 @@
     {
       "level": 0,
       "max_rooms": 1,
+      "min_rooms": 0,
       "name": "layer_0",
       "radius": 0,
       "rooms": [
@@ -114,9 +115,10 @@
     },
     {
       "level": 1,
-      "max_rooms": 2,
+      "max_rooms": 3,
+      "min_rooms": 0,
       "name": "layer_1",
-      "radius": 3167,
+      "radius": 3255,
       "rooms": [
         {
           "max_instances": 1,
@@ -125,33 +127,28 @@
           "required_children": []
         },
         {
-          "max_instances": 2,
+          "max_instances": 1,
           "min_instances": 0,
           "name": "garden",
+          "required_children": []
+        },
+        {
+          "max_instances": 1,
+          "min_instances": 0,
+          "name": "fountain",
           "required_children": []
         }
       ]
     },
     {
       "level": 2,
-      "max_rooms": 7,
+      "max_rooms": 8,
+      "min_rooms": 0,
       "name": "layer_2",
-      "radius": 7360,
+      "radius": 6152,
       "rooms": [
         {
-          "max_instances": 4,
-          "min_instances": 0,
-          "name": "bar",
-          "required_children": []
-        },
-        {
-          "max_instances": 4,
-          "min_instances": 0,
-          "name": "bar",
-          "required_children": []
-        },
-        {
-          "max_instances": 4,
+          "max_instances": 8,
           "min_instances": 0,
           "name": "bar",
           "required_children": []
@@ -214,7 +211,7 @@
     "update_interval": 53
   },
   "map_name": "FORREST",
-  "map_radius": 8808.5,
+  "map_radius": 7600.5,
   "rooms_data": {
     "bar": {
       "edge_smoothness": 101,
@@ -405,6 +402,23 @@
       ],
       "width_max": 2897,
       "width_min": 1755
+    },
+    "fountain": {
+      "edge_smoothness": 2,
+      "geometry": "Square",
+      "height_max": 1937,
+      "height_min": 1500,
+      "inherits_map_assets": true,
+      "is_boss": false,
+      "is_spawn": false,
+      "max_height": 1937,
+      "max_width": 1971,
+      "min_height": 1500,
+      "min_width": 1500,
+      "name": "fountain",
+      "spawn_groups": [],
+      "width_max": 1971,
+      "width_min": 1500
     },
     "garden": {
       "edge_smoothness": 2,
