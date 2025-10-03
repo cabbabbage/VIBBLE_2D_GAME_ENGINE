@@ -46,7 +46,7 @@ public:
 
     int selected_layer() const { return selected_layer_; }
     void select_layer(int index);
-    void mark_dirty();
+    void mark_dirty(bool trigger_preview = true);
     void mark_clean();
 
 private:
@@ -82,7 +82,6 @@ private:
     int find_spawn_layer_index() const; // first layer that contains a spawn room, or -1
     bool is_layer_locked(int index) const; // initial spawn layer is locked from editing
     std::vector<std::string> available_rooms_for_layer(int layer_index) const; // filtered per constraints
-    void handle_layer_count_changed(int index, int max_rooms);
     void handle_layer_name_changed(int index, const std::string& name);
     void handle_candidate_min_changed(int layer_index, int candidate_index, int min_instances);
     void handle_candidate_max_changed(int layer_index, int candidate_index, int max_instances);
@@ -90,7 +89,6 @@ private:
     void handle_candidate_child_added(int layer_index, int candidate_index, const std::string& child);
     void handle_candidate_child_removed(int layer_index, int candidate_index, const std::string& child);
     void handle_candidate_added(int layer_index, const std::string& room_name);
-    void update_save_button_state();
     bool save_layers_to_disk();
     bool reload_layers_from_disk();
     void ensure_layer_config_valid();
@@ -98,6 +96,7 @@ private:
     void request_preview_regeneration();
     void regenerate_preview();
     double compute_map_radius_from_layers();
+    void recalculate_radii_from_layer(int layer_index);
     int append_layer_entry(const std::string& display_name = {});
     bool ensure_child_room_exists(int parent_layer_index, const std::string& child, bool* layer_created = nullptr);
     bool handle_preview_room_click(int px, int py, int center_x, int center_y, double scale);

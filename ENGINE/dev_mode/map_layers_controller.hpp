@@ -46,7 +46,6 @@ public:
 
     bool rename_layer(int index, const std::string& name);
     bool set_layer_radius(int index, int radius);
-    bool set_layer_room_count(int index, int max_rooms);
 
     // Candidate mutations (rooms array inside a layer)
     bool add_candidate(int layer_index, const std::string& room_name);

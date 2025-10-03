@@ -50,6 +50,8 @@
 
 #include <tuple>
 
+#include <vector>
+
 
 
 #include <nlohmann/json.hpp>
@@ -715,12 +717,6 @@ void clamp_layer_room_counts(nlohmann::json& layer) {
 
     if (!layer.is_object()) return;
 
-    int max_rooms = std::max(0, layer.value("max_rooms", 0));
-
-    layer["max_rooms"] = std::min(max_rooms, kRoomRangeMaxDefault);
-
-
-
     int min_sum = 0;
 
     int max_sum = 0;
@@ -749,17 +745,17 @@ void clamp_layer_room_counts(nlohmann::json& layer) {
 
     }
 
-    int clamped_total = layer["max_rooms"].get<int>();
+    int derived_min = min_sum;
 
-    clamped_total = std::max(clamped_total, min_sum);
+    int derived_max = std::max(min_sum, max_sum);
 
-    if (max_sum > 0) {
+    derived_min = std::min(derived_min, kRoomRangeMaxDefault);
 
-        clamped_total = std::min(clamped_total, max_sum);
+    derived_max = std::min(derived_max, kRoomRangeMaxDefault);
 
-    }
+    layer["min_rooms"] = derived_min;
 
-    layer["max_rooms"] = clamped_total;
+    layer["max_rooms"] = derived_max;
 
 }
 
@@ -1585,8 +1581,6 @@ public:
 
 
 
-    void set_dirty(bool dirty);
-
     void set_selected(int index) { selected_layer_ = index; }
 
 
@@ -1615,7 +1609,6 @@ private:
 
     SDL_Rect rect_{0,0,0,0};
 
-    std::unique_ptr<DMButton> save_button_;
     std::unique_ptr<DMButton> add_button_;
 
     std::unique_ptr<DMButton> new_room_button_;
@@ -1625,8 +1618,6 @@ private:
     std::unique_ptr<DMButton> delete_button_;
 
     std::unique_ptr<DMButton> preview_button_;
-
-    bool dirty_ = false;
 
     int selected_layer_ = -1;
 
@@ -1640,7 +1631,6 @@ MapLayersPanel::PanelSidebarWidget::PanelSidebarWidget(MapLayersPanel* owner)
 
     : owner_(owner) {
 
-    save_button_ = std::make_unique<DMButton>("Save", &DMStyles::HeaderButton(), 140, DMButton::height());
     add_button_ = std::make_unique<DMButton>("Add Layer", &DMStyles::CreateButton(), 140, DMButton::height());
 
     new_room_button_ = std::make_unique<DMButton>("New Room", &DMStyles::CreateButton(), 140, DMButton::height());
@@ -1650,18 +1640,6 @@ MapLayersPanel::PanelSidebarWidget::PanelSidebarWidget(MapLayersPanel* owner)
     delete_button_ = std::make_unique<DMButton>("Delete Layer", &DMStyles::DeleteButton(), 140, DMButton::height());
 
     preview_button_ = std::make_unique<DMButton>("Generate Preview", &DMStyles::WarnButton(), 140, DMButton::height());
-
-}
-
-
-
-void MapLayersPanel::PanelSidebarWidget::set_dirty(bool dirty) {
-
-    dirty_ = dirty;
-
-    if (save_button_) {
-        save_button_->set_text(dirty_ ? "Save*" : "Save");
-    }
 
 }
 
@@ -1685,7 +1663,6 @@ void MapLayersPanel::PanelSidebarWidget::render(SDL_Renderer* renderer) const {
 
     SDL_RenderDrawRect(renderer, &rect_);
 
-    if (save_button_) save_button_->render(renderer);
     if (add_button_) add_button_->render(renderer);
 
     if (new_room_button_) new_room_button_->render(renderer);
@@ -1728,15 +1705,9 @@ public:
 
     void set_values(int min_value, int max_value) {
 
-        min_value = std::max(0, min_value);
+        min_value_ = std::max(0, min_value);
 
-        max_value = std::max(min_value, max_value);
-
-        int slider_max = std::max(kRoomRangeMaxDefault, max_value + 8);
-
-        slider_ = std::make_unique<DMRangeSlider>(0, slider_max, min_value, max_value);
-
-        update_slider_rect();
+        max_value_ = std::max(min_value_, max_value);
 
     }
 
@@ -1745,8 +1716,6 @@ public:
     void set_rect(const SDL_Rect& r) override {
 
         rect_ = r;
-
-        update_slider_rect();
 
     }
 
@@ -1760,7 +1729,9 @@ public:
 
         const DMLabelStyle label_style = DMStyles::Label();
 
-        return label_style.font_size + DMSpacing::item_gap() + DMRangeSlider::height();
+        const int gap = DMSpacing::small_gap();
+
+        return label_style.font_size * 2 + gap + DMSpacing::item_gap();
 
     }
 
@@ -1776,13 +1747,17 @@ public:
 
         const DMLabelStyle label_style = DMStyles::Label();
 
-        int text_y = rect_.y;
+        const int text_x = rect_.x + DMSpacing::item_gap();
 
-        int text_x = rect_.x + DMSpacing::item_gap();
+        draw_text(renderer, label_, text_x, rect_.y, label_style);
 
-        draw_text(renderer, label_, text_x, text_y, label_style);
+        std::ostringstream oss;
 
-        if (slider_) slider_->render(renderer);
+        oss << "Min " << min_value_ << " \u2022 Max " << max_value_;
+
+        const int value_y = rect_.y + label_style.font_size + DMSpacing::small_gap();
+
+        draw_text(renderer, oss.str(), text_x, value_y, label_style);
 
     }
 
@@ -1790,27 +1765,13 @@ public:
 
 private:
 
-    void update_slider_rect() {
-
-        if (!slider_) return;
-
-        const DMLabelStyle label_style = DMStyles::Label();
-
-        int slider_y = rect_.y + label_style.font_size + DMSpacing::item_gap();
-
-        SDL_Rect slider_rect{ rect_.x, slider_y, rect_.w, DMRangeSlider::height() };
-
-        slider_->set_rect(slider_rect);
-
-    }
-
-
-
     std::string label_;
 
     SDL_Rect rect_{0, 0, 0, 0};
 
-    std::unique_ptr<DMRangeSlider> slider_;
+    int min_value_ = 0;
+
+    int max_value_ = 0;
 
 };
 
@@ -1874,9 +1835,7 @@ private:
 
 
 
-    std::unique_ptr<DMSlider> min_slider_;
-
-    std::unique_ptr<DMSlider> max_slider_;
+    std::unique_ptr<DMRangeSlider> range_slider_;
 
     std::unique_ptr<DMButton> add_child_button_;
 
@@ -1966,12 +1925,6 @@ private:
 
     std::unique_ptr<SummaryRangeWidget> total_room_widget_;
 
-    std::unique_ptr<DMSlider> room_count_slider_;
-
-    std::unique_ptr<SliderWidget> room_count_widget_;
-
-    int max_rooms_cache_ = 0;
-
     int total_rooms_min_cache_ = 0;
 
     int total_rooms_max_cache_ = 0;
@@ -2028,7 +1981,6 @@ void MapLayersPanel::PanelSidebarWidget::set_rect(const SDL_Rect& r) {
 
     std::vector<DMButton*> btns;
 
-    if (save_button_) btns.push_back(save_button_.get());
     if (add_button_) btns.push_back(add_button_.get());
 
     if (new_room_button_) btns.push_back(new_room_button_.get());
@@ -2111,11 +2063,6 @@ bool MapLayersPanel::PanelSidebarWidget::handle_event(const SDL_Event& e) {
 
     };
 
-    handle_btn(save_button_, [this]() {
-        if (owner_) {
-            owner_->save_layers_to_disk();
-        }
-    });
     handle_btn(add_button_, [this]() { if (owner_) owner_->add_layer_internal(); });
 
     handle_btn(new_room_button_, [this]() { if (owner_) owner_->add_room_to_selected_layer(); });
@@ -2184,10 +2131,6 @@ void MapLayersPanel::LayerConfigPanel::open(int layer_index, json* layer) {
 
     name_cache_ = layer_->value("name", std::string("layer_") + std::to_string(layer_index));
 
-    if (layer_->contains("min_rooms")) layer_->erase("min_rooms");
-
-    max_rooms_cache_ = layer_->value("max_rooms", 0);
-
     refresh();
 
     set_title(std::string("Layer: ") + name_cache_);
@@ -2240,11 +2183,7 @@ void MapLayersPanel::LayerConfigPanel::ensure_cleanup() {
 
     total_room_widget_.reset();
 
-    room_count_slider_.reset();
-
-    room_count_widget_.reset();
-
-    max_rooms_cache_ = 0;
+    range_slider_.reset();
 
     total_rooms_min_cache_ = 0;
 
@@ -2374,8 +2313,6 @@ void MapLayersPanel::LayerConfigPanel::refresh() {
 
         name_cache_ = layer_->value("name", name_cache_);
 
-        max_rooms_cache_ = layer_->value("max_rooms", max_rooms_cache_);
-
     }
 
 
@@ -2405,24 +2342,6 @@ void MapLayersPanel::LayerConfigPanel::refresh() {
         name_widget_ = std::make_unique<TextBoxWidget>(name_box_.get());
 
         rows.push_back({ name_widget_.get() });
-
-
-
-        const int slider_min = std::max(0, total_rooms_min_cache_);
-
-        max_rooms_cache_ = std::max(slider_min, max_rooms_cache_);
-
-        const int slider_max_base = std::max(kRoomRangeMaxDefault, total_rooms_max_cache_ + 8);
-
-        const int slider_max = std::max(slider_max_base, max_rooms_cache_ + 8);
-
-        max_rooms_cache_ = std::min(max_rooms_cache_, slider_max);
-
-        room_count_slider_ = std::make_unique<DMSlider>("Room Count", slider_min, slider_max, max_rooms_cache_);
-
-        room_count_widget_ = std::make_unique<SliderWidget>(room_count_slider_.get());
-
-        rows.push_back({ room_count_widget_.get() });
 
 
 
@@ -2464,9 +2383,7 @@ void MapLayersPanel::LayerConfigPanel::refresh() {
 
         name_widget_.reset();
 
-        room_count_slider_.reset();
-
-        room_count_widget_.reset();
+        range_slider_.reset();
 
         add_candidate_btn_.reset();
 
@@ -2570,34 +2487,6 @@ void MapLayersPanel::LayerConfigPanel::sync_from_widgets() {
 
     }
 
-    if (!locked_ && room_count_slider_) {
-
-        const int min_allowed = total_rooms_min_cache_;
-
-        const int max_allowed = std::max(total_rooms_min_cache_, total_rooms_max_cache_);
-
-        int new_value = std::clamp(room_count_slider_->value(), min_allowed, max_allowed);
-
-        if (new_value != room_count_slider_->value()) {
-
-            room_count_slider_->set_value(new_value);
-
-        }
-
-        if (new_value != max_rooms_cache_) {
-
-            max_rooms_cache_ = new_value;
-
-            (*layer_)["max_rooms"] = max_rooms_cache_;
-
-            if (layer_->contains("min_rooms")) layer_->erase("min_rooms");
-
-            if (owner_) owner_->handle_layer_count_changed(layer_index_, max_rooms_cache_);
-
-        }
-
-    }
-
     json& rooms = (*layer_)["rooms"];
 
     if (rooms.is_array()) {
@@ -2662,28 +2551,6 @@ void MapLayersPanel::LayerConfigPanel::refresh_total_summary() {
 
     }
 
-    int stored_max_rooms = 0;
-
-    if (layer_) {
-
-        stored_max_rooms = std::max(0, layer_->value("max_rooms", 0));
-
-    }
-
-    const int min_allowed = total_rooms_min_cache_;
-
-    const int max_allowed = std::max(total_rooms_min_cache_, total_rooms_max_cache_);
-
-    stored_max_rooms = std::clamp(stored_max_rooms, min_allowed, max_allowed);
-
-    max_rooms_cache_ = stored_max_rooms;
-
-    if (room_count_slider_) {
-
-        room_count_slider_->set_value(max_rooms_cache_);
-
-    }
-
 }
 
 
@@ -2702,9 +2569,7 @@ MapLayersPanel::RoomCandidateWidget::RoomCandidateWidget(LayerConfigPanel* owner
 
     if (editable_) {
 
-        min_slider_ = std::make_unique<DMSlider>("Min Instances", 0, kCandidateRangeMax, 0);
-
-        max_slider_ = std::make_unique<DMSlider>("Max Instances", 0, kCandidateRangeMax, 0);
+        range_slider_ = std::make_unique<DMRangeSlider>(0, kCandidateRangeMax, 0, 0);
 
         add_child_button_ = std::make_unique<DMButton>("Add Child", &DMStyles::HeaderButton(), 120, DMButton::height());
 
@@ -2736,15 +2601,11 @@ void MapLayersPanel::RoomCandidateWidget::refresh_from_json() {
 
         const int slider_max = std::max(kCandidateRangeMax, max_count_cache_ + 8);
 
-        min_slider_ = std::make_unique<DMSlider>("Min Instances", 0, slider_max, min_count_cache_);
-
-        max_slider_ = std::make_unique<DMSlider>("Max Instances", 0, slider_max, max_count_cache_);
+        range_slider_ = std::make_unique<DMRangeSlider>(0, slider_max, min_count_cache_, max_count_cache_);
 
     } else {
 
-        min_slider_.reset();
-
-        max_slider_.reset();
+        range_slider_.reset();
 
     }
 
@@ -2780,23 +2641,21 @@ void MapLayersPanel::RoomCandidateWidget::update() {
 
     if (!candidate_) return;
 
-    if (min_slider_) {
+    if (range_slider_) {
 
-        int new_min = clamp_candidate_min(min_slider_->value());
+        int slider_min = clamp_candidate_min(range_slider_->min_value());
 
-        if (new_min != min_count_cache_) {
+        int slider_max = clamp_candidate_max(slider_min, range_slider_->max_value());
 
-            min_count_cache_ = new_min;
+        bool values_changed = false;
 
-            if (min_count_cache_ > max_count_cache_) {
+        if (slider_min != min_count_cache_) {
 
-                max_count_cache_ = min_count_cache_;
-
-                if (max_slider_) max_slider_->set_value(max_count_cache_);
-
-            }
+            min_count_cache_ = slider_min;
 
             (*candidate_)["min_instances"] = min_count_cache_;
+
+            values_changed = true;
 
             if (owner_ && owner_->panel_owner()) {
 
@@ -2806,27 +2665,33 @@ void MapLayersPanel::RoomCandidateWidget::update() {
 
         }
 
-    }
+        if (slider_max != max_count_cache_) {
 
-    if (max_slider_) {
-
-        int new_max = clamp_candidate_max(min_count_cache_, max_slider_->value());
-
-        if (new_max != max_count_cache_) {
-
-            max_count_cache_ = new_max;
-
-            if (max_slider_->value() != max_count_cache_) {
-
-                max_slider_->set_value(max_count_cache_);
-
-            }
+            max_count_cache_ = slider_max;
 
             (*candidate_)["max_instances"] = max_count_cache_;
+
+            values_changed = true;
 
             if (owner_ && owner_->panel_owner()) {
 
                 owner_->panel_owner()->handle_candidate_max_changed(layer_index_, candidate_index_, max_count_cache_);
+
+            }
+
+        }
+
+        if (values_changed) {
+
+            if (range_slider_->min_value() != min_count_cache_) {
+
+                range_slider_->set_min_value(min_count_cache_);
+
+            }
+
+            if (range_slider_->max_value() != max_count_cache_) {
+
+                range_slider_->set_max_value(max_count_cache_);
 
             }
 
@@ -2844,19 +2709,11 @@ void MapLayersPanel::RoomCandidateWidget::set_rect(const SDL_Rect& r) {
 
     const int spacing = DMSpacing::item_gap();
 
-    SDL_Rect slider_rect{ rect_.x + spacing, rect_.y + spacing + DMButton::height() + spacing, rect_.w - spacing * 2, DMSlider::height() };
+    SDL_Rect slider_rect{ rect_.x + spacing, rect_.y + spacing + DMButton::height() + spacing, rect_.w - spacing * 2, DMRangeSlider::height() };
 
-    if (min_slider_) {
+    if (range_slider_) {
 
-        min_slider_->set_rect(slider_rect);
-
-        slider_rect.y += slider_rect.h + spacing;
-
-    }
-
-    if (max_slider_) {
-
-        max_slider_->set_rect(slider_rect);
+        range_slider_->set_rect(slider_rect);
 
         slider_rect.y += slider_rect.h + spacing;
 
@@ -2922,9 +2779,7 @@ int MapLayersPanel::RoomCandidateWidget::height_for_width(int w) const {
 
     int height = spacing + DMButton::height() + spacing;
 
-    if (min_slider_) height += DMSlider::height() + spacing;
-
-    if (max_slider_) height += DMSlider::height() + spacing;
+    if (range_slider_) height += DMRangeSlider::height() + spacing;
 
     if (add_child_button_ || delete_button_) height += DMButton::height() + spacing;
 
@@ -2954,13 +2809,7 @@ bool MapLayersPanel::RoomCandidateWidget::handle_event(const SDL_Event& e) {
 
     bool used = false;
 
-    if (min_slider_ && min_slider_->handle_event(e)) {
-
-        used = true;
-
-    }
-
-    if (max_slider_ && max_slider_->handle_event(e)) {
+    if (range_slider_ && range_slider_->handle_event(e)) {
 
         used = true;
 
@@ -3116,9 +2965,7 @@ void MapLayersPanel::RoomCandidateWidget::render(SDL_Renderer* renderer) const {
 
     draw_text(renderer, candidate_->value("name", "room"), rect_.x + DMSpacing::item_gap(), rect_.y + DMSpacing::item_gap() - (label.font_size + 4), label);
 
-    if (min_slider_) min_slider_->render(renderer);
-
-    if (max_slider_) max_slider_->render(renderer);
+    if (range_slider_) range_slider_->render(renderer);
 
     if (add_child_button_) add_child_button_->render(renderer);
 
@@ -3193,8 +3040,6 @@ MapLayersPanel::MapLayersPanel(int x, int y)
     if (sidebar_widget_) {
 
         sidebar_widget_->set_layer_config(layer_config_.get());
-
-        sidebar_widget_->set_dirty(dirty_);
 
     }
 
@@ -3640,13 +3485,107 @@ double MapLayersPanel::compute_map_radius_from_layers() {
 
         (*map_info_)["map_radius"] = max_extent;
 
-        dirty_ = true;
-
-        update_save_button_state();
-
     }
 
     return max_extent;
+
+}
+
+
+
+void MapLayersPanel::recalculate_radii_from_layer(int layer_index) {
+
+    if (!map_info_) return;
+
+    auto& layers = layers_array();
+
+    if (!layers.is_array() || layers.empty()) return;
+
+    if (layer_index < 0) layer_index = 0;
+
+    if (layer_index >= static_cast<int>(layers.size())) {
+
+        layer_index = static_cast<int>(layers.size()) - 1;
+
+    }
+
+    const nlohmann::json* rooms_data = nullptr;
+
+    auto rooms_it = map_info_->find("rooms_data");
+
+    if (rooms_it != map_info_->end() && rooms_it->is_object()) {
+
+        rooms_data = &(*rooms_it);
+
+    }
+
+    std::vector<double> extents(layers.size(), 0.0);
+
+    for (size_t i = 0; i < layers.size(); ++i) {
+
+        const auto& layer = layers[i];
+
+        if (!layer.is_object()) continue;
+
+        auto rooms_array_it = layer.find("rooms");
+
+        if (rooms_array_it == layer.end() || !rooms_array_it->is_array()) continue;
+
+        double largest_room = 0.0;
+
+        for (const auto& candidate : *rooms_array_it) {
+
+            if (!candidate.is_object()) continue;
+
+            std::string room_name = candidate.value("name", std::string());
+
+            if (room_name.empty()) continue;
+
+            RoomGeometry geom = fetch_room_geometry(rooms_data, room_name);
+
+            largest_room = std::max(largest_room, room_extent_for_radius(geom));
+
+        }
+
+        extents[i] = largest_room;
+
+    }
+
+    for (int i = std::max(0, layer_index); i < static_cast<int>(layers.size()); ++i) {
+
+        auto& layer = layers[i];
+
+        if (!layer.is_object()) continue;
+
+        double stored_radius = layer.value("radius", 0.0);
+
+        double largest = (i >= 0 && i < static_cast<int>(extents.size())) ? extents[i] : 0.0;
+
+        double desired_radius = stored_radius;
+
+        if (i > 0) {
+
+            double prev_radius = layers[i - 1].value("radius", 0.0);
+
+            double prev_extent = extents[i - 1];
+
+            double separation = prev_extent + largest;
+
+            separation = std::max(separation, static_cast<double>(kLayerRadiusStepDefault));
+
+            double minimum = prev_radius + separation;
+
+            desired_radius = minimum;
+
+        }
+
+        int final_radius = static_cast<int>(std::ceil(desired_radius));
+
+        if (final_radius < 0) final_radius = 0;
+
+        layer["radius"] = final_radius;
+
+    }
 
 }
 
@@ -4669,13 +4608,17 @@ void MapLayersPanel::select_layer(int index) {
 
 
 
-void MapLayersPanel::mark_dirty() {
+void MapLayersPanel::mark_dirty(bool trigger_preview) {
 
     dirty_ = true;
 
-    request_preview_regeneration();
+    if (trigger_preview) {
 
-    update_save_button_state();
+        request_preview_regeneration();
+
+    }
+
+    save_layers_to_disk();
 
 }
 
@@ -4684,8 +4627,6 @@ void MapLayersPanel::mark_dirty() {
 void MapLayersPanel::mark_clean() {
 
     dirty_ = false;
-
-    update_save_button_state();
 
 }
 
@@ -4727,7 +4668,7 @@ void MapLayersPanel::ensure_layer_indices() {
 
         }
 
-        if (arr[i].contains("min_rooms")) arr[i].erase("min_rooms");
+        if (!arr[i].contains("min_rooms")) arr[i]["min_rooms"] = 0;
 
         if (!arr[i].contains("max_rooms")) arr[i]["max_rooms"] = 0;
 
@@ -4846,6 +4787,8 @@ int MapLayersPanel::append_layer_entry(const std::string& display_name) {
         {"name", name},
 
         {"radius", arr.empty() ? 0 : radius},
+
+        {"min_rooms", 0},
 
         {"max_rooms", 0},
 
@@ -5063,6 +5006,14 @@ bool MapLayersPanel::ensure_child_room_exists(int parent_layer_index, const std:
 
     clamp_layer_room_counts(*child_layer);
 
+    if (modified) {
+
+        recalculate_radii_from_layer(child_layer_index);
+
+        compute_map_radius_from_layers();
+
+    }
+
     return modified;
 
 }
@@ -5090,6 +5041,16 @@ void MapLayersPanel::delete_layer_internal(int index) {
         select_layer(static_cast<int>(arr.size()) - 1);
 
     }
+
+    if (!arr.empty()) {
+
+        int start = std::min(index, static_cast<int>(arr.size()) - 1);
+
+        recalculate_radii_from_layer(start);
+
+    }
+
+    compute_map_radius_from_layers();
 
     mark_dirty();
 
@@ -5126,26 +5087,6 @@ void MapLayersPanel::open_layer_config_internal(int index) {
     select_layer(index);
 
     layer_config_->open(index, layer);
-
-}
-
-
-
-void MapLayersPanel::handle_layer_count_changed(int index, int max_rooms) {
-
-    auto* layer = layer_at(index);
-
-    if (!layer) return;
-
-    (*layer)["max_rooms"] = std::max(0, max_rooms);
-
-    if (layer->contains("min_rooms")) layer->erase("min_rooms");
-
-    clamp_layer_room_counts(*layer);
-
-    mark_dirty();
-
-    if (layer_config_) layer_config_->refresh_total_summary();
 
 }
 
@@ -5345,6 +5286,10 @@ void MapLayersPanel::handle_candidate_removed(int layer_index, int candidate_ind
 
     clamp_layer_room_counts(*layer);
 
+    recalculate_radii_from_layer(layer_index);
+
+    compute_map_radius_from_layers();
+
     mark_dirty();
 
     if (layer_config_) layer_config_->refresh();
@@ -5481,17 +5426,13 @@ void MapLayersPanel::handle_candidate_added(int layer_index, const std::string& 
 
     clamp_layer_room_counts(*layer);
 
+    recalculate_radii_from_layer(layer_index);
+
+    compute_map_radius_from_layers();
+
     mark_dirty();
 
     if (layer_config_) layer_config_->refresh();
-
-}
-
-
-
-void MapLayersPanel::update_save_button_state() {
-
-    if (sidebar_widget_) sidebar_widget_->set_dirty(dirty_);
 
 }
 
