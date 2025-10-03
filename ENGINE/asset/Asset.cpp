@@ -2,14 +2,20 @@
 #include "controller_factory.hpp"
 #include "animation.hpp"
 #include "core/AssetsManager.hpp"
+#include "core/asset_list.hpp"
 #include "render/camera.hpp"
 #include "utils/light_utils.hpp"
+#include "asset/asset_types.hpp"
 #include <filesystem>
 #include <iostream>
 #include <random>
 #include <algorithm>
 #include <cmath>
 #include <SDL.h>
+
+namespace {
+constexpr int kNeighborSearchRadius = 512;
+}
 
 Asset::Asset(std::shared_ptr<AssetInfo> info_,
              const Area& spawn_area,
@@ -227,6 +233,12 @@ SDL_Texture* Asset::get_current_frame() const {
 void Asset::update() {
     if (!info) return;
 
+    SDL_Point previous_pos = pos;
+
+    if (info->moving_asset) {
+        update_neighbor_lists(!neighbor_lists_initialized_);
+    }
+
     if (controller_ && assets_) {
         if (Input* in = assets_->get_input()) {
             controller_->update(*in);
@@ -257,6 +269,13 @@ void Asset::update() {
 
     if (!dead && anim_) {
         anim_->update();
+    }
+
+    if (info->moving_asset) {
+        const bool moved = (pos.x != previous_pos.x || pos.y != previous_pos.y);
+        if (moved) {
+            update_neighbor_lists(true);
+        }
     }
 }
 
@@ -303,14 +322,102 @@ void Asset::add_child(Asset* child) {
 }
 
 void Asset::set_assets(Assets* a) {
-        assets_ = a;
-        if (assets_ && !anim_) {
-                anim_ = std::make_unique<AnimationUpdate>(this, assets_);
+    assets_ = a;
+    if (assets_ && !anim_) {
+            anim_ = std::make_unique<AnimationUpdate>(this, assets_);
+    }
+    if (!controller_ && assets_) {
+            ControllerFactory cf(assets_);
+            controller_ = cf.create_for_asset(this);
+    }
+    neighbors.reset();
+    impassable_naighbors.reset();
+    neighbor_lists_initialized_ = false;
+    last_neighbor_origin_ = SDL_Point{ std::numeric_limits<int>::min(), std::numeric_limits<int>::min() };
+}
+
+AssetList* Asset::get_neighbors_list() { return neighbors.get(); }
+const AssetList* Asset::get_neighbors_list() const { return neighbors.get(); }
+AssetList* Asset::get_impassable_naighbors() { return impassable_naighbors.get(); }
+const AssetList* Asset::get_impassable_naighbors() const { return impassable_naighbors.get(); }
+
+void Asset::update_neighbor_lists(bool force_update) {
+    if (!assets_ || !info || !info->moving_asset) {
+        return;
+    }
+
+    AssetList* active = assets_->active_asset_list_.get();
+    if (!active) {
+        return;
+    }
+
+    auto base_filter = [this](const Asset* candidate) {
+        if (!candidate || candidate == this || !candidate->info) {
+            return false;
         }
-        if (!controller_ && assets_) {
-                ControllerFactory cf(assets_);
-                controller_ = cf.create_for_asset(this);
+        if (candidate->info->type == asset_types::texture) {
+            return false;
         }
+        return true;
+    };
+
+    auto impassable_filter = [this](const Asset* candidate) {
+        if (!candidate || candidate == this || !candidate->info) {
+            return false;
+        }
+        if (candidate->info->type == asset_types::texture) {
+            return false;
+        }
+        return !candidate->info->passable;
+    };
+
+    const bool rebuild_neighbors = force_update || !neighbors;
+    const bool rebuild_impassable = force_update || !impassable_naighbors;
+
+    if (!rebuild_neighbors && !force_update) {
+        if (neighbor_lists_initialized_ && last_neighbor_origin_.x == pos.x && last_neighbor_origin_.y == pos.y) {
+            // Nothing changed since last refresh.
+            return;
+        }
+    }
+
+    if (rebuild_neighbors) {
+        neighbors = std::make_unique<AssetList>(
+            *active,
+            this,
+            kNeighborSearchRadius,
+            std::vector<std::string>{},
+            std::vector<std::string>{},
+            std::vector<std::string>{},
+            SortMode::ZIndexAsc,
+            base_filter);
+    } else if (neighbors) {
+        neighbors->set_center(this);
+        neighbors->set_search_radius(kNeighborSearchRadius);
+        neighbors->update();
+    }
+
+    if (rebuild_impassable) {
+        if (!neighbors) {
+            return;
+        }
+        impassable_naighbors = std::make_unique<AssetList>(
+            *neighbors,
+            this,
+            kNeighborSearchRadius,
+            std::vector<std::string>{},
+            std::vector<std::string>{},
+            std::vector<std::string>{},
+            SortMode::ZIndexAsc,
+            impassable_filter);
+    } else if (impassable_naighbors) {
+        impassable_naighbors->set_center(this);
+        impassable_naighbors->set_search_radius(kNeighborSearchRadius);
+        impassable_naighbors->update();
+    }
+
+    last_neighbor_origin_ = pos;
+    neighbor_lists_initialized_ = true;
 }
 
 void Asset::set_z_index() {

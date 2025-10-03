@@ -4,6 +4,7 @@
 #include "asset/asset_types.hpp"
 #include "animation.hpp"
 #include "core/AssetsManager.hpp"
+#include "core/asset_list.hpp"
 #include "audio/audio_engine.hpp"
 #include "utils/area.hpp"
 #include "utils/range_util.hpp"
@@ -13,6 +14,7 @@
 #include <algorithm>
 #include <random>
 #include <string>
+#include <vector>
 #include <iostream>
 #include <unordered_map>
 
@@ -52,6 +54,18 @@ struct ManualState {
 ManualState& manual_state(AnimationUpdate* updater) {
     static std::unordered_map<AnimationUpdate*, ManualState> states;
     return states[updater];
+}
+
+void gather_from_list(const AssetList* list, std::vector<Asset*>& out) {
+    if (!list) {
+        return;
+    }
+    const auto& top = list->top_unsorted();
+    out.insert(out.end(), top.begin(), top.end());
+    const auto& mid = list->middle_sorted();
+    out.insert(out.end(), mid.begin(), mid.end());
+    const auto& bot = list->bottom_unsorted();
+    out.insert(out.end(), bot.begin(), bot.end());
 }
 }
 
@@ -128,11 +142,14 @@ SDL_Point AnimationUpdate::choose_balanced_target(SDL_Point desired, const Asset
     const double base_angle  = std::atan2(static_cast<double>(dy0), static_cast<double>(dx0));
     double base_radius = std::sqrt(static_cast<double>(dx0*dx0 + dy0*dy0));
     if (base_radius < 1.0) base_radius = 1.0;
-    static const std::vector<Asset*> kEmptyAssets;
-    const std::vector<Asset*>& active = assets_owner_ ? assets_owner_->getActive() : kEmptyAssets;
     std::vector<Asset*> neighbors;
-    neighbors.reserve(active.size());
-    Range::get_in_range(SDL_Point{sx, sy}, 300, active, neighbors);
+    const AssetList* neighbor_list = self_->get_neighbors_list();
+    if (neighbor_list) {
+        gather_from_list(neighbor_list, neighbors);
+    } else if (assets_owner_) {
+        const auto& active = assets_owner_->getActive();
+        Range::get_in_range(SDL_Point{sx, sy}, 300, active, neighbors);
+    }
     static const double ang_offsets[] = { -0.6, -0.4, -0.25, -0.12, 0.0, 0.12, 0.25, 0.4, 0.6 };
     static const double rad_scales[]  = { 0.9, 1.0, 1.1 };
     SDL_Point best = desired;
@@ -183,9 +200,16 @@ bool AnimationUpdate::point_in_impassable(SDL_Point pt, const Asset* ignored) co
     Asset* closest = nullptr;
     double best_d2 = std::numeric_limits<double>::infinity();
 
-    static const std::vector<Asset*> kEmptyAssets;
-    const std::vector<Asset*>& active = assets_owner_ ? assets_owner_->getActive() : kEmptyAssets;
-    for (Asset* a : active) {
+    std::vector<Asset*> candidates;
+    const AssetList* impassable = self_->get_impassable_naighbors();
+    if (impassable) {
+        gather_from_list(impassable, candidates);
+    } else if (assets_owner_) {
+        const auto& active = assets_owner_->getActive();
+        candidates.insert(candidates.end(), active.begin(), active.end());
+    }
+
+    for (Asset* a : candidates) {
         if (!a || a == self_ || a == ignored || !a->info) continue;
         if (a->info->type == asset_types::texture) continue;
         if (a->info->passable) continue;
@@ -334,9 +358,15 @@ bool AnimationUpdate::can_move_by(int dx, int dy) const {
 bool AnimationUpdate::would_overlap_same_or_player(int dx, int dy) const {
     if (!self_ || !self_->info) return true;
     const SDL_Point new_pos{ self_->pos.x + dx, self_->pos.y + dy };
-    static const std::vector<Asset*> kEmptyAssets;
-    const std::vector<Asset*>& active = assets_owner_ ? assets_owner_->getActive() : kEmptyAssets;
-    for (Asset* a : active) {
+    std::vector<Asset*> candidates;
+    const AssetList* neighbor_list = self_->get_neighbors_list();
+    if (neighbor_list) {
+        gather_from_list(neighbor_list, candidates);
+    } else if (assets_owner_) {
+        const auto& active = assets_owner_->getActive();
+        candidates.insert(candidates.end(), active.begin(), active.end());
+    }
+    for (Asset* a : candidates) {
         if (!a || a == self_ || !a->info) continue;
         const bool is_enemy  = (a->info->type == asset_types::enemy);
         const bool is_player = (a->info->type == asset_types::player);

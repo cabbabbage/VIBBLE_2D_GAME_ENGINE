@@ -154,6 +154,14 @@
           "required_children": []
         }
       ]
+    },
+    {
+      "level": 3,
+      "max_rooms": 0,
+      "min_rooms": 0,
+      "name": "layer_3",
+      "radius": 8437,
+      "rooms": []
     }
   ],
   "map_light_data": {

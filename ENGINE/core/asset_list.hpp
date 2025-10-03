@@ -1,5 +1,6 @@
 #pragma once
 
+#include <functional>
 #include <memory>
 #include <string>
 #include <unordered_set>
@@ -17,13 +18,13 @@ enum class SortMode {
 
 class AssetList {
 public:
-    AssetList(const std::vector<Asset*>& source_candidates, SDL_Point list_center, int search_radius, const std::vector<std::string>& required_tags, const std::vector<std::string>& top_bucket_tags, const std::vector<std::string>& bottom_bucket_tags, SortMode sort_mode);
+    AssetList(const std::vector<Asset*>& source_candidates, SDL_Point list_center, int search_radius, const std::vector<std::string>& required_tags, const std::vector<std::string>& top_bucket_tags, const std::vector<std::string>& bottom_bucket_tags, SortMode sort_mode, std::function<bool(const Asset*)> eligibility_filter = nullptr);
 
-    AssetList(const std::vector<Asset*>& source_candidates, Asset* center_asset, int search_radius, const std::vector<std::string>& required_tags, const std::vector<std::string>& top_bucket_tags, const std::vector<std::string>& bottom_bucket_tags, SortMode sort_mode);
+    AssetList(const std::vector<Asset*>& source_candidates, Asset* center_asset, int search_radius, const std::vector<std::string>& required_tags, const std::vector<std::string>& top_bucket_tags, const std::vector<std::string>& bottom_bucket_tags, SortMode sort_mode, std::function<bool(const Asset*)> eligibility_filter = nullptr);
 
-    AssetList(const AssetList& parent_list, SDL_Point list_center, int search_radius, const std::vector<std::string>& required_tags, const std::vector<std::string>& top_bucket_tags, const std::vector<std::string>& bottom_bucket_tags, SortMode sort_mode);
+    AssetList(const AssetList& parent_list, SDL_Point list_center, int search_radius, const std::vector<std::string>& required_tags, const std::vector<std::string>& top_bucket_tags, const std::vector<std::string>& bottom_bucket_tags, SortMode sort_mode, std::function<bool(const Asset*)> eligibility_filter = nullptr);
 
-    AssetList(const AssetList& parent_list, Asset* center_asset, int search_radius, const std::vector<std::string>& required_tags, const std::vector<std::string>& top_bucket_tags, const std::vector<std::string>& bottom_bucket_tags, SortMode sort_mode);
+    AssetList(const AssetList& parent_list, Asset* center_asset, int search_radius, const std::vector<std::string>& required_tags, const std::vector<std::string>& top_bucket_tags, const std::vector<std::string>& bottom_bucket_tags, SortMode sort_mode, std::function<bool(const Asset*)> eligibility_filter = nullptr);
 
     void add_child(std::unique_ptr<AssetList> child);
     const std::vector<std::unique_ptr<AssetList>>& children() const;
@@ -52,6 +53,7 @@ private:
     bool has_all_required_tags(const Asset* a, const std::vector<std::string>& req) const;
     bool has_any_tag(const Asset* a, const std::vector<std::string>& tags) const;
     void sort_middle_section();
+    bool is_asset_eligible(const Asset* a) const;
 
     void get_delta_area_assets(SDL_Point prev_center, int prev_radius, SDL_Point curr_center, int curr_radius, const std::vector<Asset*>& candidates, std::vector<Asset*>& out_changed) const;
 
@@ -72,6 +74,8 @@ private:
     std::unordered_set<Asset*> list_always_ineligible_lookup_;
 
     std::vector<std::unique_ptr<AssetList>> children_;
+
+    std::function<bool(const Asset*)> eligibility_filter_;
 
     SDL_Point previous_center_point_{};
     int       previous_search_radius_ = 0;

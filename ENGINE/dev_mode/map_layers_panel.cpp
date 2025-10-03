@@ -288,6 +288,8 @@ struct RoomGeometry {
 
     double max_height = 0.0;
 
+    double radius = 0.0;
+
     bool is_circle = false;
 
     std::vector<SDL_FPoint> outline;
@@ -353,6 +355,40 @@ RoomGeometry fetch_room_geometry(const nlohmann::json* rooms_data, const std::st
 
     }
 
+    double radius_value = 0.0;
+    if (room.contains("radius")) {
+        const auto& radius_entry = room["radius"];
+        if (radius_entry.is_number_float() || radius_entry.is_number_integer()) {
+            radius_value = std::max(0.0, radius_entry.get<double>());
+        }
+    }
+
+    if (geom.is_circle) {
+        if (radius_value <= 0.0) {
+            double diameter_guess = std::max(geom.max_width, geom.max_height);
+            if (diameter_guess <= 0.0) {
+                double alt_w = extract_dimension("min_width", "width_min", "max_width", "width_max");
+                double alt_h = extract_dimension("min_height", "height_min", "max_height", "height_max");
+                diameter_guess = std::max(alt_w, alt_h);
+            }
+            if (diameter_guess > 0.0) {
+                radius_value = diameter_guess * 0.5;
+            }
+        }
+        if (radius_value <= 0.0) {
+            radius_value = std::max(geom.max_width, geom.max_height) * 0.5;
+        }
+        if (radius_value <= 0.0) {
+            radius_value = 1.0;
+        }
+        geom.radius = radius_value;
+        double diameter = radius_value * 2.0;
+        geom.max_width = diameter;
+        geom.max_height = diameter;
+    } else {
+        geom.radius = radius_value;
+    }
+
     if (geom.max_width <= 0.0 && geom.max_height <= 0.0) {
 
         geom.max_width = 100.0;
@@ -381,7 +417,7 @@ RoomGeometry fetch_room_geometry(const nlohmann::json* rooms_data, const std::st
 
     if (geom.is_circle || geometry == "circle") {
 
-        const double radius = std::max(width, height) * 0.5;
+        const double radius = (geom.radius > 0.0) ? geom.radius : std::max(width, height) * 0.5;
 
         if (radius > 0.0) {
 
@@ -473,7 +509,11 @@ double room_extent_for_radius(const RoomGeometry& geom) {
 
     if (geom.is_circle) {
 
-        return w * 0.5;
+        double radius = geom.radius;
+        if (radius <= 0.0) {
+            radius = std::max(w, h) * 0.5;
+        }
+        return std::max(0.0, radius);
 
     }
 
@@ -1271,7 +1311,9 @@ void MapLayersPanel::LayerCanvasWidget::render(SDL_Renderer* renderer) const {
 
             if (node->is_circle) {
 
-                int radius = static_cast<int>(std::lround(std::max(2.0, (node->width * 0.5) * scale)));
+                double radius_units = node->radius > 0.0 ? node->radius : (node->width * 0.5);
+
+                int radius = static_cast<int>(std::lround(std::max(2.0, radius_units * scale)));
 
                 draw_circle(renderer, center_pt.x, center_pt.y, radius, outline, room_clicked ? 4 : (room_hovered ? 3 : 2));
 
@@ -1357,7 +1399,9 @@ void MapLayersPanel::LayerCanvasWidget::render(SDL_Renderer* renderer) const {
 
             SDL_RenderDrawPoint(renderer, center_pt.x, center_pt.y);
 
-            double extent_units = node->is_circle ? node->width * 0.5
+            double radius_units = node->radius > 0.0 ? node->radius : (node->width * 0.5);
+
+            double extent_units = node->is_circle ? radius_units
 
                                                   : 0.5 * std::sqrt(node->width * node->width + node->height * node->height);
 
@@ -3351,6 +3395,8 @@ void MapLayersPanel::regenerate_preview() {
 
     root_node->height = root_geom.max_height;
 
+    root_node->radius = root_geom.radius;
+
     root_node->is_circle = root_geom.is_circle;
     root_node->outline = std::move(root_geom.outline);
 
@@ -3411,6 +3457,8 @@ void MapLayersPanel::regenerate_preview() {
             node->width = geom.max_width;
 
             node->height = geom.max_height;
+
+            node->radius = geom.radius;
 
             node->is_circle = geom.is_circle;
 
@@ -3652,7 +3700,8 @@ void MapLayersPanel::regenerate_preview() {
 
         double distance = std::sqrt(node->center.x * node->center.x + node->center.y * node->center.y);
 
-        double half_diag = 0.5 * std::sqrt(node->width * node->width + node->height * node->height);
+        double half_diag = node->is_circle ? (node->radius > 0.0 ? node->radius : (0.5 * std::sqrt(node->width * node->width + node->height * node->height)))
+                                           : 0.5 * std::sqrt(node->width * node->width + node->height * node->height);
 
         node_extent = std::max(node_extent, distance + half_diag);
 
@@ -3760,7 +3809,9 @@ const MapLayersPanel::PreviewNode* MapLayersPanel::find_room_at(int px, int py, 
 
         if (node->is_circle) {
 
-            double radius_px = std::max(8.0, (node->width * 0.5) * scale);
+            double radius_units = node->radius > 0.0 ? node->radius : (node->width * 0.5);
+
+            double radius_px = std::max(8.0, radius_units * scale);
 
             double dist = std::hypot(dx, dy);
 

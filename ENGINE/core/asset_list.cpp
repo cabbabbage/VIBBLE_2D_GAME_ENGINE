@@ -19,7 +19,8 @@ AssetList::AssetList(const std::vector<Asset*>& source_candidates,
                      const std::vector<std::string>& required_tags,
                      const std::vector<std::string>& top_bucket_tags,
                      const std::vector<std::string>& bottom_bucket_tags,
-                     SortMode sort_mode)
+                     SortMode sort_mode,
+                     std::function<bool(const Asset*)> eligibility_filter)
     : source_candidates_(source_candidates),
       center_point_(list_center),
       center_asset_(nullptr),
@@ -28,6 +29,7 @@ AssetList::AssetList(const std::vector<Asset*>& source_candidates,
       top_bucket_tags_(top_bucket_tags),
       bottom_bucket_tags_(bottom_bucket_tags),
       sort_mode_(sort_mode),
+      eligibility_filter_(std::move(eligibility_filter)),
       previous_center_point_(list_center),
       previous_search_radius_(search_radius) {
     rebuild_from_scratch();
@@ -39,7 +41,8 @@ AssetList::AssetList(const std::vector<Asset*>& source_candidates,
                      const std::vector<std::string>& required_tags,
                      const std::vector<std::string>& top_bucket_tags,
                      const std::vector<std::string>& bottom_bucket_tags,
-                     SortMode sort_mode)
+                     SortMode sort_mode,
+                     std::function<bool(const Asset*)> eligibility_filter)
     : source_candidates_(source_candidates),
       center_point_(center_asset ? center_asset->pos : SDL_Point{0, 0}),
       center_asset_(center_asset),
@@ -48,6 +51,7 @@ AssetList::AssetList(const std::vector<Asset*>& source_candidates,
       top_bucket_tags_(top_bucket_tags),
       bottom_bucket_tags_(bottom_bucket_tags),
       sort_mode_(sort_mode),
+      eligibility_filter_(std::move(eligibility_filter)),
       previous_center_point_(resolve_center()),
       previous_search_radius_(search_radius) {
     rebuild_from_scratch();
@@ -59,7 +63,8 @@ AssetList::AssetList(const AssetList& parent_list,
                      const std::vector<std::string>& required_tags,
                      const std::vector<std::string>& top_bucket_tags,
                      const std::vector<std::string>& bottom_bucket_tags,
-                     SortMode sort_mode)
+                     SortMode sort_mode,
+                     std::function<bool(const Asset*)> eligibility_filter)
     : source_candidates_(parent_list.source_candidates_),
       center_point_(list_center),
       center_asset_(nullptr),
@@ -68,6 +73,7 @@ AssetList::AssetList(const AssetList& parent_list,
       top_bucket_tags_(top_bucket_tags),
       bottom_bucket_tags_(bottom_bucket_tags),
       sort_mode_(sort_mode),
+      eligibility_filter_(std::move(eligibility_filter)),
       previous_center_point_(list_center),
       previous_search_radius_(search_radius) {
     rebuild_from_scratch();
@@ -79,7 +85,8 @@ AssetList::AssetList(const AssetList& parent_list,
                      const std::vector<std::string>& required_tags,
                      const std::vector<std::string>& top_bucket_tags,
                      const std::vector<std::string>& bottom_bucket_tags,
-                     SortMode sort_mode)
+                     SortMode sort_mode,
+                     std::function<bool(const Asset*)> eligibility_filter)
     : source_candidates_(parent_list.source_candidates_),
       center_point_(center_asset ? center_asset->pos : SDL_Point{0, 0}),
       center_asset_(center_asset),
@@ -88,6 +95,7 @@ AssetList::AssetList(const AssetList& parent_list,
       top_bucket_tags_(top_bucket_tags),
       bottom_bucket_tags_(bottom_bucket_tags),
       sort_mode_(sort_mode),
+      eligibility_filter_(std::move(eligibility_filter)),
       previous_center_point_(resolve_center()),
       previous_search_radius_(search_radius) {
     rebuild_from_scratch();
@@ -161,6 +169,15 @@ void AssetList::update() {
     for (std::size_t i = 0; i < delta_buffer_.size(); ++i) {
         Asset* asset = delta_buffer_[i];
         if (asset == nullptr) {
+            continue;
+        }
+
+        if (!is_asset_eligible(asset)) {
+            if (!contains_asset(list_always_ineligible_lookup_, asset)) {
+                list_always_ineligible_.push_back(asset);
+                list_always_ineligible_lookup_.insert(asset);
+            }
+            remove_from_all_sections(asset);
             continue;
         }
 
@@ -259,7 +276,12 @@ void AssetList::rebuild_from_scratch() {
             return;
         }
 
-        if (!has_all_required_tags(asset, required_tags_)) {
+        if (!is_asset_eligible(asset)) {
+            if (!contains_asset(list_always_ineligible_lookup_, asset)) {
+                list_always_ineligible_.push_back(asset);
+                list_always_ineligible_lookup_.insert(asset);
+            }
+        } else if (!has_all_required_tags(asset, required_tags_)) {
             if (!contains_asset(list_always_ineligible_lookup_, asset)) {
                 list_always_ineligible_.push_back(asset);
                 list_always_ineligible_lookup_.insert(asset);
@@ -285,6 +307,10 @@ void AssetList::rebuild_from_scratch() {
 
 void AssetList::route_asset_to_section(Asset* a) {
     if (a == nullptr) {
+        return;
+    }
+
+    if (!is_asset_eligible(a)) {
         return;
     }
 
@@ -351,6 +377,13 @@ bool AssetList::has_any_tag(const Asset* a, const std::vector<std::string>& tags
         }
     }
     return false;
+}
+
+bool AssetList::is_asset_eligible(const Asset* a) const {
+    if (!eligibility_filter_) {
+        return a != nullptr;
+    }
+    return a != nullptr && eligibility_filter_(a);
 }
 
 void AssetList::sort_middle_section() {
