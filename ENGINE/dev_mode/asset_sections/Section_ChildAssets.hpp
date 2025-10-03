@@ -35,12 +35,11 @@ public:
         int y = rect_.y + DMSpacing::panel_padding() + DMButton::height() + DMSpacing::header_gap();
         int maxw = rect_.w - 2 * DMSpacing::panel_padding();
 
-        // Detect if areas changed; rebuild dropdowns if needed
         if (info_) {
             std::vector<std::string> latest = collect_area_names();
             if (latest != area_names_) {
                 area_names_ = std::move(latest);
-                // rebuild dropdowns with new options
+
                 for (auto& r : rows_) {
                     int idx = r.dd_area ? r.dd_area->selected() : 0;
                     std::string sel = (idx >= 0 && idx < (int)r.options.size()) ? r.options[idx] : std::string{};
@@ -107,8 +106,7 @@ public:
                 row.spawn_cfg->update(input, screen_w, screen_h);
             }
         }
-        // Defer opening the area editor to avoid re-entrancy/crashes when
-        // the AssetInfo panel closes itself during the callback.
+
         if (pending_open_area_ && open_area_editor_) {
             pending_open_area_ = false;
             std::string nm = pending_area_name_;
@@ -129,7 +127,6 @@ public:
 
         bool changed = false;
 
-        // Per-row interactions
         for (size_t i = 0; i < rows_.size(); ++i) {
             auto& r = rows_[i];
             if (r.lbl_ && r.lbl_->handle_event(e)) used = true;
@@ -147,7 +144,7 @@ public:
                     std::string nm = r.area_name;
                     if (nm == "(none)") nm.clear();
                     if (nm.empty()) nm = std::string("child_area_") + std::to_string(i+1);
-                    // Defer opening to next update() to prevent re-entrancy
+
                     pending_area_name_ = nm;
                     pending_open_area_ = true;
                     used = true;
@@ -160,12 +157,11 @@ public:
                     }
                     rows_.erase(rows_.begin() + i);
                     changed = true; used = true;
-                    break; // indices invalidated, rebuild next frame
+                    break;
                 }
             }
         }
 
-        // Footer buttons
         if (b_add_ && b_add_->handle_event(e)) {
             if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
                 Row r;
@@ -225,12 +221,12 @@ public:
 
 private:
     struct Row {
-        // Data snapshot
+
         std::string area_name;
         int z_offset = 0;
-        std::string json_path; // relative
+        std::string json_path;
         nlohmann::json assets = nlohmann::json::array();
-        // Controls
+
         std::unique_ptr<DMButton>   lbl_;
         std::unique_ptr<DMDropdown> dd_area;
         std::unique_ptr<DMSlider>   s_z;
@@ -238,9 +234,9 @@ private:
         std::unique_ptr<DMButton>   b_delete;
         std::unique_ptr<SpawnGroupsConfig> spawn_cfg;
         DockableCollapsible::Rows spawn_rows;
-        // Choices
+
         std::vector<std::string> options;
-    };
+};
 
 private:
     SDL_Point spawn_groups_anchor_at(int screen_y) const {
@@ -263,7 +259,7 @@ private:
             Row r;
             r.area_name = c.area_name;
             r.z_offset = c.z_offset;
-            // json_path from loader is absolute; convert to relative if under asset dir
+
             r.json_path = make_relative(base_dir, c.json_path);
             if (c.inline_assets.is_array()) {
                 r.assets = c.inline_assets;
@@ -271,7 +267,7 @@ private:
             r.options = area_names_with_none();
             r.dd_area = std::make_unique<DMDropdown>("Area", r.options, find_index(r.options, r.area_name));
             r.s_z = std::make_unique<DMSlider>("Z Offset", -5000, 5000, r.z_offset);
-            // Text boxes and buttons are built in layout (lazy)
+
             rows_.push_back(std::move(r));
         }
     }
@@ -337,9 +333,9 @@ private:
             ChildInfo ci;
             ci.area_name = r.area_name;
             ci.z_offset  = r.z_offset;
-            // Inline assets
+
             ci.inline_assets = r.assets.is_array() ? r.assets : nlohmann::json::array();
-            // json_path (store absolute internally for consistency; set_children will re-relativize)
+
             ci.json_path = r.json_path.empty() ? std::string{} : join_path(base_dir, r.json_path);
             out.push_back(std::move(ci));
         }
@@ -361,8 +357,8 @@ private:
         return v;
     }
     static int find_index(const std::vector<std::string>& v, const std::string& s) {
-        for (size_t i = 0; i < v.size(); ++i) if (v[i] == s) return (int)i; 
-        // map empty string to index 0 ("(none)")
+        for (size_t i = 0; i < v.size(); ++i) if (v[i] == s) return (int)i;
+
         return 0;
     }
     static std::string safe_get_option(const std::vector<std::string>& v, int idx) {
@@ -370,7 +366,6 @@ private:
         return (v[idx] == "(none)") ? std::string{} : v[idx];
     }
 
-    // path helpers
     static std::string parent_dir(const std::string& p) {
         auto pos = p.find_last_of("/\\");
         return (pos == std::string::npos) ? std::string{} : p.substr(0, pos);
@@ -387,7 +382,7 @@ private:
     static std::string join_path(const std::string& base, const std::string& rel) {
         if (base.empty()) return rel;
         if (rel.empty()) return base;
-        if (rel.front() == '/' || rel.front() == '\\') return base + rel; // naive
+        if (rel.front() == '/' || rel.front() == '\\') return base + rel;
         char sep = (
 #ifdef _WIN32
             '\\'
@@ -406,8 +401,8 @@ private:
     std::unique_ptr<DMButton> b_add_;
     std::unique_ptr<DMButton> apply_btn_;
     std::function<void(const std::string&)> open_area_editor_;
-    AssetInfoUI* ui_ = nullptr; // non-owning
-    // Deferred area editor open state (avoid re-entrancy crash)
+    AssetInfoUI* ui_ = nullptr;
+
     bool pending_open_area_ = false;
     std::string pending_area_name_;
 };

@@ -83,7 +83,7 @@ SDL_Texture* GenerateLight::generate(SDL_Renderer* renderer,
 	}
 	auto put_pixel = [&](int x, int y, Uint8 r, Uint8 g, Uint8 b, Uint8 a) {
 		pixels[y * size + x] = SDL_MapRGBA(fmt, r, g, b, a);
-	};
+};
         float radius_f = static_cast<float>(radius);
         float radius_sq = radius_f * radius_f;
         float inv_radius = 1.0f / radius_f;

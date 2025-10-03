@@ -76,7 +76,7 @@ std::vector<std::unique_ptr<Room>> GenerateRooms::build(AssetLibrary* asset_lib,
         auto get_room_data = [&](const std::string& name) -> nlohmann::json* {
                 if (!rooms_data.is_object()) return nullptr;
                 return &rooms_data[name];
-        };
+};
         auto* map_assets_ptr = &map_assets_data;
         auto root = std::make_unique<Room>(
                                         Room::Point{ map_center_x_, map_center_y_ },
@@ -233,14 +233,7 @@ std::vector<std::unique_ptr<Room>> GenerateRooms::build(AssetLibrary* asset_lib,
                         room_refs.push_back(room_ptr.get());
                 }
                 trailgen.set_all_rooms_reference(room_refs);
-                auto trail_objects = trailgen.generate_trails(
-                        connections,
-                        existing_areas,
-                        map_path_,
-                        map_info_path_,
-                        asset_lib,
-                        map_assets_ptr,
-                        map_radius);
+                auto trail_objects = trailgen.generate_trails( connections, existing_areas, map_path_, map_info_path_, asset_lib, map_assets_ptr, map_radius);
                 for (auto& t : trail_objects) {
                         all_rooms.push_back(std::move(t));
                 }
@@ -262,10 +255,7 @@ std::vector<std::unique_ptr<Room>> GenerateRooms::build(AssetLibrary* asset_lib,
 		Area area("Map", center, diameter, diameter, "Circle", 1, diameter, diameter);
 		std::cout << "[Boundary] Created circular boundary area with diameter " << diameter << "\n";
 		AssetSpawner spawner(asset_lib, exclusion_zones);
-                std::vector<std::unique_ptr<Asset>> boundary_assets = spawner.spawn_boundary_from_json(
-                        boundary_data,
-                        area,
-                        map_info_path_ + "::map_boundary_data");
+                std::vector<std::unique_ptr<Asset>> boundary_assets = spawner.spawn_boundary_from_json( boundary_data, area, map_info_path_ + "::map_boundary_data");
 		std::cout << "[Boundary] Extracted " << boundary_assets.size() << " spawned boundary assets\n";
 		int assigned_count = 0;
 		for (auto& asset_ptr : boundary_assets) {

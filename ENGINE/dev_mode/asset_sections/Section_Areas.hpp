@@ -7,7 +7,6 @@
 #include <vector>
 #include <algorithm>
 
-// Areas list + create/open editor
 class AssetInfoUI;
 
 class Section_Areas : public DockableCollapsible {
@@ -67,7 +66,7 @@ class Section_Areas : public DockableCollapsible {
       }
     }
 
-    void render_content(SDL_Renderer* /*r*/) const override {}
+    void render_content(SDL_Renderer* ) const override {}
 
   private:
     void rebuild_rows() {
@@ -80,7 +79,7 @@ class Section_Areas : public DockableCollapsible {
           DMButton* bp = b.get();
           std::string nm = bp->text();
           auto bw = std::make_unique<ButtonWidget>(bp, [this, nm]() {
-            // Defer opening the editor to avoid re-entrancy while handling events
+
             pending_name_ = nm;
             pending_open_ = true;
           });
@@ -101,7 +100,7 @@ class Section_Areas : public DockableCollapsible {
       }
       if (b_create_) {
         auto bw = std::make_unique<ButtonWidget>(b_create_.get(), [this]() {
-          // Toggle prompt to enter a name
+
           create_prompt_open_ = true;
           if (!new_area_name_box_) new_area_name_box_ = std::make_unique<DMTextBox>("Area Name", "");
           if (new_area_name_box_) new_area_name_box_->set_value("");
@@ -121,7 +120,7 @@ class Section_Areas : public DockableCollapsible {
           if (!open_editor_) return;
           std::string name = new_area_name_box_ ? new_area_name_box_->value() : std::string{};
           if (name.empty()) {
-            // Fallback default
+
             name = "area" + std::to_string(info_ ? info_->areas.size() + 1 : 1);
           }
           create_prompt_open_ = false;
@@ -152,7 +151,7 @@ class Section_Areas : public DockableCollapsible {
     std::function<void(const std::string&)> on_delete_;
     std::unique_ptr<DMButton> dummy_del_{};
     std::vector<std::unique_ptr<Widget>> widgets_;
-    AssetInfoUI* ui_ = nullptr; // non-owning
+    AssetInfoUI* ui_ = nullptr;
     bool create_prompt_open_ = false;
     std::unique_ptr<DMTextBox> new_area_name_box_;
     bool pending_open_ = false;

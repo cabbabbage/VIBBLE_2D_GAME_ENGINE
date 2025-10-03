@@ -8,7 +8,6 @@
 #include <string>
 #include <functional>
 
-// Spacing configuration: distance sliders only
 class AssetInfoUI;
 
 class Section_Spacing : public DockableCollapsible {
@@ -22,14 +21,8 @@ class Section_Spacing : public DockableCollapsible {
       widgets_.clear();
       DockableCollapsible::Rows rows;
       if (!info_) { set_rows(rows); return; }
-      s_min_same_ = std::make_unique<DMSlider>(
-          "Min Distance From Same Type",
-          0, 2000,
-          std::max(0, info_->min_same_type_distance));
-      s_min_all_  = std::make_unique<DMSlider>(
-          "Min Distance From All Assets",
-          0, 2000,
-          std::max(0, info_->min_distance_all));
+      s_min_same_ = std::make_unique<DMSlider>( "Min Distance From Same Type", 0, 2000, std::max(0, info_->min_same_type_distance));
+      s_min_all_  = std::make_unique<DMSlider>( "Min Distance From All Assets", 0, 2000, std::max(0, info_->min_distance_all));
 
       auto w_same = std::make_unique<SliderWidget>(s_min_same_.get());
       rows.push_back({ w_same.get() });
@@ -74,12 +67,12 @@ class Section_Spacing : public DockableCollapsible {
       return used || changed;
     }
 
-    void render_content(SDL_Renderer* /*r*/) const override {}
+    void render_content(SDL_Renderer* ) const override {}
 
   private:
     std::unique_ptr<DMSlider> s_min_same_;
     std::unique_ptr<DMSlider> s_min_all_;
     std::vector<std::unique_ptr<Widget>> widgets_;
     std::unique_ptr<DMButton> apply_btn_;
-    AssetInfoUI* ui_ = nullptr; // non-owning
+    AssetInfoUI* ui_ = nullptr;
 };

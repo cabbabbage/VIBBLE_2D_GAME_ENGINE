@@ -28,7 +28,7 @@ void VibbleController::movement(const Input& input) {
         if (player_->anim_) {
             player_->anim_->move(mx, my);
         }
-    };
+};
 
     if (raw_x == 0 && raw_y == 0) {
         send_to_animation(0, 0);
@@ -50,20 +50,20 @@ void VibbleController::movement(const Input& input) {
             return (raw > 0) ? 1 : -1;
         }
         return component;
-    };
+};
 
     move_x = ensure_non_zero(move_x, raw_x);
     move_y = ensure_non_zero(move_y, raw_y);
 
     auto magnitude_sq = [&]() {
         return move_x * move_x + move_y * move_y;
-    };
+};
 
     auto reduce_once = [](int value) {
         if (value > 0) return value - 1;
         if (value < 0) return value + 1;
         return value;
-    };
+};
 
     int mag_sq = magnitude_sq();
     if (mag_sq == 0) {
@@ -114,6 +114,5 @@ void VibbleController::movement(const Input& input) {
 void VibbleController::update(const Input& input) {
     dx_ = dy_ = 0;
 
-    // Decide movement direction + possibly force an animation switch
     movement(input);
 }

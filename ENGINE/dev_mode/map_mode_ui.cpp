@@ -119,9 +119,7 @@ void MapModeUI::track_floating_panel(DockableCollapsible* panel) {
 }
 
 void MapModeUI::rebuild_floating_stack() {
-    floating_panels_.erase(
-        std::remove(floating_panels_.begin(), floating_panels_.end(), nullptr),
-        floating_panels_.end());
+    floating_panels_.erase( std::remove(floating_panels_.begin(), floating_panels_.end(), nullptr), floating_panels_.end());
 }
 
 void MapModeUI::bring_panel_to_front(DockableCollapsible* panel) {
@@ -192,7 +190,7 @@ bool MapModeUI::handle_floating_panel_event(const SDL_Event& e, bool& used) {
                 return true;
             }
             return false;
-        };
+};
 
         if (lights) {
             if (handle_and_check(lights)) { consumed = true; break; }
@@ -208,8 +206,7 @@ bool MapModeUI::handle_floating_panel_event(const SDL_Event& e, bool& used) {
             }
         }
 
-        const bool inside = (lights && lights->is_visible() && lights->is_point_inside(p.x, p.y)) ||
-                            (!lights && panel->is_visible() && panel->is_point_inside(p.x, p.y));
+        const bool inside = (lights && lights->is_visible() && lights->is_point_inside(p.x, p.y)) || (!lights && panel->is_visible() && panel->is_point_inside(p.x, p.y));
 
         if ((pointer_event || wheel_event) && inside) {
             if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
@@ -246,7 +243,7 @@ void MapModeUI::ensure_panels() {
         footer_panel_->set_bounds(screen_w_, screen_h_);
         footer_panel_->set_visible(footer_always_visible_ || map_mode_active_);
         footer_panel_->set_expanded(false);
-        // Route content events to the embedded layers panel when visible.
+
         footer_panel_->set_content_event_handler([this](const SDL_Event& e) -> bool {
             if (layers_footer_visible_ && layers_panel_) {
                 return layers_panel_->handle_event(e);
@@ -262,7 +259,6 @@ void MapModeUI::ensure_panels() {
     update_footer_visibility();
     rebuild_floating_stack();
 }
-
 
 void MapModeUI::configure_footer_buttons() {
     if (!footer_panel_) return;
@@ -287,9 +283,9 @@ void MapModeUI::configure_footer_buttons() {
                 } else {
                     set_button_state(mode, cfg_ptr->id, active);
                 }
-            };
+};
             buttons.push_back(std::move(extra));
-        };
+};
 
         for (auto& config : configs) {
             if (config.id == "switch_mode") {
@@ -301,7 +297,7 @@ void MapModeUI::configure_footer_buttons() {
                 append_button(config);
             }
         }
-    };
+};
 
     if (header_mode_ == HeaderMode::Map) {
         append_custom(map_mode_buttons_, HeaderMode::Map);
@@ -315,7 +311,7 @@ void MapModeUI::configure_footer_buttons() {
             } else if (active_panel_ == PanelType::Layers) {
                 set_active_panel(PanelType::None);
             }
-        };
+};
         buttons.push_back(std::move(layers_btn));
 
         FullScreenCollapsible::HeaderButton lights_btn;
@@ -327,7 +323,7 @@ void MapModeUI::configure_footer_buttons() {
             } else if (active_panel_ == PanelType::Lights) {
                 set_active_panel(PanelType::None);
             }
-        };
+};
         buttons.push_back(std::move(lights_btn));
 
     } else {
@@ -441,7 +437,7 @@ namespace {
 bool is_mouse_button_or_motion(const SDL_Event& e) {
     return e.type == SDL_MOUSEBUTTONDOWN || e.type == SDL_MOUSEBUTTONUP || e.type == SDL_MOUSEMOTION;
 }
-} // namespace
+}
 
 bool MapModeUI::handle_layers_footer_event(const SDL_Event& e) {
     if (!footer_panel_ || !map_mode_active_ || !footer_panel_->visible()) return false;
@@ -493,7 +489,6 @@ bool MapModeUI::should_show_layers_footer() const {
     return footer_panel_->expanded();
 }
 
-
 void MapModeUI::sync_panel_map_info() {
     if (!map_info_) return;
     ensure_panels();
@@ -512,7 +507,6 @@ void MapModeUI::sync_panel_map_info() {
         layers_panel_->set_on_save([this]() { return save_map_info_to_disk(); });
     }
 }
-
 
 void MapModeUI::update(const Input& input) {
     ensure_panels();
@@ -545,7 +539,6 @@ void MapModeUI::update(const Input& input) {
     }
 }
 
-
 bool MapModeUI::handle_event(const SDL_Event& e) {
     ensure_panels();
     bool floating_used = false;
@@ -571,7 +564,6 @@ bool MapModeUI::handle_event(const SDL_Event& e) {
     return false;
 }
 
-
 void MapModeUI::render(SDL_Renderer* renderer) const {
     for (DockableCollapsible* panel : floating_panels_) {
         if (!panel) continue;
@@ -593,12 +585,10 @@ void MapModeUI::render(SDL_Renderer* renderer) const {
     }
 }
 
-
 void MapModeUI::open_layers_panel() {
     ensure_panels();
     set_active_panel(PanelType::Layers);
 }
-
 
 void MapModeUI::toggle_light_panel() {
     ensure_panels();
@@ -608,7 +598,6 @@ void MapModeUI::toggle_light_panel() {
         set_active_panel(PanelType::Lights);
     }
 }
-
 
 void MapModeUI::toggle_layers_panel() {
     ensure_panels();
@@ -622,7 +611,6 @@ void MapModeUI::toggle_layers_panel() {
 void MapModeUI::close_all_panels() {
     set_active_panel(PanelType::None);
 }
-
 
 bool MapModeUI::is_light_panel_visible() const {
     return light_panel_ && light_panel_->is_visible();
@@ -640,7 +628,6 @@ void MapModeUI::set_light_save_callback(LightSaveCallback cb) {
     }
 }
 
-
 bool MapModeUI::is_point_inside(int x, int y) const {
     if (pointer_inside_floating_panel(x, y)) {
         return true;
@@ -653,7 +640,6 @@ bool MapModeUI::is_point_inside(int x, int y) const {
     }
     return false;
 }
-
 
 bool MapModeUI::is_any_panel_visible() const {
     for (DockableCollapsible* panel : floating_panels_) {
@@ -670,7 +656,6 @@ bool MapModeUI::is_any_panel_visible() const {
 bool MapModeUI::is_layers_footer_visible() const {
     return layers_footer_visible_;
 }
-
 
 bool MapModeUI::save_map_info_to_disk() const {
     if (!map_info_) return false;
@@ -695,17 +680,4 @@ bool MapModeUI::save_map_info_to_disk() const {
         return false;
     }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
 

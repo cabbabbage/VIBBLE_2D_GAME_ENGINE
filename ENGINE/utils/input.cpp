@@ -11,7 +11,7 @@ Input::Button to_button(Uint8 sdl_button) {
     default:                return Input::COUNT;
     }
 }
-} // namespace
+}
 
 void Input::handleEvent(const SDL_Event& e) {
     switch (e.type) {
@@ -29,7 +29,7 @@ void Input::handleEvent(const SDL_Event& e) {
         if (button != COUNT) {
             buttons_[button] = down;
             if (!down) {
-                // small click window
+
                 clickBuffer_[button] = 3;
             }
         }
@@ -54,7 +54,7 @@ void Input::handleEvent(const SDL_Event& e) {
 }
 
 void Input::update() {
-    // Mouse button transitions
+
     for (int i = 0; i < COUNT; ++i) {
         pressed_[i]   = (!prevButtons_[i] && buttons_[i]);
         released_[i]  = (prevButtons_[i] && !buttons_[i]);
@@ -62,14 +62,12 @@ void Input::update() {
         if (clickBuffer_[i] > 0) clickBuffer_[i]--;
     }
 
-    // Keyboard transitions
     for (int i = 0; i < SDL_NUM_SCANCODES; ++i) {
         keys_pressed_[i]  = (!prev_keys_down_[i] && keys_down_[i]);
         keys_released_[i] = (prev_keys_down_[i] && !keys_down_[i]);
         prev_keys_down_[i] = keys_down_[i];
     }
 
-    // Reset per-frame deltas
     dx_ = dy_ = 0;
     scrollX_ = scrollY_ = 0;
 }

@@ -58,11 +58,11 @@ void MenuUI::game_loop() {
                                 bool esc_consumed = false;
                                 if (game_assets_) {
                                                 if (game_assets_->is_asset_info_editor_open()) {
-                                                                // Close asset info editor; if it had closed the library, reopen it.
+
                                                                 game_assets_->close_asset_info_editor();
                                                                 esc_consumed = true;
                                                 }
-                                                // Note: ESC no longer closes the Asset Library.
+
                                 }
                                 if (!esc_consumed) {
                                                 toggleMenu();
@@ -157,7 +157,7 @@ void MenuUI::rebuildButtons() {
 		b.set_rect(SDL_Rect{ x, start_y, btn_w, btn_h });
 		start_y += btn_h + gap;
 		buttons_.push_back(MenuButton{ std::move(b), action });
-	};
+};
         addButton("End Run",            MenuAction::EXIT, true);
         addButton("Restart Run",        MenuAction::RESTART);
         addButton("Settings",           MenuAction::SETTINGS);
@@ -269,7 +269,7 @@ void MenuUI::doToggleDevMode() {
         dev_mode_ = !dev_mode_;
         if (game_assets_) game_assets_->set_dev_mode(dev_mode_);
         std::cout << "[MenuUI] Dev Mode = " << (dev_mode_ ? "ON" : "OFF") << "\n";
-        // Close the menu immediately after switching modes
+
         if (menu_active_) {
                 menu_active_ = false;
                 if (game_assets_) game_assets_->set_render_suppressed(false);

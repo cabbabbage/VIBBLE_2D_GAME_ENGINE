@@ -28,17 +28,8 @@ class GenerateRooms {
 
 	public:
     using Point = SDL_Point;
-    GenerateRooms(const std::vector<LayerSpec>& layers,
-                  int map_cx,
-                  int map_cy,
-                  const std::string& map_dir,
-                  const std::string& map_info_path);
-    std::vector<std::unique_ptr<Room>> build(AssetLibrary* asset_lib,
-                                             double map_radius,
-                                             const nlohmann::json& boundary_data,
-                                             nlohmann::json& rooms_data,
-                                             nlohmann::json& trails_data,
-                                             const nlohmann::json& map_assets_data);
+    GenerateRooms(const std::vector<LayerSpec>& layers, int map_cx, int map_cy, const std::string& map_dir, const std::string& map_info_path);
+    std::vector<std::unique_ptr<Room>> build(AssetLibrary* asset_lib, double map_radius, const nlohmann::json& boundary_data, nlohmann::json& rooms_data, nlohmann::json& trails_data, const nlohmann::json& map_assets_data);
     bool testing = false;
 
 	private:
@@ -46,7 +37,7 @@ class GenerateRooms {
     Room* room;
     float start_angle;
     float span_angle;
-	};
+};
     SDL_Point polar_to_cartesian(int cx, int cy, int radius, float angle_rad);
     std::vector<RoomSpec> get_children_from_layer(const LayerSpec& layer);
     std::vector<LayerSpec> map_layers_;

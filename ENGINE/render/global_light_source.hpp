@@ -8,11 +8,7 @@
 class Global_Light_Source {
 
 	public:
-    Global_Light_Source(SDL_Renderer* renderer,
-                        SDL_Point screen_center,
-                        int screen_width,
-                        SDL_Color fallback_base_color,
-                        const std::string& map_path);
+    Global_Light_Source(SDL_Renderer* renderer, SDL_Point screen_center, int screen_width, SDL_Color fallback_base_color, const std::string& map_path);
     void apply_config(const nlohmann::json& data);
     ~Global_Light_Source();
     void update();
@@ -28,7 +24,7 @@ class Global_Light_Source {
     struct KeyEntry {
         float degree;
         SDL_Color color;
-    };
+};
     bool load_from_map_light(const std::string& map_path);
     void set_defaults(int screen_width, SDL_Color fallback_base_color);
     void build_texture();

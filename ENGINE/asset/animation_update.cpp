@@ -3,7 +3,6 @@
 #include "asset/asset_info.hpp"
 #include "asset/asset_types.hpp"
 #include "animation.hpp"
-#include "core/active_assets_manager.hpp"
 #include "core/AssetsManager.hpp"
 #include "audio/audio_engine.hpp"
 #include "utils/area.hpp"
@@ -56,27 +55,29 @@ ManualState& manual_state(AnimationUpdate* updater) {
 }
 }
 
-AnimationUpdate::AnimationUpdate(Asset* self, ActiveAssetsManager& aam)
-: self_(self), aam_(aam) {
+AnimationUpdate::AnimationUpdate(Asset* self, Assets* assets)
+: self_(self), assets_owner_(assets) {
+    if (!assets_owner_ && self_) {
+        assets_owner_ = self_->get_assets();
+    }
     std::seed_seq seed{
-        static_cast<unsigned>(reinterpret_cast<uintptr_t>(self) & 0xffffffffu),
-        static_cast<unsigned>((reinterpret_cast<uintptr_t>(self) >> 32) & 0xffffffffu)
-    };
+        static_cast<unsigned>(reinterpret_cast<uintptr_t>(self) & 0xffffffffu), static_cast<unsigned>((reinterpret_cast<uintptr_t>(self) >> 32) & 0xffffffffu) };
     rng_.seed(seed);
     weight_dir_    = 0.6;
     weight_sparse_ = 0.4;
 }
 
-AnimationUpdate::AnimationUpdate(Asset* self, ActiveAssetsManager& aam,
+AnimationUpdate::AnimationUpdate(Asset* self, Assets* assets,
                                  double directness_weight, double sparsity_weight)
-: self_(self), aam_(aam),
+: self_(self), assets_owner_(assets),
   weight_dir_(std::max(0.0, directness_weight)),
   weight_sparse_(std::max(0.0, sparsity_weight)) {
     std::seed_seq seed{
-        static_cast<unsigned>(reinterpret_cast<uintptr_t>(self) & 0xffffffffu),
-        static_cast<unsigned>((reinterpret_cast<uintptr_t>(self) >> 32) & 0xffffffffu)
-    };
+        static_cast<unsigned>(reinterpret_cast<uintptr_t>(self) & 0xffffffffu), static_cast<unsigned>((reinterpret_cast<uintptr_t>(self) >> 32) & 0xffffffffu) };
     rng_.seed(seed);
+    if (!assets_owner_ && self_) {
+        assets_owner_ = self_->get_assets();
+    }
 }
 
 void AnimationUpdate::transition_mode(Mode m) {
@@ -127,7 +128,8 @@ SDL_Point AnimationUpdate::choose_balanced_target(SDL_Point desired, const Asset
     const double base_angle  = std::atan2(static_cast<double>(dy0), static_cast<double>(dx0));
     double base_radius = std::sqrt(static_cast<double>(dx0*dx0 + dy0*dy0));
     if (base_radius < 1.0) base_radius = 1.0;
-    const auto& active = aam_.getActive();
+    static const std::vector<Asset*> kEmptyAssets;
+    const std::vector<Asset*>& active = assets_owner_ ? assets_owner_->getActive() : kEmptyAssets;
     std::vector<Asset*> neighbors;
     neighbors.reserve(active.size());
     Range::get_in_range(SDL_Point{sx, sy}, 300, active, neighbors);
@@ -177,16 +179,16 @@ SDL_Point AnimationUpdate::bottom_middle(SDL_Point pos) const {
 }
 
 bool AnimationUpdate::point_in_impassable(SDL_Point pt, const Asset* ignored) const {
-    // Only test the closest relevant asset; use a robust lookup of the
-    // impassable/collision area and rely on Asset::get_area to align + scale.
+
     Asset* closest = nullptr;
     double best_d2 = std::numeric_limits<double>::infinity();
 
-    const auto& active = aam_.getActive();
+    static const std::vector<Asset*> kEmptyAssets;
+    const std::vector<Asset*>& active = assets_owner_ ? assets_owner_->getActive() : kEmptyAssets;
     for (Asset* a : active) {
         if (!a || a == self_ || a == ignored || !a->info) continue;
         if (a->info->type == asset_types::texture) continue;
-        if (a->info->passable) continue; // Only consider impassable-tagged assets
+        if (a->info->passable) continue;
         const double dx = static_cast<double>(a->pos.x - pt.x);
         const double dy = static_cast<double>(a->pos.y - pt.y);
         const double d2 = dx*dx + dy*dy;
@@ -195,7 +197,6 @@ bool AnimationUpdate::point_in_impassable(SDL_Point pt, const Asset* ignored) co
 
     if (!closest) return false;
 
-    // Try known area names in order of likelihood
     static const char* kNames[] = { "impassable_area", "passability", "collision_area" };
     for (const char* nm : kNames) {
         Area obstacle = closest->get_area(nm);
@@ -232,7 +233,7 @@ SDL_Point AnimationUpdate::sanitize_target(SDL_Point desired, const Asset* final
         if (point_in_impassable(bottom, final_target)) return false;
         if (path_blocked(origin, bottom, final_target)) return false;
         return true;
-    };
+};
     if (is_valid(desired)) return desired;
     const int base_step = std::max(1, static_cast<int>(std::lround(std::sqrt(static_cast<double>(min_move_len2())))));
     const int max_attempts = 12;
@@ -333,7 +334,8 @@ bool AnimationUpdate::can_move_by(int dx, int dy) const {
 bool AnimationUpdate::would_overlap_same_or_player(int dx, int dy) const {
     if (!self_ || !self_->info) return true;
     const SDL_Point new_pos{ self_->pos.x + dx, self_->pos.y + dy };
-    const auto& active = aam_.getActive();
+    static const std::vector<Asset*> kEmptyAssets;
+    const std::vector<Asset*>& active = assets_owner_ ? assets_owner_->getActive() : kEmptyAssets;
     for (Asset* a : active) {
         if (!a || a == self_ || !a->info) continue;
         const bool is_enemy  = (a->info->type == asset_types::enemy);
@@ -361,8 +363,7 @@ std::string AnimationUpdate::pick_best_animation_towards(SDL_Point target) {
         if (!anim.frames.empty() && anim.frames_data.size() != anim.frames.size()) continue;
         const int dx = anim.total_dx;
         const int dy = anim.total_dy;
-        // When moving, consider any animation that results in movement (dx, dy not both zero).
-        // When idle, consider only animations that have no movement (dx == 0 && dy == 0).
+
         if (moving) {
             if (dx == 0 && dy == 0) continue;
         } else {
@@ -438,8 +439,7 @@ void AnimationUpdate::ensure_orbit_target(int min_radius, int max_radius, const 
             orbit_dir_ = (orbit_forced_dir_ >= 0) ? +1 : -1;
         }
     } else {
-        orbit_dir_ = orbit_force_dir_ ? ((orbit_forced_dir_ >= 0) ? +1 : -1)
-                                      : (rand_int(rng_, 0, 1) ? +1 : -1);
+        orbit_dir_ = orbit_force_dir_ ? ((orbit_forced_dir_ >= 0) ? +1 : -1) : (rand_int(rng_, 0, 1) ? +1 : -1);
     }
     if (!orbit_params_set_) {
         orbit_radius_ = rand_int(rng_, min_radius, max_radius);
@@ -597,8 +597,12 @@ bool AnimationUpdate::advance(AnimationFrame*& frame) {
             self_->pos.y += move_dy;
             if (frame->z_resort) {
                 self_->set_z_index();
-                if (Assets* as = self_->get_assets()) {
-                    as->active_manager().markNeedsSort();
+                Assets* as = assets_owner_;
+                if (!as && self_) {
+                    as = self_->get_assets();
+                }
+                if (as) {
+                    as->mark_active_assets_dirty();
                 }
             }
         }
@@ -799,7 +803,7 @@ void AnimationUpdate::update() {
             auto has_anim = [&](const char* id) {
                 if (!self_->info) return false;
                 return self_->info->animations.find(id) != self_->info->animations.end();
-            };
+};
             auto choose_anim = [&](int dx, int dy) -> std::string {
                 if (dx == 0 && dy == 0) return {};
                 const int abs_x = std::abs(dx);
@@ -808,12 +812,12 @@ void AnimationUpdate::update() {
                     if (dx > 0) return has_anim("right") ? std::string("right") : std::string{};
                     if (dx < 0) return has_anim("left") ? std::string("left") : std::string{};
                     return std::string{};
-                };
+};
                 auto pick_vertical = [&]() -> std::string {
                     if (dy > 0) return has_anim("forward") ? std::string("forward") : std::string{};
                     if (dy < 0) return has_anim("backward") ? std::string("backward") : std::string{};
                     return std::string{};
-                };
+};
                 if (abs_x > abs_y) {
                     std::string horiz = pick_horizontal();
                     if (!horiz.empty()) return horiz;
@@ -838,7 +842,7 @@ void AnimationUpdate::update() {
                 std::string horiz = pick_horizontal();
                 if (!horiz.empty()) return horiz;
                 return has_anim("default") ? std::string("default") : std::string{};
-            };
+};
 
             std::string desired_anim;
             if (moving_now) {
@@ -889,14 +893,7 @@ void AnimationUpdate::update() {
 
             manual.last_was_moving = true;
         }
-        // Manual control should allow the override movement to actually update the
-        // asset position. Previously we set `suppress_movement_` to
-        // `manual.active`, which is always true inside this branch and therefore
-        // prevented any positional changes from occurring. As a consequence,
-        // assets controlled via `AnimationUpdate::move` (e.g. the player and
-        // custom controllers that rely on manual movement) never moved despite
-        // providing non-zero deltas. Clearing the suppression flag here ensures
-        // that the overridden deltas are applied during `advance`.
+
         suppress_movement_ = false;
         bool cont = advance(self_->current_frame);
         blocked_last_step_ = false;

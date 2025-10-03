@@ -54,19 +54,19 @@ class AssetInfoUI {
     bool visible_ = false;
     std::shared_ptr<AssetInfo> info_{};
     mutable SDL_Renderer* last_renderer_ = nullptr;
-    Assets* assets_ = nullptr; // non-owning
-    // Section-based UI
+    Assets* assets_ = nullptr;
+
     std::vector<std::unique_ptr<class DockableCollapsible>> sections_;
-    class Section_BasicInfo* basic_info_section_ = nullptr; // non-owning ptr
-    class Section_Areas* areas_section_ = nullptr;     // non-owning ptr into sections_
-    class Section_Lighting* lighting_section_ = nullptr; // non-owning ptr
-    class Asset* target_asset_ = nullptr;               // asset being edited (non-owning)
+    class Section_BasicInfo* basic_info_section_ = nullptr;
+    class Section_Areas* areas_section_ = nullptr;
+    class Section_Lighting* lighting_section_ = nullptr;
+    class Asset* target_asset_ = nullptr;
     mutable int scroll_ = 0;
     mutable int max_scroll_ = 0;
     mutable SDL_Rect panel_ {0,0,0,0};
     mutable SDL_Rect scroll_region_{0,0,0,0};
     mutable SDL_Rect name_label_rect_{0,0,0,0};
-    // Footer button: Configure Animations
+
     mutable std::unique_ptr<class DMButton> configure_btn_;
     std::unique_ptr<AnimationsEditorPanel> animations_panel_;
     int pulse_frames_ = 0;

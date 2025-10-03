@@ -57,7 +57,7 @@ void FloatingDockableManager::open_floating(const std::string& name,
             close_entry(entry.close_callback, entry.panel);
         }
     } else if (current_.panel) {
-        // Prevent duplicate references to the same panel inside the stack.
+
         stack_.erase(std::remove_if(stack_.begin(), stack_.end(),
                                     [panel](const ActiveEntry& entry) {
                                         return entry.panel == panel;

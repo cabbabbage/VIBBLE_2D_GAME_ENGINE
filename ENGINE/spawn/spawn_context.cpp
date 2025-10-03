@@ -77,7 +77,7 @@ Asset* SpawnContext::spawnAsset(const std::string& name,
             nlohmann::json j;
             bool have_inline = (childInfo->inline_assets.is_array() && !childInfo->inline_assets.empty());
             if (have_inline) {
-                // Support both legacy key ("assets") and canonical key ("spawn_groups")
+
                 j["spawn_groups"] = childInfo->inline_assets;
                 j["assets"] = childInfo->inline_assets;
             } else {
@@ -117,8 +117,8 @@ Asset* SpawnContext::spawnAsset(const std::string& name,
                     if (!uptr || !uptr->info) continue;
                     uptr->set_z_offset(childInfo->z_offset);
                     uptr->parent = raw;
-                    uptr->set_hidden(false); // ensure children are visible/spawned
-                    // Link into parent's children list
+                    uptr->set_hidden(false);
+
                     raw->children.push_back(uptr.get());
                     std::cout << "[Spawn]    Adopting child \""
                     << uptr->info->name << "\"\n";

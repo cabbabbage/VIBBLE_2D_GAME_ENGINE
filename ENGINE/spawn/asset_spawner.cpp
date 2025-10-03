@@ -78,7 +78,7 @@ void AssetSpawner::run_spawning(AssetSpawnPlanner* planner, const Area& area) {
                 return;
         }
     int spacing = 100;
-    // Create a map-wide grid covering this spawn area (shared across all methods)
+
     auto [minx, miny, maxx, maxy] = area.get_bounds();
     int w = std::max(0, maxx - minx);
     int h = std::max(0, maxy - miny);
@@ -95,11 +95,8 @@ void AssetSpawner::run_spawning(AssetSpawnPlanner* planner, const Area& area) {
                 if (!queue_item.has_candidates()) continue;
                 const std::string& pos = queue_item.position;
 
-                // Map-wide batch spawning: ignore quantity and fill all available grid points
-                // Detect via display name convention used in map_info.json (e.g., "batch_map_assets").
-                // This mirrors boundary spawning behavior but without exclusion zones.
                 if (queue_item.name == "batch_map_assets") {
-                        // Build weights for candidates (ensure non-zero sums)
+
                         std::vector<int> base_weights;
                         base_weights.reserve(queue_item.candidates.size());
                         bool has_positive_weight = false;
@@ -141,18 +138,17 @@ void AssetSpawner::run_spawning(AssetSpawnPlanner* planner, const Area& area) {
                                         }
                                         ++attempts;
                                         const SpawnCandidate& candidate = queue_item.candidates[idx];
-                                        // If the selected candidate is null, consume this grid point and move on.
+
                                         if (candidate.is_null || !candidate.info) {
                                                 grid.set_occupied(gp, true);
-                                                placed = true; // grid space considered occupied
+                                                placed = true;
                                                 break;
                                         }
                                         if (ctx.checker().check(candidate.info, spawn_pos, ctx.exclusion_zones(), ctx.all_assets(), true, true, true, 5)) {
                                                 attempt_weights[idx] = 0;
                                                 continue;
                                         }
-                                        auto* result = ctx.spawnAsset(candidate.name, candidate.info, area, spawn_pos, 0, nullptr,
-                                                                      queue_item.spawn_id, queue_item.position);
+                                        auto* result = ctx.spawnAsset(candidate.name, candidate.info, area, spawn_pos, 0, nullptr, queue_item.spawn_id, queue_item.position);
                                         if (!result) {
                                                 attempt_weights[idx] = 0;
                                                 continue;
@@ -188,7 +184,7 @@ void AssetSpawner::run_boundary_spawning(const Area& area) {
         auto point_in_exclusion = [&](const SDL_Point& pt) {
                 return std::any_of(exclusion_zones.begin(), exclusion_zones.end(),
                 [&](const Area& zone) { return zone.contains_point(pt); });
-        };
+};
 
         const std::string boundary_type{asset_types::boundary};
 
@@ -252,7 +248,7 @@ void AssetSpawner::run_boundary_spawning(const Area& area) {
                                 }
                                 ++attempts;
                                 const SpawnCandidate& candidate = queue_item.candidates[idx];
-                                // If the selected candidate is null, consume this grid point and move on.
+
                                 if (candidate.is_null || !candidate.info) {
                                         grid.set_occupied(gp, true);
                                         break;
@@ -263,8 +259,7 @@ void AssetSpawner::run_boundary_spawning(const Area& area) {
                                         continue;
                                 }
 
-                                auto* result = ctx.spawnAsset(candidate.name, candidate.info, area, spawn_pos, 0, nullptr,
-                                                              queue_item.spawn_id, queue_item.position);
+                                auto* result = ctx.spawnAsset(candidate.name, candidate.info, area, spawn_pos, 0, nullptr, queue_item.spawn_id, queue_item.position);
                                 if (!result) {
                                         attempt_weights[idx] = 0;
                                         continue;
@@ -289,7 +284,7 @@ void AssetSpawner::run_boundary_spawning(const Area& area) {
 void AssetSpawner::run_child_spawning(AssetSpawnPlanner* planner, const Area& area) {
         asset_info_library_ = asset_library_->all();
         spawn_queue_ = planner->get_spawn_queue();
-        // No grid for children; they can go anywhere inside the child area
+
         SpawnContext ctx(rng_, checker_, logger_, exclusion_zones, asset_info_library_, all_, asset_library_, nullptr);
         ChildrenSpawner childMethod;
         for (auto& queue_item : spawn_queue_) {

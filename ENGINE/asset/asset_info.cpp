@@ -313,7 +313,7 @@ void AssetInfo::upsert_area_from_editor(const Area& area) {
 			return std::numeric_limits<int>::max();
 		}
 		return static_cast<int>(rounded);
-	};
+};
 
 	const int scaled_canvas_w = compute_scaled(original_canvas_width, scale);
 	const int scaled_canvas_h = compute_scaled(original_canvas_height, scale);
@@ -344,7 +344,7 @@ void AssetInfo::upsert_area_from_editor(const Area& area) {
 			snapped = 0.0;
 		}
 		return snapped;
-	};
+};
 
 	nlohmann::json points = nlohmann::json::array();
 	for (const auto& p : area.get_points()) {
@@ -371,8 +371,6 @@ void AssetInfo::upsert_area_from_editor(const Area& area) {
 		info_json_["areas"].push_back(std::move(entry));
 	}
 }
-
-
 
 std::string AssetInfo::pick_next_animation(const std::string& mapping_id) const {
 	auto it = mappings.find(mapping_id);
@@ -406,41 +404,41 @@ void AssetInfo::load_children(const nlohmann::json& data) {
 }
 
 void AssetInfo::set_children(const std::vector<ChildInfo>& new_children) {
-    // Update in-memory copy
+
     children = new_children;
-    // Serialize to JSON under "child_assets"
+
     nlohmann::json arr = nlohmann::json::array();
     for (const auto& c : new_children) {
         nlohmann::json entry;
         entry["area_name"] = c.area_name;
         entry["z_offset"] = c.z_offset;
-        // Prefer inline assets if present and non-empty; otherwise keep json_path if set
+
         try {
             if (c.inline_assets.is_array() && !c.inline_assets.empty()) {
                 entry["assets"] = c.inline_assets;
             } else if (!c.json_path.empty()) {
-                // c.json_path might be absolute (from loader). Try to store as relative to asset dir if possible.
+
                 std::string rel = c.json_path;
                 try {
-                    // info_json_path_ is .../SRC/<AssetName>/info.json
+
                     std::string base = info_json_path_;
                     auto pos = base.find_last_of("/\\");
                     if (pos != std::string::npos) {
-                        base = base.substr(0, pos); // asset folder
+                        base = base.substr(0, pos);
                         if (rel.rfind(base, 0) == 0) {
-                            // Strip base + separator
+
                             size_t cut = base.size();
                             if (rel.size() > cut && (rel[cut] == '/' || rel[cut] == '\\')) ++cut;
                             rel = rel.substr(cut);
                         }
                     }
                 } catch (...) {
-                    // keep original rel
+
                 }
                 entry["json_path"] = rel;
             }
         } catch (...) {
-            // ignore malformed inline assets
+
         }
         arr.push_back(std::move(entry));
     }
@@ -461,7 +459,7 @@ void AssetInfo::set_lighting(bool has_shading_,
     has_light_source = has_shading || !lights.empty();
 
     nlohmann::json arr = nlohmann::json::array();
-    // Shading entry first
+
     nlohmann::json shade_entry = nlohmann::json::object();
     shade_entry["has_light_source"] = true;
     if (has_shading) {
@@ -509,15 +507,15 @@ void AssetInfo::set_lighting(bool has_shading_,
 
 bool AssetInfo::remove_area(const std::string& name) {
     bool removed = false;
-    // Remove from in-memory areas
+
     areas.erase(std::remove_if(areas.begin(), areas.end(), [&](const NamedArea& na){ return na.name == name; }), areas.end());
-    // Remove from JSON
+
     try {
         if (info_json_.contains("areas") && info_json_["areas"].is_array()) {
             nlohmann::json new_arr = nlohmann::json::array();
             for (const auto& entry : info_json_["areas"]) {
                 if (entry.is_object() && entry.value("name", std::string{}) == name) {
-                    removed = true; // skip this one
+                    removed = true;
                     continue;
                 }
                 new_arr.push_back(entry);
@@ -525,12 +523,10 @@ bool AssetInfo::remove_area(const std::string& name) {
             info_json_["areas"] = std::move(new_arr);
         }
     } catch (...) {
-        // ignore JSON errors
+
     }
     return removed;
 }
-
-// ---------------- Animations editing (dev-mode UI) ----------------
 
 std::vector<std::string> AssetInfo::animation_names() const {
 	std::vector<std::string> names;
@@ -541,7 +537,7 @@ std::vector<std::string> AssetInfo::animation_names() const {
 			}
 		}
 	} catch (...) {
-		// ignore
+
 	}
 	std::sort(names.begin(), names.end());
 	return names;
@@ -566,7 +562,7 @@ bool AssetInfo::upsert_animation(const std::string& name, const nlohmann::json& 
 			info_json_["animations"] = nlohmann::json::object();
 		}
 		info_json_["animations"][name] = payload;
-		// keep anims_json_ in sync (used by loader)
+
 		if (anims_json_.is_null() || !anims_json_.is_object()) anims_json_ = nlohmann::json::object();
 		anims_json_[name] = payload;
 		return true;
@@ -604,7 +600,7 @@ bool AssetInfo::rename_animation(const std::string& old_name, const std::string&
 			if (it != info_json_["animations"].end()) { payload = *it; found = true; }
 		}
 		if (!found) return false;
-		// insert under new name then erase old
+
 		info_json_["animations"][new_name] = payload;
 		info_json_["animations"].erase(old_name);
 		if (anims_json_.is_null() || !anims_json_.is_object()) anims_json_ = nlohmann::json::object();
@@ -625,6 +621,6 @@ void AssetInfo::set_start_animation_name(const std::string& name) {
 		start_animation = name;
 		info_json_["start"] = name;
 	} catch (...) {
-		// ignore
+
 	}
 }

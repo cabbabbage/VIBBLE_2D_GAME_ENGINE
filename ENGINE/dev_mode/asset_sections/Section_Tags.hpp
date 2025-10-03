@@ -7,7 +7,6 @@
 #include <memory>
 #include <vector>
 
-// Collapsible section to edit tags for an asset.
 class AssetInfoUI;
 
 class Section_Tags : public DockableCollapsible {
@@ -54,12 +53,12 @@ class Section_Tags : public DockableCollapsible {
       return DockableCollapsible::handle_event(e);
     }
 
-    void render_content(SDL_Renderer* /*r*/) const override {}
+    void render_content(SDL_Renderer* ) const override {}
 
   private:
     std::unique_ptr<TagEditorWidget> tag_editor_;
     std::vector<std::unique_ptr<Widget>> widgets_;
     std::unique_ptr<DMButton> apply_btn_;
-    AssetInfoUI* ui_ = nullptr; // non-owning
+    AssetInfoUI* ui_ = nullptr;
 };
 

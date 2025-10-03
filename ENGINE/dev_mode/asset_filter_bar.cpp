@@ -121,7 +121,7 @@ void AssetFilterBar::rebuild_layout(const SDL_Rect& header_rect) {
                 entry.checkbox->set_rect(SDL_Rect{0, 0, 0, 0});
             }
         }
-    };
+};
 
     if (!footer_ || screen_w_ <= 0) {
         clear_rects();
@@ -154,8 +154,7 @@ void AssetFilterBar::rebuild_layout(const SDL_Rect& header_rect) {
         auto& current_row = rows.back();
         int current_row_width = 0;
         if (!current_row.empty()) {
-            current_row_width = static_cast<int>(current_row.size()) * checkbox_width +
-                                static_cast<int>(current_row.size() - 1) * margin_x;
+            current_row_width = static_cast<int>(current_row.size()) * checkbox_width + static_cast<int>(current_row.size() - 1) * margin_x;
         }
         int width_with_new = current_row_width + checkbox_width;
         if (!current_row.empty()) {
@@ -207,8 +206,7 @@ void AssetFilterBar::rebuild_layout(const SDL_Rect& header_rect) {
             continue;
         }
 
-        const int row_width = static_cast<int>(row.size()) * checkbox_width +
-                              static_cast<int>(row.size() - 1) * margin_x;
+        const int row_width = static_cast<int>(row.size()) * checkbox_width + static_cast<int>(row.size() - 1) * margin_x;
         int x = header.x + (header.w - row_width) / 2;
         if (row_width > (right_limit - left_limit)) {
             x = left_limit;
@@ -331,13 +329,11 @@ bool AssetFilterBar::passes(const Asset& asset) const {
     if (!type_filter_enabled(type)) {
         return false;
     }
-    const bool is_map_asset = !asset.spawn_id.empty() &&
-        map_spawn_ids_.find(asset.spawn_id) != map_spawn_ids_.end();
+    const bool is_map_asset = !asset.spawn_id.empty() && map_spawn_ids_.find(asset.spawn_id) != map_spawn_ids_.end();
     if (is_map_asset && !state_.map_assets) {
         return false;
     }
-    const bool is_room_asset = !asset.spawn_id.empty() &&
-        room_spawn_ids_.find(asset.spawn_id) != room_spawn_ids_.end();
+    const bool is_room_asset = !asset.spawn_id.empty() && room_spawn_ids_.find(asset.spawn_id) != room_spawn_ids_.end();
     if (is_room_asset && !state_.current_room) {
         return false;
     }

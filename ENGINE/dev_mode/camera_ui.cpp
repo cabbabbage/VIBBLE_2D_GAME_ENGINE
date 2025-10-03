@@ -137,7 +137,7 @@ public:
                 SDL_FreeSurface(surf);
             }
             TTF_CloseFont(font);
-        };
+};
 
         draw_label(st.label, label_, rect_.x, rect_.y - st.label.font_size - DMSpacing::item_gap());
 
@@ -191,9 +191,7 @@ private:
     float value_for_x(int x) const {
         SDL_Rect track = track_rect();
         if (track.w <= 0) return value_;
-        const double ratio = std::clamp((static_cast<double>(x) - static_cast<double>(track.x)) /
-                                        static_cast<double>(std::max(1, track.w - 12)),
-                                        0.0, 1.0);
+        const double ratio = std::clamp((static_cast<double>(x) - static_cast<double>(track.x)) / static_cast<double>(std::max(1, track.w - 12)), 0.0, 1.0);
         const double raw = static_cast<double>(min_) + ratio * static_cast<double>(max_ - min_);
         return clamp_and_snap(static_cast<float>(raw));
     }
@@ -290,7 +288,6 @@ void CameraUIPanel::sync_from_camera() {
     if (distance_strength_slider_) distance_strength_slider_->set_value(last_settings_.distance_scale_strength);
 }
 
-
 void CameraUIPanel::build_ui() {
     effects_checkbox_ = std::make_unique<DMCheckbox>("Perspective Effects", true);
     effects_widget_ = std::make_unique<CheckboxWidget>(effects_checkbox_.get());
@@ -314,7 +311,6 @@ void CameraUIPanel::build_ui() {
     rebuild_rows();
 }
 
-
 void CameraUIPanel::rebuild_rows() {
     Rows rows;
     rows.push_back({ effects_widget_.get() });
@@ -328,7 +324,6 @@ void CameraUIPanel::rebuild_rows() {
     set_rows(rows);
 }
 
-
 void CameraUIPanel::reset_to_defaults() {
     camera::RealismSettings defaults;
     if (effects_checkbox_) effects_checkbox_->set_value(true);
@@ -340,7 +335,6 @@ void CameraUIPanel::reset_to_defaults() {
     if (distance_strength_slider_) distance_strength_slider_->set_value(defaults.distance_scale_strength);
     apply_settings_if_needed();
 }
-
 
 void CameraUIPanel::reload_from_json() {
     if (!assets_) return;
@@ -356,24 +350,18 @@ void CameraUIPanel::apply_settings_if_needed() {
 
     auto differs = [](float a, float b) {
         return std::fabs(a - b) > 0.0001f;
-    };
+};
 
     bool changed = effects_enabled != last_realism_enabled_;
     const camera::RealismSettings& prev = last_settings_;
-    changed = changed || differs(settings.render_distance, prev.render_distance) ||
-              differs(settings.tripod_distance_y, prev.tripod_distance_y) ||
-              differs(settings.height_at_zoom1, prev.height_at_zoom1) ||
-              differs(settings.parallax_strength, prev.parallax_strength) ||
-              differs(settings.foreshorten_strength, prev.foreshorten_strength) ||
-              differs(settings.distance_scale_strength, prev.distance_scale_strength);
+    changed = changed || differs(settings.render_distance, prev.render_distance) || differs(settings.tripod_distance_y, prev.tripod_distance_y) || differs(settings.height_at_zoom1, prev.height_at_zoom1) || differs(settings.parallax_strength, prev.parallax_strength) || differs(settings.foreshorten_strength, prev.foreshorten_strength) || differs(settings.distance_scale_strength, prev.distance_scale_strength);
 
     if (changed) {
         apply_settings_to_camera(settings, effects_enabled);
-        // Auto-save on change (no Save button in dev mode)
+
         assets_->on_camera_settings_changed();
     }
 }
-
 
 void CameraUIPanel::apply_settings_to_camera(const camera::RealismSettings& settings,
                                              bool effects_enabled) {
@@ -396,15 +384,4 @@ camera::RealismSettings CameraUIPanel::read_settings_from_ui() const {
     if (distance_strength_slider_) settings.distance_scale_strength = std::max(0.0f, distance_strength_slider_->value());
     return settings;
 }
-
-
-
-
-
-
-
-
-
-
-
 

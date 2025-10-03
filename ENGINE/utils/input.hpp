@@ -29,7 +29,6 @@ public:
     int getScrollX() const { return scrollX_; }
     int getScrollY() const { return scrollY_; }
 
-    // Keyboard queries by keycode
     bool isKeyDown(SDL_Keycode key) const {
         SDL_Scancode sc = SDL_GetScancodeFromKey(key);
         return keys_down_[sc];
@@ -43,7 +42,6 @@ public:
         return keys_released_[sc];
     }
 
-    // Keyboard queries by scancode
     bool isScancodeDown(SDL_Scancode sc) const { return keys_down_[sc]; }
     bool wasScancodePressed(SDL_Scancode sc) const { return keys_pressed_[sc]; }
     bool wasScancodeReleased(SDL_Scancode sc) const { return keys_released_[sc]; }

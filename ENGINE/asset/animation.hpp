@@ -20,7 +20,7 @@ public:
         int volume = 100;
         bool effects = false;
         std::shared_ptr<Mix_Chunk> chunk;
-    };
+};
 
 public:
     Animation();

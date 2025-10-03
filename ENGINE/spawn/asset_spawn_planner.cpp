@@ -22,13 +22,10 @@ AssetSpawnPlanner::AssetSpawnPlanner(const std::vector<nlohmann::json>& json_sou
     }
     source_changed_.assign(source_jsons_.size(), false);
 
-    // Merge only spawn_groups from all sources (order preserved).
-    // Accept legacy payloads that use the key "assets" by normalizing
-    // to "spawn_groups" via devmode::spawn::ensure_spawn_groups_array.
     nlohmann::json merged;
     merged["spawn_groups"] = nlohmann::json::array();
     for (size_t si = 0; si < source_jsons_.size(); ++si) {
-        // Make a mutable copy so we can normalize legacy keys safely
+
         nlohmann::json js = source_jsons_[si];
         auto& groups = devmode::spawn::ensure_spawn_groups_array(js);
         if (!groups.is_array()) continue;
@@ -58,14 +55,13 @@ void AssetSpawnPlanner::parse_asset_spawns(const Area& area) {
 
     auto get_opt_str = [](const nlohmann::json& j, const char* k) -> std::string {
         return (j.contains(k) && j[k].is_string()) ? j[k].get<std::string>() : std::string{};
-    };
+};
 
     for (size_t idx = 0; idx < root_json_["spawn_groups"].size(); ++idx) {
         auto& entry = root_json_["spawn_groups"][idx];
         if (!entry.is_object()) continue;
         nlohmann::json asset = entry;
 
-        // --- spawn_id (persist back into source) ---
         std::string spawn_id = get_opt_str(asset, "spawn_id");
         if (spawn_id.empty()) {
             spawn_id = devmode::spawn::generate_spawn_id();
@@ -82,7 +78,6 @@ void AssetSpawnPlanner::parse_asset_spawns(const Area& area) {
             }
         }
 
-        // --- basics ---
         std::string position = get_opt_str(asset, "position");
         if (position.empty()) position = "Random";
         if (position == "Exact Position") position = "Exact";
@@ -98,7 +93,6 @@ void AssetSpawnPlanner::parse_asset_spawns(const Area& area) {
         if (max_num < min_num) std::swap(max_num, min_num);
         int quantity = std::uniform_int_distribution<int>(min_num, max_num)(rng);
 
-        // --- ensure orig room size for Exact/Perimeter ---
         const bool need_orig = (position == "Exact" || position == "Perimeter");
         if (need_orig) {
             auto [minx, miny, maxx, maxy] = area.get_bounds();
@@ -123,7 +117,6 @@ void AssetSpawnPlanner::parse_asset_spawns(const Area& area) {
             }
         }
 
-        // --- candidates ---
         std::vector<nlohmann::json> cand_jsons;
         if (asset.contains("candidates") && asset["candidates"].is_array()) {
             for (const auto& c : asset["candidates"]) cand_jsons.push_back(c);
@@ -148,12 +141,12 @@ void AssetSpawnPlanner::parse_asset_spawns(const Area& area) {
             std::string asset_name;
             std::string label;
             bool is_null = false;
-        };
+};
 
         auto extract_chance = [](const nlohmann::json& c) -> int {
             return (c.contains("chance") && c["chance"].is_number_integer())
                    ? c["chance"].get<int>() : 0;
-        };
+};
 
         auto sanitize_key = [](std::string value) {
             auto not_space = [](unsigned char ch) { return !std::isspace(ch); };
@@ -163,7 +156,7 @@ void AssetSpawnPlanner::parse_asset_spawns(const Area& area) {
             value.assign(begin, end);
             if (!value.empty() && value.front() == '#') value.erase(0, 1);
             return value;
-        };
+};
 
         std::vector<CandidateDraft> drafts;
         drafts.reserve(cand_jsons.size());
@@ -186,7 +179,7 @@ void AssetSpawnPlanner::parse_asset_spawns(const Area& area) {
                     use_tag = true;
                     tag_value = v.substr(1);
                 }
-            };
+};
 
             if (cj.is_object()) {
                 if (cj.contains("name") && cj["name"].is_string()) {
@@ -242,7 +235,7 @@ void AssetSpawnPlanner::parse_asset_spawns(const Area& area) {
             }
 
             return draft;
-        };
+};
 
         for (const auto& cj : cand_jsons) {
             CandidateDraft draft = parse_candidate(cj);
@@ -251,8 +244,7 @@ void AssetSpawnPlanner::parse_asset_spawns(const Area& area) {
                 if (draft.use_tag) {
                     if (!draft.tag.empty()) blocked_tags.insert(draft.tag);
                 } else if (!draft.is_null) {
-                    std::string blocked = !draft.asset_name.empty() ? draft.asset_name
-                                                                    : sanitize_key(draft.original_name);
+                    std::string blocked = !draft.asset_name.empty() ? draft.asset_name : sanitize_key(draft.original_name);
                     if (!blocked.empty()) blocked_assets.insert(blocked);
                 }
             }
@@ -260,7 +252,6 @@ void AssetSpawnPlanner::parse_asset_spawns(const Area& area) {
             drafts.push_back(std::move(draft));
         }
 
-        // NEW: collect all active candidate tags
         std::unordered_set<std::string> candidate_tags;
         for (const auto& d : drafts) {
             if (d.use_tag && !d.tag.empty() && d.weight > 0) {
@@ -277,12 +268,7 @@ void AssetSpawnPlanner::parse_asset_spawns(const Area& area) {
                 std::string tag = !draft.tag.empty() ? draft.tag : sanitize_key(draft.original_name);
                 if (!tag.empty() && draft.weight > 0) {
                     try {
-                        resolved_name = resolve_asset_from_tag(
-                            tag,
-                            &blocked_tags,
-                            &blocked_assets,
-                            &candidate_tags   // NEW: pass candidate tags
-                        );
+                        resolved_name = resolve_asset_from_tag( tag, &blocked_tags, &blocked_assets, &candidate_tags );
                     } catch (...) {
                         resolved_name.clear();
                     }
@@ -311,9 +297,7 @@ void AssetSpawnPlanner::parse_asset_spawns(const Area& area) {
                 fallback_display = "#" + draft.tag;
             }
 
-            c.display_name = !draft.label.empty()
-                                 ? draft.label
-                                 : (!c.name.empty() ? c.name : fallback_display);
+            c.display_name = !draft.label.empty() ? draft.label : (!c.name.empty() ? c.name : fallback_display);
 
             if (c.display_name.empty() && is_null) c.display_name = "null";
 
@@ -331,14 +315,13 @@ void AssetSpawnPlanner::parse_asset_spawns(const Area& area) {
         }
         if (candidates.empty()) continue;
 
-        // --- Build SpawnInfo ---
         auto average_range = [&](const std::string& lo_key, const std::string& hi_key, int fallback) {
             int lo = asset.value(lo_key, fallback);
             int hi = asset.value(hi_key, fallback);
             if (lo == fallback && hi != fallback) return hi;
             if (hi == fallback && lo != fallback) return lo;
             return (lo + hi) / 2;
-        };
+};
 
         SpawnInfo s{};
         s.name     = display_name;
@@ -365,16 +348,15 @@ void AssetSpawnPlanner::parse_asset_spawns(const Area& area) {
     }
 }
 
-
 void AssetSpawnPlanner::sort_spawn_queue() {
-    // Simple, explicit order
+
     const std::vector<std::string> order = { "Center", "Entrance", "Exit", "Exact", "Perimeter", "Random" };
     auto to_lower = [](std::string s){ std::transform(s.begin(), s.end(), s.begin(), ::tolower); return s; };
     auto pri = [&](const std::string& p){
         const std::string lp = to_lower(p);
         for (size_t i=0;i<order.size();++i) if (to_lower(order[i])==lp) return static_cast<int>(i);
         return static_cast<int>(order.size());
-    };
+};
     std::sort(spawn_queue_.begin(), spawn_queue_.end(),
               [&](const SpawnInfo& a, const SpawnInfo& b){ return pri(a.position) < pri(b.position); });
 }
@@ -415,7 +397,7 @@ std::string AssetSpawnPlanner::resolve_asset_from_tag(
     const std::string& tag,
     const std::unordered_set<std::string>* banned_tags,
     const std::unordered_set<std::string>* banned_assets,
-    const std::unordered_set<std::string>* candidate_tags)   // NEW: pass in all active candidate tags
+    const std::unordered_set<std::string>* candidate_tags)
 {
     static std::mt19937 rng(std::random_device{}());
     if (tag.empty()) {
@@ -426,10 +408,8 @@ std::string AssetSpawnPlanner::resolve_asset_from_tag(
     for (const auto& [name, info] : asset_library_->all()) {
         if (!info || !info->has_tag(tag)) continue;
 
-        // Skip if this asset is explicitly blocked
         if (banned_assets && banned_assets->count(name) > 0) continue;
 
-        // Skip if it conflicts with banned tags
         if (banned_tags && !banned_tags->empty()) {
             bool skip = false;
             for (const auto& blocked : *banned_tags) {
@@ -443,7 +423,6 @@ std::string AssetSpawnPlanner::resolve_asset_from_tag(
             if (skip) continue;
         }
 
-        // NEW: Skip if this asset has any anti_tag that collides with another active candidate tag
         if (candidate_tags && !candidate_tags->empty()) {
             bool skip = false;
             for (const auto& anti : info->anti_tags) {

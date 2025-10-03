@@ -30,7 +30,7 @@ void draw_label(SDL_Renderer* renderer, const std::string& text, int x, int y) {
     TTF_CloseFont(font);
 }
 
-} // namespace
+}
 
 FullScreenCollapsible::FullScreenCollapsible(std::string title)
     : title_(std::move(title)),
@@ -118,8 +118,7 @@ void FullScreenCollapsible::set_active_button(const std::string& id, bool trigge
 }
 
 void FullScreenCollapsible::update(const Input&) {
-    // Header buttons rely on DMButton's internal hover state which is updated
-    // by handle_event(). Nothing to do here yet.
+
 }
 
 bool FullScreenCollapsible::handle_event(const SDL_Event& e) {
@@ -188,9 +187,7 @@ bool FullScreenCollapsible::handle_event(const SDL_Event& e) {
     }
 
     if (in_content) {
-        // When expanded, the content area should capture mouse input to
-        // prevent click-through interactions with underlying views.
-        // Always swallow events occurring within the content rect.
+
         return true;
     }
 
@@ -294,7 +291,7 @@ void FullScreenCollapsible::layout_buttons() {
     struct ButtonLayoutInfo {
         DMButton* widget;
         int width;
-    };
+};
 
     std::vector<ButtonLayoutInfo> visible;
     visible.reserve(buttons_.size());

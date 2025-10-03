@@ -5,12 +5,10 @@
 #include <sstream>
 #include <utility>
 
-#include "dev_mode/dm_styles.hpp" // optional, for colors if you want
-#include "utils/input.hpp"        // already used by DockableCollapsible
+#include "dev_mode/dm_styles.hpp"
+#include "utils/input.hpp"
 
 using nlohmann::json;
-
-// --------------------- Small helpers ---------------------
 
 int MapLightPanel::clamp_int(int v, int lo, int hi) {
     return std::max(lo, std::min(hi, v));
@@ -21,16 +19,14 @@ float MapLightPanel::clamp_float(float v, float lo, float hi) {
 }
 
 float MapLightPanel::wrap_angle(float a) {
-    // normalize into [0, 360)
+
     while (a < 0.0f)   a += 360.0f;
     while (a >= 360.0f) a -= 360.0f;
     return a;
 }
 
-// --------------------- Ctor / Attach ---------------------
-
 MapLightPanel::MapLightPanel(int x, int y)
-: DockableCollapsible("Map Lighting", /*floatable=*/true, x, y) {
+: DockableCollapsible("Map Lighting", true, x, y) {
     set_expanded(true);
     build_ui();
 }
@@ -43,8 +39,6 @@ void MapLightPanel::set_map_info(json* map_info, SaveCallback on_save) {
     current_key_index_ = 0;
     sync_ui_from_json();
 }
-
-// --------------------- Visibility ------------------------
 
 void MapLightPanel::open()   {
     set_visible(true);
@@ -60,10 +54,8 @@ void MapLightPanel::toggle() {
 }
 bool MapLightPanel::is_visible() const { return visible_; }
 
-// --------------------- UI Build --------------------------
-
 void MapLightPanel::build_ui() {
-    // Create all widgets
+
     radius_         = std::make_unique<DMSlider>("Radius",          0, 20000, 0);
     intensity_      = std::make_unique<DMSlider>("Intensity",       0,   255, 255);
     orbit_radius_   = std::make_unique<DMSlider>("Orbit Radius",    0, 20000, 0);
@@ -89,7 +81,6 @@ void MapLightPanel::build_ui() {
     key_b_     = std::make_unique<DMSlider>("Key B", 0, 255, 255);
     key_a_     = std::make_unique<DMSlider>("Key A", 0, 255, 255);
 
-    // Build wrapper widgets for the dockable rows
     widget_wrappers_.clear();
     widget_wrappers_.reserve(20);
 
@@ -97,11 +88,10 @@ void MapLightPanel::build_ui() {
         Widget* raw = w.get();
         widget_wrappers_.push_back(std::move(w));
         return raw;
-    };
+};
 
     Rows rows;
 
-    // Top numeric settings
     rows.push_back({
         add_widget(std::make_unique<SliderWidget>(radius_.get())),
         add_widget(std::make_unique<SliderWidget>(intensity_.get()))
@@ -119,7 +109,6 @@ void MapLightPanel::build_ui() {
         add_widget(std::make_unique<SliderWidget>(max_opacity_.get()))
     });
 
-    // Base color
     rows.push_back({
         add_widget(std::make_unique<SliderWidget>(base_r_.get())),
         add_widget(std::make_unique<SliderWidget>(base_g_.get()))
@@ -129,7 +118,6 @@ void MapLightPanel::build_ui() {
         add_widget(std::make_unique<SliderWidget>(base_a_.get()))
     });
 
-    // Keys pager
     rows.push_back({
         add_widget(std::make_unique<ButtonWidget>(prev_key_btn_.get(), [this](){ select_prev_key(); })),
         add_widget(std::make_unique<ButtonWidget>(next_key_btn_.get(), [this](){ select_next_key(); })),
@@ -137,7 +125,6 @@ void MapLightPanel::build_ui() {
         add_widget(std::make_unique<ButtonWidget>(delete_btn_.get(), [this](){ delete_current_key(); }))
     });
 
-    // Key editor (angle + color)
     rows.push_back({ add_widget(std::make_unique<SliderWidget>(key_angle_.get())) });
     rows.push_back({
         add_widget(std::make_unique<SliderWidget>(key_r_.get())),
@@ -151,13 +138,11 @@ void MapLightPanel::build_ui() {
     set_rows(rows);
 }
 
-// --------------------- Sync (JSON <-> UI) ----------------
-
 nlohmann::json& MapLightPanel::ensure_light() {
-    // Create defaults when missing
+
     if (!map_info_) {
         static json dummy = json::object();
-        return dummy; // safe no-op object (won't be saved)
+        return dummy;
     }
     if (!map_info_->contains("map_light_data") || !(*map_info_)["map_light_data"].is_object()) {
         (*map_info_)["map_light_data"] = json::object();
@@ -187,7 +172,7 @@ nlohmann::json& MapLightPanel::ensure_light() {
         L["base_color"] = {255,255,255,255};
     }
     if (!L.contains("keys") || !L["keys"].is_array()) {
-        // default single key at angle 0 with base color
+
         L["keys"] = json::array();
         L["keys"].push_back(json::array({ 0.0, L["base_color"] }));
     }
@@ -197,12 +182,11 @@ nlohmann::json& MapLightPanel::ensure_light() {
 void MapLightPanel::sync_ui_from_json() {
     json& L = ensure_light();
 
-    // Scalars
     radius_       ->set_value(clamp_int(L.value("radius", 0), 0, 20000));
     intensity_    ->set_value(clamp_int(L.value("intensity", 255), 0, 255));
     orbit_radius_ ->set_value(clamp_int(L.value("orbit_radius", 0), 0, 20000));
     update_interval_->set_value(clamp_int(L.value("update_interval", 10), 1, 120));
-    // mult in JSON is 0.0..1.0, we show as 0..100
+
     {
         double m = 0.0;
         try { m = L.at("mult").get<double>(); } catch(...) {}
@@ -213,7 +197,6 @@ void MapLightPanel::sync_ui_from_json() {
     min_opacity_->set_value(clamp_int(L.value("min_opacity", 0), 0, 255));
     max_opacity_->set_value(clamp_int(L.value("max_opacity", 255), 0, 255));
 
-    // Base color
     auto bc = L["base_color"];
     int br = 255, bg = 255, bb = 255, ba = 255;
     try {
@@ -229,11 +212,9 @@ void MapLightPanel::sync_ui_from_json() {
     base_b_->set_value(bb);
     base_a_->set_value(ba);
 
-    // Keys pager defaults
     ensure_keys_array();
     clamp_key_index();
 
-    // Load selected key into sliders
     const auto& keys = L["keys"];
     if (!keys.empty() && keys[current_key_index_].is_array() && keys[current_key_index_].size() >= 2) {
         float ang = 0.0f;
@@ -299,8 +280,6 @@ void MapLightPanel::sync_json_from_ui() {
     needs_sync_to_json_ = false;
 }
 
-// --------------------- Keys helpers ----------------------
-
 void MapLightPanel::ensure_keys_array() {
     if (!map_info_) return;
     json& L = ensure_light();
@@ -320,7 +299,7 @@ void MapLightPanel::clamp_key_index() {
         n = 1;
     }
     current_key_index_ = clamp_int(current_key_index_, 0, std::max(0, n-1));
-    // prepare label for render
+
     std::ostringstream oss;
     oss << "Key " << (current_key_index_ + 1) << " / " << n;
     current_key_label_ = oss.str();
@@ -363,7 +342,6 @@ void MapLightPanel::add_key_pair_at_current_angle() {
     keys.push_back(key1);
     keys.push_back(key2);
 
-    // Keep keys sorted by angle for sanity
     std::sort(keys.begin(), keys.end(), [](const json& A, const json& B){
         double a0 = 0.0, b0 = 0.0;
         try { a0 = A[0].get<double>(); } catch(...) {}
@@ -371,8 +349,6 @@ void MapLightPanel::add_key_pair_at_current_angle() {
         return a0 < b0;
     });
 
-    // Move selection to the first of the new pair
-    // Find its index
     for (int i=0;i<(int)keys.size();++i) {
         try {
             if ((int)std::round(keys[i][0].get<double>()) == ang) {
@@ -391,7 +367,7 @@ void MapLightPanel::delete_current_key() {
     if (!map_info_) return;
     json& L = ensure_light();
     auto& keys = L["keys"];
-    if (keys.size() <= 1) return; // keep at least one key
+    if (keys.size() <= 1) return;
     if (current_key_index_ < 0 || current_key_index_ >= (int)keys.size()) return;
     keys.erase(keys.begin() + current_key_index_);
     if (current_key_index_ >= (int)keys.size()) current_key_index_ = (int)keys.size() - 1;
@@ -401,15 +377,11 @@ void MapLightPanel::delete_current_key() {
     sync_ui_from_json();
 }
 
-// --------------------- Panel lifecycle -------------------
-
 void MapLightPanel::update(const Input& input, int screen_w, int screen_h) {
     if (!visible_) return;
 
-    // Let base handle layout/scrolling math
     DockableCollapsible::update(input, screen_w, screen_h);
 
-    // Nothing else needed here; edits are detected in handle_event, then we sync-json-on-change.
 }
 
 bool MapLightPanel::handle_event(const SDL_Event& e) {
@@ -437,14 +409,10 @@ bool MapLightPanel::is_point_inside(int x, int y) const {
     return DockableCollapsible::is_point_inside(x, y);
 }
 
-// --------------------- Custom content --------------------
-
 void MapLightPanel::render_content(SDL_Renderer* r) const {
-    // Optional: draw a compact “current key” readout below the pager
-    // (Dockable renders all child widgets already.)
+
     if (!r) return;
 
-    // We’ll draw a tiny swatch for the current key color to the right of the angle slider.
     if (!map_info_) return;
 
     auto light_it = map_info_->find("map_light_data");
@@ -471,8 +439,6 @@ void MapLightPanel::render_content(SDL_Renderer* r) const {
         }
     } catch(...) {}
 
-    // Find some area in the body viewport to draw a small color block.
-    // We can piggyback on available body_viewport_ that Dockable computes.
     SDL_Rect swatch = body_viewport_;
     swatch.y += std::max(0, swatch.h - 24);
     swatch.h = 16;
@@ -486,7 +452,5 @@ void MapLightPanel::render_content(SDL_Renderer* r) const {
     SDL_SetRenderDrawColor(r, border.r, border.g, border.b, border.a);
     SDL_RenderDrawRect(r, &swatch);
 
-    // A subtle label line above (optional): we won’t render text here to avoid font deps.
-    // If you want text, you can use DMTextBox-style label render with TTF (like widgets.cpp does).
 }
 

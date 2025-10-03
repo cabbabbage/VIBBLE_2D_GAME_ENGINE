@@ -5,29 +5,20 @@
 
 class Asset;
 
-/*
-  radial and distance helpers
-  supports asset and point overloads
-*/
-
 class Range {
  public:
-  
+
   static bool is_in_range(const Asset* a, const Asset* b, int radius);
   static bool is_in_range(const Asset* a, const SDL_Point& b, int radius);
   static bool is_in_range(const SDL_Point& a, const Asset* b, int radius);
   static bool is_in_range(const SDL_Point& a, const SDL_Point& b, int radius);
 
-  
   static double get_distance(const Asset* a, const Asset* b);
   static double get_distance(const Asset* a, const SDL_Point& b);
   static double get_distance(const SDL_Point& a, const Asset* b);
   static double get_distance(const SDL_Point& a, const SDL_Point& b);
 
-  static void get_in_range(const SDL_Point& center,
-                           int radius,
-                           const std::vector<Asset*>& candidates,
-                           std::vector<Asset*>& out);
+  static void get_in_range(const SDL_Point& center, int radius, const std::vector<Asset*>& candidates, std::vector<Asset*>& out);
 
  private:
 

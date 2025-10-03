@@ -31,7 +31,7 @@ public:
     void set_rect(const SDL_Rect& r) override { rect_ = r; }
     const SDL_Rect& rect() const override { return rect_; }
 
-    int height_for_width(int /*w*/) const override {
+    int height_for_width(int ) const override {
         const DMLabelStyle& st = DMStyles::Label();
         return st.font_size + DMSpacing::small_gap() * 2;
     }
@@ -127,7 +127,7 @@ std::optional<int> find_dimension_value(const nlohmann::json& object,
     }
     return std::nullopt;
 }
-} // namespace
+}
 
 RoomConfigurator::RoomConfigurator()
     : DockableCollapsible("Room Config", true, 0, 0) {
@@ -316,7 +316,6 @@ void RoomConfigurator::load_from_json(const nlohmann::json& data) {
     room_is_boss_ = loaded_json_.value("is_boss", false);
     room_inherits_assets_ = loaded_json_.value("inherits_map_assets", false);
 
-    // Determine if this configurator is editing a trail (as opposed to a standard room)
     is_trail_context_ = false;
     if (room_) {
         const std::string& dir = room_->room_directory;
@@ -325,12 +324,10 @@ void RoomConfigurator::load_from_json(const nlohmann::json& data) {
         }
     }
 
-    // Edge smoothness (0-101 per request; Area clamps to 0..100 internally)
     edge_smoothness_ = loaded_json_.value("edge_smoothness", 2);
     if (edge_smoothness_ < 0) edge_smoothness_ = 0;
     if (edge_smoothness_ > 101) edge_smoothness_ = 101;
 
-    // Curvyness (only relevant for trails; show if present)
     if (loaded_json_.contains("curvyness")) {
         if (auto cv = read_json_int(loaded_json_, "curvyness")) {
             curvyness_ = std::max(0, *cv);
@@ -356,7 +353,7 @@ void RoomConfigurator::load_tags_from_json(const nlohmann::json& data) {
             std::string normalized = tag_utils::normalize(entry.get<std::string>());
             if (!normalized.empty()) dest.insert(std::move(normalized));
         }
-    };
+};
 
     if (data.is_object()) {
         if (data.contains("tags")) {
@@ -445,8 +442,7 @@ bool RoomConfigurator::refresh_spawn_groups(const nlohmann::json& data) {
     if (new_w_min > new_w_max) std::swap(new_w_min, new_w_max);
     if (new_h_min > new_h_max) std::swap(new_h_min, new_h_max);
 
-    bool dims_changed = (new_w_min != room_w_min_) || (new_w_max != room_w_max_) ||
-                        (new_h_min != room_h_min_) || (new_h_max != room_h_max_);
+    bool dims_changed = (new_w_min != room_w_min_) || (new_w_max != room_w_max_) || (new_h_min != room_h_min_) || (new_h_max != room_h_max_);
 
     room_w_min_ = new_w_min;
     room_w_max_ = new_w_max;
@@ -601,7 +597,7 @@ void RoomConfigurator::rebuild_rows() {
     }
 
     if (allow_dimension_sliders) {
-        // Width range label + slider
+
         room_w_label_ = std::make_unique<RoomConfigLabel>("Width (Min/Max)");
         rows.push_back({ room_w_label_.get() });
         auto width_bounds = compute_slider_range(room_w_min_, room_w_max_);
@@ -609,7 +605,6 @@ void RoomConfigurator::rebuild_rows() {
         room_w_slider_w_ = std::make_unique<RangeSliderWidget>(room_w_slider_.get());
         rows.push_back({ room_w_slider_w_.get() });
 
-        // Height range label + slider (hide in trail config)
         if (!is_trail_context_) {
             room_h_label_ = std::make_unique<RoomConfigLabel>("Height (Min/Max)");
             rows.push_back({ room_h_label_.get() });
@@ -639,12 +634,10 @@ void RoomConfigurator::rebuild_rows() {
         room_geom_dd_w_.reset();
     }
 
-    // Edge Smoothness slider (always visible in Room Config)
     edge_smoothness_sl_ = std::make_unique<DMSlider>("Edge Smoothness", 0, 101, edge_smoothness_);
     edge_smoothness_w_ = std::make_unique<SliderWidget>(edge_smoothness_sl_.get());
     rows.push_back({ edge_smoothness_w_.get() });
 
-    // Curvyness slider for trails
     bool show_curvy = is_trail_context_;
     if (show_curvy) {
         curvyness_sl_ = std::make_unique<DMSlider>("Curvyness", 0, 16, curvyness_);
@@ -661,7 +654,7 @@ void RoomConfigurator::rebuild_rows() {
     room_boss_cb_w_.reset();
     room_inherit_cb_.reset();
     room_inherit_cb_w_.reset();
-    // Only keep Inherit Map Assets in trail config; show all three in room config
+
     if (!is_trail_context_) {
         room_spawn_cb_ = std::make_unique<DMCheckbox>("Spawn", room_is_spawn_);
         room_spawn_cb_w_ = std::make_unique<CheckboxWidget>(room_spawn_cb_.get());

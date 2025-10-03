@@ -8,13 +8,13 @@
 #include <functional>
 
 class Asset;
-class ActiveAssetsManager;
+class Assets;
 class AnimationFrame;
 
 class AnimationUpdate {
 public:
-    AnimationUpdate(Asset* self, ActiveAssetsManager& aam);
-    AnimationUpdate(Asset* self, ActiveAssetsManager& aam, double directness_weight, double sparsity_weight);
+    AnimationUpdate(Asset* self, Assets* assets);
+    AnimationUpdate(Asset* self, Assets* assets, double directness_weight, double sparsity_weight);
 
     void update();
     void set_animation_now(const std::string& anim_id);
@@ -69,7 +69,7 @@ private:
 
 private:
     Asset* self_ = nullptr;
-    ActiveAssetsManager& aam_;
+    Assets* assets_owner_ = nullptr;
     Mode mode_ = Mode::None;
     bool have_target_ = false;
     SDL_Point target_{0, 0};

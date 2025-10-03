@@ -168,7 +168,7 @@ nlohmann::json Room::create_static_room_json(std::string name) {
         bool has_player_asset = false;
         for (const auto& uptr : assets) {
                 const Asset* a = uptr.get();
-                if (!a || !a->info) continue; // skip assets lacking runtime info
+                if (!a || !a->info) continue;
 
                 const int ax = a->pos.x;
                 const int ay = a->pos.y;

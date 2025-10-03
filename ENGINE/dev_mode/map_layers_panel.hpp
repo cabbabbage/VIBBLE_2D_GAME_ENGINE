@@ -18,7 +18,6 @@ struct SDL_Renderer;
 class MapLayersController;
 class RoomConfigurator;
 
-// Floating dockable panel for editing map_layers in map_info.json.
 class MapLayersPanel : public DockableCollapsible {
 public:
     using SaveCallback = std::function<bool()>;
@@ -46,7 +45,7 @@ public:
 
     int selected_layer() const { return selected_layer_; }
     void select_layer(int index);
-    void mark_dirty();
+    void mark_dirty(bool trigger_preview = true);
     void mark_clean();
 
 private:
@@ -77,12 +76,11 @@ private:
     std::string suggest_room_name() const;
     void delete_layer_internal(int index);
     void open_layer_config_internal(int index);
-    // Layer constraints/helpers
+
     bool is_spawn_room(const std::string& room_key) const;
-    int find_spawn_layer_index() const; // first layer that contains a spawn room, or -1
-    bool is_layer_locked(int index) const; // initial spawn layer is locked from editing
-    std::vector<std::string> available_rooms_for_layer(int layer_index) const; // filtered per constraints
-    void handle_layer_count_changed(int index, int max_rooms);
+    int find_spawn_layer_index() const;
+    bool is_layer_locked(int index) const;
+    std::vector<std::string> available_rooms_for_layer(int layer_index) const;
     void handle_layer_name_changed(int index, const std::string& name);
     void handle_candidate_min_changed(int layer_index, int candidate_index, int min_instances);
     void handle_candidate_max_changed(int layer_index, int candidate_index, int max_instances);
@@ -90,7 +88,6 @@ private:
     void handle_candidate_child_added(int layer_index, int candidate_index, const std::string& child);
     void handle_candidate_child_removed(int layer_index, int candidate_index, const std::string& child);
     void handle_candidate_added(int layer_index, const std::string& room_name);
-    void update_save_button_state();
     bool save_layers_to_disk();
     bool reload_layers_from_disk();
     void ensure_layer_config_valid();
@@ -98,6 +95,7 @@ private:
     void request_preview_regeneration();
     void regenerate_preview();
     double compute_map_radius_from_layers();
+    void recalculate_radii_from_layer(int layer_index);
     int append_layer_entry(const std::string& display_name = {});
     bool ensure_child_room_exists(int parent_layer_index, const std::string& child, bool* layer_created = nullptr);
     bool handle_preview_room_click(int px, int py, int center_x, int center_y, double scale);
@@ -110,7 +108,7 @@ private:
     void ensure_room_configurator();
     nlohmann::json* ensure_room_entry(const std::string& room_name);
     SDL_Rect compute_room_config_bounds() const;
-    // Rename room key across rooms_data and map_layers references (including children). Returns final applied key.
+
     std::string rename_room_everywhere(const std::string& old_key, const std::string& desired_key);
 
 private:
@@ -121,18 +119,19 @@ private:
         bool is_circle = false;
         int layer = 0;
         SDL_Color color{255, 255, 255, 255};
+        std::vector<SDL_FPoint> outline;
         std::string name;
         PreviewNode* parent = nullptr;
         PreviewNode* left_sibling = nullptr;
         PreviewNode* right_sibling = nullptr;
         std::vector<PreviewNode*> children;
-    };
+};
     struct PreviewEdge {
         const PreviewNode* from = nullptr;
         const PreviewNode* to = nullptr;
         SDL_Color color{180, 180, 180, 255};
         bool is_trail = false;
-    };
+};
 
     nlohmann::json* map_info_ = nullptr;
     std::string map_path_;

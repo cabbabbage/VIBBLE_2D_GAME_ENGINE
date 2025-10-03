@@ -26,25 +26,25 @@ private:
         ui_fonts::decorative_bold(),
         74,
         SDL_Color{250, 195, 73, 255}
-    };
+};
     static inline TextStyle medium_main_ = {
         ui_fonts::decorative_bold(),
         32,
         SDL_Color{200, 200, 255, 200}
-    };
+};
     static inline TextStyle medium_secondary_ = {
         ui_fonts::serif_regular(),
         30,
         SDL_Color{250, 195, 73, 255}
-    };
+};
     static inline TextStyle small_main_ = {
         ui_fonts::serif_regular(),
         30,
         SDL_Color{220, 220, 200, 255}
-    };
+};
     static inline TextStyle small_secondary_ = {
         ui_fonts::serif_italic(),
         30,
         SDL_Color{140, 160, 160, 255}
-    };
+};
 };

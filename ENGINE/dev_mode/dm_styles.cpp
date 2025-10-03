@@ -19,9 +19,9 @@ const SDL_Color kAccentPress       = dm::rgba(29, 78, 216, 235);
 const SDL_Color kAccentBorder      = dm::rgba(30, 64, 175, 255);
 const SDL_Color kAccentText        = dm::rgba(240, 249, 255, 255);
 
-const SDL_Color kWarnBg            = dm::rgba(234, 179, 8, 235);   // amber 500
-const SDL_Color kWarnHover         = dm::rgba(250, 204, 21, 245);  // amber 400
-const SDL_Color kWarnPress         = dm::rgba(202, 138, 4, 235);   // amber 600
+const SDL_Color kWarnBg            = dm::rgba(234, 179, 8, 235);
+const SDL_Color kWarnHover         = dm::rgba(250, 204, 21, 245);
+const SDL_Color kWarnPress         = dm::rgba(202, 138, 4, 235);
 const SDL_Color kWarnBorder        = dm::rgba(161, 98, 7, 255);
 const SDL_Color kWarnText          = dm::rgba(30, 30, 30, 255);
 
@@ -58,7 +58,7 @@ const SDL_Color kSliderKnob        = dm::rgba(226, 232, 240, 255);
 const SDL_Color kSliderKnobHover   = dm::rgba(186, 230, 253, 255);
 const SDL_Color kSliderKnobBorder  = dm::rgba(59, 130, 246, 255);
 const SDL_Color kSliderKnobBorderHover = dm::rgba(96, 165, 250, 255);
-} // namespace
+}
 
 const DMLabelStyle &DMStyles::Label() {
   static const DMLabelStyle s{dm::FONT_PATH, 16, kTextPrimary};

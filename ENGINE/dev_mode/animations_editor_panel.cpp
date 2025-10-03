@@ -20,7 +20,6 @@ namespace fs = std::filesystem;
 
 static int clampi(int v, int lo, int hi) { return (v < lo) ? lo : (v > hi ? hi : v); }
 
-// Simple thumbnail widget that loads and draws an image path on demand.
 class ThumbWidget : public Widget {
 public:
     using PathFn = std::function<std::string()>;
@@ -29,14 +28,14 @@ public:
     ~ThumbWidget() override { if (tex_) SDL_DestroyTexture(tex_); }
     void set_rect(const SDL_Rect& r) override { rect_ = r; }
     const SDL_Rect& rect() const override { return rect_; }
-    int height_for_width(int /*w*/) const override { return pref_h_; }
-    bool handle_event(const SDL_Event& /*e*/) override { return false; }
+    int height_for_width(int ) const override { return pref_h_; }
+    bool handle_event(const SDL_Event& ) override { return false; }
     void render(SDL_Renderer* r) const override {
         if (!r) return;
-        // Resolve path
+
         const std::string path = fn_ ? fn_() : std::string{};
         if (path.empty()) return;
-        // Reload if path changed or missing texture
+
         if (!tex_ || path != last_path_) {
             if (tex_) { SDL_DestroyTexture(tex_); tex_ = nullptr; }
             SDL_Texture* t = IMG_LoadTexture(r, path.c_str());
@@ -45,14 +44,14 @@ public:
         if (!tex_) return;
         int tw=0, th=0; SDL_QueryTexture(tex_, nullptr, nullptr, &tw, &th);
         if (tw <= 0 || th <= 0) return;
-        // Aspect fit into rect_
+
         float sx = rect_.w / float(std::max(1, tw));
         float sy = rect_.h / float(std::max(1, th));
         float s = std::min(sx, sy);
         int dw = int(tw * s), dh = int(th * s);
         SDL_Rect dst{ rect_.x + (rect_.w - dw)/2, rect_.y + (rect_.h - dh)/2, dw, dh };
         SDL_RenderCopy(r, tex_, nullptr, &dst);
-        // Border
+
         const SDL_Color border = DMStyles::Border();
         SDL_SetRenderDrawColor(r, border.r, border.g, border.b, border.a);
         SDL_RenderDrawRect(r, &rect_);
@@ -66,12 +65,10 @@ private:
     mutable std::string last_path_;
 };
 
-// Member helpers are defined below to avoid AssetInfo usage.
-
 AnimationsEditorPanel::AnimationsEditorPanel() {
     box_ = std::make_unique<DockableCollapsible>("Animations", true, 32, 64);
     box_->set_expanded(true);
-    // Start hidden; only show when user clicks "Configure Animations"
+
     box_->set_visible(false);
 }
 
@@ -90,7 +87,7 @@ void AnimationsEditorPanel::set_asset_paths(const std::string& asset_dir_path,
 
 void AnimationsEditorPanel::open()  {
     if (box_) box_->set_visible(true);
-    // Defer heavy rebuild to next update tick to avoid rebuilding during event dispatch
+
     request_rebuild();
 }
 void AnimationsEditorPanel::close() { if (box_) box_->set_visible(false); }
@@ -104,10 +101,10 @@ void AnimationsEditorPanel::update(const Input& input, int screen_w, int screen_
         if (box_) box_->set_rows(rows_);
     }
     if (box_) box_->update(input, screen_w, screen_h);
-    // Detect movement modal close and persist positions
+
     bool now_open = movement_modal_.is_open();
     if (movement_was_open_ && !now_open && !movement_anim_name_.empty()) {
-        // Write positions back to JSON for the animation we edited
+
         nlohmann::json payload = animation_payload(movement_anim_name_);
         if (!payload.is_object()) payload = nlohmann::json::object();
         nlohmann::json mv = nlohmann::json::array();
@@ -116,7 +113,7 @@ void AnimationsEditorPanel::update(const Input& input, int screen_w, int screen_
         payload["movement"] = mv;
         upsert_animation(movement_anim_name_, payload);
         (void)save_info_json();
-        // Rebuild rows to reflect any size changes
+
         rebuild_all_rows();
         if (box_) box_->set_rows(rows_);
         movement_anim_name_.clear();
@@ -143,7 +140,7 @@ bool AnimationsEditorPanel::handle_event(const SDL_Event& e) {
                 }
             }
         }
-        // build payload from controls
+
         nlohmann::json payload = it->last_payload.is_object() ? it->last_payload : nlohmann::json::object();
         if (!payload.is_object()) payload = nlohmann::json::object();
         nlohmann::json src = payload.contains("source") && payload["source"].is_object() ? payload["source"] : nlohmann::json::object();
@@ -157,7 +154,7 @@ bool AnimationsEditorPanel::handle_event(const SDL_Event& e) {
         } else {
             auto names = current_names_sorted();
             std::string ref = (!names.empty() && it->ref_dd) ? names[clampi(it->ref_dd->selected(), 0, (int)names.size()-1)] : std::string{};
-            // Guard against self or cycles
+
             if (ref == it->name || creates_cycle(it->name, ref)) ref.clear();
             src["name"] = ref; src["path"] = "";
         }
@@ -180,7 +177,6 @@ bool AnimationsEditorPanel::handle_event(const SDL_Event& e) {
             payload["movement"] = mv;
         } catch(...) {}
 
-        // on_end selection
         if (it->on_end_dd) {
             auto all = current_names_sorted();
             std::vector<std::string> opts; opts.push_back("default"); opts.insert(opts.end(), all.begin(), all.end());
@@ -209,12 +205,11 @@ bool AnimationsEditorPanel::handle_event(const SDL_Event& e) {
     }
 
     if (changed_any) {
-        // Rebuild everything to refresh dynamic widgets (e.g., kind path/ref row)
+
         rebuild_all_rows();
         if (box_) box_->set_rows(rows_);
     }
 
-    // Apply any rebuild request emitted from button callbacks safely after box_ handled the event
     if (rebuild_requested_) {
         rebuild_requested_ = false;
         rebuild_all_rows();
@@ -256,8 +251,6 @@ nlohmann::json AnimationsEditorPanel::default_payload(const std::string& name) {
     p["flipped_source"]=false; p["reverse_source"]=false; p["locked"]=false; p["rnd_start"]=false; p["loop"]=false; p["speed_factor"]=1; p["number_of_frames"]=1; p["movement"]=nlohmann::json::array({nlohmann::json::array({0,0})}); p["on_end"] = "default"; return p;
 }
 
-// ---------------- JSON/file helpers (no AssetInfo) ----------------
-
 bool AnimationsEditorPanel::load_info_json() {
     info_json_ = nlohmann::json::object();
     try {
@@ -268,7 +261,7 @@ bool AnimationsEditorPanel::load_info_json() {
     } catch (...) {
         info_json_ = nlohmann::json::object();
     }
-    // Ensure structure
+
     if (!info_json_.contains("animations") || !info_json_["animations"].is_object()) {
         info_json_["animations"] = nlohmann::json::object();
     }
@@ -425,15 +418,14 @@ void AnimationsEditorPanel::rebuild_header_row() {
     }));
     row.push_back(header_widgets_.back().get());
 
-    // New From Folder... convenience button (store button as member to keep it alive)
     new_folder_btn_ = std::make_unique<DMButton>("New From Folder...", &DMStyles::ListButton(), 180, DMButton::height());
     auto new_folder_btn_ptr = new_folder_btn_.get();
     header_widgets_.push_back(std::make_unique<ButtonWidget>(new_folder_btn_ptr, [this]() {
-        // Create a unique name and default folder path = name
+
         std::string base = "new_anim"; std::string nm = base; int i=1; auto names = animation_names();
         auto exists = [&](const std::string& s){ return std::find(names.begin(), names.end(), s) != names.end(); };
         while (exists(nm)) nm = base + std::string{"_"} + std::to_string(i++);
-        std::string rel = nm; // default folder under asset dir
+        std::string rel = nm;
         try { fs::create_directories(fs::path(asset_dir_path_) / rel); } catch(...) {}
         auto p = default_payload(nm); p["source"]["path"] = rel; p["source"]["kind"] = "folder"; p["source"]["name"] = nullptr;
         p["number_of_frames"] = compute_frames_from_source(p["source"]);
@@ -443,12 +435,11 @@ void AnimationsEditorPanel::rebuild_header_row() {
 
     if (rows_.empty()) rows_.push_back(row); else rows_[0] = row;
 
-    // Empty state helper row when no animations exist
     if (names.empty()) {
-        // Message
+
         auto lbl = std::make_unique<DMTextBox>("", "No animations found. Create one to get started.");
         header_widgets_.push_back(std::make_unique<TextBoxWidget>(lbl.get()));
-        // Button
+
         auto create_btn = std::make_unique<DMButton>("Create First Animation", &DMStyles::CreateButton(), 220, DMButton::height());
         header_widgets_.push_back(std::make_unique<ButtonWidget>(create_btn.get(), [this]() {
             std::string base = "new_anim"; std::string nm = base; int i=1; auto names = animation_names();
@@ -457,9 +448,9 @@ void AnimationsEditorPanel::rebuild_header_row() {
             auto p = default_payload(nm);
             upsert_animation(nm, p); (void)save_info_json(); request_rebuild();
         }));
-        // Build row
+
         rows_.push_back(std::vector<Widget*>{ header_widgets_[1].get(), header_widgets_[2].get() });
-        // Keep DMTextBox and DMButton alive via local unique_ptrs ownership transfer
+
         (void)lbl.release(); (void)create_btn.release();
     }
 }
@@ -488,7 +479,6 @@ void AnimationsEditorPanel::rebuild_animation_rows() {
 
         int nframes = compute_frames_from_source(src); std::ostringstream oss; oss << "Frames: " << nframes; ui->frames_label = std::make_unique<DMTextBox>("", oss.str());
 
-        // Row A
         auto w_id = std::make_unique<TextBoxWidget>(ui->id_box.get());
         Widget* w_id_ptr = w_id.get(); ui->row_widgets.push_back(std::move(w_id));
         auto w_del = std::make_unique<ButtonWidget>(ui->del_btn.get(), [this, nm]() {
@@ -496,7 +486,7 @@ void AnimationsEditorPanel::rebuild_animation_rows() {
         });
         Widget* w_del_ptr = w_del.get(); ui->row_widgets.push_back(std::move(w_del));
         rows_.push_back(std::vector<Widget*>{ w_id_ptr, w_del_ptr });
-        // Row B
+
         auto w_kind = std::make_unique<DropdownWidget>(ui->kind_dd.get());
         Widget* w_kind_ptr = w_kind.get(); ui->row_widgets.push_back(std::move(w_kind));
         if (kind_idx == 0) {
@@ -508,11 +498,11 @@ void AnimationsEditorPanel::rebuild_animation_rows() {
             Widget* w_ref_ptr = w_ref.get(); ui->row_widgets.push_back(std::move(w_ref));
             rows_.push_back(std::vector<Widget*>{ w_kind_ptr, w_ref_ptr });
         }
-        // Row B2: Folder scaffolding + Thumbnail preview
+
         if (kind_idx == 0) {
             ui->create_folder_btn = std::make_unique<DMButton>("Create Folder", &DMStyles::ListButton(), 160, DMButton::height());
             auto w_cf = std::make_unique<ButtonWidget>(ui->create_folder_btn.get(), [this, nm]() {
-                // Find UI again to get path value
+
                 for (auto& it2 : items_) {
                     if (!it2 || it2->name != nm) continue;
                     std::string rel = it2->path_box ? it2->path_box->value() : std::string{};
@@ -521,7 +511,7 @@ void AnimationsEditorPanel::rebuild_animation_rows() {
                         fs::path dir = fs::path(asset_dir_path_) / rel;
                         fs::create_directories(dir);
                     } catch(...) {}
-                    // Persist path in JSON and request rebuild
+
                     nlohmann::json payload = animation_payload(nm);
                     if (!payload.is_object()) payload = nlohmann::json::object();
                     nlohmann::json src = payload.value("source", nlohmann::json::object());
@@ -532,7 +522,7 @@ void AnimationsEditorPanel::rebuild_animation_rows() {
                 }
             });
             Widget* w_cf_ptr = w_cf.get(); ui->row_widgets.push_back(std::move(w_cf));
-            // Thumbnail preview for folder
+
             auto thumb = std::make_unique<ThumbWidget>([this, nm, ui_ptr = ui.get()](){
                 nlohmann::json s = ui_ptr->last_payload.value("source", nlohmann::json::object());
                 s["kind"] = "folder"; s["path"] = ui_ptr->path_box ? ui_ptr->path_box->value() : std::string{}; s["name"] = nullptr;
@@ -542,23 +532,23 @@ void AnimationsEditorPanel::rebuild_animation_rows() {
             rows_.push_back(std::vector<Widget*>{ w_cf_ptr, w_thumbp });
         }
         else {
-            // Thumbnail for ref kind
+
             auto thumb = std::make_unique<ThumbWidget>([this, ui_ptr = ui.get()](){
                 nlohmann::json s = ui_ptr->last_payload.value("source", nlohmann::json::object());
-                s["kind"] = "animation"; // ensure
+                s["kind"] = "animation";
                 return first_frame_path(s);
             }, 96);
             Widget* w_thumbp = thumb.get(); ui->row_widgets.push_back(std::move(thumb));
             rows_.push_back(std::vector<Widget*>{ w_thumbp });
         }
-        // Row C flags
+
         auto w_cb1 = std::make_unique<CheckboxWidget>(ui->flipped_cb.get()); Widget* w_cb1p = w_cb1.get(); ui->row_widgets.push_back(std::move(w_cb1));
         auto w_cb2 = std::make_unique<CheckboxWidget>(ui->reversed_cb.get()); Widget* w_cb2p = w_cb2.get(); ui->row_widgets.push_back(std::move(w_cb2));
         auto w_cb3 = std::make_unique<CheckboxWidget>(ui->locked_cb.get());   Widget* w_cb3p = w_cb3.get(); ui->row_widgets.push_back(std::move(w_cb3));
         auto w_cb4 = std::make_unique<CheckboxWidget>(ui->rnd_start_cb.get());Widget* w_cb4p = w_cb4.get(); ui->row_widgets.push_back(std::move(w_cb4));
         auto w_cb5 = std::make_unique<CheckboxWidget>(ui->loop_cb.get());     Widget* w_cb5p = w_cb5.get(); ui->row_widgets.push_back(std::move(w_cb5));
         rows_.push_back(std::vector<Widget*>{ w_cb1p, w_cb2p, w_cb3p, w_cb4p, w_cb5p });
-        // Row D speed + movement + frames
+
         auto w_spd = std::make_unique<SliderWidget>(ui->speed_sl.get()); Widget* w_spdp = w_spd.get(); ui->row_widgets.push_back(std::move(w_spd));
         auto w_mov = std::make_unique<ButtonWidget>(ui->movement_btn.get(), [this, nm]() {
             nlohmann::json payload = animation_payload(nm);
@@ -570,8 +560,6 @@ void AnimationsEditorPanel::rebuild_animation_rows() {
         auto w_frames = std::make_unique<TextBoxWidget>(ui->frames_label.get()); Widget* w_framesp = w_frames.get(); ui->row_widgets.push_back(std::move(w_frames));
         rows_.push_back(std::vector<Widget*>{ w_spdp, w_movp, w_framesp });
 
-        // Row E: on_end + duplicate
-        // on_end dropdown: include "default" sentinel followed by animation names
         std::string on_end_val = ui->last_payload.value("on_end", std::string{"default"});
         auto all2 = current_names_sorted();
         std::vector<std::string> end_opts; end_opts.push_back("default"); end_opts.insert(end_opts.end(), all2.begin(), all2.end());
@@ -581,7 +569,7 @@ void AnimationsEditorPanel::rebuild_animation_rows() {
 
         ui->dup_btn = std::make_unique<DMButton>("Duplicate", &DMStyles::ListButton(), 120, DMButton::height());
         auto w_dup = std::make_unique<ButtonWidget>(ui->dup_btn.get(), [this, nm]() {
-            // Generate unique name based on nm
+
             std::string base = nm + std::string{"_copy"};
             std::string new_nm = base; int i=1; auto names = animation_names();
             auto exists = [&](const std::string& s){ return std::find(names.begin(), names.end(), s) != names.end(); };
@@ -592,12 +580,11 @@ void AnimationsEditorPanel::rebuild_animation_rows() {
         Widget* w_dupp = w_dup.get(); ui->row_widgets.push_back(std::move(w_dup));
         rows_.push_back(std::vector<Widget*>{ w_endp, w_dupp });
 
-        // Row F: Crop helpers for folder sources
         if (kind_idx == 0) {
-            // Alpha threshold slider
+
             ui->alpha_sl = std::make_unique<DMSlider>("alpha", 0, 255, 0);
             auto w_alpha = std::make_unique<SliderWidget>(ui->alpha_sl.get()); Widget* w_alphap = w_alpha.get(); ui->row_widgets.push_back(std::move(w_alpha));
-            // Compute button
+
             ui->compute_btn = std::make_unique<DMButton>("Compute Bounds", &DMStyles::ListButton(), 160, DMButton::height());
             auto w_comp = std::make_unique<ButtonWidget>(ui->compute_btn.get(), [this, nm]() {
                 nlohmann::json payload = animation_payload(nm);
@@ -606,7 +593,7 @@ void AnimationsEditorPanel::rebuild_animation_rows() {
                 if (rel.empty()) return;
                 fs::path dir = fs::path(asset_dir_path_) / rel;
                 auto images = animation::get_image_paths(dir);
-                // Find this UI entry to read alpha slider and write results
+
                 for (auto& it2 : items_) {
                     if (it2 && it2->name == nm) {
                         int thr = it2->alpha_sl ? it2->alpha_sl->value() : 0;
@@ -615,21 +602,20 @@ void AnimationsEditorPanel::rebuild_animation_rows() {
                         std::ostringstream oss; oss << "Crop T:" << b.top << " B:" << b.bottom << " L:" << b.left << " R:" << b.right;
                         if (!it2->crop_summary) it2->crop_summary = std::make_unique<DMTextBox>("Bounds", "");
                         it2->crop_summary->set_value(oss.str());
-                        // No full rebuild here; we updated the visible summary textbox.
+
                         break;
                     }
                 }
             });
             Widget* w_compp = w_comp.get(); ui->row_widgets.push_back(std::move(w_comp));
-            // Crop summary textbox (shows after compute)
+
             if (!ui->crop_summary) ui->crop_summary = std::make_unique<DMTextBox>("Bounds", "");
             auto w_csum = std::make_unique<TextBoxWidget>(ui->crop_summary.get()); Widget* w_csump = w_csum.get(); ui->row_widgets.push_back(std::move(w_csum));
             rows_.push_back(std::vector<Widget*>{ w_alphap, w_compp, w_csump });
 
-            // Row G: Apply crop
             ui->crop_btn = std::make_unique<DMButton>("Apply Crop", &DMStyles::DeleteButton(), 140, DMButton::height());
             auto w_crop = std::make_unique<ButtonWidget>(ui->crop_btn.get(), [this, nm]() {
-                // Find this UI entry
+
                 for (auto& it2 : items_) {
                     if (it2 && it2->name == nm) {
                         nlohmann::json payload = animation_payload(nm);
@@ -639,11 +625,11 @@ void AnimationsEditorPanel::rebuild_animation_rows() {
                         fs::path dir = fs::path(asset_dir_path_) / rel;
                         auto images = animation::get_image_paths(dir);
                         int thr = it2->alpha_sl ? it2->alpha_sl->value() : 0;
-                        // Compute bounds if missing
+
                         animation::Bounds b = it2->has_bounds ? it2->last_bounds : animation::compute_union_bounds(images, thr);
                         if (b.base_w == 0) return;
                         (void)animation::crop_images_with_bounds(images, b.top, b.bottom, b.left, b.right);
-                        // Recompute frames label and refresh UI
+
                         request_rebuild();
                         break;
                     }

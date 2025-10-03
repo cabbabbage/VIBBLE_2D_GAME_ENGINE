@@ -19,7 +19,7 @@ class MenuUI : public MainApp {
     EXIT,
     RESTART,
     SETTINGS
-        };
+};
     MenuUI(SDL_Renderer* renderer, int screen_w, int screen_h, const std::string& map_path);
     ~MenuUI();
     void init();
@@ -51,7 +51,7 @@ class MenuUI : public MainApp {
     struct MenuButton {
     Button     button;
     MenuAction action = MenuAction::NONE;
-	};
+};
     bool menu_active_ = false;
     MenuAction last_action_ = MenuAction::NONE;
     bool return_to_main_menu_ = false;

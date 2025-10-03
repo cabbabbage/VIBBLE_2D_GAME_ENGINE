@@ -12,10 +12,8 @@
 void CenterSpawner::spawn(const SpawnInfo& item, const Area* area, SpawnContext& ctx) {
     if (!area || !item.has_candidates() || item.quantity <= 0) return;
 
-    // Room center in world space
     SDL_Point center = ctx.get_area_center(*area);
 
-    // Optional snap to grid (do NOT mark occupied for room center)
     if (auto* g = ctx.grid()) {
         if (auto* np = g->get_nearest_point(center)) {
             center = np->pos;
@@ -34,10 +32,9 @@ void CenterSpawner::spawn(const SpawnInfo& item, const Area* area, SpawnContext&
 
         auto& info = candidate->info;
 
-        // Overlap check only (no min-spacing in new spec)
         if (ctx.checker().check(info, center, ctx.exclusion_zones(), ctx.all_assets(),
-                                item.check_spacing, /*check_min_spacing*/ false,
-                                /*unused*/ false, /*tries*/ 5)) {
+                                item.check_spacing,  false,
+                                 false,  5)) {
             continue;
         }
 

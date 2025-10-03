@@ -14,7 +14,7 @@ void ChildrenSpawner::spawn(const SpawnInfo& item, const Area* area, SpawnContex
     int spawned = 0;
     int attempts = 0;
     int slots_used = 0;
-    int max_attempts = quantity * 50; // be generous within the child area
+    int max_attempts = quantity * 50;
 
     while (slots_used < quantity && attempts < max_attempts) {
         ++attempts;
@@ -29,12 +29,12 @@ void ChildrenSpawner::spawn(const SpawnInfo& item, const Area* area, SpawnContex
 
         bool violate = ctx.checker().check(candidate->info,
                                            pos,
-                                           /*exclusion_areas*/ std::vector<Area>{},
+                                            std::vector<Area>{},
                                            ctx.all_assets(),
-                                           /*check_spacing*/ false,
-                                           /*check_min_distance*/ false,
-                                           /*check_min_distance_all*/ false,
-                                           /*num_neighbors*/ 0);
+                                            false,
+                                            false,
+                                            false,
+                                            0);
         if (violate) continue;
 
         auto* result = ctx.spawnAsset(candidate->name, candidate->info, *area, pos, 0, nullptr, item.spawn_id, std::string("ChildRandom"));

@@ -23,14 +23,14 @@ void SingleSpawnGroupModal::ensure_single_group(json& section,
          entry["display_name"] = default_display_name;
          entry["position"] = "Random";
          entry["candidates"] = json::array();
-         // Ensure a placeholder null candidate
+
          json null_cand = json::object();
          null_cand["name"] = "null";
          null_cand["chance"] = 0;
          entry["candidates"].push_back(std::move(null_cand));
          groups.push_back(std::move(entry));
      } else if (groups.size() > 1) {
-         // Restrict to first entry only
+
          json first = groups[0];
          groups = json::array();
          groups.push_back(std::move(first));

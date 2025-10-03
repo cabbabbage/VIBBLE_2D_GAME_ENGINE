@@ -43,7 +43,7 @@ public:
     bool handle_event(const SDL_Event& e);
     void render(SDL_Renderer* r) const;
     bool is_editing() const { return editing_; }
-    // Compute preferred height for a given width (auto-wrap)
+
     int preferred_height(int width) const;
     static int height() { return 32; }
     int height_for_width(int w) const;
@@ -82,7 +82,7 @@ private:
     bool hovered_ = false;
 };
 
-class DMTextBox; // forward
+class DMTextBox;
 
 class DMSlider {
 public:
@@ -167,9 +167,8 @@ public:
     int preferred_height(int width) const;
     static int height();
 
-    // Returns currently expanded dropdown, or nullptr if none.
     static DMDropdown* active_dropdown();
-    // Render options for the currently expanded dropdown (if any).
+
     static void render_active_options(SDL_Renderer* r);
 private:
     int label_space() const;
@@ -188,12 +187,6 @@ private:
     static DMDropdown* active_;
 };
 
-// ------------------------------------------------------------
-// Lightweight generic widget interface + adapters (formerly in ui_widget.hpp)
-// ------------------------------------------------------------
-
-// Lightweight generic widget interface for layout containers.
-// Non-owning wrappers let us use existing DM* widgets inside generic UIs.
 class Widget {
 public:
     virtual ~Widget() = default;
@@ -205,15 +198,13 @@ public:
     virtual bool wants_full_row() const { return false; }
 };
 
-// ---- Adapters for existing dev-mode widgets ----
-
 class ButtonWidget : public Widget {
 public:
     explicit ButtonWidget(DMButton* b, std::function<void()> on_click = {})
         : b_(b), on_click_(std::move(on_click)) {}
     void set_rect(const SDL_Rect& r) override { if (b_) b_->set_rect(r); }
     const SDL_Rect& rect() const override { return b_->rect(); }
-    int height_for_width(int /*w*/) const override { return DMButton::height(); }
+    int height_for_width(int ) const override { return DMButton::height(); }
     bool handle_event(const SDL_Event& e) override {
         if (!b_) return false;
         bool used = b_->handle_event(e);
@@ -224,7 +215,7 @@ public:
     }
     void render(SDL_Renderer* r) const override { if (b_) b_->render(r); }
 private:
-    DMButton* b_ = nullptr; // non-owning
+    DMButton* b_ = nullptr;
     std::function<void()> on_click_{};
 };
 
@@ -239,7 +230,7 @@ public:
     void render(SDL_Renderer* r) const override { if (t_) t_->render(r); }
     bool wants_full_row() const override { return full_row_; }
 private:
-    DMTextBox* t_ = nullptr; // non-owning
+    DMTextBox* t_ = nullptr;
     bool full_row_ = false;
 };
 
@@ -248,11 +239,11 @@ public:
     explicit CheckboxWidget(DMCheckbox* c) : c_(c) {}
     void set_rect(const SDL_Rect& r) override { if (c_) c_->set_rect(r); }
     const SDL_Rect& rect() const override { return c_->rect(); }
-    int height_for_width(int /*w*/) const override { return DMCheckbox::height(); }
+    int height_for_width(int ) const override { return DMCheckbox::height(); }
     bool handle_event(const SDL_Event& e) override { return c_ ? c_->handle_event(e) : false; }
     void render(SDL_Renderer* r) const override { if (c_) c_->render(r); }
 private:
-    DMCheckbox* c_ = nullptr; // non-owning
+    DMCheckbox* c_ = nullptr;
 };
 
 class SliderWidget : public Widget {
@@ -265,7 +256,7 @@ public:
     void render(SDL_Renderer* r) const override { if (s_) s_->render(r); }
     bool wants_full_row() const override { return true; }
 private:
-    DMSlider* s_ = nullptr; // non-owning
+    DMSlider* s_ = nullptr;
 };
 
 class RangeSliderWidget : public Widget {
@@ -273,12 +264,12 @@ public:
     explicit RangeSliderWidget(DMRangeSlider* s) : s_(s) {}
     void set_rect(const SDL_Rect& r) override { if (s_) s_->set_rect(r); }
     const SDL_Rect& rect() const override { return s_->rect(); }
-    int height_for_width(int /*w*/) const override { return DMRangeSlider::height(); }
+    int height_for_width(int ) const override { return DMRangeSlider::height(); }
     bool handle_event(const SDL_Event& e) override { return s_ ? s_->handle_event(e) : false; }
     void render(SDL_Renderer* r) const override { if (s_) s_->render(r); }
     bool wants_full_row() const override { return true; }
 private:
-    DMRangeSlider* s_ = nullptr; // non-owning
+    DMRangeSlider* s_ = nullptr;
 };
 
 class DropdownWidget : public Widget {
@@ -290,5 +281,5 @@ public:
     bool handle_event(const SDL_Event& e) override { return d_ ? d_->handle_event(e) : false; }
     void render(SDL_Renderer* r) const override { if (d_) d_->render(r); }
 private:
-    DMDropdown* d_ = nullptr; // non-owning
+    DMDropdown* d_ = nullptr;
 };

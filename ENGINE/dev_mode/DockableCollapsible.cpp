@@ -10,8 +10,7 @@
 #include "utils/input.hpp"
 
 namespace {
-    // Fixed inner width (excluding padding) applied to every floating panel so
-    // that all floating DockableCollapsible instances share the same size.
+
     constexpr int kFloatingPanelContentWidth = 360;
 
     void draw_grip(SDL_Renderer* r, const SDL_Rect& area, SDL_Color col) {
@@ -187,7 +186,6 @@ bool DockableCollapsible::handle_event(const SDL_Event& e) {
         }
     }
 
-    // Start dragging from the header button or grip area before other header interactions
     if (show_header_ && e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
         SDL_Point p{e.button.x, e.button.y};
         const bool on_header_button = header_btn_ && SDL_PointInRect(&p, &header_rect_);
@@ -411,7 +409,7 @@ void DockableCollapsible::layout(int screen_w, int screen_h) const {
     update_header_button();
 
     if (show_header_) {
-        // Enlarge the draggable grip area to make it easier to grab
+
         int grip_w = std::max(32, std::min(80, std::max(1, header_total_w) / 3));
         handle_rect_ = SDL_Rect{ header_rect_.x, header_rect_.y, grip_w, header_rect_.h };
     } else {
@@ -454,9 +452,7 @@ void DockableCollapsible::layout(int screen_w, int screen_h) const {
         max_scroll_      = std::max(0, content_height_ - body_viewport_h_);
         scroll_          = std::max(0, std::min(max_scroll_, scroll_));
     } else {
-        int available_h = (available_height_override_ >= 0)
-                              ? available_height_override_
-                              : content_height_;
+        int available_h = (available_height_override_ >= 0) ? available_height_override_ : content_height_;
         body_viewport_h_ = std::max(0, std::min(content_height_, available_h));
         max_scroll_      = std::max(0, content_height_ - body_viewport_h_);
         scroll_          = std::max(0, std::min(max_scroll_, scroll_));
@@ -484,7 +480,6 @@ void DockableCollapsible::layout(int screen_w, int screen_h) const {
 
     if (floatable_) clamp_to_bounds(screen_w, screen_h);
 }
-
 
 void DockableCollapsible::update_header_button() const {
     if (!header_btn_) return;

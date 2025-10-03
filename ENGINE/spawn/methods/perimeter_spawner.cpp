@@ -15,13 +15,9 @@
 void PerimeterSpawner::spawn(const SpawnInfo& item, const Area* area, SpawnContext& ctx) {
     if (!area || item.quantity <= 0 || !item.has_candidates()) return;
 
-    // Must have a positive fixed radius
     const int R = item.perimeter_radius;
     if (R <= 0) return;
 
-    // ---- Compute circle center ----
-    // Center is the room center plus (dx,dy) scaled from original room size to current.
-    // Same scaling semantics as ExactSpawner.
     auto [minx, miny, maxx, maxy] = area->get_bounds();
     const int curr_w = std::max(1, maxx - minx);
     const int curr_h = std::max(1, maxy - miny);
@@ -34,11 +30,8 @@ void PerimeterSpawner::spawn(const SpawnInfo& item, const Area* area, SpawnConte
 
     SDL_Point room_center = ctx.get_area_center(*area);
     SDL_Point circle_center{
-        room_center.x + static_cast<int>(std::lround(item.exact_offset.x * rx)),
-        room_center.y + static_cast<int>(std::lround(item.exact_offset.y * ry))
-    };
+        room_center.x + static_cast<int>(std::lround(item.exact_offset.x * rx)), room_center.y + static_cast<int>(std::lround(item.exact_offset.y * ry)) };
 
-    // ---- Even placement around the circle with random starting phase ----
     std::uniform_real_distribution<double> phase_dist(0.0, 2.0 * M_PI);
     const double start = phase_dist(ctx.rng());
     const double step  = (item.quantity > 0) ? (2.0 * M_PI / static_cast<double>(item.quantity)) : 0.0;
@@ -59,10 +52,9 @@ void PerimeterSpawner::spawn(const SpawnInfo& item, const Area* area, SpawnConte
 
         auto& info = candidate->info;
 
-        // Overlap check (no min-spacing/jitter in the new spec)
         if (ctx.checker().check(info, pos, ctx.exclusion_zones(), ctx.all_assets(),
-                                item.check_spacing, /*check_min_spacing*/ false,
-                                /*unknown_flag*/ false, /*tries*/ 5)) {
+                                item.check_spacing,  false,
+                                 false,  5)) {
             continue;
         }
 

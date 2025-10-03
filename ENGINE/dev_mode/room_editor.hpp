@@ -98,17 +98,17 @@ private:
         Percent,
         Perimeter,
         PerimeterCenter,
-    };
+};
 
     enum class ActiveModal {
         None,
         AssetInfo,
-    };
+};
 
     struct PerimeterOverlay {
         SDL_Point center{0, 0};
         double radius = 0.0;
-    };
+};
 
     struct PendingSpawnGroupOpen {
         std::string id;
@@ -116,14 +116,14 @@ private:
         int retry_frames = 0;
         int remaining_attempts = 3;
         bool awaiting_confirmation = false;
-    };
+};
 
     struct DraggedAssetState {
-        Asset*     asset     = nullptr;   // pointer to the dragged asset (nullable)
-        SDL_Point  start_pos {0, 0};      // screen/world position at drag start
-        SDL_FPoint direction {0.0f, 0.0f}; // normalized drag direction or delta
-        bool       active    = false;     // is a drag in progress?
-    };
+        Asset*     asset     = nullptr;
+        SDL_Point  start_pos {0, 0};
+        SDL_FPoint direction {0.0f, 0.0f};
+        bool       active    = false;
+};
     void handle_mouse_input(const Input& input);
     Asset* hit_test_asset(SDL_Point screen_point) const;
     void update_hover_state(Asset* hit);
@@ -237,7 +237,4 @@ private:
     bool is_room_spawn_id(const std::string& spawn_id) const;
     bool asset_belongs_to_room(const Asset* asset) const;
 };
-
-
-
 

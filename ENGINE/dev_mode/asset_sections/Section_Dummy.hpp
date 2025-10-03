@@ -2,7 +2,6 @@
 
 #include "../DockableCollapsible.hpp"
 
-// Simple placeholder section that only shows a header and 'Coming soon'
 class DummySection : public DockableCollapsible {
   public:
     explicit DummySection(const std::string& title)
@@ -10,7 +9,7 @@ class DummySection : public DockableCollapsible {
 
     void layout() override {
       DockableCollapsible::layout();
-      // Reserve a small placeholder height when expanded
+
       content_height_ = 28;
       if (header_) header_->set_text(expanded_ ? title_ + " ▲" : title_ + " ▼");
     }
@@ -32,13 +31,20 @@ class DummySection : public DockableCollapsible {
     }
 };
 
-// Thin wrappers for individual sections/tabs from the Python tool
+struct Section_Sizing      : public DummySection { Section_Sizing()      : DummySection("Sizing") {} };
 struct Section_Sizing      : public DummySection { Section_Sizing()      : DummySection("Sizing") {} };
 struct Section_Passability : public DummySection { Section_Passability() : DummySection("Passability") {} };
+struct Section_Passability : public DummySection { Section_Passability() : DummySection("Passability") {} };
+struct Section_Spacing     : public DummySection { Section_Spacing()     : DummySection("Spacing") {} };
 struct Section_Spacing     : public DummySection { Section_Spacing()     : DummySection("Spacing") {} };
 struct Section_Animations  : public DummySection { Section_Animations()  : DummySection("Animations") {} };
+struct Section_Animations  : public DummySection { Section_Animations()  : DummySection("Animations") {} };
+struct Section_ChildAssets : public DummySection { Section_ChildAssets() : DummySection("Child Assets") {} };
 struct Section_ChildAssets : public DummySection { Section_ChildAssets() : DummySection("Child Assets") {} };
 struct Section_Tags        : public DummySection { Section_Tags()        : DummySection("Tags") {} };
+struct Section_Tags        : public DummySection { Section_Tags()        : DummySection("Tags") {} };
 struct Section_Lighting    : public DummySection { Section_Lighting()    : DummySection("Lighting") {} };
+struct Section_Lighting    : public DummySection { Section_Lighting()    : DummySection("Lighting") {} };
+struct Section_Json        : public DummySection { Section_Json()        : DummySection("JSON") {} };
 struct Section_Json        : public DummySection { Section_Json()        : DummySection("JSON") {} };
 

@@ -92,7 +92,7 @@ std::vector<std::pair<SDL_Texture*, SDL_Rect>> FadeTextureGenerator::generate_al
 					if (intersect) inside = !inside;
 			}
 			return inside;
-		};
+};
 		SDL_Texture* tex = SDL_CreateTexture(renderer_, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET, w, h);
 		if (!tex) {
 			std::cout << "    [FadeGen " << index << "] Texture creation failed; skipping.\n";

@@ -50,13 +50,13 @@ private:
         std::string id;
         FilterKind kind = FilterKind::Type;
         std::unique_ptr<DMCheckbox> checkbox;
-    };
+};
 
     struct FilterState {
         bool map_assets = false;
         bool current_room = true;
         std::unordered_map<std::string, bool> type_filters;
-    };
+};
 
     void rebuild_map_spawn_ids();
     void rebuild_room_spawn_ids();

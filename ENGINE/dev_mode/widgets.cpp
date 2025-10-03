@@ -13,7 +13,7 @@ constexpr int kTextboxHorizontalPadding = 6;
 constexpr int kSliderControlHeight = 40;
 constexpr int kSliderValueWidth = 60;
 constexpr int kDropdownControlHeight = 32;
-constexpr int kButtonHorizontalPadding = 24; // total horizontal padding applied to button text
+constexpr int kButtonHorizontalPadding = 24;
 
 int slider_value_height() {
     const DMSliderStyle& st = DMStyles::Slider();
@@ -26,7 +26,7 @@ int range_value_width(int total_width) {
     candidate = std::min(candidate, std::max(64, total_width / 2));
     return candidate;
 }
-} // namespace
+}
 
 DMButton::DMButton(const std::string& text, const DMButtonStyle* style, int w, int h)
     : rect_{0,0,w,h}, text_(text), style_(style) {
@@ -221,9 +221,7 @@ void DMTextBox::render(SDL_Renderer* r) const {
     SDL_SetRenderDrawColor(r, border.r, border.g, border.b, border.a);
     SDL_RenderDrawRect(r, &box_rect_);
     DMLabelStyle valStyle{ st.label.font_path, st.label.font_size, st.text };
-    draw_text(r, text_, box_rect_.x + kTextboxHorizontalPadding,
-              box_rect_.y + kTextboxHorizontalPadding,
-              std::max(1, box_rect_.w - 2 * kTextboxHorizontalPadding), valStyle);
+    draw_text(r, text_, box_rect_.x + kTextboxHorizontalPadding, box_rect_.y + kTextboxHorizontalPadding, std::max(1, box_rect_.w - 2 * kTextboxHorizontalPadding), valStyle);
     if (editing_) {
         TTF_Font* f = TTF_OpenFont(valStyle.font_path.c_str(), valStyle.font_size);
         if (f) {
@@ -287,7 +285,7 @@ std::vector<std::string> DMTextBox::wrap_lines(TTF_Font* f, const std::string& s
             pos = brk;
             while (pos < para.size() && std::isspace((unsigned char)para[pos])) ++pos;
         }
-    };
+};
     while (true) {
         size_t nl = s.find('\n', start);
         if (nl == std::string::npos) { push_wrapped(s.substr(start)); break; }
@@ -464,12 +462,12 @@ int DMSlider::value_for_x(int x) const {
 bool DMSlider::handle_event(const SDL_Event& e) {
     if (edit_box_) {
         if (edit_box_->handle_event(e)) {
-            // Parse cautiously to avoid crashes on invalid input
+
             try {
                 int nv = std::stoi(edit_box_->value());
                 set_value(nv);
             } catch (...) {
-                // Ignore invalid numeric input; keep previous value
+
             }
             return true;
         }
@@ -568,8 +566,7 @@ int DMSlider::height() {
 DMRangeSlider::DMRangeSlider(int min_val, int max_val, int min_value, int max_value)
     : min_(min_val), max_(max_val) {
     if (min_ > max_) std::swap(min_, max_);
-    // Initialize with correct dependency order to avoid clamping new min against
-    // the default max_ (100) before the intended max is applied.
+
     set_max_value(max_value);
     set_min_value(min_value);
 }
@@ -647,7 +644,7 @@ bool DMRangeSlider::handle_event(const SDL_Event& e) {
                 int nv = std::stoi(edit_min_->value());
                 set_min_value(nv);
             } catch (...) {
-                // Ignore invalid input
+
             }
             return true;
         }
@@ -659,7 +656,7 @@ bool DMRangeSlider::handle_event(const SDL_Event& e) {
                 int nv = std::stoi(edit_max_->value());
                 set_max_value(nv);
             } catch (...) {
-                // Ignore invalid input
+
             }
             return true;
         }
@@ -680,7 +677,7 @@ bool DMRangeSlider::handle_event(const SDL_Event& e) {
         if (min_hit && max_hit) {
             auto center = [](const SDL_Rect& r) {
                 return SDL_Point{ r.x + r.w / 2, r.y + r.h / 2 };
-            };
+};
             const SDL_Point min_center = center(kmin);
             const SDL_Point max_center = center(kmax);
             const auto sqr = [](int v) { return v * v; };

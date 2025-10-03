@@ -11,10 +11,8 @@
 
 namespace animation {
 
-// Helper to check if file name is a numbered PNG (e.g., "0001.png").
 bool is_numbered_png(const std::string& filename);
 
-// Return sorted list of numbered PNG files inside a folder.
 std::vector<std::filesystem::path> get_image_paths(const std::filesystem::path& folder);
 
 struct Bounds {
@@ -22,23 +20,10 @@ struct Bounds {
     int base_w{0}, base_h{0};
 };
 
-// Compute union bounds across all images. If no opaque pixels are found, all
-// margins are zero. The alpha threshold treats alpha values <= threshold as
-// transparent.
-Bounds compute_union_bounds(const std::vector<std::filesystem::path>& image_paths,
-                           int alpha_threshold = 0);
+Bounds compute_union_bounds(const std::vector<std::filesystem::path>& image_paths, int alpha_threshold = 0);
 
-// Crop each image in-place using the provided margins. Returns count of images
-// successfully cropped.
-int crop_images_with_bounds(const std::vector<std::filesystem::path>& image_paths,
-                            int crop_top,
-                            int crop_bottom,
-                            int crop_left,
-                            int crop_right);
+int crop_images_with_bounds(const std::vector<std::filesystem::path>& image_paths, int crop_top, int crop_bottom, int crop_left, int crop_right);
 
-// --------------------------------------------------------------
-// Undo history manager (deep snapshots using nlohmann::json)
-// --------------------------------------------------------------
 class HistoryManager {
 public:
     explicit HistoryManager(size_t limit = 200);
@@ -51,9 +36,6 @@ private:
     size_t limit_;
 };
 
-// --------------------------------------------------------------
-// View state capture/restore interfaces
-// --------------------------------------------------------------
 struct IViewWindow {
     virtual ~IViewWindow() = default;
     virtual std::string geometry() const = 0;
@@ -83,9 +65,6 @@ public:
     void apply(IViewWindow& win, IViewCanvas& canvas, const ViewState& state) const;
 };
 
-// --------------------------------------------------------------
-// Movement modal (simplified placeholder)
-// --------------------------------------------------------------
 class MovementModal {
 public:
     using Position = std::pair<int, int>;
@@ -94,7 +73,6 @@ public:
     void open(const std::vector<Position>& positions);
     bool is_open() const;
 
-    // Event/render stubs
     bool handle_event(const SDL_Event& e);
     void render(SDL_Renderer* r);
 
@@ -107,5 +85,5 @@ private:
     int current_frame_{0};
 };
 
-} // namespace animation
+}
 

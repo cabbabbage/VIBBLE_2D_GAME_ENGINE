@@ -16,7 +16,6 @@ void ExactSpawner::spawn(const SpawnInfo& item, const Area* area, SpawnContext& 
     const int curr_w = std::max(1, maxx - minx);
     const int curr_h = std::max(1, maxy - miny);
 
-    // Fallbacks: planner should have filled these, but guard just in case.
     const int orig_w = (item.exact_origin_w > 0) ? item.exact_origin_w : curr_w;
     const int orig_h = (item.exact_origin_h > 0) ? item.exact_origin_h : curr_h;
 
@@ -25,9 +24,7 @@ void ExactSpawner::spawn(const SpawnInfo& item, const Area* area, SpawnContext& 
 
     SDL_Point center = ctx.get_area_center(*area);
     SDL_Point final_pos{
-        center.x + static_cast<int>(std::lround(item.exact_offset.x * rx)),
-        center.y + static_cast<int>(std::lround(item.exact_offset.y * ry))
-    };
+        center.x + static_cast<int>(std::lround(item.exact_offset.x * rx)), center.y + static_cast<int>(std::lround(item.exact_offset.y * ry)) };
 
     int attempts = 0;
     int spawned  = 0;
@@ -42,7 +39,6 @@ void ExactSpawner::spawn(const SpawnInfo& item, const Area* area, SpawnContext& 
 
         SDL_Point pos = final_pos;
 
-        // Optional grid snap if available
         MapGrid::Point* snapped = nullptr;
         if (auto* g = ctx.grid()) {
             snapped = g->get_nearest_point(pos);
@@ -50,8 +46,8 @@ void ExactSpawner::spawn(const SpawnInfo& item, const Area* area, SpawnContext& 
         }
 
         if (ctx.checker().check(info, pos, ctx.exclusion_zones(), ctx.all_assets(),
-                                item.check_spacing, /*check_min_spacing*/ false,
-                                /*unused*/ false, /*tries*/ 5)) {
+                                item.check_spacing,  false,
+                                 false,  5)) {
             continue;
         }
 

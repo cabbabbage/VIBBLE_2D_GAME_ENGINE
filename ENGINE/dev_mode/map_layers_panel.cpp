@@ -1,7 +1,5 @@
 #include "map_layers_panel.hpp"
 
-
-
 #include "dm_styles.hpp"
 
 #include "map_layers_controller.hpp"
@@ -14,13 +12,9 @@
 
 #include "utils/input.hpp"
 
-
-
 #include <SDL.h>
 
 #include <SDL_ttf.h>
-
-
 
 #include <algorithm>
 
@@ -50,11 +44,9 @@
 
 #include <tuple>
 
-
+#include <vector>
 
 #include <nlohmann/json.hpp>
-
-
 
 namespace {
 
@@ -63,8 +55,6 @@ constexpr int kCanvasPreferredHeight = 320;
 constexpr int kCanvasPadding = 16;
 
 constexpr int kRoomRangeMaxDefault = 64;
-
-
 
 using map_layers::kCandidateRangeMax;
 
@@ -75,8 +65,6 @@ using map_layers::clamp_candidate_min;
 constexpr int kLayerRadiusStepDefault = 512;
 
 constexpr double kTau = 6.28318530717958647692;
-
-
 
 SDL_Color hsv_to_rgb(double h, double s, double v) {
 
@@ -120,13 +108,11 @@ SDL_Color hsv_to_rgb(double h, double s, double v) {
 
         return static_cast<Uint8>(std::lround(x * 255.0));
 
-    };
+};
 
     return SDL_Color{to_byte(r), to_byte(g), to_byte(b), 255};
 
 }
-
-
 
 SDL_Color level_color(int level) {
 
@@ -135,8 +121,6 @@ SDL_Color level_color(int level) {
     return hsv_to_rgb(hue, 0.6, 1.0);
 
 }
-
-
 
 void draw_circle(SDL_Renderer* r, int cx, int cy, int radius, SDL_Color col, int thickness = 2) {
 
@@ -164,9 +148,7 @@ void draw_circle(SDL_Renderer* r, int cx, int cy, int radius, SDL_Color col, int
 
             const double y = cy + rr * std::sin(theta);
 
-            SDL_RenderDrawLine(r, static_cast<int>(std::lround(prev_x)), static_cast<int>(std::lround(prev_y)),
-
-                               static_cast<int>(std::lround(x)), static_cast<int>(std::lround(y)));
+            SDL_RenderDrawLine(r, static_cast<int>(std::lround(prev_x)), static_cast<int>(std::lround(prev_y)),  static_cast<int>(std::lround(x)), static_cast<int>(std::lround(y)));
 
             prev_x = x;
 
@@ -177,8 +159,6 @@ void draw_circle(SDL_Renderer* r, int cx, int cy, int radius, SDL_Color col, int
     }
 
 }
-
-
 
 void draw_text(SDL_Renderer* r, const std::string& text, int x, int y, const DMLabelStyle& style) {
 
@@ -212,8 +192,6 @@ void draw_text(SDL_Renderer* r, const std::string& text, int x, int y, const DML
 
 }
 
-
-
 void draw_text_centered(SDL_Renderer* r, const std::string& text, int x, int y, const DMLabelStyle& style) {
 
     if (!r) return;
@@ -246,8 +224,6 @@ void draw_text_centered(SDL_Renderer* r, const std::string& text, int x, int y, 
 
 }
 
-
-
 Uint8 lerp_channel(Uint8 from, Uint8 to, float t) {
 
     t = std::clamp(t, 0.0f, 1.0f);
@@ -260,25 +236,13 @@ Uint8 lerp_channel(Uint8 from, Uint8 to, float t) {
 
 }
 
-
-
 SDL_Color mix_color(SDL_Color from, SDL_Color to, float t) {
 
     return SDL_Color{
 
-        lerp_channel(from.r, to.r, t),
-
-        lerp_channel(from.g, to.g, t),
-
-        lerp_channel(from.b, to.b, t),
-
-        lerp_channel(from.a, to.a, t)
-
-    };
+        lerp_channel(from.r, to.r, t),  lerp_channel(from.g, to.g, t),  lerp_channel(from.b, to.b, t),  lerp_channel(from.a, to.a, t)  };
 
 }
-
-
 
 SDL_Color lighten_color(SDL_Color color, float amount) {
 
@@ -288,8 +252,6 @@ SDL_Color lighten_color(SDL_Color color, float amount) {
 
 }
 
-
-
 SDL_Color apply_alpha(SDL_Color color, Uint8 alpha) {
 
     color.a = alpha;
@@ -298,7 +260,25 @@ SDL_Color apply_alpha(SDL_Color color, Uint8 alpha) {
 
 }
 
+uint32_t mix_geometry_seed(uint32_t base, const std::string& key) {
 
+    uint64_t value = static_cast<uint64_t>(base);
+
+    value ^= static_cast<uint64_t>(std::hash<std::string>{}(key));
+
+    value ^= value >> 33;
+
+    value *= 0xff51afd7ed558ccdull;
+
+    value ^= value >> 33;
+
+    value *= 0xc4ceb9fe1a85ec53ull;
+
+    value ^= value >> 33;
+
+    return static_cast<uint32_t>(value & 0xffffffffu);
+
+}
 
 struct RoomGeometry {
 
@@ -308,11 +288,11 @@ struct RoomGeometry {
 
     bool is_circle = false;
 
+    std::vector<SDL_FPoint> outline;
+
 };
 
-
-
-RoomGeometry fetch_room_geometry(const nlohmann::json* rooms_data, const std::string& room_name) {
+RoomGeometry fetch_room_geometry(const nlohmann::json* rooms_data, const std::string& room_name, uint32_t seed = 0) {
 
     RoomGeometry geom;
 
@@ -324,11 +304,30 @@ RoomGeometry fetch_room_geometry(const nlohmann::json* rooms_data, const std::st
 
     const auto& room = *it;
 
-    geom.max_width = room.value("max_width", room.value("min_width", 0.0));
+    auto extract_dimension = [&room](const char* primary, const char* fallback1,
+                                     const char* fallback2, const char* fallback3) -> double {
 
-    geom.max_height = room.value("max_height", room.value("min_height", 0.0));
+        if (room.contains(primary)) return room.value(primary, 0.0);
+
+        if (room.contains(fallback1)) return room.value(fallback1, 0.0);
+
+        if (room.contains(fallback2)) return room.value(fallback2, 0.0);
+
+        if (room.contains(fallback3)) return room.value(fallback3, 0.0);
+
+        return 0.0;
+
+};
+
+    geom.max_width = extract_dimension("max_width", "width_max", "min_width", "width_min");
+
+    geom.max_height = extract_dimension("max_height", "height_max", "min_height", "height_min");
 
     std::string geometry = room.value("geometry", std::string());
+
+    int edge_smoothness = room.value("edge_smoothness", 75);
+
+    edge_smoothness = std::clamp(edge_smoothness, 0, 100);
 
     if (!geometry.empty()) {
 
@@ -348,6 +347,8 @@ RoomGeometry fetch_room_geometry(const nlohmann::json* rooms_data, const std::st
 
         }
 
+        geometry = std::move(lowered);
+
     }
 
     if (geom.max_width <= 0.0 && geom.max_height <= 0.0) {
@@ -366,11 +367,101 @@ RoomGeometry fetch_room_geometry(const nlohmann::json* rooms_data, const std::st
 
     }
 
+    geom.outline.clear();
+
+    const double width = std::max(geom.max_width, 1.0);
+
+    const double height = std::max(geom.max_height, 1.0);
+
+    const bool use_randomness = (seed != 0);
+
+    uint32_t local_seed = use_randomness ? mix_geometry_seed(seed, room_name) : 0u;
+
+    if (geom.is_circle || geometry == "circle") {
+
+        const double radius = std::max(width, height) * 0.5;
+
+        if (radius > 0.0) {
+
+            const int segments = std::max(12, 6 + edge_smoothness * 2);
+
+            const double max_dev = 0.20 * (100 - edge_smoothness) / 100.0;
+
+            std::mt19937 rng(local_seed == 0u ? 0x6d5a56e9u : local_seed);
+
+            std::uniform_real_distribution<double> dist(1.0 - max_dev, 1.0 + max_dev);
+
+            geom.outline.reserve(segments);
+
+            for (int i = 0; i < segments; ++i) {
+
+                const double theta = (static_cast<double>(i) / segments) * kTau;
+
+                double scale = 1.0;
+
+                if (use_randomness) {
+
+                    scale = dist(rng);
+
+                }
+
+                const double r = radius * scale;
+
+                geom.outline.push_back(SDL_FPoint{
+
+                    static_cast<float>(std::cos(theta) * r),
+
+                    static_cast<float>(std::sin(theta) * r)
+
+                });
+
+            }
+
+        }
+
+    } else if (geometry == "point") {
+
+        geom.outline.push_back(SDL_FPoint{0.0f, 0.0f});
+
+    } else {
+
+        const double half_w = width * 0.5;
+
+        const double half_h = height * 0.5;
+
+        const double max_dev = 0.25 * (100 - edge_smoothness) / 100.0;
+
+        std::mt19937 rng(local_seed == 0u ? 0x6d5a56e9u : local_seed);
+
+        std::uniform_real_distribution<double> xoff(-max_dev * width, max_dev * width);
+
+        std::uniform_real_distribution<double> yoff(-max_dev * height, max_dev * height);
+
+        auto jitter = [&](double base, std::uniform_real_distribution<double>& dist) {
+
+            if (!use_randomness) return base;
+
+            return base + dist(rng);
+
+};
+
+        geom.outline = {
+
+            SDL_FPoint{ static_cast<float>(jitter(-half_w, xoff)), static_cast<float>(jitter(-half_h, yoff)) },
+
+            SDL_FPoint{ static_cast<float>(jitter( half_w, xoff)), static_cast<float>(jitter(-half_h, yoff)) },
+
+            SDL_FPoint{ static_cast<float>(jitter( half_w, xoff)), static_cast<float>(jitter( half_h, yoff)) },
+
+            SDL_FPoint{ static_cast<float>(jitter(-half_w, xoff)), static_cast<float>(jitter( half_h, yoff)) }
+
+};
+
+    }
+
     return geom;
 
 }
-
-
 
 double room_extent_for_radius(const RoomGeometry& geom) {
 
@@ -390,8 +481,6 @@ double room_extent_for_radius(const RoomGeometry& geom) {
 
 }
 
-
-
 std::string trim_copy_local(const std::string& input) {
 
     auto is_space = [](unsigned char ch) { return std::isspace(ch) != 0; };
@@ -405,8 +494,6 @@ std::string trim_copy_local(const std::string& input) {
     return result;
 
 }
-
-
 
 std::string sanitize_room_key(const std::string& input) {
 
@@ -466,8 +553,6 @@ std::string sanitize_room_key(const std::string& input) {
 
 }
 
-
-
 std::string make_unique_room_key(const nlohmann::json& rooms_data, const std::string& base_key) {
 
     std::string base = base_key.empty() ? std::string("room") : base_key;
@@ -491,8 +576,6 @@ std::string make_unique_room_key(const nlohmann::json& rooms_data, const std::st
     return candidate;
 
 }
-
-
 
 nlohmann::json make_default_room_json(const std::string& name) {
 
@@ -536,8 +619,6 @@ nlohmann::json make_default_room_json(const std::string& name) {
 
 }
 
-
-
 int compute_next_layer_radius(const nlohmann::json& layers) {
 
     int max_radius = 0;
@@ -572,17 +653,9 @@ int compute_next_layer_radius(const nlohmann::json& layers) {
 
 }
 
-
-
 void clamp_layer_room_counts(nlohmann::json& layer) {
 
     if (!layer.is_object()) return;
-
-    int max_rooms = std::max(0, layer.value("max_rooms", 0));
-
-    layer["max_rooms"] = std::min(max_rooms, kRoomRangeMaxDefault);
-
-
 
     int min_sum = 0;
 
@@ -612,21 +685,19 @@ void clamp_layer_room_counts(nlohmann::json& layer) {
 
     }
 
-    int clamped_total = layer["max_rooms"].get<int>();
+    int derived_min = min_sum;
 
-    clamped_total = std::max(clamped_total, min_sum);
+    int derived_max = std::max(min_sum, max_sum);
 
-    if (max_sum > 0) {
+    derived_min = std::min(derived_min, kRoomRangeMaxDefault);
 
-        clamped_total = std::min(clamped_total, max_sum);
+    derived_max = std::min(derived_max, kRoomRangeMaxDefault);
 
-    }
+    layer["min_rooms"] = derived_min;
 
-    layer["max_rooms"] = clamped_total;
+    layer["max_rooms"] = derived_max;
 
 }
-
-
 
 struct PreviewRoomSpec {
 
@@ -637,8 +708,6 @@ struct PreviewRoomSpec {
     std::vector<std::string> required_children;
 
 };
-
-
 
 struct PreviewLayerSpec {
 
@@ -652,8 +721,6 @@ struct PreviewLayerSpec {
 
 };
 
-
-
 std::vector<PreviewRoomSpec> build_children_pool(const PreviewLayerSpec& layer, std::mt19937& rng) {
 
     std::vector<PreviewRoomSpec> result;
@@ -661,8 +728,6 @@ std::vector<PreviewRoomSpec> build_children_pool(const PreviewLayerSpec& layer, 
     const int target = std::max(0, layer.max_rooms);
 
     if (target == 0) return result;
-
-
 
     std::vector<PreviewRoomSpec> candidates;
 
@@ -678,11 +743,7 @@ std::vector<PreviewRoomSpec> build_children_pool(const PreviewLayerSpec& layer, 
 
     }
 
-
-
     if (candidates.empty()) return result;
-
-
 
     std::shuffle(candidates.begin(), candidates.end(), rng);
 
@@ -692,15 +753,11 @@ std::vector<PreviewRoomSpec> build_children_pool(const PreviewLayerSpec& layer, 
 
     }
 
-
-
     result.insert(result.end(), candidates.begin(), candidates.begin() + target);
 
     return result;
 
 }
-
-
 
 uint32_t compute_preview_seed(const std::vector<PreviewLayerSpec>& layers, const std::string& map_path) {
 
@@ -710,17 +767,13 @@ uint32_t compute_preview_seed(const std::vector<PreviewLayerSpec>& layers, const
 
         seed ^= value + 0x9e3779b97f4a7c15ull + (seed << 6) + (seed >> 2);
 
-    };
-
-
+};
 
     if (!map_path.empty()) {
 
         mix(static_cast<uint64_t>(std::hash<std::string>{}(map_path)));
 
     }
-
-
 
     for (const auto& layer : layers) {
 
@@ -746,8 +799,6 @@ uint32_t compute_preview_seed(const std::vector<PreviewLayerSpec>& layers, const
 
     }
 
-
-
     seed ^= (seed >> 33);
 
     uint32_t result = static_cast<uint32_t>(seed ^ (seed >> 32));
@@ -762,23 +813,9 @@ uint32_t compute_preview_seed(const std::vector<PreviewLayerSpec>& layers, const
 
 }
 
-
-
-} // namespace
-
-
+}
 
 using nlohmann::json;
-
-
-
-// -----------------------------------------------------------------------------
-
-// LayerCanvasWidget implementation
-
-// -----------------------------------------------------------------------------
-
-
 
 class MapLayersPanel::LayerCanvasWidget : public Widget {
 
@@ -786,13 +823,9 @@ public:
 
     explicit LayerCanvasWidget(MapLayersPanel* owner) : owner_(owner) {}
 
-
-
     void refresh();
 
     void set_selected(int index) { selected_index_ = index; }
-
-
 
     void set_rect(const SDL_Rect& r) override { rect_ = r; }
 
@@ -808,8 +841,6 @@ public:
 
     void render(SDL_Renderer* renderer) const override;
 
-
-
 private:
 
     struct CircleInfo {
@@ -822,9 +853,7 @@ private:
 
         std::string label;
 
-    };
-
-
+};
 
     MapLayersPanel* owner_ = nullptr;
 
@@ -835,8 +864,6 @@ private:
     int selected_index_ = -1;
 
 };
-
-
 
 void MapLayersPanel::LayerCanvasWidget::refresh() {
 
@@ -884,13 +911,9 @@ void MapLayersPanel::LayerCanvasWidget::refresh() {
 
 }
 
-
-
 bool MapLayersPanel::LayerCanvasWidget::handle_event(const SDL_Event& e) {
 
     if (!owner_) return false;
-
-
 
     auto compute_metrics = [&]() -> std::tuple<bool, int, int, double> {
 
@@ -938,9 +961,7 @@ bool MapLayersPanel::LayerCanvasWidget::handle_event(const SDL_Event& e) {
 
         return { true, center_x, center_y, scale };
 
-    };
-
-
+};
 
     auto update_hover = [&](const SDL_Point& p, int center_x, int center_y, double scale) {
 
@@ -952,9 +973,7 @@ bool MapLayersPanel::LayerCanvasWidget::handle_event(const SDL_Event& e) {
 
         owner_->update_hover_target(hovered_layer, hovered_room ? hovered_room->name : std::string());
 
-    };
-
-
+};
 
     if (e.type == SDL_MOUSEMOTION) {
 
@@ -984,8 +1003,6 @@ bool MapLayersPanel::LayerCanvasWidget::handle_event(const SDL_Event& e) {
 
     }
 
-
-
     if (e.type != SDL_MOUSEBUTTONUP) return false;
 
     SDL_Point p{ e.button.x, e.button.y };
@@ -1007,8 +1024,6 @@ bool MapLayersPanel::LayerCanvasWidget::handle_event(const SDL_Event& e) {
         return false;
 
     }
-
-
 
     if (e.button.button == SDL_BUTTON_LEFT) {
 
@@ -1034,8 +1049,6 @@ bool MapLayersPanel::LayerCanvasWidget::handle_event(const SDL_Event& e) {
 
     }
 
-
-
     int hit_index = owner_->find_layer_at(p.x, p.y, center_x, center_y, scale);
 
     if (hit_index < 0) {
@@ -1045,8 +1058,6 @@ bool MapLayersPanel::LayerCanvasWidget::handle_event(const SDL_Event& e) {
         return false;
 
     }
-
-
 
     if (e.button.button == SDL_BUTTON_LEFT) {
 
@@ -1072,10 +1083,6 @@ bool MapLayersPanel::LayerCanvasWidget::handle_event(const SDL_Event& e) {
 
 }
 
-
-
-
-
 void MapLayersPanel::LayerCanvasWidget::render(SDL_Renderer* renderer) const {
 
     if (!renderer) return;
@@ -1095,8 +1102,6 @@ void MapLayersPanel::LayerCanvasWidget::render(SDL_Renderer* renderer) const {
     SDL_RenderDrawRect(renderer, &rect_);
 
     if (!owner_ || circles_.empty()) return;
-
-
 
     const auto& arr = owner_->layers_array();
 
@@ -1124,8 +1129,6 @@ void MapLayersPanel::LayerCanvasWidget::render(SDL_Renderer* renderer) const {
 
     double scale = static_cast<double>(draw_radius_max) / display_extent;
 
-
-
     const DMLabelStyle label_style = DMStyles::Label();
 
     const int hovered_layer = owner_->hovered_layer_index_;
@@ -1141,8 +1144,6 @@ void MapLayersPanel::LayerCanvasWidget::render(SDL_Renderer* renderer) const {
     const SDL_Color clicked_layer_color = DMStyles::DeleteButton().bg;
 
     const SDL_Color clicked_room_color = DMStyles::DeleteButton().bg;
-
-
 
     for (const auto& info : circles_) {
 
@@ -1190,8 +1191,6 @@ void MapLayersPanel::LayerCanvasWidget::render(SDL_Renderer* renderer) const {
 
     }
 
-
-
     if (!owner_->preview_edges_.empty()) {
 
         for (const auto& edge : owner_->preview_edges_) {
@@ -1200,19 +1199,11 @@ void MapLayersPanel::LayerCanvasWidget::render(SDL_Renderer* renderer) const {
 
             SDL_Point from_pt{
 
-                static_cast<int>(std::lround(center_x + edge.from->center.x * scale)),
-
-                static_cast<int>(std::lround(center_y + edge.from->center.y * scale))
-
-            };
+                static_cast<int>(std::lround(center_x + edge.from->center.x * scale)),  static_cast<int>(std::lround(center_y + edge.from->center.y * scale))  };
 
             SDL_Point to_pt{
 
-                static_cast<int>(std::lround(center_x + edge.to->center.x * scale)),
-
-                static_cast<int>(std::lround(center_y + edge.to->center.y * scale))
-
-            };
+                static_cast<int>(std::lround(center_x + edge.to->center.x * scale)),  static_cast<int>(std::lround(center_y + edge.to->center.y * scale))  };
 
             SDL_Color col = edge.color;
 
@@ -1224,8 +1215,6 @@ void MapLayersPanel::LayerCanvasWidget::render(SDL_Renderer* renderer) const {
 
     }
 
-
-
     if (!owner_->preview_nodes_.empty()) {
 
         for (const auto& node_uptr : owner_->preview_nodes_) {
@@ -1236,11 +1225,7 @@ void MapLayersPanel::LayerCanvasWidget::render(SDL_Renderer* renderer) const {
 
             SDL_Point center_pt{
 
-                static_cast<int>(std::lround(center_x + node->center.x * scale)),
-
-                static_cast<int>(std::lround(center_y + node->center.y * scale))
-
-            };
+                static_cast<int>(std::lround(center_x + node->center.x * scale)),  static_cast<int>(std::lround(center_y + node->center.y * scale))  };
 
             SDL_Color outline = node->color;
 
@@ -1257,8 +1242,6 @@ void MapLayersPanel::LayerCanvasWidget::render(SDL_Renderer* renderer) const {
                 outline = lighten_color(outline, 0.45f);
 
             }
-
-
 
             if (node->is_circle) {
 
@@ -1290,15 +1273,63 @@ void MapLayersPanel::LayerCanvasWidget::render(SDL_Renderer* renderer) const {
 
             }
 
+            if (!node->outline.empty()) {
 
+                SDL_Color geom_color = lighten_color(outline, 0.25f);
+
+                if (room_clicked) {
+
+                    geom_color = clicked_room_color;
+
+                } else if (room_hovered) {
+
+                    geom_color = lighten_color(geom_color, 0.3f);
+
+                }
+
+                geom_color.a = static_cast<Uint8>(room_clicked ? 255 : 200);
+
+                std::vector<SDL_Point> polygon;
+
+                polygon.reserve(node->outline.size() + 1);
+
+                for (const auto& offset : node->outline) {
+
+                    double world_x = node->center.x + offset.x;
+
+                    double world_y = node->center.y + offset.y;
+
+                    polygon.push_back(SDL_Point{
+
+                        static_cast<int>(std::lround(center_x + world_x * scale)),
+
+                        static_cast<int>(std::lround(center_y + world_y * scale))
+
+                    });
+
+                }
+
+                SDL_SetRenderDrawColor(renderer, geom_color.r, geom_color.g, geom_color.b, geom_color.a);
+
+                if (polygon.size() == 1) {
+
+                    SDL_RenderDrawPoint(renderer, polygon.front().x, polygon.front().y);
+
+                } else if (polygon.size() >= 2) {
+
+                    polygon.push_back(polygon.front());
+
+                    SDL_RenderDrawLines(renderer, polygon.data(), static_cast<int>(polygon.size()));
+
+                }
+
+            }
 
             const SDL_Color accent = DMStyles::AccentButton().hover_bg;
 
             SDL_SetRenderDrawColor(renderer, accent.r, accent.g, accent.b, room_clicked ? 180 : 120);
 
             SDL_RenderDrawPoint(renderer, center_pt.x, center_pt.y);
-
-
 
             double extent_units = node->is_circle ? node->width * 0.5
 
@@ -1354,8 +1385,6 @@ void MapLayersPanel::LayerCanvasWidget::render(SDL_Renderer* renderer) const {
 
     }
 
-
-
     if (selected_index_ >= 0) {
 
         std::ostringstream oss;
@@ -1374,39 +1403,17 @@ void MapLayersPanel::LayerCanvasWidget::render(SDL_Renderer* renderer) const {
 
 }
 
-
-
-
-
-// -----------------------------------------------------------------------------
-
-// PanelSidebarWidget implementation
-
-// -----------------------------------------------------------------------------
-
-
-
 class MapLayersPanel::PanelSidebarWidget : public Widget {
 
 public:
 
     explicit PanelSidebarWidget(MapLayersPanel* owner);
 
-
-
     void set_layer_config(LayerConfigPanel* panel);
-
-
-
-    void set_dirty(bool dirty);
 
     void set_selected(int index) { selected_layer_ = index; }
 
-
-
     const SDL_Rect& config_rect() const { return config_rect_; }
-
-
 
     void set_rect(const SDL_Rect& r) override;
 
@@ -1417,8 +1424,6 @@ public:
     bool handle_event(const SDL_Event& e) override;
 
     void render(SDL_Renderer* renderer) const override;
-
-
 
 private:
 
@@ -1438,15 +1443,11 @@ private:
 
     std::unique_ptr<DMButton> preview_button_;
 
-    bool dirty_ = false;
-
     int selected_layer_ = -1;
 
     SDL_Rect config_rect_{0,0,0,0};
 
 };
-
-
 
 MapLayersPanel::PanelSidebarWidget::PanelSidebarWidget(MapLayersPanel* owner)
 
@@ -1463,16 +1464,6 @@ MapLayersPanel::PanelSidebarWidget::PanelSidebarWidget(MapLayersPanel* owner)
     preview_button_ = std::make_unique<DMButton>("Generate Preview", &DMStyles::WarnButton(), 140, DMButton::height());
 
 }
-
-
-
-void MapLayersPanel::PanelSidebarWidget::set_dirty(bool dirty) {
-
-    dirty_ = dirty;
-
-}
-
-
 
 void MapLayersPanel::PanelSidebarWidget::render(SDL_Renderer* renderer) const {
 
@@ -1504,24 +1495,6 @@ void MapLayersPanel::PanelSidebarWidget::render(SDL_Renderer* renderer) const {
 
 }
 
-
-
-// -----------------------------------------------------------------------------
-
-// LayerConfigPanel and RoomCandidateWidget declarations will follow
-
-// -----------------------------------------------------------------------------
-
-
-
-// -----------------------------------------------------------------------------
-
-// LayerConfigPanel implementation
-
-// -----------------------------------------------------------------------------
-
-
-
 class SummaryRangeWidget : public Widget {
 
 public:
@@ -1530,51 +1503,33 @@ public:
 
         : label_(std::move(label)) {}
 
-
-
     void set_values(int min_value, int max_value) {
 
-        min_value = std::max(0, min_value);
+        min_value_ = std::max(0, min_value);
 
-        max_value = std::max(min_value, max_value);
-
-        int slider_max = std::max(kRoomRangeMaxDefault, max_value + 8);
-
-        slider_ = std::make_unique<DMRangeSlider>(0, slider_max, min_value, max_value);
-
-        update_slider_rect();
+        max_value_ = std::max(min_value_, max_value);
 
     }
-
-
 
     void set_rect(const SDL_Rect& r) override {
 
         rect_ = r;
 
-        update_slider_rect();
-
     }
-
-
 
     const SDL_Rect& rect() const override { return rect_; }
 
-
-
-    int height_for_width(int /*w*/) const override {
+    int height_for_width(int ) const override {
 
         const DMLabelStyle label_style = DMStyles::Label();
 
-        return label_style.font_size + DMSpacing::item_gap() + DMRangeSlider::height();
+        const int gap = DMSpacing::small_gap();
+
+        return label_style.font_size * 2 + gap + DMSpacing::item_gap();
 
     }
 
-
-
-    bool handle_event(const SDL_Event& /*e*/) override { return false; }
-
-
+    bool handle_event(const SDL_Event& ) override { return false; }
 
     void render(SDL_Renderer* renderer) const override {
 
@@ -1582,45 +1537,31 @@ public:
 
         const DMLabelStyle label_style = DMStyles::Label();
 
-        int text_y = rect_.y;
+        const int text_x = rect_.x + DMSpacing::item_gap();
 
-        int text_x = rect_.x + DMSpacing::item_gap();
+        draw_text(renderer, label_, text_x, rect_.y, label_style);
 
-        draw_text(renderer, label_, text_x, text_y, label_style);
+        std::ostringstream oss;
 
-        if (slider_) slider_->render(renderer);
+        oss << "Min " << min_value_ << " \u2022 Max " << max_value_;
+
+        const int value_y = rect_.y + label_style.font_size + DMSpacing::small_gap();
+
+        draw_text(renderer, oss.str(), text_x, value_y, label_style);
 
     }
-
-
 
 private:
-
-    void update_slider_rect() {
-
-        if (!slider_) return;
-
-        const DMLabelStyle label_style = DMStyles::Label();
-
-        int slider_y = rect_.y + label_style.font_size + DMSpacing::item_gap();
-
-        SDL_Rect slider_rect{ rect_.x, slider_y, rect_.w, DMRangeSlider::height() };
-
-        slider_->set_rect(slider_rect);
-
-    }
-
-
 
     std::string label_;
 
     SDL_Rect rect_{0, 0, 0, 0};
 
-    std::unique_ptr<DMRangeSlider> slider_;
+    int min_value_ = 0;
+
+    int max_value_ = 0;
 
 };
-
-
 
 class MapLayersPanel::RoomCandidateWidget : public Widget {
 
@@ -1628,13 +1569,9 @@ public:
 
     RoomCandidateWidget(LayerConfigPanel* owner, int layer_index, int candidate_index, json* candidate, bool editable);
 
-
-
     void refresh_from_json();
 
     void update();
-
-
 
     void set_rect(const SDL_Rect& r) override;
 
@@ -1646,11 +1583,7 @@ public:
 
     void render(SDL_Renderer* renderer) const override;
 
-
-
     void set_candidate_index(int idx) { candidate_index_ = idx; }
-
-
 
 private:
 
@@ -1662,9 +1595,7 @@ private:
 
         std::unique_ptr<DMButton> remove_button;
 
-    };
-
-
+};
 
     LayerConfigPanel* owner_ = nullptr;
 
@@ -1678,17 +1609,11 @@ private:
 
     SDL_Rect rect_{0,0,0,0};
 
-
-
-    std::unique_ptr<DMSlider> min_slider_;
-
-    std::unique_ptr<DMSlider> max_slider_;
+    std::unique_ptr<DMRangeSlider> range_slider_;
 
     std::unique_ptr<DMButton> add_child_button_;
 
     std::unique_ptr<DMButton> delete_button_;
-
-
 
     int min_count_cache_ = 0;
 
@@ -1698,15 +1623,11 @@ private:
 
 };
 
-
-
 class MapLayersPanel::LayerConfigPanel : public DockableCollapsible {
 
 public:
 
     explicit LayerConfigPanel(MapLayersPanel* owner);
-
-
 
     void open(int layer_index, json* layer);
 
@@ -1728,25 +1649,17 @@ public:
 
     void ensure_cleanup();
 
-
-
     MapLayersPanel* panel_owner() const { return owner_; }
 
     int current_layer() const { return layer_index_; }
 
-
-
     void refresh_total_summary();
-
-
 
 private:
 
     void sync_from_widgets();
 
     void compute_totals(int* out_min, int* out_max) const;
-
-
 
     MapLayersPanel* owner_ = nullptr;
 
@@ -1760,57 +1673,35 @@ private:
 
     bool refresh_pending_ = false;
 
-
-
     std::unique_ptr<DMTextBox> name_box_;
 
     std::unique_ptr<TextBoxWidget> name_widget_;
 
     std::string name_cache_;
 
-
-
     std::unique_ptr<SummaryRangeWidget> total_room_widget_;
-
-    std::unique_ptr<DMSlider> room_count_slider_;
-
-    std::unique_ptr<SliderWidget> room_count_widget_;
-
-    int max_rooms_cache_ = 0;
 
     int total_rooms_min_cache_ = 0;
 
     int total_rooms_max_cache_ = 0;
 
-
-
     std::unique_ptr<DMButton> add_candidate_btn_;
 
     std::unique_ptr<ButtonWidget> add_candidate_widget_;
-
-
 
     std::unique_ptr<DMButton> close_btn_;
 
     std::unique_ptr<ButtonWidget> close_widget_;
 
-
-
     std::unique_ptr<DMButton> delete_layer_btn_;
 
     std::unique_ptr<ButtonWidget> delete_layer_widget_;
-
-
 
     std::vector<std::unique_ptr<RoomCandidateWidget>> candidate_widgets_;
 
 };
 
-
-
 void MapLayersPanel::PanelSidebarWidget::set_layer_config(LayerConfigPanel* panel) { config_panel_ = panel; }
-
-
 
 void MapLayersPanel::PanelSidebarWidget::set_rect(const SDL_Rect& r) {
 
@@ -1828,10 +1719,6 @@ void MapLayersPanel::PanelSidebarWidget::set_rect(const SDL_Rect& r) {
 
     const int btn_h = DMButton::height();
 
-
-
-    // Layout buttons in a 2xN grid (top-right control area)
-
     std::vector<DMButton*> btns;
 
     if (add_button_) btns.push_back(add_button_.get());
@@ -1843,8 +1730,6 @@ void MapLayersPanel::PanelSidebarWidget::set_rect(const SDL_Rect& r) {
     if (delete_button_) btns.push_back(delete_button_.get());
 
     if (reload_button_) btns.push_back(reload_button_.get());
-
-
 
     int y = rect_.y + spacing;
 
@@ -1863,10 +1748,6 @@ void MapLayersPanel::PanelSidebarWidget::set_rect(const SDL_Rect& r) {
         y = rect_.y + spacing + (row + 1) * (btn_h + row_gap);
 
     }
-
-
-
-    // Config panel area occupies the rest
 
     const int button_area_bottom = y;
 
@@ -1894,8 +1775,6 @@ void MapLayersPanel::PanelSidebarWidget::set_rect(const SDL_Rect& r) {
 
 }
 
-
-
 bool MapLayersPanel::PanelSidebarWidget::handle_event(const SDL_Event& e) {
 
     bool used = false;
@@ -1914,7 +1793,7 @@ bool MapLayersPanel::PanelSidebarWidget::handle_event(const SDL_Event& e) {
 
         }
 
-    };
+};
 
     handle_btn(add_button_, [this]() { if (owner_) owner_->add_layer_internal(); });
 
@@ -1937,8 +1816,6 @@ bool MapLayersPanel::PanelSidebarWidget::handle_event(const SDL_Event& e) {
     return used;
 
 }
-
-
 
 MapLayersPanel::LayerConfigPanel::LayerConfigPanel(MapLayersPanel* owner)
 
@@ -1966,8 +1843,6 @@ MapLayersPanel::LayerConfigPanel::LayerConfigPanel(MapLayersPanel* owner)
 
 }
 
-
-
 void MapLayersPanel::LayerConfigPanel::open(int layer_index, json* layer) {
 
     if (!layer) return;
@@ -1984,10 +1859,6 @@ void MapLayersPanel::LayerConfigPanel::open(int layer_index, json* layer) {
 
     name_cache_ = layer_->value("name", std::string("layer_") + std::to_string(layer_index));
 
-    if (layer_->contains("min_rooms")) layer_->erase("min_rooms");
-
-    max_rooms_cache_ = layer_->value("max_rooms", 0);
-
     refresh();
 
     set_title(std::string("Layer: ") + name_cache_);
@@ -2000,8 +1871,6 @@ void MapLayersPanel::LayerConfigPanel::open(int layer_index, json* layer) {
 
 }
 
-
-
 void MapLayersPanel::LayerConfigPanel::close() {
 
     set_visible(false);
@@ -2011,8 +1880,6 @@ void MapLayersPanel::LayerConfigPanel::close() {
     refresh_pending_ = false;
 
 }
-
-
 
 void MapLayersPanel::LayerConfigPanel::ensure_cleanup() {
 
@@ -2040,12 +1907,6 @@ void MapLayersPanel::LayerConfigPanel::ensure_cleanup() {
 
     total_room_widget_.reset();
 
-    room_count_slider_.reset();
-
-    room_count_widget_.reset();
-
-    max_rooms_cache_ = 0;
-
     total_rooms_min_cache_ = 0;
 
     total_rooms_max_cache_ = 0;
@@ -2068,15 +1929,11 @@ void MapLayersPanel::LayerConfigPanel::ensure_cleanup() {
 
 }
 
-
-
 bool MapLayersPanel::LayerConfigPanel::is_visible() const {
 
     return DockableCollapsible::is_visible();
 
 }
-
-
 
 void MapLayersPanel::LayerConfigPanel::update(const Input& input, int screen_w, int screen_h) {
 
@@ -2093,8 +1950,6 @@ void MapLayersPanel::LayerConfigPanel::update(const Input& input, int screen_w, 
     }
 
 }
-
-
 
 bool MapLayersPanel::LayerConfigPanel::handle_event(const SDL_Event& e) {
 
@@ -2124,8 +1979,6 @@ bool MapLayersPanel::LayerConfigPanel::handle_event(const SDL_Event& e) {
 
 }
 
-
-
 void MapLayersPanel::LayerConfigPanel::render(SDL_Renderer* renderer) const {
 
     if (!is_visible()) return;
@@ -2139,8 +1992,6 @@ void MapLayersPanel::LayerConfigPanel::render(SDL_Renderer* renderer) const {
     }
 
 }
-
-
 
 bool MapLayersPanel::LayerConfigPanel::is_point_inside(int x, int y) const {
 
@@ -2164,8 +2015,6 @@ bool MapLayersPanel::LayerConfigPanel::is_point_inside(int x, int y) const {
 
 }
 
-
-
 void MapLayersPanel::LayerConfigPanel::refresh() {
 
     refresh_pending_ = false;
@@ -2174,15 +2023,9 @@ void MapLayersPanel::LayerConfigPanel::refresh() {
 
         name_cache_ = layer_->value("name", name_cache_);
 
-        max_rooms_cache_ = layer_->value("max_rooms", max_rooms_cache_);
-
     }
 
-
-
     DockableCollapsible::Rows rows;
-
-
 
     compute_totals(&total_rooms_min_cache_, &total_rooms_max_cache_);
 
@@ -2196,8 +2039,6 @@ void MapLayersPanel::LayerConfigPanel::refresh() {
 
     }
 
-
-
     if (!locked_) {
 
         name_box_ = std::make_unique<DMTextBox>("Layer Name", name_cache_);
@@ -2205,26 +2046,6 @@ void MapLayersPanel::LayerConfigPanel::refresh() {
         name_widget_ = std::make_unique<TextBoxWidget>(name_box_.get());
 
         rows.push_back({ name_widget_.get() });
-
-
-
-        const int slider_min = std::max(0, total_rooms_min_cache_);
-
-        max_rooms_cache_ = std::max(slider_min, max_rooms_cache_);
-
-        const int slider_max_base = std::max(kRoomRangeMaxDefault, total_rooms_max_cache_ + 8);
-
-        const int slider_max = std::max(slider_max_base, max_rooms_cache_ + 8);
-
-        max_rooms_cache_ = std::min(max_rooms_cache_, slider_max);
-
-        room_count_slider_ = std::make_unique<DMSlider>("Room Count", slider_min, slider_max, max_rooms_cache_);
-
-        room_count_widget_ = std::make_unique<SliderWidget>(room_count_slider_.get());
-
-        rows.push_back({ room_count_widget_.get() });
-
-
 
         add_candidate_btn_ = std::make_unique<DMButton>("Add Room", &DMStyles::CreateButton(), 160, DMButton::height());
 
@@ -2244,8 +2065,6 @@ void MapLayersPanel::LayerConfigPanel::refresh() {
 
         rows.push_back({ add_candidate_widget_.get() });
 
-
-
         delete_layer_btn_ = std::make_unique<DMButton>("Delete Layer", &DMStyles::DeleteButton(), 140, DMButton::height());
 
         delete_layer_widget_ = std::make_unique<ButtonWidget>(delete_layer_btn_.get(), [this]() {
@@ -2258,15 +2077,9 @@ void MapLayersPanel::LayerConfigPanel::refresh() {
 
     } else {
 
-        // Locked layer: no editing controls, only Close button
-
         name_box_.reset();
 
         name_widget_.reset();
-
-        room_count_slider_.reset();
-
-        room_count_widget_.reset();
 
         add_candidate_btn_.reset();
 
@@ -2278,13 +2091,9 @@ void MapLayersPanel::LayerConfigPanel::refresh() {
 
     }
 
-
-
     close_btn_ = std::make_unique<DMButton>("Close", &DMStyles::HeaderButton(), 120, DMButton::height());
 
     close_widget_ = std::make_unique<ButtonWidget>(close_btn_.get(), [this]() { this->close(); });
-
-
 
     if (!locked_) {
 
@@ -2295,8 +2104,6 @@ void MapLayersPanel::LayerConfigPanel::refresh() {
         rows.push_back({ close_widget_.get() });
 
     }
-
-
 
     candidate_widgets_.clear();
 
@@ -2324,29 +2131,17 @@ void MapLayersPanel::LayerConfigPanel::refresh() {
 
     }
 
-
-
     refresh_total_summary();
 
     set_rows(rows);
 
 }
 
-
-
-
-
-
-
-
-
 void MapLayersPanel::LayerConfigPanel::request_refresh() {
 
     refresh_pending_ = true;
 
 }
-
-
 
 void MapLayersPanel::LayerConfigPanel::sync_from_widgets() {
 
@@ -2370,34 +2165,6 @@ void MapLayersPanel::LayerConfigPanel::sync_from_widgets() {
 
     }
 
-    if (!locked_ && room_count_slider_) {
-
-        const int min_allowed = total_rooms_min_cache_;
-
-        const int max_allowed = std::max(total_rooms_min_cache_, total_rooms_max_cache_);
-
-        int new_value = std::clamp(room_count_slider_->value(), min_allowed, max_allowed);
-
-        if (new_value != room_count_slider_->value()) {
-
-            room_count_slider_->set_value(new_value);
-
-        }
-
-        if (new_value != max_rooms_cache_) {
-
-            max_rooms_cache_ = new_value;
-
-            (*layer_)["max_rooms"] = max_rooms_cache_;
-
-            if (layer_->contains("min_rooms")) layer_->erase("min_rooms");
-
-            if (owner_) owner_->handle_layer_count_changed(layer_index_, max_rooms_cache_);
-
-        }
-
-    }
-
     json& rooms = (*layer_)["rooms"];
 
     if (rooms.is_array()) {
@@ -2411,8 +2178,6 @@ void MapLayersPanel::LayerConfigPanel::sync_from_widgets() {
     }
 
 }
-
-
 
 void MapLayersPanel::LayerConfigPanel::compute_totals(int* out_min, int* out_max) const {
 
@@ -2450,8 +2215,6 @@ void MapLayersPanel::LayerConfigPanel::compute_totals(int* out_min, int* out_max
 
 }
 
-
-
 void MapLayersPanel::LayerConfigPanel::refresh_total_summary() {
 
     compute_totals(&total_rooms_min_cache_, &total_rooms_max_cache_);
@@ -2462,39 +2225,7 @@ void MapLayersPanel::LayerConfigPanel::refresh_total_summary() {
 
     }
 
-    int stored_max_rooms = 0;
-
-    if (layer_) {
-
-        stored_max_rooms = std::max(0, layer_->value("max_rooms", 0));
-
-    }
-
-    const int min_allowed = total_rooms_min_cache_;
-
-    const int max_allowed = std::max(total_rooms_min_cache_, total_rooms_max_cache_);
-
-    stored_max_rooms = std::clamp(stored_max_rooms, min_allowed, max_allowed);
-
-    max_rooms_cache_ = stored_max_rooms;
-
-    if (room_count_slider_) {
-
-        room_count_slider_->set_value(max_rooms_cache_);
-
-    }
-
 }
-
-
-
-// -----------------------------------------------------------------------------
-
-// RoomCandidateWidget implementation
-
-// -----------------------------------------------------------------------------
-
-
 
 MapLayersPanel::RoomCandidateWidget::RoomCandidateWidget(LayerConfigPanel* owner, int layer_index, int candidate_index, json* candidate, bool editable)
 
@@ -2502,9 +2233,7 @@ MapLayersPanel::RoomCandidateWidget::RoomCandidateWidget(LayerConfigPanel* owner
 
     if (editable_) {
 
-        min_slider_ = std::make_unique<DMSlider>("Min Instances", 0, kCandidateRangeMax, 0);
-
-        max_slider_ = std::make_unique<DMSlider>("Max Instances", 0, kCandidateRangeMax, 0);
+        range_slider_ = std::make_unique<DMRangeSlider>(0, kCandidateRangeMax, 0, 0);
 
         add_child_button_ = std::make_unique<DMButton>("Add Child", &DMStyles::HeaderButton(), 120, DMButton::height());
 
@@ -2513,8 +2242,6 @@ MapLayersPanel::RoomCandidateWidget::RoomCandidateWidget(LayerConfigPanel* owner
     }
 
 }
-
-
 
 void MapLayersPanel::RoomCandidateWidget::refresh_from_json() {
 
@@ -2536,15 +2263,11 @@ void MapLayersPanel::RoomCandidateWidget::refresh_from_json() {
 
         const int slider_max = std::max(kCandidateRangeMax, max_count_cache_ + 8);
 
-        min_slider_ = std::make_unique<DMSlider>("Min Instances", 0, slider_max, min_count_cache_);
-
-        max_slider_ = std::make_unique<DMSlider>("Max Instances", 0, slider_max, max_count_cache_);
+        range_slider_ = std::make_unique<DMRangeSlider>(0, slider_max, min_count_cache_, max_count_cache_);
 
     } else {
 
-        min_slider_.reset();
-
-        max_slider_.reset();
+        range_slider_.reset();
 
     }
 
@@ -2574,29 +2297,25 @@ void MapLayersPanel::RoomCandidateWidget::refresh_from_json() {
 
 }
 
-
-
 void MapLayersPanel::RoomCandidateWidget::update() {
 
     if (!candidate_) return;
 
-    if (min_slider_) {
+    if (range_slider_) {
 
-        int new_min = clamp_candidate_min(min_slider_->value());
+        int slider_min = clamp_candidate_min(range_slider_->min_value());
 
-        if (new_min != min_count_cache_) {
+        int slider_max = clamp_candidate_max(slider_min, range_slider_->max_value());
 
-            min_count_cache_ = new_min;
+        bool values_changed = false;
 
-            if (min_count_cache_ > max_count_cache_) {
+        if (slider_min != min_count_cache_) {
 
-                max_count_cache_ = min_count_cache_;
-
-                if (max_slider_) max_slider_->set_value(max_count_cache_);
-
-            }
+            min_count_cache_ = slider_min;
 
             (*candidate_)["min_instances"] = min_count_cache_;
+
+            values_changed = true;
 
             if (owner_ && owner_->panel_owner()) {
 
@@ -2606,23 +2325,13 @@ void MapLayersPanel::RoomCandidateWidget::update() {
 
         }
 
-    }
+        if (slider_max != max_count_cache_) {
 
-    if (max_slider_) {
-
-        int new_max = clamp_candidate_max(min_count_cache_, max_slider_->value());
-
-        if (new_max != max_count_cache_) {
-
-            max_count_cache_ = new_max;
-
-            if (max_slider_->value() != max_count_cache_) {
-
-                max_slider_->set_value(max_count_cache_);
-
-            }
+            max_count_cache_ = slider_max;
 
             (*candidate_)["max_instances"] = max_count_cache_;
+
+            values_changed = true;
 
             if (owner_ && owner_->panel_owner()) {
 
@@ -2632,11 +2341,25 @@ void MapLayersPanel::RoomCandidateWidget::update() {
 
         }
 
+        if (values_changed) {
+
+            if (range_slider_->min_value() != min_count_cache_) {
+
+                range_slider_->set_min_value(min_count_cache_);
+
+            }
+
+            if (range_slider_->max_value() != max_count_cache_) {
+
+                range_slider_->set_max_value(max_count_cache_);
+
+            }
+
+        }
+
     }
 
 }
-
-
 
 void MapLayersPanel::RoomCandidateWidget::set_rect(const SDL_Rect& r) {
 
@@ -2644,19 +2367,11 @@ void MapLayersPanel::RoomCandidateWidget::set_rect(const SDL_Rect& r) {
 
     const int spacing = DMSpacing::item_gap();
 
-    SDL_Rect slider_rect{ rect_.x + spacing, rect_.y + spacing + DMButton::height() + spacing, rect_.w - spacing * 2, DMSlider::height() };
+    SDL_Rect slider_rect{ rect_.x + spacing, rect_.y + spacing + DMButton::height() + spacing, rect_.w - spacing * 2, DMRangeSlider::height() };
 
-    if (min_slider_) {
+    if (range_slider_) {
 
-        min_slider_->set_rect(slider_rect);
-
-        slider_rect.y += slider_rect.h + spacing;
-
-    }
-
-    if (max_slider_) {
-
-        max_slider_->set_rect(slider_rect);
+        range_slider_->set_rect(slider_rect);
 
         slider_rect.y += slider_rect.h + spacing;
 
@@ -2714,17 +2429,13 @@ void MapLayersPanel::RoomCandidateWidget::set_rect(const SDL_Rect& r) {
 
 }
 
-
-
 int MapLayersPanel::RoomCandidateWidget::height_for_width(int w) const {
 
     const int spacing = DMSpacing::item_gap();
 
     int height = spacing + DMButton::height() + spacing;
 
-    if (min_slider_) height += DMSlider::height() + spacing;
-
-    if (max_slider_) height += DMSlider::height() + spacing;
+    if (range_slider_) height += DMRangeSlider::height() + spacing;
 
     if (add_child_button_ || delete_button_) height += DMButton::height() + spacing;
 
@@ -2748,19 +2459,11 @@ int MapLayersPanel::RoomCandidateWidget::height_for_width(int w) const {
 
 }
 
-
-
 bool MapLayersPanel::RoomCandidateWidget::handle_event(const SDL_Event& e) {
 
     bool used = false;
 
-    if (min_slider_ && min_slider_->handle_event(e)) {
-
-        used = true;
-
-    }
-
-    if (max_slider_ && max_slider_->handle_event(e)) {
+    if (range_slider_ && range_slider_->handle_event(e)) {
 
         used = true;
 
@@ -2780,10 +2483,6 @@ bool MapLayersPanel::RoomCandidateWidget::handle_event(const SDL_Event& e) {
 
                         this->refresh_from_json();
 
-                        // The owner refresh rebuilds widgets/rows; return early to
-
-                        // avoid iterating over potentially invalidated state.
-
                         owner_->request_refresh();
 
                     }
@@ -2796,8 +2495,6 @@ bool MapLayersPanel::RoomCandidateWidget::handle_event(const SDL_Event& e) {
 
         used = true;
 
-        // Adding a child triggers UI rebuild via callback; stop processing.
-
         return true;
 
     }
@@ -2809,10 +2506,6 @@ bool MapLayersPanel::RoomCandidateWidget::handle_event(const SDL_Event& e) {
             if (owner_ && owner_->panel_owner()) {
 
                 owner_->panel_owner()->handle_candidate_removed(layer_index_, candidate_index_);
-
-                // Owner refresh rebuilds rows; return immediately to avoid
-
-                // accessing invalidated widgets.
 
                 owner_->request_refresh();
 
@@ -2839,10 +2532,6 @@ bool MapLayersPanel::RoomCandidateWidget::handle_event(const SDL_Event& e) {
                     owner_->panel_owner()->handle_candidate_child_removed(layer_index_, candidate_index_, chip.name);
 
                     this->refresh_from_json();
-
-                    // Refresh rebuilds widgets; return to prevent iterating
-
-                    // over a mutated chips list.
 
                     owner_->request_refresh();
 
@@ -2888,8 +2577,6 @@ bool MapLayersPanel::RoomCandidateWidget::handle_event(const SDL_Event& e) {
 
 }
 
-
-
 void MapLayersPanel::RoomCandidateWidget::render(SDL_Renderer* renderer) const {
 
     if (!renderer || !candidate_) return;
@@ -2910,21 +2597,15 @@ void MapLayersPanel::RoomCandidateWidget::render(SDL_Renderer* renderer) const {
 
     SDL_RenderDrawRect(renderer, &bg);
 
-
-
     const DMLabelStyle label = DMStyles::Label();
 
     draw_text(renderer, candidate_->value("name", "room"), rect_.x + DMSpacing::item_gap(), rect_.y + DMSpacing::item_gap() - (label.font_size + 4), label);
 
-    if (min_slider_) min_slider_->render(renderer);
-
-    if (max_slider_) max_slider_->render(renderer);
+    if (range_slider_) range_slider_->render(renderer);
 
     if (add_child_button_) add_child_button_->render(renderer);
 
     if (delete_button_) delete_button_->render(renderer);
-
-
 
     for (const auto& chip : child_chips_) {
 
@@ -2946,8 +2627,6 @@ void MapLayersPanel::RoomCandidateWidget::render(SDL_Renderer* renderer) const {
 
 }
 
-
-
 auto MapLayersPanel::layers_array() -> nlohmann::json& {
 
     ensure_layers_array();
@@ -2955,8 +2634,6 @@ auto MapLayersPanel::layers_array() -> nlohmann::json& {
     return (*map_info_)["map_layers"];
 
 }
-
-
 
 auto MapLayersPanel::layers_array() const -> const nlohmann::json& {
 
@@ -2971,8 +2648,6 @@ auto MapLayersPanel::layers_array() const -> const nlohmann::json& {
     return (*map_info_)["map_layers"];
 
 }
-
-
 
 MapLayersPanel::MapLayersPanel(int x, int y)
 
@@ -3012,11 +2687,7 @@ MapLayersPanel::MapLayersPanel(int x, int y)
 
 }
 
-
-
 MapLayersPanel::~MapLayersPanel() = default;
-
-
 
 void MapLayersPanel::set_map_info(json* map_info, const std::string& map_path) {
 
@@ -3060,15 +2731,11 @@ void MapLayersPanel::set_map_info(json* map_info, const std::string& map_path) {
 
 }
 
-
-
 void MapLayersPanel::set_on_save(SaveCallback cb) {
 
     on_save_ = std::move(cb);
 
 }
-
-
 
 void MapLayersPanel::set_controller(std::shared_ptr<MapLayersController> controller) {
 
@@ -3082,8 +2749,6 @@ void MapLayersPanel::set_controller(std::shared_ptr<MapLayersController> control
 
 }
 
-
-
 void MapLayersPanel::open() {
 
     set_visible(true);
@@ -3091,8 +2756,6 @@ void MapLayersPanel::open() {
     set_expanded(true);
 
 }
-
-
 
 void MapLayersPanel::close() {
 
@@ -3118,15 +2781,11 @@ void MapLayersPanel::close() {
 
 }
 
-
-
 bool MapLayersPanel::is_visible() const {
 
     return DockableCollapsible::is_visible();
 
 }
-
-
 
 void MapLayersPanel::set_embedded_mode(bool embedded) {
 
@@ -3168,8 +2827,6 @@ void MapLayersPanel::set_embedded_mode(bool embedded) {
 
 }
 
-
-
 void MapLayersPanel::set_embedded_bounds(const SDL_Rect& bounds) {
 
     set_rect(bounds);
@@ -3191,8 +2848,6 @@ void MapLayersPanel::set_embedded_bounds(const SDL_Rect& bounds) {
     }
 
 }
-
-
 
 void MapLayersPanel::update(const Input& input, int screen_w, int screen_h) {
 
@@ -3270,8 +2925,6 @@ void MapLayersPanel::update(const Input& input, int screen_w, int screen_h) {
 
 }
 
-
-
 bool MapLayersPanel::handle_event(const SDL_Event& e) {
 
     if (!is_visible()) return false;
@@ -3304,8 +2957,6 @@ bool MapLayersPanel::handle_event(const SDL_Event& e) {
 
 }
 
-
-
 void MapLayersPanel::render(SDL_Renderer* renderer) const {
 
     if (!is_visible()) return;
@@ -3332,8 +2983,6 @@ void MapLayersPanel::render(SDL_Renderer* renderer) const {
 
 }
 
-
-
 bool MapLayersPanel::is_point_inside(int x, int y) const {
 
     if (!is_visible()) return false;
@@ -3350,15 +2999,11 @@ bool MapLayersPanel::is_point_inside(int x, int y) const {
 
 }
 
-
-
 void MapLayersPanel::request_preview_regeneration() {
 
     preview_dirty_ = true;
 
 }
-
-
 
 double MapLayersPanel::compute_map_radius_from_layers() {
 
@@ -3438,19 +3083,107 @@ double MapLayersPanel::compute_map_radius_from_layers() {
 
         (*map_info_)["map_radius"] = max_extent;
 
-        dirty_ = true;
-
-        if (sidebar_widget_) sidebar_widget_->set_dirty(true);
-
-        update_save_button_state();
-
     }
 
     return max_extent;
 
 }
 
+void MapLayersPanel::recalculate_radii_from_layer(int layer_index) {
 
+    if (!map_info_) return;
+
+    auto& layers = layers_array();
+
+    if (!layers.is_array() || layers.empty()) return;
+
+    if (layer_index < 0) layer_index = 0;
+
+    if (layer_index >= static_cast<int>(layers.size())) {
+
+        layer_index = static_cast<int>(layers.size()) - 1;
+
+    }
+
+    const nlohmann::json* rooms_data = nullptr;
+
+    auto rooms_it = map_info_->find("rooms_data");
+
+    if (rooms_it != map_info_->end() && rooms_it->is_object()) {
+
+        rooms_data = &(*rooms_it);
+
+    }
+
+    std::vector<double> extents(layers.size(), 0.0);
+
+    for (size_t i = 0; i < layers.size(); ++i) {
+
+        const auto& layer = layers[i];
+
+        if (!layer.is_object()) continue;
+
+        auto rooms_array_it = layer.find("rooms");
+
+        if (rooms_array_it == layer.end() || !rooms_array_it->is_array()) continue;
+
+        double largest_room = 0.0;
+
+        for (const auto& candidate : *rooms_array_it) {
+
+            if (!candidate.is_object()) continue;
+
+            std::string room_name = candidate.value("name", std::string());
+
+            if (room_name.empty()) continue;
+
+            RoomGeometry geom = fetch_room_geometry(rooms_data, room_name);
+
+            largest_room = std::max(largest_room, room_extent_for_radius(geom));
+
+        }
+
+        extents[i] = largest_room;
+
+    }
+
+    for (int i = std::max(0, layer_index); i < static_cast<int>(layers.size()); ++i) {
+
+        auto& layer = layers[i];
+
+        if (!layer.is_object()) continue;
+
+        double stored_radius = layer.value("radius", 0.0);
+
+        double largest = (i >= 0 && i < static_cast<int>(extents.size())) ? extents[i] : 0.0;
+
+        double desired_radius = stored_radius;
+
+        if (i > 0) {
+
+            double prev_radius = layers[i - 1].value("radius", 0.0);
+
+            double prev_extent = extents[i - 1];
+
+            double separation = prev_extent + largest;
+
+            separation = std::max(separation, static_cast<double>(kLayerRadiusStepDefault));
+
+            double minimum = prev_radius + separation;
+
+            desired_radius = minimum;
+
+        }
+
+        int final_radius = static_cast<int>(std::ceil(desired_radius));
+
+        if (final_radius < 0) final_radius = 0;
+
+        layer["radius"] = final_radius;
+
+    }
+
+}
 
 void MapLayersPanel::regenerate_preview() {
 
@@ -3460,13 +3193,9 @@ void MapLayersPanel::regenerate_preview() {
 
     preview_edges_.clear();
 
-
-
     double computed_radius = compute_map_radius_from_layers();
 
     preview_extent_ = std::max(computed_radius, 1.0);
-
-
 
     const auto& layers = layers_array();
 
@@ -3481,8 +3210,6 @@ void MapLayersPanel::regenerate_preview() {
         return;
 
     }
-
-
 
     std::vector<PreviewLayerSpec> layer_specs;
 
@@ -3540,8 +3267,6 @@ void MapLayersPanel::regenerate_preview() {
 
     }
 
-
-
     if (layer_specs.empty() || layer_specs.front().rooms.empty()) {
 
         if (canvas_widget_) canvas_widget_->refresh();
@@ -3549,8 +3274,6 @@ void MapLayersPanel::regenerate_preview() {
         return;
 
     }
-
-
 
     const nlohmann::json* rooms_data = nullptr;
 
@@ -3566,11 +3289,11 @@ void MapLayersPanel::regenerate_preview() {
 
     }
 
-
-
     const PreviewRoomSpec& root_spec = layer_specs.front().rooms.front();
 
-    RoomGeometry root_geom = fetch_room_geometry(rooms_data, root_spec.name);
+    uint32_t seed = compute_preview_seed(layer_specs, map_path_);
+
+    RoomGeometry root_geom = fetch_room_geometry(rooms_data, root_spec.name, seed);
 
     auto root_node = std::make_unique<PreviewNode>();
 
@@ -3581,6 +3304,7 @@ void MapLayersPanel::regenerate_preview() {
     root_node->height = root_geom.max_height;
 
     root_node->is_circle = root_geom.is_circle;
+    root_node->outline = std::move(root_geom.outline);
 
     root_node->layer = layer_specs.front().level;
 
@@ -3592,15 +3316,11 @@ void MapLayersPanel::regenerate_preview() {
 
     preview_nodes_.push_back(std::move(root_node));
 
-
-
     std::unordered_map<PreviewNode*, PreviewNode*> last_child_for_parent;
 
     std::unordered_map<int, std::vector<PreviewNode*>> nodes_by_level;
 
     nodes_by_level[root_ptr->layer].push_back(root_ptr);
-
-
 
     struct PreviewSector {
 
@@ -3610,19 +3330,13 @@ void MapLayersPanel::regenerate_preview() {
 
         float span = static_cast<float>(kTau);
 
-    };
-
-
+};
 
     std::vector<PreviewNode*> current_parents{ root_ptr };
 
     std::vector<PreviewSector> current_sectors{ PreviewSector{ root_ptr, 0.0f, static_cast<float>(kTau) } };
 
-    uint32_t seed = compute_preview_seed(layer_specs, map_path_);
-
     std::mt19937 rng(seed);
-
-
 
     for (size_t li = 1; li < layer_specs.size(); ++li) {
 
@@ -3636,27 +3350,23 @@ void MapLayersPanel::regenerate_preview() {
 
         std::vector<PreviewNode*> next_parents;
 
-
-
         auto create_child = [&](PreviewNode* parent, const PreviewRoomSpec& spec, float angle, float spread) {
 
-            RoomGeometry geom = fetch_room_geometry(rooms_data, spec.name);
+            RoomGeometry geom = fetch_room_geometry(rooms_data, spec.name, seed);
 
             auto node = std::make_unique<PreviewNode>();
 
             node->center = SDL_FPoint{
 
-                static_cast<float>(std::cos(angle) * radius),
-
-                static_cast<float>(std::sin(angle) * radius)
-
-            };
+                static_cast<float>(std::cos(angle) * radius),  static_cast<float>(std::sin(angle) * radius)  };
 
             node->width = geom.max_width;
 
             node->height = geom.max_height;
 
             node->is_circle = geom.is_circle;
+
+            node->outline = std::move(geom.outline);
 
             node->layer = layer_spec.level;
 
@@ -3702,9 +3412,7 @@ void MapLayersPanel::regenerate_preview() {
 
             next_sectors.push_back(PreviewSector{ ptr, angle - spread * 0.5f, spread });
 
-        };
-
-
+};
 
         if (li == 1) {
 
@@ -3731,8 +3439,6 @@ void MapLayersPanel::regenerate_preview() {
         } else {
 
             if (current_sectors.empty()) continue;
-
-
 
             std::unordered_map<PreviewNode*, std::vector<PreviewRoomSpec>> assignments;
 
@@ -3762,8 +3468,6 @@ void MapLayersPanel::regenerate_preview() {
 
             }
 
-
-
             std::vector<PreviewNode*> parent_order;
 
             parent_order.reserve(current_sectors.size());
@@ -3775,8 +3479,6 @@ void MapLayersPanel::regenerate_preview() {
                 assignments.try_emplace(sector.node);
 
             }
-
-
 
             if (!parent_order.empty()) {
 
@@ -3797,8 +3499,6 @@ void MapLayersPanel::regenerate_preview() {
                 }
 
             }
-
-
 
             for (const auto& sector : current_sectors) {
 
@@ -3832,15 +3532,11 @@ void MapLayersPanel::regenerate_preview() {
 
         }
 
-
-
         current_parents = std::move(next_parents);
 
         current_sectors = std::move(next_sectors);
 
     }
-
-
 
     SDL_Color trail_color{120, 170, 240, 180};
 
@@ -3867,8 +3563,6 @@ void MapLayersPanel::regenerate_preview() {
         }
 
     }
-
-
 
     for (auto& [level, nodes] : nodes_by_level) {
 
@@ -3900,8 +3594,6 @@ void MapLayersPanel::regenerate_preview() {
 
     }
 
-
-
     double node_extent = 0.0;
 
     for (const auto& node_uptr : preview_nodes_) {
@@ -3924,23 +3616,17 @@ void MapLayersPanel::regenerate_preview() {
 
     }
 
-
-
     if (canvas_widget_) {
 
         canvas_widget_->refresh();
 
     }
 
-
-
     int layer_count = layers.is_array() ? static_cast<int>(layers.size()) : 0;
 
     if (clicked_layer_index_ >= layer_count) clicked_layer_index_ = -1;
 
     if (hovered_layer_index_ >= layer_count) hovered_layer_index_ = -1;
-
-
 
     auto room_exists = [&](const std::string& key) {
 
@@ -3958,9 +3644,7 @@ void MapLayersPanel::regenerate_preview() {
 
         return false;
 
-    };
-
-
+};
 
     if (!room_exists(clicked_room_key_)) {
 
@@ -3976,8 +3660,6 @@ void MapLayersPanel::regenerate_preview() {
 
 }
 
-
-
 bool MapLayersPanel::handle_preview_room_click(int px, int py, int center_x, int center_y, double scale) {
 
     const PreviewNode* node = find_room_at(px, py, center_x, center_y, scale);
@@ -3988,8 +3670,6 @@ bool MapLayersPanel::handle_preview_room_click(int px, int py, int center_x, int
 
     }
 
-
-
     update_click_target(node->layer, node->name);
 
     open_room_config_for(node->name);
@@ -3997,8 +3677,6 @@ bool MapLayersPanel::handle_preview_room_click(int px, int py, int center_x, int
     return true;
 
 }
-
-
 
 const MapLayersPanel::PreviewNode* MapLayersPanel::find_room_at(int px, int py, int center_x, int center_y, double scale) const {
 
@@ -4008,15 +3686,11 @@ const MapLayersPanel::PreviewNode* MapLayersPanel::find_room_at(int px, int py, 
 
     }
 
-
-
     const PreviewNode* best_node = nullptr;
 
     double best_score = std::numeric_limits<double>::max();
 
     const double tolerance = 6.0;
-
-
 
     for (const auto& node_uptr : preview_nodes_) {
 
@@ -4025,8 +3699,6 @@ const MapLayersPanel::PreviewNode* MapLayersPanel::find_room_at(int px, int py, 
         if (!node) continue;
 
         if (node->name.empty() || node->name == "<room>") continue;
-
-
 
         int node_cx = static_cast<int>(std::lround(center_x + node->center.x * scale));
 
@@ -4039,8 +3711,6 @@ const MapLayersPanel::PreviewNode* MapLayersPanel::find_room_at(int px, int py, 
         bool hit = false;
 
         double score = 0.0;
-
-
 
         if (node->is_circle) {
 
@@ -4076,8 +3746,6 @@ const MapLayersPanel::PreviewNode* MapLayersPanel::find_room_at(int px, int py, 
 
         }
 
-
-
         if (hit && (!best_node || score < best_score)) {
 
             best_node = node;
@@ -4088,21 +3756,15 @@ const MapLayersPanel::PreviewNode* MapLayersPanel::find_room_at(int px, int py, 
 
     }
 
-
-
     return best_node;
 
 }
-
-
 
 int MapLayersPanel::find_layer_at(int px, int py, int center_x, int center_y, double scale) const {
 
     const auto& layers = layers_array();
 
     if (!layers.is_array() || layers.empty()) return -1;
-
-
 
     const double tolerance = 12.0;
 
@@ -4136,8 +3798,6 @@ int MapLayersPanel::find_layer_at(int px, int py, int center_x, int center_y, do
 
 }
 
-
-
 void MapLayersPanel::update_hover_target(int layer_index, const std::string& room_key) {
 
     if (hovered_layer_index_ == layer_index && hovered_room_key_ == room_key) {
@@ -4152,8 +3812,6 @@ void MapLayersPanel::update_hover_target(int layer_index, const std::string& roo
 
 }
 
-
-
 void MapLayersPanel::update_click_target(int layer_index, const std::string& room_key) {
 
     clicked_layer_index_ = layer_index;
@@ -4162,8 +3820,6 @@ void MapLayersPanel::update_click_target(int layer_index, const std::string& roo
 
 }
 
-
-
 void MapLayersPanel::clear_hover_target() {
 
     hovered_layer_index_ = -1;
@@ -4171,10 +3827,6 @@ void MapLayersPanel::clear_hover_target() {
     hovered_room_key_.clear();
 
 }
-
-
-
-
 
 void MapLayersPanel::open_room_config_for(const std::string& room_name) {
 
@@ -4228,8 +3880,6 @@ void MapLayersPanel::open_room_config_for(const std::string& room_name) {
 
 }
 
-
-
 void MapLayersPanel::ensure_room_configurator() {
 
     if (!room_configurator_) {
@@ -4280,8 +3930,6 @@ void MapLayersPanel::ensure_room_configurator() {
 
 }
 
-
-
 nlohmann::json* MapLayersPanel::ensure_room_entry(const std::string& room_name) {
 
     if (!map_info_) {
@@ -4324,8 +3972,6 @@ nlohmann::json* MapLayersPanel::ensure_room_entry(const std::string& room_name) 
 
 }
 
-
-
 SDL_Rect MapLayersPanel::compute_room_config_bounds() const {
 
     if (sidebar_widget_) {
@@ -4344,8 +3990,6 @@ SDL_Rect MapLayersPanel::compute_room_config_bounds() const {
 
     const int margin = 48;
 
-
-
     int width = std::max(360, bounds.w / 3);
 
     if (bounds.w > margin * 2) {
@@ -4359,8 +4003,6 @@ SDL_Rect MapLayersPanel::compute_room_config_bounds() const {
         width = bounds.w;
 
     }
-
-
 
     int height = std::max(320, bounds.h - margin * 2);
 
@@ -4376,13 +4018,9 @@ SDL_Rect MapLayersPanel::compute_room_config_bounds() const {
 
     }
 
-
-
     if (width <= 0) width = std::max(1, bounds.w);
 
     if (height <= 0) height = std::max(1, bounds.h);
-
-
 
     int x = bounds.x + bounds.w - width - margin;
 
@@ -4396,8 +4034,6 @@ SDL_Rect MapLayersPanel::compute_room_config_bounds() const {
 
     }
 
-
-
     int y = bounds.y + margin;
 
     if (bounds.h <= margin * 2) {
@@ -4405,8 +4041,6 @@ SDL_Rect MapLayersPanel::compute_room_config_bounds() const {
         y = bounds.y;
 
     }
-
-
 
     if (x + width > bounds.x + bounds.w) {
 
@@ -4420,13 +4054,9 @@ SDL_Rect MapLayersPanel::compute_room_config_bounds() const {
 
     }
 
-
-
     return SDL_Rect{x, y, width, height};
 
 }
-
-
 
 void MapLayersPanel::select_layer(int index) {
 
@@ -4464,29 +4094,25 @@ void MapLayersPanel::select_layer(int index) {
 
 }
 
-
-
-void MapLayersPanel::mark_dirty() {
+void MapLayersPanel::mark_dirty(bool trigger_preview) {
 
     dirty_ = true;
 
-    if (sidebar_widget_) sidebar_widget_->set_dirty(true);
+    if (trigger_preview) {
 
-    request_preview_regeneration();
+        request_preview_regeneration();
+
+    }
+
+    save_layers_to_disk();
 
 }
-
-
 
 void MapLayersPanel::mark_clean() {
 
     dirty_ = false;
 
-    if (sidebar_widget_) sidebar_widget_->set_dirty(false);
-
 }
-
-
 
 void MapLayersPanel::ensure_layers_array() {
 
@@ -4499,8 +4125,6 @@ void MapLayersPanel::ensure_layers_array() {
     }
 
 }
-
-
 
 void MapLayersPanel::ensure_layer_indices() {
 
@@ -4524,7 +4148,7 @@ void MapLayersPanel::ensure_layer_indices() {
 
         }
 
-        if (arr[i].contains("min_rooms")) arr[i].erase("min_rooms");
+        if (!arr[i].contains("min_rooms")) arr[i]["min_rooms"] = 0;
 
         if (!arr[i].contains("max_rooms")) arr[i]["max_rooms"] = 0;
 
@@ -4540,8 +4164,6 @@ void MapLayersPanel::ensure_layer_indices() {
 
 }
 
-
-
 nlohmann::json* MapLayersPanel::layer_at(int index) {
 
     if (!map_info_) return nullptr;
@@ -4553,8 +4175,6 @@ nlohmann::json* MapLayersPanel::layer_at(int index) {
     return &arr[index];
 
 }
-
-
 
 const nlohmann::json* MapLayersPanel::layer_at(int index) const {
 
@@ -4568,8 +4188,6 @@ const nlohmann::json* MapLayersPanel::layer_at(int index) const {
 
 }
 
-
-
 void MapLayersPanel::rebuild_rows() {
 
     DockableCollapsible::Rows rows;
@@ -4579,8 +4197,6 @@ void MapLayersPanel::rebuild_rows() {
     set_rows(rows);
 
 }
-
-
 
 void MapLayersPanel::rebuild_available_rooms() {
 
@@ -4593,8 +4209,6 @@ void MapLayersPanel::rebuild_available_rooms() {
     if (rooms_it != map_info_->end() && rooms_it->is_object()) {
 
         for (auto it = rooms_it->begin(); it != rooms_it->end(); ++it) {
-
-            // Hide generic placeholder key "room" from selection UI
 
             if (it.key() == "room") continue;
 
@@ -4614,15 +4228,11 @@ void MapLayersPanel::rebuild_available_rooms() {
 
 }
 
-
-
 void MapLayersPanel::refresh_canvas() {
 
     if (canvas_widget_) canvas_widget_->refresh();
 
 }
-
-
 
 int MapLayersPanel::append_layer_entry(const std::string& display_name) {
 
@@ -4644,11 +4254,13 @@ int MapLayersPanel::append_layer_entry(const std::string& display_name) {
 
         {"radius", arr.empty() ? 0 : radius},
 
+        {"min_rooms", 0},
+
         {"max_rooms", 0},
 
         {"rooms", json::array()}
 
-    };
+};
 
     arr.push_back(std::move(new_layer));
 
@@ -4657,8 +4269,6 @@ int MapLayersPanel::append_layer_entry(const std::string& display_name) {
     return idx;
 
 }
-
-
 
 void MapLayersPanel::add_layer_internal() {
 
@@ -4676,11 +4286,7 @@ void MapLayersPanel::add_layer_internal() {
 
 }
 
-
-
 void MapLayersPanel::add_room_to_selected_layer() {
-
-    // Create a new room entry and open its configurator in the panel area
 
     std::string suggested = suggest_room_name();
 
@@ -4693,8 +4299,6 @@ void MapLayersPanel::add_room_to_selected_layer() {
     }
 
 }
-
-
 
 std::string MapLayersPanel::create_new_room(const std::string& desired_name, bool open_config) {
 
@@ -4730,8 +4334,6 @@ std::string MapLayersPanel::create_new_room(const std::string& desired_name, boo
 
 }
 
-
-
 std::string MapLayersPanel::suggest_room_name() const {
 
     if (!map_info_) return std::string("room");
@@ -4748,8 +4350,6 @@ std::string MapLayersPanel::suggest_room_name() const {
 
 }
 
-
-
 bool MapLayersPanel::ensure_child_room_exists(int parent_layer_index, const std::string& child, bool* layer_created) {
 
     if (layer_created) *layer_created = false;
@@ -4758,8 +4358,6 @@ bool MapLayersPanel::ensure_child_room_exists(int parent_layer_index, const std:
 
     if (child.empty()) return false;
 
-
-
     auto& arr = layers_array();
 
     int child_layer_index = parent_layer_index + 1;
@@ -4767,8 +4365,6 @@ bool MapLayersPanel::ensure_child_room_exists(int parent_layer_index, const std:
     bool modified = false;
 
     bool new_layer = false;
-
-
 
     if (child_layer_index >= static_cast<int>(arr.size())) {
 
@@ -4784,11 +4380,7 @@ bool MapLayersPanel::ensure_child_room_exists(int parent_layer_index, const std:
 
     }
 
-
-
     if (layer_created) *layer_created = new_layer;
-
-
 
     json* child_layer = layer_at(child_layer_index);
 
@@ -4803,8 +4395,6 @@ bool MapLayersPanel::ensure_child_room_exists(int parent_layer_index, const std:
         modified = true;
 
     }
-
-
 
     auto it = std::find_if(rooms.begin(), rooms.end(), [&](const json& entry) {
 
@@ -4824,7 +4414,7 @@ bool MapLayersPanel::ensure_child_room_exists(int parent_layer_index, const std:
 
             {"required_children", json::array()}
 
-        };
+};
 
         rooms.push_back(std::move(candidate));
 
@@ -4856,15 +4446,19 @@ bool MapLayersPanel::ensure_child_room_exists(int parent_layer_index, const std:
 
     }
 
-
-
     clamp_layer_room_counts(*child_layer);
+
+    if (modified) {
+
+        recalculate_radii_from_layer(child_layer_index);
+
+        compute_map_radius_from_layers();
+
+    }
 
     return modified;
 
 }
-
-
 
 void MapLayersPanel::delete_layer_internal(int index) {
 
@@ -4888,19 +4482,25 @@ void MapLayersPanel::delete_layer_internal(int index) {
 
     }
 
+    if (!arr.empty()) {
+
+        int start = std::min(index, static_cast<int>(arr.size()) - 1);
+
+        recalculate_radii_from_layer(start);
+
+    }
+
+    compute_map_radius_from_layers();
+
     mark_dirty();
 
 }
-
-
 
 void MapLayersPanel::open_layer_config_internal(int index) {
 
     if (!layer_config_) return;
 
     if (!map_info_) return;
-
-
 
     if (room_configurator_) {
 
@@ -4914,8 +4514,6 @@ void MapLayersPanel::open_layer_config_internal(int index) {
 
     layer_config_->ensure_cleanup();
 
-
-
     auto* layer = layer_at(index);
 
     if (!layer) return;
@@ -4925,28 +4523,6 @@ void MapLayersPanel::open_layer_config_internal(int index) {
     layer_config_->open(index, layer);
 
 }
-
-
-
-void MapLayersPanel::handle_layer_count_changed(int index, int max_rooms) {
-
-    auto* layer = layer_at(index);
-
-    if (!layer) return;
-
-    (*layer)["max_rooms"] = std::max(0, max_rooms);
-
-    if (layer->contains("min_rooms")) layer->erase("min_rooms");
-
-    clamp_layer_room_counts(*layer);
-
-    mark_dirty();
-
-    if (layer_config_) layer_config_->refresh_total_summary();
-
-}
-
-
 
 void MapLayersPanel::handle_layer_name_changed(int index, const std::string& name) {
 
@@ -4962,8 +4538,6 @@ void MapLayersPanel::handle_layer_name_changed(int index, const std::string& nam
 
 }
 
-
-
 std::string MapLayersPanel::rename_room_everywhere(const std::string& old_key, const std::string& desired_key) {
 
     if (!map_info_) return desired_key;
@@ -4976,8 +4550,6 @@ std::string MapLayersPanel::rename_room_everywhere(const std::string& old_key, c
 
     if (base.empty()) base = desired_key.empty() ? old_key : desired_key;
 
-
-
     auto& map_info = *map_info_;
 
     auto rdit = map_info.find("rooms_data");
@@ -4987,8 +4559,6 @@ std::string MapLayersPanel::rename_room_everywhere(const std::string& old_key, c
     auto& rooms_data = (*map_info_)["rooms_data"];
 
     if (!rooms_data.contains(old_key)) return old_key;
-
-
 
     std::string final_key = base;
 
@@ -5004,19 +4574,11 @@ std::string MapLayersPanel::rename_room_everywhere(const std::string& old_key, c
 
     }
 
-
-
-    // Ensure internal 'name' matches the key
-
     if (rooms_data[final_key].is_object()) {
 
         rooms_data[final_key]["name"] = final_key;
 
     }
-
-
-
-    // Update references in all layers (names and required_children)
 
     auto lit = map_info.find("map_layers");
 
@@ -5052,8 +4614,6 @@ std::string MapLayersPanel::rename_room_everywhere(const std::string& old_key, c
 
     }
 
-
-
     if (active_room_config_key_ == old_key) active_room_config_key_ = final_key;
 
     refresh_canvas();
@@ -5061,8 +4621,6 @@ std::string MapLayersPanel::rename_room_everywhere(const std::string& old_key, c
     return final_key;
 
 }
-
-
 
 void MapLayersPanel::handle_candidate_min_changed(int layer_index, int candidate_index, int min_instances) {
 
@@ -5094,8 +4652,6 @@ void MapLayersPanel::handle_candidate_min_changed(int layer_index, int candidate
 
 }
 
-
-
 void MapLayersPanel::handle_candidate_max_changed(int layer_index, int candidate_index, int max_instances) {
 
     auto* layer = layer_at(layer_index);
@@ -5124,8 +4680,6 @@ void MapLayersPanel::handle_candidate_max_changed(int layer_index, int candidate
 
 }
 
-
-
 void MapLayersPanel::handle_candidate_removed(int layer_index, int candidate_index) {
 
     auto* layer = layer_at(layer_index);
@@ -5142,13 +4696,15 @@ void MapLayersPanel::handle_candidate_removed(int layer_index, int candidate_ind
 
     clamp_layer_room_counts(*layer);
 
+    recalculate_radii_from_layer(layer_index);
+
+    compute_map_radius_from_layers();
+
     mark_dirty();
 
     if (layer_config_) layer_config_->refresh();
 
 }
-
-
 
 void MapLayersPanel::handle_candidate_child_added(int layer_index, int candidate_index, const std::string& child) {
 
@@ -5198,8 +4754,6 @@ void MapLayersPanel::handle_candidate_child_added(int layer_index, int candidate
 
 }
 
-
-
 void MapLayersPanel::handle_candidate_child_removed(int layer_index, int candidate_index, const std::string& child) {
 
     auto* layer = layer_at(layer_index);
@@ -5230,17 +4784,11 @@ void MapLayersPanel::handle_candidate_child_removed(int layer_index, int candida
 
 }
 
-
-
 void MapLayersPanel::handle_candidate_added(int layer_index, const std::string& room_name) {
 
     auto* layer = layer_at(layer_index);
 
     if (!layer) return;
-
-    // Enforce constraints: do not allow editing of locked (spawn) layer, and
-
-    // prevent adding spawn rooms to other layers.
 
     if (is_layer_locked(layer_index)) {
 
@@ -5272,27 +4820,21 @@ void MapLayersPanel::handle_candidate_added(int layer_index, const std::string& 
 
         {"required_children", json::array()}
 
-    };
+};
 
     rooms.push_back(std::move(candidate));
 
     clamp_layer_room_counts(*layer);
+
+    recalculate_radii_from_layer(layer_index);
+
+    compute_map_radius_from_layers();
 
     mark_dirty();
 
     if (layer_config_) layer_config_->refresh();
 
 }
-
-
-
-void MapLayersPanel::update_save_button_state() {
-
-    if (sidebar_widget_) sidebar_widget_->set_dirty(dirty_);
-
-}
-
-
 
 bool MapLayersPanel::save_layers_to_disk() {
 
@@ -5339,8 +4881,6 @@ bool MapLayersPanel::save_layers_to_disk() {
     }
 
 }
-
-
 
 bool MapLayersPanel::reload_layers_from_disk() {
 
@@ -5398,8 +4938,6 @@ bool MapLayersPanel::reload_layers_from_disk() {
 
 }
 
-
-
 void MapLayersPanel::ensure_layer_config_valid() {
 
     if (!layer_config_ || !layer_config_->is_visible()) return;
@@ -5413,8 +4951,6 @@ void MapLayersPanel::ensure_layer_config_valid() {
     }
 
 }
-
-
 
 bool MapLayersPanel::is_spawn_room(const std::string& room_key) const {
 
@@ -5431,8 +4967,6 @@ bool MapLayersPanel::is_spawn_room(const std::string& room_key) const {
     return rit->value("is_spawn", false);
 
 }
-
-
 
 int MapLayersPanel::find_spawn_layer_index() const {
 
@@ -5466,8 +5000,6 @@ int MapLayersPanel::find_spawn_layer_index() const {
 
 }
 
-
-
 bool MapLayersPanel::is_layer_locked(int index) const {
 
     const int spawn_idx = find_spawn_layer_index();
@@ -5475,8 +5007,6 @@ bool MapLayersPanel::is_layer_locked(int index) const {
     return spawn_idx >= 0 && index == spawn_idx;
 
 }
-
-
 
 std::vector<std::string> MapLayersPanel::available_rooms_for_layer(int layer_index) const {
 
@@ -5487,8 +5017,6 @@ std::vector<std::string> MapLayersPanel::available_rooms_for_layer(int layer_ind
     const bool allow_spawn_here = (spawn_idx < 0 && layer_index == 0) || (spawn_idx == layer_index);
 
     if (!allow_spawn_here) {
-
-        // Filter out spawn rooms from disallowed layers
 
         out.erase(std::remove_if(out.begin(), out.end(), [this](const std::string& key) {
 
@@ -5501,8 +5029,6 @@ std::vector<std::string> MapLayersPanel::available_rooms_for_layer(int layer_ind
     return out;
 
 }
-
-
 
 void MapLayersPanel::request_room_selection_for_layer(int layer_index, const std::function<void(const std::string&)>& cb) {
 
@@ -5521,10 +5047,4 @@ void MapLayersPanel::request_room_selection_for_layer(int layer_index, const std
     room_selector_->open(list, cb);
 
 }
-
-
-
-
-
-
 

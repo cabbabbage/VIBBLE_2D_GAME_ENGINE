@@ -50,7 +50,7 @@ renderer_(renderer)
         asset_library_ = std::make_unique<AssetLibrary>();
     loadRooms();
     {
-        // Load animations only for assets actually present in generated rooms
+
         std::unordered_set<std::string> used;
         for (Room* room : rooms_) {
             for (const auto& aup : room->assets) {
@@ -113,7 +113,7 @@ std::vector<std::vector<Asset*>> AssetLoader::group_neighboring_assets(
 	std::unordered_map<long long, std::vector<Asset*>> tile_map;
 	auto make_tile_key = [&](int tx, int ty) -> long long {
 		return (static_cast<long long>(tx) << 32) ^ static_cast<unsigned long long>(ty);
-	};
+};
 	for (Asset* a : assets) {
 		if (!a) continue;
 		int tx = a->pos.x / tile_width;
@@ -201,13 +201,7 @@ void AssetLoader::loadRooms() {
         nlohmann::json empty_rooms    = nlohmann::json::object();
         nlohmann::json empty_trails   = nlohmann::json::object();
         nlohmann::json empty_assets   = nlohmann::json::object();
-        auto room_ptrs = generator.build(
-                asset_library_.get(),
-                map_radius_,
-                map_boundary_data_ ? *map_boundary_data_ : empty_boundary,
-                rooms_data_        ? *rooms_data_        : empty_rooms,
-                trails_data_       ? *trails_data_       : empty_trails,
-                map_assets_data_   ? *map_assets_data_   : empty_assets);
+        auto room_ptrs = generator.build( asset_library_.get(), map_radius_, map_boundary_data_ ? *map_boundary_data_ : empty_boundary, rooms_data_        ? *rooms_data_        : empty_rooms, trails_data_       ? *trails_data_       : empty_trails, map_assets_data_   ? *map_assets_data_   : empty_assets);
         for (auto& up : room_ptrs) {
                 rooms_.push_back(up.get());
                 all_rooms_.push_back(std::move(up));
@@ -252,7 +246,6 @@ std::vector<Area> AssetLoader::getAllRoomAndTrailAreas() const {
 	}
 	return areas;
 }
-
 
 void AssetLoader::load_map_json() {
         map_info_path_ = map_path_ + "/map_info.json";

@@ -120,7 +120,7 @@ const std::vector<TagDatasetEntry>& tag_dataset() {
         entry.tags.assign(tags.begin(), tags.end());
         entry.anti_tags.assign(anti.begin(), anti.end());
         dataset.push_back(std::move(entry));
-    };
+};
 
     std::error_code ec;
     const std::filesystem::directory_options opts = std::filesystem::directory_options::skip_permission_denied;
@@ -410,7 +410,7 @@ void TagEditorWidget::refresh_recommendations() {
         double tag_score = 0.0;
         double anti_score = 0.0;
         double tie_break = 0.0;
-    };
+};
 
     std::vector<CandidateScore> scores;
     scores.reserve(candidates.size());
@@ -459,7 +459,7 @@ void TagEditorWidget::refresh_recommendations() {
             }
         }
         return output;
-    };
+};
 
     recommended_tags_ = make_list([](const CandidateScore& c) { return c.tag_score; });
     recommended_anti_ = make_list([](const CandidateScore& c) { return c.anti_score; });
@@ -555,13 +555,9 @@ int TagEditorWidget::layout(int width, int origin_x, int origin_y, bool apply) {
         int total_height = std::max(controls_bottom, button_bottom);
         y = total_height + results_spacing;
 
-        size_t matches = filtered_tag_order_.empty() && search_query_.empty()
-                              ? rec_tag_chips_.size()
-                              : filtered_tag_order_.size();
+        size_t matches = filtered_tag_order_.empty() && search_query_.empty() ? rec_tag_chips_.size() : filtered_tag_order_.size();
         size_t visible_tags = show_all_tag_recs_ ? matches : std::min(kRecommendationPreviewCount, matches);
-        const auto* display_order = filtered_tag_order_.empty() && search_query_.empty()
-                                        ? nullptr
-                                        : &filtered_tag_order_;
+        const auto* display_order = filtered_tag_order_.empty() && search_query_.empty() ? nullptr : &filtered_tag_order_;
         y = layout_grid(rec_tag_chips_, width, origin_x, y, apply, visible_tags, display_order);
 
         bool show_tag_toggle = matches > visible_tags || show_all_tag_recs_;
@@ -592,8 +588,7 @@ int TagEditorWidget::layout(int width, int origin_x, int origin_y, bool apply) {
             rec_anti_label_rect_ = SDL_Rect{ origin_x, y, width, label_h };
         }
         y += label_h + label_gap;
-        size_t visible_anti = show_all_anti_recs_ ? rec_anti_chips_.size()
-                                                  : std::min(kRecommendationPreviewCount, rec_anti_chips_.size());
+        size_t visible_anti = show_all_anti_recs_ ? rec_anti_chips_.size() : std::min(kRecommendationPreviewCount, rec_anti_chips_.size());
         y = layout_grid(rec_anti_chips_, width, origin_x, y, apply, visible_anti);
 
         bool show_anti_toggle = show_all_anti_recs_ || rec_anti_chips_.size() > kRecommendationPreviewCount;

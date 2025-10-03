@@ -14,7 +14,7 @@ constexpr const char *FONT_PATH = "C:/Windows/Fonts/segoeui.ttf";
 constexpr const char *FONT_PATH =
     "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf";
 #endif
-} // namespace dm
+}
 
 struct DMLabelStyle {
   std::string font_path;
@@ -77,18 +77,17 @@ public:
   static const SDL_Color &Border();
 };
 
-// Consistent spacing tokens for dev-mode UI
 struct DMSpacing {
-  // Outer padding inside panels and floating boxes
-  static int panel_padding();    // default 24
-  // Gap between stacked sections or footer items
-  static int section_gap();      // default 24
-  // Gap between controls (vertical/horizontal)
-  static int item_gap();         // default 12
-  // Space between a widget label and its control
-  static int label_gap();        // default 6
-  // Smaller gap for dense grids (chips, small labels)
-  static int small_gap();        // default 6
-  // Space below section header before content starts
-  static int header_gap();       // default 16
+
+  static int panel_padding();
+
+  static int section_gap();
+
+  static int item_gap();
+
+  static int label_gap();
+
+  static int small_gap();
+
+  static int header_gap();
 };
