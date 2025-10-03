@@ -21,7 +21,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Set up vcpkg
-        uses: microsoft/vcpkg-action@v1
+        uses: microsoft/vcpkg-actions/setup-vcpkg@v1
         with:
           vcpkgJsonGlob: 'vcpkg.json'
 
