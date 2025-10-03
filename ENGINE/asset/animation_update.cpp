@@ -244,6 +244,70 @@ void AnimationUpdate::set_target(SDL_Point desired, const Asset* final_target) {
     moving = false;
 }
 
+SDL_Point AnimationUpdate::bottom_middle(SDL_Point pos) const {
+    if (!self_ || !self_->info) return pos;
+    return SDL_Point{ pos.x, pos.y - self_->info->z_threshold };
+}
+
+bool AnimationUpdate::point_in_impassable(SDL_Point pt, const Asset* ignored) const {
+    Asset* closest = nullptr;
+    double best_d2 = std::numeric_limits<double>::infinity();
+
+    const AssetList* impassable = self_ ? self_->get_impassable_naighbors() : nullptr;
+    auto consider = [&](Asset* a) {
+        if (!a || a == self_ || a == ignored || !a->info) return;
+        if (a->info->type == asset_types::texture) return;
+        if (a->info->passable) return;
+        const double dx = static_cast<double>(a->pos.x - pt.x);
+        const double dy = static_cast<double>(a->pos.y - pt.y);
+        const double d2 = dx * dx + dy * dy;
+        if (d2 < best_d2) {
+            best_d2 = d2;
+            closest = a;
+        }
+    };
+
+    if (impassable) {
+        for (Asset* a : impassable->top_unsorted()) consider(a);
+        for (Asset* a : impassable->middle_sorted()) consider(a);
+        for (Asset* a : impassable->bottom_unsorted()) consider(a);
+    } else if (assets_owner_) {
+        const auto& active = assets_owner_->getActive();
+        for (Asset* a : active) {
+            consider(a);
+        }
+    }
+
+    if (!closest) return false;
+
+    static const char* kNames[] = { "impassable_area", "passability", "collision_area" };
+    for (const char* nm : kNames) {
+        Area obstacle = closest->get_area(nm);
+        if (obstacle.get_points().size() >= 3 && obstacle.contains_point(pt)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool AnimationUpdate::path_blocked(SDL_Point from, SDL_Point to, const Asset* ignored) const {
+    if (from.x == to.x && from.y == to.y) {
+        return point_in_impassable(to, ignored);
+    }
+    const double dist = Range::get_distance(from, to);
+    const double step_len = std::max(1.0, std::sqrt(static_cast<double>(min_move_len2())));
+    const int steps = std::max(1, static_cast<int>(std::ceil(dist / step_len)));
+    for (int i = 1; i <= steps; ++i) {
+        const double t = static_cast<double>(i) / static_cast<double>(steps);
+        const int sx = static_cast<int>(std::lround(from.x + (to.x - from.x) * t));
+        const int sy = static_cast<int>(std::lround(from.y + (to.y - from.y) * t));
+        if (point_in_impassable(SDL_Point{ sx, sy }, ignored)) {
+            return true;
+        }
+    }
+    return false;
+}
+
 void AnimationUpdate::set_path_bias(double bias) {
     path_bias_ = std::clamp(bias, 0.0, 1.0);
 }
@@ -633,63 +697,6 @@ bool AnimationUpdate::advance(AnimationFrame*& frame) {
         suppress_movement_ = false;
         bool reached_end = false;
         self_->frame_progress += progress_increment;
-        while (self_->frame_progress >= 1.0f) {
-            self_->frame_progress -= 1.0f;
-            if (frame->next) {
-                frame = frame->next;
-            } else if (anim.loop) {
-                frame = anim.get_first_frame();
-            } else {
-                reached_end = true;
-                break;
-            }
-        }
-        self_->current_frame = frame;
-        return !reached_end;
-    } catch (const std::exception& e) {
-        std::cerr << "[AnimationUpdate::advance] " << e.what() << "
-";
-    } catch (...) {
-        std::cerr << "[AnimationUpdate::advance] unknown exception
-";
-    }
-    return false;
-}
-
-        if (anim.index_of(frame) < 0) {
-            frame = anim.get_first_frame();
-            self_->frame_progress = 0.0f;
-            if (!frame) return true;
-        }
-        const bool use_override = override_movement;
-        const int move_dx = use_override ? dx_ : frame->dx;
-        const int move_dy = use_override ? dy_ : frame->dy;
-        const bool attempted_move = ((move_dx | move_dy) != 0);
-        bool blocked = false;
-        if (attempted_move && !suppress_movement_) {
-            if (!can_move_by(move_dx, move_dy)) {
-                blocked = true;
-                blocked_last_step_ = true;
-            }
-        }
-        if (attempted_move && !blocked && !suppress_movement_) {
-            self_->pos.x += move_dx;
-            self_->pos.y += move_dy;
-            if (frame->z_resort) {
-                self_->set_z_index();
-                Assets* as = assets_owner_;
-                if (!as && self_) {
-                    as = self_->get_assets();
-                }
-                if (as) {
-                    as->mark_active_assets_dirty();
-                }
-            }
-        }
-        override_movement = false;
-        suppress_movement_ = false;
-        bool reached_end = false;
-        self_->frame_progress += anim.speed_factor;
         while (self_->frame_progress >= 1.0f) {
             self_->frame_progress -= 1.0f;
             if (frame->next) {
