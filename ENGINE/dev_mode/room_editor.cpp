@@ -16,7 +16,7 @@
 #include "dev_mode/widgets.hpp"
 #include "dm_styles.hpp"
 #include "render/camera.hpp"
-#include "room/room.hpp"
+#include "map_generation/room.hpp"
 #include "spawn/asset_spawn_planner.hpp"
 #include "spawn/check.hpp"
 #include "spawn/methods/center_spawner.hpp"

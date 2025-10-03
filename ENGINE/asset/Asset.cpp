@@ -14,7 +14,7 @@
 #include <SDL.h>
 
 namespace {
-constexpr int kNeighborSearchRadius = 512;
+constexpr int kNeighborSearchRadius = 100;
 }
 
 Asset::Asset(std::shared_ptr<AssetInfo> info_,

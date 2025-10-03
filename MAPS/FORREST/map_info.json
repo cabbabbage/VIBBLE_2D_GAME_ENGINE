@@ -412,21 +412,21 @@
       "width_min": 1755
     },
     "fountain": {
-      "edge_smoothness": 2,
+      "edge_smoothness": 93,
       "geometry": "Square",
-      "height_max": 1937,
-      "height_min": 1500,
+      "height_max": 2099,
+      "height_min": 1779,
       "inherits_map_assets": true,
       "is_boss": false,
       "is_spawn": false,
-      "max_height": 1937,
-      "max_width": 1971,
-      "min_height": 1500,
-      "min_width": 1500,
+      "max_height": 2099,
+      "max_width": 2151,
+      "min_height": 1779,
+      "min_width": 1810,
       "name": "fountain",
       "spawn_groups": [],
-      "width_max": 1971,
-      "width_min": 1500
+      "width_max": 2151,
+      "width_min": 1810
     },
     "garden": {
       "edge_smoothness": 2,

@@ -5,7 +5,7 @@
 #include "dev_mode/dm_styles.hpp"
 #include "dev_mode/full_screen_collapsible.hpp"
 #include "dev_mode/widgets.hpp"
-#include "room/room.hpp"
+#include "map_generation/room.hpp"
 
 #include <algorithm>
 #include <limits>

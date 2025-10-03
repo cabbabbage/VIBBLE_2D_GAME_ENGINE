@@ -27,6 +27,7 @@ class GenerateTrails {
         nlohmann::json* data = nullptr;
 };
     const TrailTemplateRef* pick_random_asset();
+    std::vector<std::pair<Room*, Room*>> plan_maze_connections(const std::vector<Room*>& rooms, const std::vector<std::pair<Room*, Room*>>& forced_connections);
     std::vector<TrailTemplateRef> available_assets_;
     std::vector<Room*> all_rooms_reference;
     std::vector<Area> trail_areas_;

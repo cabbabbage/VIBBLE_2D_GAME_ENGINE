@@ -11,9 +11,9 @@
 #include "asset/asset_library.hpp"
 #include "asset/asset_types.hpp"
 #include "audio/audio_engine.hpp"
-#include "room/room.hpp"
+#include "map_generation/room.hpp"
 #include "utils/area.hpp"
-#include "room/generate_rooms.hpp"
+#include "map_generation/generate_rooms.hpp"
 #include <nlohmann/json.hpp>
 using json = nlohmann::json;
 

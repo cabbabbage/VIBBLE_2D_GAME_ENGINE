@@ -4,7 +4,7 @@
 #include "FloatingDockableManager.hpp"
 #include "tag_editor_widget.hpp"
 #include "tag_utils.hpp"
-#include "room/room.hpp"
+#include "map_generation/room.hpp"
 #include "utils/input.hpp"
 #include "widgets.hpp"
 

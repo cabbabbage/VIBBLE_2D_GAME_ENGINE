@@ -4,7 +4,7 @@
 #include "core/AssetsManager.hpp"
 #include "dev_mode/dm_styles.hpp"
 #include "render/camera.hpp"
-#include "room/room.hpp"
+#include "map_generation/room.hpp"
 #include "utils/area.hpp"
 #include "utils/input.hpp"
 

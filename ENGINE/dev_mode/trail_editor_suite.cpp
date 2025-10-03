@@ -6,7 +6,7 @@
 #include "dev_mode/spawn_group_utils.hpp"
 #include "dev_mode/sdl_pointer_utils.hpp"
 
-#include "room/room.hpp"
+#include "map_generation/room.hpp"
 #include "utils/input.hpp"
 
 #include <algorithm>

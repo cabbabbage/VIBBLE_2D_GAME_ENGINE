@@ -8,7 +8,7 @@
 #include "audio/audio_engine.hpp"
 #include "dev_mode/dev_controls.hpp"
 #include "render/scene_renderer.hpp"
-#include "room/room.hpp"
+#include "map_generation/room.hpp"
 #include "utils/area.hpp"
 #include "utils/input.hpp"
 #include "utils/range_util.hpp"

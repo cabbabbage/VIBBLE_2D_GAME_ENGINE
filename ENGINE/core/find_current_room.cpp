@@ -1,5 +1,5 @@
 #include "find_current_room.hpp"
-#include "room/room.hpp"
+#include "map_generation/room.hpp"
 #include "asset/Asset.hpp"
 #include "utils/area.hpp"
 #include "utils/range_util.hpp"

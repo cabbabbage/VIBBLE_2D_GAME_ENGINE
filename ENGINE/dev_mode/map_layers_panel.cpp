@@ -40,6 +40,8 @@
 
 #include <unordered_map>
 
+#include <unordered_set>
+
 #include <utility>
 
 #include <tuple>
@@ -3416,9 +3418,9 @@ void MapLayersPanel::regenerate_preview() {
 
     std::unordered_map<PreviewNode*, PreviewNode*> last_child_for_parent;
 
-    std::unordered_map<int, std::vector<PreviewNode*>> nodes_by_level;
+    std::vector<std::pair<PreviewNode*, PreviewNode*>> forced_connections;
 
-    nodes_by_level[root_ptr->layer].push_back(root_ptr);
+    forced_connections.reserve(layer_specs.size() * 4);
 
     struct PreviewSector {
 
@@ -3506,7 +3508,11 @@ void MapLayersPanel::regenerate_preview() {
 
             preview_edges_.push_back(PreviewEdge{ parent, ptr, SDL_Color{200, 200, 200, 255}, false });
 
-            nodes_by_level[layer_spec.level].push_back(ptr);
+            if (parent) {
+
+                forced_connections.emplace_back(parent, ptr);
+
+            }
 
             next_parents.push_back(ptr);
 
@@ -3640,57 +3646,453 @@ void MapLayersPanel::regenerate_preview() {
 
     SDL_Color trail_color{120, 170, 240, 180};
 
+    std::vector<PreviewNode*> node_refs;
+
+    node_refs.reserve(preview_nodes_.size());
+
     for (const auto& node_uptr : preview_nodes_) {
 
-        if (!node_uptr) continue;
+        if (auto* ptr = node_uptr.get()) {
 
-        PreviewNode* parent = node_uptr.get();
-
-        if (parent->children.size() > 1) {
-
-            for (size_t i = 0; i + 1 < parent->children.size(); ++i) {
-
-                preview_edges_.push_back(PreviewEdge{ parent->children[i], parent->children[i + 1], trail_color, true });
-
-            }
-
-            if (parent->children.size() > 2) {
-
-                preview_edges_.push_back(PreviewEdge{ parent->children.back(), parent->children.front(), trail_color, true });
-
-            }
+            node_refs.push_back(ptr);
 
         }
 
     }
 
-    for (auto& [level, nodes] : nodes_by_level) {
+    struct PreviewPairHash {
 
-        if (nodes.size() <= 1) continue;
+        size_t operator()(const std::pair<PreviewNode*, PreviewNode*>& value) const noexcept {
 
-        std::sort(nodes.begin(), nodes.end(), [](const PreviewNode* a, const PreviewNode* b) {
+            auto a = reinterpret_cast<std::uintptr_t>(value.first);
 
-            double angle_a = std::atan2(a->center.y, a->center.x);
+            auto b = reinterpret_cast<std::uintptr_t>(value.second);
 
-            double angle_b = std::atan2(b->center.y, b->center.x);
+            return std::hash<std::uintptr_t>{}(a) ^ (std::hash<std::uintptr_t>{}(b) << 1);
 
-            return angle_a < angle_b;
+        }
+
+    };
+
+    struct PreviewPairEqual {
+
+        bool operator()(const std::pair<PreviewNode*, PreviewNode*>& lhs,
+
+                        const std::pair<PreviewNode*, PreviewNode*>& rhs) const noexcept {
+
+            return lhs.first == rhs.first && lhs.second == rhs.second;
+
+        }
+
+    };
+
+    auto canonical_preview_pair = [](PreviewNode* a, PreviewNode* b) {
+
+        if (!a || !b) {
+
+            return std::pair<PreviewNode*, PreviewNode*>{nullptr, nullptr};
+
+        }
+
+        if (a > b) {
+
+            std::swap(a, b);
+
+        }
+
+        return std::pair<PreviewNode*, PreviewNode*>{a, b};
+
+    };
+
+    auto plan_preview_connections = [&](const std::vector<PreviewNode*>& nodes,
+
+                                        const std::vector<std::pair<PreviewNode*, PreviewNode*>>& forced) {
+
+        std::vector<std::pair<PreviewNode*, PreviewNode*>> planned;
+
+        if (nodes.size() < 2) {
+
+            return planned;
+
+        }
+
+        std::unordered_map<PreviewNode*, size_t> index;
+
+        index.reserve(nodes.size());
+
+        for (size_t i = 0; i < nodes.size(); ++i) {
+
+            index[nodes[i]] = i;
+
+        }
+
+        struct PreviewDisjointSet {
+
+            explicit PreviewDisjointSet(size_t count) : parent(count), rank(count, 0) {
+
+                std::iota(parent.begin(), parent.end(), 0);
+
+            }
+
+            size_t find(size_t x) {
+
+                if (parent[x] != x) {
+
+                    parent[x] = find(parent[x]);
+
+                }
+
+                return parent[x];
+
+            }
+
+            bool unite(size_t a, size_t b) {
+
+                size_t root_a = find(a);
+
+                size_t root_b = find(b);
+
+                if (root_a == root_b) {
+
+                    return false;
+
+                }
+
+                if (rank[root_a] < rank[root_b]) {
+
+                    std::swap(root_a, root_b);
+
+                }
+
+                parent[root_b] = root_a;
+
+                if (rank[root_a] == rank[root_b]) {
+
+                    ++rank[root_a];
+
+                }
+
+                return true;
+
+            }
+
+            std::vector<size_t> parent;
+
+            std::vector<int> rank;
+
+        };
+
+        PreviewDisjointSet dsu(nodes.size());
+
+        std::unordered_set<std::pair<PreviewNode*, PreviewNode*>, PreviewPairHash, PreviewPairEqual> blocked_pairs;
+
+        blocked_pairs.reserve(nodes.size() * 4 + forced.size());
+
+        for (const auto& edge : forced) {
+
+            PreviewNode* a = edge.first;
+
+            PreviewNode* b = edge.second;
+
+            if (!a || !b) continue;
+
+            auto ia = index.find(a);
+
+            auto ib = index.find(b);
+
+            if (ia == index.end() || ib == index.end()) continue;
+
+            dsu.unite(ia->second, ib->second);
+
+            auto key = canonical_preview_pair(a, b);
+
+            if (!key.first || !key.second) continue;
+
+            if (blocked_pairs.insert(key).second) {
+
+                planned.emplace_back(a, b);
+
+            }
+
+        }
+
+        struct Candidate {
+
+            PreviewNode* a = nullptr;
+
+            PreviewNode* b = nullptr;
+
+            double distance = 0.0;
+
+            double jitter = 0.0;
+
+        };
+
+        std::vector<Candidate> candidates;
+
+        candidates.reserve(nodes.size() * 4);
+
+        for (size_t i = 0; i < nodes.size(); ++i) {
+
+            PreviewNode* a = nodes[i];
+
+            if (!a) continue;
+
+            std::vector<std::pair<double, size_t>> neighbors;
+
+            neighbors.reserve(nodes.size());
+
+            for (size_t j = 0; j < nodes.size(); ++j) {
+
+                if (i == j) continue;
+
+                PreviewNode* b = nodes[j];
+
+                if (!b) continue;
+
+                double dx = static_cast<double>(a->center.x - b->center.x);
+
+                double dy = static_cast<double>(a->center.y - b->center.y);
+
+                double dist = std::hypot(dx, dy);
+
+                neighbors.emplace_back(dist, j);
+
+            }
+
+            std::sort(neighbors.begin(), neighbors.end(), [](const auto& lhs, const auto& rhs) {
+
+                return lhs.first < rhs.first;
+
+            });
+
+            constexpr int kNearestPreview = 4;
+
+            const int limit = std::min<int>(kNearestPreview, static_cast<int>(neighbors.size()));
+
+            for (int n = 0; n < limit; ++n) {
+
+                PreviewNode* b = nodes[neighbors[n].second];
+
+                auto key = canonical_preview_pair(a, b);
+
+                if (!key.first || !key.second) continue;
+
+                if (!blocked_pairs.insert(key).second) continue;
+
+                candidates.push_back(Candidate{ a, b, neighbors[n].first, 0.0 });
+
+            }
+
+        }
+
+        std::uniform_real_distribution<double> jitter_dist(0.0, 1.0);
+
+        for (auto& candidate : candidates) {
+
+            candidate.jitter = jitter_dist(rng);
+
+        }
+
+        std::sort(candidates.begin(), candidates.end(), [](const Candidate& lhs, const Candidate& rhs) {
+
+            double lw = lhs.distance + lhs.jitter * 25.0;
+
+            double rw = rhs.distance + rhs.jitter * 25.0;
+
+            if (lw == rw) {
+
+                if (lhs.a == rhs.a) return lhs.b < rhs.b;
+
+                return lhs.a < rhs.a;
+
+            }
+
+            return lw < rw;
 
         });
 
-        for (size_t i = 0; i + 1 < nodes.size(); ++i) {
+        std::uniform_real_distribution<double> loop_dist(0.0, 1.0);
 
-            if (nodes[i]->parent == nodes[i + 1]->parent) continue;
+        size_t loop_cap = static_cast<size_t>(std::ceil(nodes.size() * 0.25));
 
-            preview_edges_.push_back(PreviewEdge{ nodes[i], nodes[i + 1], trail_color, true });
+        if (loop_cap == 0 && nodes.size() > 2) {
+
+            loop_cap = 1;
+
+        }
+
+        size_t loops_added = 0;
+
+        constexpr double kLoopChance = 0.35;
+
+        for (const auto& candidate : candidates) {
+
+            PreviewNode* a = candidate.a;
+
+            PreviewNode* b = candidate.b;
+
+            auto ia = index.find(a);
+
+            auto ib = index.find(b);
+
+            if (ia == index.end() || ib == index.end()) continue;
+
+            if (dsu.unite(ia->second, ib->second)) {
+
+                planned.emplace_back(a, b);
+
+            } else if (loops_added < loop_cap && loop_dist(rng) < kLoopChance) {
+
+                planned.emplace_back(a, b);
+
+                ++loops_added;
+
+            }
 
         }
 
-        if (nodes.size() > 2 && nodes.back()->parent != nodes.front()->parent) {
+        auto rebuild_components = [&]() {
 
-            preview_edges_.push_back(PreviewEdge{ nodes.back(), nodes.front(), trail_color, true });
+            std::unordered_map<size_t, std::vector<size_t>> components;
+
+            components.reserve(nodes.size());
+
+            for (size_t i = 0; i < nodes.size(); ++i) {
+
+                components[dsu.find(i)].push_back(i);
+
+            }
+
+            return components;
+
+        };
+
+        auto components = rebuild_components();
+
+        while (components.size() > 1) {
+
+            std::vector<std::vector<size_t>> groups;
+
+            groups.reserve(components.size());
+
+            for (auto& entry : components) {
+
+                groups.push_back(std::move(entry.second));
+
+            }
+
+            if (groups.empty()) {
+
+                break;
+
+            }
+
+            const auto& base_group = groups.front();
+
+            if (base_group.empty()) {
+
+                break;
+
+            }
+
+            double best_dist = std::numeric_limits<double>::max();
+
+            size_t best_a = base_group.front();
+
+            size_t best_b = base_group.front();
+
+            for (size_t idx_a : base_group) {
+
+                const auto* node_a = nodes[idx_a];
+
+                for (size_t g = 1; g < groups.size(); ++g) {
+
+                    for (size_t idx_b : groups[g]) {
+
+                        const auto* node_b = nodes[idx_b];
+
+                        double dx = static_cast<double>(node_a->center.x - node_b->center.x);
+
+                        double dy = static_cast<double>(node_a->center.y - node_b->center.y);
+
+                        double dist = std::hypot(dx, dy);
+
+                        if (dist < best_dist) {
+
+                            best_dist = dist;
+
+                            best_a = idx_a;
+
+                            best_b = idx_b;
+
+                        }
+
+                    }
+
+                }
+
+            }
+
+            if (best_dist == std::numeric_limits<double>::max()) {
+
+                break;
+
+            }
+
+            PreviewNode* a = nodes[best_a];
+
+            PreviewNode* b = nodes[best_b];
+
+            if (!a || !b) {
+
+                break;
+
+            }
+
+            if (blocked_pairs.insert(canonical_preview_pair(a, b)).second) {
+
+                planned.emplace_back(a, b);
+
+            }
+
+            dsu.unite(best_a, best_b);
+
+            components = rebuild_components();
 
         }
+
+        return planned;
+
+    };
+
+    auto planned_connections = plan_preview_connections(node_refs, forced_connections);
+
+    std::unordered_set<std::pair<PreviewNode*, PreviewNode*>, PreviewPairHash, PreviewPairEqual> forced_set;
+
+    forced_set.reserve(forced_connections.size());
+
+    for (const auto& edge : forced_connections) {
+
+        auto key = canonical_preview_pair(edge.first, edge.second);
+
+        if (key.first && key.second) {
+
+            forced_set.insert(key);
+
+        }
+
+    }
+
+    for (const auto& edge : planned_connections) {
+
+        auto key = canonical_preview_pair(edge.first, edge.second);
+
+        if (!key.first || !key.second) continue;
+
+        if (forced_set.find(key) != forced_set.end()) continue;
+
+        preview_edges_.push_back(PreviewEdge{ edge.first, edge.second, trail_color, true });
 
     }
 

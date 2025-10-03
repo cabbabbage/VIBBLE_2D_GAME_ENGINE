@@ -13,7 +13,7 @@
 #include "asset/asset_types.hpp"
 #include "core/AssetsManager.hpp"
 #include "render/camera.hpp"
-#include "room/room.hpp"
+#include "map_generation/room.hpp"
 #include "utils/input.hpp"
 
 #include <algorithm>
