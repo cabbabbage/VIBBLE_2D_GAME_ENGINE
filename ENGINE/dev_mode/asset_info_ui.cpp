@@ -24,7 +24,7 @@
 #include "asset_sections/Section_Tags.hpp"
 #include "asset_sections/Section_Lighting.hpp"
 #include "asset_sections/Section_Spacing.hpp"
-#include "asset_sections/Section_ChildAssets.hpp"
+#include "asset_sections/Section_SpawnGroups.hpp"
 #include "widgets.hpp"
 #include "core/AssetsManager.hpp"
 #include "animations_editor_panel.hpp"
@@ -171,12 +171,6 @@ bool copy_section_from_source(AssetInfoSectionId section_id, const nlohmann::jso
             changed |= copy_key("min_same_type_distance");
             changed |= copy_key("min_distance_all");
             break;
-        case AssetInfoSectionId::Areas:
-            // Areas UI removed; no longer applied via AssetInfoUI
-            break;
-        case AssetInfoSectionId::ChildAssets:
-            changed |= copy_key("child_assets");
-            break;
     }
     return changed;
 }
@@ -198,11 +192,10 @@ AssetInfoUI::AssetInfoUI() {
     auto spacing = std::make_unique<Section_Spacing>();
     spacing->set_ui(this);
     sections_.push_back(std::move(spacing));
-    // Areas section removed; managed in Area Mode
-    auto children = std::make_unique<Section_ChildAssets>();
-    children->set_open_area_editor_callback([this](const std::string& nm){ open_area_editor(nm); });
-    children->set_ui(this);
-    sections_.push_back(std::move(children));
+    // Spawn Groups section (replaces Child Assets / Areas UI)
+    auto spawns = std::make_unique<Section_SpawnGroups>();
+    spawns->set_ui(this);
+    sections_.push_back(std::move(spawns));
 
     configure_btn_ = std::make_unique<DMButton>("Configure Animations", &DMStyles::CreateButton(), 220, DMButton::height());
     animations_panel_ = std::make_unique<AnimationsEditorPanel>();
@@ -667,8 +660,6 @@ const char* AssetInfoUI::section_display_name(AssetInfoSectionId section_id) {
         case AssetInfoSectionId::Tags:        return "Tags";
         case AssetInfoSectionId::Lighting:    return "Lighting";
         case AssetInfoSectionId::Spacing:     return "Spacing";
-        case AssetInfoSectionId::Areas:       return "Areas";
-        case AssetInfoSectionId::ChildAssets: return "Child Assets";
     }
     return "Settings";
 }

@@ -5,6 +5,6 @@ enum class AssetInfoSectionId {
     Tags,
     Lighting,
     Spacing,
-    Areas,
-    ChildAssets,
+    // Areas removed from AssetInfoUI panel
+    // ChildAssets replaced by Spawn Groups section
 };

@@ -41,6 +41,9 @@ private:
     void duplicate_spawn_group(const std::string& id);
     void delete_spawn_group(const std::string& id);
     void add_spawn_group();
+    void move_spawn_group_internal(const std::string& id, int dir);
+    void move_spawn_group_up(const std::string& id);
+    void move_spawn_group_down(const std::string& id);
     nlohmann::json* find_spawn_entry(const std::string& id);
 
     int screen_w_ = 0;

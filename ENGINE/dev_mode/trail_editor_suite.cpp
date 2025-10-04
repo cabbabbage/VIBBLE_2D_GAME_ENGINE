@@ -110,6 +110,8 @@ void TrailEditorSuite::ensure_ui() {
                 [this](const std::string& id) { open_spawn_group_editor(id); },
                 [this](const std::string& id) { duplicate_spawn_group(id); },
                 [this](const std::string& id) { delete_spawn_group(id); },
+                [this](const std::string& id) { move_spawn_group_up(id); },
+                [this](const std::string& id) { move_spawn_group_down(id); },
                 [this]() { add_spawn_group(); });
         }
     }
@@ -263,6 +265,56 @@ void TrailEditorSuite::delete_spawn_group(const std::string& id) {
     if (spawn_groups_) {
         spawn_groups_->close_all();
     }
+    rebuild_spawn_groups_ui();
+}
+
+void TrailEditorSuite::move_spawn_group_up(const std::string& id) {
+    move_spawn_group_internal(id, -1);
+}
+
+void TrailEditorSuite::move_spawn_group_down(const std::string& id) {
+    move_spawn_group_internal(id, +1);
+}
+
+void TrailEditorSuite::move_spawn_group_internal(const std::string& id, int dir) {
+    if (!active_trail_ || id.empty() || (dir != -1 && dir != 1)) {
+        return;
+    }
+    auto& root = active_trail_->assets_data();
+    auto& groups = ensure_spawn_groups_array(root);
+    if (!groups.is_array() || groups.size() <= 1) {
+        return;
+    }
+
+    int index = -1;
+    for (size_t i = 0; i < groups.size(); ++i) {
+        auto& entry = groups[i];
+        if (!entry.is_object()) {
+            continue;
+        }
+        if (entry.contains("spawn_id") && entry["spawn_id"].is_string() && entry["spawn_id"].get<std::string>() == id) {
+            index = static_cast<int>(i);
+            break;
+        }
+    }
+    if (index < 0) {
+        return;
+    }
+
+    const int target = index + dir;
+    if (target < 0 || target >= static_cast<int>(groups.size())) {
+        return;
+    }
+
+    std::swap(groups[index], groups[target]);
+    for (size_t i = 0; i < groups.size(); ++i) {
+        auto& entry = groups[i];
+        if (entry.is_object()) {
+            entry["priority"] = static_cast<int>(i);
+        }
+    }
+
+    active_trail_->save_assets_json();
     rebuild_spawn_groups_ui();
 }
 

@@ -118,6 +118,114 @@ std::string fallback_spawn_id(const nlohmann::json& entry) {
 }
 }
 
+struct SpawnGroupsConfigPanel::AreaPicker {
+    using Callback = std::function<void(const std::string&)>;
+    void set_screen_dimensions(int w, int h) { screen_w_ = w; screen_h_ = h; }
+    void set_anchor_position(int x, int y) {
+        anchor_pos_ = {x, y};
+        apply_position(x, y);
+        ensure_visible_position();
+    }
+    void open(const std::vector<std::string>& options, Callback cb) {
+        options_ = options;
+        cb_ = std::move(cb);
+        if (!panel_) {
+            panel_ = std::make_unique<DockableCollapsible>("Select Area", true, anchor_pos_.x, anchor_pos_.y);
+            panel_->set_expanded(true);
+            panel_->set_visible(false);
+            panel_->set_work_area(SDL_Rect{0, 0, screen_w_, screen_h_});
+            panel_->set_close_button_enabled(true);
+            panel_->set_scroll_enabled(true);
+            panel_->set_cell_width(220);
+        }
+        rebuild_buttons();
+        panel_->set_visible(true);
+        panel_->set_expanded(true);
+        Input dummy;
+        panel_->update(dummy, screen_w_, screen_h_);
+        ensure_visible_position();
+    }
+    void close() {
+        if (panel_) panel_->set_visible(false);
+        cb_ = nullptr;
+    }
+    bool visible() const { return panel_ && panel_->is_visible(); }
+    void update(const Input& input) {
+        if (panel_ && panel_->is_visible()) panel_->update(input, screen_w_, screen_h_);
+    }
+    bool handle_event(const SDL_Event& e) {
+        if (!panel_ || !panel_->is_visible()) return false;
+        SDL_Point before = panel_->position();
+        bool used = panel_->handle_event(e);
+        SDL_Point after = panel_->position();
+        if (after.x != before.x || after.y != before.y) ensure_visible_position();
+        return used;
+    }
+    void render(SDL_Renderer* r) const { if (panel_ && panel_->is_visible()) panel_->render(r); }
+    bool is_point_inside(int x, int y) const { return panel_ && panel_->is_visible() && panel_->is_point_inside(x, y); }
+
+private:
+    void apply_position(int x, int y) {
+        if (!panel_) {
+            panel_ = std::make_unique<DockableCollapsible>("Select Area", true, x, y);
+            panel_->set_expanded(true);
+            panel_->set_visible(false);
+            panel_->set_work_area(SDL_Rect{0, 0, screen_w_, screen_h_});
+            panel_->set_close_button_enabled(true);
+            panel_->set_scroll_enabled(true);
+            panel_->set_cell_width(220);
+        }
+        panel_->set_work_area(SDL_Rect{0, 0, screen_w_, screen_h_});
+        panel_->set_position(x, y);
+    }
+    void ensure_visible_position() {
+        if (!panel_) return;
+        SDL_Rect rect = panel_->rect();
+        const int margin = 12;
+        int x = rect.x;
+        int y = rect.y;
+        if (rect.x + rect.w > screen_w_ - margin) {
+            x = screen_w_ - rect.w - margin;
+        }
+        if (rect.x < margin) {
+            x = margin;
+        }
+        if (rect.y + rect.h > screen_h_ - margin) {
+            y = screen_h_ - rect.h - margin;
+        }
+        if (rect.y < margin) {
+            y = margin;
+        }
+        panel_->set_position(x, y);
+    }
+    void rebuild_buttons() {
+        if (!panel_) return;
+        buttons_.clear();
+        widgets_.clear();
+        std::vector<DockableCollapsible::Row> rows;
+        for (const auto& option : options_) {
+            auto button = std::make_unique<DMButton>(option, &DMStyles::ListButton(), 200, DMButton::height());
+            auto widget = std::make_unique<ButtonWidget>(button.get(), [this, option]() {
+                if (cb_) cb_(option);
+                close();
+            });
+            buttons_.push_back(std::move(button));
+            widgets_.push_back(std::move(widget));
+            rows.push_back({ widgets_.back().get() });
+        }
+        panel_->set_rows(rows);
+    }
+
+    int screen_w_ = kDefaultScreenW;
+    int screen_h_ = kDefaultScreenH;
+    SDL_Point anchor_pos_{0, 0};
+    std::unique_ptr<DockableCollapsible> panel_;
+    std::vector<std::unique_ptr<DMButton>> buttons_;
+    std::vector<std::unique_ptr<ButtonWidget>> widgets_;
+    std::vector<std::string> options_;
+    Callback cb_;
+};
+
 SpawnGroupsConfigPanel::SpawnGroupsConfigPanel(int start_x, int start_y)
     : DockableCollapsible("Spawn Group", true, start_x, start_y) {
     spawn_methods_ = {"Random", "Center", "Perimeter", "Exact", "Percent", "Entrance", "Exit"};
@@ -770,108 +878,3 @@ void SpawnGroupsConfigPanel::dispatch_save() {
     }
 }
 
-// -----------------------------
-// Simple Area Picker
-// -----------------------------
-struct SpawnGroupsConfigPanel::AreaPicker {
-    using Callback = std::function<void(const std::string&)>;
-    void set_screen_dimensions(int w, int h) { screen_w_ = w; screen_h_ = h; }
-    void set_anchor_position(int x, int y) {
-        anchor_pos_ = {x, y};
-        has_anchor_ = true;
-        apply_position(x, y);
-        ensure_visible_position();
-    }
-    void open(const std::vector<std::string>& options, Callback cb) {
-        options_ = options;
-        cb_ = std::move(cb);
-        if (!panel_) {
-            panel_ = std::make_unique<DockableCollapsible>("Select Area", true, anchor_pos_.x, anchor_pos_.y);
-            panel_->set_expanded(true);
-            panel_->set_visible(false);
-            panel_->set_work_area(SDL_Rect{0, 0, screen_w_, screen_h_});
-            panel_->set_close_button_enabled(true);
-            panel_->set_scroll_enabled(true);
-            panel_->set_cell_width(220);
-        }
-        rebuild_buttons();
-        panel_->set_visible(true);
-        panel_->set_expanded(true);
-        Input dummy;
-        panel_->update(dummy, screen_w_, screen_h_);
-        ensure_visible_position();
-    }
-    void close() {
-        if (panel_) panel_->set_visible(false);
-        cb_ = nullptr;
-    }
-    bool visible() const { return panel_ && panel_->is_visible(); }
-    void update(const Input& input) {
-        if (panel_ && panel_->is_visible()) panel_->update(input, screen_w_, screen_h_);
-    }
-    bool handle_event(const SDL_Event& e) {
-        if (!panel_ || !panel_->is_visible()) return false;
-        SDL_Point before = panel_->position();
-        bool used = panel_->handle_event(e);
-        SDL_Point after = panel_->position();
-        if (after.x != before.x || after.y != before.y) ensure_visible_position();
-        return used;
-    }
-    void render(SDL_Renderer* r) const { if (panel_ && panel_->is_visible()) panel_->render(r); }
-    bool is_point_inside(int x, int y) const { return panel_ && panel_->is_visible() && panel_->is_point_inside(x, y); }
-private:
-    void apply_position(int x, int y) {
-        if (!panel_) {
-            panel_ = std::make_unique<DockableCollapsible>("Select Area", true, x, y);
-            panel_->set_expanded(true);
-            panel_->set_visible(false);
-            panel_->set_work_area(SDL_Rect{0, 0, screen_w_, screen_h_});
-            panel_->set_close_button_enabled(true);
-            panel_->set_scroll_enabled(true);
-            panel_->set_cell_width(220);
-        }
-        panel_->set_work_area(SDL_Rect{0, 0, screen_w_, screen_h_});
-        panel_->set_position(x, y);
-    }
-    void ensure_visible_position() {
-        if (!panel_) return;
-        SDL_Rect rect = panel_->rect();
-        const int margin = 12;
-        int x = rect.x;
-        int y = rect.y;
-        if (screen_w_ > 0) {
-            int max_x = std::max(margin, screen_w_ - rect.w - margin);
-            x = std::clamp(x, margin, max_x);
-        }
-        if (screen_h_ > 0) {
-            int max_y = std::max(margin, screen_h_ - rect.h - margin);
-            y = std::clamp(y, margin, max_y);
-        }
-        panel_->set_position(x, y);
-    }
-    void rebuild_buttons() {
-        buttons_.clear();
-        button_widgets_.clear();
-        DockableCollapsible::Rows rows;
-        for (const auto& name : options_) {
-            auto b = std::make_unique<DMButton>(name, &DMStyles::ListButton(), 200, DMButton::height());
-            auto bw = std::make_unique<ButtonWidget>(b.get(), [this, name]() {
-                if (cb_) cb_(name);
-                close();
-            });
-            buttons_.push_back(std::move(b));
-            button_widgets_.push_back(std::move(bw));
-            rows.push_back({ button_widgets_.back().get() });
-        }
-        if (panel_) panel_->set_rows(rows);
-    }
-    std::unique_ptr<DockableCollapsible> panel_;
-    std::vector<std::string> options_;
-    std::vector<std::unique_ptr<DMButton>> buttons_;
-    std::vector<std::unique_ptr<ButtonWidget>> button_widgets_;
-    Callback cb_;
-    int screen_w_ = 1920;
-    int screen_h_ = 1080;
-    SDL_Point anchor_pos_{64,64};
-    bool has_anchor_ = false;
-};

@@ -4407,6 +4407,10 @@ void MapLayersPanel::ensure_room_configurator() {
 
                 [](const std::string&) {},
 
+                [](const std::string&) {},
+
+                [](const std::string&) {},
+
                 []() {}
 
             );
