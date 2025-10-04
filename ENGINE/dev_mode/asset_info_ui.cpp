@@ -27,7 +27,6 @@
 #include "asset_sections/Section_SpawnGroups.hpp"
 #include "widgets.hpp"
 #include "core/AssetsManager.hpp"
-#include "animations_editor_panel.hpp"
 #include "asset/Asset.hpp"
 #include "render/camera.hpp"
 #include "utils/light_source.hpp"
@@ -198,7 +197,6 @@ AssetInfoUI::AssetInfoUI() {
     sections_.push_back(std::move(spawns));
 
     configure_btn_ = std::make_unique<DMButton>("Configure Animations", &DMStyles::CreateButton(), 220, DMButton::height());
-    animations_panel_ = std::make_unique<AnimationsEditorPanel>();
 }
 
 AssetInfoUI::~AssetInfoUI() {
@@ -341,8 +339,6 @@ void AssetInfoUI::handle_event(const SDL_Event& e) {
 
     if (!visible_ || !info_) return;
 
-    if (animations_panel_ && animations_panel_->is_open() && animations_panel_->handle_event(e))
-        return;
 
     bool pointer_inside = false;
     if (pointer_event) {
@@ -438,9 +434,6 @@ void AssetInfoUI::update(const Input& input, int screen_w, int screen_h) {
     }
 
     layout_widgets(screen_w, screen_h);
-
-    if (animations_panel_ && animations_panel_->is_open())
-        animations_panel_->update(input, screen_w, screen_h);
 }
 
 void AssetInfoUI::render(SDL_Renderer* r, int screen_w, int screen_h) const {
@@ -484,8 +477,6 @@ void AssetInfoUI::render(SDL_Renderer* r, int screen_w, int screen_h) const {
         SDL_RenderSetClipRect(r, nullptr);
     }
 
-    if (animations_panel_ && animations_panel_->is_open())
-        animations_panel_->render(r, screen_w, screen_h);
 
     if (asset_selector_ && asset_selector_->visible())
         asset_selector_->render(r);

@@ -11,7 +11,6 @@ class AssetInfo;
 class Input;
 class Area;
 class Assets;
-class AnimationsEditorPanel;
 class Section_BasicInfo;
 class SearchAssets;
 
@@ -68,7 +67,6 @@ class AssetInfoUI {
     mutable SDL_Rect name_label_rect_{0,0,0,0};
 
     mutable std::unique_ptr<class DMButton> configure_btn_;
-    std::unique_ptr<AnimationsEditorPanel> animations_panel_;
     int pulse_frames_ = 0;
     bool camera_override_active_ = false;
     bool prev_camera_realism_enabled_ = false;

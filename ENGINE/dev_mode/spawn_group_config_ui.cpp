@@ -4,6 +4,7 @@
 #include "dm_styles.hpp"
 #include "widgets.hpp"
 #include "search_assets.hpp"
+#include "utils/input.hpp"
 
 #include <algorithm>
 #include <utility>
