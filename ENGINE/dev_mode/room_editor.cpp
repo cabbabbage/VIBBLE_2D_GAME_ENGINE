@@ -603,7 +603,23 @@ void RoomEditor::finalize_asset_drag(Asset* asset, const std::shared_ptr<AssetIn
         auto on_entry = [this](const nlohmann::json& e, const SpawnGroupsConfigPanel::ChangeSummary& summary) {
             handle_spawn_config_change(e, summary);
 };
-        spawn_groups_cfg_ui_->load(arr, std::move(on_change), std::move(on_entry));
+        // Configure area provider for link-to-area
+        auto configure_entry = [this](SpawnGroupsConfigPanel& panel, const nlohmann::json&) {
+            panel.set_area_names_provider([this]() {
+                std::vector<std::string> names;
+                if (!current_room_) return names;
+                auto& data = current_room_->assets_data();
+                if (data.contains("areas") && data["areas"].is_array()) {
+                    for (const auto& a : data["areas"]) {
+                        if (a.is_object() && a.contains("name") && a["name"].is_string()) {
+                            names.push_back(a["name"].get<std::string>());
+                        }
+                    }
+                }
+                return names;
+            });
+        };
+        spawn_groups_cfg_ui_->load(arr, std::move(on_change), std::move(on_entry), std::move(configure_entry));
     }
     rebuild_room_spawn_id_cache();
 }
@@ -1669,6 +1685,20 @@ void RoomEditor::refresh_spawn_groups_config_ui() {
         const std::string callback_id = spawn_id;
         ui.add_on_close_callback([this, callback_id]() {
             this->handle_spawn_group_panel_closed(callback_id);
+        });
+        // Provide area names for link-to-area from current room JSON
+        ui.set_area_names_provider([this]() {
+            std::vector<std::string> names;
+            if (!current_room_) return names;
+            auto& data = current_room_->assets_data();
+            if (data.contains("areas") && data["areas"].is_array()) {
+                for (const auto& a : data["areas"]) {
+                    if (a.is_object() && a.contains("name") && a["name"].is_string()) {
+                        names.push_back(a["name"].get<std::string>());
+                    }
+                }
+            }
+            return names;
         });
 };
 

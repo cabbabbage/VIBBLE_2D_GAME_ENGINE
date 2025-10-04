@@ -446,6 +446,7 @@
       "width_min": 1095
     },
     "spawn": {
+      "areas": [],
       "curvyness": 1,
       "edge_smoothness": 100,
       "geometry": "Circle",
@@ -459,6 +460,7 @@
       "min_height": 100,
       "min_width": 100,
       "name": "spawn",
+      "radius": 1806,
       "spawn_groups": [
         {
           "candidates": [

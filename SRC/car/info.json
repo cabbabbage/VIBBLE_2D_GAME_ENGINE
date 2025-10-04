@@ -1,386 +1,72 @@
 {
-    "animations": {
-        "default": {
-            "flipped_source": false,
-            "locked": false,
-            "movement": [
-                [
-                    0,
-                    0
-                ],
-                [
-                    0,
-                    0
-                ]
-            ],
-            "number_of_frames": 2,
-            "reverse_source": false,
-            "source": {
-                "kind": "folder",
-                "name": null,
-                "path": "default"
-            },
-            "speed_factor": 1
-        }
-    },
-    "anti_tags": [
-        "passable"
-    ],
-    "areas": [
-        {
-            "name": "impassable_area",
-            "offset_x": 0,
-            "offset_y": 0,
-            "original_dimensions": [
-                0,
-                0
-            ],
-            "points": [
-                [
-                    3.448,
-                    65.517
-                ],
-                [
-                    6.897,
-                    65.517
-                ],
-                [
-                    10.345,
-                    65.517
-                ],
-                [
-                    13.793,
-                    65.517
-                ],
-                [
-                    17.241,
-                    65.517
-                ],
-                [
-                    20.69,
-                    65.517
-                ],
-                [
-                    24.138,
-                    65.517
-                ],
-                [
-                    27.586,
-                    65.517
-                ],
-                [
-                    31.034,
-                    65.517
-                ],
-                [
-                    34.483,
-                    65.517
-                ],
-                [
-                    37.931,
-                    65.517
-                ],
-                [
-                    41.379,
-                    65.517
-                ],
-                [
-                    44.828,
-                    65.517
-                ],
-                [
-                    48.276,
-                    65.517
-                ],
-                [
-                    51.724,
-                    65.517
-                ],
-                [
-                    55.172,
-                    65.517
-                ],
-                [
-                    58.621,
-                    65.517
-                ],
-                [
-                    62.069,
-                    65.517
-                ],
-                [
-                    65.517,
-                    65.517
-                ],
-                [
-                    68.966,
-                    65.517
-                ],
-                [
-                    72.414,
-                    65.517
-                ],
-                [
-                    75.862,
-                    65.517
-                ],
-                [
-                    79.31,
-                    65.517
-                ],
-                [
-                    82.759,
-                    65.517
-                ],
-                [
-                    86.207,
-                    65.517
-                ],
-                [
-                    89.655,
-                    65.517
-                ],
-                [
-                    93.103,
-                    65.517
-                ],
-                [
-                    96.552,
-                    65.517
-                ],
-                [
-                    100.0,
-                    65.517
-                ],
-                [
-                    103.448,
-                    65.517
-                ],
-                [
-                    106.897,
-                    65.517
-                ],
-                [
-                    103.448,
-                    68.966
-                ],
-                [
-                    103.448,
-                    72.414
-                ],
-                [
-                    100.0,
-                    72.414
-                ],
-                [
-                    96.552,
-                    75.862
-                ],
-                [
-                    93.103,
-                    72.414
-                ],
-                [
-                    89.655,
-                    72.414
-                ],
-                [
-                    86.207,
-                    72.414
-                ],
-                [
-                    82.759,
-                    75.862
-                ],
-                [
-                    79.31,
-                    79.31
-                ],
-                [
-                    75.862,
-                    79.31
-                ],
-                [
-                    72.414,
-                    75.862
-                ],
-                [
-                    68.966,
-                    75.862
-                ],
-                [
-                    65.517,
-                    79.31
-                ],
-                [
-                    65.517,
-                    82.759
-                ],
-                [
-                    65.517,
-                    86.207
-                ],
-                [
-                    65.517,
-                    89.655
-                ],
-                [
-                    65.517,
-                    93.103
-                ],
-                [
-                    62.069,
-                    96.552
-                ],
-                [
-                    62.069,
-                    100.0
-                ],
-                [
-                    58.621,
-                    103.448
-                ],
-                [
-                    55.172,
-                    103.448
-                ],
-                [
-                    51.724,
-                    103.448
-                ],
-                [
-                    48.276,
-                    103.448
-                ],
-                [
-                    48.276,
-                    100.0
-                ],
-                [
-                    48.276,
-                    96.552
-                ],
-                [
-                    44.828,
-                    93.103
-                ],
-                [
-                    41.379,
-                    89.655
-                ],
-                [
-                    37.931,
-                    89.655
-                ],
-                [
-                    34.483,
-                    93.103
-                ],
-                [
-                    34.483,
-                    89.655
-                ],
-                [
-                    31.034,
-                    86.207
-                ],
-                [
-                    27.586,
-                    86.207
-                ],
-                [
-                    24.138,
-                    82.759
-                ],
-                [
-                    20.69,
-                    86.207
-                ],
-                [
-                    17.241,
-                    89.655
-                ],
-                [
-                    13.793,
-                    89.655
-                ],
-                [
-                    10.345,
-                    89.655
-                ],
-                [
-                    6.897,
-                    89.655
-                ],
-                [
-                    3.448,
-                    86.207
-                ],
-                [
-                    3.448,
-                    82.759
-                ],
-                [
-                    3.448,
-                    79.31
-                ],
-                [
-                    3.448,
-                    75.862
-                ],
-                [
-                    3.448,
-                    72.414
-                ],
-                [
-                    3.448,
-                    68.966
-                ]
-            ]
-        }
-    ],
-    "asset_name": "car",
-    "asset_type": "Object",
-    "can_invert": true,
-    "child_assets": [],
-    "duplicatable": false,
-    "duplication_interval_max": 60,
-    "duplication_interval_min": 30,
-    "has_shading": true,
-    "lighting_info": [
-        {
-            "factor": 100,
-            "falloff": 0,
-            "has_light_source": true,
-            "light_intensity": 255,
-            "offset_x": 0,
-            "offset_y": -163,
-            "radius": 1273,
-            "x_radius": 316,
-            "y_radius": 203
-        }
-    ],
-    "max_child_depth": 2,
-    "min_child_depth": 0,
-    "min_distance_all": 302,
-    "min_same_type_distance": 2000,
-    "render_radius": 1000,
-    "rnd_spawn_max": 400,
-    "rnd_spawn_min": 300,
-    "size_settings": {
-        "scale_percentage": 29
-    },
-    "tags": [
-        "black",
-        "car",
-        "center",
-        "default",
-        "grey",
-        "impassable",
-        "large",
-        "man-made",
-        "metal"
-    ],
-    "update_radius": 1000,
-    "z_threshold": -15
+  "animations": {
+    "default": {
+      "flipped_source": false,
+      "locked": false,
+      "movement": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ]
+      ],
+      "number_of_frames": 2,
+      "reverse_source": false,
+      "source": {
+        "kind": "folder",
+        "name": null,
+        "path": "default"
+      },
+      "speed_factor": 1
+    }
+  },
+  "anti_tags": [
+    "passable"
+  ],
+  "asset_name": "car",
+  "asset_type": "Object",
+  "can_invert": true,
+  "duplicatable": false,
+  "duplication_interval_max": 60,
+  "duplication_interval_min": 30,
+  "has_shading": true,
+  "lighting_info": [
+    {
+      "factor": 100,
+      "falloff": 0,
+      "has_light_source": true,
+      "light_intensity": 255,
+      "offset_x": 0,
+      "offset_y": -163,
+      "radius": 1273,
+      "x_radius": 316,
+      "y_radius": 203
+    }
+  ],
+  "max_child_depth": 2,
+  "min_child_depth": 0,
+  "min_distance_all": 302,
+  "min_same_type_distance": 2000,
+  "render_radius": 1000,
+  "rnd_spawn_max": 400,
+  "rnd_spawn_min": 300,
+  "size_settings": {
+    "scale_percentage": 29
+  },
+  "tags": [
+    "black",
+    "car",
+    "center",
+    "default",
+    "grey",
+    "impassable",
+    "large",
+    "man-made",
+    "metal"
+  ],
+  "update_radius": 1000,
+  "z_threshold": -15
 }

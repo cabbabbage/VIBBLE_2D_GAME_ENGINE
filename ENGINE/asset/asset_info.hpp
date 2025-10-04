@@ -55,9 +55,10 @@ class AssetInfo {
     bool is_light_source = false;
     bool moving_asset = false;
     struct NamedArea {
-    std::string name;
-    std::unique_ptr<Area> area;
-};
+        std::string name;
+        std::string type;
+        std::unique_ptr<Area> area;
+    };
     std::vector<NamedArea> areas;
     std::map<std::string, Animation> animations;
     std::map<std::string, Mapping> mappings;

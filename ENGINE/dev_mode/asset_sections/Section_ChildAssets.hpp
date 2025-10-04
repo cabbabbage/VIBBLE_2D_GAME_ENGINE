@@ -403,10 +403,20 @@ private:
 
     void configure_spawn_config(Row& r) {
         if (!r.spawn_cfg) return;
-        r.spawn_cfg->load(r.assets, [this]() {
-            commit_to_info();
-            if (info_) (void)info_->update_info_json();
-        });
+        r.spawn_cfg->load(
+            r.assets,
+            [this]() {
+                commit_to_info();
+                if (info_) (void)info_->update_info_json();
+            },
+            {},
+            [this](SpawnGroupsConfigPanel& panel, const nlohmann::json&) {
+                panel.set_area_names_provider([this]() {
+                    // Use current asset's area names
+                    return this->collect_area_names();
+                });
+            }
+        );
         r.spawn_rows.clear();
         r.spawn_cfg->append_rows(r.spawn_rows);
     }

@@ -42,6 +42,9 @@ class Area {
 
 	public:
     const std::string& get_name() const { return area_name_; }
+    void set_name(const std::string& n) { area_name_ = n; }
+    const std::string& get_type() const { return area_type_; }
+    void set_type(const std::string& t) { area_type_ = t; }
     SDL_Texture* get_texture() const;
     void create_area_texture(SDL_Renderer* renderer);
 
@@ -52,6 +55,7 @@ class Area {
 	private:
     std::vector<Point> points;
     std::string area_name_;
+    std::string area_type_ = "other";
     int center_x = 0;
     int center_y = 0;
     double area_size = 0.0;

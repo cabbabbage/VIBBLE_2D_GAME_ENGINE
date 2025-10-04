@@ -58,7 +58,7 @@ void LightMap::collect_layers(std::vector<LightEntry>& out, std::mt19937& rng) {
 	constexpr int min_visible_w = 1;
 	constexpr int min_visible_h = 1;
 	Uint8 main_alpha = main_light_.get_current_color().a;
-        const auto& active = assets_->getActive();
+        const auto& active = assets_->getFilteredActiveAssets();
         if (out.capacity() < active.size() + 3) {
                 out.reserve(active.size() + 3);
         }

@@ -27,6 +27,8 @@ public:
 
     bool is_visible() const { return visible_; }
     void set_visible(bool v);
+    void open();
+    void close();
     bool is_expanded() const { return expanded_; }
     void set_expanded(bool e);
 

@@ -986,6 +986,13 @@ void AreaOverlayEditor::save_area() {
             return;
         }
         Area area(area_name_, area_points);
+        if (AssetInfo* inf = info_) {
+            if (Area* existing = inf->find_area(area_name_)) {
+                area.set_type(existing->get_type());
+            } else {
+                area.set_type(area_name_);
+            }
+        }
         info_->upsert_area_from_editor(area);
         (void)info_->update_info_json();
         saved_since_begin_ = true;
@@ -1085,6 +1092,13 @@ void AreaOverlayEditor::save_area() {
     }
 
     Area area(area_name_, area_points);
+    if (AssetInfo* inf = info_) {
+        if (Area* existing = inf->find_area(area_name_)) {
+            area.set_type(existing->get_type());
+        } else {
+            area.set_type(area_name_);
+        }
+    }
     info_->upsert_area_from_editor(area);
     (void)info_->update_info_json();
     saved_since_begin_ = true;

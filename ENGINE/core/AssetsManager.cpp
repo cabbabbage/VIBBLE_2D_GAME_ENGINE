@@ -350,13 +350,12 @@ void Assets::refresh_filtered_active_assets() {
 }
 
 void Assets::update_filtered_active_assets() {
-    if (!dev_controls_ || !dev_controls_->is_enabled()) {
-        filtered_active_assets.clear();
-        return;
-    }
-
+    // In normal play mode (no dev controls), render all active assets.
+    // Dev controls may further filter this list when enabled.
     filtered_active_assets = active_assets;
-    dev_controls_->filter_active_assets(filtered_active_assets);
+    if (dev_controls_ && dev_controls_->is_enabled()) {
+        dev_controls_->filter_active_assets(filtered_active_assets);
+    }
 }
 
 void Assets::ensure_dev_controls() {

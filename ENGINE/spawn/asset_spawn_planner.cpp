@@ -78,6 +78,25 @@ void AssetSpawnPlanner::parse_asset_spawns(const Area& area) {
             }
         }
 
+        // Ensure a numeric priority exists; if not, assign based on list order (0..n-1)
+        int priority = -1;
+        if (asset.contains("priority") && asset["priority"].is_number_integer()) {
+            priority = asset["priority"].get<int>();
+        }
+        if (priority < 0) {
+            priority = static_cast<int>(idx);
+            entry["priority"] = priority;
+            if (idx < assets_provenance_.size()) {
+                const auto& ref = assets_provenance_[idx];
+                if (auto* src = get_source_entry(ref.source_index, ref.entry_index, ref.key)) {
+                    (*src)["priority"] = priority;
+                    if (ref.source_index >= 0 && static_cast<size_t>(ref.source_index) < source_changed_.size()) {
+                        source_changed_[static_cast<size_t>(ref.source_index)] = true;
+                    }
+                }
+            }
+        }
+
         std::string position = get_opt_str(asset, "position");
         if (position.empty()) position = "Random";
         if (position == "Exact Position") position = "Exact";
@@ -328,6 +347,7 @@ void AssetSpawnPlanner::parse_asset_spawns(const Area& area) {
         s.position = position;
         s.spawn_id = spawn_id;
         s.quantity = quantity;
+        s.priority = priority;
 
         s.check_spacing     = asset.value("check_spacing", asset.value("check_overlap", false));
         s.check_min_spacing = asset.value("enforce_spacing", asset.value("check_min_spacing", false));
@@ -349,16 +369,9 @@ void AssetSpawnPlanner::parse_asset_spawns(const Area& area) {
 }
 
 void AssetSpawnPlanner::sort_spawn_queue() {
-
-    const std::vector<std::string> order = { "Center", "Entrance", "Exit", "Exact", "Perimeter", "Random" };
-    auto to_lower = [](std::string s){ std::transform(s.begin(), s.end(), s.begin(), ::tolower); return s; };
-    auto pri = [&](const std::string& p){
-        const std::string lp = to_lower(p);
-        for (size_t i=0;i<order.size();++i) if (to_lower(order[i])==lp) return static_cast<int>(i);
-        return static_cast<int>(order.size());
-};
-    std::sort(spawn_queue_.begin(), spawn_queue_.end(),
-              [&](const SpawnInfo& a, const SpawnInfo& b){ return pri(a.position) < pri(b.position); });
+    // The only spawn ordering rule: ascending by priority (0 is highest)
+    std::stable_sort(spawn_queue_.begin(), spawn_queue_.end(),
+                     [](const SpawnInfo& a, const SpawnInfo& b){ return a.priority < b.priority; });
 }
 
 void AssetSpawnPlanner::persist_sources() {

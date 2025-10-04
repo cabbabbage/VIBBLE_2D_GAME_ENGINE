@@ -41,7 +41,12 @@ public:
     void render(SDL_Renderer* r) const;
     nlohmann::json build_json() const;
     bool is_point_inside(int x, int y) const;
-    void set_spawn_group_callbacks(std::function<void(const std::string&)> on_edit, std::function<void(const std::string&)> on_duplicate, std::function<void(const std::string&)> on_delete, std::function<void()> on_add);
+    void set_spawn_group_callbacks(std::function<void(const std::string&)> on_edit,
+                                   std::function<void(const std::string&)> on_duplicate,
+                                   std::function<void(const std::string&)> on_delete,
+                                   std::function<void(const std::string&)> on_move_up,
+                                   std::function<void(const std::string&)> on_move_down,
+                                   std::function<void()> on_add);
 
     void set_on_room_renamed(std::function<std::string(const std::string&, const std::string&)> cb) {
         on_room_renamed_ = std::move(cb);
@@ -106,24 +111,16 @@ private:
     std::vector<std::string> room_tags_;
     std::vector<std::string> room_anti_tags_;
     bool tags_dirty_ = false;
-    struct SpawnGroupRow {
-        std::string spawn_id;
-        std::unique_ptr<Widget> summary;
-        std::unique_ptr<DMButton> edit_btn;
-        std::unique_ptr<ButtonWidget> edit_btn_w;
-        std::unique_ptr<DMButton> duplicate_btn;
-        std::unique_ptr<ButtonWidget> duplicate_btn_w;
-        std::unique_ptr<DMButton> delete_btn;
-        std::unique_ptr<ButtonWidget> delete_btn_w;
-};
     std::function<void(const std::string&)> on_spawn_edit_;
     std::function<void(const std::string&)> on_spawn_duplicate_;
     std::function<void(const std::string&)> on_spawn_delete_;
+    std::function<void(const std::string&)> on_spawn_move_up_;
+    std::function<void(const std::string&)> on_spawn_move_down_;
     std::function<void()> on_spawn_add_;
     std::function<std::string(const std::string&, const std::string&)> on_room_renamed_;
     std::unique_ptr<Widget> room_section_label_;
     std::unique_ptr<Widget> spawn_groups_label_;
-    std::vector<std::unique_ptr<SpawnGroupRow>> spawn_rows_;
+    std::unique_ptr<class SpawnGroupList> spawn_list_;
     std::unique_ptr<DMButton> add_group_btn_;
     std::unique_ptr<ButtonWidget> add_group_btn_w_;
     std::unique_ptr<Widget> empty_spawn_label_;

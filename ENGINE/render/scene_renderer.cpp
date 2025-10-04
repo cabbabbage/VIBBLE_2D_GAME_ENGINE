@@ -202,7 +202,8 @@ void SceneRenderer::render() {
     }
     if (player_screen_height <= 0.0f) player_screen_height = 1.0f;
 
-    const auto& active_assets = assets_->getActive();
+    static const std::vector<Asset*> kEmpty{};
+    const auto& active_assets = assets_ ? assets_->getFilteredActiveAssets() : kEmpty;
     const float highlight_pulse = 0.45f + 0.55f * std::sin(render_call_count * 0.18f);
 
     struct AreaOverlayRequest {

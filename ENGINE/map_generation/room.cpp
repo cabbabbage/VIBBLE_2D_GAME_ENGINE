@@ -60,6 +60,7 @@ data_section_(data_section)
                         std::cout << "[Room] Using precomputed area for: " << room_name << "\n";
                 }
                 room_area = std::make_unique<Area>(room_name, precomputed_area->get_points());
+                if (room_area) room_area->set_type("room");
         } else {
                 int min_w = assets_json.value("min_width", 64);
                 int max_w = assets_json.value("max_width", min_w);
@@ -100,6 +101,7 @@ data_section_(data_section)
 			<< ", map radius: " << map_radius << "\n";
 		}
                 room_area = std::make_unique<Area>(room_name, SDL_Point{map_origin.first, map_origin.second}, width, height, geometry, edge_smoothness, map_w, map_h);
+                if (room_area) room_area->set_type("room");
 	}
 	std::vector<json> json_sources;
 	std::vector<std::string> source_paths;

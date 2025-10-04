@@ -284,20 +284,22 @@ Area* AssetInfo::find_area(const std::string& name) {
 	return nullptr;
 }
 void AssetInfo::upsert_area_from_editor(const Area& area) {
-	bool found = false;
-	for (auto& na : areas) {
-		if (na.name == area.get_name()) {
-			na.area = std::make_unique<Area>(area);
-			found = true;
-			break;
-		}
-	}
-	if (!found) {
-		NamedArea na;
-		na.name = area.get_name();
-		na.area = std::make_unique<Area>(area);
-		areas.push_back(std::move(na));
-	}
+    bool found = false;
+    for (auto& na : areas) {
+        if (na.name == area.get_name()) {
+            na.area = std::make_unique<Area>(area);
+            na.type = area.get_type().empty() ? na.type : area.get_type();
+            found = true;
+            break;
+        }
+    }
+    if (!found) {
+        NamedArea na;
+        na.name = area.get_name();
+        na.type = area.get_type();
+        na.area = std::make_unique<Area>(area);
+        areas.push_back(std::move(na));
+    }
 
 	if (!info_json_.contains("areas") || !info_json_["areas"].is_array()) {
 		info_json_["areas"] = nlohmann::json::array();
@@ -322,18 +324,20 @@ void AssetInfo::upsert_area_from_editor(const Area& area) {
 	const int default_offset_x = scaled_canvas_w / 2;
 	const int default_offset_y = scaled_canvas_h;
 
-	nlohmann::json* existing_entry = nullptr;
+    nlohmann::json* existing_entry = nullptr;
+    std::string existing_type;
 	int json_offset_x = 0;
 	int json_offset_y = 0;
 
 	for (auto& entry : info_json_["areas"]) {
-		if (!entry.is_object()) continue;
-		if (entry.value("name", std::string{}) == area.get_name()) {
-			existing_entry = &entry;
-			json_offset_x = entry.value("offset_x", 0);
-			json_offset_y = entry.value("offset_y", 0);
-			break;
-		}
+        if (!entry.is_object()) continue;
+        if (entry.value("name", std::string{}) == area.get_name()) {
+            existing_entry = &entry;
+            json_offset_x = entry.value("offset_x", 0);
+            json_offset_y = entry.value("offset_y", 0);
+            existing_type = entry.value("type", std::string{});
+            break;
+        }
 	}
 
 	const int base_offset_x = default_offset_x + json_offset_x;
@@ -356,21 +360,24 @@ void AssetInfo::upsert_area_from_editor(const Area& area) {
 
 	nlohmann::json original_dims = nlohmann::json::array({ original_canvas_width, original_canvas_height });
 
-	if (existing_entry) {
-		(*existing_entry)["name"] = area.get_name();
-		(*existing_entry)["points"] = std::move(points);
-		(*existing_entry)["original_dimensions"] = original_dims;
-		(*existing_entry)["offset_x"] = json_offset_x;
-		(*existing_entry)["offset_y"] = json_offset_y;
-	} else {
-		nlohmann::json entry;
-		entry["name"] = area.get_name();
-		entry["points"] = std::move(points);
-		entry["original_dimensions"] = original_dims;
-		entry["offset_x"] = json_offset_x;
-		entry["offset_y"] = json_offset_y;
-		info_json_["areas"].push_back(std::move(entry));
-	}
+    const std::string final_type = !area.get_type().empty() ? area.get_type() : existing_type;
+    if (existing_entry) {
+        (*existing_entry)["name"] = area.get_name();
+        if (!final_type.empty()) (*existing_entry)["type"] = final_type;
+        (*existing_entry)["points"] = std::move(points);
+        (*existing_entry)["original_dimensions"] = original_dims;
+        (*existing_entry)["offset_x"] = json_offset_x;
+        (*existing_entry)["offset_y"] = json_offset_y;
+    } else {
+        nlohmann::json entry;
+        entry["name"] = area.get_name();
+        if (!final_type.empty()) entry["type"] = final_type;
+        entry["points"] = std::move(points);
+        entry["original_dimensions"] = original_dims;
+        entry["offset_x"] = json_offset_x;
+        entry["offset_y"] = json_offset_y;
+        info_json_["areas"].push_back(std::move(entry));
+    }
 }
 
 std::string AssetInfo::pick_next_animation(const std::string& mapping_id) const {

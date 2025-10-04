@@ -14,13 +14,13 @@ void CreateRoomAreaPanel::ensure_panel() {
     panel_->set_padding(12);
     label_btn_ = std::make_unique<DMButton>("Create new room area:", &DMStyles::HeaderButton(), 260, DMButton::height());
     trigger_btn_ = std::make_unique<DMButton>("trigger", &DMStyles::CreateButton(), 120, DMButton::height());
-    spawn_btn_ = std::make_unique<DMButton>("spawn", &DMStyles::CreateButton(), 120, DMButton::height());
+    spawn_btn_ = std::make_unique<DMButton>("spawning", &DMStyles::CreateButton(), 120, DMButton::height());
     trigger_widget_ = std::make_unique<ButtonWidget>(trigger_btn_.get(), [this]() {
         if (on_create_) on_create_(std::string("trigger"));
         close();
     });
     spawn_widget_ = std::make_unique<ButtonWidget>(spawn_btn_.get(), [this]() {
-        if (on_create_) on_create_(std::string("spawn"));
+        if (on_create_) on_create_(std::string("spawning"));
         close();
     });
     rebuild_rows();

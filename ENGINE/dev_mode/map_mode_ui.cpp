@@ -242,11 +242,12 @@ void MapModeUI::ensure_panels() {
         }
         layers_panel_->close();
     }
-    if (!footer_panel_) {
-        footer_panel_ = std::make_unique<FullScreenCollapsible>("Map Mode");
-        footer_panel_->set_bounds(screen_w_, screen_h_);
-        footer_panel_->set_visible(footer_always_visible_ || map_mode_active_);
-        footer_panel_->set_expanded(false);
+      if (!footer_panel_) {
+          // No left-hand title label; keep header clean
+          footer_panel_ = std::make_unique<FullScreenCollapsible>("");
+          footer_panel_->set_bounds(screen_w_, screen_h_);
+          footer_panel_->set_visible(footer_always_visible_ || map_mode_active_);
+          footer_panel_->set_expanded(false);
 
         footer_panel_->set_content_event_handler([this](const SDL_Event& e) -> bool {
             if (layers_footer_visible_ && layers_panel_) {
@@ -300,7 +301,8 @@ void MapModeUI::configure_footer_buttons() {
     {
         FullScreenCollapsible::HeaderButton mode_btn;
         mode_btn.id = "mode_select";
-        mode_btn.label = (header_mode_ == HeaderMode::Room) ? "Mode: Room" : (header_mode_ == HeaderMode::Area ? "Mode: Area" : "Mode: Map");
+        // Shorter label without the "Mode:" prefix
+        mode_btn.label = (header_mode_ == HeaderMode::Room) ? "Room" : (header_mode_ == HeaderMode::Area ? "Area" : "Map");
         mode_btn.momentary = true;
         mode_btn.on_toggle = [this](bool) { set_active_panel(PanelType::ModeDropdown); };
         buttons.push_back(std::move(mode_btn));

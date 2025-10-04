@@ -10,6 +10,7 @@ namespace area_mode {
 // Order determines header checkbox order.
 inline const std::vector<std::string>& area_types() {
     static const std::vector<std::string> kTypes = {
+        "all",
         "impasable", // note: spelled per request
         "spacing",
         "trigger",
@@ -21,4 +22,3 @@ inline const std::vector<std::string>& area_types() {
 
 } // namespace area_mode
 } // namespace devmode
-

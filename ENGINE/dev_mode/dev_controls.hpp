@@ -158,6 +158,14 @@ private:
     // Area mode state
     class PanAndZoom area_pan_zoom_;
     std::unique_ptr<class CreateRoomAreaPanel> create_area_panel_;
-    std::string active_area_type_filter_;
+    std::unique_ptr<class EditRoomAreaPanel>   edit_area_panel_;
+    std::unique_ptr<class AreaOverlayEditor>   asset_area_editor_;
+    class Asset* area_hovered_asset_ = nullptr;
+    // Active filters: empty means show all
+    std::unordered_set<std::string> active_area_type_filters_;
+    // Hover/selection for room areas (indices into parsed list for current frame)
+    int hovered_area_index_ = -1;
+    int selected_area_index_ = -1;
+    SDL_Point last_area_click_world_{0,0};
 };
 

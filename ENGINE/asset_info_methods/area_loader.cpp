@@ -39,6 +39,7 @@ void AreaLoader::load(AssetInfo& info,
     for (const auto& entry : data["areas"]) {
         if (!entry.is_object()) continue;
         std::string name = entry.value("name", std::string{});
+        std::string type = entry.value("type", std::string{});
         if (name.empty()) continue;
 
         int stored_orig_w = info.original_canvas_width;
@@ -81,7 +82,12 @@ void AreaLoader::load(AssetInfo& info,
 
         if (pts.empty()) continue;
         auto area = std::make_unique<Area>(name, pts);
-        info.areas.push_back({ name, std::move(area) });
+        area->set_type(type);
+        AssetInfo::NamedArea na;
+        na.name = name;
+        na.type = type;
+        na.area = std::move(area);
+        info.areas.push_back(std::move(na));
     }
 }
 

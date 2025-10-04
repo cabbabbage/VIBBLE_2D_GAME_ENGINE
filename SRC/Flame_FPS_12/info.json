@@ -414,6 +414,5 @@
     "passable"
   ],
   "rnd_spawn_min": 300,
-  "rnd_spawn_max": 400,
-  "areas": []
+  "rnd_spawn_max": 400
 }

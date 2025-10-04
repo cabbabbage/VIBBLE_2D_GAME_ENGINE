@@ -1,167 +1,82 @@
 {
-    "animations": {
-        "default": {
-            "flipped_source": false,
-            "locked": false,
-            "movement": [
-                [
-                    0,
-                    0
-                ]
-            ],
-            "number_of_frames": 1,
-            "reverse_source": false,
-            "source": {
-                "kind": "folder",
-                "name": null,
-                "path": "default"
-            },
-            "speed_factor": 1
-        },
-        "group": {
-            "flipped_source": false,
-            "locked": false,
-            "movement": [
-                [
-                    0,
-                    0
-                ],
-                [
-                    0,
-                    0
-                ]
-            ],
-            "number_of_frames": 2,
-            "reverse_source": false,
-            "source": {
-                "kind": "folder",
-                "name": null,
-                "path": "group"
-            },
-            "speed_factor": 1
-        }
+  "animations": {
+    "default": {
+      "flipped_source": false,
+      "locked": false,
+      "movement": [
+        [
+          0,
+          0
+        ]
+      ],
+      "number_of_frames": 1,
+      "reverse_source": false,
+      "source": {
+        "kind": "folder",
+        "name": null,
+        "path": "default"
+      },
+      "speed_factor": 1
     },
-    "anti_tags": [],
-    "areas": [
-        {
-            "name": "impassable_area",
-            "offset_x": 0,
-            "offset_y": 0,
-            "original_dimensions": [
-                0,
-                0
-            ],
-            "points": [
-                [
-                    16.923,
-                    46.154
-                ],
-                [
-                    18.462,
-                    46.154
-                ],
-                [
-                    20.0,
-                    46.154
-                ],
-                [
-                    21.538,
-                    46.154
-                ],
-                [
-                    23.077,
-                    46.154
-                ],
-                [
-                    24.615,
-                    46.154
-                ],
-                [
-                    26.154,
-                    46.154
-                ],
-                [
-                    27.692,
-                    46.154
-                ],
-                [
-                    29.231,
-                    46.154
-                ],
-                [
-                    30.769,
-                    46.154
-                ],
-                [
-                    29.231,
-                    46.154
-                ],
-                [
-                    27.692,
-                    46.154
-                ],
-                [
-                    26.154,
-                    46.154
-                ],
-                [
-                    24.615,
-                    46.154
-                ],
-                [
-                    23.077,
-                    46.154
-                ],
-                [
-                    21.538,
-                    46.154
-                ],
-                [
-                    20.0,
-                    46.154
-                ],
-                [
-                    18.462,
-                    46.154
-                ]
-            ]
-        }
-    ],
-    "asset_name": "Tree_Darker",
-    "asset_type": "boundary",
-    "can_invert": true,
-    "duplicatable": false,
-    "duplication_interval_max": 60,
-    "duplication_interval_min": 30,
-    "has_shading": true,
-    "lighting_info": [
-        {
-            "factor": 100,
-            "falloff": 52,
-            "has_light_source": true,
-            "light_intensity": 255,
-            "offset_x": 0,
-            "offset_y": -178,
-            "radius": 1606,
-            "x_radius": 496,
-            "y_radius": 1008
-        }
-    ],
-    "max_child_depth": 8,
-    "min_child_depth": 4,
-    "min_distance_all": 0,
-    "min_same_type_distance": 21,
-    "render_radius": 1000,
-    "rnd_spawn_max": 400,
-    "rnd_spawn_min": 300,
-    "size_settings": {
-        "scale_percentage": 65
-    },
-    "tags": [
-        "default",
-        "group",
-        "impassable"
-    ],
-    "update_radius": 1000,
-    "z_threshold": 34
+    "group": {
+      "flipped_source": false,
+      "locked": false,
+      "movement": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ]
+      ],
+      "number_of_frames": 2,
+      "reverse_source": false,
+      "source": {
+        "kind": "folder",
+        "name": null,
+        "path": "group"
+      },
+      "speed_factor": 1
+    }
+  },
+  "anti_tags": [],
+  "asset_name": "Tree_Darker",
+  "asset_type": "boundary",
+  "can_invert": true,
+  "duplicatable": false,
+  "duplication_interval_max": 60,
+  "duplication_interval_min": 30,
+  "has_shading": true,
+  "lighting_info": [
+    {
+      "factor": 100,
+      "falloff": 52,
+      "has_light_source": true,
+      "light_intensity": 255,
+      "offset_x": 0,
+      "offset_y": -178,
+      "radius": 1606,
+      "x_radius": 496,
+      "y_radius": 1008
+    }
+  ],
+  "max_child_depth": 8,
+  "min_child_depth": 4,
+  "min_distance_all": 0,
+  "min_same_type_distance": 21,
+  "render_radius": 1000,
+  "rnd_spawn_max": 400,
+  "rnd_spawn_min": 300,
+  "size_settings": {
+    "scale_percentage": 65
+  },
+  "tags": [
+    "default",
+    "group",
+    "impassable"
+  ],
+  "update_radius": 1000,
+  "z_threshold": 34
 }

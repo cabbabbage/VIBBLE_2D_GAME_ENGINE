@@ -63,6 +63,8 @@ public:
     void remove_on_close_callback(size_t handle);
     void clear_on_close_callbacks();
     void set_floating_stack_key(std::string key);
+    // Provide area names for link-to-area feature; if unset, link UI is hidden
+    void set_area_names_provider(std::function<std::vector<std::string>()> provider);
 
 private:
     struct CandidateRow {
@@ -114,10 +116,18 @@ private:
     std::unique_ptr<ButtonWidget> add_candidate_widget_;
     std::unique_ptr<DMButton> done_button_;
     std::unique_ptr<ButtonWidget> done_widget_;
+    std::unique_ptr<DMButton> link_area_button_;
+    std::unique_ptr<ButtonWidget> link_area_widget_;
+    std::unique_ptr<DMButton> unlink_area_button_;
+    std::unique_ptr<ButtonWidget> unlink_area_widget_;
 
     std::vector<std::unique_ptr<CandidateRow>> candidates_;
 
     std::unique_ptr<SearchAssets> asset_search_;
+    // area picking panel
+    struct AreaPicker;
+    std::unique_ptr<AreaPicker> area_picker_;
+    std::function<std::vector<std::string>()> area_names_provider_;
 
     std::function<void(const nlohmann::json&)> on_save_callback_;
     std::function<void()> on_close_callback_;

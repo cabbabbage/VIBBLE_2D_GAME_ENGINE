@@ -65,6 +65,15 @@ void DockableCollapsible::set_visible(bool v) {
     }
 }
 
+void DockableCollapsible::open() {
+    set_visible(true);
+    set_expanded(true);
+}
+
+void DockableCollapsible::close() {
+    set_visible(false);
+}
+
 void DockableCollapsible::set_rows(const Rows& rows) {
     rows_ = rows;
 }

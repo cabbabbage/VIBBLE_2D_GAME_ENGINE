@@ -23,6 +23,7 @@ struct SpawnInfo {
     std::string name;
     std::string position;
     std::string spawn_id;
+    int priority = 0;
     int quantity = 0;
     bool check_spacing = false;
     bool check_min_spacing = false;

@@ -7,6 +7,7 @@
 #include "map_generation/room.hpp"
 #include "utils/input.hpp"
 #include "widgets.hpp"
+#include "spawn_group_list.hpp"
 
 #include <SDL_ttf.h>
 
@@ -790,47 +791,17 @@ void RoomConfigurator::rebuild_rows() {
             groups = &loaded_json_["assets"];
         }
         if (groups) {
-            int index = 1;
-            for (const auto& entry : *groups) {
-                if (!entry.is_object()) continue;
-                std::string spawn_id = entry.value("spawn_id", std::string{});
-                if (spawn_id.empty()) continue;
-                auto row = std::make_unique<SpawnGroupRow>();
-                row->spawn_id = spawn_id;
-                row->summary = std::make_unique<RoomConfigLabel>(build_spawn_summary(index, entry));
-                row->edit_btn = std::make_unique<DMButton>("Edit", &DMStyles::HeaderButton(), 72, DMButton::height());
-                if (row->edit_btn) {
-                    std::string id_copy = spawn_id;
-                    row->edit_btn_w = std::make_unique<ButtonWidget>(row->edit_btn.get(), [this, id_copy]() {
-                        if (on_spawn_edit_) on_spawn_edit_(id_copy);
-                    });
-                }
-                row->duplicate_btn = std::make_unique<DMButton>("Duplicate", &DMStyles::HeaderButton(), 96, DMButton::height());
-                if (row->duplicate_btn) {
-                    std::string id_copy = spawn_id;
-                    row->duplicate_btn_w = std::make_unique<ButtonWidget>(row->duplicate_btn.get(), [this, id_copy]() {
-                        if (on_spawn_duplicate_) on_spawn_duplicate_(id_copy);
-                    });
-                }
-                row->delete_btn = std::make_unique<DMButton>("Delete", &DMStyles::DeleteButton(), 80, DMButton::height());
-                if (row->delete_btn) {
-                    std::string id_copy = spawn_id;
-                    row->delete_btn_w = std::make_unique<ButtonWidget>(row->delete_btn.get(), [this, id_copy]() {
-                        if (on_spawn_delete_) on_spawn_delete_(id_copy);
-                    });
-                }
-                DockableCollapsible::Row spawn_row;
-                if (row->summary) spawn_row.push_back(row->summary.get());
-                if (row->edit_btn_w) spawn_row.push_back(row->edit_btn_w.get());
-                if (row->duplicate_btn_w) spawn_row.push_back(row->duplicate_btn_w.get());
-                if (row->delete_btn_w) spawn_row.push_back(row->delete_btn_w.get());
-                if (!spawn_row.empty()) {
-                    rows.push_back(spawn_row);
-                    spawn_rows_.push_back(std::move(row));
-                    have_groups = true;
-                    ++index;
-                }
-            }
+            if (!spawn_list_) spawn_list_ = std::make_unique<SpawnGroupList>();
+            spawn_list_->load(*groups);
+            SpawnGroupList::Callbacks cb{};
+            cb.on_edit = [this](const std::string& id) { if (on_spawn_edit_) on_spawn_edit_(id); };
+            cb.on_duplicate = [this](const std::string& id) { if (on_spawn_duplicate_) on_spawn_duplicate_(id); };
+            cb.on_delete = [this](const std::string& id) { if (on_spawn_delete_) on_spawn_delete_(id); };
+            cb.on_move_up = [this](const std::string& id) { if (on_spawn_move_up_) on_spawn_move_up_(id); };
+            cb.on_move_down = [this](const std::string& id) { if (on_spawn_move_down_) on_spawn_move_down_(id); };
+            spawn_list_->set_callbacks(std::move(cb));
+            spawn_list_->append_rows(rows);
+            have_groups = true;
         }
     }
 

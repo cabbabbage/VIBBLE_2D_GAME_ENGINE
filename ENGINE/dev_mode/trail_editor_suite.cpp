@@ -183,7 +183,22 @@ void TrailEditorSuite::rebuild_spawn_groups_ui() {
         }
 };
 
-    spawn_groups_->load(groups, on_change, on_entry_change, {});
+    spawn_groups_->load(groups, on_change, on_entry_change,
+        [this](SpawnGroupsConfigPanel& panel, const nlohmann::json&) {
+            panel.set_area_names_provider([this]() {
+                std::vector<std::string> names;
+                if (!this->active_trail_) return names;
+                auto& data = this->active_trail_->assets_data();
+                if (data.contains("areas") && data["areas"].is_array()) {
+                    for (const auto& a : data["areas"]) {
+                        if (a.is_object() && a.contains("name") && a["name"].is_string()) {
+                            names.push_back(a["name"].get<std::string>());
+                        }
+                    }
+                }
+                return names;
+            });
+        });
     if (configurator_) {
         configurator_->refresh_spawn_groups(active_trail_);
     }
