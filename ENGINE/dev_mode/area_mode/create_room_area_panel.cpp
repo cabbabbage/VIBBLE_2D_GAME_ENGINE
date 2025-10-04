@@ -43,11 +43,11 @@ void CreateRoomAreaPanel::open_at(int screen_x, int screen_y) {
     int x = screen_x - w / 2;
     int y = screen_y - h - 8;
     panel_->set_rect(SDL_Rect{x, y, w, h});
-    panel_->open();
+    panel_->set_visible(true);
 }
 
 void CreateRoomAreaPanel::close() {
-    if (panel_) panel_->close();
+    if (panel_) panel_->set_visible(false);
 }
 
 bool CreateRoomAreaPanel::visible() const {

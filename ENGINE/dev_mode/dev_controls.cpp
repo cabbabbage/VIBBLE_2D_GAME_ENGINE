@@ -6,6 +6,8 @@
 #include "dev_mode/full_screen_collapsible.hpp"
 #include "dev_mode/camera_ui.hpp"
 #include "dev_mode/sdl_pointer_utils.hpp"
+#include "dev_mode/area_mode/create_room_area_panel.hpp"
+#include "dev_mode/area_mode/area_types.hpp"
 #include "dm_styles.hpp"
 #include "widgets.hpp"
 
