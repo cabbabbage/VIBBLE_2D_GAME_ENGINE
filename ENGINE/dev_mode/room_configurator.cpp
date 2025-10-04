@@ -1116,9 +1116,13 @@ bool RoomConfigurator::is_point_inside(int x, int y) const {
 void RoomConfigurator::set_spawn_group_callbacks(std::function<void(const std::string&)> on_edit,
                                                  std::function<void(const std::string&)> on_duplicate,
                                                  std::function<void(const std::string&)> on_delete,
+                                                 std::function<void(const std::string&)> on_move_up,
+                                                 std::function<void(const std::string&)> on_move_down,
                                                  std::function<void()> on_add) {
     on_spawn_edit_ = std::move(on_edit);
     on_spawn_duplicate_ = std::move(on_duplicate);
     on_spawn_delete_ = std::move(on_delete);
+    on_spawn_move_up_ = std::move(on_move_up);
+    on_spawn_move_down_ = std::move(on_move_down);
     on_spawn_add_ = std::move(on_add);
 }
