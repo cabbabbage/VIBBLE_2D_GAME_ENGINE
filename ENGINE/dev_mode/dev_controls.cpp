@@ -211,6 +211,29 @@ DevControls::DevControls(Assets* owner, int screen_w, int screen_h)
     if (map_mode_ui_) {
         map_mode_ui_->set_footer_always_visible(true);
         map_mode_ui_->set_header_mode(MapModeUI::HeaderMode::Room);
+        apply_camera_area_render_flag();
+        map_mode_ui_->set_on_mode_changed([this](MapModeUI::HeaderMode mode){
+            if (mode == MapModeUI::HeaderMode::Map) {
+                if (this->mode_ != Mode::MapEditor) {
+                    enter_map_editor_mode();
+                }
+            } else if (mode == MapModeUI::HeaderMode::Room) {
+                if (this->mode_ == Mode::MapEditor) {
+                    exit_map_editor_mode(false, true);
+                }
+                this->mode_ = Mode::RoomEditor;
+                apply_camera_area_render_flag();
+                if (map_mode_ui_) map_mode_ui_->set_header_mode(MapModeUI::HeaderMode::Room);
+            } else if (mode == MapModeUI::HeaderMode::Area) {
+                if (this->mode_ == Mode::MapEditor) {
+                    exit_map_editor_mode(false, true);
+                }
+                this->mode_ = Mode::AreaMode;
+                apply_camera_area_render_flag();
+                if (map_mode_ui_) map_mode_ui_->set_header_mode(MapModeUI::HeaderMode::Area);
+            }
+            sync_header_button_states();
+        });
     }
     if (room_editor_ && map_mode_ui_) {
         room_editor_->set_shared_fullscreen_panel(map_mode_ui_->get_footer_panel());
@@ -413,9 +436,14 @@ void DevControls::update(const Input& input) {
             map_editor_->update(input);
             handle_map_selection();
         }
-    } else if (room_editor_ && room_editor_->is_enabled()) {
+    } else if (mode_ == Mode::RoomEditor && room_editor_ && room_editor_->is_enabled()) {
         if (!pointer_over_camera_panel_) {
             room_editor_->update(input);
+        }
+    } else if (mode_ == Mode::AreaMode) {
+        // Pan and zoom same as room mode, but no room editor UI
+        if (assets_) {
+            area_pan_zoom_.handle_input(assets_->getView(), input, false);
         }
     }
 
@@ -571,6 +599,60 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
         return;
     }
 
+    if (mode_ == Mode::AreaMode) {
+        if (create_area_panel_ && create_area_panel_->handle_event(event)) {
+            consume(true);
+            return;
+        }
+        if (event.type == SDL_MOUSEBUTTONDOWN && event.button.button == SDL_BUTTON_RIGHT) {
+            SDL_Point p{event.button.x, event.button.y};
+            SDL_Point world = assets_ ? assets_->getView().screen_to_map(p) : p;
+            bool inside_room = current_room_ && (!current_room_->room_area || current_room_->room_area->contains_point(world));
+            bool has_room_areas = false;
+            if (current_room_) {
+                auto& data = current_room_->assets_data();
+                has_room_areas = data.contains("areas") && data["areas"].is_array() && !data["areas"].empty();
+            }
+            if (inside_room && !has_room_areas) {
+                if (!create_area_panel_) create_area_panel_ = std::make_unique<CreateRoomAreaPanel>();
+                create_area_panel_->set_on_create([this](const std::string& type){
+                    if (!current_room_) return;
+                    auto& data = current_room_->assets_data();
+                    if (!data.contains("areas") || !data["areas"].is_array()) {
+                        data["areas"] = nlohmann::json::array();
+                    }
+                    int w = 0, h = 0;
+                    if (current_room_->room_area) {
+                        auto b = current_room_->room_area->get_bounds();
+                        int minx, miny, maxx, maxy; std::tie(minx, miny, maxx, maxy) = b;
+                        w = std::max(0, maxx - minx);
+                        h = std::max(0, maxy - miny);
+                    }
+                    if (w <= 0 || h <= 0) { w = 32; h = 32; }
+                    nlohmann::json entry;
+                    entry["type"] = type;
+                    entry["original_dimensions"] = { {"width", w}, {"height", h} };
+                    entry["points"] = nlohmann::json::array({
+                        nlohmann::json::object({{"x", 0}, {"y", 0}}),
+                        nlohmann::json::object({{"x", w}, {"y", 0}}),
+                        nlohmann::json::object({{"x", w}, {"y", h}}),
+                        nlohmann::json::object({{"x", 0}, {"y", h}})
+                    });
+                    data["areas"].push_back(std::move(entry));
+                    current_room_->save_assets_json();
+                    // Open room editor overlay as a placeholder for area editing UI
+                    if (room_editor_) {
+                        room_editor_->open_room_config();
+                    }
+                });
+                create_area_panel_->open_at(event.button.x, event.button.y);
+                consume(true);
+                return;
+            }
+        }
+        return;
+    }
+
     if (can_route_room_editor && room_editor_->handle_sdl_event(event)) {
         consume(true);
         return;
@@ -582,7 +664,7 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
 
     if (mode_ == Mode::MapEditor) {
         if (map_editor_) map_editor_->render(renderer);
-    } else if (room_editor_) {
+    } else if (mode_ == Mode::RoomEditor && room_editor_) {
         room_editor_->render_overlays(renderer);
     }
     if (map_mode_ui_) map_mode_ui_->render(renderer);
@@ -598,6 +680,9 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
     }
     if (regenerate_popup_ && regenerate_popup_->visible()) {
         regenerate_popup_->render(renderer);
+    }
+    if (mode_ == Mode::AreaMode && create_area_panel_ && create_area_panel_->visible()) {
+        create_area_panel_->render(renderer);
     }
     asset_filter_.render(renderer);
 }
@@ -751,22 +836,7 @@ void DevControls::configure_header_button_sets() {
 
     std::vector<MapModeUI::HeaderButtonConfig> map_buttons;
     std::vector<MapModeUI::HeaderButtonConfig> room_buttons;
-
-    MapModeUI::HeaderButtonConfig to_room_btn;
-    to_room_btn.id = "switch_mode";
-    to_room_btn.label = "Room Mode";
-    to_room_btn.momentary = true;
-    to_room_btn.style_override = &DMStyles::AccentButton();
-    to_room_btn.on_toggle = [this](bool) {
-        if (room_editor_) {
-            room_editor_->close_room_config();
-        }
-        if (mode_ == Mode::MapEditor) {
-            exit_map_editor_mode(false, true);
-        }
-        sync_header_button_states();
-};
-    map_buttons.push_back(std::move(to_room_btn));
+    std::vector<MapModeUI::HeaderButtonConfig> area_buttons;
 
     map_buttons.push_back(make_camera_button());
 
@@ -802,21 +872,7 @@ void DevControls::configure_header_button_sets() {
         map_buttons.push_back(std::move(boundary_btn));
     }
 
-    MapModeUI::HeaderButtonConfig to_map_btn;
-    to_map_btn.id = "switch_mode";
-    to_map_btn.label = "Map Mode";
-    to_map_btn.momentary = true;
-    to_map_btn.style_override = &DMStyles::AccentButton();
-    to_map_btn.on_toggle = [this](bool) {
-        if (room_editor_) {
-            room_editor_->close_room_config();
-        }
-        if (mode_ != Mode::MapEditor) {
-            enter_map_editor_mode();
-        }
-        sync_header_button_states();
-};
-    room_buttons.push_back(std::move(to_map_btn));
+    // Area mode buttons will be built below
 
     MapModeUI::HeaderButtonConfig lights_btn;
     lights_btn.id = "lights";
@@ -907,7 +963,30 @@ void DevControls::configure_header_button_sets() {
 };
     room_buttons.push_back(std::move(regenerate_other_btn));
 
-    map_mode_ui_->set_mode_button_sets(std::move(map_buttons), std::move(room_buttons));
+    // Area mode: single-select checkboxes for available types
+    if (active_area_type_filter_.empty()) {
+        const auto& types = devmode::area_mode::area_types();
+        if (!types.empty()) active_area_type_filter_ = types.front();
+    }
+    for (const auto& type : devmode::area_mode::area_types()) {
+        MapModeUI::HeaderButtonConfig cfg;
+        cfg.id = std::string("area_") + type;
+        cfg.label = type;
+        cfg.active = (active_area_type_filter_ == type);
+        cfg.on_toggle = [this, type](bool active) {
+            // Make selection exclusive
+            if (!active) {
+                // prevent unselecting the active option; keep at least one
+                sync_header_button_states();
+                return;
+            }
+            active_area_type_filter_ = type;
+            sync_header_button_states();
+        };
+        area_buttons.push_back(std::move(cfg));
+    }
+
+    map_mode_ui_->set_mode_button_sets(std::move(map_buttons), std::move(room_buttons), std::move(area_buttons));
     asset_filter_.set_footer_panel(map_mode_ui_->get_footer_panel());
     asset_filter_.ensure_layout();
     sync_header_button_states();
@@ -927,13 +1006,17 @@ void DevControls::sync_header_button_states() {
     map_mode_ui_->set_button_state(MapModeUI::HeaderMode::Map, "lights", lights_open);
     map_mode_ui_->set_button_state(MapModeUI::HeaderMode::Room, "regenerate", false);
     map_mode_ui_->set_button_state(MapModeUI::HeaderMode::Room, "regenerate_other", false);
-    map_mode_ui_->set_button_state(MapModeUI::HeaderMode::Room, "switch_mode", false);
-    map_mode_ui_->set_button_state(MapModeUI::HeaderMode::Map, "switch_mode", false);
 
     const bool map_assets_open = map_assets_modal_ && map_assets_modal_->visible();
     const bool boundary_open = boundary_assets_modal_ && boundary_assets_modal_->visible();
     map_mode_ui_->set_button_state(MapModeUI::HeaderMode::Map, "map_assets", map_assets_open);
     map_mode_ui_->set_button_state(MapModeUI::HeaderMode::Map, "map_boundary", boundary_open);
+
+    // Area mode single-select buttons
+    for (const auto& type : devmode::area_mode::area_types()) {
+        const std::string id = std::string("area_") + type;
+        map_mode_ui_->set_button_state(MapModeUI::HeaderMode::Area, id, active_area_type_filter_ == type);
+    }
 }
 
 void DevControls::close_all_floating_panels() {
@@ -984,6 +1067,13 @@ void DevControls::toggle_map_assets_modal() {
     auto& map_json = assets_->map_info_json();
     SDL_Color color{200, 200, 255, 255};
     map_assets_modal_->open(map_json, "map_assets_data", "batch_map_assets", "Map-wide", color, save);
+}
+
+void DevControls::apply_camera_area_render_flag() {
+    if (!assets_) return;
+    camera& cam = assets_->getView();
+    const bool enable = (mode_ == Mode::AreaMode);
+    cam.set_render_areas_enabled(enable);
 }
 
 void DevControls::toggle_boundary_assets_modal() {

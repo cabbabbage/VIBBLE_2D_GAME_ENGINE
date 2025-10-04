@@ -23,7 +23,6 @@
 #include "asset_sections/Section_BasicInfo.hpp"
 #include "asset_sections/Section_Tags.hpp"
 #include "asset_sections/Section_Lighting.hpp"
-#include "asset_sections/Section_Areas.hpp"
 #include "asset_sections/Section_Spacing.hpp"
 #include "asset_sections/Section_ChildAssets.hpp"
 #include "widgets.hpp"
@@ -173,7 +172,7 @@ bool copy_section_from_source(AssetInfoSectionId section_id, const nlohmann::jso
             changed |= copy_key("min_distance_all");
             break;
         case AssetInfoSectionId::Areas:
-            changed |= copy_key("areas");
+            // Areas UI removed; no longer applied via AssetInfoUI
             break;
         case AssetInfoSectionId::ChildAssets:
             changed |= copy_key("child_assets");
@@ -199,17 +198,7 @@ AssetInfoUI::AssetInfoUI() {
     auto spacing = std::make_unique<Section_Spacing>();
     spacing->set_ui(this);
     sections_.push_back(std::move(spacing));
-    auto areas = std::make_unique<Section_Areas>();
-    areas_section_ = areas.get();
-    areas_section_->set_open_editor_callback([this](const std::string& nm){ open_area_editor(nm); });
-    areas_section_->set_delete_callback([this](const std::string& nm){
-        if (!info_) return;
-        if (info_->remove_area(nm)) {
-            (void)info_->update_info_json();
-        }
-    });
-    areas_section_->set_ui(this);
-    sections_.push_back(std::move(areas));
+    // Areas section removed; managed in Area Mode
     auto children = std::make_unique<Section_ChildAssets>();
     children->set_open_area_editor_callback([this](const std::string& nm){ open_area_editor(nm); });
     children->set_ui(this);

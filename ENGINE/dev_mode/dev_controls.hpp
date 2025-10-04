@@ -14,6 +14,7 @@
 #include "MapLightPanel.hpp"
 #include "asset_filter_bar.hpp"
 #include "trail_editor_suite.hpp"
+#include "dev_mode/pan_and_zoom.hpp"
 #include "map_assets_modals.hpp"
 
 class Asset;
@@ -31,7 +32,8 @@ class DevControls {
 public:
     enum class Mode {
         RoomEditor,
-        MapEditor
+        MapEditor,
+        AreaMode
 };
 
     DevControls(Assets* owner, int screen_w, int screen_h);
@@ -118,6 +120,8 @@ private:
     void refresh_active_asset_filters();
     void reset_asset_filters();
     bool passes_asset_filters(Asset* asset) const;
+    void apply_camera_area_render_flag();
+    void set_mode_from_header(int header_mode);
 
 private:
     void persist_map_info_to_disk() const;
@@ -150,5 +154,10 @@ private:
 
     std::unique_ptr<SingleSpawnGroupModal> map_assets_modal_;
     std::unique_ptr<SingleSpawnGroupModal> boundary_assets_modal_;
+
+    // Area mode state
+    class PanAndZoom area_pan_zoom_;
+    std::unique_ptr<class CreateRoomAreaPanel> create_area_panel_;
+    std::string active_area_type_filter_;
 };
 

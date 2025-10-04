@@ -6,6 +6,8 @@
 #include "map_layers_controller.hpp"
 #include "map_layers_panel.hpp"
 #include "core/AssetsManager.hpp"
+#include "dev_mode/widgets.hpp"
+#include "dm_styles.hpp"
 #include "utils/input.hpp"
 
 #include <SDL.h>
@@ -70,9 +72,11 @@ void MapModeUI::set_footer_always_visible(bool on) {
 }
 
 void MapModeUI::set_mode_button_sets(std::vector<HeaderButtonConfig> map_buttons,
-                                     std::vector<HeaderButtonConfig> room_buttons) {
+                                     std::vector<HeaderButtonConfig> room_buttons,
+                                     std::vector<HeaderButtonConfig> area_buttons) {
     map_mode_buttons_ = std::move(map_buttons);
     room_mode_buttons_ = std::move(room_buttons);
+    area_mode_buttons_ = std::move(area_buttons);
     footer_buttons_configured_ = false;
     ensure_panels();
 }
@@ -88,7 +92,7 @@ void MapModeUI::set_header_mode(HeaderMode mode) {
 }
 
 MapModeUI::HeaderButtonConfig* MapModeUI::find_button(HeaderMode mode, const std::string& id) {
-    auto& list = (mode == HeaderMode::Map) ? map_mode_buttons_ : room_mode_buttons_;
+    auto& list = (mode == HeaderMode::Map) ? map_mode_buttons_ : (mode == HeaderMode::Room ? room_mode_buttons_ : area_mode_buttons_);
     auto it = std::find_if(list.begin(), list.end(),
                            [&](const HeaderButtonConfig& cfg) { return cfg.id == id; });
     if (it == list.end()) {
@@ -283,21 +287,24 @@ void MapModeUI::configure_footer_buttons() {
                 } else {
                     set_button_state(mode, cfg_ptr->id, active);
                 }
-};
+            };
             buttons.push_back(std::move(extra));
-};
+        };
 
         for (auto& config : configs) {
-            if (config.id == "switch_mode") {
-                append_button(config);
-            }
+            append_button(config);
         }
-        for (auto& config : configs) {
-            if (config.id != "switch_mode") {
-                append_button(config);
-            }
-        }
-};
+    };
+
+    // Mode selection drop-up trigger
+    {
+        FullScreenCollapsible::HeaderButton mode_btn;
+        mode_btn.id = "mode_select";
+        mode_btn.label = (header_mode_ == HeaderMode::Room) ? "Mode: Room" : (header_mode_ == HeaderMode::Area ? "Mode: Area" : "Mode: Map");
+        mode_btn.momentary = true;
+        mode_btn.on_toggle = [this](bool) { set_active_panel(PanelType::ModeDropdown); };
+        buttons.push_back(std::move(mode_btn));
+    }
 
     if (header_mode_ == HeaderMode::Map) {
         append_custom(map_mode_buttons_, HeaderMode::Map);
@@ -326,8 +333,10 @@ void MapModeUI::configure_footer_buttons() {
 };
         buttons.push_back(std::move(lights_btn));
 
-    } else {
+    } else if (header_mode_ == HeaderMode::Room) {
         append_custom(room_mode_buttons_, HeaderMode::Room);
+    } else {
+        append_custom(area_mode_buttons_, HeaderMode::Area);
     }
 
     footer_panel_->set_header_buttons(std::move(buttons));
@@ -337,8 +346,12 @@ void MapModeUI::configure_footer_buttons() {
         for (const auto& config : map_mode_buttons_) {
             footer_panel_->set_button_active_state(config.id, config.active);
         }
-    } else {
+    } else if (header_mode_ == HeaderMode::Room) {
         for (const auto& config : room_mode_buttons_) {
+            footer_panel_->set_button_active_state(config.id, config.active);
+        }
+    } else {
+        for (const auto& config : area_mode_buttons_) {
             footer_panel_->set_button_active_state(config.id, config.active);
         }
     }
@@ -352,8 +365,12 @@ void MapModeUI::sync_footer_button_states() {
         for (const auto& config : map_mode_buttons_) {
             footer_panel_->set_button_active_state(config.id, config.active);
         }
-    } else {
+    } else if (header_mode_ == HeaderMode::Room) {
         for (const auto& config : room_mode_buttons_) {
+            footer_panel_->set_button_active_state(config.id, config.active);
+        }
+    } else {
+        for (const auto& config : area_mode_buttons_) {
             footer_panel_->set_button_active_state(config.id, config.active);
         }
     }
@@ -378,6 +395,41 @@ void MapModeUI::set_active_panel(PanelType panel) {
         } else {
             light_panel_->close();
         }
+    }
+    if (panel == PanelType::ModeDropdown) {
+        if (!mode_dropdown_) {
+            mode_dropdown_ = std::make_unique<DockableCollapsible>("Select Mode", true, 0, 0);
+            mode_dropdown_->set_padding(8);
+        }
+        // Place above footer header (drop-up)
+        SDL_Rect header = footer_panel_ ? footer_panel_->header_rect() : SDL_Rect{0,0,screen_w_,40};
+        const int w = 240;
+        const int h = DMButton::height() * 3 + DMSpacing::item_gap() * 4;
+        SDL_Rect r{ header.x + DMSpacing::panel_padding(), std::max(0, header.y - h - 6), w, h };
+        mode_dropdown_->set_rect(r);
+        mode_dropdown_widgets_.clear();
+        mode_dropdown_buttons_.clear();
+        DockableCollapsible::Rows rows;
+        auto add_mode = [&](const char* label, HeaderMode m) {
+            auto btn = std::make_unique<DMButton>(label, &DMStyles::ListButton(), 200, DMButton::height());
+            DMButton* raw = btn.get();
+            auto wdg = std::make_unique<ButtonWidget>(raw, [this, m]() {
+                if (on_mode_changed_) on_mode_changed_(m);
+                if (mode_dropdown_) mode_dropdown_->close();
+            });
+            rows.push_back({ wdg.get() });
+            mode_dropdown_widgets_.push_back(std::move(wdg));
+            mode_dropdown_buttons_.push_back(std::move(btn));
+        };
+        add_mode("Room", HeaderMode::Room);
+        add_mode("Map", HeaderMode::Map);
+        add_mode("Area", HeaderMode::Area);
+        mode_dropdown_->set_rows(rows);
+        mode_dropdown_->open();
+        track_floating_panel(mode_dropdown_.get());
+        new_active = PanelType::ModeDropdown;
+    } else {
+        if (mode_dropdown_) mode_dropdown_->close();
     }
     if (panel == PanelType::Layers) {
         layers_footer_requested_ = true;
@@ -582,6 +634,9 @@ void MapModeUI::render(SDL_Renderer* renderer) const {
         render_layers_footer(renderer);
     } else {
         render_layers_footer(renderer);
+    }
+    if (mode_dropdown_ && mode_dropdown_->is_visible()) {
+        mode_dropdown_->render(renderer);
     }
 }
 

@@ -66,6 +66,9 @@ class camera {
     RealismSettings& realism_settings() { return settings_; }
     const RealismSettings& realism_settings() const { return settings_; }
 
+    void set_render_areas_enabled(bool enabled) { render_areas_enabled_ = enabled; }
+    bool render_areas_enabled() const { return render_areas_enabled_; }
+
     void apply_camera_settings(const nlohmann::json& data);
     nlohmann::json camera_settings_to_json() const;
 
@@ -124,5 +127,6 @@ class camera {
     bool       parallax_enabled_ = true;
     bool       realism_enabled_ = true;
     RealismSettings settings_{};
+    bool       render_areas_enabled_ = false;
 };
 

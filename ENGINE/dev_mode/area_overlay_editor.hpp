@@ -21,7 +21,10 @@ public:
 
     void attach_assets(Assets* a) { assets_ = a; }
 
+    // Begin editor anchored to an asset (uses asset bottom-center as anchor)
     bool begin(AssetInfo* info, Asset* asset, const std::string& area_name);
+    // Begin editor anchored to an arbitrary map point; optional asset may be provided for mask autogen
+    bool begin_at_point(AssetInfo* info, SDL_Point anchor_world, const std::string& area_name, Asset* asset = nullptr);
     void cancel();
     bool is_active() const { return active_; }
     bool consume_saved_flag() { bool v = saved_since_begin_; saved_since_begin_ = false; return v; }
@@ -31,7 +34,7 @@ public:
     void render(SDL_Renderer* r);
 
 private:
-    enum class Mode { Mask };
+    enum class Mode { Mask, Geometry };
 
     void ensure_toolbox();
     void rebuild_toolbox_rows();
@@ -48,6 +51,7 @@ private:
     std::vector<SDL_Point> extract_edge_points(int step = 1) const;
     std::vector<SDL_Point> trace_polygon_from_mask() const;
     void save_area();
+    void rebuild_mask_from_geometry();
 
 private:
     Assets* assets_ = nullptr;
@@ -68,6 +72,7 @@ private:
 
     std::unique_ptr<DockableCollapsible> toolbox_;
     std::unique_ptr<DMButton> btn_mask_;
+    std::unique_ptr<DMButton> btn_geom_;
     std::unique_ptr<DMButton> btn_save_;
     std::unique_ptr<DMSlider> crop_left_slider_;
     std::unique_ptr<DMSlider> crop_right_slider_;
@@ -90,5 +95,14 @@ private:
 
     bool saved_since_begin_ = false;
     bool toolbox_autoplace_done_ = false;
+
+    // Anchor handling
+    SDL_Point anchor_world_{0, 0};
+    bool      has_anchor_ = false;
+    bool      flipped_ = false; // mirrors asset flip when asset-driven; false for point-only usage
+
+    // Geometry tool state
+    std::vector<SDL_Point> geometry_points_;
+    bool geometry_dirty_ = false;
 
 };

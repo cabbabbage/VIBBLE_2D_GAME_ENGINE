@@ -277,7 +277,6 @@ void CameraUIPanel::sync_from_camera() {
     last_settings_ = cam.realism_settings();
     bool effects_enabled = cam.realism_enabled() && cam.parallax_enabled();
     last_realism_enabled_ = effects_enabled;
-
     if (effects_checkbox_) effects_checkbox_->set_value(effects_enabled);
 
     if (render_distance_slider_) render_distance_slider_->set_value(last_settings_.render_distance);
@@ -291,6 +290,7 @@ void CameraUIPanel::sync_from_camera() {
 void CameraUIPanel::build_ui() {
     effects_checkbox_ = std::make_unique<DMCheckbox>("Perspective Effects", true);
     effects_widget_ = std::make_unique<CheckboxWidget>(effects_checkbox_.get());
+
 
     load_button_ = std::make_unique<DMButton>("Load", &DMStyles::HeaderButton(), 110, DMButton::height());
     reset_button_ = std::make_unique<DMButton>("Reset", &DMStyles::HeaderButton(), 110, DMButton::height());
@@ -327,6 +327,7 @@ void CameraUIPanel::rebuild_rows() {
 void CameraUIPanel::reset_to_defaults() {
     camera::RealismSettings defaults;
     if (effects_checkbox_) effects_checkbox_->set_value(true);
+    
     if (render_distance_slider_) render_distance_slider_->set_value(defaults.render_distance);
     if (tripod_distance_slider_) tripod_distance_slider_->set_value(defaults.tripod_distance_y);
     if (height_zoom1_slider_) height_zoom1_slider_->set_value(defaults.height_at_zoom1);
@@ -347,6 +348,7 @@ void CameraUIPanel::apply_settings_if_needed() {
     if (!assets_) return;
     camera::RealismSettings settings = read_settings_from_ui();
     const bool effects_enabled = effects_checkbox_ ? effects_checkbox_->value() : last_realism_enabled_;
+    
 
     auto differs = [](float a, float b) {
         return std::fabs(a - b) > 0.0001f;

@@ -44,10 +44,12 @@ private:
     Assets* assets_ = nullptr;
     camera::RealismSettings last_settings_{};
     bool last_realism_enabled_ = true;
+    
     bool suppress_apply_once_ = false;
 
     std::unique_ptr<DMCheckbox> effects_checkbox_;
     std::unique_ptr<CheckboxWidget> effects_widget_;
+    
 
     std::unique_ptr<DMButton> load_button_;
     std::unique_ptr<DMButton> reset_button_;

@@ -83,17 +83,26 @@ AreaOverlayEditor::~AreaOverlayEditor() {
 
 bool AreaOverlayEditor::begin(AssetInfo* info, Asset* asset, const std::string& area_name) {
     if (!assets_ || !info || !asset) return false;
+    // Use the asset's bottom-center (its world position) as the anchor
+    return begin_at_point(info, SDL_Point{asset->pos.x, asset->pos.y}, area_name, asset);
+}
+
+bool AreaOverlayEditor::begin_at_point(AssetInfo* info, SDL_Point anchor_world, const std::string& area_name, Asset* asset) {
+    if (!assets_ || !info) return false;
 
     int cw = std::max(32, static_cast<int>(std::lround(info->original_canvas_width * info->scale_factor)));
     int ch = std::max(32, static_cast<int>(std::lround(info->original_canvas_height * info->scale_factor)));
 
     info_ = info;
-    asset_ = asset;
+    asset_ = asset; // optional, used only for mask autogen
     area_name_ = area_name;
     canvas_w_ = cw;
     canvas_h_ = ch;
     mask_origin_x_ = 0;
     mask_origin_y_ = 0;
+    anchor_world_ = anchor_world;
+    has_anchor_ = true;
+    flipped_ = (asset_ ? asset_->flipped : false);
 
     if (mask_) {
         SDL_FreeSurface(mask_);
@@ -146,6 +155,50 @@ void AreaOverlayEditor::upload_mask() {
     if (mask_tex_) {
         SDL_UpdateTexture(mask_tex_, nullptr, mask_->pixels, mask_->pitch);
     }
+}
+
+void AreaOverlayEditor::rebuild_mask_from_geometry() {
+    if (!mask_) return;
+    // Clear mask
+    SDL_FillRect(mask_, nullptr, SDL_MapRGBA(mask_->format, 255, 0, 0, 0));
+
+    if (geometry_points_.size() < 3) {
+        return;
+    }
+
+    // Ensure mask can contain the bounds
+    int minx = geometry_points_[0].x, maxx = geometry_points_[0].x;
+    int miny = geometry_points_[0].y, maxy = geometry_points_[0].y;
+    for (const auto& p : geometry_points_) {
+        minx = std::min(minx, p.x);
+        maxx = std::max(maxx, p.x);
+        miny = std::min(miny, p.y);
+        maxy = std::max(maxy, p.y);
+    }
+    ensure_mask_contains(minx, miny, 2);
+    ensure_mask_contains(maxx, maxy, 2);
+
+    if (SDL_LockSurface(mask_) != 0) {
+        return;
+    }
+    Uint8* pixels = static_cast<Uint8*>(mask_->pixels);
+    const int pitch = mask_->pitch;
+
+    int x0 = std::max(0, minx - mask_origin_x_);
+    int y0 = std::max(0, miny - mask_origin_y_);
+    int x1 = std::min(mask_->w - 1, maxx - mask_origin_x_);
+    int y1 = std::min(mask_->h - 1, maxy - mask_origin_y_);
+
+    for (int y = y0; y <= y1; ++y) {
+        Uint32* row = reinterpret_cast<Uint32*>(pixels + y * pitch);
+        for (int x = x0; x <= x1; ++x) {
+            int lx = x + mask_origin_x_;
+            int ly = y + mask_origin_y_;
+            bool inside = point_in_poly(lx, ly, geometry_points_);
+            row[x] = SDL_MapRGBA(mask_->format, 255, 0, 0, inside ? 255 : 0);
+        }
+    }
+    SDL_UnlockSurface(mask_);
 }
 
 void AreaOverlayEditor::ensure_mask_contains(int lx, int ly, int radius) {
@@ -260,6 +313,7 @@ void AreaOverlayEditor::ensure_toolbox() {
 
     toolbox_->set_expanded(true);
     btn_mask_  = std::make_unique<DMButton>("Mask",  &DMStyles::CreateButton(), 180, DMButton::height());
+    btn_geom_  = std::make_unique<DMButton>("Geometry",  &DMStyles::CreateButton(), 180, DMButton::height());
     btn_save_  = std::make_unique<DMButton>("Save",  &DMStyles::CreateButton(), 180, DMButton::height());
     rebuild_toolbox_rows();
 }
@@ -270,17 +324,34 @@ void AreaOverlayEditor::rebuild_toolbox_rows() {
     owned_widgets_.clear();
     DockableCollapsible::Rows rows;
 
-    if (btn_mask_ && btn_save_) {
-        owned_widgets_.push_back(std::make_unique<ButtonWidget>(btn_mask_.get(), [this]() {
-            discard_autogen_base();
-            reset_mask_crop_values();
-            pending_mask_generation_ = true;
-            set_mode(Mode::Mask);
-        }));
-        Widget* mask_widget = owned_widgets_.back().get();
+    if (btn_save_) {
+        // First row: show Mask (only if asset present) and Geometry buttons
+        std::vector<Widget*> first_row;
+        if (btn_mask_ && asset_) {
+            owned_widgets_.push_back(std::make_unique<ButtonWidget>(btn_mask_.get(), [this]() {
+                discard_autogen_base();
+                reset_mask_crop_values();
+                pending_mask_generation_ = (asset_ != nullptr);
+                geometry_points_.clear();
+                geometry_dirty_ = false;
+                set_mode(Mode::Mask);
+            }));
+            first_row.push_back(owned_widgets_.back().get());
+        }
+        if (btn_geom_) {
+            owned_widgets_.push_back(std::make_unique<ButtonWidget>(btn_geom_.get(), [this]() {
+                clear_mask();
+                discard_autogen_base();
+                geometry_points_.clear();
+                geometry_dirty_ = true;
+                set_mode(Mode::Geometry);
+                upload_mask();
+            }));
+            first_row.push_back(owned_widgets_.back().get());
+        }
+        if (!first_row.empty()) rows.push_back(first_row);
 
-        rows.push_back({ mask_widget });
-
+        // Save row
         owned_widgets_.push_back(std::make_unique<ButtonWidget>(btn_save_.get(), [this]() {
             save_area();
         }));
@@ -309,6 +380,16 @@ void AreaOverlayEditor::rebuild_toolbox_rows() {
 
 void AreaOverlayEditor::set_mode(Mode mode) {
     mode_ = mode;
+    if (mode_ == Mode::Geometry) {
+        clear_mask();
+        discard_autogen_base();
+        geometry_points_.clear();
+        geometry_dirty_ = true;
+        upload_mask();
+    } else {
+        geometry_points_.clear();
+        geometry_dirty_ = false;
+    }
     if (toolbox_) {
         rebuild_toolbox_rows();
     }
@@ -515,8 +596,8 @@ void AreaOverlayEditor::apply_mask_crop() {
 }
 
 void AreaOverlayEditor::position_toolbox_left_of_asset(int screen_w, int screen_h) {
-    if (!toolbox_ || !assets_ || !asset_) return;
-    SDL_Point ap = assets_->getView().map_to_screen(SDL_Point{asset_->pos.x, asset_->pos.y});
+    if (!toolbox_ || !assets_ || !has_anchor_) return;
+    SDL_Point ap = assets_->getView().map_to_screen(anchor_world_);
     int tb_w = toolbox_->rect().w;
     int x = ap.x - tb_w - 16;
     int y = ap.y - 200;
@@ -527,7 +608,7 @@ void AreaOverlayEditor::position_toolbox_left_of_asset(int screen_w, int screen_
 }
 
 void AreaOverlayEditor::update(const Input& input, int screen_w, int screen_h) {
-    if (!active_ || !assets_ || !asset_) return;
+    if (!active_ || !assets_) return;
 
     ensure_toolbox();
     if (!toolbox_autoplace_done_) {
@@ -564,13 +645,106 @@ bool AreaOverlayEditor::handle_event(const SDL_Event& e) {
             return true;
         }
     }
+    // Geometry mode: left click to add/remove points
+    if (mode_ == Mode::Geometry && e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
+        if (!assets_ || !mask_ || !has_anchor_) return false;
+
+        camera& cam = assets_->getView();
+        float scale = cam.get_scale();
+        if (scale <= 0.0f) return false;
+        const float inv_scale = 1.0f / scale;
+
+        // Use canvas dimensions for base size
+        int fw = std::max(1, canvas_w_);
+        int fh = std::max(1, canvas_h_);
+        float base_sw = static_cast<float>(fw) * inv_scale;
+        float base_sh = static_cast<float>(fh) * inv_scale;
+        if (base_sw <= 0.0f || base_sh <= 0.0f) return false;
+
+        float reference_screen_height = compute_reference_screen_height(assets_, cam);
+        if (reference_screen_height <= 0.0f) reference_screen_height = 1.0f;
+
+        const camera::RenderEffects effects = cam.compute_render_effects(
+            anchor_world_, base_sh, reference_screen_height);
+
+        float scaled_sw = base_sw * effects.distance_scale;
+        float scaled_sh = base_sh * effects.distance_scale;
+        float final_visible_h = scaled_sh * effects.vertical_scale;
+
+        int sw = std::max(1, static_cast<int>(std::lround(scaled_sw)));
+        int sh = std::max(1, static_cast<int>(std::lround(final_visible_h)));
+
+        const int pivot_x = canvas_w_ / 2;
+        const int pivot_y = canvas_h_;
+
+        const float local_bottom_center_x = static_cast<float>(mask_origin_x_) + static_cast<float>(mask_->w) * 0.5f;
+        const float local_bottom_center_y = static_cast<float>(mask_origin_y_) + static_cast<float>(mask_->h);
+
+        float offset_x_local = local_bottom_center_x - static_cast<float>(pivot_x);
+        float offset_y_local = local_bottom_center_y - static_cast<float>(pivot_y);
+        if (flipped_) {
+            offset_x_local = -offset_x_local;
+        }
+        const float offset_x_screen = offset_x_local * inv_scale * effects.distance_scale;
+        const float offset_y_screen = offset_y_local * inv_scale * effects.distance_scale * effects.vertical_scale;
+        const SDL_Point& base = effects.screen_position;
+        SDL_Point bottom_center{
+            base.x + static_cast<int>(std::lround(offset_x_screen)), base.y + static_cast<int>(std::lround(offset_y_screen)) };
+
+        SDL_Rect dst{
+            bottom_center.x - sw / 2,
+            bottom_center.y - sh,
+            sw,
+            sh
+        };
+
+        const float scale_x = static_cast<float>(dst.w) / static_cast<float>(std::max(1, mask_->w));
+        const float scale_y = static_cast<float>(dst.h) / static_cast<float>(std::max(1, mask_->h));
+
+        const int mx = e.button.x;
+        const int my = e.button.y;
+        float dx = static_cast<float>(mx - bottom_center.x);
+        float dy = static_cast<float>(my - bottom_center.y);
+        float local_fx = (flipped_ ? (-dx / std::max(1e-6f, scale_x)) : (dx / std::max(1e-6f, scale_x))) + (static_cast<float>(mask_->w) * 0.5f);
+        float local_fy = (dy / std::max(1e-6f, scale_y)) + static_cast<float>(mask_->h);
+        int sx = static_cast<int>(std::lround(local_fx));
+        int sy = static_cast<int>(std::lround(local_fy));
+        int lx = sx + mask_origin_x_;
+        int ly = sy + mask_origin_y_;
+
+        // Hit test existing markers
+        int hit_index = -1;
+        const int threshold = 8;
+        const int threshold2 = threshold * threshold;
+        for (int i = 0; i < static_cast<int>(geometry_points_.size()); ++i) {
+            int lpx = geometry_points_[i].x - mask_origin_x_;
+            int lpy = geometry_points_[i].y - mask_origin_y_;
+            float sx_screen = bottom_center.x + (flipped_ ? -((static_cast<float>(lpx) - static_cast<float>(mask_->w) * 0.5f) * scale_x)
+                                                          :  ((static_cast<float>(lpx) - static_cast<float>(mask_->w) * 0.5f) * scale_x));
+            float sy_screen = bottom_center.y + ((static_cast<float>(lpy) - static_cast<float>(mask_->h)) * scale_y);
+            int dxp = static_cast<int>(std::lround(sx_screen)) - mx;
+            int dyp = static_cast<int>(std::lround(sy_screen)) - my;
+            if (dxp * dxp + dyp * dyp <= threshold2) { hit_index = i; break; }
+        }
+
+        if (hit_index >= 0) {
+            geometry_points_.erase(geometry_points_.begin() + hit_index);
+        } else {
+            ensure_mask_contains(lx, ly, 2);
+            geometry_points_.push_back(SDL_Point{ lx, ly });
+        }
+        geometry_dirty_ = true;
+        rebuild_mask_from_geometry();
+        upload_mask();
+        return true;
+    }
     return false;
 }
 
 void AreaOverlayEditor::render(SDL_Renderer* r) {
     if (!active_) return;
 
-    if (assets_ && asset_ && mask_ && r) {
+    if (assets_ && mask_ && r) {
         do {
             if (pending_mask_generation_) {
                 if (!generate_mask_from_asset(r)) {
@@ -587,23 +761,9 @@ void AreaOverlayEditor::render(SDL_Renderer* r) {
             if (scale <= 0.0f) break;
             const float inv_scale = 1.0f / scale;
 
-            int fw = asset_->cached_w;
-            int fh = asset_->cached_h;
-            if (fw == 0 || fh == 0) {
-                if (SDL_Texture* final_tex = asset_->get_final_texture()) {
-                    SDL_QueryTexture(final_tex, nullptr, nullptr, &fw, &fh);
-                }
-                if (fw == 0 || fh == 0) {
-                    if (SDL_Texture* base_tex = asset_->get_current_frame()) {
-                        SDL_QueryTexture(base_tex, nullptr, nullptr, &fw, &fh);
-                    }
-                }
-            }
-            if (fw == 0 || fh == 0) {
-                fw = std::max(1, canvas_w_);
-                fh = std::max(1, canvas_h_);
-            }
-
+            // Base size derived from canvas, not strictly the asset
+            int fw = std::max(1, canvas_w_);
+            int fh = std::max(1, canvas_h_);
             float base_sw = static_cast<float>(fw) * inv_scale;
             float base_sh = static_cast<float>(fh) * inv_scale;
             if (base_sw <= 0.0f || base_sh <= 0.0f) break;
@@ -612,7 +772,7 @@ void AreaOverlayEditor::render(SDL_Renderer* r) {
             if (reference_screen_height <= 0.0f) reference_screen_height = 1.0f;
 
             const camera::RenderEffects effects = cam.compute_render_effects(
-                SDL_Point{ asset_->pos.x, asset_->pos.y }, base_sh, reference_screen_height);
+                has_anchor_ ? anchor_world_ : SDL_Point{0,0}, base_sh, reference_screen_height);
 
             float scaled_sw = base_sw * effects.distance_scale;
             float scaled_sh = base_sh * effects.distance_scale;
@@ -631,7 +791,7 @@ void AreaOverlayEditor::render(SDL_Renderer* r) {
             float offset_x_local = local_bottom_center_x - static_cast<float>(pivot_x);
             float offset_y_local = local_bottom_center_y - static_cast<float>(pivot_y);
 
-            if (asset_->flipped) {
+            if (flipped_) {
                 offset_x_local = -offset_x_local;
             }
 
@@ -665,7 +825,43 @@ void AreaOverlayEditor::render(SDL_Renderer* r) {
 
             SDL_SetTextureBlendMode(mask_tex_, SDL_BLENDMODE_BLEND);
             SDL_SetTextureAlphaMod(mask_tex_, mask_alpha_);
-            SDL_RenderCopyEx(r, mask_tex_, nullptr, &dst, 0.0, nullptr, asset_->flipped ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE);
+            SDL_RenderCopyEx(r, mask_tex_, nullptr, &dst, 0.0, nullptr, flipped_ ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE);
+
+            // Draw geometry tool preview: edges + point markers
+            if (mode_ == Mode::Geometry && !geometry_points_.empty()) {
+                const float scale_x = static_cast<float>(dst.w) / static_cast<float>(std::max(1, mask_->w));
+                const float scale_y = static_cast<float>(dst.h) / static_cast<float>(std::max(1, mask_->h));
+                SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
+                SDL_SetRenderDrawColor(r, 0, 255, 0, 220);
+                for (size_t i = 1; i < geometry_points_.size(); ++i) {
+                    float lpx0 = static_cast<float>(geometry_points_[i-1].x - mask_origin_x_);
+                    float lpy0 = static_cast<float>(geometry_points_[i-1].y - mask_origin_y_);
+                    float lpx1 = static_cast<float>(geometry_points_[i].x   - mask_origin_x_);
+                    float lpy1 = static_cast<float>(geometry_points_[i].y   - mask_origin_y_);
+                    float sx0 = bottom_center.x + (flipped_ ? -((lpx0 - static_cast<float>(mask_->w)*0.5f) * scale_x)
+                                                            :  ((lpx0 - static_cast<float>(mask_->w)*0.5f) * scale_x));
+                    float sy0 = bottom_center.y + ((lpy0 - static_cast<float>(mask_->h)) * scale_y);
+                    float sx1 = bottom_center.x + (flipped_ ? -((lpx1 - static_cast<float>(mask_->w)*0.5f) * scale_x)
+                                                            :  ((lpx1 - static_cast<float>(mask_->w)*0.5f) * scale_x));
+                    float sy1 = bottom_center.y + ((lpy1 - static_cast<float>(mask_->h)) * scale_y);
+                    SDL_RenderDrawLine(r, static_cast<int>(std::lround(sx0)), static_cast<int>(std::lround(sy0)),
+                                          static_cast<int>(std::lround(sx1)), static_cast<int>(std::lround(sy1)));
+                }
+                for (size_t i = 0; i < geometry_points_.size(); ++i) {
+                    float lpx = static_cast<float>(geometry_points_[i].x - mask_origin_x_);
+                    float lpy = static_cast<float>(geometry_points_[i].y - mask_origin_y_);
+                    float sx = bottom_center.x + (flipped_ ? -((lpx - static_cast<float>(mask_->w)*0.5f) * scale_x)
+                                                           :  ((lpx - static_cast<float>(mask_->w)*0.5f) * scale_x));
+                    float sy = bottom_center.y + ((lpy - static_cast<float>(mask_->h)) * scale_y);
+                    int cx = static_cast<int>(std::lround(sx));
+                    int cy = static_cast<int>(std::lround(sy));
+                    SDL_Rect mr{ cx - 3, cy - 3, 6, 6 };
+                    SDL_SetRenderDrawColor(r, 255, 255, 0, 240);
+                    SDL_RenderFillRect(r, &mr);
+                    SDL_SetRenderDrawColor(r, 0, 0, 0, 255);
+                    SDL_RenderDrawRect(r, &mr);
+                }
+            }
         } while (false);
     }
 
@@ -754,6 +950,46 @@ std::vector<SDL_Point> AreaOverlayEditor::trace_polygon_from_mask() const {
 
 void AreaOverlayEditor::save_area() {
     if (!info_) {
+        return;
+    }
+    // Geometry mode: save drawn polygon points directly
+    if (mode_ == Mode::Geometry) {
+        if (geometry_points_.size() < 3) {
+            bool removed = info_->remove_area(area_name_);
+            if (removed) {
+                (void)info_->update_info_json();
+                saved_since_begin_ = true;
+            }
+            cancel();
+            return;
+        }
+
+        std::vector<Area::Point> area_points;
+        area_points.reserve(geometry_points_.size());
+        for (const auto& p : geometry_points_) {
+            area_points.push_back(SDL_Point{ p.x, p.y });
+        }
+        if (area_points.size() >= 2) {
+            const auto& first = area_points.front();
+            const auto& last = area_points.back();
+            if (first.x == last.x && first.y == last.y) {
+                area_points.pop_back();
+            }
+        }
+        if (area_points.size() < 3) {
+            bool removed = info_->remove_area(area_name_);
+            if (removed) {
+                (void)info_->update_info_json();
+                saved_since_begin_ = true;
+            }
+            cancel();
+            return;
+        }
+        Area area(area_name_, area_points);
+        info_->upsert_area_from_editor(area);
+        (void)info_->update_info_json();
+        saved_since_begin_ = true;
+        cancel();
         return;
     }
     if (!mask_) {

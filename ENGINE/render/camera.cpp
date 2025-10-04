@@ -425,6 +425,15 @@ void camera::apply_camera_settings(const nlohmann::json& data) {
         }
     }
 
+    auto render_areas_it = data.find("render_areas_enabled");
+    if (render_areas_it != data.end()) {
+        if (render_areas_it->is_boolean()) {
+            render_areas_enabled_ = render_areas_it->get<bool>();
+        } else if (render_areas_it->is_number_integer()) {
+            render_areas_enabled_ = render_areas_it->get<int>() != 0;
+        }
+    }
+
     try_read_float("render_distance", settings_.render_distance);
     try_read_float("parallax_strength", settings_.parallax_strength);
     try_read_float("foreshorten_strength", settings_.foreshorten_strength);
@@ -462,6 +471,7 @@ nlohmann::json camera::camera_settings_to_json() const {
     j["distance_scale_strength"] = settings_.distance_scale_strength;
     j["height_at_zoom1"]       = settings_.height_at_zoom1;
     j["tripod_distance_y"]     = settings_.tripod_distance_y;
+    j["render_areas_enabled"]  = render_areas_enabled_;
     return j;
 }
 

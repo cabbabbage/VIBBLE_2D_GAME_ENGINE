@@ -3,6 +3,7 @@
 #include "asset/Asset.hpp"
 #include "light_map.hpp"
 #include "render/camera.hpp"
+#include "render_area.hpp"
 #include <algorithm>
 #include <cmath>
 #include <iostream>
@@ -181,6 +182,7 @@ void SceneRenderer::render() {
     }
 
     const auto& camera_state = assets_->getView();
+    const bool debug_render_areas = camera_state.render_areas_enabled();
     float scale = camera_state.get_scale();
     float inv_scale = 1.0f / scale;
     int min_visible_w = static_cast<int>(screen_width_  * MIN_VISIBLE_SCREEN_RATIO);
@@ -202,6 +204,15 @@ void SceneRenderer::render() {
 
     const auto& active_assets = assets_->getActive();
     const float highlight_pulse = 0.45f + 0.55f * std::sin(render_call_count * 0.18f);
+
+    struct AreaOverlayRequest {
+        Asset* asset = nullptr;
+        float asset_screen_height = 0.0f;
+    };
+    std::vector<AreaOverlayRequest> area_requests;
+    if (debug_render_areas) {
+        area_requests.reserve(active_assets.size());
+    }
 
     for (Asset* a : active_assets) {
         if (!a || !a->info) continue;
@@ -298,6 +309,10 @@ void SceneRenderer::render() {
             SDL_SetTextureColorMod(final_tex, 255, 255, 255);
             SDL_SetTextureAlphaMod(final_tex, 255);
         }
+
+        if (debug_render_areas && fb.w > 0 && fb.h > 0) {
+            area_requests.push_back(AreaOverlayRequest{ a, static_cast<float>(fb.h) });
+        }
     }
 
     SDL_SetRenderTarget(renderer_, scene_target_tex_);
@@ -305,6 +320,13 @@ void SceneRenderer::render() {
         z_light_pass_->render(debugging);
     }
     if (assets_) assets_->render_overlays(renderer_);
+
+    if (debug_render_areas) {
+        for (const auto& request : area_requests) {
+            if (!request.asset) continue;
+            render_asset_debug_areas(renderer_, camera_state, *request.asset, request.asset_screen_height, player_screen_height);
+        }
+    }
 
     if (scene_target_tex_) {
         SDL_SetRenderTarget(renderer_, nullptr);

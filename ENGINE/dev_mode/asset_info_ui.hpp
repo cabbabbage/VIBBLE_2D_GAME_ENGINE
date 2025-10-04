@@ -58,7 +58,7 @@ class AssetInfoUI {
 
     std::vector<std::unique_ptr<class DockableCollapsible>> sections_;
     class Section_BasicInfo* basic_info_section_ = nullptr;
-    class Section_Areas* areas_section_ = nullptr;
+    
     class Section_Lighting* lighting_section_ = nullptr;
     class Asset* target_asset_ = nullptr;
     mutable int scroll_ = 0;
