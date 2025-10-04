@@ -17,28 +17,6 @@
         "path": "default"
       },
       "speed_factor": 1
-    },
-    "group": {
-      "flipped_source": false,
-      "locked": false,
-      "movement": [
-        [
-          0,
-          0
-        ],
-        [
-          0,
-          0
-        ]
-      ],
-      "number_of_frames": 2,
-      "reverse_source": false,
-      "source": {
-        "kind": "folder",
-        "name": null,
-        "path": "group"
-      },
-      "speed_factor": 1
     }
   },
   "anti_tags": [],
@@ -78,5 +56,7 @@
     "impassable"
   ],
   "update_radius": 1000,
-  "z_threshold": 34
+  "z_threshold": 34,
+  "mappings": {},
+  "start": ""
 }

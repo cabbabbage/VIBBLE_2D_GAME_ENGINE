@@ -73,7 +73,22 @@ bool Section_SpawnGroups::handle_event(const SDL_Event& e) {
 
 void Section_SpawnGroups::render(SDL_Renderer* r) const {
     DockableCollapsible::render(r);
-    if (editor_) editor_->render(r);
+    if (!editor_) return;
+
+    SDL_Rect prev_clip{};
+    SDL_RenderGetClipRect(r, &prev_clip);
+#if SDL_VERSION_ATLEAST(2,0,4)
+    const SDL_bool was_clipping = SDL_RenderIsClipEnabled(r);
+#else
+    const SDL_bool was_clipping = (prev_clip.w != 0 || prev_clip.h != 0) ? SDL_TRUE : SDL_FALSE;
+#endif
+    SDL_RenderSetClipRect(r, nullptr);
+    editor_->render(r);
+    if (was_clipping == SDL_TRUE) {
+        SDL_RenderSetClipRect(r, &prev_clip);
+    } else {
+        SDL_RenderSetClipRect(r, nullptr);
+    }
 }
 
 void Section_SpawnGroups::reload_from_file() {

@@ -189,6 +189,25 @@
   "size_settings": {
     "scale_percentage": 7.0
   },
+  "spawn_groups": [
+    {
+      "candidates": [
+        {
+          "chance": 0,
+          "name": "null"
+        }
+      ],
+      "chance_denominator": 100,
+      "check_overlap": false,
+      "display_name": "New Spawn",
+      "enforce_spacing": false,
+      "max_number": 1,
+      "min_number": 1,
+      "position": "Exact",
+      "priority": 0,
+      "spawn_id": "spn-c3fa5c634749"
+    }
+  ],
   "tags": [
     "default",
     "light",

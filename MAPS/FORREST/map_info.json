@@ -502,6 +502,7 @@
           "origional_height": 3180,
           "origional_width": 3180,
           "position": "Perimeter",
+          "priority": 0,
           "radius": 1121,
           "spawn_id": "spn-7d847a71ac07"
         },
@@ -526,7 +527,25 @@
           "origional_height": 1248,
           "origional_width": 1248,
           "position": "Exact",
+          "priority": 1,
           "spawn_id": "spn-6d19915360f2"
+        },
+        {
+          "candidates": [
+            {
+              "chance": 0,
+              "name": "null"
+            }
+          ],
+          "chance_denominator": 0,
+          "check_overlap": false,
+          "display_name": "New Spawn",
+          "enforce_spacing": false,
+          "max_number": 1,
+          "min_number": 1,
+          "position": "Exact",
+          "priority": 2,
+          "spawn_id": "spn-6c844fbe9cd6"
         }
       ],
       "width_max": 3612,

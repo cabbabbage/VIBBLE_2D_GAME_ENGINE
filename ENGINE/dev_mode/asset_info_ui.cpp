@@ -339,6 +339,13 @@ void AssetInfoUI::handle_event(const SDL_Event& e) {
 
     if (!visible_ || !info_) return;
 
+    // Give sections (and any floating overlays they manage) first chance to
+    // consume the event before we enforce pointer bounds. This allows floating
+    // panels like the Spawn Groups editor to remain interactive even when they
+    // extend outside the main asset info panel.
+    for (auto& s : sections_) {
+        if (s->handle_event(e)) return;
+    }
 
     bool pointer_inside = false;
     if (pointer_event) {
@@ -366,10 +373,6 @@ void AssetInfoUI::handle_event(const SDL_Event& e) {
     if (e.type == SDL_KEYDOWN && e.key.keysym.sym == SDLK_ESCAPE) {
         close();
         return;
-    }
-
-    for (auto& s : sections_) {
-        if (s->handle_event(e)) return;
     }
 
     if (configure_btn_ && configure_btn_->handle_event(e)) {
