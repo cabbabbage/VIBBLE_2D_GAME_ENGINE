@@ -652,7 +652,7 @@ bool RoomConfigurator::any_panel_visible() const { return visible(); }
 
 void RoomConfigurator::rebuild_rows() {
     DockableCollapsible::Rows rows;
-    spawn_rows_.clear();
+    // rows owned by SpawnGroupList are rebuilt each time via append_rows
     spawn_groups_label_.reset();
     add_group_btn_.reset();
     add_group_btn_w_.reset();

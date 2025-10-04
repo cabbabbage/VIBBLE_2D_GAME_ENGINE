@@ -169,6 +169,7 @@ private:
     void duplicate_spawn_group_internal(const std::string& spawn_id);
     void delete_spawn_group_internal(const std::string& spawn_id);
     bool remove_spawn_group_by_id(const std::string& spawn_id);
+    void move_spawn_group_internal(const std::string& spawn_id, int dir);
     void open_spawn_group_editor_by_id(const std::string& spawn_id);
     void reopen_room_configurator();
     void process_pending_spawn_group_open();

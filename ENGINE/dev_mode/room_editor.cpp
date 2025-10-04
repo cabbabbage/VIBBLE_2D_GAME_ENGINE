@@ -1223,6 +1223,12 @@ void RoomEditor::ensure_room_configurator() {
             [this](const std::string& spawn_id) {
                 delete_spawn_group_internal(spawn_id);
             },
+            [this](const std::string& spawn_id) {
+                move_spawn_group_internal(spawn_id, -1);
+            },
+            [this](const std::string& spawn_id) {
+                move_spawn_group_internal(spawn_id, +1);
+            },
             [this]() {
                 if (active_modal_ == ActiveModal::AssetInfo) {
                     pulse_active_modal_header();
@@ -1845,6 +1851,10 @@ void RoomEditor::add_spawn_group_internal() {
     entry["candidates"] = nlohmann::json::array();
     entry["candidates"].push_back({{"name", "null"}, {"chance", 0}});
     arr.push_back(entry);
+    // New group gets lowest priority (end of list)
+    for (size_t i = 0; i < arr.size(); ++i) {
+        if (arr[i].is_object()) arr[i]["priority"] = static_cast<int>(i);
+    }
     sanitize_perimeter_spawn_groups(arr);
     current_room_->save_assets_json();
     rebuild_room_spawn_id_cache();
@@ -1874,6 +1884,10 @@ void RoomEditor::duplicate_spawn_group_internal(const std::string& spawn_id) {
         duplicate["display_name"] = name + " Copy";
     }
     arr.push_back(duplicate);
+    // Renumber priorities to match order
+    for (size_t i = 0; i < arr.size(); ++i) {
+        if (arr[i].is_object()) arr[i]["priority"] = static_cast<int>(i);
+    }
     if (sanitize_perimeter_spawn_groups(arr)) {
 
         for (auto& item : arr) {
@@ -1928,6 +1942,10 @@ bool RoomEditor::remove_spawn_group_by_id(const std::string& spawn_id) {
         return false;
     }
     arr.erase(it, arr.end());
+    // Renumber priorities after deletion
+    for (size_t i = 0; i < arr.size(); ++i) {
+        if (arr[i].is_object()) arr[i]["priority"] = static_cast<int>(i);
+    }
 
     if (assets_) {
         std::vector<Asset*> to_delete;
@@ -1946,6 +1964,35 @@ bool RoomEditor::remove_spawn_group_by_id(const std::string& spawn_id) {
         }
     }
     return true;
+}
+
+// dir: -1 for up, +1 for down
+void RoomEditor::move_spawn_group_internal(const std::string& spawn_id, int dir) {
+    if (!current_room_ || spawn_id.empty() || (dir != -1 && dir != +1)) return;
+    auto& root = current_room_->assets_data();
+    auto& arr = ensure_spawn_groups_array(root);
+    if (!arr.is_array() || arr.size() <= 1) return;
+    int idx = -1;
+    for (size_t i = 0; i < arr.size(); ++i) {
+        const auto& e = arr[i];
+        if (!e.is_object()) continue;
+        if (e.contains("spawn_id") && e["spawn_id"].is_string() && e["spawn_id"].get<std::string>() == spawn_id) {
+            idx = static_cast<int>(i);
+            break;
+        }
+    }
+    if (idx < 0) return;
+    int target = idx + dir;
+    if (target < 0 || target >= static_cast<int>(arr.size())) return;
+    std::swap(arr[idx], arr[target]);
+    // Renumber priorities to match order
+    for (size_t i = 0; i < arr.size(); ++i) {
+        if (arr[i].is_object()) arr[i]["priority"] = static_cast<int>(i);
+    }
+    current_room_->save_assets_json();
+    rebuild_room_spawn_id_cache();
+    refresh_spawn_groups_config_ui();
+    reopen_room_configurator();
 }
 
 void RoomEditor::open_spawn_group_editor_by_id(const std::string& spawn_id) {
