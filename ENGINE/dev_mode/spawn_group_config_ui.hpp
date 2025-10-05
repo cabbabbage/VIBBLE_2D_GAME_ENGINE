@@ -14,7 +14,6 @@ class Input;
 class ButtonWidget;
 class CheckboxWidget;
 class DropdownWidget;
-class LabelWidget;
 class RangeSliderWidget;
 class SliderWidget;
 class TextBoxWidget;
@@ -28,14 +27,14 @@ class SearchAssets;
 
 class SpawnGroupsConfigPanel : public DockableCollapsible {
 public:
-    SpawnGroupsConfigPanel(int start_x = 32, int start_y = 32);
+    SpawnGroupsConfigPanel(int start_x = 480, int start_y = 120);
     ~SpawnGroupsConfigPanel();
 
     struct ChangeSummary {
         bool method_changed = false;
         bool quantity_changed = false;
         std::string method;
-};
+    };
 
     void load(const nlohmann::json& asset);
     void open(const nlohmann::json& data, std::function<void(const nlohmann::json&)> on_save);
@@ -63,7 +62,6 @@ public:
     void remove_on_close_callback(size_t handle);
     void clear_on_close_callbacks();
     void set_floating_stack_key(std::string key);
-    // Provide area names for link-to-area feature; if unset, link UI is hidden
     void set_area_names_provider(std::function<std::vector<std::string>()> provider);
 
 private:
@@ -76,32 +74,44 @@ private:
         std::unique_ptr<ButtonWidget> remove_widget;
         std::string last_name;
         int last_chance = 0;
-};
+    };
 
-    void rebuild_layout();
-    void rebuild_method_widget();
-    void rebuild_quantity_widget();
-    void rebuild_perimeter_widget();
-    void rebuild_candidate_summary();
-    void ensure_candidate_controls();
+    struct CloseCallbackEntry {
+        size_t id = 0;
+        std::function<void()> cb;
+    };
+
+    void build_static_controls();
+    void rebuild_rows();
+    void refresh_method_control();
+    void refresh_quantity_control();
+    void refresh_perimeter_control();
+    void refresh_area_controls();
+    void update_candidate_summary();
     void sync_from_widgets();
     void sync_candidates();
-    void add_candidate(const std::string& name, int chance);
-    void remove_candidate(const CandidateRow* row);
+    void add_candidate_row(const std::string& name, int chance);
+    void remove_candidate_row(CandidateRow* target);
+    void ensure_candidate_rows();
+    void open_asset_search();
     void clamp_to_screen();
     void dispatch_save();
     void mark_dirty();
+    void notify_close_listeners();
+    void update_asset_search_anchor();
+    void reset_area_selection();
 
     std::vector<std::string> spawn_methods_;
     nlohmann::json entry_;
     std::string spawn_id_;
     std::string panel_title_;
 
-    std::unique_ptr<LabelWidget> header_label_;
-    std::unique_ptr<LabelWidget> ownership_label_;
-    std::unique_ptr<LabelWidget> locked_method_label_;
-    std::unique_ptr<LabelWidget> quantity_label_;
-    std::unique_ptr<LabelWidget> candidate_summary_label_;
+    std::unique_ptr<class StaticLabel> header_label_;
+    std::unique_ptr<class StaticLabel> ownership_label_;
+    std::unique_ptr<class StaticLabel> locked_method_label_;
+    std::unique_ptr<class StaticLabel> quantity_label_;
+    std::unique_ptr<class StaticLabel> candidate_summary_label_;
+    std::unique_ptr<class StaticLabel> area_hint_label_;
 
     std::unique_ptr<DMDropdown> method_dropdown_;
     std::unique_ptr<DropdownWidget> method_widget_;
@@ -115,21 +125,23 @@ private:
     std::unique_ptr<SliderWidget> perimeter_widget_;
     std::unique_ptr<DMButton> add_candidate_button_;
     std::unique_ptr<ButtonWidget> add_candidate_widget_;
-    std::unique_ptr<DMButton> link_area_button_;
-    std::unique_ptr<ButtonWidget> link_area_widget_;
-    std::unique_ptr<DMButton> unlink_area_button_;
-    std::unique_ptr<ButtonWidget> unlink_area_widget_;
+    std::unique_ptr<DMDropdown> area_dropdown_;
+    std::unique_ptr<DropdownWidget> area_dropdown_widget_;
+    std::unique_ptr<DMButton> area_clear_button_;
+    std::unique_ptr<ButtonWidget> area_clear_widget_;
 
     std::vector<std::unique_ptr<CandidateRow>> candidates_;
 
     std::unique_ptr<SearchAssets> asset_search_;
-    // area picking panel
-    struct AreaPicker;
-    std::unique_ptr<AreaPicker> area_picker_;
     std::function<std::vector<std::string>()> area_names_provider_;
+    std::vector<std::string> area_names_;
+    std::vector<std::string> area_dropdown_options_;
 
     std::function<void(const nlohmann::json&)> on_save_callback_;
     std::function<void()> on_close_callback_;
+    std::vector<CloseCallbackEntry> close_callbacks_;
+    size_t next_close_callback_id_ = 1;
+
     bool dirty_ = false;
 
     ChangeSummary pending_summary_;
@@ -154,15 +166,10 @@ private:
     SDL_Color ownership_color_{255, 255, 255, 255};
     bool has_ownership_color_ = false;
 
-    struct CloseCallbackEntry {
-        size_t id = 0;
-        std::function<void()> cb;
-};
-    std::vector<CloseCallbackEntry> close_callbacks_;
-    size_t next_close_callback_id_ = 1;
-    std::string floating_stack_key_;
+    SDL_Point default_position_{0, 0};
+    bool has_custom_position_ = false;
 
-    void notify_close_listeners();
+    std::string floating_stack_key_;
 };
 
 using SpawnGroupConfigUI [[deprecated("Use SpawnGroupsConfigPanel instead")]] = SpawnGroupsConfigPanel;
