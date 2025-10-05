@@ -105,6 +105,9 @@ void AssetSpawnPlanner::parse_asset_spawns(const Area& area) {
         if (display_name.empty()) display_name = get_opt_str(asset, "name");
         if (display_name.empty()) display_name = spawn_id;
 
+        // Optional link to a named room area
+        std::string link_name = get_opt_str(asset, "link");
+
         int min_num = asset.value("min_number", 1);
         int max_num = asset.value("max_number", min_num);
         if (min_num < 0) min_num = 0;
@@ -348,6 +351,9 @@ void AssetSpawnPlanner::parse_asset_spawns(const Area& area) {
         s.spawn_id = spawn_id;
         s.quantity = quantity;
         s.priority = priority;
+        if (!link_name.empty()) {
+            s.link_area_name = link_name;
+        }
 
         s.check_spacing     = asset.value("check_spacing", asset.value("check_overlap", false));
         s.check_min_spacing = asset.value("enforce_spacing", asset.value("check_min_spacing", false));

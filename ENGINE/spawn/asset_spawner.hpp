@@ -40,4 +40,5 @@ class AssetSpawner {
     std::unordered_map<std::string, std::shared_ptr<AssetInfo>> asset_info_library_;
     std::vector<std::unique_ptr<Asset>> all_;
     bool boundary_mode_ = false;
+    Room* current_room_ = nullptr;
 };

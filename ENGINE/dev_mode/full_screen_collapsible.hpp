@@ -27,6 +27,7 @@ public:
 };
 
     explicit FullScreenCollapsible(std::string title);
+    void set_title(const std::string& title);
 
     void set_bounds(int width, int height);
 

@@ -51,6 +51,8 @@ data_section_(data_section)
         if (!assets_json.is_object()) {
                 assets_json = json::object();
         }
+        // Parse any room-level named areas (trigger/spawning) into class members
+        load_named_areas_from_json();
         int map_radius_int = static_cast<int>(std::round(map_radius));
         if (map_radius_int < 0) map_radius_int = 0;
         int map_w = map_radius_int * 2;
@@ -161,6 +163,53 @@ void Room::bounds_to_size(const std::tuple<int,int,int,int>& b, int& w, int& h) 
 	std::tie(minx, miny, maxx, maxy) = b;
 	w = std::max(0, maxx - minx);
 	h = std::max(0, maxy - miny);
+}
+
+void Room::load_named_areas_from_json() {
+        areas.clear();
+        try {
+                if (!assets_json.is_object()) return;
+                if (!assets_json.contains("areas") || !assets_json["areas"].is_array()) return;
+                for (const auto& item : assets_json["areas"]) {
+                        if (!item.is_object()) continue;
+                        const std::string name = item.value("name", std::string{});
+                        if (name.empty()) continue;
+                        const std::string type = item.value("type", std::string{});
+                        int ax = 0;
+                        int ay = 0;
+                        if (item.contains("anchor") && item["anchor"].is_object()) {
+                                ax = item["anchor"].value("x", 0);
+                                ay = item["anchor"].value("y", 0);
+                        }
+                        std::vector<SDL_Point> pts;
+                        if (item.contains("points") && item["points"].is_array()) {
+                                pts.reserve(item["points"].size());
+                                for (const auto& p : item["points"]) {
+                                        if (!p.is_object()) continue;
+                                        int rx = p.value("x", 0);
+                                        int ry = p.value("y", 0);
+                                        pts.push_back(SDL_Point{ ax + rx, ay + ry });
+                                }
+                        }
+                        if (pts.size() < 3) continue;
+                        NamedArea na;
+                        na.name = name;
+                        na.type = type;
+                        na.area = std::make_unique<Area>(name, pts);
+                        if (na.area) na.area->set_type(type);
+                        areas.push_back(std::move(na));
+                }
+        } catch (...) {
+                // Silently ignore malformed area entries
+        }
+}
+
+Area* Room::find_area(const std::string& name) {
+        if (name.empty()) return nullptr;
+        for (auto& na : areas) {
+                if (na.name == name && na.area) return na.area.get();
+        }
+        return nullptr;
 }
 
 nlohmann::json Room::create_static_room_json(std::string name) {
@@ -346,6 +395,8 @@ bool Room::is_spawn_room() const {
 }
 
 void Room::save_assets_json() const {
+        // Refresh cached named areas from current JSON before saving
+        const_cast<Room*>(this)->load_named_areas_from_json();
         if (room_data_ptr_) {
                 *room_data_ptr_ = assets_json;
         }

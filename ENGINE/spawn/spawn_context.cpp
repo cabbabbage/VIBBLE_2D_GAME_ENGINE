@@ -53,6 +53,10 @@ Asset* SpawnContext::spawnAsset(const std::string& name,
                                 const std::string& spawn_id,
                                 const std::string& spawn_method)
 {
+        // If a clip area is set and the position is outside, skip spawn
+        if (clip_area_ && !clip_area_->contains_point(pos)) {
+                return nullptr;
+        }
         auto assetPtr = std::make_unique<Asset>(info, area, pos, depth, parent, spawn_id, spawn_method);
         Asset* raw = assetPtr.get();
         all_.push_back(std::move(assetPtr));

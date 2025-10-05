@@ -237,5 +237,10 @@ void Section_SpawnGroups::edit_spawn_group(const std::string& id) {
             build();
         }
     });
+    // Make the editor immediately interactive without waiting a frame
+    {
+        Input dummy;
+        editor_->update(dummy, screen_w_, screen_h_);
+    }
 }
 

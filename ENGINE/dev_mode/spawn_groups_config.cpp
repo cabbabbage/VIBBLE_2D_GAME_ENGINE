@@ -294,6 +294,12 @@ void SpawnGroupsConfig::open_entry(Entry& entry, int x, int y) {
         }
         if (on_change_) on_change_();
     });
+    // Ensure geometry/layout is computed immediately so the panel is interactive
+    // on the very first frame after opening (before the next update tick).
+    {
+        Input dummy;
+        entry.cfg->update(dummy, screen_w_, screen_h_);
+    }
 }
 
 std::optional<SpawnGroupsConfig::OpenSpawnGroupState> SpawnGroupsConfig::capture_open_spawn_group() const {

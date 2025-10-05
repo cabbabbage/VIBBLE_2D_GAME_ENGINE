@@ -1,6 +1,7 @@
 #include "spawn_group_config_ui.hpp"
 
 #include "DockableCollapsible.hpp"
+#include "FloatingDockableManager.hpp"
 #include "dm_styles.hpp"
 #include "widgets.hpp"
 #include "search_assets.hpp"
@@ -644,6 +645,13 @@ void SpawnGroupsConfigPanel::set_screen_dimensions(int width, int height) {
 }
 
 void SpawnGroupsConfigPanel::open_panel() {
+    const std::string title = panel_title_.empty() ? std::string("Spawn Group") : panel_title_;
+    auto close_cb = [this]() { this->close(); };
+    if (floating_stack_key_.empty()) {
+        FloatingDockableManager::instance().open_floating(title, this, close_cb);
+    } else {
+        FloatingDockableManager::instance().open_floating(title, this, close_cb, floating_stack_key_);
+    }
     set_visible(true);
     set_expanded(true);
     clamp_to_screen();

@@ -228,14 +228,26 @@ DevControls::DevControls(Assets* owner, int screen_w, int screen_h)
                 }
                 this->mode_ = Mode::RoomEditor;
                 apply_camera_area_render_flag();
-                if (map_mode_ui_) map_mode_ui_->set_header_mode(MapModeUI::HeaderMode::Room);
+                if (map_mode_ui_) {
+                    map_mode_ui_->set_header_mode(MapModeUI::HeaderMode::Room);
+                    if (auto* footer = map_mode_ui_->get_footer_panel()) {
+                        std::string label = std::string("Room: ") + (current_room_ ? current_room_->room_name : std::string{});
+                        footer->set_title(label);
+                    }
+                }
             } else if (mode == MapModeUI::HeaderMode::Area) {
                 if (this->mode_ == Mode::MapEditor) {
                     exit_map_editor_mode(false, true);
                 }
                 this->mode_ = Mode::AreaMode;
                 apply_camera_area_render_flag();
-                if (map_mode_ui_) map_mode_ui_->set_header_mode(MapModeUI::HeaderMode::Area);
+                if (map_mode_ui_) {
+                    map_mode_ui_->set_header_mode(MapModeUI::HeaderMode::Area);
+                    if (auto* footer = map_mode_ui_->get_footer_panel()) {
+                        std::string label = std::string("Area Mode — Room: ") + (current_room_ ? current_room_->room_name : std::string{});
+                        footer->set_title(label);
+                    }
+                }
                 // Default to 'all' view type when entering Area mode
                 active_area_type_filters_.clear();
                 active_area_type_filters_.insert("all");
@@ -313,6 +325,15 @@ void DevControls::set_current_room(Room* room) {
         room_editor_->set_current_room(room);
     }
     asset_filter_.set_current_room(room);
+    if (map_mode_ui_) {
+        if (auto* footer = map_mode_ui_->get_footer_panel()) {
+            std::string label;
+            if (mode_ == Mode::AreaMode) label = std::string("Area Mode — Room: ") + (current_room_ ? current_room_->room_name : std::string{});
+            else if (mode_ == Mode::RoomEditor) label = std::string("Room: ") + (current_room_ ? current_room_->room_name : std::string{});
+            else label = std::string("Map");
+            footer->set_title(label);
+        }
+    }
 }
 
 void DevControls::set_rooms(std::vector<Room*>* rooms) {
@@ -918,6 +939,13 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
                         if (asset_area_editor_) asset_area_editor_->attach_assets(assets_);
                         if (asset_area_editor_ && area_hovered_asset_->info) {
                             if (asset_area_editor_->begin(area_hovered_asset_->info.get(), area_hovered_asset_, area_type)) {
+                                // Update footer label to indicate what we're editing
+                                if (map_mode_ui_) {
+                                    if (auto* footer = map_mode_ui_->get_footer_panel()) {
+                                        std::string label = std::string("Editing ") + area_hovered_asset_->info->name + std::string(" — Area: ") + area_type;
+                                        footer->set_title(label);
+                                    }
+                                }
                                 consume(true);
                                 return;
                             }
@@ -997,6 +1025,38 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
             Uint8 pr=0,pg=0,pb=0,pa=0; SDL_GetRenderDrawColor(renderer, &pr, &pg, &pb, &pa);
 
             const camera& cam = assets_->getView();
+
+            // Draw room areas with hover/selection highlight
+            {
+                auto room_areas = parse_room_areas();
+                if (!room_areas.empty()) {
+                    for (int i = 0; i < static_cast<int>(room_areas.size()); ++i) {
+                        const std::string& t = room_areas[i].first;
+                        if (!type_visible(t)) continue;
+                        const auto& poly_world = room_areas[i].second;
+                        std::vector<SDL_Point> spts; spts.reserve(poly_world.size());
+                        for (const auto& wp : poly_world) spts.push_back(cam.map_to_screen(wp));
+                        if (spts.size() >= 3) {
+                            SDL_Color base = color_for_type(t);
+                            if (i == hovered_area_index_) base = SDL_Color{ std::min<Uint8>(255, Uint8(base.r + 30)), std::min<Uint8>(255, Uint8(base.g + 30)), std::min<Uint8>(255, Uint8(base.b + 30)), 120 };
+                            if (i == selected_area_index_) base = SDL_Color{ std::min<Uint8>(255, Uint8(base.r + 60)), std::min<Uint8>(255, Uint8(base.g + 60)), std::min<Uint8>(255, Uint8(base.b + 60)), 150 };
+#if SDL_VERSION_ATLEAST(2,0,18)
+                            std::vector<SDL_Vertex> verts; verts.reserve(spts.size());
+                            for (auto p : spts) { SDL_Vertex v{}; v.position=SDL_FPoint{(float)p.x,(float)p.y}; v.color=base; verts.push_back(v);} 
+                            std::vector<int> idxs; idxs.reserve((spts.size()-2)*3);
+                            for (size_t k=1;k+1<spts.size();++k){ idxs.push_back(0); idxs.push_back((int)k); idxs.push_back((int)(k+1)); }
+                            if (!idxs.empty()) SDL_RenderGeometry(renderer, nullptr, verts.data(), (int)verts.size(), idxs.data(), (int)idxs.size());
+#endif
+                        }
+                        if (!spts.empty()) {
+                            SDL_Color outline = (i == selected_area_index_) ? SDL_Color{255,255,255,200} : (i == hovered_area_index_ ? SDL_Color{230,230,230,180} : SDL_Color{220,220,220,120});
+                            std::vector<SDL_Point> pts = spts; pts.push_back(spts.front());
+                            SDL_SetRenderDrawColor(renderer, outline.r, outline.g, outline.b, outline.a);
+                            SDL_RenderDrawLines(renderer, pts.data(), (int)pts.size());
+                        }
+                    }
+                }
+            }
             // In asset modes, render asset areas for the selected type
             {
                 bool viewing_all = active_area_type_filters_.count("all") > 0;
@@ -1021,8 +1081,31 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
                                 Area world_area = a->get_area(na.name);
                                 const auto& wpts = world_area.get_points();
                                 if (wpts.size() < 3) continue;
+                                // Perspective-correct screen polygon around the asset pivot
+                                float scale = cam.get_scale();
+                                float inv_scale = (scale != 0.0f) ? (1.0f / scale) : 1.0f;
+                                float player_screen_height = 1.0f;
+                                Asset* playerAsset = assets_->player;
+                                if (playerAsset) {
+                                    int ph = playerAsset->cached_h;
+                                    if (ph <= 0) {
+                                        if (SDL_Texture* pf = playerAsset->get_final_texture()) SDL_QueryTexture(pf, nullptr, nullptr, nullptr, &ph);
+                                    }
+                                    if (ph > 0) player_screen_height = static_cast<float>(ph) * inv_scale;
+                                }
+                                if (player_screen_height <= 0.0f) player_screen_height = 1.0f;
+                                camera::RenderEffects eff = cam.compute_render_effects(SDL_Point{a->pos.x, a->pos.y}, 0.0f, player_screen_height);
+                                SDL_Point pivot_linear = cam.map_to_screen(SDL_Point{a->pos.x, a->pos.y});
+
                                 std::vector<SDL_Point> spts; spts.reserve(wpts.size());
-                                for (const auto& wp : wpts) spts.push_back(cam.map_to_screen(wp));
+                                for (const auto& wp : wpts) {
+                                    SDL_Point p_lin = cam.map_to_screen(wp);
+                                    const float dx = static_cast<float>(p_lin.x - pivot_linear.x);
+                                    const float dy = static_cast<float>(p_lin.y - pivot_linear.y);
+                                    const float sx = eff.screen_position.x + dx * eff.distance_scale;
+                                    const float sy = eff.screen_position.y + dy * (eff.distance_scale * eff.vertical_scale);
+                                    spts.push_back(SDL_Point{ static_cast<int>(std::lround(sx)), static_cast<int>(std::lround(sy)) });
+                                }
 #if SDL_VERSION_ATLEAST(2,0,18)
                                 if (spts.size() >= 3) {
                                     SDL_Color fill = SDL_Color{230, 200, 80, 50};
