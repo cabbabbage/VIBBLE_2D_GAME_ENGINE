@@ -410,6 +410,7 @@ void SpawnGroupsConfigPanel::rebuild_rows() {
 }
 
 void SpawnGroupsConfigPanel::request_rebuild_rows() {
+    DockableCollapsible::set_rows(DockableCollapsible::Rows{});
     rows_dirty_ = true;
 }
 
