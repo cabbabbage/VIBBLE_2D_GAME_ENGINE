@@ -22,6 +22,19 @@ constexpr int kChanceMin = 0;
 constexpr int kChanceMax = 1000;
 constexpr int kMaxPerimeterRadius = 10000;
 
+template <typename T>
+T json_value_or(const nlohmann::json& obj, const char* key, T default_value) {
+    auto it = obj.find(key);
+    if (it == obj.end() || it->is_null()) {
+        return default_value;
+    }
+    try {
+        return it->get<T>();
+    } catch (const nlohmann::json::exception&) {
+        return default_value;
+    }
+}
+
 int clamp_quantity(int value) {
     return std::clamp(value, kQuantityMin, kQuantityMax);
 }
@@ -263,7 +276,7 @@ void SpawnGroupsConfigPanel::refresh_perimeter_control() {
 }
 
 void SpawnGroupsConfigPanel::refresh_area_controls() {
-    std::string current_link = entry_.value("link", std::string{});
+    std::string current_link = json_value_or(entry_, "link", std::string{});
     if (area_hint_label_) {
         area_hint_label_->set_text(current_link.empty() ? "Linked area: (none)" : "Linked area: " + current_link);
     }
@@ -450,7 +463,7 @@ void SpawnGroupsConfigPanel::sync_candidates() {
         mark_dirty();
     }
 
-    if (entry_.value("chance_denominator", std::numeric_limits<int>::min()) != total) {
+    if (json_value_or(entry_, "chance_denominator", std::numeric_limits<int>::min()) != total) {
         entry_["chance_denominator"] = total;
         mark_dirty();
     }
@@ -532,7 +545,7 @@ void SpawnGroupsConfigPanel::sync_from_widgets() {
 
     if (area_dropdown_ && !area_dropdown_options_.empty()) {
         int selected = std::clamp(area_dropdown_->selected(), 0, static_cast<int>(area_dropdown_options_.size()) - 1);
-        std::string current = entry_.value("link", std::string{});
+        std::string current = json_value_or(entry_, "link", std::string{});
         std::string desired;
         if (selected > 0 && selected < static_cast<int>(area_dropdown_options_.size())) {
             desired = area_dropdown_options_[selected];
@@ -836,24 +849,24 @@ void SpawnGroupsConfigPanel::load(const nlohmann::json& asset) {
         }
     }
 
-    const std::string method = asset.value("position", spawn_methods_.empty() ? std::string{} : spawn_methods_.front());
+    const std::string method = json_value_or(asset, "position", spawn_methods_.empty() ? std::string{} : spawn_methods_.front());
     auto it = std::find(spawn_methods_.begin(), spawn_methods_.end(), method);
     method_index_ = (it != spawn_methods_.end()) ? static_cast<int>(std::distance(spawn_methods_.begin(), it)) : 0;
     baseline_method_ = spawn_methods_[method_index_];
     pending_summary_ = {};
     pending_summary_.method = baseline_method_;
 
-    quantity_min_ = clamp_quantity(asset.value("min_number", kQuantityMin));
-    quantity_max_ = clamp_quantity(asset.value("max_number", std::max(quantity_min_, kQuantityMin)));
+    quantity_min_ = clamp_quantity(json_value_or(asset, "min_number", kQuantityMin));
+    quantity_max_ = clamp_quantity(json_value_or(asset, "max_number", std::max(quantity_min_, kQuantityMin)));
     if (quantity_min_ > quantity_max_) {
         std::swap(quantity_min_, quantity_max_);
     }
     baseline_min_ = quantity_min_;
     baseline_max_ = quantity_max_;
 
-    overlap_enabled_ = asset.value("check_overlap", false);
-    spacing_enabled_ = asset.value("enforce_spacing", false);
-    perimeter_radius_ = std::max(0, asset.value("radius", asset.value("perimeter_radius", 0)));
+    overlap_enabled_ = json_value_or(asset, "check_overlap", false);
+    spacing_enabled_ = json_value_or(asset, "enforce_spacing", false);
+    perimeter_radius_ = std::max(0, json_value_or(asset, "radius", json_value_or(asset, "perimeter_radius", 0)));
 
     if (overlap_checkbox_) {
         overlap_checkbox_->set_value(overlap_enabled_);
@@ -869,8 +882,8 @@ void SpawnGroupsConfigPanel::load(const nlohmann::json& asset) {
     candidates_.clear();
     if (asset.contains("candidates") && asset["candidates"].is_array()) {
         for (const auto& candidate : asset["candidates"]) {
-            std::string name = candidate.value("name", std::string{});
-            int chance = candidate.value("chance", 0);
+            std::string name = json_value_or(candidate, "name", std::string{});
+            int chance = json_value_or(candidate, "chance", 0);
             add_candidate_row(name, chance);
         }
     }
