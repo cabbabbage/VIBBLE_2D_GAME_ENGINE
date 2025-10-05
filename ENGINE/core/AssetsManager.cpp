@@ -291,9 +291,10 @@ void Assets::apply_map_light_config() {
     scene->apply_map_light_config(*it);
 }
 
-void Assets::on_map_light_changed() {
+bool Assets::on_map_light_changed() {
     apply_map_light_config();
     save_map_info_json();
+    return true;
 }
 
 Assets::~Assets() {
@@ -374,7 +375,7 @@ void Assets::ensure_dev_controls() {
     dev_controls_->set_screen_dimensions(screen_width, screen_height);
     dev_controls_->set_rooms(&rooms_);
     dev_controls_->set_input(input);
-    dev_controls_->set_map_info(&map_info_json_, [this]() { on_map_light_changed(); });
+    dev_controls_->set_map_info(&map_info_json_, [this]() { return on_map_light_changed(); });
     dev_controls_->set_map_context(&map_info_json_, map_path_);
 }
 
@@ -579,7 +580,7 @@ void Assets::set_dev_mode(bool mode) {
             dev_controls_->set_screen_dimensions(screen_width, screen_height);
             dev_controls_->set_rooms(&rooms_);
             dev_controls_->set_input(input);
-            dev_controls_->set_map_info(&map_info_json_, [this]() { on_map_light_changed(); });
+            dev_controls_->set_map_info(&map_info_json_, [this]() { return on_map_light_changed(); });
             dev_controls_->set_map_context(&map_info_json_, map_path_);
             dev_controls_->resolve_current_room(current_room_);
         }
