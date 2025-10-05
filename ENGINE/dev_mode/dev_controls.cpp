@@ -33,6 +33,8 @@
 using devmode::sdl::event_point;
 using devmode::sdl::is_pointer_event;
 
+namespace {
+
 std::string to_lower_copy(std::string value) {
     std::transform(value.begin(), value.end(), value.begin(),
                    [](unsigned char c) { return static_cast<char>(std::tolower(c)); });

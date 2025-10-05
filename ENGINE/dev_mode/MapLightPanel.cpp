@@ -11,9 +11,7 @@
 
 using nlohmann::json;
 
-namespace {
-
-class WarningLabel : public Widget {
+class MapLightPanel::WarningLabel : public Widget {
 public:
     WarningLabel() = default;
 
@@ -74,8 +72,6 @@ private:
     std::string text_;
     SDL_Color color_{255, 120, 120, 255};
 };
-
-}  // namespace
 
 int MapLightPanel::clamp_int(int v, int lo, int hi) {
     return std::max(lo, std::min(hi, v));
@@ -157,11 +153,13 @@ void MapLightPanel::build_ui() {
         Widget* raw = w.get();
         widget_wrappers_.push_back(std::move(w));
         return raw;
-};
+    };
 
     Rows rows;
 
-    warning_label_ = static_cast<WarningLabel*>(add_widget(std::make_unique<WarningLabel>()));
+    auto warning_label = std::make_unique<WarningLabel>();
+    warning_label_ = warning_label.get();
+    add_widget(std::move(warning_label));
     if (warning_label_) {
         warning_label_->set_color(SDL_Color{255, 120, 120, 255});
         rows.push_back({ warning_label_ });

@@ -151,7 +151,7 @@ private:
     void set_mode(Mode new_mode);
 
 private:
-    void persist_map_info_to_disk() const;
+    bool persist_map_info_to_disk() const;
     const RoomAreaCache::PolygonList& room_area_polygons();
 
     Assets* assets_ = nullptr;

@@ -94,7 +94,8 @@ private:
 
     std::vector<std::unique_ptr<Widget>> widget_wrappers_;
 
-    class WarningLabel* warning_label_ = nullptr;
+    class WarningLabel;
+    WarningLabel* warning_label_ = nullptr;
 
     bool needs_sync_to_json_ = false;
 };
