@@ -30,6 +30,7 @@ public:
         bool active = false;
         bool momentary = false;
         const DMButtonStyle* style_override = nullptr;
+        const DMButtonStyle* active_style_override = nullptr;
         std::function<void(bool)> on_toggle;
 };
 

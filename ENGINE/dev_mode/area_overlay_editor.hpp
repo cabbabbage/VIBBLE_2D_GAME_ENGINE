@@ -13,6 +13,7 @@ class Input;
 class DockableCollapsible;
 class DMButton;
 class DMSlider;
+class camera;
 
 class AreaOverlayEditor {
 public:
@@ -52,6 +53,15 @@ private:
     std::vector<SDL_Point> trace_polygon_from_mask() const;
     void save_area();
     void rebuild_mask_from_geometry();
+
+    struct OverlayTransform {
+        SDL_Point anchor_screen{0, 0};
+        SDL_Rect  dst{0, 0, 0, 0};
+        SDL_Point pivot_in_dst{0, 0};
+        float     scale_x = 1.0f;
+        float     scale_y = 1.0f;
+    };
+    bool compute_overlay_transform(class camera& cam, OverlayTransform& out) const;
 
 private:
     Assets* assets_ = nullptr;

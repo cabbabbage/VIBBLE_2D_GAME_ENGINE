@@ -278,6 +278,7 @@ void MapModeUI::configure_footer_buttons() {
             extra.active = config.active;
             extra.momentary = config.momentary;
             extra.style_override = config.style_override;
+            extra.active_style_override = config.active_style_override;
             auto* cfg_ptr = &config;
             extra.on_toggle = [this, cfg_ptr, mode](bool active) {
                 if (cfg_ptr->on_toggle) {

@@ -8,6 +8,7 @@
 #include "utils/input.hpp"
 
 #include <algorithm>
+#include <limits>
 #include <utility>
 
 #include <SDL_ttf.h>
@@ -277,13 +278,6 @@ SpawnGroupsConfigPanel::SpawnGroupsConfigPanel(int start_x, int start_y)
             sync_candidates();
         });
     });
-
-    done_button_ = std::make_unique<DMButton>("Save & Close", &DMStyles::ListButton(), 140, DMButton::height());
-    done_widget_ = std::make_unique<ButtonWidget>(done_button_.get(), [this]() {
-        dispatch_save();
-        close();
-    });
-
     // Link/Unlink area buttons are created lazily in rebuild_layout() when provider is present
 
     rebuild_method_widget();
@@ -404,7 +398,10 @@ void SpawnGroupsConfigPanel::rebuild_layout() {
             if (!unlink_area_button_) {
                 unlink_area_button_ = std::make_unique<DMButton>("Unlink", &DMStyles::DeleteButton(), 90, DMButton::height());
                 unlink_area_widget_ = std::make_unique<ButtonWidget>(unlink_area_button_.get(), [this]() {
-                    if (entry_.contains("link")) entry_.erase("link");
+                    if (entry_.contains("link")) {
+                        entry_.erase("link");
+                        mark_dirty();
+                    }
                     rebuild_layout();
                 });
             }
@@ -426,6 +423,7 @@ void SpawnGroupsConfigPanel::rebuild_layout() {
                     area_picker_->open(names, [this](const std::string& selected) {
                         if (!selected.empty()) {
                             entry_["link"] = selected;
+                            mark_dirty();
                             rebuild_layout();
                         }
                     });
@@ -459,10 +457,6 @@ void SpawnGroupsConfigPanel::rebuild_layout() {
         rows.push_back({ add_candidate_widget_.get() });
     }
 
-    if (done_widget_) {
-        rows.push_back({ done_widget_.get() });
-    }
-
     set_rows(rows);
 }
 
@@ -494,8 +488,13 @@ void SpawnGroupsConfigPanel::sync_candidates() {
         total += candidate->last_chance;
         array.push_back({ {"name", name}, {"chance", candidate->last_chance} });
     }
+    const bool candidates_changed = !entry_.contains("candidates") || entry_["candidates"] != array;
+    const bool denominator_changed = entry_.value("chance_denominator", std::numeric_limits<int>::min()) != total;
     entry_["candidates"] = array;
     entry_["chance_denominator"] = total;
+    if (candidates_changed || denominator_changed) {
+        mark_dirty();
+    }
     candidate_summary_label_->set_text("Total chance: " + std::to_string(total));
 }
 
@@ -507,6 +506,7 @@ void SpawnGroupsConfigPanel::sync_from_widgets() {
             method_index_ = selected;
             const std::string method = spawn_methods_[method_index_];
             entry_["position"] = method;
+            mark_dirty();
             if (method != baseline_method_) {
                 pending_summary_.method_changed = true;
                 pending_summary_.method = method;
@@ -528,6 +528,7 @@ void SpawnGroupsConfigPanel::sync_from_widgets() {
             quantity_max_ = max_val;
             entry_["min_number"] = quantity_min_;
             entry_["max_number"] = quantity_max_;
+            mark_dirty();
             if (quantity_min_ != baseline_min_ || quantity_max_ != baseline_max_) {
                 pending_summary_.quantity_changed = true;
                 baseline_min_ = quantity_min_;
@@ -541,6 +542,7 @@ void SpawnGroupsConfigPanel::sync_from_widgets() {
         if (value != overlap_enabled_) {
             overlap_enabled_ = value;
             entry_["check_overlap"] = overlap_enabled_;
+            mark_dirty();
         }
     }
 
@@ -549,6 +551,7 @@ void SpawnGroupsConfigPanel::sync_from_widgets() {
         if (value != spacing_enabled_) {
             spacing_enabled_ = value;
             entry_["enforce_spacing"] = spacing_enabled_;
+            mark_dirty();
         }
     }
 
@@ -557,6 +560,7 @@ void SpawnGroupsConfigPanel::sync_from_widgets() {
         if (radius != perimeter_radius_) {
             perimeter_radius_ = radius;
             entry_["radius"] = perimeter_radius_;
+            mark_dirty();
         }
     }
 
@@ -565,7 +569,7 @@ void SpawnGroupsConfigPanel::sync_from_widgets() {
 
 void SpawnGroupsConfigPanel::load(const nlohmann::json& asset) {
     entry_ = asset;
-    save_dispatched_ = false;
+    dirty_ = false;
     spawn_id_ = fallback_spawn_id(asset);
     panel_title_ = "Spawn Group";
     if (header_label_) {
@@ -625,7 +629,7 @@ void SpawnGroupsConfigPanel::load(const nlohmann::json& asset) {
 void SpawnGroupsConfigPanel::open(const nlohmann::json& data, std::function<void(const nlohmann::json&)> on_save) {
     load(data);
     on_save_callback_ = std::move(on_save);
-    save_dispatched_ = false;
+    dirty_ = false;
     open_panel();
 }
 
@@ -676,6 +680,7 @@ void SpawnGroupsConfigPanel::close() {
         return;
     }
     dispatch_save();
+    dirty_ = false;
     set_visible(false);
     if (asset_search_) {
         asset_search_->close();
@@ -717,6 +722,10 @@ void SpawnGroupsConfigPanel::update(const Input& input, int screen_w, int screen
     if (screen_h > 0) screen_h_ = screen_h;
     DockableCollapsible::update(input, screen_w_, screen_h_);
     sync_from_widgets();
+    if (dirty_) {
+        dispatch_save();
+        dirty_ = false;
+    }
     if (asset_search_) {
         asset_search_->update(input);
     }
@@ -886,9 +895,10 @@ void SpawnGroupsConfigPanel::set_area_names_provider(std::function<std::vector<s
 }
 
 void SpawnGroupsConfigPanel::dispatch_save() {
-    if (!save_dispatched_ && on_save_callback_) {
+    if (on_save_callback_) {
         on_save_callback_(entry_);
-        save_dispatched_ = true;
     }
 }
+
+void SpawnGroupsConfigPanel::mark_dirty() { dirty_ = true; }
 

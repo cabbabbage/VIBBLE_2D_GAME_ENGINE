@@ -227,6 +227,61 @@ void AreaOverlayEditor::rebuild_mask_from_geometry() {
     SDL_UnlockSurface(mask_);
 }
 
+bool AreaOverlayEditor::compute_overlay_transform(camera& cam, OverlayTransform& out) const {
+    if (!mask_ || mask_->w <= 0 || mask_->h <= 0) return false;
+
+    float scale = cam.get_scale();
+    if (scale <= 0.0f) return false;
+    const float inv_scale = 1.0f / scale;
+
+    const int fw = std::max(1, canvas_w_);
+    const int fh = std::max(1, canvas_h_);
+    const float base_sw = static_cast<float>(fw) * inv_scale;
+    const float base_sh = static_cast<float>(fh) * inv_scale;
+    if (base_sw <= 0.0f || base_sh <= 0.0f) return false;
+
+    float reference_screen_height = compute_reference_screen_height(assets_, cam);
+    if (reference_screen_height <= 0.0f) reference_screen_height = 1.0f;
+
+    const SDL_Point anchor_world = has_anchor_ ? anchor_world_ : SDL_Point{0, 0};
+    const camera::RenderEffects effects = cam.compute_render_effects(anchor_world, base_sh, reference_screen_height);
+
+    const float scaled_sw = base_sw * effects.distance_scale;
+    const float scaled_sh = base_sh * effects.distance_scale;
+    const float final_visible_h = scaled_sh * effects.vertical_scale;
+
+    const int sw = std::max(1, static_cast<int>(std::lround(scaled_sw)));
+    const int sh = std::max(1, static_cast<int>(std::lround(final_visible_h)));
+
+    const float scale_per_canvas_x = static_cast<float>(sw) / static_cast<float>(fw);
+    const float scale_per_canvas_y = static_cast<float>(sh) / static_cast<float>(fh);
+
+    const float scale_per_mask_x = scale_per_canvas_x;
+    const float scale_per_mask_y = scale_per_canvas_y;
+
+    const int dst_w = std::max(1, static_cast<int>(std::lround(static_cast<float>(mask_->w) * scale_per_mask_x)));
+    const int dst_h = std::max(1, static_cast<int>(std::lround(static_cast<float>(mask_->h) * scale_per_mask_y)));
+
+    const float pivot_local_fx = static_cast<float>(canvas_w_) * 0.5f - static_cast<float>(mask_origin_x_);
+    const float pivot_local_fy = static_cast<float>(canvas_h_) - static_cast<float>(mask_origin_y_);
+
+    const int pivot_screen_x = static_cast<int>(std::lround(pivot_local_fx * scale_per_mask_x));
+    const int pivot_screen_y = static_cast<int>(std::lround(pivot_local_fy * scale_per_mask_y));
+
+    const SDL_Point anchor_screen = effects.screen_position;
+    out.anchor_screen = anchor_screen;
+    out.dst = SDL_Rect{
+        anchor_screen.x - pivot_screen_x,
+        anchor_screen.y - pivot_screen_y,
+        dst_w,
+        dst_h
+    };
+    out.pivot_in_dst = SDL_Point{ pivot_screen_x, pivot_screen_y };
+    out.scale_x = scale_per_mask_x;
+    out.scale_y = scale_per_mask_y;
+    return true;
+}
+
 void AreaOverlayEditor::ensure_mask_contains(int lx, int ly, int radius) {
     if (!mask_) return;
     int sx = lx - mask_origin_x_;
@@ -681,81 +736,42 @@ bool AreaOverlayEditor::handle_event(const SDL_Event& e) {
         if (!assets_ || !mask_ || !has_anchor_) return false;
 
         camera& cam = assets_->getView();
-        float scale = cam.get_scale();
-        if (scale <= 0.0f) return false;
-        const float inv_scale = 1.0f / scale;
-
-        // Use canvas dimensions for base size
-        int fw = std::max(1, canvas_w_);
-        int fh = std::max(1, canvas_h_);
-        float base_sw = static_cast<float>(fw) * inv_scale;
-        float base_sh = static_cast<float>(fh) * inv_scale;
-        if (base_sw <= 0.0f || base_sh <= 0.0f) return false;
-
-        float reference_screen_height = compute_reference_screen_height(assets_, cam);
-        if (reference_screen_height <= 0.0f) reference_screen_height = 1.0f;
-
-        const camera::RenderEffects effects = cam.compute_render_effects(
-            anchor_world_, base_sh, reference_screen_height);
-
-        float scaled_sw = base_sw * effects.distance_scale;
-        float scaled_sh = base_sh * effects.distance_scale;
-        float final_visible_h = scaled_sh * effects.vertical_scale;
-
-        int sw = std::max(1, static_cast<int>(std::lround(scaled_sw)));
-        int sh = std::max(1, static_cast<int>(std::lround(final_visible_h)));
-
-        const int pivot_x = canvas_w_ / 2;
-        const int pivot_y = canvas_h_;
-
-        const float local_bottom_center_x = static_cast<float>(mask_origin_x_) + static_cast<float>(mask_->w) * 0.5f;
-        const float local_bottom_center_y = static_cast<float>(mask_origin_y_) + static_cast<float>(mask_->h);
-
-        float offset_x_local = local_bottom_center_x - static_cast<float>(pivot_x);
-        float offset_y_local = local_bottom_center_y - static_cast<float>(pivot_y);
-        if (flipped_) {
-            offset_x_local = -offset_x_local;
-        }
-        const float offset_x_screen = offset_x_local * inv_scale * effects.distance_scale;
-        const float offset_y_screen = offset_y_local * inv_scale * effects.distance_scale * effects.vertical_scale;
-        const SDL_Point& base = effects.screen_position;
-        SDL_Point bottom_center{
-            base.x + static_cast<int>(std::lround(offset_x_screen)), base.y + static_cast<int>(std::lround(offset_y_screen)) };
-
-        SDL_Rect dst{
-            bottom_center.x - sw / 2,
-            bottom_center.y - sh,
-            sw,
-            sh
-        };
-
-        const float scale_x = static_cast<float>(dst.w) / static_cast<float>(std::max(1, mask_->w));
-        const float scale_y = static_cast<float>(dst.h) / static_cast<float>(std::max(1, mask_->h));
+        OverlayTransform tx{};
+        if (!compute_overlay_transform(cam, tx)) return false;
 
         const int mx = e.button.x;
         const int my = e.button.y;
-        float dx = static_cast<float>(mx - bottom_center.x);
-        float dy = static_cast<float>(my - bottom_center.y);
-        float local_fx = (flipped_ ? (-dx / std::max(1e-6f, scale_x)) : (dx / std::max(1e-6f, scale_x))) + (static_cast<float>(mask_->w) * 0.5f);
-        float local_fy = (dy / std::max(1e-6f, scale_y)) + static_cast<float>(mask_->h);
+
+        const float safe_scale_x = std::max(tx.scale_x, 1e-6f);
+        const float safe_scale_y = std::max(tx.scale_y, 1e-6f);
+
+        float local_fx = (static_cast<float>(mx) - static_cast<float>(tx.dst.x)) / safe_scale_x;
+        float local_fy = (static_cast<float>(my) - static_cast<float>(tx.dst.y)) / safe_scale_y;
+        if (flipped_) {
+            local_fx = static_cast<float>(mask_->w) - local_fx;
+        }
+
         int sx = static_cast<int>(std::lround(local_fx));
         int sy = static_cast<int>(std::lround(local_fy));
         int lx = sx + mask_origin_x_;
         int ly = sy + mask_origin_y_;
 
-        // Hit test existing markers
         int hit_index = -1;
         const int threshold = 8;
         const int threshold2 = threshold * threshold;
         for (int i = 0; i < static_cast<int>(geometry_points_.size()); ++i) {
-            int lpx = geometry_points_[i].x - mask_origin_x_;
-            int lpy = geometry_points_[i].y - mask_origin_y_;
-            float sx_screen = bottom_center.x + (flipped_ ? -((static_cast<float>(lpx) - static_cast<float>(mask_->w) * 0.5f) * scale_x)
-                                                          :  ((static_cast<float>(lpx) - static_cast<float>(mask_->w) * 0.5f) * scale_x));
-            float sy_screen = bottom_center.y + ((static_cast<float>(lpy) - static_cast<float>(mask_->h)) * scale_y);
-            int dxp = static_cast<int>(std::lround(sx_screen)) - mx;
-            int dyp = static_cast<int>(std::lround(sy_screen)) - my;
-            if (dxp * dxp + dyp * dyp <= threshold2) { hit_index = i; break; }
+            const float local_px = static_cast<float>(geometry_points_[i].x - mask_origin_x_);
+            const float local_py = static_cast<float>(geometry_points_[i].y - mask_origin_y_);
+            const float screen_px = flipped_
+                ? (static_cast<float>(tx.dst.x) + (static_cast<float>(mask_->w) - local_px) * tx.scale_x)
+                : (static_cast<float>(tx.dst.x) + local_px * tx.scale_x);
+            const float screen_py = static_cast<float>(tx.dst.y) + local_py * tx.scale_y;
+            const int dxp = static_cast<int>(std::lround(screen_px)) - mx;
+            const int dyp = static_cast<int>(std::lround(screen_py)) - my;
+            if (dxp * dxp + dyp * dyp <= threshold2) {
+                hit_index = i;
+                break;
+            }
         }
 
         if (hit_index >= 0) {
@@ -788,57 +804,10 @@ void AreaOverlayEditor::render(SDL_Renderer* r) {
             }
 
             camera& cam = assets_->getView();
-            float scale = cam.get_scale();
-            if (scale <= 0.0f) break;
-            const float inv_scale = 1.0f / scale;
+            OverlayTransform tx{};
+            if (!compute_overlay_transform(cam, tx)) break;
 
-            // Base size derived from canvas, not strictly the asset
-            int fw = std::max(1, canvas_w_);
-            int fh = std::max(1, canvas_h_);
-            float base_sw = static_cast<float>(fw) * inv_scale;
-            float base_sh = static_cast<float>(fh) * inv_scale;
-            if (base_sw <= 0.0f || base_sh <= 0.0f) break;
-
-            float reference_screen_height = compute_reference_screen_height(assets_, cam);
-            if (reference_screen_height <= 0.0f) reference_screen_height = 1.0f;
-
-            const camera::RenderEffects effects = cam.compute_render_effects(
-                has_anchor_ ? anchor_world_ : SDL_Point{0,0}, base_sh, reference_screen_height);
-
-            float scaled_sw = base_sw * effects.distance_scale;
-            float scaled_sh = base_sh * effects.distance_scale;
-            float final_visible_h = scaled_sh * effects.vertical_scale;
-
-            int sw = std::max(1, static_cast<int>(std::lround(scaled_sw)));
-            int sh = std::max(1, static_cast<int>(std::lround(final_visible_h)));
-            if (sw <= 0 || sh <= 0) break;
-
-            const int pivot_x = canvas_w_ / 2;
-            const int pivot_y = canvas_h_;
-
-            const float local_bottom_center_x = static_cast<float>(mask_origin_x_) + static_cast<float>(mask_->w) * 0.5f;
-            const float local_bottom_center_y = static_cast<float>(mask_origin_y_) + static_cast<float>(mask_->h);
-
-            float offset_x_local = local_bottom_center_x - static_cast<float>(pivot_x);
-            float offset_y_local = local_bottom_center_y - static_cast<float>(pivot_y);
-
-            if (flipped_) {
-                offset_x_local = -offset_x_local;
-            }
-
-            const float offset_x_screen = offset_x_local * inv_scale * effects.distance_scale;
-            const float offset_y_screen = offset_y_local * inv_scale * effects.distance_scale * effects.vertical_scale;
-
-            const SDL_Point& base = effects.screen_position;
-            SDL_Point bottom_center{
-                base.x + static_cast<int>(std::lround(offset_x_screen)), base.y + static_cast<int>(std::lround(offset_y_screen)) };
-
-            SDL_Rect dst{
-                bottom_center.x - sw / 2,
-                bottom_center.y - sh,
-                sw,
-                sh
-};
+            SDL_Rect dst = tx.dst;
 
             if (!mask_tex_) {
                 mask_tex_ = SDL_CreateTexture(r, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_STREAMING, mask_->w, mask_->h);
@@ -856,36 +825,44 @@ void AreaOverlayEditor::render(SDL_Renderer* r) {
 
             SDL_SetTextureBlendMode(mask_tex_, SDL_BLENDMODE_BLEND);
             SDL_SetTextureAlphaMod(mask_tex_, mask_alpha_);
-            SDL_RenderCopyEx(r, mask_tex_, nullptr, &dst, 0.0, nullptr, flipped_ ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE);
+            SDL_Point center = tx.pivot_in_dst;
+            SDL_RenderCopyEx(r, mask_tex_, nullptr, &dst, 0.0, &center, flipped_ ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE);
 
-            // Draw geometry tool preview: edges + point markers
             if (mode_ == Mode::Geometry && !geometry_points_.empty()) {
-                const float scale_x = static_cast<float>(dst.w) / static_cast<float>(std::max(1, mask_->w));
-                const float scale_y = static_cast<float>(dst.h) / static_cast<float>(std::max(1, mask_->h));
                 SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
                 SDL_SetRenderDrawColor(r, 0, 255, 0, 220);
+                const float scale_x = tx.scale_x;
+                const float scale_y = tx.scale_y;
+                const float dst_x = static_cast<float>(dst.x);
+                const float dst_y = static_cast<float>(dst.y);
+                const float mask_w_f = static_cast<float>(mask_->w);
+
                 for (size_t i = 1; i < geometry_points_.size(); ++i) {
-                    float lpx0 = static_cast<float>(geometry_points_[i-1].x - mask_origin_x_);
-                    float lpy0 = static_cast<float>(geometry_points_[i-1].y - mask_origin_y_);
-                    float lpx1 = static_cast<float>(geometry_points_[i].x   - mask_origin_x_);
-                    float lpy1 = static_cast<float>(geometry_points_[i].y   - mask_origin_y_);
-                    float sx0 = bottom_center.x + (flipped_ ? -((lpx0 - static_cast<float>(mask_->w)*0.5f) * scale_x)
-                                                            :  ((lpx0 - static_cast<float>(mask_->w)*0.5f) * scale_x));
-                    float sy0 = bottom_center.y + ((lpy0 - static_cast<float>(mask_->h)) * scale_y);
-                    float sx1 = bottom_center.x + (flipped_ ? -((lpx1 - static_cast<float>(mask_->w)*0.5f) * scale_x)
-                                                            :  ((lpx1 - static_cast<float>(mask_->w)*0.5f) * scale_x));
-                    float sy1 = bottom_center.y + ((lpy1 - static_cast<float>(mask_->h)) * scale_y);
-                    SDL_RenderDrawLine(r, static_cast<int>(std::lround(sx0)), static_cast<int>(std::lround(sy0)),
-                                          static_cast<int>(std::lround(sx1)), static_cast<int>(std::lround(sy1)));
+                    const float local_px0 = static_cast<float>(geometry_points_[i-1].x - mask_origin_x_);
+                    const float local_py0 = static_cast<float>(geometry_points_[i-1].y - mask_origin_y_);
+                    const float local_px1 = static_cast<float>(geometry_points_[i].x - mask_origin_x_);
+                    const float local_py1 = static_cast<float>(geometry_points_[i].y - mask_origin_y_);
+                    const float sx0 = flipped_
+                        ? (dst_x + (mask_w_f - local_px0) * scale_x)
+                        : (dst_x + local_px0 * scale_x);
+                    const float sy0 = dst_y + local_py0 * scale_y;
+                    const float sx1 = flipped_
+                        ? (dst_x + (mask_w_f - local_px1) * scale_x)
+                        : (dst_x + local_px1 * scale_x);
+                    const float sy1 = dst_y + local_py1 * scale_y;
+                    SDL_RenderDrawLine(r,
+                        static_cast<int>(std::lround(sx0)), static_cast<int>(std::lround(sy0)),
+                        static_cast<int>(std::lround(sx1)), static_cast<int>(std::lround(sy1)));
                 }
                 for (size_t i = 0; i < geometry_points_.size(); ++i) {
-                    float lpx = static_cast<float>(geometry_points_[i].x - mask_origin_x_);
-                    float lpy = static_cast<float>(geometry_points_[i].y - mask_origin_y_);
-                    float sx = bottom_center.x + (flipped_ ? -((lpx - static_cast<float>(mask_->w)*0.5f) * scale_x)
-                                                           :  ((lpx - static_cast<float>(mask_->w)*0.5f) * scale_x));
-                    float sy = bottom_center.y + ((lpy - static_cast<float>(mask_->h)) * scale_y);
-                    int cx = static_cast<int>(std::lround(sx));
-                    int cy = static_cast<int>(std::lround(sy));
+                    const float local_px = static_cast<float>(geometry_points_[i].x - mask_origin_x_);
+                    const float local_py = static_cast<float>(geometry_points_[i].y - mask_origin_y_);
+                    const float sx = flipped_
+                        ? (dst_x + (mask_w_f - local_px) * scale_x)
+                        : (dst_x + local_px * scale_x);
+                    const float sy = dst_y + local_py * scale_y;
+                    const int cx = static_cast<int>(std::lround(sx));
+                    const int cy = static_cast<int>(std::lround(sy));
                     SDL_Rect mr{ cx - 3, cy - 3, 6, 6 };
                     SDL_SetRenderDrawColor(r, 255, 255, 0, 240);
                     SDL_RenderFillRect(r, &mr);
@@ -893,6 +870,7 @@ void AreaOverlayEditor::render(SDL_Renderer* r) {
                     SDL_RenderDrawRect(r, &mr);
                 }
             }
+
         } while (false);
     }
 

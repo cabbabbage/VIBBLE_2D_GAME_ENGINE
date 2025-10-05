@@ -260,12 +260,9 @@
             {
               "chance": 0,
               "name": "null"
-            },
-            {
-              "chance": 100,
-              "name": "Box"
             }
           ],
+          "chance_denominator": 0,
           "check_overlap": false,
           "display_name": "Box",
           "enforce_spacing": false,
@@ -488,11 +485,15 @@
               "name": "null"
             },
             {
-              "chance": 100,
-              "name": "candle"
+              "chance": 0,
+              "name": ""
+            },
+            {
+              "chance": 0,
+              "name": "Book_Pile"
             }
           ],
-          "chance_denominator": 100,
+          "chance_denominator": 0,
           "check_overlap": false,
           "display_name": "candle",
           "dx": -332,
@@ -547,6 +548,26 @@
           "position": "Exact",
           "priority": 2,
           "spawn_id": "spn-eef91c561688"
+        },
+        {
+          "candidates": [
+            {
+              "chance": 0,
+              "name": "null"
+            }
+          ],
+          "chance_denominator": 0,
+          "check_overlap": false,
+          "display_name": "Barrel",
+          "dx": -152,
+          "dy": -424,
+          "enforce_spacing": false,
+          "max_number": 1,
+          "min_number": 1,
+          "origional_height": 3612,
+          "origional_width": 3612,
+          "position": "Exact",
+          "spawn_id": "spn-af3a3a5858e6"
         }
       ],
       "width_max": 3612,

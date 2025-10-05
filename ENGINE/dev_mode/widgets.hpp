@@ -16,6 +16,7 @@ public:
     const SDL_Rect& rect() const { return rect_; }
     void set_text(const std::string& t);
     const std::string& text() const { return text_; }
+    void set_style(const DMButtonStyle* style);
     bool handle_event(const SDL_Event& e);
     void render(SDL_Renderer* r) const;
     bool is_hovered() const { return hovered_; }

@@ -23,6 +23,7 @@ public:
         bool momentary = false;
 
         const DMButtonStyle* style_override = nullptr;
+        const DMButtonStyle* active_style_override = nullptr;
         std::unique_ptr<DMButton> widget;
 };
 

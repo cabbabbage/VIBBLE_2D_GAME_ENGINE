@@ -90,6 +90,7 @@ private:
     void remove_candidate(const CandidateRow* row);
     void clamp_to_screen();
     void dispatch_save();
+    void mark_dirty();
 
     std::vector<std::string> spawn_methods_;
     nlohmann::json entry_;
@@ -114,8 +115,6 @@ private:
     std::unique_ptr<SliderWidget> perimeter_widget_;
     std::unique_ptr<DMButton> add_candidate_button_;
     std::unique_ptr<ButtonWidget> add_candidate_widget_;
-    std::unique_ptr<DMButton> done_button_;
-    std::unique_ptr<ButtonWidget> done_widget_;
     std::unique_ptr<DMButton> link_area_button_;
     std::unique_ptr<ButtonWidget> link_area_widget_;
     std::unique_ptr<DMButton> unlink_area_button_;
@@ -131,7 +130,7 @@ private:
 
     std::function<void(const nlohmann::json&)> on_save_callback_;
     std::function<void()> on_close_callback_;
-    bool save_dispatched_ = false;
+    bool dirty_ = false;
 
     ChangeSummary pending_summary_;
     std::string baseline_method_;
