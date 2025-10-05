@@ -660,6 +660,7 @@ void SpawnGroupsConfigPanel::open_panel() {
     {
         Input dummy;
         update(dummy, screen_w_, screen_h_);
+        update(dummy, screen_w_, screen_h_);
     }
 }
 

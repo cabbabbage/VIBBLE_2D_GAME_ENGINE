@@ -285,8 +285,6 @@ void RoomEditor::update_ui(const Input& input) {
 }
 
 bool RoomEditor::handle_sdl_event(const SDL_Event& event) {
-    // Determine pointer position early so we can prioritize routing to
-    // open spawn-group panels before any global dropdown steals the event.
     int mx = 0;
     int my = 0;
     if (event.type == SDL_MOUSEMOTION) {
@@ -303,41 +301,21 @@ bool RoomEditor::handle_sdl_event(const SDL_Event& event) {
         (event.type == SDL_MOUSEBUTTONDOWN || event.type == SDL_MOUSEBUTTONUP || event.type == SDL_MOUSEMOTION);
     const bool wheel_event = (event.type == SDL_MOUSEWHEEL);
     const bool pointer_based = pointer_event || wheel_event;
-
-    // If the pointer is over any spawn-group config panel, route to it first.
-    // This avoids the global dropdown handler consuming events intended for
-    // the spawn group UI when used from room mode.
-    if (pointer_based && spawn_groups_cfg_ui_ &&
+    const bool pointer_over_spawn_panel = pointer_based &&
+        spawn_groups_cfg_ui_ &&
         spawn_groups_cfg_ui_->any_visible() &&
-        spawn_groups_cfg_ui_->is_point_inside(mx, my)) {
-        bool handled_here = spawn_groups_cfg_ui_->handle_event(event);
-        if (!handled_here) handled_here = true; // Always claim pointer while over the panel
-        if (handled_here && input_) {
-            if (event.type == SDL_MOUSEBUTTONDOWN || event.type == SDL_MOUSEBUTTONUP) {
-                input_->clearClickBuffer();
-            }
-        }
-        return handled_here;
-    }
-
-    // Otherwise, allow an active dropdown (if any) to process the event.
-    if (auto* dropdown = DMDropdown::active_dropdown()) {
-        dropdown->handle_event(event);
-        return true;
-    }
+        spawn_groups_cfg_ui_->is_point_inside(mx, my);
 
     ensure_area_editor();
     if (area_editor_ && area_editor_->is_active()) {
         if (area_editor_->handle_event(event)) return true;
     }
 
-    // pointer vars already computed above
-
     bool handled = false;
     bool pointer_claimed = false;
 
     if (pointer_based) {
-        if (spawn_groups_cfg_ui_ && spawn_groups_cfg_ui_->any_visible() && spawn_groups_cfg_ui_->is_point_inside(mx, my)) {
+        if (pointer_over_spawn_panel) {
             pointer_claimed = true;
             handled = spawn_groups_cfg_ui_->handle_event(event);
             if (!handled) {
@@ -371,6 +349,12 @@ bool RoomEditor::handle_sdl_event(const SDL_Event& event) {
     } else if (!handled && library_ui_ && library_ui_->is_visible() && (!pointer_based || !pointer_claimed)) {
         library_ui_->handle_event(event);
         handled = true;
+    }
+
+    if (!handled) {
+        if (auto* dropdown = DMDropdown::active_dropdown()) {
+            handled = dropdown->handle_event(event);
+        }
     }
 
     if (handled && input_) {
