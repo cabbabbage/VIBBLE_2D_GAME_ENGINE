@@ -807,6 +807,8 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
                 }
             }
             area_hovered_asset_ = nullptr;
+            area_hovered_asset_with_area_ = nullptr;
+            area_hovered_area_name_.clear();
             if (!first_selected_type.empty() && assets_) {
                 // Build simple hit test similar to scene rect
                 const camera& cam = assets_->getView();
@@ -856,6 +858,49 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
                     if (SDL_PointInRect(&sp, &fb)) {
                         area_hovered_asset_ = a;
                         a->set_highlighted(true);
+                        break;
+                    }
+                }
+            }
+            // If we didn't hover a missing-area asset above, see if we are hovering an existing area polygon
+            if (!area_hovered_asset_ && assets_) {
+                const camera& cam = assets_->getView();
+                float scale = cam.get_scale();
+                float inv_scale = (scale != 0.0f) ? (1.0f / scale) : 1.0f;
+                float player_screen_height = 1.0f;
+                if (Asset* playerAsset = assets_->player) {
+                    int ph = playerAsset->cached_h;
+                    if (ph <= 0) { if (SDL_Texture* pf = playerAsset->get_final_texture()) SDL_QueryTexture(pf, nullptr, nullptr, nullptr, &ph); }
+                    if (ph > 0) player_screen_height = static_cast<float>(ph) * inv_scale;
+                }
+                if (player_screen_height <= 0.0f) player_screen_height = 1.0f;
+                const auto& list2 = assets_->getFilteredActiveAssets();
+                for (int i = static_cast<int>(list2.size()) - 1; i >= 0; --i) {
+                    Asset* a = list2[i]; if (!a || !a->info) continue;
+                    const AssetInfo* inf = a->info.get();
+                    const AssetInfo::NamedArea* match = nullptr;
+                    for (const auto& na : inf->areas) {
+                        const std::string& at = !na.type.empty() ? na.type : na.name;
+                        if (at == first_selected_type) { match = &na; break; }
+                    }
+                    if (!match || !match->area) continue;
+                    Area world_area = a->get_area(match->name);
+                    const auto& wpts = world_area.get_points();
+                    if (wpts.size() < 3) continue;
+                    camera::RenderEffects eff = cam.compute_render_effects(SDL_Point{a->pos.x, a->pos.y}, 0.0f, player_screen_height);
+                    SDL_Point pivot_linear = cam.map_to_screen(SDL_Point{a->pos.x, a->pos.y});
+                    std::vector<SDL_Point> spts; spts.reserve(wpts.size());
+                    for (const auto& wp : wpts) {
+                        SDL_Point p_lin = cam.map_to_screen(wp);
+                        const float dx = static_cast<float>(p_lin.x - pivot_linear.x);
+                        const float dy = static_cast<float>(p_lin.y - pivot_linear.y);
+                        const float sx = eff.screen_position.x + dx * eff.distance_scale;
+                        const float sy = eff.screen_position.y + dy * (eff.distance_scale * eff.vertical_scale);
+                        spts.push_back(SDL_Point{ static_cast<int>(std::lround(sx)), static_cast<int>(std::lround(sy)) });
+                    }
+                    if (!spts.empty() && point_in_poly(spts, sp)) {
+                        area_hovered_asset_with_area_ = a;
+                        area_hovered_area_name_ = match->name;
                         break;
                     }
                 }
@@ -930,6 +975,23 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
                 }
             }
             if (event.type == SDL_MOUSEBUTTONDOWN && event.button.button == SDL_BUTTON_RIGHT) {
+                // First: if hovering an existing asset area, open editor to modify it
+                if (area_hovered_asset_with_area_ && !area_hovered_area_name_.empty()) {
+                    if (!asset_area_editor_) asset_area_editor_ = std::make_unique<AreaOverlayEditor>();
+                    if (asset_area_editor_) asset_area_editor_->attach_assets(assets_);
+                    if (asset_area_editor_ && area_hovered_asset_with_area_->info) {
+                        if (asset_area_editor_->begin(area_hovered_asset_with_area_->info.get(), area_hovered_asset_with_area_, area_hovered_area_name_)) {
+                            if (map_mode_ui_) {
+                                if (auto* footer = map_mode_ui_->get_footer_panel()) {
+                                    std::string label = std::string("Editing ") + area_hovered_asset_with_area_->info->name + std::string(" — Area: ") + area_hovered_area_name_;
+                                    footer->set_title(label);
+                                }
+                            }
+                            consume(true);
+                            return;
+                        }
+                    }
+                }
                 // If right-click on a hovered asset lacking the type, open AreaOverlayEditor for that asset
                 if (area_hovered_asset_ && !active_area_type_filters_.empty()) {
                     std::string area_type;
@@ -1108,7 +1170,8 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
                                 }
 #if SDL_VERSION_ATLEAST(2,0,18)
                                 if (spts.size() >= 3) {
-                                    SDL_Color fill = SDL_Color{230, 200, 80, 50};
+                                    const bool hovered_this = (a == area_hovered_asset_with_area_) && (na.name == area_hovered_area_name_);
+                                    SDL_Color fill = SDL_Color{230, 200, 80, static_cast<Uint8>(hovered_this ? 110 : 50)};
                                     std::vector<SDL_Vertex> verts; verts.reserve(spts.size());
                                     for (auto p : spts) { SDL_Vertex v{}; v.position=SDL_FPoint{(float)p.x,(float)p.y}; v.color=fill; verts.push_back(v);} 
                                     std::vector<int> idxs; idxs.reserve((spts.size()-2)*3);
@@ -1117,7 +1180,8 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
                                 }
 #endif
                                 if (!spts.empty()) {
-                                    SDL_Color outline{230, 200, 80, 120};
+                                    const bool hovered_this = (a == area_hovered_asset_with_area_) && (na.name == area_hovered_area_name_);
+                                    SDL_Color outline = hovered_this ? SDL_Color{255,255,255,200} : SDL_Color{230, 200, 80, 120};
                                     std::vector<SDL_Point> pts = spts; pts.push_back(spts.front());
                                     SDL_SetRenderDrawColor(renderer, outline.r, outline.g, outline.b, outline.a);
                                     SDL_RenderDrawLines(renderer, pts.data(), (int)pts.size());
@@ -1545,6 +1609,12 @@ void DevControls::apply_camera_area_render_flag() {
     camera& cam = assets_->getView();
     // Always render debug areas via the UI overlay, not the scene renderer
     cam.set_render_areas_enabled(false);
+
+    // In Area Mode, disable camera perspective/realism so areas align
+    // precisely with assets (only zoom scaling applies).
+    // Re-enable realism in other modes.
+    const bool area_mode = (mode_ == Mode::AreaMode);
+    cam.set_realism_enabled(!area_mode);
 }
 
 void DevControls::toggle_boundary_assets_modal() {

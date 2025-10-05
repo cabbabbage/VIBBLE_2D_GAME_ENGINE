@@ -655,6 +655,12 @@ void SpawnGroupsConfigPanel::open_panel() {
     set_visible(true);
     set_expanded(true);
     clamp_to_screen();
+    // Ensure geometry is computed immediately so the panel is interactive
+    // on the first frame after opening (before next update tick).
+    {
+        Input dummy;
+        update(dummy, screen_w_, screen_h_);
+    }
 }
 
 void SpawnGroupsConfigPanel::notify_close_listeners() {

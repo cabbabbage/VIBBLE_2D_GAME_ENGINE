@@ -234,6 +234,7 @@
       "min_height": 1072,
       "min_width": 1755,
       "name": "bar",
+      "radius": 1448,
       "spawn_groups": [
         {
           "candidates": [

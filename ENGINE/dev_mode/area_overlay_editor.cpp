@@ -90,8 +90,26 @@ bool AreaOverlayEditor::begin(AssetInfo* info, Asset* asset, const std::string& 
 bool AreaOverlayEditor::begin_at_point(AssetInfo* info, SDL_Point anchor_world, const std::string& area_name, Asset* asset) {
     if (!assets_ || !info) return false;
 
-    int cw = std::max(32, static_cast<int>(std::lround(info->original_canvas_width * info->scale_factor)));
-    int ch = std::max(32, static_cast<int>(std::lround(info->original_canvas_height * info->scale_factor)));
+    // Do NOT pre-apply the asset's scale percent to the area editor canvas.
+    // Use the asset's final texture dimensions if available; otherwise fall back
+    // to the original canvas size. This keeps the area aligned with what is
+    // actually rendered, and avoids double-applying scale.
+    int cw = std::max(32, info->original_canvas_width);
+    int ch = std::max(32, info->original_canvas_height);
+    if (asset) {
+        int fw = asset->cached_w;
+        int fh = asset->cached_h;
+        SDL_Texture* ft = asset->get_final_texture();
+        SDL_Texture* fr = asset->get_current_frame();
+        if ((fw == 0 || fh == 0) && ft) {
+            SDL_QueryTexture(ft, nullptr, nullptr, &fw, &fh);
+        }
+        if ((fw == 0 || fh == 0) && fr) {
+            SDL_QueryTexture(fr, nullptr, nullptr, &fw, &fh);
+        }
+        if (fw > 0) cw = fw;
+        if (fh > 0) ch = fh;
+    }
 
     info_ = info;
     asset_ = asset; // optional, used only for mask autogen
@@ -124,6 +142,14 @@ bool AreaOverlayEditor::begin_at_point(AssetInfo* info, SDL_Point anchor_world, 
     upload_mask();
 
     ensure_toolbox();
+    if (toolbox_) {
+        std::string title = "Area Tools";
+        if (info_) {
+            title += std::string(" — ") + info_->name;
+            if (!area_name_.empty()) title += std::string(" — ") + area_name_;
+        }
+        toolbox_->set_title(title);
+    }
 
     crop_left_slider_ = std::make_unique<DMSlider>("Crop Left", 0, canvas_w_, 0);
     crop_right_slider_ = std::make_unique<DMSlider>("Crop Right", 0, canvas_w_, 0);
@@ -309,7 +335,12 @@ std::vector<SDL_Point> AreaOverlayEditor::extract_edge_points(int step) const {
 
 void AreaOverlayEditor::ensure_toolbox() {
     if (toolbox_) return;
-    toolbox_ = std::make_unique<DockableCollapsible>("Area Tools", true);
+    std::string title = "Area Tools";
+    if (info_) {
+        title += std::string(" — ") + info_->name;
+        if (!area_name_.empty()) title += std::string(" — ") + area_name_;
+    }
+    toolbox_ = std::make_unique<DockableCollapsible>(title, true);
 
     toolbox_->set_expanded(true);
     btn_mask_  = std::make_unique<DMButton>("Mask",  &DMStyles::CreateButton(), 180, DMButton::height());

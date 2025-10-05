@@ -161,6 +161,9 @@ private:
     std::unique_ptr<class EditRoomAreaPanel>   edit_area_panel_;
     std::unique_ptr<class AreaOverlayEditor>   asset_area_editor_;
     class Asset* area_hovered_asset_ = nullptr;
+    // If hovering an existing asset area (for selected type)
+    class Asset* area_hovered_asset_with_area_ = nullptr;
+    std::string area_hovered_area_name_;
     // Active filters: empty means show all
     std::unordered_set<std::string> active_area_type_filters_;
     // Hover/selection for room areas (indices into parsed list for current frame)
