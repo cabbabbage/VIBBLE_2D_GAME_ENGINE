@@ -1,18 +1,8 @@
 {
-  "asset_name": "Book_Pile",
-  "asset_type": "Object",
   "animations": {
     "default": {
-      "source": {
-        "kind": "folder",
-        "path": "default",
-        "name": null
-      },
       "flipped_source": false,
-      "reverse_source": false,
       "locked": false,
-      "speed_factor": 1,
-      "number_of_frames": 2,
       "movement": [
         [
           0,
@@ -22,16 +12,50 @@
           0,
           0
         ]
-      ]
+      ],
+      "number_of_frames": 2,
+      "reverse_source": false,
+      "source": {
+        "kind": "folder",
+        "name": null,
+        "path": "default"
+      },
+      "speed_factor": 1
     }
   },
+  "anti_tags": [
+    "ground"
+  ],
+  "asset_name": "Book_Pile",
+  "asset_type": "Object",
   "impassable_area": null,
-  "z_threshold": 6,
+  "min_distance_all": 0,
+  "min_same_type_distance": 1000,
+  "rnd_spawn_max": 400,
+  "rnd_spawn_min": 300,
   "size_settings": {
     "scale_percentage": 20,
     "variability_percentage": 0
   },
-  "min_same_type_distance": 1000,
+  "spawn_groups": [
+    {
+      "candidates": [
+        {
+          "chance": 0,
+          "name": "null"
+        }
+      ],
+      "chance_denominator": 100,
+      "check_overlap": false,
+      "display_name": "New Spawn",
+      "enforce_spacing": false,
+      "max_number": 1,
+      "min_number": 1,
+      "position": "Exact",
+      "priority": 0,
+      "spawn_id": "spn-fc7e5f09aa85"
+    }
+  ],
   "tags": [
     "library",
     "passable",
@@ -39,10 +63,5 @@
     "book",
     "barrel_child"
   ],
-  "rnd_spawn_min": 300,
-  "rnd_spawn_max": 400,
-  "anti_tags": [
-    "ground"
-  ],
-  "min_distance_all": 0
+  "z_threshold": 6
 }
