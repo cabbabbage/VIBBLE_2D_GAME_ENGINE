@@ -75,6 +75,9 @@ public:
     void regenerate_room();
     void regenerate_room_from_template(Room* source_room);
 
+    using RoomAssetsSavedCallback = std::function<void()>;
+    void set_room_assets_saved_callback(RoomAssetsSavedCallback cb);
+
     void begin_area_edit_for_selected_asset(const std::string& area_name);
     void focus_camera_on_asset(Asset* asset, double zoom_factor = 0.8, int duration_steps = 25);
     void focus_camera_on_room_center(bool reframe_zoom = true);
@@ -173,6 +176,8 @@ private:
     void open_spawn_group_editor_by_id(const std::string& spawn_id);
     void reopen_room_configurator();
     void process_pending_spawn_group_open();
+    void notify_room_assets_saved();
+    void save_current_room_assets_json();
 
 private:
     Assets* assets_ = nullptr;
@@ -237,5 +242,7 @@ private:
     void rebuild_room_spawn_id_cache();
     bool is_room_spawn_id(const std::string& spawn_id) const;
     bool asset_belongs_to_room(const Asset* asset) const;
+
+    RoomAssetsSavedCallback room_assets_saved_callback_;
 };
 

@@ -4,11 +4,78 @@
 #include <cmath>
 #include <sstream>
 #include <utility>
+#include <SDL_ttf.h>
 
 #include "dev_mode/dm_styles.hpp"
 #include "utils/input.hpp"
 
 using nlohmann::json;
+
+namespace {
+
+class WarningLabel : public Widget {
+public:
+    WarningLabel() = default;
+
+    void set_text(std::string text) { text_ = std::move(text); }
+    const std::string& text() const { return text_; }
+
+    void set_rect(const SDL_Rect& r) override { rect_ = r; }
+    const SDL_Rect& rect() const override { return rect_; }
+
+    int height_for_width(int w) const override {
+        if (text_.empty()) {
+            return 0;
+        }
+        const DMLabelStyle& style = DMStyles::Label();
+        TTF_Font* font = style.open_font();
+        if (!font) {
+            return style.font_size;
+        }
+        SDL_Surface* surface = TTF_RenderUTF8_Blended_Wrapped(font, text_.c_str(), color_, std::max(10, w));
+        int height = surface ? surface->h : style.font_size;
+        if (surface) {
+            SDL_FreeSurface(surface);
+        }
+        TTF_CloseFont(font);
+        return height + DMSpacing::small_gap();
+    }
+
+    bool handle_event(const SDL_Event&) override { return false; }
+
+    void render(SDL_Renderer* r) const override {
+        if (text_.empty() || !r) {
+            return;
+        }
+        const DMLabelStyle& style = DMStyles::Label();
+        TTF_Font* font = style.open_font();
+        if (!font) {
+            return;
+        }
+        SDL_Surface* surface = TTF_RenderUTF8_Blended_Wrapped(font, text_.c_str(), color_, std::max(10, rect_.w));
+        if (surface) {
+            SDL_Texture* tex = SDL_CreateTextureFromSurface(r, surface);
+            if (tex) {
+                SDL_Rect dst{rect_.x, rect_.y, surface->w, surface->h};
+                SDL_RenderCopy(r, tex, nullptr, &dst);
+                SDL_DestroyTexture(tex);
+            }
+            SDL_FreeSurface(surface);
+        }
+        TTF_CloseFont(font);
+    }
+
+    bool wants_full_row() const override { return true; }
+
+    void set_color(SDL_Color color) { color_ = color; }
+
+private:
+    SDL_Rect rect_{0, 0, 0, 0};
+    std::string text_;
+    SDL_Color color_{255, 120, 120, 255};
+};
+
+}  // namespace
 
 int MapLightPanel::clamp_int(int v, int lo, int hi) {
     return std::max(lo, std::min(hi, v));
@@ -29,6 +96,7 @@ MapLightPanel::MapLightPanel(int x, int y)
 : DockableCollapsible("Map Lighting", true, x, y) {
     set_expanded(true);
     build_ui();
+    update_save_status(true);
 }
 
 MapLightPanel::~MapLightPanel() = default;
@@ -37,6 +105,7 @@ void MapLightPanel::set_map_info(json* map_info, SaveCallback on_save) {
     map_info_ = map_info;
     on_save_ = std::move(on_save);
     current_key_index_ = 0;
+    update_save_status(true);
     sync_ui_from_json();
 }
 
@@ -91,6 +160,12 @@ void MapLightPanel::build_ui() {
 };
 
     Rows rows;
+
+    warning_label_ = static_cast<WarningLabel*>(add_widget(std::make_unique<WarningLabel>()));
+    if (warning_label_) {
+        warning_label_->set_color(SDL_Color{255, 120, 120, 255});
+        rows.push_back({ warning_label_ });
+    }
 
     rows.push_back({
         add_widget(std::make_unique<SliderWidget>(radius_.get())),
@@ -276,7 +351,11 @@ void MapLightPanel::sync_json_from_ui() {
         keys[current_key_index_] = json::array({ (double)ang, json::array({ r, g, b, a }) });
     }
 
-    if (on_save_) on_save_();
+    bool ok = true;
+    if (on_save_) {
+        ok = on_save_();
+    }
+    update_save_status(ok);
     needs_sync_to_json_ = false;
 }
 
@@ -359,7 +438,11 @@ void MapLightPanel::add_key_pair_at_current_angle() {
     }
 
     needs_sync_to_json_ = true;
-    if (on_save_) on_save_();
+    bool ok = true;
+    if (on_save_) {
+        ok = on_save_();
+    }
+    update_save_status(ok);
     sync_ui_from_json();
 }
 
@@ -373,7 +456,11 @@ void MapLightPanel::delete_current_key() {
     if (current_key_index_ >= (int)keys.size()) current_key_index_ = (int)keys.size() - 1;
 
     needs_sync_to_json_ = true;
-    if (on_save_) on_save_();
+    bool ok = true;
+    if (on_save_) {
+        ok = on_save_();
+    }
+    update_save_status(ok);
     sync_ui_from_json();
 }
 
@@ -407,6 +494,26 @@ void MapLightPanel::render(SDL_Renderer* r) const {
 
 bool MapLightPanel::is_point_inside(int x, int y) const {
     return DockableCollapsible::is_point_inside(x, y);
+}
+
+void MapLightPanel::update_save_status(bool success) const {
+    if (!warning_label_) {
+        return;
+    }
+    const std::string failure_message = "Failed to save map lighting changes. Check logs.";
+    if (success) {
+        if (!persistence_warning_text_.empty()) {
+            persistence_warning_text_.clear();
+            warning_label_->set_text({});
+            const_cast<MapLightPanel*>(this)->layout();
+        }
+        return;
+    }
+    if (persistence_warning_text_ != failure_message) {
+        persistence_warning_text_ = failure_message;
+        warning_label_->set_text(persistence_warning_text_);
+        const_cast<MapLightPanel*>(this)->layout();
+    }
 }
 
 void MapLightPanel::render_content(SDL_Renderer* r) const {

@@ -162,9 +162,27 @@ enable_testing()
 
 add_executable(dev_mode_ui_tests
     tests/dev_mode/full_screen_collapsible_tests.cpp
+    tests/dev_mode/dev_controls_persistence_tests.cpp
     ENGINE/dev_mode/full_screen_collapsible.cpp
+    ENGINE/dev_mode/dev_controls_persistence.cpp
     ENGINE/dev_mode/widgets.cpp
     ENGINE/dev_mode/dm_styles.cpp
+    ENGINE/dev_mode/dev_controls.cpp
+    ENGINE/dev_mode/room_editor.cpp
+    ENGINE/dev_mode/map_editor.cpp
+    ENGINE/dev_mode/map_mode_ui.cpp
+    ENGINE/dev_mode/camera_ui.cpp
+    ENGINE/dev_mode/asset_filter_bar.cpp
+    ENGINE/dev_mode/sdl_pointer_utils.cpp
+    ENGINE/dev_mode/area_mode/create_room_area_panel.cpp
+    ENGINE/dev_mode/area_mode/edit_room_area_panel.cpp
+    ENGINE/dev_mode/area_overlay_editor.cpp
+    ENGINE/dev_mode/map_assets_modals.cpp
+    ENGINE/dev_mode/trail_editor_suite.cpp
+    ENGINE/dev_mode/MapLightPanel.cpp
+    ENGINE/dev_mode/DockableCollapsible.cpp
+    ENGINE/dev_mode/map_layers_panel.cpp
+    ENGINE/dev_mode/map_layers_controller.cpp
     ENGINE/utils/input.cpp
 )
 target_include_directories(dev_mode_ui_tests PRIVATE

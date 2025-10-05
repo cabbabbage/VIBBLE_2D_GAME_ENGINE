@@ -20,6 +20,7 @@
 class Asset;
 class Input;
 class Assets;
+class camera;
 class AssetInfo;
 class Room;
 class RoomEditor;
@@ -49,11 +50,36 @@ public:
     void set_map_info(nlohmann::json* map_info, MapLightPanel::SaveCallback on_save);
     void set_map_context(nlohmann::json* map_info, const std::string& map_path);
 
+    struct RoomAreaCache {
+        using Polygon      = std::pair<std::string, std::vector<SDL_Point>>;
+        using PolygonList  = std::vector<Polygon>;
+        using Listener     = std::function<void(const PolygonList&, std::size_t)>;
+
+        void set_listener(Listener listener);
+        void invalidate();
+        const PolygonList& ensure_from_json(const nlohmann::json* root);
+        std::size_t generation() const { return generation_; }
+
+    private:
+        PolygonList cached_;
+        const nlohmann::json* last_source_ = nullptr;
+        bool dirty_ = true;
+        std::size_t generation_ = 0;
+        Listener listener_;
+    };
+
+    void set_room_area_cache_listener(RoomAreaCache::Listener listener);
+    std::size_t room_area_cache_generation() const;
+    void notify_room_area_data_changed();
+
     Room* resolve_current_room(Room* detected_room);
 
     void set_enabled(bool enabled);
     bool is_enabled() const { return enabled_; }
     Mode mode() const { return mode_; }
+
+    // Testing hooks
+    void set_camera_override_for_testing(camera* camera_override);
 
     void update(const Input& input);
     void update_ui(const Input& input);
@@ -122,9 +148,11 @@ private:
     bool passes_asset_filters(Asset* asset) const;
     void apply_camera_area_render_flag();
     void set_mode_from_header(int header_mode);
+    void set_mode(Mode new_mode);
 
 private:
     void persist_map_info_to_disk() const;
+    const RoomAreaCache::PolygonList& room_area_polygons();
 
     Assets* assets_ = nullptr;
     Input* input_ = nullptr;
@@ -152,6 +180,8 @@ private:
     std::unique_ptr<TrailEditorSuite> trail_suite_;
     AssetFilterBar asset_filter_;
 
+    camera* camera_override_for_testing_ = nullptr;
+
     std::unique_ptr<SingleSpawnGroupModal> map_assets_modal_;
     std::unique_ptr<SingleSpawnGroupModal> boundary_assets_modal_;
 
@@ -170,5 +200,7 @@ private:
     int hovered_area_index_ = -1;
     int selected_area_index_ = -1;
     SDL_Point last_area_click_world_{0,0};
+
+    RoomAreaCache room_area_cache_;
 };
 

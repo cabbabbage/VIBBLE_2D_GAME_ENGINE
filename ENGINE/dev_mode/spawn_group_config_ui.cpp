@@ -158,6 +158,10 @@ void SpawnGroupsConfigPanel::build_static_controls() {
     if (!area_hint_label_) {
         area_hint_label_ = std::make_unique<StaticLabel>("Linked area: (none)");
     }
+    if (!persistence_warning_label_) {
+        persistence_warning_label_ = std::make_unique<StaticLabel>();
+        persistence_warning_label_->set_color(SDL_Color{255, 120, 120, 255});
+    }
 
     if (!overlap_checkbox_) {
         overlap_checkbox_ = std::make_unique<DMCheckbox>("Check overlap", false);
@@ -311,6 +315,13 @@ void SpawnGroupsConfigPanel::rebuild_rows() {
 
     if (header_label_) {
         rows.push_back({ header_label_.get() });
+    }
+
+    if (persistence_warning_label_) {
+        persistence_warning_label_->set_text(persistence_warning_text_);
+        if (!persistence_warning_text_.empty()) {
+            rows.push_back({ persistence_warning_label_.get() });
+        }
     }
 
     if (!ownership_text_.empty() && ownership_label_) {
@@ -797,6 +808,14 @@ void SpawnGroupsConfigPanel::set_area_names_provider(std::function<std::vector<s
     area_names_provider_ = std::move(provider);
     refresh_area_controls();
     rebuild_rows();
+}
+
+void SpawnGroupsConfigPanel::set_persistence_warning(const std::string& message) {
+    persistence_warning_text_ = message;
+    if (persistence_warning_label_) {
+        persistence_warning_label_->set_text(persistence_warning_text_);
+    }
+    request_rebuild_rows();
 }
 
 void SpawnGroupsConfigPanel::load(const nlohmann::json& asset) {

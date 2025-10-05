@@ -55,6 +55,7 @@ void SingleSpawnGroupModal::open(json& map_info,
         cfg_->set_floating_stack_key(stack_key_);
     }
     cfg_->set_screen_dimensions(screen_w_, screen_h_);
+    cfg_->set_persistence_warning({});
     cfg_->open(entry, [this](const json& updated) {
         if (!this->map_info_ || !this->section_) return;
         auto& groups = (*section_)["spawn_groups"];
@@ -71,7 +72,13 @@ void SingleSpawnGroupModal::open(json& map_info,
                 groups.push_back(std::move(first));
             }
         }
-        if (on_save_) on_save_();
+        bool ok = true;
+        if (on_save_) {
+            ok = on_save_();
+        }
+        if (cfg_) {
+            cfg_->set_persistence_warning(ok ? std::string{} : "Failed to save map info. Check logs.");
+        }
     });
     cfg_->set_ownership_label(ownership_label, ownership_color);
     cfg_->lock_method_to("Random");

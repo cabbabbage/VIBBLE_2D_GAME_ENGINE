@@ -12,7 +12,7 @@
 
  class SingleSpawnGroupModal {
  public:
-     using SaveCallback = std::function<void()>;
+    using SaveCallback = std::function<bool()>;
 
      SingleSpawnGroupModal();
      ~SingleSpawnGroupModal();

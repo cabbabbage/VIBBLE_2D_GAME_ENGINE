@@ -50,7 +50,7 @@ public:
     void close_all_panels();
 
     bool is_light_panel_visible() const;
-    using LightSaveCallback = std::function<void()>;
+    using LightSaveCallback = std::function<bool()>;
 
     void set_light_save_callback(LightSaveCallback cb);
 

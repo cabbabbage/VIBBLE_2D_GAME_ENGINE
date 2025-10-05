@@ -63,6 +63,7 @@ public:
     void clear_on_close_callbacks();
     void set_floating_stack_key(std::string key);
     void set_area_names_provider(std::function<std::vector<std::string>()> provider);
+    void set_persistence_warning(const std::string& message);
 
 private:
     struct CandidateRow {
@@ -113,6 +114,7 @@ private:
     std::unique_ptr<class StaticLabel> quantity_label_;
     std::unique_ptr<class StaticLabel> candidate_summary_label_;
     std::unique_ptr<class StaticLabel> area_hint_label_;
+    std::unique_ptr<class StaticLabel> persistence_warning_label_;
 
     std::unique_ptr<DMDropdown> method_dropdown_;
     std::unique_ptr<DropdownWidget> method_widget_;
@@ -168,6 +170,8 @@ private:
     std::string ownership_text_;
     SDL_Color ownership_color_{255, 255, 255, 255};
     bool has_ownership_color_ = false;
+
+    std::string persistence_warning_text_;
 
     SDL_Point default_position_{0, 0};
     bool has_custom_position_ = false;

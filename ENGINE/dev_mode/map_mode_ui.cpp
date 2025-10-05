@@ -550,7 +550,7 @@ void MapModeUI::sync_panel_map_info() {
     if (light_panel_) {
         LightSaveCallback callback = light_save_callback_;
         if (!callback) {
-            callback = [this]() { save_map_info_to_disk(); };
+            callback = [this]() { return save_map_info_to_disk(); };
         }
         light_panel_->set_map_info(map_info_, callback);
     }
