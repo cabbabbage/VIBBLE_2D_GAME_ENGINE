@@ -8,7 +8,6 @@
 #include "dev_mode/area_overlay_editor.hpp"
 #include "dev_mode/asset_info_ui.hpp"
 #include "dev_mode/asset_library_ui.hpp"
-#include "dev_mode/spawn_groups_config.hpp"
 #include "dev_mode/spawn_group_utils.hpp"
 #include "dev_mode/full_screen_collapsible.hpp"
 #include "dev_mode/room_configurator.hpp"
@@ -95,8 +94,8 @@ void RoomEditor::set_screen_dimensions(int width, int height) {
     }
     configure_shared_panel();
     refresh_room_config_visibility();
-    if (spawn_groups_cfg_ui_) {
-        spawn_groups_cfg_ui_->set_screen_dimensions(screen_w_, screen_h_);
+    if (spawn_group_panel_) {
+        spawn_group_panel_->set_screen_dimensions(screen_w_, screen_h_);
     }
 }
 
@@ -108,10 +107,8 @@ void RoomEditor::set_room_config_visible(bool visible) {
         return;
     }
     if (visible) {
-        if (spawn_groups_cfg_ui_) {
+        if (spawn_group_panel_) {
             clear_active_spawn_group_target();
-            spawn_groups_cfg_ui_->close_all();
-            spawn_groups_cfg_ui_->close();
         }
         room_cfg_ui_->open(current_room_);
     }
@@ -181,10 +178,8 @@ void RoomEditor::set_enabled(bool enabled) {
         cam.clear_focus_override();
         if (library_ui_) library_ui_->close();
         if (info_ui_) info_ui_->close();
-        if (spawn_groups_cfg_ui_) {
+        if (spawn_group_panel_) {
             clear_active_spawn_group_target();
-            spawn_groups_cfg_ui_->close_all();
-            spawn_groups_cfg_ui_->close();
         }
         if (area_editor_) area_editor_->cancel();
         clear_selection();
@@ -291,13 +286,11 @@ void RoomEditor::update_ui(const Input& input) {
     } else if (active_modal_ == ActiveModal::AssetInfo) {
         active_modal_ = ActiveModal::None;
     }
-    if (spawn_groups_cfg_ui_) {
-        spawn_groups_cfg_ui_->set_screen_dimensions(screen_w_, screen_h_);
+    if (spawn_group_panel_) {
+        spawn_group_panel_->set_screen_dimensions(screen_w_, screen_h_);
         update_spawn_groups_config_anchor();
-        spawn_groups_cfg_ui_->update(input, screen_w_, screen_h_);
+        spawn_group_panel_->update(input, screen_w_, screen_h_);
     }
-
-    process_pending_spawn_group_open();
 
     update_area_editor_focus();
 }
@@ -342,15 +335,15 @@ bool RoomEditor::handle_sdl_event(const SDL_Event& event) {
 
     auto route_spawn_panel = [&]() -> RouteResult {
         RouteResult result;
-        if (!spawn_groups_cfg_ui_ || !spawn_groups_cfg_ui_->any_visible()) {
+        if (!spawn_group_panel_ || !spawn_group_panel_->visible()) {
             return result;
         }
-        if (spawn_groups_cfg_ui_->handle_event(event)) {
+        if (spawn_group_panel_->handle_event(event)) {
             result.handled = true;
             result.pointer_blocked = true;
             return result;
         }
-        if (pointer_based && spawn_groups_cfg_ui_->is_point_inside(mx, my)) {
+        if (pointer_based && spawn_group_panel_->is_point_inside(mx, my)) {
             result.pointer_blocked = true;
         }
         return result;
@@ -469,8 +462,8 @@ bool RoomEditor::is_room_ui_blocking_point(int x, int y) const {
         return true;
     }
 
-    if (spawn_groups_cfg_ui_ && spawn_groups_cfg_ui_->any_visible() &&
-        spawn_groups_cfg_ui_->is_point_inside(x, y)) {
+    if (spawn_group_panel_ && spawn_group_panel_->visible() &&
+        spawn_group_panel_->is_point_inside(x, y)) {
         return true;
     }
 
@@ -497,8 +490,8 @@ void RoomEditor::render_overlays(SDL_Renderer* renderer) {
         info_ui_->render_world_overlay(renderer, assets_->getView());
         info_ui_->render(renderer, screen_w_, screen_h_);
     }
-    if (spawn_groups_cfg_ui_) {
-        spawn_groups_cfg_ui_->render(renderer);
+    if (spawn_group_panel_) {
+        spawn_group_panel_->render(renderer);
     }
     if (renderer && assets_ && current_room_ && current_room_->room_area) {
         auto overlay = compute_perimeter_overlay_for_drag();
@@ -587,10 +580,8 @@ std::shared_ptr<AssetInfo> RoomEditor::consume_selected_asset_from_library() {
 void RoomEditor::open_asset_info_editor(const std::shared_ptr<AssetInfo>& info) {
     if (!info) return;
     if (library_ui_) library_ui_->close();
-    if (spawn_groups_cfg_ui_) {
+    if (spawn_group_panel_) {
         clear_active_spawn_group_target();
-        spawn_groups_cfg_ui_->close_all();
-        spawn_groups_cfg_ui_->close();
     }
     if (room_config_dock_open_) {
         set_room_config_visible(false);
@@ -682,31 +673,7 @@ void RoomEditor::finalize_asset_drag(Asset* asset, const std::shared_ptr<AssetIn
     save_current_room_assets_json();
     asset->spawn_id = spawn_id;
     asset->spawn_method = "Exact";
-    if (spawn_groups_cfg_ui_) {
-        auto on_change = [this]() {
-            this->save_current_room_assets_json();
-        };
-        auto on_entry = [this](const nlohmann::json& e, const SpawnGroupsConfigPanel::ChangeSummary& summary) {
-            handle_spawn_config_change(e, summary);
-        };
-        // Configure area provider for link-to-area
-        auto configure_entry = [this](SpawnGroupsConfigPanel& panel, const nlohmann::json&) {
-            panel.set_area_names_provider([this]() {
-                std::vector<std::string> names;
-                if (!current_room_) return names;
-                auto& data = current_room_->assets_data();
-                if (data.contains("areas") && data["areas"].is_array()) {
-                    for (const auto& a : data["areas"]) {
-                        if (a.is_object() && a.contains("name") && a["name"].is_string()) {
-                            names.push_back(a["name"].get<std::string>());
-                        }
-                    }
-                }
-                return names;
-            });
-        };
-        spawn_groups_cfg_ui_->load(arr, std::move(on_change), std::move(on_entry), std::move(configure_entry));
-    }
+    refresh_spawn_groups_config_ui();
     rebuild_room_spawn_id_cache();
 }
 
@@ -942,8 +909,8 @@ void RoomEditor::handle_mouse_input(const Input& input) {
     const bool library_modal_block =
         library_ui_ && library_ui_->is_visible() && library_ui_->is_input_blocking();
     bool spawn_panel_block = false;
-    if (!library_modal_block && spawn_groups_cfg_ui_ && spawn_groups_cfg_ui_->any_visible()) {
-        spawn_panel_block = spawn_groups_cfg_ui_->is_point_inside(mx, my);
+    if (!library_modal_block && spawn_group_panel_ && spawn_group_panel_->visible()) {
+        spawn_panel_block = spawn_group_panel_->is_point_inside(mx, my);
     }
     const bool suppress_hover_and_drag = library_modal_block || spawn_panel_block;
     const bool suppress_clicks = library_modal_block || spawn_panel_block;
@@ -1235,7 +1202,7 @@ bool RoomEditor::is_ui_blocking_input(int mx, int my) const {
     if (area_editor_ && area_editor_->is_active()) {
         return true;
     }
-    if (spawn_groups_cfg_ui_ && spawn_groups_cfg_ui_->any_visible() && spawn_groups_cfg_ui_->is_point_inside(mx, my)) {
+    if (spawn_group_panel_ && spawn_group_panel_->visible() && spawn_group_panel_->is_point_inside(mx, my)) {
         return true;
     }
     return false;
@@ -1330,8 +1297,8 @@ void RoomEditor::ensure_room_configurator() {
 }
 
 void RoomEditor::ensure_spawn_groups_config_ui() {
-    if (!spawn_groups_cfg_ui_) {
-        spawn_groups_cfg_ui_ = std::make_unique<SpawnGroupsConfig>();
+    if (!spawn_group_panel_) {
+        spawn_group_panel_ = std::make_unique<SpawnGroupsConfigPanel>();
     }
 }
 
@@ -1711,105 +1678,35 @@ std::pair<int, int> RoomEditor::get_room_dimensions() const {
 void RoomEditor::refresh_spawn_groups_config_ui() {
     if (!current_room_) return;
     ensure_spawn_groups_config_ui();
-    if (!spawn_groups_cfg_ui_) return;
     auto& root = current_room_->assets_data();
     auto& arr = ensure_spawn_groups_array(root);
-    std::optional<SpawnGroupsConfig::OpenSpawnGroupState> reopen_state;
-    if (spawn_groups_cfg_ui_) {
-        reopen_state = spawn_groups_cfg_ui_->capture_open_spawn_group();
-        const bool previous = suppress_spawn_group_close_clear_;
-        suppress_spawn_group_close_clear_ = true;
-        spawn_groups_cfg_ui_->close_all();
-        suppress_spawn_group_close_clear_ = previous;
-    }
     if (sanitize_perimeter_spawn_groups(arr)) {
         save_current_room_assets_json();
     }
-    auto on_change = [this]() {
-        if (!current_room_) return;
-        auto& root = current_room_->assets_data();
-        auto& arr = ensure_spawn_groups_array(root);
-        const bool sanitized = sanitize_perimeter_spawn_groups(arr);
-        this->save_current_room_assets_json();
-        if (sanitized) {
-            refresh_spawn_groups_config_ui();
-        }
-    };
-    auto on_entry = [this](const nlohmann::json& entry, const SpawnGroupsConfigPanel::ChangeSummary& summary) {
-        handle_spawn_config_change(entry, summary);
-};
-    auto configure_entry = [this](SpawnGroupsConfigPanel& ui, const nlohmann::json& entry) {
-        const std::string spawn_id = entry.value("spawn_id", std::string{});
-        const bool room_spawn = !spawn_id.empty() && is_room_spawn_id(spawn_id);
-
-        bool boundary = false;
-        if (entry.contains("candidates") && entry["candidates"].is_array() && assets_) {
-            for (const auto& cand : entry["candidates"]) {
-                std::string candidate_name;
-                if (cand.is_object()) {
-                    if (cand.contains("name") && cand["name"].is_string()) {
-                        candidate_name = cand["name"].get<std::string>();
-                    } else if (cand.contains("asset") && cand["asset"].is_string()) {
-                        candidate_name = cand["asset"].get<std::string>();
-                    }
-                } else if (cand.is_string()) {
-                    candidate_name = cand.get<std::string>();
-                }
-                if (candidate_name.empty() || candidate_name == "null" || candidate_name.front() == '#') {
-                    continue;
-                }
-                auto info = assets_->library().get(candidate_name);
-                if (info && info->type == asset_types::boundary) {
-                    boundary = true;
-                    break;
-                }
-            }
-        }
-
-        SDL_Color gold{255, 215, 0, 255};
-        SDL_Color orange{255, 165, 0, 255};
-        SDL_Color red{220, 64, 64, 255};
-        SDL_Color color = boundary ? orange : (room_spawn ? gold : red);
-        std::string label;
-        if (room_spawn && current_room_) {
-            std::string room_name = current_room_->room_name.empty() ? std::string("Room") : current_room_->room_name;
-            label = "Room: " + room_name;
-        } else {
-            label = "Map-wide";
-        }
-        ui.set_ownership_label(label, color);
-        const std::string callback_id = spawn_id;
-        ui.add_on_close_callback([this, callback_id]() {
-            this->handle_spawn_group_panel_closed(callback_id);
-        });
-        // Provide area names for link-to-area from current room JSON
-        ui.set_area_names_provider([this]() {
-            std::vector<std::string> names;
-            if (!current_room_) return names;
-            auto& data = current_room_->assets_data();
-            if (data.contains("areas") && data["areas"].is_array()) {
-                for (const auto& a : data["areas"]) {
-                    if (a.is_object() && a.contains("name") && a["name"].is_string()) {
-                        names.push_back(a["name"].get<std::string>());
-                    }
-                }
-            }
-            return names;
-        });
-};
-
-    spawn_groups_cfg_ui_->load(arr, std::move(on_change), std::move(on_entry), std::move(configure_entry));
-    update_spawn_groups_config_anchor();
-    if (reopen_state) {
-        spawn_groups_cfg_ui_->restore_open_spawn_group(*reopen_state);
-    }
     rebuild_room_spawn_id_cache();
+
+    if (!spawn_group_panel_ || !spawn_group_panel_->visible() || !active_spawn_group_id_) {
+        return;
+    }
+
+    nlohmann::json* entry = find_spawn_entry(*active_spawn_group_id_);
+    if (!entry) {
+        clear_active_spawn_group_target();
+        return;
+    }
+
+    configure_spawn_group_panel(*spawn_group_panel_, *entry);
+    spawn_group_panel_->load(*entry);
+    spawn_group_panel_->set_screen_dimensions(screen_w_, screen_h_);
 }
 
 void RoomEditor::update_spawn_groups_config_anchor() {
-    if (!spawn_groups_cfg_ui_) return;
+    if (!spawn_group_panel_) return;
+    if (spawn_group_panel_->visible()) {
+        return;
+    }
     SDL_Point anchor = spawn_groups_anchor_point();
-    spawn_groups_cfg_ui_->set_anchor(anchor.x, anchor.y);
+    spawn_group_panel_->set_position(anchor.x, anchor.y);
 }
 
 SDL_Point RoomEditor::spawn_groups_anchor_point() const {
@@ -1825,6 +1722,64 @@ SDL_Point RoomEditor::spawn_groups_anchor_point() const {
     return SDL_Point{anchor_x, anchor_y};
 }
 
+void RoomEditor::configure_spawn_group_panel(SpawnGroupsConfigPanel& panel, const nlohmann::json& entry) {
+    const std::string spawn_id = entry.value("spawn_id", std::string{});
+    const bool room_spawn = !spawn_id.empty() && is_room_spawn_id(spawn_id);
+
+    bool boundary = false;
+    if (entry.contains("candidates") && entry["candidates"].is_array() && assets_) {
+        for (const auto& cand : entry["candidates"]) {
+            std::string candidate_name;
+            if (cand.is_object()) {
+                if (cand.contains("name") && cand["name"].is_string()) {
+                    candidate_name = cand["name"].get<std::string>();
+                } else if (cand.contains("asset") && cand["asset"].is_string()) {
+                    candidate_name = cand["asset"].get<std::string>();
+                }
+            } else if (cand.is_string()) {
+                candidate_name = cand.get<std::string>();
+            }
+            if (candidate_name.empty() || candidate_name == "null" || candidate_name.front() == '#') {
+                continue;
+            }
+            auto info = assets_->library().get(candidate_name);
+            if (info && info->type == asset_types::boundary) {
+                boundary = true;
+                break;
+            }
+        }
+    }
+
+    SDL_Color gold{255, 215, 0, 255};
+    SDL_Color orange{255, 165, 0, 255};
+    SDL_Color red{220, 64, 64, 255};
+    SDL_Color color = boundary ? orange : (room_spawn ? gold : red);
+    std::string label;
+    if (room_spawn && current_room_) {
+        std::string room_name = current_room_->room_name.empty() ? std::string("Room") : current_room_->room_name;
+        label = "Room: " + room_name;
+    } else {
+        label = "Map-wide";
+    }
+    panel.set_ownership_label(label, color);
+
+    panel.clear_on_close_callbacks();
+    panel.set_on_close([this, spawn_id]() { this->handle_spawn_group_panel_closed(spawn_id); });
+    panel.set_area_names_provider([this]() {
+        std::vector<std::string> names;
+        if (!current_room_) return names;
+        auto& data = current_room_->assets_data();
+        if (data.contains("areas") && data["areas"].is_array()) {
+            for (const auto& a : data["areas"]) {
+                if (a.is_object() && a.contains("name") && a["name"].is_string()) {
+                    names.push_back(a["name"].get<std::string>());
+                }
+            }
+        }
+        return names;
+    });
+}
+
 void RoomEditor::handle_spawn_group_panel_closed(const std::string& spawn_id) {
     if (suppress_spawn_group_close_clear_) {
         return;
@@ -1835,12 +1790,22 @@ void RoomEditor::handle_spawn_group_panel_closed(const std::string& spawn_id) {
     if (!spawn_id.empty() && spawn_id != *active_spawn_group_id_) {
         return;
     }
-    clear_active_spawn_group_target();
+    active_spawn_group_id_.reset();
 }
 
 void RoomEditor::clear_active_spawn_group_target() {
     active_spawn_group_id_.reset();
-    pending_spawn_group_open_.reset();
+    if (!spawn_group_panel_) {
+        return;
+    }
+    const bool previous = suppress_spawn_group_close_clear_;
+    suppress_spawn_group_close_clear_ = true;
+    spawn_group_panel_->set_on_close({});
+    spawn_group_panel_->clear_on_close_callbacks();
+    if (spawn_group_panel_->visible()) {
+        spawn_group_panel_->close();
+    }
+    suppress_spawn_group_close_clear_ = previous;
 }
 
 void RoomEditor::sanitize_perimeter_spawn_groups() {
@@ -2086,82 +2051,48 @@ void RoomEditor::move_spawn_group_internal(const std::string& spawn_id, int dir)
 void RoomEditor::open_spawn_group_editor_by_id(const std::string& spawn_id) {
     if (spawn_id.empty()) return;
     ensure_spawn_groups_config_ui();
-    if (!spawn_groups_cfg_ui_) return;
+    if (!spawn_group_panel_ || !current_room_) return;
+
+    nlohmann::json* entry = find_spawn_entry(spawn_id);
+    if (!entry) {
+        return;
+    }
+
     close_asset_info_editor();
     close_room_config();
     close_asset_library();
-    update_spawn_groups_config_anchor();
+
     active_spawn_group_id_ = spawn_id;
+
+    update_spawn_groups_config_anchor();
     SDL_Point anchor = spawn_groups_anchor_point();
-    spawn_groups_cfg_ui_->request_open_spawn_group(spawn_id, anchor.x, anchor.y);
+    spawn_group_panel_->set_screen_dimensions(screen_w_, screen_h_);
+    spawn_group_panel_->set_position(anchor.x, anchor.y);
 
-    PendingSpawnGroupOpen pending;
-    pending.id = spawn_id;
-    pending.position = anchor;
-    pending.retry_frames = 0;
-    pending.remaining_attempts = 6;
-    pending.awaiting_confirmation = true;
-    pending_spawn_group_open_ = pending;
-}
+    configure_spawn_group_panel(*spawn_group_panel_, *entry);
 
-void RoomEditor::process_pending_spawn_group_open() {
-    if (active_spawn_group_id_ && spawn_groups_cfg_ui_) {
-        if (!pending_spawn_group_open_ && !spawn_groups_cfg_ui_->is_open(*active_spawn_group_id_)) {
-            PendingSpawnGroupOpen pending;
-            pending.id = *active_spawn_group_id_;
-            pending.position = spawn_groups_anchor_point();
-            pending.retry_frames = 0;
-            pending.remaining_attempts = 6;
-            pending.awaiting_confirmation = false;
-            pending_spawn_group_open_ = pending;
-        }
-    }
-
-    if (!pending_spawn_group_open_) {
-        return;
-    }
-    if (!spawn_groups_cfg_ui_) {
-        pending_spawn_group_open_.reset();
-        return;
-    }
-
-    auto& pending = *pending_spawn_group_open_;
-    if (pending.id.empty()) {
-        pending_spawn_group_open_.reset();
-        return;
-    }
-
-    if (spawn_groups_cfg_ui_->is_open(pending.id)) {
-        pending_spawn_group_open_.reset();
-        return;
-    }
-
-    if (pending.awaiting_confirmation) {
-        pending.awaiting_confirmation = false;
-        pending.retry_frames = 2;
-        return;
-    }
-
-    if (pending.retry_frames > 0) {
-        --pending.retry_frames;
-        return;
-    }
-
-    if (pending.remaining_attempts <= 0) {
-        if (active_spawn_group_id_ && *active_spawn_group_id_ == pending.id) {
-            pending.remaining_attempts = 6;
-        } else {
-            pending_spawn_group_open_.reset();
+    spawn_group_panel_->open(*entry, [this, spawn_id](const nlohmann::json& updated) {
+        if (!current_room_) return;
+        auto& root = current_room_->assets_data();
+        auto& arr = ensure_spawn_groups_array(root);
+        nlohmann::json* target = find_spawn_entry(spawn_id);
+        if (!target) {
             return;
         }
-    }
-
-    SDL_Point anchor = spawn_groups_anchor_point();
-    pending.position = anchor;
-    spawn_groups_cfg_ui_->request_open_spawn_group(pending.id, anchor.x, anchor.y);
-    pending.retry_frames = 2;
-    pending.awaiting_confirmation = true;
-    --pending.remaining_attempts;
+        *target = updated;
+        const bool sanitized = sanitize_perimeter_spawn_groups(arr);
+        save_current_room_assets_json();
+        auto summary = spawn_group_panel_->consume_change_summary();
+        handle_spawn_config_change(*target, summary);
+        if (sanitized) {
+            spawn_group_panel_->load(*target);
+        }
+        configure_spawn_group_panel(*spawn_group_panel_, *target);
+        rebuild_room_spawn_id_cache();
+    });
+    spawn_group_panel_->force_pointer_ready();
+    Input dummy;
+    spawn_group_panel_->update(dummy, screen_w_, screen_h_);
 }
 
 void RoomEditor::reopen_room_configurator() {
