@@ -172,8 +172,7 @@ void SpawnGroupsConfigPanel::build_static_controls() {
         add_candidate_button_ = std::make_unique<DMButton>("Add Candidate", &DMStyles::CreateButton(), 140, DMButton::height());
         add_candidate_widget_ = std::make_unique<ButtonWidget>(add_candidate_button_.get(), [this]() {
             add_candidate_row("", 0);
-            rebuild_rows();
-            sync_candidates();
+            request_rebuild_rows();
         });
     }
 
@@ -230,8 +229,7 @@ void SpawnGroupsConfigPanel::remove_candidate_row(CandidateRow* target) {
                       candidates_.end());
     ensure_candidate_rows();
     mark_dirty();
-    rebuild_rows();
-    sync_candidates();
+    request_rebuild_rows();
 }
 
 void SpawnGroupsConfigPanel::refresh_method_control() {
@@ -304,6 +302,7 @@ void SpawnGroupsConfigPanel::update_candidate_summary() {
 }
 
 void SpawnGroupsConfigPanel::rebuild_rows() {
+    rows_dirty_ = false;
     if (!panel_title_.empty()) {
         set_title(panel_title_);
     }
@@ -408,6 +407,10 @@ void SpawnGroupsConfigPanel::rebuild_rows() {
 
     set_rows(rows);
     update_asset_search_anchor();
+}
+
+void SpawnGroupsConfigPanel::request_rebuild_rows() {
+    rows_dirty_ = true;
 }
 
 void SpawnGroupsConfigPanel::sync_candidates() {
@@ -643,6 +646,10 @@ void SpawnGroupsConfigPanel::update(const Input& input, int screen_w, int screen
         screen_h_ = screen_h;
     }
 
+    if (rows_dirty_) {
+        rebuild_rows();
+    }
+
     DockableCollapsible::update(input, screen_w_, screen_h_);
     SDL_Point pos = DockableCollapsible::position();
     if (pos.x != default_position_.x || pos.y != default_position_.y) {
@@ -876,8 +883,7 @@ void SpawnGroupsConfigPanel::open_asset_search() {
             return;
         }
         add_candidate_row(selection, 0);
-        rebuild_rows();
-        sync_candidates();
+        request_rebuild_rows();
     });
 }
 
@@ -901,6 +907,6 @@ void SpawnGroupsConfigPanel::reset_area_selection() {
         area_dropdown_widget_ = nullptr;
     }
     refresh_area_controls();
-    rebuild_rows();
+    request_rebuild_rows();
 }
 

@@ -83,6 +83,7 @@ private:
 
     void build_static_controls();
     void rebuild_rows();
+    void request_rebuild_rows();
     void refresh_method_control();
     void refresh_quantity_control();
     void refresh_perimeter_control();
@@ -172,6 +173,8 @@ private:
     bool has_custom_position_ = false;
 
     std::string floating_stack_key_;
+
+    bool rows_dirty_ = false;
 };
 
 using SpawnGroupConfigUI [[deprecated("Use SpawnGroupsConfigPanel instead")]] = SpawnGroupsConfigPanel;
