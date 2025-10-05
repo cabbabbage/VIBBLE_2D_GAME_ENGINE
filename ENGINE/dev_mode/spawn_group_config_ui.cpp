@@ -876,7 +876,6 @@ void SpawnGroupsConfigPanel::open_asset_search() {
             return;
         }
         add_candidate_row(selection, 0);
-        }
         rebuild_rows();
         sync_candidates();
     });

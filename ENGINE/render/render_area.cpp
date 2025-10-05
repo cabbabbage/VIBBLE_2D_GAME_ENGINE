@@ -83,7 +83,7 @@ void fill_polygon(SDL_Renderer* renderer, const std::vector<SDL_Point>& points, 
 
 void render_asset_debug_areas(SDL_Renderer* renderer,
                               const camera& cam,
-                              const Asset& asset,
+                              Asset& asset,
                               float asset_screen_height,
                               float reference_screen_height) {
     (void)asset_screen_height;
