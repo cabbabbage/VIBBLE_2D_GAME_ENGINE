@@ -212,6 +212,94 @@ Area* Room::find_area(const std::string& name) {
         return nullptr;
 }
 
+bool Room::remove_area(const std::string& name) {
+        if (name.empty()) {
+                return false;
+        }
+        bool removed = false;
+        try {
+                if (assets_json.is_object() && assets_json.contains("areas") && assets_json["areas"].is_array()) {
+                        auto& arr = assets_json["areas"];
+                        for (auto it = arr.begin(); it != arr.end();) {
+                                if (it->is_object() && it->value("name", std::string{}) == name) {
+                                        it = arr.erase(it);
+                                        removed = true;
+                                } else {
+                                        ++it;
+                                }
+                        }
+                }
+        } catch (...) {
+                removed = false;
+        }
+        if (removed) {
+                load_named_areas_from_json();
+        }
+        return removed;
+}
+
+void Room::upsert_named_area(const Area& area, const std::string& type) {
+        const std::string area_name = area.get_name();
+        if (area_name.empty()) {
+                return;
+        }
+
+        if (!assets_json.is_object()) {
+                assets_json = nlohmann::json::object();
+        }
+        if (!assets_json.contains("areas") || !assets_json["areas"].is_array()) {
+                assets_json["areas"] = nlohmann::json::array();
+        }
+
+        nlohmann::json entry = nlohmann::json::object();
+        entry["name"] = area_name;
+        if (!type.empty()) {
+                entry["type"] = type;
+        } else if (!area.get_type().empty()) {
+                entry["type"] = area.get_type();
+        }
+
+        const auto& pts = area.get_points();
+        if (!pts.empty()) {
+                int minx = pts.front().x;
+                int miny = pts.front().y;
+                int maxx = pts.front().x;
+                int maxy = pts.front().y;
+                for (const auto& p : pts) {
+                        minx = std::min(minx, p.x);
+                        maxx = std::max(maxx, p.x);
+                        miny = std::min(miny, p.y);
+                        maxy = std::max(maxy, p.y);
+                }
+                entry["anchor"] = nlohmann::json::object({
+                        {"x", minx},
+                        {"y", miny}
+                });
+                nlohmann::json points = nlohmann::json::array();
+                points.reserve(pts.size());
+                for (const auto& p : pts) {
+                        points.push_back({ {"x", p.x - minx}, {"y", p.y - miny} });
+                }
+                entry["points"] = std::move(points);
+        }
+
+        auto& arr = assets_json["areas"];
+        bool replaced = false;
+        for (auto& item : arr) {
+                if (!item.is_object()) continue;
+                if (item.value("name", std::string{}) == area_name) {
+                        item = entry;
+                        replaced = true;
+                        break;
+                }
+        }
+        if (!replaced) {
+                arr.push_back(entry);
+        }
+
+        load_named_areas_from_json();
+}
+
 nlohmann::json Room::create_static_room_json(std::string name) {
         json out;
 	const std::string geometry = assets_json.value("geometry", "Square");

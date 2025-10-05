@@ -1,57 +1,66 @@
 {
-  "animations": {
-    "default": {
-      "flipped_source": false,
-      "locked": false,
-      "movement": [
-        [
-          0,
-          0
-        ],
-        [
-          0,
-          0
-        ],
-        [
-          0,
-          0
-        ]
-      ],
-      "number_of_frames": 3,
-      "reverse_source": false,
-      "source": {
-        "kind": "folder",
-        "name": null,
-        "path": "default"
-      },
-      "speed_factor": 1
-    }
-  },
-  "anti_tags": [],
-  "asset_name": "fog",
-  "asset_type": "Texture",
-  "can_invert": true,
-  "duplicatable": false,
-  "duplication_interval_max": 60,
-  "duplication_interval_min": 30,
-  "has_shading": false,
-  "impassable_area": null,
-  "lighting_info": [],
-  "max_child_depth": 2,
-  "min_child_depth": 0,
-  "min_distance_all": 0,
-  "min_same_type_distance": 0,
-  "render_radius": 1000,
-  "rnd_spawn_max": 400,
-  "rnd_spawn_min": 300,
-  "size_settings": {
-    "scale_percentage": 287.0
-  },
-  "tags": [
-    "default",
-    "ground",
-    "passable"
-  ],
-  "update_radius": 1000,
-  "z_threshold": -970
+    "animations": {
+        "default": {
+            "flipped_source": false,
+            "locked": false,
+            "movement": [
+                [
+                    0,
+                    0
+                ],
+                [
+                    0,
+                    0
+                ],
+                [
+                    0,
+                    0
+                ]
+            ],
+            "number_of_frames": 3,
+            "reverse_source": false,
+            "source": {
+                "kind": "folder",
+                "name": null,
+                "path": "default"
+            },
+            "speed_factor": 1
+        }
+    },
+    "anti_tags": [
+        "book",
+        "center",
+        "man-made",
+        "scary",
+        "still",
+        "wood"
+    ],
+    "asset_name": "fog",
+    "asset_type": "Texture",
+    "can_invert": true,
+    "duplicatable": false,
+    "duplication_interval_max": 60,
+    "duplication_interval_min": 30,
+    "has_shading": false,
+    "impassable_area": null,
+    "lighting_info": [],
+    "max_child_depth": 2,
+    "min_child_depth": 0,
+    "min_distance_all": 0,
+    "min_same_type_distance": 0,
+    "render_radius": 1000,
+    "rnd_spawn_max": 400,
+    "rnd_spawn_min": 300,
+    "size_settings": {
+        "scale_percentage": 288.0
+    },
+    "tags": [
+        "default",
+        "ground",
+        "nature",
+        "passable",
+        "plant"
+    ],
+    "update_radius": 1000,
+    "z_threshold": -970
 }

@@ -51,7 +51,11 @@ public:
     void set_map_context(nlohmann::json* map_info, const std::string& map_path);
 
     struct RoomAreaCache {
-        using Polygon      = std::pair<std::string, std::vector<SDL_Point>>;
+        struct Polygon {
+            std::string name;
+            std::string type;
+            std::vector<SDL_Point> points;
+        };
         using PolygonList  = std::vector<Polygon>;
         using Listener     = std::function<void(const PolygonList&, std::size_t)>;
 
@@ -149,6 +153,7 @@ private:
     void apply_camera_area_render_flag();
     void set_mode_from_header(int header_mode);
     void set_mode(Mode new_mode);
+    std::string generate_unique_room_area_name(const std::string& base) const;
 
 private:
     bool persist_map_info_to_disk() const;

@@ -58,8 +58,10 @@ class Room {
     std::vector<NamedArea> areas;
     // Find a named room area by name; returns nullptr if not found
     Area* find_area(const std::string& name);
+    bool remove_area(const std::string& name);
+    void upsert_named_area(const Area& area, const std::string& type);
 
-	private:
+        private:
     nlohmann::json assets_json;
     nlohmann::json* room_data_ptr_ = nullptr;
     const nlohmann::json* map_assets_data_ptr_ = nullptr;

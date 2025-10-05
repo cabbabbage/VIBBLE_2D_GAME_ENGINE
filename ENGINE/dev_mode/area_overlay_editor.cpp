@@ -7,6 +7,7 @@
 #include "core/AssetsManager.hpp"
 #include "asset/Asset.hpp"
 #include "asset/asset_info.hpp"
+#include "map_generation/room.hpp"
 #include "render/camera.hpp"
 #include "utils/input.hpp"
 #include "utils/area.hpp"
@@ -113,7 +114,9 @@ bool AreaOverlayEditor::begin_at_point(AssetInfo* info, SDL_Point anchor_world, 
 
     info_ = info;
     asset_ = asset; // optional, used only for mask autogen
+    room_ = nullptr;
     area_name_ = area_name;
+    room_area_type_.clear();
     canvas_w_ = cw;
     canvas_h_ = ch;
     mask_origin_x_ = 0;
@@ -160,6 +163,120 @@ bool AreaOverlayEditor::begin_at_point(AssetInfo* info, SDL_Point anchor_world, 
 
     active_ = true;
 
+    saved_since_begin_ = false;
+    toolbox_autoplace_done_ = false;
+
+    return true;
+}
+
+bool AreaOverlayEditor::begin_for_room(Room* room, const std::string& area_name, const std::string& area_type) {
+    SDL_Point focus{0, 0};
+    if (room && room->room_area) {
+        focus = room->room_area->get_center();
+    }
+    return begin_for_room(room, area_name, area_type, focus);
+}
+
+bool AreaOverlayEditor::begin_for_room(Room* room,
+                                       const std::string& area_name,
+                                       const std::string& area_type,
+                                       SDL_Point focus_world) {
+    if (!assets_ || !room) return false;
+
+    info_ = nullptr;
+    asset_ = nullptr;
+    room_ = room;
+    area_name_ = area_name;
+    room_area_type_ = area_type;
+
+    std::vector<SDL_Point> reference_points;
+    if (Area* existing = room_->find_area(area_name_)) {
+        const auto& pts = existing->get_points();
+        reference_points.insert(reference_points.end(), pts.begin(), pts.end());
+    }
+    if (reference_points.empty() && room_->room_area) {
+        const auto& pts = room_->room_area->get_points();
+        reference_points.insert(reference_points.end(), pts.begin(), pts.end());
+    }
+    if (reference_points.empty()) {
+        const int pad = 128;
+        reference_points.push_back(SDL_Point{focus_world.x - pad, focus_world.y - pad});
+        reference_points.push_back(SDL_Point{focus_world.x + pad, focus_world.y - pad});
+        reference_points.push_back(SDL_Point{focus_world.x + pad, focus_world.y + pad});
+        reference_points.push_back(SDL_Point{focus_world.x - pad, focus_world.y + pad});
+    }
+    reference_points.push_back(focus_world);
+
+    int minx = reference_points.front().x;
+    int maxx = reference_points.front().x;
+    int miny = reference_points.front().y;
+    int maxy = reference_points.front().y;
+    for (const auto& p : reference_points) {
+        minx = std::min(minx, p.x);
+        maxx = std::max(maxx, p.x);
+        miny = std::min(miny, p.y);
+        maxy = std::max(maxy, p.y);
+    }
+    const int padding = 32;
+    minx -= padding;
+    miny -= padding;
+    maxx += padding;
+    maxy += padding;
+    if (minx == maxx) maxx = minx + 32;
+    if (miny == maxy) maxy = miny + 32;
+
+    canvas_w_ = std::max(32, maxx - minx);
+    canvas_h_ = std::max(32, maxy - miny);
+    mask_origin_x_ = minx;
+    mask_origin_y_ = miny;
+    anchor_world_ = SDL_Point{ (minx + maxx) / 2, (miny + maxy) / 2 };
+    has_anchor_ = true;
+    flipped_ = false;
+
+    if (mask_) {
+        SDL_FreeSurface(mask_);
+        mask_ = nullptr;
+    }
+    if (mask_tex_) {
+        SDL_DestroyTexture(mask_tex_);
+        mask_tex_ = nullptr;
+    }
+    discard_autogen_base();
+    pending_mask_generation_ = false;
+    applied_crop_left_ = applied_crop_right_ = applied_crop_top_ = applied_crop_bottom_ = -1;
+
+    crop_left_slider_.reset();
+    crop_right_slider_.reset();
+    crop_top_slider_.reset();
+    crop_bottom_slider_.reset();
+
+    mask_ = SDL_CreateRGBSurfaceWithFormat(0, canvas_w_, canvas_h_, 32, SDL_PIXELFORMAT_RGBA32);
+    if (!mask_) return false;
+    clear_mask();
+    upload_mask();
+
+    set_mode(Mode::Geometry);
+    geometry_points_.clear();
+    geometry_dirty_ = false;
+
+    if (Area* existing = room_->find_area(area_name_)) {
+        const auto& pts = existing->get_points();
+        geometry_points_.insert(geometry_points_.end(), pts.begin(), pts.end());
+        rebuild_mask_from_geometry();
+        upload_mask();
+    }
+
+    ensure_toolbox();
+    if (toolbox_) {
+        std::string title = "Area Tools";
+        if (room_) {
+            title += std::string(" — ") + room_->room_name;
+            if (!area_name_.empty()) title += std::string(" — ") + area_name_;
+        }
+        toolbox_->set_title(title);
+    }
+
+    active_ = true;
     saved_since_begin_ = false;
     toolbox_autoplace_done_ = false;
 
@@ -327,8 +444,13 @@ void AreaOverlayEditor::ensure_mask_contains(int lx, int ly, int radius) {
 }
 
 void AreaOverlayEditor::init_mask_from_existing_area() {
-    if (!mask_ || !info_) return;
-    Area* a = info_->find_area(area_name_);
+    if (!mask_) return;
+    Area* a = nullptr;
+    if (info_) {
+        a = info_->find_area(area_name_);
+    } else if (room_) {
+        a = room_->find_area(area_name_);
+    }
     if (!a) return;
     const auto& pts = a->get_points();
     if (pts.size() < 3) return;
@@ -393,6 +515,9 @@ void AreaOverlayEditor::ensure_toolbox() {
     std::string title = "Area Tools";
     if (info_) {
         title += std::string(" — ") + info_->name;
+        if (!area_name_.empty()) title += std::string(" — ") + area_name_;
+    } else if (room_) {
+        title += std::string(" — ") + room_->room_name;
         if (!area_name_.empty()) title += std::string(" — ") + area_name_;
     }
     toolbox_ = std::make_unique<DockableCollapsible>(title, true);
@@ -681,7 +806,7 @@ void AreaOverlayEditor::apply_mask_crop() {
     upload_mask();
 }
 
-void AreaOverlayEditor::position_toolbox_left_of_asset(int screen_w, int screen_h) {
+void AreaOverlayEditor::position_toolbox_near_anchor(int screen_w, int screen_h) {
     if (!toolbox_ || !assets_ || !has_anchor_) return;
     SDL_Point ap = assets_->getView().map_to_screen(anchor_world_);
     int tb_w = toolbox_->rect().w;
@@ -698,7 +823,7 @@ void AreaOverlayEditor::update(const Input& input, int screen_w, int screen_h) {
 
     ensure_toolbox();
     if (!toolbox_autoplace_done_) {
-        position_toolbox_left_of_asset(screen_w, screen_h);
+        position_toolbox_near_anchor(screen_w, screen_h);
         toolbox_autoplace_done_ = true;
     } else if (toolbox_) {
         toolbox_->set_work_area(SDL_Rect{0, 0, screen_w, screen_h});
@@ -958,16 +1083,68 @@ std::vector<SDL_Point> AreaOverlayEditor::trace_polygon_from_mask() const {
 }
 
 void AreaOverlayEditor::save_area() {
-    if (!info_) {
+    if (!info_ && !room_) {
+        cancel();
         return;
     }
-    // Geometry mode: save drawn polygon points directly
-    if (mode_ == Mode::Geometry) {
-        if (geometry_points_.size() < 3) {
+
+    auto remove_current = [this]() -> bool {
+        if (info_) {
             bool removed = info_->remove_area(area_name_);
             if (removed) {
                 (void)info_->update_info_json();
-                saved_since_begin_ = true;
+            }
+            return removed;
+        }
+        if (room_) {
+            bool removed = room_->remove_area(area_name_);
+            if (removed) {
+                room_->save_assets_json();
+            }
+            return removed;
+        }
+        return false;
+    };
+
+    auto determine_room_type = [this]() -> std::string {
+        if (!room_) return std::string{};
+        if (!room_area_type_.empty()) return room_area_type_;
+        if (Area* existing = room_->find_area(area_name_)) {
+            if (!existing->get_type().empty()) return existing->get_type();
+        }
+        return area_name_;
+    };
+
+    auto notify_saved = [this]() {
+        saved_since_begin_ = true;
+        if (on_saved_callback_) {
+            on_saved_callback_();
+        }
+    };
+
+    auto upsert_area = [this, &determine_room_type](Area& area) {
+        if (info_) {
+            if (Area* existing = info_->find_area(area_name_)) {
+                area.set_type(existing->get_type());
+            } else {
+                area.set_type(area_name_);
+            }
+            info_->upsert_area_from_editor(area);
+            (void)info_->update_info_json();
+        } else if (room_) {
+            std::string type = determine_room_type();
+            area.set_type(type);
+            room_area_type_ = type;
+            room_->upsert_named_area(area, type);
+            room_->save_assets_json();
+        }
+    };
+
+    // Geometry mode: save drawn polygon points directly
+    if (mode_ == Mode::Geometry) {
+        if (geometry_points_.size() < 3) {
+            if (remove_current()) {
+                notify_saved();
             }
             cancel();
             return;
@@ -986,33 +1163,22 @@ void AreaOverlayEditor::save_area() {
             }
         }
         if (area_points.size() < 3) {
-            bool removed = info_->remove_area(area_name_);
-            if (removed) {
-                (void)info_->update_info_json();
-                saved_since_begin_ = true;
+            if (remove_current()) {
+                notify_saved();
             }
             cancel();
             return;
         }
         Area area(area_name_, area_points);
-        if (AssetInfo* inf = info_) {
-            if (Area* existing = inf->find_area(area_name_)) {
-                area.set_type(existing->get_type());
-            } else {
-                area.set_type(area_name_);
-            }
-        }
-        info_->upsert_area_from_editor(area);
-        (void)info_->update_info_json();
-        saved_since_begin_ = true;
+        upsert_area(area);
+        notify_saved();
         cancel();
         return;
     }
+
     if (!mask_) {
-        bool removed = info_->remove_area(area_name_);
-        if (removed) {
-            (void)info_->update_info_json();
-            saved_since_begin_ = true;
+        if (remove_current()) {
+            notify_saved();
         }
         cancel();
         return;
@@ -1045,10 +1211,8 @@ void AreaOverlayEditor::save_area() {
     }
 
     if (!has_alpha) {
-        bool removed = info_->remove_area(area_name_);
-        if (removed) {
-            (void)info_->update_info_json();
-            saved_since_begin_ = true;
+        if (remove_current()) {
+            notify_saved();
         }
         cancel();
         return;
@@ -1101,15 +1265,7 @@ void AreaOverlayEditor::save_area() {
     }
 
     Area area(area_name_, area_points);
-    if (AssetInfo* inf = info_) {
-        if (Area* existing = inf->find_area(area_name_)) {
-            area.set_type(existing->get_type());
-        } else {
-            area.set_type(area_name_);
-        }
-    }
-    info_->upsert_area_from_editor(area);
-    (void)info_->update_info_json();
-    saved_since_begin_ = true;
+    upsert_area(area);
+    notify_saved();
     cancel();
 }

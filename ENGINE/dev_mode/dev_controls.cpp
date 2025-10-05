@@ -23,6 +23,7 @@
 #include "utils/input.hpp"
 
 #include <algorithm>
+#include <unordered_set>
 #include <utility>
 #include <cctype>
 #include <string>
@@ -99,6 +100,10 @@ DevControls::RoomAreaCache::ensure_from_json(const nlohmann::json* root) {
             if (root->contains("areas") && (*root)["areas"].is_array()) {
                 for (const auto& item : (*root)["areas"]) {
                     if (!item.is_object()) continue;
+                    const std::string name = item.contains("name") && item["name"].is_string()
+                                                ? item["name"].get<std::string>()
+                                                : std::string{};
+                    if (name.empty()) continue;
                     const std::string type = item.contains("type") && item["type"].is_string()
                                                  ? item["type"].get<std::string>()
                                                  : std::string{};
@@ -119,7 +124,11 @@ DevControls::RoomAreaCache::ensure_from_json(const nlohmann::json* root) {
                         poly.push_back(SDL_Point{ax + x, ay + y});
                     }
                     if (poly.size() >= 3) {
-                        cached_.emplace_back(type, std::move(poly));
+                        Polygon entry;
+                        entry.name = name;
+                        entry.type = !type.empty() ? type : name;
+                        entry.points = std::move(poly);
+                        cached_.push_back(std::move(entry));
                     }
                 }
             }
@@ -781,8 +790,8 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
             const bool allow_room_area_hover = (first_selected_type == "trigger" || first_selected_type == "spawning");
             if (allow_room_area_hover) {
                 for (int i = static_cast<int>(area_list.size()) - 1; i >= 0; --i) {
-                    if (!type_visible(area_list[i].first)) continue;
-                    if (point_in_poly(area_list[i].second, world)) { new_hover = i; break; }
+                    if (!type_visible(area_list[i].type)) continue;
+                    if (point_in_poly(area_list[i].points, world)) { new_hover = i; break; }
                 }
             }
             hovered_area_index_ = new_hover;
@@ -905,8 +914,40 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
         }
 
         if (event.type == SDL_MOUSEBUTTONDOWN && event.button.button == SDL_BUTTON_RIGHT) {
-            if (!first_selected_type.empty() && first_selected_type != "all" &&
-                first_selected_type != "trigger" && first_selected_type != "spawning") {
+            if (!first_selected_type.empty() && (first_selected_type == "trigger" || first_selected_type == "spawning")) {
+                if (assets_ && current_room_) {
+                    SDL_Point sp{event.button.x, event.button.y};
+                    SDL_Point world = assets_->getView().screen_to_map(sp);
+                    std::string area_type = first_selected_type;
+                    std::string area_name;
+                    if (hovered_area_index_ >= 0 && hovered_area_index_ < static_cast<int>(area_list.size())) {
+                        const auto& hovered = area_list[hovered_area_index_];
+                        area_name = hovered.name;
+                        if (!hovered.type.empty()) {
+                            area_type = hovered.type;
+                        }
+                    } else {
+                        area_name = generate_unique_room_area_name(area_type);
+                    }
+                    if (!asset_area_editor_) asset_area_editor_ = std::make_unique<AreaOverlayEditor>();
+                    if (asset_area_editor_) {
+                        asset_area_editor_->attach_assets(assets_);
+                        asset_area_editor_->set_on_saved([this]() {
+                            notify_room_area_data_changed();
+                        });
+                        if (asset_area_editor_->begin_for_room(current_room_, area_name, area_type, world)) {
+                            if (map_mode_ui_) {
+                                if (auto* footer = map_mode_ui_->get_footer_panel()) {
+                                    footer->set_title(std::string("Editing Room Area — ") + area_name);
+                                }
+                            }
+                            consume(true);
+                            return;
+                        }
+                    }
+                }
+            } else if (!first_selected_type.empty() && first_selected_type != "all") {
+                if (asset_area_editor_) asset_area_editor_->set_on_saved(nullptr);
                 Asset* target_asset = area_hovered_asset_with_area_ ? area_hovered_asset_with_area_ : area_hovered_asset_;
                 if (target_asset && target_asset->info) {
                     std::string area_name = first_selected_type;
@@ -987,9 +1028,9 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
                 const auto& room_areas = room_area_polygons();
                 if (!room_areas.empty()) {
                     for (int i = 0; i < static_cast<int>(room_areas.size()); ++i) {
-                        const std::string& t = room_areas[i].first;
+                        const std::string& t = room_areas[i].type;
                         if (!type_visible(t)) continue;
-                        const auto& poly_world = room_areas[i].second;
+                        const auto& poly_world = room_areas[i].points;
                         std::vector<SDL_Point> spts; spts.reserve(poly_world.size());
                         for (const auto& wp : poly_world) spts.push_back(cam.map_to_screen(wp));
                         if (spts.size() >= 3) {
@@ -1550,6 +1591,28 @@ void DevControls::set_mode(Mode new_mode) {
     }
     mode_ = new_mode;
     apply_camera_area_render_flag();
+}
+
+std::string DevControls::generate_unique_room_area_name(const std::string& base) const {
+    std::unordered_set<std::string> used_names;
+    if (current_room_) {
+        for (const auto& entry : current_room_->areas) {
+            used_names.insert(entry.name);
+        }
+    }
+
+    std::string prefix = base.empty() ? std::string("area") : base;
+    const std::string suffix = "_area";
+    if (prefix.size() < suffix.size() || prefix.substr(prefix.size() - suffix.size()) != suffix) {
+        prefix += suffix;
+    }
+
+    std::string candidate = prefix;
+    int counter = 1;
+    while (used_names.count(candidate) > 0) {
+        candidate = prefix + "_" + std::to_string(counter++);
+    }
+    return candidate;
 }
 
 void DevControls::toggle_boundary_assets_modal() {
