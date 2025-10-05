@@ -152,6 +152,10 @@ void DockableCollapsible::set_work_area(const SDL_Rect& area) {
     if (work_area_.h > 0) last_screen_h_ = work_area_.h;
 }
 
+void DockableCollapsible::force_pointer_ready() {
+    pointer_block_frames_ = 0;
+}
+
 void DockableCollapsible::update(const Input& input, int screen_w, int screen_h) {
     if (!visible_) return;
     if (pointer_block_frames_ > 0) {

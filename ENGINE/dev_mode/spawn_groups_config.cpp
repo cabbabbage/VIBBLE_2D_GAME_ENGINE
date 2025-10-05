@@ -86,6 +86,7 @@ void SpawnGroupsConfig::open(const nlohmann::json& assets, std::function<void(co
     set_rows(rows);
     set_visible(true);
     if (!was_visible) set_expanded(true);
+    force_pointer_ready();
     Input dummy;
     update(dummy, screen_w_, screen_h_);
 }
@@ -294,12 +295,11 @@ void SpawnGroupsConfig::open_entry(Entry& entry, int x, int y) {
         }
         if (on_change_) on_change_();
     });
+    entry.cfg->force_pointer_ready();
     // Ensure geometry/layout is computed immediately so the panel is interactive
     // on the very first frame after opening (before the next update tick).
-    {
-        Input dummy;
-        entry.cfg->update(dummy, screen_w_, screen_h_);
-    }
+    Input dummy;
+    entry.cfg->update(dummy, screen_w_, screen_h_);
 }
 
 std::optional<SpawnGroupsConfig::OpenSpawnGroupState> SpawnGroupsConfig::capture_open_spawn_group() const {

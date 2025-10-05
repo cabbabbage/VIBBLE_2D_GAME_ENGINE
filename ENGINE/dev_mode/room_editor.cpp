@@ -301,10 +301,6 @@ bool RoomEditor::handle_sdl_event(const SDL_Event& event) {
         (event.type == SDL_MOUSEBUTTONDOWN || event.type == SDL_MOUSEBUTTONUP || event.type == SDL_MOUSEMOTION);
     const bool wheel_event = (event.type == SDL_MOUSEWHEEL);
     const bool pointer_based = pointer_event || wheel_event;
-    const bool pointer_over_spawn_panel = pointer_based &&
-        spawn_groups_cfg_ui_ &&
-        spawn_groups_cfg_ui_->any_visible() &&
-        spawn_groups_cfg_ui_->is_point_inside(mx, my);
 
     ensure_area_editor();
     if (area_editor_ && area_editor_->is_active()) {
@@ -314,53 +310,77 @@ bool RoomEditor::handle_sdl_event(const SDL_Event& event) {
     bool handled = false;
     bool pointer_claimed = false;
 
-    if (pointer_based) {
-        if (pointer_over_spawn_panel) {
-            pointer_claimed = true;
-            handled = spawn_groups_cfg_ui_->handle_event(event);
-            if (!handled) {
-                handled = true;
-            }
-        } else if (info_ui_ && info_ui_->is_visible() && info_ui_->is_point_inside(mx, my)) {
-            pointer_claimed = true;
-            info_ui_->handle_event(event);
-            handled = true;
-        } else if (room_cfg_ui_ && room_cfg_ui_->visible() && room_cfg_ui_->is_point_inside(mx, my)) {
-            pointer_claimed = true;
-            handled = room_cfg_ui_->handle_event(event);
-            if (!handled) {
-                handled = true;
-            }
-        } else if (library_ui_ && library_ui_->is_visible() && library_ui_->is_input_blocking_at(mx, my)) {
-            pointer_claimed = true;
-            library_ui_->handle_event(event);
-            handled = true;
+    auto route_spawn_panel = [&]() {
+        if (!spawn_groups_cfg_ui_ || !spawn_groups_cfg_ui_->any_visible()) {
+            return;
         }
+        const bool inside = pointer_based && spawn_groups_cfg_ui_->is_point_inside(mx, my);
+        bool used = spawn_groups_cfg_ui_->handle_event(event);
+        if (!used && inside) {
+            used = true;
+        }
+        if (inside) {
+            pointer_claimed = true;
+        }
+        if (used) {
+            handled = true;
+            if (pointer_event && input_) {
+                input_->clearClickBuffer();
+            }
+        }
+    };
+
+    route_spawn_panel();
+    if (handled) {
+        return true;
     }
 
-    if (!handled && room_cfg_ui_ && room_cfg_ui_->visible() && (!pointer_based || !pointer_claimed)) {
+    if (pointer_based && !handled && !pointer_claimed && info_ui_ && info_ui_->is_visible() && info_ui_->is_point_inside(mx, my)) {
+        pointer_claimed = true;
+        handled = info_ui_->handle_event(event);
+        if (!handled) handled = true;
+    }
+
+    if (pointer_based && !handled && !pointer_claimed && room_cfg_ui_ && room_cfg_ui_->visible() && room_cfg_ui_->is_point_inside(mx, my)) {
+        pointer_claimed = true;
+        handled = room_cfg_ui_->handle_event(event);
+        if (!handled) handled = true;
+    }
+
+    if (pointer_based && !handled && !pointer_claimed && library_ui_ && library_ui_->is_visible() && library_ui_->is_input_blocking_at(mx, my)) {
+        pointer_claimed = true;
+        handled = library_ui_->handle_event(event);
+        if (!handled) handled = true;
+    }
+
+    if (!handled && room_cfg_ui_ && room_cfg_ui_->visible()) {
         handled = room_cfg_ui_->handle_event(event);
     }
-    if (!handled && info_ui_ && info_ui_->is_visible() && (!pointer_based || !pointer_claimed)) {
-        info_ui_->handle_event(event);
-        handled = true;
-    } else if (!handled && spawn_groups_cfg_ui_ && spawn_groups_cfg_ui_->any_visible() && (!pointer_based || !pointer_claimed)) {
-        handled = spawn_groups_cfg_ui_->handle_event(event);
-    } else if (!handled && library_ui_ && library_ui_->is_visible() && (!pointer_based || !pointer_claimed)) {
-        library_ui_->handle_event(event);
-        handled = true;
+
+    if (!handled && info_ui_ && info_ui_->is_visible()) {
+        handled = info_ui_->handle_event(event) || handled;
+    }
+
+    if (!handled && spawn_groups_cfg_ui_ && spawn_groups_cfg_ui_->any_visible()) {
+        route_spawn_panel();
+        if (handled) return true;
+    }
+
+    if (!handled && library_ui_ && library_ui_->is_visible()) {
+        handled = library_ui_->handle_event(event) || handled;
     }
 
     if (!handled) {
         if (auto* dropdown = DMDropdown::active_dropdown()) {
             handled = dropdown->handle_event(event);
+            if (handled && pointer_based) {
+                pointer_claimed = true;
+            }
         }
     }
 
-    if (handled && input_) {
-        if (event.type == SDL_MOUSEBUTTONDOWN || event.type == SDL_MOUSEBUTTONUP) {
-            input_->clearClickBuffer();
-        }
+    if (handled && input_ && pointer_event) {
+        input_->clearClickBuffer();
     }
     return handled;
 }

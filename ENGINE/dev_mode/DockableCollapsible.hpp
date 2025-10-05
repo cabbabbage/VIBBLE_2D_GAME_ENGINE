@@ -68,6 +68,11 @@ public:
 
     void set_on_close(std::function<void()> cb) { on_close_ = std::move(cb); }
 
+    // Immediately clears the temporary pointer-block window that fires when
+    // a floating panel becomes visible. Useful when we want the panel to be
+    // interactive on the same frame it opens.
+    void force_pointer_ready();
+
 private:
     void layout(int screen_w, int screen_h) const;
     void update_header_button() const;
