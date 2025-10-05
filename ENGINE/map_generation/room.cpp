@@ -276,9 +276,10 @@ void Room::upsert_named_area(const Area& area, const std::string& type) {
                         {"y", miny}
                 });
                 nlohmann::json points = nlohmann::json::array();
-                points.reserve(pts.size());
+                auto& points_array = points.get_ref<nlohmann::json::array_t&>();
+                points_array.reserve(pts.size());
                 for (const auto& p : pts) {
-                        points.push_back({ {"x", p.x - minx}, {"y", p.y - miny} });
+                        points_array.push_back({ {"x", p.x - minx}, {"y", p.y - miny} });
                 }
                 entry["points"] = std::move(points);
         }

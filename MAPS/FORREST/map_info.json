@@ -462,7 +462,34 @@
       "width_min": 1095
     },
     "spawn": {
-      "areas": [],
+      "areas": [
+        {
+          "anchor": {
+            "x": 1727,
+            "y": 3051
+          },
+          "name": "trigger_area",
+          "points": [
+            {
+              "x": 597,
+              "y": 51
+            },
+            {
+              "x": 956,
+              "y": 673
+            },
+            {
+              "x": 234,
+              "y": 648
+            },
+            {
+              "x": 0,
+              "y": 0
+            }
+          ],
+          "type": "trigger"
+        }
+      ],
       "curvyness": 1,
       "edge_smoothness": 100,
       "geometry": "Circle",

@@ -6,6 +6,7 @@
 #include <limits>
 #include <string>
 #include <vector>
+#include <unordered_map>
 #include <functional>
 #include <nlohmann/json.hpp>
 #include "DockableCollapsible.hpp"
@@ -43,7 +44,7 @@ public:
         std::string id;
         SDL_Point position{0, 0};
         size_t index = std::numeric_limits<size_t>::max();
-};
+    };
     std::optional<OpenSpawnGroupState> capture_open_spawn_group() const;
     void restore_open_spawn_group(const OpenSpawnGroupState& state);
     nlohmann::json to_json() const;
@@ -66,6 +67,7 @@ private:
         std::unique_ptr<ButtonWidget> btn_w;
 };
     std::vector<Entry> entries_;
+    std::unordered_map<std::string, size_t> entry_lookup_;
     nlohmann::json* assets_json_ = nullptr;
     std::function<void()> on_change_;
     std::function<void(const nlohmann::json&, const SpawnGroupsConfigPanel::ChangeSummary&)> on_entry_change_;
@@ -80,6 +82,8 @@ private:
     std::unique_ptr<ButtonWidget> b_done_w_;
     std::function<void(const nlohmann::json&)> on_close_;
     void open_entry(Entry& entry, int x, int y);
+    Entry* find_entry(const std::string& id);
+    const Entry* find_entry(const std::string& id) const;
     int screen_w_ = 1920;
     int screen_h_ = 1080;
 };

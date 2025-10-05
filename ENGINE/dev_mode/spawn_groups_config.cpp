@@ -138,6 +138,7 @@ void SpawnGroupsConfig::load(nlohmann::json& assets,
     }
 
     entries_.clear();
+    entry_lookup_.clear();
     if (!assets.is_array()) {
         loaded_snapshot_ = std::move(normalized);
         entries_loaded_ = true;
@@ -167,6 +168,7 @@ void SpawnGroupsConfig::load(nlohmann::json& assets,
             this->request_open_spawn_group(id_copy, anchor_x_, anchor_y_);
         });
         entries_.push_back(std::move(e));
+        entry_lookup_[entries_.back().id] = entries_.size() - 1;
     }
     loaded_snapshot_ = std::move(normalized);
     entries_loaded_ = true;
@@ -203,17 +205,12 @@ void SpawnGroupsConfig::update(const Input& input, int screen_w, int screen_h) {
         screen_h_ = screen_h;
     }
     set_work_area(SDL_Rect{0, 0, screen_w_, screen_h_});
-    if (pending_open_) {
-        if (entries_loaded_) {
-            auto request = *pending_open_;
-            auto it = std::find_if(entries_.begin(), entries_.end(),
-                                   [&request](const Entry& entry) { return entry.id == request.id; });
-            if (it != entries_.end()) {
-                pending_open_.reset();
-                open_spawn_group(request.id, request.x, request.y);
-            } else {
-                pending_open_.reset();
-            }
+    if (pending_open_ && entries_loaded_) {
+        PendingOpenRequest request = *pending_open_;
+        if (Entry* entry = find_entry(request.id)) {
+            pending_open_.reset();
+            close_all();
+            open_entry(*entry, request.x, request.y);
         }
     }
     if (is_visible()) {
@@ -229,9 +226,37 @@ void SpawnGroupsConfig::update(const Input& input, int screen_w, int screen_h) {
 
 bool SpawnGroupsConfig::handle_event(const SDL_Event& ev) {
     bool used = false;
-    if (is_visible()) used |= DockableCollapsible::handle_event(ev);
+    int mx = 0;
+    int my = 0;
+    const bool pointer_event = (ev.type == SDL_MOUSEMOTION || ev.type == SDL_MOUSEBUTTONDOWN || ev.type == SDL_MOUSEBUTTONUP);
+    const bool wheel_event = (ev.type == SDL_MOUSEWHEEL);
+    const bool pointer_based = pointer_event || wheel_event;
+
+    if (pointer_event) {
+        if (ev.type == SDL_MOUSEMOTION) {
+            mx = ev.motion.x;
+            my = ev.motion.y;
+        } else {
+            mx = ev.button.x;
+            my = ev.button.y;
+        }
+    } else if (wheel_event) {
+        SDL_GetMouseState(&mx, &my);
+    }
+
+    if (is_visible()) {
+        bool panel_used = DockableCollapsible::handle_event(ev);
+        if (panel_used) {
+            used = true;
+        } else if (pointer_based && DockableCollapsible::is_point_inside(mx, my)) {
+            used = true;
+        }
+    }
+
     for (auto& e : entries_) {
-        if (e.cfg && e.cfg->handle_event(ev)) {
+        if (!e.cfg) continue;
+        bool entry_used = e.cfg->handle_event(ev);
+        if (entry_used) {
             if (e.json) *e.json = e.cfg->to_json();
             if (on_entry_change_) {
                 auto summary = e.cfg->consume_change_summary();
@@ -242,6 +267,8 @@ bool SpawnGroupsConfig::handle_event(const SDL_Event& ev) {
                 e.cfg->consume_change_summary();
             }
             if (on_change_) on_change_();
+            used = true;
+        } else if (pointer_based && e.cfg->is_point_inside(mx, my)) {
             used = true;
         }
     }
@@ -257,16 +284,24 @@ void SpawnGroupsConfig::render(SDL_Renderer* r) const {
 
 void SpawnGroupsConfig::open_spawn_group(const std::string& id, int x, int y) {
     close_all();
-    for (auto& e : entries_) {
-        if (e.id == id) {
-            open_entry(e, x, y);
-            break;
-        }
+    if (Entry* entry = find_entry(id)) {
+        pending_open_.reset();
+        open_entry(*entry, x, y);
+    } else {
+        pending_open_ = PendingOpenRequest{id, x, y};
     }
 }
 
 void SpawnGroupsConfig::request_open_spawn_group(const std::string& id, int x, int y) {
     pending_open_ = PendingOpenRequest{id, x, y};
+    if (!entries_loaded_) {
+        return;
+    }
+    if (Entry* entry = find_entry(id)) {
+        close_all();
+        open_entry(*entry, x, y);
+        pending_open_.reset();
+    }
 }
 
 void SpawnGroupsConfig::close_all() {
@@ -371,5 +406,21 @@ bool SpawnGroupsConfig::is_point_inside(int x, int y) const {
         if (e.cfg && e.cfg->visible() && e.cfg->is_point_inside(x, y)) return true;
     }
     return false;
+}
+
+SpawnGroupsConfig::Entry* SpawnGroupsConfig::find_entry(const std::string& id) {
+    if (id.empty()) return nullptr;
+    auto it = entry_lookup_.find(id);
+    if (it == entry_lookup_.end()) return nullptr;
+    if (it->second >= entries_.size()) return nullptr;
+    return &entries_[it->second];
+}
+
+const SpawnGroupsConfig::Entry* SpawnGroupsConfig::find_entry(const std::string& id) const {
+    if (id.empty()) return nullptr;
+    auto it = entry_lookup_.find(id);
+    if (it == entry_lookup_.end()) return nullptr;
+    if (it->second >= entries_.size()) return nullptr;
+    return &entries_[it->second];
 }
 
