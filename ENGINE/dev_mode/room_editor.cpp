@@ -337,20 +337,20 @@ bool RoomEditor::handle_sdl_event(const SDL_Event& event) {
 
     if (pointer_based && !handled && !pointer_claimed && info_ui_ && info_ui_->is_visible() && info_ui_->is_point_inside(mx, my)) {
         pointer_claimed = true;
-        handled = info_ui_->handle_event(event);
-        if (!handled) handled = true;
+        info_ui_->handle_event(event);
+        handled = true;
     }
 
     if (pointer_based && !handled && !pointer_claimed && room_cfg_ui_ && room_cfg_ui_->visible() && room_cfg_ui_->is_point_inside(mx, my)) {
         pointer_claimed = true;
-        handled = room_cfg_ui_->handle_event(event);
-        if (!handled) handled = true;
+        room_cfg_ui_->handle_event(event);
+        handled = true;
     }
 
     if (pointer_based && !handled && !pointer_claimed && library_ui_ && library_ui_->is_visible() && library_ui_->is_input_blocking_at(mx, my)) {
         pointer_claimed = true;
-        handled = library_ui_->handle_event(event);
-        if (!handled) handled = true;
+        library_ui_->handle_event(event);
+        handled = true;
     }
 
     if (!handled && room_cfg_ui_ && room_cfg_ui_->visible()) {

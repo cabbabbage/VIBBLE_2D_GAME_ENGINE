@@ -578,8 +578,10 @@ void AssetLibraryUI::render(SDL_Renderer* r, int screen_w, int screen_h) const {
     }
 }
 
-void AssetLibraryUI::handle_event(const SDL_Event& e) {
-    if (!floating_) return;
+bool AssetLibraryUI::handle_event(const SDL_Event& e) {
+    if (!floating_) return false;
+
+    bool handled = false;
 
     if (showing_create_popup_) {
         if (e.type == SDL_KEYDOWN) {
@@ -590,17 +592,25 @@ void AssetLibraryUI::handle_event(const SDL_Event& e) {
                     filter_dirty_ = true;
                 }
                 showing_create_popup_ = false;
+                handled = true;
             } else if (e.key.keysym.sym == SDLK_ESCAPE) {
                 showing_create_popup_ = false;
+                handled = true;
             } else if (e.key.keysym.sym == SDLK_BACKSPACE) {
                 if (!new_asset_name_.empty()) new_asset_name_.pop_back();
+                handled = true;
             }
         } else if (e.type == SDL_TEXTINPUT) {
             new_asset_name_ += e.text.text;
+            handled = true;
         }
     }
 
-    floating_->handle_event(e);
+    if (floating_->handle_event(e)) {
+        handled = true;
+    }
+
+    return handled;
 }
 
 std::shared_ptr<AssetInfo> AssetLibraryUI::consume_selection() {

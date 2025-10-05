@@ -303,7 +303,7 @@ void AssetInfoUI::layout_widgets(int screen_w, int screen_h) const {
         std::max(0, panel_.h - (name_label_rect_.y + name_label_rect_.h)) };
 }
 
-void AssetInfoUI::handle_event(const SDL_Event& e) {
+bool AssetInfoUI::handle_event(const SDL_Event& e) {
     const bool pointer_event =
         (e.type == SDL_MOUSEBUTTONDOWN || e.type == SDL_MOUSEBUTTONUP || e.type == SDL_MOUSEMOTION);
     const bool wheel_event = (e.type == SDL_MOUSEWHEEL);
@@ -314,44 +314,44 @@ void AssetInfoUI::handle_event(const SDL_Event& e) {
     }
 
     if (asset_selector_ && asset_selector_->visible()) {
-        if (asset_selector_->handle_event(e)) return;
+        if (asset_selector_->handle_event(e)) return true;
         if (e.type == SDL_KEYDOWN && e.key.keysym.sym == SDLK_ESCAPE) {
             asset_selector_->close();
-            return;
+            return true;
         }
         if (pointer_event) {
             if (asset_selector_->is_point_inside(pointer.x, pointer.y)) {
-                return;
+                return true;
             }
             if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
                 asset_selector_->close();
-                return;
+                return true;
             }
         } else if (wheel_event) {
             int mx = 0;
             int my = 0;
             SDL_GetMouseState(&mx, &my);
             if (asset_selector_->is_point_inside(mx, my)) {
-                return;
+                return true;
             }
         }
     }
 
-    if (!visible_ || !info_) return;
+    if (!visible_ || !info_) return false;
 
     // Give sections (and any floating overlays they manage) first chance to
     // consume the event before we enforce pointer bounds. This allows floating
     // panels like the Spawn Groups editor to remain interactive even when they
     // extend outside the main asset info panel.
     for (auto& s : sections_) {
-        if (s->handle_event(e)) return;
+        if (s->handle_event(e)) return true;
     }
 
     bool pointer_inside = false;
     if (pointer_event) {
         pointer_inside = SDL_PointInRect(&pointer, &panel_);
         if (!pointer_inside) {
-            return;
+            return false;
         }
     } else if (wheel_event) {
         int mx = 0;
@@ -360,19 +360,19 @@ void AssetInfoUI::handle_event(const SDL_Event& e) {
         SDL_Point p{mx, my};
         pointer_inside = SDL_PointInRect(&p, &scroll_region_);
         if (!pointer_inside) {
-            return;
+            return false;
         }
     }
 
     if (wheel_event) {
         scroll_ -= e.wheel.y * 40;
         scroll_ = std::max(0, std::min(max_scroll_, scroll_));
-        return;
+        return true;
     }
 
     if (e.type == SDL_KEYDOWN && e.key.keysym.sym == SDLK_ESCAPE) {
         close();
-        return;
+        return true;
     }
 
     if (configure_btn_ && configure_btn_->handle_event(e)) {
@@ -389,12 +389,14 @@ void AssetInfoUI::handle_event(const SDL_Event& e) {
                 }
             }
         }
-        return;
+        return true;
     }
 
     if (pointer_inside) {
-        return;
+        return true;
     }
+
+    return false;
 }
 
 void AssetInfoUI::update(const Input& input, int screen_w, int screen_h) {

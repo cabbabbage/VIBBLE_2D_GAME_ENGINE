@@ -34,7 +34,7 @@ public:
 
     void update(const Input& input, int screen_w, int screen_h, AssetLibrary& lib, Assets& assets);
     void render(SDL_Renderer* r, int screen_w, int screen_h) const;
-    void handle_event(const SDL_Event& e);
+    bool handle_event(const SDL_Event& e);
 
     std::shared_ptr<AssetInfo> consume_selection();
 

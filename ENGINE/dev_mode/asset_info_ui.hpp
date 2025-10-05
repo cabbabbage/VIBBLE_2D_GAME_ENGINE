@@ -26,7 +26,7 @@ class AssetInfoUI {
     void toggle();
     bool is_visible() const { return visible_; }
     void update(const Input& input, int screen_w, int screen_h);
-    void handle_event(const SDL_Event& e);
+    bool handle_event(const SDL_Event& e);
     void render(SDL_Renderer* r, int screen_w, int screen_h) const;
     void render_world_overlay(SDL_Renderer* r, const class camera& cam) const;
     void pulse_header();
