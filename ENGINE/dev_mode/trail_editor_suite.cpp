@@ -198,6 +198,9 @@ void TrailEditorSuite::rebuild_spawn_groups_ui() {
                 return names;
             });
         });
+    spawn_groups_->set_on_layout_changed([this]() {
+        this->rebuild_spawn_groups_ui();
+    });
     {
         SpawnGroupList::Callbacks cb{};
         cb.on_add       = [this]() { add_spawn_group(); };

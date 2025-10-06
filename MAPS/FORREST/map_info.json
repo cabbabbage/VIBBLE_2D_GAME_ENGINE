@@ -533,14 +533,6 @@
           "candidates": [
             {
               "chance": 0,
-              "name": "null"
-            },
-            {
-              "chance": 0,
-              "name": ""
-            },
-            {
-              "chance": 0,
               "name": "Book_Pile"
             }
           ],
@@ -592,23 +584,6 @@
           ],
           "chance_denominator": 0,
           "check_overlap": false,
-          "display_name": "New Spawn",
-          "enforce_spacing": false,
-          "max_number": 1,
-          "min_number": 1,
-          "position": "Exact",
-          "priority": 2,
-          "spawn_id": "spn-eef91c561688"
-        },
-        {
-          "candidates": [
-            {
-              "chance": 0,
-              "name": "null"
-            }
-          ],
-          "chance_denominator": 0,
-          "check_overlap": false,
           "display_name": "Barrel",
           "dx": -152,
           "dy": -424,
@@ -618,8 +593,25 @@
           "origional_height": 3612,
           "origional_width": 3612,
           "position": "Exact",
-          "priority": 3,
+          "priority": 2,
           "spawn_id": "spn-af3a3a5858e6"
+        },
+        {
+          "candidates": [
+            {
+              "chance": 0,
+              "name": "null"
+            }
+          ],
+          "chance_denominator": 100,
+          "check_overlap": false,
+          "display_name": "New Spawn",
+          "enforce_spacing": false,
+          "max_number": 1,
+          "min_number": 1,
+          "position": "Exact",
+          "priority": 3,
+          "spawn_id": "spn-83f33027fb31"
         }
       ],
       "width_max": 3612,

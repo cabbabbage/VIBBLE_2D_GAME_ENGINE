@@ -836,7 +836,12 @@ void RoomConfigurator::rebuild_rows() {
             };
 
             // Load with editable binding to the live array
+            const auto expanded = spawn_list_->expanded_groups();
             spawn_list_->load(groups_ref, on_change, on_entry_change, std::move(configure_entry));
+            spawn_list_->set_on_layout_changed([this]() {
+                this->rebuild_rows();
+            });
+            spawn_list_->restore_expanded_groups(expanded);
 
             // Wire up non-edit actions to the external callbacks provided by the host
             SpawnGroupList::Callbacks cb{};
@@ -859,7 +864,12 @@ void RoomConfigurator::rebuild_rows() {
                 groups = &loaded_json_["assets"];
             }
             if (groups) {
+                const auto expanded = spawn_list_->expanded_groups();
                 spawn_list_->load(*groups);
+                spawn_list_->set_on_layout_changed([this]() {
+                    this->rebuild_rows();
+                });
+                spawn_list_->restore_expanded_groups(expanded);
                 SpawnGroupList::Callbacks cb{};
                 cb.on_duplicate = [this](const std::string& id) { if (on_spawn_duplicate_) on_spawn_duplicate_(id); };
                 cb.on_delete    = [this](const std::string& id) { if (on_spawn_delete_) on_spawn_delete_(id); };

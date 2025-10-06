@@ -594,7 +594,7 @@ void Assets::set_dev_mode(bool mode) {
             dev_controls_->set_enabled(false);
             dev_controls_->clear_selection();
         }
-        filtered_active_assets.clear();
+        update_filtered_active_assets();
     }
 }
 

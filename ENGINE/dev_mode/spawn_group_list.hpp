@@ -72,6 +72,7 @@ public:
 
     void append_rows(Rows& rows);
     void set_callbacks(Callbacks cb);
+    void set_on_layout_changed(std::function<void()> cb);
 
     void expand_group(const std::string& id);
     void collapse_group(const std::string& id);
@@ -118,6 +119,8 @@ private:
     std::function<void(const nlohmann::json&, const ChangeSummary&)> on_entry_change_;
     ConfigureEntryCallback configure_entry_;
     Callbacks callbacks_{};
+    std::function<void()> on_layout_change_{};
+    bool suppress_layout_callback_ = false;
 
     std::unique_ptr<SearchAssets> asset_search_;
     std::unique_ptr<DMButton> add_group_btn_;

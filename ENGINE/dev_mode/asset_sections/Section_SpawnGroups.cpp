@@ -44,7 +44,15 @@ void Section_SpawnGroups::build() {
     cb.on_move_down = [this](const std::string& id){ move_spawn_group(id, +1); };
     cb.on_add       = [this](){ add_spawn_group(); };
     list_->set_callbacks(std::move(cb));
+    const auto expanded = list_->expanded_groups();
     list_->load(groups_, on_change);
+    list_->set_on_layout_changed([this]() {
+        if (!list_) return;
+        DockableCollapsible::Rows rows;
+        list_->append_rows(rows);
+        this->set_rows(rows);
+    });
+    list_->restore_expanded_groups(expanded);
     list_->append_rows(rows);
 
     // Top-level Add Spawn Group button is provided by SpawnGroupList widget now.

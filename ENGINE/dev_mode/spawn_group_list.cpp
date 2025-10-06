@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <utility>
+#include <unordered_set>
 
 #include "dm_styles.hpp"
 #include "widgets.hpp"
@@ -185,6 +186,9 @@ void SpawnGroupList::load(const json& groups) {
     request_layout();
 }
 
+void SpawnGroupList::append_rows(Rows& rows) {
+    Rows out;
+
     // Top-level Add Spawn Group button
     if (!add_group_btn_) {
         add_group_btn_ = std::make_unique<DMButton>("Add Spawn Group", &DMStyles::CreateButton(), 160, DMButton::height());
@@ -200,8 +204,7 @@ void SpawnGroupList::load(const json& groups) {
             r->toggle_btn = std::make_unique<DMButton>(label, &DMStyles::ListButton(), 180, DMButton::height());
             r->toggle_w = std::make_unique<ButtonWidget>(r->toggle_btn.get(), [this, rr=r.get()](){
                 rr->expanded = !rr->expanded;
-                // Ask host to rebuild embedded rows and refresh UI
-                if (this->on_change_) this->on_change_();
+                this->rebuild_layout();
             });
             r->dup_btn = std::make_unique<DMButton>("+", &DMStyles::ListButton(), 28, DMButton::height());
             r->dup_w   = std::make_unique<ButtonWidget>(r->dup_btn.get(), [this, rr=r.get()](){ if (callbacks_.on_duplicate) callbacks_.on_duplicate(rr->id); });
@@ -271,7 +274,7 @@ void SpawnGroupList::load(const json& groups) {
                         if (!rr->entry) return;
                         (*rr->entry)["link"] = "";
                         if (on_change_) on_change_();
-                        request_layout();
+                        this->rebuild_layout();
                     });
                 }
                 if (!r->add_cand_btn) {
@@ -300,7 +303,7 @@ void SpawnGroupList::load(const json& groups) {
                             if (ci <= 0) return;
                             std::swap(arr[ci-1], arr[ci]);
                             if (on_change_) on_change_();
-                            request_layout();
+                            this->rebuild_layout();
                         });
                         cr->down_btn = std::make_unique<DMButton>("↓", &DMStyles::ListButton(), 24, DMButton::height());
                         cr->down_w   = std::make_unique<ButtonWidget>(cr->down_btn.get(), [this, rr=r.get(), ci](){
@@ -310,7 +313,7 @@ void SpawnGroupList::load(const json& groups) {
                             if (ci+1 >= arr.size()) return;
                             std::swap(arr[ci], arr[ci+1]);
                             if (on_change_) on_change_();
-                            request_layout();
+                            this->rebuild_layout();
                         });
                         cr->del_btn  = std::make_unique<DMButton>("X", &DMStyles::DeleteButton(), 24, DMButton::height());
                         cr->del_w    = std::make_unique<ButtonWidget>(cr->del_btn.get(), [this, rr=r.get(), ci](){
@@ -320,7 +323,7 @@ void SpawnGroupList::load(const json& groups) {
                             if (ci >= arr.size()) return;
                             arr.erase(arr.begin()+static_cast<int>(ci));
                             if (on_change_) on_change_();
-                            request_layout();
+                            this->rebuild_layout();
                         });
                         r->candidates.push_back(std::move(cr));
                     }
@@ -350,17 +353,22 @@ void SpawnGroupList::load(const json& groups) {
         }
     }
     // Make content available for embedding and floating modes
+    layout_dirty_ = false;
     set_rows(out);
     for (const auto& rr : out) rows.push_back(rr);
 }
 
 void SpawnGroupList::set_callbacks(Callbacks cb) { callbacks_ = std::move(cb); }
 
+void SpawnGroupList::set_on_layout_changed(std::function<void()> cb) {
+    on_layout_change_ = std::move(cb);
+}
+
 void SpawnGroupList::expand_group(const std::string& id) {
-    if (auto* r = find_row(id)) { r->expanded = true; request_layout(); }
+    if (auto* r = find_row(id)) { r->expanded = true; rebuild_layout(); }
 }
 void SpawnGroupList::collapse_group(const std::string& id) {
-    if (auto* r = find_row(id)) { r->expanded = false; request_layout(); }
+    if (auto* r = find_row(id)) { r->expanded = false; rebuild_layout(); }
 }
 bool SpawnGroupList::is_expanded(const std::string& id) const {
     return find_row(id) ? find_row(id)->expanded : false;
@@ -372,7 +380,20 @@ std::vector<std::string> SpawnGroupList::expanded_groups() const {
     return out;
 }
 void SpawnGroupList::restore_expanded_groups(const std::vector<std::string>& ids) {
-    for (const auto& id : ids) expand_group(id);
+    std::unordered_set<std::string> wanted(ids.begin(), ids.end());
+    bool changed = false;
+    for (auto& row : rows_) {
+        const bool should_expand = !row->id.empty() && wanted.find(row->id) != wanted.end();
+        if (row->expanded != should_expand) {
+            row->expanded = should_expand;
+            changed = true;
+        }
+    }
+    if (changed) {
+        suppress_layout_callback_ = true;
+        rebuild_layout();
+        suppress_layout_callback_ = false;
+    }
 }
 
 nlohmann::json SpawnGroupList::to_json() const {
@@ -495,7 +516,20 @@ const SpawnGroupList::EntryRow* SpawnGroupList::find_row(const std::string& id) 
     return nullptr;
 }
 
-void SpawnGroupList::rebuild_layout() { request_layout(); }
+void SpawnGroupList::rebuild_layout() {
+    request_layout();
+    if (suppress_layout_callback_) {
+        Rows dummy;
+        append_rows(dummy);
+        return;
+    }
+    if (on_layout_change_) {
+        on_layout_change_();
+    } else {
+        Rows dummy;
+        append_rows(dummy);
+    }
+}
 void SpawnGroupList::request_layout() { layout_dirty_ = true; }
 void SpawnGroupList::notify_data_changed(EntryRow&, bool, bool) { if (on_change_) on_change_(); }
 void SpawnGroupList::ensure_asset_search() {}
