@@ -14,6 +14,10 @@ class Assets;
 class Section_BasicInfo;
 class SearchAssets;
 
+namespace animation_editor {
+class AnimationEditorWindow;
+}
+
 class AssetInfoUI {
 
 	public:
@@ -65,6 +69,7 @@ class AssetInfoUI {
     mutable SDL_Rect panel_ {0,0,0,0};
     mutable SDL_Rect scroll_region_{0,0,0,0};
     mutable SDL_Rect name_label_rect_{0,0,0,0};
+    mutable SDL_Rect animation_editor_rect_{0,0,0,0};
 
     mutable std::unique_ptr<class DMButton> configure_btn_;
     int pulse_frames_ = 0;
@@ -72,4 +77,5 @@ class AssetInfoUI {
     bool prev_camera_realism_enabled_ = false;
     bool prev_camera_parallax_enabled_ = false;
     std::unique_ptr<SearchAssets> asset_selector_;
+    std::unique_ptr<animation_editor::AnimationEditorWindow> animation_editor_window_;
 };

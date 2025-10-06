@@ -25,6 +25,7 @@
 #include "asset_sections/Section_Lighting.hpp"
 #include "asset_sections/Section_Spacing.hpp"
 #include "asset_sections/Section_SpawnGroups.hpp"
+#include "asset_sections/animation_editor_window/AnimationEditorWindow.hpp"
 #include "widgets.hpp"
 #include "core/AssetsManager.hpp"
 #include "asset/Asset.hpp"
@@ -197,6 +198,7 @@ AssetInfoUI::AssetInfoUI() {
     sections_.push_back(std::move(spawns));
 
     configure_btn_ = std::make_unique<DMButton>("Configure Animations", &DMStyles::CreateButton(), 220, DMButton::height());
+    animation_editor_window_ = std::make_unique<animation_editor::AnimationEditorWindow>();
 }
 
 AssetInfoUI::~AssetInfoUI() {
@@ -218,6 +220,7 @@ void AssetInfoUI::set_info(const std::shared_ptr<AssetInfo>& info) {
     info_ = info;
     scroll_ = 0;
     if (asset_selector_) asset_selector_->close();
+    if (animation_editor_window_) animation_editor_window_->set_info(info_);
     for (auto& s : sections_) {
         s->set_info(info_);
         s->reset_scroll();
@@ -229,6 +232,10 @@ void AssetInfoUI::clear_info() {
     info_.reset();
     scroll_ = 0;
     if (asset_selector_) asset_selector_->close();
+    if (animation_editor_window_) {
+        animation_editor_window_->clear_info();
+        animation_editor_window_->set_visible(false);
+    }
     for (auto& s : sections_) {
         s->set_info(nullptr);
         s->reset_scroll();
@@ -246,6 +253,7 @@ void AssetInfoUI::close() {
     if (!visible_) return;
     apply_camera_override(false);
     visible_ = false;
+    if (animation_editor_window_) animation_editor_window_->set_visible(false);
     if (asset_selector_) asset_selector_->close();
 }
 void AssetInfoUI::toggle(){
@@ -260,6 +268,18 @@ void AssetInfoUI::layout_widgets(int screen_w, int screen_h) const {
     int panel_x = (screen_w * 2) / 3;
     int panel_w = screen_w - panel_x;
     panel_ = SDL_Rect{ panel_x, 0, panel_w, screen_h };
+    int editor_width = panel_.x;
+    int editor_height = screen_h;
+    if (editor_width <= 0 || editor_height <= 0) {
+        animation_editor_rect_ = SDL_Rect{0, 0, 0, 0};
+    } else {
+        const int padding = DMSpacing::panel_padding();
+        animation_editor_rect_ = SDL_Rect{
+            padding,
+            padding,
+            std::max(0, editor_width - padding * 2),
+            std::max(0, editor_height - padding * 2)};
+    }
     const int padding = DMSpacing::panel_padding();
     const int gap = DMSpacing::section_gap();
     const int content_x = panel_.x + padding;
@@ -337,7 +357,15 @@ bool AssetInfoUI::handle_event(const SDL_Event& e) {
         }
     }
 
-    if (!visible_ || !info_) return false;
+    if (!visible_) return false;
+
+    if (animation_editor_window_ && animation_editor_window_->is_visible()) {
+        if (animation_editor_window_->handle_event(e)) {
+            return true;
+        }
+    }
+
+    if (!info_) return false;
 
     // Give sections (and any floating overlays they manage) first chance to
     // consume the event before we enforce pointer bounds. This allows floating
@@ -377,16 +405,9 @@ bool AssetInfoUI::handle_event(const SDL_Event& e) {
 
     if (configure_btn_ && configure_btn_->handle_event(e)) {
         if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
-            if (info_) {
-                try {
-                    std::string cmd = std::string("python scripts/animation_ui.py \"") + info_->info_json_path() + "\"";
-                    int rc = std::system(cmd.c_str());
-                    if (rc != 0) {
-                        SDL_Log("animation_ui.py exited with code %d", rc);
-                    }
-                } catch (const std::exception& ex) {
-                    SDL_Log("Failed to launch animation_ui.py: %s", ex.what());
-                }
+            if (animation_editor_window_ && info_) {
+                animation_editor_window_->set_info(info_);
+                animation_editor_window_->toggle_visible();
             }
         }
         return true;
@@ -400,8 +421,16 @@ bool AssetInfoUI::handle_event(const SDL_Event& e) {
 }
 
 void AssetInfoUI::update(const Input& input, int screen_w, int screen_h) {
-    if (!visible_ || !info_) return;
     layout_widgets(screen_w, screen_h);
+
+    if (animation_editor_window_) {
+        animation_editor_window_->set_bounds(animation_editor_rect_);
+        if (animation_editor_window_->is_visible()) {
+            animation_editor_window_->update(input, screen_w, screen_h);
+        }
+    }
+
+    if (!visible_ || !info_) return;
 
     if (asset_selector_ && asset_selector_->visible()) {
         asset_selector_->update(input);
@@ -442,9 +471,15 @@ void AssetInfoUI::update(const Input& input, int screen_w, int screen_h) {
 }
 
 void AssetInfoUI::render(SDL_Renderer* r, int screen_w, int screen_h) const {
-    if (!visible_ || !info_) return;
+    if (!visible_) return;
 
     layout_widgets(screen_w, screen_h);
+
+    if (animation_editor_window_ && animation_editor_window_->is_visible()) {
+        animation_editor_window_->render(r);
+    }
+
+    if (!info_) return;
 
     SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
     SDL_Color bg = DMStyles::PanelBG();
