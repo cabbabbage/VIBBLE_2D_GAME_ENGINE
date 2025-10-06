@@ -95,7 +95,8 @@ private:
     void add_candidate_row(const std::string& name, int chance);
     void remove_candidate_row(CandidateRow* target);
     void ensure_candidate_rows();
-    void open_asset_search();
+    void open_asset_search(std::function<void(const std::string&)> on_selection = {});
+    void add_candidate_from_selection(const std::string& selection);
     void clamp_to_screen();
     void dispatch_save();
     void mark_dirty();
@@ -128,8 +129,6 @@ private:
     std::unique_ptr<SliderWidget> perimeter_widget_;
     std::unique_ptr<DMButton> add_candidate_button_;
     std::unique_ptr<ButtonWidget> add_candidate_widget_;
-    std::unique_ptr<DMButton> browse_assets_button_;
-    std::unique_ptr<ButtonWidget> browse_assets_widget_;
     std::unique_ptr<DMDropdown> area_dropdown_;
     std::unique_ptr<DropdownWidget> area_dropdown_widget_;
     std::unique_ptr<DMButton> area_clear_button_;

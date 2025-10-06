@@ -188,14 +188,6 @@ void SpawnGroupsConfigPanel::build_static_controls() {
     if (!add_candidate_button_) {
         add_candidate_button_ = std::make_unique<DMButton>("Add Candidate", &DMStyles::CreateButton(), 140, DMButton::height());
         add_candidate_widget_ = std::make_unique<ButtonWidget>(add_candidate_button_.get(), [this]() {
-            add_candidate_row("", 0);
-            request_rebuild_rows();
-        });
-    }
-
-    if (!browse_assets_button_) {
-        browse_assets_button_ = std::make_unique<DMButton>("Browse Assets", &DMStyles::HeaderButton(), 150, DMButton::height());
-        browse_assets_widget_ = std::make_unique<ButtonWidget>(browse_assets_button_.get(), [this]() {
             open_asset_search();
         });
     }
@@ -285,21 +277,27 @@ void SpawnGroupsConfigPanel::refresh_area_controls() {
     area_dropdown_.reset();
     area_dropdown_widget_.reset();
 
-    if (!area_names_provider_) {
-        return;
-    }
-
-    area_names_ = area_names_provider_();
     area_dropdown_options_.push_back("(none)");
+    if (area_names_provider_) {
+        area_names_ = area_names_provider_();
+    } else {
+        area_names_.clear();
+    }
     area_dropdown_options_.insert(area_dropdown_options_.end(), area_names_.begin(), area_names_.end());
 
     int selected = 0;
     if (!current_link.empty()) {
+        bool found = false;
         for (size_t i = 0; i < area_names_.size(); ++i) {
             if (area_names_[i] == current_link) {
                 selected = static_cast<int>(i) + 1;
+                found = true;
                 break;
             }
+        }
+        if (!found) {
+            area_dropdown_options_.push_back(current_link);
+            selected = static_cast<int>(area_dropdown_options_.size()) - 1;
         }
     }
 
@@ -381,20 +379,18 @@ void SpawnGroupsConfigPanel::rebuild_rows() {
         rows.push_back({ perimeter_widget_.get() });
     }
 
-    if (area_names_provider_) {
-        if (area_hint_label_) {
-            rows.push_back({ area_hint_label_.get() });
-        }
-        DockableCollapsible::Row area_row;
-        if (area_dropdown_widget_) {
-            area_row.push_back(area_dropdown_widget_.get());
-        }
-        if (area_clear_widget_) {
-            area_row.push_back(area_clear_widget_.get());
-        }
-        if (!area_row.empty()) {
-            rows.push_back(std::move(area_row));
-        }
+    if (area_hint_label_) {
+        rows.push_back({ area_hint_label_.get() });
+    }
+    DockableCollapsible::Row area_row;
+    if (area_dropdown_widget_) {
+        area_row.push_back(area_dropdown_widget_.get());
+    }
+    if (area_clear_widget_) {
+        area_row.push_back(area_clear_widget_.get());
+    }
+    if (!area_row.empty()) {
+        rows.push_back(std::move(area_row));
     }
 
     update_candidate_summary();
@@ -418,15 +414,8 @@ void SpawnGroupsConfigPanel::rebuild_rows() {
         }
     }
 
-    DockableCollapsible::Row actions;
     if (add_candidate_widget_) {
-        actions.push_back(add_candidate_widget_.get());
-    }
-    if (browse_assets_widget_) {
-        actions.push_back(browse_assets_widget_.get());
-    }
-    if (!actions.empty()) {
-        rows.push_back(std::move(actions));
+        rows.push_back({ add_candidate_widget_.get() });
     }
 
     set_rows(rows);
@@ -902,7 +891,7 @@ void SpawnGroupsConfigPanel::dispatch_save() {
 
 void SpawnGroupsConfigPanel::mark_dirty() { dirty_ = true; }
 
-void SpawnGroupsConfigPanel::open_asset_search() {
+void SpawnGroupsConfigPanel::open_asset_search(std::function<void(const std::string&)> on_selection) {
     if (!asset_search_) {
         asset_search_ = std::make_unique<SearchAssets>();
         if (!floating_stack_key_.empty()) {
@@ -911,13 +900,22 @@ void SpawnGroupsConfigPanel::open_asset_search() {
     }
     asset_search_->set_screen_dimensions(screen_w_, screen_h_);
     update_asset_search_anchor();
-    asset_search_->open([this](const std::string& selection) {
+    asset_search_->open([this, cb = std::move(on_selection)](const std::string& selection) {
         if (selection.empty() || (selection.front() == '#')) {
             return;
         }
-        add_candidate_row(selection, 0);
-        request_rebuild_rows();
+        if (cb) {
+            cb(selection);
+        } else {
+            add_candidate_from_selection(selection);
+        }
     });
+}
+
+void SpawnGroupsConfigPanel::add_candidate_from_selection(const std::string& selection) {
+    add_candidate_row(selection, 0);
+    request_rebuild_rows();
+    sync_candidates();
 }
 
 void SpawnGroupsConfigPanel::update_asset_search_anchor() {
