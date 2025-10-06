@@ -12,6 +12,64 @@
 
 using nlohmann::json;
 
+struct SpawnGroupList::CandidateRow {
+    std::unique_ptr<DMTextBox> name_box;
+    std::unique_ptr<TextBoxWidget> name_w;
+    std::unique_ptr<DMSlider> chance_sl;
+    std::unique_ptr<SliderWidget> chance_w;
+    std::unique_ptr<DMButton> up_btn;
+    std::unique_ptr<ButtonWidget> up_w;
+    std::unique_ptr<DMButton> down_btn;
+    std::unique_ptr<ButtonWidget> down_w;
+    std::unique_ptr<DMButton> del_btn;
+    std::unique_ptr<ButtonWidget> del_w;
+};
+
+struct SpawnGroupList::EntryRow {
+    json* array = nullptr;
+    json* entry = nullptr;
+    json  ro_entry;
+    bool  read_only = false;
+    std::string id;
+    int index = -1;
+
+    bool expanded = false;
+    std::unique_ptr<DMButton> toggle_btn;
+    std::unique_ptr<ButtonWidget> toggle_w;
+    std::unique_ptr<DMButton> up_btn;
+    std::unique_ptr<ButtonWidget> up_w;
+    std::unique_ptr<DMButton> down_btn;
+    std::unique_ptr<ButtonWidget> down_w;
+    std::unique_ptr<DMButton> del_btn;
+    std::unique_ptr<ButtonWidget> del_w;
+    std::unique_ptr<DMButton> dup_btn;
+    std::unique_ptr<ButtonWidget> dup_w;
+
+    std::unique_ptr<DMTextBox> name_box;
+    std::unique_ptr<TextBoxWidget> name_w;
+    std::unique_ptr<DMDropdown> method_dd;
+    std::unique_ptr<DropdownWidget> method_w;
+    std::unique_ptr<DMRangeSlider> qty_sl;
+    std::unique_ptr<RangeSliderWidget> qty_w;
+    std::unique_ptr<DMButton> add_cand_btn;
+    std::unique_ptr<ButtonWidget> add_cand_w;
+    std::vector<std::unique_ptr<CandidateRow>> candidates;
+
+    std::function<std::vector<std::string>()> area_names_provider;
+    std::string method_lock;
+    bool quantity_hidden = false;
+
+    std::string owner_label;
+    SDL_Color owner_color{255,255,255,255};
+
+    std::unique_ptr<DMButton> link_btn;
+    std::unique_ptr<ButtonWidget> link_btn_w;
+
+    std::unique_ptr<Widget> body_begin_marker;
+    std::unique_ptr<Widget> body_end_marker;
+    SDL_Rect body_rect{0,0,0,0};
+};
+
 namespace {
 static std::vector<std::string> kSpawnMethods{
     "Exact", "Random", "Percent", "Center", "Perimeter"
@@ -210,71 +268,6 @@ void AreaLinkPanel::apply_default_position() {
     panel_->set_position(x, y);
 }
 }
-
-struct SpawnGroupList::CandidateRow {
-    std::unique_ptr<DMTextBox> name_box;
-    std::unique_ptr<TextBoxWidget> name_w;
-    std::unique_ptr<DMSlider> chance_sl;
-    std::unique_ptr<SliderWidget> chance_w;
-    std::unique_ptr<DMButton> up_btn;
-    std::unique_ptr<ButtonWidget> up_w;
-    std::unique_ptr<DMButton> down_btn;
-    std::unique_ptr<ButtonWidget> down_w;
-    std::unique_ptr<DMButton> del_btn;
-    std::unique_ptr<ButtonWidget> del_w;
-};
-
-struct SpawnGroupList::EntryRow {
-    // Data
-    json* array = nullptr;         // bound array (editable mode)
-    json* entry = nullptr;         // bound entry (editable mode)
-    json  ro_entry;                // read-only snapshot (readonly mode)
-    bool  read_only = false;
-    std::string id;
-    int index = -1;
-
-    // Header controls
-    bool expanded = false;
-    std::unique_ptr<DMButton> toggle_btn;
-    std::unique_ptr<ButtonWidget> toggle_w;
-    std::unique_ptr<DMButton> up_btn;
-    std::unique_ptr<ButtonWidget> up_w;
-    std::unique_ptr<DMButton> down_btn;
-    std::unique_ptr<ButtonWidget> down_w;
-    std::unique_ptr<DMButton> del_btn;
-    std::unique_ptr<ButtonWidget> del_w;
-    std::unique_ptr<DMButton> dup_btn;
-    std::unique_ptr<ButtonWidget> dup_w;
-
-    // Body controls
-    std::unique_ptr<DMTextBox> name_box;
-    std::unique_ptr<TextBoxWidget> name_w;
-    std::unique_ptr<DMDropdown> method_dd;
-    std::unique_ptr<DropdownWidget> method_w;
-    std::unique_ptr<DMRangeSlider> qty_sl;
-    std::unique_ptr<RangeSliderWidget> qty_w;
-    std::unique_ptr<DMButton> add_cand_btn;
-    std::unique_ptr<ButtonWidget> add_cand_w;
-    std::vector<std::unique_ptr<CandidateRow>> candidates;
-
-    // Host integration
-    std::function<std::vector<std::string>()> area_names_provider;
-    std::string method_lock;
-    bool quantity_hidden = false;
-
-    // Ownership/parent label
-    std::string owner_label;
-    SDL_Color owner_color{255,255,255,255};
-
-    // Area link UI
-    std::unique_ptr<DMButton> link_btn;
-    std::unique_ptr<ButtonWidget> link_btn_w;
-
-    // Body highlight tracking
-    std::unique_ptr<Widget> body_begin_marker;
-    std::unique_ptr<Widget> body_end_marker;
-    SDL_Rect body_rect{0,0,0,0};
-};
 
 // RowController methods
 void SpawnGroupList::RowController::set_ownership_label(const std::string& label, SDL_Color color) {
@@ -588,7 +581,12 @@ void SpawnGroupList::update(const Input& input, int screen_w, int screen_h) {
     if (area_panel_) {
         area_panel_->set_screen_dimensions(screen_w_, screen_h_);
         area_panel_->set_anchor(anchor_);
-        area_panel_->set_parent_rect(rect());
+        SDL_Rect parent = rect();
+        if (area_panel_row_) {
+            const SDL_Rect& body = area_panel_row_->body_rect;
+            if (body.w > 0 && body.h > 0) parent = body;
+        }
+        area_panel_->set_parent_rect(parent);
     }
     DockableCollapsible::update(input, screen_w, screen_h);
     if (!is_visible()) {
@@ -806,7 +804,12 @@ void SpawnGroupList::ensure_area_panel() {
     if (area_panel_) {
         area_panel_->set_screen_dimensions(screen_w_, screen_h_);
         area_panel_->set_anchor(anchor_);
-        area_panel_->set_parent_rect(rect());
+        SDL_Rect parent = rect();
+        if (area_panel_row_) {
+            const SDL_Rect& body = area_panel_row_->body_rect;
+            if (body.w > 0 && body.h > 0) parent = body;
+        }
+        area_panel_->set_parent_rect(parent);
     }
 }
 
@@ -822,7 +825,9 @@ void SpawnGroupList::open_area_panel(EntryRow& row) {
         names = row.area_names_provider();
     }
     area_panel_row_ = &row;
-    area_panel_->set_parent_rect(rect());
+    SDL_Rect parent = rect();
+    if (row.body_rect.w > 0 && row.body_rect.h > 0) parent = row.body_rect;
+    area_panel_->set_parent_rect(parent);
     area_panel_->open(names, [this, rr=&row](const std::string& selected) {
         if (!rr->entry) return;
         (*rr->entry)["link"] = selected;

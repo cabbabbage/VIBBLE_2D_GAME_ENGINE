@@ -6,7 +6,7 @@
 #include <vector>
 
 struct SDL_Rect;
-struct SDL_Event;
+union SDL_Event;
 struct SDL_Renderer;
 
 namespace animation_editor {
@@ -34,6 +34,10 @@ class FrameMovementEditor {
   private:
     void load_frames_from_document();
     void apply_changes();
+    void ensure_children();
+    void update_layout();
+    void synchronize_selection();
+    void mark_dirty();
 
   private:
     std::shared_ptr<AnimationDocument> document_;
@@ -43,6 +47,9 @@ class FrameMovementEditor {
     std::string animation_id_;
     SDL_Rect bounds_{0, 0, 0, 0};
     CloseCallback close_callback_;
+    std::vector<MovementFrame> frames_;
+    int selected_index_ = 0;
+    bool dirty_ = false;
 };
 
 }  // namespace animation_editor

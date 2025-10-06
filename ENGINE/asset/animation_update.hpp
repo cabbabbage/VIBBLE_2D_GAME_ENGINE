@@ -58,8 +58,9 @@ private:
     bool advance(AnimationFrame*& frame);
     void get_animation();
     void get_new_target();
-    int max_current_target_dist = 100;
-    int min_current_target_dist = 50;
+    int max_current_target_dist = self_->info->NeighborSearchRadius;
+  
+    int min_current_target_dist = 0;
     double min_factor = 0.5;
 
 private:

@@ -25,6 +25,7 @@ class AnimationDocument {
 
     void rename_animation(const std::string& old_id, const std::string& new_id);
     void replace_animation_payload(const std::string& animation_id, const std::string& payload_json);
+    std::optional<std::string> animation_payload(const std::string& animation_id) const;
 
   private:
     void ensure_document_initialized();

@@ -68,12 +68,10 @@ AnimationUpdate::AnimationUpdate(Asset* self, Assets* assets)
         static_cast<unsigned>(reinterpret_cast<uintptr_t>(self) & 0xffffffffu), static_cast<unsigned>((reinterpret_cast<uintptr_t>(self) >> 32) & 0xffffffffu) };
     rng_.seed(seed);
     path_bias_ = 0.75;
-    int def_max = 100;
-    if (self_ && self_->get_neighbors_list()) {
-        def_max = std::max(1, self_->get_neighbors_list()->search_radius());
-    }
-    max_current_target_dist = def_max;
-    min_current_target_dist = std::max(1, static_cast<int>(std::floor(min_factor * def_max)));
+
+
+
+    min_current_target_dist = std::max(1, static_cast<int>(std::floor(min_factor * max_current_target_dist)));
 }
 
 AnimationUpdate::AnimationUpdate(Asset* self, Assets* assets,
@@ -86,12 +84,7 @@ AnimationUpdate::AnimationUpdate(Asset* self, Assets* assets,
     if (!assets_owner_ && self_) {
         assets_owner_ = self_->get_assets();
     }
-    int def_max = 100;
-    if (self_ && self_->get_neighbors_list()) {
-        def_max = std::max(1, self_->get_neighbors_list()->search_radius());
-    }
-    max_current_target_dist = def_max;
-    min_current_target_dist = std::max(1, static_cast<int>(std::floor(min_factor * def_max)));
+    min_current_target_dist = std::max(1, static_cast<int>(std::floor(min_factor * max_current_target_dist)));
 }
 
 void AnimationUpdate::transition_mode(Mode m) {

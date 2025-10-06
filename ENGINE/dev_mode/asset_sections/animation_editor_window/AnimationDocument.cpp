@@ -370,6 +370,12 @@ void AnimationDocument::replace_animation_payload(const std::string& animation_i
     it->second = serialize_payload(coerce_payload(animation_id, parsed));
 }
 
+std::optional<std::string> AnimationDocument::animation_payload(const std::string& animation_id) const {
+    auto it = animations_.find(animation_id);
+    if (it == animations_.end()) return std::nullopt;
+    return it->second;
+}
+
 void AnimationDocument::ensure_document_initialized() {
     std::vector<std::string> ids;
     ids.reserve(animations_.size());
