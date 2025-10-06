@@ -18,7 +18,6 @@ class FullScreenCollapsible;
 class DockableCollapsible;
 struct DMButtonStyle;
 struct SDL_Renderer;
-union SDL_Event;
 
 class MapModeUI {
 public:

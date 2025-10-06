@@ -2,6 +2,7 @@
 
 #include "utils/input.hpp"
 
+#include <SDL.h>
 #include <SDL_ttf.h>
 
 #include <algorithm>

@@ -1,5 +1,7 @@
 #include "dev_controls.hpp"
 
+#include <SDL.h>
+
 #include "dev_mode/map_editor.hpp"
 #include "dev_mode/room_editor.hpp"
 #include "dev_mode/map_mode_ui.hpp"

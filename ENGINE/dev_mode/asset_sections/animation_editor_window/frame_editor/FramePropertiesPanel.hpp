@@ -1,9 +1,10 @@
 #pragma once
 
 #include <vector>
+#include "SDL.h"
 
 struct SDL_Rect;
-struct SDL_Event;
+
 struct SDL_Renderer;
 
 namespace animation_editor {
