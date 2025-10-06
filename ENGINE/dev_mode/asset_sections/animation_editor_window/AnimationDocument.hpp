@@ -33,6 +33,8 @@ class AnimationDocument {
     std::filesystem::path info_path_;
     std::unordered_map<std::string, std::string> animations_;
     std::optional<std::string> start_animation_;
+    bool use_nested_container_ = false;
+    std::string container_metadata_;
 };
 
 }  // namespace animation_editor

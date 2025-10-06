@@ -24,7 +24,10 @@ class AnimationHistory {
     void redo();
 
   private:
-    // TODO: Store snapshot buffers and current cursor index.
+    SnapshotProducer producer_;
+    SnapshotConsumer consumer_;
+    std::vector<std::string> history_;
+    std::size_t cursor_ = 0;
 };
 
 }  // namespace animation_editor

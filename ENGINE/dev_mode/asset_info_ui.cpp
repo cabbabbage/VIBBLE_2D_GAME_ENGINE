@@ -404,12 +404,7 @@ bool AssetInfoUI::handle_event(const SDL_Event& e) {
     }
 
     if (configure_btn_ && configure_btn_->handle_event(e)) {
-        if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
-            if (animation_editor_window_ && info_) {
-                animation_editor_window_->set_info(info_);
-                animation_editor_window_->toggle_visible();
-            }
-        }
+        // Temporarily disabled while the animation editor is under construction.
         return true;
     }
 
