@@ -94,36 +94,6 @@ def crop_images_with_bounds(
             img.crop((L, T, R, B)).save(path, format="PNG", optimize=True)
             count += 1
     return count
-class HistoryManager:
-    """Keeps a stack of deep-copied snapshots for undo support."""
-
-    def __init__(self, limit: int = 200):
-        self._stack: list[Dict[str, Any]] = []
-        self._limit = max(1, int(limit))
-
-    def snapshot(self, data: Dict[str, Any]) -> None:
-        try:
-            snap = copy.deepcopy(data)
-        except Exception:
-            # fall back to shallow copy if deepcopy fails
-            snap = dict(data or {})
-        self._stack.append(snap)
-        if len(self._stack) > self._limit:
-            # drop oldest
-            self._stack = self._stack[-self._limit :]
-
-    def can_undo(self) -> bool:
-        return len(self._stack) > 0
-
-    def undo(self) -> Optional[Dict[str, Any]]:
-        if not self._stack:
-            return None
-        try:
-            last = self._stack.pop()
-        except Exception:
-            return None
-        return last
-
 class ViewStateManager:
     """Capture and restore window/canvas view state (geometry, zoom, pan)."""
 
@@ -1992,10 +1962,6 @@ class AnimationConfiguratorAppSingle:
 
         ensure_sections(self.data)
 
-        # managers: undo history
-        self.history = HistoryManager(limit=200)
-        self.history.snapshot(self.data)
-
         # Actions bar
         act = ttk.Frame(self.win)
         act.pack(side="top", fill="x", padx=8, pady=6)
@@ -2052,11 +2018,6 @@ class AnimationConfiguratorAppSingle:
         ttk.Label(self.win, textvariable=self.status, relief=tk.SUNKEN, anchor="w").pack(side="bottom", fill="x")
 
         # keyboard + close
-        try:
-            self.win.bind_all("<Control-z>", self._undo_last_change)
-            self.win.bind_all("<Control-Z>", self._undo_last_change)
-        except Exception:
-            pass
         try:
             self.win.protocol("WM_DELETE_WINDOW", self._on_close)
         except Exception:
@@ -2217,7 +2178,6 @@ class AnimationConfiguratorAppSingle:
     def _on_panel_changed(self, node_id: str, payload: Dict[str, Any]):
         if not (self.data and self.info_path):
             return
-        self._snapshot()
         self.data.setdefault("animations", {})[node_id] = payload
         self.save_current()
 
@@ -2232,7 +2192,6 @@ class AnimationConfiguratorAppSingle:
             # rebuild to reset UI to old id
             self.rebuild_list()
             return
-        self._snapshot()
         anims = self.data.setdefault("animations", {})
         anims[new_id] = anims.pop(old_id)
         # update start if matches
@@ -2300,7 +2259,6 @@ class AnimationConfiguratorAppSingle:
     def _on_panel_delete(self, node_id: str):
         if not (self.data and self.info_path):
             return
-        self._snapshot()
         self.data.setdefault("animations", {}).pop(node_id, None)
         if str(self.data.get("start", "")) == node_id:
             self.data["start"] = ""
@@ -2321,7 +2279,6 @@ class AnimationConfiguratorAppSingle:
     def _on_start_changed(self, _evt=None):
         if not (self.data and self.info_path):
             return
-        self._snapshot()
         self.data["start"] = self.start_var.get()
         self.save_current()
 
@@ -2329,7 +2286,6 @@ class AnimationConfiguratorAppSingle:
     def create_animation(self):
         if not (self.data and self.info_path):
             return
-        self._snapshot()
         base = "new_anim"
         name, i = base, 1
         while name in self.data["animations"]:
@@ -2348,26 +2304,6 @@ class AnimationConfiguratorAppSingle:
         }
         self.save_current()
         self.rebuild_list()
-
-    # ----- view persistence + undo -----
-    def _snapshot(self):
-        try:
-            if self.data is not None:
-                self.history.snapshot(self.data)
-        except Exception:
-            pass
-
-    def _undo_last_change(self, _evt=None):
-        try:
-            snap = self.history.undo()
-            if snap is None:
-                return
-            self.data = snap
-            write_json(self.info_path, self.data)
-            self.rebuild_list()
-            self.status.set("Undid last change")
-        except Exception:
-            pass
 
     def _on_close(self):
         try:

@@ -35,8 +35,12 @@ class MovementSummaryWidget {
     std::string animation_id_;
     EditCallback edit_callback_;
     SDL_Rect bounds_{0, 0, 0, 0};
+    SDL_Rect button_rect_{0, 0, 0, 0};
+    bool button_hovered_ = false;
+    bool button_pressed_ = false;
     float total_dx_ = 0.0f;
     float total_dy_ = 0.0f;
+    std::string totals_signature_;
 };
 
 }  // namespace animation_editor
