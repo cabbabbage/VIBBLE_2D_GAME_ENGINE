@@ -1,7 +1,15 @@
 #pragma once
 
+#include <array>
+#include <filesystem>
+#include <functional>
 #include <memory>
+#include <optional>
 #include <string>
+#include <unordered_set>
+#include <vector>
+
+#include <nlohmann/json.hpp>
 
 struct SDL_Rect;
 struct SDL_Event;
@@ -22,11 +30,51 @@ class SourceConfigPanel {
     void set_bounds(const SDL_Rect& bounds);
     void set_services(std::shared_ptr<CroppingService> cropping, std::shared_ptr<AsyncTaskQueue> tasks);
 
+    using PathPicker = std::function<std::optional<std::filesystem::path>()>;
+    using MultiPathPicker = std::function<std::vector<std::filesystem::path>()>;
+    using AnimationPicker = std::function<std::optional<std::string>()>;
+
+    void set_folder_picker(PathPicker picker);
+    void set_animation_picker(AnimationPicker picker);
+    void set_gif_picker(PathPicker picker);
+    void set_png_sequence_picker(MultiPathPicker picker);
+    void set_status_callback(std::function<void(const std::string&)> callback);
+
     void update();
     void render(SDL_Renderer* renderer) const;
     bool handle_event(const SDL_Event& e);
 
   private:
+    struct SourceConfig {
+        std::string kind{"folder"};
+        std::string path;
+        std::optional<std::string> name;
+        nlohmann::json extras = nlohmann::json::object();
+    };
+
+    void reload_from_document();
+    void ensure_payload_loaded();
+    void commit_payload(bool refresh_document = true);
+    void apply_source_config(const SourceConfig& config);
+    void update_number_of_frames();
+    int compute_frame_count(const SourceConfig& config) const;
+    int compute_frame_count_recursive(const SourceConfig& config, std::unordered_set<std::string>& visited) const;
+    int count_frames_in_folder(const std::string& relative_path) const;
+    std::optional<nlohmann::json> animation_payload(const std::string& id) const;
+    SourceConfig parse_source(const nlohmann::json& payload) const;
+    nlohmann::json build_source_json(const SourceConfig& config) const;
+    std::filesystem::path resolve_asset_root() const;
+    std::filesystem::path animation_output_directory() const;
+    bool prepare_output_directory(std::filesystem::path* out_dir) const;
+    std::vector<std::filesystem::path> collect_png_files(const std::filesystem::path& folder) const;
+    std::vector<std::filesystem::path> normalize_sequence(const std::vector<std::filesystem::path>& files) const;
+    void copy_sequence_to_output(const std::vector<std::filesystem::path>& files, const std::filesystem::path& out_dir) const;
+    void post_copy_process(const std::vector<std::filesystem::path>& out_files) const;
+    void layout_buttons();
+    void update_status(const std::string& message) const;
+    int hit_test_buttons(int x, int y) const;
+    bool activate_button(int index);
+
     void import_from_folder();
     void import_from_animation();
     void import_from_gif();
@@ -38,6 +86,29 @@ class SourceConfigPanel {
     std::shared_ptr<AsyncTaskQueue> task_queue_;
     std::string animation_id_;
     SDL_Rect bounds_{0, 0, 0, 0};
+
+    mutable std::string status_message_;
+    std::function<void(const std::string&)> status_callback_;
+
+    PathPicker folder_picker_;
+    AnimationPicker animation_picker_;
+    PathPicker gif_picker_;
+    MultiPathPicker png_sequence_picker_;
+
+    mutable bool payload_loaded_ = false;
+    mutable bool reloading_ = false;
+    mutable nlohmann::json payload_ = nlohmann::json::object();
+    mutable SourceConfig current_source_;
+    mutable int frame_count_ = 1;
+    mutable std::filesystem::path cached_asset_root_;
+    mutable bool cached_asset_root_valid_ = false;
+
+    struct Button {
+        SDL_Rect rect{0, 0, 0, 0};
+    };
+    std::array<Button, 4> buttons_{};
+    int hover_button_ = -1;
+    bool busy_indicator_ = false;
 };
 
 }  // namespace animation_editor

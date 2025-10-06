@@ -7,6 +7,9 @@ struct SDL_Rect;
 struct SDL_Event;
 struct SDL_Renderer;
 
+class DMCheckbox;
+class DMSlider;
+
 namespace animation_editor {
 
 class AnimationDocument;
@@ -24,13 +27,51 @@ class PlaybackSettingsPanel {
     bool handle_event(const SDL_Event& e);
 
   private:
+    struct PlaybackState {
+        bool flipped_source = false;
+        bool reverse_source = false;
+        bool locked = false;
+        bool loop = false;
+        bool random_start = false;
+        int speed_factor = 1;
+
+        bool operator==(const PlaybackState& other) const {
+            return flipped_source == other.flipped_source &&
+                   reverse_source == other.reverse_source &&
+                   locked == other.locked &&
+                   loop == other.loop &&
+                   random_start == other.random_start &&
+                   speed_factor == other.speed_factor;
+        }
+
+        bool operator!=(const PlaybackState& other) const { return !(*this == other); }
+    };
+
+    void ensure_widgets();
+    void layout_widgets() const;
+    void apply_state_to_controls(const PlaybackState& state);
+    PlaybackState read_controls() const;
+    void handle_controls_changed();
     void sync_from_document();
-    void commit_changes();
+    void commit_changes(const PlaybackState& desired_state);
 
   private:
     std::shared_ptr<AnimationDocument> document_;
     std::string animation_id_;
     SDL_Rect bounds_{0, 0, 0, 0};
+
+    std::unique_ptr<DMCheckbox> flip_checkbox_;
+    std::unique_ptr<DMCheckbox> reverse_checkbox_;
+    std::unique_ptr<DMCheckbox> locked_checkbox_;
+    std::unique_ptr<DMCheckbox> loop_checkbox_;
+    std::unique_ptr<DMCheckbox> random_start_checkbox_;
+    std::unique_ptr<DMSlider> speed_slider_;
+
+    PlaybackState state_{};
+    PlaybackState document_state_{};
+    bool has_document_state_ = false;
+    mutable bool layout_dirty_ = true;
+    bool is_syncing_ui_ = false;
 };
 
 }  // namespace animation_editor
