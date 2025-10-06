@@ -2,7 +2,7 @@
 
 #include "dev_mode/room_configurator.hpp"
 #include "dev_mode/spawn_group_config_ui.hpp"
-#include "dev_mode/spawn_groups_config.hpp"
+#include "dev_mode/spawn_group_list.hpp"
 #include "dev_mode/spawn_group_utils.hpp"
 #include "dev_mode/sdl_pointer_utils.hpp"
 
@@ -116,7 +116,7 @@ void TrailEditorSuite::ensure_ui() {
         }
     }
     if (!spawn_groups_) {
-        spawn_groups_ = std::make_unique<SpawnGroupsConfig>();
+        spawn_groups_ = std::make_unique<SpawnGroupList>();
     }
     update_bounds();
     if (configurator_) {

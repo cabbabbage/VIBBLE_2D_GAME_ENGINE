@@ -1474,9 +1474,13 @@
         {
           "chance": 0,
           "name": "null"
+        },
+        {
+          "chance": 0,
+          "name": ""
         }
       ],
-      "chance_denominator": 100,
+      "chance_denominator": 0,
       "check_overlap": false,
       "display_name": "New Spawn",
       "enforce_spacing": false,
@@ -1484,7 +1488,7 @@
       "min_number": 1,
       "position": "Exact",
       "priority": 0,
-      "spawn_id": "spn-44b6f14509d5"
+      "spawn_id": "spn-37f623fb75ae"
     }
   ],
   "start": "",
