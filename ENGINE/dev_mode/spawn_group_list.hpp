@@ -17,6 +17,7 @@ class DMButton;
 class Input;
 class Widget;
 class SearchAssets;
+class AreaLinkPanel;
 
 // SpawnGroupList now owns the full spawn group editing UI. Each row is
 // collapsible and contains the controls that were previously managed by the
@@ -86,6 +87,7 @@ public:
     void update(const Input& input, int screen_w, int screen_h) override;
     bool handle_event(const SDL_Event& e) override;
     void render(SDL_Renderer* r) const override;
+    void render_content(SDL_Renderer* r) const override;
 
     // Floating usage helpers
     void open(nlohmann::json& groups, std::function<void(const nlohmann::json&)> on_save);
@@ -105,6 +107,9 @@ private:
     void ensure_asset_search();
     void open_asset_search(EntryRow& row, std::function<void(const std::string&)> callback = {});
     void close_asset_search();
+    void ensure_area_panel();
+    void open_area_panel(EntryRow& row);
+    void close_area_panel();
 
     bool floatable_mode_ = true;
     bool layout_dirty_ = true;
@@ -123,7 +128,10 @@ private:
     bool suppress_layout_callback_ = false;
 
     std::unique_ptr<SearchAssets> asset_search_;
+    std::unique_ptr<AreaLinkPanel> area_panel_;
     std::unique_ptr<DMButton> add_group_btn_;
     std::unique_ptr<ButtonWidget> add_group_btn_w_;
     SDL_Point anchor_{0,0};
+    EntryRow* asset_search_row_ = nullptr;
+    EntryRow* area_panel_row_ = nullptr;
 };

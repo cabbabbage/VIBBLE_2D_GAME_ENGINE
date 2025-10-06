@@ -8,6 +8,7 @@
 #include "widgets.hpp"
 #include "utils/input.hpp"
 #include "search_assets.hpp"
+#include "FloatingDockableManager.hpp"
 
 using nlohmann::json;
 
@@ -18,6 +19,195 @@ static std::vector<std::string> kSpawnMethods{
 
 static bool method_uses_range(const std::string& m) {
     return !(m == "Exact" || m == "Center" || m == "Percent");
+}
+
+class RowBodyMarkerWidget : public Widget {
+public:
+    RowBodyMarkerWidget(SpawnGroupList::EntryRow* row, bool begin)
+        : row_(row), begin_(begin) {}
+
+    void set_rect(const SDL_Rect& r) override {
+        rect_ = r;
+        if (!row_) return;
+        if (begin_) {
+            row_->body_rect = SDL_Rect{r.x, r.y, r.w, 0};
+        } else {
+            if (row_->body_rect.w <= 0) {
+                row_->body_rect.w = r.w;
+            }
+            int bottom = r.y;
+            if (bottom < row_->body_rect.y) {
+                bottom = row_->body_rect.y;
+            }
+            row_->body_rect.h = bottom - row_->body_rect.y;
+        }
+    }
+
+    const SDL_Rect& rect() const override { return rect_; }
+    int height_for_width(int) const override { return 0; }
+    bool handle_event(const SDL_Event&) override { return false; }
+    void render(SDL_Renderer*) const override {}
+    bool wants_full_row() const override { return true; }
+
+private:
+    SpawnGroupList::EntryRow* row_ = nullptr;
+    bool begin_ = false;
+    SDL_Rect rect_{0,0,0,0};
+};
+
+class AreaLinkPanel {
+public:
+    AreaLinkPanel();
+
+    void set_screen_dimensions(int w, int h);
+    void set_anchor(SDL_Point anchor);
+    void set_parent_rect(const SDL_Rect& rect);
+
+    void open(const std::vector<std::string>& areas,
+              std::function<void(const std::string&)> on_select);
+    void close();
+    bool visible() const;
+
+    void update(const Input& input);
+    bool handle_event(const SDL_Event& e);
+    void render(SDL_Renderer* r) const;
+
+private:
+    void ensure_panel();
+    void rebuild_rows();
+    void apply_default_position();
+
+    std::unique_ptr<DockableCollapsible> panel_;
+    std::vector<std::unique_ptr<DMButton>> buttons_;
+    std::vector<std::unique_ptr<ButtonWidget>> button_widgets_;
+    std::vector<std::string> areas_;
+    std::function<void(const std::string&)> on_select_;
+    SDL_Point anchor_{0,0};
+    SDL_Rect parent_rect_{0,0,0,0};
+    int screen_w_ = 1920;
+    int screen_h_ = 1080;
+};
+
+AreaLinkPanel::AreaLinkPanel() = default;
+
+void AreaLinkPanel::set_screen_dimensions(int w, int h) {
+    screen_w_ = std::max(0, w);
+    screen_h_ = std::max(0, h);
+    if (panel_) {
+        Input dummy;
+        panel_->update(dummy, screen_w_, screen_h_);
+    }
+}
+
+void AreaLinkPanel::set_anchor(SDL_Point anchor) {
+    anchor_ = anchor;
+    apply_default_position();
+}
+
+void AreaLinkPanel::set_parent_rect(const SDL_Rect& rect) {
+    parent_rect_ = rect;
+    apply_default_position();
+}
+
+void AreaLinkPanel::ensure_panel() {
+    if (panel_) return;
+    panel_ = std::make_unique<DockableCollapsible>("Areas", true, 0, 0);
+    panel_->set_show_header(true);
+    panel_->set_close_button_enabled(true);
+    panel_->set_scroll_enabled(true);
+    panel_->set_visible_height(320);
+    panel_->set_cell_width(220);
+    panel_->set_on_close([this]() {
+        on_select_ = nullptr;
+    });
+}
+
+void AreaLinkPanel::open(const std::vector<std::string>& areas,
+                         std::function<void(const std::string&)> on_select) {
+    ensure_panel();
+    if (!panel_) return;
+    areas_ = areas;
+    on_select_ = std::move(on_select);
+    rebuild_rows();
+    panel_->set_visible(true);
+    panel_->set_expanded(true);
+    panel_->reset_scroll();
+    FloatingDockableManager::instance().open_floating(
+        "Area Picker", panel_.get(), [this]() { this->close(); }, "spawn-group-area");
+    panel_->force_pointer_ready();
+    apply_default_position();
+    Input dummy;
+    panel_->update(dummy, screen_w_, screen_h_);
+    apply_default_position();
+}
+
+void AreaLinkPanel::close() {
+    if (!panel_) return;
+    panel_->set_visible(false);
+    on_select_ = nullptr;
+}
+
+bool AreaLinkPanel::visible() const {
+    return panel_ && panel_->is_visible();
+}
+
+void AreaLinkPanel::update(const Input& input) {
+    if (!panel_ || !panel_->is_visible()) return;
+    panel_->update(input, screen_w_, screen_h_);
+}
+
+bool AreaLinkPanel::handle_event(const SDL_Event& e) {
+    if (!panel_ || !panel_->is_visible()) return false;
+    return panel_->handle_event(e);
+}
+
+void AreaLinkPanel::render(SDL_Renderer* r) const {
+    if (!panel_ || !panel_->is_visible()) return;
+    panel_->render(r);
+}
+
+void AreaLinkPanel::rebuild_rows() {
+    if (!panel_) return;
+    buttons_.clear();
+    button_widgets_.clear();
+    DockableCollapsible::Rows rows;
+    for (const auto& area : areas_) {
+        auto btn = std::make_unique<DMButton>(area, &DMStyles::ListButton(), 200, DMButton::height());
+        auto widget = std::make_unique<ButtonWidget>(btn.get(), [this, area]() {
+            if (on_select_) on_select_(area);
+        });
+        buttons_.push_back(std::move(btn));
+        button_widgets_.push_back(std::move(widget));
+        rows.push_back({ button_widgets_.back().get() });
+    }
+    if (rows.empty()) {
+        auto none_btn = std::make_unique<DMButton>("No Areas", &DMStyles::ListButton(), 200, DMButton::height());
+        none_btn->set_style(&DMStyles::ListButton());
+        none_btn->set_text("No Areas");
+        auto none_widget = std::make_unique<ButtonWidget>(none_btn.get());
+        buttons_.push_back(std::move(none_btn));
+        button_widgets_.push_back(std::move(none_widget));
+        rows.push_back({ button_widgets_.back().get() });
+    }
+    panel_->set_rows(rows);
+    Input dummy;
+    panel_->update(dummy, screen_w_, screen_h_);
+}
+
+void AreaLinkPanel::apply_default_position() {
+    if (!panel_) return;
+    int width = panel_->rect().w;
+    if (width <= 0) width = 220;
+    int spacing = DMSpacing::item_gap();
+    int x = parent_rect_.x - width - spacing;
+    if (x <= 0) {
+        x = std::max(spacing, anchor_.x - width - spacing);
+    }
+    if (x < DMSpacing::panel_padding()) {
+        x = DMSpacing::panel_padding();
+    }
+    int y = parent_rect_.y;
+    panel_->set_position(x, y);
 }
 }
 
@@ -75,16 +265,15 @@ struct SpawnGroupList::EntryRow {
     // Ownership/parent label
     std::string owner_label;
     SDL_Color owner_color{255,255,255,255};
-    std::unique_ptr<DMTextBox> owner_lbl_box;
-    std::unique_ptr<TextBoxWidget> owner_lbl_w;
 
     // Area link UI
-    std::unique_ptr<DMTextBox> link_lbl_box;
-    std::unique_ptr<TextBoxWidget> link_lbl_w;
-    std::unique_ptr<DMDropdown> link_dd;
-    std::unique_ptr<DropdownWidget> link_dd_w;
-    std::unique_ptr<DMButton> link_clear_btn;
-    std::unique_ptr<ButtonWidget> link_clear_w;
+    std::unique_ptr<DMButton> link_btn;
+    std::unique_ptr<ButtonWidget> link_btn_w;
+
+    // Body highlight tracking
+    std::unique_ptr<Widget> body_begin_marker;
+    std::unique_ptr<Widget> body_end_marker;
+    SDL_Rect body_rect{0,0,0,0};
 };
 
 // RowController methods
@@ -92,15 +281,10 @@ void SpawnGroupList::RowController::set_ownership_label(const std::string& label
     if (!row_) return;
     row_->owner_label = label;
     row_->owner_color = color;
-    if (row_->owner_lbl_box) {
-        std::string owner = label.empty() ? std::string("") : std::string("Parent: ") + label;
-        row_->owner_lbl_box->set_value(owner);
-    }
 }
 void SpawnGroupList::RowController::clear_ownership_label() {
     if (!row_) return;
     row_->owner_label.clear();
-    if (row_->owner_lbl_box) row_->owner_lbl_box->set_value("");
 }
 void SpawnGroupList::RowController::set_area_names_provider(std::function<std::vector<std::string>()> provider) {
     if (!row_) return;
@@ -222,12 +406,14 @@ void SpawnGroupList::append_rows(Rows& rows) {
         // Body if expanded
         if (r->expanded) {
             if (!r->read_only) {
+                if (!r->body_begin_marker)
+                    r->body_begin_marker = std::make_unique<RowBodyMarkerWidget>(r.get(), true);
+                if (!r->body_end_marker)
+                    r->body_end_marker = std::make_unique<RowBodyMarkerWidget>(r.get(), false);
+                if (r->body_begin_marker)
+                    out.push_back({ r->body_begin_marker.get() });
+
                 // Build/editable controls
-                if (!r->owner_lbl_box) {
-                    std::string owner = r->owner_label.empty() ? std::string("") : std::string("Parent: ") + r->owner_label;
-                    r->owner_lbl_box = std::make_unique<DMTextBox>("", owner);
-                    r->owner_lbl_w = std::make_unique<TextBoxWidget>(r->owner_lbl_box.get(), true);
-                }
                 if (!r->name_box) {
                     r->name_box = std::make_unique<DMTextBox>("Name", entry_display_name(*r->entry));
                     r->name_w = std::make_unique<TextBoxWidget>(r->name_box.get(), true);
@@ -245,37 +431,25 @@ void SpawnGroupList::append_rows(Rows& rows) {
                     r->qty_sl = std::make_unique<DMRangeSlider>(0, 100, mn, mx);
                     r->qty_w  = std::make_unique<RangeSliderWidget>(r->qty_sl.get());
                 }
-                // Area link
-                if (!r->link_lbl_box) {
-                    std::string link = r->entry->value("link", std::string{});
-                    std::string label = std::string("Link: ") + (link.empty() ? std::string("(None)") : link);
-                    r->link_lbl_box = std::make_unique<DMTextBox>("", label);
-                    r->link_lbl_w = std::make_unique<TextBoxWidget>(r->link_lbl_box.get(), true);
-                } else {
-                    std::string link = r->entry->value("link", std::string{});
-                    std::string label = std::string("Link: ") + (link.empty() ? std::string("(None)") : link);
-                    r->link_lbl_box->set_value(label);
-                }
-                if (!r->link_dd) {
-                    std::vector<std::string> opts{ "(None)" };
-                    if (r->area_names_provider) {
-                        auto names = r->area_names_provider();
-                        opts.insert(opts.end(), names.begin(), names.end());
-                    }
-                    int idx = 0;
-                    const std::string current = r->entry->value("link", std::string{});
-                    for (size_t i = 1; i < opts.size(); ++i) if (opts[i] == current) { idx = static_cast<int>(i); break; }
-                    r->link_dd = std::make_unique<DMDropdown>("Pick Area", opts, idx);
-                    r->link_dd_w = std::make_unique<DropdownWidget>(r->link_dd.get());
-                }
-                if (!r->link_clear_btn) {
-                    r->link_clear_btn = std::make_unique<DMButton>("Clear Link", &DMStyles::WarnButton(), 100, DMButton::height());
-                    r->link_clear_w = std::make_unique<ButtonWidget>(r->link_clear_btn.get(), [this, rr=r.get()](){
+                // Area link button
+                std::string link_value = r->entry->value("link", std::string{});
+                const std::string link_label = link_value.empty() ? std::string("Link Area") : link_value;
+                if (!r->link_btn) {
+                    r->link_btn = std::make_unique<DMButton>(link_label, &DMStyles::ListButton(), 180, DMButton::height());
+                    r->link_btn_w = std::make_unique<ButtonWidget>(r->link_btn.get(), [this, rr=r.get()](){
                         if (!rr->entry) return;
-                        (*rr->entry)["link"] = "";
-                        if (on_change_) on_change_();
-                        this->rebuild_layout();
+                        std::string current = rr->entry->value("link", std::string{});
+                        if (!current.empty()) {
+                            (*rr->entry)["link"] = std::string{};
+                            if (on_change_) on_change_();
+                            this->close_area_panel();
+                            this->rebuild_layout();
+                        } else {
+                            this->open_area_panel(*rr);
+                        }
                     });
+                } else {
+                    r->link_btn->set_text(link_label);
                 }
                 if (!r->add_cand_btn) {
                     r->add_cand_btn = std::make_unique<DMButton>("Add Candidate", &DMStyles::CreateButton(), 140, DMButton::height());
@@ -329,19 +503,19 @@ void SpawnGroupList::append_rows(Rows& rows) {
                     }
                 }
 
-                if (r->owner_lbl_w) out.push_back({ r->owner_lbl_w.get() });
                 out.push_back({ r->name_w.get() });
                 if (r->method_w) out.push_back({ r->method_w.get() });
                 const std::string method = r->entry->value("position", std::string{"Exact"});
                 if (!r->quantity_hidden && method_uses_range(method)) {
                     out.push_back({ r->qty_w.get() });
                 }
-                if (r->link_lbl_w) out.push_back({ r->link_lbl_w.get() });
-                if (r->link_dd_w && r->link_clear_w) out.push_back({ r->link_dd_w.get(), r->link_clear_w.get() });
+                if (r->link_btn_w) out.push_back({ r->link_btn_w.get() });
                 out.push_back({ r->add_cand_w.get() });
                 for (auto& cr : r->candidates) {
                     out.push_back({ cr->name_w.get(), cr->chance_w.get(), cr->up_w.get(), cr->down_w.get(), cr->del_w.get() });
                 }
+                if (r->body_end_marker)
+                    out.push_back({ r->body_end_marker.get() });
             } else {
                 // Readonly body: just show name and method
                 if (!r->name_box) {
@@ -350,6 +524,10 @@ void SpawnGroupList::append_rows(Rows& rows) {
                 }
                 out.push_back({ r->name_w.get() });
             }
+        } else {
+            r->body_rect = SDL_Rect{0,0,0,0};
+            if (area_panel_row_ == r.get()) close_area_panel();
+            if (asset_search_row_ == r.get()) close_asset_search();
         }
     }
     // Make content available for embedding and floating modes
@@ -403,7 +581,28 @@ nlohmann::json SpawnGroupList::to_json() const {
 
 void SpawnGroupList::update(const Input& input, int screen_w, int screen_h) {
     set_screen_dimensions(screen_w, screen_h);
+    if (asset_search_) {
+        asset_search_->set_screen_dimensions(screen_w_, screen_h_);
+        asset_search_->set_anchor_position(anchor_.x, anchor_.y);
+    }
+    if (area_panel_) {
+        area_panel_->set_screen_dimensions(screen_w_, screen_h_);
+        area_panel_->set_anchor(anchor_);
+        area_panel_->set_parent_rect(rect());
+    }
     DockableCollapsible::update(input, screen_w, screen_h);
+    if (!is_visible()) {
+        close_area_panel();
+        close_asset_search();
+    }
+    if (area_panel_) {
+        area_panel_->update(input);
+        if (!area_panel_->visible()) area_panel_row_ = nullptr;
+    }
+    if (asset_search_) {
+        asset_search_->update(input);
+        if (!asset_search_->visible()) asset_search_row_ = nullptr;
+    }
     // Sync editable widgets back into JSON
     if (!bound_array_) return;
     for (auto& r : rows_) {
@@ -436,20 +635,6 @@ void SpawnGroupList::update(const Input& input, int screen_w, int screen_h) {
                 }
             }
         }
-        if (r->link_dd) {
-            int idx = std::max(0, r->link_dd->selected());
-            // Reconstruct options to map index to value
-            std::vector<std::string> opts{ "(None)" };
-            if (r->area_names_provider) {
-                auto names = r->area_names_provider();
-                opts.insert(opts.end(), names.begin(), names.end());
-            }
-            std::string new_link = (idx <= 0 || idx >= (int)opts.size()) ? std::string{} : opts[(size_t)idx];
-            if (r->entry->value("link", std::string{}) != new_link) {
-                (*r->entry)["link"] = new_link;
-                changed = true;
-            }
-        }
         if (r->qty_sl) {
             int mn = std::max(0, r->qty_sl->min_value());
             int mx = std::max(mn, r->qty_sl->max_value());
@@ -476,14 +661,48 @@ void SpawnGroupList::update(const Input& input, int screen_w, int screen_h) {
 }
 
 bool SpawnGroupList::handle_event(const SDL_Event& e) {
-    bool used = DockableCollapsible::handle_event(e);
+    bool used = false;
+    if (area_panel_ && area_panel_->handle_event(e)) used = true;
+    if (asset_search_ && asset_search_->handle_event(e)) used = true;
+    if (DockableCollapsible::handle_event(e)) used = true;
     // Drop-down overlay rendering is handled in widgets
     return used;
 }
 
 void SpawnGroupList::render(SDL_Renderer* r) const {
     DockableCollapsible::render(r);
+    if (area_panel_) area_panel_->render(r);
+    if (asset_search_) asset_search_->render(r);
     DMDropdown::render_active_options(r);
+}
+
+void SpawnGroupList::render_content(SDL_Renderer* r) const {
+    if (!r) return;
+    SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
+    SDL_Color accent = DMStyles::AccentButton().border;
+    SDL_Color inner = DMStyles::AccentButton().bg;
+    inner.a = 40;
+    accent.a = 200;
+    for (const auto& row : rows_) {
+        if (!row || !row->expanded) continue;
+        SDL_Rect rect = row->body_rect;
+        if (rect.w <= 0 || rect.h <= 0) continue;
+        SDL_Rect outline = rect;
+        outline.x -= 4;
+        outline.y -= 4;
+        outline.w += 8;
+        outline.h += 8;
+        if (outline.w <= 0 || outline.h <= 0) continue;
+        SDL_SetRenderDrawColor(r, inner.r, inner.g, inner.b, inner.a);
+        SDL_RenderDrawRect(r, &outline);
+        SDL_Rect inner_outline = outline;
+        inner_outline.x += 1;
+        inner_outline.y += 1;
+        inner_outline.w -= 2;
+        inner_outline.h -= 2;
+        SDL_SetRenderDrawColor(r, accent.r, accent.g, accent.b, accent.a);
+        SDL_RenderDrawRect(r, &inner_outline);
+    }
 }
 
 void SpawnGroupList::open(json& groups, std::function<void(const json&)> on_save) {
@@ -532,7 +751,90 @@ void SpawnGroupList::rebuild_layout() {
 }
 void SpawnGroupList::request_layout() { layout_dirty_ = true; }
 void SpawnGroupList::notify_data_changed(EntryRow&, bool, bool) { if (on_change_) on_change_(); }
-void SpawnGroupList::ensure_asset_search() {}
-void SpawnGroupList::open_asset_search(EntryRow&, std::function<void(const std::string&)>) {}
-void SpawnGroupList::close_asset_search() {}
+void SpawnGroupList::ensure_asset_search() {
+    if (!asset_search_) {
+        asset_search_ = std::make_unique<SearchAssets>();
+        asset_search_->set_floating_stack_key("spawn-group-assets");
+    }
+    if (asset_search_) {
+        asset_search_->set_screen_dimensions(screen_w_, screen_h_);
+        asset_search_->set_anchor_position(anchor_.x, anchor_.y);
+    }
+}
+
+void SpawnGroupList::open_asset_search(EntryRow& row, std::function<void(const std::string&)> callback) {
+    close_area_panel();
+    ensure_asset_search();
+    if (!asset_search_) return;
+    asset_search_row_ = &row;
+    SDL_Rect parent = rect();
+    int search_width = 280;
+    int spacing = DMSpacing::item_gap();
+    int x = parent.x + parent.w + spacing;
+    if (x + search_width > screen_w_ - DMSpacing::panel_padding()) {
+        x = std::max(DMSpacing::panel_padding(), screen_w_ - search_width - DMSpacing::panel_padding());
+    }
+    int y = parent.y;
+    asset_search_->set_position(x, y);
+    asset_search_->open([this, rr=&row, cb=std::move(callback)](const std::string& selection) {
+        if (selection.empty()) return;
+        if (!selection.empty() && selection.front() == '#') return;
+        if (!rr->entry) return;
+        json& entry = *rr->entry;
+        if (!entry.contains("candidates") || !entry["candidates"].is_array()) {
+            entry["candidates"] = json::array();
+        }
+        json candidate;
+        candidate["name"] = selection;
+        candidate["chance"] = 100;
+        entry["candidates"].push_back(candidate);
+        if (on_change_) on_change_();
+        if (cb) cb(selection);
+        rebuild_layout();
+    });
+}
+
+void SpawnGroupList::close_asset_search() {
+    asset_search_row_ = nullptr;
+    if (asset_search_) asset_search_->close();
+}
+
+void SpawnGroupList::ensure_area_panel() {
+    if (!area_panel_) {
+        area_panel_ = std::make_unique<AreaLinkPanel>();
+    }
+    if (area_panel_) {
+        area_panel_->set_screen_dimensions(screen_w_, screen_h_);
+        area_panel_->set_anchor(anchor_);
+        area_panel_->set_parent_rect(rect());
+    }
+}
+
+void SpawnGroupList::open_area_panel(EntryRow& row) {
+    if (area_panel_row_ && area_panel_row_ != &row) {
+        close_area_panel();
+    }
+    close_asset_search();
+    ensure_area_panel();
+    if (!area_panel_) return;
+    std::vector<std::string> names;
+    if (row.area_names_provider) {
+        names = row.area_names_provider();
+    }
+    area_panel_row_ = &row;
+    area_panel_->set_parent_rect(rect());
+    area_panel_->open(names, [this, rr=&row](const std::string& selected) {
+        if (!rr->entry) return;
+        (*rr->entry)["link"] = selected;
+        if (on_change_) on_change_();
+        rebuild_layout();
+        if (area_panel_) area_panel_->close();
+        area_panel_row_ = nullptr;
+    });
+}
+
+void SpawnGroupList::close_area_panel() {
+    area_panel_row_ = nullptr;
+    if (area_panel_) area_panel_->close();
+}
 
