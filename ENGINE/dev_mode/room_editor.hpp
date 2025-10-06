@@ -10,7 +10,6 @@
 #include <utility>
 #include <vector>
 
-#include "dev_mode/spawn_group_config_ui.hpp"
 #include "dev_mode/pan_and_zoom.hpp"
 
 class Asset;
@@ -64,7 +63,7 @@ public:
     bool has_active_modal() const;
     void pulse_active_modal_header();
 
-    void open_spawn_group_for_asset(Asset* asset);
+    // Opening a spawn group editor via left-click is removed; dragging edits data directly.
     void finalize_asset_drag(Asset* asset, const std::shared_ptr<AssetInfo>& info);
 
     void toggle_room_config();
@@ -92,6 +91,8 @@ public:
 
     void set_zoom_scale_factor(double factor);
     double get_zoom_scale_factor() const { return zoom_scale_factor_; }
+
+    bool is_spawn_group_panel_visible() const;
 private:
     enum class DragMode {
         None,
@@ -143,13 +144,11 @@ private:
     void refresh_spawn_group_list_ui();
     void update_spawn_group_list_anchor();
     SDL_Point spawn_groups_anchor_point() const;
-    void configure_spawn_group_panel(SpawnGroupsConfigPanel& panel, const nlohmann::json& entry);
-    void handle_spawn_group_panel_closed(const std::string& spawn_id);
     void clear_active_spawn_group_target();
     void update_exact_json(nlohmann::json& entry, const Asset& asset, SDL_Point center, int width, int height);
     void update_percent_json(nlohmann::json& entry, const Asset& asset, SDL_Point center, int width, int height);
     void save_perimeter_json(nlohmann::json& entry, int dx, int dy, int orig_w, int orig_h, int radius);
-    void handle_spawn_config_change(const nlohmann::json& entry, const SpawnGroupsConfigPanel::ChangeSummary& summary);
+    void handle_spawn_config_change(const nlohmann::json& entry);
     void respawn_spawn_group(const nlohmann::json& entry);
     std::unique_ptr<MapGrid> build_room_grid(const std::string& ignore_spawn_id) const;
     void integrate_spawned_assets(std::vector<std::unique_ptr<Asset>>& spawned);
@@ -183,7 +182,7 @@ private:
 
     std::unique_ptr<AssetLibraryUI> library_ui_;
     std::unique_ptr<AssetInfoUI> info_ui_;
-    std::unique_ptr<SpawnGroupsConfigPanel> spawn_group_panel_;
+    // Legacy floating panel removed
     std::unique_ptr<AreaOverlayEditor> area_editor_;
     std::unique_ptr<RoomConfigurator> room_cfg_ui_;
     SDL_Rect room_config_bounds_{0, 0, 0, 0};

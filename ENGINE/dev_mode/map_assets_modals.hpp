@@ -8,7 +8,7 @@
 
  class Input;
  struct SDL_Renderer;
- class SpawnGroupsConfigPanel;
+class SpawnGroupList;
 
  class SingleSpawnGroupModal {
  public:
@@ -38,7 +38,7 @@ private:
     nlohmann::json* section_ = nullptr;
     SaveCallback on_save_{};
 
-    std::unique_ptr<SpawnGroupsConfigPanel> cfg_;
+    std::unique_ptr<SpawnGroupList> list_;
 
     int screen_w_ = 1920;
     int screen_h_ = 1080;

@@ -102,7 +102,6 @@ public:
     void close_asset_info_editor();
     bool is_asset_info_editor_open() const;
 
-    void open_spawn_group_for_asset(Asset* asset);
     void finalize_asset_drag(Asset* asset, const std::shared_ptr<AssetInfo>& info);
 
     void toggle_room_config();

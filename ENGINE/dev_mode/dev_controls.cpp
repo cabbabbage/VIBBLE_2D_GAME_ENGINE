@@ -609,8 +609,14 @@ void DevControls::update(const Input& input) {
 
 void DevControls::update_ui(const Input& input) {
     if (!enabled_) return;
-    if (mode_ != Mode::RoomEditor) return;
-    if (!room_editor_ || !room_editor_->is_enabled()) return;
+    if (!room_editor_) return;
+
+    const bool room_editor_active = (mode_ == Mode::RoomEditor) && room_editor_->is_enabled();
+    const bool spawn_panel_visible = room_editor_->is_spawn_group_panel_visible();
+
+    if (!room_editor_active && !spawn_panel_visible) {
+        return;
+    }
 
     room_editor_->update_ui(input);
 }
@@ -663,7 +669,9 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
         return;
     }
 
-    const bool can_route_room_editor = (mode_ != Mode::MapEditor) && can_use_room_editor_ui() && room_editor_;
+    const bool room_editor_active = can_use_room_editor_ui();
+    const bool spawn_panel_visible = room_editor_ && room_editor_->is_spawn_group_panel_visible();
+    const bool can_route_room_editor = room_editor_ && (room_editor_active || spawn_panel_visible);
     const bool pointer_over_room_ui = can_route_room_editor && pointer_relevant &&
                                       room_editor_->is_room_ui_blocking_point(pointer.x, pointer.y);
 
@@ -1226,10 +1234,7 @@ bool DevControls::is_asset_info_editor_open() const {
     return room_editor_->is_asset_info_editor_open();
 }
 
-void DevControls::open_spawn_group_for_asset(Asset* asset) {
-    if (!can_use_room_editor_ui()) return;
-    room_editor_->open_spawn_group_for_asset(asset);
-}
+// Removed: left-click open spawn group config. Dragging still updates spawn data.
 
 void DevControls::finalize_asset_drag(Asset* asset, const std::shared_ptr<AssetInfo>& info) {
     if (!can_use_room_editor_ui()) return;

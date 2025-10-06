@@ -886,11 +886,7 @@ void Assets::open_asset_info_editor_for_asset(Asset* a) {
     }
 }
 
-void Assets::open_spawn_group_for_asset(Asset* a) {
-    if (dev_controls_ && dev_controls_->is_enabled()) {
-        dev_controls_->open_spawn_group_for_asset(a);
-    }
-}
+// Removed: left-click opening of spawn group panel.
 
 void Assets::finalize_asset_drag(Asset* a, const std::shared_ptr<AssetInfo>& info) {
     if (dev_controls_ && dev_controls_->is_enabled()) {

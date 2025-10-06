@@ -532,7 +532,7 @@
           "origional_width": 3180,
           "position": "Perimeter",
           "priority": 0,
-          "radius": 1121,
+          "radius": 455,
           "spawn_id": "spn-7d847a71ac07"
         },
         {
@@ -636,6 +636,7 @@
           "max_number": 1,
           "min_number": 1,
           "position": "Intersection",
+          "priority": 0,
           "spawn_id": "spn-400a2bb2d100",
           "tag": false
         },
@@ -659,6 +660,7 @@
           "max_number": 1,
           "min_number": 1,
           "position": "Random",
+          "priority": 1,
           "spawn_id": "spn-903f62327b86",
           "tag": false
         },
@@ -687,7 +689,25 @@
           "max_number": 100,
           "min_number": 50,
           "position": "Random",
+          "priority": 2,
           "spawn_id": "spn-5db9c322ef41"
+        },
+        {
+          "candidates": [
+            {
+              "chance": 0,
+              "name": "null"
+            }
+          ],
+          "chance_denominator": 100,
+          "check_overlap": false,
+          "display_name": "New Spawn",
+          "enforce_spacing": false,
+          "max_number": 1,
+          "min_number": 1,
+          "position": "Exact",
+          "priority": 3,
+          "spawn_id": "spn-481274332a1b"
         }
       ],
       "width_max": 1208,

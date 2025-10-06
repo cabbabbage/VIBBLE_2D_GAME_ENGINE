@@ -1,512 +1,495 @@
 #include "spawn_group_list.hpp"
 
 #include <algorithm>
-#include <sstream>
+#include <utility>
 
-#include "FloatingDockableManager.hpp"
 #include "dm_styles.hpp"
-#include "utils/input.hpp"
 #include "widgets.hpp"
+#include "utils/input.hpp"
+#include "search_assets.hpp"
 
-#include <SDL_ttf.h>
+using nlohmann::json;
 
 namespace {
-constexpr int kStandaloneWidth = 1920;
-constexpr int kStandaloneHeight = 1080;
-constexpr int kSpawnGroupsMaxHeight = 560;
-
-class SimpleLabel : public Widget {
-public:
-    explicit SimpleLabel(std::string text) : text_(std::move(text)) {}
-    void set_text(std::string t) { text_ = std::move(t); }
-    void set_rect(const SDL_Rect& r) override { rect_ = r; }
-    const SDL_Rect& rect() const override { return rect_; }
-    int height_for_width(int) const override { return DMStyles::Label().font_size + DMSpacing::small_gap() * 2; }
-    bool handle_event(const SDL_Event&) override { return false; }
-    void render(SDL_Renderer* r) const override {
-        const DMLabelStyle& st = DMStyles::Label();
-        TTF_Font* font = st.open_font();
-        if (!font) return;
-        SDL_Surface* surf = TTF_RenderUTF8_Blended(font, text_.c_str(), st.color);
-        if (!surf) { TTF_CloseFont(font); return; }
-        SDL_Texture* tex = SDL_CreateTextureFromSurface(r, surf);
-        if (tex) {
-            SDL_Rect dst{ rect_.x, rect_.y, surf->w, surf->h };
-            SDL_RenderCopy(r, tex, nullptr, &dst);
-            SDL_DestroyTexture(tex);
-        }
-        SDL_FreeSurface(surf);
-        TTF_CloseFont(font);
-    }
-    bool wants_full_row() const override { return true; }
-
-private:
-    SDL_Rect rect_{0, 0, 0, 0};
-    std::string text_;
+static std::vector<std::string> kSpawnMethods{
+    "Exact", "Random", "Percent", "Center", "Perimeter"
 };
 
-std::string build_summary_for(const nlohmann::json& entry, int display_index) {
-    const std::string display = entry.value("display_name", entry.value("name", entry.value("spawn_id", std::string{"Spawn"})));
-    std::string method = entry.value("position", std::string{"Unknown"});
-    int min_q = entry.value("min_number", entry.value("max_number", 0));
-    int max_q = entry.value("max_number", min_q);
-    std::ostringstream ss;
-    ss << display_index << ". " << display << " - " << method << " (" << min_q << "-" << max_q << ")";
-    return ss.str();
+static bool method_uses_range(const std::string& m) {
+    return !(m == "Exact" || m == "Center" || m == "Percent");
+}
 }
 
-nlohmann::json normalize_spawn_assets(const nlohmann::json& assets) {
-    if (assets.is_array()) {
-        return assets;
+struct SpawnGroupList::CandidateRow {
+    std::unique_ptr<DMTextBox> name_box;
+    std::unique_ptr<TextBoxWidget> name_w;
+    std::unique_ptr<DMSlider> chance_sl;
+    std::unique_ptr<SliderWidget> chance_w;
+    std::unique_ptr<DMButton> up_btn;
+    std::unique_ptr<ButtonWidget> up_w;
+    std::unique_ptr<DMButton> down_btn;
+    std::unique_ptr<ButtonWidget> down_w;
+    std::unique_ptr<DMButton> del_btn;
+    std::unique_ptr<ButtonWidget> del_w;
+};
+
+struct SpawnGroupList::EntryRow {
+    // Data
+    json* array = nullptr;         // bound array (editable mode)
+    json* entry = nullptr;         // bound entry (editable mode)
+    json  ro_entry;                // read-only snapshot (readonly mode)
+    bool  read_only = false;
+    std::string id;
+    int index = -1;
+
+    // Header controls
+    bool expanded = false;
+    std::unique_ptr<DMButton> toggle_btn;
+    std::unique_ptr<ButtonWidget> toggle_w;
+    std::unique_ptr<DMButton> up_btn;
+    std::unique_ptr<ButtonWidget> up_w;
+    std::unique_ptr<DMButton> down_btn;
+    std::unique_ptr<ButtonWidget> down_w;
+    std::unique_ptr<DMButton> del_btn;
+    std::unique_ptr<ButtonWidget> del_w;
+    std::unique_ptr<DMButton> dup_btn;
+    std::unique_ptr<ButtonWidget> dup_w;
+
+    // Body controls
+    std::unique_ptr<DMTextBox> name_box;
+    std::unique_ptr<TextBoxWidget> name_w;
+    std::unique_ptr<DMDropdown> method_dd;
+    std::unique_ptr<DropdownWidget> method_w;
+    std::unique_ptr<DMRangeSlider> qty_sl;
+    std::unique_ptr<RangeSliderWidget> qty_w;
+    std::unique_ptr<DMButton> add_cand_btn;
+    std::unique_ptr<ButtonWidget> add_cand_w;
+    std::vector<std::unique_ptr<CandidateRow>> candidates;
+
+    // Host integration
+    std::function<std::vector<std::string>()> area_names_provider;
+    std::string method_lock;
+    bool quantity_hidden = false;
+
+    // Ownership/parent label
+    std::string owner_label;
+    SDL_Color owner_color{255,255,255,255};
+    std::unique_ptr<DMTextBox> owner_lbl_box;
+    std::unique_ptr<TextBoxWidget> owner_lbl_w;
+
+    // Area link UI
+    std::unique_ptr<DMTextBox> link_lbl_box;
+    std::unique_ptr<TextBoxWidget> link_lbl_w;
+    std::unique_ptr<DMDropdown> link_dd;
+    std::unique_ptr<DropdownWidget> link_dd_w;
+    std::unique_ptr<DMButton> link_clear_btn;
+    std::unique_ptr<ButtonWidget> link_clear_w;
+};
+
+// RowController methods
+void SpawnGroupList::RowController::set_ownership_label(const std::string& label, SDL_Color color) {
+    if (!row_) return;
+    row_->owner_label = label;
+    row_->owner_color = color;
+    if (row_->owner_lbl_box) {
+        std::string owner = label.empty() ? std::string("") : std::string("Parent: ") + label;
+        row_->owner_lbl_box->set_value(owner);
     }
-    return nlohmann::json::array();
 }
-} // namespace
+void SpawnGroupList::RowController::clear_ownership_label() {
+    if (!row_) return;
+    row_->owner_label.clear();
+    if (row_->owner_lbl_box) row_->owner_lbl_box->set_value("");
+}
+void SpawnGroupList::RowController::set_area_names_provider(std::function<std::vector<std::string>()> provider) {
+    if (!row_) return;
+        row_->area_names_provider = std::move(provider);
+}
+void SpawnGroupList::RowController::set_stack_key(std::string) {}
+void SpawnGroupList::RowController::lock_method_to(const std::string& method) {
+    if (!row_) return;
+    row_->method_lock = method;
+}
+void SpawnGroupList::RowController::clear_method_lock() {
+    if (!row_) return;
+    row_->method_lock.clear();
+}
+void SpawnGroupList::RowController::set_quantity_hidden(bool hidden) {
+    if (!row_) return;
+    row_->quantity_hidden = hidden;
+}
 
 SpawnGroupList::SpawnGroupList(bool floatable)
-    : DockableCollapsible("Spawn Groups", floatable, 32, 32),
-      floatable_mode_(floatable) {
-    set_expanded(true);
-    set_visible(false);
-    if (!floatable_mode_) {
-        set_show_header(false);
-        set_scroll_enabled(true);
-    } else {
-        set_work_area(SDL_Rect{0, 0, 0, 0});
-    }
-    set_cell_width(120);
-    set_available_height_override(kSpawnGroupsMaxHeight);
-    set_work_area(SDL_Rect{0, 0, screen_w_, screen_h_});
-    DockableCollapsible::set_on_close([this]() { close_all(); });
+    : DockableCollapsible("Spawn Groups", floatable) {
+    set_scroll_enabled(true);
+    set_cell_width(260);
 }
 
 SpawnGroupList::~SpawnGroupList() = default;
 
-bool SpawnGroupList::should_rebuild_with(const nlohmann::json& normalized_assets) const {
-    if (!is_visible()) {
-        return true;
-    }
-    if (!entries_loaded_) {
-        return true;
-    }
-    if (last_loaded_source_ != &temp_assets_) {
-        return true;
-    }
-    return loaded_snapshot_ != normalized_assets;
-}
-
-void SpawnGroupList::rebuild_list_rows(const nlohmann::json& groups) {
-    rows_.clear();
-    snapshot_ = groups;
-    if (!groups.is_array()) {
-        return;
-    }
-    int display_index = 1;
-    for (const auto& entry : groups) {
-        if (!entry.is_object()) { ++display_index; continue; }
-        std::string spawn_id = entry.value("spawn_id", std::string{});
-        if (spawn_id.empty()) { ++display_index; continue; }
-
-        auto row = std::make_unique<RowWidgets>();
-        row->id = spawn_id;
-        row->label = std::make_unique<SimpleLabel>(build_summary_for(entry, display_index));
-
-        if (intrinsic_callbacks_.on_edit || callbacks_.on_edit) {
-            row->btn_edit = std::make_unique<DMButton>("✎", &DMStyles::HeaderButton(), 36, DMButton::height());
-            row->w_edit = std::make_unique<ButtonWidget>(row->btn_edit.get(), [this, spawn_id]() {
-                if (intrinsic_callbacks_.on_edit) intrinsic_callbacks_.on_edit(spawn_id);
-                if (callbacks_.on_edit) callbacks_.on_edit(spawn_id);
-            });
-        }
-
-        if (intrinsic_callbacks_.on_move_up || callbacks_.on_move_up) {
-            row->btn_up = std::make_unique<DMButton>("▲", &DMStyles::ListButton(), 32, DMButton::height());
-            row->w_up = std::make_unique<ButtonWidget>(row->btn_up.get(), [this, spawn_id]() {
-                if (intrinsic_callbacks_.on_move_up) intrinsic_callbacks_.on_move_up(spawn_id);
-                if (callbacks_.on_move_up) callbacks_.on_move_up(spawn_id);
-            });
-        }
-
-        if (intrinsic_callbacks_.on_move_down || callbacks_.on_move_down) {
-            row->btn_down = std::make_unique<DMButton>("▼", &DMStyles::ListButton(), 32, DMButton::height());
-            row->w_down = std::make_unique<ButtonWidget>(row->btn_down.get(), [this, spawn_id]() {
-                if (intrinsic_callbacks_.on_move_down) intrinsic_callbacks_.on_move_down(spawn_id);
-                if (callbacks_.on_move_down) callbacks_.on_move_down(spawn_id);
-            });
-        }
-
-        if (intrinsic_callbacks_.on_duplicate || callbacks_.on_duplicate) {
-            row->btn_dup = std::make_unique<DMButton>("Duplicate", &DMStyles::HeaderButton(), 96, DMButton::height());
-            row->w_dup = std::make_unique<ButtonWidget>(row->btn_dup.get(), [this, spawn_id]() {
-                if (intrinsic_callbacks_.on_duplicate) intrinsic_callbacks_.on_duplicate(spawn_id);
-                if (callbacks_.on_duplicate) callbacks_.on_duplicate(spawn_id);
-            });
-        }
-
-        if (intrinsic_callbacks_.on_delete || callbacks_.on_delete) {
-            row->btn_del = std::make_unique<DMButton>("🗑", &DMStyles::DeleteButton(), 36, DMButton::height());
-            row->w_del = std::make_unique<ButtonWidget>(row->btn_del.get(), [this, spawn_id]() {
-                if (intrinsic_callbacks_.on_delete) intrinsic_callbacks_.on_delete(spawn_id);
-                if (callbacks_.on_delete) callbacks_.on_delete(spawn_id);
-            });
-        }
-
-        rows_.push_back(std::move(row));
-        ++display_index;
-    }
-}
-
-void SpawnGroupList::rebuild_panel_rows() {
-    Rows rows;
-    append_rows(rows);
-    if (b_done_w_) {
-        rows.push_back({ b_done_w_.get() });
-    }
-    set_rows(rows);
-}
-
-void SpawnGroupList::open_entry(Entry& entry, int x, int y) {
-    if (!entry.cfg) {
-        return;
-    }
-    entry.cfg->set_screen_dimensions(screen_w_, screen_h_);
-    entry.cfg->set_position(x, y);
-    SpawnGroupsConfigPanel* cfg_ptr = entry.cfg.get();
-    nlohmann::json* json_ptr = entry.json;
-    entry.cfg->open(json_ptr ? *json_ptr : nlohmann::json::object(), [this, cfg_ptr, json_ptr](const nlohmann::json& updated) {
-        if (json_ptr) *json_ptr = updated;
-        if (on_entry_change_ && json_ptr) {
-            auto summary = cfg_ptr->consume_change_summary();
-            if (summary.method_changed || summary.quantity_changed) {
-                on_entry_change_(*json_ptr, summary);
-            }
-        } else {
-            cfg_ptr->consume_change_summary();
-        }
-        if (on_change_) on_change_();
-    });
-}
-
-void SpawnGroupList::open(const nlohmann::json& assets, std::function<void(const nlohmann::json&)> on_close) {
-    if (!floatable_mode_) {
-        return;
-    }
-    on_close_ = std::move(on_close);
-    FloatingDockableManager::instance().open_floating(
-        "Spawn Groups", this, [this]() { this->set_visible(false); });
-
-    nlohmann::json normalized = normalize_spawn_assets(assets);
-    const bool was_visible = is_visible();
-    if (!should_rebuild_with(normalized)) {
-        set_visible(true);
-        if (!was_visible) set_expanded(true);
-        Input dummy;
-        update(dummy, screen_w_, screen_h_);
-        return;
-    }
-
-    temp_assets_ = normalized;
-    intrinsic_callbacks_.on_edit = [this](const std::string& id) { this->request_open_spawn_group(id, anchor_x_, anchor_y_); };
-    intrinsic_callbacks_.on_duplicate = {};
-    intrinsic_callbacks_.on_delete = {};
-    intrinsic_callbacks_.on_move_up = {};
-    intrinsic_callbacks_.on_move_down = {};
-
-    load(temp_assets_, [](){});
-    rebuild_list_rows(temp_assets_);
-    if (!b_done_) {
-        b_done_ = std::make_unique<DMButton>("Done", &DMStyles::ListButton(), 80, DMButton::height());
-        b_done_w_ = std::make_unique<ButtonWidget>(b_done_.get(), [this]() {
-            if (on_close_) on_close_(to_json());
-            close();
-        });
-    }
-    rebuild_panel_rows();
-    set_visible(true);
-    if (!was_visible) set_expanded(true);
-    Input dummy;
-    update(dummy, screen_w_, screen_h_);
-}
-
-void SpawnGroupList::close() { DockableCollapsible::set_visible(false); }
-
-bool SpawnGroupList::visible() const { return is_visible(); }
-
-void SpawnGroupList::set_position(int x, int y) { DockableCollapsible::set_position(x, y); }
-
 void SpawnGroupList::set_screen_dimensions(int width, int height) {
-    if (width > 0) {
-        screen_w_ = width;
-    }
-    if (height > 0) {
-        screen_h_ = height;
-    }
-    set_work_area(SDL_Rect{0, 0, screen_w_, screen_h_});
-    for (auto& e : entries_) {
-        if (e.cfg) {
-            e.cfg->set_screen_dimensions(screen_w_, screen_h_);
-        }
-    }
+    screen_w_ = std::max(0, width);
+    screen_h_ = std::max(0, height);
 }
 
-void SpawnGroupList::load(nlohmann::json& assets,
-                          std::function<void()> on_change,
-                          std::function<void(const nlohmann::json&, const SpawnGroupsConfigPanel::ChangeSummary&)> on_entry_change,
-                          ConfigureEntryCallback configure_entry) {
-    nlohmann::json normalized = normalize_spawn_assets(assets);
-    const bool source_changed = (last_loaded_source_ != &assets);
-    const bool content_changed = (loaded_snapshot_ != normalized);
+static std::string entry_display_name(const json& e) {
+    if (!e.is_object()) return std::string{};
+    if (e.contains("display_name") && e["display_name"].is_string()) return e["display_name"].get<std::string>();
+    if (e.contains("name") && e["name"].is_string()) return e["name"].get<std::string>();
+    if (e.contains("spawn_id") && e["spawn_id"].is_string()) return e["spawn_id"].get<std::string>();
+    return std::string{"Spawn"};
+}
 
-    assets_json_ = &assets;
+void SpawnGroupList::load(json& groups,
+                          std::function<void()> on_change,
+                          std::function<void(const json&, const ChangeSummary&)> on_entry_change,
+                          ConfigureEntryCallback configure_entry) {
+    bound_array_ = &groups;
     on_change_ = std::move(on_change);
     on_entry_change_ = std::move(on_entry_change);
     configure_entry_ = std::move(configure_entry);
-    last_loaded_source_ = &assets;
-
-    intrinsic_callbacks_.on_edit = [this](const std::string& id) { this->request_open_spawn_group(id, anchor_x_, anchor_y_); };
-    intrinsic_callbacks_.on_duplicate = {};
-    intrinsic_callbacks_.on_delete = {};
-    intrinsic_callbacks_.on_move_up = {};
-    intrinsic_callbacks_.on_move_down = {};
-
-    if (entries_loaded_ && !source_changed && !content_changed) {
+    rows_.clear();
+    if (!groups.is_array()) return;
+    for (size_t i = 0; i < groups.size(); ++i) {
+        if (!groups[i].is_object()) continue;
+        auto row = std::make_unique<EntryRow>();
+        row->array = &groups;
+        row->entry = &groups[i];
+        row->index = static_cast<int>(i);
+        row->read_only = false;
+        row->id = groups[i].value("spawn_id", std::string{});
         if (configure_entry_) {
-            for (auto& entry : entries_) {
-                if (entry.cfg && entry.json) {
-                    configure_entry_(*entry.cfg, *entry.json);
-                }
-            }
+            RowController ctl(row.get());
+            try { configure_entry_(ctl, *row->entry); } catch (...) {}
         }
-        rebuild_list_rows(loaded_snapshot_);
-        rebuild_panel_rows();
-        return;
+        rows_.push_back(std::move(row));
     }
-
-    entries_.clear();
-    if (!assets.is_array()) {
-        loaded_snapshot_ = std::move(normalized);
-        entries_loaded_ = true;
-        rebuild_list_rows(loaded_snapshot_);
-        rebuild_panel_rows();
-        return;
-    }
-
-    for (auto& it : assets) {
-        Entry e;
-        e.id = it.value("spawn_id", std::string{});
-        if (e.id.empty()) {
-            if (it.contains("name") && it["name"].is_string()) e.id = it["name"].get<std::string>();
-            else if (it.contains("tag") && it["tag"].is_string()) e.id = "#" + it["tag"].get<std::string>();
-        }
-        if (e.id.empty()) {
-            e.id = std::string("Spawn Group ") + std::to_string(entries_.size() + 1);
-        }
-        e.json = &it;
-        e.cfg = std::make_unique<SpawnGroupsConfigPanel>();
-        e.cfg->set_screen_dimensions(screen_w_, screen_h_);
-        e.cfg->load(it);
-        if (configure_entry_) {
-            configure_entry_(*e.cfg, it);
-        }
-        entries_.push_back(std::move(e));
-    }
-    loaded_snapshot_ = std::move(normalized);
-    entries_loaded_ = true;
-    rebuild_list_rows(loaded_snapshot_);
-    rebuild_panel_rows();
+    request_layout();
 }
 
-void SpawnGroupList::load(const nlohmann::json& groups) {
-    intrinsic_callbacks_ = {};
-    rebuild_list_rows(groups);
+void SpawnGroupList::load(const json& groups) {
+    readonly_snapshot_ = groups;
+    bound_array_ = nullptr;
+    on_change_ = nullptr;
+    rows_.clear();
+    if (!readonly_snapshot_.is_array()) return;
+    for (size_t i = 0; i < readonly_snapshot_.size(); ++i) {
+        if (!readonly_snapshot_[i].is_object()) continue;
+        auto row = std::make_unique<EntryRow>();
+        row->ro_entry = readonly_snapshot_[i];
+        row->index = static_cast<int>(i);
+        row->read_only = true;
+        row->id = row->ro_entry.value("spawn_id", std::string{});
+        rows_.push_back(std::move(row));
+    }
+    request_layout();
 }
 
 void SpawnGroupList::append_rows(Rows& rows) {
-    for (auto& e : rows_) {
-        DockableCollapsible::Row row;
-        if (e->label) row.push_back(e->label.get());
-        if (e->w_edit) row.push_back(e->w_edit.get());
-        if (e->w_up)   row.push_back(e->w_up.get());
-        if (e->w_down) row.push_back(e->w_down.get());
-        if (e->w_dup)  row.push_back(e->w_dup.get());
-        if (e->w_del)  row.push_back(e->w_del.get());
-        if (!row.empty()) rows.push_back(std::move(row));
-    }
-}
-
-void SpawnGroupList::set_callbacks(Callbacks cb) {
-    callbacks_ = std::move(cb);
-    rebuild_list_rows(snapshot_);
-    if (floatable_mode_) {
-        rebuild_panel_rows();
-    }
-}
-
-void SpawnGroupList::set_anchor(int x, int y) {
-    const int dx = x - anchor_x_;
-    const int dy = y - anchor_y_;
-    anchor_x_ = x;
-    anchor_y_ = y;
-    if (dx == 0 && dy == 0) {
-        return;
-    }
-    for (auto& e : entries_) {
-        if (!e.cfg || !e.cfg->visible()) {
-            continue;
+    // Build header/body widgets lazily into our own rows_, then expose via DockableCollapsible rows
+    Rows out;
+    for (auto& r : rows_) {
+        // Header
+        if (!r->toggle_btn) {
+            const std::string label = entry_display_name(r->read_only ? r->ro_entry : *r->entry);
+            r->toggle_btn = std::make_unique<DMButton>(label, &DMStyles::ListButton(), 180, DMButton::height());
+            r->toggle_w = std::make_unique<ButtonWidget>(r->toggle_btn.get(), [this, rr=r.get()](){
+                rr->expanded = !rr->expanded;
+                request_layout();
+            });
+            r->dup_btn = std::make_unique<DMButton>("+", &DMStyles::ListButton(), 28, DMButton::height());
+            r->dup_w   = std::make_unique<ButtonWidget>(r->dup_btn.get(), [this, rr=r.get()](){ if (callbacks_.on_duplicate) callbacks_.on_duplicate(rr->id); });
+            r->up_btn = std::make_unique<DMButton>("↑", &DMStyles::ListButton(), 28, DMButton::height());
+            r->up_w   = std::make_unique<ButtonWidget>(r->up_btn.get(), [this, rr=r.get()](){ if (callbacks_.on_move_up) callbacks_.on_move_up(rr->id); });
+            r->down_btn = std::make_unique<DMButton>("↓", &DMStyles::ListButton(), 28, DMButton::height());
+            r->down_w   = std::make_unique<ButtonWidget>(r->down_btn.get(), [this, rr=r.get()](){ if (callbacks_.on_move_down) callbacks_.on_move_down(rr->id); });
+            r->del_btn = std::make_unique<DMButton>("X", &DMStyles::DeleteButton(), 28, DMButton::height());
+            r->del_w   = std::make_unique<ButtonWidget>(r->del_btn.get(), [this, rr=r.get()](){ if (callbacks_.on_delete) callbacks_.on_delete(rr->id); });
+        } else {
+            r->toggle_btn->set_text(entry_display_name(r->read_only ? r->ro_entry : *r->entry));
         }
-        SDL_Point pos = e.cfg->position();
-        e.cfg->set_position(pos.x + dx, pos.y + dy);
-    }
-}
+        out.push_back({ r->toggle_w.get(), r->dup_w.get(), r->up_w.get(), r->down_w.get(), r->del_w.get() });
 
-void SpawnGroupList::open_spawn_group(const std::string& id, int x, int y) {
-    close_all();
-    for (auto& e : entries_) {
-        if (e.id == id) {
-            open_entry(e, x, y);
-            break;
-        }
-    }
-}
+        // Body if expanded
+        if (r->expanded) {
+            if (!r->read_only) {
+                // Build/editable controls
+                if (!r->owner_lbl_box) {
+                    std::string owner = r->owner_label.empty() ? std::string("") : std::string("Parent: ") + r->owner_label;
+                    r->owner_lbl_box = std::make_unique<DMTextBox>("", owner);
+                    r->owner_lbl_w = std::make_unique<TextBoxWidget>(r->owner_lbl_box.get(), true);
+                }
+                if (!r->name_box) {
+                    r->name_box = std::make_unique<DMTextBox>("Name", entry_display_name(*r->entry));
+                    r->name_w = std::make_unique<TextBoxWidget>(r->name_box.get(), true);
+                }
+                if (r->method_lock.empty() && !r->method_dd) {
+                    int idx = 0;
+                    const std::string method = r->entry->value("position", std::string{"Exact"});
+                    for (size_t i = 0; i < kSpawnMethods.size(); ++i) if (kSpawnMethods[i] == method) { idx = static_cast<int>(i); break; }
+                    r->method_dd = std::make_unique<DMDropdown>("Spawn Method", kSpawnMethods, idx);
+                    r->method_w  = std::make_unique<DropdownWidget>(r->method_dd.get());
+                }
+                if (!r->qty_sl) {
+                    int mn = r->entry->value("min_number", r->entry->value("max_number", 1));
+                    int mx = r->entry->value("max_number", mn);
+                    r->qty_sl = std::make_unique<DMRangeSlider>(0, 100, mn, mx);
+                    r->qty_w  = std::make_unique<RangeSliderWidget>(r->qty_sl.get());
+                }
+                // Area link
+                if (!r->link_lbl_box) {
+                    std::string link = r->entry->value("link", std::string{});
+                    std::string label = std::string("Link: ") + (link.empty() ? std::string("(None)") : link);
+                    r->link_lbl_box = std::make_unique<DMTextBox>("", label);
+                    r->link_lbl_w = std::make_unique<TextBoxWidget>(r->link_lbl_box.get(), true);
+                } else {
+                    std::string link = r->entry->value("link", std::string{});
+                    std::string label = std::string("Link: ") + (link.empty() ? std::string("(None)") : link);
+                    r->link_lbl_box->set_value(label);
+                }
+                if (!r->link_dd) {
+                    std::vector<std::string> opts{ "(None)" };
+                    if (r->area_names_provider) {
+                        auto names = r->area_names_provider();
+                        opts.insert(opts.end(), names.begin(), names.end());
+                    }
+                    int idx = 0;
+                    const std::string current = r->entry->value("link", std::string{});
+                    for (size_t i = 1; i < opts.size(); ++i) if (opts[i] == current) { idx = static_cast<int>(i); break; }
+                    r->link_dd = std::make_unique<DMDropdown>("Pick Area", opts, idx);
+                    r->link_dd_w = std::make_unique<DropdownWidget>(r->link_dd.get());
+                }
+                if (!r->link_clear_btn) {
+                    r->link_clear_btn = std::make_unique<DMButton>("Clear Link", &DMStyles::WarnButton(), 100, DMButton::height());
+                    r->link_clear_w = std::make_unique<ButtonWidget>(r->link_clear_btn.get(), [this, rr=r.get()](){
+                        if (!rr->entry) return;
+                        (*rr->entry)["link"] = "";
+                        if (on_change_) on_change_();
+                        request_layout();
+                    });
+                }
+                if (!r->add_cand_btn) {
+                    r->add_cand_btn = std::make_unique<DMButton>("Add Candidate", &DMStyles::CreateButton(), 140, DMButton::height());
+                    r->add_cand_w   = std::make_unique<ButtonWidget>(r->add_cand_btn.get(), [this, rr=r.get()](){ open_asset_search(*rr, {}); });
+                }
 
-void SpawnGroupList::request_open_spawn_group(const std::string& id, int x, int y) {
-    pending_open_ = PendingOpenRequest{id, x, y};
-}
+                // Rebuild candidate rows from json
+                r->candidates.clear();
+                auto& e = *r->entry;
+                if (e.contains("candidates") && e["candidates"].is_array()) {
+                    for (size_t ci = 0; ci < e["candidates"].size(); ++ci) {
+                        auto cr = std::make_unique<CandidateRow>();
+                        const auto& c = e["candidates"][ci];
+                        const std::string nm = c.value("name", std::string{"null"});
+                        int chance = c.value("chance", 0);
+                        cr->name_box = std::make_unique<DMTextBox>("Asset", nm);
+                        cr->name_w   = std::make_unique<TextBoxWidget>(cr->name_box.get());
+                        cr->chance_sl= std::make_unique<DMSlider>("Weight", 0, 100, chance);
+                        cr->chance_w = std::make_unique<SliderWidget>(cr->chance_sl.get());
+                        cr->up_btn   = std::make_unique<DMButton>("↑", &DMStyles::ListButton(), 24, DMButton::height());
+                        cr->up_w     = std::make_unique<ButtonWidget>(cr->up_btn.get(), [this, rr=r.get(), ci](){
+                            if (!rr->entry || !rr->entry->contains("candidates")) return;
+                            auto& arr = (*rr->entry)["candidates"];
+                            if (!arr.is_array()) return;
+                            if (ci <= 0) return;
+                            std::swap(arr[ci-1], arr[ci]);
+                            if (on_change_) on_change_();
+                            request_layout();
+                        });
+                        cr->down_btn = std::make_unique<DMButton>("↓", &DMStyles::ListButton(), 24, DMButton::height());
+                        cr->down_w   = std::make_unique<ButtonWidget>(cr->down_btn.get(), [this, rr=r.get(), ci](){
+                            if (!rr->entry || !rr->entry->contains("candidates")) return;
+                            auto& arr = (*rr->entry)["candidates"];
+                            if (!arr.is_array()) return;
+                            if (ci+1 >= arr.size()) return;
+                            std::swap(arr[ci], arr[ci+1]);
+                            if (on_change_) on_change_();
+                            request_layout();
+                        });
+                        cr->del_btn  = std::make_unique<DMButton>("X", &DMStyles::DeleteButton(), 24, DMButton::height());
+                        cr->del_w    = std::make_unique<ButtonWidget>(cr->del_btn.get(), [this, rr=r.get(), ci](){
+                            if (!rr->entry || !rr->entry->contains("candidates")) return;
+                            auto& arr = (*rr->entry)["candidates"];
+                            if (!arr.is_array()) return;
+                            if (ci >= arr.size()) return;
+                            arr.erase(arr.begin()+static_cast<int>(ci));
+                            if (on_change_) on_change_();
+                            request_layout();
+                        });
+                        r->candidates.push_back(std::move(cr));
+                    }
+                }
 
-void SpawnGroupList::close_all() {
-    for (auto& e : entries_) {
-        if (e.cfg) e.cfg->close();
-    }
-}
-
-bool SpawnGroupList::is_open(const std::string& id) const {
-    if (id.empty()) return false;
-    for (const auto& e : entries_) {
-        if (e.cfg && e.id == id && e.cfg->visible()) {
-            return true;
-        }
-    }
-    return false;
-}
-
-std::optional<SpawnGroupList::OpenSpawnGroupState> SpawnGroupList::capture_open_spawn_group() const {
-    for (size_t i = 0; i < entries_.size(); ++i) {
-        const auto& e = entries_[i];
-        if (!e.cfg) continue;
-        if (e.cfg->visible()) {
-            SpawnGroupList::OpenSpawnGroupState state;
-            state.id = e.id;
-            state.position = e.cfg->position();
-            state.index = i;
-            return state;
-        }
-    }
-    return std::nullopt;
-}
-
-void SpawnGroupList::restore_open_spawn_group(const OpenSpawnGroupState& state) {
-    if (!state.id.empty()) {
-        open_spawn_group(state.id, state.position.x, state.position.y);
-        for (const auto& entry : entries_) {
-            if (entry.cfg && entry.cfg->visible()) {
-                return;
+                if (r->owner_lbl_w) out.push_back({ r->owner_lbl_w.get() });
+                out.push_back({ r->name_w.get() });
+                if (r->method_w) out.push_back({ r->method_w.get() });
+                const std::string method = r->entry->value("position", std::string{"Exact"});
+                if (!r->quantity_hidden && method_uses_range(method)) {
+                    out.push_back({ r->qty_w.get() });
+                }
+                if (r->link_lbl_w) out.push_back({ r->link_lbl_w.get() });
+                if (r->link_dd_w && r->link_clear_w) out.push_back({ r->link_dd_w.get(), r->link_clear_w.get() });
+                out.push_back({ r->add_cand_w.get() });
+                for (auto& cr : r->candidates) {
+                    out.push_back({ cr->name_w.get(), cr->chance_w.get(), cr->up_w.get(), cr->down_w.get(), cr->del_w.get() });
+                }
+            } else {
+                // Readonly body: just show name and method
+                if (!r->name_box) {
+                    r->name_box = std::make_unique<DMTextBox>("Name", entry_display_name(r->ro_entry));
+                    r->name_w = std::make_unique<TextBoxWidget>(r->name_box.get(), true);
+                }
+                out.push_back({ r->name_w.get() });
             }
         }
     }
-    if (state.index < entries_.size()) {
-        auto& entry = entries_[state.index];
-        if (!entry.cfg) {
-            return;
-        }
-        close_all();
-        open_entry(entry, state.position.x, state.position.y);
-    }
+    set_rows(out);
+}
+
+void SpawnGroupList::set_callbacks(Callbacks cb) { callbacks_ = std::move(cb); }
+
+void SpawnGroupList::expand_group(const std::string& id) {
+    if (auto* r = find_row(id)) { r->expanded = true; request_layout(); }
+}
+void SpawnGroupList::collapse_group(const std::string& id) {
+    if (auto* r = find_row(id)) { r->expanded = false; request_layout(); }
+}
+bool SpawnGroupList::is_expanded(const std::string& id) const {
+    return find_row(id) ? find_row(id)->expanded : false;
+}
+
+std::vector<std::string> SpawnGroupList::expanded_groups() const {
+    std::vector<std::string> out;
+    for (const auto& r : rows_) if (r->expanded && !r->id.empty()) out.push_back(r->id);
+    return out;
+}
+void SpawnGroupList::restore_expanded_groups(const std::vector<std::string>& ids) {
+    for (const auto& id : ids) expand_group(id);
 }
 
 nlohmann::json SpawnGroupList::to_json() const {
-    nlohmann::json arr = nlohmann::json::array();
-    for (const auto& e : entries_) {
-        if (e.json) arr.push_back(*e.json);
-        else if (e.cfg) arr.push_back(e.cfg->to_json());
-    }
-    return arr;
-}
-
-bool SpawnGroupList::any_visible() const {
-    if (is_visible()) {
-        return true;
-    }
-    for (const auto& e : entries_) {
-        if (e.cfg && e.cfg->visible()) return true;
-    }
-    return false;
-}
-
-bool SpawnGroupList::is_point_inside(int x, int y) const {
-    if (is_visible() && DockableCollapsible::is_point_inside(x, y)) return true;
-    for (const auto& e : entries_) {
-        if (e.cfg && e.cfg->visible() && e.cfg->is_point_inside(x, y)) return true;
-    }
-    return false;
+    if (bound_array_) return *bound_array_;
+    return readonly_snapshot_;
 }
 
 void SpawnGroupList::update(const Input& input, int screen_w, int screen_h) {
-    if (screen_w > 0) {
-        screen_w_ = screen_w;
-    }
-    if (screen_h > 0) {
-        screen_h_ = screen_h;
-    }
-    set_work_area(SDL_Rect{0, 0, screen_w_, screen_h_});
-    if (pending_open_) {
-        if (entries_loaded_) {
-            auto request = *pending_open_;
-            auto it = std::find_if(entries_.begin(), entries_.end(),
-                                   [&request](const Entry& entry) { return entry.id == request.id; });
-            if (it != entries_.end()) {
-                pending_open_.reset();
-                open_spawn_group(request.id, request.x, request.y);
-            } else {
-                pending_open_.reset();
+    set_screen_dimensions(screen_w, screen_h);
+    DockableCollapsible::update(input, screen_w, screen_h);
+    // Sync editable widgets back into JSON
+    if (!bound_array_) return;
+    for (auto& r : rows_) {
+        if (r->read_only || !r->entry) continue;
+        bool changed = false;
+        // Enforce method lock
+        if (!r->method_lock.empty()) {
+            if (r->entry->value("position", std::string{}) != r->method_lock) {
+                (*r->entry)["position"] = r->method_lock;
+                changed = true;
+                if (on_entry_change_) {
+                    ChangeSummary cs{}; cs.method_changed = true; cs.method = r->method_lock;
+                    on_entry_change_(*r->entry, cs);
+                }
             }
         }
-    }
-    if (is_visible()) {
-        DockableCollapsible::update(input, screen_w_, screen_h_);
-    }
-    for (auto& e : entries_) {
-        if (e.cfg) {
-            e.cfg->set_screen_dimensions(screen_w_, screen_h_);
-            e.cfg->update(input, screen_w_, screen_h_);
+        if (r->name_box && r->name_box->value() != r->entry->value("display_name", std::string{})) {
+            (*r->entry)["display_name"] = r->name_box->value();
+            changed = true;
         }
+        if (r->method_dd) {
+            int idx = std::clamp(r->method_dd->selected(), 0, (int)kSpawnMethods.size()-1);
+            const std::string method = kSpawnMethods[idx];
+            if (r->entry->value("position", std::string{}) != method) {
+                (*r->entry)["position"] = method;
+                changed = true;
+                if (on_entry_change_) {
+                    ChangeSummary cs{}; cs.method_changed = true; cs.method = method;
+                    on_entry_change_(*r->entry, cs);
+                }
+            }
+        }
+        if (r->link_dd) {
+            int idx = std::max(0, r->link_dd->selected());
+            // Reconstruct options to map index to value
+            std::vector<std::string> opts{ "(None)" };
+            if (r->area_names_provider) {
+                auto names = r->area_names_provider();
+                opts.insert(opts.end(), names.begin(), names.end());
+            }
+            std::string new_link = (idx <= 0 || idx >= (int)opts.size()) ? std::string{} : opts[(size_t)idx];
+            if (r->entry->value("link", std::string{}) != new_link) {
+                (*r->entry)["link"] = new_link;
+                changed = true;
+            }
+        }
+        if (r->qty_sl) {
+            int mn = std::max(0, r->qty_sl->min_value());
+            int mx = std::max(mn, r->qty_sl->max_value());
+            if (r->entry->value("min_number", mn) != mn) { (*r->entry)["min_number"] = mn; changed = true; }
+            if (r->entry->value("max_number", mx) != mx) { (*r->entry)["max_number"] = mx; changed = true; }
+            if (changed && on_entry_change_) {
+                ChangeSummary cs{}; cs.quantity_changed = true; cs.method = r->entry->value("position", std::string{});
+                on_entry_change_(*r->entry, cs);
+            }
+        }
+        // candidates weight sync
+        if (r->entry->contains("candidates") && (*r->entry)["candidates"].is_array()) {
+            auto& carr = (*r->entry)["candidates"];
+            size_t i = 0;
+            for (auto& cr : r->candidates) {
+                if (i >= carr.size()) break;
+                int v = std::clamp(cr->chance_sl ? cr->chance_sl->value() : 0, 0, 100);
+                if (carr[i].value("chance", 0) != v) { carr[i]["chance"] = v; changed = true; }
+                ++i;
+            }
+        }
+        if (changed && on_change_) on_change_();
     }
 }
 
-bool SpawnGroupList::handle_event(const SDL_Event& ev) {
-    bool used = false;
-    if (is_visible()) used |= DockableCollapsible::handle_event(ev);
-    for (auto& e : entries_) {
-        if (e.cfg && e.cfg->handle_event(ev)) {
-            if (e.json) *e.json = e.cfg->to_json();
-            if (on_entry_change_) {
-                auto summary = e.cfg->consume_change_summary();
-                if (summary.method_changed || summary.quantity_changed) {
-                    on_entry_change_(*e.json, summary);
-                }
-            } else {
-                e.cfg->consume_change_summary();
-            }
-            if (on_change_) on_change_();
-            used = true;
-        }
-    }
+bool SpawnGroupList::handle_event(const SDL_Event& e) {
+    bool used = DockableCollapsible::handle_event(e);
+    // Drop-down overlay rendering is handled in widgets
     return used;
 }
 
 void SpawnGroupList::render(SDL_Renderer* r) const {
-    if (is_visible()) DockableCollapsible::render(r);
-    for (const auto& e : entries_) {
-        if (e.cfg) e.cfg->render(r);
-    }
+    DockableCollapsible::render(r);
+    DMDropdown::render_active_options(r);
 }
+
+void SpawnGroupList::open(json& groups, std::function<void(const json&)> on_save) {
+    // Floating open: bind to array, show as a floating panel with rows inside
+    set_floatable(true);
+    set_show_header(true);
+    set_close_button_enabled(true);
+    set_expanded(true);
+    auto save_cb = [this, on_save]() {
+        if (on_save) on_save(this->to_json());
+    };
+    load(groups, save_cb);
+    DockableCollapsible::open();
+}
+
+void SpawnGroupList::request_open_spawn_group(const std::string& id, int x, int y) {
+    set_position(x, y);
+    expand_group(id);
+}
+
+void SpawnGroupList::set_anchor(int x, int y) { anchor_.x = x; anchor_.y = y; }
+
+SpawnGroupList::EntryRow* SpawnGroupList::find_row(const std::string& id) {
+    for (auto& r : rows_) if (r->id == id) return r.get();
+    return nullptr;
+}
+const SpawnGroupList::EntryRow* SpawnGroupList::find_row(const std::string& id) const {
+    for (const auto& r : rows_) if (r->id == id) return r.get();
+    return nullptr;
+}
+
+void SpawnGroupList::rebuild_layout() { request_layout(); }
+void SpawnGroupList::request_layout() { layout_dirty_ = true; }
+void SpawnGroupList::notify_data_changed(EntryRow&, bool, bool) { if (on_change_) on_change_(); }
+void SpawnGroupList::ensure_asset_search() {}
+void SpawnGroupList::open_asset_search(EntryRow&, std::function<void(const std::string&)>) {}
+void SpawnGroupList::close_asset_search() {}
 

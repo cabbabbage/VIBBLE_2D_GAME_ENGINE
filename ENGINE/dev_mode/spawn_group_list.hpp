@@ -3,7 +3,6 @@
 #include <SDL.h>
 
 #include <functional>
-#include <limits>
 #include <memory>
 #include <optional>
 #include <string>
@@ -12,45 +11,60 @@
 #include <nlohmann/json.hpp>
 
 #include "DockableCollapsible.hpp"
-#include "spawn_group_config_ui.hpp"
 
 class ButtonWidget;
 class DMButton;
 class Input;
 class Widget;
+class SearchAssets;
 
-// Unified spawn group list controller. Provides the legacy floating panel for
-// editing spawn groups (previously SpawnGroupsConfig) while also exposing the
-// lightweight row-building helpers consumed by the room configurator UI.
+// SpawnGroupList now owns the full spawn group editing UI. Each row is
+// collapsible and contains the controls that were previously managed by the
+// standalone SpawnGroupsConfigPanel.
 class SpawnGroupList : public DockableCollapsible {
 public:
-    using Rows = DockableCollapsible::Rows;
-
-    struct Callbacks {
-        std::function<void(const std::string&)> on_edit;      // open editor
-        std::function<void(const std::string&)> on_duplicate; // duplicate entry
-        std::function<void(const std::string&)> on_delete;    // delete entry
-        std::function<void(const std::string&)> on_move_up;   // move up in list
-        std::function<void(const std::string&)> on_move_down; // move down in list
+    struct ChangeSummary {
+        bool method_changed = false;
+        bool quantity_changed = false;
+        std::string method;
     };
 
+    struct Callbacks {
+        std::function<void(const std::string&)> on_duplicate;
+        std::function<void(const std::string&)> on_delete;
+        std::function<void(const std::string&)> on_move_up;
+        std::function<void(const std::string&)> on_move_down;
+    };
+
+    // Forward-declare internal row type for controller
+    struct EntryRow;
+
+    class RowController {
+    public:
+        void set_ownership_label(const std::string& label, SDL_Color color);
+        void clear_ownership_label();
+        void set_area_names_provider(std::function<std::vector<std::string>()> provider);
+        void set_stack_key(std::string key);
+        void lock_method_to(const std::string& method);
+        void clear_method_lock();
+        void set_quantity_hidden(bool hidden);
+
+    private:
+        explicit RowController(struct EntryRow* row) : row_(row) {}
+        struct EntryRow* row_ = nullptr;
+        friend class SpawnGroupList;
+    };
+
+    using ConfigureEntryCallback = std::function<void(RowController&, const nlohmann::json&)>;
+
     explicit SpawnGroupList(bool floatable = true);
-    ~SpawnGroupList();
+    ~SpawnGroupList() override;
 
-    void open(const nlohmann::json& assets, std::function<void(const nlohmann::json&)> on_close);
-    void close();
-    bool visible() const;
-    void set_position(int x, int y);
     void set_screen_dimensions(int width, int height);
-    void update(const Input& input, int screen_w, int screen_h);
-    bool handle_event(const SDL_Event& e);
-    void render(SDL_Renderer* r) const;
 
-    using ConfigureEntryCallback = std::function<void(SpawnGroupsConfigPanel&, const nlohmann::json&)>;
-
-    void load(nlohmann::json& assets,
+    void load(nlohmann::json& groups,
               std::function<void()> on_change,
-              std::function<void(const nlohmann::json&, const SpawnGroupsConfigPanel::ChangeSummary&)> on_entry_change = {},
+              std::function<void(const nlohmann::json&, const ChangeSummary&)> on_entry_change = {},
               ConfigureEntryCallback configure_entry = {});
 
     void load(const nlohmann::json& groups);
@@ -58,79 +72,52 @@ public:
     void append_rows(Rows& rows);
     void set_callbacks(Callbacks cb);
 
-    void set_anchor(int x, int y);
-    void open_spawn_group(const std::string& id, int x, int y);
-    void request_open_spawn_group(const std::string& id, int x, int y);
-    void close_all();
-    bool is_open(const std::string& id) const;
+    void expand_group(const std::string& id);
+    void collapse_group(const std::string& id);
+    bool is_expanded(const std::string& id) const;
 
-    struct OpenSpawnGroupState {
-        std::string id;
-        SDL_Point position{0, 0};
-        size_t index = std::numeric_limits<size_t>::max();
-    };
+    std::vector<std::string> expanded_groups() const;
+    void restore_expanded_groups(const std::vector<std::string>& ids);
 
-    std::optional<OpenSpawnGroupState> capture_open_spawn_group() const;
-    void restore_open_spawn_group(const OpenSpawnGroupState& state);
     nlohmann::json to_json() const;
-    bool any_visible() const;
-    bool is_point_inside(int x, int y) const;
+
+    void update(const Input& input, int screen_w, int screen_h) override;
+    bool handle_event(const SDL_Event& e) override;
+    void render(SDL_Renderer* r) const override;
+
+    // Floating usage helpers
+    void open(nlohmann::json& groups, std::function<void(const nlohmann::json&)> on_save);
+    void request_open_spawn_group(const std::string& id, int x, int y);
+    void set_anchor(int x, int y);
 
 private:
-    struct RowWidgets {
-        std::string id;
-        std::unique_ptr<class Widget> label;
-        std::unique_ptr<DMButton> btn_edit;
-        std::unique_ptr<ButtonWidget> w_edit;
-        std::unique_ptr<DMButton> btn_up;
-        std::unique_ptr<ButtonWidget> w_up;
-        std::unique_ptr<DMButton> btn_down;
-        std::unique_ptr<ButtonWidget> w_down;
-        std::unique_ptr<DMButton> btn_dup;
-        std::unique_ptr<ButtonWidget> w_dup;
-        std::unique_ptr<DMButton> btn_del;
-        std::unique_ptr<ButtonWidget> w_del;
-    };
+    struct CandidateRow;
+    struct EntryRow;
 
-    struct Entry {
-        std::string id;
-        std::unique_ptr<SpawnGroupsConfigPanel> cfg;
-        nlohmann::json* json = nullptr;
-    };
+    EntryRow* find_row(const std::string& id);
+    const EntryRow* find_row(const std::string& id) const;
 
-    struct PendingOpenRequest {
-        std::string id;
-        int x = 0;
-        int y = 0;
-    };
-
-    bool should_rebuild_with(const nlohmann::json& normalized_assets) const;
-    void rebuild_list_rows(const nlohmann::json& groups);
-    void rebuild_panel_rows();
-    void open_entry(Entry& entry, int x, int y);
+    void rebuild_layout();
+    void request_layout();
+    void notify_data_changed(EntryRow& row, bool structure_changed, bool summary_changed);
+    void ensure_asset_search();
+    void open_asset_search(EntryRow& row, std::function<void(const std::string&)> callback = {});
+    void close_asset_search();
 
     bool floatable_mode_ = true;
-    std::optional<PendingOpenRequest> pending_open_;
-    std::vector<Entry> entries_;
-    nlohmann::json* assets_json_ = nullptr;
-    std::function<void()> on_change_;
-    std::function<void(const nlohmann::json&, const SpawnGroupsConfigPanel::ChangeSummary&)> on_entry_change_;
-    ConfigureEntryCallback configure_entry_;
-    nlohmann::json temp_assets_;
-    nlohmann::json loaded_snapshot_;
-    nlohmann::json* last_loaded_source_ = nullptr;
-    bool entries_loaded_ = false;
-    int anchor_x_ = 0;
-    int anchor_y_ = 0;
-    std::unique_ptr<DMButton> b_done_;
-    std::unique_ptr<ButtonWidget> b_done_w_;
-    std::function<void(const nlohmann::json&)> on_close_;
+    bool layout_dirty_ = true;
     int screen_w_ = 1920;
     int screen_h_ = 1080;
 
-    std::vector<std::unique_ptr<RowWidgets>> rows_;
-    nlohmann::json snapshot_;
-    Callbacks callbacks_{};
-    Callbacks intrinsic_callbacks_{};
-};
+    std::vector<std::unique_ptr<EntryRow>> rows_;
+    nlohmann::json* bound_array_ = nullptr;
+    nlohmann::json readonly_snapshot_;
 
+    std::function<void()> on_change_;
+    std::function<void(const nlohmann::json&, const ChangeSummary&)> on_entry_change_;
+    ConfigureEntryCallback configure_entry_;
+    Callbacks callbacks_{};
+
+    std::unique_ptr<SearchAssets> asset_search_;
+    SDL_Point anchor_{0,0};
+};

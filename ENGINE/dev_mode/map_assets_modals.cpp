@@ -1,7 +1,7 @@
 #include "map_assets_modals.hpp"
 
 #include <algorithm>
-#include "spawn_group_config_ui.hpp"
+#include "spawn_group_list.hpp"
 #include "utils/input.hpp"
 
 using nlohmann::json;
@@ -49,88 +49,64 @@ void SingleSpawnGroupModal::open(json& map_info,
     ensure_single_group(*section_, default_display_name);
 
     auto& groups = (*section_)["spawn_groups"];
-    json entry = groups[0];
-    if (!cfg_) cfg_ = std::make_unique<SpawnGroupsConfigPanel>();
-    if (!stack_key_.empty()) {
-        cfg_->set_floating_stack_key(stack_key_);
-    }
-    cfg_->set_screen_dimensions(screen_w_, screen_h_);
-    cfg_->set_persistence_warning({});
-    cfg_->open(entry, [this](const json& updated) {
+    if (!list_) list_ = std::make_unique<SpawnGroupList>(true);
+    list_->set_screen_dimensions(screen_w_, screen_h_);
+    // Open a floating SpawnGroupList panel bound to the current single-group array
+    list_->open(groups, [this](const json& updated_array) {
         if (!this->map_info_ || !this->section_) return;
         auto& groups = (*section_)["spawn_groups"];
-        if (!groups.is_array()) {
-            groups = json::array();
-        }
-        if (groups.empty()) {
-            groups.push_back(updated);
-        } else {
-            groups[0] = updated;
-            if (groups.size() > 1) {
-                json first = groups[0];
-                groups = json::array();
-                groups.push_back(std::move(first));
-            }
-        }
+        groups = updated_array;
+        // Enforce single group for this modal
+        ensure_single_group(*section_, "Group");
         bool ok = true;
-        if (on_save_) {
-            ok = on_save_();
-        }
-        if (cfg_) {
-            cfg_->set_persistence_warning(ok ? std::string{} : "Failed to save map info. Check logs.");
-        }
+        if (on_save_) ok = on_save_();
+        (void)ok; // Errors are reflected elsewhere if needed
     });
-    cfg_->set_ownership_label(ownership_label, ownership_color);
-    cfg_->lock_method_to("Random");
-    cfg_->set_quantity_hidden(true);
+    // Center the list panel roughly
     ensure_visible_position();
 }
 
 void SingleSpawnGroupModal::close() {
-    if (cfg_) cfg_->close();
+    if (list_) list_->close();
 }
 
 bool SingleSpawnGroupModal::visible() const {
-    return cfg_ && cfg_->visible();
+    return list_ && list_->is_visible();
 }
 
 void SingleSpawnGroupModal::update(const Input& input) {
-    if (cfg_) cfg_->update(input, screen_w_, screen_h_);
+    if (list_) list_->update(input, screen_w_, screen_h_);
 }
 
 bool SingleSpawnGroupModal::handle_event(const SDL_Event& e) {
-    if (!cfg_) return false;
-    return cfg_->handle_event(e);
+    if (!list_) return false;
+    return list_->handle_event(e);
 }
 
 void SingleSpawnGroupModal::render(SDL_Renderer* r) const {
-    if (cfg_) cfg_->render(r);
+    if (list_) list_->render(r);
 }
 
 bool SingleSpawnGroupModal::is_point_inside(int x, int y) const {
-    if (!cfg_) return false;
-    return cfg_->is_point_inside(x, y);
+    if (!list_) return false;
+    return list_->is_point_inside(x, y);
 }
 
 void SingleSpawnGroupModal::set_screen_dimensions(int width, int height) {
     screen_w_ = std::max(width, 0);
     screen_h_ = std::max(height, 0);
-    if (cfg_) {
-        cfg_->set_screen_dimensions(screen_w_, screen_h_);
-    }
+    if (list_) list_->set_screen_dimensions(screen_w_, screen_h_);
     ensure_visible_position();
 }
 
 void SingleSpawnGroupModal::set_floating_stack_key(std::string key) {
     stack_key_ = std::move(key);
-    if (cfg_ && !stack_key_.empty()) {
-        cfg_->set_floating_stack_key(stack_key_);
-    }
+    // No stack key support for SpawnGroupList floating panel
 }
 
 void SingleSpawnGroupModal::ensure_visible_position() {
-    if (!cfg_) return;
-    SDL_Rect rect = cfg_->rect();
+    if (!list_) return;
+    SDL_Rect rect = list_->rect();
     if (rect.w <= 0) rect.w = 420;
     if (rect.h <= 0) rect.h = 540;
     const int margin = 16;
@@ -138,7 +114,7 @@ void SingleSpawnGroupModal::ensure_visible_position() {
     const bool have_h = screen_h_ > 0;
     int max_x = have_w ? std::max(margin, screen_w_ - rect.w - margin) : 0;
     int max_y = have_h ? std::max(margin, screen_h_ - rect.h - margin) : 0;
-    SDL_Point pos = cfg_->position();
+    SDL_Point pos = list_->position();
     bool reposition = !position_initialized_;
     if (have_w && (pos.x < margin || pos.x > max_x)) reposition = true;
     if (have_h && (pos.y < margin || pos.y > max_y)) reposition = true;
@@ -154,7 +130,7 @@ void SingleSpawnGroupModal::ensure_visible_position() {
         y = std::clamp(centered, margin, max_y);
     }
     if (have_w || have_h) {
-        cfg_->set_position(x, y);
+        list_->set_position(x, y);
         position_initialized_ = true;
     }
 }

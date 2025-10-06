@@ -1484,7 +1484,7 @@
       "check_overlap": false,
       "display_name": "New Spawn",
       "enforce_spacing": false,
-      "max_number": 1,
+      "max_number": 33,
       "min_number": 1,
       "position": "Exact",
       "priority": 0,
