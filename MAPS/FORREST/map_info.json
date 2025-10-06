@@ -252,6 +252,7 @@
           "max_number": 213,
           "min_number": 100,
           "position": "Random",
+          "priority": 0,
           "spawn_id": "spn-2986ab1d1671",
           "tag": false
         },
@@ -271,6 +272,7 @@
           "max_number": 23,
           "min_number": -45,
           "position": "Random",
+          "priority": 1,
           "spawn_id": "spn-ebb38f93ac8d",
           "tag": false
         },
@@ -301,6 +303,7 @@
           "perimeter_y_offset_max": 0,
           "perimeter_y_offset_min": 0,
           "position": "Perimeter",
+          "priority": 2,
           "sector_center": 0,
           "sector_center_max": 0,
           "sector_center_min": 0,
@@ -331,6 +334,7 @@
           "origional_height": 2265,
           "origional_width": 2294,
           "position": "Perimeter",
+          "priority": 3,
           "radius": 801,
           "spawn_id": "spn-05dbb178991c"
         },
@@ -356,6 +360,7 @@
           "origional_height": 3117,
           "origional_width": 2772,
           "position": "Random",
+          "priority": 4,
           "spawn_id": "spn-6fcf66cb001b"
         },
         {
@@ -379,6 +384,7 @@
           "origional_height": 3114,
           "origional_width": 3319,
           "position": "Exact",
+          "priority": 5,
           "spawn_id": "spn-5fd25363c011"
         },
         {
@@ -403,7 +409,25 @@
           "origional_height": 3114,
           "origional_width": 3319,
           "position": "Exact",
+          "priority": 6,
           "spawn_id": "spn-698be3c55177"
+        },
+        {
+          "candidates": [
+            {
+              "chance": 0,
+              "name": "null"
+            }
+          ],
+          "chance_denominator": 100,
+          "check_overlap": false,
+          "display_name": "New Spawn",
+          "enforce_spacing": false,
+          "max_number": 1,
+          "min_number": 1,
+          "position": "Exact",
+          "priority": 7,
+          "spawn_id": "spn-07946fca2b8c"
         }
       ],
       "width_max": 2897,
@@ -594,6 +618,7 @@
           "origional_height": 3612,
           "origional_width": 3612,
           "position": "Exact",
+          "priority": 3,
           "spawn_id": "spn-af3a3a5858e6"
         }
       ],

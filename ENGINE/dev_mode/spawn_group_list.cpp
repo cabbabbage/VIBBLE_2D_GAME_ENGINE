@@ -185,9 +185,14 @@ void SpawnGroupList::load(const json& groups) {
     request_layout();
 }
 
-void SpawnGroupList::append_rows(Rows& rows) {
-    // Build header/body widgets lazily into our own rows_, then expose via DockableCollapsible rows
-    Rows out;
+    // Top-level Add Spawn Group button
+    if (!add_group_btn_) {
+        add_group_btn_ = std::make_unique<DMButton>("Add Spawn Group", &DMStyles::CreateButton(), 160, DMButton::height());
+        add_group_btn_w_ = std::make_unique<ButtonWidget>(add_group_btn_.get(), [this]() {
+            if (callbacks_.on_add) callbacks_.on_add();
+        });
+    }
+    out.push_back({ add_group_btn_w_.get() });
     for (auto& r : rows_) {
         // Header
         if (!r->toggle_btn) {
@@ -195,7 +200,8 @@ void SpawnGroupList::append_rows(Rows& rows) {
             r->toggle_btn = std::make_unique<DMButton>(label, &DMStyles::ListButton(), 180, DMButton::height());
             r->toggle_w = std::make_unique<ButtonWidget>(r->toggle_btn.get(), [this, rr=r.get()](){
                 rr->expanded = !rr->expanded;
-                request_layout();
+                // Ask host to rebuild embedded rows and refresh UI
+                if (this->on_change_) this->on_change_();
             });
             r->dup_btn = std::make_unique<DMButton>("+", &DMStyles::ListButton(), 28, DMButton::height());
             r->dup_w   = std::make_unique<ButtonWidget>(r->dup_btn.get(), [this, rr=r.get()](){ if (callbacks_.on_duplicate) callbacks_.on_duplicate(rr->id); });
@@ -343,7 +349,9 @@ void SpawnGroupList::append_rows(Rows& rows) {
             }
         }
     }
+    // Make content available for embedding and floating modes
     set_rows(out);
+    for (const auto& rr : out) rows.push_back(rr);
 }
 
 void SpawnGroupList::set_callbacks(Callbacks cb) { callbacks_ = std::move(cb); }
@@ -467,6 +475,7 @@ void SpawnGroupList::open(json& groups, std::function<void(const json&)> on_save
         if (on_save) on_save(this->to_json());
     };
     load(groups, save_cb);
+    Rows dummy; append_rows(dummy);
     DockableCollapsible::open();
 }
 

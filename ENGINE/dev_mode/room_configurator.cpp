@@ -840,11 +840,12 @@ void RoomConfigurator::rebuild_rows() {
 
             // Wire up non-edit actions to the external callbacks provided by the host
             SpawnGroupList::Callbacks cb{};
-            // Let SpawnGroupList handle edit intrinsically so the inline panel opens reliably
+            // Header actions
             cb.on_duplicate = [this](const std::string& id) { if (on_spawn_duplicate_) on_spawn_duplicate_(id); };
             cb.on_delete    = [this](const std::string& id) { if (on_spawn_delete_) on_spawn_delete_(id); };
             cb.on_move_up   = [this](const std::string& id) { if (on_spawn_move_up_) on_spawn_move_up_(id); };
             cb.on_move_down = [this](const std::string& id) { if (on_spawn_move_down_) on_spawn_move_down_(id); };
+            cb.on_add       = [this]() { if (on_spawn_add_) on_spawn_add_(); };
             spawn_list_->set_callbacks(std::move(cb));
 
             spawn_list_->append_rows(rows);
@@ -876,13 +877,7 @@ void RoomConfigurator::rebuild_rows() {
         rows.push_back({ empty_spawn_label_.get() });
     }
 
-    add_group_btn_ = std::make_unique<DMButton>("Add Group", &DMStyles::CreateButton(), 120, DMButton::height());
-    if (add_group_btn_) {
-        add_group_btn_w_ = std::make_unique<ButtonWidget>(add_group_btn_.get(), [this]() {
-            if (on_spawn_add_) on_spawn_add_();
-        });
-        rows.push_back({ add_group_btn_w_.get() });
-    }
+    // Add Spawn Group button provided by SpawnGroupList
 
     room_tags_label_ = std::make_unique<RoomConfigLabel>("Tags");
     rows.push_back({ room_tags_label_.get() });

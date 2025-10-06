@@ -198,6 +198,15 @@ void TrailEditorSuite::rebuild_spawn_groups_ui() {
                 return names;
             });
         });
+    {
+        SpawnGroupList::Callbacks cb{};
+        cb.on_add       = [this]() { add_spawn_group(); };
+        cb.on_duplicate = [this](const std::string& id) { duplicate_spawn_group(id); };
+        cb.on_delete    = [this](const std::string& id) { delete_spawn_group(id); };
+        cb.on_move_up   = [this](const std::string& id) { move_spawn_group_up(id); };
+        cb.on_move_down = [this](const std::string& id) { move_spawn_group_down(id); };
+        spawn_groups_->set_callbacks(std::move(cb));
+    }
     if (configurator_) {
         configurator_->refresh_spawn_groups(active_trail_);
     }

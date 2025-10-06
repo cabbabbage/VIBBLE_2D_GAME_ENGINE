@@ -34,6 +34,7 @@ public:
         std::function<void(const std::string&)> on_delete;
         std::function<void(const std::string&)> on_move_up;
         std::function<void(const std::string&)> on_move_down;
+        std::function<void()> on_add;
     };
 
     // Forward-declare internal row type for controller
@@ -119,5 +120,7 @@ private:
     Callbacks callbacks_{};
 
     std::unique_ptr<SearchAssets> asset_search_;
+    std::unique_ptr<DMButton> add_group_btn_;
+    std::unique_ptr<ButtonWidget> add_group_btn_w_;
     SDL_Point anchor_{0,0};
 };
