@@ -1,11 +1,16 @@
 #pragma once
 
 #include <memory>
+#include <optional>
 #include <string>
 
 #include <SDL.h>
 
 #include "dev_mode/widgets.hpp"
+
+namespace nlohmann {
+class json;
+}
 
 namespace animation_editor {
 
@@ -51,6 +56,9 @@ class PlaybackSettingsPanel {
     void handle_controls_changed();
     void sync_from_document();
     void commit_changes(const PlaybackState& desired_state);
+    static std::optional<std::string> fetch_payload(const AnimationDocument* document, const std::string& animation_id);
+    static PlaybackState payload_to_state(const nlohmann::json& payload);
+    static void apply_state_to_payload(nlohmann::json& payload, const PlaybackState& state);
 
   private:
     std::shared_ptr<AnimationDocument> document_;

@@ -5,6 +5,7 @@
 
 #include "asset/Asset.hpp"
 #include "asset/asset_info.hpp"
+#include "animation_update_utils.hpp"
 #include "core/asset_list.hpp"
 #include "utils/area.hpp"
 
@@ -42,34 +43,9 @@ std::vector<CollisionArea> gather_collision_areas(const Asset& self) {
     return result;
 }
 
-int distance_sq(SDL_Point a, SDL_Point b) {
-    const int dx = a.x - b.x;
-    const int dy = a.y - b.y;
-    return dx * dx + dy * dy;
-}
-
-bool segment_hits_area(SDL_Point from, SDL_Point to, const Area& area) {
-    const int steps = std::max(std::abs(to.x - from.x), std::abs(to.y - from.y));
-    if (steps == 0) {
-        return area.contains_point(from);
-    }
-
-    const double step_x = (to.x - from.x) / static_cast<double>(steps);
-    const double step_y = (to.y - from.y) / static_cast<double>(steps);
-
-    for (int i = 0; i <= steps; ++i) {
-        SDL_Point sample{ static_cast<int>(std::round(from.x + step_x * i)),
-                          static_cast<int>(std::round(from.y + step_y * i)) };
-        if (area.contains_point(sample)) {
-            return true;
-        }
-    }
-    return false;
-}
-
 bool segment_hits_any(SDL_Point from, SDL_Point to, const std::vector<CollisionArea>& areas) {
     for (const auto& entry : areas) {
-        if (segment_hits_area(from, to, entry.area)) {
+        if (animation_update::detail::segment_hits_area(from, to, entry.area)) {
             return true;
         }
     }
@@ -146,7 +122,7 @@ std::vector<SDL_Point> PathSanitizer::sanitize(const Asset& self,
 
     for (const SDL_Point& checkpoint : absolute_checkpoints) {
         SDL_Point anchor = sanitized.empty() ? origin : sanitized.back();
-        if (thresh_sq > 0 && distance_sq(anchor, checkpoint) <= thresh_sq) {
+        if (thresh_sq > 0 && animation_update::detail::distance_sq(anchor, checkpoint) <= thresh_sq) {
             continue;
         }
 
@@ -161,7 +137,7 @@ std::vector<SDL_Point> PathSanitizer::sanitize(const Asset& self,
             candidate = walk_back_to_perimeter(anchor, candidate, collision_areas);
         }
 
-        if (thresh_sq > 0 && distance_sq(anchor, candidate) <= thresh_sq) {
+        if (thresh_sq > 0 && animation_update::detail::distance_sq(anchor, candidate) <= thresh_sq) {
             continue;
         }
 

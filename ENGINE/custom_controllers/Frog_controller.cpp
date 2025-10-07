@@ -2,17 +2,10 @@
 #include "asset/Asset.hpp"
 #include "core/AssetsManager.hpp"
 #include "custom_controllers/controller_path_utils.hpp"
+#include "custom_controllers/controller_visit_threshold.hpp"
 #include "utils/range_util.hpp"
 
 #include <algorithm>
-
-namespace {
-
-int visit_threshold(const Asset* asset) {
-    return std::max(2, controller_paths::default_visit_threshold(asset));
-}
-
-} // namespace
 
 FrogController::FrogController(Assets* assets, Asset* self)
     : assets_(assets), self_(self) {
@@ -31,7 +24,7 @@ void FrogController::enter_idle(int rest_ratio) {
     last_run_target_ = nullptr;
 
     const auto path = controller_paths::idle_path(self_, idle_ratio_);
-    self_->anim_->move(path, visit_threshold(self_));
+    self_->anim_->move(path, controller_utils::controller_visit_threshold(self_));
 }
 
 void FrogController::enter_run(Asset* threat) {
@@ -43,7 +36,7 @@ void FrogController::enter_run(Asset* threat) {
     last_run_target_ = threat;
 
     const auto path = controller_paths::flee_path(self_, threat);
-    self_->anim_->move(path, visit_threshold(self_));
+    self_->anim_->move(path, controller_utils::controller_visit_threshold(self_));
 }
 
 void FrogController::update(const Input&) {

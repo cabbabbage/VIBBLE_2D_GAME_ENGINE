@@ -24,6 +24,7 @@ public:
     void set_animation_now(const std::string& anim_id);
     void set_animation_qued(const std::string& anim_id);
     void move(const std::vector<SDL_Point>& rel_checkpoints, int visited_thresh_px);
+    void refresh_z_index();
 
     bool      path_requested = false;
     SDL_Point final_dest{0, 0};

@@ -32,7 +32,7 @@ std::string quote(const std::filesystem::path& path) {
     quoted.reserve(text.size() + 2);
     quoted.push_back('"');
     for (char ch : text) {
-        if (ch == '"') quoted.push_back('\');
+        if (ch == '"') quoted.push_back('\\');
         quoted.push_back(ch);
     }
     quoted.push_back('"');

@@ -4,10 +4,7 @@
 #include "asset/Asset.hpp"
 #include "asset/animation.hpp"
 #include "asset/animation_frame.hpp"
-
-namespace {
-constexpr const char* kDefaultAnimation = "default";
-}
+#include "animation_update_utils.hpp"
 
 bool StridePlayer::tick(AnimationUpdate& up, Plan& plan,
                         std::size_t& stride_index, int& stride_frame_counter) {
@@ -29,7 +26,7 @@ bool StridePlayer::tick(AnimationUpdate& up, Plan& plan,
         plan.final_dest = self->pos;
         stride_index    = 0;
         stride_frame_counter = 0;
-        up.switch_to(kDefaultAnimation);
+        up.switch_to(animation_update::detail::kDefaultAnimation);
         up.path_requested = true;
     };
 
@@ -80,7 +77,7 @@ bool StridePlayer::tick(AnimationUpdate& up, Plan& plan,
 
     if (delta.x != 0 || delta.y != 0) {
         self->pos = to;
-        self->set_z_index();
+        up.refresh_z_index();
     }
 
     ++stride_frame_counter;

@@ -66,7 +66,7 @@ bool has_numeric_stem(const std::filesystem::path& path) {
     return std::all_of(stem.begin(), stem.end(), [](unsigned char ch) { return std::isdigit(ch) != 0; });
 }
 
-std::string to_lower_copy(std::string value) {
+std::string lowercase_copy(std::string value) {
     std::transform(value.begin(), value.end(), value.begin(), [](unsigned char ch) {
         return static_cast<char>(std::tolower(ch));
     });
@@ -248,7 +248,7 @@ std::filesystem::path PreviewProvider::find_first_frame(const std::filesystem::p
         if (ec) break;
         if (!entry.is_regular_file(ec)) continue;
         const std::filesystem::path& path = entry.path();
-        std::string ext = to_lower_copy(path.extension().string());
+        std::string ext = lowercase_copy(path.extension().string());
         if (ext != ".png") continue;
         if (!has_numeric_stem(path)) continue;
         numbered.push_back(path);

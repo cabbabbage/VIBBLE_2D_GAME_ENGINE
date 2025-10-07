@@ -12,21 +12,10 @@
 
 #include <nlohmann/json.hpp>
 
+#include "string_utils.hpp"
+
 namespace animation_editor {
 namespace {
-
-std::string trim_copy(const std::string& value) {
-    auto begin = std::find_if_not(value.begin(), value.end(), [](unsigned char ch) {
-        return std::isspace(ch) != 0;
-    });
-    auto end = std::find_if_not(value.rbegin(), value.rend(), [](unsigned char ch) {
-        return std::isspace(ch) != 0;
-    }).base();
-    if (begin >= end) {
-        return std::string();
-    }
-    return std::string(begin, end);
-}
 
 std::string trim_left_copy(const std::string& value) {
     auto begin = std::find_if_not(value.begin(), value.end(), [](unsigned char ch) {
@@ -165,7 +154,7 @@ void CustomControllerService::register_controller_with_animation(const std::stri
 }
 
 std::string CustomControllerService::sanitize_controller_name(const std::string& controller_name) const {
-    std::string trimmed = trim_copy(controller_name);
+    std::string trimmed = strings::trim_copy(controller_name);
     if (trimmed.empty()) {
         return std::string();
     }

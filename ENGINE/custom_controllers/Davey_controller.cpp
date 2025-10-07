@@ -2,6 +2,7 @@
 #include "asset/Asset.hpp"
 #include "core/AssetsManager.hpp"
 #include "custom_controllers/controller_path_utils.hpp"
+#include "custom_controllers/controller_visit_threshold.hpp"
 #include "utils/range_util.hpp"
 
 #include <algorithm>
@@ -9,10 +10,6 @@
 namespace {
 
 constexpr int kOrbitSteps = 8;
-
-int visit_threshold(const Asset* asset) {
-    return std::max(2, controller_paths::default_visit_threshold(asset));
-}
 
 int orbit_visit_threshold(const Asset* asset, int radius) {
     const int limit = std::max(1, std::min(radius, controller_paths::neighbor_radius(asset)));
@@ -38,7 +35,7 @@ void DaveyController::enter_idle(int rest_ratio) {
     current_target_ = nullptr;
 
     const auto path = controller_paths::idle_path(self_, idle_ratio_);
-    self_->anim_->move(path, visit_threshold(self_));
+    self_->anim_->move(path, controller_utils::controller_visit_threshold(self_));
 }
 
 void DaveyController::enter_pursue(Asset* target) {
@@ -54,7 +51,7 @@ void DaveyController::enter_pursue(Asset* target) {
     current_target_ = target;
 
     const auto path = controller_paths::pursue_path(self_, target);
-    self_->anim_->move(path, visit_threshold(self_));
+    self_->anim_->move(path, controller_utils::controller_visit_threshold(self_));
 }
 
 void DaveyController::enter_orbit(Asset* center, int radius) {

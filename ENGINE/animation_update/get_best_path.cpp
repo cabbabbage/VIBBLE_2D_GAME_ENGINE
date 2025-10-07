@@ -8,39 +8,12 @@
 #include "asset/animation.hpp"
 #include "asset/animation_frame.hpp"
 #include "asset/asset_info.hpp"
+#include "animation_update_utils.hpp"
 #include "core/AssetsManager.hpp"
 #include "core/asset_list.hpp"
 #include "utils/area.hpp"
 
 namespace {
-
-constexpr int kOverlapDistanceSq = 40 * 40;
-
-int distance_sq(SDL_Point a, SDL_Point b) {
-    const int dx = a.x - b.x;
-    const int dy = a.y - b.y;
-    return dx * dx + dy * dy;
-}
-
-SDL_Point bottom_middle_for(const Asset& asset, SDL_Point pos) {
-    Area area = asset.get_area("collision_area");
-    const auto& pts = area.get_points();
-    if (pts.empty()) {
-        return pos;
-    }
-
-    SDL_Point bottom = pts.front();
-    for (const SDL_Point& pt : pts) {
-        if (pt.y > bottom.y) {
-            bottom = pt;
-        }
-    }
-
-    const int offset_x = bottom.x - asset.pos.x;
-    const int offset_y = bottom.y - asset.pos.y;
-    return SDL_Point{ pos.x + offset_x, pos.y + offset_y };
-}
-
 struct CollisionEntry {
     const Asset* asset = nullptr;
     Area         area{ "impassable" };
@@ -76,31 +49,12 @@ std::vector<CollisionEntry> gather_collision_entries(const Asset& self) {
     return entries;
 }
 
-bool segment_hits_area(SDL_Point from, SDL_Point to, const Area& area) {
-    const int steps = std::max(std::abs(to.x - from.x), std::abs(to.y - from.y));
-    if (steps == 0) {
-        return area.contains_point(from);
-    }
-
-    const double step_x = (to.x - from.x) / static_cast<double>(steps);
-    const double step_y = (to.y - from.y) / static_cast<double>(steps);
-
-    for (int i = 0; i <= steps; ++i) {
-        SDL_Point sample{ static_cast<int>(std::round(from.x + step_x * i)),
-                          static_cast<int>(std::round(from.y + step_y * i)) };
-        if (area.contains_point(sample)) {
-            return true;
-        }
-    }
-    return false;
-}
-
 bool blocked_step(SDL_Point from,
                   SDL_Point to,
                   const std::vector<CollisionEntry>& collisions,
                   const Asset& self,
                   const Assets* assets_owner) {
-    const SDL_Point dest_bottom = bottom_middle_for(self, to);
+    const SDL_Point dest_bottom = animation_update::detail::bottom_middle_for(self, to);
 
     for (const CollisionEntry& entry : collisions) {
         const Asset* other = entry.asset;
@@ -108,7 +62,7 @@ bool blocked_step(SDL_Point from,
             continue;
         }
 
-        if (segment_hits_area(from, to, entry.area)) {
+        if (animation_update::detail::segment_hits_area(from, to, entry.area)) {
             return true;
         }
 
@@ -120,8 +74,9 @@ bool blocked_step(SDL_Point from,
         }
 
         if (overlap_check) {
-            const SDL_Point other_bottom = bottom_middle_for(*other, other->pos);
-            if (distance_sq(dest_bottom, other_bottom) < kOverlapDistanceSq) {
+            const SDL_Point other_bottom = animation_update::detail::bottom_middle_for(*other, other->pos);
+            if (animation_update::detail::distance_sq(dest_bottom, other_bottom) <
+                animation_update::detail::kOverlapDistanceSq) {
                 return true;
             }
         }
@@ -196,14 +151,14 @@ Plan GetBestPath::operator()(const Asset& self,
     auto movement_anims    = gather_movement_animations(self);
 
     for (const SDL_Point& checkpoint : sanitized_checkpoints) {
-        if (visited_sq > 0 && distance_sq(cursor, checkpoint) <= visited_sq) {
+        if (visited_sq > 0 && animation_update::detail::distance_sq(cursor, checkpoint) <= visited_sq) {
             continue;
         }
 
         int safeguard = 0;
-        while (distance_sq(cursor, checkpoint) > visited_sq) {
+        while (animation_update::detail::distance_sq(cursor, checkpoint) > visited_sq) {
             CandidateStride best;
-            const int       current_dist_sq = distance_sq(cursor, checkpoint);
+            const int       current_dist_sq = animation_update::detail::distance_sq(cursor, checkpoint);
 
             for (const auto& descriptor : movement_anims) {
                 if (!descriptor.animation) {
@@ -234,7 +189,7 @@ Plan GetBestPath::operator()(const Asset& self,
                         continue;
                     }
 
-                    const int dist_sq = distance_sq(simulated, checkpoint);
+                    const int dist_sq = animation_update::detail::distance_sq(simulated, checkpoint);
                     const bool reaches = (visited_sq == 0) ? (dist_sq == 0) : (dist_sq <= visited_sq);
                     const bool progress = dist_sq < current_dist_sq;
                     if (!reaches && !progress) {

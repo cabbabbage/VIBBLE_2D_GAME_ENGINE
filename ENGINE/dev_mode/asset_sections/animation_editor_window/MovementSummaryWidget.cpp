@@ -20,7 +20,7 @@ namespace {
 const int kButtonHeight = DMButton::height();
 const int kButtonWidth = 160;
 
-void render_label(SDL_Renderer* renderer, const std::string& text, int x, int y, SDL_Color color) {
+void render_summary_label(SDL_Renderer* renderer, const std::string& text, int x, int y, SDL_Color color) {
     if (!renderer || text.empty()) {
         return;
     }
@@ -127,9 +127,11 @@ void MovementSummaryWidget::render(SDL_Renderer* renderer) const {
     int text_y = bounds_.y + padding;
 
     const SDL_Color text_color = DMStyles::Label().color;
-    render_label(renderer, "Total ΔX: " + std::to_string(static_cast<int>(std::lround(total_dx_))), text_x, text_y, text_color);
+    render_summary_label(renderer, "Total ΔX: " + std::to_string(static_cast<int>(std::lround(total_dx_))), text_x, text_y,
+                         text_color);
     text_y += 24;
-    render_label(renderer, "Total ΔY: " + std::to_string(static_cast<int>(std::lround(total_dy_))), text_x, text_y, text_color);
+    render_summary_label(renderer, "Total ΔY: " + std::to_string(static_cast<int>(std::lround(total_dy_))), text_x, text_y,
+                         text_color);
 
     const DMButtonStyle& button_style = DMStyles::AccentButton();
     SDL_Color button_color = button_style.bg;
@@ -149,7 +151,7 @@ void MovementSummaryWidget::render(SDL_Renderer* renderer) const {
     int label_x = button_rect_.x + (button_rect_.w - label_width) / 2;
     label_x = std::max(label_x, button_rect_.x + 8);
     int label_y = button_rect_.y + (button_rect_.h - button_style.label.font_size) / 2;
-    render_label(renderer, button_text, label_x, label_y, button_style.text);
+    render_summary_label(renderer, button_text, label_x, label_y, button_style.text);
 }
 
 bool MovementSummaryWidget::handle_event(const SDL_Event& e) {

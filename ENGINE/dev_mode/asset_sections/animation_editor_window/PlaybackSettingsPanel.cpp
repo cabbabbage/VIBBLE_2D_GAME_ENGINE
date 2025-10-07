@@ -7,11 +7,7 @@
 #include <optional>
 #include <utility>
 
-#define private public
-#define protected public
 #include "AnimationDocument.hpp"
-#undef private
-#undef protected
 
 #include <nlohmann/json.hpp>
 
@@ -19,20 +15,6 @@
 #include "dev_mode/widgets.hpp"
 
 namespace {
-
-using animation_editor::AnimationDocument;
-using animation_editor::PlaybackSettingsPanel;
-
-std::optional<std::string> fetch_payload(const AnimationDocument* document, const std::string& animation_id) {
-    if (!document) {
-        return std::nullopt;
-    }
-    const auto it = document->animations_.find(animation_id);
-    if (it == document->animations_.end()) {
-        return std::nullopt;
-    }
-    return it->second;
-}
 
 bool parse_bool_value(const nlohmann::json& value, bool fallback) {
     if (value.is_boolean()) {
@@ -93,35 +75,6 @@ int parse_int_field(const nlohmann::json& payload, const char* key, int fallback
         return fallback;
     }
     return parse_int_value(payload.at(key), fallback);
-}
-
-PlaybackSettingsPanel::PlaybackState payload_to_state(const nlohmann::json& payload) {
-    PlaybackSettingsPanel::PlaybackState state;
-    state.flipped_source = parse_bool_field(payload, "flipped_source", false);
-    state.reverse_source = parse_bool_field(payload, "reverse_source", false);
-    state.locked = parse_bool_field(payload, "locked", false);
-    state.loop = parse_bool_field(payload, "loop", false);
-    state.random_start = parse_bool_field(payload, "rnd_start", false);
-
-    int speed = parse_int_field(payload, "speed_factor", 1);
-    speed = std::clamp(speed, -20, 20);
-    if (speed == 0) {
-        speed = 1;
-    }
-    state.speed_factor = speed;
-    return state;
-}
-
-void apply_state_to_payload(nlohmann::json& payload, const PlaybackSettingsPanel::PlaybackState& state) {
-    if (!payload.is_object()) {
-        payload = nlohmann::json::object();
-    }
-    payload["flipped_source"] = state.flipped_source;
-    payload["reverse_source"] = state.reverse_source;
-    payload["locked"] = state.locked;
-    payload["loop"] = state.loop;
-    payload["rnd_start"] = state.random_start;
-    payload["speed_factor"] = state.speed_factor;
 }
 
 }  // namespace
@@ -379,6 +332,43 @@ void PlaybackSettingsPanel::commit_changes(const PlaybackState& desired_state) {
     is_syncing_ui_ = true;
     apply_state_to_controls(normalized);
     is_syncing_ui_ = false;
+}
+
+std::optional<std::string> PlaybackSettingsPanel::fetch_payload(const AnimationDocument* document,
+                                                                const std::string& animation_id) {
+    if (!document) {
+        return std::nullopt;
+    }
+    return document->animation_payload(animation_id);
+}
+
+PlaybackSettingsPanel::PlaybackState PlaybackSettingsPanel::payload_to_state(const nlohmann::json& payload) {
+    PlaybackState state;
+    state.flipped_source = parse_bool_field(payload, "flipped_source", false);
+    state.reverse_source = parse_bool_field(payload, "reverse_source", false);
+    state.locked         = parse_bool_field(payload, "locked", false);
+    state.loop           = parse_bool_field(payload, "loop", false);
+    state.random_start   = parse_bool_field(payload, "rnd_start", false);
+
+    int speed = parse_int_field(payload, "speed_factor", 1);
+    speed     = std::clamp(speed, -20, 20);
+    if (speed == 0) {
+        speed = 1;
+    }
+    state.speed_factor = speed;
+    return state;
+}
+
+void PlaybackSettingsPanel::apply_state_to_payload(nlohmann::json& payload, const PlaybackState& state) {
+    if (!payload.is_object()) {
+        payload = nlohmann::json::object();
+    }
+    payload["flipped_source"] = state.flipped_source;
+    payload["reverse_source"] = state.reverse_source;
+    payload["locked"]         = state.locked;
+    payload["loop"]           = state.loop;
+    payload["rnd_start"]      = state.random_start;
+    payload["speed_factor"]   = state.speed_factor;
 }
 
 }  // namespace animation_editor

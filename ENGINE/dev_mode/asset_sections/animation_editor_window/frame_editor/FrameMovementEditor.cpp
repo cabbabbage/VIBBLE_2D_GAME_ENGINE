@@ -6,7 +6,7 @@
 #include <cmath>
 #include <nlohmann/json.hpp>
 
-#include "AnimationDocument.hpp"
+#include "../AnimationDocument.hpp"
 #include "FramePropertiesPanel.hpp"
 #include "MovementCanvas.hpp"
 #include "TotalsPanel.hpp"

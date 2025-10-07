@@ -15,6 +15,7 @@
 #include "PlaybackSettingsPanel.hpp"
 #include "PreviewProvider.hpp"
 #include "SourceConfigPanel.hpp"
+#include "string_utils.hpp"
 #include "dm_styles.hpp"
 #include "dev_mode/widgets.hpp"
 
@@ -29,13 +30,6 @@ constexpr int kMovementHeight = 132;
 constexpr int kOnEndHeight = 108;
 constexpr int kAudioHeight = 132;
 constexpr int kHeaderButtonWidth = 160;
-
-std::string trim_copy(std::string value) {
-    auto is_space = [](unsigned char ch) { return std::isspace(ch) != 0; };
-    value.erase(value.begin(), std::find_if(value.begin(), value.end(), [&](unsigned char ch) { return !is_space(ch); }));
-    value.erase(std::find_if(value.rbegin(), value.rend(), [&](unsigned char ch) { return !is_space(ch); }).base(), value.end());
-    return value;
-}
 
 void render_label(SDL_Renderer* renderer, const std::string& text, int x, int y, SDL_Color color) {
     if (!renderer || text.empty()) {
@@ -482,7 +476,7 @@ void AnimationInspectorPanel::commit_rename() {
         return;
     }
 
-    std::string desired = trim_copy(name_box_->value());
+    std::string desired = strings::trim_copy(name_box_->value());
     if (desired.empty() || desired == animation_id_) {
         name_box_->set_value(animation_id_);
         rename_pending_ = false;
