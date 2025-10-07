@@ -95,8 +95,9 @@ public:
     void set_anchor(int x, int y);
 
 private:
-    struct CandidateRow;
+    class CandidateList;
     struct EntryRow;
+    friend class CandidateList;
 
     struct RowRef {
         std::string id;

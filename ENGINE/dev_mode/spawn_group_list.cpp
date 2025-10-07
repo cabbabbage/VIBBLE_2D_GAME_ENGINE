@@ -129,20 +129,6 @@ private:
 
 }  // namespace
 
-struct SpawnGroupList::CandidateRow {
-    std::unique_ptr<DMTextBox> name_box;
-    std::unique_ptr<TextBoxWidget> name_w;
-    std::unique_ptr<DMSlider> chance_sl;
-    std::unique_ptr<SliderWidget> chance_w;
-    std::unique_ptr<DMButton> up_btn;
-    std::unique_ptr<ButtonWidget> up_w;
-    std::unique_ptr<DMButton> down_btn;
-    std::unique_ptr<ButtonWidget> down_w;
-    std::unique_ptr<DMButton> del_btn;
-    std::unique_ptr<ButtonWidget> del_w;
-    std::unique_ptr<SpacerWidget> spacing;
-};
-
 struct SpawnGroupList::EntryRow {
     json* array = nullptr;
     json* entry = nullptr;
@@ -169,7 +155,7 @@ struct SpawnGroupList::EntryRow {
     std::unique_ptr<DropdownWidget> method_w;
     std::unique_ptr<DMRangeSlider> qty_sl;
     std::unique_ptr<RangeSliderWidget> qty_w;
-    std::vector<std::unique_ptr<CandidateRow>> candidates;
+    std::unique_ptr<CandidateList> candidate_list;
 
     std::function<std::vector<std::string>()> area_names_provider;
     std::string method_lock;
@@ -194,19 +180,47 @@ struct SpawnGroupList::EntryRow {
     std::unique_ptr<SectionLabelWidget> owner_label_widget;
     std::unique_ptr<SpacerWidget> body_top_gap;
     std::unique_ptr<SectionLabelWidget> general_label;
+};
 
-    struct CandidatesConfig {
-        std::unique_ptr<SpacerWidget> top_gap;
-        std::unique_ptr<SectionLabelWidget> header_label;
-        std::unique_ptr<SectionLabelWidget> empty_label;
-        std::unique_ptr<DMButton> add_btn;
-        std::unique_ptr<ButtonWidget> add_w;
-        std::unique_ptr<RowRectMarkerWidget> begin_marker;
-        std::unique_ptr<RowRectMarkerWidget> end_marker;
-        std::unique_ptr<SpacerWidget> bottom_gap;
+class SpawnGroupList::CandidateList {
+public:
+    CandidateList(SpawnGroupList& owner, EntryRow& row)
+        : owner_(owner), row_(row) {}
+
+    void rebuild();
+    void append_rows(DockableCollapsible::Rows& out);
+    bool sync_to_json();
+
+private:
+    struct CandidateRow {
+        std::unique_ptr<DMTextBox> name_box;
+        std::unique_ptr<TextBoxWidget> name_w;
+        std::unique_ptr<DMSlider> chance_sl;
+        std::unique_ptr<SliderWidget> chance_w;
+        std::unique_ptr<DMButton> up_btn;
+        std::unique_ptr<ButtonWidget> up_w;
+        std::unique_ptr<DMButton> down_btn;
+        std::unique_ptr<ButtonWidget> down_w;
+        std::unique_ptr<DMButton> del_btn;
+        std::unique_ptr<ButtonWidget> del_w;
+        std::unique_ptr<SpacerWidget> spacing;
     };
 
-    std::unique_ptr<CandidatesConfig> candidates_config;
+    void ensure_common_widgets();
+    void append_empty_state(DockableCollapsible::Rows& out);
+    void append_candidate_rows(DockableCollapsible::Rows& out);
+
+    SpawnGroupList& owner_;
+    EntryRow& row_;
+    std::vector<std::unique_ptr<CandidateRow>> rows_;
+    std::unique_ptr<SpacerWidget> top_gap_;
+    std::unique_ptr<RowRectMarkerWidget> begin_marker_;
+    std::unique_ptr<RowRectMarkerWidget> end_marker_;
+    std::unique_ptr<SectionLabelWidget> header_label_;
+    std::unique_ptr<SectionLabelWidget> empty_label_;
+    std::unique_ptr<SpacerWidget> bottom_gap_;
+    std::unique_ptr<DMButton> add_btn_;
+    std::unique_ptr<ButtonWidget> add_w_;
 };
 
 namespace {
@@ -218,6 +232,140 @@ static bool method_uses_range(const std::string& m) {
     return !(m == "Exact" || m == "Center" || m == "Percent");
 }
 }  // namespace
+
+void SpawnGroupList::CandidateList::rebuild() {
+    rows_.clear();
+    if (!row_.entry) return;
+    auto& entry = *row_.entry;
+    if (!entry.contains("candidates") || !entry["candidates"].is_array()) return;
+    for (size_t ci = 0; ci < entry["candidates"].size(); ++ci) {
+        const auto& candidate = entry["candidates"][ci];
+        auto row = std::make_unique<CandidateRow>();
+        const std::string name = candidate.value("name", std::string{"null"});
+        const int chance = candidate.value("chance", 0);
+        row->name_box = std::make_unique<DMTextBox>("Asset", name);
+        row->name_w = std::make_unique<TextBoxWidget>(row->name_box.get(), true);
+        row->chance_sl = std::make_unique<DMSlider>("Weight", 0, 100, chance);
+        row->chance_w = std::make_unique<SliderWidget>(row->chance_sl.get());
+        row->up_btn = std::make_unique<DMButton>("↑", &DMStyles::ListButton(), 24, DMButton::height());
+        row->up_w = std::make_unique<ButtonWidget>(row->up_btn.get(), [this, ci]() {
+            if (!row_.entry || !row_.entry->contains("candidates")) return;
+            auto& arr = (*row_.entry)["candidates"];
+            if (!arr.is_array()) return;
+            if (ci == 0 || ci >= arr.size()) return;
+            std::swap(arr[ci - 1], arr[ci]);
+            if (owner_.on_change_) owner_.on_change_();
+            owner_.rebuild_layout();
+        });
+        row->down_btn = std::make_unique<DMButton>("↓", &DMStyles::ListButton(), 24, DMButton::height());
+        row->down_w = std::make_unique<ButtonWidget>(row->down_btn.get(), [this, ci]() {
+            if (!row_.entry || !row_.entry->contains("candidates")) return;
+            auto& arr = (*row_.entry)["candidates"];
+            if (!arr.is_array()) return;
+            if (ci + 1 >= arr.size()) return;
+            std::swap(arr[ci], arr[ci + 1]);
+            if (owner_.on_change_) owner_.on_change_();
+            owner_.rebuild_layout();
+        });
+        row->del_btn = std::make_unique<DMButton>("X", &DMStyles::DeleteButton(), 24, DMButton::height());
+        row->del_w = std::make_unique<ButtonWidget>(row->del_btn.get(), [this, ci]() {
+            if (!row_.entry || !row_.entry->contains("candidates")) return;
+            auto& arr = (*row_.entry)["candidates"];
+            if (!arr.is_array()) return;
+            if (ci >= arr.size()) return;
+            arr.erase(arr.begin() + static_cast<nlohmann::json::difference_type>(ci));
+            if (owner_.on_change_) owner_.on_change_();
+            owner_.rebuild_layout();
+        });
+        row->spacing = std::make_unique<SpacerWidget>(DMSpacing::small_gap());
+        rows_.push_back(std::move(row));
+    }
+}
+
+void SpawnGroupList::CandidateList::ensure_common_widgets() {
+    if (!top_gap_)
+        top_gap_ = std::make_unique<SpacerWidget>(std::max(6, DMSpacing::section_gap() / 2));
+    if (!begin_marker_)
+        begin_marker_ = std::make_unique<RowRectMarkerWidget>(&row_.candidates_rect, true);
+    if (!end_marker_)
+        end_marker_ = std::make_unique<RowRectMarkerWidget>(&row_.candidates_rect, false);
+    if (!header_label_)
+        header_label_ = std::make_unique<SectionLabelWidget>("Candidates", false);
+    if (!empty_label_)
+        empty_label_ = std::make_unique<SectionLabelWidget>("No candidates configured", true, DMStyles::Label().color, std::max(10, DMStyles::Label().font_size - 2));
+    if (!bottom_gap_)
+        bottom_gap_ = std::make_unique<SpacerWidget>(DMSpacing::item_gap());
+    if (!add_btn_ && row_.entry) {
+        add_btn_ = std::make_unique<DMButton>("Add Candidate", &DMStyles::CreateButton(), 160, DMButton::height());
+        add_w_ = std::make_unique<ButtonWidget>(add_btn_.get(), [this]() { owner_.open_asset_search(row_, {}); });
+    }
+    if (header_label_)
+        header_label_->set_text("Candidates");
+    if (empty_label_) {
+        empty_label_->set_text("No candidates configured");
+        empty_label_->set_font_size(std::max(10, DMStyles::Label().font_size - 2));
+    }
+}
+
+void SpawnGroupList::CandidateList::append_rows(DockableCollapsible::Rows& out) {
+    ensure_common_widgets();
+    if (top_gap_) out.push_back({ top_gap_.get() });
+    if (begin_marker_) out.push_back({ begin_marker_.get() });
+
+    DockableCollapsible::Row header_row;
+    if (header_label_) header_row.push_back(header_label_.get());
+    if (add_w_) header_row.push_back(add_w_.get());
+    if (!header_row.empty()) out.push_back(header_row);
+
+    if (rows_.empty()) {
+        append_empty_state(out);
+    } else {
+        append_candidate_rows(out);
+    }
+
+    if (end_marker_) out.push_back({ end_marker_.get() });
+    if (bottom_gap_) out.push_back({ bottom_gap_.get() });
+}
+
+void SpawnGroupList::CandidateList::append_empty_state(DockableCollapsible::Rows& out) {
+    if (empty_label_) out.push_back({ empty_label_.get() });
+}
+
+void SpawnGroupList::CandidateList::append_candidate_rows(DockableCollapsible::Rows& out) {
+    for (size_t ci = 0; ci < rows_.size(); ++ci) {
+        auto& row = rows_[ci];
+        if (!row) continue;
+        if (row->name_w) out.push_back({ row->name_w.get() });
+        if (row->chance_w) out.push_back({ row->chance_w.get() });
+        DockableCollapsible::Row controls;
+        if (row->up_w) controls.push_back(row->up_w.get());
+        if (row->down_w) controls.push_back(row->down_w.get());
+        if (row->del_w) controls.push_back(row->del_w.get());
+        if (!controls.empty()) out.push_back(controls);
+        if (ci + 1 < rows_.size() && row->spacing)
+            out.push_back({ row->spacing.get() });
+    }
+}
+
+bool SpawnGroupList::CandidateList::sync_to_json() {
+    if (!row_.entry) return false;
+    if (!row_.entry->contains("candidates")) return false;
+    auto& arr = (*row_.entry)["candidates"];
+    if (!arr.is_array()) return false;
+    bool changed = false;
+    size_t idx = 0;
+    for (auto& row : rows_) {
+        if (!row) continue;
+        if (idx >= arr.size()) break;
+        int value = std::clamp(row->chance_sl ? row->chance_sl->value() : 0, 0, 100);
+        if (arr[idx].value("chance", 0) != value) {
+            arr[idx]["chance"] = value;
+            changed = true;
+        }
+        ++idx;
+    }
+    return changed;
+}
 
 class AreaLinkPanel {
 public:
@@ -578,54 +726,6 @@ void SpawnGroupList::append_rows(Rows& rows) {
                     r->link_btn->set_text(link_label);
                 }
 
-                // Rebuild candidate rows from json
-                r->candidates.clear();
-                auto& e = *r->entry;
-                if (e.contains("candidates") && e["candidates"].is_array()) {
-                    for (size_t ci = 0; ci < e["candidates"].size(); ++ci) {
-                        auto cr = std::make_unique<CandidateRow>();
-                        const auto& c = e["candidates"][ci];
-                        const std::string nm = c.value("name", std::string{"null"});
-                        int chance = c.value("chance", 0);
-                        cr->name_box = std::make_unique<DMTextBox>("Asset", nm);
-                        cr->name_w   = std::make_unique<TextBoxWidget>(cr->name_box.get(), true);
-                        cr->chance_sl= std::make_unique<DMSlider>("Weight", 0, 100, chance);
-                        cr->chance_w = std::make_unique<SliderWidget>(cr->chance_sl.get());
-                        cr->up_btn   = std::make_unique<DMButton>("↑", &DMStyles::ListButton(), 24, DMButton::height());
-                        cr->up_w     = std::make_unique<ButtonWidget>(cr->up_btn.get(), [this, rr=r.get(), ci](){
-                            if (!rr->entry || !rr->entry->contains("candidates")) return;
-                            auto& arr = (*rr->entry)["candidates"];
-                            if (!arr.is_array()) return;
-                            if (ci <= 0) return;
-                            std::swap(arr[ci-1], arr[ci]);
-                            if (on_change_) on_change_();
-                            this->rebuild_layout();
-                        });
-                        cr->down_btn = std::make_unique<DMButton>("↓", &DMStyles::ListButton(), 24, DMButton::height());
-                        cr->down_w   = std::make_unique<ButtonWidget>(cr->down_btn.get(), [this, rr=r.get(), ci](){
-                            if (!rr->entry || !rr->entry->contains("candidates")) return;
-                            auto& arr = (*rr->entry)["candidates"];
-                            if (!arr.is_array()) return;
-                            if (ci+1 >= arr.size()) return;
-                            std::swap(arr[ci], arr[ci+1]);
-                            if (on_change_) on_change_();
-                            this->rebuild_layout();
-                        });
-                        cr->del_btn  = std::make_unique<DMButton>("X", &DMStyles::DeleteButton(), 24, DMButton::height());
-                        cr->del_w    = std::make_unique<ButtonWidget>(cr->del_btn.get(), [this, rr=r.get(), ci](){
-                            if (!rr->entry || !rr->entry->contains("candidates")) return;
-                            auto& arr = (*rr->entry)["candidates"];
-                            if (!arr.is_array()) return;
-                            if (ci >= arr.size()) return;
-                            arr.erase(arr.begin()+static_cast<int>(ci));
-                            if (on_change_) on_change_();
-                            this->rebuild_layout();
-                        });
-                        cr->spacing = std::make_unique<SpacerWidget>(DMSpacing::small_gap());
-                        r->candidates.push_back(std::move(cr));
-                    }
-                }
-
                 if (!r->general_label)
                     r->general_label = std::make_unique<SectionLabelWidget>("General Settings", true);
                 else
@@ -641,58 +741,10 @@ void SpawnGroupList::append_rows(Rows& rows) {
                     out.push_back({ r->qty_w.get() });
                 }
 
-                if (!r->candidates_config)
-                    r->candidates_config = std::make_unique<EntryRow::CandidatesConfig>();
-                auto& cand_cfg = *r->candidates_config;
-                if (!cand_cfg.top_gap)
-                    cand_cfg.top_gap = std::make_unique<SpacerWidget>(std::max(6, DMSpacing::section_gap() / 2));
-                out.push_back({ cand_cfg.top_gap.get() });
-                if (!cand_cfg.begin_marker)
-                    cand_cfg.begin_marker = std::make_unique<RowRectMarkerWidget>(&r->candidates_rect, true);
-                if (!cand_cfg.end_marker)
-                    cand_cfg.end_marker = std::make_unique<RowRectMarkerWidget>(&r->candidates_rect, false);
-                out.push_back({ cand_cfg.begin_marker.get() });
-                if (!cand_cfg.header_label)
-                    cand_cfg.header_label = std::make_unique<SectionLabelWidget>("Candidates", false);
-                else
-                    cand_cfg.header_label->set_text("Candidates");
-                DockableCollapsible::Row header_row;
-                header_row.push_back(cand_cfg.header_label.get());
-                if (!cand_cfg.add_btn) {
-                    cand_cfg.add_btn = std::make_unique<DMButton>("Add Candidate", &DMStyles::CreateButton(), 160, DMButton::height());
-                    cand_cfg.add_w   = std::make_unique<ButtonWidget>(cand_cfg.add_btn.get(), [this, rr=r.get()](){ open_asset_search(*rr, {}); });
-                }
-                header_row.push_back(cand_cfg.add_w.get());
-                out.push_back(header_row);
-
-                if (r->candidates.empty()) {
-                    if (!cand_cfg.empty_label) {
-                        cand_cfg.empty_label = std::make_unique<SectionLabelWidget>("No candidates configured", true, DMStyles::Label().color, std::max(10, DMStyles::Label().font_size - 2));
-                    }
-                    cand_cfg.empty_label->set_text("No candidates configured");
-                    cand_cfg.empty_label->set_font_size(std::max(10, DMStyles::Label().font_size - 2));
-                    out.push_back({ cand_cfg.empty_label.get() });
-                } else {
-                    if (cand_cfg.empty_label)
-                        cand_cfg.empty_label->set_text("No candidates configured");
-                    for (size_t ci = 0; ci < r->candidates.size(); ++ci) {
-                        auto& cr = r->candidates[ci];
-                        out.push_back({ cr->name_w.get() });
-                        out.push_back({ cr->chance_w.get() });
-                        DockableCollapsible::Row controls;
-                        controls.push_back(cr->up_w.get());
-                        controls.push_back(cr->down_w.get());
-                        controls.push_back(cr->del_w.get());
-                        out.push_back(controls);
-                        if (ci + 1 < r->candidates.size() && cr->spacing) {
-                            out.push_back({ cr->spacing.get() });
-                        }
-                    }
-                }
-                out.push_back({ cand_cfg.end_marker.get() });
-                if (!cand_cfg.bottom_gap)
-                    cand_cfg.bottom_gap = std::make_unique<SpacerWidget>(DMSpacing::item_gap());
-                out.push_back({ cand_cfg.bottom_gap.get() });
+                if (!r->candidate_list)
+                    r->candidate_list = std::make_unique<CandidateList>(*this, *r);
+                r->candidate_list->rebuild();
+                r->candidate_list->append_rows(out);
                 if (r->body_end_marker)
                     out.push_back({ r->body_end_marker.get() });
             } else {
@@ -838,16 +890,8 @@ void SpawnGroupList::update(const Input& input, int screen_w, int screen_h) {
                 on_entry_change_(*r->entry, cs);
             }
         }
-        // candidates weight sync
-        if (r->entry->contains("candidates") && (*r->entry)["candidates"].is_array()) {
-            auto& carr = (*r->entry)["candidates"];
-            size_t i = 0;
-            for (auto& cr : r->candidates) {
-                if (i >= carr.size()) break;
-                int v = std::clamp(cr->chance_sl ? cr->chance_sl->value() : 0, 0, 100);
-                if (carr[i].value("chance", 0) != v) { carr[i]["chance"] = v; changed = true; }
-                ++i;
-            }
+        if (r->candidate_list && r->candidate_list->sync_to_json()) {
+            changed = true;
         }
         if (changed && on_change_) on_change_();
     }
