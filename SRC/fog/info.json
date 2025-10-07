@@ -1,85 +1,81 @@
 {
-  "animations": {
-    "default": {
-      "flipped_source": false,
-      "locked": false,
-      "movement": [
-        [
-          0,
-          0
-        ],
-        [
-          0,
-          0
-        ],
-        [
-          0,
-          0
-        ]
-      ],
-      "number_of_frames": 3,
-      "reverse_source": false,
-      "source": {
-        "kind": "folder",
-        "name": null,
-        "path": "default"
-      },
-      "speed_factor": 1
-    }
-  },
-  "anti_tags": [
-    "book",
-    "center",
-    "man-made",
-    "scary",
-    "still",
-    "wood"
-  ],
-  "asset_name": "fog",
-  "asset_type": "Texture",
-  "can_invert": true,
-  "duplicatable": false,
-  "duplication_interval_max": 60,
-  "duplication_interval_min": 30,
-  "has_shading": false,
-  "impassable_area": null,
-  "lighting_info": [],
-  "max_child_depth": 2,
-  "min_child_depth": 0,
-  "min_distance_all": 0,
-  "min_same_type_distance": 0,
-  "render_radius": 1000,
-  "rnd_spawn_max": 400,
-  "rnd_spawn_min": 300,
-  "size_settings": {
-    "scale_percentage": 288.0
-  },
-  "spawn_groups": [
-    {
-      "candidates": [
-        {
-          "chance": 0,
-          "name": "null"
+    "animations": {
+        "default": {
+            "flipped_source": false,
+            "locked": false,
+            "loop": false,
+            "movement": [
+                [
+                    0,
+                    0
+                ]
+            ],
+            "number_of_frames": 1,
+            "on_end": "default",
+            "reverse_source": false,
+            "rnd_start": false,
+            "source": {
+                "kind": "folder",
+                "name": null,
+                "path": "default"
+            },
+            "speed_factor": 1
         }
-      ],
-      "chance_denominator": 0,
-      "check_overlap": false,
-      "display_name": "New Spawn",
-      "enforce_spacing": false,
-      "max_number": 7,
-      "min_number": 1,
-      "position": "Exact",
-      "priority": 0,
-      "spawn_id": "spn-e5f00ea63914"
-    }
-  ],
-  "tags": [
-    "default",
-    "ground",
-    "nature",
-    "passable",
-    "plant"
-  ],
-  "update_radius": 1000,
-  "z_threshold": -970
+    },
+    "anti_tags": [
+        "book",
+        "center",
+        "man-made",
+        "scary",
+        "still",
+        "wood"
+    ],
+    "asset_name": "fog",
+    "asset_type": "Texture",
+    "can_invert": true,
+    "duplicatable": false,
+    "duplication_interval_max": 60,
+    "duplication_interval_min": 30,
+    "has_shading": false,
+    "impassable_area": null,
+    "lighting_info": [],
+    "max_child_depth": 2,
+    "min_child_depth": 0,
+    "min_distance_all": 0,
+    "min_same_type_distance": 0,
+    "render_radius": 1000,
+    "rnd_spawn_max": 400,
+    "rnd_spawn_min": 300,
+    "size_settings": {
+        "scale_percentage": 371.0
+    },
+    "spawn_groups": [
+        {
+            "candidates": [
+                {
+                    "chance": 0,
+                    "name": "null"
+                }
+            ],
+            "chance_denominator": 0,
+            "check_overlap": false,
+            "display_name": "New Spawn",
+            "enforce_spacing": false,
+            "max_number": 7,
+            "min_number": 1,
+            "position": "Exact",
+            "priority": 0,
+            "spawn_id": "spn-e5f00ea63914"
+        }
+    ],
+    "start": "default",
+    "tags": [
+        "default",
+        "ground",
+        "nature",
+        "passable",
+        "plant"
+    ],
+    "update_radius": 1000,
+    "z_threshold": -970
 }

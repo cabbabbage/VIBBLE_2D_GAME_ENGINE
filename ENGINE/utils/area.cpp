@@ -88,11 +88,24 @@ Area::Area(const std::string& name, const std::string& json_path, float scale)
 	throw std::runtime_error("[Area: " + area_name_ + "] No points loaded");
         pos.x = pivot_x;
         pos.y = pivot_y;
-	int dx = j.value("offset_x", 0);
-	int dy = -j.value("offset_y", 0);
-	if (dx != 0 || dy != 0) {
-		apply_offset(dx, dy);
-	}
+        bool legacy_coords = true;
+        try {
+                if (j.contains("coord_system") && j["coord_system"].is_string()) {
+                        std::string coord = j["coord_system"].get<std::string>();
+                        std::transform(coord.begin(), coord.end(), coord.begin(), [](unsigned char c) {
+                                return static_cast<char>(std::tolower(c));
+                        });
+                        legacy_coords = !(coord == "screen" || coord == "sl" || coord == "world");
+                }
+        } catch (...) {
+                legacy_coords = true;
+        }
+        int dx = j.value("offset_x", 0);
+        int dy = j.value("offset_y", 0);
+        if (legacy_coords) dy = -dy;
+        if (dx != 0 || dy != 0) {
+                apply_offset(dx, dy);
+        }
 	update_geometry_data();
 }
 

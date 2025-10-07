@@ -5,6 +5,7 @@
     "height_at_zoom1": 547.0,
     "parallax_strength": 18.75,
     "realism_enabled": true,
+    "render_areas_enabled": false,
     "render_distance": 2120.0,
     "tripod_distance_y": -855.0
   },
@@ -29,7 +30,7 @@
             "name": "Small_Rock"
           },
           {
-            "chance": 48,
+            "chance": 54,
             "name": "fog"
           },
           {
@@ -225,8 +226,8 @@
       "areas": [
         {
           "anchor": {
-            "x": 13909,
-            "y": 6616
+            "x": 6378,
+            "y": 4696
           },
           "name": "trigger_area",
           "origional_height": 2896,
@@ -271,8 +272,8 @@
         },
         {
           "anchor": {
-            "x": 13909,
-            "y": 6616
+            "x": 6378,
+            "y": 4696
           },
           "name": "trigger_area_1",
           "origional_height": 2896,
@@ -303,6 +304,52 @@
             {
               "dx": -12399,
               "dy": -3808
+            }
+          ],
+          "type": "trigger"
+        },
+        {
+          "anchor": {
+            "x": 6378,
+            "y": 4696
+          },
+          "name": "trigger_area_2",
+          "origional_height": 2896,
+          "origional_width": 2896,
+          "points": [
+            {
+              "x": -4553,
+              "y": -2339
+            },
+            {
+              "x": -5272,
+              "y": -2382
+            },
+            {
+              "x": -5811,
+              "y": -1645
+            },
+            {
+              "x": -4395,
+              "y": -1511
+            }
+          ],
+          "relative_points": [
+            {
+              "dx": -4553,
+              "dy": -2339
+            },
+            {
+              "dx": -5272,
+              "dy": -2382
+            },
+            {
+              "dx": -5811,
+              "dy": -1645
+            },
+            {
+              "dx": -4395,
+              "dy": -1511
             }
           ],
           "type": "trigger"
