@@ -112,6 +112,7 @@ private:
     bool begin_ = false;
     SDL_Rect rect_{0,0,0,0};
 };
+}  // namespace
 
 class AreaLinkPanel {
 public:
@@ -266,7 +267,6 @@ void AreaLinkPanel::apply_default_position() {
     }
     int y = parent_rect_.y;
     panel_->set_position(x, y);
-}
 }
 
 // RowController methods

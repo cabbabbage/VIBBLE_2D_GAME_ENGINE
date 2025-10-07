@@ -21,7 +21,6 @@ class CroppingService;
 class AsyncTaskQueue;
 class AudioImporter;
 class FrameMovementEditor;
-class DMButton;
 
 class AnimationEditorWindow {
   public:
