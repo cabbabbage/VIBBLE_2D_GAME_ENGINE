@@ -7,6 +7,8 @@
 #include <string>
 #include <vector>
 
+#include "dev_mode/widgets.hpp"
+
 class AssetInfo;
 class Input;
 
@@ -41,6 +43,7 @@ class AnimationEditorWindow {
 
   private:
     void layout_children();
+    void ensure_layout() const;
     void configure_list_panel();
     void render_background(SDL_Renderer* renderer) const;
     void render_header(SDL_Renderer* renderer) const;
@@ -84,6 +87,7 @@ class AnimationEditorWindow {
     int status_timer_frames_ = 0;
     bool movement_editor_visible_ = false;
     std::string movement_editor_animation_id_;
+    mutable bool layout_dirty_ = true;
 };
 
 }  // namespace animation_editor

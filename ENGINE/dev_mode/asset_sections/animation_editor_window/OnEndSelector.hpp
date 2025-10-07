@@ -4,15 +4,13 @@
 #include <string>
 #include <vector>
 
-struct SDL_Rect;
-struct SDL_Event;
-struct SDL_Renderer;
+#include <SDL.h>
+
+#include "dev_mode/widgets.hpp"
 
 namespace animation_editor {
 
 class AnimationDocument;
-class DMDropdown;
-
 class OnEndSelector {
   public:
     OnEndSelector();

@@ -4,7 +4,6 @@
 #include <functional>
 #include <vector>
 
-union SDL_Event;
 struct SDL_Renderer;
 
 namespace animation_editor {

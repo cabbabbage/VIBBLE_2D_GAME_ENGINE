@@ -107,7 +107,7 @@ void MovementCanvas::render(SDL_Renderer* renderer) const {
     }
 
     // Draw the path segments between frames.
-    SDL_Color path_color = DMStyles::AccentButton().normal_bg;
+    SDL_Color path_color = DMStyles::AccentButton().bg;
     SDL_SetRenderDrawColor(renderer, path_color.r, path_color.g, path_color.b, 200);
     for (size_t i = 1; i < positions_.size(); ++i) {
         SDL_FPoint prev = world_to_screen(positions_[i - 1]);
@@ -122,11 +122,11 @@ void MovementCanvas::render(SDL_Renderer* renderer) const {
         SDL_Rect marker{static_cast<int>(std::round(screen.x)) - kPointRadius,
                         static_cast<int>(std::round(screen.y)) - kPointRadius, kPointRadius * 2, kPointRadius * 2};
 
-        SDL_Color fill = DMStyles::ListButton().normal_bg;
+        SDL_Color fill = DMStyles::ListButton().bg;
         if (static_cast<int>(i) == selected_index_) {
             fill = DMStyles::AccentButton().hover_bg;
         } else if (static_cast<int>(i) == hovered_index_) {
-            fill = DMStyles::AccentButton().normal_bg;
+            fill = DMStyles::AccentButton().bg;
         }
         SDL_SetRenderDrawColor(renderer, fill.r, fill.g, fill.b, 230);
         SDL_RenderFillRect(renderer, &marker);
@@ -136,7 +136,7 @@ void MovementCanvas::render(SDL_Renderer* renderer) const {
         SDL_RenderDrawRect(renderer, &marker);
 
         if (frames_[i].resort_z) {
-            SDL_Color indicator = with_alpha(DMStyles::DeleteButton().normal_bg, 220);
+            SDL_Color indicator = with_alpha(DMStyles::DeleteButton().bg, 220);
             SDL_Rect flag{marker.x, marker.y - 6, marker.w, 4};
             SDL_SetRenderDrawColor(renderer, indicator.r, indicator.g, indicator.b, indicator.a);
             SDL_RenderFillRect(renderer, &flag);

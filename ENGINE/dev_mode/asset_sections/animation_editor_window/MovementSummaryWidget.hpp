@@ -4,9 +4,7 @@
 #include <memory>
 #include <string>
 
-struct SDL_Rect;
-struct SDL_Event;
-struct SDL_Renderer;
+#include <SDL.h>
 
 namespace animation_editor {
 

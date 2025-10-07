@@ -12,7 +12,7 @@
 #include "utils/light_source.hpp"
 
 #include "asset_controller.hpp"
-#include "animation_update.hpp"
+#include "animation_update/animation_update.hpp"
 
 class camera;
 class Assets;

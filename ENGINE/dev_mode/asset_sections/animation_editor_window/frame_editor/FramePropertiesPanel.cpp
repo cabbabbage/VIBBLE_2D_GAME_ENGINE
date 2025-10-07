@@ -109,7 +109,7 @@ void FramePropertiesPanel::render(SDL_Renderer* renderer) const {
                  text_color);
     y += kLineHeight;
 
-    SDL_Color toggle_bg = cached_frame_.resort_z ? DMStyles::AccentButton().hover_bg : DMStyles::ListButton().normal_bg;
+    SDL_Color toggle_bg = cached_frame_.resort_z ? DMStyles::AccentButton().hover_bg : DMStyles::ListButton().bg;
     SDL_SetRenderDrawColor(renderer, toggle_bg.r, toggle_bg.g, toggle_bg.b, 240);
     SDL_RenderFillRect(renderer, &resort_toggle_rect_);
     SDL_Color toggle_border = DMStyles::ListButton().border;

@@ -2,9 +2,7 @@
 
 #include <functional>
 #include <vector>
-#include "SDL.h"
-
-struct SDL_Rect;
+#include <SDL.h>
 
 struct SDL_Renderer;
 

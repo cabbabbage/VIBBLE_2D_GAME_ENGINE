@@ -5,17 +5,15 @@
 #include <string>
 #include <vector>
 
-struct SDL_Rect;
-union SDL_Event;
-struct SDL_Renderer;
+#include <SDL.h>
+
+#include "MovementCanvas.hpp"
+#include "TotalsPanel.hpp"
+#include "FramePropertiesPanel.hpp"
 
 namespace animation_editor {
 
 class AnimationDocument;
-class MovementCanvas;
-class TotalsPanel;
-class FramePropertiesPanel;
-
 class FrameMovementEditor {
   public:
     using CloseCallback = std::function<void()>;

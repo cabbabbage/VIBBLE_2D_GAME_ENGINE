@@ -6,13 +6,9 @@
 #include <optional>
 #include <string>
 
-struct SDL_Rect;
-struct SDL_Event;
-struct SDL_Renderer;
+#include <SDL.h>
 
-class DMButton;
-class DMCheckbox;
-class DMSlider;
+#include "dev_mode/widgets.hpp"
 
 namespace animation_editor {
 

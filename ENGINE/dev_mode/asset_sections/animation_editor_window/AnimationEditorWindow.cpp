@@ -98,6 +98,7 @@ AnimationEditorWindow::AnimationEditorWindow() {
     save_button_ = std::make_unique<DMButton>("Save", &DMStyles::CreateButton(), 120, DMButton::height());
     reload_button_ = std::make_unique<DMButton>("Reload", &DMStyles::AccentButton(), 120, DMButton::height());
     close_button_ = std::make_unique<DMButton>("Close", &DMStyles::DeleteButton(), 120, DMButton::height());
+    layout_dirty_ = true;
 }
 
 void AnimationEditorWindow::set_visible(bool visible) { visible_ = visible; }
@@ -106,6 +107,7 @@ void AnimationEditorWindow::toggle_visible() { visible_ = !visible_; }
 
 void AnimationEditorWindow::set_bounds(const SDL_Rect& bounds) {
     bounds_ = bounds;
+    layout_dirty_ = true;
     layout_children();
 }
 
@@ -142,6 +144,7 @@ void AnimationEditorWindow::clear_info() {
 }
 
 void AnimationEditorWindow::layout_children() {
+    layout_dirty_ = false;
     const int padding = DMSpacing::panel_padding();
     const int button_gap = DMSpacing::item_gap();
     const int header_height = DMButton::height() + padding * 2;
@@ -199,7 +202,7 @@ void AnimationEditorWindow::configure_list_panel() {
 void AnimationEditorWindow::update(const Input&, int, int) {
     if (!visible_) return;
 
-    layout_children();
+    ensure_layout();
 
     if (task_queue_) task_queue_->update();
     if (list_panel_) list_panel_->update();
@@ -219,7 +222,7 @@ void AnimationEditorWindow::update(const Input&, int, int) {
 void AnimationEditorWindow::render(SDL_Renderer* renderer) const {
     if (!visible_ || !renderer) return;
 
-    layout_children();
+    ensure_layout();
 
     render_background(renderer);
     render_header(renderer);
@@ -234,7 +237,7 @@ void AnimationEditorWindow::render(SDL_Renderer* renderer) const {
 bool AnimationEditorWindow::handle_event(const SDL_Event& e) {
     if (!visible_) return false;
 
-    layout_children();
+    ensure_layout();
 
     if (movement_editor_visible_ && movement_editor_) {
         if (movement_editor_->handle_event(e)) {
@@ -286,6 +289,12 @@ bool AnimationEditorWindow::handle_event(const SDL_Event& e) {
     }
 
     return false;
+}
+
+void AnimationEditorWindow::ensure_layout() const {
+    if (layout_dirty_) {
+        const_cast<AnimationEditorWindow*>(this)->layout_children();
+    }
 }
 
 void AnimationEditorWindow::render_background(SDL_Renderer* renderer) const {

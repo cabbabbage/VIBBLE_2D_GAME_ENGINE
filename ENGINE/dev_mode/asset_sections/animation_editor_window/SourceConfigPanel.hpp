@@ -9,11 +9,9 @@
 #include <unordered_set>
 #include <vector>
 
-#include <nlohmann/json.hpp>
+#include <SDL.h>
 
-struct SDL_Rect;
-struct SDL_Event;
-struct SDL_Renderer;
+#include <nlohmann/json.hpp>
 
 namespace animation_editor {
 

@@ -78,7 +78,7 @@ void TotalsPanel::render(SDL_Renderer* renderer) const {
     SDL_SetRenderDrawColor(renderer, border.r, border.g, border.b, 255);
     SDL_RenderDrawRect(renderer, &bounds_);
 
-    SDL_Color button_bg = DMStyles::ListButton().normal_bg;
+    SDL_Color button_bg = DMStyles::ListButton().bg;
     SDL_Color button_border = DMStyles::ListButton().border;
     SDL_Color button_text = DMStyles::Label().color;
 

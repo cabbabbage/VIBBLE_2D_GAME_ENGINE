@@ -8,8 +8,12 @@
 #include <vector>
 
 struct SDL_Rect;
-struct SDL_Event;
+union SDL_Event;
 struct SDL_Renderer;
+#include <SDL.h>
+
+#include "dev_mode/dm_styles.hpp"
+#include "dev_mode/widgets.hpp"
 
 namespace animation_editor {
 
@@ -20,8 +24,6 @@ class MovementSummaryWidget;
 class OnEndSelector;
 class AudioPanel;
 class PreviewProvider;
-class DMButton;
-class DMTextBox;
 class CroppingService;
 class AsyncTaskQueue;
 class AudioImporter;
