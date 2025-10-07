@@ -13,10 +13,6 @@
 #include <cmath>
 #include <SDL.h>
 
-namespace {
-
-}
-
 Asset::Asset(std::shared_ptr<AssetInfo> info_,
              const Area& spawn_area,
              SDL_Point start_pos,
@@ -364,6 +360,19 @@ void Asset::update_neighbor_lists(bool force_update) {
         }
         if (candidate->info->type == asset_types::texture) {
             return false;
+        }
+        const std::string canonical_type = asset_types::canonicalize(candidate->info->type);
+        if (canonical_type == asset_types::player) {
+            return false;
+        }
+        if (canonical_type == asset_types::boundary) {
+            return true;
+        }
+        if (canonical_type == asset_types::enemy || canonical_type == asset_types::npc) {
+            return true;
+        }
+        if (candidate->info->moving_asset) {
+            return true;
         }
         return !candidate->info->passable;
     };

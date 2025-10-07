@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -9,6 +10,7 @@
 #include "asset/animation.hpp"
 #include "asset/animation_frame.hpp"
 #include "asset/asset_info.hpp"
+#include "asset/asset_types.hpp"
 #include "animation_update_utils.hpp"
 #include "core/AssetsManager.hpp"
 #include "core/asset_list.hpp"
@@ -136,10 +138,14 @@ bool AnimationUpdate::advance(AnimationFrame*& frame) {
 
     if (frame->next) {
         frame = frame->next;
-    } else if (anim.loop) {
-        frame = anim.get_first_frame();
     } else {
-        return false;
+        const bool force_loop_default =
+            self_->current_animation == animation_update::detail::kDefaultAnimation;
+        if (anim.loop || force_loop_default) {
+            frame = anim.get_first_frame();
+        } else {
+            return false;
+        }
     }
 
     return true;
@@ -225,8 +231,7 @@ bool AnimationUpdate::path_blocked(SDL_Point from, SDL_Point to, const Asset* ig
             return true;
         }
 
-        const bool overlap_check = (self_->info && neighbor->info && self_->info->type == neighbor->info->type) ||
-                                   (assets_owner_ && assets_owner_->player == neighbor);
+        const bool overlap_check = animation_update::detail::should_consider_overlap(*self_, *neighbor);
         if (overlap_check) {
             const SDL_Point neighbor_bottom = animation_update::detail::bottom_middle_for(*neighbor, neighbor->pos);
             if (animation_update::detail::distance_sq(dest_bottom, neighbor_bottom) <

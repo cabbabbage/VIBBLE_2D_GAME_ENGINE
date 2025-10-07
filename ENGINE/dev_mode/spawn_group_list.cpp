@@ -4,6 +4,8 @@
 #include <utility>
 #include <unordered_set>
 
+#include <SDL_ttf.h>
+
 #include "dm_styles.hpp"
 #include "widgets.hpp"
 #include "utils/input.hpp"
@@ -12,80 +14,84 @@
 
 using nlohmann::json;
 
-struct SpawnGroupList::CandidateRow {
-    std::unique_ptr<DMTextBox> name_box;
-    std::unique_ptr<TextBoxWidget> name_w;
-    std::unique_ptr<DMSlider> chance_sl;
-    std::unique_ptr<SliderWidget> chance_w;
-    std::unique_ptr<DMButton> up_btn;
-    std::unique_ptr<ButtonWidget> up_w;
-    std::unique_ptr<DMButton> down_btn;
-    std::unique_ptr<ButtonWidget> down_w;
-    std::unique_ptr<DMButton> del_btn;
-    std::unique_ptr<ButtonWidget> del_w;
-};
-
-struct SpawnGroupList::EntryRow {
-    json* array = nullptr;
-    json* entry = nullptr;
-    json  ro_entry;
-    bool  read_only = false;
-    std::string id;
-    int index = -1;
-
-    bool expanded = false;
-    std::unique_ptr<DMButton> toggle_btn;
-    std::unique_ptr<ButtonWidget> toggle_w;
-    std::unique_ptr<DMButton> up_btn;
-    std::unique_ptr<ButtonWidget> up_w;
-    std::unique_ptr<DMButton> down_btn;
-    std::unique_ptr<ButtonWidget> down_w;
-    std::unique_ptr<DMButton> del_btn;
-    std::unique_ptr<ButtonWidget> del_w;
-    std::unique_ptr<DMButton> dup_btn;
-    std::unique_ptr<ButtonWidget> dup_w;
-
-    std::unique_ptr<DMTextBox> name_box;
-    std::unique_ptr<TextBoxWidget> name_w;
-    std::unique_ptr<DMDropdown> method_dd;
-    std::unique_ptr<DropdownWidget> method_w;
-    std::unique_ptr<DMRangeSlider> qty_sl;
-    std::unique_ptr<RangeSliderWidget> qty_w;
-    std::unique_ptr<DMButton> add_cand_btn;
-    std::unique_ptr<ButtonWidget> add_cand_w;
-    std::vector<std::unique_ptr<CandidateRow>> candidates;
-
-    std::function<std::vector<std::string>()> area_names_provider;
-    std::string method_lock;
-    bool quantity_hidden = false;
-
-    std::string owner_label;
-    SDL_Color owner_color{255,255,255,255};
-
-    std::unique_ptr<DMButton> link_btn;
-    std::unique_ptr<ButtonWidget> link_btn_w;
-
-    std::unique_ptr<Widget> outline_begin_marker;
-    std::unique_ptr<Widget> outline_end_marker;
-    SDL_Rect outline_rect{0,0,0,0};
-
-    std::unique_ptr<Widget> body_begin_marker;
-    std::unique_ptr<Widget> body_end_marker;
-    SDL_Rect body_rect{0,0,0,0};
-
-    std::unique_ptr<Widget> candidates_begin_marker;
-    std::unique_ptr<Widget> candidates_end_marker;
-    SDL_Rect candidates_rect{0,0,0,0};
-};
-
 namespace {
-static std::vector<std::string> kSpawnMethods{
-    "Exact", "Random", "Percent", "Center", "Perimeter"
+
+class SpacerWidget : public Widget {
+public:
+    explicit SpacerWidget(int height) : height_(std::max(0, height)) {}
+
+    void set_rect(const SDL_Rect& r) override {
+        rect_ = r;
+        rect_.h = height_;
+    }
+
+    const SDL_Rect& rect() const override { return rect_; }
+
+    int height_for_width(int) const override { return height_; }
+
+    bool handle_event(const SDL_Event&) override { return false; }
+
+    void render(SDL_Renderer*) const override {}
+
+    bool wants_full_row() const override { return true; }
+
+private:
+    int height_ = 0;
+    SDL_Rect rect_{0,0,0,0};
 };
 
-static bool method_uses_range(const std::string& m) {
-    return !(m == "Exact" || m == "Center" || m == "Percent");
-}
+class SectionLabelWidget : public Widget {
+public:
+    SectionLabelWidget(std::string text,
+                       bool full_row = true,
+                       SDL_Color color = DMStyles::Label().color,
+                       int font_size = DMStyles::Label().font_size)
+        : text_(std::move(text)),
+          color_(color),
+          font_size_(std::max(8, font_size)),
+          full_row_(full_row) {}
+
+    void set_text(std::string text) { text_ = std::move(text); }
+    void set_color(SDL_Color color) { color_ = color; }
+    void set_font_size(int size) { font_size_ = std::max(8, size); }
+
+    void set_rect(const SDL_Rect& r) override { rect_ = r; }
+    const SDL_Rect& rect() const override { return rect_; }
+
+    int height_for_width(int) const override {
+        return font_size_ + DMSpacing::small_gap();
+    }
+
+    bool handle_event(const SDL_Event&) override { return false; }
+
+    void render(SDL_Renderer* renderer) const override {
+        if (!renderer) return;
+        TTF_Font* font = TTF_OpenFont(DMStyles::Label().font_path.c_str(), font_size_);
+        if (!font) return;
+        SDL_Surface* surf = TTF_RenderUTF8_Blended(font, text_.c_str(), color_);
+        if (surf) {
+            SDL_Texture* tex = SDL_CreateTextureFromSurface(renderer, surf);
+            SDL_Rect dst = rect_;
+            dst.w = surf->w;
+            dst.h = surf->h;
+            if (tex) {
+                SDL_RenderCopy(renderer, tex, nullptr, &dst);
+                SDL_DestroyTexture(tex);
+            }
+            SDL_FreeSurface(surf);
+        }
+        TTF_CloseFont(font);
+    }
+
+    bool wants_full_row() const override { return full_row_; }
+
+private:
+    std::string text_;
+    SDL_Color color_;
+    int font_size_ = 12;
+    bool full_row_ = true;
+    SDL_Rect rect_{0,0,0,0};
+};
 
 class RowRectMarkerWidget : public Widget {
 public:
@@ -120,6 +126,97 @@ private:
     bool begin_ = false;
     SDL_Rect rect_{0,0,0,0};
 };
+
+}  // namespace
+
+struct SpawnGroupList::CandidateRow {
+    std::unique_ptr<DMTextBox> name_box;
+    std::unique_ptr<TextBoxWidget> name_w;
+    std::unique_ptr<DMSlider> chance_sl;
+    std::unique_ptr<SliderWidget> chance_w;
+    std::unique_ptr<DMButton> up_btn;
+    std::unique_ptr<ButtonWidget> up_w;
+    std::unique_ptr<DMButton> down_btn;
+    std::unique_ptr<ButtonWidget> down_w;
+    std::unique_ptr<DMButton> del_btn;
+    std::unique_ptr<ButtonWidget> del_w;
+    std::unique_ptr<SpacerWidget> spacing;
+};
+
+struct SpawnGroupList::EntryRow {
+    json* array = nullptr;
+    json* entry = nullptr;
+    json  ro_entry;
+    bool  read_only = false;
+    std::string id;
+    int index = -1;
+
+    bool expanded = false;
+    std::unique_ptr<DMButton> toggle_btn;
+    std::unique_ptr<ButtonWidget> toggle_w;
+    std::unique_ptr<DMButton> up_btn;
+    std::unique_ptr<ButtonWidget> up_w;
+    std::unique_ptr<DMButton> down_btn;
+    std::unique_ptr<ButtonWidget> down_w;
+    std::unique_ptr<DMButton> del_btn;
+    std::unique_ptr<ButtonWidget> del_w;
+    std::unique_ptr<DMButton> dup_btn;
+    std::unique_ptr<ButtonWidget> dup_w;
+
+    std::unique_ptr<DMTextBox> name_box;
+    std::unique_ptr<TextBoxWidget> name_w;
+    std::unique_ptr<DMDropdown> method_dd;
+    std::unique_ptr<DropdownWidget> method_w;
+    std::unique_ptr<DMRangeSlider> qty_sl;
+    std::unique_ptr<RangeSliderWidget> qty_w;
+    std::vector<std::unique_ptr<CandidateRow>> candidates;
+
+    std::function<std::vector<std::string>()> area_names_provider;
+    std::string method_lock;
+    bool quantity_hidden = false;
+
+    std::string owner_label;
+    SDL_Color owner_color{255,255,255,255};
+
+    std::unique_ptr<DMButton> link_btn;
+    std::unique_ptr<ButtonWidget> link_btn_w;
+
+    std::unique_ptr<Widget> outline_begin_marker;
+    std::unique_ptr<Widget> outline_end_marker;
+    SDL_Rect outline_rect{0,0,0,0};
+
+    std::unique_ptr<Widget> body_begin_marker;
+    std::unique_ptr<Widget> body_end_marker;
+    SDL_Rect body_rect{0,0,0,0};
+
+    SDL_Rect candidates_rect{0,0,0,0};
+
+    std::unique_ptr<SectionLabelWidget> owner_label_widget;
+    std::unique_ptr<SpacerWidget> body_top_gap;
+    std::unique_ptr<SectionLabelWidget> general_label;
+
+    struct CandidatesConfig {
+        std::unique_ptr<SpacerWidget> top_gap;
+        std::unique_ptr<SectionLabelWidget> header_label;
+        std::unique_ptr<SectionLabelWidget> empty_label;
+        std::unique_ptr<DMButton> add_btn;
+        std::unique_ptr<ButtonWidget> add_w;
+        std::unique_ptr<RowRectMarkerWidget> begin_marker;
+        std::unique_ptr<RowRectMarkerWidget> end_marker;
+        std::unique_ptr<SpacerWidget> bottom_gap;
+    };
+
+    std::unique_ptr<CandidatesConfig> candidates_config;
+};
+
+namespace {
+static std::vector<std::string> kSpawnMethods{
+    "Exact", "Random", "Percent", "Center", "Perimeter"
+};
+
+static bool method_uses_range(const std::string& m) {
+    return !(m == "Exact" || m == "Center" || m == "Percent");
+}
 }  // namespace
 
 class AreaLinkPanel {
@@ -308,7 +405,9 @@ void SpawnGroupList::RowController::set_quantity_hidden(bool hidden) {
 SpawnGroupList::SpawnGroupList(bool floatable)
     : DockableCollapsible("Spawn Groups", floatable) {
     set_scroll_enabled(true);
-    set_cell_width(260);
+    set_cell_width(320);
+    set_row_gap(DMSpacing::item_gap());
+    set_col_gap(DMSpacing::item_gap());
 }
 
 SpawnGroupList::~SpawnGroupList() = default;
@@ -412,6 +511,20 @@ void SpawnGroupList::append_rows(Rows& rows) {
         }
         out.push_back({ r->toggle_w.get(), r->dup_w.get(), r->up_w.get(), r->down_w.get(), r->del_w.get() });
 
+        if (!r->owner_label.empty()) {
+            if (!r->owner_label_widget) {
+                int font_sz = std::max(10, DMStyles::Label().font_size - 2);
+                r->owner_label_widget = std::make_unique<SectionLabelWidget>(r->owner_label, true, r->owner_color, font_sz);
+            } else {
+                r->owner_label_widget->set_text(r->owner_label);
+                r->owner_label_widget->set_color(r->owner_color);
+                r->owner_label_widget->set_font_size(std::max(10, DMStyles::Label().font_size - 2));
+            }
+            out.push_back({ r->owner_label_widget.get() });
+        } else {
+            r->owner_label_widget.reset();
+        }
+
         // Body if expanded
         if (r->expanded) {
             if (!r->read_only) {
@@ -421,6 +534,10 @@ void SpawnGroupList::append_rows(Rows& rows) {
                     r->body_end_marker = std::make_unique<RowRectMarkerWidget>(&r->body_rect, false);
                 if (r->body_begin_marker)
                     out.push_back({ r->body_begin_marker.get() });
+
+                if (!r->body_top_gap)
+                    r->body_top_gap = std::make_unique<SpacerWidget>(DMSpacing::item_gap());
+                out.push_back({ r->body_top_gap.get() });
 
                 // Build/editable controls
                 if (!r->name_box) {
@@ -460,10 +577,6 @@ void SpawnGroupList::append_rows(Rows& rows) {
                 } else {
                     r->link_btn->set_text(link_label);
                 }
-                if (!r->add_cand_btn) {
-                    r->add_cand_btn = std::make_unique<DMButton>("Add Candidate", &DMStyles::CreateButton(), 140, DMButton::height());
-                    r->add_cand_w   = std::make_unique<ButtonWidget>(r->add_cand_btn.get(), [this, rr=r.get()](){ open_asset_search(*rr, {}); });
-                }
 
                 // Rebuild candidate rows from json
                 r->candidates.clear();
@@ -475,7 +588,7 @@ void SpawnGroupList::append_rows(Rows& rows) {
                         const std::string nm = c.value("name", std::string{"null"});
                         int chance = c.value("chance", 0);
                         cr->name_box = std::make_unique<DMTextBox>("Asset", nm);
-                        cr->name_w   = std::make_unique<TextBoxWidget>(cr->name_box.get());
+                        cr->name_w   = std::make_unique<TextBoxWidget>(cr->name_box.get(), true);
                         cr->chance_sl= std::make_unique<DMSlider>("Weight", 0, 100, chance);
                         cr->chance_w = std::make_unique<SliderWidget>(cr->chance_sl.get());
                         cr->up_btn   = std::make_unique<DMButton>("↑", &DMStyles::ListButton(), 24, DMButton::height());
@@ -508,29 +621,78 @@ void SpawnGroupList::append_rows(Rows& rows) {
                             if (on_change_) on_change_();
                             this->rebuild_layout();
                         });
+                        cr->spacing = std::make_unique<SpacerWidget>(DMSpacing::small_gap());
                         r->candidates.push_back(std::move(cr));
                     }
                 }
 
+                if (!r->general_label)
+                    r->general_label = std::make_unique<SectionLabelWidget>("General Settings", true);
+                else
+                    r->general_label->set_text("General Settings");
+                out.push_back({ r->general_label.get() });
                 out.push_back({ r->name_w.get() });
-                if (r->method_w) out.push_back({ r->method_w.get() });
+                DockableCollapsible::Row method_row;
+                if (r->method_w) method_row.push_back(r->method_w.get());
+                if (r->link_btn_w) method_row.push_back(r->link_btn_w.get());
+                if (!method_row.empty()) out.push_back(method_row);
                 const std::string method = r->entry->value("position", std::string{"Exact"});
                 if (!r->quantity_hidden && method_uses_range(method)) {
                     out.push_back({ r->qty_w.get() });
                 }
-                if (r->link_btn_w) out.push_back({ r->link_btn_w.get() });
-                if (!r->candidates_begin_marker)
-                    r->candidates_begin_marker = std::make_unique<RowRectMarkerWidget>(&r->candidates_rect, true);
-                if (!r->candidates_end_marker)
-                    r->candidates_end_marker = std::make_unique<RowRectMarkerWidget>(&r->candidates_rect, false);
-                if (r->candidates_begin_marker)
-                    out.push_back({ r->candidates_begin_marker.get() });
-                out.push_back({ r->add_cand_w.get() });
-                for (auto& cr : r->candidates) {
-                    out.push_back({ cr->name_w.get(), cr->chance_w.get(), cr->up_w.get(), cr->down_w.get(), cr->del_w.get() });
+
+                if (!r->candidates_config)
+                    r->candidates_config = std::make_unique<EntryRow::CandidatesConfig>();
+                auto& cand_cfg = *r->candidates_config;
+                if (!cand_cfg.top_gap)
+                    cand_cfg.top_gap = std::make_unique<SpacerWidget>(std::max(6, DMSpacing::section_gap() / 2));
+                out.push_back({ cand_cfg.top_gap.get() });
+                if (!cand_cfg.begin_marker)
+                    cand_cfg.begin_marker = std::make_unique<RowRectMarkerWidget>(&r->candidates_rect, true);
+                if (!cand_cfg.end_marker)
+                    cand_cfg.end_marker = std::make_unique<RowRectMarkerWidget>(&r->candidates_rect, false);
+                out.push_back({ cand_cfg.begin_marker.get() });
+                if (!cand_cfg.header_label)
+                    cand_cfg.header_label = std::make_unique<SectionLabelWidget>("Candidates", false);
+                else
+                    cand_cfg.header_label->set_text("Candidates");
+                DockableCollapsible::Row header_row;
+                header_row.push_back(cand_cfg.header_label.get());
+                if (!cand_cfg.add_btn) {
+                    cand_cfg.add_btn = std::make_unique<DMButton>("Add Candidate", &DMStyles::CreateButton(), 160, DMButton::height());
+                    cand_cfg.add_w   = std::make_unique<ButtonWidget>(cand_cfg.add_btn.get(), [this, rr=r.get()](){ open_asset_search(*rr, {}); });
                 }
-                if (r->candidates_end_marker)
-                    out.push_back({ r->candidates_end_marker.get() });
+                header_row.push_back(cand_cfg.add_w.get());
+                out.push_back(header_row);
+
+                if (r->candidates.empty()) {
+                    if (!cand_cfg.empty_label) {
+                        cand_cfg.empty_label = std::make_unique<SectionLabelWidget>("No candidates configured", true, DMStyles::Label().color, std::max(10, DMStyles::Label().font_size - 2));
+                    }
+                    cand_cfg.empty_label->set_text("No candidates configured");
+                    cand_cfg.empty_label->set_font_size(std::max(10, DMStyles::Label().font_size - 2));
+                    out.push_back({ cand_cfg.empty_label.get() });
+                } else {
+                    if (cand_cfg.empty_label)
+                        cand_cfg.empty_label->set_text("No candidates configured");
+                    for (size_t ci = 0; ci < r->candidates.size(); ++ci) {
+                        auto& cr = r->candidates[ci];
+                        out.push_back({ cr->name_w.get() });
+                        out.push_back({ cr->chance_w.get() });
+                        DockableCollapsible::Row controls;
+                        controls.push_back(cr->up_w.get());
+                        controls.push_back(cr->down_w.get());
+                        controls.push_back(cr->del_w.get());
+                        out.push_back(controls);
+                        if (ci + 1 < r->candidates.size() && cr->spacing) {
+                            out.push_back({ cr->spacing.get() });
+                        }
+                    }
+                }
+                out.push_back({ cand_cfg.end_marker.get() });
+                if (!cand_cfg.bottom_gap)
+                    cand_cfg.bottom_gap = std::make_unique<SpacerWidget>(DMSpacing::item_gap());
+                out.push_back({ cand_cfg.bottom_gap.get() });
                 if (r->body_end_marker)
                     out.push_back({ r->body_end_marker.get() });
             } else {
@@ -739,6 +901,12 @@ void SpawnGroupList::render_content(SDL_Renderer* r) const {
         outline.w += 8;
         outline.h += 8;
         if (outline.w <= 0 || outline.h <= 0) continue;
+
+        SDL_Color panel_fill = DMStyles::PanelBG();
+        panel_fill.a = 35;
+        SDL_SetRenderDrawColor(r, panel_fill.r, panel_fill.g, panel_fill.b, panel_fill.a);
+        SDL_RenderFillRect(r, &outline);
+
         SDL_SetRenderDrawColor(r, inner.r, inner.g, inner.b, inner.a);
         SDL_RenderDrawRect(r, &outline);
         SDL_Rect inner_outline = outline;
@@ -756,6 +924,10 @@ void SpawnGroupList::render_content(SDL_Renderer* r) const {
             cand.w += 12;
             cand.h += 12;
             if (cand.w > 0 && cand.h > 0) {
+                SDL_Color cand_fill = DMStyles::ListButton().bg;
+                cand_fill.a = 28;
+                SDL_SetRenderDrawColor(r, cand_fill.r, cand_fill.g, cand_fill.b, cand_fill.a);
+                SDL_RenderFillRect(r, &cand);
                 SDL_SetRenderDrawColor(r, list_border.r, list_border.g, list_border.b, list_border.a / 2);
                 SDL_RenderDrawRect(r, &cand);
                 SDL_Rect cand_inner = cand;
