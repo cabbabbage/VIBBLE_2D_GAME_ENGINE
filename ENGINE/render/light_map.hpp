@@ -21,6 +21,7 @@ public:
         ~LightMap();
 
         void render(bool debugging);
+        void set_screen_dimensions(int screen_width, int screen_height, SDL_Texture* fullscreen_light_tex);
 
 private:
         void collect_layers(std::vector<LightEntry>& out, std::mt19937& rng);

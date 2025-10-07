@@ -64,6 +64,7 @@ private:
     void sync_state_from_ui();
     void notify_state_changed();
     bool type_filter_enabled(const std::string& type) const;
+    bool default_type_enabled(const std::string& type) const;
     std::string format_type_label(const std::string& type) const;
     void collect_spawn_ids(const nlohmann::json& node, std::unordered_set<std::string>& out) const;
 

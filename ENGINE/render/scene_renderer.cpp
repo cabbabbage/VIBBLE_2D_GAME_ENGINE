@@ -74,6 +74,59 @@ SceneRenderer::~SceneRenderer() {
 
 }
 
+void SceneRenderer::recreate_fullscreen_light_texture() {
+        if (!renderer_) {
+                return;
+        }
+        if (fullscreen_light_tex_) {
+                SDL_DestroyTexture(fullscreen_light_tex_);
+                fullscreen_light_tex_ = nullptr;
+        }
+        fullscreen_light_tex_ = SDL_CreateTexture(renderer_, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET, screen_width_, screen_height_);
+        if (!fullscreen_light_tex_) {
+                std::cerr << "[SceneRenderer] Failed to recreate fullscreen light texture: " << SDL_GetError() << "\n";
+                return;
+        }
+        SDL_SetTextureBlendMode(fullscreen_light_tex_, SDL_BLENDMODE_BLEND);
+        SDL_Texture* prev = SDL_GetRenderTarget(renderer_);
+        SDL_SetRenderTarget(renderer_, fullscreen_light_tex_);
+        SDL_Color color = main_light_source_.get_current_color();
+        SDL_SetRenderDrawColor(renderer_, color.r, color.g, color.b, color.a);
+        SDL_RenderClear(renderer_);
+        SDL_SetRenderTarget(renderer_, prev);
+}
+
+void SceneRenderer::resize_render_targets_if_needed() {
+        if (!renderer_) {
+                return;
+        }
+        int output_w = 0;
+        int output_h = 0;
+        if (SDL_GetRendererOutputSize(renderer_, &output_w, &output_h) != 0) {
+                return;
+        }
+        if (output_w <= 0 || output_h <= 0) {
+                return;
+        }
+        if (output_w == screen_width_ && output_h == screen_height_) {
+                return;
+        }
+
+        screen_width_ = output_w;
+        screen_height_ = output_h;
+        main_light_source_.set_screen_size(SDL_Point{ screen_width_ / 2, screen_height_ / 2 }, screen_width_);
+
+        if (scene_target_tex_) {
+                SDL_DestroyTexture(scene_target_tex_);
+                scene_target_tex_ = nullptr;
+        }
+
+        recreate_fullscreen_light_texture();
+        if (z_light_pass_) {
+                z_light_pass_->set_screen_dimensions(screen_width_, screen_height_, fullscreen_light_tex_);
+        }
+}
+
 SDL_Renderer* SceneRenderer::get_renderer() const {
     return renderer_;
 }
@@ -143,6 +196,8 @@ SDL_Rect SceneRenderer::get_scaled_position_rect(Asset* a,
 void SceneRenderer::render() {
     static int render_call_count = 0;
     ++render_call_count;
+
+    resize_render_targets_if_needed();
 
     update_shading_groups();
     main_light_source_.update();
@@ -337,7 +392,8 @@ void SceneRenderer::render() {
 
         SDL_SetTextureBlendMode(scene_target_tex_, SDL_BLENDMODE_BLEND);
         SDL_SetTextureAlphaMod(scene_target_tex_, 255);
-        SDL_RenderCopy(renderer_, scene_target_tex_, nullptr, nullptr);
+        SDL_Rect dst{ 0, 0, screen_width_, screen_height_ };
+        SDL_RenderCopy(renderer_, scene_target_tex_, nullptr, &dst);
     }
 
 }

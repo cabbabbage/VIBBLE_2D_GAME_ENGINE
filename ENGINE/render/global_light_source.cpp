@@ -137,10 +137,19 @@ void Global_Light_Source::apply_config(const json& data) {
         set_light_brightness();
 }
 
+void Global_Light_Source::set_screen_size(SDL_Point screen_center, int screen_width) {
+        center_ = screen_center;
+        orbit_radius = std::max(1, screen_width / 4);
+        const float ca = std::cos(angle_);
+        const float sa = std::sin(angle_);
+        pos_.x = center_.x + static_cast<int>(std::lround(orbit_radius * ca));
+        pos_.y = center_.y - static_cast<int>(std::lround(orbit_radius * sa));
+}
+
 void Global_Light_Source::update() {
-	if (++frame_counter_ % update_interval_ != 0) {
-		return;
-	}
+        if (++frame_counter_ % update_interval_ != 0) {
+                return;
+        }
 	if (!initialized_) {
 		static thread_local std::mt19937 rng{std::random_device{}()};
 		std::uniform_real_distribution<float> dist(0.0f, 2.0f * float(M_PI));

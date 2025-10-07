@@ -21,7 +21,7 @@ void AssetFilterBar::initialize() {
     FilterEntry map_entry;
     map_entry.id = "map_assets";
     map_entry.kind = FilterKind::MapAssets;
-    map_entry.checkbox = std::make_unique<DMCheckbox>("Map Assets", false);
+    map_entry.checkbox = std::make_unique<DMCheckbox>("Map Assets", true);
     entries_.push_back(std::move(map_entry));
 
     FilterEntry room_entry;
@@ -34,14 +34,13 @@ void AssetFilterBar::initialize() {
         FilterEntry entry;
         entry.id = type;
         entry.kind = FilterKind::Type;
-        const bool default_enabled =
-            (type == asset_types::npc) || (type == asset_types::object);
+        const bool default_enabled = default_type_enabled(type);
         entry.checkbox = std::make_unique<DMCheckbox>(format_type_label(type), default_enabled);
         state_.type_filters[type] = default_enabled;
         entries_.push_back(std::move(entry));
     }
 
-    state_.map_assets = false;
+    state_.map_assets = true;
     state_.current_room = true;
     sync_state_from_ui();
     layout_dirty_ = true;
@@ -305,17 +304,33 @@ bool AssetFilterBar::contains_point(int x, int y) const {
 
 void AssetFilterBar::reset() {
     for (auto& entry : entries_) {
-        if (entry.checkbox) {
-            entry.checkbox->set_value(true);
+        if (!entry.checkbox) {
+            continue;
+        }
+        switch (entry.kind) {
+            case FilterKind::MapAssets:
+                entry.checkbox->set_value(true);
+                break;
+            case FilterKind::CurrentRoom:
+                entry.checkbox->set_value(true);
+                break;
+            case FilterKind::Type:
+                entry.checkbox->set_value(default_type_enabled(entry.id));
+                break;
         }
     }
     state_.map_assets = true;
     state_.current_room = true;
     for (auto& kv : state_.type_filters) {
-        kv.second = true;
+        kv.second = default_type_enabled(kv.first);
     }
     sync_state_from_ui();
     notify_state_changed();
+}
+
+bool AssetFilterBar::default_type_enabled(const std::string& type) const {
+    const std::string canonical = asset_types::canonicalize(type);
+    return canonical != asset_types::player && canonical != asset_types::texture;
 }
 
 bool AssetFilterBar::passes(const Asset& asset) const {
