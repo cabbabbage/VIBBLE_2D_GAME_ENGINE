@@ -15,6 +15,7 @@
 #include <algorithm>
 #include <cmath>
 #include <climits>
+#include <cctype>
 #include <iostream>
 #include <stdexcept>
 
@@ -68,6 +69,21 @@ namespace {
             if (screen_h > 0.0f) return screen_h;
         }
         return 1.0f;
+    }
+
+    static bool should_use_room_center_anchor(const std::string& type, const std::string& name) {
+        auto matches = [](const std::string& value) {
+            if (value.empty()) return false;
+            std::string lowered = value;
+            std::transform(lowered.begin(), lowered.end(), lowered.begin(), [](unsigned char c) {
+                return static_cast<char>(std::tolower(c));
+            });
+            return lowered == "trigger" || lowered == "spawning" || lowered == "spawn" ||
+                   lowered.find("trigger") != std::string::npos ||
+                   lowered.find("spawn") != std::string::npos;
+        };
+        if (matches(type)) return true;
+        return matches(name);
     }
 }
 
@@ -189,6 +205,14 @@ bool AreaOverlayEditor::begin_for_room(Room* room,
     area_name_ = area_name;
     room_area_type_ = area_type;
 
+    SDL_Point room_center = focus_world;
+    if (room_->room_area) {
+        room_center = room_->room_area->get_center();
+    } else {
+        room_center = SDL_Point{room_->map_origin.first, room_->map_origin.second};
+    }
+    const bool use_center_anchor = should_use_room_center_anchor(room_area_type_, area_name_);
+
     std::vector<SDL_Point> reference_points;
     if (Area* existing = room_->find_area(area_name_)) {
         const auto& pts = existing->get_points();
@@ -206,6 +230,9 @@ bool AreaOverlayEditor::begin_for_room(Room* room,
         reference_points.push_back(SDL_Point{focus_world.x - pad, focus_world.y + pad});
     }
     reference_points.push_back(focus_world);
+    if (use_center_anchor) {
+        reference_points.push_back(room_center);
+    }
 
     int minx = reference_points.front().x;
     int maxx = reference_points.front().x;
@@ -230,6 +257,9 @@ bool AreaOverlayEditor::begin_for_room(Room* room,
     mask_origin_x_ = minx;
     mask_origin_y_ = miny;
     anchor_world_ = SDL_Point{ (minx + maxx) / 2, (miny + maxy) / 2 };
+    if (use_center_anchor) {
+        anchor_world_ = room_center;
+    }
     has_anchor_ = true;
     flipped_ = false;
 

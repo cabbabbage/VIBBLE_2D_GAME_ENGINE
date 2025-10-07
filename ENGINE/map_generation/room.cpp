@@ -9,6 +9,8 @@
 #include <initializer_list>
 #include <iostream>
 #include <cmath>
+#include <optional>
+#include <string>
 using json = nlohmann::json;
 
 namespace {
@@ -24,26 +26,44 @@ int positive_from_keys(const nlohmann::json& src, std::initializer_list<const ch
         return 0;
 }
 
-void update_anchor_and_points_json(nlohmann::json& entry, const std::vector<SDL_Point>& pts) {
+bool should_use_room_center_anchor(const std::string& type, const std::string& name) {
+        auto matches = [](const std::string& value) {
+                if (value.empty()) return false;
+                std::string lowered = value;
+                std::transform(lowered.begin(), lowered.end(), lowered.begin(), [](unsigned char c) {
+                        return static_cast<char>(std::tolower(c));
+                });
+                return lowered == "trigger" || lowered == "spawning" || lowered == "spawn" ||
+                       lowered.find("trigger") != std::string::npos ||
+                       lowered.find("spawn") != std::string::npos;
+        };
+        if (matches(type)) return true;
+        return matches(name);
+}
+
+void update_anchor_and_points_json(nlohmann::json& entry,
+                                  const std::vector<SDL_Point>& pts,
+                                  std::optional<SDL_Point> forced_anchor = std::nullopt) {
         if (pts.empty()) {
                 entry.erase("anchor");
                 entry.erase("points");
                 return;
         }
-        int minx = pts.front().x;
-        int miny = pts.front().y;
-        for (const auto& p : pts) {
-                minx = std::min(minx, p.x);
-                miny = std::min(miny, p.y);
+        SDL_Point anchor = forced_anchor.value_or(SDL_Point{pts.front().x, pts.front().y});
+        if (!forced_anchor.has_value()) {
+                for (const auto& p : pts) {
+                        anchor.x = std::min(anchor.x, p.x);
+                        anchor.y = std::min(anchor.y, p.y);
+                }
         }
         entry["anchor"] = nlohmann::json::object({
-                {"x", minx},
-                {"y", miny}
+                {"x", anchor.x},
+                {"y", anchor.y}
         });
         nlohmann::json points = nlohmann::json::array();
         points.get_ref<nlohmann::json::array_t&>().reserve(pts.size());
         for (const auto& p : pts) {
-                points.push_back({ {"x", p.x - minx}, {"y", p.y - miny} });
+                points.push_back({ {"x", p.x - anchor.x}, {"y", p.y - anchor.y} });
         }
         entry["points"] = std::move(points);
 }
@@ -296,11 +316,15 @@ void Room::load_named_areas_from_json() {
 
                         item["origional_width"] = orig_w;
                         item["origional_height"] = orig_h;
+                        std::optional<SDL_Point> forced_anchor;
+                        if (should_use_room_center_anchor(type, name)) {
+                                forced_anchor = center;
+                        }
                         if (used_relative) {
-                                update_anchor_and_points_json(item, pts);
+                                update_anchor_and_points_json(item, pts, forced_anchor);
                         } else {
                                 write_relative_points_json(item, pts, center, orig_w, orig_h);
-                                update_anchor_and_points_json(item, pts);
+                                update_anchor_and_points_json(item, pts, forced_anchor);
                         }
 
                         NamedArea na;
@@ -362,6 +386,9 @@ void Room::upsert_named_area(const Area& area, const std::string& type) {
                 assets_json["areas"] = nlohmann::json::array();
         }
 
+        SDL_Point center = room_area ? room_area->get_center()
+                                     : SDL_Point{map_origin.first, map_origin.second};
+
         nlohmann::json entry = nlohmann::json::object();
         entry["name"] = area_name;
         if (!type.empty()) {
@@ -372,10 +399,13 @@ void Room::upsert_named_area(const Area& area, const std::string& type) {
 
         const auto& pts = area.get_points();
         if (!pts.empty()) {
-                update_anchor_and_points_json(entry, pts);
+                std::string effective_type = type.empty() ? area.get_type() : type;
+                std::optional<SDL_Point> forced_anchor;
+                if (should_use_room_center_anchor(effective_type, area_name)) {
+                        forced_anchor = center;
+                }
 
-                SDL_Point center = room_area ? room_area->get_center()
-                                             : SDL_Point{map_origin.first, map_origin.second};
+                update_anchor_and_points_json(entry, pts, forced_anchor);
                 int orig_w = 0;
                 int orig_h = 0;
                 if (room_area) {

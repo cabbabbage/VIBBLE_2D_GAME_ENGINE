@@ -72,6 +72,10 @@ struct SpawnGroupList::EntryRow {
     std::unique_ptr<Widget> body_begin_marker;
     std::unique_ptr<Widget> body_end_marker;
     SDL_Rect body_rect{0,0,0,0};
+
+    std::unique_ptr<Widget> candidates_begin_marker;
+    std::unique_ptr<Widget> candidates_end_marker;
+    SDL_Rect candidates_rect{0,0,0,0};
 };
 
 namespace {
@@ -382,6 +386,7 @@ void SpawnGroupList::append_rows(Rows& rows) {
         // Header
         r->outline_rect = SDL_Rect{0,0,0,0};
         r->body_rect = SDL_Rect{0,0,0,0};
+        r->candidates_rect = SDL_Rect{0,0,0,0};
         if (!r->outline_begin_marker)
             r->outline_begin_marker = std::make_unique<RowRectMarkerWidget>(&r->outline_rect, true);
         if (!r->outline_end_marker)
@@ -514,10 +519,18 @@ void SpawnGroupList::append_rows(Rows& rows) {
                     out.push_back({ r->qty_w.get() });
                 }
                 if (r->link_btn_w) out.push_back({ r->link_btn_w.get() });
+                if (!r->candidates_begin_marker)
+                    r->candidates_begin_marker = std::make_unique<RowRectMarkerWidget>(&r->candidates_rect, true);
+                if (!r->candidates_end_marker)
+                    r->candidates_end_marker = std::make_unique<RowRectMarkerWidget>(&r->candidates_rect, false);
+                if (r->candidates_begin_marker)
+                    out.push_back({ r->candidates_begin_marker.get() });
                 out.push_back({ r->add_cand_w.get() });
                 for (auto& cr : r->candidates) {
                     out.push_back({ cr->name_w.get(), cr->chance_w.get(), cr->up_w.get(), cr->down_w.get(), cr->del_w.get() });
                 }
+                if (r->candidates_end_marker)
+                    out.push_back({ r->candidates_end_marker.get() });
                 if (r->body_end_marker)
                     out.push_back({ r->body_end_marker.get() });
             } else {
@@ -701,6 +714,10 @@ void SpawnGroupList::render_content(SDL_Renderer* r) const {
     SDL_Color inner = DMStyles::AccentButton().bg;
     inner.a = 40;
     accent.a = 200;
+    SDL_Color list_border = DMStyles::ListButton().border;
+    list_border.a = 220;
+    SDL_Color separator = DMStyles::Border();
+    separator.a = 255;
     for (const auto& row : rows_) {
         if (!row) continue;
         SDL_Rect rect = row->outline_rect;
@@ -731,6 +748,31 @@ void SpawnGroupList::render_content(SDL_Renderer* r) const {
         inner_outline.h -= 2;
         SDL_SetRenderDrawColor(r, accent.r, accent.g, accent.b, accent.a);
         SDL_RenderDrawRect(r, &inner_outline);
+
+        if (row->expanded && row->candidates_rect.w > 0 && row->candidates_rect.h > 0) {
+            SDL_Rect cand = row->candidates_rect;
+            cand.x -= 6;
+            cand.y -= 6;
+            cand.w += 12;
+            cand.h += 12;
+            if (cand.w > 0 && cand.h > 0) {
+                SDL_SetRenderDrawColor(r, list_border.r, list_border.g, list_border.b, list_border.a / 2);
+                SDL_RenderDrawRect(r, &cand);
+                SDL_Rect cand_inner = cand;
+                cand_inner.x += 1;
+                cand_inner.y += 1;
+                cand_inner.w -= 2;
+                cand_inner.h -= 2;
+                SDL_SetRenderDrawColor(r, list_border.r, list_border.g, list_border.b, list_border.a);
+                SDL_RenderDrawRect(r, &cand_inner);
+            }
+        }
+
+        int sep_y = outline.y + outline.h + 2;
+        int sep_x1 = outline.x;
+        int sep_x2 = outline.x + outline.w;
+        SDL_SetRenderDrawColor(r, separator.r, separator.g, separator.b, separator.a);
+        SDL_RenderDrawLine(r, sep_x1, sep_y, sep_x2, sep_y);
     }
 }
 
