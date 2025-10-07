@@ -8,6 +8,7 @@
 #include "asset/asset_info.hpp"
 #include "utils/area.hpp"
 #include "spawn_logger.hpp"
+#include "utils/relative_room_position.hpp"
 
 void ExactSpawner::spawn(const SpawnInfo& item, const Area* area, SpawnContext& ctx) {
     if (!area || !item.has_candidates() || item.quantity <= 0) return;
@@ -16,15 +17,9 @@ void ExactSpawner::spawn(const SpawnInfo& item, const Area* area, SpawnContext& 
     const int curr_w = std::max(1, maxx - minx);
     const int curr_h = std::max(1, maxy - miny);
 
-    const int orig_w = (item.exact_origin_w > 0) ? item.exact_origin_w : curr_w;
-    const int orig_h = (item.exact_origin_h > 0) ? item.exact_origin_h : curr_h;
-
-    const double rx = static_cast<double>(curr_w) / static_cast<double>(std::max(1, orig_w));
-    const double ry = static_cast<double>(curr_h) / static_cast<double>(std::max(1, orig_h));
-
     SDL_Point center = ctx.get_area_center(*area);
-    SDL_Point final_pos{
-        center.x + static_cast<int>(std::lround(item.exact_offset.x * rx)), center.y + static_cast<int>(std::lround(item.exact_offset.y * ry)) };
+    RelativeRoomPosition relative(item.exact_offset, item.exact_origin_w, item.exact_origin_h);
+    SDL_Point final_pos = relative.resolve(center, curr_w, curr_h);
 
     int attempts = 0;
     int spawned  = 0;

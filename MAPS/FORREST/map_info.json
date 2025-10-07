@@ -521,6 +521,8 @@
             "y": 3051
           },
           "name": "trigger_area",
+          "origional_height": 3612,
+          "origional_width": 3612,
           "points": [
             {
               "x": 597,
@@ -537,6 +539,62 @@
             {
               "x": 0,
               "y": 0
+            }
+          ],
+          "relative_points": [
+            {
+              "dx": -5404,
+              "dy": -4626
+            },
+            {
+              "dx": -5045,
+              "dy": -4004
+            },
+            {
+              "dx": -5767,
+              "dy": -4029
+            },
+            {
+              "dx": -6001,
+              "dy": -4677
+            }
+          ],
+          "type": "trigger"
+        },
+        {
+          "anchor": {
+            "x": 1392,
+            "y": 2973
+          },
+          "name": "trigger_area_1",
+          "origional_height": 3612,
+          "origional_width": 3612,
+          "points": [
+            {
+              "x": 1153,
+              "y": 0
+            },
+            {
+              "x": 0,
+              "y": 922
+            },
+            {
+              "x": 1049,
+              "y": 861
+            }
+          ],
+          "relative_points": [
+            {
+              "dx": -5183,
+              "dy": -4755
+            },
+            {
+              "dx": -6336,
+              "dy": -3833
+            },
+            {
+              "dx": -5287,
+              "dy": -3894
             }
           ],
           "type": "trigger"

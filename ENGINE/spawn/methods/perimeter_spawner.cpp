@@ -11,6 +11,7 @@
 #include "asset/asset_info.hpp"
 #include "utils/area.hpp"
 #include "spawn_logger.hpp"
+#include "utils/relative_room_position.hpp"
 
 void PerimeterSpawner::spawn(const SpawnInfo& item, const Area* area, SpawnContext& ctx) {
     if (!area || item.quantity <= 0 || !item.has_candidates()) return;
@@ -22,15 +23,9 @@ void PerimeterSpawner::spawn(const SpawnInfo& item, const Area* area, SpawnConte
     const int curr_w = std::max(1, maxx - minx);
     const int curr_h = std::max(1, maxy - miny);
 
-    const int orig_w = std::max(1, item.exact_origin_w);
-    const int orig_h = std::max(1, item.exact_origin_h);
-
-    const double rx = static_cast<double>(curr_w) / static_cast<double>(orig_w);
-    const double ry = static_cast<double>(curr_h) / static_cast<double>(orig_h);
-
     SDL_Point room_center = ctx.get_area_center(*area);
-    SDL_Point circle_center{
-        room_center.x + static_cast<int>(std::lround(item.exact_offset.x * rx)), room_center.y + static_cast<int>(std::lround(item.exact_offset.y * ry)) };
+    RelativeRoomPosition relative(item.exact_offset, item.exact_origin_w, item.exact_origin_h);
+    SDL_Point circle_center = relative.resolve(room_center, curr_w, curr_h);
 
     std::uniform_real_distribution<double> phase_dist(0.0, 2.0 * M_PI);
     const double start = phase_dist(ctx.rng());

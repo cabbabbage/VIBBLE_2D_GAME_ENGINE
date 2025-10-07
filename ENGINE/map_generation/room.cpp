@@ -1,13 +1,71 @@
 #include "room.hpp"
 #include "spawn/asset_spawner.hpp"
 #include "asset/asset_types.hpp"
+#include "utils/relative_room_position.hpp"
 #include <fstream>
 #include <nlohmann/json.hpp>
 #include <stdexcept>
 #include <algorithm>
+#include <initializer_list>
 #include <iostream>
 #include <cmath>
 using json = nlohmann::json;
+
+namespace {
+
+int positive_from_keys(const nlohmann::json& src, std::initializer_list<const char*> keys) {
+        for (const char* key : keys) {
+                auto it = src.find(key);
+                if (it != src.end() && it->is_number_integer()) {
+                        int value = it->get<int>();
+                        if (value > 0) return value;
+                }
+        }
+        return 0;
+}
+
+void update_anchor_and_points_json(nlohmann::json& entry, const std::vector<SDL_Point>& pts) {
+        if (pts.empty()) {
+                entry.erase("anchor");
+                entry.erase("points");
+                return;
+        }
+        int minx = pts.front().x;
+        int miny = pts.front().y;
+        for (const auto& p : pts) {
+                minx = std::min(minx, p.x);
+                miny = std::min(miny, p.y);
+        }
+        entry["anchor"] = nlohmann::json::object({
+                {"x", minx},
+                {"y", miny}
+        });
+        nlohmann::json points = nlohmann::json::array();
+        points.get_ref<nlohmann::json::array_t&>().reserve(pts.size());
+        for (const auto& p : pts) {
+                points.push_back({ {"x", p.x - minx}, {"y", p.y - miny} });
+        }
+        entry["points"] = std::move(points);
+}
+
+void write_relative_points_json(nlohmann::json& entry,
+                                const std::vector<SDL_Point>& pts,
+                                SDL_Point center,
+                                int original_width,
+                                int original_height) {
+        original_width = std::max(1, original_width);
+        original_height = std::max(1, original_height);
+        entry["origional_width"] = original_width;
+        entry["origional_height"] = original_height;
+        nlohmann::json relative = nlohmann::json::array();
+        relative.get_ref<nlohmann::json::array_t&>().reserve(pts.size());
+        for (const auto& p : pts) {
+                relative.push_back({ {"dx", p.x - center.x}, {"dy", p.y - center.y} });
+        }
+        entry["relative_points"] = std::move(relative);
+}
+
+}  // namespace
 
 Room::Room(Point origin,
            std::string type_,
@@ -170,28 +228,81 @@ void Room::load_named_areas_from_json() {
         try {
                 if (!assets_json.is_object()) return;
                 if (!assets_json.contains("areas") || !assets_json["areas"].is_array()) return;
-                for (const auto& item : assets_json["areas"]) {
+
+                SDL_Point center = room_area ? room_area->get_center()
+                                             : SDL_Point{map_origin.first, map_origin.second};
+                int curr_w = 0;
+                int curr_h = 0;
+                if (room_area) {
+                        auto [minx, miny, maxx, maxy] = room_area->get_bounds();
+                        curr_w = std::max(1, maxx - minx);
+                        curr_h = std::max(1, maxy - miny);
+                } else {
+                        curr_w = positive_from_keys(assets_json, {"max_width", "width_max", "min_width", "width_min"});
+                        curr_h = positive_from_keys(assets_json, {"max_height", "height_max", "min_height", "height_min"});
+                        int radius = assets_json.value("radius", 0);
+                        if (radius > 0) {
+                                curr_w = std::max(curr_w, radius * 2);
+                                curr_h = std::max(curr_h, radius * 2);
+                        }
+                        curr_w = std::max(1, curr_w);
+                        curr_h = std::max(1, curr_h);
+                }
+
+                for (auto& item : assets_json["areas"]) {
                         if (!item.is_object()) continue;
                         const std::string name = item.value("name", std::string{});
                         if (name.empty()) continue;
                         const std::string type = item.value("type", std::string{});
-                        int ax = 0;
-                        int ay = 0;
-                        if (item.contains("anchor") && item["anchor"].is_object()) {
-                                ax = item["anchor"].value("x", 0);
-                                ay = item["anchor"].value("y", 0);
-                        }
+
+                        int orig_w = item.value("origional_width", item.value("original_width", curr_w));
+                        int orig_h = item.value("origional_height", item.value("original_height", curr_h));
+                        if (orig_w <= 0) orig_w = curr_w;
+                        if (orig_h <= 0) orig_h = curr_h;
+
                         std::vector<SDL_Point> pts;
-                        if (item.contains("points") && item["points"].is_array()) {
-                                pts.reserve(item["points"].size());
-                                for (const auto& p : item["points"]) {
-                                        if (!p.is_object()) continue;
-                                        int rx = p.value("x", 0);
-                                        int ry = p.value("y", 0);
-                                        pts.push_back(SDL_Point{ ax + rx, ay + ry });
+                        bool used_relative = false;
+                        auto rel_it = item.find("relative_points");
+                        if (rel_it != item.end() && rel_it->is_array() && !rel_it->empty()) {
+                                used_relative = true;
+                                pts.reserve(rel_it->size());
+                                for (const auto& rel : *rel_it) {
+                                        if (!rel.is_object()) continue;
+                                        int dx = rel.value("dx", rel.value("x", 0));
+                                        int dy = rel.value("dy", rel.value("y", 0));
+                                        RelativeRoomPosition rel_pos(SDL_Point{dx, dy}, orig_w, orig_h);
+                                        SDL_Point resolved = rel_pos.resolve(center, curr_w, curr_h);
+                                        pts.push_back(resolved);
+                                }
+                        }
+                        if (!used_relative) {
+                                int ax = 0;
+                                int ay = 0;
+                                if (item.contains("anchor") && item["anchor"].is_object()) {
+                                        ax = item["anchor"].value("x", 0);
+                                        ay = item["anchor"].value("y", 0);
+                                }
+                                if (item.contains("points") && item["points"].is_array()) {
+                                        pts.reserve(item["points"].size());
+                                        for (const auto& p : item["points"]) {
+                                                if (!p.is_object()) continue;
+                                                int rx = p.value("x", 0);
+                                                int ry = p.value("y", 0);
+                                                pts.push_back(SDL_Point{ ax + rx, ay + ry });
+                                        }
                                 }
                         }
                         if (pts.size() < 3) continue;
+
+                        item["origional_width"] = orig_w;
+                        item["origional_height"] = orig_h;
+                        if (used_relative) {
+                                update_anchor_and_points_json(item, pts);
+                        } else {
+                                write_relative_points_json(item, pts, center, orig_w, orig_h);
+                                update_anchor_and_points_json(item, pts);
+                        }
+
                         NamedArea na;
                         na.name = name;
                         na.type = type;
@@ -261,27 +372,29 @@ void Room::upsert_named_area(const Area& area, const std::string& type) {
 
         const auto& pts = area.get_points();
         if (!pts.empty()) {
-                int minx = pts.front().x;
-                int miny = pts.front().y;
-                int maxx = pts.front().x;
-                int maxy = pts.front().y;
-                for (const auto& p : pts) {
-                        minx = std::min(minx, p.x);
-                        maxx = std::max(maxx, p.x);
-                        miny = std::min(miny, p.y);
-                        maxy = std::max(maxy, p.y);
+                update_anchor_and_points_json(entry, pts);
+
+                SDL_Point center = room_area ? room_area->get_center()
+                                             : SDL_Point{map_origin.first, map_origin.second};
+                int orig_w = 0;
+                int orig_h = 0;
+                if (room_area) {
+                        auto [minx, miny, maxx, maxy] = room_area->get_bounds();
+                        orig_w = std::max(1, maxx - minx);
+                        orig_h = std::max(1, maxy - miny);
+                } else {
+                        orig_w = positive_from_keys(assets_json, {"origional_width", "original_width", "max_width", "width_max", "min_width", "width_min"});
+                        orig_h = positive_from_keys(assets_json, {"origional_height", "original_height", "max_height", "height_max", "min_height", "height_min"});
+                        int radius = assets_json.value("radius", 0);
+                        if (radius > 0) {
+                                orig_w = std::max(orig_w, radius * 2);
+                                orig_h = std::max(orig_h, radius * 2);
+                        }
+                        if (orig_w <= 0) orig_w = 1;
+                        if (orig_h <= 0) orig_h = 1;
                 }
-                entry["anchor"] = nlohmann::json::object({
-                        {"x", minx},
-                        {"y", miny}
-                });
-                nlohmann::json points = nlohmann::json::array();
-                auto& points_array = points.get_ref<nlohmann::json::array_t&>();
-                points_array.reserve(pts.size());
-                for (const auto& p : pts) {
-                        points_array.push_back({ {"x", p.x - minx}, {"y", p.y - miny} });
-                }
-                entry["points"] = std::move(points);
+
+                write_relative_points_json(entry, pts, center, orig_w, orig_h);
         }
 
         auto& arr = assets_json["areas"];
