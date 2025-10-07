@@ -55,7 +55,7 @@
         "jitter_max": 3,
         "jitter_min": 3,
         "max_number": 100,
-        "min_number": 53,
+        "min_number": 52,
         "position": "Random",
         "spawn_id": "spn-5200d51e3675"
       }

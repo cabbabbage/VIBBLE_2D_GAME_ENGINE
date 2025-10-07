@@ -1,8 +1,13 @@
 #include "spawn_group_list.hpp"
 
 #include <algorithm>
-#include <utility>
+#include <cmath>
+#include <iomanip>
+#include <numeric>
+#include <sstream>
 #include <unordered_set>
+#include <utility>
+#include <vector>
 
 #include <SDL_ttf.h>
 
@@ -190,37 +195,70 @@ public:
     void rebuild();
     void append_rows(DockableCollapsible::Rows& out);
     bool sync_to_json();
+    void add_candidate(const std::string& asset_name);
 
 private:
-    struct CandidateRow {
-        std::unique_ptr<DMTextBox> name_box;
-        std::unique_ptr<TextBoxWidget> name_w;
-        std::unique_ptr<DMSlider> chance_sl;
-        std::unique_ptr<SliderWidget> chance_w;
-        std::unique_ptr<DMButton> up_btn;
-        std::unique_ptr<ButtonWidget> up_w;
-        std::unique_ptr<DMButton> down_btn;
-        std::unique_ptr<ButtonWidget> down_w;
-        std::unique_ptr<DMButton> del_btn;
-        std::unique_ptr<ButtonWidget> del_w;
-        std::unique_ptr<SpacerWidget> spacing;
+    struct CandidateInfo {
+        std::string name;
+        double weight = 0.0;
+    };
+
+    class CandidatePieWidget : public Widget {
+    public:
+        explicit CandidatePieWidget(CandidateList& list) : list_(list) {}
+
+        void set_rect(const SDL_Rect& r) override { rect_ = r; }
+        const SDL_Rect& rect() const override { return rect_; }
+        int height_for_width(int w) const override;
+        bool handle_event(const SDL_Event& e) override;
+        void render(SDL_Renderer* r) const override;
+        bool wants_full_row() const override { return true; }
+
+    private:
+        struct Layout {
+            SDL_FPoint center{0.f, 0.f};
+            float radius = 0.f;
+            SDL_Rect legend{0, 0, 0, 0};
+        };
+
+        Layout compute_layout() const;
+        int index_for_point(int x, int y) const;
+
+        SDL_Rect rect_{0, 0, 0, 0};
+        CandidateList& list_;
     };
 
     void ensure_common_widgets();
-    void append_empty_state(DockableCollapsible::Rows& out);
-    void append_candidate_rows(DockableCollapsible::Rows& out);
+    void clear_hover();
+    void set_hover(int idx, bool inside);
+    bool handle_scroll(int steps);
+    bool remove_hovered();
+    void ensure_positive_total();
+    void renormalize();
+    double step_amount() const;
+    SDL_Color color_for_index(size_t index, bool highlight) const;
+    const std::vector<CandidateInfo>& candidates() const { return candidates_; }
+    double total_weight() const { return total_weight_; }
+    bool has_hover() const { return hover_active_ && hover_index_ >= 0 && hover_index_ < static_cast<int>(candidates_.size()); }
+    int hovered_index() const { return has_hover() ? hover_index_ : -1; }
+    bool adjust_weight_internal(int idx, int steps);
 
     SpawnGroupList& owner_;
     EntryRow& row_;
-    std::vector<std::unique_ptr<CandidateRow>> rows_;
+    std::vector<CandidateInfo> candidates_;
+    double total_weight_ = 100.0;
+    int hover_index_ = -1;
+    bool hover_active_ = false;
+    bool dirty_ = false;
+
     std::unique_ptr<SpacerWidget> top_gap_;
     std::unique_ptr<RowRectMarkerWidget> begin_marker_;
     std::unique_ptr<RowRectMarkerWidget> end_marker_;
     std::unique_ptr<SectionLabelWidget> header_label_;
-    std::unique_ptr<SectionLabelWidget> empty_label_;
     std::unique_ptr<SpacerWidget> bottom_gap_;
     std::unique_ptr<DMButton> add_btn_;
     std::unique_ptr<ButtonWidget> add_w_;
+    std::unique_ptr<CandidatePieWidget> pie_widget_;
 };
 
 namespace {
@@ -234,52 +272,34 @@ static bool method_uses_range(const std::string& m) {
 }  // namespace
 
 void SpawnGroupList::CandidateList::rebuild() {
-    rows_.clear();
+    candidates_.clear();
+    hover_index_ = -1;
+    hover_active_ = false;
+    dirty_ = false;
+    total_weight_ = 0.0;
     if (!row_.entry) return;
     auto& entry = *row_.entry;
     if (!entry.contains("candidates") || !entry["candidates"].is_array()) return;
-    for (size_t ci = 0; ci < entry["candidates"].size(); ++ci) {
-        const auto& candidate = entry["candidates"][ci];
-        auto row = std::make_unique<CandidateRow>();
-        const std::string name = candidate.value("name", std::string{"null"});
-        const int chance = candidate.value("chance", 0);
-        row->name_box = std::make_unique<DMTextBox>("Asset", name);
-        row->name_w = std::make_unique<TextBoxWidget>(row->name_box.get(), true);
-        row->chance_sl = std::make_unique<DMSlider>("Weight", 0, 100, chance);
-        row->chance_w = std::make_unique<SliderWidget>(row->chance_sl.get());
-        row->up_btn = std::make_unique<DMButton>("↑", &DMStyles::ListButton(), 24, DMButton::height());
-        row->up_w = std::make_unique<ButtonWidget>(row->up_btn.get(), [this, ci]() {
-            if (!row_.entry || !row_.entry->contains("candidates")) return;
-            auto& arr = (*row_.entry)["candidates"];
-            if (!arr.is_array()) return;
-            if (ci == 0 || ci >= arr.size()) return;
-            std::swap(arr[ci - 1], arr[ci]);
-            if (owner_.on_change_) owner_.on_change_();
-            owner_.rebuild_layout();
-        });
-        row->down_btn = std::make_unique<DMButton>("↓", &DMStyles::ListButton(), 24, DMButton::height());
-        row->down_w = std::make_unique<ButtonWidget>(row->down_btn.get(), [this, ci]() {
-            if (!row_.entry || !row_.entry->contains("candidates")) return;
-            auto& arr = (*row_.entry)["candidates"];
-            if (!arr.is_array()) return;
-            if (ci + 1 >= arr.size()) return;
-            std::swap(arr[ci], arr[ci + 1]);
-            if (owner_.on_change_) owner_.on_change_();
-            owner_.rebuild_layout();
-        });
-        row->del_btn = std::make_unique<DMButton>("X", &DMStyles::DeleteButton(), 24, DMButton::height());
-        row->del_w = std::make_unique<ButtonWidget>(row->del_btn.get(), [this, ci]() {
-            if (!row_.entry || !row_.entry->contains("candidates")) return;
-            auto& arr = (*row_.entry)["candidates"];
-            if (!arr.is_array()) return;
-            if (ci >= arr.size()) return;
-            arr.erase(arr.begin() + static_cast<nlohmann::json::difference_type>(ci));
-            if (owner_.on_change_) owner_.on_change_();
-            owner_.rebuild_layout();
-        });
-        row->spacing = std::make_unique<SpacerWidget>(DMSpacing::small_gap());
-        rows_.push_back(std::move(row));
+    const auto& arr = entry["candidates"];
+    candidates_.reserve(arr.size());
+    for (const auto& candidate : arr) {
+        CandidateInfo info;
+        info.name = candidate.value("name", std::string{"null"});
+        info.weight = static_cast<double>(candidate.value("chance", 0));
+        if (info.weight < 0.0) info.weight = 0.0;
+        candidates_.push_back(std::move(info));
     }
+    total_weight_ = std::accumulate(candidates_.begin(), candidates_.end(), 0.0,
+        [](double acc, const CandidateInfo& info) {
+            return acc + std::max(0.0, info.weight);
+        });
+    if (!candidates_.empty() && total_weight_ <= 0.0) {
+        total_weight_ = static_cast<double>(candidates_.size()) * 100.0;
+        double share = total_weight_ / candidates_.size();
+        for (auto& info : candidates_) info.weight = share;
+        dirty_ = true;
+    }
+    ensure_common_widgets();
 }
 
 void SpawnGroupList::CandidateList::ensure_common_widgets() {
@@ -291,20 +311,16 @@ void SpawnGroupList::CandidateList::ensure_common_widgets() {
         end_marker_ = std::make_unique<RowRectMarkerWidget>(&row_.candidates_rect, false);
     if (!header_label_)
         header_label_ = std::make_unique<SectionLabelWidget>("Candidates", false);
-    if (!empty_label_)
-        empty_label_ = std::make_unique<SectionLabelWidget>("No candidates configured", true, DMStyles::Label().color, std::max(10, DMStyles::Label().font_size - 2));
     if (!bottom_gap_)
         bottom_gap_ = std::make_unique<SpacerWidget>(DMSpacing::item_gap());
     if (!add_btn_ && row_.entry) {
         add_btn_ = std::make_unique<DMButton>("Add Candidate", &DMStyles::CreateButton(), 160, DMButton::height());
         add_w_ = std::make_unique<ButtonWidget>(add_btn_.get(), [this]() { owner_.open_asset_search(row_, {}); });
     }
+    if (!pie_widget_)
+        pie_widget_ = std::make_unique<CandidatePieWidget>(*this);
     if (header_label_)
         header_label_->set_text("Candidates");
-    if (empty_label_) {
-        empty_label_->set_text("No candidates configured");
-        empty_label_->set_font_size(std::max(10, DMStyles::Label().font_size - 2));
-    }
 }
 
 void SpawnGroupList::CandidateList::append_rows(DockableCollapsible::Rows& out) {
@@ -316,55 +332,531 @@ void SpawnGroupList::CandidateList::append_rows(DockableCollapsible::Rows& out) 
     if (header_label_) header_row.push_back(header_label_.get());
     if (add_w_) header_row.push_back(add_w_.get());
     if (!header_row.empty()) out.push_back(header_row);
-
-    if (rows_.empty()) {
-        append_empty_state(out);
-    } else {
-        append_candidate_rows(out);
-    }
-
+    if (pie_widget_) out.push_back({ pie_widget_.get() });
     if (end_marker_) out.push_back({ end_marker_.get() });
     if (bottom_gap_) out.push_back({ bottom_gap_.get() });
 }
 
-void SpawnGroupList::CandidateList::append_empty_state(DockableCollapsible::Rows& out) {
-    if (empty_label_) out.push_back({ empty_label_.get() });
-}
-
-void SpawnGroupList::CandidateList::append_candidate_rows(DockableCollapsible::Rows& out) {
-    for (size_t ci = 0; ci < rows_.size(); ++ci) {
-        auto& row = rows_[ci];
-        if (!row) continue;
-        if (row->name_w) out.push_back({ row->name_w.get() });
-        if (row->chance_w) out.push_back({ row->chance_w.get() });
-        DockableCollapsible::Row controls;
-        if (row->up_w) controls.push_back(row->up_w.get());
-        if (row->down_w) controls.push_back(row->down_w.get());
-        if (row->del_w) controls.push_back(row->del_w.get());
-        if (!controls.empty()) out.push_back(controls);
-        if (ci + 1 < rows_.size() && row->spacing)
-            out.push_back({ row->spacing.get() });
-    }
-}
-
 bool SpawnGroupList::CandidateList::sync_to_json() {
-    if (!row_.entry) return false;
-    if (!row_.entry->contains("candidates")) return false;
-    auto& arr = (*row_.entry)["candidates"];
-    if (!arr.is_array()) return false;
-    bool changed = false;
-    size_t idx = 0;
-    for (auto& row : rows_) {
-        if (!row) continue;
-        if (idx >= arr.size()) break;
-        int value = std::clamp(row->chance_sl ? row->chance_sl->value() : 0, 0, 100);
-        if (arr[idx].value("chance", 0) != value) {
-            arr[idx]["chance"] = value;
-            changed = true;
-        }
-        ++idx;
+    if (!dirty_ || !row_.entry) return false;
+    auto& entry = *row_.entry;
+    if (!entry.contains("candidates") || !entry["candidates"].is_array()) {
+        entry["candidates"] = json::array();
     }
-    return changed;
+    auto& arr = entry["candidates"];
+    arr = json::array();
+
+    if (candidates_.empty()) {
+        dirty_ = false;
+        return true;
+    }
+
+    double sum = std::accumulate(candidates_.begin(), candidates_.end(), 0.0,
+        [](double acc, const CandidateInfo& info) {
+            return acc + std::max(0.0, info.weight);
+        });
+    if (sum <= 0.0) {
+        sum = static_cast<double>(candidates_.size());
+        for (auto& c : candidates_) c.weight = 1.0;
+        total_weight_ = sum;
+    }
+
+    int target_total = static_cast<int>(std::round(total_weight_));
+    if (target_total <= 0) {
+        target_total = static_cast<int>(std::round(sum));
+    }
+    if (target_total < 0) target_total = 0;
+
+    std::vector<int> rounded;
+    rounded.reserve(candidates_.size());
+    int remaining = target_total;
+    for (size_t i = 0; i < candidates_.size(); ++i) {
+        int value = static_cast<int>(std::round(std::max(0.0, candidates_[i].weight)));
+        if (i + 1 == candidates_.size()) {
+            value = std::max(0, remaining);
+        } else {
+            if (remaining < 0) remaining = 0;
+            value = std::max(0, std::min(value, remaining));
+            remaining -= value;
+        }
+        rounded.push_back(value);
+        json cand;
+        cand["name"] = candidates_[i].name;
+        cand["chance"] = value;
+        arr.push_back(std::move(cand));
+    }
+    if (!rounded.empty() && remaining > 0) {
+        rounded.back() += remaining;
+        arr.back()["chance"] = rounded.back();
+    }
+    int total_written = std::accumulate(rounded.begin(), rounded.end(), 0);
+    total_weight_ = static_cast<double>(total_written);
+    for (size_t i = 0; i < rounded.size(); ++i) {
+        candidates_[i].weight = static_cast<double>(rounded[i]);
+    }
+    dirty_ = false;
+    return true;
+}
+
+void SpawnGroupList::CandidateList::clear_hover() {
+    hover_index_ = -1;
+    hover_active_ = false;
+}
+
+void SpawnGroupList::CandidateList::set_hover(int idx, bool inside) {
+    if (!inside) {
+        clear_hover();
+        return;
+    }
+    hover_active_ = true;
+    if (idx >= 0 && idx < static_cast<int>(candidates_.size())) {
+        hover_index_ = idx;
+    } else {
+        hover_index_ = -1;
+    }
+}
+
+bool SpawnGroupList::CandidateList::handle_scroll(int steps) {
+    if (!has_hover() || steps == 0) return false;
+    return adjust_weight_internal(hover_index_, steps);
+}
+
+bool SpawnGroupList::CandidateList::remove_hovered() {
+    if (!has_hover()) return false;
+    int idx = hover_index_;
+    if (idx < 0 || idx >= static_cast<int>(candidates_.size())) return false;
+    double removed = std::max(0.0, candidates_[idx].weight);
+    candidates_.erase(candidates_.begin() + idx);
+    if (candidates_.empty()) {
+        total_weight_ = 100.0;
+        clear_hover();
+    } else {
+        double sum = std::accumulate(candidates_.begin(), candidates_.end(), 0.0,
+            [](double acc, const CandidateInfo& info) { return acc + std::max(0.0, info.weight); });
+        if (sum <= 0.0) {
+            double share = (total_weight_ > 0.0 ? total_weight_ : 100.0) / candidates_.size();
+            for (auto& c : candidates_) c.weight = share;
+        } else {
+            if (total_weight_ <= 0.0) total_weight_ = sum + removed;
+            double factor = (sum > 0.0) ? (total_weight_ / sum) : 1.0;
+            for (auto& c : candidates_) c.weight *= factor;
+        }
+        if (hover_index_ >= static_cast<int>(candidates_.size())) {
+            hover_index_ = static_cast<int>(candidates_.size()) - 1;
+        }
+        renormalize();
+    }
+    dirty_ = true;
+    return true;
+}
+
+void SpawnGroupList::CandidateList::ensure_positive_total() {
+    if (total_weight_ > 0.0) return;
+    if (candidates_.empty()) {
+        total_weight_ = 100.0;
+        return;
+    }
+    total_weight_ = std::accumulate(candidates_.begin(), candidates_.end(), 0.0,
+        [](double acc, const CandidateInfo& info) { return acc + std::max(0.0, info.weight); });
+    if (total_weight_ <= 0.0) {
+        total_weight_ = static_cast<double>(candidates_.size()) * 100.0;
+        double share = total_weight_ / candidates_.size();
+        for (auto& c : candidates_) c.weight = share;
+    }
+}
+
+void SpawnGroupList::CandidateList::renormalize() {
+    if (candidates_.empty()) {
+        total_weight_ = 0.0;
+        return;
+    }
+    double sum = 0.0;
+    for (auto& c : candidates_) {
+        if (c.weight < 0.0) c.weight = 0.0;
+        sum += c.weight;
+    }
+    if (sum <= 0.0) {
+        double share = (total_weight_ > 0.0 ? total_weight_ : 1.0) / candidates_.size();
+        for (auto& c : candidates_) c.weight = share;
+        sum = share * candidates_.size();
+    }
+    if (total_weight_ <= 0.0) total_weight_ = sum;
+    if (sum > 0.0) {
+        double factor = total_weight_ / sum;
+        for (auto& c : candidates_) c.weight *= factor;
+    }
+}
+
+double SpawnGroupList::CandidateList::step_amount() const {
+    double base = total_weight_;
+    if (base <= 0.0) {
+        base = static_cast<double>(std::max<size_t>(1, candidates_.size())) * 100.0;
+    }
+    double step = base * 0.01;
+    if (step < 1.0) step = 1.0;
+    return step;
+}
+
+bool SpawnGroupList::CandidateList::adjust_weight_internal(int idx, int steps) {
+    if (idx < 0 || idx >= static_cast<int>(candidates_.size()) || steps == 0) return false;
+    if (candidates_.size() <= 1) return false;
+    ensure_positive_total();
+    double total = total_weight_;
+    if (total <= 0.0) return false;
+    double current = std::max(0.0, candidates_[idx].weight);
+    double others = std::max(0.0, total - current);
+    double step = step_amount();
+    if (steps > 0) {
+        if (others <= 0.0) return false;
+        double delta = step * steps;
+        delta = std::min(delta, others);
+        if (delta <= 0.0) return false;
+        double factor = (others - delta) / std::max(1e-6, others);
+        for (size_t i = 0; i < candidates_.size(); ++i) {
+            if (static_cast<int>(i) == idx) continue;
+            candidates_[i].weight *= factor;
+        }
+        candidates_[idx].weight = current + delta;
+    } else {
+        double delta = step * (-steps);
+        delta = std::min(delta, current);
+        if (delta <= 0.0) return false;
+        double prev_others = std::max(0.0, others);
+        candidates_[idx].weight = current - delta;
+        double new_others = total - candidates_[idx].weight;
+        if (candidates_.size() > 1) {
+            if (prev_others > 0.0) {
+                double factor = new_others / prev_others;
+                for (size_t i = 0; i < candidates_.size(); ++i) {
+                    if (static_cast<int>(i) == idx) continue;
+                    candidates_[i].weight *= factor;
+                }
+            } else {
+                double share = (candidates_.size() > 1) ? (new_others / (candidates_.size() - 1)) : 0.0;
+                for (size_t i = 0; i < candidates_.size(); ++i) {
+                    if (static_cast<int>(i) == idx) continue;
+                    candidates_[i].weight = share;
+                }
+            }
+        }
+    }
+    renormalize();
+    dirty_ = true;
+    return true;
+}
+
+SDL_Color SpawnGroupList::CandidateList::color_for_index(size_t index, bool highlight) const {
+    static const SDL_Color palette[] = {
+        {230, 126, 34, 230}, {46, 204, 113, 230}, {52, 152, 219, 230}, {155, 89, 182, 230},
+        {241, 196, 15, 230}, {231, 76, 60, 230}, {26, 188, 156, 230}, {149, 165, 166, 230}
+    };
+    const size_t palette_size = sizeof(palette) / sizeof(palette[0]);
+    SDL_Color color = palette_size ? palette[index % palette_size] : SDL_Color{200, 200, 200, 230};
+    if (highlight) {
+        auto bump = [](Uint8 channel) -> Uint8 {
+            int v = static_cast<int>(channel) + 40;
+            if (v > 255) v = 255;
+            return static_cast<Uint8>(v);
+        };
+        color.r = bump(color.r);
+        color.g = bump(color.g);
+        color.b = bump(color.b);
+        color.a = 255;
+    }
+    return color;
+}
+
+void SpawnGroupList::CandidateList::add_candidate(const std::string& asset_name) {
+    if (asset_name.empty()) return;
+    ensure_positive_total();
+    if (candidates_.empty()) {
+        double base_total = std::max(100.0, total_weight_);
+        candidates_.push_back(CandidateInfo{asset_name, base_total});
+        total_weight_ = base_total;
+    } else {
+        double base_total = total_weight_;
+        if (base_total <= 0.0) base_total = std::max(100.0, static_cast<double>(candidates_.size()) * 100.0);
+        double target_total = std::max(base_total, 100.0);
+        double new_share = std::max(1.0, target_total * 0.05);
+        if (new_share >= target_total) {
+            target_total = std::max(new_share * 1.05, new_share + 1.0);
+        }
+        double scale_factor = (base_total > 0.0) ? ((target_total - new_share) / base_total) : 0.0;
+        if (scale_factor < 0.0) scale_factor = 0.0;
+        for (auto& c : candidates_) c.weight *= scale_factor;
+        candidates_.push_back(CandidateInfo{asset_name, new_share});
+        total_weight_ = target_total;
+    }
+    hover_index_ = static_cast<int>(candidates_.size()) - 1;
+    hover_active_ = true;
+    renormalize();
+    dirty_ = true;
+}
+
+int SpawnGroupList::CandidateList::CandidatePieWidget::height_for_width(int w) const {
+    return std::max(220, w / 2);
+}
+
+SpawnGroupList::CandidateList::CandidatePieWidget::Layout
+SpawnGroupList::CandidateList::CandidatePieWidget::compute_layout() const {
+    Layout layout{};
+    const int padding = DMSpacing::item_gap();
+    int inner_w = std::max(0, rect_.w - padding * 2);
+    int inner_h = std::max(0, rect_.h - padding * 2);
+    int legend_width = std::min(200, inner_w / 3);
+    int chart_w = inner_w - legend_width - padding;
+    if (chart_w < 140) {
+        legend_width = 0;
+        chart_w = inner_w;
+    }
+    int chart_size = std::max(0, std::min(inner_h, chart_w));
+    if (chart_size <= 0) chart_size = std::max(0, std::min(inner_w, inner_h));
+    layout.radius = chart_size * 0.5f;
+    float center_x = rect_.x + padding + layout.radius;
+    float center_y = rect_.y + padding + inner_h * 0.5f;
+    if (legend_width == 0) {
+        center_x = rect_.x + rect_.w * 0.5f;
+    }
+    layout.center = SDL_FPoint{center_x, center_y};
+    layout.legend = SDL_Rect{rect_.x + padding + chart_w + padding, rect_.y + padding, legend_width, inner_h};
+    if (legend_width == 0) {
+        layout.legend = SDL_Rect{rect_.x + padding, rect_.y + padding, inner_w, inner_h};
+    }
+    return layout;
+}
+
+int SpawnGroupList::CandidateList::CandidatePieWidget::index_for_point(int x, int y) const {
+    const auto& candidates = list_.candidates();
+    if (candidates.empty()) return -1;
+    Layout layout = compute_layout();
+    if (layout.radius <= 0.f) return -1;
+    float dx = static_cast<float>(x) - layout.center.x;
+    float dy = static_cast<float>(y) - layout.center.y;
+    float dist_sq = dx * dx + dy * dy;
+    if (dist_sq > layout.radius * layout.radius) return -1;
+    constexpr double kPi = 3.14159265358979323846;
+    constexpr double kTwoPi = 6.28318530717958647692;
+    constexpr double kStartAngle = -1.5707963267948966;
+    double total = list_.total_weight();
+    if (total <= 0.0) {
+        total = std::accumulate(candidates.begin(), candidates.end(), 0.0,
+            [](double acc, const auto& info) { return acc + std::max(0.0, info.weight); });
+        if (total <= 0.0) return -1;
+    }
+    double angle = std::atan2(dy, dx);
+    double relative = angle - kStartAngle;
+    while (relative < 0.0) relative += kTwoPi;
+    while (relative >= kTwoPi) relative -= kTwoPi;
+    double accum = 0.0;
+    for (size_t i = 0; i < candidates.size(); ++i) {
+        double weight = std::max(0.0, candidates[i].weight);
+        double portion = (total > 0.0) ? (weight / total) : 0.0;
+        double sweep = portion * kTwoPi;
+        if (i + 1 == candidates.size()) {
+            sweep = kTwoPi - accum;
+        }
+        accum += sweep;
+        if (relative <= accum + 1e-6) {
+            return static_cast<int>(i);
+        }
+    }
+    return -1;
+}
+
+bool SpawnGroupList::CandidateList::CandidatePieWidget::handle_event(const SDL_Event& e) {
+    switch (e.type) {
+    case SDL_MOUSEMOTION: {
+        bool inside = e.motion.x >= rect_.x && e.motion.x < rect_.x + rect_.w &&
+                      e.motion.y >= rect_.y && e.motion.y < rect_.y + rect_.h;
+        int idx = inside ? index_for_point(e.motion.x, e.motion.y) : -1;
+        list_.set_hover(idx, inside);
+        return inside;
+    }
+    case SDL_MOUSEBUTTONDOWN: {
+        bool inside = e.button.x >= rect_.x && e.button.x < rect_.x + rect_.w &&
+                      e.button.y >= rect_.y && e.button.y < rect_.y + rect_.h;
+        if (!inside) return false;
+        int idx = index_for_point(e.button.x, e.button.y);
+        list_.set_hover(idx, true);
+        if (e.button.button == SDL_BUTTON_LEFT && e.button.clicks >= 2) {
+            return list_.remove_hovered();
+        }
+        return true;
+    }
+    case SDL_MOUSEWHEEL: {
+        if (!list_.has_hover()) return false;
+        int steps = e.wheel.y;
+#if SDL_VERSION_ATLEAST(2,0,18)
+        if (e.wheel.direction == SDL_MOUSEWHEEL_FLIPPED) steps = -steps;
+#endif
+        if (steps != 0) {
+            return list_.handle_scroll(steps);
+        }
+        break;
+    }
+    default:
+        break;
+    }
+    return false;
+}
+
+void SpawnGroupList::CandidateList::CandidatePieWidget::render(SDL_Renderer* r) const {
+    if (!r) return;
+    const auto& candidates = list_.candidates();
+    Layout layout = compute_layout();
+    float radius = layout.radius;
+    SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
+    SDL_Color border = DMStyles::Border();
+    border.a = 220;
+    auto draw_text = [&](TTF_Font* font, const std::string& text, int x, int y, SDL_Color color, bool center) {
+        SDL_Rect dst{0, 0, 0, 0};
+        if (!font) return dst;
+        SDL_Surface* surf = TTF_RenderUTF8_Blended(font, text.c_str(), color);
+        if (!surf) return dst;
+        SDL_Texture* tex = SDL_CreateTextureFromSurface(r, surf);
+        dst = SDL_Rect{x, y, surf->w, surf->h};
+        if (center) {
+            dst.x -= dst.w / 2;
+            dst.y -= dst.h / 2;
+        }
+        if (tex) {
+            SDL_RenderCopy(r, tex, nullptr, &dst);
+            SDL_DestroyTexture(tex);
+        }
+        SDL_FreeSurface(surf);
+        return dst;
+    };
+
+    int font_size = std::max(11, DMStyles::Label().font_size - 1);
+    TTF_Font* font = TTF_OpenFont(DMStyles::Label().font_path.c_str(), font_size);
+
+    if (candidates.empty() || radius <= 0.f) {
+        const int segments = 64;
+        std::vector<SDL_Point> outline;
+        outline.reserve(segments + 1);
+        constexpr double kTwoPi = 6.28318530717958647692;
+        constexpr double kStartAngle = -1.5707963267948966;
+        for (int i = 0; i <= segments; ++i) {
+            double t = kStartAngle + kTwoPi * (static_cast<double>(i) / segments);
+            outline.push_back(SDL_Point{static_cast<int>(layout.center.x + radius * std::cos(t)),
+                                        static_cast<int>(layout.center.y + radius * std::sin(t))});
+        }
+        SDL_SetRenderDrawColor(r, border.r, border.g, border.b, border.a);
+        if (!outline.empty()) SDL_RenderDrawLines(r, outline.data(), static_cast<int>(outline.size()));
+        draw_text(font, "No candidates configured", static_cast<int>(layout.center.x), static_cast<int>(layout.center.y), DMStyles::Label().color, true);
+        if (font) TTF_CloseFont(font);
+        return;
+    }
+
+    double total = list_.total_weight();
+    if (total <= 0.0) {
+        total = std::accumulate(candidates.begin(), candidates.end(), 0.0,
+            [](double acc, const auto& info) { return acc + std::max(0.0, info.weight); });
+        if (total <= 0.0) total = 1.0;
+    }
+    constexpr double kPi = 3.14159265358979323846;
+
+    constexpr double kTwoPi = 6.28318530717958647692;
+    constexpr double kStartAngle = -1.5707963267948966;
+    double angle = kStartAngle;
+    double used = 0.0;
+    int hovered = list_.hovered_index();
+
+    for (size_t i = 0; i < candidates.size(); ++i) {
+        double weight = std::max(0.0, candidates[i].weight);
+        double portion = (total > 0.0) ? (weight / total) : 0.0;
+        double sweep = portion * kTwoPi;
+        if (i + 1 == candidates.size()) {
+            sweep = kTwoPi - used;
+        }
+        if (sweep <= 0.0) {
+            used += sweep;
+            angle += sweep;
+            continue;
+        }
+        bool highlight = (static_cast<int>(i) == hovered);
+        SDL_Color color = list_.color_for_index(i, highlight);
+        float slice_radius = radius + (highlight ? 6.0f : 0.0f);
+        int segments = std::max(6, static_cast<int>(std::ceil(std::abs(sweep) / (kPi / 32.0))));
+#if SDL_VERSION_ATLEAST(2,0,18)
+        std::vector<SDL_Vertex> verts;
+        verts.reserve(segments + 2);
+        SDL_Vertex center_vert{};
+        center_vert.position = SDL_FPoint{layout.center.x, layout.center.y};
+        center_vert.color = color;
+        verts.push_back(center_vert);
+        for (int s = 0; s <= segments; ++s) {
+            double t = angle + sweep * (static_cast<double>(s) / segments);
+            SDL_Vertex v{};
+            v.position = SDL_FPoint{layout.center.x + slice_radius * static_cast<float>(std::cos(t)),
+                                    layout.center.y + slice_radius * static_cast<float>(std::sin(t))};
+            v.color = color;
+            verts.push_back(v);
+        }
+        std::vector<int> idxs;
+        idxs.reserve(segments * 3);
+        for (int s = 1; s <= segments; ++s) {
+            idxs.push_back(0);
+            idxs.push_back(s);
+            idxs.push_back(s + 1);
+        }
+        SDL_RenderGeometry(r, nullptr, verts.data(), static_cast<int>(verts.size()), idxs.data(), static_cast<int>(idxs.size()));
+#else
+        SDL_SetRenderDrawColor(r, color.r, color.g, color.b, color.a);
+        for (int s = 0; s <= segments; ++s) {
+            double t = angle + sweep * (static_cast<double>(s) / segments);
+            SDL_RenderDrawLine(r,
+                static_cast<int>(layout.center.x),
+                static_cast<int>(layout.center.y),
+                static_cast<int>(layout.center.x + slice_radius * std::cos(t)),
+                static_cast<int>(layout.center.y + slice_radius * std::sin(t)));
+        }
+#endif
+        used += sweep;
+        angle += sweep;
+    }
+
+    const int outline_segments = 96;
+    std::vector<SDL_Point> outline;
+    outline.reserve(outline_segments + 1);
+    float outline_radius = radius + 6.0f;
+    for (int i = 0; i <= outline_segments; ++i) {
+        double t = kStartAngle + kTwoPi * (static_cast<double>(i) / outline_segments);
+        outline.push_back(SDL_Point{static_cast<int>(layout.center.x + outline_radius * std::cos(t)),
+                                    static_cast<int>(layout.center.y + outline_radius * std::sin(t))});
+    }
+    SDL_SetRenderDrawColor(r, border.r, border.g, border.b, border.a);
+    if (!outline.empty()) SDL_RenderDrawLines(r, outline.data(), static_cast<int>(outline.size()));
+
+    if (layout.legend.w > 60 && font) {
+        SDL_Color text_color = DMStyles::Label().color;
+        int font_height = TTF_FontHeight(font);
+        int row_height = std::max(font_height + 6, 20);
+        int y = layout.legend.y;
+        for (size_t i = 0; i < candidates.size(); ++i) {
+            if (y + row_height > layout.legend.y + layout.legend.h) break;
+            SDL_Color swatch = list_.color_for_index(i, static_cast<int>(i) == hovered);
+            SDL_Rect box{layout.legend.x, y, 16, 16};
+            SDL_SetRenderDrawColor(r, swatch.r, swatch.g, swatch.b, 255);
+            SDL_RenderFillRect(r, &box);
+            SDL_Color outline_col = DMStyles::Border();
+            outline_col.a = 255;
+            SDL_SetRenderDrawColor(r, outline_col.r, outline_col.g, outline_col.b, outline_col.a);
+            SDL_RenderDrawRect(r, &box);
+            double percent = (total > 0.0) ? (std::max(0.0, candidates[i].weight) / total) * 100.0 : 0.0;
+            std::ostringstream label;
+            label << candidates[i].name << " - " << std::fixed << std::setprecision(1) << percent << "% ("
+                  << static_cast<int>(std::round(std::max(0.0, candidates[i].weight))) << ")";
+            draw_text(font, label.str(), box.x + box.w + 8, y + (row_height - font_height) / 2, text_color, false);
+            y += row_height;
+        }
+    } else if (font) {
+        std::ostringstream summary;
+        summary << "Total weight: " << static_cast<int>(std::round(total));
+        draw_text(font, summary.str(), rect_.x + DMSpacing::item_gap(), rect_.y + DMSpacing::item_gap(), DMStyles::Label().color, false);
+    }
+
+    if (font) TTF_CloseFont(font);
 }
 
 class AreaLinkPanel {
@@ -1109,11 +1601,12 @@ void SpawnGroupList::open_asset_search(EntryRow& row, std::function<void(const s
         if (!entry.contains("candidates") || !entry["candidates"].is_array()) {
             entry["candidates"] = json::array();
         }
-        json candidate;
-        candidate["name"] = selection;
-        candidate["chance"] = 100;
-        entry["candidates"].push_back(candidate);
-        if (on_change_) on_change_();
+        if (!rr->candidate_list)
+            rr->candidate_list = std::make_unique<CandidateList>(*this, *rr);
+        rr->candidate_list->rebuild();
+        rr->candidate_list->add_candidate(selection);
+        bool changed = rr->candidate_list->sync_to_json();
+        if (on_change_ && changed) on_change_();
         if (cb) cb(selection);
         rebuild_layout();
     });
