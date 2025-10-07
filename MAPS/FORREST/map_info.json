@@ -533,7 +533,7 @@
           "candidates": [
             {
               "chance": 0,
-              "name": "Book_Pile"
+              "name": "null"
             }
           ],
           "chance_denominator": 0,

@@ -15,7 +15,7 @@ namespace animation_editor {
 namespace {
 
 const int kButtonSize = 28;
-const int kPanelPadding = 12;
+const int kTotalsPanelPadding = 12;
 
 void render_totals_label(SDL_Renderer* renderer, const std::string& text, int x, int y, SDL_Color color) {
     if (!renderer || text.empty()) return;
@@ -49,8 +49,8 @@ TotalsPanel::TotalsPanel() = default;
 
 void TotalsPanel::set_bounds(const SDL_Rect& bounds) {
     bounds_ = bounds;
-    prev_button_ = SDL_Rect{bounds_.x + kPanelPadding, bounds_.y + kPanelPadding, kButtonSize, kButtonSize};
-    next_button_ = SDL_Rect{prev_button_.x + kButtonSize + kPanelPadding / 2, prev_button_.y, kButtonSize, kButtonSize};
+    prev_button_ = SDL_Rect{bounds_.x + kTotalsPanelPadding, bounds_.y + kTotalsPanelPadding, kButtonSize, kButtonSize};
+    next_button_ = SDL_Rect{prev_button_.x + kButtonSize + kTotalsPanelPadding / 2, prev_button_.y, kButtonSize, kButtonSize};
 }
 
 void TotalsPanel::set_frames(const std::vector<MovementFrame>& frames) {
@@ -94,8 +94,8 @@ void TotalsPanel::render(SDL_Renderer* renderer) const {
     render_totals_label(renderer, ">", next_button_.x + (next_button_.w / 2) - 6,
                         next_button_.y + (next_button_.h / 2) - 10, button_text);
 
-    int text_x = next_button_.x + next_button_.w + kPanelPadding;
-    int text_y = bounds_.y + kPanelPadding;
+    int text_x = next_button_.x + next_button_.w + kTotalsPanelPadding;
+    int text_y = bounds_.y + kTotalsPanelPadding;
 
     const int frame_count = static_cast<int>(frames_.size());
     int selected = selected_index_ ? *selected_index_ : 0;
