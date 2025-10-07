@@ -14,15 +14,15 @@
       {
         "candidates": [
           {
-            "chance": 100,
+            "chance": 95,
             "name": "null"
           },
           {
-            "chance": 73,
+            "chance": 69,
             "name": "Grass_FPS_2"
           },
           {
-            "chance": 71,
+            "chance": 67,
             "name": "Grass_1_FPS_2"
           },
           {
@@ -30,7 +30,7 @@
             "name": "Small_Rock"
           },
           {
-            "chance": 54,
+            "chance": 51,
             "name": "fog"
           },
           {
@@ -44,6 +44,10 @@
           {
             "chance": 1,
             "name": "Frog"
+          },
+          {
+            "chance": 32,
+            "name": "Axe"
           }
         ],
         "chance_denominator": 297,
@@ -55,7 +59,7 @@
         "jitter_max": 3,
         "jitter_min": 3,
         "max_number": 100,
-        "min_number": 52,
+        "min_number": 53,
         "position": "Random",
         "spawn_id": "spn-5200d51e3675"
       }
@@ -798,17 +802,17 @@
         }
       ],
       "curvyness": 1,
-      "edge_smoothness": 100,
+      "edge_smoothness": 101,
       "geometry": "Circle",
-      "height_max": 3420,
-      "height_min": 100,
+      "height_max": 3612,
+      "height_min": 3612,
       "inherits_map_assets": true,
       "is_boss": false,
       "is_spawn": true,
-      "max_height": 3420,
+      "max_height": 3612,
       "max_width": 3612,
-      "min_height": 100,
-      "min_width": 100,
+      "min_height": 3612,
+      "min_width": 3612,
       "name": "spawn",
       "radius": 1806,
       "spawn_groups": [
@@ -904,7 +908,7 @@
         }
       ],
       "width_max": 3612,
-      "width_min": 100
+      "width_min": 3612
     }
   },
   "trails_data": {

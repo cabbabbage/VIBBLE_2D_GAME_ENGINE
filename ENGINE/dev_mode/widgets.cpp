@@ -28,6 +28,9 @@ int range_value_width(int total_width) {
     return candidate;
 }
 
+constexpr SDL_Color kSliderHoverOutline{0, 122, 255, 255};
+constexpr SDL_Color kSliderFocusOutline{255, 255, 255, 255};
+
 std::unordered_set<const void*> g_slider_scroll_captures;
 
 void set_slider_scroll_capture(const void* owner, bool capture) {
@@ -414,6 +417,7 @@ DMSlider::DMSlider(const std::string& label, int min_val, int max_val, int value
 }
 
 DMSlider::~DMSlider() {
+    focused_ = false;
     set_slider_scroll_capture(this, false);
 }
 
@@ -516,17 +520,23 @@ bool DMSlider::handle_event(const SDL_Event& e) {
         }
         if (!edit_box_->is_editing()) edit_box_.reset();
     }
-    auto update_hover = [this](SDL_Point p) {
-        bool was_hovered = hovered_;
-        hovered_ = SDL_PointInRect(&p, &rect_);
-        if (hovered_ != was_hovered) {
-            set_slider_scroll_capture(this, hovered_);
-        }
-        if (!hovered_) {
-            knob_hovered_ = false;
+    auto set_focus = [this](bool focus) {
+        if (focused_ == focus) {
             return;
         }
+        focused_ = focus;
+        set_slider_scroll_capture(this, focused_);
+    };
+    auto update_hover = [this, &set_focus](SDL_Point p) {
+        bool inside = SDL_PointInRect(&p, &rect_);
+        hovered_ = inside;
+        if (!inside) {
+            knob_hovered_ = false;
+            set_focus(false);
+            return inside;
+        }
         knob_hovered_ = true;
+        return inside;
     };
 
     if (e.type == SDL_MOUSEMOTION) {
@@ -534,17 +544,26 @@ bool DMSlider::handle_event(const SDL_Event& e) {
         update_hover(p);
     } else if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
         SDL_Point p{ e.button.x, e.button.y };
-        update_hover(p);
+        bool inside = update_hover(p);
+        if (inside) {
+            set_focus(true);
+        } else {
+            set_focus(false);
+        }
         SDL_Rect vr = value_rect();
-        if (SDL_PointInRect(&p, &vr)) {
+        if (inside && SDL_PointInRect(&p, &vr)) {
             edit_box_ = std::make_unique<DMTextBox>("", std::to_string(value_));
             edit_box_->set_rect(vr);
             edit_box_->handle_event(e);
             return true;
         }
     } else if (e.type == SDL_MOUSEWHEEL) {
+        if (!focused_) {
+            return false;
+        }
         SDL_Point mouse{0, 0};
         if (SDL_GetMouseFocus() == nullptr) {
+            set_focus(false);
             return false;
         }
         SDL_GetMouseState(&mouse.x, &mouse.y);
@@ -593,8 +612,11 @@ void DMSlider::render(SDL_Renderer* r) const {
     if (!label_.empty() && label_height_ > 0) {
         draw_text(r, label_, label_rect_.x, label_rect_.y);
     }
-    if (hovered_) {
-        SDL_SetRenderDrawColor(r, st.knob_border_hover.r, st.knob_border_hover.g, st.knob_border_hover.b, st.knob_border_hover.a);
+    if (focused_) {
+        SDL_SetRenderDrawColor(r, kSliderFocusOutline.r, kSliderFocusOutline.g, kSliderFocusOutline.b, kSliderFocusOutline.a);
+        SDL_RenderDrawRect(r, &rect_);
+    } else if (hovered_) {
+        SDL_SetRenderDrawColor(r, kSliderHoverOutline.r, kSliderHoverOutline.g, kSliderHoverOutline.b, kSliderHoverOutline.a);
         SDL_RenderDrawRect(r, &rect_);
     }
     SDL_Rect tr = track_rect();
@@ -653,6 +675,7 @@ DMRangeSlider::DMRangeSlider(int min_val, int max_val, int min_value, int max_va
 }
 
 DMRangeSlider::~DMRangeSlider() {
+    focused_ = false;
     set_slider_scroll_capture(this, false);
 }
 
@@ -747,16 +770,21 @@ bool DMRangeSlider::handle_event(const SDL_Event& e) {
         }
         if (!edit_max_->is_editing()) edit_max_.reset();
     }
-    auto update_hover = [this](SDL_Point p) {
-        bool was_hovered = hovered_;
-        hovered_ = SDL_PointInRect(&p, &rect_);
-        if (hovered_ != was_hovered) {
-            set_slider_scroll_capture(this, hovered_);
+    auto set_focus = [this](bool focus) {
+        if (focused_ == focus) {
+            return;
         }
-        if (!hovered_) {
+        focused_ = focus;
+        set_slider_scroll_capture(this, focused_);
+    };
+    auto update_hover = [this, &set_focus](SDL_Point p) {
+        bool inside = SDL_PointInRect(&p, &rect_);
+        hovered_ = inside;
+        if (!inside) {
             min_hovered_ = false;
             max_hovered_ = false;
-            return;
+            set_focus(false);
+            return inside;
         }
         SDL_Rect kmin = min_knob_rect();
         SDL_Rect kmax = max_knob_rect();
@@ -771,7 +799,7 @@ bool DMRangeSlider::handle_event(const SDL_Event& e) {
                 min_hovered_ = true;
                 max_hovered_ = false;
             }
-            return;
+            return inside;
         }
         const auto sqr = [](int v) { return v * v; };
         const int min_dist = sqr(p.x - min_center.x) + sqr(p.y - min_center.y);
@@ -783,6 +811,7 @@ bool DMRangeSlider::handle_event(const SDL_Event& e) {
             min_hovered_ = false;
             max_hovered_ = true;
         }
+        return inside;
     };
 
     if (e.type == SDL_MOUSEMOTION) {
@@ -790,14 +819,19 @@ bool DMRangeSlider::handle_event(const SDL_Event& e) {
         update_hover(p);
     } else if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
         SDL_Point p{ e.button.x, e.button.y };
-        update_hover(p);
+        bool inside = update_hover(p);
+        if (inside) {
+            set_focus(true);
+        } else {
+            set_focus(false);
+        }
         if (e.button.clicks >= 2) {
-            if (SDL_PointInRect(&p, &min_value_rect_)) {
+            if (inside && SDL_PointInRect(&p, &min_value_rect_)) {
                 edit_min_ = std::make_unique<DMTextBox>("", std::to_string(min_value_));
                 edit_min_->set_rect(min_value_rect_);
                 edit_min_->handle_event(e);
                 return true;
-            } else if (SDL_PointInRect(&p, &max_value_rect_)) {
+            } else if (inside && SDL_PointInRect(&p, &max_value_rect_)) {
                 edit_max_ = std::make_unique<DMTextBox>("", std::to_string(max_value_));
                 edit_max_->set_rect(max_value_rect_);
                 edit_max_->handle_event(e);
@@ -805,8 +839,12 @@ bool DMRangeSlider::handle_event(const SDL_Event& e) {
             }
         }
     } else if (e.type == SDL_MOUSEWHEEL) {
+        if (!focused_) {
+            return false;
+        }
         SDL_Point mouse{0, 0};
         if (SDL_GetMouseFocus() == nullptr) {
+            set_focus(false);
             return false;
         }
         SDL_GetMouseState(&mouse.x, &mouse.y);
@@ -857,8 +895,11 @@ void DMRangeSlider::draw_text(SDL_Renderer* r, const std::string& s, int x, int 
 
 void DMRangeSlider::render(SDL_Renderer* r) const {
     const DMSliderStyle& st = DMStyles::Slider();
-    if (hovered_) {
-        SDL_SetRenderDrawColor(r, st.knob_border_hover.r, st.knob_border_hover.g, st.knob_border_hover.b, st.knob_border_hover.a);
+    if (focused_) {
+        SDL_SetRenderDrawColor(r, kSliderFocusOutline.r, kSliderFocusOutline.g, kSliderFocusOutline.b, kSliderFocusOutline.a);
+        SDL_RenderDrawRect(r, &rect_);
+    } else if (hovered_) {
+        SDL_SetRenderDrawColor(r, kSliderHoverOutline.r, kSliderHoverOutline.g, kSliderHoverOutline.b, kSliderHoverOutline.a);
         SDL_RenderDrawRect(r, &rect_);
     }
     SDL_Rect tr = track_rect();

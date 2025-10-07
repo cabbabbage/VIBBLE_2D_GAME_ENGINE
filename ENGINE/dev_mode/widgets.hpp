@@ -119,6 +119,7 @@ private:
     int value_ = 0;
     bool knob_hovered_ = false;
     bool hovered_ = false;
+    bool focused_ = false;
     std::unique_ptr<DMTextBox> edit_box_;
 };
 
@@ -153,6 +154,7 @@ private:
     bool min_hovered_ = false;
     bool max_hovered_ = false;
     bool hovered_ = false;
+    bool focused_ = false;
     std::unique_ptr<DMTextBox> edit_min_;
     std::unique_ptr<DMTextBox> edit_max_;
 };
