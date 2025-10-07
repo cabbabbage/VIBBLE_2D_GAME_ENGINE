@@ -8,6 +8,7 @@
 #include "utils/input.hpp"
 #include "widgets.hpp"
 #include "spawn_group_list.hpp"
+#include "spawn_group_utils.hpp"
 
 #include <SDL_ttf.h>
 
@@ -784,24 +785,100 @@ void RoomConfigurator::rebuild_rows() {
 
     bool have_groups = false;
     if (!loaded_json_.is_null()) {
-        const nlohmann::json* groups = nullptr;
-        if (loaded_json_.contains("spawn_groups") && loaded_json_["spawn_groups"].is_array()) {
-            groups = &loaded_json_["spawn_groups"];
-        } else if (loaded_json_.contains("assets") && loaded_json_["assets"].is_array()) {
-            groups = &loaded_json_["assets"];
-        }
-        if (groups) {
-            if (!spawn_list_) spawn_list_ = std::make_unique<SpawnGroupList>();
-            spawn_list_->load(*groups);
+        if (!spawn_list_) spawn_list_ = std::make_unique<SpawnGroupList>();
+
+        // Prefer binding to the live room data so edits persist immediately
+        if (room_) {
+            auto& root = room_->assets_data();
+            // Decide which array to bind based on how the JSON was loaded
+            const char* target_key = spawn_groups_from_assets_ ? "assets" : "spawn_groups";
+            if (!root.contains(target_key) || !root[target_key].is_array()) {
+                root[target_key] = nlohmann::json::array();
+            }
+            nlohmann::json& groups_ref = root[target_key];
+
+            auto on_change = [this]() {
+                if (room_) {
+                    room_->save_assets_json();
+                    // Rebuild our list rows to reflect any structural changes
+                    this->refresh_spawn_groups(room_);
+                }
+            };
+
+            auto on_entry_change = [this](const nlohmann::json&, const SpawnGroupList::ChangeSummary&) {
+                if (room_) {
+                    room_->save_assets_json();
+                    // Rebuild the rows so summaries/labels stay in sync
+                    this->refresh_spawn_groups(room_);
+                }
+            };
+
+            SpawnGroupList::ConfigureEntryCallback configure_entry = [this](SpawnGroupList::RowController& row, const nlohmann::json&) {
+                // Provide area names from the current room
+                row.set_area_names_provider([this]() {
+                    std::vector<std::string> names;
+                    if (!room_) return names;
+                    auto& data = room_->assets_data();
+                    if (data.contains("areas") && data["areas"].is_array()) {
+                        for (const auto& a : data["areas"]) {
+                            if (a.is_object() && a.contains("name") && a["name"].is_string()) {
+                                names.push_back(a["name"].get<std::string>());
+                            }
+                        }
+                    }
+                    return names;
+                });
+                // Parent label
+                if (room_) {
+                    std::string room_name = room_->room_name.empty() ? std::string("Room") : room_->room_name;
+                    row.set_ownership_label(room_name, SDL_Color{255,224,96,255});
+                }
+            };
+
+            // Load with editable binding to the live array
+            const auto expanded = spawn_list_->expanded_groups();
+            spawn_list_->load(groups_ref, on_change, on_entry_change, std::move(configure_entry));
+            spawn_list_->set_on_layout_changed([this]() {
+                this->rebuild_rows();
+            });
+            spawn_list_->restore_expanded_groups(expanded);
+
+            // Wire up non-edit actions to the external callbacks provided by the host
             SpawnGroupList::Callbacks cb{};
-            cb.on_edit = [this](const std::string& id) { if (on_spawn_edit_) on_spawn_edit_(id); };
+            // Header actions
             cb.on_duplicate = [this](const std::string& id) { if (on_spawn_duplicate_) on_spawn_duplicate_(id); };
-            cb.on_delete = [this](const std::string& id) { if (on_spawn_delete_) on_spawn_delete_(id); };
-            cb.on_move_up = [this](const std::string& id) { if (on_spawn_move_up_) on_spawn_move_up_(id); };
+            cb.on_delete    = [this](const std::string& id) { if (on_spawn_delete_) on_spawn_delete_(id); };
+            cb.on_move_up   = [this](const std::string& id) { if (on_spawn_move_up_) on_spawn_move_up_(id); };
             cb.on_move_down = [this](const std::string& id) { if (on_spawn_move_down_) on_spawn_move_down_(id); };
+            cb.on_add       = [this]() { if (on_spawn_add_) on_spawn_add_(); };
             spawn_list_->set_callbacks(std::move(cb));
+
             spawn_list_->append_rows(rows);
             have_groups = true;
+        } else {
+            // Fallback: read-only list from the loaded JSON snapshot
+            const nlohmann::json* groups = nullptr;
+            if (loaded_json_.contains("spawn_groups") && loaded_json_["spawn_groups"].is_array()) {
+                groups = &loaded_json_["spawn_groups"];
+            } else if (loaded_json_.contains("assets") && loaded_json_["assets"].is_array()) {
+                groups = &loaded_json_["assets"];
+            }
+            if (groups) {
+                const auto expanded = spawn_list_->expanded_groups();
+                spawn_list_->load(*groups);
+                spawn_list_->set_on_layout_changed([this]() {
+                    this->rebuild_rows();
+                });
+                spawn_list_->restore_expanded_groups(expanded);
+                SpawnGroupList::Callbacks cb{};
+                cb.on_duplicate = [this](const std::string& id) { if (on_spawn_duplicate_) on_spawn_duplicate_(id); };
+                cb.on_delete    = [this](const std::string& id) { if (on_spawn_delete_) on_spawn_delete_(id); };
+                cb.on_move_up   = [this](const std::string& id) { if (on_spawn_move_up_) on_spawn_move_up_(id); };
+                cb.on_move_down = [this](const std::string& id) { if (on_spawn_move_down_) on_spawn_move_down_(id); };
+                spawn_list_->set_callbacks(std::move(cb));
+                spawn_list_->append_rows(rows);
+                have_groups = true;
+            }
         }
     }
 
@@ -810,13 +887,7 @@ void RoomConfigurator::rebuild_rows() {
         rows.push_back({ empty_spawn_label_.get() });
     }
 
-    add_group_btn_ = std::make_unique<DMButton>("Add Group", &DMStyles::CreateButton(), 120, DMButton::height());
-    if (add_group_btn_) {
-        add_group_btn_w_ = std::make_unique<ButtonWidget>(add_group_btn_.get(), [this]() {
-            if (on_spawn_add_) on_spawn_add_();
-        });
-        rows.push_back({ add_group_btn_w_.get() });
-    }
+    // Add Spawn Group button provided by SpawnGroupList
 
     room_tags_label_ = std::make_unique<RoomConfigLabel>("Tags");
     rows.push_back({ room_tags_label_.get() });

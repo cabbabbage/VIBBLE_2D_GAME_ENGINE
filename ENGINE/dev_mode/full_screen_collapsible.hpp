@@ -23,10 +23,12 @@ public:
         bool momentary = false;
 
         const DMButtonStyle* style_override = nullptr;
+        const DMButtonStyle* active_style_override = nullptr;
         std::unique_ptr<DMButton> widget;
 };
 
     explicit FullScreenCollapsible(std::string title);
+    void set_title(const std::string& title);
 
     void set_bounds(int width, int height);
 

@@ -48,7 +48,20 @@ class Room {
     void save_assets_json() const;
     bool is_spawn_room() const;
 
-	private:
+    // Room-level named areas (e.g., trigger/spawning areas) parsed from assets JSON
+    struct NamedArea {
+        std::string name;
+        std::string type;
+        std::unique_ptr<Area> area;
+    };
+    // All named areas defined for this room (world-space polygons)
+    std::vector<NamedArea> areas;
+    // Find a named room area by name; returns nullptr if not found
+    Area* find_area(const std::string& name);
+    bool remove_area(const std::string& name);
+    void upsert_named_area(const Area& area, const std::string& type);
+
+        private:
     nlohmann::json assets_json;
     nlohmann::json* room_data_ptr_ = nullptr;
     const nlohmann::json* map_assets_data_ptr_ = nullptr;
@@ -56,4 +69,5 @@ class Room {
     std::string data_section_;
     int clamp_int(int v, int lo, int hi) const;
     void bounds_to_size(const std::tuple<int,int,int,int>& b, int& w, int& h) const;
+    void load_named_areas_from_json();
 };

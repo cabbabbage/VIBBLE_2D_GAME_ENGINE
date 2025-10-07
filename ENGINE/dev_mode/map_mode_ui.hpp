@@ -18,7 +18,6 @@ class FullScreenCollapsible;
 class DockableCollapsible;
 struct DMButtonStyle;
 struct SDL_Renderer;
-union SDL_Event;
 
 class MapModeUI {
 public:
@@ -30,6 +29,7 @@ public:
         bool active = false;
         bool momentary = false;
         const DMButtonStyle* style_override = nullptr;
+        const DMButtonStyle* active_style_override = nullptr;
         std::function<void(bool)> on_toggle;
 };
 
@@ -49,7 +49,7 @@ public:
     void close_all_panels();
 
     bool is_light_panel_visible() const;
-    using LightSaveCallback = std::function<void()>;
+    using LightSaveCallback = std::function<bool()>;
 
     void set_light_save_callback(LightSaveCallback cb);
 

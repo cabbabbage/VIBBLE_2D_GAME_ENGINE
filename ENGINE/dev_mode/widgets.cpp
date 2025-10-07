@@ -45,6 +45,15 @@ void DMButton::set_text(const std::string& t) {
     rect_.w = std::max(rect_.w, preferred_width_);
 }
 
+void DMButton::set_style(const DMButtonStyle* style) {
+    if (style_ == style) {
+        return;
+    }
+    style_ = style;
+    update_preferred_width();
+    rect_.w = std::max(rect_.w, preferred_width_);
+}
+
 void DMButton::update_preferred_width() {
     if (!style_) {
         preferred_width_ = rect_.w;

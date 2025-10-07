@@ -20,6 +20,7 @@
 class Asset;
 class Input;
 class Assets;
+class camera;
 class AssetInfo;
 class Room;
 class RoomEditor;
@@ -49,11 +50,40 @@ public:
     void set_map_info(nlohmann::json* map_info, MapLightPanel::SaveCallback on_save);
     void set_map_context(nlohmann::json* map_info, const std::string& map_path);
 
+    struct RoomAreaCache {
+        struct Polygon {
+            std::string name;
+            std::string type;
+            std::vector<SDL_Point> points;
+        };
+        using PolygonList  = std::vector<Polygon>;
+        using Listener     = std::function<void(const PolygonList&, std::size_t)>;
+
+        void set_listener(Listener listener);
+        void invalidate();
+        const PolygonList& ensure_from_json(const nlohmann::json* root);
+        std::size_t generation() const { return generation_; }
+
+    private:
+        PolygonList cached_;
+        const nlohmann::json* last_source_ = nullptr;
+        bool dirty_ = true;
+        std::size_t generation_ = 0;
+        Listener listener_;
+    };
+
+    void set_room_area_cache_listener(RoomAreaCache::Listener listener);
+    std::size_t room_area_cache_generation() const;
+    void notify_room_area_data_changed();
+
     Room* resolve_current_room(Room* detected_room);
 
     void set_enabled(bool enabled);
     bool is_enabled() const { return enabled_; }
     Mode mode() const { return mode_; }
+
+    // Testing hooks
+    void set_camera_override_for_testing(camera* camera_override);
 
     void update(const Input& input);
     void update_ui(const Input& input);
@@ -72,7 +102,6 @@ public:
     void close_asset_info_editor();
     bool is_asset_info_editor_open() const;
 
-    void open_spawn_group_for_asset(Asset* asset);
     void finalize_asset_drag(Asset* asset, const std::shared_ptr<AssetInfo>& info);
 
     void toggle_room_config();
@@ -122,9 +151,12 @@ private:
     bool passes_asset_filters(Asset* asset) const;
     void apply_camera_area_render_flag();
     void set_mode_from_header(int header_mode);
+    void set_mode(Mode new_mode);
+    std::string generate_unique_room_area_name(const std::string& base) const;
 
 private:
-    void persist_map_info_to_disk() const;
+    bool persist_map_info_to_disk() const;
+    const RoomAreaCache::PolygonList& room_area_polygons();
 
     Assets* assets_ = nullptr;
     Input* input_ = nullptr;
@@ -152,6 +184,8 @@ private:
     std::unique_ptr<TrailEditorSuite> trail_suite_;
     AssetFilterBar asset_filter_;
 
+    camera* camera_override_for_testing_ = nullptr;
+
     std::unique_ptr<SingleSpawnGroupModal> map_assets_modal_;
     std::unique_ptr<SingleSpawnGroupModal> boundary_assets_modal_;
 
@@ -161,11 +195,16 @@ private:
     std::unique_ptr<class EditRoomAreaPanel>   edit_area_panel_;
     std::unique_ptr<class AreaOverlayEditor>   asset_area_editor_;
     class Asset* area_hovered_asset_ = nullptr;
+    // If hovering an existing asset area (for selected type)
+    class Asset* area_hovered_asset_with_area_ = nullptr;
+    std::string area_hovered_area_name_;
     // Active filters: empty means show all
     std::unordered_set<std::string> active_area_type_filters_;
     // Hover/selection for room areas (indices into parsed list for current frame)
     int hovered_area_index_ = -1;
     int selected_area_index_ = -1;
     SDL_Point last_area_click_world_{0,0};
+
+    RoomAreaCache room_area_cache_;
 };
 

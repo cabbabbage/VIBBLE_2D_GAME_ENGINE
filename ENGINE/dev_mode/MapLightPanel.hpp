@@ -13,7 +13,7 @@
 
 class MapLightPanel : public DockableCollapsible {
 public:
-    using SaveCallback = std::function<void()>;
+    using SaveCallback = std::function<bool()>;
 
     MapLightPanel(int x = 40, int y = 40);
     ~MapLightPanel() override;
@@ -31,11 +31,15 @@ public:
 
     bool is_point_inside(int x, int y) const;
 
+    const std::string& persistence_warning() const { return persistence_warning_text_; }
+
 protected:
 
     void render_content(SDL_Renderer* r) const override;
 
 private:
+
+    void update_save_status(bool success) const;
 
     void build_ui();
     void sync_ui_from_json();
@@ -86,8 +90,12 @@ private:
     std::unique_ptr<DMSlider> key_a_;
 
     mutable std::string current_key_label_;
+    mutable std::string persistence_warning_text_;
 
     std::vector<std::unique_ptr<Widget>> widget_wrappers_;
+
+    class WarningLabel;
+    WarningLabel* warning_label_ = nullptr;
 
     bool needs_sync_to_json_ = false;
 };

@@ -1,5 +1,7 @@
 #include "dev_controls.hpp"
 
+#include <SDL.h>
+
 #include "dev_mode/map_editor.hpp"
 #include "dev_mode/room_editor.hpp"
 #include "dev_mode/map_mode_ui.hpp"
@@ -13,6 +15,7 @@
 #include "asset/asset_info.hpp"
 #include "dm_styles.hpp"
 #include "widgets.hpp"
+#include "dev_controls_persistence.hpp"
 
 #include "asset/Asset.hpp"
 #include "asset/asset_types.hpp"
@@ -22,11 +25,12 @@
 #include "utils/input.hpp"
 
 #include <algorithm>
+#include <unordered_set>
 #include <utility>
 #include <cctype>
 #include <string>
 #include <vector>
-#include <fstream>
+#include <iostream>
 #include <nlohmann/json.hpp>
 
 using devmode::sdl::event_point;
@@ -72,6 +76,76 @@ bool consume_modal_event(Modal* modal,
 }
 
 }  // namespace
+
+void DevControls::RoomAreaCache::set_listener(Listener listener) {
+    listener_ = std::move(listener);
+}
+
+void DevControls::RoomAreaCache::invalidate() {
+    dirty_ = true;
+}
+
+const DevControls::RoomAreaCache::PolygonList&
+DevControls::RoomAreaCache::ensure_from_json(const nlohmann::json* root) {
+    if (root != last_source_) {
+        dirty_ = true;
+    }
+    if (!dirty_) {
+        return cached_;
+    }
+
+    cached_.clear();
+    last_source_ = root;
+
+    if (root) {
+        try {
+            if (root->contains("areas") && (*root)["areas"].is_array()) {
+                for (const auto& item : (*root)["areas"]) {
+                    if (!item.is_object()) continue;
+                    const std::string name = item.contains("name") && item["name"].is_string()
+                                                ? item["name"].get<std::string>()
+                                                : std::string{};
+                    if (name.empty()) continue;
+                    const std::string type = item.contains("type") && item["type"].is_string()
+                                                 ? item["type"].get<std::string>()
+                                                 : std::string{};
+                    const auto& pts = item.contains("points") ? item["points"] : nlohmann::json();
+                    if (!pts.is_array() || pts.size() < 3) continue;
+                    int ax = 0;
+                    int ay = 0;
+                    if (item.contains("anchor") && item["anchor"].is_object()) {
+                        ax = item["anchor"].value("x", 0);
+                        ay = item["anchor"].value("y", 0);
+                    }
+                    std::vector<SDL_Point> poly;
+                    poly.reserve(pts.size());
+                    for (const auto& p : pts) {
+                        if (!p.is_object()) continue;
+                        int x = p.value("x", 0);
+                        int y = p.value("y", 0);
+                        poly.push_back(SDL_Point{ax + x, ay + y});
+                    }
+                    if (poly.size() >= 3) {
+                        Polygon entry;
+                        entry.name = name;
+                        entry.type = !type.empty() ? type : name;
+                        entry.points = std::move(poly);
+                        cached_.push_back(std::move(entry));
+                    }
+                }
+            }
+        } catch (...) {
+            cached_.clear();
+        }
+    }
+
+    dirty_ = false;
+    ++generation_;
+    if (listener_) {
+        listener_(cached_, generation_);
+    }
+    return cached_;
+}
 
 class RegenerateRoomPopup {
 public:
@@ -204,6 +278,9 @@ DevControls::DevControls(Assets* owner, int screen_w, int screen_h)
       screen_w_(screen_w),
       screen_h_(screen_h) {
     room_editor_ = std::make_unique<RoomEditor>(assets_, screen_w_, screen_h_);
+    if (room_editor_) {
+        room_editor_->set_room_assets_saved_callback([this]() { notify_room_area_data_changed(); });
+    }
     map_editor_ = std::make_unique<MapEditor>(assets_);
     map_mode_ui_ = std::make_unique<MapModeUI>(assets_);
     camera_panel_ = std::make_unique<CameraUIPanel>(assets_, 72, 72);
@@ -226,16 +303,26 @@ DevControls::DevControls(Assets* owner, int screen_w, int screen_h)
                 if (this->mode_ == Mode::MapEditor) {
                     exit_map_editor_mode(false, true);
                 }
-                this->mode_ = Mode::RoomEditor;
-                apply_camera_area_render_flag();
-                if (map_mode_ui_) map_mode_ui_->set_header_mode(MapModeUI::HeaderMode::Room);
+                this->set_mode(Mode::RoomEditor);
+                if (map_mode_ui_) {
+                    map_mode_ui_->set_header_mode(MapModeUI::HeaderMode::Room);
+                    if (auto* footer = map_mode_ui_->get_footer_panel()) {
+                        std::string label = std::string("Room: ") + (current_room_ ? current_room_->room_name : std::string{});
+                        footer->set_title(label);
+                    }
+                }
             } else if (mode == MapModeUI::HeaderMode::Area) {
                 if (this->mode_ == Mode::MapEditor) {
                     exit_map_editor_mode(false, true);
                 }
-                this->mode_ = Mode::AreaMode;
-                apply_camera_area_render_flag();
-                if (map_mode_ui_) map_mode_ui_->set_header_mode(MapModeUI::HeaderMode::Area);
+                this->set_mode(Mode::AreaMode);
+                if (map_mode_ui_) {
+                    map_mode_ui_->set_header_mode(MapModeUI::HeaderMode::Area);
+                    if (auto* footer = map_mode_ui_->get_footer_panel()) {
+                        std::string label = std::string("Area Mode — Room: ") + (current_room_ ? current_room_->room_name : std::string{});
+                        footer->set_title(label);
+                    }
+                }
                 // Default to 'all' view type when entering Area mode
                 active_area_type_filters_.clear();
                 active_area_type_filters_.insert("all");
@@ -313,11 +400,27 @@ void DevControls::set_current_room(Room* room) {
         room_editor_->set_current_room(room);
     }
     asset_filter_.set_current_room(room);
+    if (map_mode_ui_) {
+        if (auto* footer = map_mode_ui_->get_footer_panel()) {
+            std::string label;
+            if (mode_ == Mode::AreaMode) label = std::string("Area Mode — Room: ") + (current_room_ ? current_room_->room_name : std::string{});
+            else if (mode_ == Mode::RoomEditor) label = std::string("Room: ") + (current_room_ ? current_room_->room_name : std::string{});
+            else label = std::string("Map");
+            footer->set_title(label);
+        }
+    }
+
+    notify_room_area_data_changed();
 }
 
 void DevControls::set_rooms(std::vector<Room*>* rooms) {
     rooms_ = rooms;
     if (map_editor_) map_editor_->set_rooms(rooms);
+}
+
+void DevControls::set_camera_override_for_testing(camera* camera_override) {
+    camera_override_for_testing_ = camera_override;
+    apply_camera_area_render_flag();
 }
 
 void DevControls::set_map_context(nlohmann::json* map_info, const std::string& map_path) {
@@ -327,6 +430,7 @@ void DevControls::set_map_context(nlohmann::json* map_info, const std::string& m
     if (map_mode_ui_) map_mode_ui_->set_light_save_callback(map_light_save_cb_);
     asset_filter_.set_map_info(map_info_json_);
     configure_header_button_sets();
+    notify_room_area_data_changed();
 }
 
 bool DevControls::is_pointer_over_dev_ui(int x, int y) const {
@@ -384,7 +488,7 @@ void DevControls::set_enabled(bool enabled) {
     if (enabled_) {
         const bool camera_was_visible = camera_panel_ && camera_panel_->is_visible();
         close_all_floating_panels();
-        mode_ = Mode::RoomEditor;
+        set_mode(Mode::RoomEditor);
         Room* target = choose_room(current_room_ ? current_room_ : detected_room_);
         dev_selected_room_ = target;
         if (room_editor_) room_editor_->set_enabled(true);
@@ -413,7 +517,7 @@ void DevControls::set_enabled(bool enabled) {
                 panel->set_expanded(false);
             }
         }
-        mode_ = Mode::RoomEditor;
+        set_mode(Mode::RoomEditor);
         dev_selected_room_ = nullptr;
         if (room_editor_) {
             room_editor_->set_enabled(false);
@@ -507,8 +611,14 @@ void DevControls::update(const Input& input) {
 
 void DevControls::update_ui(const Input& input) {
     if (!enabled_) return;
-    if (mode_ != Mode::RoomEditor) return;
-    if (!room_editor_ || !room_editor_->is_enabled()) return;
+    if (!room_editor_) return;
+
+    const bool room_editor_active = (mode_ == Mode::RoomEditor) && room_editor_->is_enabled();
+    const bool spawn_panel_visible = room_editor_->is_spawn_group_panel_visible();
+
+    if (!room_editor_active && !spawn_panel_visible) {
+        return;
+    }
 
     room_editor_->update_ui(input);
 }
@@ -561,7 +671,9 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
         return;
     }
 
-    const bool can_route_room_editor = (mode_ != Mode::MapEditor) && can_use_room_editor_ui() && room_editor_;
+    const bool room_editor_active = can_use_room_editor_ui();
+    const bool spawn_panel_visible = room_editor_ && room_editor_->is_spawn_group_panel_visible();
+    const bool can_route_room_editor = room_editor_ && (room_editor_active || spawn_panel_visible);
     const bool pointer_over_room_ui = can_route_room_editor && pointer_relevant &&
                                       room_editor_->is_room_ui_blocking_point(pointer.x, pointer.y);
 
@@ -630,37 +742,7 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
                 return;
             }
         }
-        // Parse room areas for hover/select and creation checks
-        auto parse_room_areas = [this]() -> std::vector<std::pair<std::string, std::vector<SDL_Point>>> {
-            std::vector<std::pair<std::string, std::vector<SDL_Point>>> out;
-            if (!current_room_) return out;
-            const auto& root = current_room_->assets_data();
-            if (!root.contains("areas") || !root["areas"].is_array()) return out;
-            for (const auto& item : root["areas"]) {
-                if (!item.is_object()) continue;
-                const std::string type = item.contains("type") && item["type"].is_string() ? item["type"].get<std::string>() : std::string{};
-                const auto& pts = item.contains("points") ? item["points"] : nlohmann::json();
-                if (!pts.is_array() || pts.size() < 3) continue;
-                // Anchor defaults to (0,0) meaning points are absolute world coords
-                int ax = 0, ay = 0;
-                if (item.contains("anchor") && item["anchor"].is_object()) {
-                    ax = item["anchor"].value("x", 0);
-                    ay = item["anchor"].value("y", 0);
-                }
-                std::vector<SDL_Point> poly;
-                poly.reserve(pts.size());
-                for (const auto& p : pts) {
-                    if (!p.is_object()) continue;
-                    int x = p.value("x", 0);
-                    int y = p.value("y", 0);
-                    poly.push_back(SDL_Point{ax + x, ay + y});
-                }
-                if (poly.size() >= 3) out.emplace_back(type, std::move(poly));
-            }
-            return out;
-        };
-
-        auto area_list = parse_room_areas();
+        const auto& area_list = room_area_polygons();
 
         if (create_area_panel_ && create_area_panel_->handle_event(event)) {
             consume(true);
@@ -669,57 +751,6 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
         if (edit_area_panel_ && edit_area_panel_->handle_event(event)) {
             consume(true);
             return;
-        }
-
-        if (event.type == SDL_MOUSEBUTTONDOWN && event.button.button == SDL_BUTTON_RIGHT) {
-            // Auto-create a room area only if the currently viewed type is trigger or spawning
-            auto selected_view_type = [this]() -> std::string {
-                for (const auto& t : devmode::area_mode::area_types()) {
-                    if (active_area_type_filters_.count(t)) return t;
-                }
-                return std::string{};
-            }();
-            if (!selected_view_type.empty() && (selected_view_type == "trigger" || selected_view_type == "spawning")) {
-                SDL_Point p{event.button.x, event.button.y};
-                SDL_Point world = assets_ ? assets_->getView().screen_to_map(p) : p;
-                last_area_click_world_ = world;
-                bool inside_room = current_room_ && (!current_room_->room_area || current_room_->room_area->contains_point(world));
-                if (inside_room && current_room_) {
-                    auto& data = current_room_->assets_data();
-                    if (!data.contains("areas") || !data["areas"].is_array()) {
-                        data["areas"] = nlohmann::json::array();
-                    }
-                    int w = 0, h = 0;
-                    if (current_room_->room_area) {
-                        auto b = current_room_->room_area->get_bounds();
-                        int minx, miny, maxx, maxy; std::tie(minx, miny, maxx, maxy) = b;
-                        w = std::max(0, maxx - minx);
-                        h = std::max(0, maxy - miny);
-                    }
-                    if (w <= 0 || h <= 0) { w = 32; h = 32; }
-                    nlohmann::json entry;
-                    entry["type"] = selected_view_type;
-                    // default name if not changed later
-                    int next_index = 1;
-                    try { const auto& arr = data["areas"]; next_index = static_cast<int>(arr.size()) + 1; } catch (...) {}
-                    entry["name"] = selected_view_type + std::string("_") + std::to_string(next_index);
-                    // Anchor at click, center the rectangle
-                    int ax = std::max(0, last_area_click_world_.x - w / 2);
-                    int ay = std::max(0, last_area_click_world_.y - h / 2);
-                    entry["anchor"] = nlohmann::json::object({{"x", ax}, {"y", ay}});
-                    entry["original_dimensions"] = { {"width", w}, {"height", h} };
-                    entry["points"] = nlohmann::json::array({
-                        nlohmann::json::object({{"x", 0}, {"y", 0}}),
-                        nlohmann::json::object({{"x", w}, {"y", 0}}),
-                        nlohmann::json::object({{"x", w}, {"y", h}}),
-                        nlohmann::json::object({{"x", 0}, {"y", h}})
-                    });
-                    data["areas"].push_back(std::move(entry));
-                    current_room_->save_assets_json();
-                    consume(true);
-                    return;
-                }
-            }
         }
 
         // Hover/select over visible filtered areas
@@ -743,58 +774,45 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
             return inside;
         };
 
+        std::vector<std::string> selected_asset_types;
+        for (const auto& t : devmode::area_mode::area_types()) {
+            if (t == "all" || t == "trigger" || t == "spawning") continue;
+            if (active_area_type_filters_.count(t)) selected_asset_types.push_back(t);
+        }
+        const bool viewing_all_assets = active_area_type_filters_.empty() || active_area_type_filters_.count("all") > 0;
+        auto asset_type_visible = [&](const std::string& type) -> bool {
+            if (viewing_all_assets) return true;
+            return std::find(selected_asset_types.begin(), selected_asset_types.end(), type) != selected_asset_types.end();
+        };
+
+        auto first_selected_type = [this]() -> std::string {
+            for (const auto& t : devmode::area_mode::area_types()) {
+                if (active_area_type_filters_.count(t)) return t;
+            }
+            return std::string{};
+        }();
+
         if (event.type == SDL_MOUSEMOTION || event.type == SDL_MOUSEBUTTONDOWN || event.type == SDL_MOUSEBUTTONUP) {
-            auto selected_view_type_inline = [this]() -> std::string {
-                for (const auto& t : devmode::area_mode::area_types()) {
-                    if (active_area_type_filters_.count(t)) return t;
-                }
-                return std::string{};
-            }();
             SDL_Point sp = (event.type == SDL_MOUSEMOTION) ? SDL_Point{event.motion.x, event.motion.y}
                                                            : SDL_Point{event.button.x, event.button.y};
             SDL_Point world = assets_ ? assets_->getView().screen_to_map(sp) : sp;
             int new_hover = -1;
-            const bool allow_room_area_hover = (selected_view_type_inline == "trigger" || selected_view_type_inline == "spawning");
+            const bool allow_room_area_hover = (first_selected_type == "trigger" || first_selected_type == "spawning");
             if (allow_room_area_hover) {
                 for (int i = static_cast<int>(area_list.size()) - 1; i >= 0; --i) {
-                    if (!type_visible(area_list[i].first)) continue;
-                    if (point_in_poly(area_list[i].second, world)) { new_hover = i; break; }
+                    if (!type_visible(area_list[i].type)) continue;
+                    if (point_in_poly(area_list[i].points, world)) { new_hover = i; break; }
                 }
             }
             hovered_area_index_ = new_hover;
 
-            // Asset hover logic: highlight assets that do NOT have the currently viewed area type
-            auto first_selected_type = [this]() -> std::string {
-                for (const auto& t : devmode::area_mode::area_types()) {
-                    if (active_area_type_filters_.count(t)) return t;
-                }
-                return std::string{};
-            }();
-            auto has_area_of_type = [](const AssetInfo* info, const std::string& type_name) -> bool {
-                if (!info) return false;
-                for (const auto& na : info->areas) {
-                    // Prefer explicit type if present, fallback to matching legacy name
-                    if (!na.type.empty()) { if (na.type == type_name) return true; }
-                    else if (na.name == type_name) return true;
-                }
-                return false;
-            };
-            // Clear previous highlights when moving
-            if (event.type == SDL_MOUSEMOTION && assets_) {
-                for (Asset* a : assets_->getFilteredActiveAssets()) {
-                    if (a) a->set_highlighted(false);
-                }
-            }
-            area_hovered_asset_ = nullptr;
-            if (!first_selected_type.empty() && assets_) {
-                // Build simple hit test similar to scene rect
+            Asset* new_hover_asset = nullptr;
+            if (assets_) {
                 const camera& cam = assets_->getView();
                 float scale = cam.get_scale();
                 float inv_scale = (scale != 0.0f) ? (1.0f / scale) : 1.0f;
-                // Player screen height reference
                 float player_screen_height = 1.0f;
-                Asset* playerAsset = assets_->player;
-                if (playerAsset) {
+                if (Asset* playerAsset = assets_->player) {
                     int ph = playerAsset->cached_h;
                     if (ph <= 0) {
                         if (SDL_Texture* pf = playerAsset->get_final_texture()) SDL_QueryTexture(pf, nullptr, nullptr, nullptr, &ph);
@@ -825,103 +843,147 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
                     return SDL_Rect{ eff.screen_position.x - sw_px / 2, eff.screen_position.y - sh_px, sw_px, sh_px };
                 };
 
-                // Iterate in reverse to prioritize top-most similar to renderer loop-end
+                if (event.type == SDL_MOUSEMOTION) {
+                    for (Asset* a : assets_->getFilteredActiveAssets()) {
+                        if (a) a->set_highlighted(false);
+                    }
+                }
+
                 const auto& list = assets_->getFilteredActiveAssets();
                 for (int i = static_cast<int>(list.size()) - 1; i >= 0; --i) {
-                    Asset* a = list[i]; if (!a || !a->info) continue;
-                    if (has_area_of_type(a->info.get(), first_selected_type)) continue; // skip assets that already have this area type
+                    Asset* a = list[i];
+                    if (!a) continue;
                     SDL_Rect fb = screen_rect_for(a);
                     if (fb.w <= 0 || fb.h <= 0) continue;
                     if (SDL_PointInRect(&sp, &fb)) {
-                        area_hovered_asset_ = a;
-                        a->set_highlighted(true);
+                        new_hover_asset = a;
                         break;
                     }
                 }
-            }
-            if (event.type == SDL_MOUSEBUTTONUP && event.button.button == SDL_BUTTON_LEFT) {
-                selected_area_index_ = hovered_area_index_;
-                if (selected_area_index_ >= 0) {
-                    // Open or update edit panel near pointer
-                    if (!edit_area_panel_) edit_area_panel_ = std::make_unique<EditRoomAreaPanel>();
-                    edit_area_panel_->set_area_types(devmode::area_mode::area_types());
-                    // Set current type
-                    if (selected_area_index_ >= 0 && selected_area_index_ < (int)area_list.size()) {
-                        edit_area_panel_->set_selected_type(area_list[selected_area_index_].first);
-                    }
-                    // Set current name
-                    if (current_room_) {
-                        try {
-                            auto& data = current_room_->assets_data();
-                            if (data.contains("areas") && data["areas"].is_array()) {
-                                const auto& item = data["areas"][selected_area_index_];
-                                std::string nm = item.value("name", std::string{});
-                                if (nm.empty()) nm = area_list[selected_area_index_].first;
-                                edit_area_panel_->set_selected_name(nm);
-                            }
-                        } catch (...) {}
-                    }
-                    // Wire callbacks
-                    edit_area_panel_->set_on_change_type([this](const std::string& new_type){
-                        if (!current_room_) return;
-                        try {
-                            auto& data = current_room_->assets_data();
-                            if (!data.contains("areas") || !data["areas"].is_array()) return;
-                            if (selected_area_index_ < 0 || selected_area_index_ >= (int)data["areas"].size()) return;
-                            auto& item = data["areas"][selected_area_index_];
-                            if (item.is_object()) {
-                                item["type"] = new_type;
-                                current_room_->save_assets_json();
-                            }
-                        } catch (...) {}
-                    });
-                    edit_area_panel_->set_on_change_name([this](const std::string& new_name){
-                        if (!current_room_) return;
-                        try {
-                            auto& data = current_room_->assets_data();
-                            if (!data.contains("areas") || !data["areas"].is_array()) return;
-                            if (selected_area_index_ < 0 || selected_area_index_ >= (int)data["areas"].size()) return;
-                            auto& item = data["areas"][selected_area_index_];
-                            if (item.is_object()) {
-                                item["name"] = new_name;
-                                current_room_->save_assets_json();
-                            }
-                        } catch (...) {}
-                    });
-                    edit_area_panel_->set_on_delete([this]() {
-                        if (!current_room_) return;
-                        try {
-                            auto& data = current_room_->assets_data();
-                            if (!data.contains("areas") || !data["areas"].is_array()) return;
-                            if (selected_area_index_ < 0 || selected_area_index_ >= (int)data["areas"].size()) return;
-                            auto& arr = data["areas"];
-                            // erase by rebuilding array without the index
-                            nlohmann::json new_arr = nlohmann::json::array();
-                            for (int i = 0; i < (int)arr.size(); ++i) if (i != selected_area_index_) new_arr.push_back(arr[i]);
-                            arr = std::move(new_arr);
-                            current_room_->save_assets_json();
-                            selected_area_index_ = -1;
-                        } catch (...) {}
-                    });
-                    edit_area_panel_->open(event.button.x + 12, event.button.y + 12);
-                } else {
-                    if (edit_area_panel_) edit_area_panel_->close();
+                if (new_hover_asset) {
+                    new_hover_asset->set_highlighted(true);
                 }
             }
-            if (event.type == SDL_MOUSEBUTTONDOWN && event.button.button == SDL_BUTTON_RIGHT) {
-                // If right-click on a hovered asset lacking the type, open AreaOverlayEditor for that asset
-                if (area_hovered_asset_ && !active_area_type_filters_.empty()) {
-                    std::string area_type;
-                    for (const auto& t : devmode::area_mode::area_types()) { if (active_area_type_filters_.count(t)) { area_type = t; break; } }
-                    if (!area_type.empty()) {
-                        if (!asset_area_editor_) asset_area_editor_ = std::make_unique<AreaOverlayEditor>();
-                        if (asset_area_editor_) asset_area_editor_->attach_assets(assets_);
-                        if (asset_area_editor_ && area_hovered_asset_->info) {
-                            if (asset_area_editor_->begin(area_hovered_asset_->info.get(), area_hovered_asset_, area_type)) {
-                                consume(true);
-                                return;
+            area_hovered_asset_ = new_hover_asset;
+
+            area_hovered_asset_with_area_ = nullptr;
+            area_hovered_area_name_.clear();
+            if (assets_) {
+                const camera& cam = assets_->getView();
+                float scale = cam.get_scale();
+                float inv_scale = (scale != 0.0f) ? (1.0f / scale) : 1.0f;
+                float player_screen_height = 1.0f;
+                if (Asset* playerAsset = assets_->player) {
+                    int ph = playerAsset->cached_h;
+                    if (ph <= 0) {
+                        if (SDL_Texture* pf = playerAsset->get_final_texture()) SDL_QueryTexture(pf, nullptr, nullptr, nullptr, &ph);
+                    }
+                    if (ph > 0) player_screen_height = static_cast<float>(ph) * inv_scale;
+                }
+                if (player_screen_height <= 0.0f) player_screen_height = 1.0f;
+
+                const auto& list2 = assets_->getFilteredActiveAssets();
+                bool found_area = false;
+                for (int i = static_cast<int>(list2.size()) - 1; i >= 0 && !found_area; --i) {
+                    Asset* a = list2[i];
+                    if (!a || !a->info) continue;
+                    const AssetInfo* inf = a->info.get();
+                    for (const auto& na : inf->areas) {
+                        const std::string& at = !na.type.empty() ? na.type : na.name;
+                        if (!asset_type_visible(at)) continue;
+                        if (!na.area) continue;
+                        Area world_area = a->get_area(na.name);
+                        const auto& wpts = world_area.get_points();
+                        if (wpts.size() < 3) continue;
+                        camera::RenderEffects eff = cam.compute_render_effects(SDL_Point{a->pos.x, a->pos.y}, 0.0f, player_screen_height);
+                        SDL_Point pivot_linear = cam.map_to_screen(SDL_Point{a->pos.x, a->pos.y});
+                        std::vector<SDL_Point> spts; spts.reserve(wpts.size());
+                        for (const auto& wp : wpts) {
+                            SDL_Point p_lin = cam.map_to_screen(wp);
+                            const float dx = static_cast<float>(p_lin.x - pivot_linear.x);
+                            const float dy = static_cast<float>(p_lin.y - pivot_linear.y);
+                            const float sx = eff.screen_position.x + dx * eff.distance_scale;
+                            const float sy = eff.screen_position.y + dy * (eff.distance_scale * eff.vertical_scale);
+                            spts.push_back(SDL_Point{ static_cast<int>(std::lround(sx)), static_cast<int>(std::lround(sy)) });
+                        }
+                        if (!spts.empty() && point_in_poly(spts, sp)) {
+                            area_hovered_asset_with_area_ = a;
+                            area_hovered_area_name_ = na.name;
+                            if (!area_hovered_asset_) {
+                                area_hovered_asset_ = a;
+                                if (event.type == SDL_MOUSEMOTION) {
+                                    a->set_highlighted(true);
+                                }
+                            }
+                            found_area = true;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        if (event.type == SDL_MOUSEBUTTONDOWN && event.button.button == SDL_BUTTON_RIGHT) {
+            if (!first_selected_type.empty() && (first_selected_type == "trigger" || first_selected_type == "spawning")) {
+                if (assets_ && current_room_) {
+                    SDL_Point sp{event.button.x, event.button.y};
+                    SDL_Point world = assets_->getView().screen_to_map(sp);
+                    std::string area_type = first_selected_type;
+                    std::string area_name;
+                    if (hovered_area_index_ >= 0 && hovered_area_index_ < static_cast<int>(area_list.size())) {
+                        const auto& hovered = area_list[hovered_area_index_];
+                        area_name = hovered.name;
+                        if (!hovered.type.empty()) {
+                            area_type = hovered.type;
+                        }
+                    } else {
+                        area_name = generate_unique_room_area_name(area_type);
+                    }
+                    if (!asset_area_editor_) asset_area_editor_ = std::make_unique<AreaOverlayEditor>();
+                    if (asset_area_editor_) {
+                        asset_area_editor_->attach_assets(assets_);
+                        asset_area_editor_->set_on_saved([this]() {
+                            notify_room_area_data_changed();
+                        });
+                        if (asset_area_editor_->begin_for_room(current_room_, area_name, area_type, world)) {
+                            if (map_mode_ui_) {
+                                if (auto* footer = map_mode_ui_->get_footer_panel()) {
+                                    footer->set_title(std::string("Editing Room Area — ") + area_name);
+                                }
+                            }
+                            consume(true);
+                            return;
+                        }
+                    }
+                }
+            } else if (!first_selected_type.empty() && first_selected_type != "all") {
+                if (asset_area_editor_) asset_area_editor_->set_on_saved(nullptr);
+                Asset* target_asset = area_hovered_asset_with_area_ ? area_hovered_asset_with_area_ : area_hovered_asset_;
+                if (target_asset && target_asset->info) {
+                    std::string area_name = first_selected_type;
+                    bool removed_existing = false;
+                    for (const auto& na : target_asset->info->areas) {
+                        const std::string normalized = !na.type.empty() ? na.type : na.name;
+                        if (normalized == first_selected_type) {
+                            area_name = na.name;
+                            removed_existing = target_asset->info->remove_area(na.name);
+                            if (removed_existing) {
+                                (void)target_asset->info->update_info_json();
+                            }
+                            break;
+                        }
+                    }
+                    if (!asset_area_editor_) asset_area_editor_ = std::make_unique<AreaOverlayEditor>();
+                    if (asset_area_editor_) asset_area_editor_->attach_assets(assets_);
+                    if (asset_area_editor_ && asset_area_editor_->begin(target_asset->info.get(), target_asset, area_name)) {
+                        if (map_mode_ui_) {
+                            if (auto* footer = map_mode_ui_->get_footer_panel()) {
+                                std::string label = std::string("Editing ") + target_asset->info->name + std::string(" — Area: ") + area_name;
+                                footer->set_title(label);
                             }
                         }
+                        consume(true);
+                        return;
                     }
                 }
             }
@@ -946,33 +1008,6 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
     } else if (mode_ == Mode::AreaMode) {
         // Render room areas in UI overlay
         if (renderer && assets_) {
-            auto parse_room_areas = [this]() -> std::vector<std::pair<std::string, std::vector<SDL_Point>>> {
-                std::vector<std::pair<std::string, std::vector<SDL_Point>>> out;
-                if (!current_room_) return out;
-                const auto& root = current_room_->assets_data();
-                if (!root.contains("areas") || !root["areas"].is_array()) return out;
-                for (const auto& item : root["areas"]) {
-                    if (!item.is_object()) continue;
-                    const std::string type = item.contains("type") && item["type"].is_string() ? item["type"].get<std::string>() : std::string{};
-                    const auto& pts = item.contains("points") ? item["points"] : nlohmann::json();
-                    if (!pts.is_array() || pts.size() < 3) continue;
-                    int ax = 0, ay = 0;
-                    if (item.contains("anchor") && item["anchor"].is_object()) {
-                        ax = item["anchor"].value("x", 0);
-                        ay = item["anchor"].value("y", 0);
-                    }
-                    std::vector<SDL_Point> poly;
-                    poly.reserve(pts.size());
-                    for (const auto& p : pts) {
-                        if (!p.is_object()) continue;
-                        int x = p.value("x", 0);
-                        int y = p.value("y", 0);
-                        poly.push_back(SDL_Point{ax + x, ay + y});
-                    }
-                    if (poly.size() >= 3) out.emplace_back(type, std::move(poly));
-                }
-                return out;
-            };
 
             auto type_visible = [this](const std::string& type) -> bool {
                 if (active_area_type_filters_.count("all") > 0) return true; // 'all' shows all
@@ -997,48 +1032,128 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
             Uint8 pr=0,pg=0,pb=0,pa=0; SDL_GetRenderDrawColor(renderer, &pr, &pg, &pb, &pa);
 
             const camera& cam = assets_->getView();
+
+            // Draw room areas with hover/selection highlight
+            {
+                const auto& room_areas = room_area_polygons();
+                if (!room_areas.empty()) {
+                    for (int i = 0; i < static_cast<int>(room_areas.size()); ++i) {
+                        const std::string& t = room_areas[i].type;
+                        if (!type_visible(t)) continue;
+                        const auto& poly_world = room_areas[i].points;
+                        std::vector<SDL_Point> spts; spts.reserve(poly_world.size());
+                        for (const auto& wp : poly_world) spts.push_back(cam.map_to_screen(wp));
+                        if (spts.size() >= 3) {
+                            SDL_Color base = color_for_type(t);
+                            if (i == hovered_area_index_) base = SDL_Color{ std::min<Uint8>(255, Uint8(base.r + 30)), std::min<Uint8>(255, Uint8(base.g + 30)), std::min<Uint8>(255, Uint8(base.b + 30)), 120 };
+                            if (i == selected_area_index_) base = SDL_Color{ std::min<Uint8>(255, Uint8(base.r + 60)), std::min<Uint8>(255, Uint8(base.g + 60)), std::min<Uint8>(255, Uint8(base.b + 60)), 150 };
+#if SDL_VERSION_ATLEAST(2,0,18)
+                            std::vector<SDL_Vertex> verts; verts.reserve(spts.size());
+                            for (auto p : spts) { SDL_Vertex v{}; v.position=SDL_FPoint{(float)p.x,(float)p.y}; v.color=base; verts.push_back(v);} 
+                            std::vector<int> idxs; idxs.reserve((spts.size()-2)*3);
+                            for (size_t k=1;k+1<spts.size();++k){ idxs.push_back(0); idxs.push_back((int)k); idxs.push_back((int)(k+1)); }
+                            if (!idxs.empty()) SDL_RenderGeometry(renderer, nullptr, verts.data(), (int)verts.size(), idxs.data(), (int)idxs.size());
+#endif
+                        }
+                        if (!spts.empty()) {
+                            SDL_Color outline = (i == selected_area_index_) ? SDL_Color{255,255,255,200} : (i == hovered_area_index_ ? SDL_Color{230,230,230,180} : SDL_Color{220,220,220,120});
+                            std::vector<SDL_Point> pts = spts; pts.push_back(spts.front());
+                            SDL_SetRenderDrawColor(renderer, outline.r, outline.g, outline.b, outline.a);
+                            SDL_RenderDrawLines(renderer, pts.data(), (int)pts.size());
+                        }
+                    }
+                }
+            }
             // In asset modes, render asset areas for the selected type
             {
                 bool viewing_all = active_area_type_filters_.count("all") > 0;
                 bool viewing_room_types = active_area_type_filters_.count("trigger") > 0 || active_area_type_filters_.count("spawning") > 0;
-                // asset mode means not all and not room types
-                if (!viewing_all && !viewing_room_types) {
-                    // Determine selected asset area type
-                    std::string selected_type;
-                    for (const auto& t : devmode::area_mode::area_types()) {
-                        if (t == "all" || t == "trigger" || t == "spawning") continue;
-                        if (active_area_type_filters_.count(t)) { selected_type = t; break; }
-                    }
-                    if (!selected_type.empty() && assets_) {
-                        const auto& list = assets_->getFilteredActiveAssets();
-                        for (Asset* a : list) {
-                            if (!a || !a->info) continue;
-                            for (const auto& na : a->info->areas) {
-                                const std::string& at = !na.type.empty() ? na.type : na.name;
-                                if (at != selected_type) continue;
-                                if (!na.area) continue;
-                                // Build world polygon via asset transform
-                                Area world_area = a->get_area(na.name);
-                                const auto& wpts = world_area.get_points();
-                                if (wpts.size() < 3) continue;
-                                std::vector<SDL_Point> spts; spts.reserve(wpts.size());
-                                for (const auto& wp : wpts) spts.push_back(cam.map_to_screen(wp));
+                std::vector<std::string> selected_asset_types;
+                for (const auto& t : devmode::area_mode::area_types()) {
+                    if (t == "all" || t == "trigger" || t == "spawning") continue;
+                    if (active_area_type_filters_.count(t)) selected_asset_types.push_back(t);
+                }
+                const bool show_all_assets = viewing_all || active_area_type_filters_.empty();
+                if (assets_ && !viewing_room_types && (show_all_assets || !selected_asset_types.empty())) {
+                    auto is_visible_type = [&](const std::string& type) {
+                        if (show_all_assets) return true;
+                        return std::find(selected_asset_types.begin(), selected_asset_types.end(), type) != selected_asset_types.end();
+                    };
+                    auto lighten = [](Uint8 channel, int delta) -> Uint8 {
+                        int v = static_cast<int>(channel) + delta;
+                        if (v < 0) v = 0;
+                        if (v > 255) v = 255;
+                        return static_cast<Uint8>(v);
+                    };
+
+                    const auto& list = assets_->getFilteredActiveAssets();
+                    for (Asset* a : list) {
+                        if (!a || !a->info) continue;
+                        float scale = cam.get_scale();
+                        float inv_scale = (scale != 0.0f) ? (1.0f / scale) : 1.0f;
+                        float player_screen_height = 1.0f;
+                        if (Asset* playerAsset = assets_->player) {
+                            int ph = playerAsset->cached_h;
+                            if (ph <= 0) {
+                                if (SDL_Texture* pf = playerAsset->get_final_texture()) SDL_QueryTexture(pf, nullptr, nullptr, nullptr, &ph);
+                            }
+                            if (ph > 0) player_screen_height = static_cast<float>(ph) * inv_scale;
+                        }
+                        if (player_screen_height <= 0.0f) player_screen_height = 1.0f;
+
+                        for (const auto& na : a->info->areas) {
+                            const std::string& normalized = !na.type.empty() ? na.type : na.name;
+                            if (!is_visible_type(normalized)) continue;
+                            if (!na.area) continue;
+
+                            Area world_area = a->get_area(na.name);
+                            const auto& wpts = world_area.get_points();
+                            if (wpts.size() < 3) continue;
+
+                            camera::RenderEffects eff = cam.compute_render_effects(SDL_Point{a->pos.x, a->pos.y}, 0.0f, player_screen_height);
+                            SDL_Point pivot_linear = cam.map_to_screen(SDL_Point{a->pos.x, a->pos.y});
+
+                            std::vector<SDL_Point> spts; spts.reserve(wpts.size());
+                            for (const auto& wp : wpts) {
+                                SDL_Point p_lin = cam.map_to_screen(wp);
+                                const float dx = static_cast<float>(p_lin.x - pivot_linear.x);
+                                const float dy = static_cast<float>(p_lin.y - pivot_linear.y);
+                                const float sx = eff.screen_position.x + dx * eff.distance_scale;
+                                const float sy = eff.screen_position.y + dy * (eff.distance_scale * eff.vertical_scale);
+                                spts.push_back(SDL_Point{ static_cast<int>(std::lround(sx)), static_cast<int>(std::lround(sy)) });
+                            }
+
+                            const bool hovered_this = (a == area_hovered_asset_with_area_) && (na.name == area_hovered_area_name_);
+                            SDL_Color base = color_for_type(normalized);
+                            SDL_Color fill = base;
+                            fill.a = static_cast<Uint8>(hovered_this ? std::min<int>(255, base.a + 64) : std::max<int>(30, base.a / 2));
+
 #if SDL_VERSION_ATLEAST(2,0,18)
-                                if (spts.size() >= 3) {
-                                    SDL_Color fill = SDL_Color{230, 200, 80, 50};
-                                    std::vector<SDL_Vertex> verts; verts.reserve(spts.size());
-                                    for (auto p : spts) { SDL_Vertex v{}; v.position=SDL_FPoint{(float)p.x,(float)p.y}; v.color=fill; verts.push_back(v);} 
-                                    std::vector<int> idxs; idxs.reserve((spts.size()-2)*3);
-                                    for (size_t i=1;i+1<spts.size();++i){ idxs.push_back(0); idxs.push_back((int)i); idxs.push_back((int)(i+1)); }
-                                    if (!idxs.empty()) SDL_RenderGeometry(renderer, nullptr, verts.data(), (int)verts.size(), idxs.data(), (int)idxs.size());
+                            if (spts.size() >= 3) {
+                                std::vector<SDL_Vertex> verts; verts.reserve(spts.size());
+                                for (auto p : spts) {
+                                    SDL_Vertex v{};
+                                    v.position = SDL_FPoint{static_cast<float>(p.x), static_cast<float>(p.y)};
+                                    v.color = fill;
+                                    verts.push_back(v);
                                 }
+                                std::vector<int> idxs; idxs.reserve((spts.size() - 2) * 3);
+                                for (size_t i = 1; i + 1 < spts.size(); ++i) {
+                                    idxs.push_back(0);
+                                    idxs.push_back(static_cast<int>(i));
+                                    idxs.push_back(static_cast<int>(i + 1));
+                                }
+                                if (!idxs.empty()) {
+                                    SDL_RenderGeometry(renderer, nullptr, verts.data(), static_cast<int>(verts.size()), idxs.data(), static_cast<int>(idxs.size()));
+                                }
+                            }
 #endif
-                                if (!spts.empty()) {
-                                    SDL_Color outline{230, 200, 80, 120};
-                                    std::vector<SDL_Point> pts = spts; pts.push_back(spts.front());
-                                    SDL_SetRenderDrawColor(renderer, outline.r, outline.g, outline.b, outline.a);
-                                    SDL_RenderDrawLines(renderer, pts.data(), (int)pts.size());
-                                }
+                            if (!spts.empty()) {
+                                SDL_Color outline = hovered_this ? SDL_Color{255, 255, 255, 200}
+                                                                : SDL_Color{lighten(base.r, 20), lighten(base.g, 20), lighten(base.b, 20), std::max<Uint8>(base.a, 120)};
+                                std::vector<SDL_Point> pts = spts; pts.push_back(spts.front());
+                                SDL_SetRenderDrawColor(renderer, outline.r, outline.g, outline.b, outline.a);
+                                SDL_RenderDrawLines(renderer, pts.data(), static_cast<int>(pts.size()));
                             }
                         }
                     }
@@ -1121,10 +1236,7 @@ bool DevControls::is_asset_info_editor_open() const {
     return room_editor_->is_asset_info_editor_open();
 }
 
-void DevControls::open_spawn_group_for_asset(Asset* asset) {
-    if (!can_use_room_editor_ui()) return;
-    room_editor_->open_spawn_group_for_asset(asset);
-}
+// Removed: left-click open spawn group config. Dragging still updates spawn data.
 
 void DevControls::finalize_asset_drag(Asset* asset, const std::shared_ptr<AssetInfo>& info) {
     if (!can_use_room_editor_ui()) return;
@@ -1357,6 +1469,7 @@ void DevControls::configure_header_button_sets() {
         cfg.id = std::string("area_") + type;
         cfg.label = type;
         cfg.active = (active_area_type_filters_.count(type) > 0);
+        cfg.active_style_override = &DMStyles::AccentButton();
         cfg.on_toggle = [this, type](bool active) {
             if (active) {
                 if (type == "all") {
@@ -1451,17 +1564,62 @@ void DevControls::toggle_map_assets_modal() {
     } else {
         map_assets_modal_->set_screen_dimensions(screen_w_, screen_h_);
     }
-    auto save = [this]() { persist_map_info_to_disk(); };
+    auto save = [this]() { return persist_map_info_to_disk(); };
     auto& map_json = assets_->map_info_json();
     SDL_Color color{200, 200, 255, 255};
     map_assets_modal_->open(map_json, "map_assets_data", "batch_map_assets", "Map-wide", color, save);
 }
 
 void DevControls::apply_camera_area_render_flag() {
-    if (!assets_) return;
-    camera& cam = assets_->getView();
+    camera* cam_ptr = nullptr;
+    if (camera_override_for_testing_) {
+        cam_ptr = camera_override_for_testing_;
+    } else if (assets_) {
+        cam_ptr = &assets_->getView();
+    }
+
+    if (!cam_ptr) {
+        return;
+    }
+
     // Always render debug areas via the UI overlay, not the scene renderer
-    cam.set_render_areas_enabled(false);
+    cam_ptr->set_render_areas_enabled(false);
+
+    // In Area Mode, disable camera perspective/realism so areas align
+    // precisely with assets (only zoom scaling applies).
+    // Re-enable realism in other modes.
+    const bool area_mode = (mode_ == Mode::AreaMode);
+    cam_ptr->set_realism_enabled(!area_mode);
+}
+
+void DevControls::set_mode(Mode new_mode) {
+    if (mode_ == new_mode) {
+        return;
+    }
+    mode_ = new_mode;
+    apply_camera_area_render_flag();
+}
+
+std::string DevControls::generate_unique_room_area_name(const std::string& base) const {
+    std::unordered_set<std::string> used_names;
+    if (current_room_) {
+        for (const auto& entry : current_room_->areas) {
+            used_names.insert(entry.name);
+        }
+    }
+
+    std::string prefix = base.empty() ? std::string("area") : base;
+    const std::string suffix = "_area";
+    if (prefix.size() < suffix.size() || prefix.substr(prefix.size() - suffix.size()) != suffix) {
+        prefix += suffix;
+    }
+
+    std::string candidate = prefix;
+    int counter = 1;
+    while (used_names.count(candidate) > 0) {
+        candidate = prefix + "_" + std::to_string(counter++);
+    }
+    return candidate;
 }
 
 void DevControls::toggle_boundary_assets_modal() {
@@ -1473,7 +1631,7 @@ void DevControls::toggle_boundary_assets_modal() {
     } else {
         boundary_assets_modal_->set_screen_dimensions(screen_w_, screen_h_);
     }
-    auto save = [this]() { persist_map_info_to_disk(); };
+    auto save = [this]() { return persist_map_info_to_disk(); };
     auto& map_json = assets_->map_info_json();
     SDL_Color color{255, 200, 120, 255};
     boundary_assets_modal_->open(map_json, "map_boundary_data", "batch_map_boundary", "Boundary", color, save);
@@ -1520,6 +1678,26 @@ void DevControls::open_regenerate_room_popup() {
                             },
                             screen_w_,
                             screen_h_);
+}
+
+void DevControls::set_room_area_cache_listener(RoomAreaCache::Listener listener) {
+    room_area_cache_.set_listener(std::move(listener));
+}
+
+std::size_t DevControls::room_area_cache_generation() const {
+    return room_area_cache_.generation();
+}
+
+void DevControls::notify_room_area_data_changed() {
+    room_area_cache_.invalidate();
+}
+
+const DevControls::RoomAreaCache::PolygonList& DevControls::room_area_polygons() {
+    const nlohmann::json* root = nullptr;
+    if (current_room_) {
+        root = &current_room_->assets_data();
+    }
+    return room_area_cache_.ensure_from_json(root);
 }
 
 void DevControls::toggle_map_light_panel() {
@@ -1569,7 +1747,7 @@ void DevControls::enter_map_editor_mode() {
     if (mode_ == Mode::MapEditor) return;
 
     close_all_floating_panels();
-    mode_ = Mode::MapEditor;
+    set_mode(Mode::MapEditor);
     map_editor_->set_input(input_);
     map_editor_->set_rooms(rooms_);
     map_editor_->set_screen_dimensions(screen_w_, screen_h_);
@@ -1594,7 +1772,7 @@ void DevControls::exit_map_editor_mode(bool focus_player, bool restore_previous_
         map_mode_ui_->set_map_mode_active(false);
         map_mode_ui_->set_header_mode(MapModeUI::HeaderMode::Room);
     }
-    mode_ = Mode::RoomEditor;
+    set_mode(Mode::RoomEditor);
     if (room_editor_ && enabled_) {
         room_editor_->set_enabled(true);
         room_editor_->set_current_room(current_room_);
@@ -1699,21 +1877,11 @@ bool DevControls::passes_asset_filters(Asset* asset) const {
     return asset_filter_.passes(*asset);
 }
 
-void DevControls::persist_map_info_to_disk() const {
+bool DevControls::persist_map_info_to_disk() const {
     if (!assets_) {
-        return;
+        std::cerr << "[DevControls] Cannot persist map info: assets manager not set\n";
+        return false;
     }
-    try {
-        const std::string& path = assets_->map_info_path();
-        if (path.empty()) {
-            return;
-        }
-        std::ofstream out(path);
-        if (!out.is_open()) {
-            return;
-        }
-        out << assets_->map_info_json().dump(2);
-    } catch (...) {
-    }
+    return devmode::write_map_info_json(assets_->map_info_path(), assets_->map_info_json(), std::cerr);
 }
 

@@ -1,10 +1,12 @@
 #include "Vibble_controller.hpp"
 
 #include "asset/Asset.hpp"
+#include "custom_controllers/controller_path_utils.hpp"
 #include "utils/input.hpp"
 
 #include <cmath>
 #include <string>
+#include <vector>
 
 VibbleController::VibbleController(Asset* player)
     : player_(player) {}
@@ -25,10 +27,24 @@ void VibbleController::movement(const Input& input) {
     const int raw_y = (down  ? 1 : 0) - (up    ? 1 : 0);
 
     auto send_to_animation = [&](int mx, int my) {
-        if (player_->anim_) {
-            player_->anim_->move(mx, my);
+        if (!player_ || !player_->anim_) {
+            return;
         }
-};
+
+        if (mx == 0 && my == 0) {
+            player_->anim_->move({}, 0);
+            return;
+        }
+
+        const int radius = controller_paths::neighbor_radius(player_);
+        SDL_Point delta = controller_paths::clamp_delta(SDL_Point{ mx, my }, radius);
+        if (delta.x == 0 && delta.y == 0) {
+            player_->anim_->move({}, 0);
+            return;
+        }
+
+        player_->anim_->move(std::vector<SDL_Point>{ delta }, 0);
+    };
 
     if (raw_x == 0 && raw_y == 0) {
         send_to_animation(0, 0);

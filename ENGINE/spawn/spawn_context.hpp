@@ -42,6 +42,9 @@ class SpawnContext {
     std::unordered_map<std::string, std::shared_ptr<AssetInfo>>& info_library() { return asset_info_library_; }
     std::vector<std::unique_ptr<Asset>>& all_assets() { return all_; }
     MapGrid* grid() { return grid_; }
+    // Limit spawns to inside this area if set
+    void set_clip_area(const Area* a) { clip_area_ = a; }
+    const Area* clip_area() const { return clip_area_; }
 
 	private:
     std::mt19937& rng_;
@@ -52,4 +55,5 @@ class SpawnContext {
     std::vector<std::unique_ptr<Asset>>& all_;
     AssetLibrary* asset_library_;
     MapGrid* grid_ = nullptr;
+    const Area* clip_area_ = nullptr;
 };

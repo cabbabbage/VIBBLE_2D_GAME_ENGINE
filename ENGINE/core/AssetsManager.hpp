@@ -60,7 +60,6 @@ public:
     bool is_asset_info_editor_open() const;
     void clear_editor_selection();
     void handle_sdl_event(const SDL_Event& e);
-    void open_spawn_group_for_asset(Asset* a);
     void finalize_asset_drag(Asset* a, const std::shared_ptr<AssetInfo>& info);
     void on_camera_settings_changed();
     void reload_camera_settings();
@@ -102,7 +101,7 @@ private:
     void load_map_info_json();
     void save_map_info_json();
     void apply_map_light_config();
-    void on_map_light_changed();
+    bool on_map_light_changed();
     void hydrate_map_info_sections();
     void load_camera_settings_from_json();
     void write_camera_settings_to_json();

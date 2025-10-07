@@ -13,7 +13,6 @@
 #include "room_selector_popup.hpp"
 
 class Input;
-union SDL_Event;
 struct SDL_Renderer;
 class MapLayersController;
 class RoomConfigurator;

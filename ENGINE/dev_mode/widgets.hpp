@@ -16,6 +16,7 @@ public:
     const SDL_Rect& rect() const { return rect_; }
     void set_text(const std::string& t);
     const std::string& text() const { return text_; }
+    void set_style(const DMButtonStyle* style);
     bool handle_event(const SDL_Event& e);
     void render(SDL_Renderer* r) const;
     bool is_hovered() const { return hovered_; }
@@ -275,11 +276,20 @@ private:
 class DropdownWidget : public Widget {
 public:
     explicit DropdownWidget(DMDropdown* d) : d_(d) {}
-    void set_rect(const SDL_Rect& r) override { if (d_) d_->set_rect(r); }
-    const SDL_Rect& rect() const override { return d_->rect(); }
+    void set_rect(const SDL_Rect& r) override {
+        rect_cache_ = r;
+        if (d_) d_->set_rect(r);
+    }
+    const SDL_Rect& rect() const override {
+        if (d_) {
+            return d_->rect();
+        }
+        return rect_cache_;
+    }
     int height_for_width(int w) const override { return d_ ? d_->preferred_height(w) : DMDropdown::height(); }
     bool handle_event(const SDL_Event& e) override { return d_ ? d_->handle_event(e) : false; }
     void render(SDL_Renderer* r) const override { if (d_) d_->render(r); }
 private:
     DMDropdown* d_ = nullptr;
+    SDL_Rect rect_cache_{0, 0, 0, 0};
 };

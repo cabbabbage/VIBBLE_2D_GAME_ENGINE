@@ -2,6 +2,7 @@
 
 #include "utils/input.hpp"
 
+#include <SDL.h>
 #include <SDL_ttf.h>
 
 #include <algorithm>
@@ -9,6 +10,16 @@
 namespace {
 constexpr int kDefaultHeaderHeight = 40;
 constexpr int kArrowButtonWidth = 36;
+
+const DMButtonStyle* button_style_for(const FullScreenCollapsible::HeaderButton& btn) {
+    if (btn.active && btn.active_style_override) {
+        return btn.active_style_override;
+    }
+    if (btn.style_override) {
+        return btn.style_override;
+    }
+    return &DMStyles::HeaderButton();
+}
 
 void draw_label(SDL_Renderer* renderer, const std::string& text, int x, int y) {
     if (!renderer) return;
@@ -87,7 +98,7 @@ void FullScreenCollapsible::set_expanded(bool expanded) {
 void FullScreenCollapsible::set_header_buttons(std::vector<HeaderButton> buttons) {
     buttons_ = std::move(buttons);
     for (auto& btn : buttons_) {
-        const DMButtonStyle* style = btn.style_override ? btn.style_override : &DMStyles::HeaderButton();
+        const DMButtonStyle* style = button_style_for(btn);
         btn.widget = std::make_unique<DMButton>(btn.label, style, 120, DMButton::height());
     }
     layout_buttons();
@@ -98,6 +109,9 @@ void FullScreenCollapsible::activate_button(const std::string& id) {
         const bool new_state = (btn.id == id);
         if (btn.active != new_state) {
             btn.active = new_state;
+            if (btn.widget) {
+                btn.widget->set_style(button_style_for(btn));
+            }
             if (btn.on_toggle) {
                 btn.on_toggle(btn.active);
             }
@@ -110,6 +124,9 @@ void FullScreenCollapsible::set_active_button(const std::string& id, bool trigge
         const bool new_state = (!id.empty() && btn.id == id);
         if (btn.active != new_state) {
             btn.active = new_state;
+            if (btn.widget) {
+                btn.widget->set_style(button_style_for(btn));
+            }
             if (trigger_callback && btn.on_toggle) {
                 btn.on_toggle(btn.active);
             }
@@ -371,6 +388,9 @@ void FullScreenCollapsible::set_button_active_state(const std::string& id, bool 
             if (btn.momentary && active) {
                 btn.active = false;
             }
+            if (btn.widget) {
+                btn.widget->set_style(button_style_for(btn));
+            }
         }
     }
 }
@@ -397,3 +417,10 @@ const FullScreenCollapsible::HeaderButton* FullScreenCollapsible::find_button(co
     return &(*it);
 }
 
+
+// Added: update the title dynamically from outside
+void FullScreenCollapsible::set_title(const std::string& title) {
+    title_ = title;
+    update_title_width();
+    layout_buttons();
+}

@@ -6,6 +6,7 @@
 #include <cctype>
 #include <string>
 #include <vector>
+#include <cmath>
 
 #include "asset/Asset.hpp"
 #include "render/camera.hpp"
@@ -82,9 +83,10 @@ void fill_polygon(SDL_Renderer* renderer, const std::vector<SDL_Point>& points, 
 
 void render_asset_debug_areas(SDL_Renderer* renderer,
                               const camera& cam,
-                              const Asset& asset,
+                              Asset& asset,
                               float asset_screen_height,
                               float reference_screen_height) {
+    (void)asset_screen_height;
     if (!renderer || !asset.info) {
         return;
     }
@@ -100,22 +102,74 @@ void render_asset_debug_areas(SDL_Renderer* renderer,
     Uint8 prev_r = 0, prev_g = 0, prev_b = 0, prev_a = 0;
     SDL_GetRenderDrawColor(renderer, &prev_r, &prev_g, &prev_b, &prev_a);
 
+    const float camera_scale = cam.get_scale();
+    if (camera_scale <= 0.0f) {
+        SDL_SetRenderDrawColor(renderer, prev_r, prev_g, prev_b, prev_a);
+        SDL_SetRenderDrawBlendMode(renderer, previous_blend_mode);
+        return;
+    }
+    const float inv_scale = 1.0f / camera_scale;
+
     for (const auto& named_area : asset.info->areas) {
         if (!named_area.area) {
             continue;
         }
 
-        Area world_area = asset.get_area(named_area.name);
-        const auto& world_points = world_area.get_points();
-        if (world_points.size() < 3) {
+        const auto& local_points = named_area.area->get_points();
+        if (local_points.size() < 3) {
             continue;
         }
 
+        int fw = asset.cached_w;
+        int fh = asset.cached_h;
+        if ((fw == 0 || fh == 0) && asset.get_final_texture()) {
+            SDL_QueryTexture(asset.get_final_texture(), nullptr, nullptr, &fw, &fh);
+            asset.cached_w = fw;
+            asset.cached_h = fh;
+        }
+        if (fw <= 0 || fh <= 0) {
+            continue;
+        }
+
+        float base_sw = static_cast<float>(fw) * inv_scale;
+        float base_sh = static_cast<float>(fh) * inv_scale;
+        if (base_sw <= 0.0f || base_sh <= 0.0f) {
+            continue;
+        }
+
+        float ref_height = reference_screen_height;
+        if (ref_height <= 0.0f) {
+            ref_height = 1.0f;
+        }
+
+        const camera::RenderEffects effects = cam.compute_render_effects(asset.pos, base_sh, ref_height);
+
+        float scaled_sw = base_sw * effects.distance_scale;
+        float scaled_sh = base_sh * effects.distance_scale;
+        float final_visible_h = scaled_sh * effects.vertical_scale;
+
+        int sw = std::max(1, static_cast<int>(std::lround(scaled_sw)));
+        int sh = std::max(1, static_cast<int>(std::lround(final_visible_h)));
+        if (sw <= 0 || sh <= 0) {
+            continue;
+        }
+
+        const SDL_Point& anchor_screen = effects.screen_position;
+        SDL_Rect dst{ anchor_screen.x - sw / 2, anchor_screen.y - sh, sw, sh };
+        const float scale_x = static_cast<float>(dst.w) / static_cast<float>(fw);
+        const float scale_y = static_cast<float>(dst.h) / static_cast<float>(fh);
+
         std::vector<SDL_Point> screen_points;
-        screen_points.reserve(world_points.size());
-        for (const auto& pt : world_points) {
-            camera::RenderEffects effects = cam.compute_render_effects(pt, asset_screen_height, reference_screen_height);
-            screen_points.push_back(effects.screen_position);
+        screen_points.reserve(local_points.size());
+        for (const auto& lp : local_points) {
+            float local_x = static_cast<float>(lp.x);
+            if (asset.flipped) {
+                local_x = static_cast<float>(fw) - local_x;
+            }
+            float local_y = static_cast<float>(lp.y);
+            float sx = static_cast<float>(dst.x) + local_x * scale_x;
+            float sy = static_cast<float>(dst.y) + local_y * scale_y;
+            screen_points.push_back(SDL_Point{ static_cast<int>(std::lround(sx)), static_cast<int>(std::lround(sy)) });
         }
 
         SDL_Color fill_color = color_for_area(named_area.name);

@@ -34,7 +34,9 @@ void AssetSpawner::spawn(Room& room) {
 	}
 	const Area& spawn_area = *room.room_area;
 	logger_ = SpawnLogger(room.map_path, room.room_directory);
+	current_room_ = &room;
 	run_spawning(room.planner.get(), spawn_area);
+	current_room_ = nullptr;
 	room.add_room_assets(std::move(all_));
 }
 
@@ -94,6 +96,14 @@ void AssetSpawner::run_spawning(AssetSpawnPlanner* planner, const Area& area) {
                 logger_.start_timer();
                 if (!queue_item.has_candidates()) continue;
                 const std::string& pos = queue_item.position;
+
+                // Apply per-group link-area clipping if configured
+                if (current_room_ && !queue_item.link_area_name.empty()) {
+                        Area* link = current_room_->find_area(queue_item.link_area_name);
+                        ctx.set_clip_area(link);
+                } else {
+                        ctx.set_clip_area(nullptr);
+                }
 
                 if (queue_item.name == "batch_map_assets") {
 
@@ -195,6 +205,14 @@ void AssetSpawner::run_boundary_spawning(const Area& area) {
                 constexpr int kBoundarySpacing = 100;
                 MapGrid grid = MapGrid::from_area_bounds(area, kBoundarySpacing);
                 SpawnContext ctx(rng_, checker_, logger_, exclusion_zones, asset_info_library_, all_, asset_library_, &grid);
+
+                // Apply per-group link-area clipping if configured
+                if (current_room_ && !queue_item.link_area_name.empty()) {
+                        Area* link = current_room_->find_area(queue_item.link_area_name);
+                        ctx.set_clip_area(link);
+                } else {
+                        ctx.set_clip_area(nullptr);
+                }
 
                 std::vector<int> base_weights;
                 base_weights.reserve(queue_item.candidates.size());

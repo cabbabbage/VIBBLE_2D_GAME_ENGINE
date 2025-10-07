@@ -2,6 +2,7 @@
 
 #include <SDL.h>
 
+#include <functional>
 #include <memory>
 #include <string>
 #include <vector>
@@ -13,6 +14,8 @@ class Input;
 class DockableCollapsible;
 class DMButton;
 class DMSlider;
+class camera;
+class Room;
 
 class AreaOverlayEditor {
 public:
@@ -25,6 +28,9 @@ public:
     bool begin(AssetInfo* info, Asset* asset, const std::string& area_name);
     // Begin editor anchored to an arbitrary map point; optional asset may be provided for mask autogen
     bool begin_at_point(AssetInfo* info, SDL_Point anchor_world, const std::string& area_name, Asset* asset = nullptr);
+    // Begin editor for a room-level area (trigger/spawning etc.) optionally focusing around a specific world point
+    bool begin_for_room(Room* room, const std::string& area_name, const std::string& area_type);
+    bool begin_for_room(Room* room, const std::string& area_name, const std::string& area_type, SDL_Point focus_world);
     void cancel();
     bool is_active() const { return active_; }
     bool consume_saved_flag() { bool v = saved_since_begin_; saved_since_begin_ = false; return v; }
@@ -32,6 +38,7 @@ public:
     void update(const Input& input, int screen_w, int screen_h);
     bool handle_event(const SDL_Event& e);
     void render(SDL_Renderer* r);
+    void set_on_saved(std::function<void()> cb) { on_saved_callback_ = std::move(cb); }
 
 private:
     enum class Mode { Mask, Geometry };
@@ -43,7 +50,7 @@ private:
     bool generate_mask_from_asset(SDL_Renderer* renderer);
     void apply_mask_crop();
     void discard_autogen_base();
-    void position_toolbox_left_of_asset(int screen_w, int screen_h);
+    void position_toolbox_near_anchor(int screen_w, int screen_h);
     void clear_mask();
     void upload_mask();
     void ensure_mask_contains(int lx, int ly, int radius);
@@ -53,11 +60,22 @@ private:
     void save_area();
     void rebuild_mask_from_geometry();
 
+    struct OverlayTransform {
+        SDL_Point anchor_screen{0, 0};
+        SDL_Rect  dst{0, 0, 0, 0};
+        SDL_Point pivot_in_dst{0, 0};
+        float     scale_x = 1.0f;
+        float     scale_y = 1.0f;
+    };
+    bool compute_overlay_transform(class camera& cam, OverlayTransform& out) const;
+
 private:
     Assets* assets_ = nullptr;
     AssetInfo* info_ = nullptr;
     Asset* asset_ = nullptr;
+    Room* room_ = nullptr;
     std::string area_name_;
+    std::string room_area_type_;
     bool active_ = false;
 
     SDL_Surface* mask_ = nullptr;
@@ -95,6 +113,8 @@ private:
 
     bool saved_since_begin_ = false;
     bool toolbox_autoplace_done_ = false;
+
+    std::function<void()> on_saved_callback_;
 
     // Anchor handling
     SDL_Point anchor_world_{0, 0};

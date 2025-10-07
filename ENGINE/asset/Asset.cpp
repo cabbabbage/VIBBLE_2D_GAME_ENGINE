@@ -236,10 +236,6 @@ void Asset::update() {
 
     SDL_Point previous_pos = pos;
 
-    if (info->moving_asset) {
-        update_neighbor_lists(!neighbor_lists_initialized_);
-    }
-
     if (controller_ && assets_) {
         if (Input* in = assets_->get_input()) {
             controller_->update(*in);

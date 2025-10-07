@@ -7,7 +7,6 @@
 #include <nlohmann/json.hpp>
 
 #include "dev_mode/spawn_group_list.hpp"
-#include "dev_mode/spawn_group_config_ui.hpp"
 #include "dev_mode/spawn_group_utils.hpp"
 #include "dev_mode/dm_styles.hpp"
 #include "dev_mode/widgets.hpp"
@@ -33,20 +32,30 @@ void Section_SpawnGroups::build() {
     if (!list_) list_ = std::make_unique<SpawnGroupList>();
     reload_from_file();
 
-    // Wire callbacks
+    // Bind live JSON so inline editor updates can persist
+    auto on_change = [this]() {
+        (void)this->save_to_file();
+        this->build();
+    };
     SpawnGroupList::Callbacks cb{};
-    cb.on_edit      = [this](const std::string& id){ edit_spawn_group(id); };
     cb.on_duplicate = [this](const std::string& id){ duplicate_spawn_group(id); };
     cb.on_delete    = [this](const std::string& id){ delete_spawn_group(id); };
     cb.on_move_up   = [this](const std::string& id){ move_spawn_group(id, -1); };
     cb.on_move_down = [this](const std::string& id){ move_spawn_group(id, +1); };
+    cb.on_add       = [this](){ add_spawn_group(); };
     list_->set_callbacks(std::move(cb));
-    list_->load(groups_);
+    const auto expanded = list_->expanded_groups();
+    list_->load(groups_, on_change);
+    list_->set_on_layout_changed([this]() {
+        if (!list_) return;
+        DockableCollapsible::Rows rows;
+        list_->append_rows(rows);
+        this->set_rows(rows);
+    });
+    list_->restore_expanded_groups(expanded);
     list_->append_rows(rows);
 
-    if (!add_btn_) add_btn_ = std::make_unique<DMButton>("Add Group", &DMStyles::CreateButton(), 140, DMButton::height());
-    if (!add_btn_w_) add_btn_w_ = std::make_unique<ButtonWidget>(add_btn_.get(), [this](){ add_spawn_group(); });
-    rows.push_back({ add_btn_w_.get() });
+    // Top-level Add Spawn Group button is provided by SpawnGroupList widget now.
 
     set_rows(rows);
 }
@@ -58,37 +67,24 @@ void Section_SpawnGroups::layout() {
 void Section_SpawnGroups::update(const Input& input, int screen_w, int screen_h) {
     screen_w_ = screen_w > 0 ? screen_w : screen_w_;
     screen_h_ = screen_h > 0 ? screen_h : screen_h_;
-    if (editor_) {
-        editor_->set_screen_dimensions(screen_w_, screen_h_);
-        editor_->update(input, screen_w_, screen_h_);
+    if (list_) {
+        list_->set_screen_dimensions(screen_w_, screen_h_);
+        SDL_Point anchor = editor_anchor_point();
+        list_->set_anchor(anchor.x, anchor.y);
+        list_->update(input, screen_w_, screen_h_);
     }
     DockableCollapsible::update(input, screen_w, screen_h);
 }
 
 bool Section_SpawnGroups::handle_event(const SDL_Event& e) {
     bool used = DockableCollapsible::handle_event(e);
-    if (editor_ && editor_->handle_event(e)) return true;
+    if (list_ && list_->handle_event(e)) return true;
     return used;
 }
 
 void Section_SpawnGroups::render(SDL_Renderer* r) const {
     DockableCollapsible::render(r);
-    if (!editor_) return;
-
-    SDL_Rect prev_clip{};
-    SDL_RenderGetClipRect(r, &prev_clip);
-#if SDL_VERSION_ATLEAST(2,0,4)
-    const SDL_bool was_clipping = SDL_RenderIsClipEnabled(r);
-#else
-    const SDL_bool was_clipping = (prev_clip.w != 0 || prev_clip.h != 0) ? SDL_TRUE : SDL_FALSE;
-#endif
-    SDL_RenderSetClipRect(r, nullptr);
-    editor_->render(r);
-    if (was_clipping == SDL_TRUE) {
-        SDL_RenderSetClipRect(r, &prev_clip);
-    } else {
-        SDL_RenderSetClipRect(r, nullptr);
-    }
+    if (list_) list_->render(r);
 }
 
 void Section_SpawnGroups::reload_from_file() {
@@ -168,11 +164,15 @@ void Section_SpawnGroups::add_spawn_group() {
     entry["chance_denominator"] = 100;
     entry["candidates"] = nlohmann::json::array();
     entry["candidates"].push_back({{"name", "null"}, {"chance", 0}});
+    const std::string new_id = entry["spawn_id"].get<std::string>();
     groups_.push_back(entry);
     renumber_priorities();
     (void)save_to_file();
     build();
-    edit_spawn_group(entry["spawn_id"].get<std::string>());
+    if (list_) {
+        SDL_Point anchor = editor_anchor_point();
+        list_->request_open_spawn_group(new_id, anchor.x, anchor.y);
+    }
 }
 
 void Section_SpawnGroups::duplicate_spawn_group(const std::string& id) {
@@ -219,23 +219,5 @@ SDL_Point Section_SpawnGroups::editor_anchor_point() const {
     return SDL_Point{x, y};
 }
 
-void Section_SpawnGroups::edit_spawn_group(const std::string& id) {
-    if (!groups_.is_array()) return;
-    int idx = index_of(id);
-    if (idx < 0) return;
-    nlohmann::json entry = groups_[idx];
-    if (!editor_) editor_ = std::make_unique<SpawnGroupsConfigPanel>();
-    editor_->set_screen_dimensions(screen_w_, screen_h_);
-    SDL_Point anchor = editor_anchor_point();
-    editor_->set_position(anchor.x, anchor.y);
-    editor_->open(entry, [this, idx](const nlohmann::json& updated){
-        if (!groups_.is_array()) return;
-        if (idx >= 0 && idx < static_cast<int>(groups_.size())) {
-            groups_[idx] = updated;
-            renumber_priorities();
-            (void)save_to_file();
-            build();
-        }
-    });
-}
+// Editing is handled by SpawnGroupList's own editor; no direct edit method needed.
 

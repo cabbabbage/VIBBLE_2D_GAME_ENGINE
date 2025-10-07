@@ -1,45 +1,41 @@
 #include "Davey_controller.hpp"
 #include "asset/Asset.hpp"
 #include "core/AssetsManager.hpp"
+#include "custom_controllers/controller_path_utils.hpp"
+#include "custom_controllers/controller_visit_threshold.hpp"
 #include "utils/range_util.hpp"
+
 #include <algorithm>
-#include <cmath>
+
+namespace {
+
+constexpr int kOrbitSteps = 8;
+
+int orbit_visit_threshold(const Asset* asset, int radius) {
+    const int limit = std::max(1, std::min(radius, controller_paths::neighbor_radius(asset)));
+    return std::max(2, limit / 4);
+}
+
+} // namespace
+
 DaveyController::DaveyController(Assets* assets, Asset* self)
     : assets_(assets), self_(self) {
     if (self_ && self_->anim_) {
-        self_->anim_->set_path_bias(default_bias_);
-        self_->anim_->set_idle(idle_ratio_);
-        state_ = State::Idle;
-        active_bias_ = default_bias_;
-        current_target_ = nullptr;
+        enter_idle(idle_ratio_);
     }
-}
-
-void DaveyController::apply_path_bias(double desired_bias) {
-    if (!self_ || !self_->anim_) {
-        return;
-    }
-    const double clamped = std::clamp(desired_bias, 0.0, 1.0);
-    if (std::abs(active_bias_ - clamped) < 1e-4) {
-        return;
-    }
-    active_bias_ = clamped;
-    self_->anim_->set_path_bias(clamped);
 }
 
 void DaveyController::enter_idle(int rest_ratio) {
     if (!self_ || !self_->anim_) {
         return;
     }
-    const int clamped = std::clamp(rest_ratio, 0, 100);
-    if (state_ == State::Idle && idle_ratio_ == clamped) {
-        return;
-    }
-    idle_ratio_ = clamped;
+
+    idle_ratio_ = std::clamp(rest_ratio, 0, 100);
     state_ = State::Idle;
     current_target_ = nullptr;
-    apply_path_bias(default_bias_);
-    self_->anim_->set_idle(clamped);
+
+    const auto path = controller_paths::idle_path(self_, idle_ratio_);
+    self_->anim_->move(path, controller_utils::controller_visit_threshold(self_));
 }
 
 void DaveyController::enter_pursue(Asset* target) {
@@ -50,13 +46,12 @@ void DaveyController::enter_pursue(Asset* target) {
         enter_idle(idle_ratio_);
         return;
     }
-    if (state_ == State::Pursuing && current_target_ == target) {
-        return;
-    }
+
     state_ = State::Pursuing;
     current_target_ = target;
-    apply_path_bias(default_bias_);
-    self_->anim_->set_pursue(target);
+
+    const auto path = controller_paths::pursue_path(self_, target);
+    self_->anim_->move(path, controller_utils::controller_visit_threshold(self_));
 }
 
 void DaveyController::enter_orbit(Asset* center, int radius) {
@@ -67,13 +62,17 @@ void DaveyController::enter_orbit(Asset* center, int radius) {
         enter_idle(idle_ratio_);
         return;
     }
-    if (state_ == State::Orbiting && current_target_ == center) {
-        return;
-    }
+
     state_ = State::Orbiting;
     current_target_ = center;
-    apply_path_bias(orbit_bias_);
-    self_->anim_->set_orbit(center, radius, radius, 1'000'000);
+
+    const auto path = controller_paths::orbit_path(self_, center, radius, kOrbitSteps);
+    if (path.empty()) {
+        enter_pursue(center);
+        return;
+    }
+
+    self_->anim_->move(path, orbit_visit_threshold(self_, radius));
 }
 
 void DaveyController::update(const Input&) {
@@ -89,12 +88,12 @@ void DaveyController::update(const Input&) {
     try {
         Asset* player = assets_->player;
         if (!player || player == self_) {
-            enter_idle(5);
+            enter_idle(10);
             return;
         }
 
         const double distance = Range::get_distance(self_, player);
-        constexpr double orbit_radius = 44.0;
+        constexpr double orbit_radius  = 44.0;
         constexpr double chase_trigger = 360.0;
 
         if (distance <= orbit_radius) {

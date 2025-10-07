@@ -222,6 +222,34 @@
   "map_radius": 7728.5,
   "rooms_data": {
     "bar": {
+      "areas": [
+        {
+          "anchor": {
+            "x": 1284,
+            "y": 2926
+          },
+          "name": "trigger_area",
+          "points": [
+            {
+              "x": 0,
+              "y": 190
+            },
+            {
+              "x": 171,
+              "y": 418
+            },
+            {
+              "x": 344,
+              "y": 127
+            },
+            {
+              "x": 166,
+              "y": 0
+            }
+          ],
+          "type": "trigger"
+        }
+      ],
       "edge_smoothness": 101,
       "geometry": "Circle",
       "height_max": 2500,
@@ -234,6 +262,7 @@
       "min_height": 1072,
       "min_width": 1755,
       "name": "bar",
+      "radius": 1448,
       "spawn_groups": [
         {
           "candidates": [
@@ -251,6 +280,7 @@
           "max_number": 213,
           "min_number": 100,
           "position": "Random",
+          "priority": 0,
           "spawn_id": "spn-2986ab1d1671",
           "tag": false
         },
@@ -259,12 +289,9 @@
             {
               "chance": 0,
               "name": "null"
-            },
-            {
-              "chance": 100,
-              "name": "Box"
             }
           ],
+          "chance_denominator": 0,
           "check_overlap": false,
           "display_name": "Box",
           "enforce_spacing": false,
@@ -273,6 +300,7 @@
           "max_number": 23,
           "min_number": -45,
           "position": "Random",
+          "priority": 1,
           "spawn_id": "spn-ebb38f93ac8d",
           "tag": false
         },
@@ -303,6 +331,7 @@
           "perimeter_y_offset_max": 0,
           "perimeter_y_offset_min": 0,
           "position": "Perimeter",
+          "priority": 2,
           "sector_center": 0,
           "sector_center_max": 0,
           "sector_center_min": 0,
@@ -333,6 +362,7 @@
           "origional_height": 2265,
           "origional_width": 2294,
           "position": "Perimeter",
+          "priority": 3,
           "radius": 801,
           "spawn_id": "spn-05dbb178991c"
         },
@@ -358,6 +388,7 @@
           "origional_height": 3117,
           "origional_width": 2772,
           "position": "Random",
+          "priority": 4,
           "spawn_id": "spn-6fcf66cb001b"
         },
         {
@@ -381,6 +412,7 @@
           "origional_height": 3114,
           "origional_width": 3319,
           "position": "Exact",
+          "priority": 5,
           "spawn_id": "spn-5fd25363c011"
         },
         {
@@ -405,7 +437,25 @@
           "origional_height": 3114,
           "origional_width": 3319,
           "position": "Exact",
+          "priority": 6,
           "spawn_id": "spn-698be3c55177"
+        },
+        {
+          "candidates": [
+            {
+              "chance": 0,
+              "name": "null"
+            }
+          ],
+          "chance_denominator": 100,
+          "check_overlap": false,
+          "display_name": "New Spawn",
+          "enforce_spacing": false,
+          "max_number": 1,
+          "min_number": 1,
+          "position": "Exact",
+          "priority": 7,
+          "spawn_id": "spn-07946fca2b8c"
         }
       ],
       "width_max": 2897,
@@ -464,7 +514,34 @@
       "width_min": 1095
     },
     "spawn": {
-      "areas": [],
+      "areas": [
+        {
+          "anchor": {
+            "x": 1727,
+            "y": 3051
+          },
+          "name": "trigger_area",
+          "points": [
+            {
+              "x": 597,
+              "y": 51
+            },
+            {
+              "x": 956,
+              "y": 673
+            },
+            {
+              "x": 234,
+              "y": 648
+            },
+            {
+              "x": 0,
+              "y": 0
+            }
+          ],
+          "type": "trigger"
+        }
+      ],
       "curvyness": 1,
       "edge_smoothness": 100,
       "geometry": "Circle",
@@ -485,13 +562,9 @@
             {
               "chance": 0,
               "name": "null"
-            },
-            {
-              "chance": 100,
-              "name": "candle"
             }
           ],
-          "chance_denominator": 100,
+          "chance_denominator": 0,
           "check_overlap": false,
           "display_name": "candle",
           "dx": -332,
@@ -503,7 +576,7 @@
           "origional_width": 3180,
           "position": "Perimeter",
           "priority": 0,
-          "radius": 1121,
+          "radius": 455,
           "spawn_id": "spn-7d847a71ac07"
         },
         {
@@ -539,13 +612,17 @@
           ],
           "chance_denominator": 0,
           "check_overlap": false,
-          "display_name": "New Spawn",
+          "display_name": "Barrel",
+          "dx": -152,
+          "dy": -424,
           "enforce_spacing": false,
           "max_number": 1,
           "min_number": 1,
+          "origional_height": 3612,
+          "origional_width": 3612,
           "position": "Exact",
           "priority": 2,
-          "spawn_id": "spn-eef91c561688"
+          "spawn_id": "spn-af3a3a5858e6"
         }
       ],
       "width_max": 3612,
@@ -555,6 +632,7 @@
   "trails_data": {
     "basic": {
       "curvyness": 4,
+      "edge_smoothness": 2,
       "geometry": "Square",
       "height_max": 1221,
       "height_min": 100,
@@ -562,7 +640,7 @@
       "is_boss": false,
       "is_spawn": false,
       "max_height": 1221,
-      "max_width": 1208,
+      "max_width": 796,
       "min_height": 100,
       "min_width": 470,
       "name": "basic",
@@ -587,6 +665,7 @@
           "max_number": 1,
           "min_number": 1,
           "position": "Intersection",
+          "priority": 0,
           "spawn_id": "spn-400a2bb2d100",
           "tag": false
         },
@@ -610,38 +689,12 @@
           "max_number": 1,
           "min_number": 1,
           "position": "Random",
+          "priority": 1,
           "spawn_id": "spn-903f62327b86",
           "tag": false
-        },
-        {
-          "candidates": [
-            {
-              "chance": 82,
-              "name": "null"
-            },
-            {
-              "chance": 15,
-              "name": "light"
-            },
-            {
-              "chance": 3,
-              "name": "flower_1"
-            }
-          ],
-          "check_overlap": false,
-          "display_name": "batch_basic",
-          "enforce_spacing": false,
-          "grid_spacing_max": 100,
-          "grid_spacing_min": 100,
-          "jitter_max": 0,
-          "jitter_min": 0,
-          "max_number": 100,
-          "min_number": 50,
-          "position": "Random",
-          "spawn_id": "spn-5db9c322ef41"
         }
       ],
-      "width_max": 1208,
+      "width_max": 796,
       "width_min": 470
     },
     "brick": {
@@ -679,8 +732,26 @@
           "max_number": 1,
           "min_number": 1,
           "position": "Random",
+          "priority": 0,
           "spawn_id": "spn-201a21be3548",
           "tag": false
+        },
+        {
+          "candidates": [
+            {
+              "chance": 0,
+              "name": "null"
+            }
+          ],
+          "chance_denominator": 0,
+          "check_overlap": false,
+          "display_name": "New Spawn",
+          "enforce_spacing": false,
+          "max_number": 1,
+          "min_number": 1,
+          "position": "Exact",
+          "priority": 1,
+          "spawn_id": "spn-468fbf18908b"
         }
       ],
       "width_max": 1115,
