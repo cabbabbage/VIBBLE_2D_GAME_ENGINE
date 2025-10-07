@@ -1,17 +1,283 @@
 #include "get_best_path.hpp"
 
+#include <algorithm>
+#include <cmath>
+#include <limits>
+
 #include "asset/Asset.hpp"
 #include "asset/animation.hpp"
+#include "asset/animation_frame.hpp"
+#include "asset/asset_info.hpp"
+#include "core/AssetsManager.hpp"
+#include "core/asset_list.hpp"
+#include "utils/area.hpp"
+
+namespace {
+
+constexpr int kOverlapDistanceSq = 40 * 40;
+
+int distance_sq(SDL_Point a, SDL_Point b) {
+    const int dx = a.x - b.x;
+    const int dy = a.y - b.y;
+    return dx * dx + dy * dy;
+}
+
+SDL_Point bottom_middle_for(const Asset& asset, SDL_Point pos) {
+    Area area = asset.get_area("collision_area");
+    const auto& pts = area.get_points();
+    if (pts.empty()) {
+        return pos;
+    }
+
+    SDL_Point bottom = pts.front();
+    for (const SDL_Point& pt : pts) {
+        if (pt.y > bottom.y) {
+            bottom = pt;
+        }
+    }
+
+    const int offset_x = bottom.x - asset.pos.x;
+    const int offset_y = bottom.y - asset.pos.y;
+    return SDL_Point{ pos.x + offset_x, pos.y + offset_y };
+}
+
+struct CollisionEntry {
+    const Asset* asset = nullptr;
+    Area         area{ "impassable" };
+};
+
+std::vector<CollisionEntry> gather_collision_entries(const Asset& self) {
+    std::vector<CollisionEntry> entries;
+    const AssetList* list = self.get_impassable_naighbors();
+    if (!list) {
+        return entries;
+    }
+
+    std::vector<Asset*> neighbors;
+    list->full_list(neighbors);
+    entries.reserve(neighbors.size());
+
+    for (Asset* neighbor : neighbors) {
+        if (!neighbor || neighbor == &self || !neighbor->info) {
+            continue;
+        }
+
+        Area area = neighbor->get_area("impassable");
+        if (area.get_points().empty()) {
+            area = neighbor->get_area("collision_area");
+        }
+        if (area.get_points().empty()) {
+            continue;
+        }
+
+        entries.push_back(CollisionEntry{ neighbor, std::move(area) });
+    }
+
+    return entries;
+}
+
+bool segment_hits_area(SDL_Point from, SDL_Point to, const Area& area) {
+    const int steps = std::max(std::abs(to.x - from.x), std::abs(to.y - from.y));
+    if (steps == 0) {
+        return area.contains_point(from);
+    }
+
+    const double step_x = (to.x - from.x) / static_cast<double>(steps);
+    const double step_y = (to.y - from.y) / static_cast<double>(steps);
+
+    for (int i = 0; i <= steps; ++i) {
+        SDL_Point sample{ static_cast<int>(std::round(from.x + step_x * i)),
+                          static_cast<int>(std::round(from.y + step_y * i)) };
+        if (area.contains_point(sample)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool blocked_step(SDL_Point from,
+                  SDL_Point to,
+                  const std::vector<CollisionEntry>& collisions,
+                  const Asset& self,
+                  const Assets* assets_owner) {
+    const SDL_Point dest_bottom = bottom_middle_for(self, to);
+
+    for (const CollisionEntry& entry : collisions) {
+        const Asset* other = entry.asset;
+        if (!other || other == &self || !other->info) {
+            continue;
+        }
+
+        if (segment_hits_area(from, to, entry.area)) {
+            return true;
+        }
+
+        bool overlap_check = false;
+        if (self.info && other->info && self.info->type == other->info->type) {
+            overlap_check = true;
+        } else if (assets_owner && assets_owner->player == other) {
+            overlap_check = true;
+        }
+
+        if (overlap_check) {
+            const SDL_Point other_bottom = bottom_middle_for(*other, other->pos);
+            if (distance_sq(dest_bottom, other_bottom) < kOverlapDistanceSq) {
+                return true;
+            }
+        }
+    }
+
+    return false;
+}
+
+struct AnimationDescriptor {
+    std::string       id;
+    const Animation*  animation = nullptr;
+    bool              locked    = false;
+    int               frame_count = 0;
+};
+
+std::vector<AnimationDescriptor> gather_movement_animations(const Asset& self) {
+    std::vector<AnimationDescriptor> result;
+    if (!self.info) {
+        return result;
+    }
+
+    for (const auto& [id, anim] : self.info->animations) {
+        const int frame_count = static_cast<int>(anim.frames_data.size());
+        if (frame_count <= 0) {
+            continue;
+        }
+
+        bool has_motion = false;
+        for (const auto& frame : anim.frames_data) {
+            if (frame.dx != 0 || frame.dy != 0) {
+                has_motion = true;
+                break;
+            }
+        }
+        if (!has_motion) {
+            continue;
+        }
+
+        result.push_back(AnimationDescriptor{ id, &anim, anim.locked, frame_count });
+    }
+
+    return result;
+}
+
+struct CandidateStride {
+    std::string animation_id;
+    SDL_Point   end_position{ 0, 0 };
+    int         frames   = 0;
+    int         dist_sq  = std::numeric_limits<int>::max();
+    bool        reaches  = false;
+    bool        valid    = false;
+};
+
+} // namespace
 
 Plan GetBestPath::operator()(const Asset& self,
                              const std::vector<SDL_Point>& sanitized_checkpoints,
-                             int) const {
+                             int visited_thresh_px) const {
     Plan plan;
     plan.sanitized_checkpoints = sanitized_checkpoints;
-    if (!sanitized_checkpoints.empty()) {
-        plan.final_dest = sanitized_checkpoints.back();
-    } else {
-        plan.final_dest = self.pos;
+
+    SDL_Point cursor = self.pos;
+    plan.final_dest  = cursor;
+
+    if (!self.info) {
+        return plan;
     }
+
+    const auto collisions  = gather_collision_entries(self);
+    const Assets* assets   = self.get_assets();
+    const int visited_sq   = visited_thresh_px * visited_thresh_px;
+    auto movement_anims    = gather_movement_animations(self);
+
+    for (const SDL_Point& checkpoint : sanitized_checkpoints) {
+        if (visited_sq > 0 && distance_sq(cursor, checkpoint) <= visited_sq) {
+            continue;
+        }
+
+        int safeguard = 0;
+        while (distance_sq(cursor, checkpoint) > visited_sq) {
+            CandidateStride best;
+            const int       current_dist_sq = distance_sq(cursor, checkpoint);
+
+            for (const auto& descriptor : movement_anims) {
+                if (!descriptor.animation) {
+                    continue;
+                }
+
+                const int max_frames = descriptor.frame_count;
+                if (max_frames <= 0) {
+                    continue;
+                }
+
+                const int min_frames = descriptor.locked ? max_frames : 1;
+                for (int frames = min_frames; frames <= max_frames; ++frames) {
+                    SDL_Point simulated = cursor;
+                    bool      blocked   = false;
+
+                    for (int i = 0; i < frames; ++i) {
+                        const AnimationFrame& frame = descriptor.animation->frames_data[i];
+                        SDL_Point next{ simulated.x + frame.dx, simulated.y + frame.dy };
+                        if (blocked_step(simulated, next, collisions, self, assets)) {
+                            blocked = true;
+                            break;
+                        }
+                        simulated = next;
+                    }
+
+                    if (blocked) {
+                        continue;
+                    }
+
+                    const int dist_sq = distance_sq(simulated, checkpoint);
+                    const bool reaches = (visited_sq == 0) ? (dist_sq == 0) : (dist_sq <= visited_sq);
+                    const bool progress = dist_sq < current_dist_sq;
+                    if (!reaches && !progress) {
+                        continue;
+                    }
+
+                    bool use_candidate = false;
+                    if (!best.valid) {
+                        use_candidate = true;
+                    } else if (reaches != best.reaches) {
+                        use_candidate = reaches;
+                    } else if (reaches && frames < best.frames) {
+                        use_candidate = true;
+                    } else if (!reaches && dist_sq < best.dist_sq) {
+                        use_candidate = true;
+                    } else if (!reaches && dist_sq == best.dist_sq && frames < best.frames) {
+                        use_candidate = true;
+                    }
+
+                    if (use_candidate) {
+                        best.valid        = true;
+                        best.reaches      = reaches;
+                        best.animation_id = descriptor.id;
+                        best.frames       = frames;
+                        best.dist_sq      = dist_sq;
+                        best.end_position = simulated;
+                    }
+                }
+            }
+
+            if (!best.valid) {
+                break;
+            }
+
+            plan.strides.push_back(Stride{ best.animation_id, best.frames });
+            cursor = best.end_position;
+            plan.final_dest = cursor;
+
+            if (++safeguard > 256) {
+                break;
+            }
+        }
+    }
+
     return plan;
 }

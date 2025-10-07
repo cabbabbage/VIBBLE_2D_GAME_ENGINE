@@ -37,6 +37,8 @@ private:
     bool path_blocked(SDL_Point from, SDL_Point to, const Asset* ignored) const;
 
 private:
+    friend class StridePlayer;
+
     Asset*  self_          = nullptr;
     Assets* assets_owner_  = nullptr;
 
@@ -51,8 +53,4 @@ private:
     StridePlayer  player_{};
 
     std::optional<std::string> queued_anim_{};
-    bool forced_active_      = false;
-    bool blocked_last_step_  = false;
-    int  slow_frame_interval_ = 1;
-    int  slow_frame_counter_  = 0;
 };
