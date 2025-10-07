@@ -6,11 +6,9 @@
 
 #include <SDL.h>
 
-#include "dev_mode/widgets.hpp"
+#include <nlohmann/json.hpp>
 
-namespace nlohmann {
-class json;
-}
+#include "dev_mode/widgets.hpp"
 
 namespace animation_editor {
 

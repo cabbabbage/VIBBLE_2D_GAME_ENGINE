@@ -15,9 +15,9 @@ namespace animation_editor {
 namespace {
 
 const int kButtonSize = 28;
-const int kPadding = 12;
+const int kPanelPadding = 12;
 
-void render_label(SDL_Renderer* renderer, const std::string& text, int x, int y, SDL_Color color) {
+void render_totals_label(SDL_Renderer* renderer, const std::string& text, int x, int y, SDL_Color color) {
     if (!renderer || text.empty()) return;
     const DMLabelStyle& style = DMStyles::Label();
     TTF_Font* font = style.open_font();
@@ -37,7 +37,7 @@ void render_label(SDL_Renderer* renderer, const std::string& text, int x, int y,
     TTF_CloseFont(font);
 }
 
-bool point_in_rect(const SDL_Event& e, const SDL_Rect& rect) {
+bool point_in_button_rect(const SDL_Event& e, const SDL_Rect& rect) {
     if (e.type != SDL_MOUSEBUTTONDOWN) return false;
     SDL_Point p{e.button.x, e.button.y};
     return SDL_PointInRect(&p, &rect) != 0;
@@ -49,8 +49,8 @@ TotalsPanel::TotalsPanel() = default;
 
 void TotalsPanel::set_bounds(const SDL_Rect& bounds) {
     bounds_ = bounds;
-    prev_button_ = SDL_Rect{bounds_.x + kPadding, bounds_.y + kPadding, kButtonSize, kButtonSize};
-    next_button_ = SDL_Rect{prev_button_.x + kButtonSize + kPadding / 2, prev_button_.y, kButtonSize, kButtonSize};
+    prev_button_ = SDL_Rect{bounds_.x + kPanelPadding, bounds_.y + kPanelPadding, kButtonSize, kButtonSize};
+    next_button_ = SDL_Rect{prev_button_.x + kButtonSize + kPanelPadding / 2, prev_button_.y, kButtonSize, kButtonSize};
 }
 
 void TotalsPanel::set_frames(const std::vector<MovementFrame>& frames) {
@@ -89,37 +89,37 @@ void TotalsPanel::render(SDL_Renderer* renderer) const {
     SDL_RenderDrawRect(renderer, &prev_button_);
     SDL_RenderDrawRect(renderer, &next_button_);
 
-    render_label(renderer, "<", prev_button_.x + (prev_button_.w / 2) - 6,
-                 prev_button_.y + (prev_button_.h / 2) - 10, button_text);
-    render_label(renderer, ">", next_button_.x + (next_button_.w / 2) - 6,
-                 next_button_.y + (next_button_.h / 2) - 10, button_text);
+    render_totals_label(renderer, "<", prev_button_.x + (prev_button_.w / 2) - 6,
+                        prev_button_.y + (prev_button_.h / 2) - 10, button_text);
+    render_totals_label(renderer, ">", next_button_.x + (next_button_.w / 2) - 6,
+                        next_button_.y + (next_button_.h / 2) - 10, button_text);
 
-    int text_x = next_button_.x + next_button_.w + kPadding;
-    int text_y = bounds_.y + kPadding;
+    int text_x = next_button_.x + next_button_.w + kPanelPadding;
+    int text_y = bounds_.y + kPanelPadding;
 
     const int frame_count = static_cast<int>(frames_.size());
     int selected = selected_index_ ? *selected_index_ : 0;
     selected = std::clamp(selected, 0, std::max(0, frame_count - 1));
 
-    render_label(renderer, "Frames: " + std::to_string(frame_count), text_x, text_y, button_text);
+    render_totals_label(renderer, "Frames: " + std::to_string(frame_count), text_x, text_y, button_text);
     text_y += 22;
-    render_label(renderer, "Selected: " + std::to_string(selected), text_x, text_y, button_text);
+    render_totals_label(renderer, "Selected: " + std::to_string(selected), text_x, text_y, button_text);
     text_y += 22;
-    render_label(renderer, "Total ΔX: " + std::to_string(static_cast<int>(std::lround(total_dx_))), text_x, text_y,
-                 button_text);
+    render_totals_label(renderer, "Total ΔX: " + std::to_string(static_cast<int>(std::lround(total_dx_))), text_x, text_y,
+                        button_text);
     text_y += 22;
-    render_label(renderer, "Total ΔY: " + std::to_string(static_cast<int>(std::lround(total_dy_))), text_x, text_y,
-                 button_text);
+    render_totals_label(renderer, "Total ΔY: " + std::to_string(static_cast<int>(std::lround(total_dy_))), text_x, text_y,
+                        button_text);
 }
 
 bool TotalsPanel::handle_event(const SDL_Event& e) {
     if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
-        if (point_in_rect(e, prev_button_) && selected_index_ && *selected_index_ > 0) {
+        if (point_in_button_rect(e, prev_button_) && selected_index_ && *selected_index_ > 0) {
             --(*selected_index_);
             if (on_selection_changed_) on_selection_changed_(*selected_index_);
             return true;
         }
-        if (point_in_rect(e, next_button_) && selected_index_) {
+        if (point_in_button_rect(e, next_button_) && selected_index_) {
             const int last_index = std::max(0, static_cast<int>(frames_.size()) - 1);
             if (*selected_index_ < last_index) {
                 ++(*selected_index_);
