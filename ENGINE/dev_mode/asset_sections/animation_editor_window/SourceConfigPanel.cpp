@@ -122,6 +122,13 @@ void SourceConfigPanel::set_animation_id(const std::string& animation_id) {
 
 void SourceConfigPanel::set_bounds(const SDL_Rect& bounds) {
     bounds_ = bounds;
+    if (bounds_.w <= 0 || bounds_.h <= 0) {
+        for (auto& button : buttons_) {
+            button.rect = SDL_Rect{bounds_.x, bounds_.y, 0, 0};
+        }
+        hover_button_ = -1;
+        return;
+    }
     layout_buttons();
 }
 
@@ -153,6 +160,8 @@ void SourceConfigPanel::update() {
 
 void SourceConfigPanel::render(SDL_Renderer* renderer) const {
     if (!renderer) return;
+
+    if (bounds_.w <= 0 || bounds_.h <= 0) return;
 
     SDL_Rect panel_bounds = bounds_;
     SDL_SetRenderDrawColor(renderer, 0x2d, 0x34, 0x36, 255);
@@ -189,6 +198,8 @@ void SourceConfigPanel::render(SDL_Renderer* renderer) const {
 }
 
 bool SourceConfigPanel::handle_event(const SDL_Event& e) {
+    if (bounds_.w <= 0 || bounds_.h <= 0) return false;
+
     switch (e.type) {
         case SDL_MOUSEMOTION: {
             hover_button_ = hit_test_buttons(e.motion.x, e.motion.y);

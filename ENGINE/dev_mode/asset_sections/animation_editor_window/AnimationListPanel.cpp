@@ -227,15 +227,38 @@ void AnimationListPanel::layout_inspectors() {
     const int padding = DMSpacing::panel_padding();
     const int gap = DMSpacing::section_gap();
     const int width = std::max(0, bounds_.w - padding * 2);
+    int column_count = width > 0 ? 2 : 1;
+    int column_gap = column_count > 1 ? gap : 0;
+    int column_width = width;
+    if (column_count > 1) {
+        column_width = (width - column_gap) / column_count;
+        if (column_width <= 0) {
+            column_count = 1;
+            column_gap = 0;
+            column_width = width;
+        }
+    }
 
-    int content_y = padding;
     std::vector<int> heights(inspectors_.size(), 0);
     for (size_t i = 0; i < inspectors_.size(); ++i) {
         if (inspectors_[i]) {
-            heights[i] = inspectors_[i]->height_for_width(width);
+            heights[i] = inspectors_[i]->height_for_width(column_width);
         }
-        content_y += heights[i];
-        if (i + 1 < inspectors_.size()) {
+    }
+
+    size_t row_count = (inspectors_.size() + static_cast<size_t>(column_count) - 1) / static_cast<size_t>(column_count);
+    std::vector<int> row_heights(row_count, 0);
+    int content_y = padding;
+    for (size_t row = 0; row < row_count; ++row) {
+        int row_height = 0;
+        for (int col = 0; col < column_count; ++col) {
+            size_t index = row * static_cast<size_t>(column_count) + static_cast<size_t>(col);
+            if (index >= inspectors_.size()) break;
+            row_height = std::max(row_height, heights[index]);
+        }
+        row_heights[row] = row_height;
+        content_y += row_height;
+        if (row + 1 < row_count) {
             content_y += gap;
         }
     }
@@ -244,14 +267,19 @@ void AnimationListPanel::layout_inspectors() {
     clamp_scroll();
 
     int y = padding;
-    for (size_t i = 0; i < inspectors_.size(); ++i) {
-        SDL_Rect rect{bounds_.x + padding, bounds_.y + y - scroll_offset_, width, heights[i]};
-        inspector_bounds_[i] = rect;
-        if (inspectors_[i]) {
-            inspectors_[i]->set_bounds(rect);
+    for (size_t row = 0; row < row_count; ++row) {
+        for (int col = 0; col < column_count; ++col) {
+            size_t index = row * static_cast<size_t>(column_count) + static_cast<size_t>(col);
+            if (index >= inspectors_.size()) break;
+            int x = bounds_.x + padding + col * (column_width + column_gap);
+            SDL_Rect rect{x, bounds_.y + y - scroll_offset_, column_width, heights[index]};
+            inspector_bounds_[index] = rect;
+            if (inspectors_[index]) {
+                inspectors_[index]->set_bounds(rect);
+            }
         }
-        y += heights[i];
-        if (i + 1 < inspectors_.size()) {
+        y += row_heights[row];
+        if (row + 1 < row_count) {
             y += gap;
         }
     }

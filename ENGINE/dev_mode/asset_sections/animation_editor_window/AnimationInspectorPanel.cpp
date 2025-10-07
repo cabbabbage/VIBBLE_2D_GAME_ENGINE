@@ -85,7 +85,11 @@ bool is_pointer_event(const SDL_Event& e) {
 
 }  // namespace
 
-AnimationInspectorPanel::AnimationInspectorPanel() = default;
+AnimationInspectorPanel::AnimationInspectorPanel() {
+    source_toggle_button_ = std::make_unique<DMButton>("[+] Frame Sources", &DMStyles::HeaderButton(), 200,
+                                                      DMButton::height());
+    update_source_toggle_label();
+}
 
 void AnimationInspectorPanel::set_document(std::shared_ptr<AnimationDocument> document) {
     document_ = std::move(document);
@@ -157,13 +161,18 @@ int AnimationInspectorPanel::height_for_width(int /*width*/) const {
     const int padding = DMSpacing::panel_padding();
     const int gap = DMSpacing::section_gap();
     const int header_height = std::max(DMTextBox::height(), DMButton::height());
+    const int toggle_height = DMButton::height();
 
     int total = padding;  // top padding
     total += header_height;
     total += gap;
     total += kPreviewHeight;
     total += gap;
-    total += kSourceHeight;
+    total += toggle_height;
+    if (!source_collapsed_) {
+        total += DMSpacing::item_gap();
+        total += kSourceHeight;
+    }
     total += gap;
     total += kPlaybackHeight;
     total += gap;
@@ -255,7 +264,8 @@ void AnimationInspectorPanel::render(SDL_Renderer* renderer) const {
         }
     }
 
-    if (source_config_) source_config_->render(renderer);
+    if (source_toggle_button_) source_toggle_button_->render(renderer);
+    if (!source_collapsed_ && source_config_) source_config_->render(renderer);
     if (playback_settings_) playback_settings_->render(renderer);
     if (movement_summary_) movement_summary_->render(renderer);
     if (on_end_selector_) on_end_selector_->render(renderer);
@@ -301,7 +311,19 @@ bool AnimationInspectorPanel::handle_event(const SDL_Event& e) {
         handled = true;
     }
 
-    if (source_config_ && source_config_->handle_event(e)) handled = true;
+    if (source_toggle_button_) {
+        bool consumed = source_toggle_button_->handle_event(e);
+        if (consumed) {
+            handled = true;
+            if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
+                source_collapsed_ = !source_collapsed_;
+                update_source_toggle_label();
+                layout_dirty_ = true;
+            }
+        }
+    }
+
+    if (!source_collapsed_ && source_config_ && source_config_->handle_event(e)) handled = true;
     if (playback_settings_ && playback_settings_->handle_event(e)) handled = true;
     if (movement_summary_ && movement_summary_->handle_event(e)) handled = true;
     if (on_end_selector_ && on_end_selector_->handle_event(e)) handled = true;
@@ -333,6 +355,11 @@ void AnimationInspectorPanel::rebuild_widgets() {
     if (!delete_button_) {
         delete_button_ = std::make_unique<DMButton>("Delete", &DMStyles::DeleteButton(), kHeaderButtonWidth,
                                                     DMButton::height());
+    }
+
+    if (!source_toggle_button_) {
+        source_toggle_button_ = std::make_unique<DMButton>("[+] Frame Sources", &DMStyles::HeaderButton(), 200,
+                                                           DMButton::height());
     }
 
     if (!source_config_) {
@@ -369,6 +396,7 @@ void AnimationInspectorPanel::rebuild_widgets() {
     refresh_start_indicator();
     layout_dirty_ = true;
     apply_dependencies();
+    update_source_toggle_label();
 }
 
 void AnimationInspectorPanel::refresh_totals() {
@@ -395,6 +423,18 @@ void AnimationInspectorPanel::apply_dependencies() {
     if (audio_panel_) {
         audio_panel_->set_importer(audio_importer_);
         audio_panel_->set_file_picker(audio_file_picker_);
+    }
+}
+
+void AnimationInspectorPanel::update_source_toggle_label() {
+    if (!source_toggle_button_) {
+        return;
+    }
+
+    if (source_collapsed_) {
+        source_toggle_button_->set_text("[+] Frame Sources");
+    } else {
+        source_toggle_button_->set_text("[-] Frame Sources");
     }
 }
 
@@ -447,9 +487,20 @@ void AnimationInspectorPanel::layout_widgets() const {
     self->preview_rect_ = SDL_Rect{x, y, width, kPreviewHeight};
     y += kPreviewHeight + gap;
 
-    self->source_rect_ = SDL_Rect{x, y, width, kSourceHeight};
-    if (self->source_config_) self->source_config_->set_bounds(self->source_rect_);
-    y += kSourceHeight + gap;
+    self->source_toggle_rect_ = SDL_Rect{x, y, width, DMButton::height()};
+    if (self->source_toggle_button_) self->source_toggle_button_->set_rect(self->source_toggle_rect_);
+    y += DMButton::height();
+
+    if (!source_collapsed_) {
+        y += item_gap;
+        self->source_rect_ = SDL_Rect{x, y, width, kSourceHeight};
+        if (self->source_config_) self->source_config_->set_bounds(self->source_rect_);
+        y += kSourceHeight;
+    } else {
+        self->source_rect_ = SDL_Rect{x, y, width, 0};
+        if (self->source_config_) self->source_config_->set_bounds(SDL_Rect{x, y, width, 0});
+    }
+    y += gap;
 
     self->playback_rect_ = SDL_Rect{x, y, width, kPlaybackHeight};
     if (self->playback_settings_) self->playback_settings_->set_bounds(self->playback_rect_);

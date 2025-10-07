@@ -294,12 +294,7 @@ void AssetInfoUI::layout_widgets(int screen_w, int screen_h) const {
     if (editor_width <= 0 || editor_height <= 0) {
         animation_editor_rect_ = SDL_Rect{0, 0, 0, 0};
     } else {
-        const int padding = DMSpacing::panel_padding();
-        animation_editor_rect_ = SDL_Rect{
-            padding,
-            padding,
-            std::max(0, editor_width - padding * 2),
-            std::max(0, editor_height - padding * 2)};
+        animation_editor_rect_ = SDL_Rect{0, 0, editor_width, editor_height};
     }
     const int padding = DMSpacing::panel_padding();
     const int gap = DMSpacing::section_gap();

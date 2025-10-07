@@ -146,7 +146,7 @@ void MovementSummaryWidget::render(SDL_Renderer* renderer) const {
     SDL_SetRenderDrawColor(renderer, button_style.border.r, button_style.border.g, button_style.border.b, button_style.border.a);
     SDL_RenderDrawRect(renderer, &button_rect_);
 
-    const std::string button_text = "Edit Movement";
+    const std::string button_text = "Frame Editor";
     int label_width = measure_text_width(button_style.label, button_text);
     int label_x = button_rect_.x + (button_rect_.w - label_width) / 2;
     label_x = std::max(label_x, button_rect_.x + 8);

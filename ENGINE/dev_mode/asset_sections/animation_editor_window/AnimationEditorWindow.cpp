@@ -286,6 +286,11 @@ bool AnimationEditorWindow::handle_event(const SDL_Event& e) {
         if (SDL_PointInRect(&p, &bounds_)) {
             return true;
         }
+        return true;
+    }
+
+    if (e.type == SDL_MOUSEBUTTONDOWN || e.type == SDL_MOUSEBUTTONUP || e.type == SDL_MOUSEMOTION) {
+        return true;
     }
 
     return false;
