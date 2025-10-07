@@ -28,6 +28,8 @@ public:
     nlohmann::json save_current_room(std::string room_name);
     void update(const Input& input, int screen_center_x, int screen_center_y);
     void set_dev_mode(bool mode);
+    void set_force_high_quality_rendering(bool enable);
+    bool force_high_quality_rendering() const { return force_high_quality_rendering_; }
     void set_render_suppressed(bool suppressed);
     void set_input(Input* m);
     Input* get_input() const { return input; }
@@ -110,6 +112,7 @@ private:
     void addAsset(const std::string& name, SDL_Point g);
     void update_filtered_active_assets();
     void ensure_dev_controls();
+    void update_scene_render_quality();
 
     friend class SceneRenderer;
     friend class Asset;
@@ -131,6 +134,7 @@ private:
     int num_groups_ = 4;
     bool dev_mode = false;
     bool suppress_render_ = false;
+    bool force_high_quality_rendering_ = false;
     std::vector<Asset*> removal_queue;
 
     AssetLibrary& library_;

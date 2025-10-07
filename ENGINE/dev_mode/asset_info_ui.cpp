@@ -604,6 +604,10 @@ void AssetInfoUI::update(const Input& input, int screen_w, int screen_h) {
     }
 
     layout_widgets(screen_w, screen_h);
+
+    if (assets_ && lighting_section_ && lighting_section_->is_expanded()) {
+        assets_->set_force_high_quality_rendering(true);
+    }
 }
 
 void AssetInfoUI::render(SDL_Renderer* r, int screen_w, int screen_h) const {

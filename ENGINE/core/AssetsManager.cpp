@@ -569,14 +569,13 @@ void Assets::set_dev_mode(bool mode) {
     const bool changed = (dev_mode != mode);
     dev_mode = mode;
 
-    if (scene) {
-        scene->set_low_quality_rendering(dev_mode);
-    }
+    force_high_quality_rendering_ = dev_mode ? true : false;
+    update_scene_render_quality();
 
     if (dev_mode) {
         SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "0");
         if (changed) {
-            std::cout << "[Assets] Dev Mode enabled: forcing lowest render quality.\n";
+            std::cout << "[Assets] Dev Mode enabled: keeping full render quality.\n";
         }
         ensure_dev_controls();
         if (dev_controls_) {
@@ -603,6 +602,22 @@ void Assets::set_dev_mode(bool mode) {
         }
         update_filtered_active_assets();
     }
+}
+
+void Assets::set_force_high_quality_rendering(bool enable) {
+    if (force_high_quality_rendering_ == enable) {
+        return;
+    }
+    force_high_quality_rendering_ = enable;
+    update_scene_render_quality();
+}
+
+void Assets::update_scene_render_quality() {
+    if (!scene) {
+        return;
+    }
+    const bool low_quality = dev_mode && !force_high_quality_rendering_;
+    scene->set_low_quality_rendering(low_quality);
 }
 
 void Assets::set_render_suppressed(bool suppressed) {
