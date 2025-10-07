@@ -1581,13 +1581,27 @@ void SpawnGroupList::open_asset_search(EntryRow& row, std::function<void(const s
     if (!asset_search_) return;
     bind_row_ref(asset_search_row_ref_, row);
     SDL_Rect parent = rect();
-    int search_width = 280;
-    int spacing = DMSpacing::item_gap();
+    if (row.candidates_rect.w > 0 && row.candidates_rect.h > 0) {
+        parent = row.candidates_rect;
+    } else if (row.body_rect.w > 0 && row.body_rect.h > 0) {
+        parent = row.body_rect;
+    }
+    const int search_width = 280;
+    const int spacing = DMSpacing::item_gap();
+    const int margin = DMSpacing::panel_padding();
     int x = parent.x + parent.w + spacing;
-    if (x + search_width > screen_w_ - DMSpacing::panel_padding()) {
-        x = std::max(DMSpacing::panel_padding(), screen_w_ - search_width - DMSpacing::panel_padding());
+    if (screen_w_ > 0) {
+        int max_x = std::max(margin, screen_w_ - search_width - margin);
+        if (x > max_x) {
+            x = std::max(margin, parent.x - search_width - spacing);
+        }
+        x = std::clamp(x, margin, max_x);
     }
     int y = parent.y;
+    if (screen_h_ > 0) {
+        int max_y = std::max(margin, screen_h_ - parent.h - margin);
+        y = std::clamp(y, margin, max_y);
+    }
     asset_search_->set_position(x, y);
     asset_search_->open([this, cb=std::move(callback)](const std::string& selection) {
         if (selection.empty()) return;

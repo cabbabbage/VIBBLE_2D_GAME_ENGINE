@@ -3,39 +3,85 @@
 #include <algorithm>
 #include "spawn_group_list.hpp"
 #include "utils/input.hpp"
+#include "dev_mode/spawn_group_utils.hpp"
 
 using nlohmann::json;
 
 SingleSpawnGroupModal::SingleSpawnGroupModal() = default;
 SingleSpawnGroupModal::~SingleSpawnGroupModal() = default;
 
+namespace {
+
+void ensure_candidate_list(json& entry) {
+    if (!entry.contains("candidates") || !entry["candidates"].is_array()) {
+        entry["candidates"] = json::array();
+    }
+    auto& candidates = entry["candidates"];
+    if (candidates.empty()) {
+        json null_cand = json::object();
+        null_cand["name"] = "null";
+        null_cand["chance"] = 0;
+        candidates.push_back(std::move(null_cand));
+    }
+}
+
+void ensure_spawn_group_defaults(json& entry, const std::string& default_display_name) {
+    if (!entry.is_object()) {
+        entry = json::object();
+    }
+    if (!entry.contains("spawn_id") || !entry["spawn_id"].is_string() || entry["spawn_id"].get<std::string>().empty()) {
+        entry["spawn_id"] = devmode::spawn::generate_spawn_id();
+    }
+    if (!entry.contains("display_name") || !entry["display_name"].is_string() || entry["display_name"].get<std::string>().empty()) {
+        entry["display_name"] = default_display_name;
+    }
+    if (!entry.contains("position") || !entry["position"].is_string() || entry["position"].get<std::string>().empty()) {
+        entry["position"] = "Random";
+    }
+    int min_number = entry.value("min_number", 1);
+    int max_number = entry.value("max_number", min_number);
+    min_number = std::max(1, min_number);
+    if (max_number < min_number) {
+        max_number = min_number;
+    }
+    entry["min_number"] = min_number;
+    entry["max_number"] = max_number;
+    if (!entry.contains("chance_denominator") || !entry["chance_denominator"].is_number_integer() || entry["chance_denominator"].get<int>() <= 0) {
+        entry["chance_denominator"] = 100;
+    }
+    if (!entry.contains("check_overlap") || !entry["check_overlap"].is_boolean()) {
+        entry["check_overlap"] = false;
+    }
+    if (!entry.contains("enforce_spacing") || !entry["enforce_spacing"].is_boolean()) {
+        entry["enforce_spacing"] = false;
+    }
+    ensure_candidate_list(entry);
+}
+
+}  // namespace
+
 void SingleSpawnGroupModal::ensure_single_group(json& section,
                                                 const std::string& default_display_name) {
-     if (!section.is_object()) {
-         section = json::object();
-     }
-     if (!section.contains("spawn_groups") || !section["spawn_groups"].is_array()) {
-         section["spawn_groups"] = json::array();
-     }
-     auto& groups = section["spawn_groups"];
-     if (groups.empty()) {
-         json entry = json::object();
-         entry["display_name"] = default_display_name;
-         entry["position"] = "Random";
-         entry["candidates"] = json::array();
-
-         json null_cand = json::object();
-         null_cand["name"] = "null";
-         null_cand["chance"] = 0;
-         entry["candidates"].push_back(std::move(null_cand));
-         groups.push_back(std::move(entry));
-     } else if (groups.size() > 1) {
-
-         json first = groups[0];
-         groups = json::array();
-         groups.push_back(std::move(first));
-     }
- }
+    if (!section.is_object()) {
+        section = json::object();
+    }
+    if (!section.contains("spawn_groups") || !section["spawn_groups"].is_array()) {
+        section["spawn_groups"] = json::array();
+    }
+    auto& groups = section["spawn_groups"];
+    if (groups.empty()) {
+        json entry = json::object();
+        ensure_spawn_group_defaults(entry, default_display_name);
+        groups.push_back(std::move(entry));
+    } else {
+        ensure_spawn_group_defaults(groups[0], default_display_name);
+        if (groups.size() > 1) {
+            json first = groups[0];
+            groups = json::array();
+            groups.push_back(std::move(first));
+        }
+    }
+}
 
 void SingleSpawnGroupModal::open(json& map_info,
                                  const std::string& section_key,
@@ -52,12 +98,12 @@ void SingleSpawnGroupModal::open(json& map_info,
     if (!list_) list_ = std::make_unique<SpawnGroupList>(true);
     list_->set_screen_dimensions(screen_w_, screen_h_);
     // Open a floating SpawnGroupList panel bound to the current single-group array
-    list_->open(groups, [this](const json& updated_array) {
+    list_->open(groups, [this, default_display_name](const json& updated_array) {
         if (!this->map_info_ || !this->section_) return;
         auto& groups = (*section_)["spawn_groups"];
         groups = updated_array;
         // Enforce single group for this modal
-        ensure_single_group(*section_, "Group");
+        ensure_single_group(*section_, default_display_name);
         bool ok = true;
         if (on_save_) ok = on_save_();
         (void)ok; // Errors are reflected elsewhere if needed
