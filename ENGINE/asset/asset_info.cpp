@@ -326,39 +326,73 @@ void AssetInfo::upsert_area_from_editor(const Area& area) {
 
     nlohmann::json* existing_entry = nullptr;
     std::string existing_type;
-	int json_offset_x = 0;
-	int json_offset_y = 0;
+    int json_offset_x = 0;
+    int json_offset_y = 0;
+    int stored_orig_w = original_canvas_width;
+    int stored_orig_h = original_canvas_height;
 
-	for (auto& entry : info_json_["areas"]) {
+        for (auto& entry : info_json_["areas"]) {
         if (!entry.is_object()) continue;
         if (entry.value("name", std::string{}) == area.get_name()) {
             existing_entry = &entry;
             json_offset_x = entry.value("offset_x", 0);
             json_offset_y = entry.value("offset_y", 0);
             existing_type = entry.value("type", std::string{});
+            try {
+                if (entry.contains("original_dimensions") && entry["original_dimensions"].is_array() && entry["original_dimensions"].size() == 2) {
+                    stored_orig_w = entry["original_dimensions"][0].get<int>();
+                    stored_orig_h = entry["original_dimensions"][1].get<int>();
+                }
+            } catch (...) {
+                stored_orig_w = original_canvas_width;
+                stored_orig_h = original_canvas_height;
+            }
             break;
         }
-	}
+        }
 
-	const int base_offset_x = default_offset_x + json_offset_x;
-	const int base_offset_y = default_offset_y - json_offset_y;
+        const int base_offset_x = default_offset_x + json_offset_x;
+        const int base_offset_y = default_offset_y - json_offset_y;
 
-	auto encode = [](double value) {
-		double snapped = std::round(value * 1000.0) / 1000.0;
-		if (std::abs(snapped) < 1e-6) {
-			snapped = 0.0;
-		}
-		return snapped;
+        if (stored_orig_w <= 0) stored_orig_w = original_canvas_width;
+        if (stored_orig_h <= 0) stored_orig_h = original_canvas_height;
+        if (stored_orig_w <= 0) stored_orig_w = 1;
+        if (stored_orig_h <= 0) stored_orig_h = 1;
+
+        double width_ratio = 1.0;
+        double height_ratio = 1.0;
+        if (stored_orig_w > 0 && original_canvas_width > 0 && stored_orig_w != original_canvas_width) {
+                width_ratio = static_cast<double>(original_canvas_width) / static_cast<double>(stored_orig_w);
+        }
+        if (stored_orig_h > 0 && original_canvas_height > 0 && stored_orig_h != original_canvas_height) {
+                height_ratio = static_cast<double>(original_canvas_height) / static_cast<double>(stored_orig_h);
+        }
+
+        const double scale_x = static_cast<double>(scale) * width_ratio;
+        const double scale_y = static_cast<double>(scale) * height_ratio;
+
+        auto encode = [](double value) {
+                double snapped = std::round(value * 1000.0) / 1000.0;
+                if (std::abs(snapped) < 1e-6) {
+                        snapped = 0.0;
+                }
+                return snapped;
 };
 
-	nlohmann::json points = nlohmann::json::array();
-	for (const auto& p : area.get_points()) {
-		double rel_x = (static_cast<double>(p.x) - static_cast<double>(base_offset_x)) / static_cast<double>(scale);
-		double rel_y = (static_cast<double>(p.y) - static_cast<double>(base_offset_y)) / static_cast<double>(scale);
-		points.push_back({ encode(rel_x), encode(rel_y) });
-	}
+        nlohmann::json points = nlohmann::json::array();
+        for (const auto& p : area.get_points()) {
+                double rel_x = 0.0;
+                double rel_y = 0.0;
+                if (scale_x != 0.0) {
+                        rel_x = (static_cast<double>(p.x) - static_cast<double>(base_offset_x)) / scale_x;
+                }
+                if (scale_y != 0.0) {
+                        rel_y = (static_cast<double>(p.y) - static_cast<double>(base_offset_y)) / scale_y;
+                }
+                points.push_back({ encode(rel_x), encode(rel_y) });
+        }
 
-	nlohmann::json original_dims = nlohmann::json::array({ original_canvas_width, original_canvas_height });
+        nlohmann::json original_dims = nlohmann::json::array({ stored_orig_w, stored_orig_h });
 
     const std::string final_type = !area.get_type().empty() ? area.get_type() : existing_type;
     if (existing_entry) {

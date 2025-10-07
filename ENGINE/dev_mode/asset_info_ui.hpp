@@ -70,6 +70,15 @@ class AssetInfoUI {
     mutable SDL_Rect scroll_region_{0,0,0,0};
     mutable SDL_Rect name_label_rect_{0,0,0,0};
     mutable SDL_Rect animation_editor_rect_{0,0,0,0};
+    mutable SDL_Rect scroll_track_rect_{0,0,0,0};
+    mutable SDL_Rect scroll_thumb_rect_{0,0,0,0};
+    mutable int content_height_px_ = 0;
+    mutable int visible_height_px_ = 0;
+    mutable bool scroll_dragging_ = false;
+    mutable bool scrollbar_dragging_ = false;
+    mutable int scroll_drag_anchor_y_ = 0;
+    mutable int scroll_drag_start_scroll_ = 0;
+    mutable int scrollbar_drag_offset_ = 0;
 
     mutable std::unique_ptr<class DMButton> configure_btn_;
     mutable std::unique_ptr<class ButtonWidget> configure_btn_widget_;

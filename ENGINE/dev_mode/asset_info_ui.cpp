@@ -35,6 +35,10 @@
 
 namespace {
 
+constexpr int kScrollbarWidth = 10;
+constexpr int kScrollbarGap = 6;
+constexpr int kScrollbarTrackMargin = 4;
+
 void render_label_text(SDL_Renderer* renderer, const std::string& text, int x, int y) {
     if (!renderer || text.empty()) return;
     const DMLabelStyle& style = DMStyles::Label();
@@ -229,6 +233,8 @@ void AssetInfoUI::set_assets(Assets* a) {
 void AssetInfoUI::set_info(const std::shared_ptr<AssetInfo>& info) {
     info_ = info;
     scroll_ = 0;
+    scroll_dragging_ = false;
+    scrollbar_dragging_ = false;
     if (asset_selector_) asset_selector_->close();
     if (animation_editor_window_) animation_editor_window_->set_info(info_);
     for (auto& s : sections_) {
@@ -241,6 +247,8 @@ void AssetInfoUI::set_info(const std::shared_ptr<AssetInfo>& info) {
 void AssetInfoUI::clear_info() {
     info_.reset();
     scroll_ = 0;
+    scroll_dragging_ = false;
+    scrollbar_dragging_ = false;
     if (asset_selector_) asset_selector_->close();
     if (animation_editor_window_) {
         animation_editor_window_->clear_info();
@@ -263,6 +271,8 @@ void AssetInfoUI::close() {
     if (!visible_) return;
     apply_camera_override(false);
     visible_ = false;
+    scroll_dragging_ = false;
+    scrollbar_dragging_ = false;
     if (animation_editor_window_) animation_editor_window_->set_visible(false);
     if (asset_selector_) asset_selector_->close();
 }
@@ -293,44 +303,95 @@ void AssetInfoUI::layout_widgets(int screen_w, int screen_h) const {
     const int padding = DMSpacing::panel_padding();
     const int gap = DMSpacing::section_gap();
     const int content_x = panel_.x + padding;
-    const int content_w = panel_.w - 2 * padding;
+    const int base_content_w = std::max(0, panel_.w - 2 * padding);
     const int content_top = panel_.y + padding;
 
     const int label_height = DMButton::height();
     const int label_gap = DMSpacing::item_gap();
-    name_label_rect_ = SDL_Rect{ content_x, content_top, content_w, label_height };
+    name_label_rect_ = SDL_Rect{ content_x, content_top, base_content_w, label_height };
     int scroll_start = content_top + label_height + label_gap;
 
-    auto layout_with_scroll = [&](int scroll_value) {
+    int content_w_active = base_content_w;
+
+    auto layout_with_scroll = [&](int scroll_value, int content_width) {
         int y = scroll_start;
         for (auto& s : sections_) {
-            s->set_rect(SDL_Rect{ content_x, y - scroll_value, content_w, 0 });
+            s->set_rect(SDL_Rect{ content_x, y - scroll_value, content_width, 0 });
             y += s->height() + gap;
         }
         if (configure_btn_widget_) {
-            configure_btn_widget_->set_rect(SDL_Rect{ content_x, y - scroll_value, content_w, DMButton::height() });
+            configure_btn_widget_->set_rect(SDL_Rect{ content_x, y - scroll_value, content_width, DMButton::height() });
             y += DMButton::height() + gap;
         }
         return y;
 };
 
-    int end_y = layout_with_scroll(scroll_);
+    int end_y = layout_with_scroll(scroll_, content_w_active);
     int content_height = end_y - scroll_start;
     int visible_height = panel_.h - padding - label_height - label_gap;
     max_scroll_ = std::max(0, content_height - std::max(0, visible_height));
+    if (max_scroll_ > 0) {
+        const int scroll_space = kScrollbarWidth + kScrollbarGap;
+        int adjusted_content_w = std::max(0, base_content_w - scroll_space);
+        if (adjusted_content_w != content_w_active) {
+            content_w_active = adjusted_content_w;
+            end_y = layout_with_scroll(scroll_, content_w_active);
+            content_height = end_y - scroll_start;
+            visible_height = panel_.h - padding - label_height - label_gap;
+            max_scroll_ = std::max(0, content_height - std::max(0, visible_height));
+        }
+    } else {
+        content_w_active = base_content_w;
+    }
+
     int clamped = std::max(0, std::min(max_scroll_, scroll_));
     if (clamped != scroll_) {
         scroll_ = clamped;
-        end_y = layout_with_scroll(scroll_);
+        end_y = layout_with_scroll(scroll_, content_w_active);
         content_height = end_y - scroll_start;
+        visible_height = panel_.h - padding - label_height - label_gap;
         max_scroll_ = std::max(0, content_height - std::max(0, visible_height));
     }
+
+    content_height_px_ = std::max(0, content_height);
+    visible_height_px_ = std::max(0, visible_height);
 
     scroll_region_ = SDL_Rect{
         panel_.x,
         name_label_rect_.y + name_label_rect_.h,
         panel_.w,
         std::max(0, panel_.h - (name_label_rect_.y + name_label_rect_.h)) };
+
+    if (max_scroll_ == 0) {
+        scroll_dragging_ = false;
+        scrollbar_dragging_ = false;
+        scroll_track_rect_ = SDL_Rect{0,0,0,0};
+        scroll_thumb_rect_ = SDL_Rect{0,0,0,0};
+    } else {
+        const int track_x = panel_.x + panel_.w - padding - kScrollbarWidth;
+        const int track_y = scroll_region_.y + kScrollbarTrackMargin;
+        const int track_h = std::max(0, scroll_region_.h - 2 * kScrollbarTrackMargin);
+        scroll_track_rect_ = SDL_Rect{ track_x, track_y, kScrollbarWidth, track_h };
+        if (track_h <= 0) {
+            scrollbar_dragging_ = false;
+            scroll_thumb_rect_ = SDL_Rect{ track_x, track_y, kScrollbarWidth, 0 };
+        } else if (content_height_px_ > 0 && visible_height_px_ > 0) {
+            int thumb_h = static_cast<int>(std::round(static_cast<double>(track_h) * visible_height_px_ /
+                                                      std::max(visible_height_px_, content_height_px_)));
+            thumb_h = std::clamp(thumb_h, 20, track_h);
+            int scroll_range = std::max(0, track_h - thumb_h);
+            int thumb_y = track_y;
+            if (scroll_range > 0 && max_scroll_ > 0) {
+                double ratio = static_cast<double>(scroll_) / static_cast<double>(max_scroll_);
+                thumb_y = track_y + static_cast<int>(std::round(ratio * scroll_range));
+            }
+            thumb_y = std::clamp(thumb_y, track_y, track_y + scroll_range);
+            scroll_thumb_rect_ = SDL_Rect{ track_x, thumb_y, kScrollbarWidth, thumb_h };
+        } else {
+            scrollbar_dragging_ = false;
+            scroll_thumb_rect_ = SDL_Rect{ track_x, track_y, kScrollbarWidth, track_h };
+        }
+    }
 }
 
 bool AssetInfoUI::handle_event(const SDL_Event& e) {
@@ -386,9 +447,11 @@ bool AssetInfoUI::handle_event(const SDL_Event& e) {
     }
 
     bool pointer_inside = false;
+    bool pointer_inside_panel = false;
     if (pointer_event) {
-        pointer_inside = SDL_PointInRect(&pointer, &panel_);
-        if (!pointer_inside) {
+        pointer_inside_panel = SDL_PointInRect(&pointer, &panel_);
+        pointer_inside = pointer_inside_panel;
+        if (!pointer_inside && !scroll_dragging_ && !scrollbar_dragging_) {
             return false;
         }
     } else if (wheel_event) {
@@ -408,6 +471,41 @@ bool AssetInfoUI::handle_event(const SDL_Event& e) {
         return true;
     }
 
+    if (pointer_event && e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
+        bool handled = false;
+        if (scroll_dragging_) {
+            scroll_dragging_ = false;
+            handled = true;
+        }
+        if (scrollbar_dragging_) {
+            scrollbar_dragging_ = false;
+            handled = true;
+        }
+        if (handled) return true;
+    }
+
+    if (pointer_event && e.type == SDL_MOUSEMOTION) {
+        if (scrollbar_dragging_ && max_scroll_ > 0) {
+            int thumb_h = scroll_thumb_rect_.h;
+            int track_h = scroll_track_rect_.h;
+            if (track_h > 0 && thumb_h > 0) {
+                int min_thumb_y = scroll_track_rect_.y;
+                int max_thumb_y = scroll_track_rect_.y + std::max(0, track_h - thumb_h);
+                int new_thumb_y = pointer.y - scrollbar_drag_offset_;
+                new_thumb_y = std::clamp(new_thumb_y, min_thumb_y, max_thumb_y);
+                int range = std::max(0, max_thumb_y - min_thumb_y);
+                double ratio = (range > 0) ? static_cast<double>(new_thumb_y - min_thumb_y) / static_cast<double>(range) : 0.0;
+                scroll_ = std::max(0, std::min(max_scroll_, static_cast<int>(std::round(ratio * max_scroll_))));
+            }
+            return true;
+        }
+        if (scroll_dragging_) {
+            int dy = pointer.y - scroll_drag_anchor_y_;
+            scroll_ = std::max(0, std::min(max_scroll_, scroll_drag_start_scroll_ - dy));
+            return true;
+        }
+    }
+
     if (e.type == SDL_KEYDOWN && e.key.keysym.sym == SDLK_ESCAPE) {
         close();
         return true;
@@ -417,7 +515,41 @@ bool AssetInfoUI::handle_event(const SDL_Event& e) {
         return true;
     }
 
-    if (pointer_inside) {
+    if (pointer_event && e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
+        if (max_scroll_ > 0) {
+            if (SDL_PointInRect(&pointer, &scroll_thumb_rect_)) {
+                scrollbar_dragging_ = true;
+                scrollbar_drag_offset_ = pointer.y - scroll_thumb_rect_.y;
+                return true;
+            }
+            if (SDL_PointInRect(&pointer, &scroll_track_rect_)) {
+                int thumb_h = scroll_thumb_rect_.h;
+                int track_h = scroll_track_rect_.h;
+                if (track_h > 0 && thumb_h > 0) {
+                    int min_thumb_y = scroll_track_rect_.y;
+                    int max_thumb_y = scroll_track_rect_.y + std::max(0, track_h - thumb_h);
+                    int desired = pointer.y - thumb_h / 2;
+                    desired = std::clamp(desired, min_thumb_y, max_thumb_y);
+                    int range = std::max(0, max_thumb_y - min_thumb_y);
+                    if (range > 0 && max_scroll_ > 0) {
+                        double ratio = static_cast<double>(desired - min_thumb_y) / static_cast<double>(range);
+                        scroll_ = std::max(0, std::min(max_scroll_, static_cast<int>(std::round(ratio * max_scroll_))));
+                    }
+                }
+                scrollbar_dragging_ = true;
+                scrollbar_drag_offset_ = scroll_thumb_rect_.h / 2;
+                return true;
+            }
+        }
+        if (max_scroll_ > 0 && SDL_PointInRect(&pointer, &scroll_region_)) {
+            scroll_dragging_ = true;
+            scroll_drag_anchor_y_ = pointer.y;
+            scroll_drag_start_scroll_ = scroll_;
+            return true;
+        }
+    }
+
+    if (pointer_inside_panel || scroll_dragging_ || scrollbar_dragging_) {
         return true;
     }
 
@@ -514,6 +646,17 @@ void AssetInfoUI::render(SDL_Renderer* r, int screen_w, int screen_h) const {
     for (auto& s : sections_) s->render(r);
 
     if (configure_btn_) configure_btn_->render(r);
+
+    if (max_scroll_ > 0 && scroll_track_rect_.w > 0 && scroll_track_rect_.h > 0) {
+        SDL_Color track_col = DMStyles::Border();
+        SDL_SetRenderDrawColor(r, track_col.r, track_col.g, track_col.b, std::min<int>(track_col.a, 120));
+        SDL_RenderFillRect(r, &scroll_track_rect_);
+        if (scroll_thumb_rect_.h > 0) {
+            SDL_Color thumb_col = DMStyles::AccentButton().hover_bg;
+            SDL_SetRenderDrawColor(r, thumb_col.r, thumb_col.g, thumb_col.b, thumb_col.a);
+            SDL_RenderFillRect(r, &scroll_thumb_rect_);
+        }
+    }
 
     if (was_clipping == SDL_TRUE) {
         SDL_RenderSetClipRect(r, &prev_clip);
