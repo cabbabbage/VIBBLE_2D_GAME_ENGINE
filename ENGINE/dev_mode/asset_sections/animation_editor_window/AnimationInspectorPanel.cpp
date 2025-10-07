@@ -112,6 +112,53 @@ void AnimationInspectorPanel::set_preview_provider(std::shared_ptr<PreviewProvid
     preview_provider_ = std::move(provider);
 }
 
+void AnimationInspectorPanel::set_source_services(std::shared_ptr<CroppingService> cropping,
+                                                  std::shared_ptr<AsyncTaskQueue> tasks) {
+    cropping_service_ = std::move(cropping);
+    task_queue_ = std::move(tasks);
+    apply_dependencies();
+}
+
+void AnimationInspectorPanel::set_source_folder_picker(PathPicker picker) {
+    folder_picker_ = std::move(picker);
+    apply_dependencies();
+}
+
+void AnimationInspectorPanel::set_source_animation_picker(AnimationPicker picker) {
+    animation_picker_ = std::move(picker);
+    apply_dependencies();
+}
+
+void AnimationInspectorPanel::set_source_gif_picker(PathPicker picker) {
+    gif_picker_ = std::move(picker);
+    apply_dependencies();
+}
+
+void AnimationInspectorPanel::set_source_png_sequence_picker(MultiPathPicker picker) {
+    png_sequence_picker_ = std::move(picker);
+    apply_dependencies();
+}
+
+void AnimationInspectorPanel::set_source_status_callback(StatusCallback callback) {
+    status_callback_ = std::move(callback);
+    apply_dependencies();
+}
+
+void AnimationInspectorPanel::set_movement_edit_callback(MovementEditCallback callback) {
+    movement_edit_callback_ = std::move(callback);
+    apply_dependencies();
+}
+
+void AnimationInspectorPanel::set_audio_importer(std::shared_ptr<AudioImporter> importer) {
+    audio_importer_ = std::move(importer);
+    apply_dependencies();
+}
+
+void AnimationInspectorPanel::set_audio_file_picker(AudioFilePicker picker) {
+    audio_file_picker_ = std::move(picker);
+    apply_dependencies();
+}
+
 int AnimationInspectorPanel::height_for_width(int /*width*/) const {
     const int padding = DMSpacing::panel_padding();
     const int gap = DMSpacing::section_gap();
@@ -327,12 +374,33 @@ void AnimationInspectorPanel::rebuild_widgets() {
     rename_pending_ = false;
     refresh_start_indicator();
     layout_dirty_ = true;
+    apply_dependencies();
 }
 
 void AnimationInspectorPanel::refresh_totals() {
     if (movement_summary_) {
         movement_summary_->set_document(document_);
         movement_summary_->set_animation_id(animation_id_);
+    }
+}
+
+void AnimationInspectorPanel::apply_dependencies() {
+    if (source_config_) {
+        source_config_->set_services(cropping_service_, task_queue_);
+        source_config_->set_folder_picker(folder_picker_);
+        source_config_->set_animation_picker(animation_picker_);
+        source_config_->set_gif_picker(gif_picker_);
+        source_config_->set_png_sequence_picker(png_sequence_picker_);
+        source_config_->set_status_callback(status_callback_);
+    }
+
+    if (movement_summary_) {
+        movement_summary_->set_edit_callback(movement_edit_callback_);
+    }
+
+    if (audio_panel_) {
+        audio_panel_->set_importer(audio_importer_);
+        audio_panel_->set_file_picker(audio_file_picker_);
     }
 }
 

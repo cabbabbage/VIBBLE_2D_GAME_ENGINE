@@ -404,7 +404,13 @@ bool AssetInfoUI::handle_event(const SDL_Event& e) {
     }
 
     if (configure_btn_ && configure_btn_->handle_event(e)) {
-        // Temporarily disabled while the animation editor is under construction.
+        if (animation_editor_window_) {
+            if (animation_editor_window_->is_visible()) {
+                animation_editor_window_->set_visible(false);
+            } else if (info_) {
+                animation_editor_window_->set_visible(true);
+            }
+        }
         return true;
     }
 

@@ -11,6 +11,7 @@ struct SDL_Renderer;
 namespace animation_editor {
 
 class AnimationDocument;
+class DMDropdown;
 
 class OnEndSelector {
   public:
@@ -26,12 +27,19 @@ class OnEndSelector {
 
   private:
     void rebuild_options();
+    void sync_from_document();
+    void layout_dropdown() const;
+    void commit_selection();
+    int find_option_index(const std::string& value) const;
 
   private:
     std::shared_ptr<AnimationDocument> document_;
     std::string animation_id_;
     SDL_Rect bounds_{0, 0, 0, 0};
     std::vector<std::string> options_;
+    std::unique_ptr<DMDropdown> dropdown_;
+    mutable bool layout_dirty_ = true;
+    std::string payload_signature_;
 };
 
 }  // namespace animation_editor

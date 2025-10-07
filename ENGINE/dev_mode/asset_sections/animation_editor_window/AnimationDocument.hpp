@@ -27,6 +27,8 @@ class AnimationDocument {
     void replace_animation_payload(const std::string& animation_id, const std::string& payload_json);
     std::optional<std::string> animation_payload(const std::string& animation_id) const;
 
+    const std::filesystem::path& info_path() const { return info_path_; }
+
   private:
     void ensure_document_initialized();
     void rebuild_animation_cache();

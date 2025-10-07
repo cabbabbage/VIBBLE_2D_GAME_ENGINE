@@ -73,6 +73,16 @@ void AnimationListPanel::set_preview_provider(std::shared_ptr<PreviewProvider> p
     layout_dirty_ = true;
 }
 
+void AnimationListPanel::set_inspector_configurator(std::function<void(AnimationInspectorPanel&)> configurator) {
+    inspector_configurator_ = std::move(configurator);
+    for (auto& inspector : inspectors_) {
+        if (inspector && inspector_configurator_) {
+            inspector_configurator_(*inspector);
+        }
+    }
+    layout_dirty_ = true;
+}
+
 void AnimationListPanel::update() {
     if (document_) {
         auto ids = document_->animation_ids();
@@ -192,6 +202,9 @@ void AnimationListPanel::rebuild_children() {
         inspector->set_animation_id(id);
         if (preview_provider_) {
             inspector->set_preview_provider(preview_provider_);
+        }
+        if (inspector_configurator_) {
+            inspector_configurator_(*inspector);
         }
         inspectors_.push_back(std::move(inspector));
     }
