@@ -198,6 +198,16 @@ AssetInfoUI::AssetInfoUI() {
     sections_.push_back(std::move(spawns));
 
     configure_btn_ = std::make_unique<DMButton>("Configure Animations", &DMStyles::CreateButton(), 220, DMButton::height());
+    configure_btn_widget_ = std::make_unique<ButtonWidget>(configure_btn_.get(), [this]() {
+        if (!animation_editor_window_) {
+            return;
+        }
+        if (animation_editor_window_->is_visible()) {
+            animation_editor_window_->set_visible(false);
+        } else if (info_) {
+            animation_editor_window_->set_visible(true);
+        }
+    });
     animation_editor_window_ = std::make_unique<animation_editor::AnimationEditorWindow>();
 }
 
@@ -297,8 +307,8 @@ void AssetInfoUI::layout_widgets(int screen_w, int screen_h) const {
             s->set_rect(SDL_Rect{ content_x, y - scroll_value, content_w, 0 });
             y += s->height() + gap;
         }
-        if (configure_btn_) {
-            configure_btn_->set_rect(SDL_Rect{ content_x, y - scroll_value, content_w, DMButton::height() });
+        if (configure_btn_widget_) {
+            configure_btn_widget_->set_rect(SDL_Rect{ content_x, y - scroll_value, content_w, DMButton::height() });
             y += DMButton::height() + gap;
         }
         return y;
@@ -403,14 +413,7 @@ bool AssetInfoUI::handle_event(const SDL_Event& e) {
         return true;
     }
 
-    if (configure_btn_ && configure_btn_->handle_event(e)) {
-        if (animation_editor_window_) {
-            if (animation_editor_window_->is_visible()) {
-                animation_editor_window_->set_visible(false);
-            } else if (info_) {
-                animation_editor_window_->set_visible(true);
-            }
-        }
+    if (configure_btn_widget_ && configure_btn_widget_->handle_event(e)) {
         return true;
     }
 

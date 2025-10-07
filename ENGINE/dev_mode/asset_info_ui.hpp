@@ -72,6 +72,7 @@ class AssetInfoUI {
     mutable SDL_Rect animation_editor_rect_{0,0,0,0};
 
     mutable std::unique_ptr<class DMButton> configure_btn_;
+    mutable std::unique_ptr<class ButtonWidget> configure_btn_widget_;
     int pulse_frames_ = 0;
     bool camera_override_active_ = false;
     bool prev_camera_realism_enabled_ = false;

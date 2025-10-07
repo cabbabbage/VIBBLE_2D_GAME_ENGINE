@@ -519,8 +519,14 @@ void SpawnGroupList::append_rows(Rows& rows) {
             }
         } else {
             r->body_rect = SDL_Rect{0,0,0,0};
-            if (area_panel_row_ == r.get()) close_area_panel();
-            if (asset_search_row_ == r.get()) close_asset_search();
+            EntryRow* area_row = lookup_row(area_panel_row_ref_);
+            if ((area_row && area_row == r.get()) || (!area_row && area_panel_row_ref_.valid())) {
+                close_area_panel();
+            }
+            EntryRow* search_row = lookup_row(asset_search_row_ref_);
+            if ((search_row && search_row == r.get()) || (!search_row && asset_search_row_ref_.valid())) {
+                close_asset_search();
+            }
         }
     }
     // Make content available for embedding and floating modes
@@ -582,9 +588,11 @@ void SpawnGroupList::update(const Input& input, int screen_w, int screen_h) {
         area_panel_->set_screen_dimensions(screen_w_, screen_h_);
         area_panel_->set_anchor(anchor_);
         SDL_Rect parent = rect();
-        if (area_panel_row_) {
-            const SDL_Rect& body = area_panel_row_->body_rect;
+        if (auto* row = lookup_row(area_panel_row_ref_)) {
+            const SDL_Rect& body = row->body_rect;
             if (body.w > 0 && body.h > 0) parent = body;
+        } else if (area_panel_row_ref_.valid()) {
+            close_area_panel();
         }
         area_panel_->set_parent_rect(parent);
     }
@@ -595,11 +603,11 @@ void SpawnGroupList::update(const Input& input, int screen_w, int screen_h) {
     }
     if (area_panel_) {
         area_panel_->update(input);
-        if (!area_panel_->visible()) area_panel_row_ = nullptr;
+        if (!area_panel_->visible()) clear_row_ref(area_panel_row_ref_);
     }
     if (asset_search_) {
         asset_search_->update(input);
-        if (!asset_search_->visible()) asset_search_row_ = nullptr;
+        if (!asset_search_->visible()) clear_row_ref(asset_search_row_ref_);
     }
     // Sync editable widgets back into JSON
     if (!bound_array_) return;
@@ -733,6 +741,40 @@ const SpawnGroupList::EntryRow* SpawnGroupList::find_row(const std::string& id) 
     return nullptr;
 }
 
+void SpawnGroupList::bind_row_ref(RowRef& ref, EntryRow& row) {
+    ref.id = row.id;
+    ref.index = row.index;
+}
+
+SpawnGroupList::EntryRow* SpawnGroupList::lookup_row(RowRef& ref) {
+    if (!ref.id.empty()) {
+        if (auto* row = find_row(ref.id)) {
+            ref.index = row->index;
+            return row;
+        }
+        return nullptr;
+    }
+    if (ref.index >= 0 && ref.index < static_cast<int>(rows_.size())) {
+        return rows_[ref.index].get();
+    }
+    return nullptr;
+}
+
+const SpawnGroupList::EntryRow* SpawnGroupList::lookup_row(const RowRef& ref) const {
+    if (!ref.id.empty()) {
+        return find_row(ref.id);
+    }
+    if (ref.index >= 0 && ref.index < static_cast<int>(rows_.size())) {
+        return rows_[ref.index].get();
+    }
+    return nullptr;
+}
+
+void SpawnGroupList::clear_row_ref(RowRef& ref) {
+    ref.id.clear();
+    ref.index = -1;
+}
+
 void SpawnGroupList::rebuild_layout() {
     request_layout();
     if (suppress_layout_callback_) {
@@ -764,7 +806,7 @@ void SpawnGroupList::open_asset_search(EntryRow& row, std::function<void(const s
     close_area_panel();
     ensure_asset_search();
     if (!asset_search_) return;
-    asset_search_row_ = &row;
+    bind_row_ref(asset_search_row_ref_, row);
     SDL_Rect parent = rect();
     int search_width = 280;
     int spacing = DMSpacing::item_gap();
@@ -774,10 +816,14 @@ void SpawnGroupList::open_asset_search(EntryRow& row, std::function<void(const s
     }
     int y = parent.y;
     asset_search_->set_position(x, y);
-    asset_search_->open([this, rr=&row, cb=std::move(callback)](const std::string& selection) {
+    asset_search_->open([this, cb=std::move(callback)](const std::string& selection) {
         if (selection.empty()) return;
         if (!selection.empty() && selection.front() == '#') return;
-        if (!rr->entry) return;
+        EntryRow* rr = lookup_row(asset_search_row_ref_);
+        if (!rr || !rr->entry) {
+            close_asset_search();
+            return;
+        }
         json& entry = *rr->entry;
         if (!entry.contains("candidates") || !entry["candidates"].is_array()) {
             entry["candidates"] = json::array();
@@ -793,7 +839,7 @@ void SpawnGroupList::open_asset_search(EntryRow& row, std::function<void(const s
 }
 
 void SpawnGroupList::close_asset_search() {
-    asset_search_row_ = nullptr;
+    clear_row_ref(asset_search_row_ref_);
     if (asset_search_) asset_search_->close();
 }
 
@@ -805,16 +851,22 @@ void SpawnGroupList::ensure_area_panel() {
         area_panel_->set_screen_dimensions(screen_w_, screen_h_);
         area_panel_->set_anchor(anchor_);
         SDL_Rect parent = rect();
-        if (area_panel_row_) {
-            const SDL_Rect& body = area_panel_row_->body_rect;
+        if (auto* row = lookup_row(area_panel_row_ref_)) {
+            const SDL_Rect& body = row->body_rect;
             if (body.w > 0 && body.h > 0) parent = body;
+        } else if (area_panel_row_ref_.valid()) {
+            close_area_panel();
         }
         area_panel_->set_parent_rect(parent);
     }
 }
 
 void SpawnGroupList::open_area_panel(EntryRow& row) {
-    if (area_panel_row_ && area_panel_row_ != &row) {
+    if (EntryRow* current = lookup_row(area_panel_row_ref_)) {
+        if (current != &row) {
+            close_area_panel();
+        }
+    } else if (area_panel_row_ref_.valid()) {
         close_area_panel();
     }
     close_asset_search();
@@ -824,22 +876,26 @@ void SpawnGroupList::open_area_panel(EntryRow& row) {
     if (row.area_names_provider) {
         names = row.area_names_provider();
     }
-    area_panel_row_ = &row;
+    bind_row_ref(area_panel_row_ref_, row);
     SDL_Rect parent = rect();
     if (row.body_rect.w > 0 && row.body_rect.h > 0) parent = row.body_rect;
     area_panel_->set_parent_rect(parent);
-    area_panel_->open(names, [this, rr=&row](const std::string& selected) {
-        if (!rr->entry) return;
+    area_panel_->open(names, [this](const std::string& selected) {
+        EntryRow* rr = lookup_row(area_panel_row_ref_);
+        if (!rr || !rr->entry) {
+            close_area_panel();
+            return;
+        }
         (*rr->entry)["link"] = selected;
         if (on_change_) on_change_();
         rebuild_layout();
         if (area_panel_) area_panel_->close();
-        area_panel_row_ = nullptr;
+        clear_row_ref(area_panel_row_ref_);
     });
 }
 
 void SpawnGroupList::close_area_panel() {
-    area_panel_row_ = nullptr;
+    clear_row_ref(area_panel_row_ref_);
     if (area_panel_) area_panel_->close();
 }
 

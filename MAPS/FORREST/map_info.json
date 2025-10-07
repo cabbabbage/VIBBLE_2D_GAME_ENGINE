@@ -595,23 +595,6 @@
           "position": "Exact",
           "priority": 2,
           "spawn_id": "spn-af3a3a5858e6"
-        },
-        {
-          "candidates": [
-            {
-              "chance": 0,
-              "name": "null"
-            }
-          ],
-          "chance_denominator": 100,
-          "check_overlap": false,
-          "display_name": "New Spawn",
-          "enforce_spacing": false,
-          "max_number": 1,
-          "min_number": 1,
-          "position": "Exact",
-          "priority": 3,
-          "spawn_id": "spn-83f33027fb31"
         }
       ],
       "width_max": 3612,

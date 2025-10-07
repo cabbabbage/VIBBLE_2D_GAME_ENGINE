@@ -98,8 +98,19 @@ private:
     struct CandidateRow;
     struct EntryRow;
 
+    struct RowRef {
+        std::string id;
+        int index = -1;
+        bool valid() const { return !id.empty() || index >= 0; }
+    };
+
     EntryRow* find_row(const std::string& id);
     const EntryRow* find_row(const std::string& id) const;
+
+    void bind_row_ref(RowRef& ref, EntryRow& row);
+    EntryRow* lookup_row(RowRef& ref);
+    const EntryRow* lookup_row(const RowRef& ref) const;
+    void clear_row_ref(RowRef& ref);
 
     void rebuild_layout();
     void request_layout();
@@ -132,6 +143,6 @@ private:
     std::unique_ptr<DMButton> add_group_btn_;
     std::unique_ptr<ButtonWidget> add_group_btn_w_;
     SDL_Point anchor_{0,0};
-    EntryRow* asset_search_row_ = nullptr;
-    EntryRow* area_panel_row_ = nullptr;
+    RowRef asset_search_row_ref_{};
+    RowRef area_panel_row_ref_{};
 };
