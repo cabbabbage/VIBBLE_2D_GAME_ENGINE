@@ -429,6 +429,32 @@ bool AreaOverlayEditor::compute_overlay_transform(camera& cam, OverlayTransform&
     return true;
 }
 
+SDL_Point AreaOverlayEditor::resolve_anchor_world() const {
+    if (asset_) {
+        return SDL_Point{ asset_->pos.x, asset_->pos.y };
+    }
+    if (room_) {
+        if (should_use_room_center_anchor(room_area_type_, area_name_)) {
+            if (room_->room_area) {
+                return room_->room_area->get_center();
+            }
+            return SDL_Point{ room_->map_origin.first, room_->map_origin.second };
+        }
+        if (Area* existing = room_->find_area(area_name_)) {
+            const auto& pts = existing->get_points();
+            if (!pts.empty()) {
+                SDL_Point anchor = pts.front();
+                for (const auto& p : pts) {
+                    anchor.x = std::min(anchor.x, p.x);
+                    anchor.y = std::min(anchor.y, p.y);
+                }
+                return anchor;
+            }
+        }
+    }
+    return anchor_world_;
+}
+
 void AreaOverlayEditor::ensure_mask_contains(int lx, int ly, int radius) {
     if (!mask_) return;
     int sx = lx - mask_origin_x_;
@@ -851,6 +877,13 @@ void AreaOverlayEditor::position_toolbox_near_anchor(int screen_w, int screen_h)
 void AreaOverlayEditor::update(const Input& input, int screen_w, int screen_h) {
     if (!active_ || !assets_) return;
 
+    if (has_anchor_) {
+        SDL_Point resolved = resolve_anchor_world();
+        if (resolved.x != anchor_world_.x || resolved.y != anchor_world_.y) {
+            anchor_world_ = resolved;
+        }
+    }
+
     ensure_toolbox();
     if (!toolbox_autoplace_done_) {
         position_toolbox_near_anchor(screen_w, screen_h);
@@ -890,6 +923,8 @@ bool AreaOverlayEditor::handle_event(const SDL_Event& e) {
     if (mode_ == Mode::Geometry && e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
         if (!assets_ || !mask_ || !has_anchor_) return false;
 
+        anchor_world_ = resolve_anchor_world();
+
         camera& cam = assets_->getView();
         OverlayTransform tx{};
         if (!compute_overlay_transform(cam, tx)) return false;
@@ -902,9 +937,6 @@ bool AreaOverlayEditor::handle_event(const SDL_Event& e) {
 
         float local_fx = (static_cast<float>(mx) - static_cast<float>(tx.dst.x)) / safe_scale_x;
         float local_fy = (static_cast<float>(my) - static_cast<float>(tx.dst.y)) / safe_scale_y;
-        if (flipped_) {
-            local_fx = static_cast<float>(mask_->w) - local_fx;
-        }
 
         int sx = static_cast<int>(std::lround(local_fx));
         int sy = static_cast<int>(std::lround(local_fy));
@@ -917,9 +949,7 @@ bool AreaOverlayEditor::handle_event(const SDL_Event& e) {
         for (int i = 0; i < static_cast<int>(geometry_points_.size()); ++i) {
             const float local_px = static_cast<float>(geometry_points_[i].x - mask_origin_x_);
             const float local_py = static_cast<float>(geometry_points_[i].y - mask_origin_y_);
-            const float screen_px = flipped_
-                ? (static_cast<float>(tx.dst.x) + (static_cast<float>(mask_->w) - local_px) * tx.scale_x)
-                : (static_cast<float>(tx.dst.x) + local_px * tx.scale_x);
+            const float screen_px = static_cast<float>(tx.dst.x) + local_px * tx.scale_x;
             const float screen_py = static_cast<float>(tx.dst.y) + local_py * tx.scale_y;
             const int dxp = static_cast<int>(std::lround(screen_px)) - mx;
             const int dyp = static_cast<int>(std::lround(screen_py)) - my;
@@ -990,20 +1020,15 @@ void AreaOverlayEditor::render(SDL_Renderer* r) {
                 const float scale_y = tx.scale_y;
                 const float dst_x = static_cast<float>(dst.x);
                 const float dst_y = static_cast<float>(dst.y);
-                const float mask_w_f = static_cast<float>(mask_->w);
 
                 for (size_t i = 1; i < geometry_points_.size(); ++i) {
                     const float local_px0 = static_cast<float>(geometry_points_[i-1].x - mask_origin_x_);
                     const float local_py0 = static_cast<float>(geometry_points_[i-1].y - mask_origin_y_);
                     const float local_px1 = static_cast<float>(geometry_points_[i].x - mask_origin_x_);
                     const float local_py1 = static_cast<float>(geometry_points_[i].y - mask_origin_y_);
-                    const float sx0 = flipped_
-                        ? (dst_x + (mask_w_f - local_px0) * scale_x)
-                        : (dst_x + local_px0 * scale_x);
+                    const float sx0 = dst_x + local_px0 * scale_x;
                     const float sy0 = dst_y + local_py0 * scale_y;
-                    const float sx1 = flipped_
-                        ? (dst_x + (mask_w_f - local_px1) * scale_x)
-                        : (dst_x + local_px1 * scale_x);
+                    const float sx1 = dst_x + local_px1 * scale_x;
                     const float sy1 = dst_y + local_py1 * scale_y;
                     SDL_RenderDrawLine(r,
                         static_cast<int>(std::lround(sx0)), static_cast<int>(std::lround(sy0)),
@@ -1012,9 +1037,7 @@ void AreaOverlayEditor::render(SDL_Renderer* r) {
                 for (size_t i = 0; i < geometry_points_.size(); ++i) {
                     const float local_px = static_cast<float>(geometry_points_[i].x - mask_origin_x_);
                     const float local_py = static_cast<float>(geometry_points_[i].y - mask_origin_y_);
-                    const float sx = flipped_
-                        ? (dst_x + (mask_w_f - local_px) * scale_x)
-                        : (dst_x + local_px * scale_x);
+                    const float sx = dst_x + local_px * scale_x;
                     const float sy = dst_y + local_py * scale_y;
                     const int cx = static_cast<int>(std::lround(sx));
                     const int cy = static_cast<int>(std::lround(sy));

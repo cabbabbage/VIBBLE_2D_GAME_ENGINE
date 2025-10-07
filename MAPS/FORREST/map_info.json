@@ -749,6 +749,52 @@
             }
           ],
           "type": "trigger"
+        },
+        {
+          "anchor": {
+            "x": 7728,
+            "y": 7728
+          },
+          "name": "trigger_area_3",
+          "origional_height": 3612,
+          "origional_width": 3612,
+          "points": [
+            {
+              "x": -5508,
+              "y": -4426
+            },
+            {
+              "x": -5741,
+              "y": -4320
+            },
+            {
+              "x": -5655,
+              "y": -4052
+            },
+            {
+              "x": -5285,
+              "y": -4149
+            }
+          ],
+          "relative_points": [
+            {
+              "dx": -5508,
+              "dy": -4426
+            },
+            {
+              "dx": -5741,
+              "dy": -4320
+            },
+            {
+              "dx": -5655,
+              "dy": -4052
+            },
+            {
+              "dx": -5285,
+              "dy": -4149
+            }
+          ],
+          "type": "trigger"
         }
       ],
       "curvyness": 1,
@@ -832,6 +878,29 @@
           "position": "Exact",
           "priority": 2,
           "spawn_id": "spn-af3a3a5858e6"
+        },
+        {
+          "candidates": [
+            {
+              "chance": 0,
+              "name": "null"
+            },
+            {
+              "chance": 100,
+              "name": "Barrel"
+            }
+          ],
+          "check_overlap": false,
+          "display_name": "Barrel",
+          "dx": -153,
+          "dy": 408,
+          "enforce_spacing": false,
+          "max_number": 1,
+          "min_number": 1,
+          "origional_height": 3612,
+          "origional_width": 3612,
+          "position": "Exact",
+          "spawn_id": "spn-6a71cc852363"
         }
       ],
       "width_max": 3612,

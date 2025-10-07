@@ -130,6 +130,7 @@ DevControls::RoomAreaCache::ensure_from_json(const nlohmann::json* root) {
                         entry.name = name;
                         entry.type = !type.empty() ? type : name;
                         entry.points = std::move(poly);
+                        entry.anchor = SDL_Point{ ax, ay };
                         cached_.push_back(std::move(entry));
                     }
                 }
@@ -1033,6 +1034,14 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
 
             const camera& cam = assets_->getView();
 
+            auto draw_anchor = [&](SDL_Point world, SDL_Color color) {
+                SDL_Point screen = cam.map_to_screen(world);
+                const int arm = 5;
+                SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b, color.a);
+                SDL_RenderDrawLine(renderer, screen.x - arm, screen.y, screen.x + arm, screen.y);
+                SDL_RenderDrawLine(renderer, screen.x, screen.y - arm, screen.x, screen.y + arm);
+            };
+
             // Draw room areas with hover/selection highlight
             {
                 const auto& room_areas = room_area_polygons();
@@ -1060,6 +1069,9 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
                             std::vector<SDL_Point> pts = spts; pts.push_back(spts.front());
                             SDL_SetRenderDrawColor(renderer, outline.r, outline.g, outline.b, outline.a);
                             SDL_RenderDrawLines(renderer, pts.data(), (int)pts.size());
+                            if (!room_areas[i].points.empty()) {
+                                draw_anchor(room_areas[i].anchor, SDL_Color{outline.r, outline.g, outline.b, 220});
+                            }
                         }
                     }
                 }
@@ -1154,6 +1166,7 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
                                 std::vector<SDL_Point> pts = spts; pts.push_back(spts.front());
                                 SDL_SetRenderDrawColor(renderer, outline.r, outline.g, outline.b, outline.a);
                                 SDL_RenderDrawLines(renderer, pts.data(), static_cast<int>(pts.size()));
+                                draw_anchor(SDL_Point{a->pos.x, a->pos.y}, SDL_Color{outline.r, outline.g, outline.b, 220});
                             }
                         }
                     }

@@ -55,6 +55,7 @@ public:
             std::string name;
             std::string type;
             std::vector<SDL_Point> points;
+            SDL_Point anchor{0, 0};
         };
         using PolygonList  = std::vector<Polygon>;
         using Listener     = std::function<void(const PolygonList&, std::size_t)>;

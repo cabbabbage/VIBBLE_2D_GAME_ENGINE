@@ -26,19 +26,30 @@ int positive_from_keys(const nlohmann::json& src, std::initializer_list<const ch
         return 0;
 }
 
+bool matches_spawn_trigger(const std::string& value) {
+        if (value.empty()) return false;
+        std::string lowered = value;
+        std::transform(lowered.begin(), lowered.end(), lowered.begin(), [](unsigned char c) {
+                return static_cast<char>(std::tolower(c));
+        });
+        return lowered == "trigger" || lowered == "spawning" || lowered == "spawn" ||
+               lowered.find("trigger") != std::string::npos ||
+               lowered.find("spawn") != std::string::npos;
+}
+
 bool should_use_room_center_anchor(const std::string& type, const std::string& name) {
-        auto matches = [](const std::string& value) {
-                if (value.empty()) return false;
-                std::string lowered = value;
-                std::transform(lowered.begin(), lowered.end(), lowered.begin(), [](unsigned char c) {
-                        return static_cast<char>(std::tolower(c));
-                });
-                return lowered == "trigger" || lowered == "spawning" || lowered == "spawn" ||
-                       lowered.find("trigger") != std::string::npos ||
-                       lowered.find("spawn") != std::string::npos;
-        };
-        if (matches(type)) return true;
-        return matches(name);
+        if (matches_spawn_trigger(type)) return true;
+        return matches_spawn_trigger(name);
+}
+
+bool is_allowed_room_area_type(const std::string& type, const std::string& name) {
+        if (matches_spawn_trigger(type)) {
+                return true;
+        }
+        if (type.empty() && matches_spawn_trigger(name)) {
+                return true;
+        }
+        return type.empty() && name.empty();
 }
 
 void update_anchor_and_points_json(nlohmann::json& entry,
@@ -274,6 +285,12 @@ void Room::load_named_areas_from_json() {
                         const std::string name = item.value("name", std::string{});
                         if (name.empty()) continue;
                         const std::string type = item.value("type", std::string{});
+
+                        if (!is_allowed_room_area_type(type, name)) {
+                                std::cerr << "[Room] Ignoring area '" << name << "' with unsupported type '"
+                                          << type << "' (rooms support spawn/trigger areas only).\n";
+                                continue;
+                        }
 
                         int orig_w = item.value("origional_width", item.value("original_width", curr_w));
                         int orig_h = item.value("origional_height", item.value("original_height", curr_h));
