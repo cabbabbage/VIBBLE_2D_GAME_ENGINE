@@ -4,6 +4,7 @@
 #include <cctype>
 #include <cmath>
 #include <cstring>
+#include <unordered_set>
 
 namespace {
 constexpr int kBoxTopPadding = 5;
@@ -26,6 +27,24 @@ int range_value_width(int total_width) {
     candidate = std::min(candidate, std::max(64, total_width / 2));
     return candidate;
 }
+
+std::unordered_set<const void*> g_slider_scroll_captures;
+
+void set_slider_scroll_capture(const void* owner, bool capture) {
+    if (capture) {
+        g_slider_scroll_captures.insert(owner);
+    } else {
+        g_slider_scroll_captures.erase(owner);
+    }
+}
+
+bool slider_scroll_captured() {
+    return !g_slider_scroll_captures.empty();
+}
+}
+
+bool DMWidgetsSliderScrollCaptured() {
+    return slider_scroll_captured();
 }
 
 DMButton::DMButton(const std::string& text, const DMButtonStyle* style, int w, int h)
@@ -394,6 +413,10 @@ DMSlider::DMSlider(const std::string& label, int min_val, int max_val, int value
     set_value(value_);
 }
 
+DMSlider::~DMSlider() {
+    set_slider_scroll_capture(this, false);
+}
+
 void DMSlider::set_rect(const SDL_Rect& r) {
     rect_ = r;
     label_height_ = compute_label_height(rect_.w);
@@ -494,18 +517,16 @@ bool DMSlider::handle_event(const SDL_Event& e) {
         if (!edit_box_->is_editing()) edit_box_.reset();
     }
     auto update_hover = [this](SDL_Point p) {
-        if (SDL_PointInRect(&p, &rect_)) {
-            knob_hovered_ = true;
+        bool was_hovered = hovered_;
+        hovered_ = SDL_PointInRect(&p, &rect_);
+        if (hovered_ != was_hovered) {
+            set_slider_scroll_capture(this, hovered_);
+        }
+        if (!hovered_) {
+            knob_hovered_ = false;
             return;
         }
-        SDL_Rect hover_rect = content_rect_;
-        hover_rect.y -= 8;
-        hover_rect.h += 16;
-        if (hover_rect.w <= 0 || hover_rect.h <= 0) {
-            knob_hovered_ = false;
-        } else {
-            knob_hovered_ = SDL_PointInRect(&p, &hover_rect);
-        }
+        knob_hovered_ = true;
     };
 
     if (e.type == SDL_MOUSEMOTION) {
@@ -528,7 +549,7 @@ bool DMSlider::handle_event(const SDL_Event& e) {
         }
         SDL_GetMouseState(&mouse.x, &mouse.y);
         update_hover(mouse);
-        if (!knob_hovered_) {
+        if (!hovered_) {
             return false;
         }
         int delta = e.wheel.y;
@@ -571,6 +592,10 @@ void DMSlider::render(SDL_Renderer* r) const {
     const DMSliderStyle& st = DMStyles::Slider();
     if (!label_.empty() && label_height_ > 0) {
         draw_text(r, label_, label_rect_.x, label_rect_.y);
+    }
+    if (hovered_) {
+        SDL_SetRenderDrawColor(r, st.knob_border_hover.r, st.knob_border_hover.g, st.knob_border_hover.b, st.knob_border_hover.a);
+        SDL_RenderDrawRect(r, &rect_);
     }
     SDL_Rect tr = track_rect();
     SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
@@ -625,6 +650,10 @@ DMRangeSlider::DMRangeSlider(int min_val, int max_val, int min_value, int max_va
 
     set_max_value(max_value);
     set_min_value(min_value);
+}
+
+DMRangeSlider::~DMRangeSlider() {
+    set_slider_scroll_capture(this, false);
 }
 
 void DMRangeSlider::set_rect(const SDL_Rect& r) {
@@ -719,7 +748,12 @@ bool DMRangeSlider::handle_event(const SDL_Event& e) {
         if (!edit_max_->is_editing()) edit_max_.reset();
     }
     auto update_hover = [this](SDL_Point p) {
-        if (!SDL_PointInRect(&p, &rect_)) {
+        bool was_hovered = hovered_;
+        hovered_ = SDL_PointInRect(&p, &rect_);
+        if (hovered_ != was_hovered) {
+            set_slider_scroll_capture(this, hovered_);
+        }
+        if (!hovered_) {
             min_hovered_ = false;
             max_hovered_ = false;
             return;
@@ -777,7 +811,7 @@ bool DMRangeSlider::handle_event(const SDL_Event& e) {
         }
         SDL_GetMouseState(&mouse.x, &mouse.y);
         update_hover(mouse);
-        if (!min_hovered_ && !max_hovered_) {
+        if (!hovered_) {
             return false;
         }
         int delta = e.wheel.y;
@@ -823,6 +857,10 @@ void DMRangeSlider::draw_text(SDL_Renderer* r, const std::string& s, int x, int 
 
 void DMRangeSlider::render(SDL_Renderer* r) const {
     const DMSliderStyle& st = DMStyles::Slider();
+    if (hovered_) {
+        SDL_SetRenderDrawColor(r, st.knob_border_hover.r, st.knob_border_hover.g, st.knob_border_hover.b, st.knob_border_hover.a);
+        SDL_RenderDrawRect(r, &rect_);
+    }
     SDL_Rect tr = track_rect();
     SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
     SDL_SetRenderDrawColor(r, st.track_bg.r, st.track_bg.g, st.track_bg.b, st.track_bg.a);

@@ -1467,7 +1467,7 @@
     "rnd_spawn_max": 400,
     "rnd_spawn_min": 300,
     "size_settings": {
-        "scale_percentage": 12.0
+        "scale_percentage": 9.0
     },
     "spawn_groups": [
         {
@@ -1495,5 +1495,5 @@
     "start": "",
     "tags": [],
     "update_radius": 1000,
-    "z_threshold": -13
+    "z_threshold": -10
 }

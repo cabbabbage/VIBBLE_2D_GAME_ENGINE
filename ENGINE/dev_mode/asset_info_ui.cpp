@@ -17,6 +17,7 @@
 #include "asset/asset_info.hpp"
 #include "utils/input.hpp"
 #include "utils/area.hpp"
+#include "widgets.hpp"
 
 #include "DockableCollapsible.hpp"
 #include "dm_styles.hpp"
@@ -398,6 +399,7 @@ bool AssetInfoUI::handle_event(const SDL_Event& e) {
     const bool pointer_event =
         (e.type == SDL_MOUSEBUTTONDOWN || e.type == SDL_MOUSEBUTTONUP || e.type == SDL_MOUSEMOTION);
     const bool wheel_event = (e.type == SDL_MOUSEWHEEL);
+    const bool slider_capture = wheel_event && DMWidgetsSliderScrollCaptured();
     SDL_Point pointer{0, 0};
     if (pointer_event) {
         pointer.x = (e.type == SDL_MOUSEMOTION) ? e.motion.x : e.button.x;
@@ -444,6 +446,10 @@ bool AssetInfoUI::handle_event(const SDL_Event& e) {
     // extend outside the main asset info panel.
     for (auto& s : sections_) {
         if (s->handle_event(e)) return true;
+    }
+
+    if (slider_capture) {
+        return true;
     }
 
     bool pointer_inside = false;

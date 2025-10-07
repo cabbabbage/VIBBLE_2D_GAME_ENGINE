@@ -9,6 +9,8 @@
 
 #include "dm_styles.hpp"
 
+bool DMWidgetsSliderScrollCaptured();
+
 class DMButton {
 public:
     DMButton(const std::string& text, const DMButtonStyle* style, int w, int h);
@@ -88,6 +90,7 @@ class DMTextBox;
 class DMSlider {
 public:
     DMSlider(const std::string& label, int min_val, int max_val, int value);
+    ~DMSlider();
     void set_rect(const SDL_Rect& r);
     const SDL_Rect& rect() const { return rect_; }
     void set_value(int v);
@@ -115,12 +118,14 @@ private:
     int max_ = 100;
     int value_ = 0;
     bool knob_hovered_ = false;
+    bool hovered_ = false;
     std::unique_ptr<DMTextBox> edit_box_;
 };
 
 class DMRangeSlider {
 public:
     DMRangeSlider(int min_val, int max_val, int min_value, int max_value);
+    ~DMRangeSlider();
     void set_rect(const SDL_Rect& r);
     const SDL_Rect& rect() const { return rect_; }
     void set_min_value(int v);
@@ -147,6 +152,7 @@ private:
     int max_value_ = 100;
     bool min_hovered_ = false;
     bool max_hovered_ = false;
+    bool hovered_ = false;
     std::unique_ptr<DMTextBox> edit_min_;
     std::unique_ptr<DMTextBox> edit_max_;
 };
