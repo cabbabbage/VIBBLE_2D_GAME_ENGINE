@@ -65,6 +65,10 @@ struct SpawnGroupList::EntryRow {
     std::unique_ptr<DMButton> link_btn;
     std::unique_ptr<ButtonWidget> link_btn_w;
 
+    std::unique_ptr<Widget> outline_begin_marker;
+    std::unique_ptr<Widget> outline_end_marker;
+    SDL_Rect outline_rect{0,0,0,0};
+
     std::unique_ptr<Widget> body_begin_marker;
     std::unique_ptr<Widget> body_end_marker;
     SDL_Rect body_rect{0,0,0,0};
@@ -79,25 +83,25 @@ static bool method_uses_range(const std::string& m) {
     return !(m == "Exact" || m == "Center" || m == "Percent");
 }
 
-class RowBodyMarkerWidget : public Widget {
+class RowRectMarkerWidget : public Widget {
 public:
-    RowBodyMarkerWidget(SpawnGroupList::EntryRow* row, bool begin)
-        : row_(row), begin_(begin) {}
+    RowRectMarkerWidget(SDL_Rect* target, bool begin)
+        : target_rect_(target), begin_(begin) {}
 
     void set_rect(const SDL_Rect& r) override {
         rect_ = r;
-        if (!row_) return;
+        if (!target_rect_) return;
         if (begin_) {
-            row_->body_rect = SDL_Rect{r.x, r.y, r.w, 0};
+            *target_rect_ = SDL_Rect{r.x, r.y, r.w, 0};
         } else {
-            if (row_->body_rect.w <= 0) {
-                row_->body_rect.w = r.w;
+            if (target_rect_->w <= 0) {
+                target_rect_->w = r.w;
             }
-            int bottom = r.y;
-            if (bottom < row_->body_rect.y) {
-                bottom = row_->body_rect.y;
+            int bottom = r.y + r.h;
+            if (bottom < target_rect_->y) {
+                bottom = target_rect_->y;
             }
-            row_->body_rect.h = bottom - row_->body_rect.y;
+            target_rect_->h = bottom - target_rect_->y;
         }
     }
 
@@ -108,7 +112,7 @@ public:
     bool wants_full_row() const override { return true; }
 
 private:
-    SpawnGroupList::EntryRow* row_ = nullptr;
+    SDL_Rect* target_rect_ = nullptr;
     bool begin_ = false;
     SDL_Rect rect_{0,0,0,0};
 };
@@ -376,6 +380,13 @@ void SpawnGroupList::append_rows(Rows& rows) {
     out.push_back({ add_group_btn_w_.get() });
     for (auto& r : rows_) {
         // Header
+        r->outline_rect = SDL_Rect{0,0,0,0};
+        r->body_rect = SDL_Rect{0,0,0,0};
+        if (!r->outline_begin_marker)
+            r->outline_begin_marker = std::make_unique<RowRectMarkerWidget>(&r->outline_rect, true);
+        if (!r->outline_end_marker)
+            r->outline_end_marker = std::make_unique<RowRectMarkerWidget>(&r->outline_rect, false);
+        out.push_back({ r->outline_begin_marker.get() });
         if (!r->toggle_btn) {
             const std::string label = entry_display_name(r->read_only ? r->ro_entry : *r->entry);
             r->toggle_btn = std::make_unique<DMButton>(label, &DMStyles::ListButton(), 180, DMButton::height());
@@ -400,9 +411,9 @@ void SpawnGroupList::append_rows(Rows& rows) {
         if (r->expanded) {
             if (!r->read_only) {
                 if (!r->body_begin_marker)
-                    r->body_begin_marker = std::make_unique<RowBodyMarkerWidget>(r.get(), true);
+                    r->body_begin_marker = std::make_unique<RowRectMarkerWidget>(&r->body_rect, true);
                 if (!r->body_end_marker)
-                    r->body_end_marker = std::make_unique<RowBodyMarkerWidget>(r.get(), false);
+                    r->body_end_marker = std::make_unique<RowRectMarkerWidget>(&r->body_rect, false);
                 if (r->body_begin_marker)
                     out.push_back({ r->body_begin_marker.get() });
 
@@ -528,6 +539,7 @@ void SpawnGroupList::append_rows(Rows& rows) {
                 close_asset_search();
             }
         }
+        out.push_back({ r->outline_end_marker.get() });
     }
     // Make content available for embedding and floating modes
     layout_dirty_ = false;
@@ -690,8 +702,19 @@ void SpawnGroupList::render_content(SDL_Renderer* r) const {
     inner.a = 40;
     accent.a = 200;
     for (const auto& row : rows_) {
-        if (!row || !row->expanded) continue;
-        SDL_Rect rect = row->body_rect;
+        if (!row) continue;
+        SDL_Rect rect = row->outline_rect;
+        if (row->expanded && row->body_rect.w > 0 && row->body_rect.h > 0) {
+            if (rect.w <= 0 || rect.h <= 0) {
+                rect = row->body_rect;
+            } else {
+                int left = std::min(rect.x, row->body_rect.x);
+                int top = std::min(rect.y, row->body_rect.y);
+                int right = std::max(rect.x + rect.w, row->body_rect.x + row->body_rect.w);
+                int bottom = std::max(rect.y + rect.h, row->body_rect.y + row->body_rect.h);
+                rect = SDL_Rect{left, top, right - left, bottom - top};
+            }
+        }
         if (rect.w <= 0 || rect.h <= 0) continue;
         SDL_Rect outline = rect;
         outline.x -= 4;

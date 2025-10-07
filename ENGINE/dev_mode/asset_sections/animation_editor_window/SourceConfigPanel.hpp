@@ -103,6 +103,7 @@ class SourceConfigPanel {
 
     struct Button {
         SDL_Rect rect{0, 0, 0, 0};
+        std::string label;
     };
     std::array<Button, 4> buttons_{};
     int hover_button_ = -1;

@@ -2,6 +2,7 @@
 
 #include <SDL.h>
 #include <SDL_log.h>
+#include <SDL_ttf.h>
 
 #include <algorithm>
 #include <cctype>
@@ -23,6 +24,7 @@
 
 #include "AsyncTaskQueue.hpp"
 #include "CroppingService.hpp"
+#include "dm_styles.hpp"
 
 namespace animation_editor {
 
@@ -68,9 +70,44 @@ int safe_to_int(const nlohmann::json& value, int fallback) {
     return fallback;
 }
 
+void render_button_label(SDL_Renderer* renderer, const SDL_Rect& rect, const std::string& text) {
+    if (!renderer || text.empty()) {
+        return;
+    }
+
+    const DMLabelStyle& style = DMStyles::Label();
+    TTF_Font* font = style.open_font();
+    if (!font) {
+        return;
+    }
+
+    SDL_Surface* surface = TTF_RenderUTF8_Blended(font, text.c_str(), style.color);
+    if (!surface) {
+        TTF_CloseFont(font);
+        return;
+    }
+
+    SDL_Texture* texture = SDL_CreateTextureFromSurface(renderer, surface);
+    if (texture) {
+        int x = rect.x + std::max(0, (rect.w - surface->w) / 2);
+        int y = rect.y + std::max(0, (rect.h - surface->h) / 2);
+        SDL_Rect dst{x, y, surface->w, surface->h};
+        SDL_RenderCopy(renderer, texture, nullptr, &dst);
+        SDL_DestroyTexture(texture);
+    }
+
+    SDL_FreeSurface(surface);
+    TTF_CloseFont(font);
+}
+
 }  // namespace
 
-SourceConfigPanel::SourceConfigPanel() = default;
+SourceConfigPanel::SourceConfigPanel() {
+    buttons_[0].label = "Import From Folder";
+    buttons_[1].label = "Link From Animation";
+    buttons_[2].label = "Import From GIF";
+    buttons_[3].label = "Import PNG Sequence";
+}
 
 void SourceConfigPanel::set_document(std::shared_ptr<AnimationDocument> document) {
     document_ = std::move(document);
@@ -137,6 +174,8 @@ void SourceConfigPanel::render(SDL_Renderer* renderer) const {
 
         SDL_SetRenderDrawColor(renderer, 0x18, 0x1f, 0x20, 255);
         SDL_RenderDrawRect(renderer, &rect);
+
+        render_button_label(renderer, rect, button.label);
     }
 
     // Simple status indicator bar at bottom.

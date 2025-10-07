@@ -77,7 +77,9 @@ bool StridePlayer::tick(AnimationUpdate& up, Plan& plan,
 
     if (delta.x != 0 || delta.y != 0) {
         self->pos = to;
-        up.refresh_z_index();
+        if (!frame || frame->z_resort) {
+            up.refresh_z_index();
+        }
     }
 
     ++stride_frame_counter;

@@ -522,6 +522,13 @@ void Assets::update(const Input& input,
     if (player) {
         dx = player->pos.x - start_px;
         dy = player->pos.y - start_py;
+        if (dx != 0 || dy != 0) {
+            camera_.update_zoom(active_room, finder_, player);
+            update_active_assets(camera_.get_screen_center());
+            rebuild_active_assets_if_needed();
+            update_closest_assets(player, 3);
+            update_filtered_active_assets();
+        }
     }
     if (player) {
         player->distance_to_player_sq = 0.0f;

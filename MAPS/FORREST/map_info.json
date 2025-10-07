@@ -222,6 +222,34 @@
   "map_radius": 7728.5,
   "rooms_data": {
     "bar": {
+      "areas": [
+        {
+          "anchor": {
+            "x": 1284,
+            "y": 2926
+          },
+          "name": "trigger_area",
+          "points": [
+            {
+              "x": 0,
+              "y": 190
+            },
+            {
+              "x": 171,
+              "y": 418
+            },
+            {
+              "x": 344,
+              "y": 127
+            },
+            {
+              "x": 166,
+              "y": 0
+            }
+          ],
+          "type": "trigger"
+        }
+      ],
       "edge_smoothness": 101,
       "geometry": "Circle",
       "height_max": 2500,
@@ -604,6 +632,7 @@
   "trails_data": {
     "basic": {
       "curvyness": 4,
+      "edge_smoothness": 2,
       "geometry": "Square",
       "height_max": 1221,
       "height_min": 100,
@@ -611,7 +640,7 @@
       "is_boss": false,
       "is_spawn": false,
       "max_height": 1221,
-      "max_width": 1208,
+      "max_width": 796,
       "min_height": 100,
       "min_width": 470,
       "name": "basic",
@@ -663,54 +692,9 @@
           "priority": 1,
           "spawn_id": "spn-903f62327b86",
           "tag": false
-        },
-        {
-          "candidates": [
-            {
-              "chance": 82,
-              "name": "null"
-            },
-            {
-              "chance": 15,
-              "name": "light"
-            },
-            {
-              "chance": 3,
-              "name": "flower_1"
-            }
-          ],
-          "check_overlap": false,
-          "display_name": "batch_basic",
-          "enforce_spacing": false,
-          "grid_spacing_max": 100,
-          "grid_spacing_min": 100,
-          "jitter_max": 0,
-          "jitter_min": 0,
-          "max_number": 100,
-          "min_number": 50,
-          "position": "Random",
-          "priority": 2,
-          "spawn_id": "spn-5db9c322ef41"
-        },
-        {
-          "candidates": [
-            {
-              "chance": 0,
-              "name": "null"
-            }
-          ],
-          "chance_denominator": 100,
-          "check_overlap": false,
-          "display_name": "New Spawn",
-          "enforce_spacing": false,
-          "max_number": 1,
-          "min_number": 1,
-          "position": "Exact",
-          "priority": 3,
-          "spawn_id": "spn-481274332a1b"
         }
       ],
-      "width_max": 1208,
+      "width_max": 796,
       "width_min": 470
     },
     "brick": {

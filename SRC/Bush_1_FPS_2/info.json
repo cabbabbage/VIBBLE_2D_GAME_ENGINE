@@ -372,12 +372,12 @@
     "rnd_spawn_max": 400,
     "rnd_spawn_min": 300,
     "size_settings": {
-        "scale_percentage": 11.0
+        "scale_percentage": 14.0
     },
     "start": "",
     "tags": [
         "nature",
         "passable"
     ],
-    "z_threshold": 30
+    "z_threshold": 4
 }
