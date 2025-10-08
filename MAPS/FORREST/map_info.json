@@ -500,24 +500,32 @@
           "name": "attack_trigger",
           "points": [
             {
-              "x": -608,
-              "y": -866
+              "x": -363,
+              "y": -1011
             },
             {
-              "x": -908,
-              "y": -134
+              "x": -786,
+              "y": -453
             },
             {
-              "x": -118,
-              "y": 375
+              "x": -610,
+              "y": 119
             },
             {
-              "x": 671,
-              "y": -38
+              "x": 101,
+              "y": 367
             },
             {
-              "x": 500,
-              "y": -887
+              "x": 703,
+              "y": -115
+            },
+            {
+              "x": 669,
+              "y": -628
+            },
+            {
+              "x": 254,
+              "y": -964
             }
           ],
           "type": "trigger"
@@ -552,8 +560,8 @@
           "chance_denominator": 100,
           "check_overlap": false,
           "display_name": "lab_bombs",
-          "dx": 0,
-          "dy": -194,
+          "dx": 39,
+          "dy": -340,
           "enforce_spacing": false,
           "max_number": 5,
           "min_number": 5,
@@ -561,8 +569,31 @@
           "origional_width": 2080,
           "position": "Perimeter",
           "priority": 0,
-          "radius": 406,
+          "radius": 584,
           "spawn_id": "spn-20997858f211"
+        },
+        {
+          "candidates": [
+            {
+              "chance": 0,
+              "name": "null"
+            },
+            {
+              "chance": 100,
+              "name": "candle"
+            }
+          ],
+          "check_overlap": false,
+          "display_name": "candle",
+          "dx": -13,
+          "dy": -162,
+          "enforce_spacing": false,
+          "max_number": 1,
+          "min_number": 1,
+          "origional_height": 2080,
+          "origional_width": 2080,
+          "position": "Exact",
+          "spawn_id": "spn-b09ff44ad485"
         }
       ],
       "width_max": 2080,

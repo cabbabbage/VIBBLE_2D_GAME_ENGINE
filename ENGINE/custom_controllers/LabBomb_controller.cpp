@@ -206,11 +206,11 @@ void LabBombController::enter_idle(int rest_ratio) {
     if (!self_ || !self_->anim_) {
         return;
     }
-    idle_ratio_ = std::clamp(rest_ratio, 0, 100);
-    current_target_ = nullptr;
-    if (state_ == State::Detonated) {
+    if (state_ == State::Detonated || state_ == State::Pursuing) {
         return;
     }
+    idle_ratio_ = std::clamp(rest_ratio, 0, 100);
+    current_target_ = nullptr;
     state_ = State::Idle;
     const auto path = controller_paths::idle_path(self_, idle_ratio_);
     self_->anim_->move(path, controller_utils::controller_visit_threshold(self_));
@@ -221,7 +221,9 @@ void LabBombController::enter_pursue(Asset* target) {
         return;
     }
     if (!target || state_ == State::Detonated) {
-        enter_idle(idle_ratio_);
+        if (state_ != State::Pursuing) {
+            enter_idle(idle_ratio_);
+        }
         return;
     }
     state_ = State::Pursuing;
@@ -315,39 +317,52 @@ void LabBombController::update(const Input&) {
     if (spent_) {
         return;
     }
+    const bool pursuing = state_ == State::Pursuing;
     if (!assets_) {
-        enter_idle(5);
+        if (!pursuing) {
+            enter_idle(5);
+        }
         return;
     }
     if (!ensure_registration()) {
-        enter_idle(idle_ratio_);
+        if (!pursuing) {
+            enter_idle(idle_ratio_);
+        }
         return;
     }
     RoomState* state = find_room_state(self_->owning_room_name());
     if (!state) {
-        enter_idle(idle_ratio_);
+        if (!pursuing) {
+            enter_idle(idle_ratio_);
+        }
         return;
     }
     if (!is_in_owning_room()) {
-        enter_idle(idle_ratio_);
+        if (!pursuing) {
+            enter_idle(idle_ratio_);
+        }
         return;
     }
     Asset* player = assets_->player;
     if (!player || player == self_) {
-        enter_idle(35);
+        if (!pursuing) {
+            enter_idle(35);
+        }
         return;
     }
-    if (!state->is_triggered() && is_player_inside_trigger()) {
-        state->mark_trigger_entered();
-    }
-    if (!state->is_active(this)) {
-        enter_idle(idle_ratio_);
-        return;
-    }
-    if (state_ != State::Pursuing || current_target_ != player) {
+    if (!pursuing) {
+        if (!state->is_triggered() && is_player_inside_trigger()) {
+            state->mark_trigger_entered();
+        }
+        if (!state->is_active(this)) {
+            enter_idle(idle_ratio_);
+            return;
+        }
+        enter_pursue(player);
+    } else if (current_target_ != player) {
         enter_pursue(player);
     }
-    constexpr int activation_radius = 50;
+    constexpr int activation_radius = 5;
     const long long activation_radius_sq = static_cast<long long>(activation_radius) * activation_radius;
     const long long distance_sq = Range::distance_sq(self_, player);
 

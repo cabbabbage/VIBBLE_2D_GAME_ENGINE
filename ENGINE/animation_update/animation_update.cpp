@@ -213,6 +213,10 @@ bool AnimationUpdate::point_in_impassable(SDL_Point pt, const Asset* ignored) co
             return false;
         }
 
+        if (neighbor->info->type == asset_types::player) {
+            return false;
+        }
+
         Area area = neighbor->get_area("impassable");
         if (area.get_points().empty()) {
             area = neighbor->get_area("collision_area");
@@ -234,6 +238,10 @@ bool AnimationUpdate::path_blocked(SDL_Point from, SDL_Point to, const Asset* ig
 
     return visit_impassable_neighbors(*self_, [&](Asset* neighbor) {
         if (!neighbor || neighbor == self_ || neighbor == ignored || !neighbor->info) {
+            return false;
+        }
+
+        if (neighbor->info->type == asset_types::player) {
             return false;
         }
 
