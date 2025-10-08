@@ -458,17 +458,28 @@ void SpawnGroupList::CandidateList::ensure_common_widgets() {
     if (!add_btn_ && row_.entry) {
         add_btn_ = std::make_unique<DMButton>("Add Candidate", &DMStyles::CreateButton(), 160, DMButton::height());
         add_w_ = std::make_unique<ButtonWidget>(add_btn_.get(), [this]() {
-            // Ensure any inline search UI is closed before opening the global asset search.
-            close_search();
+            if (!row_.entry) {
+                return;
+            }
 
-            // Expand the row so the newly added candidate is immediately visible.
+            const bool should_open = !search_open_;
+
+            // Expand the row so the search UI and resulting candidate are visible.
             if (!row_.expanded) {
                 row_.expanded = true;
                 owner_.rebuild_layout();
             }
 
-            owner_.request_asset_search_open(row_);
+            if (should_open) {
+                owner_.close_asset_search();
+                open_search();
+            } else {
+                close_search();
+            }
         });
+    }
+    if (add_btn_) {
+        add_btn_->set_text(search_open_ ? "Close Search" : "Add Candidate");
     }
     if (!pie_widget_)
         pie_widget_ = std::make_unique<CandidatePieWidget>(*this);
@@ -1519,7 +1530,11 @@ void SpawnGroupList::append_rows(Rows& rows) {
             const std::string label = entry_display_name(r->read_only ? r->ro_entry : *r->entry);
             r->toggle_btn = std::make_unique<DMButton>(label, &DMStyles::ListButton(), 180, DMButton::height());
             r->toggle_w = std::make_unique<ButtonWidget>(r->toggle_btn.get(), [this, rr=r.get()](){
-                rr->expanded = !rr->expanded;
+                bool next_state = !rr->expanded;
+                rr->expanded = next_state;
+                if (!next_state && rr->candidate_list) {
+                    rr->candidate_list->close_search();
+                }
                 this->rebuild_layout();
             });
             r->dup_btn = std::make_unique<DMButton>("+", &DMStyles::ListButton(), 28, DMButton::height());

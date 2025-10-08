@@ -7,7 +7,6 @@
 #include <fstream>
 #include <cmath>
 #include <algorithm>
-#include <random>
 #include <vector>
 #include <iostream>
 #ifndef M_PI
@@ -71,18 +70,8 @@ SDL_Texture* GenerateLight::generate(SDL_Renderer* renderer,
         float fade_exponent = 0.6f + 3.4f * falloff_norm;
         float white_core_ratio  = 0.2f + falloff_ratio * 0.6f;
         float white_core_radius = static_cast<float>(radius) * white_core_ratio;
-	std::mt19937 rng(std::random_device{}());
-	std::uniform_real_distribution<float> angle_dist(0.0f, 2.0f * float(M_PI));
-	std::uniform_real_distribution<float> spread_dist(0.2f, 0.6f);
-	std::uniform_int_distribution<int>    ray_count_dist(4, 7);
-	const int ray_count = ray_count_dist(rng);
-	std::vector<std::pair<float, float>> rays;
-	rays.reserve(ray_count);
-	for (int i = 0; i < ray_count; ++i) {
-		rays.emplace_back(angle_dist(rng), spread_dist(rng));
-	}
-	auto put_pixel = [&](int x, int y, Uint8 r, Uint8 g, Uint8 b, Uint8 a) {
-		pixels[y * size + x] = SDL_MapRGBA(fmt, r, g, b, a);
+        auto put_pixel = [&](int x, int y, Uint8 r, Uint8 g, Uint8 b, Uint8 a) {
+                pixels[y * size + x] = SDL_MapRGBA(fmt, r, g, b, a);
 };
         float radius_f = static_cast<float>(radius);
         float radius_sq = radius_f * radius_f;
@@ -97,23 +86,9 @@ SDL_Texture* GenerateLight::generate(SDL_Renderer* renderer,
                                         continue;
                         }
                         float dist = std::sqrt(dist_sq);
-			float angle = std::atan2(dy, dx);
-			float ray_boost = 1.0f;
-			for (const auto& rs : rays) {
-					float ray_angle = rs.first;
-					float spread    = rs.second;
-					float diff = std::fabs(angle - ray_angle);
-					diff = std::fmod(diff + 2.0f * float(M_PI), 2.0f * float(M_PI));
-					if (diff > float(M_PI)) diff = 2.0f * float(M_PI) - diff;
-					if (diff < spread) {
-								float f = 1.0f - (diff / spread);
-								ray_boost += f * 0.05f;
-					}
-			}
-			ray_boost = std::clamp(ray_boost, 1.0f, 1.1f);
                         float base_gradient = std::max(0.0f, 1.0f - (dist * inv_radius));
                         float alpha_ratio  = std::pow(base_gradient, fade_exponent);
-			alpha_ratio = std::clamp(alpha_ratio * ray_boost, 0.0f, 1.0f);
+                        alpha_ratio = std::clamp(alpha_ratio, 0.0f, 1.0f);
 			Uint8 alpha = static_cast<Uint8>(std::min(255.0f, intensity * alpha_ratio * 1.6f));
                         float brightness = 1.0f;
                         if (dist > white_core_radius) {

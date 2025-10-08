@@ -18,9 +18,9 @@
     "exposure": 1.2200000286102295,
     "final_blur_mix": 0.49000000953674316,
     "final_blur_radius": 1.0299999713897705,
-    "gamma_comp": 0.9100000262260437,
+    "gamma_comp": 0.550000011920929,
     "metric": "MaxRGB",
-    "min_luma_threshold": 0.3569999933242798,
+    "min_luma_threshold": 0.36500000953674316,
     "per_light_enabled": true,
     "samples": 112,
     "use_alpha_in_mask": true,
@@ -156,8 +156,8 @@
         },
         {
           "max_instances": 1,
-          "min_instances": 0,
-          "name": "fountain",
+          "min_instances": 1,
+          "name": "room_lab",
           "required_children": []
         }
       ]
@@ -455,9 +455,9 @@
       "width_max": 2897,
       "width_min": 1755
     },
-    "fountain": {
+    "room_lab": {
       "edge_smoothness": 93,
-      "geometry": "Square",
+      "geometry": "Circle",
       "height_max": 2099,
       "height_min": 1779,
       "inherits_map_assets": true,
@@ -467,7 +467,7 @@
       "max_width": 2151,
       "min_height": 1779,
       "min_width": 1810,
-      "name": "fountain",
+      "name": "room_lab",
       "spawn_groups": [
         {
           "candidates": [
@@ -539,6 +539,24 @@
       "min_height": 1500,
       "min_width": 1500,
       "name": "room_1",
+      "spawn_groups": [],
+      "width_max": 10000,
+      "width_min": 1500
+    },
+    "room_2": {
+      "curvyness": 2,
+      "edge_smoothness": 2,
+      "geometry": "Square",
+      "height_max": 10000,
+      "height_min": 1500,
+      "inherits_map_assets": false,
+      "is_boss": false,
+      "is_spawn": false,
+      "max_height": 10000,
+      "max_width": 10000,
+      "min_height": 1500,
+      "min_width": 1500,
+      "name": "room_2",
       "spawn_groups": [],
       "width_max": 10000,
       "width_min": 1500
