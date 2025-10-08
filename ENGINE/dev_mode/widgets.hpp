@@ -220,6 +220,7 @@ public:
     void set_rect(const SDL_Rect& r);
     const SDL_Rect& rect() const { return rect_; }
     int selected() const { return index_; }
+    void set_selected(int idx);
     bool handle_event(const SDL_Event& e);
     void render(SDL_Renderer* r) const;
     void render_options(SDL_Renderer* r) const;

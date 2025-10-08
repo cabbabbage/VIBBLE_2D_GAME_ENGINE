@@ -10,6 +10,7 @@
 #include <nlohmann/json_fwd.hpp>
 
 class DMCheckbox;
+class DMDropdown;
 class DMSlider;
 class Widget;
 class Input;
@@ -57,8 +58,20 @@ private:
     bool needs_sync_ = false;
 
     std::unique_ptr<DMCheckbox> enabled_checkbox_;
+    std::unique_ptr<DMCheckbox> per_light_checkbox_;
+    std::unique_ptr<DMCheckbox> use_alpha_checkbox_;
     std::unique_ptr<DMSlider> final_blur_radius_slider_;
     std::unique_ptr<DMSlider> final_blur_mix_slider_;
+    std::unique_ptr<DMDropdown> metric_dropdown_;
+    std::unique_ptr<DMSlider> gamma_comp_slider_;
+    std::unique_ptr<DMSlider> min_luma_slider_;
+    std::unique_ptr<DMSlider> bright_percentile_slider_;
+    std::unique_ptr<DMSlider> samples_slider_;
+    std::unique_ptr<DMSlider> density_slider_;
+    std::unique_ptr<DMSlider> decay_slider_;
+    std::unique_ptr<DMSlider> weight_slider_;
+    std::unique_ptr<DMSlider> exposure_slider_;
+    std::unique_ptr<DMSlider> downsample_slider_;
 
     std::vector<std::unique_ptr<Widget>> widget_wrappers_;
 

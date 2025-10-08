@@ -1275,6 +1275,17 @@ void DMDropdown::set_rect(const SDL_Rect& r) {
     rect_.h = (box_rect_.y - rect_.y) + box_rect_.h + kBoxBottomPadding;
 }
 
+void DMDropdown::set_selected(int idx) {
+    if (options_.empty()) {
+        index_ = 0;
+        return;
+    }
+    if (idx < 0) idx = 0;
+    int max_index = static_cast<int>(options_.size()) - 1;
+    if (idx > max_index) idx = max_index;
+    index_ = idx;
+}
+
 bool DMDropdown::handle_event(const SDL_Event& e) {
     if (expanded_) {
         if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {

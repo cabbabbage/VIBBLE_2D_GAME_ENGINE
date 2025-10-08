@@ -8,6 +8,7 @@
 #include "audio/audio_engine.hpp"
 #include "dev_mode/dev_controls.hpp"
 #include "render/scene_renderer.hpp"
+#include "render/light_rays.hpp"
 #include "map_generation/room.hpp"
 #include "utils/area.hpp"
 #include "utils/input.hpp"
@@ -286,24 +287,8 @@ void Assets::hydrate_map_info_sections() {
     }
     {
         nlohmann::json& R = map_info_json_["light_rays_params"];
-        if (!R.is_object()) {
-            R = nlohmann::json::object();
-        }
-        auto ensure_bool = [&](const char* key, bool def) {
-            bool value = def;
-            try { value = R.at(key).get<bool>(); } catch (...) {}
-            R[key] = value;
-        };
-        auto ensure_double = [&](const char* key, double def, double lo, double hi) {
-            double value = def;
-            try { value = R.at(key).get<double>(); } catch (...) {}
-            value = std::clamp(value, lo, hi);
-            R[key] = value;
-        };
-
-        ensure_bool("enabled", true);
-        ensure_double("final_blur_radius", 2.5, 0.0, 32.0);
-        ensure_double("final_blur_mix", 0.85, 0.0, 1.0);
+        LightRaysConfig config = LightRaysConfig::from_json(R);
+        R = config.to_json();
     }
     ensure_object("rooms_data");
     ensure_object("trails_data");

@@ -9,6 +9,7 @@
 #include "global_light_source.hpp"
 #include "render_asset.hpp"
 #include "render/camera.hpp"
+#include "render/light_rays.hpp"
 
 class GaussianBlurHelper;
 class AssetLightRaysRenderer;
@@ -51,6 +52,8 @@ class SceneRenderer {
     int            num_groups_ = 20;
     bool           debugging = false;
     bool           low_quality_mode_ = false;
+
+    LightRaysConfig light_rays_config_{};
 
     float          final_blur_radius_ = 0.f;
     float          final_blur_mix_ = 0.f;
