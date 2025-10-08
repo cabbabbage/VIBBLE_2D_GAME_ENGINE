@@ -27,7 +27,8 @@ public:
 
     void set_screen_size(int screen_w, int screen_h);
     void set_params(const LightRaysParams& p);
-    void set_light_screen_pos(SDL_Point p); // screen pixels
+    void set_light_screen_pos(SDL_Point p); // screen pixels (manual override)
+    void clear_light_override();            // re-enable automatic detection
     void set_enabled(bool v);
 
     // Returns low-res texture with white rays and alpha. Blend with ADD.
@@ -37,8 +38,9 @@ public:
 private:
     SDL_Renderer* renderer_ = nullptr;
     LightRaysParams params_{};
-    SDL_Point light_pos_{0, 0};
+    SDL_Point manual_light_pos_{0, 0};
     bool enabled_ = true;
+    bool manual_light_override_ = false;
 
     int screen_w_ = 0;
     int screen_h_ = 0;
@@ -54,9 +56,14 @@ private:
     std::vector<uint8_t>  alpha_buffer_;
     std::array<int, 256>  histogram_{};
 
+    SDL_FPoint detected_light_lowres_{0.f, 0.f};
+    SDL_FPoint dominant_axis_{1.f, 0.f};
+    bool has_detected_light_ = false;
+
     void destroy_textures_();
     bool ensure_lowres_target_();
     void ensure_buffer_capacity_(int pixel_count);
+    void analyze_brightness_distribution_(int dw, int dh);
 
     static inline uint8_t clamp_u8_(float v) {
         if (v <= 0.f) return 0;

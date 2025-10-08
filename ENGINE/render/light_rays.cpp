@@ -14,7 +14,7 @@ inline float luma_u8(uint8_t r, uint8_t g, uint8_t b) {
 
 LightRaysPass::LightRaysPass(SDL_Renderer* r, int sw, int sh)
 : renderer_(r), screen_w_(sw), screen_h_(sh) {
-    light_pos_ = SDL_Point{ sw / 2, sh / 3 };
+    manual_light_pos_ = SDL_Point{ sw / 2, sh / 3 };
 }
 
 LightRaysPass::~LightRaysPass() {
@@ -51,7 +51,14 @@ void LightRaysPass::set_params(const LightRaysParams& p) {
     destroy_textures_();
 }
 
-void LightRaysPass::set_light_screen_pos(SDL_Point p) { light_pos_ = p; }
+void LightRaysPass::set_light_screen_pos(SDL_Point p) {
+    manual_light_pos_ = p;
+    manual_light_override_ = true;
+}
+
+void LightRaysPass::clear_light_override() {
+    manual_light_override_ = false;
+}
 void LightRaysPass::set_enabled(bool v) { enabled_ = v; }
 
 bool LightRaysPass::ensure_lowres_target_() {
@@ -206,8 +213,17 @@ SDL_Texture* LightRaysPass::compute(SDL_Texture* source_render_target) {
     }
 
     // Ray march toward light
-    const float lx = float(light_pos_.x) / float(factor);
-    const float ly = float(light_pos_.y) / float(factor);
+    analyze_brightness_distribution_(dw, dh);
+
+    float lx = 0.5f * float(dw);
+    float ly = 0.33f * float(dh);
+    if (manual_light_override_) {
+        lx = float(manual_light_pos_.x) / float(factor);
+        ly = float(manual_light_pos_.y) / float(factor);
+    } else if (has_detected_light_) {
+        lx = detected_light_lowres_.x;
+        ly = detected_light_lowres_.y;
+    }
     const float max_dist = std::sqrt(float(dw * dw + dh * dh));
 
     const int samples = std::max(1, params_.samples);
@@ -242,7 +258,18 @@ SDL_Texture* LightRaysPass::compute(SDL_Texture* source_render_target) {
             float dist = std::sqrt(dx0 * dx0 + dy0 * dy0);
             float falloff = max_dist > 0.f ? std::clamp(1.f - (dist / max_dist), 0.f, 1.f) : 1.f;
             falloff = falloff * falloff;
-            float val = std::min(1.f, sum * exposure * falloff);
+            float directional = 1.f;
+            if (!manual_light_override_ && has_detected_light_) {
+                float vx = float(x) - detected_light_lowres_.x;
+                float vy = float(y) - detected_light_lowres_.y;
+                float len = std::sqrt(vx * vx + vy * vy);
+                if (len > 1e-4f) {
+                    float norm_dot = (vx * dominant_axis_.x + vy * dominant_axis_.y) / len;
+                    directional = 0.5f * (norm_dot + 1.f);
+                    directional = directional * directional;
+                }
+            }
+            float val = std::min(1.f, sum * exposure * falloff * directional);
             // slight gamma curve to sharpen streaks
             val = std::pow(std::max(0.f, val), 0.85f);
             alpha_buffer_[y * dw + x] = clamp_u8_(val * 255.f);
@@ -279,4 +306,72 @@ SDL_Texture* LightRaysPass::compute(SDL_Texture* source_render_target) {
 
     SDL_UnlockTexture(rays_tex_lowres_);
     return rays_tex_lowres_;
+}
+
+void LightRaysPass::analyze_brightness_distribution_(int dw, int dh) {
+    has_detected_light_ = false;
+    dominant_axis_ = SDL_FPoint{1.f, 0.f};
+
+    float total_weight = 0.f;
+    float sum_x = 0.f;
+    float sum_y = 0.f;
+
+    for (int y = 0; y < dh; ++y) {
+        for (int x = 0; x < dw; ++x) {
+            float w = bright_buffer_[y * dw + x];
+            if (w <= 0.f) continue;
+            total_weight += w;
+            sum_x += w * float(x);
+            sum_y += w * float(y);
+        }
+    }
+
+    if (total_weight <= 1e-4f) {
+        return;
+    }
+
+    const float inv_w = 1.f / total_weight;
+    float cx = sum_x * inv_w;
+    float cy = sum_y * inv_w;
+
+    detected_light_lowres_ = SDL_FPoint{cx, cy};
+    has_detected_light_ = true;
+
+    float mxx = 0.f, myy = 0.f, mxy = 0.f;
+    for (int y = 0; y < dh; ++y) {
+        for (int x = 0; x < dw; ++x) {
+            float w = bright_buffer_[y * dw + x];
+            if (w <= 0.f) continue;
+            float dx = float(x) - cx;
+            float dy = float(y) - cy;
+            mxx += w * dx * dx;
+            myy += w * dy * dy;
+            mxy += w * dx * dy;
+        }
+    }
+
+    mxx *= inv_w;
+    myy *= inv_w;
+    mxy *= inv_w;
+
+    float diff = mxx - myy;
+    float discr = std::sqrt(std::max(0.f, diff * diff * 0.25f + mxy * mxy));
+    float lambda = 0.5f * (mxx + myy) + discr;
+
+    float vx = 1.f;
+    float vy = 0.f;
+    if (std::abs(mxy) > 1e-6f) {
+        vx = mxy;
+        vy = lambda - mxx;
+    } else if (diff < 0.f) {
+        vx = 0.f;
+        vy = 1.f;
+    }
+
+    float len = std::sqrt(vx * vx + vy * vy);
+    if (len > 1e-6f) {
+        dominant_axis_ = SDL_FPoint{vx / len, vy / len};
+    } else {
+        dominant_axis_ = SDL_FPoint{1.f, 0.f};
+    }
 }

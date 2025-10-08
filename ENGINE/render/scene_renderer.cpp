@@ -67,12 +67,12 @@ SceneRenderer::SceneRenderer(SDL_Renderer* renderer,
     // Light rays pass on top - strong and safe values that will show clearly
     light_rays_pass_ = std::make_unique<LightRaysPass>(renderer_, screen_width_, screen_height_);
     LightRaysParams rays_params{};
-    rays_params.min_luma_threshold = 0.35f;  // include more candidates
+    rays_params.min_luma_threshold = 0.1f;  // include more candidates
     rays_params.bright_percentile  = 0.94f;  // focus on top 6%
     rays_params.samples            = 112;    // balanced quality/perf
     rays_params.density            = 1.35f;  // faster march toward light
     rays_params.decay              = 0.94f;  // gradual fade for crisp streaks
-    rays_params.weight             = 1.75f;  // per-sample strength
+    rays_params.weight             = 6.75f;  // per-sample strength
     rays_params.exposure           = 8.6f;   // global boost
     rays_params.downsample_log2    = 1; // thinner but faster in low quality
     light_rays_pass_->set_params(rays_params);
