@@ -10,21 +10,21 @@
     "tripod_distance_y": -1335.0
   },
   "light_rays_params": {
-    "bright_percentile": 0.8999999761581421,
-    "decay": 0.9850000143051147,
+    "bright_percentile": 0.8159999847412109,
+    "decay": 0.8899999856948853,
     "density": 1.399999976158142,
     "downsample_log2": 4,
     "enabled": true,
-    "exposure": 1.2200000286102295,
+    "exposure": 4.139999866485596,
     "final_blur_mix": 0.49000000953674316,
     "final_blur_radius": 1.0299999713897705,
-    "gamma_comp": 0.550000011920929,
+    "gamma_comp": 1.5299999713897705,
     "metric": "MaxRGB",
-    "min_luma_threshold": 0.36500000953674316,
+    "min_luma_threshold": 0.3240000009536743,
     "per_light_enabled": true,
     "samples": 112,
     "use_alpha_in_mask": true,
-    "weight": 1.350000023841858
+    "weight": 4.369999885559082
   },
   "map_assets_data": {
     "spawn_groups": [
@@ -138,7 +138,7 @@
     {
       "level": 1,
       "max_rooms": 3,
-      "min_rooms": 0,
+      "min_rooms": 1,
       "name": "layer_1",
       "radius": 3709,
       "rooms": [
@@ -455,41 +455,6 @@
       "width_max": 2897,
       "width_min": 1755
     },
-    "room_lab": {
-      "edge_smoothness": 93,
-      "geometry": "Circle",
-      "height_max": 2099,
-      "height_min": 1779,
-      "inherits_map_assets": true,
-      "is_boss": false,
-      "is_spawn": false,
-      "max_height": 2099,
-      "max_width": 2151,
-      "min_height": 1779,
-      "min_width": 1810,
-      "name": "room_lab",
-      "spawn_groups": [
-        {
-          "candidates": [
-            {
-              "chance": 0,
-              "name": "null"
-            }
-          ],
-          "chance_denominator": 0,
-          "check_overlap": false,
-          "display_name": "New Spawn",
-          "enforce_spacing": false,
-          "max_number": 1,
-          "min_number": 1,
-          "position": "Exact",
-          "priority": 0,
-          "spawn_id": "spn-63068cffe9db"
-        }
-      ],
-      "width_max": 2151,
-      "width_min": 1810
-    },
     "garden": {
       "edge_smoothness": 2,
       "geometry": "Square",
@@ -560,6 +525,41 @@
       "spawn_groups": [],
       "width_max": 10000,
       "width_min": 1500
+    },
+    "room_lab": {
+      "edge_smoothness": 93,
+      "geometry": "Circle",
+      "height_max": 2099,
+      "height_min": 1779,
+      "inherits_map_assets": true,
+      "is_boss": false,
+      "is_spawn": false,
+      "max_height": 2099,
+      "max_width": 2151,
+      "min_height": 1779,
+      "min_width": 1810,
+      "name": "room_lab",
+      "spawn_groups": [
+        {
+          "candidates": [
+            {
+              "chance": 0,
+              "name": "null"
+            }
+          ],
+          "chance_denominator": 0,
+          "check_overlap": false,
+          "display_name": "New Spawn",
+          "enforce_spacing": false,
+          "max_number": 1,
+          "min_number": 1,
+          "position": "Exact",
+          "priority": 0,
+          "spawn_id": "spn-63068cffe9db"
+        }
+      ],
+      "width_max": 2151,
+      "width_min": 1810
     },
     "spawn": {
       "areas": [

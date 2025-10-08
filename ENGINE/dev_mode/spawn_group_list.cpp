@@ -418,8 +418,9 @@ void SpawnGroupList::CandidateList::rebuild() {
     pending_commit_ = false;
     set_scroll_focus(false);
     total_weight_ = 0.0;
-    if (!row_.entry) return;
-    auto& entry = *row_.entry;
+    json* entry_ptr = owner_.resolve_entry(row_);
+    if (!entry_ptr) return;
+    auto& entry = *entry_ptr;
     if (!entry.contains("candidates") || !entry["candidates"].is_array()) return;
     const auto& arr = entry["candidates"];
     candidates_.reserve(arr.size());
@@ -445,6 +446,7 @@ void SpawnGroupList::CandidateList::rebuild() {
 }
 
 void SpawnGroupList::CandidateList::ensure_common_widgets() {
+    json* entry_ptr = owner_.resolve_entry(row_);
     if (!top_gap_)
         top_gap_ = std::make_unique<SpacerWidget>(std::max(6, DMSpacing::section_gap() / 2));
     if (!begin_marker_)
@@ -455,10 +457,10 @@ void SpawnGroupList::CandidateList::ensure_common_widgets() {
         header_label_ = std::make_unique<SectionLabelWidget>("Candidates", false);
     if (!bottom_gap_)
         bottom_gap_ = std::make_unique<SpacerWidget>(DMSpacing::item_gap());
-    if (!add_btn_ && row_.entry) {
+    if (!add_btn_ && entry_ptr) {
         add_btn_ = std::make_unique<DMButton>("Add Candidate", &DMStyles::CreateButton(), 160, DMButton::height());
         add_w_ = std::make_unique<ButtonWidget>(add_btn_.get(), [this]() {
-            if (!row_.entry) {
+            if (!owner_.resolve_entry(row_)) {
                 return;
             }
 
@@ -671,8 +673,10 @@ void SpawnGroupList::CandidateList::handle_search_selection(int index) {
 }
 
 bool SpawnGroupList::CandidateList::sync_to_json() {
-    if (!dirty_ || !row_.entry) return false;
-    auto& entry = *row_.entry;
+    if (!dirty_) return false;
+    json* entry_ptr = owner_.resolve_entry(row_);
+    if (!entry_ptr) return false;
+    auto& entry = *entry_ptr;
     if (!entry.contains("candidates") || !entry["candidates"].is_array()) {
         entry["candidates"] = json::array();
     }
@@ -1517,6 +1521,15 @@ void SpawnGroupList::append_rows(Rows& rows) {
     }
     out.push_back({ add_group_btn_w_.get() });
     for (auto& r : rows_) {
+        const json* entry_json = nullptr;
+        if (r->read_only) {
+            entry_json = &r->ro_entry;
+        } else {
+            entry_json = resolve_entry(*r);
+        }
+        if (!entry_json) {
+            continue;
+        }
         // Header
         r->outline_rect = SDL_Rect{0,0,0,0};
         r->body_rect = SDL_Rect{0,0,0,0};
@@ -1527,7 +1540,7 @@ void SpawnGroupList::append_rows(Rows& rows) {
             r->outline_end_marker = std::make_unique<RowRectMarkerWidget>(&r->outline_rect, false);
         out.push_back({ r->outline_begin_marker.get() });
         if (!r->toggle_btn) {
-            const std::string label = entry_display_name(r->read_only ? r->ro_entry : *r->entry);
+            const std::string label = entry_display_name(*entry_json);
             r->toggle_btn = std::make_unique<DMButton>(label, &DMStyles::ListButton(), 180, DMButton::height());
             r->toggle_w = std::make_unique<ButtonWidget>(r->toggle_btn.get(), [this, rr=r.get()](){
                 bool next_state = !rr->expanded;
@@ -1546,7 +1559,7 @@ void SpawnGroupList::append_rows(Rows& rows) {
             r->del_btn = std::make_unique<DMButton>("X", &DMStyles::DeleteButton(), 28, DMButton::height());
             r->del_w   = std::make_unique<ButtonWidget>(r->del_btn.get(), [this, rr=r.get()](){ if (callbacks_.on_delete) callbacks_.on_delete(rr->id); });
         } else {
-            r->toggle_btn->set_text(entry_display_name(r->read_only ? r->ro_entry : *r->entry));
+            r->toggle_btn->set_text(entry_display_name(*entry_json));
         }
         out.push_back({ r->toggle_w.get(), r->dup_w.get(), r->up_w.get(), r->down_w.get(), r->del_w.get() });
 
@@ -1567,6 +1580,10 @@ void SpawnGroupList::append_rows(Rows& rows) {
         // Body if expanded
         if (r->expanded) {
             if (!r->read_only) {
+                json* entry = resolve_entry(*r);
+                if (!entry) {
+                    continue;
+                }
                 if (!r->body_begin_marker)
                     r->body_begin_marker = std::make_unique<RowRectMarkerWidget>(&r->body_rect, true);
                 if (!r->body_end_marker)
@@ -1580,33 +1597,34 @@ void SpawnGroupList::append_rows(Rows& rows) {
 
                 // Build/editable controls
                 if (!r->name_box) {
-                    r->name_box = std::make_unique<DMTextBox>("Name", entry_display_name(*r->entry));
+                    r->name_box = std::make_unique<DMTextBox>("Name", entry_display_name(*entry));
                     r->name_w = std::make_unique<TextBoxWidget>(r->name_box.get(), true);
                 }
                 if (r->method_lock.empty() && !r->method_dd) {
                     int idx = 0;
-                    const std::string method = r->entry->value("position", std::string{"Exact"});
+                    const std::string method = entry->value("position", std::string{"Exact"});
                     for (size_t i = 0; i < kSpawnMethods.size(); ++i) if (kSpawnMethods[i] == method) { idx = static_cast<int>(i); break; }
                     r->method_dd = std::make_unique<DMDropdown>("Spawn Method", kSpawnMethods, idx);
                     r->method_w  = std::make_unique<DropdownWidget>(r->method_dd.get());
                 }
                 if (!r->qty_sl) {
-                    int mn = r->entry->value("min_number", r->entry->value("max_number", 1));
-                    int mx = r->entry->value("max_number", mn);
+                    int mn = entry->value("min_number", entry->value("max_number", 1));
+                    int mx = entry->value("max_number", mn);
                     r->qty_sl = std::make_unique<DMRangeSlider>(0, 100, mn, mx);
                     r->qty_sl->set_defer_commit_until_unfocus(true);
                     r->qty_w  = std::make_unique<RangeSliderWidget>(r->qty_sl.get());
                 }
                 // Area link button
-                std::string link_value = r->entry->value("link", std::string{});
+                std::string link_value = entry->value("link", std::string{});
                 const std::string link_label = link_value.empty() ? std::string("Link Area") : link_value;
                 if (!r->link_btn) {
                     r->link_btn = std::make_unique<DMButton>(link_label, &DMStyles::ListButton(), 180, DMButton::height());
-                    r->link_btn_w = std::make_unique<ButtonWidget>(r->link_btn.get(), [this, rr=r.get()](){
-                        if (!rr->entry) return;
-                        std::string current = rr->entry->value("link", std::string{});
+                    r->link_btn_w = std::make_unique<ButtonWidget>(r->link_btn.get(), [this, rr=r.get()]{
+                        json* entry = this->resolve_entry(*rr);
+                        if (!entry) return;
+                        std::string current = entry->value("link", std::string{});
                         if (!current.empty()) {
-                            (*rr->entry)["link"] = std::string{};
+                            (*entry)["link"] = std::string{};
                             if (on_change_) on_change_();
                             this->close_area_panel();
                             this->rebuild_layout();
@@ -1638,7 +1656,7 @@ void SpawnGroupList::append_rows(Rows& rows) {
                     method_row.push_back(r->regen_w.get());
                 }
                 if (!method_row.empty()) out.push_back(method_row);
-                const std::string method = r->entry->value("position", std::string{"Exact"});
+                const std::string method = entry->value("position", std::string{"Exact"});
                 if (!r->quantity_hidden && method_uses_range(method)) {
                     out.push_back({ r->qty_w.get() });
                 }
@@ -1691,8 +1709,10 @@ void SpawnGroupList::refresh_row_configuration() {
             continue;
         }
         const json* entry_json = nullptr;
-        if (!row_ptr->read_only && row_ptr->entry) {
-            entry_json = row_ptr->entry;
+        if (!row_ptr->read_only) {
+            if (json* entry = resolve_entry(*row_ptr)) {
+                entry_json = entry;
+            }
         } else if (row_ptr->read_only) {
             entry_json = &row_ptr->ro_entry;
         }
@@ -1793,43 +1813,45 @@ void SpawnGroupList::update(const Input& input, int screen_w, int screen_h) {
     // Sync editable widgets back into JSON
     if (!bound_array_) return;
     for (auto& r : rows_) {
-        if (r->read_only || !r->entry) continue;
+        if (r->read_only) continue;
+        json* entry = resolve_entry(*r);
+        if (!entry) continue;
         bool changed = false;
         // Enforce method lock
         if (!r->method_lock.empty()) {
-            if (r->entry->value("position", std::string{}) != r->method_lock) {
-                (*r->entry)["position"] = r->method_lock;
+            if (entry->value("position", std::string{}) != r->method_lock) {
+                (*entry)["position"] = r->method_lock;
                 changed = true;
                 if (on_entry_change_) {
                     ChangeSummary cs{}; cs.method_changed = true; cs.method = r->method_lock;
-                    on_entry_change_(*r->entry, cs);
+                    on_entry_change_(*entry, cs);
                 }
             }
         }
-        if (r->name_box && r->name_box->value() != r->entry->value("display_name", std::string{})) {
-            (*r->entry)["display_name"] = r->name_box->value();
+        if (r->name_box && r->name_box->value() != entry->value("display_name", std::string{})) {
+            (*entry)["display_name"] = r->name_box->value();
             changed = true;
         }
         if (r->method_dd) {
             int idx = std::clamp(r->method_dd->selected(), 0, (int)kSpawnMethods.size()-1);
             const std::string method = kSpawnMethods[idx];
-            if (r->entry->value("position", std::string{}) != method) {
-                (*r->entry)["position"] = method;
+            if (entry->value("position", std::string{}) != method) {
+                (*entry)["position"] = method;
                 changed = true;
                 if (on_entry_change_) {
                     ChangeSummary cs{}; cs.method_changed = true; cs.method = method;
-                    on_entry_change_(*r->entry, cs);
+                    on_entry_change_(*entry, cs);
                 }
             }
         }
         if (r->qty_sl) {
             int mn = std::max(0, r->qty_sl->min_value());
             int mx = std::max(mn, r->qty_sl->max_value());
-            if (r->entry->value("min_number", mn) != mn) { (*r->entry)["min_number"] = mn; changed = true; }
-            if (r->entry->value("max_number", mx) != mx) { (*r->entry)["max_number"] = mx; changed = true; }
+            if (entry->value("min_number", mn) != mn) { (*entry)["min_number"] = mn; changed = true; }
+            if (entry->value("max_number", mx) != mx) { (*entry)["max_number"] = mx; changed = true; }
             if (changed && on_entry_change_) {
-                ChangeSummary cs{}; cs.quantity_changed = true; cs.method = r->entry->value("position", std::string{});
-                on_entry_change_(*r->entry, cs);
+                ChangeSummary cs{}; cs.quantity_changed = true; cs.method = entry->value("position", std::string{});
+                on_entry_change_(*entry, cs);
             }
         }
         if (r->candidate_list && r->candidate_list->sync_to_json()) {
@@ -2003,6 +2025,71 @@ void SpawnGroupList::clear_row_ref(RowRef& ref) {
     ref.index = -1;
 }
 
+json* SpawnGroupList::resolve_entry(EntryRow& row) {
+    if (row.read_only) {
+        return nullptr;
+    }
+    if (!row.array || !row.array->is_array()) {
+        row.entry = nullptr;
+        return nullptr;
+    }
+
+    auto& arr = *row.array;
+    auto lookup_by_index = [&]() -> json* {
+        if (row.index < 0 || row.index >= static_cast<int>(arr.size())) {
+            return nullptr;
+        }
+        json& candidate = arr[row.index];
+        if (!candidate.is_object()) {
+            return nullptr;
+        }
+        return &candidate;
+    };
+
+    auto matches_row_id = [&](const json& candidate) {
+        if (row.id.empty() || !candidate.is_object()) {
+            return false;
+        }
+        if (!candidate.contains("spawn_id") || !candidate["spawn_id"].is_string()) {
+            return false;
+        }
+        return candidate["spawn_id"].get<std::string>() == row.id;
+    };
+
+    if (row.entry) {
+        if (row.index >= 0 && row.index < static_cast<int>(arr.size())) {
+            json& candidate = arr[row.index];
+            if (&candidate == row.entry || matches_row_id(candidate)) {
+                row.entry = &candidate;
+                return row.entry;
+            }
+        }
+    }
+
+    if (!row.id.empty()) {
+        for (size_t i = 0; i < arr.size(); ++i) {
+            json& candidate = arr[i];
+            if (!candidate.is_object()) continue;
+            if (matches_row_id(candidate)) {
+                row.entry = &candidate;
+                row.index = static_cast<int>(i);
+                return row.entry;
+            }
+        }
+    }
+
+    if (json* by_index = lookup_by_index()) {
+        row.entry = by_index;
+        if (row.id.empty() && (*by_index).contains("spawn_id") && (*by_index)["spawn_id"].is_string()) {
+            row.id = (*by_index)["spawn_id"].get<std::string>();
+        }
+        return row.entry;
+    }
+
+    row.entry = nullptr;
+    return nullptr;
+}
+
 void SpawnGroupList::rebuild_layout() {
     request_layout();
     if (suppress_layout_callback_) {
@@ -2068,11 +2155,12 @@ void SpawnGroupList::open_asset_search(EntryRow& row, std::function<void(const s
         if (selection.empty()) return;
         if (!selection.empty() && selection.front() == '#') return;
         EntryRow* rr = lookup_row(asset_search_row_ref_);
-        if (!rr || !rr->entry) {
+        json* entry_ptr = rr ? this->resolve_entry(*rr) : nullptr;
+        if (!rr || !entry_ptr) {
             close_asset_search();
             return;
         }
-        json& entry = *rr->entry;
+        json& entry = *entry_ptr;
         if (!entry.contains("candidates") || !entry["candidates"].is_array()) {
             entry["candidates"] = json::array();
         }
@@ -2131,11 +2219,12 @@ void SpawnGroupList::open_area_panel(EntryRow& row) {
     area_panel_->set_parent_rect(parent);
     area_panel_->open(names, [this](const std::string& selected) {
         EntryRow* rr = lookup_row(area_panel_row_ref_);
-        if (!rr || !rr->entry) {
+        json* entry_ptr = rr ? this->resolve_entry(*rr) : nullptr;
+        if (!rr || !entry_ptr) {
             close_area_panel();
             return;
         }
-        (*rr->entry)["link"] = selected;
+        (*entry_ptr)["link"] = selected;
         if (on_change_) on_change_();
         rebuild_layout();
         if (area_panel_) area_panel_->close();

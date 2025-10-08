@@ -128,6 +128,8 @@ private:
     void open_area_panel(EntryRow& row);
     void close_area_panel();
 
+    nlohmann::json* resolve_entry(EntryRow& row);
+
     bool default_floatable_mode_ = true;
     bool embedded_mode_ = false;
     bool layout_dirty_ = true;

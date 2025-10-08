@@ -51,8 +51,7 @@ SceneRenderer::SceneRenderer(SDL_Renderer* renderer,
         SDL_SetTextureBlendMode(fullscreen_light_tex_, SDL_BLENDMODE_BLEND);
         SDL_Texture* prev = SDL_GetRenderTarget(renderer_);
         SDL_SetRenderTarget(renderer_, fullscreen_light_tex_);
-        SDL_Color color = main_light_source_.get_current_color();
-        SDL_SetRenderDrawColor(renderer_, color.r, color.g, color.b, color.a);
+        SDL_SetRenderDrawColor(renderer_, 255, 255, 255, 0);
         SDL_RenderClear(renderer_);
         SDL_SetRenderTarget(renderer_, prev);
     } else {
@@ -129,8 +128,7 @@ void SceneRenderer::apply_map_light_config(const nlohmann::json& data) {
 
     SDL_Texture* prev = SDL_GetRenderTarget(renderer_);
     SDL_SetRenderTarget(renderer_, fullscreen_light_tex_);
-    SDL_Color color = main_light_source_.get_current_color();
-    SDL_SetRenderDrawColor(renderer_, color.r, color.g, color.b, color.a);
+    SDL_SetRenderDrawColor(renderer_, 255, 255, 255, 0);
     SDL_RenderClear(renderer_);
     SDL_SetRenderTarget(renderer_, prev);
 }
@@ -292,8 +290,7 @@ void SceneRenderer::recreate_fullscreen_light_texture() {
     SDL_SetTextureBlendMode(fullscreen_light_tex_, SDL_BLENDMODE_BLEND);
     SDL_Texture* prev = SDL_GetRenderTarget(renderer_);
     SDL_SetRenderTarget(renderer_, fullscreen_light_tex_);
-    SDL_Color color = main_light_source_.get_current_color();
-    SDL_SetRenderDrawColor(renderer_, color.r, color.g, color.b, color.a);
+    SDL_SetRenderDrawColor(renderer_, 255, 255, 255, 0);
     SDL_RenderClear(renderer_);
     SDL_SetRenderTarget(renderer_, prev);
 }
