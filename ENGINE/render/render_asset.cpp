@@ -74,7 +74,7 @@ SDL_Texture* RenderAsset::regenerateFinalTexture(Asset* a) {
 	SDL_SetTextureColorMod(base, 255, 255, 255);
 	SDL_RenderCopy(renderer_, base, nullptr, nullptr);
 	SDL_SetTextureColorMod(base, 255, 255, 255);
-	if (a->has_shading) {
+        if (a->is_shaded) {
 		if (SDL_Texture* mask = render_shadow_mask(a, bw, bh)) {
 			SDL_SetRenderTarget(renderer_, final_tex);
 			SDL_SetTextureBlendMode(mask, SDL_BLENDMODE_MOD);
