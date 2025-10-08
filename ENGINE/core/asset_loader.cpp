@@ -1,7 +1,9 @@
 #include "asset_loader.hpp"
+#include "asset_loader_internal.hpp"
 #include <fstream>
 #include <iostream>
 #include <numeric>
+#include <algorithm>
 #include <unordered_map>
 #include <unordered_set>
 #include <cmath>
@@ -19,25 +21,125 @@ using json = nlohmann::json;
 
 namespace {
         Asset* findCenterAsset(const std::vector<Asset*>& group) {
-		if (group.empty()) return nullptr;
-		double avgX = std::accumulate(group.begin(), group.end(), 0.0,
-		[](double sum, Asset* a) { return sum + a->pos.x; }) / group.size();
-		double avgY = std::accumulate(group.begin(), group.end(), 0.0,
-		[](double sum, Asset* a) { return sum + a->pos.y; }) / group.size();
-		Asset* center = group.front();
-		double bestDistSq = std::numeric_limits<double>::infinity();
-		for (auto* a : group) {
-			double dx = a->pos.x - avgX;
-			double dy = a->pos.y - avgY;
-			double distSq = dx * dx + dy * dy;
-			if (distSq < bestDistSq) {
-					bestDistSq = distSq;
-					center = a;
-			}
-		}
-		return center;
+                if (group.empty()) return nullptr;
+                double avgX = std::accumulate(group.begin(), group.end(), 0.0,
+                [](double sum, Asset* a) { return sum + a->pos.x; }) / group.size();
+                double avgY = std::accumulate(group.begin(), group.end(), 0.0,
+                [](double sum, Asset* a) { return sum + a->pos.y; }) / group.size();
+                Asset* center = group.front();
+                double bestDistSq = std::numeric_limits<double>::infinity();
+                for (auto* a : group) {
+                        double dx = a->pos.x - avgX;
+                        double dy = a->pos.y - avgY;
+                        double distSq = dx * dx + dy * dy;
+                        if (distSq < bestDistSq) {
+                                        bestDistSq = distSq;
+                                        center = a;
+                        }
+                }
+                return center;
         }
 }
+
+namespace asset_loader_internal {
+
+std::vector<ZoneCacheEntry> build_zone_cache(const std::vector<const Area*>& zones) {
+        std::vector<ZoneCacheEntry> cache;
+        cache.reserve(zones.size());
+        for (const Area* zone : zones) {
+                if (!zone) continue;
+                auto [min_x, min_y, max_x, max_y] = zone->get_bounds();
+                const auto& pts = zone->get_points();
+                cache.push_back(ZoneCacheEntry{zone, min_x, min_y, max_x, max_y, &pts});
+        }
+        return cache;
+}
+
+bool point_inside_any_zone(const SDL_Point& point, const std::vector<ZoneCacheEntry>& cache) {
+        for (const auto& entry : cache) {
+                if (point.x < entry.min_x || point.x > entry.max_x ||
+                    point.y < entry.min_y || point.y > entry.max_y) {
+                        continue;
+                }
+                if (entry.area && entry.area->contains_point(point)) {
+                        return true;
+                }
+        }
+        return false;
+}
+
+static double distance_sq_to_aabb(const SDL_Point& point,
+                                  double min_x,
+                                  double min_y,
+                                  double max_x,
+                                  double max_y) {
+        const double px = static_cast<double>(point.x);
+        const double py = static_cast<double>(point.y);
+        double dx = 0.0;
+        if (px < min_x) dx = min_x - px;
+        else if (px > max_x) dx = px - max_x;
+        double dy = 0.0;
+        if (py < min_y) dy = min_y - py;
+        else if (py > max_y) dy = py - max_y;
+        return dx * dx + dy * dy;
+}
+
+double min_distance_sq_to_zones(const SDL_Point& point,
+                                const std::vector<ZoneCacheEntry>& cache,
+                                int fade_end_distance) {
+        double minDistSq = std::numeric_limits<double>::infinity();
+        const double pad = static_cast<double>(fade_end_distance);
+        for (const auto& entry : cache) {
+                const double paddedDistSq = distance_sq_to_aabb(point,
+                                                                static_cast<double>(entry.min_x) - pad,
+                                                                static_cast<double>(entry.min_y) - pad,
+                                                                static_cast<double>(entry.max_x) + pad,
+                                                                static_cast<double>(entry.max_y) + pad);
+                if (paddedDistSq >= minDistSq) {
+                        continue;
+                }
+                const auto* pts = entry.points;
+                if (!pts || pts->size() < 2) {
+                        const double bboxDistSq = distance_sq_to_aabb(point,
+                                                                       static_cast<double>(entry.min_x),
+                                                                       static_cast<double>(entry.min_y),
+                                                                       static_cast<double>(entry.max_x),
+                                                                       static_cast<double>(entry.max_y));
+                        if (bboxDistSq < minDistSq) {
+                                minDistSq = bboxDistSq;
+                        }
+                        continue;
+                }
+                const size_t count = pts->size();
+                for (size_t i = 0; i + 1 < count; ++i) {
+                        const SDL_Point& p1 = (*pts)[i];
+                        const SDL_Point& p2 = (*pts)[(i + 1) % count];
+                        const double x1 = static_cast<double>(p1.x);
+                        const double y1 = static_cast<double>(p1.y);
+                        const double vx = static_cast<double>(p2.x - p1.x);
+                        const double vy = static_cast<double>(p2.y - p1.y);
+                        const double wx = static_cast<double>(point.x) - x1;
+                        const double wy = static_cast<double>(point.y) - y1;
+                        const double len2 = vx * vx + vy * vy;
+                        double t = len2 > 0.0 ? (vx * wx + vy * wy) / len2 : 0.0;
+                        t = std::clamp(t, 0.0, 1.0);
+                        const double projx = x1 + t * vx;
+                        const double projy = y1 + t * vy;
+                        const double dx = projx - static_cast<double>(point.x);
+                        const double dy = projy - static_cast<double>(point.y);
+                        const double distSq = dx * dx + dy * dy;
+                        if (distSq < minDistSq) {
+                                minDistSq = distSq;
+                                if (minDistSq <= 0.0) {
+                                        return 0.0;
+                                }
+                        }
+                }
+        }
+        return minDistSq;
+}
+
+} // namespace asset_loader_internal
 
 AssetLoader::~AssetLoader() = default;
 
@@ -141,58 +243,36 @@ std::vector<std::vector<Asset*>> AssetLoader::group_neighboring_assets(
 std::vector<Asset*> AssetLoader::collectDistantAssets(int fade_start_distance, int fade_end_distance) {
 	std::vector<Asset*> distant_assets;
 	distant_assets.reserve(rooms_.size() * 4);
-	auto allZones = getAllRoomAndTrailAreas();
-	for (Room* room : rooms_) {
-		for (auto& asset_up : room->assets) {
-			Asset* asset = asset_up.get();
+        auto allZones = getAllRoomAndTrailAreas();
+        auto zoneCache = asset_loader_internal::build_zone_cache(allZones);
+        for (Room* room : rooms_) {
+                for (auto& asset_up : room->assets) {
+                        Asset* asset = asset_up.get();
             if (!asset->info || asset->info->type != asset_types::boundary) {
                     asset->alpha_percentage = 1.0;
                     continue;
             }
-			bool is_inside = false;
-			for (const Area& zone : allZones) {
-					if (zone.contains_point({asset->pos.x, asset->pos.y})) {
-								is_inside = true;
-								break;
-					}
-			}
-			if (!is_inside) {
-                                       double minDistSq = std::numeric_limits<double>::infinity();
-					for (const Area& zone : allZones) {
-								const auto& pts = zone.get_points();
-								for (size_t i = 0; i + 1 < pts.size(); ++i) {
-													auto [x1, y1] = pts[i];
-													auto [x2, y2] = pts[(i + 1) % pts.size()];
-													double vx = x2 - x1, vy = y2 - y1;
-													double wx = asset->pos.x - x1, wy = asset->pos.y - y1;
-													double len2 = vx * vx + vy * vy;
-													double t = len2 > 0.0 ? (vx * wx + vy * wy) / len2 : 0.0;
-													t = std::clamp(t, 0.0, 1.0);
-													double projx = x1 + t * vx;
-													double projy = y1 + t * vy;
-                                                                                                       double dx = projx - asset->pos.x;
-                                                                                                       double dy = projy - asset->pos.y;
-                                                                                                       double distSq = dx * dx + dy * dy;
-                                                                                                       minDistSq = std::min(minDistSq, distSq);
-                                                               }
-                                       }
-                                       double minDist = std::sqrt(minDistSq);
-                                       double alpha = 0.0;
-                                       if (minDist <= fade_start_distance) alpha = 1.0;
-                                       else if (minDist >= fade_end_distance) alpha = 0.0;
-                                       else {
-                                                               double t = (minDist - fade_start_distance) / (fade_end_distance - fade_start_distance);
-                                                               double diff = 1.0 - t;
-                                                               alpha = diff * diff;
-                                       }
-                                       asset->alpha_percentage = alpha * 1.2;
-					bool distant = !(alpha > 0.3);
-					asset->static_frame = distant;
-					if (distant) distant_assets.push_back(asset);
-			}
-		}
-	}
-	return distant_assets;
+                        SDL_Point asset_point{asset->pos.x, asset->pos.y};
+                        if (asset_loader_internal::point_inside_any_zone(asset_point, zoneCache)) {
+                                continue;
+                        }
+                        double minDistSq = asset_loader_internal::min_distance_sq_to_zones(asset_point, zoneCache, fade_end_distance);
+                        double minDist = std::sqrt(minDistSq);
+                        double alpha = 0.0;
+                        if (minDist <= fade_start_distance) alpha = 1.0;
+                        else if (minDist >= fade_end_distance) alpha = 0.0;
+                        else {
+                                double t = (minDist - fade_start_distance) / (fade_end_distance - fade_start_distance);
+                                double diff = 1.0 - t;
+                                alpha = diff * diff;
+                        }
+                        asset->alpha_percentage = alpha * 1.2;
+                        bool distant = !(alpha > 0.3);
+                        asset->static_frame = distant;
+                        if (distant) distant_assets.push_back(asset);
+                }
+        }
+        return distant_assets;
 }
 
 void AssetLoader::loadRooms() {
@@ -238,13 +318,15 @@ std::vector<Asset> AssetLoader::createAssets() {
 	return assetsVec;
 }
 
-std::vector<Area> AssetLoader::getAllRoomAndTrailAreas() const {
-	std::vector<Area> areas;
-	areas.reserve(rooms_.size());
-	for (Room* r : rooms_) {
-		areas.push_back(*r->room_area);
-	}
-	return areas;
+std::vector<const Area*> AssetLoader::getAllRoomAndTrailAreas() const {
+        std::vector<const Area*> areas;
+        areas.reserve(rooms_.size());
+        for (const Room* r : rooms_) {
+                if (r && r->room_area) {
+                        areas.push_back(r->room_area.get());
+                }
+        }
+        return areas;
 }
 
 void AssetLoader::load_map_json() {

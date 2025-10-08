@@ -29,9 +29,6 @@ SDL_Color color_for_area(const std::string& name) {
     if (lower.find("trigger") != std::string::npos) {
         return SDL_Color{0, 0, 255, 128};
     }
-    if (lower.find("spacing") != std::string::npos) {
-        return SDL_Color{0, 200, 0, 128};
-    }
     if (lower.find("child") != std::string::npos) {
         return SDL_Color{255, 220, 0, 128};
     }

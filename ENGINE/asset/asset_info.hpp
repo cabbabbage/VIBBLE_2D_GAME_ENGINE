@@ -8,6 +8,7 @@
 #include <optional>
 #include <string>
 #include <vector>
+#include <unordered_set>
 
 struct ChildInfo {
     std::string json_path;
@@ -96,6 +97,9 @@ class AssetInfo {
     std::string info_json_path() const { return info_json_path_; }
     std::string asset_dir_path() const { return dir_path_; }
 
+    const std::unordered_set<std::string>& tag_lookup() const { return tag_lookup_; }
+    const std::unordered_set<std::string>& anti_tag_lookup() const { return anti_tag_lookup_; }
+
     bool remove_area(const std::string& name);
 
     std::vector<std::string> animation_names() const;
@@ -132,6 +136,10 @@ class AssetInfo {
     std::string dir_path_;
     nlohmann::json info_json_;
     std::string info_json_path_;
+    void rebuild_tag_cache();
+    void rebuild_anti_tag_cache();
+    std::unordered_set<std::string> tag_lookup_;
+    std::unordered_set<std::string> anti_tag_lookup_;
     friend class AnimationLoader;
     friend class LightingLoader;
     friend class ChildLoader;

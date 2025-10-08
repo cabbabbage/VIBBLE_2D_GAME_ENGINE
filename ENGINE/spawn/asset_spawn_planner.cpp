@@ -355,7 +355,6 @@ void AssetSpawnPlanner::parse_asset_spawns(const Area& area) {
             s.link_area_name = link_name;
         }
 
-        s.check_spacing     = asset.value("check_spacing", asset.value("check_overlap", false));
         s.check_min_spacing = asset.value("enforce_spacing", asset.value("check_min_spacing", false));
 
         s.exact_offset.x = asset.value("dx", asset.value("exact_dx", 0));

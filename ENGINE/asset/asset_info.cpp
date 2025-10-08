@@ -247,6 +247,8 @@ AssetInfo::AssetInfo(const std::string &asset_folder_name)
                         }
                 }
         }
+        rebuild_tag_cache();
+        rebuild_anti_tag_cache();
         if (data.contains("animations") && data["animations"].is_object()) {
                 nlohmann::json new_anim = nlohmann::json::object();
                 for (auto it = data["animations"].begin(); it != data["animations"].end(); ++it) {
@@ -358,7 +360,7 @@ void AssetInfo::load_base_properties(const nlohmann::json &data) {
 }
 
 bool AssetInfo::has_tag(const std::string &tag) const {
-    return std::find(tags.begin(), tags.end(), tag) != tags.end();
+    return tag_lookup_.find(tag) != tag_lookup_.end();
 }
 
 void AssetInfo::generate_lights(SDL_Renderer *renderer) {
@@ -433,19 +435,20 @@ void AssetInfo::set_scale_filter(bool smooth) {
 }
 
 void AssetInfo::set_tags(const std::vector<std::string> &t) {
-	tags = t;
-	nlohmann::json arr = nlohmann::json::array();
-	for (const auto &s : tags)
-	arr.push_back(s);
-	info_json_["tags"] = std::move(arr);
-	passable = has_tag("passable");
+        tags = t;
+        rebuild_tag_cache();
+        nlohmann::json arr = nlohmann::json::array();
+        for (const auto &s : tags)
+        arr.push_back(s);
+        info_json_["tags"] = std::move(arr);
+        passable = has_tag("passable");
 }
 
 void AssetInfo::add_tag(const std::string &tag) {
-	if (std::find(tags.begin(), tags.end(), tag) == tags.end()) {
-		tags.push_back(tag);
-	}
-	set_tags(tags);
+        if (!has_tag(tag)) {
+                tags.push_back(tag);
+        }
+        set_tags(tags);
 }
 
 void AssetInfo::remove_tag(const std::string &tag) {
@@ -455,6 +458,7 @@ void AssetInfo::remove_tag(const std::string &tag) {
 
 void AssetInfo::set_anti_tags(const std::vector<std::string> &t) {
         anti_tags = t;
+        rebuild_anti_tag_cache();
         nlohmann::json arr = nlohmann::json::array();
         for (const auto &s : anti_tags)
                 arr.push_back(s);
@@ -462,7 +466,7 @@ void AssetInfo::set_anti_tags(const std::vector<std::string> &t) {
 }
 
 void AssetInfo::add_anti_tag(const std::string &tag) {
-        if (std::find(anti_tags.begin(), anti_tags.end(), tag) == anti_tags.end()) {
+        if (anti_tag_lookup_.find(tag) == anti_tag_lookup_.end()) {
                 anti_tags.push_back(tag);
         }
         set_anti_tags(anti_tags);
@@ -473,11 +477,27 @@ void AssetInfo::remove_anti_tag(const std::string &tag) {
         set_anti_tags(anti_tags);
 }
 
+void AssetInfo::rebuild_tag_cache() {
+        tag_lookup_.clear();
+        tag_lookup_.reserve(tags.size());
+        for (const auto& value : tags) {
+                tag_lookup_.insert(value);
+        }
+}
+
+void AssetInfo::rebuild_anti_tag_cache() {
+        anti_tag_lookup_.clear();
+        anti_tag_lookup_.reserve(anti_tags.size());
+        for (const auto& value : anti_tags) {
+                anti_tag_lookup_.insert(value);
+        }
+}
+
 void AssetInfo::set_passable(bool v) {
-	passable = v;
-	if (v)
-	add_tag("passable");
-	else
+        passable = v;
+        if (v)
+        add_tag("passable");
+        else
 	remove_tag("passable");
 }
 

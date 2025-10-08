@@ -67,6 +67,14 @@ private:
     bool should_rebuild_with(const nlohmann::json& data) const;
     void load_tags_from_json(const nlohmann::json& data);
     void write_tags_to_json(nlohmann::json& object) const;
+    nlohmann::json* resolve_spawn_groups_array();
+    bool mutate_spawn_groups(const std::function<bool(nlohmann::json&)>& mutator);
+    void synchronize_spawn_groups_snapshot(const nlohmann::json& groups);
+    void handle_spawn_groups_changed(bool structure_changed);
+    bool add_spawn_group_local();
+    bool duplicate_spawn_group_local(const std::string& id);
+    bool delete_spawn_group_local(const std::string& id);
+    bool move_spawn_group_local(const std::string& id, int direction);
     static constexpr int kMaxFloatingHeight = 640;
     SDL_Rect bounds_{0,0,0,0};
     SDL_Rect applied_bounds_{-1,-1,0,0};

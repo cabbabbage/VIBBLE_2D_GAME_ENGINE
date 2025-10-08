@@ -162,6 +162,7 @@ enable_testing()
 
 add_executable(dev_mode_ui_tests
     tests/dev_mode/full_screen_collapsible_tests.cpp
+    tests/dev_mode/tag_cache_tests.cpp
     ENGINE/dev_mode/full_screen_collapsible.cpp
     ENGINE/dev_mode/widgets.cpp
     ENGINE/dev_mode/dm_styles.cpp
@@ -182,3 +183,36 @@ target_link_libraries(dev_mode_ui_tests PRIVATE
 )
 target_compile_definitions(dev_mode_ui_tests PRIVATE SDL_MAIN_HANDLED)
 add_test(NAME dev_mode_ui_tests COMMAND dev_mode_ui_tests)
+
+add_executable(map_grid_tests
+    tests/map_grid_tests.cpp
+    ENGINE/utils/map_grid.cpp
+    ENGINE/utils/area.cpp
+)
+target_include_directories(map_grid_tests PRIVATE
+    ${CMAKE_SOURCE_DIR}/external
+    ${CMAKE_SOURCE_DIR}/ENGINE
+    ${CMAKE_SOURCE_DIR}/ENGINE/utils
+)
+target_link_libraries(map_grid_tests PRIVATE
+    SDL2::SDL2
+)
+target_compile_definitions(map_grid_tests PRIVATE SDL_MAIN_HANDLED)
+add_test(NAME map_grid_tests COMMAND map_grid_tests)
+
+add_executable(asset_loader_distance_tests
+    tests/core/asset_loader_distance_tests.cpp
+    ENGINE/utils/area.cpp
+)
+target_include_directories(asset_loader_distance_tests PRIVATE
+    ${CMAKE_SOURCE_DIR}/external
+    ${CMAKE_SOURCE_DIR}/ENGINE
+    ${CMAKE_SOURCE_DIR}/ENGINE/core
+    ${CMAKE_SOURCE_DIR}/ENGINE/utils
+)
+target_link_libraries(asset_loader_distance_tests PRIVATE
+    nlohmann_json::nlohmann_json
+    SDL2::SDL2
+)
+target_compile_definitions(asset_loader_distance_tests PRIVATE SDL_MAIN_HANDLED)
+add_test(NAME asset_loader_distance_tests COMMAND asset_loader_distance_tests)

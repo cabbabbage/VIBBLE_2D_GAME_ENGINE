@@ -439,9 +439,9 @@ bool AssetList::has_all_required_tags(const Asset* a, const std::vector<std::str
         return false;
     }
 
-    const auto& asset_tags = a->info->tags;
+    const auto& asset_tags = a->info->tag_lookup();
     for (const std::string& tag : req) {
-        if (std::find(asset_tags.begin(), asset_tags.end(), tag) == asset_tags.end()) {
+        if (asset_tags.find(tag) == asset_tags.end()) {
             return false;
         }
     }
@@ -457,9 +457,9 @@ bool AssetList::has_any_tag(const Asset* a, const std::vector<std::string>& tags
         return false;
     }
 
-    const auto& asset_tags = a->info->tags;
+    const auto& asset_tags = a->info->tag_lookup();
     for (const std::string& tag : tags) {
-        if (std::find(asset_tags.begin(), asset_tags.end(), tag) != asset_tags.end()) {
+        if (asset_tags.find(tag) != asset_tags.end()) {
             return true;
         }
     }

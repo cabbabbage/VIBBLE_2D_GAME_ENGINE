@@ -33,8 +33,7 @@ void CenterSpawner::spawn(const SpawnInfo& item, const Area* area, SpawnContext&
         auto& info = candidate->info;
 
         if (ctx.checker().check(info, center, ctx.exclusion_zones(), ctx.all_assets(),
-                                item.check_spacing,  false,
-                                 false,  5)) {
+                                false, false, 5)) {
             continue;
         }
 

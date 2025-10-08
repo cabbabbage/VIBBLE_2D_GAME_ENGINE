@@ -1,11 +1,8 @@
 #include "check.hpp"
 #include <algorithm>
-#include <limits>
-#include <cmath>
 #include <iostream>
 #include <SDL.h>
 #include "utils/range_util.hpp"
-#include "utils/area_helpers.hpp"
 #include "asset/asset_types.hpp"
 
 Check::Check(bool debug)
@@ -20,7 +17,6 @@ bool Check::check(const std::shared_ptr<AssetInfo>& info,
                   const SDL_Point& test_pos,
                   const std::vector<Area>& exclusion_areas,
                   const std::vector<std::unique_ptr<Asset>>& assets,
-                  bool check_spacing,
                   bool check_min_distance,
                   bool check_min_distance_all,
                   int num_neighbors) const
@@ -50,13 +46,7 @@ bool Check::check(const std::shared_ptr<AssetInfo>& info,
         }
 	auto nearest = get_closest_assets(test_pos, num_neighbors, assets);
 	if (debug_) std::cout << "[Check] Found " << nearest.size() << " nearest assets.\n";
-	if (check_spacing && info->find_area("spacing_area")) {
-		if (check_spacing_overlap(info, test_pos, nearest)) {
-			if (debug_) std::cout << "[Check] Spacing overlap detected.\n";
-			return true;
-		}
-	}
-	if (check_min_distance && info->min_same_type_distance > 0) {
+        if (check_min_distance && info->min_same_type_distance > 0) {
 		if (check_min_type_distance(info, test_pos, assets)) {
 			if (debug_) std::cout << "[Check] Minimum type distance violated.\n";
 			return true;
@@ -107,30 +97,6 @@ std::vector<Asset*> Check::get_closest_assets(const SDL_Point& pos, int max_coun
 		}
 	}
 	return closest;
-}
-
-bool Check::check_spacing_overlap(const std::shared_ptr<AssetInfo>& info,
-                                  const SDL_Point& test_pos,
-                                  const std::vector<Asset*>& closest_assets) const
-{
-	if (!info) return false;
-        Area* spacing = info->find_area("spacing_area");
-        if (!spacing) return false;
-        Area test_area = area_helpers::make_world_area(*info, *spacing, test_pos, false);
-	for (Asset* other : closest_assets) {
-		if (!other || !other->info) continue;
-                Area other_area("fallback", SDL_Point{other->pos.x, other->pos.y}, 1, 1, "Square", 0, std::numeric_limits<int>::max(), std::numeric_limits<int>::max());
-                Area* o_spacing = other->info->find_area("spacing_area");
-                if (o_spacing) {
-                        other_area = area_helpers::make_world_area(*other->info, *o_spacing, other->pos, other->flipped);
-                }
-		if (test_area.intersects(other_area)) {
-			if (debug_) std::cout << "[Check] Overlap found between test area and asset: "
-			<< other->info->name << "\n";
-			return true;
-		}
-	}
-	return false;
 }
 
 bool Check::check_min_distance_all(const std::shared_ptr<AssetInfo>& info,

@@ -25,7 +25,6 @@ struct SpawnInfo {
     std::string spawn_id;
     int priority = 0;
     int quantity = 0;
-    bool check_spacing = false;
     bool check_min_spacing = false;
 
     // Optional named room area to clip spawning within

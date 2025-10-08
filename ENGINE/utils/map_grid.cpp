@@ -70,24 +70,69 @@ MapGrid::Point* MapGrid::get_nearest_point(SDL_Point p) {
 
 MapGrid::Point* MapGrid::get_rnd_point_in_area(const Area& area, std::mt19937& rng) {
     if (free_count_ <= 0) return nullptr;
-    std::vector<int> candidates;
-    candidates.reserve(grid_.size());
-    for (int i = 0; i < static_cast<int>(grid_.size()); ++i) {
-        if (!grid_[i].occupied && area.contains_point(grid_[i].pos)) {
-            candidates.push_back(i);
+    auto [minx, miny, maxx, maxy] = area.get_bounds();
+    int min_ix = 0, min_iy = 0;
+    int max_ix = 0, max_iy = 0;
+    to_grid_indices(SDL_Point{minx, miny}, min_ix, min_iy);
+    to_grid_indices(SDL_Point{maxx, maxy}, max_ix, max_iy);
+
+    min_ix = std::clamp(min_ix, 0, cols_ - 1);
+    max_ix = std::clamp(max_ix, 0, cols_ - 1);
+    min_iy = std::clamp(min_iy, 0, rows_ - 1);
+    max_iy = std::clamp(max_iy, 0, rows_ - 1);
+
+    if (min_ix > max_ix) std::swap(min_ix, max_ix);
+    if (min_iy > max_iy) std::swap(min_iy, max_iy);
+
+    Point* chosen = nullptr;
+    int seen = 0;
+    for (int iy = min_iy; iy <= max_iy; ++iy) {
+        for (int ix = min_ix; ix <= max_ix; ++ix) {
+            auto& pt = grid_[idx(ix, iy)];
+            if (pt.occupied || !area.contains_point(pt.pos)) continue;
+            ++seen;
+            std::uniform_int_distribution<int> pick(0, seen - 1);
+            if (pick(rng) == 0) {
+                chosen = &pt;
+            }
         }
     }
-    if (candidates.empty()) return nullptr;
-    std::uniform_int_distribution<int> pick(0, static_cast<int>(candidates.size()) - 1);
-    return &grid_[candidates[pick(rng)]];
+
+    return chosen;
 }
 
 std::vector<MapGrid::Point*> MapGrid::get_all_points_in_area(const Area& area) const {
+    if (grid_.empty()) return {};
+
+    auto [minx, miny, maxx, maxy] = area.get_bounds();
+    int min_ix = 0, min_iy = 0;
+    int max_ix = 0, max_iy = 0;
+    to_grid_indices(SDL_Point{minx, miny}, min_ix, min_iy);
+    to_grid_indices(SDL_Point{maxx, maxy}, max_ix, max_iy);
+
+    min_ix = std::clamp(min_ix, 0, cols_ - 1);
+    max_ix = std::clamp(max_ix, 0, cols_ - 1);
+    min_iy = std::clamp(min_iy, 0, rows_ - 1);
+    max_iy = std::clamp(max_iy, 0, rows_ - 1);
+
+    if (min_ix > max_ix) std::swap(min_ix, max_ix);
+    if (min_iy > max_iy) std::swap(min_iy, max_iy);
+
+    const int span_x = max_ix - min_ix + 1;
+    const int span_y = max_iy - min_iy + 1;
+    const int reserve = span_x * span_y;
     std::vector<Point*> out;
-    out.reserve(grid_.size());
-    for (int i = 0; i < static_cast<int>(grid_.size()); ++i) {
-        const auto& pt = grid_[i];
-        if (!pt.occupied && area.contains_point(pt.pos)) out.push_back(const_cast<Point*>(&pt));
+    if (reserve > 0) {
+        out.reserve(reserve);
+    }
+
+    for (int iy = min_iy; iy <= max_iy; ++iy) {
+        for (int ix = min_ix; ix <= max_ix; ++ix) {
+            const auto& pt = grid_[idx(ix, iy)];
+            if (!pt.occupied && area.contains_point(pt.pos)) {
+                out.push_back(const_cast<Point*>(&pt));
+            }
+        }
     }
     return out;
 }

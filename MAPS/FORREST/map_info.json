@@ -513,28 +513,6 @@
         {
           "candidates": [
             {
-              "chance": 200,
-              "name": "null"
-            }
-          ],
-          "chance_denominator": 0,
-          "check_overlap": false,
-          "display_name": "candle",
-          "dx": -332,
-          "dy": -167,
-          "enforce_spacing": false,
-          "max_number": 78,
-          "min_number": 15,
-          "origional_height": 3180,
-          "origional_width": 3180,
-          "position": "Perimeter",
-          "priority": 0,
-          "radius": 455,
-          "spawn_id": "spn-7d847a71ac07"
-        },
-        {
-          "candidates": [
-            {
               "chance": 0,
               "name": "null"
             },
@@ -553,7 +531,7 @@
           "origional_height": 1248,
           "origional_width": 1248,
           "position": "Exact",
-          "priority": 1,
+          "priority": 0,
           "spawn_id": "spn-6d19915360f2"
         },
         {
@@ -574,7 +552,7 @@
           "origional_height": 3612,
           "origional_width": 3612,
           "position": "Exact",
-          "priority": 2,
+          "priority": 1,
           "spawn_id": "spn-af3a3a5858e6"
         }
       ],
