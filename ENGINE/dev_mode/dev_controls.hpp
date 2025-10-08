@@ -28,6 +28,7 @@ class MapEditor;
 class MapModeUI;
 class CameraUIPanel;
 class RegenerateRoomPopup;
+class LightRaysUIPanel;
 
 class DevControls {
 public:
@@ -133,6 +134,8 @@ private:
     void toggle_map_light_panel();
     void toggle_camera_panel();
     void close_camera_panel();
+    void toggle_light_rays_panel();
+    void close_light_rays_panel();
 
     void toggle_map_assets_modal();
     void toggle_boundary_assets_modal();
@@ -179,9 +182,11 @@ private:
     MapLightPanel::SaveCallback map_light_save_cb_;
     std::unique_ptr<MapModeUI> map_mode_ui_;
     std::unique_ptr<CameraUIPanel> camera_panel_;
+    std::unique_ptr<LightRaysUIPanel> light_rays_panel_;
     std::unique_ptr<RegenerateRoomPopup> regenerate_popup_;
     std::string map_path_;
     bool pointer_over_camera_panel_ = false;
+    bool pointer_over_light_rays_panel_ = false;
     std::unique_ptr<TrailEditorSuite> trail_suite_;
     AssetFilterBar asset_filter_;
 

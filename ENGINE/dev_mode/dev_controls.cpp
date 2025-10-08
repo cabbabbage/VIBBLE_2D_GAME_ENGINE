@@ -7,6 +7,7 @@
 #include "dev_mode/map_mode_ui.hpp"
 #include "dev_mode/full_screen_collapsible.hpp"
 #include "dev_mode/camera_ui.hpp"
+#include "dev_mode/LightRaysUIPanel.hpp"
 #include "dev_mode/sdl_pointer_utils.hpp"
 #include "dev_mode/area_mode/create_room_area_panel.hpp"
 #include "dev_mode/area_mode/edit_room_area_panel.hpp"
@@ -295,6 +296,11 @@ DevControls::DevControls(Assets* owner, int screen_w, int screen_h)
     if (camera_panel_) {
         camera_panel_->close();
     }
+    light_rays_panel_ = std::make_unique<LightRaysUIPanel>(360, 96);
+    if (light_rays_panel_) {
+        light_rays_panel_->close();
+        light_rays_panel_->set_on_close([this]() { sync_header_button_states(); });
+    }
     if (map_editor_) {
         map_editor_->set_ui_blocker([this](int x, int y) { return is_pointer_over_dev_ui(x, y); });
     }
@@ -414,6 +420,9 @@ void DevControls::set_map_info(nlohmann::json* map_info, MapLightPanel::SaveCall
         map_mode_ui_->set_light_save_callback(map_light_save_cb_);
         map_mode_ui_->set_map_context(map_info_json_, map_path_);
     }
+    if (light_rays_panel_) {
+        light_rays_panel_->set_map_info(map_info_json_, map_light_save_cb_);
+    }
     asset_filter_.set_map_info(map_info_json_);
     configure_header_button_sets();
 }
@@ -436,6 +445,7 @@ void DevControls::set_screen_dimensions(int width, int height) {
     if (map_mode_ui_) map_mode_ui_->set_screen_dimensions(width, height);
     SDL_Rect bounds{0, 0, screen_w_, screen_h_};
     if (camera_panel_) camera_panel_->set_work_area(bounds);
+    if (light_rays_panel_) light_rays_panel_->set_work_area(bounds);
     if (trail_suite_) trail_suite_->set_screen_dimensions(width, height);
     asset_filter_.set_screen_dimensions(width, height);
     if (map_assets_modal_) map_assets_modal_->set_screen_dimensions(width, height);
@@ -480,6 +490,7 @@ void DevControls::set_map_context(nlohmann::json* map_info, const std::string& m
     map_path_ = map_path;
     if (map_mode_ui_) map_mode_ui_->set_map_context(map_info, map_path);
     if (map_mode_ui_) map_mode_ui_->set_light_save_callback(map_light_save_cb_);
+    if (light_rays_panel_) light_rays_panel_->set_map_info(map_info_json_, map_light_save_cb_);
     asset_filter_.set_map_info(map_info_json_);
     configure_header_button_sets();
     notify_room_area_data_changed();
@@ -487,6 +498,9 @@ void DevControls::set_map_context(nlohmann::json* map_info, const std::string& m
 
 bool DevControls::is_pointer_over_dev_ui(int x, int y) const {
     if (camera_panel_ && camera_panel_->is_visible() && camera_panel_->is_point_inside(x, y)) {
+        return true;
+    }
+    if (light_rays_panel_ && light_rays_panel_->is_visible() && light_rays_panel_->is_point_inside(x, y)) {
         return true;
     }
     if (room_editor_ && room_editor_->is_room_ui_blocking_point(x, y)) {
@@ -539,6 +553,7 @@ void DevControls::set_enabled(bool enabled) {
 
     if (enabled_) {
         const bool camera_was_visible = camera_panel_ && camera_panel_->is_visible();
+        const bool light_rays_was_visible = light_rays_panel_ && light_rays_panel_->is_visible();
         close_all_floating_panels();
         set_mode(Mode::RoomEditor);
         Room* target = choose_room(current_room_ ? current_room_ : detected_room_);
@@ -556,6 +571,9 @@ void DevControls::set_enabled(bool enabled) {
         }
         if (camera_was_visible && camera_panel_) {
             camera_panel_->open();
+        }
+        if (light_rays_was_visible && light_rays_panel_) {
+            light_rays_panel_->open();
         }
     } else {
         close_all_floating_panels();
@@ -575,6 +593,7 @@ void DevControls::set_enabled(bool enabled) {
             room_editor_->set_enabled(false);
         }
         close_camera_panel();
+        close_light_rays_panel();
     }
 
     sync_header_button_states();
@@ -595,6 +614,9 @@ void DevControls::update(const Input& input) {
     }
     pointer_over_camera_panel_ =
         camera_panel_ && camera_panel_->is_visible() && camera_panel_->is_point_inside(input.getX(), input.getY());
+    pointer_over_light_rays_panel_ =
+        light_rays_panel_ && light_rays_panel_->is_visible() &&
+        light_rays_panel_->is_point_inside(input.getX(), input.getY());
 
     if (mode_ == Mode::MapEditor) {
         if (map_mode_ui_ && input.wasScancodePressed(SDL_SCANCODE_F8)) {
@@ -605,7 +627,7 @@ void DevControls::update(const Input& input) {
             handle_map_selection();
         }
     } else if (mode_ == Mode::RoomEditor && room_editor_ && room_editor_->is_enabled()) {
-        if (!pointer_over_camera_panel_) {
+        if (!pointer_over_camera_panel_ && !pointer_over_light_rays_panel_) {
             room_editor_->update(input);
         }
     } else if (mode_ == Mode::AreaMode) {
@@ -626,6 +648,9 @@ void DevControls::update(const Input& input) {
 
     if (camera_panel_) {
         camera_panel_->update(input, screen_w_, screen_h_);
+    }
+    if (light_rays_panel_) {
+        light_rays_panel_->update(input, screen_w_, screen_h_);
     }
     if (regenerate_popup_ && regenerate_popup_->visible()) {
         regenerate_popup_->update(input);
@@ -766,8 +791,35 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
         }
     }
 
+    bool pointer_event_inside_light_rays = false;
+    if (light_rays_panel_ && light_rays_panel_->is_visible()) {
+        switch (event.type) {
+        case SDL_MOUSEMOTION:
+            pointer_event_inside_light_rays = light_rays_panel_->is_point_inside(event.motion.x, event.motion.y);
+            break;
+        case SDL_MOUSEBUTTONDOWN:
+        case SDL_MOUSEBUTTONUP:
+            pointer_event_inside_light_rays = light_rays_panel_->is_point_inside(event.button.x, event.button.y);
+            break;
+        case SDL_MOUSEWHEEL: {
+            int mx = 0;
+            int my = 0;
+            SDL_GetMouseState(&mx, &my);
+            pointer_event_inside_light_rays = light_rays_panel_->is_point_inside(mx, my);
+            break;
+        }
+        default:
+            break;
+        }
+    }
+
     if (camera_panel_ && camera_panel_->is_visible()) {
         if (consume(camera_panel_->handle_event(event))) {
+            return;
+        }
+    }
+    if (light_rays_panel_ && light_rays_panel_->is_visible()) {
+        if (consume(light_rays_panel_->handle_event(event))) {
             return;
         }
     }
@@ -776,7 +828,11 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
     if ((event.type == SDL_KEYDOWN || event.type == SDL_KEYUP || event.type == SDL_TEXTINPUT) && pointer_over_camera_panel_) {
         block_for_camera = true;
     }
-    if (block_for_camera) {
+    bool block_for_light_rays = pointer_event_inside_light_rays;
+    if ((event.type == SDL_KEYDOWN || event.type == SDL_KEYUP || event.type == SDL_TEXTINPUT) && pointer_over_light_rays_panel_) {
+        block_for_light_rays = true;
+    }
+    if (block_for_camera || block_for_light_rays) {
         consume(true);
         return;
     }
@@ -1254,6 +1310,9 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
         boundary_assets_modal_->render(renderer);
     }
     if (trail_suite_) trail_suite_->render(renderer);
+    if (light_rays_panel_ && light_rays_panel_->is_visible()) {
+        light_rays_panel_->render(renderer);
+    }
     if (camera_panel_ && camera_panel_->is_visible()) {
         camera_panel_->render(renderer);
     }
@@ -1471,8 +1530,29 @@ void DevControls::configure_header_button_sets() {
             map_mode_ui_->toggle_light_panel();
         }
         sync_header_button_states();
-};
+    };
     room_buttons.push_back(std::move(lights_btn));
+
+    MapModeUI::HeaderButtonConfig light_rays_btn;
+    light_rays_btn.id = "light_rays";
+    light_rays_btn.label = "Light Rays";
+    light_rays_btn.active = light_rays_panel_ && light_rays_panel_->is_visible();
+    light_rays_btn.on_toggle = [this](bool active) {
+        if (!light_rays_panel_) {
+            sync_header_button_states();
+            return;
+        }
+        if (room_editor_) {
+            room_editor_->close_room_config();
+        }
+        const bool currently_open = light_rays_panel_->is_visible();
+        if (active != currently_open) {
+            toggle_light_rays_panel();
+        } else {
+            sync_header_button_states();
+        }
+    };
+    room_buttons.push_back(std::move(light_rays_btn));
 
     room_buttons.push_back(make_camera_button());
 
@@ -1578,6 +1658,8 @@ void DevControls::sync_header_button_states() {
     map_mode_ui_->set_button_state(MapModeUI::HeaderMode::Map, "camera", camera_open);
     const bool lights_open = map_mode_ui_->is_light_panel_visible();
     map_mode_ui_->set_button_state(MapModeUI::HeaderMode::Room, "lights", lights_open);
+    const bool light_rays_open = light_rays_panel_ && light_rays_panel_->is_visible();
+    map_mode_ui_->set_button_state(MapModeUI::HeaderMode::Room, "light_rays", light_rays_open);
     map_mode_ui_->set_button_state(MapModeUI::HeaderMode::Map, "lights", lights_open);
     map_mode_ui_->set_button_state(MapModeUI::HeaderMode::Room, "regenerate", false);
     map_mode_ui_->set_button_state(MapModeUI::HeaderMode::Room, "regenerate_other", false);
@@ -1602,6 +1684,9 @@ void DevControls::close_all_floating_panels() {
     }
     if (camera_panel_) {
         camera_panel_->close();
+    }
+    if (light_rays_panel_) {
+        light_rays_panel_->close();
     }
     if (map_mode_ui_) {
         map_mode_ui_->close_all_panels();
@@ -1820,6 +1905,29 @@ void DevControls::toggle_camera_panel() {
 void DevControls::close_camera_panel() {
     if (camera_panel_) {
         camera_panel_->close();
+    }
+}
+
+void DevControls::toggle_light_rays_panel() {
+    if (!light_rays_panel_) {
+        return;
+    }
+    if (light_rays_panel_->is_visible()) {
+        light_rays_panel_->close();
+    } else {
+        if (is_modal_blocking_panels()) {
+            pulse_modal_header();
+            sync_header_button_states();
+            return;
+        }
+        light_rays_panel_->open();
+    }
+    sync_header_button_states();
+}
+
+void DevControls::close_light_rays_panel() {
+    if (light_rays_panel_) {
+        light_rays_panel_->close();
     }
 }
 

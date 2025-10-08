@@ -16,6 +16,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <cctype>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -75,6 +76,41 @@ Assets::Assets(std::vector<Asset>&& loaded,
 
     update_filtered_active_assets();
 
+}
+
+std::vector<const Room::NamedArea*> Assets::current_room_trigger_areas() const {
+    std::vector<const Room::NamedArea*> result;
+    if (!current_room_) {
+        return result;
+    }
+
+    const auto is_trigger_string = [](const std::string& value) {
+        if (value.empty()) {
+            return false;
+        }
+        std::string lowered;
+        lowered.reserve(value.size());
+        for (unsigned char ch : value) {
+            lowered.push_back(static_cast<char>(std::tolower(ch)));
+        }
+        if (lowered == "trigger") {
+            return true;
+        }
+        return lowered.find("trigger") != std::string::npos;
+    };
+
+    for (const auto& entry : current_room_->areas) {
+        if (!entry.area) {
+            continue;
+        }
+        if (is_trigger_string(entry.kind) ||
+            is_trigger_string(entry.type) ||
+            is_trigger_string(entry.name)) {
+            result.push_back(&entry);
+        }
+    }
+
+    return result;
 }
 
 void Assets::load_map_info_json() {
@@ -223,6 +259,7 @@ void Assets::hydrate_map_info_sections() {
     ensure_object("map_assets_data");
     ensure_object("map_boundary_data");
     ensure_object("map_light_data");
+    ensure_object("light_rays_params");
 
     {
         nlohmann::json& L = map_info_json_["map_light_data"];
@@ -246,6 +283,39 @@ void Assets::hydrate_map_info_sections() {
             D["keys"] = nlohmann::json::array();
             D["keys"].push_back(nlohmann::json::array({ 0.0, D["base_color"] }));
         }
+    }
+    {
+        nlohmann::json& R = map_info_json_["light_rays_params"];
+        if (!R.is_object()) {
+            R = nlohmann::json::object();
+        }
+        auto ensure_bool = [&](const char* key, bool def) {
+            bool value = def;
+            try { value = R.at(key).get<bool>(); } catch (...) {}
+            R[key] = value;
+        };
+        auto ensure_double = [&](const char* key, double def, double lo, double hi) {
+            double value = def;
+            try { value = R.at(key).get<double>(); } catch (...) {}
+            value = std::clamp(value, lo, hi);
+            R[key] = value;
+        };
+        auto ensure_int = [&](const char* key, int def, int lo, int hi) {
+            int value = def;
+            try { value = R.at(key).get<int>(); } catch (...) {}
+            value = std::clamp(value, lo, hi);
+            R[key] = value;
+        };
+
+        ensure_bool("enabled", true);
+        ensure_double("min_luma_threshold", 0.1, 0.0, 1.0);
+        ensure_double("bright_percentile", 0.94, 0.0, 1.0);
+        ensure_double("density", 1.35, 0.0, 4.0);
+        ensure_double("decay", 0.94, 0.0, 1.0);
+        ensure_double("weight", 6.75, 0.0, 20.0);
+        ensure_double("exposure", 8.6, 0.0, 20.0);
+        ensure_int("samples", 112, 1, 256);
+        ensure_int("downsample_log2", 1, 0, 4);
     }
     ensure_object("rooms_data");
     ensure_object("trails_data");
@@ -287,10 +357,13 @@ void Assets::apply_map_light_config() {
         return;
     }
     auto it = map_info_json_.find("map_light_data");
-    if (it == map_info_json_.end() || !it->is_object()) {
-        return;
+    if (it != map_info_json_.end() && it->is_object()) {
+        scene->apply_map_light_config(*it);
     }
-    scene->apply_map_light_config(*it);
+    auto rays_it = map_info_json_.find("light_rays_params");
+    if (rays_it != map_info_json_.end() && rays_it->is_object()) {
+        scene->apply_light_rays_config(*rays_it);
+    }
 }
 
 bool Assets::on_map_light_changed() {

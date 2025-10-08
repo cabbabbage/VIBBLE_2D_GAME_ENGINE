@@ -23,6 +23,7 @@ class SceneRenderer {
     ~SceneRenderer();
     void render();
     void apply_map_light_config(const nlohmann::json& data);
+    void apply_light_rays_config(const nlohmann::json& data);
     SDL_Renderer* get_renderer() const;
     void set_low_quality_rendering(bool low_quality);
 

@@ -72,6 +72,10 @@ public:
 
     void set_editor_current_room(Room* room);
 
+    Room* current_room() { return current_room_; }
+    const Room* current_room() const { return current_room_; }
+    std::vector<const Room::NamedArea*> current_room_trigger_areas() const;
+
     nlohmann::json& map_info_json() { return map_info_json_; }
     const nlohmann::json& map_info_json() const { return map_info_json_; }
     const std::string& map_path() const { return map_path_; }

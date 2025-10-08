@@ -159,6 +159,40 @@ void SceneRenderer::apply_map_light_config(const nlohmann::json& data) {
     SDL_SetRenderTarget(renderer_, prev);
 }
 
+void SceneRenderer::apply_light_rays_config(const nlohmann::json& data) {
+    if (!light_rays_pass_) {
+        return;
+    }
+
+    auto read_double = [&](const char* key, double def, double lo, double hi) -> float {
+        double value = def;
+        try { value = data.at(key).get<double>(); } catch (...) {}
+        value = std::clamp(value, lo, hi);
+        return static_cast<float>(value);
+    };
+    auto read_int = [&](const char* key, int def, int lo, int hi) -> int {
+        int value = def;
+        try { value = data.at(key).get<int>(); } catch (...) {}
+        return std::clamp(value, lo, hi);
+    };
+
+    LightRaysParams params{};
+    params.min_luma_threshold = read_double("min_luma_threshold", params.min_luma_threshold, 0.0, 1.0);
+    params.bright_percentile  = read_double("bright_percentile", params.bright_percentile, 0.0, 1.0);
+    params.density            = read_double("density", params.density, 0.0, 4.0);
+    params.decay              = read_double("decay", params.decay, 0.0, 1.0);
+    params.weight             = read_double("weight", params.weight, 0.0, 20.0);
+    params.exposure           = read_double("exposure", params.exposure, 0.0, 20.0);
+    params.samples            = read_int("samples", params.samples, 1, 256);
+    params.downsample_log2    = read_int("downsample_log2", params.downsample_log2, 0, 4);
+
+    bool enabled = true;
+    try { enabled = data.at("enabled").get<bool>(); } catch (...) {}
+
+    light_rays_pass_->set_params(params);
+    light_rays_pass_->set_enabled(enabled);
+}
+
 void SceneRenderer::update_shading_groups() {
     ++current_shading_group_;
     if (current_shading_group_ > num_groups_) current_shading_group_ = 1;
