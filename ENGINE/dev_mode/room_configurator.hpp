@@ -9,6 +9,7 @@
 #include <nlohmann/json.hpp>
 
 #include "DockableCollapsible.hpp"
+#include "spawn_group_list.hpp"
 
 class Input;
 class Room;

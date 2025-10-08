@@ -839,29 +839,40 @@ void Assets::schedule_removal(Asset* a) {
 }
 
 void Assets::process_removals() {
-    if (removal_queue.empty()) return;
+    if (removal_queue.empty()) {
+        return;
+    }
+
     std::unordered_set<Asset*> removal_lookup(removal_queue.begin(), removal_queue.end());
 
-        auto it = std::find_if(owned_assets.begin(), owned_assets.end(),
-                               [a](const std::unique_ptr<Asset>& p){ return p.get() == a; });
-        if (it != owned_assets.end()) {
-            owned_assets.erase(it);
+    for (auto it = owned_assets.begin(); it != owned_assets.end();) {
+        if (removal_lookup.count(it->get()) > 0) {
+            it = owned_assets.erase(it);
+        } else {
+            ++it;
         }
-
-        auto erase_ptr = [a](auto& vec) {
-            vec.erase(std::remove(vec.begin(), vec.end(), a), vec.end());
-};
-        erase_ptr(all);
-        erase_ptr(active_assets);
-        erase_ptr(active_light_assets_);
-        erase_ptr(filtered_active_assets);
-        erase_ptr(closest_assets);
     }
+
+    auto erase_ptrs = [&removal_lookup](auto& vec) {
+        vec.erase(
+            std::remove_if(vec.begin(), vec.end(),
+                           [&removal_lookup](auto* candidate) {
+                               return removal_lookup.count(candidate) > 0;
+                           }),
+            vec.end());
+    };
+
+    erase_ptrs(all);
+    erase_ptrs(active_assets);
+    erase_ptrs(active_light_assets_);
+    erase_ptrs(filtered_active_assets);
+    erase_ptrs(closest_assets);
 
     if (dev_controls_ && dev_controls_->is_enabled()) {
         dev_controls_->clear_selection();
         dev_controls_->set_active_assets(filtered_active_assets);
     }
+
     removal_queue.clear();
 
     initialize_active_assets(camera_.get_screen_center());
