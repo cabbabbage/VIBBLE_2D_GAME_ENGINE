@@ -57,11 +57,7 @@
             "name": "Frog"
           },
           {
-            "chance": 84,
-            "name": "Axe"
-          },
-          {
-            "chance": 40,
+            "chance": 1,
             "name": "Stump"
           }
         ],

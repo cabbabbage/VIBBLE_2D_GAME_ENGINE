@@ -66,6 +66,8 @@ private:
     std::unique_ptr<DMSlider> exposure_slider_;
     std::unique_ptr<DMSlider> samples_slider_;
     std::unique_ptr<DMSlider> downsample_slider_;
+    std::unique_ptr<DMSlider> final_blur_radius_slider_;
+    std::unique_ptr<DMSlider> final_blur_mix_slider_;
 
     std::vector<std::unique_ptr<Widget>> widget_wrappers_;
 

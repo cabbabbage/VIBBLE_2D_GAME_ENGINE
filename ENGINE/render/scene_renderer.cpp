@@ -75,6 +75,8 @@ SceneRenderer::SceneRenderer(SDL_Renderer* renderer,
     rays_params.weight             = 6.75f;  // per-sample strength
     rays_params.exposure           = 8.6f;   // global boost
     rays_params.downsample_log2    = 1; // thinner but faster in low quality
+    rays_params.final_blur_radius  = 2.5f;
+    rays_params.final_blur_mix     = 0.85f;
     light_rays_pass_->set_params(rays_params);
     light_rays_pass_->set_enabled(true);
 }
@@ -185,6 +187,8 @@ void SceneRenderer::apply_light_rays_config(const nlohmann::json& data) {
     params.exposure           = read_double("exposure", params.exposure, 0.0, 20.0);
     params.samples            = read_int("samples", params.samples, 1, 256);
     params.downsample_log2    = read_int("downsample_log2", params.downsample_log2, 0, 4);
+    params.final_blur_radius  = read_double("final_blur_radius", params.final_blur_radius, 0.0, 32.0);
+    params.final_blur_mix     = read_double("final_blur_mix", params.final_blur_mix, 0.0, 1.0);
 
     bool enabled = true;
     try { enabled = data.at("enabled").get<bool>(); } catch (...) {}

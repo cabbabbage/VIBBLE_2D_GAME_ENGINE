@@ -38,6 +38,9 @@ void LightRaysPass::destroy_textures_() {
     capture_pixels_.clear();
     luma_buffer_.clear();
     bright_buffer_.clear();
+    ray_intensity_buffer_.clear();
+    ray_intensity_original_.clear();
+    blur_work_buffer_.clear();
     alpha_buffer_.clear();
 }
 
@@ -126,6 +129,9 @@ void LightRaysPass::ensure_buffer_capacity_(int pixel_count) {
     if (static_cast<int>(capture_pixels_.size()) < pixel_count) capture_pixels_.resize(pixel_count);
     if (static_cast<int>(luma_buffer_.size()) < pixel_count)    luma_buffer_.resize(pixel_count);
     if (static_cast<int>(bright_buffer_.size()) < pixel_count)  bright_buffer_.resize(pixel_count);
+    if (static_cast<int>(ray_intensity_buffer_.size()) < pixel_count) ray_intensity_buffer_.resize(pixel_count);
+    if (static_cast<int>(ray_intensity_original_.size()) < pixel_count) ray_intensity_original_.resize(pixel_count);
+    if (static_cast<int>(blur_work_buffer_.size()) < pixel_count) blur_work_buffer_.resize(pixel_count);
     if (static_cast<int>(alpha_buffer_.size()) < pixel_count)   alpha_buffer_.resize(pixel_count);
 }
 
@@ -138,6 +144,7 @@ SDL_Texture* LightRaysPass::compute(SDL_Texture* source_render_target) {
     const int dh = lr_h_;
     const int total_pixels = dw * dh;
     ensure_buffer_capacity_(total_pixels);
+    float total_luma = 0.f;
 
     SDL_Texture* prev_target = SDL_GetRenderTarget(renderer_);
     SDL_SetRenderTarget(renderer_, capture_tex_lowres_);
@@ -185,6 +192,7 @@ SDL_Texture* LightRaysPass::compute(SDL_Texture* source_render_target) {
         float L = luma_u8(r, g, b) * (a / 255.f);
         L = std::min(1.f, std::max(0.f, L));
         luma_buffer_[i] = L;
+        total_luma += L;
         int bin = std::clamp(int(L * 255.f + 0.5f), 0, 255);
         histogram_[bin] += 1;
     }
@@ -198,7 +206,14 @@ SDL_Texture* LightRaysPass::compute(SDL_Texture* source_render_target) {
         running += histogram_[b];
         if (running >= keep) { thresh_bin = b; break; }
     }
-    float thr = std::max(params_.min_luma_threshold, thresh_bin / 255.f);
+    float avg_luma = total_pixels > 0 ? total_luma / static_cast<float>(total_pixels) : 0.f;
+    avg_luma = std::clamp(avg_luma, 0.f, 1.f);
+    float darkness = 1.f - avg_luma;
+    float percentile_thr = thresh_bin / 255.f;
+    float dynamic_floor = params_.min_luma_threshold * (0.5f + 0.5f * avg_luma);
+    float lowered_percentile = percentile_thr - darkness * 0.25f;
+    float thr = std::max(dynamic_floor, lowered_percentile);
+    thr = std::clamp(thr, 0.f, 1.f);
 
     // If too many pixels are considered bright, skip to avoid washing the screen
     if (keep > total_pixels * 0.45f) {
@@ -227,21 +242,25 @@ SDL_Texture* LightRaysPass::compute(SDL_Texture* source_render_target) {
     const float max_dist = std::sqrt(float(dw * dw + dh * dh));
 
     const int samples = std::max(1, params_.samples);
-    const float density = params_.density / float(samples);
+    const float base_density = params_.density / float(samples);
     const float decay   = params_.decay;
     const float weight  = params_.weight;
-    const float exposure = params_.exposure;
+    const float exposure = params_.exposure * (1.f + darkness * 1.25f);
 
     for (int y = 0; y < dh; ++y) {
         for (int x = 0; x < dw; ++x) {
+            const int idx = y * dw + x;
             float dx = lx - float(x);
             float dy = ly - float(y);
             float px = float(x);
             float py = float(y);
-            float stepx = dx * density;
-            float stepy = dy * density;
+            float base_strength = std::clamp(bright_buffer_[idx], 0.f, 1.f);
+            float density_scale = 0.55f + 0.45f * base_strength;
+            float stepx = dx * base_density * density_scale;
+            float stepy = dy * base_density * density_scale;
             float illum_decay = 1.f;
             float sum = 0.f;
+            float max_sample = base_strength;
 
             for (int s = 0; s < samples; ++s) {
                 px += stepx;
@@ -250,14 +269,29 @@ SDL_Texture* LightRaysPass::compute(SDL_Texture* source_render_target) {
                 int sy = int(py + 0.5f);
                 if ((unsigned)sx >= (unsigned)dw || (unsigned)sy >= (unsigned)dh) break;
                 float sample = bright_buffer_[sy * dw + sx];
+                if (sample > max_sample) max_sample = sample;
                 sum += sample * illum_decay * weight;
                 illum_decay *= decay;
+                if (illum_decay < 1e-3f && max_sample < 0.25f) break;
             }
+
+            float length_factor = std::max(base_strength, max_sample);
+            length_factor = std::clamp(length_factor, 0.f, 1.f);
+            const float min_length = 0.3f;
+            float length_scale = min_length + (1.f - min_length) * length_factor;
+            float darkness_bonus = darkness * 0.25f;
+            length_scale = std::clamp(length_scale + (1.f - length_scale) * darkness_bonus,
+                                      min_length * 0.5f, 1.f);
+
             float dx0 = float(x) - lx;
             float dy0 = float(y) - ly;
             float dist = std::sqrt(dx0 * dx0 + dy0 * dy0);
-            float falloff = max_dist > 0.f ? std::clamp(1.f - (dist / max_dist), 0.f, 1.f) : 1.f;
+            float effective_max_dist = max_dist * length_scale;
+            float falloff = effective_max_dist > 1e-5f
+                                ? std::clamp(1.f - (dist / effective_max_dist), 0.f, 1.f)
+                                : 1.f;
             falloff = falloff * falloff;
+
             float directional = 1.f;
             if (!manual_light_override_ && has_detected_light_) {
                 float vx = float(x) - detected_light_lowres_.x;
@@ -269,11 +303,76 @@ SDL_Texture* LightRaysPass::compute(SDL_Texture* source_render_target) {
                     directional = directional * directional;
                 }
             }
+
             float val = std::min(1.f, sum * exposure * falloff * directional);
-            // slight gamma curve to sharpen streaks
-            val = std::pow(std::max(0.f, val), 0.85f);
-            alpha_buffer_[y * dw + x] = clamp_u8_(val * 255.f);
+            float gamma = std::clamp(0.85f - 0.15f * darkness, 0.65f, 0.9f);
+            val = std::pow(std::max(0.f, val), gamma);
+            ray_intensity_buffer_[idx] = val;
         }
+    }
+
+    // Final blur (performed at low resolution)
+    const float blur_radius = std::clamp(params_.final_blur_radius, 0.f, 32.f);
+    const float blur_mix = std::clamp(params_.final_blur_mix, 0.f, 1.f);
+    if (blur_radius > 0.01f && blur_mix > 1e-3f) {
+        const int radius_px = std::clamp(int(std::ceil(blur_radius)), 1, 64);
+        const int kernel_size = radius_px * 2 + 1;
+        std::vector<float> kernel(kernel_size);
+        const float sigma = std::max(0.1f, blur_radius * 0.5f);
+        const float inv_two_sigma_sq = 1.f / (2.f * sigma * sigma);
+        float kernel_sum = 0.f;
+        for (int i = -radius_px; i <= radius_px; ++i) {
+            float w = std::exp(-(i * i) * inv_two_sigma_sq);
+            kernel[i + radius_px] = w;
+            kernel_sum += w;
+        }
+        if (kernel_sum <= 0.f) kernel_sum = 1.f;
+        for (float& w : kernel) {
+            w /= kernel_sum;
+        }
+
+        std::copy(ray_intensity_buffer_.begin(), ray_intensity_buffer_.begin() + total_pixels,
+                  ray_intensity_original_.begin());
+
+        for (int y = 0; y < dh; ++y) {
+            for (int x = 0; x < dw; ++x) {
+                float accum = 0.f;
+                float weight_sum = 0.f;
+                for (int k = -radius_px; k <= radius_px; ++k) {
+                    int sx = std::clamp(x + k, 0, dw - 1);
+                    float w = kernel[k + radius_px];
+                    accum += w * ray_intensity_original_[y * dw + sx];
+                    weight_sum += w;
+                }
+                blur_work_buffer_[y * dw + x] = weight_sum > 0.f ? accum / weight_sum : accum;
+            }
+        }
+
+        for (int y = 0; y < dh; ++y) {
+            for (int x = 0; x < dw; ++x) {
+                float accum = 0.f;
+                float weight_sum = 0.f;
+                for (int k = -radius_px; k <= radius_px; ++k) {
+                    int sy = std::clamp(y + k, 0, dh - 1);
+                    float w = kernel[k + radius_px];
+                    accum += w * blur_work_buffer_[sy * dw + x];
+                    weight_sum += w;
+                }
+                float blurred = weight_sum > 0.f ? accum / weight_sum : accum;
+                int idx = y * dw + x;
+                float original = ray_intensity_original_[idx];
+                float mixed = original + (blurred - original) * blur_mix;
+                ray_intensity_buffer_[idx] = std::clamp(mixed, 0.f, 1.f);
+            }
+        }
+    } else {
+        for (int i = 0; i < total_pixels; ++i) {
+            ray_intensity_buffer_[i] = std::clamp(ray_intensity_buffer_[i], 0.f, 1.f);
+        }
+    }
+
+    for (int i = 0; i < total_pixels; ++i) {
+        alpha_buffer_[i] = clamp_u8_(ray_intensity_buffer_[i] * 255.f);
     }
 
     // Map to low-res texture using the texture's real format

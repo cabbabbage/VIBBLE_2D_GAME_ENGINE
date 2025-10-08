@@ -35,6 +35,10 @@ constexpr int kSamplesMin = 1;
 constexpr int kSamplesMax = 256;
 constexpr int kDownsampleMin = 0;
 constexpr int kDownsampleMax = 4;
+constexpr int kFinalBlurRadiusMin = 0;
+constexpr int kFinalBlurRadiusMax = 1000;   // 0.00 .. 10.00
+constexpr int kFinalBlurMixMin = 0;
+constexpr int kFinalBlurMixMax = 100;        // 0.00 .. 1.00
 
 constexpr bool kEnabledDefault = false;
 constexpr double kMinLumaDefault = 0.1;
@@ -45,6 +49,8 @@ constexpr double kWeightDefault = 6.75;
 constexpr double kExposureDefault = 8.6;
 constexpr int kSamplesDefault = 112;
 constexpr int kDownsampleDefault = 1;
+constexpr double kFinalBlurRadiusDefault = 2.5;
+constexpr double kFinalBlurMixDefault = 0.85;
 
 constexpr double clamp_double(double v, double lo, double hi) {
     return std::max(lo, std::min(hi, v));
@@ -61,6 +67,8 @@ json default_light_rays_params() {
         {"exposure", kExposureDefault},
         {"samples", kSamplesDefault},
         {"downsample_log2", kDownsampleDefault},
+        {"final_blur_radius", kFinalBlurRadiusDefault},
+        {"final_blur_mix", kFinalBlurMixDefault},
     };
 }
 
@@ -104,6 +112,8 @@ json sanitize_params(const json* candidate) {
     params["exposure"] = safe_double("exposure", kExposureDefault, 0.0, 20.0);
     params["samples"] = safe_int("samples", kSamplesDefault, kSamplesMin, kSamplesMax);
     params["downsample_log2"] = safe_int("downsample_log2", kDownsampleDefault, kDownsampleMin, kDownsampleMax);
+    params["final_blur_radius"] = safe_double("final_blur_radius", kFinalBlurRadiusDefault, 0.0, 10.0);
+    params["final_blur_mix"] = safe_double("final_blur_mix", kFinalBlurMixDefault, 0.0, 1.0);
 
     return params;
 }
@@ -235,6 +245,14 @@ void LightRaysUIPanel::build_ui() {
 
     samples_slider_ = std::make_unique<DMSlider>("Samples", kSamplesMin, kSamplesMax, 112);
     downsample_slider_ = std::make_unique<DMSlider>("Downsample log2", kDownsampleMin, kDownsampleMax, 1);
+    final_blur_radius_slider_ = std::make_unique<DMSlider>(
+        "Final Blur Radius", kFinalBlurRadiusMin, kFinalBlurRadiusMax,
+        double_to_slider_units(kFinalBlurRadiusDefault, kFloatScale, kFinalBlurRadiusMin, kFinalBlurRadiusMax));
+    configure_float_slider(final_blur_radius_slider_.get(), kFloatScale, 2);
+    final_blur_mix_slider_ = std::make_unique<DMSlider>(
+        "Final Blur Mix", kFinalBlurMixMin, kFinalBlurMixMax,
+        double_to_slider_units(kFinalBlurMixDefault, kFloatScale, kFinalBlurMixMin, kFinalBlurMixMax));
+    configure_float_slider(final_blur_mix_slider_.get(), kFloatScale, 2);
 
     widget_wrappers_.clear();
     widget_wrappers_.reserve(16);
@@ -272,6 +290,11 @@ void LightRaysUIPanel::build_ui() {
     rows.push_back({
         add_widget(std::make_unique<SliderWidget>(samples_slider_.get())),
         add_widget(std::make_unique<SliderWidget>(downsample_slider_.get()))
+    });
+
+    rows.push_back({
+        add_widget(std::make_unique<SliderWidget>(final_blur_radius_slider_.get())),
+        add_widget(std::make_unique<SliderWidget>(final_blur_mix_slider_.get()))
     });
 
     set_rows(rows);
@@ -356,6 +379,16 @@ void LightRaysUIPanel::sync_ui_from_json() {
     if (downsample_slider_) {
         downsample_slider_->set_value(clamp_int(params.value("downsample_log2", kDownsampleDefault), kDownsampleMin, kDownsampleMax));
     }
+    if (final_blur_radius_slider_) {
+        int units = double_to_slider_units(params.value("final_blur_radius", kFinalBlurRadiusDefault),
+                                           kFloatScale, kFinalBlurRadiusMin, kFinalBlurRadiusMax);
+        final_blur_radius_slider_->set_value(units);
+    }
+    if (final_blur_mix_slider_) {
+        int units = double_to_slider_units(params.value("final_blur_mix", kFinalBlurMixDefault),
+                                           kFloatScale, kFinalBlurMixMin, kFinalBlurMixMax);
+        final_blur_mix_slider_->set_value(units);
+    }
 
     needs_sync_ = false;
 }
@@ -391,6 +424,12 @@ void LightRaysUIPanel::sync_json_from_ui() {
     }
     if (downsample_slider_) {
         params["downsample_log2"] = clamp_int(downsample_slider_->value(), kDownsampleMin, kDownsampleMax);
+    }
+    if (final_blur_radius_slider_) {
+        params["final_blur_radius"] = slider_units_to_double(final_blur_radius_slider_->value(), kFloatScale);
+    }
+    if (final_blur_mix_slider_) {
+        params["final_blur_mix"] = slider_units_to_double(final_blur_mix_slider_->value(), kFloatScale);
     }
 
     if (!map_info_->is_object()) {

@@ -18,6 +18,10 @@ struct LightRaysParams {
 
     // Resolution control
     int   downsample_log2 = 2; // 2 => render at 1/4 size
+
+    // Final blur (applied inside the pass)
+    float final_blur_radius = 2.0f;  // gaussian radius in pixels (low-res space)
+    float final_blur_mix    = 0.85f; // 0 => original, 1 => fully blurred
 };
 
 class LightRaysPass {
@@ -53,6 +57,9 @@ private:
     std::vector<uint32_t> capture_pixels_;
     std::vector<float>    luma_buffer_;
     std::vector<float>    bright_buffer_;
+    std::vector<float>    ray_intensity_buffer_;
+    std::vector<float>    ray_intensity_original_;
+    std::vector<float>    blur_work_buffer_;
     std::vector<uint8_t>  alpha_buffer_;
     std::array<int, 256>  histogram_{};
 

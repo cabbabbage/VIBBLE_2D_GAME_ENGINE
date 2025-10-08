@@ -13,7 +13,7 @@
 
 namespace {
 
-std::string to_lower_copy(const std::string& text) {
+std::string to_lower_copy_render(const std::string& text) {
     std::string lower = text;
     std::transform(lower.begin(), lower.end(), lower.begin(), [](unsigned char ch) {
         return static_cast<char>(std::tolower(ch));
@@ -22,7 +22,7 @@ std::string to_lower_copy(const std::string& text) {
 }
 
 SDL_Color color_for_area(const std::string& name) {
-    const std::string lower = to_lower_copy(name);
+    const std::string lower = to_lower_copy_render(name);
     if (lower.find("boundary") != std::string::npos) {
         return SDL_Color{255, 0, 0, 128};
     }
