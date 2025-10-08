@@ -525,18 +525,20 @@
       "width_min": 1500
     },
     "room_lab": {
+      "curvyness": 1,
       "edge_smoothness": 93,
       "geometry": "Circle",
-      "height_max": 2099,
-      "height_min": 1779,
+      "height_max": 10344,
+      "height_min": 10344,
       "inherits_map_assets": true,
       "is_boss": false,
       "is_spawn": false,
-      "max_height": 2099,
-      "max_width": 2151,
-      "min_height": 1779,
-      "min_width": 1810,
+      "max_height": 10344,
+      "max_width": 10344,
+      "min_height": 10344,
+      "min_width": 10344,
       "name": "room_lab",
+      "radius": 5172,
       "spawn_groups": [
         {
           "candidates": [
@@ -556,8 +558,8 @@
           "spawn_id": "spn-63068cffe9db"
         }
       ],
-      "width_max": 2151,
-      "width_min": 1810
+      "width_max": 10344,
+      "width_min": 10344
     },
     "spawn": {
       "areas": [
@@ -784,30 +786,6 @@
           "position": "Exact",
           "priority": 0,
           "spawn_id": "spn-400a2bb2d100",
-          "tag": false
-        },
-        {
-          "candidates": [
-            {
-              "chance": 0,
-              "name": "null"
-            },
-            {
-              "chance": 100,
-              "name": "Bomb"
-            }
-          ],
-          "chance_denominator": 100,
-          "check_overlap": false,
-          "display_name": "Bomb",
-          "enforce_spacing": false,
-          "exact_position": null,
-          "inherited": false,
-          "max_number": 1,
-          "min_number": 1,
-          "position": "Random",
-          "priority": 1,
-          "spawn_id": "spn-903f62327b86",
           "tag": false
         }
       ],
