@@ -7,9 +7,7 @@
 #include <string>
 #include <vector>
 
-namespace nlohmann {
-class json;
-}
+#include <nlohmann/json_fwd.hpp>
 
 class DMCheckbox;
 class DMSlider;
@@ -45,7 +43,6 @@ private:
     void build_ui();
     void sync_ui_from_json();
     void sync_json_from_ui();
-    nlohmann::json& ensure_params();
 
     static int clamp_int(int v, int lo, int hi);
     static double slider_units_to_double(int units, int scale);

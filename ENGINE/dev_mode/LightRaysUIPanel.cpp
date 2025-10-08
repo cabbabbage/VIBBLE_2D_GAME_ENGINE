@@ -36,8 +36,76 @@ constexpr int kSamplesMax = 256;
 constexpr int kDownsampleMin = 0;
 constexpr int kDownsampleMax = 4;
 
+constexpr bool kEnabledDefault = false;
+constexpr double kMinLumaDefault = 0.1;
+constexpr double kBrightPercentileDefault = 0.94;
+constexpr double kDensityDefault = 1.35;
+constexpr double kDecayDefault = 0.94;
+constexpr double kWeightDefault = 6.75;
+constexpr double kExposureDefault = 8.6;
+constexpr int kSamplesDefault = 112;
+constexpr int kDownsampleDefault = 1;
+
 constexpr double clamp_double(double v, double lo, double hi) {
     return std::max(lo, std::min(hi, v));
+}
+
+json default_light_rays_params() {
+    return json{
+        {"enabled", kEnabledDefault},
+        {"min_luma_threshold", kMinLumaDefault},
+        {"bright_percentile", kBrightPercentileDefault},
+        {"density", kDensityDefault},
+        {"decay", kDecayDefault},
+        {"weight", kWeightDefault},
+        {"exposure", kExposureDefault},
+        {"samples", kSamplesDefault},
+        {"downsample_log2", kDownsampleDefault},
+    };
+}
+
+json sanitize_params(const json* candidate) {
+    json params = default_light_rays_params();
+    if (!candidate || !candidate->is_object()) {
+        return params;
+    }
+
+    const json& root = *candidate;
+    auto safe_bool = [&](const char* key, bool def) {
+        try {
+            return root.at(key).get<bool>();
+        } catch (...) {
+            return def;
+        }
+    };
+    auto safe_double = [&](const char* key, double def, double lo, double hi) {
+        double value = def;
+        try {
+            value = root.at(key).get<double>();
+        } catch (...) {
+        }
+        return clamp_double(value, lo, hi);
+    };
+    auto safe_int = [&](const char* key, int def, int lo, int hi) {
+        int value = def;
+        try {
+            value = root.at(key).get<int>();
+        } catch (...) {
+        }
+        return LightRaysUIPanel::clamp_int(value, lo, hi);
+    };
+
+    params["enabled"] = safe_bool("enabled", kEnabledDefault);
+    params["min_luma_threshold"] = safe_double("min_luma_threshold", kMinLumaDefault, 0.0, 1.0);
+    params["bright_percentile"] = safe_double("bright_percentile", kBrightPercentileDefault, 0.0, 1.0);
+    params["density"] = safe_double("density", kDensityDefault, 0.0, 4.0);
+    params["decay"] = safe_double("decay", kDecayDefault, 0.0, 1.0);
+    params["weight"] = safe_double("weight", kWeightDefault, 0.0, 20.0);
+    params["exposure"] = safe_double("exposure", kExposureDefault, 0.0, 20.0);
+    params["samples"] = safe_int("samples", kSamplesDefault, kSamplesMin, kSamplesMax);
+    params["downsample_log2"] = safe_int("downsample_log2", kDownsampleDefault, kDownsampleMin, kDownsampleMax);
+
+    return params;
 }
 }
 
@@ -245,85 +313,48 @@ int LightRaysUIPanel::double_to_slider_units(double value, int scale, int lo, in
     return as_int;
 }
 
-nlohmann::json& LightRaysUIPanel::ensure_params() {
-    static json dummy = json::object();
-    if (!map_info_) {
-        return dummy;
-    }
-    if (!map_info_->is_object()) {
-        *map_info_ = json::object();
-    }
-    json& root = (*map_info_)["light_rays_params"];
-    if (!root.is_object()) {
-        root = json::object();
-    }
-
-    bool enabled = root.value("enabled", true);
-    root["enabled"] = enabled;
-
-    double min_luma = clamp_double(root.value("min_luma_threshold", 0.1), 0.0, 1.0);
-    root["min_luma_threshold"] = min_luma;
-
-    double bright = clamp_double(root.value("bright_percentile", 0.94), 0.0, 1.0);
-    root["bright_percentile"] = bright;
-
-    double density = clamp_double(root.value("density", 1.35), 0.0, 4.0);
-    root["density"] = density;
-
-    double decay = clamp_double(root.value("decay", 0.94), 0.0, 1.0);
-    root["decay"] = decay;
-
-    double weight = clamp_double(root.value("weight", 6.75), 0.0, 20.0);
-    root["weight"] = weight;
-
-    double exposure = clamp_double(root.value("exposure", 8.6), 0.0, 20.0);
-    root["exposure"] = exposure;
-
-    int samples = clamp_int(root.value("samples", 112), kSamplesMin, kSamplesMax);
-    root["samples"] = samples;
-
-    int downsample = clamp_int(root.value("downsample_log2", 1), kDownsampleMin, kDownsampleMax);
-    root["downsample_log2"] = downsample;
-
-    return root;
-}
-
 void LightRaysUIPanel::sync_ui_from_json() {
-    json& params = ensure_params();
+    json params = default_light_rays_params();
+    if (map_info_ && map_info_->is_object()) {
+        auto it = map_info_->find("light_rays_params");
+        if (it != map_info_->end()) {
+            params = sanitize_params(&(*it));
+        }
+    }
 
     if (enabled_checkbox_) {
-        enabled_checkbox_->set_value(params.value("enabled", true));
+        enabled_checkbox_->set_value(params.value("enabled", kEnabledDefault));
     }
 
     if (min_luma_slider_) {
-        int units = double_to_slider_units(params.value("min_luma_threshold", 0.1), kFloatScale, kMinLumaMin, kMinLumaMax);
+        int units = double_to_slider_units(params.value("min_luma_threshold", kMinLumaDefault), kFloatScale, kMinLumaMin, kMinLumaMax);
         min_luma_slider_->set_value(units);
     }
     if (bright_percentile_slider_) {
-        int units = double_to_slider_units(params.value("bright_percentile", 0.94), kFloatScale, kBrightPercentileMin, kBrightPercentileMax);
+        int units = double_to_slider_units(params.value("bright_percentile", kBrightPercentileDefault), kFloatScale, kBrightPercentileMin, kBrightPercentileMax);
         bright_percentile_slider_->set_value(units);
     }
     if (density_slider_) {
-        int units = double_to_slider_units(params.value("density", 1.35), kFloatScale, kDensityMin, kDensityMax);
+        int units = double_to_slider_units(params.value("density", kDensityDefault), kFloatScale, kDensityMin, kDensityMax);
         density_slider_->set_value(units);
     }
     if (decay_slider_) {
-        int units = double_to_slider_units(params.value("decay", 0.94), kFloatScale, kDecayMin, kDecayMax);
+        int units = double_to_slider_units(params.value("decay", kDecayDefault), kFloatScale, kDecayMin, kDecayMax);
         decay_slider_->set_value(units);
     }
     if (weight_slider_) {
-        int units = double_to_slider_units(params.value("weight", 6.75), kFloatScale, kWeightMin, kWeightMax);
+        int units = double_to_slider_units(params.value("weight", kWeightDefault), kFloatScale, kWeightMin, kWeightMax);
         weight_slider_->set_value(units);
     }
     if (exposure_slider_) {
-        int units = double_to_slider_units(params.value("exposure", 8.6), kFloatScale, kExposureMin, kExposureMax);
+        int units = double_to_slider_units(params.value("exposure", kExposureDefault), kFloatScale, kExposureMin, kExposureMax);
         exposure_slider_->set_value(units);
     }
     if (samples_slider_) {
-        samples_slider_->set_value(clamp_int(params.value("samples", 112), kSamplesMin, kSamplesMax));
+        samples_slider_->set_value(clamp_int(params.value("samples", kSamplesDefault), kSamplesMin, kSamplesMax));
     }
     if (downsample_slider_) {
-        downsample_slider_->set_value(clamp_int(params.value("downsample_log2", 1), kDownsampleMin, kDownsampleMax));
+        downsample_slider_->set_value(clamp_int(params.value("downsample_log2", kDownsampleDefault), kDownsampleMin, kDownsampleMax));
     }
 
     needs_sync_ = false;
@@ -332,7 +363,7 @@ void LightRaysUIPanel::sync_ui_from_json() {
 void LightRaysUIPanel::sync_json_from_ui() {
     if (!map_info_) return;
 
-    json& params = ensure_params();
+    json params = default_light_rays_params();
 
     if (enabled_checkbox_) {
         params["enabled"] = enabled_checkbox_->value();
@@ -361,6 +392,11 @@ void LightRaysUIPanel::sync_json_from_ui() {
     if (downsample_slider_) {
         params["downsample_log2"] = clamp_int(downsample_slider_->value(), kDownsampleMin, kDownsampleMax);
     }
+
+    if (!map_info_->is_object()) {
+        *map_info_ = json::object();
+    }
+    (*map_info_)["light_rays_params"] = std::move(params);
 
     bool ok = true;
     if (on_save_) {
