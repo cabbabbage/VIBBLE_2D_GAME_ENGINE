@@ -70,13 +70,30 @@ inline SDL_Point scaled_anchor_point(const CanvasMetrics& canvas, float scale) {
     return anchor;
 }
 
+inline int unscale_dimension(int dimension, float scale) {
+    if (!(scale > 0.0f) || !std::isfinite(scale)) {
+        return dimension;
+    }
+    if (dimension <= 0) {
+        return 0;
+    }
+    const double value = static_cast<double>(dimension) / static_cast<double>(scale);
+    const long long rounded = std::llround(value);
+    if (rounded < 0) {
+        return 0;
+    }
+    if (rounded > static_cast<long long>(std::numeric_limits<int>::max())) {
+        return std::numeric_limits<int>::max();
+    }
+    return static_cast<int>(rounded);
+}
+
 inline nlohmann::json encode_canonical_points(const std::vector<Area::Point>& points,
-                                              const CanvasMetrics& canvas,
+                                              SDL_Point anchor,
                                               float scale) {
     nlohmann::json arr = nlohmann::json::array();
     auto& out = arr.get_ref<nlohmann::json::array_t&>();
     out.reserve(points.size());
-    const SDL_Point anchor = scaled_anchor_point(canvas, scale);
     for (const auto& p : points) {
         const long long dx_scaled = static_cast<long long>(p.x) - static_cast<long long>(anchor.x);
         const long long dy_scaled = static_cast<long long>(p.y) - static_cast<long long>(anchor.y);
@@ -88,12 +105,11 @@ inline nlohmann::json encode_canonical_points(const std::vector<Area::Point>& po
 }
 
 inline std::vector<Area::Point> decode_canonical_points(const nlohmann::json& points,
-                                                        const CanvasMetrics& canvas,
+                                                        SDL_Point anchor,
                                                         float scale) {
     std::vector<Area::Point> decoded;
     if (!points.is_array()) return decoded;
     decoded.reserve(points.size());
-    const SDL_Point anchor = scaled_anchor_point(canvas, scale);
     for (const auto& entry : points) {
         if (!entry.is_object()) continue;
         const int canonical_x = entry.value("x", 0);
@@ -131,10 +147,12 @@ SDL_Point AssetInfo::AreaCodec::scaled_anchor(const AssetInfo& info,
     return scaled_anchor_point(canvas, scale);
 }
 
-nlohmann::json AssetInfo::AreaCodec::encode_entry(const AssetInfo& info,
-                                                  const Area& area,
-                                                  const std::string& final_type,
-                                                  const std::string& final_kind) {
+nlohmann::json AssetInfo::AreaCodec::encode_entry(
+    const AssetInfo& info,
+    const Area& area,
+    const std::string& final_type,
+    const std::string& final_kind,
+    std::optional<AssetInfo::NamedArea::RenderFrame> frame) {
     nlohmann::json entry = nlohmann::json::object();
     entry["name"] = area.get_name();
     if (!final_type.empty()) {
@@ -145,19 +163,54 @@ nlohmann::json AssetInfo::AreaCodec::encode_entry(const AssetInfo& info,
     }
     entry["schema_version"] = 2;
 
-    const float scale = sanitize_scale(info.scale_factor);
-    const CanvasMetrics canvas = canvas_metrics_for(info);
-    entry["coordinate_space"] = {
-        {"kind", "canonical"},
+    if (!frame) {
+        for (const auto& na : info.areas) {
+            if (!na.area) continue;
+            if (na.area->get_name() == area.get_name() && na.render_frame) {
+                frame = na.render_frame;
+                break;
+            }
+        }
+    }
+
+    const float info_scale = sanitize_scale(info.scale_factor);
+    const float save_scale = sanitize_scale(frame ? frame->pixel_scale : info_scale);
+    CanvasMetrics canonical_canvas = canvas_metrics_for(info);
+    nlohmann::json coordinate_space = {
         {"origin", "bottom_center"},
-        {"canvas_width", canvas.width},
-        {"canvas_height", canvas.height},
-        {"scale_at_save", scale}
+        {"scale_at_save", save_scale}
     };
 
-    const SDL_Point anchor = canonical_anchor(canvas);
-    entry["anchor"] = { {"x", anchor.x}, {"y", anchor.y} };
-    entry["points"] = encode_canonical_points(area.get_points(), canvas, scale);
+    SDL_Point render_anchor{0, 0};
+    if (frame && frame->is_valid()) {
+        coordinate_space["kind"] = "render_space";
+        coordinate_space["canvas_width"] = frame->width;
+        coordinate_space["canvas_height"] = frame->height;
+        coordinate_space["pivot"] = {
+            {"x", frame->pivot_x},
+            {"y", frame->pivot_y}
+        };
+
+        if (canonical_canvas.width <= 0) {
+            canonical_canvas.width = unscale_dimension(frame->width, save_scale);
+        }
+        if (canonical_canvas.height <= 0) {
+            canonical_canvas.height = unscale_dimension(frame->height, save_scale);
+        }
+        render_anchor.x = frame->pivot_x;
+        render_anchor.y = frame->pivot_y;
+    } else {
+        coordinate_space["kind"] = "canonical";
+        coordinate_space["canvas_width"] = canonical_canvas.width;
+        coordinate_space["canvas_height"] = canonical_canvas.height;
+        render_anchor = scaled_anchor_point(canonical_canvas, save_scale);
+    }
+
+    entry["coordinate_space"] = coordinate_space;
+
+    const SDL_Point canonical_anchor_point = canonical_anchor(canonical_canvas);
+    entry["anchor"] = { {"x", canonical_anchor_point.x}, {"y", canonical_anchor_point.y} };
+    entry["points"] = encode_canonical_points(area.get_points(), render_anchor, save_scale);
     return entry;
 }
 
@@ -178,23 +231,68 @@ AssetInfo::AreaCodec::decode_entry(const AssetInfo& info, const nlohmann::json& 
     }
 
     const auto& space = entry["coordinate_space"];
-    const std::string space_kind = space.value("kind", std::string{});
     const std::string origin = space.value("origin", std::string{});
-    if (space_kind != "canonical" || origin != "bottom_center") {
+    if (origin != "bottom_center") {
         return std::nullopt;
     }
 
-    CanvasMetrics canvas = canvas_metrics_for(info);
-    const CanvasMetrics saved = metrics_from_json(space);
-    if (canvas.width <= 0) {
-        canvas.width = saved.width;
-    }
-    if (canvas.height <= 0) {
-        canvas.height = saved.height;
+    const std::string space_kind = space.value("kind", std::string{});
+    const float saved_scale = sanitize_scale(space.value("scale_at_save", 1.0f));
+    const float current_scale = sanitize_scale(info.scale_factor);
+
+    CanvasMetrics canonical_canvas = canvas_metrics_for(info);
+    CanvasMetrics saved_canvas = metrics_from_json(space);
+
+    SDL_Point render_anchor = scaled_anchor_point(canonical_canvas, current_scale);
+    std::optional<AssetInfo::NamedArea::RenderFrame> frame;
+
+    if (space_kind == "render_space") {
+        AssetInfo::NamedArea::RenderFrame rf;
+        rf.width = saved_canvas.width;
+        rf.height = saved_canvas.height;
+        if (space.contains("pivot") && space["pivot"].is_object()) {
+            rf.pivot_x = space["pivot"].value("x", rf.width / 2);
+            rf.pivot_y = space["pivot"].value("y", rf.height);
+        } else {
+            rf.pivot_x = (rf.width > 0) ? rf.width / 2 : 0;
+            rf.pivot_y = rf.height;
+        }
+        rf.pixel_scale = saved_scale;
+
+        if (rf.is_valid()) {
+            frame = rf;
+
+            if (canonical_canvas.width <= 0) {
+                canonical_canvas.width = unscale_dimension(rf.width, rf.pixel_scale);
+            }
+            if (canonical_canvas.height <= 0) {
+                canonical_canvas.height = unscale_dimension(rf.height, rf.pixel_scale);
+            }
+
+            const int scaled_w = compute_scaled_dimension(canonical_canvas.width, current_scale);
+            const int scaled_h = compute_scaled_dimension(canonical_canvas.height, current_scale);
+            const double ratio_x = (rf.width > 0)
+                                       ? static_cast<double>(rf.pivot_x) / static_cast<double>(rf.width)
+                                       : 0.5;
+            const double ratio_y = (rf.height > 0)
+                                       ? static_cast<double>(rf.pivot_y) / static_cast<double>(rf.height)
+                                       : 1.0;
+            render_anchor.x = static_cast<int>(std::llround(ratio_x * static_cast<double>(scaled_w)));
+            render_anchor.y = static_cast<int>(std::llround(ratio_y * static_cast<double>(scaled_h)));
+        }
+    } else if (space_kind == "canonical") {
+        if (canonical_canvas.width <= 0) {
+            canonical_canvas.width = saved_canvas.width;
+        }
+        if (canonical_canvas.height <= 0) {
+            canonical_canvas.height = saved_canvas.height;
+        }
+        render_anchor = scaled_anchor_point(canonical_canvas, current_scale);
+    } else {
+        return std::nullopt;
     }
 
-    const float scale = sanitize_scale(info.scale_factor);
-    std::vector<Area::Point> points = decode_canonical_points(entry["points"], canvas, scale);
+    std::vector<Area::Point> points = decode_canonical_points(entry["points"], render_anchor, current_scale);
     if (points.size() < 3) {
         return std::nullopt;
     }
@@ -211,6 +309,7 @@ AssetInfo::AreaCodec::decode_entry(const AssetInfo& info, const nlohmann::json& 
     if (!applied_type.empty()) {
         named.area->set_type(applied_type);
     }
+    named.render_frame = frame;
     return named;
 }
 AssetInfo::AssetInfo(const std::string &asset_folder_name)
@@ -507,7 +606,8 @@ Area* AssetInfo::find_area(const std::string& name) {
 	}
 	return nullptr;
 }
-void AssetInfo::upsert_area_from_editor(const Area& area) {
+void AssetInfo::upsert_area_from_editor(const Area& area,
+                                        std::optional<NamedArea::RenderFrame> frame) {
     if (area.get_name().empty()) {
         return;
     }
@@ -539,6 +639,7 @@ void AssetInfo::upsert_area_from_editor(const Area& area) {
             na.area = std::make_unique<Area>(area);
             if (!final_type.empty()) na.type = final_type;
             if (!final_kind.empty()) na.kind = final_kind;
+            na.render_frame = frame;
             updated = true;
             break;
         }
@@ -549,10 +650,12 @@ void AssetInfo::upsert_area_from_editor(const Area& area) {
         na.type = final_type;
         na.kind = final_kind;
         na.area = std::make_unique<Area>(area);
+        na.render_frame = frame;
         areas.push_back(std::move(na));
     }
 
-    nlohmann::json entry = AreaCodec::encode_entry(*this, area, final_type, final_kind);
+    nlohmann::json entry =
+        AreaCodec::encode_entry(*this, area, final_type, final_kind, frame);
 
     if (existing_entry) {
         *existing_entry = std::move(entry);

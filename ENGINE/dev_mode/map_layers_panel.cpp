@@ -4382,11 +4382,11 @@ void MapLayersPanel::open_room_config_for(const std::string& room_name) {
 
     room_configurator_->set_bounds(compute_room_config_bounds());
 
-    auto on_change = [this]() { handle_room_spawn_groups_changed(); };
+    auto on_change = [this]() { handle_room_spawn_groups_changed(false); };
 
     auto on_entry_change = [this](const nlohmann::json&, const SpawnGroupList::ChangeSummary&) {
 
-        handle_room_spawn_groups_changed();
+        handle_room_spawn_groups_changed(false);
 
     };
 
@@ -4432,7 +4432,9 @@ void MapLayersPanel::ensure_room_configurator() {
 
                 [this](const std::string& id) { move_spawn_group_in_active_room(id, +1); },
 
-                [this]() { add_spawn_group_to_active_room(); }
+                [this]() { add_spawn_group_to_active_room(); },
+
+                [this](const std::string&) { handle_room_spawn_groups_changed(true); }
 
             );
 
@@ -4598,7 +4600,7 @@ nlohmann::json* MapLayersPanel::active_room_entry() {
 
 }
 
-void MapLayersPanel::handle_room_spawn_groups_changed() {
+void MapLayersPanel::handle_room_spawn_groups_changed(bool request_preview) {
 
     if (!room_configurator_) {
 
@@ -4616,7 +4618,9 @@ void MapLayersPanel::handle_room_spawn_groups_changed() {
 
     mark_dirty();
 
-    request_preview_regeneration();
+    if (request_preview) {
+        request_preview_regeneration();
+    }
 
     room_configurator_->refresh_spawn_groups(*entry);
 

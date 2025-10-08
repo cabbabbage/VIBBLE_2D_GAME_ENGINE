@@ -1308,6 +1308,15 @@ void RoomConfigurator::rebuild_rows(bool reload_spawn_list) {
             });
 
             SpawnGroupList::Callbacks cb{};
+            if (on_spawn_regenerate_ || on_spawn_edit_) {
+                cb.on_regenerate = [this](const std::string& id) {
+                    if (on_spawn_regenerate_) {
+                        on_spawn_regenerate_(id);
+                    } else if (on_spawn_edit_) {
+                        on_spawn_edit_(id);
+                    }
+                };
+            }
             cb.on_duplicate = [this](const std::string& id) {
                 if (on_spawn_duplicate_) {
                     on_spawn_duplicate_(id);
@@ -1764,11 +1773,13 @@ void RoomConfigurator::set_spawn_group_callbacks(std::function<void(const std::s
                                                  std::function<void(const std::string&)> on_delete,
                                                  std::function<void(const std::string&)> on_move_up,
                                                  std::function<void(const std::string&)> on_move_down,
-                                                 std::function<void()> on_add) {
+                                                 std::function<void()> on_add,
+                                                 std::function<void(const std::string&)> on_regenerate) {
     on_spawn_edit_ = std::move(on_edit);
     on_spawn_duplicate_ = std::move(on_duplicate);
     on_spawn_delete_ = std::move(on_delete);
     on_spawn_move_up_ = std::move(on_move_up);
     on_spawn_move_down_ = std::move(on_move_down);
     on_spawn_add_ = std::move(on_add);
+    on_spawn_regenerate_ = std::move(on_regenerate);
 }

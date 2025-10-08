@@ -233,6 +233,9 @@ struct SpawnGroupList::EntryRow {
     std::unique_ptr<DMButton> link_btn;
     std::unique_ptr<ButtonWidget> link_btn_w;
 
+    std::unique_ptr<DMButton> regen_btn;
+    std::unique_ptr<ButtonWidget> regen_w;
+
     std::unique_ptr<Widget> outline_begin_marker;
     std::unique_ptr<Widget> outline_end_marker;
     SDL_Rect outline_rect{0,0,0,0};
@@ -1604,6 +1607,16 @@ void SpawnGroupList::append_rows(Rows& rows) {
                 DockableCollapsible::Row method_row;
                 if (r->method_w) method_row.push_back(r->method_w.get());
                 if (r->link_btn_w) method_row.push_back(r->link_btn_w.get());
+                if (callbacks_.on_regenerate) {
+                    if (!r->regen_btn) {
+                        r->regen_btn = std::make_unique<DMButton>("Regenerate", &DMStyles::CreateButton(), 120, DMButton::height());
+                        r->regen_w = std::make_unique<ButtonWidget>(r->regen_btn.get(), [this, rr=r.get()](){
+                            if (!callbacks_.on_regenerate || rr->id.empty()) return;
+                            callbacks_.on_regenerate(rr->id);
+                        });
+                    }
+                    method_row.push_back(r->regen_w.get());
+                }
                 if (!method_row.empty()) out.push_back(method_row);
                 const std::string method = r->entry->value("position", std::string{"Exact"});
                 if (!r->quantity_hidden && method_uses_range(method)) {

@@ -31,6 +31,7 @@ public:
     };
 
     struct Callbacks {
+        std::function<void(const std::string&)> on_regenerate;
         std::function<void(const std::string&)> on_duplicate;
         std::function<void(const std::string&)> on_delete;
         std::function<void(const std::string&)> on_move_up;

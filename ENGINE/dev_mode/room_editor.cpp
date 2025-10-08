@@ -1276,6 +1276,14 @@ void RoomEditor::ensure_room_configurator() {
                     return;
                 }
                 add_spawn_group_internal();
+            },
+            [this](const std::string& spawn_id) {
+                if (spawn_id.empty()) {
+                    return;
+                }
+                if (nlohmann::json* entry = find_spawn_entry(spawn_id)) {
+                    respawn_spawn_group(*entry);
+                }
             });
     }
 }

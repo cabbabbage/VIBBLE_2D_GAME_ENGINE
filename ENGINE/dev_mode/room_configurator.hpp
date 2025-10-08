@@ -52,7 +52,8 @@ public:
                                    std::function<void(const std::string&)> on_delete,
                                    std::function<void(const std::string&)> on_move_up,
                                    std::function<void(const std::string&)> on_move_down,
-                                   std::function<void()> on_add);
+                                   std::function<void()> on_add,
+                                   std::function<void(const std::string&)> on_regenerate = {});
 
     void set_on_room_renamed(std::function<std::string(const std::string&, const std::string&)> cb) {
         on_room_renamed_ = std::move(cb);
@@ -134,6 +135,7 @@ private:
     std::function<void(const std::string&)> on_spawn_move_up_;
     std::function<void(const std::string&)> on_spawn_move_down_;
     std::function<void()> on_spawn_add_;
+    std::function<void(const std::string&)> on_spawn_regenerate_;
     std::function<void()> on_external_spawn_change_;
     std::function<void(const nlohmann::json&, const SpawnGroupList::ChangeSummary&)> on_external_spawn_entry_change_;
     SpawnGroupList::ConfigureEntryCallback external_configure_entry_;

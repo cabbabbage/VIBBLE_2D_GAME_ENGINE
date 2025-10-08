@@ -5,6 +5,7 @@
 #include "utils/light_source.hpp"
 #include <map>
 #include <nlohmann/json.hpp>
+#include <cmath>
 #include <optional>
 #include <string>
 #include <vector>
@@ -57,10 +58,22 @@ class AssetInfo {
     bool is_light_source = false;
     bool moving_asset = false;
     struct NamedArea {
+        struct RenderFrame {
+            int width = 0;
+            int height = 0;
+            int pivot_x = 0;
+            int pivot_y = 0;
+            float pixel_scale = 1.0f;
+
+            bool is_valid() const {
+                return width > 0 && height > 0 && std::isfinite(pixel_scale) && pixel_scale > 0.0f;
+            }
+        };
         std::string name;
         std::string type;
         std::string kind;
         std::unique_ptr<Area> area;
+        std::optional<RenderFrame> render_frame;
     };
     std::vector<NamedArea> areas;
     std::map<std::string, Animation> animations;
@@ -86,7 +99,8 @@ class AssetInfo {
     void remove_anti_tag(const std::string &tag);
     void set_passable(bool v);
     Area* find_area(const std::string& name);
-    void upsert_area_from_editor(const class Area& area);
+    void upsert_area_from_editor(const class Area& area,
+                                 std::optional<NamedArea::RenderFrame> frame = std::nullopt);
     std::string pick_next_animation(const std::string& mapping_id) const;
     int NeighborSearchRadius = 500;
 
@@ -118,10 +132,12 @@ class AssetInfo {
         static SDL_Point scaled_anchor(const AssetInfo& info,
                                        std::optional<float> scale_override = std::nullopt);
 
-        static nlohmann::json encode_entry(const AssetInfo& info,
-                                           const Area&       area,
-                                           const std::string& final_type,
-                                           const std::string& final_kind);
+        static nlohmann::json encode_entry(
+            const AssetInfo& info,
+            const Area& area,
+            const std::string& final_type,
+            const std::string& final_kind,
+            std::optional<NamedArea::RenderFrame> frame = std::nullopt);
 
         static std::optional<NamedArea> decode_entry(const AssetInfo& info,
                                                      const nlohmann::json& entry);
