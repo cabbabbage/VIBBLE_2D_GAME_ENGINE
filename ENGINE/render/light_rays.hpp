@@ -6,6 +6,9 @@
 #include <limits>
 #include <string>
 #include <string_view>
+#include <vector>
+
+#include <SDL.h>
 
 #include <nlohmann/json.hpp>
 
@@ -163,4 +166,52 @@ struct LightRaysConfig {
         j["per_light_enabled"] = per_light_enabled;
         return j;
     }
+};
+
+class LightRaysPass {
+public:
+    LightRaysPass(SDL_Renderer* renderer = nullptr,
+                  int screen_w = 0,
+                  int screen_h = 0);
+    ~LightRaysPass();
+
+    void set_renderer(SDL_Renderer* renderer);
+    void set_screen_size(int w, int h);
+    void set_enabled(bool enabled);
+    bool enabled() const { return enabled_; }
+
+    void set_params(const LightRaysParams& params);
+    const LightRaysParams& params() const { return params_; }
+
+    void set_light_screen_pos(SDL_Point pos) { light_screen_pos_ = pos; }
+
+    SDL_Texture* compute(SDL_Texture* source_texture);
+
+private:
+    bool ensure_resources();
+    void release_resources();
+    void update_downsample_dimensions();
+
+    float brightness_from_pixel(uint32_t pixel) const;
+    float sample_brightness(float u, float v) const;
+
+private:
+    SDL_Renderer* renderer_ = nullptr;
+    SDL_Texture* capture_texture_ = nullptr;
+    SDL_Texture* rays_texture_ = nullptr;
+    SDL_PixelFormat* pixel_format_ = nullptr;
+
+    int screen_w_ = 0;
+    int screen_h_ = 0;
+    int downsample_w_ = 0;
+    int downsample_h_ = 0;
+
+    SDL_Point light_screen_pos_{0, 0};
+
+    bool enabled_ = false;
+    LightRaysParams params_{};
+
+    std::vector<uint32_t> capture_pixels_;
+    std::vector<float> downsampled_mask_;
+    std::vector<uint32_t> rays_pixels_;
 };
