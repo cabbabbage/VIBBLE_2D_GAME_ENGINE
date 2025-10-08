@@ -74,6 +74,7 @@ public:
     void append_rows(Rows& rows);
     void set_callbacks(Callbacks cb);
     void set_on_layout_changed(std::function<void()> cb);
+    void refresh_row_configuration();
 
     void expand_group(const std::string& id);
     void collapse_group(const std::string& id);

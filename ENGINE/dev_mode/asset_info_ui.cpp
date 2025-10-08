@@ -394,7 +394,9 @@ bool AssetInfoUI::handle_event(const SDL_Event& e) {
     const bool pointer_event =
         (e.type == SDL_MOUSEBUTTONDOWN || e.type == SDL_MOUSEBUTTONUP || e.type == SDL_MOUSEMOTION);
     const bool wheel_event = (e.type == SDL_MOUSEWHEEL);
-    const bool slider_capture = wheel_event && DMWidgetsSliderScrollCaptured();
+    const auto slider_capture_active = [&]() {
+        return wheel_event && DMWidgetsSliderScrollCaptured();
+    };
     SDL_Point pointer{0, 0};
     if (pointer_event) {
         pointer.x = (e.type == SDL_MOUSEMOTION) ? e.motion.x : e.button.x;
@@ -443,7 +445,7 @@ bool AssetInfoUI::handle_event(const SDL_Event& e) {
         if (s->handle_event(e)) return true;
     }
 
-    if (slider_capture) {
+    if (slider_capture_active()) {
         return true;
     }
 
@@ -467,6 +469,9 @@ bool AssetInfoUI::handle_event(const SDL_Event& e) {
     }
 
     if (wheel_event) {
+        if (slider_capture_active()) {
+            return true;
+        }
         scroll_ -= e.wheel.y * 40;
         scroll_ = std::max(0, std::min(max_scroll_, scroll_));
         return true;

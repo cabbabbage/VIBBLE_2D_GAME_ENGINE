@@ -1631,6 +1631,32 @@ void SpawnGroupList::set_on_layout_changed(std::function<void()> cb) {
     on_layout_change_ = std::move(cb);
 }
 
+void SpawnGroupList::refresh_row_configuration() {
+    if (!configure_entry_) {
+        return;
+    }
+    for (auto& row_ptr : rows_) {
+        if (!row_ptr) {
+            continue;
+        }
+        const json* entry_json = nullptr;
+        if (!row_ptr->read_only && row_ptr->entry) {
+            entry_json = row_ptr->entry;
+        } else if (row_ptr->read_only) {
+            entry_json = &row_ptr->ro_entry;
+        }
+        if (!entry_json) {
+            continue;
+        }
+        try {
+            RowController controller(row_ptr.get());
+            configure_entry_(controller, *entry_json);
+        } catch (...) {
+        }
+    }
+    request_layout();
+}
+
 void SpawnGroupList::expand_group(const std::string& id) {
     if (auto* r = find_row(id)) { r->expanded = true; rebuild_layout(); }
 }

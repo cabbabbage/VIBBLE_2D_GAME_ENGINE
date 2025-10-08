@@ -188,7 +188,9 @@ bool DockableCollapsible::handle_event(const SDL_Event& e) {
     const bool pointer_event =
         (e.type == SDL_MOUSEBUTTONDOWN || e.type == SDL_MOUSEBUTTONUP || e.type == SDL_MOUSEMOTION);
     const bool wheel_event = (e.type == SDL_MOUSEWHEEL);
-    const bool slider_capture = wheel_event && DMWidgetsSliderScrollCaptured();
+    const auto slider_capture_active = [&]() {
+        return wheel_event && DMWidgetsSliderScrollCaptured();
+    };
     SDL_Point pointer_pos{0, 0};
     if (pointer_event) {
         if (e.type == SDL_MOUSEMOTION) {
@@ -264,7 +266,7 @@ bool DockableCollapsible::handle_event(const SDL_Event& e) {
         }
     }
 
-    if (expanded_ && scroll_enabled_ && wheel_event && !slider_capture) {
+    if (expanded_ && scroll_enabled_ && wheel_event && !slider_capture_active()) {
         SDL_Point mouse_point{0, 0};
         SDL_GetMouseState(&mouse_point.x, &mouse_point.y);
         if (SDL_PointInRect(&mouse_point, &body_viewport_)) {
@@ -289,7 +291,7 @@ bool DockableCollapsible::handle_event(const SDL_Event& e) {
         }
     }
 
-    if (wheel_event && slider_capture) {
+    if (slider_capture_active()) {
         return true;
     }
 

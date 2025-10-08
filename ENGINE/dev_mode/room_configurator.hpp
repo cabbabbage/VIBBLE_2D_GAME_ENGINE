@@ -55,7 +55,7 @@ private:
     void load_from_json(const nlohmann::json& data);
     void apply_bounds_if_needed();
     void undock_from_sidebar(const SDL_Point& grab_point);
-    void rebuild_rows();
+    void rebuild_rows(bool reload_spawn_list = true);
     std::string selected_geometry() const;
     bool should_rebuild_with(const nlohmann::json& data) const;
     void load_tags_from_json(const nlohmann::json& data);
@@ -121,6 +121,8 @@ private:
     std::unique_ptr<Widget> room_section_label_;
     std::unique_ptr<Widget> spawn_groups_label_;
     std::unique_ptr<class SpawnGroupList> spawn_list_;
+    nlohmann::json* bound_spawn_groups_array_ = nullptr;
+    const nlohmann::json* bound_readonly_groups_array_ = nullptr;
     std::unique_ptr<DMButton> add_group_btn_;
     std::unique_ptr<ButtonWidget> add_group_btn_w_;
     std::unique_ptr<Widget> empty_spawn_label_;

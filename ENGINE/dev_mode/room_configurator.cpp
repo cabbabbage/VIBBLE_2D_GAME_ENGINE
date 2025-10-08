@@ -602,6 +602,8 @@ bool RoomConfigurator::should_rebuild_with(const nlohmann::json& data) const {
 
 void RoomConfigurator::open(const nlohmann::json& data) {
     room_ = nullptr;
+    bound_spawn_groups_array_ = nullptr;
+    bound_readonly_groups_array_ = nullptr;
     if (!docked_mode_) {
         FloatingDockableManager::instance().open_floating(
             "Room Config", this, [this]() { this->close(); });
@@ -626,6 +628,8 @@ void RoomConfigurator::open(Room* room) {
     const bool same_room = (room == previous_room);
     const nlohmann::json& source = room ? room->assets_data() : empty_object();
     room_ = room;
+    bound_spawn_groups_array_ = nullptr;
+    bound_readonly_groups_array_ = nullptr;
     if (!docked_mode_) {
         FloatingDockableManager::instance().open_floating(
             "Room Config", this, [this]() { this->close(); });
@@ -651,7 +655,7 @@ bool RoomConfigurator::visible() const { return is_visible(); }
 
 bool RoomConfigurator::any_panel_visible() const { return visible(); }
 
-void RoomConfigurator::rebuild_rows() {
+void RoomConfigurator::rebuild_rows(bool reload_spawn_list) {
     DockableCollapsible::Rows rows;
     // rows owned by SpawnGroupList are rebuilt each time via append_rows
     spawn_groups_label_.reset();
@@ -837,13 +841,18 @@ void RoomConfigurator::rebuild_rows() {
                 }
             };
 
-            // Load with editable binding to the live array
-            const auto expanded = spawn_list_->expanded_groups();
-            spawn_list_->load(groups_ref, on_change, on_entry_change, std::move(configure_entry));
+            const bool needs_reload = reload_spawn_list || bound_spawn_groups_array_ != &groups_ref;
+            if (needs_reload) {
+                const auto expanded = spawn_list_->expanded_groups();
+                spawn_list_->load(groups_ref, on_change, on_entry_change, configure_entry);
+                spawn_list_->restore_expanded_groups(expanded);
+            } else {
+                spawn_list_->refresh_row_configuration();
+            }
+
             spawn_list_->set_on_layout_changed([this]() {
-                this->rebuild_rows();
+                this->rebuild_rows(false);
             });
-            spawn_list_->restore_expanded_groups(expanded);
 
             // Wire up non-edit actions to the external callbacks provided by the host
             SpawnGroupList::Callbacks cb{};
@@ -856,6 +865,8 @@ void RoomConfigurator::rebuild_rows() {
             spawn_list_->set_callbacks(std::move(cb));
 
             spawn_list_->append_rows(rows);
+            bound_spawn_groups_array_ = &groups_ref;
+            bound_readonly_groups_array_ = nullptr;
             have_groups = true;
         } else {
             // Fallback: read-only list from the loaded JSON snapshot
@@ -866,12 +877,17 @@ void RoomConfigurator::rebuild_rows() {
                 groups = &loaded_json_["assets"];
             }
             if (groups) {
-                const auto expanded = spawn_list_->expanded_groups();
-                spawn_list_->load(*groups);
+                const bool needs_reload = reload_spawn_list || bound_readonly_groups_array_ != groups;
+                if (needs_reload) {
+                    const auto expanded = spawn_list_->expanded_groups();
+                    spawn_list_->load(*groups);
+                    spawn_list_->restore_expanded_groups(expanded);
+                } else {
+                    spawn_list_->refresh_row_configuration();
+                }
                 spawn_list_->set_on_layout_changed([this]() {
-                    this->rebuild_rows();
+                    this->rebuild_rows(false);
                 });
-                spawn_list_->restore_expanded_groups(expanded);
                 SpawnGroupList::Callbacks cb{};
                 cb.on_duplicate = [this](const std::string& id) { if (on_spawn_duplicate_) on_spawn_duplicate_(id); };
                 cb.on_delete    = [this](const std::string& id) { if (on_spawn_delete_) on_spawn_delete_(id); };
@@ -879,7 +895,12 @@ void RoomConfigurator::rebuild_rows() {
                 cb.on_move_down = [this](const std::string& id) { if (on_spawn_move_down_) on_spawn_move_down_(id); };
                 spawn_list_->set_callbacks(std::move(cb));
                 spawn_list_->append_rows(rows);
+                bound_readonly_groups_array_ = groups;
+                bound_spawn_groups_array_ = nullptr;
                 have_groups = true;
+            } else {
+                bound_readonly_groups_array_ = nullptr;
+                bound_spawn_groups_array_ = nullptr;
             }
         }
     }

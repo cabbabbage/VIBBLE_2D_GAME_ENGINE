@@ -578,9 +578,7 @@ void DevControls::set_enabled(bool enabled) {
     }
 
     sync_header_button_states();
-    if (!enabled_) {
-        reset_asset_filters();
-    } else {
+    if (enabled_) {
         asset_filter_.ensure_layout();
     }
 }

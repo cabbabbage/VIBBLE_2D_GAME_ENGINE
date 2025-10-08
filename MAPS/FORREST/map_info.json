@@ -709,7 +709,7 @@
           "dy": -167,
           "enforce_spacing": false,
           "max_number": 78,
-          "min_number": 9,
+          "min_number": 15,
           "origional_height": 3180,
           "origional_width": 3180,
           "position": "Perimeter",
@@ -763,6 +763,12 @@
           "spawn_id": "spn-af3a3a5858e6"
         }
       ],
+      "tags": {
+        "include": [
+          "man-made",
+          "passable"
+        ]
+      },
       "width_max": 3612,
       "width_min": 3612
     }
