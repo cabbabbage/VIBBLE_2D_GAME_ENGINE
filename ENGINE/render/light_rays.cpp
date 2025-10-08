@@ -1,349 +1,242 @@
 #include "light_rays.hpp"
-
 #include <algorithm>
 #include <cmath>
-#include <vector>
+#include <iostream>
+#include <array>
 
 namespace {
-constexpr float kEpsilon = 1e-6f;
-
-inline float clamp01(float v) {
-    if (v <= 0.0f) return 0.0f;
-    if (v >= 1.0f) return 1.0f;
-    return v;
+inline float luma_u8(uint8_t r, uint8_t g, uint8_t b) {
+    // Rec. 709
+    return (0.2126f * r + 0.7152f * g + 0.0722f * b) / 255.f;
 }
 
-inline Uint8 clamp_u8(float v) {
-    if (v <= 0.0f) return 0;
-    if (v >= 255.0f) return 255;
-    return static_cast<Uint8>(v + 0.5f);
-}
+// Box downsample by integer factor from RGBA8888 buffer
+static void downsample_box_rgba8888(
+    const uint32_t* src, int sw, int sh, int factor,
+    std::vector<uint32_t>& dst, int& dw, int& dh)
+{
+    dw = std::max(1, sw / factor);
+    dh = std::max(1, sh / factor);
+    dst.assign(dw * dh, 0u);
 
-float luma_rec709(float r, float g, float b) {
-    return 0.2126f * r + 0.7152f * g + 0.0722f * b;
+    const int ks = factor;
+    for (int y = 0; y < dh; ++y) {
+        for (int x = 0; x < dw; ++x) {
+            int sx0 = x * ks;
+            int sy0 = y * ks;
+            int rsum = 0, gsum = 0, bsum = 0, asum = 0, cnt = 0;
+            for (int ky = 0; ky < ks; ++ky) {
+                int sy = sy0 + ky;
+                if (sy >= sh) break;
+                const uint32_t* row = src + sy * sw;
+                for (int kx = 0; kx < ks; ++kx) {
+                    int sx = sx0 + kx;
+                    if (sx >= sw) break;
+                    uint32_t px = row[sx];
+                    uint8_t a = (px >> 24) & 0xFF;
+                    uint8_t r = (px >> 16) & 0xFF;
+                    uint8_t g = (px >> 8)  & 0xFF;
+                    uint8_t b = (px >> 0)  & 0xFF;
+                    rsum += r; gsum += g; bsum += b; asum += a; ++cnt;
+                }
+            }
+            if (cnt == 0) cnt = 1;
+            uint8_t r = static_cast<uint8_t>(rsum / cnt);
+            uint8_t g = static_cast<uint8_t>(gsum / cnt);
+            uint8_t b = static_cast<uint8_t>(bsum / cnt);
+            uint8_t a = static_cast<uint8_t>(asum / cnt);
+            dst[y * dw + x] = (uint32_t(a) << 24) | (uint32_t(r) << 16) | (uint32_t(g) << 8) | uint32_t(b);
+        }
+    }
 }
+} // anon
 
-float avg_rgb(float r, float g, float b) {
-    return (r + g + b) / 3.0f;
-}
-
-float energy_rgb(float r, float g, float b) {
-    return std::sqrt(std::max(0.0f, (r * r + g * g + b * b) / 3.0f));
-}
-}
-
-LightRaysPass::LightRaysPass(SDL_Renderer* renderer, int screen_w, int screen_h)
-    : renderer_(renderer), screen_w_(screen_w), screen_h_(screen_h) {
-    pixel_format_ = SDL_AllocFormat(SDL_PIXELFORMAT_RGBA8888);
-    update_downsample_dimensions();
+LightRaysPass::LightRaysPass(SDL_Renderer* r, int sw, int sh)
+: renderer_(r), screen_w_(sw), screen_h_(sh) {
+    light_pos_ = SDL_Point{ sw / 2, sh / 3 };
 }
 
 LightRaysPass::~LightRaysPass() {
-    release_resources();
-    if (pixel_format_) {
-        SDL_FreeFormat(pixel_format_);
-        pixel_format_ = nullptr;
+    destroy_textures_();
+}
+
+void LightRaysPass::destroy_textures_() {
+    if (rays_tex_lowres_) {
+        SDL_DestroyTexture(rays_tex_lowres_);
+        rays_tex_lowres_ = nullptr;
     }
+    lr_w_ = lr_h_ = 0;
 }
 
-void LightRaysPass::set_renderer(SDL_Renderer* renderer) {
-    if (renderer_ == renderer) {
-        return;
+void LightRaysPass::set_screen_size(int sw, int sh) {
+    screen_w_ = sw; screen_h_ = sh;
+    destroy_textures_();
+}
+
+void LightRaysPass::set_params(const LightRaysParams& p) {
+    params_ = p;
+    destroy_textures_();
+}
+
+void LightRaysPass::set_light_screen_pos(SDL_Point p) { light_pos_ = p; }
+void LightRaysPass::set_enabled(bool v) { enabled_ = v; }
+
+bool LightRaysPass::ensure_lowres_target_() {
+    const int factor = 1 << std::max(0, params_.downsample_log2);
+    int want_w = std::max(1, screen_w_ / factor);
+    int want_h = std::max(1, screen_h_ / factor);
+    if (rays_tex_lowres_) {
+        int w = 0, h = 0; Uint32 fmt = 0; int access = 0;
+        if (SDL_QueryTexture(rays_tex_lowres_, &fmt, &access, &w, &h) == 0 && w == want_w && h == want_h) {
+            lr_w_ = w; lr_h_ = h; return true;
+        }
+        SDL_DestroyTexture(rays_tex_lowres_);
+        rays_tex_lowres_ = nullptr;
     }
-    renderer_ = renderer;
-    release_resources();
-}
-
-void LightRaysPass::set_screen_size(int w, int h) {
-    if (w == screen_w_ && h == screen_h_) {
-        return;
-    }
-    screen_w_ = std::max(0, w);
-    screen_h_ = std::max(0, h);
-    update_downsample_dimensions();
-    release_resources();
-}
-
-void LightRaysPass::set_enabled(bool enabled) {
-    enabled_ = enabled;
-}
-
-void LightRaysPass::set_params(const LightRaysParams& params) {
-    if (params_.downsample_log2 != params.downsample_log2) {
-        params_ = params;
-        update_downsample_dimensions();
-        release_resources();
-        return;
-    }
-    params_ = params;
-}
-
-float LightRaysPass::brightness_from_pixel(uint32_t pixel) const {
-    float a = ((pixel >> 24) & 0xFF) / 255.0f;
-    float r = ((pixel >> 16) & 0xFF) / 255.0f;
-    float g = ((pixel >> 8) & 0xFF) / 255.0f;
-    float b = ((pixel >> 0) & 0xFF) / 255.0f;
-
-    float brightness = 0.0f;
-    switch (params_.metric) {
-        case BrightnessMetric::Luma709:  brightness = luma_rec709(r, g, b); break;
-        case BrightnessMetric::MaxRGB:   brightness = std::max(std::max(r, g), b); break;
-        case BrightnessMetric::AvgRGB:   brightness = avg_rgb(r, g, b); break;
-        case BrightnessMetric::EnergyRGB:brightness = energy_rgb(r, g, b); break;
-    }
-
-    if (params_.use_alpha_in_mask) {
-        brightness *= a;
-    }
-    brightness = std::pow(clamp01(brightness), std::max(0.01f, params_.gamma_comp));
-    return clamp01(brightness);
-}
-
-float LightRaysPass::sample_brightness(float u, float v) const {
-    if (downsample_w_ <= 0 || downsample_h_ <= 0 || downsampled_mask_.empty()) {
-        return 0.0f;
-    }
-
-    float x = clamp01(u) * (static_cast<float>(downsample_w_) - 1.0f);
-    float y = clamp01(v) * (static_cast<float>(downsample_h_) - 1.0f);
-
-    int x0 = static_cast<int>(std::floor(x));
-    int y0 = static_cast<int>(std::floor(y));
-    int x1 = std::min(x0 + 1, downsample_w_ - 1);
-    int y1 = std::min(y0 + 1, downsample_h_ - 1);
-
-    float tx = x - static_cast<float>(x0);
-    float ty = y - static_cast<float>(y0);
-
-    const auto idx = [&](int px, int py) {
-        px = std::clamp(px, 0, downsample_w_ - 1);
-        py = std::clamp(py, 0, downsample_h_ - 1);
-        return py * downsample_w_ + px;
-    };
-
-    float s00 = downsampled_mask_[idx(x0, y0)];
-    float s10 = downsampled_mask_[idx(x1, y0)];
-    float s01 = downsampled_mask_[idx(x0, y1)];
-    float s11 = downsampled_mask_[idx(x1, y1)];
-
-    float sx0 = s00 + (s10 - s00) * tx;
-    float sx1 = s01 + (s11 - s01) * tx;
-    return sx0 + (sx1 - sx0) * ty;
-}
-
-void LightRaysPass::update_downsample_dimensions() {
-    int shift = std::clamp(params_.downsample_log2, 0, 6);
-    int divisor = 1 << shift;
-    if (divisor <= 0) divisor = 1;
-
-    auto ceil_div = [](int value, int d) {
-        if (d <= 0) return value;
-        return (value + d - 1) / d;
-    };
-
-    downsample_w_ = std::max(1, ceil_div(screen_w_, divisor));
-    downsample_h_ = std::max(1, ceil_div(screen_h_, divisor));
-}
-
-bool LightRaysPass::ensure_resources() {
-    if (!renderer_ || screen_w_ <= 0 || screen_h_ <= 0) {
+    rays_tex_lowres_ = SDL_CreateTexture(renderer_, SDL_PIXELFORMAT_RGBA8888,
+                                         SDL_TEXTUREACCESS_STREAMING, want_w, want_h);
+    if (!rays_tex_lowres_) {
+        std::cerr << "[LightRaysPass] Failed to create lowres rays texture: " << SDL_GetError() << "\n";
         return false;
     }
-
-    if (!pixel_format_) {
-        pixel_format_ = SDL_AllocFormat(SDL_PIXELFORMAT_RGBA8888);
-        if (!pixel_format_) {
-            return false;
-        }
-    }
-
-    if (!capture_texture_) {
-        capture_texture_ = SDL_CreateTexture(renderer_, SDL_PIXELFORMAT_RGBA8888,
-                                             SDL_TEXTUREACCESS_TARGET, screen_w_, screen_h_);
-        if (!capture_texture_) {
-            return false;
-        }
-        SDL_SetTextureBlendMode(capture_texture_, SDL_BLENDMODE_NONE);
-    }
-
-    if (!rays_texture_) {
-        rays_texture_ = SDL_CreateTexture(renderer_, SDL_PIXELFORMAT_RGBA8888,
-                                          SDL_TEXTUREACCESS_STREAMING,
-                                          downsample_w_, downsample_h_);
-        if (!rays_texture_) {
-            return false;
-        }
-        SDL_SetTextureBlendMode(rays_texture_, SDL_BLENDMODE_ADD);
-    #if SDL_VERSION_ATLEAST(2,0,12)
-        SDL_SetTextureScaleMode(rays_texture_, SDL_ScaleModeLinear);
-    #endif
-    }
-
-    capture_pixels_.assign(static_cast<size_t>(screen_w_) * static_cast<size_t>(screen_h_), 0u);
-    downsampled_mask_.assign(static_cast<size_t>(downsample_w_) * static_cast<size_t>(downsample_h_), 0.0f);
-    rays_pixels_.assign(static_cast<size_t>(downsample_w_) * static_cast<size_t>(downsample_h_), 0u);
-
+    SDL_SetTextureBlendMode(rays_tex_lowres_, SDL_BLENDMODE_ADD); // default to ADD
+    lr_w_ = want_w; lr_h_ = want_h;
     return true;
 }
 
-void LightRaysPass::release_resources() {
-    if (capture_texture_) {
-        SDL_DestroyTexture(capture_texture_);
-        capture_texture_ = nullptr;
-    }
-    if (rays_texture_) {
-        SDL_DestroyTexture(rays_texture_);
-        rays_texture_ = nullptr;
-    }
-    capture_pixels_.clear();
-    downsampled_mask_.clear();
-    rays_pixels_.clear();
-}
+SDL_Texture* LightRaysPass::compute(SDL_Texture* source_render_target) {
+    if (!enabled_ || !renderer_ || !source_render_target) return nullptr;
+    if (!ensure_lowres_target_()) return nullptr;
 
-SDL_Texture* LightRaysPass::compute(SDL_Texture* source_texture) {
-    if (!enabled_ || !renderer_ || !source_texture) {
-        return nullptr;
-    }
-    if (screen_w_ <= 0 || screen_h_ <= 0) {
-        return nullptr;
-    }
-    if (params_.samples <= 0) {
-        return nullptr;
-    }
+    // Save and set render target to the source to read pixels
+    SDL_Texture* prev = SDL_GetRenderTarget(renderer_);
+    SDL_SetRenderTarget(renderer_, source_render_target);
 
-    update_downsample_dimensions();
-    if (!ensure_resources()) {
-        return nullptr;
-    }
-
-    SDL_Texture* previous_target = SDL_GetRenderTarget(renderer_);
-    SDL_SetRenderTarget(renderer_, capture_texture_);
-    SDL_SetRenderDrawColor(renderer_, 0, 0, 0, 0);
-    SDL_RenderClear(renderer_);
-
-    SDL_BlendMode prev_blend = SDL_BLENDMODE_INVALID;
-    const bool restore_blend = SDL_GetTextureBlendMode(source_texture, &prev_blend) == 0;
-    Uint8 prev_r = 255, prev_g = 255, prev_b = 255, prev_a = 255;
-    const bool restore_color = SDL_GetTextureColorMod(source_texture, &prev_r, &prev_g, &prev_b) == 0;
-    const bool restore_alpha = SDL_GetTextureAlphaMod(source_texture, &prev_a) == 0;
-
-    SDL_SetTextureBlendMode(source_texture, SDL_BLENDMODE_NONE);
-    SDL_SetTextureColorMod(source_texture, 255, 255, 255);
-    SDL_SetTextureAlphaMod(source_texture, 255);
-
-    SDL_Rect dst{0, 0, screen_w_, screen_h_};
-    SDL_RenderCopy(renderer_, source_texture, nullptr, &dst);
-
-    if (restore_blend) SDL_SetTextureBlendMode(source_texture, prev_blend);
-    if (restore_color) SDL_SetTextureColorMod(source_texture, prev_r, prev_g, prev_b);
-    if (restore_alpha) SDL_SetTextureAlphaMod(source_texture, prev_a);
-
+    // Readback full-res RGBA8888 into a temporary buffer
+    std::vector<uint32_t> full_rgba(screen_w_ * screen_h_);
     SDL_Rect rect{0, 0, screen_w_, screen_h_};
     if (SDL_RenderReadPixels(renderer_, &rect, SDL_PIXELFORMAT_RGBA8888,
-                             capture_pixels_.data(), screen_w_ * static_cast<int>(sizeof(uint32_t))) != 0) {
-        SDL_SetRenderTarget(renderer_, previous_target);
+                             full_rgba.data(), screen_w_ * int(sizeof(uint32_t))) != 0) {
+        SDL_SetRenderTarget(renderer_, prev);
+        std::cerr << "[LightRaysPass] SDL_RenderReadPixels failed: " << SDL_GetError() << "\n";
         return nullptr;
     }
 
-    SDL_SetRenderTarget(renderer_, previous_target);
+    // Restore previous render target
+    SDL_SetRenderTarget(renderer_, prev);
 
-    const int block_shift = std::clamp(params_.downsample_log2, 0, 6);
+    // Downsample for speed
+    const int factor = 1 << std::max(0, params_.downsample_log2);
+    std::vector<uint32_t> low_rgba;
+    int dw = 0, dh = 0;
+    downsample_box_rgba8888(full_rgba.data(), screen_w_, screen_h_, factor, low_rgba, dw, dh);
 
-    std::vector<int> contribution_counts(static_cast<size_t>(downsample_w_) * static_cast<size_t>(downsample_h_), 0);
-
-    for (int y = 0; y < screen_h_; ++y) {
-        int mask_y = std::min(y >> block_shift, downsample_h_ - 1);
-        for (int x = 0; x < screen_w_; ++x) {
-            int mask_x = std::min(x >> block_shift, downsample_w_ - 1);
-            size_t mask_idx = static_cast<size_t>(mask_y) * static_cast<size_t>(downsample_w_) + static_cast<size_t>(mask_x);
-            float brightness = brightness_from_pixel(capture_pixels_[static_cast<size_t>(y) * static_cast<size_t>(screen_w_) + static_cast<size_t>(x)]);
-            downsampled_mask_[mask_idx] += brightness;
-            contribution_counts[mask_idx] += 1;
-        }
+    // Build luma buffer and histogram
+    std::vector<float> luma(dw * dh, 0.f);
+    std::array<int, 256> hist{}; hist.fill(0);
+    for (int i = 0; i < dw * dh; ++i) {
+        uint32_t px = low_rgba[i];
+        uint8_t a = (px >> 24) & 0xFF;
+        uint8_t r = (px >> 16) & 0xFF;
+        uint8_t g = (px >> 8)  & 0xFF;
+        uint8_t b = (px >> 0)  & 0xFF;
+        float L = luma_u8(r, g, b) * (a / 255.f);
+        L = std::min(1.f, std::max(0.f, L));
+        luma[i] = L;
+        int bin = std::clamp(int(L * 255.f + 0.5f), 0, 255);
+        hist[bin] += 1;
     }
 
-    std::vector<float> mask_values = downsampled_mask_;
-    for (size_t idx = 0; idx < mask_values.size(); ++idx) {
-        int count = contribution_counts[idx];
-        if (count > 0) {
-            mask_values[idx] = downsampled_mask_[idx] / static_cast<float>(count);
-        } else {
-            mask_values[idx] = 0.0f;
-        }
+    // Percentile threshold
+    const int total = dw * dh;
+    const float tail = 1.f - std::clamp(params_.bright_percentile, 0.f, 1.f);
+    const int keep = std::max(1, int(total * tail));
+    int running = 0;
+    int thresh_bin = 255;
+    for (int b = 255; b >= 0; --b) {
+        running += hist[b];
+        if (running >= keep) { thresh_bin = b; break; }
+    }
+    float thr = std::max(params_.min_luma_threshold, thresh_bin / 255.f);
+
+    // If too many pixels are considered bright, skip to avoid washing the screen
+    if (keep > total * 0.25f) {
+        return nullptr;
     }
 
-    float bright_cut = params_.min_luma_threshold;
-    if (!mask_values.empty()) {
-        std::vector<float> temp = mask_values;
-        size_t percentile_index = static_cast<size_t>(std::clamp(params_.bright_percentile, 0.0f, 1.0f) * (temp.size() - 1));
-        std::nth_element(temp.begin(), temp.begin() + static_cast<long>(percentile_index), temp.end());
-        bright_cut = std::max(bright_cut, temp[percentile_index]);
+    // Bright mask in [0..1]
+    std::vector<float> bright(dw * dh, 0.f);
+    const float denom = std::max(1e-5f, 1.f - thr);
+    for (int i = 0; i < dw * dh; ++i) {
+        float v = (luma[i] - thr) / denom;
+        bright[i] = v > 0.f ? v : 0.f;
     }
 
-    for (size_t i = 0; i < mask_values.size(); ++i) {
-        float v = mask_values[i];
-        if (v <= bright_cut) {
-            v = 0.0f;
-        } else {
-            float denom = std::max(kEpsilon, 1.0f - bright_cut);
-            v = (v - bright_cut) / denom;
-        }
-        downsampled_mask_[i] = clamp01(v);
-    }
+    // Ray march toward light
+    const float lx = float(light_pos_.x) / float(factor);
+    const float ly = float(light_pos_.y) / float(factor);
+    const float max_dist = std::sqrt(float(dw * dw + dh * dh));
 
-    const float inv_mask_w = 1.0f / static_cast<float>(downsample_w_);
-    const float inv_mask_h = 1.0f / static_cast<float>(downsample_h_);
+    std::vector<uint8_t> out_alpha(dw * dh, 0);
+    const int samples = std::max(1, params_.samples);
+    const float density = params_.density / float(samples);
+    const float decay   = params_.decay;
+    const float weight  = params_.weight;
+    const float exposure = params_.exposure;
 
-    float light_u = 0.5f;
-    float light_v = 0.5f;
-    if (screen_w_ > 0) {
-        light_u = (static_cast<float>(light_screen_pos_.x) + 0.5f) / static_cast<float>(screen_w_);
-    }
-    if (screen_h_ > 0) {
-        light_v = (static_cast<float>(light_screen_pos_.y) + 0.5f) / static_cast<float>(screen_h_);
-    }
+    for (int y = 0; y < dh; ++y) {
+        for (int x = 0; x < dw; ++x) {
+            float dx = lx - float(x);
+            float dy = ly - float(y);
+            float px = float(x);
+            float py = float(y);
+            float stepx = dx * density;
+            float stepy = dy * density;
+            float illum_decay = 1.f;
+            float sum = 0.f;
 
-    const int samples = std::clamp(params_.samples, 1, 1024);
-    const float density = std::max(0.0f, params_.density);
-    const float decay = std::clamp(params_.decay, 0.0f, 0.9999f);
-    const float weight = std::max(0.0f, params_.weight);
-    const float exposure = std::max(0.0f, params_.exposure);
-
-    for (int y = 0; y < downsample_h_; ++y) {
-        for (int x = 0; x < downsample_w_; ++x) {
-            float u = (static_cast<float>(x) + 0.5f) * inv_mask_w;
-            float v = (static_cast<float>(y) + 0.5f) * inv_mask_h;
-
-            float delta_u = (u - light_u) * density / static_cast<float>(samples);
-            float delta_v = (v - light_v) * density / static_cast<float>(samples);
-
-            float sample_u = u;
-            float sample_v = v;
-            float illumination_decay = 1.0f;
-            float accum = 0.0f;
-
-            for (int i = 0; i < samples; ++i) {
-                sample_u -= delta_u;
-                sample_v -= delta_v;
-                if (sample_u < 0.0f || sample_u > 1.0f || sample_v < 0.0f || sample_v > 1.0f) {
-                    continue;
-                }
-                float sample_value = sample_brightness(sample_u, sample_v);
-                accum += sample_value * illumination_decay * weight;
-                illumination_decay *= decay;
+            for (int s = 0; s < samples; ++s) {
+                px += stepx;
+                py += stepy;
+                int sx = int(px + 0.5f);
+                int sy = int(py + 0.5f);
+                if ((unsigned)sx >= (unsigned)dw || (unsigned)sy >= (unsigned)dh) break;
+                float sample = bright[sy * dw + sx];
+                sum += sample * illum_decay * weight;
+                illum_decay *= decay;
             }
-
-            float intensity = accum * exposure;
-            Uint8 value = clamp_u8(intensity * 255.0f);
-            rays_pixels_[static_cast<size_t>(y) * static_cast<size_t>(downsample_w_) + static_cast<size_t>(x)] =
-                SDL_MapRGBA(pixel_format_, value, value, value, value);
+            float dx0 = float(x) - lx;
+            float dy0 = float(y) - ly;
+            float dist = std::sqrt(dx0 * dx0 + dy0 * dy0);
+            float falloff = max_dist > 0.f ? std::clamp(1.f - (dist / max_dist), 0.f, 1.f) : 1.f;
+            falloff = falloff * falloff;
+            float val = std::min(1.f, sum * exposure * falloff);
+            out_alpha[y * dw + x] = clamp_u8_(val * 255.f);
         }
     }
 
-    if (SDL_UpdateTexture(rays_texture_, nullptr, rays_pixels_.data(),
-                          downsample_w_ * static_cast<int>(sizeof(uint32_t))) != 0) {
+    // Map to low-res texture using the texture's real format
+    void* pixels = nullptr;
+    int pitch = 0;
+    if (SDL_LockTexture(rays_tex_lowres_, nullptr, &pixels, &pitch) != 0) {
+        std::cerr << "[LightRaysPass] LockTexture failed: " << SDL_GetError() << "\n";
         return nullptr;
     }
 
-    return rays_texture_;
+    Uint32 fmt = 0; int access = 0, tw = 0, th = 0;
+    SDL_QueryTexture(rays_tex_lowres_, &fmt, &access, &tw, &th);
+    SDL_PixelFormat* pf = SDL_AllocFormat(fmt);
+
+    for (int y = 0; y < dh; ++y) {
+        uint8_t* row = static_cast<uint8_t*>(pixels) + y * pitch;
+        Uint32* p32 = reinterpret_cast<Uint32*>(row);
+        for (int x = 0; x < dw; ++x) {
+            uint8_t a = out_alpha[y * dw + x];
+            p32[x] = SDL_MapRGBA(pf, 255, 255, 255, a); // correct packing for this texture format
+        }
+    }
+
+    SDL_FreeFormat(pf);
+    SDL_UnlockTexture(rays_tex_lowres_);
+    return rays_tex_lowres_;
 }
