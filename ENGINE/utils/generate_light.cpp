@@ -50,7 +50,7 @@ SDL_Texture* GenerateLight::generate(SDL_Renderer* renderer,
 	fs::create_directories(folder);
 	const int radius    = light.radius;
 	const int falloff   = std::clamp(light.fall_off, 0, 100);
-	const SDL_Color col = light.color;
+        const SDL_Color col = SDL_Color{255, 255, 255, 255};
 	const int intensity = std::clamp(light.intensity, 0, 255);
 	const int flare     = std::clamp(light.flare, 0, 100);
 	const int size = std::max(1, radius * 2);
@@ -115,23 +115,13 @@ SDL_Texture* GenerateLight::generate(SDL_Renderer* renderer,
                         float alpha_ratio  = std::pow(base_gradient, fade_exponent);
 			alpha_ratio = std::clamp(alpha_ratio * ray_boost, 0.0f, 1.0f);
 			Uint8 alpha = static_cast<Uint8>(std::min(255.0f, intensity * alpha_ratio * 1.6f));
-			SDL_Color final_color;
-			if (dist <= white_core_radius) {
-					final_color.r = static_cast<Uint8>((255 + col.r) / 2);
-					final_color.g = static_cast<Uint8>((255 + col.g) / 2);
-					final_color.b = static_cast<Uint8>((255 + col.b) / 2);
-					final_color.a = alpha;
-			} else {
-					float t = (dist - white_core_radius) / std::max(1e-6f, (radius - white_core_radius));
-					Uint8 core_r = static_cast<Uint8>((255 + col.r) / 2);
-					Uint8 core_g = static_cast<Uint8>((255 + col.g) / 2);
-					Uint8 core_b = static_cast<Uint8>((255 + col.b) / 2);
-					final_color.r = static_cast<Uint8>((1.0f - t) * core_r + t * col.r);
-					final_color.g = static_cast<Uint8>((1.0f - t) * core_g + t * col.g);
-					final_color.b = static_cast<Uint8>((1.0f - t) * core_b + t * col.b);
-					final_color.a = alpha;
-			}
-			put_pixel(x, y, final_color.r, final_color.g, final_color.b, final_color.a);
+                        float brightness = 1.0f;
+                        if (dist > white_core_radius) {
+                                        float t = (dist - white_core_radius) / std::max(1e-6f, (radius - white_core_radius));
+                                        brightness = std::clamp(1.0f - t * 0.6f, 0.0f, 1.0f);
+                        }
+                        Uint8 value = static_cast<Uint8>(std::clamp(brightness * 255.0f, 0.0f, 255.0f));
+                        put_pixel(x, y, value, value, value, alpha);
 		}
 	}
 	SDL_UnlockSurface(surf);

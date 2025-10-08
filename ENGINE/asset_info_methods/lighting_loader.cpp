@@ -38,11 +38,6 @@ void LightingLoader::load(AssetInfo& info, const json& data) {
                 light.x_radius  = static_cast<int>(std::lround(static_cast<double>(raw_x_radius) * factor));
                 light.y_radius  = static_cast<int>(std::lround(static_cast<double>(raw_y_radius) * factor));
                 light.color     = {255, 255, 255, 255};
-                if (l.contains("light_color") && l["light_color"].is_array() && l["light_color"].size() == 3) {
-                        light.color.r = l["light_color"][0].get<int>();
-                        light.color.g = l["light_color"][1].get<int>();
-                        light.color.b = l["light_color"][2].get<int>();
-                }
                 return parsed;
 };
         auto append_light = [&](const ParsedLight& parsed) {

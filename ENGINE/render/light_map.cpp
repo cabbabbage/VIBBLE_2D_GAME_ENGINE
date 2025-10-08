@@ -78,7 +78,7 @@ void LightMap::collect_layers(std::vector<LightEntry>& out, std::mt19937& rng) {
         }
         if (fullscreen_light_tex_) {
                 out.push_back({ fullscreen_light_tex_, { 0, 0, screen_width_, screen_height_ },
-                        static_cast<Uint8>(main_alpha / 2), SDL_FLIP_NONE, false });
+                        static_cast<Uint8>(main_alpha / 2), SDL_FLIP_NONE });
         }
 	if (SDL_Texture* map_tex = main_light_.get_texture()) {
 		int lw = main_light_.get_cached_w();
@@ -86,9 +86,9 @@ void LightMap::collect_layers(std::vector<LightEntry>& out, std::mt19937& rng) {
 		if (lw == 0 || lh == 0) SDL_QueryTexture(map_tex, nullptr, nullptr, &lw, &lh);
 		SDL_Rect map_rect = get_scaled_position_rect(main_light_.get_position(), lw, lh, inv_scale, min_visible_w, min_visible_h);
 		if (map_rect.w != 0 || map_rect.h != 0) {
-			out.push_back({ map_tex, map_rect, main_alpha, SDL_FLIP_NONE, false });
-		}
-	}
+                        out.push_back({ map_tex, map_rect, main_alpha, SDL_FLIP_NONE });
+                }
+        }
         const float main_brightness = static_cast<float>(main_light_.get_brightness());
         for (Asset* a : candidates) {
                 if (!a || !a->info || !a->info->is_light_source) continue;
@@ -114,7 +114,7 @@ void LightMap::collect_layers(std::vector<LightEntry>& out, std::mt19937& rng) {
                         }
                         Uint8 alpha = static_cast<Uint8>(std::clamp(alpha_f, 0.0f, 255.0f));
                         out.push_back({ light.texture, dst, alpha,
-                 a->flipped ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE, true });
+                 a->flipped ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE });
                 }
         }
 }
@@ -156,9 +156,9 @@ SDL_Texture* LightMap::build_lowres_mask(const std::vector<LightEntry>& layers,
         SDL_RenderClear(renderer_);
         SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_ADD);
 	for (auto& e : layers) {
-		SDL_SetTextureBlendMode(e.tex, SDL_BLENDMODE_ADD);
-		SDL_SetTextureAlphaMod(e.tex, e.alpha);
-		SDL_SetTextureColorMod(e.tex, 255, 255, 220);
+                SDL_SetTextureBlendMode(e.tex, SDL_BLENDMODE_ADD);
+                SDL_SetTextureAlphaMod(e.tex, e.alpha);
+                SDL_SetTextureColorMod(e.tex, 255, 255, 255);
 		SDL_Rect scaled_dst{
 			e.dst.x / downscale,
 			e.dst.y / downscale,

@@ -64,17 +64,17 @@ SceneRenderer::SceneRenderer(SDL_Renderer* renderer,
         z_light_pass_->render(debugging);
     }
 
-    // Light rays pass on top
+    // Light rays pass on top - strong and safe values that will show clearly
     light_rays_pass_ = std::make_unique<LightRaysPass>(renderer_, screen_width_, screen_height_);
-    LightRaysParams rays_params;
-    rays_params.min_luma_threshold = 0.80f;      // absolute floor
-    rays_params.bright_percentile  = 0.985f;     // top 1.5 percent
-    rays_params.samples            = 64;
-    rays_params.density            = 0.9f;
-    rays_params.decay              = 0.97f;
-    rays_params.weight             = 0.75f;
-    rays_params.exposure           = 1.1f;
-    rays_params.downsample_log2    = low_quality_mode_ ? 3 : 2; // 1/8 in dev, 1/4 otherwise
+    LightRaysParams rays_params{};
+    rays_params.min_luma_threshold = 0.40f;  // include more candidates
+    rays_params.bright_percentile  = 0.90f;  // keep top 10% only
+    rays_params.samples            = 128;    // longer and smoother
+    rays_params.density            = 1.5f;   // faster march toward light
+    rays_params.decay              = 0.99f;  // slow fade for long rays
+    rays_params.weight             = 1.6f;   // per-sample strength
+    rays_params.exposure           = 2.8f;   // global boost
+    rays_params.downsample_log2    = low_quality_mode_ ? 2 : 1; // thicker at 1/2 res in full quality
     light_rays_pass_->set_params(rays_params);
     light_rays_pass_->set_enabled(!low_quality_mode_);
 }
@@ -91,9 +91,8 @@ SceneRenderer::~SceneRenderer() {
 }
 
 void SceneRenderer::recreate_fullscreen_light_texture() {
-    if (!renderer_) {
-        return;
-    }
+    if (!renderer_) return;
+
     if (fullscreen_light_tex_) {
         SDL_DestroyTexture(fullscreen_light_tex_);
         fullscreen_light_tex_ = nullptr;
@@ -113,20 +112,13 @@ void SceneRenderer::recreate_fullscreen_light_texture() {
 }
 
 void SceneRenderer::resize_render_targets_if_needed() {
-    if (!renderer_) {
-        return;
-    }
+    if (!renderer_) return;
+
     int output_w = 0;
     int output_h = 0;
-    if (SDL_GetRendererOutputSize(renderer_, &output_w, &output_h) != 0) {
-        return;
-    }
-    if (output_w <= 0 || output_h <= 0) {
-        return;
-    }
-    if (output_w == screen_width_ && output_h == screen_height_) {
-        return;
-    }
+    if (SDL_GetRendererOutputSize(renderer_, &output_w, &output_h) != 0) return;
+    if (output_w <= 0 || output_h <= 0) return;
+    if (output_w == screen_width_ && output_h == screen_height_) return;
 
     screen_width_ = output_w;
     screen_height_ = output_h;
@@ -157,9 +149,8 @@ void SceneRenderer::set_low_quality_rendering(bool low_quality) {
 
 void SceneRenderer::apply_map_light_config(const nlohmann::json& data) {
     main_light_source_.apply_config(data);
-    if (!renderer_ || !fullscreen_light_tex_) {
-        return;
-    }
+    if (!renderer_ || !fullscreen_light_tex_) return;
+
     SDL_Texture* prev = SDL_GetRenderTarget(renderer_);
     SDL_SetRenderTarget(renderer_, fullscreen_light_tex_);
     SDL_Color color = main_light_source_.get_current_color();
@@ -170,14 +161,14 @@ void SceneRenderer::apply_map_light_config(const nlohmann::json& data) {
 
 void SceneRenderer::update_shading_groups() {
     ++current_shading_group_;
-    if (current_shading_group_ > num_groups_)
-        current_shading_group_ = 1;
+    if (current_shading_group_ > num_groups_) current_shading_group_ = 1;
 }
 
 bool SceneRenderer::shouldRegen(Asset* a) {
-    if (!a->get_final_texture()) { return true; }
+    if (!a->get_final_texture()) return true;
     return (a->get_shading_group() > 0 &&
-            a->get_shading_group() == current_shading_group_) || (!a->get_final_texture() || !a->static_frame || a->get_render_player_light());
+            a->get_shading_group() == current_shading_group_) ||
+           (!a->get_final_texture() || !a->static_frame || a->get_render_player_light());
 }
 
 SDL_Rect SceneRenderer::get_scaled_position_rect(Asset* a,
@@ -225,10 +216,7 @@ void SceneRenderer::render() {
 
     auto ensure_target = [&](SDL_Texture*& tex, int w, int h) {
         if (low_quality_mode_) {
-            if (tex) {
-                SDL_DestroyTexture(tex);
-                tex = nullptr;
-            }
+            if (tex) { SDL_DestroyTexture(tex); tex = nullptr; }
             return false;
         }
         int tw = 0, th = 0; Uint32 fmt = 0; int access = 0;
@@ -282,14 +270,9 @@ void SceneRenderer::render() {
     const auto& active_assets = assets_ ? assets_->getFilteredActiveAssets() : kEmpty;
     const float highlight_pulse = 0.45f + 0.55f * std::sin(render_call_count * 0.18f);
 
-    struct AreaOverlayRequest {
-        Asset* asset = nullptr;
-        float asset_screen_height = 0.0f;
-    };
+    struct AreaOverlayRequest { Asset* asset; float asset_screen_height; };
     std::vector<AreaOverlayRequest> area_requests;
-    if (debug_render_areas) {
-        area_requests.reserve(active_assets.size());
-    }
+    if (debug_render_areas) area_requests.reserve(active_assets.size());
 
     for (Asset* a : active_assets) {
         if (!a || !a->info) continue;
@@ -407,17 +390,21 @@ void SceneRenderer::render() {
 
     // Compute light rays from the fully drawn scene_target_tex_
     if (!low_quality_mode_ && light_rays_pass_ && scene_target_tex_) {
-        // Pick a light origin in screen space. Replace with your main light screen point if available.
+        // Make sure light origin is on screen so the effect is obvious
         SDL_Point light_screen = SDL_Point{ screen_width_ / 2, screen_height_ / 3 };
         light_rays_pass_->set_light_screen_pos(light_screen);
 
         SDL_Texture* rays_lowres = light_rays_pass_->compute(scene_target_tex_);
         if (rays_lowres) {
-            // Bake rays into the scene texture so scene_target_tex_ becomes the final texture
             SDL_SetRenderTarget(renderer_, scene_target_tex_);
-            SDL_SetTextureBlendMode(rays_lowres, SDL_BLENDMODE_ADD);
+            SDL_SetTextureBlendMode(rays_lowres, SDL_BLENDMODE_ADD);   // FIX: additive blend for rays
+            SDL_SetTextureAlphaMod(rays_lowres, 255);                   // max intensity
             SDL_Rect full{ 0, 0, screen_width_, screen_height_ };
             SDL_RenderCopy(renderer_, rays_lowres, nullptr, &full);
+        } else {
+            // If you see this, your bright-percentile guard likely skipped the pass
+            // or the mask was empty. Loosen thresholds temporarily to test.
+            // std::cerr << "[SceneRenderer] LightRaysPass returned nullptr\n";
         }
     }
 

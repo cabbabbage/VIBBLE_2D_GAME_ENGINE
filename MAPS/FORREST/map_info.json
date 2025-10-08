@@ -221,11 +221,11 @@
       ]
     ],
     "max_opacity": 255,
-    "min_opacity": 23,
+    "min_opacity": 0,
     "mult": 0.32,
     "orbit_radius": 782,
     "radius": 747,
-    "update_interval": 2
+    "update_interval": 12
   },
   "map_name": "FORREST",
   "map_radius": 9708.0,
@@ -542,6 +542,52 @@
             {
               "x": -7528,
               "y": -5532
+            }
+          ],
+          "type": "trigger"
+        },
+        {
+          "anchor": {
+            "x": 9707,
+            "y": 9706
+          },
+          "kind": "Trigger",
+          "name": "trigger_area_2",
+          "points": [
+            {
+              "x": -7564,
+              "y": -6270
+            },
+            {
+              "x": -8084,
+              "y": -5960
+            },
+            {
+              "x": -8086,
+              "y": -7082
+            }
+          ],
+          "type": "trigger"
+        },
+        {
+          "anchor": {
+            "x": 9708,
+            "y": 9705
+          },
+          "kind": "Trigger",
+          "name": "trigger_area_3",
+          "points": [
+            {
+              "x": -204,
+              "y": -599
+            },
+            {
+              "x": 257,
+              "y": -693
+            },
+            {
+              "x": 194,
+              "y": -237
             }
           ],
           "type": "trigger"

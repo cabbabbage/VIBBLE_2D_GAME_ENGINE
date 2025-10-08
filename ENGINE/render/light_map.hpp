@@ -15,8 +15,7 @@ public:
                 SDL_Rect dst;
                 Uint8 alpha;
                 SDL_RendererFlip flip;
-                bool apply_tint;
-};
+        };
         LightMap(SDL_Renderer* renderer, Assets* assets, Global_Light_Source& main_light, int screen_width, int screen_height, SDL_Texture* fullscreen_light_tex);
         ~LightMap();
 

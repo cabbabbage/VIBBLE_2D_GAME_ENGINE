@@ -409,8 +409,12 @@ bool AreaOverlayEditor::compute_overlay_transform(camera& cam, OverlayTransform&
     const int dst_w = std::max(1, static_cast<int>(std::lround(static_cast<float>(mask_->w) * scale_per_mask_x)));
     const int dst_h = std::max(1, static_cast<int>(std::lround(static_cast<float>(mask_->h) * scale_per_mask_y)));
 
-    const float pivot_local_fx = static_cast<float>(canvas_w_) * 0.5f - static_cast<float>(mask_origin_x_);
-    const float pivot_local_fy = static_cast<float>(canvas_h_) - static_cast<float>(mask_origin_y_);
+    float pivot_local_fx = static_cast<float>(canvas_w_) * 0.5f - static_cast<float>(mask_origin_x_);
+    float pivot_local_fy = static_cast<float>(canvas_h_) - static_cast<float>(mask_origin_y_);
+    if (room_) {
+        pivot_local_fx = static_cast<float>(anchor_world_.x) - static_cast<float>(mask_origin_x_);
+        pivot_local_fy = static_cast<float>(anchor_world_.y) - static_cast<float>(mask_origin_y_);
+    }
 
     const int pivot_screen_x = static_cast<int>(std::lround(pivot_local_fx * scale_per_mask_x));
     const int pivot_screen_y = static_cast<int>(std::lround(pivot_local_fy * scale_per_mask_y));
