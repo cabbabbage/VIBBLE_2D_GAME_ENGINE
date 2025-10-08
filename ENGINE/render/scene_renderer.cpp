@@ -14,7 +14,7 @@
 #include <initializer_list>
 #include <array>
 #include <memory>
-#include "gaussian_blur.hpp"
+#include "render/gaussian_blur.hpp"
 #include "asset_light_rays.hpp"
 
 static constexpr SDL_Color SLATE_COLOR = {69, 101, 74, 255};
@@ -72,6 +72,28 @@ SceneRenderer::SceneRenderer(SDL_Renderer* renderer,
 
     final_blur_helper_ = std::make_unique<GaussianBlurHelper>(renderer_);
     asset_light_rays_ = std::make_unique<AssetLightRaysRenderer>(renderer_);
+
+    // Per light rays params
+    {
+        LightRaysParams p{};
+        p.metric            = BrightnessMetric::MaxRGB;
+        p.use_alpha_in_mask = false;
+        p.gamma_comp        = 0.9f;
+
+        p.min_luma_threshold = 0.35f;
+        p.bright_percentile  = 0.90f;
+
+        p.samples  = 112;
+        p.density  = 1.4f;
+        p.decay    = 0.985f;
+        p.weight   = 1.35f;
+        p.exposure = 2.2f;
+
+        p.downsample_log2 = 1;
+        asset_light_rays_->set_params(p);
+        asset_light_rays_->set_enabled(true);
+    }
+
     refresh_blur_helpers();
 }
 
@@ -154,31 +176,53 @@ void SceneRenderer::apply_map_light_config(const nlohmann::json& data) {
 }
 
 void SceneRenderer::apply_light_rays_config(const nlohmann::json& data) {
-    auto read_double = [&](const char* key, double def, double lo, double hi) -> float {
-        double value = def;
-        try { value = data.at(key).get<double>(); } catch (...) {}
-        value = std::clamp(value, lo, hi);
-        return static_cast<float>(value);
+    auto f = [&](const char* k, double d, double lo, double hi){
+        double v=d; try{ v=data.at(k).get<double>(); }catch(...){} return float(std::clamp(v,lo,hi));
     };
+    bool enabled = true; try{ enabled = data.at("enabled").get<bool>(); }catch(...){}
 
-    bool enabled = true;
-    try { enabled = data.at("enabled").get<bool>(); } catch (...) {}
-
-    final_blur_radius_ = read_double("final_blur_radius", final_blur_radius_, 0.0, 32.0);
-    final_blur_mix_ = read_double("final_blur_mix", final_blur_mix_, 0.0, 1.0);
+    final_blur_radius_   = f("final_blur_radius", final_blur_radius_, 0.0, 32.0);
+    final_blur_mix_      = f("final_blur_mix",    final_blur_mix_,    0.0, 1.0);
     final_blur_requested_ = enabled;
     refresh_blur_helpers();
+
+    // Optional JSON params for per light rays
+    if (asset_light_rays_) {
+        LightRaysParams p{};
+        p.metric = BrightnessMetric::MaxRGB;
+        try {
+            std::string m = data.at("metric").get<std::string>();
+            if (m == "Luma709")  p.metric = BrightnessMetric::Luma709;
+            if (m == "MaxRGB")   p.metric = BrightnessMetric::MaxRGB;
+            if (m == "AvgRGB")   p.metric = BrightnessMetric::AvgRGB;
+            if (m == "EnergyRGB")p.metric = BrightnessMetric::EnergyRGB;
+        } catch (...) {}
+
+        p.use_alpha_in_mask = data.value("use_alpha_in_mask", false);
+        p.gamma_comp        = f("gamma_comp", 0.9, 0.1, 4.0);
+
+        p.min_luma_threshold = f("min_luma_threshold", 0.35, 0.0, 1.0);
+        p.bright_percentile  = f("bright_percentile",  0.90, 0.0, 1.0);
+
+        p.samples  = int(std::clamp(data.value("samples", 112), 1, 512));
+        p.density  = f("density",  1.4, 0.01, 4.0);
+        p.decay    = f("decay",    0.985, 0.5, 0.9999);
+        p.weight   = f("weight",   1.35, 0.0, 8.0);
+        p.exposure = f("exposure", 2.2,  0.0, 8.0);
+
+        p.downsample_log2 = std::clamp(data.value("downsample_log2", 1), 0, 4);
+
+        asset_light_rays_->set_params(p);
+        asset_light_rays_->set_enabled(true);
+    }
 }
 
 void SceneRenderer::refresh_blur_helpers() {
     final_blur_enabled_ = final_blur_requested_ && !low_quality_mode_;
 
     if (renderer_) {
-        if (final_blur_helper_) {
-            final_blur_helper_->set_renderer(renderer_);
-        } else {
-            final_blur_helper_ = std::make_unique<GaussianBlurHelper>(renderer_);
-        }
+        if (final_blur_helper_) final_blur_helper_->set_renderer(renderer_);
+        else final_blur_helper_ = std::make_unique<GaussianBlurHelper>(renderer_);
     } else {
         final_blur_helper_.reset();
     }
@@ -186,22 +230,16 @@ void SceneRenderer::refresh_blur_helpers() {
     if (asset_light_rays_) {
         asset_light_rays_->set_renderer(renderer_);
         asset_light_rays_->set_blur_settings(final_blur_radius_, final_blur_mix_);
-        asset_light_rays_->set_enabled(final_blur_enabled_);
+        asset_light_rays_->set_enabled(true); // always allow per light rays
     }
 }
 
 void SceneRenderer::apply_final_blur_pass() {
-    if (!final_blur_enabled_ || final_blur_radius_ <= 0.f || final_blur_mix_ <= 0.f) {
-        return;
-    }
-    if (!renderer_ || !scene_target_tex_ || !final_blur_helper_) {
-        return;
-    }
+    if (!final_blur_enabled_ || final_blur_radius_ <= 0.f || final_blur_mix_ <= 0.f) return;
+    if (!renderer_ || !scene_target_tex_ || !final_blur_helper_) return;
 
     SDL_Texture* blurred = final_blur_helper_->apply(scene_target_tex_, screen_width_, screen_height_, final_blur_radius_, final_blur_mix_);
-    if (!blurred) {
-        return;
-    }
+    if (!blurred) return;
 
     SDL_Texture* prev_target = SDL_GetRenderTarget(renderer_);
     SDL_SetRenderTarget(renderer_, scene_target_tex_);
@@ -358,6 +396,7 @@ void SceneRenderer::render() {
         const bool is_selected   = a->is_selected();
         const SDL_RendererFlip flip_mode = a->flipped ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE;
 
+        // Per light rays before the asset draws
         if (asset_light_rays_) {
             asset_light_rays_->render_before_asset(a, fb, fw, fh, flip_mode);
         }
@@ -452,8 +491,7 @@ void SceneRenderer::render() {
         SDL_RenderCopy(renderer_, scene_target_tex_, nullptr, &dst);
     }
 
-    // Draw development overlays after presenting the scene so they don't
-    // influence post-processing like light rays.
+    // Draw development overlays after presenting the scene so they do not affect post effects
     SDL_SetRenderTarget(renderer_, nullptr);
     SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND);
     if (assets_) assets_->render_overlays(renderer_);

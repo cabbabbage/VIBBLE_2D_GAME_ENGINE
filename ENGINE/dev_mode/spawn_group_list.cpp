@@ -458,11 +458,16 @@ void SpawnGroupList::CandidateList::ensure_common_widgets() {
     if (!add_btn_ && row_.entry) {
         add_btn_ = std::make_unique<DMButton>("Add Candidate", &DMStyles::CreateButton(), 160, DMButton::height());
         add_w_ = std::make_unique<ButtonWidget>(add_btn_.get(), [this]() {
-            if (search_open_) {
-                close_search();
-            } else {
-                open_search();
+            // Ensure any inline search UI is closed before opening the global asset search.
+            close_search();
+
+            // Expand the row so the newly added candidate is immediately visible.
+            if (!row_.expanded) {
+                row_.expanded = true;
+                owner_.rebuild_layout();
             }
+
+            owner_.request_asset_search_open(row_);
         });
     }
     if (!pie_widget_)
