@@ -593,19 +593,19 @@
         }
       ],
       "curvyness": 1,
-      "edge_smoothness": 93,
+      "edge_smoothness": 101,
       "geometry": "Circle",
-      "height_max": 1800,
-      "height_min": 1800,
+      "height_max": 2080,
+      "height_min": 2080,
       "inherits_map_assets": false,
       "is_boss": false,
       "is_spawn": false,
-      "max_height": 1800,
-      "max_width": 1800,
-      "min_height": 1800,
-      "min_width": 1800,
+      "max_height": 2080,
+      "max_width": 2080,
+      "min_height": 2080,
+      "min_width": 2080,
       "name": "room_lab",
-      "radius": 900,
+      "radius": 1040,
       "spawn_groups": [
         {
           "candidates": [
@@ -618,113 +618,34 @@
               "name": "Bomb"
             }
           ],
+          "chance_denominator": 100,
           "check_overlap": false,
-          "display_name": "Bomb",
-          "dx": 1600,
+          "display_name": "lab_bombs",
+          "dx": 0,
           "dy": 0,
           "enforce_spacing": false,
-          "max_number": 1,
-          "min_number": 1,
-          "origional_height": 1800,
-          "origional_width": 1800,
-          "position": "Exact",
-          "spawn_id": "spn-83d69901070e"
-        },
-        {
-          "candidates": [
-            {
-              "chance": 0,
-              "name": "null"
-            },
-            {
-              "chance": 100,
-              "name": "Bomb"
-            }
-          ],
-          "check_overlap": false,
-          "display_name": "Bomb",
-          "dx": 494,
-          "dy": 1525,
-          "enforce_spacing": false,
-          "max_number": 1,
-          "min_number": 1,
-          "origional_height": 1800,
-          "origional_width": 1800,
-          "position": "Exact",
-          "spawn_id": "spn-4c5d3a2f4b1e"
-        },
-        {
-          "candidates": [
-            {
-              "chance": 0,
-              "name": "null"
-            },
-            {
-              "chance": 100,
-              "name": "Bomb"
-            }
-          ],
-          "check_overlap": false,
-          "display_name": "Bomb",
-          "dx": -1294,
-          "dy": 939,
-          "enforce_spacing": false,
-          "max_number": 1,
-          "min_number": 1,
-          "origional_height": 1800,
-          "origional_width": 1800,
-          "position": "Exact",
-          "spawn_id": "spn-1a2b3c4d5e6f"
-        },
-        {
-          "candidates": [
-            {
-              "chance": 0,
-              "name": "null"
-            },
-            {
-              "chance": 100,
-              "name": "Bomb"
-            }
-          ],
-          "check_overlap": false,
-          "display_name": "Bomb",
-          "dx": -1294,
-          "dy": -939,
-          "enforce_spacing": false,
-          "max_number": 1,
-          "min_number": 1,
-          "origional_height": 1800,
-          "origional_width": 1800,
-          "position": "Exact",
-          "spawn_id": "spn-7e8f9a0b1c2d"
-        },
-        {
-          "candidates": [
-            {
-              "chance": 0,
-              "name": "null"
-            },
-            {
-              "chance": 100,
-              "name": "Bomb"
-            }
-          ],
-          "check_overlap": false,
-          "display_name": "Bomb",
-          "dx": 494,
-          "dy": -1525,
-          "enforce_spacing": false,
-          "max_number": 1,
-          "min_number": 1,
-          "origional_height": 1800,
-          "origional_width": 1800,
-          "position": "Exact",
-          "spawn_id": "spn-d4c3b2a1908f"
+          "max_number": 5,
+          "min_number": 5,
+          "origional_height": 2262,
+          "origional_width": 2333,
+          "percentage_shift_from_center": 55,
+          "perimeter_x_offset_max": 0,
+          "perimeter_x_offset_min": 0,
+          "perimeter_y_offset_max": 0,
+          "perimeter_y_offset_min": 0,
+          "position": "Perimeter",
+          "priority": 0,
+          "sector_center": 0,
+          "sector_center_max": 0,
+          "sector_center_min": 0,
+          "sector_range": 360,
+          "sector_range_max": 360,
+          "sector_range_min": 360,
+          "spawn_id": "spn-20997858f211"
         }
       ],
-      "width_max": 1800,
-      "width_min": 1800
+      "width_max": 2080,
+      "width_min": 2080
     },
     "spawn": {
       "areas": [
@@ -980,7 +901,7 @@
             },
             {
               "chance": 100,
-              "name": "Bomb"
+              "name": "#pretty"
             }
           ],
           "chance_denominator": 100,

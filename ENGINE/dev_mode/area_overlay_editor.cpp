@@ -85,6 +85,17 @@ namespace {
         if (matches(type)) return true;
         return matches(name);
     }
+
+    static std::string trim_copy(std::string value) {
+        auto is_space = [](unsigned char ch) { return std::isspace(ch) != 0; };
+        value.erase(value.begin(), std::find_if(value.begin(), value.end(), [&](unsigned char ch) {
+            return !is_space(ch);
+        }));
+        value.erase(std::find_if(value.rbegin(), value.rend(), [&](unsigned char ch) {
+            return !is_space(ch);
+        }).base(), value.end());
+        return value;
+    }
 }
 
 constexpr Uint8 kDefaultMaskAlpha = 128;
@@ -153,6 +164,8 @@ bool AreaOverlayEditor::begin_at_point(AssetInfo* info, SDL_Point anchor_world, 
     pending_mask_generation_ = false;
     applied_crop_left_ = applied_crop_right_ = applied_crop_top_ = applied_crop_bottom_ = -1;
 
+    name_box_ = std::make_unique<DMTextBox>("Area Name", area_name_);
+
     mask_ = SDL_CreateRGBSurfaceWithFormat(0, canvas_w_, canvas_h_, 32, SDL_PIXELFORMAT_RGBA32);
     if (!mask_) return false;
     clear_mask();
@@ -161,14 +174,7 @@ bool AreaOverlayEditor::begin_at_point(AssetInfo* info, SDL_Point anchor_world, 
     upload_mask();
 
     ensure_toolbox();
-    if (toolbox_) {
-        std::string title = "Area Tools";
-        if (info_) {
-            title += std::string(" — ") + info_->name;
-            if (!area_name_.empty()) title += std::string(" — ") + area_name_;
-        }
-        toolbox_->set_title(title);
-    }
+    update_toolbox_title();
 
     crop_left_slider_ = std::make_unique<DMSlider>("Crop Left", 0, canvas_w_, 0);
     crop_right_slider_ = std::make_unique<DMSlider>("Crop Right", 0, canvas_w_, 0);
@@ -204,6 +210,7 @@ bool AreaOverlayEditor::begin_for_room(Room* room,
     room_ = room;
     area_name_ = area_name;
     room_area_type_ = area_type;
+    name_box_ = std::make_unique<DMTextBox>("Area Name", area_name_);
 
     SDL_Point room_center = focus_world;
     if (room_->room_area) {
@@ -297,14 +304,7 @@ bool AreaOverlayEditor::begin_for_room(Room* room,
     }
 
     ensure_toolbox();
-    if (toolbox_) {
-        std::string title = "Area Tools";
-        if (room_) {
-            title += std::string(" — ") + room_->room_name;
-            if (!area_name_.empty()) title += std::string(" — ") + area_name_;
-        }
-        toolbox_->set_title(title);
-    }
+    update_toolbox_title();
 
     active_ = true;
     saved_since_begin_ = false;
@@ -572,21 +572,30 @@ std::vector<SDL_Point> AreaOverlayEditor::extract_edge_points(int step) const {
 
 void AreaOverlayEditor::ensure_toolbox() {
     if (toolbox_) return;
-    std::string title = "Area Tools";
-    if (info_) {
-        title += std::string(" — ") + info_->name;
-        if (!area_name_.empty()) title += std::string(" — ") + area_name_;
-    } else if (room_) {
-        title += std::string(" — ") + room_->room_name;
-        if (!area_name_.empty()) title += std::string(" — ") + area_name_;
-    }
-    toolbox_ = std::make_unique<DockableCollapsible>(title, true);
+    toolbox_ = std::make_unique<DockableCollapsible>("Area Tools", true);
 
     toolbox_->set_expanded(true);
     btn_mask_  = std::make_unique<DMButton>("Mask",  &DMStyles::CreateButton(), 180, DMButton::height());
     btn_geom_  = std::make_unique<DMButton>("Geometry",  &DMStyles::CreateButton(), 180, DMButton::height());
     btn_save_  = std::make_unique<DMButton>("Save",  &DMStyles::CreateButton(), 180, DMButton::height());
+    btn_rename_ = std::make_unique<DMButton>("Rename", &DMStyles::CreateButton(), 180, DMButton::height());
+    btn_delete_ = std::make_unique<DMButton>("Delete", &DMStyles::DeleteButton(), 180, DMButton::height());
+    update_toolbox_title();
     rebuild_toolbox_rows();
+}
+
+void AreaOverlayEditor::update_toolbox_title() {
+    if (!toolbox_) return;
+    std::string title = "Area Tools";
+    if (info_) {
+        title += std::string(" — ") + info_->name;
+    } else if (room_) {
+        title += std::string(" — ") + room_->room_name;
+    }
+    if (!area_name_.empty()) {
+        title += std::string(" — ") + area_name_;
+    }
+    toolbox_->set_title(title);
 }
 
 void AreaOverlayEditor::rebuild_toolbox_rows() {
@@ -627,6 +636,31 @@ void AreaOverlayEditor::rebuild_toolbox_rows() {
             save_area();
         }));
         rows.push_back({ owned_widgets_.back().get() });
+    }
+
+    if (name_box_) {
+        owned_widgets_.push_back(std::make_unique<TextBoxWidget>(name_box_.get(), true));
+        rows.push_back({ owned_widgets_.back().get() });
+    }
+
+    std::vector<Widget*> manage_row;
+    if (btn_rename_) {
+        owned_widgets_.push_back(std::make_unique<ButtonWidget>(btn_rename_.get(), [this]() {
+            if (!name_box_) return;
+            if (!rename_current_area(name_box_->value())) {
+                name_box_->set_value(area_name_);
+            }
+        }));
+        manage_row.push_back(owned_widgets_.back().get());
+    }
+    if (btn_delete_) {
+        owned_widgets_.push_back(std::make_unique<ButtonWidget>(btn_delete_.get(), [this]() {
+            delete_current_area();
+        }));
+        manage_row.push_back(owned_widgets_.back().get());
+    }
+    if (!manage_row.empty()) {
+        rows.push_back(manage_row);
     }
 
     if (mode_ == Mode::Mask) {
@@ -677,6 +711,99 @@ void AreaOverlayEditor::reset_mask_crop_values() {
     if (crop_right_slider_)  crop_right_slider_->set_value(0);
     if (crop_top_slider_)    crop_top_slider_->set_value(0);
     if (crop_bottom_slider_) crop_bottom_slider_->set_value(0);
+}
+
+bool AreaOverlayEditor::rename_current_area(const std::string& desired_name) {
+    std::string trimmed = trim_copy(desired_name);
+    if (trimmed.empty()) {
+        return false;
+    }
+    if (trimmed == area_name_) {
+        if (name_box_) {
+            name_box_->set_value(area_name_);
+        }
+        update_toolbox_title();
+        return true;
+    }
+
+    auto apply_success = [&](bool persisted) {
+        area_name_ = trimmed;
+        if (name_box_) {
+            name_box_->set_value(area_name_);
+        }
+        update_toolbox_title();
+        if (persisted) {
+            saved_since_begin_ = true;
+            if (on_saved_callback_) {
+                on_saved_callback_();
+            }
+        }
+        return true;
+    };
+
+    if (info_) {
+        auto conflict = std::find_if(info_->areas.begin(), info_->areas.end(), [&](const AssetInfo::NamedArea& na) {
+            return na.name == trimmed && na.name != area_name_;
+        });
+        if (conflict != info_->areas.end()) {
+            return false;
+        }
+        bool had_existing = std::find_if(info_->areas.begin(), info_->areas.end(), [&](const AssetInfo::NamedArea& na) {
+            return na.name == area_name_;
+        }) != info_->areas.end();
+        if (had_existing) {
+            if (!info_->rename_area(area_name_, trimmed)) {
+                return false;
+            }
+            (void)info_->update_info_json();
+        }
+        return apply_success(had_existing);
+    }
+
+    if (room_) {
+        auto conflict = std::find_if(room_->areas.begin(), room_->areas.end(), [&](const Room::NamedArea& na) {
+            return na.name == trimmed && na.name != area_name_;
+        });
+        if (conflict != room_->areas.end()) {
+            return false;
+        }
+        bool had_existing = std::find_if(room_->areas.begin(), room_->areas.end(), [&](const Room::NamedArea& na) {
+            return na.name == area_name_;
+        }) != room_->areas.end();
+        if (had_existing) {
+            if (!room_->rename_area(area_name_, trimmed)) {
+                return false;
+            }
+            room_->save_assets_json();
+        }
+        return apply_success(had_existing);
+    }
+
+    return apply_success(false);
+}
+
+void AreaOverlayEditor::delete_current_area() {
+    bool removed = false;
+    if (info_) {
+        removed = info_->remove_area(area_name_);
+        if (removed) {
+            (void)info_->update_info_json();
+        }
+    } else if (room_) {
+        removed = room_->remove_area(area_name_);
+        if (removed) {
+            room_->save_assets_json();
+        }
+    }
+
+    if (removed) {
+        saved_since_begin_ = true;
+        if (on_saved_callback_) {
+            on_saved_callback_();
+        }
+    }
+
+    cancel();
 }
 
 void AreaOverlayEditor::discard_autogen_base() {

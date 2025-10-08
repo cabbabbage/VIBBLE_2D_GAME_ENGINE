@@ -830,6 +830,50 @@ bool AssetInfo::remove_area(const std::string& name) {
     return removed;
 }
 
+bool AssetInfo::rename_area(const std::string& old_name, const std::string& new_name) {
+    if (old_name.empty() || new_name.empty()) {
+        return false;
+    }
+    if (old_name == new_name) {
+        return true;
+    }
+
+    auto conflict = std::find_if(areas.begin(), areas.end(), [&](const NamedArea& na) {
+        return na.name == new_name;
+    });
+    if (conflict != areas.end()) {
+        return false;
+    }
+
+    bool renamed = false;
+    for (auto& na : areas) {
+        if (na.name == old_name) {
+            na.name = new_name;
+            if (na.area) {
+                na.area->set_name(new_name);
+            }
+            renamed = true;
+        }
+    }
+    if (!renamed) {
+        return false;
+    }
+
+    try {
+        if (info_json_.contains("areas") && info_json_["areas"].is_array()) {
+            for (auto& entry : info_json_["areas"]) {
+                if (entry.is_object() && entry.value("name", std::string{}) == old_name) {
+                    entry["name"] = new_name;
+                }
+            }
+        }
+    } catch (...) {
+        // Ignore JSON update errors; in-memory data already updated.
+    }
+
+    return true;
+}
+
 std::vector<std::string> AssetInfo::animation_names() const {
 	std::vector<std::string> names;
 	try {

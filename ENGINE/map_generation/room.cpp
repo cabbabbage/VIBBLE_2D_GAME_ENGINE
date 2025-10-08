@@ -361,6 +361,38 @@ bool Room::remove_area(const std::string& name) {
         return removed;
 }
 
+bool Room::rename_area(const std::string& old_name, const std::string& new_name) {
+        if (old_name.empty() || new_name.empty()) {
+                return false;
+        }
+        if (old_name == new_name) {
+                return true;
+        }
+        for (const auto& na : areas) {
+                if (na.name == new_name) {
+                        return false;
+                }
+        }
+        bool renamed = false;
+        try {
+                if (assets_json.is_object() && assets_json.contains("areas") && assets_json["areas"].is_array()) {
+                        for (auto& entry : assets_json["areas"]) {
+                                if (entry.is_object() && entry.value("name", std::string{}) == old_name) {
+                                        entry["name"] = new_name;
+                                        renamed = true;
+                                }
+                        }
+                }
+        } catch (...) {
+                return false;
+        }
+        if (!renamed) {
+                return false;
+        }
+        load_named_areas_from_json();
+        return true;
+}
+
 void Room::upsert_named_area(const Area& area, const std::string& type) {
         const std::string area_name = area.get_name();
         if (area_name.empty()) {

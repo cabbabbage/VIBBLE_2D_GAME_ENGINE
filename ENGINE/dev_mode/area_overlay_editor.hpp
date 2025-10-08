@@ -14,6 +14,7 @@ class Input;
 class DockableCollapsible;
 class DMButton;
 class DMSlider;
+class DMTextBox;
 class camera;
 class Room;
 
@@ -47,6 +48,7 @@ private:
     void rebuild_toolbox_rows();
     void set_mode(Mode mode);
     void reset_mask_crop_values();
+    void update_toolbox_title();
     bool generate_mask_from_asset(SDL_Renderer* renderer);
     void apply_mask_crop();
     void discard_autogen_base();
@@ -60,6 +62,8 @@ private:
     void save_area();
     void rebuild_mask_from_geometry();
     SDL_Point resolve_anchor_world() const;
+    bool rename_current_area(const std::string& desired_name);
+    void delete_current_area();
 
     struct OverlayTransform {
         SDL_Point anchor_screen{0, 0};
@@ -93,11 +97,14 @@ private:
     std::unique_ptr<DMButton> btn_mask_;
     std::unique_ptr<DMButton> btn_geom_;
     std::unique_ptr<DMButton> btn_save_;
+    std::unique_ptr<DMButton> btn_rename_;
+    std::unique_ptr<DMButton> btn_delete_;
     std::unique_ptr<DMSlider> crop_left_slider_;
     std::unique_ptr<DMSlider> crop_right_slider_;
     std::unique_ptr<DMSlider> crop_top_slider_;
     std::unique_ptr<DMSlider> crop_bottom_slider_;
     std::vector<std::unique_ptr<class Widget>> owned_widgets_;
+    std::unique_ptr<DMTextBox> name_box_;
 
     int crop_left_px_ = 0;
     int crop_right_px_ = 0;

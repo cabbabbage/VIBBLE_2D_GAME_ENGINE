@@ -81,6 +81,7 @@ class Room {
     // Find a named room area by name; returns nullptr if not found
     Area* find_area(const std::string& name);
     bool remove_area(const std::string& name);
+    bool rename_area(const std::string& old_name, const std::string& new_name);
     void upsert_named_area(const Area& area, const std::string& type);
 
         private:

@@ -1046,7 +1046,8 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
             }
         }
 
-        if (event.type == SDL_MOUSEBUTTONDOWN && event.button.button == SDL_BUTTON_RIGHT) {
+        if (event.type == SDL_MOUSEBUTTONDOWN &&
+            (event.button.button == SDL_BUTTON_LEFT || event.button.button == SDL_BUTTON_RIGHT)) {
             if (!first_selected_type.empty() && (first_selected_type == "trigger" || first_selected_type == "spawning")) {
                 if (assets_ && current_room_) {
                     SDL_Point sp{event.button.x, event.button.y};
