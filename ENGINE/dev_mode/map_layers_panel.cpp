@@ -7,6 +7,7 @@
 #include "map_layers_common.hpp"
 
 #include "room_configurator.hpp"
+#include "spawn_group_utils.hpp"
 
 #include "widgets.hpp"
 
@@ -4381,7 +4382,25 @@ void MapLayersPanel::open_room_config_for(const std::string& room_name) {
 
     room_configurator_->set_bounds(compute_room_config_bounds());
 
-    room_configurator_->open(*entry);
+    auto on_change = [this]() { handle_room_spawn_groups_changed(); };
+
+    auto on_entry_change = [this](const nlohmann::json&, const SpawnGroupList::ChangeSummary&) {
+
+        handle_room_spawn_groups_changed();
+
+    };
+
+    std::string label = entry->value("name", room_name);
+
+    if (label.empty()) label = room_name.empty() ? std::string("Room") : room_name;
+
+    SpawnGroupList::ConfigureEntryCallback configure_entry = [label](SpawnGroupList::RowController& row, const nlohmann::json&) {
+
+        row.set_ownership_label(label, SDL_Color{255,224,96,255});
+
+    };
+
+    room_configurator_->open(*entry, std::move(on_change), std::move(on_entry_change), std::move(configure_entry));
 
 }
 
@@ -4405,15 +4424,15 @@ void MapLayersPanel::ensure_room_configurator() {
 
                 [](const std::string&) {},
 
-                [](const std::string&) {},
+                [this](const std::string& id) { duplicate_spawn_group_in_active_room(id); },
 
-                [](const std::string&) {},
+                [this](const std::string& id) { delete_spawn_group_from_active_room(id); },
 
-                [](const std::string&) {},
+                [this](const std::string& id) { move_spawn_group_in_active_room(id, -1); },
 
-                [](const std::string&) {},
+                [this](const std::string& id) { move_spawn_group_in_active_room(id, +1); },
 
-                []() {}
+                [this]() { add_spawn_group_to_active_room(); }
 
             );
 
@@ -4566,6 +4585,272 @@ SDL_Rect MapLayersPanel::compute_room_config_bounds() const {
     return SDL_Rect{x, y, width, height};
 
 }
+
+nlohmann::json* MapLayersPanel::active_room_entry() {
+
+    if (active_room_config_key_.empty()) {
+
+        return nullptr;
+
+    }
+
+    return ensure_room_entry(active_room_config_key_);
+
+}
+
+void MapLayersPanel::handle_room_spawn_groups_changed() {
+
+    if (!room_configurator_) {
+
+        return;
+
+    }
+
+    nlohmann::json* entry = active_room_entry();
+
+    if (!entry) {
+
+        return;
+
+    }
+
+    mark_dirty();
+
+    request_preview_regeneration();
+
+    room_configurator_->refresh_spawn_groups(*entry);
+
+}
+
+void MapLayersPanel::add_spawn_group_to_active_room() {
+
+    nlohmann::json* entry = active_room_entry();
+
+    if (!entry) {
+
+        return;
+
+    }
+
+    auto& groups = devmode::spawn::ensure_spawn_groups_array(*entry);
+
+    nlohmann::json new_group;
+
+    new_group["spawn_id"] = devmode::spawn::generate_spawn_id();
+
+    new_group["display_name"] = "New Spawn";
+
+    new_group["position"] = "Exact";
+
+    new_group["min_number"] = 1;
+
+    new_group["max_number"] = 1;
+
+    new_group["check_overlap"] = false;
+
+    new_group["enforce_spacing"] = false;
+
+    new_group["chance_denominator"] = 100;
+
+    new_group["candidates"] = nlohmann::json::array();
+
+    new_group["candidates"].push_back({{"name", "null"}, {"chance", 0}});
+
+    groups.push_back(new_group);
+
+    for (size_t i = 0; i < groups.size(); ++i) {
+
+        if (groups[i].is_object()) groups[i]["priority"] = static_cast<int>(i);
+
+    }
+
+    devmode::spawn::sanitize_perimeter_spawn_groups(groups);
+
+    handle_room_spawn_groups_changed();
+
+}
+
+void MapLayersPanel::duplicate_spawn_group_in_active_room(const std::string& spawn_id) {
+
+    if (spawn_id.empty()) {
+
+        return;
+
+    }
+
+    nlohmann::json* entry = active_room_entry();
+
+    if (!entry) {
+
+        return;
+
+    }
+
+    auto& groups = devmode::spawn::ensure_spawn_groups_array(*entry);
+
+    nlohmann::json* original = nullptr;
+
+    for (auto& item : groups) {
+
+        if (!item.is_object()) continue;
+
+        if (item.contains("spawn_id") && item["spawn_id"].is_string() && item["spawn_id"].get<std::string>() == spawn_id) {
+
+            original = &item;
+
+            break;
+
+        }
+
+    }
+
+    if (!original) {
+
+        return;
+
+    }
+
+    nlohmann::json duplicate = *original;
+
+    std::string new_id = devmode::spawn::generate_spawn_id();
+
+    duplicate["spawn_id"] = new_id;
+
+    if (duplicate.contains("display_name") && duplicate["display_name"].is_string()) {
+
+        duplicate["display_name"] = duplicate["display_name"].get<std::string>() + " Copy";
+
+    }
+
+    groups.push_back(duplicate);
+
+    for (size_t i = 0; i < groups.size(); ++i) {
+
+        if (groups[i].is_object()) groups[i]["priority"] = static_cast<int>(i);
+
+    }
+
+    devmode::spawn::sanitize_perimeter_spawn_groups(groups);
+
+    handle_room_spawn_groups_changed();
+
+}
+
+void MapLayersPanel::delete_spawn_group_from_active_room(const std::string& spawn_id) {
+
+    if (spawn_id.empty()) {
+
+        return;
+
+    }
+
+    nlohmann::json* entry = active_room_entry();
+
+    if (!entry) {
+
+        return;
+
+    }
+
+    auto& groups = devmode::spawn::ensure_spawn_groups_array(*entry);
+
+    auto it = std::remove_if(groups.begin(), groups.end(), [&](nlohmann::json& item) {
+
+        if (!item.is_object()) return false;
+
+        if (!item.contains("spawn_id") || !item["spawn_id"].is_string()) return false;
+
+        return item["spawn_id"].get<std::string>() == spawn_id;
+
+    });
+
+    if (it == groups.end()) {
+
+        return;
+
+    }
+
+    groups.erase(it, groups.end());
+
+    for (size_t i = 0; i < groups.size(); ++i) {
+
+        if (groups[i].is_object()) groups[i]["priority"] = static_cast<int>(i);
+
+    }
+
+    handle_room_spawn_groups_changed();
+
+}
+
+void MapLayersPanel::move_spawn_group_in_active_room(const std::string& spawn_id, int dir) {
+
+    if (spawn_id.empty() || (dir != -1 && dir != 1)) {
+
+        return;
+
+    }
+
+    nlohmann::json* entry = active_room_entry();
+
+    if (!entry) {
+
+        return;
+
+    }
+
+    auto& groups = devmode::spawn::ensure_spawn_groups_array(*entry);
+
+    if (!groups.is_array() || groups.size() <= 1) {
+
+        return;
+
+    }
+
+    int index = -1;
+
+    for (size_t i = 0; i < groups.size(); ++i) {
+
+        const auto& item = groups[i];
+
+        if (!item.is_object()) continue;
+
+        if (item.contains("spawn_id") && item["spawn_id"].is_string() && item["spawn_id"].get<std::string>() == spawn_id) {
+
+            index = static_cast<int>(i);
+
+            break;
+
+        }
+
+    }
+
+    if (index < 0) {
+
+        return;
+
+    }
+
+    int target = index + dir;
+
+    if (target < 0 || target >= static_cast<int>(groups.size())) {
+
+        return;
+
+    }
+
+    std::swap(groups[index], groups[target]);
+
+    for (size_t i = 0; i < groups.size(); ++i) {
+
+        if (groups[i].is_object()) groups[i]["priority"] = static_cast<int>(i);
+
+    }
+
+    handle_room_spawn_groups_changed();
+
+}
+
+
 
 void MapLayersPanel::select_layer(int index) {
 

@@ -25,6 +25,7 @@ class AudioImporter;
 class AnimationEditorWindow {
   public:
     AnimationEditorWindow();
+    ~AnimationEditorWindow();
 
     void set_visible(bool visible);
     bool is_visible() const { return visible_; }

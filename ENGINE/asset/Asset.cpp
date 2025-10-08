@@ -10,9 +10,26 @@
 #include <filesystem>
 #include <iostream>
 #include <random>
+#include <mutex>
 #include <algorithm>
 #include <cmath>
 #include <SDL.h>
+
+namespace {
+
+std::mt19937& asset_rng()
+{
+        static std::mt19937 rng{ std::random_device{}() };
+        return rng;
+}
+
+std::mutex& asset_rng_mutex()
+{
+        static std::mutex mutex;
+        return mutex;
+}
+
+} // namespace
 
 Asset::Asset(std::shared_ptr<AssetInfo> info_,
              const Area& spawn_area,
@@ -50,9 +67,12 @@ Asset::Asset(std::shared_ptr<AssetInfo> info_,
                 static_frame     = (anim.frames.size() == 1);
                 current_frame    = anim.get_first_frame();
                 if ((anim.randomize || anim.rnd_start) && anim.frames.size() > 1) {
-                        std::mt19937 g{ std::random_device{}() };
                         std::uniform_int_distribution<int> d(0, int(anim.frames.size()) - 1);
-                        int idx = d(g);
+                        int idx;
+                        {
+                                std::lock_guard<std::mutex> lock(asset_rng_mutex());
+                                idx = d(asset_rng());
+                        }
                         AnimationFrame* f = anim.get_first_frame();
                         while (idx-- > 0 && f && f->next) { f = f->next; }
                         current_frame = f;
@@ -181,12 +201,15 @@ void Asset::finalize_setup() {
                         anim.change(current_frame, static_frame);
                         frame_progress = 0.0f;
                         if ((anim.randomize || anim.rnd_start) && anim.frames.size() > 1) {
-                                        std::mt19937 rng{ std::random_device{}() };
-                                        std::uniform_int_distribution<int> dist(0, int(anim.frames.size()) - 1);
-                                        int idx = dist(rng);
-                                        AnimationFrame* f = anim.get_first_frame();
-                                        while (idx-- > 0 && f && f->next) { f = f->next; }
-                                        current_frame = f;
+                                std::uniform_int_distribution<int> dist(0, int(anim.frames.size()) - 1);
+                                int idx;
+                                {
+                                        std::lock_guard<std::mutex> lock(asset_rng_mutex());
+                                        idx = dist(asset_rng());
+                                }
+                                AnimationFrame* f = anim.get_first_frame();
+                                while (idx-- > 0 && f && f->next) { f = f->next; }
+                                current_frame = f;
                         }
                 }
 	}

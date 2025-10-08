@@ -351,12 +351,13 @@ void Assets::refresh_filtered_active_assets() {
 }
 
 void Assets::update_filtered_active_assets() {
-    // In normal play mode (no dev controls), render all active assets.
-    // Dev controls may further filter this list when enabled.
-    filtered_active_assets = active_assets;
     if (dev_controls_ && dev_controls_->is_enabled()) {
+        filtered_active_assets = active_assets;
         dev_controls_->filter_active_assets(filtered_active_assets);
+        return;
     }
+
+    filtered_active_assets.clear();
 }
 
 void Assets::ensure_dev_controls() {
@@ -622,6 +623,13 @@ void Assets::update_scene_render_quality() {
 
 void Assets::set_render_suppressed(bool suppressed) {
     suppress_render_ = suppressed;
+}
+
+const std::vector<Asset*>& Assets::getFilteredActiveAssets() const {
+    if (dev_controls_ && dev_controls_->is_enabled()) {
+        return filtered_active_assets;
+    }
+    return active_assets;
 }
 
 const std::vector<Asset*>& Assets::get_selected_assets() const {

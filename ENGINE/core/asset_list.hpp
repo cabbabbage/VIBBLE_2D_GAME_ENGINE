@@ -1,8 +1,10 @@
 #pragma once
 
+#include <cstddef>
 #include <functional>
 #include <memory>
 #include <string>
+#include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
@@ -55,10 +57,22 @@ public:
     int search_radius() const { return search_radius_; }
 
 private:
+    enum class SectionBucket {
+        Top,
+        Middle,
+        Bottom
+    };
+
+    struct SectionSlot {
+        SectionBucket bucket;
+        std::size_t   index = 0;
+    };
+
     SDL_Point resolve_center() const;
     void rebuild_from_scratch();
     void route_asset_to_section(Asset* a);
     void remove_from_all_sections(Asset* a);
+    std::vector<Asset*>& bucket_vector(SectionBucket bucket);
     bool has_all_required_tags(const Asset* a, const std::vector<std::string>& req) const;
     bool has_any_tag(const Asset* a, const std::vector<std::string>& tags) const;
     void sort_middle_section();
@@ -80,6 +94,8 @@ private:
     std::vector<Asset*> list_top_unsorted_;
     std::vector<Asset*> list_middle_sorted_;
     std::vector<Asset*> list_bottom_unsorted_;
+
+    std::unordered_map<Asset*, SectionSlot> membership_lookup_;
 
     std::vector<Asset*> list_always_ineligible_;
     std::unordered_set<Asset*> list_always_ineligible_lookup_;

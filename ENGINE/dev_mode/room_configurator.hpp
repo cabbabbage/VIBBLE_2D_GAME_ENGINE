@@ -8,6 +8,7 @@
 #include <nlohmann/json.hpp>
 
 #include "DockableCollapsible.hpp"
+#include "spawn_group_list.hpp"
 class DropdownWidget;
 class RangeSliderWidget;
 class SliderWidget;
@@ -30,8 +31,13 @@ public:
     ~RoomConfigurator();
     void set_bounds(const SDL_Rect& bounds);
     void open(const nlohmann::json& room_data);
+    void open(nlohmann::json& room_data,
+              std::function<void()> on_change,
+              std::function<void(const nlohmann::json&, const SpawnGroupList::ChangeSummary&)> on_entry_change = {},
+              SpawnGroupList::ConfigureEntryCallback configure_entry = {});
     void open(Room* room);
     bool refresh_spawn_groups(const nlohmann::json& room_data);
+    bool refresh_spawn_groups(nlohmann::json& room_data);
     bool refresh_spawn_groups(Room* room);
     void close();
     bool visible() const;
@@ -56,6 +62,7 @@ private:
     void apply_bounds_if_needed();
     void undock_from_sidebar(const SDL_Point& grab_point);
     void rebuild_rows(bool reload_spawn_list = true);
+    void open_from_data(const nlohmann::json& data, bool same_room = false);
     std::string selected_geometry() const;
     bool should_rebuild_with(const nlohmann::json& data) const;
     void load_tags_from_json(const nlohmann::json& data);
@@ -69,6 +76,7 @@ private:
     bool docked_mode_ = false;
     std::vector<std::string> room_geom_options_;
     Room* room_ = nullptr;
+    nlohmann::json* external_room_json_ = nullptr;
     nlohmann::json loaded_json_;
     std::string room_name_;
     int room_w_min_ = 1500;
@@ -116,6 +124,9 @@ private:
     std::function<void(const std::string&)> on_spawn_move_up_;
     std::function<void(const std::string&)> on_spawn_move_down_;
     std::function<void()> on_spawn_add_;
+    std::function<void()> on_external_spawn_change_;
+    std::function<void(const nlohmann::json&, const SpawnGroupList::ChangeSummary&)> on_external_spawn_entry_change_;
+    SpawnGroupList::ConfigureEntryCallback external_configure_entry_;
     std::function<std::string(const std::string&, const std::string&)> on_room_renamed_;
     std::unique_ptr<Widget> spawn_groups_label_;
     std::unique_ptr<class SpawnGroupList> spawn_list_;

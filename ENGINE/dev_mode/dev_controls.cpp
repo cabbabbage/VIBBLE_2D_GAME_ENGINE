@@ -1929,7 +1929,7 @@ void DevControls::filter_active_assets(std::vector<Asset*>& assets) const {
 }
 
 void DevControls::refresh_active_asset_filters() {
-    if (!assets_) {
+    if (!assets_ || !enabled_) {
         return;
     }
     assets_->refresh_filtered_active_assets();
