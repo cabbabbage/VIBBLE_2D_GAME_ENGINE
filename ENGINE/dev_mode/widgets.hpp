@@ -145,6 +145,7 @@ private:
     bool knob_hovered_ = false;
     bool hovered_ = false;
     bool focused_ = false;
+    bool dragging_ = false;
     std::unique_ptr<DMTextBox> edit_box_;
     std::function<std::string(int)> value_formatter_{};
     std::function<std::optional<int>(const std::string&)> value_parser_{};
@@ -206,6 +207,8 @@ private:
     bool max_hovered_ = false;
     bool hovered_ = false;
     bool focused_ = false;
+    bool dragging_min_ = false;
+    bool dragging_max_ = false;
     std::unique_ptr<DMTextBox> edit_min_;
     std::unique_ptr<DMTextBox> edit_max_;
 };

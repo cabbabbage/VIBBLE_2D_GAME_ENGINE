@@ -469,7 +469,8 @@ bool AssetInfoUI::handle_event(const SDL_Event& e) {
         SDL_GetMouseState(&mx, &my);
         SDL_Point p{mx, my};
         pointer_inside = SDL_PointInRect(&p, &scroll_region_);
-        if (!pointer_inside) {
+        pointer_inside_panel = SDL_PointInRect(&p, &panel_);
+        if (!pointer_inside && !pointer_inside_panel) {
             return false;
         }
     }
@@ -591,8 +592,13 @@ void AssetInfoUI::update(const Input& input, int screen_w, int screen_h) {
 
     int mx = input.getX();
     int my = input.getY();
-    if (mx >= scroll_region_.x && mx < scroll_region_.x + scroll_region_.w &&
-        my >= scroll_region_.y && my < scroll_region_.y + scroll_region_.h) {
+    const bool pointer_in_scroll =
+        (mx >= scroll_region_.x && mx < scroll_region_.x + scroll_region_.w &&
+         my >= scroll_region_.y && my < scroll_region_.y + scroll_region_.h);
+    const bool pointer_in_panel_area =
+        (mx >= panel_.x && mx < panel_.x + panel_.w &&
+         my >= panel_.y && my < panel_.y + panel_.h);
+    if ((pointer_in_scroll || pointer_in_panel_area) && !DMWidgetsSliderScrollCaptured()) {
         int dy = input.getScrollY();
         if (dy != 0) {
             scroll_ -= dy * 40;
