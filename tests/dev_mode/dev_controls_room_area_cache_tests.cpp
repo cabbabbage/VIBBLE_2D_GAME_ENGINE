@@ -22,6 +22,7 @@ TEST_CASE("RoomAreaCache caches polygons until invalidated") {
         nlohmann::json{
             {"name", "start"},
             {"type", "trigger"},
+            {"kind", "Trigger"},
             {"anchor", nlohmann::json{{"x", 2}, {"y", 1}}},
             {"points", nlohmann::json::array({
                 nlohmann::json{{"x", 0}, {"y", 0}},

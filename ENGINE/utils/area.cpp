@@ -54,46 +54,37 @@ Area::Area(const std::string& name, SDL_Point center, int w, int h,
         update_geometry_data();
 }
 
-Area::Area(const std::string& name, const std::string& json_path, float scale)
+Area::Area(const std::string& name, const std::string& json_path, float /*scale*/)
 : area_name_(name)
 {
-	if (scale <= 0.0f)
-	throw std::invalid_argument("[Area: " + area_name_ + "] Scale must be positive");
-	std::ifstream in(json_path);
-	if (!in.is_open())
-	throw std::runtime_error("[Area: " + area_name_ + "] Failed to open JSON: " + json_path);
-	nlohmann::json j;
-	in >> j;
-	auto& pts_json = j.at("points");
-	auto& dim_json = j.at("original_dimensions");
-	if (!pts_json.is_array() || !dim_json.is_array() || dim_json.size() != 2)
-	throw std::runtime_error("[Area: " + area_name_ + "] Bad JSON: " + json_path);
-	int orig_w = dim_json[0].get<int>();
-	int orig_h = dim_json[1].get<int>();
-	if (orig_w <= 0 || orig_h <= 0)
-	throw std::runtime_error("[Area: " + area_name_ + "] Invalid dimensions in JSON");
-        int pivot_x = static_cast<int>(std::round((orig_w / 2.0f) * scale));
-        int pivot_y = static_cast<int>(std::round(orig_h * scale));
-	points.clear();
-	points.reserve(pts_json.size());
-	for (auto& elem : pts_json) {
-		if (!elem.is_array() || elem.size() < 2) continue;
-		float rel_x = elem[0].get<float>();
-		float rel_y = elem[1].get<float>();
-                int x = pivot_x + static_cast<int>(std::round(rel_x * scale));
-                int y = pivot_y + static_cast<int>(std::round(rel_y * scale));
-                points.push_back({x, y});
-	}
-	if (points.empty())
-	throw std::runtime_error("[Area: " + area_name_ + "] No points loaded");
-        pos.x = pivot_x;
-        pos.y = pivot_y;
-	int dx = j.value("offset_x", 0);
-	int dy = -j.value("offset_y", 0);
-	if (dx != 0 || dy != 0) {
-		apply_offset(dx, dy);
-	}
-	update_geometry_data();
+        std::ifstream in(json_path);
+        if (!in.is_open()) {
+                throw std::runtime_error("[Area: " + area_name_ + "] Failed to open JSON: " + json_path);
+        }
+        nlohmann::json j;
+        in >> j;
+        if (!j.contains("points") || !j["points"].is_array()) {
+                throw std::runtime_error("[Area: " + area_name_ + "] Bad JSON: " + json_path);
+        }
+        SDL_Point anchor{0, 0};
+        if (j.contains("anchor") && j["anchor"].is_object()) {
+                anchor.x = j["anchor"].value("x", 0);
+                anchor.y = j["anchor"].value("y", 0);
+        }
+        points.clear();
+        points.reserve(j["points"].size());
+        for (const auto& elem : j["points"]) {
+                if (!elem.is_object()) continue;
+                int x = elem.value("x", 0);
+                int y = elem.value("y", 0);
+                points.push_back({ anchor.x + x, anchor.y + y });
+        }
+        if (points.empty()) {
+                throw std::runtime_error("[Area: " + area_name_ + "] No points loaded");
+        }
+        pos.x = anchor.x;
+        pos.y = anchor.y;
+        update_geometry_data();
 }
 
 void Area::apply_offset(int dx, int dy) {

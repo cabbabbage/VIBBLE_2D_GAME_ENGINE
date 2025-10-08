@@ -2,6 +2,7 @@
 
 #include "AnimationDocument.hpp"
 #include "AudioImporter.hpp"
+#include "PanelLayoutConstants.hpp"
 
 #include <SDL.h>
 #include <SDL_log.h>
@@ -18,7 +19,7 @@ namespace animation_editor {
 
 namespace {
 
-const int kPanelPadding = 12;
+constexpr int kItemGap = 8;
 
 void render_label(SDL_Renderer* renderer, const std::string& text, int x, int y, int max_width = -1,
                   SDL_Color color = DMStyles::Label().color) {
@@ -90,6 +91,31 @@ void AudioPanel::set_importer(std::shared_ptr<AudioImporter> importer) {
 
 void AudioPanel::set_file_picker(FilePicker picker) { file_picker_ = std::move(picker); }
 
+int AudioPanel::preferred_height(int width) const {
+    const int padding = kPanelPadding;
+    const int gap = kItemGap;
+    const int label_h = label_height();
+    const int slider_area_width = std::max(0, width - padding * 2);
+    const int slider_h = volume_slider_ ? volume_slider_->preferred_height(slider_area_width) : DMSlider::height();
+    int height = padding;  // top padding
+    height += label_h;     // section title
+    if (has_audio_) {
+        height += label_h;  // clip label
+        height += DMButton::height();
+        height += gap;
+        height += slider_h;
+        height += gap;
+        height += DMCheckbox::height();
+        height += gap;
+        height += DMButton::height();  // button row
+    } else {
+        height += label_h;  // "No audio" label
+        height += DMButton::height();
+    }
+    height += padding;  // bottom padding
+    return height;
+}
+
 void AudioPanel::ensure_widgets() {
     if (!attach_button_) {
         attach_button_ = std::make_unique<DMButton>("Attach Audio", &DMStyles::CreateButton(), 160, DMButton::height());
@@ -115,16 +141,16 @@ void AudioPanel::layout_widgets() const {
     if (!layout_dirty_) return;
     layout_dirty_ = false;
     const int padding = kPanelPadding;
-    const int gap = DMSpacing::item_gap();
+    const int gap = kItemGap;
     const int content_x = bounds_.x + padding;
     const int content_w = std::max(0, bounds_.w - padding * 2);
-    int cursor_y = bounds_.y + padding + label_height();
-
-    cursor_y += gap;
+    int cursor_y = bounds_.y + padding + label_height() + DMSpacing::small_gap();
 
     if (has_audio_) {
         if (preview_button_) {
-            SDL_Rect r{content_x, cursor_y, std::min(content_w, preview_button_->rect().w), DMButton::height()};
+            int width = std::min(content_w, preview_button_->rect().w);
+            int offset = std::max(0, (content_w - width) / 2);
+            SDL_Rect r{content_x + offset, cursor_y, width, DMButton::height()};
             preview_button_->set_rect(r);
             cursor_y += DMButton::height() + gap;
         }
@@ -142,14 +168,19 @@ void AudioPanel::layout_widgets() const {
             int button_gap = DMSpacing::small_gap();
             int button_width = (content_w - button_gap) / 2;
             button_width = std::max(button_width, 120);
-            SDL_Rect replace_rect{content_x, cursor_y, button_width, DMButton::height()};
-            SDL_Rect remove_rect{content_x + button_width + button_gap, cursor_y, button_width, DMButton::height()};
+            button_width = std::min(button_width, replace_button_->rect().w);
+            int pair_width = button_width * 2 + button_gap;
+            int offset = std::max(0, (content_w - pair_width) / 2);
+            SDL_Rect replace_rect{content_x + offset, cursor_y, button_width, DMButton::height()};
+            SDL_Rect remove_rect{replace_rect.x + button_width + button_gap, cursor_y, button_width, DMButton::height()};
             replace_button_->set_rect(replace_rect);
             remove_button_->set_rect(remove_rect);
         }
     } else {
         if (attach_button_) {
-            SDL_Rect r{content_x, cursor_y, content_w, DMButton::height()};
+            int width = std::min(content_w, attach_button_->rect().w);
+            int offset = std::max(0, (content_w - width) / 2);
+            SDL_Rect r{content_x + offset, cursor_y, width, DMButton::height()};
             attach_button_->set_rect(r);
         }
     }

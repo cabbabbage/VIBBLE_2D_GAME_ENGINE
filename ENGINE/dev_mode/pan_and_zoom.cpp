@@ -22,7 +22,7 @@ void PanAndZoom::handle_input(camera& cam, const Input& input, bool pan_blocked)
         }
         const int base = 10;
         const int dur = std::max(6, base - 2 * std::min(6, std::abs(wheel_y)));
-        cam.animate_zoom_multiply(eff, dur);
+        cam.animate_zoom_towards_point(eff, SDL_Point{ input.getX(), input.getY() }, dur);
     }
 
     if (input.wasReleased(Input::LEFT)) {
@@ -32,7 +32,7 @@ void PanAndZoom::handle_input(camera& cam, const Input& input, bool pan_blocked)
     if (input.wasPressed(Input::LEFT)) {
         if (!pan_blocked) {
             panning_ = true;
-            pan_start_mouse_map_ = cam.screen_to_map(SDL_Point{input.getX(), input.getY()});
+            pan_start_mouse_screen_ = SDL_Point{ input.getX(), input.getY() };
             pan_start_center_ = cam.get_screen_center();
             cam.set_manual_zoom_override(true);
             cam.set_focus_override(pan_start_center_);
@@ -45,9 +45,13 @@ void PanAndZoom::handle_input(camera& cam, const Input& input, bool pan_blocked)
         return;
     }
 
-    SDL_Point current = cam.screen_to_map(SDL_Point{input.getX(), input.getY()});
-    SDL_Point delta{pan_start_mouse_map_.x - current.x, pan_start_mouse_map_.y - current.y};
-    SDL_Point new_center{pan_start_center_.x + delta.x, pan_start_center_.y + delta.y};
+    const double scale = std::max(0.0001, static_cast<double>(cam.get_scale()));
+    const int dx = input.getX() - pan_start_mouse_screen_.x;
+    const int dy = input.getY() - pan_start_mouse_screen_.y;
+    SDL_Point new_center{
+        static_cast<int>(std::lround(static_cast<double>(pan_start_center_.x) - static_cast<double>(dx) * scale)),
+        static_cast<int>(std::lround(static_cast<double>(pan_start_center_.y) - static_cast<double>(dy) * scale))
+    };
     cam.set_focus_override(new_center);
     cam.set_screen_center(new_center);
 }

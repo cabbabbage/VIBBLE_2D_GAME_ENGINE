@@ -264,6 +264,52 @@ void camera::animate_zoom_multiply(double factor, int duration_steps) {
     manual_zoom_override_ = true;
 }
 
+void camera::animate_zoom_towards_point(double factor, SDL_Point screen_point, int duration_steps) {
+    if (factor <= 0.0) factor = 1.0;
+
+    const int base_w = std::max(1, width_from_area(base_zoom_));
+    const int base_h = std::max(1, height_from_area(base_zoom_));
+
+    int left, top, right, bottom;
+    std::tie(left, top, right, bottom) = current_view_.get_bounds();
+    (void)right;
+    (void)bottom;
+
+    const double current_scale = std::max(0.0001, static_cast<double>(scale_));
+    const double new_scale     = std::max(0.0001, current_scale * factor);
+
+    const double world_x = static_cast<double>(left) + static_cast<double>(screen_point.x) * current_scale;
+    const double world_y = static_cast<double>(top)  + static_cast<double>(screen_point.y) * current_scale;
+
+    const double half_w = static_cast<double>(base_w) * new_scale * 0.5;
+    const double half_h = static_cast<double>(base_h) * new_scale * 0.5;
+
+    SDL_Point target_center{
+        static_cast<int>(std::lround(world_x - static_cast<double>(screen_point.x) * new_scale + half_w)),
+        static_cast<int>(std::lround(world_y - static_cast<double>(screen_point.y) * new_scale + half_h))
+    };
+
+    if (duration_steps <= 0) {
+        set_screen_center(target_center);
+        set_scale(static_cast<float>(new_scale));
+        pan_override_ = false;
+        manual_zoom_override_ = true;
+        set_focus_override(target_center);
+        return;
+    }
+
+    start_center_  = screen_center_;
+    target_center_ = target_center;
+    start_scale_   = scale_;
+    target_scale_  = new_scale;
+    steps_total_   = std::max(1, duration_steps);
+    steps_done_    = 0;
+    zooming_       = true;
+    pan_override_  = true;
+    manual_zoom_override_ = true;
+    set_focus_override(target_center_);
+}
+
 SDL_Point camera::map_to_screen(SDL_Point world, float, float) const {
     int left, top, right, bottom;
     std::tie(left, top, right, bottom) = current_view_.get_bounds();

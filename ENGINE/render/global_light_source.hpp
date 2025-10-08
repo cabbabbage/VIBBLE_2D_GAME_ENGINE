@@ -12,6 +12,7 @@ class Global_Light_Source {
     void apply_config(const nlohmann::json& data);
     ~Global_Light_Source();
     void update();
+    void set_screen_size(SDL_Point screen_center, int screen_width);
     SDL_Point    get_position() const;
     float        get_angle() const;
     SDL_Texture* get_texture() const;

@@ -10,6 +10,7 @@
 #include "spawn/asset_spawn_planner.hpp"
 #include "spawn/asset_spawner.hpp"
 #include "utils/area.hpp"
+#include "utils/area_helpers.hpp"
 namespace fs = std::filesystem;
 
 SpawnContext::SpawnContext(std::mt19937& rng,
@@ -104,11 +105,7 @@ Asset* SpawnContext::spawnAsset(const std::string& name,
                     continue;
                 }
             }
-            Area childArea = *base_area;
-            childArea.align(SDL_Point{raw->pos.x, raw->pos.y});
-            if (raw->flipped) {
-                childArea.flip_horizontal(raw->pos.x);
-            }
+            Area childArea = area_helpers::make_world_area(*raw->info, *base_area, raw->pos, raw->flipped);
             AssetSpawnPlanner childPlanner(std::vector<nlohmann::json>{ j },
                                   childArea,
                                   *asset_library_,

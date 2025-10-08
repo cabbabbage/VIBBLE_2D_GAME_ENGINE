@@ -44,6 +44,10 @@ std::string to_lower_copy(std::string value) {
     return value;
 }
 
+constexpr const char* kModeIdRoom = "room";
+constexpr const char* kModeIdMap = "map";
+constexpr const char* kModeIdArea = "area";
+
 bool is_trail_room(const Room* room) {
     if (!room || room->type.empty()) {
         return false;
@@ -85,6 +89,7 @@ void DevControls::RoomAreaCache::invalidate() {
     dirty_ = true;
 }
 
+
 const DevControls::RoomAreaCache::PolygonList&
 DevControls::RoomAreaCache::ensure_from_json(const nlohmann::json* root) {
     if (root != last_source_) {
@@ -93,10 +98,8 @@ DevControls::RoomAreaCache::ensure_from_json(const nlohmann::json* root) {
     if (!dirty_) {
         return cached_;
     }
-
     cached_.clear();
     last_source_ = root;
-
     if (root) {
         try {
             if (root->contains("areas") && (*root)["areas"].is_array()) {
@@ -109,6 +112,11 @@ DevControls::RoomAreaCache::ensure_from_json(const nlohmann::json* root) {
                     const std::string type = item.contains("type") && item["type"].is_string()
                                                  ? item["type"].get<std::string>()
                                                  : std::string{};
+                    RoomAreaSerialization::Kind kind =
+                            RoomAreaSerialization::infer_kind_from_entry(item, type, name);
+                    if (!RoomAreaSerialization::is_supported_kind(kind)) {
+                        continue;
+                    }
                     const auto& pts = item.contains("points") ? item["points"] : nlohmann::json();
                     if (!pts.is_array() || pts.size() < 3) continue;
                     int ax = 0;
@@ -128,8 +136,9 @@ DevControls::RoomAreaCache::ensure_from_json(const nlohmann::json* root) {
                     if (poly.size() >= 3) {
                         Polygon entry;
                         entry.name = name;
-                        entry.type = !type.empty() ? type : name;
+                        entry.type = !type.empty() ? type : RoomAreaSerialization::to_string(kind);
                         entry.points = std::move(poly);
+                        entry.anchor = SDL_Point{ ax, ay };
                         cached_.push_back(std::move(entry));
                     }
                 }
@@ -138,7 +147,6 @@ DevControls::RoomAreaCache::ensure_from_json(const nlohmann::json* root) {
             cached_.clear();
         }
     }
-
     dirty_ = false;
     ++generation_;
     if (listener_) {
@@ -299,6 +307,7 @@ DevControls::DevControls(Assets* owner, int screen_w, int screen_h)
                 if (this->mode_ != Mode::MapEditor) {
                     enter_map_editor_mode();
                 }
+                asset_filter_.set_active_mode(kModeIdMap);
             } else if (mode == MapModeUI::HeaderMode::Room) {
                 if (this->mode_ == Mode::MapEditor) {
                     exit_map_editor_mode(false, true);
@@ -311,6 +320,7 @@ DevControls::DevControls(Assets* owner, int screen_w, int screen_h)
                         footer->set_title(label);
                     }
                 }
+                asset_filter_.set_active_mode(kModeIdRoom);
             } else if (mode == MapModeUI::HeaderMode::Area) {
                 if (this->mode_ == Mode::MapEditor) {
                     exit_map_editor_mode(false, true);
@@ -326,6 +336,7 @@ DevControls::DevControls(Assets* owner, int screen_w, int screen_h)
                 // Default to 'all' view type when entering Area mode
                 active_area_type_filters_.clear();
                 active_area_type_filters_.insert("all");
+                asset_filter_.set_active_mode(kModeIdArea);
             }
             sync_header_button_states();
         });
@@ -342,9 +353,50 @@ DevControls::DevControls(Assets* owner, int screen_w, int screen_h)
     asset_filter_.set_state_changed_callback([this]() { refresh_active_asset_filters(); });
     asset_filter_.set_enabled(enabled_);
     asset_filter_.set_screen_dimensions(screen_w_, screen_h_);
-    asset_filter_.set_footer_panel(map_mode_ui_ ? map_mode_ui_->get_footer_panel() : nullptr);
     asset_filter_.set_map_info(map_info_json_);
     asset_filter_.set_current_room(current_room_);
+    asset_filter_.set_mode_buttons({
+        {kModeIdRoom, "Room", mode_ == Mode::RoomEditor},
+        {kModeIdMap, "Map", mode_ == Mode::MapEditor},
+        {kModeIdArea, "Area", mode_ == Mode::AreaMode}
+    });
+    asset_filter_.set_mode_changed_callback([this](const std::string& id) {
+        if (id == kModeIdMap) {
+            if (this->mode_ != Mode::MapEditor) {
+                enter_map_editor_mode();
+            }
+        } else if (id == kModeIdRoom) {
+            if (this->mode_ == Mode::MapEditor) {
+                exit_map_editor_mode(false, true);
+            }
+            this->set_mode(Mode::RoomEditor);
+            if (map_mode_ui_) {
+                map_mode_ui_->set_header_mode(MapModeUI::HeaderMode::Room);
+                if (auto* footer = map_mode_ui_->get_footer_panel()) {
+                    std::string label = std::string("Room: ") +
+                                        (current_room_ ? current_room_->room_name : std::string{});
+                    footer->set_title(label);
+                }
+            }
+        } else if (id == kModeIdArea) {
+            if (this->mode_ == Mode::MapEditor) {
+                exit_map_editor_mode(false, true);
+            }
+            this->set_mode(Mode::AreaMode);
+            if (map_mode_ui_) {
+                map_mode_ui_->set_header_mode(MapModeUI::HeaderMode::Area);
+                if (auto* footer = map_mode_ui_->get_footer_panel()) {
+                    std::string label = std::string("Area Mode — Room: ") +
+                                        (current_room_ ? current_room_->room_name : std::string{});
+                    footer->set_title(label);
+                }
+            }
+            active_area_type_filters_.clear();
+            active_area_type_filters_.insert("all");
+        }
+        sync_header_button_states();
+    });
+    asset_filter_.set_filters_expanded(false);
 }
 
 DevControls::~DevControls() = default;
@@ -596,12 +648,16 @@ void DevControls::update(const Input& input) {
     asset_filter_.ensure_layout();
 
     if (room_editor_ && room_editor_->is_enabled()) {
-        FullScreenCollapsible* footer = map_mode_ui_ ? map_mode_ui_->get_footer_panel() : nullptr;
-        if (footer && footer->visible()) {
-            const SDL_Rect& header = footer->header_rect();
-            SDL_Point pointer{input.getX(), input.getY()};
-            if (header.w > 0 && header.h > 0 && SDL_PointInRect(&pointer, &header)) {
-                room_editor_->clear_highlighted_assets();
+        SDL_Point pointer{input.getX(), input.getY()};
+        if (asset_filter_.contains_point(pointer.x, pointer.y)) {
+            room_editor_->clear_highlighted_assets();
+        } else {
+            FullScreenCollapsible* footer = map_mode_ui_ ? map_mode_ui_->get_footer_panel() : nullptr;
+            if (footer && footer->visible()) {
+                const SDL_Rect& header = footer->header_rect();
+                if (header.w > 0 && header.h > 0 && SDL_PointInRect(&pointer, &header)) {
+                    room_editor_->clear_highlighted_assets();
+                }
             }
         }
     }
@@ -1033,6 +1089,14 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
 
             const camera& cam = assets_->getView();
 
+            auto draw_anchor = [&](SDL_Point world, SDL_Color color) {
+                SDL_Point screen = cam.map_to_screen(world);
+                const int arm = 5;
+                SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b, color.a);
+                SDL_RenderDrawLine(renderer, screen.x - arm, screen.y, screen.x + arm, screen.y);
+                SDL_RenderDrawLine(renderer, screen.x, screen.y - arm, screen.x, screen.y + arm);
+            };
+
             // Draw room areas with hover/selection highlight
             {
                 const auto& room_areas = room_area_polygons();
@@ -1060,6 +1124,9 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
                             std::vector<SDL_Point> pts = spts; pts.push_back(spts.front());
                             SDL_SetRenderDrawColor(renderer, outline.r, outline.g, outline.b, outline.a);
                             SDL_RenderDrawLines(renderer, pts.data(), (int)pts.size());
+                            if (!room_areas[i].points.empty()) {
+                                draw_anchor(room_areas[i].anchor, SDL_Color{outline.r, outline.g, outline.b, 220});
+                            }
                         }
                     }
                 }
@@ -1154,6 +1221,7 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
                                 std::vector<SDL_Point> pts = spts; pts.push_back(spts.front());
                                 SDL_SetRenderDrawColor(renderer, outline.r, outline.g, outline.b, outline.a);
                                 SDL_RenderDrawLines(renderer, pts.data(), static_cast<int>(pts.size()));
+                                draw_anchor(SDL_Point{a->pos.x, a->pos.y}, SDL_Color{outline.r, outline.g, outline.b, 220});
                             }
                         }
                     }
@@ -1488,7 +1556,6 @@ void DevControls::configure_header_button_sets() {
     }
 
     map_mode_ui_->set_mode_button_sets(std::move(map_buttons), std::move(room_buttons), std::move(area_buttons));
-    asset_filter_.set_footer_panel(map_mode_ui_->get_footer_panel());
     asset_filter_.ensure_layout();
     sync_header_button_states();
 }
@@ -1597,6 +1664,17 @@ void DevControls::set_mode(Mode new_mode) {
         return;
     }
     mode_ = new_mode;
+    switch (mode_) {
+    case Mode::RoomEditor:
+        asset_filter_.set_active_mode(kModeIdRoom);
+        break;
+    case Mode::MapEditor:
+        asset_filter_.set_active_mode(kModeIdMap);
+        break;
+    case Mode::AreaMode:
+        asset_filter_.set_active_mode(kModeIdArea);
+        break;
+    }
     apply_camera_area_render_flag();
 }
 

@@ -25,6 +25,7 @@
 #include "AsyncTaskQueue.hpp"
 #include "CroppingService.hpp"
 #include "dm_styles.hpp"
+#include "dev_mode/widgets.hpp"
 
 namespace animation_editor {
 
@@ -122,6 +123,13 @@ void SourceConfigPanel::set_animation_id(const std::string& animation_id) {
 
 void SourceConfigPanel::set_bounds(const SDL_Rect& bounds) {
     bounds_ = bounds;
+    if (bounds_.w <= 0 || bounds_.h <= 0) {
+        for (auto& button : buttons_) {
+            button.rect = SDL_Rect{bounds_.x, bounds_.y, 0, 0};
+        }
+        hover_button_ = -1;
+        return;
+    }
     layout_buttons();
 }
 
@@ -153,6 +161,8 @@ void SourceConfigPanel::update() {
 
 void SourceConfigPanel::render(SDL_Renderer* renderer) const {
     if (!renderer) return;
+
+    if (bounds_.w <= 0 || bounds_.h <= 0) return;
 
     SDL_Rect panel_bounds = bounds_;
     SDL_SetRenderDrawColor(renderer, 0x2d, 0x34, 0x36, 255);
@@ -189,6 +199,8 @@ void SourceConfigPanel::render(SDL_Renderer* renderer) const {
 }
 
 bool SourceConfigPanel::handle_event(const SDL_Event& e) {
+    if (bounds_.w <= 0 || bounds_.h <= 0) return false;
+
     switch (e.type) {
         case SDL_MOUSEMOTION: {
             hover_button_ = hit_test_buttons(e.motion.x, e.motion.y);
@@ -206,6 +218,20 @@ bool SourceConfigPanel::handle_event(const SDL_Event& e) {
             break;
     }
     return false;
+}
+
+int SourceConfigPanel::preferred_height(int) const {
+    const int padding = 6;
+    const int button_count = static_cast<int>(buttons_.size());
+    const int button_height = DMButton::height();
+    int height = padding;  // top padding
+    if (button_count > 0) {
+        height += button_count * button_height;
+        height += std::max(0, button_count - 1) * padding;
+    }
+    height += padding;  // bottom padding
+    height += 6;        // busy indicator strip
+    return height;
 }
 
 void SourceConfigPanel::reload_from_document() {

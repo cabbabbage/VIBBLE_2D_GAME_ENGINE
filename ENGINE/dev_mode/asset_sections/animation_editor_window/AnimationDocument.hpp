@@ -16,6 +16,8 @@ class AnimationDocument {
     void load_from_file(const std::filesystem::path& info_path);
     void save_to_file() const;
 
+    bool consume_dirty_flag() const;
+
     void create_animation(const std::string& animation_id);
     void delete_animation(const std::string& animation_id);
 
@@ -32,6 +34,7 @@ class AnimationDocument {
   private:
     void ensure_document_initialized();
     void rebuild_animation_cache();
+    void mark_dirty() const;
 
   private:
     std::filesystem::path info_path_;
@@ -39,6 +42,7 @@ class AnimationDocument {
     std::optional<std::string> start_animation_;
     bool use_nested_container_ = false;
     std::string container_metadata_;
+    mutable bool dirty_ = false;
 };
 
 }  // namespace animation_editor

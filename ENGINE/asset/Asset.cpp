@@ -4,6 +4,7 @@
 #include "core/AssetsManager.hpp"
 #include "core/asset_list.hpp"
 #include "render/camera.hpp"
+#include "utils/area_helpers.hpp"
 #include "utils/light_utils.hpp"
 #include "asset/asset_types.hpp"
 #include <filesystem>
@@ -12,10 +13,6 @@
 #include <algorithm>
 #include <cmath>
 #include <SDL.h>
-
-namespace {
-
-}
 
 Asset::Asset(std::shared_ptr<AssetInfo> info_,
              const Area& spawn_area,
@@ -365,6 +362,19 @@ void Asset::update_neighbor_lists(bool force_update) {
         if (candidate->info->type == asset_types::texture) {
             return false;
         }
+        const std::string canonical_type = asset_types::canonicalize(candidate->info->type);
+        if (canonical_type == asset_types::player) {
+            return false;
+        }
+        if (canonical_type == asset_types::boundary) {
+            return true;
+        }
+        if (canonical_type == asset_types::enemy || canonical_type == asset_types::npc) {
+            return true;
+        }
+        if (candidate->info->moving_asset) {
+            return true;
+        }
         return !candidate->info->passable;
     };
 
@@ -500,28 +510,7 @@ Area Asset::get_area(const std::string& name) const {
                 return Area(name);
         }
 
-        const auto& local_pts = base->get_points();
-        if (local_pts.empty()) {
-                return Area(base->get_name());
-        }
-
-        const float scale_factor = (info->scale_factor > 0.0f) ? info->scale_factor : 1.0f;
-        const int pivot_x = static_cast<int>(std::lround(info->original_canvas_width * scale_factor * 0.5f));
-        const int pivot_y = static_cast<int>(std::lround(info->original_canvas_height * scale_factor));
-
-        std::vector<SDL_Point> world_pts;
-        world_pts.reserve(local_pts.size());
-        for (const auto& lp : local_pts) {
-                int local_dx = lp.x - pivot_x;
-                if (flipped) {
-                        local_dx = -local_dx;
-                }
-                const int world_x = pos.x + local_dx;
-                const int world_y = pos.y + (lp.y - pivot_y);
-                world_pts.push_back(SDL_Point{ world_x, world_y });
-        }
-
-        return Area(base->get_name(), world_pts);
+        return area_helpers::make_world_area(*info, *base, pos, flipped);
 }
 
 void Asset::deactivate() {

@@ -47,6 +47,7 @@ class camera {
     void  pan_and_zoom_to_asset(const Asset* a, double zoom_scale_factor, int duration_steps);
 
     void  animate_zoom_multiply(double factor, int duration_steps);
+    void  animate_zoom_towards_point(double factor, SDL_Point screen_point, int duration_steps);
 
     const Area& get_base_zoom() const { return base_zoom_; }
     const Area& get_current_view() const { return current_view_; }

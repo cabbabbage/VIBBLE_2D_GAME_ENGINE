@@ -59,6 +59,7 @@ private:
     std::vector<SDL_Point> trace_polygon_from_mask() const;
     void save_area();
     void rebuild_mask_from_geometry();
+    SDL_Point resolve_anchor_world() const;
 
     struct OverlayTransform {
         SDL_Point anchor_screen{0, 0};

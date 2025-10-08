@@ -154,6 +154,7 @@ void AnimationDocument::load_from_file(const std::filesystem::path& info_path) {
     start_animation_.reset();
     use_nested_container_ = false;
     container_metadata_.clear();
+    dirty_ = false;
 
     nlohmann::json root = nlohmann::json::object();
     if (!info_path.empty()) {
@@ -261,6 +262,15 @@ void AnimationDocument::save_to_file() const {
         return;
     }
     out << root.dump(4);
+    dirty_ = false;
+}
+
+bool AnimationDocument::consume_dirty_flag() const {
+    if (!dirty_) {
+        return false;
+    }
+    dirty_ = false;
+    return true;
 }
 
 void AnimationDocument::create_animation(const std::string& animation_id) {
@@ -283,6 +293,7 @@ void AnimationDocument::create_animation(const std::string& animation_id) {
         start_animation_ = candidate;
     }
     rebuild_animation_cache();
+    mark_dirty();
 }
 
 void AnimationDocument::delete_animation(const std::string& animation_id) {
@@ -299,6 +310,7 @@ void AnimationDocument::delete_animation(const std::string& animation_id) {
             start_animation_.reset();
         }
     }
+    mark_dirty();
 }
 
 std::vector<std::string> AnimationDocument::animation_ids() const {
@@ -319,13 +331,19 @@ std::optional<std::string> AnimationDocument::start_animation() const {
 
 void AnimationDocument::set_start_animation(const std::string& animation_id) {
     if (animation_id.empty()) {
-        start_animation_.reset();
+        if (start_animation_) {
+            start_animation_.reset();
+            mark_dirty();
+        }
         return;
     }
     if (animations_.count(animation_id) == 0) {
         return;
     }
-    start_animation_ = animation_id;
+    if (!start_animation_ || *start_animation_ != animation_id) {
+        start_animation_ = animation_id;
+        mark_dirty();
+    }
 }
 
 void AnimationDocument::rename_animation(const std::string& old_id, const std::string& new_id) {
@@ -357,6 +375,7 @@ void AnimationDocument::rename_animation(const std::string& old_id, const std::s
     if (start_animation_ && *start_animation_ == old_id) {
         start_animation_ = candidate;
     }
+    mark_dirty();
 }
 
 void AnimationDocument::replace_animation_payload(const std::string& animation_id, const std::string& payload_json) {
@@ -367,7 +386,12 @@ void AnimationDocument::replace_animation_payload(const std::string& animation_i
         SDL_Log("AnimationDocument: ignoring invalid payload for '%s'", animation_id.c_str());
         return;
     }
-    it->second = serialize_payload(coerce_payload(animation_id, parsed));
+    std::string normalized = serialize_payload(coerce_payload(animation_id, parsed));
+    if (it->second == normalized) {
+        return;
+    }
+    it->second = std::move(normalized);
+    mark_dirty();
 }
 
 std::optional<std::string> AnimationDocument::animation_payload(const std::string& animation_id) const {
@@ -396,6 +420,8 @@ void AnimationDocument::ensure_document_initialized() {
 void AnimationDocument::rebuild_animation_cache() {
     ensure_document_initialized();
 }
+
+void AnimationDocument::mark_dirty() const { dirty_ = true; }
 
 }  // namespace animation_editor
 

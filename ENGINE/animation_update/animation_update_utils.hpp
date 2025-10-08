@@ -2,16 +2,49 @@
 
 #include <algorithm>
 #include <cmath>
+#include <string>
 
 #include <SDL.h>
 
 #include "asset/Asset.hpp"
+#include "asset/asset_types.hpp"
 #include "utils/area.hpp"
 
 namespace animation_update::detail {
 
 inline constexpr const char kDefaultAnimation[] = "default";
 inline constexpr int        kOverlapDistanceSq  = 40 * 40;
+
+inline bool should_consider_overlap(const Asset& self, const Asset& other) {
+    if (!self.info || !other.info) {
+        return false;
+    }
+
+    const std::string self_type  = asset_types::canonicalize(self.info->type);
+    const std::string other_type = asset_types::canonicalize(other.info->type);
+
+    if (other_type == asset_types::player) {
+        return false;
+    }
+
+    if (self.info->moving_asset && other.info->moving_asset) {
+        return true;
+    }
+
+    if (other_type == asset_types::boundary) {
+        return true;
+    }
+
+    if (other_type == asset_types::enemy || other_type == asset_types::npc) {
+        return true;
+    }
+
+    if (self_type == other_type && other_type != asset_types::player) {
+        return true;
+    }
+
+    return false;
+}
 
 inline int distance_sq(SDL_Point a, SDL_Point b) {
     const int dx = a.x - b.x;

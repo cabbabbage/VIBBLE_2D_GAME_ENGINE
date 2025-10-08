@@ -16,6 +16,6 @@ public:
 private:
     double zoom_scale_factor_ = 1.1;
     bool panning_ = false;
-    SDL_Point pan_start_mouse_map_{0, 0};
+    SDL_Point pan_start_mouse_screen_{0, 0};
     SDL_Point pan_start_center_{0, 0};
 };

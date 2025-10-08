@@ -27,6 +27,8 @@ class SceneRenderer {
     void update_shading_groups();
     bool shouldRegen(Asset* a);
     SDL_Rect get_scaled_position_rect(Asset* a, int fw, int fh, float inv_scale, int min_w, int min_h, float reference_screen_height);
+    void resize_render_targets_if_needed();
+    void recreate_fullscreen_light_texture();
 
     std::string    map_path_;
     SDL_Renderer*  renderer_;

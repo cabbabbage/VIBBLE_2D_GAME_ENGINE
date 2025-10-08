@@ -11,10 +11,15 @@
 
 #include <nlohmann/json.hpp>
 
+#include "PanelLayoutConstants.hpp"
 #include "dev_mode/dm_styles.hpp"
 #include "dev_mode/widgets.hpp"
 
 namespace {
+
+constexpr int kItemGap = 8;
+
+using animation_editor::kPanelPadding;
 
 bool parse_bool_value(const nlohmann::json& value, bool fallback) {
     if (value.is_boolean()) {
@@ -98,6 +103,22 @@ void PlaybackSettingsPanel::set_animation_id(const std::string& animation_id) {
 void PlaybackSettingsPanel::set_bounds(const SDL_Rect& bounds) {
     bounds_ = bounds;
     layout_dirty_ = true;
+}
+
+int PlaybackSettingsPanel::preferred_height(int width) const {
+    const int padding = kPanelPadding;
+    const int gap = kItemGap;
+    const int checkbox_height = DMCheckbox::height();
+    const int slider_area_width = std::max(0, width - padding * 2);
+    const int slider_height = speed_slider_ ? speed_slider_->preferred_height(slider_area_width)
+                                            : DMSlider::height();
+
+    int height = padding;  // top padding
+    height += checkbox_height * 5;
+    height += gap * 4;  // gaps between checkboxes
+    height += slider_height;
+    height += padding;  // bottom padding
+    return height;
 }
 
 void PlaybackSettingsPanel::update() {
@@ -185,8 +206,8 @@ void PlaybackSettingsPanel::layout_widgets() const {
         return;
     }
 
-    const int padding = DMSpacing::panel_padding();
-    const int gap = DMSpacing::item_gap();
+    const int padding = kPanelPadding;
+    const int gap = kItemGap;
     const int width = std::max(0, bounds_.w - padding * 2);
     int x = bounds_.x + padding;
     int y = bounds_.y + padding;

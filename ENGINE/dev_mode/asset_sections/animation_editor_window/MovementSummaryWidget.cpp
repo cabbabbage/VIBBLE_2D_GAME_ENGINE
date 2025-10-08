@@ -10,6 +10,7 @@
 #include <string>
 
 #include "AnimationDocument.hpp"
+#include "PanelLayoutConstants.hpp"
 #include "dm_styles.hpp"
 #include "dev_mode/widgets.hpp"
 
@@ -85,7 +86,7 @@ void MovementSummaryWidget::set_animation_id(const std::string& animation_id) {
 void MovementSummaryWidget::set_bounds(const SDL_Rect& bounds) {
     bounds_ = bounds;
 
-    const int padding = DMSpacing::panel_padding();
+    const int padding = kPanelPadding;
     const int width = std::max(kButtonWidth, std::min(bounds_.w - padding * 2, kButtonWidth));
     const int x = bounds_.x + bounds_.w - padding - width;
     const int y = bounds_.y + bounds_.h - padding - kButtonHeight;
@@ -93,6 +94,17 @@ void MovementSummaryWidget::set_bounds(const SDL_Rect& bounds) {
 }
 
 void MovementSummaryWidget::set_edit_callback(EditCallback callback) { edit_callback_ = std::move(callback); }
+
+int MovementSummaryWidget::preferred_height(int) const {
+    const int padding = kPanelPadding;
+    const int label_height = DMStyles::Label().font_size + DMSpacing::small_gap();
+    int height = padding;  // top padding
+    height += label_height * 2;
+    height += DMSpacing::small_gap();
+    height += DMButton::height();
+    height += padding;  // bottom padding
+    return height;
+}
 
 void MovementSummaryWidget::update() {
     if (!document_) {
@@ -122,14 +134,14 @@ void MovementSummaryWidget::render(SDL_Renderer* renderer) const {
     SDL_SetRenderDrawColor(renderer, border.r, border.g, border.b, border.a);
     SDL_RenderDrawRect(renderer, &bounds_);
 
-    const int padding = DMSpacing::panel_padding();
+    const int padding = kPanelPadding;
     int text_x = bounds_.x + padding;
     int text_y = bounds_.y + padding;
 
     const SDL_Color text_color = DMStyles::Label().color;
     render_summary_label(renderer, "Total ΔX: " + std::to_string(static_cast<int>(std::lround(total_dx_))), text_x, text_y,
                          text_color);
-    text_y += 24;
+    text_y += DMStyles::Label().font_size + DMSpacing::small_gap();
     render_summary_label(renderer, "Total ΔY: " + std::to_string(static_cast<int>(std::lround(total_dy_))), text_x, text_y,
                          text_color);
 
@@ -146,7 +158,7 @@ void MovementSummaryWidget::render(SDL_Renderer* renderer) const {
     SDL_SetRenderDrawColor(renderer, button_style.border.r, button_style.border.g, button_style.border.b, button_style.border.a);
     SDL_RenderDrawRect(renderer, &button_rect_);
 
-    const std::string button_text = "Edit Movement";
+    const std::string button_text = "Frame Editor";
     int label_width = measure_text_width(button_style.label, button_text);
     int label_x = button_rect_.x + (button_rect_.w - label_width) / 2;
     label_x = std::max(label_x, button_rect_.x + 8);

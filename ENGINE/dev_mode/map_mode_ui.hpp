@@ -81,7 +81,7 @@ private:
     void configure_footer_buttons();
     void sync_footer_button_states();
     void update_footer_visibility();
-    enum class PanelType { None, Lights, Layers, ModeDropdown };
+    enum class PanelType { None, Lights, Layers };
     void set_active_panel(PanelType panel);
     const char* panel_button_id(PanelType panel) const;
     void update_layers_footer(const Input& input);
@@ -120,9 +120,6 @@ private:
     bool layers_footer_visible_ = false;
     std::vector<DockableCollapsible*> floating_panels_;
     LightSaveCallback light_save_callback_;
-    std::unique_ptr<DockableCollapsible> mode_dropdown_;
     std::function<void(HeaderMode)> on_mode_changed_;
-    std::vector<std::unique_ptr<class Widget>> mode_dropdown_widgets_;
-    std::vector<std::unique_ptr<class DMButton>> mode_dropdown_buttons_;
 };
 

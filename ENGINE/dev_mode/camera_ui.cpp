@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cmath>
 #include <iomanip>
+#include <optional>
 #include <sstream>
 #include <utility>
 
@@ -56,155 +57,123 @@ public:
                       float step,
                       float value,
                       int precision = 2)
-        : label_(std::move(label)),
-          min_(std::min(min_val, max_val)),
+        : min_(std::min(min_val, max_val)),
           max_(std::max(min_val, max_val)),
           step_(step > 0.0f ? step : 0.001f),
           precision_(std::max(0, precision)) {
-        set_value(value);
+        slider_min_units_ = 0;
+        slider_max_units_ = std::max(slider_min_units_, compute_units_for_value(max_));
+        slider_ = std::make_unique<DMSlider>(label, slider_min_units_, slider_max_units_, value_to_slider(value));
+        slider_->set_value_formatter([this](int units) { return format_units(units); });
+        slider_->set_value_parser([this](const std::string& text) { return parse_units(text); });
+        slider_widget_ = std::make_unique<SliderWidget>(slider_.get());
+        current_value_ = slider_to_value(slider_->value());
     }
 
     void set_value(float v) {
-        value_ = clamp_and_snap(v);
+        if (!slider_) return;
+        slider_->set_value(value_to_slider(v));
+        current_value_ = slider_to_value(slider_->value());
     }
 
-    float value() const { return value_; }
+    float value() const { return current_value_; }
 
-    void set_rect(const SDL_Rect& r) override { rect_ = r; }
+    void set_rect(const SDL_Rect& r) override {
+        if (slider_widget_) slider_widget_->set_rect(r);
+    }
 
-    const SDL_Rect& rect() const override { return rect_; }
+    const SDL_Rect& rect() const override {
+        if (slider_widget_) {
+            return slider_widget_->rect();
+        }
+        static SDL_Rect empty{0, 0, 0, 0};
+        return empty;
+    }
 
-    int height_for_width(int) const override { return DMSlider::height(); }
+    int height_for_width(int w) const override {
+        return slider_widget_ ? slider_widget_->height_for_width(w) : DMSlider::height();
+    }
 
     bool wants_full_row() const override { return true; }
 
     bool handle_event(const SDL_Event& e) override {
-        if (e.type == SDL_MOUSEMOTION) {
-            SDL_Point p{ e.motion.x, e.motion.y };
-            SDL_Rect knob = knob_rect();
-            knob_hovered_ = SDL_PointInRect(&p, &knob);
-            if (dragging_) {
-                set_value(value_for_x(p.x));
-                return true;
-            }
-        } else if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
-            SDL_Point p{ e.button.x, e.button.y };
-            SDL_Rect knob = knob_rect();
-            if (SDL_PointInRect(&p, &knob)) {
-                dragging_ = true;
-                return true;
-            }
-            SDL_Rect track = track_rect();
-            if (SDL_PointInRect(&p, &track)) {
-                set_value(value_for_x(p.x));
-                dragging_ = true;
-                return true;
-            }
-        } else if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
-            if (dragging_) {
-                dragging_ = false;
-                return true;
-            }
-        } else if (e.type == SDL_MOUSEWHEEL) {
-            SDL_Point mouse{0, 0};
-            if (SDL_GetMouseFocus() == nullptr) {
-                return false;
-            }
-            SDL_GetMouseState(&mouse.x, &mouse.y);
-            if (SDL_PointInRect(&mouse, &rect_)) {
-                float delta = static_cast<float>(e.wheel.y) * step_;
-                set_value(value_ + delta);
-                return true;
-            }
+        if (!slider_widget_) return false;
+        bool handled = slider_widget_->handle_event(e);
+        if (slider_) {
+            current_value_ = slider_to_value(slider_->value());
         }
-        return false;
+        return handled;
     }
 
     void render(SDL_Renderer* r) const override {
-        const DMSliderStyle& st = DMStyles::Slider();
-
-        auto draw_label = [&](const DMLabelStyle& ls, const std::string& text, int x, int y) {
-            TTF_Font* font = TTF_OpenFont(ls.font_path.c_str(), ls.font_size);
-            if (!font) return;
-            SDL_Surface* surf = TTF_RenderUTF8_Blended(font, text.c_str(), ls.color);
-            if (surf) {
-                SDL_Texture* tex = SDL_CreateTextureFromSurface(r, surf);
-                if (tex) {
-                    SDL_Rect dst{ x, y, surf->w, surf->h };
-                    SDL_RenderCopy(r, tex, nullptr, &dst);
-                    SDL_DestroyTexture(tex);
-                }
-                SDL_FreeSurface(surf);
-            }
-            TTF_CloseFont(font);
-};
-
-        draw_label(st.label, label_, rect_.x, rect_.y - st.label.font_size - DMSpacing::item_gap());
-
-        SDL_Rect track = track_rect();
-        SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
-        SDL_SetRenderDrawColor(r, st.track_bg.r, st.track_bg.g, st.track_bg.b, st.track_bg.a);
-        SDL_RenderFillRect(r, &track);
-
-        const double range = std::max(0.0001, static_cast<double>(max_ - min_));
-        const double fill_ratio = std::clamp((static_cast<double>(value_) - static_cast<double>(min_)) / range, 0.0, 1.0);
-        SDL_Rect fill{ track.x, track.y, static_cast<int>(std::lround(fill_ratio * track.w)), track.h };
-        SDL_SetRenderDrawColor(r, st.track_fill.r, st.track_fill.g, st.track_fill.b, st.track_fill.a);
-        SDL_RenderFillRect(r, &fill);
-
-        SDL_Rect knob = knob_rect();
-        SDL_Color knob_col = (knob_hovered_ || dragging_) ? st.knob_hover : st.knob;
-        SDL_Color knob_border = (knob_hovered_ || dragging_) ? st.knob_border_hover : st.knob_border;
-        SDL_SetRenderDrawColor(r, knob_col.r, knob_col.g, knob_col.b, knob_col.a);
-        SDL_RenderFillRect(r, &knob);
-        SDL_SetRenderDrawColor(r, knob_border.r, knob_border.g, knob_border.b, knob_border.a);
-        SDL_RenderDrawRect(r, &knob);
-
-        std::ostringstream ss;
-        ss << std::fixed << std::setprecision(precision_) << value_;
-        const std::string value_text = ss.str();
-        int value_y = rect_.y + (rect_.h - st.value.font_size) / 2;
-        draw_label(st.value, value_text, rect_.x + rect_.w - 70, value_y);
+        if (slider_widget_) slider_widget_->render(r);
     }
 
 private:
-    float clamp_and_snap(float v) const {
+    float snap_value(float v) const {
+        if (max_ <= min_ || step_ <= 0.0f) {
+            return std::clamp(v, min_, max_);
+        }
         float clamped = std::clamp(v, min_, max_);
-        const float offset = clamped - min_;
-        const float steps = std::round(offset / step_);
+        float steps = std::round((clamped - min_) / step_);
         float snapped = min_ + steps * step_;
-        return std::clamp(snapped, min_, max_);
+        if (snapped < min_) snapped = min_;
+        if (snapped > max_) snapped = max_;
+        return snapped;
     }
 
-    SDL_Rect track_rect() const {
-        return SDL_Rect{ rect_.x, rect_.y + rect_.h / 2 - 4, rect_.w - 80, 8 };
+    int compute_units_for_value(float v) const {
+        if (step_ <= 0.0f || max_ <= min_) {
+            return 0;
+        }
+        float snapped = snap_value(v);
+        double steps = std::round((snapped - min_) / step_);
+        return std::max(0, static_cast<int>(std::llround(steps)));
     }
 
-    SDL_Rect knob_rect() const {
-        SDL_Rect track = track_rect();
-        const double range = std::max(0.0001, static_cast<double>(max_ - min_));
-        const double ratio = std::clamp((static_cast<double>(value_) - static_cast<double>(min_)) / range, 0.0, 1.0);
-        int x = track.x + static_cast<int>(std::lround(ratio * (track.w - 12)));
-        return SDL_Rect{ x, track.y - 4, 12, 16 };
+    int value_to_slider(float v) const {
+        if (step_ <= 0.0f || max_ <= min_) {
+            return slider_min_units_;
+        }
+        float snapped = snap_value(v);
+        double steps = std::round((snapped - min_) / step_);
+        int units = static_cast<int>(std::llround(steps));
+        return std::clamp(units, slider_min_units_, slider_max_units_);
     }
 
-    float value_for_x(int x) const {
-        SDL_Rect track = track_rect();
-        if (track.w <= 0) return value_;
-        const double ratio = std::clamp((static_cast<double>(x) - static_cast<double>(track.x)) / static_cast<double>(std::max(1, track.w - 12)), 0.0, 1.0);
-        const double raw = static_cast<double>(min_) + ratio * static_cast<double>(max_ - min_);
-        return clamp_and_snap(static_cast<float>(raw));
+    float slider_to_value(int units) const {
+        if (step_ <= 0.0f || max_ <= min_) {
+            return std::clamp(min_, min_, max_);
+        }
+        int clamped_units = std::clamp(units, slider_min_units_, slider_max_units_);
+        float raw = min_ + static_cast<float>(clamped_units) * step_;
+        return snap_value(raw);
     }
 
-    std::string label_;
+    std::string format_units(int units) const {
+        std::ostringstream ss;
+        ss << std::fixed << std::setprecision(precision_) << slider_to_value(units);
+        return ss.str();
+    }
+
+    std::optional<int> parse_units(const std::string& text) const {
+        try {
+            float parsed = std::stof(text);
+            return value_to_slider(parsed);
+        } catch (...) {
+            return std::nullopt;
+        }
+    }
+
+    std::unique_ptr<DMSlider> slider_;
+    std::unique_ptr<SliderWidget> slider_widget_;
     float min_ = 0.0f;
     float max_ = 1.0f;
     float step_ = 0.01f;
     int precision_ = 2;
-    float value_ = 0.0f;
-    bool dragging_ = false;
-    bool knob_hovered_ = false;
-    SDL_Rect rect_{0, 0, 0, 0};
+    int slider_min_units_ = 0;
+    int slider_max_units_ = 0;
+    float current_value_ = 0.0f;
 };
 
 CameraUIPanel::CameraUIPanel(Assets* assets, int x, int y)

@@ -3,11 +3,13 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
+#include <string>
 
 #include "asset/Asset.hpp"
 #include "asset/animation.hpp"
 #include "asset/animation_frame.hpp"
 #include "asset/asset_info.hpp"
+#include "asset/asset_types.hpp"
 #include "animation_update_utils.hpp"
 #include "core/AssetsManager.hpp"
 #include "core/asset_list.hpp"
@@ -54,6 +56,7 @@ bool blocked_step(SDL_Point from,
                   const std::vector<CollisionEntry>& collisions,
                   const Asset& self,
                   const Assets* assets_owner) {
+    (void)assets_owner;
     const SDL_Point dest_bottom = animation_update::detail::bottom_middle_for(self, to);
 
     for (const CollisionEntry& entry : collisions) {
@@ -66,12 +69,7 @@ bool blocked_step(SDL_Point from,
             return true;
         }
 
-        bool overlap_check = false;
-        if (self.info && other->info && self.info->type == other->info->type) {
-            overlap_check = true;
-        } else if (assets_owner && assets_owner->player == other) {
-            overlap_check = true;
-        }
+        bool overlap_check = animation_update::detail::should_consider_overlap(self, *other);
 
         if (overlap_check) {
             const SDL_Point other_bottom = animation_update::detail::bottom_middle_for(*other, other->pos);

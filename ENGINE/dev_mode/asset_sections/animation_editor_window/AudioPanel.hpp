@@ -31,6 +31,8 @@ class AudioPanel {
     void render(SDL_Renderer* renderer) const;
     bool handle_event(const SDL_Event& e);
 
+    int preferred_height(int width) const;
+
   private:
     void attach_audio();
     void replace_audio();

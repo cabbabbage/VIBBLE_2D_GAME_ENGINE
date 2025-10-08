@@ -13,9 +13,29 @@
 #include <tuple>
 #include <nlohmann/json.hpp>
 
+#include <SDL.h>
+
+namespace RoomAreaSerialization {
+enum class Kind { Spawn, Trigger, Unknown };
+
+Kind infer_kind_from_entry(const nlohmann::json& entry,
+                           const std::string& type_hint,
+                           const std::string& name_hint);
+Kind infer_kind_from_strings(const std::string& kind_value,
+                             const std::string& type_hint,
+                             const std::string& name_hint);
+std::string to_string(Kind kind);
+bool is_supported_kind(Kind kind);
+SDL_Point choose_anchor(Kind kind,
+                        SDL_Point default_anchor,
+                        const std::vector<SDL_Point>& world_points);
+std::vector<SDL_Point> decode_points(const nlohmann::json& entry, SDL_Point anchor);
+nlohmann::json encode_points(const std::vector<SDL_Point>& points, SDL_Point anchor);
+}
+
 class Room {
 
-	public:
+        public:
     typedef std::pair<int, int> Point;
     Room(Point origin, std::string type_, const std::string& room_def_name, Room* parent, const std::string& map_dir, const std::string& map_info_path, AssetLibrary* asset_lib, Area* precomputed_area, nlohmann::json* room_data, const nlohmann::json* map_assets_data, double map_radius, const std::string& data_section);
     void set_sibling_left(Room* left_room);
@@ -52,6 +72,7 @@ class Room {
     struct NamedArea {
         std::string name;
         std::string type;
+        std::string kind;
         std::unique_ptr<Area> area;
     };
     // All named areas defined for this room (world-space polygons)

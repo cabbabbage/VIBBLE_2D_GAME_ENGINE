@@ -17,6 +17,7 @@
 #include "asset/asset_info.hpp"
 #include "utils/input.hpp"
 #include "utils/area.hpp"
+#include "widgets.hpp"
 
 #include "DockableCollapsible.hpp"
 #include "dm_styles.hpp"
@@ -293,12 +294,7 @@ void AssetInfoUI::layout_widgets(int screen_w, int screen_h) const {
     if (editor_width <= 0 || editor_height <= 0) {
         animation_editor_rect_ = SDL_Rect{0, 0, 0, 0};
     } else {
-        const int padding = DMSpacing::panel_padding();
-        animation_editor_rect_ = SDL_Rect{
-            padding,
-            padding,
-            std::max(0, editor_width - padding * 2),
-            std::max(0, editor_height - padding * 2)};
+        animation_editor_rect_ = SDL_Rect{0, 0, editor_width, editor_height};
     }
     const int padding = DMSpacing::panel_padding();
     const int gap = DMSpacing::section_gap();
@@ -398,6 +394,7 @@ bool AssetInfoUI::handle_event(const SDL_Event& e) {
     const bool pointer_event =
         (e.type == SDL_MOUSEBUTTONDOWN || e.type == SDL_MOUSEBUTTONUP || e.type == SDL_MOUSEMOTION);
     const bool wheel_event = (e.type == SDL_MOUSEWHEEL);
+    const bool slider_capture = wheel_event && DMWidgetsSliderScrollCaptured();
     SDL_Point pointer{0, 0};
     if (pointer_event) {
         pointer.x = (e.type == SDL_MOUSEMOTION) ? e.motion.x : e.button.x;
@@ -444,6 +441,10 @@ bool AssetInfoUI::handle_event(const SDL_Event& e) {
     // extend outside the main asset info panel.
     for (auto& s : sections_) {
         if (s->handle_event(e)) return true;
+    }
+
+    if (slider_capture) {
+        return true;
     }
 
     bool pointer_inside = false;
@@ -604,6 +605,10 @@ void AssetInfoUI::update(const Input& input, int screen_w, int screen_h) {
     }
 
     layout_widgets(screen_w, screen_h);
+
+    if (assets_ && lighting_section_ && lighting_section_->is_expanded()) {
+        assets_->set_force_high_quality_rendering(true);
+    }
 }
 
 void AssetInfoUI::render(SDL_Renderer* r, int screen_w, int screen_h) const {

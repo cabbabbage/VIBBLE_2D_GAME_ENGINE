@@ -1,27 +1,28 @@
 {
   "camera_settings": {
     "distance_scale_strength": 0.10999999940395355,
-    "foreshorten_strength": 0.10999999940395355,
-    "height_at_zoom1": 547.0,
-    "parallax_strength": 18.75,
+    "foreshorten_strength": 0.11999999731779099,
+    "height_at_zoom1": 716.0,
+    "parallax_strength": 19.0,
     "realism_enabled": true,
+    "render_areas_enabled": false,
     "render_distance": 2120.0,
-    "tripod_distance_y": -855.0
+    "tripod_distance_y": -1330.0
   },
   "map_assets_data": {
     "spawn_groups": [
       {
         "candidates": [
           {
-            "chance": 100,
+            "chance": 103,
             "name": "null"
           },
           {
-            "chance": 73,
+            "chance": 75,
             "name": "Grass_FPS_2"
           },
           {
-            "chance": 71,
+            "chance": 73,
             "name": "Grass_1_FPS_2"
           },
           {
@@ -29,7 +30,7 @@
             "name": "Small_Rock"
           },
           {
-            "chance": 48,
+            "chance": 55,
             "name": "fog"
           },
           {
@@ -43,6 +44,10 @@
           {
             "chance": 1,
             "name": "Frog"
+          },
+          {
+            "chance": 88,
+            "name": "Axe"
           }
         ],
         "chance_denominator": 297,
@@ -54,7 +59,7 @@
         "jitter_max": 3,
         "jitter_min": 3,
         "max_number": 100,
-        "min_number": 50,
+        "min_number": 53,
         "position": "Random",
         "spawn_id": "spn-5200d51e3675"
       }
@@ -118,7 +123,7 @@
       "max_rooms": 3,
       "min_rooms": 0,
       "name": "layer_1",
-      "radius": 3319,
+      "radius": 3709,
       "rooms": [
         {
           "max_instances": 1,
@@ -145,7 +150,7 @@
       "max_rooms": 8,
       "min_rooms": 3,
       "name": "layer_2",
-      "radius": 6280,
+      "radius": 7060,
       "rooms": [
         {
           "max_instances": 8,
@@ -160,7 +165,7 @@
       "max_rooms": 0,
       "min_rooms": 0,
       "name": "layer_3",
-      "radius": 8437,
+      "radius": 8908,
       "rooms": []
     }
   ],
@@ -172,7 +177,7 @@
       247
     ],
     "fall_off": 100,
-    "intensity": 255,
+    "intensity": 254,
     "keys": [
       [
         0.0,
@@ -219,32 +224,83 @@
     "update_interval": 53
   },
   "map_name": "FORREST",
-  "map_radius": 7728.5,
+  "map_radius": 9708.0,
   "rooms_data": {
     "bar": {
       "areas": [
         {
           "anchor": {
-            "x": 1284,
-            "y": 2926
+            "x": 6378,
+            "y": 4696
           },
+          "kind": "Trigger",
           "name": "trigger_area",
           "points": [
             {
-              "x": 0,
-              "y": 190
+              "x": -12621,
+              "y": -3500
             },
             {
-              "x": 171,
-              "y": 418
+              "x": -12450,
+              "y": -3272
             },
             {
-              "x": 344,
-              "y": 127
+              "x": -12277,
+              "y": -3563
             },
             {
-              "x": 166,
-              "y": 0
+              "x": -12455,
+              "y": -3690
+            }
+          ],
+          "type": "trigger"
+        },
+        {
+          "anchor": {
+            "x": 6378,
+            "y": 4696
+          },
+          "kind": "Trigger",
+          "name": "trigger_area_1",
+          "points": [
+            {
+              "x": -12364,
+              "y": -3577
+            },
+            {
+              "x": -12076,
+              "y": -3718
+            },
+            {
+              "x": -12399,
+              "y": -3808
+            }
+          ],
+          "type": "trigger"
+        },
+        {
+          "anchor": {
+            "x": 6378,
+            "y": 4696
+          },
+          "kind": "Trigger",
+          "name": "trigger_area_2",
+          "points": [
+            {
+              "x": -4553,
+              "y": -2339
+            },
+            {
+              "x": -5272,
+              "y": -2382
+            },
+            {
+              "x": -5811,
+              "y": -1645
+            },
+            {
+              "x": -4395,
+              "y": -1511
             }
           ],
           "type": "trigger"
@@ -517,50 +573,128 @@
       "areas": [
         {
           "anchor": {
-            "x": 1727,
-            "y": 3051
+            "x": 7728,
+            "y": 7728
           },
+          "kind": "Trigger",
           "name": "trigger_area",
           "points": [
             {
-              "x": 597,
-              "y": 51
+              "x": -5404,
+              "y": -4626
             },
             {
-              "x": 956,
-              "y": 673
+              "x": -5045,
+              "y": -4004
             },
             {
-              "x": 234,
-              "y": 648
+              "x": -5767,
+              "y": -4029
             },
             {
-              "x": 0,
-              "y": 0
+              "x": -6001,
+              "y": -4677
+            }
+          ],
+          "type": "trigger"
+        },
+        {
+          "anchor": {
+            "x": 7728,
+            "y": 7728
+          },
+          "kind": "Trigger",
+          "name": "trigger_area_1",
+          "points": [
+            {
+              "x": -5183,
+              "y": -4755
+            },
+            {
+              "x": -6336,
+              "y": -3833
+            },
+            {
+              "x": -5287,
+              "y": -3894
+            }
+          ],
+          "type": "trigger"
+        },
+        {
+          "anchor": {
+            "x": 7728,
+            "y": 7728
+          },
+          "kind": "Trigger",
+          "name": "trigger_area_2",
+          "points": [
+            {
+              "x": -6408,
+              "y": -3916
+            },
+            {
+              "x": -7162,
+              "y": -3986
+            },
+            {
+              "x": -6651,
+              "y": -4957
+            },
+            {
+              "x": -6171,
+              "y": -5146
+            }
+          ],
+          "type": "trigger"
+        },
+        {
+          "anchor": {
+            "x": 7728,
+            "y": 7728
+          },
+          "kind": "Trigger",
+          "name": "trigger_area_3",
+          "points": [
+            {
+              "x": -5508,
+              "y": -4426
+            },
+            {
+              "x": -5741,
+              "y": -4320
+            },
+            {
+              "x": -5655,
+              "y": -4052
+            },
+            {
+              "x": -5285,
+              "y": -4149
             }
           ],
           "type": "trigger"
         }
       ],
       "curvyness": 1,
-      "edge_smoothness": 100,
+      "edge_smoothness": 97,
       "geometry": "Circle",
-      "height_max": 3420,
-      "height_min": 100,
+      "height_max": 3612,
+      "height_min": 3612,
       "inherits_map_assets": true,
       "is_boss": false,
       "is_spawn": true,
-      "max_height": 3420,
+      "max_height": 3612,
       "max_width": 3612,
-      "min_height": 100,
-      "min_width": 100,
+      "min_height": 3612,
+      "min_width": 3612,
       "name": "spawn",
       "radius": 1806,
       "spawn_groups": [
         {
           "candidates": [
             {
-              "chance": 0,
+              "chance": 200,
               "name": "null"
             }
           ],
@@ -571,7 +705,7 @@
           "dy": -167,
           "enforce_spacing": false,
           "max_number": 78,
-          "min_number": 2,
+          "min_number": 9,
           "origional_height": 3180,
           "origional_width": 3180,
           "position": "Perimeter",
@@ -606,7 +740,7 @@
         {
           "candidates": [
             {
-              "chance": 0,
+              "chance": 200,
               "name": "null"
             }
           ],
@@ -626,7 +760,7 @@
         }
       ],
       "width_max": 3612,
-      "width_min": 100
+      "width_min": 3612
     }
   },
   "trails_data": {

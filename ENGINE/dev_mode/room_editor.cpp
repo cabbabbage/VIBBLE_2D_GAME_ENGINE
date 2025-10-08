@@ -27,6 +27,7 @@
 #include "spawn/spawn_logger.hpp"
 #include "utils/input.hpp"
 #include "utils/map_grid.hpp"
+#include "utils/relative_room_position.hpp"
 
 #include <algorithm>
 #include <array>
@@ -1362,10 +1363,10 @@ void RoomEditor::begin_drag_session(const SDL_Point& world_mouse, bool ctrl_modi
             drag_perimeter_orig_h_ = std::max(1, entry->value("origional_height", drag_perimeter_curr_h_));
             const int stored_dx = entry->value("dx", 0);
             const int stored_dy = entry->value("dy", 0);
-            const double rx = static_cast<double>(std::max(1, drag_perimeter_curr_w_)) / static_cast<double>(std::max(1, drag_perimeter_orig_w_));
-            const double ry = static_cast<double>(std::max(1, drag_perimeter_curr_h_)) / static_cast<double>(std::max(1, drag_perimeter_orig_h_));
-            drag_perimeter_center_offset_world_.x = static_cast<int>(std::lround(static_cast<double>(stored_dx) * rx));
-            drag_perimeter_center_offset_world_.y = static_cast<int>(std::lround(static_cast<double>(stored_dy) * ry));
+            RelativeRoomPosition relative(SDL_Point{stored_dx, stored_dy},
+                                          drag_perimeter_orig_w_,
+                                          drag_perimeter_orig_h_);
+            drag_perimeter_center_offset_world_ = relative.scaled_offset(drag_perimeter_curr_w_, drag_perimeter_curr_h_);
             drag_perimeter_circle_center_.x = drag_room_center_.x + drag_perimeter_center_offset_world_.x;
             drag_perimeter_circle_center_.y = drag_room_center_.y + drag_perimeter_center_offset_world_.y;
             if ((*entry).contains("radius") && (*entry)["radius"].is_number_integer()) {
@@ -1548,13 +1549,10 @@ void RoomEditor::finalize_drag_session() {
                         const int curr_h = std::max(1, drag_perimeter_curr_h_ > 0 ? drag_perimeter_curr_h_ : height);
                         const int orig_w = std::max(1, drag_perimeter_orig_w_ > 0 ? drag_perimeter_orig_w_ : curr_w);
                         const int orig_h = std::max(1, drag_perimeter_orig_h_ > 0 ? drag_perimeter_orig_h_ : curr_h);
-                        const double rx = static_cast<double>(curr_w) / static_cast<double>(std::max(1, orig_w));
-                        const double ry = static_cast<double>(curr_h) / static_cast<double>(std::max(1, orig_h));
-                        const int dx = (rx != 0.0) ? static_cast<int>(std::lround(static_cast<double>(drag_perimeter_center_offset_world_.x) / rx)) : 0;
-                        const int dy = (ry != 0.0) ? static_cast<int>(std::lround(static_cast<double>(drag_perimeter_center_offset_world_.y) / ry)) : 0;
+                        SDL_Point stored = RelativeRoomPosition::ToOriginal(drag_perimeter_center_offset_world_, orig_w, orig_h, curr_w, curr_h);
                         const double dist = std::hypot(static_cast<double>(primary->pos.x - drag_perimeter_circle_center_.x), static_cast<double>(primary->pos.y - drag_perimeter_circle_center_.y));
                         const int radius = static_cast<int>(std::lround(dist));
-                        save_perimeter_json(*entry, dx, dy, orig_w, orig_h, radius);
+                        save_perimeter_json(*entry, stored.x, stored.y, orig_w, orig_h, radius);
                         json_modified = true;
                     }
                     break;
@@ -1564,13 +1562,10 @@ void RoomEditor::finalize_drag_session() {
                         const int curr_h = std::max(1, drag_perimeter_curr_h_ > 0 ? drag_perimeter_curr_h_ : height);
                         const int orig_w = std::max(1, drag_perimeter_orig_w_ > 0 ? drag_perimeter_orig_w_ : curr_w);
                         const int orig_h = std::max(1, drag_perimeter_orig_h_ > 0 ? drag_perimeter_orig_h_ : curr_h);
-                        const double rx = static_cast<double>(curr_w) / static_cast<double>(std::max(1, orig_w));
-                        const double ry = static_cast<double>(curr_h) / static_cast<double>(std::max(1, orig_h));
-                        const int dx = (rx != 0.0) ? static_cast<int>(std::lround(static_cast<double>(drag_perimeter_center_offset_world_.x) / rx)) : 0;
-                        const int dy = (ry != 0.0) ? static_cast<int>(std::lround(static_cast<double>(drag_perimeter_center_offset_world_.y) / ry)) : 0;
+                        SDL_Point stored = RelativeRoomPosition::ToOriginal(drag_perimeter_center_offset_world_, orig_w, orig_h, curr_w, curr_h);
                         const double dist = std::hypot(static_cast<double>(primary->pos.x - drag_perimeter_circle_center_.x), static_cast<double>(primary->pos.y - drag_perimeter_circle_center_.y));
                         const int radius = static_cast<int>(std::lround(dist));
-                        save_perimeter_json(*entry, dx, dy, orig_w, orig_h, radius);
+                        save_perimeter_json(*entry, stored.x, stored.y, orig_w, orig_h, radius);
                         json_modified = true;
                     }
                     break;
@@ -1729,10 +1724,10 @@ std::optional<RoomEditor::PerimeterOverlay> RoomEditor::compute_perimeter_overla
     int orig_h = std::max(1, entry->value("origional_height", room_h));
     int stored_dx = entry->value("dx", 0);
     int stored_dy = entry->value("dy", 0);
-    double rx = (orig_w != 0) ? static_cast<double>(room_w) / static_cast<double>(orig_w) : 1.0;
-    double ry = (orig_h != 0) ? static_cast<double>(room_h) / static_cast<double>(orig_h) : 1.0;
-    overlay.center.x += static_cast<int>(std::lround(static_cast<double>(stored_dx) * rx));
-    overlay.center.y += static_cast<int>(std::lround(static_cast<double>(stored_dy) * ry));
+    RelativeRoomPosition relative(SDL_Point{stored_dx, stored_dy}, orig_w, orig_h);
+    SDL_Point scaled = relative.scaled_offset(room_w, room_h);
+    overlay.center.x += scaled.x;
+    overlay.center.y += scaled.y;
     overlay.radius = entry->value("radius", 0.0);
     if (overlay.radius <= 0.0 && active_assets_) {
         for (Asset* asset : *active_assets_) {

@@ -1,59 +1,88 @@
 {
-  "impassable_area": null,
-  "asset_name": "Axe",
-  "asset_type": "Object",
-  "duplicatable": false,
-  "duplication_interval_min": 30,
-  "duplication_interval_max": 60,
-  "min_child_depth": 2,
-  "max_child_depth": 2,
-  "animations": {
-    "default": {
-      "source": {
-        "kind": "folder",
-        "path": "default",
-        "name": null
-      },
-      "flipped_source": false,
-      "reverse_source": false,
-      "locked": false,
-      "speed_factor": 1,
-      "number_of_frames": 1,
-      "movement": [
-        [
-          0,
-          0
-        ]
-      ],
-      "loop": false,
-      "rnd_start": false,
-      "on_end": "default"
-    }
-  },
-  "tags": [
-    "passable",
-    "default"
-  ],
-  "min_same_type_distance": 0,
-  "z_threshold": 5,
-  "size_settings": {
-    "scale_percentage": 20
-  },
-  "min_distance_all": 0,
-  "anti_tags": [],
-  "rnd_spawn_min": 300,
-  "rnd_spawn_max": 400,
-  "render_radius": 2191,
-  "can_invert": true,
-  "update_radius": 1000,
-  "mappings": {},
-  "layout": {
-    "__view": {
-      "geometry": "1100x780+208+208",
-      "zoom": 1.0,
-      "xview": 0.0,
-      "yview": 0.0
-    }
-  },
-  "start": ""
+    "animations": {
+        "default": {
+            "flipped_source": false,
+            "locked": false,
+            "loop": false,
+            "movement": [
+                [
+                    0,
+                    0
+                ]
+            ],
+            "number_of_frames": 1,
+            "on_end": "default",
+            "reverse_source": false,
+            "rnd_start": false,
+            "source": {
+                "kind": "folder",
+                "name": null,
+                "path": "default"
+            },
+            "speed_factor": 1
+        }
+    },
+    "anti_tags": [],
+    "asset_name": "Axe",
+    "asset_type": "Object",
+    "can_invert": true,
+    "duplicatable": false,
+    "duplication_interval_max": 60,
+    "duplication_interval_min": 30,
+    "has_shading": false,
+    "impassable_area": null,
+    "layout": {
+        "__view": {
+            "geometry": "1100x780+208+208",
+            "xview": 0.0,
+            "yview": 0.0,
+            "zoom": 1.0
+        }
+    },
+    "lighting_info": [
+        {
+            "factor": 100,
+            "falloff": 0,
+            "has_light_source": true,
+            "light_intensity": 0,
+            "offset_x": 0,
+            "offset_y": 0,
+            "radius": 0,
+            "x_radius": 0,
+            "y_radius": 0
+        },
+        {
+            "falloff": 50,
+            "flare": 0,
+            "flicker": 20,
+            "has_light_source": true,
+            "light_color": [
+                255,
+                255,
+                255
+            ],
+            "light_intensity": 255,
+            "offset_x": 0,
+            "offset_y": 0,
+            "radius": 64
+        }
+    ],
+    "mappings": {},
+    "max_child_depth": 2,
+    "min_child_depth": 2,
+    "min_distance_all": 0,
+    "min_same_type_distance": 0,
+    "render_radius": 2191,
+    "rnd_spawn_max": 400,
+    "rnd_spawn_min": 300,
+    "size_settings": {
+        "scale_percentage": 21.0
+    },
+    "start": "",
+    "tags": [
+        "passable",
+        "default"
+    ],
+    "update_radius": 1000,
+    "z_threshold": 5
 }

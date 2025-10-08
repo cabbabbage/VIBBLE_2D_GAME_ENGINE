@@ -31,8 +31,20 @@ LightMap::~LightMap() {
         }
 }
 
+void LightMap::set_screen_dimensions(int screen_width, int screen_height, SDL_Texture* fullscreen_light_tex) {
+        screen_width_ = std::max(1, screen_width);
+        screen_height_ = std::max(1, screen_height);
+        fullscreen_light_tex_ = fullscreen_light_tex;
+        if (lowres_mask_tex_) {
+                SDL_DestroyTexture(lowres_mask_tex_);
+                lowres_mask_tex_ = nullptr;
+                lowres_w_ = 0;
+                lowres_h_ = 0;
+        }
+}
+
 void LightMap::render(bool debugging) {
-	if (debugging) std::cout << "[render_asset_lights_z] start\n";
+        if (debugging) std::cout << "[render_asset_lights_z] start\n";
 	static std::mt19937 flicker_rng{ std::random_device{}() };
 	static std::vector<LightEntry> z_lights;
 	z_lights.clear();

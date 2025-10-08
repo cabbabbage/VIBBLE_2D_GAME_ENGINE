@@ -1,91 +1,107 @@
 #include "area_loader.hpp"
+
 #include "asset/asset_info.hpp"
 #include "utils/area.hpp"
+
+#include <algorithm>
 #include <cmath>
 #include <limits>
-#include <filesystem>
-#include <iostream>
+
 using nlohmann::json;
 
-void AreaLoader::load(AssetInfo& info,
-                      const json& data,
-                      float scale,
-                      int offset_x,
-                      int offset_y) {
+namespace {
+
+inline float sanitize_scale(float scale) {
+    if (!(scale > 0.0f) || !std::isfinite(scale)) {
+        return 1.0f;
+    }
+    return scale;
+}
+
+inline int compute_scaled_dimension(int dimension, float factor) {
+    if (dimension <= 0) return 0;
+    double value = static_cast<double>(dimension) * static_cast<double>(factor);
+    long long rounded = std::llround(value);
+    if (rounded < 0) rounded = 0;
+    if (rounded > static_cast<long long>(std::numeric_limits<int>::max())) {
+        return std::numeric_limits<int>::max();
+    }
+    return static_cast<int>(rounded);
+}
+
+} // namespace
+
+std::vector<AreaSerialization::LocalPoint>
+AreaSerialization::read_local_points(const json& entry) {
+    std::vector<LocalPoint> locals;
+    if (!entry.contains("points") || !entry["points"].is_array()) {
+        return locals;
+    }
+    locals.reserve(entry["points"].size());
+    for (const auto& point : entry["points"]) {
+        if (!point.is_object()) continue;
+        LocalPoint lp;
+        lp.x = point.value("x", 0);
+        lp.y = point.value("y", 0);
+        locals.push_back(lp);
+    }
+    return locals;
+}
+
+SDL_Point AreaLoader::asset_anchor(const AssetInfo& info) {
+    const float scale = sanitize_scale(info.scale_factor);
+    const int scaled_w = compute_scaled_dimension(info.original_canvas_width, scale);
+    const int scaled_h = compute_scaled_dimension(info.original_canvas_height, scale);
+    SDL_Point anchor{0, 0};
+    anchor.x = (scaled_w > 0) ? scaled_w / 2 : 0;
+    anchor.y = scaled_h;
+    return anchor;
+}
+
+std::vector<Area::Point> AreaLoader::decode_points(const json& entry,
+                                                   SDL_Point anchor) {
+    std::vector<Area::Point> pts;
+    auto locals = AreaSerialization::read_local_points(entry);
+    pts.reserve(locals.size());
+    for (const auto& local : locals) {
+        pts.push_back({ anchor.x + local.x, anchor.y + local.y });
+    }
+    return pts;
+}
+
+nlohmann::json AreaLoader::encode_points(const std::vector<Area::Point>& points,
+                                         SDL_Point anchor) {
+    json pts = json::array();
+    pts.get_ref<json::array_t&>().reserve(points.size());
+    for (const auto& p : points) {
+        pts.push_back({ {"x", p.x - anchor.x}, {"y", p.y - anchor.y} });
+    }
+    return pts;
+}
+
+void AreaLoader::load(AssetInfo& info, const json& data) {
     info.areas.clear();
     if (!data.contains("areas") || !data["areas"].is_array()) return;
 
-    const float active_scale = (scale <= 0.0f) ? 1.0f : scale;
-    auto compute_scaled = [](int dimension, float factor) {
-        double value = static_cast<double>(dimension) * static_cast<double>(factor);
-        long long rounded = std::llround(value);
-        if (rounded < 1) rounded = 1;
-        if (rounded > static_cast<long long>(std::numeric_limits<int>::max())) {
-            return std::numeric_limits<int>::max();
-        }
-        return static_cast<int>(rounded);
-};
-
-    int default_offset_x = offset_x;
-    int default_offset_y = offset_y;
-
-    if (default_offset_x == 0 && info.original_canvas_width > 0) {
-        default_offset_x = compute_scaled(info.original_canvas_width, active_scale) / 2;
-    }
-    if (default_offset_y == 0 && info.original_canvas_height > 0) {
-        default_offset_y = compute_scaled(info.original_canvas_height, active_scale);
-    }
+    const SDL_Point anchor = asset_anchor(info);
 
     for (const auto& entry : data["areas"]) {
         if (!entry.is_object()) continue;
         std::string name = entry.value("name", std::string{});
         std::string type = entry.value("type", std::string{});
+        std::string kind = entry.value("kind", std::string{});
         if (name.empty()) continue;
 
-        int stored_orig_w = info.original_canvas_width;
-        int stored_orig_h = info.original_canvas_height;
-        if (entry.contains("original_dimensions") && entry["original_dimensions"].is_array() && entry["original_dimensions"].size() == 2) {
-            stored_orig_w = entry["original_dimensions"][0].get<int>();
-            stored_orig_h = entry["original_dimensions"][1].get<int>();
-        }
+        auto pts = decode_points(entry, anchor);
+        if (pts.size() < 3) continue;
 
-        int json_offset_x = entry.value("offset_x", 0);
-        int json_offset_y = entry.value("offset_y", 0);
-
-        const int base_offset_x = default_offset_x + json_offset_x;
-        const int base_offset_y = default_offset_y - json_offset_y;
-
-        double width_ratio = 1.0;
-        double height_ratio = 1.0;
-        if (stored_orig_w > 0 && info.original_canvas_width > 0 && stored_orig_w != info.original_canvas_width) {
-            width_ratio = static_cast<double>(info.original_canvas_width) / static_cast<double>(stored_orig_w);
-        }
-        if (stored_orig_h > 0 && info.original_canvas_height > 0 && stored_orig_h != info.original_canvas_height) {
-            height_ratio = static_cast<double>(info.original_canvas_height) / static_cast<double>(stored_orig_h);
-        }
-
-        const double scale_x = static_cast<double>(active_scale) * width_ratio;
-        const double scale_y = static_cast<double>(active_scale) * height_ratio;
-
-        std::vector<Area::Point> pts;
-        if (entry.contains("points") && entry["points"].is_array()) {
-            pts.reserve(entry["points"].size());
-            for (const auto& p : entry["points"]) {
-                if (!p.is_array() || p.size() < 2) continue;
-                double rel_x = p[0].get<double>();
-                double rel_y = p[1].get<double>();
-                int lx = static_cast<int>(std::llround(rel_x * scale_x)) + base_offset_x;
-                int ly = static_cast<int>(std::llround(rel_y * scale_y)) + base_offset_y;
-                pts.push_back({ lx, ly });
-            }
-        }
-
-        if (pts.empty()) continue;
         auto area = std::make_unique<Area>(name, pts);
         area->set_type(type);
+
         AssetInfo::NamedArea na;
         na.name = name;
         na.type = type;
+        na.kind = kind;
         na.area = std::move(area);
         info.areas.push_back(std::move(na));
     }

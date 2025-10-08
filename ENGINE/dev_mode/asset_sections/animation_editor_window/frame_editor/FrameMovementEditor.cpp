@@ -7,6 +7,7 @@
 #include <nlohmann/json.hpp>
 
 #include "../AnimationDocument.hpp"
+#include "../PanelLayoutConstants.hpp"
 #include "FramePropertiesPanel.hpp"
 #include "MovementCanvas.hpp"
 #include "TotalsPanel.hpp"
@@ -15,7 +16,6 @@ namespace animation_editor {
 
 namespace {
 
-constexpr int kPanelPadding = 16;
 constexpr int kSidePanelWidth = 240;
 constexpr int kTotalsHeight = 120;
 

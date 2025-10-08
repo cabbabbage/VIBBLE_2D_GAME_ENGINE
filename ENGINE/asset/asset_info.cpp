@@ -110,7 +110,7 @@ AssetInfo::AssetInfo(const std::string &asset_folder_name)
         int scaled_canvas_h = static_cast<int>(original_canvas_height * scale_factor);
 	int offset_x = (scaled_canvas_w - 0) / 2;
 	int offset_y = (scaled_canvas_h - 0);
-	load_areas(data, scale_factor, offset_x, offset_y);
+        load_areas(data);
 	load_children(data);
 	try {
 		if (data.contains("custom_controller_key") && data["custom_controller_key"].is_string()) {
@@ -284,132 +284,62 @@ Area* AssetInfo::find_area(const std::string& name) {
 	return nullptr;
 }
 void AssetInfo::upsert_area_from_editor(const Area& area) {
-    bool found = false;
-    for (auto& na : areas) {
-        if (na.name == area.get_name()) {
-            na.area = std::make_unique<Area>(area);
-            na.type = area.get_type().empty() ? na.type : area.get_type();
-            found = true;
+    if (area.get_name().empty()) {
+        return;
+    }
+
+    if (!info_json_.contains("areas") || !info_json_["areas"].is_array()) {
+        info_json_["areas"] = nlohmann::json::array();
+    }
+
+    nlohmann::json* existing_entry = nullptr;
+    std::string existing_type;
+    std::string existing_kind;
+    for (auto& entry : info_json_["areas"]) {
+        if (!entry.is_object()) continue;
+        if (entry.value("name", std::string{}) == area.get_name()) {
+            existing_entry = &entry;
+            existing_type = entry.value("type", std::string{});
+            existing_kind = entry.value("kind", std::string{});
             break;
         }
     }
-    if (!found) {
+
+    const std::string final_type = !area.get_type().empty() ? area.get_type() : existing_type;
+    std::string final_kind = existing_kind;
+    if (final_kind.empty()) final_kind = final_type;
+
+    bool updated = false;
+    for (auto& na : areas) {
+        if (na.name == area.get_name()) {
+            na.area = std::make_unique<Area>(area);
+            if (!final_type.empty()) na.type = final_type;
+            if (!final_kind.empty()) na.kind = final_kind;
+            updated = true;
+            break;
+        }
+    }
+    if (!updated) {
         NamedArea na;
         na.name = area.get_name();
-        na.type = area.get_type();
+        na.type = final_type;
+        na.kind = final_kind;
         na.area = std::make_unique<Area>(area);
         areas.push_back(std::move(na));
     }
 
-	if (!info_json_.contains("areas") || !info_json_["areas"].is_array()) {
-		info_json_["areas"] = nlohmann::json::array();
-	}
+    const SDL_Point anchor = AreaLoader::asset_anchor(*this);
+    nlohmann::json points = AreaLoader::encode_points(area.get_points(), anchor);
 
-	float scale = scale_factor;
-	if (scale <= 0.0f) scale = 1.0f;
+    nlohmann::json entry = nlohmann::json::object();
+    entry["name"] = area.get_name();
+    if (!final_type.empty()) entry["type"] = final_type;
+    if (!final_kind.empty()) entry["kind"] = final_kind;
+    entry["points"] = std::move(points);
 
-	auto compute_scaled = [](int dimension, float factor) {
-		double value = static_cast<double>(dimension) * static_cast<double>(factor);
-		long long rounded = std::llround(value);
-		if (rounded < 1) rounded = 1;
-		if (rounded > static_cast<long long>(std::numeric_limits<int>::max())) {
-			return std::numeric_limits<int>::max();
-		}
-		return static_cast<int>(rounded);
-};
-
-	const int scaled_canvas_w = compute_scaled(original_canvas_width, scale);
-	const int scaled_canvas_h = compute_scaled(original_canvas_height, scale);
-
-	const int default_offset_x = scaled_canvas_w / 2;
-	const int default_offset_y = scaled_canvas_h;
-
-    nlohmann::json* existing_entry = nullptr;
-    std::string existing_type;
-    int json_offset_x = 0;
-    int json_offset_y = 0;
-    int stored_orig_w = original_canvas_width;
-    int stored_orig_h = original_canvas_height;
-
-        for (auto& entry : info_json_["areas"]) {
-        if (!entry.is_object()) continue;
-        if (entry.value("name", std::string{}) == area.get_name()) {
-            existing_entry = &entry;
-            json_offset_x = entry.value("offset_x", 0);
-            json_offset_y = entry.value("offset_y", 0);
-            existing_type = entry.value("type", std::string{});
-            try {
-                if (entry.contains("original_dimensions") && entry["original_dimensions"].is_array() && entry["original_dimensions"].size() == 2) {
-                    stored_orig_w = entry["original_dimensions"][0].get<int>();
-                    stored_orig_h = entry["original_dimensions"][1].get<int>();
-                }
-            } catch (...) {
-                stored_orig_w = original_canvas_width;
-                stored_orig_h = original_canvas_height;
-            }
-            break;
-        }
-        }
-
-        const int base_offset_x = default_offset_x + json_offset_x;
-        const int base_offset_y = default_offset_y - json_offset_y;
-
-        if (stored_orig_w <= 0) stored_orig_w = original_canvas_width;
-        if (stored_orig_h <= 0) stored_orig_h = original_canvas_height;
-        if (stored_orig_w <= 0) stored_orig_w = 1;
-        if (stored_orig_h <= 0) stored_orig_h = 1;
-
-        double width_ratio = 1.0;
-        double height_ratio = 1.0;
-        if (stored_orig_w > 0 && original_canvas_width > 0 && stored_orig_w != original_canvas_width) {
-                width_ratio = static_cast<double>(original_canvas_width) / static_cast<double>(stored_orig_w);
-        }
-        if (stored_orig_h > 0 && original_canvas_height > 0 && stored_orig_h != original_canvas_height) {
-                height_ratio = static_cast<double>(original_canvas_height) / static_cast<double>(stored_orig_h);
-        }
-
-        const double scale_x = static_cast<double>(scale) * width_ratio;
-        const double scale_y = static_cast<double>(scale) * height_ratio;
-
-        auto encode = [](double value) {
-                double snapped = std::round(value * 1000.0) / 1000.0;
-                if (std::abs(snapped) < 1e-6) {
-                        snapped = 0.0;
-                }
-                return snapped;
-};
-
-        nlohmann::json points = nlohmann::json::array();
-        for (const auto& p : area.get_points()) {
-                double rel_x = 0.0;
-                double rel_y = 0.0;
-                if (scale_x != 0.0) {
-                        rel_x = (static_cast<double>(p.x) - static_cast<double>(base_offset_x)) / scale_x;
-                }
-                if (scale_y != 0.0) {
-                        rel_y = (static_cast<double>(p.y) - static_cast<double>(base_offset_y)) / scale_y;
-                }
-                points.push_back({ encode(rel_x), encode(rel_y) });
-        }
-
-        nlohmann::json original_dims = nlohmann::json::array({ stored_orig_w, stored_orig_h });
-
-    const std::string final_type = !area.get_type().empty() ? area.get_type() : existing_type;
     if (existing_entry) {
-        (*existing_entry)["name"] = area.get_name();
-        if (!final_type.empty()) (*existing_entry)["type"] = final_type;
-        (*existing_entry)["points"] = std::move(points);
-        (*existing_entry)["original_dimensions"] = original_dims;
-        (*existing_entry)["offset_x"] = json_offset_x;
-        (*existing_entry)["offset_y"] = json_offset_y;
+        *existing_entry = std::move(entry);
     } else {
-        nlohmann::json entry;
-        entry["name"] = area.get_name();
-        if (!final_type.empty()) entry["type"] = final_type;
-        entry["points"] = std::move(points);
-        entry["original_dimensions"] = original_dims;
-        entry["offset_x"] = json_offset_x;
-        entry["offset_y"] = json_offset_y;
         info_json_["areas"].push_back(std::move(entry));
     }
 }
@@ -436,9 +366,8 @@ std::string AssetInfo::pick_next_animation(const std::string& mapping_id) const 
 	return {};
 }
 
-void AssetInfo::load_areas(const nlohmann::json& data, float scale, int offset_x,
-                           int offset_y) {
-	AreaLoader::load(*this, data, scale, offset_x, offset_y);
+void AssetInfo::load_areas(const nlohmann::json& data) {
+        AreaLoader::load(*this, data);
 }
 
 void AssetInfo::load_children(const nlohmann::json& data) {

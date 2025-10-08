@@ -6,10 +6,13 @@
 #include <nlohmann/json.hpp>
 
 #include "AnimationDocument.hpp"
+#include "PanelLayoutConstants.hpp"
 #include "dev_mode/dm_styles.hpp"
 #include "dev_mode/widgets.hpp"
 
 namespace {
+
+using animation_editor::kPanelPadding;
 
 std::string payload_signature(const std::optional<std::string>& payload) {
     if (!payload.has_value()) {
@@ -57,6 +60,10 @@ void OnEndSelector::set_bounds(const SDL_Rect& bounds) {
     bounds_ = bounds;
     layout_dirty_ = true;
     layout_dropdown();
+}
+
+int OnEndSelector::preferred_height(int) const {
+    return kPanelPadding * 2 + DMDropdown::height();
 }
 
 void OnEndSelector::update() {
@@ -161,9 +168,9 @@ void OnEndSelector::layout_dropdown() const {
     auto* self = const_cast<OnEndSelector*>(this);
     self->layout_dirty_ = false;
 
-    const int padding = DMSpacing::panel_padding();
-    const int width = std::max(0, bounds_.w - padding * 2);
-    SDL_Rect rect{bounds_.x + padding, bounds_.y + padding, width, std::max(0, bounds_.h - padding * 2)};
+    const int width = std::max(0, bounds_.w - kPanelPadding * 2);
+    SDL_Rect rect{bounds_.x + kPanelPadding, bounds_.y + kPanelPadding, width,
+                  std::max(0, bounds_.h - kPanelPadding * 2)};
     dropdown_->set_rect(rect);
 }
 
