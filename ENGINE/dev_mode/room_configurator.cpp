@@ -682,12 +682,7 @@ void RoomConfigurator::rebuild_rows(bool reload_spawn_list) {
     add_group_btn_.reset();
     add_group_btn_w_.reset();
     empty_spawn_label_.reset();
-    room_section_label_.reset();
-    room_tags_label_.reset();
     room_tags_editor_.reset();
-
-    room_section_label_ = std::make_unique<RoomConfigLabel>("Room Settings");
-    rows.push_back({ room_section_label_.get() });
 
     room_name_lbl_ = std::make_unique<DMTextBox>("Room Name", room_name_);
     room_name_lbl_w_ = std::make_unique<TextBoxWidget>(room_name_lbl_.get());
@@ -964,9 +959,6 @@ void RoomConfigurator::rebuild_rows(bool reload_spawn_list) {
     }
 
     // Add Spawn Group button provided by SpawnGroupList
-
-    room_tags_label_ = std::make_unique<RoomConfigLabel>("Tags");
-    rows.push_back({ room_tags_label_.get() });
 
     room_tags_editor_ = std::make_unique<TagEditorWidget>();
     room_tags_editor_->set_tags(room_tags_, room_anti_tags_);

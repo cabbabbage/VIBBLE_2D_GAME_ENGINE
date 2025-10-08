@@ -188,6 +188,7 @@ private:
     SDL_Rect room_config_bounds_{0, 0, 0, 0};
     FullScreenCollapsible* shared_fullscreen_panel_ = nullptr;
     bool room_config_dock_open_ = false;
+    bool room_config_was_visible_ = false;
     ActiveModal active_modal_ = ActiveModal::None;
 
     bool last_area_editor_active_ = false;

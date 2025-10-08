@@ -106,7 +106,6 @@ private:
     std::unique_ptr<CheckboxWidget> room_inherit_cb_w_;
     std::unique_ptr<DMTextBox> room_name_lbl_;
     std::unique_ptr<TextBoxWidget> room_name_lbl_w_;
-    std::unique_ptr<Widget> room_tags_label_;
     std::unique_ptr<TagEditorWidget> room_tags_editor_;
     std::vector<std::string> room_tags_;
     std::vector<std::string> room_anti_tags_;
@@ -118,7 +117,6 @@ private:
     std::function<void(const std::string&)> on_spawn_move_down_;
     std::function<void()> on_spawn_add_;
     std::function<std::string(const std::string&, const std::string&)> on_room_renamed_;
-    std::unique_ptr<Widget> room_section_label_;
     std::unique_ptr<Widget> spawn_groups_label_;
     std::unique_ptr<class SpawnGroupList> spawn_list_;
     nlohmann::json* bound_spawn_groups_array_ = nullptr;
