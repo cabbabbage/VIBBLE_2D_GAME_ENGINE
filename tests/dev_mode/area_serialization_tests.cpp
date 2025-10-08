@@ -1,7 +1,7 @@
 #include "doctest/doctest.h"
 
-#include "ENGINE/asset/asset_info.hpp"
-#include "ENGINE/map_generation/room.hpp"
+#include "asset/asset_info.hpp"
+#include "map_generation/room.hpp"
 
 #include <cmath>
 #include <filesystem>

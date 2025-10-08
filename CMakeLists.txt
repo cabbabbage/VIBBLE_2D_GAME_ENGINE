@@ -170,6 +170,7 @@ add_executable(dev_mode_ui_tests
 )
 target_include_directories(dev_mode_ui_tests PRIVATE
     ${CMAKE_SOURCE_DIR}/external
+    ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/ENGINE
     ${CMAKE_SOURCE_DIR}/ENGINE/dev_mode
     ${CMAKE_SOURCE_DIR}/ENGINE/utils
@@ -203,9 +204,11 @@ add_test(NAME map_grid_tests COMMAND map_grid_tests)
 add_executable(asset_loader_distance_tests
     tests/core/asset_loader_distance_tests.cpp
     ENGINE/utils/area.cpp
+    ENGINE/core/asset_loader_internal.cpp
 )
 target_include_directories(asset_loader_distance_tests PRIVATE
     ${CMAKE_SOURCE_DIR}/external
+    ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/ENGINE
     ${CMAKE_SOURCE_DIR}/ENGINE/core
     ${CMAKE_SOURCE_DIR}/ENGINE/utils

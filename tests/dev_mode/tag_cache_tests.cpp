@@ -1,7 +1,7 @@
 #define DOCTEST_CONFIG_IMPLEMENT_WITHOUT_MAIN
 #include "doctest/doctest.h"
 
-#include "ENGINE/asset/asset_info.hpp"
+#include "asset/asset_info.hpp"
 
 #include <algorithm>
 #include <chrono>

@@ -17,6 +17,7 @@ bool Check::check(const std::shared_ptr<AssetInfo>& info,
                   const SDL_Point& test_pos,
                   const std::vector<Area>& exclusion_areas,
                   const std::vector<std::unique_ptr<Asset>>& assets,
+                  bool respect_exclusion_zones,
                   bool check_min_distance,
                   bool check_min_distance_all,
                   int num_neighbors) const
@@ -30,10 +31,10 @@ bool Check::check(const std::shared_ptr<AssetInfo>& info,
 		<< test_pos.x << ", " << test_pos.y
 		<< ") for asset: " << info->name << "\n";
 	}
-	if (is_in_exclusion_zone(test_pos, exclusion_areas)) {
-		if (debug_) std::cout << "[Check] Point is inside exclusion zone.\n";
-		return true;
-	}
+        if (respect_exclusion_zones && is_in_exclusion_zone(test_pos, exclusion_areas)) {
+                if (debug_) std::cout << "[Check] Point is inside exclusion zone.\n";
+                return true;
+        }
 	if (check_min_distance_all && info->min_distance_all > 0) {
 		if (this->check_min_distance_all(info, test_pos, assets)) {
 			if (debug_) std::cout << "[Check] Minimum distance (all) violated.\n";
