@@ -6,12 +6,13 @@
 #include <nlohmann/json.hpp>
 
 #include "AnimationDocument.hpp"
+#include "PanelLayoutConstants.hpp"
 #include "dev_mode/dm_styles.hpp"
 #include "dev_mode/widgets.hpp"
 
 namespace {
 
-constexpr int kPanelPadding = 16;
+using animation_editor::kPanelPadding;
 
 std::string payload_signature(const std::optional<std::string>& payload) {
     if (!payload.has_value()) {

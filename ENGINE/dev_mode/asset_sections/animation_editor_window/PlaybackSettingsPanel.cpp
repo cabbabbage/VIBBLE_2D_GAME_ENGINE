@@ -11,13 +11,15 @@
 
 #include <nlohmann/json.hpp>
 
+#include "PanelLayoutConstants.hpp"
 #include "dev_mode/dm_styles.hpp"
 #include "dev_mode/widgets.hpp"
 
 namespace {
 
-constexpr int kPanelPadding = 16;
 constexpr int kItemGap = 8;
+
+using animation_editor::kPanelPadding;
 
 bool parse_bool_value(const nlohmann::json& value, bool fallback) {
     if (value.is_boolean()) {

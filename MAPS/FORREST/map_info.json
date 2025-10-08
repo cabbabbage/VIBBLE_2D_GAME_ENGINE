@@ -233,6 +233,7 @@
             "x": 6378,
             "y": 4696
           },
+          "kind": "Trigger",
           "name": "trigger_area",
           "points": [
             {
@@ -252,14 +253,14 @@
               "y": -3690
             }
           ],
-          "type": "trigger",
-          "kind": "Trigger"
+          "type": "trigger"
         },
         {
           "anchor": {
             "x": 6378,
             "y": 4696
           },
+          "kind": "Trigger",
           "name": "trigger_area_1",
           "points": [
             {
@@ -275,14 +276,14 @@
               "y": -3808
             }
           ],
-          "type": "trigger",
-          "kind": "Trigger"
+          "type": "trigger"
         },
         {
           "anchor": {
             "x": 6378,
             "y": 4696
           },
+          "kind": "Trigger",
           "name": "trigger_area_2",
           "points": [
             {
@@ -302,8 +303,7 @@
               "y": -1511
             }
           ],
-          "type": "trigger",
-          "kind": "Trigger"
+          "type": "trigger"
         }
       ],
       "edge_smoothness": 101,
@@ -576,6 +576,7 @@
             "x": 7728,
             "y": 7728
           },
+          "kind": "Trigger",
           "name": "trigger_area",
           "points": [
             {
@@ -595,14 +596,14 @@
               "y": -4677
             }
           ],
-          "type": "trigger",
-          "kind": "Trigger"
+          "type": "trigger"
         },
         {
           "anchor": {
             "x": 7728,
             "y": 7728
           },
+          "kind": "Trigger",
           "name": "trigger_area_1",
           "points": [
             {
@@ -618,14 +619,14 @@
               "y": -3894
             }
           ],
-          "type": "trigger",
-          "kind": "Trigger"
+          "type": "trigger"
         },
         {
           "anchor": {
             "x": 7728,
             "y": 7728
           },
+          "kind": "Trigger",
           "name": "trigger_area_2",
           "points": [
             {
@@ -645,14 +646,14 @@
               "y": -5146
             }
           ],
-          "type": "trigger",
-          "kind": "Trigger"
+          "type": "trigger"
         },
         {
           "anchor": {
             "x": 7728,
             "y": 7728
           },
+          "kind": "Trigger",
           "name": "trigger_area_3",
           "points": [
             {
@@ -672,8 +673,7 @@
               "y": -4149
             }
           ],
-          "type": "trigger",
-          "kind": "Trigger"
+          "type": "trigger"
         }
       ],
       "curvyness": 1,
@@ -694,7 +694,7 @@
         {
           "candidates": [
             {
-              "chance": 0,
+              "chance": 200,
               "name": "null"
             }
           ],
@@ -740,7 +740,7 @@
         {
           "candidates": [
             {
-              "chance": 0,
+              "chance": 200,
               "name": "null"
             }
           ],
@@ -761,12 +761,16 @@
         {
           "candidates": [
             {
-              "chance": 0,
+              "chance": 40,
               "name": "null"
             },
             {
-              "chance": 100,
+              "chance": 2708,
               "name": "Barrel"
+            },
+            {
+              "chance": 4704,
+              "name": "Bone"
             }
           ],
           "check_overlap": false,
@@ -774,11 +778,11 @@
           "dx": -153,
           "dy": 408,
           "enforce_spacing": false,
-          "max_number": 1,
+          "max_number": 5,
           "min_number": 1,
           "origional_height": 3612,
           "origional_width": 3612,
-          "position": "Exact",
+          "position": "Random",
           "spawn_id": "spn-6a71cc852363"
         }
       ],

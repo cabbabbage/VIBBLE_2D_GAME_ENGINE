@@ -2,6 +2,7 @@
 
 #include "AnimationDocument.hpp"
 #include "AudioImporter.hpp"
+#include "PanelLayoutConstants.hpp"
 
 #include <SDL.h>
 #include <SDL_log.h>
@@ -18,7 +19,6 @@ namespace animation_editor {
 
 namespace {
 
-constexpr int kPanelPadding = 16;
 constexpr int kItemGap = 8;
 
 void render_label(SDL_Renderer* renderer, const std::string& text, int x, int y, int max_width = -1,

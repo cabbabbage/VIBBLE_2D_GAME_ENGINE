@@ -10,6 +10,7 @@
 #include <string>
 
 #include "AnimationDocument.hpp"
+#include "PanelLayoutConstants.hpp"
 #include "dm_styles.hpp"
 #include "dev_mode/widgets.hpp"
 
@@ -19,7 +20,6 @@ namespace {
 
 const int kButtonHeight = DMButton::height();
 const int kButtonWidth = 160;
-const int kPanelPadding = 16;
 
 void render_summary_label(SDL_Renderer* renderer, const std::string& text, int x, int y, SDL_Color color) {
     if (!renderer || text.empty()) {
