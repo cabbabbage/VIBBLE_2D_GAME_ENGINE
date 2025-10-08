@@ -24,6 +24,7 @@
 #include "CroppingService.hpp"
 #include "dm_styles.hpp"
 #include "dev_mode/widgets.hpp"
+#include "string_utils.hpp"
 
 namespace animation_editor {
 
@@ -48,13 +49,6 @@ std::string to_lower_copy(std::string text) {
 
 bool has_extension_ci(const std::filesystem::path& path, std::string_view ext) {
     return case_insensitive_equals(path.extension().string(), std::string(ext));
-}
-
-std::string trim_copy(std::string value) {
-    auto is_space = [](unsigned char ch) { return std::isspace(ch) != 0; };
-    value.erase(value.begin(), std::find_if(value.begin(), value.end(), [&](unsigned char ch) { return !is_space(ch); }));
-    value.erase(std::find_if(value.rbegin(), value.rend(), [&](unsigned char ch) { return !is_space(ch); }).base(), value.end());
-    return value;
 }
 
 int safe_to_int(const nlohmann::json& value, int fallback) {
@@ -310,7 +304,7 @@ int SourceConfigPanel::compute_frame_count_recursive(const SourceConfig& config,
                                                      std::unordered_set<std::string>& visited) const {
     std::string kind = to_lower_copy(config.kind);
     if (kind == "animation") {
-        std::string target = trim_copy(config.name.value_or(config.path));
+        std::string target = strings::trim_copy(config.name.value_or(config.path));
         if (target.empty()) return 1;
         if (visited.count(target) != 0) return 1;
         visited.insert(target);
@@ -627,7 +621,7 @@ void SourceConfigPanel::import_from_animation() {
         update_status("Animation selection cancelled");
         return;
     }
-    std::string target = trim_copy(*selection);
+    std::string target = strings::trim_copy(*selection);
     if (target.empty()) {
         update_status("Animation selection empty");
         return;

@@ -19,6 +19,7 @@
 #include "CroppingService.hpp"
 #include "PreviewProvider.hpp"
 #include "frame_editor/FrameMovementEditor.hpp"
+#include "string_utils.hpp"
 #include "ui/tinyfiledialogs.h"
 #include "utils/input.hpp"
 
@@ -55,20 +56,13 @@ void render_label(SDL_Renderer* renderer, const std::string& text, int x, int y)
     TTF_CloseFont(font);
 }
 
-std::string trim_copy(std::string value) {
-    auto is_space = [](unsigned char ch) { return std::isspace(ch) != 0; };
-    value.erase(value.begin(), std::find_if(value.begin(), value.end(), [&](unsigned char ch) { return !is_space(ch); }));
-    value.erase(std::find_if(value.rbegin(), value.rend(), [&](unsigned char ch) { return !is_space(ch); }).base(), value.end());
-    return value;
-}
-
 std::vector<std::filesystem::path> split_paths(const std::string& raw) {
     std::vector<std::filesystem::path> paths;
     size_t start = 0;
     while (start < raw.size()) {
         size_t pos = raw.find('|', start);
         std::string token = raw.substr(start, pos == std::string::npos ? std::string::npos : pos - start);
-        token = trim_copy(token);
+        token = animation_editor::strings::trim_copy(token);
         if (!token.empty()) {
             paths.emplace_back(token);
         }
@@ -431,7 +425,7 @@ void AnimationEditorWindow::close_movement_editor() {
 void AnimationEditorWindow::create_animation_via_prompt() {
     const char* input = tinyfd_inputBox("Create Animation", "Enter new animation identifier", "animation");
     if (!input) return;
-    std::string name = trim_copy(input);
+    std::string name = animation_editor::strings::trim_copy(input);
     if (name.empty()) {
         name = "animation";
     }
@@ -512,7 +506,7 @@ std::optional<std::string> AnimationEditorWindow::pick_animation_reference() con
 
     const char* result = tinyfd_inputBox("Select Animation", oss.str().c_str(), ids.front().c_str());
     if (!result) return std::nullopt;
-    std::string choice = trim_copy(result);
+    std::string choice = animation_editor::strings::trim_copy(result);
     if (choice.empty()) return std::nullopt;
     if (std::find(ids.begin(), ids.end(), choice) == ids.end()) return std::nullopt;
     return choice;
