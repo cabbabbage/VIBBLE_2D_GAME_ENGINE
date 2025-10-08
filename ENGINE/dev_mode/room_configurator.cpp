@@ -329,6 +329,7 @@ void RoomConfigurator::apply_bounds_if_needed() {
         if (applied_bounds_.x != bounds_.x || applied_bounds_.y != bounds_.y ||
             applied_bounds_.w != bounds_.w || applied_bounds_.h != bounds_.h) {
             set_available_height_override(kMaxFloatingHeight);
+            set_visible_height(kMaxFloatingHeight);
             applied_bounds_ = bounds_;
             if (!has_custom_position_) {
                 set_position(preferred_position_.x, preferred_position_.y);
