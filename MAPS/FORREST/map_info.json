@@ -234,9 +234,9 @@
     "max_opacity": 255,
     "min_opacity": 0,
     "mult": 0.32,
-    "orbit_radius": 9743,
-    "radius": 747,
-    "update_interval": 1
+    "orbit_radius": 1264,
+    "radius": 5517,
+    "update_interval": 9
   },
   "map_name": "FORREST",
   "map_radius": 9708.0,
