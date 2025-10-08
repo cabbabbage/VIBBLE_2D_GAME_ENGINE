@@ -413,14 +413,6 @@ void SceneRenderer::render() {
     if (!low_quality_mode_ && z_light_pass_) {
         z_light_pass_->render(debugging);
     }
-    if (assets_) assets_->render_overlays(renderer_);
-
-    if (debug_render_areas) {
-        for (const auto& request : area_requests) {
-            if (!request.asset) continue;
-            render_asset_debug_areas(renderer_, camera_state, *request.asset, request.asset_screen_height, player_screen_height);
-        }
-    }
 
     // Compute light rays from the fully drawn scene_target_tex_
     if (!low_quality_mode_ && light_rays_pass_ && scene_target_tex_) {
@@ -453,5 +445,18 @@ void SceneRenderer::render() {
         SDL_SetTextureAlphaMod(scene_target_tex_, 255);
         SDL_Rect dst{ 0, 0, screen_width_, screen_height_ };
         SDL_RenderCopy(renderer_, scene_target_tex_, nullptr, &dst);
+    }
+
+    // Draw development overlays after presenting the scene so they don't
+    // influence post-processing like light rays.
+    SDL_SetRenderTarget(renderer_, nullptr);
+    SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND);
+    if (assets_) assets_->render_overlays(renderer_);
+
+    if (debug_render_areas) {
+        for (const auto& request : area_requests) {
+            if (!request.asset) continue;
+            render_asset_debug_areas(renderer_, camera_state, *request.asset, request.asset_screen_height, player_screen_height);
+        }
     }
 }
