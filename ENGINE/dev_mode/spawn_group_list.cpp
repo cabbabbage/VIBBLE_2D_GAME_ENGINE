@@ -2,8 +2,12 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cctype>
+#include <filesystem>
+#include <fstream>
 #include <iomanip>
 #include <numeric>
+#include <set>
 #include <sstream>
 #include <unordered_set>
 #include <utility>
@@ -20,6 +24,63 @@
 using nlohmann::json;
 
 namespace {
+
+struct CandidateAssetRecord {
+    std::string name;
+    std::vector<std::string> tags;
+};
+
+struct CandidateAssetCache {
+    bool loaded = false;
+    std::vector<CandidateAssetRecord> assets;
+    std::vector<std::string> tags;
+};
+
+static CandidateAssetCache& candidate_asset_cache() {
+    static CandidateAssetCache cache;
+    if (cache.loaded) {
+        return cache;
+    }
+    namespace fs = std::filesystem;
+    cache.assets.clear();
+    cache.tags.clear();
+    std::set<std::string> tagset;
+    fs::path src("SRC");
+    if (fs::exists(src) && fs::is_directory(src)) {
+        for (auto& entry : fs::directory_iterator(src)) {
+            if (!entry.is_directory()) continue;
+            fs::path info_path = entry.path() / "info.json";
+            if (!fs::exists(info_path)) continue;
+            try {
+                std::ifstream f(info_path);
+                if (!f) continue;
+                nlohmann::json j; f >> j;
+                CandidateAssetRecord record;
+                record.name = j.value("asset_name", entry.path().filename().string());
+                if (j.contains("tags") && j["tags"].is_array()) {
+                    for (const auto& t : j["tags"]) {
+                        if (!t.is_string()) continue;
+                        std::string tag = t.get<std::string>();
+                        record.tags.push_back(tag);
+                        tagset.insert(tag);
+                    }
+                }
+                cache.assets.push_back(std::move(record));
+            } catch (...) {}
+        }
+    }
+    std::sort(cache.assets.begin(), cache.assets.end(), [](const auto& a, const auto& b) {
+        return a.name < b.name;
+    });
+    cache.tags.assign(tagset.begin(), tagset.end());
+    cache.loaded = true;
+    return cache;
+}
+
+static std::string lower_copy(std::string s) {
+    for (auto& c : s) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    return s;
+}
 
 class SpacerWidget : public Widget {
 public:
@@ -229,7 +290,54 @@ private:
         CandidateList& list_;
     };
 
+    class SearchTextBoxWidget : public Widget {
+    public:
+        SearchTextBoxWidget(CandidateList& list, DMTextBox* box)
+            : list_(list), box_(box) {}
+
+        void set_box(DMTextBox* box) { box_ = box; }
+
+        void set_rect(const SDL_Rect& r) override {
+            if (box_) box_->set_rect(r);
+            rect_ = box_ ? box_->rect() : SDL_Rect{r.x, r.y, r.w, r.h};
+        }
+
+        const SDL_Rect& rect() const override { return box_ ? box_->rect() : rect_; }
+
+        int height_for_width(int w) const override {
+            return box_ ? box_->preferred_height(w) : DMTextBox::height();
+        }
+
+        bool handle_event(const SDL_Event& e) override {
+            if (!box_) return false;
+            std::string before = box_->value();
+            bool used = box_->handle_event(e);
+            if (before != box_->value()) {
+                list_.on_search_query_changed();
+            }
+            return used;
+        }
+
+        void render(SDL_Renderer* r) const override {
+            if (box_) box_->render(r);
+        }
+
+        bool wants_full_row() const override { return true; }
+
+    private:
+        CandidateList& list_;
+        DMTextBox* box_ = nullptr;
+        SDL_Rect rect_{0, 0, 0, 0};
+    };
+
+    struct SearchResult {
+        std::string label;
+        bool is_tag = false;
+        bool is_null = false;
+    };
+
     void ensure_common_widgets();
+    void ensure_search_widgets();
     void clear_hover();
     void set_hover(int idx, bool inside);
     bool handle_scroll(int steps);
@@ -245,6 +353,11 @@ private:
     bool adjust_weight_internal(int idx, int steps);
     void set_scroll_focus(bool focus);
     bool scroll_focused() const { return scroll_focus_; }
+    void open_search();
+    void close_search();
+    bool refresh_search_results(bool force = false);
+    void on_search_query_changed();
+    void handle_search_selection(int index);
 
     SpawnGroupList& owner_;
     EntryRow& row_;
@@ -265,6 +378,15 @@ private:
     std::unique_ptr<DMButton> add_btn_;
     std::unique_ptr<ButtonWidget> add_w_;
     std::unique_ptr<CandidatePieWidget> pie_widget_;
+    std::unique_ptr<SpacerWidget> search_gap_;
+    std::unique_ptr<DMTextBox> search_box_;
+    std::unique_ptr<SearchTextBoxWidget> search_box_widget_;
+    std::unique_ptr<SectionLabelWidget> no_results_label_;
+    std::vector<SearchResult> search_results_;
+    std::vector<std::unique_ptr<DMButton>> search_buttons_;
+    std::vector<std::unique_ptr<ButtonWidget>> search_button_widgets_;
+    std::string last_search_query_;
+    bool search_open_ = false;
 };
 
 namespace {
@@ -280,6 +402,9 @@ static bool method_uses_range(const std::string& m) {
 SpawnGroupList::CandidateList::~CandidateList() {
     set_scroll_focus(false);
     DMWidgetsSetSliderScrollCapture(this, false);
+    if (search_box_ && search_box_->is_editing()) {
+        SDL_StopTextInput();
+    }
 }
 
 void SpawnGroupList::CandidateList::rebuild() {
@@ -329,12 +454,31 @@ void SpawnGroupList::CandidateList::ensure_common_widgets() {
         bottom_gap_ = std::make_unique<SpacerWidget>(DMSpacing::item_gap());
     if (!add_btn_ && row_.entry) {
         add_btn_ = std::make_unique<DMButton>("Add Candidate", &DMStyles::CreateButton(), 160, DMButton::height());
-        add_w_ = std::make_unique<ButtonWidget>(add_btn_.get(), [this]() { owner_.request_asset_search_open(row_, {}); });
+        add_w_ = std::make_unique<ButtonWidget>(add_btn_.get(), [this]() {
+            if (search_open_) {
+                close_search();
+            } else {
+                open_search();
+            }
+        });
     }
     if (!pie_widget_)
         pie_widget_ = std::make_unique<CandidatePieWidget>(*this);
     if (header_label_)
         header_label_->set_text("Candidates");
+}
+
+void SpawnGroupList::CandidateList::ensure_search_widgets() {
+    if (!search_gap_)
+        search_gap_ = std::make_unique<SpacerWidget>(DMSpacing::small_gap());
+    if (!search_box_)
+        search_box_ = std::make_unique<DMTextBox>("Search Assets", "");
+    if (!search_box_widget_)
+        search_box_widget_ = std::make_unique<SearchTextBoxWidget>(*this, search_box_.get());
+    else
+        search_box_widget_->set_box(search_box_.get());
+    if (!no_results_label_)
+        no_results_label_ = std::make_unique<SectionLabelWidget>("No matching assets", true);
 }
 
 void SpawnGroupList::CandidateList::append_rows(DockableCollapsible::Rows& out) {
@@ -346,9 +490,165 @@ void SpawnGroupList::CandidateList::append_rows(DockableCollapsible::Rows& out) 
     if (header_label_) header_row.push_back(header_label_.get());
     if (add_w_) header_row.push_back(add_w_.get());
     if (!header_row.empty()) out.push_back(header_row);
+    if (search_open_) {
+        ensure_search_widgets();
+        if (search_gap_) out.push_back({ search_gap_.get() });
+        if (search_box_widget_) out.push_back({ search_box_widget_.get() });
+        if (search_button_widgets_.empty() && no_results_label_) {
+            out.push_back({ no_results_label_.get() });
+        } else {
+            for (auto& w : search_button_widgets_) {
+                if (w) out.push_back({ w.get() });
+            }
+        }
+    }
     if (pie_widget_) out.push_back({ pie_widget_.get() });
     if (end_marker_) out.push_back({ end_marker_.get() });
     if (bottom_gap_) out.push_back({ bottom_gap_.get() });
+}
+
+void SpawnGroupList::CandidateList::open_search() {
+    ensure_common_widgets();
+    ensure_search_widgets();
+    if (search_box_) {
+        search_box_->set_value("");
+    }
+    last_search_query_.clear();
+    search_open_ = true;
+    refresh_search_results(true);
+    owner_.rebuild_layout();
+}
+
+void SpawnGroupList::CandidateList::close_search() {
+    if (!search_open_) return;
+    if (search_box_ && search_box_->is_editing()) {
+        SDL_StopTextInput();
+    }
+    search_open_ = false;
+    last_search_query_.clear();
+    search_results_.clear();
+    search_buttons_.clear();
+    search_button_widgets_.clear();
+    if (search_box_) {
+        search_box_->set_value("");
+    }
+    owner_.rebuild_layout();
+}
+
+bool SpawnGroupList::CandidateList::refresh_search_results(bool force) {
+    if (!search_open_) return false;
+    ensure_search_widgets();
+
+    std::vector<SearchResult> previous_results = search_results_;
+    std::string previous_query = last_search_query_;
+    std::string query = search_box_ ? search_box_->value() : std::string{};
+    if (!force && query == previous_query) {
+        return false;
+    }
+
+    last_search_query_ = query;
+    search_results_.clear();
+    search_buttons_.clear();
+    search_button_widgets_.clear();
+
+    const auto& cache = candidate_asset_cache();
+    std::string query_lc = lower_copy(query);
+    bool query_is_tag = !query.empty() && query.front() == '#';
+    std::string tag_query = query_is_tag ? query.substr(1) : query;
+    std::string tag_query_lc = lower_copy(tag_query);
+
+    auto contains_ci = [](const std::string& text, const std::string& needle_lc) {
+        if (needle_lc.empty()) return true;
+        std::string lowered = lower_copy(text);
+        return lowered.find(needle_lc) != std::string::npos;
+    };
+
+    search_results_.push_back(SearchResult{"null", false, true});
+
+    for (const auto& asset : cache.assets) {
+        bool match = false;
+        if (query_is_tag) {
+            if (tag_query_lc.empty()) {
+                match = true;
+            } else {
+                for (const auto& tag : asset.tags) {
+                    if (contains_ci(tag, tag_query_lc)) { match = true; break; }
+                }
+            }
+        } else {
+            match = contains_ci(asset.name, query_lc);
+            if (!match && !query_lc.empty()) {
+                for (const auto& tag : asset.tags) {
+                    if (contains_ci(tag, query_lc)) { match = true; break; }
+                }
+            }
+        }
+        if (match) {
+            search_results_.push_back(SearchResult{asset.name, false, false});
+        }
+    }
+
+    for (const auto& tag : cache.tags) {
+        bool match = query_is_tag ? contains_ci(tag, tag_query_lc) : contains_ci(tag, query_lc);
+        if (!match) continue;
+        search_results_.push_back(SearchResult{"#" + tag, true, false});
+    }
+
+    search_buttons_.reserve(search_results_.size());
+    search_button_widgets_.reserve(search_results_.size());
+    for (size_t i = 0; i < search_results_.size(); ++i) {
+        const auto& result = search_results_[i];
+        auto btn = std::make_unique<DMButton>(result.label, &DMStyles::ListButton(), 220, DMButton::height());
+        auto widget = std::make_unique<ButtonWidget>(btn.get(), [this, idx = static_cast<int>(i)]() {
+            this->handle_search_selection(idx);
+        });
+        search_buttons_.push_back(std::move(btn));
+        search_button_widgets_.push_back(std::move(widget));
+    }
+
+    if (no_results_label_) {
+        no_results_label_->set_text("No matching assets or tags");
+    }
+
+    bool changed = query != previous_query;
+    if (!changed) {
+        if (search_results_.size() != previous_results.size()) {
+            changed = true;
+        } else {
+            for (size_t i = 0; i < search_results_.size(); ++i) {
+                const auto& a = search_results_[i];
+                const auto& b = previous_results[i];
+                if (a.label != b.label || a.is_tag != b.is_tag || a.is_null != b.is_null) {
+                    changed = true;
+                    break;
+                }
+            }
+        }
+    }
+
+    return changed;
+}
+
+void SpawnGroupList::CandidateList::on_search_query_changed() {
+    if (!search_open_) return;
+    if (refresh_search_results(false)) {
+        owner_.rebuild_layout();
+    }
+}
+
+void SpawnGroupList::CandidateList::handle_search_selection(int index) {
+    if (index < 0 || index >= static_cast<int>(search_results_.size())) return;
+    const auto& result = search_results_[index];
+    if (result.is_tag) {
+        if (search_box_) {
+            search_box_->set_value(result.label);
+            on_search_query_changed();
+        }
+        return;
+    }
+    std::string asset_name = result.is_null ? std::string{"null"} : result.label;
+    close_search();
+    add_candidate(asset_name);
 }
 
 bool SpawnGroupList::CandidateList::sync_to_json() {
@@ -1481,8 +1781,6 @@ void SpawnGroupList::render_content(SDL_Renderer* r) const {
     SDL_Color inner = DMStyles::AccentButton().bg;
     inner.a = 40;
     accent.a = 200;
-    SDL_Color list_border = DMStyles::ListButton().border;
-    list_border.a = 220;
     SDL_Color separator = DMStyles::Border();
     separator.a = 255;
     for (const auto& row : rows_) {
@@ -1529,19 +1827,25 @@ void SpawnGroupList::render_content(SDL_Renderer* r) const {
             cand.w += 12;
             cand.h += 12;
             if (cand.w > 0 && cand.h > 0) {
-                SDL_Color cand_fill = DMStyles::ListButton().bg;
-                cand_fill.a = 28;
+                SDL_Color cand_fill = DMStyles::PanelBG();
+                cand_fill.a = 36;
                 SDL_SetRenderDrawColor(r, cand_fill.r, cand_fill.g, cand_fill.b, cand_fill.a);
                 SDL_RenderFillRect(r, &cand);
-                SDL_SetRenderDrawColor(r, list_border.r, list_border.g, list_border.b, list_border.a / 2);
+
+                SDL_Color outer{255, 255, 255, 235};
+                SDL_SetRenderDrawColor(r, outer.r, outer.g, outer.b, outer.a);
                 SDL_RenderDrawRect(r, &cand);
+
                 SDL_Rect cand_inner = cand;
                 cand_inner.x += 1;
                 cand_inner.y += 1;
-                cand_inner.w -= 2;
-                cand_inner.h -= 2;
-                SDL_SetRenderDrawColor(r, list_border.r, list_border.g, list_border.b, list_border.a);
-                SDL_RenderDrawRect(r, &cand_inner);
+                cand_inner.w = std::max(0, cand_inner.w - 2);
+                cand_inner.h = std::max(0, cand_inner.h - 2);
+                SDL_Color inner_white{255, 255, 255, 160};
+                if (cand_inner.w > 0 && cand_inner.h > 0) {
+                    SDL_SetRenderDrawColor(r, inner_white.r, inner_white.g, inner_white.b, inner_white.a);
+                    SDL_RenderDrawRect(r, &cand_inner);
+                }
             }
         }
 

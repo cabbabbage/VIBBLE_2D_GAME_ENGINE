@@ -603,9 +603,6 @@ bool DMSlider::handle_event(const SDL_Event& e) {
             return true;
         }
     } else if (e.type == SDL_MOUSEWHEEL) {
-        if (!focused_) {
-            return false;
-        }
         SDL_Point mouse{0, 0};
         if (SDL_GetMouseFocus() == nullptr) {
             set_focus(false);
@@ -615,6 +612,9 @@ bool DMSlider::handle_event(const SDL_Event& e) {
         update_hover(mouse);
         if (!hovered_) {
             return false;
+        }
+        if (!focused_) {
+            set_focus(true);
         }
         int delta = e.wheel.y;
         if (e.wheel.direction == SDL_MOUSEWHEEL_FLIPPED) {
@@ -1011,9 +1011,6 @@ bool DMRangeSlider::handle_event(const SDL_Event& e) {
             }
         }
     } else if (e.type == SDL_MOUSEWHEEL) {
-        if (!focused_) {
-            return false;
-        }
         SDL_Point mouse{0, 0};
         if (SDL_GetMouseFocus() == nullptr) {
             set_focus(false);
@@ -1023,6 +1020,9 @@ bool DMRangeSlider::handle_event(const SDL_Event& e) {
         update_hover(mouse);
         if (!hovered_) {
             return false;
+        }
+        if (!focused_) {
+            set_focus(true);
         }
         int delta = e.wheel.y;
         if (e.wheel.direction == SDL_MOUSEWHEEL_FLIPPED) {

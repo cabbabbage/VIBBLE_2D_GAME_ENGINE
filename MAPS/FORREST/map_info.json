@@ -14,15 +14,15 @@
       {
         "candidates": [
           {
-            "chance": 94,
+            "chance": 103,
             "name": "null"
           },
           {
-            "chance": 68,
+            "chance": 75,
             "name": "Grass_FPS_2"
           },
           {
-            "chance": 66,
+            "chance": 73,
             "name": "Grass_1_FPS_2"
           },
           {
@@ -30,7 +30,7 @@
             "name": "Small_Rock"
           },
           {
-            "chance": 50,
+            "chance": 55,
             "name": "fog"
           },
           {
@@ -46,7 +46,7 @@
             "name": "Frog"
           },
           {
-            "chance": 72,
+            "chance": 88,
             "name": "Axe"
           }
         ],
