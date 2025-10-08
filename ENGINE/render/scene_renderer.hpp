@@ -14,8 +14,6 @@
 class Assets;
 class Asset;
 class RenderAsset;
-class GaussianBlurHelper;
-
 class SceneRenderer {
 public:
     SceneRenderer(SDL_Renderer* renderer,
@@ -38,8 +36,6 @@ public:
 private:
     void recreate_fullscreen_light_texture();
     void resize_render_targets_if_needed();
-    void refresh_blur_helpers();
-    void apply_final_blur_pass();
     void update_shading_groups();
     bool shouldRegen(Asset* a);
 
@@ -75,13 +71,9 @@ private:
     // Full-screen light rays
     std::unique_ptr<LightRaysPass> light_rays_pass_;
     LightRaysParams light_rays_params_{};
+    int configured_downsample_log2_ = 2;
 
-    // Final blur
-    std::unique_ptr<GaussianBlurHelper> final_blur_helper_;
-    float final_blur_radius_ = 2.5f;
-    float final_blur_mix_ = 0.85f;
-    bool  final_blur_requested_ = true;
-    bool  final_blur_enabled_ = true;
+    bool  light_rays_enabled_ = true;
 
     // Misc
     bool low_quality_mode_ = false;

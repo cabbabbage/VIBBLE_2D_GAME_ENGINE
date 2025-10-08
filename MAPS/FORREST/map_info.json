@@ -16,8 +16,6 @@
     "downsample_log2": 4,
     "enabled": true,
     "exposure": 4.139999866485596,
-    "final_blur_mix": 0.49000000953674316,
-    "final_blur_radius": 1.0299999713897705,
     "gamma_comp": 1.5299999713897705,
     "metric": "MaxRGB",
     "min_luma_threshold": 0.3240000009536743,

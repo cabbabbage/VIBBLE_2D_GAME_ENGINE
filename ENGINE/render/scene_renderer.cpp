@@ -4,6 +4,7 @@
 #include "light_map.hpp"
 #include "render/camera.hpp"
 #include "render_area.hpp"
+#include "render/light_rays_config.hpp"
 #include <algorithm>
 #include <cmath>
 #include <iostream>
@@ -15,6 +16,7 @@
 #include <array>
 #include <memory>
 #include "light_rays.hpp"
+#include "render/RenderAsset.hpp"
 
 static constexpr SDL_Color SLATE_COLOR = {69, 101, 74, 255};
 static constexpr float MIN_VISIBLE_SCREEN_RATIO = 0.015f;
@@ -40,7 +42,7 @@ SceneRenderer::SceneRenderer(SDL_Renderer* renderer,
   main_light_source_(renderer, SDL_Point{ screen_width / 2, screen_height / 2 },
                      screen_width, SDL_Color{255, 255, 255, 255}, map_path),
   fullscreen_light_tex_(nullptr),
-  render_asset_(renderer, assets, assets->getView(), main_light_source_, assets->player)
+  render_asset_(std::make_unique<RenderAsset>(renderer, assets, assets->getView(), main_light_source_, assets->player))
 {
     low_quality_mode_ = assets_ && assets_->is_dev_mode();
 
@@ -66,17 +68,17 @@ SceneRenderer::SceneRenderer(SDL_Renderer* renderer,
 
     // Light rays pass on top
     light_rays_pass_ = std::make_unique<LightRaysPass>(renderer_, screen_width_, screen_height_);
-    LightRaysParams rays_params;
-    rays_params.min_luma_threshold = 0.80f;      // absolute floor
-    rays_params.bright_percentile  = 0.985f;     // top 1.5 percent
-    rays_params.samples            = 64;
-    rays_params.density            = 0.9f;
-    rays_params.decay              = 0.97f;
-    rays_params.weight             = 0.75f;
-    rays_params.exposure           = 1.1f;
-    rays_params.downsample_log2    = low_quality_mode_ ? 3 : 2; // 1/8 in dev, 1/4 otherwise
-    light_rays_pass_->set_params(rays_params);
-    light_rays_pass_->set_enabled(!low_quality_mode_);
+    LightRaysConfig defaults = LightRaysConfig::defaults();
+    light_rays_params_ = to_light_rays_params(defaults.per_light);
+    configured_downsample_log2_ = defaults.per_light.downsample_log2;
+    if (low_quality_mode_) {
+        light_rays_params_.downsample_log2 = std::max(configured_downsample_log2_, 3);
+    } else {
+        light_rays_params_.downsample_log2 = configured_downsample_log2_;
+    }
+    light_rays_enabled_ = defaults.enabled && defaults.per_light_enabled;
+    light_rays_pass_->set_params(light_rays_params_);
+    light_rays_pass_->set_enabled(light_rays_enabled_ && !low_quality_mode_);
 }
 
 SceneRenderer::~SceneRenderer() {
@@ -152,7 +154,13 @@ SDL_Renderer* SceneRenderer::get_renderer() const {
 
 void SceneRenderer::set_low_quality_rendering(bool low_quality) {
     low_quality_mode_ = low_quality;
-    if (light_rays_pass_) light_rays_pass_->set_enabled(!low_quality_mode_);
+    if (light_rays_pass_) {
+        light_rays_params_.downsample_log2 = low_quality_mode_
+            ? std::max(configured_downsample_log2_, 3)
+            : configured_downsample_log2_;
+        light_rays_pass_->set_params(light_rays_params_);
+        light_rays_pass_->set_enabled(light_rays_enabled_ && !low_quality_mode_);
+    }
 }
 
 void SceneRenderer::apply_map_light_config(const nlohmann::json& data) {
@@ -166,6 +174,22 @@ void SceneRenderer::apply_map_light_config(const nlohmann::json& data) {
     SDL_SetRenderDrawColor(renderer_, color.r, color.g, color.b, color.a);
     SDL_RenderClear(renderer_);
     SDL_SetRenderTarget(renderer_, prev);
+}
+
+void SceneRenderer::apply_light_rays_config(const nlohmann::json& data) {
+    LightRaysConfig config = LightRaysConfig::from_json(data);
+    configured_downsample_log2_ = config.per_light.downsample_log2;
+    light_rays_params_ = to_light_rays_params(config.per_light);
+    if (low_quality_mode_) {
+        light_rays_params_.downsample_log2 = std::max(configured_downsample_log2_, 3);
+    } else {
+        light_rays_params_.downsample_log2 = configured_downsample_log2_;
+    }
+    light_rays_enabled_ = config.enabled && config.per_light_enabled;
+    if (light_rays_pass_) {
+        light_rays_pass_->set_params(light_rays_params_);
+        light_rays_pass_->set_enabled(light_rays_enabled_ && !low_quality_mode_);
+    }
 }
 
 void SceneRenderer::update_shading_groups() {
@@ -297,7 +321,7 @@ void SceneRenderer::render() {
         SDL_Texture* final_tex = a->get_final_texture();
         if (shouldRegen(a)) {
             SDL_Texture* previous_final = final_tex;
-            final_tex = render_asset_.regenerateFinalTexture(a);
+            final_tex = render_asset_->regenerateFinalTexture(a);
             if (!final_tex) {
                 final_tex = previous_final;
             } else if (final_tex != previous_final) {

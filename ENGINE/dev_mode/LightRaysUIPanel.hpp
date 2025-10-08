@@ -57,11 +57,9 @@ private:
 
     bool needs_sync_ = false;
 
-    std::unique_ptr<DMCheckbox> enabled_checkbox_;
+    std::unique_ptr<DMCheckbox> rays_enabled_checkbox_;
     std::unique_ptr<DMCheckbox> per_light_checkbox_;
     std::unique_ptr<DMCheckbox> use_alpha_checkbox_;
-    std::unique_ptr<DMSlider> final_blur_radius_slider_;
-    std::unique_ptr<DMSlider> final_blur_mix_slider_;
     std::unique_ptr<DMDropdown> metric_dropdown_;
     std::unique_ptr<DMSlider> gamma_comp_slider_;
     std::unique_ptr<DMSlider> min_luma_slider_;

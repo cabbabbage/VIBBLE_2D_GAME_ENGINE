@@ -13,6 +13,7 @@
 #include "dev_mode/dm_styles.hpp"
 #include "dev_mode/widgets.hpp"
 #include "render/light_rays.hpp"
+#include "render/light_rays_config.hpp"
 #include "utils/input.hpp"
 
 #include <nlohmann/json.hpp>
@@ -20,12 +21,6 @@
 using nlohmann::json;
 
 namespace {
-constexpr int kFloatScale = 100;
-constexpr int kFinalBlurRadiusMin = 0;
-constexpr int kFinalBlurRadiusMax = 1000;   // 0.00 .. 10.00
-constexpr int kFinalBlurMixMin = 0;
-constexpr int kFinalBlurMixMax = 100;        // 0.00 .. 1.00
-
 constexpr int kGammaScale = 100;             // 0.01 steps
 constexpr int kGammaMin = 10;                // 0.10
 constexpr int kGammaMax = 400;               // 4.00
@@ -200,19 +195,9 @@ void LightRaysUIPanel::build_ui() {
         metric_options.emplace_back(name);
     }
 
-    enabled_checkbox_ = std::make_unique<DMCheckbox>("Enable Final Blur", defaults.final_blur_enabled);
-    per_light_checkbox_ = std::make_unique<DMCheckbox>("Enable Light Rays", defaults.per_light_enabled);
+    rays_enabled_checkbox_ = std::make_unique<DMCheckbox>("Enable Light Rays", defaults.enabled);
+    per_light_checkbox_ = std::make_unique<DMCheckbox>("Enable Per-Light Rays", defaults.per_light_enabled);
     use_alpha_checkbox_ = std::make_unique<DMCheckbox>("Use Alpha In Mask", defaults.per_light.use_alpha_in_mask);
-
-    final_blur_radius_slider_ = std::make_unique<DMSlider>(
-        "Blur Radius", kFinalBlurRadiusMin, kFinalBlurRadiusMax,
-        double_to_slider_units(defaults.final_blur_radius, kFloatScale, kFinalBlurRadiusMin, kFinalBlurRadiusMax));
-    configure_float_slider(final_blur_radius_slider_.get(), kFloatScale, 2);
-
-    final_blur_mix_slider_ = std::make_unique<DMSlider>(
-        "Blur Mix", kFinalBlurMixMin, kFinalBlurMixMax,
-        double_to_slider_units(defaults.final_blur_mix, kFloatScale, kFinalBlurMixMin, kFinalBlurMixMax));
-    configure_float_slider(final_blur_mix_slider_.get(), kFloatScale, 2);
 
     metric_dropdown_ = std::make_unique<DMDropdown>(
         "Brightness Metric", metric_options, metric_to_index(defaults.per_light.metric));
@@ -276,10 +261,7 @@ void LightRaysUIPanel::build_ui() {
     status_label_->set_color(SDL_Color{255, 120, 120, 255});
     rows.push_back({ add_widget(std::move(status)) });
 
-    rows.push_back({ add_widget(std::make_unique<CheckboxWidget>(enabled_checkbox_.get())) });
-    rows.push_back({ add_widget(std::make_unique<SliderWidget>(final_blur_radius_slider_.get())) });
-    rows.push_back({ add_widget(std::make_unique<SliderWidget>(final_blur_mix_slider_.get())) });
-
+    rows.push_back({ add_widget(std::make_unique<CheckboxWidget>(rays_enabled_checkbox_.get())) });
     rows.push_back({ add_widget(std::make_unique<CheckboxWidget>(per_light_checkbox_.get())) });
     rows.push_back({ add_widget(std::make_unique<DropdownWidget>(metric_dropdown_.get())) });
     rows.push_back({ add_widget(std::make_unique<CheckboxWidget>(use_alpha_checkbox_.get())) });
@@ -341,24 +323,14 @@ void LightRaysUIPanel::sync_ui_from_json() {
         }
     }
 
-    if (enabled_checkbox_) {
-        enabled_checkbox_->set_value(config.final_blur_enabled);
+    if (rays_enabled_checkbox_) {
+        rays_enabled_checkbox_->set_value(config.enabled);
     }
     if (per_light_checkbox_) {
         per_light_checkbox_->set_value(config.per_light_enabled);
     }
     if (use_alpha_checkbox_) {
         use_alpha_checkbox_->set_value(config.per_light.use_alpha_in_mask);
-    }
-    if (final_blur_radius_slider_) {
-        int units = double_to_slider_units(config.final_blur_radius,
-                                           kFloatScale, kFinalBlurRadiusMin, kFinalBlurRadiusMax);
-        final_blur_radius_slider_->set_value(units);
-    }
-    if (final_blur_mix_slider_) {
-        int units = double_to_slider_units(config.final_blur_mix,
-                                           kFloatScale, kFinalBlurMixMin, kFinalBlurMixMax);
-        final_blur_mix_slider_->set_value(units);
     }
     if (metric_dropdown_) {
         metric_dropdown_->set_selected(metric_to_index(config.per_light.metric));
@@ -407,22 +379,14 @@ void LightRaysUIPanel::sync_json_from_ui() {
 
     LightRaysConfig config = default_light_rays_config();
 
-    if (enabled_checkbox_) {
-        config.final_blur_enabled = enabled_checkbox_->value();
+    if (rays_enabled_checkbox_) {
+        config.enabled = rays_enabled_checkbox_->value();
     }
     if (per_light_checkbox_) {
         config.per_light_enabled = per_light_checkbox_->value();
     }
     if (use_alpha_checkbox_) {
         config.per_light.use_alpha_in_mask = use_alpha_checkbox_->value();
-    }
-    if (final_blur_radius_slider_) {
-        config.final_blur_radius = static_cast<float>(
-            slider_units_to_double(final_blur_radius_slider_->value(), kFloatScale));
-    }
-    if (final_blur_mix_slider_) {
-        config.final_blur_mix = static_cast<float>(
-            slider_units_to_double(final_blur_mix_slider_->value(), kFloatScale));
     }
     if (metric_dropdown_) {
         config.per_light.metric = index_to_metric(metric_dropdown_->selected());
@@ -479,7 +443,7 @@ void LightRaysUIPanel::update_save_status(bool success) const {
     if (!status_label_) {
         return;
     }
-    const std::string failure_message = "Failed to save blur settings. Check logs.";
+    const std::string failure_message = "Failed to save light ray settings. Check logs.";
     if (success) {
         if (!status_text_.empty()) {
             status_text_.clear();

@@ -9,6 +9,7 @@
 #include "dev_mode/dev_controls.hpp"
 #include "render/scene_renderer.hpp"
 #include "render/light_rays.hpp"
+#include "render/light_rays_config.hpp"
 #include "map_generation/room.hpp"
 #include "utils/area.hpp"
 #include "utils/input.hpp"
