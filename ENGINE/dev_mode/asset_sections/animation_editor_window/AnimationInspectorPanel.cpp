@@ -23,11 +23,15 @@ namespace animation_editor {
 
 namespace {
 
+constexpr int kInspectorPadding   = 16;
+constexpr int kInspectorItemGap   = 8;
+constexpr int kInspectorSectionGap = 16;
+
 constexpr int kPreviewHeight = 148;
 constexpr int kSourceHeight = 200;
-constexpr int kPlaybackHeight = 320;
-constexpr int kMovementHeight = 132;
-constexpr int kOnEndHeight = 108;
+constexpr int kPlaybackHeight = 288;
+constexpr int kMovementHeight = 120;
+constexpr int kOnEndHeight = 96;
 constexpr int kAudioHeight = 132;
 constexpr int kHeaderButtonWidth = 160;
 
@@ -158,19 +162,19 @@ void AnimationInspectorPanel::set_audio_file_picker(AudioFilePicker picker) {
 }
 
 int AnimationInspectorPanel::height_for_width(int /*width*/) const {
-    const int padding = DMSpacing::panel_padding();
-    const int gap = DMSpacing::section_gap();
+    const int padding = kInspectorPadding;
+    const int gap = kInspectorSectionGap;
     const int header_height = std::max(DMTextBox::height(), DMButton::height());
     const int toggle_height = DMButton::height();
 
     int total = padding;  // top padding
     total += header_height;
-    total += gap;
+    total += kInspectorItemGap;
     total += kPreviewHeight;
     total += gap;
     total += toggle_height;
     if (!source_collapsed_) {
-        total += DMSpacing::item_gap();
+        total += kInspectorItemGap;
         total += kSourceHeight;
     }
     total += gap;
@@ -230,7 +234,7 @@ void AnimationInspectorPanel::render(SDL_Renderer* renderer) const {
     if (is_start_animation_) {
         const DMLabelStyle& style = DMStyles::Label();
         SDL_Color accent = DMStyles::AccentButton().text;
-        render_label(renderer, "Start Animation", header_rect_.x + DMSpacing::panel_padding(),
+        render_label(renderer, "Start Animation", header_rect_.x + kInspectorPadding,
                      header_rect_.y + header_rect_.h - style.font_size - DMSpacing::small_gap(), accent);
     }
 
@@ -246,7 +250,7 @@ void AnimationInspectorPanel::render(SDL_Renderer* renderer) const {
             int tex_w = 0;
             int tex_h = 0;
             SDL_QueryTexture(texture, nullptr, nullptr, &tex_w, &tex_h);
-            const int padding = DMSpacing::panel_padding();
+            const int padding = kInspectorPadding;
             int avail_w = std::max(1, preview_rect_.w - padding * 2);
             int avail_h = std::max(1, preview_rect_.h - padding * 2);
             float scale = std::min(avail_w / static_cast<float>(tex_w), avail_h / static_cast<float>(tex_h));
@@ -443,9 +447,9 @@ void AnimationInspectorPanel::layout_widgets() const {
     auto* self = const_cast<AnimationInspectorPanel*>(this);
     self->layout_dirty_ = false;
 
-    const int padding = DMSpacing::panel_padding();
-    const int gap = DMSpacing::section_gap();
-    const int item_gap = DMSpacing::item_gap();
+    const int padding = kInspectorPadding;
+    const int gap = kInspectorSectionGap;
+    const int item_gap = kInspectorItemGap;
     const int width = std::max(0, bounds_.w - padding * 2);
     int x = bounds_.x + padding;
     int y = bounds_.y + padding;

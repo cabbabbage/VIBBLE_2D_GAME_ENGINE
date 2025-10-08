@@ -191,6 +191,7 @@ class SpawnGroupList::CandidateList {
 public:
     CandidateList(SpawnGroupList& owner, EntryRow& row)
         : owner_(owner), row_(row) {}
+    ~CandidateList();
 
     void rebuild();
     void append_rows(DockableCollapsible::Rows& out);
@@ -242,6 +243,8 @@ private:
     bool has_hover() const { return hover_active_ && hover_index_ >= 0 && hover_index_ < static_cast<int>(candidates_.size()); }
     int hovered_index() const { return has_hover() ? hover_index_ : -1; }
     bool adjust_weight_internal(int idx, int steps);
+    void set_scroll_focus(bool focus);
+    bool scroll_focused() const { return scroll_focus_; }
 
     SpawnGroupList& owner_;
     EntryRow& row_;
@@ -250,6 +253,7 @@ private:
     int hover_index_ = -1;
     bool hover_active_ = false;
     bool dirty_ = false;
+    bool scroll_focus_ = false;
 
     std::unique_ptr<SpacerWidget> top_gap_;
     std::unique_ptr<RowRectMarkerWidget> begin_marker_;
@@ -271,11 +275,16 @@ static bool method_uses_range(const std::string& m) {
 }
 }  // namespace
 
+SpawnGroupList::CandidateList::~CandidateList() {
+    DMWidgetsSetSliderScrollCapture(this, false);
+}
+
 void SpawnGroupList::CandidateList::rebuild() {
     candidates_.clear();
     hover_index_ = -1;
     hover_active_ = false;
     dirty_ = false;
+    set_scroll_focus(false);
     total_weight_ = 0.0;
     if (!row_.entry) return;
     auto& entry = *row_.entry;
@@ -398,9 +407,18 @@ bool SpawnGroupList::CandidateList::sync_to_json() {
     return true;
 }
 
+void SpawnGroupList::CandidateList::set_scroll_focus(bool focus) {
+    if (scroll_focus_ == focus) {
+        return;
+    }
+    scroll_focus_ = focus;
+    DMWidgetsSetSliderScrollCapture(this, scroll_focus_);
+}
+
 void SpawnGroupList::CandidateList::clear_hover() {
     hover_index_ = -1;
     hover_active_ = false;
+    set_scroll_focus(false);
 }
 
 void SpawnGroupList::CandidateList::set_hover(int idx, bool inside) {
@@ -417,7 +435,7 @@ void SpawnGroupList::CandidateList::set_hover(int idx, bool inside) {
 }
 
 bool SpawnGroupList::CandidateList::handle_scroll(int steps) {
-    if (!has_hover() || steps == 0) return false;
+    if (!scroll_focus_ || !has_hover() || steps == 0) return false;
     return adjust_weight_internal(hover_index_, steps);
 }
 
@@ -675,13 +693,19 @@ bool SpawnGroupList::CandidateList::CandidatePieWidget::handle_event(const SDL_E
     case SDL_MOUSEBUTTONDOWN: {
         bool inside = e.button.x >= rect_.x && e.button.x < rect_.x + rect_.w &&
                       e.button.y >= rect_.y && e.button.y < rect_.y + rect_.h;
-        if (!inside) return false;
-        int idx = index_for_point(e.button.x, e.button.y);
-        list_.set_hover(idx, true);
-        if (e.button.button == SDL_BUTTON_LEFT && e.button.clicks >= 2) {
-            return list_.remove_hovered();
+        int idx = inside ? index_for_point(e.button.x, e.button.y) : -1;
+        list_.set_hover(idx, inside);
+        if (e.button.button == SDL_BUTTON_LEFT) {
+            if (inside && idx >= 0) {
+                list_.set_scroll_focus(true);
+                if (e.button.clicks >= 2) {
+                    return list_.remove_hovered();
+                }
+                return true;
+            }
+            list_.set_scroll_focus(false);
         }
-        return true;
+        return inside;
     }
     case SDL_MOUSEWHEEL: {
         int mouse_x = 0;
@@ -694,16 +718,17 @@ bool SpawnGroupList::CandidateList::CandidatePieWidget::handle_event(const SDL_E
             list_.set_hover(idx, true);
         }
         bool has_hover = list_.has_hover();
+        bool focused = list_.scroll_focused();
         int steps = e.wheel.y;
 #if SDL_VERSION_ATLEAST(2,0,18)
         if (e.wheel.direction == SDL_MOUSEWHEEL_FLIPPED) steps = -steps;
 #endif
-        if (steps != 0 && has_hover) {
+        if (steps != 0 && has_hover && focused) {
             if (list_.handle_scroll(steps)) {
                 return true;
             }
         }
-        if (inside || has_hover) {
+        if (focused || inside || has_hover) {
             return true;
         }
         break;

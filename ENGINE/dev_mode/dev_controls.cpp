@@ -85,6 +85,7 @@ void DevControls::RoomAreaCache::invalidate() {
     dirty_ = true;
 }
 
+
 const DevControls::RoomAreaCache::PolygonList&
 DevControls::RoomAreaCache::ensure_from_json(const nlohmann::json* root) {
     if (root != last_source_) {
@@ -93,10 +94,8 @@ DevControls::RoomAreaCache::ensure_from_json(const nlohmann::json* root) {
     if (!dirty_) {
         return cached_;
     }
-
     cached_.clear();
     last_source_ = root;
-
     if (root) {
         try {
             if (root->contains("areas") && (*root)["areas"].is_array()) {
@@ -109,6 +108,11 @@ DevControls::RoomAreaCache::ensure_from_json(const nlohmann::json* root) {
                     const std::string type = item.contains("type") && item["type"].is_string()
                                                  ? item["type"].get<std::string>()
                                                  : std::string{};
+                    RoomAreaSerialization::Kind kind =
+                            RoomAreaSerialization::infer_kind_from_entry(item, type, name);
+                    if (!RoomAreaSerialization::is_supported_kind(kind)) {
+                        continue;
+                    }
                     const auto& pts = item.contains("points") ? item["points"] : nlohmann::json();
                     if (!pts.is_array() || pts.size() < 3) continue;
                     int ax = 0;
@@ -129,6 +133,7 @@ DevControls::RoomAreaCache::ensure_from_json(const nlohmann::json* root) {
                         Polygon entry;
                         entry.name = name;
                         entry.type = !type.empty() ? type : name;
+                        entry.type = !type.empty() ? type : RoomAreaSerialization::to_string(kind);
                         entry.points = std::move(poly);
                         entry.anchor = SDL_Point{ ax, ay };
                         cached_.push_back(std::move(entry));
@@ -139,7 +144,6 @@ DevControls::RoomAreaCache::ensure_from_json(const nlohmann::json* root) {
             cached_.clear();
         }
     }
-
     dirty_ = false;
     ++generation_;
     if (listener_) {

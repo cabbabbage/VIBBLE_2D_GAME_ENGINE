@@ -16,6 +16,9 @@
 
 namespace {
 
+constexpr int kPanelPadding = 16;
+constexpr int kItemGap = 8;
+
 bool parse_bool_value(const nlohmann::json& value, bool fallback) {
     if (value.is_boolean()) {
         return value.get<bool>();
@@ -185,8 +188,8 @@ void PlaybackSettingsPanel::layout_widgets() const {
         return;
     }
 
-    const int padding = DMSpacing::panel_padding();
-    const int gap = DMSpacing::item_gap();
+    const int padding = kPanelPadding;
+    const int gap = kItemGap;
     const int width = std::max(0, bounds_.w - padding * 2);
     int x = bounds_.x + padding;
     int y = bounds_.y + padding;

@@ -18,6 +18,9 @@ namespace animation_editor {
 
 namespace {
 
+constexpr int kPanelPadding = 16;
+constexpr int kItemGap = 8;
+
 void render_label(SDL_Renderer* renderer, const std::string& text, int x, int y, int max_width = -1,
                   SDL_Color color = DMStyles::Label().color) {
     if (!renderer || text.empty()) return;
@@ -112,8 +115,8 @@ void AudioPanel::ensure_widgets() {
 void AudioPanel::layout_widgets() const {
     if (!layout_dirty_) return;
     layout_dirty_ = false;
-    const int padding = DMSpacing::panel_padding();
-    const int gap = DMSpacing::item_gap();
+    const int padding = kPanelPadding;
+    const int gap = kItemGap;
     const int content_x = bounds_.x + padding;
     const int content_w = std::max(0, bounds_.w - padding * 2);
     int cursor_y = bounds_.y + padding + label_height() + DMSpacing::small_gap();
@@ -179,7 +182,7 @@ void AudioPanel::render(SDL_Renderer* renderer) const {
     SDL_SetRenderDrawColor(renderer, border.r, border.g, border.b, border.a);
     SDL_RenderDrawRect(renderer, &bounds_);
 
-    int padding = DMSpacing::panel_padding();
+    int padding = kPanelPadding;
     int max_label_width = std::max(0, bounds_.w - padding * 2);
     int label_y = bounds_.y + padding;
     render_label(renderer, "Audio", bounds_.x + padding, label_y);

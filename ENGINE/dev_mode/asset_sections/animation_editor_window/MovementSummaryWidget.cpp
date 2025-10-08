@@ -19,6 +19,7 @@ namespace {
 
 const int kButtonHeight = DMButton::height();
 const int kButtonWidth = 160;
+const int kPanelPadding = 16;
 
 void render_summary_label(SDL_Renderer* renderer, const std::string& text, int x, int y, SDL_Color color) {
     if (!renderer || text.empty()) {
@@ -85,7 +86,7 @@ void MovementSummaryWidget::set_animation_id(const std::string& animation_id) {
 void MovementSummaryWidget::set_bounds(const SDL_Rect& bounds) {
     bounds_ = bounds;
 
-    const int padding = DMSpacing::panel_padding();
+    const int padding = kPanelPadding;
     const int width = std::max(kButtonWidth, std::min(bounds_.w - padding * 2, kButtonWidth));
     const int x = bounds_.x + bounds_.w - padding - width;
     const int y = bounds_.y + bounds_.h - padding - kButtonHeight;
@@ -122,14 +123,14 @@ void MovementSummaryWidget::render(SDL_Renderer* renderer) const {
     SDL_SetRenderDrawColor(renderer, border.r, border.g, border.b, border.a);
     SDL_RenderDrawRect(renderer, &bounds_);
 
-    const int padding = DMSpacing::panel_padding();
+    const int padding = kPanelPadding;
     int text_x = bounds_.x + padding;
     int text_y = bounds_.y + padding;
 
     const SDL_Color text_color = DMStyles::Label().color;
     render_summary_label(renderer, "Total ΔX: " + std::to_string(static_cast<int>(std::lround(total_dx_))), text_x, text_y,
                          text_color);
-    text_y += 24;
+    text_y += DMStyles::Label().font_size + DMSpacing::small_gap();
     render_summary_label(renderer, "Total ΔY: " + std::to_string(static_cast<int>(std::lround(total_dy_))), text_x, text_y,
                          text_color);
 

@@ -50,6 +50,10 @@ bool DMWidgetsSliderScrollCaptured() {
     return slider_scroll_captured();
 }
 
+void DMWidgetsSetSliderScrollCapture(const void* owner, bool capture) {
+    set_slider_scroll_capture(owner, capture);
+}
+
 DMButton::DMButton(const std::string& text, const DMButtonStyle* style, int w, int h)
     : rect_{0,0,w,h}, text_(text), style_(style) {
     update_preferred_width();

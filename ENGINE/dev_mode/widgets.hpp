@@ -10,6 +10,7 @@
 #include "dm_styles.hpp"
 
 bool DMWidgetsSliderScrollCaptured();
+void DMWidgetsSetSliderScrollCapture(const void* owner, bool capture);
 
 class DMButton {
 public:

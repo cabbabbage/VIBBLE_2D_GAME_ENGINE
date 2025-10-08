@@ -908,9 +908,19 @@ void RoomConfigurator::rebuild_rows() {
 }
 
 void RoomConfigurator::update(const Input& input, int screen_w, int screen_h) {
-    if (is_visible()) {
+    const bool panel_visible = is_visible();
+    if (panel_visible) {
         apply_bounds_if_needed();
         DockableCollapsible::update(input, screen_w, screen_h);
+    }
+
+    if (spawn_list_) {
+        spawn_list_->set_visible(panel_visible);
+        spawn_list_->set_screen_dimensions(screen_w, screen_h);
+        SDL_Rect panel_rect = rect();
+        SDL_Point anchor{panel_rect.x + panel_rect.w + DMSpacing::item_gap(), panel_rect.y};
+        spawn_list_->set_anchor(anchor.x, anchor.y);
+        spawn_list_->update(input, screen_w, screen_h);
     }
 
     bool changed = false;
@@ -1127,6 +1137,9 @@ bool RoomConfigurator::handle_event(const SDL_Event& e) {
                 floating_position_ = after;
             }
         }
+    }
+    if (spawn_list_ && spawn_list_->handle_event(e)) {
+        used = true;
     }
     return used;
 }

@@ -11,6 +11,8 @@
 
 namespace {
 
+constexpr int kPanelPadding = 16;
+
 std::string payload_signature(const std::optional<std::string>& payload) {
     if (!payload.has_value()) {
         return {};
@@ -161,9 +163,9 @@ void OnEndSelector::layout_dropdown() const {
     auto* self = const_cast<OnEndSelector*>(this);
     self->layout_dirty_ = false;
 
-    const int padding = DMSpacing::panel_padding();
-    const int width = std::max(0, bounds_.w - padding * 2);
-    SDL_Rect rect{bounds_.x + padding, bounds_.y + padding, width, std::max(0, bounds_.h - padding * 2)};
+    const int width = std::max(0, bounds_.w - kPanelPadding * 2);
+    SDL_Rect rect{bounds_.x + kPanelPadding, bounds_.y + kPanelPadding, width,
+                  std::max(0, bounds_.h - kPanelPadding * 2)};
     dropdown_->set_rect(rect);
 }
 
