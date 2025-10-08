@@ -132,7 +132,6 @@ DevControls::RoomAreaCache::ensure_from_json(const nlohmann::json* root) {
                     if (poly.size() >= 3) {
                         Polygon entry;
                         entry.name = name;
-                        entry.type = !type.empty() ? type : name;
                         entry.type = !type.empty() ? type : RoomAreaSerialization::to_string(kind);
                         entry.points = std::move(poly);
                         entry.anchor = SDL_Point{ ax, ay };

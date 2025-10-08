@@ -234,8 +234,6 @@
             "y": 4696
           },
           "name": "trigger_area",
-          "origional_height": 2896,
-          "origional_width": 2897,
           "points": [
             {
               "x": -12621,
@@ -254,25 +252,8 @@
               "y": -3690
             }
           ],
-          "relative_points": [
-            {
-              "dx": -12625,
-              "dy": -3500
-            },
-            {
-              "dx": -12454,
-              "dy": -3272
-            },
-            {
-              "dx": -12281,
-              "dy": -3563
-            },
-            {
-              "dx": -12459,
-              "dy": -3690
-            }
-          ],
-          "type": "trigger"
+          "type": "trigger",
+          "kind": "Trigger"
         },
         {
           "anchor": {
@@ -280,8 +261,6 @@
             "y": 4696
           },
           "name": "trigger_area_1",
-          "origional_height": 2896,
-          "origional_width": 2896,
           "points": [
             {
               "x": -12364,
@@ -296,21 +275,8 @@
               "y": -3808
             }
           ],
-          "relative_points": [
-            {
-              "dx": -12364,
-              "dy": -3577
-            },
-            {
-              "dx": -12076,
-              "dy": -3718
-            },
-            {
-              "dx": -12399,
-              "dy": -3808
-            }
-          ],
-          "type": "trigger"
+          "type": "trigger",
+          "kind": "Trigger"
         },
         {
           "anchor": {
@@ -318,8 +284,6 @@
             "y": 4696
           },
           "name": "trigger_area_2",
-          "origional_height": 2896,
-          "origional_width": 2896,
           "points": [
             {
               "x": -4553,
@@ -338,25 +302,8 @@
               "y": -1511
             }
           ],
-          "relative_points": [
-            {
-              "dx": -4553,
-              "dy": -2339
-            },
-            {
-              "dx": -5272,
-              "dy": -2382
-            },
-            {
-              "dx": -5811,
-              "dy": -1645
-            },
-            {
-              "dx": -4395,
-              "dy": -1511
-            }
-          ],
-          "type": "trigger"
+          "type": "trigger",
+          "kind": "Trigger"
         }
       ],
       "edge_smoothness": 101,
@@ -630,8 +577,6 @@
             "y": 7728
           },
           "name": "trigger_area",
-          "origional_height": 3612,
-          "origional_width": 3612,
           "points": [
             {
               "x": -5404,
@@ -650,25 +595,8 @@
               "y": -4677
             }
           ],
-          "relative_points": [
-            {
-              "dx": -5404,
-              "dy": -4626
-            },
-            {
-              "dx": -5045,
-              "dy": -4004
-            },
-            {
-              "dx": -5767,
-              "dy": -4029
-            },
-            {
-              "dx": -6001,
-              "dy": -4677
-            }
-          ],
-          "type": "trigger"
+          "type": "trigger",
+          "kind": "Trigger"
         },
         {
           "anchor": {
@@ -676,8 +604,6 @@
             "y": 7728
           },
           "name": "trigger_area_1",
-          "origional_height": 3612,
-          "origional_width": 3612,
           "points": [
             {
               "x": -5183,
@@ -692,21 +618,8 @@
               "y": -3894
             }
           ],
-          "relative_points": [
-            {
-              "dx": -5183,
-              "dy": -4755
-            },
-            {
-              "dx": -6336,
-              "dy": -3833
-            },
-            {
-              "dx": -5287,
-              "dy": -3894
-            }
-          ],
-          "type": "trigger"
+          "type": "trigger",
+          "kind": "Trigger"
         },
         {
           "anchor": {
@@ -714,8 +627,6 @@
             "y": 7728
           },
           "name": "trigger_area_2",
-          "origional_height": 3612,
-          "origional_width": 3612,
           "points": [
             {
               "x": -6408,
@@ -734,25 +645,8 @@
               "y": -5146
             }
           ],
-          "relative_points": [
-            {
-              "dx": -6408,
-              "dy": -3916
-            },
-            {
-              "dx": -7162,
-              "dy": -3986
-            },
-            {
-              "dx": -6651,
-              "dy": -4957
-            },
-            {
-              "dx": -6171,
-              "dy": -5146
-            }
-          ],
-          "type": "trigger"
+          "type": "trigger",
+          "kind": "Trigger"
         },
         {
           "anchor": {
@@ -760,8 +654,6 @@
             "y": 7728
           },
           "name": "trigger_area_3",
-          "origional_height": 3612,
-          "origional_width": 3612,
           "points": [
             {
               "x": -5508,
@@ -780,25 +672,8 @@
               "y": -4149
             }
           ],
-          "relative_points": [
-            {
-              "dx": -5508,
-              "dy": -4426
-            },
-            {
-              "dx": -5741,
-              "dy": -4320
-            },
-            {
-              "dx": -5655,
-              "dy": -4052
-            },
-            {
-              "dx": -5285,
-              "dy": -4149
-            }
-          ],
-          "type": "trigger"
+          "type": "trigger",
+          "kind": "Trigger"
         }
       ],
       "curvyness": 1,

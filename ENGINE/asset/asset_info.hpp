@@ -57,6 +57,7 @@ class AssetInfo {
     struct NamedArea {
         std::string name;
         std::string type;
+        std::string kind;
         std::unique_ptr<Area> area;
     };
     std::vector<NamedArea> areas;
@@ -111,7 +112,7 @@ class AssetInfo {
 	private:
     void load_base_properties(const nlohmann::json &data);
     void generate_lights(SDL_Renderer *renderer);
-    void load_areas(const nlohmann::json &data, float scale, int offset_x, int offset_y);
+    void load_areas(const nlohmann::json &data);
     void load_children(const nlohmann::json &data);
     nlohmann::json anims_json_;
     std::string dir_path_;

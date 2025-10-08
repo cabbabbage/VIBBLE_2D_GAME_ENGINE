@@ -1,12 +1,10 @@
 #include "room.hpp"
 #include "spawn/asset_spawner.hpp"
 #include "asset/asset_types.hpp"
-#include "utils/relative_room_position.hpp"
 #include <fstream>
 #include <nlohmann/json.hpp>
 #include <stdexcept>
 #include <algorithm>
-#include <initializer_list>
 #include <iostream>
 #include <cmath>
 #include <optional>
@@ -15,88 +13,110 @@ using json = nlohmann::json;
 
 namespace {
 
-int positive_from_keys(const nlohmann::json& src, std::initializer_list<const char*> keys) {
-        for (const char* key : keys) {
-                auto it = src.find(key);
-                if (it != src.end() && it->is_number_integer()) {
-                        int value = it->get<int>();
-                        if (value > 0) return value;
-                }
-        }
-        return 0;
-}
-
-bool matches_spawn_trigger(const std::string& value) {
-        if (value.empty()) return false;
-        std::string lowered = value;
-        std::transform(lowered.begin(), lowered.end(), lowered.begin(), [](unsigned char c) {
+std::string to_lower_copy(std::string value) {
+        std::transform(value.begin(), value.end(), value.begin(), [](unsigned char c) {
                 return static_cast<char>(std::tolower(c));
         });
-        return lowered == "trigger" || lowered == "spawning" || lowered == "spawn" ||
-               lowered.find("trigger") != std::string::npos ||
-               lowered.find("spawn") != std::string::npos;
+        return value;
 }
 
-bool should_use_room_center_anchor(const std::string& type, const std::string& name) {
-        if (matches_spawn_trigger(type)) return true;
-        return matches_spawn_trigger(name);
+RoomAreaSerialization::Kind parse_kind_value(const std::string& value) {
+        if (value.empty()) return RoomAreaSerialization::Kind::Unknown;
+        std::string lowered = to_lower_copy(value);
+        if (lowered.find("spawn") != std::string::npos) {
+                return RoomAreaSerialization::Kind::Spawn;
+        }
+        if (lowered.find("trigger") != std::string::npos) {
+                return RoomAreaSerialization::Kind::Trigger;
+        }
+        return RoomAreaSerialization::Kind::Unknown;
 }
 
-bool is_allowed_room_area_type(const std::string& type, const std::string& name) {
-        if (matches_spawn_trigger(type)) {
-                return true;
+SDL_Point min_corner_anchor(const std::vector<SDL_Point>& points) {
+        if (points.empty()) return SDL_Point{0, 0};
+        SDL_Point anchor{points.front().x, points.front().y};
+        for (const auto& p : points) {
+                anchor.x = std::min(anchor.x, p.x);
+                anchor.y = std::min(anchor.y, p.y);
         }
-        if (type.empty() && matches_spawn_trigger(name)) {
-                return true;
-        }
-        return type.empty() && name.empty();
-}
-
-void update_anchor_and_points_json(nlohmann::json& entry,
-                                  const std::vector<SDL_Point>& pts,
-                                  std::optional<SDL_Point> forced_anchor = std::nullopt) {
-        if (pts.empty()) {
-                entry.erase("anchor");
-                entry.erase("points");
-                return;
-        }
-        SDL_Point anchor = forced_anchor.value_or(SDL_Point{pts.front().x, pts.front().y});
-        if (!forced_anchor.has_value()) {
-                for (const auto& p : pts) {
-                        anchor.x = std::min(anchor.x, p.x);
-                        anchor.y = std::min(anchor.y, p.y);
-                }
-        }
-        entry["anchor"] = nlohmann::json::object({
-                {"x", anchor.x},
-                {"y", anchor.y}
-        });
-        nlohmann::json points = nlohmann::json::array();
-        points.get_ref<nlohmann::json::array_t&>().reserve(pts.size());
-        for (const auto& p : pts) {
-                points.push_back({ {"x", p.x - anchor.x}, {"y", p.y - anchor.y} });
-        }
-        entry["points"] = std::move(points);
-}
-
-void write_relative_points_json(nlohmann::json& entry,
-                                const std::vector<SDL_Point>& pts,
-                                SDL_Point center,
-                                int original_width,
-                                int original_height) {
-        original_width = std::max(1, original_width);
-        original_height = std::max(1, original_height);
-        entry["origional_width"] = original_width;
-        entry["origional_height"] = original_height;
-        nlohmann::json relative = nlohmann::json::array();
-        relative.get_ref<nlohmann::json::array_t&>().reserve(pts.size());
-        for (const auto& p : pts) {
-                relative.push_back({ {"dx", p.x - center.x}, {"dy", p.y - center.y} });
-        }
-        entry["relative_points"] = std::move(relative);
+        return anchor;
 }
 
 }  // namespace
+
+namespace RoomAreaSerialization {
+
+Kind infer_kind_from_strings(const std::string& kind_value,
+                             const std::string& type_hint,
+                             const std::string& name_hint) {
+        if (Kind parsed = parse_kind_value(kind_value); parsed != Kind::Unknown) {
+                return parsed;
+        }
+        if (Kind parsed = parse_kind_value(type_hint); parsed != Kind::Unknown) {
+                return parsed;
+        }
+        if (Kind parsed = parse_kind_value(name_hint); parsed != Kind::Unknown) {
+                return parsed;
+        }
+        return Kind::Unknown;
+}
+
+Kind infer_kind_from_entry(const nlohmann::json& entry,
+                           const std::string& type_hint,
+                           const std::string& name_hint) {
+        std::string provided;
+        if (entry.contains("kind") && entry["kind"].is_string()) {
+                provided = entry["kind"].get<std::string>();
+        }
+        return infer_kind_from_strings(provided, type_hint, name_hint);
+}
+
+std::string to_string(Kind kind) {
+        switch (kind) {
+        case Kind::Spawn:   return "Spawn";
+        case Kind::Trigger: return "Trigger";
+        case Kind::Unknown: default: return std::string{};
+        }
+}
+
+bool is_supported_kind(Kind kind) {
+        return kind == Kind::Spawn || kind == Kind::Trigger;
+}
+
+SDL_Point choose_anchor(Kind kind,
+                        SDL_Point default_anchor,
+                        const std::vector<SDL_Point>& world_points) {
+        if (!world_points.empty() && !is_supported_kind(kind)) {
+                return min_corner_anchor(world_points);
+        }
+        return default_anchor;
+}
+
+std::vector<SDL_Point> decode_points(const nlohmann::json& entry, SDL_Point anchor) {
+        std::vector<SDL_Point> pts;
+        if (!entry.contains("points") || !entry["points"].is_array()) {
+                return pts;
+        }
+        pts.reserve(entry["points"].size());
+        for (const auto& point : entry["points"]) {
+                if (!point.is_object()) continue;
+                int x = point.value("x", 0);
+                int y = point.value("y", 0);
+                pts.push_back(SDL_Point{anchor.x + x, anchor.y + y});
+        }
+        return pts;
+}
+
+nlohmann::json encode_points(const std::vector<SDL_Point>& points, SDL_Point anchor) {
+        nlohmann::json arr = nlohmann::json::array();
+        arr.get_ref<nlohmann::json::array_t&>().reserve(points.size());
+        for (const auto& p : points) {
+                arr.push_back({ {"x", p.x - anchor.x}, {"y", p.y - anchor.y} });
+        }
+        return arr;
+}
+
+} // namespace RoomAreaSerialization
 
 Room::Room(Point origin,
            std::string type_,
@@ -260,25 +280,8 @@ void Room::load_named_areas_from_json() {
                 if (!assets_json.is_object()) return;
                 if (!assets_json.contains("areas") || !assets_json["areas"].is_array()) return;
 
-                SDL_Point center = room_area ? room_area->get_center()
-                                             : SDL_Point{map_origin.first, map_origin.second};
-                int curr_w = 0;
-                int curr_h = 0;
-                if (room_area) {
-                        auto [minx, miny, maxx, maxy] = room_area->get_bounds();
-                        curr_w = std::max(1, maxx - minx);
-                        curr_h = std::max(1, maxy - miny);
-                } else {
-                        curr_w = positive_from_keys(assets_json, {"max_width", "width_max", "min_width", "width_min"});
-                        curr_h = positive_from_keys(assets_json, {"max_height", "height_max", "min_height", "height_min"});
-                        int radius = assets_json.value("radius", 0);
-                        if (radius > 0) {
-                                curr_w = std::max(curr_w, radius * 2);
-                                curr_h = std::max(curr_h, radius * 2);
-                        }
-                        curr_w = std::max(1, curr_w);
-                        curr_h = std::max(1, curr_h);
-                }
+                SDL_Point default_anchor = room_area ? room_area->get_center()
+                                                     : SDL_Point{map_origin.first, map_origin.second};
 
                 for (auto& item : assets_json["areas"]) {
                         if (!item.is_object()) continue;
@@ -286,67 +289,35 @@ void Room::load_named_areas_from_json() {
                         if (name.empty()) continue;
                         const std::string type = item.value("type", std::string{});
 
-                        if (!is_allowed_room_area_type(type, name)) {
-                                std::cerr << "[Room] Ignoring area '" << name << "' with unsupported type '"
-                                          << type << "' (rooms support spawn/trigger areas only).\n";
+                        RoomAreaSerialization::Kind kind =
+                                RoomAreaSerialization::infer_kind_from_entry(item, type, name);
+                        if (!RoomAreaSerialization::is_supported_kind(kind)) {
+                                std::cerr << "[Room] Ignoring area '" << name << "' with unsupported kind '"
+                                          << item.value("kind", std::string{}) << "'. Rooms support Spawn/Trigger only.\n";
                                 continue;
                         }
 
-                        int orig_w = item.value("origional_width", item.value("original_width", curr_w));
-                        int orig_h = item.value("origional_height", item.value("original_height", curr_h));
-                        if (orig_w <= 0) orig_w = curr_w;
-                        if (orig_h <= 0) orig_h = curr_h;
+                        SDL_Point anchor = default_anchor;
+                        if (item.contains("anchor") && item["anchor"].is_object()) {
+                                anchor.x = item["anchor"].value("x", anchor.x);
+                                anchor.y = item["anchor"].value("y", anchor.y);
+                        }
 
-                        std::vector<SDL_Point> pts;
-                        bool used_relative = false;
-                        auto rel_it = item.find("relative_points");
-                        if (rel_it != item.end() && rel_it->is_array() && !rel_it->empty()) {
-                                used_relative = true;
-                                pts.reserve(rel_it->size());
-                                for (const auto& rel : *rel_it) {
-                                        if (!rel.is_object()) continue;
-                                        int dx = rel.value("dx", rel.value("x", 0));
-                                        int dy = rel.value("dy", rel.value("y", 0));
-                                        RelativeRoomPosition rel_pos(SDL_Point{dx, dy}, orig_w, orig_h);
-                                        SDL_Point resolved = rel_pos.resolve(center, curr_w, curr_h);
-                                        pts.push_back(resolved);
-                                }
-                        }
-                        if (!used_relative) {
-                                int ax = 0;
-                                int ay = 0;
-                                if (item.contains("anchor") && item["anchor"].is_object()) {
-                                        ax = item["anchor"].value("x", 0);
-                                        ay = item["anchor"].value("y", 0);
-                                }
-                                if (item.contains("points") && item["points"].is_array()) {
-                                        pts.reserve(item["points"].size());
-                                        for (const auto& p : item["points"]) {
-                                                if (!p.is_object()) continue;
-                                                int rx = p.value("x", 0);
-                                                int ry = p.value("y", 0);
-                                                pts.push_back(SDL_Point{ ax + rx, ay + ry });
-                                        }
-                                }
-                        }
+                        auto pts = RoomAreaSerialization::decode_points(item, anchor);
                         if (pts.size() < 3) continue;
 
-                        item["origional_width"] = orig_w;
-                        item["origional_height"] = orig_h;
-                        std::optional<SDL_Point> forced_anchor;
-                        if (should_use_room_center_anchor(type, name)) {
-                                forced_anchor = center;
-                        }
-                        if (used_relative) {
-                                update_anchor_and_points_json(item, pts, forced_anchor);
-                        } else {
-                                write_relative_points_json(item, pts, center, orig_w, orig_h);
-                                update_anchor_and_points_json(item, pts, forced_anchor);
-                        }
+                        item["anchor"] = nlohmann::json::object({ {"x", anchor.x}, {"y", anchor.y} });
+                        item["points"] = RoomAreaSerialization::encode_points(pts, anchor);
+                        item.erase("relative_points");
+                        item.erase("origional_width");
+                        item.erase("origional_height");
+                        item.erase("original_width");
+                        item.erase("original_height");
 
                         NamedArea na;
                         na.name = name;
                         na.type = type;
+                        na.kind = RoomAreaSerialization::to_string(kind);
                         na.area = std::make_unique<Area>(name, pts);
                         if (na.area) na.area->set_type(type);
                         areas.push_back(std::move(na));
@@ -403,59 +374,56 @@ void Room::upsert_named_area(const Area& area, const std::string& type) {
                 assets_json["areas"] = nlohmann::json::array();
         }
 
-        SDL_Point center = room_area ? room_area->get_center()
-                                     : SDL_Point{map_origin.first, map_origin.second};
-
-        nlohmann::json entry = nlohmann::json::object();
-        entry["name"] = area_name;
-        if (!type.empty()) {
-                entry["type"] = type;
-        } else if (!area.get_type().empty()) {
-                entry["type"] = area.get_type();
-        }
-
         const auto& pts = area.get_points();
-        if (!pts.empty()) {
-                std::string effective_type = type.empty() ? area.get_type() : type;
-                std::optional<SDL_Point> forced_anchor;
-                if (should_use_room_center_anchor(effective_type, area_name)) {
-                        forced_anchor = center;
-                }
-
-                update_anchor_and_points_json(entry, pts, forced_anchor);
-                int orig_w = 0;
-                int orig_h = 0;
-                if (room_area) {
-                        auto [minx, miny, maxx, maxy] = room_area->get_bounds();
-                        orig_w = std::max(1, maxx - minx);
-                        orig_h = std::max(1, maxy - miny);
-                } else {
-                        orig_w = positive_from_keys(assets_json, {"origional_width", "original_width", "max_width", "width_max", "min_width", "width_min"});
-                        orig_h = positive_from_keys(assets_json, {"origional_height", "original_height", "max_height", "height_max", "min_height", "height_min"});
-                        int radius = assets_json.value("radius", 0);
-                        if (radius > 0) {
-                                orig_w = std::max(orig_w, radius * 2);
-                                orig_h = std::max(orig_h, radius * 2);
-                        }
-                        if (orig_w <= 0) orig_w = 1;
-                        if (orig_h <= 0) orig_h = 1;
-                }
-
-                write_relative_points_json(entry, pts, center, orig_w, orig_h);
+        if (pts.size() < 3) {
+                return;
         }
 
-        auto& arr = assets_json["areas"];
-        bool replaced = false;
-        for (auto& item : arr) {
+        std::string effective_type = !type.empty() ? type : area.get_type();
+        nlohmann::json* existing_entry = nullptr;
+        std::string existing_kind;
+        for (auto& item : assets_json["areas"]) {
                 if (!item.is_object()) continue;
                 if (item.value("name", std::string{}) == area_name) {
-                        item = entry;
-                        replaced = true;
+                        existing_entry = &item;
+                        if (effective_type.empty()) {
+                                effective_type = item.value("type", std::string{});
+                        }
+                        existing_kind = item.value("kind", std::string{});
                         break;
                 }
         }
-        if (!replaced) {
-                arr.push_back(entry);
+
+        RoomAreaSerialization::Kind kind =
+                RoomAreaSerialization::infer_kind_from_strings(existing_kind, effective_type, area_name);
+        if (!RoomAreaSerialization::is_supported_kind(kind)) {
+                std::cerr << "[Room] Refusing to store area '" << area_name
+                          << "' with unsupported kind (" << existing_kind << ").\n";
+                return;
+        }
+
+        SDL_Point default_anchor = room_area ? room_area->get_center()
+                                             : SDL_Point{map_origin.first, map_origin.second};
+        SDL_Point anchor = RoomAreaSerialization::choose_anchor(kind, default_anchor, pts);
+        if (existing_entry && existing_entry->contains("anchor") && (*existing_entry)["anchor"].is_object()) {
+                anchor.x = (*existing_entry)["anchor"].value("x", anchor.x);
+                anchor.y = (*existing_entry)["anchor"].value("y", anchor.y);
+        }
+
+        nlohmann::json entry = nlohmann::json::object({
+                {"name", area_name},
+                {"points", RoomAreaSerialization::encode_points(pts, anchor)},
+        });
+        if (!effective_type.empty()) {
+                entry["type"] = effective_type;
+        }
+        entry["kind"] = RoomAreaSerialization::to_string(kind);
+        entry["anchor"] = nlohmann::json::object({ {"x", anchor.x}, {"y", anchor.y} });
+
+        if (existing_entry) {
+                *existing_entry = entry;
+        } else {
+                assets_json["areas"].push_back(entry);
         }
 
         load_named_areas_from_json();
