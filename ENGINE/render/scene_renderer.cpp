@@ -67,16 +67,16 @@ SceneRenderer::SceneRenderer(SDL_Renderer* renderer,
     // Light rays pass on top - strong and safe values that will show clearly
     light_rays_pass_ = std::make_unique<LightRaysPass>(renderer_, screen_width_, screen_height_);
     LightRaysParams rays_params{};
-    rays_params.min_luma_threshold = 0.40f;  // include more candidates
-    rays_params.bright_percentile  = 0.90f;  // keep top 10% only
-    rays_params.samples            = 128;    // longer and smoother
-    rays_params.density            = 1.5f;   // faster march toward light
-    rays_params.decay              = 0.99f;  // slow fade for long rays
-    rays_params.weight             = 1.6f;   // per-sample strength
-    rays_params.exposure           = 2.8f;   // global boost
-    rays_params.downsample_log2    = low_quality_mode_ ? 2 : 1; // thicker at 1/2 res in full quality
+    rays_params.min_luma_threshold = 0.35f;  // include more candidates
+    rays_params.bright_percentile  = 0.94f;  // focus on top 6%
+    rays_params.samples            = 112;    // balanced quality/perf
+    rays_params.density            = 1.35f;  // faster march toward light
+    rays_params.decay              = 0.94f;  // gradual fade for crisp streaks
+    rays_params.weight             = 1.75f;  // per-sample strength
+    rays_params.exposure           = 8.6f;   // global boost
+    rays_params.downsample_log2    = 1; // thinner but faster in low quality
     light_rays_pass_->set_params(rays_params);
-    light_rays_pass_->set_enabled(!low_quality_mode_);
+    light_rays_pass_->set_enabled(true);
 }
 
 SceneRenderer::~SceneRenderer() {

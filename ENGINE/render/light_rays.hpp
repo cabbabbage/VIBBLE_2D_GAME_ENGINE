@@ -1,6 +1,7 @@
 #pragma once
 #include <SDL.h>
 #include <vector>
+#include <array>
 #include <cstdint>
 
 struct LightRaysParams {
@@ -43,10 +44,19 @@ private:
     int screen_h_ = 0;
 
     SDL_Texture* rays_tex_lowres_ = nullptr;
+    SDL_Texture* capture_tex_lowres_ = nullptr;
+    SDL_PixelFormat* rays_pixel_format_ = nullptr;
     int lr_w_ = 0, lr_h_ = 0;
+
+    std::vector<uint32_t> capture_pixels_;
+    std::vector<float>    luma_buffer_;
+    std::vector<float>    bright_buffer_;
+    std::vector<uint8_t>  alpha_buffer_;
+    std::array<int, 256>  histogram_{};
 
     void destroy_textures_();
     bool ensure_lowres_target_();
+    void ensure_buffer_capacity_(int pixel_count);
 
     static inline uint8_t clamp_u8_(float v) {
         if (v <= 0.f) return 0;
