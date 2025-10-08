@@ -234,5 +234,6 @@ private:
     bool asset_belongs_to_room(const Asset* asset) const;
 
     RoomAssetsSavedCallback room_assets_saved_callback_;
+    std::string rename_active_room(const std::string& old_name, const std::string& desired_name);
 };
 

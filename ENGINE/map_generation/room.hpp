@@ -67,6 +67,7 @@ class Room {
     nlohmann::json& assets_data();
     void save_assets_json() const;
     bool is_spawn_room() const;
+    void rename(const std::string& new_name, nlohmann::json& map_info_json);
 
     // Room-level named areas (e.g., trigger/spawning areas) parsed from assets JSON
     struct NamedArea {

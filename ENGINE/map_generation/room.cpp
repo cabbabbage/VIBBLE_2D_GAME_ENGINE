@@ -611,6 +611,68 @@ bool Room::is_spawn_room() const {
         return assets_json.value("is_spawn", false);
 }
 
+void Room::rename(const std::string& new_name, nlohmann::json& map_info_json) {
+        if (new_name.empty() || new_name == room_name) {
+                if (!room_data_ptr_ && map_info_json.is_object()) {
+                        nlohmann::json& section = map_info_json[data_section_];
+                        if (section.is_object() && section.contains(room_name)) {
+                                room_data_ptr_ = &section[room_name];
+                        }
+                }
+                return;
+        }
+
+        if (!map_info_json.is_object()) {
+                map_info_json = nlohmann::json::object();
+        }
+
+        nlohmann::json& section = map_info_json[data_section_];
+        if (!section.is_object()) {
+                section = nlohmann::json::object();
+        }
+
+        if (room_data_ptr_) {
+                assets_json = *room_data_ptr_;
+        } else {
+                auto it = section.find(room_name);
+                if (it != section.end()) {
+                        assets_json = *it;
+                }
+        }
+
+        assets_json["name"] = new_name;
+
+        section[new_name] = assets_json;
+        nlohmann::json* new_entry = &section[new_name];
+
+        if (section.contains(room_name)) {
+                section.erase(room_name);
+        }
+
+        room_name = new_name;
+        room_data_ptr_ = new_entry;
+        assets_json = *room_data_ptr_;
+
+        if (!json_path.empty()) {
+                size_t pos = json_path.rfind("::");
+                if (pos != std::string::npos) {
+                        json_path = json_path.substr(0, pos + 2) + room_name;
+                } else {
+                        json_path = room_name;
+                }
+        }
+
+        if (room_area) {
+                room_area->set_name(room_name);
+        }
+
+        for (auto& owned : assets) {
+                if (owned) {
+                        owned->set_owning_room_name(room_name);
+                }
+        }
+}
+
 void Room::save_assets_json() const {
         // Refresh cached named areas from current JSON before saving
         const_cast<Room*>(this)->load_named_areas_from_json();

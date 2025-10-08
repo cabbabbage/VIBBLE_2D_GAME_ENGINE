@@ -600,6 +600,7 @@ std::string RoomConfigurator::selected_geometry() const {
 void RoomConfigurator::ensure_spawn_list() {
     if (!spawn_list_) {
         spawn_list_ = std::make_unique<SpawnGroupList>();
+        spawn_list_->set_embedded_mode(true);
     }
 }
 

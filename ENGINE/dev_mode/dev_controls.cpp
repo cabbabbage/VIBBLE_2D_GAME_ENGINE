@@ -357,7 +357,8 @@ DevControls::DevControls(Assets* owner, int screen_w, int screen_h)
     }
     asset_filter_.initialize();
     asset_filter_.set_state_changed_callback([this]() { refresh_active_asset_filters(); });
-    asset_filter_.set_enabled(enabled_);
+    const bool layers_panel_open = map_mode_ui_ && map_mode_ui_->is_layers_footer_visible();
+    asset_filter_.set_enabled(enabled_ && !layers_panel_open);
     asset_filter_.set_screen_dimensions(screen_w_, screen_h_);
     asset_filter_.set_map_info(map_info_json_);
     asset_filter_.set_current_room(current_room_);
@@ -549,7 +550,8 @@ Room* DevControls::resolve_current_room(Room* detected_room) {
 void DevControls::set_enabled(bool enabled) {
     if (enabled == enabled_) return;
     enabled_ = enabled;
-    asset_filter_.set_enabled(enabled_);
+    const bool layers_panel_open = map_mode_ui_ && map_mode_ui_->is_layers_footer_visible();
+    asset_filter_.set_enabled(enabled_ && !layers_panel_open);
 
     if (enabled_) {
         const bool camera_was_visible = camera_panel_ && camera_panel_->is_visible();
@@ -656,6 +658,8 @@ void DevControls::update(const Input& input) {
         regenerate_popup_->update(input);
     }
     const bool hide_headers = is_modal_blocking_panels();
+    const bool layers_panel_open = map_mode_ui_ && map_mode_ui_->is_layers_footer_visible();
+    asset_filter_.set_enabled(enabled_ && !layers_panel_open);
     if (map_mode_ui_) {
         map_mode_ui_->set_headers_suppressed(hide_headers);
         map_mode_ui_->update(input);
@@ -718,6 +722,8 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
     }
 
     const bool hide_headers = is_modal_blocking_panels();
+    const bool layers_panel_open = map_mode_ui_ && map_mode_ui_->is_layers_footer_visible();
+    asset_filter_.set_enabled(enabled_ && !layers_panel_open);
     if (map_mode_ui_) {
         map_mode_ui_->set_headers_suppressed(hide_headers);
     }
@@ -1319,7 +1325,8 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
     if (regenerate_popup_ && regenerate_popup_->visible()) {
         regenerate_popup_->render(renderer);
     }
-    if (!is_modal_blocking_panels()) {
+    const bool layers_panel_open = map_mode_ui_ && map_mode_ui_->is_layers_footer_visible();
+    if (!is_modal_blocking_panels() && !layers_panel_open) {
         asset_filter_.render(renderer);
     }
 }
