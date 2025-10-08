@@ -2133,7 +2133,7 @@
             "y_radius": 76
         }
     ],
-    "min_distance_all": 0,
+    "min_distance_all": 2,
     "min_same_type_distance": 0,
     "render_radius": 1000,
     "rnd_spawn_max": 400,
