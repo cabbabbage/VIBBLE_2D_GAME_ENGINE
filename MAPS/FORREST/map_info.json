@@ -5,24 +5,23 @@
     "height_at_zoom1": 557.0,
     "parallax_strength": 19.0,
     "realism_enabled": true,
-    "render_areas_enabled": false,
     "render_distance": 2120.0,
     "tripod_distance_y": -1335.0
   },
   "light_rays_params": {
-    "bright_percentile": 0.8159999847412109,
-    "decay": 0.8899999856948853,
-    "density": 1.399999976158142,
+    "bright_percentile": 0.8709999918937683,
+    "decay": 0.6380000114440918,
+    "density": 2.1700000762939453,
     "downsample_log2": 4,
     "enabled": true,
-    "exposure": 4.139999866485596,
-    "gamma_comp": 1.5299999713897705,
+    "exposure": 1.2400000095367432,
+    "gamma_comp": 2.569999933242798,
     "metric": "MaxRGB",
-    "min_luma_threshold": 0.3240000009536743,
+    "min_luma_threshold": 0.5690000057220459,
     "per_light_enabled": true,
-    "samples": 112,
+    "samples": 212,
     "use_alpha_in_mask": true,
-    "weight": 4.369999885559082
+    "weight": 5.460000038146973
   },
   "map_assets_data": {
     "spawn_groups": [

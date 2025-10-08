@@ -426,13 +426,29 @@ void LightRaysUIPanel::sync_json_from_ui() {
         config.per_light.downsample_log2 = clamp_int(downsample_slider_->value(), kDownsampleMin, kDownsampleMax);
     }
 
-    if (!map_info_->is_object()) {
-        *map_info_ = json::object();
+    bool changed = false;
+
+    if (config.enabled) {
+        if (!map_info_->is_object()) {
+            *map_info_ = json::object();
+            changed = true;
+        }
+
+        json new_config = config.to_json();
+        json* dest = nullptr;
+        if (map_info_->is_object()) {
+            dest = &(*map_info_)["light_rays_params"];
+            if (*dest != new_config) {
+                *dest = std::move(new_config);
+                changed = true;
+            }
+        }
+    } else if (map_info_->is_object()) {
+        changed = map_info_->erase("light_rays_params") > 0;
     }
-    (*map_info_)["light_rays_params"] = config.to_json();
 
     bool ok = true;
-    if (on_save_) {
+    if (changed && on_save_) {
         ok = on_save_();
     }
     update_save_status(ok);
