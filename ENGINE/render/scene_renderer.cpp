@@ -16,7 +16,7 @@
 #include <array>
 #include <memory>
 #include "light_rays.hpp"
-#include "render/RenderAsset.hpp"
+#include "render/render_asset.hpp"
 
 static constexpr SDL_Color SLATE_COLOR = {69, 101, 74, 255};
 static constexpr float MIN_VISIBLE_SCREEN_RATIO = 0.015f;
