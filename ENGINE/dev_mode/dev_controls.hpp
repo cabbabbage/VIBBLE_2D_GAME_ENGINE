@@ -8,6 +8,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
+#include <optional>
 
 #include <nlohmann/json_fwd.hpp>
 
@@ -63,7 +64,8 @@ public:
 
         void set_listener(Listener listener);
         void invalidate();
-        const PolygonList& ensure_from_json(const nlohmann::json* root);
+        const PolygonList& ensure_from_json(const nlohmann::json* root,
+                                            std::optional<SDL_Point> default_anchor = std::nullopt);
         std::size_t generation() const { return generation_; }
 
     private:

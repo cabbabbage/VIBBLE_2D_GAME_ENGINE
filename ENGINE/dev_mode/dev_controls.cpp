@@ -31,6 +31,7 @@
 #include <cctype>
 #include <string>
 #include <vector>
+#include <optional>
 #include <iostream>
 #include <nlohmann/json.hpp>
 
@@ -92,7 +93,8 @@ void DevControls::RoomAreaCache::invalidate() {
 
 
 const DevControls::RoomAreaCache::PolygonList&
-DevControls::RoomAreaCache::ensure_from_json(const nlohmann::json* root) {
+DevControls::RoomAreaCache::ensure_from_json(const nlohmann::json* root,
+                                             std::optional<SDL_Point> default_anchor) {
     if (root != last_source_) {
         dirty_ = true;
     }
@@ -120,27 +122,42 @@ DevControls::RoomAreaCache::ensure_from_json(const nlohmann::json* root) {
                     }
                     const auto& pts = item.contains("points") ? item["points"] : nlohmann::json();
                     if (!pts.is_array() || pts.size() < 3) continue;
-                    int ax = 0;
-                    int ay = 0;
-                    if (item.contains("anchor") && item["anchor"].is_object()) {
-                        ax = item["anchor"].value("x", 0);
-                        ay = item["anchor"].value("y", 0);
-                    }
-                    std::vector<SDL_Point> poly;
-                    poly.reserve(pts.size());
-                    for (const auto& p : pts) {
-                        if (!p.is_object()) continue;
-                        int x = p.value("x", 0);
-                        int y = p.value("y", 0);
-                        poly.push_back(SDL_Point{ax + x, ay + y});
-                    }
-                    if (poly.size() >= 3) {
-                        Polygon entry;
-                        entry.name = name;
-                        entry.type = !type.empty() ? type : RoomAreaSerialization::to_string(kind);
-                        entry.points = std::move(poly);
-                        entry.anchor = SDL_Point{ ax, ay };
-                        cached_.push_back(std::move(entry));
+
+                    if (default_anchor.has_value()) {
+                        SDL_Point fallback = *default_anchor;
+                        auto anchor = RoomAreaSerialization::resolve_anchor(item, fallback, kind);
+                        std::vector<SDL_Point> poly = RoomAreaSerialization::decode_points(item, anchor.world);
+                        if (poly.size() >= 3) {
+                            Polygon entry;
+                            entry.name = name;
+                            entry.type = !type.empty() ? type : RoomAreaSerialization::to_string(kind);
+                            entry.points = std::move(poly);
+                            entry.anchor = anchor.world;
+                            cached_.push_back(std::move(entry));
+                        }
+                    } else {
+                        int ax = 0;
+                        int ay = 0;
+                        if (item.contains("anchor") && item["anchor"].is_object()) {
+                            ax = item["anchor"].value("x", 0);
+                            ay = item["anchor"].value("y", 0);
+                        }
+                        std::vector<SDL_Point> poly;
+                        poly.reserve(pts.size());
+                        for (const auto& p : pts) {
+                            if (!p.is_object()) continue;
+                            int x = p.value("x", 0);
+                            int y = p.value("y", 0);
+                            poly.push_back(SDL_Point{ax + x, ay + y});
+                        }
+                        if (poly.size() >= 3) {
+                            Polygon entry;
+                            entry.name = name;
+                            entry.type = !type.empty() ? type : RoomAreaSerialization::to_string(kind);
+                            entry.points = std::move(poly);
+                            entry.anchor = SDL_Point{ ax, ay };
+                            cached_.push_back(std::move(entry));
+                        }
                     }
                 }
             }
@@ -1872,10 +1889,16 @@ void DevControls::notify_room_area_data_changed() {
 
 const DevControls::RoomAreaCache::PolygonList& DevControls::room_area_polygons() {
     const nlohmann::json* root = nullptr;
+    std::optional<SDL_Point> default_anchor;
     if (current_room_) {
         root = &current_room_->assets_data();
+        SDL_Point anchor{ current_room_->map_origin.first, current_room_->map_origin.second };
+        if (current_room_->room_area) {
+            anchor = current_room_->room_area->get_center();
+        }
+        default_anchor = anchor;
     }
-    return room_area_cache_.ensure_from_json(root);
+    return room_area_cache_.ensure_from_json(root, default_anchor);
 }
 
 void DevControls::toggle_map_light_panel() {
