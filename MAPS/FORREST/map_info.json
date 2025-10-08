@@ -503,6 +503,24 @@
       "width_max": 1903,
       "width_min": 1095
     },
+    "room": {
+      "curvyness": 2,
+      "edge_smoothness": 2,
+      "geometry": "Square",
+      "height_max": 10000,
+      "height_min": 1500,
+      "inherits_map_assets": false,
+      "is_boss": false,
+      "is_spawn": false,
+      "max_height": 10000,
+      "max_width": 10000,
+      "min_height": 1500,
+      "min_width": 1500,
+      "name": "room",
+      "spawn_groups": [],
+      "width_max": 10000,
+      "width_min": 1500
+    },
     "spawn": {
       "areas": [
         {
