@@ -10,6 +10,40 @@ inline float luma_u8(uint8_t r, uint8_t g, uint8_t b) {
     return (0.2126f * r + 0.7152f * g + 0.0722f * b) / 255.f;
 }
 
+inline float max_rgb_u8(uint8_t r, uint8_t g, uint8_t b) {
+    return static_cast<float>(std::max({r, g, b})) / 255.f;
+}
+
+inline float avg_rgb_u8(uint8_t r, uint8_t g, uint8_t b) {
+    return (static_cast<float>(r) + static_cast<float>(g) + static_cast<float>(b)) / (3.f * 255.f);
+}
+
+inline float energy_rgb_u8(uint8_t r, uint8_t g, uint8_t b) {
+    const float rf = static_cast<float>(r) / 255.f;
+    const float gf = static_cast<float>(g) / 255.f;
+    const float bf = static_cast<float>(b) / 255.f;
+    return std::sqrt((rf * rf + gf * gf + bf * bf) / 3.f);
+}
+
+inline float brightness_from_metric(BrightnessMetric metric, uint8_t r, uint8_t g, uint8_t b) {
+    switch (metric) {
+        case BrightnessMetric::Luma709:  return luma_u8(r, g, b);
+        case BrightnessMetric::MaxRGB:   return max_rgb_u8(r, g, b);
+        case BrightnessMetric::AvgRGB:   return avg_rgb_u8(r, g, b);
+        case BrightnessMetric::EnergyRGB:return energy_rgb_u8(r, g, b);
+    }
+    return max_rgb_u8(r, g, b);
+}
+
+inline float apply_gamma(float value, float gamma) {
+    const float v = std::clamp(value, 0.f, 1.f);
+    if (gamma <= 0.f) {
+        return v;
+    }
+    const float inv_gamma = 1.f / std::max(1e-4f, gamma);
+    return std::pow(v, inv_gamma);
+}
+
 // Box downsample by integer factor from RGBA8888 buffer
 static void downsample_box_rgba8888(
     const uint32_t* src, int sw, int sh, int factor,
@@ -100,6 +134,9 @@ bool LightRaysPass::ensure_lowres_target_() {
         return false;
     }
     SDL_SetTextureBlendMode(rays_tex_lowres_, SDL_BLENDMODE_ADD); // default to ADD
+#if SDL_VERSION_ATLEAST(2,0,12)
+    SDL_SetTextureScaleMode(rays_tex_lowres_, SDL_ScaleModeBest);
+#endif
     lr_w_ = want_w; lr_h_ = want_h;
     return true;
 }
@@ -131,8 +168,8 @@ SDL_Texture* LightRaysPass::compute(SDL_Texture* source_render_target) {
     int dw = 0, dh = 0;
     downsample_box_rgba8888(full_rgba.data(), screen_w_, screen_h_, factor, low_rgba, dw, dh);
 
-    // Build luma buffer and histogram
-    std::vector<float> luma(dw * dh, 0.f);
+    // Build brightness buffer and histogram
+    std::vector<float> brightness(dw * dh, 0.f);
     std::array<int, 256> hist{}; hist.fill(0);
     for (int i = 0; i < dw * dh; ++i) {
         uint32_t px = low_rgba[i];
@@ -140,9 +177,13 @@ SDL_Texture* LightRaysPass::compute(SDL_Texture* source_render_target) {
         uint8_t r = (px >> 16) & 0xFF;
         uint8_t g = (px >> 8)  & 0xFF;
         uint8_t b = (px >> 0)  & 0xFF;
-        float L = luma_u8(r, g, b) * (a / 255.f);
-        L = std::min(1.f, std::max(0.f, L));
-        luma[i] = L;
+        float L = brightness_from_metric(params_.metric, r, g, b);
+        if (params_.use_alpha_in_mask) {
+            L *= (a / 255.f);
+        }
+        L = apply_gamma(L, params_.gamma_comp);
+        L = std::clamp(L, 0.f, 1.f);
+        brightness[i] = L;
         int bin = std::clamp(int(L * 255.f + 0.5f), 0, 255);
         hist[bin] += 1;
     }
@@ -168,7 +209,7 @@ SDL_Texture* LightRaysPass::compute(SDL_Texture* source_render_target) {
     std::vector<float> bright(dw * dh, 0.f);
     const float denom = std::max(1e-5f, 1.f - thr);
     for (int i = 0; i < dw * dh; ++i) {
-        float v = (luma[i] - thr) / denom;
+        float v = (brightness[i] - thr) / denom;
         bright[i] = v > 0.f ? v : 0.f;
     }
 

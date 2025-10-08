@@ -51,6 +51,15 @@ SceneRenderer::SceneRenderer(SDL_Renderer* renderer,
 	// No accumulation texture; render directly to default target
 
         z_light_pass_ = std::make_unique<LightMap>(renderer_, assets_, main_light_source_, screen_width_, screen_height_, fullscreen_light_tex_);
+        light_rays_config_ = LightRaysConfig::defaults();
+        light_rays_params_ = light_rays_config_.to_light_rays_params();
+        light_rays_pass_ = std::make_unique<LightRaysPass>(renderer_, screen_width_, screen_height_);
+        light_rays_enabled_ = light_rays_config_.enabled && light_rays_config_.per_light_enabled;
+        if (light_rays_pass_) {
+                light_rays_pass_->set_screen_size(screen_width_, screen_height_);
+                light_rays_pass_->set_params(light_rays_params_);
+                light_rays_pass_->set_enabled(light_rays_enabled_);
+        }
         main_light_source_.update();
         z_light_pass_->render(debugging);
 }
@@ -90,6 +99,17 @@ void SceneRenderer::apply_map_light_config(const nlohmann::json& data) {
         SDL_SetRenderDrawColor(renderer_, color.r, color.g, color.b, color.a);
         SDL_RenderClear(renderer_);
         SDL_SetRenderTarget(renderer_, prev);
+}
+
+void SceneRenderer::apply_light_rays_config(const nlohmann::json& data) {
+        light_rays_config_ = LightRaysConfig::from_json(data);
+        light_rays_params_ = light_rays_config_.to_light_rays_params();
+        light_rays_enabled_ = light_rays_config_.enabled && light_rays_config_.per_light_enabled;
+        if (light_rays_pass_) {
+                light_rays_pass_->set_screen_size(screen_width_, screen_height_);
+                light_rays_pass_->set_params(light_rays_params_);
+                light_rays_pass_->set_enabled(light_rays_enabled_);
+        }
 }
 
 void SceneRenderer::update_shading_groups() {
@@ -253,6 +273,13 @@ void SceneRenderer::render() {
     z_light_pass_->render(debugging);
     if (assets_) assets_->render_overlays(renderer_);
 
+    SDL_Texture* light_rays_texture = nullptr;
+    if (scene_target_tex_ && light_rays_pass_ && light_rays_enabled_) {
+        light_rays_pass_->set_screen_size(screen_width_, screen_height_);
+        light_rays_pass_->set_light_screen_pos(main_light_source_.get_position());
+        light_rays_texture = light_rays_pass_->compute(scene_target_tex_);
+    }
+
     // ----- POST: DIRECT MULTI-TAP BLEND ON BACKBUFFER (no render targets) -----
     if (scene_target_tex_) {
         SDL_SetRenderTarget(renderer_, nullptr);
@@ -289,6 +316,11 @@ void SceneRenderer::render() {
             }
         } else {
             SDL_SetTextureAlphaMod(scene_target_tex_, 255);
+        }
+
+        if (light_rays_texture) {
+            SDL_Rect dest{0, 0, screen_width_, screen_height_};
+            SDL_RenderCopy(renderer_, light_rays_texture, nullptr, &dest);
         }
     }
 

@@ -3,7 +3,19 @@
 #include <vector>
 #include <cstdint>
 
+enum class BrightnessMetric {
+    Luma709,
+    MaxRGB,
+    AvgRGB,
+    EnergyRGB,
+};
+
 struct LightRaysParams {
+    // Bright mask options
+    bool  use_alpha_in_mask = true;
+    BrightnessMetric metric = BrightnessMetric::MaxRGB;
+    float gamma_comp = 1.0f;   // >1 brightens after compensation
+
     // Bright-pass
     float min_luma_threshold = 0.90f;  // absolute floor in [0..1]
     float bright_percentile  = 0.995f; // keep top 0.5 percent

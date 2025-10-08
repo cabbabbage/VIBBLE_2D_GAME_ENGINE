@@ -9,6 +9,8 @@
 #include "global_light_source.hpp"
 #include "render_asset.hpp"
 #include "render/camera.hpp"
+#include "render/light_rays.hpp"
+#include "render/light_rays_config.hpp"
 
 class Assets;
 class Asset;
@@ -20,6 +22,7 @@ class SceneRenderer {
     ~SceneRenderer();
     void render();
     void apply_map_light_config(const nlohmann::json& data);
+    void apply_light_rays_config(const nlohmann::json& data);
     SDL_Renderer* get_renderer() const;
 
 	private:
@@ -42,6 +45,10 @@ class SceneRenderer {
     SDL_Texture*   fullscreen_light_tex_;
     RenderAsset    render_asset_;
     std::unique_ptr<LightMap> z_light_pass_;
+    std::unique_ptr<LightRaysPass> light_rays_pass_;
+    LightRaysConfig light_rays_config_{};
+    LightRaysParams light_rays_params_{};
+    bool light_rays_enabled_ = false;
     int            current_shading_group_ = 0;
     int            num_groups_ = 20;
     bool           debugging = false;
