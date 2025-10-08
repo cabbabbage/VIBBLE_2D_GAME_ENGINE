@@ -8,7 +8,7 @@ namespace {
 constexpr float kRadiusEpsilon = 0.01f;
 constexpr float kMixEpsilon = 1e-3f;
 
-inline uint8_t clamp_u8(float v) {
+inline uint8_t clamp_to_u8(float v) {
     if (v <= 0.f) return 0;
     if (v >= 255.f) return 255;
     return static_cast<uint8_t>(v + 0.5f);
@@ -252,10 +252,10 @@ SDL_Texture* GaussianBlurHelper::apply(SDL_Texture* source,
     }
 
     for (int i = 0; i < total_pixels; ++i) {
-        uint8_t r = clamp_u8(channel_r_[i] * 255.f);
-        uint8_t g = clamp_u8(channel_g_[i] * 255.f);
-        uint8_t b = clamp_u8(channel_b_[i] * 255.f);
-        uint8_t a = clamp_u8(channel_a_[i] * 255.f);
+        uint8_t r = clamp_to_u8(channel_r_[i] * 255.f);
+        uint8_t g = clamp_to_u8(channel_g_[i] * 255.f);
+        uint8_t b = clamp_to_u8(channel_b_[i] * 255.f);
+        uint8_t a = clamp_to_u8(channel_a_[i] * 255.f);
         output_pixels_[static_cast<size_t>(i)] = SDL_MapRGBA(pixel_format_, r, g, b, a);
     }
 

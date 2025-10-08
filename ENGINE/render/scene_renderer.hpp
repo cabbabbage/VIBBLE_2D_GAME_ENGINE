@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <nlohmann/json.hpp>
 
+#include "global_light_source.hpp"
 #include "light_map.hpp"
 #include "light_rays.hpp"
 
@@ -65,7 +66,7 @@ private:
     SDL_Texture* scene_target_tex_ = nullptr;
 
     // Lighting
-    MainLightSource main_light_source_;
+    Global_Light_Source main_light_source_;
     std::unique_ptr<LightMap> z_light_pass_;
 
     // Asset renderer

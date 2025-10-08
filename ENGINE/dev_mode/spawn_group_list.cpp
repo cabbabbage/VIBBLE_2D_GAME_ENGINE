@@ -261,6 +261,7 @@ public:
     void append_rows(DockableCollapsible::Rows& out);
     bool sync_to_json();
     void add_candidate(const std::string& asset_name);
+    void close_search();
 
 private:
     struct CandidateInfo {
@@ -357,7 +358,6 @@ private:
     void set_scroll_focus(bool focus);
     bool scroll_focused() const { return scroll_focus_; }
     void open_search();
-    void close_search();
     bool refresh_search_results(bool force = false);
     void on_search_query_changed();
     void handle_search_selection(int index);
