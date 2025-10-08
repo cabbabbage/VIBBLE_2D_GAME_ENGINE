@@ -38,13 +38,13 @@ public:
     void render(SDL_Renderer* renderer) const;
 
     bool is_point_inside(int x, int y) const;
-
+    static int clamp_int(int v, int lo, int hi);
 private:
     void build_ui();
     void sync_ui_from_json();
     void sync_json_from_ui();
 
-    static int clamp_int(int v, int lo, int hi);
+
     static double slider_units_to_double(int units, int scale);
     static int double_to_slider_units(double value, int scale, int lo, int hi);
 

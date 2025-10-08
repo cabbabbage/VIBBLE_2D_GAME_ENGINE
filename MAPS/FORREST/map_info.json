@@ -9,6 +9,17 @@
     "render_distance": 2120.0,
     "tripod_distance_y": -1335.0
   },
+  "light_rays_params": {
+    "bright_percentile": 0.63,
+    "decay": 0.53,
+    "density": 1.33,
+    "downsample_log2": 1,
+    "enabled": true,
+    "exposure": 1.72,
+    "min_luma_threshold": 0.1,
+    "samples": 140,
+    "weight": 3.85
+  },
   "map_assets_data": {
     "spawn_groups": [
       {
@@ -225,7 +236,7 @@
     "mult": 0.32,
     "orbit_radius": 9743,
     "radius": 747,
-    "update_interval": 41
+    "update_interval": 1
   },
   "map_name": "FORREST",
   "map_radius": 9708.0,
