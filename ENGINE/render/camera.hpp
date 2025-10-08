@@ -52,6 +52,7 @@ class camera {
     void  pan_and_zoom_to_asset(const Asset* a, double zoom_scale_factor, int duration_steps);
     // Zoom animation without panning: multiply current target by factor over duration
     void  animate_zoom_multiply(double factor, int duration_steps);
+    void  animate_zoom_towards_point(double factor, SDL_Point screen_point, int duration_steps);
 
     // View accessors
     const Area& get_base_zoom() const { return base_zoom_; }
@@ -72,6 +73,9 @@ class camera {
 
     void set_realism_enabled(bool enabled) { realism_enabled_ = enabled; }
     bool realism_enabled() const { return realism_enabled_; }
+
+    void set_render_areas_enabled(bool enabled) { render_areas_enabled_ = enabled; }
+    bool render_areas_enabled() const { return render_areas_enabled_; }
 
     void set_realism_settings(const RealismSettings& settings) { settings_ = settings; }
     RealismSettings& realism_settings() { return settings_; }
@@ -146,5 +150,6 @@ class camera {
     bool       parallax_enabled_ = true;
     bool       realism_enabled_ = true;
     RealismSettings settings_{};
+    bool       render_areas_enabled_ = true;
 };
 

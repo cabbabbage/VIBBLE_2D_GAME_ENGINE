@@ -1,7 +1,7 @@
 #include "camera.hpp"
 #include "asset/Asset.hpp"
 #include "utils/area.hpp"
-#include "room/room.hpp"
+#include "map_generation/room.hpp"
 #include "find_current_room.hpp"
 #include <cmath>
 #include <algorithm>
@@ -261,6 +261,43 @@ void camera::animate_zoom_multiply(double factor, int duration_steps) {
     steps_done_    = 0;
     zooming_       = true;
     pan_override_  = false;
+    manual_zoom_override_ = true;
+}
+
+void camera::animate_zoom_towards_point(double factor, SDL_Point screen_point, int duration_steps) {
+    if (factor <= 0.0) {
+        factor = 1.0;
+    }
+
+    const double current_scale = std::max(0.0001, static_cast<double>(scale_));
+    const double new_scale     = std::max(0.0001, current_scale * factor);
+
+    int left = 0, top = 0, right = 0, bottom = 0;
+    std::tie(left, top, right, bottom) = current_view_.get_bounds();
+
+    const double world_x = static_cast<double>(left) + static_cast<double>(screen_point.x) * current_scale;
+    const double world_y = static_cast<double>(top)  + static_cast<double>(screen_point.y) * current_scale;
+
+    const int base_w = std::max(1, width_from_area(base_zoom_));
+    const int base_h = std::max(1, height_from_area(base_zoom_));
+
+    const double target_center_x = world_x - static_cast<double>(screen_point.x) * new_scale +
+                                   (static_cast<double>(base_w) * new_scale) * 0.5;
+    const double target_center_y = world_y - static_cast<double>(screen_point.y) * new_scale +
+                                   (static_cast<double>(base_h) * new_scale) * 0.5;
+
+    start_center_  = screen_center_;
+    target_center_ = SDL_Point{
+        static_cast<int>(std::lround(target_center_x)),
+        static_cast<int>(std::lround(target_center_y))
+    };
+
+    start_scale_   = scale_;
+    target_scale_  = new_scale;
+    steps_total_   = std::max(1, duration_steps);
+    steps_done_    = 0;
+    zooming_       = true;
+    pan_override_  = true;
     manual_zoom_override_ = true;
 }
 

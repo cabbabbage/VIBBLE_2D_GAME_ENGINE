@@ -24,6 +24,8 @@ class SceneRenderer {
     void apply_map_light_config(const nlohmann::json& data);
     void apply_light_rays_config(const nlohmann::json& data);
     SDL_Renderer* get_renderer() const;
+    void set_low_quality_rendering(bool enabled);
+    bool low_quality_rendering() const { return low_quality_rendering_; }
 
 	private:
     void update_shading_groups();
@@ -52,6 +54,7 @@ class SceneRenderer {
     int            current_shading_group_ = 0;
     int            num_groups_ = 20;
     bool           debugging = false;
+    bool           low_quality_rendering_ = false;
 
     // GPU-based postprocess targets (faster fullscreen blur overlay)
     SDL_Texture*   scene_target_tex_    = nullptr;  // full-res scene render target

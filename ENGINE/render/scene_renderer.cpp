@@ -88,6 +88,27 @@ SDL_Renderer* SceneRenderer::get_renderer() const {
     return renderer_;
 }
 
+void SceneRenderer::set_low_quality_rendering(bool enabled) {
+        if (low_quality_rendering_ == enabled) {
+                return;
+        }
+        low_quality_rendering_ = enabled;
+        if (enabled) {
+                if (scene_target_tex_) {
+                        SDL_DestroyTexture(scene_target_tex_);
+                        scene_target_tex_ = nullptr;
+                }
+                if (post_small_tex_a_) {
+                        SDL_DestroyTexture(post_small_tex_a_);
+                        post_small_tex_a_ = nullptr;
+                }
+                if (post_small_tex_b_) {
+                        SDL_DestroyTexture(post_small_tex_b_);
+                        post_small_tex_b_ = nullptr;
+                }
+        }
+}
+
 void SceneRenderer::apply_map_light_config(const nlohmann::json& data) {
         main_light_source_.apply_config(data);
         if (!renderer_ || !fullscreen_light_tex_) {
@@ -171,6 +192,8 @@ void SceneRenderer::render() {
     // Full-resolution blur (no downscale, no blend-mode selection)
     const int blur_radius_full = std::max(0, kPostBlurRadiusPx);
 
+    const bool use_postprocess = !low_quality_rendering_;
+
     // ----- ENSURE GPU RENDER TARGETS & CLEAR SCENE -----
     auto ensure_target = [&](SDL_Texture*& tex, int w, int h) {
         int tw = 0, th = 0; Uint32 fmt = 0; int access = 0;
@@ -186,14 +209,33 @@ void SceneRenderer::render() {
         #endif
         return true;
     };
-    if (!ensure_target(scene_target_tex_, screen_width_, screen_height_)) {
-        // Fallback: clear backbuffer and render directly (no post-process)
-        SDL_SetRenderTarget(renderer_, nullptr);
-        SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND);
-        SDL_SetRenderDrawColor(renderer_, SLATE_COLOR.r, SLATE_COLOR.g, SLATE_COLOR.b, 255);
-        SDL_RenderClear(renderer_);
+    if (use_postprocess) {
+        if (!ensure_target(scene_target_tex_, screen_width_, screen_height_)) {
+            // Fallback: clear backbuffer and render directly (no post-process)
+            SDL_SetRenderTarget(renderer_, nullptr);
+            SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND);
+            SDL_SetRenderDrawColor(renderer_, SLATE_COLOR.r, SLATE_COLOR.g, SLATE_COLOR.b, 255);
+            SDL_RenderClear(renderer_);
+        } else {
+            SDL_SetRenderTarget(renderer_, scene_target_tex_);
+            SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND);
+            SDL_SetRenderDrawColor(renderer_, SLATE_COLOR.r, SLATE_COLOR.g, SLATE_COLOR.b, 255);
+            SDL_RenderClear(renderer_);
+        }
     } else {
-        SDL_SetRenderTarget(renderer_, scene_target_tex_);
+        if (scene_target_tex_) {
+            SDL_DestroyTexture(scene_target_tex_);
+            scene_target_tex_ = nullptr;
+        }
+        if (post_small_tex_a_) {
+            SDL_DestroyTexture(post_small_tex_a_);
+            post_small_tex_a_ = nullptr;
+        }
+        if (post_small_tex_b_) {
+            SDL_DestroyTexture(post_small_tex_b_);
+            post_small_tex_b_ = nullptr;
+        }
+        SDL_SetRenderTarget(renderer_, nullptr);
         SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND);
         SDL_SetRenderDrawColor(renderer_, SLATE_COLOR.r, SLATE_COLOR.g, SLATE_COLOR.b, 255);
         SDL_RenderClear(renderer_);
@@ -269,19 +311,19 @@ void SceneRenderer::render() {
     }
 
     // ----- LIGHTS / OVERLAYS -----
-    SDL_SetRenderTarget(renderer_, scene_target_tex_);
+    SDL_SetRenderTarget(renderer_, use_postprocess ? scene_target_tex_ : nullptr);
     z_light_pass_->render(debugging);
     if (assets_) assets_->render_overlays(renderer_);
 
     SDL_Texture* light_rays_texture = nullptr;
-    if (scene_target_tex_ && light_rays_pass_ && light_rays_enabled_) {
+    if (use_postprocess && scene_target_tex_ && light_rays_pass_ && light_rays_enabled_) {
         light_rays_pass_->set_screen_size(screen_width_, screen_height_);
         light_rays_pass_->set_light_screen_pos(main_light_source_.get_position());
         light_rays_texture = light_rays_pass_->compute(scene_target_tex_);
     }
 
     // ----- POST: DIRECT MULTI-TAP BLEND ON BACKBUFFER (no render targets) -----
-    if (scene_target_tex_) {
+    if (use_postprocess && scene_target_tex_) {
         SDL_SetRenderTarget(renderer_, nullptr);
         SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND);
         SDL_SetRenderDrawColor(renderer_, 0, 0, 0, 255);
@@ -322,6 +364,8 @@ void SceneRenderer::render() {
             SDL_Rect dest{0, 0, screen_width_, screen_height_};
             SDL_RenderCopy(renderer_, light_rays_texture, nullptr, &dest);
         }
+    } else {
+        SDL_SetRenderTarget(renderer_, nullptr);
     }
 
     // ----- PRESENT -----
