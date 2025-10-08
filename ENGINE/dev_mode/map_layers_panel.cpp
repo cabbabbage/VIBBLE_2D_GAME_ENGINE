@@ -2308,6 +2308,7 @@ MapLayersPanel::RoomCandidateWidget::RoomCandidateWidget(LayerConfigPanel* owner
     if (editable_) {
 
         range_slider_ = std::make_unique<DMRangeSlider>(0, kCandidateRangeMax, 0, 0);
+        range_slider_->set_defer_commit_until_unfocus(true);
 
         add_child_button_ = std::make_unique<DMButton>("Add Child", &DMStyles::HeaderButton(), 120, DMButton::height());
 
@@ -2338,6 +2339,7 @@ void MapLayersPanel::RoomCandidateWidget::refresh_from_json() {
         const int slider_max = std::max(kCandidateRangeMax, max_count_cache_ + 8);
 
         range_slider_ = std::make_unique<DMRangeSlider>(0, slider_max, min_count_cache_, max_count_cache_);
+        range_slider_->set_defer_commit_until_unfocus(true);
 
     } else {
 

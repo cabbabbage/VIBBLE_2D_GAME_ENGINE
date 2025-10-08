@@ -710,6 +710,7 @@ void RoomConfigurator::rebuild_rows() {
             rows.push_back({ room_w_label_.get() });
             auto width_bounds = compute_slider_range(room_w_min_, room_w_max_);
             room_w_slider_ = std::make_unique<DMRangeSlider>(width_bounds.first, width_bounds.second, room_w_min_, room_w_max_);
+            room_w_slider_->set_defer_commit_until_unfocus(true);
             room_w_slider_w_ = std::make_unique<RangeSliderWidget>(room_w_slider_.get());
             rows.push_back({ room_w_slider_w_.get() });
 
@@ -718,6 +719,7 @@ void RoomConfigurator::rebuild_rows() {
                 rows.push_back({ room_h_label_.get() });
                 auto height_bounds = compute_slider_range(room_h_min_, room_h_max_);
                 room_h_slider_ = std::make_unique<DMRangeSlider>(height_bounds.first, height_bounds.second, room_h_min_, room_h_max_);
+                room_h_slider_->set_defer_commit_until_unfocus(true);
                 room_h_slider_w_ = std::make_unique<RangeSliderWidget>(room_h_slider_.get());
                 rows.push_back({ room_h_slider_w_.get() });
             } else {

@@ -62,6 +62,10 @@ void OnEndSelector::set_bounds(const SDL_Rect& bounds) {
     layout_dropdown();
 }
 
+int OnEndSelector::preferred_height(int) const {
+    return kPanelPadding * 2 + DMDropdown::height();
+}
+
 void OnEndSelector::update() {
     layout_dropdown();
     if (!document_ || animation_id_.empty()) {

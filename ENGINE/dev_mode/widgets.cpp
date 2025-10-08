@@ -421,8 +421,47 @@ DMSlider::DMSlider(const std::string& label, int min_val, int max_val, int value
 }
 
 DMSlider::~DMSlider() {
+    commit_pending_value();
     focused_ = false;
     set_slider_scroll_capture(this, false);
+}
+
+int DMSlider::clamp_value(int v) const {
+    if (min_ <= max_) {
+        return std::max(min_, std::min(max_, v));
+    }
+    return std::min(min_, std::max(max_, v));
+}
+
+bool DMSlider::apply_interaction_value(int v) {
+    int clamped = clamp_value(v);
+    if (!defer_commit_until_unfocus_) {
+        int prev = value_;
+        value_ = clamped;
+        pending_value_ = value_;
+        has_pending_value_ = false;
+        return value_ != prev;
+    }
+    int prev_display = pending_value_;
+    pending_value_ = clamped;
+    has_pending_value_ = (pending_value_ != value_);
+    return pending_value_ != prev_display;
+}
+
+bool DMSlider::commit_pending_value() {
+    if (!defer_commit_until_unfocus_ || !has_pending_value_) {
+        return false;
+    }
+    has_pending_value_ = false;
+    if (value_ == pending_value_) {
+        return false;
+    }
+    value_ = pending_value_;
+    return true;
+}
+
+int DMSlider::display_value() const {
+    return defer_commit_until_unfocus_ ? pending_value_ : value_;
 }
 
 void DMSlider::set_rect(const SDL_Rect& r) {
@@ -470,11 +509,10 @@ void DMSlider::set_rect(const SDL_Rect& r) {
 }
 
 void DMSlider::set_value(int v) {
-    if (min_ <= max_) {
-        value_ = std::max(min_, std::min(max_, v));
-    } else {
-        value_ = std::min(min_, std::max(max_, v));
-    }
+    int clamped = clamp_value(v);
+    value_ = clamped;
+    pending_value_ = clamped;
+    has_pending_value_ = false;
 }
 
 int DMSlider::label_space() const {
@@ -497,7 +535,7 @@ SDL_Rect DMSlider::track_rect() const {
 SDL_Rect DMSlider::knob_rect() const {
     SDL_Rect tr = track_rect();
     int usable = std::max(1, tr.w - 12);
-    int x = tr.x + (int)((value_ - min_) * usable / (double)(std::max(1, max_ - min_)));
+    int x = tr.x + (int)((display_value() - min_) * usable / (double)(std::max(1, max_ - min_)));
     return SDL_Rect{ x, tr.y - 4, 12, 16 };
 }
 
@@ -530,6 +568,9 @@ bool DMSlider::handle_event(const SDL_Event& e) {
         }
         focused_ = focus;
         set_slider_scroll_capture(this, focused_);
+        if (!focused_) {
+            commit_pending_value();
+        }
     };
     auto update_hover = [this, &set_focus](SDL_Point p) {
         bool inside = SDL_PointInRect(&p, &rect_);
@@ -556,7 +597,7 @@ bool DMSlider::handle_event(const SDL_Event& e) {
         }
         SDL_Rect vr = value_rect();
         if (inside && SDL_PointInRect(&p, &vr)) {
-            edit_box_ = std::make_unique<DMTextBox>("", std::to_string(value_));
+            edit_box_ = std::make_unique<DMTextBox>("", std::to_string(display_value()));
             edit_box_->set_rect(vr);
             edit_box_->handle_event(e);
             return true;
@@ -587,9 +628,11 @@ bool DMSlider::handle_event(const SDL_Event& e) {
         if (delta == 0) {
             return false;
         }
-        const int prev = value_;
-        set_value(value_ + delta);
-        return value_ != prev;
+        const int prev_display = display_value();
+        if (!apply_interaction_value(prev_display + delta)) {
+            return false;
+        }
+        return display_value() != prev_display;
     }
     return false;
 }
@@ -628,7 +671,8 @@ void DMSlider::render(SDL_Renderer* r) const {
     SDL_SetRenderDrawColor(r, st.track_bg.r, st.track_bg.g, st.track_bg.b, st.track_bg.a);
     SDL_RenderFillRect(r, &tr);
     int range = std::max(1, max_ - min_);
-    SDL_Rect fill{ tr.x, tr.y, (int)((value_ - min_) * tr.w / (double)range), tr.h };
+    int current_value = display_value();
+    SDL_Rect fill{ tr.x, tr.y, (int)((current_value - min_) * tr.w / (double)range), tr.h };
     SDL_SetRenderDrawColor(r, st.track_fill.r, st.track_fill.g, st.track_fill.b, st.track_fill.a);
     SDL_RenderFillRect(r, &fill);
     SDL_Rect krect = knob_rect();
@@ -642,7 +686,7 @@ void DMSlider::render(SDL_Renderer* r) const {
         edit_box_->render(r);
     } else {
         SDL_Rect vr = value_rect();
-        draw_text(r, std::to_string(value_), vr.x + 6, vr.y + (vr.h - st.value.font_size) / 2);
+        draw_text(r, std::to_string(current_value), vr.x + 6, vr.y + (vr.h - st.value.font_size) / 2);
     }
 }
 
@@ -679,8 +723,90 @@ DMRangeSlider::DMRangeSlider(int min_val, int max_val, int min_value, int max_va
 }
 
 DMRangeSlider::~DMRangeSlider() {
+    commit_pending_values();
     focused_ = false;
     set_slider_scroll_capture(this, false);
+}
+
+int DMRangeSlider::clamp_min_value(int v) const {
+    int hi = defer_commit_until_unfocus_ ? pending_max_value_ : max_value_;
+    hi = std::max(min_, std::min(max_, hi));
+    return std::max(min_, std::min(hi, v));
+}
+
+int DMRangeSlider::clamp_max_value(int v) const {
+    int lo = defer_commit_until_unfocus_ ? pending_min_value_ : min_value_;
+    lo = std::max(min_, std::min(max_, lo));
+    return std::max(lo, std::min(max_, v));
+}
+
+bool DMRangeSlider::apply_min_interaction(int v) {
+    int clamped = clamp_min_value(v);
+    if (!defer_commit_until_unfocus_) {
+        int prev = min_value_;
+        min_value_ = clamped;
+        if (min_value_ > max_value_) min_value_ = max_value_;
+        pending_min_value_ = min_value_;
+        pending_max_value_ = max_value_;
+        pending_dirty_ = false;
+        return min_value_ != prev;
+    }
+    int prev_display = pending_min_value_;
+    pending_min_value_ = clamped;
+    if (pending_min_value_ > pending_max_value_) pending_min_value_ = pending_max_value_;
+    bool changed = pending_min_value_ != prev_display;
+    pending_dirty_ = pending_dirty_ || (pending_min_value_ != min_value_);
+    return changed;
+}
+
+bool DMRangeSlider::apply_max_interaction(int v) {
+    int clamped = clamp_max_value(v);
+    if (!defer_commit_until_unfocus_) {
+        int prev = max_value_;
+        max_value_ = clamped;
+        if (max_value_ < min_value_) max_value_ = min_value_;
+        pending_min_value_ = min_value_;
+        pending_max_value_ = max_value_;
+        pending_dirty_ = false;
+        return max_value_ != prev;
+    }
+    int prev_display = pending_max_value_;
+    pending_max_value_ = clamped;
+    if (pending_max_value_ < pending_min_value_) pending_max_value_ = pending_min_value_;
+    bool changed = pending_max_value_ != prev_display;
+    pending_dirty_ = pending_dirty_ || (pending_max_value_ != max_value_);
+    return changed;
+}
+
+bool DMRangeSlider::commit_pending_values() {
+    if (!defer_commit_until_unfocus_) {
+        return false;
+    }
+    if (!pending_dirty_ && pending_min_value_ == min_value_ && pending_max_value_ == max_value_) {
+        return false;
+    }
+    pending_dirty_ = false;
+    bool changed = false;
+    if (min_value_ != pending_min_value_) {
+        min_value_ = pending_min_value_;
+        changed = true;
+    }
+    if (max_value_ != pending_max_value_) {
+        max_value_ = pending_max_value_;
+        changed = true;
+    }
+    if (min_value_ > max_value_) {
+        max_value_ = min_value_;
+    }
+    return changed;
+}
+
+int DMRangeSlider::display_min_value() const {
+    return defer_commit_until_unfocus_ ? pending_min_value_ : min_value_;
+}
+
+int DMRangeSlider::display_max_value() const {
+    return defer_commit_until_unfocus_ ? pending_max_value_ : max_value_;
 }
 
 void DMRangeSlider::set_rect(const SDL_Rect& r) {
@@ -712,11 +838,21 @@ void DMRangeSlider::set_rect(const SDL_Rect& r) {
 void DMRangeSlider::set_min_value(int v) {
     min_value_ = std::max(min_, std::min(max_, v));
     if (min_value_ > max_value_) min_value_ = max_value_;
+    pending_min_value_ = min_value_;
+    if (!defer_commit_until_unfocus_) {
+        pending_max_value_ = max_value_;
+    }
+    pending_dirty_ = false;
 }
 
 void DMRangeSlider::set_max_value(int v) {
     max_value_ = std::max(min_, std::min(max_, v));
     if (max_value_ < min_value_) max_value_ = min_value_;
+    pending_max_value_ = max_value_;
+    if (!defer_commit_until_unfocus_) {
+        pending_min_value_ = min_value_;
+    }
+    pending_dirty_ = false;
 }
 
 SDL_Rect DMRangeSlider::content_rect() const {
@@ -731,14 +867,14 @@ SDL_Rect DMRangeSlider::track_rect() const {
 SDL_Rect DMRangeSlider::min_knob_rect() const {
     SDL_Rect tr = track_rect();
     int range = std::max(1, max_ - min_);
-    int x = tr.x + (int)((min_value_ - min_) * (tr.w - 12) / (double)range);
+    int x = tr.x + (int)((display_min_value() - min_) * (tr.w - 12) / (double)range);
     return SDL_Rect{ x, tr.y, 12, 16 };
 }
 
 SDL_Rect DMRangeSlider::max_knob_rect() const {
     SDL_Rect tr = track_rect();
     int range = std::max(1, max_ - min_);
-    int x = tr.x + (int)((max_value_ - min_) * (tr.w - 12) / (double)range);
+    int x = tr.x + (int)((display_max_value() - min_) * (tr.w - 12) / (double)range);
     return SDL_Rect{ x, tr.y - 16 + tr.h,    12, 16 };
 }
 
@@ -780,6 +916,9 @@ bool DMRangeSlider::handle_event(const SDL_Event& e) {
         }
         focused_ = focus;
         set_slider_scroll_capture(this, focused_);
+        if (!focused_) {
+            commit_pending_values();
+        }
     };
     auto update_hover = [this, &set_focus](SDL_Point p) {
         bool inside = SDL_PointInRect(&p, &rect_);
@@ -831,12 +970,12 @@ bool DMRangeSlider::handle_event(const SDL_Event& e) {
         }
         if (e.button.clicks >= 2) {
             if (inside && SDL_PointInRect(&p, &min_value_rect_)) {
-                edit_min_ = std::make_unique<DMTextBox>("", std::to_string(min_value_));
+                edit_min_ = std::make_unique<DMTextBox>("", std::to_string(display_min_value()));
                 edit_min_->set_rect(min_value_rect_);
                 edit_min_->handle_event(e);
                 return true;
             } else if (inside && SDL_PointInRect(&p, &max_value_rect_)) {
-                edit_max_ = std::make_unique<DMTextBox>("", std::to_string(max_value_));
+                edit_max_ = std::make_unique<DMTextBox>("", std::to_string(display_max_value()));
                 edit_max_->set_rect(max_value_rect_);
                 edit_max_->handle_event(e);
                 return true;
@@ -868,14 +1007,18 @@ bool DMRangeSlider::handle_event(const SDL_Event& e) {
         if (delta == 0) {
             return false;
         }
-        const int prev_min = min_value_;
-        const int prev_max = max_value_;
+        const int prev_min = display_min_value();
+        const int prev_max = display_max_value();
+        bool changed = false;
         if (max_hovered_) {
-            set_max_value(max_value_ + delta);
+            changed = apply_max_interaction(prev_max + delta);
         } else {
-            set_min_value(min_value_ + delta);
+            changed = apply_min_interaction(prev_min + delta);
         }
-        return prev_min != min_value_ || prev_max != max_value_;
+        if (!changed) {
+            changed = display_min_value() != prev_min || display_max_value() != prev_max;
+        }
+        return changed;
     }
     return false;
 }
@@ -933,12 +1076,12 @@ void DMRangeSlider::render(SDL_Renderer* r) const {
         edit_min_->render(r);
     } else {
         int text_y = min_value_rect_.y + (min_value_rect_.h - st.value.font_size) / 2;
-        draw_text(r, std::to_string(min_value_), min_value_rect_.x + 4, text_y);
+        draw_text(r, std::to_string(display_min_value()), min_value_rect_.x + 4, text_y);
     }
     if (edit_max_) {
         edit_max_->render(r);
     } else {
-        std::string value = std::to_string(max_value_);
+        std::string value = std::to_string(display_max_value());
         int text_x = max_value_rect_.x + 4;
         int text_y = max_value_rect_.y + (max_value_rect_.h - st.value.font_size) / 2;
         TTF_Font* f = TTF_OpenFont(st.label.font_path.c_str(), st.label.font_size);

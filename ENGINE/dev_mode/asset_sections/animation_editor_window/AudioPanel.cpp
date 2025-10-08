@@ -91,6 +91,31 @@ void AudioPanel::set_importer(std::shared_ptr<AudioImporter> importer) {
 
 void AudioPanel::set_file_picker(FilePicker picker) { file_picker_ = std::move(picker); }
 
+int AudioPanel::preferred_height(int width) const {
+    const int padding = kPanelPadding;
+    const int gap = kItemGap;
+    const int label_h = label_height();
+    const int slider_area_width = std::max(0, width - padding * 2);
+    const int slider_h = volume_slider_ ? volume_slider_->preferred_height(slider_area_width) : DMSlider::height();
+    int height = padding;  // top padding
+    height += label_h;     // section title
+    if (has_audio_) {
+        height += label_h;  // clip label
+        height += DMButton::height();
+        height += gap;
+        height += slider_h;
+        height += gap;
+        height += DMCheckbox::height();
+        height += gap;
+        height += DMButton::height();  // button row
+    } else {
+        height += label_h;  // "No audio" label
+        height += DMButton::height();
+    }
+    height += padding;  // bottom padding
+    return height;
+}
+
 void AudioPanel::ensure_widgets() {
     if (!attach_button_) {
         attach_button_ = std::make_unique<DMButton>("Attach Audio", &DMStyles::CreateButton(), 160, DMButton::height());

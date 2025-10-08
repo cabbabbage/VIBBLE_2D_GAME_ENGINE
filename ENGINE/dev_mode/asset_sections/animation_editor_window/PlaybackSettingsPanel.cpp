@@ -105,6 +105,22 @@ void PlaybackSettingsPanel::set_bounds(const SDL_Rect& bounds) {
     layout_dirty_ = true;
 }
 
+int PlaybackSettingsPanel::preferred_height(int width) const {
+    const int padding = kPanelPadding;
+    const int gap = kItemGap;
+    const int checkbox_height = DMCheckbox::height();
+    const int slider_area_width = std::max(0, width - padding * 2);
+    const int slider_height = speed_slider_ ? speed_slider_->preferred_height(slider_area_width)
+                                            : DMSlider::height();
+
+    int height = padding;  // top padding
+    height += checkbox_height * 5;
+    height += gap * 4;  // gaps between checkboxes
+    height += slider_height;
+    height += padding;  // bottom padding
+    return height;
+}
+
 void PlaybackSettingsPanel::update() {
     layout_widgets();
 }

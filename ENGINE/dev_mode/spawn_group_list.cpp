@@ -189,8 +189,8 @@ struct SpawnGroupList::EntryRow {
 
 class SpawnGroupList::CandidateList {
 public:
-    CandidateList(SpawnGroupList& owner, EntryRow& row)
-        : owner_(owner), row_(row) {}
+    CandidateList(SpawnGroupList& owner, EntryRow& row, bool defer_commit = false)
+        : owner_(owner), row_(row), defer_commit_until_unfocus_(defer_commit) {}
     ~CandidateList();
 
     void rebuild();
@@ -254,6 +254,8 @@ private:
     bool hover_active_ = false;
     bool dirty_ = false;
     bool scroll_focus_ = false;
+    bool pending_commit_ = false;
+    bool defer_commit_until_unfocus_ = false;
 
     std::unique_ptr<SpacerWidget> top_gap_;
     std::unique_ptr<RowRectMarkerWidget> begin_marker_;
@@ -276,6 +278,7 @@ static bool method_uses_range(const std::string& m) {
 }  // namespace
 
 SpawnGroupList::CandidateList::~CandidateList() {
+    set_scroll_focus(false);
     DMWidgetsSetSliderScrollCapture(this, false);
 }
 
@@ -284,6 +287,7 @@ void SpawnGroupList::CandidateList::rebuild() {
     hover_index_ = -1;
     hover_active_ = false;
     dirty_ = false;
+    pending_commit_ = false;
     set_scroll_focus(false);
     total_weight_ = 0.0;
     if (!row_.entry) return;
@@ -307,6 +311,7 @@ void SpawnGroupList::CandidateList::rebuild() {
         double share = total_weight_ / candidates_.size();
         for (auto& info : candidates_) info.weight = share;
         dirty_ = true;
+        pending_commit_ = false;
     }
     ensure_common_widgets();
 }
@@ -357,6 +362,7 @@ bool SpawnGroupList::CandidateList::sync_to_json() {
 
     if (candidates_.empty()) {
         dirty_ = false;
+        pending_commit_ = false;
         return true;
     }
 
@@ -404,6 +410,7 @@ bool SpawnGroupList::CandidateList::sync_to_json() {
         candidates_[i].weight = static_cast<double>(rounded[i]);
     }
     dirty_ = false;
+    pending_commit_ = false;
     return true;
 }
 
@@ -413,6 +420,12 @@ void SpawnGroupList::CandidateList::set_scroll_focus(bool focus) {
     }
     scroll_focus_ = focus;
     DMWidgetsSetSliderScrollCapture(this, scroll_focus_);
+    if (!scroll_focus_ && defer_commit_until_unfocus_) {
+        if (pending_commit_) {
+            dirty_ = true;
+            pending_commit_ = false;
+        }
+    }
 }
 
 void SpawnGroupList::CandidateList::clear_hover() {
@@ -465,6 +478,7 @@ bool SpawnGroupList::CandidateList::remove_hovered() {
         renormalize();
     }
     dirty_ = true;
+    pending_commit_ = false;
     return true;
 }
 
@@ -559,7 +573,11 @@ bool SpawnGroupList::CandidateList::adjust_weight_internal(int idx, int steps) {
         }
     }
     renormalize();
-    dirty_ = true;
+    if (defer_commit_until_unfocus_) {
+        pending_commit_ = true;
+    } else {
+        dirty_ = true;
+    }
     return true;
 }
 
@@ -609,6 +627,7 @@ void SpawnGroupList::CandidateList::add_candidate(const std::string& asset_name)
     hover_active_ = true;
     renormalize();
     dirty_ = true;
+    pending_commit_ = false;
 }
 
 int SpawnGroupList::CandidateList::CandidatePieWidget::height_for_width(int w) const {
@@ -1234,6 +1253,7 @@ void SpawnGroupList::append_rows(Rows& rows) {
                     int mn = r->entry->value("min_number", r->entry->value("max_number", 1));
                     int mx = r->entry->value("max_number", mn);
                     r->qty_sl = std::make_unique<DMRangeSlider>(0, 100, mn, mx);
+                    r->qty_sl->set_defer_commit_until_unfocus(true);
                     r->qty_w  = std::make_unique<RangeSliderWidget>(r->qty_sl.get());
                 }
                 // Area link button
@@ -1273,7 +1293,7 @@ void SpawnGroupList::append_rows(Rows& rows) {
                 }
 
                 if (!r->candidate_list)
-                    r->candidate_list = std::make_unique<CandidateList>(*this, *r);
+                    r->candidate_list = std::make_unique<CandidateList>(*this, *r, true);
                 r->candidate_list->rebuild();
                 r->candidate_list->append_rows(out);
                 if (r->body_end_marker)
@@ -1671,7 +1691,7 @@ void SpawnGroupList::open_asset_search(EntryRow& row, std::function<void(const s
             entry["candidates"] = json::array();
         }
         if (!rr->candidate_list)
-            rr->candidate_list = std::make_unique<CandidateList>(*this, *rr);
+            rr->candidate_list = std::make_unique<CandidateList>(*this, *rr, true);
         rr->candidate_list->rebuild();
         rr->candidate_list->add_candidate(selection);
         bool changed = rr->candidate_list->sync_to_json();

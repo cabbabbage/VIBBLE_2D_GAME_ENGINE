@@ -96,11 +96,27 @@ public:
     const SDL_Rect& rect() const { return rect_; }
     void set_value(int v);
     int value() const { return value_; }
+    void set_defer_commit_until_unfocus(bool defer) {
+        if (defer_commit_until_unfocus_ == defer) {
+            return;
+        }
+        defer_commit_until_unfocus_ = defer;
+        if (!defer_commit_until_unfocus_) {
+            commit_pending_value();
+        }
+        pending_value_ = value_;
+        has_pending_value_ = false;
+    }
+    bool defer_commit_until_unfocus() const { return defer_commit_until_unfocus_; }
     bool handle_event(const SDL_Event& e);
     void render(SDL_Renderer* r) const;
     int preferred_height(int width) const;
     static int height();
 private:
+    int clamp_value(int v) const;
+    bool apply_interaction_value(int v);
+    bool commit_pending_value();
+    int display_value() const;
     int label_space() const;
     SDL_Rect content_rect() const;
     SDL_Rect value_rect() const;
@@ -118,6 +134,9 @@ private:
     int min_ = 0;
     int max_ = 100;
     int value_ = 0;
+    int pending_value_ = 0;
+    bool has_pending_value_ = false;
+    bool defer_commit_until_unfocus_ = false;
     bool knob_hovered_ = false;
     bool hovered_ = false;
     bool focused_ = false;
@@ -134,10 +153,30 @@ public:
     void set_max_value(int v);
     int min_value() const { return min_value_; }
     int max_value() const { return max_value_; }
+    void set_defer_commit_until_unfocus(bool defer) {
+        if (defer_commit_until_unfocus_ == defer) {
+            return;
+        }
+        defer_commit_until_unfocus_ = defer;
+        if (!defer_commit_until_unfocus_) {
+            commit_pending_values();
+        }
+        pending_min_value_ = min_value_;
+        pending_max_value_ = max_value_;
+        pending_dirty_ = false;
+    }
+    bool defer_commit_until_unfocus() const { return defer_commit_until_unfocus_; }
     bool handle_event(const SDL_Event& e);
     void render(SDL_Renderer* r) const;
     static int height();
 private:
+    int clamp_min_value(int v) const;
+    int clamp_max_value(int v) const;
+    bool apply_min_interaction(int v);
+    bool apply_max_interaction(int v);
+    bool commit_pending_values();
+    int display_min_value() const;
+    int display_max_value() const;
     SDL_Rect track_rect() const;
     SDL_Rect min_knob_rect() const;
     SDL_Rect max_knob_rect() const;
@@ -152,6 +191,10 @@ private:
     int max_ = 100;
     int min_value_ = 0;
     int max_value_ = 100;
+    int pending_min_value_ = 0;
+    int pending_max_value_ = 0;
+    bool pending_dirty_ = false;
+    bool defer_commit_until_unfocus_ = false;
     bool min_hovered_ = false;
     bool max_hovered_ = false;
     bool hovered_ = false;

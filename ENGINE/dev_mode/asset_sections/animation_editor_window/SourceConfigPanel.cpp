@@ -25,6 +25,7 @@
 #include "AsyncTaskQueue.hpp"
 #include "CroppingService.hpp"
 #include "dm_styles.hpp"
+#include "dev_mode/widgets.hpp"
 
 namespace animation_editor {
 
@@ -217,6 +218,20 @@ bool SourceConfigPanel::handle_event(const SDL_Event& e) {
             break;
     }
     return false;
+}
+
+int SourceConfigPanel::preferred_height(int) const {
+    const int padding = 6;
+    const int button_count = static_cast<int>(buttons_.size());
+    const int button_height = DMButton::height();
+    int height = padding;  // top padding
+    if (button_count > 0) {
+        height += button_count * button_height;
+        height += std::max(0, button_count - 1) * padding;
+    }
+    height += padding;  // bottom padding
+    height += 6;        // busy indicator strip
+    return height;
 }
 
 void SourceConfigPanel::reload_from_document() {

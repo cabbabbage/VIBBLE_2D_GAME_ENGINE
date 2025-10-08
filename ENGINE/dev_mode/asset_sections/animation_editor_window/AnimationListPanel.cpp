@@ -138,6 +138,25 @@ void AnimationListPanel::render(SDL_Renderer* renderer) const {
 
 bool AnimationListPanel::handle_event(const SDL_Event& e) {
     if (e.type == SDL_MOUSEWHEEL) {
+        int mx = 0;
+        int my = 0;
+        SDL_GetMouseState(&mx, &my);
+        SDL_Point mouse{mx, my};
+        if (!SDL_PointInRect(&mouse, &bounds_) && !DMWidgetsSliderScrollCaptured()) {
+            return false;
+        }
+
+        bool handled = false;
+        for (auto& inspector : inspectors_) {
+            if (inspector && inspector->handle_event(e)) {
+                handled = true;
+                break;
+            }
+        }
+        if (handled || DMWidgetsSliderScrollCaptured()) {
+            return handled;
+        }
+
         const int step = DMSpacing::section_gap() + DMButton::height();
         scroll_offset_ -= e.wheel.y * step;
         clamp_scroll();

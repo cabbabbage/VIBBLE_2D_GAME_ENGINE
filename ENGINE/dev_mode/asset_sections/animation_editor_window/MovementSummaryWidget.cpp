@@ -95,6 +95,17 @@ void MovementSummaryWidget::set_bounds(const SDL_Rect& bounds) {
 
 void MovementSummaryWidget::set_edit_callback(EditCallback callback) { edit_callback_ = std::move(callback); }
 
+int MovementSummaryWidget::preferred_height(int) const {
+    const int padding = kPanelPadding;
+    const int label_height = DMStyles::Label().font_size + DMSpacing::small_gap();
+    int height = padding;  // top padding
+    height += label_height * 2;
+    height += DMSpacing::small_gap();
+    height += DMButton::height();
+    height += padding;  // bottom padding
+    return height;
+}
+
 void MovementSummaryWidget::update() {
     if (!document_) {
         return;
