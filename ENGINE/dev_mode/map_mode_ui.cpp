@@ -242,12 +242,12 @@ void MapModeUI::ensure_panels() {
         }
         layers_panel_->close();
     }
-      if (!footer_panel_) {
-          // No left-hand title label; keep header clean
-          footer_panel_ = std::make_unique<FullScreenCollapsible>("");
-          footer_panel_->set_bounds(screen_w_, screen_h_);
-          footer_panel_->set_visible(footer_always_visible_ || map_mode_active_);
-          footer_panel_->set_expanded(false);
+    if (!footer_panel_) {
+        footer_panel_ = std::make_unique<FullScreenCollapsible>("");
+        footer_panel_->set_bounds(screen_w_, screen_h_);
+        footer_panel_->set_title_visible(false);
+        footer_panel_->set_visible(footer_always_visible_ || map_mode_active_);
+        footer_panel_->set_expanded(false);
 
         footer_panel_->set_content_event_handler([this](const SDL_Event& e) -> bool {
             if (layers_footer_visible_ && layers_panel_) {
@@ -297,17 +297,6 @@ void MapModeUI::configure_footer_buttons() {
             append_button(config);
         }
     };
-
-    // Mode selection drop-up trigger
-    {
-        FullScreenCollapsible::HeaderButton mode_btn;
-        mode_btn.id = "mode_select";
-        // Shorter label without the "Mode:" prefix
-        mode_btn.label = (header_mode_ == HeaderMode::Room) ? "Room" : (header_mode_ == HeaderMode::Area ? "Area" : "Map");
-        mode_btn.momentary = true;
-        mode_btn.on_toggle = [this](bool) { set_active_panel(PanelType::ModeDropdown); };
-        buttons.push_back(std::move(mode_btn));
-    }
 
     if (header_mode_ == HeaderMode::Map) {
         append_custom(map_mode_buttons_, HeaderMode::Map);
@@ -398,41 +387,6 @@ void MapModeUI::set_active_panel(PanelType panel) {
         } else {
             light_panel_->close();
         }
-    }
-    if (panel == PanelType::ModeDropdown) {
-        if (!mode_dropdown_) {
-            mode_dropdown_ = std::make_unique<DockableCollapsible>("Select Mode", true, 0, 0);
-            mode_dropdown_->set_padding(8);
-        }
-        // Place above footer header (drop-up)
-        SDL_Rect header = footer_panel_ ? footer_panel_->header_rect() : SDL_Rect{0,0,screen_w_,40};
-        const int w = 240;
-        const int h = DMButton::height() * 3 + DMSpacing::item_gap() * 4;
-        SDL_Rect r{ header.x + DMSpacing::panel_padding(), std::max(0, header.y - h - 6), w, h };
-        mode_dropdown_->set_rect(r);
-        mode_dropdown_widgets_.clear();
-        mode_dropdown_buttons_.clear();
-        DockableCollapsible::Rows rows;
-        auto add_mode = [&](const char* label, HeaderMode m) {
-            auto btn = std::make_unique<DMButton>(label, &DMStyles::ListButton(), 200, DMButton::height());
-            DMButton* raw = btn.get();
-            auto wdg = std::make_unique<ButtonWidget>(raw, [this, m]() {
-                if (on_mode_changed_) on_mode_changed_(m);
-                if (mode_dropdown_) mode_dropdown_->close();
-            });
-            rows.push_back({ wdg.get() });
-            mode_dropdown_widgets_.push_back(std::move(wdg));
-            mode_dropdown_buttons_.push_back(std::move(btn));
-        };
-        add_mode("Room", HeaderMode::Room);
-        add_mode("Map", HeaderMode::Map);
-        add_mode("Area", HeaderMode::Area);
-        mode_dropdown_->set_rows(rows);
-        mode_dropdown_->open();
-        track_floating_panel(mode_dropdown_.get());
-        new_active = PanelType::ModeDropdown;
-    } else {
-        if (mode_dropdown_) mode_dropdown_->close();
     }
     if (panel == PanelType::Layers) {
         layers_footer_requested_ = true;
@@ -637,9 +591,6 @@ void MapModeUI::render(SDL_Renderer* renderer) const {
         render_layers_footer(renderer);
     } else {
         render_layers_footer(renderer);
-    }
-    if (mode_dropdown_ && mode_dropdown_->is_visible()) {
-        mode_dropdown_->render(renderer);
     }
 }
 

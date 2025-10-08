@@ -29,6 +29,8 @@ public:
 
     explicit FullScreenCollapsible(std::string title);
     void set_title(const std::string& title);
+    void set_title_visible(bool visible);
+    bool title_visible() const { return show_title_; }
 
     void set_bounds(int width, int height);
 
@@ -74,6 +76,7 @@ private:
     int header_height_ = 0;
     bool visible_ = true;
     bool expanded_ = false;
+    bool show_title_ = true;
 
     SDL_Rect header_rect_{0,0,0,0};
     SDL_Rect content_rect_{0,0,0,0};

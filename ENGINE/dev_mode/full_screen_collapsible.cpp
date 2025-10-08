@@ -66,6 +66,9 @@ void FullScreenCollapsible::set_header_height(int height) {
 
 void FullScreenCollapsible::update_title_width() {
     title_width_ = 0;
+    if (!show_title_ || title_.empty()) {
+        return;
+    }
     const DMLabelStyle& style = DMStyles::Label();
     TTF_Font* font = style.open_font();
     if (!font) return;
@@ -230,12 +233,14 @@ void FullScreenCollapsible::render(SDL_Renderer* renderer) const {
         SDL_RenderDrawRect(renderer, &content);
     }
 
-    int text_x = header_rect_.x + DMSpacing::item_gap();
-    int text_y = header_rect_.y + (header_rect_.h - DMStyles::Label().font_size) / 2;
-    if (header_rect_.h > DMStyles::Label().font_size + DMSpacing::item_gap() * 2) {
-        text_y = header_rect_.y + DMSpacing::item_gap();
+    if (show_title_ && !title_.empty()) {
+        int text_x = header_rect_.x + DMSpacing::item_gap();
+        int text_y = header_rect_.y + (header_rect_.h - DMStyles::Label().font_size) / 2;
+        if (header_rect_.h > DMStyles::Label().font_size + DMSpacing::item_gap() * 2) {
+            text_y = header_rect_.y + DMSpacing::item_gap();
+        }
+        draw_label(renderer, title_, text_x, text_y);
     }
-    draw_label(renderer, title_, text_x, text_y);
 
     for (const auto& btn : buttons_) {
         if (!btn.widget) continue;
@@ -421,6 +426,15 @@ const FullScreenCollapsible::HeaderButton* FullScreenCollapsible::find_button(co
 // Added: update the title dynamically from outside
 void FullScreenCollapsible::set_title(const std::string& title) {
     title_ = title;
+    update_title_width();
+    layout_buttons();
+}
+
+void FullScreenCollapsible::set_title_visible(bool visible) {
+    if (show_title_ == visible) {
+        return;
+    }
+    show_title_ = visible;
     update_title_width();
     layout_buttons();
 }
