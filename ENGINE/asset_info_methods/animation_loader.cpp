@@ -59,7 +59,6 @@ void AnimationLoader::load(AssetInfo& info, SDL_Renderer* renderer) {
 		const Animation& a = kv.second;
 		if (a.movment || a.total_dx != 0 || a.total_dy != 0) { info.moving_asset = true; break; }
 	}
-	get_area_textures(info, renderer);
 }
 
 void AnimationLoader::get_area_textures(AssetInfo& info, SDL_Renderer* renderer) {

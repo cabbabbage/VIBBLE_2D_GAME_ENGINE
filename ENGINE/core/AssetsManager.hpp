@@ -39,7 +39,7 @@ public:
     Asset* get_hovered_asset() const;
 
     const std::vector<Asset*>& getActive() const { return active_assets; }
-    const std::vector<Asset*>& getFilteredActiveAssets() const { return filtered_active_assets; }
+    const std::vector<Asset*>& getFilteredActiveAssets() const;
     std::vector<Asset*>& mutable_filtered_active_assets() { return filtered_active_assets; }
     const std::vector<Asset*>& getClosest() const { return closest_assets; }
     camera& getView() { return camera_; }

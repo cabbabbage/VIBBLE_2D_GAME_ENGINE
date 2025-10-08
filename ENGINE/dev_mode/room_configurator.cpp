@@ -140,14 +140,41 @@ std::optional<int> read_radius_value(const nlohmann::json& object) {
     return std::nullopt;
 }
 
-int infer_radius_from_dimensions(int w_min, int w_max, int h_min, int h_max) {
-    int diameter = 0;
-    diameter = std::max(diameter, std::max(w_min, w_max));
-    diameter = std::max(diameter, std::max(h_min, h_max));
-    if (diameter <= 0) {
-        return 0;
+std::optional<std::pair<int, int>> read_radius_range(const nlohmann::json& object) {
+    if (!object.is_object()) {
+        return std::nullopt;
     }
-    return std::max(0, diameter / 2);
+
+    auto min_value = find_dimension_value(object, {"min_radius", "radius_min", "minRadius", "radiusMin"});
+    auto max_value = find_dimension_value(object, {"max_radius", "radius_max", "maxRadius", "radiusMax"});
+
+    bool have_min = min_value.has_value();
+    bool have_max = max_value.has_value();
+
+    if (!have_min && !have_max) {
+        if (auto legacy = read_radius_value(object)) {
+            int value = std::max(0, *legacy);
+            return std::make_pair(value, value);
+        }
+        return std::nullopt;
+    }
+
+    int min_radius = std::max(0, min_value.value_or(max_value.value_or(0)));
+    int max_radius = std::max(0, max_value.value_or(min_value.value_or(min_radius)));
+
+    if (max_radius < min_radius) {
+        std::swap(min_radius, max_radius);
+    }
+
+    return std::make_pair(min_radius, max_radius);
+}
+
+std::pair<int, int> infer_radius_range_from_dimensions(int w_min, int w_max, int h_min, int h_max) {
+    int min_diameter = std::max({0, w_min, h_min});
+    int max_diameter = std::max({min_diameter, w_max, h_max});
+    int min_radius = std::max(0, min_diameter / 2);
+    int max_radius = std::max(min_radius, max_diameter / 2);
+    return {min_radius, max_radius};
 }
 }
 
@@ -343,14 +370,17 @@ void RoomConfigurator::load_from_json(const nlohmann::json& data) {
         geometry_is_circle = (lowered == "circle");
     }
 
-    room_radius_ = 0;
+    room_radius_min_ = 0;
+    room_radius_max_ = 0;
     if (geometry_is_circle) {
-        if (auto radius_value = read_radius_value(loaded_json_)) {
-            room_radius_ = *radius_value;
-        } else {
-            room_radius_ = infer_radius_from_dimensions(room_w_min_, room_w_max_, room_h_min_, room_h_max_);
+        auto inferred = infer_radius_range_from_dimensions(room_w_min_, room_w_max_, room_h_min_, room_h_max_);
+        if (auto radius_range = read_radius_range(loaded_json_)) {
+            inferred = *radius_range;
         }
-        if (room_radius_ < 0) room_radius_ = 0;
+        room_radius_min_ = std::max(0, inferred.first);
+        room_radius_max_ = std::max(room_radius_min_, inferred.second);
+        room_w_min_ = room_h_min_ = room_radius_min_ * 2;
+        room_w_max_ = room_h_max_ = room_radius_max_ * 2;
     }
 
     room_is_spawn_ = loaded_json_.value("is_spawn", false);
@@ -439,6 +469,221 @@ void RoomConfigurator::write_tags_to_json(nlohmann::json& object) const {
     object.erase("anti_tags");
 }
 
+nlohmann::json* RoomConfigurator::resolve_spawn_groups_array() {
+    if (bound_spawn_groups_array_) {
+        return bound_spawn_groups_array_;
+    }
+    if (room_) {
+        nlohmann::json& root = room_->assets_data();
+        bound_spawn_groups_array_ = &devmode::spawn::ensure_spawn_groups_array(root);
+        return bound_spawn_groups_array_;
+    }
+    if (external_room_json_) {
+        bound_spawn_groups_array_ = &devmode::spawn::ensure_spawn_groups_array(*external_room_json_);
+        return bound_spawn_groups_array_;
+    }
+    if (loaded_json_.is_object()) {
+        bound_spawn_groups_array_ = &devmode::spawn::ensure_spawn_groups_array(loaded_json_);
+        return bound_spawn_groups_array_;
+    }
+    return nullptr;
+}
+
+bool RoomConfigurator::mutate_spawn_groups(const std::function<bool(nlohmann::json&)>& mutator) {
+    nlohmann::json* groups = resolve_spawn_groups_array();
+    if (!groups) {
+        return false;
+    }
+    bool changed = false;
+    try {
+        changed = mutator(*groups);
+    } catch (...) {
+        return false;
+    }
+    if (!changed) {
+        return false;
+    }
+    synchronize_spawn_groups_snapshot(*groups);
+    return true;
+}
+
+void RoomConfigurator::synchronize_spawn_groups_snapshot(const nlohmann::json& groups) {
+    if (!loaded_json_.is_object()) {
+        loaded_json_ = nlohmann::json::object();
+    }
+    loaded_json_["spawn_groups"] = groups;
+    loaded_json_.erase("assets");
+    spawn_groups_from_assets_ = false;
+}
+
+void RoomConfigurator::handle_spawn_groups_changed(bool structure_changed) {
+    if (room_) {
+        refresh_spawn_groups(room_);
+    } else if (external_room_json_) {
+        refresh_spawn_groups(*external_room_json_);
+    } else {
+        refresh_spawn_groups(loaded_json_);
+    }
+
+    if (on_external_spawn_change_) {
+        on_external_spawn_change_();
+    }
+
+    bound_spawn_groups_array_ = resolve_spawn_groups_array();
+
+    if (structure_changed) {
+        rebuild_rows(true);
+    } else if (spawn_list_) {
+        spawn_list_->refresh_row_configuration();
+    }
+}
+
+bool RoomConfigurator::add_spawn_group_local() {
+    std::string new_id;
+    bool changed = mutate_spawn_groups([&](nlohmann::json& groups) {
+        nlohmann::json entry = nlohmann::json::object();
+        new_id = devmode::spawn::generate_spawn_id();
+        entry["spawn_id"] = new_id;
+        entry["display_name"] = "New Spawn";
+        entry["position"] = "Exact";
+        entry["min_number"] = 1;
+        entry["max_number"] = 1;
+        entry["check_overlap"] = false;
+        entry["enforce_spacing"] = false;
+        entry["chance_denominator"] = 100;
+        entry["candidates"] = nlohmann::json::array({ nlohmann::json{{"name", "null"}, {"chance", 0}} });
+        entry["priority"] = static_cast<int>(groups.size());
+        groups.push_back(entry);
+        for (size_t i = 0; i < groups.size(); ++i) {
+            if (groups[i].is_object()) {
+                groups[i]["priority"] = static_cast<int>(i);
+            }
+        }
+        devmode::spawn::sanitize_perimeter_spawn_groups(groups);
+        return true;
+    });
+    if (!changed) {
+        return false;
+    }
+    handle_spawn_groups_changed(true);
+    if (!new_id.empty() && spawn_list_) {
+        spawn_list_->expand_group(new_id);
+    }
+    return true;
+}
+
+bool RoomConfigurator::duplicate_spawn_group_local(const std::string& id) {
+    if (id.empty()) {
+        return false;
+    }
+    std::string new_id;
+    bool changed = mutate_spawn_groups([&](nlohmann::json& groups) {
+        for (auto& entry : groups) {
+            if (!entry.is_object()) {
+                continue;
+            }
+            if (!entry.contains("spawn_id") || !entry["spawn_id"].is_string()) {
+                continue;
+            }
+            if (entry["spawn_id"].get<std::string>() != id) {
+                continue;
+            }
+            nlohmann::json duplicate = entry;
+            new_id = devmode::spawn::generate_spawn_id();
+            duplicate["spawn_id"] = new_id;
+            if (duplicate.contains("display_name") && duplicate["display_name"].is_string()) {
+                duplicate["display_name"] = duplicate["display_name"].get<std::string>() + " Copy";
+            }
+            groups.push_back(duplicate);
+            break;
+        }
+        if (new_id.empty()) {
+            return false;
+        }
+        for (size_t i = 0; i < groups.size(); ++i) {
+            if (groups[i].is_object()) {
+                groups[i]["priority"] = static_cast<int>(i);
+            }
+        }
+        devmode::spawn::sanitize_perimeter_spawn_groups(groups);
+        return true;
+    });
+    if (!changed) {
+        return false;
+    }
+    handle_spawn_groups_changed(true);
+    if (!new_id.empty() && spawn_list_) {
+        spawn_list_->expand_group(new_id);
+    }
+    return true;
+}
+
+bool RoomConfigurator::delete_spawn_group_local(const std::string& id) {
+    if (id.empty()) {
+        return false;
+    }
+    bool changed = mutate_spawn_groups([&](nlohmann::json& groups) {
+        auto it = std::remove_if(groups.begin(), groups.end(), [&](nlohmann::json& entry) {
+            return entry.is_object() && entry.contains("spawn_id") && entry["spawn_id"].is_string() && entry["spawn_id"].get<std::string>() == id;
+        });
+        if (it == groups.end()) {
+            return false;
+        }
+        groups.erase(it, groups.end());
+        for (size_t i = 0; i < groups.size(); ++i) {
+            if (groups[i].is_object()) {
+                groups[i]["priority"] = static_cast<int>(i);
+            }
+        }
+        devmode::spawn::sanitize_perimeter_spawn_groups(groups);
+        return true;
+    });
+    if (!changed) {
+        return false;
+    }
+    handle_spawn_groups_changed(true);
+    return true;
+}
+
+bool RoomConfigurator::move_spawn_group_local(const std::string& id, int direction) {
+    if (id.empty() || direction == 0) {
+        return false;
+    }
+    bool changed = mutate_spawn_groups([&](nlohmann::json& groups) {
+        int source_index = -1;
+        for (size_t i = 0; i < groups.size(); ++i) {
+            const auto& entry = groups[i];
+            if (!entry.is_object()) {
+                continue;
+            }
+            if (entry.contains("spawn_id") && entry["spawn_id"].is_string() && entry["spawn_id"].get<std::string>() == id) {
+                source_index = static_cast<int>(i);
+                break;
+            }
+        }
+        if (source_index < 0) {
+            return false;
+        }
+        int target_index = source_index + direction;
+        if (target_index < 0 || target_index >= static_cast<int>(groups.size())) {
+            return false;
+        }
+        std::swap(groups[source_index], groups[target_index]);
+        for (size_t i = 0; i < groups.size(); ++i) {
+            if (groups[i].is_object()) {
+                groups[i]["priority"] = static_cast<int>(i);
+            }
+        }
+        devmode::spawn::sanitize_perimeter_spawn_groups(groups);
+        return true;
+    });
+    if (!changed) {
+        return false;
+    }
+    handle_spawn_groups_changed(true);
+    return true;
+}
+
 bool RoomConfigurator::refresh_spawn_groups(const nlohmann::json& data) {
     if (!loaded_json_.is_object()) {
         loaded_json_ = nlohmann::json::object();
@@ -493,40 +738,47 @@ bool RoomConfigurator::refresh_spawn_groups(const nlohmann::json& data) {
     }
     bool is_circle_geom = (lowered_geom == "circle");
 
-    int new_radius = room_radius_;
-    bool radius_changed = false;
-    if (is_circle_geom) {
-        if (auto radius_value = read_radius_value(data)) {
-            new_radius = *radius_value;
-            radius_changed = (new_radius != room_radius_);
-        } else if (dims_changed || room_radius_ <= 0) {
-            int inferred = infer_radius_from_dimensions(new_w_min, new_w_max, new_h_min, new_h_max);
-            if (inferred != room_radius_) {
-                new_radius = inferred;
-                radius_changed = true;
-            }
-        }
-    }
-
     room_w_min_ = new_w_min;
     room_w_max_ = new_w_max;
     room_h_min_ = new_h_min;
     room_h_max_ = new_h_max;
-    if (is_circle_geom && new_radius >= 0) {
-        room_radius_ = new_radius;
-    }
-
+    bool radius_changed = false;
     if (is_circle_geom) {
-        int diameter = std::max(0, room_radius_) * 2;
-        loaded_json_["radius"] = room_radius_;
-        loaded_json_["min_width"] = diameter;
-        loaded_json_["width_min"] = diameter;
-        loaded_json_["max_width"] = diameter;
-        loaded_json_["width_max"] = diameter;
-        loaded_json_["min_height"] = diameter;
-        loaded_json_["height_min"] = diameter;
-        loaded_json_["max_height"] = diameter;
-        loaded_json_["height_max"] = diameter;
+        int prev_min_radius = room_radius_min_;
+        int prev_max_radius = room_radius_max_;
+        auto radius_pair = std::make_pair(room_radius_min_, room_radius_max_);
+        if (auto radius_range = read_radius_range(data)) {
+            int min_radius = std::max(0, radius_range->first);
+            int max_radius = std::max(min_radius, radius_range->second);
+            radius_pair = {min_radius, max_radius};
+        } else if (dims_changed || room_radius_min_ <= 0 || room_radius_max_ <= 0) {
+            auto inferred = infer_radius_range_from_dimensions(new_w_min, new_w_max, new_h_min, new_h_max);
+            if (inferred.first != room_radius_min_ || inferred.second != room_radius_max_) {
+                radius_pair = inferred;
+            }
+        }
+
+        room_radius_min_ = std::max(0, radius_pair.first);
+        room_radius_max_ = std::max(room_radius_min_, radius_pair.second);
+        radius_changed = (room_radius_min_ != prev_min_radius) || (room_radius_max_ != prev_max_radius);
+        int min_diameter = room_radius_min_ * 2;
+        int max_diameter = room_radius_max_ * 2;
+        room_w_min_ = room_h_min_ = min_diameter;
+        room_w_max_ = room_h_max_ = max_diameter;
+
+        loaded_json_["radius"] = room_radius_max_;
+        loaded_json_["min_radius"] = room_radius_min_;
+        loaded_json_["max_radius"] = room_radius_max_;
+        loaded_json_["radius_min"] = room_radius_min_;
+        loaded_json_["radius_max"] = room_radius_max_;
+        loaded_json_["min_width"] = min_diameter;
+        loaded_json_["width_min"] = min_diameter;
+        loaded_json_["max_width"] = max_diameter;
+        loaded_json_["width_max"] = max_diameter;
+        loaded_json_["min_height"] = min_diameter;
+        loaded_json_["height_min"] = min_diameter;
+        loaded_json_["max_height"] = max_diameter;
+        loaded_json_["height_max"] = max_diameter;
     } else {
         if (have_w_min || have_w_max || dims_changed) {
             loaded_json_["min_width"] = room_w_min_;
@@ -541,6 +793,10 @@ bool RoomConfigurator::refresh_spawn_groups(const nlohmann::json& data) {
             loaded_json_["height_max"] = room_h_max_;
         }
         loaded_json_.erase("radius");
+        loaded_json_.erase("min_radius");
+        loaded_json_.erase("max_radius");
+        loaded_json_.erase("radius_min");
+        loaded_json_.erase("radius_max");
     }
 
     const char* target_key = spawn_groups_from_assets_ ? "assets" : "spawn_groups";
@@ -576,9 +832,48 @@ bool RoomConfigurator::refresh_spawn_groups(const nlohmann::json& data) {
     return false;
 }
 
+bool RoomConfigurator::refresh_spawn_groups(nlohmann::json& data) {
+    if (!data.contains("spawn_groups") || !data["spawn_groups"].is_array()) {
+        if (data.contains("assets") && data["assets"].is_array()) {
+            data["spawn_groups"] = data["assets"];
+        } else {
+            data["spawn_groups"] = nlohmann::json::array();
+        }
+    }
+
+    if (data.contains("assets")) {
+        data.erase("assets");
+    }
+
+    bool refreshed = refresh_spawn_groups(static_cast<const nlohmann::json&>(data));
+    loaded_json_.erase("assets");
+    spawn_groups_from_assets_ = false;
+    return refreshed;
+}
+
 bool RoomConfigurator::refresh_spawn_groups(Room* room) {
-    const nlohmann::json& source = room ? room->assets_data() : empty_object();
-    return refresh_spawn_groups(source);
+    if (room) {
+        nlohmann::json& root = room->assets_data();
+
+        if (!root.contains("spawn_groups") || !root["spawn_groups"].is_array()) {
+            if (root.contains("assets") && root["assets"].is_array()) {
+                root["spawn_groups"] = root["assets"];
+            } else {
+                root["spawn_groups"] = nlohmann::json::array();
+            }
+        }
+
+        if (root.contains("assets")) {
+            root.erase("assets");
+        }
+
+        bool refreshed = refresh_spawn_groups(static_cast<const nlohmann::json&>(root));
+        loaded_json_.erase("assets");
+        spawn_groups_from_assets_ = false;
+        return refreshed;
+    }
+
+    return refresh_spawn_groups(empty_object());
 }
 
 std::string RoomConfigurator::selected_geometry() const {
@@ -602,12 +897,52 @@ bool RoomConfigurator::should_rebuild_with(const nlohmann::json& data) const {
 
 void RoomConfigurator::open(const nlohmann::json& data) {
     room_ = nullptr;
+    external_room_json_ = nullptr;
+    on_external_spawn_change_ = nullptr;
+    on_external_spawn_entry_change_ = nullptr;
+    external_configure_entry_ = {};
+    open_from_data(data);
+}
+
+void RoomConfigurator::open(nlohmann::json& data,
+                            std::function<void()> on_change,
+                            std::function<void(const nlohmann::json&, const SpawnGroupList::ChangeSummary&)> on_entry_change,
+                            SpawnGroupList::ConfigureEntryCallback configure_entry) {
+    room_ = nullptr;
+    external_room_json_ = &data;
+    on_external_spawn_change_ = std::move(on_change);
+    on_external_spawn_entry_change_ = std::move(on_entry_change);
+    external_configure_entry_ = std::move(configure_entry);
+    open_from_data(static_cast<const nlohmann::json&>(data));
+}
+
+void RoomConfigurator::open(Room* room) {
+    Room* previous_room = room_;
+    const bool same_room = (room == previous_room);
+    room_ = room;
+    external_room_json_ = nullptr;
+    on_external_spawn_change_ = nullptr;
+    on_external_spawn_entry_change_ = nullptr;
+    external_configure_entry_ = {};
+    const nlohmann::json& source = room ? room->assets_data() : empty_object();
+    open_from_data(source, same_room);
+}
+
+void RoomConfigurator::open_from_data(const nlohmann::json& data, bool same_room) {
+    bound_spawn_groups_array_ = nullptr;
+    bound_readonly_groups_array_ = nullptr;
     if (!docked_mode_) {
         FloatingDockableManager::instance().open_floating(
             "Room Config", this, [this]() { this->close(); });
     }
     const bool was_visible = is_visible();
-    if (!should_rebuild_with(data)) {
+    if (same_room && !should_rebuild_with(data)) {
+        set_visible(true);
+        if (!was_visible) set_expanded(true);
+        apply_bounds_if_needed();
+        return;
+    }
+    if (!same_room && !should_rebuild_with(data)) {
         set_visible(true);
         if (!was_visible) set_expanded(true);
         apply_bounds_if_needed();
@@ -621,49 +956,20 @@ void RoomConfigurator::open(const nlohmann::json& data) {
     apply_bounds_if_needed();
 }
 
-void RoomConfigurator::open(Room* room) {
-    Room* previous_room = room_;
-    const bool same_room = (room == previous_room);
-    const nlohmann::json& source = room ? room->assets_data() : empty_object();
-    room_ = room;
-    if (!docked_mode_) {
-        FloatingDockableManager::instance().open_floating(
-            "Room Config", this, [this]() { this->close(); });
-    }
-    const bool was_visible = is_visible();
-    if (same_room && !should_rebuild_with(source)) {
-        set_visible(true);
-        if (!was_visible) set_expanded(true);
-        apply_bounds_if_needed();
-        return;
-    }
-    load_from_json(source);
-    rebuild_rows();
-    reset_scroll();
-    set_visible(true);
-    if (!was_visible) set_expanded(true);
-    apply_bounds_if_needed();
-}
-
 void RoomConfigurator::close() { set_visible(false); }
 
 bool RoomConfigurator::visible() const { return is_visible(); }
 
 bool RoomConfigurator::any_panel_visible() const { return visible(); }
 
-void RoomConfigurator::rebuild_rows() {
+void RoomConfigurator::rebuild_rows(bool reload_spawn_list) {
     DockableCollapsible::Rows rows;
     // rows owned by SpawnGroupList are rebuilt each time via append_rows
     spawn_groups_label_.reset();
     add_group_btn_.reset();
     add_group_btn_w_.reset();
     empty_spawn_label_.reset();
-    room_section_label_.reset();
-    room_tags_label_.reset();
     room_tags_editor_.reset();
-
-    room_section_label_ = std::make_unique<RoomConfigLabel>("Room Settings");
-    rows.push_back({ room_section_label_.get() });
 
     room_name_lbl_ = std::make_unique<DMTextBox>("Room Name", room_name_);
     room_name_lbl_w_ = std::make_unique<TextBoxWidget>(room_name_lbl_.get());
@@ -697,14 +1003,17 @@ void RoomConfigurator::rebuild_rows() {
             room_h_slider_.reset();
             room_h_slider_w_.reset();
 
-            int radius_value = std::max(0, room_radius_);
-            auto radius_bounds = compute_slider_range(radius_value, radius_value);
-            room_radius_slider_ = std::make_unique<DMSlider>("Radius", radius_bounds.first, radius_bounds.second, radius_value);
-            room_radius_slider_w_ = std::make_unique<SliderWidget>(room_radius_slider_.get());
+            room_radius_label_ = std::make_unique<RoomConfigLabel>("Radius (Min/Max)");
+            rows.push_back({ room_radius_label_.get() });
+            auto radius_bounds = compute_slider_range(room_radius_min_, room_radius_max_);
+            room_radius_slider_ = std::make_unique<DMRangeSlider>(radius_bounds.first, radius_bounds.second, room_radius_min_, room_radius_max_);
+            room_radius_slider_->set_defer_commit_until_unfocus(true);
+            room_radius_slider_w_ = std::make_unique<RangeSliderWidget>(room_radius_slider_.get());
             rows.push_back({ room_radius_slider_w_.get() });
         } else {
             room_radius_slider_.reset();
             room_radius_slider_w_.reset();
+            room_radius_label_.reset();
 
             room_w_label_ = std::make_unique<RoomConfigLabel>("Width (Min/Max)");
             rows.push_back({ room_w_label_.get() });
@@ -735,6 +1044,7 @@ void RoomConfigurator::rebuild_rows() {
         room_h_slider_w_.reset();
         room_radius_slider_.reset();
         room_radius_slider_w_.reset();
+        room_radius_label_.reset();
     }
 
     int geom_index = room_geom_options_.empty() ? 0 : std::clamp(room_geom_, 0, static_cast<int>(room_geom_options_.size()) - 1);
@@ -788,16 +1098,49 @@ void RoomConfigurator::rebuild_rows() {
     bool have_groups = false;
     if (!loaded_json_.is_null()) {
         if (!spawn_list_) spawn_list_ = std::make_unique<SpawnGroupList>();
+        spawn_list_->set_embedded_mode(true);
 
         // Prefer binding to the live room data so edits persist immediately
         if (room_) {
             auto& root = room_->assets_data();
-            // Decide which array to bind based on how the JSON was loaded
-            const char* target_key = spawn_groups_from_assets_ ? "assets" : "spawn_groups";
+
+            if (spawn_groups_from_assets_) {
+                nlohmann::json migrated_groups = nlohmann::json::array();
+                bool have_source = false;
+
+                if (root.contains("spawn_groups") && root["spawn_groups"].is_array()) {
+                    migrated_groups = root["spawn_groups"];
+                    have_source = true;
+                } else if (root.contains("assets") && root["assets"].is_array()) {
+                    migrated_groups = root["assets"];
+                    have_source = true;
+                } else if (loaded_json_.contains("spawn_groups") && loaded_json_["spawn_groups"].is_array()) {
+                    migrated_groups = loaded_json_["spawn_groups"];
+                    have_source = true;
+                } else if (loaded_json_.contains("assets") && loaded_json_["assets"].is_array()) {
+                    migrated_groups = loaded_json_["assets"];
+                    have_source = true;
+                }
+
+                if (!have_source) {
+                    migrated_groups = nlohmann::json::array();
+                }
+
+                root["spawn_groups"] = migrated_groups;
+                root.erase("assets");
+                loaded_json_["spawn_groups"] = migrated_groups;
+                loaded_json_.erase("assets");
+                spawn_groups_from_assets_ = false;
+            }
+
+            const char* target_key = "spawn_groups";
             if (!root.contains(target_key) || !root[target_key].is_array()) {
                 root[target_key] = nlohmann::json::array();
             }
             nlohmann::json& groups_ref = root[target_key];
+            loaded_json_["spawn_groups"] = groups_ref;
+            loaded_json_.erase("assets");
+            spawn_groups_from_assets_ = false;
 
             auto on_change = [this]() {
                 if (room_) {
@@ -837,25 +1180,183 @@ void RoomConfigurator::rebuild_rows() {
                 }
             };
 
-            // Load with editable binding to the live array
-            const auto expanded = spawn_list_->expanded_groups();
-            spawn_list_->load(groups_ref, on_change, on_entry_change, std::move(configure_entry));
-            spawn_list_->set_on_layout_changed([this]() {
-                this->rebuild_rows();
-            });
-            spawn_list_->restore_expanded_groups(expanded);
+            const bool needs_reload = reload_spawn_list || bound_spawn_groups_array_ != &groups_ref;
+            if (needs_reload) {
+                const auto expanded = spawn_list_->expanded_groups();
+                spawn_list_->load(groups_ref, on_change, on_entry_change, configure_entry);
+                spawn_list_->restore_expanded_groups(expanded);
+            } else {
+                spawn_list_->refresh_row_configuration();
+            }
 
-            // Wire up non-edit actions to the external callbacks provided by the host
+            spawn_list_->set_on_layout_changed([this]() {
+                this->rebuild_rows(false);
+            });
+
             SpawnGroupList::Callbacks cb{};
-            // Header actions
-            cb.on_duplicate = [this](const std::string& id) { if (on_spawn_duplicate_) on_spawn_duplicate_(id); };
-            cb.on_delete    = [this](const std::string& id) { if (on_spawn_delete_) on_spawn_delete_(id); };
-            cb.on_move_up   = [this](const std::string& id) { if (on_spawn_move_up_) on_spawn_move_up_(id); };
-            cb.on_move_down = [this](const std::string& id) { if (on_spawn_move_down_) on_spawn_move_down_(id); };
-            cb.on_add       = [this]() { if (on_spawn_add_) on_spawn_add_(); };
+            cb.on_duplicate = [this](const std::string& id) {
+                if (on_spawn_duplicate_) {
+                    on_spawn_duplicate_(id);
+                } else {
+                    duplicate_spawn_group_local(id);
+                }
+            };
+            cb.on_delete = [this](const std::string& id) {
+                if (on_spawn_delete_) {
+                    on_spawn_delete_(id);
+                } else {
+                    delete_spawn_group_local(id);
+                }
+            };
+            cb.on_move_up = [this](const std::string& id) {
+                if (on_spawn_move_up_) {
+                    on_spawn_move_up_(id);
+                } else {
+                    move_spawn_group_local(id, -1);
+                }
+            };
+            cb.on_move_down = [this](const std::string& id) {
+                if (on_spawn_move_down_) {
+                    on_spawn_move_down_(id);
+                } else {
+                    move_spawn_group_local(id, +1);
+                }
+            };
+            cb.on_add = [this]() {
+                if (on_spawn_add_) {
+                    on_spawn_add_();
+                } else {
+                    add_spawn_group_local();
+                }
+            };
             spawn_list_->set_callbacks(std::move(cb));
 
             spawn_list_->append_rows(rows);
+            bound_spawn_groups_array_ = &groups_ref;
+            bound_readonly_groups_array_ = nullptr;
+            have_groups = true;
+        } else if (external_room_json_) {
+            auto& root = *external_room_json_;
+
+            if (spawn_groups_from_assets_) {
+                nlohmann::json migrated_groups = nlohmann::json::array();
+                bool have_source = false;
+
+                if (root.contains("spawn_groups") && root["spawn_groups"].is_array()) {
+                    migrated_groups = root["spawn_groups"];
+                    have_source = true;
+                } else if (root.contains("assets") && root["assets"].is_array()) {
+                    migrated_groups = root["assets"];
+                    have_source = true;
+                } else if (loaded_json_.contains("spawn_groups") && loaded_json_["spawn_groups"].is_array()) {
+                    migrated_groups = loaded_json_["spawn_groups"];
+                    have_source = true;
+                } else if (loaded_json_.contains("assets") && loaded_json_["assets"].is_array()) {
+                    migrated_groups = loaded_json_["assets"];
+                    have_source = true;
+                }
+
+                if (!have_source) {
+                    migrated_groups = nlohmann::json::array();
+                }
+
+                root["spawn_groups"] = migrated_groups;
+                root.erase("assets");
+                loaded_json_["spawn_groups"] = migrated_groups;
+                loaded_json_.erase("assets");
+                spawn_groups_from_assets_ = false;
+            }
+
+            const char* target_key = "spawn_groups";
+            if (!root.contains(target_key) || !root[target_key].is_array()) {
+                root[target_key] = nlohmann::json::array();
+            }
+            nlohmann::json& groups_ref = root[target_key];
+            loaded_json_["spawn_groups"] = groups_ref;
+            loaded_json_.erase("assets");
+            spawn_groups_from_assets_ = false;
+
+            auto on_change = [this]() {
+                if (on_external_spawn_change_) {
+                    on_external_spawn_change_();
+                } else if (external_room_json_) {
+                    this->refresh_spawn_groups(*external_room_json_);
+                }
+            };
+
+            auto on_entry_change = [this](const nlohmann::json& entry, const SpawnGroupList::ChangeSummary& summary) {
+                if (on_external_spawn_entry_change_) {
+                    on_external_spawn_entry_change_(entry, summary);
+                } else if (external_room_json_) {
+                    this->refresh_spawn_groups(*external_room_json_);
+                }
+            };
+
+            SpawnGroupList::ConfigureEntryCallback configure_entry = external_configure_entry_;
+
+            const bool needs_reload = reload_spawn_list || bound_spawn_groups_array_ != &groups_ref;
+            if (needs_reload) {
+                const auto expanded = spawn_list_->expanded_groups();
+                spawn_list_->load(groups_ref, on_change, on_entry_change, configure_entry);
+                spawn_list_->restore_expanded_groups(expanded);
+            } else {
+                spawn_list_->refresh_row_configuration();
+            }
+
+            spawn_list_->set_on_layout_changed([this]() {
+                this->rebuild_rows(false);
+            });
+
+            SpawnGroupList::Callbacks cb{};
+            if (on_spawn_regenerate_ || on_spawn_edit_) {
+                cb.on_regenerate = [this](const std::string& id) {
+                    if (on_spawn_regenerate_) {
+                        on_spawn_regenerate_(id);
+                    } else if (on_spawn_edit_) {
+                        on_spawn_edit_(id);
+                    }
+                };
+            }
+            cb.on_duplicate = [this](const std::string& id) {
+                if (on_spawn_duplicate_) {
+                    on_spawn_duplicate_(id);
+                } else {
+                    duplicate_spawn_group_local(id);
+                }
+            };
+            cb.on_delete = [this](const std::string& id) {
+                if (on_spawn_delete_) {
+                    on_spawn_delete_(id);
+                } else {
+                    delete_spawn_group_local(id);
+                }
+            };
+            cb.on_move_up = [this](const std::string& id) {
+                if (on_spawn_move_up_) {
+                    on_spawn_move_up_(id);
+                } else {
+                    move_spawn_group_local(id, -1);
+                }
+            };
+            cb.on_move_down = [this](const std::string& id) {
+                if (on_spawn_move_down_) {
+                    on_spawn_move_down_(id);
+                } else {
+                    move_spawn_group_local(id, +1);
+                }
+            };
+            cb.on_add = [this]() {
+                if (on_spawn_add_) {
+                    on_spawn_add_();
+                } else {
+                    add_spawn_group_local();
+                }
+            };
+            spawn_list_->set_callbacks(std::move(cb));
+
+            spawn_list_->append_rows(rows);
+            bound_spawn_groups_array_ = &groups_ref;
+            bound_readonly_groups_array_ = nullptr;
             have_groups = true;
         } else {
             // Fallback: read-only list from the loaded JSON snapshot
@@ -866,20 +1367,46 @@ void RoomConfigurator::rebuild_rows() {
                 groups = &loaded_json_["assets"];
             }
             if (groups) {
-                const auto expanded = spawn_list_->expanded_groups();
-                spawn_list_->load(*groups);
+                const bool needs_reload = reload_spawn_list || bound_readonly_groups_array_ != groups;
+                if (needs_reload) {
+                    const auto expanded = spawn_list_->expanded_groups();
+                    spawn_list_->load(*groups);
+                    spawn_list_->restore_expanded_groups(expanded);
+                } else {
+                    spawn_list_->refresh_row_configuration();
+                }
                 spawn_list_->set_on_layout_changed([this]() {
-                    this->rebuild_rows();
+                    this->rebuild_rows(false);
                 });
-                spawn_list_->restore_expanded_groups(expanded);
                 SpawnGroupList::Callbacks cb{};
-                cb.on_duplicate = [this](const std::string& id) { if (on_spawn_duplicate_) on_spawn_duplicate_(id); };
-                cb.on_delete    = [this](const std::string& id) { if (on_spawn_delete_) on_spawn_delete_(id); };
-                cb.on_move_up   = [this](const std::string& id) { if (on_spawn_move_up_) on_spawn_move_up_(id); };
-                cb.on_move_down = [this](const std::string& id) { if (on_spawn_move_down_) on_spawn_move_down_(id); };
+                cb.on_duplicate = [this](const std::string& id) {
+                    if (on_spawn_duplicate_) {
+                        on_spawn_duplicate_(id);
+                    }
+                };
+                cb.on_delete = [this](const std::string& id) {
+                    if (on_spawn_delete_) {
+                        on_spawn_delete_(id);
+                    }
+                };
+                cb.on_move_up = [this](const std::string& id) {
+                    if (on_spawn_move_up_) {
+                        on_spawn_move_up_(id);
+                    }
+                };
+                cb.on_move_down = [this](const std::string& id) {
+                    if (on_spawn_move_down_) {
+                        on_spawn_move_down_(id);
+                    }
+                };
                 spawn_list_->set_callbacks(std::move(cb));
                 spawn_list_->append_rows(rows);
+                bound_readonly_groups_array_ = groups;
+                bound_spawn_groups_array_ = nullptr;
                 have_groups = true;
+            } else {
+                bound_readonly_groups_array_ = nullptr;
+                bound_spawn_groups_array_ = nullptr;
             }
         }
     }
@@ -890,9 +1417,6 @@ void RoomConfigurator::rebuild_rows() {
     }
 
     // Add Spawn Group button provided by SpawnGroupList
-
-    room_tags_label_ = std::make_unique<RoomConfigLabel>("Tags");
-    rows.push_back({ room_tags_label_.get() });
 
     room_tags_editor_ = std::make_unique<TagEditorWidget>();
     room_tags_editor_->set_tags(room_tags_, room_anti_tags_);
@@ -911,10 +1435,7 @@ void RoomConfigurator::rebuild_rows() {
 
 void RoomConfigurator::update(const Input& input, int screen_w, int screen_h) {
     const bool panel_visible = is_visible();
-    if (panel_visible) {
-        apply_bounds_if_needed();
-        DockableCollapsible::update(input, screen_w, screen_h);
-    }
+    apply_bounds_if_needed();
 
     if (spawn_list_) {
         spawn_list_->set_visible(panel_visible);
@@ -923,6 +1444,10 @@ void RoomConfigurator::update(const Input& input, int screen_w, int screen_h) {
         SDL_Point anchor{panel_rect.x + panel_rect.w + DMSpacing::item_gap(), panel_rect.y};
         spawn_list_->set_anchor(anchor.x, anchor.y);
         spawn_list_->update(input, screen_w, screen_h);
+    }
+
+    if (panel_visible) {
+        DockableCollapsible::update(input, screen_w, screen_h);
     }
 
     bool changed = false;
@@ -972,9 +1497,13 @@ void RoomConfigurator::update(const Input& input, int screen_w, int screen_h) {
     }
 
     if (room_radius_slider_) {
-        int new_radius = std::max(0, room_radius_slider_->value());
-        if (new_radius != room_radius_) {
-            room_radius_ = new_radius;
+        int new_min = std::max(0, room_radius_slider_->min_value());
+        int new_max = std::max(new_min, room_radius_slider_->max_value());
+        if (new_min != room_radius_min_ || new_max != room_radius_max_) {
+            room_radius_min_ = new_min;
+            room_radius_max_ = new_max;
+            room_w_min_ = room_h_min_ = room_radius_min_ * 2;
+            room_w_max_ = room_h_max_ = room_radius_max_ * 2;
             changed = true;
         }
     }
@@ -1046,20 +1575,31 @@ void RoomConfigurator::update(const Input& input, int screen_w, int screen_h) {
         bool is_circle_geom = (lowered_geom == "circle");
         loaded_json_["name"] = room_name_;
         if (is_circle_geom) {
-            int diameter = std::max(0, room_radius_) * 2;
-            room_w_min_ = room_w_max_ = diameter;
-            room_h_min_ = room_h_max_ = diameter;
-            loaded_json_["radius"] = room_radius_;
-            loaded_json_["min_width"] = diameter;
-            loaded_json_["max_width"] = diameter;
-            loaded_json_["width_min"] = diameter;
-            loaded_json_["width_max"] = diameter;
-            loaded_json_["min_height"] = diameter;
-            loaded_json_["max_height"] = diameter;
-            loaded_json_["height_min"] = diameter;
-            loaded_json_["height_max"] = diameter;
+            int min_diameter = room_radius_min_ * 2;
+            int max_diameter = room_radius_max_ * 2;
+            room_w_min_ = min_diameter;
+            room_w_max_ = max_diameter;
+            room_h_min_ = min_diameter;
+            room_h_max_ = max_diameter;
+            loaded_json_["radius"] = room_radius_max_;
+            loaded_json_["min_radius"] = room_radius_min_;
+            loaded_json_["max_radius"] = room_radius_max_;
+            loaded_json_["radius_min"] = room_radius_min_;
+            loaded_json_["radius_max"] = room_radius_max_;
+            loaded_json_["min_width"] = min_diameter;
+            loaded_json_["max_width"] = max_diameter;
+            loaded_json_["width_min"] = min_diameter;
+            loaded_json_["width_max"] = max_diameter;
+            loaded_json_["min_height"] = min_diameter;
+            loaded_json_["max_height"] = max_diameter;
+            loaded_json_["height_min"] = min_diameter;
+            loaded_json_["height_max"] = max_diameter;
         } else {
             loaded_json_.erase("radius");
+            loaded_json_.erase("min_radius");
+            loaded_json_.erase("max_radius");
+            loaded_json_.erase("radius_min");
+            loaded_json_.erase("radius_max");
             loaded_json_["min_width"] = room_w_min_;
             loaded_json_["max_width"] = room_w_max_;
             loaded_json_["width_min"] = room_w_min_;
@@ -1083,20 +1623,29 @@ void RoomConfigurator::update(const Input& input, int screen_w, int screen_h) {
             auto& r = room_->assets_data();
             r["name"] = room_name_;
             if (is_circle_geom) {
-                int diameter = std::max(0, room_radius_) * 2;
-                r["radius"] = room_radius_;
-                r["min_width"] = diameter;
-                r["max_width"] = diameter;
-                r["width_min"] = diameter;
-                r["width_max"] = diameter;
-                r["min_height"] = diameter;
-                r["max_height"] = diameter;
-                r["height_min"] = diameter;
-                r["height_max"] = diameter;
+                int min_diameter = room_radius_min_ * 2;
+                int max_diameter = room_radius_max_ * 2;
+                r["radius"] = room_radius_max_;
+                r["min_radius"] = room_radius_min_;
+                r["max_radius"] = room_radius_max_;
+                r["radius_min"] = room_radius_min_;
+                r["radius_max"] = room_radius_max_;
+                r["min_width"] = min_diameter;
+                r["max_width"] = max_diameter;
+                r["width_min"] = min_diameter;
+                r["width_max"] = max_diameter;
+                r["min_height"] = min_diameter;
+                r["max_height"] = max_diameter;
+                r["height_min"] = min_diameter;
+                r["height_max"] = max_diameter;
             } else {
                 if (r.contains("radius")) {
                     r.erase("radius");
                 }
+                r.erase("min_radius");
+                r.erase("max_radius");
+                r.erase("radius_min");
+                r.erase("radius_max");
                 r["min_width"] = room_w_min_;
                 r["max_width"] = room_w_max_;
                 r["width_min"] = room_w_min_;
@@ -1161,18 +1710,27 @@ nlohmann::json RoomConfigurator::build_json() const {
     }
     bool is_circle_geom = (lowered_geom == "circle");
     if (is_circle_geom) {
-        int diameter = std::max(0, room_radius_) * 2;
-        result["radius"] = room_radius_;
-        result["min_width"] = diameter;
-        result["max_width"] = diameter;
-        result["width_min"] = diameter;
-        result["width_max"] = diameter;
-        result["min_height"] = diameter;
-        result["max_height"] = diameter;
-        result["height_min"] = diameter;
-        result["height_max"] = diameter;
+        int min_diameter = room_radius_min_ * 2;
+        int max_diameter = room_radius_max_ * 2;
+        result["radius"] = room_radius_max_;
+        result["min_radius"] = room_radius_min_;
+        result["max_radius"] = room_radius_max_;
+        result["radius_min"] = room_radius_min_;
+        result["radius_max"] = room_radius_max_;
+        result["min_width"] = min_diameter;
+        result["max_width"] = max_diameter;
+        result["width_min"] = min_diameter;
+        result["width_max"] = max_diameter;
+        result["min_height"] = min_diameter;
+        result["max_height"] = max_diameter;
+        result["height_min"] = min_diameter;
+        result["height_max"] = max_diameter;
     } else {
         result.erase("radius");
+        result.erase("min_radius");
+        result.erase("max_radius");
+        result.erase("radius_min");
+        result.erase("radius_max");
         result["min_width"] = room_w_min_;
         result["max_width"] = room_w_max_;
         result["width_min"] = room_w_min_;
@@ -1191,6 +1749,17 @@ nlohmann::json RoomConfigurator::build_json() const {
         result["curvyness"] = curvyness_;
     }
     write_tags_to_json(result);
+    if (bound_spawn_groups_array_) {
+        result["spawn_groups"] = *bound_spawn_groups_array_;
+    } else if (spawn_list_) {
+        nlohmann::json groups = spawn_list_->to_json();
+        if (groups.is_array()) {
+            result["spawn_groups"] = std::move(groups);
+        }
+    } else if (loaded_json_.contains("spawn_groups") && loaded_json_["spawn_groups"].is_array()) {
+        result["spawn_groups"] = loaded_json_["spawn_groups"];
+    }
+    result.erase("assets");
     return result;
 }
 
@@ -1204,11 +1773,13 @@ void RoomConfigurator::set_spawn_group_callbacks(std::function<void(const std::s
                                                  std::function<void(const std::string&)> on_delete,
                                                  std::function<void(const std::string&)> on_move_up,
                                                  std::function<void(const std::string&)> on_move_down,
-                                                 std::function<void()> on_add) {
+                                                 std::function<void()> on_add,
+                                                 std::function<void(const std::string&)> on_regenerate) {
     on_spawn_edit_ = std::move(on_edit);
     on_spawn_duplicate_ = std::move(on_duplicate);
     on_spawn_delete_ = std::move(on_delete);
     on_spawn_move_up_ = std::move(on_move_up);
     on_spawn_move_down_ = std::move(on_move_down);
     on_spawn_add_ = std::move(on_add);
+    on_spawn_regenerate_ = std::move(on_regenerate);
 }

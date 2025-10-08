@@ -352,11 +352,17 @@ void AssetInfoUI::layout_widgets(int screen_w, int screen_h) const {
     content_height_px_ = std::max(0, content_height);
     visible_height_px_ = std::max(0, visible_height);
 
+    const int visible_area_h = std::max(0, visible_height);
+    const int clip_h = std::max(0, std::min(content_height, visible_area_h));
+    const int clip_w = std::max(0, content_w_active);
+    const int scroll_top = scroll_start;
+    content_clip_rect_ = SDL_Rect{ content_x, scroll_top, clip_w, clip_h > 0 ? clip_h : visible_area_h };
+
     scroll_region_ = SDL_Rect{
         panel_.x,
-        name_label_rect_.y + name_label_rect_.h,
+        scroll_top,
         panel_.w,
-        std::max(0, panel_.h - (name_label_rect_.y + name_label_rect_.h)) };
+        visible_area_h };
 
     if (max_scroll_ == 0) {
         scroll_dragging_ = false;
@@ -394,7 +400,7 @@ bool AssetInfoUI::handle_event(const SDL_Event& e) {
     const bool pointer_event =
         (e.type == SDL_MOUSEBUTTONDOWN || e.type == SDL_MOUSEBUTTONUP || e.type == SDL_MOUSEMOTION);
     const bool wheel_event = (e.type == SDL_MOUSEWHEEL);
-    const bool slider_capture = wheel_event && DMWidgetsSliderScrollCaptured();
+    const bool slider_capture_active = DMWidgetsSliderScrollCaptured();
     SDL_Point pointer{0, 0};
     if (pointer_event) {
         pointer.x = (e.type == SDL_MOUSEMOTION) ? e.motion.x : e.button.x;
@@ -443,7 +449,7 @@ bool AssetInfoUI::handle_event(const SDL_Event& e) {
         if (s->handle_event(e)) return true;
     }
 
-    if (slider_capture) {
+    if (wheel_event && slider_capture_active) {
         return true;
     }
 
@@ -461,12 +467,16 @@ bool AssetInfoUI::handle_event(const SDL_Event& e) {
         SDL_GetMouseState(&mx, &my);
         SDL_Point p{mx, my};
         pointer_inside = SDL_PointInRect(&p, &scroll_region_);
-        if (!pointer_inside) {
+        pointer_inside_panel = SDL_PointInRect(&p, &panel_);
+        if (!pointer_inside && !pointer_inside_panel) {
             return false;
         }
     }
 
     if (wheel_event) {
+        if (slider_capture_active) {
+            return true;
+        }
         scroll_ -= e.wheel.y * 40;
         scroll_ = std::max(0, std::min(max_scroll_, scroll_));
         return true;
@@ -580,8 +590,13 @@ void AssetInfoUI::update(const Input& input, int screen_w, int screen_h) {
 
     int mx = input.getX();
     int my = input.getY();
-    if (mx >= scroll_region_.x && mx < scroll_region_.x + scroll_region_.w &&
-        my >= scroll_region_.y && my < scroll_region_.y + scroll_region_.h) {
+    const bool pointer_in_scroll =
+        (mx >= scroll_region_.x && mx < scroll_region_.x + scroll_region_.w &&
+         my >= scroll_region_.y && my < scroll_region_.y + scroll_region_.h);
+    const bool pointer_in_panel_area =
+        (mx >= panel_.x && mx < panel_.x + panel_.w &&
+         my >= panel_.y && my < panel_.y + panel_.h);
+    if ((pointer_in_scroll || pointer_in_panel_area) && !DMWidgetsSliderScrollCaptured()) {
         int dy = input.getScrollY();
         if (dy != 0) {
             scroll_ -= dy * 40;
@@ -646,11 +661,22 @@ void AssetInfoUI::render(SDL_Renderer* r, int screen_w, int screen_h) const {
 #else
     const SDL_bool was_clipping = (prev_clip.w != 0 || prev_clip.h != 0) ? SDL_TRUE : SDL_FALSE;
 #endif
-    SDL_RenderSetClipRect(r, &panel_);
+    SDL_Rect panel_clip = panel_;
+    SDL_RenderSetClipRect(r, &panel_clip);
+
+    SDL_Rect content_clip = content_clip_rect_;
+    if (content_clip.w > 0 && content_clip.h > 0) {
+        SDL_Rect intersection;
+        if (SDL_IntersectRect(&panel_clip, &content_clip, &intersection) == SDL_TRUE) {
+            SDL_RenderSetClipRect(r, &intersection);
+        }
+    }
 
     for (auto& s : sections_) s->render(r);
 
     if (configure_btn_) configure_btn_->render(r);
+
+    SDL_RenderSetClipRect(r, &panel_clip);
 
     if (max_scroll_ > 0 && scroll_track_rect_.w > 0 && scroll_track_rect_.h > 0) {
         SDL_Color track_col = DMStyles::Border();

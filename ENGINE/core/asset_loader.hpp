@@ -24,7 +24,7 @@ class AssetLoader {
     void link_by_child(const std::vector<std::vector<Asset*>>& groups);
 
     std::vector<Asset> createAssets();
-    std::vector<Area> getAllRoomAndTrailAreas() const;
+    std::vector<const Area*> getAllRoomAndTrailAreas() const;
     AssetLibrary* getAssetLibrary() const { return asset_library_.get(); }
     const std::vector<Room*>& getRooms() const { return rooms_; }
     double getMapRadius() const { return map_radius_; }

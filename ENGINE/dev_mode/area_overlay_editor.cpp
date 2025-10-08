@@ -1182,7 +1182,17 @@ void AreaOverlayEditor::save_area() {
             } else {
                 area.set_type(area_name_);
             }
-            info_->upsert_area_from_editor(area);
+            AssetInfo::NamedArea::RenderFrame frame;
+            frame.width = std::max(0, canvas_w_);
+            frame.height = std::max(0, canvas_h_);
+            frame.pivot_x = (frame.width > 0) ? frame.width / 2 : 0;
+            frame.pivot_y = frame.height;
+            float scale = info_->scale_factor;
+            if (!(scale > 0.0f) || !std::isfinite(scale)) {
+                scale = 1.0f;
+            }
+            frame.pixel_scale = scale;
+            info_->upsert_area_from_editor(area, frame);
             (void)info_->update_info_json();
         } else if (room_) {
             std::string type = determine_room_type();

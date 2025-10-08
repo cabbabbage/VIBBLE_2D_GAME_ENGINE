@@ -17,14 +17,33 @@
 #include "utils/area.hpp"
 
 namespace {
-std::vector<Asset*> gather_impassable_neighbors(const Asset& asset) {
-    std::vector<Asset*> neighbors;
+template <typename Fn>
+bool visit_impassable_neighbors(const Asset& asset, Fn&& fn) {
     const AssetList* list = asset.get_impassable_naighbors();
     if (!list) {
-        return neighbors;
+        return false;
     }
-    list->full_list(neighbors);
-    return neighbors;
+
+    const auto visit_bucket = [&](const std::vector<Asset*>& bucket) {
+        for (Asset* neighbor : bucket) {
+            if (fn(neighbor)) {
+                return true;
+            }
+        }
+        return false;
+    };
+
+    if (visit_bucket(list->top_unsorted())) {
+        return true;
+    }
+    if (visit_bucket(list->middle_sorted())) {
+        return true;
+    }
+    if (visit_bucket(list->bottom_unsorted())) {
+        return true;
+    }
+
+    return false;
 }
 }
 
@@ -189,9 +208,9 @@ bool AnimationUpdate::point_in_impassable(SDL_Point pt, const Asset* ignored) co
         return false;
     }
 
-    for (Asset* neighbor : gather_impassable_neighbors(*self_)) {
+    return visit_impassable_neighbors(*self_, [&](Asset* neighbor) {
         if (!neighbor || neighbor == self_ || neighbor == ignored || !neighbor->info) {
-            continue;
+            return false;
         }
 
         Area area = neighbor->get_area("impassable");
@@ -199,15 +218,11 @@ bool AnimationUpdate::point_in_impassable(SDL_Point pt, const Asset* ignored) co
             area = neighbor->get_area("collision_area");
         }
         if (area.get_points().empty()) {
-            continue;
+            return false;
         }
 
-        if (area.contains_point(pt)) {
-            return true;
-        }
-    }
-
-    return false;
+        return area.contains_point(pt);
+    });
 }
 
 bool AnimationUpdate::path_blocked(SDL_Point from, SDL_Point to, const Asset* ignored) const {
@@ -217,9 +232,9 @@ bool AnimationUpdate::path_blocked(SDL_Point from, SDL_Point to, const Asset* ig
 
     const SDL_Point dest_bottom = animation_update::detail::bottom_middle_for(*self_, to);
 
-    for (Asset* neighbor : gather_impassable_neighbors(*self_)) {
+    return visit_impassable_neighbors(*self_, [&](Asset* neighbor) {
         if (!neighbor || neighbor == self_ || neighbor == ignored || !neighbor->info) {
-            continue;
+            return false;
         }
 
         Area area = neighbor->get_area("impassable");
@@ -239,7 +254,7 @@ bool AnimationUpdate::path_blocked(SDL_Point from, SDL_Point to, const Asset* ig
                 return true;
             }
         }
-    }
 
-    return false;
+        return false;
+    });
 }

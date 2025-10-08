@@ -88,6 +88,7 @@ private:
 
     std::vector<FilterEntry> entries_;
     FilterState state_{};
+    bool has_saved_state_ = false;
     SDL_Rect layout_bounds_{0, 0, 0, 0};
     SDL_Rect mode_bar_rect_{0, 0, 0, 0};
     SDL_Rect header_rect_{0, 0, 0, 0};

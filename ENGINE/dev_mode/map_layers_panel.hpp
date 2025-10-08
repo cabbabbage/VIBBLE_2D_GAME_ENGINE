@@ -107,6 +107,12 @@ private:
     void ensure_room_configurator();
     nlohmann::json* ensure_room_entry(const std::string& room_name);
     SDL_Rect compute_room_config_bounds() const;
+    nlohmann::json* active_room_entry();
+    void handle_room_spawn_groups_changed(bool request_preview = true);
+    void add_spawn_group_to_active_room();
+    void duplicate_spawn_group_in_active_room(const std::string& spawn_id);
+    void delete_spawn_group_from_active_room(const std::string& spawn_id);
+    void move_spawn_group_in_active_room(const std::string& spawn_id, int dir);
 
     std::string rename_room_everywhere(const std::string& old_key, const std::string& desired_key);
 

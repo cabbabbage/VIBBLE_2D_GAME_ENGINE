@@ -233,6 +233,9 @@ struct SpawnGroupList::EntryRow {
     std::unique_ptr<DMButton> link_btn;
     std::unique_ptr<ButtonWidget> link_btn_w;
 
+    std::unique_ptr<DMButton> regen_btn;
+    std::unique_ptr<ButtonWidget> regen_w;
+
     std::unique_ptr<Widget> outline_begin_marker;
     std::unique_ptr<Widget> outline_end_marker;
     SDL_Rect outline_rect{0,0,0,0};
@@ -1402,6 +1405,7 @@ void SpawnGroupList::RowController::set_quantity_hidden(bool hidden) {
 
 SpawnGroupList::SpawnGroupList(bool floatable)
     : DockableCollapsible("Spawn Groups", floatable) {
+    default_floatable_mode_ = floatable;
     set_scroll_enabled(true);
     set_cell_width(320);
     set_row_gap(DMSpacing::item_gap());
@@ -1413,6 +1417,23 @@ SpawnGroupList::~SpawnGroupList() = default;
 void SpawnGroupList::set_screen_dimensions(int width, int height) {
     screen_w_ = std::max(0, width);
     screen_h_ = std::max(0, height);
+}
+
+void SpawnGroupList::set_embedded_mode(bool embedded) {
+    if (embedded_mode_ == embedded) {
+        return;
+    }
+    embedded_mode_ = embedded;
+    if (embedded_mode_) {
+        set_floatable(false);
+        set_show_header(false);
+        set_scroll_enabled(false);
+        pointer_block_frames_ = 0;
+    } else {
+        set_floatable(default_floatable_mode_);
+        set_show_header(true);
+        set_scroll_enabled(true);
+    }
 }
 
 static std::string entry_display_name(const json& e) {
@@ -1586,6 +1607,16 @@ void SpawnGroupList::append_rows(Rows& rows) {
                 DockableCollapsible::Row method_row;
                 if (r->method_w) method_row.push_back(r->method_w.get());
                 if (r->link_btn_w) method_row.push_back(r->link_btn_w.get());
+                if (callbacks_.on_regenerate) {
+                    if (!r->regen_btn) {
+                        r->regen_btn = std::make_unique<DMButton>("Regenerate", &DMStyles::CreateButton(), 120, DMButton::height());
+                        r->regen_w = std::make_unique<ButtonWidget>(r->regen_btn.get(), [this, rr=r.get()](){
+                            if (!callbacks_.on_regenerate || rr->id.empty()) return;
+                            callbacks_.on_regenerate(rr->id);
+                        });
+                    }
+                    method_row.push_back(r->regen_w.get());
+                }
                 if (!method_row.empty()) out.push_back(method_row);
                 const std::string method = r->entry->value("position", std::string{"Exact"});
                 if (!r->quantity_hidden && method_uses_range(method)) {
@@ -1629,6 +1660,32 @@ void SpawnGroupList::set_callbacks(Callbacks cb) { callbacks_ = std::move(cb); }
 
 void SpawnGroupList::set_on_layout_changed(std::function<void()> cb) {
     on_layout_change_ = std::move(cb);
+}
+
+void SpawnGroupList::refresh_row_configuration() {
+    if (!configure_entry_) {
+        return;
+    }
+    for (auto& row_ptr : rows_) {
+        if (!row_ptr) {
+            continue;
+        }
+        const json* entry_json = nullptr;
+        if (!row_ptr->read_only && row_ptr->entry) {
+            entry_json = row_ptr->entry;
+        } else if (row_ptr->read_only) {
+            entry_json = &row_ptr->ro_entry;
+        }
+        if (!entry_json) {
+            continue;
+        }
+        try {
+            RowController controller(row_ptr.get());
+            configure_entry_(controller, *entry_json);
+        } catch (...) {
+        }
+    }
+    request_layout();
 }
 
 void SpawnGroupList::expand_group(const std::string& id) {
@@ -1686,7 +1743,11 @@ void SpawnGroupList::update(const Input& input, int screen_w, int screen_h) {
         }
         area_panel_->set_parent_rect(parent);
     }
-    DockableCollapsible::update(input, screen_w, screen_h);
+    if (!embedded_mode_) {
+        DockableCollapsible::update(input, screen_w, screen_h);
+    } else if (is_visible() && pointer_block_frames_ > 0) {
+        --pointer_block_frames_;
+    }
     if (pending_asset_search_open_) {
         if (is_visible()) {
             if (EntryRow* target = lookup_row(pending_asset_search_row_ref_)) {
@@ -1859,6 +1920,7 @@ void SpawnGroupList::render_content(SDL_Renderer* r) const {
 
 void SpawnGroupList::open(json& groups, std::function<void(const json&)> on_save) {
     // Floating open: bind to array, show as a floating panel with rows inside
+    set_embedded_mode(false);
     set_floatable(true);
     set_show_header(true);
     set_close_button_enabled(true);

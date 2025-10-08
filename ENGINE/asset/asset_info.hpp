@@ -5,8 +5,11 @@
 #include "utils/light_source.hpp"
 #include <map>
 #include <nlohmann/json.hpp>
+#include <cmath>
+#include <optional>
 #include <string>
 #include <vector>
+#include <unordered_set>
 
 struct ChildInfo {
     std::string json_path;
@@ -47,18 +50,30 @@ class AssetInfo {
     int min_distance_all;
     float scale_factor;
     bool smooth_scaling = true;
-    int original_canvas_width;
-    int original_canvas_height;
+    int original_canvas_width = 0;
+    int original_canvas_height = 0;
     bool flipable;
     std::vector<std::string> tags;
     std::vector<std::string> anti_tags;
     bool is_light_source = false;
     bool moving_asset = false;
     struct NamedArea {
+        struct RenderFrame {
+            int width = 0;
+            int height = 0;
+            int pivot_x = 0;
+            int pivot_y = 0;
+            float pixel_scale = 1.0f;
+
+            bool is_valid() const {
+                return width > 0 && height > 0 && std::isfinite(pixel_scale) && pixel_scale > 0.0f;
+            }
+        };
         std::string name;
         std::string type;
         std::string kind;
         std::unique_ptr<Area> area;
+        std::optional<RenderFrame> render_frame;
     };
     std::vector<NamedArea> areas;
     std::map<std::string, Animation> animations;
@@ -84,7 +99,8 @@ class AssetInfo {
     void remove_anti_tag(const std::string &tag);
     void set_passable(bool v);
     Area* find_area(const std::string& name);
-    void upsert_area_from_editor(const class Area& area);
+    void upsert_area_from_editor(const class Area& area,
+                                 std::optional<NamedArea::RenderFrame> frame = std::nullopt);
     std::string pick_next_animation(const std::string& mapping_id) const;
     int NeighborSearchRadius = 500;
 
@@ -94,6 +110,9 @@ class AssetInfo {
 
     std::string info_json_path() const { return info_json_path_; }
     std::string asset_dir_path() const { return dir_path_; }
+
+    const std::unordered_set<std::string>& tag_lookup() const { return tag_lookup_; }
+    const std::unordered_set<std::string>& anti_tag_lookup() const { return anti_tag_lookup_; }
 
     bool remove_area(const std::string& name);
 
@@ -109,7 +128,22 @@ class AssetInfo {
 
     void set_start_animation_name(const std::string& name);
 
-	private:
+    struct AreaCodec {
+        static SDL_Point scaled_anchor(const AssetInfo& info,
+                                       std::optional<float> scale_override = std::nullopt);
+
+        static nlohmann::json encode_entry(
+            const AssetInfo& info,
+            const Area& area,
+            const std::string& final_type,
+            const std::string& final_kind,
+            std::optional<NamedArea::RenderFrame> frame = std::nullopt);
+
+        static std::optional<NamedArea> decode_entry(const AssetInfo& info,
+                                                     const nlohmann::json& entry);
+    };
+
+        private:
     void load_base_properties(const nlohmann::json &data);
     void generate_lights(SDL_Renderer *renderer);
     void load_areas(const nlohmann::json &data);
@@ -118,8 +152,11 @@ class AssetInfo {
     std::string dir_path_;
     nlohmann::json info_json_;
     std::string info_json_path_;
+    void rebuild_tag_cache();
+    void rebuild_anti_tag_cache();
+    std::unordered_set<std::string> tag_lookup_;
+    std::unordered_set<std::string> anti_tag_lookup_;
     friend class AnimationLoader;
     friend class LightingLoader;
-    friend class AreaLoader;
     friend class ChildLoader;
 };

@@ -12,7 +12,6 @@ inline const std::vector<std::string>& area_types() {
     static const std::vector<std::string> kTypes = {
         "all",
         "impassable", // note: spelled per request
-        "spacing",
         "trigger",
         "child",
         "spawning"

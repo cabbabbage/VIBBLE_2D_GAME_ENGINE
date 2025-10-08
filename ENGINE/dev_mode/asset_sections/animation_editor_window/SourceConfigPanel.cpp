@@ -18,9 +18,7 @@
 #include <unordered_set>
 #include <vector>
 
-#define private public
 #include "AnimationDocument.hpp"
-#undef private
 
 #include "AsyncTaskQueue.hpp"
 #include "CroppingService.hpp"
@@ -48,7 +46,7 @@ std::string to_lower_copy(std::string text) {
     return text;
 }
 
-bool has_extension(const std::filesystem::path& path, std::string_view ext) {
+bool has_extension_ci(const std::filesystem::path& path, std::string_view ext) {
     return case_insensitive_equals(path.extension().string(), std::string(ext));
 }
 
@@ -248,9 +246,8 @@ void SourceConfigPanel::reload_from_document() {
         return;
     }
 
-    auto it = document_->animations_.find(animation_id_);
-    if (it != document_->animations_.end()) {
-        nlohmann::json parsed = nlohmann::json::parse(it->second, nullptr, false);
+    if (auto payload_text = document_->animation_payload(animation_id_)) {
+        nlohmann::json parsed = nlohmann::json::parse(*payload_text, nullptr, false);
         if (!parsed.is_discarded() && parsed.is_object()) {
             payload_ = parsed;
             payload_loaded_ = true;
@@ -372,9 +369,9 @@ int SourceConfigPanel::count_frames_in_folder(const std::string& relative_path) 
 
 std::optional<nlohmann::json> SourceConfigPanel::animation_payload(const std::string& id) const {
     if (!document_) return std::nullopt;
-    auto it = document_->animations_.find(id);
-    if (it == document_->animations_.end()) return std::nullopt;
-    nlohmann::json parsed = nlohmann::json::parse(it->second, nullptr, false);
+    auto payload_text = document_->animation_payload(id);
+    if (!payload_text.has_value()) return std::nullopt;
+    nlohmann::json parsed = nlohmann::json::parse(*payload_text, nullptr, false);
     if (parsed.is_discarded() || !parsed.is_object()) return std::nullopt;
     return parsed;
 }
@@ -424,8 +421,9 @@ std::filesystem::path SourceConfigPanel::resolve_asset_root() const {
     if (cached_asset_root_valid_) return cached_asset_root_;
     cached_asset_root_ = std::filesystem::path{};
     if (document_) {
-        if (!document_->info_path_.empty()) {
-            cached_asset_root_ = document_->info_path_.parent_path();
+        const std::filesystem::path& info_path = document_->info_path();
+        if (!info_path.empty()) {
+            cached_asset_root_ = info_path.parent_path();
         }
     }
     cached_asset_root_valid_ = true;
@@ -449,7 +447,7 @@ bool SourceConfigPanel::prepare_output_directory(std::filesystem::path* out_dir)
         std::filesystem::create_directories(dir);
         for (const auto& entry : std::filesystem::directory_iterator(dir)) {
             if (!entry.is_regular_file()) continue;
-            if (has_extension(entry.path(), ".png")) {
+            if (has_extension_ci(entry.path(), ".png")) {
                 std::error_code ec;
                 std::filesystem::remove(entry.path(), ec);
             }
@@ -469,7 +467,7 @@ std::vector<std::filesystem::path> SourceConfigPanel::collect_png_files(const st
     try {
         for (const auto& entry : std::filesystem::directory_iterator(folder)) {
             if (!entry.is_regular_file()) continue;
-            if (has_extension(entry.path(), ".png")) {
+            if (has_extension_ci(entry.path(), ".png")) {
                 files.push_back(entry.path());
             }
         }
@@ -686,7 +684,7 @@ void SourceConfigPanel::import_from_png_sequence() {
     std::vector<std::filesystem::path> filtered;
     filtered.reserve(files.size());
     for (const auto& file : files) {
-        if (has_extension(file, ".png")) {
+        if (has_extension_ci(file, ".png")) {
             filtered.push_back(file);
         }
     }

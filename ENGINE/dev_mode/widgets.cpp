@@ -574,32 +574,62 @@ bool DMSlider::handle_event(const SDL_Event& e) {
     };
     auto update_hover = [this, &set_focus](SDL_Point p) {
         bool inside = SDL_PointInRect(&p, &rect_);
-        hovered_ = inside;
+        hovered_ = inside || dragging_;
         if (!inside) {
-            knob_hovered_ = false;
-            set_focus(false);
+            if (!dragging_) {
+                knob_hovered_ = false;
+                set_focus(false);
+            }
             return inside;
         }
-        knob_hovered_ = true;
+        if (dragging_) {
+            knob_hovered_ = true;
+        } else {
+            SDL_Rect knob = knob_rect();
+            knob_hovered_ = SDL_PointInRect(&p, &knob);
+        }
         return inside;
     };
 
     if (e.type == SDL_MOUSEMOTION) {
         SDL_Point p{ e.motion.x, e.motion.y };
         update_hover(p);
+        if (dragging_) {
+            apply_interaction_value(value_for_x(p.x));
+            return true;
+        }
     } else if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
         SDL_Point p{ e.button.x, e.button.y };
         bool inside = update_hover(p);
         if (inside) {
             set_focus(true);
-        } else {
+            SDL_Rect vr = value_rect();
+            if (SDL_PointInRect(&p, &vr)) {
+                edit_box_ = std::make_unique<DMTextBox>("", format_value(display_value()));
+                edit_box_->set_rect(vr);
+                edit_box_->handle_event(e);
+                return true;
+            }
+            SDL_Rect tr = track_rect();
+            SDL_Rect knob = knob_rect();
+            if (SDL_PointInRect(&p, &knob) || SDL_PointInRect(&p, &tr)) {
+                dragging_ = true;
+                knob_hovered_ = true;
+                apply_interaction_value(value_for_x(p.x));
+                return true;
+            }
+        } else if (!dragging_) {
             set_focus(false);
         }
-        SDL_Rect vr = value_rect();
-        if (inside && SDL_PointInRect(&p, &vr)) {
-            edit_box_ = std::make_unique<DMTextBox>("", format_value(display_value()));
-            edit_box_->set_rect(vr);
-            edit_box_->handle_event(e);
+    } else if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
+        bool was_dragging = dragging_;
+        dragging_ = false;
+        SDL_Point p{ e.button.x, e.button.y };
+        update_hover(p);
+        if (!SDL_PointInRect(&p, &rect_) && focused_) {
+            set_focus(false);
+        }
+        if (was_dragging) {
             return true;
         }
     } else if (e.type == SDL_MOUSEWHEEL) {
@@ -950,16 +980,42 @@ bool DMRangeSlider::handle_event(const SDL_Event& e) {
         }
     };
     auto update_hover = [this, &set_focus](SDL_Point p) {
-        bool inside = SDL_PointInRect(&p, &rect_);
-        hovered_ = inside;
-        if (!inside) {
-            min_hovered_ = false;
+        if (dragging_min_) {
+            min_hovered_ = true;
             max_hovered_ = false;
-            set_focus(false);
+        } else if (dragging_max_) {
+            min_hovered_ = false;
+            max_hovered_ = true;
+        }
+        bool inside = SDL_PointInRect(&p, &rect_);
+        hovered_ = inside || dragging_min_ || dragging_max_;
+        if (!inside) {
+            if (!dragging_min_ && !dragging_max_) {
+                min_hovered_ = false;
+                max_hovered_ = false;
+                set_focus(false);
+            }
             return inside;
         }
         SDL_Rect kmin = min_knob_rect();
         SDL_Rect kmax = max_knob_rect();
+        bool on_min = SDL_PointInRect(&p, &kmin);
+        bool on_max = SDL_PointInRect(&p, &kmax);
+        if (dragging_min_) {
+            min_hovered_ = true;
+            max_hovered_ = false;
+            return inside;
+        }
+        if (dragging_max_) {
+            min_hovered_ = false;
+            max_hovered_ = true;
+            return inside;
+        }
+        if (on_min || on_max) {
+            min_hovered_ = on_min;
+            max_hovered_ = on_max;
+            return inside;
+        }
         SDL_Point min_center{ kmin.x + kmin.w / 2, kmin.y + kmin.h / 2 };
         SDL_Point max_center{ kmax.x + kmax.w / 2, kmax.y + kmax.h / 2 };
         const bool overlap = (min_center.x == max_center.x) && (min_center.y == max_center.y);
@@ -989,12 +1045,24 @@ bool DMRangeSlider::handle_event(const SDL_Event& e) {
     if (e.type == SDL_MOUSEMOTION) {
         SDL_Point p{ e.motion.x, e.motion.y };
         update_hover(p);
+        bool dragging = false;
+        if (dragging_min_) {
+            apply_min_interaction(value_for_x(p.x));
+            dragging = true;
+        }
+        if (dragging_max_) {
+            apply_max_interaction(value_for_x(p.x));
+            dragging = true;
+        }
+        if (dragging) {
+            return true;
+        }
     } else if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
         SDL_Point p{ e.button.x, e.button.y };
         bool inside = update_hover(p);
         if (inside) {
             set_focus(true);
-        } else {
+        } else if (!dragging_min_ && !dragging_max_) {
             set_focus(false);
         }
         if (e.button.clicks >= 2) {
@@ -1009,6 +1077,56 @@ bool DMRangeSlider::handle_event(const SDL_Event& e) {
                 edit_max_->handle_event(e);
                 return true;
             }
+        }
+        if (inside) {
+            SDL_Rect track = track_rect();
+            SDL_Rect min_knob = min_knob_rect();
+            SDL_Rect max_knob = max_knob_rect();
+            bool on_track = SDL_PointInRect(&p, &track);
+            bool on_min = SDL_PointInRect(&p, &min_knob);
+            bool on_max = SDL_PointInRect(&p, &max_knob);
+            if (on_min || (on_track && min_hovered_ && !max_hovered_)) {
+                dragging_min_ = true;
+                min_hovered_ = true;
+                max_hovered_ = false;
+                apply_min_interaction(value_for_x(p.x));
+                return true;
+            }
+            if (on_max || (on_track && max_hovered_ && !min_hovered_)) {
+                dragging_max_ = true;
+                min_hovered_ = false;
+                max_hovered_ = true;
+                apply_max_interaction(value_for_x(p.x));
+                return true;
+            }
+            if (on_track) {
+                int target = value_for_x(p.x);
+                int midpoint = (display_min_value() + display_max_value()) / 2;
+                if (target <= midpoint) {
+                    dragging_min_ = true;
+                    min_hovered_ = true;
+                    max_hovered_ = false;
+                    apply_min_interaction(target);
+                } else {
+                    dragging_max_ = true;
+                    min_hovered_ = false;
+                    max_hovered_ = true;
+                    apply_max_interaction(target);
+                }
+                return true;
+            }
+        }
+    } else if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
+        bool was_dragging = dragging_min_ || dragging_max_;
+        dragging_min_ = false;
+        dragging_max_ = false;
+        SDL_Point p{ e.button.x, e.button.y };
+        update_hover(p);
+        if (!SDL_PointInRect(&p, &rect_) && focused_) {
+            set_focus(false);
+        }
+        if (was_dragging) {
+            return true;
         }
     } else if (e.type == SDL_MOUSEWHEEL) {
         SDL_Point mouse{0, 0};

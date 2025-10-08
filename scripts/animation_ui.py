@@ -999,19 +999,27 @@ class AnimationsPanel:
         self._sync_movement_from_source()
 
         self.frame = tk.LabelFrame(parent, text=self.node_id, bd=6, relief=tk.GROOVE)
+        # Wrap all widgets in a dedicated content frame so the label frame's
+        # border can size itself around every child (header, preview, audio
+        # controls, etc.).  Using a single packed container prevents grid
+        # geometry quirks where tall widgets (like the preview image or audio
+        # sliders) could extend past the visible border when the panel is
+        # collapsed/expanded.
+        self._content = ttk.Frame(self.frame)
+        self._content.pack(fill="both", expand=True, padx=6, pady=6)
+
         self._build_ui()
         self._refresh_preview()
 
     
     def _build_ui(self) -> None:
-        header = ttk.Frame(self.frame)
-        header.grid(row=0, column=0, sticky="ew", padx=8, pady=(6, 8))
-        self.frame.columnconfigure(0, weight=1)
+        header = ttk.Frame(self._content)
+        header.pack(fill="x", pady=(0, 8))
 
         id_font = ("Segoe UI", 14, "bold")
         ttk.Label(header, text="ID:", font=id_font).pack(side="left")
         self.id_var = tk.StringVar(value=self.node_id)
-        
+
         id_entry = tk.Entry(header, textvariable=self.id_var, width=24, font=id_font)
         id_entry.pack(side="left", padx=(4, 10))
         id_entry.bind("<FocusOut>", self._commit_rename)
@@ -1020,12 +1028,11 @@ class AnimationsPanel:
         ttk.Button(header, text="Delete", command=self._do_delete).pack(side="right")
 
         self._preview_label = tk.Label(header, bd=0, highlightthickness=0, background="#2d3436")
-        self._preview_label.pack(side="right", padx=6)
+        self._preview_label.pack(side="right", padx=6, pady=4)
         self._preview_img = None
 
-        body = ttk.Frame(self.frame)
-        body.grid(row=1, column=0, sticky="nsew", padx=8, pady=(0, 8))
-        self.frame.rowconfigure(1, weight=1)
+        body = ttk.Frame(self._content)
+        body.pack(fill="both", expand=True)
 
         
         self.sources_panel = SourcesElementPanel(

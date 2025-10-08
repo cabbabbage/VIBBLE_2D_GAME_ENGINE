@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <iterator>
 #include <unordered_set>
 
 #include "asset/Asset.hpp"
@@ -197,7 +198,10 @@ void AssetList::set_search_radius(int r) {
 
 void AssetList::set_sort_mode(SortMode m) {
     sort_mode_ = m;
-    sort_middle_section();
+    middle_section_dirty_ = true;
+    if (middle_section_dirty_) {
+        sort_middle_section();
+    }
 }
 
 void AssetList::set_tags(const std::vector<std::string>& required_tags,
@@ -248,7 +252,9 @@ void AssetList::update() {
         }
     }
 
-    sort_middle_section();
+    if (middle_section_dirty_) {
+        sort_middle_section();
+    }
 
     previous_center_point_ = current_center;
     previous_search_radius_ = search_radius_;
@@ -318,6 +324,8 @@ void AssetList::rebuild_from_scratch() {
     list_always_ineligible_lookup_.clear();
     delta_buffer_.clear();
     delta_inside_flags_.clear();
+    membership_lookup_.clear();
+    middle_section_dirty_ = false;
 
     SDL_Point center = resolve_center();
 
@@ -347,7 +355,9 @@ void AssetList::rebuild_from_scratch() {
         }
     });
 
-    sort_middle_section();
+    if (middle_section_dirty_) {
+        sort_middle_section();
+    }
 
     previous_center_point_ = center;
     previous_search_radius_ = search_radius_;
@@ -368,17 +378,26 @@ void AssetList::route_asset_to_section(Asset* a) {
 
     remove_from_all_sections(a);
 
+    auto place_in_bucket = [&](SectionBucket bucket, std::vector<Asset*>& container) {
+        std::size_t index = container.size();
+        container.push_back(a);
+        membership_lookup_[a] = SectionSlot{bucket, index};
+        if (bucket == SectionBucket::Middle) {
+            middle_section_dirty_ = true;
+        }
+    };
+
     if (!top_bucket_tags_.empty() && has_any_tag(a, top_bucket_tags_)) {
-        list_top_unsorted_.push_back(a);
+        place_in_bucket(SectionBucket::Top, list_top_unsorted_);
         return;
     }
 
     if (!bottom_bucket_tags_.empty() && has_any_tag(a, bottom_bucket_tags_)) {
-        list_bottom_unsorted_.push_back(a);
+        place_in_bucket(SectionBucket::Bottom, list_bottom_unsorted_);
         return;
     }
 
-    list_middle_sorted_.push_back(a);
+    place_in_bucket(SectionBucket::Middle, list_middle_sorted_);
 }
 
 void AssetList::remove_from_all_sections(Asset* a) {
@@ -386,13 +405,50 @@ void AssetList::remove_from_all_sections(Asset* a) {
         return;
     }
 
-    auto remover = [a](std::vector<Asset*>& vec) {
-        vec.erase(std::remove(vec.begin(), vec.end(), a), vec.end());
-};
+    auto it = membership_lookup_.find(a);
+    if (it == membership_lookup_.end()) {
+        return;
+    }
 
-    remover(list_top_unsorted_);
-    remover(list_middle_sorted_);
-    remover(list_bottom_unsorted_);
+    SectionSlot slot = it->second;
+    std::vector<Asset*>& vec = bucket_vector(slot.bucket);
+
+    if (vec.empty()) {
+        membership_lookup_.erase(it);
+        return;
+    }
+
+    if (slot.index >= vec.size() || vec[slot.index] != a) {
+        // Fallback: linear scan if slot is stale for any reason.
+        auto found = std::find(vec.begin(), vec.end(), a);
+        if (found == vec.end()) {
+            membership_lookup_.erase(it);
+            return;
+        }
+        slot.index = static_cast<std::size_t>(std::distance(vec.begin(), found));
+        it->second.index = slot.index;
+    }
+
+    bool mark_dirty = (slot.bucket == SectionBucket::Middle);
+
+    std::size_t last_index = vec.size() - 1;
+    if (slot.index != last_index) {
+        Asset* moved = vec[last_index];
+        vec[slot.index] = moved;
+        vec.pop_back();
+        auto moved_it = membership_lookup_.find(moved);
+        if (moved_it != membership_lookup_.end()) {
+            moved_it->second.index = slot.index;
+        }
+    } else {
+        vec.pop_back();
+    }
+
+    membership_lookup_.erase(it);
+
+    if (mark_dirty) {
+        middle_section_dirty_ = true;
+    }
 }
 
 bool AssetList::has_all_required_tags(const Asset* a, const std::vector<std::string>& req) const {
@@ -400,9 +456,9 @@ bool AssetList::has_all_required_tags(const Asset* a, const std::vector<std::str
         return false;
     }
 
-    const auto& asset_tags = a->info->tags;
+    const auto& asset_tags = a->info->tag_lookup();
     for (const std::string& tag : req) {
-        if (std::find(asset_tags.begin(), asset_tags.end(), tag) == asset_tags.end()) {
+        if (asset_tags.find(tag) == asset_tags.end()) {
             return false;
         }
     }
@@ -418,9 +474,9 @@ bool AssetList::has_any_tag(const Asset* a, const std::vector<std::string>& tags
         return false;
     }
 
-    const auto& asset_tags = a->info->tags;
+    const auto& asset_tags = a->info->tag_lookup();
     for (const std::string& tag : tags) {
-        if (std::find(asset_tags.begin(), asset_tags.end(), tag) != asset_tags.end()) {
+        if (asset_tags.find(tag) != asset_tags.end()) {
             return true;
         }
     }
@@ -461,6 +517,18 @@ void AssetList::sort_middle_section() {
             });
             break;
     }
+
+    for (std::size_t i = 0; i < list_middle_sorted_.size(); ++i) {
+        Asset* asset = list_middle_sorted_[i];
+        if (asset) {
+            auto it = membership_lookup_.find(asset);
+            if (it != membership_lookup_.end()) {
+                it->second.index = i;
+            }
+        }
+    }
+
+    middle_section_dirty_ = false;
 }
 
 void AssetList::get_delta_area_assets(SDL_Point prev_center,
@@ -508,5 +576,17 @@ void AssetList::for_each_candidate(const std::function<void(Asset*)>& f) const {
             process_asset(process_asset, a);
         }
     }
+}
+
+std::vector<Asset*>& AssetList::bucket_vector(SectionBucket bucket) {
+    switch (bucket) {
+        case SectionBucket::Top:
+            return list_top_unsorted_;
+        case SectionBucket::Middle:
+            return list_middle_sorted_;
+        case SectionBucket::Bottom:
+            return list_bottom_unsorted_;
+    }
+    return list_middle_sorted_;
 }
 

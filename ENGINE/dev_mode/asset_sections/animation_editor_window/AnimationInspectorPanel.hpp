@@ -68,6 +68,7 @@ class AnimationInspectorPanel {
     void refresh_start_indicator();
     void apply_dependencies();
     void update_source_toggle_label();
+    void update_collapse_toggle_label();
 
   private:
     std::shared_ptr<AnimationDocument> document_;
@@ -81,9 +82,11 @@ class AnimationInspectorPanel {
     std::unique_ptr<DMButton> start_button_;
     std::unique_ptr<DMButton> delete_button_;
     std::unique_ptr<DMButton> source_toggle_button_;
+    std::unique_ptr<DMButton> collapse_toggle_button_;
     std::string animation_id_;
     SDL_Rect bounds_{0, 0, 0, 0};
     mutable SDL_Rect header_rect_{0, 0, 0, 0};
+    mutable SDL_Rect collapse_toggle_rect_{0, 0, 0, 0};
     mutable SDL_Rect preview_rect_{0, 0, 0, 0};
     mutable SDL_Rect source_toggle_rect_{0, 0, 0, 0};
     mutable SDL_Rect source_rect_{0, 0, 0, 0};
@@ -95,6 +98,7 @@ class AnimationInspectorPanel {
     bool rename_pending_ = false;
     bool is_start_animation_ = false;
     bool source_collapsed_ = true;
+    bool collapsed_ = true;
 
     std::shared_ptr<CroppingService> cropping_service_;
     std::shared_ptr<AsyncTaskQueue> task_queue_;

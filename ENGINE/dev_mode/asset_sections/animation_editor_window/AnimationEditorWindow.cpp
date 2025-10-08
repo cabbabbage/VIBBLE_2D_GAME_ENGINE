@@ -102,6 +102,8 @@ AnimationEditorWindow::AnimationEditorWindow() {
     layout_dirty_ = true;
 }
 
+AnimationEditorWindow::~AnimationEditorWindow() = default;
+
 void AnimationEditorWindow::set_visible(bool visible) {
     if (!visible && visible_) {
         if (document_ && document_->consume_dirty_flag()) {

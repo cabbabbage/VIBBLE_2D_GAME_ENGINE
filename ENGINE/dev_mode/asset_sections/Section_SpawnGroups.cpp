@@ -30,6 +30,7 @@ Section_SpawnGroups::Section_SpawnGroups()
 void Section_SpawnGroups::build() {
     DockableCollapsible::Rows rows;
     if (!list_) list_ = std::make_unique<SpawnGroupList>();
+    if (list_) list_->set_embedded_mode(true);
     reload_from_file();
 
     // Bind live JSON so inline editor updates can persist

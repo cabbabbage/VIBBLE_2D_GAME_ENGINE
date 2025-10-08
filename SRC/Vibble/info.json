@@ -182,7 +182,7 @@
                 "name": "backward",
                 "path": ""
             },
-            "speed_factor": 1
+            "speed_factor": -1
         },
         "left": {
             "custom_animation_controller_hpp_path": "",

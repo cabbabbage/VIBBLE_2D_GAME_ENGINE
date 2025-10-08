@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "dev_mode/widgets.hpp"
+#include "frame_editor/FrameMovementEditor.hpp"
 
 class AssetInfo;
 class Input;
@@ -20,11 +21,11 @@ class PreviewProvider;
 class CroppingService;
 class AsyncTaskQueue;
 class AudioImporter;
-class FrameMovementEditor;
 
 class AnimationEditorWindow {
   public:
     AnimationEditorWindow();
+    ~AnimationEditorWindow();
 
     void set_visible(bool visible);
     bool is_visible() const { return visible_; }

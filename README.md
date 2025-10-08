@@ -219,6 +219,9 @@ Notes
 Assets (`SRC/<AssetName>/info.json`)
 - `animations`: sources, movement, loop/locked, `on_end` mapping
 - `areas`: collision/interaction/shading polygons
+- `areas` entries store canonical offsets from the bottom-center of the original canvas in `points`.
+  - Each polygon includes a `coordinate_space` object. Modern tooling writes a `render_space` variant that records the render-space `canvas_width`, `canvas_height`, per-area `pivot`, and `scale_at_save` so world alignment stays consistent across re-scaling.
+  - Tooling that writes asset areas must regenerate data; legacy arrays without this metadata are ignored on load.
 - `lighting`: static/orbital lights
 - `custom_controller_key`: binds to a controller in `ENGINE/custom_controllers`
 - `moving_asset` is computed automatically from animations

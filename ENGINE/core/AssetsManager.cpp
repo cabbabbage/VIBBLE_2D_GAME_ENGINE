@@ -15,6 +15,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -23,6 +24,7 @@
 #include <nlohmann/json.hpp>
 #include <system_error>
 #include <vector>
+#include <unordered_set>
 #include <SDL.h>
 
 Assets::Assets(std::vector<Asset>&& loaded,
@@ -351,12 +353,13 @@ void Assets::refresh_filtered_active_assets() {
 }
 
 void Assets::update_filtered_active_assets() {
-    // In normal play mode (no dev controls), render all active assets.
-    // Dev controls may further filter this list when enabled.
-    filtered_active_assets = active_assets;
     if (dev_controls_ && dev_controls_->is_enabled()) {
+        filtered_active_assets = active_assets;
         dev_controls_->filter_active_assets(filtered_active_assets);
+        return;
     }
+
+    filtered_active_assets.clear();
 }
 
 void Assets::ensure_dev_controls() {
@@ -494,6 +497,11 @@ void Assets::update(const Input& input,
     (void)screen_center_x;
     (void)screen_center_y;
 
+    bool closest_assets_dirty = false;
+    const auto mark_closest_assets_dirty = [&closest_assets_dirty]() {
+        closest_assets_dirty = true;
+    };
+
     Room* detected_room = finder_ ? finder_->getCurrentRoom() : nullptr;
     Room* active_room = detected_room;
     if (dev_controls_ && dev_controls_->is_enabled()) {
@@ -503,9 +511,9 @@ void Assets::update(const Input& input,
 
     camera_.update_zoom(active_room, finder_, player);
 
+    mark_closest_assets_dirty();
     update_active_assets(camera_.get_screen_center());
     rebuild_active_assets_if_needed();
-    update_closest_assets(player, 3);
 
     AudioEngine& audio_engine = AudioEngine::instance();
     audio_engine.set_effect_max_distance(static_cast<float>(std::max(1, camera_.get_render_distance_world_margin())));
@@ -524,9 +532,9 @@ void Assets::update(const Input& input,
         dy = player->pos.y - start_py;
         if (dx != 0 || dy != 0) {
             camera_.update_zoom(active_room, finder_, player);
+            mark_closest_assets_dirty();
             update_active_assets(camera_.get_screen_center());
             rebuild_active_assets_if_needed();
-            update_closest_assets(player, 3);
             update_filtered_active_assets();
         }
     }
@@ -534,8 +542,8 @@ void Assets::update(const Input& input,
         player->distance_to_player_sq = 0.0f;
         for (Asset* a : active_assets) {
             if (!a || a == player) continue;
-            const double d = Range::get_distance(a, player);
-            a->distance_to_player_sq = static_cast<float>(d * d);
+            const long long dist_sq = Range::distance_sq(a, player);
+            a->distance_to_player_sq = static_cast<float>(dist_sq);
         }
     } else {
         for (Asset* a : active_assets) {
@@ -548,6 +556,10 @@ void Assets::update(const Input& input,
             if (a && a != player)
                 a->update();
         }
+    }
+
+    if (closest_assets_dirty) {
+        update_closest_assets(player, 3);
     }
 
     if (dev_controls_ && dev_controls_->is_enabled()) {
@@ -622,6 +634,13 @@ void Assets::update_scene_render_quality() {
 
 void Assets::set_render_suppressed(bool suppressed) {
     suppress_render_ = suppressed;
+}
+
+const std::vector<Asset*>& Assets::getFilteredActiveAssets() const {
+    if (dev_controls_ && dev_controls_->is_enabled()) {
+        return filtered_active_assets;
+    }
+    return active_assets;
 }
 
 const std::vector<Asset*>& Assets::get_selected_assets() const {
@@ -814,22 +833,27 @@ void Assets::schedule_removal(Asset* a) {
 
 void Assets::process_removals() {
     if (removal_queue.empty()) return;
-    for (Asset* a : removal_queue) {
+    std::unordered_set<Asset*> removal_lookup(removal_queue.begin(), removal_queue.end());
 
-        auto it = std::find_if(owned_assets.begin(), owned_assets.end(),
-                               [a](const std::unique_ptr<Asset>& p){ return p.get() == a; });
-        if (it != owned_assets.end()) {
-            owned_assets.erase(it);
-        }
+    owned_assets.erase(
+        std::remove_if(owned_assets.begin(), owned_assets.end(),
+                       [&removal_lookup](const std::unique_ptr<Asset>& p) {
+                           return removal_lookup.count(p.get()) > 0;
+                       }),
+        owned_assets.end());
 
-        auto erase_ptr = [a](auto& vec) {
-            vec.erase(std::remove(vec.begin(), vec.end(), a), vec.end());
-};
-        erase_ptr(all);
-        erase_ptr(active_assets);
-        erase_ptr(filtered_active_assets);
-        erase_ptr(closest_assets);
-    }
+    auto erase_ptr = [&removal_lookup](auto& vec) {
+        vec.erase(std::remove_if(vec.begin(), vec.end(),
+                                 [&removal_lookup](auto* asset_ptr) {
+                                     return removal_lookup.count(asset_ptr) > 0;
+                                 }),
+                  vec.end());
+    };
+
+    erase_ptr(all);
+    erase_ptr(active_assets);
+    erase_ptr(filtered_active_assets);
+    erase_ptr(closest_assets);
 
     if (dev_controls_ && dev_controls_->is_enabled()) {
         dev_controls_->clear_selection();

@@ -507,7 +507,7 @@ bool DevControls::is_pointer_over_dev_ui(int x, int y) const {
     if (edit_area_panel_ && edit_area_panel_->visible() && edit_area_panel_->is_point_inside(x, y)) {
         return true;
     }
-    if (enabled_ && asset_filter_.contains_point(x, y)) {
+    if (!is_modal_blocking_panels() && enabled_ && asset_filter_.contains_point(x, y)) {
         return true;
     }
     return false;
@@ -578,9 +578,7 @@ void DevControls::set_enabled(bool enabled) {
     }
 
     sync_header_button_states();
-    if (!enabled_) {
-        reset_asset_filters();
-    } else {
+    if (enabled_) {
         asset_filter_.ensure_layout();
     }
 }
@@ -632,7 +630,9 @@ void DevControls::update(const Input& input) {
     if (regenerate_popup_ && regenerate_popup_->visible()) {
         regenerate_popup_->update(input);
     }
+    const bool hide_headers = is_modal_blocking_panels();
     if (map_mode_ui_) {
+        map_mode_ui_->set_headers_suppressed(hide_headers);
         map_mode_ui_->update(input);
     }
     if (map_assets_modal_ && map_assets_modal_->visible()) {
@@ -649,9 +649,9 @@ void DevControls::update(const Input& input) {
 
     if (room_editor_ && room_editor_->is_enabled()) {
         SDL_Point pointer{input.getX(), input.getY()};
-        if (asset_filter_.contains_point(pointer.x, pointer.y)) {
+        if (!hide_headers && asset_filter_.contains_point(pointer.x, pointer.y)) {
             room_editor_->clear_highlighted_assets();
-        } else {
+        } else if (!hide_headers) {
             FullScreenCollapsible* footer = map_mode_ui_ ? map_mode_ui_->get_footer_panel() : nullptr;
             if (footer && footer->visible()) {
                 const SDL_Rect& header = footer->header_rect();
@@ -692,6 +692,11 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
         pointer = event_point(event);
     }
 
+    const bool hide_headers = is_modal_blocking_panels();
+    if (map_mode_ui_) {
+        map_mode_ui_->set_headers_suppressed(hide_headers);
+    }
+
     auto consume = [&](bool used) {
         if (used && input_) {
             input_->consumeEvent(event);
@@ -699,10 +704,10 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
         return used;
     };
 
-    if (pointer_event && consume(asset_filter_.handle_event(event))) {
+    if (!hide_headers && pointer_event && consume(asset_filter_.handle_event(event))) {
         return;
     }
-    if (pointer_relevant && enabled_ && asset_filter_.contains_point(pointer.x, pointer.y)) {
+    if (!hide_headers && pointer_relevant && enabled_ && asset_filter_.contains_point(pointer.x, pointer.y)) {
         consume(true);
         return;
     }
@@ -1255,7 +1260,9 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
     if (regenerate_popup_ && regenerate_popup_->visible()) {
         regenerate_popup_->render(renderer);
     }
-    asset_filter_.render(renderer);
+    if (!is_modal_blocking_panels()) {
+        asset_filter_.render(renderer);
+    }
 }
 
 void DevControls::toggle_asset_library() {
@@ -1922,7 +1929,7 @@ void DevControls::filter_active_assets(std::vector<Asset*>& assets) const {
 }
 
 void DevControls::refresh_active_asset_filters() {
-    if (!assets_) {
+    if (!assets_ || !enabled_) {
         return;
     }
     assets_->refresh_filtered_active_assets();

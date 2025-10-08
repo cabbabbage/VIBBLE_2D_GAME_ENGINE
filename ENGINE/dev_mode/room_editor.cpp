@@ -205,8 +205,15 @@ void RoomEditor::update(const Input& input) {
 }
 
 void RoomEditor::update_ui(const Input& input) {
+    const bool config_visible_now = room_cfg_ui_ && room_cfg_ui_->visible();
+
     if (!enabled_) {
+        room_config_was_visible_ = config_visible_now;
         return;
+    }
+
+    if (config_visible_now && !room_config_was_visible_) {
+        reset_drag_state();
     }
 
     if (library_ui_ && library_ui_->is_visible()) {
@@ -287,6 +294,8 @@ void RoomEditor::update_ui(const Input& input) {
     // legacy floating panel removed
 
     update_area_editor_focus();
+
+    room_config_was_visible_ = config_visible_now;
 }
 
 bool RoomEditor::handle_sdl_event(const SDL_Event& event) {
@@ -864,7 +873,10 @@ bool RoomEditor::is_spawn_group_panel_visible() const { return false; }
 void RoomEditor::handle_mouse_input(const Input& input) {
     camera& cam = assets_->getView();
 
-    if (input.isScancodeDown(SDL_SCANCODE_ESCAPE)) {
+    const bool asset_info_open =
+        (active_modal_ == ActiveModal::AssetInfo) || (info_ui_ && info_ui_->is_visible());
+
+    if (!asset_info_open && input.isScancodeDown(SDL_SCANCODE_ESCAPE)) {
         clear_selection();
         return;
     }
@@ -873,11 +885,14 @@ void RoomEditor::handle_mouse_input(const Input& input) {
 
     const int mx = input_->getX();
     const int my = input_->getY();
-    const bool ui_blocked = is_ui_blocking_input(mx, my);
+    const bool ui_blocked = asset_info_open || is_ui_blocking_input(mx, my);
     const bool library_modal_block =
         library_ui_ && library_ui_->is_visible() && library_ui_->is_input_blocking();
-    const bool suppress_hover_and_drag = library_modal_block;
-    const bool suppress_clicks = library_modal_block;
+
+
+    const bool config_open = room_cfg_ui_ && room_cfg_ui_->visible();
+    const bool suppress_hover_and_drag = library_modal_block || asset_info_open || config_open;
+    const bool suppress_clicks = library_modal_block || asset_info_open;
 
     Asset* hit_asset = nullptr;
     if (!ui_blocked && !suppress_hover_and_drag) {
@@ -890,8 +905,14 @@ void RoomEditor::handle_mouse_input(const Input& input) {
 
     if (suppress_hover_and_drag) {
         if (dragging_) {
-            finalize_drag_session();
-            dragging_ = false;
+            if (library_modal_block) {
+                finalize_drag_session();
+                dragging_ = false;
+            } else if (config_open) {
+                reset_drag_state();
+            }
+        } else if (config_open) {
+            reset_drag_state();
         }
         hovered_asset_ = nullptr;
         hover_miss_frames_ = 3;
@@ -1255,6 +1276,14 @@ void RoomEditor::ensure_room_configurator() {
                     return;
                 }
                 add_spawn_group_internal();
+            },
+            [this](const std::string& spawn_id) {
+                if (spawn_id.empty()) {
+                    return;
+                }
+                if (nlohmann::json* entry = find_spawn_entry(spawn_id)) {
+                    respawn_spawn_group(*entry);
+                }
             });
     }
 }

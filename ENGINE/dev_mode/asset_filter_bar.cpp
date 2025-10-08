@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <limits>
+#include <unordered_set>
 #include <nlohmann/json.hpp>
 
 namespace {
@@ -19,32 +20,60 @@ AssetFilterBar::~AssetFilterBar() = default;
 
 void AssetFilterBar::initialize() {
     entries_.clear();
-    state_.type_filters.clear();
+
+    const bool use_saved_state = has_saved_state_ || !state_.type_filters.empty();
 
     FilterEntry map_entry;
     map_entry.id = "map_assets";
     map_entry.kind = FilterKind::MapAssets;
-    map_entry.checkbox = std::make_unique<DMCheckbox>("Map Assets", true);
+    const bool map_assets_value = use_saved_state ? state_.map_assets : true;
+    map_entry.checkbox = std::make_unique<DMCheckbox>("Map Assets", map_assets_value);
+    if (!use_saved_state) {
+        state_.map_assets = map_assets_value;
+    }
     entries_.push_back(std::move(map_entry));
 
     FilterEntry room_entry;
     room_entry.id = "current_room";
     room_entry.kind = FilterKind::CurrentRoom;
-    room_entry.checkbox = std::make_unique<DMCheckbox>("Current Room", true);
+    const bool current_room_value = use_saved_state ? state_.current_room : true;
+    room_entry.checkbox = std::make_unique<DMCheckbox>("Current Room", current_room_value);
+    if (!use_saved_state) {
+        state_.current_room = current_room_value;
+    }
     entries_.push_back(std::move(room_entry));
 
-    for (const std::string& type : asset_types::all_as_strings()) {
+    const auto all_types = asset_types::all_as_strings();
+    std::unordered_set<std::string> known_types;
+    known_types.reserve(all_types.size());
+    for (const std::string& type : all_types) {
         FilterEntry entry;
         entry.id = type;
         entry.kind = FilterKind::Type;
         const bool default_enabled = default_type_enabled(type);
-        entry.checkbox = std::make_unique<DMCheckbox>(format_type_label(type), default_enabled);
-        state_.type_filters[type] = default_enabled;
+        bool checkbox_value = default_enabled;
+        if (use_saved_state) {
+            auto it = state_.type_filters.find(type);
+            if (it != state_.type_filters.end()) {
+                checkbox_value = it->second;
+            }
+        }
+        entry.checkbox = std::make_unique<DMCheckbox>(format_type_label(type), checkbox_value);
+        state_.type_filters[type] = checkbox_value;
+        known_types.insert(type);
         entries_.push_back(std::move(entry));
     }
 
-    state_.map_assets = true;
-    state_.current_room = true;
+    if (use_saved_state) {
+        for (auto it = state_.type_filters.begin(); it != state_.type_filters.end();) {
+            if (known_types.find(it->first) == known_types.end()) {
+                it = state_.type_filters.erase(it);
+            } else {
+                ++it;
+            }
+        }
+    }
+
     filters_expanded_ = false;
     filter_toggle_button_ = std::make_unique<DMButton>("▲",
                                                       &DMStyles::HeaderButton(),
@@ -436,6 +465,7 @@ void AssetFilterBar::sync_state_from_ui() {
             break;
         }
     }
+    has_saved_state_ = true;
 }
 
 void AssetFilterBar::notify_state_changed() {
