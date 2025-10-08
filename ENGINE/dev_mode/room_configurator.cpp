@@ -482,6 +482,34 @@ bool RoomConfigurator::apply_room_data(const nlohmann::json& data) {
 
 void RoomConfigurator::open(const nlohmann::json& room_data) {
     room_ = nullptr;
+    external_room_json_ = nullptr;
+    on_external_spawn_change_ = {};
+    on_external_spawn_entry_change_ = {};
+    external_configure_entry_ = {};
+    is_trail_context_ = false;
+    if (!docked_mode_) {
+        FloatingDockableManager::instance().open_floating(
+            "Room Config", this, [this]() { this->close(); });
+    }
+    bool changed = apply_room_data(room_data);
+    if (changed) {
+        rebuild_rows();
+        reset_scroll();
+    }
+    set_visible(true);
+    set_expanded(true);
+    apply_bounds_if_needed();
+}
+
+void RoomConfigurator::open(nlohmann::json& room_data,
+                            std::function<void()> on_change,
+                            std::function<void(const nlohmann::json&, const SpawnGroupList::ChangeSummary&)> on_entry_change,
+                            SpawnGroupList::ConfigureEntryCallback configure_entry) {
+    room_ = nullptr;
+    external_room_json_ = &room_data;
+    on_external_spawn_change_ = std::move(on_change);
+    on_external_spawn_entry_change_ = std::move(on_entry_change);
+    external_configure_entry_ = std::move(configure_entry);
     is_trail_context_ = false;
     if (!docked_mode_) {
         FloatingDockableManager::instance().open_floating(
@@ -500,6 +528,10 @@ void RoomConfigurator::open(const nlohmann::json& room_data) {
 void RoomConfigurator::open(Room* room) {
     Room* previous = room_;
     room_ = room;
+    external_room_json_ = nullptr;
+    on_external_spawn_change_ = {};
+    on_external_spawn_entry_change_ = {};
+    external_configure_entry_ = {};
     is_trail_context_ = false;
     if (room_) {
         const std::string& dir = room_->room_directory;
@@ -531,6 +563,15 @@ bool RoomConfigurator::refresh_spawn_groups(const nlohmann::json& room_data) {
     return changed;
 }
 
+bool RoomConfigurator::refresh_spawn_groups(nlohmann::json& room_data) {
+    external_room_json_ = &room_data;
+    bool changed = apply_room_data(room_data);
+    if (changed) {
+        rebuild_rows();
+    }
+    return changed;
+}
+
 bool RoomConfigurator::refresh_spawn_groups(Room* room) {
     const nlohmann::json& src = room ? room->assets_data() : empty_object();
     return refresh_spawn_groups(src);
@@ -538,6 +579,10 @@ bool RoomConfigurator::refresh_spawn_groups(Room* room) {
 
 void RoomConfigurator::close() {
     set_visible(false);
+    external_room_json_ = nullptr;
+    on_external_spawn_change_ = {};
+    on_external_spawn_entry_change_ = {};
+    external_configure_entry_ = {};
 }
 
 bool RoomConfigurator::visible() const { return is_visible(); }
@@ -613,6 +658,62 @@ void RoomConfigurator::rebuild_spawn_rows(Rows& rows) {
         spawn_list_->set_on_layout_changed([this]() { this->rebuild_rows(); });
         spawn_list_->restore_expanded_groups(expanded);
         SpawnGroupList::Callbacks cb{};
+        cb.on_regenerate = [this](const std::string& id) {
+            if (on_spawn_regenerate_) on_spawn_regenerate_(id);
+        };
+        cb.on_duplicate = [this](const std::string& id) {
+            if (on_spawn_duplicate_) on_spawn_duplicate_(id);
+        };
+        cb.on_delete = [this](const std::string& id) {
+            if (on_spawn_delete_) on_spawn_delete_(id);
+        };
+        cb.on_move_up = [this](const std::string& id) {
+            if (on_spawn_move_up_) on_spawn_move_up_(id);
+        };
+        cb.on_move_down = [this](const std::string& id) {
+            if (on_spawn_move_down_) on_spawn_move_down_(id);
+        };
+        cb.on_add = [this]() {
+            if (on_spawn_add_) on_spawn_add_();
+        };
+        spawn_list_->set_callbacks(std::move(cb));
+        spawn_list_->append_rows(rows);
+        have_groups = true;
+    } else if (external_room_json_) {
+        auto& root = live_room_json();
+        const char* key = spawn_groups_from_assets_ ? "assets" : "spawn_groups";
+        if (!root.contains(key) || !root[key].is_array()) {
+            root[key] = nlohmann::json::array();
+        }
+        nlohmann::json& groups = root[key];
+
+        auto on_change = [this]() {
+            if (external_room_json_) {
+                this->refresh_spawn_groups(*external_room_json_);
+                if (on_external_spawn_change_) on_external_spawn_change_();
+            }
+        };
+
+        auto on_entry_change = [this](const nlohmann::json& entry, const SpawnGroupList::ChangeSummary& summary) {
+            if (external_room_json_) {
+                this->refresh_spawn_groups(*external_room_json_);
+                if (on_external_spawn_entry_change_) {
+                    on_external_spawn_entry_change_(entry, summary);
+                }
+                if (on_external_spawn_change_) {
+                    on_external_spawn_change_();
+                }
+            }
+        };
+
+        auto expanded = spawn_list_->expanded_groups();
+        spawn_list_->load(groups, std::move(on_change), std::move(on_entry_change), external_configure_entry_);
+        spawn_list_->set_on_layout_changed([this]() { this->rebuild_rows(); });
+        spawn_list_->restore_expanded_groups(expanded);
+        SpawnGroupList::Callbacks cb{};
+        cb.on_regenerate = [this](const std::string& id) {
+            if (on_spawn_regenerate_) on_spawn_regenerate_(id);
+        };
         cb.on_duplicate = [this](const std::string& id) {
             if (on_spawn_duplicate_) on_spawn_duplicate_(id);
         };
@@ -648,6 +749,9 @@ void RoomConfigurator::rebuild_spawn_rows(Rows& rows) {
             spawn_list_->set_on_layout_changed([this]() { this->rebuild_rows(); });
             spawn_list_->restore_expanded_groups(expanded);
             SpawnGroupList::Callbacks cb{};
+            cb.on_regenerate = [this](const std::string& id) {
+                if (on_spawn_regenerate_) on_spawn_regenerate_(id);
+            };
             cb.on_duplicate = [this](const std::string& id) {
                 if (on_spawn_duplicate_) on_spawn_duplicate_(id);
             };
@@ -956,6 +1060,10 @@ bool RoomConfigurator::sync_state_from_widgets() {
             state_->apply_to_json(root, !is_trail_context_);
             write_tags_to_json(root);
             room_->save_assets_json();
+        } else if (external_room_json_) {
+            auto& root = live_room_json();
+            state_->apply_to_json(root, !is_trail_context_);
+            write_tags_to_json(root);
         }
     }
 
@@ -998,12 +1106,18 @@ const nlohmann::json& RoomConfigurator::live_room_json() const {
     if (room_) {
         return room_->assets_data();
     }
+    if (external_room_json_) {
+        return *external_room_json_;
+    }
     return loaded_json_;
 }
 
 nlohmann::json& RoomConfigurator::live_room_json() {
     if (room_) {
         return room_->assets_data();
+    }
+    if (external_room_json_) {
+        return *external_room_json_;
     }
     if (!loaded_json_.is_object()) {
         loaded_json_ = nlohmann::json::object();

@@ -9,6 +9,9 @@
 #include "global_light_source.hpp"
 #include "render_asset.hpp"
 #include "render/camera.hpp"
+#include <memory>
+
+class LightRaysPass; 
 
 class Assets;
 class Asset;
@@ -23,7 +26,8 @@ class SceneRenderer {
     SDL_Renderer* get_renderer() const;
     void set_low_quality_rendering(bool low_quality);
 
-        private:
+    private:
+    std::unique_ptr<LightRaysPass> light_rays_pass_;
     void update_shading_groups();
     bool shouldRegen(Asset* a);
     SDL_Rect get_scaled_position_rect(Asset* a, int fw, int fh, float inv_scale, int min_w, int min_h, float reference_screen_height);
