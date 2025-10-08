@@ -524,12 +524,45 @@
       "width_min": 1500
     },
     "room_lab": {
+      "areas": [
+        {
+          "anchor": {
+            "x": 13397,
+            "y": 10101
+          },
+          "kind": "Trigger",
+          "name": "attack_trigger",
+          "points": [
+            {
+              "x": -117,
+              "y": -613
+            },
+            {
+              "x": -413,
+              "y": -362
+            },
+            {
+              "x": 141,
+              "y": -214
+            },
+            {
+              "x": 283,
+              "y": -547
+            },
+            {
+              "x": 112,
+              "y": -705
+            }
+          ],
+          "type": "trigger"
+        }
+      ],
       "curvyness": 1,
       "edge_smoothness": 93,
       "geometry": "Circle",
       "height_max": 10344,
       "height_min": 10344,
-      "inherits_map_assets": true,
+      "inherits_map_assets": false,
       "is_boss": false,
       "is_spawn": false,
       "max_height": 10344,
@@ -537,24 +570,30 @@
       "min_height": 10344,
       "min_width": 10344,
       "name": "room_lab",
-      "radius": 5172,
+      "radius": 2172,
       "spawn_groups": [
         {
           "candidates": [
             {
               "chance": 0,
               "name": "null"
+            },
+            {
+              "chance": 100,
+              "name": "Bomb"
             }
           ],
-          "chance_denominator": 0,
           "check_overlap": false,
-          "display_name": "New Spawn",
+          "display_name": "Bomb",
+          "dx": -457,
+          "dy": 278,
           "enforce_spacing": false,
           "max_number": 1,
           "min_number": 1,
+          "origional_height": 2351,
+          "origional_width": 2368,
           "position": "Exact",
-          "priority": 0,
-          "spawn_id": "spn-63068cffe9db"
+          "spawn_id": "spn-83d69901070e"
         }
       ],
       "width_max": 10344,
@@ -664,7 +703,7 @@
       "geometry": "Circle",
       "height_max": 3612,
       "height_min": 3612,
-      "inherits_map_assets": true,
+      "inherits_map_assets": false,
       "is_boss": false,
       "is_spawn": true,
       "max_height": 3612,

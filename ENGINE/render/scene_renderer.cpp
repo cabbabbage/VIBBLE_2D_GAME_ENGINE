@@ -313,12 +313,15 @@ void SceneRenderer::render() {
     // ----- LIGHTS / OVERLAYS -----
     SDL_SetRenderTarget(renderer_, use_postprocess ? scene_target_tex_ : nullptr);
     z_light_pass_->render(debugging);
-    if (assets_) assets_->render_overlays(renderer_);
 
     SDL_Texture* light_rays_texture = nullptr;
     if (use_postprocess && scene_target_tex_ && light_rays_pass_ && light_rays_enabled_) {
         light_rays_pass_->set_screen_size(screen_width_, screen_height_);
-        light_rays_pass_->set_light_screen_pos(main_light_source_.get_position());
+        SDL_Point light_screen_pos = main_light_source_.get_position();
+        if (assets_) {
+            light_screen_pos = assets_->getView().map_to_screen(light_screen_pos);
+        }
+        light_rays_pass_->set_light_screen_pos(light_screen_pos);
         light_rays_texture = light_rays_pass_->compute(scene_target_tex_);
     }
 
@@ -366,6 +369,10 @@ void SceneRenderer::render() {
         }
     } else {
         SDL_SetRenderTarget(renderer_, nullptr);
+    }
+
+    if (assets_) {
+        assets_->render_overlays(renderer_);
     }
 
     // ----- PRESENT -----
