@@ -15,6 +15,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -541,11 +542,7 @@ void Assets::update(const Input& input,
         player->distance_to_player_sq = 0.0f;
         for (Asset* a : active_assets) {
             if (!a || a == player) continue;
-            const long long dx = static_cast<long long>(a->pos.x) -
-                                 static_cast<long long>(player->pos.x);
-            const long long dy = static_cast<long long>(a->pos.y) -
-                                 static_cast<long long>(player->pos.y);
-            const long long dist_sq = dx * dx + dy * dy;
+            const long long dist_sq = Range::distance_sq(a, player);
             a->distance_to_player_sq = static_cast<float>(dist_sq);
         }
     } else {

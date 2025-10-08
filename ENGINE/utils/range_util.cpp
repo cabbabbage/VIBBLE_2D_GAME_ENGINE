@@ -13,6 +13,12 @@ bool is_within_radius(long long ax, long long ay, long long bx, long long by, in
     return dx * dx + dy * dy <= r * r;
 }
 
+long long distance_squared(long long ax, long long ay, long long bx, long long by) {
+    const long long dx = ax - bx;
+    const long long dy = ay - by;
+    return dx * dx + dy * dy;
+}
+
 bool resolve_asset_pos(const Asset* asset, long long& x, long long& y) {
     if (!asset) {
         return false;
@@ -89,6 +95,43 @@ bool Range::is_in_range(const SDL_Point& a, const SDL_Point& b, int radius) {
                             static_cast<long long>(b.x),
                             static_cast<long long>(b.y),
                             radius);
+}
+
+long long Range::distance_sq(const Asset* a, const Asset* b) {
+    long long ax, ay, bx, by;
+    if (!resolve_asset_pos(a, ax, ay) || !resolve_asset_pos(b, bx, by)) {
+        return std::numeric_limits<long long>::max();
+    }
+    return distance_squared(ax, ay, bx, by);
+}
+
+long long Range::distance_sq(const Asset* a, const SDL_Point& b) {
+    long long ax, ay;
+    if (!resolve_asset_pos(a, ax, ay)) {
+        return std::numeric_limits<long long>::max();
+    }
+    return distance_squared(ax,
+                            ay,
+                            static_cast<long long>(b.x),
+                            static_cast<long long>(b.y));
+}
+
+long long Range::distance_sq(const SDL_Point& a, const Asset* b) {
+    long long bx, by;
+    if (!resolve_asset_pos(b, bx, by)) {
+        return std::numeric_limits<long long>::max();
+    }
+    return distance_squared(static_cast<long long>(a.x),
+                            static_cast<long long>(a.y),
+                            bx,
+                            by);
+}
+
+long long Range::distance_sq(const SDL_Point& a, const SDL_Point& b) {
+    return distance_squared(static_cast<long long>(a.x),
+                            static_cast<long long>(a.y),
+                            static_cast<long long>(b.x),
+                            static_cast<long long>(b.y));
 }
 
 double Range::get_distance(const Asset* a, const Asset* b) {

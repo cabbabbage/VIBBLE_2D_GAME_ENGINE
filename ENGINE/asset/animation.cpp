@@ -190,15 +190,30 @@ void Animation::load(const std::string& trigger,
 			}
 		}
 		std::vector<SDL_Surface*> surfaces;
-		if (use_cache) {
-			use_cache = cache.load_surface_sequence(cache_folder, expected_frames, surfaces);
-		}
-		if (!use_cache) {
-			surfaces.clear();
-			for (int i = 0; i < expected_frames; ++i) {
-					std::string f = src_folder + "/" + std::to_string(i) + ".png";
-					int new_w = 0, new_h = 0;
-					SDL_Surface* scaled = cache.load_and_scale_surface(f, scale_factor, new_w, new_h);
+                if (use_cache) {
+                        use_cache = cache.load_surface_sequence(cache_folder, expected_frames, surfaces);
+                        if (use_cache) {
+                                original_canvas_width  = orig_w;
+                                original_canvas_height = orig_h;
+                                if (!surfaces.empty() && surfaces[0]) {
+                                        scaled_sprite_w = surfaces[0]->w;
+                                        scaled_sprite_h = surfaces[0]->h;
+                                } else {
+                                        int fallback_w = static_cast<int>(orig_w * scale_factor);
+                                        int fallback_h = static_cast<int>(orig_h * scale_factor);
+                                        if (fallback_w <= 0 && orig_w > 0) fallback_w = 1;
+                                        if (fallback_h <= 0 && orig_h > 0) fallback_h = 1;
+                                        scaled_sprite_w = fallback_w;
+                                        scaled_sprite_h = fallback_h;
+                                }
+                        }
+                }
+                if (!use_cache) {
+                        surfaces.clear();
+                        for (int i = 0; i < expected_frames; ++i) {
+                                        std::string f = src_folder + "/" + std::to_string(i) + ".png";
+                                        int new_w = 0, new_h = 0;
+                                        SDL_Surface* scaled = cache.load_and_scale_surface(f, scale_factor, new_w, new_h);
 					if (!scaled) {
 								std::cerr << "[Animation] Failed to load or scale: " << f << "\n";
 								continue;
@@ -209,17 +224,31 @@ void Animation::load(const std::string& trigger,
 								scaled_sprite_w = new_w;
 								scaled_sprite_h = new_h;
 					}
-					surfaces.push_back(scaled);
-			}
-			cache.save_surface_sequence(cache_folder, surfaces);
-			nlohmann::json new_meta;
-			new_meta["frame_count"]     = expected_frames;
-			new_meta["scale_factor"]    = scale_factor;
-			new_meta["original_width"]  = orig_w;
-			new_meta["original_height"] = orig_h;
-			cache.save_metadata(meta_file, new_meta);
-		}
-		for (SDL_Surface* surf : surfaces) {
+                                        surfaces.push_back(scaled);
+                        }
+                        cache.save_surface_sequence(cache_folder, surfaces);
+                        nlohmann::json new_meta;
+                        new_meta["frame_count"]     = expected_frames;
+                        new_meta["scale_factor"]    = scale_factor;
+                        new_meta["original_width"]  = orig_w;
+                        new_meta["original_height"] = orig_h;
+                        cache.save_metadata(meta_file, new_meta);
+                }
+                if (original_canvas_width <= 0 && orig_w > 0) {
+                        original_canvas_width = orig_w;
+                }
+                if (original_canvas_height <= 0 && orig_h > 0) {
+                        original_canvas_height = orig_h;
+                }
+                if ((scaled_sprite_w <= 0 || scaled_sprite_h <= 0) && orig_w > 0 && orig_h > 0) {
+                        int fallback_w = static_cast<int>(orig_w * scale_factor);
+                        int fallback_h = static_cast<int>(orig_h * scale_factor);
+                        if (fallback_w <= 0) fallback_w = 1;
+                        if (fallback_h <= 0) fallback_h = 1;
+                        scaled_sprite_w = fallback_w;
+                        scaled_sprite_h = fallback_h;
+                }
+                for (SDL_Surface* surf : surfaces) {
                         SDL_Texture* tex = cache.surface_to_texture(renderer, surf);
                         SDL_FreeSurface(surf);
                         if (!tex) {

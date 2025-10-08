@@ -484,10 +484,14 @@ void Asset::set_z_offset(int z) {
 }
 
 void Asset::set_flip() {
-	if (!info || !info->flipable) return;
-	std::mt19937 rng{ std::random_device{}() };
-	std::uniform_int_distribution<int> dist(0, 1);
-	flipped = (dist(rng) == 1);
+        if (!info || !info->flipable) return;
+        std::uniform_int_distribution<int> dist(0, 1);
+        bool should_flip;
+        {
+                std::lock_guard<std::mutex> lock(asset_rng_mutex());
+                should_flip = (dist(asset_rng()) == 1);
+        }
+        flipped = should_flip;
 }
 
 void Asset::set_final_texture(SDL_Texture* tex) {

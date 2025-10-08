@@ -601,7 +601,7 @@
           "inherited": false,
           "max_number": 1,
           "min_number": 1,
-          "position": "Intersection",
+          "position": "Exact",
           "priority": 0,
           "spawn_id": "spn-400a2bb2d100",
           "tag": false

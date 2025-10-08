@@ -18,6 +18,11 @@ class Range {
   static double get_distance(const SDL_Point& a, const Asset* b);
   static double get_distance(const SDL_Point& a, const SDL_Point& b);
 
+  static long long distance_sq(const Asset* a, const Asset* b);
+  static long long distance_sq(const Asset* a, const SDL_Point& b);
+  static long long distance_sq(const SDL_Point& a, const Asset* b);
+  static long long distance_sq(const SDL_Point& a, const SDL_Point& b);
+
   static void get_in_range(const SDL_Point& center, int radius, const std::vector<Asset*>& candidates, std::vector<Asset*>& out);
 
  private:

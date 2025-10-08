@@ -70,16 +70,16 @@ bool Check::is_in_exclusion_zone(const SDL_Point& pos, const std::vector<Area>& 
 std::vector<Asset*> Check::get_closest_assets(const SDL_Point& pos, int max_count,
                                               const std::vector<std::unique_ptr<Asset>>& assets) const
 {
-	std::vector<std::pair<double, Asset*>> pairs;
-	pairs.reserve(assets.size());
-	for (const auto& uptr : assets) {
-		Asset* a = uptr.get();
-		if (!a || !a->info) continue;
-		const double d = Range::get_distance(SDL_Point{ pos.x, pos.y }, a);
-		pairs.emplace_back(d * d, a);
-	}
-	if (pairs.size() > static_cast<size_t>(max_count)) {
-		std::nth_element(pairs.begin(),
+        std::vector<std::pair<long long, Asset*>> pairs;
+        pairs.reserve(assets.size());
+        for (const auto& uptr : assets) {
+                Asset* a = uptr.get();
+                if (!a || !a->info) continue;
+                const long long dist_sq = Range::distance_sq(SDL_Point{ pos.x, pos.y }, a);
+                pairs.emplace_back(dist_sq, a);
+        }
+        if (pairs.size() > static_cast<size_t>(max_count)) {
+                std::nth_element(pairs.begin(),
 		pairs.begin() + max_count,
 		pairs.end(),
 		[](auto& a, auto& b) { return a.first < b.first; });
@@ -92,12 +92,12 @@ std::vector<Asset*> Check::get_closest_assets(const SDL_Point& pos, int max_coun
 	for (auto& p : pairs) {
 		closest.push_back(p.second);
 		if (debug_) {
-			std::cout << "[Check] Closest asset: " << p.second->info->name
-			<< " at (" << p.second->pos.x << ", " << p.second->pos.y
-			<< "), dist_sq=" << p.first << "\n";
-		}
-	}
-	return closest;
+                std::cout << "[Check] Closest asset: " << p.second->info->name
+                        << " at (" << p.second->pos.x << ", " << p.second->pos.y
+                        << "), dist_sq=" << p.first << "\n";
+                }
+        }
+        return closest;
 }
 
 bool Check::check_min_distance_all(const std::shared_ptr<AssetInfo>& info,

@@ -188,9 +188,7 @@ bool DockableCollapsible::handle_event(const SDL_Event& e) {
     const bool pointer_event =
         (e.type == SDL_MOUSEBUTTONDOWN || e.type == SDL_MOUSEBUTTONUP || e.type == SDL_MOUSEMOTION);
     const bool wheel_event = (e.type == SDL_MOUSEWHEEL);
-    const auto slider_capture_active = [&]() {
-        return wheel_event && DMWidgetsSliderScrollCaptured();
-    };
+    const bool slider_capture_active = DMWidgetsSliderScrollCaptured();
     SDL_Point pointer_pos{0, 0};
     if (pointer_event) {
         if (e.type == SDL_MOUSEMOTION) {
@@ -266,7 +264,7 @@ bool DockableCollapsible::handle_event(const SDL_Event& e) {
         }
     }
 
-    if (expanded_ && scroll_enabled_ && wheel_event && !slider_capture_active()) {
+    if (expanded_ && scroll_enabled_ && wheel_event && !slider_capture_active) {
         SDL_Point mouse_point{0, 0};
         SDL_GetMouseState(&mouse_point.x, &mouse_point.y);
         if (SDL_PointInRect(&mouse_point, &body_viewport_)) {
@@ -278,7 +276,11 @@ bool DockableCollapsible::handle_event(const SDL_Event& e) {
 
     bool forward_to_children = expanded_;
     if (forward_to_children && pointer_event) {
-        forward_to_children = SDL_PointInRect(&pointer_pos, &body_viewport_);
+        if (SDL_PointInRect(&pointer_pos, &body_viewport_)) {
+            forward_to_children = true;
+        } else {
+            forward_to_children = slider_capture_active;
+        }
     }
 
     if (forward_to_children) {
@@ -291,7 +293,7 @@ bool DockableCollapsible::handle_event(const SDL_Event& e) {
         }
     }
 
-    if (slider_capture_active()) {
+    if (wheel_event && slider_capture_active) {
         return true;
     }
 
