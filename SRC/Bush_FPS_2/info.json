@@ -351,7 +351,7 @@
     "lighting_info": [
         {
             "factor": 100,
-            "falloff": 38,
+            "falloff": 0,
             "has_light_source": true,
             "light_intensity": 255,
             "offset_x": 0,

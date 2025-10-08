@@ -3,6 +3,7 @@
 #include <SDL.h>
 #include <SDL_ttf.h>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 #include <functional>
@@ -108,6 +109,8 @@ public:
         has_pending_value_ = false;
     }
     bool defer_commit_until_unfocus() const { return defer_commit_until_unfocus_; }
+    void set_value_formatter(std::function<std::string(int)> formatter);
+    void set_value_parser(std::function<std::optional<int>(const std::string&)> parser);
     bool handle_event(const SDL_Event& e);
     void render(SDL_Renderer* r) const;
     int preferred_height(int width) const;
@@ -125,6 +128,8 @@ private:
     int value_for_x(int x) const;
     void draw_text(SDL_Renderer* r, const std::string& s, int x, int y) const;
     int compute_label_height(int width) const;
+    std::string format_value(int v) const;
+    std::optional<int> parse_value(const std::string& text) const;
     SDL_Rect rect_{0,0,200,40};
     SDL_Rect content_rect_{0,0,200,40};
     SDL_Rect label_rect_{0,0,0,0};
@@ -141,6 +146,8 @@ private:
     bool hovered_ = false;
     bool focused_ = false;
     std::unique_ptr<DMTextBox> edit_box_;
+    std::function<std::string(int)> value_formatter_{};
+    std::function<std::optional<int>(const std::string&)> value_parser_{};
 };
 
 class DMRangeSlider {

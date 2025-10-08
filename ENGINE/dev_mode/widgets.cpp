@@ -4,7 +4,9 @@
 #include <cctype>
 #include <cmath>
 #include <cstring>
+#include <optional>
 #include <unordered_set>
+#include <utility>
 
 namespace {
 constexpr int kBoxTopPadding = 5;
@@ -551,12 +553,10 @@ int DMSlider::value_for_x(int x) const {
 bool DMSlider::handle_event(const SDL_Event& e) {
     if (edit_box_) {
         if (edit_box_->handle_event(e)) {
-
-            try {
-                int nv = std::stoi(edit_box_->value());
-                set_value(nv);
-            } catch (...) {
-
+            std::optional<int> parsed = parse_value(edit_box_->value());
+            if (parsed) {
+                set_value(*parsed);
+                edit_box_->set_value(format_value(display_value()));
             }
             return true;
         }
@@ -597,7 +597,7 @@ bool DMSlider::handle_event(const SDL_Event& e) {
         }
         SDL_Rect vr = value_rect();
         if (inside && SDL_PointInRect(&p, &vr)) {
-            edit_box_ = std::make_unique<DMTextBox>("", std::to_string(display_value()));
+            edit_box_ = std::make_unique<DMTextBox>("", format_value(display_value()));
             edit_box_->set_rect(vr);
             edit_box_->handle_event(e);
             return true;
@@ -686,7 +686,36 @@ void DMSlider::render(SDL_Renderer* r) const {
         edit_box_->render(r);
     } else {
         SDL_Rect vr = value_rect();
-        draw_text(r, std::to_string(current_value), vr.x + 6, vr.y + (vr.h - st.value.font_size) / 2);
+        draw_text(r, format_value(current_value), vr.x + 6, vr.y + (vr.h - st.value.font_size) / 2);
+    }
+}
+
+void DMSlider::set_value_formatter(std::function<std::string(int)> formatter) {
+    value_formatter_ = std::move(formatter);
+    if (edit_box_) {
+        edit_box_->set_value(format_value(display_value()));
+    }
+}
+
+void DMSlider::set_value_parser(std::function<std::optional<int>(const std::string&)> parser) {
+    value_parser_ = std::move(parser);
+}
+
+std::string DMSlider::format_value(int v) const {
+    if (value_formatter_) {
+        return value_formatter_(v);
+    }
+    return std::to_string(v);
+}
+
+std::optional<int> DMSlider::parse_value(const std::string& text) const {
+    if (value_parser_) {
+        return value_parser_(text);
+    }
+    try {
+        return std::stoi(text);
+    } catch (...) {
+        return std::nullopt;
     }
 }
 
