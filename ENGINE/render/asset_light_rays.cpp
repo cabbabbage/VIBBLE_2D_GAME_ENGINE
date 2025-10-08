@@ -2,18 +2,32 @@
 
 #include "asset/Asset.hpp"
 #include "asset/asset_info.hpp"
-#include "render/light_rays.hpp"
+#include "render/gaussian_blur.hpp"
 #include "utils/light_source.hpp"
 
 #include <algorithm>
 #include <cmath>
 
-AssetLightRaysRenderer::AssetLightRaysRenderer(SDL_Renderer* renderer, LightRaysPass* pass)
+AssetLightRaysRenderer::AssetLightRaysRenderer(SDL_Renderer* renderer)
     : renderer_(renderer),
-      light_rays_pass_(pass) {}
+      blur_helper_(renderer ? std::make_unique<GaussianBlurHelper>(renderer) : nullptr) {}
 
-void AssetLightRaysRenderer::set_light_rays_pass(LightRaysPass* pass) {
-    light_rays_pass_ = pass;
+void AssetLightRaysRenderer::set_renderer(SDL_Renderer* renderer) {
+    renderer_ = renderer;
+    if (blur_helper_) {
+        blur_helper_->set_renderer(renderer);
+    } else if (renderer) {
+        blur_helper_ = std::make_unique<GaussianBlurHelper>(renderer);
+    }
+}
+
+void AssetLightRaysRenderer::set_enabled(bool enabled) {
+    enabled_ = enabled;
+}
+
+void AssetLightRaysRenderer::set_blur_settings(float radius, float mix) {
+    blur_radius_ = radius;
+    blur_mix_ = mix;
 }
 
 void AssetLightRaysRenderer::render_before_asset(Asset* asset,
@@ -21,7 +35,7 @@ void AssetLightRaysRenderer::render_before_asset(Asset* asset,
                                                  int base_width,
                                                  int base_height,
                                                  SDL_RendererFlip flip_mode) {
-    if (!renderer_ || !light_rays_pass_ || !asset || !asset->info) {
+    if (!renderer_ || !enabled_ || !asset || !asset->info) {
         return;
     }
     if (asset_screen_rect.w <= 0 || asset_screen_rect.h <= 0) {
@@ -40,8 +54,6 @@ void AssetLightRaysRenderer::render_before_asset(Asset* asset,
         return;
     }
 
-    light_rays_pass_->clear_light_override();
-
     for (auto& light : asset->info->light_sources) {
         if (!light.texture) {
             continue;
@@ -57,7 +69,17 @@ void AssetLightRaysRenderer::render_before_asset(Asset* asset,
             light.cached_h = light_h;
         }
 
-        SDL_Texture* rays_texture = light_rays_pass_->compute(light.texture, light_w, light_h);
+        SDL_Texture* rays_texture = light.texture;
+        if (blur_helper_ && blur_radius_ > 0.f && blur_mix_ > 0.f) {
+            SDL_Texture* blurred = blur_helper_->apply(light.texture,
+                                                       light_w,
+                                                       light_h,
+                                                       blur_radius_,
+                                                       blur_mix_);
+            if (blurred) {
+                rays_texture = blurred;
+            }
+        }
         if (!rays_texture) {
             continue;
         }

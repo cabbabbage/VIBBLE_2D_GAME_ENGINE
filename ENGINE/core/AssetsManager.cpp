@@ -300,22 +300,10 @@ void Assets::hydrate_map_info_sections() {
             value = std::clamp(value, lo, hi);
             R[key] = value;
         };
-        auto ensure_int = [&](const char* key, int def, int lo, int hi) {
-            int value = def;
-            try { value = R.at(key).get<int>(); } catch (...) {}
-            value = std::clamp(value, lo, hi);
-            R[key] = value;
-        };
 
         ensure_bool("enabled", true);
-        ensure_double("min_luma_threshold", 0.1, 0.0, 1.0);
-        ensure_double("bright_percentile", 0.94, 0.0, 1.0);
-        ensure_double("density", 1.35, 0.0, 4.0);
-        ensure_double("decay", 0.94, 0.0, 1.0);
-        ensure_double("weight", 6.75, 0.0, 20.0);
-        ensure_double("exposure", 8.6, 0.0, 20.0);
-        ensure_int("samples", 112, 1, 256);
-        ensure_int("downsample_log2", 1, 0, 4);
+        ensure_double("final_blur_radius", 2.5, 0.0, 32.0);
+        ensure_double("final_blur_mix", 0.85, 0.0, 1.0);
     }
     ensure_object("rooms_data");
     ensure_object("trails_data");

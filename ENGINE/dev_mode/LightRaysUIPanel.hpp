@@ -44,7 +44,6 @@ private:
     void sync_ui_from_json();
     void sync_json_from_ui();
 
-
     static double slider_units_to_double(int units, int scale);
     static int double_to_slider_units(double value, int scale, int lo, int hi);
 
@@ -58,14 +57,6 @@ private:
     bool needs_sync_ = false;
 
     std::unique_ptr<DMCheckbox> enabled_checkbox_;
-    std::unique_ptr<DMSlider> min_luma_slider_;
-    std::unique_ptr<DMSlider> bright_percentile_slider_;
-    std::unique_ptr<DMSlider> density_slider_;
-    std::unique_ptr<DMSlider> decay_slider_;
-    std::unique_ptr<DMSlider> weight_slider_;
-    std::unique_ptr<DMSlider> exposure_slider_;
-    std::unique_ptr<DMSlider> samples_slider_;
-    std::unique_ptr<DMSlider> downsample_slider_;
     std::unique_ptr<DMSlider> final_blur_radius_slider_;
     std::unique_ptr<DMSlider> final_blur_mix_slider_;
 
@@ -75,4 +66,3 @@ private:
     StatusLabel* status_label_ = nullptr;
     mutable std::string status_text_{};
 };
-

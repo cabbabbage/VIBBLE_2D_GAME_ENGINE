@@ -19,36 +19,12 @@ using nlohmann::json;
 
 namespace {
 constexpr int kFloatScale = 100;
-constexpr int kMinLumaMin = 0;
-constexpr int kMinLumaMax = 100;
-constexpr int kBrightPercentileMin = 0;
-constexpr int kBrightPercentileMax = 100;
-constexpr int kDensityMin = 0;
-constexpr int kDensityMax = 400;      // 0.00 .. 4.00
-constexpr int kDecayMin = 0;
-constexpr int kDecayMax = 100;        // 0.00 .. 1.00
-constexpr int kWeightMin = 0;
-constexpr int kWeightMax = 2000;      // 0.00 .. 20.00
-constexpr int kExposureMin = 0;
-constexpr int kExposureMax = 2000;    // 0.00 .. 20.00
-constexpr int kSamplesMin = 1;
-constexpr int kSamplesMax = 256;
-constexpr int kDownsampleMin = 0;
-constexpr int kDownsampleMax = 4;
 constexpr int kFinalBlurRadiusMin = 0;
 constexpr int kFinalBlurRadiusMax = 1000;   // 0.00 .. 10.00
 constexpr int kFinalBlurMixMin = 0;
 constexpr int kFinalBlurMixMax = 100;        // 0.00 .. 1.00
 
-constexpr bool kEnabledDefault = false;
-constexpr double kMinLumaDefault = 0.1;
-constexpr double kBrightPercentileDefault = 0.94;
-constexpr double kDensityDefault = 1.35;
-constexpr double kDecayDefault = 0.94;
-constexpr double kWeightDefault = 6.75;
-constexpr double kExposureDefault = 8.6;
-constexpr int kSamplesDefault = 112;
-constexpr int kDownsampleDefault = 1;
+constexpr bool   kEnabledDefault = false;
 constexpr double kFinalBlurRadiusDefault = 2.5;
 constexpr double kFinalBlurMixDefault = 0.85;
 
@@ -59,14 +35,6 @@ constexpr double clamp_double(double v, double lo, double hi) {
 json default_light_rays_params() {
     return json{
         {"enabled", kEnabledDefault},
-        {"min_luma_threshold", kMinLumaDefault},
-        {"bright_percentile", kBrightPercentileDefault},
-        {"density", kDensityDefault},
-        {"decay", kDecayDefault},
-        {"weight", kWeightDefault},
-        {"exposure", kExposureDefault},
-        {"samples", kSamplesDefault},
-        {"downsample_log2", kDownsampleDefault},
         {"final_blur_radius", kFinalBlurRadiusDefault},
         {"final_blur_mix", kFinalBlurMixDefault},
     };
@@ -94,30 +62,14 @@ json sanitize_params(const json* candidate) {
         }
         return clamp_double(value, lo, hi);
     };
-    auto safe_int = [&](const char* key, int def, int lo, int hi) {
-        int value = def;
-        try {
-            value = root.at(key).get<int>();
-        } catch (...) {
-        }
-        return LightRaysUIPanel::clamp_int(value, lo, hi);
-    };
 
     params["enabled"] = safe_bool("enabled", kEnabledDefault);
-    params["min_luma_threshold"] = safe_double("min_luma_threshold", kMinLumaDefault, 0.0, 1.0);
-    params["bright_percentile"] = safe_double("bright_percentile", kBrightPercentileDefault, 0.0, 1.0);
-    params["density"] = safe_double("density", kDensityDefault, 0.0, 4.0);
-    params["decay"] = safe_double("decay", kDecayDefault, 0.0, 1.0);
-    params["weight"] = safe_double("weight", kWeightDefault, 0.0, 20.0);
-    params["exposure"] = safe_double("exposure", kExposureDefault, 0.0, 20.0);
-    params["samples"] = safe_int("samples", kSamplesDefault, kSamplesMin, kSamplesMax);
-    params["downsample_log2"] = safe_int("downsample_log2", kDownsampleDefault, kDownsampleMin, kDownsampleMax);
     params["final_blur_radius"] = safe_double("final_blur_radius", kFinalBlurRadiusDefault, 0.0, 10.0);
     params["final_blur_mix"] = safe_double("final_blur_mix", kFinalBlurMixDefault, 0.0, 1.0);
 
     return params;
 }
-}
+} // namespace
 
 class LightRaysUIPanel::StatusLabel : public Widget {
 public:
@@ -182,7 +134,7 @@ private:
 };
 
 LightRaysUIPanel::LightRaysUIPanel(int x, int y)
-    : DockableCollapsible("Light Rays", true, x, y) {
+    : DockableCollapsible("Final Blur", true, x, y) {
     set_expanded(true);
     set_visible(false);
     set_close_button_enabled(true);
@@ -223,39 +175,20 @@ void LightRaysUIPanel::toggle() {
 bool LightRaysUIPanel::is_visible() const { return visible_; }
 
 void LightRaysUIPanel::build_ui() {
-    enabled_checkbox_ = std::make_unique<DMCheckbox>("Enable Light Rays", true);
+    enabled_checkbox_ = std::make_unique<DMCheckbox>("Enable Final Blur", true);
 
-    min_luma_slider_ = std::make_unique<DMSlider>("Min Luma Threshold", kMinLumaMin, kMinLumaMax, 10);
-    configure_float_slider(min_luma_slider_.get(), kFloatScale, 2);
-
-    bright_percentile_slider_ = std::make_unique<DMSlider>("Bright Percentile", kBrightPercentileMin, kBrightPercentileMax, 94);
-    configure_float_slider(bright_percentile_slider_.get(), kFloatScale, 2);
-
-    density_slider_ = std::make_unique<DMSlider>("Density", kDensityMin, kDensityMax, 135);
-    configure_float_slider(density_slider_.get(), kFloatScale, 2);
-
-    decay_slider_ = std::make_unique<DMSlider>("Decay", kDecayMin, kDecayMax, 94);
-    configure_float_slider(decay_slider_.get(), kFloatScale, 2);
-
-    weight_slider_ = std::make_unique<DMSlider>("Weight", kWeightMin, kWeightMax, 675);
-    configure_float_slider(weight_slider_.get(), kFloatScale, 2);
-
-    exposure_slider_ = std::make_unique<DMSlider>("Exposure", kExposureMin, kExposureMax, 860);
-    configure_float_slider(exposure_slider_.get(), kFloatScale, 2);
-
-    samples_slider_ = std::make_unique<DMSlider>("Samples", kSamplesMin, kSamplesMax, 112);
-    downsample_slider_ = std::make_unique<DMSlider>("Downsample log2", kDownsampleMin, kDownsampleMax, 1);
     final_blur_radius_slider_ = std::make_unique<DMSlider>(
-        "Final Blur Radius", kFinalBlurRadiusMin, kFinalBlurRadiusMax,
+        "Blur Radius", kFinalBlurRadiusMin, kFinalBlurRadiusMax,
         double_to_slider_units(kFinalBlurRadiusDefault, kFloatScale, kFinalBlurRadiusMin, kFinalBlurRadiusMax));
     configure_float_slider(final_blur_radius_slider_.get(), kFloatScale, 2);
+
     final_blur_mix_slider_ = std::make_unique<DMSlider>(
-        "Final Blur Mix", kFinalBlurMixMin, kFinalBlurMixMax,
+        "Blur Mix", kFinalBlurMixMin, kFinalBlurMixMax,
         double_to_slider_units(kFinalBlurMixDefault, kFloatScale, kFinalBlurMixMin, kFinalBlurMixMax));
     configure_float_slider(final_blur_mix_slider_.get(), kFloatScale, 2);
 
     widget_wrappers_.clear();
-    widget_wrappers_.reserve(16);
+    widget_wrappers_.reserve(6);
 
     auto add_widget = [this](std::unique_ptr<Widget> w) -> Widget* {
         Widget* raw = w.get();
@@ -271,26 +204,6 @@ void LightRaysUIPanel::build_ui() {
     rows.push_back({ add_widget(std::move(status)) });
 
     rows.push_back({ add_widget(std::make_unique<CheckboxWidget>(enabled_checkbox_.get())) });
-
-    rows.push_back({
-        add_widget(std::make_unique<SliderWidget>(min_luma_slider_.get())),
-        add_widget(std::make_unique<SliderWidget>(bright_percentile_slider_.get()))
-    });
-
-    rows.push_back({
-        add_widget(std::make_unique<SliderWidget>(density_slider_.get())),
-        add_widget(std::make_unique<SliderWidget>(decay_slider_.get()))
-    });
-
-    rows.push_back({
-        add_widget(std::make_unique<SliderWidget>(weight_slider_.get())),
-        add_widget(std::make_unique<SliderWidget>(exposure_slider_.get()))
-    });
-
-    rows.push_back({
-        add_widget(std::make_unique<SliderWidget>(samples_slider_.get())),
-        add_widget(std::make_unique<SliderWidget>(downsample_slider_.get()))
-    });
 
     rows.push_back({
         add_widget(std::make_unique<SliderWidget>(final_blur_radius_slider_.get())),
@@ -348,37 +261,6 @@ void LightRaysUIPanel::sync_ui_from_json() {
     if (enabled_checkbox_) {
         enabled_checkbox_->set_value(params.value("enabled", kEnabledDefault));
     }
-
-    if (min_luma_slider_) {
-        int units = double_to_slider_units(params.value("min_luma_threshold", kMinLumaDefault), kFloatScale, kMinLumaMin, kMinLumaMax);
-        min_luma_slider_->set_value(units);
-    }
-    if (bright_percentile_slider_) {
-        int units = double_to_slider_units(params.value("bright_percentile", kBrightPercentileDefault), kFloatScale, kBrightPercentileMin, kBrightPercentileMax);
-        bright_percentile_slider_->set_value(units);
-    }
-    if (density_slider_) {
-        int units = double_to_slider_units(params.value("density", kDensityDefault), kFloatScale, kDensityMin, kDensityMax);
-        density_slider_->set_value(units);
-    }
-    if (decay_slider_) {
-        int units = double_to_slider_units(params.value("decay", kDecayDefault), kFloatScale, kDecayMin, kDecayMax);
-        decay_slider_->set_value(units);
-    }
-    if (weight_slider_) {
-        int units = double_to_slider_units(params.value("weight", kWeightDefault), kFloatScale, kWeightMin, kWeightMax);
-        weight_slider_->set_value(units);
-    }
-    if (exposure_slider_) {
-        int units = double_to_slider_units(params.value("exposure", kExposureDefault), kFloatScale, kExposureMin, kExposureMax);
-        exposure_slider_->set_value(units);
-    }
-    if (samples_slider_) {
-        samples_slider_->set_value(clamp_int(params.value("samples", kSamplesDefault), kSamplesMin, kSamplesMax));
-    }
-    if (downsample_slider_) {
-        downsample_slider_->set_value(clamp_int(params.value("downsample_log2", kDownsampleDefault), kDownsampleMin, kDownsampleMax));
-    }
     if (final_blur_radius_slider_) {
         int units = double_to_slider_units(params.value("final_blur_radius", kFinalBlurRadiusDefault),
                                            kFloatScale, kFinalBlurRadiusMin, kFinalBlurRadiusMax);
@@ -400,30 +282,6 @@ void LightRaysUIPanel::sync_json_from_ui() {
 
     if (enabled_checkbox_) {
         params["enabled"] = enabled_checkbox_->value();
-    }
-    if (min_luma_slider_) {
-        params["min_luma_threshold"] = slider_units_to_double(min_luma_slider_->value(), kFloatScale);
-    }
-    if (bright_percentile_slider_) {
-        params["bright_percentile"] = slider_units_to_double(bright_percentile_slider_->value(), kFloatScale);
-    }
-    if (density_slider_) {
-        params["density"] = slider_units_to_double(density_slider_->value(), kFloatScale);
-    }
-    if (decay_slider_) {
-        params["decay"] = slider_units_to_double(decay_slider_->value(), kFloatScale);
-    }
-    if (weight_slider_) {
-        params["weight"] = slider_units_to_double(weight_slider_->value(), kFloatScale);
-    }
-    if (exposure_slider_) {
-        params["exposure"] = slider_units_to_double(exposure_slider_->value(), kFloatScale);
-    }
-    if (samples_slider_) {
-        params["samples"] = clamp_int(samples_slider_->value(), kSamplesMin, kSamplesMax);
-    }
-    if (downsample_slider_) {
-        params["downsample_log2"] = clamp_int(downsample_slider_->value(), kDownsampleMin, kDownsampleMax);
     }
     if (final_blur_radius_slider_) {
         params["final_blur_radius"] = slider_units_to_double(final_blur_radius_slider_->value(), kFloatScale);
@@ -449,7 +307,7 @@ void LightRaysUIPanel::update_save_status(bool success) const {
     if (!status_label_) {
         return;
     }
-    const std::string failure_message = "Failed to save light rays settings. Check logs.";
+    const std::string failure_message = "Failed to save blur settings. Check logs.";
     if (success) {
         if (!status_text_.empty()) {
             status_text_.clear();
@@ -491,4 +349,3 @@ void LightRaysUIPanel::render(SDL_Renderer* renderer) const {
 bool LightRaysUIPanel::is_point_inside(int x, int y) const {
     return DockableCollapsible::is_point_inside(x, y);
 }
-

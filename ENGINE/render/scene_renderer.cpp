@@ -14,7 +14,7 @@
 #include <initializer_list>
 #include <array>
 #include <memory>
-#include "light_rays.hpp"
+#include "gaussian_blur.hpp"
 #include "asset_light_rays.hpp"
 
 static constexpr SDL_Color SLATE_COLOR = {69, 101, 74, 255};
@@ -65,24 +65,14 @@ SceneRenderer::SceneRenderer(SDL_Renderer* renderer,
         z_light_pass_->render(debugging);
     }
 
-    // Light rays pass on top - strong and safe values that will show clearly
-    light_rays_pass_ = std::make_unique<LightRaysPass>(renderer_, screen_width_, screen_height_);
-    LightRaysParams rays_params{};
-    rays_params.min_luma_threshold = 0.1f;  // include more candidates
-    rays_params.bright_percentile  = 0.94f;  // focus on top 6%
-    rays_params.samples            = 112;    // balanced quality/perf
-    rays_params.density            = 1.35f;  // faster march toward light
-    rays_params.decay              = 0.94f;  // gradual fade for crisp streaks
-    rays_params.weight             = 6.75f;  // per-sample strength
-    rays_params.exposure           = 8.6f;   // global boost
-    rays_params.downsample_log2    = 1; // thinner but faster in low quality
-    rays_params.final_blur_radius  = 2.5f;
-    rays_params.final_blur_mix     = 0.85f;
-    light_rays_pass_->set_params(rays_params);
-    light_rays_pass_->set_enabled(!low_quality_mode_);
-    asset_light_rays_ = std::make_unique<AssetLightRaysRenderer>(renderer_,
-                                                                 !low_quality_mode_ ? light_rays_pass_.get()
-                                                                                    : nullptr);
+    final_blur_radius_ = 2.5f;
+    final_blur_mix_ = 0.85f;
+    final_blur_requested_ = true;
+    final_blur_enabled_ = final_blur_requested_ && !low_quality_mode_;
+
+    final_blur_helper_ = std::make_unique<GaussianBlurHelper>(renderer_);
+    asset_light_rays_ = std::make_unique<AssetLightRaysRenderer>(renderer_);
+    refresh_blur_helpers();
 }
 
 SceneRenderer::~SceneRenderer() {
@@ -139,9 +129,7 @@ void SceneRenderer::resize_render_targets_if_needed() {
     if (z_light_pass_) {
         z_light_pass_->set_screen_dimensions(screen_width_, screen_height_, fullscreen_light_tex_);
     }
-    if (light_rays_pass_) {
-        light_rays_pass_->set_screen_size(screen_width_, screen_height_);
-    }
+    refresh_blur_helpers();
 }
 
 SDL_Renderer* SceneRenderer::get_renderer() const {
@@ -150,12 +138,7 @@ SDL_Renderer* SceneRenderer::get_renderer() const {
 
 void SceneRenderer::set_low_quality_rendering(bool low_quality) {
     low_quality_mode_ = low_quality;
-    if (light_rays_pass_) light_rays_pass_->set_enabled(!low_quality_mode_);
-    if (asset_light_rays_) {
-        asset_light_rays_->set_light_rays_pass((light_rays_pass_ && !low_quality_mode_)
-                                                   ? light_rays_pass_.get()
-                                                   : nullptr);
-    }
+    refresh_blur_helpers();
 }
 
 void SceneRenderer::apply_map_light_config(const nlohmann::json& data) {
@@ -171,42 +154,62 @@ void SceneRenderer::apply_map_light_config(const nlohmann::json& data) {
 }
 
 void SceneRenderer::apply_light_rays_config(const nlohmann::json& data) {
-    if (!light_rays_pass_) {
-        return;
-    }
-
     auto read_double = [&](const char* key, double def, double lo, double hi) -> float {
         double value = def;
         try { value = data.at(key).get<double>(); } catch (...) {}
         value = std::clamp(value, lo, hi);
         return static_cast<float>(value);
     };
-    auto read_int = [&](const char* key, int def, int lo, int hi) -> int {
-        int value = def;
-        try { value = data.at(key).get<int>(); } catch (...) {}
-        return std::clamp(value, lo, hi);
-    };
-
-    LightRaysParams params{};
-    params.min_luma_threshold = read_double("min_luma_threshold", params.min_luma_threshold, 0.0, 1.0);
-    params.bright_percentile  = read_double("bright_percentile", params.bright_percentile, 0.0, 1.0);
-    params.density            = read_double("density", params.density, 0.0, 4.0);
-    params.decay              = read_double("decay", params.decay, 0.0, 1.0);
-    params.weight             = read_double("weight", params.weight, 0.0, 20.0);
-    params.exposure           = read_double("exposure", params.exposure, 0.0, 20.0);
-    params.samples            = read_int("samples", params.samples, 1, 256);
-    params.downsample_log2    = read_int("downsample_log2", params.downsample_log2, 0, 4);
-    params.final_blur_radius  = read_double("final_blur_radius", params.final_blur_radius, 0.0, 32.0);
-    params.final_blur_mix     = read_double("final_blur_mix", params.final_blur_mix, 0.0, 1.0);
 
     bool enabled = true;
     try { enabled = data.at("enabled").get<bool>(); } catch (...) {}
 
-    light_rays_pass_->set_params(params);
-    light_rays_pass_->set_enabled(enabled);
-    if (asset_light_rays_) {
-        asset_light_rays_->set_light_rays_pass(enabled ? light_rays_pass_.get() : nullptr);
+    final_blur_radius_ = read_double("final_blur_radius", final_blur_radius_, 0.0, 32.0);
+    final_blur_mix_ = read_double("final_blur_mix", final_blur_mix_, 0.0, 1.0);
+    final_blur_requested_ = enabled;
+    refresh_blur_helpers();
+}
+
+void SceneRenderer::refresh_blur_helpers() {
+    final_blur_enabled_ = final_blur_requested_ && !low_quality_mode_;
+
+    if (renderer_) {
+        if (final_blur_helper_) {
+            final_blur_helper_->set_renderer(renderer_);
+        } else {
+            final_blur_helper_ = std::make_unique<GaussianBlurHelper>(renderer_);
+        }
+    } else {
+        final_blur_helper_.reset();
     }
+
+    if (asset_light_rays_) {
+        asset_light_rays_->set_renderer(renderer_);
+        asset_light_rays_->set_blur_settings(final_blur_radius_, final_blur_mix_);
+        asset_light_rays_->set_enabled(final_blur_enabled_);
+    }
+}
+
+void SceneRenderer::apply_final_blur_pass() {
+    if (!final_blur_enabled_ || final_blur_radius_ <= 0.f || final_blur_mix_ <= 0.f) {
+        return;
+    }
+    if (!renderer_ || !scene_target_tex_ || !final_blur_helper_) {
+        return;
+    }
+
+    SDL_Texture* blurred = final_blur_helper_->apply(scene_target_tex_, screen_width_, screen_height_, final_blur_radius_, final_blur_mix_);
+    if (!blurred) {
+        return;
+    }
+
+    SDL_Texture* prev_target = SDL_GetRenderTarget(renderer_);
+    SDL_SetRenderTarget(renderer_, scene_target_tex_);
+    SDL_SetTextureBlendMode(blurred, SDL_BLENDMODE_BLEND);
+    SDL_SetTextureAlphaMod(blurred, 255);
+    SDL_Rect dst{0, 0, screen_width_, screen_height_};
+    SDL_RenderCopy(renderer_, blurred, nullptr, &dst);
+    SDL_SetRenderTarget(renderer_, prev_target);
 }
 
 void SceneRenderer::update_shading_groups() {
@@ -433,6 +436,8 @@ void SceneRenderer::render() {
     if (!low_quality_mode_ && z_light_pass_) {
         z_light_pass_->render(debugging);
     }
+
+    apply_final_blur_pass();
 
     // Present final composed texture
     if (scene_target_tex_) {

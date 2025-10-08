@@ -1,15 +1,18 @@
 #pragma once
 
 #include <SDL.h>
+#include <memory>
 
 class Asset;
-class LightRaysPass;
+class GaussianBlurHelper;
 
 class AssetLightRaysRenderer {
 public:
-    AssetLightRaysRenderer(SDL_Renderer* renderer, LightRaysPass* pass = nullptr);
+    explicit AssetLightRaysRenderer(SDL_Renderer* renderer = nullptr);
 
-    void set_light_rays_pass(LightRaysPass* pass);
+    void set_renderer(SDL_Renderer* renderer);
+    void set_enabled(bool enabled);
+    void set_blur_settings(float radius, float mix);
 
     void render_before_asset(Asset* asset,
                              const SDL_Rect& asset_screen_rect,
@@ -19,5 +22,8 @@ public:
 
 private:
     SDL_Renderer* renderer_ = nullptr;
-    LightRaysPass* light_rays_pass_ = nullptr;
+    bool enabled_ = false;
+    float blur_radius_ = 0.f;
+    float blur_mix_ = 0.f;
+    std::unique_ptr<GaussianBlurHelper> blur_helper_;
 };

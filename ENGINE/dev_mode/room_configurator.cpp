@@ -908,6 +908,7 @@ void RoomConfigurator::rebuild_rows() {
 void RoomConfigurator::update(const Input& input, int screen_w, int screen_h) {
     const bool panel_visible = is_visible();
     apply_bounds_if_needed();
+    DockableCollapsible::update(input, screen_w, screen_h);
 
     if (spawn_list_) {
         spawn_list_->set_visible(panel_visible);
