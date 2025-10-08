@@ -42,10 +42,19 @@ void LightRaysPass::destroy_textures_() {
     ray_intensity_original_.clear();
     blur_work_buffer_.clear();
     alpha_buffer_.clear();
+    screen_w_ = 0;
+    screen_h_ = 0;
 }
 
 void LightRaysPass::set_screen_size(int sw, int sh) {
-    screen_w_ = sw; screen_h_ = sh;
+    if (sw <= 0 || sh <= 0) {
+        return;
+    }
+    if (screen_w_ == sw && screen_h_ == sh) {
+        return;
+    }
+    screen_w_ = sw;
+    screen_h_ = sh;
     destroy_textures_();
 }
 
@@ -64,7 +73,13 @@ void LightRaysPass::clear_light_override() {
 }
 void LightRaysPass::set_enabled(bool v) { enabled_ = v; }
 
-bool LightRaysPass::ensure_lowres_target_() {
+bool LightRaysPass::ensure_lowres_target_(int source_w, int source_h) {
+    if (source_w <= 0 || source_h <= 0) {
+        return false;
+    }
+    screen_w_ = source_w;
+    screen_h_ = source_h;
+
     const int factor = 1 << std::max(0, params_.downsample_log2);
     int want_w = std::max(1, screen_w_ / factor);
     int want_h = std::max(1, screen_h_ / factor);
@@ -135,9 +150,15 @@ void LightRaysPass::ensure_buffer_capacity_(int pixel_count) {
     if (static_cast<int>(alpha_buffer_.size()) < pixel_count)   alpha_buffer_.resize(pixel_count);
 }
 
-SDL_Texture* LightRaysPass::compute(SDL_Texture* source_render_target) {
+SDL_Texture* LightRaysPass::compute(SDL_Texture* source_render_target, int source_w, int source_h) {
     if (!enabled_ || !renderer_ || !source_render_target) return nullptr;
-    if (!ensure_lowres_target_()) return nullptr;
+    if (source_w <= 0 || source_h <= 0) {
+        SDL_QueryTexture(source_render_target, nullptr, nullptr, &source_w, &source_h);
+    }
+    if (source_w <= 0 || source_h <= 0) {
+        return nullptr;
+    }
+    if (!ensure_lowres_target_(source_w, source_h)) return nullptr;
 
     const int factor = 1 << std::max(0, params_.downsample_log2);
     const int dw = lr_w_;
@@ -232,9 +253,11 @@ SDL_Texture* LightRaysPass::compute(SDL_Texture* source_render_target) {
 
     float lx = 0.5f * float(dw);
     float ly = 0.33f * float(dh);
+    const float scale_x = source_w > 0 ? static_cast<float>(dw) / static_cast<float>(source_w) : 0.0f;
+    const float scale_y = source_h > 0 ? static_cast<float>(dh) / static_cast<float>(source_h) : 0.0f;
     if (manual_light_override_) {
-        lx = float(manual_light_pos_.x) / float(factor);
-        ly = float(manual_light_pos_.y) / float(factor);
+        lx = float(manual_light_pos_.x) * scale_x;
+        ly = float(manual_light_pos_.y) * scale_y;
     } else if (has_detected_light_) {
         lx = detected_light_lowres_.x;
         ly = detected_light_lowres_.y;

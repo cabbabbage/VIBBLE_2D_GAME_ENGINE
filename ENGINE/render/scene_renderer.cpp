@@ -15,6 +15,7 @@
 #include <array>
 #include <memory>
 #include "light_rays.hpp"
+#include "asset_light_rays.hpp"
 
 static constexpr SDL_Color SLATE_COLOR = {69, 101, 74, 255};
 static constexpr float MIN_VISIBLE_SCREEN_RATIO = 0.015f;
@@ -78,7 +79,10 @@ SceneRenderer::SceneRenderer(SDL_Renderer* renderer,
     rays_params.final_blur_radius  = 2.5f;
     rays_params.final_blur_mix     = 0.85f;
     light_rays_pass_->set_params(rays_params);
-    light_rays_pass_->set_enabled(true);
+    light_rays_pass_->set_enabled(!low_quality_mode_);
+    asset_light_rays_ = std::make_unique<AssetLightRaysRenderer>(renderer_,
+                                                                 !low_quality_mode_ ? light_rays_pass_.get()
+                                                                                    : nullptr);
 }
 
 SceneRenderer::~SceneRenderer() {
@@ -147,6 +151,11 @@ SDL_Renderer* SceneRenderer::get_renderer() const {
 void SceneRenderer::set_low_quality_rendering(bool low_quality) {
     low_quality_mode_ = low_quality;
     if (light_rays_pass_) light_rays_pass_->set_enabled(!low_quality_mode_);
+    if (asset_light_rays_) {
+        asset_light_rays_->set_light_rays_pass((light_rays_pass_ && !low_quality_mode_)
+                                                   ? light_rays_pass_.get()
+                                                   : nullptr);
+    }
 }
 
 void SceneRenderer::apply_map_light_config(const nlohmann::json& data) {
@@ -195,6 +204,9 @@ void SceneRenderer::apply_light_rays_config(const nlohmann::json& data) {
 
     light_rays_pass_->set_params(params);
     light_rays_pass_->set_enabled(enabled);
+    if (asset_light_rays_) {
+        asset_light_rays_->set_light_rays_pass(enabled ? light_rays_pass_.get() : nullptr);
+    }
 }
 
 void SceneRenderer::update_shading_groups() {
@@ -343,6 +355,10 @@ void SceneRenderer::render() {
         const bool is_selected   = a->is_selected();
         const SDL_RendererFlip flip_mode = a->flipped ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE;
 
+        if (asset_light_rays_) {
+            asset_light_rays_->render_before_asset(a, fb, fw, fh, flip_mode);
+        }
+
         if (is_highlighted || is_selected) {
             SDL_BlendMode previous_blend_mode = SDL_BLENDMODE_BLEND;
             SDL_GetTextureBlendMode(mod_target, &previous_blend_mode);
@@ -416,26 +432,6 @@ void SceneRenderer::render() {
     // Still rendering into scene_target_tex_ here
     if (!low_quality_mode_ && z_light_pass_) {
         z_light_pass_->render(debugging);
-    }
-
-    // Compute light rays from the fully drawn scene_target_tex_
-    if (!low_quality_mode_ && light_rays_pass_ && scene_target_tex_) {
-        // Make sure light origin is on screen so the effect is obvious
-        SDL_Point light_screen = SDL_Point{ screen_width_ / 2, screen_height_ / 3 };
-        light_rays_pass_->set_light_screen_pos(light_screen);
-
-        SDL_Texture* rays_lowres = light_rays_pass_->compute(scene_target_tex_);
-        if (rays_lowres) {
-            SDL_SetRenderTarget(renderer_, scene_target_tex_);
-            SDL_SetTextureBlendMode(rays_lowres, SDL_BLENDMODE_ADD);   // FIX: additive blend for rays
-            SDL_SetTextureAlphaMod(rays_lowres, 255);                   // max intensity
-            SDL_Rect full{ 0, 0, screen_width_, screen_height_ };
-            SDL_RenderCopy(renderer_, rays_lowres, nullptr, &full);
-        } else {
-            // If you see this, your bright-percentile guard likely skipped the pass
-            // or the mask was empty. Loosen thresholds temporarily to test.
-            // std::cerr << "[SceneRenderer] LightRaysPass returned nullptr\n";
-        }
     }
 
     // Present final composed texture

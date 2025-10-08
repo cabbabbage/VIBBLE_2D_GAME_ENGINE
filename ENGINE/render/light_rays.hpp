@@ -37,7 +37,7 @@ public:
 
     // Returns low-res texture with white rays and alpha. Blend with ADD.
     // Returns nullptr if disabled or on failure.
-    SDL_Texture* compute(SDL_Texture* source_render_target);
+    SDL_Texture* compute(SDL_Texture* source_render_target, int source_w = 0, int source_h = 0);
 
 private:
     SDL_Renderer* renderer_ = nullptr;
@@ -68,7 +68,7 @@ private:
     bool has_detected_light_ = false;
 
     void destroy_textures_();
-    bool ensure_lowres_target_();
+    bool ensure_lowres_target_(int source_w, int source_h);
     void ensure_buffer_capacity_(int pixel_count);
     void analyze_brightness_distribution_(int dw, int dh);
 

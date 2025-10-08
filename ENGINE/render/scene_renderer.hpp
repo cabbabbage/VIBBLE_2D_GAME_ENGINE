@@ -11,7 +11,8 @@
 #include "render/camera.hpp"
 #include <memory>
 
-class LightRaysPass; 
+class LightRaysPass;
+class AssetLightRaysRenderer;
 
 class Assets;
 class Asset;
@@ -43,6 +44,7 @@ class SceneRenderer {
     Global_Light_Source main_light_source_;
     SDL_Texture*   fullscreen_light_tex_;
     RenderAsset    render_asset_;
+    std::unique_ptr<AssetLightRaysRenderer> asset_light_rays_;
     std::unique_ptr<LightMap> z_light_pass_;
     int            current_shading_group_ = 0;
     int            num_groups_ = 20;
