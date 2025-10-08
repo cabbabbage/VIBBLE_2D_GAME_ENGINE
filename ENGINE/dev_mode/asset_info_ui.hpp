@@ -70,6 +70,7 @@ class AssetInfoUI {
     mutable SDL_Rect scroll_region_{0,0,0,0};
     mutable SDL_Rect name_label_rect_{0,0,0,0};
     mutable SDL_Rect animation_editor_rect_{0,0,0,0};
+    mutable SDL_Rect content_clip_rect_{0,0,0,0};
     mutable SDL_Rect scroll_track_rect_{0,0,0,0};
     mutable SDL_Rect scroll_thumb_rect_{0,0,0,0};
     mutable int content_height_px_ = 0;

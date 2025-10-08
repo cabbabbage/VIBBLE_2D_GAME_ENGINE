@@ -352,11 +352,17 @@ void AssetInfoUI::layout_widgets(int screen_w, int screen_h) const {
     content_height_px_ = std::max(0, content_height);
     visible_height_px_ = std::max(0, visible_height);
 
+    const int visible_area_h = std::max(0, visible_height);
+    const int clip_h = std::max(0, std::min(content_height, visible_area_h));
+    const int clip_w = std::max(0, content_w_active);
+    const int scroll_top = scroll_start;
+    content_clip_rect_ = SDL_Rect{ content_x, scroll_top, clip_w, clip_h > 0 ? clip_h : visible_area_h };
+
     scroll_region_ = SDL_Rect{
         panel_.x,
-        name_label_rect_.y + name_label_rect_.h,
+        scroll_top,
         panel_.w,
-        std::max(0, panel_.h - (name_label_rect_.y + name_label_rect_.h)) };
+        visible_area_h };
 
     if (max_scroll_ == 0) {
         scroll_dragging_ = false;
@@ -651,11 +657,22 @@ void AssetInfoUI::render(SDL_Renderer* r, int screen_w, int screen_h) const {
 #else
     const SDL_bool was_clipping = (prev_clip.w != 0 || prev_clip.h != 0) ? SDL_TRUE : SDL_FALSE;
 #endif
-    SDL_RenderSetClipRect(r, &panel_);
+    SDL_Rect panel_clip = panel_;
+    SDL_RenderSetClipRect(r, &panel_clip);
+
+    SDL_Rect content_clip = content_clip_rect_;
+    if (content_clip.w > 0 && content_clip.h > 0) {
+        SDL_Rect intersection;
+        if (SDL_IntersectRect(&panel_clip, &content_clip, &intersection) == SDL_TRUE) {
+            SDL_RenderSetClipRect(r, &intersection);
+        }
+    }
 
     for (auto& s : sections_) s->render(r);
 
     if (configure_btn_) configure_btn_->render(r);
+
+    SDL_RenderSetClipRect(r, &panel_clip);
 
     if (max_scroll_ > 0 && scroll_track_rect_.w > 0 && scroll_track_rect_.h > 0) {
         SDL_Color track_col = DMStyles::Border();

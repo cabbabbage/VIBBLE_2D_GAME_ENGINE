@@ -79,15 +79,15 @@
             "name": "null"
           },
           {
-            "chance": 22,
+            "chance": 18,
             "name": "Tree"
           },
           {
-            "chance": 38,
+            "chance": 40,
             "name": "Tree_Dark"
           },
           {
-            "chance": 38,
+            "chance": 80,
             "name": "Tree_Darker"
           }
         ],
