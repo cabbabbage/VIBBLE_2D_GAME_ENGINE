@@ -10,15 +10,17 @@
     "tripod_distance_y": -1335.0
   },
   "light_rays_params": {
-    "bright_percentile": 0.63,
-    "decay": 0.53,
-    "density": 1.33,
-    "downsample_log2": 1,
+    "bright_percentile": 0.57,
+    "decay": 0.43,
+    "density": 1.99,
+    "downsample_log2": 0,
     "enabled": true,
-    "exposure": 1.72,
-    "min_luma_threshold": 0.1,
-    "samples": 140,
-    "weight": 3.85
+    "exposure": 1.65,
+    "final_blur_mix": 1.0,
+    "final_blur_radius": 1.03,
+    "min_luma_threshold": 0.63,
+    "samples": 139,
+    "weight": 1.51
   },
   "map_assets_data": {
     "spawn_groups": [
