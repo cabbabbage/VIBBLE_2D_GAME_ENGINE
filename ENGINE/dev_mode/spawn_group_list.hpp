@@ -76,6 +76,8 @@ public:
     void set_on_layout_changed(std::function<void()> cb);
     void refresh_row_configuration();
 
+    void set_embedded_mode(bool embedded);
+
     void expand_group(const std::string& id);
     void collapse_group(const std::string& id);
     bool is_expanded(const std::string& id) const;
@@ -125,7 +127,8 @@ private:
     void open_area_panel(EntryRow& row);
     void close_area_panel();
 
-    bool floatable_mode_ = true;
+    bool default_floatable_mode_ = true;
+    bool embedded_mode_ = false;
     bool layout_dirty_ = true;
     int screen_w_ = 1920;
     int screen_h_ = 1080;

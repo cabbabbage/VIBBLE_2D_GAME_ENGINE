@@ -71,6 +71,21 @@ void MapModeUI::set_footer_always_visible(bool on) {
     update_footer_visibility();
 }
 
+void MapModeUI::set_headers_suppressed(bool suppressed) {
+    if (headers_suppressed_ == suppressed) {
+        return;
+    }
+    headers_suppressed_ = suppressed;
+    ensure_panels();
+    if (headers_suppressed_) {
+        if (layers_panel_) {
+            layers_panel_->close();
+        }
+        layers_footer_visible_ = false;
+    }
+    update_footer_visibility();
+}
+
 void MapModeUI::set_mode_button_sets(std::vector<HeaderButtonConfig> map_buttons,
                                      std::vector<HeaderButtonConfig> room_buttons,
                                      std::vector<HeaderButtonConfig> area_buttons) {
@@ -371,7 +386,8 @@ void MapModeUI::sync_footer_button_states() {
 void MapModeUI::update_footer_visibility() {
     if (!footer_panel_) return;
     footer_panel_->set_bounds(screen_w_, screen_h_);
-    footer_panel_->set_visible(footer_always_visible_ || map_mode_active_);
+    const bool should_show = !headers_suppressed_ && (footer_always_visible_ || map_mode_active_);
+    footer_panel_->set_visible(should_show);
 }
 
 void MapModeUI::set_active_panel(PanelType panel) {
@@ -423,6 +439,9 @@ const char* MapModeUI::panel_button_id(PanelType panel) const {
 }
 
 void MapModeUI::update_layers_footer(const Input& input) {
+    if (headers_suppressed_) {
+        return;
+    }
     bool should_show = should_show_layers_footer();
     if (layers_footer_visible_ != should_show) {
         layers_footer_visible_ = should_show;
@@ -449,6 +468,7 @@ bool is_mouse_button_or_motion(const SDL_Event& e) {
 }
 
 bool MapModeUI::handle_layers_footer_event(const SDL_Event& e) {
+    if (headers_suppressed_) return false;
     if (!footer_panel_ || !map_mode_active_ || !footer_panel_->visible()) return false;
 
     SDL_Rect header = footer_panel_->header_rect();
@@ -487,11 +507,13 @@ bool MapModeUI::handle_layers_footer_event(const SDL_Event& e) {
 }
 
 void MapModeUI::render_layers_footer(SDL_Renderer* renderer) const {
+    if (headers_suppressed_) return;
     if (!layers_footer_visible_ || !layers_panel_) return;
     layers_panel_->render(renderer);
 }
 
 bool MapModeUI::should_show_layers_footer() const {
+    if (headers_suppressed_) return false;
     if (!map_mode_active_ || !footer_panel_) return false;
     if (!layers_footer_requested_) return false;
     if (!footer_panel_->visible()) return false;
@@ -519,7 +541,7 @@ void MapModeUI::sync_panel_map_info() {
 
 void MapModeUI::update(const Input& input) {
     ensure_panels();
-    if (footer_panel_) {
+    if (footer_panel_ && footer_panel_->visible()) {
         footer_panel_->update(input);
     }
     update_layers_footer(input);
@@ -560,10 +582,11 @@ bool MapModeUI::handle_event(const SDL_Event& e) {
 
     bool footer_used = false;
     bool layers_used = false;
-    if (footer_panel_ && footer_panel_->visible()) {
+    const bool allow_footer = !headers_suppressed_;
+    if (allow_footer && footer_panel_ && footer_panel_->visible()) {
         footer_used = footer_panel_->handle_event(e);
         layers_used = handle_layers_footer_event(e);
-    } else {
+    } else if (allow_footer) {
         layers_used = handle_layers_footer_event(e);
     }
     if (footer_used || layers_used) {
@@ -640,6 +663,9 @@ void MapModeUI::set_light_save_callback(LightSaveCallback cb) {
 bool MapModeUI::is_point_inside(int x, int y) const {
     if (pointer_inside_floating_panel(x, y)) {
         return true;
+    }
+    if (headers_suppressed_) {
+        return false;
     }
     if (footer_panel_ && footer_panel_->visible() && footer_panel_->contains(x, y)) {
         return true;

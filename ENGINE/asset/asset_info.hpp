@@ -5,6 +5,7 @@
 #include "utils/light_source.hpp"
 #include <map>
 #include <nlohmann/json.hpp>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -109,7 +110,20 @@ class AssetInfo {
 
     void set_start_animation_name(const std::string& name);
 
-	private:
+    struct AreaCodec {
+        static SDL_Point scaled_anchor(const AssetInfo& info,
+                                       std::optional<float> scale_override = std::nullopt);
+
+        static nlohmann::json encode_entry(const AssetInfo& info,
+                                           const Area&       area,
+                                           const std::string& final_type,
+                                           const std::string& final_kind);
+
+        static std::optional<NamedArea> decode_entry(const AssetInfo& info,
+                                                     const nlohmann::json& entry);
+    };
+
+        private:
     void load_base_properties(const nlohmann::json &data);
     void generate_lights(SDL_Renderer *renderer);
     void load_areas(const nlohmann::json &data);
@@ -120,6 +134,5 @@ class AssetInfo {
     std::string info_json_path_;
     friend class AnimationLoader;
     friend class LightingLoader;
-    friend class AreaLoader;
     friend class ChildLoader;
 };

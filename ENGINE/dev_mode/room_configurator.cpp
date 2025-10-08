@@ -577,8 +577,28 @@ bool RoomConfigurator::refresh_spawn_groups(const nlohmann::json& data) {
 }
 
 bool RoomConfigurator::refresh_spawn_groups(Room* room) {
-    const nlohmann::json& source = room ? room->assets_data() : empty_object();
-    return refresh_spawn_groups(source);
+    if (room) {
+        nlohmann::json& root = room->assets_data();
+
+        if (!root.contains("spawn_groups") || !root["spawn_groups"].is_array()) {
+            if (root.contains("assets") && root["assets"].is_array()) {
+                root["spawn_groups"] = root["assets"];
+            } else {
+                root["spawn_groups"] = nlohmann::json::array();
+            }
+        }
+
+        if (root.contains("assets")) {
+            root.erase("assets");
+        }
+
+        bool refreshed = refresh_spawn_groups(static_cast<const nlohmann::json&>(root));
+        loaded_json_.erase("assets");
+        spawn_groups_from_assets_ = false;
+        return refreshed;
+    }
+
+    return refresh_spawn_groups(empty_object());
 }
 
 std::string RoomConfigurator::selected_geometry() const {
@@ -792,16 +812,49 @@ void RoomConfigurator::rebuild_rows(bool reload_spawn_list) {
     bool have_groups = false;
     if (!loaded_json_.is_null()) {
         if (!spawn_list_) spawn_list_ = std::make_unique<SpawnGroupList>();
+        spawn_list_->set_embedded_mode(true);
 
         // Prefer binding to the live room data so edits persist immediately
         if (room_) {
             auto& root = room_->assets_data();
-            // Decide which array to bind based on how the JSON was loaded
-            const char* target_key = spawn_groups_from_assets_ ? "assets" : "spawn_groups";
+
+            if (spawn_groups_from_assets_) {
+                nlohmann::json migrated_groups = nlohmann::json::array();
+                bool have_source = false;
+
+                if (root.contains("spawn_groups") && root["spawn_groups"].is_array()) {
+                    migrated_groups = root["spawn_groups"];
+                    have_source = true;
+                } else if (root.contains("assets") && root["assets"].is_array()) {
+                    migrated_groups = root["assets"];
+                    have_source = true;
+                } else if (loaded_json_.contains("spawn_groups") && loaded_json_["spawn_groups"].is_array()) {
+                    migrated_groups = loaded_json_["spawn_groups"];
+                    have_source = true;
+                } else if (loaded_json_.contains("assets") && loaded_json_["assets"].is_array()) {
+                    migrated_groups = loaded_json_["assets"];
+                    have_source = true;
+                }
+
+                if (!have_source) {
+                    migrated_groups = nlohmann::json::array();
+                }
+
+                root["spawn_groups"] = migrated_groups;
+                root.erase("assets");
+                loaded_json_["spawn_groups"] = migrated_groups;
+                loaded_json_.erase("assets");
+                spawn_groups_from_assets_ = false;
+            }
+
+            const char* target_key = "spawn_groups";
             if (!root.contains(target_key) || !root[target_key].is_array()) {
                 root[target_key] = nlohmann::json::array();
             }
             nlohmann::json& groups_ref = root[target_key];
+            loaded_json_["spawn_groups"] = groups_ref;
+            loaded_json_.erase("assets");
+            spawn_groups_from_assets_ = false;
 
             auto on_change = [this]() {
                 if (room_) {
@@ -932,10 +985,7 @@ void RoomConfigurator::rebuild_rows(bool reload_spawn_list) {
 
 void RoomConfigurator::update(const Input& input, int screen_w, int screen_h) {
     const bool panel_visible = is_visible();
-    if (panel_visible) {
-        apply_bounds_if_needed();
-        DockableCollapsible::update(input, screen_w, screen_h);
-    }
+    apply_bounds_if_needed();
 
     if (spawn_list_) {
         spawn_list_->set_visible(panel_visible);
@@ -944,6 +994,10 @@ void RoomConfigurator::update(const Input& input, int screen_w, int screen_h) {
         SDL_Point anchor{panel_rect.x + panel_rect.w + DMSpacing::item_gap(), panel_rect.y};
         spawn_list_->set_anchor(anchor.x, anchor.y);
         spawn_list_->update(input, screen_w, screen_h);
+    }
+
+    if (panel_visible) {
+        DockableCollapsible::update(input, screen_w, screen_h);
     }
 
     bool changed = false;

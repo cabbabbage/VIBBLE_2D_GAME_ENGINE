@@ -1,7 +1,6 @@
 #include "asset_info.hpp"
 #include "asset_info_methods/animation_loader.hpp"
 #include "asset/asset_types.hpp"
-#include "asset_info_methods/area_loader.hpp"
 #include "asset_info_methods/child_loader.hpp"
 #include "asset_info_methods/lighting_loader.hpp"
 #include <algorithm>
@@ -13,6 +12,207 @@
 #include <limits>
 #include <cmath>
 #include <cctype>
+
+namespace {
+
+struct CanvasMetrics {
+    int width = 0;
+    int height = 0;
+};
+
+inline CanvasMetrics canvas_metrics_for(const AssetInfo& info) {
+    CanvasMetrics metrics;
+    metrics.width = std::max(info.original_canvas_width, 0);
+    metrics.height = std::max(info.original_canvas_height, 0);
+    return metrics;
+}
+
+inline CanvasMetrics metrics_from_json(const nlohmann::json& space) {
+    CanvasMetrics metrics;
+    metrics.width = std::max(space.value("canvas_width", 0), 0);
+    metrics.height = std::max(space.value("canvas_height", 0), 0);
+    return metrics;
+}
+
+inline float sanitize_scale(float scale) {
+    if (!(scale > 0.0f) || !std::isfinite(scale)) {
+        return 1.0f;
+    }
+    return scale;
+}
+
+inline int compute_scaled_dimension(int dimension, float factor) {
+    if (dimension <= 0) return 0;
+    double value = static_cast<double>(dimension) * static_cast<double>(factor);
+    long long rounded = std::llround(value);
+    if (rounded < 0) {
+        return 0;
+    }
+    if (rounded > static_cast<long long>(std::numeric_limits<int>::max())) {
+        return std::numeric_limits<int>::max();
+    }
+    return static_cast<int>(rounded);
+}
+
+inline SDL_Point canonical_anchor(const CanvasMetrics& canvas) {
+    SDL_Point anchor{0, 0};
+    anchor.x = (canvas.width > 0) ? canvas.width / 2 : 0;
+    anchor.y = canvas.height;
+    return anchor;
+}
+
+inline SDL_Point scaled_anchor_point(const CanvasMetrics& canvas, float scale) {
+    SDL_Point anchor{0, 0};
+    const int scaled_w = compute_scaled_dimension(canvas.width, scale);
+    const int scaled_h = compute_scaled_dimension(canvas.height, scale);
+    anchor.x = (scaled_w > 0) ? scaled_w / 2 : 0;
+    anchor.y = scaled_h;
+    return anchor;
+}
+
+inline nlohmann::json encode_canonical_points(const std::vector<Area::Point>& points,
+                                              const CanvasMetrics& canvas,
+                                              float scale) {
+    nlohmann::json arr = nlohmann::json::array();
+    auto& out = arr.get_ref<nlohmann::json::array_t&>();
+    out.reserve(points.size());
+    const SDL_Point anchor = scaled_anchor_point(canvas, scale);
+    for (const auto& p : points) {
+        const long long dx_scaled = static_cast<long long>(p.x) - static_cast<long long>(anchor.x);
+        const long long dy_scaled = static_cast<long long>(p.y) - static_cast<long long>(anchor.y);
+        const int canonical_x = static_cast<int>(std::llround(static_cast<double>(dx_scaled) / scale));
+        const int canonical_y = static_cast<int>(std::llround(static_cast<double>(dy_scaled) / scale));
+        out.push_back({ {"x", canonical_x}, {"y", canonical_y} });
+    }
+    return arr;
+}
+
+inline std::vector<Area::Point> decode_canonical_points(const nlohmann::json& points,
+                                                        const CanvasMetrics& canvas,
+                                                        float scale) {
+    std::vector<Area::Point> decoded;
+    if (!points.is_array()) return decoded;
+    decoded.reserve(points.size());
+    const SDL_Point anchor = scaled_anchor_point(canvas, scale);
+    for (const auto& entry : points) {
+        if (!entry.is_object()) continue;
+        const int canonical_x = entry.value("x", 0);
+        const int canonical_y = entry.value("y", 0);
+        const long long scaled_dx = static_cast<long long>(std::llround(static_cast<double>(canonical_x) * scale));
+        const long long scaled_dy = static_cast<long long>(std::llround(static_cast<double>(canonical_y) * scale));
+        const long long world_x = static_cast<long long>(anchor.x) + scaled_dx;
+        const long long world_y = static_cast<long long>(anchor.y) + scaled_dy;
+        Area::Point p{};
+        if (world_x < static_cast<long long>(std::numeric_limits<int>::min())) {
+            p.x = std::numeric_limits<int>::min();
+        } else if (world_x > static_cast<long long>(std::numeric_limits<int>::max())) {
+            p.x = std::numeric_limits<int>::max();
+        } else {
+            p.x = static_cast<int>(world_x);
+        }
+        if (world_y < static_cast<long long>(std::numeric_limits<int>::min())) {
+            p.y = std::numeric_limits<int>::min();
+        } else if (world_y > static_cast<long long>(std::numeric_limits<int>::max())) {
+            p.y = std::numeric_limits<int>::max();
+        } else {
+            p.y = static_cast<int>(world_y);
+        }
+        decoded.push_back(p);
+    }
+    return decoded;
+}
+
+} // namespace
+
+SDL_Point AssetInfo::AreaCodec::scaled_anchor(const AssetInfo& info,
+                                             std::optional<float> scale_override) {
+    const float scale = sanitize_scale(scale_override.value_or(info.scale_factor));
+    CanvasMetrics canvas = canvas_metrics_for(info);
+    return scaled_anchor_point(canvas, scale);
+}
+
+nlohmann::json AssetInfo::AreaCodec::encode_entry(const AssetInfo& info,
+                                                  const Area& area,
+                                                  const std::string& final_type,
+                                                  const std::string& final_kind) {
+    nlohmann::json entry = nlohmann::json::object();
+    entry["name"] = area.get_name();
+    if (!final_type.empty()) {
+        entry["type"] = final_type;
+    }
+    if (!final_kind.empty()) {
+        entry["kind"] = final_kind;
+    }
+    entry["schema_version"] = 2;
+
+    const float scale = sanitize_scale(info.scale_factor);
+    const CanvasMetrics canvas = canvas_metrics_for(info);
+    entry["coordinate_space"] = {
+        {"kind", "canonical"},
+        {"origin", "bottom_center"},
+        {"canvas_width", canvas.width},
+        {"canvas_height", canvas.height},
+        {"scale_at_save", scale}
+    };
+
+    const SDL_Point anchor = canonical_anchor(canvas);
+    entry["anchor"] = { {"x", anchor.x}, {"y", anchor.y} };
+    entry["points"] = encode_canonical_points(area.get_points(), canvas, scale);
+    return entry;
+}
+
+std::optional<AssetInfo::NamedArea>
+AssetInfo::AreaCodec::decode_entry(const AssetInfo& info, const nlohmann::json& entry) {
+    if (!entry.is_object()) {
+        return std::nullopt;
+    }
+    const std::string name = entry.value("name", std::string{});
+    if (name.empty()) {
+        return std::nullopt;
+    }
+    if (!entry.contains("points") || !entry["points"].is_array()) {
+        return std::nullopt;
+    }
+    if (!entry.contains("coordinate_space") || !entry["coordinate_space"].is_object()) {
+        return std::nullopt;
+    }
+
+    const auto& space = entry["coordinate_space"];
+    const std::string space_kind = space.value("kind", std::string{});
+    const std::string origin = space.value("origin", std::string{});
+    if (space_kind != "canonical" || origin != "bottom_center") {
+        return std::nullopt;
+    }
+
+    CanvasMetrics canvas = canvas_metrics_for(info);
+    const CanvasMetrics saved = metrics_from_json(space);
+    if (canvas.width <= 0) {
+        canvas.width = saved.width;
+    }
+    if (canvas.height <= 0) {
+        canvas.height = saved.height;
+    }
+
+    const float scale = sanitize_scale(info.scale_factor);
+    std::vector<Area::Point> points = decode_canonical_points(entry["points"], canvas, scale);
+    if (points.size() < 3) {
+        return std::nullopt;
+    }
+
+    NamedArea named;
+    named.name = name;
+    named.type = entry.value("type", std::string{});
+    named.kind = entry.value("kind", named.type);
+    if (named.kind.empty()) {
+        named.kind = named.type;
+    }
+    named.area = std::make_unique<Area>(name, points);
+    const std::string& applied_type = !named.type.empty() ? named.type : named.kind;
+    if (!applied_type.empty()) {
+        named.area->set_type(applied_type);
+    }
+    return named;
+}
 AssetInfo::AssetInfo(const std::string &asset_folder_name)
 : is_shaded(false)
 , is_light_source(false) {
@@ -332,14 +532,7 @@ void AssetInfo::upsert_area_from_editor(const Area& area) {
         areas.push_back(std::move(na));
     }
 
-    const SDL_Point anchor = AreaLoader::asset_anchor(*this);
-    nlohmann::json points = AreaLoader::encode_points(area.get_points(), anchor);
-
-    nlohmann::json entry = nlohmann::json::object();
-    entry["name"] = area.get_name();
-    if (!final_type.empty()) entry["type"] = final_type;
-    if (!final_kind.empty()) entry["kind"] = final_kind;
-    entry["points"] = std::move(points);
+    nlohmann::json entry = AreaCodec::encode_entry(*this, area, final_type, final_kind);
 
     if (existing_entry) {
         *existing_entry = std::move(entry);
@@ -371,7 +564,18 @@ std::string AssetInfo::pick_next_animation(const std::string& mapping_id) const 
 }
 
 void AssetInfo::load_areas(const nlohmann::json& data) {
-        AreaLoader::load(*this, data);
+        areas.clear();
+        if (!data.contains("areas") || !data["areas"].is_array()) {
+                return;
+        }
+
+        for (const auto& entry : data["areas"]) {
+                auto decoded = AreaCodec::decode_entry(*this, entry);
+                if (!decoded) {
+                        continue;
+                }
+                areas.push_back(std::move(*decoded));
+        }
 }
 
 void AssetInfo::load_children(const nlohmann::json& data) {

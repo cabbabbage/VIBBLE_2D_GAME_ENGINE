@@ -1402,6 +1402,7 @@ void SpawnGroupList::RowController::set_quantity_hidden(bool hidden) {
 
 SpawnGroupList::SpawnGroupList(bool floatable)
     : DockableCollapsible("Spawn Groups", floatable) {
+    default_floatable_mode_ = floatable;
     set_scroll_enabled(true);
     set_cell_width(320);
     set_row_gap(DMSpacing::item_gap());
@@ -1413,6 +1414,23 @@ SpawnGroupList::~SpawnGroupList() = default;
 void SpawnGroupList::set_screen_dimensions(int width, int height) {
     screen_w_ = std::max(0, width);
     screen_h_ = std::max(0, height);
+}
+
+void SpawnGroupList::set_embedded_mode(bool embedded) {
+    if (embedded_mode_ == embedded) {
+        return;
+    }
+    embedded_mode_ = embedded;
+    if (embedded_mode_) {
+        set_floatable(false);
+        set_show_header(false);
+        set_scroll_enabled(false);
+        pointer_block_frames_ = 0;
+    } else {
+        set_floatable(default_floatable_mode_);
+        set_show_header(true);
+        set_scroll_enabled(true);
+    }
 }
 
 static std::string entry_display_name(const json& e) {
@@ -1712,7 +1730,11 @@ void SpawnGroupList::update(const Input& input, int screen_w, int screen_h) {
         }
         area_panel_->set_parent_rect(parent);
     }
-    DockableCollapsible::update(input, screen_w, screen_h);
+    if (!embedded_mode_) {
+        DockableCollapsible::update(input, screen_w, screen_h);
+    } else if (is_visible() && pointer_block_frames_ > 0) {
+        --pointer_block_frames_;
+    }
     if (pending_asset_search_open_) {
         if (is_visible()) {
             if (EntryRow* target = lookup_row(pending_asset_search_row_ref_)) {
@@ -1885,6 +1907,7 @@ void SpawnGroupList::render_content(SDL_Renderer* r) const {
 
 void SpawnGroupList::open(json& groups, std::function<void(const json&)> on_save) {
     // Floating open: bind to array, show as a floating panel with rows inside
+    set_embedded_mode(false);
     set_floatable(true);
     set_show_header(true);
     set_close_button_enabled(true);
