@@ -2,12 +2,12 @@
   "camera_settings": {
     "distance_scale_strength": 0.10999999940395355,
     "foreshorten_strength": 0.11999999731779099,
-    "height_at_zoom1": 716.0,
+    "height_at_zoom1": 557.0,
     "parallax_strength": 19.0,
     "realism_enabled": true,
     "render_areas_enabled": false,
     "render_distance": 2120.0,
-    "tripod_distance_y": -1330.0
+    "tripod_distance_y": -1335.0
   },
   "map_assets_data": {
     "spawn_groups": [
@@ -495,6 +495,31 @@
       "width_min": 1095
     },
     "spawn": {
+      "areas": [
+        {
+          "anchor": {
+            "x": 9704,
+            "y": 9709
+          },
+          "kind": "Trigger",
+          "name": "trigger_area",
+          "points": [
+            {
+              "x": -8217,
+              "y": -6884
+            },
+            {
+              "x": -7363,
+              "y": -6558
+            },
+            {
+              "x": -7694,
+              "y": -6023
+            }
+          ],
+          "type": "trigger"
+        }
+      ],
       "curvyness": 1,
       "edge_smoothness": 97,
       "geometry": "Circle",
