@@ -225,7 +225,7 @@
     "mult": 0.32,
     "orbit_radius": 782,
     "radius": 747,
-    "update_interval": 53
+    "update_interval": 2
   },
   "map_name": "FORREST",
   "map_radius": 9708.0,

@@ -198,7 +198,10 @@ void AssetList::set_search_radius(int r) {
 
 void AssetList::set_sort_mode(SortMode m) {
     sort_mode_ = m;
-    sort_middle_section();
+    middle_section_dirty_ = true;
+    if (middle_section_dirty_) {
+        sort_middle_section();
+    }
 }
 
 void AssetList::set_tags(const std::vector<std::string>& required_tags,
@@ -249,7 +252,9 @@ void AssetList::update() {
         }
     }
 
-    sort_middle_section();
+    if (middle_section_dirty_) {
+        sort_middle_section();
+    }
 
     previous_center_point_ = current_center;
     previous_search_radius_ = search_radius_;
@@ -320,6 +325,7 @@ void AssetList::rebuild_from_scratch() {
     delta_buffer_.clear();
     delta_inside_flags_.clear();
     membership_lookup_.clear();
+    middle_section_dirty_ = false;
 
     SDL_Point center = resolve_center();
 
@@ -349,7 +355,9 @@ void AssetList::rebuild_from_scratch() {
         }
     });
 
-    sort_middle_section();
+    if (middle_section_dirty_) {
+        sort_middle_section();
+    }
 
     previous_center_point_ = center;
     previous_search_radius_ = search_radius_;
@@ -374,6 +382,9 @@ void AssetList::route_asset_to_section(Asset* a) {
         std::size_t index = container.size();
         container.push_back(a);
         membership_lookup_[a] = SectionSlot{bucket, index};
+        if (bucket == SectionBucket::Middle) {
+            middle_section_dirty_ = true;
+        }
     };
 
     if (!top_bucket_tags_.empty() && has_any_tag(a, top_bucket_tags_)) {
@@ -418,6 +429,8 @@ void AssetList::remove_from_all_sections(Asset* a) {
         it->second.index = slot.index;
     }
 
+    bool mark_dirty = (slot.bucket == SectionBucket::Middle);
+
     std::size_t last_index = vec.size() - 1;
     if (slot.index != last_index) {
         Asset* moved = vec[last_index];
@@ -432,6 +445,10 @@ void AssetList::remove_from_all_sections(Asset* a) {
     }
 
     membership_lookup_.erase(it);
+
+    if (mark_dirty) {
+        middle_section_dirty_ = true;
+    }
 }
 
 bool AssetList::has_all_required_tags(const Asset* a, const std::vector<std::string>& req) const {
@@ -510,6 +527,8 @@ void AssetList::sort_middle_section() {
             }
         }
     }
+
+    middle_section_dirty_ = false;
 }
 
 void AssetList::get_delta_area_assets(SDL_Point prev_center,

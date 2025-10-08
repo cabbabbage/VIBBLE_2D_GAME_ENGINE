@@ -495,6 +495,11 @@ void Assets::update(const Input& input,
     (void)screen_center_x;
     (void)screen_center_y;
 
+    bool closest_assets_dirty = false;
+    const auto mark_closest_assets_dirty = [&closest_assets_dirty]() {
+        closest_assets_dirty = true;
+    };
+
     Room* detected_room = finder_ ? finder_->getCurrentRoom() : nullptr;
     Room* active_room = detected_room;
     if (dev_controls_ && dev_controls_->is_enabled()) {
@@ -504,9 +509,9 @@ void Assets::update(const Input& input,
 
     camera_.update_zoom(active_room, finder_, player);
 
+    mark_closest_assets_dirty();
     update_active_assets(camera_.get_screen_center());
     rebuild_active_assets_if_needed();
-    update_closest_assets(player, 3);
 
     AudioEngine& audio_engine = AudioEngine::instance();
     audio_engine.set_effect_max_distance(static_cast<float>(std::max(1, camera_.get_render_distance_world_margin())));
@@ -525,9 +530,9 @@ void Assets::update(const Input& input,
         dy = player->pos.y - start_py;
         if (dx != 0 || dy != 0) {
             camera_.update_zoom(active_room, finder_, player);
+            mark_closest_assets_dirty();
             update_active_assets(camera_.get_screen_center());
             rebuild_active_assets_if_needed();
-            update_closest_assets(player, 3);
             update_filtered_active_assets();
         }
     }
@@ -549,6 +554,10 @@ void Assets::update(const Input& input,
             if (a && a != player)
                 a->update();
         }
+    }
+
+    if (closest_assets_dirty) {
+        update_closest_assets(player, 3);
     }
 
     if (dev_controls_ && dev_controls_->is_enabled()) {

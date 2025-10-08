@@ -113,5 +113,7 @@ private:
     // Optional view of a parent list's current filtered contents as our candidate set.
     const AssetList* parent_provider_ = nullptr;
     bool inherit_parent_view_ = false;
+
+    bool middle_section_dirty_ = false;
 };
 
