@@ -53,8 +53,8 @@ class AnimationEditorWindow {
     void open_movement_editor(const std::string& animation_id);
     void close_movement_editor();
     void create_animation_via_prompt();
-    void save_document();
     void reload_document();
+    void process_auto_save();
 
     std::optional<std::filesystem::path> pick_folder() const;
     std::optional<std::filesystem::path> pick_gif() const;
@@ -75,7 +75,6 @@ class AnimationEditorWindow {
     std::unique_ptr<AnimationListPanel> list_panel_;
     std::unique_ptr<FrameMovementEditor> movement_editor_;
     std::unique_ptr<DMButton> add_button_;
-    std::unique_ptr<DMButton> save_button_;
     std::unique_ptr<DMButton> reload_button_;
     std::unique_ptr<DMButton> close_button_;
     SDL_Rect header_rect_{0, 0, 0, 0};
@@ -87,6 +86,8 @@ class AnimationEditorWindow {
     bool movement_editor_visible_ = false;
     std::string movement_editor_animation_id_;
     mutable bool layout_dirty_ = true;
+    bool auto_save_pending_ = false;
+    int auto_save_timer_frames_ = 0;
 };
 
 }  // namespace animation_editor

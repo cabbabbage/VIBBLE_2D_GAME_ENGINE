@@ -228,7 +228,7 @@ void AnimationListPanel::layout_inspectors() {
     const int gap = DMSpacing::section_gap();
     const int width = std::max(0, bounds_.w - padding * 2);
     int column_count = width > 0 ? 2 : 1;
-    int column_gap = column_count > 1 ? gap : 0;
+    int column_gap = column_count > 1 ? DMSpacing::item_gap() : 0;
     int column_width = width;
     if (column_count > 1) {
         column_width = (width - column_gap) / column_count;

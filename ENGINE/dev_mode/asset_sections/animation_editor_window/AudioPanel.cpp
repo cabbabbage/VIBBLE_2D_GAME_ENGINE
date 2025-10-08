@@ -18,8 +18,6 @@ namespace animation_editor {
 
 namespace {
 
-const int kPanelPadding = 12;
-
 void render_label(SDL_Renderer* renderer, const std::string& text, int x, int y, int max_width = -1,
                   SDL_Color color = DMStyles::Label().color) {
     if (!renderer || text.empty()) return;
@@ -114,17 +112,17 @@ void AudioPanel::ensure_widgets() {
 void AudioPanel::layout_widgets() const {
     if (!layout_dirty_) return;
     layout_dirty_ = false;
-    const int padding = kPanelPadding;
+    const int padding = DMSpacing::panel_padding();
     const int gap = DMSpacing::item_gap();
     const int content_x = bounds_.x + padding;
     const int content_w = std::max(0, bounds_.w - padding * 2);
-    int cursor_y = bounds_.y + padding + label_height();
-
-    cursor_y += gap;
+    int cursor_y = bounds_.y + padding + label_height() + DMSpacing::small_gap();
 
     if (has_audio_) {
         if (preview_button_) {
-            SDL_Rect r{content_x, cursor_y, std::min(content_w, preview_button_->rect().w), DMButton::height()};
+            int width = std::min(content_w, preview_button_->rect().w);
+            int offset = std::max(0, (content_w - width) / 2);
+            SDL_Rect r{content_x + offset, cursor_y, width, DMButton::height()};
             preview_button_->set_rect(r);
             cursor_y += DMButton::height() + gap;
         }
@@ -142,14 +140,19 @@ void AudioPanel::layout_widgets() const {
             int button_gap = DMSpacing::small_gap();
             int button_width = (content_w - button_gap) / 2;
             button_width = std::max(button_width, 120);
-            SDL_Rect replace_rect{content_x, cursor_y, button_width, DMButton::height()};
-            SDL_Rect remove_rect{content_x + button_width + button_gap, cursor_y, button_width, DMButton::height()};
+            button_width = std::min(button_width, replace_button_->rect().w);
+            int pair_width = button_width * 2 + button_gap;
+            int offset = std::max(0, (content_w - pair_width) / 2);
+            SDL_Rect replace_rect{content_x + offset, cursor_y, button_width, DMButton::height()};
+            SDL_Rect remove_rect{replace_rect.x + button_width + button_gap, cursor_y, button_width, DMButton::height()};
             replace_button_->set_rect(replace_rect);
             remove_button_->set_rect(remove_rect);
         }
     } else {
         if (attach_button_) {
-            SDL_Rect r{content_x, cursor_y, content_w, DMButton::height()};
+            int width = std::min(content_w, attach_button_->rect().w);
+            int offset = std::max(0, (content_w - width) / 2);
+            SDL_Rect r{content_x + offset, cursor_y, width, DMButton::height()};
             attach_button_->set_rect(r);
         }
     }
@@ -176,7 +179,7 @@ void AudioPanel::render(SDL_Renderer* renderer) const {
     SDL_SetRenderDrawColor(renderer, border.r, border.g, border.b, border.a);
     SDL_RenderDrawRect(renderer, &bounds_);
 
-    int padding = kPanelPadding;
+    int padding = DMSpacing::panel_padding();
     int max_label_width = std::max(0, bounds_.w - padding * 2);
     int label_y = bounds_.y + padding;
     render_label(renderer, "Audio", bounds_.x + padding, label_y);

@@ -117,6 +117,7 @@ private:
     void request_layout();
     void notify_data_changed(EntryRow& row, bool structure_changed, bool summary_changed);
     void ensure_asset_search();
+    void request_asset_search_open(EntryRow& row, std::function<void(const std::string&)> callback = {});
     void open_asset_search(EntryRow& row, std::function<void(const std::string&)> callback = {});
     void close_asset_search();
     void ensure_area_panel();
@@ -146,4 +147,7 @@ private:
     SDL_Point anchor_{0,0};
     RowRef asset_search_row_ref_{};
     RowRef area_panel_row_ref_{};
+    bool pending_asset_search_open_ = false;
+    RowRef pending_asset_search_row_ref_{};
+    std::function<void(const std::string&)> pending_asset_search_callback_{};
 };

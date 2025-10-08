@@ -30,6 +30,8 @@ namespace {
 
 using animation_editor::AnimationEditorWindow;
 
+constexpr int kAutoSaveDelayFrames = 12;
+
 void render_label(SDL_Renderer* renderer, const std::string& text, int x, int y) {
     if (!renderer || text.empty()) return;
 
@@ -95,15 +97,24 @@ AnimationEditorWindow::AnimationEditorWindow() {
     configure_list_panel();
 
     add_button_ = std::make_unique<DMButton>("Add Animation", &DMStyles::CreateButton(), 160, DMButton::height());
-    save_button_ = std::make_unique<DMButton>("Save", &DMStyles::CreateButton(), 120, DMButton::height());
     reload_button_ = std::make_unique<DMButton>("Reload", &DMStyles::AccentButton(), 120, DMButton::height());
     close_button_ = std::make_unique<DMButton>("Close", &DMStyles::DeleteButton(), 120, DMButton::height());
     layout_dirty_ = true;
 }
 
-void AnimationEditorWindow::set_visible(bool visible) { visible_ = visible; }
+void AnimationEditorWindow::set_visible(bool visible) {
+    if (!visible && visible_) {
+        if (document_ && document_->consume_dirty_flag()) {
+            auto_save_pending_ = true;
+            auto_save_timer_frames_ = 0;
+        }
+        auto_save_timer_frames_ = 0;
+        process_auto_save();
+    }
+    visible_ = visible;
+}
 
-void AnimationEditorWindow::toggle_visible() { visible_ = !visible_; }
+void AnimationEditorWindow::toggle_visible() { set_visible(!visible_); }
 
 void AnimationEditorWindow::set_bounds(const SDL_Rect& bounds) {
     bounds_ = bounds;
@@ -116,6 +127,7 @@ void AnimationEditorWindow::set_info(const std::shared_ptr<AssetInfo>& info) {
     if (info) {
         info_path_ = info->info_json_path();
         document_->load_from_file(info_path_);
+        document_->consume_dirty_flag();
         preview_provider_->set_document(document_);
         configure_list_panel();
         if (list_panel_) list_panel_->set_preview_provider(preview_provider_);
@@ -126,6 +138,8 @@ void AnimationEditorWindow::set_info(const std::shared_ptr<AssetInfo>& info) {
         }
         if (list_panel_) list_panel_->set_document(document_);
         set_status_message("Loaded " + info_path_.filename().string(), 240);
+        auto_save_pending_ = false;
+        auto_save_timer_frames_ = 0;
     } else {
         clear_info();
     }
@@ -137,44 +151,49 @@ void AnimationEditorWindow::clear_info() {
     movement_editor_visible_ = false;
     movement_editor_animation_id_.clear();
     document_->load_from_file(std::filesystem::path{});
+    document_->consume_dirty_flag();
     preview_provider_->invalidate_all();
     if (list_panel_) list_panel_->set_preview_provider(preview_provider_);
     if (list_panel_) list_panel_->set_document(document_);
     set_status_message("Select an asset to configure animations.", 240);
+    auto_save_pending_ = false;
+    auto_save_timer_frames_ = 0;
 }
 
 void AnimationEditorWindow::layout_children() {
     layout_dirty_ = false;
     const int padding = DMSpacing::panel_padding();
-    const int button_gap = DMSpacing::item_gap();
-    const int header_height = DMButton::height() + padding * 2;
+    const int header_gap = DMSpacing::small_gap();
+    const int button_gap = DMSpacing::small_gap();
+    const int header_height = DMButton::height() + header_gap * 2;
     header_rect_ = SDL_Rect{bounds_.x, bounds_.y, bounds_.w, header_height};
 
-    int x = header_rect_.x + padding;
-    int y = header_rect_.y + padding;
-
-    if (add_button_) {
-        add_button_->set_rect(SDL_Rect{x, y, add_button_->rect().w, DMButton::height()});
-        x += add_button_->rect().w + button_gap;
-    }
-    if (save_button_) {
-        save_button_->set_rect(SDL_Rect{x, y, save_button_->rect().w, DMButton::height()});
-        x += save_button_->rect().w + button_gap;
-    }
-    if (reload_button_) {
-        reload_button_->set_rect(SDL_Rect{x, y, reload_button_->rect().w, DMButton::height()});
-    }
+    int y = header_rect_.y + header_gap;
+    int left_x = header_rect_.x + padding;
+    int right_x = header_rect_.x + header_rect_.w - padding;
 
     if (close_button_) {
         int width = close_button_->rect().w;
-        close_button_->set_rect(SDL_Rect{header_rect_.x + header_rect_.w - padding - width, y, width, DMButton::height()});
+        right_x -= width;
+        close_button_->set_rect(SDL_Rect{right_x, y, width, DMButton::height()});
+        right_x -= button_gap;
+    }
+    if (reload_button_) {
+        int width = reload_button_->rect().w;
+        right_x -= width;
+        reload_button_->set_rect(SDL_Rect{right_x, y, width, DMButton::height()});
+        right_x -= button_gap;
+    }
+    if (add_button_) {
+        add_button_->set_rect(SDL_Rect{left_x, y, add_button_->rect().w, DMButton::height()});
     }
 
-    int status_height = DMSpacing::panel_padding() * 2 + DMStyles::Label().font_size;
+    const int status_padding = DMSpacing::panel_padding();
+    int status_height = DMStyles::Label().font_size + status_padding * 2;
     status_rect_ = SDL_Rect{bounds_.x, bounds_.y + bounds_.h - status_height, bounds_.w, status_height};
 
-    int list_y = header_rect_.y + header_rect_.h;
-    int list_height = std::max(0, status_rect_.y - list_y);
+    int list_y = header_rect_.y + header_rect_.h + header_gap;
+    int list_height = std::max(0, status_rect_.y - list_y - header_gap);
     list_rect_ = SDL_Rect{bounds_.x + padding, list_y, std::max(0, bounds_.w - padding * 2), list_height};
     if (list_panel_) list_panel_->set_bounds(list_rect_);
 
@@ -199,8 +218,13 @@ void AnimationEditorWindow::configure_list_panel() {
     });
 }
 
-void AnimationEditorWindow::update(const Input&, int, int) {
+void AnimationEditorWindow::update(const Input& input, int, int) {
     if (!visible_) return;
+
+    auto& mutable_input = const_cast<Input&>(input);
+    mutable_input.consumeAllMouseButtons();
+    mutable_input.consumeMotion();
+    mutable_input.consumeScroll();
 
     ensure_layout();
 
@@ -210,6 +234,13 @@ void AnimationEditorWindow::update(const Input&, int, int) {
         movement_editor_->set_bounds(movement_editor_rect_);
         movement_editor_->update();
     }
+
+    if (document_ && document_->consume_dirty_flag()) {
+        auto_save_pending_ = true;
+        auto_save_timer_frames_ = kAutoSaveDelayFrames;
+    }
+
+    process_auto_save();
 
     if (status_timer_frames_ > 0) {
         --status_timer_frames_;
@@ -319,16 +350,14 @@ void AnimationEditorWindow::render_header(SDL_Renderer* renderer) const {
     SDL_RenderFillRect(renderer, &header_rect_);
 
     std::string title = "Animation Editor";
-    render_label(renderer, title, header_rect_.x + DMSpacing::panel_padding(),
-                 header_rect_.y + DMSpacing::panel_padding() / 2);
-
     if (!info_path_.empty()) {
-        render_label(renderer, info_path_.filename().string(), header_rect_.x + DMSpacing::panel_padding(),
-                     header_rect_.y + DMSpacing::panel_padding() + DMStyles::Label().font_size);
+        title += " — ";
+        title += info_path_.filename().string();
     }
+    render_label(renderer, title, header_rect_.x + DMSpacing::panel_padding(),
+                 header_rect_.y + DMSpacing::small_gap());
 
     if (add_button_) add_button_->render(renderer);
-    if (save_button_) save_button_->render(renderer);
     if (reload_button_) reload_button_->render(renderer);
     if (close_button_) close_button_->render(renderer);
 }
@@ -369,7 +398,6 @@ bool AnimationEditorWindow::handle_header_event(const SDL_Event& e) {
     };
 
     handle_button(add_button_, [this]() { create_animation_via_prompt(); });
-    handle_button(save_button_, [this]() { save_document(); });
     handle_button(reload_button_, [this]() { reload_document(); });
     handle_button(close_button_, [this]() { visible_ = false; });
     return consumed;
@@ -410,17 +438,32 @@ void AnimationEditorWindow::create_animation_via_prompt() {
     set_status_message("Created animation '" + name + "'.", 240);
 }
 
-void AnimationEditorWindow::save_document() {
-    document_->save_to_file();
-    set_status_message("Animations saved.", 240);
-}
-
 void AnimationEditorWindow::reload_document() {
     if (info_path_.empty()) return;
     document_->load_from_file(info_path_);
     preview_provider_->invalidate_all();
     if (list_panel_) list_panel_->set_document(document_);
     set_status_message("Reloaded animations from disk.", 240);
+    auto_save_pending_ = false;
+    auto_save_timer_frames_ = 0;
+}
+
+void AnimationEditorWindow::process_auto_save() {
+    if (!auto_save_pending_ || !document_) {
+        return;
+    }
+
+    if (auto_save_timer_frames_ > 0) {
+        --auto_save_timer_frames_;
+        return;
+    }
+
+    document_->save_to_file();
+    if (!info_path_.empty()) {
+        set_status_message("Animations auto-saved.", 180);
+    }
+    auto_save_pending_ = false;
+    auto_save_timer_frames_ = 0;
 }
 
 std::optional<std::filesystem::path> AnimationEditorWindow::pick_folder() const {

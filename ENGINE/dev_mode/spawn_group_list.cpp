@@ -315,7 +315,7 @@ void SpawnGroupList::CandidateList::ensure_common_widgets() {
         bottom_gap_ = std::make_unique<SpacerWidget>(DMSpacing::item_gap());
     if (!add_btn_ && row_.entry) {
         add_btn_ = std::make_unique<DMButton>("Add Candidate", &DMStyles::CreateButton(), 160, DMButton::height());
-        add_w_ = std::make_unique<ButtonWidget>(add_btn_.get(), [this]() { owner_.open_asset_search(row_, {}); });
+        add_w_ = std::make_unique<ButtonWidget>(add_btn_.get(), [this]() { owner_.request_asset_search_open(row_, {}); });
     }
     if (!pie_widget_)
         pie_widget_ = std::make_unique<CandidatePieWidget>(*this);
@@ -684,13 +684,27 @@ bool SpawnGroupList::CandidateList::CandidatePieWidget::handle_event(const SDL_E
         return true;
     }
     case SDL_MOUSEWHEEL: {
-        if (!list_.has_hover()) return false;
+        int mouse_x = 0;
+        int mouse_y = 0;
+        SDL_GetMouseState(&mouse_x, &mouse_y);
+        bool inside = mouse_x >= rect_.x && mouse_x < rect_.x + rect_.w &&
+                      mouse_y >= rect_.y && mouse_y < rect_.y + rect_.h;
+        if (inside) {
+            int idx = index_for_point(mouse_x, mouse_y);
+            list_.set_hover(idx, true);
+        }
+        bool has_hover = list_.has_hover();
         int steps = e.wheel.y;
 #if SDL_VERSION_ATLEAST(2,0,18)
         if (e.wheel.direction == SDL_MOUSEWHEEL_FLIPPED) steps = -steps;
 #endif
-        if (steps != 0) {
-            return list_.handle_scroll(steps);
+        if (steps != 0 && has_hover) {
+            if (list_.handle_scroll(steps)) {
+                return true;
+            }
+        }
+        if (inside || has_hover) {
+            return true;
         }
         break;
     }
@@ -1328,6 +1342,16 @@ void SpawnGroupList::update(const Input& input, int screen_w, int screen_h) {
         area_panel_->set_parent_rect(parent);
     }
     DockableCollapsible::update(input, screen_w, screen_h);
+    if (pending_asset_search_open_) {
+        if (is_visible()) {
+            if (EntryRow* target = lookup_row(pending_asset_search_row_ref_)) {
+                open_asset_search(*target, std::move(pending_asset_search_callback_));
+            }
+        }
+        pending_asset_search_callback_ = {};
+        clear_row_ref(pending_asset_search_row_ref_);
+        pending_asset_search_open_ = false;
+    }
     if (!is_visible()) {
         close_area_panel();
         close_asset_search();
@@ -1573,6 +1597,12 @@ void SpawnGroupList::ensure_asset_search() {
         asset_search_->set_screen_dimensions(screen_w_, screen_h_);
         asset_search_->set_anchor_position(anchor_.x, anchor_.y);
     }
+}
+
+void SpawnGroupList::request_asset_search_open(EntryRow& row, std::function<void(const std::string&)> callback) {
+    bind_row_ref(pending_asset_search_row_ref_, row);
+    pending_asset_search_callback_ = std::move(callback);
+    pending_asset_search_open_ = true;
 }
 
 void SpawnGroupList::open_asset_search(EntryRow& row, std::function<void(const std::string&)> callback) {

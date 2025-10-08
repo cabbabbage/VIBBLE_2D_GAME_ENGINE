@@ -431,11 +431,8 @@ void AnimationInspectorPanel::update_source_toggle_label() {
         return;
     }
 
-    if (source_collapsed_) {
-        source_toggle_button_->set_text("[+] Frame Sources");
-    } else {
-        source_toggle_button_->set_text("[-] Frame Sources");
-    }
+    const char* arrow = source_collapsed_ ? "\u25BC" : "\u25B2";  // ▼ : ▲
+    source_toggle_button_->set_text(std::string(arrow) + " Frame Sources");
 }
 
 void AnimationInspectorPanel::layout_widgets() const {
