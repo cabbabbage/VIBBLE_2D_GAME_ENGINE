@@ -644,7 +644,7 @@ bool DMSlider::handle_event(const SDL_Event& e) {
             return false;
         }
         if (!focused_) {
-            set_focus(true);
+            return false;
         }
         int delta = e.wheel.y;
         if (e.wheel.direction == SDL_MOUSEWHEEL_FLIPPED) {
@@ -1140,7 +1140,7 @@ bool DMRangeSlider::handle_event(const SDL_Event& e) {
             return false;
         }
         if (!focused_) {
-            set_focus(true);
+            return false;
         }
         int delta = e.wheel.y;
         if (e.wheel.direction == SDL_MOUSEWHEEL_FLIPPED) {

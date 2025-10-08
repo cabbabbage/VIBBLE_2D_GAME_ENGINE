@@ -819,7 +819,14 @@ void Assets::rebuild_active_assets_if_needed() {
     }
 
     active_assets.clear();
+    active_light_assets_.clear();
     active_asset_list_->full_list(active_assets);
+    active_light_assets_.reserve(active_assets.size());
+    for (Asset* asset : active_assets) {
+        if (asset && asset->info && asset->info->is_light_source) {
+            active_light_assets_.push_back(asset);
+        }
+    }
     active_assets_dirty_ = false;
 }
 
@@ -835,25 +842,21 @@ void Assets::process_removals() {
     if (removal_queue.empty()) return;
     std::unordered_set<Asset*> removal_lookup(removal_queue.begin(), removal_queue.end());
 
-    owned_assets.erase(
-        std::remove_if(owned_assets.begin(), owned_assets.end(),
-                       [&removal_lookup](const std::unique_ptr<Asset>& p) {
-                           return removal_lookup.count(p.get()) > 0;
-                       }),
-        owned_assets.end());
+        auto it = std::find_if(owned_assets.begin(), owned_assets.end(),
+                               [a](const std::unique_ptr<Asset>& p){ return p.get() == a; });
+        if (it != owned_assets.end()) {
+            owned_assets.erase(it);
+        }
 
-    auto erase_ptr = [&removal_lookup](auto& vec) {
-        vec.erase(std::remove_if(vec.begin(), vec.end(),
-                                 [&removal_lookup](auto* asset_ptr) {
-                                     return removal_lookup.count(asset_ptr) > 0;
-                                 }),
-                  vec.end());
-    };
-
-    erase_ptr(all);
-    erase_ptr(active_assets);
-    erase_ptr(filtered_active_assets);
-    erase_ptr(closest_assets);
+        auto erase_ptr = [a](auto& vec) {
+            vec.erase(std::remove(vec.begin(), vec.end(), a), vec.end());
+};
+        erase_ptr(all);
+        erase_ptr(active_assets);
+        erase_ptr(active_light_assets_);
+        erase_ptr(filtered_active_assets);
+        erase_ptr(closest_assets);
+    }
 
     if (dev_controls_ && dev_controls_->is_enabled()) {
         dev_controls_->clear_selection();
