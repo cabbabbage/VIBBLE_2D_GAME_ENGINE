@@ -8,21 +8,48 @@
 #include <cmath>
 
 CurrentRoomFinder::CurrentRoomFinder(std::vector<Room*>& rooms, Asset*& player)
-: rooms_(rooms), player_(player) {}
+: rooms_(rooms), player_(player), last_room_(nullptr) {}
 
 void CurrentRoomFinder::setRooms(std::vector<Room*>& rooms) {
     rooms_ = rooms;
+    last_room_ = nullptr;
 }
 
 void CurrentRoomFinder::setPlayer(Asset*& player) {
     player_ = player;
+    last_room_ = nullptr;
 }
 
 Room* CurrentRoomFinder::getCurrentRoom() const {
-    if (!player_) return nullptr;
+    if (!player_) {
+        last_room_ = nullptr;
+        return nullptr;
+    }
 
     const int px = player_->pos.x;
     const int py = player_->pos.y;
+    auto contains_player = [&](Room* room) -> bool {
+        return room && room->room_area && room->room_area->contains_point(SDL_Point{px, py});
+    };
+
+    auto try_room = [&](Room* room) -> Room* {
+        if (contains_player(room)) {
+            last_room_ = room;
+            return room;
+        }
+        return nullptr;
+    };
+
+    if (Room* matched = try_room(last_room_)) return matched;
+
+    if (last_room_) {
+        for (Room* connected : last_room_->connected_rooms) {
+            if (Room* matched = try_room(connected)) return matched;
+        }
+        if (Room* matched = try_room(last_room_->left_sibling)) return matched;
+        if (Room* matched = try_room(last_room_->right_sibling)) return matched;
+    }
+
     Room* best = nullptr;
 
     for (Room* r : rooms_) {
@@ -32,7 +59,10 @@ Room* CurrentRoomFinder::getCurrentRoom() const {
             break;
         }
     }
-    if (best) return best;
+    if (best) {
+        last_room_ = best;
+        return best;
+    }
 
     double best_dist = std::numeric_limits<double>::max();
     SDL_Point player_pos{px, py};
@@ -46,6 +76,7 @@ Room* CurrentRoomFinder::getCurrentRoom() const {
             best = r;
         }
     }
+    last_room_ = best;
     return best;
 }
 

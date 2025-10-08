@@ -3,22 +3,22 @@
 
 
 MAPS/FORREST/map_info.json::rooms_data
-Vibble,1.000,260,260,exact,0.060,260,-0.002
+Vibble,1.000,261,261,exact,0.060,261,-0.006
 candle,0.470,2929,6226,perimeter,0.475,145,-0.460
-batch_map_assets,0.502,973655,1938093,mapwide_batch,12.378,2767,2.119
-flower_1,1.000,69111,69111,perimeter,0.708,2451,-0.434
-Booze_2,0.000,0,384587,random,12.576,2451,-2.406
-Barrel,0.012,148,12600,random,134.955,9,177.065
-Box,0.027,9352,346101,random,11.756,2334,-10.625
-Lantern,1.000,2311,2311,exact,0.040,2311,0.037
-car,1.000,2311,2311,exact,0.078,2311,0.002
-New Spawn,0.000,0,725,exact,0.004,725,0.003
+batch_map_assets,0.503,979172,1945247,mapwide_batch,12.376,2778,0.157
+flower_1,1.000,69318,69318,perimeter,0.708,2460,-0.390
+Booze_2,0.000,0,385891,random,12.577,2460,2.040
+Barrel,0.008,149,19600,random,190.327,9,-101.733
+Box,0.027,9352,346197,random,11.720,2342,-11.138
+Lantern,1.000,2320,2320,exact,0.040,2320,0.053
+car,1.000,2320,2320,exact,0.078,2320,-0.004
+New Spawn,0.000,0,735,exact,0.004,735,0.002
 
 
 
 MAPS/FORREST/map_info.json::trails_data
-Bomb,0.984,3818,3881,random,0.087,3818,0.015
-batch_map_assets,0.492,736543,1495711,mapwide_batch,6.978,3738,1.066
+Bomb,0.984,3832,3896,random,0.087,3832,0.014
+batch_map_assets,0.493,739828,1500004,mapwide_batch,6.970,3752,0.263
 batch_basic,0.029,3434,118857,random,1.442,1580,0.125
-candle,0.429,834,1946,random,0.049,1946,0.043
-New Spawn,0.000,0,552,exact,0.004,552,0.002
+candle,0.431,841,1953,random,0.049,1953,0.015
+New Spawn,0.000,0,559,exact,0.004,559,0.001

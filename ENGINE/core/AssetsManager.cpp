@@ -23,6 +23,7 @@
 #include <nlohmann/json.hpp>
 #include <system_error>
 #include <vector>
+#include <unordered_set>
 #include <SDL.h>
 
 Assets::Assets(std::vector<Asset>&& loaded,
@@ -540,8 +541,12 @@ void Assets::update(const Input& input,
         player->distance_to_player_sq = 0.0f;
         for (Asset* a : active_assets) {
             if (!a || a == player) continue;
-            const double d = Range::get_distance(a, player);
-            a->distance_to_player_sq = static_cast<float>(d * d);
+            const long long dx = static_cast<long long>(a->pos.x) -
+                                 static_cast<long long>(player->pos.x);
+            const long long dy = static_cast<long long>(a->pos.y) -
+                                 static_cast<long long>(player->pos.y);
+            const long long dist_sq = dx * dx + dy * dy;
+            a->distance_to_player_sq = static_cast<float>(dist_sq);
         }
     } else {
         for (Asset* a : active_assets) {
@@ -831,22 +836,27 @@ void Assets::schedule_removal(Asset* a) {
 
 void Assets::process_removals() {
     if (removal_queue.empty()) return;
-    for (Asset* a : removal_queue) {
+    std::unordered_set<Asset*> removal_lookup(removal_queue.begin(), removal_queue.end());
 
-        auto it = std::find_if(owned_assets.begin(), owned_assets.end(),
-                               [a](const std::unique_ptr<Asset>& p){ return p.get() == a; });
-        if (it != owned_assets.end()) {
-            owned_assets.erase(it);
-        }
+    owned_assets.erase(
+        std::remove_if(owned_assets.begin(), owned_assets.end(),
+                       [&removal_lookup](const std::unique_ptr<Asset>& p) {
+                           return removal_lookup.count(p.get()) > 0;
+                       }),
+        owned_assets.end());
 
-        auto erase_ptr = [a](auto& vec) {
-            vec.erase(std::remove(vec.begin(), vec.end(), a), vec.end());
-};
-        erase_ptr(all);
-        erase_ptr(active_assets);
-        erase_ptr(filtered_active_assets);
-        erase_ptr(closest_assets);
-    }
+    auto erase_ptr = [&removal_lookup](auto& vec) {
+        vec.erase(std::remove_if(vec.begin(), vec.end(),
+                                 [&removal_lookup](auto* asset_ptr) {
+                                     return removal_lookup.count(asset_ptr) > 0;
+                                 }),
+                  vec.end());
+    };
+
+    erase_ptr(all);
+    erase_ptr(active_assets);
+    erase_ptr(filtered_active_assets);
+    erase_ptr(closest_assets);
 
     if (dev_controls_ && dev_controls_->is_enabled()) {
         dev_controls_->clear_selection();
