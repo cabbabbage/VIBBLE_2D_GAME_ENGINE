@@ -2,7 +2,7 @@
 
 namespace animation_editor {
 
-inline constexpr int kPanelPadding = 16;
+inline constexpr int kPanelPadding = 10;
 
 }  // namespace animation_editor
 
