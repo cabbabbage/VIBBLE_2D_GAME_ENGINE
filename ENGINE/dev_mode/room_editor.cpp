@@ -294,6 +294,8 @@ void RoomEditor::update_ui(const Input& input) {
     // legacy floating panel removed
 
     update_area_editor_focus();
+
+    room_config_was_visible_ = config_visible_now;
 }
 
 bool RoomEditor::handle_sdl_event(const SDL_Event& event) {
@@ -730,8 +732,6 @@ void RoomEditor::regenerate_room_from_template(Room* source_room) {
             assets_->update_closest_assets(assets_->player, 3);
         }
     }
-
-    room_config_was_visible_ = config_visible_now;
 }
 
 void RoomEditor::begin_area_edit_for_selected_asset(const std::string& area_name) {
