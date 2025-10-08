@@ -227,7 +227,7 @@ void LabBombController::enter_pursue(Asset* target) {
     state_ = State::Pursuing;
     current_target_ = target;
     const auto path = controller_paths::pursue_path(self_, target);
-    self_->anim_->move(path, controller_utils::controller_visit_threshold(self_));
+    self_->anim_->move(path, 20);
 }
 
 bool LabBombController::trigger_explosion() {
@@ -239,6 +239,8 @@ bool LabBombController::trigger_explosion() {
     }
     state_ = State::Detonated;
     current_target_ = nullptr;
+    pending_deletion_ = false;
+    detonation_animation_.clear();
 
     const auto has_animation = [&](const std::string& name) {
         return self_->info && self_->info->animations.find(name) != self_->info->animations.end();
@@ -247,6 +249,8 @@ bool LabBombController::trigger_explosion() {
     const auto play_animation = [&](const std::string& name) {
         self_->anim_->set_animation_now(name);
         self_->anim_->move({}, controller_utils::controller_visit_threshold(self_));
+        detonation_animation_ = name;
+        pending_deletion_ = true;
     };
 
     if (has_animation("explode")) {
@@ -298,7 +302,14 @@ bool LabBombController::is_player_inside_trigger() const {
 }
 
 void LabBombController::update(const Input&) {
-    if (!self_ || !self_->anim_) {
+    if (!self_) {
+        return;
+    }
+    if (pending_deletion_) {
+        process_pending_deletion();
+        return;
+    }
+    if (!self_->anim_) {
         return;
     }
     if (spent_) {
@@ -354,6 +365,53 @@ void LabBombController::update(const Input&) {
             self_->Delete();
         }
     }
+}
+
+void LabBombController::process_pending_deletion() {
+    if (!pending_deletion_) {
+        return;
+    }
+    if (!self_) {
+        pending_deletion_ = false;
+        detonation_animation_.clear();
+        return;
+    }
+    if (should_wait_for_explosion_animation()) {
+        return;
+    }
+    pending_deletion_ = false;
+    detonation_animation_.clear();
+    if (!self_->dead) {
+        self_->Delete();
+    }
+}
+
+bool LabBombController::should_wait_for_explosion_animation() const {
+    if (!self_) {
+        return false;
+    }
+    if (!pending_deletion_) {
+        return false;
+    }
+    if (!self_->anim_ || !self_->info) {
+        return false;
+    }
+    if (detonation_animation_.empty()) {
+        return false;
+    }
+    if (self_->get_current_animation() != detonation_animation_) {
+        return false;
+    }
+    if (self_->is_current_animation_looping()) {
+        return false;
+    }
+    if (!self_->is_current_animation_last_frame()) {
+        return true;
+    }
+    if (self_->is_current_animation_locked_in_progress()) {
+        return true;
+    }
+    return false;
 }
 
 void LabBombController::start_pursuit() {

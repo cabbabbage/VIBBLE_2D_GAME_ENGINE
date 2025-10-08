@@ -497,7 +497,7 @@
           },
           "anchor_relative_to_center": true,
           "kind": "Trigger",
-          "name": "attack_area",
+          "name": "attack_trigger",
           "points": [
             {
               "x": -608,

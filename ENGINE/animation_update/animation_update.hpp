@@ -36,6 +36,7 @@ private:
     SDL_Point bottom_middle(SDL_Point pos) const;
     bool point_in_impassable(SDL_Point pt, const Asset* ignored) const;
     bool path_blocked(SDL_Point from, SDL_Point to, const Asset* ignored) const;
+    bool attempt_unstick(SDL_Point from, SDL_Point to);
 
 private:
     friend class StridePlayer;

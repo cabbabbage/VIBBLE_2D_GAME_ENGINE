@@ -3,6 +3,8 @@
 
 #include "asset/asset_controller.hpp"
 
+#include <string>
+
 class Assets;
 class Asset;
 class Input;
@@ -27,6 +29,8 @@ private:
     bool ensure_registration();
     bool is_player_inside_trigger() const;
     bool is_in_owning_room() const;
+    void process_pending_deletion();
+    bool should_wait_for_explosion_animation() const;
 
     Assets* assets_ = nullptr;
     Asset* self_ = nullptr;
@@ -35,6 +39,8 @@ private:
     int idle_ratio_ = 5;
     bool registered_ = false;
     bool spent_ = false;
+    bool pending_deletion_ = false;
+    std::string detonation_animation_;
 };
 
 #endif

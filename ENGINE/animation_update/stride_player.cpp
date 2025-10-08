@@ -71,6 +71,7 @@ bool StridePlayer::tick(AnimationUpdate& up, Plan& plan,
     SDL_Point to{ from.x + delta.x, from.y + delta.y };
 
     if ((delta.x != 0 || delta.y != 0) && up.path_blocked(from, to, self)) {
+        up.attempt_unstick(from, to);
         abort_plan();
         return false;
     }
