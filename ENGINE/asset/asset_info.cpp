@@ -106,12 +106,7 @@ AssetInfo::AssetInfo(const std::string &asset_folder_name)
                         smooth_scaling = !(filter == "nearest" || filter == "point" || filter == "none");
                 }
         }
-        int scaled_canvas_w = static_cast<int>(original_canvas_width * scale_factor);
-        int scaled_canvas_h = static_cast<int>(original_canvas_height * scale_factor);
-	int offset_x = (scaled_canvas_w - 0) / 2;
-	int offset_y = (scaled_canvas_h - 0);
-        load_areas(data);
-	load_children(data);
+        load_children(data);
 	try {
 		if (data.contains("custom_controller_key") && data["custom_controller_key"].is_string()) {
 			custom_controller_key = data["custom_controller_key"].get<std::string>();
@@ -136,7 +131,16 @@ AssetInfo::~AssetInfo() {
 }
 
 void AssetInfo::loadAnimations(SDL_Renderer *renderer) {
-	AnimationLoader::load(*this, renderer);
+        AnimationLoader::load(*this, renderer);
+
+        const bool has_canvas = original_canvas_width > 0 && original_canvas_height > 0;
+        if (!has_canvas) {
+                areas.clear();
+                return;
+        }
+
+        load_areas(info_json_);
+        AnimationLoader::get_area_textures(*this, renderer);
 }
 
 void AssetInfo::load_base_properties(const nlohmann::json &data) {

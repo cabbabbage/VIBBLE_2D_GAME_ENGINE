@@ -47,8 +47,8 @@ class AssetInfo {
     int min_distance_all;
     float scale_factor;
     bool smooth_scaling = true;
-    int original_canvas_width;
-    int original_canvas_height;
+    int original_canvas_width = 0;
+    int original_canvas_height = 0;
     bool flipable;
     std::vector<std::string> tags;
     std::vector<std::string> anti_tags;
