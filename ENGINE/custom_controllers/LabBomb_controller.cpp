@@ -8,6 +8,7 @@
 #include "utils/range_util.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <random>
 #include <string>
 #include <unordered_map>
@@ -315,9 +316,17 @@ void LabBombController::update(const Input&) {
     if (state_ != State::Pursuing || current_target_ != player) {
         enter_pursue(player);
     }
-    const double distance = Range::get_distance(self_, player);
-    constexpr double activation_radius = 50.0;
-    if (distance <= activation_radius) {
+    constexpr int activation_radius = 50;
+    const long long activation_radius_sq = static_cast<long long>(activation_radius) * activation_radius;
+    const long long distance_sq = Range::distance_sq(self_, player);
+
+    bool in_activation_range = distance_sq <= activation_radius_sq;
+    if (!in_activation_range) {
+        const double distance = Range::get_distance(self_, player);
+        in_activation_range = std::isfinite(distance) && distance <= static_cast<double>(activation_radius);
+    }
+
+    if (in_activation_range) {
         trigger_explosion();
         mark_spent();
         state->notify_bomb_spent(this);
