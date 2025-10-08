@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "dev_mode/widgets.hpp"
+#include "frame_editor/FrameMovementEditor.hpp"
 
 class AssetInfo;
 class Input;
@@ -20,7 +21,6 @@ class PreviewProvider;
 class CroppingService;
 class AsyncTaskQueue;
 class AudioImporter;
-class FrameMovementEditor;
 
 class AnimationEditorWindow {
   public:
