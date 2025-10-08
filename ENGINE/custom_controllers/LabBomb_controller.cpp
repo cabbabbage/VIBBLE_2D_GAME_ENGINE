@@ -192,7 +192,7 @@ bool LabBombController::ensure_registration() {
     if (!self_ || self_->owning_room_name().empty()) {
         return false;
     }
-    if (self_->owning_room_name() != "lab_room") {
+    if (self_->owning_room_name() != "room_lab") {
         return false;
     }
     RoomState& state = ensure_room_state(self_->owning_room_name());
@@ -316,7 +316,7 @@ void LabBombController::update(const Input&) {
         enter_pursue(player);
     }
     const double distance = Range::get_distance(self_, player);
-    constexpr double activation_radius = 10.0;
+    constexpr double activation_radius = 50.0;
     if (distance <= activation_radius) {
         trigger_explosion();
         mark_spent();
