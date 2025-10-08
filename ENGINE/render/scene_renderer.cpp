@@ -18,7 +18,7 @@
 #include <initializer_list>
 #include <cstdint>
 
-static constexpr SDL_Color SLATE_COLOR = {69, 101, 74, 255};
+static constexpr SDL_Color BACKGROUND_CLEAR_COLOR = {0, 0, 0, 255};
 static constexpr float MIN_VISIBLE_SCREEN_RATIO = 0.015f;
 
 namespace {
@@ -307,7 +307,7 @@ void SceneRenderer::render() {
     // Always render into the scene target so ray pass can read pixels
     SDL_SetRenderTarget(renderer_, scene_target_tex_);
     SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND);
-    SDL_SetRenderDrawColor(renderer_, SLATE_COLOR.r, SLATE_COLOR.g, SLATE_COLOR.b, 255);
+    SDL_SetRenderDrawColor(renderer_, BACKGROUND_CLEAR_COLOR.r, BACKGROUND_CLEAR_COLOR.g, BACKGROUND_CLEAR_COLOR.b, 255);
     SDL_RenderClear(renderer_);
 
     const auto& camera_state = assets_->getView();
@@ -457,9 +457,6 @@ void SceneRenderer::render() {
     // Present
     SDL_SetRenderTarget(renderer_, nullptr);
     SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND);
-    SDL_SetRenderDrawColor(renderer_, SLATE_COLOR.r, SLATE_COLOR.g, SLATE_COLOR.b, 255);
-    SDL_RenderClear(renderer_);
-
     SDL_SetTextureBlendMode(scene_target_tex_, SDL_BLENDMODE_BLEND);
     SDL_SetTextureAlphaMod(scene_target_tex_, 255);
     SDL_Rect dst{ 0, 0, screen_width_, screen_height_ };
