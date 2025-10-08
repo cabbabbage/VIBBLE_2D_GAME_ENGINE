@@ -1,8 +1,5 @@
 #pragma once
 #include <SDL.h>
-#include <memory>
-#include <vector>
-#include "render/gaussian_blur.hpp"
 #include "light_rays.hpp" // reuse LightRaysParams + BrightnessMetric
 
 class Asset;
@@ -25,7 +22,6 @@ public:
 
 private:
     SDL_Renderer* renderer_ = nullptr;
-    std::unique_ptr<GaussianBlurHelper> blur_helper_;
     bool enabled_ = true;
 
     // optional post-blur on the rays texture
@@ -33,13 +29,6 @@ private:
     float blur_mix_ = 0.f;
 
     LightRaysParams params_{}; // same knobs as full-screen pass
-
-    // helpers
-    SDL_Texture* capture_light_to_rt_(SDL_Texture* src, int w, int h);
-    SDL_Texture* build_rays_from_light_(SDL_Texture* light_tex,
-                                        int light_w, int light_h,
-                                        float& out_avg_brightness);
-
     static inline uint8_t clamp_u8_(float v) {
         if (v <= 0.f) return 0;
         if (v >= 255.f) return 255;
