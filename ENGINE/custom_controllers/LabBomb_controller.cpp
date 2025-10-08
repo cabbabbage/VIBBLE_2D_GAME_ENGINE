@@ -230,17 +230,37 @@ void LabBombController::enter_pursue(Asset* target) {
     self_->anim_->move(path, controller_utils::controller_visit_threshold(self_));
 }
 
-void LabBombController::trigger_explosion() {
+bool LabBombController::trigger_explosion() {
     if (!self_ || !self_->anim_) {
-        return;
+        return false;
     }
     if (state_ == State::Detonated) {
-        return;
+        return true;
     }
     state_ = State::Detonated;
     current_target_ = nullptr;
-    self_->anim_->set_animation_now("explosion");
-    self_->anim_->move({}, controller_utils::controller_visit_threshold(self_));
+
+    const auto has_animation = [&](const std::string& name) {
+        return self_->info && self_->info->animations.find(name) != self_->info->animations.end();
+    };
+
+    const auto play_animation = [&](const std::string& name) {
+        self_->anim_->set_animation_now(name);
+        self_->anim_->move({}, controller_utils::controller_visit_threshold(self_));
+    };
+
+    if (has_animation("explode")) {
+        play_animation("explode");
+        return true;
+    }
+
+    if (has_animation("explosion")) {
+        play_animation("explosion");
+        return true;
+    }
+
+    self_->Delete();
+    return false;
 }
 
 bool LabBombController::is_in_owning_room() const {
@@ -327,9 +347,12 @@ void LabBombController::update(const Input&) {
     }
 
     if (in_activation_range) {
-        trigger_explosion();
+        const bool exploded = trigger_explosion();
         mark_spent();
         state->notify_bomb_spent(this);
+        if (!exploded && self_ && !self_->dead) {
+            self_->Delete();
+        }
     }
 }
 

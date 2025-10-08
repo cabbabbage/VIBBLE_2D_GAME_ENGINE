@@ -203,3 +203,53 @@ TEST_CASE("Room area serialization round-trip and kind validation") {
     auto bad_kind = RoomAreaSerialization::infer_kind_from_entry(bad_meta, "other", "misc");
     CHECK_FALSE(RoomAreaSerialization::is_supported_kind(bad_kind));
 }
+
+TEST_CASE("Legacy room anchors default to room center when resolved") {
+    const SDL_Point default_anchor{4000, 6000};
+    nlohmann::json entry = {
+        {"anchor", { {"x", 13397}, {"y", 10096} }},
+        {"points", nlohmann::json::array({
+            nlohmann::json::object({ {"x", -10}, {"y", -10} })
+        })}
+    };
+
+    auto data = RoomAreaSerialization::resolve_anchor(
+        entry, default_anchor, RoomAreaSerialization::Kind::Trigger);
+
+    CHECK(data.relative_to_center);
+    CHECK_EQ(data.world.x, default_anchor.x);
+    CHECK_EQ(data.world.y, default_anchor.y);
+    CHECK_EQ(data.relative_offset.x, 0);
+    CHECK_EQ(data.relative_offset.y, 0);
+
+    RoomAreaSerialization::write_anchor(entry, data, RoomAreaSerialization::Kind::Trigger);
+    REQUIRE(entry.contains("anchor_relative_to_center"));
+    CHECK(entry["anchor_relative_to_center"].get<bool>());
+    CHECK_EQ(entry["anchor"].value("x", -1), 0);
+    CHECK_EQ(entry["anchor"].value("y", -1), 0);
+}
+
+TEST_CASE("Relative room anchor offsets are preserved") {
+    const SDL_Point default_anchor{100, 200};
+    nlohmann::json entry = {
+        {"anchor", { {"x", 12}, {"y", -8} }},
+        {"anchor_relative_to_center", true},
+        {"points", nlohmann::json::array({
+            nlohmann::json::object({ {"x", 5}, {"y", 9} })
+        })}
+    };
+
+    auto data = RoomAreaSerialization::resolve_anchor(
+        entry, default_anchor, RoomAreaSerialization::Kind::Spawn);
+
+    CHECK(data.relative_to_center);
+    CHECK_EQ(data.world.x, default_anchor.x + 12);
+    CHECK_EQ(data.world.y, default_anchor.y - 8);
+    CHECK_EQ(data.relative_offset.x, 12);
+    CHECK_EQ(data.relative_offset.y, -8);
+
+    RoomAreaSerialization::write_anchor(entry, data, RoomAreaSerialization::Kind::Spawn);
+    CHECK_EQ(entry["anchor"].value("x", 0), 12);
+    CHECK_EQ(entry["anchor"].value("y", 0), -8);
+    CHECK(entry["anchor_relative_to_center"].get<bool>());
+}

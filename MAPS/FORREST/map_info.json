@@ -134,23 +134,11 @@
     },
     {
       "level": 1,
-      "max_rooms": 3,
+      "max_rooms": 1,
       "min_rooms": 1,
       "name": "layer_1",
-      "radius": 3709,
+      "radius": 2440,
       "rooms": [
-        {
-          "max_instances": 1,
-          "min_instances": 0,
-          "name": "bar",
-          "required_children": []
-        },
-        {
-          "max_instances": 1,
-          "min_instances": 0,
-          "name": "garden",
-          "required_children": []
-        },
         {
           "max_instances": 1,
           "min_instances": 1,
@@ -158,29 +146,6 @@
           "required_children": []
         }
       ]
-    },
-    {
-      "level": 2,
-      "max_rooms": 8,
-      "min_rooms": 3,
-      "name": "layer_2",
-      "radius": 7060,
-      "rooms": [
-        {
-          "max_instances": 8,
-          "min_instances": 3,
-          "name": "bar",
-          "required_children": []
-        }
-      ]
-    },
-    {
-      "level": 3,
-      "max_rooms": 0,
-      "min_rooms": 0,
-      "name": "layer_3",
-      "radius": 8908,
-      "rooms": []
     }
   ],
   "map_light_data": {
@@ -238,7 +203,7 @@
     "update_interval": 9
   },
   "map_name": "FORREST",
-  "map_radius": 9708.0,
+  "map_radius": 4280.0,
   "rooms_data": {
     "bar": {
       "edge_smoothness": 101,
@@ -527,31 +492,40 @@
       "areas": [
         {
           "anchor": {
-            "x": 13397,
-            "y": 10096
+            "x": 0,
+            "y": 0
           },
+          "anchor_relative_to_center": true,
           "kind": "Trigger",
-          "name": "attack_trigger",
+          "name": "trigger_area",
           "points": [
             {
-              "x": -259,
-              "y": -655
+              "x": -166,
+              "y": -692
             },
             {
-              "x": -813,
-              "y": -366
+              "x": -525,
+              "y": -444
             },
             {
-              "x": -262,
-              "y": 316
+              "x": -562,
+              "y": -154
             },
             {
-              "x": 476,
-              "y": 152
+              "x": -187,
+              "y": 352
             },
             {
-              "x": 560,
-              "y": -649
+              "x": 509,
+              "y": 122
+            },
+            {
+              "x": 709,
+              "y": -543
+            },
+            {
+              "x": 344,
+              "y": -691
             }
           ],
           "type": "trigger"
@@ -606,9 +580,10 @@
       "areas": [
         {
           "anchor": {
-            "x": 9704,
-            "y": 9709
+            "x": 0,
+            "y": 0
           },
+          "anchor_relative_to_center": true,
           "kind": "Trigger",
           "name": "trigger_area",
           "points": [
@@ -629,9 +604,10 @@
         },
         {
           "anchor": {
-            "x": 9713,
-            "y": 9706
+            "x": 0,
+            "y": 0
           },
+          "anchor_relative_to_center": true,
           "kind": "Trigger",
           "name": "trigger_area_1",
           "points": [
@@ -656,9 +632,10 @@
         },
         {
           "anchor": {
-            "x": 9707,
-            "y": 9706
+            "x": 0,
+            "y": 0
           },
+          "anchor_relative_to_center": true,
           "kind": "Trigger",
           "name": "trigger_area_2",
           "points": [
@@ -679,9 +656,10 @@
         },
         {
           "anchor": {
-            "x": 9708,
-            "y": 9705
+            "x": 0,
+            "y": 0
           },
+          "anchor_relative_to_center": true,
           "kind": "Trigger",
           "name": "trigger_area_3",
           "points": [
@@ -706,7 +684,7 @@
       "geometry": "Circle",
       "height_max": 3612,
       "height_min": 3612,
-      "inherits_map_assets": false,
+      "inherits_map_assets": true,
       "is_boss": false,
       "is_spawn": true,
       "max_height": 3612,
@@ -739,44 +717,6 @@
           "position": "Exact",
           "priority": 0,
           "spawn_id": "spn-6d19915360f2"
-        },
-        {
-          "candidates": [
-            {
-              "chance": 200,
-              "name": "null"
-            }
-          ],
-          "chance_denominator": 0,
-          "check_overlap": false,
-          "display_name": "Barrel",
-          "dx": -152,
-          "dy": -424,
-          "enforce_spacing": false,
-          "max_number": 1,
-          "min_number": 1,
-          "origional_height": 3612,
-          "origional_width": 3612,
-          "position": "Exact",
-          "priority": 1,
-          "spawn_id": "spn-af3a3a5858e6"
-        },
-        {
-          "candidates": [
-            {
-              "chance": 200,
-              "name": "null"
-            }
-          ],
-          "chance_denominator": 100,
-          "check_overlap": false,
-          "display_name": "New Spawn",
-          "enforce_spacing": false,
-          "max_number": 1,
-          "min_number": 1,
-          "position": "Exact",
-          "priority": 2,
-          "spawn_id": "spn-713c834ac232"
         }
       ],
       "tags": {
