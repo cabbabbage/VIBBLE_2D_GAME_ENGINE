@@ -58,9 +58,11 @@ Asset::Asset(std::shared_ptr<AssetInfo> info_,
                 try {
                         is_shaded = info->is_shaded;
                         generate_rays = info->generate_rays;
+                        ray_strength = info->ray_strength;
                 } catch (...) {
                         is_shaded = false;
                         generate_rays = false;
+                        ray_strength = 0;
                 }
         }
         std::string start_id = info->start_animation.empty() ? std::string{"default"} : info->start_animation;
@@ -114,6 +116,7 @@ Asset::Asset(const Asset& o)
 , flipped(o.flipped)
 , render_player_light(o.render_player_light)
 , generate_rays(o.generate_rays)
+, ray_strength(o.ray_strength)
 , alpha_percentage(o.alpha_percentage)
 , distance_to_player_sq(o.distance_to_player_sq)
 , distance_from_camera(o.distance_from_camera)
@@ -162,6 +165,7 @@ Asset& Asset::operator=(const Asset& o) {
 	flipped              = o.flipped;
         render_player_light  = o.render_player_light;
         generate_rays        = o.generate_rays;
+        ray_strength         = o.ray_strength;
 	alpha_percentage     = o.alpha_percentage;
         distance_to_player_sq = o.distance_to_player_sq;
         distance_from_camera = o.distance_from_camera;

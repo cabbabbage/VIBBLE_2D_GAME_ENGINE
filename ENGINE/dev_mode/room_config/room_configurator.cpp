@@ -1142,6 +1142,8 @@ void RoomConfigurator::render(SDL_Renderer* r) const {
     container_.render(r, last_screen_w_, last_screen_h_);
 }
 
+const SDL_Rect& RoomConfigurator::panel_rect() const { return container_.panel_rect(); }
+
 const nlohmann::json& RoomConfigurator::live_room_json() const {
     if (room_) {
         return room_->assets_data();

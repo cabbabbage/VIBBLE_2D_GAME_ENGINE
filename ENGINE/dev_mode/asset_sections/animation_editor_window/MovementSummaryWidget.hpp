@@ -41,6 +41,7 @@ class MovementSummaryWidget {
     float total_dx_ = 0.0f;
     float total_dy_ = 0.0f;
     std::string totals_signature_;
+    bool show_edit_button_ = true;
 };
 
 }  // namespace animation_editor

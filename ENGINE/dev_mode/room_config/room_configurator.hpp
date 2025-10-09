@@ -56,6 +56,8 @@ public:
     bool handle_event(const SDL_Event& e);
     void render(SDL_Renderer* r) const;
 
+    const SDL_Rect& panel_rect() const;
+
     nlohmann::json build_json() const;
     bool is_point_inside(int x, int y) const;
 

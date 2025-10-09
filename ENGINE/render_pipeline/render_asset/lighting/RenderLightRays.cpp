@@ -101,14 +101,22 @@ inline uint8_t clamp_u8(float v) {
     return static_cast<uint8_t>(v + 0.5f);
 }
 
+inline int asset_ray_strength(const Asset& asset) {
+    if (asset.info) {
+        return std::clamp(asset.info->ray_strength, 0, 100);
+    }
+    return std::clamp(asset.ray_strength, 0, 100);
+}
+
 } // namespace
 
 bool RenderLightRays::supports(const Asset& asset) const {
-    return asset.generate_rays;
+    return asset.generate_rays && asset_ray_strength(asset) > 0;
 }
 
 SDL_Texture* RenderLightRays::run(SDL_Renderer* renderer, const Asset& asset, StageContext& context) {
-    if (!renderer || !asset.generate_rays) {
+    const int ray_strength = asset_ray_strength(asset);
+    if (!renderer || !asset.generate_rays || ray_strength <= 0) {
         return nullptr;
     }
 
@@ -256,7 +264,8 @@ SDL_Texture* RenderLightRays::run(SDL_Renderer* renderer, const Asset& asset, St
     const float map_opacity = context.main_light_alpha() / 255.f;
     const float map_intensity_boost = 1.f + (1.f - map_opacity) * 0.85f;
     const float darkness_boost = 1.f + std::clamp(0.55f - avg_brightness, 0.f, 0.55f) * 1.35f;
-    const float exposure_base = params.exposure * map_intensity_boost * darkness_boost;
+    const float strength_scale = static_cast<float>(ray_strength) / 100.f;
+    const float exposure_base = params.exposure * map_intensity_boost * darkness_boost * strength_scale;
 
     for (int y = 0; y < dh; ++y) {
         for (int x = 0; x < dw; ++x) {

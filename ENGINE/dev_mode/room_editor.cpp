@@ -1799,7 +1799,7 @@ void RoomEditor::update_spawn_group_list_anchor() {
 SDL_Point RoomEditor::spawn_groups_anchor_point() const {
     SDL_Rect reference = room_config_bounds_;
     if (room_cfg_ui_) {
-        const SDL_Rect rect = room_cfg_ui_->rect();
+        const SDL_Rect rect = room_cfg_ui_->panel_rect();
         if (rect.w > 0 || rect.h > 0) {
             reference = rect;
         }

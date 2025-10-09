@@ -458,6 +458,8 @@ void AssetInfo::load_base_properties(const nlohmann::json &data) {
         flipable = data.value("can_invert", false);
         generate_rays = data.value("generate_rays", false);
         info_json_["generate_rays"] = generate_rays;
+        ray_strength = std::clamp(data.value("ray_strength", 0), 0, 100);
+        info_json_["ray_strength"] = ray_strength;
 }
 
 bool AssetInfo::has_tag(const std::string &tag) const {
@@ -599,7 +601,13 @@ void AssetInfo::set_passable(bool v) {
         if (v)
         add_tag("passable");
         else
-	remove_tag("passable");
+        remove_tag("passable");
+}
+
+void AssetInfo::set_ray_strength(int strength) {
+        int clamped = std::clamp(strength, 0, 100);
+        ray_strength = clamped;
+        info_json_["ray_strength"] = ray_strength;
 }
 
 Area* AssetInfo::find_area(const std::string& name) {
