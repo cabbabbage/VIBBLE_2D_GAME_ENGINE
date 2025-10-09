@@ -6,6 +6,7 @@
             "flipped_source": false,
             "has_custom_animation_controller": false,
             "locked": true,
+            "loop": false,
             "movement": [
                 [
                     0,
@@ -184,6 +185,7 @@
             "flipped_source": false,
             "has_custom_animation_controller": false,
             "locked": true,
+            "loop": false,
             "movement": [
                 [
                     0,
@@ -268,6 +270,7 @@
             "flipped_source": false,
             "has_custom_animation_controller": false,
             "locked": true,
+            "loop": false,
             "movement": [
                 [
                     0,
@@ -311,7 +314,7 @@
                 "name": null,
                 "path": "explosion"
             },
-            "speed_factor": -5
+            "speed_factor": -3
         },
         "forward": {
             "custom_animation_controller_hpp_path": "",
@@ -319,6 +322,7 @@
             "flipped_source": false,
             "has_custom_animation_controller": false,
             "locked": true,
+            "loop": false,
             "movement": [
                 [
                     0,
@@ -496,6 +500,7 @@
             "flipped_source": true,
             "has_custom_animation_controller": false,
             "locked": true,
+            "loop": false,
             "movement": [
                 [
                     0,
@@ -673,6 +678,7 @@
             "flipped_source": false,
             "has_custom_animation_controller": false,
             "locked": true,
+            "loop": false,
             "movement": [
                 [
                     0,
@@ -887,7 +893,7 @@
     "size_settings": {
         "scale_percentage": 17.0
     },
-    "start": "",
+    "start": "backward",
     "tags": [
         "bluff",
         "bone",

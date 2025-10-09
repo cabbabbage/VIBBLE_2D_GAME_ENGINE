@@ -8,6 +8,8 @@
 #include "audio/audio_engine.hpp"
 #include "dev_mode/dev_controls.hpp"
 #include "render/scene_renderer.hpp"
+#include "render/light_rays.hpp"
+#include "render/light_rays_config.hpp"
 #include "map_generation/room.hpp"
 #include "utils/area.hpp"
 #include "utils/input.hpp"
@@ -16,6 +18,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <cctype>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -75,6 +78,41 @@ Assets::Assets(std::vector<Asset>&& loaded,
 
     update_filtered_active_assets();
 
+}
+
+std::vector<const Room::NamedArea*> Assets::current_room_trigger_areas() const {
+    std::vector<const Room::NamedArea*> result;
+    if (!current_room_) {
+        return result;
+    }
+
+    const auto is_trigger_string = [](const std::string& value) {
+        if (value.empty()) {
+            return false;
+        }
+        std::string lowered;
+        lowered.reserve(value.size());
+        for (unsigned char ch : value) {
+            lowered.push_back(static_cast<char>(std::tolower(ch)));
+        }
+        if (lowered == "trigger") {
+            return true;
+        }
+        return lowered.find("trigger") != std::string::npos;
+    };
+
+    for (const auto& entry : current_room_->areas) {
+        if (!entry.area) {
+            continue;
+        }
+        if (is_trigger_string(entry.kind) ||
+            is_trigger_string(entry.type) ||
+            is_trigger_string(entry.name)) {
+            result.push_back(&entry);
+        }
+    }
+
+    return result;
 }
 
 void Assets::load_map_info_json() {
@@ -223,6 +261,7 @@ void Assets::hydrate_map_info_sections() {
     ensure_object("map_assets_data");
     ensure_object("map_boundary_data");
     ensure_object("map_light_data");
+    ensure_object("light_rays_params");
 
     {
         nlohmann::json& L = map_info_json_["map_light_data"];
@@ -246,6 +285,54 @@ void Assets::hydrate_map_info_sections() {
             D["keys"] = nlohmann::json::array();
             D["keys"].push_back(nlohmann::json::array({ 0.0, D["base_color"] }));
         }
+        auto clamp_component = [](int v) { return std::max(0, std::min(255, v)); };
+        if (!D.contains("screen_light") || !D["screen_light"].is_object()) {
+            D["screen_light"] = nlohmann::json::object();
+        }
+        nlohmann::json& screen = D["screen_light"];
+        if (!screen.contains("color") || !screen["color"].is_array() || screen["color"].size() < 3) {
+            screen["color"] = nlohmann::json::array({255, 255, 255});
+        } else {
+            for (std::size_t i = 0; i < 3; ++i) {
+                if (i >= screen["color"].size()) {
+                    screen["color"].push_back(255);
+                } else {
+                    try {
+                        int comp = clamp_component(screen["color"][i].get<int>());
+                        screen["color"][i] = comp;
+                    } catch (...) {
+                        screen["color"][i] = 255;
+                    }
+                }
+            }
+            while (screen["color"].size() > 3) {
+                screen["color"].erase(screen["color"].size() - 1);
+            }
+        }
+        int map_min = D.value("min_opacity", 0);
+        int map_max = D.value("max_opacity", 255);
+        map_min = std::max(0, std::min(255, map_min));
+        map_max = std::max(0, std::min(255, map_max));
+        if (map_min > map_max) std::swap(map_min, map_max);
+        if (!screen.contains("min_opacity")) screen["min_opacity"] = map_min;
+        if (!screen.contains("max_opacity")) screen["max_opacity"] = map_max;
+        try {
+            int smin = clamp_component(screen["min_opacity"].get<int>());
+            int smax = clamp_component(screen["max_opacity"].get<int>());
+            smin = std::max(map_min, std::min(map_max, smin));
+            smax = std::max(map_min, std::min(map_max, smax));
+            if (smin > smax) std::swap(smin, smax);
+            screen["min_opacity"] = smin;
+            screen["max_opacity"] = smax;
+        } catch (...) {
+            screen["min_opacity"] = map_min;
+            screen["max_opacity"] = map_max;
+        }
+    }
+    {
+        nlohmann::json& R = map_info_json_["light_rays_params"];
+        LightRaysConfig config = LightRaysConfig::from_json(R);
+        R = config.to_json();
     }
     ensure_object("rooms_data");
     ensure_object("trails_data");
@@ -287,10 +374,13 @@ void Assets::apply_map_light_config() {
         return;
     }
     auto it = map_info_json_.find("map_light_data");
-    if (it == map_info_json_.end() || !it->is_object()) {
-        return;
+    if (it != map_info_json_.end() && it->is_object()) {
+        scene->apply_map_light_config(*it);
     }
-    scene->apply_map_light_config(*it);
+    auto rays_it = map_info_json_.find("light_rays_params");
+    if (rays_it != map_info_json_.end() && rays_it->is_object()) {
+        scene->apply_light_rays_config(*rays_it);
+    }
 }
 
 bool Assets::on_map_light_changed() {
@@ -819,7 +909,14 @@ void Assets::rebuild_active_assets_if_needed() {
     }
 
     active_assets.clear();
+    active_light_assets_.clear();
     active_asset_list_->full_list(active_assets);
+    active_light_assets_.reserve(active_assets.size());
+    for (Asset* asset : active_assets) {
+        if (asset && asset->info && asset->info->is_light_source) {
+            active_light_assets_.push_back(asset);
+        }
+    }
     active_assets_dirty_ = false;
 }
 
@@ -832,33 +929,40 @@ void Assets::schedule_removal(Asset* a) {
 }
 
 void Assets::process_removals() {
-    if (removal_queue.empty()) return;
+    if (removal_queue.empty()) {
+        return;
+    }
+
     std::unordered_set<Asset*> removal_lookup(removal_queue.begin(), removal_queue.end());
 
-    owned_assets.erase(
-        std::remove_if(owned_assets.begin(), owned_assets.end(),
-                       [&removal_lookup](const std::unique_ptr<Asset>& p) {
-                           return removal_lookup.count(p.get()) > 0;
-                       }),
-        owned_assets.end());
+    for (auto it = owned_assets.begin(); it != owned_assets.end();) {
+        if (removal_lookup.count(it->get()) > 0) {
+            it = owned_assets.erase(it);
+        } else {
+            ++it;
+        }
+    }
 
-    auto erase_ptr = [&removal_lookup](auto& vec) {
-        vec.erase(std::remove_if(vec.begin(), vec.end(),
-                                 [&removal_lookup](auto* asset_ptr) {
-                                     return removal_lookup.count(asset_ptr) > 0;
-                                 }),
-                  vec.end());
+    auto erase_ptrs = [&removal_lookup](auto& vec) {
+        vec.erase(
+            std::remove_if(vec.begin(), vec.end(),
+                           [&removal_lookup](auto* candidate) {
+                               return removal_lookup.count(candidate) > 0;
+                           }),
+            vec.end());
     };
 
-    erase_ptr(all);
-    erase_ptr(active_assets);
-    erase_ptr(filtered_active_assets);
-    erase_ptr(closest_assets);
+    erase_ptrs(all);
+    erase_ptrs(active_assets);
+    erase_ptrs(active_light_assets_);
+    erase_ptrs(filtered_active_assets);
+    erase_ptrs(closest_assets);
 
     if (dev_controls_ && dev_controls_->is_enabled()) {
         dev_controls_->clear_selection();
         dev_controls_->set_active_assets(filtered_active_assets);
     }
+
     removal_queue.clear();
 
     initialize_active_assets(camera_.get_screen_center());
@@ -875,6 +979,17 @@ void Assets::render_overlays(SDL_Renderer* renderer) {
 
 SDL_Renderer* Assets::renderer() const {
     return scene ? scene->get_renderer() : nullptr;
+}
+
+Global_Light_Source* Assets::map_light_source() {
+    if (!scene) {
+        return nullptr;
+    }
+    return &scene->map_light_source();
+}
+
+const Global_Light_Source* Assets::map_light_source() const {
+    return const_cast<Assets*>(this)->map_light_source();
 }
 
 void Assets::toggle_asset_library() {

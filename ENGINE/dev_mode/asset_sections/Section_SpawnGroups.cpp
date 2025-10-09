@@ -6,8 +6,8 @@
 
 #include <nlohmann/json.hpp>
 
-#include "dev_mode/spawn_group_list.hpp"
-#include "dev_mode/spawn_group_utils.hpp"
+#include "dev_mode/room_config/spawn_group_list.hpp"
+#include "dev_mode/room_config/spawn_group_utils.hpp"
 #include "dev_mode/dm_styles.hpp"
 #include "dev_mode/widgets.hpp"
 #include "asset/asset_info.hpp"

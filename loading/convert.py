@@ -8,14 +8,14 @@ BORDER_CROP = 2  # pixels to crop from each edge
 CONFIG = {
     "radius": 0,              # 0 = auto (~10% of min dimension), or set explicit px
     "palette_colors": 10,     # number of colors for cartoon look
-    "smooth_passes": 2,       # increase for extra smooth/flat areas
-    "blur_radius": 0.8,       # per-pass Gaussian blur radius
+    "smooth_passes": 2,       # increase for extra smoothing passes
+    "blur_radius": 0.0,       # retained for compatibility; no blur applied
     "contrast": 1.1,          # 1.0 = no change
     "brightness": 1.2,        # ~+20%
     "saturation": 1.1,        # ~+10%
     "outline_strength": 0.35, # 0..1 (lower = subtler)
     "outline_threshold": 40,  # higher keeps only major edges
-    "outline_soften": 1.0     # blur the edge mask a bit to avoid jaggies
+    "outline_soften": 1.0     # retained for compatibility; no blur applied
 }
 # ============================
 
@@ -27,10 +27,9 @@ def rounded_mask(size, radius):
     draw.rounded_rectangle((0, 0, w, h), radius=radius, fill=255)
     return mask
 
-def smooth_image(rgb, passes=2, blur_radius=0.8):
-    """Gentle smoothing: blur + mode filter to flatten colors."""
+def smooth_image(rgb, passes=2, blur_radius=0.0):
+    """Gentle smoothing without Gaussian blur."""
     for _ in range(max(1, passes)):
-        rgb = rgb.filter(ImageFilter.GaussianBlur(blur_radius))
         rgb = rgb.filter(ImageFilter.ModeFilter(size=3))
     return rgb
 
@@ -46,8 +45,7 @@ def ink_outline(rgb, strength=0.35, threshold=40, soften=1.0):
     inv = ImageOps.invert(edges)
     inv = ImageEnhance.Contrast(inv).enhance(1.3)
     mask = inv.point(lambda p: 255 if p > threshold else 0).convert("L")
-    if soften > 0:
-        mask = mask.filter(ImageFilter.GaussianBlur(soften))
+    # Edge softening blur removed
     if strength <= 0:
         return rgb
     if strength < 1.0:
@@ -60,7 +58,7 @@ def ink_outline(rgb, strength=0.35, threshold=40, soften=1.0):
 def cartoonize(rgb,
                palette_colors=10,
                smooth_passes=2,
-               blur_radius=0.8,
+               blur_radius=0.0,
                contrast=1.1,
                brightness=1.2,
                saturation=1.1,

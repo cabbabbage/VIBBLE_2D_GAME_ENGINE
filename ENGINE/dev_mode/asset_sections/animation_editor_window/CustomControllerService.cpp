@@ -290,7 +290,8 @@ void CustomControllerService::write_controller_files(const std::filesystem::path
 
         cpp << "#include \"" << base_name << ".hpp\"\n\n";
         cpp << "#include \"asset/Asset.hpp\"\n";
-        cpp << "#include \"core/AssetsManager.hpp\"\n\n";
+        cpp << "#include \"core/AssetsManager.hpp\"\n";
+        cpp << "#include \"map_generation/room.hpp\"\n\n";
         cpp << class_name << "::" << class_name << "(Assets* assets, Asset* self)\n";
         cpp << "    : assets_(assets), self_(self) {\n";
         cpp << "}\n\n";
@@ -298,6 +299,13 @@ void CustomControllerService::write_controller_files(const std::filesystem::path
         cpp << "    if (!self_) {\n";
         cpp << "        return;\n";
         cpp << "    }\n";
+        cpp << "\n";
+        cpp << "    const Room* current_room = assets_ ? assets_->current_room() : nullptr;\n";
+        cpp << "    const auto trigger_areas = assets_\n";
+        cpp << "        ? assets_->current_room_trigger_areas()\n";
+        cpp << "        : std::vector<const Room::NamedArea*>{};\n";
+        cpp << "    (void)current_room;\n";
+        cpp << "    (void)trigger_areas;\n";
         cpp << "}\n";
     }
 }

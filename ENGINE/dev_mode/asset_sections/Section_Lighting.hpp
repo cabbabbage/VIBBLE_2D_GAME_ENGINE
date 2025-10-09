@@ -33,6 +33,7 @@ public:
         s_sh_radius_    = std::make_unique<DMSlider>("Radius (px)", 0, 2000, shading_light_.radius);
         s_sh_x_radius_  = std::make_unique<DMSlider>("X Orbit Radius (px)", 0, 2000, shading_light_.x_radius);
         s_sh_y_radius_  = std::make_unique<DMSlider>("Y Orbit Radius (px)", 0, 2000, shading_light_.y_radius);
+        s_sh_apex_bias_ = std::make_unique<DMSlider>("Apex Velocity Bias", 0, 100, shading_light_.apex_speed_bias);
         s_sh_offset_x_  = std::make_unique<DMSlider>("X Offset (px)", -2000, 2000, shading_light_.offset_x);
         s_sh_offset_y_  = std::make_unique<DMSlider>("Y Offset (px)", -2000, 2000, shading_light_.offset_y);
         s_sh_falloff_   = std::make_unique<DMSlider>("Falloff (%)", 0, 100, shading_light_.fall_off);
@@ -87,6 +88,7 @@ public:
             place(s_sh_radius_,    DMSlider::height());
             place(s_sh_x_radius_,  DMSlider::height());
             place(s_sh_y_radius_,  DMSlider::height());
+            place(s_sh_apex_bias_, DMSlider::height());
             place(s_sh_offset_x_,  DMSlider::height());
             place(s_sh_offset_y_,  DMSlider::height());
             place(s_sh_falloff_,   DMSlider::height());
@@ -138,6 +140,7 @@ public:
             if (s_sh_radius_    && s_sh_radius_->handle_event(e))    { shading_light_.radius = s_sh_radius_->value(); changed = true; }
             if (s_sh_x_radius_  && s_sh_x_radius_->handle_event(e))  { shading_light_.x_radius = s_sh_x_radius_->value(); changed = true; }
             if (s_sh_y_radius_  && s_sh_y_radius_->handle_event(e))  { shading_light_.y_radius = s_sh_y_radius_->value(); changed = true; }
+            if (s_sh_apex_bias_ && s_sh_apex_bias_->handle_event(e)) { shading_light_.apex_speed_bias = s_sh_apex_bias_->value(); changed = true; }
             if (s_sh_offset_x_  && s_sh_offset_x_->handle_event(e))  { shading_light_.offset_x = s_sh_offset_x_->value(); changed = true; }
             if (s_sh_offset_y_  && s_sh_offset_y_->handle_event(e))  { shading_light_.offset_y = s_sh_offset_y_->value(); changed = true; }
             if (s_sh_falloff_   && s_sh_falloff_->handle_event(e))   { shading_light_.fall_off = s_sh_falloff_->value(); changed = true; }
@@ -233,6 +236,7 @@ public:
             if (s_sh_radius_)    s_sh_radius_->render(r);
             if (s_sh_x_radius_)  s_sh_x_radius_->render(r);
             if (s_sh_y_radius_)  s_sh_y_radius_->render(r);
+            if (s_sh_apex_bias_) s_sh_apex_bias_->render(r);
             if (s_sh_offset_x_)  s_sh_offset_x_->render(r);
             if (s_sh_offset_y_)  s_sh_offset_y_->render(r);
             if (s_sh_falloff_)   s_sh_falloff_->render(r);
@@ -295,6 +299,7 @@ private:
     std::unique_ptr<DMSlider> s_sh_radius_;
     std::unique_ptr<DMSlider> s_sh_x_radius_;
     std::unique_ptr<DMSlider> s_sh_y_radius_;
+    std::unique_ptr<DMSlider> s_sh_apex_bias_;
     std::unique_ptr<DMSlider> s_sh_offset_x_;
     std::unique_ptr<DMSlider> s_sh_offset_y_;
     std::unique_ptr<DMSlider> s_sh_falloff_;

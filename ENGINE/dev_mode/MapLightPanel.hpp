@@ -11,6 +11,9 @@
 
 #include <nlohmann/json.hpp>
 
+struct OrbitSettings;
+struct ScreenLightSettings;
+
 class MapLightPanel : public DockableCollapsible {
 public:
     using SaveCallback = std::function<bool()>;
@@ -42,9 +45,53 @@ private:
     void update_save_status(bool success) const;
 
     void build_ui();
+    void apply_changes();
+    void rebuild_rows();
+    void update_section_header_labels();
     void sync_ui_from_json();
     void sync_json_from_ui();
     nlohmann::json& ensure_light();
+    nlohmann::json& ensure_screen_light(nlohmann::json& light);
+
+    struct OrbitSettings {
+        int update_interval = 10;
+        int orbit_radius = 0;
+        int min_opacity = 0;
+        int max_opacity = 255;
+        bool operator==(const OrbitSettings& other) const {
+            return update_interval == other.update_interval &&
+                   orbit_radius == other.orbit_radius &&
+                   min_opacity == other.min_opacity &&
+                   max_opacity == other.max_opacity;
+        }
+    };
+
+    struct ScreenLightSettings {
+        int r = 255;
+        int g = 255;
+        int b = 255;
+        int min_opacity = 0;
+        int max_opacity = 255;
+        bool operator==(const ScreenLightSettings& other) const {
+            return r == other.r &&
+                   g == other.g &&
+                   b == other.b &&
+                   min_opacity == other.min_opacity &&
+                   max_opacity == other.max_opacity;
+        }
+    };
+
+    OrbitSettings sanitize_orbit_settings(const OrbitSettings& raw) const;
+    ScreenLightSettings sanitize_screen_settings(const ScreenLightSettings& raw,
+                                                 const OrbitSettings& orbit) const;
+    OrbitSettings current_orbit_settings_from_ui() const;
+    ScreenLightSettings current_screen_settings_from_ui() const;
+    void set_orbit_sliders(const OrbitSettings& orbit);
+    void set_screen_sliders(const ScreenLightSettings& screen);
+    void write_orbit_settings_to_json(const OrbitSettings& orbit);
+    void write_screen_settings_to_json(const ScreenLightSettings& screen);
+    void apply_immediate_settings();
+    bool commit_light_changes();
 
     void ensure_keys_array();
     void clamp_key_index();
@@ -61,9 +108,17 @@ private:
 
     nlohmann::json* map_info_ = nullptr;
     SaveCallback on_save_;
+    nlohmann::json editing_light_{};
 
     int current_key_index_ = 0;
 
+    std::unique_ptr<DMButton> update_btn_;
+    std::unique_ptr<DMButton> orbit_section_btn_;
+    std::unique_ptr<DMButton> screen_section_btn_;
+    std::unique_ptr<DMButton> texture_section_btn_;
+    bool orbit_section_collapsed_ = false;
+    bool screen_section_collapsed_ = false;
+    bool texture_section_collapsed_ = false;
     std::unique_ptr<DMSlider> radius_;
     std::unique_ptr<DMSlider> intensity_;
     std::unique_ptr<DMSlider> orbit_radius_;
@@ -72,6 +127,12 @@ private:
     std::unique_ptr<DMSlider> falloff_;
     std::unique_ptr<DMSlider> min_opacity_;
     std::unique_ptr<DMSlider> max_opacity_;
+
+    std::unique_ptr<DMSlider> screen_r_;
+    std::unique_ptr<DMSlider> screen_g_;
+    std::unique_ptr<DMSlider> screen_b_;
+    std::unique_ptr<DMSlider> screen_min_opacity_;
+    std::unique_ptr<DMSlider> screen_max_opacity_;
 
     std::unique_ptr<DMSlider> base_r_;
     std::unique_ptr<DMSlider> base_g_;
@@ -97,5 +158,12 @@ private:
     class WarningLabel;
     WarningLabel* warning_label_ = nullptr;
 
+    void toggle_orbit_section();
+    void toggle_screen_section();
+    void toggle_texture_section();
+
     bool needs_sync_to_json_ = false;
+
+    OrbitSettings last_applied_orbit_{};
+    ScreenLightSettings last_applied_screen_{};
 };

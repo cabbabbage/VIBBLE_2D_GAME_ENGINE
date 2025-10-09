@@ -115,6 +115,7 @@ class AssetInfo {
     const std::unordered_set<std::string>& anti_tag_lookup() const { return anti_tag_lookup_; }
 
     bool remove_area(const std::string& name);
+    bool rename_area(const std::string& old_name, const std::string& new_name);
 
     std::vector<std::string> animation_names() const;
 

@@ -31,6 +31,7 @@
 #include "core/AssetsManager.hpp"
 #include "asset/Asset.hpp"
 #include "render/camera.hpp"
+#include "render/global_light_source.hpp"
 #include "utils/light_source.hpp"
 #include "search_assets.hpp"
 
@@ -777,6 +778,64 @@ void AssetInfoUI::render_world_overlay(SDL_Renderer* r, const camera& cam) const
         SDL_Point p = cam.compute_render_effects(SDL_Point{wx, wy}, 0.0f, 0.0f).screen_position;
         SDL_RenderDrawPoint(r, p.x, p.y);
     }
+
+    Uint8 prev_r = 0, prev_g = 0, prev_b = 0, prev_a = 0;
+    SDL_GetRenderDrawColor(r, &prev_r, &prev_g, &prev_b, &prev_a);
+    SDL_BlendMode prev_mode = SDL_BLENDMODE_NONE;
+    SDL_GetRenderDrawBlendMode(r, &prev_mode);
+    SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
+
+    const Global_Light_Source* global_light = assets_ ? assets_->map_light_source() : nullptr;
+    SDL_Point screen_center_map = cam.get_screen_center();
+    SDL_Point screen_center = cam.map_to_screen(screen_center_map);
+
+    bool drew_indicator = false;
+    if (global_light && global_light->get_texture()) {
+        SDL_Point light_pos = global_light->get_position();
+        SDL_Point end = cam.map_to_screen(light_pos);
+        SDL_SetRenderDrawColor(r, 220, 32, 32, 230);
+        SDL_RenderDrawLine(r, screen_center.x, screen_center.y, end.x, end.y);
+        SDL_Rect tip{end.x - 4, end.y - 4, 8, 8};
+        SDL_RenderFillRect(r, &tip);
+        drew_indicator = true;
+    }
+
+    if (!drew_indicator) {
+        SDL_SetRenderDrawColor(r, 220, 32, 32, 230);
+        SDL_RenderDrawLine(r, screen_center.x - 6, screen_center.y - 6,
+                                      screen_center.x + 6, screen_center.y + 6);
+        SDL_RenderDrawLine(r, screen_center.x - 6, screen_center.y + 6,
+                                      screen_center.x + 6, screen_center.y - 6);
+    }
+
+    const double center_x = static_cast<double>(target_asset_->pos.x + base_offset_x);
+    const double center_y = static_cast<double>(target_asset_->pos.y + light.offset_y);
+    SDL_Point orbit_center_screen = cam.compute_render_effects(
+        SDL_Point{static_cast<int>(std::lround(center_x)), static_cast<int>(std::lround(center_y))},
+        0.0f, 0.0f).screen_position;
+
+    double angle = global_light ? static_cast<double>(global_light->get_angle()) : 0.0;
+    double dir_x = std::cos(angle) * static_cast<double>(light.x_radius);
+    if (flipped) dir_x = -dir_x;
+    double dir_y = -std::sin(angle) * static_cast<double>(light.y_radius);
+    double length = std::hypot(dir_x, dir_y);
+    if (length > 0.0) {
+        double max_length = 60.0;
+        double scale = std::min(1.0, max_length / length);
+        SDL_Point orbit_end_screen = cam.compute_render_effects(
+            SDL_Point{
+                static_cast<int>(std::lround(center_x + dir_x * scale)),
+                static_cast<int>(std::lround(center_y + dir_y * scale))
+            },
+            0.0f, 0.0f).screen_position;
+        SDL_Color orbit_color = DMStyles::AccentButton().hover_bg;
+        SDL_SetRenderDrawColor(r, orbit_color.r, orbit_color.g, orbit_color.b, 255);
+        SDL_RenderDrawLine(r, orbit_center_screen.x, orbit_center_screen.y,
+                                orbit_end_screen.x, orbit_end_screen.y);
+    }
+
+    SDL_SetRenderDrawColor(r, prev_r, prev_g, prev_b, prev_a);
+    SDL_SetRenderDrawBlendMode(r, prev_mode);
 }
 
 void AssetInfoUI::refresh_target_asset_scale() {

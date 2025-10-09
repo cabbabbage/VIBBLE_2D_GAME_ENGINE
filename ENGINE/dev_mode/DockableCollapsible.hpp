@@ -64,7 +64,7 @@ public:
 
     const SDL_Rect& rect() const { return rect_; }
     int height() const { return rect_.h; }
-    bool is_point_inside(int x, int y) const;
+    virtual bool is_point_inside(int x, int y) const;
 
     void set_on_close(std::function<void()> cb) { on_close_ = std::move(cb); }
 

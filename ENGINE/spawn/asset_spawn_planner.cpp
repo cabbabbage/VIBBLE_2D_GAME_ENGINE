@@ -7,7 +7,7 @@
 #include <unordered_set>
 #include <cctype>
 #include <iomanip>
-#include "dev_mode/spawn_group_utils.hpp"
+#include "dev_mode/room_config/spawn_group_utils.hpp"
 namespace fs = std::filesystem;
 
 AssetSpawnPlanner::AssetSpawnPlanner(const std::vector<nlohmann::json>& json_sources,

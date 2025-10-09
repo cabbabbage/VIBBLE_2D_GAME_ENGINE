@@ -97,7 +97,7 @@ public:
     void open(nlohmann::json& groups, std::function<void(const nlohmann::json&)> on_save);
     void request_open_spawn_group(const std::string& id, int x, int y);
     void set_anchor(int x, int y);
-
+    void close_asset_search();
 private:
     class CandidateList;
     struct EntryRow;
@@ -123,10 +123,12 @@ private:
     void ensure_asset_search();
     void request_asset_search_open(EntryRow& row, std::function<void(const std::string&)> callback = {});
     void open_asset_search(EntryRow& row, std::function<void(const std::string&)> callback = {});
-    void close_asset_search();
+
     void ensure_area_panel();
     void open_area_panel(EntryRow& row);
     void close_area_panel();
+
+    nlohmann::json* resolve_entry(EntryRow& row);
 
     bool default_floatable_mode_ = true;
     bool embedded_mode_ = false;

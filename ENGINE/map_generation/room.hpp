@@ -26,11 +26,22 @@ Kind infer_kind_from_strings(const std::string& kind_value,
                              const std::string& name_hint);
 std::string to_string(Kind kind);
 bool is_supported_kind(Kind kind);
+struct AnchorData {
+        SDL_Point world{0, 0};
+        SDL_Point relative_offset{0, 0};
+        bool      relative_to_center = false;
+};
 SDL_Point choose_anchor(Kind kind,
                         SDL_Point default_anchor,
                         const std::vector<SDL_Point>& world_points);
 std::vector<SDL_Point> decode_points(const nlohmann::json& entry, SDL_Point anchor);
 nlohmann::json encode_points(const std::vector<SDL_Point>& points, SDL_Point anchor);
+AnchorData resolve_anchor(const nlohmann::json& entry,
+                          SDL_Point default_anchor,
+                          Kind kind);
+void write_anchor(nlohmann::json& entry,
+                  const AnchorData& anchor,
+                  Kind kind);
 }
 
 class Room {
@@ -67,6 +78,7 @@ class Room {
     nlohmann::json& assets_data();
     void save_assets_json() const;
     bool is_spawn_room() const;
+    void rename(const std::string& new_name, nlohmann::json& map_info_json);
 
     // Room-level named areas (e.g., trigger/spawning areas) parsed from assets JSON
     struct NamedArea {
@@ -80,6 +92,7 @@ class Room {
     // Find a named room area by name; returns nullptr if not found
     Area* find_area(const std::string& name);
     bool remove_area(const std::string& name);
+    bool rename_area(const std::string& old_name, const std::string& new_name);
     void upsert_named_area(const Area& area, const std::string& type);
 
         private:

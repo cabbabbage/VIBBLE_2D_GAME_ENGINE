@@ -150,8 +150,8 @@ void AnimationInspectorPanel::set_source_status_callback(StatusCallback callback
     apply_dependencies();
 }
 
-void AnimationInspectorPanel::set_movement_edit_callback(MovementEditCallback callback) {
-    movement_edit_callback_ = std::move(callback);
+void AnimationInspectorPanel::set_frame_edit_callback(FrameEditCallback callback) {
+    frame_edit_callback_ = std::move(callback);
     apply_dependencies();
 }
 
@@ -503,7 +503,7 @@ void AnimationInspectorPanel::apply_dependencies() {
     }
 
     if (movement_summary_) {
-        movement_summary_->set_edit_callback(movement_edit_callback_);
+        movement_summary_->set_edit_callback(frame_edit_callback_);
     }
 
     if (audio_panel_) {

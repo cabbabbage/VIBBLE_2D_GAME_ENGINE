@@ -50,6 +50,7 @@ Asset::Asset(std::shared_ptr<AssetInfo> info_,
 , depth(depth_)
 , spawn_id(spawn_id_)
 , spawn_method(spawn_method_)
+, owning_room_name_(spawn_area.get_name())
 {
 	set_flip();
 	set_z_index();
@@ -130,6 +131,7 @@ Asset::Asset(const Asset& o)
 , assets_(o.assets_)
 , spawn_id(o.spawn_id)
 , spawn_method(o.spawn_method)
+, owning_room_name_(o.owning_room_name_)
 , controller_(nullptr)
 , anim_(nullptr)
 , last_scaled_texture_(nullptr)
@@ -176,6 +178,7 @@ Asset& Asset::operator=(const Asset& o) {
         assets_              = o.assets_;
         spawn_id             = o.spawn_id;
         spawn_method         = o.spawn_method;
+        owning_room_name_    = o.owning_room_name_;
         controller_.reset();
         anim_.reset();
         last_scaled_texture_      = nullptr;
@@ -351,6 +354,10 @@ void Asset::set_assets(Assets* a) {
     impassable_naighbors = nullptr;
     neighbor_lists_initialized_ = false;
     last_neighbor_origin_ = SDL_Point{ std::numeric_limits<int>::min(), std::numeric_limits<int>::min() };
+}
+
+void Asset::set_owning_room_name(std::string name) {
+    owning_room_name_ = std::move(name);
 }
 
 AssetList* Asset::get_neighbors_list() { return neighbors.get(); }

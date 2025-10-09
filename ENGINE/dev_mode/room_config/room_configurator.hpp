@@ -5,48 +5,56 @@
 #include <memory>
 #include <string>
 #include <vector>
+
 #include <nlohmann/json.hpp>
 
 #include "DockableCollapsible.hpp"
 #include "spawn_group_list.hpp"
+
+class Input;
+class Room;
+class TagEditorWidget;
+class SpawnGroupList;
 class DropdownWidget;
 class RangeSliderWidget;
 class SliderWidget;
 class CheckboxWidget;
-class ButtonWidget;
-class Input;
-class DMDropdown;
+class TextBoxWidget;
 class DMRangeSlider;
+class DMSlider;
 class DMCheckbox;
 class DMTextBox;
-class DMButton;
-class TextBoxWidget;
-class Room;
-class Widget;
-class TagEditorWidget;
+class DMDropdown;
 
 class RoomConfigurator : public DockableCollapsible {
 public:
     RoomConfigurator();
-    ~RoomConfigurator();
+    ~RoomConfigurator() override;
+
     void set_bounds(const SDL_Rect& bounds);
+
     void open(const nlohmann::json& room_data);
     void open(nlohmann::json& room_data,
               std::function<void()> on_change,
               std::function<void(const nlohmann::json&, const SpawnGroupList::ChangeSummary&)> on_entry_change = {},
               SpawnGroupList::ConfigureEntryCallback configure_entry = {});
     void open(Room* room);
+
     bool refresh_spawn_groups(const nlohmann::json& room_data);
     bool refresh_spawn_groups(nlohmann::json& room_data);
     bool refresh_spawn_groups(Room* room);
+
     void close();
     bool visible() const;
     bool any_panel_visible() const;
-    void update(const Input& input, int screen_w, int screen_h);
-    bool handle_event(const SDL_Event& e);
-    void render(SDL_Renderer* r) const;
+
+    void update(const Input& input, int screen_w, int screen_h) override;
+    bool handle_event(const SDL_Event& e) override;
+    void render(SDL_Renderer* r) const override;
+
     nlohmann::json build_json() const;
-    bool is_point_inside(int x, int y) const;
+    bool is_point_inside(int x, int y) const override;
+
     void set_spawn_group_callbacks(std::function<void(const std::string&)> on_edit,
                                    std::function<void(const std::string&)> on_duplicate,
                                    std::function<void(const std::string&)> on_delete,
@@ -58,77 +66,78 @@ public:
     void set_on_room_renamed(std::function<std::string(const std::string&, const std::string&)> cb) {
         on_room_renamed_ = std::move(cb);
     }
+
 private:
-    void load_from_json(const nlohmann::json& data);
+    struct State;
+
     void apply_bounds_if_needed();
     void undock_from_sidebar(const SDL_Point& grab_point);
-    void rebuild_rows(bool reload_spawn_list = true);
-    void open_from_data(const nlohmann::json& data, bool same_room = false);
-    std::string selected_geometry() const;
-    bool should_rebuild_with(const nlohmann::json& data) const;
+    bool apply_room_data(const nlohmann::json& data);
+    void rebuild_rows();
+    void rebuild_spawn_rows(Rows& rows);
     void load_tags_from_json(const nlohmann::json& data);
     void write_tags_to_json(nlohmann::json& object) const;
-    nlohmann::json* resolve_spawn_groups_array();
-    bool mutate_spawn_groups(const std::function<bool(nlohmann::json&)>& mutator);
-    void synchronize_spawn_groups_snapshot(const nlohmann::json& groups);
-    void handle_spawn_groups_changed(bool structure_changed);
-    bool add_spawn_group_local();
-    bool duplicate_spawn_group_local(const std::string& id);
-    bool delete_spawn_group_local(const std::string& id);
-    bool move_spawn_group_local(const std::string& id, int direction);
+    std::string selected_geometry() const;
+    bool sync_state_from_widgets();
+    void ensure_spawn_list();
+    const nlohmann::json& live_room_json() const;
+    nlohmann::json& live_room_json();
+
     static constexpr int kMaxFloatingHeight = 640;
-    SDL_Rect bounds_{0,0,0,0};
-    SDL_Rect applied_bounds_{-1,-1,0,0};
+
+    SDL_Rect bounds_{0, 0, 0, 0};
+    SDL_Rect applied_bounds_{-1, -1, 0, 0};
     SDL_Point preferred_position_{32, 32};
-    bool has_custom_position_ = false;
     SDL_Point floating_position_{32, 32};
+    bool has_custom_position_ = false;
     bool docked_mode_ = false;
-    std::vector<std::string> room_geom_options_;
+
+    std::unique_ptr<State> state_;
+
     Room* room_ = nullptr;
     nlohmann::json* external_room_json_ = nullptr;
     nlohmann::json loaded_json_;
-    std::string room_name_;
-    int room_w_min_ = 1500;
-    int room_w_max_ = 10000;
-    int room_h_min_ = 1500;
-    int room_h_max_ = 10000;
-    int room_radius_min_ = 0;
-    int room_radius_max_ = 0;
-    int room_geom_ = 0;
     bool spawn_groups_from_assets_ = false;
-    bool room_is_spawn_ = false;
-    bool room_is_boss_ = false;
-    bool room_inherits_assets_ = false;
     bool is_trail_context_ = false;
-    int edge_smoothness_ = 2;
-    int curvyness_ = 2;
-    std::unique_ptr<DMRangeSlider> room_w_slider_;
-    std::unique_ptr<RangeSliderWidget> room_w_slider_w_;
-    std::unique_ptr<DMRangeSlider> room_h_slider_;
-    std::unique_ptr<RangeSliderWidget> room_h_slider_w_;
-    std::unique_ptr<DMRangeSlider> room_radius_slider_;
-    std::unique_ptr<RangeSliderWidget> room_radius_slider_w_;
-    std::unique_ptr<Widget> room_radius_label_;
-    std::unique_ptr<Widget> room_w_label_;
-    std::unique_ptr<Widget> room_h_label_;
-    std::unique_ptr<DMDropdown> room_geom_dd_;
-    std::unique_ptr<DropdownWidget> room_geom_dd_w_;
-    std::unique_ptr<DMSlider> edge_smoothness_sl_;
-    std::unique_ptr<SliderWidget> edge_smoothness_w_;
-    std::unique_ptr<DMSlider> curvyness_sl_;
-    std::unique_ptr<SliderWidget> curvyness_w_;
-    std::unique_ptr<DMCheckbox> room_spawn_cb_;
-    std::unique_ptr<CheckboxWidget> room_spawn_cb_w_;
-    std::unique_ptr<DMCheckbox> room_boss_cb_;
-    std::unique_ptr<CheckboxWidget> room_boss_cb_w_;
-    std::unique_ptr<DMCheckbox> room_inherit_cb_;
-    std::unique_ptr<CheckboxWidget> room_inherit_cb_w_;
-    std::unique_ptr<DMTextBox> room_name_lbl_;
-    std::unique_ptr<TextBoxWidget> room_name_lbl_w_;
-    std::unique_ptr<TagEditorWidget> room_tags_editor_;
+
+    std::vector<std::string> geometry_options_;
+
     std::vector<std::string> room_tags_;
     std::vector<std::string> room_anti_tags_;
     bool tags_dirty_ = false;
+
+    std::unique_ptr<DMTextBox> name_box_;
+    std::unique_ptr<TextBoxWidget> name_widget_;
+    std::unique_ptr<DMDropdown> geometry_dropdown_;
+    std::unique_ptr<DropdownWidget> geometry_widget_;
+    std::unique_ptr<DMRangeSlider> width_slider_;
+    std::unique_ptr<RangeSliderWidget> width_widget_;
+    std::unique_ptr<DMRangeSlider> height_slider_;
+    std::unique_ptr<RangeSliderWidget> height_widget_;
+    std::unique_ptr<DMSlider> radius_slider_;
+    std::unique_ptr<SliderWidget> radius_widget_;
+    std::unique_ptr<DMSlider> edge_slider_;
+    std::unique_ptr<SliderWidget> edge_widget_;
+    std::unique_ptr<DMSlider> curvy_slider_;
+    std::unique_ptr<SliderWidget> curvy_widget_;
+    std::unique_ptr<DMCheckbox> spawn_checkbox_;
+    std::unique_ptr<CheckboxWidget> spawn_widget_;
+    std::unique_ptr<DMCheckbox> boss_checkbox_;
+    std::unique_ptr<CheckboxWidget> boss_widget_;
+    std::unique_ptr<DMCheckbox> inherit_checkbox_;
+    std::unique_ptr<CheckboxWidget> inherit_widget_;
+    std::unique_ptr<TagEditorWidget> tag_editor_;
+
+    std::unique_ptr<Widget> room_section_label_;
+    std::unique_ptr<Widget> geometry_label_;
+    std::unique_ptr<Widget> dimensions_label_;
+    std::unique_ptr<Widget> toggles_label_;
+    std::unique_ptr<Widget> spawn_label_;
+    std::unique_ptr<Widget> tags_label_;
+    std::unique_ptr<Widget> empty_spawn_label_;
+
+    std::unique_ptr<SpawnGroupList> spawn_list_;
+
     std::function<void(const std::string&)> on_spawn_edit_;
     std::function<void(const std::string&)> on_spawn_duplicate_;
     std::function<void(const std::string&)> on_spawn_delete_;
@@ -140,11 +149,5 @@ private:
     std::function<void(const nlohmann::json&, const SpawnGroupList::ChangeSummary&)> on_external_spawn_entry_change_;
     SpawnGroupList::ConfigureEntryCallback external_configure_entry_;
     std::function<std::string(const std::string&, const std::string&)> on_room_renamed_;
-    std::unique_ptr<Widget> spawn_groups_label_;
-    std::unique_ptr<class SpawnGroupList> spawn_list_;
-    nlohmann::json* bound_spawn_groups_array_ = nullptr;
-    const nlohmann::json* bound_readonly_groups_array_ = nullptr;
-    std::unique_ptr<DMButton> add_group_btn_;
-    std::unique_ptr<ButtonWidget> add_group_btn_w_;
-    std::unique_ptr<Widget> empty_spawn_label_;
 };
+

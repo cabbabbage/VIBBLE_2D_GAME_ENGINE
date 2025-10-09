@@ -778,6 +778,7 @@ void AssetInfo::set_lighting(bool is_shaded_,
         shade_entry["offset_x"] = base_off_x;
         shade_entry["offset_y"] = base_off_y;
         shade_entry["factor"] = shading_factor;
+        shade_entry["apex_speed_bias"] = shading.apex_speed_bias;
     } else {
         shade_entry["light_intensity"] = 0;
         shade_entry["radius"] = 0;
@@ -787,6 +788,7 @@ void AssetInfo::set_lighting(bool is_shaded_,
         shade_entry["offset_x"] = 0;
         shade_entry["offset_y"] = 0;
         shade_entry["factor"] = shading_factor;
+        shade_entry["apex_speed_bias"] = shading.apex_speed_bias;
     }
     arr.push_back(shade_entry);
 
@@ -828,6 +830,50 @@ bool AssetInfo::remove_area(const std::string& name) {
 
     }
     return removed;
+}
+
+bool AssetInfo::rename_area(const std::string& old_name, const std::string& new_name) {
+    if (old_name.empty() || new_name.empty()) {
+        return false;
+    }
+    if (old_name == new_name) {
+        return true;
+    }
+
+    auto conflict = std::find_if(areas.begin(), areas.end(), [&](const NamedArea& na) {
+        return na.name == new_name;
+    });
+    if (conflict != areas.end()) {
+        return false;
+    }
+
+    bool renamed = false;
+    for (auto& na : areas) {
+        if (na.name == old_name) {
+            na.name = new_name;
+            if (na.area) {
+                na.area->set_name(new_name);
+            }
+            renamed = true;
+        }
+    }
+    if (!renamed) {
+        return false;
+    }
+
+    try {
+        if (info_json_.contains("areas") && info_json_["areas"].is_array()) {
+            for (auto& entry : info_json_["areas"]) {
+                if (entry.is_object() && entry.value("name", std::string{}) == old_name) {
+                    entry["name"] = new_name;
+                }
+            }
+        }
+    } catch (...) {
+        // Ignore JSON update errors; in-memory data already updated.
+    }
+
+    return true;
 }
 
 std::vector<std::string> AssetInfo::animation_names() const {

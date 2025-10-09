@@ -8,11 +8,14 @@
 class Global_Light_Source {
 
 	public:
-    Global_Light_Source(SDL_Renderer* renderer, SDL_Point screen_center, int screen_width, SDL_Color fallback_base_color, const std::string& map_path);
+    Global_Light_Source(SDL_Renderer* renderer,
+                        SDL_Point screen_center,
+                        int screen_width,
+                        SDL_Color fallback_base_color,
+                        const std::string& map_path);
     void apply_config(const nlohmann::json& data);
     ~Global_Light_Source();
     void update();
-    void set_screen_size(SDL_Point screen_center, int screen_width);
     SDL_Point    get_position() const;
     float        get_angle() const;
     SDL_Texture* get_texture() const;
@@ -20,12 +23,15 @@ class Global_Light_Source {
     int          get_brightness() const;
     int get_cached_w() const { return cached_w_; }
     int get_cached_h() const { return cached_h_; }
+    SDL_Point    get_orbit_center() const { return center_; }
+    int          min_opacity() const { return min_opacity_; }
+    int          max_opacity() const { return max_opacity_; }
 
-	private:
+        private:
     struct KeyEntry {
         float degree;
         SDL_Color color;
-};
+    };
     bool load_from_map_light(const std::string& map_path);
     void set_defaults(int screen_width, SDL_Color fallback_base_color);
     void build_texture();
@@ -33,12 +39,14 @@ class Global_Light_Source {
     Uint8 clamp_alpha(Uint8 value) const;
     SDL_Color clamp_color_alpha(SDL_Color color) const;
     SDL_Color compute_color_from_horizon() const;
+    void      recalc_position();
 
-	private:
+        private:
     SDL_Renderer* renderer_;
     SDL_Texture*  texture_;
     SDL_Color base_color_;
     SDL_Color current_color_;
+    SDL_Point default_center_;
     SDL_Point center_;
     SDL_Point pos_;
     float angle_;

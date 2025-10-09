@@ -7,10 +7,11 @@
 #include "core/AssetsManager.hpp"
 #include "dev_mode/area_overlay_editor.hpp"
 #include "dev_mode/asset_info_ui.hpp"
+#include "dev_mode/dev_controls_persistence.hpp"
 #include "dev_mode/asset_library_ui.hpp"
-#include "dev_mode/spawn_group_utils.hpp"
+#include "room_config/spawn_group_utils.hpp"
 #include "dev_mode/full_screen_collapsible.hpp"
-#include "dev_mode/room_configurator.hpp"
+#include "room_config/room_configurator.hpp"
 #include "dev_mode/FloatingDockableManager.hpp"
 #include "dev_mode/widgets.hpp"
 #include "dm_styles.hpp"
@@ -46,6 +47,98 @@
 using devmode::spawn::ensure_spawn_groups_array;
 using devmode::spawn::find_spawn_groups_array;
 using devmode::spawn::generate_spawn_id;
+
+namespace {
+
+std::string trim_copy_room_editor(const std::string& input) {
+    auto is_space = [](unsigned char ch) { return std::isspace(ch) != 0; };
+    std::string result = input;
+    result.erase(result.begin(), std::find_if(result.begin(), result.end(), [&](unsigned char ch) {
+        return !is_space(ch);
+    }));
+    result.erase(std::find_if(result.rbegin(), result.rend(), [&](unsigned char ch) {
+        return !is_space(ch);
+    }).base(), result.end());
+    return result;
+}
+
+std::string sanitize_room_key_local(const std::string& input) {
+    std::string out;
+    out.reserve(input.size());
+    bool last_underscore = false;
+    for (char ch : input) {
+        unsigned char uch = static_cast<unsigned char>(ch);
+        if (std::isalnum(uch)) {
+            out.push_back(static_cast<char>(std::tolower(uch)));
+            last_underscore = false;
+        } else if (ch == '_' || ch == '-') {
+            if (!last_underscore && !out.empty()) {
+                out.push_back('_');
+                last_underscore = true;
+            }
+        } else if (std::isspace(uch)) {
+            if (!last_underscore && !out.empty()) {
+                out.push_back('_');
+                last_underscore = true;
+            }
+        }
+    }
+    while (!out.empty() && out.back() == '_') {
+        out.pop_back();
+    }
+    if (out.empty()) {
+        out = "room";
+    }
+    return out;
+}
+
+std::string make_unique_room_key_excluding(const nlohmann::json& rooms_data,
+                                           const std::string& base_key,
+                                           const std::string& exclude_key) {
+    std::string base = base_key.empty() ? std::string("room") : base_key;
+    std::string candidate = base;
+    int suffix = 1;
+    while (rooms_data.is_object() && rooms_data.contains(candidate) && candidate != exclude_key) {
+        candidate = base + "_" + std::to_string(suffix++);
+    }
+    return candidate;
+}
+
+void rename_room_references_in_layers(nlohmann::json& map_info,
+                                      const std::string& old_name,
+                                      const std::string& new_name) {
+    if (old_name == new_name) {
+        return;
+    }
+    auto lit = map_info.find("map_layers");
+    if (lit == map_info.end() || !lit->is_array()) {
+        return;
+    }
+    for (auto& layer : *lit) {
+        auto rooms_it = layer.find("rooms");
+        if (rooms_it == layer.end() || !rooms_it->is_array()) {
+            continue;
+        }
+        for (auto& entry : *rooms_it) {
+            if (!entry.is_object()) {
+                continue;
+            }
+            if (entry.value("name", std::string()) == old_name) {
+                entry["name"] = new_name;
+            }
+            auto& children = entry["required_children"];
+            if (children.is_array()) {
+                for (auto& child : children) {
+                    if (child.is_string() && child.get<std::string>() == old_name) {
+                        child = new_name;
+                    }
+                }
+            }
+        }
+    }
+}
+
+} // namespace
 
 RoomEditor::RoomEditor(Assets* owner, int screen_w, int screen_h)
     : assets_(owner), screen_w_(screen_w), screen_h_(screen_h) {
@@ -1285,7 +1378,36 @@ void RoomEditor::ensure_room_configurator() {
                     respawn_spawn_group(*entry);
                 }
             });
+        room_cfg_ui_->set_on_room_renamed([this](const std::string& old_name, const std::string& desired) {
+            return this->rename_active_room(old_name, desired);
+        });
     }
+}
+
+std::string RoomEditor::rename_active_room(const std::string& old_name, const std::string& desired_name) {
+    std::string trimmed = trim_copy_room_editor(desired_name);
+    std::string base = sanitize_room_key_local(trimmed.empty() ? desired_name : trimmed);
+    if (!assets_ || !current_room_) {
+        return base.empty() ? old_name : base;
+    }
+
+    auto& map_info = assets_->map_info_json();
+    nlohmann::json& rooms_data = map_info["rooms_data"];
+    if (!rooms_data.is_object()) {
+        rooms_data = nlohmann::json::object();
+    }
+
+    std::string candidate_base = base.empty() ? (current_room_->room_name.empty() ? std::string("room") : current_room_->room_name) : base;
+    std::string final_key = make_unique_room_key_excluding(rooms_data, candidate_base, old_name);
+
+    if (final_key != current_room_->room_name) {
+        current_room_->rename(final_key, map_info);
+        rename_room_references_in_layers(map_info, old_name, final_key);
+        devmode::write_map_info_json(assets_->map_info_path(), map_info, std::cerr);
+        rebuild_room_spawn_id_cache();
+    }
+
+    return final_key;
 }
 
 void RoomEditor::ensure_spawn_group_list_ui() {

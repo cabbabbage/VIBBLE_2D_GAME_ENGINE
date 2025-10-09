@@ -1,9 +1,9 @@
 #include "map_assets_modals.hpp"
 
 #include <algorithm>
-#include "spawn_group_list.hpp"
+#include "room_config/spawn_group_list.hpp"
 #include "utils/input.hpp"
-#include "dev_mode/spawn_group_utils.hpp"
+#include "room_config/spawn_group_utils.hpp"
 
 using nlohmann::json;
 
@@ -97,6 +97,18 @@ void SingleSpawnGroupModal::open(json& map_info,
     auto& groups = (*section_)["spawn_groups"];
     if (!list_) list_ = std::make_unique<SpawnGroupList>(true);
     list_->set_screen_dimensions(screen_w_, screen_h_);
+    // Ensure the floating panel provides enough room for long lists while
+    // remaining scrollable so content is accessible on smaller displays.
+    constexpr int kPanelCellWidth   = 360;
+    constexpr int kMinVisibleHeight = 420;
+    constexpr int kHeightMargin     = 200;
+    list_->set_cell_width(kPanelCellWidth);
+    list_->set_scroll_enabled(true);
+    int visible_height = kMinVisibleHeight;
+    if (screen_h_ > 0) {
+        visible_height = std::max(kMinVisibleHeight, screen_h_ - kHeightMargin);
+    }
+    list_->set_visible_height(visible_height);
     // Open a floating SpawnGroupList panel bound to the current single-group array
     list_->open(groups, [this, default_display_name](const json& updated_array) {
         if (!this->map_info_ || !this->section_) return;
@@ -153,7 +165,9 @@ void SingleSpawnGroupModal::set_floating_stack_key(std::string key) {
 void SingleSpawnGroupModal::ensure_visible_position() {
     if (!list_) return;
     SDL_Rect rect = list_->rect();
-    if (rect.w <= 0) rect.w = 420;
+    constexpr int kPreferredWidth = 460;
+    if (rect.w <= 0) rect.w = kPreferredWidth;
+    rect.w = std::max(rect.w, kPreferredWidth);
     if (rect.h <= 0) rect.h = 540;
     const int margin = 16;
     const bool have_w = screen_w_ > 0;

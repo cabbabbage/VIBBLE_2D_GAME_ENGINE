@@ -67,6 +67,8 @@ class Asset {
     void set_camera(camera* v) { window = v; }
     void set_assets(Assets* a);
     Assets* get_assets() const { return assets_; }
+    const std::string& owning_room_name() const { return owning_room_name_; }
+    void set_owning_room_name(std::string name);
     AssetList* get_neighbors_list();
     const AssetList* get_neighbors_list() const;
     AssetList* get_impassable_naighbors();
@@ -104,6 +106,7 @@ class Asset {
     int cached_h = 0;
     std::string spawn_id;
     std::string spawn_method;
+    std::string owning_room_name_;
     std::unique_ptr<AnimationUpdate> anim_;
         private:
     friend class AnimationUpdate;

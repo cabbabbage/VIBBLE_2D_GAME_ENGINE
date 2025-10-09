@@ -6,8 +6,8 @@
 
 #include "map_layers_common.hpp"
 
-#include "room_configurator.hpp"
-#include "spawn_group_utils.hpp"
+#include "room_config/room_configurator.hpp"
+#include "room_config/spawn_group_utils.hpp"
 
 #include "widgets.hpp"
 
@@ -528,7 +528,7 @@ double room_extent_for_radius(const RoomGeometry& geom) {
 
 }
 
-std::string trim_copy_local(const std::string& input) {
+std::string trim_copy_map_layers(const std::string& input) {
 
     auto is_space = [](unsigned char ch) { return std::isspace(ch) != 0; };
 
@@ -5104,7 +5104,7 @@ std::string MapLayersPanel::create_new_room(const std::string& desired_name, boo
 
     if (!map_info_) return {};
 
-    std::string trimmed = trim_copy_local(desired_name);
+    std::string trimmed = trim_copy_map_layers(desired_name);
 
     std::string key = sanitize_room_key(trimmed);
 
@@ -5344,7 +5344,7 @@ std::string MapLayersPanel::rename_room_everywhere(const std::string& old_key, c
 
     if (old_key.empty()) return desired_key;
 
-    std::string trimmed = trim_copy_local(desired_key);
+    std::string trimmed = trim_copy_map_layers(desired_key);
 
     std::string base = sanitize_room_key(trimmed);
 

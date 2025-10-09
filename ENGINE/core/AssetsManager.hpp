@@ -19,6 +19,7 @@ class Room;
 class Input;
 class DevControls;
 class AssetInfo;
+class Global_Light_Source;
 
 class Assets {
 public:
@@ -40,6 +41,7 @@ public:
 
     const std::vector<Asset*>& getActive() const { return active_assets; }
     const std::vector<Asset*>& getFilteredActiveAssets() const;
+    const std::vector<Asset*>& getActiveLightAssets() const { return active_light_assets_; }
     std::vector<Asset*>& mutable_filtered_active_assets() { return filtered_active_assets; }
     const std::vector<Asset*>& getClosest() const { return closest_assets; }
     camera& getView() { return camera_; }
@@ -71,6 +73,10 @@ public:
 
     void set_editor_current_room(Room* room);
 
+    Room* current_room() { return current_room_; }
+    const Room* current_room() const { return current_room_; }
+    std::vector<const Room::NamedArea*> current_room_trigger_areas() const;
+
     nlohmann::json& map_info_json() { return map_info_json_; }
     const nlohmann::json& map_info_json() const { return map_info_json_; }
     const std::string& map_path() const { return map_path_; }
@@ -88,6 +94,9 @@ public:
     void update_closest_assets(Asset* player, int max_count);
     void mark_active_assets_dirty();
     void initialize_active_assets(SDL_Point center);
+
+    Global_Light_Source* map_light_source();
+    const Global_Light_Source* map_light_source() const;
 
     bool is_dev_mode() const { return dev_mode; }
 
@@ -128,6 +137,7 @@ private:
     int dy = 0;
     std::vector<Asset*> active_assets;
     std::vector<Asset*> filtered_active_assets;
+    std::vector<Asset*> active_light_assets_;
     std::vector<Asset*> closest_assets;
     std::vector<Room*> rooms_;
     Room* current_room_ = nullptr;
