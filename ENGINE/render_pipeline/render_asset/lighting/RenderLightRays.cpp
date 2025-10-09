@@ -2,8 +2,8 @@
 
 namespace render_pipeline::lighting {
 
-bool RenderLightRays::supports(const Asset&) const {
-    return false;
+bool RenderLightRays::supports(const Asset& asset) const {
+    return asset.generate_rays;
 }
 
 SDL_Texture* RenderLightRays::run(SDL_Renderer*, const Asset&, StageContext&) {

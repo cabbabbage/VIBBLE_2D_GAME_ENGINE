@@ -57,6 +57,7 @@ class AssetInfo {
     std::vector<std::string> anti_tags;
     bool is_light_source = false;
     bool moving_asset = false;
+    bool generate_rays = false;
     struct NamedArea {
         struct RenderFrame {
             int width = 0;

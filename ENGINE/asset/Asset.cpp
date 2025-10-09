@@ -55,7 +55,13 @@ Asset::Asset(std::shared_ptr<AssetInfo> info_,
 	set_flip();
 	set_z_index();
         if (info) {
-                try { is_shaded = info->is_shaded; } catch (...) { is_shaded = false; }
+                try {
+                        is_shaded = info->is_shaded;
+                        generate_rays = info->generate_rays;
+                } catch (...) {
+                        is_shaded = false;
+                        generate_rays = false;
+                }
         }
         std::string start_id = info->start_animation.empty() ? std::string{"default"} : info->start_animation;
         auto it = info->animations.find(start_id);
@@ -107,6 +113,7 @@ Asset::Asset(const Asset& o)
 , active(o.active)
 , flipped(o.flipped)
 , render_player_light(o.render_player_light)
+, generate_rays(o.generate_rays)
 , alpha_percentage(o.alpha_percentage)
 , distance_to_player_sq(o.distance_to_player_sq)
 , distance_from_camera(o.distance_from_camera)
@@ -153,7 +160,8 @@ Asset& Asset::operator=(const Asset& o) {
 	z_offset             = o.z_offset;
 	active               = o.active;
 	flipped              = o.flipped;
-	render_player_light  = o.render_player_light;
+        render_player_light  = o.render_player_light;
+        generate_rays        = o.generate_rays;
 	alpha_percentage     = o.alpha_percentage;
         distance_to_player_sq = o.distance_to_player_sq;
         distance_from_camera = o.distance_from_camera;

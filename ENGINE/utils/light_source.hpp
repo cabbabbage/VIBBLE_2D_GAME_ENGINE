@@ -18,4 +18,5 @@ struct LightSource {
         int cached_h = 0;
         SDL_Color color = {255, 255, 255, 255};
         SDL_Texture* texture = nullptr;
+        bool behind = false;
 };
