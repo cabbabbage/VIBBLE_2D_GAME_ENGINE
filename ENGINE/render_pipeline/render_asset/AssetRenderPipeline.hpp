@@ -12,7 +12,7 @@ class Asset;
 class camera;
 class Global_Light_Source;
 struct SceneLighting {
-    camera&               camera;
+    camera&               camera_view;
     Global_Light_Source&  main_light;
     Asset*                player = nullptr;
 };

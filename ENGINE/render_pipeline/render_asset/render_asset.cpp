@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <cmath>
+
 RenderAsset::RenderAsset(SDL_Renderer* renderer)
 : renderer_(renderer) {}
 
@@ -123,6 +124,3 @@ SDL_Texture* RenderAsset::texture_for_scale(Asset* asset,
 
         return current_tex ? current_tex : base_tex;
 }
-
-RenderAsset::RenderAsset(SDL_Renderer* renderer)
-: renderer_(renderer) {}
