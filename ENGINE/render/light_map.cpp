@@ -120,8 +120,11 @@ void LightMap::collect_layers(std::vector<LightEntry>& out, std::mt19937& rng) {
 
 SDL_Texture* LightMap::build_lowres_mask(const std::vector<LightEntry>& layers,
                                          int low_w, int low_h, int downscale) {
-	SDL_Texture* lowres_mask = SDL_CreateTexture(renderer_, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET, low_w, low_h);
+        SDL_Texture* lowres_mask = SDL_CreateTexture(renderer_, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET, low_w, low_h);
         SDL_SetTextureBlendMode(lowres_mask, SDL_BLENDMODE_NONE);
+#if SDL_VERSION_ATLEAST(2,0,12)
+        SDL_SetTextureScaleMode(lowres_mask, SDL_ScaleModeNearest);
+#endif
         SDL_SetRenderTarget(renderer_, lowres_mask);
         SDL_SetRenderDrawColor(renderer_, 0, 0, 0, 200);
         SDL_RenderClear(renderer_);

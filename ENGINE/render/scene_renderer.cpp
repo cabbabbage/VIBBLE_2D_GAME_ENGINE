@@ -33,9 +33,12 @@ SceneRenderer::SceneRenderer(SDL_Renderer* renderer,
   fullscreen_light_tex_(nullptr),
   render_asset_(renderer, assets->getView(), main_light_source_, assets->player)
 {
-	fullscreen_light_tex_ = SDL_CreateTexture(renderer_, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET, screen_width_, screen_height_);
+        fullscreen_light_tex_ = SDL_CreateTexture(renderer_, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET, screen_width_, screen_height_);
         if (fullscreen_light_tex_) {
                 SDL_SetTextureBlendMode(fullscreen_light_tex_, SDL_BLENDMODE_BLEND);
+#if SDL_VERSION_ATLEAST(2,0,12)
+                SDL_SetTextureScaleMode(fullscreen_light_tex_, SDL_ScaleModeNearest);
+#endif
                 update_fullscreen_light_texture();
         } else {
                 std::cerr << "[SceneRenderer] Failed to create fullscreen light texture: "

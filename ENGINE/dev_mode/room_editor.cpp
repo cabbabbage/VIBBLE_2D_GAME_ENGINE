@@ -50,7 +50,7 @@ using devmode::spawn::generate_spawn_id;
 
 namespace {
 
-std::string trim_copy_local(const std::string& input) {
+std::string trim_copy_room_editor(const std::string& input) {
     auto is_space = [](unsigned char ch) { return std::isspace(ch) != 0; };
     std::string result = input;
     result.erase(result.begin(), std::find_if(result.begin(), result.end(), [&](unsigned char ch) {
@@ -1385,7 +1385,7 @@ void RoomEditor::ensure_room_configurator() {
 }
 
 std::string RoomEditor::rename_active_room(const std::string& old_name, const std::string& desired_name) {
-    std::string trimmed = trim_copy_local(desired_name);
+    std::string trimmed = trim_copy_room_editor(desired_name);
     std::string base = sanitize_room_key_local(trimmed.empty() ? desired_name : trimmed);
     if (!assets_ || !current_room_) {
         return base.empty() ? old_name : base;

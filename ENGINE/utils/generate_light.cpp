@@ -36,7 +36,7 @@ SDL_Texture* GenerateLight::generate(SDL_Renderer* renderer,
     const std::string meta_file  = folder + "/metadata.json";
     const std::string img_file   = folder + "/light.png";
 
-    const int blur_passes = 0; // no blur here, do it as a render pass
+    const int blur_passes = 0; // blur disabled; keep cached lights sharp
 
     // try cache
     json meta;
@@ -64,6 +64,9 @@ SDL_Texture* GenerateLight::generate(SDL_Renderer* renderer,
             SDL_FreeSurface(surf);
             if (tex) {
                 SDL_SetTextureBlendMode(tex, SDL_BLENDMODE_BLEND);
+#if SDL_VERSION_ATLEAST(2,0,12)
+                SDL_SetTextureScaleMode(tex, SDL_ScaleModeNearest);
+#endif
                 return tex;
             }
         }
@@ -148,6 +151,9 @@ SDL_Texture* GenerateLight::generate(SDL_Renderer* renderer,
         return nullptr;
     }
     SDL_SetTextureBlendMode(tex, SDL_BLENDMODE_BLEND);
+#if SDL_VERSION_ATLEAST(2,0,12)
+    SDL_SetTextureScaleMode(tex, SDL_ScaleModeNearest);
+#endif
 
     CacheManager::save_surface_as_png(surf, img_file);
     SDL_FreeSurface(surf);
