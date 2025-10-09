@@ -778,6 +778,7 @@ void AssetInfo::set_lighting(bool is_shaded_,
         shade_entry["offset_x"] = base_off_x;
         shade_entry["offset_y"] = base_off_y;
         shade_entry["factor"] = shading_factor;
+        shade_entry["apex_speed_bias"] = shading.apex_speed_bias;
     } else {
         shade_entry["light_intensity"] = 0;
         shade_entry["radius"] = 0;
@@ -787,6 +788,7 @@ void AssetInfo::set_lighting(bool is_shaded_,
         shade_entry["offset_x"] = 0;
         shade_entry["offset_y"] = 0;
         shade_entry["factor"] = shading_factor;
+        shade_entry["apex_speed_bias"] = shading.apex_speed_bias;
     }
     arr.push_back(shade_entry);
 

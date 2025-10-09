@@ -243,16 +243,38 @@ void RenderAsset::render_shadow_moving_lights(Asset* a, const SDL_Rect& bounds, 
 }
 
 void RenderAsset::render_shadow_orbital_lights(Asset* a, const SDL_Rect& bounds, Uint8 alpha) {
-	if (!a || !a->info) return;
-	const float angle = main_light_source_.get_angle();
-	for (auto& light : a->info->orbital_light_sources) {
-		if (!light.texture || light.x_radius <= 0 || light.y_radius <= 0) continue;
-		const bool flipped = a->flipped;
-		const float offset_x = flipped ? -static_cast<float>(light.offset_x) : static_cast<float>(light.offset_x);
-		float orbit_x = std::cos(angle) * light.x_radius;
-		if (flipped) orbit_x = -orbit_x;
-		const float lx = static_cast<float>(a->pos.x) + offset_x + orbit_x;
-		const float ly = static_cast<float>(a->pos.y) + light.offset_y - std::sin(angle) * light.y_radius;
+        if (!a || !a->info) return;
+        const float base_angle = main_light_source_.get_angle();
+        const auto compute_angle = [&](const LightSource& light) {
+                if (light.apex_speed_bias <= 0) {
+                        return base_angle;
+                }
+                constexpr float kPi = 3.14159265358979323846f;
+                constexpr float kHalfPi = kPi * 0.5f;
+                constexpr float kTwoPi = kPi * 2.0f;
+                float normalized = (kHalfPi - base_angle) / kTwoPi;
+                normalized -= std::floor(normalized);
+                const float bias = std::clamp(light.apex_speed_bias, 0, 100) / 100.0f;
+                const float exponent = 1.0f + bias * 4.0f;
+                float adjusted = normalized;
+                if (normalized < 0.5f) {
+                        const float local = normalized * 2.0f;
+                        adjusted = 0.5f * std::pow(local, exponent);
+                } else {
+                        const float local = (normalized - 0.5f) * 2.0f;
+                        adjusted = 0.5f + 0.5f * (1.0f - std::pow(1.0f - local, exponent));
+                }
+                return kHalfPi - adjusted * kTwoPi;
+        };
+        for (auto& light : a->info->orbital_light_sources) {
+                if (!light.texture || light.x_radius <= 0 || light.y_radius <= 0) continue;
+                const bool flipped = a->flipped;
+                const float angle = compute_angle(light);
+                const float offset_x = flipped ? -static_cast<float>(light.offset_x) : static_cast<float>(light.offset_x);
+                float orbit_x = std::cos(angle) * light.x_radius;
+                if (flipped) orbit_x = -orbit_x;
+                const float lx = static_cast<float>(a->pos.x) + offset_x + orbit_x;
+                const float ly = static_cast<float>(a->pos.y) + light.offset_y - std::sin(angle) * light.y_radius;
 
 		// Local (asset-space) offset to keep path/look invariant with zoom.
 		const int dx_world = static_cast<int>(std::lround(lx)) - a->pos.x;

@@ -1822,6 +1822,7 @@
     "has_shading": true,
     "lighting_info": [
         {
+            "apex_speed_bias": 59,
             "factor": 100,
             "falloff": 0,
             "has_light_source": true,

@@ -1,6 +1,7 @@
 #include "lighting_loader.hpp"
 #include "asset/asset_info.hpp"
 #include "utils/generate_light.hpp"
+#include <algorithm>
 #include <cmath>
 #include <nlohmann/json.hpp>
 using nlohmann::json;
@@ -32,6 +33,7 @@ void LightingLoader::load(AssetInfo& info, const json& data) {
                 int raw_x_radius = l.value("x_radius", 0);
                 int raw_y_radius = l.value("y_radius", 0);
                 parsed.factor_percent = l.value("factor", 100);
+                light.apex_speed_bias = std::clamp(l.value("apex_speed_bias", 0), 0, 100);
                 const double factor = static_cast<double>(parsed.factor_percent) / 100.0;
                 light.offset_x  = static_cast<int>(std::lround(static_cast<double>(raw_offset_x) * factor));
                 light.offset_y  = static_cast<int>(std::lround(static_cast<double>(raw_offset_y) * factor));
