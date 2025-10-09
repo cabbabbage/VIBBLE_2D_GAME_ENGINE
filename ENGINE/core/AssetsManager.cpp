@@ -992,6 +992,16 @@ const Global_Light_Source* Assets::map_light_source() const {
     return const_cast<Assets*>(this)->map_light_source();
 }
 
+void Assets::set_map_light_panel_visible(bool visible) {
+    if (dev_controls_ && dev_controls_->is_enabled()) {
+        dev_controls_->set_map_light_panel_visible(visible);
+    }
+}
+
+bool Assets::is_map_light_panel_visible() const {
+    return dev_controls_ && dev_controls_->is_enabled() && dev_controls_->is_map_light_panel_visible();
+}
+
 void Assets::toggle_asset_library() {
     if (dev_controls_ && dev_controls_->is_enabled()) {
         dev_controls_->toggle_asset_library();

@@ -219,10 +219,15 @@ AssetInfoUI::AssetInfoUI() {
 
 AssetInfoUI::~AssetInfoUI() {
     apply_camera_override(false);
+    sync_map_light_panel_visibility(false);
 }
 
 void AssetInfoUI::set_assets(Assets* a) {
     if (assets_ == a) return;
+    if (map_light_panel_auto_opened_ && assets_) {
+        assets_->set_map_light_panel_visible(false);
+        map_light_panel_auto_opened_ = false;
+    }
     if (camera_override_active_) {
         apply_camera_override(false);
     }
@@ -247,6 +252,7 @@ void AssetInfoUI::set_info(const std::shared_ptr<AssetInfo>& info) {
 }
 
 void AssetInfoUI::clear_info() {
+    sync_map_light_panel_visibility(false);
     info_.reset();
     scroll_ = 0;
     scroll_dragging_ = false;
@@ -273,6 +279,7 @@ void AssetInfoUI::close() {
     if (!visible_) return;
     apply_camera_override(false);
     visible_ = false;
+    sync_map_light_panel_visibility(false);
     scroll_dragging_ = false;
     scrollbar_dragging_ = false;
     if (animation_editor_window_) animation_editor_window_->set_visible(false);
@@ -578,6 +585,12 @@ void AssetInfoUI::update(const Input& input, int screen_w, int screen_h) {
         }
     }
 
+    bool want_map_light_panel = false;
+    if (visible_ && info_ && lighting_section_ && lighting_section_->is_expanded()) {
+        want_map_light_panel = lighting_section_->shading_source_enabled();
+    }
+    sync_map_light_panel_visibility(want_map_light_panel);
+
     if (!visible_ || !info_) return;
 
     if (asset_selector_ && asset_selector_->visible()) {
@@ -852,6 +865,35 @@ void AssetInfoUI::refresh_target_asset_scale() {
 void AssetInfoUI::sync_target_z_threshold() {
     if (!target_asset_) return;
     target_asset_->set_z_index();
+}
+
+void AssetInfoUI::sync_map_light_panel_visibility(bool want_visible) {
+    if (!assets_) {
+        map_light_panel_auto_opened_ = false;
+        return;
+    }
+
+    bool panel_visible = assets_->is_map_light_panel_visible();
+
+    if (want_visible) {
+        if (!panel_visible) {
+            assets_->set_map_light_panel_visible(true);
+            panel_visible = assets_->is_map_light_panel_visible();
+        }
+        map_light_panel_auto_opened_ = panel_visible;
+        if (!panel_visible) {
+            map_light_panel_auto_opened_ = false;
+        }
+        return;
+    }
+
+    if (map_light_panel_auto_opened_ && panel_visible) {
+        assets_->set_map_light_panel_visible(false);
+        panel_visible = assets_->is_map_light_panel_visible();
+    }
+    if (!panel_visible) {
+        map_light_panel_auto_opened_ = false;
+    }
 }
 
 void AssetInfoUI::request_apply_section(AssetInfoSectionId section_id) {

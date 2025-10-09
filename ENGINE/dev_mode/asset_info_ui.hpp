@@ -52,6 +52,7 @@ class AssetInfoUI {
     void open_area_editor(const std::string& name);
     bool apply_section_to_assets(AssetInfoSectionId section_id, const std::vector<std::string>& asset_names);
     static const char* section_display_name(AssetInfoSectionId section_id);
+    void sync_map_light_panel_visibility(bool want_visible);
 
   private:
     bool visible_ = false;
@@ -89,4 +90,5 @@ class AssetInfoUI {
     bool prev_camera_parallax_enabled_ = false;
     std::unique_ptr<SearchAssets> asset_selector_;
     std::unique_ptr<animation_editor::AnimationEditorWindow> animation_editor_window_;
+    bool map_light_panel_auto_opened_ = false;
 };

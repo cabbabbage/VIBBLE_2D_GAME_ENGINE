@@ -97,6 +97,8 @@ public:
 
     Global_Light_Source* map_light_source();
     const Global_Light_Source* map_light_source() const;
+    void set_map_light_panel_visible(bool visible);
+    bool is_map_light_panel_visible() const;
 
     bool is_dev_mode() const { return dev_mode; }
 

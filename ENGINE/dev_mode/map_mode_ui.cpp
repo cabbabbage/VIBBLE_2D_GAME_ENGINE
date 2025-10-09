@@ -622,6 +622,22 @@ void MapModeUI::open_layers_panel() {
     set_active_panel(PanelType::Layers);
 }
 
+void MapModeUI::open_light_panel() {
+    ensure_panels();
+    if (active_panel_ != PanelType::Lights) {
+        set_active_panel(PanelType::Lights);
+    }
+}
+
+void MapModeUI::close_light_panel() {
+    ensure_panels();
+    if (active_panel_ == PanelType::Lights) {
+        set_active_panel(PanelType::None);
+    } else if (light_panel_) {
+        light_panel_->close();
+    }
+}
+
 void MapModeUI::toggle_light_panel() {
     ensure_panels();
     if (active_panel_ == PanelType::Lights) {

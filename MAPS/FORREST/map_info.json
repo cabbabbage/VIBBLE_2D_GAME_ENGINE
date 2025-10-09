@@ -766,11 +766,11 @@
           "dx": -115,
           "dy": -192,
           "enforce_spacing": false,
-          "max_number": 1,
-          "min_number": 1,
+          "max_number": 2,
+          "min_number": 2,
           "origional_height": 3623,
           "origional_width": 3621,
-          "position": "Exact",
+          "position": "Perimeter",
           "spawn_id": "spn-f60c32ff55cd"
         }
       ],

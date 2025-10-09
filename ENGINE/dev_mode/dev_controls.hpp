@@ -112,6 +112,9 @@ public:
     void close_room_config();
     bool is_room_config_open() const;
 
+    void set_map_light_panel_visible(bool visible);
+    bool is_map_light_panel_visible() const;
+
     void begin_area_edit_for_selected_asset(const std::string& area_name);
     void focus_camera_on_asset(Asset* asset, double zoom_factor = 0.8, int duration_steps = 25);
 

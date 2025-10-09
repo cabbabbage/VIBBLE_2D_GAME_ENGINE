@@ -1952,6 +1952,31 @@ void DevControls::toggle_map_light_panel() {
     sync_header_button_states();
 }
 
+void DevControls::set_map_light_panel_visible(bool visible) {
+    if (!map_mode_ui_) {
+        return;
+    }
+    const bool currently_open = map_mode_ui_->is_light_panel_visible();
+    if (visible == currently_open) {
+        return;
+    }
+    if (visible) {
+        if (is_modal_blocking_panels()) {
+            pulse_modal_header();
+            sync_header_button_states();
+            return;
+        }
+        map_mode_ui_->open_light_panel();
+    } else {
+        map_mode_ui_->close_light_panel();
+    }
+    sync_header_button_states();
+}
+
+bool DevControls::is_map_light_panel_visible() const {
+    return map_mode_ui_ && map_mode_ui_->is_light_panel_visible();
+}
+
 void DevControls::toggle_camera_panel() {
     if (!camera_panel_) {
         return;

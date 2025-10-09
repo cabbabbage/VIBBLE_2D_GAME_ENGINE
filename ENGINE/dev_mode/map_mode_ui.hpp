@@ -44,6 +44,8 @@ public:
     void render(SDL_Renderer* renderer) const;
 
     void open_layers_panel();
+    void open_light_panel();
+    void close_light_panel();
     void toggle_light_panel();
     void toggle_layers_panel();
     void close_all_panels();

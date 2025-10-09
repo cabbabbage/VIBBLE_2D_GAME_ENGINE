@@ -264,6 +264,12 @@ public:
     }
 
     bool shading_enabled() const { return c_is_shaded_ && c_is_shaded_->value(); }
+    bool shading_source_enabled() const {
+        if (!c_is_shaded_ || !c_is_shaded_->value()) {
+            return false;
+        }
+        return shading_light_.radius > 0 || shading_light_.x_radius > 0 || shading_light_.y_radius > 0;
+    }
     const LightSource& shading_light() const { return shading_light_; }
 
 private:

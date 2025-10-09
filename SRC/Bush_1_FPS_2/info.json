@@ -353,6 +353,7 @@
     "impassable_area": null,
     "lighting_info": [
         {
+            "apex_speed_bias": 0,
             "factor": 100,
             "falloff": 0,
             "has_light_source": true,
