@@ -3,19 +3,43 @@
 #include <utility>
 #include <vector>
 
-#include "spawn_method_control_widgets/CandidateListWidget.hpp"
-#include "spawn_method_control_widgets/ISpawnMethodWidget.hpp"
+#include "widgets/ExactWidget.hpp"
+#include "widgets/ISpawnMethodWidget.hpp"
+#include "widgets/PerimeterWidget.hpp"
+#include "widgets/RandomWidget.hpp"
 
 namespace vibble::dev_mode::room_config::spawn_group_lists {
+namespace {
 
-using spawn_method_control_widgets::CandidateListWidget;
-using spawn_method_control_widgets::ISpawnMethodWidget;
+using widgets::ExactWidget;
+using widgets::ISpawnMethodWidget;
+using widgets::PerimeterWidget;
+using widgets::RandomWidget;
+
+std::unique_ptr<ISpawnMethodWidget> create_widget_for_method(const model::SpawnMethodId& method) {
+    if (method == "Random") {
+        return std::make_unique<RandomWidget>();
+    }
+    if (method == "Perimeter") {
+        return std::make_unique<PerimeterWidget>();
+    }
+    if (method == "Exact") {
+        return std::make_unique<ExactWidget>();
+    }
+    return nullptr;
+}
+
+}  // namespace
 
 SpawnGroupRow::SpawnGroupRow(model::SpawnGroup group) : group_(std::move(group)) {
     refresh_from_group();
+    set_method_widget(create_widget_for_method(group_.method));
     header_.method_dropdown.on_method_selected().connect([this](const model::SpawnMethodId& method) {
-        group_.method = method;
-        refresh_method_config();
+        if (suppress_method_change_) {
+            return;
+        }
+        model::switch_method(group_, method);
+        set_method_widget(create_widget_for_method(group_.method));
     });
 }
 
@@ -28,7 +52,7 @@ const model::SpawnGroup& SpawnGroupRow::group() const {
 void SpawnGroupRow::set_group(model::SpawnGroup group) {
     group_ = std::move(group);
     refresh_from_group();
-    bind_method_widget();
+    set_method_widget(create_widget_for_method(group_.method));
 }
 
 SpawnGroupRow::Header& SpawnGroupRow::header() {
@@ -116,15 +140,15 @@ void SpawnGroupRow::trigger_delete() {
 }
 
 void SpawnGroupRow::set_method_widget(std::unique_ptr<ISpawnMethodWidget> widget) {
-    method_widget_ = std::move(widget);
-    candidate_widget_ = dynamic_cast<CandidateListWidget*>(method_widget_.get());
-    if (candidate_widget_) {
-        candidate_widget_->on_changed().connect([this](const std::vector<model::Candidate>& candidates) {
-            group_.candidates = candidates;
-            refresh_method_config();
-        });
+    if (method_widget_) {
+        method_widget_->clear_method_state();
     }
-    bind_method_widget();
+    method_widget_ = std::move(widget);
+    body_.method_widget = method_widget_.get();
+    if (method_widget_) {
+        method_widget_->bind(group_);
+        method_widget_->sync_from_model();
+    }
 }
 
 ISpawnMethodWidget* SpawnGroupRow::method_widget() {
@@ -138,30 +162,9 @@ const ISpawnMethodWidget* SpawnGroupRow::method_widget() const {
 void SpawnGroupRow::refresh_from_group() {
     header_.name = group_.display_name;
     set_area_id(group_.id);
+    suppress_method_change_ = true;
     header_.method_dropdown.set_selected_method(group_.method);
-}
-
-void SpawnGroupRow::bind_method_widget() {
-    body_.method_widget = method_widget_.get();
-    if (!method_widget_) {
-        return;
-    }
-    method_widget_->bind_group(group_);
-    if (candidate_widget_) {
-        candidate_widget_->sync_from_model();
-        group_.candidates = candidate_widget_->candidates();
-    }
-    refresh_method_config();
-}
-
-void SpawnGroupRow::refresh_method_config() {
-    if (!method_widget_) {
-        return;
-    }
-    group_.method_config = method_widget_->emit_config();
-    if (candidate_widget_) {
-        group_.candidates = candidate_widget_->candidates();
-    }
+    suppress_method_change_ = false;
 }
 
 }  // namespace vibble::dev_mode::room_config::spawn_group_lists

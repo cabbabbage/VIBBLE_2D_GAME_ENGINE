@@ -12,8 +12,12 @@
 namespace vibble::dev_mode::room_config::spawn_group_lists {
 
 namespace spawn_method_control_widgets {
+class LinkToAreaButton;
+class SpawnMethodDropdown;
+}
+
+namespace widgets {
 class ISpawnMethodWidget;
-class CandidateListWidget;
 }
 
 class SpawnGroupRow {
@@ -28,7 +32,7 @@ public:
     };
 
     struct Body {
-        spawn_method_control_widgets::ISpawnMethodWidget* method_widget = nullptr;
+        widgets::ISpawnMethodWidget* method_widget = nullptr;
     };
 
     const model::SpawnGroup& group() const;
@@ -60,26 +64,24 @@ public:
     void trigger_move_down();
     void trigger_delete();
 
-    void set_method_widget(std::unique_ptr<spawn_method_control_widgets::ISpawnMethodWidget> widget);
-    spawn_method_control_widgets::ISpawnMethodWidget* method_widget();
-    const spawn_method_control_widgets::ISpawnMethodWidget* method_widget() const;
+    void set_method_widget(std::unique_ptr<widgets::ISpawnMethodWidget> widget);
+    widgets::ISpawnMethodWidget* method_widget();
+    const widgets::ISpawnMethodWidget* method_widget() const;
 
 private:
     void refresh_from_group();
-    void bind_method_widget();
-    void refresh_method_config();
 
     model::SpawnGroup group_;
     Header header_{};
     Body body_{};
     std::string area_id_{};
     bool open_ = false;
+    bool suppress_method_change_ = false;
     Signal<void()> on_open_{};
     Signal<void()> on_move_up_{};
     Signal<void()> on_move_down_{};
     Signal<void()> on_delete_{};
-    spawn_method_control_widgets::CandidateListWidget* candidate_widget_ = nullptr;
-    std::unique_ptr<spawn_method_control_widgets::ISpawnMethodWidget> method_widget_;
+    std::unique_ptr<widgets::ISpawnMethodWidget> method_widget_;
 };
 
 }  // namespace vibble::dev_mode::room_config::spawn_group_lists
