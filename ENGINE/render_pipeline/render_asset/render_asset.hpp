@@ -11,6 +11,7 @@ class RenderAsset {
 
 	public:
     RenderAsset(SDL_Renderer* renderer, camera& cam, Global_Light_Source& main_light, Asset* player);
+    void set_player_asset(Asset* player) { p = player; }
     SDL_Texture* regenerateFinalTexture(Asset* a);
     SDL_Texture* texture_for_scale(Asset* asset,
                                    SDL_Texture* base_tex,

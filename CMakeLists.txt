@@ -127,6 +127,7 @@ target_include_directories(engine
         ${CMAKE_SOURCE_DIR}/ENGINE/core
         ${CMAKE_SOURCE_DIR}/ENGINE/dev_mode
         ${CMAKE_SOURCE_DIR}/ENGINE/render
+        ${CMAKE_SOURCE_DIR}/ENGINE/render_pipeline
         ${CMAKE_SOURCE_DIR}/ENGINE/map_generation
         ${CMAKE_SOURCE_DIR}/ENGINE/spawn
         ${CMAKE_SOURCE_DIR}/ENGINE/ui

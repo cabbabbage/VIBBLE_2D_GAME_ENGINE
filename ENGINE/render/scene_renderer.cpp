@@ -31,7 +31,7 @@ SceneRenderer::SceneRenderer(SDL_Renderer* renderer,
   main_light_source_(renderer, SDL_Point{ screen_width / 2, screen_height / 2 },
                      screen_width, SDL_Color{255, 255, 255, 255}, map_path),
   fullscreen_light_tex_(nullptr),
-  render_asset_(renderer, assets->getView(), main_light_source_, assets->player)
+  render_pipeline_(renderer, SceneLighting{ assets->getView(), main_light_source_, assets->player })
 {
         fullscreen_light_tex_ = SDL_CreateTexture(renderer_, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET, screen_width_, screen_height_);
         if (fullscreen_light_tex_) {
@@ -303,7 +303,7 @@ void SceneRenderer::render() {
         if (!a || !a->info) continue;
 
         if (shouldRegen(a)) {
-            SDL_Texture* tex = render_asset_.regenerateFinalTexture(a);
+            SDL_Texture* tex = render_pipeline_.regenerateFinalTexture(a);
             a->set_final_texture(tex);
         }
 
@@ -319,7 +319,7 @@ void SceneRenderer::render() {
         SDL_Rect fb = get_scaled_position_rect(a, fw, fh, inv_scale, min_visible_w, min_visible_h, player_screen_height);
         if (fb.w == 0 && fb.h == 0) continue;
 
-        SDL_Texture* draw_tex = render_asset_.texture_for_scale(a, final_tex, fw, fh, fb.w, fb.h);
+        SDL_Texture* draw_tex = render_pipeline_.texture_for_scale(a, final_tex, fw, fh, fb.w, fb.h);
         SDL_Texture* mod_target = draw_tex ? draw_tex : final_tex;
 
         if (a->is_highlighted()) {

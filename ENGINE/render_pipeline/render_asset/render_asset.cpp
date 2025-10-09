@@ -1,5 +1,5 @@
 #include "render_asset.hpp"
-#include "global_light_source.hpp"
+#include "render/global_light_source.hpp"
 #include "asset/Asset.hpp"
 #include "asset/asset_types.hpp"
 #include "core/AssetsManager.hpp"
