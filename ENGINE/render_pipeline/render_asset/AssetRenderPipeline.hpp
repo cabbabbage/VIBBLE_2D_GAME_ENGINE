@@ -18,14 +18,32 @@ struct SceneLighting {
 };
 
 struct StageContext {
-    SDL_Texture* base_texture    = nullptr;
-    SDL_Texture* working_texture = nullptr;
+    SDL_Texture* base_texture = nullptr;
+    SceneLighting* lighting   = nullptr;
+    int           width       = 0;
+    int           height      = 0;
+
+    SDL_Rect asset_bounds() const { return SDL_Rect{ 0, 0, width, height }; }
+    SDL_Point anchor_bottom_center() const { return SDL_Point{ width / 2, height }; }
+    SDL_Rect dest_from_world_offset(int dx_world, int dy_world, int lw, int lh) const {
+        SDL_Point anchor = anchor_bottom_center();
+        return SDL_Rect{ anchor.x + dx_world - (lw / 2), anchor.y + dy_world - (lh / 2), lw, lh };
+    }
+
+    Uint8                    main_light_alpha() const;
+    Uint8                    main_light_brightness() const;
+    Global_Light_Source&     main_light();
+    const Global_Light_Source& main_light() const;
+    camera&                  camera();
+    const camera&            camera() const;
+    Asset*                   player() const;
 };
 
 class AssetRenderPipeline {
 public:
     AssetRenderPipeline(SDL_Renderer* renderer, const SceneLighting& lighting);
 
+    SDL_Texture* run(Asset& asset);
     SDL_Texture* regenerateFinalTexture(Asset* asset);
     SDL_Texture* texture_for_scale(Asset* asset,
                                    SDL_Texture* base_tex,
@@ -42,6 +60,10 @@ private:
     SDL_Renderer*                          renderer_ = nullptr;
     SceneLighting                          lighting_;
     RenderAsset                            render_asset_;
-    std::vector<std::unique_ptr<IRenderStage>> stages_;
+    struct StageEntry {
+        std::unique_ptr<IRenderStage> stage;
+        SDL_BlendMode                 blend = SDL_BLENDMODE_BLEND;
+    };
+    std::vector<StageEntry> stages_;
 };
 

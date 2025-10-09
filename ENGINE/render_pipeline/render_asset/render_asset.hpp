@@ -2,17 +2,13 @@
 
 #include <SDL.h>
 #include <string>
-#include "render/camera.hpp"
 
 class Asset;
-class Global_Light_Source;
 
 class RenderAsset {
 
-	public:
-    RenderAsset(SDL_Renderer* renderer, camera& cam, Global_Light_Source& main_light, Asset* player);
-    void set_player_asset(Asset* player) { p = player; }
-    SDL_Texture* regenerateFinalTexture(Asset* a);
+        public:
+    explicit RenderAsset(SDL_Renderer* renderer);
     SDL_Texture* texture_for_scale(Asset* asset,
                                    SDL_Texture* base_tex,
                                    int base_w,
@@ -21,14 +17,5 @@ class RenderAsset {
                                    int target_h);
 
 	private:
-    Asset* p;
-    SDL_Texture* render_shadow_mask(Asset* a, int bw, int bh);
-    void render_shadow_moving_lights(Asset* a, const SDL_Rect& bounds, Uint8 alpha);
-    void render_shadow_orbital_lights(Asset* a, const SDL_Rect& bounds, Uint8 alpha);
-    void render_shadow_received_static_lights(Asset* a, const SDL_Rect& bounds, Uint8 alpha);
-
-	private:
     SDL_Renderer* renderer_;
-    camera& cam_;
-    Global_Light_Source& main_light_source_;
 };
