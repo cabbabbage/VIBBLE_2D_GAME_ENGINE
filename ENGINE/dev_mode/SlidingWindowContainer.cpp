@@ -43,20 +43,50 @@ void SlidingWindowContainer::set_update_function(UpdateFunction fn) { update_fun
 void SlidingWindowContainer::set_event_function(EventFunction fn) { event_function_ = std::move(fn); }
 void SlidingWindowContainer::set_header_text(const std::string& text) { header_text_ = text; }
 void SlidingWindowContainer::set_header_text_provider(HeaderTextProvider provider) { header_text_provider_ = std::move(provider); }
+void SlidingWindowContainer::set_on_close(std::function<void()> cb) { on_close_ = std::move(cb); }
+
+void SlidingWindowContainer::set_blocks_editor_interactions(bool block) {
+    if (blocks_editor_interactions_ == block) {
+        return;
+    }
+    blocks_editor_interactions_ = block;
+    update_editor_interaction_block_state();
+}
+
+void SlidingWindowContainer::set_editor_interaction_blocker(std::function<void(bool)> blocker) {
+    editor_interaction_blocker_ = std::move(blocker);
+    bool should_block = blocks_editor_interactions_ && visible_;
+    editor_interactions_blocked_ = should_block;
+    if (editor_interaction_blocker_) {
+        editor_interaction_blocker_(should_block);
+    }
+}
 
 void SlidingWindowContainer::open() { set_visible(true); }
 void SlidingWindowContainer::close() {
-    visible_ = false;
-    scroll_dragging_ = false;
-    scrollbar_dragging_ = false;
+    if (!visible_) {
+        return;
+    }
+    set_visible(false);
+    if (on_close_) {
+        on_close_();
+    }
 }
 
 void SlidingWindowContainer::set_visible(bool visible) {
+    if (visible_ == visible) {
+        if (!visible_) {
+            scroll_dragging_ = false;
+            scrollbar_dragging_ = false;
+        }
+        return;
+    }
     visible_ = visible;
     if (!visible_) {
         scroll_dragging_ = false;
         scrollbar_dragging_ = false;
     }
+    update_editor_interaction_block_state();
 }
 
 void SlidingWindowContainer::reset_scroll() {
@@ -111,6 +141,16 @@ bool SlidingWindowContainer::handle_event(const SDL_Event& e) {
 
     if (event_function_) {
         if (event_function_(e)) return true;
+    }
+
+    if (close_button_) {
+        bool handled = close_button_->handle_event(e);
+        if (handled) {
+            if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
+                close();
+            }
+            return true;
+        }
     }
 
     if (last_screen_w_ <= 0 || last_screen_h_ <= 0) {
@@ -245,6 +285,10 @@ void SlidingWindowContainer::render(SDL_Renderer* renderer, int screen_w, int sc
     SDL_SetRenderDrawColor(renderer, bg.r, bg.g, bg.b, bg.a);
     SDL_RenderFillRect(renderer, &panel_);
 
+    if (close_button_) {
+        close_button_->render(renderer);
+    }
+
     std::string label = header_text_provider_ ? header_text_provider_() : header_text_;
     render_label_text(renderer, label, name_label_rect_);
 
@@ -316,6 +360,10 @@ void SlidingWindowContainer::layout(int screen_w, int screen_h) const {
         scroll_track_rect_ = SDL_Rect{0, 0, 0, 0};
         scroll_thumb_rect_ = SDL_Rect{0, 0, 0, 0};
         content_clip_rect_ = SDL_Rect{0, 0, 0, 0};
+        close_button_rect_ = SDL_Rect{0, 0, 0, 0};
+        if (close_button_) {
+            close_button_->set_rect(close_button_rect_);
+        }
         max_scroll_ = 0;
         return;
     }
@@ -332,7 +380,17 @@ void SlidingWindowContainer::layout(int screen_w, int screen_h) const {
 
     const int label_height = DMButton::height();
     const int label_gap = DMSpacing::item_gap();
-    name_label_rect_ = SDL_Rect{content_x, content_top, base_content_w, label_height};
+    const int close_button_w = label_height;
+    const int close_button_gap = DMSpacing::item_gap();
+    close_button_rect_ = SDL_Rect{content_x, content_top, close_button_w, label_height};
+    int label_x = close_button_rect_.x + close_button_rect_.w + close_button_gap;
+    int label_w = std::max(0, (content_x + base_content_w) - label_x);
+    name_label_rect_ = SDL_Rect{label_x, content_top, label_w, label_height};
+
+    if (!close_button_) {
+        close_button_ = std::make_unique<DMButton>("X", &DMStyles::HeaderButton(), close_button_w, label_height);
+    }
+    close_button_->set_rect(close_button_rect_);
     int scroll_start = content_top + label_height + label_gap;
 
     int content_w_active = base_content_w;
@@ -417,6 +475,17 @@ void SlidingWindowContainer::layout(int screen_w, int screen_h) const {
             scrollbar_dragging_ = false;
             scroll_thumb_rect_ = SDL_Rect{ track_x, track_y, kScrollbarWidth, track_h };
         }
+    }
+}
+
+void SlidingWindowContainer::update_editor_interaction_block_state() {
+    bool should_block = blocks_editor_interactions_ && visible_;
+    if (editor_interactions_blocked_ == should_block) {
+        return;
+    }
+    editor_interactions_blocked_ = should_block;
+    if (editor_interaction_blocker_) {
+        editor_interaction_blocker_(should_block);
     }
 }
 

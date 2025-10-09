@@ -2,9 +2,11 @@
 
 #include <SDL.h>
 #include <functional>
+#include <memory>
 #include <string>
 
 class Input;
+class DMButton;
 
 class SlidingWindowContainer {
 public:
@@ -30,6 +32,10 @@ public:
     void set_event_function(EventFunction fn);
     void set_header_text(const std::string& text);
     void set_header_text_provider(HeaderTextProvider provider);
+    void set_on_close(std::function<void()> cb);
+
+    void set_blocks_editor_interactions(bool block);
+    void set_editor_interaction_blocker(std::function<void(bool)> blocker);
 
     void open();
     void close();
@@ -53,6 +59,7 @@ public:
 private:
     void layout(int screen_w, int screen_h) const;
     void update_scroll_from_delta(int delta);
+    void update_editor_interaction_block_state();
 
 private:
     LayoutFunction layout_function_{};
@@ -62,10 +69,16 @@ private:
     HeaderTextProvider header_text_provider_{};
     std::string header_text_{};
 
+    std::function<void()> on_close_{};
+    std::function<void(bool)> editor_interaction_blocker_{};
+
     bool visible_ = false;
+    bool blocks_editor_interactions_ = false;
+    bool editor_interactions_blocked_ = false;
 
     mutable SDL_Rect panel_{0,0,0,0};
     mutable SDL_Rect name_label_rect_{0,0,0,0};
+    mutable SDL_Rect close_button_rect_{0,0,0,0};
     mutable SDL_Rect content_clip_rect_{0,0,0,0};
     mutable SDL_Rect scroll_region_{0,0,0,0};
     mutable SDL_Rect scroll_track_rect_{0,0,0,0};
@@ -81,6 +94,8 @@ private:
     mutable int scroll_drag_start_scroll_ = 0;
     mutable int scrollbar_drag_offset_ = 0;
     mutable int pulse_frames_ = 0;
+
+    mutable std::unique_ptr<DMButton> close_button_{};
 
     mutable int last_screen_w_ = 0;
     mutable int last_screen_h_ = 0;
