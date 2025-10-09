@@ -46,6 +46,8 @@ private:
 
     void build_ui();
     void apply_changes();
+    void rebuild_rows();
+    void update_section_header_labels();
     void sync_ui_from_json();
     void sync_json_from_ui();
     nlohmann::json& ensure_light();
@@ -110,8 +112,13 @@ private:
 
     int current_key_index_ = 0;
 
-    std::unique_ptr<DMButton> update_top_btn_;
-    std::unique_ptr<DMButton> update_bottom_btn_;
+    std::unique_ptr<DMButton> update_btn_;
+    std::unique_ptr<DMButton> orbit_section_btn_;
+    std::unique_ptr<DMButton> screen_section_btn_;
+    std::unique_ptr<DMButton> texture_section_btn_;
+    bool orbit_section_collapsed_ = false;
+    bool screen_section_collapsed_ = false;
+    bool texture_section_collapsed_ = false;
     std::unique_ptr<DMSlider> radius_;
     std::unique_ptr<DMSlider> intensity_;
     std::unique_ptr<DMSlider> orbit_radius_;
@@ -149,8 +156,11 @@ private:
     std::vector<std::unique_ptr<Widget>> widget_wrappers_;
 
     class WarningLabel;
-    class SectionLabel;
     WarningLabel* warning_label_ = nullptr;
+
+    void toggle_orbit_section();
+    void toggle_screen_section();
+    void toggle_texture_section();
 
     bool needs_sync_to_json_ = false;
 

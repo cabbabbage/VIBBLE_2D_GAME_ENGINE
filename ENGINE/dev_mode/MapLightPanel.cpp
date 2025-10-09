@@ -73,45 +73,6 @@ private:
     SDL_Color color_{255, 120, 120, 255};
 };
 
-class MapLightPanel::SectionLabel : public Widget {
-public:
-    explicit SectionLabel(std::string text)
-        : text_(std::move(text)) {}
-
-    void set_rect(const SDL_Rect& r) override { rect_ = r; }
-    const SDL_Rect& rect() const override { return rect_; }
-
-    int height_for_width(int) const override {
-        return DMCheckbox::height();
-    }
-
-    bool handle_event(const SDL_Event&) override { return false; }
-
-    void render(SDL_Renderer* renderer) const override {
-        if (!renderer) return;
-        const DMLabelStyle& style = DMStyles::Label();
-        TTF_Font* font = style.open_font();
-        if (!font) return;
-        SDL_Surface* surface = TTF_RenderUTF8_Blended(font, text_.c_str(), style.color);
-        if (surface) {
-            SDL_Texture* tex = SDL_CreateTextureFromSurface(renderer, surface);
-            if (tex) {
-                SDL_Rect dst{ rect_.x, rect_.y, surface->w, surface->h };
-                SDL_RenderCopy(renderer, tex, nullptr, &dst);
-                SDL_DestroyTexture(tex);
-            }
-            SDL_FreeSurface(surface);
-        }
-        TTF_CloseFont(font);
-    }
-
-    bool wants_full_row() const override { return true; }
-
-private:
-    std::string text_;
-    SDL_Rect rect_{0, 0, 0, 0};
-};
-
 int MapLightPanel::clamp_int(int v, int lo, int hi) {
     return std::max(lo, std::min(hi, v));
 }
@@ -165,8 +126,12 @@ bool MapLightPanel::is_visible() const { return visible_; }
 
 void MapLightPanel::build_ui() {
 
-    update_top_btn_    = std::make_unique<DMButton>("Update Light", &DMStyles::AccentButton(), 160, DMButton::height());
-    update_bottom_btn_ = std::make_unique<DMButton>("Update Light", &DMStyles::AccentButton(), 160, DMButton::height());
+    update_btn_ = std::make_unique<DMButton>("Update Light", &DMStyles::AccentButton(), 160, DMButton::height());
+    orbit_section_btn_ = std::make_unique<DMButton>("", &DMStyles::HeaderButton(), 220, DMButton::height());
+    screen_section_btn_ = std::make_unique<DMButton>("", &DMStyles::HeaderButton(), 220, DMButton::height());
+    texture_section_btn_ = std::make_unique<DMButton>("", &DMStyles::HeaderButton(), 220, DMButton::height());
+    update_section_header_labels();
+
     radius_         = std::make_unique<DMSlider>("Radius",          0, 20000, 0);
     intensity_      = std::make_unique<DMSlider>("Intensity",       0,   255, 255);
     orbit_radius_   = std::make_unique<DMSlider>("Orbit Radius",    0, 20000, 0);
@@ -198,8 +163,29 @@ void MapLightPanel::build_ui() {
     key_b_     = std::make_unique<DMSlider>("Key B", 0, 255, 255);
     key_a_     = std::make_unique<DMSlider>("Key A", 0, 255, 255);
 
+    rebuild_rows();
+}
+
+void MapLightPanel::update_section_header_labels() {
+    auto label_for = [](const std::string& title, bool collapsed) {
+        return std::string(collapsed ? "[+] " : "[-] ") + title;
+    };
+    if (orbit_section_btn_) {
+        orbit_section_btn_->set_text(label_for("Orbit Settings", orbit_section_collapsed_));
+    }
+    if (screen_section_btn_) {
+        screen_section_btn_->set_text(label_for("Screen Light", screen_section_collapsed_));
+    }
+    if (texture_section_btn_) {
+        texture_section_btn_->set_text(label_for("Map Light Texture", texture_section_collapsed_));
+    }
+}
+
+void MapLightPanel::rebuild_rows() {
+    update_section_header_labels();
+
     widget_wrappers_.clear();
-    widget_wrappers_.reserve(20);
+    widget_wrappers_.reserve(48);
 
     auto add_widget = [this](std::unique_ptr<Widget> w) -> Widget* {
         Widget* raw = w.get();
@@ -209,82 +195,95 @@ void MapLightPanel::build_ui() {
 
     Rows rows;
 
-    rows.push_back({
-        add_widget(std::make_unique<ButtonWidget>(update_top_btn_.get(), [this]() { apply_changes(); }))
-    });
-
     auto warning_label = std::make_unique<WarningLabel>();
     warning_label_ = warning_label.get();
-    add_widget(std::move(warning_label));
-    if (warning_label_) {
-        warning_label_->set_color(SDL_Color{255, 120, 120, 255});
-        rows.push_back({ warning_label_ });
+    warning_label_->set_color(SDL_Color{255, 120, 120, 255});
+    if (!persistence_warning_text_.empty()) {
+        warning_label_->set_text(persistence_warning_text_);
+    }
+    rows.push_back({ add_widget(std::move(warning_label)) });
+
+    rows.push_back({ add_widget(std::make_unique<ButtonWidget>(orbit_section_btn_.get(), [this]() { toggle_orbit_section(); })) });
+    if (!orbit_section_collapsed_) {
+        rows.push_back({
+            add_widget(std::make_unique<SliderWidget>(update_interval_.get())),
+            add_widget(std::make_unique<SliderWidget>(orbit_radius_.get()))
+        });
+        rows.push_back({
+            add_widget(std::make_unique<SliderWidget>(min_opacity_.get())),
+            add_widget(std::make_unique<SliderWidget>(max_opacity_.get()))
+        });
     }
 
-    rows.push_back({ add_widget(std::make_unique<SectionLabel>("Orbit Settings")) });
-    rows.push_back({
-        add_widget(std::make_unique<SliderWidget>(update_interval_.get())),
-        add_widget(std::make_unique<SliderWidget>(orbit_radius_.get()))
-    });
-    rows.push_back({
-        add_widget(std::make_unique<SliderWidget>(min_opacity_.get())),
-        add_widget(std::make_unique<SliderWidget>(max_opacity_.get()))
-    });
+    rows.push_back({ add_widget(std::make_unique<ButtonWidget>(screen_section_btn_.get(), [this]() { toggle_screen_section(); })) });
+    if (!screen_section_collapsed_) {
+        rows.push_back({
+            add_widget(std::make_unique<SliderWidget>(screen_r_.get())),
+            add_widget(std::make_unique<SliderWidget>(screen_g_.get()))
+        });
+        rows.push_back({
+            add_widget(std::make_unique<SliderWidget>(screen_b_.get())),
+            add_widget(std::make_unique<SliderWidget>(screen_min_opacity_.get()))
+        });
+        rows.push_back({
+            add_widget(std::make_unique<SliderWidget>(screen_max_opacity_.get()))
+        });
+    }
 
-    rows.push_back({ add_widget(std::make_unique<SectionLabel>("Screen Light")) });
-    rows.push_back({
-        add_widget(std::make_unique<SliderWidget>(screen_r_.get())),
-        add_widget(std::make_unique<SliderWidget>(screen_g_.get()))
-    });
-    rows.push_back({
-        add_widget(std::make_unique<SliderWidget>(screen_b_.get())),
-        add_widget(std::make_unique<SliderWidget>(screen_min_opacity_.get()))
-    });
-    rows.push_back({
-        add_widget(std::make_unique<SliderWidget>(screen_max_opacity_.get()))
-    });
-
-    rows.push_back({ add_widget(std::make_unique<SectionLabel>("Map Light Texture")) });
-    rows.push_back({
-        add_widget(std::make_unique<SliderWidget>(radius_.get())),
-        add_widget(std::make_unique<SliderWidget>(intensity_.get()))
-    });
-    rows.push_back({
-        add_widget(std::make_unique<SliderWidget>(mult_x100_.get())),
-        add_widget(std::make_unique<SliderWidget>(falloff_.get()))
-    });
-
-    rows.push_back({
-        add_widget(std::make_unique<SliderWidget>(base_r_.get())),
-        add_widget(std::make_unique<SliderWidget>(base_g_.get()))
-    });
-    rows.push_back({
-        add_widget(std::make_unique<SliderWidget>(base_b_.get())),
-        add_widget(std::make_unique<SliderWidget>(base_a_.get()))
-    });
-
-    rows.push_back({
-        add_widget(std::make_unique<ButtonWidget>(prev_key_btn_.get(), [this](){ select_prev_key(); })),
-        add_widget(std::make_unique<ButtonWidget>(next_key_btn_.get(), [this](){ select_next_key(); })),
-        add_widget(std::make_unique<ButtonWidget>(add_pair_btn_.get(), [this](){ add_key_pair_at_current_angle(); })),
-        add_widget(std::make_unique<ButtonWidget>(delete_btn_.get(), [this](){ delete_current_key(); }))
-    });
-
-    rows.push_back({ add_widget(std::make_unique<SliderWidget>(key_angle_.get())) });
-    rows.push_back({
-        add_widget(std::make_unique<SliderWidget>(key_r_.get())),
-        add_widget(std::make_unique<SliderWidget>(key_g_.get()))
-    });
-    rows.push_back({
-        add_widget(std::make_unique<SliderWidget>(key_b_.get())),
-        add_widget(std::make_unique<SliderWidget>(key_a_.get()))
-    });
-
-    rows.push_back({
-        add_widget(std::make_unique<ButtonWidget>(update_bottom_btn_.get(), [this]() { apply_changes(); }))
-    });
+    rows.push_back({ add_widget(std::make_unique<ButtonWidget>(texture_section_btn_.get(), [this]() { toggle_texture_section(); })) });
+    if (!texture_section_collapsed_) {
+        rows.push_back({
+            add_widget(std::make_unique<SliderWidget>(radius_.get())),
+            add_widget(std::make_unique<SliderWidget>(intensity_.get()))
+        });
+        rows.push_back({
+            add_widget(std::make_unique<SliderWidget>(mult_x100_.get())),
+            add_widget(std::make_unique<SliderWidget>(falloff_.get()))
+        });
+        rows.push_back({
+            add_widget(std::make_unique<SliderWidget>(base_r_.get())),
+            add_widget(std::make_unique<SliderWidget>(base_g_.get()))
+        });
+        rows.push_back({
+            add_widget(std::make_unique<SliderWidget>(base_b_.get())),
+            add_widget(std::make_unique<SliderWidget>(base_a_.get()))
+        });
+        rows.push_back({
+            add_widget(std::make_unique<ButtonWidget>(prev_key_btn_.get(), [this]() { select_prev_key(); })),
+            add_widget(std::make_unique<ButtonWidget>(next_key_btn_.get(), [this]() { select_next_key(); })),
+            add_widget(std::make_unique<ButtonWidget>(add_pair_btn_.get(), [this]() { add_key_pair_at_current_angle(); })),
+            add_widget(std::make_unique<ButtonWidget>(delete_btn_.get(), [this]() { delete_current_key(); }))
+        });
+        rows.push_back({ add_widget(std::make_unique<SliderWidget>(key_angle_.get())) });
+        rows.push_back({
+            add_widget(std::make_unique<SliderWidget>(key_r_.get())),
+            add_widget(std::make_unique<SliderWidget>(key_g_.get()))
+        });
+        rows.push_back({
+            add_widget(std::make_unique<SliderWidget>(key_b_.get())),
+            add_widget(std::make_unique<SliderWidget>(key_a_.get()))
+        });
+        rows.push_back({
+            add_widget(std::make_unique<ButtonWidget>(update_btn_.get(), [this]() { apply_changes(); }))
+        });
+    }
 
     set_rows(rows);
+}
+
+void MapLightPanel::toggle_orbit_section() {
+    orbit_section_collapsed_ = !orbit_section_collapsed_;
+    rebuild_rows();
+}
+
+void MapLightPanel::toggle_screen_section() {
+    screen_section_collapsed_ = !screen_section_collapsed_;
+    rebuild_rows();
+}
+
+void MapLightPanel::toggle_texture_section() {
+    texture_section_collapsed_ = !texture_section_collapsed_;
+    rebuild_rows();
 }
 
 void MapLightPanel::apply_changes() {
