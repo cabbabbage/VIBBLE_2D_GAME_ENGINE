@@ -9,18 +9,22 @@ SpawnMethodDropdown::SpawnMethodDropdown() = default;
 
 void SpawnMethodDropdown::set_available_methods(std::vector<model::SpawnMethodId> methods) {
     available_methods_ = std::move(methods);
-    if (!available_methods_.empty() && selected_method_.empty()) {
-        selected_method_ = available_methods_.front();
-    } else if (!selected_method_.empty()) {
-        const auto it = std::find(available_methods_.begin(), available_methods_.end(), selected_method_);
-        if (it == available_methods_.end()) {
-            selected_method_.clear();
+    if (!available_methods_.empty()) {
+        if (selected_method_.empty()) {
+            set_selected_method(available_methods_.front());
+        } else if (std::find(available_methods_.begin(), available_methods_.end(), selected_method_) ==
+                   available_methods_.end()) {
+            set_selected_method(available_methods_.front());
         }
+    } else if (!selected_method_.empty()) {
+        set_selected_method(model::SpawnMethodId{});
     }
 }
 
 void SpawnMethodDropdown::set_selected_method(model::SpawnMethodId method) {
+    if (selected_method_ == method) return;
     selected_method_ = std::move(method);
+    on_method_selected_.emit(selected_method_);
 }
 
 const model::SpawnMethodId& SpawnMethodDropdown::selected_method() const {
@@ -29,6 +33,10 @@ const model::SpawnMethodId& SpawnMethodDropdown::selected_method() const {
 
 const std::vector<model::SpawnMethodId>& SpawnMethodDropdown::available_methods() const {
     return available_methods_;
+}
+
+Signal<void(const model::SpawnMethodId&)>& SpawnMethodDropdown::on_method_selected() {
+    return on_method_selected_;
 }
 
 }  // namespace vibble::dev_mode::room_config::spawn_group_lists::spawn_method_control_widgets

@@ -18,4 +18,14 @@ bool LinkToAreaButton::has_target_area() const {
     return !area_id_.empty();
 }
 
+Signal<void(const std::string&)>& LinkToAreaButton::on_open_area() {
+    return on_open_area_;
+}
+
+void LinkToAreaButton::open_area() {
+    if (!area_id_.empty()) {
+        on_open_area_.emit(area_id_);
+    }
+}
+
 }  // namespace vibble::dev_mode::room_config::spawn_group_lists::spawn_method_control_widgets
