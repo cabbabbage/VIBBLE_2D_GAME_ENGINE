@@ -26,11 +26,11 @@ const Global_Light_Source& StageContext::main_light() const {
     return lighting->main_light;
 }
 
-camera& StageContext::camera() {
+camera& StageContext::camera_view() {
     return lighting->camera_view;
 }
 
-const camera& StageContext::camera() const {
+const camera& StageContext::camera_view() const {
     return lighting->camera_view;
 }
 

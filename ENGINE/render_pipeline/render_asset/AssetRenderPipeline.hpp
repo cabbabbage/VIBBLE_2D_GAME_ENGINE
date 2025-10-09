@@ -34,8 +34,8 @@ struct StageContext {
     Uint8                    main_light_brightness() const;
     Global_Light_Source&     main_light();
     const Global_Light_Source& main_light() const;
-    camera&                  camera();
-    const camera&            camera() const;
+    camera&                  camera_view();
+    const camera&            camera_view() const;
     Asset*                   player() const;
 };
 
