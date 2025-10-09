@@ -7,7 +7,7 @@ namespace vibble::dev_mode::room_config::spawn_group_lists::widgets {
 
 class ISpawnMethodWidget {
 public:
-    using OnChangedSignal = Signal<void()>;
+    using OnChangedSignal = Signal<>;
 
     virtual ~ISpawnMethodWidget() = default;
 

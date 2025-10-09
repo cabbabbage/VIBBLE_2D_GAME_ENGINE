@@ -54,10 +54,10 @@ public:
     bool is_open() const;
     void set_open(bool open);
 
-    Signal<void()>& on_open();
-    Signal<void()>& on_move_up();
-    Signal<void()>& on_move_down();
-    Signal<void()>& on_delete();
+    Signal<>& on_open();
+    Signal<>& on_move_up();
+    Signal<>& on_move_down();
+    Signal<>& on_delete();
 
     void trigger_open();
     void trigger_move_up();
@@ -77,10 +77,10 @@ private:
     std::string area_id_{};
     bool open_ = false;
     bool suppress_method_change_ = false;
-    Signal<void()> on_open_{};
-    Signal<void()> on_move_up_{};
-    Signal<void()> on_move_down_{};
-    Signal<void()> on_delete_{};
+    Signal<> on_open_{};
+    Signal<> on_move_up_{};
+    Signal<> on_move_down_{};
+    Signal<> on_delete_{};
     std::unique_ptr<widgets::ISpawnMethodWidget> method_widget_;
 };
 

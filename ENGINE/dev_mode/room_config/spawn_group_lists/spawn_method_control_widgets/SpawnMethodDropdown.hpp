@@ -16,12 +16,12 @@ public:
     const model::SpawnMethodId& selected_method() const;
     const std::vector<model::SpawnMethodId>& available_methods() const;
 
-    Signal<void(const model::SpawnMethodId&)>& on_method_selected();
+    Signal<const model::SpawnMethodId&>& on_method_selected();
 
 private:
     std::vector<model::SpawnMethodId> available_methods_;
     model::SpawnMethodId selected_method_;
-    Signal<void(const model::SpawnMethodId&)> on_method_selected_;
+    Signal<const model::SpawnMethodId&> on_method_selected_;
 };
 
 }  // namespace vibble::dev_mode::room_config::spawn_group_lists::spawn_method_control_widgets

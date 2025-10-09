@@ -107,19 +107,19 @@ void SpawnGroupRow::set_open(bool open) {
     }
 }
 
-Signal<void()>& SpawnGroupRow::on_open() {
+Signal<>& SpawnGroupRow::on_open() {
     return on_open_;
 }
 
-Signal<void()>& SpawnGroupRow::on_move_up() {
+Signal<>& SpawnGroupRow::on_move_up() {
     return on_move_up_;
 }
 
-Signal<void()>& SpawnGroupRow::on_move_down() {
+Signal<>& SpawnGroupRow::on_move_down() {
     return on_move_down_;
 }
 
-Signal<void()>& SpawnGroupRow::on_delete() {
+Signal<>& SpawnGroupRow::on_delete() {
     return on_delete_;
 }
 

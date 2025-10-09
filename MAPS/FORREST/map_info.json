@@ -749,29 +749,6 @@
           "position": "Exact",
           "priority": 0,
           "spawn_id": "spn-6d19915360f2"
-        },
-        {
-          "candidates": [
-            {
-              "chance": 0,
-              "name": "null"
-            },
-            {
-              "chance": 100,
-              "name": "candle"
-            }
-          ],
-          "check_overlap": false,
-          "display_name": "candle",
-          "dx": -115,
-          "dy": -192,
-          "enforce_spacing": false,
-          "max_number": 2,
-          "min_number": 2,
-          "origional_height": 3623,
-          "origional_width": 3621,
-          "position": "Perimeter",
-          "spawn_id": "spn-f60c32ff55cd"
         }
       ],
       "tags": {

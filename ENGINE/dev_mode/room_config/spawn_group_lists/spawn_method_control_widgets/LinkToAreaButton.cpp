@@ -18,7 +18,7 @@ bool LinkToAreaButton::has_target_area() const {
     return !area_id_.empty();
 }
 
-Signal<void(const std::string&)>& LinkToAreaButton::on_open_area() {
+Signal<const std::string&>& LinkToAreaButton::on_open_area() {
     return on_open_area_;
 }
 

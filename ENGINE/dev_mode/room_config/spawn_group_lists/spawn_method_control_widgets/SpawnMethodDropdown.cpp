@@ -35,7 +35,7 @@ const std::vector<model::SpawnMethodId>& SpawnMethodDropdown::available_methods(
     return available_methods_;
 }
 
-Signal<void(const model::SpawnMethodId&)>& SpawnMethodDropdown::on_method_selected() {
+Signal<const model::SpawnMethodId&>& SpawnMethodDropdown::on_method_selected() {
     return on_method_selected_;
 }
 
