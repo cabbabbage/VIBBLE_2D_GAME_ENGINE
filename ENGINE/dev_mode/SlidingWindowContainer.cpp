@@ -62,6 +62,16 @@ void SlidingWindowContainer::set_editor_interaction_blocker(std::function<void(b
     }
 }
 
+void SlidingWindowContainer::set_panel_bounds_override(const SDL_Rect& bounds) {
+    panel_override_ = bounds;
+    panel_override_active_ = bounds.w > 0 && bounds.h > 0;
+}
+
+void SlidingWindowContainer::clear_panel_bounds_override() {
+    panel_override_active_ = false;
+    panel_override_ = SDL_Rect{0, 0, 0, 0};
+}
+
 void SlidingWindowContainer::open() { set_visible(true); }
 void SlidingWindowContainer::close() {
     if (!visible_) {
@@ -368,9 +378,25 @@ void SlidingWindowContainer::layout(int screen_w, int screen_h) const {
         return;
     }
 
-    int panel_x = (screen_w * 2) / 3;
-    int panel_w = screen_w - panel_x;
-    panel_ = SDL_Rect{panel_x, 0, panel_w, screen_h};
+    if (panel_override_active_) {
+        SDL_Rect desired = panel_override_;
+        desired.w = std::max(0, desired.w);
+        desired.h = std::max(0, desired.h);
+        if (desired.w == 0 || desired.h == 0) {
+            desired = SDL_Rect{0, 0, screen_w, screen_h};
+        }
+        if (desired.w > screen_w) desired.w = screen_w;
+        if (desired.h > screen_h) desired.h = screen_h;
+        int max_x = screen_w - desired.w;
+        int max_y = screen_h - desired.h;
+        desired.x = std::clamp(desired.x, 0, std::max(0, max_x));
+        desired.y = std::clamp(desired.y, 0, std::max(0, max_y));
+        panel_ = desired;
+    } else {
+        int panel_x = (screen_w * 2) / 3;
+        int panel_w = screen_w - panel_x;
+        panel_ = SDL_Rect{panel_x, 0, panel_w, screen_h};
+    }
 
     const int padding = DMSpacing::panel_padding();
     const int gap = DMSpacing::section_gap();

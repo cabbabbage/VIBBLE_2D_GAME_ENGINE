@@ -37,6 +37,9 @@ public:
     void set_blocks_editor_interactions(bool block);
     void set_editor_interaction_blocker(std::function<void(bool)> blocker);
 
+    void set_panel_bounds_override(const SDL_Rect& bounds);
+    void clear_panel_bounds_override();
+
     void open();
     void close();
     void set_visible(bool visible);
@@ -75,6 +78,9 @@ private:
     bool visible_ = false;
     bool blocks_editor_interactions_ = false;
     bool editor_interactions_blocked_ = false;
+
+    bool panel_override_active_ = false;
+    SDL_Rect panel_override_{0, 0, 0, 0};
 
     mutable SDL_Rect panel_{0,0,0,0};
     mutable SDL_Rect name_label_rect_{0,0,0,0};

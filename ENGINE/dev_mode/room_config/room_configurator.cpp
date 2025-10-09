@@ -1,6 +1,5 @@
 #include "room_configurator.hpp"
 
-#include "FloatingDockableManager.hpp"
 #include "dm_styles.hpp"
 #include "map_generation/room.hpp"
 #include "spawn_group_lists/spawn_group_list.hpp"
@@ -279,120 +278,187 @@ struct RoomConfigurator::State {
     }
 };
 
-RoomConfigurator::RoomConfigurator()
-    : DockableCollapsible("Room Config", true, 0, 0) {
+RoomConfigurator::RoomConfigurator() {
     geometry_options_ = {"Square", "Circle"};
-    set_close_button_enabled(true);
-    set_title("Room Config");
-    set_expanded(true);
-    set_visible(false);
-    set_show_header(true);
-    set_scroll_enabled(true);
-    set_padding(DMSpacing::panel_padding());
-    set_row_gap(DMSpacing::item_gap());
-    set_col_gap(DMSpacing::item_gap());
-    set_cell_width(kRoomConfigPanelContentWidth);
-    set_available_height_override(kMaxFloatingHeight);
-    set_work_area(SDL_Rect{0, 0, 0, 0});
-    floating_position_ = position();
+    row_gap_ = DMSpacing::item_gap();
+    col_gap_ = DMSpacing::item_gap();
+    cell_width_ = kRoomConfigPanelContentWidth;
+    container_.set_header_text("Room Config");
+    container_.set_on_close([this]() { handle_container_closed(); });
+    container_.set_layout_function([this](const SlidingWindowContainer::LayoutContext& ctx) {
+        return this->layout_content(ctx);
+    });
+    container_.set_render_function([this](SDL_Renderer* renderer) {
+        for (const auto& row : rows_) {
+            for (Widget* w : row) {
+                if (w) w->render(renderer);
+            }
+        }
+    });
+    container_.set_event_function([this](const SDL_Event& e) {
+        if (e.type == SDL_KEYDOWN && e.key.keysym.sym == SDLK_ESCAPE) {
+            this->close();
+            return true;
+        }
+        for (auto& row : rows_) {
+            for (Widget* w : row) {
+                if (w && w->handle_event(e)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    });
+    container_.set_blocks_editor_interactions(true);
     state_ = std::make_unique<State>();
 }
 
 RoomConfigurator::~RoomConfigurator() = default;
 
 void RoomConfigurator::set_bounds(const SDL_Rect& bounds) {
-    bounds_ = bounds;
-    const bool want_docked = bounds_.w > 0 && bounds_.h > 0;
-    if (want_docked != docked_mode_) {
-        if (want_docked) {
-            floating_position_ = has_custom_position_ ? position() : preferred_position_;
-            FloatingDockableManager::instance().notify_panel_closed(this);
-            set_floatable(false);
-            set_close_button_enabled(false);
-            set_scroll_enabled(true);
-            has_custom_position_ = false;
-        } else {
-            set_floatable(true);
-            set_close_button_enabled(true);
-            preferred_position_ = floating_position_;
-        }
-        docked_mode_ = want_docked;
-    } else if (!want_docked) {
-        preferred_position_ = floating_position_;
-    }
-    applied_bounds_ = SDL_Rect{-1, -1, 0, 0};
-    apply_bounds_if_needed();
-}
-
-void RoomConfigurator::apply_bounds_if_needed() {
-    if (!docked_mode_ || bounds_.w <= 0 || bounds_.h <= 0) {
-        if (applied_bounds_.x != bounds_.x || applied_bounds_.y != bounds_.y ||
-            applied_bounds_.w != bounds_.w || applied_bounds_.h != bounds_.h) {
-            set_available_height_override(kMaxFloatingHeight);
-            set_visible_height(kMaxFloatingHeight);
-            applied_bounds_ = bounds_;
-            if (!has_custom_position_) {
-                set_position(preferred_position_.x, preferred_position_.y);
-                floating_position_ = preferred_position_;
+    bounds_override_ = bounds;
+    has_bounds_override_ = bounds.w > 0 && bounds.h > 0;
+    if (has_bounds_override_) {
+        SDL_Rect clamped = clamp_to_work_area(bounds);
+        container_.set_panel_bounds_override(clamped);
+        const int padding = DMSpacing::panel_padding();
+        const int available_width = std::max(0, clamped.w - 2 * padding);
+        int cell_width = kRoomConfigPanelContentWidth;
+        if (available_width > 0) {
+            cell_width = std::min(kRoomConfigPanelContentWidth, available_width);
+            if (available_width >= kRoomConfigPanelMinWidth) {
+                cell_width = std::max(kRoomConfigPanelMinWidth, cell_width);
             }
         }
-        return;
+        cell_width_ = cell_width;
+    } else {
+        container_.clear_panel_bounds_override();
+        cell_width_ = kRoomConfigPanelContentWidth;
     }
-
-    if (applied_bounds_.x == bounds_.x && applied_bounds_.y == bounds_.y &&
-        applied_bounds_.w == bounds_.w && applied_bounds_.h == bounds_.h) {
-        return;
-    }
-
-    const int pad = DMSpacing::panel_padding();
-    const int available = std::max(0, bounds_.h - 2 * pad);
-    const int available_width = std::max(0, bounds_.w - 2 * pad);
-    int cell_width = kRoomConfigPanelContentWidth;
-    if (available_width > 0) {
-        cell_width = std::min(kRoomConfigPanelContentWidth, available_width);
-        if (available_width >= kRoomConfigPanelMinWidth) {
-            cell_width = std::max(kRoomConfigPanelMinWidth, cell_width);
-        }
-    }
-
-    set_cell_width(cell_width);
-    int override_h = available > 0 ? std::min(available, kMaxFloatingHeight) : kMaxFloatingHeight;
-    set_available_height_override(override_h);
-    set_visible_height(available > 0 ? available : override_h);
-    DockableCollapsible::set_rect(bounds_);
-    applied_bounds_ = bounds_;
 }
 
-void RoomConfigurator::undock_from_sidebar(const SDL_Point& grab_point) {
-    if (!docked_mode_) return;
-
-    const int offset_x = grab_point.x - bounds_.x;
-    const int offset_y = grab_point.y - bounds_.y;
-    const int max_header_width = kRoomConfigPanelContentWidth;
-    const int clamped_offset_x = std::max(0, std::min(offset_x, max_header_width - 1));
-    int new_x = grab_point.x - clamped_offset_x;
-    int new_y = grab_point.y - std::max(0, std::min(offset_y, DMButton::height() - 1));
-
-    docked_mode_ = false;
-    bounds_ = SDL_Rect{0, 0, 0, 0};
-    applied_bounds_ = SDL_Rect{-1, -1, 0, 0};
-    set_floatable(true);
-    set_close_button_enabled(true);
-    set_available_height_override(kMaxFloatingHeight);
-
-    if (!has_custom_position_) {
-        preferred_position_ = floating_position_;
+void RoomConfigurator::set_work_area(const SDL_Rect& bounds) {
+    work_area_ = bounds;
+    if (has_bounds_override_) {
+        SDL_Rect clamped = clamp_to_work_area(bounds_override_);
+        container_.set_panel_bounds_override(clamped);
+        const int padding = DMSpacing::panel_padding();
+        const int available_width = std::max(0, clamped.w - 2 * padding);
+        int cell_width = kRoomConfigPanelContentWidth;
+        if (available_width > 0) {
+            cell_width = std::min(kRoomConfigPanelContentWidth, available_width);
+            if (available_width >= kRoomConfigPanelMinWidth) {
+                cell_width = std::max(kRoomConfigPanelMinWidth, cell_width);
+            }
+        }
+        cell_width_ = cell_width;
     }
+}
 
-    floating_position_ = SDL_Point{new_x, new_y};
-    preferred_position_ = floating_position_;
-    has_custom_position_ = true;
-    set_position(new_x, new_y);
-    SDL_Point clamped = position();
-    floating_position_ = clamped;
-    preferred_position_ = clamped;
-    FloatingDockableManager::instance().open_floating(
-        "Room Config", this, [this]() { this->close(); });
+void RoomConfigurator::set_show_header(bool show) { show_header_ = show; }
+
+void RoomConfigurator::set_on_close(std::function<void()> cb) { on_close_ = std::move(cb); }
+
+void RoomConfigurator::reset_scroll() { container_.reset_scroll(); }
+
+SDL_Rect RoomConfigurator::clamp_to_work_area(const SDL_Rect& bounds) const {
+    if (work_area_.w <= 0 || work_area_.h <= 0) {
+        return bounds;
+    }
+    SDL_Rect result = bounds;
+    result.w = std::max(1, std::min(result.w, work_area_.w));
+    result.h = std::max(1, std::min(result.h, work_area_.h));
+    int min_x = work_area_.x;
+    int max_x = work_area_.x + work_area_.w - result.w;
+    int min_y = work_area_.y;
+    int max_y = work_area_.y + work_area_.h - result.h;
+    if (max_x < min_x) max_x = min_x;
+    if (max_y < min_y) max_y = min_y;
+    result.x = std::clamp(result.x, min_x, max_x);
+    result.y = std::clamp(result.y, min_y, max_y);
+    return result;
+}
+
+RoomConfigurator::Rows RoomConfigurator::compute_layout_rows() const {
+    Rows layout_rows;
+    layout_rows.reserve(rows_.size());
+    for (const auto& row : rows_) {
+        Row current;
+        bool inserted_any = false;
+        for (Widget* w : row) {
+            if (w && w->wants_full_row()) {
+                if (!current.empty()) {
+                    layout_rows.push_back(current);
+                    current.clear();
+                }
+                layout_rows.push_back({w});
+                inserted_any = true;
+            } else {
+                current.push_back(w);
+                if (w) inserted_any = true;
+            }
+        }
+        if (!current.empty()) {
+            layout_rows.push_back(std::move(current));
+        } else if (!inserted_any) {
+            layout_rows.emplace_back();
+        }
+    }
+    return layout_rows;
+}
+
+int RoomConfigurator::layout_content(const SlidingWindowContainer::LayoutContext& ctx) const {
+    auto layout_rows = compute_layout_rows();
+    int content_width = ctx.content_width;
+    if (cell_width_ > 0) {
+        content_width = std::min(content_width, cell_width_);
+    }
+    int x_origin = ctx.content_x;
+    if (content_width < ctx.content_width) {
+        x_origin += (ctx.content_width - content_width) / 2;
+    }
+    int y = ctx.content_top;
+    bool first_row = true;
+    for (const auto& row : layout_rows) {
+        if (!row.empty()) {
+            if (!first_row) y += row_gap_;
+            first_row = false;
+            int columns = static_cast<int>(row.size());
+            int col_width = std::max(1, (content_width - (columns - 1) * col_gap_) / std::max(1, columns));
+            int row_height = 0;
+            for (Widget* w : row) {
+                if (w) {
+                    row_height = std::max(row_height, w->height_for_width(col_width));
+                }
+            }
+            int x = x_origin;
+            for (Widget* w : row) {
+                if (w) {
+                    w->set_rect(SDL_Rect{x, y - ctx.scroll_value, col_width, row_height});
+                }
+                x += col_width + col_gap_;
+            }
+            y += row_height;
+        } else {
+            if (!first_row) y += row_gap_;
+            first_row = false;
+        }
+    }
+    return y;
+}
+
+void RoomConfigurator::set_rows(Rows rows) { rows_ = std::move(rows); }
+
+void RoomConfigurator::handle_container_closed() {
+    if (spawn_list_) {
+        spawn_list_->close();
+        spawn_list_->set_visible(false);
+    }
+    external_room_json_ = nullptr;
+    on_external_spawn_change_ = {};
+    on_external_spawn_entry_change_ = {};
+    external_configure_entry_ = {};
+    if (on_close_) on_close_();
 }
 
 bool RoomConfigurator::apply_room_data(const nlohmann::json& data) {
@@ -488,18 +554,12 @@ void RoomConfigurator::open(const nlohmann::json& room_data) {
     on_external_spawn_entry_change_ = {};
     external_configure_entry_ = {};
     is_trail_context_ = false;
-    if (!docked_mode_) {
-        FloatingDockableManager::instance().open_floating(
-            "Room Config", this, [this]() { this->close(); });
-    }
     bool changed = apply_room_data(room_data);
     if (changed) {
         rebuild_rows();
         reset_scroll();
     }
-    set_visible(true);
-    set_expanded(true);
-    apply_bounds_if_needed();
+    container_.open();
 }
 
 void RoomConfigurator::open(nlohmann::json& room_data,
@@ -512,18 +572,12 @@ void RoomConfigurator::open(nlohmann::json& room_data,
     on_external_spawn_entry_change_ = std::move(on_entry_change);
     external_configure_entry_ = std::move(configure_entry);
     is_trail_context_ = false;
-    if (!docked_mode_) {
-        FloatingDockableManager::instance().open_floating(
-            "Room Config", this, [this]() { this->close(); });
-    }
     bool changed = apply_room_data(room_data);
     if (changed) {
         rebuild_rows();
         reset_scroll();
     }
-    set_visible(true);
-    set_expanded(true);
-    apply_bounds_if_needed();
+    container_.open();
 }
 
 void RoomConfigurator::open(Room* room) {
@@ -540,10 +594,6 @@ void RoomConfigurator::open(Room* room) {
             is_trail_context_ = true;
         }
     }
-    if (!docked_mode_) {
-        FloatingDockableManager::instance().open_floating(
-            "Room Config", this, [this]() { this->close(); });
-    }
 
     const nlohmann::json& source = room ? room->assets_data() : empty_object();
     bool changed = (room != previous) || apply_room_data(source);
@@ -551,9 +601,7 @@ void RoomConfigurator::open(Room* room) {
         rebuild_rows();
         reset_scroll();
     }
-    set_visible(true);
-    set_expanded(true);
-    apply_bounds_if_needed();
+    container_.open();
 }
 
 bool RoomConfigurator::refresh_spawn_groups(const nlohmann::json& room_data) {
@@ -579,14 +627,18 @@ bool RoomConfigurator::refresh_spawn_groups(Room* room) {
 }
 
 void RoomConfigurator::close() {
-    set_visible(false);
-    external_room_json_ = nullptr;
-    on_external_spawn_change_ = {};
-    on_external_spawn_entry_change_ = {};
-    external_configure_entry_ = {};
+    if (!container_.is_visible()) {
+        if (spawn_list_) spawn_list_->set_visible(false);
+        external_room_json_ = nullptr;
+        on_external_spawn_change_ = {};
+        on_external_spawn_entry_change_ = {};
+        external_configure_entry_ = {};
+        return;
+    }
+    container_.close();
 }
 
-bool RoomConfigurator::visible() const { return is_visible(); }
+bool RoomConfigurator::visible() const { return container_.is_visible(); }
 
 bool RoomConfigurator::any_panel_visible() const { return visible(); }
 
@@ -786,7 +838,7 @@ void RoomConfigurator::rebuild_rows() {
         state_ = std::make_unique<State>();
     }
 
-    DockableCollapsible::Rows rows;
+    Rows rows;
     room_section_label_ = std::make_unique<RoomConfiguratorSectionLabel>("Room Properties");
     rows.push_back({room_section_label_.get()});
 
@@ -907,14 +959,15 @@ void RoomConfigurator::rebuild_rows() {
 }
 
 void RoomConfigurator::update(const Input& input, int screen_w, int screen_h) {
-    const bool panel_visible = is_visible();
-    apply_bounds_if_needed();
-    DockableCollapsible::update(input, screen_w, screen_h);
+    last_screen_w_ = screen_w;
+    last_screen_h_ = screen_h;
+    container_.update(input, screen_w, screen_h);
+    const bool panel_visible = container_.is_visible();
 
     if (spawn_list_) {
         spawn_list_->set_visible(panel_visible);
         spawn_list_->set_screen_dimensions(screen_w, screen_h);
-        SDL_Rect panel_rect = rect();
+        SDL_Rect panel_rect = container_.panel_rect();
         SDL_Point anchor{panel_rect.x + panel_rect.w + DMSpacing::item_gap(), panel_rect.y};
         spawn_list_->set_anchor(anchor.x, anchor.y);
         spawn_list_->update(input, screen_w, screen_h);
@@ -1075,23 +1128,8 @@ bool RoomConfigurator::sync_state_from_widgets() {
 
 bool RoomConfigurator::handle_event(const SDL_Event& e) {
     bool used = false;
-    if (is_visible()) {
-        apply_bounds_if_needed();
-        if (docked_mode_ && e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
-            SDL_Point p{e.button.x, e.button.y};
-            if (SDL_PointInRect(&p, &header_rect_) || SDL_PointInRect(&p, &handle_rect_)) {
-                undock_from_sidebar(p);
-            }
-        }
-        SDL_Point before = position();
-        used |= DockableCollapsible::handle_event(e);
-        SDL_Point after = position();
-        if (after.x != before.x || after.y != before.y) {
-            has_custom_position_ = true;
-            if (!docked_mode_) {
-                floating_position_ = after;
-            }
-        }
+    if (container_.is_visible()) {
+        used = container_.handle_event(e);
     }
     if (spawn_list_ && spawn_list_->handle_event(e)) {
         used = true;
@@ -1100,9 +1138,8 @@ bool RoomConfigurator::handle_event(const SDL_Event& e) {
 }
 
 void RoomConfigurator::render(SDL_Renderer* r) const {
-    if (is_visible()) {
-        DockableCollapsible::render(r);
-    }
+    if (!container_.is_visible()) return;
+    container_.render(r, last_screen_w_, last_screen_h_);
 }
 
 const nlohmann::json& RoomConfigurator::live_room_json() const {
@@ -1138,10 +1175,7 @@ nlohmann::json RoomConfigurator::build_json() const {
     return result;
 }
 
-bool RoomConfigurator::is_point_inside(int x, int y) const {
-    if (!is_visible()) return false;
-    return DockableCollapsible::is_point_inside(x, y);
-}
+bool RoomConfigurator::is_point_inside(int x, int y) const { return container_.is_point_inside(x, y); }
 
 void RoomConfigurator::load_tags_from_json(const nlohmann::json& data) {
     std::set<std::string> include;
