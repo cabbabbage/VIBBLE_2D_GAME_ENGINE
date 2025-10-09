@@ -5,6 +5,7 @@
 #include <string>
 #include <vector>
 
+#include "dev_mode/SlidingWindowContainer.hpp"
 #include "dev_mode/asset_info_sections.hpp"
 
 class AssetInfo;
@@ -65,26 +66,12 @@ class AssetInfoUI {
     
     class Section_Lighting* lighting_section_ = nullptr;
     class Asset* target_asset_ = nullptr;
-    mutable int scroll_ = 0;
-    mutable int max_scroll_ = 0;
-    mutable SDL_Rect panel_ {0,0,0,0};
-    mutable SDL_Rect scroll_region_{0,0,0,0};
-    mutable SDL_Rect name_label_rect_{0,0,0,0};
     mutable SDL_Rect animation_editor_rect_{0,0,0,0};
-    mutable SDL_Rect content_clip_rect_{0,0,0,0};
-    mutable SDL_Rect scroll_track_rect_{0,0,0,0};
-    mutable SDL_Rect scroll_thumb_rect_{0,0,0,0};
-    mutable int content_height_px_ = 0;
-    mutable int visible_height_px_ = 0;
-    mutable bool scroll_dragging_ = false;
-    mutable bool scrollbar_dragging_ = false;
-    mutable int scroll_drag_anchor_y_ = 0;
-    mutable int scroll_drag_start_scroll_ = 0;
-    mutable int scrollbar_drag_offset_ = 0;
+
+    SlidingWindowContainer container_;
 
     mutable std::unique_ptr<class DMButton> configure_btn_;
     mutable std::unique_ptr<class ButtonWidget> configure_btn_widget_;
-    int pulse_frames_ = 0;
     bool camera_override_active_ = false;
     bool prev_camera_realism_enabled_ = false;
     bool prev_camera_parallax_enabled_ = false;
