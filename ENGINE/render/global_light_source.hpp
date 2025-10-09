@@ -36,12 +36,14 @@ class Global_Light_Source {
     Uint8 clamp_alpha(Uint8 value) const;
     SDL_Color clamp_color_alpha(SDL_Color color) const;
     SDL_Color compute_color_from_horizon() const;
+    void      recalc_position();
 
-	private:
+        private:
     SDL_Renderer* renderer_;
     SDL_Texture*  texture_;
     SDL_Color base_color_;
     SDL_Color current_color_;
+    SDL_Point default_center_;
     SDL_Point center_;
     SDL_Point pos_;
     float angle_;

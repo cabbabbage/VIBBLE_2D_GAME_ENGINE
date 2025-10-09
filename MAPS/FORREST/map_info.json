@@ -9,15 +9,15 @@
     "tripod_distance_y": -1335.0
   },
   "light_rays_params": {
-    "bright_percentile": 0.890999972820282,
-    "decay": 0.5540000200271606,
+    "bright_percentile": 0.746999979019165,
+    "decay": 0.7549999952316284,
     "density": 2.1700000762939453,
     "downsample_log2": 4,
     "enabled": true,
     "exposure": 1.2400000095367432,
-    "gamma_comp": 2.569999933242798,
+    "gamma_comp": 2.069999933242798,
     "metric": "MaxRGB",
-    "min_luma_threshold": 0.5690000057220459,
+    "min_luma_threshold": 0.6809999942779541,
     "per_light_enabled": true,
     "samples": 212,
     "use_alpha_in_mask": true,
@@ -198,7 +198,7 @@
     "max_opacity": 255,
     "min_opacity": 23,
     "mult": 0.32,
-    "orbit_radius": 345,
+    "orbit_radius": 1839,
     "radius": 2759,
     "update_interval": 9
   },

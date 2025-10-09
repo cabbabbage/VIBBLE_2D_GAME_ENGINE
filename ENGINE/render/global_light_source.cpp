@@ -7,6 +7,7 @@
 #include <cmath>
 #include <algorithm>
 #include <random>
+#include <optional>
 #include <SDL.h>
 using json = nlohmann::json;
 
@@ -19,10 +20,11 @@ Global_Light_Source::Global_Light_Source(SDL_Renderer* renderer,
 texture_(nullptr),
 base_color_(fallback_base_color),
 current_color_(fallback_base_color),
+default_center_(screen_center),
 center_(screen_center),
 angle_(0.0f),
 initialized_(false),
-pos_{0,0},
+pos_{screen_center.x, screen_center.y},
 frame_counter_(0),
 light_brightness(255)
 {
@@ -30,6 +32,7 @@ light_brightness(255)
         if (!load_from_map_light(map_path)) {
                 build_texture();
                 set_light_brightness();
+                recalc_position();
         }
 }
 
@@ -46,6 +49,8 @@ void Global_Light_Source::set_defaults(int screen_width, SDL_Color fallback_base
         max_opacity_     = 255;
         key_colors_.clear();
         key_colors_.push_back({0.0f, base_color_});
+        center_ = default_center_;
+        recalc_position();
 }
 
 bool Global_Light_Source::load_from_map_light(const std::string& map_path) {
@@ -65,6 +70,21 @@ bool Global_Light_Source::load_from_map_light(const std::string& map_path) {
                 std::cerr << "[MapLight] Failed to parse map_info.json: " << e.what() << "\n";
                 return false;
         }
+
+        int default_cx = default_center_.x;
+        int default_cy = default_center_.y;
+        try {
+                double map_radius = j.value("map_radius", 0.0);
+                if (map_radius > 0.0) {
+                        int center_val = static_cast<int>(std::lround(map_radius));
+                        default_cx = center_val;
+                        default_cy = center_val;
+                }
+        } catch (...) {
+                // keep fallback default center if parsing fails
+        }
+        default_center_ = SDL_Point{ default_cx, default_cy };
+        center_ = default_center_;
         auto it = j.find("map_light_data");
         if (it == j.end() || !it->is_object()) {
                 // No map light data present; allow caller to fall back to defaults.
@@ -136,9 +156,54 @@ void Global_Light_Source::apply_config(const json& data) {
                 });
         }
 
+        center_ = default_center_;
+        auto parse_point = [](const nlohmann::json& arr) -> std::optional<SDL_Point> {
+                if (!arr.is_array() || arr.size() < 2) {
+                        return std::nullopt;
+                }
+                try {
+                        double cx = arr[0].get<double>();
+                        double cy = arr[1].get<double>();
+                        return SDL_Point{ static_cast<int>(std::lround(cx)), static_cast<int>(std::lround(cy)) };
+                } catch (...) {
+                        return std::nullopt;
+                }
+        };
+        bool custom_center = false;
+        if (auto center_it = data.find("center"); center_it != data.end()) {
+                if (auto parsed = parse_point(*center_it)) {
+                        center_ = *parsed;
+                        custom_center = true;
+                }
+        }
+        if (!custom_center) {
+                if (auto position_it = data.find("position"); position_it != data.end()) {
+                        if (auto parsed = parse_point(*position_it)) {
+                                center_ = *parsed;
+                                custom_center = true;
+                        }
+                }
+        }
+        if (!custom_center) {
+                if (data.contains("center_x")) {
+                        try {
+                                center_.x = data.at("center_x").get<int>();
+                                custom_center = true;
+                        } catch (...) {}
+                }
+                if (data.contains("center_y")) {
+                        try {
+                                center_.y = data.at("center_y").get<int>();
+                                custom_center = true;
+                        } catch (...) {}
+                }
+        }
+
         current_color_ = clamp_color_alpha(base_color_);
         build_texture();
         set_light_brightness();
+        recalc_position();
+        frame_counter_ = 0;
 }
 
 void Global_Light_Source::update() {
@@ -152,13 +217,10 @@ void Global_Light_Source::update() {
 		initialized_ = true;
 	}
 
-	float prev = angle_;
-	angle_ -= 0.01f;
+        angle_ -= 0.01f;
 	if (angle_ < 0.0f) angle_ += 2.0f * float(M_PI);
 
-	float ca = std::cos(angle_), sa = std::sin(angle_);
-	pos_.x = center_.x + int(orbit_radius * ca);
-	pos_.y = center_.y - int(orbit_radius * sa);
+	recalc_position();
 
 	SDL_Color k = compute_color_from_horizon();
 	current_color_ = k;
@@ -208,6 +270,15 @@ void Global_Light_Source::build_texture() {
 	} else {
 		SDL_QueryTexture(texture_, nullptr, nullptr, &cached_w_, &cached_h_);
 	}
+}
+
+void Global_Light_Source::recalc_position() {
+        const double ca = std::cos(angle_);
+        const double sa = std::sin(angle_);
+        const int dx = static_cast<int>(std::lround(static_cast<double>(orbit_radius) * ca));
+        const int dy = static_cast<int>(std::lround(static_cast<double>(orbit_radius) * sa));
+        pos_.x = center_.x + dx;
+        pos_.y = center_.y - dy;
 }
 
 SDL_Color Global_Light_Source::compute_color_from_horizon() const {
