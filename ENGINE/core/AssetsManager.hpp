@@ -19,6 +19,7 @@ class Room;
 class Input;
 class DevControls;
 class AssetInfo;
+class Global_Light_Source;
 
 class Assets {
 public:
@@ -93,6 +94,9 @@ public:
     void update_closest_assets(Asset* player, int max_count);
     void mark_active_assets_dirty();
     void initialize_active_assets(SDL_Point center);
+
+    Global_Light_Source* map_light_source();
+    const Global_Light_Source* map_light_source() const;
 
     bool is_dev_mode() const { return dev_mode; }
 

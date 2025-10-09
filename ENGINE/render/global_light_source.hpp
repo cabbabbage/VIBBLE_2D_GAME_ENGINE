@@ -23,8 +23,11 @@ class Global_Light_Source {
     int          get_brightness() const;
     int get_cached_w() const { return cached_w_; }
     int get_cached_h() const { return cached_h_; }
+    SDL_Point    get_orbit_center() const { return center_; }
+    int          min_opacity() const { return min_opacity_; }
+    int          max_opacity() const { return max_opacity_; }
 
-	private:
+        private:
     struct KeyEntry {
         float degree;
         SDL_Color color;

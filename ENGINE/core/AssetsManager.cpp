@@ -285,6 +285,49 @@ void Assets::hydrate_map_info_sections() {
             D["keys"] = nlohmann::json::array();
             D["keys"].push_back(nlohmann::json::array({ 0.0, D["base_color"] }));
         }
+        auto clamp_component = [](int v) { return std::max(0, std::min(255, v)); };
+        if (!D.contains("screen_light") || !D["screen_light"].is_object()) {
+            D["screen_light"] = nlohmann::json::object();
+        }
+        nlohmann::json& screen = D["screen_light"];
+        if (!screen.contains("color") || !screen["color"].is_array() || screen["color"].size() < 3) {
+            screen["color"] = nlohmann::json::array({255, 255, 255});
+        } else {
+            for (std::size_t i = 0; i < 3; ++i) {
+                if (i >= screen["color"].size()) {
+                    screen["color"].push_back(255);
+                } else {
+                    try {
+                        int comp = clamp_component(screen["color"][i].get<int>());
+                        screen["color"][i] = comp;
+                    } catch (...) {
+                        screen["color"][i] = 255;
+                    }
+                }
+            }
+            while (screen["color"].size() > 3) {
+                screen["color"].erase(screen["color"].size() - 1);
+            }
+        }
+        int map_min = D.value("min_opacity", 0);
+        int map_max = D.value("max_opacity", 255);
+        map_min = std::max(0, std::min(255, map_min));
+        map_max = std::max(0, std::min(255, map_max));
+        if (map_min > map_max) std::swap(map_min, map_max);
+        if (!screen.contains("min_opacity")) screen["min_opacity"] = map_min;
+        if (!screen.contains("max_opacity")) screen["max_opacity"] = map_max;
+        try {
+            int smin = clamp_component(screen["min_opacity"].get<int>());
+            int smax = clamp_component(screen["max_opacity"].get<int>());
+            smin = std::max(map_min, std::min(map_max, smin));
+            smax = std::max(map_min, std::min(map_max, smax));
+            if (smin > smax) std::swap(smin, smax);
+            screen["min_opacity"] = smin;
+            screen["max_opacity"] = smax;
+        } catch (...) {
+            screen["min_opacity"] = map_min;
+            screen["max_opacity"] = map_max;
+        }
     }
     {
         nlohmann::json& R = map_info_json_["light_rays_params"];
@@ -936,6 +979,17 @@ void Assets::render_overlays(SDL_Renderer* renderer) {
 
 SDL_Renderer* Assets::renderer() const {
     return scene ? scene->get_renderer() : nullptr;
+}
+
+Global_Light_Source* Assets::map_light_source() {
+    if (!scene) {
+        return nullptr;
+    }
+    return &scene->map_light_source();
+}
+
+const Global_Light_Source* Assets::map_light_source() const {
+    return const_cast<Assets*>(this)->map_light_source();
 }
 
 void Assets::toggle_asset_library() {

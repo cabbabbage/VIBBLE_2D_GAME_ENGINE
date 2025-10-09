@@ -19,6 +19,15 @@ screen_height_(screen_height),
 fullscreen_light_tex_(fullscreen_light_tex)
 {}
 
+void LightMap::set_fullscreen_light_settings(SDL_Color color, int min_opacity, int max_opacity) {
+        fullscreen_light_color_ = SDL_Color{color.r, color.g, color.b, 255};
+        fullscreen_light_min_opacity_ = std::clamp(min_opacity, 0, 255);
+        fullscreen_light_max_opacity_ = std::clamp(max_opacity, 0, 255);
+        if (fullscreen_light_min_opacity_ > fullscreen_light_max_opacity_) {
+                std::swap(fullscreen_light_min_opacity_, fullscreen_light_max_opacity_);
+        }
+}
+
 void LightMap::render(bool debugging) {
 	if (debugging) std::cout << "[render_asset_lights_z] start\n";
 	static std::mt19937 flicker_rng{ std::random_device{}() };
@@ -43,24 +52,36 @@ void LightMap::collect_layers(std::vector<LightEntry>& out, std::mt19937& rng) {
         constexpr int min_visible_w = 1;
         constexpr int min_visible_h = 1;
         Uint8 main_alpha = main_light_.get_current_color().a;
-        last_main_light_alpha_ = main_alpha;
+        Uint8 screen_alpha = static_cast<Uint8>(std::clamp<int>(main_alpha, fullscreen_light_min_opacity_, fullscreen_light_max_opacity_));
+        last_main_light_alpha_ = screen_alpha;
         const auto& active = assets_->getActive();
         if (out.capacity() < active.size() + 3) {
                 out.reserve(active.size() + 3);
         }
-	if (fullscreen_light_tex_) {
-		out.push_back({ fullscreen_light_tex_, { 0, 0, screen_width_, screen_height_ },
-			static_cast<Uint8>(main_alpha / 2), SDL_FLIP_NONE, false });
-	}
-	if (SDL_Texture* map_tex = main_light_.get_texture()) {
-		int lw = main_light_.get_cached_w();
-		int lh = main_light_.get_cached_h();
-		if (lw == 0 || lh == 0) SDL_QueryTexture(map_tex, nullptr, nullptr, &lw, &lh);
-		SDL_Rect map_rect = get_scaled_position_rect(main_light_.get_position(), lw, lh, inv_scale, min_visible_w, min_visible_h);
-		if (map_rect.w != 0 || map_rect.h != 0) {
-			out.push_back({ map_tex, map_rect, main_alpha, SDL_FLIP_NONE, false });
-		}
-	}
+        if (fullscreen_light_tex_) {
+                LightEntry entry{};
+                entry.tex = fullscreen_light_tex_;
+                entry.dst = { 0, 0, screen_width_, screen_height_ };
+                entry.alpha = screen_alpha;
+                entry.flip = SDL_FLIP_NONE;
+                entry.color_mod = fullscreen_light_color_;
+                out.push_back(entry);
+        }
+        if (SDL_Texture* map_tex = main_light_.get_texture()) {
+                int lw = main_light_.get_cached_w();
+                int lh = main_light_.get_cached_h();
+                if (lw == 0 || lh == 0) SDL_QueryTexture(map_tex, nullptr, nullptr, &lw, &lh);
+                SDL_Rect map_rect = get_scaled_position_rect(main_light_.get_position(), lw, lh, inv_scale, min_visible_w, min_visible_h);
+                if (map_rect.w != 0 || map_rect.h != 0) {
+                        LightEntry entry{};
+                        entry.tex = map_tex;
+                        entry.dst = map_rect;
+                        entry.alpha = main_alpha;
+                        entry.flip = SDL_FLIP_NONE;
+                        entry.color_mod = SDL_Color{255, 255, 220, 255};
+                        out.push_back(entry);
+                }
+        }
         const float main_brightness = static_cast<float>(main_light_.get_brightness());
         for (Asset* a : active) {
                 if (!a || !a->info) continue;
@@ -86,8 +107,13 @@ void LightMap::collect_layers(std::vector<LightEntry>& out, std::mt19937& rng) {
                                         alpha_f *= (1.0f + std::uniform_real_distribution<float>(-max_jitter, max_jitter)(rng));
                         }
                         Uint8 alpha = static_cast<Uint8>(std::clamp(alpha_f, 0.0f, 255.0f));
-                        out.push_back({ light.texture, dst, alpha,
-                 a->flipped ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE, true });
+                        LightEntry entry{};
+                        entry.tex = light.texture;
+                        entry.dst = dst;
+                        entry.alpha = alpha;
+                        entry.flip = a->flipped ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE;
+                        entry.color_mod = SDL_Color{255, 255, 220, 255};
+                        out.push_back(entry);
                 }
         }
 }
@@ -101,19 +127,19 @@ SDL_Texture* LightMap::build_lowres_mask(const std::vector<LightEntry>& layers,
         SDL_RenderClear(renderer_);
         SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_ADD);
         if (last_main_light_alpha_ > 0) {
-                SDL_SetRenderDrawColor(renderer_, 255, 255, 255, last_main_light_alpha_);
+                SDL_SetRenderDrawColor(renderer_, fullscreen_light_color_.r, fullscreen_light_color_.g, fullscreen_light_color_.b, last_main_light_alpha_);
                 SDL_Rect fullscreen_rect{ 0, 0, low_w, low_h };
                 SDL_RenderFillRect(renderer_, &fullscreen_rect);
         }
         for (auto& e : layers) {
                 SDL_SetTextureBlendMode(e.tex, SDL_BLENDMODE_ADD);
                 SDL_SetTextureAlphaMod(e.tex, e.alpha);
-                SDL_SetTextureColorMod(e.tex, 255, 255, 220);
+                SDL_SetTextureColorMod(e.tex, e.color_mod.r, e.color_mod.g, e.color_mod.b);
                 SDL_Rect scaled_dst{
-			e.dst.x / downscale,
-			e.dst.y / downscale,
-			e.dst.w / downscale,
-			e.dst.h / downscale
+                        e.dst.x / downscale,
+                        e.dst.y / downscale,
+                        e.dst.w / downscale,
+                        e.dst.h / downscale
 		};
 		SDL_RenderCopyEx(renderer_, e.tex, nullptr, &scaled_dst, 0, nullptr, e.flip);
 	}

@@ -17,6 +17,7 @@
 #include "dm_styles.hpp"
 #include "widgets.hpp"
 #include "dev_controls_persistence.hpp"
+#include "render/global_light_source.hpp"
 
 #include "asset/Asset.hpp"
 #include "asset/asset_types.hpp"
@@ -1324,6 +1325,26 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
         }
         if (asset_area_editor_ && asset_area_editor_->is_active()) {
             asset_area_editor_->render(renderer);
+        }
+    }
+    if (renderer && map_mode_ui_ && map_mode_ui_->is_light_panel_visible() && assets_) {
+        if (const Global_Light_Source* light = assets_->map_light_source()) {
+            SDL_Point orbit_center = light->get_orbit_center();
+            SDL_Point light_pos = light->get_position();
+            const camera& cam = assets_->getView();
+            SDL_Point start = cam.map_to_screen(orbit_center);
+            SDL_Point end = cam.map_to_screen(light_pos);
+            SDL_BlendMode prev_mode = SDL_BLENDMODE_NONE;
+            SDL_GetRenderDrawBlendMode(renderer, &prev_mode);
+            Uint8 pr = 0, pg = 0, pb = 0, pa = 0;
+            SDL_GetRenderDrawColor(renderer, &pr, &pg, &pb, &pa);
+            SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+            SDL_SetRenderDrawColor(renderer, 255, 255, 255, 200);
+            SDL_RenderDrawLine(renderer, start.x, start.y, end.x, end.y);
+            SDL_Rect tip{ end.x - 3, end.y - 3, 6, 6 };
+            SDL_RenderFillRect(renderer, &tip);
+            SDL_SetRenderDrawColor(renderer, pr, pg, pb, pa);
+            SDL_SetRenderDrawBlendMode(renderer, prev_mode);
         }
     }
     if (map_mode_ui_) map_mode_ui_->render(renderer);

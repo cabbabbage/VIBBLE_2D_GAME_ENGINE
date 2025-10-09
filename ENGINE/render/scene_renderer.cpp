@@ -35,22 +35,20 @@ SceneRenderer::SceneRenderer(SDL_Renderer* renderer,
   render_asset_(renderer, assets->getView(), main_light_source_, assets->player)
 {
 	fullscreen_light_tex_ = SDL_CreateTexture(renderer_, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET, screen_width_, screen_height_);
-	if (fullscreen_light_tex_) {
-		SDL_SetTextureBlendMode(fullscreen_light_tex_, SDL_BLENDMODE_BLEND);
-		SDL_Texture* prev = SDL_GetRenderTarget(renderer_);
-		SDL_SetRenderTarget(renderer_, fullscreen_light_tex_);
-		SDL_Color color = main_light_source_.get_current_color();
-		SDL_SetRenderDrawColor(renderer_, color.r, color.g, color.b, color.a);
-		SDL_RenderClear(renderer_);
-		SDL_SetRenderTarget(renderer_, prev);
-	} else {
-		std::cerr << "[SceneRenderer] Failed to create fullscreen light texture: "
-		          << SDL_GetError() << "\n";
-	}
+        if (fullscreen_light_tex_) {
+                SDL_SetTextureBlendMode(fullscreen_light_tex_, SDL_BLENDMODE_BLEND);
+                update_fullscreen_light_texture();
+        } else {
+                std::cerr << "[SceneRenderer] Failed to create fullscreen light texture: "
+                          << SDL_GetError() << "\n";
+        }
 
-	// No accumulation texture; render directly to default target
+        // No accumulation texture; render directly to default target
 
         z_light_pass_ = std::make_unique<LightMap>(renderer_, assets_, main_light_source_, screen_width_, screen_height_, fullscreen_light_tex_);
+        if (z_light_pass_) {
+                z_light_pass_->set_fullscreen_light_settings(screen_light_color_, screen_light_min_opacity_, screen_light_max_opacity_);
+        }
         light_rays_config_ = LightRaysConfig::defaults();
         light_rays_params_ = light_rays_config_.to_light_rays_params();
         light_rays_pass_ = std::make_unique<LightRaysPass>(renderer_, screen_width_, screen_height_);
@@ -111,15 +109,8 @@ void SceneRenderer::set_low_quality_rendering(bool enabled) {
 
 void SceneRenderer::apply_map_light_config(const nlohmann::json& data) {
         main_light_source_.apply_config(data);
-        if (!renderer_ || !fullscreen_light_tex_) {
-                return;
-        }
-        SDL_Texture* prev = SDL_GetRenderTarget(renderer_);
-        SDL_SetRenderTarget(renderer_, fullscreen_light_tex_);
-        SDL_Color color = main_light_source_.get_current_color();
-        SDL_SetRenderDrawColor(renderer_, color.r, color.g, color.b, color.a);
-        SDL_RenderClear(renderer_);
-        SDL_SetRenderTarget(renderer_, prev);
+        apply_screen_light_settings(data);
+        update_fullscreen_light_texture();
 }
 
 void SceneRenderer::apply_light_rays_config(const nlohmann::json& data) {
@@ -131,6 +122,52 @@ void SceneRenderer::apply_light_rays_config(const nlohmann::json& data) {
                 light_rays_pass_->set_params(light_rays_params_);
                 light_rays_pass_->set_enabled(light_rays_enabled_);
         }
+}
+
+void SceneRenderer::apply_screen_light_settings(const nlohmann::json& data) {
+        SDL_Color desired_color{255, 255, 255, 255};
+        int desired_min = 0;
+        int desired_max = 255;
+        auto screen_it = data.find("screen_light");
+        if (screen_it != data.end() && screen_it->is_object()) {
+                const auto& screen = *screen_it;
+                auto color_it = screen.find("color");
+                if (color_it != screen.end() && color_it->is_array()) {
+                        try {
+                                if (color_it->size() >= 3) {
+                                        desired_color.r = static_cast<Uint8>(std::clamp(color_it->at(0).get<int>(), 0, 255));
+                                        desired_color.g = static_cast<Uint8>(std::clamp(color_it->at(1).get<int>(), 0, 255));
+                                        desired_color.b = static_cast<Uint8>(std::clamp(color_it->at(2).get<int>(), 0, 255));
+                                }
+                        } catch (...) {}
+                }
+                desired_min = screen.value("min_opacity", desired_min);
+                desired_max = screen.value("max_opacity", desired_max);
+        }
+
+        int map_min = main_light_source_.min_opacity();
+        int map_max = main_light_source_.max_opacity();
+        desired_min = std::clamp(desired_min, map_min, map_max);
+        desired_max = std::clamp(desired_max, map_min, map_max);
+        if (desired_min > desired_max) std::swap(desired_min, desired_max);
+
+        screen_light_color_ = SDL_Color{desired_color.r, desired_color.g, desired_color.b, 255};
+        screen_light_min_opacity_ = desired_min;
+        screen_light_max_opacity_ = desired_max;
+        if (z_light_pass_) {
+                z_light_pass_->set_fullscreen_light_settings(screen_light_color_, screen_light_min_opacity_, screen_light_max_opacity_);
+        }
+}
+
+void SceneRenderer::update_fullscreen_light_texture() {
+        if (!renderer_ || !fullscreen_light_tex_) {
+                return;
+        }
+        SDL_Texture* prev = SDL_GetRenderTarget(renderer_);
+        SDL_SetRenderTarget(renderer_, fullscreen_light_tex_);
+        SDL_SetRenderDrawColor(renderer_, 255, 255, 255, 255);
+        SDL_RenderClear(renderer_);
+        SDL_SetRenderTarget(renderer_, prev);
 }
 
 void SceneRenderer::update_shading_groups() {
