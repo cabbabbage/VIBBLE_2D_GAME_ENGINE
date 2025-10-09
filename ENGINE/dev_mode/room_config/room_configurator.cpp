@@ -3,7 +3,7 @@
 #include "FloatingDockableManager.hpp"
 #include "dm_styles.hpp"
 #include "map_generation/room.hpp"
-#include "spawn_group_list.hpp"
+#include "spawn_group_lists/spawn_group_list.hpp"
 #include "tag_editor_widget.hpp"
 #include "tag_utils.hpp"
 #include "utils/input.hpp"

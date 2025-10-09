@@ -1,7 +1,7 @@
 #include "map_assets_modals.hpp"
 
 #include <algorithm>
-#include "room_config/spawn_group_list.hpp"
+#include "spawn_group_lists/spawn_group_list.hpp"
 #include "utils/input.hpp"
 #include "room_config/spawn_group_utils.hpp"
 

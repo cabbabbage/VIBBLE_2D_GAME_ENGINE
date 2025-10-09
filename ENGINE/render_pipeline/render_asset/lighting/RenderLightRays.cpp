@@ -1,5 +1,7 @@
 #include "render_pipeline/render_asset/lighting/RenderLightRays.hpp"
 
+#include "asset/Asset.hpp"
+
 namespace render_pipeline::lighting {
 
 bool RenderLightRays::supports(const Asset& asset) const {

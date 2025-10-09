@@ -5,13 +5,12 @@
 
 #include <SDL.h>
 
+#include "render_pipeline/render_asset/IRenderStage.hpp"
 #include "render_pipeline/render_asset/render_asset.hpp"
 
 class Asset;
 class camera;
 class Global_Light_Source;
-class IRenderStage;
-
 struct SceneLighting {
     camera&               camera;
     Global_Light_Source&  main_light;
