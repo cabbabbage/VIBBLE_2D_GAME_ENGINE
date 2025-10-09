@@ -9,8 +9,8 @@
     "tripod_distance_y": -1335.0
   },
   "light_rays_params": {
-    "bright_percentile": 0.8709999918937683,
-    "decay": 0.6380000114440918,
+    "bright_percentile": 0.890999972820282,
+    "decay": 0.5540000200271606,
     "density": 2.1700000762939453,
     "downsample_log2": 4,
     "enabled": true,
@@ -21,7 +21,7 @@
     "per_light_enabled": true,
     "samples": 212,
     "use_alpha_in_mask": true,
-    "weight": 5.460000038146973
+    "weight": 6.949999809265137
   },
   "map_assets_data": {
     "spawn_groups": [

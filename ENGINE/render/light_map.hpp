@@ -25,11 +25,12 @@ class LightMap {
     SDL_Texture* build_lowres_mask(const std::vector<LightEntry>& layers, int low_w, int low_h, int downscale);
     SDL_Rect get_scaled_position_rect(SDL_Point pos, int fw, int fh, float inv_scale, int min_w, int min_h);
 
-	private:
+        private:
     SDL_Renderer* renderer_;
     Assets* assets_;
     Global_Light_Source& main_light_;
     int screen_width_;
     int screen_height_;
     SDL_Texture* fullscreen_light_tex_;
+    Uint8 last_main_light_alpha_ = 0;
 };

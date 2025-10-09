@@ -39,10 +39,11 @@ void LightMap::render(bool debugging) {
 }
 
 void LightMap::collect_layers(std::vector<LightEntry>& out, std::mt19937& rng) {
-	const float inv_scale = 1.0f / assets_->getView().get_scale();
-	constexpr int min_visible_w = 1;
-	constexpr int min_visible_h = 1;
-	Uint8 main_alpha = main_light_.get_current_color().a;
+        const float inv_scale = 1.0f / assets_->getView().get_scale();
+        constexpr int min_visible_w = 1;
+        constexpr int min_visible_h = 1;
+        Uint8 main_alpha = main_light_.get_current_color().a;
+        last_main_light_alpha_ = main_alpha;
         const auto& active = assets_->getActive();
         if (out.capacity() < active.size() + 3) {
                 out.reserve(active.size() + 3);
@@ -94,16 +95,21 @@ void LightMap::collect_layers(std::vector<LightEntry>& out, std::mt19937& rng) {
 SDL_Texture* LightMap::build_lowres_mask(const std::vector<LightEntry>& layers,
                                          int low_w, int low_h, int downscale) {
 	SDL_Texture* lowres_mask = SDL_CreateTexture(renderer_, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET, low_w, low_h);
-	SDL_SetTextureBlendMode(lowres_mask, SDL_BLENDMODE_NONE);
-	SDL_SetRenderTarget(renderer_, lowres_mask);
-	SDL_SetRenderDrawColor(renderer_, 0, 0, 0, 200);
-	SDL_RenderClear(renderer_);
-	SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_ADD);
-	for (auto& e : layers) {
-		SDL_SetTextureBlendMode(e.tex, SDL_BLENDMODE_ADD);
-		SDL_SetTextureAlphaMod(e.tex, e.alpha);
-		SDL_SetTextureColorMod(e.tex, 255, 255, 220);
-		SDL_Rect scaled_dst{
+        SDL_SetTextureBlendMode(lowres_mask, SDL_BLENDMODE_NONE);
+        SDL_SetRenderTarget(renderer_, lowres_mask);
+        SDL_SetRenderDrawColor(renderer_, 0, 0, 0, 200);
+        SDL_RenderClear(renderer_);
+        SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_ADD);
+        if (last_main_light_alpha_ > 0) {
+                SDL_SetRenderDrawColor(renderer_, 255, 255, 255, last_main_light_alpha_);
+                SDL_Rect fullscreen_rect{ 0, 0, low_w, low_h };
+                SDL_RenderFillRect(renderer_, &fullscreen_rect);
+        }
+        for (auto& e : layers) {
+                SDL_SetTextureBlendMode(e.tex, SDL_BLENDMODE_ADD);
+                SDL_SetTextureAlphaMod(e.tex, e.alpha);
+                SDL_SetTextureColorMod(e.tex, 255, 255, 220);
+                SDL_Rect scaled_dst{
 			e.dst.x / downscale,
 			e.dst.y / downscale,
 			e.dst.w / downscale,
