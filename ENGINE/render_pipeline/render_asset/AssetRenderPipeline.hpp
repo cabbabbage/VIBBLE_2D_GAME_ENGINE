@@ -11,10 +11,14 @@
 class Asset;
 class camera;
 class Global_Light_Source;
+struct LightRaysConfig;
+struct LightRaysParams;
 struct SceneLighting {
     camera&               camera_view;
     Global_Light_Source&  main_light;
     Asset*                player = nullptr;
+    const LightRaysConfig* light_rays_config = nullptr;
+    const LightRaysParams* light_rays_params = nullptr;
 };
 
 struct StageContext {
@@ -22,6 +26,7 @@ struct StageContext {
     SceneLighting* lighting   = nullptr;
     int           width       = 0;
     int           height      = 0;
+    SDL_Texture*  final_texture = nullptr;
 
     SDL_Rect asset_bounds() const { return SDL_Rect{ 0, 0, width, height }; }
     SDL_Point anchor_bottom_center() const { return SDL_Point{ width / 2, height }; }
@@ -37,6 +42,8 @@ struct StageContext {
     camera&                  camera_view();
     const camera&            camera_view() const;
     Asset*                   player() const;
+    const LightRaysConfig*   light_rays_config() const;
+    const LightRaysParams*   light_rays_params() const;
 };
 
 class AssetRenderPipeline {

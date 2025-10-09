@@ -38,6 +38,14 @@ Asset* StageContext::player() const {
     return lighting ? lighting->player : nullptr;
 }
 
+const LightRaysConfig* StageContext::light_rays_config() const {
+    return lighting ? lighting->light_rays_config : nullptr;
+}
+
+const LightRaysParams* StageContext::light_rays_params() const {
+    return lighting ? lighting->light_rays_params : nullptr;
+}
+
 AssetRenderPipeline::AssetRenderPipeline(SDL_Renderer* renderer, const SceneLighting& lighting)
 : renderer_(renderer)
 , lighting_(lighting)
@@ -97,6 +105,8 @@ SDL_Texture* AssetRenderPipeline::run(Asset& asset) {
         return nullptr;
     }
 
+    context.final_texture = final_texture;
+
     std::vector<SDL_Texture*> intermediates;
     intermediates.reserve(stages_.size());
 
@@ -105,6 +115,7 @@ SDL_Texture* AssetRenderPipeline::run(Asset& asset) {
         if (!entry.stage || !entry.stage->supports(asset)) {
             continue;
         }
+        context.final_texture = final_texture;
         SDL_Texture* stage_texture = entry.stage->run(renderer_, asset, context);
         if (!stage_texture) {
             continue;

@@ -61,6 +61,7 @@ private:
     LightRaysConfig light_rays_config_{};
     LightRaysParams light_rays_params_{};
     bool light_rays_enabled_ = false;
+    bool fullscreen_light_rays_disabled_ = true;
     int            current_shading_group_ = 0;
     int            num_groups_ = 20;
     bool           debugging = false;
