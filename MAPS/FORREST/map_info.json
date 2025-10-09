@@ -155,7 +155,7 @@
       248,
       247
     ],
-    "fall_off": 100,
+    "fall_off": 7,
     "intensity": 254,
     "keys": [
       [
@@ -196,10 +196,10 @@
       ]
     ],
     "max_opacity": 255,
-    "min_opacity": 0,
+    "min_opacity": 23,
     "mult": 0.32,
-    "orbit_radius": 1264,
-    "radius": 10006,
+    "orbit_radius": 345,
+    "radius": 2759,
     "update_interval": 9
   },
   "map_name": "FORREST",

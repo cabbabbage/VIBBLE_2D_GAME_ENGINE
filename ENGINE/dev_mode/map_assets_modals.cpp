@@ -1,9 +1,9 @@
 #include "map_assets_modals.hpp"
 
 #include <algorithm>
-#include "spawn_group_list.hpp"
+#include "room_config/spawn_group_list.hpp"
 #include "utils/input.hpp"
-#include "dev_mode/spawn_group_utils.hpp"
+#include "room_config/spawn_group_utils.hpp"
 
 using nlohmann::json;
 

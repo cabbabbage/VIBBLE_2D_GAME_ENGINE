@@ -101,6 +101,11 @@ void MapLightPanel::set_map_info(json* map_info, SaveCallback on_save) {
     map_info_ = map_info;
     on_save_ = std::move(on_save);
     current_key_index_ = 0;
+    editing_light_ = json::object();
+    if (map_info_ && map_info_->contains("map_light_data") && (*map_info_)["map_light_data"].is_object()) {
+        editing_light_ = (*map_info_)["map_light_data"];
+    }
+    ensure_light();
     update_save_status(true);
     sync_ui_from_json();
 }
@@ -121,6 +126,8 @@ bool MapLightPanel::is_visible() const { return visible_; }
 
 void MapLightPanel::build_ui() {
 
+    update_top_btn_    = std::make_unique<DMButton>("Update Light", &DMStyles::AccentButton(), 160, DMButton::height());
+    update_bottom_btn_ = std::make_unique<DMButton>("Update Light", &DMStyles::AccentButton(), 160, DMButton::height());
     radius_         = std::make_unique<DMSlider>("Radius",          0, 20000, 0);
     intensity_      = std::make_unique<DMSlider>("Intensity",       0,   255, 255);
     orbit_radius_   = std::make_unique<DMSlider>("Orbit Radius",    0, 20000, 0);
@@ -156,6 +163,10 @@ void MapLightPanel::build_ui() {
     };
 
     Rows rows;
+
+    rows.push_back({
+        add_widget(std::make_unique<ButtonWidget>(update_top_btn_.get(), [this]() { apply_changes(); }))
+    });
 
     auto warning_label = std::make_unique<WarningLabel>();
     warning_label_ = warning_label.get();
@@ -208,19 +219,39 @@ void MapLightPanel::build_ui() {
         add_widget(std::make_unique<SliderWidget>(key_a_.get()))
     });
 
+    rows.push_back({
+        add_widget(std::make_unique<ButtonWidget>(update_bottom_btn_.get(), [this]() { apply_changes(); }))
+    });
+
     set_rows(rows);
+}
+
+void MapLightPanel::apply_changes() {
+    if (!map_info_) {
+        return;
+    }
+
+    sync_json_from_ui();
+
+    json& L = ensure_light();
+    if (!map_info_->is_object()) {
+        *map_info_ = json::object();
+    }
+    (*map_info_)["map_light_data"] = L;
+
+    bool ok = true;
+    if (on_save_) {
+        ok = on_save_();
+    }
+    update_save_status(ok);
 }
 
 nlohmann::json& MapLightPanel::ensure_light() {
 
-    if (!map_info_) {
-        static json dummy = json::object();
-        return dummy;
+    if (!editing_light_.is_object()) {
+        editing_light_ = json::object();
     }
-    if (!map_info_->contains("map_light_data") || !(*map_info_)["map_light_data"].is_object()) {
-        (*map_info_)["map_light_data"] = json::object();
-    }
-    json& L = (*map_info_)["map_light_data"];
+    json& L = editing_light_;
     if (!L.contains("radius"))         L["radius"] = 0;
     if (!L.contains("intensity"))      L["intensity"] = 255;
     if (!L.contains("orbit_radius"))   L["orbit_radius"] = 0;
@@ -319,7 +350,6 @@ void MapLightPanel::sync_ui_from_json() {
 }
 
 void MapLightPanel::sync_json_from_ui() {
-    if (!map_info_) return;
     json& L = ensure_light();
 
     L["radius"]         = radius_->value();
@@ -349,16 +379,10 @@ void MapLightPanel::sync_json_from_ui() {
         keys[current_key_index_] = json::array({ (double)ang, json::array({ r, g, b, a }) });
     }
 
-    bool ok = true;
-    if (on_save_) {
-        ok = on_save_();
-    }
-    update_save_status(ok);
     needs_sync_to_json_ = false;
 }
 
 void MapLightPanel::ensure_keys_array() {
-    if (!map_info_) return;
     json& L = ensure_light();
     if (!L.contains("keys") || !L["keys"].is_array()) {
         L["keys"] = json::array();
@@ -367,7 +391,6 @@ void MapLightPanel::ensure_keys_array() {
 }
 
 void MapLightPanel::clamp_key_index() {
-    if (!map_info_) { current_key_index_ = 0; return; }
     json& L = ensure_light();
     int n = (int)L["keys"].size();
     if (n <= 0) {
@@ -383,7 +406,6 @@ void MapLightPanel::clamp_key_index() {
 }
 
 void MapLightPanel::select_prev_key() {
-    if (!map_info_) return;
     json& L = ensure_light();
     int n = (int)L["keys"].size();
     if (n <= 0) return;
@@ -392,7 +414,6 @@ void MapLightPanel::select_prev_key() {
 }
 
 void MapLightPanel::select_next_key() {
-    if (!map_info_) return;
     json& L = ensure_light();
     int n = (int)L["keys"].size();
     if (n <= 0) return;
@@ -401,7 +422,6 @@ void MapLightPanel::select_next_key() {
 }
 
 void MapLightPanel::add_key_pair_at_current_angle() {
-    if (!map_info_) return;
     json& L = ensure_light();
 
     const int ang = clamp_int(key_angle_->value(), 0, 360);
@@ -436,16 +456,10 @@ void MapLightPanel::add_key_pair_at_current_angle() {
     }
 
     needs_sync_to_json_ = true;
-    bool ok = true;
-    if (on_save_) {
-        ok = on_save_();
-    }
-    update_save_status(ok);
     sync_ui_from_json();
 }
 
 void MapLightPanel::delete_current_key() {
-    if (!map_info_) return;
     json& L = ensure_light();
     auto& keys = L["keys"];
     if (keys.size() <= 1) return;
@@ -454,11 +468,6 @@ void MapLightPanel::delete_current_key() {
     if (current_key_index_ >= (int)keys.size()) current_key_index_ = (int)keys.size() - 1;
 
     needs_sync_to_json_ = true;
-    bool ok = true;
-    if (on_save_) {
-        ok = on_save_();
-    }
-    update_save_status(ok);
     sync_ui_from_json();
 }
 
@@ -518,11 +527,8 @@ void MapLightPanel::render_content(SDL_Renderer* r) const {
 
     if (!r) return;
 
-    if (!map_info_) return;
-
-    auto light_it = map_info_->find("map_light_data");
-    if (light_it == map_info_->end() || !light_it->is_object()) return;
-    const json& L = *light_it;
+    if (!editing_light_.is_object()) return;
+    const json& L = editing_light_;
     auto keys_it = L.find("keys");
     if (keys_it == L.end() || !keys_it->is_array()) return;
     const auto& keys = *keys_it;

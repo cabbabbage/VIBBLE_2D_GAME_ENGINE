@@ -1,7 +1,7 @@
 #define DOCTEST_CONFIG_IMPLEMENT_WITHOUT_MAIN
 #include "doctest/doctest.h"
 
-#include "dev_mode/spawn_group_list.hpp"
+#include "dev_mode/room_config/spawn_group_list.hpp"
 
 #include <SDL.h>
 #include <SDL_ttf.h>

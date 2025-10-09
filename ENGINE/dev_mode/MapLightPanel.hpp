@@ -42,6 +42,7 @@ private:
     void update_save_status(bool success) const;
 
     void build_ui();
+    void apply_changes();
     void sync_ui_from_json();
     void sync_json_from_ui();
     nlohmann::json& ensure_light();
@@ -61,9 +62,12 @@ private:
 
     nlohmann::json* map_info_ = nullptr;
     SaveCallback on_save_;
+    nlohmann::json editing_light_{};
 
     int current_key_index_ = 0;
 
+    std::unique_ptr<DMButton> update_top_btn_;
+    std::unique_ptr<DMButton> update_bottom_btn_;
     std::unique_ptr<DMSlider> radius_;
     std::unique_ptr<DMSlider> intensity_;
     std::unique_ptr<DMSlider> orbit_radius_;

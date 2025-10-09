@@ -1,7 +1,7 @@
 #pragma once
 
 #include "../DockableCollapsible.hpp"
-#include "tag_editor_widget.hpp"
+#include "dev_mode/room_config/tag_editor_widget.hpp"
 #include "widgets.hpp"
 #include "dev_mode/asset_info_sections.hpp"
 #include <memory>

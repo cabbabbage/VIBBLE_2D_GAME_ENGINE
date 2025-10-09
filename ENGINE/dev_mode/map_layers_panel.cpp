@@ -6,8 +6,8 @@
 
 #include "map_layers_common.hpp"
 
-#include "room_configurator.hpp"
-#include "spawn_group_utils.hpp"
+#include "room_config/room_configurator.hpp"
+#include "room_config/spawn_group_utils.hpp"
 
 #include "widgets.hpp"
 
