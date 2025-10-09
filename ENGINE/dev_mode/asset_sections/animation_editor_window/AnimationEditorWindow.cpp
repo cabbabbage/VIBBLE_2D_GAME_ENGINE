@@ -18,7 +18,7 @@
 #include "AudioImporter.hpp"
 #include "CroppingService.hpp"
 #include "PreviewProvider.hpp"
-#include "frame_editor/FrameMovementEditor.hpp"
+#include "frame_editor/FrameEditor.hpp"
 #include "string_utils.hpp"
 #include "ui/tinyfiledialogs.h"
 #include "utils/input.hpp"
@@ -144,8 +144,8 @@ void AnimationEditorWindow::set_info(const std::shared_ptr<AssetInfo>& info) {
 void AnimationEditorWindow::clear_info() {
     info_.reset();
     info_path_.clear();
-    movement_editor_visible_ = false;
-    movement_editor_animation_id_.clear();
+    frame_editor_visible_ = false;
+    frame_editor_animation_id_.clear();
     document_->load_from_file(std::filesystem::path{});
     document_->consume_dirty_flag();
     preview_provider_->invalidate_all();
@@ -193,9 +193,9 @@ void AnimationEditorWindow::layout_children() {
     list_rect_ = SDL_Rect{bounds_.x + padding, list_y, std::max(0, bounds_.w - padding * 2), list_height};
     if (list_panel_) list_panel_->set_bounds(list_rect_);
 
-    movement_editor_rect_ = SDL_Rect{bounds_.x + padding, bounds_.y + padding,
+    frame_editor_rect_ = SDL_Rect{bounds_.x + padding, bounds_.y + padding,
                                      std::max(0, bounds_.w - padding * 2), std::max(0, bounds_.h - padding * 2)};
-    if (movement_editor_) movement_editor_->set_bounds(movement_editor_rect_);
+    if (frame_editor_) frame_editor_->set_bounds(frame_editor_rect_);
 }
 
 void AnimationEditorWindow::configure_list_panel() {
@@ -208,7 +208,7 @@ void AnimationEditorWindow::configure_list_panel() {
         inspector.set_source_gif_picker([this]() { return this->pick_gif(); });
         inspector.set_source_png_sequence_picker([this]() { return this->pick_png_sequence(); });
         inspector.set_source_status_callback([this](const std::string& message) { this->set_status_message(message); });
-        inspector.set_movement_edit_callback([this](const std::string& id) { this->open_movement_editor(id); });
+        inspector.set_frame_edit_callback([this](const std::string& id) { this->open_frame_editor(id); });
         inspector.set_audio_importer(audio_importer_);
         inspector.set_audio_file_picker([this]() { return this->pick_audio_file(); });
     });
@@ -226,9 +226,9 @@ void AnimationEditorWindow::update(const Input& input, int, int) {
 
     if (task_queue_) task_queue_->update();
     if (list_panel_) list_panel_->update();
-    if (movement_editor_visible_ && movement_editor_) {
-        movement_editor_->set_bounds(movement_editor_rect_);
-        movement_editor_->update();
+    if (frame_editor_visible_ && frame_editor_) {
+        frame_editor_->set_bounds(frame_editor_rect_);
+        frame_editor_->update();
     }
 
     if (document_ && document_->consume_dirty_flag()) {
@@ -256,8 +256,8 @@ void AnimationEditorWindow::render(SDL_Renderer* renderer) const {
     if (list_panel_) list_panel_->render(renderer);
     render_status(renderer);
     DMDropdown::render_active_options(renderer);
-    if (movement_editor_visible_) {
-        render_movement_overlay(renderer);
+    if (frame_editor_visible_) {
+        render_frame_editor_overlay(renderer);
     }
 }
 
@@ -266,8 +266,8 @@ bool AnimationEditorWindow::handle_event(const SDL_Event& e) {
 
     ensure_layout();
 
-    if (movement_editor_visible_ && movement_editor_) {
-        if (movement_editor_->handle_event(e)) {
+    if (frame_editor_visible_ && frame_editor_) {
+        if (frame_editor_->handle_event(e)) {
             return true;
         }
     }
@@ -281,11 +281,11 @@ bool AnimationEditorWindow::handle_event(const SDL_Event& e) {
     }
 
     if (e.type == SDL_KEYDOWN) {
-        if (movement_editor_visible_ && e.key.keysym.sym == SDLK_ESCAPE) {
-            close_movement_editor();
+        if (frame_editor_visible_ && e.key.keysym.sym == SDLK_ESCAPE) {
+            close_frame_editor();
             return true;
         }
-        if (!movement_editor_visible_ && e.key.keysym.sym == SDLK_ESCAPE) {
+        if (!frame_editor_visible_ && e.key.keysym.sym == SDLK_ESCAPE) {
             visible_ = false;
             return true;
         }
@@ -374,13 +374,13 @@ void AnimationEditorWindow::render_status(SDL_Renderer* renderer) const {
                  status_rect_.y + DMSpacing::panel_padding());
 }
 
-void AnimationEditorWindow::render_movement_overlay(SDL_Renderer* renderer) const {
+void AnimationEditorWindow::render_frame_editor_overlay(SDL_Renderer* renderer) const {
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
     SDL_SetRenderDrawColor(renderer, 10, 10, 14, 192);
     SDL_RenderFillRect(renderer, &bounds_);
 
-    if (movement_editor_) {
-        movement_editor_->render(renderer);
+    if (frame_editor_) {
+        frame_editor_->render(renderer);
     }
 }
 
@@ -404,21 +404,21 @@ void AnimationEditorWindow::set_status_message(const std::string& message, int f
     status_timer_frames_ = std::max(frames, 0);
 }
 
-void AnimationEditorWindow::open_movement_editor(const std::string& animation_id) {
-    if (!movement_editor_) {
-        movement_editor_ = std::make_unique<FrameMovementEditor>();
-        movement_editor_->set_close_callback([this]() { this->close_movement_editor(); });
+void AnimationEditorWindow::open_frame_editor(const std::string& animation_id) {
+    if (!frame_editor_) {
+        frame_editor_ = std::make_unique<FrameEditor>();
+        frame_editor_->set_close_callback([this]() { this->close_frame_editor(); });
     }
-    movement_editor_animation_id_ = animation_id;
-    movement_editor_->set_document(document_);
-    movement_editor_->set_animation_id(animation_id);
-    movement_editor_->set_bounds(movement_editor_rect_);
-    movement_editor_visible_ = true;
+    frame_editor_animation_id_ = animation_id;
+    frame_editor_->set_document(document_);
+    frame_editor_->set_animation_id(animation_id);
+    frame_editor_->set_bounds(frame_editor_rect_);
+    frame_editor_visible_ = true;
 }
 
-void AnimationEditorWindow::close_movement_editor() {
-    movement_editor_visible_ = false;
-    movement_editor_animation_id_.clear();
+void AnimationEditorWindow::close_frame_editor() {
+    frame_editor_visible_ = false;
+    frame_editor_animation_id_.clear();
     set_status_message("Movement updated.", 180);
 }
 

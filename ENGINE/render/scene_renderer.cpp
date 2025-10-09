@@ -10,7 +10,6 @@
 #include <tuple>
 #include <vector>
 #include <cstdint>
-#include <initializer_list>
 
 static constexpr SDL_Color SLATE_COLOR = {69, 101, 74, 255};
 static constexpr float MIN_VISIBLE_SCREEN_RATIO = 0.015f;
@@ -224,10 +223,7 @@ void SceneRenderer::render() {
     main_light_source_.update();
 
     // ====== Tunable post-process params (hook to your UI) ======
-    static int   kPostBlurRadiusPx = 2;   // blur radius at full-res
     static Uint8 kPostOverlayAlpha = 255;  // 0..255
-    // Full-resolution blur (no downscale, no blend-mode selection)
-    const int blur_radius_full = std::max(0, kPostBlurRadiusPx);
 
     const bool use_postprocess = !low_quality_rendering_;
 
@@ -375,27 +371,10 @@ void SceneRenderer::render() {
         SDL_SetTextureAlphaMod(scene_target_tex_, base_alpha);
         SDL_RenderCopy(renderer_, scene_target_tex_, nullptr, nullptr);
 
-        // Overlay: blurred approximation via multi-tap offsets of the same texture
         if (kPostOverlayAlpha > 0) {
-            const int r = std::max(0, blur_radius_full);
-            if (r > 0) {
-                const int step = std::max(1, r / 2);
-                const int taps = 9; // 3x3 grid
-                const Uint8 tap_alpha = static_cast<Uint8>(std::max(1, kPostOverlayAlpha / taps));
-                SDL_SetTextureAlphaMod(scene_target_tex_, tap_alpha);
-                for (int dy : std::initializer_list<int>{-step, 0, step}) {
-                    for (int dx : std::initializer_list<int>{-step, 0, step}) {
-                        SDL_Rect dd{dx, dy, screen_width_, screen_height_};
-                        SDL_RenderCopy(renderer_, scene_target_tex_, nullptr, &dd);
-                    }
-                }
-                SDL_SetTextureAlphaMod(scene_target_tex_, 255);
-            } else {
-                // If radius is 0, just blend a single extra pass at full alpha
-                SDL_SetTextureAlphaMod(scene_target_tex_, kPostOverlayAlpha);
-                SDL_RenderCopy(renderer_, scene_target_tex_, nullptr, nullptr);
-                SDL_SetTextureAlphaMod(scene_target_tex_, 255);
-            }
+            SDL_SetTextureAlphaMod(scene_target_tex_, kPostOverlayAlpha);
+            SDL_RenderCopy(renderer_, scene_target_tex_, nullptr, nullptr);
+            SDL_SetTextureAlphaMod(scene_target_tex_, 255);
         } else {
             SDL_SetTextureAlphaMod(scene_target_tex_, 255);
         }
