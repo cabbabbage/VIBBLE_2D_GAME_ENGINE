@@ -16,9 +16,8 @@
 
 class Input;
 
-class SpawnGroupRow;
-
 class SpawnGroupConfig : public DockableCollapsible {
+    struct RowEntry;
 public:
     struct ChangeSummary {
         bool method_changed = false;
@@ -47,10 +46,10 @@ public:
         void set_quantity_hidden(bool hidden);
 
     private:
-        explicit RowController(SpawnGroupRow* row) : row_(row) {}
-        SpawnGroupRow* row_ = nullptr;
+        explicit RowController(RowEntry* row) : row_(row) {}
+        RowEntry* row_ = nullptr;
         friend class SpawnGroupConfig;
-};
+    };
 
     using ConfigureEntryCallback = std::function<void(RowController&, const nlohmann::json&)>;
 
@@ -112,7 +111,7 @@ private:
 
     void load_impl(nlohmann::json* array, nlohmann::json* entry, std::function<void()> on_change, std::function<void(const nlohmann::json&, const ChangeSummary&)> on_entry_change, ConfigureEntryCallback configure_entry);
     void rebuild_rows();
-    void apply_configuration(SpawnGroupRow& row);
+    void apply_configuration(RowEntry& row);
     void rebuild_layout();
     void mark_layout_dirty();
     DockableCollapsible::Rows build_layout_rows();

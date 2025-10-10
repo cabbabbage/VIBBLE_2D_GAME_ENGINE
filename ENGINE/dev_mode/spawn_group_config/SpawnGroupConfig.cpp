@@ -11,7 +11,6 @@
 
 #include <nlohmann/json.hpp>
 
-#include "SpawnGroupRow.hpp"
 #include "spawn_group_utils.hpp"
 #include "dm_styles.hpp"
 #include "widgets.hpp"
@@ -68,6 +67,10 @@ constexpr const char* kDefaultMethod = "Random";
 constexpr int kDefaultMinNumber = 1;
 constexpr int kDefaultMaxNumber = 1;
 constexpr int kExactDefaultQuantity = 1;
+
+std::function<std::vector<std::string>()> empty_provider() {
+    return []() { return std::vector<std::string>{}; };
+}
 
 int parse_int_or(const std::string& text, int fallback) {
     if (text.empty()) return fallback;
@@ -349,17 +352,18 @@ struct SpawnGroupConfig::RowEntry {
         std::unique_ptr<ButtonWidget> remove_widget;
 };
 
-    explicit RowEntry(SpawnGroupConfig& owner, std::unique_ptr<SpawnGroupRow> row)
-        : owner_(&owner), row_(std::move(row)) {
+    explicit RowEntry(SpawnGroupConfig& owner)
+        : owner_(&owner),
+          area_provider_(empty_provider()),
+          candidate_graph_(std::make_unique<CandidateEditorPieGraphWidget>()) {
         editable_ = owner_->bound_array_ != nullptr;
         method_options_ = build_method_options(kDefaultMethod);
 
         toggle_button_ = std::make_unique<DMButton>("▶", &DMStyles::ListButton(), 28, DMButton::height());
         toggle_widget_ = std::make_unique<ButtonWidget>(toggle_button_.get(), [this]() {
-            if (!row_) return;
             expanded_state_ = !expanded_state_;
-            if (expanded_state_) owner_->expand_group(row_->spawn_id());
-            else owner_->collapse_group(row_->spawn_id());
+            if (expanded_state_) owner_->expand_group(spawn_id());
+            else owner_->collapse_group(spawn_id());
             update_toggle_label();
             owner_->mark_layout_dirty();
         });
@@ -370,32 +374,32 @@ struct SpawnGroupConfig::RowEntry {
 
         regenerate_button_ = std::make_unique<DMButton>("Regenerate", &DMStyles::ListButton(), 0, DMButton::height());
         regenerate_widget_ = std::make_unique<ButtonWidget>(regenerate_button_.get(), [this]() {
-            if (!owner_ || !row_ || !owner_->callbacks_.on_regenerate) return;
-            owner_->callbacks_.on_regenerate(row_->spawn_id());
+            if (!owner_ || !owner_->callbacks_.on_regenerate) return;
+            owner_->callbacks_.on_regenerate(spawn_id());
         });
 
         duplicate_button_ = std::make_unique<DMButton>("Duplicate", &DMStyles::ListButton(), 0, DMButton::height());
         duplicate_widget_ = std::make_unique<ButtonWidget>(duplicate_button_.get(), [this]() {
-            if (!owner_ || !row_ || !owner_->callbacks_.on_duplicate) return;
-            owner_->callbacks_.on_duplicate(row_->spawn_id());
+            if (!owner_ || !owner_->callbacks_.on_duplicate) return;
+            owner_->callbacks_.on_duplicate(spawn_id());
         });
 
         delete_button_ = std::make_unique<DMButton>("Delete", &DMStyles::DeleteButton(), 0, DMButton::height());
         delete_widget_ = std::make_unique<ButtonWidget>(delete_button_.get(), [this]() {
-            if (!owner_ || !row_ || !owner_->callbacks_.on_delete) return;
-            owner_->callbacks_.on_delete(row_->spawn_id());
+            if (!owner_ || !owner_->callbacks_.on_delete) return;
+            owner_->callbacks_.on_delete(spawn_id());
         });
 
         move_up_button_ = std::make_unique<DMButton>("Up", &DMStyles::ListButton(), 0, DMButton::height());
         move_up_widget_ = std::make_unique<ButtonWidget>(move_up_button_.get(), [this]() {
-            if (!owner_ || !row_ || !owner_->callbacks_.on_move_up) return;
-            owner_->callbacks_.on_move_up(row_->spawn_id());
+            if (!owner_ || !owner_->callbacks_.on_move_up) return;
+            owner_->callbacks_.on_move_up(spawn_id());
         });
 
         move_down_button_ = std::make_unique<DMButton>("Down", &DMStyles::ListButton(), 0, DMButton::height());
         move_down_widget_ = std::make_unique<ButtonWidget>(move_down_button_.get(), [this]() {
-            if (!owner_ || !row_ || !owner_->callbacks_.on_move_down) return;
-            owner_->callbacks_.on_move_down(row_->spawn_id());
+            if (!owner_ || !owner_->callbacks_.on_move_down) return;
+            owner_->callbacks_.on_move_down(spawn_id());
         });
 
         auto name_box = std::make_unique<DMTextBox>("Display Name", "");
@@ -465,9 +469,78 @@ struct SpawnGroupConfig::RowEntry {
         update_toggle_label();
     }
 
+    void bind(nlohmann::json* entry) {
+        entry_ = entry;
+        editable_ = owner_ && owner_->bound_array_ != nullptr;
+        if (!entry_) {
+            shadow_entry_ = nlohmann::json::object();
+        }
+        update_candidate_graph();
+    }
+
+    void set_shadow_entry(const nlohmann::json& entry) {
+        shadow_entry_ = entry;
+        update_candidate_graph();
+    }
+
+    nlohmann::json* mutable_entry() { return entry_; }
+
+    const nlohmann::json* mutable_entry() const { return entry_; }
+
+    const nlohmann::json& entry_view() const {
+        if (entry_) {
+            return *entry_;
+        }
+        return shadow_entry_;
+    }
+
+    std::string spawn_id() const {
+        const auto& entry = entry_view();
+        if (entry.contains("spawn_id") && entry["spawn_id"].is_string()) {
+            return entry["spawn_id"].get<std::string>();
+        }
+        return std::string{};
+    }
+
+    void set_ownership_label(const std::string& label, SDL_Color color) {
+        ownership_label_ = label;
+        ownership_color_ = color;
+    }
+
+    void clear_ownership_label() {
+        ownership_label_.clear();
+        ownership_color_.reset();
+    }
+
+    void set_area_names_provider(std::function<std::vector<std::string>()> provider) {
+        area_provider_ = provider ? std::move(provider) : empty_provider();
+    }
+
+    const std::function<std::vector<std::string>()>& area_names_provider() const {
+        return area_provider_;
+    }
+
+    void set_stack_key(std::string key) { stack_key_ = std::move(key); }
+
+    const std::optional<std::string>& stack_key() const { return stack_key_; }
+
+    void lock_method_to(std::string method) { method_lock_ = std::move(method); }
+
+    const std::optional<std::string>& method_lock() const { return method_lock_; }
+
+    void clear_method_lock() { method_lock_.reset(); }
+
+    void set_quantity_hidden(bool hidden) { quantity_hidden_ = hidden; }
+
+    bool quantity_hidden() const { return quantity_hidden_; }
+
+    CandidateEditorPieGraphWidget* candidate_editor_widget() { return candidate_graph_.get(); }
+
+    const CandidateEditorPieGraphWidget* candidate_editor_widget() const { return candidate_graph_.get(); }
+
     void sync_from_json() {
-        const auto& entry = row_->entry_view();
-        const std::string id = row_->spawn_id();
+        const auto& entry = entry_view();
+        const std::string id = spawn_id();
         spawn_id_label_->set_text(id.empty() ? std::string("<no id>") : id);
 
         std::string display = safe_string(entry, "display_name", {});
@@ -509,7 +582,7 @@ struct SpawnGroupConfig::RowEntry {
     void refresh_configuration() {
         update_area_dropdown_from_provider();
         update_ownership_label();
-        auto lock = row_->method_lock();
+        auto lock = method_lock();
         if (lock) {
             if (std::find(method_options_.begin(), method_options_.end(), *lock) == method_options_.end()) {
                 method_options_.push_back(*lock);
@@ -570,7 +643,7 @@ struct SpawnGroupConfig::RowEntry {
         method_row.push_back(enforce_widget_.get());
         rows.push_back(method_row);
 
-        if (!row_->quantity_hidden()) {
+        if (!quantity_hidden()) {
             if (use_exact_quantity_) {
                 rows.push_back({exact_widget_.get()});
             } else {
@@ -595,19 +668,13 @@ struct SpawnGroupConfig::RowEntry {
                 }
             }
             rows.push_back({add_candidate_widget_.get()});
-            if (auto* graph = row_->candidate_editor_widget()) {
+            if (auto* graph = candidate_editor_widget()) {
                 rows.push_back({graph});
             }
         }
     }
 
-    SpawnGroupRow* model() const { return row_.get(); }
-
 private:
-    nlohmann::json* mutable_entry() {
-        return row_ ? row_->mutable_entry() : nullptr;
-    }
-
     void notify_change(bool method_changed, bool quantity_changed, bool candidates_changed) {
         if (!owner_) return;
         SpawnGroupConfig::ChangeSummary summary;
@@ -616,7 +683,7 @@ private:
         summary.candidates_changed = candidates_changed;
         summary.method = current_method_;
 
-        nlohmann::json entry_copy = row_ ? row_->entry_view() : nlohmann::json::object();
+        nlohmann::json entry_copy = entry_view();
 
         owner_->enqueue_notification([owner = owner_, entry = std::move(entry_copy), summary]() mutable {
             if (!owner) return;
@@ -633,13 +700,13 @@ private:
 
     void update_ownership_label() {
         if (!ownership_label_) return;
-        const std::string& label = row_->ownership_label();
+        const std::string& label = ownership_label_;
         if (label.empty()) {
             ownership_label_->set_text("");
             ownership_label_->set_subtle(true);
         } else {
             ownership_label_->set_text(label);
-            if (auto color = row_->ownership_color()) {
+            if (auto color = ownership_color_) {
                 ownership_label_->set_color(*color);
             }
             ownership_label_->set_subtle(false);
@@ -648,9 +715,9 @@ private:
 
     void update_area_dropdown_from_provider() {
         if (!area_widget_) return;
-        auto provider = row_->area_names_provider();
+        auto provider = area_names_provider();
         std::vector<std::string> options = provider ? provider() : std::vector<std::string>{};
-        std::string current = safe_string(row_->entry_view(), "area", std::string{});
+        std::string current = safe_string(entry_view(), "area", std::string{});
         if (!current.empty() && std::find(options.begin(), options.end(), current) == options.end()) {
             options.push_back(current);
         }
@@ -672,15 +739,15 @@ private:
     }
 
     void update_candidate_graph() {
-        if (auto* graph = row_->candidate_editor_widget()) {
-            graph->set_candidates_from_json(row_->entry_view());
+        if (auto* graph = candidate_editor_widget()) {
+            graph->set_candidates_from_json(entry_view());
         }
     }
 
     void rebuild_candidate_widgets() {
         candidate_rows_.clear();
         auto* entry = mutable_entry();
-        const nlohmann::json& view = row_->entry_view();
+        const nlohmann::json& view = entry_view();
         const nlohmann::json* candidates = nullptr;
         if (entry && entry->is_object() && entry->contains("candidates") && (*entry)["candidates"].is_array()) {
             candidates = &(*entry)["candidates"];
@@ -825,7 +892,15 @@ private:
     }
 
     SpawnGroupConfig* owner_ = nullptr;
-    std::unique_ptr<SpawnGroupRow> row_{};
+    nlohmann::json* entry_ = nullptr;
+    nlohmann::json shadow_entry_ = nlohmann::json::object();
+    std::string ownership_label_{};
+    std::optional<SDL_Color> ownership_color_{};
+    std::function<std::vector<std::string>()> area_provider_{};
+    std::optional<std::string> stack_key_{};
+    std::optional<std::string> method_lock_{};
+    bool quantity_hidden_ = false;
+    std::unique_ptr<CandidateEditorPieGraphWidget> candidate_graph_{};
     bool editable_ = false;
     bool expanded_state_ = false;
     bool use_exact_quantity_ = false;
@@ -1089,7 +1164,7 @@ void SpawnGroupConfig::rebuild_rows() {
     auto take_existing = [&previous](const std::string& id) -> std::unique_ptr<RowEntry> {
         if (id.empty()) return nullptr;
         for (auto it = previous.begin(); it != previous.end(); ++it) {
-            if (*it && (*it)->model() && (*it)->model()->spawn_id() == id) {
+            if (*it && (*it)->spawn_id() == id) {
                 auto result = std::move(*it);
                 previous.erase(it);
                 return result;
@@ -1103,21 +1178,19 @@ void SpawnGroupConfig::rebuild_rows() {
         std::string id = entry.is_object() ? entry.value("spawn_id", std::string{}) : std::string{};
         std::unique_ptr<RowEntry> row_entry = take_existing(id);
         if (!row_entry) {
-            auto model = std::make_unique<SpawnGroupRow>();
-            row_entry = std::make_unique<RowEntry>(*this, std::move(model));
+            row_entry = std::make_unique<RowEntry>(*this);
         }
-        auto* model = row_entry->model();
         if (bound_array_) {
-            model->bind(&(*bound_array_)[i]);
+            row_entry->bind(&(*bound_array_)[i]);
         } else if (bound_entry_ && i == 0) {
-            model->bind(bound_entry_);
+            row_entry->bind(bound_entry_);
         } else {
-            model->bind(nullptr);
-            model->set_shadow_entry(entry);
+            row_entry->bind(nullptr);
+            row_entry->set_shadow_entry(entry);
         }
-        apply_configuration(*model);
+        apply_configuration(*row_entry);
         row_entry->sync_from_json();
-        row_entry->set_expanded(is_expanded(model->spawn_id()));
+        row_entry->set_expanded(is_expanded(row_entry->spawn_id()));
         rebuilt.emplace_back(std::move(row_entry));
     }
 
@@ -1125,7 +1198,7 @@ void SpawnGroupConfig::rebuild_rows() {
     mark_layout_dirty();
 }
 
-void SpawnGroupConfig::apply_configuration(SpawnGroupRow& row) {
+void SpawnGroupConfig::apply_configuration(RowEntry& row) {
     if (!configure_entry_) return;
     RowController controller(&row);
     configure_entry_(controller, row.entry_view());
@@ -1151,7 +1224,7 @@ DockableCollapsible::Rows SpawnGroupConfig::build_layout_rows() {
     bool have_rows = false;
     for (auto& row : rows_) {
         have_rows = true;
-        row->set_expanded(is_expanded(row->model()->spawn_id()));
+        row->set_expanded(is_expanded(row->spawn_id()));
         row->append_layout_rows(result);
     }
 
