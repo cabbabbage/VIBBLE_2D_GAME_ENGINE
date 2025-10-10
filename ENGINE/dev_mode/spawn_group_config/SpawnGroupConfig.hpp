@@ -77,6 +77,11 @@ public:
     void bind_entry(nlohmann::json& entry,
                     EntryCallbacks callbacks = {},
                     ConfigureEntryCallback configure_entry = {});
+    void bind_entry(nlohmann::json& entry,
+                    std::function<void()> on_change,
+                    std::function<void(const nlohmann::json&, const ChangeSummary&)> on_entry_change,
+                    EntryCallbacks callbacks = {},
+                    ConfigureEntryCallback configure_entry = {});
 
     void load(const nlohmann::json& groups);
 

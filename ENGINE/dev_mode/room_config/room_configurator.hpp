@@ -21,11 +21,13 @@ class RangeSliderWidget;
 class SliderWidget;
 class CheckboxWidget;
 class TextBoxWidget;
+class ButtonWidget;
 class DMRangeSlider;
 class DMSlider;
 class DMCheckbox;
 class DMTextBox;
 class DMDropdown;
+class DMButton;
 
 class RoomConfigurator {
 public:
@@ -88,7 +90,6 @@ private:
     void write_tags_to_json(nlohmann::json& object) const;
     std::string selected_geometry() const;
     bool sync_state_from_widgets();
-    void ensure_spawn_list();
     const nlohmann::json& live_room_json() const;
     nlohmann::json& live_room_json();
     void set_rows(Rows rows);
@@ -156,7 +157,10 @@ private:
     std::unique_ptr<Widget> tags_label_;
     std::unique_ptr<Widget> empty_spawn_label_;
 
-    std::unique_ptr<SpawnGroupConfig> spawn_list_;
+    std::vector<std::unique_ptr<SpawnGroupConfig>> spawn_group_configs_;
+    std::vector<std::string> spawn_group_config_ids_;
+    std::unique_ptr<DMButton> add_spawn_button_;
+    std::unique_ptr<ButtonWidget> add_spawn_widget_;
 
     std::function<void(const std::string&)> on_spawn_edit_;
     std::function<void(const std::string&)> on_spawn_duplicate_;

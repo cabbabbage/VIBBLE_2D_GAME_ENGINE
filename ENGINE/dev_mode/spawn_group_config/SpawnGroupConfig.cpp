@@ -898,11 +898,20 @@ void SpawnGroupConfig::load(nlohmann::json& groups,
 void SpawnGroupConfig::bind_entry(nlohmann::json& entry,
                                   EntryCallbacks callbacks,
                                   ConfigureEntryCallback configure_entry) {
+    bind_entry(entry, {}, {}, std::move(callbacks), std::move(configure_entry));
+}
+
+void SpawnGroupConfig::bind_entry(nlohmann::json& entry,
+                                  std::function<void()> on_change,
+                                  std::function<void(const nlohmann::json&, const ChangeSummary&)> on_entry_change,
+                                  EntryCallbacks callbacks,
+                                  ConfigureEntryCallback configure_entry) {
     entry_callbacks_ = std::move(callbacks);
-    auto relay = [this](const nlohmann::json& updated, const ChangeSummary& summary) {
+    auto relay = [this, cb = std::move(on_entry_change)](const nlohmann::json& updated, const ChangeSummary& summary) {
+        if (cb) cb(updated, summary);
         fire_entry_callbacks(updated, summary);
     };
-    load_impl(nullptr, &entry, {}, std::move(relay), std::move(configure_entry));
+    load_impl(nullptr, &entry, std::move(on_change), std::move(relay), std::move(configure_entry));
 }
 
 void SpawnGroupConfig::load(const nlohmann::json& groups) {
