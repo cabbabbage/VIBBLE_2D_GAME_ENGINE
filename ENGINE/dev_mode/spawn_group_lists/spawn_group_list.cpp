@@ -5,6 +5,18 @@
 
 #include "spawn_group_row.hpp"
 
+namespace {
+class ScopedFlag {
+public:
+    ScopedFlag(bool& flag, bool value) : flag_(flag), previous_(flag) { flag_ = value; }
+    ~ScopedFlag() { flag_ = previous_; }
+
+private:
+    bool& flag_;
+    bool previous_;
+};
+}  // namespace
+
 SpawnGroupList::SpawnGroupList(bool floatable)
     : DockableCollapsible("Spawn Groups", floatable),
       default_floatable_mode_(floatable) {}
@@ -35,6 +47,7 @@ void SpawnGroupList::load(const nlohmann::json& groups) {
 }
 
 void SpawnGroupList::append_rows(Rows& rows) {
+    ScopedFlag guard(suppress_layout_change_callback_, true);
     rebuild_rows();
     for (size_t i = 0; i < rows_.size(); ++i) {
         rows.emplace_back();
@@ -208,7 +221,7 @@ void SpawnGroupList::rebuild_layout() {
         layout_rows.emplace_back();
     }
     set_rows(layout_rows);
-    if (on_layout_change_) {
+    if (!suppress_layout_change_callback_ && on_layout_change_) {
         on_layout_change_();
     }
 }

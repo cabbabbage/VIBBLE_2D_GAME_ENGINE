@@ -121,5 +121,7 @@ private:
     SDL_Point anchor_{0, 0};
     std::optional<std::string> pending_focus_id_{};
     std::function<void(const nlohmann::json&)> pending_save_callback_{};
+
+    bool suppress_layout_change_callback_ = false;
 };
 
