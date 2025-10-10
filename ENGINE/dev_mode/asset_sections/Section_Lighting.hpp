@@ -21,8 +21,10 @@ public:
         s_ray_strength_.reset();
         if (!info_) return;
         if (info_->generate_rays) {
-            int strength = std::clamp(info_->ray_strength, 0, 100);
+            const int strength = std::clamp(info_->ray_strength, 0, 100);
             s_ray_strength_ = std::make_unique<DMSlider>("Ray Strength", 0, 100, strength);
+        } else {
+            info_->set_ray_strength(0);
         }
 
         for (const auto& ls : info_->light_sources) {
@@ -100,6 +102,7 @@ public:
         bool changed = false;
         if (s_ray_strength_ && s_ray_strength_->handle_event(e)) {
             changed = true;
+            used = true;
         }
         for (size_t i = 0; i < rows_.size(); ++i) {
             auto& r = rows_[i];
@@ -205,7 +208,7 @@ private:
         std::vector<LightSource> lights;
         for (const auto& r : rows_) lights.push_back(r.light);
         if (info_) {
-            int strength = info_->ray_strength;
+            int strength = 0;
             if (s_ray_strength_) {
                 strength = std::clamp(s_ray_strength_->value(), 0, 100);
             }

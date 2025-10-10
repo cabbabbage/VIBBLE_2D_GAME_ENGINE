@@ -859,6 +859,7 @@
     "duplicatable": false,
     "duplication_interval_max": 60,
     "duplication_interval_min": 30,
+    "generate_rays": false,
     "has_shading": true,
     "impassable_area": null,
     "layout": {
@@ -871,13 +872,15 @@
     },
     "lighting_info": [
         {
+            "apex_speed_bias": 0,
+            "behind": false,
             "factor": 100,
             "falloff": 0,
             "has_light_source": true,
             "light_intensity": 250,
             "offset_x": 0,
             "offset_y": 0,
-            "radius": 782,
+            "radius": 89,
             "x_radius": 76,
             "y_radius": 70
         }
@@ -887,6 +890,8 @@
     "min_child_depth": 0,
     "min_distance_all": 254,
     "min_same_type_distance": 466,
+    "neighbor_search_distance": 500,
+    "ray_strength": 0,
     "render_radius": 1000,
     "rnd_spawn_max": 400,
     "rnd_spawn_min": 300,

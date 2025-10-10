@@ -1,5 +1,7 @@
 #include "stride_player.hpp"
 
+#include <vector>
+
 #include "animation_update.hpp"
 #include "asset/Asset.hpp"
 #include "asset/animation.hpp"
@@ -74,10 +76,15 @@ bool StridePlayer::tick(AnimationUpdate& up, Plan& plan,
     SDL_Point delta{ frame->dx, frame->dy };
     SDL_Point to{ from.x + delta.x, from.y + delta.y };
 
-    if ((delta.x != 0 || delta.y != 0) && up.path_blocked(from, to, self)) {
-        up.attempt_unstick(from, to);
-        abort_plan();
-        return false;
+    if (delta.x != 0 || delta.y != 0) {
+        std::vector<const Asset*> blockers;
+        if (up.path_blocked(from, to, self, &blockers)) {
+            if (up.handle_blocked_path(from, to, blockers)) {
+                return true;
+            }
+            abort_plan();
+            return false;
+        }
     }
 
     if (delta.x != 0 || delta.y != 0) {
@@ -85,6 +92,7 @@ bool StridePlayer::tick(AnimationUpdate& up, Plan& plan,
         if (!frame || frame->z_resort) {
             up.refresh_z_index();
         }
+        up.mark_progress_toward_checkpoints();
     }
 
     ++stride_frame_counter;

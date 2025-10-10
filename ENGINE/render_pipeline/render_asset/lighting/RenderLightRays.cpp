@@ -111,7 +111,10 @@ inline int asset_ray_strength(const Asset& asset) {
 } // namespace
 
 bool RenderLightRays::supports(const Asset& asset) const {
-    return asset.generate_rays && asset_ray_strength(asset) > 0;
+    if (!asset.generate_rays) {
+        return false;
+    }
+    return asset_ray_strength(asset) > 0;
 }
 
 SDL_Texture* RenderLightRays::run(SDL_Renderer* renderer, const Asset& asset, StageContext& context) {
