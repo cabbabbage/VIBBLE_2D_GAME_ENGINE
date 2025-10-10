@@ -17,16 +17,18 @@ Global_Light_Source::Global_Light_Source(SDL_Renderer* renderer,
                                          SDL_Color fallback_base_color,
                                          const std::string& map_path)
 : renderer_(renderer),
-texture_(nullptr),
-base_color_(fallback_base_color),
-current_color_(fallback_base_color),
-default_center_(screen_center),
-center_(screen_center),
-angle_(0.0f),
-initialized_(false),
-pos_{screen_center.x, screen_center.y},
-frame_counter_(0),
-light_brightness(255)
+        texture_(nullptr),
+        base_color_(fallback_base_color),
+        current_color_(fallback_base_color),
+        default_center_(screen_center),
+        center_(screen_center),
+        angle_(0.0f),
+        initialized_(false),
+        pos_{screen_center.x, screen_center.y},
+        frame_counter_(0),
+        light_brightness(255),
+        orbit_radius_x_(0),
+        orbit_radius_y_(0)
 {
         set_defaults(screen_width, fallback_base_color);
         if (!load_from_map_light(map_path)) {
@@ -41,7 +43,8 @@ void Global_Light_Source::set_defaults(int screen_width, SDL_Color fallback_base
         intensity_       = 255.0f;
         mult_            = 0.4f;
         fall_off_        = 1.0f;
-        orbit_radius     = std::max(1, screen_width / 4);
+        orbit_radius_x_  = std::max(1, screen_width / 4);
+        orbit_radius_y_  = orbit_radius_x_;
         update_interval_ = 2;
         base_color_      = clamp_color_alpha(fallback_base_color);
         current_color_   = base_color_;
@@ -102,7 +105,9 @@ void Global_Light_Source::apply_config(const json& data) {
 
         radius_        = data.value("radius", radius_);
         intensity_     = data.value("intensity", intensity_);
-        orbit_radius   = data.value("orbit_radius", orbit_radius);
+        const int fallback_orbit = std::clamp(data.value("orbit_radius", orbit_radius_x_), 0, 20000);
+        orbit_radius_x_ = std::clamp(data.value("orbit_x", fallback_orbit), 0, 20000);
+        orbit_radius_y_ = std::clamp(data.value("orbit_y", orbit_radius_x_), 0, 20000);
         update_interval_= std::max(1, data.value("update_interval", update_interval_));
         mult_          = std::clamp(data.value("mult", mult_), 0.0f, 1.0f);
         fall_off_      = data.value("fall_off", fall_off_);
@@ -275,8 +280,8 @@ void Global_Light_Source::build_texture() {
 void Global_Light_Source::recalc_position() {
         const double ca = std::cos(angle_);
         const double sa = std::sin(angle_);
-        const int dx = static_cast<int>(std::lround(static_cast<double>(orbit_radius) * ca));
-        const int dy = static_cast<int>(std::lround(static_cast<double>(orbit_radius) * sa));
+        const int dx = static_cast<int>(std::lround(static_cast<double>(orbit_radius_x_) * ca));
+        const int dy = static_cast<int>(std::lround(static_cast<double>(orbit_radius_y_) * sa));
         pos_.x = center_.x + dx;
         pos_.y = center_.y - dy;
 }

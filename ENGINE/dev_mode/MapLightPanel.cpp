@@ -4,6 +4,7 @@
 #include <cmath>
 #include <sstream>
 #include <utility>
+#include <optional>
 #include <SDL_ttf.h>
 
 #include "dev_mode/dm_styles.hpp"
@@ -134,7 +135,8 @@ void MapLightPanel::build_ui() {
 
     radius_         = std::make_unique<DMSlider>("Radius",          0, 20000, 0);
     intensity_      = std::make_unique<DMSlider>("Intensity",       0,   255, 255);
-    orbit_radius_   = std::make_unique<DMSlider>("Orbit Radius",    0, 20000, 0);
+    orbit_x_        = std::make_unique<DMSlider>("Orbit X Radius",  0, 20000, 0);
+    orbit_y_        = std::make_unique<DMSlider>("Orbit Y Radius",  0, 20000, 0);
     update_interval_= std::make_unique<DMSlider>("Update Interval", 1,   120, 10);
     mult_x100_      = std::make_unique<DMSlider>("Mult x100",       0,   100, 0);
     falloff_        = std::make_unique<DMSlider>("Fall-off",        0,   100, 100);
@@ -146,6 +148,17 @@ void MapLightPanel::build_ui() {
     screen_b_          = std::make_unique<DMSlider>("Screen Base B",       0, 255, 255);
     screen_min_opacity_= std::make_unique<DMSlider>("Screen Min Opacity",  0, 255, 0);
     screen_max_opacity_= std::make_unique<DMSlider>("Screen Max Opacity",  0, 255, 255);
+
+    if (update_interval_) update_interval_->set_defer_commit_until_unfocus(true);
+    if (orbit_x_)        orbit_x_->set_defer_commit_until_unfocus(true);
+    if (orbit_y_)        orbit_y_->set_defer_commit_until_unfocus(true);
+    if (min_opacity_)    min_opacity_->set_defer_commit_until_unfocus(true);
+    if (max_opacity_)    max_opacity_->set_defer_commit_until_unfocus(true);
+    if (screen_r_)       screen_r_->set_defer_commit_until_unfocus(true);
+    if (screen_g_)       screen_g_->set_defer_commit_until_unfocus(true);
+    if (screen_b_)       screen_b_->set_defer_commit_until_unfocus(true);
+    if (screen_min_opacity_) screen_min_opacity_->set_defer_commit_until_unfocus(true);
+    if (screen_max_opacity_) screen_max_opacity_->set_defer_commit_until_unfocus(true);
 
     base_r_ = std::make_unique<DMSlider>("Base R", 0, 255, 255);
     base_g_ = std::make_unique<DMSlider>("Base G", 0, 255, 255);
@@ -207,7 +220,10 @@ void MapLightPanel::rebuild_rows() {
     if (!orbit_section_collapsed_) {
         rows.push_back({
             add_widget(std::make_unique<SliderWidget>(update_interval_.get())),
-            add_widget(std::make_unique<SliderWidget>(orbit_radius_.get()))
+            add_widget(std::make_unique<SliderWidget>(orbit_x_.get()))
+        });
+        rows.push_back({
+            add_widget(std::make_unique<SliderWidget>(orbit_y_.get()))
         });
         rows.push_back({
             add_widget(std::make_unique<SliderWidget>(min_opacity_.get())),
@@ -310,7 +326,26 @@ nlohmann::json& MapLightPanel::ensure_light() {
     json& L = editing_light_;
     if (!L.contains("radius"))         L["radius"] = 0;
     if (!L.contains("intensity"))      L["intensity"] = 255;
-    if (!L.contains("orbit_radius"))   L["orbit_radius"] = 0;
+    auto read_radius = [&](const char* key) -> std::optional<int> {
+        auto it = L.find(key);
+        if (it == L.end()) {
+            return std::nullopt;
+        }
+        try {
+            return clamp_int(it->get<int>(), 0, 20000);
+        } catch (...) {
+            return std::nullopt;
+        }
+    };
+
+    const int fallback_orbit = read_radius("orbit_radius").value_or(0);
+    int orbit_x = read_radius("orbit_x").value_or(fallback_orbit);
+    int orbit_y = read_radius("orbit_y").value_or(orbit_x);
+    orbit_x = clamp_int(orbit_x, 0, 20000);
+    orbit_y = clamp_int(orbit_y, 0, 20000);
+    L["orbit_x"] = orbit_x;
+    L["orbit_y"] = orbit_y;
+    L["orbit_radius"] = std::max(orbit_x, orbit_y);
     if (!L.contains("update_interval"))L["update_interval"] = 10;
     if (!L.contains("mult"))           L["mult"] = 0.0;
     if (!L.contains("fall_off"))       L["fall_off"] = 100;
@@ -411,7 +446,9 @@ void MapLightPanel::sync_ui_from_json() {
 
     OrbitSettings orbit{};
     orbit.update_interval = clamp_int(L.value("update_interval", 10), 1, 120);
-    orbit.orbit_radius = clamp_int(L.value("orbit_radius", 0), 0, 20000);
+    const int fallback_orbit = clamp_int(L.value("orbit_radius", 0), 0, 20000);
+    orbit.orbit_x = clamp_int(L.value("orbit_x", fallback_orbit), 0, 20000);
+    orbit.orbit_y = clamp_int(L.value("orbit_y", orbit.orbit_x), 0, 20000);
     orbit.min_opacity = clamp_int(L.value("min_opacity", 0), 0, 255);
     orbit.max_opacity = clamp_int(L.value("max_opacity", 255), 0, 255);
     orbit = sanitize_orbit_settings(orbit);
@@ -530,7 +567,8 @@ void MapLightPanel::ensure_keys_array() {
 MapLightPanel::OrbitSettings MapLightPanel::sanitize_orbit_settings(const OrbitSettings& raw) const {
     OrbitSettings out = raw;
     out.update_interval = clamp_int(out.update_interval, 1, 120);
-    out.orbit_radius = clamp_int(out.orbit_radius, 0, 20000);
+    out.orbit_x = clamp_int(out.orbit_x, 0, 20000);
+    out.orbit_y = clamp_int(out.orbit_y, 0, 20000);
     out.min_opacity = clamp_int(out.min_opacity, 0, 255);
     out.max_opacity = clamp_int(out.max_opacity, 0, 255);
     if (out.min_opacity > out.max_opacity) {
@@ -559,7 +597,8 @@ MapLightPanel::ScreenLightSettings MapLightPanel::sanitize_screen_settings(const
 MapLightPanel::OrbitSettings MapLightPanel::current_orbit_settings_from_ui() const {
     OrbitSettings current;
     current.update_interval = update_interval_ ? update_interval_->value() : 10;
-    current.orbit_radius = orbit_radius_ ? orbit_radius_->value() : 0;
+    current.orbit_x = orbit_x_ ? orbit_x_->value() : 0;
+    current.orbit_y = orbit_y_ ? orbit_y_->value() : current.orbit_x;
     current.min_opacity = min_opacity_ ? min_opacity_->value() : 0;
     current.max_opacity = max_opacity_ ? max_opacity_->value() : 255;
     return current;
@@ -577,7 +616,8 @@ MapLightPanel::ScreenLightSettings MapLightPanel::current_screen_settings_from_u
 
 void MapLightPanel::set_orbit_sliders(const OrbitSettings& orbit) {
     if (update_interval_) update_interval_->set_value(orbit.update_interval);
-    if (orbit_radius_)    orbit_radius_->set_value(orbit.orbit_radius);
+    if (orbit_x_)         orbit_x_->set_value(orbit.orbit_x);
+    if (orbit_y_)         orbit_y_->set_value(orbit.orbit_y);
     if (min_opacity_)     min_opacity_->set_value(orbit.min_opacity);
     if (max_opacity_)     max_opacity_->set_value(orbit.max_opacity);
 }
@@ -593,7 +633,9 @@ void MapLightPanel::set_screen_sliders(const ScreenLightSettings& screen) {
 void MapLightPanel::write_orbit_settings_to_json(const OrbitSettings& orbit) {
     json& L = ensure_light();
     L["update_interval"] = orbit.update_interval;
-    L["orbit_radius"] = orbit.orbit_radius;
+    L["orbit_x"] = orbit.orbit_x;
+    L["orbit_y"] = orbit.orbit_y;
+    L["orbit_radius"] = std::max(orbit.orbit_x, orbit.orbit_y);
     L["min_opacity"] = orbit.min_opacity;
     L["max_opacity"] = orbit.max_opacity;
 }

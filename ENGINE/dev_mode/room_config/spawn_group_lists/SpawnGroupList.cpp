@@ -11,7 +11,7 @@
 #include <nlohmann/json.hpp>
 
 #include "SpawnGroupRow.hpp"
-#include "spawn_group_utils.hpp"
+#include "../spawn_group_utils.hpp"
 #include "dm_styles.hpp"
 #include "widgets.hpp"
 

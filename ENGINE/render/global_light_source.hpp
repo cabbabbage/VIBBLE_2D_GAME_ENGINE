@@ -57,7 +57,8 @@ class Global_Light_Source {
     float intensity_;
     float mult_;
     float fall_off_;
-    int   orbit_radius;
+    int   orbit_radius_x_;
+    int   orbit_radius_y_;
     int   update_interval_;
     int   min_opacity_;
     int   max_opacity_;

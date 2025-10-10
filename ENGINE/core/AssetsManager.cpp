@@ -189,7 +189,34 @@ void Assets::hydrate_map_info_sections() {
         nlohmann::json& D = map_info_json_["map_light_data"];
         if (!D.contains("radius"))          D["radius"] = 0;
         if (!D.contains("intensity"))       D["intensity"] = 255;
-        if (!D.contains("orbit_radius"))    D["orbit_radius"] = 0;
+        auto clamp_radius = [](int v) { return std::max(0, std::min(20000, v)); };
+        int orbit_radius = 0;
+        if (D.contains("orbit_radius")) {
+            try {
+                orbit_radius = clamp_radius(D["orbit_radius"].get<int>());
+            } catch (...) {
+                orbit_radius = 0;
+            }
+        }
+        int orbit_x = orbit_radius;
+        if (D.contains("orbit_x")) {
+            try {
+                orbit_x = clamp_radius(D["orbit_x"].get<int>());
+            } catch (...) {
+                orbit_x = orbit_radius;
+            }
+        }
+        int orbit_y = orbit_x;
+        if (D.contains("orbit_y")) {
+            try {
+                orbit_y = clamp_radius(D["orbit_y"].get<int>());
+            } catch (...) {
+                orbit_y = orbit_x;
+            }
+        }
+        D["orbit_x"] = orbit_x;
+        D["orbit_y"] = orbit_y;
+        D["orbit_radius"] = std::max(orbit_x, orbit_y);
         if (!D.contains("update_interval")) D["update_interval"] = 10;
         if (!D.contains("mult"))            D["mult"] = 0.0;
         if (!D.contains("fall_off"))        D["fall_off"] = 100;
