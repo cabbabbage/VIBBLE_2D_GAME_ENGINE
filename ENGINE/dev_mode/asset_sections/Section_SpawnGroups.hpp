@@ -42,6 +42,8 @@ private:
 
     SDL_Point editor_anchor_point() const;
 
+    void schedule_rebuild();
+
 private:
     AssetInfoUI* ui_ = nullptr;
     nlohmann::json groups_ = nlohmann::json::array();
@@ -54,4 +56,7 @@ private:
     // Floating editors are now managed by SpawnGroupList itself
     int screen_w_ = 1920;
     int screen_h_ = 1080;
+
+    bool rebuilding_ = false;
+    bool rebuild_requested_ = false;
 };

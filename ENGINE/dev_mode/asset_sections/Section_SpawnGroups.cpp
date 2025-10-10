@@ -28,6 +28,14 @@ Section_SpawnGroups::Section_SpawnGroups()
 }
 
 void Section_SpawnGroups::build() {
+    if (rebuilding_) {
+        rebuild_requested_ = true;
+        return;
+    }
+
+    rebuilding_ = true;
+    rebuild_requested_ = false;
+
     DockableCollapsible::Rows rows;
     if (!list_) list_ = std::make_unique<SpawnGroupList>();
     if (list_) list_->set_embedded_mode(true);
@@ -36,7 +44,7 @@ void Section_SpawnGroups::build() {
     // Bind live JSON so inline editor updates can persist
     auto on_change = [this]() {
         (void)this->save_to_file();
-        this->build();
+        this->schedule_rebuild();
     };
     SpawnGroupList::Callbacks cb{};
     cb.on_duplicate = [this](const std::string& id){ duplicate_spawn_group(id); };
@@ -59,6 +67,13 @@ void Section_SpawnGroups::build() {
     // Top-level Add Spawn Group button is provided by SpawnGroupList widget now.
 
     set_rows(rows);
+
+    const bool run_again = rebuild_requested_;
+    rebuild_requested_ = false;
+    rebuilding_ = false;
+    if (run_again) {
+        build();
+    }
 }
 
 void Section_SpawnGroups::layout() {
@@ -167,7 +182,7 @@ void Section_SpawnGroups::add_spawn_group() {
     groups_.push_back(entry);
     renumber_priorities();
     (void)save_to_file();
-    build();
+    schedule_rebuild();
     if (list_) {
         SDL_Point anchor = editor_anchor_point();
         list_->request_open_spawn_group(new_id, anchor.x, anchor.y);
@@ -185,7 +200,7 @@ void Section_SpawnGroups::duplicate_spawn_group(const std::string& id) {
     groups_.push_back(std::move(duplicate));
     renumber_priorities();
     (void)save_to_file();
-    build();
+    schedule_rebuild();
 }
 
 void Section_SpawnGroups::delete_spawn_group(const std::string& id) {
@@ -195,7 +210,7 @@ void Section_SpawnGroups::delete_spawn_group(const std::string& id) {
     }), groups_.end());
     renumber_priorities();
     (void)save_to_file();
-    build();
+    schedule_rebuild();
 }
 
 void Section_SpawnGroups::move_spawn_group(const std::string& id, int dir) {
@@ -207,7 +222,7 @@ void Section_SpawnGroups::move_spawn_group(const std::string& id, int dir) {
     std::swap(groups_[idx], groups_[target]);
     renumber_priorities();
     (void)save_to_file();
-    build();
+    schedule_rebuild();
 }
 
 SDL_Point Section_SpawnGroups::editor_anchor_point() const {
@@ -219,4 +234,14 @@ SDL_Point Section_SpawnGroups::editor_anchor_point() const {
 }
 
 // Editing is handled by SpawnGroupList's own editor; no direct edit method needed.
+
+void Section_SpawnGroups::schedule_rebuild() {
+    if (rebuilding_) {
+        rebuild_requested_ = true;
+        return;
+    }
+
+    rebuild_requested_ = false;
+    build();
+}
 
