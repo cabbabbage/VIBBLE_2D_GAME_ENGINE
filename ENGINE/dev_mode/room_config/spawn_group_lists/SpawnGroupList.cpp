@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cmath>
+#include <deque>
 #include <optional>
 #include <sstream>
 #include <string>
@@ -615,15 +616,18 @@ private:
 
     void notify_change(bool method_changed, bool quantity_changed) {
         if (!owner_) return;
-        if (owner_->on_change_) owner_->on_change_();
-        if (owner_->on_entry_change_) {
-            SpawnGroupList::ChangeSummary summary;
-            summary.method_changed = method_changed;
-            summary.quantity_changed = quantity_changed;
-            summary.method = current_method_;
-            const nlohmann::json& src = row_->entry_view();
-            owner_->on_entry_change_(src, summary);
-        }
+        SpawnGroupList::ChangeSummary summary;
+        summary.method_changed = method_changed;
+        summary.quantity_changed = quantity_changed;
+        summary.method = current_method_;
+
+        nlohmann::json entry_copy = row_ ? row_->entry_view() : nlohmann::json::object();
+
+        owner_->enqueue_notification([owner = owner_, entry = std::move(entry_copy), summary]() mutable {
+            if (!owner) return;
+            if (owner->on_change_) owner->on_change_();
+            if (owner->on_entry_change_) owner->on_entry_change_(entry, summary);
+        });
     }
 
     void update_toggle_label() {
@@ -969,10 +973,13 @@ nlohmann::json SpawnGroupList::to_json() const {
 
 void SpawnGroupList::update(const Input& input, int screen_w, int screen_h) {
     DockableCollapsible::update(input, screen_w, screen_h);
+    process_pending_notifications();
 }
 
 bool SpawnGroupList::handle_event(const SDL_Event& e) {
-    return DockableCollapsible::handle_event(e);
+    bool handled = DockableCollapsible::handle_event(e);
+    process_pending_notifications();
+    return handled;
 }
 
 void SpawnGroupList::render(SDL_Renderer* r) const {
@@ -1105,6 +1112,22 @@ DockableCollapsible::Rows SpawnGroupList::build_layout_rows() {
 const nlohmann::json* SpawnGroupList::current_source() const {
     if (bound_array_) return bound_array_;
     return &readonly_snapshot_;
+}
+
+void SpawnGroupList::enqueue_notification(std::function<void()> cb) {
+    if (!cb) return;
+    pending_notifications_.push_back(std::move(cb));
+}
+
+void SpawnGroupList::process_pending_notifications() {
+    if (processing_notifications_) return;
+    processing_notifications_ = true;
+    while (!pending_notifications_.empty()) {
+        auto cb = std::move(pending_notifications_.front());
+        pending_notifications_.pop_front();
+        if (cb) cb();
+    }
+    processing_notifications_ = false;
 }
 
 void SpawnGroupList::RowController::set_ownership_label(const std::string& label, SDL_Color color) {

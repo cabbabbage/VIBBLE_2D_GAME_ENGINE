@@ -26,6 +26,8 @@ private:
     State state_ = State::Idle;
     int idle_ratio_ = 5;
     Asset* current_target_ = nullptr;
+    bool pursuit_locked_ = false;
+    bool explosion_started_ = false;
 };
 
 #endif

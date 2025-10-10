@@ -8,6 +8,7 @@
 #include <string>
 #include <unordered_set>
 #include <vector>
+#include <deque>
 
 #include <nlohmann/json.hpp>
 
@@ -103,6 +104,8 @@ private:
     void mark_layout_dirty();
     DockableCollapsible::Rows build_layout_rows();
     const nlohmann::json* current_source() const;
+    void enqueue_notification(std::function<void()> cb);
+    void process_pending_notifications();
 
 private:
     bool default_floatable_mode_ = true;
@@ -130,5 +133,8 @@ private:
     std::unique_ptr<DMButton> add_button_{};
     std::unique_ptr<ButtonWidget> add_button_widget_{};
     std::unique_ptr<class LabelWidget> empty_state_label_{};
+
+    std::deque<std::function<void()>> pending_notifications_{};
+    bool processing_notifications_ = false;
 };
 

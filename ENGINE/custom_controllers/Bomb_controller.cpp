@@ -6,6 +6,7 @@
 #include "utils/range_util.hpp"
 
 #include <algorithm>
+#include <cmath>
 
 BombController::BombController(Assets* assets, Asset* self)
     : assets_(assets), self_(self) {
@@ -41,6 +42,7 @@ void BombController::enter_pursue(Asset* target) {
 
     state_ = State::Pursuing;
     current_target_ = target;
+    pursuit_locked_ = true;
 
     const auto path = controller_paths::pursue_path(self_, target);
     self_->anim_->move(path, controller_utils::controller_visit_threshold(self_));
@@ -56,7 +58,24 @@ void BombController::trigger_explosion() {
 
     state_ = State::Detonating;
     current_target_ = nullptr;
-    self_->anim_->set_animation_now("explosion");
+
+    bool animation_started = false;
+    if (!self_->info) {
+        self_->anim_->set_animation_now("explosion");
+        animation_started = true;
+    } else {
+        const auto it = self_->info->animations.find("explosion");
+        if (it != self_->info->animations.end()) {
+            self_->anim_->set_animation_now("explosion");
+            animation_started = true;
+        }
+    }
+
+    explosion_started_ = animation_started;
+    if (!animation_started) {
+        self_->Delete();
+        return;
+    }
     self_->anim_->move({}, controller_utils::controller_visit_threshold(self_));
 }
 
@@ -66,6 +85,11 @@ void BombController::update(const Input&) {
     }
 
     if (state_ == State::Detonating) {
+        if (explosion_started_ && (!self_->info || self_->get_current_animation() == "explosion")) {
+            if (!self_->is_current_animation_looping() && self_->is_current_animation_last_frame()) {
+                self_->Delete();
+            }
+        }
         return;
     }
 
@@ -77,19 +101,40 @@ void BombController::update(const Input&) {
     try {
         Asset* player = assets_->player;
         if (!player || player == self_) {
-            enter_idle(35);
+            if (!pursuit_locked_) {
+                enter_idle(35);
+            }
             return;
         }
 
         const double distance = Range::get_distance(self_, player);
-        constexpr double detonation_radius = 54.0;
+        if (!std::isfinite(distance)) {
+            if (!pursuit_locked_) {
+                enter_idle(idle_ratio_);
+            }
+            return;
+        }
+
+        constexpr double detection_radius = 800.0;
+        constexpr double detonation_radius = 30.0;
 
         if (distance <= detonation_radius) {
             trigger_explosion();
             return;
         }
 
-        enter_pursue(player);
+        if (!pursuit_locked_ && distance <= detection_radius) {
+            pursuit_locked_ = true;
+        }
+
+        if (pursuit_locked_) {
+            enter_pursue(player);
+            return;
+        }
+
+        if (state_ != State::Idle) {
+            enter_idle(idle_ratio_);
+        }
     } catch (...) {
         enter_idle(5);
     }
