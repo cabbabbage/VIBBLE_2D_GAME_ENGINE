@@ -901,7 +901,17 @@ void SpawnGroupList::load(const nlohmann::json& groups) {
 }
 
 void SpawnGroupList::append_rows(Rows& rows) {
-    rebuild_rows();
+    const bool was_suppressed = suppress_layout_change_callback_;
+    // Calling rebuild_rows()/rebuild_layout() here would trigger the
+    // on_layout_change_ callback, which in turn calls append_rows() again.
+    // Temporarily suppress the callback while we bring the layout up to date
+    // so we don't recurse infinitely when a parent section mirrors our rows.
+    if (layout_dirty_) {
+        suppress_layout_change_callback_ = true;
+        rebuild_layout();
+    }
+    suppress_layout_change_callback_ = was_suppressed;
+
     auto layout_rows = build_layout_rows();
     rows.insert(rows.end(), layout_rows.begin(), layout_rows.end());
     set_rows(layout_rows);
