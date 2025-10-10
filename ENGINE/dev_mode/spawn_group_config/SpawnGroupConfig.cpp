@@ -12,7 +12,7 @@
 #include <nlohmann/json.hpp>
 
 #include "SpawnGroupRow.hpp"
-#include "../room_config/spawn_group_utils.hpp"
+#include "spawn_group_utils.hpp"
 #include "dm_styles.hpp"
 #include "widgets.hpp"
 #include "widgets/CandidateEditorPieGraphWidget.hpp"
@@ -128,18 +128,15 @@ double safe_double(const nlohmann::json& obj, const char* key, double fallback) 
     return fallback;
 }
 
-void ensure_candidate_list(nlohmann::json& entry) {
-    if (!entry.is_object()) entry = nlohmann::json::object();
-    if (!entry.contains("candidates") || !entry["candidates"].is_array()) {
-        entry["candidates"] = nlohmann::json::array();
+std::string default_display_name_for(const nlohmann::json& entry) {
+    if (entry.is_object()) {
+        const auto it = entry.find("display_name");
+        if (it != entry.end() && it->is_string()) {
+            std::string value = it->get<std::string>();
+            if (!value.empty()) return value;
+        }
     }
-    auto& arr = entry["candidates"];
-    if (arr.empty()) {
-        nlohmann::json candidate = nlohmann::json::object();
-        candidate["name"] = "null";
-        candidate["chance"] = 0;
-        arr.push_back(std::move(candidate));
-    }
+    return "New Spawn";
 }
 
 class CallbackTextBoxWidget : public Widget {
@@ -452,7 +449,7 @@ struct SpawnGroupConfig::RowEntry {
         add_candidate_widget_ = std::make_unique<ButtonWidget>(add_candidate_button_.get(), [this]() {
             if (!editable_) return;
             if (auto* entry = mutable_entry()) {
-                ensure_candidate_list(*entry);
+                devmode::spawn::sanitize_spawn_group_candidates(*entry);
                 nlohmann::json candidate = nlohmann::json::object();
                 candidate["name"] = "null";
                 candidate["chance"] = 0;
@@ -705,7 +702,7 @@ private:
                 [this, i](const std::string& text) {
                     if (!editable_) return;
                     if (auto* entry = mutable_entry()) {
-                        ensure_candidate_list(*entry);
+                        devmode::spawn::sanitize_spawn_group_candidates(*entry);
                         if (i < entry->at("candidates").size()) {
                             entry->at("candidates").at(i)["name"] = trim(text);
                             update_candidate_graph();
@@ -722,7 +719,7 @@ private:
                 [this, i](const std::string& text) {
                     if (!editable_) return;
                     if (auto* entry = mutable_entry()) {
-                        ensure_candidate_list(*entry);
+                        devmode::spawn::sanitize_spawn_group_candidates(*entry);
                         if (i < entry->at("candidates").size()) {
                             double value = parse_double_or(text, safe_double(entry->at("candidates").at(i), "chance", 0.0));
                             entry->at("candidates").at(i)["chance"] = value;
@@ -739,7 +736,7 @@ private:
             widgets.remove_widget = std::make_unique<ButtonWidget>(widgets.remove_button.get(), [this, i]() {
                 if (!editable_) return;
                 if (auto* entry = mutable_entry()) {
-                    ensure_candidate_list(*entry);
+                    devmode::spawn::sanitize_spawn_group_candidates(*entry);
                     auto& arr = entry->at("candidates");
                     if (arr.is_array() && arr.size() > 1 && i < arr.size()) {
                         arr.erase(arr.begin() + static_cast<nlohmann::json::difference_type>(i));
@@ -922,6 +919,13 @@ void SpawnGroupConfig::load(const nlohmann::json& groups) {
     on_entry_change_ = {};
     configure_entry_ = {};
     readonly_snapshot_ = groups;
+    if (!readonly_snapshot_.is_array()) {
+        readonly_snapshot_ = nlohmann::json::array();
+    }
+    for (auto& item : readonly_snapshot_) {
+        if (!item.is_object()) continue;
+        devmode::spawn::ensure_spawn_group_entry_defaults(item, default_display_name_for(item));
+    }
     single_entry_shadow_.clear();
     rebuild_rows();
 }
@@ -934,8 +938,21 @@ void SpawnGroupConfig::load_impl(nlohmann::json* array,
     bound_array_ = array;
     bound_entry_ = entry;
     if (bound_entry_) {
+        devmode::spawn::ensure_spawn_group_entry_defaults(*bound_entry_,
+                                                          default_display_name_for(*bound_entry_));
+    }
+    if (bound_array_) {
+        devmode::spawn::ensure_spawn_groups_array(*bound_array_);
+        for (auto& item : *bound_array_) {
+            if (!item.is_object()) continue;
+            devmode::spawn::ensure_spawn_group_entry_defaults(item, default_display_name_for(item));
+        }
+    }
+    if (bound_entry_) {
         single_entry_shadow_ = nlohmann::json::array();
         single_entry_shadow_.push_back(*bound_entry_);
+        devmode::spawn::ensure_spawn_group_entry_defaults(single_entry_shadow_.at(0),
+                                                          default_display_name_for(single_entry_shadow_.at(0)));
     } else {
         single_entry_shadow_.clear();
         if (bound_array_) {

@@ -3,7 +3,7 @@
 #include "dm_styles.hpp"
 #include "map_generation/room.hpp"
 #include "../spawn_group_config/SpawnGroupConfig.hpp"
-#include "spawn_group_utils.hpp"
+#include "../spawn_group_config/spawn_group_utils.hpp"
 #include "tag_editor_widget.hpp"
 #include "tag_utils.hpp"
 #include "utils/input.hpp"

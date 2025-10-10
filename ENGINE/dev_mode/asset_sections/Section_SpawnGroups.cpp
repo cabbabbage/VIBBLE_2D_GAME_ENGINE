@@ -7,7 +7,7 @@
 #include <nlohmann/json.hpp>
 
 #include "dev_mode/spawn_group_config/SpawnGroupConfig.hpp"
-#include "dev_mode/room_config/spawn_group_utils.hpp"
+#include "dev_mode/spawn_group_config/spawn_group_utils.hpp"
 #include "dev_mode/dm_styles.hpp"
 #include "dev_mode/widgets.hpp"
 #include "asset/asset_info.hpp"
@@ -172,13 +172,8 @@ void Section_SpawnGroups::add_spawn_group() {
     if (!groups_.is_array()) groups_ = nlohmann::json::array();
     nlohmann::json entry = nlohmann::json::object();
     entry["spawn_id"] = devmode::spawn::generate_spawn_id();
-    entry["display_name"] = "New Spawn";
     entry["position"] = "Exact";
-    entry["min_number"] = 1;
-    entry["max_number"] = 1;
-    entry["enforce_spacing"] = false;
-    entry["candidates"] = nlohmann::json::array();
-    entry["candidates"].push_back({{"name", "null"}, {"chance", 0}});
+    devmode::spawn::ensure_spawn_group_entry_defaults(entry, "New Spawn");
     const std::string new_id = entry["spawn_id"].get<std::string>();
     groups_.push_back(entry);
     renumber_priorities();
@@ -198,6 +193,11 @@ void Section_SpawnGroups::duplicate_spawn_group(const std::string& id) {
     if (duplicate.contains("display_name") && duplicate["display_name"].is_string()) {
         duplicate["display_name"] = duplicate["display_name"].get<std::string>() + " Copy";
     }
+    devmode::spawn::ensure_spawn_group_entry_defaults(
+        duplicate,
+        duplicate.contains("display_name") && duplicate["display_name"].is_string()
+            ? duplicate["display_name"].get<std::string>()
+            : std::string{"New Spawn"});
     groups_.push_back(std::move(duplicate));
     renumber_priorities();
     (void)save_to_file();

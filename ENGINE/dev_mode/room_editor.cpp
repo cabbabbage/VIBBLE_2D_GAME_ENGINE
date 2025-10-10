@@ -9,7 +9,7 @@
 #include "dev_mode/asset_info_ui.hpp"
 #include "dev_mode/dev_controls_persistence.hpp"
 #include "dev_mode/asset_library_ui.hpp"
-#include "room_config/spawn_group_utils.hpp"
+#include "spawn_group_config/spawn_group_utils.hpp"
 #include "dev_mode/full_screen_collapsible.hpp"
 #include "room_config/room_configurator.hpp"
 #include "dev_mode/FloatingDockableManager.hpp"
@@ -753,18 +753,15 @@ void RoomEditor::finalize_asset_drag(Asset* asset, const std::shared_ptr<AssetIn
     std::string spawn_id = generate_spawn_id();
     nlohmann::json entry;
     entry["spawn_id"] = spawn_id;
-    entry["min_number"] = 1;
-    entry["max_number"] = 1;
     entry["position"] = "Exact";
-    entry["enforce_spacing"] = false;
     entry["dx"] = asset->pos.x - center.x;
     entry["dy"] = asset->pos.y - center.y;
     if (width > 0) entry["origional_width"] = width;
     if (height > 0) entry["origional_height"] = height;
     entry["display_name"] = info->name;
 
-    entry["candidates"] = nlohmann::json::array();
-    entry["candidates"].push_back({{"name", "null"}, {"chance", 0}});
+    devmode::spawn::ensure_spawn_group_entry_defaults(entry, info->name);
+
     entry["candidates"].push_back({{"name", info->name}, {"chance", 100}});
 
     arr.push_back(entry);
@@ -807,6 +804,11 @@ void RoomEditor::regenerate_room_from_template(Room* source_room) {
             if (!entry.is_object()) continue;
             nlohmann::json clone = entry;
             clone["spawn_id"] = generate_spawn_id();
+            devmode::spawn::ensure_spawn_group_entry_defaults(
+                clone,
+                clone.contains("display_name") && clone["display_name"].is_string()
+                    ? clone["display_name"].get<std::string>()
+                    : std::string{"New Spawn"});
             target_groups.push_back(clone);
         }
     }
@@ -1938,13 +1940,8 @@ void RoomEditor::add_spawn_group_internal() {
     auto& arr = ensure_spawn_groups_array(root);
     nlohmann::json entry;
     entry["spawn_id"] = generate_spawn_id();
-    entry["display_name"] = "New Spawn";
     entry["position"] = "Exact";
-    entry["min_number"] = 1;
-    entry["max_number"] = 1;
-    entry["enforce_spacing"] = false;
-    entry["candidates"] = nlohmann::json::array();
-    entry["candidates"].push_back({{"name", "null"}, {"chance", 0}});
+    devmode::spawn::ensure_spawn_group_entry_defaults(entry, "New Spawn");
     arr.push_back(entry);
     // New group gets lowest priority (end of list)
     for (size_t i = 0; i < arr.size(); ++i) {
@@ -1978,6 +1975,11 @@ void RoomEditor::duplicate_spawn_group_internal(const std::string& spawn_id) {
         std::string name = duplicate["display_name"].get<std::string>();
         duplicate["display_name"] = name + " Copy";
     }
+    devmode::spawn::ensure_spawn_group_entry_defaults(
+        duplicate,
+        duplicate.contains("display_name") && duplicate["display_name"].is_string()
+            ? duplicate["display_name"].get<std::string>()
+            : std::string{"New Spawn"});
     arr.push_back(duplicate);
     // Renumber priorities to match order
     for (size_t i = 0; i < arr.size(); ++i) {

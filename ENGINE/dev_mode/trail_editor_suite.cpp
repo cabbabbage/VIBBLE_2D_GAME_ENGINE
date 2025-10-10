@@ -2,7 +2,7 @@
 
 #include "room_config/room_configurator.hpp"
 #include "spawn_group_config/SpawnGroupConfig.hpp"
-#include "room_config/spawn_group_utils.hpp"
+#include "spawn_group_config/spawn_group_utils.hpp"
 #include "dev_mode/sdl_pointer_utils.hpp"
 
 #include "map_generation/room.hpp"
@@ -241,6 +241,11 @@ void TrailEditorSuite::duplicate_spawn_group(const std::string& id) {
     if (duplicate.contains("display_name") && duplicate["display_name"].is_string()) {
         duplicate["display_name"] = duplicate["display_name"].get<std::string>() + " Copy";
     }
+    devmode::spawn::ensure_spawn_group_entry_defaults(
+        duplicate,
+        duplicate.contains("display_name") && duplicate["display_name"].is_string()
+            ? duplicate["display_name"].get<std::string>()
+            : std::string{"New Spawn"});
     groups.push_back(duplicate);
     sanitize_perimeter_spawn_groups(groups);
     active_trail_->save_assets_json();
@@ -331,13 +336,8 @@ void TrailEditorSuite::add_spawn_group() {
     auto& groups = ensure_spawn_groups_array(root);
     nlohmann::json entry;
     entry["spawn_id"] = generate_spawn_id();
-    entry["display_name"] = "New Spawn";
     entry["position"] = "Exact";
-    entry["min_number"] = 1;
-    entry["max_number"] = 1;
-    entry["enforce_spacing"] = false;
-    entry["candidates"] = nlohmann::json::array();
-    entry["candidates"].push_back({{"name", "null"}, {"chance", 0}});
+    devmode::spawn::ensure_spawn_group_entry_defaults(entry, "New Spawn");
     groups.push_back(entry);
     sanitize_perimeter_spawn_groups(groups);
     active_trail_->save_assets_json();

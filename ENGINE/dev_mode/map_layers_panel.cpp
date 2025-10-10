@@ -7,7 +7,7 @@
 #include "map_layers_common.hpp"
 
 #include "room_config/room_configurator.hpp"
-#include "room_config/spawn_group_utils.hpp"
+#include "spawn_group_config/spawn_group_utils.hpp"
 
 #include "widgets.hpp"
 
@@ -4636,21 +4636,9 @@ void MapLayersPanel::add_spawn_group_to_active_room() {
 
     nlohmann::json new_group;
 
-    new_group["spawn_id"] = devmode::spawn::generate_spawn_id();
-
-    new_group["display_name"] = "New Spawn";
-
     new_group["position"] = "Exact";
 
-    new_group["min_number"] = 1;
-
-    new_group["max_number"] = 1;
-
-    new_group["enforce_spacing"] = false;
-
-    new_group["candidates"] = nlohmann::json::array();
-
-    new_group["candidates"].push_back({{"name", "null"}, {"chance", 0}});
+    devmode::spawn::ensure_spawn_group_entry_defaults(new_group, "New Spawn");
 
     groups.push_back(new_group);
 
@@ -4717,6 +4705,12 @@ void MapLayersPanel::duplicate_spawn_group_in_active_room(const std::string& spa
         duplicate["display_name"] = duplicate["display_name"].get<std::string>() + " Copy";
 
     }
+
+    devmode::spawn::ensure_spawn_group_entry_defaults(
+        duplicate,
+        duplicate.contains("display_name") && duplicate["display_name"].is_string()
+            ? duplicate["display_name"].get<std::string>()
+            : std::string{"New Spawn"});
 
     groups.push_back(duplicate);
 
