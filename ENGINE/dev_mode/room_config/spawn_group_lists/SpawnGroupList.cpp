@@ -14,6 +14,56 @@
 #include "../spawn_group_utils.hpp"
 #include "dm_styles.hpp"
 #include "widgets.hpp"
+#include "widgets/CandidateEditorPieGraphWidget.hpp"
+
+class LabelWidget : public Widget {
+public:
+    LabelWidget() = default;
+    explicit LabelWidget(std::string text, SDL_Color color = DMStyles::Label().color, bool subtle = false)
+        : text_(std::move(text)), color_(color), subtle_(subtle) {}
+
+    void set_text(const std::string& text) { text_ = text; }
+    void set_color(SDL_Color color) { color_ = color; }
+    void set_subtle(bool subtle) { subtle_ = subtle; }
+
+    void set_rect(const SDL_Rect& r) override { rect_ = r; }
+    const SDL_Rect& rect() const override { return rect_; }
+    int height_for_width(int) const override { return DMCheckbox::height(); }
+
+    bool handle_event(const SDL_Event&) override { return false; }
+
+    void render(SDL_Renderer* renderer) const override {
+        if (!renderer) return;
+        DMLabelStyle style = DMStyles::Label();
+        SDL_Color color = subtle_ ? SDL_Color{static_cast<Uint8>(style.color.r / 2),
+                                              static_cast<Uint8>(style.color.g / 2),
+                                              static_cast<Uint8>(style.color.b / 2),
+                                              style.color.a}
+                                  : style.color;
+        if (color_.a != 0) color = color_;
+        TTF_Font* font = TTF_OpenFont(style.font_path.c_str(), style.font_size);
+        if (!font) return;
+        SDL_Surface* surface = TTF_RenderUTF8_Blended(font, text_.c_str(), color);
+        if (!surface) {
+            TTF_CloseFont(font);
+            return;
+        }
+        SDL_Texture* texture = SDL_CreateTextureFromSurface(renderer, surface);
+        if (texture) {
+            SDL_Rect dst{rect_.x, rect_.y, surface->w, surface->h};
+            SDL_RenderCopy(renderer, texture, nullptr, &dst);
+            SDL_DestroyTexture(texture);
+        }
+        SDL_FreeSurface(surface);
+        TTF_CloseFont(font);
+    }
+
+private:
+    std::string text_{};
+    SDL_Color color_{0, 0, 0, 0};
+    bool subtle_ = false;
+    SDL_Rect rect_{0, 0, 0, 0};
+};
 
 namespace {
 constexpr const char* kDefaultMethod = "Random";
@@ -90,55 +140,6 @@ void ensure_candidate_list(nlohmann::json& entry) {
         arr.push_back(std::move(candidate));
     }
 }
-
-class LabelWidget : public Widget {
-public:
-    LabelWidget() = default;
-    explicit LabelWidget(std::string text, SDL_Color color = DMStyles::Label().color, bool subtle = false)
-        : text_(std::move(text)), color_(color), subtle_(subtle) {}
-
-    void set_text(const std::string& text) { text_ = text; }
-    void set_color(SDL_Color color) { color_ = color; }
-    void set_subtle(bool subtle) { subtle_ = subtle; }
-
-    void set_rect(const SDL_Rect& r) override { rect_ = r; }
-    const SDL_Rect& rect() const override { return rect_; }
-    int height_for_width(int) const override { return DMCheckbox::height(); }
-
-    bool handle_event(const SDL_Event&) override { return false; }
-
-    void render(SDL_Renderer* renderer) const override {
-        if (!renderer) return;
-        DMLabelStyle style = DMStyles::Label();
-        SDL_Color color = subtle_ ? SDL_Color{static_cast<Uint8>(style.color.r / 2),
-                                              static_cast<Uint8>(style.color.g / 2),
-                                              static_cast<Uint8>(style.color.b / 2),
-                                              style.color.a}
-                                  : style.color;
-        if (color_.a != 0) color = color_;
-        TTF_Font* font = TTF_OpenFont(style.font_path.c_str(), style.font_size);
-        if (!font) return;
-        SDL_Surface* surface = TTF_RenderUTF8_Blended(font, text_.c_str(), color);
-        if (!surface) {
-            TTF_CloseFont(font);
-            return;
-        }
-        SDL_Texture* texture = SDL_CreateTextureFromSurface(renderer, surface);
-        if (texture) {
-            SDL_Rect dst{rect_.x, rect_.y, surface->w, surface->h};
-            SDL_RenderCopy(renderer, texture, nullptr, &dst);
-            SDL_DestroyTexture(texture);
-        }
-        SDL_FreeSurface(surface);
-        TTF_CloseFont(font);
-    }
-
-private:
-    std::string text_{};
-    SDL_Color color_{0, 0, 0, 0};
-    bool subtle_ = false;
-    SDL_Rect rect_{0, 0, 0, 0};
-};
 
 class CallbackTextBoxWidget : public Widget {
 public:

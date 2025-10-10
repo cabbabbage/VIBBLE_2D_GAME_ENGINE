@@ -15,6 +15,7 @@ class Area;
 class Assets;
 class Section_BasicInfo;
 class SearchAssets;
+class Section_Shading;
 
 namespace animation_editor {
 class AnimationEditorWindow;
@@ -65,8 +66,9 @@ class AssetInfoUI {
 
     std::vector<std::unique_ptr<class DockableCollapsible>> sections_;
     class Section_BasicInfo* basic_info_section_ = nullptr;
-    
+
     class Section_Lighting* lighting_section_ = nullptr;
+    class Section_Shading* shading_section_ = nullptr;
     class Asset* target_asset_ = nullptr;
     mutable SDL_Rect animation_editor_rect_{0,0,0,0};
 

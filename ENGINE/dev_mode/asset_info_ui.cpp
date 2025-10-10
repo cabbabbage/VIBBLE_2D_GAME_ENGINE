@@ -24,6 +24,7 @@
 #include "asset_sections/Section_BasicInfo.hpp"
 #include "asset_sections/Section_Tags.hpp"
 #include "asset_sections/Section_Lighting.hpp"
+#include "asset_sections/Section_Shading.hpp"
 #include "asset_sections/Section_Spacing.hpp"
 #include "asset_sections/Section_SpawnGroups.hpp"
 #include "asset_sections/animation_editor_window/AnimationEditorWindow.hpp"
@@ -166,6 +167,10 @@ AssetInfoUI::AssetInfoUI() {
     lighting->set_ui(this);
     lighting_section_ = lighting.get();
     sections_.push_back(std::move(lighting));
+    auto shading = std::make_unique<Section_Shading>();
+    shading->set_ui(this);
+    shading_section_ = shading.get();
+    sections_.push_back(std::move(shading));
     auto spacing = std::make_unique<Section_Spacing>();
     spacing->set_ui(this);
     sections_.push_back(std::move(spacing));
@@ -383,8 +388,8 @@ void AssetInfoUI::update(const Input& input, int screen_w, int screen_h) {
     }
 
     bool want_map_light_panel = false;
-    if (visible_ && info_ && lighting_section_ && lighting_section_->is_expanded()) {
-        want_map_light_panel = lighting_section_->shading_source_enabled();
+    if (visible_ && info_ && shading_section_ && shading_section_->is_expanded()) {
+        want_map_light_panel = shading_section_->shading_source_enabled();
     }
     sync_map_light_panel_visibility(want_map_light_panel);
 
@@ -404,7 +409,9 @@ void AssetInfoUI::update(const Input& input, int screen_w, int screen_h) {
 
     layout_widgets(screen_w, screen_h);
 
-    if (assets_ && lighting_section_ && lighting_section_->is_expanded()) {
+    const bool shading_open = shading_section_ && shading_section_->is_expanded();
+    const bool lighting_open = lighting_section_ && lighting_section_->is_expanded();
+    if (assets_ && (shading_open || lighting_open)) {
         assets_->set_force_high_quality_rendering(true);
     }
 }
@@ -492,8 +499,8 @@ void AssetInfoUI::render_world_overlay(SDL_Renderer* r, const camera& cam) const
         basic_info_section_->render_world_overlay(r, cam, target_asset_, reference_screen_height);
     }
 
-    if (!lighting_section_ || !lighting_section_->is_expanded() || !lighting_section_->shading_enabled() || !target_asset_) return;
-    const LightSource& light = lighting_section_->shading_light();
+    if (!shading_section_ || !shading_section_->is_expanded() || !shading_section_->shading_enabled() || !target_asset_) return;
+    const LightSource& light = shading_section_->shading_light();
     if (light.x_radius <= 0 && light.y_radius <= 0) return;
     const SDL_Color accent = DMStyles::AccentButton().hover_bg;
     SDL_SetRenderDrawColor(r, accent.r, accent.g, accent.b, 255);

@@ -1,10 +1,9 @@
 #pragma once
 
 #include "../DockableCollapsible.hpp"
+#include <algorithm>
 #include <memory>
 #include <vector>
-#include <cmath>
-#include <algorithm>
 #include "asset/asset_info.hpp"
 #include "asset_info_methods/lighting_loader.hpp"
 #include "dev_mode/asset_info_sections.hpp"
@@ -19,30 +18,12 @@ public:
 
     void build() override {
         rows_.clear();
-        shading_factor_ = 100;
         s_ray_strength_.reset();
         if (!info_) return;
-        shading_factor_ = std::clamp(info_->shading_factor, 1, 200);
         if (info_->generate_rays) {
             int strength = std::clamp(info_->ray_strength, 0, 100);
             s_ray_strength_ = std::make_unique<DMSlider>("Ray Strength", 0, 100, strength);
         }
-        c_is_shaded_ = std::make_unique<DMCheckbox>("Has Shading", info_->is_shaded);
-        shading_label_ = std::make_unique<DMButton>("Shading Source", &DMStyles::HeaderButton(), 150, DMButton::height());
-        if (!info_->orbital_light_sources.empty()) {
-            shading_light_ = info_->orbital_light_sources[0];
-        } else {
-            shading_light_ = LightSource{};
-        }
-        s_sh_intensity_ = std::make_unique<DMSlider>("Light Intensity", 0, 255, shading_light_.intensity);
-        s_sh_radius_    = std::make_unique<DMSlider>("Radius (px)", 0, 2000, shading_light_.radius);
-        s_sh_x_radius_  = std::make_unique<DMSlider>("X Orbit Radius (px)", 0, 2000, shading_light_.x_radius);
-        s_sh_y_radius_  = std::make_unique<DMSlider>("Y Orbit Radius (px)", 0, 2000, shading_light_.y_radius);
-        s_sh_apex_bias_ = std::make_unique<DMSlider>("Apex Velocity Bias", 0, 100, shading_light_.apex_speed_bias);
-        s_sh_offset_x_  = std::make_unique<DMSlider>("X Offset (px)", -2000, 2000, shading_light_.offset_x);
-        s_sh_offset_y_  = std::make_unique<DMSlider>("Y Offset (px)", -2000, 2000, shading_light_.offset_y);
-        s_sh_falloff_   = std::make_unique<DMSlider>("Falloff (%)", 0, 100, shading_light_.fall_off);
-        s_sh_factor_    = std::make_unique<DMSlider>("Factor", 1, 200, shading_factor_);
 
         for (const auto& ls : info_->light_sources) {
             Row r;
@@ -81,29 +62,6 @@ public:
         if (s_ray_strength_) {
             place(s_ray_strength_, DMSlider::height());
         }
-        if (c_is_shaded_) {
-            place(c_is_shaded_, DMCheckbox::height());
-        }
-        if (c_is_shaded_ && c_is_shaded_->value()) {
-            int shade_start = y;
-            if (shading_label_) {
-                int lbl_w = shading_label_->rect().w;
-                int lbl_x = rect_.x + DMSpacing::panel_padding() + (maxw - lbl_w) / 2;
-                shading_label_->set_rect(SDL_Rect{ lbl_x, y - scroll_, lbl_w, DMButton::height() });
-                y += DMButton::height() + DMSpacing::item_gap();
-            }
-            place(s_sh_intensity_, DMSlider::height());
-            place(s_sh_radius_,    DMSlider::height());
-            place(s_sh_x_radius_,  DMSlider::height());
-            place(s_sh_y_radius_,  DMSlider::height());
-            place(s_sh_apex_bias_, DMSlider::height());
-            place(s_sh_offset_x_,  DMSlider::height());
-            place(s_sh_offset_y_,  DMSlider::height());
-            place(s_sh_falloff_,   DMSlider::height());
-            place(s_sh_factor_,    DMSlider::height());
-            shading_rect_ = SDL_Rect{ x - 4, shade_start - scroll_ - 4, maxw + 8, (y - shade_start) + 8 };
-        }
-
         for (size_t i = 0; i < rows_.size(); ++i) {
             auto& r = rows_[i];
             if (!r.lbl)
@@ -142,40 +100,6 @@ public:
         bool changed = false;
         if (s_ray_strength_ && s_ray_strength_->handle_event(e)) {
             changed = true;
-        }
-        if (c_is_shaded_ && c_is_shaded_->handle_event(e)) {
-            changed = true;
-        }
-        if (c_is_shaded_ && c_is_shaded_->value()) {
-            if (s_sh_intensity_ && s_sh_intensity_->handle_event(e)) { shading_light_.intensity = s_sh_intensity_->value(); changed = true; }
-            if (s_sh_radius_    && s_sh_radius_->handle_event(e))    { shading_light_.radius = s_sh_radius_->value(); changed = true; }
-            if (s_sh_x_radius_  && s_sh_x_radius_->handle_event(e))  { shading_light_.x_radius = s_sh_x_radius_->value(); changed = true; }
-            if (s_sh_y_radius_  && s_sh_y_radius_->handle_event(e))  { shading_light_.y_radius = s_sh_y_radius_->value(); changed = true; }
-            if (s_sh_apex_bias_ && s_sh_apex_bias_->handle_event(e)) { shading_light_.apex_speed_bias = s_sh_apex_bias_->value(); changed = true; }
-            if (s_sh_offset_x_  && s_sh_offset_x_->handle_event(e))  { shading_light_.offset_x = s_sh_offset_x_->value(); changed = true; }
-            if (s_sh_offset_y_  && s_sh_offset_y_->handle_event(e))  { shading_light_.offset_y = s_sh_offset_y_->value(); changed = true; }
-            if (s_sh_falloff_   && s_sh_falloff_->handle_event(e))   { shading_light_.fall_off = s_sh_falloff_->value(); changed = true; }
-            if (s_sh_factor_    && s_sh_factor_->handle_event(e))    {
-                int new_factor = std::clamp(s_sh_factor_->value(), 1, 200);
-                if (new_factor != shading_factor_) {
-                    const double prev = std::max(1, shading_factor_);
-                    const double ratio = static_cast<double>(new_factor) / prev;
-                    auto scale_clamped = [&](int value, int min_v, int max_v) {
-                        double scaled = std::round(static_cast<double>(value) * ratio);
-                        return static_cast<int>(std::clamp(scaled, static_cast<double>(min_v), static_cast<double>(max_v)));
-};
-                    shading_light_.x_radius = scale_clamped(shading_light_.x_radius, 0, 2000);
-                    shading_light_.y_radius = scale_clamped(shading_light_.y_radius, 0, 2000);
-                    shading_light_.offset_x = scale_clamped(shading_light_.offset_x, -2000, 2000);
-                    shading_light_.offset_y = scale_clamped(shading_light_.offset_y, -2000, 2000);
-                    if (s_sh_x_radius_)  s_sh_x_radius_->set_value(shading_light_.x_radius);
-                    if (s_sh_y_radius_)  s_sh_y_radius_->set_value(shading_light_.y_radius);
-                    if (s_sh_offset_x_)  s_sh_offset_x_->set_value(shading_light_.offset_x);
-                    if (s_sh_offset_y_)  s_sh_offset_y_->set_value(shading_light_.offset_y);
-                }
-                shading_factor_ = new_factor;
-                changed = true;
-            }
         }
         for (size_t i = 0; i < rows_.size(); ++i) {
             auto& r = rows_[i];
@@ -241,22 +165,6 @@ public:
 
     void render_content(SDL_Renderer* r) const override {
         if (s_ray_strength_) s_ray_strength_->render(r);
-        if (c_is_shaded_) c_is_shaded_->render(r);
-        if (c_is_shaded_ && c_is_shaded_->value()) {
-            if (shading_label_) shading_label_->render(r);
-            if (s_sh_intensity_) s_sh_intensity_->render(r);
-            if (s_sh_radius_)    s_sh_radius_->render(r);
-            if (s_sh_x_radius_)  s_sh_x_radius_->render(r);
-            if (s_sh_y_radius_)  s_sh_y_radius_->render(r);
-            if (s_sh_apex_bias_) s_sh_apex_bias_->render(r);
-            if (s_sh_offset_x_)  s_sh_offset_x_->render(r);
-            if (s_sh_offset_y_)  s_sh_offset_y_->render(r);
-            if (s_sh_falloff_)   s_sh_falloff_->render(r);
-            if (s_sh_factor_)    s_sh_factor_->render(r);
-            SDL_Color bc = DMStyles::Border();
-            SDL_SetRenderDrawColor(r, bc.r, bc.g, bc.b, bc.a);
-            SDL_RenderDrawRect(r, &shading_rect_);
-        }
         for (const auto& rrow : rows_) {
             if (rrow.lbl)      rrow.lbl->render(r);
             if (rrow.b_delete) rrow.b_delete->render(r);
@@ -274,15 +182,6 @@ public:
         if (b_add_) b_add_->render(r);
         if (apply_btn_) apply_btn_->render(r);
     }
-
-    bool shading_enabled() const { return c_is_shaded_ && c_is_shaded_->value(); }
-    bool shading_source_enabled() const {
-        if (!c_is_shaded_ || !c_is_shaded_->value()) {
-            return false;
-        }
-        return shading_light_.radius > 0 || shading_light_.x_radius > 0 || shading_light_.y_radius > 0;
-    }
-    const LightSource& shading_light() const { return shading_light_; }
 
 private:
     struct Row {
@@ -312,23 +211,15 @@ private:
             }
             info_->set_ray_strength(strength);
         }
-        info_->set_lighting(c_is_shaded_ ? c_is_shaded_->value() : false, shading_light_, shading_factor_, lights);
+        LightSource shading_light{};
+        if (info_ && !info_->orbital_light_sources.empty()) {
+            shading_light = info_->orbital_light_sources.front();
+        }
+        int shading_factor = info_ ? info_->shading_factor : 100;
+        bool is_shaded = info_ ? info_->is_shaded : false;
+        info_->set_lighting(is_shaded, shading_light, shading_factor, lights);
     }
 
-    LightSource shading_light_{};
-    int shading_factor_ = 100;
-    std::unique_ptr<DMButton> shading_label_;
-    SDL_Rect shading_rect_{0,0,0,0};
-    std::unique_ptr<DMCheckbox> c_is_shaded_;
-    std::unique_ptr<DMSlider> s_sh_intensity_;
-    std::unique_ptr<DMSlider> s_sh_radius_;
-    std::unique_ptr<DMSlider> s_sh_x_radius_;
-    std::unique_ptr<DMSlider> s_sh_y_radius_;
-    std::unique_ptr<DMSlider> s_sh_apex_bias_;
-    std::unique_ptr<DMSlider> s_sh_offset_x_;
-    std::unique_ptr<DMSlider> s_sh_offset_y_;
-    std::unique_ptr<DMSlider> s_sh_falloff_;
-    std::unique_ptr<DMSlider> s_sh_factor_;
     std::unique_ptr<DMSlider> s_ray_strength_;
 
     std::vector<Row> rows_;

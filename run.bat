@@ -1,6 +1,22 @@
 @echo off
 setlocal enabledelayedexpansion
 
+if "%~1"=="__RUN__" (
+    shift
+    goto :main
+)
+
+set "LOG_FILE=%~dp0log.txt"
+type nul > "%LOG_FILE%"
+set "SCRIPT_PATH=%~f0"
+
+rem Run the script recursively and pipe to powershell logger
+cmd /v:on /c call "%SCRIPT_PATH%" __RUN__ %* 2>&1 | powershell -NoProfile -Command ^
+  "$input | Tee-Object -FilePath '%LOG_FILE%'; exit $LASTEXITCODE"
+
+exit /b %ERRORLEVEL%
+
+:main
 rem =========================
 rem VIBBLE Engine - run.bat
 rem Local build + run using CMakePresets + auto-vcpkg
@@ -10,6 +26,7 @@ pushd "%~dp0" >nul
 
 set "BUILD_CONFIG=RelWithDebInfo"
 set "EXTRA_ARGS="
+
 
 rem ----------------------------------------------------
 rem Ensure vcpkg exists (clone if missing)
