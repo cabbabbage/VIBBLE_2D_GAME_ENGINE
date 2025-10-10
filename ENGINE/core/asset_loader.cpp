@@ -96,7 +96,6 @@ void AssetLoader::link_by_child(const std::vector<std::vector<Asset*>>& groups) 
 		}
 		removeMergedAssets({group.begin(), group.end()}, center_asset);
 	}
-	std::cout << "[link_by_child] Linked " << total_linked << " assets as children.\n";
 }
 
 void AssetLoader::removeMergedAssets(const std::vector<Asset*>& to_remove, Asset* skip) {
@@ -136,7 +135,6 @@ std::vector<std::vector<Asset*>> AssetLoader::group_neighboring_assets(
 		largest_group = std::max(largest_group, g.size());
 	}
 	double avg_group_size = groups.empty() ? 0.0 : (double)total_assets / groups.size();
-	std::cout << "[" << group_type << "] Created " << groups.size() << " tile groups, total assets: " << total_assets << ", avg group size: " << avg_group_size << ", largest group: " << largest_group << "\n";
 	return groups;
 }
 
@@ -213,9 +211,7 @@ std::vector<Asset> AssetLoader::extract_all_assets() {
 }
 
 std::vector<Asset> AssetLoader::createAssets() {
-	auto assetsVec = extract_all_assets();
-	std::cout << "[AssetLoader] Created vector with " << assetsVec.size() << " assets\n";
-	return assetsVec;
+	return extract_all_assets();
 }
 
 std::vector<const Area*> AssetLoader::getAllRoomAndTrailAreas() const {

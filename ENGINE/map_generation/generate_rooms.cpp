@@ -242,25 +242,21 @@ std::vector<std::unique_ptr<Room>> GenerateRooms::build(AssetLibrary* asset_lib,
 		std::cout << "[GenerateRooms] Trail generation complete. Total rooms now: " << all_rooms.size() << "\n";
 	}
         if (!boundary_data.is_null() && !boundary_data.empty()) {
-                std::cout << "[Boundary] Starting boundary asset spawning...\n";
                 std::vector<Area> exclusion_zones;
                 for (const auto& r : all_rooms) {
                         exclusion_zones.push_back(*r->room_area);
                 }
-		std::cout << "[Boundary] Collected " << exclusion_zones.size() << " exclusion zones from existing rooms.\n";
-		int cx = map_radius;
-		int cy = map_radius;
-		int diameter = map_radius * 2;
-		SDL_Point center{cx, cy};
-		Area area("Map", center, diameter, diameter, "Circle", 1, diameter, diameter);
-		std::cout << "[Boundary] Created circular boundary area with diameter " << diameter << "\n";
-		AssetSpawner spawner(asset_lib, exclusion_zones);
+                int cx = map_radius;
+                int cy = map_radius;
+                int diameter = map_radius * 2;
+                SDL_Point center{cx, cy};
+                Area area("Map", center, diameter, diameter, "Circle", 1, diameter, diameter);
+                AssetSpawner spawner(asset_lib, exclusion_zones);
                 std::vector<std::unique_ptr<Asset>> boundary_assets = spawner.spawn_boundary_from_json( boundary_data, area, map_info_path_ + "::map_boundary_data");
-		std::cout << "[Boundary] Extracted " << boundary_assets.size() << " spawned boundary assets\n";
-		int assigned_count = 0;
-		for (auto& asset_ptr : boundary_assets) {
-			Asset* asset = asset_ptr.get();
-			if (!asset) continue;
+                int assigned_count = 0;
+                for (auto& asset_ptr : boundary_assets) {
+                        Asset* asset = asset_ptr.get();
+                        if (!asset) continue;
 			Room* closest_room = nullptr;
 			double closest_dist_sq = std::numeric_limits<double>::max();
 			for (const auto& room_ptr : all_rooms) {
@@ -277,12 +273,11 @@ std::vector<std::unique_ptr<Room>> GenerateRooms::build(AssetLibrary* asset_lib,
 			}
 			if (closest_room) {
 					std::vector<std::unique_ptr<Asset>> wrapper;
-					wrapper.push_back(std::move(asset_ptr));
-					closest_room->add_room_assets(std::move(wrapper));
-					assigned_count++;
-			}
-		}
-		std::cout << "[Boundary] Assigned " << assigned_count << " assets to closest rooms\n";
-	}
+                                        wrapper.push_back(std::move(asset_ptr));
+                                        closest_room->add_room_assets(std::move(wrapper));
+                                        assigned_count++;
+                        }
+                }
+        }
 	return all_rooms;
 }
