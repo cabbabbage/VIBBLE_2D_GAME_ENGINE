@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <string>
 #include <vector>
 
@@ -8,6 +9,7 @@
 struct Stride {
     std::string animation_id;
     int         frames = 0;
+    std::size_t path_index = 0;
 };
 
 struct Plan {

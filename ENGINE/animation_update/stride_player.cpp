@@ -26,7 +26,7 @@ bool StridePlayer::tick(AnimationUpdate& up, Plan& plan,
         plan.final_dest = self->pos;
         stride_index    = 0;
         stride_frame_counter = 0;
-        up.switch_to(animation_update::detail::kDefaultAnimation);
+        up.switch_to(animation_update::detail::kDefaultAnimation, 0);
         up.path_requested = true;
     };
 
@@ -41,8 +41,11 @@ bool StridePlayer::tick(AnimationUpdate& up, Plan& plan,
         stride = plan.strides[stride_index];
     }
 
-    if (self->current_animation != stride.animation_id) {
-        up.switch_to(stride.animation_id);
+    const std::size_t stride_path = stride.path_index;
+    const bool same_animation     = (self->current_animation == stride.animation_id);
+    const bool same_path          = same_animation && (up.path_index_for(stride.animation_id) == stride_path);
+    if (!same_animation || !same_path) {
+        up.switch_to(stride.animation_id, stride_path);
         stride_frame_counter = 0;
     }
 
@@ -57,8 +60,9 @@ bool StridePlayer::tick(AnimationUpdate& up, Plan& plan,
     }
 
     Animation& anim = anim_it->second;
+    const std::size_t current_path = up.path_index_for(self->current_animation);
     if (!self->current_frame) {
-        self->current_frame = anim.get_first_frame();
+        self->current_frame = anim.get_first_frame(current_path);
         if (!self->current_frame) {
             abort_plan();
             return false;
@@ -89,11 +93,11 @@ bool StridePlayer::tick(AnimationUpdate& up, Plan& plan,
     if (!stride_complete) {
         if (!up.advance(self->current_frame)) {
             stride_complete = true;
-            self->current_frame = anim.get_first_frame();
+            self->current_frame = anim.get_first_frame(current_path);
         }
     } else {
         if (!up.advance(self->current_frame)) {
-            self->current_frame = anim.get_first_frame();
+            self->current_frame = anim.get_first_frame(current_path);
         }
     }
 
@@ -105,7 +109,7 @@ bool StridePlayer::tick(AnimationUpdate& up, Plan& plan,
             return false;
         }
         const Stride& next_stride = plan.strides[stride_index];
-        up.switch_to(next_stride.animation_id);
+        up.switch_to(next_stride.animation_id, next_stride.path_index);
         if (stride_index == plan.strides.size() - 1) {
             up.path_requested = true;
         }

@@ -148,8 +148,9 @@ bool AnimationUpdate::advance(AnimationFrame*& frame) {
     }
 
     Animation& anim = it->second;
+    std::size_t path_index = path_index_for(self_->current_animation);
     if (!frame) {
-        frame = anim.get_first_frame();
+        frame = anim.get_first_frame(path_index);
         if (!frame) {
             return false;
         }
@@ -161,7 +162,7 @@ bool AnimationUpdate::advance(AnimationFrame*& frame) {
         const bool force_loop_default =
             self_->current_animation == animation_update::detail::kDefaultAnimation;
         if (anim.loop || force_loop_default) {
-            frame = anim.get_first_frame();
+            frame = anim.get_first_frame(path_index);
         } else {
             return false;
         }
@@ -170,7 +171,7 @@ bool AnimationUpdate::advance(AnimationFrame*& frame) {
     return true;
 }
 
-void AnimationUpdate::switch_to(const std::string& anim_id) {
+void AnimationUpdate::switch_to(const std::string& anim_id, std::size_t path_index) {
     if (!self_ || !self_->info) {
         return;
     }
@@ -189,11 +190,21 @@ void AnimationUpdate::switch_to(const std::string& anim_id) {
     }
 
     Animation& anim = it->second;
-    AnimationFrame* new_frame = anim.get_first_frame();
+    path_index = anim.clamp_path_index(path_index);
+    AnimationFrame* new_frame = anim.get_first_frame(path_index);
     self_->current_animation = it->first;
     self_->current_frame = new_frame;
     self_->static_frame = anim.is_static();
     self_->frame_progress = 0.0f;
+    active_paths_[self_->current_animation] = path_index;
+}
+
+std::size_t AnimationUpdate::path_index_for(const std::string& anim_id) const {
+    auto it = active_paths_.find(anim_id);
+    if (it != active_paths_.end()) {
+        return it->second;
+    }
+    return 0;
 }
 
 SDL_Point AnimationUpdate::bottom_middle(SDL_Point pos) const {

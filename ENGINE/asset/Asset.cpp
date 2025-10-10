@@ -254,12 +254,15 @@ SDL_Texture* Asset::get_current_frame() const {
         auto iti = info->animations.find(current_animation);
         if (iti == info->animations.end()) return nullptr;
 
-        const Animation& anim = iti->second;
+        Animation& anim = const_cast<Animation&>(iti->second);
 
         int idx_anim = anim.index_of(current_frame);
         if (idx_anim < 0) {
-
-            const_cast<Asset*>(this)->current_frame = const_cast<AnimationFrame*>(anim.frames_data.empty() ? nullptr : &anim.frames_data[0]);
+            std::size_t path_index = 0;
+            if (anim_) {
+                path_index = anim_->path_index_for(current_animation);
+            }
+            const_cast<Asset*>(this)->current_frame = anim.get_first_frame(path_index);
             const_cast<Asset*>(this)->frame_progress = 0.0f;
         }
 
@@ -284,15 +287,21 @@ void Asset::update() {
             auto def = info->animations.find("default");
             if (def == info->animations.end()) def = info->animations.begin();
             if (def != info->animations.end()) {
-                current_animation = def->first;
-                current_frame     = def->second.get_first_frame();
-                frame_progress    = 0.0f;
-                static_frame      = def->second.is_static();
+                if (anim_) {
+                    anim_->set_animation_now(def->first);
+                } else {
+                    current_animation = def->first;
+                    Animation& anim   = def->second;
+                    current_frame     = anim.get_first_frame();
+                    frame_progress    = 0.0f;
+                    static_frame      = anim.is_static();
+                }
             }
         } else {
             Animation& anim = iti->second;
             if (anim.index_of(current_frame) < 0) {
-                current_frame = anim.get_first_frame();
+                std::size_t path_index = anim_ ? anim_->path_index_for(current_animation) : 0;
+                current_frame = anim.get_first_frame(path_index);
                 frame_progress = 0.0f;
                 static_frame = anim.is_static();
             }

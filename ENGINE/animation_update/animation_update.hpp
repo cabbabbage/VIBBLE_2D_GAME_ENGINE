@@ -2,6 +2,7 @@
 
 #include <optional>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include <SDL.h>
@@ -25,13 +26,14 @@ public:
     void set_animation_qued(const std::string& anim_id);
     void move(const std::vector<SDL_Point>& rel_checkpoints, int visited_thresh_px);
     void refresh_z_index();
+    std::size_t path_index_for(const std::string& anim_id) const;
 
     bool      path_requested = false;
     SDL_Point final_dest{0, 0};
 
 private:
     bool advance(AnimationFrame*& frame);
-    void switch_to(const std::string& anim_id);
+    void switch_to(const std::string& anim_id, std::size_t path_index = 0);
 
     SDL_Point bottom_middle(SDL_Point pos) const;
     bool point_in_impassable(SDL_Point pt, const Asset* ignored) const;
@@ -55,4 +57,5 @@ private:
     StridePlayer  player_{};
 
     std::optional<std::string> queued_anim_{};
+    std::unordered_map<std::string, std::size_t> active_paths_{};
 };

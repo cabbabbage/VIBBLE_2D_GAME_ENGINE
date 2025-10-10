@@ -84,10 +84,12 @@ bool blocked_step(SDL_Point from,
 }
 
 struct AnimationDescriptor {
-    std::string       id;
-    const Animation*  animation = nullptr;
-    bool              locked    = false;
-    int               frame_count = 0;
+    std::string                     id;
+    const Animation*                animation   = nullptr;
+    std::size_t                     path_index  = 0;
+    const std::vector<AnimationFrame>* frames    = nullptr;
+    bool                            locked      = false;
+    int                             frame_count = 0;
 };
 
 std::vector<AnimationDescriptor> gather_movement_animations(const Asset& self) {
@@ -97,23 +99,27 @@ std::vector<AnimationDescriptor> gather_movement_animations(const Asset& self) {
     }
 
     for (const auto& [id, anim] : self.info->animations) {
-        const int frame_count = static_cast<int>(anim.frames_data.size());
-        if (frame_count <= 0) {
-            continue;
-        }
-
-        bool has_motion = false;
-        for (const auto& frame : anim.frames_data) {
-            if (frame.dx != 0 || frame.dy != 0) {
-                has_motion = true;
-                break;
+        const std::size_t path_count = anim.movement_path_count();
+        for (std::size_t path_index = 0; path_index < path_count; ++path_index) {
+            const auto& frames = anim.movement_path(path_index);
+            const int   frame_count = static_cast<int>(frames.size());
+            if (frame_count <= 0) {
+                continue;
             }
-        }
-        if (!has_motion) {
-            continue;
-        }
 
-        result.push_back(AnimationDescriptor{ id, &anim, anim.locked, frame_count });
+            bool has_motion = false;
+            for (const auto& frame : frames) {
+                if (frame.dx != 0 || frame.dy != 0) {
+                    has_motion = true;
+                    break;
+                }
+            }
+            if (!has_motion) {
+                continue;
+            }
+
+            result.push_back(AnimationDescriptor{ id, &anim, path_index, &frames, anim.locked, frame_count });
+        }
     }
 
     return result;
@@ -126,6 +132,7 @@ struct CandidateStride {
     int         dist_sq  = std::numeric_limits<int>::max();
     bool        reaches  = false;
     bool        valid    = false;
+    std::size_t path_index = 0;
 };
 
 } // namespace
@@ -163,6 +170,11 @@ Plan GetBestPath::operator()(const Asset& self,
                     continue;
                 }
 
+                const auto* frames_path = descriptor.frames;
+                if (!frames_path) {
+                    continue;
+                }
+
                 const int max_frames = descriptor.frame_count;
                 if (max_frames <= 0) {
                     continue;
@@ -174,7 +186,7 @@ Plan GetBestPath::operator()(const Asset& self,
                     bool      blocked   = false;
 
                     for (int i = 0; i < frames; ++i) {
-                        const AnimationFrame& frame = descriptor.animation->frames_data[i];
+                        const AnimationFrame& frame = (*frames_path)[i];
                         SDL_Point next{ simulated.x + frame.dx, simulated.y + frame.dy };
                         if (blocked_step(simulated, next, collisions, self, assets)) {
                             blocked = true;
@@ -214,6 +226,7 @@ Plan GetBestPath::operator()(const Asset& self,
                         best.frames       = frames;
                         best.dist_sq      = dist_sq;
                         best.end_position = simulated;
+                        best.path_index   = descriptor.path_index;
                     }
                 }
             }
@@ -222,7 +235,7 @@ Plan GetBestPath::operator()(const Asset& self,
                 break;
             }
 
-            plan.strides.push_back(Stride{ best.animation_id, best.frames });
+            plan.strides.push_back(Stride{ best.animation_id, best.frames, best.path_index });
             cursor = best.end_position;
             plan.final_dest = cursor;
 

@@ -58,13 +58,13 @@ This is the complete flow from content to pixels each frame, and how core data t
 
 - `Animation` (one entry inside `AssetInfo::animations`)
   - Frame textures: `frames` (vector of `SDL_Texture*`).
-  - Frame data: `frames_data` (vector of `AnimationFrame`).
+  - Movement paths: `movement_path(index)` exposes per-frame `AnimationFrame` sequences; path `0` is the default.
   - Motion & playback: `total_dx/dy`, `movment`, `locked`, `loop`, `rnd_start`, `speed_factor`, `randomize`.
   - Mapping: `on_end_mapping` (next animation id) / `on_end_animation`.
   - Source/transform: `source`, `flipped_source`, `reverse_source`.
 
-- `AnimationFrame` (one element per visible frame)
-  - `dx/dy` per-frame movement, `z_resort` (request resort), `rgb` tint.
+  - `AnimationFrame` (one element per visible frame)
+    - `dx/dy` per-frame movement, `z_resort` (request resort), `rgb` tint, `frame_index`.
   - Linked list pointers (`prev/next`) and flags (`is_first/is_last`).
 
 - `Asset` (runtime instance)
@@ -106,13 +106,13 @@ AssetInfo (definition)
 
 Animation
 ├─ frames: vector<SDL_Texture*>
-├─ frames_data: vector<AnimationFrame>
+├─ movement paths: vector<vector<AnimationFrame>>
 ├─ number_of_frames, speed_factor, locked, loop, rnd_start
 ├─ total_dx, total_dy, movment, on_end_mapping/on_end_animation
 └─ source, flipped_source, reverse_source, randomize
 
 AnimationFrame
-└─ dx, dy, z_resort, rgb, prev/next, is_first/is_last
+└─ dx, dy, z_resort, rgb, frame_index, prev/next, is_first/is_last
 ```
 
 ---

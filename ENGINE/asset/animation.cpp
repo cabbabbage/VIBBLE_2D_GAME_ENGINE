@@ -104,34 +104,66 @@ void Animation::load(const std::string& trigger,
 	on_end_animation = anim_json.value("on_end", std::string{"default"});
         total_dx = 0;
         total_dy = 0;
-        frames_data.clear();
+        movement_paths_.clear();
         audio_clip = AudioClip{};
         bool movement_specified = false;
-        if (anim_json.contains("movement") && anim_json["movement"].is_array()) {
-                for (const auto& mv : anim_json["movement"]) {
+
+        auto parse_movement_sequence = [](const nlohmann::json& seq, std::vector<AnimationFrame>& dest) {
+                bool specified = false;
+                if (!seq.is_array()) return specified;
+                auto clamp = [](int v) { return (v < 0) ? 0 : (v > 255 ? 255 : v); };
+                for (const auto& mv : seq) {
                         if (!mv.is_array() || mv.size() < 2) continue;
                         AnimationFrame fm;
                         try { fm.dx = mv[0].get<int>(); } catch (...) { fm.dx = 0; }
                         try { fm.dy = mv[1].get<int>(); } catch (...) { fm.dy = 0; }
                         if (mv.size() >= 3 && mv[2].is_boolean()) {
-                                        fm.z_resort = mv[2].get<bool>();
+                                fm.z_resort = mv[2].get<bool>();
                         }
                         if (mv.size() >= 4 && mv[3].is_array() && mv[3].size() >= 3) {
-                                        auto clamp = [](int v) { return (v < 0) ? 0 : (v > 255 ? 255 : v); };
-                                        int r = 255, g = 255, b = 255;
-                                        try { r = clamp(mv[3][0].get<int>()); } catch (...) { r = 255; }
-                                        try { g = clamp(mv[3][1].get<int>()); } catch (...) { g = 255; }
-                                        try { b = clamp(mv[3][2].get<int>()); } catch (...) { b = 255; }
-                                        fm.rgb = SDL_Color{ static_cast<Uint8>(r), static_cast<Uint8>(g), static_cast<Uint8>(b), 255 };
+                                int r = 255, g = 255, b = 255;
+                                try { r = clamp(mv[3][0].get<int>()); } catch (...) { r = 255; }
+                                try { g = clamp(mv[3][1].get<int>()); } catch (...) { g = 255; }
+                                try { b = clamp(mv[3][2].get<int>()); } catch (...) { b = 255; }
+                                fm.rgb = SDL_Color{ static_cast<Uint8>(r), static_cast<Uint8>(g), static_cast<Uint8>(b), 255 };
                         }
                         if (fm.dx != 0 || fm.dy != 0 || mv.size() >= 3) {
-                                movement_specified = true;
+                                specified = true;
                         }
-                        frames_data.push_back(fm);
-                        total_dx += fm.dx;
-                        total_dy += fm.dy;
+                        dest.push_back(fm);
+                }
+                return specified;
+        };
+
+        std::vector<std::vector<AnimationFrame>> parsed_paths;
+        if (anim_json.contains("movement_paths") && anim_json["movement_paths"].is_array()) {
+                for (const auto& path_json : anim_json["movement_paths"]) {
+                        std::vector<AnimationFrame> path_frames;
+                        bool specified = parse_movement_sequence(path_json, path_frames);
+                        if (!path_frames.empty()) {
+                                parsed_paths.push_back(std::move(path_frames));
+                        } else {
+                                parsed_paths.emplace_back();
+                        }
+                        movement_specified = movement_specified || specified;
                 }
         }
+
+        std::vector<AnimationFrame> primary_path;
+        if (anim_json.contains("movement") && anim_json["movement"].is_array()) {
+                bool specified = parse_movement_sequence(anim_json["movement"], primary_path);
+                movement_specified = movement_specified || specified;
+        }
+
+        if (!primary_path.empty()) {
+                parsed_paths.insert(parsed_paths.begin(), std::move(primary_path));
+        }
+
+        if (parsed_paths.empty()) {
+                parsed_paths.emplace_back();
+        }
+
+        movement_paths_ = std::move(parsed_paths);
 	if (source.kind == "animation" && !source.name.empty()) {
 		auto it = info.animations.find(source.name);
 		if (it != info.animations.end()) {
@@ -292,32 +324,24 @@ void Animation::load(const std::string& trigger,
         if (!movement_specified && source.kind == "animation" && !source.name.empty()) {
                 auto it = info.animations.find(source.name);
                 if (it != info.animations.end()) {
-                        const auto& src_frames_data = it->second.frames_data;
-                        if (!src_frames_data.empty()) {
-                                const std::size_t count = src_frames_data.size();
-                                frames_data.assign(count, AnimationFrame{});
-                                total_dx = 0;
-                                total_dy = 0;
-                                for (std::size_t i = 0; i < count; ++i) {
-                                        std::size_t src_index = reverse_source ? (count - 1 - i) : i;
-                                        if (src_index >= src_frames_data.size()) {
-                                                continue;
+                        const Animation& src_anim = it->second;
+                        movement_paths_           = src_anim.movement_paths_;
+                        if (!movement_paths_.empty()) {
+                                if (reverse_source) {
+                                        for (auto& path : movement_paths_) {
+                                                std::reverse(path.begin(), path.end());
+                                                for (auto& frame : path) {
+                                                        frame.dx = -frame.dx;
+                                                        frame.dy = -frame.dy;
+                                                }
                                         }
-                                        AnimationFrame dest;
-                                        dest.dx = src_frames_data[src_index].dx;
-                                        dest.dy = src_frames_data[src_index].dy;
-                                        dest.z_resort = src_frames_data[src_index].z_resort;
-                                        dest.rgb = src_frames_data[src_index].rgb;
-                                        if (reverse_source) {
-                                                dest.dx = -dest.dx;
-                                                dest.dy = -dest.dy;
+                                }
+                                if (flipped_source) {
+                                        for (auto& path : movement_paths_) {
+                                                for (auto& frame : path) {
+                                                        frame.dx = -frame.dx;
+                                                }
                                         }
-                                        if (flipped_source) {
-                                                dest.dx = -dest.dx;
-                                        }
-                                        frames_data[i] = dest;
-                                        total_dx += dest.dx;
-                                        total_dy += dest.dy;
                                 }
                                 movement_specified = true;
                         }
@@ -359,53 +383,105 @@ void Animation::load(const std::string& trigger,
                         }
                 }
         }
-        movment = !(total_dx == 0 && total_dy == 0);
+        const std::size_t expected_frames = frames.size();
+        if (movement_paths_.empty()) {
+                movement_paths_.emplace_back();
+        }
+
+        bool any_motion = false;
+        for (auto& path : movement_paths_) {
+                if (path.size() != expected_frames) {
+                        path.resize(expected_frames);
+                }
+                for (std::size_t i = 0; i < path.size(); ++i) {
+                        AnimationFrame& f = path[i];
+                        f.prev        = (i > 0) ? &path[i - 1] : nullptr;
+                        f.next        = (i + 1 < path.size()) ? &path[i + 1] : nullptr;
+                        f.is_first    = (i == 0);
+                        f.is_last     = (i + 1 == path.size());
+                        f.frame_index = static_cast<int>(i);
+                        if (f.dx != 0 || f.dy != 0) {
+                                any_motion = true;
+                        }
+                }
+        }
+
+        total_dx = 0;
+        total_dy = 0;
+        if (!movement_paths_.empty()) {
+                const auto& primary = movement_paths_.front();
+                for (const auto& frame : primary) {
+                        total_dx += frame.dx;
+                        total_dy += frame.dy;
+                        if (frame.dx != 0 || frame.dy != 0) {
+                                any_motion = true;
+                        }
+                }
+        }
+
+        movment = any_motion;
         number_of_frames = static_cast<int>(frames.size());
         if (trigger == "default" && !frames.empty()) {
                 base_sprite = frames[0];
-        }
-
-        if (frames_data.size() < frames.size()) {
-                frames_data.resize(frames.size());
-        }
-        for (std::size_t i = 0; i < frames_data.size(); ++i) {
-                AnimationFrame& f = frames_data[i];
-                f.prev = (i > 0) ? &frames_data[i - 1] : nullptr;
-                f.next = (i + 1 < frames_data.size()) ? &frames_data[i + 1] : nullptr;
-                f.is_first = (i == 0);
-                f.is_last = (i + 1 == frames_data.size());
         }
 }
 
 SDL_Texture* Animation::get_frame(const AnimationFrame* frame) const {
         if (!frame) return nullptr;
-        int index = index_of(frame);
+        const int index = frame->frame_index;
         if (index < 0 || index >= static_cast<int>(frames.size())) return nullptr;
         return frames[index];
 }
 
-AnimationFrame* Animation::get_first_frame() {
-        if (frames_data.empty()) return nullptr;
-        return &frames_data[0];
+AnimationFrame* Animation::get_first_frame(std::size_t path_index) {
+        if (movement_paths_.empty()) return nullptr;
+        path_index = clamp_path_index(path_index);
+        auto& path = movement_paths_[path_index];
+        if (path.empty()) return nullptr;
+        return &path[0];
 }
 
 int Animation::index_of(const AnimationFrame* frame) const {
-        if (!frame || frames_data.empty()) return -1;
-        const AnimationFrame* data = frames_data.data();
-        const std::uintptr_t base = reinterpret_cast<std::uintptr_t>(data);
-        const std::uintptr_t ptr  = reinterpret_cast<std::uintptr_t>(frame);
-        const std::uintptr_t end  = base + sizeof(AnimationFrame) * frames_data.size();
-        if (ptr < base || ptr >= end) return -1;
-        const std::uintptr_t offset = ptr - base;
-        if (offset % sizeof(AnimationFrame) != 0) return -1;
-        size_t index = offset / sizeof(AnimationFrame);
-        return static_cast<int>(index);
+        if (!frame) return -1;
+        const int index = frame->frame_index;
+        if (index < 0 || index >= static_cast<int>(frames.size())) return -1;
+        for (const auto& path : movement_paths_) {
+                if (path.empty()) continue;
+                const AnimationFrame* data = path.data();
+                const AnimationFrame* end  = data + path.size();
+                if (frame >= data && frame < end) {
+                        return index;
+                }
+        }
+        return -1;
 }
 
 void Animation::change(AnimationFrame*& frame, bool& static_flag) const {
         if (frozen) return;
-        frame = const_cast<AnimationFrame*>(frames_data.empty() ? nullptr : &frames_data[0]);
+        auto& self = const_cast<Animation&>(*this);
+        frame      = self.get_first_frame();
         static_flag = is_static();
+}
+
+std::size_t Animation::movement_path_count() const { return movement_paths_.size(); }
+
+const std::vector<AnimationFrame>& Animation::movement_path(std::size_t index) const {
+        static const std::vector<AnimationFrame> kEmpty{};
+        if (movement_paths_.empty()) return kEmpty;
+        if (index >= movement_paths_.size()) index = 0;
+        return movement_paths_[index];
+}
+
+std::vector<AnimationFrame>& Animation::movement_path(std::size_t index) {
+        if (movement_paths_.empty()) movement_paths_.emplace_back();
+        if (index >= movement_paths_.size()) index = 0;
+        return movement_paths_[index];
+}
+
+std::size_t Animation::clamp_path_index(std::size_t index) const {
+        if (movement_paths_.empty()) return 0;
+        if (index >= movement_paths_.size()) return 0;
+        return index;
 }
 
 void Animation::freeze() { frozen = true; }
