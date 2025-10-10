@@ -1,7 +1,7 @@
 #define DOCTEST_CONFIG_IMPLEMENT_WITHOUT_MAIN
 #include "doctest/doctest.h"
 
-#include "dev_mode/spawn_group_list/SpawnGroupList.hpp"
+#include "dev_mode/spawn_group_config/SpawnGroupConfig.hpp"
 
 #include <SDL.h>
 #include <SDL_ttf.h>
@@ -39,7 +39,7 @@ SDLSubsystemGuard& ensure_sdl() {
 }
 } // namespace
 
-TEST_CASE("SpawnGroupList rows survive JSON array replacement") {
+TEST_CASE("SpawnGroupConfig rows survive JSON array replacement") {
     ensure_sdl();
 
     using nlohmann::json;
@@ -48,17 +48,17 @@ TEST_CASE("SpawnGroupList rows survive JSON array replacement") {
         json{{"spawn_id", "alpha"}, {"display_name", "Alpha"}, {"min_number", 1}, {"max_number", 1}}
     });
 
-    SpawnGroupList list;
+    SpawnGroupConfig list;
     std::vector<std::string> labels;
     auto on_change = []() {};
-    auto on_entry_change = [](const json&, const SpawnGroupList::ChangeSummary&) {};
-    auto configure = [&labels](SpawnGroupList::RowController&, const json& entry) {
+    auto on_entry_change = [](const json&, const SpawnGroupConfig::ChangeSummary&) {};
+    auto configure = [&labels](SpawnGroupConfig::RowController&, const json& entry) {
         labels.push_back(entry.value("display_name", std::string{}));
     };
 
     list.load(groups, on_change, on_entry_change, configure);
 
-    SpawnGroupList::Rows rows;
+    SpawnGroupConfig::Rows rows;
     list.append_rows(rows);
     REQUIRE_FALSE(rows.empty());
     REQUIRE_EQ(labels.size(), 1);

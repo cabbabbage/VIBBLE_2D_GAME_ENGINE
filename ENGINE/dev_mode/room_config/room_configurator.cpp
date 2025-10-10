@@ -2,7 +2,7 @@
 
 #include "dm_styles.hpp"
 #include "map_generation/room.hpp"
-#include "../spawn_group_list/SpawnGroupList.hpp"
+#include "../spawn_group_config/SpawnGroupConfig.hpp"
 #include "spawn_group_utils.hpp"
 #include "tag_editor_widget.hpp"
 #include "tag_utils.hpp"
@@ -532,8 +532,8 @@ void RoomConfigurator::open(const nlohmann::json& room_data) {
 
 void RoomConfigurator::open(nlohmann::json& room_data,
                             std::function<void()> on_change,
-                            std::function<void(const nlohmann::json&, const SpawnGroupList::ChangeSummary&)> on_entry_change,
-                            SpawnGroupList::ConfigureEntryCallback configure_entry) {
+                            std::function<void(const nlohmann::json&, const SpawnGroupConfig::ChangeSummary&)> on_entry_change,
+                            SpawnGroupConfig::ConfigureEntryCallback configure_entry) {
     room_ = nullptr;
     external_room_json_ = &room_data;
     on_external_spawn_change_ = std::move(on_change);
@@ -620,7 +620,7 @@ std::string RoomConfigurator::selected_geometry() const {
 
 void RoomConfigurator::ensure_spawn_list() {
     if (!spawn_list_) {
-        spawn_list_ = std::make_unique<SpawnGroupList>();
+        spawn_list_ = std::make_unique<SpawnGroupConfig>();
         spawn_list_->set_embedded_mode(true);
     }
 }
@@ -644,14 +644,14 @@ void RoomConfigurator::rebuild_spawn_rows(Rows& rows) {
             }
         };
 
-        auto on_entry_change = [this](const nlohmann::json&, const SpawnGroupList::ChangeSummary&) {
+        auto on_entry_change = [this](const nlohmann::json&, const SpawnGroupConfig::ChangeSummary&) {
             if (room_) {
                 room_->save_assets_json();
                 this->refresh_spawn_groups(room_);
             }
         };
 
-        SpawnGroupList::ConfigureEntryCallback configure_entry = [this](SpawnGroupList::RowController& row, const nlohmann::json&) {
+        SpawnGroupConfig::ConfigureEntryCallback configure_entry = [this](SpawnGroupConfig::RowController& row, const nlohmann::json&) {
             row.set_area_names_provider([this]() {
                 std::vector<std::string> names;
                 if (!room_) return names;
@@ -675,7 +675,7 @@ void RoomConfigurator::rebuild_spawn_rows(Rows& rows) {
         spawn_list_->load(groups, on_change, on_entry_change, std::move(configure_entry));
         spawn_list_->set_on_layout_changed([this]() { this->rebuild_rows(); });
         spawn_list_->restore_expanded_groups(expanded);
-        SpawnGroupList::Callbacks cb{};
+        SpawnGroupConfig::Callbacks cb{};
         cb.on_regenerate = [this](const std::string& id) {
             if (on_spawn_regenerate_) on_spawn_regenerate_(id);
         };
@@ -708,7 +708,7 @@ void RoomConfigurator::rebuild_spawn_rows(Rows& rows) {
             }
         };
 
-        auto on_entry_change = [this](const nlohmann::json& entry, const SpawnGroupList::ChangeSummary& summary) {
+        auto on_entry_change = [this](const nlohmann::json& entry, const SpawnGroupConfig::ChangeSummary& summary) {
             if (external_room_json_) {
                 this->refresh_spawn_groups(*external_room_json_);
                 if (on_external_spawn_entry_change_) {
@@ -724,7 +724,7 @@ void RoomConfigurator::rebuild_spawn_rows(Rows& rows) {
         spawn_list_->load(groups, std::move(on_change), std::move(on_entry_change), external_configure_entry_);
         spawn_list_->set_on_layout_changed([this]() { this->rebuild_rows(); });
         spawn_list_->restore_expanded_groups(expanded);
-        SpawnGroupList::Callbacks cb{};
+        SpawnGroupConfig::Callbacks cb{};
         cb.on_regenerate = [this](const std::string& id) {
             if (on_spawn_regenerate_) on_spawn_regenerate_(id);
         };
@@ -756,7 +756,7 @@ void RoomConfigurator::rebuild_spawn_rows(Rows& rows) {
             spawn_list_->load(*groups);
             spawn_list_->set_on_layout_changed([this]() { this->rebuild_rows(); });
             spawn_list_->restore_expanded_groups(expanded);
-            SpawnGroupList::Callbacks cb{};
+            SpawnGroupConfig::Callbacks cb{};
             cb.on_regenerate = [this](const std::string& id) {
                 if (on_spawn_regenerate_) on_spawn_regenerate_(id);
             };

@@ -13,7 +13,7 @@ class DMButton;
 class ButtonWidget;
 
 // Minimal asset-level Spawn Groups editor section.
-// - Renders a list of spawn groups using SpawnGroupList.
+// - Renders a list of spawn groups using SpawnGroupConfig.
 // - Supports Add, Edit (floating panel), Duplicate, Delete, Move Up/Down.
 // - Persists to the asset's info.json under key "spawn_groups".
 class Section_SpawnGroups : public DockableCollapsible {
@@ -48,12 +48,12 @@ private:
     AssetInfoUI* ui_ = nullptr;
     nlohmann::json groups_ = nlohmann::json::array();
 
-    std::unique_ptr<class SpawnGroupList> list_;
+    std::unique_ptr<class SpawnGroupConfig> list_;
 
     std::unique_ptr<DMButton> add_btn_;
     std::unique_ptr<ButtonWidget> add_btn_w_;
 
-    // Floating editors are now managed by SpawnGroupList itself
+    // Floating editors are now managed by SpawnGroupConfig itself
     int screen_w_ = 1920;
     int screen_h_ = 1080;
 

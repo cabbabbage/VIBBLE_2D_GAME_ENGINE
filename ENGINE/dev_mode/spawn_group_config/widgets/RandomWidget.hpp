@@ -1,8 +1,8 @@
 #pragma once
 
-#include "dev_mode/spawn_group_list/widgets/ISpawnMethodWidget.hpp"
+#include "dev_mode/spawn_group_config/widgets/ISpawnMethodWidget.hpp"
 
-namespace vibble::dev_mode::spawn_group_list::widgets {
+namespace vibble::dev_mode::spawn_group_config::widgets {
 
 class RandomWidget : public ISpawnMethodWidget {
 public:
@@ -18,4 +18,4 @@ private:
     model::SpawnGroup* group_ = nullptr;
 };
 
-}  // namespace vibble::dev_mode::spawn_group_list::widgets
+}  // namespace vibble::dev_mode::spawn_group_config::widgets

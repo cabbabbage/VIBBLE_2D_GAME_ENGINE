@@ -3,9 +3,9 @@
 #include <vector>
 
 #include "dev_mode/room_config/spawn_group_model.hpp"
-#include "dev_mode/spawn_group_list/Signal.hpp"
+#include "dev_mode/spawn_group_config/Signal.hpp"
 
-namespace vibble::dev_mode::spawn_group_list::spawn_method_control_widgets {
+namespace vibble::dev_mode::spawn_group_config::spawn_method_control_widgets {
 
 class SpawnMethodDropdown {
 public:
@@ -24,4 +24,4 @@ private:
     Signal<const model::SpawnMethodId&> on_method_selected_;
 };
 
-}  // namespace vibble::dev_mode::spawn_group_list::spawn_method_control_widgets
+}  // namespace vibble::dev_mode::spawn_group_config::spawn_method_control_widgets

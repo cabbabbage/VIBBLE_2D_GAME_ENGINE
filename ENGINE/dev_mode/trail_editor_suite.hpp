@@ -13,7 +13,7 @@ class Room;
 class SDL_Renderer;
 
 class RoomConfigurator;
-class SpawnGroupList;
+class SpawnGroupConfig;
 
 class TrailEditorSuite {
 public:
@@ -52,6 +52,6 @@ private:
 
     Room* active_trail_ = nullptr;
     std::unique_ptr<RoomConfigurator> configurator_;
-    std::unique_ptr<SpawnGroupList> spawn_groups_;
+    std::unique_ptr<SpawnGroupConfig> spawn_groups_;
 };
 

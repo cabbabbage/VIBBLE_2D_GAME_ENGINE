@@ -4376,7 +4376,7 @@ void MapLayersPanel::open_room_config_for(const std::string& room_name) {
 
     auto on_change = [this]() { handle_room_spawn_groups_changed(false); };
 
-    auto on_entry_change = [this](const nlohmann::json&, const SpawnGroupList::ChangeSummary&) {
+    auto on_entry_change = [this](const nlohmann::json&, const SpawnGroupConfig::ChangeSummary&) {
 
         handle_room_spawn_groups_changed(false);
 
@@ -4386,7 +4386,7 @@ void MapLayersPanel::open_room_config_for(const std::string& room_name) {
 
     if (label.empty()) label = room_name.empty() ? std::string("Room") : room_name;
 
-    SpawnGroupList::ConfigureEntryCallback configure_entry = [label](SpawnGroupList::RowController& row, const nlohmann::json&) {
+    SpawnGroupConfig::ConfigureEntryCallback configure_entry = [label](SpawnGroupConfig::RowController& row, const nlohmann::json&) {
 
         row.set_ownership_label(label, SDL_Color{255,224,96,255});
 

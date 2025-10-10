@@ -1,7 +1,7 @@
 #include "trail_editor_suite.hpp"
 
 #include "room_config/room_configurator.hpp"
-#include "spawn_group_list/SpawnGroupList.hpp"
+#include "spawn_group_config/SpawnGroupConfig.hpp"
 #include "room_config/spawn_group_utils.hpp"
 #include "dev_mode/sdl_pointer_utils.hpp"
 
@@ -114,7 +114,7 @@ void TrailEditorSuite::ensure_ui() {
         }
     }
     if (!spawn_groups_) {
-        spawn_groups_ = std::make_unique<SpawnGroupList>();
+        spawn_groups_ = std::make_unique<SpawnGroupConfig>();
     }
     update_bounds();
     if (configurator_) {
@@ -166,7 +166,7 @@ void TrailEditorSuite::rebuild_spawn_groups_ui() {
         }
 };
 
-    auto on_entry_change = [this](const nlohmann::json&, const SpawnGroupList::ChangeSummary& summary) {
+    auto on_entry_change = [this](const nlohmann::json&, const SpawnGroupConfig::ChangeSummary& summary) {
         if (!active_trail_) {
             return;
         }
@@ -183,7 +183,7 @@ void TrailEditorSuite::rebuild_spawn_groups_ui() {
 };
 
     spawn_groups_->load(groups, on_change, on_entry_change,
-        [this](SpawnGroupList::RowController& row, const nlohmann::json&) {
+        [this](SpawnGroupConfig::RowController& row, const nlohmann::json&) {
             row.set_area_names_provider([this]() {
                 std::vector<std::string> names;
                 if (!this->active_trail_) return names;
@@ -202,7 +202,7 @@ void TrailEditorSuite::rebuild_spawn_groups_ui() {
         this->rebuild_spawn_groups_ui();
     });
     {
-        SpawnGroupList::Callbacks cb{};
+        SpawnGroupConfig::Callbacks cb{};
         cb.on_add       = [this]() { add_spawn_group(); };
         cb.on_duplicate = [this](const std::string& id) { duplicate_spawn_group(id); };
         cb.on_delete    = [this](const std::string& id) { delete_spawn_group(id); };

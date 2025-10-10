@@ -6,7 +6,7 @@
 
 #include <nlohmann/json.hpp>
 
-#include "dev_mode/spawn_group_list/SpawnGroupList.hpp"
+#include "dev_mode/spawn_group_config/SpawnGroupConfig.hpp"
 #include "dev_mode/room_config/spawn_group_utils.hpp"
 #include "dev_mode/dm_styles.hpp"
 #include "dev_mode/widgets.hpp"
@@ -37,7 +37,7 @@ void Section_SpawnGroups::build() {
     rebuild_requested_ = false;
 
     DockableCollapsible::Rows rows;
-    if (!list_) list_ = std::make_unique<SpawnGroupList>();
+    if (!list_) list_ = std::make_unique<SpawnGroupConfig>();
     if (list_) list_->set_embedded_mode(true);
     reload_from_file();
 
@@ -46,7 +46,7 @@ void Section_SpawnGroups::build() {
         (void)this->save_to_file();
         this->schedule_rebuild();
     };
-    SpawnGroupList::Callbacks cb{};
+    SpawnGroupConfig::Callbacks cb{};
     cb.on_duplicate = [this](const std::string& id){ duplicate_spawn_group(id); };
     cb.on_delete    = [this](const std::string& id){ delete_spawn_group(id); };
     cb.on_move_up   = [this](const std::string& id){ move_spawn_group(id, -1); };
@@ -64,7 +64,7 @@ void Section_SpawnGroups::build() {
     list_->restore_expanded_groups(expanded);
     list_->append_rows(rows);
 
-    // Top-level Add Spawn Group button is provided by SpawnGroupList widget now.
+    // Top-level Add Spawn Group button is provided by SpawnGroupConfig widget now.
 
     set_rows(rows);
 
@@ -233,7 +233,7 @@ SDL_Point Section_SpawnGroups::editor_anchor_point() const {
     return SDL_Point{x, y};
 }
 
-// Editing is handled by SpawnGroupList's own editor; no direct edit method needed.
+// Editing is handled by SpawnGroupConfig's own editor; no direct edit method needed.
 
 void Section_SpawnGroups::schedule_rebuild() {
     if (rebuilding_) {

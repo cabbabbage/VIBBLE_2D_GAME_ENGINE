@@ -3,7 +3,7 @@
 #include <functional>
 #include <vector>
 
-namespace vibble::dev_mode::spawn_group_list {
+namespace vibble::dev_mode::spawn_group_config {
 
 template <typename... Args>
 class Signal {
@@ -33,5 +33,5 @@ private:
     std::vector<Slot> slots_;
 };
 
-}  // namespace vibble::dev_mode::spawn_group_list
+}  // namespace vibble::dev_mode::spawn_group_config
 

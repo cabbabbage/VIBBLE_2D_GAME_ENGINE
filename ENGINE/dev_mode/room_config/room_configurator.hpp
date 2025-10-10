@@ -10,12 +10,12 @@
 
 #include "SlidingWindowContainer.hpp"
 #include "widgets.hpp"
-#include "../spawn_group_list/SpawnGroupList.hpp"
+#include "../spawn_group_config/SpawnGroupConfig.hpp"
 
 class Input;
 class Room;
 class TagEditorWidget;
-class SpawnGroupList;
+class SpawnGroupConfig;
 class DropdownWidget;
 class RangeSliderWidget;
 class SliderWidget;
@@ -41,8 +41,8 @@ public:
     void open(const nlohmann::json& room_data);
     void open(nlohmann::json& room_data,
               std::function<void()> on_change,
-              std::function<void(const nlohmann::json&, const SpawnGroupList::ChangeSummary&)> on_entry_change = {},
-              SpawnGroupList::ConfigureEntryCallback configure_entry = {});
+              std::function<void(const nlohmann::json&, const SpawnGroupConfig::ChangeSummary&)> on_entry_change = {},
+              SpawnGroupConfig::ConfigureEntryCallback configure_entry = {});
     void open(Room* room);
 
     bool refresh_spawn_groups(const nlohmann::json& room_data);
@@ -156,7 +156,7 @@ private:
     std::unique_ptr<Widget> tags_label_;
     std::unique_ptr<Widget> empty_spawn_label_;
 
-    std::unique_ptr<SpawnGroupList> spawn_list_;
+    std::unique_ptr<SpawnGroupConfig> spawn_list_;
 
     std::function<void(const std::string&)> on_spawn_edit_;
     std::function<void(const std::string&)> on_spawn_duplicate_;
@@ -166,8 +166,8 @@ private:
     std::function<void()> on_spawn_add_;
     std::function<void(const std::string&)> on_spawn_regenerate_;
     std::function<void()> on_external_spawn_change_;
-    std::function<void(const nlohmann::json&, const SpawnGroupList::ChangeSummary&)> on_external_spawn_entry_change_;
-    SpawnGroupList::ConfigureEntryCallback external_configure_entry_;
+    std::function<void(const nlohmann::json&, const SpawnGroupConfig::ChangeSummary&)> on_external_spawn_entry_change_;
+    SpawnGroupConfig::ConfigureEntryCallback external_configure_entry_;
     std::function<std::string(const std::string&, const std::string&)> on_room_renamed_;
 };
 

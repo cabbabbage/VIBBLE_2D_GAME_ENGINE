@@ -18,11 +18,11 @@ class Input;
 
 class SpawnGroupRow;
 
-// SpawnGroupList is a light-weight controller that manages SpawnGroupRow
+// SpawnGroupConfig is a light-weight controller that manages SpawnGroupRow
 // instances backed by a JSON array. The heavy UI previously embedded in this
 // class has been extracted so the list focuses purely on coordinating row
 // lifetimes and surfacing change notifications.
-class SpawnGroupList : public DockableCollapsible {
+class SpawnGroupConfig : public DockableCollapsible {
 public:
     struct ChangeSummary {
         bool method_changed = false;
@@ -52,13 +52,13 @@ public:
     private:
         explicit RowController(SpawnGroupRow* row) : row_(row) {}
         SpawnGroupRow* row_ = nullptr;
-        friend class SpawnGroupList;
+        friend class SpawnGroupConfig;
     };
 
     using ConfigureEntryCallback = std::function<void(RowController&, const nlohmann::json&)>;
 
-    explicit SpawnGroupList(bool floatable = true);
-    ~SpawnGroupList() override;
+    explicit SpawnGroupConfig(bool floatable = true);
+    ~SpawnGroupConfig() override;
 
     void set_screen_dimensions(int width, int height);
 

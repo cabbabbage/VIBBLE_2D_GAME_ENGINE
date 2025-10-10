@@ -132,7 +132,7 @@ private:
     void ensure_area_editor();
     void apply_area_editor_camera_override(bool enable);
     void ensure_room_configurator();
-    void ensure_spawn_group_list_ui();
+    void ensure_spawn_group_config_ui();
     void update_room_config_bounds();
     void begin_drag_session(const SDL_Point& world_mouse, bool ctrl_modifier);
     void update_drag_session(const SDL_Point& world_mouse);
@@ -142,8 +142,8 @@ private:
     nlohmann::json* find_spawn_entry(const std::string& spawn_id);
     SDL_Point get_room_center() const;
     std::pair<int, int> get_room_dimensions() const;
-    void refresh_spawn_group_list_ui();
-    void update_spawn_group_list_anchor();
+    void refresh_spawn_group_config_ui();
+    void update_spawn_group_config_anchor();
     SDL_Point spawn_groups_anchor_point() const;
     void clear_active_spawn_group_target();
     void update_exact_json(nlohmann::json& entry, const Asset& asset, SDL_Point center, int width, int height);

@@ -1,7 +1,7 @@
 #include "map_assets_modals.hpp"
 
 #include <algorithm>
-#include "spawn_group_list/SpawnGroupList.hpp"
+#include "spawn_group_config/SpawnGroupConfig.hpp"
 #include "utils/input.hpp"
 #include "room_config/spawn_group_utils.hpp"
 
@@ -89,7 +89,7 @@ void SingleSpawnGroupModal::open(json& map_info,
     ensure_single_group(*section_, default_display_name);
 
     auto& groups = (*section_)["spawn_groups"];
-    if (!list_) list_ = std::make_unique<SpawnGroupList>(true);
+    if (!list_) list_ = std::make_unique<SpawnGroupConfig>(true);
     list_->set_screen_dimensions(screen_w_, screen_h_);
     // Ensure the floating panel provides enough room for long lists while
     // remaining scrollable so content is accessible on smaller displays.
@@ -103,7 +103,7 @@ void SingleSpawnGroupModal::open(json& map_info,
         visible_height = std::max(kMinVisibleHeight, screen_h_ - kHeightMargin);
     }
     list_->set_visible_height(visible_height);
-    // Open a floating SpawnGroupList panel bound to the current single-group array
+    // Open a floating SpawnGroupConfig panel bound to the current single-group array
     list_->open(groups, [this, default_display_name](const json& updated_array) {
         if (!this->map_info_ || !this->section_) return;
         auto& groups = (*section_)["spawn_groups"];
@@ -153,7 +153,7 @@ void SingleSpawnGroupModal::set_screen_dimensions(int width, int height) {
 
 void SingleSpawnGroupModal::set_floating_stack_key(std::string key) {
     stack_key_ = std::move(key);
-    // No stack key support for SpawnGroupList floating panel
+    // No stack key support for SpawnGroupConfig floating panel
 }
 
 void SingleSpawnGroupModal::ensure_visible_position() {
