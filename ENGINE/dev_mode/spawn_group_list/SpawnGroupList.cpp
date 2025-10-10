@@ -12,7 +12,7 @@
 #include <nlohmann/json.hpp>
 
 #include "SpawnGroupRow.hpp"
-#include "../spawn_group_utils.hpp"
+#include "../room_config/spawn_group_utils.hpp"
 #include "dm_styles.hpp"
 #include "widgets.hpp"
 #include "widgets/CandidateEditorPieGraphWidget.hpp"

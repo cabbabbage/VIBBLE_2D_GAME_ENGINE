@@ -1,6 +1,6 @@
 #include "PerimeterWidget.hpp"
 
-namespace vibble::dev_mode::room_config::spawn_group_lists::widgets {
+namespace vibble::dev_mode::spawn_group_list::widgets {
 
 void PerimeterWidget::bind(model::SpawnGroup& group) {
     group_ = &group;
@@ -88,4 +88,4 @@ const model::MethodConfig::Perimeter* PerimeterWidget::read_config() const {
     return group_->method_config.as_perimeter();
 }
 
-}  // namespace vibble::dev_mode::room_config::spawn_group_lists::widgets
+}  // namespace vibble::dev_mode::spawn_group_list::widgets

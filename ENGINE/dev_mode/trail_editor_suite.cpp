@@ -1,7 +1,7 @@
 #include "trail_editor_suite.hpp"
 
 #include "room_config/room_configurator.hpp"
-#include "room_config/spawn_group_lists/SpawnGroupList.hpp"
+#include "spawn_group_list/SpawnGroupList.hpp"
 #include "room_config/spawn_group_utils.hpp"
 #include "dev_mode/sdl_pointer_utils.hpp"
 

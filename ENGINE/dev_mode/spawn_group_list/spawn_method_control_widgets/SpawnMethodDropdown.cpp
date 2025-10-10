@@ -3,7 +3,7 @@
 #include <algorithm>
 #include <utility>
 
-namespace vibble::dev_mode::room_config::spawn_group_lists::spawn_method_control_widgets {
+namespace vibble::dev_mode::spawn_group_list::spawn_method_control_widgets {
 
 SpawnMethodDropdown::SpawnMethodDropdown() = default;
 
@@ -39,4 +39,4 @@ Signal<const model::SpawnMethodId&>& SpawnMethodDropdown::on_method_selected() {
     return on_method_selected_;
 }
 
-}  // namespace vibble::dev_mode::room_config::spawn_group_lists::spawn_method_control_widgets
+}  // namespace vibble::dev_mode::spawn_group_list::spawn_method_control_widgets
