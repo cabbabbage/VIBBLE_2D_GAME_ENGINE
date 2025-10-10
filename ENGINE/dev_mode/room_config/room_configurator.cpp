@@ -703,13 +703,13 @@ void RoomConfigurator::rebuild_spawn_rows(Rows& rows) {
         SpawnGroupConfig::ConfigureEntryCallback final_configure_entry;
         if (configure_entry) {
             final_configure_entry = [this, configure_entry = std::move(configure_entry)](
-                                        SpawnGroupConfig::RowController& row, const nlohmann::json& cfg_entry) {
-                configure_entry(row, cfg_entry);
-                row.set_open_area_handler(on_spawn_area_open_, spawn_area_stack_key_);
+                                        SpawnGroupConfig::EntryController& entry, const nlohmann::json& cfg_entry) {
+                configure_entry(entry, cfg_entry);
+                entry.set_open_area_handler(on_spawn_area_open_, spawn_area_stack_key_);
             };
         } else if (on_spawn_area_open_ || !spawn_area_stack_key_.empty()) {
-            final_configure_entry = [this](SpawnGroupConfig::RowController& row, const nlohmann::json&) {
-                row.set_open_area_handler(on_spawn_area_open_, spawn_area_stack_key_);
+            final_configure_entry = [this](SpawnGroupConfig::EntryController& entry, const nlohmann::json&) {
+                entry.set_open_area_handler(on_spawn_area_open_, spawn_area_stack_key_);
             };
         }
 
@@ -729,8 +729,8 @@ void RoomConfigurator::rebuild_spawn_rows(Rows& rows) {
         auto& root = live_room_json();
         nlohmann::json& groups = devmode::spawn::ensure_spawn_groups_array(root);
 
-        auto configure_entry = [this](SpawnGroupConfig::RowController& row, const nlohmann::json&) {
-            row.set_area_names_provider([this]() {
+        auto configure_entry = [this](SpawnGroupConfig::EntryController& entry, const nlohmann::json&) {
+            entry.set_area_names_provider([this]() {
                 std::vector<std::string> names;
                 if (!room_) return names;
                 auto& data = room_->assets_data();
@@ -745,7 +745,7 @@ void RoomConfigurator::rebuild_spawn_rows(Rows& rows) {
             });
             if (room_) {
                 std::string label = room_->room_name.empty() ? std::string("Room") : room_->room_name;
-                row.set_ownership_label(label, SDL_Color{255, 224, 96, 255});
+                entry.set_ownership_label(label, SDL_Color{255, 224, 96, 255});
             }
         };
 

@@ -70,13 +70,13 @@ void SingleSpawnGroupModal::open(json& map_info,
 };
 
     SpawnGroupConfig::ConfigureEntryCallback configure_entry =
-        [this, ownership_label, ownership_color](SpawnGroupConfig::RowController& row, const json&) {
+        [this, ownership_label, ownership_color](SpawnGroupConfig::EntryController& entry, const json&) {
             if (!ownership_label.empty()) {
-                row.set_ownership_label(ownership_label, ownership_color);
+                entry.set_ownership_label(ownership_label, ownership_color);
             } else {
-                row.clear_ownership_label();
+                entry.clear_ownership_label();
             }
-            row.set_open_area_handler(on_open_area_, stack_key_);
+            entry.set_open_area_handler(on_open_area_, stack_key_);
     };
 
     list_->set_on_layout_changed([this]() { ensure_visible_position(); });

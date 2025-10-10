@@ -39,7 +39,7 @@ SDLSubsystemGuard& ensure_sdl() {
 }
 } // namespace
 
-TEST_CASE("SpawnGroupConfig rows survive JSON array replacement") {
+TEST_CASE("SpawnGroupConfig entries survive JSON array replacement") {
     ensure_sdl();
 
     using nlohmann::json;
@@ -52,7 +52,7 @@ TEST_CASE("SpawnGroupConfig rows survive JSON array replacement") {
     std::vector<std::string> labels;
     auto on_change = []() {};
     auto on_entry_change = [](const json&, const SpawnGroupConfig::ChangeSummary&) {};
-    auto configure = [&labels](SpawnGroupConfig::RowController&, const json& entry) {
+    auto configure = [&labels](SpawnGroupConfig::EntryController&, const json& entry) {
         labels.push_back(entry.value("display_name", std::string{}));
     };
 

@@ -197,8 +197,8 @@ void TrailEditorSuite::rebuild_spawn_groups_ui() {
 };
 
     spawn_groups_->load(groups, on_change, on_entry_change,
-        [this](SpawnGroupConfig::RowController& row, const nlohmann::json&) {
-            row.set_area_names_provider([this]() {
+        [this](SpawnGroupConfig::EntryController& entry, const nlohmann::json&) {
+            entry.set_area_names_provider([this]() {
                 std::vector<std::string> names;
                 if (!this->active_trail_) return names;
                 auto& data = this->active_trail_->assets_data();
@@ -211,7 +211,7 @@ void TrailEditorSuite::rebuild_spawn_groups_ui() {
                 }
                 return names;
             });
-            row.set_open_area_handler(on_open_area_, open_area_stack_key_);
+            entry.set_open_area_handler(on_open_area_, open_area_stack_key_);
         });
     spawn_groups_->set_on_layout_changed([this]() {
         this->rebuild_spawn_groups_ui();

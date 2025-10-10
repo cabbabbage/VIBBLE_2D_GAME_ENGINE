@@ -17,14 +17,14 @@
 class Input;
 
 class SpawnGroupConfig : public DockableCollapsible {
-    struct RowEntry;
+    struct Entry;
 public:
     struct ChangeSummary {
         bool method_changed = false;
         bool quantity_changed = false;
         bool candidates_changed = false;
         std::string method;
-};
+    };
 
     struct Callbacks {
         std::function<void(const std::string&)> on_regenerate;
@@ -35,7 +35,7 @@ public:
         std::function<void()> on_add;
 };
 
-    class RowController {
+    class EntryController {
     public:
         void set_ownership_label(const std::string& label, SDL_Color color);
         void clear_ownership_label();
@@ -48,12 +48,12 @@ public:
         void set_quantity_hidden(bool hidden);
 
     private:
-        explicit RowController(RowEntry* row) : row_(row) {}
-        RowEntry* row_ = nullptr;
+        explicit EntryController(Entry* entry) : entry_(entry) {}
+        Entry* entry_ = nullptr;
         friend class SpawnGroupConfig;
     };
 
-    using ConfigureEntryCallback = std::function<void(RowController&, const nlohmann::json&)>;
+    using ConfigureEntryCallback = std::function<void(EntryController&, const nlohmann::json&)>;
 
     struct EntryCallbacks {
         std::function<void(const std::string&)> on_method_changed;
@@ -108,12 +108,9 @@ public:
     void set_anchor(int x, int y);
     void close_asset_search();
 
-private:
-    struct RowEntry;
-
     void load_impl(nlohmann::json* array, nlohmann::json* entry, std::function<void()> on_change, std::function<void(const nlohmann::json&, const ChangeSummary&)> on_entry_change, ConfigureEntryCallback configure_entry);
     void rebuild_rows();
-    void apply_configuration(RowEntry& row);
+    void apply_configuration(Entry& entry);
     void rebuild_layout();
     void mark_layout_dirty();
     DockableCollapsible::Rows build_layout_rows();
@@ -129,7 +126,7 @@ private:
     int screen_w_ = 1920;
     int screen_h_ = 1080;
 
-    std::vector<std::unique_ptr<RowEntry>> rows_;
+    std::vector<std::unique_ptr<Entry>> entries_;
     nlohmann::json* bound_array_ = nullptr;
     nlohmann::json* bound_entry_ = nullptr;
     nlohmann::json single_entry_shadow_{};
