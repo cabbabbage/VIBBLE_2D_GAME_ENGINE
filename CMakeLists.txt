@@ -164,22 +164,10 @@ enable_testing()
 add_executable(dev_mode_ui_tests
     tests/dev_mode/full_screen_collapsible_tests.cpp
     tests/dev_mode/tag_cache_tests.cpp
-    tests/dev_mode/spawn_group_config_tests.cpp
-    tests/dev_mode/spawn_group_list_tests.cpp
     tests/dev_mode/asset_info_stub.cpp
-    ENGINE/dev_mode/DockableCollapsible.cpp
     ENGINE/dev_mode/full_screen_collapsible.cpp
     ENGINE/dev_mode/widgets.cpp
     ENGINE/dev_mode/dm_styles.cpp
-    ENGINE/dev_mode/spawn_group_config/SpawnGroupConfig.cpp
-    ENGINE/dev_mode/spawn_group_config/SpawnGroupRow.cpp
-    ENGINE/dev_mode/spawn_group_config/widgets/CandidateEditorPieGraphWidget.cpp
-    ENGINE/dev_mode/spawn_group_config/widgets/ExactWidget.cpp
-    ENGINE/dev_mode/spawn_group_config/widgets/PerimeterWidget.cpp
-    ENGINE/dev_mode/spawn_group_config/widgets/RandomWidget.cpp
-    ENGINE/dev_mode/spawn_group_config/spawn_method_control_widgets/LinkToAreaButton.cpp
-    ENGINE/dev_mode/spawn_group_config/spawn_method_control_widgets/SpawnMethodDropdown.cpp
-    ENGINE/dev_mode/room_config/spawn_group_utils.cpp
     ENGINE/utils/input.cpp
 )
 target_include_directories(dev_mode_ui_tests PRIVATE
