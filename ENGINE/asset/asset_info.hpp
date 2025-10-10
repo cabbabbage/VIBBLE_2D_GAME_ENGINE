@@ -89,6 +89,7 @@ class AssetInfo {
     void set_z_threshold(int z);
     void set_min_same_type_distance(int d);
     void set_min_distance_all(int d);
+    void set_neighbor_search_radius(int radius);
     void set_flipable(bool v);
     void set_scale_factor(float factor);
     void set_scale_percentage(float percent);

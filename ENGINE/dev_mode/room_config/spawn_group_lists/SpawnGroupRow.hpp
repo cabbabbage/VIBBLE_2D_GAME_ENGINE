@@ -1,87 +1,68 @@
 #pragma once
 
+#include <SDL.h>
+
+#include <functional>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
-#include "dev_mode/room_config/spawn_group_model.hpp"
-#include "spawn_method_control_widgets/LinkToAreaButton.hpp"
-#include "spawn_method_control_widgets/SpawnMethodDropdown.hpp"
-#include "Signal.hpp"
+#include <nlohmann/json_fwd.hpp>
 
-namespace vibble::dev_mode::room_config::spawn_group_lists {
+class CandidateEditorPieGraphWidget;
 
-namespace spawn_method_control_widgets {
-class LinkToAreaButton;
-class SpawnMethodDropdown;
-}
-
-namespace widgets {
-class ISpawnMethodWidget;
-}
-
+// SpawnGroupRow acts as a light-weight data model that mirrors the spawn group
+// entry in the underlying JSON array. The row exposes a handful of optional
+// presentation properties used by the UI widgets, but does not own any heavy
+// view logic.
 class SpawnGroupRow {
 public:
-    explicit SpawnGroupRow(model::SpawnGroup group);
-    ~SpawnGroupRow();
+    SpawnGroupRow();
+    explicit SpawnGroupRow(nlohmann::json* entry);
 
-    struct Header {
-        std::string name;
-        spawn_method_control_widgets::LinkToAreaButton link_to_area;
-        spawn_method_control_widgets::SpawnMethodDropdown method_dropdown;
-    };
+    void bind(nlohmann::json* entry);
+    void set_shadow_entry(const nlohmann::json& entry);
 
-    struct Body {
-        widgets::ISpawnMethodWidget* method_widget = nullptr;
-    };
+    nlohmann::json* mutable_entry();
+    const nlohmann::json* mutable_entry() const;
+    const nlohmann::json& entry_view() const;
 
-    const model::SpawnGroup& group() const;
-    void set_group(model::SpawnGroup group);
+    std::string spawn_id() const;
 
-    Header& header();
-    const Header& header() const;
-    Body& body();
-    const Body& body() const;
+    void set_ownership_label(const std::string& label, SDL_Color color);
+    void clear_ownership_label();
 
-    void set_display_name(std::string name);
-    const std::string& display_name() const;
+    void set_area_names_provider(std::function<std::vector<std::string>()> provider);
+    const std::function<std::vector<std::string>()>& area_names_provider() const;
 
-    void set_area_id(std::string area_id);
-    const std::string& area_id() const;
+    void set_stack_key(std::string key);
+    const std::optional<std::string>& stack_key() const;
 
-    void set_available_methods(std::vector<model::SpawnMethodId> methods);
+    void lock_method_to(std::string method);
+    const std::optional<std::string>& method_lock() const;
+    void clear_method_lock();
 
-    bool is_open() const;
-    void set_open(bool open);
+    void set_quantity_hidden(bool hidden);
+    bool quantity_hidden() const;
 
-    Signal<>& on_open();
-    Signal<>& on_move_up();
-    Signal<>& on_move_down();
-    Signal<>& on_delete();
+    const std::string& ownership_label() const;
+    std::optional<SDL_Color> ownership_color() const;
 
-    void trigger_open();
-    void trigger_move_up();
-    void trigger_move_down();
-    void trigger_delete();
-
-    void set_method_widget(std::unique_ptr<widgets::ISpawnMethodWidget> widget);
-    widgets::ISpawnMethodWidget* method_widget();
-    const widgets::ISpawnMethodWidget* method_widget() const;
+    CandidateEditorPieGraphWidget* candidate_editor_widget();
+    const CandidateEditorPieGraphWidget* candidate_editor_widget() const;
 
 private:
-    void refresh_from_group();
+    void update_candidate_graph_from_entry();
 
-    model::SpawnGroup group_;
-    Header header_{};
-    Body body_{};
-    std::string area_id_{};
-    bool open_ = false;
-    bool suppress_method_change_ = false;
-    Signal<> on_open_{};
-    Signal<> on_move_up_{};
-    Signal<> on_move_down_{};
-    Signal<> on_delete_{};
-    std::unique_ptr<widgets::ISpawnMethodWidget> method_widget_;
+    nlohmann::json* entry_ = nullptr;
+    nlohmann::json shadow_entry_;
+    std::string ownership_label_{};
+    std::optional<SDL_Color> ownership_color_{};
+    std::function<std::vector<std::string>()> area_provider_{};
+    std::optional<std::string> stack_key_{};
+    std::optional<std::string> method_lock_{};
+    bool quantity_hidden_ = false;
+    std::unique_ptr<CandidateEditorPieGraphWidget> candidate_graph_;
 };
 
-}  // namespace vibble::dev_mode::room_config::spawn_group_lists

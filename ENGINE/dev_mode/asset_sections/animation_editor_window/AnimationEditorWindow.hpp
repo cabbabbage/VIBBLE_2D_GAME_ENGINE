@@ -53,6 +53,7 @@ class AnimationEditorWindow {
     void set_status_message(const std::string& message, int frames = 300);
     void open_frame_editor(const std::string& animation_id);
     void close_frame_editor();
+    void update_corner_button();
     void create_animation_via_prompt();
     void reload_document();
     void process_auto_save();
@@ -75,6 +76,7 @@ class AnimationEditorWindow {
     std::shared_ptr<AudioImporter> audio_importer_;
     std::unique_ptr<AnimationListPanel> list_panel_;
     std::unique_ptr<FrameEditor> frame_editor_;
+    std::unique_ptr<DMButton> header_corner_button_;
     std::unique_ptr<DMButton> add_button_;
     std::unique_ptr<DMButton> reload_button_;
     std::unique_ptr<DMButton> close_button_;

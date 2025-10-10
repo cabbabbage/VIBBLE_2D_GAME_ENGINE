@@ -90,10 +90,13 @@ AnimationEditorWindow::AnimationEditorWindow() {
     list_panel_->set_preview_provider(preview_provider_);
     configure_list_panel();
 
+    header_corner_button_ =
+        std::make_unique<DMButton>("X", &DMStyles::DeleteButton(), DMButton::height(), DMButton::height());
     add_button_ = std::make_unique<DMButton>("Add Animation", &DMStyles::CreateButton(), 160, DMButton::height());
     reload_button_ = std::make_unique<DMButton>("Reload", &DMStyles::AccentButton(), 120, DMButton::height());
     close_button_ = std::make_unique<DMButton>("Close", &DMStyles::DeleteButton(), 120, DMButton::height());
     layout_dirty_ = true;
+    update_corner_button();
 }
 
 AnimationEditorWindow::~AnimationEditorWindow() = default;
@@ -146,6 +149,7 @@ void AnimationEditorWindow::clear_info() {
     info_path_.clear();
     frame_editor_visible_ = false;
     frame_editor_animation_id_.clear();
+    update_corner_button();
     document_->load_from_file(std::filesystem::path{});
     document_->consume_dirty_flag();
     preview_provider_->invalidate_all();
@@ -168,6 +172,11 @@ void AnimationEditorWindow::layout_children() {
     int left_x = header_rect_.x + padding;
     int right_x = header_rect_.x + header_rect_.w - padding;
 
+    if (header_corner_button_) {
+        int width = header_corner_button_->rect().w;
+        header_corner_button_->set_rect(SDL_Rect{left_x, y, width, DMButton::height()});
+        left_x += width + button_gap;
+    }
     if (close_button_) {
         int width = close_button_->rect().w;
         right_x -= width;
@@ -266,14 +275,14 @@ bool AnimationEditorWindow::handle_event(const SDL_Event& e) {
 
     ensure_layout();
 
+    if (handle_header_event(e)) {
+        return true;
+    }
+
     if (frame_editor_visible_ && frame_editor_) {
         if (frame_editor_->handle_event(e)) {
             return true;
         }
-    }
-
-    if (handle_header_event(e)) {
-        return true;
     }
 
     if (list_panel_ && list_panel_->handle_event(e)) {
@@ -350,12 +359,20 @@ void AnimationEditorWindow::render_header(SDL_Renderer* renderer) const {
         title += " — ";
         title += info_path_.filename().string();
     }
-    render_label(renderer, title, header_rect_.x + DMSpacing::panel_padding(),
-                 header_rect_.y + DMSpacing::small_gap());
-
+    if (header_corner_button_) header_corner_button_->render(renderer);
     if (add_button_) add_button_->render(renderer);
     if (reload_button_) reload_button_->render(renderer);
     if (close_button_) close_button_->render(renderer);
+
+    int label_x = header_rect_.x + DMSpacing::panel_padding();
+    if (header_corner_button_) {
+        label_x = std::max(label_x, header_corner_button_->rect().x + header_corner_button_->rect().w +
+                                            DMSpacing::small_gap());
+    }
+    if (add_button_) {
+        label_x = std::max(label_x, add_button_->rect().x + add_button_->rect().w + DMSpacing::small_gap());
+    }
+    render_label(renderer, title, label_x, header_rect_.y + DMSpacing::small_gap());
 }
 
 void AnimationEditorWindow::render_status(SDL_Renderer* renderer) const {
@@ -382,6 +399,10 @@ void AnimationEditorWindow::render_frame_editor_overlay(SDL_Renderer* renderer) 
     if (frame_editor_) {
         frame_editor_->render(renderer);
     }
+
+    if (header_corner_button_) {
+        header_corner_button_->render(renderer);
+    }
 }
 
 bool AnimationEditorWindow::handle_header_event(const SDL_Event& e) {
@@ -393,9 +414,18 @@ bool AnimationEditorWindow::handle_header_event(const SDL_Event& e) {
         }
     };
 
-    handle_button(add_button_, [this]() { create_animation_via_prompt(); });
-    handle_button(reload_button_, [this]() { reload_document(); });
-    handle_button(close_button_, [this]() { visible_ = false; });
+    handle_button(header_corner_button_, [this]() {
+        if (frame_editor_visible_) {
+            close_frame_editor();
+        } else {
+            visible_ = false;
+        }
+    });
+    if (!frame_editor_visible_) {
+        handle_button(add_button_, [this]() { create_animation_via_prompt(); });
+        handle_button(reload_button_, [this]() { reload_document(); });
+        handle_button(close_button_, [this]() { visible_ = false; });
+    }
     return consumed;
 }
 
@@ -414,12 +444,27 @@ void AnimationEditorWindow::open_frame_editor(const std::string& animation_id) {
     frame_editor_->set_animation_id(animation_id);
     frame_editor_->set_bounds(frame_editor_rect_);
     frame_editor_visible_ = true;
+    update_corner_button();
 }
 
 void AnimationEditorWindow::close_frame_editor() {
     frame_editor_visible_ = false;
     frame_editor_animation_id_.clear();
     set_status_message("Movement updated.", 180);
+    update_corner_button();
+}
+
+void AnimationEditorWindow::update_corner_button() {
+    if (!header_corner_button_) {
+        return;
+    }
+    if (frame_editor_visible_) {
+        header_corner_button_->set_text(u8"\u2190");
+        header_corner_button_->set_style(&DMStyles::HeaderButton());
+    } else {
+        header_corner_button_->set_text("X");
+        header_corner_button_->set_style(&DMStyles::DeleteButton());
+    }
 }
 
 void AnimationEditorWindow::create_animation_via_prompt() {

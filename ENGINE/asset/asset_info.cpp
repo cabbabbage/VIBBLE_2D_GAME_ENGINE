@@ -460,6 +460,9 @@ void AssetInfo::load_base_properties(const nlohmann::json &data) {
         info_json_["generate_rays"] = generate_rays;
         ray_strength = std::clamp(data.value("ray_strength", 0), 0, 100);
         info_json_["ray_strength"] = ray_strength;
+        NeighborSearchRadius = std::clamp(
+            data.value("neighbor_search_distance", NeighborSearchRadius), 20, 1000);
+        info_json_["neighbor_search_distance"] = NeighborSearchRadius;
 }
 
 bool AssetInfo::has_tag(const std::string &tag) const {
@@ -499,13 +502,18 @@ void AssetInfo::set_min_same_type_distance(int d) {
 }
 
 void AssetInfo::set_min_distance_all(int d) {
-	min_distance_all = d;
-	info_json_["min_distance_all"] = d;
+        min_distance_all = d;
+        info_json_["min_distance_all"] = d;
+}
+
+void AssetInfo::set_neighbor_search_radius(int radius) {
+        NeighborSearchRadius = std::clamp(radius, 20, 1000);
+        info_json_["neighbor_search_distance"] = NeighborSearchRadius;
 }
 
 void AssetInfo::set_flipable(bool v) {
-	flipable = v;
-	info_json_["can_invert"] = v;
+        flipable = v;
+        info_json_["can_invert"] = v;
 }
 
 void AssetInfo::set_scale_factor(float factor) {

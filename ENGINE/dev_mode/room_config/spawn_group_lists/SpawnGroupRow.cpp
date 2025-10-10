@@ -1,170 +1,131 @@
 #include "SpawnGroupRow.hpp"
 
+#include <nlohmann/json.hpp>
+
 #include <utility>
-#include <vector>
 
-#include "widgets/ExactWidget.hpp"
-#include "widgets/ISpawnMethodWidget.hpp"
-#include "widgets/PerimeterWidget.hpp"
-#include "widgets/RandomWidget.hpp"
+#include "widgets/CandidateEditorPieGraphWidget.hpp"
 
-namespace vibble::dev_mode::room_config::spawn_group_lists {
 namespace {
-
-using widgets::ExactWidget;
-using widgets::ISpawnMethodWidget;
-using widgets::PerimeterWidget;
-using widgets::RandomWidget;
-
-std::unique_ptr<ISpawnMethodWidget> create_widget_for_method(const model::SpawnMethodId& method) {
-    if (method == "Random") {
-        return std::make_unique<RandomWidget>();
-    }
-    if (method == "Perimeter") {
-        return std::make_unique<PerimeterWidget>();
-    }
-    if (method == "Exact") {
-        return std::make_unique<ExactWidget>();
-    }
-    return nullptr;
+std::function<std::vector<std::string>()> empty_provider() {
+    return []() { return std::vector<std::string>{}; };
 }
-
 }  // namespace
 
-SpawnGroupRow::SpawnGroupRow(model::SpawnGroup group) : group_(std::move(group)) {
-    refresh_from_group();
-    set_method_widget(create_widget_for_method(group_.method));
-    header_.method_dropdown.on_method_selected().connect([this](const model::SpawnMethodId& method) {
-        if (suppress_method_change_) {
-            return;
-        }
-        model::switch_method(group_, method);
-        set_method_widget(create_widget_for_method(group_.method));
-    });
+SpawnGroupRow::SpawnGroupRow()
+    : area_provider_(empty_provider()),
+      candidate_graph_(std::make_unique<CandidateEditorPieGraphWidget>()) {
+    update_candidate_graph_from_entry();
 }
 
-SpawnGroupRow::~SpawnGroupRow() = default;
-
-const model::SpawnGroup& SpawnGroupRow::group() const {
-    return group_;
+SpawnGroupRow::SpawnGroupRow(nlohmann::json* entry)
+    : entry_(entry),
+      area_provider_(empty_provider()),
+      candidate_graph_(std::make_unique<CandidateEditorPieGraphWidget>()) {
+    update_candidate_graph_from_entry();
 }
 
-void SpawnGroupRow::set_group(model::SpawnGroup group) {
-    group_ = std::move(group);
-    refresh_from_group();
-    set_method_widget(create_widget_for_method(group_.method));
+void SpawnGroupRow::bind(nlohmann::json* entry) {
+    entry_ = entry;
+    if (!entry_) {
+        shadow_entry_ = nlohmann::json::object();
+    }
+    update_candidate_graph_from_entry();
 }
 
-SpawnGroupRow::Header& SpawnGroupRow::header() {
-    return header_;
+void SpawnGroupRow::set_shadow_entry(const nlohmann::json& entry) {
+    shadow_entry_ = entry;
+    update_candidate_graph_from_entry();
 }
 
-const SpawnGroupRow::Header& SpawnGroupRow::header() const {
-    return header_;
+nlohmann::json* SpawnGroupRow::mutable_entry() { return entry_; }
+
+const nlohmann::json* SpawnGroupRow::mutable_entry() const { return entry_; }
+
+const nlohmann::json& SpawnGroupRow::entry_view() const {
+    if (entry_) {
+        return *entry_;
+    }
+    return shadow_entry_;
 }
 
-SpawnGroupRow::Body& SpawnGroupRow::body() {
-    return body_;
+std::string SpawnGroupRow::spawn_id() const {
+    const auto& entry = entry_view();
+    if (entry.contains("spawn_id") && entry["spawn_id"].is_string()) {
+        return entry["spawn_id"].get<std::string>();
+    }
+    return std::string{};
 }
 
-const SpawnGroupRow::Body& SpawnGroupRow::body() const {
-    return body_;
+void SpawnGroupRow::set_ownership_label(const std::string& label, SDL_Color color) {
+    ownership_label_ = label;
+    ownership_color_ = color;
 }
 
-void SpawnGroupRow::set_display_name(std::string name) {
-    group_.display_name = std::move(name);
-    header_.name = group_.display_name;
+void SpawnGroupRow::clear_ownership_label() {
+    ownership_label_.clear();
+    ownership_color_.reset();
 }
 
-const std::string& SpawnGroupRow::display_name() const {
-    return header_.name;
+void SpawnGroupRow::set_area_names_provider(std::function<std::vector<std::string>()> provider) {
+    area_provider_ = provider ? std::move(provider) : empty_provider();
 }
 
-void SpawnGroupRow::set_area_id(std::string area_id) {
-    area_id_ = std::move(area_id);
-    header_.link_to_area.set_target_area(area_id_);
+const std::function<std::vector<std::string>()>& SpawnGroupRow::area_names_provider() const {
+    return area_provider_;
 }
 
-const std::string& SpawnGroupRow::area_id() const {
-    return area_id_;
+void SpawnGroupRow::set_stack_key(std::string key) {
+    stack_key_ = std::move(key);
 }
 
-void SpawnGroupRow::set_available_methods(std::vector<model::SpawnMethodId> methods) {
-    header_.method_dropdown.set_available_methods(std::move(methods));
+const std::optional<std::string>& SpawnGroupRow::stack_key() const {
+    return stack_key_;
 }
 
-bool SpawnGroupRow::is_open() const {
-    return open_;
+void SpawnGroupRow::lock_method_to(std::string method) {
+    method_lock_ = std::move(method);
 }
 
-void SpawnGroupRow::set_open(bool open) {
-    if (open_ == open) {
+const std::optional<std::string>& SpawnGroupRow::method_lock() const {
+    return method_lock_;
+}
+
+void SpawnGroupRow::clear_method_lock() {
+    method_lock_.reset();
+}
+
+void SpawnGroupRow::set_quantity_hidden(bool hidden) {
+    quantity_hidden_ = hidden;
+}
+
+bool SpawnGroupRow::quantity_hidden() const {
+    return quantity_hidden_;
+}
+
+const std::string& SpawnGroupRow::ownership_label() const {
+    return ownership_label_;
+}
+
+std::optional<SDL_Color> SpawnGroupRow::ownership_color() const {
+    return ownership_color_;
+}
+
+CandidateEditorPieGraphWidget* SpawnGroupRow::candidate_editor_widget() {
+    return candidate_graph_.get();
+}
+
+const CandidateEditorPieGraphWidget* SpawnGroupRow::candidate_editor_widget() const {
+    return candidate_graph_.get();
+}
+
+void SpawnGroupRow::update_candidate_graph_from_entry() {
+    if (!candidate_graph_) {
+        candidate_graph_ = std::make_unique<CandidateEditorPieGraphWidget>();
+    }
+    if (!candidate_graph_) {
         return;
     }
-    open_ = open;
-    if (open_) {
-        on_open_.emit();
-    }
+    candidate_graph_->set_candidates_from_json(entry_view());
 }
 
-Signal<>& SpawnGroupRow::on_open() {
-    return on_open_;
-}
-
-Signal<>& SpawnGroupRow::on_move_up() {
-    return on_move_up_;
-}
-
-Signal<>& SpawnGroupRow::on_move_down() {
-    return on_move_down_;
-}
-
-Signal<>& SpawnGroupRow::on_delete() {
-    return on_delete_;
-}
-
-void SpawnGroupRow::trigger_open() {
-    on_open_.emit();
-}
-
-void SpawnGroupRow::trigger_move_up() {
-    on_move_up_.emit();
-}
-
-void SpawnGroupRow::trigger_move_down() {
-    on_move_down_.emit();
-}
-
-void SpawnGroupRow::trigger_delete() {
-    on_delete_.emit();
-}
-
-void SpawnGroupRow::set_method_widget(std::unique_ptr<ISpawnMethodWidget> widget) {
-    if (method_widget_) {
-        method_widget_->clear_method_state();
-    }
-    method_widget_ = std::move(widget);
-    body_.method_widget = method_widget_.get();
-    if (method_widget_) {
-        method_widget_->bind(group_);
-        method_widget_->sync_from_model();
-    }
-}
-
-ISpawnMethodWidget* SpawnGroupRow::method_widget() {
-    return method_widget_.get();
-}
-
-const ISpawnMethodWidget* SpawnGroupRow::method_widget() const {
-    return method_widget_.get();
-}
-
-void SpawnGroupRow::refresh_from_group() {
-    header_.name = group_.display_name;
-    set_area_id(group_.id);
-    suppress_method_change_ = true;
-    header_.method_dropdown.set_selected_method(group_.method);
-    suppress_method_change_ = false;
-}
-
-}  // namespace vibble::dev_mode::room_config::spawn_group_lists
