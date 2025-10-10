@@ -27,6 +27,7 @@ public:
     struct ChangeSummary {
         bool method_changed = false;
         bool quantity_changed = false;
+        bool candidates_changed = false;
         std::string method;
     };
 
@@ -57,6 +58,12 @@ public:
 
     using ConfigureEntryCallback = std::function<void(RowController&, const nlohmann::json&)>;
 
+    struct EntryCallbacks {
+        std::function<void(const std::string&)> on_method_changed;
+        std::function<void(int min_number, int max_number)> on_quantity_changed;
+        std::function<void(const nlohmann::json&)> on_candidates_changed;
+    };
+
     explicit SpawnGroupConfig(bool floatable = true);
     ~SpawnGroupConfig() override;
 
@@ -66,6 +73,10 @@ public:
               std::function<void()> on_change,
               std::function<void(const nlohmann::json&, const ChangeSummary&)> on_entry_change = {},
               ConfigureEntryCallback configure_entry = {});
+
+    void bind_entry(nlohmann::json& entry,
+                    EntryCallbacks callbacks = {},
+                    ConfigureEntryCallback configure_entry = {});
 
     void load(const nlohmann::json& groups);
 
@@ -98,6 +109,11 @@ public:
 private:
     struct RowEntry;
 
+    void load_impl(nlohmann::json* array,
+                   nlohmann::json* entry,
+                   std::function<void()> on_change,
+                   std::function<void(const nlohmann::json&, const ChangeSummary&)> on_entry_change,
+                   ConfigureEntryCallback configure_entry);
     void rebuild_rows();
     void apply_configuration(SpawnGroupRow& row);
     void rebuild_layout();
@@ -106,6 +122,7 @@ private:
     const nlohmann::json* current_source() const;
     void enqueue_notification(std::function<void()> cb);
     void process_pending_notifications();
+    void fire_entry_callbacks(const nlohmann::json& entry, const ChangeSummary& summary);
 
 private:
     bool default_floatable_mode_ = true;
@@ -116,11 +133,14 @@ private:
 
     std::vector<std::unique_ptr<RowEntry>> rows_;
     nlohmann::json* bound_array_ = nullptr;
+    nlohmann::json* bound_entry_ = nullptr;
+    nlohmann::json single_entry_shadow_{};
     nlohmann::json readonly_snapshot_{};
 
     std::function<void()> on_change_{};
     std::function<void(const nlohmann::json&, const ChangeSummary&)> on_entry_change_{};
     ConfigureEntryCallback configure_entry_{};
+    EntryCallbacks entry_callbacks_{};
     Callbacks callbacks_{};
     std::function<void()> on_layout_change_{};
 
@@ -136,5 +156,7 @@ private:
 
     std::deque<std::function<void()>> pending_notifications_{};
     bool processing_notifications_ = false;
+
+    friend class SpawnGroupConfigTestAccessor;
 };
 

@@ -410,7 +410,7 @@ struct SpawnGroupConfig::RowEntry {
                 if (!editable_) return;
                 if (auto* entry = mutable_entry()) {
                     (*entry)["display_name"] = value;
-                    notify_change(false, false);
+                    notify_change(false, false, false);
                 }
             },
             true,
@@ -428,7 +428,7 @@ struct SpawnGroupConfig::RowEntry {
                 if (!editable_) return;
                 if (auto* entry = mutable_entry()) {
                     (*entry)["enforce_spacing"] = value;
-                    notify_change(false, false);
+                    notify_change(false, false, false);
                 }
             },
             editable_);
@@ -459,7 +459,7 @@ struct SpawnGroupConfig::RowEntry {
                 entry->at("candidates").push_back(candidate);
                 update_candidate_graph();
                 rebuild_candidate_widgets();
-                notify_change(false, false);
+                notify_change(false, false, true);
                 owner_->mark_layout_dirty();
             }
         });
@@ -614,11 +614,12 @@ private:
         return row_ ? row_->mutable_entry() : nullptr;
     }
 
-    void notify_change(bool method_changed, bool quantity_changed) {
+    void notify_change(bool method_changed, bool quantity_changed, bool candidates_changed) {
         if (!owner_) return;
         SpawnGroupConfig::ChangeSummary summary;
         summary.method_changed = method_changed;
         summary.quantity_changed = quantity_changed;
+        summary.candidates_changed = candidates_changed;
         summary.method = current_method_;
 
         nlohmann::json entry_copy = row_ ? row_->entry_view() : nlohmann::json::object();
@@ -627,6 +628,7 @@ private:
             if (!owner) return;
             if (owner->on_change_) owner->on_change_();
             if (owner->on_entry_change_) owner->on_entry_change_(entry, summary);
+            owner->fire_entry_callbacks(entry, summary);
         });
     }
 
@@ -707,7 +709,7 @@ private:
                         if (i < entry->at("candidates").size()) {
                             entry->at("candidates").at(i)["name"] = trim(text);
                             update_candidate_graph();
-                            notify_change(false, false);
+                            notify_change(false, false, true);
                         }
                     }
                 },
@@ -725,7 +727,7 @@ private:
                             double value = parse_double_or(text, safe_double(entry->at("candidates").at(i), "chance", 0.0));
                             entry->at("candidates").at(i)["chance"] = value;
                             update_candidate_graph();
-                            notify_change(false, false);
+                            notify_change(false, false, true);
                         }
                     }
                 },
@@ -743,7 +745,7 @@ private:
                         arr.erase(arr.begin() + static_cast<nlohmann::json::difference_type>(i));
                         update_candidate_graph();
                         rebuild_candidate_widgets();
-                        notify_change(false, false);
+                        notify_change(false, false, true);
                         owner_->mark_layout_dirty();
                     }
                 }
@@ -774,7 +776,7 @@ private:
             }
             current_method_ = method;
             use_exact_quantity_ = (method == "Exact" || method == "Exact Position");
-            notify_change(method != previous, true);
+            notify_change(method != previous, true, false);
             owner_->mark_layout_dirty();
             sync_from_json();
         }
@@ -785,7 +787,7 @@ private:
         if (index < 0 || index >= static_cast<int>(area_options_.size())) return;
         if (auto* entry = mutable_entry()) {
             (*entry)["area"] = area_options_[index];
-            notify_change(false, false);
+            notify_change(false, false, false);
         }
     }
 
@@ -798,7 +800,7 @@ private:
             if (max_value < min_value) max_value = min_value;
             (*entry)["min_number"] = min_value;
             (*entry)["max_number"] = max_value;
-            notify_change(false, true);
+            notify_change(false, true, false);
             sync_from_json();
         }
     }
@@ -810,7 +812,7 @@ private:
             int min_value = safe_int(*entry, "min_number", kDefaultMinNumber);
             if (max_value < min_value) max_value = min_value;
             (*entry)["max_number"] = max_value;
-            notify_change(false, true);
+            notify_change(false, true, false);
             sync_from_json();
         }
     }
@@ -823,7 +825,7 @@ private:
             (*entry)["quantity"] = value;
             (*entry)["min_number"] = value;
             (*entry)["max_number"] = value;
-            notify_change(false, true);
+            notify_change(false, true, false);
             sync_from_json();
         }
     }
@@ -890,17 +892,51 @@ void SpawnGroupConfig::load(nlohmann::json& groups,
                           std::function<void()> on_change,
                           std::function<void(const nlohmann::json&, const ChangeSummary&)> on_entry_change,
                           ConfigureEntryCallback configure_entry) {
-    bound_array_ = &groups;
-    readonly_snapshot_.clear();
-    on_change_ = std::move(on_change);
-    on_entry_change_ = std::move(on_entry_change);
-    configure_entry_ = std::move(configure_entry);
-    rebuild_rows();
+    load_impl(&groups, nullptr, std::move(on_change), std::move(on_entry_change), std::move(configure_entry));
+}
+
+void SpawnGroupConfig::bind_entry(nlohmann::json& entry,
+                                  EntryCallbacks callbacks,
+                                  ConfigureEntryCallback configure_entry) {
+    entry_callbacks_ = std::move(callbacks);
+    auto relay = [this](const nlohmann::json& updated, const ChangeSummary& summary) {
+        fire_entry_callbacks(updated, summary);
+    };
+    load_impl(nullptr, &entry, {}, std::move(relay), std::move(configure_entry));
 }
 
 void SpawnGroupConfig::load(const nlohmann::json& groups) {
     bound_array_ = nullptr;
+    bound_entry_ = nullptr;
+    entry_callbacks_ = {};
+    on_change_ = {};
+    on_entry_change_ = {};
+    configure_entry_ = {};
     readonly_snapshot_ = groups;
+    single_entry_shadow_.clear();
+    rebuild_rows();
+}
+
+void SpawnGroupConfig::load_impl(nlohmann::json* array,
+                                 nlohmann::json* entry,
+                                 std::function<void()> on_change,
+                                 std::function<void(const nlohmann::json&, const ChangeSummary&)> on_entry_change,
+                                 ConfigureEntryCallback configure_entry) {
+    bound_array_ = array;
+    bound_entry_ = entry;
+    if (bound_entry_) {
+        single_entry_shadow_ = nlohmann::json::array();
+        single_entry_shadow_.push_back(*bound_entry_);
+    } else {
+        single_entry_shadow_.clear();
+        if (bound_array_) {
+            entry_callbacks_ = {};
+        }
+    }
+    readonly_snapshot_.clear();
+    on_change_ = std::move(on_change);
+    on_entry_change_ = std::move(on_entry_change);
+    configure_entry_ = std::move(configure_entry);
     rebuild_rows();
 }
 
@@ -1011,6 +1047,16 @@ void SpawnGroupConfig::set_anchor(int x, int y) {
 void SpawnGroupConfig::close_asset_search() { pending_focus_id_.reset(); }
 
 void SpawnGroupConfig::rebuild_rows() {
+    if (bound_entry_) {
+        if (!single_entry_shadow_.is_array()) {
+            single_entry_shadow_ = nlohmann::json::array();
+        }
+        if (single_entry_shadow_.empty()) {
+            single_entry_shadow_.push_back(*bound_entry_);
+        } else {
+            single_entry_shadow_.at(0) = *bound_entry_;
+        }
+    }
     const nlohmann::json* source = current_source();
     if (!source || !source->is_array()) {
         rows_.clear();
@@ -1045,6 +1091,8 @@ void SpawnGroupConfig::rebuild_rows() {
         auto* model = row_entry->model();
         if (bound_array_) {
             model->bind(&(*bound_array_)[i]);
+        } else if (bound_entry_ && i == 0) {
+            model->bind(bound_entry_);
         } else {
             model->bind(nullptr);
             model->set_shadow_entry(entry);
@@ -1111,7 +1159,9 @@ DockableCollapsible::Rows SpawnGroupConfig::build_layout_rows() {
 
 const nlohmann::json* SpawnGroupConfig::current_source() const {
     if (bound_array_) return bound_array_;
-    return &readonly_snapshot_;
+    if (bound_entry_) return &single_entry_shadow_;
+    if (!readonly_snapshot_.is_null()) return &readonly_snapshot_;
+    return nullptr;
 }
 
 void SpawnGroupConfig::enqueue_notification(std::function<void()> cb) {
@@ -1128,6 +1178,34 @@ void SpawnGroupConfig::process_pending_notifications() {
         if (cb) cb();
     }
     processing_notifications_ = false;
+}
+
+void SpawnGroupConfig::fire_entry_callbacks(const nlohmann::json& entry, const ChangeSummary& summary) {
+    if (summary.method_changed && entry_callbacks_.on_method_changed) {
+        std::string method = summary.method;
+        if (entry.is_object()) {
+            method = entry.value("position", method);
+        }
+        entry_callbacks_.on_method_changed(method);
+    }
+    if (summary.quantity_changed && entry_callbacks_.on_quantity_changed) {
+        int min_value = 0;
+        int max_value = 0;
+        if (entry.is_object()) {
+            if (entry.contains("quantity") && entry["quantity"].is_number()) {
+                int quantity = entry["quantity"].get<int>();
+                min_value = quantity;
+                max_value = quantity;
+            } else {
+                min_value = safe_int(entry, "min_number", 0);
+                max_value = safe_int(entry, "max_number", min_value);
+            }
+        }
+        entry_callbacks_.on_quantity_changed(min_value, max_value);
+    }
+    if (summary.candidates_changed && entry_callbacks_.on_candidates_changed) {
+        entry_callbacks_.on_candidates_changed(entry);
+    }
 }
 
 void SpawnGroupConfig::RowController::set_ownership_label(const std::string& label, SDL_Color color) {
