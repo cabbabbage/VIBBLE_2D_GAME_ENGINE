@@ -7,6 +7,8 @@
 
 namespace vibble::dev_mode::spawn_group_config::spawn_method_control_widgets {
 
+namespace model = vibble::dev_mode::room_config::model;
+
 class SpawnMethodDropdown {
 public:
     SpawnMethodDropdown();

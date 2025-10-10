@@ -8,6 +8,7 @@
 
 #include "asset/Asset.hpp"
 #include "render_pipeline/render_asset/AssetRenderPipeline.hpp"
+#include "render/global_light_source.hpp"
 #include "utils/light_source.hpp"
 #include "utils/light_utils.hpp"
 

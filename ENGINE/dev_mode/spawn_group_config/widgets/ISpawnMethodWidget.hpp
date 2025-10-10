@@ -5,6 +5,8 @@
 
 namespace vibble::dev_mode::spawn_group_config::widgets {
 
+namespace model = vibble::dev_mode::room_config::model;
+
 class ISpawnMethodWidget {
 public:
     using OnChangedSignal = Signal<>;

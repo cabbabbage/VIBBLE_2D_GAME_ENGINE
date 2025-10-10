@@ -1,4 +1,4 @@
-#include "SpawnGroupConfig.hpp"
+﻿#include "SpawnGroupConfig.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -361,7 +361,7 @@ struct SpawnGroupConfig::Entry {
         editable_ = owner_->bound_array_ != nullptr;
         method_options_ = build_method_options(kDefaultMethod);
 
-        toggle_button_ = std::make_unique<DMButton>("▶", &DMStyles::ListButton(), 28, DMButton::height());
+        toggle_button_ = std::make_unique<DMButton>("â–¶", &DMStyles::ListButton(), 28, DMButton::height());
         toggle_widget_ = std::make_unique<ButtonWidget>(toggle_button_.get(), [this]() {
             expanded_state_ = !expanded_state_;
             if (expanded_state_) owner_->expand_group(spawn_id());
@@ -371,8 +371,8 @@ struct SpawnGroupConfig::Entry {
         });
 
         spawn_id_label_ = std::make_unique<LabelWidget>();
-        ownership_label_ = std::make_unique<LabelWidget>();
-        ownership_label_->set_subtle(true);
+        ownership_label_widget_ = std::make_unique<LabelWidget>();
+        ownership_label_widget_->set_subtle(true);
 
         regenerate_button_ = std::make_unique<DMButton>("Regenerate", &DMStyles::ListButton(), 0, DMButton::height());
         regenerate_widget_ = std::make_unique<ButtonWidget>(regenerate_button_.get(), [this]() {
@@ -519,12 +519,12 @@ struct SpawnGroupConfig::Entry {
     }
 
     void set_ownership_label(const std::string& label, SDL_Color color) {
-        ownership_label_ = label;
+        ownership_label_text_ = label;
         ownership_color_ = color;
     }
 
     void clear_ownership_label() {
-        ownership_label_.clear();
+        ownership_label_text_.clear();
         ownership_color_.reset();
     }
 
@@ -656,7 +656,7 @@ struct SpawnGroupConfig::Entry {
         DockableCollapsible::Row header_row;
         header_row.push_back(toggle_widget_.get());
         header_row.push_back(spawn_id_label_.get());
-        header_row.push_back(ownership_label_.get());
+        header_row.push_back(ownership_label_widget_.get());
         header_row.push_back(regenerate_widget_.get());
         header_row.push_back(duplicate_widget_.get());
         header_row.push_back(delete_widget_.get());
@@ -729,21 +729,21 @@ private:
 
     void update_toggle_label() {
         if (!toggle_button_) return;
-        toggle_button_->set_text(expanded_state_ ? "▼" : "▶");
+        toggle_button_->set_text(expanded_state_ ? "[-]" : "[+]");
     }
 
     void update_ownership_label() {
-        if (!ownership_label_) return;
-        const std::string& label = ownership_label_;
+        if (!ownership_label_widget_) return;
+        const std::string& label = ownership_label_text_;
         if (label.empty()) {
-            ownership_label_->set_text("");
-            ownership_label_->set_subtle(true);
+            ownership_label_widget_->set_text("");
+            ownership_label_widget_->set_subtle(true);
         } else {
-            ownership_label_->set_text(label);
+            ownership_label_widget_->set_text(label);
             if (auto color = ownership_color_) {
-                ownership_label_->set_color(*color);
+                ownership_label_widget_->set_color(*color);
             }
-            ownership_label_->set_subtle(false);
+            ownership_label_widget_->set_subtle(false);
         }
     }
 
@@ -942,7 +942,7 @@ private:
     SpawnGroupConfig* owner_ = nullptr;
     nlohmann::json* entry_ = nullptr;
     nlohmann::json shadow_entry_ = nlohmann::json::object();
-    std::string ownership_label_{};
+    std::string ownership_label_text_{};
     std::optional<SDL_Color> ownership_color_{};
     std::function<std::vector<std::string>()> area_provider_{};
     std::optional<std::string> stack_key_{};
@@ -957,7 +957,7 @@ private:
     std::unique_ptr<DMButton> toggle_button_{};
     std::unique_ptr<ButtonWidget> toggle_widget_{};
     std::unique_ptr<LabelWidget> spawn_id_label_{};
-    std::unique_ptr<LabelWidget> ownership_label_{};
+    std::unique_ptr<LabelWidget> ownership_label_widget_{};
 
     std::unique_ptr<DMButton> regenerate_button_{};
     std::unique_ptr<ButtonWidget> regenerate_widget_{};

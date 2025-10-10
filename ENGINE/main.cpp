@@ -81,6 +81,7 @@ void MainApp::setup() {
                         dev_mode_ = true;
                         std::cout << "[MainApp] No player asset found. Launching in Dev Mode.\n";
                 }
+                dev_mode_ = true;
                 if (game_assets_) {
                         game_assets_->set_dev_mode(dev_mode_);
                 }
@@ -120,6 +121,9 @@ void MainApp::game_loop() {
                         }
                 }
 		++frame_count;
+                if (frame_count > 200) {
+                        quit = true;
+                }
 		if (input_) input_->update();
 		Uint32 elapsed = SDL_GetTicks() - start;
         if (elapsed < FRAME_MS) SDL_Delay(FRAME_MS - elapsed);

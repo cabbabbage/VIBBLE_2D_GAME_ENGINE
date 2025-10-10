@@ -17,7 +17,6 @@
 
 namespace RoomAreaSerialization {
 enum class Kind { Spawn, Trigger, Unknown };
-enum class Kind { Spawn, Trigger, Unknown };
 
 Kind infer_kind_from_entry(const nlohmann::json& entry, const std::string& type_hint, const std::string& name_hint);
 Kind infer_kind_from_strings(const std::string& kind_value, const std::string& type_hint, const std::string& name_hint);

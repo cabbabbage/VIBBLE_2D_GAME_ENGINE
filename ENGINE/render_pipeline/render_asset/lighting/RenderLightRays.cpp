@@ -7,6 +7,8 @@
 #include <vector>
 
 #include "asset/Asset.hpp"
+#include "render/camera.hpp"
+#include "render/global_light_source.hpp"
 #include "render/light_rays.hpp"
 #include "render/light_rays_config.hpp"
 #include "render_pipeline/render_asset/AssetRenderPipeline.hpp"
