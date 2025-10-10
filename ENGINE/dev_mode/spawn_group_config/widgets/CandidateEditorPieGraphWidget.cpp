@@ -42,6 +42,10 @@ int CandidateEditorPieGraphWidget::height_for_width(int w) const {
 bool CandidateEditorPieGraphWidget::handle_event(const SDL_Event& e) {
     if (candidates_.empty()) {
         hovered_index_ = -1;
+        if (scroll_capture_active_) {
+            DMWidgetsSetSliderScrollCapture(this, false);
+            scroll_capture_active_ = false;
+        }
         return false;
     }
 
@@ -86,8 +90,42 @@ bool CandidateEditorPieGraphWidget::handle_event(const SDL_Event& e) {
             hovered_index_ = new_hover;
             return true;
         }
-    } else if (e.type == SDL_MOUSEBUTTONDOWN) {
-        return hovered_index_ >= 0;
+    } else if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
+        if (hovered_index_ >= 0) {
+            if (active_index_ != hovered_index_) {
+                active_index_ = hovered_index_;
+                if (!scroll_capture_active_) {
+                    DMWidgetsSetSliderScrollCapture(this, true);
+                    scroll_capture_active_ = true;
+                }
+            } else {
+                active_index_ = -1;
+                if (scroll_capture_active_) {
+                    DMWidgetsSetSliderScrollCapture(this, false);
+                    scroll_capture_active_ = false;
+                }
+            }
+            return true;
+        } else if (active_index_ != -1) {
+            active_index_ = -1;
+            if (scroll_capture_active_) {
+                DMWidgetsSetSliderScrollCapture(this, false);
+                scroll_capture_active_ = false;
+            }
+        }
+    } else if (e.type == SDL_MOUSEWHEEL) {
+        if (active_index_ >= 0 && on_adjust_) {
+            int delta = e.wheel.y; // positive up, negative down
+            if (delta != 0) {
+                on_adjust_(active_index_, delta);
+                return true; // prevent container scrolling while focused
+            }
+        }
+    }
+
+    if (active_index_ == -1 && scroll_capture_active_) {
+        DMWidgetsSetSliderScrollCapture(this, false);
+        scroll_capture_active_ = false;
     }
 
     return false;
@@ -187,6 +225,13 @@ void CandidateEditorPieGraphWidget::set_candidates_from_json(const nlohmann::jso
 
     candidates_ = std::move(info);
     hovered_index_ = -1;
+    if (active_index_ >= static_cast<int>(candidates_.size())) {
+        active_index_ = -1;
+        if (scroll_capture_active_) {
+            DMWidgetsSetSliderScrollCapture(this, false);
+            scroll_capture_active_ = false;
+        }
+    }
 }
 
 CandidateEditorPieGraphWidget::Layout CandidateEditorPieGraphWidget::compute_layout() const {

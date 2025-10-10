@@ -358,7 +358,7 @@ struct SpawnGroupConfig::Entry {
         : owner_(&owner),
           area_provider_(empty_provider()),
           candidate_graph_(std::make_unique<CandidateEditorPieGraphWidget>()) {
-        editable_ = owner_->bound_array_ != nullptr;
+        editable_ = (owner_->bound_array_ != nullptr) || (owner_->bound_entry_ != nullptr);
         method_options_ = build_method_options(kDefaultMethod);
 
         toggle_button_ = std::make_unique<DMButton>("â–¶", &DMStyles::ListButton(), 28, DMButton::height());
@@ -487,7 +487,7 @@ struct SpawnGroupConfig::Entry {
 
     void bind(nlohmann::json* entry) {
         entry_ = entry;
-        editable_ = owner_ && owner_->bound_array_ != nullptr;
+        editable_ = owner_ && (owner_->bound_array_ != nullptr || owner_->bound_entry_ != nullptr);
         if (!entry_) {
             shadow_entry_ = nlohmann::json::object();
         }
@@ -653,19 +653,23 @@ struct SpawnGroupConfig::Entry {
     bool expanded() const { return expanded_state_; }
 
     void append_layout_rows(DockableCollapsible::Rows& rows) {
-        DockableCollapsible::Row header_row;
-        header_row.push_back(toggle_widget_.get());
-        header_row.push_back(spawn_id_label_.get());
-        header_row.push_back(ownership_label_widget_.get());
-        header_row.push_back(regenerate_widget_.get());
-        header_row.push_back(duplicate_widget_.get());
-        header_row.push_back(delete_widget_.get());
-        header_row.push_back(move_up_widget_.get());
-        header_row.push_back(move_down_widget_.get());
-        rows.push_back(header_row);
+        // Outer dockable header shows group name and header actions; keep body minimal here
+        if (spawn_id_label_) {
+            rows.push_back({spawn_id_label_.get()});
+        }
+        if (ownership_label_widget_) {
+            rows.push_back({ownership_label_widget_.get()});
+        }
 
+        DockableCollapsible::Row primary_actions;
+        if (regenerate_widget_) primary_actions.push_back(regenerate_widget_.get());
+        if (duplicate_widget_) primary_actions.push_back(duplicate_widget_.get());
+        if (!primary_actions.empty()) rows.push_back(primary_actions);
+
+        // Display name field
         rows.push_back({name_widget_.get()});
 
+        // Position + area + enforce spacing
         DockableCollapsible::Row method_row;
         method_row.push_back(method_widget_.get());
         if (show_area_dropdown_) {
@@ -677,6 +681,7 @@ struct SpawnGroupConfig::Entry {
         method_row.push_back(enforce_widget_.get());
         rows.push_back(method_row);
 
+        // Quantity controls
         if (!quantity_hidden()) {
             if (use_exact_quantity_) {
                 rows.push_back({exact_widget_.get()});
@@ -688,23 +693,14 @@ struct SpawnGroupConfig::Entry {
             }
         }
 
-        if (expanded_state_) {
-            rows.push_back({candidate_header_.get()});
-            if (candidate_entries_.empty()) {
-                rows.push_back({empty_candidates_label_.get()});
-            } else {
-                for (auto& candidate : candidate_entries_) {
-                    DockableCollapsible::Row candidate_row;
-                    candidate_row.push_back(candidate.name_widget.get());
-                    candidate_row.push_back(candidate.chance_widget.get());
-                    candidate_row.push_back(candidate.remove_widget.get());
-                    rows.push_back(std::move(candidate_row));
-                }
-            }
-            rows.push_back({add_candidate_widget_.get()});
-            if (auto* graph = candidate_editor_widget()) {
-                rows.push_back({graph});
-            }
+        // Candidates: only pie and Add button
+        rows.push_back({candidate_header_.get()});
+        if (candidate_entries_.empty()) {
+            rows.push_back({empty_candidates_label_.get()});
+        }
+        rows.push_back({add_candidate_widget_.get()});
+        if (auto* graph = candidate_editor_widget()) {
+            rows.push_back({graph});
         }
     }
 
@@ -727,10 +723,7 @@ private:
         });
     }
 
-    void update_toggle_label() {
-        if (!toggle_button_) return;
-        toggle_button_->set_text(expanded_state_ ? "[-]" : "[+]");
-    }
+    void update_toggle_label() {}
 
     void update_ownership_label() {
         if (!ownership_label_widget_) return;
@@ -788,6 +781,20 @@ private:
     void update_candidate_graph() {
         if (auto* graph = candidate_editor_widget()) {
             graph->set_candidates_from_json(entry_view());
+            graph->set_on_adjust([this](int index, int delta){
+                if (!editable_) return;
+                if (index < 0) return;
+                if (auto* entry = mutable_entry()) {
+                    devmode::spawn::sanitize_spawn_group_candidates(*entry);
+                    auto& arr = (*entry)["candidates"];
+                    if (!arr.is_array() || index >= static_cast<int>(arr.size())) return;
+                    double curr = safe_double(arr.at(index), "chance", safe_double(arr.at(index), "weight", 0.0));
+                    double next = std::max(0.0, curr + static_cast<double>(delta));
+                    arr.at(index)["chance"] = next;
+                    update_candidate_graph();
+                    notify_change(false, false, true);
+                }
+            });
         }
     }
 
@@ -1000,6 +1007,13 @@ SpawnGroupConfig::SpawnGroupConfig(bool floatable)
     : DockableCollapsible("Spawn Groups", floatable),
       default_floatable_mode_(floatable) {
     set_cell_width(260);
+    // Header action buttons
+    header_up_btn_ = std::make_unique<DMButton>("\u25B2", &DMStyles::HeaderButton(), DMButton::height(), DMButton::height());
+    header_down_btn_ = std::make_unique<DMButton>("\u25BC", &DMStyles::HeaderButton(), DMButton::height(), DMButton::height());
+    header_delete_btn_ = std::make_unique<DMButton>("X", &DMStyles::HeaderButton(), DMButton::height(), DMButton::height());
+    header_up_widget_ = std::make_unique<ButtonWidget>(header_up_btn_.get(), [](){});
+    header_down_widget_ = std::make_unique<ButtonWidget>(header_down_btn_.get(), [](){});
+    header_delete_widget_ = std::make_unique<ButtonWidget>(header_delete_btn_.get(), [](){});
 }
 
 SpawnGroupConfig::~SpawnGroupConfig() = default;
@@ -1156,10 +1170,51 @@ nlohmann::json SpawnGroupConfig::to_json() const {
 
 void SpawnGroupConfig::update(const Input& input, int screen_w, int screen_h) {
     DockableCollapsible::update(input, screen_w, screen_h);
+    if (bound_entry_) {
+        const int padding = DMSpacing::panel_padding();
+        const int btn = DMButton::height();
+        const int gap = DMSpacing::item_gap();
+        int right = rect_.x + rect_.w - padding;
+        SDL_Rect del{right - btn, header_rect_.y, btn, btn};
+        SDL_Rect down{del.x - gap - btn, header_rect_.y, btn, btn};
+        SDL_Rect up{down.x - gap - btn, header_rect_.y, btn, btn};
+        if (header_delete_btn_) header_delete_btn_->set_rect(del);
+        if (header_down_btn_) header_down_btn_->set_rect(down);
+        if (header_up_btn_) header_up_btn_->set_rect(up);
+    }
     process_pending_notifications();
 }
 
 bool SpawnGroupConfig::handle_event(const SDL_Event& e) {
+    if (bound_entry_) {
+        auto spawn_id_for_actions = [this]() -> std::string {
+            if (entries_.empty() || !entries_[0]) return std::string{};
+            return entries_[0]->spawn_id();
+        };
+        bool consumed = false;
+        if (header_up_btn_ && header_up_widget_ && header_up_widget_->handle_event(e)) {
+            consumed = true;
+            if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
+                std::string id = spawn_id_for_actions();
+                if (!id.empty() && callbacks_.on_move_up) callbacks_.on_move_up(id);
+            }
+        }
+        if (header_down_btn_ && header_down_widget_ && header_down_widget_->handle_event(e)) {
+            consumed = true;
+            if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
+                std::string id = spawn_id_for_actions();
+                if (!id.empty() && callbacks_.on_move_down) callbacks_.on_move_down(id);
+            }
+        }
+        if (header_delete_btn_ && header_delete_widget_ && header_delete_widget_->handle_event(e)) {
+            consumed = true;
+            if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
+                std::string id = spawn_id_for_actions();
+                if (!id.empty() && callbacks_.on_delete) callbacks_.on_delete(id);
+            }
+        }
+        if (consumed) return true;
+    }
     bool handled = DockableCollapsible::handle_event(e);
     process_pending_notifications();
     return handled;
@@ -1167,6 +1222,10 @@ bool SpawnGroupConfig::handle_event(const SDL_Event& e) {
 
 void SpawnGroupConfig::render(SDL_Renderer* r) const {
     DockableCollapsible::render(r);
+    if (!r || !bound_entry_) return;
+    if (header_up_btn_) header_up_btn_->render(r);
+    if (header_down_btn_) header_down_btn_->render(r);
+    if (header_delete_btn_) header_delete_btn_->render(r);
 }
 
 void SpawnGroupConfig::render_content(SDL_Renderer* r) const {

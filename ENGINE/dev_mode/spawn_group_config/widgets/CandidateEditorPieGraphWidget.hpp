@@ -22,6 +22,7 @@ public:
 
     void set_weights(std::vector<float> weights);
     void set_candidates_from_json(const nlohmann::json& entry);
+    void set_on_adjust(std::function<void(int index, int delta)> cb) { on_adjust_ = std::move(cb); }
 
 private:
     struct CandidateInfo {
@@ -50,5 +51,8 @@ private:
     SDL_Rect rect_{};
     std::vector<CandidateInfo> candidates_{};
     int hovered_index_ = -1;
+    int active_index_ = -1;
+    std::function<void(int index, int delta)> on_adjust_{};
+    bool scroll_capture_active_ = false;
 };
 

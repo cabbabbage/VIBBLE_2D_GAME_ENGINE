@@ -152,6 +152,14 @@ private:
     std::deque<std::function<void()>> pending_notifications_{};
     bool processing_notifications_ = false;
 
+    // Header actions (moved from internal row): up/down/delete
+    std::unique_ptr<DMButton> header_up_btn_{};
+    std::unique_ptr<DMButton> header_down_btn_{};
+    std::unique_ptr<DMButton> header_delete_btn_{};
+    std::unique_ptr<ButtonWidget> header_up_widget_{};
+    std::unique_ptr<ButtonWidget> header_down_widget_{};
+    std::unique_ptr<ButtonWidget> header_delete_widget_{};
+
     friend class SpawnGroupConfigTestAccessor;
 };
 

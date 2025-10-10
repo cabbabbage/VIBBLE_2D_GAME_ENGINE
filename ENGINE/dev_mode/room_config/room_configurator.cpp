@@ -279,6 +279,23 @@ RoomConfigurator::RoomConfigurator() {
             if (cfg) cfg->render(renderer);
         }
     });
+    container_.set_event_function([this](const SDL_Event& e) {
+        // Give child dockables first shot at events so clicks don't get swallowed by the container
+        if (e.type == SDL_KEYDOWN && e.key.keysym.sym == SDLK_ESCAPE) {
+            this->close();
+            return true;
+        }
+        bool used = false;
+        if (basic_panel_ && basic_panel_->is_visible()) {
+            if (basic_panel_->handle_event(e)) used = true;
+        }
+        for (auto& cfg : spawn_group_configs_) {
+            if (cfg && cfg->is_visible()) {
+                if (cfg->handle_event(e)) used = true;
+            }
+        }
+        return used;
+    });
     container_.set_update_function([this](const Input& input, int screen_w, int screen_h) {
         if (basic_panel_) basic_panel_->update(input, screen_w, screen_h);
         for (auto& cfg : spawn_group_configs_) {
@@ -292,43 +309,16 @@ RoomConfigurator::RoomConfigurator() {
 RoomConfigurator::~RoomConfigurator() = default;
 
 void RoomConfigurator::set_bounds(const SDL_Rect& bounds) {
-    bounds_override_ = bounds;
-    has_bounds_override_ = bounds.w > 0 && bounds.h > 0;
-    if (has_bounds_override_) {
-        SDL_Rect clamped = clamp_to_work_area(bounds);
-        container_.set_panel_bounds_override(clamped);
-        const int padding = DMSpacing::panel_padding();
-        const int available_width = std::max(0, clamped.w - 2 * padding);
-        int cell_width = kRoomConfigPanelContentWidth;
-        if (available_width > 0) {
-            cell_width = std::min(kRoomConfigPanelContentWidth, available_width);
-            if (available_width >= kRoomConfigPanelMinWidth) {
-                cell_width = std::max(kRoomConfigPanelMinWidth, cell_width);
-            }
-        }
-        cell_width_ = cell_width;
-    } else {
-        container_.clear_panel_bounds_override();
-        cell_width_ = kRoomConfigPanelContentWidth;
-    }
+    // Use default SlidingWindowContainer layout to match AssetInfoUI (snug right, full height)
+    bounds_override_ = SDL_Rect{0, 0, 0, 0};
+    has_bounds_override_ = false;
+    container_.clear_panel_bounds_override();
+    cell_width_ = kRoomConfigPanelContentWidth;
 }
 
 void RoomConfigurator::set_work_area(const SDL_Rect& bounds) {
     work_area_ = bounds;
-    if (has_bounds_override_) {
-        SDL_Rect clamped = clamp_to_work_area(bounds_override_);
-        container_.set_panel_bounds_override(clamped);
-        const int padding = DMSpacing::panel_padding();
-        const int available_width = std::max(0, clamped.w - 2 * padding);
-        int cell_width = kRoomConfigPanelContentWidth;
-        if (available_width > 0) {
-            cell_width = std::min(kRoomConfigPanelContentWidth, available_width);
-            if (available_width >= kRoomConfigPanelMinWidth) {
-                cell_width = std::max(kRoomConfigPanelMinWidth, cell_width);
-            }
-        }
-        cell_width_ = cell_width;
-    }
+    // No-op for bounds override; container default layout handles snug sizing
 }
 
 void RoomConfigurator::set_show_header(bool show) { show_header_ = show; }
@@ -630,31 +620,49 @@ void RoomConfigurator::rebuild_spawn_rows(Rows& rows) {
         bool have_id_field = entry.is_object() && entry.contains("spawn_id");
         std::string id = have_id_field ? entry.value("spawn_id", std::string{}) : std::string{};
         auto config = take_config(id);
+        const bool created_new = !config;
         if (!config) {
             config = std::make_unique<SpawnGroupConfig>();
         }
 
         // Panels are dockable collapsibles anchored inside the container
         config->set_embedded_mode(true);
+        config->set_show_header(true);
+        config->set_close_button_enabled(false);
+        if (created_new) {
+            config->set_expanded(false);
+        }
 
         config->set_screen_dimensions(last_screen_w_, last_screen_h_);
 
         SpawnGroupConfig::Callbacks callbacks{};
         callbacks.on_regenerate = [this](const std::string& value) {
             if (on_spawn_regenerate_) on_spawn_regenerate_(value);
-};
+        };
         callbacks.on_duplicate = [this](const std::string& value) {
             if (on_spawn_duplicate_) on_spawn_duplicate_(value);
-};
+            this->request_rebuild();
+            if (room_) this->refresh_spawn_groups(room_);
+            else if (external_room_json_) this->refresh_spawn_groups(*external_room_json_);
+        };
         callbacks.on_delete = [this](const std::string& value) {
             if (on_spawn_delete_) on_spawn_delete_(value);
-};
+            this->request_rebuild();
+            if (room_) this->refresh_spawn_groups(room_);
+            else if (external_room_json_) this->refresh_spawn_groups(*external_room_json_);
+        };
         callbacks.on_move_up = [this](const std::string& value) {
             if (on_spawn_move_up_) on_spawn_move_up_(value);
-};
+            this->request_rebuild();
+            if (room_) this->refresh_spawn_groups(room_);
+            else if (external_room_json_) this->refresh_spawn_groups(*external_room_json_);
+        };
         callbacks.on_move_down = [this](const std::string& value) {
             if (on_spawn_move_down_) on_spawn_move_down_(value);
-};
+            this->request_rebuild();
+            if (room_) this->refresh_spawn_groups(room_);
+            else if (external_room_json_) this->refresh_spawn_groups(*external_room_json_);
+        };
         config->set_callbacks(std::move(callbacks));
 
         SpawnGroupConfig::EntryCallbacks entry_callbacks{};
@@ -960,6 +968,7 @@ void RoomConfigurator::rebuild_rows_internal() {
         basic_panel_->set_show_header(true);
         basic_panel_->set_close_button_enabled(false);
         basic_panel_->set_scroll_enabled(true);
+        basic_panel_->set_expanded(false);
     }
     basic_panel_->set_rows(rows_);
 }
@@ -1134,27 +1143,14 @@ bool RoomConfigurator::sync_state_from_widgets() {
 }
 
 bool RoomConfigurator::handle_event(const SDL_Event& e) {
-    bool used = false;
-    if (container_.is_visible()) {
-        // Close on ESC
-        if (e.type == SDL_KEYDOWN && e.key.keysym.sym == SDLK_ESCAPE) {
-            close();
-            return true;
-        }
-        used = container_.handle_event(e);
-        if (basic_panel_ && basic_panel_->handle_event(e)) used = true;
-        for (auto& config : spawn_group_configs_) {
-            if (config && config->handle_event(e)) {
-                used = true;
-            }
-        }
-    }
-    return used;
+    if (!container_.is_visible()) return false;
+    return container_.handle_event(e);
 }
 
 void RoomConfigurator::render(SDL_Renderer* r) const {
     if (!container_.is_visible()) return;
     container_.render(r, last_screen_w_, last_screen_h_);
+    DMDropdown::render_active_options(r);
 }
 
 const SDL_Rect& RoomConfigurator::panel_rect() const { return container_.panel_rect(); }

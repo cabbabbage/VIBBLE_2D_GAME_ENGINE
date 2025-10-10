@@ -62,6 +62,10 @@
           {
             "chance": 1,
             "name": "Stump"
+          },
+          {
+            "chance": 0,
+            "name": "null"
           }
         ],
         "display_name": "batch_map_assets",
