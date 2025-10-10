@@ -22,6 +22,8 @@ void VibbleController::movement(const Input& input) {
     const bool down  = input.isScancodeDown(SDL_SCANCODE_S);
     const bool left  = input.isScancodeDown(SDL_SCANCODE_A);
     const bool right = input.isScancodeDown(SDL_SCANCODE_D);
+    const bool sprint = input.isScancodeDown(SDL_SCANCODE_LSHIFT) ||
+                        input.isScancodeDown(SDL_SCANCODE_RSHIFT);
 
     const int raw_x = (right ? 1 : 0) - (left ? 1 : 0);
     const int raw_y = (down  ? 1 : 0) - (up    ? 1 : 0);
@@ -46,6 +48,12 @@ void VibbleController::movement(const Input& input) {
         player_->anim_->move(std::vector<SDL_Point>{ delta }, 0);
     };
 
+    const int target_speed = sprint ? kWalkSpeed * kSprintMultiplier : kWalkSpeed;
+    if (target_speed <= 0) {
+        send_to_animation(0, 0);
+        return;
+    }
+
     if (raw_x == 0 && raw_y == 0) {
         send_to_animation(0, 0);
         return;
@@ -57,7 +65,7 @@ void VibbleController::movement(const Input& input) {
         return;
     }
 
-    const double scale = 5.0 / length;
+    const double scale = static_cast<double>(target_speed) / length;
     int move_x = static_cast<int>(std::lround(static_cast<double>(raw_x) * scale));
     int move_y = static_cast<int>(std::lround(static_cast<double>(raw_y) * scale));
 
@@ -66,20 +74,20 @@ void VibbleController::movement(const Input& input) {
             return (raw > 0) ? 1 : -1;
         }
         return component;
-};
+    };
 
     move_x = ensure_non_zero(move_x, raw_x);
     move_y = ensure_non_zero(move_y, raw_y);
 
     auto magnitude_sq = [&]() {
         return move_x * move_x + move_y * move_y;
-};
+    };
 
     auto reduce_once = [](int value) {
         if (value > 0) return value - 1;
         if (value < 0) return value + 1;
         return value;
-};
+    };
 
     int mag_sq = magnitude_sq();
     if (mag_sq == 0) {
@@ -88,7 +96,9 @@ void VibbleController::movement(const Input& input) {
         mag_sq = magnitude_sq();
     }
 
-    while (mag_sq > 25) {
+    const int target_mag_sq = target_speed * target_speed;
+
+    while (mag_sq > target_mag_sq) {
         if (std::abs(move_x) >= std::abs(move_y)) {
             move_x = reduce_once(move_x);
         } else {
@@ -97,13 +107,13 @@ void VibbleController::movement(const Input& input) {
         mag_sq = magnitude_sq();
     }
 
-    while (mag_sq < 25 && (move_x != 0 || move_y != 0)) {
+    while (mag_sq < target_mag_sq && (move_x != 0 || move_y != 0)) {
         bool adjusted = false;
         if (std::abs(move_x) <= std::abs(move_y) && move_x != 0) {
             const int step = (move_x > 0) ? 1 : -1;
             const int candidate = move_x + step;
             const int candidate_mag = candidate * candidate + move_y * move_y;
-            if (candidate_mag <= 25) {
+            if (candidate_mag <= target_mag_sq) {
                 move_x = candidate;
                 mag_sq = candidate_mag;
                 adjusted = true;
@@ -113,7 +123,7 @@ void VibbleController::movement(const Input& input) {
             const int step = (move_y > 0) ? 1 : -1;
             const int candidate = move_y + step;
             const int candidate_mag = move_x * move_x + candidate * candidate;
-            if (candidate_mag <= 25) {
+            if (candidate_mag <= target_mag_sq) {
                 move_y = candidate;
                 mag_sq = candidate_mag;
                 adjusted = true;
