@@ -82,6 +82,7 @@ private:
 
     bool apply_room_data(const nlohmann::json& data);
     void rebuild_rows();
+    void rebuild_rows_internal();
     void rebuild_spawn_rows(Rows& rows);
     void load_tags_from_json(const nlohmann::json& data);
     void write_tags_to_json(nlohmann::json& object) const;
@@ -111,6 +112,8 @@ private:
     int last_screen_w_ = 0;
     int last_screen_h_ = 0;
     std::function<void()> on_close_{};
+    bool rebuild_in_progress_ = false;
+    bool pending_rebuild_ = false;
 
     Room* room_ = nullptr;
     nlohmann::json* external_room_json_ = nullptr;

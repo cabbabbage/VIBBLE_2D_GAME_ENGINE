@@ -859,7 +859,7 @@
     "duplicatable": false,
     "duplication_interval_max": 60,
     "duplication_interval_min": 30,
-    "generate_rays": false,
+    "generate_rays": true,
     "has_shading": true,
     "impassable_area": null,
     "layout": {
@@ -891,7 +891,7 @@
     "min_distance_all": 254,
     "min_same_type_distance": 466,
     "neighbor_search_distance": 500,
-    "ray_strength": 0,
+    "ray_strength": 100,
     "render_radius": 1000,
     "rnd_spawn_max": 400,
     "rnd_spawn_min": 300,

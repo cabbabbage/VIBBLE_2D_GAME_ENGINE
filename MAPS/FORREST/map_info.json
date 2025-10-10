@@ -664,7 +664,7 @@
       "min_height": 8818,
       "min_width": 8818,
       "name": "spawn",
-      "radius": 4409,
+      "radius": 1000,
       "spawn_groups": [
         {
           "candidates": [

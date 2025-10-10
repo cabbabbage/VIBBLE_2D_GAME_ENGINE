@@ -792,6 +792,29 @@ void RoomConfigurator::rebuild_rows() {
         state_ = std::make_unique<State>();
     }
 
+    if (rebuild_in_progress_) {
+        pending_rebuild_ = true;
+        return;
+    }
+
+    for (;;) {
+        rebuild_in_progress_ = true;
+        do {
+            pending_rebuild_ = false;
+            rebuild_rows_internal();
+        } while (pending_rebuild_);
+        rebuild_in_progress_ = false;
+        if (!pending_rebuild_) {
+            break;
+        }
+    }
+}
+
+void RoomConfigurator::rebuild_rows_internal() {
+    if (!state_) {
+        state_ = std::make_unique<State>();
+    }
+
     Rows rows;
     room_section_label_ = std::make_unique<RoomConfiguratorSectionLabel>("Room Properties");
     rows.push_back({room_section_label_.get()});
