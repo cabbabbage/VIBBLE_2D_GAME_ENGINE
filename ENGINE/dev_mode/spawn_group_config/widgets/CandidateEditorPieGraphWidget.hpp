@@ -23,6 +23,7 @@ public:
     void set_weights(std::vector<float> weights);
     void set_candidates_from_json(const nlohmann::json& entry);
     void set_on_adjust(std::function<void(int index, int delta)> cb) { on_adjust_ = std::move(cb); }
+    void set_on_delete(std::function<void(int index)> cb) { on_delete_ = std::move(cb); }
 
 private:
     struct CandidateInfo {
@@ -53,6 +54,7 @@ private:
     int hovered_index_ = -1;
     int active_index_ = -1;
     std::function<void(int index, int delta)> on_adjust_{};
+    std::function<void(int index)> on_delete_{};
     bool scroll_capture_active_ = false;
 };
 

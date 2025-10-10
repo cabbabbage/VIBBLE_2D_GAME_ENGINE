@@ -16,6 +16,7 @@
 #include "widgets.hpp"
 #include "widgets/CandidateEditorPieGraphWidget.hpp"
 #include "spawn_method_control_widgets/LinkToAreaButton.hpp"
+#include "search_assets.hpp"
 
 class LabelWidget : public Widget {
 public:
@@ -376,32 +377,52 @@ struct SpawnGroupConfig::Entry {
 
         regenerate_button_ = std::make_unique<DMButton>("Regenerate", &DMStyles::ListButton(), 0, DMButton::height());
         regenerate_widget_ = std::make_unique<ButtonWidget>(regenerate_button_.get(), [this]() {
-            if (!owner_ || !owner_->callbacks_.on_regenerate) return;
-            owner_->callbacks_.on_regenerate(spawn_id());
+            if (!owner_) return;
+            std::string id = spawn_id();
+            owner_->enqueue_notification([owner = owner_, id]() {
+                if (!owner) return;
+                if (owner->callbacks_.on_regenerate) owner->callbacks_.on_regenerate(id);
+            });
         });
 
         duplicate_button_ = std::make_unique<DMButton>("Duplicate", &DMStyles::ListButton(), 0, DMButton::height());
         duplicate_widget_ = std::make_unique<ButtonWidget>(duplicate_button_.get(), [this]() {
-            if (!owner_ || !owner_->callbacks_.on_duplicate) return;
-            owner_->callbacks_.on_duplicate(spawn_id());
+            if (!owner_) return;
+            std::string id = spawn_id();
+            owner_->enqueue_notification([owner = owner_, id]() {
+                if (!owner) return;
+                if (owner->callbacks_.on_duplicate) owner->callbacks_.on_duplicate(id);
+            });
         });
 
         delete_button_ = std::make_unique<DMButton>("Delete", &DMStyles::DeleteButton(), 0, DMButton::height());
         delete_widget_ = std::make_unique<ButtonWidget>(delete_button_.get(), [this]() {
-            if (!owner_ || !owner_->callbacks_.on_delete) return;
-            owner_->callbacks_.on_delete(spawn_id());
+            if (!owner_) return;
+            std::string id = spawn_id();
+            owner_->enqueue_notification([owner = owner_, id]() {
+                if (!owner) return;
+                if (owner->callbacks_.on_delete) owner->callbacks_.on_delete(id);
+            });
         });
 
         move_up_button_ = std::make_unique<DMButton>("Up", &DMStyles::ListButton(), 0, DMButton::height());
         move_up_widget_ = std::make_unique<ButtonWidget>(move_up_button_.get(), [this]() {
-            if (!owner_ || !owner_->callbacks_.on_move_up) return;
-            owner_->callbacks_.on_move_up(spawn_id());
+            if (!owner_) return;
+            std::string id = spawn_id();
+            owner_->enqueue_notification([owner = owner_, id]() {
+                if (!owner) return;
+                if (owner->callbacks_.on_move_up) owner->callbacks_.on_move_up(id);
+            });
         });
 
         move_down_button_ = std::make_unique<DMButton>("Down", &DMStyles::ListButton(), 0, DMButton::height());
         move_down_widget_ = std::make_unique<ButtonWidget>(move_down_button_.get(), [this]() {
-            if (!owner_ || !owner_->callbacks_.on_move_down) return;
-            owner_->callbacks_.on_move_down(spawn_id());
+            if (!owner_) return;
+            std::string id = spawn_id();
+            owner_->enqueue_notification([owner = owner_, id]() {
+                if (!owner) return;
+                if (owner->callbacks_.on_move_down) owner->callbacks_.on_move_down(id);
+            });
         });
 
         auto name_box = std::make_unique<DMTextBox>("Display Name", "");
@@ -464,18 +485,8 @@ struct SpawnGroupConfig::Entry {
 
         add_candidate_button_ = std::make_unique<DMButton>("Add Candidate", &DMStyles::CreateButton(), 0, DMButton::height());
         add_candidate_widget_ = std::make_unique<ButtonWidget>(add_candidate_button_.get(), [this]() {
-            if (!editable_) return;
-            if (auto* entry = mutable_entry()) {
-                devmode::spawn::sanitize_spawn_group_candidates(*entry);
-                nlohmann::json candidate = nlohmann::json::object();
-                candidate["name"] = "null";
-                candidate["chance"] = 0;
-                entry->at("candidates").push_back(candidate);
-                update_candidate_graph();
-                rebuild_candidate_widgets();
-                notify_change(false, false, true);
-                owner_->mark_layout_dirty();
-            }
+            if (!editable_ || !owner_) return;
+            owner_->open_asset_search_for_entry(this->spawn_id());
         });
 
         empty_candidates_label_ = std::make_unique<LabelWidget>("No candidates", DMStyles::Label().color, true);
@@ -795,6 +806,9 @@ private:
                     notify_change(false, false, true);
                 }
             });
+            graph->set_on_delete([this](int index){
+                this->remove_candidate_at(index);
+            });
         }
     }
 
@@ -851,22 +865,70 @@ private:
             widgets.chance_widget->set_value(std::to_string(static_cast<int>(std::round(chance))));
 
             widgets.remove_button = std::make_unique<DMButton>("Remove", &DMStyles::DeleteButton(), 0, DMButton::height());
-            widgets.remove_widget = std::make_unique<ButtonWidget>(widgets.remove_button.get(), [this, i]() {
-                if (!editable_) return;
-                if (auto* entry = mutable_entry()) {
-                    devmode::spawn::sanitize_spawn_group_candidates(*entry);
-                    auto& arr = entry->at("candidates");
-                    if (arr.is_array() && arr.size() > 1 && i < arr.size()) {
-                        arr.erase(arr.begin() + static_cast<nlohmann::json::difference_type>(i));
-                        update_candidate_graph();
-                        rebuild_candidate_widgets();
-                        notify_change(false, false, true);
-                        owner_->mark_layout_dirty();
-                    }
-                }
+            int index_copy = static_cast<int>(i);
+            widgets.remove_widget = std::make_unique<ButtonWidget>(widgets.remove_button.get(), [this, index_copy]() {
+                this->remove_candidate_at(index_copy);
             });
 
             candidate_entries_.push_back(std::move(widgets));
+        }
+    }
+
+    double candidate_weight_at(size_t idx) const {
+        const nlohmann::json& view = entry_view();
+        if (!view.is_object() || !view.contains("candidates") || !view["candidates"].is_array()) return 0.0;
+        const auto& arr = view["candidates"];
+        if (idx >= arr.size()) return 0.0;
+        const auto& cand = arr[idx];
+        return safe_double(cand, "chance", safe_double(cand, "weight", 0.0));
+    }
+
+    double max_candidate_weight() const {
+        const nlohmann::json& view = entry_view();
+        if (!view.is_object() || !view.contains("candidates") || !view["candidates"].is_array()) return 0.0;
+        double max_w = 0.0;
+        for (const auto& cand : view["candidates"]) {
+            double w = safe_double(cand, "chance", safe_double(cand, "weight", 0.0));
+            max_w = std::max(max_w, clamp_positive(w));
+        }
+        return max_w;
+    }
+
+    void remove_candidate_at(int index) {
+        if (!editable_ || index < 0) return;
+        if (auto* entry = mutable_entry()) {
+            devmode::spawn::sanitize_spawn_group_candidates(*entry);
+            auto& arr = (*entry)["candidates"];
+            if (!arr.is_array()) return;
+            if (index >= static_cast<int>(arr.size())) return;
+            arr.erase(arr.begin() + index);
+            devmode::spawn::sanitize_spawn_group_candidates(*entry);
+            update_candidate_graph();
+            rebuild_candidate_widgets();
+            notify_change(false, false, true);
+            owner_->mark_layout_dirty();
+        }
+    }
+
+    void add_candidate_from_search(const std::string& label) {
+        if (!editable_) return;
+        if (label.empty()) return;
+        if (auto* entry = mutable_entry()) {
+            devmode::spawn::sanitize_spawn_group_candidates(*entry);
+            auto& arr = (*entry)["candidates"];
+            if (!arr.is_array()) return;
+            double max_weight = max_candidate_weight();
+            double new_weight = max_weight > 0.0 ? max_weight * 0.05 : 5.0;
+            if (new_weight <= 0.0) new_weight = 5.0;
+
+            nlohmann::json candidate = nlohmann::json::object();
+            candidate["name"] = label;
+            candidate["chance"] = new_weight;
+            arr.push_back(candidate);
+            update_candidate_graph();
+            rebuild_candidate_widgets();
+            notify_change(false, false, true);
+            owner_->mark_layout_dirty();
         }
     }
 
@@ -1021,6 +1083,7 @@ SpawnGroupConfig::~SpawnGroupConfig() = default;
 void SpawnGroupConfig::set_screen_dimensions(int width, int height) {
     screen_w_ = width;
     screen_h_ = height;
+    if (asset_search_) asset_search_->set_screen_dimensions(width, height);
 }
 
 void SpawnGroupConfig::load(nlohmann::json& groups,
@@ -1182,10 +1245,25 @@ void SpawnGroupConfig::update(const Input& input, int screen_w, int screen_h) {
         if (header_down_btn_) header_down_btn_->set_rect(down);
         if (header_up_btn_) header_up_btn_->set_rect(up);
     }
+    if (asset_search_ && asset_search_->visible()) {
+        asset_search_->set_screen_dimensions(screen_w_, screen_h_);
+        SDL_Rect panel = rect();
+        int anchor_x = panel.x + panel.w + 16;
+        int anchor_y = panel.y;
+        if (anchor_.x != 0 || anchor_.y != 0) {
+            anchor_x = anchor_.x;
+            anchor_y = anchor_.y;
+        }
+        asset_search_->set_anchor_position(anchor_x, anchor_y);
+        asset_search_->update(input);
+    }
     process_pending_notifications();
 }
 
 bool SpawnGroupConfig::handle_event(const SDL_Event& e) {
+    if (asset_search_ && asset_search_->visible()) {
+        if (asset_search_->handle_event(e)) return true;
+    }
     if (bound_entry_) {
         auto spawn_id_for_actions = [this]() -> std::string {
             if (entries_.empty() || !entries_[0]) return std::string{};
@@ -1196,21 +1274,33 @@ bool SpawnGroupConfig::handle_event(const SDL_Event& e) {
             consumed = true;
             if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
                 std::string id = spawn_id_for_actions();
-                if (!id.empty() && callbacks_.on_move_up) callbacks_.on_move_up(id);
+                if (!id.empty()) {
+                    enqueue_notification([this, id]() {
+                        if (callbacks_.on_move_up) callbacks_.on_move_up(id);
+                    });
+                }
             }
         }
         if (header_down_btn_ && header_down_widget_ && header_down_widget_->handle_event(e)) {
             consumed = true;
             if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
                 std::string id = spawn_id_for_actions();
-                if (!id.empty() && callbacks_.on_move_down) callbacks_.on_move_down(id);
+                if (!id.empty()) {
+                    enqueue_notification([this, id]() {
+                        if (callbacks_.on_move_down) callbacks_.on_move_down(id);
+                    });
+                }
             }
         }
         if (header_delete_btn_ && header_delete_widget_ && header_delete_widget_->handle_event(e)) {
             consumed = true;
             if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
                 std::string id = spawn_id_for_actions();
-                if (!id.empty() && callbacks_.on_delete) callbacks_.on_delete(id);
+                if (!id.empty()) {
+                    enqueue_notification([this, id]() {
+                        if (callbacks_.on_delete) callbacks_.on_delete(id);
+                    });
+                }
             }
         }
         if (consumed) return true;
@@ -1222,10 +1312,15 @@ bool SpawnGroupConfig::handle_event(const SDL_Event& e) {
 
 void SpawnGroupConfig::render(SDL_Renderer* r) const {
     DockableCollapsible::render(r);
-    if (!r || !bound_entry_) return;
-    if (header_up_btn_) header_up_btn_->render(r);
-    if (header_down_btn_) header_down_btn_->render(r);
-    if (header_delete_btn_) header_delete_btn_->render(r);
+    if (!r) return;
+    if (bound_entry_) {
+        if (header_up_btn_) header_up_btn_->render(r);
+        if (header_down_btn_) header_down_btn_->render(r);
+        if (header_delete_btn_) header_delete_btn_->render(r);
+    }
+    if (asset_search_ && asset_search_->visible()) {
+        asset_search_->render(r);
+    }
 }
 
 void SpawnGroupConfig::render_content(SDL_Renderer* r) const {
@@ -1250,7 +1345,51 @@ void SpawnGroupConfig::set_anchor(int x, int y) {
     anchor_.y = y;
 }
 
-void SpawnGroupConfig::close_asset_search() { pending_focus_id_.reset(); }
+SpawnGroupConfig::Entry* SpawnGroupConfig::find_entry_by_id(const std::string& id) {
+    if (id.empty()) return nullptr;
+    for (auto& entry : entries_) {
+        if (entry && entry->spawn_id() == id) {
+            return entry.get();
+        }
+    }
+    return nullptr;
+}
+
+void SpawnGroupConfig::open_asset_search_for_entry(const std::string& spawn_id) {
+    if (spawn_id.empty()) return;
+    pending_add_spawn_id_ = spawn_id;
+    if (!asset_search_) asset_search_ = std::make_unique<SearchAssets>();
+    asset_search_->set_screen_dimensions(screen_w_, screen_h_);
+    SDL_Rect panel = rect();
+    int anchor_x = panel.x + panel.w + 16;
+    int anchor_y = panel.y;
+    if (anchor_.x != 0 || anchor_.y != 0) {
+        anchor_x = anchor_.x;
+        anchor_y = anchor_.y;
+    }
+    asset_search_->set_anchor_position(anchor_x, anchor_y);
+    asset_search_->open([this](const std::string& value) {
+        this->handle_asset_search_selection(value);
+    });
+}
+
+void SpawnGroupConfig::handle_asset_search_selection(const std::string& value) {
+    if (pending_add_spawn_id_.empty()) {
+        close_asset_search();
+        return;
+    }
+    Entry* entry = find_entry_by_id(pending_add_spawn_id_);
+    if (entry && !value.empty()) {
+        entry->add_candidate_from_search(value);
+    }
+    close_asset_search();
+}
+
+void SpawnGroupConfig::close_asset_search() {
+    if (asset_search_) asset_search_->close();
+    pending_add_spawn_id_.clear();
+    pending_focus_id_.reset();
+}
 
 void SpawnGroupConfig::rebuild_rows() {
     if (bound_entry_) {

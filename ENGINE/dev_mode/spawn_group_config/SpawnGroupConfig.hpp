@@ -15,6 +15,7 @@
 #include "DockableCollapsible.hpp"
 
 class Input;
+class SearchAssets;
 
 class SpawnGroupConfig : public DockableCollapsible {
     struct Entry;
@@ -159,6 +160,13 @@ private:
     std::unique_ptr<ButtonWidget> header_up_widget_{};
     std::unique_ptr<ButtonWidget> header_down_widget_{};
     std::unique_ptr<ButtonWidget> header_delete_widget_{};
+
+    std::unique_ptr<SearchAssets> asset_search_{};
+    std::string pending_add_spawn_id_{};
+
+    void open_asset_search_for_entry(const std::string& spawn_id);
+    void handle_asset_search_selection(const std::string& value);
+    Entry* find_entry_by_id(const std::string& id);
 
     friend class SpawnGroupConfigTestAccessor;
 };

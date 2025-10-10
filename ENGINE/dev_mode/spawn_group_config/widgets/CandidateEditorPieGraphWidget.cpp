@@ -92,6 +92,15 @@ bool CandidateEditorPieGraphWidget::handle_event(const SDL_Event& e) {
         }
     } else if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
         if (hovered_index_ >= 0) {
+            if (e.button.clicks >= 2) {
+                if (on_delete_) on_delete_(hovered_index_);
+                active_index_ = -1;
+                if (scroll_capture_active_) {
+                    DMWidgetsSetSliderScrollCapture(this, false);
+                    scroll_capture_active_ = false;
+                }
+                return true;
+            }
             if (active_index_ != hovered_index_) {
                 active_index_ = hovered_index_;
                 if (!scroll_capture_active_) {

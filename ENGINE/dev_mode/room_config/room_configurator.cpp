@@ -400,6 +400,7 @@ void RoomConfigurator::handle_container_closed() {
         if (config) {
             config->close();
             config->set_visible(false);
+            config->close_asset_search();
         }
     }
     external_room_json_ = nullptr;
@@ -629,6 +630,8 @@ void RoomConfigurator::rebuild_spawn_rows(Rows& rows) {
         config->set_embedded_mode(true);
         config->set_show_header(true);
         config->set_close_button_enabled(false);
+        config->set_scroll_enabled(true);
+        config->force_pointer_ready();
         if (created_new) {
             config->set_expanded(false);
         }
@@ -969,8 +972,11 @@ void RoomConfigurator::rebuild_rows_internal() {
         basic_panel_->set_close_button_enabled(false);
         basic_panel_->set_scroll_enabled(true);
         basic_panel_->set_expanded(false);
+    } else {
+        basic_panel_->set_scroll_enabled(true);
     }
     basic_panel_->set_rows(rows_);
+    basic_panel_->force_pointer_ready();
 }
 
 void RoomConfigurator::update(const Input& input, int screen_w, int screen_h) {
