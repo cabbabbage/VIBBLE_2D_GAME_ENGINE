@@ -102,17 +102,6 @@ std::optional<int> read_json_int(const nlohmann::json& obj, const std::string& k
     return std::nullopt;
 }
 
-std::optional<int> find_dimension_value(const nlohmann::json& obj,
-                                       std::initializer_list<const char*> keys) {
-    for (const char* key : keys) {
-        if (!key) continue;
-        if (auto value = read_json_int(obj, key)) {
-            return value;
-        }
-    }
-    return std::nullopt;
-}
-
 std::optional<int> read_radius_value(const nlohmann::json& obj) {
     if (!obj.is_object()) return std::nullopt;
     if (auto value = read_json_int(obj, "radius")) {
@@ -203,17 +192,17 @@ struct RoomConfigurator::State {
         name = src.value("name", src.value("room_name", std::string{}));
         geometry = src.value("geometry", geometry_options.empty() ? std::string{} : geometry_options.front());
 
-        if (auto value = find_dimension_value(src, {"min_width", "width_min", "minWidth", "widthMin"})) {
+        if (auto value = read_json_int(src, "min_width")) {
             width_min = *value;
         }
-        if (auto value = find_dimension_value(src, {"max_width", "width_max", "maxWidth", "widthMax"})) {
+        if (auto value = read_json_int(src, "max_width")) {
             width_max = *value;
         }
         if (allow_height) {
-            if (auto value = find_dimension_value(src, {"min_height", "height_min", "minHeight", "heightMin"})) {
+            if (auto value = read_json_int(src, "min_height")) {
                 height_min = *value;
             }
-            if (auto value = find_dimension_value(src, {"max_height", "height_max", "maxHeight", "heightMax"})) {
+            if (auto value = read_json_int(src, "max_height")) {
                 height_max = *value;
             }
         }
@@ -259,22 +248,14 @@ struct RoomConfigurator::State {
             dest["radius"] = radius;
             dest["min_width"] = diameter;
             dest["max_width"] = diameter;
-            dest["width_min"] = diameter;
-            dest["width_max"] = diameter;
             dest["min_height"] = diameter;
             dest["max_height"] = diameter;
-            dest["height_min"] = diameter;
-            dest["height_max"] = diameter;
         } else {
             dest.erase("radius");
             dest["min_width"] = width_min;
             dest["max_width"] = width_max;
-            dest["width_min"] = width_min;
-            dest["width_max"] = width_max;
             dest["min_height"] = allow_height ? height_min : width_min;
             dest["max_height"] = allow_height ? height_max : width_max;
-            dest["height_min"] = allow_height ? height_min : width_min;
-            dest["height_max"] = allow_height ? height_max : width_max;
         }
     }
 };
@@ -470,12 +451,6 @@ bool RoomConfigurator::apply_room_data(const nlohmann::json& data) {
     const nlohmann::json& normalized = data.is_object() ? data : empty_object();
 
     nlohmann::json normalized_copy = normalized;
-    if (normalized_copy.contains("assets") && normalized_copy["assets"].is_array()) {
-        if (!normalized_copy.contains("spawn_groups") || !normalized_copy["spawn_groups"].is_array()) {
-            normalized_copy["spawn_groups"] = normalized_copy["assets"];
-        }
-        normalized_copy.erase("assets");
-    }
     if (!normalized_copy.contains("spawn_groups") || !normalized_copy["spawn_groups"].is_array()) {
         normalized_copy["spawn_groups"] = nlohmann::json::array();
     }

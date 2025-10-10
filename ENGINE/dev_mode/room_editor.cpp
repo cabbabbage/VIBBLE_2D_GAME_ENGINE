@@ -756,7 +756,6 @@ void RoomEditor::finalize_asset_drag(Asset* asset, const std::shared_ptr<AssetIn
     entry["min_number"] = 1;
     entry["max_number"] = 1;
     entry["position"] = "Exact";
-    entry["check_overlap"] = false;
     entry["enforce_spacing"] = false;
     entry["dx"] = asset->pos.x - center.x;
     entry["dy"] = asset->pos.y - center.y;
@@ -1942,9 +1941,7 @@ void RoomEditor::add_spawn_group_internal() {
     entry["position"] = "Exact";
     entry["min_number"] = 1;
     entry["max_number"] = 1;
-    entry["check_overlap"] = false;
     entry["enforce_spacing"] = false;
-    entry["chance_denominator"] = 100;
     entry["candidates"] = nlohmann::json::array();
     entry["candidates"].push_back({{"name", "null"}, {"chance", 0}});
     arr.push_back(entry);
@@ -2286,12 +2283,8 @@ void RoomEditor::regenerate_current_room() {
         room_json["radius"] = chosen_radius;
         room_json["min_width"] = width;
         room_json["max_width"] = width;
-        room_json["width_min"] = width;
-        room_json["width_max"] = width;
         room_json["min_height"] = height;
         room_json["max_height"] = height;
-        room_json["height_min"] = height;
-        room_json["height_max"] = height;
     } else {
         std::uniform_int_distribution<int> dist_w(min_w, max_w);
         std::uniform_int_distribution<int> dist_h(min_h, max_h);

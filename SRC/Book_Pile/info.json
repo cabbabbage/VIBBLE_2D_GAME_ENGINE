@@ -45,8 +45,6 @@
           "name": "null"
         }
       ],
-      "chance_denominator": 0,
-      "check_overlap": false,
       "display_name": "New Spawn",
       "enforce_spacing": false,
       "max_number": 1,

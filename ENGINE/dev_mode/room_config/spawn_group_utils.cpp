@@ -22,11 +22,6 @@ nlohmann::json& ensure_spawn_groups_array(nlohmann::json& root) {
     if (root.contains("spawn_groups") && root["spawn_groups"].is_array()) {
         return root["spawn_groups"];
     }
-    if (root.contains("assets") && root["assets"].is_array()) {
-        root["spawn_groups"] = root["assets"];
-        root.erase("assets");
-        return root["spawn_groups"];
-    }
     root["spawn_groups"] = nlohmann::json::array();
     return root["spawn_groups"];
 }
@@ -34,9 +29,6 @@ nlohmann::json& ensure_spawn_groups_array(nlohmann::json& root) {
 const nlohmann::json* find_spawn_groups_array(const nlohmann::json& root) {
     if (root.contains("spawn_groups") && root["spawn_groups"].is_array()) {
         return &root["spawn_groups"];
-    }
-    if (root.contains("assets") && root["assets"].is_array()) {
-        return &root["assets"];
     }
     return nullptr;
 }

@@ -64,14 +64,8 @@
             "name": "Stump"
           }
         ],
-        "chance_denominator": 297,
-        "check_overlap": false,
         "display_name": "batch_map_assets",
         "enforce_spacing": false,
-        "grid_spacing_max": 110,
-        "grid_spacing_min": 110,
-        "jitter_max": 3,
-        "jitter_min": 3,
         "max_number": 100,
         "min_number": 53,
         "position": "Random",
@@ -101,14 +95,8 @@
             "name": "Tree_Darker"
           }
         ],
-        "chance_denominator": 98,
-        "check_overlap": false,
         "display_name": "batch_map_boundary",
         "enforce_spacing": false,
-        "grid_spacing_max": 150,
-        "grid_spacing_min": 150,
-        "jitter_max": 29,
-        "jitter_min": 29,
         "max_number": 100,
         "min_number": 100,
         "position": "Random",
@@ -217,8 +205,6 @@
     "bar": {
       "edge_smoothness": 101,
       "geometry": "Circle",
-      "height_max": 2500,
-      "height_min": 1072,
       "inherits_map_assets": true,
       "is_boss": false,
       "is_spawn": false,
@@ -236,18 +222,13 @@
               "name": "null"
             }
           ],
-          "chance_denominator": 0,
-          "check_overlap": false,
           "display_name": "Booze_2",
           "enforce_spacing": false,
-          "exact_position": null,
-          "inherited": false,
           "max_number": 213,
           "min_number": 100,
           "position": "Random",
           "priority": 0,
-          "spawn_id": "spn-2986ab1d1671",
-          "tag": false
+          "spawn_id": "spn-2986ab1d1671"
         },
         {
           "candidates": [
@@ -256,18 +237,13 @@
               "name": "null"
             }
           ],
-          "chance_denominator": 0,
-          "check_overlap": false,
           "display_name": "Box",
           "enforce_spacing": false,
-          "exact_position": null,
-          "inherited": false,
           "max_number": 23,
           "min_number": -45,
           "position": "Random",
           "priority": 1,
-          "spawn_id": "spn-ebb38f93ac8d",
-          "tag": false
+          "spawn_id": "spn-ebb38f93ac8d"
         },
         {
           "candidates": [
@@ -280,8 +256,6 @@
               "name": "candle"
             }
           ],
-          "chance_denominator": 100,
-          "check_overlap": false,
           "display_name": "candle",
           "dx": -496,
           "dy": -259,
@@ -316,8 +290,6 @@
               "name": "flower_1"
             }
           ],
-          "chance_denominator": 100,
-          "check_overlap": false,
           "display_name": "flower_1",
           "dx": -102,
           "dy": -250,
@@ -342,8 +314,6 @@
               "name": "Barrel"
             }
           ],
-          "chance_denominator": 100,
-          "check_overlap": false,
           "display_name": "Barrel",
           "dx": -21,
           "dy": -294,
@@ -367,7 +337,6 @@
               "name": "Lantern"
             }
           ],
-          "check_overlap": false,
           "display_name": "Lantern",
           "dx": 86,
           "dy": -327,
@@ -391,8 +360,6 @@
               "name": "car"
             }
           ],
-          "chance_denominator": 100,
-          "check_overlap": false,
           "display_name": "car",
           "dx": 270,
           "dy": -194,
@@ -412,8 +379,6 @@
               "name": "null"
             }
           ],
-          "chance_denominator": 100,
-          "check_overlap": false,
           "display_name": "New Spawn",
           "enforce_spacing": false,
           "max_number": 1,
@@ -422,15 +387,11 @@
           "priority": 7,
           "spawn_id": "spn-07946fca2b8c"
         }
-      ],
-      "width_max": 2897,
-      "width_min": 1755
+      ]
     },
     "garden": {
       "edge_smoothness": 2,
       "geometry": "Square",
-      "height_max": 1971,
-      "height_min": 1044,
       "inherits_map_assets": false,
       "is_boss": false,
       "is_spawn": false,
@@ -439,16 +400,12 @@
       "min_height": 1044,
       "min_width": 1095,
       "name": "garden",
-      "spawn_groups": [],
-      "width_max": 1903,
-      "width_min": 1095
+      "spawn_groups": []
     },
     "room": {
       "curvyness": 2,
       "edge_smoothness": 2,
       "geometry": "Square",
-      "height_max": 10000,
-      "height_min": 1500,
       "inherits_map_assets": false,
       "is_boss": false,
       "is_spawn": false,
@@ -457,16 +414,12 @@
       "min_height": 1500,
       "min_width": 1500,
       "name": "room",
-      "spawn_groups": [],
-      "width_max": 10000,
-      "width_min": 1500
+      "spawn_groups": []
     },
     "room_1": {
       "curvyness": 2,
       "edge_smoothness": 2,
       "geometry": "Square",
-      "height_max": 10000,
-      "height_min": 1500,
       "inherits_map_assets": false,
       "is_boss": false,
       "is_spawn": false,
@@ -475,16 +428,12 @@
       "min_height": 1500,
       "min_width": 1500,
       "name": "room_1",
-      "spawn_groups": [],
-      "width_max": 10000,
-      "width_min": 1500
+      "spawn_groups": []
     },
     "room_2": {
       "curvyness": 2,
       "edge_smoothness": 2,
       "geometry": "Square",
-      "height_max": 10000,
-      "height_min": 1500,
       "inherits_map_assets": false,
       "is_boss": false,
       "is_spawn": false,
@@ -493,9 +442,7 @@
       "min_height": 1500,
       "min_width": 1500,
       "name": "room_2",
-      "spawn_groups": [],
-      "width_max": 10000,
-      "width_min": 1500
+      "spawn_groups": []
     },
     "room_lab": {
       "areas": [
@@ -543,8 +490,6 @@
       "curvyness": 1,
       "edge_smoothness": 101,
       "geometry": "Circle",
-      "height_max": 2080,
-      "height_min": 2080,
       "inherits_map_assets": false,
       "is_boss": false,
       "is_spawn": false,
@@ -566,8 +511,6 @@
               "name": "Bomb"
             }
           ],
-          "chance_denominator": 100,
-          "check_overlap": false,
           "display_name": "lab_bombs",
           "dx": 39,
           "dy": -340,
@@ -592,7 +535,6 @@
               "name": "candle"
             }
           ],
-          "check_overlap": false,
           "display_name": "candle",
           "dx": -13,
           "dy": -162,
@@ -604,9 +546,7 @@
           "position": "Exact",
           "spawn_id": "spn-b09ff44ad485"
         }
-      ],
-      "width_max": 2080,
-      "width_min": 2080
+      ]
     },
     "spawn": {
       "areas": [
@@ -714,8 +654,6 @@
       "curvyness": 1,
       "edge_smoothness": 97,
       "geometry": "Circle",
-      "height_max": 8818,
-      "height_min": 8818,
       "inherits_map_assets": true,
       "is_boss": false,
       "is_spawn": true,
@@ -737,7 +675,6 @@
               "name": "Vibble"
             }
           ],
-          "check_overlap": false,
           "display_name": "Vibble",
           "dx": -43,
           "dy": -154,
@@ -756,9 +693,7 @@
           "man-made",
           "passable"
         ]
-      },
-      "width_max": 8818,
-      "width_min": 8818
+      }
     }
   },
   "trails_data": {
@@ -766,8 +701,6 @@
       "curvyness": 4,
       "edge_smoothness": 2,
       "geometry": "Square",
-      "height_max": 1221,
-      "height_min": 100,
       "inherits_map_assets": true,
       "is_boss": false,
       "is_spawn": false,
@@ -788,29 +721,20 @@
               "name": "candle"
             }
           ],
-          "chance_denominator": 100,
-          "check_overlap": false,
           "display_name": "candle",
           "enforce_spacing": false,
-          "exact_position": null,
-          "inherited": false,
           "max_number": 1,
           "min_number": 1,
           "position": "Exact",
           "priority": 0,
-          "spawn_id": "spn-400a2bb2d100",
-          "tag": false
+          "spawn_id": "spn-400a2bb2d100"
         }
-      ],
-      "width_max": 796,
-      "width_min": 470
+      ]
     },
     "brick": {
       "curvyness": 4,
       "edge_smoothness": 101,
       "geometry": "Square",
-      "height_max": 1000,
-      "height_min": 100,
       "inherits_map_assets": true,
       "is_boss": false,
       "is_spawn": false,
@@ -831,18 +755,13 @@
               "name": "#pretty"
             }
           ],
-          "chance_denominator": 100,
-          "check_overlap": false,
           "display_name": "Bomb",
           "enforce_spacing": false,
-          "exact_position": null,
-          "inherited": false,
           "max_number": 1,
           "min_number": 1,
           "position": "Random",
           "priority": 0,
-          "spawn_id": "spn-201a21be3548",
-          "tag": false
+          "spawn_id": "spn-201a21be3548"
         },
         {
           "candidates": [
@@ -851,8 +770,6 @@
               "name": "null"
             }
           ],
-          "chance_denominator": 0,
-          "check_overlap": false,
           "display_name": "New Spawn",
           "enforce_spacing": false,
           "max_number": 1,
@@ -861,9 +778,7 @@
           "priority": 1,
           "spawn_id": "spn-468fbf18908b"
         }
-      ],
-      "width_max": 1115,
-      "width_min": 705
+      ]
     }
   }
 }

@@ -46,12 +46,6 @@ void ensure_spawn_group_defaults(json& entry, const std::string& default_display
     }
     entry["min_number"] = min_number;
     entry["max_number"] = max_number;
-    if (!entry.contains("chance_denominator") || !entry["chance_denominator"].is_number_integer() || entry["chance_denominator"].get<int>() <= 0) {
-        entry["chance_denominator"] = 100;
-    }
-    if (!entry.contains("check_overlap") || !entry["check_overlap"].is_boolean()) {
-        entry["check_overlap"] = false;
-    }
     if (!entry.contains("enforce_spacing") || !entry["enforce_spacing"].is_boolean()) {
         entry["enforce_spacing"] = false;
     }

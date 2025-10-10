@@ -192,12 +192,8 @@ nlohmann::json build_default_map_info(const std::string& map_name) {
     spawn_room["radius"] = kSpawnRadius;
     spawn_room["min_width"] = diameter;
     spawn_room["max_width"] = diameter;
-    spawn_room["width_min"] = diameter;
-    spawn_room["width_max"] = diameter;
     spawn_room["min_height"] = diameter;
     spawn_room["max_height"] = diameter;
-    spawn_room["height_min"] = diameter;
-    spawn_room["height_max"] = diameter;
     spawn_room["edge_smoothness"] = 2;
     spawn_room["is_spawn"] = true;
     spawn_room["is_boss"] = false;

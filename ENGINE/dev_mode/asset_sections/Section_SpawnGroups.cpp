@@ -160,9 +160,7 @@ void Section_SpawnGroups::add_spawn_group() {
     entry["position"] = "Exact";
     entry["min_number"] = 1;
     entry["max_number"] = 1;
-    entry["check_overlap"] = false;
     entry["enforce_spacing"] = false;
-    entry["chance_denominator"] = 100;
     entry["candidates"] = nlohmann::json::array();
     entry["candidates"].push_back({{"name", "null"}, {"chance", 0}});
     const std::string new_id = entry["spawn_id"].get<std::string>();

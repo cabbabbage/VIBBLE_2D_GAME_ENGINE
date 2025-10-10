@@ -735,7 +735,7 @@ void AssetInfo::set_children(const std::vector<ChildInfo>& new_children) {
 
         try {
             if (c.inline_assets.is_array() && !c.inline_assets.empty()) {
-                entry["assets"] = c.inline_assets;
+                entry["spawn_groups"] = c.inline_assets;
             } else if (!c.json_path.empty()) {
 
                 std::string rel = c.json_path;

@@ -22,8 +22,8 @@ void ChildLoader::load_children(AssetInfo& info,
         ci.area_name = entry.value("area_name", std::string{});
         ci.z_offset  = entry.value("z_offset", 0);
         try {
-            if (entry.contains("assets") && entry["assets"].is_array()) {
-                ci.inline_assets = entry["assets"];
+            if (entry.contains("spawn_groups") && entry["spawn_groups"].is_array()) {
+                ci.inline_assets = entry["spawn_groups"];
             } else {
                 ci.inline_assets = json::array();
             }

@@ -313,24 +313,13 @@ RoomGeometry fetch_room_geometry(const nlohmann::json* rooms_data, const std::st
 
     const auto& room = *it;
 
-    auto extract_dimension = [&room](const char* primary, const char* fallback1,
-                                     const char* fallback2, const char* fallback3) -> double {
-
-        if (room.contains(primary)) return room.value(primary, 0.0);
-
-        if (room.contains(fallback1)) return room.value(fallback1, 0.0);
-
-        if (room.contains(fallback2)) return room.value(fallback2, 0.0);
-
-        if (room.contains(fallback3)) return room.value(fallback3, 0.0);
-
-        return 0.0;
-
+    auto extract_dimension = [&room](const char* key) -> double {
+        return room.value(key, 0.0);
 };
 
-    geom.max_width = extract_dimension("max_width", "width_max", "min_width", "width_min");
+    geom.max_width = extract_dimension("max_width");
 
-    geom.max_height = extract_dimension("max_height", "height_max", "min_height", "height_min");
+    geom.max_height = extract_dimension("max_height");
 
     std::string geometry = room.value("geometry", std::string());
 
@@ -372,8 +361,8 @@ RoomGeometry fetch_room_geometry(const nlohmann::json* rooms_data, const std::st
         if (radius_value <= 0.0) {
             double diameter_guess = std::max(geom.max_width, geom.max_height);
             if (diameter_guess <= 0.0) {
-                double alt_w = extract_dimension("min_width", "width_min", "max_width", "width_max");
-                double alt_h = extract_dimension("min_height", "height_min", "max_height", "height_max");
+                double alt_w = extract_dimension("min_width");
+                double alt_h = extract_dimension("min_height");
                 diameter_guess = std::max(alt_w, alt_h);
             }
             if (diameter_guess > 0.0) {
@@ -638,17 +627,9 @@ nlohmann::json make_default_room_json(const std::string& name) {
 
     room["max_width"] = kDefaultRoomMax;
 
-    room["width_min"] = kDefaultRoomMin;
-
-    room["width_max"] = kDefaultRoomMax;
-
     room["min_height"] = kDefaultRoomMin;
 
     room["max_height"] = kDefaultRoomMax;
-
-    room["height_min"] = kDefaultRoomMin;
-
-    room["height_max"] = kDefaultRoomMax;
 
     room["edge_smoothness"] = 2;
 
@@ -4665,11 +4646,7 @@ void MapLayersPanel::add_spawn_group_to_active_room() {
 
     new_group["max_number"] = 1;
 
-    new_group["check_overlap"] = false;
-
     new_group["enforce_spacing"] = false;
-
-    new_group["chance_denominator"] = 100;
 
     new_group["candidates"] = nlohmann::json::array();
 

@@ -19,13 +19,11 @@
 #include <cmath>
 #include <cstdint>
 #include <cctype>
-#include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <limits>
 #include <memory>
 #include <nlohmann/json.hpp>
-#include <system_error>
 #include <vector>
 #include <unordered_set>
 #include <SDL.h>
@@ -163,88 +161,6 @@ void Assets::hydrate_map_info_sections() {
     if (!map_info_json_.is_object()) {
         return;
     }
-    if (map_path_.empty()) {
-        return;
-    }
-
-    const auto hydrate_from_file = [&](const char* legacy_key, const char* merged_key) {
-        if (map_info_json_.contains(merged_key)) {
-            return;
-        }
-        auto it = map_info_json_.find(legacy_key);
-        if (it == map_info_json_.end() || !it->is_string()) {
-            return;
-        }
-        const std::string file_path = map_path_ + "/" + it->get<std::string>();
-        std::ifstream section(file_path);
-        if (!section.is_open()) {
-            std::cerr << "[Assets] Legacy map section missing: " << file_path << "\n";
-            return;
-        }
-        try {
-            nlohmann::json data;
-            section >> data;
-            map_info_json_[merged_key] = std::move(data);
-        } catch (const std::exception& ex) {
-            std::cerr << "[Assets] Failed to hydrate " << merged_key << " from "
-                      << file_path << ": " << ex.what() << "\n";
-        }
-};
-
-    hydrate_from_file("map_assets", "map_assets_data");
-    hydrate_from_file("map_boundary", "map_boundary_data");
-    hydrate_from_file("map_light", "map_light_data");
-
-    const auto hydrate_directory = [&](const char* merged_key, const char* directory_name) {
-        if (map_info_json_.contains(merged_key) && map_info_json_[merged_key].is_object()) {
-            return;
-        }
-
-        const std::filesystem::path dir = std::filesystem::path(map_path_) / directory_name;
-        if (!std::filesystem::exists(dir) || !std::filesystem::is_directory(dir)) {
-            return;
-        }
-
-        std::error_code ec;
-        std::filesystem::directory_iterator it(dir, ec);
-        if (ec) {
-            std::cerr << "[Assets] Failed to scan legacy directory " << dir << ": "
-                      << ec.message() << "\n";
-            return;
-        }
-
-        nlohmann::json merged = nlohmann::json::object();
-        for (const auto& entry : it) {
-            if (!entry.is_regular_file()) {
-                continue;
-            }
-            const auto& path = entry.path();
-            if (path.extension() != ".json") {
-                continue;
-            }
-            std::ifstream in(path);
-            if (!in.is_open()) {
-                std::cerr << "[Assets] Failed to open legacy section " << path << "\n";
-                continue;
-            }
-            try {
-                nlohmann::json section;
-                in >> section;
-                merged[path.stem().string()] = std::move(section);
-            } catch (const std::exception& ex) {
-                std::cerr << "[Assets] Failed to hydrate " << merged_key << " entry from "
-                          << path << ": " << ex.what() << "\n";
-            }
-        }
-
-        if (!merged.is_object()) {
-            merged = nlohmann::json::object();
-        }
-        map_info_json_[merged_key] = std::move(merged);
-};
-
-    hydrate_directory("rooms_data", "rooms");
-    hydrate_directory("trails_data", "trails");
 
     const auto ensure_object = [&](const char* key) {
         auto it = map_info_json_.find(key);
@@ -262,6 +178,8 @@ void Assets::hydrate_map_info_sections() {
     ensure_object("map_boundary_data");
     ensure_object("map_light_data");
     ensure_object("light_rays_params");
+    ensure_object("rooms_data");
+    ensure_object("trails_data");
 
     {
         nlohmann::json& L = map_info_json_["map_light_data"];
@@ -334,8 +252,6 @@ void Assets::hydrate_map_info_sections() {
         LightRaysConfig config = LightRaysConfig::from_json(R);
         R = config.to_json();
     }
-    ensure_object("rooms_data");
-    ensure_object("trails_data");
 }
 
 void Assets::load_camera_settings_from_json() {

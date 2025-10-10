@@ -45,14 +45,8 @@
             "name": "Frog"
           }
         ],
-        "chance_denominator": 98,
-        "check_overlap": false,
         "display_name": "batch_map_assets",
         "enforce_spacing": false,
-        "grid_spacing_max": 110,
-        "grid_spacing_min": 110,
-        "jitter_max": 3,
-        "jitter_min": 3,
         "max_number": 500,
         "min_number": 500,
         "position": "Random",
@@ -82,14 +76,8 @@
             "name": "Tree_Darker"
           }
         ],
-        "chance_denominator": 100,
-        "check_overlap": false,
         "display_name": "batch_map_boundary",
         "enforce_spacing": false,
-        "grid_spacing_max": 150,
-        "grid_spacing_min": 150,
-        "jitter_max": 29,
-        "jitter_min": 29,
         "max_number": 500,
         "min_number": 100,
         "position": "Random",
@@ -145,8 +133,6 @@
     "spawn": {
       "edge_smoothness": 1000,
       "geometry": "Circle",
-      "height_max": 15000,
-      "height_min": 15000,
       "inherits_map_assets": true,
       "is_boss": false,
       "is_spawn": true,
@@ -155,9 +141,7 @@
       "min_height": 100,
       "min_width": 100,
       "name": "spawn",
-      "spawn_groups": [],
-      "width_max": 11090,
-      "width_min": 100
+      "spawn_groups": []
     }
   },
   "trails_data": {}
