@@ -1,6 +1,7 @@
 #include "room_configurator.hpp"
 
 #include "dm_styles.hpp"
+#include "DockableCollapsible.hpp"
 #include "map_generation/room.hpp"
 #include "../spawn_group_config/SpawnGroupConfig.hpp"
 #include "../spawn_group_config/spawn_group_utils.hpp"
@@ -262,31 +263,27 @@ RoomConfigurator::RoomConfigurator() {
     row_gap_ = DMSpacing::item_gap();
     col_gap_ = DMSpacing::item_gap();
     cell_width_ = kRoomConfigPanelContentWidth;
-    container_.set_header_text("Room Config");
+    container_.set_header_text_provider([this]() {
+        if (state_ && !state_->name.empty()) {
+            return std::string{"Room: "} + state_->name;
+        }
+        return std::string{"Room Config"};
+    });
     container_.set_on_close([this]() { handle_container_closed(); });
     container_.set_layout_function([this](const SlidingWindowContainer::LayoutContext& ctx) {
         return this->layout_content(ctx);
     });
     container_.set_render_function([this](SDL_Renderer* renderer) {
-        for (const auto& row : rows_) {
-            for (Widget* w : row) {
-                if (w) w->render(renderer);
-            }
+        if (basic_panel_) basic_panel_->render(renderer);
+        for (const auto& cfg : spawn_group_configs_) {
+            if (cfg) cfg->render(renderer);
         }
     });
-    container_.set_event_function([this](const SDL_Event& e) {
-        if (e.type == SDL_KEYDOWN && e.key.keysym.sym == SDLK_ESCAPE) {
-            this->close();
-            return true;
+    container_.set_update_function([this](const Input& input, int screen_w, int screen_h) {
+        if (basic_panel_) basic_panel_->update(input, screen_w, screen_h);
+        for (auto& cfg : spawn_group_configs_) {
+            if (cfg) cfg->update(input, screen_w, screen_h);
         }
-        for (auto& row : rows_) {
-            for (Widget* w : row) {
-                if (w && w->handle_event(e)) {
-                    return true;
-                }
-            }
-        }
-        return false;
     });
     container_.set_blocks_editor_interactions(true);
     state_ = std::make_unique<State>();
@@ -391,41 +388,17 @@ RoomConfigurator::Rows RoomConfigurator::compute_layout_rows() const {
 }
 
 int RoomConfigurator::layout_content(const SlidingWindowContainer::LayoutContext& ctx) const {
-    auto layout_rows = compute_layout_rows();
-    int content_width = ctx.content_width;
-    if (cell_width_ > 0) {
-        content_width = std::min(content_width, cell_width_);
-    }
-    int x_origin = ctx.content_x;
-    if (content_width < ctx.content_width) {
-        x_origin += (ctx.content_width - content_width) / 2;
-    }
     int y = ctx.content_top;
-    bool first_row = true;
-    for (const auto& row : layout_rows) {
-        if (!row.empty()) {
-            if (!first_row) y += row_gap_;
-            first_row = false;
-            int columns = static_cast<int>(row.size());
-            int col_width = std::max(1, (content_width - (columns - 1) * col_gap_) / std::max(1, columns));
-            int row_height = 0;
-            for (Widget* w : row) {
-                if (w) {
-                    row_height = std::max(row_height, w->height_for_width(col_width));
-                }
-            }
-            int x = x_origin;
-            for (Widget* w : row) {
-                if (w) {
-                    w->set_rect(SDL_Rect{x, y - ctx.scroll_value, col_width, row_height});
-                }
-                x += col_width + col_gap_;
-            }
-            y += row_height;
-        } else {
-            if (!first_row) y += row_gap_;
-            first_row = false;
-        }
+    // Position the basic info panel first
+    if (basic_panel_ && basic_panel_->is_visible()) {
+        basic_panel_->set_rect(SDL_Rect{ctx.content_x, y - ctx.scroll_value, ctx.content_width, 0});
+        y += basic_panel_->height() + ctx.gap;
+    }
+    // Then position each spawn group panel in order
+    for (const auto& cfg : spawn_group_configs_) {
+        if (!cfg || !cfg->is_visible()) continue;
+        cfg->set_rect(SDL_Rect{ctx.content_x, y - ctx.scroll_value, ctx.content_width, 0});
+        y += cfg->height() + ctx.gap;
     }
     return y;
 }
@@ -618,9 +591,8 @@ std::string RoomConfigurator::selected_geometry() const {
 }
 
 void RoomConfigurator::rebuild_spawn_rows(Rows& rows) {
-    spawn_label_ = std::make_unique<RoomConfiguratorSectionLabel>("Spawn Groups");
-    rows.push_back({spawn_label_.get()});
-
+    // In the new layout, spawn groups are individual dockable panels
+    spawn_label_.reset();
     empty_spawn_label_.reset();
     add_spawn_button_.reset();
     add_spawn_widget_.reset();
@@ -660,13 +632,12 @@ void RoomConfigurator::rebuild_spawn_rows(Rows& rows) {
         auto config = take_config(id);
         if (!config) {
             config = std::make_unique<SpawnGroupConfig>();
-            config->set_embedded_mode(true);
         }
 
+        // Panels are dockable collapsibles anchored inside the container
         config->set_embedded_mode(true);
 
         config->set_screen_dimensions(last_screen_w_, last_screen_h_);
-        config->set_on_layout_changed([this]() { this->rebuild_rows(); });
 
         SpawnGroupConfig::Callbacks callbacks{};
         callbacks.on_regenerate = [this](const std::string& value) {
@@ -713,12 +684,38 @@ void RoomConfigurator::rebuild_spawn_rows(Rows& rows) {
             };
         }
 
+        // Derive a header title from the spawn entry
+        auto title_from = [](const nlohmann::json& e) -> std::string {
+            if (e.is_object()) {
+                if (e.contains("display_name") && e["display_name"].is_string()) {
+                    std::string t = e["display_name"].get<std::string>();
+                    if (!t.empty()) return t;
+                }
+                if (e.contains("spawn_id") && e["spawn_id"].is_string()) {
+                    std::string id = e["spawn_id"].get<std::string>();
+                    if (!id.empty()) return id;
+                }
+            }
+            return std::string{"Spawn Group"};
+        };
+        config->set_title(title_from(entry));
+
+        // Bind and build panel first with callbacks suppressed to avoid
+        // re-entrant rebuild loops during initial construction.
+        auto wrapped_entry_change = [this, cfg=config.get(), on_entry_change = std::move(on_entry_change), title_from](
+                                        const nlohmann::json& updated,
+                                        const SpawnGroupConfig::ChangeSummary& summary) {
+            // Update title when name changes
+            if (cfg) cfg->set_title(title_from(updated));
+            if (on_entry_change) on_entry_change(updated, summary);
+        };
         config->bind_entry(entry,
                            std::move(on_change),
-                           std::move(on_entry_change),
+                           std::move(wrapped_entry_change),
                            std::move(entry_callbacks),
                            std::move(final_configure_entry));
-        config->append_rows(rows);
+        // When the panel layout changes (collapse/expand), request a relayout
+        config->set_on_layout_changed([this]() { this->request_rebuild(); });
 
         spawn_group_config_ids_.push_back(id);
         spawn_group_configs_.push_back(std::move(config));
@@ -756,7 +753,7 @@ void RoomConfigurator::rebuild_spawn_rows(Rows& rows) {
 };
             auto on_entry_change = [this](const nlohmann::json&, const SpawnGroupConfig::ChangeSummary&) {
                 if (room_) room_->save_assets_json();
-                this->rebuild_rows();
+                this->request_rebuild();
 };
             bind_spawn_entry(entry, configure_entry, std::move(on_change), std::move(on_entry_change));
         }
@@ -774,7 +771,7 @@ void RoomConfigurator::rebuild_spawn_rows(Rows& rows) {
                 if (!external_room_json_) return;
                 if (on_external_spawn_entry_change_) on_external_spawn_entry_change_(updated, summary);
                 if (on_external_spawn_change_) on_external_spawn_change_();
-                this->rebuild_rows();
+                this->request_rebuild();
 };
             bind_spawn_entry(entry, external_configure_entry_, std::move(on_change), std::move(on_entry_change));
         }
@@ -786,24 +783,12 @@ void RoomConfigurator::rebuild_spawn_rows(Rows& rows) {
         nlohmann::json& groups = devmode::spawn::ensure_spawn_groups_array(root);
         for (auto& entry : groups) {
             have_groups = true;
-            auto on_change = [this]() { this->rebuild_rows(); };
-            auto on_entry_change = [this](const nlohmann::json&, const SpawnGroupConfig::ChangeSummary&) { this->rebuild_rows(); };
+            auto on_change = [this]() { this->request_rebuild(); };
+            auto on_entry_change = [this](const nlohmann::json&, const SpawnGroupConfig::ChangeSummary&) { this->request_rebuild(); };
             bind_spawn_entry(entry, {}, std::move(on_change), std::move(on_entry_change));
         }
     }
-
-    if (!have_groups) {
-        empty_spawn_label_ = std::make_unique<RoomConfiguratorSectionLabel>("No spawn groups configured.", true);
-        rows.push_back({empty_spawn_label_.get()});
-    }
-
-    if (on_spawn_add_) {
-        add_spawn_button_ = std::make_unique<DMButton>("Add Spawn Group", &DMStyles::CreateButton(), 0, DMButton::height());
-        add_spawn_widget_ = std::make_unique<ButtonWidget>(add_spawn_button_.get(), [this]() {
-            if (on_spawn_add_) on_spawn_add_();
-        });
-        rows.push_back({add_spawn_widget_.get()});
-    }
+    (void)have_groups; // Panels are handled above; basic panel handles add button
 }
 
 void RoomConfigurator::rebuild_rows() {
@@ -824,6 +809,14 @@ void RoomConfigurator::rebuild_rows() {
         } while (pending_rebuild_);
         rebuild_in_progress_ = false;
         if (!pending_rebuild_) {
+            break;
+        }
+        // Failsafe: if rebuilds keep getting requested, schedule a deferred
+        // rebuild on the next tick and bail to avoid freezing.
+        static int guard_counter = 0;
+        if (++guard_counter > 8) {
+            deferred_rebuild_ = true;
+            guard_counter = 0;
             break;
         }
     }
@@ -932,6 +925,7 @@ void RoomConfigurator::rebuild_rows_internal() {
         rows.push_back({spawn_widget_.get(), inherit_widget_.get()});
     }
 
+    // Build/refresh spawn group panels (as separate dockable panels)
     rebuild_spawn_rows(rows);
 
     tags_label_ = std::make_unique<RoomConfiguratorSectionLabel>("Tags", true);
@@ -949,26 +943,49 @@ void RoomConfigurator::rebuild_rows_internal() {
     });
     rows.push_back({tag_editor_.get()});
 
+    // Optional: provide Add Spawn Group action within the basic panel
+    if (on_spawn_add_) {
+        add_spawn_button_ = std::make_unique<DMButton>("Add Spawn Group", &DMStyles::CreateButton(), 0, DMButton::height());
+        add_spawn_widget_ = std::make_unique<ButtonWidget>(add_spawn_button_.get(), [this]() {
+            if (on_spawn_add_) on_spawn_add_();
+        });
+        rows.push_back({add_spawn_widget_.get()});
+    }
+
     set_rows(rows);
+
+    // Ensure a dockable basic info panel exists and uses these rows
+    if (!basic_panel_) {
+        basic_panel_ = std::make_unique<DockableCollapsible>("Basic Room Info", false);
+        basic_panel_->set_show_header(true);
+        basic_panel_->set_close_button_enabled(false);
+        basic_panel_->set_scroll_enabled(true);
+    }
+    basic_panel_->set_rows(rows_);
 }
 
 void RoomConfigurator::update(const Input& input, int screen_w, int screen_h) {
     last_screen_w_ = screen_w;
     last_screen_h_ = screen_h;
-    container_.update(input, screen_w, screen_h);
     const bool panel_visible = container_.is_visible();
-
+    if (basic_panel_) {
+        basic_panel_->set_visible(panel_visible);
+    }
     for (auto& config : spawn_group_configs_) {
         if (!config) continue;
         config->set_visible(panel_visible);
         config->set_screen_dimensions(screen_w, screen_h);
-        config->update(input, screen_w, screen_h);
     }
+
+    container_.update(input, screen_w, screen_h);
 
     if (!state_) return;
 
     bool needs_rebuild = sync_state_from_widgets();
     if (needs_rebuild) {
+        rebuild_rows();
+    } else if (deferred_rebuild_) {
+        deferred_rebuild_ = false;
         rebuild_rows();
     }
 }
@@ -1119,11 +1136,17 @@ bool RoomConfigurator::sync_state_from_widgets() {
 bool RoomConfigurator::handle_event(const SDL_Event& e) {
     bool used = false;
     if (container_.is_visible()) {
+        // Close on ESC
+        if (e.type == SDL_KEYDOWN && e.key.keysym.sym == SDLK_ESCAPE) {
+            close();
+            return true;
+        }
         used = container_.handle_event(e);
-    }
-    for (auto& config : spawn_group_configs_) {
-        if (config && config->handle_event(e)) {
-            used = true;
+        if (basic_panel_ && basic_panel_->handle_event(e)) used = true;
+        for (auto& config : spawn_group_configs_) {
+            if (config && config->handle_event(e)) {
+                used = true;
+            }
         }
     }
     return used;
@@ -1252,5 +1275,10 @@ void RoomConfigurator::set_spawn_area_open_callback(
             config->refresh_row_configuration();
         }
     }
+}
+
+
+void RoomConfigurator::request_rebuild() {
+    deferred_rebuild_ = true;
 }
 

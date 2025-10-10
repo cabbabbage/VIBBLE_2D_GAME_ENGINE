@@ -138,6 +138,15 @@ void rename_room_references_in_layers(nlohmann::json& map_info,
     }
 }
 
+void room_editor_trace(const std::string& message) {
+    try {
+        std::ofstream log("dev_mode_trace.log", std::ios::app);
+        log << message << '\n';
+    } catch (...) {
+        // ignore logging failures
+    }
+}
+
 }
 
 RoomEditor::RoomEditor(Assets* owner, int screen_w, int screen_h)
@@ -235,31 +244,48 @@ void RoomEditor::set_header_visibility_callback(std::function<void(bool)> cb) {
 }
 
 void RoomEditor::set_current_room(Room* room) {
+    room_editor_trace("[RoomEditor] set_current_room begin");
+    if (room) {
+        room_editor_trace(std::string("[RoomEditor] target room -> ") + room->room_name);
+    } else {
+        room_editor_trace("[RoomEditor] target room -> <null>");
+    }
+
     const bool room_changed = (room != current_room_);
 
     if (room != current_room_) {
+        room_editor_trace("[RoomEditor] clearing active spawn group target");
         clear_active_spawn_group_target();
     }
 
     current_room_ = room;
     if (current_room_) {
+        room_editor_trace("[RoomEditor] acquiring assets_data");
         auto& assets_json = current_room_->assets_data();
+        room_editor_trace("[RoomEditor] ensuring spawn_groups array");
         auto& groups = ensure_spawn_groups_array(assets_json);
         if (sanitize_perimeter_spawn_groups(groups)) {
+            room_editor_trace("[RoomEditor] perimeter groups sanitized, saving");
             save_current_room_assets_json();
         }
     }
+    room_editor_trace("[RoomEditor] rebuilding room spawn id cache");
     rebuild_room_spawn_id_cache();
+    room_editor_trace("[RoomEditor] refreshing spawn group config UI");
     refresh_spawn_group_config_ui();
 
     if (room_cfg_ui_) {
+        room_editor_trace("[RoomEditor] opening room config UI");
         room_cfg_ui_->open(current_room_);
         refresh_room_config_visibility();
     }
 
     if (!enabled_ && room_changed && current_room_) {
+        room_editor_trace("[RoomEditor] focusing camera on room center");
         focus_camera_on_room_center();
     }
+
+    room_editor_trace("[RoomEditor] set_current_room complete");
 }
 
 void RoomEditor::set_enabled(bool enabled) {
@@ -2496,4 +2522,9 @@ void RoomEditor::save_perimeter_json(nlohmann::json& entry, int dx, int dy, int 
         }
     }
 }
+
+
+
+
+
 

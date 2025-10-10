@@ -28,6 +28,19 @@
 #include <unordered_set>
 #include <SDL.h>
 
+namespace {
+
+void dev_mode_trace(const std::string& message) {
+    try {
+        std::ofstream log("dev_mode_trace.log", std::ios::app);
+        log << message << '\n';
+    } catch (...) {
+        // Swallow logging errors; tracing must never throw.
+    }
+}
+
+}
+
 Assets::Assets(std::vector<Asset>&& loaded,
                AssetLibrary& library,
                Asset*,
@@ -400,19 +413,37 @@ void Assets::ensure_dev_controls() {
         return;
     }
 
+    const char* msg_create = "[Assets] Creating Dev Controls";
+    std::cout << msg_create << "\n";
+    dev_mode_trace(msg_create);
     dev_controls_ = new DevControls(this, screen_width, screen_height);
     if (!dev_controls_) {
+        const char* msg_fail = "[Assets] Failed to allocate Dev Controls";
+        std::cout << msg_fail << "\n";
+        dev_mode_trace(msg_fail);
         return;
     }
+    const char* msg_constructed = "[Assets] Dev Controls constructed, wiring context";
+    std::cout << msg_constructed << "\n";
+    dev_mode_trace(msg_constructed);
 
+    dev_mode_trace("[Assets] Dev Controls -> set_player");
     dev_controls_->set_player(player);
+    dev_mode_trace("[Assets] Dev Controls -> set_active_assets");
     dev_controls_->set_active_assets(filtered_active_assets);
+    dev_mode_trace("[Assets] Dev Controls -> set_current_room");
     dev_controls_->set_current_room(current_room_);
+    dev_mode_trace("[Assets] Dev Controls -> set_screen_dimensions");
     dev_controls_->set_screen_dimensions(screen_width, screen_height);
+    dev_mode_trace("[Assets] Dev Controls -> set_rooms");
     dev_controls_->set_rooms(&rooms_);
+    dev_mode_trace("[Assets] Dev Controls -> set_input");
     dev_controls_->set_input(input);
+    dev_mode_trace("[Assets] Dev Controls -> set_map_info");
     dev_controls_->set_map_info(&map_info_json_, [this]() { return on_map_light_changed(); });
+    dev_mode_trace("[Assets] Dev Controls -> set_map_context");
     dev_controls_->set_map_context(&map_info_json_, map_path_);
+    dev_mode_trace("[Assets] Dev Controls wiring complete");
 }
 
 void Assets::update_closest_assets(Asset* player, int max_count) {
@@ -614,16 +645,24 @@ void Assets::set_dev_mode(bool mode) {
     const bool changed = (dev_mode != mode);
     dev_mode = mode;
 
-    force_high_quality_rendering_ = dev_mode ? true : false;
+    // In dev mode, prefer low-quality rendering for responsiveness.
+    // This avoids creating large intermediate render targets that can stall/freeze some GPUs.
+    // When not in dev mode, use the normal (high quality) pipeline.
+    force_high_quality_rendering_ = false;
     update_scene_render_quality();
 
     if (dev_mode) {
         SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "0");
         if (changed) {
-            std::cout << "[Assets] Dev Mode enabled: keeping full render quality.\n";
-        }
+        dev_mode_trace("[Assets] Dev Mode enabled: using low-quality rendering for responsiveness.");
+        std::cout << "[Assets] Dev Mode enabled: using low-quality rendering for responsiveness.\n";
+    }
+        dev_mode_trace("[Assets] Enabling Dev Controls");
+        std::cout << "[Assets] Enabling Dev Controls\n";
         ensure_dev_controls();
         if (dev_controls_) {
+            dev_mode_trace("[Assets] Dev Controls acquired, toggling on");
+            std::cout << "[Assets] Dev Controls acquired, toggling on\n";
             dev_controls_->set_enabled(true);
             dev_controls_->set_player(player);
             dev_controls_->set_active_assets(filtered_active_assets);
@@ -636,12 +675,16 @@ void Assets::set_dev_mode(bool mode) {
             dev_controls_->resolve_current_room(current_room_);
         }
         refresh_filtered_active_assets();
+        dev_mode_trace("[Assets] Dev Controls enabled");
+        std::cout << "[Assets] Dev Controls enabled\n";
     } else {
         SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "2");
         if (changed) {
             std::cout << "[Assets] Dev Mode disabled: restoring high render quality.\n";
         }
         if (dev_controls_) {
+            dev_mode_trace("[Assets] Disabling Dev Controls");
+            std::cout << "[Assets] Disabling Dev Controls\n";
             dev_controls_->set_enabled(false);
             dev_controls_->clear_selection();
         }

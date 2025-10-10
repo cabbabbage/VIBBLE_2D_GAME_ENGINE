@@ -16,6 +16,7 @@ class Input;
 class Room;
 class TagEditorWidget;
 class SpawnGroupConfig;
+class DockableCollapsible;
 class DropdownWidget;
 class RangeSliderWidget;
 class SliderWidget;
@@ -88,6 +89,8 @@ private:
     void rebuild_rows();
     void rebuild_rows_internal();
     void rebuild_spawn_rows(Rows& rows);
+    // Request a rebuild on the next update tick to avoid re-entrant loops
+    void request_rebuild();
     void load_tags_from_json(const nlohmann::json& data);
     void write_tags_to_json(nlohmann::json& object) const;
     std::string selected_geometry() const;
@@ -105,6 +108,7 @@ private:
 
     SlidingWindowContainer container_;
     Rows rows_;
+    std::unique_ptr<DockableCollapsible> basic_panel_;
     bool show_header_ = true;
     SDL_Rect bounds_override_{0, 0, 0, 0};
     SDL_Rect work_area_{0, 0, 0, 0};
@@ -117,6 +121,7 @@ private:
     std::function<void()> on_close_{};
     bool rebuild_in_progress_ = false;
     bool pending_rebuild_ = false;
+    bool deferred_rebuild_ = false;
 
     Room* room_ = nullptr;
     nlohmann::json* external_room_json_ = nullptr;

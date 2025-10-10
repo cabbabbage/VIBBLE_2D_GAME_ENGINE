@@ -1,6 +1,8 @@
 #include "dev_controls.hpp"
 
 #include <SDL.h>
+#include <fstream>
+#include <sstream>
 
 #include "dev_mode/map_editor.hpp"
 #include "dev_mode/room_editor.hpp"
@@ -45,6 +47,15 @@ std::string to_lower_copy(std::string value) {
     std::transform(value.begin(), value.end(), value.begin(),
                    [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
     return value;
+}
+
+void dev_mode_trace(const std::string& message) {
+    try {
+        std::ofstream log("dev_mode_trace.log", std::ios::app);
+        log << message << '\n';
+    } catch (...) {
+        // Never propagate logging failures.
+    }
 }
 
 constexpr const char* kModeIdRoom = "room";
@@ -303,6 +314,9 @@ DevControls::DevControls(Assets* owner, int screen_w, int screen_h)
     : assets_(owner),
       screen_w_(screen_w),
       screen_h_(screen_h) {
+    const char* ctor_start = "[DevControls] ctor start";
+    dev_mode_trace(ctor_start);
+    std::cout << ctor_start << "\n";
     room_editor_ = std::make_unique<RoomEditor>(assets_, screen_w_, screen_h_);
     if (room_editor_) {
         room_editor_->set_room_assets_saved_callback([this]() { notify_room_area_data_changed(); });
@@ -426,6 +440,9 @@ DevControls::DevControls(Assets* owner, int screen_w, int screen_h)
         sync_header_button_states();
     });
     asset_filter_.set_filters_expanded(false);
+    const char* ctor_end = "[DevControls] ctor complete";
+    dev_mode_trace(ctor_end);
+    std::cout << ctor_end << "\n";
 }
 
 DevControls::~DevControls() = default;
@@ -477,11 +494,18 @@ void DevControls::set_screen_dimensions(int width, int height) {
 }
 
 void DevControls::set_current_room(Room* room) {
+    {
+        std::ostringstream oss;
+        oss << "[DevControls] set_current_room begin -> "
+            << (room ? room->room_name : std::string("<null>"));
+        dev_mode_trace(oss.str());
+    }
     current_room_ = room;
 
     dev_selected_room_ = room;
     if (regenerate_popup_) regenerate_popup_->close();
     if (room_editor_) {
+        dev_mode_trace("[DevControls] set_current_room -> room_editor set_current_room");
         room_editor_->set_current_room(room);
     }
     asset_filter_.set_current_room(room);
@@ -496,6 +520,7 @@ void DevControls::set_current_room(Room* room) {
     }
 
     notify_room_area_data_changed();
+    dev_mode_trace("[DevControls] set_current_room complete");
 }
 
 void DevControls::set_rooms(std::vector<Room*>* rooms) {
@@ -570,12 +595,27 @@ Room* DevControls::resolve_current_room(Room* detected_room) {
 }
 
 void DevControls::set_enabled(bool enabled) {
-    if (enabled == enabled_) return;
+    {
+        std::ostringstream oss;
+        oss << "[DevControls] set_enabled(" << (enabled ? "true" : "false") << ") begin";
+        const std::string msg = oss.str();
+        dev_mode_trace(msg);
+        std::cout << msg << "\n";
+    }
+    if (enabled == enabled_) {
+        const char* msg = "[DevControls] set_enabled unchanged, exiting";
+        dev_mode_trace(msg);
+        std::cout << msg << "\n";
+        return;
+    }
     enabled_ = enabled;
     const bool layers_panel_open = map_mode_ui_ && map_mode_ui_->is_layers_footer_visible();
     asset_filter_.set_enabled(enabled_ && !layers_panel_open);
 
     if (enabled_) {
+        const char* msg = "[DevControls] preparing enable flow";
+        dev_mode_trace(msg);
+        std::cout << msg << "\n";
         const bool camera_was_visible = camera_panel_ && camera_panel_->is_visible();
         const bool light_rays_was_visible = light_rays_panel_ && light_rays_panel_->is_visible();
         close_all_floating_panels();
@@ -599,7 +639,13 @@ void DevControls::set_enabled(bool enabled) {
         if (light_rays_was_visible && light_rays_panel_) {
             light_rays_panel_->open();
         }
+        const char* msg_enable_done = "[DevControls] enable flow complete";
+        dev_mode_trace(msg_enable_done);
+        std::cout << msg_enable_done << "\n";
     } else {
+        const char* msg_disable = "[DevControls] preparing disable flow";
+        dev_mode_trace(msg_disable);
+        std::cout << msg_disable << "\n";
         close_all_floating_panels();
         if (map_editor_ && map_editor_->is_enabled()) {
             map_editor_->exit(true, false);
@@ -618,11 +664,21 @@ void DevControls::set_enabled(bool enabled) {
         }
         close_camera_panel();
         close_light_rays_panel();
+        const char* msg_disable_done = "[DevControls] disable flow complete";
+        dev_mode_trace(msg_disable_done);
+        std::cout << msg_disable_done << "\n";
     }
 
     sync_header_button_states();
     if (enabled_) {
         asset_filter_.ensure_layout();
+    }
+    {
+        std::ostringstream oss;
+        oss << "[DevControls] set_enabled(" << (enabled ? "true" : "false") << ") done";
+        const std::string msg = oss.str();
+        dev_mode_trace(msg);
+        std::cout << msg << "\n";
     }
 }
 
