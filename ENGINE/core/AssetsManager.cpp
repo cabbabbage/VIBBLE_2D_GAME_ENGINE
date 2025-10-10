@@ -618,10 +618,9 @@ void Assets::set_dev_mode(bool mode) {
     update_scene_render_quality();
 
     if (dev_mode) {
-        std::cerr << "[Assets] set_dev_mode -> enabling dev controls (changed=" << std::boolalpha << changed << ")\n";
         SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "0");
         if (changed) {
-            std::cerr << "[Assets] Dev Mode enabled: keeping full render quality.\n";
+            std::cout << "[Assets] Dev Mode enabled: keeping full render quality.\n";
         }
         ensure_dev_controls();
         if (dev_controls_) {
