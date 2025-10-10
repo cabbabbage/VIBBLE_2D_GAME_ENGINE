@@ -91,6 +91,8 @@ class Asset {
     bool active = false;
     bool flipped = false;
     bool render_player_light = false;
+    bool generate_rays = false;
+    int ray_strength = 0;
     double alpha_percentage = 1.0;
     float distance_to_player_sq = std::numeric_limits<float>::infinity();
     float distance_from_camera = 0.0f;

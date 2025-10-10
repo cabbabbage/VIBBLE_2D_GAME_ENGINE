@@ -450,12 +450,16 @@ void AssetInfo::load_base_properties(const nlohmann::json &data) {
                 std::cout << "[AssetInfo] Player asset '" << name << "' loaded\n\n";
         }
 	start_animation = data.value("start", std::string{"default"});
-	z_threshold = data.value("z_threshold", 0);
-	passable = has_tag("passable");
+        z_threshold = data.value("z_threshold", 0);
+        passable = has_tag("passable");
         is_shaded = data.value("has_shading", false);
-	min_same_type_distance = data.value("min_same_type_distance", 0);
-	min_distance_all = data.value("min_distance_all", 0);
-	flipable = data.value("can_invert", false);
+        min_same_type_distance = data.value("min_same_type_distance", 0);
+        min_distance_all = data.value("min_distance_all", 0);
+        flipable = data.value("can_invert", false);
+        generate_rays = data.value("generate_rays", false);
+        info_json_["generate_rays"] = generate_rays;
+        ray_strength = std::clamp(data.value("ray_strength", 0), 0, 100);
+        info_json_["ray_strength"] = ray_strength;
 }
 
 bool AssetInfo::has_tag(const std::string &tag) const {
@@ -597,7 +601,13 @@ void AssetInfo::set_passable(bool v) {
         if (v)
         add_tag("passable");
         else
-	remove_tag("passable");
+        remove_tag("passable");
+}
+
+void AssetInfo::set_ray_strength(int strength) {
+        int clamped = std::clamp(strength, 0, 100);
+        ray_strength = clamped;
+        info_json_["ray_strength"] = ray_strength;
 }
 
 Area* AssetInfo::find_area(const std::string& name) {
@@ -779,6 +789,7 @@ void AssetInfo::set_lighting(bool is_shaded_,
         shade_entry["offset_y"] = base_off_y;
         shade_entry["factor"] = shading_factor;
         shade_entry["apex_speed_bias"] = shading.apex_speed_bias;
+        shade_entry["behind"] = shading.behind;
     } else {
         shade_entry["light_intensity"] = 0;
         shade_entry["radius"] = 0;
@@ -789,6 +800,7 @@ void AssetInfo::set_lighting(bool is_shaded_,
         shade_entry["offset_y"] = 0;
         shade_entry["factor"] = shading_factor;
         shade_entry["apex_speed_bias"] = shading.apex_speed_bias;
+        shade_entry["behind"] = shading.behind;
     }
     arr.push_back(shade_entry);
 
@@ -803,6 +815,7 @@ void AssetInfo::set_lighting(bool is_shaded_,
         j["offset_x"] = l.offset_x;
         j["offset_y"] = l.offset_y;
         j["light_color"] = { l.color.r, l.color.g, l.color.b };
+        j["behind"] = l.behind;
         arr.push_back(std::move(j));
     }
     info_json_["has_shading"] = is_shaded;

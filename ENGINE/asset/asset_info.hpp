@@ -57,6 +57,8 @@ class AssetInfo {
     std::vector<std::string> anti_tags;
     bool is_light_source = false;
     bool moving_asset = false;
+    bool generate_rays = false;
+    int ray_strength = 0;
     struct NamedArea {
         struct RenderFrame {
             int width = 0;
@@ -107,6 +109,7 @@ class AssetInfo {
     void set_children(const std::vector<ChildInfo>& children);
 
     void set_lighting(bool is_shaded, const LightSource& shading, int shading_factor, const std::vector<LightSource>& lights);
+    void set_ray_strength(int strength);
 
     std::string info_json_path() const { return info_json_path_; }
     std::string asset_dir_path() const { return dir_path_; }

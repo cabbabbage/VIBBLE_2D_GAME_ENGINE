@@ -8,8 +8,9 @@
 
 #include <nlohmann/json.hpp>
 
-#include "DockableCollapsible.hpp"
-#include "spawn_group_list.hpp"
+#include "SlidingWindowContainer.hpp"
+#include "widgets.hpp"
+#include "spawn_group_lists/spawn_group_list.hpp"
 
 class Input;
 class Room;
@@ -26,12 +27,16 @@ class DMCheckbox;
 class DMTextBox;
 class DMDropdown;
 
-class RoomConfigurator : public DockableCollapsible {
+class RoomConfigurator {
 public:
     RoomConfigurator();
-    ~RoomConfigurator() override;
+    ~RoomConfigurator();
 
     void set_bounds(const SDL_Rect& bounds);
+    void set_work_area(const SDL_Rect& bounds);
+    void set_show_header(bool show);
+    void set_on_close(std::function<void()> cb);
+    void set_header_visibility_controller(std::function<void(bool)> cb);
 
     void open(const nlohmann::json& room_data);
     void open(nlohmann::json& room_data,
@@ -48,12 +53,14 @@ public:
     bool visible() const;
     bool any_panel_visible() const;
 
-    void update(const Input& input, int screen_w, int screen_h) override;
-    bool handle_event(const SDL_Event& e) override;
-    void render(SDL_Renderer* r) const override;
+    void update(const Input& input, int screen_w, int screen_h);
+    bool handle_event(const SDL_Event& e);
+    void render(SDL_Renderer* r) const;
+
+    const SDL_Rect& panel_rect() const;
 
     nlohmann::json build_json() const;
-    bool is_point_inside(int x, int y) const override;
+    bool is_point_inside(int x, int y) const;
 
     void set_spawn_group_callbacks(std::function<void(const std::string&)> on_edit,
                                    std::function<void(const std::string&)> on_duplicate,
@@ -70,8 +77,9 @@ public:
 private:
     struct State;
 
-    void apply_bounds_if_needed();
-    void undock_from_sidebar(const SDL_Point& grab_point);
+    using Row = std::vector<Widget*>;
+    using Rows = std::vector<Row>;
+
     bool apply_room_data(const nlohmann::json& data);
     void rebuild_rows();
     void rebuild_spawn_rows(Rows& rows);
@@ -82,22 +90,31 @@ private:
     void ensure_spawn_list();
     const nlohmann::json& live_room_json() const;
     nlohmann::json& live_room_json();
-
-    static constexpr int kMaxFloatingHeight = 640;
-
-    SDL_Rect bounds_{0, 0, 0, 0};
-    SDL_Rect applied_bounds_{-1, -1, 0, 0};
-    SDL_Point preferred_position_{32, 32};
-    SDL_Point floating_position_{32, 32};
-    bool has_custom_position_ = false;
-    bool docked_mode_ = false;
+    void set_rows(Rows rows);
+    int layout_content(const SlidingWindowContainer::LayoutContext& ctx) const;
+    Rows compute_layout_rows() const;
+    SDL_Rect clamp_to_work_area(const SDL_Rect& bounds) const;
+    void handle_container_closed();
+    void reset_scroll();
 
     std::unique_ptr<State> state_;
+
+    SlidingWindowContainer container_;
+    Rows rows_;
+    bool show_header_ = true;
+    SDL_Rect bounds_override_{0, 0, 0, 0};
+    SDL_Rect work_area_{0, 0, 0, 0};
+    bool has_bounds_override_ = false;
+    int cell_width_ = 0;
+    int row_gap_ = 0;
+    int col_gap_ = 0;
+    int last_screen_w_ = 0;
+    int last_screen_h_ = 0;
+    std::function<void()> on_close_{};
 
     Room* room_ = nullptr;
     nlohmann::json* external_room_json_ = nullptr;
     nlohmann::json loaded_json_;
-    bool spawn_groups_from_assets_ = false;
     bool is_trail_context_ = false;
 
     std::vector<std::string> geometry_options_;

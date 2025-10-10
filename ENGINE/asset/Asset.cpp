@@ -55,7 +55,15 @@ Asset::Asset(std::shared_ptr<AssetInfo> info_,
 	set_flip();
 	set_z_index();
         if (info) {
-                try { is_shaded = info->is_shaded; } catch (...) { is_shaded = false; }
+                try {
+                        is_shaded = info->is_shaded;
+                        generate_rays = info->generate_rays;
+                        ray_strength = info->ray_strength;
+                } catch (...) {
+                        is_shaded = false;
+                        generate_rays = false;
+                        ray_strength = 0;
+                }
         }
         std::string start_id = info->start_animation.empty() ? std::string{"default"} : info->start_animation;
         auto it = info->animations.find(start_id);
@@ -107,6 +115,8 @@ Asset::Asset(const Asset& o)
 , active(o.active)
 , flipped(o.flipped)
 , render_player_light(o.render_player_light)
+, generate_rays(o.generate_rays)
+, ray_strength(o.ray_strength)
 , alpha_percentage(o.alpha_percentage)
 , distance_to_player_sq(o.distance_to_player_sq)
 , distance_from_camera(o.distance_from_camera)
@@ -153,7 +163,9 @@ Asset& Asset::operator=(const Asset& o) {
 	z_offset             = o.z_offset;
 	active               = o.active;
 	flipped              = o.flipped;
-	render_player_light  = o.render_player_light;
+        render_player_light  = o.render_player_light;
+        generate_rays        = o.generate_rays;
+        ray_strength         = o.ray_strength;
 	alpha_percentage     = o.alpha_percentage;
         distance_to_player_sq = o.distance_to_player_sq;
         distance_from_camera = o.distance_from_camera;
@@ -242,12 +254,15 @@ SDL_Texture* Asset::get_current_frame() const {
         auto iti = info->animations.find(current_animation);
         if (iti == info->animations.end()) return nullptr;
 
-        const Animation& anim = iti->second;
+        Animation& anim = const_cast<Animation&>(iti->second);
 
         int idx_anim = anim.index_of(current_frame);
         if (idx_anim < 0) {
-
-            const_cast<Asset*>(this)->current_frame = const_cast<AnimationFrame*>(anim.frames_data.empty() ? nullptr : &anim.frames_data[0]);
+            std::size_t path_index = 0;
+            if (anim_) {
+                path_index = anim_->path_index_for(current_animation);
+            }
+            const_cast<Asset*>(this)->current_frame = anim.get_first_frame(path_index);
             const_cast<Asset*>(this)->frame_progress = 0.0f;
         }
 
@@ -272,15 +287,21 @@ void Asset::update() {
             auto def = info->animations.find("default");
             if (def == info->animations.end()) def = info->animations.begin();
             if (def != info->animations.end()) {
-                current_animation = def->first;
-                current_frame     = def->second.get_first_frame();
-                frame_progress    = 0.0f;
-                static_frame      = def->second.is_static();
+                if (anim_) {
+                    anim_->set_animation_now(def->first);
+                } else {
+                    current_animation = def->first;
+                    Animation& anim   = def->second;
+                    current_frame     = anim.get_first_frame();
+                    frame_progress    = 0.0f;
+                    static_frame      = anim.is_static();
+                }
             }
         } else {
             Animation& anim = iti->second;
             if (anim.index_of(current_frame) < 0) {
-                current_frame = anim.get_first_frame();
+                std::size_t path_index = anim_ ? anim_->path_index_for(current_animation) : 0;
+                current_frame = anim.get_first_frame(path_index);
                 frame_progress = 0.0f;
                 static_frame = anim.is_static();
             }

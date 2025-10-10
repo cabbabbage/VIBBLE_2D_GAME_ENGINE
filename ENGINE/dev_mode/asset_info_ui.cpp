@@ -7,7 +7,6 @@
 #include <filesystem>
 #include <fstream>
 #include <SDL_log.h>
-#include <SDL_ttf.h>
 #include <stdexcept>
 #include <vector>
 
@@ -20,6 +19,7 @@
 #include "widgets.hpp"
 
 #include "DockableCollapsible.hpp"
+#include "SlidingWindowContainer.hpp"
 #include "dm_styles.hpp"
 #include "asset_sections/Section_BasicInfo.hpp"
 #include "asset_sections/Section_Tags.hpp"
@@ -27,41 +27,12 @@
 #include "asset_sections/Section_Spacing.hpp"
 #include "asset_sections/Section_SpawnGroups.hpp"
 #include "asset_sections/animation_editor_window/AnimationEditorWindow.hpp"
-#include "widgets.hpp"
 #include "core/AssetsManager.hpp"
 #include "asset/Asset.hpp"
 #include "render/camera.hpp"
 #include "render/global_light_source.hpp"
 #include "utils/light_source.hpp"
 #include "search_assets.hpp"
-
-namespace {
-
-constexpr int kScrollbarWidth = 10;
-constexpr int kScrollbarGap = 6;
-constexpr int kScrollbarTrackMargin = 4;
-
-void render_label_text(SDL_Renderer* renderer, const std::string& text, int x, int y) {
-    if (!renderer || text.empty()) return;
-    const DMLabelStyle& style = DMStyles::Label();
-    TTF_Font* font = style.open_font();
-    if (!font) return;
-    SDL_Surface* surf = TTF_RenderUTF8_Blended(font, text.c_str(), style.color);
-    if (!surf) {
-        TTF_CloseFont(font);
-        return;
-    }
-    SDL_Texture* tex = SDL_CreateTextureFromSurface(renderer, surf);
-    if (tex) {
-        SDL_Rect dst{x, y, surf->w, surf->h};
-        SDL_RenderCopy(renderer, tex, nullptr, &dst);
-        SDL_DestroyTexture(tex);
-    }
-    SDL_FreeSurface(surf);
-    TTF_CloseFont(font);
-}
-
-}
 
 namespace {
 
@@ -215,14 +186,63 @@ AssetInfoUI::AssetInfoUI() {
         }
     });
     animation_editor_window_ = std::make_unique<animation_editor::AnimationEditorWindow>();
+
+    container_.set_header_text_provider([this]() {
+        return info_ ? info_->name : std::string();
+    });
+
+    container_.set_layout_function([this](const SlidingWindowContainer::LayoutContext& ctx) {
+        int y = ctx.content_top;
+        for (auto& section : sections_) {
+            section->set_rect(SDL_Rect{ctx.content_x, y - ctx.scroll_value, ctx.content_width, 0});
+            y += section->height() + ctx.gap;
+        }
+        if (configure_btn_widget_) {
+            configure_btn_widget_->set_rect(SDL_Rect{ctx.content_x, y - ctx.scroll_value, ctx.content_width, DMButton::height()});
+            y += DMButton::height() + ctx.gap;
+        }
+        return y;
+    });
+
+    container_.set_render_function([this](SDL_Renderer* renderer) {
+        for (auto& section : sections_) section->render(renderer);
+        if (configure_btn_) configure_btn_->render(renderer);
+    });
+
+    container_.set_update_function([this](const Input& input, int screen_w, int screen_h) {
+        for (auto& section : sections_) section->update(input, screen_w, screen_h);
+        for (size_t i = 0; i < sections_.size(); ++i) {
+            if (sections_[i]->is_expanded()) {
+                for (size_t j = 0; j < sections_.size(); ++j) {
+                    if (i != j) sections_[j]->set_expanded(false);
+                }
+                break;
+            }
+        }
+    });
+
+    container_.set_event_function([this](const SDL_Event& e) {
+        for (auto& section : sections_) {
+            if (section->handle_event(e)) return true;
+        }
+        if (configure_btn_widget_ && configure_btn_widget_->handle_event(e)) {
+            return true;
+        }
+        return false;
+    });
 }
 
 AssetInfoUI::~AssetInfoUI() {
     apply_camera_override(false);
+    sync_map_light_panel_visibility(false);
 }
 
 void AssetInfoUI::set_assets(Assets* a) {
     if (assets_ == a) return;
+    if (map_light_panel_auto_opened_ && assets_) {
+        assets_->set_map_light_panel_visible(false);
+        map_light_panel_auto_opened_ = false;
+    }
     if (camera_override_active_) {
         apply_camera_override(false);
     }
@@ -234,9 +254,7 @@ void AssetInfoUI::set_assets(Assets* a) {
 
 void AssetInfoUI::set_info(const std::shared_ptr<AssetInfo>& info) {
     info_ = info;
-    scroll_ = 0;
-    scroll_dragging_ = false;
-    scrollbar_dragging_ = false;
+    container_.reset_scroll();
     if (asset_selector_) asset_selector_->close();
     if (animation_editor_window_) animation_editor_window_->set_info(info_);
     for (auto& s : sections_) {
@@ -247,10 +265,9 @@ void AssetInfoUI::set_info(const std::shared_ptr<AssetInfo>& info) {
 }
 
 void AssetInfoUI::clear_info() {
+    sync_map_light_panel_visibility(false);
     info_.reset();
-    scroll_ = 0;
-    scroll_dragging_ = false;
-    scrollbar_dragging_ = false;
+    container_.reset_scroll();
     if (asset_selector_) asset_selector_->close();
     if (animation_editor_window_) {
         animation_editor_window_->clear_info();
@@ -266,6 +283,7 @@ void AssetInfoUI::clear_info() {
 
 void AssetInfoUI::open()  {
     visible_ = true;
+    container_.open();
     apply_camera_override(true);
     for (auto& s : sections_) s->set_expanded(false);
 }
@@ -273,8 +291,8 @@ void AssetInfoUI::close() {
     if (!visible_) return;
     apply_camera_override(false);
     visible_ = false;
-    scroll_dragging_ = false;
-    scrollbar_dragging_ = false;
+    container_.close();
+    sync_map_light_panel_visibility(false);
     if (animation_editor_window_) animation_editor_window_->set_visible(false);
     if (asset_selector_) asset_selector_->close();
 }
@@ -287,113 +305,14 @@ void AssetInfoUI::toggle(){
 }
 
 void AssetInfoUI::layout_widgets(int screen_w, int screen_h) const {
-    int panel_x = (screen_w * 2) / 3;
-    int panel_w = screen_w - panel_x;
-    panel_ = SDL_Rect{ panel_x, 0, panel_w, screen_h };
-    int editor_width = panel_.x;
+    container_.prepare_layout(screen_w, screen_h);
+    const SDL_Rect& panel = container_.panel_rect();
+    int editor_width = panel.x;
     int editor_height = screen_h;
     if (editor_width <= 0 || editor_height <= 0) {
         animation_editor_rect_ = SDL_Rect{0, 0, 0, 0};
     } else {
         animation_editor_rect_ = SDL_Rect{0, 0, editor_width, editor_height};
-    }
-    const int padding = DMSpacing::panel_padding();
-    const int gap = DMSpacing::section_gap();
-    const int content_x = panel_.x + padding;
-    const int base_content_w = std::max(0, panel_.w - 2 * padding);
-    const int content_top = panel_.y + padding;
-
-    const int label_height = DMButton::height();
-    const int label_gap = DMSpacing::item_gap();
-    name_label_rect_ = SDL_Rect{ content_x, content_top, base_content_w, label_height };
-    int scroll_start = content_top + label_height + label_gap;
-
-    int content_w_active = base_content_w;
-
-    auto layout_with_scroll = [&](int scroll_value, int content_width) {
-        int y = scroll_start;
-        for (auto& s : sections_) {
-            s->set_rect(SDL_Rect{ content_x, y - scroll_value, content_width, 0 });
-            y += s->height() + gap;
-        }
-        if (configure_btn_widget_) {
-            configure_btn_widget_->set_rect(SDL_Rect{ content_x, y - scroll_value, content_width, DMButton::height() });
-            y += DMButton::height() + gap;
-        }
-        return y;
-};
-
-    int end_y = layout_with_scroll(scroll_, content_w_active);
-    int content_height = end_y - scroll_start;
-    int visible_height = panel_.h - padding - label_height - label_gap;
-    max_scroll_ = std::max(0, content_height - std::max(0, visible_height));
-    if (max_scroll_ > 0) {
-        const int scroll_space = kScrollbarWidth + kScrollbarGap;
-        int adjusted_content_w = std::max(0, base_content_w - scroll_space);
-        if (adjusted_content_w != content_w_active) {
-            content_w_active = adjusted_content_w;
-            end_y = layout_with_scroll(scroll_, content_w_active);
-            content_height = end_y - scroll_start;
-            visible_height = panel_.h - padding - label_height - label_gap;
-            max_scroll_ = std::max(0, content_height - std::max(0, visible_height));
-        }
-    } else {
-        content_w_active = base_content_w;
-    }
-
-    int clamped = std::max(0, std::min(max_scroll_, scroll_));
-    if (clamped != scroll_) {
-        scroll_ = clamped;
-        end_y = layout_with_scroll(scroll_, content_w_active);
-        content_height = end_y - scroll_start;
-        visible_height = panel_.h - padding - label_height - label_gap;
-        max_scroll_ = std::max(0, content_height - std::max(0, visible_height));
-    }
-
-    content_height_px_ = std::max(0, content_height);
-    visible_height_px_ = std::max(0, visible_height);
-
-    const int visible_area_h = std::max(0, visible_height);
-    const int clip_h = std::max(0, std::min(content_height, visible_area_h));
-    const int clip_w = std::max(0, content_w_active);
-    const int scroll_top = scroll_start;
-    content_clip_rect_ = SDL_Rect{ content_x, scroll_top, clip_w, clip_h > 0 ? clip_h : visible_area_h };
-
-    scroll_region_ = SDL_Rect{
-        panel_.x,
-        scroll_top,
-        panel_.w,
-        visible_area_h };
-
-    if (max_scroll_ == 0) {
-        scroll_dragging_ = false;
-        scrollbar_dragging_ = false;
-        scroll_track_rect_ = SDL_Rect{0,0,0,0};
-        scroll_thumb_rect_ = SDL_Rect{0,0,0,0};
-    } else {
-        const int track_x = panel_.x + panel_.w - padding - kScrollbarWidth;
-        const int track_y = scroll_region_.y + kScrollbarTrackMargin;
-        const int track_h = std::max(0, scroll_region_.h - 2 * kScrollbarTrackMargin);
-        scroll_track_rect_ = SDL_Rect{ track_x, track_y, kScrollbarWidth, track_h };
-        if (track_h <= 0) {
-            scrollbar_dragging_ = false;
-            scroll_thumb_rect_ = SDL_Rect{ track_x, track_y, kScrollbarWidth, 0 };
-        } else if (content_height_px_ > 0 && visible_height_px_ > 0) {
-            int thumb_h = static_cast<int>(std::round(static_cast<double>(track_h) * visible_height_px_ /
-                                                      std::max(visible_height_px_, content_height_px_)));
-            thumb_h = std::clamp(thumb_h, 20, track_h);
-            int scroll_range = std::max(0, track_h - thumb_h);
-            int thumb_y = track_y;
-            if (scroll_range > 0 && max_scroll_ > 0) {
-                double ratio = static_cast<double>(scroll_) / static_cast<double>(max_scroll_);
-                thumb_y = track_y + static_cast<int>(std::round(ratio * scroll_range));
-            }
-            thumb_y = std::clamp(thumb_y, track_y, track_y + scroll_range);
-            scroll_thumb_rect_ = SDL_Rect{ track_x, thumb_y, kScrollbarWidth, thumb_h };
-        } else {
-            scrollbar_dragging_ = false;
-            scroll_thumb_rect_ = SDL_Rect{ track_x, track_y, kScrollbarWidth, track_h };
-        }
     }
 }
 
@@ -401,7 +320,6 @@ bool AssetInfoUI::handle_event(const SDL_Event& e) {
     const bool pointer_event =
         (e.type == SDL_MOUSEBUTTONDOWN || e.type == SDL_MOUSEBUTTONUP || e.type == SDL_MOUSEMOTION);
     const bool wheel_event = (e.type == SDL_MOUSEWHEEL);
-    const bool slider_capture_active = DMWidgetsSliderScrollCaptured();
     SDL_Point pointer{0, 0};
     if (pointer_event) {
         pointer.x = (e.type == SDL_MOUSEMOTION) ? e.motion.x : e.button.x;
@@ -442,126 +360,12 @@ bool AssetInfoUI::handle_event(const SDL_Event& e) {
 
     if (!info_) return false;
 
-    // Give sections (and any floating overlays they manage) first chance to
-    // consume the event before we enforce pointer bounds. This allows floating
-    // panels like the Spawn Groups editor to remain interactive even when they
-    // extend outside the main asset info panel.
-    for (auto& s : sections_) {
-        if (s->handle_event(e)) return true;
-    }
-
-    if (wheel_event && slider_capture_active) {
-        return true;
-    }
-
-    bool pointer_inside = false;
-    bool pointer_inside_panel = false;
-    if (pointer_event) {
-        pointer_inside_panel = SDL_PointInRect(&pointer, &panel_);
-        pointer_inside = pointer_inside_panel;
-        if (!pointer_inside && !scroll_dragging_ && !scrollbar_dragging_) {
-            return false;
-        }
-    } else if (wheel_event) {
-        int mx = 0;
-        int my = 0;
-        SDL_GetMouseState(&mx, &my);
-        SDL_Point p{mx, my};
-        pointer_inside = SDL_PointInRect(&p, &scroll_region_);
-        pointer_inside_panel = SDL_PointInRect(&p, &panel_);
-        if (!pointer_inside && !pointer_inside_panel) {
-            return false;
-        }
-    }
-
-    if (wheel_event) {
-        if (slider_capture_active) {
-            return true;
-        }
-        scroll_ -= e.wheel.y * 40;
-        scroll_ = std::max(0, std::min(max_scroll_, scroll_));
-        return true;
-    }
-
-    if (pointer_event && e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
-        bool handled = false;
-        if (scroll_dragging_) {
-            scroll_dragging_ = false;
-            handled = true;
-        }
-        if (scrollbar_dragging_) {
-            scrollbar_dragging_ = false;
-            handled = true;
-        }
-        if (handled) return true;
-    }
-
-    if (pointer_event && e.type == SDL_MOUSEMOTION) {
-        if (scrollbar_dragging_ && max_scroll_ > 0) {
-            int thumb_h = scroll_thumb_rect_.h;
-            int track_h = scroll_track_rect_.h;
-            if (track_h > 0 && thumb_h > 0) {
-                int min_thumb_y = scroll_track_rect_.y;
-                int max_thumb_y = scroll_track_rect_.y + std::max(0, track_h - thumb_h);
-                int new_thumb_y = pointer.y - scrollbar_drag_offset_;
-                new_thumb_y = std::clamp(new_thumb_y, min_thumb_y, max_thumb_y);
-                int range = std::max(0, max_thumb_y - min_thumb_y);
-                double ratio = (range > 0) ? static_cast<double>(new_thumb_y - min_thumb_y) / static_cast<double>(range) : 0.0;
-                scroll_ = std::max(0, std::min(max_scroll_, static_cast<int>(std::round(ratio * max_scroll_))));
-            }
-            return true;
-        }
-        if (scroll_dragging_) {
-            int dy = pointer.y - scroll_drag_anchor_y_;
-            scroll_ = std::max(0, std::min(max_scroll_, scroll_drag_start_scroll_ - dy));
-            return true;
-        }
-    }
-
     if (e.type == SDL_KEYDOWN && e.key.keysym.sym == SDLK_ESCAPE) {
         close();
         return true;
     }
 
-    if (configure_btn_widget_ && configure_btn_widget_->handle_event(e)) {
-        return true;
-    }
-
-    if (pointer_event && e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
-        if (max_scroll_ > 0) {
-            if (SDL_PointInRect(&pointer, &scroll_thumb_rect_)) {
-                scrollbar_dragging_ = true;
-                scrollbar_drag_offset_ = pointer.y - scroll_thumb_rect_.y;
-                return true;
-            }
-            if (SDL_PointInRect(&pointer, &scroll_track_rect_)) {
-                int thumb_h = scroll_thumb_rect_.h;
-                int track_h = scroll_track_rect_.h;
-                if (track_h > 0 && thumb_h > 0) {
-                    int min_thumb_y = scroll_track_rect_.y;
-                    int max_thumb_y = scroll_track_rect_.y + std::max(0, track_h - thumb_h);
-                    int desired = pointer.y - thumb_h / 2;
-                    desired = std::clamp(desired, min_thumb_y, max_thumb_y);
-                    int range = std::max(0, max_thumb_y - min_thumb_y);
-                    if (range > 0 && max_scroll_ > 0) {
-                        double ratio = static_cast<double>(desired - min_thumb_y) / static_cast<double>(range);
-                        scroll_ = std::max(0, std::min(max_scroll_, static_cast<int>(std::round(ratio * max_scroll_))));
-                    }
-                }
-                scrollbar_dragging_ = true;
-                scrollbar_drag_offset_ = scroll_thumb_rect_.h / 2;
-                return true;
-            }
-        }
-        if (max_scroll_ > 0 && SDL_PointInRect(&pointer, &scroll_region_)) {
-            scroll_dragging_ = true;
-            scroll_drag_anchor_y_ = pointer.y;
-            scroll_drag_start_scroll_ = scroll_;
-            return true;
-        }
-    }
-
-    if (pointer_inside_panel || scroll_dragging_ || scrollbar_dragging_) {
+    if (container_.handle_event(e)) {
         return true;
     }
 
@@ -578,47 +382,25 @@ void AssetInfoUI::update(const Input& input, int screen_w, int screen_h) {
         }
     }
 
+    bool want_map_light_panel = false;
+    if (visible_ && info_ && lighting_section_ && lighting_section_->is_expanded()) {
+        want_map_light_panel = lighting_section_->shading_source_enabled();
+    }
+    sync_map_light_panel_visibility(want_map_light_panel);
+
     if (!visible_ || !info_) return;
 
     if (asset_selector_ && asset_selector_->visible()) {
         asset_selector_->update(input);
+        const SDL_Rect& panel = container_.panel_rect();
         int search_width = 280;
-        int search_x = panel_.x - search_width - DMSpacing::panel_padding();
+        int search_x = panel.x - search_width - DMSpacing::panel_padding();
         if (search_x < DMSpacing::panel_padding()) search_x = DMSpacing::panel_padding();
-        int search_y = panel_.y + DMSpacing::panel_padding();
+        int search_y = panel.y + DMSpacing::panel_padding();
         asset_selector_->set_position(search_x, search_y);
     }
 
-    int mx = input.getX();
-    int my = input.getY();
-    const bool pointer_in_scroll =
-        (mx >= scroll_region_.x && mx < scroll_region_.x + scroll_region_.w &&
-         my >= scroll_region_.y && my < scroll_region_.y + scroll_region_.h);
-    const bool pointer_in_panel_area =
-        (mx >= panel_.x && mx < panel_.x + panel_.w &&
-         my >= panel_.y && my < panel_.y + panel_.h);
-    if ((pointer_in_scroll || pointer_in_panel_area) && !DMWidgetsSliderScrollCaptured()) {
-        int dy = input.getScrollY();
-        if (dy != 0) {
-            scroll_ -= dy * 40;
-            scroll_ = std::max(0, std::min(max_scroll_, scroll_));
-        }
-    }
-
-    for (auto& s : sections_) s->update(input, screen_w, screen_h);
-
-    for (size_t i = 0; i < sections_.size(); ++i) {
-        if (sections_[i]->is_expanded()) {
-            for (size_t j = 0; j < sections_.size(); ++j) {
-                if (i != j) sections_[j]->set_expanded(false);
-            }
-            break;
-        }
-    }
-
-    if (pulse_frames_ > 0) {
-        --pulse_frames_;
-    }
+    container_.update(input, screen_w, screen_h);
 
     layout_widgets(screen_w, screen_h);
 
@@ -636,66 +418,15 @@ void AssetInfoUI::render(SDL_Renderer* r, int screen_w, int screen_h) const {
         animation_editor_window_->render(r);
     }
 
-    if (!info_) return;
-
-    SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
-    SDL_Color bg = DMStyles::PanelBG();
-    SDL_SetRenderDrawColor(r, bg.r, bg.g, bg.b, bg.a);
-    SDL_RenderFillRect(r, &panel_);
-
-    if (info_) {
-        render_label_text(r, info_->name, name_label_rect_.x, name_label_rect_.y);
-    }
-
-    if (pulse_frames_ > 0) {
-        Uint8 alpha = static_cast<Uint8>(std::clamp(pulse_frames_ * 12, 0, 180));
-        SDL_Rect header_rect{panel_.x, panel_.y, panel_.w, DMButton::height()};
-        const SDL_Color accent = DMStyles::AccentButton().hover_bg;
-        SDL_SetRenderDrawColor(r, accent.r, accent.g, accent.b, alpha);
-        SDL_RenderFillRect(r, &header_rect);
-    }
-
-    SDL_Rect prev_clip;
-    SDL_RenderGetClipRect(r, &prev_clip);
-#if SDL_VERSION_ATLEAST(2,0,4)
-    const SDL_bool was_clipping = SDL_RenderIsClipEnabled(r);
-#else
-    const SDL_bool was_clipping = (prev_clip.w != 0 || prev_clip.h != 0) ? SDL_TRUE : SDL_FALSE;
-#endif
-    SDL_Rect panel_clip = panel_;
-    SDL_RenderSetClipRect(r, &panel_clip);
-
-    SDL_Rect content_clip = content_clip_rect_;
-    if (content_clip.w > 0 && content_clip.h > 0) {
-        SDL_Rect intersection;
-        if (SDL_IntersectRect(&panel_clip, &content_clip, &intersection) == SDL_TRUE) {
-            SDL_RenderSetClipRect(r, &intersection);
+    if (!info_) {
+        if (asset_selector_ && asset_selector_->visible()) {
+            asset_selector_->render(r);
         }
+        last_renderer_ = r;
+        return;
     }
 
-    for (auto& s : sections_) s->render(r);
-
-    if (configure_btn_) configure_btn_->render(r);
-
-    SDL_RenderSetClipRect(r, &panel_clip);
-
-    if (max_scroll_ > 0 && scroll_track_rect_.w > 0 && scroll_track_rect_.h > 0) {
-        SDL_Color track_col = DMStyles::Border();
-        SDL_SetRenderDrawColor(r, track_col.r, track_col.g, track_col.b, std::min<int>(track_col.a, 120));
-        SDL_RenderFillRect(r, &scroll_track_rect_);
-        if (scroll_thumb_rect_.h > 0) {
-            SDL_Color thumb_col = DMStyles::AccentButton().hover_bg;
-            SDL_SetRenderDrawColor(r, thumb_col.r, thumb_col.g, thumb_col.b, thumb_col.a);
-            SDL_RenderFillRect(r, &scroll_thumb_rect_);
-        }
-    }
-
-    if (was_clipping == SDL_TRUE) {
-        SDL_RenderSetClipRect(r, &prev_clip);
-    } else {
-        SDL_RenderSetClipRect(r, nullptr);
-    }
-
+    container_.render(r, screen_w, screen_h);
 
     if (asset_selector_ && asset_selector_->visible())
         asset_selector_->render(r);
@@ -704,7 +435,7 @@ void AssetInfoUI::render(SDL_Renderer* r, int screen_w, int screen_h) const {
 }
 
 void AssetInfoUI::pulse_header() {
-    pulse_frames_ = 20;
+    container_.pulse_header();
 }
 
 void AssetInfoUI::apply_camera_override(bool enable) {
@@ -854,6 +585,35 @@ void AssetInfoUI::sync_target_z_threshold() {
     target_asset_->set_z_index();
 }
 
+void AssetInfoUI::sync_map_light_panel_visibility(bool want_visible) {
+    if (!assets_) {
+        map_light_panel_auto_opened_ = false;
+        return;
+    }
+
+    bool panel_visible = assets_->is_map_light_panel_visible();
+
+    if (want_visible) {
+        if (!panel_visible) {
+            assets_->set_map_light_panel_visible(true);
+            panel_visible = assets_->is_map_light_panel_visible();
+        }
+        map_light_panel_auto_opened_ = panel_visible;
+        if (!panel_visible) {
+            map_light_panel_auto_opened_ = false;
+        }
+        return;
+    }
+
+    if (map_light_panel_auto_opened_ && panel_visible) {
+        assets_->set_map_light_panel_visible(false);
+        panel_visible = assets_->is_map_light_panel_visible();
+    }
+    if (!panel_visible) {
+        map_light_panel_auto_opened_ = false;
+    }
+}
+
 void AssetInfoUI::request_apply_section(AssetInfoSectionId section_id) {
     if (!info_) return;
     if (!asset_selector_) asset_selector_ = std::make_unique<SearchAssets>();
@@ -871,11 +631,12 @@ void AssetInfoUI::request_apply_section(AssetInfoSectionId section_id) {
         (void)apply_section_to_assets(section_id, assets);
     });
 
-    if (panel_.w > 0) {
+    const SDL_Rect& panel = container_.panel_rect();
+    if (panel.w > 0) {
         int search_width = 280;
-        int search_x = panel_.x - search_width - DMSpacing::panel_padding();
+        int search_x = panel.x - search_width - DMSpacing::panel_padding();
         if (search_x < DMSpacing::panel_padding()) search_x = DMSpacing::panel_padding();
-        int search_y = panel_.y + DMSpacing::panel_padding();
+        int search_y = panel.y + DMSpacing::panel_padding();
         asset_selector_->set_position(search_x, search_y);
     }
 }
@@ -922,6 +683,10 @@ bool AssetInfoUI::apply_section_to_assets(AssetInfoSectionId section_id, const s
     return all_success;
 }
 
+void AssetInfoUI::set_header_visibility_callback(std::function<void(bool)> cb) {
+    container_.set_header_visibility_controller(std::move(cb));
+}
+
 const char* AssetInfoUI::section_display_name(AssetInfoSectionId section_id) {
     switch (section_id) {
         case AssetInfoSectionId::BasicInfo:   return "Basic Info";
@@ -935,7 +700,7 @@ const char* AssetInfoUI::section_display_name(AssetInfoSectionId section_id) {
 bool AssetInfoUI::is_point_inside(int x, int y) const {
     if (!visible_) return false;
     SDL_Point p{ x, y };
-    if (SDL_PointInRect(&p, &panel_)) return true;
+    if (container_.is_point_inside(x, y)) return true;
     if (asset_selector_ && asset_selector_->visible() && asset_selector_->is_point_inside(x, y)) return true;
     return false;
 }

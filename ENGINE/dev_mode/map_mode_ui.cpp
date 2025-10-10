@@ -72,10 +72,32 @@ void MapModeUI::set_footer_always_visible(bool on) {
 }
 
 void MapModeUI::set_headers_suppressed(bool suppressed) {
-    if (headers_suppressed_ == suppressed) {
+    base_headers_suppressed_ = suppressed;
+    bool final_state = base_headers_suppressed_ || sliding_headers_hidden_;
+    if (headers_suppressed_ == final_state) {
         return;
     }
-    headers_suppressed_ = suppressed;
+    headers_suppressed_ = final_state;
+    ensure_panels();
+    if (headers_suppressed_) {
+        if (layers_panel_) {
+            layers_panel_->close();
+        }
+        layers_footer_visible_ = false;
+    }
+    update_footer_visibility();
+}
+
+void MapModeUI::set_sliding_headers_hidden(bool hidden) {
+    if (sliding_headers_hidden_ == hidden) {
+        return;
+    }
+    sliding_headers_hidden_ = hidden;
+    bool final_state = base_headers_suppressed_ || sliding_headers_hidden_;
+    if (headers_suppressed_ == final_state) {
+        return;
+    }
+    headers_suppressed_ = final_state;
     ensure_panels();
     if (headers_suppressed_) {
         if (layers_panel_) {
@@ -252,6 +274,9 @@ void MapModeUI::ensure_panels() {
     if (!layers_panel_) {
         layers_panel_ = std::make_unique<MapLayersPanel>(kDefaultPanelX + 64, kDefaultPanelY + 64);
         layers_panel_->set_embedded_mode(true);
+        layers_panel_->set_header_visibility_callback([this](bool visible) {
+            this->set_sliding_headers_hidden(visible);
+        });
         if (layers_controller_) {
             layers_panel_->set_controller(layers_controller_);
         }
@@ -620,6 +645,22 @@ void MapModeUI::render(SDL_Renderer* renderer) const {
 void MapModeUI::open_layers_panel() {
     ensure_panels();
     set_active_panel(PanelType::Layers);
+}
+
+void MapModeUI::open_light_panel() {
+    ensure_panels();
+    if (active_panel_ != PanelType::Lights) {
+        set_active_panel(PanelType::Lights);
+    }
+}
+
+void MapModeUI::close_light_panel() {
+    ensure_panels();
+    if (active_panel_ == PanelType::Lights) {
+        set_active_panel(PanelType::None);
+    } else if (light_panel_) {
+        light_panel_->close();
+    }
 }
 
 void MapModeUI::toggle_light_panel() {

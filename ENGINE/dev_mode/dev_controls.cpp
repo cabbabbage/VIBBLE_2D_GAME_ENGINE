@@ -307,9 +307,14 @@ DevControls::DevControls(Assets* owner, int screen_w, int screen_h)
     room_editor_ = std::make_unique<RoomEditor>(assets_, screen_w_, screen_h_);
     if (room_editor_) {
         room_editor_->set_room_assets_saved_callback([this]() { notify_room_area_data_changed(); });
+        room_editor_->set_header_visibility_callback([this](bool visible) {
+            sliding_headers_hidden_ = visible;
+            apply_header_suppression();
+        });
     }
     map_editor_ = std::make_unique<MapEditor>(assets_);
     map_mode_ui_ = std::make_unique<MapModeUI>(assets_);
+    apply_header_suppression();
     camera_panel_ = std::make_unique<CameraUIPanel>(assets_, 72, 72);
     if (camera_panel_) {
         camera_panel_->close();
@@ -675,11 +680,13 @@ void DevControls::update(const Input& input) {
     if (regenerate_popup_ && regenerate_popup_->visible()) {
         regenerate_popup_->update(input);
     }
-    const bool hide_headers = is_modal_blocking_panels();
+    const bool modal_hide = is_modal_blocking_panels();
+    modal_headers_hidden_ = modal_hide;
+    const bool hide_headers = modal_hide || sliding_headers_hidden_;
     const bool layers_panel_open = map_mode_ui_ && map_mode_ui_->is_layers_footer_visible();
     asset_filter_.set_enabled(enabled_ && !layers_panel_open);
+    apply_header_suppression();
     if (map_mode_ui_) {
-        map_mode_ui_->set_headers_suppressed(hide_headers);
         map_mode_ui_->update(input);
     }
     if (map_assets_modal_ && map_assets_modal_->visible()) {
@@ -739,12 +746,12 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
         pointer = event_point(event);
     }
 
-    const bool hide_headers = is_modal_blocking_panels();
+    const bool modal_hide = is_modal_blocking_panels();
+    modal_headers_hidden_ = modal_hide;
+    const bool hide_headers = modal_hide || sliding_headers_hidden_;
     const bool layers_panel_open = map_mode_ui_ && map_mode_ui_->is_layers_footer_visible();
     asset_filter_.set_enabled(enabled_ && !layers_panel_open);
-    if (map_mode_ui_) {
-        map_mode_ui_->set_headers_suppressed(hide_headers);
-    }
+    apply_header_suppression();
 
     auto consume = [&](bool used) {
         if (used && input_) {
@@ -1776,6 +1783,12 @@ void DevControls::pulse_modal_header() {
     }
 }
 
+void DevControls::apply_header_suppression() {
+    if (map_mode_ui_) {
+        map_mode_ui_->set_headers_suppressed(modal_headers_hidden_ || sliding_headers_hidden_);
+    }
+}
+
 void DevControls::toggle_map_assets_modal() {
     if (!assets_) return;
     if (!map_assets_modal_) {
@@ -1950,6 +1963,31 @@ void DevControls::toggle_map_light_panel() {
     }
     map_mode_ui_->toggle_light_panel();
     sync_header_button_states();
+}
+
+void DevControls::set_map_light_panel_visible(bool visible) {
+    if (!map_mode_ui_) {
+        return;
+    }
+    const bool currently_open = map_mode_ui_->is_light_panel_visible();
+    if (visible == currently_open) {
+        return;
+    }
+    if (visible) {
+        if (is_modal_blocking_panels()) {
+            pulse_modal_header();
+            sync_header_button_states();
+            return;
+        }
+        map_mode_ui_->open_light_panel();
+    } else {
+        map_mode_ui_->close_light_panel();
+    }
+    sync_header_button_states();
+}
+
+bool DevControls::is_map_light_panel_visible() const {
+    return map_mode_ui_ && map_mode_ui_->is_light_panel_visible();
 }
 
 void DevControls::toggle_camera_panel() {

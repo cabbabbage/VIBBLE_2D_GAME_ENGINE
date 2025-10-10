@@ -87,10 +87,16 @@ void MovementSummaryWidget::set_bounds(const SDL_Rect& bounds) {
     bounds_ = bounds;
 
     const int padding = kPanelPadding;
-    const int width = std::max(kButtonWidth, std::min(bounds_.w - padding * 2, kButtonWidth));
-    const int x = bounds_.x + bounds_.w - padding - width;
-    const int y = bounds_.y + bounds_.h - padding - kButtonHeight;
-    button_rect_ = SDL_Rect{x, y, width, kButtonHeight};
+    if (show_edit_button_) {
+        const int width = std::max(kButtonWidth, std::min(bounds_.w - padding * 2, kButtonWidth));
+        const int x = bounds_.x + bounds_.w - padding - width;
+        const int y = bounds_.y + bounds_.h - padding - kButtonHeight;
+        button_rect_ = SDL_Rect{x, y, width, kButtonHeight};
+    } else {
+        button_rect_ = SDL_Rect{0, 0, 0, 0};
+        button_hovered_ = false;
+        button_pressed_ = false;
+    }
 }
 
 void MovementSummaryWidget::set_edit_callback(EditCallback callback) { edit_callback_ = std::move(callback); }
@@ -100,8 +106,10 @@ int MovementSummaryWidget::preferred_height(int) const {
     const int label_height = DMStyles::Label().font_size + DMSpacing::small_gap();
     int height = padding;  // top padding
     height += label_height * 2;
-    height += DMSpacing::small_gap();
-    height += DMButton::height();
+    if (show_edit_button_) {
+        height += DMSpacing::small_gap();
+        height += DMButton::height();
+    }
     height += padding;  // bottom padding
     return height;
 }
@@ -145,28 +153,35 @@ void MovementSummaryWidget::render(SDL_Renderer* renderer) const {
     render_summary_label(renderer, "Total ΔY: " + std::to_string(static_cast<int>(std::lround(total_dy_))), text_x, text_y,
                          text_color);
 
-    const DMButtonStyle& button_style = DMStyles::AccentButton();
-    SDL_Color button_color = button_style.bg;
-    if (button_pressed_) {
-        button_color = button_style.press_bg;
-    } else if (button_hovered_) {
-        button_color = button_style.hover_bg;
+    if (show_edit_button_) {
+        const DMButtonStyle& button_style = DMStyles::AccentButton();
+        SDL_Color button_color = button_style.bg;
+        if (button_pressed_) {
+            button_color = button_style.press_bg;
+        } else if (button_hovered_) {
+            button_color = button_style.hover_bg;
+        }
+        SDL_SetRenderDrawColor(renderer, button_color.r, button_color.g, button_color.b, button_color.a);
+        SDL_RenderFillRect(renderer, &button_rect_);
+
+        SDL_SetRenderDrawColor(renderer, button_style.border.r, button_style.border.g, button_style.border.b, button_style.border.a);
+        SDL_RenderDrawRect(renderer, &button_rect_);
+
+        const std::string button_text = "Frame Editor";
+        int label_width = measure_text_width(button_style.label, button_text);
+        int label_x = button_rect_.x + (button_rect_.w - label_width) / 2;
+        label_x = std::max(label_x, button_rect_.x + 8);
+        int label_y = button_rect_.y + (button_rect_.h - button_style.label.font_size) / 2;
+        render_summary_label(renderer, button_text, label_x, label_y, button_style.text);
     }
-    SDL_SetRenderDrawColor(renderer, button_color.r, button_color.g, button_color.b, button_color.a);
-    SDL_RenderFillRect(renderer, &button_rect_);
-
-    SDL_SetRenderDrawColor(renderer, button_style.border.r, button_style.border.g, button_style.border.b, button_style.border.a);
-    SDL_RenderDrawRect(renderer, &button_rect_);
-
-    const std::string button_text = "Frame Editor";
-    int label_width = measure_text_width(button_style.label, button_text);
-    int label_x = button_rect_.x + (button_rect_.w - label_width) / 2;
-    label_x = std::max(label_x, button_rect_.x + 8);
-    int label_y = button_rect_.y + (button_rect_.h - button_style.label.font_size) / 2;
-    render_summary_label(renderer, button_text, label_x, label_y, button_style.text);
 }
 
 bool MovementSummaryWidget::handle_event(const SDL_Event& e) {
+    if (!show_edit_button_) {
+        button_hovered_ = false;
+        button_pressed_ = false;
+        return false;
+    }
     switch (e.type) {
         case SDL_MOUSEMOTION: {
             SDL_Point p{e.motion.x, e.motion.y};
@@ -209,18 +224,36 @@ bool MovementSummaryWidget::handle_event(const SDL_Event& e) {
 void MovementSummaryWidget::refresh_totals() {
     total_dx_ = 0.0f;
     total_dy_ = 0.0f;
+    show_edit_button_ = true;
 
     if (!document_ || animation_id_.empty()) {
+        set_bounds(bounds_);
         return;
     }
 
     auto payload_dump = document_->animation_payload(animation_id_);
     if (!payload_dump.has_value()) {
+        set_bounds(bounds_);
         return;
     }
 
     nlohmann::json payload = nlohmann::json::parse(*payload_dump, nullptr, false);
-    if (!payload.is_object() || !payload.contains("movement")) {
+    if (!payload.is_object()) {
+        set_bounds(bounds_);
+        return;
+    }
+
+    if (payload.contains("source") && payload["source"].is_object()) {
+        const nlohmann::json& source = payload["source"];
+        std::string kind = source.value("kind", "");
+        if (kind == "animation") {
+            show_edit_button_ = false;
+        }
+    }
+
+    set_bounds(bounds_);
+
+    if (!payload.contains("movement")) {
         return;
     }
 

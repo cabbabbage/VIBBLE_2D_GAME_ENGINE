@@ -6,22 +6,21 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <unordered_set>
 #include <vector>
 
 #include <nlohmann/json.hpp>
 
 #include "DockableCollapsible.hpp"
 
-class ButtonWidget;
-class DMButton;
 class Input;
-class Widget;
-class SearchAssets;
-class AreaLinkPanel;
 
-// SpawnGroupList now owns the full spawn group editing UI. Each row is
-// collapsible and contains the controls that were previously managed by the
-// standalone SpawnGroupsConfigPanel.
+class SpawnGroupRow;
+
+// SpawnGroupList is now a light-weight controller that manages SpawnGroupRow
+// instances backed by a JSON array. The heavy UI previously embedded in this
+// class has been extracted so the list focuses purely on coordinating row
+// lifetimes and surfacing change notifications.
 class SpawnGroupList : public DockableCollapsible {
 public:
     struct ChangeSummary {
@@ -39,9 +38,6 @@ public:
         std::function<void()> on_add;
     };
 
-    // Forward-declare internal row type for controller
-    struct EntryRow;
-
     class RowController {
     public:
         void set_ownership_label(const std::string& label, SDL_Color color);
@@ -53,8 +49,8 @@ public:
         void set_quantity_hidden(bool hidden);
 
     private:
-        explicit RowController(struct EntryRow* row) : row_(row) {}
-        struct EntryRow* row_ = nullptr;
+        explicit RowController(SpawnGroupRow* row) : row_(row) {}
+        SpawnGroupRow* row_ = nullptr;
         friend class SpawnGroupList;
     };
 
@@ -93,68 +89,39 @@ public:
     void render(SDL_Renderer* r) const override;
     void render_content(SDL_Renderer* r) const override;
 
-    // Floating usage helpers
     void open(nlohmann::json& groups, std::function<void(const nlohmann::json&)> on_save);
     void request_open_spawn_group(const std::string& id, int x, int y);
     void set_anchor(int x, int y);
     void close_asset_search();
+
 private:
-    class CandidateList;
-    struct EntryRow;
-    friend class CandidateList;
-
-    struct RowRef {
-        std::string id;
-        int index = -1;
-        bool valid() const { return !id.empty() || index >= 0; }
-    };
-
-    EntryRow* find_row(const std::string& id);
-    const EntryRow* find_row(const std::string& id) const;
-
-    void bind_row_ref(RowRef& ref, EntryRow& row);
-    EntryRow* lookup_row(RowRef& ref);
-    const EntryRow* lookup_row(const RowRef& ref) const;
-    void clear_row_ref(RowRef& ref);
-
+    void rebuild_rows();
+    void apply_configuration(SpawnGroupRow& row);
     void rebuild_layout();
-    void request_layout();
-    void notify_data_changed(EntryRow& row, bool structure_changed, bool summary_changed);
-    void ensure_asset_search();
-    void request_asset_search_open(EntryRow& row, std::function<void(const std::string&)> callback = {});
-    void open_asset_search(EntryRow& row, std::function<void(const std::string&)> callback = {});
+    const nlohmann::json* current_source() const;
 
-    void ensure_area_panel();
-    void open_area_panel(EntryRow& row);
-    void close_area_panel();
-
-    nlohmann::json* resolve_entry(EntryRow& row);
-
+private:
     bool default_floatable_mode_ = true;
     bool embedded_mode_ = false;
     bool layout_dirty_ = true;
     int screen_w_ = 1920;
     int screen_h_ = 1080;
 
-    std::vector<std::unique_ptr<EntryRow>> rows_;
+    std::vector<std::unique_ptr<SpawnGroupRow>> rows_;
     nlohmann::json* bound_array_ = nullptr;
-    nlohmann::json readonly_snapshot_;
+    nlohmann::json readonly_snapshot_{};
 
-    std::function<void()> on_change_;
-    std::function<void(const nlohmann::json&, const ChangeSummary&)> on_entry_change_;
-    ConfigureEntryCallback configure_entry_;
+    std::function<void()> on_change_{};
+    std::function<void(const nlohmann::json&, const ChangeSummary&)> on_entry_change_{};
+    ConfigureEntryCallback configure_entry_{};
     Callbacks callbacks_{};
     std::function<void()> on_layout_change_{};
-    bool suppress_layout_callback_ = false;
 
-    std::unique_ptr<SearchAssets> asset_search_;
-    std::unique_ptr<AreaLinkPanel> area_panel_;
-    std::unique_ptr<DMButton> add_group_btn_;
-    std::unique_ptr<ButtonWidget> add_group_btn_w_;
-    SDL_Point anchor_{0,0};
-    RowRef asset_search_row_ref_{};
-    RowRef area_panel_row_ref_{};
-    bool pending_asset_search_open_ = false;
-    RowRef pending_asset_search_row_ref_{};
-    std::function<void(const std::string&)> pending_asset_search_callback_{};
+    std::unordered_set<std::string> expanded_{};
+    SDL_Point anchor_{0, 0};
+    std::optional<std::string> pending_focus_id_{};
+    std::function<void(const nlohmann::json&)> pending_save_callback_{};
+
+    bool suppress_layout_change_callback_ = false;
 };
+

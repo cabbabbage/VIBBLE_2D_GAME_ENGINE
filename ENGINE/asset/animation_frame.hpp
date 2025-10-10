@@ -7,6 +7,7 @@ public:
     int dy = 0;
     bool z_resort = true;
     SDL_Color rgb{255, 255, 255, 255};
+    int frame_index = -1;
     AnimationFrame* prev = nullptr;
     AnimationFrame* next = nullptr;
     bool is_last = false;

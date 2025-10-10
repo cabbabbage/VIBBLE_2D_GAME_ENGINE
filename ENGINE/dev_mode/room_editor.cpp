@@ -211,6 +211,29 @@ void RoomEditor::set_shared_fullscreen_panel(FullScreenCollapsible* panel) {
     update_spawn_group_list_anchor();
 }
 
+void RoomEditor::set_header_visibility_callback(std::function<void(bool)> cb) {
+    header_visibility_callback_ = std::move(cb);
+    if (header_visibility_callback_) {
+        header_visibility_callback_(room_config_panel_visible_ || asset_info_panel_visible_);
+    }
+    if (room_cfg_ui_) {
+        room_cfg_ui_->set_header_visibility_controller([this](bool visible) {
+            room_config_panel_visible_ = visible;
+            if (header_visibility_callback_) {
+                header_visibility_callback_(room_config_panel_visible_ || asset_info_panel_visible_);
+            }
+        });
+    }
+    if (info_ui_) {
+        info_ui_->set_header_visibility_callback([this](bool visible) {
+            asset_info_panel_visible_ = visible;
+            if (header_visibility_callback_) {
+                header_visibility_callback_(room_config_panel_visible_ || asset_info_panel_visible_);
+            }
+        });
+    }
+}
+
 void RoomEditor::set_current_room(Room* room) {
     const bool room_changed = (room != current_room_);
 
@@ -659,7 +682,15 @@ void RoomEditor::open_asset_info_editor(const std::shared_ptr<AssetInfo>& info) 
     if (room_config_dock_open_) {
         set_room_config_visible(false);
     }
-    if (!info_ui_) info_ui_ = std::make_unique<AssetInfoUI>();
+    if (!info_ui_) {
+        info_ui_ = std::make_unique<AssetInfoUI>();
+        info_ui_->set_header_visibility_callback([this](bool visible) {
+            asset_info_panel_visible_ = visible;
+            if (header_visibility_callback_) {
+                header_visibility_callback_(room_config_panel_visible_ || asset_info_panel_visible_);
+            }
+        });
+    }
     if (info_ui_) info_ui_->set_assets(assets_);
     if (info_ui_) {
         info_ui_->clear_info();
@@ -1333,6 +1364,12 @@ void RoomEditor::ensure_room_configurator() {
         room_cfg_ui_ = std::make_unique<RoomConfigurator>();
     }
     if (room_cfg_ui_) {
+        room_cfg_ui_->set_header_visibility_controller([this](bool visible) {
+            room_config_panel_visible_ = visible;
+            if (header_visibility_callback_) {
+                header_visibility_callback_(room_config_panel_visible_ || asset_info_panel_visible_);
+            }
+        });
         room_cfg_ui_->set_bounds(room_config_bounds_);
         room_cfg_ui_->set_work_area(SDL_Rect{0, 0, screen_w_, screen_h_});
         room_cfg_ui_->set_on_close([this]() {
@@ -1799,7 +1836,7 @@ void RoomEditor::update_spawn_group_list_anchor() {
 SDL_Point RoomEditor::spawn_groups_anchor_point() const {
     SDL_Rect reference = room_config_bounds_;
     if (room_cfg_ui_) {
-        const SDL_Rect rect = room_cfg_ui_->rect();
+        const SDL_Rect rect = room_cfg_ui_->panel_rect();
         if (rect.w > 0 || rect.h > 0) {
             reference = rect;
         }

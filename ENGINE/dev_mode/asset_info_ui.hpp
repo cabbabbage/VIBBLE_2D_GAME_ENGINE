@@ -1,10 +1,12 @@
 #pragma once
 
 #include <SDL.h>
+#include <functional>
 #include <memory>
 #include <string>
 #include <vector>
 
+#include "dev_mode/SlidingWindowContainer.hpp"
 #include "dev_mode/asset_info_sections.hpp"
 
 class AssetInfo;
@@ -43,6 +45,7 @@ class AssetInfoUI {
     void refresh_target_asset_scale();
     void sync_target_z_threshold();
     void request_apply_section(AssetInfoSectionId section_id);
+    void set_header_visibility_callback(std::function<void(bool)> cb);
 
   private:
     void layout_widgets(int screen_w, int screen_h) const;
@@ -52,6 +55,7 @@ class AssetInfoUI {
     void open_area_editor(const std::string& name);
     bool apply_section_to_assets(AssetInfoSectionId section_id, const std::vector<std::string>& asset_names);
     static const char* section_display_name(AssetInfoSectionId section_id);
+    void sync_map_light_panel_visibility(bool want_visible);
 
   private:
     bool visible_ = false;
@@ -64,29 +68,16 @@ class AssetInfoUI {
     
     class Section_Lighting* lighting_section_ = nullptr;
     class Asset* target_asset_ = nullptr;
-    mutable int scroll_ = 0;
-    mutable int max_scroll_ = 0;
-    mutable SDL_Rect panel_ {0,0,0,0};
-    mutable SDL_Rect scroll_region_{0,0,0,0};
-    mutable SDL_Rect name_label_rect_{0,0,0,0};
     mutable SDL_Rect animation_editor_rect_{0,0,0,0};
-    mutable SDL_Rect content_clip_rect_{0,0,0,0};
-    mutable SDL_Rect scroll_track_rect_{0,0,0,0};
-    mutable SDL_Rect scroll_thumb_rect_{0,0,0,0};
-    mutable int content_height_px_ = 0;
-    mutable int visible_height_px_ = 0;
-    mutable bool scroll_dragging_ = false;
-    mutable bool scrollbar_dragging_ = false;
-    mutable int scroll_drag_anchor_y_ = 0;
-    mutable int scroll_drag_start_scroll_ = 0;
-    mutable int scrollbar_drag_offset_ = 0;
+
+    SlidingWindowContainer container_;
 
     mutable std::unique_ptr<class DMButton> configure_btn_;
     mutable std::unique_ptr<class ButtonWidget> configure_btn_widget_;
-    int pulse_frames_ = 0;
     bool camera_override_active_ = false;
     bool prev_camera_realism_enabled_ = false;
     bool prev_camera_parallax_enabled_ = false;
     std::unique_ptr<SearchAssets> asset_selector_;
     std::unique_ptr<animation_editor::AnimationEditorWindow> animation_editor_window_;
+    bool map_light_panel_auto_opened_ = false;
 };

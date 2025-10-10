@@ -20,8 +20,13 @@ public:
     void build() override {
         rows_.clear();
         shading_factor_ = 100;
+        s_ray_strength_.reset();
         if (!info_) return;
         shading_factor_ = std::clamp(info_->shading_factor, 1, 200);
+        if (info_->generate_rays) {
+            int strength = std::clamp(info_->ray_strength, 0, 100);
+            s_ray_strength_ = std::make_unique<DMSlider>("Ray Strength", 0, 100, strength);
+        }
         c_is_shaded_ = std::make_unique<DMCheckbox>("Has Shading", info_->is_shaded);
         shading_label_ = std::make_unique<DMButton>("Shading Source", &DMStyles::HeaderButton(), 150, DMButton::height());
         if (!info_->orbital_light_sources.empty()) {
@@ -73,6 +78,9 @@ public:
             y += h + DMSpacing::item_gap();
 };
 
+        if (s_ray_strength_) {
+            place(s_ray_strength_, DMSlider::height());
+        }
         if (c_is_shaded_) {
             place(c_is_shaded_, DMCheckbox::height());
         }
@@ -132,6 +140,9 @@ public:
         bool used = DockableCollapsible::handle_event(e);
         if (!info_ || !expanded_) return used;
         bool changed = false;
+        if (s_ray_strength_ && s_ray_strength_->handle_event(e)) {
+            changed = true;
+        }
         if (c_is_shaded_ && c_is_shaded_->handle_event(e)) {
             changed = true;
         }
@@ -229,6 +240,7 @@ public:
     }
 
     void render_content(SDL_Renderer* r) const override {
+        if (s_ray_strength_) s_ray_strength_->render(r);
         if (c_is_shaded_) c_is_shaded_->render(r);
         if (c_is_shaded_ && c_is_shaded_->value()) {
             if (shading_label_) shading_label_->render(r);
@@ -264,6 +276,12 @@ public:
     }
 
     bool shading_enabled() const { return c_is_shaded_ && c_is_shaded_->value(); }
+    bool shading_source_enabled() const {
+        if (!c_is_shaded_ || !c_is_shaded_->value()) {
+            return false;
+        }
+        return shading_light_.radius > 0 || shading_light_.x_radius > 0 || shading_light_.y_radius > 0;
+    }
     const LightSource& shading_light() const { return shading_light_; }
 
 private:
@@ -287,6 +305,13 @@ private:
         if (!info_) return;
         std::vector<LightSource> lights;
         for (const auto& r : rows_) lights.push_back(r.light);
+        if (info_) {
+            int strength = info_->ray_strength;
+            if (s_ray_strength_) {
+                strength = std::clamp(s_ray_strength_->value(), 0, 100);
+            }
+            info_->set_ray_strength(strength);
+        }
         info_->set_lighting(c_is_shaded_ ? c_is_shaded_->value() : false, shading_light_, shading_factor_, lights);
     }
 
@@ -304,6 +329,7 @@ private:
     std::unique_ptr<DMSlider> s_sh_offset_y_;
     std::unique_ptr<DMSlider> s_sh_falloff_;
     std::unique_ptr<DMSlider> s_sh_factor_;
+    std::unique_ptr<DMSlider> s_ray_strength_;
 
     std::vector<Row> rows_;
     std::unique_ptr<DMButton> b_add_;

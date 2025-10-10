@@ -112,6 +112,9 @@ public:
     void close_room_config();
     bool is_room_config_open() const;
 
+    void set_map_light_panel_visible(bool visible);
+    bool is_map_light_panel_visible() const;
+
     void begin_area_edit_for_selected_asset(const std::string& area_name);
     void focus_camera_on_asset(Asset* asset, double zoom_factor = 0.8, int duration_steps = 25);
 
@@ -151,6 +154,7 @@ private:
     void open_regenerate_room_popup();
     bool is_modal_blocking_panels() const;
     void pulse_modal_header();
+    void apply_header_suppression();
 
     void refresh_active_asset_filters();
     void reset_asset_filters();
@@ -189,6 +193,8 @@ private:
     std::string map_path_;
     bool pointer_over_camera_panel_ = false;
     bool pointer_over_light_rays_panel_ = false;
+    bool modal_headers_hidden_ = false;
+    bool sliding_headers_hidden_ = false;
     std::unique_ptr<TrailEditorSuite> trail_suite_;
     AssetFilterBar asset_filter_;
 

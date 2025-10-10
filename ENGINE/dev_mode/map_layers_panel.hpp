@@ -27,6 +27,7 @@ public:
     void set_map_info(nlohmann::json* map_info, const std::string& map_path);
     void set_on_save(SaveCallback cb);
     void set_controller(std::shared_ptr<MapLayersController> controller);
+    void set_header_visibility_callback(std::function<void(bool)> cb);
 
     void open();
     void close();
@@ -167,4 +168,5 @@ private:
     std::shared_ptr<MapLayersController> controller_;
     bool embedded_mode_ = false;
     SDL_Rect screen_bounds_{0, 0, 0, 0};
+    std::function<void(bool)> header_visibility_callback_{};
 };
