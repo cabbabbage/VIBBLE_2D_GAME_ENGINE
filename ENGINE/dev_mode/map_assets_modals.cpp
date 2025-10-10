@@ -89,7 +89,10 @@ void SingleSpawnGroupModal::open(json& map_info,
     ensure_single_group(*section_, default_display_name);
 
     auto& groups = (*section_)["spawn_groups"];
+    auto& entry = groups.front();
+
     if (!list_) list_ = std::make_unique<SpawnGroupConfig>(true);
+    list_->set_embedded_mode(false);
     list_->set_screen_dimensions(screen_w_, screen_h_);
     // Ensure the floating panel provides enough room for long lists while
     // remaining scrollable so content is accessible on smaller displays.
@@ -103,17 +106,39 @@ void SingleSpawnGroupModal::open(json& map_info,
         visible_height = std::max(kMinVisibleHeight, screen_h_ - kHeightMargin);
     }
     list_->set_visible_height(visible_height);
-    // Open a floating SpawnGroupConfig panel bound to the current single-group array
-    list_->open(groups, [this, default_display_name](const json& updated_array) {
-        if (!this->map_info_ || !this->section_) return;
-        auto& groups = (*section_)["spawn_groups"];
-        groups = updated_array;
-        // Enforce single group for this modal
+
+    auto relay_save = [this, default_display_name]() {
+        if (!this->section_ || !this->section_->is_object()) return;
         ensure_single_group(*section_, default_display_name);
+        auto& groups = (*section_)["spawn_groups"];
+        if (!groups.is_array() || groups.empty()) return;
         bool ok = true;
         if (on_save_) ok = on_save_();
-        (void)ok; // Errors are reflected elsewhere if needed
-    });
+        (void)ok;
+    };
+
+    SpawnGroupConfig::ConfigureEntryCallback configure_entry =
+        [this, ownership_label, ownership_color](SpawnGroupConfig::RowController& row, const json&) {
+            if (!ownership_label.empty()) {
+                row.set_ownership_label(ownership_label, ownership_color);
+            } else {
+                row.clear_ownership_label();
+            }
+            if (!stack_key_.empty()) {
+                row.set_stack_key(stack_key_);
+            }
+        };
+
+    list_->set_on_layout_changed([this]() { ensure_visible_position(); });
+    position_initialized_ = false;
+    list_->bind_entry(entry,
+                      relay_save,
+                      [relay_save](const json&, const SpawnGroupConfig::ChangeSummary&) { relay_save(); },
+                      {},
+                      std::move(configure_entry));
+    list_->DockableCollapsible::open();
+    list_->force_pointer_ready();
+
     // Center the list panel roughly
     ensure_visible_position();
 }

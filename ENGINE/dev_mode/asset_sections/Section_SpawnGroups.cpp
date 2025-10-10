@@ -60,6 +60,7 @@ void Section_SpawnGroups::build() {
         DockableCollapsible::Rows rows;
         list_->append_rows(rows);
         this->set_rows(rows);
+        this->layout();
     });
     list_->restore_expanded_groups(expanded);
     list_->append_rows(rows);
