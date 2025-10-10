@@ -3,6 +3,7 @@
 #include "dm_styles.hpp"
 #include "map_generation/room.hpp"
 #include "spawn_group_lists/spawn_group_list.hpp"
+#include "spawn_group_utils.hpp"
 #include "tag_editor_widget.hpp"
 #include "tag_utils.hpp"
 #include "utils/input.hpp"
@@ -359,6 +360,10 @@ void RoomConfigurator::set_show_header(bool show) { show_header_ = show; }
 
 void RoomConfigurator::set_on_close(std::function<void()> cb) { on_close_ = std::move(cb); }
 
+void RoomConfigurator::set_header_visibility_controller(std::function<void(bool)> cb) {
+    container_.set_header_visibility_controller(std::move(cb));
+}
+
 void RoomConfigurator::reset_scroll() { container_.reset_scroll(); }
 
 SDL_Rect RoomConfigurator::clamp_to_work_area(const SDL_Rect& bounds) const {
@@ -464,38 +469,27 @@ void RoomConfigurator::handle_container_closed() {
 bool RoomConfigurator::apply_room_data(const nlohmann::json& data) {
     const nlohmann::json& normalized = data.is_object() ? data : empty_object();
 
-    bool new_spawn_from_assets = false;
-    const nlohmann::json* new_spawn_array = nullptr;
-    if (normalized.contains("spawn_groups") && normalized["spawn_groups"].is_array()) {
-        new_spawn_array = &normalized["spawn_groups"];
-        new_spawn_from_assets = false;
-    } else if (normalized.contains("assets") && normalized["assets"].is_array()) {
-        new_spawn_array = &normalized["assets"];
-        new_spawn_from_assets = true;
+    nlohmann::json normalized_copy = normalized;
+    if (normalized_copy.contains("assets") && normalized_copy["assets"].is_array()) {
+        if (!normalized_copy.contains("spawn_groups") || !normalized_copy["spawn_groups"].is_array()) {
+            normalized_copy["spawn_groups"] = normalized_copy["assets"];
+        }
+        normalized_copy.erase("assets");
+    }
+    if (!normalized_copy.contains("spawn_groups") || !normalized_copy["spawn_groups"].is_array()) {
+        normalized_copy["spawn_groups"] = nlohmann::json::array();
     }
 
-    const nlohmann::json* current_spawn_array = nullptr;
-    if (spawn_groups_from_assets_) {
-        if (loaded_json_.contains("assets") && loaded_json_["assets"].is_array()) {
-            current_spawn_array = &loaded_json_["assets"];
-        }
-    } else {
-        if (loaded_json_.contains("spawn_groups") && loaded_json_["spawn_groups"].is_array()) {
-            current_spawn_array = &loaded_json_["spawn_groups"];
-        }
-    }
+    const nlohmann::json new_spawn_array = normalized_copy["spawn_groups"];
+    const nlohmann::json current_spawn_array =
+        (loaded_json_.contains("spawn_groups") && loaded_json_["spawn_groups"].is_array())
+            ? loaded_json_["spawn_groups"]
+            : nlohmann::json::array();
 
-    bool spawn_changed = false;
-    if (new_spawn_from_assets != spawn_groups_from_assets_) {
-        spawn_changed = true;
-    } else if (new_spawn_array || current_spawn_array) {
-        if (!new_spawn_array || !current_spawn_array || *new_spawn_array != *current_spawn_array) {
-            spawn_changed = true;
-        }
-    }
+    bool spawn_changed = (new_spawn_array != current_spawn_array);
 
     State new_state = state_ ? *state_ : State{};
-    new_state.load_from_json(normalized, geometry_options_, !is_trail_context_);
+    new_state.load_from_json(normalized_copy, geometry_options_, !is_trail_context_);
 
     bool geometry_added = append_unique(geometry_options_, new_state.geometry);
 
@@ -530,7 +524,7 @@ bool RoomConfigurator::apply_room_data(const nlohmann::json& data) {
     capture_tags(prev_include, prev_include);
     capture_tags(prev_exclude, prev_exclude);
 
-    load_tags_from_json(normalized);
+    load_tags_from_json(normalized_copy);
     capture_tags(room_tags_, include);
     capture_tags(room_anti_tags_, exclude);
     bool tags_changed = (include != prev_include) || (exclude != prev_exclude);
@@ -539,8 +533,7 @@ bool RoomConfigurator::apply_room_data(const nlohmann::json& data) {
         return false;
     }
 
-    loaded_json_ = normalized;
-    spawn_groups_from_assets_ = new_spawn_from_assets;
+    loaded_json_ = std::move(normalized_copy);
     if (!state_) state_ = std::make_unique<State>();
     *state_ = std::move(new_state);
     tags_dirty_ = false;
@@ -667,11 +660,7 @@ void RoomConfigurator::rebuild_spawn_rows(Rows& rows) {
     bool have_groups = false;
     if (room_) {
         auto& root = live_room_json();
-        const char* key = spawn_groups_from_assets_ ? "assets" : "spawn_groups";
-        if (!root.contains(key) || !root[key].is_array()) {
-            root[key] = nlohmann::json::array();
-        }
-        nlohmann::json& groups = root[key];
+        nlohmann::json& groups = devmode::spawn::ensure_spawn_groups_array(root);
 
         auto on_change = [this]() {
             if (room_) {
@@ -735,11 +724,7 @@ void RoomConfigurator::rebuild_spawn_rows(Rows& rows) {
         have_groups = true;
     } else if (external_room_json_) {
         auto& root = live_room_json();
-        const char* key = spawn_groups_from_assets_ ? "assets" : "spawn_groups";
-        if (!root.contains(key) || !root[key].is_array()) {
-            root[key] = nlohmann::json::array();
-        }
-        nlohmann::json& groups = root[key];
+        nlohmann::json& groups = devmode::spawn::ensure_spawn_groups_array(root);
 
         auto on_change = [this]() {
             if (external_room_json_) {
@@ -788,14 +773,8 @@ void RoomConfigurator::rebuild_spawn_rows(Rows& rows) {
         have_groups = true;
     } else {
         const nlohmann::json* groups = nullptr;
-        const char* primary_key = spawn_groups_from_assets_ ? "assets" : "spawn_groups";
-        if (loaded_json_.contains(primary_key) && loaded_json_[primary_key].is_array()) {
-            groups = &loaded_json_[primary_key];
-        } else {
-            const char* fallback = spawn_groups_from_assets_ ? "spawn_groups" : "assets";
-            if (loaded_json_.contains(fallback) && loaded_json_[fallback].is_array()) {
-                groups = &loaded_json_[fallback];
-            }
+        if (loaded_json_.contains("spawn_groups") && loaded_json_["spawn_groups"].is_array()) {
+            groups = &loaded_json_["spawn_groups"];
         }
         if (groups) {
             auto expanded = spawn_list_->expanded_groups();

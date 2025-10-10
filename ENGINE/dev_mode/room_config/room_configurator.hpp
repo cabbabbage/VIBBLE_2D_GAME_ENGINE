@@ -36,6 +36,7 @@ public:
     void set_work_area(const SDL_Rect& bounds);
     void set_show_header(bool show);
     void set_on_close(std::function<void()> cb);
+    void set_header_visibility_controller(std::function<void(bool)> cb);
 
     void open(const nlohmann::json& room_data);
     void open(nlohmann::json& room_data,
@@ -114,7 +115,6 @@ private:
     Room* room_ = nullptr;
     nlohmann::json* external_room_json_ = nullptr;
     nlohmann::json loaded_json_;
-    bool spawn_groups_from_assets_ = false;
     bool is_trail_context_ = false;
 
     std::vector<std::string> geometry_options_;

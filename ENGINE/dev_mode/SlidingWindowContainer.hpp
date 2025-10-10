@@ -36,6 +36,7 @@ public:
 
     void set_blocks_editor_interactions(bool block);
     void set_editor_interaction_blocker(std::function<void(bool)> blocker);
+    void set_header_visibility_controller(std::function<void(bool)> controller);
 
     void set_panel_bounds_override(const SDL_Rect& bounds);
     void clear_panel_bounds_override();
@@ -74,6 +75,7 @@ private:
 
     std::function<void()> on_close_{};
     std::function<void(bool)> editor_interaction_blocker_{};
+    std::function<void(bool)> header_visibility_controller_{};
 
     bool visible_ = false;
     bool blocks_editor_interactions_ = false;

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <SDL.h>
+#include <functional>
 #include <memory>
 #include <string>
 #include <vector>
@@ -44,6 +45,7 @@ class AssetInfoUI {
     void refresh_target_asset_scale();
     void sync_target_z_threshold();
     void request_apply_section(AssetInfoSectionId section_id);
+    void set_header_visibility_callback(std::function<void(bool)> cb);
 
   private:
     void layout_widgets(int screen_w, int screen_h) const;

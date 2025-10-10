@@ -62,6 +62,13 @@ void SlidingWindowContainer::set_editor_interaction_blocker(std::function<void(b
     }
 }
 
+void SlidingWindowContainer::set_header_visibility_controller(std::function<void(bool)> controller) {
+    header_visibility_controller_ = std::move(controller);
+    if (header_visibility_controller_) {
+        header_visibility_controller_(visible_);
+    }
+}
+
 void SlidingWindowContainer::set_panel_bounds_override(const SDL_Rect& bounds) {
     panel_override_ = bounds;
     panel_override_active_ = bounds.w > 0 && bounds.h > 0;
@@ -95,6 +102,9 @@ void SlidingWindowContainer::set_visible(bool visible) {
     if (!visible_) {
         scroll_dragging_ = false;
         scrollbar_dragging_ = false;
+    }
+    if (header_visibility_controller_) {
+        header_visibility_controller_(visible_);
     }
     update_editor_interaction_block_state();
 }
@@ -387,10 +397,10 @@ void SlidingWindowContainer::layout(int screen_w, int screen_h) const {
         }
         if (desired.w > screen_w) desired.w = screen_w;
         if (desired.h > screen_h) desired.h = screen_h;
-        int max_x = screen_w - desired.w;
+        desired.x = std::max(0, screen_w - desired.w);
         int max_y = screen_h - desired.h;
-        desired.x = std::clamp(desired.x, 0, std::max(0, max_x));
-        desired.y = std::clamp(desired.y, 0, std::max(0, max_y));
+        if (max_y < 0) max_y = 0;
+        desired.y = std::clamp(desired.y, 0, max_y);
         panel_ = desired;
     } else {
         int panel_x = (screen_w * 2) / 3;

@@ -683,6 +683,10 @@ bool AssetInfoUI::apply_section_to_assets(AssetInfoSectionId section_id, const s
     return all_success;
 }
 
+void AssetInfoUI::set_header_visibility_callback(std::function<void(bool)> cb) {
+    container_.set_header_visibility_controller(std::move(cb));
+}
+
 const char* AssetInfoUI::section_display_name(AssetInfoSectionId section_id) {
     switch (section_id) {
         case AssetInfoSectionId::BasicInfo:   return "Basic Info";

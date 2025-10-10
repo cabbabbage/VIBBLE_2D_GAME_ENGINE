@@ -37,6 +37,7 @@ public:
     void set_current_room(Room* room);
     void set_room_config_visible(bool visible);
     void set_shared_fullscreen_panel(FullScreenCollapsible* panel);
+    void set_header_visibility_callback(std::function<void(bool)> cb);
 
     void set_enabled(bool enabled);
     bool is_enabled() const { return enabled_; }
@@ -190,6 +191,9 @@ private:
     bool room_config_dock_open_ = false;
     bool room_config_was_visible_ = false;
     ActiveModal active_modal_ = ActiveModal::None;
+    std::function<void(bool)> header_visibility_callback_{};
+    bool room_config_panel_visible_ = false;
+    bool asset_info_panel_visible_ = false;
 
     bool last_area_editor_active_ = false;
     bool area_editor_override_active_ = false;

@@ -2824,6 +2824,17 @@ void MapLayersPanel::set_controller(std::shared_ptr<MapLayersController> control
 
 }
 
+void MapLayersPanel::set_header_visibility_callback(std::function<void(bool)> cb) {
+    header_visibility_callback_ = std::move(cb);
+    if (room_configurator_) {
+        room_configurator_->set_header_visibility_controller([this](bool visible) {
+            if (header_visibility_callback_) {
+                header_visibility_callback_(visible);
+            }
+        });
+    }
+}
+
 void MapLayersPanel::open() {
 
     if (!is_visible()) {
@@ -4411,7 +4422,11 @@ void MapLayersPanel::ensure_room_configurator() {
         room_configurator_ = std::make_unique<RoomConfigurator>();
 
         if (room_configurator_) {
-
+            room_configurator_->set_header_visibility_controller([this](bool visible) {
+                if (header_visibility_callback_) {
+                    header_visibility_callback_(visible);
+                }
+            });
             room_configurator_->set_show_header(true);
 
             room_configurator_->set_on_close([this]() {
