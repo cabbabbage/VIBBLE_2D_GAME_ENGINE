@@ -15,6 +15,7 @@
 #include "dm_styles.hpp"
 #include "widgets.hpp"
 #include "widgets/CandidateEditorPieGraphWidget.hpp"
+#include "spawn_method_control_widgets/LinkToAreaButton.hpp"
 
 class LabelWidget : public Widget {
 public:
@@ -63,6 +64,7 @@ private:
 };
 
 namespace {
+using vibble::dev_mode::spawn_group_config::spawn_method_control_widgets::LinkToAreaButton;
 constexpr const char* kDefaultMethod = "Random";
 constexpr int kDefaultMinNumber = 1;
 constexpr int kDefaultMaxNumber = 1;
@@ -420,6 +422,20 @@ struct SpawnGroupConfig::RowEntry {
         area_widget_ = std::make_unique<CallbackDropdownWidget>(
             "Area", std::vector<std::string>{"None"}, [this](int index) { on_area_changed(index); }, editable_);
 
+        area_link_button_ = std::make_unique<LinkToAreaButton>();
+        area_link_button_->on_open_area().connect([this](const std::string& area_id) {
+            if (!open_area_handler_) return;
+            static const std::string kEmptyKey;
+            const std::string& key = stack_key_ ? *stack_key_ : kEmptyKey;
+            open_area_handler_(area_id, key);
+        });
+        open_area_button_ = std::make_unique<DMButton>("Open", &DMStyles::ListButton(), 0, DMButton::height());
+        open_area_widget_ = std::make_unique<ButtonWidget>(open_area_button_.get(), [this]() {
+            if (area_link_button_) {
+                area_link_button_->open_area();
+            }
+        });
+
         auto enforce_checkbox = std::make_unique<DMCheckbox>("Enforce Spacing", false);
         enforce_widget_ = std::make_unique<CallbackCheckboxWidget>(std::move(enforce_checkbox),
             [this](bool value) {
@@ -514,6 +530,21 @@ struct SpawnGroupConfig::RowEntry {
 
     void set_area_names_provider(std::function<std::vector<std::string>()> provider) {
         area_provider_ = provider ? std::move(provider) : empty_provider();
+    }
+
+    void set_open_area_handler(std::function<void(const std::string&, const std::string&)> handler,
+                               std::optional<std::string> stack_key) {
+        open_area_handler_ = std::move(handler);
+        if (stack_key.has_value()) {
+            if (stack_key->empty()) {
+                stack_key_.reset();
+            } else {
+                stack_key_ = std::move(*stack_key);
+            }
+        }
+        if (owner_) {
+            owner_->mark_layout_dirty();
+        }
     }
 
     const std::function<std::vector<std::string>()>& area_names_provider() const {
@@ -639,6 +670,9 @@ struct SpawnGroupConfig::RowEntry {
         method_row.push_back(method_widget_.get());
         if (show_area_dropdown_) {
             method_row.push_back(area_widget_.get());
+            if (open_area_widget_ && open_area_handler_) {
+                method_row.push_back(open_area_widget_.get());
+            }
         }
         method_row.push_back(enforce_widget_.get());
         rows.push_back(method_row);
@@ -724,6 +758,7 @@ private:
         if (options.empty()) {
             show_area_dropdown_ = false;
             area_options_.clear();
+            update_area_link_target_from_widget();
             return;
         }
         show_area_dropdown_ = true;
@@ -736,6 +771,18 @@ private:
             }
         }
         area_widget_->set_options(area_options_, index);
+        update_area_link_target_from_widget();
+    }
+
+    void update_area_link_target_from_widget() {
+        if (!area_link_button_) return;
+        if (!show_area_dropdown_ || !area_widget_) {
+            area_link_button_->set_target_area({});
+            return;
+        }
+        int selected_index = area_widget_->selected();
+        std::string value = area_widget_->option_value(selected_index);
+        area_link_button_->set_target_area(std::move(value));
     }
 
     void update_candidate_graph() {
@@ -850,6 +897,7 @@ private:
             (*entry)["area"] = area_options_[index];
             notify_change(false, false, false);
         }
+        update_area_link_target_from_widget();
     }
 
     void on_min_changed(const std::string& text) {
@@ -930,6 +978,10 @@ private:
     bool show_area_dropdown_ = false;
     std::vector<std::string> area_options_{};
     std::unique_ptr<CallbackDropdownWidget> area_widget_{};
+    std::unique_ptr<LinkToAreaButton> area_link_button_{};
+    std::unique_ptr<DMButton> open_area_button_{};
+    std::unique_ptr<ButtonWidget> open_area_widget_{};
+    std::function<void(const std::string&, const std::string&)> open_area_handler_{};
 
     std::unique_ptr<CallbackCheckboxWidget> enforce_widget_{};
 
@@ -1056,6 +1108,8 @@ void SpawnGroupConfig::set_on_layout_changed(std::function<void()> cb) { on_layo
 
 void SpawnGroupConfig::refresh_row_configuration() {
     for (auto& row : rows_) {
+        if (!row) continue;
+        apply_configuration(*row);
         row->refresh_configuration();
     }
     mark_layout_dirty();
@@ -1317,6 +1371,13 @@ void SpawnGroupConfig::RowController::set_area_names_provider(std::function<std:
 void SpawnGroupConfig::RowController::set_stack_key(std::string key) {
     if (!row_) return;
     row_->set_stack_key(std::move(key));
+}
+
+void SpawnGroupConfig::RowController::set_open_area_handler(
+    std::function<void(const std::string&, const std::string&)> handler,
+    std::optional<std::string> stack_key) {
+    if (!row_) return;
+    row_->set_open_area_handler(std::move(handler), std::move(stack_key));
 }
 
 void SpawnGroupConfig::RowController::lock_method_to(const std::string& method) {

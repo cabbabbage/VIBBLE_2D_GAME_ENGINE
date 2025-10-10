@@ -76,10 +76,8 @@ void SingleSpawnGroupModal::open(json& map_info,
             } else {
                 row.clear_ownership_label();
             }
-            if (!stack_key_.empty()) {
-                row.set_stack_key(stack_key_);
-            }
-};
+            row.set_open_area_handler(on_open_area_, stack_key_);
+    };
 
     list_->set_on_layout_changed([this]() { ensure_visible_position(); });
     position_initialized_ = false;
@@ -129,7 +127,17 @@ void SingleSpawnGroupModal::set_screen_dimensions(int width, int height) {
 
 void SingleSpawnGroupModal::set_floating_stack_key(std::string key) {
     stack_key_ = std::move(key);
+    if (list_) {
+        list_->refresh_row_configuration();
+    }
+}
 
+void SingleSpawnGroupModal::set_on_open_area(
+    std::function<void(const std::string&, const std::string&)> cb) {
+    on_open_area_ = std::move(cb);
+    if (list_) {
+        list_->refresh_row_configuration();
+    }
 }
 
 void SingleSpawnGroupModal::ensure_visible_position() {

@@ -3,10 +3,9 @@
 #include <SDL.h>
 
 #include <memory>
+#include <functional>
 #include <nlohmann/json_fwd.hpp>
 #include <string>
-
-#include <nlohmann/json_fwd.hpp>
 
 class Input;
 class Room;
@@ -33,6 +32,9 @@ public:
 
     Room* active_trail() const { return active_trail_; }
 
+    void set_on_open_area(std::function<void(const std::string&, const std::string&)> cb,
+                          std::string stack_key = {});
+
 private:
     void ensure_ui();
     void update_bounds();
@@ -53,5 +55,7 @@ private:
     Room* active_trail_ = nullptr;
     std::unique_ptr<RoomConfigurator> configurator_;
     std::unique_ptr<SpawnGroupConfig> spawn_groups_;
+    std::function<void(const std::string&, const std::string&)> on_open_area_{};
+    std::string open_area_stack_key_{};
 };
 

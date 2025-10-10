@@ -40,6 +40,8 @@ public:
         void set_ownership_label(const std::string& label, SDL_Color color);
         void clear_ownership_label();
         void set_area_names_provider(std::function<std::vector<std::string>()> provider);
+        void set_open_area_handler(std::function<void(const std::string&, const std::string&)> handler,
+                                   std::optional<std::string> stack_key = std::nullopt);
         void set_stack_key(std::string key);
         void lock_method_to(const std::string& method);
         void clear_method_lock();

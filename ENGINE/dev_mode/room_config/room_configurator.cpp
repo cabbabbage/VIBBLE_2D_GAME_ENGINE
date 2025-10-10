@@ -700,7 +700,24 @@ void RoomConfigurator::rebuild_spawn_rows(Rows& rows) {
         entry_callbacks.on_quantity_changed = [request_regenerate](int, int) { request_regenerate(); };
         entry_callbacks.on_candidates_changed = [request_regenerate](const nlohmann::json&) { request_regenerate(); };
 
-        config->bind_entry(entry, std::move(on_change), std::move(on_entry_change), std::move(entry_callbacks), std::move(configure_entry));
+        SpawnGroupConfig::ConfigureEntryCallback final_configure_entry;
+        if (configure_entry) {
+            final_configure_entry = [this, configure_entry = std::move(configure_entry)](
+                                        SpawnGroupConfig::RowController& row, const nlohmann::json& cfg_entry) {
+                configure_entry(row, cfg_entry);
+                row.set_open_area_handler(on_spawn_area_open_, spawn_area_stack_key_);
+            };
+        } else if (on_spawn_area_open_ || !spawn_area_stack_key_.empty()) {
+            final_configure_entry = [this](SpawnGroupConfig::RowController& row, const nlohmann::json&) {
+                row.set_open_area_handler(on_spawn_area_open_, spawn_area_stack_key_);
+            };
+        }
+
+        config->bind_entry(entry,
+                           std::move(on_change),
+                           std::move(on_entry_change),
+                           std::move(entry_callbacks),
+                           std::move(final_configure_entry));
         config->append_rows(rows);
 
         spawn_group_config_ids_.push_back(id);
@@ -730,7 +747,7 @@ void RoomConfigurator::rebuild_spawn_rows(Rows& rows) {
                 std::string label = room_->room_name.empty() ? std::string("Room") : room_->room_name;
                 row.set_ownership_label(label, SDL_Color{255, 224, 96, 255});
             }
-};
+        };
 
         for (auto& entry : groups) {
             have_groups = true;
@@ -1223,5 +1240,17 @@ void RoomConfigurator::set_spawn_group_callbacks(std::function<void(const std::s
     on_spawn_move_down_ = std::move(on_move_down);
     on_spawn_add_ = std::move(on_add);
     on_spawn_regenerate_ = std::move(on_regenerate);
+}
+
+void RoomConfigurator::set_spawn_area_open_callback(
+    std::function<void(const std::string&, const std::string&)> cb,
+    std::string stack_key) {
+    on_spawn_area_open_ = std::move(cb);
+    spawn_area_stack_key_ = std::move(stack_key);
+    for (auto& config : spawn_group_configs_) {
+        if (config) {
+            config->refresh_row_configuration();
+        }
+    }
 }
 

@@ -99,6 +99,19 @@ bool TrailEditorSuite::contains_point(int x, int y) const {
     return false;
 }
 
+void TrailEditorSuite::set_on_open_area(
+    std::function<void(const std::string&, const std::string&)> cb,
+    std::string stack_key) {
+    on_open_area_ = std::move(cb);
+    open_area_stack_key_ = std::move(stack_key);
+    if (configurator_) {
+        configurator_->set_spawn_area_open_callback(on_open_area_, open_area_stack_key_);
+    }
+    if (spawn_groups_) {
+        spawn_groups_->refresh_row_configuration();
+    }
+}
+
 void TrailEditorSuite::ensure_ui() {
     if (!configurator_) {
         configurator_ = std::make_unique<RoomConfigurator>();
@@ -111,6 +124,7 @@ void TrailEditorSuite::ensure_ui() {
                 [this](const std::string& id) { move_spawn_group_up(id); },
                 [this](const std::string& id) { move_spawn_group_down(id); },
                 [this]() { add_spawn_group(); });
+            configurator_->set_spawn_area_open_callback(on_open_area_, open_area_stack_key_);
         }
     }
     if (!spawn_groups_) {
@@ -197,6 +211,7 @@ void TrailEditorSuite::rebuild_spawn_groups_ui() {
                 }
                 return names;
             });
+            row.set_open_area_handler(on_open_area_, open_area_stack_key_);
         });
     spawn_groups_->set_on_layout_changed([this]() {
         this->rebuild_spawn_groups_ui();
