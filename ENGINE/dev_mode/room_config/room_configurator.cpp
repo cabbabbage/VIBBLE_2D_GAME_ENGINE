@@ -691,7 +691,25 @@ void RoomConfigurator::rebuild_spawn_rows(Rows& rows) {
         };
         config->set_callbacks(std::move(callbacks));
 
-        config->bind_entry(entry, std::move(on_change), std::move(on_entry_change), {}, std::move(configure_entry));
+        SpawnGroupConfig::EntryCallbacks entry_callbacks{};
+        nlohmann::json* entry_ptr = &entry;
+        auto request_regenerate = [this, entry_ptr, id]() {
+            std::string target = id;
+            if (target.empty() && entry_ptr && entry_ptr->is_object()) {
+                target = entry_ptr->value("spawn_id", std::string{});
+            }
+            if (target.empty()) return;
+            if (on_spawn_regenerate_) on_spawn_regenerate_(target);
+        };
+        entry_callbacks.on_method_changed = [request_regenerate](const std::string&) { request_regenerate(); };
+        entry_callbacks.on_quantity_changed = [request_regenerate](int, int) { request_regenerate(); };
+        entry_callbacks.on_candidates_changed = [request_regenerate](const nlohmann::json&) { request_regenerate(); };
+
+        config->bind_entry(entry,
+                           std::move(on_change),
+                           std::move(on_entry_change),
+                           std::move(entry_callbacks),
+                           std::move(configure_entry));
         config->append_rows(rows);
 
         spawn_group_config_ids_.push_back(id);

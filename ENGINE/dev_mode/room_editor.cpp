@@ -1407,6 +1407,7 @@ void RoomEditor::ensure_room_configurator() {
                 add_spawn_group_internal();
             },
             [this](const std::string& spawn_id) {
+                refresh_spawn_group_config_ui();
                 if (spawn_id.empty()) {
                     return;
                 }
@@ -2432,6 +2433,7 @@ void RoomEditor::regenerate_current_room() {
     }
 
     refresh_spawn_group_config_ui();
+    reopen_room_configurator();
 }
 
 void RoomEditor::update_exact_json(nlohmann::json& entry, const Asset& asset, SDL_Point center, int width, int height) {
