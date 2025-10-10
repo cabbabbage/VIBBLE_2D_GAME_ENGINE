@@ -82,6 +82,7 @@ void MainApp::setup() {
                         std::cout << "[MainApp] No player asset found. Launching in Dev Mode.\n";
                 }
                 dev_mode_ = true;
+                std::cerr << "[MainApp] set_dev_mode(" << (dev_mode_ ? "true" : "false") << ")\n";
                 if (game_assets_) {
                         game_assets_->set_dev_mode(dev_mode_);
                 }
