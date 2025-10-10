@@ -3667,7 +3667,7 @@ void MapLayersPanel::regenerate_preview() {
 
         }
 
-    };
+};
 
     struct PreviewPairEqual {
 
@@ -3679,7 +3679,7 @@ void MapLayersPanel::regenerate_preview() {
 
         }
 
-    };
+};
 
     auto canonical_preview_pair = [](PreviewNode* a, PreviewNode* b) {
 
@@ -3697,7 +3697,7 @@ void MapLayersPanel::regenerate_preview() {
 
         return std::pair<PreviewNode*, PreviewNode*>{a, b};
 
-    };
+};
 
     auto plan_preview_connections = [&](const std::vector<PreviewNode*>& nodes,
 
@@ -3775,7 +3775,7 @@ void MapLayersPanel::regenerate_preview() {
 
             std::vector<int> rank;
 
-        };
+};
 
         PreviewDisjointSet dsu(nodes.size());
 
@@ -3821,7 +3821,7 @@ void MapLayersPanel::regenerate_preview() {
 
             double jitter = 0.0;
 
-        };
+};
 
         std::vector<Candidate> candidates;
 
@@ -3961,7 +3961,7 @@ void MapLayersPanel::regenerate_preview() {
 
             return components;
 
-        };
+};
 
         auto components = rebuild_components();
 
@@ -4059,7 +4059,7 @@ void MapLayersPanel::regenerate_preview() {
 
         return planned;
 
-    };
+};
 
     auto planned_connections = plan_preview_connections(node_refs, forced_connections);
 
@@ -4101,8 +4101,7 @@ void MapLayersPanel::regenerate_preview() {
 
         double distance = std::sqrt(node->center.x * node->center.x + node->center.y * node->center.y);
 
-        double half_diag = node->is_circle ? (node->radius > 0.0 ? node->radius : (0.5 * std::sqrt(node->width * node->width + node->height * node->height)))
-                                           : 0.5 * std::sqrt(node->width * node->width + node->height * node->height);
+        double half_diag = node->is_circle ? (node->radius > 0.0 ? node->radius : (0.5 * std::sqrt(node->width * node->width + node->height * node->height))) : 0.5 * std::sqrt(node->width * node->width + node->height * node->height);
 
         node_extent = std::max(node_extent, distance + half_diag);
 
@@ -4380,7 +4379,7 @@ void MapLayersPanel::open_room_config_for(const std::string& room_name) {
 
         handle_room_spawn_groups_changed(false);
 
-    };
+};
 
     std::string label = entry->value("name", room_name);
 
@@ -4390,7 +4389,7 @@ void MapLayersPanel::open_room_config_for(const std::string& room_name) {
 
         row.set_ownership_label(label, SDL_Color{255,224,96,255});
 
-    };
+};
 
     room_configurator_->open(*entry, std::move(on_change), std::move(on_entry_change), std::move(configure_entry));
 
@@ -4839,8 +4838,6 @@ void MapLayersPanel::move_spawn_group_in_active_room(const std::string& spawn_id
     handle_room_spawn_groups_changed();
 
 }
-
-
 
 void MapLayersPanel::select_layer(int index) {
 

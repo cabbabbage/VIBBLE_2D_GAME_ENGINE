@@ -274,7 +274,7 @@ void TrailEditorSuite::delete_spawn_group(const std::string& id) {
     groups.erase(it, groups.end());
     sanitize_perimeter_spawn_groups(groups);
     active_trail_->save_assets_json();
-    // no explicit close_all in merged UI
+
     rebuild_spawn_groups_ui();
 }
 

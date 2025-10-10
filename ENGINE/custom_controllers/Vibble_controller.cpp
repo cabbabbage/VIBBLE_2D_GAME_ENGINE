@@ -34,20 +34,20 @@ SDL_Point normalized_step(int raw_x, int raw_y, int target_speed) {
             return (raw > 0) ? 1 : -1;
         }
         return component;
-    };
+};
 
     move_x = ensure_non_zero(move_x, raw_x);
     move_y = ensure_non_zero(move_y, raw_y);
 
     auto magnitude_squared = [&]() {
         return move_x * move_x + move_y * move_y;
-    };
+};
 
     auto reduce_once = [](int value) {
         if (value > 0) return value - 1;
         if (value < 0) return value + 1;
         return value;
-    };
+};
 
     const int target_magnitude_sq = target_speed * target_speed;
 
@@ -97,7 +97,7 @@ SDL_Point normalized_step(int raw_x, int raw_y, int target_speed) {
     return SDL_Point{ move_x, move_y };
 }
 
-} // namespace
+}
 
 VibbleController::VibbleController(Asset* player)
     : player_(player) {}
@@ -113,8 +113,7 @@ void VibbleController::movement(const Input& input) {
     const bool down  = input.isScancodeDown(SDL_SCANCODE_S);
     const bool left  = input.isScancodeDown(SDL_SCANCODE_A);
     const bool right = input.isScancodeDown(SDL_SCANCODE_D);
-    const bool sprint = input.isScancodeDown(SDL_SCANCODE_LSHIFT) ||
-                        input.isScancodeDown(SDL_SCANCODE_RSHIFT);
+    const bool sprint = input.isScancodeDown(SDL_SCANCODE_LSHIFT) || input.isScancodeDown(SDL_SCANCODE_RSHIFT);
 
     const int raw_x = (right ? 1 : 0) - (left ? 1 : 0);
     const int raw_y = (down  ? 1 : 0) - (up    ? 1 : 0);

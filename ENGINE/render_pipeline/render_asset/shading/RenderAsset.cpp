@@ -38,9 +38,7 @@ SDL_Texture* RenderAsset::run(SDL_Renderer* renderer, const Asset& asset, StageC
     }
     SDL_SetTextureBlendMode(target, SDL_BLENDMODE_BLEND);
 #if SDL_VERSION_ATLEAST(2,0,12)
-    SDL_SetTextureScaleMode(
-        target,
-        (asset.info && !asset.info->smooth_scaling) ? SDL_ScaleModeNearest : SDL_ScaleModeBest);
+    SDL_SetTextureScaleMode( target, (asset.info && !asset.info->smooth_scaling) ? SDL_ScaleModeNearest : SDL_ScaleModeBest);
 #endif
 
     SDL_Texture* prev_target = SDL_GetRenderTarget(renderer);
@@ -48,9 +46,6 @@ SDL_Texture* RenderAsset::run(SDL_Renderer* renderer, const Asset& asset, StageC
     SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
     SDL_RenderClear(renderer);
 
-    // Keep the asset fully opaque while allowing lighting and shadow logic to
-    // use their own transparency values. Assets should not become see-through
-    // as a side effect of the main light alpha calculations.
     SDL_SetTextureAlphaMod(base_texture, 255);
     SDL_SetTextureColorMod(base_texture, 255, 255, 255);
     SDL_RenderCopy(renderer, base_texture, nullptr, nullptr);
@@ -62,5 +57,5 @@ SDL_Texture* RenderAsset::run(SDL_Renderer* renderer, const Asset& asset, StageC
     return target;
 }
 
-} // namespace render_pipeline::shading
+}
 

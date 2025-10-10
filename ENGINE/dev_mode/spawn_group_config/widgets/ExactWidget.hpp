@@ -22,4 +22,4 @@ private:
     model::SpawnGroup* group_ = nullptr;
 };
 
-}  // namespace vibble::dev_mode::spawn_group_config::widgets
+}

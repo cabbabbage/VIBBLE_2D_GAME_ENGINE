@@ -51,7 +51,7 @@ bool is_integral(double value) {
     return std::fabs(value - rounded) < 1e-9;
 }
 
-}  // namespace
+}
 
 std::string generate_spawn_id() {
     static std::mt19937 rng(std::random_device{}());
@@ -242,4 +242,4 @@ bool ensure_spawn_group_entry_defaults(nlohmann::json& entry,
     return changed;
 }
 
-}  // namespace devmode::spawn
+}

@@ -49,7 +49,7 @@ double distance_sq_to_aabb(const SDL_Point& point,
     return dx * dx + dy * dy;
 }
 
-} // namespace
+}
 
 double min_distance_sq_to_zones(const SDL_Point& point,
                                 const std::vector<ZoneCacheEntry>& cache,
@@ -57,21 +57,13 @@ double min_distance_sq_to_zones(const SDL_Point& point,
     double minDistSq = std::numeric_limits<double>::infinity();
     const double pad = static_cast<double>(fade_end_distance);
     for (const auto& entry : cache) {
-        const double paddedDistSq = distance_sq_to_aabb(point,
-                                                        static_cast<double>(entry.min_x) - pad,
-                                                        static_cast<double>(entry.min_y) - pad,
-                                                        static_cast<double>(entry.max_x) + pad,
-                                                        static_cast<double>(entry.max_y) + pad);
+        const double paddedDistSq = distance_sq_to_aabb(point, static_cast<double>(entry.min_x) - pad, static_cast<double>(entry.min_y) - pad, static_cast<double>(entry.max_x) + pad, static_cast<double>(entry.max_y) + pad);
         if (paddedDistSq >= minDistSq) {
             continue;
         }
         const auto* pts = entry.points;
         if (!pts || pts->size() < 2) {
-            const double bboxDistSq = distance_sq_to_aabb(point,
-                                                           static_cast<double>(entry.min_x),
-                                                           static_cast<double>(entry.min_y),
-                                                           static_cast<double>(entry.max_x),
-                                                           static_cast<double>(entry.max_y));
+            const double bboxDistSq = distance_sq_to_aabb(point, static_cast<double>(entry.min_x), static_cast<double>(entry.min_y), static_cast<double>(entry.max_x), static_cast<double>(entry.max_y));
             if (bboxDistSq < minDistSq) {
                 minDistSq = bboxDistSq;
             }
@@ -106,5 +98,5 @@ double min_distance_sq_to_zones(const SDL_Point& point,
     return minDistSq;
 }
 
-} // namespace asset_loader_internal
+}
 

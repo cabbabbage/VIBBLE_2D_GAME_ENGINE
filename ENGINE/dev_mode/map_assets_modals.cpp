@@ -47,8 +47,7 @@ void SingleSpawnGroupModal::open(json& map_info,
     if (!list_) list_ = std::make_unique<SpawnGroupConfig>(true);
     list_->set_embedded_mode(false);
     list_->set_screen_dimensions(screen_w_, screen_h_);
-    // Ensure the floating panel provides enough room for long lists while
-    // remaining scrollable so content is accessible on smaller displays.
+
     constexpr int kPanelCellWidth   = 360;
     constexpr int kMinVisibleHeight = 420;
     constexpr int kHeightMargin     = 200;
@@ -68,7 +67,7 @@ void SingleSpawnGroupModal::open(json& map_info,
         bool ok = true;
         if (on_save_) ok = on_save_();
         (void)ok;
-    };
+};
 
     SpawnGroupConfig::ConfigureEntryCallback configure_entry =
         [this, ownership_label, ownership_color](SpawnGroupConfig::RowController& row, const json&) {
@@ -80,7 +79,7 @@ void SingleSpawnGroupModal::open(json& map_info,
             if (!stack_key_.empty()) {
                 row.set_stack_key(stack_key_);
             }
-        };
+};
 
     list_->set_on_layout_changed([this]() { ensure_visible_position(); });
     position_initialized_ = false;
@@ -92,7 +91,6 @@ void SingleSpawnGroupModal::open(json& map_info,
     list_->DockableCollapsible::open();
     list_->force_pointer_ready();
 
-    // Center the list panel roughly
     ensure_visible_position();
 }
 
@@ -131,7 +129,7 @@ void SingleSpawnGroupModal::set_screen_dimensions(int width, int height) {
 
 void SingleSpawnGroupModal::set_floating_stack_key(std::string key) {
     stack_key_ = std::move(key);
-    // No stack key support for SpawnGroupConfig floating panel
+
 }
 
 void SingleSpawnGroupModal::ensure_visible_position() {

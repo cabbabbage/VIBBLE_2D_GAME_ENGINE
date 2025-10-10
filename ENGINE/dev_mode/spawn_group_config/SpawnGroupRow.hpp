@@ -12,10 +12,6 @@
 
 class CandidateEditorPieGraphWidget;
 
-// SpawnGroupRow acts as a light-weight data model that mirrors the spawn group
-// entry in the underlying JSON array. The row exposes a handful of optional
-// presentation properties used by the UI widgets, but does not own any heavy
-// view logic.
 class SpawnGroupRow {
 public:
     SpawnGroupRow();

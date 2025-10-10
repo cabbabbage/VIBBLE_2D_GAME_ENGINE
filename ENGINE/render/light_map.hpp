@@ -16,7 +16,7 @@ class LightMap {
         Uint8 alpha;
         SDL_RendererFlip flip;
         SDL_Color color_mod;
-    };
+};
     LightMap(SDL_Renderer* renderer, Assets* assets, Global_Light_Source& main_light, int screen_width, int screen_height, SDL_Texture* fullscreen_light_tex);
     void render(bool debugging);
     void set_fullscreen_light_settings(SDL_Color color, int min_opacity, int max_opacity);

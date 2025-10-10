@@ -42,5 +42,5 @@ class OnEndSelector {
     std::string payload_signature_;
 };
 
-}  // namespace animation_editor
+}
 

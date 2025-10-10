@@ -37,5 +37,5 @@ class TotalsPanel {
     std::function<void(int)> on_selection_changed_;
 };
 
-}  // namespace animation_editor
+}
 

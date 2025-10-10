@@ -39,5 +39,5 @@ class CroppingService {
     static SDL_Surface* load_surface_rgba(const std::filesystem::path& path);
 };
 
-}  // namespace animation_editor
+}
 

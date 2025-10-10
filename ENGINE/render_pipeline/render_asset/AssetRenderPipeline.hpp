@@ -52,12 +52,7 @@ public:
 
     SDL_Texture* run(Asset& asset);
     SDL_Texture* regenerateFinalTexture(Asset* asset);
-    SDL_Texture* texture_for_scale(Asset* asset,
-                                   SDL_Texture* base_tex,
-                                   int base_w,
-                                   int base_h,
-                                   int target_w,
-                                   int target_h);
+    SDL_Texture* texture_for_scale(Asset* asset, SDL_Texture* base_tex, int base_w, int base_h, int target_w, int target_h);
 
     SceneLighting&       lighting();
     const SceneLighting& lighting() const;
@@ -70,7 +65,7 @@ private:
     struct StageEntry {
         std::unique_ptr<IRenderStage> stage;
         SDL_BlendMode                 blend = SDL_BLENDMODE_BLEND;
-    };
+};
     std::vector<StageEntry> stages_;
 };
 

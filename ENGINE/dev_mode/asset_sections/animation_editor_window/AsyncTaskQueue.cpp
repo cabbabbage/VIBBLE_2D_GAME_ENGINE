@@ -20,7 +20,7 @@ void wait_and_log(std::future<void>& task) {
     }
 }
 
-}  // namespace
+}
 
 AsyncTaskQueue::AsyncTaskQueue() = default;
 
@@ -80,5 +80,5 @@ bool AsyncTaskQueue::is_busy() const {
     return false;
 }
 
-}  // namespace animation_editor
+}
 

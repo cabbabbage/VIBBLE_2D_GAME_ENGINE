@@ -13,7 +13,6 @@ class DMButton;
 class ButtonWidget;
 class Input;
 
-// Floating editor for a selected room area: change type and delete.
 class EditRoomAreaPanel {
 public:
     using ChangeTypeCallback = std::function<void(const std::string&)>;
@@ -31,7 +30,7 @@ public:
     void set_on_change_name(ChangeNameCallback cb) { on_change_name_ = std::move(cb); }
     void set_on_delete(DeleteCallback cb) { on_delete_ = std::move(cb); }
 
-    void open(int screen_x, int screen_y); // place panel
+    void open(int screen_x, int screen_y);
     void close();
     bool visible() const;
 

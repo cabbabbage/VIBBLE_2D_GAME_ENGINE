@@ -39,10 +39,7 @@ int parse_int(const nlohmann::json& value, int fallback) {
 nlohmann::json coerce_payload(const std::string& animation_id, const nlohmann::json& source_payload) {
     nlohmann::json payload = source_payload.is_object() ? source_payload : nlohmann::json::object();
 
-    // Source description.
-    nlohmann::json source = payload.contains("source") && payload["source"].is_object()
-                                ? payload["source"]
-                                : nlohmann::json::object();
+    nlohmann::json source = payload.contains("source") && payload["source"].is_object() ? payload["source"] : nlohmann::json::object();
     std::string kind = source.value("kind", std::string{"folder"});
     std::string path = source.value("path", kind == "folder" ? animation_id : std::string{});
     nlohmann::json name_value;
@@ -59,11 +56,11 @@ nlohmann::json coerce_payload(const std::string& animation_id, const nlohmann::j
         {"kind", kind},
         {"path", path},
         {"name", name_value},
-    };
+};
 
     auto ensure_bool = [&](const char* key, bool fallback) {
         payload[key] = parse_bool(payload.contains(key) ? payload[key] : nlohmann::json(fallback), fallback);
-    };
+};
 
     ensure_bool("flipped_source", false);
     ensure_bool("reverse_source", false);
@@ -80,9 +77,7 @@ nlohmann::json coerce_payload(const std::string& animation_id, const nlohmann::j
     if (frames < 1) frames = 1;
     payload["number_of_frames"] = frames;
 
-    nlohmann::json movement = payload.contains("movement") && payload["movement"].is_array()
-                                  ? payload["movement"]
-                                  : nlohmann::json::array();
+    nlohmann::json movement = payload.contains("movement") && payload["movement"].is_array() ? payload["movement"] : nlohmann::json::array();
     if (!movement.is_array()) {
         movement = nlohmann::json::array();
     }
@@ -142,7 +137,7 @@ nlohmann::json parse_payload(const std::string& payload_dump, const std::string&
     return coerce_payload(animation_id, parsed);
 }
 
-}  // namespace
+}
 
 namespace animation_editor {
 
@@ -423,5 +418,5 @@ void AnimationDocument::rebuild_animation_cache() {
 
 void AnimationDocument::mark_dirty() const { dirty_ = true; }
 
-}  // namespace animation_editor
+}
 

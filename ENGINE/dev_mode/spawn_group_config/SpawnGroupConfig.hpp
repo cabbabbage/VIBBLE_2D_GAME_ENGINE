@@ -18,10 +18,6 @@ class Input;
 
 class SpawnGroupRow;
 
-// SpawnGroupConfig is a light-weight controller that manages SpawnGroupRow
-// instances backed by a JSON array. The heavy UI previously embedded in this
-// class has been extracted so the list focuses purely on coordinating row
-// lifetimes and surfacing change notifications.
 class SpawnGroupConfig : public DockableCollapsible {
 public:
     struct ChangeSummary {
@@ -29,7 +25,7 @@ public:
         bool quantity_changed = false;
         bool candidates_changed = false;
         std::string method;
-    };
+};
 
     struct Callbacks {
         std::function<void(const std::string&)> on_regenerate;
@@ -38,7 +34,7 @@ public:
         std::function<void(const std::string&)> on_move_up;
         std::function<void(const std::string&)> on_move_down;
         std::function<void()> on_add;
-    };
+};
 
     class RowController {
     public:
@@ -54,7 +50,7 @@ public:
         explicit RowController(SpawnGroupRow* row) : row_(row) {}
         SpawnGroupRow* row_ = nullptr;
         friend class SpawnGroupConfig;
-    };
+};
 
     using ConfigureEntryCallback = std::function<void(RowController&, const nlohmann::json&)>;
 
@@ -62,7 +58,7 @@ public:
         std::function<void(const std::string&)> on_method_changed;
         std::function<void(int min_number, int max_number)> on_quantity_changed;
         std::function<void(const nlohmann::json&)> on_candidates_changed;
-    };
+};
 
     explicit SpawnGroupConfig(bool floatable = true);
     ~SpawnGroupConfig() override;
@@ -114,11 +110,7 @@ public:
 private:
     struct RowEntry;
 
-    void load_impl(nlohmann::json* array,
-                   nlohmann::json* entry,
-                   std::function<void()> on_change,
-                   std::function<void(const nlohmann::json&, const ChangeSummary&)> on_entry_change,
-                   ConfigureEntryCallback configure_entry);
+    void load_impl(nlohmann::json* array, nlohmann::json* entry, std::function<void()> on_change, std::function<void(const nlohmann::json&, const ChangeSummary&)> on_entry_change, ConfigureEntryCallback configure_entry);
     void rebuild_rows();
     void apply_configuration(SpawnGroupRow& row);
     void rebuild_layout();

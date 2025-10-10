@@ -24,4 +24,4 @@ private:
     Signal<const model::SpawnMethodId&> on_method_selected_;
 };
 
-}  // namespace vibble::dev_mode::spawn_group_config::spawn_method_control_widgets
+}

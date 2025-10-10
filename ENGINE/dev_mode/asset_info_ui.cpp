@@ -174,7 +174,7 @@ AssetInfoUI::AssetInfoUI() {
     auto spacing = std::make_unique<Section_Spacing>();
     spacing->set_ui(this);
     sections_.push_back(std::move(spacing));
-    // Spawn Groups section (replaces Child Assets / Areas UI)
+
     auto spawns = std::make_unique<Section_SpawnGroups>();
     spawns->set_ui(this);
     sections_.push_back(std::move(spawns));
@@ -540,10 +540,8 @@ void AssetInfoUI::render_world_overlay(SDL_Renderer* r, const camera& cam) const
 
     if (!drew_indicator) {
         SDL_SetRenderDrawColor(r, 220, 32, 32, 230);
-        SDL_RenderDrawLine(r, screen_center.x - 6, screen_center.y - 6,
-                                      screen_center.x + 6, screen_center.y + 6);
-        SDL_RenderDrawLine(r, screen_center.x - 6, screen_center.y + 6,
-                                      screen_center.x + 6, screen_center.y - 6);
+        SDL_RenderDrawLine(r, screen_center.x - 6, screen_center.y - 6, screen_center.x + 6, screen_center.y + 6);
+        SDL_RenderDrawLine(r, screen_center.x - 6, screen_center.y + 6, screen_center.x + 6, screen_center.y - 6);
     }
 
     const double center_x = static_cast<double>(target_asset_->pos.x + base_offset_x);
@@ -568,8 +566,7 @@ void AssetInfoUI::render_world_overlay(SDL_Renderer* r, const camera& cam) const
             0.0f, 0.0f).screen_position;
         SDL_Color orbit_color = DMStyles::AccentButton().hover_bg;
         SDL_SetRenderDrawColor(r, orbit_color.r, orbit_color.g, orbit_color.b, 255);
-        SDL_RenderDrawLine(r, orbit_center_screen.x, orbit_center_screen.y,
-                                orbit_end_screen.x, orbit_end_screen.y);
+        SDL_RenderDrawLine(r, orbit_center_screen.x, orbit_center_screen.y, orbit_end_screen.x, orbit_end_screen.y);
     }
 
     SDL_SetRenderDrawColor(r, prev_r, prev_g, prev_b, prev_a);

@@ -138,7 +138,7 @@ inline std::vector<Area::Point> decode_canonical_points(const nlohmann::json& po
     return decoded;
 }
 
-} // namespace
+}
 
 SDL_Point AssetInfo::AreaCodec::scaled_anchor(const AssetInfo& info,
                                              std::optional<float> scale_override) {
@@ -179,7 +179,7 @@ nlohmann::json AssetInfo::AreaCodec::encode_entry(
     nlohmann::json coordinate_space = {
         {"origin", "bottom_center"},
         {"scale_at_save", save_scale}
-    };
+};
 
     SDL_Point render_anchor{0, 0};
     if (frame && frame->is_valid()) {
@@ -189,7 +189,7 @@ nlohmann::json AssetInfo::AreaCodec::encode_entry(
         coordinate_space["pivot"] = {
             {"x", frame->pivot_x},
             {"y", frame->pivot_y}
-        };
+};
 
         if (canonical_canvas.width <= 0) {
             canonical_canvas.width = unscale_dimension(frame->width, save_scale);
@@ -271,12 +271,8 @@ AssetInfo::AreaCodec::decode_entry(const AssetInfo& info, const nlohmann::json& 
 
             const int scaled_w = compute_scaled_dimension(canonical_canvas.width, current_scale);
             const int scaled_h = compute_scaled_dimension(canonical_canvas.height, current_scale);
-            const double ratio_x = (rf.width > 0)
-                                       ? static_cast<double>(rf.pivot_x) / static_cast<double>(rf.width)
-                                       : 0.5;
-            const double ratio_y = (rf.height > 0)
-                                       ? static_cast<double>(rf.pivot_y) / static_cast<double>(rf.height)
-                                       : 1.0;
+            const double ratio_x = (rf.width > 0) ? static_cast<double>(rf.pivot_x) / static_cast<double>(rf.width) : 0.5;
+            const double ratio_y = (rf.height > 0) ? static_cast<double>(rf.pivot_y) / static_cast<double>(rf.height) : 1.0;
             render_anchor.x = static_cast<int>(std::llround(ratio_x * static_cast<double>(scaled_w)));
             render_anchor.y = static_cast<int>(std::llround(ratio_y * static_cast<double>(scaled_h)));
         }
@@ -460,8 +456,7 @@ void AssetInfo::load_base_properties(const nlohmann::json &data) {
         info_json_["generate_rays"] = generate_rays;
         ray_strength = std::clamp(data.value("ray_strength", 0), 0, 100);
         info_json_["ray_strength"] = ray_strength;
-        NeighborSearchRadius = std::clamp(
-            data.value("neighbor_search_distance", NeighborSearchRadius), 20, 1000);
+        NeighborSearchRadius = std::clamp( data.value("neighbor_search_distance", NeighborSearchRadius), 20, 1000);
         info_json_["neighbor_search_distance"] = NeighborSearchRadius;
 }
 
@@ -891,7 +886,7 @@ bool AssetInfo::rename_area(const std::string& old_name, const std::string& new_
             }
         }
     } catch (...) {
-        // Ignore JSON update errors; in-memory data already updated.
+
     }
 
     return true;

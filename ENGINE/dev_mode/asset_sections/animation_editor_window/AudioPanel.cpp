@@ -66,7 +66,7 @@ int label_height() {
     return style.font_size + DMSpacing::small_gap();
 }
 
-}  // namespace
+}
 
 AudioPanel::AudioPanel() { ensure_widgets(); }
 
@@ -97,22 +97,22 @@ int AudioPanel::preferred_height(int width) const {
     const int label_h = label_height();
     const int slider_area_width = std::max(0, width - padding * 2);
     const int slider_h = volume_slider_ ? volume_slider_->preferred_height(slider_area_width) : DMSlider::height();
-    int height = padding;  // top padding
-    height += label_h;     // section title
+    int height = padding;
+    height += label_h;
     if (has_audio_) {
-        height += label_h;  // clip label
+        height += label_h;
         height += DMButton::height();
         height += gap;
         height += slider_h;
         height += gap;
         height += DMCheckbox::height();
         height += gap;
-        height += DMButton::height();  // button row
+        height += DMButton::height();
     } else {
-        height += label_h;  // "No audio" label
+        height += label_h;
         height += DMButton::height();
     }
-    height += padding;  // bottom padding
+    height += padding;
     return height;
 }
 
@@ -238,7 +238,7 @@ bool AudioPanel::handle_event(const SDL_Event& e) {
             (this->*callback)();
             consumed = true;
         }
-    };
+};
 
     if (!has_audio_) {
         handle_button(attach_button_, &AudioPanel::attach_audio);
@@ -384,5 +384,5 @@ std::filesystem::path AudioPanel::resolve_audio_path() const {
     return importer_->resolve_asset_path(relative);
 }
 
-}  // namespace animation_editor
+}
 

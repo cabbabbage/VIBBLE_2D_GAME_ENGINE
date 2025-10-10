@@ -97,7 +97,7 @@ std::vector<const Room::NamedArea*> Assets::current_room_trigger_areas() const {
             return true;
         }
         return lowered.find("trigger") != std::string::npos;
-    };
+};
 
     for (const auto& entry : current_room_->areas) {
         if (!entry.area) {
@@ -533,7 +533,7 @@ void Assets::update(const Input& input,
     bool closest_assets_dirty = false;
     const auto mark_closest_assets_dirty = [&closest_assets_dirty]() {
         closest_assets_dirty = true;
-    };
+};
 
     Room* detected_room = finder_ ? finder_->getCurrentRoom() : nullptr;
     Room* active_room = detected_room;
@@ -893,7 +893,7 @@ void Assets::process_removals() {
                                return removal_lookup.count(candidate) > 0;
                            }),
             vec.end());
-    };
+};
 
     erase_ptrs(all);
     erase_ptrs(active_assets);
@@ -999,8 +999,6 @@ void Assets::open_asset_info_editor_for_asset(Asset* a) {
         dev_controls_->open_asset_info_editor_for_asset(a);
     }
 }
-
-// Removed: left-click opening of spawn group panel.
 
 void Assets::finalize_asset_drag(Asset* a, const std::shared_ptr<AssetInfo>& info) {
     if (dev_controls_ && dev_controls_->is_enabled()) {

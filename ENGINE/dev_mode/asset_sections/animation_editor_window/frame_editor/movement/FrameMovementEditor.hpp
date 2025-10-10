@@ -51,7 +51,7 @@ class FrameMovementEditor {
         std::string name;
         std::vector<MovementFrame> frames;
         bool primary = false;
-    };
+};
 
     struct VariantTabState {
         SDL_Rect rect{0, 0, 0, 0};
@@ -61,7 +61,7 @@ class FrameMovementEditor {
         bool pressed = false;
         bool close_hovered = false;
         bool close_pressed = false;
-    };
+};
 
     std::shared_ptr<AnimationDocument> document_;
     std::unique_ptr<MovementCanvas> canvas_;
@@ -82,5 +82,5 @@ class FrameMovementEditor {
     bool add_button_pressed_ = false;
 };
 
-}  // namespace animation_editor
+}
 

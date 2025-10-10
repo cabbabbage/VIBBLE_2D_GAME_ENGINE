@@ -42,7 +42,7 @@ SDL_Point min_corner_anchor(const std::vector<SDL_Point>& points) {
         return anchor;
 }
 
-}  // namespace
+}
 
 namespace RoomAreaSerialization {
 
@@ -104,7 +104,7 @@ AnchorData resolve_anchor(const nlohmann::json& entry,
         if (has_flag && entry["anchor_relative_to_center"].is_boolean()) {
                 wants_relative = entry["anchor_relative_to_center"].get<bool>();
         } else if (!has_flag && data.relative_to_center) {
-                // Legacy data stored absolute anchors; treat them as centered.
+
                 stored = SDL_Point{0, 0};
                 wants_relative = true;
         }
@@ -178,7 +178,7 @@ nlohmann::json encode_points(const std::vector<SDL_Point>& points, SDL_Point anc
         return arr;
 }
 
-} // namespace RoomAreaSerialization
+}
 
 Room::Room(Point origin,
            std::string type_,
@@ -222,7 +222,7 @@ data_section_(data_section)
         if (!assets_json.is_object()) {
                 assets_json = json::object();
         }
-        // Parse any room-level named areas (trigger/spawning) into class members
+
         load_named_areas_from_json();
         int map_radius_int = static_cast<int>(std::round(map_radius));
         if (map_radius_int < 0) map_radius_int = 0;
@@ -248,7 +248,7 @@ data_section_(data_section)
                         diameter = std::max(diameter, std::max(h_min, h_max));
                         if (diameter <= 0) return 0;
                         return std::max(1, diameter / 2);
-                };
+};
                 std::string lowered_geometry = geometry;
                 std::transform(lowered_geometry.begin(), lowered_geometry.end(), lowered_geometry.begin(), [](unsigned char ch) {
                         return static_cast<char>(std::tolower(ch));
@@ -381,7 +381,7 @@ void Room::load_named_areas_from_json() {
                         areas.push_back(std::move(na));
                 }
         } catch (...) {
-                // Silently ignore malformed area entries
+
         }
 }
 
@@ -675,7 +675,7 @@ void Room::rename(const std::string& new_name, nlohmann::json& map_info_json) {
 }
 
 void Room::save_assets_json() const {
-        // Refresh cached named areas from current JSON before saving
+
         const_cast<Room*>(this)->load_named_areas_from_json();
         if (room_data_ptr_) {
                 *room_data_ptr_ = assets_json;

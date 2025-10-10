@@ -70,13 +70,13 @@ class AssetInfo {
             bool is_valid() const {
                 return width > 0 && height > 0 && std::isfinite(pixel_scale) && pixel_scale > 0.0f;
             }
-        };
+};
         std::string name;
         std::string type;
         std::string kind;
         std::unique_ptr<Area> area;
         std::optional<RenderFrame> render_frame;
-    };
+};
     std::vector<NamedArea> areas;
     std::map<std::string, Animation> animations;
     std::map<std::string, Mapping> mappings;
@@ -102,8 +102,7 @@ class AssetInfo {
     void remove_anti_tag(const std::string &tag);
     void set_passable(bool v);
     Area* find_area(const std::string& name);
-    void upsert_area_from_editor(const class Area& area,
-                                 std::optional<NamedArea::RenderFrame> frame = std::nullopt);
+    void upsert_area_from_editor(const class Area& area, std::optional<NamedArea::RenderFrame> frame = std::nullopt);
     std::string pick_next_animation(const std::string& mapping_id) const;
     int NeighborSearchRadius = 500;
 
@@ -134,19 +133,12 @@ class AssetInfo {
     void set_start_animation_name(const std::string& name);
 
     struct AreaCodec {
-        static SDL_Point scaled_anchor(const AssetInfo& info,
-                                       std::optional<float> scale_override = std::nullopt);
+        static SDL_Point scaled_anchor(const AssetInfo& info, std::optional<float> scale_override = std::nullopt);
 
-        static nlohmann::json encode_entry(
-            const AssetInfo& info,
-            const Area& area,
-            const std::string& final_type,
-            const std::string& final_kind,
-            std::optional<NamedArea::RenderFrame> frame = std::nullopt);
+        static nlohmann::json encode_entry( const AssetInfo& info, const Area& area, const std::string& final_type, const std::string& final_kind, std::optional<NamedArea::RenderFrame> frame = std::nullopt);
 
-        static std::optional<NamedArea> decode_entry(const AssetInfo& info,
-                                                     const nlohmann::json& entry);
-    };
+        static std::optional<NamedArea> decode_entry(const AssetInfo& info, const nlohmann::json& entry);
+};
 
         private:
     void load_base_properties(const nlohmann::json &data);

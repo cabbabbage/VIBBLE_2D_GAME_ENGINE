@@ -44,5 +44,5 @@ class AnimationListPanel {
     bool layout_dirty_ = true;
 };
 
-}  // namespace animation_editor
+}
 

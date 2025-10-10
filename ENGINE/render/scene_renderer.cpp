@@ -16,8 +16,6 @@ static constexpr float MIN_VISIBLE_SCREEN_RATIO = 0.015f;
 
 namespace { }
 
-// Motion blur disabled
-
 SceneRenderer::SceneRenderer(SDL_Renderer* renderer,
                              Assets* assets,
                              int screen_width,
@@ -46,8 +44,6 @@ SceneRenderer::SceneRenderer(SDL_Renderer* renderer,
                 std::cerr << "[SceneRenderer] Failed to create fullscreen light texture: "
                           << SDL_GetError() << "\n";
         }
-
-        // No accumulation texture; render directly to default target
 
         z_light_pass_ = std::make_unique<LightMap>(renderer_, assets_, main_light_source_, screen_width_, screen_height_, fullscreen_light_tex_);
         if (z_light_pass_) {
@@ -83,7 +79,7 @@ SceneRenderer::~SceneRenderer() {
                 SDL_DestroyTexture(post_small_tex_b_);
                 post_small_tex_b_ = nullptr;
         }
-        // CPU surfaces were removed in favor of GPU textures for postprocess.
+
 }
 
 SDL_Renderer* SceneRenderer::get_renderer() const {
@@ -185,8 +181,7 @@ void SceneRenderer::update_shading_groups() {
 bool SceneRenderer::shouldRegen(Asset* a) {
 	if (!a->get_final_texture()) { return true; }
 	return (a->get_shading_group() > 0 &&
-	        a->get_shading_group() == current_shading_group_) ||
-	       (!a->get_final_texture() || !a->static_frame || a->get_render_player_light());
+	        a->get_shading_group() == current_shading_group_) || (!a->get_final_texture() || !a->static_frame || a->get_render_player_light());
 }
 
 SDL_Rect SceneRenderer::get_scaled_position_rect(Asset* a,
@@ -229,12 +224,10 @@ void SceneRenderer::render() {
     update_shading_groups();
     main_light_source_.update();
 
-    // ====== Tunable post-process params (hook to your UI) ======
-    static Uint8 kPostOverlayAlpha = 255;  // 0..255
+    static Uint8 kPostOverlayAlpha = 255;
 
     const bool use_postprocess = !low_quality_rendering_;
 
-    // ----- ENSURE GPU RENDER TARGETS & CLEAR SCENE -----
     auto ensure_target = [&](SDL_Texture*& tex, int w, int h) {
         int tw = 0, th = 0; Uint32 fmt = 0; int access = 0;
         if (tex && SDL_QueryTexture(tex, &fmt, &access, &tw, &th) == 0) {
@@ -248,10 +241,10 @@ void SceneRenderer::render() {
         SDL_SetTextureScaleMode(tex, SDL_ScaleModeBest);
         #endif
         return true;
-    };
+};
     if (use_postprocess) {
         if (!ensure_target(scene_target_tex_, screen_width_, screen_height_)) {
-            // Fallback: clear backbuffer and render directly (no post-process)
+
             SDL_SetRenderTarget(renderer_, nullptr);
             SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND);
             SDL_SetRenderDrawColor(renderer_, SLATE_COLOR.r, SLATE_COLOR.g, SLATE_COLOR.b, 255);
@@ -281,7 +274,6 @@ void SceneRenderer::render() {
         SDL_RenderClear(renderer_);
     }
 
-    // ----- WORLD RENDER -----
     const auto& camera_state = assets_->getView();
     float scale = camera_state.get_scale();
     float inv_scale = 1.0f / scale;
@@ -342,15 +334,13 @@ void SceneRenderer::render() {
             SDL_SetTextureColorMod(mod_target, 255, 255, 255);
         }
 
-        SDL_RenderCopyEx(renderer_, draw_tex ? draw_tex : final_tex, nullptr, &fb, 0, nullptr,
-                         a->flipped ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE);
+        SDL_RenderCopyEx(renderer_, draw_tex ? draw_tex : final_tex, nullptr, &fb, 0, nullptr, a->flipped ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE);
         SDL_SetTextureColorMod(mod_target, 255, 255, 255);
         if (draw_tex && draw_tex != final_tex) {
             SDL_SetTextureColorMod(final_tex, 255, 255, 255);
         }
     }
 
-    // ----- LIGHTS / OVERLAYS -----
     SDL_SetRenderTarget(renderer_, use_postprocess ? scene_target_tex_ : nullptr);
     z_light_pass_->render(debugging);
 
@@ -366,14 +356,12 @@ void SceneRenderer::render() {
         light_rays_texture = light_rays_pass_->compute(scene_target_tex_);
     }
 
-    // ----- POST: DIRECT MULTI-TAP BLEND ON BACKBUFFER (no render targets) -----
     if (use_postprocess && scene_target_tex_) {
         SDL_SetRenderTarget(renderer_, nullptr);
         SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND);
         SDL_SetRenderDrawColor(renderer_, 0, 0, 0, 255);
         SDL_RenderClear(renderer_);
 
-        // Base: dimmed original
         Uint8 base_alpha = static_cast<Uint8>(255 - kPostOverlayAlpha);
         SDL_SetTextureBlendMode(scene_target_tex_, SDL_BLENDMODE_BLEND);
         SDL_SetTextureAlphaMod(scene_target_tex_, base_alpha);
@@ -399,6 +387,5 @@ void SceneRenderer::render() {
         assets_->render_overlays(renderer_);
     }
 
-    // ----- PRESENT -----
     SDL_RenderPresent(renderer_);
 }

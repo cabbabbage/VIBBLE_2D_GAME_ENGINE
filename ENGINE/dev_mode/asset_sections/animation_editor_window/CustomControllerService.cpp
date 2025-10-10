@@ -39,7 +39,7 @@ std::string quote_argument(const std::filesystem::path& path) {
     return quoted;
 }
 
-}  // namespace
+}
 
 CustomControllerService::CustomControllerService() = default;
 
@@ -295,7 +295,7 @@ void CustomControllerService::write_controller_files(const std::filesystem::path
         cpp << class_name << "::" << class_name << "(Assets* assets, Asset* self)\n";
         cpp << "    : assets_(assets), self_(self) {\n";
         cpp << "}\n\n";
-        cpp << "void " << class_name << "::update(const Input& /*in*/) {\n";
+        cpp << "void " << class_name << "::update(const Input& ) {\n";
         cpp << "    if (!self_) {\n";
         cpp << "        return;\n";
         cpp << "    }\n";
@@ -367,7 +367,7 @@ void CustomControllerService::ensure_controller_factory_registration(const std::
         std::vector<std::string> branch_lines = {
             "                if (key == \"" + base_name + "\")",
             "                        return std::make_unique<" + class_name + ">(assets_, self);"
-        };
+};
 
         auto catch_it = std::find_if(lines.begin(), lines.end(), [](const std::string& value) {
             return value.find("} catch") != std::string::npos;
@@ -436,8 +436,7 @@ void CustomControllerService::update_asset_metadata(const std::string& base_name
             auto entry_it = animations_it->find(animation_id);
             if (entry_it != animations_it->end() && entry_it->is_object()) {
                 (*entry_it)["custom_animation_controller_key"] = base_name;
-                (*entry_it)["custom_animation_controller_hpp_path"] =
-                    (controller_dir_ / (base_name + ".hpp")).string();
+                (*entry_it)["custom_animation_controller_hpp_path"] = (controller_dir_ / (base_name + ".hpp")).string();
                 (*entry_it)["has_custom_animation_controller"] = true;
             }
         }
@@ -496,5 +495,5 @@ void CustomControllerService::open_in_default_editor(const std::filesystem::path
     }
 }
 
-}  // namespace animation_editor
+}
 

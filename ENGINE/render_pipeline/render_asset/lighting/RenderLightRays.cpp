@@ -108,7 +108,7 @@ inline int asset_ray_strength(const Asset& asset) {
     return std::clamp(asset.ray_strength, 0, 100);
 }
 
-} // namespace
+}
 
 bool RenderLightRays::supports(const Asset& asset) const {
     if (!asset.generate_rays) {
@@ -237,7 +237,6 @@ SDL_Texture* RenderLightRays::run(SDL_Renderer* renderer, const Asset& asset, St
     }
     float threshold = std::max(params.min_luma_threshold, threshold_bin / 255.f);
 
-    // Encourage tighter highlights when the bright portion is very large
     if (keep > total_pixels * 0.35f) {
         threshold = std::max(threshold, 0.92f);
     }
@@ -322,11 +321,7 @@ SDL_Texture* RenderLightRays::run(SDL_Renderer* renderer, const Asset& asset, St
         }
     }
 
-    SDL_Texture* lowres_tex = SDL_CreateTexture(renderer,
-                                                SDL_PIXELFORMAT_RGBA8888,
-                                                SDL_TEXTUREACCESS_STREAMING,
-                                                dw,
-                                                dh);
+    SDL_Texture* lowres_tex = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_STREAMING, dw, dh);
     if (!lowres_tex) {
         return nullptr;
     }
@@ -353,11 +348,7 @@ SDL_Texture* RenderLightRays::run(SDL_Renderer* renderer, const Asset& asset, St
 
     SDL_UnlockTexture(lowres_tex);
 
-    SDL_Texture* texture = SDL_CreateTexture(renderer,
-                                             SDL_PIXELFORMAT_RGBA8888,
-                                             SDL_TEXTUREACCESS_TARGET,
-                                             width,
-                                             height);
+    SDL_Texture* texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET, width, height);
     if (!texture) {
         SDL_DestroyTexture(lowres_tex);
         return nullptr;
@@ -378,5 +369,5 @@ SDL_Texture* RenderLightRays::run(SDL_Renderer* renderer, const Asset& asset, St
     return texture;
 }
 
-} // namespace render_pipeline::lighting
+}
 

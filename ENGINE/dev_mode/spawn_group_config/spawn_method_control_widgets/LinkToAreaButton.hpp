@@ -22,4 +22,4 @@ private:
     Signal<const std::string&> on_open_area_{};
 };
 
-}  // namespace vibble::dev_mode::spawn_group_config::spawn_method_control_widgets
+}

@@ -14,15 +14,9 @@ const nlohmann::json* find_spawn_groups_array(const nlohmann::json& root);
 
 bool sanitize_perimeter_spawn_groups(nlohmann::json& groups);
 
-// Ensures a spawn group entry contains required candidate data and normalizes
-// values. Returns true when the entry was modified.
 bool sanitize_spawn_group_candidates(nlohmann::json& entry);
 
-// Ensures a spawn group entry has required fields and sensible defaults. The
-// provided display name is only applied when the entry lacks one. Returns true
-// when the entry was modified.
-bool ensure_spawn_group_entry_defaults(nlohmann::json& entry,
-                                       const std::string& default_display_name);
+bool ensure_spawn_group_entry_defaults(nlohmann::json& entry, const std::string& default_display_name);
 
-}  // namespace devmode::spawn
+}
 

@@ -27,7 +27,6 @@ struct SpawnInfo {
     int quantity = 0;
     bool check_min_spacing = false;
 
-    // Optional named room area to clip spawning within
     std::string link_area_name;
 
     SDL_Point exact_offset{0, 0};

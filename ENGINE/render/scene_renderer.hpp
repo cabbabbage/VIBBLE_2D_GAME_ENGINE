@@ -35,13 +35,7 @@ class SceneRenderer {
 private:
     void update_shading_groups();
     bool shouldRegen(Asset* a);
-    SDL_Rect get_scaled_position_rect(Asset* a,
-                                      int fw,
-                                      int fh,
-                                      float inv_scale,
-                                      int min_w,
-                                      int min_h,
-                                      float reference_screen_height);
+    SDL_Rect get_scaled_position_rect(Asset* a, int fw, int fh, float inv_scale, int min_w, int min_h, float reference_screen_height);
     void apply_screen_light_settings(const nlohmann::json& data);
     void update_fullscreen_light_texture();
 
@@ -67,9 +61,8 @@ private:
     bool           debugging = false;
     bool           low_quality_rendering_ = false;
 
-    // GPU-based postprocess targets
-    SDL_Texture*   scene_target_tex_    = nullptr;  // full-res scene render target
-    SDL_Texture*   post_small_tex_a_    = nullptr;  // downscaled intermediate A
-    SDL_Texture*   post_small_tex_b_    = nullptr;  // downscaled intermediate B (ping-pong)
-    
+    SDL_Texture*   scene_target_tex_    = nullptr;
+    SDL_Texture*   post_small_tex_a_    = nullptr;
+    SDL_Texture*   post_small_tex_b_    = nullptr;
+
 };

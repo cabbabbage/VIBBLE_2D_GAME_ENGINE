@@ -30,7 +30,7 @@ Room* CurrentRoomFinder::getCurrentRoom() const {
     const int py = player_->pos.y;
     auto contains_player = [&](Room* room) -> bool {
         return room && room->room_area && room->room_area->contains_point(SDL_Point{px, py});
-    };
+};
 
     auto try_room = [&](Room* room) -> Room* {
         if (contains_player(room)) {
@@ -38,7 +38,7 @@ Room* CurrentRoomFinder::getCurrentRoom() const {
             return room;
         }
         return nullptr;
-    };
+};
 
     if (Room* matched = try_room(last_room_)) return matched;
 

@@ -93,5 +93,5 @@ class AnimationEditorWindow {
     int auto_save_timer_frames_ = 0;
 };
 
-}  // namespace animation_editor
+}
 

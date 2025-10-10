@@ -45,5 +45,5 @@ class AnimationDocument {
     mutable bool dirty_ = false;
 };
 
-}  // namespace animation_editor
+}
 

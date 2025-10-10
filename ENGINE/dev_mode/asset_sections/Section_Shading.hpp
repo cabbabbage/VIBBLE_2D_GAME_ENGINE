@@ -91,7 +91,7 @@ public:
             if (!widget) return;
             widget->set_rect(SDL_Rect{x, y - scroll_, maxw, h});
             y += h + DMSpacing::item_gap();
-        };
+};
 
         if (c_is_shaded_) {
             place(c_is_shaded_, DMCheckbox::height());
@@ -153,7 +153,7 @@ public:
                     auto scale_clamped = [&](int value, int min_v, int max_v) {
                         double scaled = std::round(static_cast<double>(value) * ratio);
                         return static_cast<int>(std::clamp(scaled, static_cast<double>(min_v), static_cast<double>(max_v)));
-                    };
+};
                     shading_light_.x_radius = scale_clamped(shading_light_.x_radius, 0, 2000);
                     shading_light_.y_radius = scale_clamped(shading_light_.y_radius, 0, 2000);
                     shading_light_.offset_x = scale_clamped(shading_light_.offset_x, -2000, 2000);

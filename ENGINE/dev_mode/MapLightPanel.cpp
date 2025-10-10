@@ -182,7 +182,7 @@ void MapLightPanel::build_ui() {
 void MapLightPanel::update_section_header_labels() {
     auto label_for = [](const std::string& title, bool collapsed) {
         return std::string(collapsed ? "[+] " : "[-] ") + title;
-    };
+};
     if (orbit_section_btn_) {
         orbit_section_btn_->set_text(label_for("Orbit Settings", orbit_section_collapsed_));
     }
@@ -204,7 +204,7 @@ void MapLightPanel::rebuild_rows() {
         Widget* raw = w.get();
         widget_wrappers_.push_back(std::move(w));
         return raw;
-    };
+};
 
     Rows rows;
 
@@ -344,7 +344,7 @@ nlohmann::json& MapLightPanel::ensure_light() {
         } catch (...) {
         }
         return std::nullopt;
-    };
+};
 
     auto read_int = [&](const char* key, int fallback, int lo, int hi) {
         int value = fallback;
@@ -355,7 +355,7 @@ nlohmann::json& MapLightPanel::ensure_light() {
             }
         }
         return clamp_int(value, lo, hi);
-    };
+};
 
     auto parse_double = [](const json& value, double fallback) -> std::optional<double> {
         try {
@@ -376,7 +376,7 @@ nlohmann::json& MapLightPanel::ensure_light() {
         } catch (...) {
         }
         return std::nullopt;
-    };
+};
 
     auto read_double = [&](const char* key, double fallback, double lo, double hi) {
         double value = fallback;
@@ -387,7 +387,7 @@ nlohmann::json& MapLightPanel::ensure_light() {
             }
         }
         return std::clamp(value, lo, hi);
-    };
+};
 
     L["radius"] = read_int("radius", 0, 0, 20000);
     L["intensity"] = read_int("intensity", 255, 0, 255);
@@ -414,7 +414,7 @@ nlohmann::json& MapLightPanel::ensure_light() {
             return clamp_int(*parsed, 0, 20000);
         }
         return std::nullopt;
-    };
+};
 
     const int fallback_orbit = read_radius("orbit_radius").value_or(0);
     int orbit_x = read_radius("orbit_x").value_or(fallback_orbit);
@@ -453,7 +453,7 @@ nlohmann::json& MapLightPanel::ensure_screen_light(nlohmann::json& light) {
         } catch (...) {
             return 255;
         }
-    };
+};
     auto& color = screen["color"];
     if (color.is_array()) {
         for (std::size_t i = 0; i < 3; ++i) {

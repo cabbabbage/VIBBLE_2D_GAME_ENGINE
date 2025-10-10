@@ -133,11 +133,9 @@ void SlidingWindowContainer::update(const Input& input, int screen_w, int screen
     int mx = input.getX();
     int my = input.getY();
     const bool pointer_in_scroll =
-        (mx >= scroll_region_.x && mx < scroll_region_.x + scroll_region_.w &&
-         my >= scroll_region_.y && my < scroll_region_.y + scroll_region_.h);
+        (mx >= scroll_region_.x && mx < scroll_region_.x + scroll_region_.w && my >= scroll_region_.y && my < scroll_region_.y + scroll_region_.h);
     const bool pointer_in_panel_area =
-        (mx >= panel_.x && mx < panel_.x + panel_.w &&
-         my >= panel_.y && my < panel_.y + panel_.h);
+        (mx >= panel_.x && mx < panel_.x + panel_.w && my >= panel_.y && my < panel_.y + panel_.h);
     if ((pointer_in_scroll || pointer_in_panel_area) && !DMWidgetsSliderScrollCaptured()) {
         int dy = input.getScrollY();
         if (dy != 0) {
@@ -240,9 +238,7 @@ bool SlidingWindowContainer::handle_event(const SDL_Event& e) {
                 int new_thumb_y = pointer.y - scrollbar_drag_offset_;
                 new_thumb_y = std::clamp(new_thumb_y, min_thumb_y, max_thumb_y);
                 int range = std::max(0, max_thumb_y - min_thumb_y);
-                double ratio = (range > 0)
-                                    ? static_cast<double>(new_thumb_y - min_thumb_y) / static_cast<double>(range)
-                                    : 0.0;
+                double ratio = (range > 0) ? static_cast<double>(new_thumb_y - min_thumb_y) / static_cast<double>(range) : 0.0;
                 scroll_ = std::max(0, std::min(max_scroll_, static_cast<int>(std::round(ratio * max_scroll_))));
             }
             return true;
@@ -346,8 +342,7 @@ void SlidingWindowContainer::render(SDL_Renderer* renderer, int screen_w, int sc
 
     if (max_scroll_ > 0 && scroll_track_rect_.w > 0 && scroll_track_rect_.h > 0) {
         SDL_Color track_col = DMStyles::Border();
-        SDL_SetRenderDrawColor(renderer, track_col.r, track_col.g, track_col.b,
-                               std::min<int>(track_col.a, 120));
+        SDL_SetRenderDrawColor(renderer, track_col.r, track_col.g, track_col.b, std::min<int>(track_col.a, 120));
         SDL_RenderFillRect(renderer, &scroll_track_rect_);
         if (scroll_thumb_rect_.h > 0) {
             SDL_Color thumb_col = DMStyles::AccentButton().hover_bg;
@@ -437,7 +432,7 @@ void SlidingWindowContainer::layout(int screen_w, int screen_h) const {
             return layout_function_(ctx);
         }
         return scroll_start;
-    };
+};
 
     int end_y = perform_layout(scroll_, content_w_active);
     int content_height = end_y - scroll_start;
@@ -496,8 +491,7 @@ void SlidingWindowContainer::layout(int screen_w, int screen_h) const {
             scrollbar_dragging_ = false;
             scroll_thumb_rect_ = SDL_Rect{ track_x, track_y, kScrollbarWidth, 0 };
         } else if (content_height_px_ > 0 && visible_height_px_ > 0) {
-            int thumb_h = static_cast<int>(std::round(static_cast<double>(track_h) * visible_height_px_ /
-                                                      std::max(visible_height_px_, content_height_px_)));
+            int thumb_h = static_cast<int>(std::round(static_cast<double>(track_h) * visible_height_px_ / std::max(visible_height_px_, content_height_px_)));
             thumb_h = std::clamp(thumb_h, 20, track_h);
             int scroll_range = std::max(0, track_h - thumb_h);
             int thumb_y = track_y;

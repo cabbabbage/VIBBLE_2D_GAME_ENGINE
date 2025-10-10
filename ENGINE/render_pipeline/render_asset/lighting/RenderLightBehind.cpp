@@ -14,5 +14,5 @@ SDL_Texture* RenderLightBehind::run(SDL_Renderer* renderer, const Asset& asset, 
     return detail::build_light_texture(renderer, asset, context, true);
 }
 
-} // namespace render_pipeline::lighting
+}
 

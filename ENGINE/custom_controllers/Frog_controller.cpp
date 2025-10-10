@@ -20,11 +20,11 @@ constexpr Uint32 kRunHopIntervalMinMs   = 350;
 constexpr Uint32 kRunHopIntervalMaxMs   = 850;
 constexpr double kPi                    = 3.14159265358979323846;
 constexpr double kTau                   = 6.28318530717958647692;
-constexpr double kFleeAngleJitter       = kPi / 6.0; // +/-30 degrees.
+constexpr double kFleeAngleJitter       = kPi / 6.0;
 constexpr double kFleeDistanceScaleMin  = 0.65;
 constexpr double kFleeDistanceScaleMax  = 1.0;
 
-} // namespace
+}
 
 FrogController::FrogController(Assets* assets, Asset* self)
     : assets_(assets), self_(self), rng_(std::random_device{}()) {
@@ -117,8 +117,7 @@ void FrogController::update(const Input&) {
 
 void FrogController::schedule_next_idle_hop() {
     const Uint32 now = SDL_GetTicks();
-    std::uniform_int_distribution<int> wait_dist(static_cast<int>(kIdleHopIntervalMinMs),
-                                                 static_cast<int>(kIdleHopIntervalMaxMs));
+    std::uniform_int_distribution<int> wait_dist(static_cast<int>(kIdleHopIntervalMinMs), static_cast<int>(kIdleHopIntervalMaxMs));
     next_idle_hop_time_ms_ = now + static_cast<Uint32>(wait_dist(rng_));
 }
 
@@ -141,8 +140,7 @@ void FrogController::perform_idle_hop() {
 
 void FrogController::schedule_next_run_hop() {
     const Uint32 now = SDL_GetTicks();
-    std::uniform_int_distribution<int> wait_dist(static_cast<int>(kRunHopIntervalMinMs),
-                                                 static_cast<int>(kRunHopIntervalMaxMs));
+    std::uniform_int_distribution<int> wait_dist(static_cast<int>(kRunHopIntervalMinMs), static_cast<int>(kRunHopIntervalMaxMs));
     next_run_hop_time_ms_ = now + static_cast<Uint32>(wait_dist(rng_));
 }
 
@@ -257,8 +255,7 @@ SDL_Point FrogController::random_idle_destination() {
     }
 
     std::uniform_real_distribution<double> angle_dist(0.0, kTau);
-    std::uniform_real_distribution<double> distance_dist(static_cast<double>(radius) * 0.25,
-                                                         static_cast<double>(radius));
+    std::uniform_real_distribution<double> distance_dist(static_cast<double>(radius) * 0.25, static_cast<double>(radius));
 
     for (int attempt = 0; attempt < 8; ++attempt) {
         const double angle = angle_dist(rng_);

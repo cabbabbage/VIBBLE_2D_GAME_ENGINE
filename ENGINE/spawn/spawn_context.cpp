@@ -54,7 +54,7 @@ Asset* SpawnContext::spawnAsset(const std::string& name,
                                 const std::string& spawn_id,
                                 const std::string& spawn_method)
 {
-        // If a clip area is set and the position is outside, skip spawn
+
         if (clip_area_ && !clip_area_->contains_point(pos)) {
                 return nullptr;
         }

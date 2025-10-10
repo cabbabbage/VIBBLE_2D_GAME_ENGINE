@@ -22,7 +22,7 @@ public:
         std::string id;
         std::string label;
         bool active = false;
-    };
+};
 
     AssetFilterBar();
     ~AssetFilterBar();
@@ -100,7 +100,7 @@ private:
     struct ModeButtonEntry {
         ModeButtonConfig config;
         std::unique_ptr<class DMButton> button;
-    };
+};
     std::vector<ModeButtonEntry> mode_buttons_;
     std::function<void(const std::string&)> on_mode_selected_{};
     std::unique_ptr<class DMButton> filter_toggle_button_;

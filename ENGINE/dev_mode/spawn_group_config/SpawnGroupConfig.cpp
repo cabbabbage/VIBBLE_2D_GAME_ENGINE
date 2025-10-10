@@ -37,10 +37,7 @@ public:
         if (!renderer) return;
         DMLabelStyle style = DMStyles::Label();
         SDL_Color color = subtle_ ? SDL_Color{static_cast<Uint8>(style.color.r / 2),
-                                              static_cast<Uint8>(style.color.g / 2),
-                                              static_cast<Uint8>(style.color.b / 2),
-                                              style.color.a}
-                                  : style.color;
+                                              static_cast<Uint8>(style.color.g / 2), static_cast<Uint8>(style.color.b / 2), style.color.a} : style.color;
         if (color_.a != 0) color = color_;
         TTF_Font* font = TTF_OpenFont(style.font_path.c_str(), style.font_size);
         if (!font) return;
@@ -340,7 +337,7 @@ std::string trim(const std::string& value) {
     return value.substr(start, end - start);
 }
 
-}  // namespace
+}
 
 struct SpawnGroupConfig::RowEntry {
     struct CandidateWidgets {
@@ -350,7 +347,7 @@ struct SpawnGroupConfig::RowEntry {
         std::unique_ptr<CallbackTextBoxWidget> chance_widget;
         std::unique_ptr<DMButton> remove_button;
         std::unique_ptr<ButtonWidget> remove_widget;
-    };
+};
 
     explicit RowEntry(SpawnGroupConfig& owner, std::unique_ptr<SpawnGroupRow> row)
         : owner_(&owner), row_(std::move(row)) {
@@ -907,7 +904,7 @@ void SpawnGroupConfig::bind_entry(nlohmann::json& entry,
     auto relay = [this, cb = std::move(on_entry_change)](const nlohmann::json& updated, const ChangeSummary& summary) {
         if (cb) cb(updated, summary);
         fire_entry_callbacks(updated, summary);
-    };
+};
     load_impl(nullptr, &entry, std::move(on_change), std::move(relay), std::move(configure_entry));
 }
 
@@ -938,8 +935,7 @@ void SpawnGroupConfig::load_impl(nlohmann::json* array,
     bound_array_ = array;
     bound_entry_ = entry;
     if (bound_entry_) {
-        devmode::spawn::ensure_spawn_group_entry_defaults(*bound_entry_,
-                                                          default_display_name_for(*bound_entry_));
+        devmode::spawn::ensure_spawn_group_entry_defaults(*bound_entry_, default_display_name_for(*bound_entry_));
     }
     if (bound_array_) {
         devmode::spawn::ensure_spawn_groups_array(*bound_array_);
@@ -951,8 +947,7 @@ void SpawnGroupConfig::load_impl(nlohmann::json* array,
     if (bound_entry_) {
         single_entry_shadow_ = nlohmann::json::array();
         single_entry_shadow_.push_back(*bound_entry_);
-        devmode::spawn::ensure_spawn_group_entry_defaults(single_entry_shadow_.at(0),
-                                                          default_display_name_for(single_entry_shadow_.at(0)));
+        devmode::spawn::ensure_spawn_group_entry_defaults(single_entry_shadow_.at(0), default_display_name_for(single_entry_shadow_.at(0)));
     } else {
         single_entry_shadow_.clear();
         if (bound_array_) {
@@ -968,10 +963,7 @@ void SpawnGroupConfig::load_impl(nlohmann::json* array,
 
 void SpawnGroupConfig::append_rows(Rows& rows) {
     const bool was_suppressed = suppress_layout_change_callback_;
-    // Calling rebuild_rows()/rebuild_layout() here would trigger the
-    // on_layout_change_ callback, which in turn calls append_rows() again.
-    // Temporarily suppress the callback while we bring the layout up to date
-    // so we don't recurse infinitely when a parent section mirrors our rows.
+
     if (layout_dirty_) {
         suppress_layout_change_callback_ = true;
         rebuild_layout();
@@ -1104,7 +1096,7 @@ void SpawnGroupConfig::rebuild_rows() {
             }
         }
         return nullptr;
-    };
+};
 
     for (size_t i = 0; i < source->size(); ++i) {
         const auto& entry = (*source)[i];

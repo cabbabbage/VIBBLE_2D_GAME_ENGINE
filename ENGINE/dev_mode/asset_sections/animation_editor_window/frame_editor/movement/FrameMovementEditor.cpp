@@ -129,7 +129,7 @@ std::vector<MovementFrame> default_variant_frames() {
     return parse_movement_frames(nlohmann::json::array());
 }
 
-}  // namespace
+}
 
 FrameMovementEditor::FrameMovementEditor() { ensure_children(); }
 
@@ -423,8 +423,7 @@ void FrameMovementEditor::layout_variant_header() {
         tab.close_visible = !variants_[i].primary;
         if (tab.close_visible) {
             tab.close_rect = SDL_Rect{tab.rect.x + tab.rect.w - kVariantCloseSize - 4,
-                                      tab.rect.y + (tab.rect.h - kVariantCloseSize) / 2, kVariantCloseSize,
-                                      kVariantCloseSize};
+                                      tab.rect.y + (tab.rect.h - kVariantCloseSize) / 2, kVariantCloseSize, kVariantCloseSize};
         } else {
             tab.close_rect = SDL_Rect{0, 0, 0, 0};
         }
@@ -680,5 +679,5 @@ std::string FrameMovementEditor::generate_variant_name() const {
     }
 }
 
-}  // namespace animation_editor
+}
 

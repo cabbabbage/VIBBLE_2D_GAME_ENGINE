@@ -33,18 +33,34 @@ class DummySection : public DockableCollapsible {
 
 struct Section_Sizing      : public DummySection { Section_Sizing()      : DummySection("Sizing") {} };
 struct Section_Sizing      : public DummySection { Section_Sizing()      : DummySection("Sizing") {} };
+struct Section_Sizing      : public DummySection { Section_Sizing()      : DummySection("Sizing") {} };
+struct Section_Sizing      : public DummySection { Section_Sizing()      : DummySection("Sizing") {} };
+struct Section_Passability : public DummySection { Section_Passability() : DummySection("Passability") {} };
+struct Section_Passability : public DummySection { Section_Passability() : DummySection("Passability") {} };
 struct Section_Passability : public DummySection { Section_Passability() : DummySection("Passability") {} };
 struct Section_Passability : public DummySection { Section_Passability() : DummySection("Passability") {} };
 struct Section_Spacing     : public DummySection { Section_Spacing()     : DummySection("Spacing") {} };
 struct Section_Spacing     : public DummySection { Section_Spacing()     : DummySection("Spacing") {} };
+struct Section_Spacing     : public DummySection { Section_Spacing()     : DummySection("Spacing") {} };
+struct Section_Spacing     : public DummySection { Section_Spacing()     : DummySection("Spacing") {} };
+struct Section_Animations  : public DummySection { Section_Animations()  : DummySection("Animations") {} };
+struct Section_Animations  : public DummySection { Section_Animations()  : DummySection("Animations") {} };
 struct Section_Animations  : public DummySection { Section_Animations()  : DummySection("Animations") {} };
 struct Section_Animations  : public DummySection { Section_Animations()  : DummySection("Animations") {} };
 struct Section_ChildAssets : public DummySection { Section_ChildAssets() : DummySection("Child Assets") {} };
 struct Section_ChildAssets : public DummySection { Section_ChildAssets() : DummySection("Child Assets") {} };
+struct Section_ChildAssets : public DummySection { Section_ChildAssets() : DummySection("Child Assets") {} };
+struct Section_ChildAssets : public DummySection { Section_ChildAssets() : DummySection("Child Assets") {} };
+struct Section_Tags        : public DummySection { Section_Tags()        : DummySection("Tags") {} };
+struct Section_Tags        : public DummySection { Section_Tags()        : DummySection("Tags") {} };
 struct Section_Tags        : public DummySection { Section_Tags()        : DummySection("Tags") {} };
 struct Section_Tags        : public DummySection { Section_Tags()        : DummySection("Tags") {} };
 struct Section_Lighting    : public DummySection { Section_Lighting()    : DummySection("Lighting") {} };
 struct Section_Lighting    : public DummySection { Section_Lighting()    : DummySection("Lighting") {} };
+struct Section_Lighting    : public DummySection { Section_Lighting()    : DummySection("Lighting") {} };
+struct Section_Lighting    : public DummySection { Section_Lighting()    : DummySection("Lighting") {} };
+struct Section_Json        : public DummySection { Section_Json()        : DummySection("JSON") {} };
+struct Section_Json        : public DummySection { Section_Json()        : DummySection("JSON") {} };
 struct Section_Json        : public DummySection { Section_Json()        : DummySection("JSON") {} };
 struct Section_Json        : public DummySection { Section_Json()        : DummySection("JSON") {} };
 

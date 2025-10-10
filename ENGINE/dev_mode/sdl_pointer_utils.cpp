@@ -19,5 +19,5 @@ SDL_Point event_point(const SDL_Event& e) {
     return SDL_Point{mx, my};
 }
 
-}  // namespace devmode::sdl
+}
 

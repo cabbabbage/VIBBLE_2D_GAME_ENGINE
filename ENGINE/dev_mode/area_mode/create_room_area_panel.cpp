@@ -29,7 +29,7 @@ void CreateRoomAreaPanel::ensure_panel() {
 void CreateRoomAreaPanel::rebuild_rows() {
     if (!panel_) return;
     DockableCollapsible::Rows rows;
-    // Just the two action buttons (label is the header title)
+
     rows.push_back({ trigger_widget_.get(), spawn_widget_.get() });
     panel_->set_rows(rows);
 }
@@ -39,7 +39,7 @@ void CreateRoomAreaPanel::open_at(int screen_x, int screen_y) {
     if (!panel_) return;
     const int w = 270;
     const int h = DMButton::height() + DMSpacing::panel_padding() * 2 + DMSpacing::item_gap();
-    // Position above the click (drop up)
+
     int x = screen_x - w / 2;
     int y = screen_y - h - 8;
     panel_->set_rect(SDL_Rect{x, y, w, h});

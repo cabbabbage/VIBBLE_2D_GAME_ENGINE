@@ -125,7 +125,7 @@ bool render_orbital_lights(SDL_Renderer* renderer, const Asset& asset, StageCont
             adjusted          = 0.5f + 0.5f * (1.0f - std::pow(1.0f - local, exponent));
         }
         return kHalfPi - adjusted * kTwoPi;
-    };
+};
 
     for (auto& light : asset.info->orbital_light_sources) {
         if (!light.texture || light.behind || light.x_radius <= 0 || light.y_radius <= 0) {
@@ -150,10 +150,7 @@ bool render_orbital_lights(SDL_Renderer* renderer, const Asset& asset, StageCont
             light.cached_h = lh;
         }
 
-        SDL_Rect dst = context.dest_from_world_offset(static_cast<int>(std::lround(lx)) - asset.pos.x,
-                                                      static_cast<int>(std::lround(ly)) - asset.pos.y,
-                                                      lw,
-                                                      lh);
+        SDL_Rect dst = context.dest_from_world_offset(static_cast<int>(std::lround(lx)) - asset.pos.x, static_cast<int>(std::lround(ly)) - asset.pos.y, lw, lh);
 
         SDL_SetTextureBlendMode(light.texture, SDL_BLENDMODE_ADD);
         SDL_SetTextureAlphaMod(light.texture, alpha);
@@ -165,7 +162,7 @@ bool render_orbital_lights(SDL_Renderer* renderer, const Asset& asset, StageCont
     return any_rendered;
 }
 
-} // namespace
+}
 
 bool RenderShadowMask::supports(const Asset& asset) const {
     return asset.is_shaded;
@@ -225,5 +222,5 @@ SDL_Texture* RenderShadowMask::run(SDL_Renderer* renderer, const Asset& asset, S
     return mask;
 }
 
-} // namespace render_pipeline::shading
+}
 

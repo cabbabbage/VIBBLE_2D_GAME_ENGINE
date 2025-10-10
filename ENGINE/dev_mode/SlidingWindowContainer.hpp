@@ -16,7 +16,7 @@ public:
         int scroll_value;
         int content_top;
         int gap;
-    };
+};
 
     using LayoutFunction = std::function<int(const LayoutContext&)>;
     using RenderFunction = std::function<void(SDL_Renderer*)>;

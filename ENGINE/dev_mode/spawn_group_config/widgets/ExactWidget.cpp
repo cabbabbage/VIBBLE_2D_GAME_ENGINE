@@ -54,4 +54,4 @@ const model::MethodConfig::Exact* ExactWidget::read_config() const {
     return group_->method_config.as_exact();
 }
 
-}  // namespace vibble::dev_mode::spawn_group_config::widgets
+}

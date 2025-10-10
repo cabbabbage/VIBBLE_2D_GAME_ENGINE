@@ -20,7 +20,7 @@ constexpr double kStartAngle = -1.5707963267948966;
 double clamp_positive(double value) {
     return value < 0.0 ? 0.0 : value;
 }
-}  // namespace
+}
 
 CandidateEditorPieGraphWidget::CandidateEditorPieGraphWidget() {
     rect_ = SDL_Rect{0, 0, 280, 180};
@@ -269,10 +269,7 @@ void CandidateEditorPieGraphWidget::render_empty(SDL_Renderer* renderer, const L
     }
 
     const SDL_Color text_color = DMStyles::Label().color;
-    draw_text(renderer, font, "No candidates configured",
-              static_cast<int>(std::round(center.x)),
-              static_cast<int>(std::round(center.y)),
-              text_color, true);
+    draw_text(renderer, font, "No candidates configured", static_cast<int>(std::round(center.x)), static_cast<int>(std::round(center.y)), text_color, true);
 }
 
 void CandidateEditorPieGraphWidget::render_slices(SDL_Renderer* renderer, const Layout& layout, double total) const {
@@ -328,11 +325,7 @@ void CandidateEditorPieGraphWidget::render_slices(SDL_Renderer* renderer, const 
         SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b, color.a);
         for (int s = 0; s <= segments; ++s) {
             double t = angle + sweep * (static_cast<double>(s) / segments);
-            SDL_RenderDrawLine(renderer,
-                               static_cast<int>(std::round(layout.center.x)),
-                               static_cast<int>(std::round(layout.center.y)),
-                               static_cast<int>(std::round(layout.center.x + slice_radius * std::cos(t))),
-                               static_cast<int>(std::round(layout.center.y + slice_radius * std::sin(t))));
+            SDL_RenderDrawLine(renderer, static_cast<int>(std::round(layout.center.x)), static_cast<int>(std::round(layout.center.y)), static_cast<int>(std::round(layout.center.x + slice_radius * std::cos(t))), static_cast<int>(std::round(layout.center.y + slice_radius * std::sin(t))));
         }
 #endif
 
@@ -390,18 +383,15 @@ void CandidateEditorPieGraphWidget::render_legend(SDL_Renderer* renderer, const 
 
             double percent = total > 0.0 ? (clamp_positive(candidates_[i].weight) / total) * 100.0 : 0.0;
             std::ostringstream label;
-            label << candidates_[i].name << " - " << std::fixed << std::setprecision(1) << percent << "% ("
-                  << static_cast<int>(std::round(clamp_positive(candidates_[i].weight))) << ")";
-            draw_text(renderer, font, label.str(), box.x + box.w + 8,
-                      y + (row_height - font_height) / 2, text_color, false);
+            label << candidates_[i].name << " - " << std::fixed << std::setprecision(1) << percent << "% (" << static_cast<int>(std::round(clamp_positive(candidates_[i].weight))) << ")";
+            draw_text(renderer, font, label.str(), box.x + box.w + 8, y + (row_height - font_height) / 2, text_color, false);
 
             y += row_height;
         }
     } else {
         std::ostringstream summary;
         summary << "Total weight: " << static_cast<int>(std::round(total));
-        draw_text(renderer, font, summary.str(), rect_.x + DMSpacing::item_gap(),
-                  rect_.y + DMSpacing::item_gap(), DMStyles::Label().color, false);
+        draw_text(renderer, font, summary.str(), rect_.x + DMSpacing::item_gap(), rect_.y + DMSpacing::item_gap(), DMStyles::Label().color, false);
     }
 }
 

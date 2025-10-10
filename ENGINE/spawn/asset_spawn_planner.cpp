@@ -78,7 +78,6 @@ void AssetSpawnPlanner::parse_asset_spawns(const Area& area) {
             }
         }
 
-        // Ensure a numeric priority exists; if not, assign based on list order (0..n-1)
         int priority = -1;
         if (asset.contains("priority") && asset["priority"].is_number_integer()) {
             priority = asset["priority"].get<int>();
@@ -105,7 +104,6 @@ void AssetSpawnPlanner::parse_asset_spawns(const Area& area) {
         if (display_name.empty()) display_name = get_opt_str(asset, "name");
         if (display_name.empty()) display_name = spawn_id;
 
-        // Optional link to a named room area
         std::string link_name = get_opt_str(asset, "link");
 
         int min_num = asset.value("min_number", 1);
@@ -374,7 +372,7 @@ void AssetSpawnPlanner::parse_asset_spawns(const Area& area) {
 }
 
 void AssetSpawnPlanner::sort_spawn_queue() {
-    // The only spawn ordering rule: ascending by priority (0 is highest)
+
     std::stable_sort(spawn_queue_.begin(), spawn_queue_.end(),
                      [](const SpawnInfo& a, const SpawnInfo& b){ return a.priority < b.priority; });
 }

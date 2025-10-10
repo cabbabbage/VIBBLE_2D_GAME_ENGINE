@@ -79,9 +79,8 @@ namespace {
                 return static_cast<char>(std::tolower(c));
             });
             return lowered == "trigger" || lowered == "spawning" || lowered == "spawn" ||
-                   lowered.find("trigger") != std::string::npos ||
-                   lowered.find("spawn") != std::string::npos;
-        };
+                   lowered.find("trigger") != std::string::npos || lowered.find("spawn") != std::string::npos;
+};
         if (matches(type)) return true;
         return matches(name);
     }
@@ -111,17 +110,13 @@ AreaOverlayEditor::~AreaOverlayEditor() {
 
 bool AreaOverlayEditor::begin(AssetInfo* info, Asset* asset, const std::string& area_name) {
     if (!assets_ || !info || !asset) return false;
-    // Use the asset's bottom-center (its world position) as the anchor
+
     return begin_at_point(info, SDL_Point{asset->pos.x, asset->pos.y}, area_name, asset);
 }
 
 bool AreaOverlayEditor::begin_at_point(AssetInfo* info, SDL_Point anchor_world, const std::string& area_name, Asset* asset) {
     if (!assets_ || !info) return false;
 
-    // Do NOT pre-apply the asset's scale percent to the area editor canvas.
-    // Use the asset's final texture dimensions if available; otherwise fall back
-    // to the original canvas size. This keeps the area aligned with what is
-    // actually rendered, and avoids double-applying scale.
     int cw = std::max(32, info->original_canvas_width);
     int ch = std::max(32, info->original_canvas_height);
     if (asset) {
@@ -140,7 +135,7 @@ bool AreaOverlayEditor::begin_at_point(AssetInfo* info, SDL_Point anchor_world, 
     }
 
     info_ = info;
-    asset_ = asset; // optional, used only for mask autogen
+    asset_ = asset;
     room_ = nullptr;
     area_name_ = area_name;
     room_area_type_.clear();
@@ -332,14 +327,13 @@ void AreaOverlayEditor::upload_mask() {
 
 void AreaOverlayEditor::rebuild_mask_from_geometry() {
     if (!mask_) return;
-    // Clear mask
+
     SDL_FillRect(mask_, nullptr, SDL_MapRGBA(mask_->format, 255, 0, 0, 0));
 
     if (geometry_points_.size() < 3) {
         return;
     }
 
-    // Ensure mask can contain the bounds
     int minx = geometry_points_[0].x, maxx = geometry_points_[0].x;
     int miny = geometry_points_[0].y, maxy = geometry_points_[0].y;
     for (const auto& p : geometry_points_) {
@@ -426,7 +420,7 @@ bool AreaOverlayEditor::compute_overlay_transform(camera& cam, OverlayTransform&
         anchor_screen.y - pivot_screen_y,
         dst_w,
         dst_h
-    };
+};
     out.pivot_in_dst = SDL_Point{ pivot_screen_x, pivot_screen_y };
     out.scale_x = scale_per_mask_x;
     out.scale_y = scale_per_mask_y;
@@ -605,7 +599,7 @@ void AreaOverlayEditor::rebuild_toolbox_rows() {
     DockableCollapsible::Rows rows;
 
     if (btn_save_) {
-        // First row: show Mask (only if asset present) and Geometry buttons
+
         std::vector<Widget*> first_row;
         if (btn_mask_ && asset_) {
             owned_widgets_.push_back(std::make_unique<ButtonWidget>(btn_mask_.get(), [this]() {
@@ -631,7 +625,6 @@ void AreaOverlayEditor::rebuild_toolbox_rows() {
         }
         if (!first_row.empty()) rows.push_back(first_row);
 
-        // Save row
         owned_widgets_.push_back(std::make_unique<ButtonWidget>(btn_save_.get(), [this]() {
             save_area();
         }));
@@ -739,7 +732,7 @@ bool AreaOverlayEditor::rename_current_area(const std::string& desired_name) {
             }
         }
         return true;
-    };
+};
 
     if (info_) {
         auto conflict = std::find_if(info_->areas.begin(), info_->areas.end(), [&](const AssetInfo::NamedArea& na) {
@@ -1050,7 +1043,7 @@ bool AreaOverlayEditor::handle_event(const SDL_Event& e) {
             return true;
         }
     }
-    // Geometry mode: left click to add/remove points
+
     if (mode_ == Mode::Geometry && e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
         if (!assets_ || !mask_ || !has_anchor_) return false;
 
@@ -1161,9 +1154,7 @@ void AreaOverlayEditor::render(SDL_Renderer* r) {
                     const float sy0 = dst_y + local_py0 * scale_y;
                     const float sx1 = dst_x + local_px1 * scale_x;
                     const float sy1 = dst_y + local_py1 * scale_y;
-                    SDL_RenderDrawLine(r,
-                        static_cast<int>(std::lround(sx0)), static_cast<int>(std::lround(sy0)),
-                        static_cast<int>(std::lround(sx1)), static_cast<int>(std::lround(sy1)));
+                    SDL_RenderDrawLine(r, static_cast<int>(std::lround(sx0)), static_cast<int>(std::lround(sy0)), static_cast<int>(std::lround(sx1)), static_cast<int>(std::lround(sy1)));
                 }
                 for (size_t i = 0; i < geometry_points_.size(); ++i) {
                     const float local_px = static_cast<float>(geometry_points_[i].x - mask_origin_x_);
@@ -1288,7 +1279,7 @@ void AreaOverlayEditor::save_area() {
             return removed;
         }
         return false;
-    };
+};
 
     auto determine_room_type = [this]() -> std::string {
         if (!room_) return std::string{};
@@ -1297,14 +1288,14 @@ void AreaOverlayEditor::save_area() {
             if (!existing->get_type().empty()) return existing->get_type();
         }
         return area_name_;
-    };
+};
 
     auto notify_saved = [this]() {
         saved_since_begin_ = true;
         if (on_saved_callback_) {
             on_saved_callback_();
         }
-    };
+};
 
     auto upsert_area = [this, &determine_room_type](Area& area) {
         if (info_) {
@@ -1332,9 +1323,8 @@ void AreaOverlayEditor::save_area() {
             room_->upsert_named_area(area, type);
             room_->save_assets_json();
         }
-    };
+};
 
-    // Geometry mode: save drawn polygon points directly
     if (mode_ == Mode::Geometry) {
         if (geometry_points_.size() < 3) {
             if (remove_current()) {

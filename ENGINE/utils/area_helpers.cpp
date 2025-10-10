@@ -65,7 +65,7 @@ find_render_frame(const AssetInfo& info, const Area& local_area) {
     }
     return nullptr;
 }
-} // namespace
+}
 
 Area make_world_area(const AssetInfo& info,
                      const Area&       local_area,
@@ -93,12 +93,10 @@ Area make_world_area(const AssetInfo& info,
             base_height = unscale_dimension(frame->height, frame->pixel_scale);
         }
         if (frame->width > 0) {
-            pivot_ratio_x = static_cast<double>(frame->pivot_x) /
-                            static_cast<double>(std::max(frame->width, 1));
+            pivot_ratio_x = static_cast<double>(frame->pivot_x) / static_cast<double>(std::max(frame->width, 1));
         }
         if (frame->height > 0) {
-            pivot_ratio_y = static_cast<double>(frame->pivot_y) /
-                            static_cast<double>(std::max(frame->height, 1));
+            pivot_ratio_y = static_cast<double>(frame->pivot_y) / static_cast<double>(std::max(frame->height, 1));
         }
     }
 
@@ -114,12 +112,8 @@ Area make_world_area(const AssetInfo& info,
         }
     }
 
-    const int pivot_x = (scaled_width > 0)
-                            ? static_cast<int>(std::llround(pivot_ratio_x * scaled_width))
-                            : 0;
-    const int pivot_y = (scaled_height > 0)
-                            ? static_cast<int>(std::llround(pivot_ratio_y * scaled_height))
-                            : 0;
+    const int pivot_x = (scaled_width > 0) ? static_cast<int>(std::llround(pivot_ratio_x * scaled_width)) : 0;
+    const int pivot_y = (scaled_height > 0) ? static_cast<int>(std::llround(pivot_ratio_y * scaled_height)) : 0;
 
     std::vector<SDL_Point> world_points;
     world_points.reserve(local_points.size());
@@ -153,5 +147,5 @@ Area make_world_area(const AssetInfo& info,
     return make_world_area(info, *local, world_pos, flipped);
 }
 
-} // namespace area_helpers
+}
 

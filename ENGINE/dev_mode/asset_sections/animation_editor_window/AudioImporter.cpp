@@ -57,7 +57,7 @@ std::filesystem::path normalize_destination(const std::filesystem::path& asset_r
     return dest.lexically_normal();
 }
 
-}  // namespace
+}
 
 AudioImporter::AudioImporter() = default;
 
@@ -162,5 +162,5 @@ std::filesystem::path AudioImporter::resolve_asset_path(const std::filesystem::p
     return (asset_root_ / relative).lexically_normal();
 }
 
-}  // namespace animation_editor
+}
 

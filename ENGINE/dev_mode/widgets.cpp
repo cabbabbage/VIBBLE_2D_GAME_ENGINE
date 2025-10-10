@@ -571,7 +571,7 @@ bool DMSlider::handle_event(const SDL_Event& e) {
         if (!focused_) {
             commit_pending_value();
         }
-    };
+};
     auto update_hover = [this, &set_focus](SDL_Point p) {
         bool inside = SDL_PointInRect(&p, &rect_);
         hovered_ = inside || dragging_;
@@ -589,7 +589,7 @@ bool DMSlider::handle_event(const SDL_Event& e) {
             knob_hovered_ = SDL_PointInRect(&p, &knob);
         }
         return inside;
-    };
+};
 
     if (e.type == SDL_MOUSEMOTION) {
         SDL_Point p{ e.motion.x, e.motion.y };
@@ -978,7 +978,7 @@ bool DMRangeSlider::handle_event(const SDL_Event& e) {
         if (!focused_) {
             commit_pending_values();
         }
-    };
+};
     auto update_hover = [this, &set_focus](SDL_Point p) {
         if (dragging_min_) {
             min_hovered_ = true;
@@ -1040,7 +1040,7 @@ bool DMRangeSlider::handle_event(const SDL_Event& e) {
             max_hovered_ = true;
         }
         return inside;
-    };
+};
 
     if (e.type == SDL_MOUSEMOTION) {
         SDL_Point p{ e.motion.x, e.motion.y };

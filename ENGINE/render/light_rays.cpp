@@ -6,7 +6,7 @@
 
 namespace {
 inline float luma_u8(uint8_t r, uint8_t g, uint8_t b) {
-    // Rec. 709
+
     return (0.2126f * r + 0.7152f * g + 0.0722f * b) / 255.f;
 }
 
@@ -44,7 +44,6 @@ inline float apply_gamma(float value, float gamma) {
     return std::pow(v, inv_gamma);
 }
 
-// Box downsample by integer factor from RGBA8888 buffer
 static void downsample_box_rgba8888(
     const uint32_t* src, int sw, int sh, int factor,
     std::vector<uint32_t>& dst, int& dw, int& dh)
@@ -83,7 +82,7 @@ static void downsample_box_rgba8888(
         }
     }
 }
-} // anon
+}
 
 LightRaysPass::LightRaysPass(SDL_Renderer* r, int sw, int sh)
 : renderer_(r), screen_w_(sw), screen_h_(sh) {
@@ -127,13 +126,12 @@ bool LightRaysPass::ensure_lowres_target_() {
         SDL_DestroyTexture(rays_tex_lowres_);
         rays_tex_lowres_ = nullptr;
     }
-    rays_tex_lowres_ = SDL_CreateTexture(renderer_, SDL_PIXELFORMAT_RGBA8888,
-                                         SDL_TEXTUREACCESS_STREAMING, want_w, want_h);
+    rays_tex_lowres_ = SDL_CreateTexture(renderer_, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_STREAMING, want_w, want_h);
     if (!rays_tex_lowres_) {
         std::cerr << "[LightRaysPass] Failed to create lowres rays texture: " << SDL_GetError() << "\n";
         return false;
     }
-    SDL_SetTextureBlendMode(rays_tex_lowres_, SDL_BLENDMODE_ADD); // default to ADD
+    SDL_SetTextureBlendMode(rays_tex_lowres_, SDL_BLENDMODE_ADD);
 #if SDL_VERSION_ATLEAST(2,0,12)
     SDL_SetTextureScaleMode(rays_tex_lowres_, SDL_ScaleModeBest);
 #endif
@@ -145,11 +143,9 @@ SDL_Texture* LightRaysPass::compute(SDL_Texture* source_render_target) {
     if (!enabled_ || !renderer_ || !source_render_target) return nullptr;
     if (!ensure_lowres_target_()) return nullptr;
 
-    // Save and set render target to the source to read pixels
     SDL_Texture* prev = SDL_GetRenderTarget(renderer_);
     SDL_SetRenderTarget(renderer_, source_render_target);
 
-    // Readback full-res RGBA8888 into a temporary buffer
     std::vector<uint32_t> full_rgba(screen_w_ * screen_h_);
     SDL_Rect rect{0, 0, screen_w_, screen_h_};
     if (SDL_RenderReadPixels(renderer_, &rect, SDL_PIXELFORMAT_RGBA8888,
@@ -159,16 +155,13 @@ SDL_Texture* LightRaysPass::compute(SDL_Texture* source_render_target) {
         return nullptr;
     }
 
-    // Restore previous render target
     SDL_SetRenderTarget(renderer_, prev);
 
-    // Downsample for speed
     const int factor = 1 << std::max(0, params_.downsample_log2);
     std::vector<uint32_t> low_rgba;
     int dw = 0, dh = 0;
     downsample_box_rgba8888(full_rgba.data(), screen_w_, screen_h_, factor, low_rgba, dw, dh);
 
-    // Build brightness buffer and histogram
     std::vector<float> brightness(dw * dh, 0.f);
     std::array<int, 256> hist{}; hist.fill(0);
     for (int i = 0; i < dw * dh; ++i) {
@@ -188,7 +181,6 @@ SDL_Texture* LightRaysPass::compute(SDL_Texture* source_render_target) {
         hist[bin] += 1;
     }
 
-    // Percentile threshold
     const int total = dw * dh;
     const float tail = 1.f - std::clamp(params_.bright_percentile, 0.f, 1.f);
     const int keep = std::max(1, int(total * tail));
@@ -200,12 +192,10 @@ SDL_Texture* LightRaysPass::compute(SDL_Texture* source_render_target) {
     }
     float thr = std::max(params_.min_luma_threshold, thresh_bin / 255.f);
 
-    // If too many pixels are considered bright, skip to avoid washing the screen
     if (keep > total * 0.25f) {
         return nullptr;
     }
 
-    // Bright mask in [0..1]
     std::vector<float> bright(dw * dh, 0.f);
     const float denom = std::max(1e-5f, 1.f - thr);
     for (int i = 0; i < dw * dh; ++i) {
@@ -213,7 +203,6 @@ SDL_Texture* LightRaysPass::compute(SDL_Texture* source_render_target) {
         bright[i] = v > 0.f ? v : 0.f;
     }
 
-    // Ray march toward light
     const float lx = float(light_pos_.x) / float(factor);
     const float ly = float(light_pos_.y) / float(factor);
     const float max_dist = std::sqrt(float(dw * dw + dh * dh));
@@ -256,7 +245,6 @@ SDL_Texture* LightRaysPass::compute(SDL_Texture* source_render_target) {
         }
     }
 
-    // Map to low-res texture using the texture's real format
     void* pixels = nullptr;
     int pitch = 0;
     if (SDL_LockTexture(rays_tex_lowres_, nullptr, &pixels, &pitch) != 0) {
@@ -273,7 +261,7 @@ SDL_Texture* LightRaysPass::compute(SDL_Texture* source_render_target) {
         Uint32* p32 = reinterpret_cast<Uint32*>(row);
         for (int x = 0; x < dw; ++x) {
             uint8_t a = out_alpha[y * dw + x];
-            p32[x] = SDL_MapRGBA(pf, 255, 255, 255, a); // correct packing for this texture format
+            p32[x] = SDL_MapRGBA(pf, 255, 255, 255, a);
         }
     }
 

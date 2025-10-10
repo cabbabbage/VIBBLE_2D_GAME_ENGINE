@@ -21,4 +21,4 @@ protected:
     OnChangedSignal on_changed_{};
 };
 
-}  // namespace vibble::dev_mode::spawn_group_config::widgets
+}

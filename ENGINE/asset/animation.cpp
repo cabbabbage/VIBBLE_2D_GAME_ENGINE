@@ -133,7 +133,7 @@ void Animation::load(const std::string& trigger,
                         dest.push_back(fm);
                 }
                 return specified;
-        };
+};
 
         std::vector<std::vector<AnimationFrame>> parsed_paths;
         if (anim_json.contains("movement_paths") && anim_json["movement_paths"].is_array()) {

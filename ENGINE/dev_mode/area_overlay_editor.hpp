@@ -25,11 +25,10 @@ public:
 
     void attach_assets(Assets* a) { assets_ = a; }
 
-    // Begin editor anchored to an asset (uses asset bottom-center as anchor)
     bool begin(AssetInfo* info, Asset* asset, const std::string& area_name);
-    // Begin editor anchored to an arbitrary map point; optional asset may be provided for mask autogen
+
     bool begin_at_point(AssetInfo* info, SDL_Point anchor_world, const std::string& area_name, Asset* asset = nullptr);
-    // Begin editor for a room-level area (trigger/spawning etc.) optionally focusing around a specific world point
+
     bool begin_for_room(Room* room, const std::string& area_name, const std::string& area_type);
     bool begin_for_room(Room* room, const std::string& area_name, const std::string& area_type, SDL_Point focus_world);
     void cancel();
@@ -71,7 +70,7 @@ private:
         SDL_Point pivot_in_dst{0, 0};
         float     scale_x = 1.0f;
         float     scale_y = 1.0f;
-    };
+};
     bool compute_overlay_transform(class camera& cam, OverlayTransform& out) const;
 
 private:
@@ -124,12 +123,10 @@ private:
 
     std::function<void()> on_saved_callback_;
 
-    // Anchor handling
     SDL_Point anchor_world_{0, 0};
     bool      has_anchor_ = false;
-    bool      flipped_ = false; // mirrors asset flip when asset-driven; false for point-only usage
+    bool      flipped_ = false;
 
-    // Geometry tool state
     std::vector<SDL_Point> geometry_points_;
     bool geometry_dirty_ = false;
 

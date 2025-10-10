@@ -12,14 +12,7 @@ public:
     explicit Check(bool debug);
     void setDebug(bool debug);
 
-    bool check(const std::shared_ptr<AssetInfo>& info,
-               const SDL_Point& test_pos,
-               const std::vector<Area>& exclusion_areas,
-               const std::vector<std::unique_ptr<Asset>>& assets,
-               bool respect_exclusion_zones,
-               bool check_min_distance,
-               bool check_min_distance_all,
-               int num_neighbors) const;
+    bool check(const std::shared_ptr<AssetInfo>& info, const SDL_Point& test_pos, const std::vector<Area>& exclusion_areas, const std::vector<std::unique_ptr<Asset>>& assets, bool respect_exclusion_zones, bool check_min_distance, bool check_min_distance_all, int num_neighbors) const;
 
 private:
     bool debug_;

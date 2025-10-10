@@ -88,4 +88,4 @@ const model::MethodConfig::Perimeter* PerimeterWidget::read_config() const {
     return group_->method_config.as_perimeter();
 }
 
-}  // namespace vibble::dev_mode::spawn_group_config::widgets
+}

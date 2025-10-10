@@ -41,11 +41,10 @@ void Section_SpawnGroups::build() {
     if (list_) list_->set_embedded_mode(true);
     reload_from_file();
 
-    // Bind live JSON so inline editor updates can persist
     auto on_change = [this]() {
         (void)this->save_to_file();
         this->schedule_rebuild();
-    };
+};
     SpawnGroupConfig::Callbacks cb{};
     cb.on_duplicate = [this](const std::string& id){ duplicate_spawn_group(id); };
     cb.on_delete    = [this](const std::string& id){ delete_spawn_group(id); };
@@ -64,8 +63,6 @@ void Section_SpawnGroups::build() {
     });
     list_->restore_expanded_groups(expanded);
     list_->append_rows(rows);
-
-    // Top-level Add Spawn Group button is provided by SpawnGroupConfig widget now.
 
     set_rows(rows);
 
@@ -134,7 +131,7 @@ bool Section_SpawnGroups::save_to_file() {
         }
         ensure_array(root, "spawn_groups");
         root["spawn_groups"] = groups_.is_array() ? groups_ : nlohmann::json::array();
-        // Also ensure each has priority consistent with array order
+
         if (root["spawn_groups"].is_array()) {
             for (size_t i = 0; i < root["spawn_groups"].size(); ++i) {
                 if (root["spawn_groups"][i].is_object()) root["spawn_groups"][i]["priority"] = static_cast<int>(i);
@@ -227,14 +224,12 @@ void Section_SpawnGroups::move_spawn_group(const std::string& id, int dir) {
 }
 
 SDL_Point Section_SpawnGroups::editor_anchor_point() const {
-    // Center-left of the asset info panel approximation: left of this section
+
     SDL_Rect r = rect();
     int x = std::max(16, r.x - 320);
     int y = std::max(16, r.y + r.h / 4);
     return SDL_Point{x, y};
 }
-
-// Editing is handled by SpawnGroupConfig's own editor; no direct edit method needed.
 
 void Section_SpawnGroups::schedule_rebuild() {
     if (rebuilding_) {

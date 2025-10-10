@@ -28,4 +28,4 @@ void LinkToAreaButton::open_area() {
     }
 }
 
-}  // namespace vibble::dev_mode::spawn_group_config::spawn_method_control_widgets
+}

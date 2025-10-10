@@ -30,7 +30,7 @@ bool StridePlayer::tick(AnimationUpdate& up, Plan& plan,
         stride_frame_counter = 0;
         up.switch_to(animation_update::detail::kDefaultAnimation, 0);
         up.path_requested = true;
-    };
+};
 
     Stride& stride = plan.strides[stride_index];
     if (stride.frames <= 0) {

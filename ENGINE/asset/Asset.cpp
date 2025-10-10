@@ -29,7 +29,7 @@ std::mutex& asset_rng_mutex()
         return mutex;
 }
 
-} // namespace
+}
 
 Asset::Asset(std::shared_ptr<AssetInfo> info_,
              const Area& spawn_area,
@@ -406,7 +406,7 @@ void Asset::update_neighbor_lists(bool force_update) {
             return false;
         }
         return true;
-    };
+};
 
     auto impassable_filter = [this](const Asset* candidate) {
         if (!candidate || candidate == this || !candidate->info) {
@@ -429,13 +429,13 @@ void Asset::update_neighbor_lists(bool force_update) {
             return true;
         }
         return !candidate->info->passable;
-    };
+};
 
     const bool rebuild_neighbors = force_update || !neighbors;
 
     if (!rebuild_neighbors && !force_update) {
         if (neighbor_lists_initialized_ && last_neighbor_origin_.x == pos.x && last_neighbor_origin_.y == pos.y) {
-            // Nothing changed since last refresh.
+
             return;
         }
     }
@@ -461,7 +461,7 @@ void Asset::update_neighbor_lists(bool force_update) {
                 std::vector<std::string>{},
                 SortMode::ZIndexAsc,
                 impassable_filter,
-                true /* inherit parent view */);
+                true );
             impassable_naighbors = imp_child.get();
             neighbors->add_child(std::move(imp_child));
         }
@@ -479,7 +479,7 @@ void Asset::update_neighbor_lists(bool force_update) {
                 std::vector<std::string>{},
                 SortMode::ZIndexAsc,
                 impassable_filter,
-                true /* inherit parent view */);
+                true );
             impassable_naighbors = imp_child.get();
             neighbors->add_child(std::move(imp_child));
         }

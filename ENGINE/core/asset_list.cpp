@@ -385,7 +385,7 @@ void AssetList::route_asset_to_section(Asset* a) {
         if (bucket == SectionBucket::Middle) {
             middle_section_dirty_ = true;
         }
-    };
+};
 
     if (!top_bucket_tags_.empty() && has_any_tag(a, top_bucket_tags_)) {
         place_in_bucket(SectionBucket::Top, list_top_unsorted_);
@@ -419,7 +419,7 @@ void AssetList::remove_from_all_sections(Asset* a) {
     }
 
     if (slot.index >= vec.size() || vec[slot.index] != a) {
-        // Fallback: linear scan if slot is stale for any reason.
+
         auto found = std::find(vec.begin(), vec.end(), a);
         if (found == vec.end()) {
             membership_lookup_.erase(it);
@@ -559,7 +559,7 @@ void AssetList::for_each_candidate(const std::function<void(Asset*)>& f) const {
         for (Asset* child : asset->children) {
             self(self, child);
         }
-    };
+};
 
     if (inherit_parent_view_ && parent_provider_) {
         for (Asset* a : parent_provider_->top_unsorted()) {

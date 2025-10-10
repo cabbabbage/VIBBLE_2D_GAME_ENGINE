@@ -64,7 +64,6 @@ public:
     bool has_active_modal() const;
     void pulse_active_modal_header();
 
-    // Opening a spawn group editor via left-click is removed; dragging edits data directly.
     void finalize_asset_drag(Asset* asset, const std::shared_ptr<AssetInfo>& info);
 
     void toggle_room_config();
@@ -183,7 +182,7 @@ private:
 
     std::unique_ptr<AssetLibraryUI> library_ui_;
     std::unique_ptr<AssetInfoUI> info_ui_;
-    // Legacy floating panel removed
+
     std::unique_ptr<AreaOverlayEditor> area_editor_;
     std::unique_ptr<RoomConfigurator> room_cfg_ui_;
     SDL_Rect room_config_bounds_{0, 0, 0, 0};

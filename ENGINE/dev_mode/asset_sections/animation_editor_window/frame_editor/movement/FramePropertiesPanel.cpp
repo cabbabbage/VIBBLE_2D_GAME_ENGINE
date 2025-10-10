@@ -42,7 +42,7 @@ bool point_in_rect(const SDL_Event& e, const SDL_Rect& rect) {
     return SDL_PointInRect(&p, &rect) != 0;
 }
 
-}  // namespace
+}
 
 FramePropertiesPanel::FramePropertiesPanel() = default;
 
@@ -102,11 +102,9 @@ void FramePropertiesPanel::render(SDL_Renderer* renderer) const {
 
     render_label(renderer, "Index: " + std::to_string(std::max(0, cached_index_)), x, y, text_color);
     y += kLineHeight;
-    render_label(renderer, "ΔX: " + std::to_string(static_cast<int>(std::lround(cached_frame_.dx))), x, y,
-                 text_color);
+    render_label(renderer, "ΔX: " + std::to_string(static_cast<int>(std::lround(cached_frame_.dx))), x, y, text_color);
     y += kLineHeight;
-    render_label(renderer, "ΔY: " + std::to_string(static_cast<int>(std::lround(cached_frame_.dy))), x, y,
-                 text_color);
+    render_label(renderer, "ΔY: " + std::to_string(static_cast<int>(std::lround(cached_frame_.dy))), x, y, text_color);
     y += kLineHeight;
 
     SDL_Color toggle_bg = cached_frame_.resort_z ? DMStyles::AccentButton().hover_bg : DMStyles::ListButton().bg;
@@ -116,8 +114,7 @@ void FramePropertiesPanel::render(SDL_Renderer* renderer) const {
     SDL_SetRenderDrawColor(renderer, toggle_border.r, toggle_border.g, toggle_border.b, 255);
     SDL_RenderDrawRect(renderer, &resort_toggle_rect_);
 
-    render_label(renderer, cached_frame_.resort_z ? "Resort Z: Yes" : "Resort Z: No",
-                 resort_toggle_rect_.x + 8, resort_toggle_rect_.y + 6, text_color);
+    render_label(renderer, cached_frame_.resort_z ? "Resort Z: Yes" : "Resort Z: No", resort_toggle_rect_.x + 8, resort_toggle_rect_.y + 6, text_color);
 }
 
 bool FramePropertiesPanel::handle_event(const SDL_Event& e) {
@@ -142,9 +139,7 @@ bool FramePropertiesPanel::handle_event(const SDL_Event& e) {
 void FramePropertiesPanel::layout_controls() {
     int width = std::max(0, bounds_.w - 2 * kPadding);
     resort_toggle_rect_ = SDL_Rect{bounds_.x + kPadding,
-                                   bounds_.y + kPadding + (kLineHeight + 4) * 4,
-                                   width,
-                                   kLineHeight + 8};
+                                   bounds_.y + kPadding + (kLineHeight + 4) * 4, width, kLineHeight + 8};
 }
 
 void FramePropertiesPanel::sync_from_selected() {
@@ -166,5 +161,5 @@ void FramePropertiesPanel::apply_to_selected() {
     if (on_frame_changed_) on_frame_changed_();
 }
 
-}  // namespace animation_editor
+}
 

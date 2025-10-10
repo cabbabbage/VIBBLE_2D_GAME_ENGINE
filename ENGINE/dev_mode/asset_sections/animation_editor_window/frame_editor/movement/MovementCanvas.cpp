@@ -22,7 +22,7 @@ SDL_Color with_alpha(SDL_Color c, Uint8 alpha) {
     return c;
 }
 
-}  // namespace
+}
 
 MovementCanvas::MovementCanvas() = default;
 
@@ -75,15 +75,11 @@ void MovementCanvas::render(SDL_Renderer* renderer) const {
     const float scale = pixels_per_unit_ * zoom_;
     const SDL_FPoint center_px{bounds_.x + bounds_.w / 2.0f, bounds_.y + bounds_.h / 2.0f};
 
-    // Render grid axes relative to the world origin.
     SDL_FPoint origin_screen = world_to_screen(SDL_FPoint{0.0f, 0.0f});
     SDL_SetRenderDrawColor(renderer, border.r, border.g, border.b, 40);
-    SDL_RenderDrawLine(renderer, bounds_.x, static_cast<int>(origin_screen.y), bounds_.x + bounds_.w,
-                       static_cast<int>(origin_screen.y));
-    SDL_RenderDrawLine(renderer, static_cast<int>(origin_screen.x), bounds_.y,
-                       static_cast<int>(origin_screen.x), bounds_.y + bounds_.h);
+    SDL_RenderDrawLine(renderer, bounds_.x, static_cast<int>(origin_screen.y), bounds_.x + bounds_.w, static_cast<int>(origin_screen.y));
+    SDL_RenderDrawLine(renderer, static_cast<int>(origin_screen.x), bounds_.y, static_cast<int>(origin_screen.x), bounds_.y + bounds_.h);
 
-    // Draw unit grid lines every tile to aid alignment.
     SDL_SetRenderDrawColor(renderer, border.r, border.g, border.b, 25);
     if (scale >= 8.0f) {
         const float units_visible_x = bounds_.w / scale;
@@ -95,28 +91,23 @@ void MovementCanvas::render(SDL_Renderer* renderer) const {
         for (int x = start_x; x <= end_x; ++x) {
             SDL_FPoint a = world_to_screen(SDL_FPoint{static_cast<float>(x), static_cast<float>(start_y - 1)});
             SDL_FPoint b = world_to_screen(SDL_FPoint{static_cast<float>(x), static_cast<float>(end_y + 1)});
-            SDL_RenderDrawLine(renderer, static_cast<int>(a.x), static_cast<int>(a.y), static_cast<int>(b.x),
-                               static_cast<int>(b.y));
+            SDL_RenderDrawLine(renderer, static_cast<int>(a.x), static_cast<int>(a.y), static_cast<int>(b.x), static_cast<int>(b.y));
         }
         for (int y = start_y; y <= end_y; ++y) {
             SDL_FPoint a = world_to_screen(SDL_FPoint{static_cast<float>(start_x - 1), static_cast<float>(y)});
             SDL_FPoint b = world_to_screen(SDL_FPoint{static_cast<float>(end_x + 1), static_cast<float>(y)});
-            SDL_RenderDrawLine(renderer, static_cast<int>(a.x), static_cast<int>(a.y), static_cast<int>(b.x),
-                               static_cast<int>(b.y));
+            SDL_RenderDrawLine(renderer, static_cast<int>(a.x), static_cast<int>(a.y), static_cast<int>(b.x), static_cast<int>(b.y));
         }
     }
 
-    // Draw the path segments between frames.
     SDL_Color path_color = DMStyles::AccentButton().bg;
     SDL_SetRenderDrawColor(renderer, path_color.r, path_color.g, path_color.b, 200);
     for (size_t i = 1; i < positions_.size(); ++i) {
         SDL_FPoint prev = world_to_screen(positions_[i - 1]);
         SDL_FPoint curr = world_to_screen(positions_[i]);
-        SDL_RenderDrawLine(renderer, static_cast<int>(std::round(prev.x)), static_cast<int>(std::round(prev.y)),
-                           static_cast<int>(std::round(curr.x)), static_cast<int>(std::round(curr.y)));
+        SDL_RenderDrawLine(renderer, static_cast<int>(std::round(prev.x)), static_cast<int>(std::round(prev.y)), static_cast<int>(std::round(curr.x)), static_cast<int>(std::round(curr.y)));
     }
 
-    // Draw frame markers.
     for (size_t i = 0; i < positions_.size(); ++i) {
         SDL_FPoint screen = world_to_screen(positions_[i]);
         SDL_Rect marker{static_cast<int>(std::round(screen.x)) - kPointRadius,
@@ -150,7 +141,7 @@ bool MovementCanvas::handle_event(const SDL_Event& e) {
     auto within_bounds = [&](int x, int y) {
         SDL_Point p{x, y};
         return SDL_PointInRect(&p, &bounds_) != 0;
-    };
+};
 
     switch (e.type) {
         case SDL_MOUSEMOTION: {
@@ -338,5 +329,5 @@ SDL_FPoint MovementCanvas::screen_to_world(SDL_Point screen) const {
                       -(static_cast<float>(screen.y) - center_px.y) / scale + center_world_.y};
 }
 
-}  // namespace animation_editor
+}
 

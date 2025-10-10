@@ -74,7 +74,7 @@ std::vector<std::filesystem::path> split_paths(const std::string& raw) {
 
 std::string default_audio_subdir() { return "audio"; }
 
-}  // namespace
+}
 
 namespace animation_editor {
 
@@ -366,8 +366,7 @@ void AnimationEditorWindow::render_header(SDL_Renderer* renderer) const {
 
     int label_x = header_rect_.x + DMSpacing::panel_padding();
     if (header_corner_button_) {
-        label_x = std::max(label_x, header_corner_button_->rect().x + header_corner_button_->rect().w +
-                                            DMSpacing::small_gap());
+        label_x = std::max(label_x, header_corner_button_->rect().x + header_corner_button_->rect().w + DMSpacing::small_gap());
     }
     if (add_button_) {
         label_x = std::max(label_x, add_button_->rect().x + add_button_->rect().w + DMSpacing::small_gap());
@@ -387,8 +386,7 @@ void AnimationEditorWindow::render_status(SDL_Renderer* renderer) const {
     SDL_SetRenderDrawColor(renderer, border.r, border.g, border.b, border.a);
     SDL_RenderDrawRect(renderer, &status_rect_);
 
-    render_label(renderer, status_message_, status_rect_.x + DMSpacing::panel_padding(),
-                 status_rect_.y + DMSpacing::panel_padding());
+    render_label(renderer, status_message_, status_rect_.x + DMSpacing::panel_padding(), status_rect_.y + DMSpacing::panel_padding());
 }
 
 void AnimationEditorWindow::render_frame_editor_overlay(SDL_Renderer* renderer) const {
@@ -412,7 +410,7 @@ bool AnimationEditorWindow::handle_header_event(const SDL_Event& e) {
             callback();
             consumed = true;
         }
-    };
+};
 
     handle_button(header_corner_button_, [this]() {
         if (frame_editor_visible_) {
@@ -509,8 +507,7 @@ void AnimationEditorWindow::process_auto_save() {
 
 std::optional<std::filesystem::path> AnimationEditorWindow::pick_folder() const {
     std::string default_path = info_path_.empty() ? std::string{} : info_path_.parent_path().string();
-    const char* result = tinyfd_selectFolderDialog("Select Animation Folder",
-                                                  default_path.empty() ? nullptr : default_path.c_str());
+    const char* result = tinyfd_selectFolderDialog("Select Animation Folder", default_path.empty() ? nullptr : default_path.c_str());
     if (!result || std::string(result).empty()) {
         return std::nullopt;
     }
@@ -530,8 +527,7 @@ std::optional<std::filesystem::path> AnimationEditorWindow::pick_gif() const {
 std::vector<std::filesystem::path> AnimationEditorWindow::pick_png_sequence() const {
     std::string default_path = info_path_.empty() ? std::string{} : info_path_.parent_path().string();
     const char* filters[] = {"*.png"};
-    const char* result = tinyfd_openFileDialog("Import PNG Sequence", default_path.c_str(), 1, filters,
-                                              "PNG Images", 1);
+    const char* result = tinyfd_openFileDialog("Import PNG Sequence", default_path.c_str(), 1, filters, "PNG Images", 1);
     if (!result || std::string(result).empty()) {
         return {};
     }
@@ -560,13 +556,12 @@ std::optional<std::string> AnimationEditorWindow::pick_animation_reference() con
 std::optional<std::filesystem::path> AnimationEditorWindow::pick_audio_file() const {
     std::string default_path = info_path_.empty() ? std::string{} : info_path_.parent_path().string();
     const char* filters[] = {"*.wav", "*.ogg", "*.mp3"};
-    const char* result = tinyfd_openFileDialog("Select Audio Clip", default_path.c_str(), 3, filters,
-                                              "Audio Files", 0);
+    const char* result = tinyfd_openFileDialog("Select Audio Clip", default_path.c_str(), 3, filters, "Audio Files", 0);
     if (!result || std::string(result).empty()) {
         return std::nullopt;
     }
     return std::filesystem::path(result);
 }
 
-}  // namespace animation_editor
+}
 

@@ -33,5 +33,5 @@ private:
     std::vector<Slot> slots_;
 };
 
-}  // namespace vibble::dev_mode::spawn_group_config
+}
 

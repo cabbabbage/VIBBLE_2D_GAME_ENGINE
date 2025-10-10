@@ -23,10 +23,6 @@ inline bool should_consider_overlap(const Asset& self, const Asset& other) {
     const std::string self_type  = asset_types::canonicalize(self.info->type);
     const std::string other_type = asset_types::canonicalize(other.info->type);
 
-    // Allow overlaps whenever one of the assets is the player. Moving assets
-    // should still avoid overlapping with other moving assets, but the player
-    // is exempt from that restriction so that NPCs and enemies can share the
-    // same space as the player when required by gameplay.
     if (self_type == asset_types::player || other_type == asset_types::player) {
         return false;
     }
@@ -94,5 +90,5 @@ inline SDL_Point bottom_middle_for(const Asset& asset, SDL_Point pos) {
     return SDL_Point{ pos.x + offset_x, pos.y + offset_y };
 }
 
-}  // namespace animation_update::detail
+}
 

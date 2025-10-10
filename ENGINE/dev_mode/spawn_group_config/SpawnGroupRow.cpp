@@ -10,7 +10,7 @@ namespace {
 std::function<std::vector<std::string>()> empty_provider() {
     return []() { return std::vector<std::string>{}; };
 }
-}  // namespace
+}
 
 SpawnGroupRow::SpawnGroupRow()
     : area_provider_(empty_provider()),

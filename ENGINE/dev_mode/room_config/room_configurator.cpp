@@ -41,10 +41,7 @@ public:
         if (!renderer) return;
         const DMLabelStyle& st = DMStyles::Label();
         SDL_Color color = subtle_ ? SDL_Color{static_cast<Uint8>(st.color.r / 2),
-                                             static_cast<Uint8>(st.color.g / 2),
-                                             static_cast<Uint8>(st.color.b / 2),
-                                             st.color.a}
-                                  : st.color;
+                                             static_cast<Uint8>(st.color.g / 2), static_cast<Uint8>(st.color.b / 2), st.color.a} : st.color;
         TTF_Font* font = TTF_OpenFont(st.font_path.c_str(), st.font_size);
         if (!font) return;
         SDL_Surface* surface = TTF_RenderUTF8_Blended(font, text_.c_str(), color);
@@ -141,7 +138,7 @@ bool append_unique(std::vector<std::string>& options, const std::string& value) 
     return true;
 }
 
-} // namespace
+}
 
 struct RoomConfigurator::State {
     std::string name;
@@ -180,7 +177,7 @@ struct RoomConfigurator::State {
             width_min = width_max = height_min = height_max = radius * 2;
         }
         if (is_spawn && is_boss) {
-            // prefer spawn flag if both enabled
+
             is_boss = false;
         }
     }
@@ -459,9 +456,7 @@ bool RoomConfigurator::apply_room_data(const nlohmann::json& data) {
 
     const nlohmann::json new_spawn_array = normalized_copy["spawn_groups"];
     const nlohmann::json current_spawn_array =
-        (loaded_json_.contains("spawn_groups") && loaded_json_["spawn_groups"].is_array())
-            ? loaded_json_["spawn_groups"]
-            : nlohmann::json::array();
+        (loaded_json_.contains("spawn_groups") && loaded_json_["spawn_groups"].is_array()) ? loaded_json_["spawn_groups"] : nlohmann::json::array();
 
     bool spawn_changed = (new_spawn_array != current_spawn_array);
 
@@ -494,7 +489,7 @@ bool RoomConfigurator::apply_room_data(const nlohmann::json& data) {
     auto capture_tags = [&](const std::vector<std::string>& src, std::vector<std::string>& dst) {
         dst = src;
         std::sort(dst.begin(), dst.end());
-    };
+};
 
     std::vector<std::string> prev_include = room_tags_;
     std::vector<std::string> prev_exclude = room_anti_tags_;
@@ -654,7 +649,7 @@ void RoomConfigurator::rebuild_spawn_rows(Rows& rows) {
             }
         }
         return nullptr;
-    };
+};
 
     auto bind_spawn_entry = [&](nlohmann::json& entry,
                                 SpawnGroupConfig::ConfigureEntryCallback configure_entry,
@@ -676,19 +671,19 @@ void RoomConfigurator::rebuild_spawn_rows(Rows& rows) {
         SpawnGroupConfig::Callbacks callbacks{};
         callbacks.on_regenerate = [this](const std::string& value) {
             if (on_spawn_regenerate_) on_spawn_regenerate_(value);
-        };
+};
         callbacks.on_duplicate = [this](const std::string& value) {
             if (on_spawn_duplicate_) on_spawn_duplicate_(value);
-        };
+};
         callbacks.on_delete = [this](const std::string& value) {
             if (on_spawn_delete_) on_spawn_delete_(value);
-        };
+};
         callbacks.on_move_up = [this](const std::string& value) {
             if (on_spawn_move_up_) on_spawn_move_up_(value);
-        };
+};
         callbacks.on_move_down = [this](const std::string& value) {
             if (on_spawn_move_down_) on_spawn_move_down_(value);
-        };
+};
         config->set_callbacks(std::move(callbacks));
 
         SpawnGroupConfig::EntryCallbacks entry_callbacks{};
@@ -700,21 +695,17 @@ void RoomConfigurator::rebuild_spawn_rows(Rows& rows) {
             }
             if (target.empty()) return;
             if (on_spawn_regenerate_) on_spawn_regenerate_(target);
-        };
+};
         entry_callbacks.on_method_changed = [request_regenerate](const std::string&) { request_regenerate(); };
         entry_callbacks.on_quantity_changed = [request_regenerate](int, int) { request_regenerate(); };
         entry_callbacks.on_candidates_changed = [request_regenerate](const nlohmann::json&) { request_regenerate(); };
 
-        config->bind_entry(entry,
-                           std::move(on_change),
-                           std::move(on_entry_change),
-                           std::move(entry_callbacks),
-                           std::move(configure_entry));
+        config->bind_entry(entry, std::move(on_change), std::move(on_entry_change), std::move(entry_callbacks), std::move(configure_entry));
         config->append_rows(rows);
 
         spawn_group_config_ids_.push_back(id);
         spawn_group_configs_.push_back(std::move(config));
-    };
+};
 
     bool have_groups = false;
     if (room_) {
@@ -739,17 +730,17 @@ void RoomConfigurator::rebuild_spawn_rows(Rows& rows) {
                 std::string label = room_->room_name.empty() ? std::string("Room") : room_->room_name;
                 row.set_ownership_label(label, SDL_Color{255, 224, 96, 255});
             }
-        };
+};
 
         for (auto& entry : groups) {
             have_groups = true;
             auto on_change = [this]() {
                 if (room_) room_->save_assets_json();
-            };
+};
             auto on_entry_change = [this](const nlohmann::json&, const SpawnGroupConfig::ChangeSummary&) {
                 if (room_) room_->save_assets_json();
                 this->rebuild_rows();
-            };
+};
             bind_spawn_entry(entry, configure_entry, std::move(on_change), std::move(on_entry_change));
         }
     } else if (external_room_json_) {
@@ -761,13 +752,13 @@ void RoomConfigurator::rebuild_spawn_rows(Rows& rows) {
             auto on_change = [this]() {
                 if (!external_room_json_) return;
                 if (on_external_spawn_change_) on_external_spawn_change_();
-            };
+};
             auto on_entry_change = [this](const nlohmann::json& updated, const SpawnGroupConfig::ChangeSummary& summary) {
                 if (!external_room_json_) return;
                 if (on_external_spawn_entry_change_) on_external_spawn_entry_change_(updated, summary);
                 if (on_external_spawn_change_) on_external_spawn_change_();
                 this->rebuild_rows();
-            };
+};
             bind_spawn_entry(entry, external_configure_entry_, std::move(on_change), std::move(on_entry_change));
         }
     } else {
@@ -869,16 +860,14 @@ void RoomConfigurator::rebuild_rows_internal() {
         radius_widget_.reset();
 
         auto width_range = compute_slider_range(state_->width_min, state_->width_max);
-        width_slider_ = std::make_unique<DMRangeSlider>(width_range.first, width_range.second,
-                                                        state_->width_min, state_->width_max);
+        width_slider_ = std::make_unique<DMRangeSlider>(width_range.first, width_range.second, state_->width_min, state_->width_max);
         width_slider_->set_defer_commit_until_unfocus(true);
         width_widget_ = std::make_unique<RangeSliderWidget>(width_slider_.get());
         rows.push_back({width_widget_.get()});
 
         if (!is_trail_context_) {
             auto height_range = compute_slider_range(state_->height_min, state_->height_max);
-            height_slider_ = std::make_unique<DMRangeSlider>(height_range.first, height_range.second,
-                                                             state_->height_min, state_->height_max);
+            height_slider_ = std::make_unique<DMRangeSlider>(height_range.first, height_range.second, state_->height_min, state_->height_max);
             height_slider_->set_defer_commit_until_unfocus(true);
             height_widget_ = std::make_unique<RangeSliderWidget>(height_slider_.get());
             rows.push_back({height_widget_.get()});
@@ -998,15 +987,13 @@ bool RoomConfigurator::sync_state_from_widgets() {
     }
 
     if (geometry_dropdown_) {
-        int idx = std::clamp(geometry_dropdown_->selected(), 0,
-                              static_cast<int>(geometry_options_.size()) - 1);
+        int idx = std::clamp(geometry_dropdown_->selected(), 0, static_cast<int>(geometry_options_.size()) - 1);
         std::string selected = geometry_options_.empty() ? std::string{} : geometry_options_[idx];
         if (selected != state_->geometry) {
             state_->geometry = selected;
             if (state_->geometry_is_circle()) {
                 if (!radius_slider_) {
-                    state_->radius = infer_radius_from_dimensions(state_->width_min, state_->width_max,
-                                                                  state_->height_min, state_->height_max);
+                    state_->radius = infer_radius_from_dimensions(state_->width_min, state_->width_max, state_->height_min, state_->height_max);
                 }
             } else if (radius_slider_) {
                 int diameter = std::max(0, state_->radius) * 2;
@@ -1178,7 +1165,7 @@ void RoomConfigurator::load_tags_from_json(const nlohmann::json& data) {
             std::string normalized = tag_utils::normalize(entry.get<std::string>());
             if (!normalized.empty()) dest.insert(std::move(normalized));
         }
-    };
+};
 
     if (data.is_object()) {
         if (data.contains("tags")) {

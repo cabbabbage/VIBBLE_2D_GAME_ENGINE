@@ -11,24 +11,21 @@ enum class BrightnessMetric {
 };
 
 struct LightRaysParams {
-    // Bright mask options
+
     bool  use_alpha_in_mask = true;
     BrightnessMetric metric = BrightnessMetric::MaxRGB;
-    float gamma_comp = 1.0f;   // >1 brightens after compensation
+    float gamma_comp = 1.0f;
 
-    // Bright-pass
-    float min_luma_threshold = 0.90f;  // absolute floor in [0..1]
-    float bright_percentile  = 0.995f; // keep top 0.5 percent
+    float min_luma_threshold = 0.90f;
+    float bright_percentile  = 0.995f;
 
-    // Ray march
     int   samples  = 64;
-    float density  = 0.9f;   // fraction of vector per step across all samples
-    float decay    = 0.97f;  // falloff per sample
-    float weight   = 0.75f;  // per-sample contribution
-    float exposure = 0.9f;   // final scale
+    float density  = 0.9f;
+    float decay    = 0.97f;
+    float weight   = 0.75f;
+    float exposure = 0.9f;
 
-    // Resolution control
-    int   downsample_log2 = 2; // 2 => render at 1/4 size
+    int   downsample_log2 = 2;
 };
 
 class LightRaysPass {
@@ -38,11 +35,9 @@ public:
 
     void set_screen_size(int screen_w, int screen_h);
     void set_params(const LightRaysParams& p);
-    void set_light_screen_pos(SDL_Point p); // screen pixels
+    void set_light_screen_pos(SDL_Point p);
     void set_enabled(bool v);
 
-    // Returns low-res texture with white rays and alpha. Blend with ADD.
-    // Returns nullptr if disabled or on failure.
     SDL_Texture* compute(SDL_Texture* source_render_target);
 
 private:

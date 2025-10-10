@@ -106,7 +106,7 @@ SDL_Point walk_back_to_perimeter(SDL_Point start,
     return best;
 }
 
-} // namespace
+}
 
 std::vector<SDL_Point> PathSanitizer::sanitize(const Asset& self,
                                                const std::vector<SDL_Point>& absolute_checkpoints,

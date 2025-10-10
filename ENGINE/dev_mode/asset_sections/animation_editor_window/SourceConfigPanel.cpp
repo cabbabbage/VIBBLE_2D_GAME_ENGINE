@@ -93,7 +93,7 @@ void render_button_label(SDL_Renderer* renderer, const SDL_Rect& rect, const std
     TTF_CloseFont(font);
 }
 
-}  // namespace
+}
 
 SourceConfigPanel::SourceConfigPanel() {
     buttons_[0].label = "Import From Folder";
@@ -180,7 +180,6 @@ void SourceConfigPanel::render(SDL_Renderer* renderer) const {
         render_button_label(renderer, rect, button.label);
     }
 
-    // Simple status indicator bar at bottom.
     if (busy_indicator_) {
         SDL_Rect indicator = bounds_;
         indicator.y = indicator.y + indicator.h - 6;
@@ -216,13 +215,13 @@ int SourceConfigPanel::preferred_height(int) const {
     const int padding = 6;
     const int button_count = static_cast<int>(buttons_.size());
     const int button_height = DMButton::height();
-    int height = padding;  // top padding
+    int height = padding;
     if (button_count > 0) {
         height += button_count * button_height;
         height += std::max(0, button_count - 1) * padding;
     }
-    height += padding;  // bottom padding
-    height += 6;        // busy indicator strip
+    height += padding;
+    height += 6;
     return height;
 }
 
@@ -489,7 +488,7 @@ std::vector<std::filesystem::path> SourceConfigPanel::normalize_sequence(const s
             }
         }
         return std::make_tuple(1, 0, to_lower_copy(stem));
-    };
+};
 
     std::sort(normalized.begin(), normalized.end(), [&](const auto& lhs, const auto& rhs) {
         return numeric_key(lhs) < numeric_key(rhs);
@@ -658,9 +657,7 @@ void SourceConfigPanel::import_from_gif() {
         return;
     }
 
-    // GIF decoding is not implemented in this tooling build.
-    SDL_Log("SourceConfigPanel: GIF import requested for %s, but decoding is not supported in this build.",
-            file->string().c_str());
+    SDL_Log("SourceConfigPanel: GIF import requested for %s, but decoding is not supported in this build.", file->string().c_str());
     update_status("GIF import not supported");
 }
 
@@ -700,5 +697,5 @@ void SourceConfigPanel::import_from_png_sequence() {
     update_status("Imported PNG sequence");
 }
 
-}  // namespace animation_editor
+}
 

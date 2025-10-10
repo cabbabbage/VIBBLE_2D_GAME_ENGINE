@@ -31,7 +31,7 @@ bool visit_impassable_neighbors(const Asset& asset, Fn&& fn) {
             }
         }
         return false;
-    };
+};
 
     if (visit_bucket(list->top_unsorted())) {
         return true;
@@ -395,7 +395,7 @@ bool AnimationUpdate::attempt_unstick(SDL_Point from,
         if (it == dirs.end()) {
             dirs.push_back(dir);
         }
-    };
+};
 
     std::vector<SDL_Point> directions;
     if (primary.x == 0 && primary.y == 0) {
@@ -435,7 +435,7 @@ bool AnimationUpdate::attempt_unstick(SDL_Point from,
             return false;
         });
         return blocked;
-    };
+};
 
     const auto inside_any = [&](SDL_Point bottom) {
         bool inside = false;
@@ -457,7 +457,7 @@ bool AnimationUpdate::attempt_unstick(SDL_Point from,
             return false;
         });
         return inside;
-    };
+};
 
     const int max_steps = 12;
     for (SDL_Point dir : directions) {
@@ -521,7 +521,7 @@ namespace {
 bool same_point(SDL_Point lhs, SDL_Point rhs) {
     return lhs.x == rhs.x && lhs.y == rhs.y;
 }
-} // namespace
+}
 
 bool AnimationUpdate::adjust_next_checkpoint(const std::vector<const Asset*>& blockers) {
     if (!self_ || !self_->info) {
@@ -530,9 +530,7 @@ bool AnimationUpdate::adjust_next_checkpoint(const std::vector<const Asset*>& bl
 
     mark_progress_toward_checkpoints();
 
-    SDL_Point target = (next_checkpoint_index_ < plan_.sanitized_checkpoints.size())
-                           ? plan_.sanitized_checkpoints[next_checkpoint_index_]
-                           : final_dest;
+    SDL_Point target = (next_checkpoint_index_ < plan_.sanitized_checkpoints.size()) ? plan_.sanitized_checkpoints[next_checkpoint_index_] : final_dest;
 
     SDL_Point bottom_target = animation_update::detail::bottom_middle_for(*self_, target);
 
@@ -551,16 +549,14 @@ bool AnimationUpdate::adjust_next_checkpoint(const std::vector<const Asset*>& bl
             return;
         }
 
-        bool relevant = area.contains_point(bottom_target) ||
-                         animation_update::detail::segment_hits_area(self_->pos, target, area);
+        bool relevant = area.contains_point(bottom_target) || animation_update::detail::segment_hits_area(self_->pos, target, area);
 
         if (!relevant) {
             const bool overlap_check = animation_update::detail::should_consider_overlap(*self_, *neighbor);
             if (overlap_check) {
                 const SDL_Point neighbor_bottom =
                     animation_update::detail::bottom_middle_for(*neighbor, neighbor->pos);
-                relevant = animation_update::detail::distance_sq(bottom_target, neighbor_bottom) <
-                           animation_update::detail::kOverlapDistanceSq;
+                relevant = animation_update::detail::distance_sq(bottom_target, neighbor_bottom) < animation_update::detail::kOverlapDistanceSq;
             }
         }
 
@@ -572,7 +568,7 @@ bool AnimationUpdate::adjust_next_checkpoint(const std::vector<const Asset*>& bl
         push.x += bottom_target.x - center.x;
         push.y += bottom_target.y - center.y;
         influencing_neighbors.push_back(neighbor);
-    };
+};
 
     if (!blockers.empty()) {
         for (const Asset* neighbor : blockers) {
@@ -608,7 +604,7 @@ bool AnimationUpdate::adjust_next_checkpoint(const std::vector<const Asset*>& bl
         if (it == dirs.end()) {
             dirs.push_back(dir);
         }
-    };
+};
 
     std::vector<SDL_Point> directions;
     if (primary.x == 0 && primary.y == 0) {
@@ -653,7 +649,7 @@ bool AnimationUpdate::adjust_next_checkpoint(const std::vector<const Asset*>& bl
         path_requested         = false;
         mark_progress_toward_checkpoints();
         return true;
-    };
+};
 
     const int max_steps = 24;
     for (SDL_Point dir : directions) {

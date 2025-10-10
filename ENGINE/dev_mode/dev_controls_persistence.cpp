@@ -40,4 +40,4 @@ bool write_map_info_json(const std::string& path,
     }
 }
 
-}  // namespace devmode
+}

@@ -88,13 +88,11 @@ bool is_pointer_event(const SDL_Event& e) {
     }
 }
 
-}  // namespace
+}
 
 AnimationInspectorPanel::AnimationInspectorPanel() {
-    source_toggle_button_ = std::make_unique<DMButton>("[+] Frame Sources", &DMStyles::HeaderButton(), 200,
-                                                      DMButton::height());
-    collapse_toggle_button_ = std::make_unique<DMButton>("", &DMStyles::HeaderButton(), header_toggle_width(),
-                                                         DMButton::height());
+    source_toggle_button_ = std::make_unique<DMButton>("[+] Frame Sources", &DMStyles::HeaderButton(), 200, DMButton::height());
+    collapse_toggle_button_ = std::make_unique<DMButton>("", &DMStyles::HeaderButton(), header_toggle_width(), DMButton::height());
     update_source_toggle_label();
     update_collapse_toggle_label();
 }
@@ -175,9 +173,7 @@ int AnimationInspectorPanel::height_for_width(int width) const {
 
     const bool collapsed = collapsed_;
 
-    int source_height = (!collapsed && !source_collapsed_ && source_config_)
-                            ? source_config_->preferred_height(content_width)
-                            : 0;
+    int source_height = (!collapsed && !source_collapsed_ && source_config_) ? source_config_->preferred_height(content_width) : 0;
     int playback_height = !collapsed && playback_settings_ ? playback_settings_->preferred_height(content_width) : 0;
     int movement_height = !collapsed && movement_summary_ ? movement_summary_->preferred_height(content_width) : 0;
     int on_end_height = !collapsed && on_end_selector_ ? on_end_selector_->preferred_height(content_width) : 0;
@@ -196,9 +192,9 @@ int AnimationInspectorPanel::height_for_width(int width) const {
             default:
                 return false;
         }
-    };
+};
 
-    int total = padding;  // top padding
+    int total = padding;
     total += header_height;
     total += kInspectorItemGap;
     total += kPreviewHeight;
@@ -208,8 +204,7 @@ int AnimationInspectorPanel::height_for_width(int width) const {
         return total;
     }
 
-    const bool has_sections = (source_height > 0 || playback_height > 0 || movement_height > 0 || on_end_height > 0 ||
-                               audio_height > 0);
+    const bool has_sections = (source_height > 0 || playback_height > 0 || movement_height > 0 || on_end_height > 0 || audio_height > 0);
     if (has_sections) {
         total += gap;
     }
@@ -246,7 +241,7 @@ int AnimationInspectorPanel::height_for_width(int width) const {
     if (audio_height > 0) {
         total += audio_height;
     }
-    total += padding;  // bottom padding
+    total += padding;
 
     return total;
 }
@@ -294,15 +289,12 @@ void AnimationInspectorPanel::render(SDL_Renderer* renderer) const {
     if (start_button_) start_button_->render(renderer);
     if (delete_button_) delete_button_->render(renderer);
 
-    // Start indicator label
     if (is_start_animation_) {
         const DMLabelStyle& style = DMStyles::Label();
         SDL_Color accent = DMStyles::AccentButton().text;
-        render_label(renderer, "Start Animation", header_rect_.x + kInspectorPadding,
-                     header_rect_.y + header_rect_.h - style.font_size - DMSpacing::small_gap(), accent);
+        render_label(renderer, "Start Animation", header_rect_.x + kInspectorPadding, header_rect_.y + header_rect_.h - style.font_size - DMSpacing::small_gap(), accent);
     }
 
-    // Preview panel background
     SDL_SetRenderDrawColor(renderer, 28, 37, 48, 230);
     SDL_RenderFillRect(renderer, &preview_rect_);
     SDL_SetRenderDrawColor(renderer, border.r, border.g, border.b, border.a);
@@ -326,9 +318,7 @@ void AnimationInspectorPanel::render(SDL_Renderer* renderer) const {
         } else {
             const DMLabelStyle& style = DMStyles::Label();
             SDL_Color color = style.color;
-            render_label(renderer, "No Preview Available",
-                         preview_rect_.x + (preview_rect_.w - text_width(style, "No Preview Available")) / 2,
-                         preview_rect_.y + preview_rect_.h / 2 - style.font_size / 2, color);
+            render_label(renderer, "No Preview Available", preview_rect_.x + (preview_rect_.w - text_width(style, "No Preview Available")) / 2, preview_rect_.y + preview_rect_.h / 2 - style.font_size / 2, color);
         }
     }
 
@@ -429,22 +419,18 @@ void AnimationInspectorPanel::rebuild_widgets() {
     }
 
     if (!start_button_) {
-        start_button_ = std::make_unique<DMButton>("Set as Start", &DMStyles::AccentButton(), kHeaderButtonWidth,
-                                                   DMButton::height());
+        start_button_ = std::make_unique<DMButton>("Set as Start", &DMStyles::AccentButton(), kHeaderButtonWidth, DMButton::height());
     }
 
     if (!delete_button_) {
-        delete_button_ = std::make_unique<DMButton>("Delete", &DMStyles::DeleteButton(), kHeaderButtonWidth,
-                                                    DMButton::height());
+        delete_button_ = std::make_unique<DMButton>("Delete", &DMStyles::DeleteButton(), kHeaderButtonWidth, DMButton::height());
     }
 
     if (!source_toggle_button_) {
-        source_toggle_button_ = std::make_unique<DMButton>("[+] Frame Sources", &DMStyles::HeaderButton(), 200,
-                                                           DMButton::height());
+        source_toggle_button_ = std::make_unique<DMButton>("[+] Frame Sources", &DMStyles::HeaderButton(), 200, DMButton::height());
     }
     if (!collapse_toggle_button_) {
-        collapse_toggle_button_ = std::make_unique<DMButton>("", &DMStyles::HeaderButton(), header_toggle_width(),
-                                                             DMButton::height());
+        collapse_toggle_button_ = std::make_unique<DMButton>("", &DMStyles::HeaderButton(), header_toggle_width(), DMButton::height());
     }
 
     if (!source_config_) {
@@ -647,7 +633,7 @@ void AnimationInspectorPanel::layout_widgets() const {
         int height;
         SDL_Rect* rect;
         std::function<void(const SDL_Rect&)> apply_bounds;
-    };
+};
 
     std::array<SectionInfo, 4> sections{{
         {playback_height, &self->playback_rect_, [self](const SDL_Rect& r) {
@@ -671,7 +657,7 @@ void AnimationInspectorPanel::layout_widgets() const {
             }
         }
         return false;
-    };
+};
 
     for (size_t i = 0; i < sections.size(); ++i) {
         const auto& sec = sections[i];
@@ -754,5 +740,5 @@ void AnimationInspectorPanel::refresh_start_indicator() {
     }
 }
 
-}  // namespace animation_editor
+}
 

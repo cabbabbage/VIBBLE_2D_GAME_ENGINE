@@ -25,4 +25,4 @@ void RandomWidget::ensure_random_config() {
     }
 }
 
-}  // namespace vibble::dev_mode::spawn_group_config::widgets
+}

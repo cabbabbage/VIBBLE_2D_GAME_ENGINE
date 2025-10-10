@@ -30,7 +30,7 @@ void EditRoomAreaPanel::set_selected_type(const std::string& type_value) {
     for (size_t i = 0; i < types_.size(); ++i) {
         if (types_[i] == type_value) { idx = static_cast<int>(i); break; }
     }
-    // DMDropdown does not expose setter; re-create to set index
+
     type_dd_ = std::make_unique<DMDropdown>("Type", types_, idx);
     type_widget_ = std::make_unique<DropdownWidget>(type_dd_.get());
     last_selected_index_ = idx;

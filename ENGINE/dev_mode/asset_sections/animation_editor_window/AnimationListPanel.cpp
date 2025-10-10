@@ -46,7 +46,7 @@ bool rects_intersect(const SDL_Rect& a, const SDL_Rect& b) {
     return SDL_IntersectRect(&a, &b, &result) == SDL_TRUE;
 }
 
-}  // namespace
+}
 
 namespace animation_editor {
 
@@ -314,5 +314,5 @@ void AnimationListPanel::clamp_scroll() {
     }
 }
 
-}  // namespace animation_editor
+}
 

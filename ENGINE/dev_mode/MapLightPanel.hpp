@@ -66,7 +66,7 @@ private:
                    min_opacity == other.min_opacity &&
                    max_opacity == other.max_opacity;
         }
-    };
+};
 
     struct ScreenLightSettings {
         int r = 255;
@@ -81,11 +81,10 @@ private:
                    min_opacity == other.min_opacity &&
                    max_opacity == other.max_opacity;
         }
-    };
+};
 
     OrbitSettings sanitize_orbit_settings(const OrbitSettings& raw) const;
-    ScreenLightSettings sanitize_screen_settings(const ScreenLightSettings& raw,
-                                                 const OrbitSettings& orbit) const;
+    ScreenLightSettings sanitize_screen_settings(const ScreenLightSettings& raw, const OrbitSettings& orbit) const;
     OrbitSettings current_orbit_settings_from_ui() const;
     ScreenLightSettings current_screen_settings_from_ui() const;
     void set_orbit_sliders(const OrbitSettings& orbit);

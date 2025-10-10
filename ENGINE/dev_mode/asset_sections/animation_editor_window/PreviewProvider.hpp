@@ -30,13 +30,11 @@ class PreviewProvider {
         SDL_Renderer* renderer = nullptr;
         std::shared_ptr<SDL_Texture> texture;
         std::string signature;
-    };
+};
 
     std::shared_ptr<SDL_Texture> build_texture(SDL_Renderer* renderer, const std::string& animation_id, int depth = 0);
-    std::shared_ptr<SDL_Texture> build_texture_from_payload(SDL_Renderer* renderer, const std::string& animation_id,
-                                                            const nlohmann::json& payload, int depth);
-    std::shared_ptr<SDL_Texture> load_folder_texture(SDL_Renderer* renderer, const std::filesystem::path& folder,
-                                                     int frames, bool flipped) const;
+    std::shared_ptr<SDL_Texture> build_texture_from_payload(SDL_Renderer* renderer, const std::string& animation_id, const nlohmann::json& payload, int depth);
+    std::shared_ptr<SDL_Texture> load_folder_texture(SDL_Renderer* renderer, const std::filesystem::path& folder, int frames, bool flipped) const;
     std::filesystem::path resolve_asset_root() const;
     std::filesystem::path find_first_frame(const std::filesystem::path& folder, int frames) const;
 
@@ -45,5 +43,5 @@ class PreviewProvider {
     std::filesystem::path asset_root_;
 };
 
-}  // namespace animation_editor
+}
 

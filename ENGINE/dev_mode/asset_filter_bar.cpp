@@ -75,10 +75,7 @@ void AssetFilterBar::initialize() {
     }
 
     filters_expanded_ = false;
-    filter_toggle_button_ = std::make_unique<DMButton>("▲",
-                                                      &DMStyles::HeaderButton(),
-                                                      std::max(DMButton::height(), kToggleButtonMinWidth),
-                                                      DMButton::height());
+    filter_toggle_button_ = std::make_unique<DMButton>("▲", &DMStyles::HeaderButton(), std::max(DMButton::height(), kToggleButtonMinWidth), DMButton::height());
     update_filter_toggle_label();
     sync_state_from_ui();
     layout_dirty_ = true;
@@ -121,11 +118,7 @@ void AssetFilterBar::set_mode_buttons(std::vector<ModeButtonConfig> buttons) {
     for (auto& cfg : buttons) {
         ModeButtonEntry entry;
         entry.config = std::move(cfg);
-        entry.button = std::make_unique<DMButton>(entry.config.label,
-                                                  entry.config.active ? &DMStyles::AccentButton()
-                                                                     : &DMStyles::HeaderButton(),
-                                                  180,
-                                                  DMButton::height());
+        entry.button = std::make_unique<DMButton>(entry.config.label, entry.config.active ? &DMStyles::AccentButton() : &DMStyles::HeaderButton(), 180, DMButton::height());
         mode_buttons_.push_back(std::move(entry));
     }
     layout_dirty_ = true;
@@ -142,8 +135,7 @@ void AssetFilterBar::set_active_mode(const std::string& id, bool trigger_callbac
         if (entry.config.active != should_be_active) {
             entry.config.active = should_be_active;
             if (entry.button) {
-                entry.button->set_style(entry.config.active ? &DMStyles::AccentButton()
-                                                           : &DMStyles::HeaderButton());
+                entry.button->set_style(entry.config.active ? &DMStyles::AccentButton() : &DMStyles::HeaderButton());
             }
             changed = true;
         }
@@ -210,7 +202,7 @@ void AssetFilterBar::rebuild_layout() {
         int max_x = std::max(layout_bounds_.x + layout_bounds_.w, rect.x + rect.w);
         int max_y = std::max(layout_bounds_.y + layout_bounds_.h, rect.y + rect.h);
         layout_bounds_ = SDL_Rect{min_x, min_y, max_x - min_x, max_y - min_y};
-    };
+};
 
     const int header_height = DMButton::height() + DMSpacing::item_gap() * 2;
     const int toggle_button_width = std::max(DMButton::height(), kToggleButtonMinWidth);
@@ -234,8 +226,7 @@ void AssetFilterBar::rebuild_layout() {
     if (filter_toggle_button_) {
         const SDL_Rect& toggle_rect = filter_toggle_button_->rect();
         if (toggle_rect.w > 0) {
-            const int right_limit = std::max(mode_bar_rect_.x,
-                                             toggle_rect.x - DMSpacing::item_gap());
+            const int right_limit = std::max(mode_bar_rect_.x, toggle_rect.x - DMSpacing::item_gap());
             mode_bar_rect_.w = std::max(0, right_limit - mode_bar_rect_.x);
         }
     }
@@ -321,7 +312,7 @@ bool AssetFilterBar::handle_event(const SDL_Event& event) {
                 set_active_mode(entry.config.id, true);
             }
         }
-    };
+};
 
     for (auto& entry : mode_buttons_) {
         handle_button(entry);
@@ -596,8 +587,7 @@ void AssetFilterBar::layout_filter_checkboxes() {
         auto& current_row = rows.back();
         int current_width = 0;
         if (!current_row.empty()) {
-            current_width = static_cast<int>(current_row.size()) * checkbox_width +
-                            static_cast<int>(current_row.size() - 1) * margin_x;
+            current_width = static_cast<int>(current_row.size()) * checkbox_width + static_cast<int>(current_row.size() - 1) * margin_x;
         }
         int width_with_new = current_width + checkbox_width;
         if (!current_row.empty()) {
@@ -635,8 +625,7 @@ void AssetFilterBar::layout_filter_checkboxes() {
         if (row.empty()) {
             continue;
         }
-        const int row_width = static_cast<int>(row.size()) * checkbox_width +
-                              static_cast<int>(row.size() - 1) * margin_x;
+        const int row_width = static_cast<int>(row.size()) * checkbox_width + static_cast<int>(row.size() - 1) * margin_x;
         int x = filters_rect_.x + (filters_rect_.w - row_width) / 2;
         if (row_width > (right_limit - left_limit)) {
             x = left_limit;

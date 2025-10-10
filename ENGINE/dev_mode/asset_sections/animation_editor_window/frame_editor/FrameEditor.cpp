@@ -9,7 +9,7 @@
 namespace animation_editor {
 namespace {
 constexpr int kTabButtonWidth = 140;
-}  // namespace
+}
 
 FrameEditor::FrameEditor() { ensure_children(); }
 
@@ -182,5 +182,5 @@ SDL_Rect FrameEditor::content_rect() const {
     return SDL_Rect{bounds_.x, top, bounds_.w, height};
 }
 
-}  // namespace animation_editor
+}
 

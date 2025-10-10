@@ -422,8 +422,6 @@ const FullScreenCollapsible::HeaderButton* FullScreenCollapsible::find_button(co
     return &(*it);
 }
 
-
-// Added: update the title dynamically from outside
 void FullScreenCollapsible::set_title(const std::string& title) {
     title_ = title;
     update_title_width();
