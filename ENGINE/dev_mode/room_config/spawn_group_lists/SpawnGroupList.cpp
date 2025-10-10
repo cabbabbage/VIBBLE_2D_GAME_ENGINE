@@ -502,7 +502,7 @@ struct SpawnGroupList::RowEntry {
         max_widget_->set_value(std::to_string(max_number));
         exact_widget_->set_value(std::to_string(quantity));
 
-        bool enforce_spacing = entry.value("enforce_spacing", false);
+        bool enforce_spacing = entry.is_object() ? entry.value("enforce_spacing", false) : false;
         enforce_widget_->set_value(enforce_spacing);
 
         update_area_dropdown_from_provider();
@@ -682,9 +682,9 @@ private:
         auto* entry = mutable_entry();
         const nlohmann::json& view = row_->entry_view();
         const nlohmann::json* candidates = nullptr;
-        if (entry && entry->contains("candidates") && (*entry)["candidates"].is_array()) {
+        if (entry && entry->is_object() && entry->contains("candidates") && (*entry)["candidates"].is_array()) {
             candidates = &(*entry)["candidates"];
-        } else if (view.contains("candidates") && view["candidates"].is_array()) {
+        } else if (view.is_object() && view.contains("candidates") && view["candidates"].is_array()) {
             candidates = &view["candidates"];
         }
         if (!candidates) return;
@@ -1029,7 +1029,7 @@ void SpawnGroupList::rebuild_rows() {
 
     for (size_t i = 0; i < source->size(); ++i) {
         const auto& entry = (*source)[i];
-        std::string id = entry.value("spawn_id", std::string{});
+        std::string id = entry.is_object() ? entry.value("spawn_id", std::string{}) : std::string{};
         std::unique_ptr<RowEntry> row_entry = take_existing(id);
         if (!row_entry) {
             auto model = std::make_unique<SpawnGroupRow>();

@@ -324,18 +324,96 @@ nlohmann::json& MapLightPanel::ensure_light() {
         editing_light_ = json::object();
     }
     json& L = editing_light_;
-    if (!L.contains("radius"))         L["radius"] = 0;
-    if (!L.contains("intensity"))      L["intensity"] = 255;
+
+    auto parse_int = [](const json& value, int fallback) -> std::optional<int> {
+        try {
+            if (value.is_number_integer()) {
+                return value.get<int>();
+            }
+            if (value.is_number_float()) {
+                return static_cast<int>(std::lround(value.get<double>()));
+            }
+            if (value.is_string()) {
+                const std::string text = value.get<std::string>();
+                size_t idx = 0;
+                int parsed = std::stoi(text, &idx);
+                if (idx == text.size()) {
+                    return parsed;
+                }
+            }
+        } catch (...) {
+        }
+        return std::nullopt;
+    };
+
+    auto read_int = [&](const char* key, int fallback, int lo, int hi) {
+        int value = fallback;
+        auto it = L.find(key);
+        if (it != L.end()) {
+            if (auto parsed = parse_int(*it, fallback)) {
+                value = *parsed;
+            }
+        }
+        return clamp_int(value, lo, hi);
+    };
+
+    auto parse_double = [](const json& value, double fallback) -> std::optional<double> {
+        try {
+            if (value.is_number_float()) {
+                return value.get<double>();
+            }
+            if (value.is_number_integer()) {
+                return static_cast<double>(value.get<int>());
+            }
+            if (value.is_string()) {
+                const std::string text = value.get<std::string>();
+                size_t idx = 0;
+                double parsed = std::stod(text, &idx);
+                if (idx == text.size()) {
+                    return parsed;
+                }
+            }
+        } catch (...) {
+        }
+        return std::nullopt;
+    };
+
+    auto read_double = [&](const char* key, double fallback, double lo, double hi) {
+        double value = fallback;
+        auto it = L.find(key);
+        if (it != L.end()) {
+            if (auto parsed = parse_double(*it, fallback)) {
+                value = *parsed;
+            }
+        }
+        return std::clamp(value, lo, hi);
+    };
+
+    L["radius"] = read_int("radius", 0, 0, 20000);
+    L["intensity"] = read_int("intensity", 255, 0, 255);
+    L["fall_off"] = read_int("fall_off", 100, 0, 100);
+    L["update_interval"] = read_int("update_interval", 10, 1, 120);
+
+    double mult = read_double("mult", 0.0, 0.0, 1.0);
+    L["mult"] = mult;
+
+    int min_opacity = read_int("min_opacity", 0, 0, 255);
+    int max_opacity = read_int("max_opacity", 255, 0, 255);
+    if (min_opacity > max_opacity) {
+        std::swap(min_opacity, max_opacity);
+    }
+    L["min_opacity"] = min_opacity;
+    L["max_opacity"] = max_opacity;
+
     auto read_radius = [&](const char* key) -> std::optional<int> {
         auto it = L.find(key);
         if (it == L.end()) {
             return std::nullopt;
         }
-        try {
-            return clamp_int(it->get<int>(), 0, 20000);
-        } catch (...) {
-            return std::nullopt;
+        if (auto parsed = parse_int(*it, 0)) {
+            return clamp_int(*parsed, 0, 20000);
         }
+        return std::nullopt;
     };
 
     const int fallback_orbit = read_radius("orbit_radius").value_or(0);
@@ -346,22 +424,6 @@ nlohmann::json& MapLightPanel::ensure_light() {
     L["orbit_x"] = orbit_x;
     L["orbit_y"] = orbit_y;
     L["orbit_radius"] = std::max(orbit_x, orbit_y);
-    if (!L.contains("update_interval"))L["update_interval"] = 10;
-    if (!L.contains("mult"))           L["mult"] = 0.0;
-    if (!L.contains("fall_off"))       L["fall_off"] = 100;
-    if (!L.contains("min_opacity"))    L["min_opacity"] = 0;
-    if (!L.contains("max_opacity"))    L["max_opacity"] = 255;
-    {
-        int min_o = 0;
-        int max_o = 255;
-        try { min_o = L.at("min_opacity").get<int>(); } catch(...) {}
-        try { max_o = L.at("max_opacity").get<int>(); } catch(...) {}
-        min_o = clamp_int(min_o, 0, 255);
-        max_o = clamp_int(max_o, 0, 255);
-        if (min_o > max_o) std::swap(min_o, max_o);
-        L["min_opacity"] = min_o;
-        L["max_opacity"] = max_o;
-    }
 
     if (!L.contains("base_color") || !L["base_color"].is_array() || L["base_color"].size() < 4) {
         L["base_color"] = {255,255,255,255};

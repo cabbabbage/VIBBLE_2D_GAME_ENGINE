@@ -230,15 +230,17 @@ void Asset::finalize_setup() {
 	}
 	for (Asset* child : children)
 	if (child) child->finalize_setup();
-	if (!children.empty()) {
-		std::cout << "[Asset] \"" << (info ? info->name : std::string{"<null>"})
+        #ifdef VIBBLE_DEBUG_ASSET_LOGS
+        if (!children.empty()) {
+                std::cout << "[Asset] \"" << (info ? info->name : std::string{"<null>"})
                 << "\" at (" << pos.x << ", " << pos.y
                 << ") has " << children.size() << " child(ren):\n";
                 for (Asset* child : children)
                 if (child && child->info)
                 std::cout << "    - \"" << child->info->name
                 << "\" at (" << child->pos.x << ", " << child->pos.y << ")\n";
-	}
+        }
+        #endif
         if (assets_ && !anim_) {
                 anim_ = std::make_unique<AnimationUpdate>(this, assets_);
         }
