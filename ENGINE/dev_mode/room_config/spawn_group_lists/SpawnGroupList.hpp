@@ -95,9 +95,13 @@ public:
     void close_asset_search();
 
 private:
+    struct RowEntry;
+
     void rebuild_rows();
     void apply_configuration(SpawnGroupRow& row);
     void rebuild_layout();
+    void mark_layout_dirty();
+    DockableCollapsible::Rows build_layout_rows();
     const nlohmann::json* current_source() const;
 
 private:
@@ -107,7 +111,7 @@ private:
     int screen_w_ = 1920;
     int screen_h_ = 1080;
 
-    std::vector<std::unique_ptr<SpawnGroupRow>> rows_;
+    std::vector<std::unique_ptr<RowEntry>> rows_;
     nlohmann::json* bound_array_ = nullptr;
     nlohmann::json readonly_snapshot_{};
 
@@ -123,5 +127,8 @@ private:
     std::function<void(const nlohmann::json&)> pending_save_callback_{};
 
     bool suppress_layout_change_callback_ = false;
+    std::unique_ptr<DMButton> add_button_{};
+    std::unique_ptr<ButtonWidget> add_button_widget_{};
+    std::unique_ptr<class LabelWidget> empty_state_label_{};
 };
 
