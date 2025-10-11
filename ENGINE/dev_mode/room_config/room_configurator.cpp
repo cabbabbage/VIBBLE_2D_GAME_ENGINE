@@ -310,11 +310,20 @@ RoomConfigurator::RoomConfigurator() {
 RoomConfigurator::~RoomConfigurator() = default;
 
 void RoomConfigurator::set_bounds(const SDL_Rect& bounds) {
-    // Use default SlidingWindowContainer layout to match AssetInfoUI (snug right, full height)
-    bounds_override_ = SDL_Rect{0, 0, 0, 0};
-    has_bounds_override_ = false;
-    container_.clear_panel_bounds_override();
-    cell_width_ = kRoomConfigPanelContentWidth;
+    bounds_override_ = bounds;
+    has_bounds_override_ = bounds.w > 0 && bounds.h > 0;
+    if (has_bounds_override_) {
+        SDL_Rect clamped = bounds;
+        clamped.w = std::max(0, clamped.w);
+        clamped.h = std::max(0, clamped.h);
+        container_.set_panel_bounds_override(clamped);
+        const int padding = DMSpacing::panel_padding();
+        int available = std::max(kRoomConfigPanelMinWidth, clamped.w - padding * 2);
+        cell_width_ = std::max(kRoomConfigPanelMinWidth, available);
+    } else {
+        container_.clear_panel_bounds_override();
+        cell_width_ = kRoomConfigPanelContentWidth;
+    }
 }
 
 void RoomConfigurator::set_work_area(const SDL_Rect& bounds) {

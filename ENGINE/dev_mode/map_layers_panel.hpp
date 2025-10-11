@@ -16,6 +16,7 @@ class Input;
 struct SDL_Renderer;
 class MapLayersController;
 class RoomConfigurator;
+class SlidingWindowContainer;
 
 class MapLayersPanel : public DockableCollapsible {
 public:
@@ -51,6 +52,8 @@ public:
 private:
     class LayerCanvasWidget;
     class PanelSidebarWidget;
+    class PreviewToolbarWidget;
+    class PreviewColumnWidget;
     class LayerConfigPanel;
     class RoomCandidateWidget;
     struct PreviewNode;
@@ -107,6 +110,9 @@ private:
     void open_room_config_for(const std::string& room_name);
     void ensure_room_configurator();
     nlohmann::json* ensure_room_entry(const std::string& room_name);
+    void update_sidebar_bounds(const SDL_Rect& bounds);
+    void close_layer_config_panel(bool cleanup = false);
+    std::string layer_config_title_for(int index, const nlohmann::json* layer) const;
     SDL_Rect compute_room_config_bounds() const;
     nlohmann::json* active_room_entry();
     void handle_room_spawn_groups_changed(bool request_preview = true);
@@ -145,10 +151,14 @@ private:
     SaveCallback on_save_;
 
     std::unique_ptr<LayerCanvasWidget> canvas_widget_;
+    std::unique_ptr<PreviewToolbarWidget> toolbar_widget_;
+    std::unique_ptr<PreviewColumnWidget> preview_column_widget_;
     std::unique_ptr<PanelSidebarWidget> sidebar_widget_;
     std::unique_ptr<LayerConfigPanel> layer_config_;
+    std::unique_ptr<SlidingWindowContainer> layer_config_container_;
     std::unique_ptr<RoomSelectorPopup> room_selector_;
     std::unique_ptr<RoomConfigurator> room_configurator_;
+    std::string layer_config_header_text_;
 
     std::vector<std::unique_ptr<PreviewNode>> preview_nodes_;
     std::vector<PreviewEdge> preview_edges_;

@@ -15,7 +15,7 @@
     "downsample_log2": 4,
     "enabled": true,
     "exposure": 1.2400000095367432,
-    "gamma_comp": 3.130000114440918,
+    "gamma_comp": 2.680000066757202,
     "metric": "MaxRGB",
     "min_luma_threshold": 0.6639999747276306,
     "per_light_enabled": true,
