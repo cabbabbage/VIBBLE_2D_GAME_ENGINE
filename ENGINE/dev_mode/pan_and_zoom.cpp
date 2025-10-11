@@ -49,9 +49,7 @@ void PanAndZoom::handle_input(camera& cam, const Input& input, bool pan_blocked)
     const int dx = input.getX() - pan_start_mouse_screen_.x;
     const int dy = input.getY() - pan_start_mouse_screen_.y;
     SDL_Point new_center{
-        static_cast<int>(std::lround(static_cast<double>(pan_start_center_.x) - static_cast<double>(dx) * scale)),
-        static_cast<int>(std::lround(static_cast<double>(pan_start_center_.y) - static_cast<double>(dy) * scale))
-    };
+        static_cast<int>(std::lround(static_cast<double>(pan_start_center_.x) - static_cast<double>(dx) * scale)), static_cast<int>(std::lround(static_cast<double>(pan_start_center_.y) - static_cast<double>(dy) * scale)) };
     cam.set_focus_override(new_center);
     cam.set_screen_center(new_center);
 }

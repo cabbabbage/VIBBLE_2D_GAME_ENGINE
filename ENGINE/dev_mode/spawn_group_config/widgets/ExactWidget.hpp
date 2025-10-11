@@ -1,8 +1,8 @@
 #pragma once
 
-#include "dev_mode/room_config/spawn_group_lists/widgets/ISpawnMethodWidget.hpp"
+#include "dev_mode/spawn_group_config/widgets/ISpawnMethodWidget.hpp"
 
-namespace vibble::dev_mode::room_config::spawn_group_lists::widgets {
+namespace vibble::dev_mode::spawn_group_config::widgets {
 
 class ExactWidget : public ISpawnMethodWidget {
 public:
@@ -22,4 +22,4 @@ private:
     model::SpawnGroup* group_ = nullptr;
 };
 
-}  // namespace vibble::dev_mode::room_config::spawn_group_lists::widgets
+}

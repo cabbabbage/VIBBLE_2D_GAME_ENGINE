@@ -87,7 +87,7 @@ bool CacheManager::load_surface_sequence(const std::string& folder, int frame_co
         } else if (fs::exists(bmp)) {
             s = IMG_Load(bmp.c_str());
         } else {
-            // Missing frame
+
             for (SDL_Surface* t : surfaces) if (t) SDL_FreeSurface(t);
             surfaces.clear();
             return false;
@@ -102,7 +102,6 @@ bool CacheManager::load_surface_sequence(const std::string& folder, int frame_co
     return true;
 }
 
-// Save sequence as PNGs. If PNG save fails, individual frames fall back to BMP.
 bool CacheManager::save_surface_sequence(const std::string& folder, const std::vector<SDL_Surface*>& surfaces) {
     try {
         fs::remove_all(folder);
@@ -138,29 +137,27 @@ SDL_Surface* CacheManager::load_and_scale_surface(const std::string& path, float
     int final_w = std::max(1, static_cast<int>(std::lround(src_w * scale)));
     int final_h = std::max(1, static_cast<int>(std::lround(src_h * scale)));
 
-    // If basically 1:1, return a copy in RGBA8888
     if (final_w == src_w && final_h == src_h) {
         out_w = src_w; out_h = src_h;
-        return src; // already RGBA8888 copy
+        return src;
     }
 
     set_best_scale_hint();
 
     auto make_rgba = [](int w, int h) {
         return SDL_CreateRGBSurfaceWithFormat(0, w, h, 32, SDL_PIXELFORMAT_RGBA8888);
-    };
+};
 
-    SDL_Surface* current = src;          // owned
+    SDL_Surface* current = src;
     int cur_w = src_w;
     int cur_h = src_h;
 
-    // For strong downscales, shrink by halves to reduce ringing and aliasing
     const float down_ratio = std::min(final_w / float(src_w), final_h / float(src_h));
     if (down_ratio < 0.5f) {
         while (true) {
             int next_w = std::max(1, cur_w / 2);
             int next_h = std::max(1, cur_h / 2);
-            // Stop if halving goes too far below target
+
             if (next_w < final_w * 1.25f || next_h < final_h * 1.25f) break;
 
             SDL_Surface* half = make_rgba(next_w, next_h);
@@ -203,7 +200,7 @@ SDL_Surface* CacheManager::load_and_scale_surface(const std::string& path, float
 
     out_w = final_w;
     out_h = final_h;
-    return dst; // caller frees
+    return dst;
 }
 
 SDL_Texture* CacheManager::surface_to_texture(SDL_Renderer* renderer, SDL_Surface* surface) {

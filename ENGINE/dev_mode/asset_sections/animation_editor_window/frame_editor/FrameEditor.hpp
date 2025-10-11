@@ -21,7 +21,7 @@ class FrameEditor {
         Movement = 0,
         Children = 1,
         Attacking = 2,
-    };
+};
 
     using CloseCallback = std::function<void()>;
 
@@ -55,5 +55,5 @@ class FrameEditor {
     Mode active_mode_ = Mode::Movement;
 };
 
-}  // namespace animation_editor
+}
 

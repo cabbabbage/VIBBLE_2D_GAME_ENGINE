@@ -42,5 +42,5 @@ SDL_Texture* RenderCastShadow::run(SDL_Renderer* renderer, const Asset& asset, S
     return texture;
 }
 
-} // namespace render_pipeline::shading
+}
 

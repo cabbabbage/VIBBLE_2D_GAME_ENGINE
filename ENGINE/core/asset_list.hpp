@@ -28,9 +28,6 @@ public:
 
     AssetList(const AssetList& parent_list, Asset* center_asset, int search_radius, const std::vector<std::string>& required_tags, const std::vector<std::string>& top_bucket_tags, const std::vector<std::string>& bottom_bucket_tags, SortMode sort_mode, std::function<bool(const Asset*)> eligibility_filter = nullptr);
 
-    // Variant that allows using the parent's current filtered contents as the candidate set
-    // instead of the original source candidates. This avoids re-scanning the entire pool when
-    // building a refined child list (e.g., impassable neighbors from general neighbors).
     AssetList(const AssetList& parent_list, SDL_Point list_center, int search_radius, const std::vector<std::string>& required_tags, const std::vector<std::string>& top_bucket_tags, const std::vector<std::string>& bottom_bucket_tags, SortMode sort_mode, std::function<bool(const Asset*)> eligibility_filter, bool inherit_parent_view);
 
     AssetList(const AssetList& parent_list, Asset* center_asset, int search_radius, const std::vector<std::string>& required_tags, const std::vector<std::string>& top_bucket_tags, const std::vector<std::string>& bottom_bucket_tags, SortMode sort_mode, std::function<bool(const Asset*)> eligibility_filter, bool inherit_parent_view);
@@ -61,12 +58,12 @@ private:
         Top,
         Middle,
         Bottom
-    };
+};
 
     struct SectionSlot {
         SectionBucket bucket;
         std::size_t   index = 0;
-    };
+};
 
     SDL_Point resolve_center() const;
     void rebuild_from_scratch();
@@ -110,7 +107,6 @@ private:
     std::vector<Asset*> delta_buffer_;
     mutable std::vector<bool> delta_inside_flags_;
 
-    // Optional view of a parent list's current filtered contents as our candidate set.
     const AssetList* parent_provider_ = nullptr;
     bool inherit_parent_view_ = false;
 

@@ -130,8 +130,7 @@ inline std::vector<SDL_Point> flee_path(const Asset* asset, const Asset* threat)
         direction.x = 1;
     }
 
-    const double length = std::sqrt(static_cast<double>(direction.x) * direction.x +
-                                    static_cast<double>(direction.y) * direction.y);
+    const double length = std::sqrt(static_cast<double>(direction.x) * direction.x + static_cast<double>(direction.y) * direction.y);
     const double scale = (length <= 1e-6) ? 0.0 : static_cast<double>(radius) / length;
     SDL_Point desired{ origin.x + static_cast<int>(std::round(direction.x * scale)),
                        origin.y + static_cast<int>(std::round(direction.y * scale)) };
@@ -195,5 +194,5 @@ inline int default_visit_threshold(const Asset* asset) {
     return std::max(1, radius / 8);
 }
 
-} // namespace controller_paths
+}
 

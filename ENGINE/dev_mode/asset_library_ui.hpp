@@ -5,6 +5,7 @@
 #include <string>
 #include <memory>
 #include <unordered_set>
+#include <optional>
 
 class Input;
 class AssetInfo;
@@ -44,6 +45,12 @@ private:
     void refresh_tiles(Assets& assets);
     bool matches_query(const AssetInfo& info, const std::string& query) const;
     SDL_Texture* get_default_frame_texture(const AssetInfo& info) const;
+    void request_delete(const std::shared_ptr<AssetInfo>& info);
+    void cancel_delete_request();
+    void confirm_delete_request();
+    void clear_delete_state();
+    bool handle_delete_modal_event(const SDL_Event& e);
+    void update_delete_modal_geometry(int screen_w, int screen_h);
 
 private:
     std::unique_ptr<DockableCollapsible> floating_;
@@ -59,11 +66,26 @@ private:
     struct AssetTileWidget;
     std::vector<std::unique_ptr<AssetTileWidget>> tiles_;
 
+    struct PendingDeleteInfo {
+        std::string name;
+        std::string asset_dir;
+    };
+
     Assets* assets_owner_ = nullptr;
+    AssetLibrary* library_owner_ = nullptr;
     mutable std::unordered_set<std::string> preview_attempted_;
 
     std::shared_ptr<AssetInfo> pending_selection_{};
 
     bool showing_create_popup_ = false;
     std::string new_asset_name_;
+    bool showing_delete_popup_ = false;
+    std::optional<PendingDeleteInfo> pending_delete_;
+    SDL_Rect delete_modal_rect_{0, 0, 0, 0};
+    SDL_Rect delete_yes_rect_{0, 0, 0, 0};
+    SDL_Rect delete_no_rect_{0, 0, 0, 0};
+    bool delete_yes_hovered_ = false;
+    bool delete_no_hovered_ = false;
+    bool delete_yes_pressed_ = false;
+    bool delete_no_pressed_ = false;
 };

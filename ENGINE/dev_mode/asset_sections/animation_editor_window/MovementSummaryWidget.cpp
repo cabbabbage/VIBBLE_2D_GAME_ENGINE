@@ -69,7 +69,7 @@ int measure_text_width(const DMLabelStyle& style, const std::string& text) {
     return width;
 }
 
-}  // namespace
+}
 
 MovementSummaryWidget::MovementSummaryWidget() = default;
 
@@ -104,13 +104,13 @@ void MovementSummaryWidget::set_edit_callback(EditCallback callback) { edit_call
 int MovementSummaryWidget::preferred_height(int) const {
     const int padding = kPanelPadding;
     const int label_height = DMStyles::Label().font_size + DMSpacing::small_gap();
-    int height = padding;  // top padding
+    int height = padding;
     height += label_height * 2;
     if (show_edit_button_) {
         height += DMSpacing::small_gap();
         height += DMButton::height();
     }
-    height += padding;  // bottom padding
+    height += padding;
     return height;
 }
 
@@ -147,11 +147,9 @@ void MovementSummaryWidget::render(SDL_Renderer* renderer) const {
     int text_y = bounds_.y + padding;
 
     const SDL_Color text_color = DMStyles::Label().color;
-    render_summary_label(renderer, "Total ΔX: " + std::to_string(static_cast<int>(std::lround(total_dx_))), text_x, text_y,
-                         text_color);
+    render_summary_label(renderer, "Total ΔX: " + std::to_string(static_cast<int>(std::lround(total_dx_))), text_x, text_y, text_color);
     text_y += DMStyles::Label().font_size + DMSpacing::small_gap();
-    render_summary_label(renderer, "Total ΔY: " + std::to_string(static_cast<int>(std::lround(total_dy_))), text_x, text_y,
-                         text_color);
+    render_summary_label(renderer, "Total ΔY: " + std::to_string(static_cast<int>(std::lround(total_dy_))), text_x, text_y, text_color);
 
     if (show_edit_button_) {
         const DMButtonStyle& button_style = DMStyles::AccentButton();
@@ -278,5 +276,5 @@ void MovementSummaryWidget::refresh_totals() {
     }
 }
 
-}  // namespace animation_editor
+}
 

@@ -7,8 +7,6 @@
 
 namespace devmode {
 
-bool write_map_info_json(const std::string& path,
-                         const nlohmann::json& data,
-                         std::ostream& log);
+bool write_map_info_json(const std::string& path, const nlohmann::json& data, std::ostream& log);
 
 }

@@ -40,7 +40,7 @@ void LightMap::render(bool debugging) {
 	SDL_Texture* prev_target = SDL_GetRenderTarget(renderer_);
 	SDL_Texture* lowres_mask = build_lowres_mask(z_lights, low_w, low_h, downscale);
 	SDL_SetTextureBlendMode(lowres_mask, SDL_BLENDMODE_MOD);
-	// Composite onto whatever target was active before building the mask
+
 	SDL_SetRenderTarget(renderer_, prev_target);
 	SDL_RenderCopy(renderer_, lowres_mask, nullptr, nullptr);
 	SDL_DestroyTexture(lowres_mask);
@@ -143,7 +143,7 @@ SDL_Texture* LightMap::build_lowres_mask(const std::vector<LightEntry>& layers,
                         e.dst.y / downscale,
                         e.dst.w / downscale,
                         e.dst.h / downscale
-		};
+};
 		SDL_RenderCopyEx(renderer_, e.tex, nullptr, &scaled_dst, 0, nullptr, e.flip);
 	}
 	return lowres_mask;

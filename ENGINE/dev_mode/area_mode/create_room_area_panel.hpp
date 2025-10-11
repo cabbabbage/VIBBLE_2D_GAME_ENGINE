@@ -10,8 +10,6 @@ class DMButton;
 class ButtonWidget;
 class Input;
 
-// A small floating panel offering creation of a new room area.
-// Shows: "Create new room area:" with options for Trigger and Spawn.
 class CreateRoomAreaPanel {
 public:
     using CreateCallback = std::function<void(const std::string& type)>;
@@ -30,7 +28,6 @@ public:
     void render(SDL_Renderer* r) const;
     bool is_point_inside(int x, int y) const;
 
-    // Used for stacking/focus management
     DockableCollapsible* panel();
 
 private:

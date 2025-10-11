@@ -54,7 +54,7 @@ Area::Area(const std::string& name, SDL_Point center, int w, int h,
         update_geometry_data();
 }
 
-Area::Area(const std::string& name, const std::string& json_path, float /*scale*/)
+Area::Area(const std::string& name, const std::string& json_path, float )
 : area_name_(name)
 {
         std::ifstream in(json_path);

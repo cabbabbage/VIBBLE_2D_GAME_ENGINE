@@ -82,7 +82,7 @@ int parse_int_field(const nlohmann::json& payload, const char* key, int fallback
     return parse_int_value(payload.at(key), fallback);
 }
 
-}  // namespace
+}
 
 namespace animation_editor {
 
@@ -110,14 +110,13 @@ int PlaybackSettingsPanel::preferred_height(int width) const {
     const int gap = kItemGap;
     const int checkbox_height = DMCheckbox::height();
     const int slider_area_width = std::max(0, width - padding * 2);
-    const int slider_height = speed_slider_ ? speed_slider_->preferred_height(slider_area_width)
-                                            : DMSlider::height();
+    const int slider_height = speed_slider_ ? speed_slider_->preferred_height(slider_area_width) : DMSlider::height();
 
-    int height = padding;  // top padding
+    int height = padding;
     height += checkbox_height * 5;
-    height += gap * 4;  // gaps between checkboxes
+    height += gap * 4;
     height += slider_height;
-    height += padding;  // bottom padding
+    height += padding;
     return height;
 }
 
@@ -157,7 +156,7 @@ bool PlaybackSettingsPanel::handle_event(const SDL_Event& e) {
             used = true;
             handle_controls_changed();
         }
-    };
+};
 
     handle_checkbox(flip_checkbox_);
     handle_checkbox(reverse_checkbox_);
@@ -179,7 +178,7 @@ void PlaybackSettingsPanel::ensure_widgets() {
             checkbox = std::make_unique<DMCheckbox>(label, false);
             layout_dirty_ = true;
         }
-    };
+};
 
     ensure_checkbox(flip_checkbox_, "Flip Source Horizontally");
     ensure_checkbox(reverse_checkbox_, "Play Frames In Reverse");
@@ -219,7 +218,7 @@ void PlaybackSettingsPanel::layout_widgets() const {
         SDL_Rect rect{x, y, width, DMCheckbox::height()};
         checkbox->set_rect(rect);
         y += rect.h + gap;
-    };
+};
 
     place_checkbox(flip_checkbox_.get());
     place_checkbox(reverse_checkbox_.get());
@@ -392,5 +391,5 @@ void PlaybackSettingsPanel::apply_state_to_payload(nlohmann::json& payload, cons
     payload["speed_factor"]   = state.speed_factor;
 }
 
-}  // namespace animation_editor
+}
 

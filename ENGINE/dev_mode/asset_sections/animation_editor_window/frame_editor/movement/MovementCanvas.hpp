@@ -10,7 +10,7 @@ struct MovementFrame {
     float dx = 0.0f;
     float dy = 0.0f;
     bool resort_z = false;
-    // TODO: Add tint metadata fields when implemented.
+
 };
 
 class MovementCanvas {
@@ -52,5 +52,5 @@ class MovementCanvas {
     SDL_FPoint drag_target_world_{0.0f, 0.0f};
 };
 
-}  // namespace animation_editor
+}
 

@@ -1,9 +1,11 @@
 #pragma once
 
-#include "dev_mode/room_config/spawn_group_lists/Signal.hpp"
+#include "dev_mode/spawn_group_config/Signal.hpp"
 #include "dev_mode/room_config/spawn_group_model.hpp"
 
-namespace vibble::dev_mode::room_config::spawn_group_lists::widgets {
+namespace vibble::dev_mode::spawn_group_config::widgets {
+
+namespace model = vibble::dev_mode::room_config::model;
 
 class ISpawnMethodWidget {
 public:
@@ -21,4 +23,4 @@ protected:
     OnChangedSignal on_changed_{};
 };
 
-}  // namespace vibble::dev_mode::room_config::spawn_group_lists::widgets
+}

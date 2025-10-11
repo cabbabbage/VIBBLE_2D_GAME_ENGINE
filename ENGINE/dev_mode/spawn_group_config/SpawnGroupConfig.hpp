@@ -8,24 +8,22 @@
 #include <string>
 #include <unordered_set>
 #include <vector>
+#include <deque>
 
 #include <nlohmann/json.hpp>
 
 #include "DockableCollapsible.hpp"
 
 class Input;
+class SearchAssets;
 
-class SpawnGroupRow;
-
-// SpawnGroupList is now a light-weight controller that manages SpawnGroupRow
-// instances backed by a JSON array. The heavy UI previously embedded in this
-// class has been extracted so the list focuses purely on coordinating row
-// lifetimes and surfacing change notifications.
-class SpawnGroupList : public DockableCollapsible {
+class SpawnGroupConfig : public DockableCollapsible {
+    struct Entry;
 public:
     struct ChangeSummary {
         bool method_changed = false;
         bool quantity_changed = false;
+        bool candidates_changed = false;
         std::string method;
     };
 
@@ -36,28 +34,36 @@ public:
         std::function<void(const std::string&)> on_move_up;
         std::function<void(const std::string&)> on_move_down;
         std::function<void()> on_add;
-    };
+};
 
-    class RowController {
+    class EntryController {
     public:
         void set_ownership_label(const std::string& label, SDL_Color color);
         void clear_ownership_label();
         void set_area_names_provider(std::function<std::vector<std::string>()> provider);
+        void set_open_area_handler(std::function<void(const std::string&, const std::string&)> handler,
+                                   std::optional<std::string> stack_key = std::nullopt);
         void set_stack_key(std::string key);
         void lock_method_to(const std::string& method);
         void clear_method_lock();
         void set_quantity_hidden(bool hidden);
 
     private:
-        explicit RowController(SpawnGroupRow* row) : row_(row) {}
-        SpawnGroupRow* row_ = nullptr;
-        friend class SpawnGroupList;
+        explicit EntryController(Entry* entry) : entry_(entry) {}
+        Entry* entry_ = nullptr;
+        friend class SpawnGroupConfig;
     };
 
-    using ConfigureEntryCallback = std::function<void(RowController&, const nlohmann::json&)>;
+    using ConfigureEntryCallback = std::function<void(EntryController&, const nlohmann::json&)>;
 
-    explicit SpawnGroupList(bool floatable = true);
-    ~SpawnGroupList() override;
+    struct EntryCallbacks {
+        std::function<void(const std::string&)> on_method_changed;
+        std::function<void(int min_number, int max_number)> on_quantity_changed;
+        std::function<void(const nlohmann::json&)> on_candidates_changed;
+};
+
+    explicit SpawnGroupConfig(bool floatable = true);
+    ~SpawnGroupConfig() override;
 
     void set_screen_dimensions(int width, int height);
 
@@ -65,6 +71,15 @@ public:
               std::function<void()> on_change,
               std::function<void(const nlohmann::json&, const ChangeSummary&)> on_entry_change = {},
               ConfigureEntryCallback configure_entry = {});
+
+    void bind_entry(nlohmann::json& entry,
+                    EntryCallbacks callbacks = {},
+                    ConfigureEntryCallback configure_entry = {});
+    void bind_entry(nlohmann::json& entry,
+                    std::function<void()> on_change,
+                    std::function<void(const nlohmann::json&, const ChangeSummary&)> on_entry_change,
+                    EntryCallbacks callbacks = {},
+                    ConfigureEntryCallback configure_entry = {});
 
     void load(const nlohmann::json& groups);
 
@@ -94,11 +109,16 @@ public:
     void set_anchor(int x, int y);
     void close_asset_search();
 
-private:
+    void load_impl(nlohmann::json* array, nlohmann::json* entry, std::function<void()> on_change, std::function<void(const nlohmann::json&, const ChangeSummary&)> on_entry_change, ConfigureEntryCallback configure_entry);
     void rebuild_rows();
-    void apply_configuration(SpawnGroupRow& row);
+    void apply_configuration(Entry& entry);
     void rebuild_layout();
+    void mark_layout_dirty();
+    DockableCollapsible::Rows build_layout_rows();
     const nlohmann::json* current_source() const;
+    void enqueue_notification(std::function<void()> cb);
+    void process_pending_notifications();
+    void fire_entry_callbacks(const nlohmann::json& entry, const ChangeSummary& summary);
 
 private:
     bool default_floatable_mode_ = true;
@@ -107,13 +127,16 @@ private:
     int screen_w_ = 1920;
     int screen_h_ = 1080;
 
-    std::vector<std::unique_ptr<SpawnGroupRow>> rows_;
+    std::vector<std::unique_ptr<Entry>> entries_;
     nlohmann::json* bound_array_ = nullptr;
+    nlohmann::json* bound_entry_ = nullptr;
+    nlohmann::json single_entry_shadow_{};
     nlohmann::json readonly_snapshot_{};
 
     std::function<void()> on_change_{};
     std::function<void(const nlohmann::json&, const ChangeSummary&)> on_entry_change_{};
     ConfigureEntryCallback configure_entry_{};
+    EntryCallbacks entry_callbacks_{};
     Callbacks callbacks_{};
     std::function<void()> on_layout_change_{};
 
@@ -123,5 +146,28 @@ private:
     std::function<void(const nlohmann::json&)> pending_save_callback_{};
 
     bool suppress_layout_change_callback_ = false;
+    std::unique_ptr<DMButton> add_button_{};
+    std::unique_ptr<ButtonWidget> add_button_widget_{};
+    std::unique_ptr<class LabelWidget> empty_state_label_{};
+
+    std::deque<std::function<void()>> pending_notifications_{};
+    bool processing_notifications_ = false;
+
+    // Header actions (moved from internal row): up/down/delete
+    std::unique_ptr<DMButton> header_up_btn_{};
+    std::unique_ptr<DMButton> header_down_btn_{};
+    std::unique_ptr<DMButton> header_delete_btn_{};
+    std::unique_ptr<ButtonWidget> header_up_widget_{};
+    std::unique_ptr<ButtonWidget> header_down_widget_{};
+    std::unique_ptr<ButtonWidget> header_delete_widget_{};
+
+    std::unique_ptr<SearchAssets> asset_search_{};
+    std::string pending_add_spawn_id_{};
+
+    void open_asset_search_for_entry(const std::string& spawn_id);
+    void handle_asset_search_selection(const std::string& value);
+    Entry* find_entry_by_id(const std::string& id);
+
+    friend class SpawnGroupConfigTestAccessor;
 };
 

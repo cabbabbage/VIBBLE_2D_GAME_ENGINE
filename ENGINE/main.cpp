@@ -14,6 +14,7 @@
 #include <SDL_image.h>
 #include <SDL_mixer.h>
 #include <SDL_ttf.h>
+#include <chrono>
 #include <ctime>
 #include <fstream>
 #include <filesystem>
@@ -26,6 +27,7 @@
 #include <vector>
 #include <algorithm>
 #include <optional>
+#include <iomanip>
 #include <cctype>
 #include <system_error>
 namespace fs = std::filesystem;
@@ -56,7 +58,10 @@ void MainApp::setup() {
 	std::srand(static_cast<unsigned int>(std::time(nullptr)));
         try {
                 loader_ = std::make_unique<AssetLoader>(map_path_, renderer_);
+                auto spawn_begin = std::chrono::steady_clock::now();
                 auto all_assets = loader_->createAssets();
+                const auto asset_count = all_assets.size();
+                const auto room_count = loader_->getRooms().size();
                 Asset* player_ptr = nullptr;
                 for (auto& a : all_assets) {
                         if (a.info && a.info->type == asset_types::player) { player_ptr = &a; break; }
@@ -64,6 +69,12 @@ void MainApp::setup() {
                 int start_px = player_ptr ? player_ptr->pos.x : static_cast<int>(loader_->getMapRadius());
                 int start_py = player_ptr ? player_ptr->pos.y : static_cast<int>(loader_->getMapRadius());
                 game_assets_ = new Assets(std::move(all_assets), *loader_->getAssetLibrary(), player_ptr, loader_->getRooms(), screen_w_, screen_h_, start_px, start_py, static_cast<int>(loader_->getMapRadius() * 1.2), renderer_, map_path_);
+                const double spawn_seconds = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - spawn_begin).count() / 1000.0;
+                std::ostringstream init_summary;
+                init_summary << "[Init] Assets initialized: " << asset_count
+                             << " assets across " << room_count << " rooms in "
+                             << std::fixed << std::setprecision(2) << spawn_seconds << "s";
+                std::cout << init_summary.str() << "\n";
                 input_ = new Input();
                 game_assets_->set_input(input_);
                 if (!player_ptr) {
@@ -85,8 +96,9 @@ void MainApp::game_loop() {
         bool quit = false;
         SDL_Event e;
         int frame_count = 0;
-	while (!quit) {
-		Uint32 start = SDL_GetTicks();
+        std::cout << "game loop started!\n";
+        while (!quit) {
+                Uint32 start = SDL_GetTicks();
 		while (SDL_PollEvent(&e)) {
 			if (e.type == SDL_QUIT) quit = true;
 			if (input_) input_->handleEvent(e);
@@ -169,6 +181,8 @@ nlohmann::json build_default_map_info(const std::string& map_name) {
     nlohmann::json default_light = nlohmann::json::object({
         {"radius", 0},
         {"intensity", 255},
+        {"orbit_x", 0},
+        {"orbit_y", 0},
         {"orbit_radius", 0},
         {"update_interval", 10},
         {"mult", 0.0},
@@ -192,12 +206,8 @@ nlohmann::json build_default_map_info(const std::string& map_name) {
     spawn_room["radius"] = kSpawnRadius;
     spawn_room["min_width"] = diameter;
     spawn_room["max_width"] = diameter;
-    spawn_room["width_min"] = diameter;
-    spawn_room["width_max"] = diameter;
     spawn_room["min_height"] = diameter;
     spawn_room["max_height"] = diameter;
-    spawn_room["height_min"] = diameter;
-    spawn_room["height_max"] = diameter;
     spawn_room["edge_smoothness"] = 2;
     spawn_room["is_spawn"] = true;
     spawn_room["is_boss"] = false;

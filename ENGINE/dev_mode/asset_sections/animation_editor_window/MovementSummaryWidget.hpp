@@ -44,5 +44,5 @@ class MovementSummaryWidget {
     bool show_edit_button_ = true;
 };
 
-}  // namespace animation_editor
+}
 

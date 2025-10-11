@@ -19,7 +19,7 @@
 namespace fs = std::filesystem;
 using json = nlohmann::json;
 
-static constexpr int kCacheVersion = 3; // invalidate any cached versions that used flare
+static constexpr int kCacheVersion = 3;
 
 GenerateLight::GenerateLight(SDL_Renderer* renderer)
 : renderer_(renderer) {}
@@ -36,23 +36,14 @@ SDL_Texture* GenerateLight::generate(SDL_Renderer* renderer,
     const std::string meta_file  = folder + "/metadata.json";
     const std::string img_file   = folder + "/light.png";
 
-    const int blur_passes = 0; // blur disabled; keep cached lights sharp
+    const int blur_passes = 0;
 
-    // try cache
     json meta;
     bool cache_ok = false;
     if (CacheManager::load_metadata(meta_file, meta)) {
         try {
             cache_ok =
-                meta.value("version", -1) == kCacheVersion &&
-                meta.value("radius",   -1) == light.radius &&
-                meta.value("fall_off", -1) == light.fall_off &&
-                meta.value("intensity",-1) == light.intensity &&
-                meta.value("blur_passes", -1) == blur_passes &&
-                meta.contains("color") && meta["color"].is_array() && meta["color"].size() == 3 &&
-                meta["color"][0].get<int>() == light.color.r &&
-                meta["color"][1].get<int>() == light.color.g &&
-                meta["color"][2].get<int>() == light.color.b;
+                meta.value("version", -1) == kCacheVersion && meta.value("radius",   -1) == light.radius && meta.value("fall_off", -1) == light.fall_off && meta.value("intensity",-1) == light.intensity && meta.value("blur_passes", -1) == blur_passes && meta.contains("color") && meta["color"].is_array() && meta["color"].size() == 3 && meta["color"][0].get<int>() == light.color.r && meta["color"][1].get<int>() == light.color.g && meta["color"][2].get<int>() == light.color.b;
         } catch (...) {
             cache_ok = false;
         }
@@ -72,13 +63,12 @@ SDL_Texture* GenerateLight::generate(SDL_Renderer* renderer,
         }
     }
 
-    // regen
     fs::remove_all(folder);
     fs::create_directories(folder);
 
     const int radius    = std::max(1, light.radius);
     const int falloff   = std::clamp(light.fall_off, 0, 100);
-    const SDL_Color col = light.color; // colored radial light
+    const SDL_Color col = light.color;
     const int intensity = std::clamp(light.intensity, 0, 255);
 
     const int size = std::max(1, radius * 2);
@@ -97,7 +87,7 @@ SDL_Texture* GenerateLight::generate(SDL_Renderer* renderer,
     SDL_PixelFormat* fmt = surf->format;
 
     const float falloff_norm    = std::clamp(falloff / 100.0f, 0.0f, 1.0f);
-    const float fade_exponent   = 0.6f + 3.4f * falloff_norm;     // higher = tighter core
+    const float fade_exponent   = 0.6f + 3.4f * falloff_norm;
     const float core_ratio      = 0.25f + (1.0f - falloff_norm) * 0.55f;
     const float white_core_r    = radius * std::clamp(core_ratio, 0.05f, 0.95f);
 
@@ -111,7 +101,7 @@ SDL_Texture* GenerateLight::generate(SDL_Renderer* renderer,
 
     auto put_px = [&](int x, int y, Uint8 r, Uint8 g, Uint8 b, Uint8 a) {
         pixels[y * size + x] = SDL_MapRGBA(fmt, r, g, b, a);
-    };
+};
 
     for (int y = 0; y < size; ++y) {
         for (int x = 0; x < size; ++x) {

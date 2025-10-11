@@ -18,12 +18,8 @@
 namespace RoomAreaSerialization {
 enum class Kind { Spawn, Trigger, Unknown };
 
-Kind infer_kind_from_entry(const nlohmann::json& entry,
-                           const std::string& type_hint,
-                           const std::string& name_hint);
-Kind infer_kind_from_strings(const std::string& kind_value,
-                             const std::string& type_hint,
-                             const std::string& name_hint);
+Kind infer_kind_from_entry(const nlohmann::json& entry, const std::string& type_hint, const std::string& name_hint);
+Kind infer_kind_from_strings(const std::string& kind_value, const std::string& type_hint, const std::string& name_hint);
 std::string to_string(Kind kind);
 bool is_supported_kind(Kind kind);
 struct AnchorData {
@@ -31,17 +27,11 @@ struct AnchorData {
         SDL_Point relative_offset{0, 0};
         bool      relative_to_center = false;
 };
-SDL_Point choose_anchor(Kind kind,
-                        SDL_Point default_anchor,
-                        const std::vector<SDL_Point>& world_points);
+SDL_Point choose_anchor(Kind kind, SDL_Point default_anchor, const std::vector<SDL_Point>& world_points);
 std::vector<SDL_Point> decode_points(const nlohmann::json& entry, SDL_Point anchor);
 nlohmann::json encode_points(const std::vector<SDL_Point>& points, SDL_Point anchor);
-AnchorData resolve_anchor(const nlohmann::json& entry,
-                          SDL_Point default_anchor,
-                          Kind kind);
-void write_anchor(nlohmann::json& entry,
-                  const AnchorData& anchor,
-                  Kind kind);
+AnchorData resolve_anchor(const nlohmann::json& entry, SDL_Point default_anchor, Kind kind);
+void write_anchor(nlohmann::json& entry, const AnchorData& anchor, Kind kind);
 }
 
 class Room {
@@ -80,16 +70,15 @@ class Room {
     bool is_spawn_room() const;
     void rename(const std::string& new_name, nlohmann::json& map_info_json);
 
-    // Room-level named areas (e.g., trigger/spawning areas) parsed from assets JSON
     struct NamedArea {
         std::string name;
         std::string type;
         std::string kind;
         std::unique_ptr<Area> area;
-    };
-    // All named areas defined for this room (world-space polygons)
+};
+
     std::vector<NamedArea> areas;
-    // Find a named room area by name; returns nullptr if not found
+
     Area* find_area(const std::string& name);
     bool remove_area(const std::string& name);
     bool rename_area(const std::string& old_name, const std::string& new_name);

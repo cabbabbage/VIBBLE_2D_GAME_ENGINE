@@ -41,5 +41,5 @@ class FramePropertiesPanel {
     std::function<void()> on_frame_changed_;
 };
 
-}  // namespace animation_editor
+}
 

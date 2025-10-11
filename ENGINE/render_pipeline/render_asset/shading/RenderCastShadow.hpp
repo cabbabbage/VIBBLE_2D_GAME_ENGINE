@@ -10,5 +10,5 @@ public:
     SDL_Texture* run(SDL_Renderer* renderer, const Asset& asset, StageContext& context) override;
 };
 
-} // namespace render_pipeline::shading
+}
 

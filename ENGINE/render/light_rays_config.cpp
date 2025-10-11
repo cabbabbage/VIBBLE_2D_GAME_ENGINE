@@ -33,7 +33,7 @@ int clamp_int(int v, int lo, int hi) {
 float clamp_float(float v, float lo, float hi) {
     return std::max(lo, std::min(hi, v));
 }
-} // namespace
+}
 
 LightRaysConfig LightRaysConfig::defaults() {
     LightRaysConfig config;

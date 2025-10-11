@@ -8,7 +8,7 @@
 
  class Input;
  struct SDL_Renderer;
-class SpawnGroupList;
+class SpawnGroupConfig;
 
  class SingleSpawnGroupModal {
  public:
@@ -29,6 +29,7 @@ class SpawnGroupList;
 
     void set_screen_dimensions(int width, int height);
     void set_floating_stack_key(std::string key);
+    void set_on_open_area(std::function<void(const std::string&, const std::string&)> cb);
 
 private:
     void ensure_single_group(nlohmann::json& section, const std::string& default_display_name);
@@ -38,10 +39,11 @@ private:
     nlohmann::json* section_ = nullptr;
     SaveCallback on_save_{};
 
-    std::unique_ptr<SpawnGroupList> list_;
+    std::unique_ptr<SpawnGroupConfig> list_;
 
     int screen_w_ = 1920;
     int screen_h_ = 1080;
     bool position_initialized_ = false;
     std::string stack_key_;
+    std::function<void(const std::string&, const std::string&)> on_open_area_{};
 };

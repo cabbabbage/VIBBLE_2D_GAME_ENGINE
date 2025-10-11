@@ -279,7 +279,8 @@ bool DockableCollapsible::handle_event(const SDL_Event& e) {
         if (SDL_PointInRect(&pointer_pos, &body_viewport_)) {
             forward_to_children = true;
         } else {
-            forward_to_children = slider_capture_active;
+            bool dropdown_active = (DMDropdown::active_dropdown() != nullptr);
+            forward_to_children = slider_capture_active || dropdown_active;
         }
     }
 

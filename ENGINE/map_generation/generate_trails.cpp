@@ -84,7 +84,7 @@ std::pair<double, double> room_center(Room* room) {
     return {static_cast<double>(room->map_origin.first), static_cast<double>(room->map_origin.second)};
 }
 
-} // namespace
+}
 GenerateTrails::GenerateTrails(nlohmann::json& trail_data)
 : rng_(std::random_device{}()),
 trails_data_(&trail_data)
@@ -120,9 +120,7 @@ std::vector<std::unique_ptr<Room>> GenerateTrails::generate_trails(
         std::vector<Area> all_areas = existing_areas;
         auto connection_plan = plan_maze_connections(all_rooms_reference, room_pairs);
         if (testing) {
-                std::cout << "[GenerateTrails] Planned " << connection_plan.size()
-                          << " trail connections (" << room_pairs.size()
-                          << " forced).\n";
+                std::cout << "[GenerateTrails] Planned " << connection_plan.size() << " trail connections (" << room_pairs.size() << " forced).\n";
         }
         for (const auto& [a, b] : connection_plan) {
                 if (!a || !b) continue;
@@ -208,7 +206,7 @@ std::vector<std::pair<Room*, Room*>> GenerateTrails::plan_maze_connections(
                 Room* b = nullptr;
                 double distance = 0.0;
                 double jitter = 0.0;
-        };
+};
 
         std::vector<CandidateEdge> candidates;
         candidates.reserve(unique_rooms.size() * kNearestNeighborCount);
@@ -286,7 +284,7 @@ std::vector<std::pair<Room*, Room*>> GenerateTrails::plan_maze_connections(
                         components[dsu.find(i)].push_back(i);
                 }
                 return components;
-        };
+};
 
         auto components = rebuild_components();
         while (components.size() > 1) {

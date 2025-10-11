@@ -5,7 +5,6 @@
 #include "custom_controllers/Vibble_controller.hpp"
 #include "custom_controllers/Frog_controller.hpp"
 #include "custom_controllers/Bomb_controller.hpp"
-#include "custom_controllers/LabBomb_controller.hpp"
 #include "custom_controllers/default_controller.hpp"
 
 ControllerFactory::ControllerFactory(Assets* assets)
@@ -26,12 +25,8 @@ ControllerFactory::create_by_key(const std::string& key, Asset* self) const {
 
                         return std::make_unique<FrogController>(assets_, self);
 
-                if (key == "Bomb_controller") {
-                        if (self && self->owning_room_name() == "room_lab") {
-                                return std::make_unique<LabBombController>(assets_, self);
-                        }
+                if (key == "Bomb_controller")
                         return std::make_unique<BombController>(assets_, self);
-                }
         } catch (...) {
         }
         return std::make_unique<DefaultController>(self);

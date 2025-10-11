@@ -19,7 +19,7 @@ SurfacePtr make_surface_ptr(SDL_Surface* surface) {
     return SurfacePtr(surface, SDL_FreeSurface);
 }
 
-}  // namespace
+}
 
 CroppingService::CroppingService() = default;
 
@@ -223,5 +223,5 @@ void CroppingService::crop_images_with_bounds(const std::vector<std::filesystem:
     }
 }
 
-}  // namespace animation_editor
+}
 

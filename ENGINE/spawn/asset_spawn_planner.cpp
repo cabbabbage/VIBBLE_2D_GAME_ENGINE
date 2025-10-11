@@ -7,7 +7,7 @@
 #include <unordered_set>
 #include <cctype>
 #include <iomanip>
-#include "dev_mode/room_config/spawn_group_utils.hpp"
+#include "dev_mode/spawn_group_config/spawn_group_utils.hpp"
 namespace fs = std::filesystem;
 
 AssetSpawnPlanner::AssetSpawnPlanner(const std::vector<nlohmann::json>& json_sources,
@@ -78,7 +78,6 @@ void AssetSpawnPlanner::parse_asset_spawns(const Area& area) {
             }
         }
 
-        // Ensure a numeric priority exists; if not, assign based on list order (0..n-1)
         int priority = -1;
         if (asset.contains("priority") && asset["priority"].is_number_integer()) {
             priority = asset["priority"].get<int>();
@@ -105,7 +104,6 @@ void AssetSpawnPlanner::parse_asset_spawns(const Area& area) {
         if (display_name.empty()) display_name = get_opt_str(asset, "name");
         if (display_name.empty()) display_name = spawn_id;
 
-        // Optional link to a named room area
         std::string link_name = get_opt_str(asset, "link");
 
         int min_num = asset.value("min_number", 1);
@@ -355,7 +353,7 @@ void AssetSpawnPlanner::parse_asset_spawns(const Area& area) {
             s.link_area_name = link_name;
         }
 
-        s.check_min_spacing = asset.value("enforce_spacing", asset.value("check_min_spacing", false));
+        s.check_min_spacing = asset.value("enforce_spacing", false);
 
         s.exact_offset.x = asset.value("dx", asset.value("exact_dx", 0));
         s.exact_offset.y = asset.value("dy", asset.value("exact_dy", 0));
@@ -374,7 +372,7 @@ void AssetSpawnPlanner::parse_asset_spawns(const Area& area) {
 }
 
 void AssetSpawnPlanner::sort_spawn_queue() {
-    // The only spawn ordering rule: ascending by priority (0 is highest)
+
     std::stable_sort(spawn_queue_.begin(), spawn_queue_.end(),
                      [](const SpawnInfo& a, const SpawnInfo& b){ return a.priority < b.priority; });
 }

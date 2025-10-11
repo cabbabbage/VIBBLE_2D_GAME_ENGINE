@@ -16,19 +16,19 @@ struct Candidate {
 
 struct MethodConfig {
     struct None {
-    };
+};
 
     struct Random {
-    };
+};
 
     struct Perimeter {
         int min_number = 2;
         int max_number = 2;
-    };
+};
 
     struct Exact {
         int quantity = 1;
-    };
+};
 
     using Variant = std::variant<None, Random, Perimeter, Exact>;
 
@@ -86,4 +86,4 @@ inline void switch_method(SpawnGroup& group, SpawnMethodId method) {
     }
 }
 
-}  // namespace vibble::dev_mode::room_config::model
+}

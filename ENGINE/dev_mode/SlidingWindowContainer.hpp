@@ -16,7 +16,7 @@ public:
         int scroll_value;
         int content_top;
         int gap;
-    };
+};
 
     using LayoutFunction = std::function<int(const LayoutContext&)>;
     using RenderFunction = std::function<void(SDL_Renderer*)>;
@@ -33,6 +33,7 @@ public:
     void set_header_text(const std::string& text);
     void set_header_text_provider(HeaderTextProvider provider);
     void set_on_close(std::function<void()> cb);
+    void set_header_visible(bool visible);
 
     void set_blocks_editor_interactions(bool block);
     void set_editor_interaction_blocker(std::function<void(bool)> blocker);
@@ -78,6 +79,7 @@ private:
     std::function<void(bool)> header_visibility_controller_{};
 
     bool visible_ = false;
+    bool header_visible_ = true;
     bool blocks_editor_interactions_ = false;
     bool editor_interactions_blocked_ = false;
 

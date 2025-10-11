@@ -329,14 +329,14 @@ void MapModeUI::configure_footer_buttons() {
                 } else {
                     set_button_state(mode, cfg_ptr->id, active);
                 }
-            };
+};
             buttons.push_back(std::move(extra));
-        };
+};
 
         for (auto& config : configs) {
             append_button(config);
         }
-    };
+};
 
     if (header_mode_ == HeaderMode::Map) {
         append_custom(map_mode_buttons_, HeaderMode::Map);

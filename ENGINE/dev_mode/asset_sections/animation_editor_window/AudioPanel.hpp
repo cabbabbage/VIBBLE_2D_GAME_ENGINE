@@ -66,5 +66,5 @@ class AudioPanel {
     std::unique_ptr<DMCheckbox> effects_checkbox_;
 };
 
-}  // namespace animation_editor
+}
 

@@ -58,14 +58,13 @@ public:
             std::string type;
             std::vector<SDL_Point> points;
             SDL_Point anchor{0, 0};
-        };
+};
         using PolygonList  = std::vector<Polygon>;
         using Listener     = std::function<void(const PolygonList&, std::size_t)>;
 
         void set_listener(Listener listener);
         void invalidate();
-        const PolygonList& ensure_from_json(const nlohmann::json* root,
-                                            std::optional<SDL_Point> default_anchor = std::nullopt);
+        const PolygonList& ensure_from_json(const nlohmann::json* root, std::optional<SDL_Point> default_anchor = std::nullopt);
         std::size_t generation() const { return generation_; }
 
     private:
@@ -74,7 +73,7 @@ public:
         bool dirty_ = true;
         std::size_t generation_ = 0;
         Listener listener_;
-    };
+};
 
     void set_room_area_cache_listener(RoomAreaCache::Listener listener);
     std::size_t room_area_cache_generation() const;
@@ -86,7 +85,6 @@ public:
     bool is_enabled() const { return enabled_; }
     Mode mode() const { return mode_; }
 
-    // Testing hooks
     void set_camera_override_for_testing(camera* camera_override);
 
     void update(const Input& input);
@@ -203,18 +201,17 @@ private:
     std::unique_ptr<SingleSpawnGroupModal> map_assets_modal_;
     std::unique_ptr<SingleSpawnGroupModal> boundary_assets_modal_;
 
-    // Area mode state
     class PanAndZoom area_pan_zoom_;
     std::unique_ptr<class CreateRoomAreaPanel> create_area_panel_;
     std::unique_ptr<class EditRoomAreaPanel>   edit_area_panel_;
     std::unique_ptr<class AreaOverlayEditor>   asset_area_editor_;
     class Asset* area_hovered_asset_ = nullptr;
-    // If hovering an existing asset area (for selected type)
+
     class Asset* area_hovered_asset_with_area_ = nullptr;
     std::string area_hovered_area_name_;
-    // Active filters: empty means show all
+
     std::unordered_set<std::string> active_area_type_filters_;
-    // Hover/selection for room areas (indices into parsed list for current frame)
+
     int hovered_area_index_ = -1;
     int selected_area_index_ = -1;
     SDL_Point last_area_click_world_{0,0};

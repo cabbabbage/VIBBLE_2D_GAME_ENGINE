@@ -27,7 +27,7 @@ bool resolve_asset_pos(const Asset* asset, long long& x, long long& y) {
     y = static_cast<long long>(asset->pos.y);
     return true;
 }
-}  // namespace
+}
 
 bool Range::xy(const Asset* a, double& x, double& y) {
     x = 0.0;
@@ -71,10 +71,7 @@ bool Range::is_in_range(const Asset* a, const SDL_Point& b, int radius) {
     if (!resolve_asset_pos(a, ax, ay)) {
         return false;
     }
-    return is_within_radius(ax, ay,
-                            static_cast<long long>(b.x),
-                            static_cast<long long>(b.y),
-                            radius);
+    return is_within_radius(ax, ay, static_cast<long long>(b.x), static_cast<long long>(b.y), radius);
 }
 
 bool Range::is_in_range(const SDL_Point& a, const Asset* b, int radius) {
@@ -82,19 +79,11 @@ bool Range::is_in_range(const SDL_Point& a, const Asset* b, int radius) {
     if (!resolve_asset_pos(b, bx, by)) {
         return false;
     }
-    return is_within_radius(static_cast<long long>(a.x),
-                            static_cast<long long>(a.y),
-                            bx,
-                            by,
-                            radius);
+    return is_within_radius(static_cast<long long>(a.x), static_cast<long long>(a.y), bx, by, radius);
 }
 
 bool Range::is_in_range(const SDL_Point& a, const SDL_Point& b, int radius) {
-    return is_within_radius(static_cast<long long>(a.x),
-                            static_cast<long long>(a.y),
-                            static_cast<long long>(b.x),
-                            static_cast<long long>(b.y),
-                            radius);
+    return is_within_radius(static_cast<long long>(a.x), static_cast<long long>(a.y), static_cast<long long>(b.x), static_cast<long long>(b.y), radius);
 }
 
 long long Range::distance_sq(const Asset* a, const Asset* b) {
@@ -110,10 +99,7 @@ long long Range::distance_sq(const Asset* a, const SDL_Point& b) {
     if (!resolve_asset_pos(a, ax, ay)) {
         return std::numeric_limits<long long>::max();
     }
-    return distance_squared(ax,
-                            ay,
-                            static_cast<long long>(b.x),
-                            static_cast<long long>(b.y));
+    return distance_squared(ax, ay, static_cast<long long>(b.x), static_cast<long long>(b.y));
 }
 
 long long Range::distance_sq(const SDL_Point& a, const Asset* b) {
@@ -121,17 +107,11 @@ long long Range::distance_sq(const SDL_Point& a, const Asset* b) {
     if (!resolve_asset_pos(b, bx, by)) {
         return std::numeric_limits<long long>::max();
     }
-    return distance_squared(static_cast<long long>(a.x),
-                            static_cast<long long>(a.y),
-                            bx,
-                            by);
+    return distance_squared(static_cast<long long>(a.x), static_cast<long long>(a.y), bx, by);
 }
 
 long long Range::distance_sq(const SDL_Point& a, const SDL_Point& b) {
-    return distance_squared(static_cast<long long>(a.x),
-                            static_cast<long long>(a.y),
-                            static_cast<long long>(b.x),
-                            static_cast<long long>(b.y));
+    return distance_squared(static_cast<long long>(a.x), static_cast<long long>(a.y), static_cast<long long>(b.x), static_cast<long long>(b.y));
 }
 
 double Range::get_distance(const Asset* a, const Asset* b) {

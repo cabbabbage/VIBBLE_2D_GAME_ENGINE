@@ -50,7 +50,7 @@ class SourceConfigPanel {
         std::string path;
         std::optional<std::string> name;
         nlohmann::json extras = nlohmann::json::object();
-    };
+};
 
     void reload_from_document();
     void ensure_payload_loaded();
@@ -106,11 +106,11 @@ class SourceConfigPanel {
     struct Button {
         SDL_Rect rect{0, 0, 0, 0};
         std::string label;
-    };
+};
     std::array<Button, 4> buttons_{};
     int hover_button_ = -1;
     bool busy_indicator_ = false;
 };
 
-}  // namespace animation_editor
+}
 

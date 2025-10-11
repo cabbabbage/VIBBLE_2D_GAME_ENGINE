@@ -21,33 +21,33 @@
 using nlohmann::json;
 
 namespace {
-constexpr int kGammaScale = 100;             // 0.01 steps
-constexpr int kGammaMin = 10;                // 0.10
-constexpr int kGammaMax = 400;               // 4.00
+constexpr int kGammaScale = 100;
+constexpr int kGammaMin = 10;
+constexpr int kGammaMax = 400;
 
-constexpr int kMinLumaScale = 1000;          // 0.001 steps
+constexpr int kMinLumaScale = 1000;
 constexpr int kMinLumaMin = 0;
 constexpr int kMinLumaMax = 1000;
 
-constexpr int kPercentileScale = 1000;       // 0.001 steps
+constexpr int kPercentileScale = 1000;
 constexpr int kPercentileMin = 0;
 constexpr int kPercentileMax = 1000;
 
-constexpr int kDensityScale = 100;           // 0.01 steps
-constexpr int kDensityMin = 1;               // 0.01
-constexpr int kDensityMax = 400;             // 4.00
+constexpr int kDensityScale = 100;
+constexpr int kDensityMin = 1;
+constexpr int kDensityMax = 400;
 
-constexpr int kDecayScale = 1000;            // 0.001 steps
-constexpr int kDecayMin = 500;               // 0.500
-constexpr int kDecayMax = 999;               // 0.999
+constexpr int kDecayScale = 1000;
+constexpr int kDecayMin = 500;
+constexpr int kDecayMax = 999;
 
-constexpr int kWeightScale = 100;            // 0.01 steps
+constexpr int kWeightScale = 100;
 constexpr int kWeightMin = 0;
-constexpr int kWeightMax = 800;              // 8.00
+constexpr int kWeightMax = 800;
 
-constexpr int kExposureScale = 100;          // 0.01 steps
+constexpr int kExposureScale = 100;
 constexpr int kExposureMin = 0;
-constexpr int kExposureMax = 800;            // 8.00
+constexpr int kExposureMax = 800;
 
 constexpr int kSamplesMin = 1;
 constexpr int kSamplesMax = 512;
@@ -82,7 +82,7 @@ BrightnessMetric index_to_metric(int index) {
     }
     return BrightnessMetric::MaxRGB;
 }
-} // namespace
+}
 
 class LightRaysUIPanel::StatusLabel : public Widget {
 public:
@@ -199,51 +199,32 @@ void LightRaysUIPanel::build_ui() {
     per_light_checkbox_ = std::make_unique<DMCheckbox>("Enable Per-Light Rays", defaults.per_light_enabled);
     use_alpha_checkbox_ = std::make_unique<DMCheckbox>("Use Alpha In Mask", defaults.per_light.use_alpha_in_mask);
 
-    metric_dropdown_ = std::make_unique<DMDropdown>(
-        "Brightness Metric", metric_options, metric_to_index(defaults.per_light.metric));
+    metric_dropdown_ = std::make_unique<DMDropdown>( "Brightness Metric", metric_options, metric_to_index(defaults.per_light.metric));
 
-    gamma_comp_slider_ = std::make_unique<DMSlider>(
-        "Gamma Compensation", kGammaMin, kGammaMax,
-        double_to_slider_units(defaults.per_light.gamma_comp, kGammaScale, kGammaMin, kGammaMax));
+    gamma_comp_slider_ = std::make_unique<DMSlider>( "Gamma Compensation", kGammaMin, kGammaMax, double_to_slider_units(defaults.per_light.gamma_comp, kGammaScale, kGammaMin, kGammaMax));
     configure_float_slider(gamma_comp_slider_.get(), kGammaScale, 2);
 
-    min_luma_slider_ = std::make_unique<DMSlider>(
-        "Min Luma Threshold", kMinLumaMin, kMinLumaMax,
-        double_to_slider_units(defaults.per_light.min_luma_threshold, kMinLumaScale, kMinLumaMin, kMinLumaMax));
+    min_luma_slider_ = std::make_unique<DMSlider>( "Min Luma Threshold", kMinLumaMin, kMinLumaMax, double_to_slider_units(defaults.per_light.min_luma_threshold, kMinLumaScale, kMinLumaMin, kMinLumaMax));
     configure_float_slider(min_luma_slider_.get(), kMinLumaScale, 3);
 
-    bright_percentile_slider_ = std::make_unique<DMSlider>(
-        "Bright Percentile", kPercentileMin, kPercentileMax,
-        double_to_slider_units(defaults.per_light.bright_percentile, kPercentileScale, kPercentileMin, kPercentileMax));
+    bright_percentile_slider_ = std::make_unique<DMSlider>( "Bright Percentile", kPercentileMin, kPercentileMax, double_to_slider_units(defaults.per_light.bright_percentile, kPercentileScale, kPercentileMin, kPercentileMax));
     configure_float_slider(bright_percentile_slider_.get(), kPercentileScale, 3);
 
-    samples_slider_ = std::make_unique<DMSlider>(
-        "Samples", kSamplesMin, kSamplesMax,
-        clamp_int(defaults.per_light.samples, kSamplesMin, kSamplesMax));
+    samples_slider_ = std::make_unique<DMSlider>( "Samples", kSamplesMin, kSamplesMax, clamp_int(defaults.per_light.samples, kSamplesMin, kSamplesMax));
 
-    density_slider_ = std::make_unique<DMSlider>(
-        "Density", kDensityMin, kDensityMax,
-        double_to_slider_units(defaults.per_light.density, kDensityScale, kDensityMin, kDensityMax));
+    density_slider_ = std::make_unique<DMSlider>( "Density", kDensityMin, kDensityMax, double_to_slider_units(defaults.per_light.density, kDensityScale, kDensityMin, kDensityMax));
     configure_float_slider(density_slider_.get(), kDensityScale, 2);
 
-    decay_slider_ = std::make_unique<DMSlider>(
-        "Decay", kDecayMin, kDecayMax,
-        double_to_slider_units(defaults.per_light.decay, kDecayScale, kDecayMin, kDecayMax));
+    decay_slider_ = std::make_unique<DMSlider>( "Decay", kDecayMin, kDecayMax, double_to_slider_units(defaults.per_light.decay, kDecayScale, kDecayMin, kDecayMax));
     configure_float_slider(decay_slider_.get(), kDecayScale, 3);
 
-    weight_slider_ = std::make_unique<DMSlider>(
-        "Weight", kWeightMin, kWeightMax,
-        double_to_slider_units(defaults.per_light.weight, kWeightScale, kWeightMin, kWeightMax));
+    weight_slider_ = std::make_unique<DMSlider>( "Weight", kWeightMin, kWeightMax, double_to_slider_units(defaults.per_light.weight, kWeightScale, kWeightMin, kWeightMax));
     configure_float_slider(weight_slider_.get(), kWeightScale, 2);
 
-    exposure_slider_ = std::make_unique<DMSlider>(
-        "Exposure", kExposureMin, kExposureMax,
-        double_to_slider_units(defaults.per_light.exposure, kExposureScale, kExposureMin, kExposureMax));
+    exposure_slider_ = std::make_unique<DMSlider>( "Exposure", kExposureMin, kExposureMax, double_to_slider_units(defaults.per_light.exposure, kExposureScale, kExposureMin, kExposureMax));
     configure_float_slider(exposure_slider_.get(), kExposureScale, 2);
 
-    downsample_slider_ = std::make_unique<DMSlider>(
-        "Downsample (log2)", kDownsampleMin, kDownsampleMax,
-        clamp_int(defaults.per_light.downsample_log2, kDownsampleMin, kDownsampleMax));
+    downsample_slider_ = std::make_unique<DMSlider>( "Downsample (log2)", kDownsampleMin, kDownsampleMax, clamp_int(defaults.per_light.downsample_log2, kDownsampleMin, kDownsampleMax));
 
     widget_wrappers_.clear();
     widget_wrappers_.reserve(20);
@@ -252,7 +233,7 @@ void LightRaysUIPanel::build_ui() {
         Widget* raw = w.get();
         widget_wrappers_.push_back(std::move(w));
         return raw;
-    };
+};
 
     Rows rows;
 
@@ -336,39 +317,31 @@ void LightRaysUIPanel::sync_ui_from_json() {
         metric_dropdown_->set_selected(metric_to_index(config.per_light.metric));
     }
     if (gamma_comp_slider_) {
-        gamma_comp_slider_->set_value(double_to_slider_units(config.per_light.gamma_comp,
-                                                             kGammaScale, kGammaMin, kGammaMax));
+        gamma_comp_slider_->set_value(double_to_slider_units(config.per_light.gamma_comp, kGammaScale, kGammaMin, kGammaMax));
     }
     if (min_luma_slider_) {
-        min_luma_slider_->set_value(double_to_slider_units(config.per_light.min_luma_threshold,
-                                                           kMinLumaScale, kMinLumaMin, kMinLumaMax));
+        min_luma_slider_->set_value(double_to_slider_units(config.per_light.min_luma_threshold, kMinLumaScale, kMinLumaMin, kMinLumaMax));
     }
     if (bright_percentile_slider_) {
-        bright_percentile_slider_->set_value(double_to_slider_units(config.per_light.bright_percentile,
-                                                                    kPercentileScale, kPercentileMin, kPercentileMax));
+        bright_percentile_slider_->set_value(double_to_slider_units(config.per_light.bright_percentile, kPercentileScale, kPercentileMin, kPercentileMax));
     }
     if (samples_slider_) {
         samples_slider_->set_value(clamp_int(config.per_light.samples, kSamplesMin, kSamplesMax));
     }
     if (density_slider_) {
-        density_slider_->set_value(double_to_slider_units(config.per_light.density,
-                                                          kDensityScale, kDensityMin, kDensityMax));
+        density_slider_->set_value(double_to_slider_units(config.per_light.density, kDensityScale, kDensityMin, kDensityMax));
     }
     if (decay_slider_) {
-        decay_slider_->set_value(double_to_slider_units(config.per_light.decay,
-                                                        kDecayScale, kDecayMin, kDecayMax));
+        decay_slider_->set_value(double_to_slider_units(config.per_light.decay, kDecayScale, kDecayMin, kDecayMax));
     }
     if (weight_slider_) {
-        weight_slider_->set_value(double_to_slider_units(config.per_light.weight,
-                                                         kWeightScale, kWeightMin, kWeightMax));
+        weight_slider_->set_value(double_to_slider_units(config.per_light.weight, kWeightScale, kWeightMin, kWeightMax));
     }
     if (exposure_slider_) {
-        exposure_slider_->set_value(double_to_slider_units(config.per_light.exposure,
-                                                           kExposureScale, kExposureMin, kExposureMax));
+        exposure_slider_->set_value(double_to_slider_units(config.per_light.exposure, kExposureScale, kExposureMin, kExposureMax));
     }
     if (downsample_slider_) {
-        downsample_slider_->set_value(clamp_int(config.per_light.downsample_log2,
-                                                kDownsampleMin, kDownsampleMax));
+        downsample_slider_->set_value(clamp_int(config.per_light.downsample_log2, kDownsampleMin, kDownsampleMax));
     }
 
     needs_sync_ = false;
@@ -392,35 +365,28 @@ void LightRaysUIPanel::sync_json_from_ui() {
         config.per_light.metric = index_to_metric(metric_dropdown_->selected());
     }
     if (gamma_comp_slider_) {
-        config.per_light.gamma_comp = static_cast<float>(
-            slider_units_to_double(gamma_comp_slider_->value(), kGammaScale));
+        config.per_light.gamma_comp = static_cast<float>( slider_units_to_double(gamma_comp_slider_->value(), kGammaScale));
     }
     if (min_luma_slider_) {
-        config.per_light.min_luma_threshold = static_cast<float>(
-            slider_units_to_double(min_luma_slider_->value(), kMinLumaScale));
+        config.per_light.min_luma_threshold = static_cast<float>( slider_units_to_double(min_luma_slider_->value(), kMinLumaScale));
     }
     if (bright_percentile_slider_) {
-        config.per_light.bright_percentile = static_cast<float>(
-            slider_units_to_double(bright_percentile_slider_->value(), kPercentileScale));
+        config.per_light.bright_percentile = static_cast<float>( slider_units_to_double(bright_percentile_slider_->value(), kPercentileScale));
     }
     if (samples_slider_) {
         config.per_light.samples = clamp_int(samples_slider_->value(), kSamplesMin, kSamplesMax);
     }
     if (density_slider_) {
-        config.per_light.density = static_cast<float>(
-            slider_units_to_double(density_slider_->value(), kDensityScale));
+        config.per_light.density = static_cast<float>( slider_units_to_double(density_slider_->value(), kDensityScale));
     }
     if (decay_slider_) {
-        config.per_light.decay = static_cast<float>(
-            slider_units_to_double(decay_slider_->value(), kDecayScale));
+        config.per_light.decay = static_cast<float>( slider_units_to_double(decay_slider_->value(), kDecayScale));
     }
     if (weight_slider_) {
-        config.per_light.weight = static_cast<float>(
-            slider_units_to_double(weight_slider_->value(), kWeightScale));
+        config.per_light.weight = static_cast<float>( slider_units_to_double(weight_slider_->value(), kWeightScale));
     }
     if (exposure_slider_) {
-        config.per_light.exposure = static_cast<float>(
-            slider_units_to_double(exposure_slider_->value(), kExposureScale));
+        config.per_light.exposure = static_cast<float>( slider_units_to_double(exposure_slider_->value(), kExposureScale));
     }
     if (downsample_slider_) {
         config.per_light.downsample_log2 = clamp_int(downsample_slider_->value(), kDownsampleMin, kDownsampleMax);

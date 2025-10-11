@@ -19,16 +19,27 @@
 #include <cmath>
 #include <cstdint>
 #include <cctype>
-#include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <limits>
 #include <memory>
 #include <nlohmann/json.hpp>
-#include <system_error>
 #include <vector>
 #include <unordered_set>
 #include <SDL.h>
+
+namespace {
+
+void dev_mode_trace(const std::string& message) {
+    try {
+        std::ofstream log("dev_mode_trace.log", std::ios::app);
+        log << message << '\n';
+    } catch (...) {
+        // Swallow logging errors; tracing must never throw.
+    }
+}
+
+}
 
 Assets::Assets(std::vector<Asset>&& loaded,
                AssetLibrary& library,
@@ -99,7 +110,7 @@ std::vector<const Room::NamedArea*> Assets::current_room_trigger_areas() const {
             return true;
         }
         return lowered.find("trigger") != std::string::npos;
-    };
+};
 
     for (const auto& entry : current_room_->areas) {
         if (!entry.area) {
@@ -163,88 +174,6 @@ void Assets::hydrate_map_info_sections() {
     if (!map_info_json_.is_object()) {
         return;
     }
-    if (map_path_.empty()) {
-        return;
-    }
-
-    const auto hydrate_from_file = [&](const char* legacy_key, const char* merged_key) {
-        if (map_info_json_.contains(merged_key)) {
-            return;
-        }
-        auto it = map_info_json_.find(legacy_key);
-        if (it == map_info_json_.end() || !it->is_string()) {
-            return;
-        }
-        const std::string file_path = map_path_ + "/" + it->get<std::string>();
-        std::ifstream section(file_path);
-        if (!section.is_open()) {
-            std::cerr << "[Assets] Legacy map section missing: " << file_path << "\n";
-            return;
-        }
-        try {
-            nlohmann::json data;
-            section >> data;
-            map_info_json_[merged_key] = std::move(data);
-        } catch (const std::exception& ex) {
-            std::cerr << "[Assets] Failed to hydrate " << merged_key << " from "
-                      << file_path << ": " << ex.what() << "\n";
-        }
-};
-
-    hydrate_from_file("map_assets", "map_assets_data");
-    hydrate_from_file("map_boundary", "map_boundary_data");
-    hydrate_from_file("map_light", "map_light_data");
-
-    const auto hydrate_directory = [&](const char* merged_key, const char* directory_name) {
-        if (map_info_json_.contains(merged_key) && map_info_json_[merged_key].is_object()) {
-            return;
-        }
-
-        const std::filesystem::path dir = std::filesystem::path(map_path_) / directory_name;
-        if (!std::filesystem::exists(dir) || !std::filesystem::is_directory(dir)) {
-            return;
-        }
-
-        std::error_code ec;
-        std::filesystem::directory_iterator it(dir, ec);
-        if (ec) {
-            std::cerr << "[Assets] Failed to scan legacy directory " << dir << ": "
-                      << ec.message() << "\n";
-            return;
-        }
-
-        nlohmann::json merged = nlohmann::json::object();
-        for (const auto& entry : it) {
-            if (!entry.is_regular_file()) {
-                continue;
-            }
-            const auto& path = entry.path();
-            if (path.extension() != ".json") {
-                continue;
-            }
-            std::ifstream in(path);
-            if (!in.is_open()) {
-                std::cerr << "[Assets] Failed to open legacy section " << path << "\n";
-                continue;
-            }
-            try {
-                nlohmann::json section;
-                in >> section;
-                merged[path.stem().string()] = std::move(section);
-            } catch (const std::exception& ex) {
-                std::cerr << "[Assets] Failed to hydrate " << merged_key << " entry from "
-                          << path << ": " << ex.what() << "\n";
-            }
-        }
-
-        if (!merged.is_object()) {
-            merged = nlohmann::json::object();
-        }
-        map_info_json_[merged_key] = std::move(merged);
-};
-
-    hydrate_directory("rooms_data", "rooms");
-    hydrate_directory("trails_data", "trails");
 
     const auto ensure_object = [&](const char* key) {
         auto it = map_info_json_.find(key);
@@ -262,6 +191,8 @@ void Assets::hydrate_map_info_sections() {
     ensure_object("map_boundary_data");
     ensure_object("map_light_data");
     ensure_object("light_rays_params");
+    ensure_object("rooms_data");
+    ensure_object("trails_data");
 
     {
         nlohmann::json& L = map_info_json_["map_light_data"];
@@ -271,7 +202,34 @@ void Assets::hydrate_map_info_sections() {
         nlohmann::json& D = map_info_json_["map_light_data"];
         if (!D.contains("radius"))          D["radius"] = 0;
         if (!D.contains("intensity"))       D["intensity"] = 255;
-        if (!D.contains("orbit_radius"))    D["orbit_radius"] = 0;
+        auto clamp_radius = [](int v) { return std::max(0, std::min(20000, v)); };
+        int orbit_radius = 0;
+        if (D.contains("orbit_radius")) {
+            try {
+                orbit_radius = clamp_radius(D["orbit_radius"].get<int>());
+            } catch (...) {
+                orbit_radius = 0;
+            }
+        }
+        int orbit_x = orbit_radius;
+        if (D.contains("orbit_x")) {
+            try {
+                orbit_x = clamp_radius(D["orbit_x"].get<int>());
+            } catch (...) {
+                orbit_x = orbit_radius;
+            }
+        }
+        int orbit_y = orbit_x;
+        if (D.contains("orbit_y")) {
+            try {
+                orbit_y = clamp_radius(D["orbit_y"].get<int>());
+            } catch (...) {
+                orbit_y = orbit_x;
+            }
+        }
+        D["orbit_x"] = orbit_x;
+        D["orbit_y"] = orbit_y;
+        D["orbit_radius"] = std::max(orbit_x, orbit_y);
         if (!D.contains("update_interval")) D["update_interval"] = 10;
         if (!D.contains("mult"))            D["mult"] = 0.0;
         if (!D.contains("fall_off"))        D["fall_off"] = 100;
@@ -334,8 +292,6 @@ void Assets::hydrate_map_info_sections() {
         LightRaysConfig config = LightRaysConfig::from_json(R);
         R = config.to_json();
     }
-    ensure_object("rooms_data");
-    ensure_object("trails_data");
 }
 
 void Assets::load_camera_settings_from_json() {
@@ -457,19 +413,37 @@ void Assets::ensure_dev_controls() {
         return;
     }
 
+    const char* msg_create = "[Assets] Creating Dev Controls";
+    std::cout << msg_create << "\n";
+    dev_mode_trace(msg_create);
     dev_controls_ = new DevControls(this, screen_width, screen_height);
     if (!dev_controls_) {
+        const char* msg_fail = "[Assets] Failed to allocate Dev Controls";
+        std::cout << msg_fail << "\n";
+        dev_mode_trace(msg_fail);
         return;
     }
+    const char* msg_constructed = "[Assets] Dev Controls constructed, wiring context";
+    std::cout << msg_constructed << "\n";
+    dev_mode_trace(msg_constructed);
 
+    dev_mode_trace("[Assets] Dev Controls -> set_player");
     dev_controls_->set_player(player);
+    dev_mode_trace("[Assets] Dev Controls -> set_active_assets");
     dev_controls_->set_active_assets(filtered_active_assets);
+    dev_mode_trace("[Assets] Dev Controls -> set_current_room");
     dev_controls_->set_current_room(current_room_);
+    dev_mode_trace("[Assets] Dev Controls -> set_screen_dimensions");
     dev_controls_->set_screen_dimensions(screen_width, screen_height);
+    dev_mode_trace("[Assets] Dev Controls -> set_rooms");
     dev_controls_->set_rooms(&rooms_);
+    dev_mode_trace("[Assets] Dev Controls -> set_input");
     dev_controls_->set_input(input);
+    dev_mode_trace("[Assets] Dev Controls -> set_map_info");
     dev_controls_->set_map_info(&map_info_json_, [this]() { return on_map_light_changed(); });
+    dev_mode_trace("[Assets] Dev Controls -> set_map_context");
     dev_controls_->set_map_context(&map_info_json_, map_path_);
+    dev_mode_trace("[Assets] Dev Controls wiring complete");
 }
 
 void Assets::update_closest_assets(Asset* player, int max_count) {
@@ -590,7 +564,7 @@ void Assets::update(const Input& input,
     bool closest_assets_dirty = false;
     const auto mark_closest_assets_dirty = [&closest_assets_dirty]() {
         closest_assets_dirty = true;
-    };
+};
 
     Room* detected_room = finder_ ? finder_->getCurrentRoom() : nullptr;
     Room* active_room = detected_room;
@@ -671,16 +645,24 @@ void Assets::set_dev_mode(bool mode) {
     const bool changed = (dev_mode != mode);
     dev_mode = mode;
 
-    force_high_quality_rendering_ = dev_mode ? true : false;
+    // In dev mode, prefer low-quality rendering for responsiveness.
+    // This avoids creating large intermediate render targets that can stall/freeze some GPUs.
+    // When not in dev mode, use the normal (high quality) pipeline.
+    force_high_quality_rendering_ = false;
     update_scene_render_quality();
 
     if (dev_mode) {
         SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "0");
         if (changed) {
-            std::cout << "[Assets] Dev Mode enabled: keeping full render quality.\n";
-        }
+        dev_mode_trace("[Assets] Dev Mode enabled: using low-quality rendering for responsiveness.");
+        std::cout << "[Assets] Dev Mode enabled: using low-quality rendering for responsiveness.\n";
+    }
+        dev_mode_trace("[Assets] Enabling Dev Controls");
+        std::cout << "[Assets] Enabling Dev Controls\n";
         ensure_dev_controls();
         if (dev_controls_) {
+            dev_mode_trace("[Assets] Dev Controls acquired, toggling on");
+            std::cout << "[Assets] Dev Controls acquired, toggling on\n";
             dev_controls_->set_enabled(true);
             dev_controls_->set_player(player);
             dev_controls_->set_active_assets(filtered_active_assets);
@@ -693,12 +675,16 @@ void Assets::set_dev_mode(bool mode) {
             dev_controls_->resolve_current_room(current_room_);
         }
         refresh_filtered_active_assets();
+        dev_mode_trace("[Assets] Dev Controls enabled");
+        std::cout << "[Assets] Dev Controls enabled\n";
     } else {
         SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "2");
         if (changed) {
             std::cout << "[Assets] Dev Mode disabled: restoring high render quality.\n";
         }
         if (dev_controls_) {
+            dev_mode_trace("[Assets] Disabling Dev Controls");
+            std::cout << "[Assets] Disabling Dev Controls\n";
             dev_controls_->set_enabled(false);
             dev_controls_->clear_selection();
         }
@@ -950,7 +936,7 @@ void Assets::process_removals() {
                                return removal_lookup.count(candidate) > 0;
                            }),
             vec.end());
-    };
+};
 
     erase_ptrs(all);
     erase_ptrs(active_assets);
@@ -1056,8 +1042,6 @@ void Assets::open_asset_info_editor_for_asset(Asset* a) {
         dev_controls_->open_asset_info_editor_for_asset(a);
     }
 }
-
-// Removed: left-click opening of spawn group panel.
 
 void Assets::finalize_asset_drag(Asset* a, const std::shared_ptr<AssetInfo>& info) {
     if (dev_controls_ && dev_controls_->is_enabled()) {

@@ -38,7 +38,7 @@ SDL_Texture* create_half_scale(SDL_Renderer* renderer,
         return half;
 }
 
-} // namespace
+}
 
 SDL_Texture* RenderAsset::texture_for_scale(Asset* asset,
                                             SDL_Texture* base_tex,

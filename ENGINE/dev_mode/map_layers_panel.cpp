@@ -7,7 +7,7 @@
 #include "map_layers_common.hpp"
 
 #include "room_config/room_configurator.hpp"
-#include "room_config/spawn_group_utils.hpp"
+#include "spawn_group_config/spawn_group_utils.hpp"
 
 #include "widgets.hpp"
 
@@ -313,24 +313,13 @@ RoomGeometry fetch_room_geometry(const nlohmann::json* rooms_data, const std::st
 
     const auto& room = *it;
 
-    auto extract_dimension = [&room](const char* primary, const char* fallback1,
-                                     const char* fallback2, const char* fallback3) -> double {
-
-        if (room.contains(primary)) return room.value(primary, 0.0);
-
-        if (room.contains(fallback1)) return room.value(fallback1, 0.0);
-
-        if (room.contains(fallback2)) return room.value(fallback2, 0.0);
-
-        if (room.contains(fallback3)) return room.value(fallback3, 0.0);
-
-        return 0.0;
-
+    auto extract_dimension = [&room](const char* key) -> double {
+        return room.value(key, 0.0);
 };
 
-    geom.max_width = extract_dimension("max_width", "width_max", "min_width", "width_min");
+    geom.max_width = extract_dimension("max_width");
 
-    geom.max_height = extract_dimension("max_height", "height_max", "min_height", "height_min");
+    geom.max_height = extract_dimension("max_height");
 
     std::string geometry = room.value("geometry", std::string());
 
@@ -372,8 +361,8 @@ RoomGeometry fetch_room_geometry(const nlohmann::json* rooms_data, const std::st
         if (radius_value <= 0.0) {
             double diameter_guess = std::max(geom.max_width, geom.max_height);
             if (diameter_guess <= 0.0) {
-                double alt_w = extract_dimension("min_width", "width_min", "max_width", "width_max");
-                double alt_h = extract_dimension("min_height", "height_min", "max_height", "height_max");
+                double alt_w = extract_dimension("min_width");
+                double alt_h = extract_dimension("min_height");
                 diameter_guess = std::max(alt_w, alt_h);
             }
             if (diameter_guess > 0.0) {
@@ -638,17 +627,9 @@ nlohmann::json make_default_room_json(const std::string& name) {
 
     room["max_width"] = kDefaultRoomMax;
 
-    room["width_min"] = kDefaultRoomMin;
-
-    room["width_max"] = kDefaultRoomMax;
-
     room["min_height"] = kDefaultRoomMin;
 
     room["max_height"] = kDefaultRoomMax;
-
-    room["height_min"] = kDefaultRoomMin;
-
-    room["height_max"] = kDefaultRoomMax;
 
     room["edge_smoothness"] = 2;
 
@@ -3686,7 +3667,7 @@ void MapLayersPanel::regenerate_preview() {
 
         }
 
-    };
+};
 
     struct PreviewPairEqual {
 
@@ -3698,7 +3679,7 @@ void MapLayersPanel::regenerate_preview() {
 
         }
 
-    };
+};
 
     auto canonical_preview_pair = [](PreviewNode* a, PreviewNode* b) {
 
@@ -3716,7 +3697,7 @@ void MapLayersPanel::regenerate_preview() {
 
         return std::pair<PreviewNode*, PreviewNode*>{a, b};
 
-    };
+};
 
     auto plan_preview_connections = [&](const std::vector<PreviewNode*>& nodes,
 
@@ -3794,7 +3775,7 @@ void MapLayersPanel::regenerate_preview() {
 
             std::vector<int> rank;
 
-        };
+};
 
         PreviewDisjointSet dsu(nodes.size());
 
@@ -3840,7 +3821,7 @@ void MapLayersPanel::regenerate_preview() {
 
             double jitter = 0.0;
 
-        };
+};
 
         std::vector<Candidate> candidates;
 
@@ -3980,7 +3961,7 @@ void MapLayersPanel::regenerate_preview() {
 
             return components;
 
-        };
+};
 
         auto components = rebuild_components();
 
@@ -4078,7 +4059,7 @@ void MapLayersPanel::regenerate_preview() {
 
         return planned;
 
-    };
+};
 
     auto planned_connections = plan_preview_connections(node_refs, forced_connections);
 
@@ -4120,8 +4101,7 @@ void MapLayersPanel::regenerate_preview() {
 
         double distance = std::sqrt(node->center.x * node->center.x + node->center.y * node->center.y);
 
-        double half_diag = node->is_circle ? (node->radius > 0.0 ? node->radius : (0.5 * std::sqrt(node->width * node->width + node->height * node->height)))
-                                           : 0.5 * std::sqrt(node->width * node->width + node->height * node->height);
+        double half_diag = node->is_circle ? (node->radius > 0.0 ? node->radius : (0.5 * std::sqrt(node->width * node->width + node->height * node->height))) : 0.5 * std::sqrt(node->width * node->width + node->height * node->height);
 
         node_extent = std::max(node_extent, distance + half_diag);
 
@@ -4395,21 +4375,21 @@ void MapLayersPanel::open_room_config_for(const std::string& room_name) {
 
     auto on_change = [this]() { handle_room_spawn_groups_changed(false); };
 
-    auto on_entry_change = [this](const nlohmann::json&, const SpawnGroupList::ChangeSummary&) {
+    auto on_entry_change = [this](const nlohmann::json&, const SpawnGroupConfig::ChangeSummary&) {
 
         handle_room_spawn_groups_changed(false);
 
-    };
+};
 
     std::string label = entry->value("name", room_name);
 
     if (label.empty()) label = room_name.empty() ? std::string("Room") : room_name;
 
-    SpawnGroupList::ConfigureEntryCallback configure_entry = [label](SpawnGroupList::RowController& row, const nlohmann::json&) {
+    SpawnGroupConfig::ConfigureEntryCallback configure_entry = [label](SpawnGroupConfig::EntryController& entry, const nlohmann::json&) {
 
-        row.set_ownership_label(label, SDL_Color{255,224,96,255});
+        entry.set_ownership_label(label, SDL_Color{255,224,96,255});
 
-    };
+};
 
     room_configurator_->open(*entry, std::move(on_change), std::move(on_entry_change), std::move(configure_entry));
 
@@ -4427,7 +4407,7 @@ void MapLayersPanel::ensure_room_configurator() {
                     header_visibility_callback_(visible);
                 }
             });
-            room_configurator_->set_show_header(true);
+            room_configurator_->set_show_header(false);
 
             room_configurator_->set_on_close([this]() {
 
@@ -4654,26 +4634,7 @@ void MapLayersPanel::add_spawn_group_to_active_room() {
     auto& groups = devmode::spawn::ensure_spawn_groups_array(*entry);
 
     nlohmann::json new_group;
-
-    new_group["spawn_id"] = devmode::spawn::generate_spawn_id();
-
-    new_group["display_name"] = "New Spawn";
-
-    new_group["position"] = "Exact";
-
-    new_group["min_number"] = 1;
-
-    new_group["max_number"] = 1;
-
-    new_group["check_overlap"] = false;
-
-    new_group["enforce_spacing"] = false;
-
-    new_group["chance_denominator"] = 100;
-
-    new_group["candidates"] = nlohmann::json::array();
-
-    new_group["candidates"].push_back({{"name", "null"}, {"chance", 0}});
+    devmode::spawn::ensure_spawn_group_entry_defaults(new_group, "New Spawn");
 
     groups.push_back(new_group);
 
@@ -4740,6 +4701,12 @@ void MapLayersPanel::duplicate_spawn_group_in_active_room(const std::string& spa
         duplicate["display_name"] = duplicate["display_name"].get<std::string>() + " Copy";
 
     }
+
+    devmode::spawn::ensure_spawn_group_entry_defaults(
+        duplicate,
+        duplicate.contains("display_name") && duplicate["display_name"].is_string()
+            ? duplicate["display_name"].get<std::string>()
+            : std::string{"New Spawn"});
 
     groups.push_back(duplicate);
 
@@ -4868,8 +4835,6 @@ void MapLayersPanel::move_spawn_group_in_active_room(const std::string& spawn_id
     handle_room_spawn_groups_changed();
 
 }
-
-
 
 void MapLayersPanel::select_layer(int index) {
 

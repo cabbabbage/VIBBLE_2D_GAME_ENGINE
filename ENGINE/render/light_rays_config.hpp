@@ -18,7 +18,7 @@ struct LightRaysConfig {
         float weight = 0.75f;
         float exposure = 0.9f;
         int   downsample_log2 = 2;
-    };
+};
 
     bool enabled = false;
     bool per_light_enabled = true;

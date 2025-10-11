@@ -9,7 +9,7 @@
 #include "dev_mode/asset_info_ui.hpp"
 #include "dev_mode/dev_controls_persistence.hpp"
 #include "dev_mode/asset_library_ui.hpp"
-#include "room_config/spawn_group_utils.hpp"
+#include "spawn_group_config/spawn_group_utils.hpp"
 #include "dev_mode/full_screen_collapsible.hpp"
 #include "room_config/room_configurator.hpp"
 #include "dev_mode/FloatingDockableManager.hpp"
@@ -138,7 +138,16 @@ void rename_room_references_in_layers(nlohmann::json& map_info,
     }
 }
 
-} // namespace
+void room_editor_trace(const std::string& message) {
+    try {
+        std::ofstream log("dev_mode_trace.log", std::ios::app);
+        log << message << '\n';
+    } catch (...) {
+        // ignore logging failures
+    }
+}
+
+}
 
 RoomEditor::RoomEditor(Assets* owner, int screen_w, int screen_h)
     : assets_(owner), screen_w_(screen_w), screen_h_(screen_h) {
@@ -188,7 +197,7 @@ void RoomEditor::set_screen_dimensions(int width, int height) {
     }
     configure_shared_panel();
     refresh_room_config_visibility();
-    // legacy floating panel removed
+
 }
 
 void RoomEditor::set_room_config_visible(bool visible) {
@@ -208,7 +217,7 @@ void RoomEditor::set_room_config_visible(bool visible) {
 void RoomEditor::set_shared_fullscreen_panel(FullScreenCollapsible* panel) {
     shared_fullscreen_panel_ = panel;
     configure_shared_panel();
-    update_spawn_group_list_anchor();
+    update_spawn_group_config_anchor();
 }
 
 void RoomEditor::set_header_visibility_callback(std::function<void(bool)> cb) {
@@ -235,31 +244,48 @@ void RoomEditor::set_header_visibility_callback(std::function<void(bool)> cb) {
 }
 
 void RoomEditor::set_current_room(Room* room) {
+    room_editor_trace("[RoomEditor] set_current_room begin");
+    if (room) {
+        room_editor_trace(std::string("[RoomEditor] target room -> ") + room->room_name);
+    } else {
+        room_editor_trace("[RoomEditor] target room -> <null>");
+    }
+
     const bool room_changed = (room != current_room_);
 
     if (room != current_room_) {
+        room_editor_trace("[RoomEditor] clearing active spawn group target");
         clear_active_spawn_group_target();
     }
 
     current_room_ = room;
     if (current_room_) {
+        room_editor_trace("[RoomEditor] acquiring assets_data");
         auto& assets_json = current_room_->assets_data();
+        room_editor_trace("[RoomEditor] ensuring spawn_groups array");
         auto& groups = ensure_spawn_groups_array(assets_json);
         if (sanitize_perimeter_spawn_groups(groups)) {
+            room_editor_trace("[RoomEditor] perimeter groups sanitized, saving");
             save_current_room_assets_json();
         }
     }
+    room_editor_trace("[RoomEditor] rebuilding room spawn id cache");
     rebuild_room_spawn_id_cache();
-    refresh_spawn_group_list_ui();
+    room_editor_trace("[RoomEditor] refreshing spawn group config UI");
+    refresh_spawn_group_config_ui();
 
     if (room_cfg_ui_) {
+        room_editor_trace("[RoomEditor] opening room config UI");
         room_cfg_ui_->open(current_room_);
         refresh_room_config_visibility();
     }
 
     if (!enabled_ && room_changed && current_room_) {
+        room_editor_trace("[RoomEditor] focusing camera on room center");
         focus_camera_on_room_center();
     }
+
+    room_editor_trace("[RoomEditor] set_current_room complete");
 }
 
 void RoomEditor::set_enabled(bool enabled) {
@@ -370,7 +396,7 @@ void RoomEditor::update_ui(const Input& input) {
 
     if (room_cfg_ui_ && room_cfg_ui_->visible()) {
         room_cfg_ui_->update(input, screen_w_, screen_h_);
-        update_spawn_group_list_anchor();
+        update_spawn_group_config_anchor();
     }
 
     ensure_area_editor();
@@ -407,7 +433,6 @@ void RoomEditor::update_ui(const Input& input) {
     } else if (active_modal_ == ActiveModal::AssetInfo) {
         active_modal_ = ActiveModal::None;
     }
-    // legacy floating panel removed
 
     update_area_editor_focus();
 
@@ -435,7 +460,7 @@ bool RoomEditor::handle_sdl_event(const SDL_Event& event) {
     struct RouteResult {
         bool handled = false;
         bool pointer_blocked = false;
-    };
+};
 
     auto apply_result = [&](const RouteResult& result, bool& pointer_blocked) -> bool {
         if (result.handled) {
@@ -448,11 +473,9 @@ bool RoomEditor::handle_sdl_event(const SDL_Event& event) {
             pointer_blocked = true;
         }
         return false;
-    };
+};
 
     bool pointer_blocked = false;
-
-    // legacy spawn panel routing removed
 
     auto route_info_panel = [&]() -> RouteResult {
         RouteResult result;
@@ -468,7 +491,7 @@ bool RoomEditor::handle_sdl_event(const SDL_Event& event) {
             result.pointer_blocked = true;
         }
         return result;
-    };
+};
 
     auto route_room_config = [&]() -> RouteResult {
         RouteResult result;
@@ -484,7 +507,7 @@ bool RoomEditor::handle_sdl_event(const SDL_Event& event) {
             result.pointer_blocked = true;
         }
         return result;
-    };
+};
 
     auto route_library_panel = [&]() -> RouteResult {
         RouteResult result;
@@ -500,9 +523,8 @@ bool RoomEditor::handle_sdl_event(const SDL_Event& event) {
             result.pointer_blocked = true;
         }
         return result;
-    };
+};
 
-    // no spawn panel routing
     if (apply_result(route_info_panel(), pointer_blocked)) {
         return true;
     }
@@ -553,7 +575,6 @@ bool RoomEditor::is_room_panel_blocking_point(int x, int y) const {
 }
 
 bool RoomEditor::is_room_ui_blocking_point(int x, int y) const {
-    // no floating spawn panel
 
     if (!enabled_) {
         return false;
@@ -590,7 +611,7 @@ void RoomEditor::render_overlays(SDL_Renderer* renderer) {
         info_ui_->render_world_overlay(renderer, assets_->getView());
         info_ui_->render(renderer, screen_w_, screen_h_);
     }
-    // no floating spawn panel rendering
+
     if (renderer && assets_ && current_room_ && current_room_->room_area) {
         auto overlay = compute_perimeter_overlay_for_drag();
         if (!overlay) {
@@ -731,8 +752,6 @@ void RoomEditor::pulse_active_modal_header() {
     }
 }
 
-// Removed: opening spawn group via asset click
-
 void RoomEditor::finalize_asset_drag(Asset* asset, const std::shared_ptr<AssetInfo>& info) {
     if (!asset || !info || !current_room_) return;
     auto& root = current_room_->assets_data();
@@ -753,26 +772,22 @@ void RoomEditor::finalize_asset_drag(Asset* asset, const std::shared_ptr<AssetIn
     std::string spawn_id = generate_spawn_id();
     nlohmann::json entry;
     entry["spawn_id"] = spawn_id;
-    entry["min_number"] = 1;
-    entry["max_number"] = 1;
     entry["position"] = "Exact";
-    entry["check_overlap"] = false;
-    entry["enforce_spacing"] = false;
     entry["dx"] = asset->pos.x - center.x;
     entry["dy"] = asset->pos.y - center.y;
     if (width > 0) entry["origional_width"] = width;
     if (height > 0) entry["origional_height"] = height;
     entry["display_name"] = info->name;
 
-    entry["candidates"] = nlohmann::json::array();
-    entry["candidates"].push_back({{"name", "null"}, {"chance", 0}});
+    devmode::spawn::ensure_spawn_group_entry_defaults(entry, info->name);
+
     entry["candidates"].push_back({{"name", info->name}, {"chance", 100}});
 
     arr.push_back(entry);
     save_current_room_assets_json();
     asset->spawn_id = spawn_id;
     asset->spawn_method = "Exact";
-    refresh_spawn_group_list_ui();
+    refresh_spawn_group_config_ui();
     rebuild_room_spawn_id_cache();
 }
 
@@ -808,6 +823,11 @@ void RoomEditor::regenerate_room_from_template(Room* source_room) {
             if (!entry.is_object()) continue;
             nlohmann::json clone = entry;
             clone["spawn_id"] = generate_spawn_id();
+            devmode::spawn::ensure_spawn_group_entry_defaults(
+                clone,
+                clone.contains("display_name") && clone["display_name"].is_string()
+                    ? clone["display_name"].get<std::string>()
+                    : std::string{"New Spawn"});
             target_groups.push_back(clone);
         }
     }
@@ -840,7 +860,7 @@ void RoomEditor::regenerate_room_from_template(Room* source_room) {
     }
 
     rebuild_room_spawn_id_cache();
-    refresh_spawn_group_list_ui();
+    refresh_spawn_group_config_ui();
     reopen_room_configurator();
 
     if (const nlohmann::json* new_groups = find_spawn_groups_array(target_root)) {
@@ -1012,7 +1032,6 @@ void RoomEditor::handle_mouse_input(const Input& input) {
     const bool ui_blocked = asset_info_open || is_ui_blocking_input(mx, my);
     const bool library_modal_block =
         library_ui_ && library_ui_->is_visible() && library_ui_->is_input_blocking();
-
 
     const bool config_open = room_cfg_ui_ && room_cfg_ui_->visible();
     const bool suppress_hover_and_drag = library_modal_block || asset_info_open || config_open;
@@ -1190,8 +1209,6 @@ void RoomEditor::handle_click(const Input& input) {
                 selected_assets_.push_back(nearest);
             }
         }
-        // Removed: opening spawn group config on left click.
-        // Left-click now only selects; editing happens via spawn group lists.
 
         Uint32 now = SDL_GetTicks();
         if (last_click_asset_ == nearest && (now - last_click_time_ms_) <= 300) {
@@ -1312,7 +1329,7 @@ bool RoomEditor::is_ui_blocking_input(int mx, int my) const {
     if (area_editor_ && area_editor_->is_active()) {
         return true;
     }
-    // no floating spawn group panel
+
     return false;
 }
 
@@ -1374,7 +1391,7 @@ void RoomEditor::ensure_room_configurator() {
         room_cfg_ui_->set_work_area(SDL_Rect{0, 0, screen_w_, screen_h_});
         room_cfg_ui_->set_on_close([this]() {
             room_config_dock_open_ = false;
-            update_spawn_group_list_anchor();
+            update_spawn_group_config_anchor();
         });
         room_cfg_ui_->set_spawn_group_callbacks(
             [this](const std::string& spawn_id) {
@@ -1408,6 +1425,7 @@ void RoomEditor::ensure_room_configurator() {
                 add_spawn_group_internal();
             },
             [this](const std::string& spawn_id) {
+                refresh_spawn_group_config_ui();
                 if (spawn_id.empty()) {
                     return;
                 }
@@ -1447,8 +1465,8 @@ std::string RoomEditor::rename_active_room(const std::string& old_name, const st
     return final_key;
 }
 
-void RoomEditor::ensure_spawn_group_list_ui() {
-    // legacy floating spawn panel removed
+void RoomEditor::ensure_spawn_group_config_ui() {
+
 }
 
 void RoomEditor::update_room_config_bounds() {
@@ -1479,7 +1497,7 @@ void RoomEditor::refresh_room_config_visibility() {
     }
     if (active_modal_ == ActiveModal::AssetInfo) {
         room_cfg_ui_->close();
-        update_spawn_group_list_anchor();
+        update_spawn_group_config_anchor();
         return;
     }
     if (room_config_dock_open_) {
@@ -1488,7 +1506,7 @@ void RoomEditor::refresh_room_config_visibility() {
     } else {
         room_cfg_ui_->close();
     }
-    update_spawn_group_list_anchor();
+    update_spawn_group_config_anchor();
 }
 
 void RoomEditor::handle_delete_shortcut(const Input& input) {
@@ -1765,7 +1783,7 @@ void RoomEditor::finalize_drag_session() {
 
     if (json_modified) {
         save_current_room_assets_json();
-        refresh_spawn_group_list_ui();
+        refresh_spawn_group_config_ui();
     }
 
     reset_drag_state();
@@ -1818,9 +1836,9 @@ std::pair<int, int> RoomEditor::get_room_dimensions() const {
     return {width, height};
 }
 
-void RoomEditor::refresh_spawn_group_list_ui() {
+void RoomEditor::refresh_spawn_group_config_ui() {
     if (!current_room_) return;
-    ensure_spawn_group_list_ui();
+    ensure_spawn_group_config_ui();
     auto& root = current_room_->assets_data();
     auto& arr = ensure_spawn_groups_array(root);
     if (sanitize_perimeter_spawn_groups(arr)) {
@@ -1829,8 +1847,8 @@ void RoomEditor::refresh_spawn_group_list_ui() {
     rebuild_room_spawn_id_cache();
 }
 
-void RoomEditor::update_spawn_group_list_anchor() {
-    // legacy floating panel removed
+void RoomEditor::update_spawn_group_config_anchor() {
+
 }
 
 SDL_Point RoomEditor::spawn_groups_anchor_point() const {
@@ -1938,24 +1956,16 @@ void RoomEditor::add_spawn_group_internal() {
     auto& arr = ensure_spawn_groups_array(root);
     nlohmann::json entry;
     entry["spawn_id"] = generate_spawn_id();
-    entry["display_name"] = "New Spawn";
-    entry["position"] = "Exact";
-    entry["min_number"] = 1;
-    entry["max_number"] = 1;
-    entry["check_overlap"] = false;
-    entry["enforce_spacing"] = false;
-    entry["chance_denominator"] = 100;
-    entry["candidates"] = nlohmann::json::array();
-    entry["candidates"].push_back({{"name", "null"}, {"chance", 0}});
+    devmode::spawn::ensure_spawn_group_entry_defaults(entry, "New Spawn");
     arr.push_back(entry);
-    // New group gets lowest priority (end of list)
+
     for (size_t i = 0; i < arr.size(); ++i) {
         if (arr[i].is_object()) arr[i]["priority"] = static_cast<int>(i);
     }
     sanitize_perimeter_spawn_groups(arr);
     save_current_room_assets_json();
     rebuild_room_spawn_id_cache();
-    refresh_spawn_group_list_ui();
+    refresh_spawn_group_config_ui();
     reopen_room_configurator();
     open_spawn_group_editor_by_id(entry["spawn_id"].get<std::string>());
 }
@@ -1980,8 +1990,13 @@ void RoomEditor::duplicate_spawn_group_internal(const std::string& spawn_id) {
         std::string name = duplicate["display_name"].get<std::string>();
         duplicate["display_name"] = name + " Copy";
     }
+    devmode::spawn::ensure_spawn_group_entry_defaults(
+        duplicate,
+        duplicate.contains("display_name") && duplicate["display_name"].is_string()
+            ? duplicate["display_name"].get<std::string>()
+            : std::string{"New Spawn"});
     arr.push_back(duplicate);
-    // Renumber priorities to match order
+
     for (size_t i = 0; i < arr.size(); ++i) {
         if (arr[i].is_object()) arr[i]["priority"] = static_cast<int>(i);
     }
@@ -1997,7 +2012,7 @@ void RoomEditor::duplicate_spawn_group_internal(const std::string& spawn_id) {
     }
     save_current_room_assets_json();
     rebuild_room_spawn_id_cache();
-    refresh_spawn_group_list_ui();
+    refresh_spawn_group_config_ui();
     if (nlohmann::json* fresh = find_spawn_entry(new_id)) {
         respawn_spawn_group(*fresh);
     }
@@ -2014,7 +2029,7 @@ void RoomEditor::delete_spawn_group_internal(const std::string& spawn_id) {
         clear_active_spawn_group_target();
     }
     rebuild_room_spawn_id_cache();
-    refresh_spawn_group_list_ui();
+    refresh_spawn_group_config_ui();
     reopen_room_configurator();
     if (assets_) {
         assets_->refresh_active_asset_lists();
@@ -2037,7 +2052,7 @@ bool RoomEditor::remove_spawn_group_by_id(const std::string& spawn_id) {
         return false;
     }
     arr.erase(it, arr.end());
-    // Renumber priorities after deletion
+
     for (size_t i = 0; i < arr.size(); ++i) {
         if (arr[i].is_object()) arr[i]["priority"] = static_cast<int>(i);
     }
@@ -2061,7 +2076,6 @@ bool RoomEditor::remove_spawn_group_by_id(const std::string& spawn_id) {
     return true;
 }
 
-// dir: -1 for up, +1 for down
 void RoomEditor::move_spawn_group_internal(const std::string& spawn_id, int dir) {
     if (!current_room_ || spawn_id.empty() || (dir != -1 && dir != +1)) return;
     auto& root = current_room_->assets_data();
@@ -2080,13 +2094,13 @@ void RoomEditor::move_spawn_group_internal(const std::string& spawn_id, int dir)
     int target = idx + dir;
     if (target < 0 || target >= static_cast<int>(arr.size())) return;
     std::swap(arr[idx], arr[target]);
-    // Renumber priorities to match order
+
     for (size_t i = 0; i < arr.size(); ++i) {
         if (arr[i].is_object()) arr[i]["priority"] = static_cast<int>(i);
     }
     save_current_room_assets_json();
     rebuild_room_spawn_id_cache();
-    refresh_spawn_group_list_ui();
+    refresh_spawn_group_config_ui();
     reopen_room_configurator();
 }
 
@@ -2125,7 +2139,7 @@ bool RoomEditor::asset_belongs_to_room(const Asset* ) const {
 }
 
 void RoomEditor::handle_spawn_config_change(const nlohmann::json& entry) {
-    // Conservatively respawn on changes affecting method/quantity in the new inline editor
+
     respawn_spawn_group(entry);
 }
 
@@ -2263,7 +2277,7 @@ void RoomEditor::regenerate_current_room() {
             diameter = std::max(diameter, std::max(h_min, h_max));
             if (diameter <= 0) return 0;
             return std::max(1, diameter / 2);
-        };
+};
         int radius_value = room_json.value("radius", -1);
         int min_radius = radius_value;
         int max_radius = radius_value;
@@ -2286,12 +2300,8 @@ void RoomEditor::regenerate_current_room() {
         room_json["radius"] = chosen_radius;
         room_json["min_width"] = width;
         room_json["max_width"] = width;
-        room_json["width_min"] = width;
-        room_json["width_max"] = width;
         room_json["min_height"] = height;
         room_json["max_height"] = height;
-        room_json["height_min"] = height;
-        room_json["height_max"] = height;
     } else {
         std::uniform_int_distribution<int> dist_w(min_w, max_w);
         std::uniform_int_distribution<int> dist_h(min_h, max_h);
@@ -2438,7 +2448,8 @@ void RoomEditor::regenerate_current_room() {
         }
     }
 
-    refresh_spawn_group_list_ui();
+    refresh_spawn_group_config_ui();
+    reopen_room_configurator();
 }
 
 void RoomEditor::update_exact_json(nlohmann::json& entry, const Asset& asset, SDL_Point center, int width, int height) {
@@ -2510,4 +2521,9 @@ void RoomEditor::save_perimeter_json(nlohmann::json& entry, int dx, int dy, int 
         }
     }
 }
+
+
+
+
+
 

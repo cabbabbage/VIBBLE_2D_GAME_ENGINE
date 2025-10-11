@@ -16,7 +16,7 @@ int orbit_visit_threshold(const Asset* asset, int radius) {
     return std::max(2, limit / 4);
 }
 
-} // namespace
+}
 
 DaveyController::DaveyController(Assets* assets, Asset* self)
     : assets_(assets), self_(self) {

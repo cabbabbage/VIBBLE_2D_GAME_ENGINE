@@ -112,5 +112,5 @@ class AnimationInspectorPanel {
     AudioFilePicker audio_file_picker_;
 };
 
-}  // namespace animation_editor
+}
 

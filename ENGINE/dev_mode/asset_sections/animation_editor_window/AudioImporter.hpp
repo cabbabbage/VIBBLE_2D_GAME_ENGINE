@@ -24,5 +24,5 @@ class AudioImporter {
     mutable int preview_channel_ = -1;
 };
 
-}  // namespace animation_editor
+}
 

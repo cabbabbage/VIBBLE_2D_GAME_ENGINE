@@ -10,22 +10,25 @@
 
 #include "SlidingWindowContainer.hpp"
 #include "widgets.hpp"
-#include "spawn_group_lists/spawn_group_list.hpp"
+#include "../spawn_group_config/SpawnGroupConfig.hpp"
 
 class Input;
 class Room;
 class TagEditorWidget;
-class SpawnGroupList;
+class SpawnGroupConfig;
+class DockableCollapsible;
 class DropdownWidget;
 class RangeSliderWidget;
 class SliderWidget;
 class CheckboxWidget;
 class TextBoxWidget;
+class ButtonWidget;
 class DMRangeSlider;
 class DMSlider;
 class DMCheckbox;
 class DMTextBox;
 class DMDropdown;
+class DMButton;
 
 class RoomConfigurator {
 public:
@@ -41,8 +44,8 @@ public:
     void open(const nlohmann::json& room_data);
     void open(nlohmann::json& room_data,
               std::function<void()> on_change,
-              std::function<void(const nlohmann::json&, const SpawnGroupList::ChangeSummary&)> on_entry_change = {},
-              SpawnGroupList::ConfigureEntryCallback configure_entry = {});
+              std::function<void(const nlohmann::json&, const SpawnGroupConfig::ChangeSummary&)> on_entry_change = {},
+              SpawnGroupConfig::ConfigureEntryCallback configure_entry = {});
     void open(Room* room);
 
     bool refresh_spawn_groups(const nlohmann::json& room_data);
@@ -69,6 +72,8 @@ public:
                                    std::function<void(const std::string&)> on_move_down,
                                    std::function<void()> on_add,
                                    std::function<void(const std::string&)> on_regenerate = {});
+    void set_spawn_area_open_callback(std::function<void(const std::string&, const std::string&)> cb,
+                                      std::string stack_key = {});
 
     void set_on_room_renamed(std::function<std::string(const std::string&, const std::string&)> cb) {
         on_room_renamed_ = std::move(cb);
@@ -82,12 +87,14 @@ private:
 
     bool apply_room_data(const nlohmann::json& data);
     void rebuild_rows();
+    void rebuild_rows_internal();
     void rebuild_spawn_rows(Rows& rows);
+    // Request a rebuild on the next update tick to avoid re-entrant loops
+    void request_rebuild();
     void load_tags_from_json(const nlohmann::json& data);
     void write_tags_to_json(nlohmann::json& object) const;
     std::string selected_geometry() const;
     bool sync_state_from_widgets();
-    void ensure_spawn_list();
     const nlohmann::json& live_room_json() const;
     nlohmann::json& live_room_json();
     void set_rows(Rows rows);
@@ -96,11 +103,14 @@ private:
     SDL_Rect clamp_to_work_area(const SDL_Rect& bounds) const;
     void handle_container_closed();
     void reset_scroll();
+    bool add_spawn_group_direct();
+    void renumber_spawn_group_priorities(nlohmann::json& groups) const;
 
     std::unique_ptr<State> state_;
 
     SlidingWindowContainer container_;
     Rows rows_;
+    std::unique_ptr<DockableCollapsible> basic_panel_;
     bool show_header_ = true;
     SDL_Rect bounds_override_{0, 0, 0, 0};
     SDL_Rect work_area_{0, 0, 0, 0};
@@ -111,6 +121,9 @@ private:
     int last_screen_w_ = 0;
     int last_screen_h_ = 0;
     std::function<void()> on_close_{};
+    bool rebuild_in_progress_ = false;
+    bool pending_rebuild_ = false;
+    bool deferred_rebuild_ = false;
 
     Room* room_ = nullptr;
     nlohmann::json* external_room_json_ = nullptr;
@@ -153,7 +166,10 @@ private:
     std::unique_ptr<Widget> tags_label_;
     std::unique_ptr<Widget> empty_spawn_label_;
 
-    std::unique_ptr<SpawnGroupList> spawn_list_;
+    std::vector<std::unique_ptr<SpawnGroupConfig>> spawn_group_configs_;
+    std::vector<std::string> spawn_group_config_ids_;
+    std::unique_ptr<DMButton> add_spawn_button_;
+    std::unique_ptr<ButtonWidget> add_spawn_widget_;
 
     std::function<void(const std::string&)> on_spawn_edit_;
     std::function<void(const std::string&)> on_spawn_duplicate_;
@@ -162,9 +178,11 @@ private:
     std::function<void(const std::string&)> on_spawn_move_down_;
     std::function<void()> on_spawn_add_;
     std::function<void(const std::string&)> on_spawn_regenerate_;
+    std::function<void(const std::string&, const std::string&)> on_spawn_area_open_;
+    std::string spawn_area_stack_key_;
     std::function<void()> on_external_spawn_change_;
-    std::function<void(const nlohmann::json&, const SpawnGroupList::ChangeSummary&)> on_external_spawn_entry_change_;
-    SpawnGroupList::ConfigureEntryCallback external_configure_entry_;
+    std::function<void(const nlohmann::json&, const SpawnGroupConfig::ChangeSummary&)> on_external_spawn_entry_change_;
+    SpawnGroupConfig::ConfigureEntryCallback external_configure_entry_;
     std::function<std::string(const std::string&, const std::string&)> on_room_renamed_;
 };
 

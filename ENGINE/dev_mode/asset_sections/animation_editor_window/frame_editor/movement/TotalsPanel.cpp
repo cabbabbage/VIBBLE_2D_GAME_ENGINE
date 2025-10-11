@@ -43,7 +43,7 @@ bool point_in_button_rect(const SDL_Event& e, const SDL_Rect& rect) {
     return SDL_PointInRect(&p, &rect) != 0;
 }
 
-}  // namespace
+}
 
 TotalsPanel::TotalsPanel() = default;
 
@@ -89,10 +89,8 @@ void TotalsPanel::render(SDL_Renderer* renderer) const {
     SDL_RenderDrawRect(renderer, &prev_button_);
     SDL_RenderDrawRect(renderer, &next_button_);
 
-    render_totals_label(renderer, "<", prev_button_.x + (prev_button_.w / 2) - 6,
-                        prev_button_.y + (prev_button_.h / 2) - 10, button_text);
-    render_totals_label(renderer, ">", next_button_.x + (next_button_.w / 2) - 6,
-                        next_button_.y + (next_button_.h / 2) - 10, button_text);
+    render_totals_label(renderer, "<", prev_button_.x + (prev_button_.w / 2) - 6, prev_button_.y + (prev_button_.h / 2) - 10, button_text);
+    render_totals_label(renderer, ">", next_button_.x + (next_button_.w / 2) - 6, next_button_.y + (next_button_.h / 2) - 10, button_text);
 
     int text_x = next_button_.x + next_button_.w + kTotalsPanelPadding;
     int text_y = bounds_.y + kTotalsPanelPadding;
@@ -105,11 +103,9 @@ void TotalsPanel::render(SDL_Renderer* renderer) const {
     text_y += 22;
     render_totals_label(renderer, "Selected: " + std::to_string(selected), text_x, text_y, button_text);
     text_y += 22;
-    render_totals_label(renderer, "Total ΔX: " + std::to_string(static_cast<int>(std::lround(total_dx_))), text_x, text_y,
-                        button_text);
+    render_totals_label(renderer, "Total ΔX: " + std::to_string(static_cast<int>(std::lround(total_dx_))), text_x, text_y, button_text);
     text_y += 22;
-    render_totals_label(renderer, "Total ΔY: " + std::to_string(static_cast<int>(std::lround(total_dy_))), text_x, text_y,
-                        button_text);
+    render_totals_label(renderer, "Total ΔY: " + std::to_string(static_cast<int>(std::lround(total_dy_))), text_x, text_y, button_text);
 }
 
 bool TotalsPanel::handle_event(const SDL_Event& e) {
@@ -140,5 +136,5 @@ void TotalsPanel::recalculate_totals() {
     }
 }
 
-}  // namespace animation_editor
+}
 

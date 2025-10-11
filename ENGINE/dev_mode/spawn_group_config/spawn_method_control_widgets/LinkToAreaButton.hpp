@@ -2,9 +2,9 @@
 
 #include <string>
 
-#include "dev_mode/room_config/spawn_group_lists/Signal.hpp"
+#include "dev_mode/spawn_group_config/Signal.hpp"
 
-namespace vibble::dev_mode::room_config::spawn_group_lists::spawn_method_control_widgets {
+namespace vibble::dev_mode::spawn_group_config::spawn_method_control_widgets {
 
 class LinkToAreaButton {
 public:
@@ -22,4 +22,4 @@ private:
     Signal<const std::string&> on_open_area_{};
 };
 
-}  // namespace vibble::dev_mode::room_config::spawn_group_lists::spawn_method_control_widgets
+}

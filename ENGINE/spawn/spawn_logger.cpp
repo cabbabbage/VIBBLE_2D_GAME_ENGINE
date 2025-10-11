@@ -3,7 +3,6 @@
 #include <vector>
 #include <string>
 #include <sstream>
-#include <iostream>
 #include <iomanip>
 SpawnLogger::SpawnLogger(const std::string& map_dir,
                          std::string room_dir)
@@ -113,12 +112,7 @@ void SpawnLogger::output_and_log(const std::string& asset_name,
 }
 
 void SpawnLogger::progress(const std::shared_ptr<AssetInfo>& info, int current, int total) {
-	const int bar_width = 50;
-	double percent = (total > 0) ? static_cast<double>(current) / total : 0.0;
-	int filled = static_cast<int>(percent * bar_width);
-	std::string bar(filled, '#');
-	bar.resize(bar_width, '-');
-	std::ostringstream oss;
-	oss << "[Checking] " << std::left << std::setw(20) << info->name << "[" << bar << "] " << std::setw(3) << static_cast<int>(percent * 100) << "%\r";
-	std::cout << oss.str() << std::flush;
+        (void)info;
+        (void)current;
+        (void)total;
 }

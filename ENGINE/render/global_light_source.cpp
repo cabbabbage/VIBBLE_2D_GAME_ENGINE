@@ -17,16 +17,18 @@ Global_Light_Source::Global_Light_Source(SDL_Renderer* renderer,
                                          SDL_Color fallback_base_color,
                                          const std::string& map_path)
 : renderer_(renderer),
-texture_(nullptr),
-base_color_(fallback_base_color),
-current_color_(fallback_base_color),
-default_center_(screen_center),
-center_(screen_center),
-angle_(0.0f),
-initialized_(false),
-pos_{screen_center.x, screen_center.y},
-frame_counter_(0),
-light_brightness(255)
+        texture_(nullptr),
+        base_color_(fallback_base_color),
+        current_color_(fallback_base_color),
+        default_center_(screen_center),
+        center_(screen_center),
+        angle_(0.0f),
+        initialized_(false),
+        pos_{screen_center.x, screen_center.y},
+        frame_counter_(0),
+        light_brightness(255),
+        orbit_radius_x_(0),
+        orbit_radius_y_(0)
 {
         set_defaults(screen_width, fallback_base_color);
         if (!load_from_map_light(map_path)) {
@@ -41,7 +43,8 @@ void Global_Light_Source::set_defaults(int screen_width, SDL_Color fallback_base
         intensity_       = 255.0f;
         mult_            = 0.4f;
         fall_off_        = 1.0f;
-        orbit_radius     = std::max(1, screen_width / 4);
+        orbit_radius_x_  = std::max(1, screen_width / 4);
+        orbit_radius_y_  = orbit_radius_x_;
         update_interval_ = 2;
         base_color_      = clamp_color_alpha(fallback_base_color);
         current_color_   = base_color_;
@@ -57,7 +60,7 @@ bool Global_Light_Source::load_from_map_light(const std::string& map_path) {
         if (map_path.empty()) {
                 return false;
         }
-        // Map light configuration now lives inside map_info.json under key "map_light_data".
+
         std::ifstream in(map_path + "/map_info.json");
         if (!in.is_open()) {
                 std::cerr << "[MapLight] Failed to open map_info.json in " << map_path << "\n";
@@ -81,13 +84,13 @@ bool Global_Light_Source::load_from_map_light(const std::string& map_path) {
                         default_cy = center_val;
                 }
         } catch (...) {
-                // keep fallback default center if parsing fails
+
         }
         default_center_ = SDL_Point{ default_cx, default_cy };
         center_ = default_center_;
         auto it = j.find("map_light_data");
         if (it == j.end() || !it->is_object()) {
-                // No map light data present; allow caller to fall back to defaults.
+
                 std::cerr << "[MapLight] map_info.json has no valid map_light_data object. Using defaults.\n";
                 return false;
         }
@@ -102,7 +105,9 @@ void Global_Light_Source::apply_config(const json& data) {
 
         radius_        = data.value("radius", radius_);
         intensity_     = data.value("intensity", intensity_);
-        orbit_radius   = data.value("orbit_radius", orbit_radius);
+        const int fallback_orbit = std::clamp(data.value("orbit_radius", orbit_radius_x_), 0, 20000);
+        orbit_radius_x_ = std::clamp(data.value("orbit_x", fallback_orbit), 0, 20000);
+        orbit_radius_y_ = std::clamp(data.value("orbit_y", orbit_radius_x_), 0, 20000);
         update_interval_= std::max(1, data.value("update_interval", update_interval_));
         mult_          = std::clamp(data.value("mult", mult_), 0.0f, 1.0f);
         fall_off_      = data.value("fall_off", fall_off_);
@@ -140,11 +145,7 @@ void Global_Light_Source::apply_config(const json& data) {
                         const auto& col = entry[1];
                         if (!col.is_array() || col.size() < 4) continue;
                         SDL_Color c{
-                                static_cast<Uint8>(std::clamp(col[0].get<int>(), 0, 255)),
-                                static_cast<Uint8>(std::clamp(col[1].get<int>(), 0, 255)),
-                                static_cast<Uint8>(std::clamp(col[2].get<int>(), 0, 255)),
-                                static_cast<Uint8>(std::clamp(col[3].get<int>(), 0, 255))
-                        };
+                                static_cast<Uint8>(std::clamp(col[0].get<int>(), 0, 255)), static_cast<Uint8>(std::clamp(col[1].get<int>(), 0, 255)), static_cast<Uint8>(std::clamp(col[2].get<int>(), 0, 255)), static_cast<Uint8>(std::clamp(col[3].get<int>(), 0, 255)) };
                         key_colors_.push_back({deg, clamp_color_alpha(c)});
                 }
         }
@@ -168,7 +169,7 @@ void Global_Light_Source::apply_config(const json& data) {
                 } catch (...) {
                         return std::nullopt;
                 }
-        };
+};
         bool custom_center = false;
         if (auto center_it = data.find("center"); center_it != data.end()) {
                 if (auto parsed = parse_point(*center_it)) {
@@ -275,8 +276,8 @@ void Global_Light_Source::build_texture() {
 void Global_Light_Source::recalc_position() {
         const double ca = std::cos(angle_);
         const double sa = std::sin(angle_);
-        const int dx = static_cast<int>(std::lround(static_cast<double>(orbit_radius) * ca));
-        const int dy = static_cast<int>(std::lround(static_cast<double>(orbit_radius) * sa));
+        const int dx = static_cast<int>(std::lround(static_cast<double>(orbit_radius_x_) * ca));
+        const int dy = static_cast<int>(std::lround(static_cast<double>(orbit_radius_y_) * sa));
         pos_.x = center_.x + dx;
         pos_.y = center_.y - dy;
 }
@@ -287,7 +288,7 @@ SDL_Color Global_Light_Source::compute_color_from_horizon() const {
 
 	auto lerp = [](Uint8 A, Uint8 B, float t){
 		return Uint8(A + (B - A) * t);
-	};
+};
 
 	if (key_colors_.size() < 2) {
 		return key_colors_.empty() ? base_color_ : key_colors_.front().color;

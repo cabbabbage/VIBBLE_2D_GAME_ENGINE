@@ -47,7 +47,7 @@ class PlaybackSettingsPanel {
         }
 
         bool operator!=(const PlaybackState& other) const { return !(*this == other); }
-    };
+};
 
     void ensure_widgets();
     void layout_widgets() const;
@@ -79,5 +79,5 @@ class PlaybackSettingsPanel {
     bool is_syncing_ui_ = false;
 };
 
-}  // namespace animation_editor
+}
 

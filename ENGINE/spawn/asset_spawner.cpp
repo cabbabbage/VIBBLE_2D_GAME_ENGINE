@@ -97,7 +97,6 @@ void AssetSpawner::run_spawning(AssetSpawnPlanner* planner, const Area& area) {
                 if (!queue_item.has_candidates()) continue;
                 const std::string& pos = queue_item.position;
 
-                // Apply per-group link-area clipping if configured
                 if (current_room_ && !queue_item.link_area_name.empty()) {
                         Area* link = current_room_->find_area(queue_item.link_area_name);
                         ctx.set_clip_area(link);
@@ -206,7 +205,6 @@ void AssetSpawner::run_boundary_spawning(const Area& area) {
                 MapGrid grid = MapGrid::from_area_bounds(area, kBoundarySpacing);
                 SpawnContext ctx(rng_, checker_, logger_, exclusion_zones, asset_info_library_, all_, asset_library_, &grid);
 
-                // Apply per-group link-area clipping if configured
                 if (current_room_ && !queue_item.link_area_name.empty()) {
                         Area* link = current_room_->find_area(queue_item.link_area_name);
                         ctx.set_clip_area(link);

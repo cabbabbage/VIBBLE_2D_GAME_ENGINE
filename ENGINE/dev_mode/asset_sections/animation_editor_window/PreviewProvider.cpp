@@ -35,8 +35,7 @@ SurfacePtr flip_horizontal(SDL_Surface* surface) {
     if (!surface) {
         return SurfacePtr(nullptr, SDL_FreeSurface);
     }
-    SurfacePtr flipped = make_surface_ptr(
-        SDL_CreateRGBSurfaceWithFormat(0, surface->w, surface->h, 32, SDL_PIXELFORMAT_RGBA32));
+    SurfacePtr flipped = make_surface_ptr( SDL_CreateRGBSurfaceWithFormat(0, surface->w, surface->h, 32, SDL_PIXELFORMAT_RGBA32));
     if (!flipped) {
         return SurfacePtr(nullptr, SDL_FreeSurface);
     }
@@ -49,8 +48,7 @@ SurfacePtr flip_horizontal(SDL_Surface* surface) {
         const Uint8* src_row = static_cast<const Uint8*>(surface->pixels) + y * surface->pitch;
         Uint8* dst_row = static_cast<Uint8*>(flipped->pixels) + y * flipped->pitch;
         for (int x = 0; x < surface->w; ++x) {
-            std::memcpy(dst_row + x * bytes_per_pixel,
-                        src_row + (surface->w - 1 - x) * bytes_per_pixel, bytes_per_pixel);
+            std::memcpy(dst_row + x * bytes_per_pixel, src_row + (surface->w - 1 - x) * bytes_per_pixel, bytes_per_pixel);
         }
     }
 
@@ -73,7 +71,7 @@ std::string lowercase_copy(std::string value) {
     return value;
 }
 
-}  // namespace
+}
 
 namespace animation_editor {
 
@@ -277,5 +275,5 @@ std::filesystem::path PreviewProvider::find_first_frame(const std::filesystem::p
     return numbered.front();
 }
 
-}  // namespace animation_editor
+}
 

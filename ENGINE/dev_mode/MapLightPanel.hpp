@@ -55,16 +55,18 @@ private:
 
     struct OrbitSettings {
         int update_interval = 10;
-        int orbit_radius = 0;
+        int orbit_x = 0;
+        int orbit_y = 0;
         int min_opacity = 0;
         int max_opacity = 255;
         bool operator==(const OrbitSettings& other) const {
             return update_interval == other.update_interval &&
-                   orbit_radius == other.orbit_radius &&
+                   orbit_x == other.orbit_x &&
+                   orbit_y == other.orbit_y &&
                    min_opacity == other.min_opacity &&
                    max_opacity == other.max_opacity;
         }
-    };
+};
 
     struct ScreenLightSettings {
         int r = 255;
@@ -79,11 +81,10 @@ private:
                    min_opacity == other.min_opacity &&
                    max_opacity == other.max_opacity;
         }
-    };
+};
 
     OrbitSettings sanitize_orbit_settings(const OrbitSettings& raw) const;
-    ScreenLightSettings sanitize_screen_settings(const ScreenLightSettings& raw,
-                                                 const OrbitSettings& orbit) const;
+    ScreenLightSettings sanitize_screen_settings(const ScreenLightSettings& raw, const OrbitSettings& orbit) const;
     OrbitSettings current_orbit_settings_from_ui() const;
     ScreenLightSettings current_screen_settings_from_ui() const;
     void set_orbit_sliders(const OrbitSettings& orbit);
@@ -121,7 +122,8 @@ private:
     bool texture_section_collapsed_ = false;
     std::unique_ptr<DMSlider> radius_;
     std::unique_ptr<DMSlider> intensity_;
-    std::unique_ptr<DMSlider> orbit_radius_;
+    std::unique_ptr<DMSlider> orbit_x_;
+    std::unique_ptr<DMSlider> orbit_y_;
     std::unique_ptr<DMSlider> update_interval_;
     std::unique_ptr<DMSlider> mult_x100_;
     std::unique_ptr<DMSlider> falloff_;

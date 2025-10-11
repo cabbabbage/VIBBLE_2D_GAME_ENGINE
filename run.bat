@@ -1,6 +1,22 @@
 @echo off
 setlocal enabledelayedexpansion
 
+if "%~1"=="__RUN__" (
+    shift
+    goto :main
+)
+
+set "LOG_FILE=%~dp0log.txt"
+type nul > "%LOG_FILE%"
+set "SCRIPT_PATH=%~f0"
+
+rem Run the script recursively and pipe to powershell logger
+cmd /v:on /c call "%SCRIPT_PATH%" __RUN__ %* 2>&1 | powershell -NoProfile -Command ^
+  "$input | Tee-Object -FilePath '%LOG_FILE%'; exit $LASTEXITCODE"
+
+exit /b %ERRORLEVEL%
+
+:main
 rem =========================
 rem VIBBLE Engine - run.bat
 rem Local build + run using CMakePresets + auto-vcpkg
@@ -10,6 +26,7 @@ pushd "%~dp0" >nul
 
 set "BUILD_CONFIG=RelWithDebInfo"
 set "EXTRA_ARGS="
+
 
 rem ----------------------------------------------------
 rem Ensure vcpkg exists (clone if missing)
@@ -67,13 +84,28 @@ if errorlevel 1 goto :fail
 rem ----------------------------------------------------
 rem Locate exe (handle both Ninja and VS generators, and optional RUNTIME_OUTPUT dir)
 rem ----------------------------------------------------
-set "EXE="
-if exist "%cd%\ENGINE\engine.exe" set "EXE=%cd%\ENGINE\engine.exe"
-if not defined EXE if exist "%cd%\build\%BUILD_CONFIG%\engine.exe" set "EXE=%cd%\build\%BUILD_CONFIG%\engine.exe"
-if not defined EXE if exist "%cd%\build\engine.exe" set "EXE=%cd%\build\engine.exe"
+set "RELEASE_DIR=%cd%\release"
+if not exist "%RELEASE_DIR%" (
+    mkdir "%RELEASE_DIR%"
+    if errorlevel 1 (
+        echo [ERROR] Failed to create release directory.
+        goto :fail
+    )
+)
 
-if not defined EXE (
-    echo [ERROR] Executable not found in ENGINE\, build\%BUILD_CONFIG%\ or build\ .
+for %%P in ("%RELEASE_DIR%\*.exe" "%RELEASE_DIR%\*.dll" "%RELEASE_DIR%\*.pdb") do (
+    if exist %%~P del /q %%~P >nul 2>&1
+)
+
+call :CollectArtifacts "%cd%"
+call :CollectArtifacts "%cd%\ENGINE"
+call :CollectArtifacts "%cd%\build\%BUILD_CONFIG%"
+call :CollectArtifacts "%cd%\build"
+
+set "EXE=%RELEASE_DIR%\engine.exe"
+
+if not exist "%EXE%" (
+    echo [ERROR] Executable not found in release directory.
     goto :fail
 )
 
@@ -97,6 +129,16 @@ echo [run.bat] Launching: "%EXE%"
 
 popd >nul
 exit /b 0
+
+:CollectArtifacts
+set "SRC_DIR=%~1"
+if not exist "%SRC_DIR%" goto :eof
+for %%E in (exe dll pdb) do (
+    for /f "delims=" %%F in ('dir /b "%SRC_DIR%\*.%%E" 2^>nul') do (
+        move /y "%SRC_DIR%\%%F" "%RELEASE_DIR%" >nul
+    )
+)
+goto :eof
 
 :fail
 echo [run.bat] Build failed.

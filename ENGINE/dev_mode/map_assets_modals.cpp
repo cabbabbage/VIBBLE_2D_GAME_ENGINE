@@ -1,80 +1,27 @@
 #include "map_assets_modals.hpp"
 
 #include <algorithm>
-#include "spawn_group_lists/spawn_group_list.hpp"
+#include "spawn_group_config/SpawnGroupConfig.hpp"
+#include "spawn_group_config/spawn_group_utils.hpp"
 #include "utils/input.hpp"
-#include "room_config/spawn_group_utils.hpp"
 
 using nlohmann::json;
 
 SingleSpawnGroupModal::SingleSpawnGroupModal() = default;
 SingleSpawnGroupModal::~SingleSpawnGroupModal() = default;
 
-namespace {
-
-void ensure_candidate_list(json& entry) {
-    if (!entry.contains("candidates") || !entry["candidates"].is_array()) {
-        entry["candidates"] = json::array();
-    }
-    auto& candidates = entry["candidates"];
-    if (candidates.empty()) {
-        json null_cand = json::object();
-        null_cand["name"] = "null";
-        null_cand["chance"] = 0;
-        candidates.push_back(std::move(null_cand));
-    }
-}
-
-void ensure_spawn_group_defaults(json& entry, const std::string& default_display_name) {
-    if (!entry.is_object()) {
-        entry = json::object();
-    }
-    if (!entry.contains("spawn_id") || !entry["spawn_id"].is_string() || entry["spawn_id"].get<std::string>().empty()) {
-        entry["spawn_id"] = devmode::spawn::generate_spawn_id();
-    }
-    if (!entry.contains("display_name") || !entry["display_name"].is_string() || entry["display_name"].get<std::string>().empty()) {
-        entry["display_name"] = default_display_name;
-    }
-    if (!entry.contains("position") || !entry["position"].is_string() || entry["position"].get<std::string>().empty()) {
-        entry["position"] = "Random";
-    }
-    int min_number = entry.value("min_number", 1);
-    int max_number = entry.value("max_number", min_number);
-    min_number = std::max(1, min_number);
-    if (max_number < min_number) {
-        max_number = min_number;
-    }
-    entry["min_number"] = min_number;
-    entry["max_number"] = max_number;
-    if (!entry.contains("chance_denominator") || !entry["chance_denominator"].is_number_integer() || entry["chance_denominator"].get<int>() <= 0) {
-        entry["chance_denominator"] = 100;
-    }
-    if (!entry.contains("check_overlap") || !entry["check_overlap"].is_boolean()) {
-        entry["check_overlap"] = false;
-    }
-    if (!entry.contains("enforce_spacing") || !entry["enforce_spacing"].is_boolean()) {
-        entry["enforce_spacing"] = false;
-    }
-    ensure_candidate_list(entry);
-}
-
-}  // namespace
-
 void SingleSpawnGroupModal::ensure_single_group(json& section,
                                                 const std::string& default_display_name) {
     if (!section.is_object()) {
         section = json::object();
     }
-    if (!section.contains("spawn_groups") || !section["spawn_groups"].is_array()) {
-        section["spawn_groups"] = json::array();
-    }
-    auto& groups = section["spawn_groups"];
+    auto& groups = devmode::spawn::ensure_spawn_groups_array(section);
     if (groups.empty()) {
         json entry = json::object();
-        ensure_spawn_group_defaults(entry, default_display_name);
+        devmode::spawn::ensure_spawn_group_entry_defaults(entry, default_display_name);
         groups.push_back(std::move(entry));
     } else {
-        ensure_spawn_group_defaults(groups[0], default_display_name);
+        devmode::spawn::ensure_spawn_group_entry_defaults(groups[0], default_display_name);
         if (groups.size() > 1) {
             json first = groups[0];
             groups = json::array();
@@ -95,10 +42,12 @@ void SingleSpawnGroupModal::open(json& map_info,
     ensure_single_group(*section_, default_display_name);
 
     auto& groups = (*section_)["spawn_groups"];
-    if (!list_) list_ = std::make_unique<SpawnGroupList>(true);
+    auto& entry = groups.front();
+
+    if (!list_) list_ = std::make_unique<SpawnGroupConfig>(true);
+    list_->set_embedded_mode(false);
     list_->set_screen_dimensions(screen_w_, screen_h_);
-    // Ensure the floating panel provides enough room for long lists while
-    // remaining scrollable so content is accessible on smaller displays.
+
     constexpr int kPanelCellWidth   = 360;
     constexpr int kMinVisibleHeight = 420;
     constexpr int kHeightMargin     = 200;
@@ -109,18 +58,37 @@ void SingleSpawnGroupModal::open(json& map_info,
         visible_height = std::max(kMinVisibleHeight, screen_h_ - kHeightMargin);
     }
     list_->set_visible_height(visible_height);
-    // Open a floating SpawnGroupList panel bound to the current single-group array
-    list_->open(groups, [this, default_display_name](const json& updated_array) {
-        if (!this->map_info_ || !this->section_) return;
-        auto& groups = (*section_)["spawn_groups"];
-        groups = updated_array;
-        // Enforce single group for this modal
+
+    auto relay_save = [this, default_display_name]() {
+        if (!this->section_ || !this->section_->is_object()) return;
         ensure_single_group(*section_, default_display_name);
+        auto& groups = devmode::spawn::ensure_spawn_groups_array(*section_);
+        if (!groups.is_array() || groups.empty()) return;
         bool ok = true;
         if (on_save_) ok = on_save_();
-        (void)ok; // Errors are reflected elsewhere if needed
-    });
-    // Center the list panel roughly
+        (void)ok;
+};
+
+    SpawnGroupConfig::ConfigureEntryCallback configure_entry =
+        [this, ownership_label, ownership_color](SpawnGroupConfig::EntryController& entry, const json&) {
+            if (!ownership_label.empty()) {
+                entry.set_ownership_label(ownership_label, ownership_color);
+            } else {
+                entry.clear_ownership_label();
+            }
+            entry.set_open_area_handler(on_open_area_, stack_key_);
+    };
+
+    list_->set_on_layout_changed([this]() { ensure_visible_position(); });
+    position_initialized_ = false;
+    list_->bind_entry(entry,
+                      relay_save,
+                      [relay_save](const json&, const SpawnGroupConfig::ChangeSummary&) { relay_save(); },
+                      {},
+                      std::move(configure_entry));
+    list_->DockableCollapsible::open();
+    list_->force_pointer_ready();
+
     ensure_visible_position();
 }
 
@@ -159,7 +127,17 @@ void SingleSpawnGroupModal::set_screen_dimensions(int width, int height) {
 
 void SingleSpawnGroupModal::set_floating_stack_key(std::string key) {
     stack_key_ = std::move(key);
-    // No stack key support for SpawnGroupList floating panel
+    if (list_) {
+        list_->refresh_row_configuration();
+    }
+}
+
+void SingleSpawnGroupModal::set_on_open_area(
+    std::function<void(const std::string&, const std::string&)> cb) {
+    on_open_area_ = std::move(cb);
+    if (list_) {
+        list_->refresh_row_configuration();
+    }
 }
 
 void SingleSpawnGroupModal::ensure_visible_position() {

@@ -8,6 +8,7 @@
 
 #include "asset/Asset.hpp"
 #include "render_pipeline/render_asset/AssetRenderPipeline.hpp"
+#include "render/global_light_source.hpp"
 #include "utils/light_source.hpp"
 #include "utils/light_utils.hpp"
 
@@ -54,7 +55,6 @@ inline SDL_Texture* build_light_texture(SDL_Renderer* renderer,
 
     const Uint8 main_brightness = context.main_light_brightness();
 
-    // Static lights received by the asset.
     for (const auto& static_light : asset.static_lights) {
         if (!static_light.source || !static_light.source->texture) {
             continue;
@@ -86,7 +86,6 @@ inline SDL_Texture* build_light_texture(SDL_Renderer* renderer,
         SDL_SetTextureAlphaMod(static_light.source->texture, 255);
     }
 
-    // Lights owned by the asset itself.
     if (asset.info) {
         for (auto& light : asset.info->light_sources) {
             if (!light.texture || light.behind != behind) {
@@ -113,18 +112,11 @@ inline SDL_Texture* build_light_texture(SDL_Renderer* renderer,
             }
             Uint8 final_alpha = static_cast<Uint8>(std::clamp(alpha, 0.0f, 255.0f));
             SDL_SetTextureAlphaMod(light.texture, final_alpha);
-            SDL_RenderCopyEx(renderer,
-                             light.texture,
-                             nullptr,
-                             &dst,
-                             0.0,
-                             nullptr,
-                             asset.flipped ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE);
+            SDL_RenderCopyEx(renderer, light.texture, nullptr, &dst, 0.0, nullptr, asset.flipped ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE);
             SDL_SetTextureAlphaMod(light.texture, 255);
         }
     }
 
-    // Orbital lights owned by the asset.
     if (asset.info) {
         const float base_angle = context.main_light().get_angle();
         const auto compute_angle = [&](const LightSource& light) {
@@ -147,7 +139,7 @@ inline SDL_Texture* build_light_texture(SDL_Renderer* renderer,
                 adjusted          = 0.5f + 0.5f * (1.0f - std::pow(1.0f - local, exponent));
             }
             return kHalfPi - adjusted * kTwoPi;
-        };
+};
 
         for (auto& light : asset.info->orbital_light_sources) {
             if (!light.texture || light.behind != behind || light.x_radius <= 0 || light.y_radius <= 0) {
@@ -172,10 +164,7 @@ inline SDL_Texture* build_light_texture(SDL_Renderer* renderer,
                 light.cached_h = lh;
             }
 
-            SDL_Rect dst = context.dest_from_world_offset(static_cast<int>(std::lround(lx)) - asset.pos.x,
-                                                          static_cast<int>(std::lround(ly)) - asset.pos.y,
-                                                          lw,
-                                                          lh);
+            SDL_Rect dst = context.dest_from_world_offset(static_cast<int>(std::lround(lx)) - asset.pos.x, static_cast<int>(std::lround(ly)) - asset.pos.y, lw, lh);
 
             SDL_SetTextureBlendMode(light.texture, SDL_BLENDMODE_ADD);
             SDL_SetTextureAlphaMod(light.texture, context.main_light_alpha());
@@ -184,7 +173,6 @@ inline SDL_Texture* build_light_texture(SDL_Renderer* renderer,
         }
     }
 
-    // Player-attached lights affecting the asset.
     if (Asset* player = context.player()) {
         if (player->info) {
             const double static_factor = LightUtils::calculate_static_alpha_percentage(&asset, player);
@@ -221,5 +209,5 @@ inline SDL_Texture* build_light_texture(SDL_Renderer* renderer,
     return texture;
 }
 
-} // namespace render_pipeline::lighting::detail
+}
 

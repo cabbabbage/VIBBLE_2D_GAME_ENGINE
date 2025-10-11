@@ -6,8 +6,8 @@
 
 #include <nlohmann/json.hpp>
 
-#include "dev_mode/spawn_group_lists/spawn_group_list.hpp"
-#include "dev_mode/room_config/spawn_group_utils.hpp"
+#include "dev_mode/spawn_group_config/SpawnGroupConfig.hpp"
+#include "dev_mode/spawn_group_config/spawn_group_utils.hpp"
 #include "dev_mode/dm_styles.hpp"
 #include "dev_mode/widgets.hpp"
 #include "asset/asset_info.hpp"
@@ -28,17 +28,24 @@ Section_SpawnGroups::Section_SpawnGroups()
 }
 
 void Section_SpawnGroups::build() {
+    if (rebuilding_) {
+        rebuild_requested_ = true;
+        return;
+    }
+
+    rebuilding_ = true;
+    rebuild_requested_ = false;
+
     DockableCollapsible::Rows rows;
-    if (!list_) list_ = std::make_unique<SpawnGroupList>();
+    if (!list_) list_ = std::make_unique<SpawnGroupConfig>();
     if (list_) list_->set_embedded_mode(true);
     reload_from_file();
 
-    // Bind live JSON so inline editor updates can persist
     auto on_change = [this]() {
         (void)this->save_to_file();
-        this->build();
-    };
-    SpawnGroupList::Callbacks cb{};
+        this->schedule_rebuild();
+};
+    SpawnGroupConfig::Callbacks cb{};
     cb.on_duplicate = [this](const std::string& id){ duplicate_spawn_group(id); };
     cb.on_delete    = [this](const std::string& id){ delete_spawn_group(id); };
     cb.on_move_up   = [this](const std::string& id){ move_spawn_group(id, -1); };
@@ -52,13 +59,19 @@ void Section_SpawnGroups::build() {
         DockableCollapsible::Rows rows;
         list_->append_rows(rows);
         this->set_rows(rows);
+        this->layout();
     });
     list_->restore_expanded_groups(expanded);
     list_->append_rows(rows);
 
-    // Top-level Add Spawn Group button is provided by SpawnGroupList widget now.
-
     set_rows(rows);
+
+    const bool run_again = rebuild_requested_;
+    rebuild_requested_ = false;
+    rebuilding_ = false;
+    if (run_again) {
+        build();
+    }
 }
 
 void Section_SpawnGroups::layout() {
@@ -118,7 +131,7 @@ bool Section_SpawnGroups::save_to_file() {
         }
         ensure_array(root, "spawn_groups");
         root["spawn_groups"] = groups_.is_array() ? groups_ : nlohmann::json::array();
-        // Also ensure each has priority consistent with array order
+
         if (root["spawn_groups"].is_array()) {
             for (size_t i = 0; i < root["spawn_groups"].size(); ++i) {
                 if (root["spawn_groups"][i].is_object()) root["spawn_groups"][i]["priority"] = static_cast<int>(i);
@@ -156,20 +169,13 @@ void Section_SpawnGroups::add_spawn_group() {
     if (!groups_.is_array()) groups_ = nlohmann::json::array();
     nlohmann::json entry = nlohmann::json::object();
     entry["spawn_id"] = devmode::spawn::generate_spawn_id();
-    entry["display_name"] = "New Spawn";
     entry["position"] = "Exact";
-    entry["min_number"] = 1;
-    entry["max_number"] = 1;
-    entry["check_overlap"] = false;
-    entry["enforce_spacing"] = false;
-    entry["chance_denominator"] = 100;
-    entry["candidates"] = nlohmann::json::array();
-    entry["candidates"].push_back({{"name", "null"}, {"chance", 0}});
+    devmode::spawn::ensure_spawn_group_entry_defaults(entry, "New Spawn");
     const std::string new_id = entry["spawn_id"].get<std::string>();
     groups_.push_back(entry);
     renumber_priorities();
     (void)save_to_file();
-    build();
+    schedule_rebuild();
     if (list_) {
         SDL_Point anchor = editor_anchor_point();
         list_->request_open_spawn_group(new_id, anchor.x, anchor.y);
@@ -184,10 +190,15 @@ void Section_SpawnGroups::duplicate_spawn_group(const std::string& id) {
     if (duplicate.contains("display_name") && duplicate["display_name"].is_string()) {
         duplicate["display_name"] = duplicate["display_name"].get<std::string>() + " Copy";
     }
+    devmode::spawn::ensure_spawn_group_entry_defaults(
+        duplicate,
+        duplicate.contains("display_name") && duplicate["display_name"].is_string()
+            ? duplicate["display_name"].get<std::string>()
+            : std::string{"New Spawn"});
     groups_.push_back(std::move(duplicate));
     renumber_priorities();
     (void)save_to_file();
-    build();
+    schedule_rebuild();
 }
 
 void Section_SpawnGroups::delete_spawn_group(const std::string& id) {
@@ -197,7 +208,7 @@ void Section_SpawnGroups::delete_spawn_group(const std::string& id) {
     }), groups_.end());
     renumber_priorities();
     (void)save_to_file();
-    build();
+    schedule_rebuild();
 }
 
 void Section_SpawnGroups::move_spawn_group(const std::string& id, int dir) {
@@ -209,16 +220,24 @@ void Section_SpawnGroups::move_spawn_group(const std::string& id, int dir) {
     std::swap(groups_[idx], groups_[target]);
     renumber_priorities();
     (void)save_to_file();
-    build();
+    schedule_rebuild();
 }
 
 SDL_Point Section_SpawnGroups::editor_anchor_point() const {
-    // Center-left of the asset info panel approximation: left of this section
+
     SDL_Rect r = rect();
     int x = std::max(16, r.x - 320);
     int y = std::max(16, r.y + r.h / 4);
     return SDL_Point{x, y};
 }
 
-// Editing is handled by SpawnGroupList's own editor; no direct edit method needed.
+void Section_SpawnGroups::schedule_rebuild() {
+    if (rebuilding_) {
+        rebuild_requested_ = true;
+        return;
+    }
+
+    rebuild_requested_ = false;
+    build();
+}
 

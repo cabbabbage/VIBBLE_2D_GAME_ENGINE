@@ -1,8 +1,8 @@
 #include "trail_editor_suite.hpp"
 
 #include "room_config/room_configurator.hpp"
-#include "spawn_group_lists/spawn_group_list.hpp"
-#include "room_config/spawn_group_utils.hpp"
+#include "spawn_group_config/SpawnGroupConfig.hpp"
+#include "spawn_group_config/spawn_group_utils.hpp"
 #include "dev_mode/sdl_pointer_utils.hpp"
 
 #include "map_generation/room.hpp"
@@ -99,6 +99,19 @@ bool TrailEditorSuite::contains_point(int x, int y) const {
     return false;
 }
 
+void TrailEditorSuite::set_on_open_area(
+    std::function<void(const std::string&, const std::string&)> cb,
+    std::string stack_key) {
+    on_open_area_ = std::move(cb);
+    open_area_stack_key_ = std::move(stack_key);
+    if (configurator_) {
+        configurator_->set_spawn_area_open_callback(on_open_area_, open_area_stack_key_);
+    }
+    if (spawn_groups_) {
+        spawn_groups_->refresh_row_configuration();
+    }
+}
+
 void TrailEditorSuite::ensure_ui() {
     if (!configurator_) {
         configurator_ = std::make_unique<RoomConfigurator>();
@@ -111,10 +124,11 @@ void TrailEditorSuite::ensure_ui() {
                 [this](const std::string& id) { move_spawn_group_up(id); },
                 [this](const std::string& id) { move_spawn_group_down(id); },
                 [this]() { add_spawn_group(); });
+            configurator_->set_spawn_area_open_callback(on_open_area_, open_area_stack_key_);
         }
     }
     if (!spawn_groups_) {
-        spawn_groups_ = std::make_unique<SpawnGroupList>();
+        spawn_groups_ = std::make_unique<SpawnGroupConfig>();
     }
     update_bounds();
     if (configurator_) {
@@ -166,7 +180,7 @@ void TrailEditorSuite::rebuild_spawn_groups_ui() {
         }
 };
 
-    auto on_entry_change = [this](const nlohmann::json&, const SpawnGroupList::ChangeSummary& summary) {
+    auto on_entry_change = [this](const nlohmann::json&, const SpawnGroupConfig::ChangeSummary& summary) {
         if (!active_trail_) {
             return;
         }
@@ -183,8 +197,8 @@ void TrailEditorSuite::rebuild_spawn_groups_ui() {
 };
 
     spawn_groups_->load(groups, on_change, on_entry_change,
-        [this](SpawnGroupList::RowController& row, const nlohmann::json&) {
-            row.set_area_names_provider([this]() {
+        [this](SpawnGroupConfig::EntryController& entry, const nlohmann::json&) {
+            entry.set_area_names_provider([this]() {
                 std::vector<std::string> names;
                 if (!this->active_trail_) return names;
                 auto& data = this->active_trail_->assets_data();
@@ -197,12 +211,13 @@ void TrailEditorSuite::rebuild_spawn_groups_ui() {
                 }
                 return names;
             });
+            entry.set_open_area_handler(on_open_area_, open_area_stack_key_);
         });
     spawn_groups_->set_on_layout_changed([this]() {
         this->rebuild_spawn_groups_ui();
     });
     {
-        SpawnGroupList::Callbacks cb{};
+        SpawnGroupConfig::Callbacks cb{};
         cb.on_add       = [this]() { add_spawn_group(); };
         cb.on_duplicate = [this](const std::string& id) { duplicate_spawn_group(id); };
         cb.on_delete    = [this](const std::string& id) { delete_spawn_group(id); };
@@ -241,6 +256,11 @@ void TrailEditorSuite::duplicate_spawn_group(const std::string& id) {
     if (duplicate.contains("display_name") && duplicate["display_name"].is_string()) {
         duplicate["display_name"] = duplicate["display_name"].get<std::string>() + " Copy";
     }
+    devmode::spawn::ensure_spawn_group_entry_defaults(
+        duplicate,
+        duplicate.contains("display_name") && duplicate["display_name"].is_string()
+            ? duplicate["display_name"].get<std::string>()
+            : std::string{"New Spawn"});
     groups.push_back(duplicate);
     sanitize_perimeter_spawn_groups(groups);
     active_trail_->save_assets_json();
@@ -269,7 +289,7 @@ void TrailEditorSuite::delete_spawn_group(const std::string& id) {
     groups.erase(it, groups.end());
     sanitize_perimeter_spawn_groups(groups);
     active_trail_->save_assets_json();
-    // no explicit close_all in merged UI
+
     rebuild_spawn_groups_ui();
 }
 
@@ -331,15 +351,8 @@ void TrailEditorSuite::add_spawn_group() {
     auto& groups = ensure_spawn_groups_array(root);
     nlohmann::json entry;
     entry["spawn_id"] = generate_spawn_id();
-    entry["display_name"] = "New Spawn";
     entry["position"] = "Exact";
-    entry["min_number"] = 1;
-    entry["max_number"] = 1;
-    entry["check_overlap"] = false;
-    entry["enforce_spacing"] = false;
-    entry["chance_denominator"] = 100;
-    entry["candidates"] = nlohmann::json::array();
-    entry["candidates"].push_back({{"name", "null"}, {"chance", 0}});
+    devmode::spawn::ensure_spawn_group_entry_defaults(entry, "New Spawn");
     groups.push_back(entry);
     sanitize_perimeter_spawn_groups(groups);
     active_trail_->save_assets_json();

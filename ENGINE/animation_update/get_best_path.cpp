@@ -135,7 +135,7 @@ struct CandidateStride {
     std::size_t path_index = 0;
 };
 
-} // namespace
+}
 
 Plan GetBestPath::operator()(const Asset& self,
                              const std::vector<SDL_Point>& sanitized_checkpoints,

@@ -11,6 +11,14 @@
 #include <memory>
 #include <SDL.h>
 
+namespace {
+#ifdef VIBBLE_DEBUG_ASSET_LOGS
+constexpr bool kAssetLoggingEnabled = true;
+#else
+constexpr bool kAssetLoggingEnabled = false;
+#endif
+}
+
 void InitializeAssets::initialize(Assets& assets,
                                   std::vector<Asset>&& loaded,
                                   std::vector<Room*> rooms,
@@ -20,22 +28,28 @@ void InitializeAssets::initialize(Assets& assets,
                                   int screen_center_y,
                                   int )
 {
-	std::cout << "[InitializeAssets] Initializing Assets manager...\n";
+        if (kAssetLoggingEnabled) {
+                std::cout << "[InitializeAssets] Initializing Assets manager...\n";
+        }
         assets.set_rooms(std::move(rooms));
 	assets.all.reserve(loaded.size());
 	while (!loaded.empty()) {
 		Asset a = std::move(loaded.back());
 		loaded.pop_back();
-		if (!a.info) {
-			std::cerr << "[InitializeAssets] Skipping asset: info is null\n";
-			continue;
-		}
-		auto it = a.info->animations.find("default");
-		if (it == a.info->animations.end() || it->second.frames.empty()) {
-			std::cerr << "[InitializeAssets] Skipping asset '" << a.info->name
-			<< "': missing or empty default animation\n";
-			continue;
-		}
+                if (!a.info) {
+                        if (kAssetLoggingEnabled) {
+                                std::cerr << "[InitializeAssets] Skipping asset: info is null\n";
+                        }
+                        continue;
+                }
+                auto it = a.info->animations.find("default");
+                if (it == a.info->animations.end() || it->second.frames.empty()) {
+                        if (kAssetLoggingEnabled) {
+                                std::cerr << "[InitializeAssets] Skipping asset '" << a.info->name
+                                << "': missing or empty default animation\n";
+                        }
+                        continue;
+                }
 		auto newAsset = std::make_unique<Asset>(std::move(a));
 		Asset* raw = newAsset.get();
                 set_camera_recursive(raw, &assets.getView());
@@ -48,14 +62,20 @@ void InitializeAssets::initialize(Assets& assets,
         assets.initialize_active_assets(SDL_Point{screen_center_x, screen_center_y});
         assets.refresh_active_asset_lists();
         setup_shading_groups(assets);
-        std::cout << "[InitializeAssets] Initialization base complete. Total assets: "
-        << assets.all.size() << "\n";
+        if (kAssetLoggingEnabled) {
+                std::cout << "[InitializeAssets] Initialization base complete. Total assets: "
+                << assets.all.size() << "\n";
+        }
         try {
                 setup_static_sources(assets);
         } catch (const std::length_error& e) {
-                std::cerr << "[InitializeAssets] light-gen failed: " << e.what() << "\n";
+                if (kAssetLoggingEnabled) {
+                        std::cerr << "[InitializeAssets] light-gen failed: " << e.what() << "\n";
+                }
         }
-        std::cout << "[InitializeAssets] All static sources set.\n";
+        if (kAssetLoggingEnabled) {
+                std::cout << "[InitializeAssets] All static sources set.\n";
+        }
     assets.mark_active_assets_dirty();
     assets.refresh_active_asset_lists();
     assets.getView().zoom_to_scale(1.0, 200);
@@ -65,10 +85,12 @@ void InitializeAssets::find_player(Assets& assets) {
         for (Asset* asset : assets.all) {
                 if (asset && asset->info && asset->info->type == asset_types::player) {
 			assets.player = asset;
-			std::cout << "[InitializeAssets] Found player asset: "
-			<< assets.player->info->name << "\n";
-			break;
-		}
+                        if (kAssetLoggingEnabled) {
+                                std::cout << "[InitializeAssets] Found player asset: "
+                                << assets.player->info->name << "\n";
+                        }
+                        break;
+                }
 	}
 }
 

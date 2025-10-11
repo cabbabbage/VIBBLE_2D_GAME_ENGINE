@@ -1,6 +1,6 @@
 #include "RandomWidget.hpp"
 
-namespace vibble::dev_mode::room_config::spawn_group_lists::widgets {
+namespace vibble::dev_mode::spawn_group_config::widgets {
 
 void RandomWidget::bind(model::SpawnGroup& group) {
     group_ = &group;
@@ -25,4 +25,4 @@ void RandomWidget::ensure_random_config() {
     }
 }
 
-}  // namespace vibble::dev_mode::room_config::spawn_group_lists::widgets
+}

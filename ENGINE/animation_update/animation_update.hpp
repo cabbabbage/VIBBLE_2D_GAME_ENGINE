@@ -37,8 +37,12 @@ private:
 
     SDL_Point bottom_middle(SDL_Point pos) const;
     bool point_in_impassable(SDL_Point pt, const Asset* ignored) const;
-    bool path_blocked(SDL_Point from, SDL_Point to, const Asset* ignored) const;
-    bool attempt_unstick(SDL_Point from, SDL_Point to);
+    bool path_blocked(SDL_Point from, SDL_Point to, const Asset* ignored, std::vector<const Asset*>* blockers = nullptr) const;
+    bool attempt_unstick(SDL_Point from, SDL_Point to, const std::vector<const Asset*>& blockers);
+    bool adjust_next_checkpoint(const std::vector<const Asset*>& blockers);
+    bool handle_blocked_path(SDL_Point from, SDL_Point to, const std::vector<const Asset*>& blockers);
+    void mark_progress_toward_checkpoints();
+    bool replan_to_destination();
 
 private:
     friend class StridePlayer;
@@ -51,6 +55,7 @@ private:
     Plan   plan_{};
     size_t stride_index_        = 0;
     int    stride_frame_counter_ = 0;
+    size_t next_checkpoint_index_ = 0;
 
     PathSanitizer sanitizer_{};
     GetBestPath   planner_{};

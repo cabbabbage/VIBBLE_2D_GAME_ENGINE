@@ -38,7 +38,7 @@ std::string parse_on_end(const std::optional<std::string>& payload_dump) {
     return "default";
 }
 
-}  // namespace
+}
 
 namespace animation_editor {
 
@@ -216,5 +216,5 @@ int OnEndSelector::find_option_index(const std::string& value) const {
     return -1;
 }
 
-}  // namespace animation_editor
+}
 

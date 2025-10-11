@@ -24,5 +24,5 @@ class AsyncTaskQueue {
     mutable std::vector<std::future<void>> tasks_;
 };
 
-}  // namespace animation_editor
+}
 

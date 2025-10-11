@@ -19,6 +19,9 @@ public:
 private:
     void movement(const Input& input);
 
+    static constexpr int kWalkSpeed       = 5;
+    static constexpr int kSprintMultiplier = 2;
+
     Asset* player_ = nullptr;
     int    dx_ = 0;
     int    dy_ = 0;
