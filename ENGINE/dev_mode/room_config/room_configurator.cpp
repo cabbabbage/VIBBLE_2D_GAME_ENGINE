@@ -303,6 +303,7 @@ RoomConfigurator::RoomConfigurator() {
         }
     });
     container_.set_blocks_editor_interactions(true);
+    container_.set_header_visible(show_header_);
     state_ = std::make_unique<State>();
 }
 
@@ -321,7 +322,10 @@ void RoomConfigurator::set_work_area(const SDL_Rect& bounds) {
     // No-op for bounds override; container default layout handles snug sizing
 }
 
-void RoomConfigurator::set_show_header(bool show) { show_header_ = show; }
+void RoomConfigurator::set_show_header(bool show) {
+    show_header_ = show;
+    container_.set_header_visible(show_header_);
+}
 
 void RoomConfigurator::set_on_close(std::function<void()> cb) { on_close_ = std::move(cb); }
 
@@ -330,6 +334,41 @@ void RoomConfigurator::set_header_visibility_controller(std::function<void(bool)
 }
 
 void RoomConfigurator::reset_scroll() { container_.reset_scroll(); }
+
+bool RoomConfigurator::add_spawn_group_direct() {
+    nlohmann::json& root = live_room_json();
+    nlohmann::json& groups = devmode::spawn::ensure_spawn_groups_array(root);
+
+    nlohmann::json new_group = nlohmann::json::object();
+    devmode::spawn::ensure_spawn_group_entry_defaults(new_group, "New Spawn");
+    groups.push_back(new_group);
+    renumber_spawn_group_priorities(groups);
+    devmode::spawn::sanitize_perimeter_spawn_groups(groups);
+
+    if (room_) {
+        room_->save_assets_json();
+        refresh_spawn_groups(room_);
+    } else if (external_room_json_) {
+        refresh_spawn_groups(*external_room_json_);
+        if (on_external_spawn_change_) on_external_spawn_change_();
+    } else {
+        bool changed = apply_room_data(root);
+        if (changed) {
+            rebuild_rows();
+        } else {
+            request_rebuild();
+        }
+    }
+    return true;
+}
+
+void RoomConfigurator::renumber_spawn_group_priorities(nlohmann::json& groups) const {
+    if (!groups.is_array()) return;
+    for (size_t i = 0; i < groups.size(); ++i) {
+        if (!groups[i].is_object()) continue;
+        groups[i]["priority"] = static_cast<int>(i);
+    }
+}
 
 SDL_Rect RoomConfigurator::clamp_to_work_area(const SDL_Rect& bounds) const {
     if (work_area_.w <= 0 || work_area_.h <= 0) {
@@ -630,7 +669,7 @@ void RoomConfigurator::rebuild_spawn_rows(Rows& rows) {
         config->set_embedded_mode(true);
         config->set_show_header(true);
         config->set_close_button_enabled(false);
-        config->set_scroll_enabled(true);
+        config->set_scroll_enabled(false);
         config->force_pointer_ready();
         if (created_new) {
             config->set_expanded(false);
@@ -954,14 +993,15 @@ void RoomConfigurator::rebuild_rows_internal() {
     });
     rows.push_back({tag_editor_.get()});
 
-    // Optional: provide Add Spawn Group action within the basic panel
-    if (on_spawn_add_) {
-        add_spawn_button_ = std::make_unique<DMButton>("Add Spawn Group", &DMStyles::CreateButton(), 0, DMButton::height());
-        add_spawn_widget_ = std::make_unique<ButtonWidget>(add_spawn_button_.get(), [this]() {
-            if (on_spawn_add_) on_spawn_add_();
-        });
-        rows.push_back({add_spawn_widget_.get()});
-    }
+    add_spawn_button_ = std::make_unique<DMButton>("Add Spawn Group", &DMStyles::CreateButton(), 0, DMButton::height());
+    add_spawn_widget_ = std::make_unique<ButtonWidget>(add_spawn_button_.get(), [this]() {
+        if (on_spawn_add_) {
+            on_spawn_add_();
+        } else {
+            this->add_spawn_group_direct();
+        }
+    });
+    rows.push_back({add_spawn_widget_.get()});
 
     set_rows(rows);
 

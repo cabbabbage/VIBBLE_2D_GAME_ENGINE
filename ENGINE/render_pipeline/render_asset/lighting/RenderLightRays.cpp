@@ -260,7 +260,6 @@ SDL_Texture* RenderLightRays::run(SDL_Renderer* renderer, const Asset& asset, St
     const float lx = light_local_x / static_cast<float>(factor);
     const float ly = light_local_y / static_cast<float>(factor);
 
-    const float max_dist = std::sqrt(static_cast<float>(dw * dw + dh * dh)) * 1.35f;
     const int base_samples = std::max(8, params.samples);
 
     std::vector<uint8_t> out_alpha(static_cast<size_t>(dw) * static_cast<size_t>(dh), 0u);
@@ -270,6 +269,16 @@ SDL_Texture* RenderLightRays::run(SDL_Renderer* renderer, const Asset& asset, St
     const float darkness_boost = 1.f + std::clamp(0.55f - avg_brightness, 0.f, 0.55f) * 1.35f;
     const float strength_scale = static_cast<float>(ray_strength) / 100.f;
     const float exposure_base = params.exposure * map_intensity_boost * darkness_boost * strength_scale;
+
+    const float center_x = static_cast<float>(dw) * 0.5f;
+    const float center_y = static_cast<float>(dh) * 0.5f;
+    const float diag = std::max(1.f, std::sqrt(static_cast<float>(dw * dw + dh * dh)));
+    const float light_offset = std::sqrt((lx - center_x) * (lx - center_x) + (ly - center_y) * (ly - center_y));
+    // Allow rays from distant lights by extending the falloff radius using asset size and ray strength.
+    const float ray_extent_scale = std::max(0.0f, 0.75f + params.density * 0.6f + strength_scale * 0.8f);
+    const float max_dist = std::max(1.f, light_offset + diag * (1.0f + ray_extent_scale));
+    const float inv_max_dist = max_dist > 0.f ? 1.f / max_dist : 0.f;
+    const float falloff_power = 1.05f + std::clamp(params.density, 0.0f, 8.0f) * 0.12f;
 
     for (int y = 0; y < dh; ++y) {
         for (int x = 0; x < dw; ++x) {
@@ -315,8 +324,11 @@ SDL_Texture* RenderLightRays::run(SDL_Renderer* renderer, const Asset& asset, St
             const float dx0 = static_cast<float>(x) - lx;
             const float dy0 = static_cast<float>(y) - ly;
             const float dist = std::sqrt(dx0 * dx0 + dy0 * dy0);
-            float falloff = max_dist > 0.f ? std::clamp(1.f - (dist / max_dist), 0.f, 1.f) : 1.f;
-            falloff = std::pow(falloff, 1.6f);
+            float falloff = 1.f;
+            if (inv_max_dist > 0.f) {
+                const float normalized = std::clamp(dist * inv_max_dist, 0.f, 1.f);
+                falloff = std::pow(std::max(0.f, 1.f - normalized), falloff_power);
+            }
 
             const float value = std::min(1.f, sum * exposure_base * falloff);
             out_alpha[y * dw + x] = clamp_u8(value * 255.f);

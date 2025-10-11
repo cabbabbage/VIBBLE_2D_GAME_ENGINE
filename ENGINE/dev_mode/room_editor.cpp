@@ -1956,7 +1956,6 @@ void RoomEditor::add_spawn_group_internal() {
     auto& arr = ensure_spawn_groups_array(root);
     nlohmann::json entry;
     entry["spawn_id"] = generate_spawn_id();
-    entry["position"] = "Exact";
     devmode::spawn::ensure_spawn_group_entry_defaults(entry, "New Spawn");
     arr.push_back(entry);
 

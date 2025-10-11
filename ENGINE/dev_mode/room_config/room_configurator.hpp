@@ -103,6 +103,8 @@ private:
     SDL_Rect clamp_to_work_area(const SDL_Rect& bounds) const;
     void handle_container_closed();
     void reset_scroll();
+    bool add_spawn_group_direct();
+    void renumber_spawn_group_priorities(nlohmann::json& groups) const;
 
     std::unique_ptr<State> state_;
 

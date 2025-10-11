@@ -61,3 +61,12 @@ void AssetLibrary::loadAnimationsFor(SDL_Renderer* renderer, const std::unordere
         }
     }
 }
+
+bool AssetLibrary::remove(const std::string& name) {
+    auto it = info_by_name_.find(name);
+    if (it == info_by_name_.end()) {
+        return false;
+    }
+    info_by_name_.erase(it);
+    return true;
+}

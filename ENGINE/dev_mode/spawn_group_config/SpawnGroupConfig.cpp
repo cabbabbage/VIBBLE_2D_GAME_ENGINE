@@ -346,6 +346,8 @@ std::string trim(const std::string& value) {
 }
 
 struct SpawnGroupConfig::Entry {
+    friend class SpawnGroupConfig;
+
     struct CandidateWidgets {
         std::unique_ptr<DMTextBox> name_box;
         std::unique_ptr<CallbackTextBoxWidget> name_widget;
@@ -889,7 +891,8 @@ private:
         double max_w = 0.0;
         for (const auto& cand : view["candidates"]) {
             double w = safe_double(cand, "chance", safe_double(cand, "weight", 0.0));
-            max_w = std::max(max_w, clamp_positive(w));
+            double positive = w < 0.0 ? 0.0 : w;
+            max_w = std::max(max_w, positive);
         }
         return max_w;
     }
@@ -1070,8 +1073,8 @@ SpawnGroupConfig::SpawnGroupConfig(bool floatable)
       default_floatable_mode_(floatable) {
     set_cell_width(260);
     // Header action buttons
-    header_up_btn_ = std::make_unique<DMButton>("\u25B2", &DMStyles::HeaderButton(), DMButton::height(), DMButton::height());
-    header_down_btn_ = std::make_unique<DMButton>("\u25BC", &DMStyles::HeaderButton(), DMButton::height(), DMButton::height());
+    header_up_btn_ = std::make_unique<DMButton>("\xE2\x96\xB2", &DMStyles::HeaderButton(), DMButton::height(), DMButton::height());
+    header_down_btn_ = std::make_unique<DMButton>("\xE2\x96\xBC", &DMStyles::HeaderButton(), DMButton::height(), DMButton::height());
     header_delete_btn_ = std::make_unique<DMButton>("X", &DMStyles::HeaderButton(), DMButton::height(), DMButton::height());
     header_up_widget_ = std::make_unique<ButtonWidget>(header_up_btn_.get(), [](){});
     header_down_widget_ = std::make_unique<ButtonWidget>(header_down_btn_.get(), [](){});

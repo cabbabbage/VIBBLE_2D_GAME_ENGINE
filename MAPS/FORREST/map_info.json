@@ -87,11 +87,7 @@
             "name": "null"
           },
           {
-            "chance": 18,
-            "name": "Tree"
-          },
-          {
-            "chance": 40,
+            "chance": 25.0,
             "name": "Tree_Dark"
           },
           {
@@ -677,6 +673,25 @@
               "name": "null"
             },
             {
+              "chance": 5.0,
+              "name": "candle"
+            }
+          ],
+          "display_name": "New Spaw",
+          "enforce_spacing": false,
+          "max_number": 40,
+          "min_number": 30,
+          "position": "Random",
+          "priority": 0,
+          "spawn_id": "spn-1189590fa424"
+        },
+        {
+          "candidates": [
+            {
+              "chance": 0,
+              "name": "null"
+            },
+            {
               "chance": 100,
               "name": "Vibble"
             }
@@ -690,7 +705,7 @@
           "origional_height": 1248,
           "origional_width": 1248,
           "position": "Exact",
-          "priority": 0,
+          "priority": 1,
           "spawn_id": "spn-6d19915360f2"
         }
       ],

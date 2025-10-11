@@ -4407,7 +4407,7 @@ void MapLayersPanel::ensure_room_configurator() {
                     header_visibility_callback_(visible);
                 }
             });
-            room_configurator_->set_show_header(true);
+            room_configurator_->set_show_header(false);
 
             room_configurator_->set_on_close([this]() {
 
@@ -4634,9 +4634,6 @@ void MapLayersPanel::add_spawn_group_to_active_room() {
     auto& groups = devmode::spawn::ensure_spawn_groups_array(*entry);
 
     nlohmann::json new_group;
-
-    new_group["position"] = "Exact";
-
     devmode::spawn::ensure_spawn_group_entry_defaults(new_group, "New Spawn");
 
     groups.push_back(new_group);
