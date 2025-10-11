@@ -3,10 +3,10 @@
     "distance_scale_strength": 0.10999999940395355,
     "foreshorten_strength": 0.11999999731779099,
     "height_at_zoom1": 557.0,
-    "parallax_strength": 19.0,
+    "parallax_strength": 18.5,
     "realism_enabled": true,
     "render_distance": 2120.0,
-    "tripod_distance_y": -1335.0
+    "tripod_distance_y": -1220.0
   },
   "light_rays_params": {
     "bright_percentile": 0.8479999899864197,

@@ -16,6 +16,9 @@ SDL_Texture* RenderAsset::texture_for_scale(Asset* asset,
                                             int target_w,
                                             int target_h) {
         if (!asset || !base_tex || base_w <= 0 || base_h <= 0 || target_w <= 0 || target_h <= 0) {
+                if (asset) {
+                        asset->update_scale_usage(1.0f, 1.0f, 1.0f, 0);
+                }
                 return base_tex;
         }
 
@@ -23,10 +26,12 @@ SDL_Texture* RenderAsset::texture_for_scale(Asset* asset,
         const render_pipeline::ScaleSelection selection = render_pipeline::ScalingLogic::Choose(desired_scale);
 
         if (selection.index <= 0 || selection.stored_scale >= 0.995f) {
+                asset->update_scale_usage(desired_scale, 1.0f, desired_scale, 0);
                 return base_tex;
         }
 
         if (static_cast<std::size_t>(selection.index) >= asset->downscale_cache_.size()) {
+                asset->update_scale_usage(desired_scale, 1.0f, desired_scale, 0);
                 return base_tex;
         }
 
@@ -51,6 +56,7 @@ SDL_Texture* RenderAsset::texture_for_scale(Asset* asset,
                         entry.width   = 0;
                         entry.height  = 0;
                         entry.scale   = selection.stored_scale;
+                        asset->update_scale_usage(desired_scale, 1.0f, desired_scale, 0);
                         return base_tex;
                 }
                 entry.texture = scaled;
@@ -59,5 +65,11 @@ SDL_Texture* RenderAsset::texture_for_scale(Asset* asset,
                 entry.scale   = selection.stored_scale;
         }
 
-        return entry.texture ? entry.texture : base_tex;
+        SDL_Texture* result = entry.texture ? entry.texture : base_tex;
+        const bool using_cached = (result == entry.texture && result != nullptr);
+        const float texture_scale = using_cached ? selection.stored_scale : 1.0f;
+        const float remainder_scale = using_cached ? selection.remainder_scale : desired_scale;
+        const int variant_index = using_cached ? selection.index : 0;
+        asset->update_scale_usage(desired_scale, texture_scale, remainder_scale, variant_index);
+        return result ? result : base_tex;
 }

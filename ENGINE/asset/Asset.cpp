@@ -150,8 +150,10 @@ Asset::Asset(const Asset& o)
 , last_scaled_w_(0)
 , last_scaled_h_(0)
 , last_scaled_camera_scale_(-1.0f)
+, last_scale_usage_()
 {
         clear_downscale_cache();
+        last_scale_usage_ = o.last_scale_usage_;
 }
 
 Asset& Asset::operator=(const Asset& o) {
@@ -200,6 +202,7 @@ Asset& Asset::operator=(const Asset& o) {
         last_scaled_w_            = 0;
         last_scaled_h_            = 0;
         last_scaled_camera_scale_ = -1.0f;
+        last_scale_usage_         = o.last_scale_usage_;
         return *this;
 }
 
@@ -596,6 +599,23 @@ void Asset::clear_downscale_cache() {
         last_scaled_w_            = 0;
         last_scaled_h_            = 0;
         last_scaled_camera_scale_ = -1.0f;
+        last_scale_usage_         = {};
+}
+
+void Asset::update_scale_usage(float requested, float texture_scale, float remainder, int variant_index) {
+        if (!std::isfinite(requested) || requested <= 0.0f) {
+                requested = 1.0f;
+        }
+        if (!std::isfinite(texture_scale) || texture_scale <= 0.0f) {
+                texture_scale = 1.0f;
+        }
+        if (!std::isfinite(remainder) || remainder <= 0.0f) {
+                remainder = 1.0f;
+        }
+        last_scale_usage_.requested_scale = requested;
+        last_scale_usage_.texture_scale   = texture_scale;
+        last_scale_usage_.remainder_scale = remainder;
+        last_scale_usage_.variant_index   = std::clamp(variant_index, 0, static_cast<int>(render_pipeline::ScalingLogic::kVariantCount) - 1);
 }
 
 void Asset::set_hidden(bool state){ hidden = state; }

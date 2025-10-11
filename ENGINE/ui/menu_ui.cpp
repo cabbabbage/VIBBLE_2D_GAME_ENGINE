@@ -92,6 +92,14 @@ void MenuUI::game_loop() {
                         if (input_) {
                                 game_assets_->update(*input_, px, py);
                         }
+                        static bool opened_asset_info_once = false;
+                        if (!opened_asset_info_once) {
+                                const auto& active = game_assets_->getActive();
+                                if (!active.empty()) {
+                                        game_assets_->open_asset_info_editor_for_asset(active.front());
+                                        opened_asset_info_once = true;
+                                }
+                        }
                 }
                 if (menu_active_) {
                         render();

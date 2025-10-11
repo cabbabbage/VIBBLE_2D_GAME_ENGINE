@@ -56,6 +56,19 @@ class Asset {
     bool is_current_animation_looping() const;
     void add_child(Asset* child);
 
+    struct ScaleUsageStats {
+        float requested_scale = 1.0f;
+        float texture_scale   = 1.0f;
+        float remainder_scale = 1.0f;
+        int   variant_index   = 0;
+
+        float requested_percent() const { return requested_scale * 100.0f; }
+        float texture_percent() const { return texture_scale * 100.0f; }
+        float remainder_percent() const { return remainder_scale * 100.0f; }
+    };
+
+    const ScaleUsageStats& last_scale_usage() const { return last_scale_usage_; }
+
     void add_static_light_source(LightSource* light, SDL_Point world, Asset* owner);
     void set_render_player_light(bool value);
     bool get_render_player_light() const;
@@ -152,6 +165,10 @@ class Asset {
     int          last_scaled_w_            = 0;
     int          last_scaled_h_            = 0;
     float        last_scaled_camera_scale_ = -1.0f;
+
+    ScaleUsageStats last_scale_usage_{};
+
+    void update_scale_usage(float requested, float texture_scale, float remainder, int variant_index);
 };
 
 #endif
