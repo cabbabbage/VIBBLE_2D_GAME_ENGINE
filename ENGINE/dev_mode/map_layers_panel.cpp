@@ -52,6 +52,8 @@
 
 #include <nlohmann/json.hpp>
 
+class SummaryRangeWidget;
+
 namespace {
 
 constexpr int kCanvasPreferredHeight = 320;
@@ -1546,6 +1548,97 @@ private:
     SDL_Rect rect_{0,0,0,0};
     SDL_Rect config_rect_{0,0,0,0};
 };
+
+class MapLayersPanel::LayerConfigPanel : public DockableCollapsible {
+
+public:
+
+    explicit LayerConfigPanel(MapLayersPanel* owner);
+    ~LayerConfigPanel();
+
+    void open(int layer_index, json* layer);
+    void close();
+    void ensure_cleanup();
+
+    bool is_visible() const;
+    void update(const Input& input, int screen_w, int screen_h) override;
+    bool handle_event(const SDL_Event& e) override;
+    void render(SDL_Renderer* renderer) const override;
+    bool is_point_inside(int x, int y) const override;
+
+    void refresh();
+    void request_refresh();
+    void sync_from_widgets();
+    void compute_totals(int* out_min, int* out_max) const;
+    void refresh_total_summary();
+
+    MapLayersPanel* panel_owner() const { return owner_; }
+
+private:
+
+    MapLayersPanel* owner_ = nullptr;
+    int layer_index_ = -1;
+    json* layer_ = nullptr;
+    bool locked_ = false;
+    bool cleanup_pending_ = false;
+    bool refresh_pending_ = false;
+    std::string name_cache_;
+    std::unique_ptr<DMTextBox> name_box_;
+    std::unique_ptr<TextBoxWidget> name_widget_;
+    std::unique_ptr<DMButton> add_candidate_btn_;
+    std::unique_ptr<ButtonWidget> add_candidate_widget_;
+    std::unique_ptr<DMButton> delete_layer_btn_;
+    std::unique_ptr<ButtonWidget> delete_layer_widget_;
+    std::unique_ptr<DMButton> close_btn_;
+    std::unique_ptr<ButtonWidget> close_widget_;
+    std::unique_ptr<SummaryRangeWidget> total_room_widget_;
+    int total_rooms_min_cache_ = 0;
+    int total_rooms_max_cache_ = 0;
+    std::vector<std::unique_ptr<RoomCandidateWidget>> candidate_widgets_;
+};
+
+class MapLayersPanel::RoomCandidateWidget : public Widget {
+
+public:
+
+    RoomCandidateWidget(LayerConfigPanel* owner, int layer_index, int candidate_index, json* candidate, bool editable);
+    ~RoomCandidateWidget();
+
+    void refresh_from_json();
+    void update();
+
+    void set_rect(const SDL_Rect& r) override;
+    const SDL_Rect& rect() const override { return rect_; }
+    int height_for_width(int w) const override;
+    bool handle_event(const SDL_Event& e) override;
+    void render(SDL_Renderer* renderer) const override;
+
+    void set_candidate_index(int index) { candidate_index_ = index; }
+
+private:
+
+    struct ChildChip {
+        std::string name;
+        SDL_Rect rect{0,0,0,0};
+        std::unique_ptr<DMButton> remove_button;
+    };
+
+    LayerConfigPanel* owner_ = nullptr;
+    int layer_index_ = -1;
+    int candidate_index_ = -1;
+    json* candidate_ = nullptr;
+    bool editable_ = false;
+    SDL_Rect rect_{0,0,0,0};
+    std::unique_ptr<DMRangeSlider> range_slider_;
+    std::unique_ptr<DMButton> add_child_button_;
+    std::unique_ptr<DMButton> delete_button_;
+    int min_count_cache_ = 0;
+    int max_count_cache_ = 0;
+    std::vector<ChildChip> child_chips_;
+};
+
+MapLayersPanel::LayerConfigPanel::~LayerConfigPanel() = default;
+MapLayersPanel::RoomCandidateWidget::~RoomCandidateWidget() = default;
 
 MapLayersPanel::PreviewToolbarWidget::PreviewToolbarWidget(MapLayersPanel* owner)
 
