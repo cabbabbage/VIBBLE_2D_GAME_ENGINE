@@ -1,12 +1,15 @@
 #pragma once
+#pragma once
 
-#include <array>
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstddef>
 #include <limits>
+#include <string>
 
 #include <SDL.h>
+#include <filesystem>
 
 namespace render_pipeline {
 
@@ -65,6 +68,27 @@ struct ScalingLogic {
         result.remainder_scale = (chosen_scale > 0.0f) ? (desired_scale / chosen_scale) : 1.0f;
         return result;
     }
+
+    static inline int ScalePercent(std::size_t index) {
+        if (index >= kVariantCount) {
+            return 0;
+        }
+        return static_cast<int>(std::lround(kScaleSteps[index] * 100.0f));
+    }
+
+    static inline std::string VariantFolder(const std::string& base, std::size_t index) {
+        return std::filesystem::path(base)
+            .append("scale_" + std::to_string(ScalePercent(index)))
+            .string();
+    }
+
+    static inline std::array<int, kVariantCount> PercentSteps() {
+        std::array<int, kVariantCount> percents{};
+        for (std::size_t i = 0; i < kVariantCount; ++i) {
+            percents[i] = ScalePercent(i);
+        }
+        return percents;
+    }
 };
 
 inline SDL_Texture* CreateScaledTexture(SDL_Renderer* renderer,
@@ -110,5 +134,41 @@ inline SDL_Texture* CreateScaledTexture(SDL_Renderer* renderer,
     return scaled;
 }
 
-}  // namespace render_pipeline
+inline SDL_Surface* CreateScaledSurface(SDL_Surface* src, float scale) {
+    if (!src || scale <= 0.0f) {
+        return nullptr;
+    }
 
+    if (std::fabs(scale - 1.0f) <= 1e-4f) {
+        SDL_Surface* copy = SDL_CreateRGBSurfaceWithFormat(0, src->w, src->h, 32, SDL_PIXELFORMAT_RGBA8888);
+        if (!copy) {
+            return nullptr;
+        }
+        SDL_Rect rect{0, 0, src->w, src->h};
+        if (SDL_BlitSurface(src, &rect, copy, &rect) != 0) {
+            SDL_FreeSurface(copy);
+            return nullptr;
+        }
+        return copy;
+    }
+
+    const int dst_w = std::max(1, static_cast<int>(std::lround(static_cast<double>(src->w) * scale)));
+    const int dst_h = std::max(1, static_cast<int>(std::lround(static_cast<double>(src->h) * scale)));
+
+    SDL_Surface* dst = SDL_CreateRGBSurfaceWithFormat(0, dst_w, dst_h, 32, SDL_PIXELFORMAT_RGBA8888);
+    if (!dst) {
+        return nullptr;
+    }
+
+    SDL_Rect src_rect{0, 0, src->w, src->h};
+    SDL_Rect dst_rect{0, 0, dst_w, dst_h};
+    SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "best");
+    if (SDL_BlitScaled(src, &src_rect, dst, &dst_rect) != 0) {
+        SDL_FreeSurface(dst);
+        return nullptr;
+    }
+
+    return dst;
+}
+
+}  // namespace render_pipeline
