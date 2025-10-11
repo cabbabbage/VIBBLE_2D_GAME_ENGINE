@@ -9,7 +9,7 @@ class GenerateLight {
 
 	public:
     GenerateLight(SDL_Renderer* renderer);
-    SDL_Texture* generate(SDL_Renderer* renderer, const std::string& asset_name, const LightSource& light, std::size_t light_index);
+    SDL_Texture* generate(SDL_Renderer* renderer, const std::string& asset_name, LightSource& light, std::size_t light_index);
 
 	private:
     SDL_Renderer* renderer_;

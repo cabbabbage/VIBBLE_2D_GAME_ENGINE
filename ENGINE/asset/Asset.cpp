@@ -87,6 +87,7 @@ Asset::Asset(std::shared_ptr<AssetInfo> info_,
                         current_frame = f;
                 }
         }
+        clear_downscale_cache();
 }
 
 Asset::~Asset() {
@@ -149,7 +150,10 @@ Asset::Asset(const Asset& o)
 , last_scaled_w_(0)
 , last_scaled_h_(0)
 , last_scaled_camera_scale_(-1.0f)
+, last_scale_usage_()
 {
+        clear_downscale_cache();
+        last_scale_usage_ = o.last_scale_usage_;
 }
 
 Asset& Asset::operator=(const Asset& o) {
@@ -198,6 +202,7 @@ Asset& Asset::operator=(const Asset& o) {
         last_scaled_w_            = 0;
         last_scaled_h_            = 0;
         last_scaled_camera_scale_ = -1.0f;
+        last_scale_usage_         = o.last_scale_usage_;
         return *this;
 }
 
@@ -579,18 +584,38 @@ void Asset::deactivate() {
 }
 
 void Asset::clear_downscale_cache() {
-        for (auto& entry : downscale_cache_) {
-                if (entry.texture) {
+        for (std::size_t idx = 0; idx < downscale_cache_.size(); ++idx) {
+                auto& entry = downscale_cache_[idx];
+                if (idx != 0 && entry.texture) {
                         SDL_DestroyTexture(entry.texture);
-                        entry.texture = nullptr;
                 }
+                entry.texture = nullptr;
+                entry.width   = 0;
+                entry.height  = 0;
+                entry.scale   = render_pipeline::ScalingLogic::kScaleSteps[idx];
         }
-        downscale_cache_.clear();
         last_scaled_texture_      = nullptr;
         last_scaled_source_       = nullptr;
         last_scaled_w_            = 0;
         last_scaled_h_            = 0;
         last_scaled_camera_scale_ = -1.0f;
+        last_scale_usage_         = {};
+}
+
+void Asset::update_scale_usage(float requested, float texture_scale, float remainder, int variant_index) {
+        if (!std::isfinite(requested) || requested <= 0.0f) {
+                requested = 1.0f;
+        }
+        if (!std::isfinite(texture_scale) || texture_scale <= 0.0f) {
+                texture_scale = 1.0f;
+        }
+        if (!std::isfinite(remainder) || remainder <= 0.0f) {
+                remainder = 1.0f;
+        }
+        last_scale_usage_.requested_scale = requested;
+        last_scale_usage_.texture_scale   = texture_scale;
+        last_scale_usage_.remainder_scale = remainder;
+        last_scale_usage_.variant_index   = std::clamp(variant_index, 0, static_cast<int>(render_pipeline::ScalingLogic::kVariantCount) - 1);
 }
 
 void Asset::set_hidden(bool state){ hidden = state; }

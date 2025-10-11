@@ -10,6 +10,7 @@
 #include "render/scene_renderer.hpp"
 #include "render/light_rays.hpp"
 #include "render/light_rays_config.hpp"
+#include "render/DisplayStats.hpp"
 #include "map_generation/room.hpp"
 #include "utils/area.hpp"
 #include "utils/input.hpp"
@@ -82,6 +83,7 @@ Assets::Assets(std::vector<Asset>&& loaded,
 
     scene = new SceneRenderer(renderer, this, screen_width_, screen_height_, map_path);
     apply_map_light_config();
+    display_stats_ = std::make_unique<DisplayStats>(renderer);
 
     for (Asset* a : all) {
         if (a) a->set_assets(this);
@@ -561,6 +563,10 @@ void Assets::update(const Input& input,
     (void)screen_center_x;
     (void)screen_center_y;
 
+    if (display_stats_) {
+        display_stats_->handle_input(input);
+    }
+
     bool closest_assets_dirty = false;
     const auto mark_closest_assets_dirty = [&closest_assets_dirty]() {
         closest_assets_dirty = true;
@@ -637,6 +643,10 @@ void Assets::update(const Input& input,
     }
 
     if (scene && !suppress_render_) scene->render();
+
+    if (display_stats_) {
+        display_stats_->update(*this);
+    }
 
     process_removals();
 }
@@ -961,10 +971,30 @@ void Assets::render_overlays(SDL_Renderer* renderer) {
     if (dev_controls_ && dev_controls_->is_enabled()) {
         dev_controls_->render_overlays(renderer);
     }
+    if (display_stats_) {
+        display_stats_->render(renderer);
+    }
 }
 
 SDL_Renderer* Assets::renderer() const {
     return scene ? scene->get_renderer() : nullptr;
+}
+
+Asset* Assets::find_asset_by_name(const std::string& name) const {
+    if (name.empty()) {
+        return nullptr;
+    }
+    for (Asset* asset : active_assets) {
+        if (asset && asset->info && asset->info->name == name) {
+            return asset;
+        }
+    }
+    for (Asset* asset : all) {
+        if (asset && asset->info && asset->info->name == name) {
+            return asset;
+        }
+    }
+    return nullptr;
 }
 
 Global_Light_Source* Assets::map_light_source() {

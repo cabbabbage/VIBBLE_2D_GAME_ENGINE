@@ -20,6 +20,7 @@ class Input;
 class DevControls;
 class AssetInfo;
 class Global_Light_Source;
+class DisplayStats;
 
 class Assets {
 public:
@@ -34,6 +35,7 @@ public:
     void set_render_suppressed(bool suppressed);
     void set_input(Input* m);
     Input* get_input() const { return input; }
+    Asset* find_asset_by_name(const std::string& name) const;
 
     const std::vector<Asset*>& get_selected_assets() const;
     const std::vector<Asset*>& get_highlighted_assets() const;
@@ -155,6 +157,7 @@ private:
     nlohmann::json map_info_json_;
     std::unique_ptr<AssetList> active_asset_list_;
     bool active_assets_dirty_ = true;
+    std::unique_ptr<DisplayStats> display_stats_;
 
     struct ClosestEntry {
         double distance_sq;

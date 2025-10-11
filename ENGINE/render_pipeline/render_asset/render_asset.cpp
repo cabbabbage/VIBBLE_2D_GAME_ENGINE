@@ -1,6 +1,7 @@
 #include "render_asset.hpp"
 
 #include "asset/Asset.hpp"
+#include "render_pipeline/ScalingLogic.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -47,80 +48,60 @@ SDL_Texture* RenderAsset::texture_for_scale(Asset* asset,
                                             int target_w,
                                             int target_h) {
         if (!asset || !base_tex || base_w <= 0 || base_h <= 0 || target_w <= 0 || target_h <= 0) {
-                return base_tex;
-        }
-
-        const float ratio_w = static_cast<float>(target_w) / static_cast<float>(base_w);
-        const float ratio_h = static_cast<float>(target_h) / static_cast<float>(base_h);
-        const float ratio = std::min(ratio_w, ratio_h);
-        if (ratio >= 0.95f) {
-                return base_tex;
-        }
-
-        int levels = 0;
-        int preview_w = base_w;
-        int preview_h = base_h;
-        float working_ratio = ratio;
-        const int   kMaxLevels    = 4;
-        const float kTargetRatio  = 0.55f;
-        while (working_ratio < kTargetRatio && preview_w > 1 && preview_h > 1 && levels < kMaxLevels) {
-                working_ratio *= 2.0f;
-                preview_w = std::max(1, preview_w / 2);
-                preview_h = std::max(1, preview_h / 2);
-                ++levels;
-        }
-
-        if (levels <= 0) {
-                return base_tex;
-        }
-
-        Uint32 format = SDL_PIXELFORMAT_RGBA8888;
-        if (SDL_QueryTexture(base_tex, &format, nullptr, nullptr, nullptr) != 0) {
-                format = SDL_PIXELFORMAT_RGBA8888;
-        }
-
-        SDL_Texture* current_tex = base_tex;
-        int          current_w   = base_w;
-        int          current_h   = base_h;
-        float        current_scale = 1.0f;
-
-        for (int level = 0; level < levels; ++level) {
-                float next_scale = current_scale * 0.5f;
-                const int next_w = std::max(1, current_w / 2);
-                const int next_h = std::max(1, current_h / 2);
-
-                auto it = std::find_if(asset->downscale_cache_.begin(),
-                                       asset->downscale_cache_.end(),
-                                       [next_scale](const Asset::DownscaleCacheEntry& entry) {
-                                               return std::abs(entry.scale - next_scale) <= 0.0001f;
-                                       });
-
-                if (it == asset->downscale_cache_.end() || !it->texture || it->width != next_w || it->height != next_h) {
-                        SDL_Texture* created = create_half_scale(renderer_, current_tex, format, current_w, current_h);
-                        if (!created) {
-                                return (level == 0) ? base_tex : current_tex;
-                        }
-                        Asset::DownscaleCacheEntry entry;
-                        entry.scale   = next_scale;
-                        entry.width   = next_w;
-                        entry.height  = next_h;
-                        entry.texture = created;
-                        if (it == asset->downscale_cache_.end()) {
-                                asset->downscale_cache_.push_back(entry);
-                                it = asset->downscale_cache_.begin() + (asset->downscale_cache_.size() - 1);
-                        } else {
-                                if (it->texture) {
-                                        SDL_DestroyTexture(it->texture);
-                                }
-                                *it = entry;
-                        }
+                if (asset) {
+                        asset->update_scale_usage(1.0f, 1.0f, 1.0f, 0);
                 }
-
-                current_tex   = it->texture;
-                current_w     = it->width;
-                current_h     = it->height;
-                current_scale = next_scale;
+                return base_tex;
         }
 
-        return current_tex ? current_tex : base_tex;
+        const float desired_scale = render_pipeline::ScalingLogic::ComputeScale(base_w, base_h, target_w, target_h);
+        const render_pipeline::ScaleSelection selection = render_pipeline::ScalingLogic::Choose(desired_scale);
+
+        if (selection.index <= 0 || selection.stored_scale >= 0.995f) {
+                asset->update_scale_usage(desired_scale, 1.0f, desired_scale, 0);
+                return base_tex;
+        }
+
+        if (static_cast<std::size_t>(selection.index) >= asset->downscale_cache_.size()) {
+                asset->update_scale_usage(desired_scale, 1.0f, desired_scale, 0);
+                return base_tex;
+        }
+
+        Asset::DownscaleCacheEntry& entry = asset->downscale_cache_[selection.index];
+        const int expected_w = std::max(1, static_cast<int>(std::lround(static_cast<double>(base_w) * selection.stored_scale)));
+        const int expected_h = std::max(1, static_cast<int>(std::lround(static_cast<double>(base_h) * selection.stored_scale)));
+
+        const bool needs_rebuild =
+            !entry.texture ||
+            entry.width  != expected_w ||
+            entry.height != expected_h ||
+            std::fabs(entry.scale - selection.stored_scale) > 0.0001f;
+
+        if (needs_rebuild) {
+                if (entry.texture) {
+                        SDL_DestroyTexture(entry.texture);
+                        entry.texture = nullptr;
+                }
+                SDL_Texture* scaled = render_pipeline::CreateScaledTexture(renderer_, base_tex, base_w, base_h, selection.stored_scale);
+                if (!scaled) {
+                        entry.texture = nullptr;
+                        entry.width   = 0;
+                        entry.height  = 0;
+                        entry.scale   = selection.stored_scale;
+                        asset->update_scale_usage(desired_scale, 1.0f, desired_scale, 0);
+                        return base_tex;
+                }
+                entry.texture = scaled;
+                entry.width   = expected_w;
+                entry.height  = expected_h;
+                entry.scale   = selection.stored_scale;
+        }
+
+        SDL_Texture* result = entry.texture ? entry.texture : base_tex;
+        const bool using_cached = (result == entry.texture && result != nullptr);
+        const float texture_scale = using_cached ? selection.stored_scale : 1.0f;
+        const float remainder_scale = using_cached ? selection.remainder_scale : desired_scale;
+        const int variant_index = using_cached ? selection.index : 0;
+        asset->update_scale_usage(desired_scale, texture_scale, remainder_scale, variant_index);
+        return result ? result : base_tex;
 }

@@ -1,5 +1,6 @@
 #include "generate_light.hpp"
 #include "cache_manager.hpp"
+#include "render_pipeline/ScalingLogic.hpp"
 
 #include <SDL.h>
 #include <SDL_image.h>
@@ -10,6 +11,7 @@
 #include <cmath>
 #include <algorithm>
 #include <vector>
+#include <array>
 #include <iostream>
 
 #ifndef M_PI
@@ -26,10 +28,12 @@ GenerateLight::GenerateLight(SDL_Renderer* renderer)
 
 SDL_Texture* GenerateLight::generate(SDL_Renderer* renderer,
                                      const std::string& asset_name,
-                                     const LightSource& light,
+                                     LightSource& light,
                                      std::size_t light_index)
 {
     if (!renderer) return nullptr;
+
+    clear_light_cache(light);
 
     const std::string cache_root = "cache/" + asset_name + "/lights";
     const std::string folder     = cache_root + "/" + std::to_string(light_index);
@@ -40,6 +44,7 @@ SDL_Texture* GenerateLight::generate(SDL_Renderer* renderer,
 
     json meta;
     bool cache_ok = false;
+    const auto expected_steps = render_pipeline::ScalingLogic::PercentSteps();
     if (CacheManager::load_metadata(meta_file, meta)) {
         try {
             cache_ok =
@@ -49,16 +54,65 @@ SDL_Texture* GenerateLight::generate(SDL_Renderer* renderer,
         }
     }
 
+    std::array<std::vector<SDL_Surface*>, render_pipeline::ScalingLogic::kVariantCount> variant_surfaces;
+
     if (cache_ok) {
-        if (SDL_Surface* surf = CacheManager::load_surface(img_file)) {
-            SDL_Texture* tex = CacheManager::surface_to_texture(renderer, surf);
-            SDL_FreeSurface(surf);
-            if (tex) {
-                SDL_SetTextureBlendMode(tex, SDL_BLENDMODE_BLEND);
+        bool variants_loaded = true;
+        for (std::size_t idx = 0; idx < render_pipeline::ScalingLogic::kVariantCount; ++idx) {
+            std::string variant_path = render_pipeline::ScalingLogic::VariantFolder(folder, idx);
+            std::vector<SDL_Surface*> loaded;
+            if (!CacheManager::load_surface_sequence(variant_path, 1, loaded)) {
+                variants_loaded = false;
+                break;
+            }
+            variant_surfaces[idx] = std::move(loaded);
+        }
+        if (variants_loaded && !variant_surfaces[0].empty() && variant_surfaces[0][0]) {
+            SDL_Texture* base_tex = nullptr;
+            for (std::size_t idx = 0; idx < render_pipeline::ScalingLogic::kVariantCount; ++idx) {
+                SDL_Surface* surface = (!variant_surfaces[idx].empty()) ? variant_surfaces[idx][0] : nullptr;
+                SDL_Texture* tex_variant = surface ? CacheManager::surface_to_texture(renderer, surface) : nullptr;
+                if (tex_variant) {
+                    SDL_SetTextureBlendMode(tex_variant, SDL_BLENDMODE_BLEND);
 #if SDL_VERSION_ATLEAST(2,0,12)
-                SDL_SetTextureScaleMode(tex, SDL_ScaleModeNearest);
+                    SDL_SetTextureScaleMode(tex_variant, SDL_ScaleModeNearest);
 #endif
-                return tex;
+                }
+                if (idx == 0) {
+                    base_tex = tex_variant;
+                    if (tex_variant) {
+                        SDL_QueryTexture(tex_variant, nullptr, nullptr, &light.cached_w, &light.cached_h);
+                        light.texture = tex_variant;
+                        light.cached_variants[0] = tex_variant;
+                        light.variant_w[0] = light.cached_w;
+                        light.variant_h[0] = light.cached_h;
+                    }
+                } else {
+                    if (tex_variant) {
+                        SDL_QueryTexture(tex_variant, nullptr, nullptr, &light.variant_w[idx], &light.variant_h[idx]);
+                    } else {
+                        light.variant_w[idx] = 0;
+                        light.variant_h[idx] = 0;
+                    }
+                    light.cached_variants[idx] = tex_variant;
+                }
+            }
+            for (auto& list : variant_surfaces) {
+                for (SDL_Surface* s : list) {
+                    if (s) SDL_FreeSurface(s);
+                }
+                list.clear();
+            }
+            if (base_tex) {
+                return base_tex;
+            }
+            clear_light_cache(light);
+        } else {
+            for (auto& list : variant_surfaces) {
+                for (SDL_Surface* s : list) {
+                    if (s) SDL_FreeSurface(s);
+                }
+                list.clear();
             }
         }
     }
@@ -134,19 +188,26 @@ SDL_Texture* GenerateLight::generate(SDL_Renderer* renderer,
 
     SDL_UnlockSurface(surf);
 
-    SDL_Texture* tex = SDL_CreateTextureFromSurface(renderer, surf);
-    if (!tex) {
-        std::cerr << "[GenerateLight] Failed to create texture: " << SDL_GetError() << "\n";
-        SDL_FreeSurface(surf);
-        return nullptr;
+    std::array<SDL_Surface*, render_pipeline::ScalingLogic::kVariantCount> surfaces{};
+    surfaces[0] = surf;
+    for (std::size_t idx = 1; idx < render_pipeline::ScalingLogic::kVariantCount; ++idx) {
+        SDL_Surface* scaled_surface = render_pipeline::CreateScaledSurface(surf, render_pipeline::ScalingLogic::kScaleSteps[idx]);
+        if (!scaled_surface) {
+            scaled_surface = render_pipeline::CreateScaledSurface(surf, 1.0f);
+        }
+        surfaces[idx] = scaled_surface;
     }
-    SDL_SetTextureBlendMode(tex, SDL_BLENDMODE_BLEND);
-#if SDL_VERSION_ATLEAST(2,0,12)
-    SDL_SetTextureScaleMode(tex, SDL_ScaleModeNearest);
-#endif
+
+    for (std::size_t idx = 0; idx < render_pipeline::ScalingLogic::kVariantCount; ++idx) {
+        std::vector<SDL_Surface*> single;
+        if (surfaces[idx]) {
+            single.push_back(surfaces[idx]);
+            const std::string variant_path = render_pipeline::ScalingLogic::VariantFolder(folder, idx);
+            CacheManager::save_surface_sequence(variant_path, single);
+        }
+    }
 
     CacheManager::save_surface_as_png(surf, img_file);
-    SDL_FreeSurface(surf);
 
     json new_meta;
     new_meta["version"]     = kCacheVersion;
@@ -155,7 +216,53 @@ SDL_Texture* GenerateLight::generate(SDL_Renderer* renderer,
     new_meta["intensity"]   = light.intensity;
     new_meta["blur_passes"] = blur_passes;
     new_meta["color"]       = { col.r, col.g, col.b };
+    nlohmann::json steps_json = nlohmann::json::array();
+    for (std::size_t idx = 0; idx < render_pipeline::ScalingLogic::kVariantCount; ++idx) {
+        steps_json.push_back(expected_steps[idx]);
+    }
+    new_meta["scale_steps"] = std::move(steps_json);
     CacheManager::save_metadata(meta_file, new_meta);
 
-    return tex;
+    SDL_Texture* base_tex = nullptr;
+    for (std::size_t idx = 0; idx < render_pipeline::ScalingLogic::kVariantCount; ++idx) {
+        SDL_Surface* surface = surfaces[idx];
+        SDL_Texture* tex_variant = surface ? CacheManager::surface_to_texture(renderer, surface) : nullptr;
+        if (tex_variant) {
+            SDL_SetTextureBlendMode(tex_variant, SDL_BLENDMODE_BLEND);
+#if SDL_VERSION_ATLEAST(2,0,12)
+            SDL_SetTextureScaleMode(tex_variant, SDL_ScaleModeNearest);
+#endif
+        }
+        if (idx == 0) {
+            base_tex = tex_variant;
+            if (tex_variant) {
+                SDL_QueryTexture(tex_variant, nullptr, nullptr, &light.cached_w, &light.cached_h);
+                light.texture = tex_variant;
+                light.cached_variants[0] = tex_variant;
+                light.variant_w[0] = light.cached_w;
+                light.variant_h[0] = light.cached_h;
+            }
+        } else {
+            if (tex_variant) {
+                SDL_QueryTexture(tex_variant, nullptr, nullptr, &light.variant_w[idx], &light.variant_h[idx]);
+            } else {
+                light.variant_w[idx] = 0;
+                light.variant_h[idx] = 0;
+            }
+            light.cached_variants[idx] = tex_variant;
+        }
+    }
+
+    for (SDL_Surface*& surface : surfaces) {
+        if (surface) {
+            SDL_FreeSurface(surface);
+            surface = nullptr;
+        }
+    }
+
+    if (!base_tex) {
+        clear_light_cache(light);
+    }
+
+    return base_tex;
 }

@@ -73,20 +73,10 @@ void LightingLoader::load(AssetInfo& info, const json& data) {
 void LightingLoader::generate_textures(AssetInfo& info, SDL_Renderer* renderer) {
 	GenerateLight generator(renderer);
 	for (std::size_t i = 0; i < info.light_sources.size(); ++i) {
-		SDL_Texture* tex = generator.generate(renderer, info.name, info.light_sources[i], i);
-		if (tex) {
-			SDL_SetTextureBlendMode(tex, SDL_BLENDMODE_BLEND);
-			info.light_sources[i].texture = tex;
-			SDL_QueryTexture(tex, nullptr, nullptr, &info.light_sources[i].cached_w, &info.light_sources[i].cached_h);
-		}
+		generator.generate(renderer, info.name, info.light_sources[i], i);
 	}
 	std::size_t base_index = info.light_sources.size();
 	for (std::size_t i = 0; i < info.orbital_light_sources.size(); ++i) {
-		SDL_Texture* tex = generator.generate(renderer, info.name, info.orbital_light_sources[i], base_index + i);
-		if (tex) {
-			SDL_SetTextureBlendMode(tex, SDL_BLENDMODE_BLEND);
-			info.orbital_light_sources[i].texture = tex;
-			SDL_QueryTexture(tex, nullptr, nullptr, &info.orbital_light_sources[i].cached_w, &info.orbital_light_sources[i].cached_h);
-		}
+		generator.generate(renderer, info.name, info.orbital_light_sources[i], base_index + i);
 	}
 }

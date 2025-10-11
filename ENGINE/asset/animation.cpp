@@ -1,14 +1,18 @@
 #include "animation.hpp"
 #include "asset/asset_info.hpp"
 #include "utils/cache_manager.hpp"
+#include "render_pipeline/ScalingLogic.hpp"
 #include <SDL_image.h>
 #include <SDL_mixer.h>
 #include <algorithm>
+#include <array>
+#include <cmath>
 #include <cstdint>
 #include <filesystem>
 #include <iostream>
 #include <memory>
 #include <unordered_map>
+#include <iterator>
 namespace fs = std::filesystem;
 
 namespace {
@@ -55,9 +59,33 @@ void apply_scale_mode(SDL_Texture* tex, const AssetInfo& info) {
 #else
 void apply_scale_mode(SDL_Texture*, const AssetInfo&) {}
 #endif
+
 }
 
 Animation::Animation() = default;
+
+void Animation::clear_texture_cache() {
+        for (auto& cache_entry : frame_cache_) {
+                for (SDL_Texture*& tex : cache_entry.textures) {
+                        if (tex) {
+                                SDL_DestroyTexture(tex);
+                                tex = nullptr;
+                        }
+                }
+        }
+        frame_cache_.clear();
+        frames.clear();
+}
+
+SDL_Texture* Animation::frame_variant(std::size_t frame_index, std::size_t variant_index) const {
+        if (variant_index >= render_pipeline::ScalingLogic::kVariantCount) {
+                variant_index = 0;
+        }
+        if (frame_index >= frame_cache_.size()) {
+                return nullptr;
+        }
+        return frame_cache_[frame_index].textures[variant_index];
+}
 
 void Animation::load(const std::string& trigger,
                      const nlohmann::json& anim_json,
@@ -73,6 +101,7 @@ void Animation::load(const std::string& trigger,
                      int& original_canvas_height)
 {
         CacheManager cache;
+        clear_texture_cache();
         if (anim_json.contains("source")) {
                 const auto& s = anim_json["source"];
 		try {
@@ -167,28 +196,70 @@ void Animation::load(const std::string& trigger,
 	if (source.kind == "animation" && !source.name.empty()) {
 		auto it = info.animations.find(source.name);
 		if (it != info.animations.end()) {
-			const auto& src_frames = it->second.frames;
-			for (SDL_Texture* src : src_frames) {
-					if (!src) continue;
-					Uint32 fmt; int access, w, h;
-					if (SDL_QueryTexture(src, &fmt, &access, &w, &h) != 0) {
-								continue;
-					}
-					SDL_Texture* dst = SDL_CreateTexture(renderer, fmt, SDL_TEXTUREACCESS_TARGET, w, h);
-					if (!dst) continue;
-                                        SDL_SetTextureBlendMode(dst, SDL_BLENDMODE_BLEND);
-                                        apply_scale_mode(dst, info);
-					SDL_SetRenderTarget(renderer, dst);
-					SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
-					SDL_RenderClear(renderer);
-					SDL_Rect r{0, 0, w, h};
-					SDL_RendererFlip flip = flipped_source ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE;
-					SDL_RenderCopyEx(renderer, src, nullptr, &r, 0.0, nullptr, flip);
-					SDL_SetRenderTarget(renderer, nullptr);
-					frames.push_back(dst);
-			}
-			if (reverse_source) {
-					std::reverse(frames.begin(), frames.end());
+                        const Animation& src_anim = it->second;
+                        if (!src_anim.frames.empty()) {
+                                std::vector<SDL_Texture*> new_frames;
+                                std::vector<FrameCache>   new_caches;
+                                new_frames.reserve(src_anim.frames.size());
+                                new_caches.reserve(src_anim.frames.size());
+                                for (std::size_t frame_idx = 0; frame_idx < src_anim.frames.size(); ++frame_idx) {
+                                        FrameCache cache_entry;
+                                        bool base_ok = false;
+                                        for (std::size_t variant_idx = 0; variant_idx < render_pipeline::ScalingLogic::kVariantCount; ++variant_idx) {
+                                                SDL_Texture* source_tex = src_anim.frame_variant(frame_idx, variant_idx);
+                                                if (!source_tex) {
+                                                        cache_entry.textures[variant_idx] = nullptr;
+                                                        cache_entry.widths[variant_idx]   = 0;
+                                                        cache_entry.heights[variant_idx]  = 0;
+                                                        continue;
+                                                }
+                                                Uint32 fmt = SDL_PIXELFORMAT_RGBA8888;
+                                                int access = 0;
+                                                int tex_w = 0;
+                                                int tex_h = 0;
+                                                if (SDL_QueryTexture(source_tex, &fmt, &access, &tex_w, &tex_h) != 0 || tex_w <= 0 || tex_h <= 0) {
+                                                        cache_entry.textures[variant_idx] = nullptr;
+                                                        cache_entry.widths[variant_idx]   = 0;
+                                                        cache_entry.heights[variant_idx]  = 0;
+                                                        continue;
+                                                }
+                                                SDL_Texture* dst = SDL_CreateTexture(renderer, fmt, SDL_TEXTUREACCESS_TARGET, tex_w, tex_h);
+                                                if (!dst) {
+                                                        cache_entry.textures[variant_idx] = nullptr;
+                                                        cache_entry.widths[variant_idx]   = 0;
+                                                        cache_entry.heights[variant_idx]  = 0;
+                                                        continue;
+                                                }
+                                                SDL_SetTextureBlendMode(dst, SDL_BLENDMODE_BLEND);
+                                                apply_scale_mode(dst, info);
+                                                SDL_Texture* prev_target = SDL_GetRenderTarget(renderer);
+                                                SDL_SetRenderTarget(renderer, dst);
+                                                SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
+                                                SDL_RenderClear(renderer);
+                                                SDL_Rect r{0, 0, tex_w, tex_h};
+                                                SDL_RenderCopy(renderer, source_tex, nullptr, &r);
+                                                SDL_SetRenderTarget(renderer, prev_target);
+                                                cache_entry.textures[variant_idx] = dst;
+                                                cache_entry.widths[variant_idx]   = tex_w;
+                                                cache_entry.heights[variant_idx]  = tex_h;
+                                                if (variant_idx == 0) {
+                                                        base_ok = true;
+                                                }
+                                        }
+                                        if (!base_ok || !cache_entry.textures[0]) {
+                                                for (SDL_Texture*& tex : cache_entry.textures) {
+                                                        if (tex) {
+                                                                SDL_DestroyTexture(tex);
+                                                                tex = nullptr;
+                                                        }
+                                                }
+                                                continue;
+                                        }
+                                        new_frames.push_back(cache_entry.textures[0]);
+                                        new_caches.push_back(std::move(cache_entry));
+                                }
+                                frames.insert(frames.end(), new_frames.begin(), new_frames.end());
+                                frame_cache_.insert(frame_cache_.end(), std::make_move_iterator(new_caches.begin()), std::make_move_iterator(new_caches.end()));
 			}
 		}
 	} else {
@@ -212,36 +283,78 @@ void Animation::load(const std::string& trigger,
 		if (expected_frames == 0) return;
 		bool use_cache = false;
 		nlohmann::json meta;
+                const auto expected_steps = render_pipeline::ScalingLogic::PercentSteps();
 		if (cache.load_metadata(meta_file, meta)) {
-			if (meta.value("frame_count", -1) == expected_frames &&
-			meta.value("scale_factor", -1.0f) == scale_factor &&
-			meta.value("original_width", -1) == orig_w &&
-			meta.value("original_height", -1) == orig_h)
-			{
-					use_cache = true;
-			}
+                        bool meta_ok = (
+                            meta.value("frame_count", -1) == expected_frames &&
+                            meta.value("scale_factor", -1.0f) == scale_factor &&
+                            meta.value("original_width", -1) == orig_w &&
+                            meta.value("original_height", -1) == orig_h);
+                        if (meta_ok) {
+                                if (meta.contains("scale_steps") && meta["scale_steps"].is_array()) {
+                                        const auto& stored = meta["scale_steps"];
+                                        if (stored.size() == render_pipeline::ScalingLogic::kVariantCount) {
+                                                for (std::size_t idx = 0; idx < render_pipeline::ScalingLogic::kVariantCount; ++idx) {
+                                                        int stored_pct = stored[idx].get<int>();
+                                                        if (stored_pct != expected_steps[idx]) {
+                                                                meta_ok = false;
+                                                                break;
+                                                        }
+                                                }
+                                        } else {
+                                                meta_ok = false;
+                                        }
+                                } else {
+                                        meta_ok = false;
+                                }
+                        }
+			use_cache = meta_ok;
 		}
-		std::vector<SDL_Surface*> surfaces;
+
+                std::array<std::vector<SDL_Surface*>, render_pipeline::ScalingLogic::kVariantCount> variant_surfaces;
                 if (use_cache) {
-                        use_cache = cache.load_surface_sequence(cache_folder, expected_frames, surfaces);
-                        if (use_cache) {
+                        bool variants_loaded = true;
+                        for (std::size_t idx = 0; idx < render_pipeline::ScalingLogic::kVariantCount; ++idx) {
+                                std::string variant_path = render_pipeline::ScalingLogic::VariantFolder(cache_folder, idx);
+                                std::vector<SDL_Surface*> loaded;
+                                if (!cache.load_surface_sequence(variant_path, expected_frames, loaded)) {
+                                        if (idx == 0 && cache.load_surface_sequence(cache_folder, expected_frames, loaded)) {
+                                                // legacy cache, continue but ensure metadata regenerated later
+                                                use_cache = false;
+                                        } else {
+                                                variants_loaded = false;
+                                                break;
+                                        }
+                                }
+                                variant_surfaces[idx] = std::move(loaded);
+                        }
+                        if (!variants_loaded) {
+                                for (auto& list : variant_surfaces) {
+                                        for (SDL_Surface* surf : list) {
+                                                if (surf) SDL_FreeSurface(surf);
+                                        }
+                                        list.clear();
+                                }
+                                use_cache = false;
+                        } else if (use_cache) {
                                 original_canvas_width  = orig_w;
                                 original_canvas_height = orig_h;
-                                if (!surfaces.empty() && surfaces[0]) {
-                                        scaled_sprite_w = surfaces[0]->w;
-                                        scaled_sprite_h = surfaces[0]->h;
-                                } else {
-                                        int fallback_w = static_cast<int>(orig_w * scale_factor);
-                                        int fallback_h = static_cast<int>(orig_h * scale_factor);
-                                        if (fallback_w <= 0 && orig_w > 0) fallback_w = 1;
-                                        if (fallback_h <= 0 && orig_h > 0) fallback_h = 1;
-                                        scaled_sprite_w = fallback_w;
-                                        scaled_sprite_h = fallback_h;
+                                if (!variant_surfaces[0].empty() && variant_surfaces[0][0]) {
+                                        scaled_sprite_w = variant_surfaces[0][0]->w;
+                                        scaled_sprite_h = variant_surfaces[0][0]->h;
                                 }
                         }
                 }
+
                 if (!use_cache) {
-                        surfaces.clear();
+                        for (auto& list : variant_surfaces) {
+                                for (SDL_Surface* surf : list) {
+                                        if (surf) SDL_FreeSurface(surf);
+                                }
+                                list.clear();
+                        }
+                        std::vector<SDL_Surface*> base_surfaces;
+                        base_surfaces.reserve(expected_frames);
                         for (int i = 0; i < expected_frames; ++i) {
                                         std::string f = src_folder + "/" + std::to_string(i) + ".png";
                                         int new_w = 0, new_h = 0;
@@ -256,15 +369,43 @@ void Animation::load(const std::string& trigger,
 								scaled_sprite_w = new_w;
 								scaled_sprite_h = new_h;
 					}
-                                        surfaces.push_back(scaled);
+                                        base_surfaces.push_back(scaled);
                         }
-                        cache.save_surface_sequence(cache_folder, surfaces);
+                        if (base_surfaces.size() != static_cast<std::size_t>(expected_frames)) {
+                                for (SDL_Surface* surf : base_surfaces) {
+                                        if (surf) SDL_FreeSurface(surf);
+                                }
+                                return;
+                        }
+                        variant_surfaces[0] = std::move(base_surfaces);
+                        for (std::size_t idx = 1; idx < render_pipeline::ScalingLogic::kVariantCount; ++idx) {
+                                const float scale_step = render_pipeline::ScalingLogic::kScaleSteps[idx];
+                                variant_surfaces[idx].reserve(variant_surfaces[0].size());
+                                for (SDL_Surface* base_surface : variant_surfaces[0]) {
+                                        SDL_Surface* scaled = render_pipeline::CreateScaledSurface(base_surface, scale_step);
+                                        variant_surfaces[idx].push_back(scaled);
+                                }
+                        }
+                        for (std::size_t idx = 0; idx < render_pipeline::ScalingLogic::kVariantCount; ++idx) {
+                                const std::string variant_path = render_pipeline::ScalingLogic::VariantFolder(cache_folder, idx);
+                                cache.save_surface_sequence(variant_path, variant_surfaces[idx]);
+                        }
                         nlohmann::json new_meta;
                         new_meta["frame_count"]     = expected_frames;
                         new_meta["scale_factor"]    = scale_factor;
                         new_meta["original_width"]  = orig_w;
                         new_meta["original_height"] = orig_h;
+                        nlohmann::json step_arr = nlohmann::json::array();
+                        for (std::size_t idx = 0; idx < render_pipeline::ScalingLogic::kVariantCount; ++idx) {
+                                step_arr.push_back(expected_steps[idx]);
+                        }
+                        new_meta["scale_steps"] = std::move(step_arr);
                         cache.save_metadata(meta_file, new_meta);
+                }
+
+                if (!variant_surfaces[0].empty() && variant_surfaces[0][0] && (scaled_sprite_w <= 0 || scaled_sprite_h <= 0)) {
+                        scaled_sprite_w = variant_surfaces[0][0]->w;
+                        scaled_sprite_h = variant_surfaces[0][0]->h;
                 }
                 if (original_canvas_width <= 0 && orig_w > 0) {
                         original_canvas_width = orig_w;
@@ -280,45 +421,92 @@ void Animation::load(const std::string& trigger,
                         scaled_sprite_w = fallback_w;
                         scaled_sprite_h = fallback_h;
                 }
-                for (SDL_Surface* surf : surfaces) {
-                        SDL_Texture* tex = cache.surface_to_texture(renderer, surf);
-                        SDL_FreeSurface(surf);
-                        if (!tex) {
-                                        std::cerr << "[Animation] Failed to create texture for '" << trigger << "'\n";
-                                        continue;
+                frames.clear();
+                frame_cache_.clear();
+                frames.reserve(expected_frames);
+                frame_cache_.reserve(expected_frames);
+
+                for (std::size_t frame_idx = 0; frame_idx < variant_surfaces[0].size(); ++frame_idx) {
+                        FrameCache cache_entry;
+                        for (std::size_t variant_idx = 0; variant_idx < render_pipeline::ScalingLogic::kVariantCount; ++variant_idx) {
+                                SDL_Surface* surface = (frame_idx < variant_surfaces[variant_idx].size())
+                                                        ? variant_surfaces[variant_idx][frame_idx]
+                                                        : nullptr;
+                                SDL_Texture* tex_variant = nullptr;
+                                if (surface) {
+                                        tex_variant = cache.surface_to_texture(renderer, surface);
+                                        if (tex_variant) {
+                                                apply_scale_mode(tex_variant, info);
+                                        }
+                                }
+                                int tex_w = surface ? surface->w : 0;
+                                int tex_h = surface ? surface->h : 0;
+                                if (tex_variant && (tex_w == 0 || tex_h == 0)) {
+                                        SDL_QueryTexture(tex_variant, nullptr, nullptr, &tex_w, &tex_h);
+                                }
+                                cache_entry.textures[variant_idx] = tex_variant;
+                                cache_entry.widths[variant_idx]   = tex_w;
+                                cache_entry.heights[variant_idx]  = tex_h;
+                                if (variant_idx == 0) {
+                                        frames.push_back(tex_variant);
+                                }
                         }
-                        apply_scale_mode(tex, info);
-                        frames.push_back(tex);
+                        frame_cache_.push_back(std::move(cache_entry));
                 }
-		if (flipped_source && !frames.empty()) {
-			std::vector<SDL_Texture*> flipped;
-			flipped.reserve(frames.size());
-			for (SDL_Texture* src : frames) {
-					if (!src) { flipped.push_back(nullptr); continue; }
-					Uint32 fmt; int access, w, h;
-					if (SDL_QueryTexture(src, &fmt, &access, &w, &h) != 0) {
-								flipped.push_back(nullptr);
-								continue;
-					}
-					SDL_Texture* dst = SDL_CreateTexture(renderer, fmt, SDL_TEXTUREACCESS_TARGET, w, h);
-					if (!dst) { flipped.push_back(nullptr); continue; }
+
+                for (auto& list : variant_surfaces) {
+                        for (SDL_Surface* surf : list) {
+                                if (surf) {
+                                        SDL_FreeSurface(surf);
+                                }
+                        }
+                        list.clear();
+                }
+		if (flipped_source && renderer && !frame_cache_.empty()) {
+                        for (std::size_t frame_index = 0; frame_index < frame_cache_.size(); ++frame_index) {
+                                FrameCache& cache_entry = frame_cache_[frame_index];
+                                for (std::size_t variant_idx = 0; variant_idx < render_pipeline::ScalingLogic::kVariantCount; ++variant_idx) {
+                                        SDL_Texture* src_tex = cache_entry.textures[variant_idx];
+                                        if (!src_tex) {
+                                                continue;
+                                        }
+                                        Uint32 fmt = SDL_PIXELFORMAT_RGBA8888;
+                                        int access = 0;
+                                        int tex_w = cache_entry.widths[variant_idx];
+                                        int tex_h = cache_entry.heights[variant_idx];
+                                        if (tex_w <= 0 || tex_h <= 0) {
+                                                if (SDL_QueryTexture(src_tex, &fmt, &access, &tex_w, &tex_h) != 0 || tex_w <= 0 || tex_h <= 0) {
+                                                        continue;
+                                                }
+                                        } else if (SDL_QueryTexture(src_tex, &fmt, &access, nullptr, nullptr) != 0) {
+                                                fmt = SDL_PIXELFORMAT_RGBA8888;
+                                        }
+                                        SDL_Texture* dst = SDL_CreateTexture(renderer, fmt, SDL_TEXTUREACCESS_TARGET, tex_w, tex_h);
+                                        if (!dst) {
+                                                continue;
+                                        }
                                         SDL_SetTextureBlendMode(dst, SDL_BLENDMODE_BLEND);
+                                        apply_scale_mode(dst, info);
+                                        SDL_Texture* prev_target = SDL_GetRenderTarget(renderer);
                                         SDL_SetRenderTarget(renderer, dst);
                                         SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
                                         SDL_RenderClear(renderer);
-                                        SDL_Rect r{0, 0, w, h};
-                                        SDL_RenderCopyEx(renderer, src, nullptr, &r, 0.0, nullptr, SDL_FLIP_HORIZONTAL);
-                                        SDL_SetRenderTarget(renderer, nullptr);
-                                        apply_scale_mode(dst, info);
-                                        flipped.push_back(dst);
-			}
-			for (SDL_Texture* t : frames) {
-					if (t) SDL_DestroyTexture(t);
-			}
-			frames.swap(flipped);
+                                        SDL_Rect rect{0, 0, tex_w, tex_h};
+                                        SDL_RenderCopyEx(renderer, src_tex, nullptr, &rect, 0.0, nullptr, SDL_FLIP_HORIZONTAL);
+                                        SDL_SetRenderTarget(renderer, prev_target);
+                                        SDL_DestroyTexture(src_tex);
+                                        cache_entry.textures[variant_idx] = dst;
+                                        cache_entry.widths[variant_idx]   = tex_w;
+                                        cache_entry.heights[variant_idx]  = tex_h;
+                                }
+                                if (frame_index < frames.size()) {
+                                        frames[frame_index] = cache_entry.textures[0];
+                                }
+                        }
 		}
 		if (reverse_source && !frames.empty()) {
 			std::reverse(frames.begin(), frames.end());
+                        std::reverse(frame_cache_.begin(), frame_cache_.end());
 		}
 	}
         if (!movement_specified && source.kind == "animation" && !source.name.empty()) {

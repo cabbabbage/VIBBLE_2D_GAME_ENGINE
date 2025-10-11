@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstddef>
+#include <array>
 #include <memory>
 #include <string>
 #include <utility>
@@ -8,6 +9,7 @@
 #include <SDL.h>
 #include <nlohmann/json.hpp>
 #include "animation_frame.hpp"
+#include "render_pipeline/ScalingLogic.hpp"
 
 class AssetInfo;
 struct Mix_Chunk;
@@ -32,10 +34,18 @@ public:
     void change(AnimationFrame*& frame, bool& static_flag) const;
     void freeze();
     bool is_frozen() const;
-    bool is_static() const;
-    bool has_audio() const;
-    Mix_Chunk* audio_chunk() const;
+   bool is_static() const;
+   bool has_audio() const;
+   Mix_Chunk* audio_chunk() const;
     const AudioClip* audio_data() const;
+    void clear_texture_cache();
+    SDL_Texture* frame_variant(std::size_t frame_index, std::size_t variant_index) const;
+
+    struct FrameCache {
+        std::array<SDL_Texture*, render_pipeline::ScalingLogic::kVariantCount> textures{};
+        std::array<int, render_pipeline::ScalingLogic::kVariantCount> widths{};
+        std::array<int, render_pipeline::ScalingLogic::kVariantCount> heights{};
+    };
     struct Source {
     std::string kind;
     std::string path;
@@ -62,6 +72,7 @@ public:
     std::size_t default_movement_path_index() const { return 0; }
     std::size_t clamp_path_index(std::size_t index) const;
 private:
+    std::vector<FrameCache> frame_cache_;
     AudioClip audio_clip;
     std::vector<std::vector<AnimationFrame>> movement_paths_;
 };
