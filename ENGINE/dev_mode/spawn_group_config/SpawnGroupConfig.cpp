@@ -1086,7 +1086,11 @@ private:
 SpawnGroupConfig::SpawnGroupConfig(bool floatable)
     : DockableCollapsible("Spawn Groups", floatable),
       default_floatable_mode_(floatable) {
-    set_cell_width(260);
+    set_scroll_enabled(true);
+    set_cell_width(420);
+    set_row_gap(8);
+    set_col_gap(12);
+    set_padding(12);
     // Header action buttons
     header_up_btn_ = std::make_unique<DMButton>("\xE2\x96\xB2", &DMStyles::HeaderButton(), DMButton::height(), DMButton::height());
     header_down_btn_ = std::make_unique<DMButton>("\xE2\x96\xBC", &DMStyles::HeaderButton(), DMButton::height(), DMButton::height());
