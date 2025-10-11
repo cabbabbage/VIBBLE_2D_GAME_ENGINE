@@ -9,6 +9,38 @@
 RenderAsset::RenderAsset(SDL_Renderer* renderer)
 : renderer_(renderer) {}
 
+namespace {
+
+SDL_Texture* create_half_scale(SDL_Renderer* renderer,
+                               SDL_Texture* source,
+                               Uint32 format,
+                               int src_w,
+                               int src_h) {
+        if (!renderer || !source || src_w <= 0 || src_h <= 0) {
+                return nullptr;
+        }
+        int dst_w = std::max(1, src_w / 2);
+        int dst_h = std::max(1, src_h / 2);
+        SDL_Texture* half = SDL_CreateTexture(renderer, format, SDL_TEXTUREACCESS_TARGET, dst_w, dst_h);
+        if (!half) {
+                return nullptr;
+        }
+        SDL_SetTextureBlendMode(half, SDL_BLENDMODE_BLEND);
+        #if SDL_VERSION_ATLEAST(2,0,12)
+        SDL_SetTextureScaleMode(half, SDL_ScaleModeBest);
+        #endif
+        SDL_Texture* prev_target = SDL_GetRenderTarget(renderer);
+        SDL_SetRenderTarget(renderer, half);
+        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
+        SDL_RenderClear(renderer);
+        SDL_Rect dst{0, 0, dst_w, dst_h};
+        SDL_RenderCopy(renderer, source, nullptr, &dst);
+        SDL_SetRenderTarget(renderer, prev_target);
+        return half;
+}
+
+}
+
 SDL_Texture* RenderAsset::texture_for_scale(Asset* asset,
                                             SDL_Texture* base_tex,
                                             int base_w,

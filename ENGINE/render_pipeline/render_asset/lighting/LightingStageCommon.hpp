@@ -122,9 +122,9 @@ inline SDL_Texture* build_light_texture(SDL_Renderer* renderer,
                 alpha *= (1.0f + dist(flicker_rng()));
             }
             Uint8 final_alpha = static_cast<Uint8>(std::clamp(alpha, 0.0f, 255.0f));
-            SDL_SetTextureAlphaMod(chosen_texture, final_alpha);
-            SDL_RenderCopyEx(renderer, chosen_texture, nullptr, &dst, 0.0, nullptr, asset.flipped ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE);
-            SDL_SetTextureAlphaMod(chosen_texture, 255);
+            SDL_SetTextureAlphaMod(light.texture, final_alpha);
+            SDL_RenderCopyEx(renderer, light.texture, nullptr, &dst, 0.0, nullptr, asset.flipped ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE);
+            SDL_SetTextureAlphaMod(light.texture, 255);
         }
     }
 

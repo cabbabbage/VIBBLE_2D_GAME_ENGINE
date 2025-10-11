@@ -23,33 +23,6 @@ using json = nlohmann::json;
 
 static constexpr int kCacheVersion = 3;
 
-namespace {
-
-void clear_light_cache(LightSource& light) {
-    for (std::size_t idx = 0; idx < render_pipeline::ScalingLogic::kVariantCount; ++idx) {
-        SDL_Texture*& tex = light.cached_variants[idx];
-        if (!tex) {
-            light.variant_w[idx] = 0;
-            light.variant_h[idx] = 0;
-            continue;
-        }
-        if (idx != 0 || tex != light.texture) {
-            SDL_DestroyTexture(tex);
-        }
-        tex = nullptr;
-        light.variant_w[idx] = 0;
-        light.variant_h[idx] = 0;
-    }
-    if (light.texture) {
-        SDL_DestroyTexture(light.texture);
-        light.texture = nullptr;
-    }
-    light.cached_w = 0;
-    light.cached_h = 0;
-}
-
-}  // namespace
-
 GenerateLight::GenerateLight(SDL_Renderer* renderer)
 : renderer_(renderer) {}
 
@@ -76,20 +49,6 @@ SDL_Texture* GenerateLight::generate(SDL_Renderer* renderer,
         try {
             cache_ok =
                 meta.value("version", -1) == kCacheVersion && meta.value("radius",   -1) == light.radius && meta.value("fall_off", -1) == light.fall_off && meta.value("intensity",-1) == light.intensity && meta.value("blur_passes", -1) == blur_passes && meta.contains("color") && meta["color"].is_array() && meta["color"].size() == 3 && meta["color"][0].get<int>() == light.color.r && meta["color"][1].get<int>() == light.color.g && meta["color"][2].get<int>() == light.color.b;
-            if (cache_ok) {
-                if (!meta.contains("scale_steps") || !meta["scale_steps"].is_array() ||
-                    meta["scale_steps"].size() != render_pipeline::ScalingLogic::kVariantCount) {
-                    cache_ok = false;
-                } else {
-                    for (std::size_t idx = 0; idx < render_pipeline::ScalingLogic::kVariantCount; ++idx) {
-                        int stored_pct = meta["scale_steps"][idx].get<int>();
-                        if (stored_pct != expected_steps[idx]) {
-                                cache_ok = false;
-                                break;
-                        }
-                    }
-                }
-            }
         } catch (...) {
             cache_ok = false;
         }
@@ -156,10 +115,6 @@ SDL_Texture* GenerateLight::generate(SDL_Renderer* renderer,
                 list.clear();
             }
         }
-    }
-
-    for (auto& list : variant_surfaces) {
-        list.clear();
     }
 
     fs::remove_all(folder);
