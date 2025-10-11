@@ -2,12 +2,8 @@
 
 #include <algorithm>
 #include <cmath>
-#include <cctype>
-#include <cstdlib>
 #include <functional>
-#include <iomanip>
 #include <optional>
-#include <sstream>
 #include <string>
 #include <utility>
 
@@ -16,6 +12,7 @@
 #include "DockableCollapsible.hpp"
 #include "dm_styles.hpp"
 #include "spawn_group_config/spawn_group_utils.hpp"
+#include "spawn_group_config/widgets/CandidateEditorPieGraphWidget.hpp"
 #include "utils/input.hpp"
 #include "widgets.hpp"
 
@@ -23,54 +20,10 @@ using nlohmann::json;
 
 namespace {
 
-std::string trim(const std::string& value) {
-    size_t start = 0;
-    while (start < value.size() && std::isspace(static_cast<unsigned char>(value[start]))) ++start;
-    size_t end = value.size();
-    while (end > start && std::isspace(static_cast<unsigned char>(value[end - 1]))) --end;
-    return value.substr(start, end - start);
-}
-
-double parse_double_or(const std::string& text, double fallback) {
-    if (text.empty()) return fallback;
-    const char* cstr = text.c_str();
-    char* end = nullptr;
-    double value = std::strtod(cstr, &end);
-    if (end == cstr) return fallback;
-    while (end && *end) {
-        if (!std::isspace(static_cast<unsigned char>(*end))) return fallback;
-        ++end;
-    }
-    if (!std::isfinite(value)) return fallback;
-    return value;
-}
-
 bool is_integral(double value) {
     if (!std::isfinite(value)) return false;
     const double rounded = std::round(value);
     return std::fabs(value - rounded) < 1e-9;
-}
-
-std::string chance_to_string(const json& candidate) {
-    if (!candidate.is_object()) return "0";
-    const auto it = candidate.find("chance");
-    if (it == candidate.end()) return "0";
-    if (it->is_number_integer()) {
-        return std::to_string(it->get<int>());
-    }
-    if (it->is_number_float()) {
-        double value = it->get<double>();
-        if (is_integral(value)) {
-            return std::to_string(static_cast<int>(std::llround(value)));
-        }
-        std::ostringstream oss;
-        oss << std::fixed << std::setprecision(2) << value;
-        return oss.str();
-    }
-    if (it->is_string()) {
-        return it->get<std::string>();
-    }
-    return "0";
 }
 
 class LabelWidget : public Widget {
@@ -178,7 +131,7 @@ public:
 
     CandidateListPanelImpl() : DockableCollapsible("Spawn Group Candidates", true) {
         set_scroll_enabled(true);
-        set_cell_width(360);
+        set_cell_width(420);
         set_row_gap(8);
         set_col_gap(12);
         set_padding(12);
@@ -221,13 +174,19 @@ public:
 
         if (!display_name_widget_) display_name_widget_ = std::make_unique<LabelWidget>();
         if (!candidates_header_) candidates_header_ = std::make_unique<LabelWidget>("Candidates");
-        if (!empty_candidates_label_) {
-            empty_candidates_label_ = std::make_unique<LabelWidget>("No candidates configured", DMStyles::Label().color, true);
+        if (!instructions_label_) {
+            instructions_label_ = std::make_unique<LabelWidget>(
+                "Scroll on a slice to adjust weight. Double-click to remove.", DMStyles::Label().color, true);
         }
         if (!add_button_) {
             add_button_ = std::make_unique<DMButton>("Add Candidate", &DMStyles::ListButton(), 0, DMButton::height());
             add_widget_ = std::make_unique<ButtonWidget>(add_button_.get(), [this]() { add_candidate(); });
         }
+        if (!pie_widget_) {
+            pie_widget_ = std::make_unique<CandidateEditorPieGraphWidget>();
+        }
+        pie_widget_->set_on_adjust([this](int index, int delta) { adjust_candidate_weight(index, delta); });
+        pie_widget_->set_on_delete([this](int index) { remove_candidate(index); });
 
         if (!ownership_label_.empty()) {
             set_title(ownership_label_ + " Candidates");
@@ -244,18 +203,31 @@ public:
         if (save_callback_) save_callback_();
         if (force_rebuild || sanitized) {
             rebuild_rows(false);
+        } else if (pie_widget_) {
+            pie_widget_->set_candidates_from_json(*entry_);
         }
     }
 
 private:
-    struct CandidateRow {
-        size_t index = 0;
-        std::unique_ptr<LabelWidget> label;
-        std::unique_ptr<CallbackTextBoxWidget> name_widget;
-        std::unique_ptr<CallbackTextBoxWidget> chance_widget;
-        std::unique_ptr<DMButton> remove_button;
-        std::unique_ptr<ButtonWidget> remove_widget;
-    };
+    static double read_candidate_weight(const json& candidate) {
+        if (candidate.is_object()) {
+            const auto weight_it = candidate.find("chance");
+            if (weight_it != candidate.end()) {
+                if (weight_it->is_number_float()) return weight_it->get<double>();
+                if (weight_it->is_number_integer()) return static_cast<double>(weight_it->get<int>());
+            }
+            const auto alt_it = candidate.find("weight");
+            if (alt_it != candidate.end()) {
+                if (alt_it->is_number_float()) return alt_it->get<double>();
+                if (alt_it->is_number_integer()) return static_cast<double>(alt_it->get<int>());
+            }
+        } else if (candidate.is_number_float()) {
+            return candidate.get<double>();
+        } else if (candidate.is_number_integer()) {
+            return static_cast<double>(candidate.get<int>());
+        }
+        return 0.0;
+    }
 
     bool sanitize_entry() {
         if (!entry_) return false;
@@ -267,11 +239,14 @@ private:
     void rebuild_rows(bool ensure_sanitized) {
         if (!entry_) {
             set_rows({});
-            candidate_rows_.clear();
             return;
         }
 
         if (ensure_sanitized) sanitize_entry();
+
+        if (pie_widget_) {
+            pie_widget_->set_candidates_from_json(*entry_);
+        }
 
         DockableCollapsible::Rows rows;
 
@@ -291,48 +266,13 @@ private:
             rows.push_back({candidates_header_.get()});
         }
 
-        candidate_rows_.clear();
-        auto& candidates = (*entry_)["candidates"];
-        if (!candidates.is_array() || candidates.empty()) {
-            if (empty_candidates_label_) rows.push_back({empty_candidates_label_.get()});
-        } else {
-            candidate_rows_.reserve(candidates.size());
-            for (size_t i = 0; i < candidates.size(); ++i) {
-                CandidateRow row;
-                row.index = i;
-                row.label = std::make_unique<LabelWidget>(
-                    "Candidate " + std::to_string(i + 1), DMStyles::Label().color, true);
+        if (instructions_label_) {
+            instructions_label_->set_subtle(true);
+            rows.push_back({instructions_label_.get()});
+        }
 
-                std::string name = candidates[i].value("name", std::string{"null"});
-                auto name_box = std::make_unique<DMTextBox>("Asset Name", name);
-                row.name_widget = std::make_unique<CallbackTextBoxWidget>(
-                    std::move(name_box),
-                    [this, idx = row.index](const std::string& value) { on_name_changed(idx, value); },
-                    true);
-
-                std::string chance = chance_to_string(candidates[i]);
-                auto chance_box = std::make_unique<DMTextBox>("Chance", chance);
-                row.chance_widget = std::make_unique<CallbackTextBoxWidget>(
-                    std::move(chance_box),
-                    [this, idx = row.index](const std::string& value) { on_chance_changed(idx, value); },
-                    false);
-
-                row.remove_button = std::make_unique<DMButton>("Remove", &DMStyles::DeleteButton(), 0, DMButton::height());
-                row.remove_widget = std::make_unique<ButtonWidget>(row.remove_button.get(), [this, idx = row.index]() {
-                    remove_candidate(idx);
-                });
-
-                candidate_rows_.push_back(std::move(row));
-            }
-
-            for (auto& row : candidate_rows_) {
-                rows.push_back({row.label.get()});
-                rows.push_back({row.name_widget.get()});
-                DockableCollapsible::Row chance_row;
-                chance_row.push_back(row.chance_widget.get());
-                chance_row.push_back(row.remove_widget.get());
-                rows.push_back(std::move(chance_row));
-            }
+        if (pie_widget_) {
+            rows.push_back({pie_widget_.get()});
         }
 
         if (add_widget_) {
@@ -342,38 +282,29 @@ private:
         set_rows(rows);
     }
 
-    void on_name_changed(size_t index, const std::string& value) {
-        if (!entry_) return;
+    void adjust_candidate_weight(int index, int delta) {
+        if (!entry_ || delta == 0) return;
+        devmode::spawn::ensure_spawn_group_entry_defaults(*entry_, default_display_name_);
         auto& candidates = (*entry_)["candidates"];
-        if (!candidates.is_array() || index >= candidates.size()) return;
-        candidates[index]["name"] = trim(value);
-        notify_save(false);
-    }
-
-    void on_chance_changed(size_t index, const std::string& value) {
-        if (!entry_) return;
-        auto& candidates = (*entry_)["candidates"];
-        if (!candidates.is_array() || index >= candidates.size()) return;
-        double fallback = 0.0;
-        const auto it = candidates[index].find("chance");
-        if (it != candidates[index].end()) {
-            if (it->is_number_float()) fallback = it->get<double>();
-            else if (it->is_number_integer()) fallback = static_cast<double>(it->get<int>());
+        if (!candidates.is_array() || index < 0 || index >= static_cast<int>(candidates.size())) return;
+        auto& candidate = candidates[index];
+        if (!candidate.is_object()) {
+            candidate = json::object();
         }
-        double parsed = parse_double_or(value, fallback);
-        if (parsed < 0.0) parsed = 0.0;
-        if (is_integral(parsed)) {
-            candidates[index]["chance"] = static_cast<int>(std::llround(parsed));
+        double current = read_candidate_weight(candidate);
+        double next = std::max(0.0, current + static_cast<double>(delta));
+        if (is_integral(next)) {
+            candidate["chance"] = static_cast<int>(std::llround(next));
         } else {
-            candidates[index]["chance"] = parsed;
+            candidate["chance"] = next;
         }
-        notify_save(false);
+        notify_save(true);
     }
 
-    void remove_candidate(size_t index) {
-        if (!entry_) return;
+    void remove_candidate(int index) {
+        if (!entry_ || index < 0) return;
         auto& candidates = (*entry_)["candidates"];
-        if (!candidates.is_array() || index >= candidates.size()) return;
+        if (!candidates.is_array() || index >= static_cast<int>(candidates.size())) return;
         auto it = candidates.begin() + static_cast<json::difference_type>(index);
         candidates.erase(it);
         notify_save(true);
@@ -399,11 +330,10 @@ private:
     std::unique_ptr<LabelWidget> ownership_label_widget_{};
     std::unique_ptr<LabelWidget> display_name_widget_{};
     std::unique_ptr<LabelWidget> candidates_header_{};
-    std::unique_ptr<LabelWidget> empty_candidates_label_{};
+    std::unique_ptr<LabelWidget> instructions_label_{};
     std::unique_ptr<DMButton> add_button_{};
     std::unique_ptr<ButtonWidget> add_widget_{};
-
-    std::vector<CandidateRow> candidate_rows_{};
+    std::unique_ptr<CandidateEditorPieGraphWidget> pie_widget_{};
 };
 
 }  // namespace
