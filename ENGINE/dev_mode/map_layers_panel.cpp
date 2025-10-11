@@ -52,8 +52,6 @@
 
 #include <nlohmann/json.hpp>
 
-class SummaryRangeWidget;
-
 namespace {
 
 constexpr int kCanvasPreferredHeight = 320;
@@ -131,6 +129,58 @@ SDL_Color level_color(int level) {
     return hsv_to_rgb(hue, 0.6, 1.0);
 
 }
+
+class SummaryRangeWidget : public Widget {
+public:
+    explicit SummaryRangeWidget(std::string label)
+        : label_(std::move(label)) {}
+
+    void set_rect(const SDL_Rect& r) override { rect_ = r; }
+    const SDL_Rect& rect() const override { return rect_; }
+
+    int height_for_width(int) const override {
+        constexpr int kPadding = 8;
+        const auto& style = DMStyles::Label();
+        return style.font_size * 2 + kPadding * 3;
+    }
+
+    bool handle_event(const SDL_Event&) override { return false; }
+
+    void render(SDL_Renderer* renderer) const override {
+        if (!renderer) return;
+
+        constexpr int kPadding = 8;
+        const int label_y = rect_.y + kPadding;
+        const int value_y = label_y + DMStyles::Label().font_size + kPadding;
+        draw_text(renderer, label_, rect_.x + kPadding, label_y, DMStyles::Label());
+        draw_text(renderer, display_text(), rect_.x + kPadding, value_y, DMStyles::Label());
+    }
+
+    void set_values(int min_value, int max_value) {
+        min_value_ = min_value;
+        max_value_ = max_value;
+        has_values_ = true;
+    }
+
+    bool wants_full_row() const override { return true; }
+
+private:
+    std::string display_text() const {
+        if (!has_values_) {
+            return "-";
+        }
+        if (min_value_ == max_value_) {
+            return std::to_string(min_value_);
+        }
+        return std::to_string(min_value_) + " - " + std::to_string(max_value_);
+    }
+
+    std::string label_;
+    SDL_Rect rect_{0, 0, 0, 0};
+    int min_value_ = 0;
+    int max_value_ = 0;
+    bool has_values_ = false;
+};
 
 void draw_circle(SDL_Renderer* r, int cx, int cy, int radius, SDL_Color col, int thickness = 2) {
 
