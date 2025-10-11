@@ -418,11 +418,7 @@ AssetInfo::~AssetInfo() {
 	oss << "[AssetInfo] Destructor for '" << name << "'\r";
 	std::cout << std::left << std::setw(60) << oss.str() << std::flush;
 	for (auto &[key, anim] : animations) {
-		for (SDL_Texture *tex : anim.frames) {
-			if (tex)
-			SDL_DestroyTexture(tex);
-		}
-		anim.frames.clear();
+                anim.clear_texture_cache();
 	}
 	animations.clear();
 }

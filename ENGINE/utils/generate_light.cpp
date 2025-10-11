@@ -1,5 +1,6 @@
 #include "generate_light.hpp"
 #include "cache_manager.hpp"
+#include "render_pipeline/ScalingLogic.hpp"
 
 #include <SDL.h>
 #include <SDL_image.h>
@@ -21,15 +22,44 @@ using json = nlohmann::json;
 
 static constexpr int kCacheVersion = 3;
 
+namespace {
+
+void clear_light_cache(LightSource& light) {
+    for (std::size_t idx = 0; idx < render_pipeline::ScalingLogic::kVariantCount; ++idx) {
+        SDL_Texture*& tex = light.cached_variants[idx];
+        if (!tex) {
+            light.variant_w[idx] = 0;
+            light.variant_h[idx] = 0;
+            continue;
+        }
+        if (idx != 0 || tex != light.texture) {
+            SDL_DestroyTexture(tex);
+        }
+        tex = nullptr;
+        light.variant_w[idx] = 0;
+        light.variant_h[idx] = 0;
+    }
+    if (light.texture) {
+        SDL_DestroyTexture(light.texture);
+        light.texture = nullptr;
+    }
+    light.cached_w = 0;
+    light.cached_h = 0;
+}
+
+}  // namespace
+
 GenerateLight::GenerateLight(SDL_Renderer* renderer)
 : renderer_(renderer) {}
 
 SDL_Texture* GenerateLight::generate(SDL_Renderer* renderer,
                                      const std::string& asset_name,
-                                     const LightSource& light,
+                                     LightSource& light,
                                      std::size_t light_index)
 {
     if (!renderer) return nullptr;
+
+    clear_light_cache(light);
 
     const std::string cache_root = "cache/" + asset_name + "/lights";
     const std::string folder     = cache_root + "/" + std::to_string(light_index);
@@ -58,6 +88,22 @@ SDL_Texture* GenerateLight::generate(SDL_Renderer* renderer,
 #if SDL_VERSION_ATLEAST(2,0,12)
                 SDL_SetTextureScaleMode(tex, SDL_ScaleModeNearest);
 #endif
+                light.texture = tex;
+                SDL_QueryTexture(tex, nullptr, nullptr, &light.cached_w, &light.cached_h);
+                light.cached_variants[0] = tex;
+                light.variant_w[0] = light.cached_w;
+                light.variant_h[0] = light.cached_h;
+                for (std::size_t idx = 1; idx < render_pipeline::ScalingLogic::kVariantCount; ++idx) {
+                    SDL_Texture* scaled = render_pipeline::CreateScaledTexture(renderer, tex, light.cached_w, light.cached_h, render_pipeline::ScalingLogic::kScaleSteps[idx]);
+                    if (!scaled) {
+                        light.cached_variants[idx] = nullptr;
+                        light.variant_w[idx] = 0;
+                        light.variant_h[idx] = 0;
+                        continue;
+                    }
+                    light.cached_variants[idx] = scaled;
+                    SDL_QueryTexture(scaled, nullptr, nullptr, &light.variant_w[idx], &light.variant_h[idx]);
+                }
                 return tex;
             }
         }
@@ -156,6 +202,26 @@ SDL_Texture* GenerateLight::generate(SDL_Renderer* renderer,
     new_meta["blur_passes"] = blur_passes;
     new_meta["color"]       = { col.r, col.g, col.b };
     CacheManager::save_metadata(meta_file, new_meta);
+
+    light.texture = tex;
+    light.cached_w = size;
+    light.cached_h = size;
+    light.cached_variants[0] = tex;
+    light.variant_w[0] = size;
+    light.variant_h[0] = size;
+
+    for (std::size_t idx = 1; idx < render_pipeline::ScalingLogic::kVariantCount; ++idx) {
+        const float scale = render_pipeline::ScalingLogic::kScaleSteps[idx];
+        SDL_Texture* scaled = render_pipeline::CreateScaledTexture(renderer, tex, size, size, scale);
+        if (!scaled) {
+            light.cached_variants[idx] = nullptr;
+            light.variant_w[idx] = 0;
+            light.variant_h[idx] = 0;
+            continue;
+        }
+        light.cached_variants[idx] = scaled;
+        SDL_QueryTexture(scaled, nullptr, nullptr, &light.variant_w[idx], &light.variant_h[idx]);
+    }
 
     return tex;
 }

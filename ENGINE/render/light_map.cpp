@@ -5,6 +5,7 @@
 #include <vector>
 #include <iostream>
 #include <cmath>
+#include "render_pipeline/ScalingLogic.hpp"
 LightMap::LightMap(SDL_Renderer* renderer,
                    Assets* assets,
                    Global_Light_Source& main_light,
@@ -107,8 +108,11 @@ void LightMap::collect_layers(std::vector<LightEntry>& out, std::mt19937& rng) {
                                         alpha_f *= (1.0f + std::uniform_real_distribution<float>(-max_jitter, max_jitter)(rng));
                         }
                         Uint8 alpha = static_cast<Uint8>(std::clamp(alpha_f, 0.0f, 255.0f));
+                        const float desired_scale = render_pipeline::ScalingLogic::ComputeScale(lw, lh, dst.w, dst.h);
+                        SDL_Texture* selected = light.texture_for_scale(desired_scale);
+                        if (!selected) continue;
                         LightEntry entry{};
-                        entry.tex = light.texture;
+                        entry.tex = selected;
                         entry.dst = dst;
                         entry.alpha = alpha;
                         entry.flip = a->flipped ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE;

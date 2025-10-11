@@ -72,7 +72,12 @@ inline SDL_Texture* build_light_texture(SDL_Renderer* renderer,
         }
 
         SDL_Rect dst = context.dest_from_world_offset(static_light.offset.x, static_light.offset.y, lw, lh);
-        SDL_SetTextureBlendMode(static_light.source->texture, SDL_BLENDMODE_ADD);
+        const float desired_scale = render_pipeline::ScalingLogic::ComputeScale(lw, lh, dst.w, dst.h);
+        SDL_Texture* chosen_texture = static_light.source->texture_for_scale(desired_scale);
+        if (!chosen_texture) {
+            continue;
+        }
+        SDL_SetTextureBlendMode(chosen_texture, SDL_BLENDMODE_ADD);
         float base_alpha = static_cast<float>(main_brightness) * static_light.alpha_percentage;
         if (static_light.source->flicker > 0) {
             const float brightness_scale = std::clamp(static_light.source->intensity / 255.0f, 0.0f, 1.0f);
@@ -81,9 +86,9 @@ inline SDL_Texture* build_light_texture(SDL_Renderer* renderer,
             base_alpha *= (1.0f + dist(flicker_rng()));
         }
         Uint8 final_alpha = static_cast<Uint8>(std::clamp(base_alpha, 0.0f, 255.0f));
-        SDL_SetTextureAlphaMod(static_light.source->texture, final_alpha);
-        SDL_RenderCopy(renderer, static_light.source->texture, nullptr, &dst);
-        SDL_SetTextureAlphaMod(static_light.source->texture, 255);
+        SDL_SetTextureAlphaMod(chosen_texture, final_alpha);
+        SDL_RenderCopy(renderer, chosen_texture, nullptr, &dst);
+        SDL_SetTextureAlphaMod(chosen_texture, 255);
     }
 
     if (asset.info) {
@@ -103,7 +108,13 @@ inline SDL_Texture* build_light_texture(SDL_Renderer* renderer,
             const int offset_x = asset.flipped ? -light.offset_x : light.offset_x;
             SDL_Rect  dst      = context.dest_from_world_offset(offset_x, light.offset_y, lw, lh);
 
-            SDL_SetTextureBlendMode(light.texture, SDL_BLENDMODE_ADD);
+            const float desired_scale = render_pipeline::ScalingLogic::ComputeScale(lw, lh, dst.w, dst.h);
+            SDL_Texture* chosen_texture = light.texture_for_scale(desired_scale);
+            if (!chosen_texture) {
+                continue;
+            }
+
+            SDL_SetTextureBlendMode(chosen_texture, SDL_BLENDMODE_ADD);
             float alpha = static_cast<float>(main_brightness) * std::clamp(light.intensity / 255.0f, 0.0f, 1.0f);
             if (light.flicker > 0) {
                 const float max_jitter = (light.flicker / 100.0f) * std::clamp(light.intensity / 255.0f, 0.0f, 1.0f);
@@ -111,9 +122,9 @@ inline SDL_Texture* build_light_texture(SDL_Renderer* renderer,
                 alpha *= (1.0f + dist(flicker_rng()));
             }
             Uint8 final_alpha = static_cast<Uint8>(std::clamp(alpha, 0.0f, 255.0f));
-            SDL_SetTextureAlphaMod(light.texture, final_alpha);
-            SDL_RenderCopyEx(renderer, light.texture, nullptr, &dst, 0.0, nullptr, asset.flipped ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE);
-            SDL_SetTextureAlphaMod(light.texture, 255);
+            SDL_SetTextureAlphaMod(chosen_texture, final_alpha);
+            SDL_RenderCopyEx(renderer, chosen_texture, nullptr, &dst, 0.0, nullptr, asset.flipped ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE);
+            SDL_SetTextureAlphaMod(chosen_texture, 255);
         }
     }
 
@@ -166,10 +177,16 @@ inline SDL_Texture* build_light_texture(SDL_Renderer* renderer,
 
             SDL_Rect dst = context.dest_from_world_offset(static_cast<int>(std::lround(lx)) - asset.pos.x, static_cast<int>(std::lround(ly)) - asset.pos.y, lw, lh);
 
-            SDL_SetTextureBlendMode(light.texture, SDL_BLENDMODE_ADD);
-            SDL_SetTextureAlphaMod(light.texture, context.main_light_alpha());
-            SDL_RenderCopy(renderer, light.texture, nullptr, &dst);
-            SDL_SetTextureAlphaMod(light.texture, 255);
+            const float desired_scale = render_pipeline::ScalingLogic::ComputeScale(lw, lh, dst.w, dst.h);
+            SDL_Texture* chosen_texture = light.texture_for_scale(desired_scale);
+            if (!chosen_texture) {
+                continue;
+            }
+
+            SDL_SetTextureBlendMode(chosen_texture, SDL_BLENDMODE_ADD);
+            SDL_SetTextureAlphaMod(chosen_texture, context.main_light_alpha());
+            SDL_RenderCopy(renderer, chosen_texture, nullptr, &dst);
+            SDL_SetTextureAlphaMod(chosen_texture, 255);
         }
     }
 
@@ -196,11 +213,16 @@ inline SDL_Texture* build_light_texture(SDL_Renderer* renderer,
                 const int dy_world = world_ly - asset.pos.y;
 
                 SDL_Rect dst = context.dest_from_world_offset(dx_world, dy_world, lw, lh);
-                SDL_SetTextureBlendMode(light.texture, SDL_BLENDMODE_ADD);
+                const float desired_scale = render_pipeline::ScalingLogic::ComputeScale(lw, lh, dst.w, dst.h);
+                SDL_Texture* chosen_texture = light.texture_for_scale(desired_scale);
+                if (!chosen_texture) {
+                    continue;
+                }
+                SDL_SetTextureBlendMode(chosen_texture, SDL_BLENDMODE_ADD);
                 Uint8 inten = static_cast<Uint8>(std::clamp(base_alpha, 0.0, 255.0));
-                SDL_SetTextureAlphaMod(light.texture, inten);
-                SDL_RenderCopy(renderer, light.texture, nullptr, &dst);
-                SDL_SetTextureAlphaMod(light.texture, 255);
+                SDL_SetTextureAlphaMod(chosen_texture, inten);
+                SDL_RenderCopy(renderer, chosen_texture, nullptr, &dst);
+                SDL_SetTextureAlphaMod(chosen_texture, 255);
             }
         }
     }

@@ -1,7 +1,10 @@
 #pragma once
 
 #include <SDL.h>
+#include <array>
 #include <vector>
+
+#include "render_pipeline/ScalingLogic.hpp"
 
 struct LightSource {
         int intensity = 255;
@@ -19,4 +22,19 @@ struct LightSource {
         SDL_Color color = {255, 255, 255, 255};
         SDL_Texture* texture = nullptr;
         bool behind = false;
+        std::array<SDL_Texture*, render_pipeline::ScalingLogic::kVariantCount> cached_variants{};
+        std::array<int, render_pipeline::ScalingLogic::kVariantCount> variant_w{};
+        std::array<int, render_pipeline::ScalingLogic::kVariantCount> variant_h{};
+
+        SDL_Texture* texture_for_scale(float desired_scale) const {
+                const auto selection = render_pipeline::ScalingLogic::Choose(desired_scale);
+                const std::size_t idx = static_cast<std::size_t>(selection.index);
+                if (idx == 0) {
+                        return texture;
+                }
+                if (idx < cached_variants.size() && cached_variants[idx]) {
+                        return cached_variants[idx];
+                }
+                return texture;
+        }
 };

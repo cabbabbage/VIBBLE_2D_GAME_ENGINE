@@ -87,6 +87,7 @@ Asset::Asset(std::shared_ptr<AssetInfo> info_,
                         current_frame = f;
                 }
         }
+        clear_downscale_cache();
 }
 
 Asset::~Asset() {
@@ -150,6 +151,7 @@ Asset::Asset(const Asset& o)
 , last_scaled_h_(0)
 , last_scaled_camera_scale_(-1.0f)
 {
+        clear_downscale_cache();
 }
 
 Asset& Asset::operator=(const Asset& o) {
@@ -579,13 +581,16 @@ void Asset::deactivate() {
 }
 
 void Asset::clear_downscale_cache() {
-        for (auto& entry : downscale_cache_) {
-                if (entry.texture) {
+        for (std::size_t idx = 0; idx < downscale_cache_.size(); ++idx) {
+                auto& entry = downscale_cache_[idx];
+                if (idx != 0 && entry.texture) {
                         SDL_DestroyTexture(entry.texture);
-                        entry.texture = nullptr;
                 }
+                entry.texture = nullptr;
+                entry.width   = 0;
+                entry.height  = 0;
+                entry.scale   = render_pipeline::ScalingLogic::kScaleSteps[idx];
         }
-        downscale_cache_.clear();
         last_scaled_texture_      = nullptr;
         last_scaled_source_       = nullptr;
         last_scaled_w_            = 0;

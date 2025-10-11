@@ -2,6 +2,7 @@
 #define ASSET_HPP
 
 #include <string>
+#include <array>
 #include <vector>
 #include <memory>
 #include <SDL.h>
@@ -13,6 +14,7 @@
 
 #include "asset_controller.hpp"
 #include "animation_update/animation_update.hpp"
+#include "render_pipeline/ScalingLogic.hpp"
 
 class camera;
 class Assets;
@@ -143,7 +145,7 @@ class Asset {
 
     void clear_downscale_cache();
 
-    std::vector<DownscaleCacheEntry> downscale_cache_;
+    std::array<DownscaleCacheEntry, render_pipeline::ScalingLogic::kVariantCount> downscale_cache_{};
 
     SDL_Texture* last_scaled_texture_      = nullptr;
     SDL_Texture* last_scaled_source_       = nullptr;
