@@ -62,8 +62,9 @@ renderer_(renderer)
             }
         }
         asset_library_->loadAnimationsFor(renderer_, used);
+        asset_library_->ensureAllAnimationsLoaded(renderer_);
     }
-	finalizeAssets();
+        finalizeAssets();
 	auto distant_boundary = collectDistantAssets(0,2000);
 	for(auto a : distant_boundary){
 		a->set_hidden(true);

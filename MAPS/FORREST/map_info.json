@@ -44,10 +44,6 @@
             "name": "Small_Rock"
           },
           {
-            "chance": 52,
-            "name": "fog"
-          },
-          {
             "chance": 1,
             "name": "Bush_FPS_2"
           },
@@ -682,7 +678,7 @@
           "max_number": 40,
           "min_number": 30,
           "position": "Random",
-          "priority": 0,
+          "priority": 1,
           "spawn_id": "spn-1189590fa424"
         },
         {
@@ -692,7 +688,7 @@
               "name": "null"
             },
             {
-              "chance": 100,
+              "chance": 1000.0,
               "name": "Vibble"
             }
           ],
@@ -705,7 +701,7 @@
           "origional_height": 1248,
           "origional_width": 1248,
           "position": "Exact",
-          "priority": 1,
+          "priority": 0,
           "spawn_id": "spn-6d19915360f2"
         }
       ],

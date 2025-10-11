@@ -29,10 +29,6 @@
             "name": "Small_Rock"
           },
           {
-            "chance": 8,
-            "name": "fog"
-          },
-          {
             "chance": 1,
             "name": "Bush_FPS_2"
           },

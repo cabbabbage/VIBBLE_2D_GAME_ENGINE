@@ -498,7 +498,8 @@ struct SpawnGroupConfig::Entry {
         update_toggle_label();
     }
 
-    void bind(nlohmann::json* entry) {
+    void bind(nlohmann::json* entry, std::optional<size_t> index = std::nullopt) {
+        array_index_ = index;
         entry_ = entry;
         editable_ = owner_ && (owner_->bound_array_ != nullptr || owner_->bound_entry_ != nullptr);
         if (!entry_) {
@@ -512,13 +513,25 @@ struct SpawnGroupConfig::Entry {
         update_candidate_graph();
     }
 
-    nlohmann::json* mutable_entry() { return entry_; }
+    nlohmann::json* mutable_entry() {
+        if (array_index_ && owner_ && owner_->bound_array_) {
+            auto* arr = owner_->bound_array_;
+            if (*array_index_ < arr->size()) {
+                entry_ = &(*arr)[*array_index_];
+            } else {
+                entry_ = nullptr;
+            }
+        }
+        return entry_;
+    }
 
-    const nlohmann::json* mutable_entry() const { return entry_; }
+    const nlohmann::json* mutable_entry() const {
+        return const_cast<Entry*>(this)->mutable_entry();
+    }
 
     const nlohmann::json& entry_view() const {
-        if (entry_) {
-            return *entry_;
+        if (const auto* current = mutable_entry()) {
+            return *current;
         }
         return shadow_entry_;
     }
@@ -1061,6 +1074,8 @@ private:
     std::unique_ptr<CallbackTextBoxWidget> max_widget_{};
     std::unique_ptr<CallbackTextBoxWidget> exact_widget_{};
 
+    std::optional<size_t> array_index_{};
+
     std::vector<CandidateWidgets> candidate_entries_{};
     std::unique_ptr<LabelWidget> candidate_header_{};
     std::unique_ptr<DMButton> add_candidate_button_{};
@@ -1436,7 +1451,7 @@ void SpawnGroupConfig::rebuild_rows() {
             group_entry = std::make_unique<Entry>(*this);
         }
         if (bound_array_) {
-            group_entry->bind(&(*bound_array_)[i]);
+            group_entry->bind(&(*bound_array_)[i], i);
         } else if (bound_entry_ && i == 0) {
             group_entry->bind(bound_entry_);
         } else {

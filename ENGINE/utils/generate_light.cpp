@@ -13,6 +13,7 @@
 #include <vector>
 #include <array>
 #include <iostream>
+#include <unordered_set>
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
@@ -22,6 +23,30 @@ namespace fs = std::filesystem;
 using json = nlohmann::json;
 
 static constexpr int kCacheVersion = 3;
+
+namespace {
+
+void clear_light_cache(LightSource& light) {
+    std::unordered_set<SDL_Texture*> destroyed;
+    auto destroy_texture = [&destroyed](SDL_Texture*& texture) {
+        if (texture && destroyed.insert(texture).second) {
+            SDL_DestroyTexture(texture);
+        }
+        texture = nullptr;
+    };
+
+    destroy_texture(light.texture);
+    light.cached_w = 0;
+    light.cached_h = 0;
+
+    for (std::size_t idx = 0; idx < light.cached_variants.size(); ++idx) {
+        destroy_texture(light.cached_variants[idx]);
+        light.variant_w[idx] = 0;
+        light.variant_h[idx] = 0;
+    }
+}
+
+}  // namespace
 
 GenerateLight::GenerateLight(SDL_Renderer* renderer)
 : renderer_(renderer) {}
