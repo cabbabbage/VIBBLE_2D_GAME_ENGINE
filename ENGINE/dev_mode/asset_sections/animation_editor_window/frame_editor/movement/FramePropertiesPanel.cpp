@@ -8,6 +8,7 @@
 
 #include "MovementCanvas.hpp"
 #include "dm_styles.hpp"
+#include "draw_utils.hpp"
 
 namespace animation_editor {
 
@@ -85,13 +86,17 @@ void FramePropertiesPanel::render(SDL_Renderer* renderer) const {
     if (!renderer) return;
 
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-    SDL_Color bg = DMStyles::PanelBG();
-    SDL_SetRenderDrawColor(renderer, bg.r, bg.g, bg.b, 220);
-    SDL_RenderFillRect(renderer, &bounds_);
-
-    SDL_Color border = DMStyles::AccentButton().hover_bg;
-    SDL_SetRenderDrawColor(renderer, border.r, border.g, border.b, 255);
-    SDL_RenderDrawRect(renderer, &bounds_);
+    dm_draw::DrawBeveledRect(
+        renderer,
+        bounds_,
+        DMStyles::CornerRadius(),
+        DMStyles::BevelDepth(),
+        DMStyles::PanelBG(),
+        DMStyles::HighlightColor(),
+        DMStyles::ShadowColor(),
+        false,
+        DMStyles::HighlightIntensity(),
+        DMStyles::ShadowIntensity());
 
     SDL_Color text_color = DMStyles::Label().color;
     int x = bounds_.x + kPadding;

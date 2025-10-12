@@ -12,6 +12,7 @@
 #include "AnimationDocument.hpp"
 #include "PanelLayoutConstants.hpp"
 #include "dm_styles.hpp"
+#include "dev_mode/draw_utils.hpp"
 #include "dev_mode/widgets.hpp"
 
 namespace animation_editor {
@@ -134,13 +135,17 @@ void MovementSummaryWidget::render(SDL_Renderer* renderer) const {
 
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
 
-    const SDL_Color& panel_bg = DMStyles::PanelBG();
-    SDL_SetRenderDrawColor(renderer, panel_bg.r, panel_bg.g, panel_bg.b, panel_bg.a);
-    SDL_RenderFillRect(renderer, &bounds_);
-
-    const SDL_Color& border = DMStyles::Border();
-    SDL_SetRenderDrawColor(renderer, border.r, border.g, border.b, border.a);
-    SDL_RenderDrawRect(renderer, &bounds_);
+    dm_draw::DrawBeveledRect(
+        renderer,
+        bounds_,
+        DMStyles::CornerRadius(),
+        DMStyles::BevelDepth(),
+        DMStyles::PanelBG(),
+        DMStyles::HighlightColor(),
+        DMStyles::ShadowColor(),
+        false,
+        DMStyles::HighlightIntensity(),
+        DMStyles::ShadowIntensity());
 
     const int padding = kPanelPadding;
     int text_x = bounds_.x + padding;

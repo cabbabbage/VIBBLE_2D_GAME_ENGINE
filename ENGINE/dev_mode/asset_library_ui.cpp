@@ -22,6 +22,7 @@
 #include "core/AssetsManager.hpp"
 #include "DockableCollapsible.hpp"
 #include "widgets.hpp"
+#include "draw_utils.hpp"
 
 #include <nlohmann/json.hpp>
 
@@ -293,12 +294,25 @@ struct AssetLibraryUI::AssetTileWidget : public Widget {
         } else if (delete_hovered) {
             delete_bg = delete_style.hover_bg;
         }
-        SDL_SetRenderDrawColor(r, delete_bg.r, delete_bg.g, delete_bg.b, delete_bg.a);
-        SDL_RenderFillRect(r, &button_rect);
+        const int corner_radius = DMStyles::CornerRadius();
+        const int bevel_depth = DMStyles::BevelDepth();
+        const SDL_Color& highlight = DMStyles::HighlightColor();
+        const SDL_Color& shadow = DMStyles::ShadowColor();
+        dm_draw::DrawBeveledRect(
+            r,
+            button_rect,
+            corner_radius,
+            bevel_depth,
+            delete_bg,
+            highlight,
+            shadow,
+            false,
+            DMStyles::HighlightIntensity(),
+            DMStyles::ShadowIntensity());
         SDL_SetRenderDrawColor(r, delete_style.border.r, delete_style.border.g, delete_style.border.b, delete_style.border.a);
         SDL_RenderDrawRect(r, &button_rect);
         SDL_SetRenderDrawColor(r, delete_style.text.r, delete_style.text.g, delete_style.text.b, delete_style.text.a);
-        const int cross_inset = std::max(2, button_rect.w / 4);
+        const int cross_inset = std::max(bevel_depth + 1, button_rect.w / 4);
         SDL_RenderDrawLine(r,
                            button_rect.x + cross_inset,
                            button_rect.y + cross_inset,
@@ -879,25 +893,49 @@ void AssetLibraryUI::render(SDL_Renderer* r, int screen_w, int screen_h) const {
         SDL_Rect box{ screen_w/2 - 150, screen_h/2 - 40, 300, 80 };
         SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
         const SDL_Color panel_bg = DMStyles::PanelBG();
-        SDL_SetRenderDrawColor(r, panel_bg.r, panel_bg.g, panel_bg.b, panel_bg.a);
-        SDL_RenderFillRect(r, &box);
+        const SDL_Color& highlight = DMStyles::HighlightColor();
+        const SDL_Color& shadow = DMStyles::ShadowColor();
+        const int corner_radius = DMStyles::CornerRadius();
+        const int bevel_depth = DMStyles::BevelDepth();
+        dm_draw::DrawBeveledRect(
+            r,
+            box,
+            corner_radius,
+            bevel_depth,
+            panel_bg,
+            highlight,
+            shadow,
+            false,
+            DMStyles::HighlightIntensity(),
+            DMStyles::ShadowIntensity());
         const SDL_Color panel_border = DMStyles::Border();
         SDL_SetRenderDrawColor(r, panel_border.r, panel_border.g, panel_border.b, panel_border.a);
         SDL_RenderDrawRect(r, &box);
 
         SDL_Rect input_rect{ box.x + 8, box.y + 8, box.w - 16, box.h - 16 };
         const DMTextBoxStyle& textbox = DMStyles::TextBox();
-        SDL_SetRenderDrawColor(r, textbox.bg.r, textbox.bg.g, textbox.bg.b, textbox.bg.a);
-        SDL_RenderFillRect(r, &input_rect);
+        dm_draw::DrawBeveledRect(
+            r,
+            input_rect,
+            corner_radius,
+            bevel_depth,
+            textbox.bg,
+            highlight,
+            shadow,
+            false,
+            DMStyles::HighlightIntensity(),
+            DMStyles::ShadowIntensity());
         SDL_SetRenderDrawColor(r, textbox.border.r, textbox.border.g, textbox.border.b, textbox.border.a);
         SDL_RenderDrawRect(r, &input_rect);
 
-        const int text_padding = 12;
+        const int text_padding = 12 + bevel_depth;
+        const int interior_h = std::max(0, input_rect.h - 2 * bevel_depth);
         TTF_Font* font = load_font(18);
         if (font) {
             std::string display = new_asset_name_.empty() ? "Enter asset name..." : new_asset_name_;
             SDL_Color color = new_asset_name_.empty() ? textbox.label.color : textbox.text;
             int available_w = input_rect.w - 2 * text_padding;
+            if (available_w < 0) available_w = 0;
             int tw = 0;
             int th = 0;
             std::string render_text = display;
@@ -925,8 +963,14 @@ void AssetLibraryUI::render(SDL_Renderer* r, int screen_w, int screen_h) const {
                 SDL_Texture* tex = SDL_CreateTextureFromSurface(r, surf);
                 SDL_FreeSurface(surf);
                 if (tex) {
+                    const int text_area_h = std::max(0, interior_h - th);
+                    int text_y = input_rect.y + bevel_depth + text_area_h / 2;
+                    text_y = std::max(text_y, input_rect.y + bevel_depth);
+                    text_y = std::min(text_y, input_rect.y + input_rect.h - bevel_depth - th);
                     SDL_Rect dst{ input_rect.x + text_padding,
-                                  input_rect.y + (input_rect.h - th) / 2, tw, th };
+                                  text_y,
+                                  tw,
+                                  th };
                     SDL_RenderCopy(r, tex, nullptr, &dst);
                     SDL_DestroyTexture(tex);
                 }
@@ -941,7 +985,10 @@ void AssetLibraryUI::render(SDL_Renderer* r, int screen_w, int screen_h) const {
                 }
                 if (caret_h <= 0) caret_h = th;
                 int caret_x = input_rect.x + text_padding + std::min(caret_w, available_w);
-                int caret_top = input_rect.y + (input_rect.h - caret_h) / 2;
+                const int caret_area_h = std::max(0, interior_h - caret_h);
+                int caret_top = input_rect.y + bevel_depth + caret_area_h / 2;
+                caret_top = std::max(caret_top, input_rect.y + bevel_depth);
+                caret_top = std::min(caret_top, input_rect.y + input_rect.h - bevel_depth - caret_h);
                 int caret_bottom = caret_top + caret_h;
                 SDL_SetRenderDrawColor(r, color.r, color.g, color.b, color.a);
                 SDL_RenderDrawLine(r, caret_x + 1, caret_top, caret_x + 1, caret_bottom);
@@ -960,9 +1007,22 @@ void AssetLibraryUI::render(SDL_Renderer* r, int screen_w, int screen_h) const {
         }
         SDL_Rect box = delete_modal_rect_;
         const SDL_Color panel_bg = DMStyles::PanelBG();
+        const SDL_Color& highlight = DMStyles::HighlightColor();
+        const SDL_Color& shadow = DMStyles::ShadowColor();
+        const int corner_radius = DMStyles::CornerRadius();
+        const int bevel_depth = DMStyles::BevelDepth();
+        dm_draw::DrawBeveledRect(
+            r,
+            box,
+            corner_radius,
+            bevel_depth,
+            panel_bg,
+            highlight,
+            shadow,
+            false,
+            DMStyles::HighlightIntensity(),
+            DMStyles::ShadowIntensity());
         const SDL_Color panel_border = DMStyles::Border();
-        SDL_SetRenderDrawColor(r, panel_bg.r, panel_bg.g, panel_bg.b, panel_bg.a);
-        SDL_RenderFillRect(r, &box);
         SDL_SetRenderDrawColor(r, panel_border.r, panel_border.g, panel_border.b, panel_border.a);
         SDL_RenderDrawRect(r, &box);
 
@@ -972,7 +1032,7 @@ void AssetLibraryUI::render(SDL_Renderer* r, int screen_w, int screen_h) const {
         }
         std::string message = "Are you sure you want to permanently delete \"" + asset_label + "\"?";
 
-        const int text_margin = 16;
+        const int text_margin = 16 + bevel_depth;
         SDL_Rect text_rect{ box.x + text_margin, box.y + text_margin, box.w - 2 * text_margin, delete_yes_rect_.y - box.y - text_margin - 10 };
         text_rect.w = std::max(0, text_rect.w);
         text_rect.h = std::max(0, text_rect.h);
@@ -1004,8 +1064,17 @@ void AssetLibraryUI::render(SDL_Renderer* r, int screen_w, int screen_h) const {
             } else if (hovered) {
                 bg = style.hover_bg;
             }
-            SDL_SetRenderDrawColor(r, bg.r, bg.g, bg.b, bg.a);
-            SDL_RenderFillRect(r, &rect);
+            dm_draw::DrawBeveledRect(
+                r,
+                rect,
+                corner_radius,
+                bevel_depth,
+                bg,
+                highlight,
+                shadow,
+                false,
+                DMStyles::HighlightIntensity(),
+                DMStyles::ShadowIntensity());
             SDL_SetRenderDrawColor(r, style.border.r, style.border.g, style.border.b, style.border.a);
             SDL_RenderDrawRect(r, &rect);
 
@@ -1022,9 +1091,13 @@ void AssetLibraryUI::render(SDL_Renderer* r, int screen_w, int screen_h) const {
                         int tw = 0;
                         int th = 0;
                         SDL_QueryTexture(tex, nullptr, nullptr, &tw, &th);
+                        const int interior_h = std::max(0, rect.h - 2 * bevel_depth);
+                        int text_y = rect.y + bevel_depth + std::max(0, interior_h - th) / 2;
+                        text_y = std::max(text_y, rect.y + bevel_depth);
+                        text_y = std::min(text_y, rect.y + rect.h - bevel_depth - th);
                         SDL_Rect dst{
                             rect.x + (rect.w - tw) / 2,
-                            rect.y + (rect.h - th) / 2,
+                            text_y,
                             tw,
                             th
                         };

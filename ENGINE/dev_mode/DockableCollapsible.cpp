@@ -323,19 +323,21 @@ void DockableCollapsible::render(SDL_Renderer* r) const {
 
     SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
     const SDL_Color& fill = DMStyles::PanelBG();
-    const SDL_Color& highlight = DMStyles::PanelHeader();
-    const SDL_Color& shadow = DMStyles::Border();
+    const SDL_Color& header_highlight = DMStyles::PanelHeader();
+    const SDL_Color& border_shadow = DMStyles::Border();
+    const float highlight_intensity = DMStyles::HighlightIntensity();
+    const float shadow_intensity = DMStyles::ShadowIntensity();
     dm_draw::DrawBeveledRect(
         r,
         rect_,
         DMStyles::CornerRadius(),
         DMStyles::BevelDepth(),
         fill,
-        highlight,
-        shadow,
+        header_highlight,
+        border_shadow,
         false,
-        DMStyles::HighlightIntensity(),
-        DMStyles::ShadowIntensity());
+        highlight_intensity,
+        shadow_intensity);
 
     if (header_btn_) header_btn_->render(r);
     if (close_btn_ && (floatable_ || close_button_enabled_)) close_btn_->render(r);

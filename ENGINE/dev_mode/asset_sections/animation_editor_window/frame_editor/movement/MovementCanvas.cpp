@@ -7,6 +7,7 @@
 #include <limits>
 
 #include "dm_styles.hpp"
+#include "draw_utils.hpp"
 
 namespace animation_editor {
 
@@ -64,13 +65,19 @@ void MovementCanvas::render(SDL_Renderer* renderer) const {
 
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
 
-    const SDL_Color bg = DMStyles::PanelBG();
-    SDL_SetRenderDrawColor(renderer, bg.r, bg.g, bg.b, 220);
-    SDL_RenderFillRect(renderer, &bounds_);
+    dm_draw::DrawBeveledRect(
+        renderer,
+        bounds_,
+        DMStyles::CornerRadius(),
+        DMStyles::BevelDepth(),
+        DMStyles::PanelBG(),
+        DMStyles::HighlightColor(),
+        DMStyles::ShadowColor(),
+        false,
+        DMStyles::HighlightIntensity(),
+        DMStyles::ShadowIntensity());
 
     SDL_Color border = DMStyles::AccentButton().hover_bg;
-    SDL_SetRenderDrawColor(renderer, border.r, border.g, border.b, 255);
-    SDL_RenderDrawRect(renderer, &bounds_);
 
     const float scale = pixels_per_unit_ * zoom_;
     const SDL_FPoint center_px{bounds_.x + bounds_.w / 2.0f, bounds_.y + bounds_.h / 2.0f};
