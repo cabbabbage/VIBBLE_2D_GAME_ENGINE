@@ -166,6 +166,7 @@ add_executable(dev_mode_ui_tests
     tests/dev_mode/tag_cache_tests.cpp
     tests/dev_mode/asset_info_stub.cpp
     ENGINE/dev_mode/full_screen_collapsible.cpp
+    ENGINE/dev_mode/draw_utils.cpp
     ENGINE/dev_mode/widgets.cpp
     ENGINE/dev_mode/dm_styles.cpp
     ENGINE/utils/input.cpp

@@ -9,14 +9,20 @@
 #include <utility>
 
 namespace {
-constexpr int kBoxTopPadding = 5;
-constexpr int kBoxBottomPadding = 5;
-constexpr int kLabelControlGap = 5;
-constexpr int kTextboxHorizontalPadding = 6;
-constexpr int kSliderControlHeight = 40;
+constexpr int kBoxTopPadding = 8;
+constexpr int kBoxBottomPadding = 8;
+constexpr int kLabelControlGap = 8;
+constexpr int kTextboxHorizontalPadding = 8;
+constexpr int kSliderControlHeight = 44;
 constexpr int kSliderValueWidth = 60;
 constexpr int kDropdownControlHeight = 32;
-constexpr int kButtonHorizontalPadding = 24;
+constexpr int kButtonHorizontalPadding = 28;
+constexpr int kCheckboxLabelGap = 8;
+constexpr int kSliderValueHorizontalPadding = 8;
+constexpr int kSliderTrackThickness = 10;
+constexpr int kSliderKnobWidth = 14;
+constexpr int kSliderKnobHeight = 18;
+constexpr int kSliderKnobVerticalInset = (kSliderKnobHeight - kSliderTrackThickness) / 2;
 
 int slider_value_height() {
     const DMSliderStyle& st = DMStyles::Slider();
@@ -389,7 +395,7 @@ void DMCheckbox::draw_label(SDL_Renderer* r) const {
     if (surf) {
         SDL_Texture* tex = SDL_CreateTextureFromSurface(r, surf);
         if (tex) {
-            SDL_Rect dst{ rect_.x + rect_.h + 6, rect_.y + (rect_.h - surf->h)/2, surf->w, surf->h };
+            SDL_Rect dst{ rect_.x + rect_.h + kCheckboxLabelGap, rect_.y + (rect_.h - surf->h)/2, surf->w, surf->h };
             SDL_RenderCopy(r, tex, nullptr, &dst);
             SDL_DestroyTexture(tex);
         }
@@ -531,19 +537,19 @@ SDL_Rect DMSlider::value_rect() const {
 
 SDL_Rect DMSlider::track_rect() const {
     int track_width = std::max(0, content_rect_.w);
-    return SDL_Rect{ content_rect_.x, content_rect_.y + content_rect_.h/2 - 4, track_width, 8 };
+    return SDL_Rect{ content_rect_.x, content_rect_.y + content_rect_.h/2 - kSliderTrackThickness / 2, track_width, kSliderTrackThickness };
 }
 
 SDL_Rect DMSlider::knob_rect() const {
     SDL_Rect tr = track_rect();
-    int usable = std::max(1, tr.w - 12);
+    int usable = std::max(1, tr.w - kSliderKnobWidth);
     int x = tr.x + (int)((display_value() - min_) * usable / (double)(std::max(1, max_ - min_)));
-    return SDL_Rect{ x, tr.y - 4, 12, 16 };
+    return SDL_Rect{ x, tr.y - kSliderKnobVerticalInset, kSliderKnobWidth, kSliderKnobHeight };
 }
 
 int DMSlider::value_for_x(int x) const {
     SDL_Rect tr = track_rect();
-    int usable = std::max(1, tr.w - 12);
+    int usable = std::max(1, tr.w - kSliderKnobWidth);
     double t = (x - tr.x) / (double)usable;
     int range = std::max(1, max_ - min_);
     int v = min_ + (int)std::round(t * range);
@@ -716,7 +722,7 @@ void DMSlider::render(SDL_Renderer* r) const {
         edit_box_->render(r);
     } else {
         SDL_Rect vr = value_rect();
-        draw_text(r, format_value(current_value), vr.x + 6, vr.y + (vr.h - st.value.font_size) / 2);
+        draw_text(r, format_value(current_value), vr.x + kSliderValueHorizontalPadding, vr.y + (vr.h - st.value.font_size) / 2);
     }
 }
 
@@ -920,26 +926,28 @@ SDL_Rect DMRangeSlider::content_rect() const {
 
 SDL_Rect DMRangeSlider::track_rect() const {
     int width = std::max(0, content_rect_.w);
-    return SDL_Rect{ content_rect_.x, content_rect_.y + content_rect_.h/2 - 4, width, 8 };
+    return SDL_Rect{ content_rect_.x, content_rect_.y + content_rect_.h/2 - kSliderTrackThickness / 2, width, kSliderTrackThickness };
 }
 
 SDL_Rect DMRangeSlider::min_knob_rect() const {
     SDL_Rect tr = track_rect();
+    int usable = std::max(1, tr.w - kSliderKnobWidth);
     int range = std::max(1, max_ - min_);
-    int x = tr.x + (int)((display_min_value() - min_) * (tr.w - 12) / (double)range);
-    return SDL_Rect{ x, tr.y, 12, 16 };
+    int x = tr.x + (int)((display_min_value() - min_) * usable / (double)range);
+    return SDL_Rect{ x, tr.y - kSliderKnobVerticalInset, kSliderKnobWidth, kSliderKnobHeight };
 }
 
 SDL_Rect DMRangeSlider::max_knob_rect() const {
     SDL_Rect tr = track_rect();
+    int usable = std::max(1, tr.w - kSliderKnobWidth);
     int range = std::max(1, max_ - min_);
-    int x = tr.x + (int)((display_max_value() - min_) * (tr.w - 12) / (double)range);
-    return SDL_Rect{ x, tr.y - 16 + tr.h,    12, 16 };
+    int x = tr.x + (int)((display_max_value() - min_) * usable / (double)range);
+    return SDL_Rect{ x, tr.y - kSliderKnobVerticalInset, kSliderKnobWidth, kSliderKnobHeight };
 }
 
 int DMRangeSlider::value_for_x(int x) const {
     SDL_Rect tr = track_rect();
-    double t = (x - tr.x) / (double)(std::max(1, tr.w - 12));
+    double t = (x - tr.x) / (double)(std::max(1, tr.w - kSliderKnobWidth));
     int v = min_ + (int)std::round(t * (max_ - min_));
     return std::max(min_, std::min(max_, v));
 }
@@ -1202,8 +1210,8 @@ void DMRangeSlider::render(SDL_Renderer* r) const {
     SDL_RenderFillRect(r, &tr);
     SDL_Rect kmin = min_knob_rect();
     SDL_Rect kmax = max_knob_rect();
-    int fill_x = kmin.x + 6;
-    int fill_w = (kmax.x + 6) - fill_x;
+    int fill_x = kmin.x + kSliderKnobWidth / 2;
+    int fill_w = (kmax.x + kSliderKnobWidth / 2) - fill_x;
     SDL_Rect fill{ fill_x, tr.y, std::max(0, fill_w), tr.h };
     SDL_SetRenderDrawColor(r, st.track_fill.r, st.track_fill.g, st.track_fill.b, st.track_fill.a);
     SDL_RenderFillRect(r, &fill);
@@ -1223,20 +1231,21 @@ void DMRangeSlider::render(SDL_Renderer* r) const {
         edit_min_->render(r);
     } else {
         int text_y = min_value_rect_.y + (min_value_rect_.h - st.value.font_size) / 2;
-        draw_text(r, std::to_string(display_min_value()), min_value_rect_.x + 4, text_y);
+        draw_text(r, std::to_string(display_min_value()), min_value_rect_.x + kSliderValueHorizontalPadding, text_y);
     }
     if (edit_max_) {
         edit_max_->render(r);
     } else {
         std::string value = std::to_string(display_max_value());
-        int text_x = max_value_rect_.x + 4;
+        int text_x = max_value_rect_.x + kSliderValueHorizontalPadding;
         int text_y = max_value_rect_.y + (max_value_rect_.h - st.value.font_size) / 2;
         TTF_Font* f = TTF_OpenFont(st.label.font_path.c_str(), st.label.font_size);
         if (f) {
             int tw = 0;
             int th = 0;
             if (TTF_SizeUTF8(f, value.c_str(), &tw, &th) == 0) {
-                text_x = std::max(max_value_rect_.x + 4, max_value_rect_.x + max_value_rect_.w - tw - 4);
+                text_x = std::max(max_value_rect_.x + kSliderValueHorizontalPadding,
+                                   max_value_rect_.x + max_value_rect_.w - tw - kSliderValueHorizontalPadding);
             }
             TTF_CloseFont(f);
         }
