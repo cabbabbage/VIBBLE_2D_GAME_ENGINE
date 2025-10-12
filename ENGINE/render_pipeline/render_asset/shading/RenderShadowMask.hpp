@@ -6,8 +6,13 @@ namespace render_pipeline::shading {
 
 class RenderShadowMask : public IRenderStage {
 public:
+    ~RenderShadowMask() override;
     bool         supports(const Asset& asset) const override;
     SDL_Texture* run(SDL_Renderer* renderer, const Asset& asset, StageContext& context) override;
+private:
+    SDL_Texture* cached_texture_ = nullptr;
+    int          cached_width_   = 0;
+    int          cached_height_  = 0;
 };
 
 }

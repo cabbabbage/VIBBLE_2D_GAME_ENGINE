@@ -22,7 +22,8 @@ inline std::mt19937& flicker_rng() {
 inline SDL_Texture* build_light_texture(SDL_Renderer* renderer,
                                         const Asset& asset,
                                         StageContext& context,
-                                        bool behind) {
+                                        bool behind,
+                                        SDL_Texture* texture_override = nullptr) {
     if (!renderer) {
         return nullptr;
     }
@@ -41,10 +42,12 @@ inline SDL_Texture* build_light_texture(SDL_Renderer* renderer,
         return nullptr;
     }
 
-    SDL_Texture* texture =
-        SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET, width, height);
+    SDL_Texture* texture = texture_override;
     if (!texture) {
-        return nullptr;
+        texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET, width, height);
+        if (!texture) {
+            return nullptr;
+        }
     }
     SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_BLEND);
 

@@ -31,8 +31,6 @@ SceneRenderer::SceneRenderer(SDL_Renderer* renderer,
   fullscreen_light_tex_(nullptr),
   render_pipeline_(renderer, SceneLighting{ assets->getView(), main_light_source_, assets->player })
 {
-        render_pipeline_.lighting().light_rays_config = &light_rays_config_;
-        render_pipeline_.lighting().light_rays_params = &light_rays_params_;
         fullscreen_light_tex_ = SDL_CreateTexture(renderer_, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET, screen_width_, screen_height_);
         if (fullscreen_light_tex_) {
                 SDL_SetTextureBlendMode(fullscreen_light_tex_, SDL_BLENDMODE_BLEND);
@@ -117,8 +115,6 @@ void SceneRenderer::apply_light_rays_config(const nlohmann::json& data) {
         light_rays_config_ = LightRaysConfig::from_json(data);
         light_rays_params_ = light_rays_config_.to_light_rays_params();
         light_rays_enabled_ = false;
-        render_pipeline_.lighting().light_rays_config = &light_rays_config_;
-        render_pipeline_.lighting().light_rays_params = &light_rays_params_;
         if (light_rays_pass_) {
                 light_rays_pass_->set_screen_size(screen_width_, screen_height_);
                 light_rays_pass_->set_params(light_rays_params_);
