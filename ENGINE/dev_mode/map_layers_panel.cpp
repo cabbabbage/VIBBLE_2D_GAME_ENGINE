@@ -74,6 +74,9 @@ constexpr double kMapRadiusOuterPadding = 800.0;
 
 constexpr double kTau = 6.28318530717958647692;
 
+void draw_text(SDL_Renderer* r, const std::string& text, int x, int y, const DMLabelStyle& style);
+void draw_text_centered(SDL_Renderer* r, const std::string& text, int x, int y, const DMLabelStyle& style);
+
 SDL_Color hsv_to_rgb(double h, double s, double v) {
 
     h = std::fmod(std::max(0.0, std::min(h, 1.0)), 1.0) * 6.0;
