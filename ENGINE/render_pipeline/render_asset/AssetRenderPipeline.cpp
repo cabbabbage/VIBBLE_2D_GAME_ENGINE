@@ -52,7 +52,6 @@ AssetRenderPipeline::AssetRenderPipeline(SDL_Renderer* renderer, const SceneLigh
     stages_.push_back(StageEntry{ std::make_unique<RenderLightFront>(), SDL_BLENDMODE_ADD, true });
     stages_.push_back(StageEntry{ std::make_unique<RenderCastShadow>(), SDL_BLENDMODE_BLEND, false });
     stages_.push_back(StageEntry{ std::make_unique<RenderShadowMask>(), SDL_BLENDMODE_MOD, true });
-    stages_.push_back(StageEntry{ std::make_unique<RenderLightRays>(), SDL_BLENDMODE_ADD, false });
 }
 
 SDL_Texture* AssetRenderPipeline::run(Asset& asset) {
