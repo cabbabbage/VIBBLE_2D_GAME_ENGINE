@@ -1113,6 +1113,12 @@ bool MapLayersPanel::LayerCanvasWidget::handle_event(const SDL_Event& e) {
 
         if (owner_->handle_preview_room_click(p.x, p.y, center_x, center_y, scale)) {
 
+            if (!owner_->clicked_room_key_.empty() && owner_->active_room_config_key_ != owner_->clicked_room_key_) {
+
+                owner_->open_room_config_for(owner_->clicked_room_key_);
+
+            }
+
             return true;
 
         }
@@ -1146,6 +1152,8 @@ bool MapLayersPanel::LayerCanvasWidget::handle_event(const SDL_Event& e) {
     if (e.button.button == SDL_BUTTON_LEFT) {
 
         owner_->update_click_target(hit_index, std::string());
+
+        owner_->open_layer_config_internal(hit_index);
 
         owner_->select_layer(hit_index);
 
@@ -2617,6 +2625,8 @@ bool MapLayersPanel::RoomCandidateWidget::handle_event(const SDL_Event& e) {
                 if (!room_key.empty()) {
 
                     owner_->panel_owner()->update_click_target(layer_index_, room_key);
+
+                    owner_->panel_owner()->open_room_config_for(room_key);
 
                 }
 
@@ -4278,6 +4288,8 @@ bool MapLayersPanel::handle_preview_room_click(int px, int py, int center_x, int
     }
 
     update_click_target(node->layer, node->name);
+
+    open_room_config_for(node->name);
 
     return true;
 
