@@ -2228,6 +2228,12 @@ void MapLayersPanel::LayerConfigPanel::refresh() {
 
     set_rows(rows);
 
+    if (owner_ && owner_->layer_config_container_) {
+
+        owner_->layer_config_container_->request_layout();
+
+    }
+
 }
 
 void MapLayersPanel::LayerConfigPanel::request_refresh() {
@@ -6222,6 +6228,8 @@ void MapLayersPanel::handle_candidate_removed(int layer_index, int candidate_ind
 
     if (layer_config_) layer_config_->refresh();
 
+    if (layer_config_container_) layer_config_container_->request_layout();
+
 }
 
 void MapLayersPanel::handle_candidate_child_added(int layer_index, int candidate_index, const std::string& child) {
@@ -6273,6 +6281,8 @@ void MapLayersPanel::handle_candidate_child_added(int layer_index, int candidate
         mark_dirty();
 
         if (layer_config_) layer_config_->refresh();
+
+        if (layer_config_container_) layer_config_container_->request_layout();
 
     }
 
@@ -6369,6 +6379,8 @@ void MapLayersPanel::handle_candidate_added(int layer_index, const std::string& 
     mark_dirty();
 
     if (layer_config_) layer_config_->refresh();
+
+    if (layer_config_container_) layer_config_container_->request_layout();
 
 }
 
