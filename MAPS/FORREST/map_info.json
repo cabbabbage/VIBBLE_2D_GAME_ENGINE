@@ -652,6 +652,21 @@
           "position": "Exact",
           "priority": 0,
           "spawn_id": "spn-6d19915360f2"
+        },
+        {
+          "candidates": [
+            {
+              "chance": 0,
+              "name": "null"
+            }
+          ],
+          "display_name": "New Spawn",
+          "enforce_spacing": false,
+          "max_number": 1,
+          "min_number": 1,
+          "position": "Random",
+          "priority": 1,
+          "spawn_id": "spn-71d59b926658"
         }
       ],
       "tags": {

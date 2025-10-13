@@ -1,6 +1,7 @@
 #include "draw_utils.hpp"
 
 #include <algorithm>
+#include <cmath>
 
 namespace dm_draw {
 namespace {
@@ -60,13 +61,88 @@ void DrawBeveledRect(
     if (!renderer || rect.w <= 0 || rect.h <= 0) return;
 
     const int max_radius = std::max(0, std::min(rect.w, rect.h) / 2);
-    corner_radius = std::clamp(corner_radius, 0, max_radius);
+    const int effective_radius = std::clamp(corner_radius, 0, max_radius);
 
-    const int max_bevel = std::max(0, std::min({bevel_depth, rect.w / 2, rect.h / 2}));
+    const auto compute_horizontal_span = [&](int y, int inset, int& out_start, int& out_end) {
+        const int inner_x = rect.x + inset;
+        const int inner_y = rect.y + inset;
+        const int inner_w = rect.w - inset * 2;
+        const int inner_h = rect.h - inset * 2;
+        if (inner_w <= 0 || inner_h <= 0 || y < inner_y || y >= inner_y + inner_h) {
+            return false;
+        }
+
+        const int radius = std::max(0, effective_radius - inset);
+        int offset = 0;
+        if (radius > 0) {
+            const int rel_y = y - inner_y;
+            if (rel_y < radius) {
+                const float dy = static_cast<float>(radius - rel_y - 0.5f);
+                const float dx = std::sqrt(std::max(0.0f, static_cast<float>(radius * radius) - dy * dy));
+                offset = static_cast<int>(std::ceil(radius - dx));
+            } else if (rel_y >= inner_h - radius) {
+                const int rel_bottom = inner_h - 1 - rel_y;
+                const float dy = static_cast<float>(radius - rel_bottom - 0.5f);
+                const float dx = std::sqrt(std::max(0.0f, static_cast<float>(radius * radius) - dy * dy));
+                offset = static_cast<int>(std::ceil(radius - dx));
+            }
+        }
+
+        offset = std::min(offset, inner_w / 2);
+        out_start = inner_x + offset;
+        out_end = inner_x + inner_w - offset - 1;
+        if (out_start > out_end) {
+            out_start = inner_x + inner_w / 2;
+            out_end = out_start;
+        }
+        return true;
+    };
+
+    const auto compute_vertical_span = [&](int x, int inset, int& out_start, int& out_end) {
+        const int inner_x = rect.x + inset;
+        const int inner_y = rect.y + inset;
+        const int inner_w = rect.w - inset * 2;
+        const int inner_h = rect.h - inset * 2;
+        if (inner_w <= 0 || inner_h <= 0 || x < inner_x || x >= inner_x + inner_w) {
+            return false;
+        }
+
+        const int radius = std::max(0, effective_radius - inset);
+        int offset = 0;
+        if (radius > 0) {
+            const int rel_x = x - inner_x;
+            if (rel_x < radius) {
+                const float dx = static_cast<float>(radius - rel_x - 0.5f);
+                const float dy = std::sqrt(std::max(0.0f, static_cast<float>(radius * radius) - dx * dx));
+                offset = static_cast<int>(std::ceil(radius - dy));
+            } else if (rel_x >= inner_w - radius) {
+                const int rel_right = inner_w - 1 - rel_x;
+                const float dx = static_cast<float>(radius - rel_right - 0.5f);
+                const float dy = std::sqrt(std::max(0.0f, static_cast<float>(radius * radius) - dx * dx));
+                offset = static_cast<int>(std::ceil(radius - dy));
+            }
+        }
+
+        offset = std::min(offset, inner_h / 2);
+        out_start = inner_y + offset;
+        out_end = inner_y + inner_h - offset - 1;
+        if (out_start > out_end) {
+            out_start = inner_y + inner_h / 2;
+            out_end = out_start;
+        }
+        return true;
+    };
 
     SDL_SetRenderDrawColor(renderer, fill.r, fill.g, fill.b, fill.a);
-    SDL_RenderFillRect(renderer, &rect);
+    for (int y = rect.y; y < rect.y + rect.h; ++y) {
+        int span_start = 0;
+        int span_end = -1;
+        if (compute_horizontal_span(y, 0, span_start, span_end)) {
+            SDL_RenderDrawLine(renderer, span_start, y, span_end, y);
+        }
+    }
 
+    const int max_bevel = std::max(0, std::min({bevel_depth, rect.w / 2, rect.h / 2}));
     if (max_bevel > 0) {
         const int bevel_iterations = max_bevel;
         for (int i = 0; i < bevel_iterations; ++i) {
@@ -77,25 +153,32 @@ void DrawBeveledRect(
             const SDL_Color right_color = DarkenColor(shadow, shadow_intensity * t);
 
             const int inset = i;
-            const int min_x = rect.x + corner_radius + inset;
-            const int max_x = rect.x + rect.w - corner_radius - inset - 1;
-            const int min_y = rect.y + corner_radius + inset;
-            const int max_y = rect.y + rect.h - corner_radius - inset - 1;
 
-            if (min_x <= max_x) {
+            int start = 0;
+            int end = -1;
+
+            const int top_y = rect.y + inset;
+            if (compute_horizontal_span(top_y, inset, start, end)) {
                 SDL_SetRenderDrawColor(renderer, top_color.r, top_color.g, top_color.b, top_color.a);
-                draw_horizontal(renderer, rect.y + inset, min_x, max_x);
-
-                SDL_SetRenderDrawColor(renderer, bottom_color.r, bottom_color.g, bottom_color.b, bottom_color.a);
-                draw_horizontal(renderer, rect.y + rect.h - 1 - inset, min_x, max_x);
+                draw_horizontal(renderer, top_y, start, end);
             }
 
-            if (min_y <= max_y) {
-                SDL_SetRenderDrawColor(renderer, left_color.r, left_color.g, left_color.b, left_color.a);
-                draw_vertical(renderer, rect.x + inset, min_y, max_y);
+            const int bottom_y = rect.y + rect.h - 1 - inset;
+            if (bottom_y != top_y && compute_horizontal_span(bottom_y, inset, start, end)) {
+                SDL_SetRenderDrawColor(renderer, bottom_color.r, bottom_color.g, bottom_color.b, bottom_color.a);
+                draw_horizontal(renderer, bottom_y, start, end);
+            }
 
+            const int left_x = rect.x + inset;
+            if (compute_vertical_span(left_x, inset, start, end)) {
+                SDL_SetRenderDrawColor(renderer, left_color.r, left_color.g, left_color.b, left_color.a);
+                draw_vertical(renderer, left_x, start, end);
+            }
+
+            const int right_x = rect.x + rect.w - 1 - inset;
+            if (right_x != left_x && compute_vertical_span(right_x, inset, start, end)) {
                 SDL_SetRenderDrawColor(renderer, right_color.r, right_color.g, right_color.b, right_color.a);
-                draw_vertical(renderer, rect.x + rect.w - 1 - inset, min_y, max_y);
+                draw_vertical(renderer, right_x, start, end);
             }
         }
     }
@@ -103,7 +186,29 @@ void DrawBeveledRect(
     if (draw_outline) {
         const SDL_Color outline_color = DarkenColor(fill, 0.4f);
         SDL_SetRenderDrawColor(renderer, outline_color.r, outline_color.g, outline_color.b, outline_color.a);
-        SDL_RenderDrawRect(renderer, &rect);
+
+        int start = 0;
+        int end = -1;
+
+        const int top_y = rect.y;
+        if (compute_horizontal_span(top_y, 0, start, end)) {
+            draw_horizontal(renderer, top_y, start, end);
+        }
+
+        const int bottom_y = rect.y + rect.h - 1;
+        if (bottom_y != top_y && compute_horizontal_span(bottom_y, 0, start, end)) {
+            draw_horizontal(renderer, bottom_y, start, end);
+        }
+
+        const int left_x = rect.x;
+        if (compute_vertical_span(left_x, 0, start, end)) {
+            draw_vertical(renderer, left_x, start, end);
+        }
+
+        const int right_x = rect.x + rect.w - 1;
+        if (right_x != left_x && compute_vertical_span(right_x, 0, start, end)) {
+            draw_vertical(renderer, right_x, start, end);
+        }
     }
 }
 
