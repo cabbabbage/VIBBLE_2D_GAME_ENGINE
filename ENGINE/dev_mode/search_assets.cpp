@@ -188,6 +188,23 @@ std::string SearchAssets::to_lower(std::string s) {
 void SearchAssets::open(Callback cb) {
     cb_ = std::move(cb);
     if (all_.empty()) load_assets();
+    if (embedded_) {
+        if (panel_) {
+            panel_->set_visible(true);
+            panel_->set_expanded(true);
+            panel_->reset_scroll();
+            panel_->force_pointer_ready();
+            SDL_Rect applied = embedded_rect_;
+            if (applied.w <= 0) applied.w = panel_->rect().w;
+            if (applied.h <= 0) applied.h = panel_->rect().h;
+            panel_->set_rect(applied);
+            Input dummy;
+            panel_->update(dummy, applied.w, applied.h);
+        }
+        last_query_.clear();
+        filter_assets();
+        return;
+    }
     SDL_Point target = last_known_position_;
     if (has_custom_position_) {
         target = last_known_position_;
@@ -323,11 +340,17 @@ bool SearchAssets::handle_event(const SDL_Event& e) {
 
 void SearchAssets::update(const Input& input) {
     if (panel_ && panel_->is_visible()) {
-        panel_->update(input, screen_w_, screen_h_);
-        last_known_position_ = panel_->position();
-        if (!has_custom_position_) {
-            pending_position_ = last_known_position_;
-            has_pending_position_ = true;
+        if (embedded_) {
+            int w = embedded_rect_.w > 0 ? embedded_rect_.w : screen_w_;
+            int h = embedded_rect_.h > 0 ? embedded_rect_.h : screen_h_;
+            panel_->update(input, w, h);
+        } else {
+            panel_->update(input, screen_w_, screen_h_);
+            last_known_position_ = panel_->position();
+            if (!has_custom_position_) {
+                pending_position_ = last_known_position_;
+                has_pending_position_ = true;
+            }
         }
     }
 }
