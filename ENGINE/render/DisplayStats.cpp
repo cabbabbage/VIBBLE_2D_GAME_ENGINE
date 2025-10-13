@@ -82,7 +82,7 @@ void DisplayStats::record_frame_timing(float elapsed_ms, float target_ms, float 
     if (frame_timing_samples_.size() >= kMaxSamples) {
         frame_timing_samples_.erase(frame_timing_samples_.begin());
     }
-    frame_timing_samples_.push_back(FrameTimingSample{elapsed_ms, target_ms, early_ms, late_ms});
+    frame_timing_samples_.emplace_back(FrameTimingSample{elapsed_ms, target_ms, early_ms, late_ms});
 }
 
 void DisplayStats::render(SDL_Renderer* renderer) {

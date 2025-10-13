@@ -653,11 +653,9 @@ void Assets::update(const Input& input,
 
 void Assets::record_frame_timing(float elapsed_ms, float target_ms, float early_ms, float late_ms)
 {
-    if (!display_stats_) {
-        return;
+    if (display_stats_) {
+        display_stats_->record_frame_timing(elapsed_ms, target_ms, early_ms, late_ms);
     }
-
-    display_stats_->record_frame_timing(elapsed_ms, target_ms, early_ms, late_ms);
 }
 
 void Assets::set_dev_mode(bool mode) {

@@ -93,7 +93,7 @@ void MainApp::setup() {
 
 void MainApp::game_loop() {
         constexpr float TARGET_FPS = 24.0f;
-        const float target_ms = 1000.0f / TARGET_FPS;
+        constexpr float TARGET_FRAME_MS = 1000.0f / TARGET_FPS;
         bool quit = false;
         SDL_Event e;
         int frame_count = 0;
@@ -123,11 +123,11 @@ void MainApp::game_loop() {
 		++frame_count;
 		if (input_) input_->update();
                 const float elapsed_ms = static_cast<float>(SDL_GetTicks() - start);
-                const float early_ms = std::max(target_ms - elapsed_ms, 0.0f);
-                const float late_ms = std::max(elapsed_ms - target_ms, 0.0f);
+                const float early_ms = std::max(TARGET_FRAME_MS - elapsed_ms, 0.0f);
+                const float late_ms = std::max(elapsed_ms - TARGET_FRAME_MS, 0.0f);
 
                 if (game_assets_) {
-                        game_assets_->record_frame_timing(elapsed_ms, target_ms, early_ms, late_ms);
+                        game_assets_->record_frame_timing(elapsed_ms, TARGET_FRAME_MS, early_ms, late_ms);
                 }
 
                 if (early_ms > 0.0f) {

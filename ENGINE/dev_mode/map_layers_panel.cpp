@@ -1087,7 +1087,9 @@ bool MapLayersPanel::LayerCanvasWidget::handle_event(const SDL_Event& e) {
 
     }
 
-    if (e.type != SDL_MOUSEBUTTONDOWN) {
+    const bool is_press = (e.type == SDL_MOUSEBUTTONDOWN && e.button.state == SDL_PRESSED);
+    const bool is_release = (e.type == SDL_MOUSEBUTTONUP && e.button.state == SDL_RELEASED);
+    if (!is_press && !is_release) {
         return false;
     }
 
@@ -1095,7 +1097,11 @@ bool MapLayersPanel::LayerCanvasWidget::handle_event(const SDL_Event& e) {
 
     if (!SDL_PointInRect(&p, &rect_)) {
 
-        owner_->clear_hover_target();
+        if (is_press) {
+
+            owner_->clear_hover_target();
+
+        }
 
         return false;
 
@@ -1105,7 +1111,19 @@ bool MapLayersPanel::LayerCanvasWidget::handle_event(const SDL_Event& e) {
 
     if (!ok) {
 
-        owner_->clear_hover_target();
+        if (is_press) {
+
+            owner_->clear_hover_target();
+
+        }
+
+        return false;
+
+    }
+
+    if (!is_press) {
+
+        update_hover(p, center_x, center_y, scale);
 
         return false;
 
