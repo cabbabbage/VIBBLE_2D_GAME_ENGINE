@@ -1,0 +1,169 @@
+#include "map_layers_geometry.hpp"
+
+#include <algorithm>
+#include <cctype>
+#include <cmath>
+#include <string>
+
+#include <nlohmann/json.hpp>
+
+namespace map_layers {
+
+namespace {
+
+double extract_dimension(const nlohmann::json& room, const char* key) {
+    if (!room.is_object()) return 0.0;
+    const auto it = room.find(key);
+    if (it == room.end()) return 0.0;
+    if (it->is_number_float() || it->is_number_integer()) {
+        return it->get<double>();
+    }
+    return 0.0;
+}
+
+bool is_circle_geometry(std::string geometry_value) {
+    if (geometry_value.empty()) return false;
+    std::string lowered;
+    lowered.reserve(geometry_value.size());
+    for (char ch : geometry_value) {
+        lowered.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(ch))));
+    }
+    return lowered == "circle";
+}
+
+double sanitize_dimension(double value, double fallback) {
+    if (value > 0.0) return value;
+    return fallback;
+}
+
+}  // namespace
+
+double room_extent_from_rooms_data(const nlohmann::json* rooms_data,
+                                   const std::string& room_name) {
+    if (!rooms_data || !rooms_data->is_object() || room_name.empty()) {
+        return 0.0;
+    }
+    const auto room_it = rooms_data->find(room_name);
+    if (room_it == rooms_data->end() || !room_it->is_object()) {
+        return 0.0;
+    }
+    const auto& room = *room_it;
+
+    double max_width = extract_dimension(room, "max_width");
+    double max_height = extract_dimension(room, "max_height");
+    const bool is_circle = is_circle_geometry(room.value("geometry", std::string()));
+
+    double radius_value = 0.0;
+    const auto radius_it = room.find("radius");
+    if (radius_it != room.end() && (radius_it->is_number_float() || radius_it->is_number_integer())) {
+        radius_value = std::max(0.0, radius_it->get<double>());
+    }
+
+    if (is_circle) {
+        if (radius_value <= 0.0) {
+            double diameter_guess = std::max(max_width, max_height);
+            if (diameter_guess <= 0.0) {
+                const double alt_w = extract_dimension(room, "min_width");
+                const double alt_h = extract_dimension(room, "min_height");
+                diameter_guess = std::max(alt_w, alt_h);
+            }
+            if (diameter_guess > 0.0) {
+                radius_value = diameter_guess * 0.5;
+            }
+        }
+        if (radius_value <= 0.0) {
+            radius_value = std::max(max_width, max_height) * 0.5;
+        }
+        if (radius_value <= 0.0) {
+            radius_value = 1.0;
+        }
+        return radius_value;
+    }
+
+    if (max_width <= 0.0 && max_height <= 0.0) {
+        max_width = 100.0;
+        max_height = 100.0;
+    } else {
+        max_width = sanitize_dimension(max_width, max_height);
+        max_height = sanitize_dimension(max_height, max_width);
+    }
+
+    const double clamped_width = std::max(0.0, max_width);
+    const double clamped_height = std::max(0.0, max_height);
+    const double diagonal = std::sqrt(clamped_width * clamped_width + clamped_height * clamped_height);
+    return diagonal * 0.5;
+}
+
+LayerRadiiResult compute_layer_radii(const nlohmann::json& layers,
+                                      const nlohmann::json* rooms_data) {
+    LayerRadiiResult result;
+    if (!layers.is_array() || layers.empty()) {
+        result.map_radius = 0.0;
+        return result;
+    }
+
+    const size_t layer_count = layers.size();
+    result.layer_radii.assign(layer_count, 0.0);
+    result.layer_extents.assign(layer_count, 0.0);
+
+    double fallback_radius = 0.0;
+    double max_extent = 0.0;
+
+    for (size_t i = 0; i < layer_count; ++i) {
+        const auto& layer = layers[i];
+        if (!layer.is_object()) {
+            continue;
+        }
+        const double stored_radius = layer.value("radius", 0.0);
+        fallback_radius = std::max(fallback_radius, stored_radius);
+
+        double largest_room = 0.0;
+        const auto rooms_it = layer.find("rooms");
+        if (rooms_it != layer.end() && rooms_it->is_array()) {
+            for (const auto& candidate : *rooms_it) {
+                if (!candidate.is_object()) continue;
+                const std::string room_name = candidate.value("name", std::string());
+                largest_room = std::max(largest_room, room_extent_from_rooms_data(rooms_data, room_name));
+            }
+        }
+        result.layer_extents[i] = largest_room;
+    }
+
+    for (size_t i = 0; i < layer_count; ++i) {
+        const auto& layer = layers[i];
+        if (!layer.is_object()) {
+            continue;
+        }
+
+        double desired_radius = layer.value("radius", 0.0);
+        const double largest = result.layer_extents[i];
+
+        if (i > 0) {
+            const double prev_radius = result.layer_radii[i - 1];
+            const double prev_extent = result.layer_extents[i - 1];
+            double separation = prev_extent + largest + kLayerEdgeBuffer;
+            const double minimum_step = static_cast<double>(kLayerRadiusStepDefault) + kLayerEdgeBuffer;
+            separation = std::max(separation, minimum_step);
+            const double minimum = prev_radius + separation;
+            desired_radius = minimum;
+        }
+
+        int final_radius = static_cast<int>(std::ceil(desired_radius));
+        if (final_radius < 0) final_radius = 0;
+        result.layer_radii[i] = static_cast<double>(final_radius);
+        max_extent = std::max(max_extent, result.layer_radii[i] + largest);
+    }
+
+    if (max_extent <= 0.0) {
+        max_extent = fallback_radius;
+    }
+    if (max_extent <= 0.0) {
+        max_extent = 1.0;
+    }
+
+    result.map_radius = max_extent + kMapRadiusOuterPadding;
+    return result;
+}
+
+}  // namespace map_layers
+

@@ -208,16 +208,6 @@ bool MapLayersController::rename_layer(int index, const std::string& name) {
     return true;
 }
 
-bool MapLayersController::set_layer_radius(int index, int radius) {
-    if (!validate_layer_index(index)) return false;
-    auto* layer_json = layer(index);
-    if (!layer_json) return false;
-    (*layer_json)["radius"] = std::max(0, radius);
-    dirty_ = true;
-    notify();
-    return true;
-}
-
 bool MapLayersController::add_candidate(int layer_index, const std::string& room_name) {
     if (!validate_layer_index(layer_index)) return false;
     auto* layer_json = layer(layer_index);

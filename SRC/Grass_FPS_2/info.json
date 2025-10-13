@@ -1,113 +1,117 @@
 {
-  "animations": {
-    "default": {
-      "custom_animation_controller_hpp_path": "",
-      "custom_animation_controller_key": "",
-      "flipped_source": false,
-      "has_custom_animation_controller": false,
-      "locked": false,
-      "movement": [
-        [
-          0,
-          0
-        ],
-        [
-          0,
-          0
-        ],
-        [
-          0,
-          0
-        ],
-        [
-          0,
-          0
-        ],
-        [
-          0,
-          0
-        ],
-        [
-          0,
-          0
-        ],
-        [
-          0,
-          0
-        ],
-        [
-          0,
-          0
-        ],
-        [
-          0,
-          0
-        ],
-        [
-          0,
-          0
-        ],
-        [
-          0,
-          0
-        ],
-        [
-          0,
-          0
-        ]
-      ],
-      "number_of_frames": 12,
-      "on_end": "default",
-      "reverse_source": false,
-      "rnd_start": false,
-      "source": {
-        "kind": "folder",
-        "name": null,
-        "path": "default"
-      },
-      "speed_factor": -2
-    }
-  },
-  "anti_tags": [],
-  "asset_name": "Grass_FPS_2",
-  "asset_type": "texture",
-  "can_invert": true,
-  "duplicatable": false,
-  "duplication_interval_max": 60,
-  "duplication_interval_min": 30,
-  "impassable_area": null,
-  "layout": {
-    "__view": {
-      "geometry": "1100x780+26+26",
-      "xview": 0.0,
-      "yview": 0.0,
-      "zoom": 1.0
-    }
-  },
-  "mappings": {},
-  "max_child_depth": 2,
-  "min_child_depth": 0,
-  "min_distance_all": 40,
-  "min_same_type_distance": 40,
-  "render_radius": 1000,
-  "rnd_spawn_max": 400,
-  "rnd_spawn_min": 300,
-  "size_settings": {
-    "scale_percentage": 3
-  },
-  "start": "",
-  "tags": [
-    "bluff",
-    "default",
-    "green",
-    "ground",
-    "leafy",
-    "meadow",
-    "moving",
-    "nature",
-    "passable",
-    "plant"
-  ],
-  "update_radius": 1000,
-  "z_threshold": -216
+    "animations": {
+        "default": {
+            "custom_animation_controller_hpp_path": "",
+            "custom_animation_controller_key": "",
+            "flipped_source": false,
+            "has_custom_animation_controller": false,
+            "locked": false,
+            "movement": [
+                [
+                    0,
+                    0
+                ],
+                [
+                    0,
+                    0
+                ],
+                [
+                    0,
+                    0
+                ],
+                [
+                    0,
+                    0
+                ],
+                [
+                    0,
+                    0
+                ],
+                [
+                    0,
+                    0
+                ],
+                [
+                    0,
+                    0
+                ],
+                [
+                    0,
+                    0
+                ],
+                [
+                    0,
+                    0
+                ],
+                [
+                    0,
+                    0
+                ],
+                [
+                    0,
+                    0
+                ],
+                [
+                    0,
+                    0
+                ]
+            ],
+            "number_of_frames": 12,
+            "on_end": "default",
+            "reverse_source": false,
+            "rnd_start": false,
+            "source": {
+                "kind": "folder",
+                "name": null,
+                "path": "default"
+            },
+            "speed_factor": -2
+        }
+    },
+    "anti_tags": [],
+    "asset_name": "Grass_FPS_2",
+    "asset_type": "texture",
+    "can_invert": true,
+    "duplicatable": false,
+    "duplication_interval_max": 60,
+    "duplication_interval_min": 30,
+    "generate_rays": false,
+    "impassable_area": null,
+    "layout": {
+        "__view": {
+            "geometry": "1100x780+26+26",
+            "xview": 0.0,
+            "yview": 0.0,
+            "zoom": 1.0
+        }
+    },
+    "mappings": {},
+    "max_child_depth": 2,
+    "min_child_depth": 0,
+    "min_distance_all": 40,
+    "min_same_type_distance": 40,
+    "neighbor_search_distance": 500,
+    "ray_strength": 0,
+    "render_radius": 1000,
+    "rnd_spawn_max": 400,
+    "rnd_spawn_min": 300,
+    "size_settings": {
+        "scale_percentage": 3
+    },
+    "start": "",
+    "tags": [
+        "bluff",
+        "default",
+        "grass",
+        "green",
+        "ground",
+        "leafy",
+        "meadow",
+        "moving",
+        "nature",
+        "passable",
+        "plant"
+    ],
+    "update_radius": 1000,
+    "z_threshold": -216
 }

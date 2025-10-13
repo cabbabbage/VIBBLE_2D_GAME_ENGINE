@@ -5,6 +5,7 @@
 #include "map_layers_controller.hpp"
 
 #include "map_layers_common.hpp"
+#include "map_generation/map_layers_geometry.hpp"
 
 #include "room_config/room_configurator.hpp"
 #include "SlidingWindowContainer.hpp"
@@ -67,11 +68,11 @@ using map_layers::clamp_candidate_max;
 
 using map_layers::clamp_candidate_min;
 
-constexpr int kLayerRadiusStepDefault = 512;
+using map_layers::kLayerEdgeBuffer;
 
-constexpr double kLayerEdgeBuffer = 400.0;
+using map_layers::kLayerRadiusStepDefault;
 
-constexpr double kMapRadiusOuterPadding = 800.0;
+using map_layers::kMapRadiusOuterPadding;
 
 constexpr double kTau = 6.28318530717958647692;
 
@@ -704,40 +705,6 @@ nlohmann::json make_default_room_json(const std::string& name) {
 
 }
 
-int compute_next_layer_radius(const nlohmann::json& layers) {
-
-    int max_radius = 0;
-
-    bool has_layer = false;
-
-    if (layers.is_array()) {
-
-        for (const auto& layer : layers) {
-
-            if (!layer.is_object()) continue;
-
-            has_layer = true;
-
-            max_radius = std::max(max_radius, layer.value("radius", 0));
-
-        }
-
-    }
-
-    if (!has_layer) return 0;
-
-    int step = std::max(kLayerRadiusStepDefault, max_radius / 3);
-
-    if (max_radius <= 0) {
-
-        return kLayerRadiusStepDefault + static_cast<int>(std::ceil(kLayerEdgeBuffer));
-
-    }
-
-    return max_radius + step + static_cast<int>(std::ceil(kLayerEdgeBuffer));
-
-}
-
 void clamp_layer_room_counts(nlohmann::json& layer) {
 
     if (!layer.is_object()) return;
@@ -956,21 +923,13 @@ void MapLayersPanel::LayerCanvasWidget::refresh() {
 
     if (!owner_ || !owner_->map_info_) return;
 
+    owner_->ensure_cached_radii();
+
     const auto& arr = owner_->layers_array();
 
     if (arr.empty()) return;
 
-    double max_radius = 1.0;
-
-    for (const auto& layer : arr) {
-
-        if (layer.is_object()) {
-
-            max_radius = std::max(max_radius, static_cast<double>(layer.value("radius", 0)));
-
-        }
-
-    }
+    const auto& radii = owner_->cached_layer_radii();
 
     for (size_t i = 0; i < arr.size(); ++i) {
 
@@ -982,9 +941,9 @@ void MapLayersPanel::LayerCanvasWidget::refresh() {
 
         info.index = static_cast<int>(i);
 
-        int radius = layer.value("radius", 0);
+        double radius = (i < radii.size()) ? radii[i] : 0.0;
 
-        info.radius_px = radius;
+        info.radius_px = static_cast<int>(std::lround(radius));
 
         info.color = level_color(static_cast<int>(i));
 
@@ -1004,17 +963,23 @@ bool MapLayersPanel::LayerCanvasWidget::handle_event(const SDL_Event& e) {
 
         if (circles_.empty()) return { false, 0, 0, 1.0 };
 
+        owner_->ensure_cached_radii();
+
         const auto& arr = owner_->layers_array();
 
         if (arr.empty()) return { false, 0, 0, 1.0 };
 
+        const auto& radii = owner_->cached_layer_radii();
+
         double max_radius = 1.0;
 
-        for (const auto& layer : arr) {
+        for (size_t i = 0; i < arr.size(); ++i) {
 
-            if (layer.is_object()) {
+            const auto& layer = arr[i];
 
-                max_radius = std::max(max_radius, static_cast<double>(layer.value("radius", 0)));
+            if (layer.is_object() && i < radii.size()) {
+
+                max_radius = std::max(max_radius, radii[i]);
 
             }
 
@@ -1229,15 +1194,21 @@ void MapLayersPanel::LayerCanvasWidget::render(SDL_Renderer* renderer) const {
 
     if (!owner_ || circles_.empty()) return;
 
+    owner_->ensure_cached_radii();
+
     const auto& arr = owner_->layers_array();
+
+    const auto& radii = owner_->cached_layer_radii();
 
     double max_radius = 1.0;
 
-    for (const auto& layer : arr) {
+    for (size_t i = 0; i < arr.size(); ++i) {
 
-        if (layer.is_object()) {
+        const auto& layer = arr[i];
 
-            max_radius = std::max(max_radius, static_cast<double>(layer.value("radius", 0)));
+        if (layer.is_object() && i < radii.size()) {
+
+            max_radius = std::max(max_radius, radii[i]);
 
         }
 
@@ -1255,13 +1226,7 @@ void MapLayersPanel::LayerCanvasWidget::render(SDL_Renderer* renderer) const {
 
     double scale = static_cast<double>(draw_radius_max) / display_extent;
 
-    double map_radius_value = 0.0;
-
-    if (owner_->map_info_) {
-
-        map_radius_value = owner_->map_info_->value("map_radius", 0.0);
-
-    }
+    double map_radius_value = owner_->cached_map_radius();
 
     const int map_radius_pixels = map_radius_value > 0.0 ? std::max(12, static_cast<int>(std::lround(map_radius_value * scale))) : 0;
 
@@ -1301,7 +1266,7 @@ void MapLayersPanel::LayerCanvasWidget::render(SDL_Renderer* renderer) const {
 
         if (!layer) continue;
 
-        int radius_value = layer->value("radius", 0);
+        double radius_value = (static_cast<size_t>(info.index) < radii.size()) ? radii[info.index] : 0.0;
 
         int pixel_radius = static_cast<int>(std::lround(radius_value * scale));
 
@@ -2975,6 +2940,7 @@ void MapLayersPanel::set_map_info(json* map_info, const std::string& map_path) {
     map_info_ = map_info;
 
     map_path_ = map_path;
+    invalidate_cached_radii();
 
     if (controller_) {
 
@@ -3411,187 +3377,83 @@ void MapLayersPanel::request_preview_regeneration() {
 
 }
 
-double MapLayersPanel::compute_map_radius_from_layers() {
+double MapLayersPanel::compute_map_radius_from_layers() const {
 
-    if (!map_info_) return 0.0;
+    if (!map_info_) {
+        cached_layer_radii_.clear();
+        cached_layer_extents_.clear();
+        cached_map_radius_ = 0.0;
+        radii_dirty_ = false;
+        return 0.0;
+    }
 
     const auto& layers = layers_array();
-
     if (!layers.is_array() || layers.empty()) {
-
+        cached_layer_radii_.clear();
+        cached_layer_extents_.clear();
+        cached_map_radius_ = 0.0;
+        radii_dirty_ = false;
         return 0.0;
-
     }
 
     const nlohmann::json* rooms_data = nullptr;
-
     auto rooms_it = map_info_->find("rooms_data");
-
     if (rooms_it != map_info_->end() && rooms_it->is_object()) {
-
         rooms_data = &(*rooms_it);
-
     }
 
-    double fallback_radius = 0.0;
-
-    double max_extent = 0.0;
-
-    for (const auto& layer : layers) {
-
-        if (!layer.is_object()) continue;
-
-        double layer_radius = layer.value("radius", 0.0);
-
-        fallback_radius = std::max(fallback_radius, layer_radius);
-
-        double largest_room = 0.0;
-
-        auto rooms_array_it = layer.find("rooms");
-
-        if (rooms_array_it != layer.end() && rooms_array_it->is_array()) {
-
-            for (const auto& candidate : *rooms_array_it) {
-
-                if (!candidate.is_object()) continue;
-
-                std::string room_name = candidate.value("name", std::string());
-
-                if (room_name.empty()) continue;
-
-                RoomGeometry geom = fetch_room_geometry(rooms_data, room_name);
-
-                largest_room = std::max(largest_room, room_extent_for_radius(geom));
-
-            }
-
-        }
-
-        max_extent = std::max(max_extent, layer_radius + largest_room);
-
-    }
-
-    if (max_extent <= 0.0) {
-
-        max_extent = fallback_radius;
-
-    }
-
-    if (max_extent <= 0.0) {
-
-        max_extent = 1.0;
-
-    }
-
-    double padded_extent = max_extent + kMapRadiusOuterPadding;
-
-    double current = map_info_->value("map_radius", 0.0);
-
-    if (std::fabs(current - padded_extent) > 0.5) {
-
-        (*map_info_)["map_radius"] = padded_extent;
-
-    }
-
-    return padded_extent;
+    auto result = map_layers::compute_layer_radii(layers, rooms_data);
+    cached_layer_radii_ = std::move(result.layer_radii);
+    cached_layer_extents_ = std::move(result.layer_extents);
+    cached_map_radius_ = result.map_radius;
+    radii_dirty_ = false;
+    return cached_map_radius_;
 
 }
 
 void MapLayersPanel::recalculate_radii_from_layer(int layer_index) {
 
-    if (!map_info_) return;
+    (void)layer_index;
+    invalidate_cached_radii();
 
-    auto& layers = layers_array();
+}
 
-    if (!layers.is_array() || layers.empty()) return;
+void MapLayersPanel::invalidate_cached_radii() const {
 
-    if (layer_index < 0) layer_index = 0;
+    cached_layer_radii_.clear();
+    cached_layer_extents_.clear();
+    cached_map_radius_ = 0.0;
+    radii_dirty_ = true;
 
-    if (layer_index >= static_cast<int>(layers.size())) {
+}
 
-        layer_index = static_cast<int>(layers.size()) - 1;
+void MapLayersPanel::ensure_cached_radii() const {
 
+    if (radii_dirty_) {
+        compute_map_radius_from_layers();
     }
 
-    const nlohmann::json* rooms_data = nullptr;
+}
 
-    auto rooms_it = map_info_->find("rooms_data");
+const std::vector<double>& MapLayersPanel::cached_layer_radii() const {
 
-    if (rooms_it != map_info_->end() && rooms_it->is_object()) {
+    ensure_cached_radii();
+    return cached_layer_radii_;
 
-        rooms_data = &(*rooms_it);
+}
 
-    }
+double MapLayersPanel::cached_layer_radius(int index) const {
 
-    std::vector<double> extents(layers.size(), 0.0);
+    ensure_cached_radii();
+    if (index < 0 || index >= static_cast<int>(cached_layer_radii_.size())) return 0.0;
+    return cached_layer_radii_[index];
 
-    for (size_t i = 0; i < layers.size(); ++i) {
+}
 
-        const auto& layer = layers[i];
+double MapLayersPanel::cached_map_radius() const {
 
-        if (!layer.is_object()) continue;
-
-        auto rooms_array_it = layer.find("rooms");
-
-        if (rooms_array_it == layer.end() || !rooms_array_it->is_array()) continue;
-
-        double largest_room = 0.0;
-
-        for (const auto& candidate : *rooms_array_it) {
-
-            if (!candidate.is_object()) continue;
-
-            std::string room_name = candidate.value("name", std::string());
-
-            if (room_name.empty()) continue;
-
-            RoomGeometry geom = fetch_room_geometry(rooms_data, room_name);
-
-            largest_room = std::max(largest_room, room_extent_for_radius(geom));
-
-        }
-
-        extents[i] = largest_room;
-
-    }
-
-    for (int i = std::max(0, layer_index); i < static_cast<int>(layers.size()); ++i) {
-
-        auto& layer = layers[i];
-
-        if (!layer.is_object()) continue;
-
-        double stored_radius = layer.value("radius", 0.0);
-
-        double largest = (i >= 0 && i < static_cast<int>(extents.size())) ? extents[i] : 0.0;
-
-        double desired_radius = stored_radius;
-
-        if (i > 0) {
-
-            double prev_radius = layers[i - 1].value("radius", 0.0);
-
-            double prev_extent = extents[i - 1];
-
-            double separation = prev_extent + largest + kLayerEdgeBuffer;
-
-            double minimum_step = static_cast<double>(kLayerRadiusStepDefault) + kLayerEdgeBuffer;
-
-            separation = std::max(separation, minimum_step);
-
-            double minimum = prev_radius + separation;
-
-            desired_radius = minimum;
-
-        }
-
-        int final_radius = static_cast<int>(std::ceil(desired_radius));
-
-        if (final_radius < 0) final_radius = 0;
-
-        layer["radius"] = final_radius;
-
-    }
+    ensure_cached_radii();
+    return cached_map_radius_;
 
 }
 
@@ -3625,6 +3487,8 @@ void MapLayersPanel::regenerate_preview() {
 
     layer_specs.reserve(layers.size());
 
+    const auto& radii = cached_layer_radii();
+
     for (const auto& layer_json : layers) {
 
         if (!layer_json.is_object()) continue;
@@ -3633,7 +3497,15 @@ void MapLayersPanel::regenerate_preview() {
 
         spec.level = layer_json.value("level", static_cast<int>(layer_specs.size()));
 
-        spec.radius = layer_json.value("radius", 0.0);
+        if (spec.level >= 0 && static_cast<size_t>(spec.level) < radii.size()) {
+
+            spec.radius = radii[static_cast<size_t>(spec.level)];
+
+        } else {
+
+            spec.radius = 0.0;
+
+        }
 
         spec.max_rooms = layer_json.value("max_rooms", 0);
 
@@ -4590,7 +4462,7 @@ int MapLayersPanel::find_layer_at(int px, int py, int center_x, int center_y, do
 
         if (!layer_json.is_object()) continue;
 
-        int current_radius = layer_json.value("radius", 0);
+        double current_radius = cached_layer_radius(static_cast<int>(i));
 
         int pixel_radius = static_cast<int>(std::lround(current_radius * scale));
 
@@ -5669,15 +5541,13 @@ int MapLayersPanel::append_layer_entry(const std::string& display_name) {
 
     std::string name = display_name.empty() ? std::string("layer_") + std::to_string(idx) : display_name;
 
-    int radius = arr.empty() ? 0 : compute_next_layer_radius(arr);
-
     json new_layer = {
 
         {"level", idx},
 
         {"name", name},
 
-        {"radius", arr.empty() ? 0 : radius},
+        {"radius", 0},
 
         {"min_rooms", 0},
 

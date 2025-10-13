@@ -180,6 +180,10 @@ void SlidingWindowContainer::update(const Input& input, int screen_w, int screen
 }
 
 bool SlidingWindowContainer::handle_event(const SDL_Event& e) {
+    if (last_screen_w_ > 0 && last_screen_h_ > 0) {
+        prepare_layout(last_screen_w_, last_screen_h_);
+    }
+
     if (!visible_) return false;
 
     if (event_function_) {

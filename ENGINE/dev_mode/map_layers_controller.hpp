@@ -34,7 +34,6 @@ public:
     bool reorder_layer(int from, int to);
 
     bool rename_layer(int index, const std::string& name);
-    bool set_layer_radius(int index, int radius);
 
     bool add_candidate(int layer_index, const std::string& room_name);
     bool remove_candidate(int layer_index, int candidate_index);

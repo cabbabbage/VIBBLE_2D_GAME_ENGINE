@@ -103,7 +103,7 @@ private:
     void request_room_selection_for_layer(int layer_index, const std::function<void(const std::string&)>& cb);
     void request_preview_regeneration();
     void regenerate_preview();
-    double compute_map_radius_from_layers();
+    double compute_map_radius_from_layers() const;
     void recalculate_radii_from_layer(int layer_index);
     int append_layer_entry(const std::string& display_name = {});
     bool ensure_child_room_exists(int parent_layer_index, const std::string& child, bool* layer_created = nullptr);
@@ -127,6 +127,12 @@ private:
     void delete_spawn_group_from_active_room(const std::string& spawn_id);
     void move_spawn_group_in_active_room(const std::string& spawn_id, int dir);
     void reorder_spawn_group_in_active_room(const std::string& spawn_id, size_t target_index);
+
+    void invalidate_cached_radii() const;
+    void ensure_cached_radii() const;
+    const std::vector<double>& cached_layer_radii() const;
+    double cached_layer_radius(int index) const;
+    double cached_map_radius() const;
 
     std::string rename_room_everywhere(const std::string& old_key, const std::string& desired_key);
 
@@ -177,6 +183,10 @@ private:
 
     std::vector<std::unique_ptr<PreviewNode>> preview_nodes_;
     std::vector<PreviewEdge> preview_edges_;
+    mutable std::vector<double> cached_layer_radii_;
+    mutable std::vector<double> cached_layer_extents_;
+    mutable double cached_map_radius_ = 0.0;
+    mutable bool radii_dirty_ = true;
     double preview_extent_ = 0.0;
     bool preview_dirty_ = true;
     std::string active_room_config_key_;

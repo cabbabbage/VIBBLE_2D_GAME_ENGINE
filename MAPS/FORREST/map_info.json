@@ -28,24 +28,24 @@
       {
         "candidates": [
           {
-            "chance": 71,
-            "name": "Grass_FPS_2"
-          },
-          {
-            "chance": 14,
+            "chance": 121,
             "name": "null"
           },
           {
-            "chance": 74.55,
-            "name": "Grass_FPS_2"
-          },
-          {
             "chance": 3.7275,
             "name": "#pretty"
           },
           {
             "chance": 3.7275,
             "name": "#pretty"
+          },
+          {
+            "chance": 4.7275,
+            "name": "Small_Rock"
+          },
+          {
+            "chance": 40.05,
+            "name": "#grass"
           }
         ],
         "display_name": "batch_map_assets",
