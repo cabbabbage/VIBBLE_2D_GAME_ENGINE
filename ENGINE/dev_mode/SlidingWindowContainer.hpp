@@ -87,7 +87,7 @@ private:
     bool panel_override_active_ = false;
     SDL_Rect panel_override_{0, 0, 0, 0};
 
-    bool scrollbar_visible_ = true;
+    bool scrollbar_visible_ = false;
 
     mutable SDL_Rect panel_{0,0,0,0};
     mutable SDL_Rect name_label_rect_{0,0,0,0};

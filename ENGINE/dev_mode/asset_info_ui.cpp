@@ -196,6 +196,8 @@ AssetInfoUI::AssetInfoUI() {
         return info_ ? info_->name : std::string();
     });
 
+    container_.set_scrollbar_visible(false);
+
     container_.set_layout_function([this](const SlidingWindowContainer::LayoutContext& ctx) {
         int y = ctx.content_top;
         for (auto& section : sections_) {

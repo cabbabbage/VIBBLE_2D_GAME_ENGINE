@@ -73,27 +73,27 @@ void MapModeUI::set_footer_always_visible(bool on) {
 
 void MapModeUI::set_headers_suppressed(bool suppressed) {
     base_headers_suppressed_ = suppressed;
-    bool final_state = base_headers_suppressed_ || sliding_headers_hidden_;
-    if (headers_suppressed_ == final_state) {
-        return;
-    }
-    headers_suppressed_ = final_state;
-    ensure_panels();
-    if (headers_suppressed_) {
-        if (layers_panel_) {
-            layers_panel_->close();
-        }
-        layers_footer_visible_ = false;
-    }
-    update_footer_visibility();
+    refresh_header_suppression_state();
 }
 
 void MapModeUI::set_sliding_headers_hidden(bool hidden) {
-    if (sliding_headers_hidden_ == hidden) {
+    if (sliding_headers_hidden_external_ == hidden) {
         return;
     }
-    sliding_headers_hidden_ = hidden;
-    bool final_state = base_headers_suppressed_ || sliding_headers_hidden_;
+    sliding_headers_hidden_external_ = hidden;
+    refresh_header_suppression_state();
+}
+
+void MapModeUI::set_dev_sliding_headers_hidden(bool hidden) {
+    if (dev_sliding_headers_hidden_ == hidden) {
+        return;
+    }
+    dev_sliding_headers_hidden_ = hidden;
+    refresh_header_suppression_state();
+}
+
+void MapModeUI::refresh_header_suppression_state() {
+    bool final_state = base_headers_suppressed_ || sliding_headers_hidden_external_ || dev_sliding_headers_hidden_;
     if (headers_suppressed_ == final_state) {
         return;
     }

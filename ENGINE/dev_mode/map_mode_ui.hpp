@@ -61,6 +61,7 @@ public:
     void set_footer_always_visible(bool on);
     void set_headers_suppressed(bool suppressed);
     void set_sliding_headers_hidden(bool hidden);
+    void set_dev_sliding_headers_hidden(bool hidden);
     void set_mode_button_sets(std::vector<HeaderButtonConfig> map_buttons,
                               std::vector<HeaderButtonConfig> room_buttons,
                               std::vector<HeaderButtonConfig> area_buttons = {});
@@ -92,6 +93,7 @@ private:
     bool handle_layers_footer_event(const SDL_Event& e);
     void render_layers_footer(SDL_Renderer* renderer) const;
     bool should_show_layers_footer() const;
+    void refresh_header_suppression_state();
     void track_floating_panel(DockableCollapsible* panel);
     void rebuild_floating_stack();
     void bring_panel_to_front(DockableCollapsible* panel);
@@ -125,7 +127,8 @@ private:
     bool layers_footer_visible_ = false;
     bool headers_suppressed_ = false;
     bool base_headers_suppressed_ = false;
-    bool sliding_headers_hidden_ = false;
+    bool sliding_headers_hidden_external_ = false;
+    bool dev_sliding_headers_hidden_ = false;
     std::vector<DockableCollapsible*> floating_panels_;
     LightSaveCallback light_save_callback_;
     std::function<void(HeaderMode)> on_mode_changed_;
