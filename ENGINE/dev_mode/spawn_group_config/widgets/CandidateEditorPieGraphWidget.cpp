@@ -56,7 +56,7 @@ int CandidateEditorPieGraphWidget::height_for_width(int w) const {
         min_height += DMButton::height() + margin;
     }
     if (search_visible()) {
-        min_height += kSearchPanelHeight + margin;
+        min_height += desired_search_panel_height() + margin;
     }
     return std::max(constrained, rect_.h > 0 ? rect_.h : min_height);
 }
@@ -106,13 +106,6 @@ bool CandidateEditorPieGraphWidget::handle_event(const SDL_Event& e) {
             return true;
         }
     }
-
-    auto release_scroll_capture = [this]() {
-        if (scroll_capture_active_) {
-            DMWidgetsSetSliderScrollCapture(this, false);
-            scroll_capture_active_ = false;
-        }
-    };
 
     if (candidates_.empty()) {
         hovered_index_ = -1;
@@ -274,32 +267,34 @@ void CandidateEditorPieGraphWidget::render(SDL_Renderer* renderer) const {
         add_button_->render(renderer);
     }
 
-    Layout layout = compute_layout();
-    int font_size = std::max(11, DMStyles::Label().font_size - 1);
-    TTF_Font* font = TTF_OpenFont(DMStyles::Label().font_path.c_str(), font_size);
+    if (!search_visible()) {
+        Layout layout = compute_layout();
+        int font_size = std::max(11, DMStyles::Label().font_size - 1);
+        TTF_Font* font = TTF_OpenFont(DMStyles::Label().font_path.c_str(), font_size);
 
-    const bool has_candidates = !candidates_.empty() && layout.radius > 0.0f;
-    if (!has_candidates) {
-        render_empty(renderer, layout, font);
-    } else {
-        double total = total_weight();
-        if (total <= 0.0) {
-            total = std::accumulate(candidates_.begin(), candidates_.end(), 0.0,
-                                    [](double acc, const CandidateInfo& info) {
-                                        return acc + clamp_positive(info.weight);
-                                    });
+        const bool has_candidates = !candidates_.empty() && layout.radius > 0.0f;
+        if (!has_candidates) {
+            render_empty(renderer, layout, font);
+        } else {
+            double total = total_weight();
             if (total <= 0.0) {
-                total = 1.0;
+                total = std::accumulate(candidates_.begin(), candidates_.end(), 0.0,
+                                        [](double acc, const CandidateInfo& info) {
+                                            return acc + clamp_positive(info.weight);
+                                        });
+                if (total <= 0.0) {
+                    total = 1.0;
+                }
             }
+
+            render_slices(renderer, layout, total);
+            render_outline(renderer, layout);
+            render_legend(renderer, layout, total, font);
         }
 
-        render_slices(renderer, layout, total);
-        render_outline(renderer, layout);
-        render_legend(renderer, layout, total, font);
-    }
-
-    if (font) {
-        TTF_CloseFont(font);
+        if (font) {
+            TTF_CloseFont(font);
+        }
     }
 
     if (search_visible()) {
@@ -405,9 +400,13 @@ void CandidateEditorPieGraphWidget::set_on_add_candidate(std::function<void(cons
     notify_layout_change();
 }
 
-void CandidateEditorPieGraphWidget::show_search(const SDL_Rect& anchor_rect, std::function<void(const std::string&)> on_select) {
+void CandidateEditorPieGraphWidget::show_search(const SDL_Rect& anchor_rect,
+                                                std::function<void(const std::string&)> on_select) {
     (void)anchor_rect;
     ensure_search_created();
+    hovered_index_ = -1;
+    active_index_ = -1;
+    release_scroll_capture();
     search_assets_->open([this, cb = std::move(on_select)](const std::string& value) {
         if (cb) {
             cb(value);
@@ -588,9 +587,10 @@ void CandidateEditorPieGraphWidget::update_internal_layout() {
 
     if (search_visible() && search_assets_) {
         const int available_height = std::max(0, rect_.y + rect_.h - y);
-        int search_height = std::min(available_height, kSearchPanelHeight);
+        int desired_height = desired_search_panel_height();
+        int search_height = std::min(available_height, desired_height);
         if (search_height <= 0) {
-            search_height = std::min(kSearchPanelHeight, rect_.h);
+            search_height = std::min(desired_height, rect_.h);
         }
         search_rect_ = SDL_Rect{rect_.x + margin, y, width, search_height};
         position_search_within_bounds();
@@ -888,6 +888,20 @@ void CandidateEditorPieGraphWidget::ensure_search_created() {
     }
 }
 
+int CandidateEditorPieGraphWidget::desired_search_panel_height() const {
+    if (last_search_height_ > 0) {
+        return last_search_height_;
+    }
+    return kSearchPanelHeight;
+}
+
+void CandidateEditorPieGraphWidget::release_scroll_capture() {
+    if (scroll_capture_active_) {
+        DMWidgetsSetSliderScrollCapture(this, false);
+        scroll_capture_active_ = false;
+    }
+}
+
 void CandidateEditorPieGraphWidget::position_search_within_bounds() {
     if (!search_assets_ || !search_visible()) {
         return;
@@ -897,7 +911,7 @@ void CandidateEditorPieGraphWidget::position_search_within_bounds() {
         target.w = std::max(0, rect_.w - DMSpacing::item_gap() * 2);
     }
     if (target.h <= 0) {
-        target.h = kSearchPanelHeight;
+        target.h = desired_search_panel_height();
     }
     search_assets_->set_embedded_rect(target);
     SDL_Rect applied = search_assets_->rect();

@@ -67,6 +67,8 @@ private:
     static SDL_Color color_for_index(size_t index);
     static SDL_Color lighten(SDL_Color color, float amount);
     static Uint8 clamp_color(int value);
+    int desired_search_panel_height() const;
+    void release_scroll_capture();
     void ensure_search_created();
     void position_search_within_bounds();
     void notify_layout_change() const;
