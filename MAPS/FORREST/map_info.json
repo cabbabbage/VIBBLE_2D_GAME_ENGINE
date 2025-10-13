@@ -642,12 +642,12 @@
       "inherits_map_assets": true,
       "is_boss": false,
       "is_spawn": true,
-      "max_height": 8818,
-      "max_width": 8818,
-      "min_height": 8818,
-      "min_width": 8818,
+      "max_height": 32452,
+      "max_width": 32452,
+      "min_height": 32452,
+      "min_width": 32452,
       "name": "spawn",
-      "radius": 4409,
+      "radius": 16226,
       "spawn_groups": [
         {
           "candidates": [
