@@ -7,7 +7,7 @@
         },
         "lock": {
             "asset_info": {
-                "basic": true
+                "basic": false
             },
             "camera": {
                 "controls": false

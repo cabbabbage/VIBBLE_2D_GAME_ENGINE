@@ -202,8 +202,9 @@ AssetInfoUI::AssetInfoUI() {
     container_.set_layout_function([this](const SlidingWindowContainer::LayoutContext& ctx) {
         int y = ctx.content_top;
         for (auto& section : sections_) {
-            section->set_rect(SDL_Rect{ctx.content_x, y - ctx.scroll_value, ctx.content_width, 0});
-            y += section->height() + ctx.gap;
+            const int previous_height = section->height();
+            section->set_rect(SDL_Rect{ctx.content_x, y - ctx.scroll_value, ctx.content_width, previous_height});
+            y += previous_height + ctx.gap;
         }
         if (configure_btn_widget_) {
             configure_btn_widget_->set_rect(SDL_Rect{ctx.content_x, y - ctx.scroll_value, ctx.content_width, DMButton::height()});

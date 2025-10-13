@@ -29,6 +29,7 @@
     "duplicatable": false,
     "duplication_interval_max": 60,
     "duplication_interval_min": 30,
+    "generate_rays": false,
     "has_shading": false,
     "impassable_area": null,
     "layout": {
@@ -57,11 +58,13 @@
     "min_child_depth": 2,
     "min_distance_all": 0,
     "min_same_type_distance": 0,
+    "neighbor_search_distance": 500,
+    "ray_strength": 0,
     "render_radius": 2191,
     "rnd_spawn_max": 400,
     "rnd_spawn_min": 300,
     "size_settings": {
-        "scale_percentage": 21.0
+        "scale_percentage": 26.0
     },
     "start": "",
     "tags": [
@@ -69,5 +72,5 @@
         "default"
     ],
     "update_radius": 1000,
-    "z_threshold": 5
+    "z_threshold": -488
 }
