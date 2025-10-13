@@ -164,11 +164,26 @@ void MovementSummaryWidget::render(SDL_Renderer* renderer) const {
         } else if (button_hovered_) {
             button_color = button_style.hover_bg;
         }
-        SDL_SetRenderDrawColor(renderer, button_color.r, button_color.g, button_color.b, button_color.a);
-        SDL_RenderFillRect(renderer, &button_rect_);
+        const int button_radius = std::min(DMStyles::CornerRadius(), std::min(button_rect_.w, button_rect_.h) / 2);
+        const int button_bevel = std::min(DMStyles::BevelDepth(), std::max(0, std::min(button_rect_.w, button_rect_.h) / 2));
+        dm_draw::DrawBeveledRect(
+            renderer,
+            button_rect_,
+            button_radius,
+            button_bevel,
+            button_color,
+            button_color,
+            button_color,
+            false,
+            0.0f,
+            0.0f);
 
-        SDL_SetRenderDrawColor(renderer, button_style.border.r, button_style.border.g, button_style.border.b, button_style.border.a);
-        SDL_RenderDrawRect(renderer, &button_rect_);
+        dm_draw::DrawRoundedOutline(
+            renderer,
+            button_rect_,
+            button_radius,
+            1,
+            button_style.border);
 
         const std::string button_text = "Frame Editor";
         int label_width = measure_text_width(button_style.label, button_text);

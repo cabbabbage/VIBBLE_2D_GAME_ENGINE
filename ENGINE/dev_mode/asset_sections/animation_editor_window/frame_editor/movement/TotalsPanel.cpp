@@ -87,12 +87,43 @@ void TotalsPanel::render(SDL_Renderer* renderer) const {
     SDL_Color button_border = DMStyles::ListButton().border;
     SDL_Color button_text = DMStyles::Label().color;
 
-    SDL_SetRenderDrawColor(renderer, button_bg.r, button_bg.g, button_bg.b, 240);
-    SDL_RenderFillRect(renderer, &prev_button_);
-    SDL_RenderFillRect(renderer, &next_button_);
-    SDL_SetRenderDrawColor(renderer, button_border.r, button_border.g, button_border.b, 255);
-    SDL_RenderDrawRect(renderer, &prev_button_);
-    SDL_RenderDrawRect(renderer, &next_button_);
+    const SDL_Color fill_prev{button_bg.r, button_bg.g, button_bg.b, 240};
+    const int button_radius = std::min(DMStyles::CornerRadius(), std::min(prev_button_.w, prev_button_.h) / 2);
+    const int button_bevel = std::min(DMStyles::BevelDepth(), std::max(0, std::min(prev_button_.w, prev_button_.h) / 2));
+    dm_draw::DrawBeveledRect(
+        renderer,
+        prev_button_,
+        button_radius,
+        button_bevel,
+        fill_prev,
+        fill_prev,
+        fill_prev,
+        false,
+        0.0f,
+        0.0f);
+    dm_draw::DrawBeveledRect(
+        renderer,
+        next_button_,
+        button_radius,
+        button_bevel,
+        fill_prev,
+        fill_prev,
+        fill_prev,
+        false,
+        0.0f,
+        0.0f);
+    dm_draw::DrawRoundedOutline(
+        renderer,
+        prev_button_,
+        button_radius,
+        1,
+        button_border);
+    dm_draw::DrawRoundedOutline(
+        renderer,
+        next_button_,
+        button_radius,
+        1,
+        button_border);
 
     render_totals_label(renderer, "<", prev_button_.x + (prev_button_.w / 2) - 6, prev_button_.y + (prev_button_.h / 2) - 10, button_text);
     render_totals_label(renderer, ">", next_button_.x + (next_button_.w / 2) - 6, next_button_.y + (next_button_.h / 2) - 10, button_text);

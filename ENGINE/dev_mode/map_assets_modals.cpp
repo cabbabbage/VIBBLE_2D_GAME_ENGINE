@@ -79,7 +79,17 @@ public:
     CallbackTextBoxWidget(std::unique_ptr<DMTextBox> box,
                           std::function<void(const std::string&)> on_change,
                           bool full_row)
-        : box_(std::move(box)), on_change_(std::move(on_change)), full_row_(full_row) {}
+        : box_(std::move(box)), on_change_(std::move(on_change)), full_row_(full_row) {
+        if (box_) {
+            box_->set_on_height_changed([this]() { this->request_layout(); });
+        }
+    }
+
+    ~CallbackTextBoxWidget() override {
+        if (box_) {
+            box_->set_on_height_changed(nullptr);
+        }
+    }
 
     void set_rect(const SDL_Rect& r) override {
         if (box_) box_->set_rect(r);

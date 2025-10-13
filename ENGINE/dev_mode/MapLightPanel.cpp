@@ -8,6 +8,7 @@
 #include <SDL_ttf.h>
 
 #include "dev_mode/dm_styles.hpp"
+#include "dev_mode/draw_utils.hpp"
 #include "utils/input.hpp"
 
 using nlohmann::json;
@@ -929,12 +930,28 @@ void MapLightPanel::render_content(SDL_Renderer* r) const {
     swatch.w = std::min(120, swatch.w);
 
     SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
-    SDL_SetRenderDrawColor(r, r_out, g_out, b_out, a_out);
-    SDL_RenderFillRect(r, &swatch);
+    const SDL_Color fill_color{static_cast<Uint8>(r_out), static_cast<Uint8>(g_out), static_cast<Uint8>(b_out), static_cast<Uint8>(a_out)};
+    const int radius = std::min(DMStyles::CornerRadius(), std::min(swatch.w, swatch.h) / 2);
+    const int bevel = std::min(DMStyles::BevelDepth(), std::max(0, std::min(swatch.w, swatch.h) / 2));
+    dm_draw::DrawBeveledRect(
+        r,
+        swatch,
+        radius,
+        bevel,
+        fill_color,
+        fill_color,
+        fill_color,
+        false,
+        0.0f,
+        0.0f);
 
     const SDL_Color border = DMStyles::Border();
-    SDL_SetRenderDrawColor(r, border.r, border.g, border.b, border.a);
-    SDL_RenderDrawRect(r, &swatch);
+    dm_draw::DrawRoundedOutline(
+        r,
+        swatch,
+        radius,
+        1,
+        border);
 
 }
 

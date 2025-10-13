@@ -3,6 +3,7 @@
 #include "asset/Asset.hpp"
 #include "core/AssetsManager.hpp"
 #include "dev_mode/dm_styles.hpp"
+#include "dev_mode/draw_utils.hpp"
 #include "render/camera.hpp"
 #include "map_generation/room.hpp"
 #include "utils/area.hpp"
@@ -336,10 +337,25 @@ void MapEditor::render_room_label(SDL_Renderer* renderer, Room* room) {
     const SDL_Color& bg_color = is_trail ? kTrailLabelBg : kLabelBg;
     const SDL_Color& border_color = is_trail ? kTrailLabelBorder : kLabelBorder;
 
-    SDL_SetRenderDrawColor(renderer, bg_color.r, bg_color.g, bg_color.b, bg_color.a);
-    SDL_RenderFillRect(renderer, &bg_rect);
-    SDL_SetRenderDrawColor(renderer, border_color.r, border_color.g, border_color.b, border_color.a);
-    SDL_RenderDrawRect(renderer, &bg_rect);
+    const int radius = std::min(DMStyles::CornerRadius(), std::min(bg_rect.w, bg_rect.h) / 2);
+    const int bevel = std::min(DMStyles::BevelDepth(), std::max(0, std::min(bg_rect.w, bg_rect.h) / 2));
+    dm_draw::DrawBeveledRect(
+        renderer,
+        bg_rect,
+        radius,
+        bevel,
+        bg_color,
+        bg_color,
+        bg_color,
+        false,
+        0.0f,
+        0.0f);
+    dm_draw::DrawRoundedOutline(
+        renderer,
+        bg_rect,
+        radius,
+        1,
+        border_color);
 
     SDL_Texture* text_tex = SDL_CreateTextureFromSurface(renderer, text_surface);
     if (text_tex) {

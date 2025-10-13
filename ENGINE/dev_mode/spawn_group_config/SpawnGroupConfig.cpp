@@ -16,6 +16,7 @@
 #include "widgets.hpp"
 #include "widgets/CandidateEditorPieGraphWidget.hpp"
 #include "spawn_method_control_widgets/LinkToAreaButton.hpp"
+#include "Input.hpp"
 
 class SpawnGroupLabelWidget : public Widget {
 public:
@@ -144,10 +145,20 @@ std::string default_display_name_for(const nlohmann::json& entry) {
 class SpawnGroupCallbackTextBoxWidget : public Widget {
 public:
     SpawnGroupCallbackTextBoxWidget(std::unique_ptr<DMTextBox> box,
-                                    std::function<void(const std::string&)> on_change,
-                                    bool full_row,
-                                    bool editable)
-        : box_(std::move(box)), on_change_(std::move(on_change)), full_row_(full_row), editable_(editable) {}
+                          std::function<void(const std::string&)> on_change,
+                          bool full_row,
+                          bool editable)
+        : box_(std::move(box)), on_change_(std::move(on_change)), full_row_(full_row), editable_(editable) {
+        if (box_) {
+            box_->set_on_height_changed([this]() { this->request_layout(); });
+        }
+    }
+
+    ~SpawnGroupCallbackTextBoxWidget() override {
+        if (box_) {
+            box_->set_on_height_changed(nullptr);
+        }
+    }
 
     void set_rect(const SDL_Rect& r) override {
         if (box_) box_->set_rect(r);

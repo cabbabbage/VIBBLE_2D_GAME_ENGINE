@@ -468,10 +468,25 @@ void FrameMovementEditor::render_variant_header(SDL_Renderer* renderer) const {
         } else if (tab.hovered) {
             button_color = style.hover_bg;
         }
-        SDL_SetRenderDrawColor(renderer, button_color.r, button_color.g, button_color.b, button_color.a);
-        SDL_RenderFillRect(renderer, &tab.rect);
-        SDL_SetRenderDrawColor(renderer, style.border.r, style.border.g, style.border.b, style.border.a);
-        SDL_RenderDrawRect(renderer, &tab.rect);
+        const int tab_radius = std::min(DMStyles::CornerRadius(), std::min(tab.rect.w, tab.rect.h) / 2);
+        const int tab_bevel = std::min(DMStyles::BevelDepth(), std::max(0, std::min(tab.rect.w, tab.rect.h) / 2));
+        dm_draw::DrawBeveledRect(
+            renderer,
+            tab.rect,
+            tab_radius,
+            tab_bevel,
+            button_color,
+            button_color,
+            button_color,
+            false,
+            0.0f,
+            0.0f);
+        dm_draw::DrawRoundedOutline(
+            renderer,
+            tab.rect,
+            tab_radius,
+            1,
+            style.border);
 
         SDL_Rect text_rect = tab.rect;
         if (tab.close_visible) {
@@ -486,19 +501,49 @@ void FrameMovementEditor::render_variant_header(SDL_Renderer* renderer) const {
             } else if (tab.close_hovered) {
                 close_bg = style.hover_bg;
             }
-            SDL_SetRenderDrawColor(renderer, close_bg.r, close_bg.g, close_bg.b, close_bg.a);
-            SDL_RenderFillRect(renderer, &tab.close_rect);
-            SDL_SetRenderDrawColor(renderer, style.border.r, style.border.g, style.border.b, style.border.a);
-            SDL_RenderDrawRect(renderer, &tab.close_rect);
+            const int close_radius = std::min(DMStyles::CornerRadius(), std::min(tab.close_rect.w, tab.close_rect.h) / 2);
+            const int close_bevel = std::min(DMStyles::BevelDepth(), std::max(0, std::min(tab.close_rect.w, tab.close_rect.h) / 2));
+            dm_draw::DrawBeveledRect(
+                renderer,
+                tab.close_rect,
+                close_radius,
+                close_bevel,
+                close_bg,
+                close_bg,
+                close_bg,
+                false,
+                0.0f,
+                0.0f);
+            dm_draw::DrawRoundedOutline(
+                renderer,
+                tab.close_rect,
+                close_radius,
+                1,
+                style.border);
             render_tab_text(renderer, "×", tab.close_rect, style.text);
         }
     }
 
     SDL_Color add_color = add_button_pressed_ ? active_style.press_bg : (add_button_hovered_ ? active_style.hover_bg : active_style.bg);
-    SDL_SetRenderDrawColor(renderer, add_color.r, add_color.g, add_color.b, add_color.a);
-    SDL_RenderFillRect(renderer, &add_button_rect_);
-    SDL_SetRenderDrawColor(renderer, active_style.border.r, active_style.border.g, active_style.border.b, active_style.border.a);
-    SDL_RenderDrawRect(renderer, &add_button_rect_);
+    const int add_radius = std::min(DMStyles::CornerRadius(), std::min(add_button_rect_.w, add_button_rect_.h) / 2);
+    const int add_bevel = std::min(DMStyles::BevelDepth(), std::max(0, std::min(add_button_rect_.w, add_button_rect_.h) / 2));
+    dm_draw::DrawBeveledRect(
+        renderer,
+        add_button_rect_,
+        add_radius,
+        add_bevel,
+        add_color,
+        add_color,
+        add_color,
+        false,
+        0.0f,
+        0.0f);
+    dm_draw::DrawRoundedOutline(
+        renderer,
+        add_button_rect_,
+        add_radius,
+        1,
+        active_style.border);
     render_tab_text(renderer, "+", add_button_rect_, active_style.text);
 }
 

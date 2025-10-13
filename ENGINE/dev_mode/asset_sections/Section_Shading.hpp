@@ -12,6 +12,7 @@
 
 #include "asset/asset_info.hpp"
 #include "asset_info_methods/lighting_loader.hpp"
+#include "dev_mode/draw_utils.hpp"
 #include "dev_mode/asset_info_sections.hpp"
 
 class AssetInfoUI;
@@ -199,8 +200,12 @@ public:
             if (s_sh_falloff_)   s_sh_falloff_->render(r);
             if (s_sh_factor_)    s_sh_factor_->render(r);
             SDL_Color bc = DMStyles::Border();
-            SDL_SetRenderDrawColor(r, bc.r, bc.g, bc.b, bc.a);
-            SDL_RenderDrawRect(r, &shading_rect_);
+            dm_draw::DrawRoundedOutline(
+                r,
+                shading_rect_,
+                DMStyles::CornerRadius(),
+                1,
+                bc);
         }
     }
 

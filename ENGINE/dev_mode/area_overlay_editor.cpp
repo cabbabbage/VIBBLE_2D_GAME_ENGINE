@@ -2,6 +2,7 @@
 
 #include "DockableCollapsible.hpp"
 #include "widgets.hpp"
+#include "draw_utils.hpp"
 #include "dm_styles.hpp"
 
 #include "core/AssetsManager.hpp"
@@ -1164,10 +1165,27 @@ void AreaOverlayEditor::render(SDL_Renderer* r) {
                     const int cx = static_cast<int>(std::lround(sx));
                     const int cy = static_cast<int>(std::lround(sy));
                     SDL_Rect mr{ cx - 3, cy - 3, 6, 6 };
-                    SDL_SetRenderDrawColor(r, 255, 255, 0, 240);
-                    SDL_RenderFillRect(r, &mr);
-                    SDL_SetRenderDrawColor(r, 0, 0, 0, 255);
-                    SDL_RenderDrawRect(r, &mr);
+                    const SDL_Color fill{255, 255, 0, 240};
+                    const SDL_Color outline{0, 0, 0, 255};
+                    const int radius = std::min(DMStyles::CornerRadius(), std::min(mr.w, mr.h) / 2);
+                    const int bevel = std::min(DMStyles::BevelDepth(), std::max(0, std::min(mr.w, mr.h) / 2));
+                    dm_draw::DrawBeveledRect(
+                        r,
+                        mr,
+                        radius,
+                        bevel,
+                        fill,
+                        fill,
+                        fill,
+                        false,
+                        0.0f,
+                        0.0f);
+                    dm_draw::DrawRoundedOutline(
+                        r,
+                        mr,
+                        radius,
+                        1,
+                        outline);
                 }
             }
 

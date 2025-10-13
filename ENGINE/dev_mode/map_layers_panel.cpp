@@ -1203,16 +1203,29 @@ void MapLayersPanel::LayerCanvasWidget::render(SDL_Renderer* renderer) const {
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
 
     const SDL_Color bg = DMStyles::PanelBG();
+    const SDL_Color highlight = DMStyles::HighlightColor();
+    const SDL_Color shadow = DMStyles::ShadowColor();
 
-    SDL_SetRenderDrawColor(renderer, bg.r, bg.g, bg.b, bg.a);
-
-    SDL_RenderFillRect(renderer, &rect_);
+    dm_draw::DrawBeveledRect(
+        renderer,
+        rect_,
+        DMStyles::CornerRadius(),
+        DMStyles::BevelDepth(),
+        bg,
+        highlight,
+        shadow,
+        false,
+        DMStyles::HighlightIntensity(),
+        DMStyles::ShadowIntensity());
 
     const SDL_Color border = DMStyles::Border();
 
-    SDL_SetRenderDrawColor(renderer, border.r, border.g, border.b, border.a);
-
-    SDL_RenderDrawRect(renderer, &rect_);
+    dm_draw::DrawRoundedOutline(
+        renderer,
+        rect_,
+        DMStyles::CornerRadius(),
+        1,
+        border);
 
     if (!owner_ || circles_.empty()) return;
 
@@ -1396,19 +1409,38 @@ void MapLayersPanel::LayerCanvasWidget::render(SDL_Renderer* renderer) const {
 
                 SDL_Rect room_rect{ center_pt.x - half_w, center_pt.y - half_h, half_w * 2, half_h * 2 };
 
+                const int room_radius = std::min(DMStyles::CornerRadius(), std::min(room_rect.w, room_rect.h) / 2);
+
+                const int room_bevel = std::min(DMStyles::BevelDepth(), std::max(0, std::min(room_rect.w, room_rect.h) / 2));
+
                 if (room_clicked || room_hovered) {
 
                     SDL_Color fill = room_clicked ? apply_alpha(clicked_room_color, 90) : apply_alpha(hover_accent, 80);
 
-                    SDL_SetRenderDrawColor(renderer, fill.r, fill.g, fill.b, fill.a);
-
-                    SDL_RenderFillRect(renderer, &room_rect);
+                    dm_draw::DrawBeveledRect(
+                        renderer,
+                        room_rect,
+                        room_radius,
+                        room_bevel,
+                        fill,
+                        fill,
+                        fill,
+                        false,
+                        0.0f,
+                        0.0f);
 
                 }
 
-                SDL_SetRenderDrawColor(renderer, outline.r, outline.g, outline.b, 220);
+                SDL_Color outline_color = outline;
 
-                SDL_RenderDrawRect(renderer, &room_rect);
+                outline_color.a = 220;
+
+                dm_draw::DrawRoundedOutline(
+                    renderer,
+                    room_rect,
+                    room_radius,
+                    1,
+                    outline_color);
 
             }
 
@@ -1827,11 +1859,26 @@ void MapLayersPanel::PreviewToolbarWidget::render(SDL_Renderer* renderer) const 
     if (!renderer) return;
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
     const SDL_Color bg = DMStyles::PanelBG();
-    SDL_SetRenderDrawColor(renderer, bg.r, bg.g, bg.b, bg.a);
-    SDL_RenderFillRect(renderer, &rect_);
+    const SDL_Color highlight = DMStyles::HighlightColor();
+    const SDL_Color shadow = DMStyles::ShadowColor();
+    dm_draw::DrawBeveledRect(
+        renderer,
+        rect_,
+        DMStyles::CornerRadius(),
+        DMStyles::BevelDepth(),
+        bg,
+        highlight,
+        shadow,
+        false,
+        DMStyles::HighlightIntensity(),
+        DMStyles::ShadowIntensity());
     const SDL_Color border = DMStyles::Border();
-    SDL_SetRenderDrawColor(renderer, border.r, border.g, border.b, border.a);
-    SDL_RenderDrawRect(renderer, &rect_);
+    dm_draw::DrawRoundedOutline(
+        renderer,
+        rect_,
+        DMStyles::CornerRadius(),
+        1,
+        border);
     if (add_button_) add_button_->render(renderer);
     if (new_room_button_) new_room_button_->render(renderer);
     if (preview_button_) preview_button_->render(renderer);
@@ -1899,11 +1946,26 @@ void MapLayersPanel::PanelSidebarWidget::render(SDL_Renderer* renderer) const {
     if (!renderer) return;
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
     const SDL_Color bg = DMStyles::PanelBG();
-    SDL_SetRenderDrawColor(renderer, bg.r, bg.g, bg.b, bg.a);
-    SDL_RenderFillRect(renderer, &rect_);
+    const SDL_Color highlight = DMStyles::HighlightColor();
+    const SDL_Color shadow = DMStyles::ShadowColor();
+    dm_draw::DrawBeveledRect(
+        renderer,
+        rect_,
+        DMStyles::CornerRadius(),
+        DMStyles::BevelDepth(),
+        bg,
+        highlight,
+        shadow,
+        false,
+        DMStyles::HighlightIntensity(),
+        DMStyles::ShadowIntensity());
     const SDL_Color border = DMStyles::Border();
-    SDL_SetRenderDrawColor(renderer, border.r, border.g, border.b, border.a);
-    SDL_RenderDrawRect(renderer, &rect_);
+    dm_draw::DrawRoundedOutline(
+        renderer,
+        rect_,
+        DMStyles::CornerRadius(),
+        1,
+        border);
 }
 MapLayersPanel::LayerConfigPanel::LayerConfigPanel(MapLayersPanel* owner)
 
@@ -2677,15 +2739,30 @@ void MapLayersPanel::RoomCandidateWidget::render(SDL_Renderer* renderer) const {
 
     const SDL_Color row_bg = DMStyles::PanelHeader();
 
-    SDL_SetRenderDrawColor(renderer, row_bg.r, row_bg.g, row_bg.b, row_bg.a);
+    const SDL_Color highlight = DMStyles::HighlightColor();
 
-    SDL_RenderFillRect(renderer, &bg);
+    const SDL_Color shadow = DMStyles::ShadowColor();
+
+    dm_draw::DrawBeveledRect(
+        renderer,
+        bg,
+        DMStyles::CornerRadius(),
+        DMStyles::BevelDepth(),
+        row_bg,
+        highlight,
+        shadow,
+        false,
+        DMStyles::HighlightIntensity(),
+        DMStyles::ShadowIntensity());
 
     const SDL_Color border = DMStyles::Border();
 
-    SDL_SetRenderDrawColor(renderer, border.r, border.g, border.b, border.a);
-
-    SDL_RenderDrawRect(renderer, &bg);
+    dm_draw::DrawRoundedOutline(
+        renderer,
+        bg,
+        DMStyles::CornerRadius(),
+        1,
+        border);
 
     const DMLabelStyle label = DMStyles::Label();
 
@@ -2701,13 +2778,28 @@ void MapLayersPanel::RoomCandidateWidget::render(SDL_Renderer* renderer) const {
 
         const DMButtonStyle& chip_style = DMStyles::ListButton();
 
-        SDL_SetRenderDrawColor(renderer, chip_style.bg.r, chip_style.bg.g, chip_style.bg.b, chip_style.bg.a);
+        const int chip_radius = std::min(DMStyles::CornerRadius(), std::min(chip.rect.w, chip.rect.h) / 2);
 
-        SDL_RenderFillRect(renderer, &chip.rect);
+        const int chip_bevel = std::min(DMStyles::BevelDepth(), std::max(0, std::min(chip.rect.w, chip.rect.h) / 2));
 
-        SDL_SetRenderDrawColor(renderer, chip_style.border.r, chip_style.border.g, chip_style.border.b, chip_style.border.a);
+        dm_draw::DrawBeveledRect(
+            renderer,
+            chip.rect,
+            chip_radius,
+            chip_bevel,
+            chip_style.bg,
+            chip_style.bg,
+            chip_style.bg,
+            false,
+            0.0f,
+            0.0f);
 
-        SDL_RenderDrawRect(renderer, &chip.rect);
+        dm_draw::DrawRoundedOutline(
+            renderer,
+            chip.rect,
+            chip_radius,
+            1,
+            chip_style.border);
 
         draw_text(renderer, chip.name, chip.rect.x + 6, chip.rect.y + (chip.rect.h - label.font_size) / 2, label);
 

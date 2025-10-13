@@ -3,6 +3,7 @@
 #include "asset/Asset.hpp"
 #include "asset/asset_types.hpp"
 #include "dev_mode/dm_styles.hpp"
+#include "dev_mode/draw_utils.hpp"
 #include "dev_mode/widgets.hpp"
 #include "map_generation/room.hpp"
 
@@ -13,6 +14,7 @@
 
 namespace {
 constexpr int kToggleButtonMinWidth = 36;
+constexpr int kPanelOutlineThickness = 1;
 }
 
 AssetFilterBar::AssetFilterBar() = default;
@@ -255,9 +257,32 @@ void AssetFilterBar::render(SDL_Renderer* renderer) const {
     }
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
 
+    const SDL_Color panel_bg = DMStyles::PanelBG();
+    const SDL_Color highlight = DMStyles::HighlightColor();
+    const SDL_Color shadow = DMStyles::ShadowColor();
+    dm_draw::DrawBeveledRect(
+        renderer,
+        layout_bounds_,
+        DMStyles::CornerRadius(),
+        DMStyles::BevelDepth(),
+        panel_bg,
+        highlight,
+        shadow,
+        false,
+        DMStyles::HighlightIntensity(),
+        DMStyles::ShadowIntensity());
+
+    const SDL_Color border = DMStyles::Border();
+    dm_draw::DrawRoundedOutline(
+        renderer,
+        layout_bounds_,
+        DMStyles::CornerRadius(),
+        kPanelOutlineThickness,
+        border);
+
     const SDL_Color header_bg = DMStyles::PanelHeader();
-    SDL_SetRenderDrawColor(renderer, header_bg.r, header_bg.g, header_bg.b, 240);
     if (header_rect_.w > 0 && header_rect_.h > 0) {
+        SDL_SetRenderDrawColor(renderer, header_bg.r, header_bg.g, header_bg.b, 240);
         SDL_RenderFillRect(renderer, &header_rect_);
     }
 
@@ -271,12 +296,6 @@ void AssetFilterBar::render(SDL_Renderer* renderer) const {
         }
     }
 
-    const SDL_Color border = DMStyles::Border();
-    SDL_SetRenderDrawColor(renderer, border.r, border.g, border.b, border.a);
-    if (header_rect_.w > 0 && header_rect_.h > 0) {
-        SDL_RenderDrawRect(renderer, &header_rect_);
-    }
-
     if (!filters_expanded_) {
         return;
     }
@@ -285,8 +304,6 @@ void AssetFilterBar::render(SDL_Renderer* renderer) const {
         const SDL_Color content_bg = DMStyles::PanelBG();
         SDL_SetRenderDrawColor(renderer, content_bg.r, content_bg.g, content_bg.b, 220);
         SDL_RenderFillRect(renderer, &filters_rect_);
-        SDL_SetRenderDrawColor(renderer, border.r, border.g, border.b, border.a);
-        SDL_RenderDrawRect(renderer, &filters_rect_);
     }
 
     for (const auto& entry : entries_) {

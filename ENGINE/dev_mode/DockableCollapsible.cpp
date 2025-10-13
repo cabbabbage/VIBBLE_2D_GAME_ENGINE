@@ -52,8 +52,13 @@ namespace {
         }
 
         SDL_Color stroke = DMStyles::Border();
-        SDL_SetRenderDrawColor(r, stroke.r, stroke.g, stroke.b, stroke.a);
-        SDL_RenderDrawRect(r, &body);
+        const int radius = std::min(DMStyles::CornerRadius(), std::min(body.w, body.h) / 2);
+        dm_draw::DrawRoundedOutline(
+            r,
+            body,
+            radius,
+            1,
+            stroke);
 
         SDL_Point shackle_left_top{shackle.x, shackle.y + shackle.h / 2};
         SDL_Point shackle_right_top{shackle.x + shackle.w, shackle.y + shackle.h / 2};
@@ -127,6 +132,16 @@ void DockableCollapsible::set_rows(const Rows& rows) {
         return;
     }
     rows_ = rows;
+    for (auto& row : rows_) {
+        for (auto* w : row) {
+            if (!w) {
+                continue;
+            }
+            w->set_layout_dirty_callback([this]() {
+                this->layout(last_screen_w_, last_screen_h_);
+            });
+        }
+    }
 }
 
 void DockableCollapsible::set_title(const std::string& title) {

@@ -1,6 +1,7 @@
 #include "room_selector_popup.hpp"
 
 #include "dm_styles.hpp"
+#include "draw_utils.hpp"
 #include "utils/input.hpp"
 #include "widgets.hpp"
 
@@ -118,11 +119,26 @@ void RoomSelectorPopup::render(SDL_Renderer* renderer) const {
     ensure_geometry();
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
     const SDL_Color bg = DMStyles::PanelBG();
-    SDL_SetRenderDrawColor(renderer, bg.r, bg.g, bg.b, bg.a);
-    SDL_RenderFillRect(renderer, &rect_);
+    const SDL_Color highlight = DMStyles::HighlightColor();
+    const SDL_Color shadow = DMStyles::ShadowColor();
+    dm_draw::DrawBeveledRect(
+        renderer,
+        rect_,
+        DMStyles::CornerRadius(),
+        DMStyles::BevelDepth(),
+        bg,
+        highlight,
+        shadow,
+        false,
+        DMStyles::HighlightIntensity(),
+        DMStyles::ShadowIntensity());
     const SDL_Color border = DMStyles::Border();
-    SDL_SetRenderDrawColor(renderer, border.r, border.g, border.b, border.a);
-    SDL_RenderDrawRect(renderer, &rect_);
+    dm_draw::DrawRoundedOutline(
+        renderer,
+        rect_,
+        DMStyles::CornerRadius(),
+        1,
+        border);
 
     SDL_Rect prev_clip{};
     SDL_RenderGetClipRect(renderer, &prev_clip);

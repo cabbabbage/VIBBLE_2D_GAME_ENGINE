@@ -7,6 +7,7 @@
 #include <string>
 #include <vector>
 #include <functional>
+#include <utility>
 
 #include "dm_styles.hpp"
 
@@ -52,10 +53,14 @@ public:
     int preferred_height(int width) const;
     static int height() { return 32; }
     int height_for_width(int w) const;
+    void set_on_height_changed(std::function<void()> cb);
 private:
     void draw_text(SDL_Renderer* r, const std::string& s, int x, int y, int max_width, const DMLabelStyle& ls) const;
     std::vector<std::string> wrap_lines(TTF_Font* f, const std::string& s, int max_width) const;
     int compute_label_height(int width) const;
+    int compute_text_height(TTF_Font* f, int width) const;
+    int compute_box_height(int width) const;
+    bool update_geometry(bool notify_change);
     SDL_Rect box_rect() const;
     SDL_Rect label_rect() const;
     SDL_Rect rect_{0,0,200,32};
@@ -67,6 +72,7 @@ private:
     bool hovered_ = false;
     bool editing_ = false;
     size_t caret_pos_ = 0;
+    std::function<void()> on_height_changed_{};
 };
 
 class DMCheckbox {
@@ -265,6 +271,11 @@ public:
     virtual bool handle_event(const SDL_Event& e) = 0;
     virtual void render(SDL_Renderer* r) const = 0;
     virtual bool wants_full_row() const { return false; }
+    void set_layout_dirty_callback(std::function<void()> cb) { layout_dirty_callback_ = std::move(cb); }
+protected:
+    void request_layout() const { if (layout_dirty_callback_) layout_dirty_callback_(); }
+private:
+    mutable std::function<void()> layout_dirty_callback_{};
 };
 
 class ButtonWidget : public Widget {
@@ -291,7 +302,16 @@ private:
 class TextBoxWidget : public Widget {
 public:
     explicit TextBoxWidget(DMTextBox* t, bool full_row = false)
-        : t_(t), full_row_(full_row) {}
+        : t_(t), full_row_(full_row) {
+        if (t_) {
+            t_->set_on_height_changed([this]() { this->request_layout(); });
+        }
+    }
+    ~TextBoxWidget() override {
+        if (t_) {
+            t_->set_on_height_changed(nullptr);
+        }
+    }
     void set_rect(const SDL_Rect& r) override { if (t_) t_->set_rect(r); }
     const SDL_Rect& rect() const override { return t_->rect(); }
     int height_for_width(int w) const override { return t_ ? t_->preferred_height(w) : DMTextBox::height(); }

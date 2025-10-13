@@ -9,7 +9,7 @@
                 "map_panel": false
             },
             "map_assets": {
-                "candidates": true
+                "candidates": false
             }
         }
     }

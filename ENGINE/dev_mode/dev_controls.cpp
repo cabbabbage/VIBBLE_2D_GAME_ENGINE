@@ -17,6 +17,7 @@
 #include "dev_mode/area_overlay_editor.hpp"
 #include "asset/asset_info.hpp"
 #include "dm_styles.hpp"
+#include "draw_utils.hpp"
 #include "widgets.hpp"
 #include "dev_controls_persistence.hpp"
 #include "render/global_light_source.hpp"
@@ -61,6 +62,7 @@ void dev_mode_trace(const std::string& message) {
 constexpr const char* kModeIdRoom = "room";
 constexpr const char* kModeIdMap = "map";
 constexpr const char* kModeIdArea = "area";
+constexpr int kPopupOutlineThickness = 1;
 
 bool is_trail_room(const Room* room) {
     if (!room || room->type.empty()) {
@@ -274,12 +276,27 @@ public:
     void render(SDL_Renderer* renderer) const {
         if (!visible_ || !renderer) return;
         SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-        SDL_Color bg = DMStyles::PanelBG();
-        SDL_SetRenderDrawColor(renderer, bg.r, bg.g, bg.b, bg.a);
-        SDL_RenderFillRect(renderer, &rect_);
-        SDL_Color border = DMStyles::Border();
-        SDL_SetRenderDrawColor(renderer, border.r, border.g, border.b, border.a);
-        SDL_RenderDrawRect(renderer, &rect_);
+        const SDL_Color bg = DMStyles::PanelBG();
+        const SDL_Color highlight = DMStyles::HighlightColor();
+        const SDL_Color shadow = DMStyles::ShadowColor();
+        dm_draw::DrawBeveledRect(
+            renderer,
+            rect_,
+            DMStyles::CornerRadius(),
+            DMStyles::BevelDepth(),
+            bg,
+            highlight,
+            shadow,
+            false,
+            DMStyles::HighlightIntensity(),
+            DMStyles::ShadowIntensity());
+        const SDL_Color border = DMStyles::Border();
+        dm_draw::DrawRoundedOutline(
+            renderer,
+            rect_,
+            DMStyles::CornerRadius(),
+            kPopupOutlineThickness,
+            border);
         const int margin = DMSpacing::item_gap();
         const int spacing = DMSpacing::small_gap();
         const int button_height = DMButton::height();

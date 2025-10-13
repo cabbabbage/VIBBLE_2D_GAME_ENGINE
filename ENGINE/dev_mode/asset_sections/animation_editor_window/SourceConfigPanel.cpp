@@ -179,11 +179,27 @@ void SourceConfigPanel::render(SDL_Renderer* renderer) const {
         bool hovered = static_cast<int>(i) == hover_button_;
         SDL_Color fill{static_cast<Uint8>(hovered ? 0x5c : 0x3a), static_cast<Uint8>(hovered ? 0x78 : 0x4b),
                        static_cast<Uint8>(hovered ? 0xa8 : 0x63), 255};
-        SDL_SetRenderDrawColor(renderer, fill.r, fill.g, fill.b, fill.a);
-        SDL_RenderFillRect(renderer, &rect);
+        const int radius = std::min(DMStyles::CornerRadius(), std::min(rect.w, rect.h) / 2);
+        const int bevel = std::min(DMStyles::BevelDepth(), std::max(0, std::min(rect.w, rect.h) / 2));
+        dm_draw::DrawBeveledRect(
+            renderer,
+            rect,
+            radius,
+            bevel,
+            fill,
+            fill,
+            fill,
+            false,
+            0.0f,
+            0.0f);
 
-        SDL_SetRenderDrawColor(renderer, 0x18, 0x1f, 0x20, 255);
-        SDL_RenderDrawRect(renderer, &rect);
+        SDL_Color border{0x18, 0x1f, 0x20, 255};
+        dm_draw::DrawRoundedOutline(
+            renderer,
+            rect,
+            radius,
+            1,
+            border);
 
         render_button_label(renderer, rect, button.label);
     }

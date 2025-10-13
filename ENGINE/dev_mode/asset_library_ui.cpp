@@ -309,8 +309,12 @@ struct AssetLibraryUI::AssetTileWidget : public Widget {
             false,
             DMStyles::HighlightIntensity(),
             DMStyles::ShadowIntensity());
-        SDL_SetRenderDrawColor(r, delete_style.border.r, delete_style.border.g, delete_style.border.b, delete_style.border.a);
-        SDL_RenderDrawRect(r, &button_rect);
+        dm_draw::DrawRoundedOutline(
+            r,
+            button_rect,
+            corner_radius,
+            1,
+            delete_style.border);
         SDL_SetRenderDrawColor(r, delete_style.text.r, delete_style.text.g, delete_style.text.b, delete_style.text.a);
         const int cross_inset = std::max(bevel_depth + 1, button_rect.w / 4);
         SDL_RenderDrawLine(r,
@@ -392,8 +396,13 @@ struct AssetLibraryUI::AssetTileWidget : public Widget {
             SDL_RenderFillRect(r, &rect_);
         }
         SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
-        SDL_SetRenderDrawColor(r, kTileBd.r, kTileBd.g, kTileBd.b, kTileBd.a);
-        SDL_RenderDrawRect(r, &rect_);
+        const int tile_radius = std::min(DMStyles::CornerRadius(), std::min(rect_.w, rect_.h) / 2);
+        dm_draw::DrawRoundedOutline(
+            r,
+            rect_,
+            tile_radius,
+            1,
+            kTileBd);
         if (label_font && label_rect.w > 0) {
             SDL_Color text_color = DMStyles::Label().color;
             SDL_Surface* surf = TTF_RenderUTF8_Blended(label_font, render_label.c_str(), text_color);
@@ -915,8 +924,12 @@ void AssetLibraryUI::render(SDL_Renderer* r, int screen_w, int screen_h) const {
             DMStyles::HighlightIntensity(),
             DMStyles::ShadowIntensity());
         const SDL_Color panel_border = DMStyles::Border();
-        SDL_SetRenderDrawColor(r, panel_border.r, panel_border.g, panel_border.b, panel_border.a);
-        SDL_RenderDrawRect(r, &box);
+        dm_draw::DrawRoundedOutline(
+            r,
+            box,
+            corner_radius,
+            1,
+            panel_border);
 
         SDL_Rect input_rect{ box.x + 8, box.y + 8, box.w - 16, box.h - 16 };
         const DMTextBoxStyle& textbox = DMStyles::TextBox();
@@ -931,8 +944,12 @@ void AssetLibraryUI::render(SDL_Renderer* r, int screen_w, int screen_h) const {
             false,
             DMStyles::HighlightIntensity(),
             DMStyles::ShadowIntensity());
-        SDL_SetRenderDrawColor(r, textbox.border.r, textbox.border.g, textbox.border.b, textbox.border.a);
-        SDL_RenderDrawRect(r, &input_rect);
+        dm_draw::DrawRoundedOutline(
+            r,
+            input_rect,
+            corner_radius,
+            1,
+            textbox.border);
 
         const int text_padding = 12 + bevel_depth;
         const int interior_h = std::max(0, input_rect.h - 2 * bevel_depth);
@@ -1029,8 +1046,12 @@ void AssetLibraryUI::render(SDL_Renderer* r, int screen_w, int screen_h) const {
             DMStyles::HighlightIntensity(),
             DMStyles::ShadowIntensity());
         const SDL_Color panel_border = DMStyles::Border();
-        SDL_SetRenderDrawColor(r, panel_border.r, panel_border.g, panel_border.b, panel_border.a);
-        SDL_RenderDrawRect(r, &box);
+        dm_draw::DrawRoundedOutline(
+            r,
+            box,
+            corner_radius,
+            1,
+            panel_border);
 
         std::string asset_label = "(Unnamed)";
         if (pending_delete_ && !pending_delete_->name.empty()) {
@@ -1081,8 +1102,12 @@ void AssetLibraryUI::render(SDL_Renderer* r, int screen_w, int screen_h) const {
                 false,
                 DMStyles::HighlightIntensity(),
                 DMStyles::ShadowIntensity());
-            SDL_SetRenderDrawColor(r, style.border.r, style.border.g, style.border.b, style.border.a);
-            SDL_RenderDrawRect(r, &rect);
+            dm_draw::DrawRoundedOutline(
+                r,
+                rect,
+                corner_radius,
+                1,
+                style.border);
 
             TTF_Font* btn_font = load_font(style.label.font_size > 0 ? style.label.font_size : 16);
             if (!btn_font) {

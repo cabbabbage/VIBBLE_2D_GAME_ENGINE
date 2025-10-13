@@ -658,9 +658,13 @@
             {
               "chance": 0,
               "name": "null"
+            },
+            {
+              "chance": 5.0,
+              "name": "Barrel"
             }
           ],
-          "display_name": "New Spawn",
+          "display_name": "New Spawnok",
           "enforce_spacing": false,
           "max_number": 1,
           "min_number": 1,

@@ -126,12 +126,28 @@ void MovementCanvas::render(SDL_Renderer* renderer) const {
         } else if (static_cast<int>(i) == hovered_index_) {
             fill = DMStyles::AccentButton().bg;
         }
-        SDL_SetRenderDrawColor(renderer, fill.r, fill.g, fill.b, 230);
-        SDL_RenderFillRect(renderer, &marker);
+        const SDL_Color fill_color{fill.r, fill.g, fill.b, 230};
+        const SDL_Color outline = DMStyles::ListButton().border;
+        const int radius = std::min(DMStyles::CornerRadius(), std::min(marker.w, marker.h) / 2);
+        const int bevel = std::min(DMStyles::BevelDepth(), std::max(0, std::min(marker.w, marker.h) / 2));
+        dm_draw::DrawBeveledRect(
+            renderer,
+            marker,
+            radius,
+            bevel,
+            fill_color,
+            fill_color,
+            fill_color,
+            false,
+            0.0f,
+            0.0f);
 
-        SDL_Color outline = DMStyles::ListButton().border;
-        SDL_SetRenderDrawColor(renderer, outline.r, outline.g, outline.b, 255);
-        SDL_RenderDrawRect(renderer, &marker);
+        dm_draw::DrawRoundedOutline(
+            renderer,
+            marker,
+            radius,
+            1,
+            outline);
 
         if (frames_[i].resort_z) {
             SDL_Color indicator = with_alpha(DMStyles::DeleteButton().bg, 220);

@@ -13,6 +13,8 @@
 #include <nlohmann/json.hpp>
 
 #include "../../search_assets.hpp"
+#include "../../dm_styles.hpp"
+#include "../../draw_utils.hpp"
 #include "../../../utils/input.hpp"
 
 namespace {
@@ -645,12 +647,27 @@ void CandidateEditorPieGraphWidget::render_legend(SDL_Renderer* renderer, const 
             }
 
             SDL_Rect box{row_rect.x, row_rect.y + std::max(0, (row_rect.h - 16) / 2), 16, 16};
-            SDL_SetRenderDrawColor(renderer, swatch.r, swatch.g, swatch.b, 255);
-            SDL_RenderFillRect(renderer, &box);
+            const int radius = std::min(DMStyles::CornerRadius(), std::min(box.w, box.h) / 2);
+            const int bevel = std::min(DMStyles::BevelDepth(), std::max(0, std::min(box.w, box.h) / 2));
+            dm_draw::DrawBeveledRect(
+                renderer,
+                box,
+                radius,
+                bevel,
+                swatch,
+                swatch,
+                swatch,
+                false,
+                0.0f,
+                0.0f);
             SDL_Color outline_color = DMStyles::Border();
             outline_color.a = 255;
-            SDL_SetRenderDrawColor(renderer, outline_color.r, outline_color.g, outline_color.b, outline_color.a);
-            SDL_RenderDrawRect(renderer, &box);
+            dm_draw::DrawRoundedOutline(
+                renderer,
+                box,
+                radius,
+                1,
+                outline_color);
 
             double percent = total > 0.0 ? (clamp_positive(candidates_[i].weight) / total) * 100.0 : 0.0;
             std::ostringstream label;

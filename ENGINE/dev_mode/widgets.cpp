@@ -26,6 +26,9 @@ constexpr int kSliderTrackThickness = 10;
 constexpr int kSliderKnobWidth = 14;
 constexpr int kSliderKnobHeight = 18;
 constexpr int kSliderKnobVerticalInset = (kSliderKnobHeight - kSliderTrackThickness) / 2;
+constexpr int kControlOutlineThickness = 1;
+constexpr int kFocusRingThickness = 2;
+constexpr int kKnobOutlineThickness = 1;
 
 int slider_value_height() {
     const DMSliderStyle& st = DMStyles::Slider();
@@ -142,8 +145,12 @@ void DMButton::render(SDL_Renderer* r) const {
         DMStyles::ShadowIntensity());
 
     SDL_Color border = style_->border;
-    SDL_SetRenderDrawColor(r, border.r, border.g, border.b, border.a);
-    SDL_RenderDrawRect(r, &rect_);
+    dm_draw::DrawRoundedOutline(
+        r,
+        rect_,
+        DMStyles::CornerRadius(),
+        kControlOutlineThickness,
+        border);
     draw_label(r, style_->text);
 }
 
@@ -152,23 +159,24 @@ DMTextBox::DMTextBox(const std::string& label, const std::string& value)
 
 void DMTextBox::set_rect(const SDL_Rect& r) {
     rect_ = r;
-    label_height_ = compute_label_height(rect_.w);
-    int y = rect_.y + kBoxTopPadding;
-    label_rect_ = SDL_Rect{ rect_.x, y, rect_.w, label_height_ };
-    int control_y = y + label_height_ + (label_height_ > 0 ? kLabelControlGap : 0);
-    int available = rect_.h - (control_y - rect_.y) - kBoxBottomPadding;
-    int control_h = std::max(DMTextBox::height(), available);
-    box_rect_ = SDL_Rect{ rect_.x, control_y, rect_.w, control_h };
-    rect_.h = (box_rect_.y - rect_.y) + box_rect_.h + kBoxBottomPadding;
+    update_geometry(false);
 }
 
 void DMTextBox::set_value(const std::string& v) {
+    bool value_changed = (text_ != v);
     text_ = v;
     caret_pos_ = std::min(caret_pos_, text_.size());
+    if (value_changed) {
+        update_geometry(true);
+    }
 }
 
 int DMTextBox::height_for_width(int w) const {
     return preferred_height(w);
+}
+
+void DMTextBox::set_on_height_changed(std::function<void()> cb) {
+    on_height_changed_ = std::move(cb);
 }
 
 bool DMTextBox::handle_event(const SDL_Event& e) {
@@ -217,6 +225,9 @@ bool DMTextBox::handle_event(const SDL_Event& e) {
         } else if (e.key.keysym.sym == SDLK_END) {
             caret_pos_ = text_.size();
         }
+    }
+    if (changed) {
+        update_geometry(true);
     }
     return changed;
 }
@@ -270,10 +281,21 @@ void DMTextBox::render(SDL_Renderer* r) const {
         border = DMStyles::TextboxHoverOutline();
     }
     if (editing_) {
+        const SDL_Color focus = DMStyles::TextboxFocusOutline();
+        dm_draw::DrawRoundedFocusRing(
+            r,
+            box_rect_,
+            DMStyles::CornerRadius(),
+            kFocusRingThickness,
+            focus);
         border = DMStyles::TextboxActiveOutline();
     }
-    SDL_SetRenderDrawColor(r, border.r, border.g, border.b, border.a);
-    SDL_RenderDrawRect(r, &box_rect_);
+    dm_draw::DrawRoundedOutline(
+        r,
+        box_rect_,
+        DMStyles::CornerRadius(),
+        kControlOutlineThickness,
+        border);
     DMLabelStyle valStyle{ st.label.font_path, st.label.font_size, st.text };
     draw_text(r, text_, box_rect_.x + kTextboxHorizontalPadding, box_rect_.y + kTextboxHorizontalPadding, std::max(1, box_rect_.w - 2 * kTextboxHorizontalPadding), valStyle);
     if (editing_) {
@@ -352,7 +374,7 @@ std::vector<std::string> DMTextBox::wrap_lines(TTF_Font* f, const std::string& s
 
 int DMTextBox::preferred_height(int width) const {
     int label_h = compute_label_height(width);
-    int box_h   = DMTextBox::height();
+    int box_h   = compute_box_height(width);
     return kBoxTopPadding + label_h + (label_h > 0 ? kLabelControlGap : 0) + box_h + kBoxBottomPadding;
 }
 
@@ -371,6 +393,65 @@ int DMTextBox::compute_label_height(int width) const {
         if (i + 1 < lines.size()) total += gap;
     }
     return total;
+}
+
+int DMTextBox::compute_text_height(TTF_Font* f, int width) const {
+    if (!f) {
+        return 0;
+    }
+    auto lines = wrap_lines(f, text_, std::max(1, width));
+    if (lines.empty()) {
+        return TTF_FontHeight(f);
+    }
+    const int gap = DMSpacing::small_gap();
+    int total = 0;
+    for (size_t i = 0; i < lines.size(); ++i) {
+        const std::string& line = lines[i];
+        int line_height = 0;
+        if (!line.empty()) {
+            int w = 0;
+            if (TTF_SizeUTF8(f, line.c_str(), &w, &line_height) != 0) {
+                line_height = 0;
+            }
+        }
+        if (line_height <= 0) {
+            line_height = TTF_FontHeight(f);
+        }
+        total += line_height;
+        if (i + 1 < lines.size()) {
+            total += gap;
+        }
+    }
+    return total;
+}
+
+int DMTextBox::compute_box_height(int width) const {
+    const DMTextBoxStyle& st = DMStyles::TextBox();
+    TTF_Font* f = DMFontCache::instance().get_font(st.label.font_path, st.label.font_size);
+    int content_width = std::max(1, width - 2 * kTextboxHorizontalPadding);
+    int text_height = compute_text_height(f, content_width);
+    if (text_height <= 0) {
+        text_height = f ? TTF_FontHeight(f) : st.label.font_size;
+    }
+    int padded_height = text_height + 2 * kTextboxHorizontalPadding;
+    return std::max(DMTextBox::height(), padded_height);
+}
+
+bool DMTextBox::update_geometry(bool notify_change) {
+    int previous_height = rect_.h;
+    rect_.w = std::max(0, rect_.w);
+    label_height_ = compute_label_height(rect_.w);
+    int y = rect_.y + kBoxTopPadding;
+    label_rect_ = SDL_Rect{ rect_.x, y, rect_.w, label_height_ };
+    int control_y = y + label_height_ + (label_height_ > 0 ? kLabelControlGap : 0);
+    int control_h = compute_box_height(rect_.w);
+    box_rect_ = SDL_Rect{ rect_.x, control_y, rect_.w, control_h };
+    rect_.h = (box_rect_.y - rect_.y) + box_rect_.h + kBoxBottomPadding;
+    bool height_changed = (rect_.h != previous_height);
+    if (notify_change && height_changed && on_height_changed_) {
+        on_height_changed_();
+    }
+    return height_changed;
 }
 
 SDL_Rect DMTextBox::box_rect() const {
@@ -429,8 +510,12 @@ void DMCheckbox::render(SDL_Renderer* r) const {
     if (value_) {
         border = DMStyles::CheckboxActiveOutline();
     }
-    SDL_SetRenderDrawColor(r, border.r, border.g, border.b, border.a);
-    SDL_RenderDrawRect(r, &box);
+    dm_draw::DrawRoundedOutline(
+        r,
+        box,
+        DMStyles::CornerRadius(),
+        kControlOutlineThickness,
+        border);
     if (value_) {
         SDL_Color check = DMStyles::CheckboxCheckColor();
         SDL_Rect inner{ box.x + 4, box.y + 4, box.w - 8, box.h - 8 };
@@ -713,12 +798,20 @@ void DMSlider::render(SDL_Renderer* r) const {
     const bool active = focused_ || dragging_;
     if (active) {
         const SDL_Color& focus_outline = DMStyles::SliderFocusOutline();
-        SDL_SetRenderDrawColor(r, focus_outline.r, focus_outline.g, focus_outline.b, focus_outline.a);
-        SDL_RenderDrawRect(r, &rect_);
+        dm_draw::DrawRoundedFocusRing(
+            r,
+            rect_,
+            DMStyles::CornerRadius(),
+            kFocusRingThickness,
+            focus_outline);
     } else if (hovered_) {
         const SDL_Color& hover_outline = DMStyles::SliderHoverOutline();
-        SDL_SetRenderDrawColor(r, hover_outline.r, hover_outline.g, hover_outline.b, hover_outline.a);
-        SDL_RenderDrawRect(r, &rect_);
+        dm_draw::DrawRoundedOutline(
+            r,
+            rect_,
+            DMStyles::CornerRadius(),
+            kControlOutlineThickness,
+            hover_outline);
     }
     SDL_Rect tr = track_rect();
     SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
@@ -778,8 +871,12 @@ void DMSlider::render(SDL_Renderer* r) const {
         false,
         DMStyles::HighlightIntensity(),
         DMStyles::ShadowIntensity());
-    SDL_SetRenderDrawColor(r, kborder.r, kborder.g, kborder.b, kborder.a);
-    SDL_RenderDrawRect(r, &krect);
+    dm_draw::DrawRoundedOutline(
+        r,
+        krect,
+        knob_radius,
+        kKnobOutlineThickness,
+        kborder);
     if (edit_box_) {
         edit_box_->render(r);
     } else {
@@ -1265,12 +1362,20 @@ void DMRangeSlider::render(SDL_Renderer* r) const {
     const bool active = focused_ || dragging;
     if (active) {
         const SDL_Color& focus_outline = DMStyles::SliderFocusOutline();
-        SDL_SetRenderDrawColor(r, focus_outline.r, focus_outline.g, focus_outline.b, focus_outline.a);
-        SDL_RenderDrawRect(r, &rect_);
+        dm_draw::DrawRoundedFocusRing(
+            r,
+            rect_,
+            DMStyles::CornerRadius(),
+            kFocusRingThickness,
+            focus_outline);
     } else if (hovered_) {
         const SDL_Color& hover_outline = DMStyles::SliderHoverOutline();
-        SDL_SetRenderDrawColor(r, hover_outline.r, hover_outline.g, hover_outline.b, hover_outline.a);
-        SDL_RenderDrawRect(r, &rect_);
+        dm_draw::DrawRoundedOutline(
+            r,
+            rect_,
+            DMStyles::CornerRadius(),
+            kControlOutlineThickness,
+            hover_outline);
     }
     SDL_Rect tr = track_rect();
     SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
@@ -1341,8 +1446,12 @@ void DMRangeSlider::render(SDL_Renderer* r) const {
         false,
         DMStyles::HighlightIntensity(),
         DMStyles::ShadowIntensity());
-    SDL_SetRenderDrawColor(r, border_min.r, border_min.g, border_min.b, border_min.a);
-    SDL_RenderDrawRect(r, &kmin);
+    dm_draw::DrawRoundedOutline(
+        r,
+        kmin,
+        knob_radius,
+        kKnobOutlineThickness,
+        border_min);
     dm_draw::DrawBeveledRect(
         r,
         kmax,
@@ -1354,8 +1463,12 @@ void DMRangeSlider::render(SDL_Renderer* r) const {
         false,
         DMStyles::HighlightIntensity(),
         DMStyles::ShadowIntensity());
-    SDL_SetRenderDrawColor(r, border_max.r, border_max.g, border_max.b, border_max.a);
-    SDL_RenderDrawRect(r, &kmax);
+    dm_draw::DrawRoundedOutline(
+        r,
+        kmax,
+        knob_radius,
+        kKnobOutlineThickness,
+        border_max);
     if (edit_min_) {
         edit_min_->render(r);
     } else {
@@ -1511,10 +1624,21 @@ void DMDropdown::render(SDL_Renderer* r) const {
         border = DMStyles::TextboxHoverOutline();
     }
     if (has_focus) {
+        const SDL_Color focus = DMStyles::TextboxFocusOutline();
+        dm_draw::DrawRoundedFocusRing(
+            r,
+            box_rect_,
+            DMStyles::CornerRadius(),
+            kFocusRingThickness,
+            focus);
         border = DMStyles::TextboxActiveOutline();
     }
-    SDL_SetRenderDrawColor(r, border.r, border.g, border.b, border.a);
-    SDL_RenderDrawRect(r, &box_rect_);
+    dm_draw::DrawRoundedOutline(
+        r,
+        box_rect_,
+        DMStyles::CornerRadius(),
+        kControlOutlineThickness,
+        border);
     DMLabelStyle labelStyle{ st.label.font_path, st.label.font_size, st.text };
     TTF_Font* f = TTF_OpenFont(labelStyle.font_path.c_str(), labelStyle.font_size);
     if (f) {
@@ -1675,8 +1799,21 @@ void DMDropdown::render_options(SDL_Renderer* r) const {
             false,
             DMStyles::HighlightIntensity(),
             DMStyles::ShadowIntensity());
-        SDL_SetRenderDrawColor(r, border.r, border.g, border.b, border.a);
-        SDL_RenderDrawRect(r, &rect);
+        if (current) {
+            const SDL_Color focus_ring = DMStyles::TextboxFocusOutline();
+            dm_draw::DrawRoundedFocusRing(
+                r,
+                rect,
+                DMStyles::CornerRadius(),
+                kFocusRingThickness,
+                focus_ring);
+        }
+        dm_draw::DrawRoundedOutline(
+            r,
+            rect,
+            DMStyles::CornerRadius(),
+            kControlOutlineThickness,
+            border);
         if (!font) {
             continue;
         }

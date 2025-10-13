@@ -41,4 +41,18 @@ void DrawBeveledRect(
     float highlight_intensity = 0.35f,
     float shadow_intensity = 0.35f);
 
+void DrawRoundedOutline(
+    SDL_Renderer* renderer,
+    const SDL_Rect& rect,
+    int corner_radius,
+    int thickness,
+    const SDL_Color& color);
+
+void DrawRoundedFocusRing(
+    SDL_Renderer* renderer,
+    const SDL_Rect& rect,
+    int corner_radius,
+    int thickness,
+    const SDL_Color& color);
+
 }
