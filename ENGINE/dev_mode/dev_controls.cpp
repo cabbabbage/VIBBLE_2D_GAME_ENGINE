@@ -24,12 +24,25 @@
 
 #include "asset/Asset.hpp"
 #include "asset/asset_types.hpp"
+#include "asset/asset_utils.hpp"
 #include "core/AssetsManager.hpp"
 #include "render/camera.hpp"
 #include "map_generation/room.hpp"
+#include "spawn/asset_spawn_planner.hpp"
+#include "spawn/asset_spawner.hpp"
+#include "spawn/check.hpp"
+#include "spawn/methods/center_spawner.hpp"
+#include "spawn/methods/exact_spawner.hpp"
+#include "spawn/methods/perimeter_spawner.hpp"
+#include "spawn/methods/percent_spawner.hpp"
+#include "spawn/methods/random_spawner.hpp"
+#include "spawn/spawn_logger.hpp"
+#include "utils/area.hpp"
+#include "utils/map_grid.hpp"
 #include "utils/input.hpp"
 
 #include <algorithm>
+#include <unordered_map>
 #include <unordered_set>
 #include <utility>
 #include <cctype>
@@ -37,6 +50,7 @@
 #include <vector>
 #include <optional>
 #include <iostream>
+#include <random>
 #include <nlohmann/json.hpp>
 
 using devmode::sdl::event_point;
@@ -1854,6 +1868,191 @@ void DevControls::apply_header_suppression() {
     }
 }
 
+int DevControls::map_radius_or_default() const {
+    if (!assets_) {
+        return 1000;
+    }
+    int radius = 0;
+    try {
+        const nlohmann::json& map_json = assets_->map_info_json();
+        if (map_json.is_object()) {
+            radius = map_json.value("map_radius", 0);
+        }
+    } catch (...) {
+        radius = 0;
+    }
+    if (radius <= 0) {
+        const auto& rooms = assets_->rooms();
+        for (Room* room : rooms) {
+            if (!room || !room->room_area) {
+                continue;
+            }
+            auto [minx, miny, maxx, maxy] = room->room_area->get_bounds();
+            int extent = 0;
+            extent = std::max(extent, std::abs(minx));
+            extent = std::max(extent, std::abs(miny));
+            extent = std::max(extent, std::abs(maxx));
+            extent = std::max(extent, std::abs(maxy));
+            radius = std::max(radius, extent);
+        }
+    }
+    if (radius <= 0) {
+        radius = 1000;
+    }
+    return radius;
+}
+
+void DevControls::remove_spawn_group_assets(const std::string& spawn_id) {
+    if (!assets_ || spawn_id.empty()) {
+        return;
+    }
+    std::vector<Asset*> to_remove;
+    to_remove.reserve(assets_->all.size());
+    for (Asset* asset : assets_->all) {
+        if (!asset || asset->dead) {
+            continue;
+        }
+        if (asset == assets_->player) {
+            continue;
+        }
+        if (asset->spawn_id == spawn_id) {
+            to_remove.push_back(asset);
+        }
+    }
+    for (Asset* asset : to_remove) {
+        purge_asset(asset);
+        auto& all = assets_->all;
+        all.erase(std::remove(all.begin(), all.end(), asset), all.end());
+        asset->Delete();
+    }
+}
+
+void DevControls::integrate_spawned_assets(std::vector<std::unique_ptr<Asset>>& spawned) {
+    if (!assets_ || spawned.empty()) {
+        return;
+    }
+    for (auto& uptr : spawned) {
+        if (!uptr) {
+            continue;
+        }
+        Asset* raw = uptr.get();
+        set_camera_recursive(raw, &assets_->getView());
+        set_assets_owner_recursive(raw, assets_);
+        raw->finalize_setup();
+        assets_->owned_assets.emplace_back(std::move(uptr));
+        assets_->all.push_back(raw);
+    }
+    spawned.clear();
+    assets_->initialize_active_assets(assets_->getView().get_screen_center());
+    assets_->refresh_active_asset_lists();
+    assets_->update_closest_assets(assets_->player, 3);
+}
+
+void DevControls::regenerate_map_spawn_group(const nlohmann::json& entry) {
+    if (!assets_ || !entry.is_object()) {
+        return;
+    }
+    const std::string spawn_id = entry.value("spawn_id", std::string{});
+    if (spawn_id.empty()) {
+        return;
+    }
+
+    remove_spawn_group_assets(spawn_id);
+
+    std::unordered_map<std::string, std::shared_ptr<AssetInfo>> asset_info_library = assets_->library().all();
+    std::vector<std::unique_ptr<Asset>> spawned;
+    Check checker(false);
+    std::mt19937 rng(std::random_device{}());
+
+    const auto& rooms = assets_->rooms();
+    ExactSpawner exact;
+    CenterSpawner center;
+    RandomSpawner random;
+    PerimeterSpawner perimeter;
+    PercentSpawner percent;
+
+    for (Room* room : rooms) {
+        if (!room || !room->room_area) {
+            continue;
+        }
+        nlohmann::json& room_json = room->assets_data();
+        if (!room_json.is_object()) {
+            continue;
+        }
+        if (!room_json.value("inherits_map_assets", false)) {
+            continue;
+        }
+
+        nlohmann::json root = nlohmann::json::object();
+        root["spawn_groups"] = nlohmann::json::array();
+        root["spawn_groups"].push_back(entry);
+        std::vector<nlohmann::json> sources{root};
+        std::vector<std::string> paths;
+        AssetSpawnPlanner planner(sources, *room->room_area, assets_->library(), paths);
+
+        MapGrid grid = MapGrid::from_area_bounds(*room->room_area, 100);
+        std::vector<Area> exclusion;
+        SpawnLogger logger("", "");
+        SpawnContext ctx(rng, checker, logger, exclusion, asset_info_library, spawned, &assets_->library(), &grid);
+
+        const auto& queue = planner.get_spawn_queue();
+        const Area* area_ptr = room->room_area.get();
+        for (const auto& info : queue) {
+            const std::string& pos = info.position;
+            if (pos == "Exact" || pos == "Exact Position") {
+                exact.spawn(info, area_ptr, ctx);
+            } else if (pos == "Center") {
+                center.spawn(info, area_ptr, ctx);
+            } else if (pos == "Perimeter") {
+                perimeter.spawn(info, area_ptr, ctx);
+            } else if (pos == "Percent") {
+                percent.spawn(info, area_ptr, ctx);
+            } else {
+                random.spawn(info, area_ptr, ctx);
+            }
+        }
+    }
+
+    integrate_spawned_assets(spawned);
+}
+
+void DevControls::regenerate_boundary_spawn_group(const nlohmann::json& entry) {
+    if (!assets_ || !entry.is_object()) {
+        return;
+    }
+    const std::string spawn_id = entry.value("spawn_id", std::string{});
+    if (spawn_id.empty()) {
+        return;
+    }
+
+    remove_spawn_group_assets(spawn_id);
+
+    const int radius = map_radius_or_default();
+    const int diameter = radius * 2;
+    SDL_Point center{radius, radius};
+    Area area("map_boundary_regen", center, diameter, diameter, "Circle", 1, diameter, diameter);
+
+    std::vector<Area> exclusion;
+    const auto& rooms = assets_->rooms();
+    exclusion.reserve(rooms.size());
+    for (Room* room : rooms) {
+        if (room && room->room_area) {
+            exclusion.push_back(*room->room_area);
+        }
+    }
+
+    AssetSpawner spawner(&assets_->library(), exclusion);
+    nlohmann::json root = nlohmann::json::object();
+    root["spawn_groups"] = nlohmann::json::array();
+    root["spawn_groups"].push_back(entry);
+    std::string source = assets_->map_info_path();
+    if (!source.empty()) {
+        source += "::map_boundary_data";
+    }
+    auto spawned = spawner.spawn_boundary_from_json(root, area, source);
+    integrate_spawned_assets(spawned);
+}
+
 void DevControls::toggle_map_assets_modal() {
     if (!assets_) return;
     if (!map_assets_modal_) {
@@ -1864,9 +2063,10 @@ void DevControls::toggle_map_assets_modal() {
         map_assets_modal_->set_screen_dimensions(screen_w_, screen_h_);
     }
     auto save = [this]() { return persist_map_info_to_disk(); };
+    auto regen = [this](const nlohmann::json& entry) { this->regenerate_map_spawn_group(entry); };
     auto& map_json = assets_->map_info_json();
     SDL_Color color{200, 200, 255, 255};
-    map_assets_modal_->open(map_json, "map_assets_data", "batch_map_assets", "Map-wide", color, save);
+    map_assets_modal_->open(map_json, "map_assets_data", "batch_map_assets", "Map-wide", color, save, regen);
 }
 
 void DevControls::apply_camera_area_render_flag() {
@@ -1938,9 +2138,16 @@ void DevControls::toggle_boundary_assets_modal() {
         boundary_assets_modal_->set_screen_dimensions(screen_w_, screen_h_);
     }
     auto save = [this]() { return persist_map_info_to_disk(); };
+    auto regen = [this](const nlohmann::json& entry) { this->regenerate_boundary_spawn_group(entry); };
     auto& map_json = assets_->map_info_json();
     SDL_Color color{255, 200, 120, 255};
-    boundary_assets_modal_->open(map_json, "map_boundary_data", "batch_map_boundary", "Boundary", color, save);
+    boundary_assets_modal_->open(map_json,
+                                 "map_boundary_data",
+                                 "batch_map_boundary",
+                                 "Boundary",
+                                 color,
+                                 save,
+                                 regen);
 }
 
 void DevControls::open_regenerate_room_popup() {

@@ -138,6 +138,7 @@ private:
 class CandidateListPanelImpl : public DockableCollapsible {
 public:
     using SaveCallback = std::function<void()>;
+    using RegenCallback = std::function<void(const json&)>;
 
     CandidateListPanelImpl() : DockableCollapsible("Spawn Group Candidates", true) {
         set_scroll_enabled(true);
@@ -168,12 +169,14 @@ public:
               std::string default_display_name,
               std::string ownership_label,
               std::optional<SDL_Color> ownership_color,
-              SaveCallback on_save) {
+              SaveCallback on_save,
+              RegenCallback on_regen) {
         entry_ = entry;
         default_display_name_ = std::move(default_display_name);
         ownership_label_ = std::move(ownership_label);
         ownership_color_ = ownership_color;
         save_callback_ = std::move(on_save);
+        regen_callback_ = std::move(on_regen);
 
         if (!ownership_label_.empty()) {
             if (!ownership_label_widget_) ownership_label_widget_ = std::make_unique<LabelWidget>();
@@ -192,6 +195,18 @@ public:
             instructions_label_ = std::make_unique<LabelWidget>(
                 "Scroll on a slice to adjust weight. Double-click to remove.", DMStyles::Label().color, true);
         }
+        if (!regen_button_ && regen_callback_) {
+            regen_button_ = std::make_unique<DMButton>("Regen", &DMStyles::PrimaryButton(), 0, DMButton::height());
+        }
+        if (regen_callback_) {
+            if (!regen_widget_) {
+                regen_widget_ = std::make_unique<ButtonWidget>(regen_button_.get(), [this]() { this->handle_regen(); });
+            }
+        } else {
+            regen_widget_.reset();
+            regen_button_.reset();
+        }
+
         if (!add_button_) {
             add_button_ = std::make_unique<DMButton>("Add Candidate", &DMStyles::ListButton(), 0, DMButton::height());
             add_widget_ = std::make_unique<ButtonWidget>(add_button_.get(), [this]() { open_candidate_search(); });
@@ -281,6 +296,10 @@ private:
         }
 
         DockableCollapsible::Rows rows;
+
+        if (regen_widget_) {
+            rows.push_back({regen_widget_.get()});
+        }
 
         if (ownership_label_widget_) {
             rows.push_back({ownership_label_widget_.get()});
@@ -379,15 +398,32 @@ private:
         notify_save(true);
     }
 
+    void handle_regen() {
+        if (!entry_) return;
+        const bool sanitized = sanitize_entry();
+        if (sanitized && pie_widget_) {
+            pie_widget_->set_candidates_from_json(*entry_);
+        }
+        if (save_callback_) {
+            save_callback_();
+        }
+        if (regen_callback_) {
+            regen_callback_(*entry_);
+        }
+    }
+
     json* entry_ = nullptr;
     std::string default_display_name_{};
     std::string ownership_label_{};
     std::optional<SDL_Color> ownership_color_{};
     SaveCallback save_callback_{};
+    RegenCallback regen_callback_{};
 
     int screen_w_ = 1920;
     int screen_h_ = 1080;
 
+    std::unique_ptr<DMButton> regen_button_{};
+    std::unique_ptr<ButtonWidget> regen_widget_{};
     std::unique_ptr<LabelWidget> ownership_label_widget_{};
     std::unique_ptr<LabelWidget> display_name_widget_{};
     std::unique_ptr<LabelWidget> candidates_header_{};
@@ -432,9 +468,11 @@ void SingleSpawnGroupModal::open(json& map_info,
                                  const std::string& default_display_name,
                                  const std::string& ownership_label,
                                  SDL_Color ownership_color,
-                                 SaveCallback on_save) {
+                                 SaveCallback on_save,
+                                 RegenCallback on_regen) {
     map_info_ = &map_info;
     on_save_ = std::move(on_save);
+    on_regen_ = std::move(on_regen);
     section_ = &(*map_info_)[section_key];
     ensure_single_group(*section_, default_display_name);
 
@@ -449,6 +487,9 @@ void SingleSpawnGroupModal::open(json& map_info,
                  ownership_label.empty() ? std::optional<SDL_Color>{} : std::optional<SDL_Color>{ownership_color},
                  [this]() {
                      if (on_save_) on_save_();
+                 },
+                 [this]() {
+                     if (entry_ && on_regen_) on_regen_(*entry_);
                  });
 
     panel_->open();

@@ -163,6 +163,12 @@ private:
     std::string generate_unique_room_area_name(const std::string& base) const;
 
 private:
+    int map_radius_or_default() const;
+    void remove_spawn_group_assets(const std::string& spawn_id);
+    void integrate_spawned_assets(std::vector<std::unique_ptr<Asset>>& spawned);
+    void regenerate_map_spawn_group(const nlohmann::json& entry);
+    void regenerate_boundary_spawn_group(const nlohmann::json& entry);
+
     bool persist_map_info_to_disk() const;
     const RoomAreaCache::PolygonList& room_area_polygons();
 

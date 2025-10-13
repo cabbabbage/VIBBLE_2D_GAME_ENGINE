@@ -14,11 +14,18 @@ class CandidateListPanel;
 class SingleSpawnGroupModal {
  public:
     using SaveCallback = std::function<bool()>;
+    using RegenCallback = std::function<void(const nlohmann::json&)>;
 
      SingleSpawnGroupModal();
      ~SingleSpawnGroupModal();
 
-     void open(nlohmann::json& map_info, const std::string& section_key, const std::string& default_display_name, const std::string& ownership_label, SDL_Color ownership_color, SaveCallback on_save);
+    void open(nlohmann::json& map_info,
+              const std::string& section_key,
+              const std::string& default_display_name,
+              const std::string& ownership_label,
+              SDL_Color ownership_color,
+              SaveCallback on_save,
+              RegenCallback on_regen);
 
     void close();
     bool visible() const;
@@ -40,6 +47,7 @@ class SingleSpawnGroupModal {
     nlohmann::json* section_ = nullptr;
     nlohmann::json* entry_ = nullptr;
     SaveCallback on_save_{};
+    RegenCallback on_regen_{};
 
     std::unique_ptr<CandidateListPanel> panel_;
 
