@@ -9,8 +9,6 @@
 #include "global_light_source.hpp"
 #include "render_pipeline/render_asset/AssetRenderPipeline.hpp"
 #include "render/camera.hpp"
-#include "render/light_rays.hpp"
-#include "render/light_rays_config.hpp"
 
 class Assets;
 class Asset;
@@ -57,7 +55,7 @@ private:
     bool light_rays_enabled_ = false;
     bool fullscreen_light_rays_disabled_ = true;
     int            current_shading_group_ = 0;
-    int            num_groups_ = 20;
+    int            num_groups_ = 40;
     bool           debugging = false;
     bool           low_quality_rendering_ = false;
 

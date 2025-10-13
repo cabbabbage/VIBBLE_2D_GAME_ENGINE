@@ -58,6 +58,7 @@ public:
 private:
     class LayerCanvasWidget;
     class PanelSidebarWidget;
+    class RoomListPanel;
     class PreviewToolbarWidget;
     class PreviewColumnWidget;
     class LayerConfigPanel;
@@ -78,6 +79,7 @@ private:
 
     void rebuild_rows();
     void rebuild_available_rooms();
+    void refresh_room_list();
     void refresh_canvas();
     void add_layer_internal();
     void add_room_to_selected_layer();
@@ -114,6 +116,7 @@ private:
     void update_click_target(int layer_index, const std::string& room_key);
     void clear_hover_target();
     void open_room_config_for(const std::string& room_name);
+    void show_room_details(const std::string& room_key);
     void ensure_room_configurator();
     nlohmann::json* ensure_room_entry(const std::string& room_name);
     void update_sidebar_bounds(const SDL_Rect& bounds);
@@ -179,6 +182,7 @@ private:
     std::unique_ptr<PreviewToolbarWidget> toolbar_widget_;
     std::unique_ptr<PreviewColumnWidget> preview_column_widget_;
     std::unique_ptr<PanelSidebarWidget> sidebar_widget_;
+    std::unique_ptr<RoomListPanel> room_list_panel_;
     std::unique_ptr<LayerConfigPanel> layer_config_;
     std::unique_ptr<SlidingWindowContainer> layer_config_container_;
     std::unique_ptr<RoomSelectorPopup> room_selector_;

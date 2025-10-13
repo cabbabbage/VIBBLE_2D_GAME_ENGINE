@@ -147,7 +147,7 @@ private:
     std::vector<Asset*> closest_assets;
     std::vector<Room*> rooms_;
     Room* current_room_ = nullptr;
-    int num_groups_ = 4;
+    int num_groups_ = 40;
     bool dev_mode = false;
     bool suppress_render_ = false;
     bool force_high_quality_rendering_ = false;
