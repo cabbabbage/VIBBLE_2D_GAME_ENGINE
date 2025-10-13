@@ -567,6 +567,12 @@ struct SpawnGroupConfig::Entry {
         update_toggle_label();
     }
 
+    ~Entry() {
+        if (owner_ && owner_->current_entry_ == this) {
+            owner_->current_entry_ = nullptr;
+        }
+    }
+
     void bind(nlohmann::json* entry, std::optional<size_t> index = std::nullopt) {
         array_index_ = index;
         entry_ = entry;
@@ -841,11 +847,15 @@ private:
 
         nlohmann::json entry_copy = entry_view();
 
-        owner_->enqueue_notification([owner = owner_, entry = std::move(entry_copy), summary]() mutable {
+        owner_->enqueue_notification([owner = owner_, entry = std::move(entry_copy), summary, self = this]() mutable {
             if (!owner) return;
+            owner->current_entry_ = self;
             if (owner->on_change_) owner->on_change_();
             if (owner->on_entry_change_) owner->on_entry_change_(entry, summary);
             owner->fire_entry_callbacks(entry, summary);
+            if (owner->current_entry_ == self) {
+                owner->current_entry_ = nullptr;
+            }
         });
     }
 
@@ -1967,7 +1977,12 @@ void SpawnGroupConfig::process_pending_notifications() {
     while (!pending_notifications_.empty()) {
         auto cb = std::move(pending_notifications_.front());
         pending_notifications_.pop_front();
-        if (cb) cb();
+        if (cb) {
+            cb();
+            if (current_entry_) {
+                current_entry_ = nullptr;
+            }
+        }
     }
     processing_notifications_ = false;
 }

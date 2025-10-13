@@ -170,6 +170,7 @@ private:
     std::unique_ptr<ButtonWidget> header_delete_widget_{};
 
     DragState drag_state_{};
+    Entry* current_entry_ = nullptr;
 
     Entry* find_entry_by_id(const std::string& id);
     void begin_drag(size_t index, int pointer_y);
