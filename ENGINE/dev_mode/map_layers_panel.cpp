@@ -1288,6 +1288,18 @@ void MapLayersPanel::LayerCanvasWidget::render(SDL_Renderer* renderer) const {
 
         }
 
+        if (layer_hovered || layer_clicked) {
+
+            int fill_radius = std::max(2, pixel_radius - 4);
+
+            int fill_thickness = std::max(1, fill_radius);
+
+            SDL_Color fill_color = layer_clicked ? apply_alpha(clicked_layer_color, 90) : apply_alpha(hover_accent, 70);
+
+            draw_circle(renderer, center_x, center_y, fill_radius, fill_color, fill_thickness);
+
+        }
+
         int thickness = 3;
 
         if (info.index == selected_index_) thickness = 6;
@@ -2580,6 +2592,29 @@ bool MapLayersPanel::RoomCandidateWidget::handle_event(const SDL_Event& e) {
 
     bool used = false;
 
+    const std::string room_key = (candidate_ && candidate_->is_object())
+                                     ? candidate_->value("name", std::string())
+                                     : std::string();
+    MapLayersPanel* panel = owner_ ? owner_->panel_owner() : nullptr;
+
+    auto update_hover_state = [&](const SDL_Point& pt, bool inside) {
+        if (!panel) return;
+        if (inside) {
+            panel->update_hover_target(layer_index_, room_key);
+        } else if (panel->hovered_layer_index_ == layer_index_
+                   && panel->hovered_room_key_ == room_key) {
+            panel->clear_hover_target();
+        }
+    };
+
+    if (e.type == SDL_MOUSEMOTION) {
+        SDL_Point motion_point{ e.motion.x, e.motion.y };
+        update_hover_state(motion_point, SDL_PointInRect(&motion_point, &rect_));
+    } else if (e.type == SDL_MOUSEBUTTONDOWN || e.type == SDL_MOUSEBUTTONUP) {
+        SDL_Point click_point{ e.button.x, e.button.y };
+        update_hover_state(click_point, SDL_PointInRect(&click_point, &rect_));
+    }
+
     if (range_slider_ && range_slider_->handle_event(e)) {
 
         used = true;
@@ -2702,11 +2737,29 @@ void MapLayersPanel::RoomCandidateWidget::render(SDL_Renderer* renderer) const {
 
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
 
-    const SDL_Color row_bg = DMStyles::PanelHeader();
-
+    SDL_Color row_bg = DMStyles::PanelHeader();
+    SDL_Color border = DMStyles::Border();
     const SDL_Color highlight = DMStyles::HighlightColor();
-
     const SDL_Color shadow = DMStyles::ShadowColor();
+
+    const MapLayersPanel* panel = owner_ ? owner_->panel_owner() : nullptr;
+    std::string room_key = candidate_->value("name", std::string());
+    std::string display_name = candidate_->value("name", std::string("room"));
+
+    bool layer_hovered = panel && panel->hovered_layer_index_ == layer_index_;
+    bool layer_clicked = panel && panel->clicked_layer_index_ == layer_index_;
+    bool room_hovered = layer_hovered && (panel->hovered_room_key_.empty() || panel->hovered_room_key_ == room_key);
+    bool room_clicked = layer_clicked && (panel->clicked_room_key_.empty() || panel->clicked_room_key_ == room_key);
+
+    if (room_clicked) {
+        const DMButtonStyle& style = DMStyles::DeleteButton();
+        row_bg = mix_color(row_bg, style.bg, 0.55f);
+        border = mix_color(border, style.border, 0.7f);
+    } else if (room_hovered) {
+        const DMButtonStyle& style = DMStyles::AccentButton();
+        row_bg = mix_color(row_bg, style.hover_bg, 0.45f);
+        border = mix_color(border, style.border, 0.6f);
+    }
 
     dm_draw::DrawBeveledRect(
         renderer,
@@ -2720,8 +2773,6 @@ void MapLayersPanel::RoomCandidateWidget::render(SDL_Renderer* renderer) const {
         DMStyles::HighlightIntensity(),
         DMStyles::ShadowIntensity());
 
-    const SDL_Color border = DMStyles::Border();
-
     dm_draw::DrawRoundedOutline(
         renderer,
         bg,
@@ -2729,9 +2780,16 @@ void MapLayersPanel::RoomCandidateWidget::render(SDL_Renderer* renderer) const {
         1,
         border);
 
-    const DMLabelStyle label = DMStyles::Label();
+    DMLabelStyle label = DMStyles::Label();
+    if (room_clicked) {
+        const DMButtonStyle& style = DMStyles::DeleteButton();
+        label.color = mix_color(label.color, style.text, 0.7f);
+    } else if (room_hovered) {
+        const DMButtonStyle& style = DMStyles::AccentButton();
+        label.color = mix_color(label.color, style.text, 0.6f);
+    }
 
-    draw_text(renderer, candidate_->value("name", "room"), rect_.x + DMSpacing::item_gap(), rect_.y + DMSpacing::item_gap() - (label.font_size + 4), label);
+    draw_text(renderer, display_name, rect_.x + DMSpacing::item_gap(), rect_.y + DMSpacing::item_gap() - (label.font_size + 4), label);
 
     if (range_slider_) range_slider_->render(renderer);
 
