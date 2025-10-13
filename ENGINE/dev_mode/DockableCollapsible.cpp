@@ -5,12 +5,17 @@
 #include "dev_ui_settings.hpp"
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <string>
 #include <vector>
 #include <SDL_log.h>
 
 #include "utils/input.hpp"
+
+#ifndef DM_FORCE_LAYOUT
+#define DM_FORCE_LAYOUT 0
+#endif
 
 namespace {
 
@@ -76,6 +81,46 @@ namespace {
                                shackle_left_top.x, shackle_left_top.y + shackle.h / 2);
         }
     }
+
+    class LayoutTimingScope {
+    public:
+        LayoutTimingScope(const std::string& title,
+                          bool layout_dirty,
+                          bool geometry_dirty,
+                          bool resized,
+                          bool forced)
+            : title_(title),
+              layout_dirty_(layout_dirty),
+              geometry_dirty_(geometry_dirty),
+              resized_(resized),
+              forced_(forced),
+              start_(std::chrono::steady_clock::now()) {
+            SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION,
+                         "[DockableCollapsible] layout begin: %s (layout=%s geometry=%s resized=%s forced=%s)",
+                         title_.c_str(),
+                         layout_dirty_ ? "true" : "false",
+                         geometry_dirty_ ? "true" : "false",
+                         resized_ ? "true" : "false",
+                         forced_ ? "true" : "false");
+        }
+
+        ~LayoutTimingScope() {
+            auto elapsed = std::chrono::steady_clock::now() - start_;
+            double ms = std::chrono::duration<double, std::milli>(elapsed).count();
+            SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION,
+                         "[DockableCollapsible] layout end: %s (%.3f ms)",
+                         title_.c_str(),
+                         ms);
+        }
+
+    private:
+        std::string title_;
+        bool layout_dirty_ = false;
+        bool geometry_dirty_ = false;
+        bool resized_ = false;
+        bool forced_ = false;
+        std::chrono::steady_clock::time_point start_;
+    };
 }
 
 DockableCollapsible::DockableCollapsible(const std::string& title, bool floatable,
@@ -115,6 +160,7 @@ void DockableCollapsible::set_visible(bool v) {
         FloatingDockableManager::instance().notify_panel_closed(this);
         if (on_close_) on_close_();
     }
+    invalidate_layout();
 }
 
 void DockableCollapsible::open() {
@@ -138,10 +184,12 @@ void DockableCollapsible::set_rows(const Rows& rows) {
                 continue;
             }
             w->set_layout_dirty_callback([this]() {
-                this->layout(last_screen_w_, last_screen_h_);
+                this->invalidate_layout();
             });
+            w->clear_layout_dirty_flags();
         }
     }
+    invalidate_layout();
 }
 
 void DockableCollapsible::set_title(const std::string& title) {
@@ -152,6 +200,7 @@ void DockableCollapsible::set_title(const std::string& title) {
 void DockableCollapsible::set_expanded(bool e) {
     expanded_ = e;
     update_header_button();
+    invalidate_layout();
 }
 
 void DockableCollapsible::set_show_header(bool show) {
@@ -169,7 +218,7 @@ void DockableCollapsible::set_show_header(bool show) {
         }
         update_header_button();
     }
-    layout();
+    invalidate_layout();
 }
 
 void DockableCollapsible::set_close_button_enabled(bool enabled) {
@@ -186,7 +235,7 @@ void DockableCollapsible::set_close_button_enabled(bool enabled) {
             close_btn_.reset();
         }
     }
-    layout();
+    invalidate_layout();
 }
 
 void DockableCollapsible::setLocked(bool locked) {
@@ -212,11 +261,12 @@ void DockableCollapsible::set_position(int x, int y) {
     if (!floatable_) return;
     rect_.x = x; rect_.y = y;
     clamp_to_bounds(last_screen_w_, last_screen_h_);
+    invalidate_layout(true);
 }
 
 void DockableCollapsible::set_rect(const SDL_Rect& r) {
     rect_ = r;
-    layout();
+    invalidate_layout();
 }
 
 void DockableCollapsible::set_floatable(bool floatable) {
@@ -228,13 +278,14 @@ void DockableCollapsible::set_floatable(bool floatable) {
     header_dragging_via_button_ = false;
     header_btn_drag_moved_ = false;
     pointer_block_frames_ = 0;
-    layout();
+    invalidate_layout();
 }
 
 void DockableCollapsible::set_work_area(const SDL_Rect& area) {
     work_area_ = area;
     if (work_area_.w > 0) last_screen_w_ = work_area_.w;
     if (work_area_.h > 0) last_screen_h_ = work_area_.h;
+    invalidate_layout();
 }
 
 void DockableCollapsible::set_available_height_override(int height) {
@@ -243,6 +294,7 @@ void DockableCollapsible::set_available_height_override(int height) {
         return;
     }
     available_height_override_ = height;
+    invalidate_layout(true);
 }
 
 void DockableCollapsible::set_cell_width(int w) {
@@ -251,6 +303,7 @@ void DockableCollapsible::set_cell_width(int w) {
         return;
     }
     cell_width_ = std::max(40, w);
+    invalidate_layout();
 }
 
 void DockableCollapsible::set_padding(int p) {
@@ -259,6 +312,7 @@ void DockableCollapsible::set_padding(int p) {
         return;
     }
     padding_ = std::max(0, p);
+    invalidate_layout();
 }
 
 void DockableCollapsible::set_row_gap(int g) {
@@ -267,6 +321,7 @@ void DockableCollapsible::set_row_gap(int g) {
         return;
     }
     row_gap_ = std::max(0, g);
+    invalidate_layout();
 }
 
 void DockableCollapsible::set_col_gap(int g) {
@@ -275,6 +330,7 @@ void DockableCollapsible::set_col_gap(int g) {
         return;
     }
     col_gap_ = std::max(0, g);
+    invalidate_layout();
 }
 
 void DockableCollapsible::set_visible_height(int h) {
@@ -283,6 +339,7 @@ void DockableCollapsible::set_visible_height(int h) {
         return;
     }
     visible_height_ = std::max(0, h);
+    invalidate_layout();
 }
 
 void DockableCollapsible::set_floating_content_width(int w) {
@@ -295,7 +352,7 @@ void DockableCollapsible::set_floating_content_width(int w) {
         return;
     }
     floating_content_width_ = clamped;
-    layout();
+    invalidate_layout();
 }
 
 void DockableCollapsible::reset_scroll() const {
@@ -304,10 +361,21 @@ void DockableCollapsible::reset_scroll() const {
         return;
     }
     scroll_ = 0;
+    invalidate_layout(true);
 }
 
 void DockableCollapsible::force_pointer_ready() {
     pointer_block_frames_ = 0;
+}
+
+void DockableCollapsible::invalidate_layout(bool geometry_only) const {
+    if (!geometry_only) {
+        needs_layout_ = true;
+    }
+    needs_geometry_ = true;
+#if DM_FORCE_LAYOUT
+    layout(last_screen_w_, last_screen_h_);
+#endif
 }
 
 void DockableCollapsible::update(const Input& input, int screen_w, int screen_h) {
@@ -315,7 +383,32 @@ void DockableCollapsible::update(const Input& input, int screen_w, int screen_h)
     if (pointer_block_frames_ > 0) {
         --pointer_block_frames_;
     }
+
+#if DM_FORCE_LAYOUT
+    LayoutTimingScope timing_scope(title_, true, true, false, true);
     layout(screen_w, screen_h);
+#else
+    bool resized = false;
+    if (screen_w > 0 && screen_w != last_screen_w_) {
+        resized = true;
+    }
+    if (screen_h > 0 && screen_h != last_screen_h_) {
+        resized = true;
+    }
+    if (resized) {
+        needs_geometry_ = true;
+    }
+    if (!layout_initialized_) {
+        needs_layout_ = true;
+        needs_geometry_ = true;
+    }
+    const bool layout_dirty = needs_layout_;
+    const bool geometry_dirty = needs_geometry_;
+    if (needs_layout_ || needs_geometry_) {
+        LayoutTimingScope timing_scope(title_, layout_dirty, geometry_dirty, resized, false);
+        layout(screen_w, screen_h);
+    }
+#endif
 
     if (locked_) {
         log_locked_mutation("update");
@@ -331,6 +424,7 @@ void DockableCollapsible::update(const Input& input, int screen_w, int screen_h)
             if (dy != 0) {
                 scroll_ -= dy * 40;
                 scroll_ = std::max(0, std::min(max_scroll_, scroll_));
+                invalidate_layout(true);
             }
         }
     }
@@ -385,6 +479,7 @@ bool DockableCollapsible::handle_event(const SDL_Event& e) {
             if (header_dragging_via_button_) {
                 header_btn_drag_moved_ = true;
             }
+            invalidate_layout(true);
             return true;
         }
         if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
@@ -399,9 +494,11 @@ bool DockableCollapsible::handle_event(const SDL_Event& e) {
                 if (!drag_moved && SDL_PointInRect(&p, &header_rect_)) {
                     expanded_ = !expanded_;
                     update_header_button();
+                    invalidate_layout();
                 }
                 return true;
             }
+            invalidate_layout(true);
             return true;
         }
     }
@@ -425,6 +522,7 @@ bool DockableCollapsible::handle_event(const SDL_Event& e) {
             if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
                 expanded_ = !expanded_;
                 update_header_button();
+                invalidate_layout();
             }
             return true;
         }
@@ -474,6 +572,7 @@ bool DockableCollapsible::handle_event(const SDL_Event& e) {
         if (SDL_PointInRect(&mouse_point, &body_viewport_)) {
             scroll_ -= e.wheel.y * 40;
             scroll_ = std::max(0, std::min(max_scroll_, scroll_));
+            invalidate_layout(true);
             return true;
         }
     }
@@ -650,6 +749,19 @@ void DockableCollapsible::layout(int screen_w, int screen_h) const {
         return layout_rows;
     }();
 
+    auto finalize_layout = [this]() {
+        needs_layout_ = false;
+        needs_geometry_ = false;
+        layout_initialized_ = true;
+        for (const auto& row : rows_) {
+            for (auto* w : row) {
+                if (w) {
+                    w->clear_layout_dirty_flags();
+                }
+            }
+        }
+    };
+
     int header_total_w = 0;
     if (floatable_) {
         header_total_w = floating_content_width_;
@@ -742,6 +854,7 @@ void DockableCollapsible::layout(int screen_w, int screen_h) const {
         max_scroll_ = 0;
         scroll_     = 0;
         if (floatable_) clamp_to_bounds(screen_w, screen_h);
+        finalize_layout();
         return;
     }
 
@@ -778,6 +891,7 @@ void DockableCollapsible::layout(int screen_w, int screen_h) const {
     }
 
     if (floatable_) clamp_to_bounds(screen_w, screen_h);
+    finalize_layout();
 }
 
 void DockableCollapsible::update_header_button() const {

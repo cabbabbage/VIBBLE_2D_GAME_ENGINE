@@ -3,14 +3,14 @@
 #include <SDL.h>
 #include <SDL_ttf.h>
 #include <algorithm>
+#include <array>
 #include <cmath>
-#include <iomanip>
 #include <optional>
-#include <sstream>
 #include <utility>
 
 #include "core/AssetsManager.hpp"
 #include "dev_mode/dm_styles.hpp"
+#include "dev_mode/shared/formatting.hpp"
 #include "dev_mode/widgets.hpp"
 #include "utils/input.hpp"
 
@@ -64,7 +64,9 @@ public:
         slider_min_units_ = 0;
         slider_max_units_ = std::max(slider_min_units_, compute_units_for_value(max_));
         slider_ = std::make_unique<DMSlider>(label, slider_min_units_, slider_max_units_, value_to_slider(value));
-        slider_->set_value_formatter([this](int units) { return format_units(units); });
+        slider_->set_value_formatter([this](int units, std::array<char, dev_mode::kSliderFormatBufferSize>& buffer) {
+            return format_units(units, buffer);
+        });
         slider_->set_value_parser([this](const std::string& text) { return parse_units(text); });
         slider_widget_ = std::make_unique<SliderWidget>(slider_.get());
         current_value_ = slider_to_value(slider_->value());
@@ -150,10 +152,8 @@ private:
         return snap_value(raw);
     }
 
-    std::string format_units(int units) const {
-        std::ostringstream ss;
-        ss << std::fixed << std::setprecision(precision_) << slider_to_value(units);
-        return ss.str();
+    std::string_view format_units(int units, std::array<char, dev_mode::kSliderFormatBufferSize>& buffer) const {
+        return dev_mode::FormatSliderValue(slider_to_value(units), precision_, buffer);
     }
 
     std::optional<int> parse_units(const std::string& text) const {

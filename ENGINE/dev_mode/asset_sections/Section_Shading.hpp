@@ -3,15 +3,15 @@
 #include "../DockableCollapsible.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
-#include <iomanip>
 #include <memory>
 #include <optional>
-#include <sstream>
 #include <vector>
 
 #include "asset/asset_info.hpp"
 #include "asset_info_methods/lighting_loader.hpp"
+#include "dev_mode/shared/formatting.hpp"
 #include "dev_mode/draw_utils.hpp"
 #include "dev_mode/asset_info_sections.hpp"
 
@@ -54,10 +54,8 @@ public:
         shading_label_ = std::make_unique<DMButton>("Shading Source", &DMStyles::HeaderButton(), 150, DMButton::height());
 
         s_base_shadow_height_ = std::make_unique<DMSlider>("Base_shadow_height factor", 0, 220, base_shadow_height_value_);
-        s_base_shadow_height_->set_value_formatter([](int v) {
-            std::ostringstream ss;
-            ss << std::fixed << std::setprecision(2) << (static_cast<double>(v) / 100.0);
-            return ss.str();
+        s_base_shadow_height_->set_value_formatter([](int v, std::array<char, dev_mode::kSliderFormatBufferSize>& buffer) {
+            return dev_mode::FormatSliderValue(static_cast<double>(v) / 100.0, 2, buffer);
         });
         s_base_shadow_height_->set_value_parser([](const std::string& text) -> std::optional<int> {
             try {

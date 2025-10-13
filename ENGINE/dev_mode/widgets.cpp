@@ -1,13 +1,16 @@
 #include "widgets.hpp"
 #include "draw_utils.hpp"
 #include "font_cache.hpp"
+#include <SDL_log.h>
 #include <algorithm>
-#include <sstream>
+#include <charconv>
 #include <cctype>
 #include <cmath>
 #include <cstring>
 #include <iterator>
 #include <optional>
+#include <string_view>
+#include <system_error>
 #include <unordered_set>
 #include <utility>
 
@@ -29,6 +32,32 @@ constexpr int kSliderKnobVerticalInset = (kSliderKnobHeight - kSliderTrackThickn
 constexpr int kControlOutlineThickness = 1;
 constexpr int kFocusRingThickness = 2;
 constexpr int kKnobOutlineThickness = 1;
+
+struct SliderFormatStats {
+    int format_calls = 0;
+    int allocations = 0;
+    int last_logged_calls = 0;
+    int last_logged_allocations = 0;
+
+    void log_if_needed() {
+        constexpr int kLogInterval = 120;
+        if (format_calls - last_logged_calls < kLogInterval) {
+            return;
+        }
+        SDL_LogVerbose(SDL_LOG_CATEGORY_APPLICATION,
+                       "[DMSlider] format stats: calls=%d allocations=%d (delta=%d)",
+                       format_calls,
+                       allocations,
+                       allocations - last_logged_allocations);
+        last_logged_calls = format_calls;
+        last_logged_allocations = allocations;
+    }
+};
+
+SliderFormatStats& slider_format_stats() {
+    static SliderFormatStats stats;
+    return stats;
+}
 
 int slider_value_height() {
     const DMSliderStyle& st = DMStyles::Slider();
@@ -882,7 +911,7 @@ void DMSlider::render(SDL_Renderer* r) const {
         edit_box_->render(r);
     } else {
         SDL_Rect vr = value_rect();
-        std::string value_text = format_value(current_value);
+        const std::string& value_text = format_value(current_value);
         SDL_Point size = DMFontCache::instance().measure_text(st.label, value_text);
         int text_x = vr.x + kSliderValueHorizontalPadding;
         int text_y = vr.y + (vr.h - size.y) / 2;
@@ -890,8 +919,9 @@ void DMSlider::render(SDL_Renderer* r) const {
     }
 }
 
-void DMSlider::set_value_formatter(std::function<std::string(int)> formatter) {
+void DMSlider::set_value_formatter(SliderValueFormatter formatter) {
     value_formatter_ = std::move(formatter);
+    formatted_value_cache_.clear();
     if (edit_box_) {
         edit_box_->set_value(format_value(display_value()));
     }
@@ -901,11 +931,49 @@ void DMSlider::set_value_parser(std::function<std::optional<int>(const std::stri
     value_parser_ = std::move(parser);
 }
 
-std::string DMSlider::format_value(int v) const {
+const std::string& DMSlider::format_value(int v) const {
+    auto& stats = slider_format_stats();
+    ++stats.format_calls;
+
     if (value_formatter_) {
-        return value_formatter_(v);
+        const std::size_t before_capacity = formatted_value_cache_.capacity();
+        std::string_view view = value_formatter_(v, value_buffer_);
+        if (!view.empty()) {
+            formatted_value_cache_.assign(view.data(), view.size());
+        } else {
+            std::string fallback = std::to_string(v);
+            formatted_value_cache_.assign(fallback.data(), fallback.size());
+        }
+        if (formatted_value_cache_.capacity() > before_capacity) {
+            ++stats.allocations;
+            SDL_LogVerbose(SDL_LOG_CATEGORY_APPLICATION,
+                           "[DMSlider] format allocation grew: before=%zu after=%zu",
+                           before_capacity,
+                           formatted_value_cache_.capacity());
+        }
+        stats.log_if_needed();
+        return formatted_value_cache_;
     }
-    return std::to_string(v);
+
+    const std::size_t before_capacity = formatted_value_cache_.capacity();
+    auto* begin = value_buffer_.data();
+    auto* end = value_buffer_.data() + value_buffer_.size();
+    auto result = std::to_chars(begin, end, v);
+    if (result.ec == std::errc{}) {
+        formatted_value_cache_.assign(begin, static_cast<std::size_t>(result.ptr - begin));
+    } else {
+        std::string fallback = std::to_string(v);
+        formatted_value_cache_.assign(fallback.data(), fallback.size());
+    }
+    if (formatted_value_cache_.capacity() > before_capacity) {
+        ++stats.allocations;
+        SDL_LogVerbose(SDL_LOG_CATEGORY_APPLICATION,
+                       "[DMSlider] integer format allocation grew: before=%zu after=%zu",
+                       before_capacity,
+                       formatted_value_cache_.capacity());
+    }
+    stats.log_if_needed();
+    return formatted_value_cache_;
 }
 
 std::optional<int> DMSlider::parse_value(const std::string& text) const {

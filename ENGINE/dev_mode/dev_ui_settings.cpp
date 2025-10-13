@@ -1,11 +1,12 @@
 #include "dev_ui_settings.hpp"
 
+#include "dev_mode/core/dev_json_store.hpp"
+
 #include <filesystem>
-#include <fstream>
 #include <mutex>
 #include <string>
+#include <utility>
 #include <vector>
-#include <iostream>
 
 #include <nlohmann/json.hpp>
 
@@ -43,38 +44,12 @@ void ensure_loaded() {
     }
     settings_loaded_flag() = true;
 
-    auto& cache = settings_cache();
-    std::ifstream in(settings_path());
-    if (!in.is_open()) {
-        cache = nlohmann::json::object();
-        return;
+    auto loaded = devmode::core::DevJsonStore::instance().load(settings_path());
+    if (!loaded.is_object()) {
+        loaded = nlohmann::json::object();
     }
-    try {
-        in >> cache;
-        if (!cache.is_object()) {
-            cache = nlohmann::json::object();
-        }
-    } catch (...) {
-        cache = nlohmann::json::object();
-    }
-}
-
-void persist_if_dirty() {
-    if (!settings_dirty_flag()) {
-        return;
-    }
+    settings_cache() = std::move(loaded);
     settings_dirty_flag() = false;
-    const auto path = settings_path();
-    std::ofstream out(path);
-    if (!out.is_open()) {
-        std::cerr << "[dev_ui_settings] Failed to open '" << path << "' for writing\n";
-        return;
-    }
-    try {
-        out << settings_cache().dump(4);
-    } catch (const std::exception& ex) {
-        std::cerr << "[dev_ui_settings] Failed to write settings: " << ex.what() << "\n";
-    }
 }
 
 std::vector<std::string> split_key(std::string_view key) {
@@ -150,7 +125,7 @@ void save_bool(std::string_view key, bool value) {
     }
     (*node)[parts.back()] = value;
     settings_dirty_flag() = true;
-    persist_if_dirty();
+    devmode::core::DevJsonStore::instance().submit(settings_path(), settings_cache(), 4);
 }
 
 } // namespace devmode::ui_settings

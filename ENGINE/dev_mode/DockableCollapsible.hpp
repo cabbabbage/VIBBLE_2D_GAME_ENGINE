@@ -82,6 +82,7 @@ public:
 
 private:
     void layout(int screen_w, int screen_h) const;
+    void invalidate_layout(bool geometry_only = false) const;
     void update_header_button() const;
     void update_lock_button() const;
     int  compute_row_width(int num_cols) const;
@@ -157,4 +158,7 @@ protected:
     mutable int last_screen_w_ = 0;
     mutable int last_screen_h_ = 0;
     mutable std::unordered_set<std::string> locked_mutation_warnings_{};
+    mutable bool needs_layout_ = true;
+    mutable bool needs_geometry_ = true;
+    mutable bool layout_initialized_ = false;
 };

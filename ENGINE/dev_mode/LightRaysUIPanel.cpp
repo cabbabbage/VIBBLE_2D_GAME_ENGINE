@@ -4,13 +4,12 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
-#include <iomanip>
 #include <limits>
 #include <optional>
-#include <sstream>
 #include <utility>
 
 #include "dev_mode/dm_styles.hpp"
+#include "dev_mode/shared/formatting.hpp"
 #include "dev_mode/widgets.hpp"
 #include "render/light_rays.hpp"
 #include "render/light_rays_config.hpp"
@@ -261,11 +260,8 @@ void LightRaysUIPanel::build_ui() {
 
 void LightRaysUIPanel::configure_float_slider(DMSlider* slider, int scale, int precision) {
     if (!slider) return;
-    slider->set_value_formatter([scale, precision](int units) {
-        std::ostringstream oss;
-        oss << std::fixed << std::setprecision(precision)
-            << slider_units_to_double(units, scale);
-        return oss.str();
+    slider->set_value_formatter([scale, precision](int units, std::array<char, dev_mode::kSliderFormatBufferSize>& buffer) {
+        return dev_mode::FormatSliderValue(slider_units_to_double(units, scale), precision, buffer);
     });
     slider->set_value_parser([scale](const std::string& text) -> std::optional<int> {
         try {

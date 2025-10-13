@@ -2,14 +2,17 @@
 
 #include <SDL.h>
 #include <SDL_ttf.h>
+#include <array>
 #include <memory>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <vector>
 #include <functional>
 #include <utility>
 
 #include "dm_styles.hpp"
+#include "shared/formatting.hpp"
 
 bool DMWidgetsSliderScrollCaptured();
 void DMWidgetsSetSliderScrollCapture(const void* owner, bool capture);
@@ -115,7 +118,8 @@ public:
         has_pending_value_ = false;
     }
     bool defer_commit_until_unfocus() const { return defer_commit_until_unfocus_; }
-    void set_value_formatter(std::function<std::string(int)> formatter);
+    using SliderValueFormatter = std::function<std::string_view(int, std::array<char, dev_mode::kSliderFormatBufferSize>&)>;
+    void set_value_formatter(SliderValueFormatter formatter);
     void set_value_parser(std::function<std::optional<int>(const std::string&)> parser);
     bool handle_event(const SDL_Event& e);
     void render(SDL_Renderer* r) const;
@@ -134,7 +138,7 @@ private:
     int value_for_x(int x) const;
     void draw_text(SDL_Renderer* r, const std::string& s, int x, int y) const;
     int compute_label_height(int width) const;
-    std::string format_value(int v) const;
+    const std::string& format_value(int v) const;
     std::optional<int> parse_value(const std::string& text) const;
     SDL_Rect rect_{0,0,200,40};
     SDL_Rect content_rect_{0,0,200,40};
@@ -153,7 +157,9 @@ private:
     bool focused_ = false;
     bool dragging_ = false;
     std::unique_ptr<DMTextBox> edit_box_;
-    std::function<std::string(int)> value_formatter_{};
+    mutable std::array<char, dev_mode::kSliderFormatBufferSize> value_buffer_{};
+    mutable std::string formatted_value_cache_{};
+    SliderValueFormatter value_formatter_{};
     std::function<std::optional<int>(const std::string&)> value_parser_{};
 };
 
@@ -272,10 +278,23 @@ public:
     virtual void render(SDL_Renderer* r) const = 0;
     virtual bool wants_full_row() const { return false; }
     void set_layout_dirty_callback(std::function<void()> cb) { layout_dirty_callback_ = std::move(cb); }
+    void clear_layout_dirty_flags() const { layout_dirty_ = false; geometry_dirty_ = false; }
+    bool needs_layout() const { return layout_dirty_; }
+    bool needs_geometry() const { return geometry_dirty_; }
 protected:
-    void request_layout() const { if (layout_dirty_callback_) layout_dirty_callback_(); }
+    void request_layout() const {
+        layout_dirty_ = true;
+        geometry_dirty_ = true;
+        if (layout_dirty_callback_) layout_dirty_callback_();
+    }
+    void request_geometry_update() const {
+        geometry_dirty_ = true;
+        if (layout_dirty_callback_) layout_dirty_callback_();
+    }
 private:
     mutable std::function<void()> layout_dirty_callback_{};
+    mutable bool layout_dirty_ = false;
+    mutable bool geometry_dirty_ = false;
 };
 
 class ButtonWidget : public Widget {
