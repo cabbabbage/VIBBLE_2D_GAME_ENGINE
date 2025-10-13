@@ -192,7 +192,7 @@ void MapLightPanel::build_ui() {
 
 void MapLightPanel::update_section_header_labels() {
     auto label_for = [](const std::string& title, bool collapsed) {
-        return std::string(collapsed ? "[+] " : "[-] ") + title;
+        return std::string(collapsed ? "[\xE2\x86\x93] " : "[\xE2\x86\x91] ") + title;
 };
     if (orbit_section_btn_) {
         orbit_section_btn_->set_text(label_for("Orbit Settings", orbit_section_collapsed_));

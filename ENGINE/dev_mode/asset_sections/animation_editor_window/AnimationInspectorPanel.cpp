@@ -92,7 +92,7 @@ bool is_pointer_event(const SDL_Event& e) {
 }
 
 AnimationInspectorPanel::AnimationInspectorPanel() {
-    source_toggle_button_ = std::make_unique<DMButton>("[+] Frame Sources", &DMStyles::HeaderButton(), 200, DMButton::height());
+    source_toggle_button_ = std::make_unique<DMButton>("[\xE2\x86\x93] Frame Sources", &DMStyles::HeaderButton(), 200, DMButton::height());
     collapse_toggle_button_ = std::make_unique<DMButton>("", &DMStyles::HeaderButton(), header_toggle_width(), DMButton::height());
     update_source_toggle_label();
     update_collapse_toggle_label();
@@ -462,7 +462,7 @@ void AnimationInspectorPanel::rebuild_widgets() {
     }
 
     if (!source_toggle_button_) {
-        source_toggle_button_ = std::make_unique<DMButton>("[+] Frame Sources", &DMStyles::HeaderButton(), 200, DMButton::height());
+        source_toggle_button_ = std::make_unique<DMButton>("[\xE2\x86\x93] Frame Sources", &DMStyles::HeaderButton(), 200, DMButton::height());
     }
     if (!collapse_toggle_button_) {
         collapse_toggle_button_ = std::make_unique<DMButton>("", &DMStyles::HeaderButton(), header_toggle_width(), DMButton::height());
@@ -538,7 +538,7 @@ void AnimationInspectorPanel::update_source_toggle_label() {
         return;
     }
 
-    const char* label = source_collapsed_ ? "[+] Frame Sources" : "[-] Frame Sources";
+    const char* label = source_collapsed_ ? "[\xE2\x86\x93] Frame Sources" : "[\xE2\x86\x91] Frame Sources";
     source_toggle_button_->set_text(label);
 }
 

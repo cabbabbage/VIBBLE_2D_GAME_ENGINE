@@ -311,6 +311,7 @@ void RoomConfigurator::set_bounds(const SDL_Rect& bounds) {
         container_.clear_panel_bounds_override();
         cell_width_ = kRoomConfigPanelContentWidth;
     }
+    apply_basic_panel_layout();
 }
 
 void RoomConfigurator::set_work_area(const SDL_Rect& bounds) {
@@ -364,6 +365,16 @@ void RoomConfigurator::renumber_spawn_group_priorities(nlohmann::json& groups) c
         if (!groups[i].is_object()) continue;
         groups[i]["priority"] = static_cast<int>(i);
     }
+}
+
+void RoomConfigurator::apply_basic_panel_layout() {
+    if (!basic_panel_) {
+        return;
+    }
+    basic_panel_->set_cell_width(cell_width_);
+    basic_panel_->set_padding(DMSpacing::panel_padding());
+    basic_panel_->set_row_gap(row_gap_);
+    basic_panel_->set_col_gap(col_gap_);
 }
 
 SDL_Rect RoomConfigurator::clamp_to_work_area(const SDL_Rect& bounds) const {
@@ -1051,12 +1062,12 @@ void RoomConfigurator::rebuild_rows_internal() {
     if (!basic_panel_) {
         basic_panel_ = std::make_unique<DockableCollapsible>("Basic Room Info", false);
         basic_panel_->set_show_header(true);
-        basic_panel_->set_close_button_enabled(false);
-        basic_panel_->set_scroll_enabled(false);
-        basic_panel_->set_expanded(false);
-    } else {
-        basic_panel_->set_scroll_enabled(false);
     }
+    basic_panel_->set_close_button_enabled(false);
+    basic_panel_->set_scroll_enabled(false);
+    basic_panel_->setLocked(false);
+    basic_panel_->set_expanded(true);
+    apply_basic_panel_layout();
     basic_panel_->set_rows(rows_);
     basic_panel_->force_pointer_ready();
 }

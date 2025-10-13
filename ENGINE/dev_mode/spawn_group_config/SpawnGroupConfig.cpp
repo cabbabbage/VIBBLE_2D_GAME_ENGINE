@@ -1235,6 +1235,23 @@ void SpawnGroupConfig::refresh_row_configuration() {
 void SpawnGroupConfig::set_embedded_mode(bool embedded) {
     embedded_mode_ = embedded;
     set_floatable(!embedded ? default_floatable_mode_ : false);
+    if (embedded) {
+        setLocked(false);
+    }
+}
+
+std::string_view SpawnGroupConfig::lock_settings_namespace() const {
+    if (embedded_mode_) {
+        return {};
+    }
+    return "spawn_groups";
+}
+
+std::string_view SpawnGroupConfig::lock_settings_id() const {
+    if (embedded_mode_) {
+        return {};
+    }
+    return "config";
 }
 
 void SpawnGroupConfig::expand_group(const std::string& id) {

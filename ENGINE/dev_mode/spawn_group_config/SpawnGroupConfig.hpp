@@ -184,7 +184,7 @@ private:
     friend class SpawnGroupConfigTestAccessor;
 
 protected:
-    std::string_view lock_settings_namespace() const override { return "spawn_groups"; }
-    std::string_view lock_settings_id() const override { return "config"; }
+    std::string_view lock_settings_namespace() const override;
+    std::string_view lock_settings_id() const override;
 };
 

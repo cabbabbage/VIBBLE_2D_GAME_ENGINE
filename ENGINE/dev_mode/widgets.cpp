@@ -723,9 +723,7 @@ bool DMSlider::handle_event(const SDL_Event& e) {
         if (inside) {
             bool was_focused = focused_;
             set_focus(true);
-            if (!was_focused) {
-                return true;
-            }
+            bool handled = !was_focused;
             SDL_Rect vr = value_rect();
             if (SDL_PointInRect(&p, &vr)) {
                 edit_box_ = std::make_unique<DMTextBox>("", format_value(display_value()));
@@ -739,6 +737,9 @@ bool DMSlider::handle_event(const SDL_Event& e) {
                 dragging_ = true;
                 knob_hovered_ = true;
                 apply_interaction_value(value_for_x(p.x));
+                return true;
+            }
+            if (handled) {
                 return true;
             }
         } else if (!dragging_) {
