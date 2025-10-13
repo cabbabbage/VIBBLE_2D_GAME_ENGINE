@@ -52,6 +52,8 @@ public:
 
     void reset_scroll();
     void pulse_header();
+    int scroll_value() const;
+    void set_scroll_value(int value);
 
     void update(const Input& input, int screen_w, int screen_h);
     bool handle_event(const SDL_Event& e);

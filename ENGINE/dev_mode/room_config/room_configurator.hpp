@@ -112,6 +112,10 @@ private:
     void forget_collapsible(const DockableCollapsible* panel);
     bool base_panel_expanded(const std::string& key) const;
     void set_base_panel_expanded(const std::string& key, bool expanded);
+    void persist_spawn_group_changes();
+    void handle_spawn_groups_mutated();
+    void handle_spawn_group_entry_changed(const nlohmann::json& entry,
+                                          const SpawnGroupConfig::ChangeSummary& summary);
 
     std::unique_ptr<State> state_;
 

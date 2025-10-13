@@ -134,6 +134,17 @@ void SlidingWindowContainer::reset_scroll() {
     scrollbar_dragging_ = false;
 }
 
+int SlidingWindowContainer::scroll_value() const {
+    return scroll_;
+}
+
+void SlidingWindowContainer::set_scroll_value(int value) {
+    scroll_ = std::max(0, value);
+    scroll_dragging_ = false;
+    scrollbar_dragging_ = false;
+    layout_dirty_ = true;
+}
+
 void SlidingWindowContainer::pulse_header() { pulse_frames_ = 20; }
 
 void SlidingWindowContainer::prepare_layout(int screen_w, int screen_h) const {

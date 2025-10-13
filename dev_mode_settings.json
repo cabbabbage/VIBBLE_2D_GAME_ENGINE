@@ -6,6 +6,9 @@
             }
         },
         "lock": {
+            "asset_info": {
+                "basic": true
+            },
             "camera": {
                 "controls": false
             },
