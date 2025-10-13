@@ -1998,6 +1998,18 @@ void SpawnGroupConfig::fire_entry_callbacks(const nlohmann::json& entry, const C
     if (summary.candidates_changed && entry_callbacks_.on_candidates_changed) {
         entry_callbacks_.on_candidates_changed(entry);
     }
+    if (summary.method_changed && callbacks_.on_regenerate && !entry_callbacks_.on_method_changed) {
+        std::string id;
+        if (entry.is_object() && entry.contains("spawn_id") && entry["spawn_id"].is_string()) {
+            id = entry["spawn_id"].get<std::string>();
+        }
+        if (id.empty() && current_entry_) {
+            id = current_entry_->spawn_id();
+        }
+        if (!id.empty()) {
+            callbacks_.on_regenerate(id);
+        }
+    }
 }
 
 void SpawnGroupConfig::EntryController::set_ownership_label(const std::string& label, SDL_Color color) {
