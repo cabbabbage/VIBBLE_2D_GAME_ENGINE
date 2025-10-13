@@ -88,6 +88,10 @@ public:
   static const SDL_Color &TextboxBaseFill();
   static const SDL_Color &TextboxHoverFill();
   static const SDL_Color &TextboxFocusOutline();
+  static const SDL_Color &TextboxHoverOutline();
+  static const SDL_Color &TextboxActiveOutline();
+  static const SDL_Color &TextCaretColor();
+  static const SDL_Color &TextboxSelectionFill();
   static const SDL_Color &CheckboxBaseFill();
   static const SDL_Color &CheckboxHoverFill();
   static const SDL_Color &CheckboxCheckColor();

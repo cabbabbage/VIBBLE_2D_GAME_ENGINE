@@ -59,6 +59,12 @@ const SDL_Color kTextboxBg         = dm::rgba(13, 23, 38, 235);
 const SDL_Color kTextboxBgHover    = dm::rgba(18, 32, 52, 240);
 const SDL_Color kTextboxBorder     = kNeutralBorder;
 const SDL_Color kTextboxBorderHot  = kAccentOrangeStrong;
+const SDL_Color kTextboxBorder     = dm::rgba(48, 64, 96, 255);
+const SDL_Color kTextboxBorderPreview = dm::rgba(248, 250, 252, 235);
+const SDL_Color kTextboxBorderActive  = dm::rgba(245, 158, 11, 255);
+const SDL_Color kTextboxCaret      = dm::rgba(251, 191, 36, 255);
+const SDL_Color kTextboxSelection  = dm::rgba(245, 158, 11, 96);
+const SDL_Color kTextboxBorderHot  = dm::rgba(73, 103, 151, 255);
 const SDL_Color kTextboxText       = kTextPrimary;
 
 const SDL_Color kCheckboxBg        = dm::rgba(20, 32, 52, 235);
@@ -254,6 +260,26 @@ const SDL_Color &DMStyles::TextboxHoverFill() {
 
 const SDL_Color &DMStyles::TextboxFocusOutline() {
   static const SDL_Color c = kTextboxBorderHot;
+  return c;
+}
+
+const SDL_Color &DMStyles::TextboxHoverOutline() {
+  static const SDL_Color c = kTextboxBorderPreview;
+  return c;
+}
+
+const SDL_Color &DMStyles::TextboxActiveOutline() {
+  static const SDL_Color c = kTextboxBorderActive;
+  return c;
+}
+
+const SDL_Color &DMStyles::TextCaretColor() {
+  static const SDL_Color c = kTextboxCaret;
+  return c;
+}
+
+const SDL_Color &DMStyles::TextboxSelectionFill() {
+  static const SDL_Color c = kTextboxSelection;
   return c;
 }
 

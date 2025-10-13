@@ -283,9 +283,12 @@ void DMTextBox::render(SDL_Renderer* r) const {
         DMStyles::HighlightIntensity(),
         DMStyles::ShadowIntensity());
 
-    SDL_Color border = hovered_ ? st.border_hover : st.border;
+    SDL_Color border = st.border;
+    if (hovered_ && !editing_) {
+        border = DMStyles::TextboxHoverOutline();
+    }
     if (editing_) {
-        border = DMStyles::TextboxFocusOutline();
+        border = DMStyles::TextboxActiveOutline();
     }
     SDL_SetRenderDrawColor(r, border.r, border.g, border.b, border.a);
     SDL_RenderDrawRect(r, &box_rect_);
@@ -319,7 +322,8 @@ void DMTextBox::render(SDL_Renderer* r) const {
                     }
                 }
             }
-            SDL_SetRenderDrawColor(r, st.text.r, st.text.g, st.text.b, st.text.a);
+            const SDL_Color caret = DMStyles::TextCaretColor();
+            SDL_SetRenderDrawColor(r, caret.r, caret.g, caret.b, caret.a);
             SDL_RenderDrawLine(r, caret_x, caret_y, caret_x, caret_y + caret_height);
             TTF_CloseFont(f);
         }
@@ -1528,9 +1532,12 @@ void DMDropdown::render(SDL_Renderer* r) const {
             TTF_CloseFont(f);
         }
     }
-    SDL_Color border = hovered_ ? st.border_hover : st.border;
+    SDL_Color border = st.border;
+    if (hovered_ && !has_focus) {
+        border = DMStyles::TextboxHoverOutline();
+    }
     if (has_focus) {
-        border = DMStyles::TextboxFocusOutline();
+        border = DMStyles::TextboxActiveOutline();
     }
     SDL_SetRenderDrawColor(r, border.r, border.g, border.b, border.a);
     SDL_RenderDrawRect(r, &box_rect_);
@@ -1564,8 +1571,8 @@ void DMDropdown::render_options(SDL_Renderer* r) const {
 
     const DMTextBoxStyle& tb = DMStyles::TextBox();
     DMLabelStyle labelStyle{ tb.label.font_path, tb.label.font_size, tb.text };
-    const SDL_Color focus_border = DMStyles::TextboxFocusOutline();
-    const SDL_Color base_border = tb.border;
+    const SDL_Color focus_border = DMStyles::TextboxActiveOutline();
+    const SDL_Color base_border = DMStyles::TextboxHoverOutline();
     const SDL_Color base_fill = DMStyles::TextboxBaseFill();
     const SDL_Color focus_fill = DMStyles::TextboxHoverFill();
     const SDL_Color highlight = DMStyles::HighlightColor();
