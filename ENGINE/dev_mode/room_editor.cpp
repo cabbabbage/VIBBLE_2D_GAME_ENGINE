@@ -41,6 +41,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <fstream>
+#include <SDL_log.h>
 
 #include <nlohmann/json.hpp>
 
@@ -169,6 +170,14 @@ void RoomEditor::notify_room_assets_saved() {
 
 void RoomEditor::save_current_room_assets_json() {
     if (!current_room_) {
+        return;
+    }
+    if (info_ui_ && info_ui_->is_locked()) {
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "[RoomEditor] Asset info panel is locked; save skipped.");
+        return;
+    }
+    if (room_cfg_ui_ && room_cfg_ui_->is_locked()) {
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "[RoomEditor] Room configurator is locked; save skipped.");
         return;
     }
     current_room_->save_assets_json();
@@ -666,6 +675,10 @@ void RoomEditor::toggle_asset_library() {
         pulse_active_modal_header();
         return;
     }
+    if (library_ui_ && library_ui_->is_locked()) {
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "[RoomEditor] Asset library is locked; toggle ignored.");
+        return;
+    }
     library_ui_->toggle();
 }
 
@@ -792,10 +805,20 @@ void RoomEditor::finalize_asset_drag(Asset* asset, const std::shared_ptr<AssetIn
 }
 
 void RoomEditor::toggle_room_config() {
+    ensure_room_configurator();
+    if (room_cfg_ui_ && room_cfg_ui_->is_locked()) {
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "[RoomEditor] Room configurator is locked; toggle ignored.");
+        return;
+    }
     set_room_config_visible(!is_room_config_open());
 }
 
 void RoomEditor::open_room_config() {
+    ensure_room_configurator();
+    if (room_cfg_ui_ && room_cfg_ui_->is_locked()) {
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "[RoomEditor] Room configurator is locked; open request ignored.");
+        return;
+    }
     set_room_config_visible(true);
 }
 
@@ -808,10 +831,18 @@ bool RoomEditor::is_room_config_open() const {
 }
 
 void RoomEditor::regenerate_room() {
+    if (room_cfg_ui_ && room_cfg_ui_->is_locked()) {
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "[RoomEditor] Room configurator is locked; regeneration skipped.");
+        return;
+    }
     regenerate_current_room();
 }
 
 void RoomEditor::regenerate_room_from_template(Room* source_room) {
+    if (room_cfg_ui_ && room_cfg_ui_->is_locked()) {
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "[RoomEditor] Room configurator is locked; regeneration from template skipped.");
+        return;
+    }
     if (!assets_ || !current_room_ || !source_room) return;
     auto& target_root = current_room_->assets_data();
     auto& target_groups = ensure_spawn_groups_array(target_root);
@@ -1338,10 +1369,18 @@ void RoomEditor::handle_shortcuts(const Input& input) {
     if (!ctrl) return;
 
     if (input.wasScancodePressed(SDL_SCANCODE_A)) {
-        toggle_asset_library();
+        if (library_ui_ && library_ui_->is_locked()) {
+            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "[RoomEditor] Asset library is locked; shortcut ignored.");
+        } else {
+            toggle_asset_library();
+        }
     }
     if (input.wasScancodePressed(SDL_SCANCODE_R)) {
-        toggle_room_config();
+        if (room_cfg_ui_ && room_cfg_ui_->is_locked()) {
+            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "[RoomEditor] Room configurator is locked; shortcut ignored.");
+        } else {
+            toggle_room_config();
+        }
     }
 }
 

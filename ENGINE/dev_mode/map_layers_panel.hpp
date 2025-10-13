@@ -4,6 +4,7 @@
 #include <functional>
 #include <memory>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include <SDL.h>
@@ -129,6 +130,8 @@ private:
     void reorder_spawn_group_in_active_room(const std::string& spawn_id, size_t target_index);
 
     std::string rename_room_everywhere(const std::string& old_key, const std::string& desired_key);
+
+    bool ensure_writable(std::string_view action) const;
 
 private:
     struct PreviewNode {

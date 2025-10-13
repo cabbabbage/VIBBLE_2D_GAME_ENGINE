@@ -56,6 +56,7 @@ public:
     void close();
     bool visible() const;
     bool any_panel_visible() const;
+    bool is_locked() const;
 
     void update(const Input& input, int screen_w, int screen_h);
     bool handle_event(const SDL_Event& e);

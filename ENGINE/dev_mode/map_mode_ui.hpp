@@ -100,6 +100,7 @@ private:
     bool is_pointer_event(const SDL_Event& e) const;
     SDL_Point event_point(const SDL_Event& e) const;
     HeaderButtonConfig* find_button(HeaderMode mode, const std::string& id);
+    bool ensure_panel_unlocked(DockableCollapsible* panel, const char* panel_name) const;
 
 private:
     Assets* assets_ = nullptr;

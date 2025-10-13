@@ -345,6 +345,15 @@ void AssetInfoUI::toggle(){
     }
 }
 
+bool AssetInfoUI::is_locked() const {
+    for (const auto& section : sections_) {
+        if (section && section->isLocked()) {
+            return true;
+        }
+    }
+    return false;
+}
+
 void AssetInfoUI::layout_widgets(int screen_w, int screen_h) const {
     container_.prepare_layout(screen_w, screen_h);
     const SDL_Rect& panel = container_.panel_rect();
@@ -656,6 +665,10 @@ void AssetInfoUI::sync_map_light_panel_visibility(bool want_visible) {
 
 void AssetInfoUI::request_apply_section(AssetInfoSectionId section_id) {
     if (!info_) return;
+    if (is_locked()) {
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "[AssetInfoUI] Panel is locked; bulk apply request ignored.");
+        return;
+    }
     if (!asset_selector_) asset_selector_ = std::make_unique<SearchAssets>();
     if (!asset_selector_) return;
 
@@ -684,6 +697,10 @@ void AssetInfoUI::request_apply_section(AssetInfoSectionId section_id) {
 bool AssetInfoUI::apply_section_to_assets(AssetInfoSectionId section_id, const std::vector<std::string>& asset_names) {
     if (!info_) return false;
     if (asset_names.empty()) return true;
+    if (is_locked()) {
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "[AssetInfoUI] Panel is locked; apply_section_to_assets skipped.");
+        return false;
+    }
 
     (void)info_->update_info_json();
     nlohmann::json source;
@@ -746,6 +763,10 @@ bool AssetInfoUI::is_point_inside(int x, int y) const {
 }
 
 void AssetInfoUI::save_now() const {
+    if (is_locked()) {
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "[AssetInfoUI] Panel is locked; save skipped.");
+        return;
+    }
     if (info_) (void)info_->update_info_json();
 }
 

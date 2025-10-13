@@ -15,6 +15,7 @@
 #include "utils/input.hpp"
 
 #include <SDL.h>
+#include <SDL_log.h>
 
 #include <SDL_ttf.h>
 
@@ -3179,11 +3180,15 @@ void MapLayersPanel::update(const Input& input, int screen_w, int screen_h) {
 
                 if (!entry->is_object() || *entry != updated) {
 
-                    *entry = std::move(updated);
+                    if (ensure_writable("apply room configuration changes")) {
 
-                    mark_dirty();
+                        *entry = std::move(updated);
 
-                    request_preview_regeneration();
+                        mark_dirty();
+
+                        request_preview_regeneration();
+
+                    }
 
                 }
 
@@ -4650,6 +4655,12 @@ void MapLayersPanel::ensure_room_configurator() {
 
                 std::string final_name = this->rename_room_everywhere(old_name, desired);
 
+                if (final_name == old_name) {
+
+                    return final_name;
+
+                }
+
                 this->rebuild_available_rooms();
 
                 this->request_preview_regeneration();
@@ -4693,6 +4704,12 @@ nlohmann::json* MapLayersPanel::ensure_room_entry(const std::string& room_name) 
     auto it = rooms_data.find(room_name);
 
     if (it == rooms_data.end() || !it->is_object()) {
+
+        if (!ensure_writable("create room entry")) {
+
+            return nullptr;
+
+        }
 
         rooms_data[room_name] = make_default_room_json(room_name);
 
@@ -4903,6 +4920,12 @@ void MapLayersPanel::handle_room_spawn_groups_changed(bool request_preview) {
 
     }
 
+    if (!ensure_writable("update room spawn groups")) {
+
+        return;
+
+    }
+
     mark_dirty();
 
     if (request_preview) {
@@ -4918,6 +4941,12 @@ void MapLayersPanel::add_spawn_group_to_active_room() {
     nlohmann::json* entry = active_room_entry();
 
     if (!entry) {
+
+        return;
+
+    }
+
+    if (!ensure_writable("add spawn group")) {
 
         return;
 
@@ -4953,6 +4982,12 @@ void MapLayersPanel::duplicate_spawn_group_in_active_room(const std::string& spa
     nlohmann::json* entry = active_room_entry();
 
     if (!entry) {
+
+        return;
+
+    }
+
+    if (!ensure_writable("duplicate spawn group")) {
 
         return;
 
@@ -5030,6 +5065,12 @@ void MapLayersPanel::delete_spawn_group_from_active_room(const std::string& spaw
 
     }
 
+    if (!ensure_writable("delete spawn group")) {
+
+        return;
+
+    }
+
     auto& groups = devmode::spawn::ensure_spawn_groups_array(*entry);
 
     auto it = std::remove_if(groups.begin(), groups.end(), [&](nlohmann::json& item) {
@@ -5071,6 +5112,12 @@ void MapLayersPanel::move_spawn_group_in_active_room(const std::string& spawn_id
     nlohmann::json* entry = active_room_entry();
 
     if (!entry) {
+
+        return;
+
+    }
+
+    if (!ensure_writable("reorder spawn group")) {
 
         return;
 
@@ -5237,7 +5284,21 @@ void MapLayersPanel::select_layer(int index) {
 
 }
 
+bool MapLayersPanel::ensure_writable(std::string_view action) const {
+    if (!isLocked()) {
+        return true;
+    }
+    SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "[MapLayersPanel] Locked: %s", std::string(action).c_str());
+    return false;
+}
+
 void MapLayersPanel::mark_dirty(bool trigger_preview) {
+
+    if (!ensure_writable("mark dirty")) {
+
+        return;
+
+    }
 
     dirty_ = true;
 
@@ -5534,6 +5595,12 @@ void MapLayersPanel::add_layer_internal() {
 
     if (!map_info_) return;
 
+    if (!ensure_writable("add layer")) {
+
+        return;
+
+    }
+
     const int idx = append_layer_entry();
 
     if (idx < 0) return;
@@ -5565,6 +5632,12 @@ void MapLayersPanel::add_room_to_selected_layer() {
 std::string MapLayersPanel::create_new_room(const std::string& desired_name, bool open_config) {
 
     if (!map_info_) return {};
+
+    if (!ensure_writable("create room")) {
+
+        return {};
+
+    }
 
     std::string trimmed = trim_copy_map_layers(desired_name);
 
@@ -5619,6 +5692,12 @@ bool MapLayersPanel::ensure_child_room_exists(int parent_layer_index, const std:
     if (!map_info_) return false;
 
     if (child.empty()) return false;
+
+    if (!ensure_writable("ensure child room exists")) {
+
+        return false;
+
+    }
 
     auto& arr = layers_array();
 
@@ -5726,6 +5805,12 @@ void MapLayersPanel::delete_layer_internal(int index) {
 
     if (!map_info_) return;
 
+    if (!ensure_writable("delete layer")) {
+
+        return;
+
+    }
+
     if (is_layer_locked(index)) return;
 
     auto& arr = layers_array();
@@ -5799,6 +5884,12 @@ void MapLayersPanel::handle_layer_name_changed(int index, const std::string& nam
 
     if (!layer) return;
 
+    if (!ensure_writable("rename layer")) {
+
+        return;
+
+    }
+
     (*layer)["name"] = name;
 
     mark_dirty();
@@ -5824,6 +5915,12 @@ std::string MapLayersPanel::rename_room_everywhere(const std::string& old_key, c
     if (!map_info_) return desired_key;
 
     if (old_key.empty()) return desired_key;
+
+    if (!ensure_writable("rename room")) {
+
+        return old_key;
+
+    }
 
     std::string trimmed = trim_copy_map_layers(desired_key);
 
@@ -5915,6 +6012,12 @@ void MapLayersPanel::handle_candidate_min_changed(int layer_index, int candidate
 
     if (candidate_index < 0 || candidate_index >= static_cast<int>(rooms_it->size())) return;
 
+    if (!ensure_writable("update candidate min")) {
+
+        return;
+
+    }
+
     auto& entry = (*rooms_it)[candidate_index];
 
     int clamped_min = clamp_candidate_min(min_instances);
@@ -5945,6 +6048,12 @@ void MapLayersPanel::handle_candidate_max_changed(int layer_index, int candidate
 
     if (candidate_index < 0 || candidate_index >= static_cast<int>(rooms_it->size())) return;
 
+    if (!ensure_writable("update candidate max")) {
+
+        return;
+
+    }
+
     auto& entry = (*rooms_it)[candidate_index];
 
     int current_min = clamp_candidate_min(entry.value("min_instances", 0));
@@ -5973,6 +6082,12 @@ void MapLayersPanel::handle_candidate_removed(int layer_index, int candidate_ind
 
     if (candidate_index < 0 || candidate_index >= static_cast<int>(rooms_it->size())) return;
 
+    if (!ensure_writable("remove candidate")) {
+
+        return;
+
+    }
+
     rooms_it->erase(rooms_it->begin() + candidate_index);
 
     clamp_layer_room_counts(*layer);
@@ -5998,6 +6113,12 @@ void MapLayersPanel::handle_candidate_child_added(int layer_index, int candidate
     if (rooms_it == layer->end() || !rooms_it->is_array()) return;
 
     if (candidate_index < 0 || candidate_index >= static_cast<int>(rooms_it->size())) return;
+
+    if (!ensure_writable("add candidate child")) {
+
+        return;
+
+    }
 
     auto& entry = (*rooms_it)[candidate_index];
 
@@ -6053,6 +6174,12 @@ void MapLayersPanel::handle_candidate_child_removed(int layer_index, int candida
 
     if (!children.is_array()) return;
 
+    if (!ensure_writable("remove candidate child")) {
+
+        return;
+
+    }
+
     auto it = std::find(children.begin(), children.end(), child);
 
     if (it != children.end()) {
@@ -6084,6 +6211,12 @@ void MapLayersPanel::handle_candidate_added(int layer_index, const std::string& 
         const bool allowed_here = (spawn_idx < 0 && layer_index == 0) || (spawn_idx == layer_index);
 
         if (!allowed_here) return;
+
+    }
+
+    if (!ensure_writable("add candidate")) {
+
+        return;
 
     }
 
@@ -6120,6 +6253,12 @@ void MapLayersPanel::handle_candidate_added(int layer_index, const std::string& 
 bool MapLayersPanel::save_layers_to_disk() {
 
     if (!map_info_) return false;
+
+    if (!ensure_writable("save layers to disk")) {
+
+        return false;
+
+    }
 
     if (on_save_) {
 

@@ -11,6 +11,7 @@
 #include "utils/input.hpp"
 
 #include <SDL.h>
+#include <SDL_log.h>
 #include <algorithm>
 #include <iterator>
 #include <fstream>
@@ -135,6 +136,14 @@ MapModeUI::HeaderButtonConfig* MapModeUI::find_button(HeaderMode mode, const std
         return nullptr;
     }
     return &(*it);
+}
+
+bool MapModeUI::ensure_panel_unlocked(DockableCollapsible* panel, const char* panel_name) const {
+    if (panel && panel->isLocked()) {
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "[MapModeUI] %s panel is locked; action ignored.", panel_name);
+        return false;
+    }
+    return true;
 }
 
 void MapModeUI::set_button_state(const std::string& id, bool active) {
@@ -409,6 +418,15 @@ void MapModeUI::update_footer_visibility() {
 }
 
 void MapModeUI::set_layers_footer_expanded(bool expanded) {
+    const bool previous_visible = layers_footer_visible_;
+
+    if (!ensure_panel_unlocked(layers_panel_.get(), "Layers")) {
+        if (footer_panel_) {
+            footer_panel_->set_expanded(previous_visible);
+        }
+        return;
+    }
+
     layers_footer_requested_ = expanded;
     layers_footer_visible_ = expanded;
 
@@ -429,6 +447,18 @@ void MapModeUI::set_layers_footer_expanded(bool expanded) {
 
 void MapModeUI::set_active_panel(PanelType panel) {
     ensure_panels();
+
+    if (panel == PanelType::Lights && !ensure_panel_unlocked(light_panel_.get(), "Light")) {
+        sync_footer_button_states();
+        return;
+    }
+    if (panel == PanelType::Layers && !ensure_panel_unlocked(layers_panel_.get(), "Layers")) {
+        if (footer_panel_) {
+            footer_panel_->set_expanded(layers_footer_visible_);
+        }
+        sync_footer_button_states();
+        return;
+    }
 
     PanelType new_active = PanelType::None;
 
@@ -651,11 +681,17 @@ void MapModeUI::render(SDL_Renderer* renderer) const {
 
 void MapModeUI::open_layers_panel() {
     ensure_panels();
+    if (!ensure_panel_unlocked(layers_panel_.get(), "Layers")) {
+        return;
+    }
     set_active_panel(PanelType::Layers);
 }
 
 void MapModeUI::open_light_panel() {
     ensure_panels();
+    if (!ensure_panel_unlocked(light_panel_.get(), "Light")) {
+        return;
+    }
     if (active_panel_ != PanelType::Lights) {
         set_active_panel(PanelType::Lights);
     }
@@ -672,6 +708,10 @@ void MapModeUI::close_light_panel() {
 
 void MapModeUI::toggle_light_panel() {
     ensure_panels();
+    if (!ensure_panel_unlocked(light_panel_.get(), "Light")) {
+        sync_footer_button_states();
+        return;
+    }
     if (active_panel_ == PanelType::Lights) {
         set_active_panel(PanelType::None);
     } else {
@@ -681,6 +721,10 @@ void MapModeUI::toggle_light_panel() {
 
 void MapModeUI::toggle_layers_panel() {
     ensure_panels();
+    if (!ensure_panel_unlocked(layers_panel_.get(), "Layers")) {
+        sync_footer_button_states();
+        return;
+    }
     if (active_panel_ == PanelType::Layers) {
         set_active_panel(PanelType::None);
     } else {

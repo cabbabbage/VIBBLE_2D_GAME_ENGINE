@@ -32,6 +32,7 @@ public:
     bool is_input_blocking() const;
     bool is_input_blocking_at(int mx, int my) const;
     bool is_dragging_asset() const;
+    bool is_locked() const;
 
     void update(const Input& input, int screen_w, int screen_h, AssetLibrary& lib, Assets& assets);
     void render(SDL_Renderer* r, int screen_w, int screen_h) const;

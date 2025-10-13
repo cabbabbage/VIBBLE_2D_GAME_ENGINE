@@ -458,6 +458,10 @@ bool AssetLibraryUI::is_input_blocking() const {
     return (floating_ && floating_->is_expanded()) || showing_create_popup_ || showing_delete_popup_;
 }
 
+bool AssetLibraryUI::is_locked() const {
+    return floating_ && floating_->isLocked();
+}
+
 void AssetLibraryUI::ensure_items(AssetLibrary& lib) {
     if (items_cached_) return;
     items_.clear();

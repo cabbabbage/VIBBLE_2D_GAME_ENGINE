@@ -621,6 +621,18 @@ bool RoomConfigurator::visible() const { return container_.is_visible(); }
 
 bool RoomConfigurator::any_panel_visible() const { return visible(); }
 
+bool RoomConfigurator::is_locked() const {
+    if (basic_panel_ && basic_panel_->isLocked()) {
+        return true;
+    }
+    for (const auto& cfg : spawn_group_configs_) {
+        if (cfg && cfg->isLocked()) {
+            return true;
+        }
+    }
+    return false;
+}
+
 std::string RoomConfigurator::selected_geometry() const {
     if (!state_) return geometry_options_.empty() ? std::string{} : geometry_options_.front();
     if (geometry_options_.empty()) return state_->geometry;
