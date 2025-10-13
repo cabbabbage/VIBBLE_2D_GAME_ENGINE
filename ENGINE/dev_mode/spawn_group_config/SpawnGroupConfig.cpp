@@ -71,7 +71,7 @@ constexpr int kDefaultMinNumber = 1;
 constexpr int kDefaultMaxNumber = 1;
 constexpr int kExactDefaultQuantity = 1;
 constexpr int kPerimeterRadiusSliderMin = 0;
-constexpr int kPerimeterRadiusSliderMax = 10000;
+constexpr int kPerimeterRadiusSliderMax = 20000;
 
 std::function<std::vector<std::string>()> empty_provider() {
     return []() { return std::vector<std::string>{}; };
