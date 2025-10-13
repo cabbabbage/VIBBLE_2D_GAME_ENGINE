@@ -15,6 +15,8 @@
 #include "DockableCollapsible.hpp"
 
 class Input;
+class SpawnGroupLabelWidget;
+
 class SpawnGroupConfig : public DockableCollapsible {
     struct Entry;
 public:
@@ -158,7 +160,7 @@ private:
     bool suppress_layout_change_callback_ = false;
     std::unique_ptr<DMButton> add_button_{};
     std::unique_ptr<ButtonWidget> add_button_widget_{};
-    std::unique_ptr<class LabelWidget> empty_state_label_{};
+    std::unique_ptr<SpawnGroupLabelWidget> empty_state_label_{};
 
     std::deque<std::function<void()>> pending_notifications_{};
     bool processing_notifications_ = false;

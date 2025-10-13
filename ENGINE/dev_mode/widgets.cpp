@@ -331,13 +331,13 @@ std::vector<std::string> DMTextBox::wrap_lines(TTF_Font* f, const std::string& s
                 } else break;
             }
             size_t brk = best_break;
-            if (brk > pos && last_space != std::string::npos && last_space > pos) brk = last_space;
+            if (brk > pos && last_space != std::string::npos && last_space >= pos) {
+                brk = (brk > last_space) ? std::min(para.size(), last_space + 1) : last_space;
+            }
             if (brk == pos) brk = std::min(para.size(), pos + 1);
             std::string ln = para.substr(pos, brk - pos);
-            while (!ln.empty() && std::isspace((unsigned char)ln.back())) ln.pop_back();
             out.push_back(ln);
             pos = brk;
-            while (pos < para.size() && std::isspace((unsigned char)para[pos])) ++pos;
         }
 };
     while (true) {
@@ -607,13 +607,12 @@ bool DMSlider::handle_event(const SDL_Event& e) {
             commit_pending_value();
         }
 };
-    auto update_hover = [this, &set_focus](SDL_Point p) {
+    auto update_hover = [this](SDL_Point p) {
         bool inside = SDL_PointInRect(&p, &rect_);
         hovered_ = inside || dragging_;
         if (!inside) {
             if (!dragging_) {
                 knob_hovered_ = false;
-                set_focus(false);
             }
             return inside;
         }
@@ -672,18 +671,13 @@ bool DMSlider::handle_event(const SDL_Event& e) {
             return true;
         }
     } else if (e.type == SDL_MOUSEWHEEL) {
-        SDL_Point mouse{0, 0};
-        if (SDL_GetMouseFocus() == nullptr) {
-            set_focus(false);
-            return false;
-        }
-        SDL_GetMouseState(&mouse.x, &mouse.y);
-        update_hover(mouse);
-        if (!hovered_) {
-            return false;
-        }
         if (!focused_) {
             return false;
+        }
+        if (SDL_GetMouseFocus() != nullptr) {
+            SDL_Point mouse{0, 0};
+            SDL_GetMouseState(&mouse.x, &mouse.y);
+            update_hover(mouse);
         }
         int delta = e.wheel.y;
         if (e.wheel.direction == SDL_MOUSEWHEEL_FLIPPED) {
@@ -1051,16 +1045,19 @@ bool DMRangeSlider::handle_event(const SDL_Event& e) {
         focused_ = focus;
         set_slider_scroll_capture(this, focused_);
         if (!focused_) {
+            wheel_target_max_ = false;
             commit_pending_values();
         }
 };
-    auto update_hover = [this, &set_focus](SDL_Point p) {
+    auto update_hover = [this](SDL_Point p) {
         if (dragging_min_) {
             min_hovered_ = true;
             max_hovered_ = false;
+            wheel_target_max_ = false;
         } else if (dragging_max_) {
             min_hovered_ = false;
             max_hovered_ = true;
+            wheel_target_max_ = true;
         }
         bool inside = SDL_PointInRect(&p, &rect_);
         hovered_ = inside || dragging_min_ || dragging_max_;
@@ -1068,7 +1065,6 @@ bool DMRangeSlider::handle_event(const SDL_Event& e) {
             if (!dragging_min_ && !dragging_max_) {
                 min_hovered_ = false;
                 max_hovered_ = false;
-                set_focus(false);
             }
             return inside;
         }
@@ -1079,16 +1075,21 @@ bool DMRangeSlider::handle_event(const SDL_Event& e) {
         if (dragging_min_) {
             min_hovered_ = true;
             max_hovered_ = false;
+            wheel_target_max_ = false;
             return inside;
         }
         if (dragging_max_) {
             min_hovered_ = false;
             max_hovered_ = true;
+            wheel_target_max_ = true;
             return inside;
         }
         if (on_min || on_max) {
             min_hovered_ = on_min;
             max_hovered_ = on_max;
+            if (on_min != on_max) {
+                wheel_target_max_ = on_max;
+            }
             return inside;
         }
         SDL_Point min_center{ kmin.x + kmin.w / 2, kmin.y + kmin.h / 2 };
@@ -1098,9 +1099,11 @@ bool DMRangeSlider::handle_event(const SDL_Event& e) {
             if (p.x >= max_center.x) {
                 min_hovered_ = false;
                 max_hovered_ = true;
+                wheel_target_max_ = true;
             } else {
                 min_hovered_ = true;
                 max_hovered_ = false;
+                wheel_target_max_ = false;
             }
             return inside;
         }
@@ -1110,9 +1113,11 @@ bool DMRangeSlider::handle_event(const SDL_Event& e) {
         if (min_dist <= max_dist) {
             min_hovered_ = true;
             max_hovered_ = false;
+            wheel_target_max_ = false;
         } else {
             min_hovered_ = false;
             max_hovered_ = true;
+            wheel_target_max_ = true;
         }
         return inside;
 };
@@ -1168,6 +1173,7 @@ bool DMRangeSlider::handle_event(const SDL_Event& e) {
                 dragging_min_ = true;
                 min_hovered_ = true;
                 max_hovered_ = false;
+                wheel_target_max_ = false;
                 apply_min_interaction(value_for_x(p.x));
                 return true;
             }
@@ -1175,6 +1181,7 @@ bool DMRangeSlider::handle_event(const SDL_Event& e) {
                 dragging_max_ = true;
                 min_hovered_ = false;
                 max_hovered_ = true;
+                wheel_target_max_ = true;
                 apply_max_interaction(value_for_x(p.x));
                 return true;
             }
@@ -1185,11 +1192,13 @@ bool DMRangeSlider::handle_event(const SDL_Event& e) {
                     dragging_min_ = true;
                     min_hovered_ = true;
                     max_hovered_ = false;
+                    wheel_target_max_ = false;
                     apply_min_interaction(target);
                 } else {
                     dragging_max_ = true;
                     min_hovered_ = false;
                     max_hovered_ = true;
+                    wheel_target_max_ = true;
                     apply_max_interaction(target);
                 }
                 return true;
@@ -1208,18 +1217,13 @@ bool DMRangeSlider::handle_event(const SDL_Event& e) {
             return true;
         }
     } else if (e.type == SDL_MOUSEWHEEL) {
-        SDL_Point mouse{0, 0};
-        if (SDL_GetMouseFocus() == nullptr) {
-            set_focus(false);
-            return false;
-        }
-        SDL_GetMouseState(&mouse.x, &mouse.y);
-        update_hover(mouse);
-        if (!hovered_) {
-            return false;
-        }
         if (!focused_) {
             return false;
+        }
+        if (SDL_GetMouseFocus() != nullptr) {
+            SDL_Point mouse{0, 0};
+            SDL_GetMouseState(&mouse.x, &mouse.y);
+            update_hover(mouse);
         }
         int delta = e.wheel.y;
         if (e.wheel.direction == SDL_MOUSEWHEEL_FLIPPED) {
@@ -1235,8 +1239,9 @@ bool DMRangeSlider::handle_event(const SDL_Event& e) {
         }
         const int prev_min = display_min_value();
         const int prev_max = display_max_value();
+        bool target_max = max_hovered_ && !min_hovered_ ? true : wheel_target_max_;
         bool changed = false;
-        if (max_hovered_) {
+        if (target_max) {
             changed = apply_max_interaction(prev_max + delta);
         } else {
             changed = apply_min_interaction(prev_min + delta);

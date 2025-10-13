@@ -17,10 +17,10 @@
 #include "widgets/CandidateEditorPieGraphWidget.hpp"
 #include "spawn_method_control_widgets/LinkToAreaButton.hpp"
 
-class LabelWidget : public Widget {
+class SpawnGroupLabelWidget : public Widget {
 public:
-    LabelWidget() = default;
-    explicit LabelWidget(std::string text, SDL_Color color = DMStyles::Label().color, bool subtle = false)
+    SpawnGroupLabelWidget() = default;
+    explicit SpawnGroupLabelWidget(std::string text, SDL_Color color = DMStyles::Label().color, bool subtle = false)
         : text_(std::move(text)), color_(color), subtle_(subtle) {}
 
     void set_text(const std::string& text) { text_ = text; }
@@ -141,12 +141,12 @@ std::string default_display_name_for(const nlohmann::json& entry) {
     return "New Spawn";
 }
 
-class CallbackTextBoxWidget : public Widget {
+class SpawnGroupCallbackTextBoxWidget : public Widget {
 public:
-    CallbackTextBoxWidget(std::unique_ptr<DMTextBox> box,
-                          std::function<void(const std::string&)> on_change,
-                          bool full_row,
-                          bool editable)
+    SpawnGroupCallbackTextBoxWidget(std::unique_ptr<DMTextBox> box,
+                                    std::function<void(const std::string&)> on_change,
+                                    bool full_row,
+                                    bool editable)
         : box_(std::move(box)), on_change_(std::move(on_change)), full_row_(full_row), editable_(editable) {}
 
     void set_rect(const SDL_Rect& r) override {
@@ -349,9 +349,9 @@ struct SpawnGroupConfig::Entry {
 
     struct CandidateWidgets {
         std::unique_ptr<DMTextBox> name_box;
-        std::unique_ptr<CallbackTextBoxWidget> name_widget;
+        std::unique_ptr<SpawnGroupCallbackTextBoxWidget> name_widget;
         std::unique_ptr<DMTextBox> chance_box;
-        std::unique_ptr<CallbackTextBoxWidget> chance_widget;
+        std::unique_ptr<SpawnGroupCallbackTextBoxWidget> chance_widget;
         std::unique_ptr<DMButton> remove_button;
         std::unique_ptr<ButtonWidget> remove_widget;
 };
@@ -381,8 +381,8 @@ struct SpawnGroupConfig::Entry {
             owner_->mark_layout_dirty();
         });
 
-        spawn_id_label_ = std::make_unique<LabelWidget>();
-        ownership_label_widget_ = std::make_unique<LabelWidget>();
+        spawn_id_label_ = std::make_unique<SpawnGroupLabelWidget>();
+        ownership_label_widget_ = std::make_unique<SpawnGroupLabelWidget>();
         ownership_label_widget_->set_subtle(true);
 
         regenerate_button_ = std::make_unique<DMButton>("Regenerate", &DMStyles::ListButton(), 0, DMButton::height());
@@ -416,7 +416,7 @@ struct SpawnGroupConfig::Entry {
         });
 
         auto name_box = std::make_unique<DMTextBox>("Display Name", "");
-        name_widget_ = std::make_unique<CallbackTextBoxWidget>(std::move(name_box),
+        name_widget_ = std::make_unique<SpawnGroupCallbackTextBoxWidget>(std::move(name_box),
             [this](const std::string& value) {
                 if (!editable_) return;
                 if (auto* entry = mutable_entry()) {
@@ -459,18 +459,18 @@ struct SpawnGroupConfig::Entry {
             editable_);
 
         auto min_box = std::make_unique<DMTextBox>("Min Number", "");
-        min_widget_ = std::make_unique<CallbackTextBoxWidget>(std::move(min_box),
+        min_widget_ = std::make_unique<SpawnGroupCallbackTextBoxWidget>(std::move(min_box),
             [this](const std::string& text) { on_min_changed(text); }, false, editable_);
 
         auto max_box = std::make_unique<DMTextBox>("Max Number", "");
-        max_widget_ = std::make_unique<CallbackTextBoxWidget>(std::move(max_box),
+        max_widget_ = std::make_unique<SpawnGroupCallbackTextBoxWidget>(std::move(max_box),
             [this](const std::string& text) { on_max_changed(text); }, false, editable_);
 
         auto exact_box = std::make_unique<DMTextBox>("Quantity", "");
-        exact_widget_ = std::make_unique<CallbackTextBoxWidget>(std::move(exact_box),
+        exact_widget_ = std::make_unique<SpawnGroupCallbackTextBoxWidget>(std::move(exact_box),
             [this](const std::string& text) { on_exact_changed(text); }, false, editable_);
 
-        candidate_header_ = std::make_unique<LabelWidget>("Candidates");
+        candidate_header_ = std::make_unique<SpawnGroupLabelWidget>("Candidates");
         candidate_header_->set_subtle(true);
 
         add_candidate_button_ = std::make_unique<DMButton>("Add Candidate", &DMStyles::CreateButton(), 0, DMButton::height());
@@ -483,7 +483,7 @@ struct SpawnGroupConfig::Entry {
             }
         });
 
-        empty_candidates_label_ = std::make_unique<LabelWidget>("No candidates", DMStyles::Label().color, true);
+        empty_candidates_label_ = std::make_unique<SpawnGroupLabelWidget>("No candidates", DMStyles::Label().color, true);
 
         rebuild_candidate_widgets();
         sync_from_json();
@@ -855,7 +855,7 @@ private:
             double chance = safe_double(cand, "chance", safe_double(cand, "weight", 0.0));
 
             widgets.name_box = std::make_unique<DMTextBox>("Name", name);
-            widgets.name_widget = std::make_unique<CallbackTextBoxWidget>(std::move(widgets.name_box),
+            widgets.name_widget = std::make_unique<SpawnGroupCallbackTextBoxWidget>(std::move(widgets.name_box),
                 [this, i](const std::string& text) {
                     if (!editable_) return;
                     if (auto* entry = mutable_entry()) {
@@ -872,7 +872,7 @@ private:
             widgets.name_widget->set_value(name);
 
             widgets.chance_box = std::make_unique<DMTextBox>("Chance", std::to_string(static_cast<int>(chance)));
-            widgets.chance_widget = std::make_unique<CallbackTextBoxWidget>(std::move(widgets.chance_box),
+            widgets.chance_widget = std::make_unique<SpawnGroupCallbackTextBoxWidget>(std::move(widgets.chance_box),
                 [this, i](const std::string& text) {
                     if (!editable_) return;
                     if (auto* entry = mutable_entry()) {
@@ -1051,8 +1051,8 @@ private:
 
     std::unique_ptr<DMButton> toggle_button_{};
     std::unique_ptr<ButtonWidget> toggle_widget_{};
-    std::unique_ptr<LabelWidget> spawn_id_label_{};
-    std::unique_ptr<LabelWidget> ownership_label_widget_{};
+    std::unique_ptr<SpawnGroupLabelWidget> spawn_id_label_{};
+    std::unique_ptr<SpawnGroupLabelWidget> ownership_label_widget_{};
 
     std::unique_ptr<DMButton> regenerate_button_{};
     std::unique_ptr<ButtonWidget> regenerate_widget_{};
@@ -1061,7 +1061,7 @@ private:
     std::unique_ptr<DMButton> delete_button_{};
     std::unique_ptr<ButtonWidget> delete_widget_{};
 
-    std::unique_ptr<CallbackTextBoxWidget> name_widget_{};
+    std::unique_ptr<SpawnGroupCallbackTextBoxWidget> name_widget_{};
 
     std::vector<std::string> method_options_{};
     std::unique_ptr<CallbackDropdownWidget> method_widget_{};
@@ -1076,17 +1076,17 @@ private:
 
     std::unique_ptr<CallbackCheckboxWidget> enforce_widget_{};
 
-    std::unique_ptr<CallbackTextBoxWidget> min_widget_{};
-    std::unique_ptr<CallbackTextBoxWidget> max_widget_{};
-    std::unique_ptr<CallbackTextBoxWidget> exact_widget_{};
+    std::unique_ptr<SpawnGroupCallbackTextBoxWidget> min_widget_{};
+    std::unique_ptr<SpawnGroupCallbackTextBoxWidget> max_widget_{};
+    std::unique_ptr<SpawnGroupCallbackTextBoxWidget> exact_widget_{};
 
     std::optional<size_t> array_index_{};
 
     std::vector<CandidateWidgets> candidate_entries_{};
-    std::unique_ptr<LabelWidget> candidate_header_{};
+    std::unique_ptr<SpawnGroupLabelWidget> candidate_header_{};
     std::unique_ptr<DMButton> add_candidate_button_{};
     std::unique_ptr<ButtonWidget> add_candidate_widget_{};
-    std::unique_ptr<LabelWidget> empty_candidates_label_{};
+    std::unique_ptr<SpawnGroupLabelWidget> empty_candidates_label_{};
 };
 
 SpawnGroupConfig::SpawnGroupConfig(bool floatable)
@@ -1781,7 +1781,7 @@ DockableCollapsible::Rows SpawnGroupConfig::build_layout_rows() {
 
     if (!have_rows) {
         if (!empty_state_label_) {
-            empty_state_label_ = std::make_unique<LabelWidget>("No spawn groups configured.", DMStyles::Label().color, true);
+            empty_state_label_ = std::make_unique<SpawnGroupLabelWidget>("No spawn groups configured.", DMStyles::Label().color, true);
         }
         result.push_back({empty_state_label_.get()});
     }

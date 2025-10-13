@@ -209,6 +209,7 @@ private:
     bool focused_ = false;
     bool dragging_min_ = false;
     bool dragging_max_ = false;
+    bool wheel_target_max_ = false;
     std::unique_ptr<DMTextBox> edit_min_;
     std::unique_ptr<DMTextBox> edit_max_;
 };
