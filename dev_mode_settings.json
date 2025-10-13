@@ -1,6 +1,9 @@
 {
     "dev_ui": {
         "lock": {
+            "lighting": {
+                "map_panel": false
+            },
             "map_assets": {
                 "candidates": true
             }

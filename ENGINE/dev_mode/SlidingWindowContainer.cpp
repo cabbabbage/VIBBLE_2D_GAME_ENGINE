@@ -60,6 +60,20 @@ void SlidingWindowContainer::set_header_visible(bool visible) {
     layout(last_screen_w_, last_screen_h_);
 }
 
+void SlidingWindowContainer::set_scrollbar_visible(bool visible) {
+    if (scrollbar_visible_ == visible) {
+        return;
+    }
+    scrollbar_visible_ = visible;
+    if (!scrollbar_visible_) {
+        scrollbar_dragging_ = false;
+        scroll_dragging_ = false;
+        scroll_track_rect_ = SDL_Rect{0, 0, 0, 0};
+        scroll_thumb_rect_ = SDL_Rect{0, 0, 0, 0};
+    }
+    layout(last_screen_w_, last_screen_h_);
+}
+
 void SlidingWindowContainer::set_blocks_editor_interactions(bool block) {
     if (blocks_editor_interactions_ == block) {
         return;
@@ -266,7 +280,9 @@ bool SlidingWindowContainer::handle_event(const SDL_Event& e) {
     }
 
     if (pointer_event && e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
-        if (max_scroll_ > 0) {
+        if (scrollbar_visible_ && max_scroll_ > 0 &&
+            scroll_thumb_rect_.w > 0 && scroll_thumb_rect_.h > 0 &&
+            scroll_track_rect_.w > 0 && scroll_track_rect_.h > 0) {
             if (SDL_PointInRect(&pointer, &scroll_thumb_rect_)) {
                 scrollbar_dragging_ = true;
                 scrollbar_drag_offset_ = pointer.y - scroll_thumb_rect_.y;
@@ -387,7 +403,7 @@ void SlidingWindowContainer::render(SDL_Renderer* renderer, int screen_w, int sc
 
     SDL_RenderSetClipRect(renderer, &panel_clip);
 
-    if (max_scroll_ > 0 && scroll_track_rect_.w > 0 && scroll_track_rect_.h > 0) {
+    if (scrollbar_visible_ && max_scroll_ > 0 && scroll_track_rect_.w > 0 && scroll_track_rect_.h > 0) {
         SDL_Rect track = scroll_track_rect_;
         const int track_radius = std::min(DMStyles::CornerRadius(), std::min(track.w, track.h) / 2);
         const int track_bevel = std::min(DMStyles::BevelDepth(), std::max(0, std::min(track.w, track.h) / 2));
@@ -520,7 +536,7 @@ void SlidingWindowContainer::layout(int screen_w, int screen_h) const {
     int visible_height = panel_.h - padding - (header_visible_ ? (label_height + label_gap) : 0);
     max_scroll_ = std::max(0, content_height - std::max(0, visible_height));
 
-    if (max_scroll_ > 0) {
+    if (scrollbar_visible_ && max_scroll_ > 0) {
         const int scroll_space = kScrollbarWidth + kScrollbarGap;
         int adjusted_content_w = std::max(0, base_content_w - scroll_space);
         if (adjusted_content_w != content_w_active) {
@@ -558,11 +574,14 @@ void SlidingWindowContainer::layout(int screen_w, int screen_h) const {
         panel_.w,
         visible_area_h };
 
-    if (max_scroll_ == 0) {
+    if (!scrollbar_visible_ || max_scroll_ == 0) {
         scroll_dragging_ = false;
         scrollbar_dragging_ = false;
         scroll_track_rect_ = SDL_Rect{0,0,0,0};
         scroll_thumb_rect_ = SDL_Rect{0,0,0,0};
+        if (!scrollbar_visible_) {
+            return;
+        }
     } else {
         const int track_x = panel_.x + panel_.w - padding - kScrollbarWidth;
         const int track_y = scroll_region_.y + kScrollbarTrackMargin;

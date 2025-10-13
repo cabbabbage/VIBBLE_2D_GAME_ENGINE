@@ -303,6 +303,7 @@ RoomConfigurator::RoomConfigurator() {
         }
     });
     container_.set_blocks_editor_interactions(true);
+    container_.set_scrollbar_visible(false);
     container_.set_header_visible(show_header_);
     state_ = std::make_unique<State>();
 }
@@ -438,7 +439,7 @@ int RoomConfigurator::layout_content(const SlidingWindowContainer::LayoutContext
         cfg->set_rect(SDL_Rect{ctx.content_x, y - ctx.scroll_value, ctx.content_width, 0});
         y += cfg->height() + ctx.gap;
     }
-    return y;
+    return y + ctx.gap;
 }
 
 void RoomConfigurator::set_rows(Rows rows) { rows_ = std::move(rows); }

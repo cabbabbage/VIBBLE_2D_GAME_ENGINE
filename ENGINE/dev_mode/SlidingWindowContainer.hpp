@@ -34,6 +34,7 @@ public:
     void set_header_text_provider(HeaderTextProvider provider);
     void set_on_close(std::function<void()> cb);
     void set_header_visible(bool visible);
+    void set_scrollbar_visible(bool visible);
 
     void set_blocks_editor_interactions(bool block);
     void set_editor_interaction_blocker(std::function<void(bool)> blocker);
@@ -85,6 +86,8 @@ private:
 
     bool panel_override_active_ = false;
     SDL_Rect panel_override_{0, 0, 0, 0};
+
+    bool scrollbar_visible_ = true;
 
     mutable SDL_Rect panel_{0,0,0,0};
     mutable SDL_Rect name_label_rect_{0,0,0,0};

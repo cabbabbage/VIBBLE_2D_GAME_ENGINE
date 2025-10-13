@@ -2951,7 +2951,16 @@ void MapLayersPanel::set_header_visibility_callback(std::function<void(bool)> cb
         layer_config_container_->set_header_visibility_controller(controller);
     }
     if (room_configurator_) {
-        room_configurator_->set_header_visibility_controller(controller);
+        room_configurator_->set_header_visibility_controller([this](bool visible) {
+            if (!header_visibility_callback_) {
+                return;
+            }
+            bool show_header = !visible;
+            if (embedded_mode_) {
+                show_header = false;
+            }
+            header_visibility_callback_(show_header);
+        });
     }
 }
 
@@ -4621,9 +4630,14 @@ void MapLayersPanel::ensure_room_configurator() {
 
         if (room_configurator_) {
             room_configurator_->set_header_visibility_controller([this](bool visible) {
-                if (header_visibility_callback_) {
-                    header_visibility_callback_(visible);
+                if (!header_visibility_callback_) {
+                    return;
                 }
+                bool show_header = !visible;
+                if (embedded_mode_) {
+                    show_header = false;
+                }
+                header_visibility_callback_(show_header);
             });
             room_configurator_->set_show_header(false);
 
