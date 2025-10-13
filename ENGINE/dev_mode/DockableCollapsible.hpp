@@ -22,6 +22,8 @@ public:
     explicit DockableCollapsible(const std::string& title, bool floatable = true, int x = 32, int y = 32);
     virtual ~DockableCollapsible();
 
+    static constexpr int kDefaultFloatingContentWidth = 360;
+
     void set_title(const std::string& title);
     virtual void set_info(const std::shared_ptr<AssetInfo>& info) { info_ = info; }
     virtual void build() {}
@@ -61,6 +63,7 @@ public:
     void set_row_gap(int g);
     void set_col_gap(int g);
     void set_visible_height(int h);
+    void set_floating_content_width(int w);
 
     void reset_scroll() const;
 
@@ -141,6 +144,7 @@ protected:
     int row_gap_   = 8;
     int col_gap_   = 12;
     int cell_width_= 280;
+    int floating_content_width_ = kDefaultFloatingContentWidth;
 
     SDL_Rect work_area_{0,0,0,0};
 

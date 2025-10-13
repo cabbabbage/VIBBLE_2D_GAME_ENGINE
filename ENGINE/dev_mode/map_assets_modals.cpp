@@ -131,6 +131,7 @@ public:
 
     CandidateListPanelImpl() : DockableCollapsible("Spawn Group Candidates", true) {
         set_scroll_enabled(true);
+        set_floating_content_width(480);
         set_cell_width(420);
         set_row_gap(8);
         set_col_gap(12);
