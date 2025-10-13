@@ -682,7 +682,7 @@
               "name": "Axe"
             },
             {
-              "chance": 5.0,
+              "chance": 14.0,
               "name": "candle"
             }
           ],
@@ -690,11 +690,11 @@
           "dx": 1114,
           "dy": -829,
           "enforce_spacing": false,
-          "max_number": 1,
-          "min_number": 1,
+          "max_number": 20,
+          "min_number": 2,
           "origional_height": 9038,
           "origional_width": 9017,
-          "position": "Exact",
+          "position": "Perimeter",
           "spawn_id": "spn-dbc1671870c3"
         }
       ],

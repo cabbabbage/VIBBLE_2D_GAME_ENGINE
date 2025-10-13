@@ -782,6 +782,8 @@ bool RoomConfigurator::apply_room_data(const nlohmann::json& data) {
 }
 
 void RoomConfigurator::open(const nlohmann::json& room_data) {
+    const bool was_visible = container_.is_visible();
+
     room_ = nullptr;
     external_room_json_ = nullptr;
     on_external_spawn_change_ = {};
@@ -791,7 +793,9 @@ void RoomConfigurator::open(const nlohmann::json& room_data) {
     bool changed = apply_room_data(room_data);
     if (changed) {
         rebuild_rows();
-        reset_scroll();
+        if (!was_visible) {
+            reset_scroll();
+        }
     }
     container_.open();
 }
@@ -800,6 +804,8 @@ void RoomConfigurator::open(nlohmann::json& room_data,
                             std::function<void()> on_change,
                             std::function<void(const nlohmann::json&, const SpawnGroupConfig::ChangeSummary&)> on_entry_change,
                             SpawnGroupConfig::ConfigureEntryCallback configure_entry) {
+    const bool was_visible = container_.is_visible();
+
     room_ = nullptr;
     external_room_json_ = &room_data;
     on_external_spawn_change_ = std::move(on_change);
@@ -809,12 +815,16 @@ void RoomConfigurator::open(nlohmann::json& room_data,
     bool changed = apply_room_data(room_data);
     if (changed) {
         rebuild_rows();
-        reset_scroll();
+        if (!was_visible) {
+            reset_scroll();
+        }
     }
     container_.open();
 }
 
 void RoomConfigurator::open(Room* room) {
+    const bool was_visible = container_.is_visible();
+
     Room* previous = room_;
     room_ = room;
     external_room_json_ = nullptr;
@@ -833,7 +843,9 @@ void RoomConfigurator::open(Room* room) {
     bool changed = (room != previous) || apply_room_data(source);
     if (changed) {
         rebuild_rows();
-        reset_scroll();
+        if (!was_visible) {
+            reset_scroll();
+        }
     }
     container_.open();
 }
