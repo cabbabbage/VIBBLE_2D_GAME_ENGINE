@@ -637,17 +637,17 @@
         }
       ],
       "curvyness": 1,
-      "edge_smoothness": 84,
+      "edge_smoothness": 28,
       "geometry": "Circle",
       "inherits_map_assets": true,
       "is_boss": false,
       "is_spawn": true,
-      "max_height": 32452,
-      "max_width": 32452,
-      "min_height": 32452,
-      "min_width": 32452,
+      "max_height": 53732,
+      "max_width": 53732,
+      "min_height": 53732,
+      "min_width": 53732,
       "name": "spawn",
-      "radius": 16226,
+      "radius": 26866,
       "spawn_groups": [
         {
           "candidates": [
@@ -682,7 +682,7 @@
               "name": "Axe"
             },
             {
-              "chance": 8.0,
+              "chance": 0.0,
               "name": "candle"
             }
           ],

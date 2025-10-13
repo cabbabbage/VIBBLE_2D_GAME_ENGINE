@@ -1110,7 +1110,6 @@ void RoomConfigurator::rebuild_rows_internal() {
 
     if (state_->geometry_is_circle()) {
         radius_slider_ = std::make_unique<DMSlider>("Radius", 0, 200000, state_->radius);
-        radius_slider_->set_defer_commit_until_unfocus(true);
         radius_widget_ = std::make_unique<SliderWidget>(radius_slider_.get());
         width_slider_.reset();
         width_widget_.reset();
@@ -1122,13 +1121,11 @@ void RoomConfigurator::rebuild_rows_internal() {
 
         auto width_range = compute_slider_range(state_->width_min, state_->width_max);
         width_slider_ = std::make_unique<DMRangeSlider>(width_range.first, width_range.second, state_->width_min, state_->width_max);
-        width_slider_->set_defer_commit_until_unfocus(true);
         width_widget_ = std::make_unique<RangeSliderWidget>(width_slider_.get());
 
         if (!is_trail_context_) {
             auto height_range = compute_slider_range(state_->height_min, state_->height_max);
             height_slider_ = std::make_unique<DMRangeSlider>(height_range.first, height_range.second, state_->height_min, state_->height_max);
-            height_slider_->set_defer_commit_until_unfocus(true);
             height_widget_ = std::make_unique<RangeSliderWidget>(height_slider_.get());
         } else {
             height_slider_.reset();
@@ -1137,12 +1134,10 @@ void RoomConfigurator::rebuild_rows_internal() {
     }
 
     edge_slider_ = std::make_unique<DMSlider>("Edge Smoothness", 0, 101, state_->edge_smoothness);
-    edge_slider_->set_defer_commit_until_unfocus(true);
     edge_widget_ = std::make_unique<SliderWidget>(edge_slider_.get());
 
     if (is_trail_context_) {
         curvy_slider_ = std::make_unique<DMSlider>("Curvyness", 0, 16, state_->curvyness);
-        curvy_slider_->set_defer_commit_until_unfocus(true);
         curvy_widget_ = std::make_unique<SliderWidget>(curvy_slider_.get());
     } else {
         curvy_slider_.reset();

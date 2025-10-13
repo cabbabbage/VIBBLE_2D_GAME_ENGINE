@@ -746,6 +746,9 @@ bool DMSlider::handle_event(const SDL_Event& e) {
     if (e.type == SDL_MOUSEMOTION) {
         SDL_Point p{ e.motion.x, e.motion.y };
         update_hover(p);
+        if (!dragging_ && focused_ && !hovered_) {
+            set_focus(false);
+        }
         if (dragging_) {
             apply_interaction_value(value_for_x(p.x));
             return true;
@@ -1295,6 +1298,10 @@ bool DMRangeSlider::handle_event(const SDL_Event& e) {
     if (e.type == SDL_MOUSEMOTION) {
         SDL_Point p{ e.motion.x, e.motion.y };
         update_hover(p);
+        const bool dragging_state = dragging_min_ || dragging_max_;
+        if (!dragging_state && focused_ && !hovered_) {
+            set_focus(false);
+        }
         bool dragging = false;
         if (dragging_min_) {
             apply_min_interaction(value_for_x(p.x));
