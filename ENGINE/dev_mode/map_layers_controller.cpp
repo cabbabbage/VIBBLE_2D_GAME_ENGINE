@@ -14,28 +14,8 @@ using nlohmann::json;
 
 namespace {
 constexpr int kDefaultRoomRangeMax = 64;
-constexpr int kDefaultLayerRadiusStep = 512;
-
 using map_layers::clamp_candidate_max;
 using map_layers::clamp_candidate_min;
-
-int next_layer_radius(const json& layers) {
-    int max_radius = 0;
-    bool has_layer = false;
-    if (layers.is_array()) {
-        for (const auto& layer : layers) {
-            if (!layer.is_object()) continue;
-            has_layer = true;
-            max_radius = std::max(max_radius, layer.value("radius", 0));
-        }
-    }
-    if (!has_layer) return 0;
-    int step = std::max(kDefaultLayerRadiusStep, max_radius / 3);
-    if (max_radius <= 0) {
-        return kDefaultLayerRadiusStep;
-    }
-    return max_radius + step;
-}
 }
 
 void MapLayersController::bind(json* map_info, std::string map_path) {
@@ -152,11 +132,9 @@ int MapLayersController::create_layer(const std::string& display_name) {
     ensure_initialized();
     auto& arr = (*map_info_)["map_layers"];
     const int idx = static_cast<int>(arr.size());
-    int radius = arr.empty() ? 0 : next_layer_radius(arr);
     json layer = {
         {"level", idx},
         {"name", display_name.empty() ? std::string("layer_") + std::to_string(idx) : display_name},
-        {"radius", arr.empty() ? 0 : radius},
         {"min_rooms", 0},
         {"max_rooms", 0},
         {"rooms", json::array()}
@@ -280,11 +258,9 @@ bool MapLayersController::add_candidate_child(int layer_index, int candidate_ind
 
     if (child_layer_index >= static_cast<int>(layers_arr.size())) {
         int new_level = static_cast<int>(layers_arr.size());
-        int radius = layers_arr.empty() ? 0 : next_layer_radius(layers_arr);
         json child_layer = {
             {"level", new_level},
             {"name", std::string("layer_") + std::to_string(new_level)},
-            {"radius", layers_arr.empty() ? 0 : radius},
             {"max_rooms", 0},
             {"rooms", json::array()}
 };
@@ -364,6 +340,10 @@ void MapLayersController::ensure_initialized() {
     if (!map_info_->contains("map_layers") || !(*map_info_)["map_layers"].is_array()) {
         (*map_info_)["map_layers"] = json::array();
     }
+    auto map_radius_it = map_info_->find("map_radius");
+    if (map_radius_it != map_info_->end()) {
+        map_info_->erase(map_radius_it);
+    }
     ensure_layer_indices();
 }
 
@@ -383,11 +363,14 @@ void MapLayersController::ensure_layer_indices() {
             oss << "layer_" << i;
             layer_json["name"] = oss.str();
         }
-        if (!layer_json.contains("radius")) layer_json["radius"] = 0;
         if (!layer_json.contains("min_rooms")) layer_json["min_rooms"] = 0;
         if (!layer_json.contains("max_rooms")) layer_json["max_rooms"] = 0;
         if (!layer_json.contains("rooms") || !layer_json["rooms"].is_array()) {
             layer_json["rooms"] = json::array();
+        }
+        auto radius_it = layer_json.find("radius");
+        if (radius_it != layer_json.end()) {
+            layer_json.erase(radius_it);
         }
         clamp_layer_counts(layer_json);
         auto& rooms = layer_json["rooms"];

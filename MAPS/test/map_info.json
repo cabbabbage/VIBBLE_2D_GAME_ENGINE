@@ -6,7 +6,6 @@
     {
       "level": 0,
       "max_rooms": 1,
-      "radius": 1500,
       "rooms": [
         {
           "max_instances": 1,
@@ -46,7 +45,6 @@
     "update_interval": 10
   },
   "map_name": "test",
-  "map_radius": 1500,
   "rooms_data": {
     "spawn": {
       "edge_smoothness": 2,

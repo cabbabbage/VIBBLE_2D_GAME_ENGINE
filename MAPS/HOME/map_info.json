@@ -86,7 +86,6 @@
       "level": 0,
       "max_rooms": 1,
       "name": "layer_0",
-      "radius": 1500,
       "rooms": [
         {
           "max_instances": 1,
@@ -124,7 +123,6 @@
     "update_interval": 10
   },
   "map_name": "HOME",
-  "map_radius": 18000,
   "rooms_data": {
     "spawn": {
       "edge_smoothness": 1000,

@@ -5304,6 +5304,14 @@ void MapLayersPanel::ensure_layers_array() {
 
     }
 
+    auto map_radius_it = map_info_->find("map_radius");
+
+    if (map_radius_it != map_info_->end()) {
+
+        map_info_->erase(map_radius_it);
+
+    }
+
 }
 
 void MapLayersPanel::ensure_layer_indices() {
@@ -5332,11 +5340,17 @@ void MapLayersPanel::ensure_layer_indices() {
 
         if (!arr[i].contains("max_rooms")) arr[i]["max_rooms"] = 0;
 
-        if (!arr[i].contains("radius")) arr[i]["radius"] = 0;
-
         if (!arr[i].contains("rooms") || !arr[i]["rooms"].is_array()) {
 
             arr[i]["rooms"] = json::array();
+
+        }
+
+        auto radius_it = arr[i].find("radius");
+
+        if (radius_it != arr[i].end()) {
+
+            arr[i].erase(radius_it);
 
         }
 
@@ -5546,8 +5560,6 @@ int MapLayersPanel::append_layer_entry(const std::string& display_name) {
         {"level", idx},
 
         {"name", name},
-
-        {"radius", 0},
 
         {"min_rooms", 0},
 

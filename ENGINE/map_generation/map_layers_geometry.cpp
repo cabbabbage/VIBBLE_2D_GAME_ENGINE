@@ -106,16 +106,14 @@ LayerRadiiResult compute_layer_radii(const nlohmann::json& layers,
     result.layer_radii.assign(layer_count, 0.0);
     result.layer_extents.assign(layer_count, 0.0);
 
-    double fallback_radius = 0.0;
     double max_extent = 0.0;
+    double largest_extent = 0.0;
 
     for (size_t i = 0; i < layer_count; ++i) {
         const auto& layer = layers[i];
         if (!layer.is_object()) {
             continue;
         }
-        const double stored_radius = layer.value("radius", 0.0);
-        fallback_radius = std::max(fallback_radius, stored_radius);
 
         double largest_room = 0.0;
         const auto rooms_it = layer.find("rooms");
@@ -127,6 +125,7 @@ LayerRadiiResult compute_layer_radii(const nlohmann::json& layers,
             }
         }
         result.layer_extents[i] = largest_room;
+        largest_extent = std::max(largest_extent, largest_room);
     }
 
     for (size_t i = 0; i < layer_count; ++i) {
@@ -135,8 +134,8 @@ LayerRadiiResult compute_layer_radii(const nlohmann::json& layers,
             continue;
         }
 
-        double desired_radius = layer.value("radius", 0.0);
         const double largest = result.layer_extents[i];
+        double desired_radius = largest;
 
         if (i > 0) {
             const double prev_radius = result.layer_radii[i - 1];
@@ -155,7 +154,7 @@ LayerRadiiResult compute_layer_radii(const nlohmann::json& layers,
     }
 
     if (max_extent <= 0.0) {
-        max_extent = fallback_radius;
+        max_extent = largest_extent;
     }
     if (max_extent <= 0.0) {
         max_extent = 1.0;

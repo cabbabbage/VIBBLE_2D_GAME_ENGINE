@@ -63,6 +63,7 @@ std::vector<RoomSpec> GenerateRooms::get_children_from_layer(const LayerSpec& la
 
 std::vector<std::unique_ptr<Room>> GenerateRooms::build(AssetLibrary* asset_lib,
                                                         double map_radius,
+                                                        const std::vector<double>& layer_radii,
                                                         const nlohmann::json& boundary_data,
                                                         nlohmann::json& rooms_data,
                                                         nlohmann::json& trails_data,
@@ -97,9 +98,9 @@ std::vector<std::unique_ptr<Room>> GenerateRooms::build(AssetLibrary* asset_lib,
 	std::vector<Room*> current_parents = { all_rooms[0].get() };
 	std::vector<Sector> current_sectors = { { current_parents[0], 0.0f, 2 * M_PI } };
 	for (size_t li = 1; li < map_layers_.size(); ++li) {
-		const LayerSpec& layer = map_layers_[li];
-		auto children_specs = get_children_from_layer(layer);
-                double radius = layer.radius;
+                const LayerSpec& layer = map_layers_[li];
+                const double radius = (li < layer_radii.size()) ? layer_radii[li] : 0.0;
+                auto children_specs = get_children_from_layer(layer);
                 if (testing) {
                         std::cout << "[GenerateRooms] Layer " << layer.level
                         << " radius: " << radius

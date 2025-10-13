@@ -209,7 +209,7 @@ void AssetLoader::loadRooms() {
         nlohmann::json empty_rooms    = nlohmann::json::object();
         nlohmann::json empty_trails   = nlohmann::json::object();
         nlohmann::json empty_assets   = nlohmann::json::object();
-        auto room_ptrs = generator.build( asset_library_.get(), map_radius_, map_boundary_data_ ? *map_boundary_data_ : empty_boundary, rooms_data_        ? *rooms_data_        : empty_rooms, trails_data_       ? *trails_data_       : empty_trails, map_assets_data_   ? *map_assets_data_   : empty_assets);
+        auto room_ptrs = generator.build( asset_library_.get(), map_radius_, layer_radii_, map_boundary_data_ ? *map_boundary_data_ : empty_boundary, rooms_data_        ? *rooms_data_        : empty_rooms, trails_data_       ? *trails_data_       : empty_trails, map_assets_data_   ? *map_assets_data_   : empty_assets);
         for (auto& up : room_ptrs) {
                 rooms_.push_back(up.get());
                 all_rooms_.push_back(std::move(up));
@@ -286,16 +286,15 @@ void AssetLoader::load_map_json() {
 
         map_radius_   = radii_result.map_radius;
         map_center_x_ = map_center_y_ = map_radius_;
+        layer_radii_  = radii_result.layer_radii;
         map_layers_.clear();
 
         if (layers_it != map_info_json_.end() && layers_it->is_array()) {
-                const auto& radii = radii_result.layer_radii;
                 map_layers_.reserve(layers_it->size());
                 size_t index = 0;
                 for (const auto& layer_entry : *layers_it) {
                         LayerSpec spec;
                         spec.level = static_cast<int>(index);
-                        spec.radius = index < radii.size() ? radii[index] : 0.0;
                         spec.max_rooms = 0;
 
                         if (layer_entry.is_object()) {

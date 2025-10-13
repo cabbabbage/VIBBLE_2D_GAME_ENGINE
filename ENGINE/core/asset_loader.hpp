@@ -36,6 +36,7 @@ class AssetLoader {
     std::vector<std::unique_ptr<Room>> all_rooms_;
     std::unique_ptr<AssetLibrary> asset_library_;
     std::vector<LayerSpec>              map_layers_;
+    std::vector<double>                 layer_radii_;
     double map_center_x_ = 0.0;
     double map_center_y_ = 0.0;
     double map_radius_   = 0.0;

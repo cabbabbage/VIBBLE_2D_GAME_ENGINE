@@ -19,7 +19,6 @@ struct RoomSpec {
 
 struct LayerSpec {
         int level = 0;
-        double radius = 0.0;
         int max_rooms = 0;
         std::vector<RoomSpec> rooms;
 };
@@ -29,7 +28,7 @@ class GenerateRooms {
 	public:
     using Point = SDL_Point;
     GenerateRooms(const std::vector<LayerSpec>& layers, int map_cx, int map_cy, const std::string& map_dir, const std::string& map_info_path);
-    std::vector<std::unique_ptr<Room>> build(AssetLibrary* asset_lib, double map_radius, const nlohmann::json& boundary_data, nlohmann::json& rooms_data, nlohmann::json& trails_data, const nlohmann::json& map_assets_data);
+    std::vector<std::unique_ptr<Room>> build(AssetLibrary* asset_lib, double map_radius, const std::vector<double>& layer_radii, const nlohmann::json& boundary_data, nlohmann::json& rooms_data, nlohmann::json& trails_data, const nlohmann::json& map_assets_data);
     bool testing = false;
 
 	private:

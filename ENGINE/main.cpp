@@ -175,11 +175,9 @@ nlohmann::json build_default_map_info(const std::string& map_name) {
     const int diameter = kSpawnRadius * 2;
 
     nlohmann::json map_info;
-    map_info["map_radius"] = kSpawnRadius;
 
     nlohmann::json layer;
     layer["level"] = 0;
-    layer["radius"] = kSpawnRadius;
     layer["max_rooms"] = 1;
     nlohmann::json spawn_spec;
     spawn_spec["name"] = "spawn";
