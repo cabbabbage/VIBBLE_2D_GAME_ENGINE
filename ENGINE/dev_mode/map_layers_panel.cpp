@@ -5077,13 +5077,13 @@ void MapLayersPanel::reorder_spawn_group_in_active_room(const std::string& spawn
 
     }
 
-    nlohmann::json moved = groups[current_index];
+    nlohmann::json moved = std::move(groups[current_index]);
 
     const auto erase_pos = groups.begin() + static_cast<nlohmann::json::difference_type>(current_index);
 
     groups.erase(erase_pos);
 
-    const size_t insert_index = current_index < bounded_index ? bounded_index - 1 : bounded_index;
+    size_t insert_index = std::min(bounded_index, groups.size());
 
     const auto insert_pos = groups.begin() + static_cast<nlohmann::json::difference_type>(insert_index);
 

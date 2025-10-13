@@ -2113,10 +2113,10 @@ void RoomEditor::reorder_spawn_group_internal(const std::string& spawn_id, size_
     const size_t bounded_index = std::min(target_index, arr.size() - 1);
     if (current_index == bounded_index) return;
 
-    nlohmann::json entry = arr[current_index];
+    nlohmann::json entry = std::move(arr[current_index]);
     const auto erase_pos = arr.begin() + static_cast<nlohmann::json::difference_type>(current_index);
     arr.erase(erase_pos);
-    const size_t insert_index = current_index < bounded_index ? bounded_index - 1 : bounded_index;
+    size_t insert_index = std::min(bounded_index, arr.size());
     const auto insert_pos = arr.begin() + static_cast<nlohmann::json::difference_type>(insert_index);
     arr.insert(insert_pos, std::move(entry));
 

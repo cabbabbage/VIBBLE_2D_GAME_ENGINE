@@ -663,6 +663,7 @@ void RoomConfigurator::rebuild_spawn_rows(Rows& rows) {
 };
 
     auto bind_spawn_entry = [&](nlohmann::json& entry,
+                                nlohmann::json& group_array,
                                 SpawnGroupConfig::ConfigureEntryCallback configure_entry,
                                 std::function<void()> on_change,
                                 std::function<void(const nlohmann::json&, const SpawnGroupConfig::ChangeSummary&)> on_entry_change) {
@@ -702,11 +703,50 @@ void RoomConfigurator::rebuild_spawn_rows(Rows& rows) {
             if (room_) this->refresh_spawn_groups(room_);
             else if (external_room_json_) this->refresh_spawn_groups(*external_room_json_);
         };
-        callbacks.on_reorder = [this](const std::string& value, size_t index) {
+        callbacks.on_reorder = [this, groups = &group_array](const std::string& value, size_t index) {
             if (on_spawn_reorder_) on_spawn_reorder_(value, index);
-            this->request_rebuild();
-            if (room_) this->refresh_spawn_groups(room_);
-            else if (external_room_json_) this->refresh_spawn_groups(*external_room_json_);
+            if (!groups || !groups->is_array() || groups->empty()) {
+                return;
+            }
+
+            auto& arr = *groups;
+            size_t current_index = arr.size();
+            for (size_t i = 0; i < arr.size(); ++i) {
+                const auto& element = arr[i];
+                if (!element.is_object()) continue;
+                if (element.contains("spawn_id") && element["spawn_id"].is_string() &&
+                    element["spawn_id"].get<std::string>() == value) {
+                    current_index = i;
+                    break;
+                }
+            }
+            if (current_index >= arr.size()) {
+                return;
+            }
+
+            size_t target_index = index;
+            if (!arr.empty()) {
+                const size_t max_index = arr.size() - 1;
+                if (target_index > max_index) {
+                    target_index = max_index;
+                }
+            } else {
+                target_index = 0;
+            }
+
+            if (current_index != target_index) {
+                nlohmann::json moved = std::move(arr[current_index]);
+                const auto erase_pos = arr.begin() + static_cast<nlohmann::json::difference_type>(current_index);
+                arr.erase(erase_pos);
+                size_t insert_index = target_index;
+                if (insert_index > arr.size()) {
+                    insert_index = arr.size();
+                }
+                const auto insert_pos = arr.begin() + static_cast<nlohmann::json::difference_type>(insert_index);
+                arr.insert(insert_pos, std::move(moved));
+            }
+
+            renumber_spawn_group_priorities(arr);
         };
         config->set_callbacks(std::move(callbacks));
 
@@ -808,7 +848,7 @@ void RoomConfigurator::rebuild_spawn_rows(Rows& rows) {
                 if (room_) room_->save_assets_json();
                 this->request_rebuild();
 };
-            bind_spawn_entry(entry, configure_entry, std::move(on_change), std::move(on_entry_change));
+            bind_spawn_entry(entry, groups, configure_entry, std::move(on_change), std::move(on_entry_change));
         }
     } else if (external_room_json_) {
         auto& root = live_room_json();
@@ -826,7 +866,7 @@ void RoomConfigurator::rebuild_spawn_rows(Rows& rows) {
                 if (on_external_spawn_change_) on_external_spawn_change_();
                 this->request_rebuild();
 };
-            bind_spawn_entry(entry, external_configure_entry_, std::move(on_change), std::move(on_entry_change));
+            bind_spawn_entry(entry, groups, external_configure_entry_, std::move(on_change), std::move(on_entry_change));
         }
     } else {
         nlohmann::json& root = loaded_json_;
@@ -838,7 +878,7 @@ void RoomConfigurator::rebuild_spawn_rows(Rows& rows) {
             have_groups = true;
             auto on_change = [this]() { this->request_rebuild(); };
             auto on_entry_change = [this](const nlohmann::json&, const SpawnGroupConfig::ChangeSummary&) { this->request_rebuild(); };
-            bind_spawn_entry(entry, {}, std::move(on_change), std::move(on_entry_change));
+            bind_spawn_entry(entry, groups, {}, std::move(on_change), std::move(on_entry_change));
         }
     }
     (void)have_groups; // Panels are handled above; basic panel handles add button

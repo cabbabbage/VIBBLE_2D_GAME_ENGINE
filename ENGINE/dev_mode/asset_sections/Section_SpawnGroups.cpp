@@ -218,11 +218,11 @@ void Section_SpawnGroups::reorder_spawn_group(const std::string& id, size_t new_
     const size_t from = static_cast<size_t>(current_index);
     if (from == bounded_index) return;
 
-    nlohmann::json entry = groups_[from];
+    nlohmann::json entry = std::move(groups_[from]);
     const auto erase_pos = groups_.begin() + static_cast<nlohmann::json::difference_type>(from);
     groups_.erase(erase_pos);
-    const size_t adjusted_index = from < bounded_index ? bounded_index - 1 : bounded_index;
-    const auto insert_pos = groups_.begin() + static_cast<nlohmann::json::difference_type>(adjusted_index);
+    size_t insert_index = std::min(bounded_index, groups_.size());
+    const auto insert_pos = groups_.begin() + static_cast<nlohmann::json::difference_type>(insert_index);
     groups_.insert(insert_pos, std::move(entry));
 
     renumber_priorities();

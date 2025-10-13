@@ -35,7 +35,7 @@ private:
         SDL_FPoint center{0.f, 0.f};
         float radius = 0.f;
         SDL_Rect legend{0, 0, 0, 0};
-};
+    };
 
     Layout compute_layout() const;
     double total_weight() const;
@@ -45,7 +45,10 @@ private:
     void render_outline(SDL_Renderer* renderer, const Layout& layout) const;
     void render_legend(SDL_Renderer* renderer, const Layout& layout, double total, TTF_Font* font) const;
     SDL_Rect draw_text(SDL_Renderer* renderer, TTF_Font* font, const std::string& text, int x, int y, SDL_Color color, bool center) const;
-    static SDL_Color color_for_index(size_t index, bool highlight);
+    int hit_test_candidate(const Layout& layout, SDL_Point point, double total) const;
+    void cache_legend_rows(const Layout& layout, int row_height = -1) const;
+    static int default_legend_row_height();
+    static SDL_Color color_for_index(size_t index);
     static SDL_Color lighten(SDL_Color color, float amount);
     static Uint8 clamp_color(int value);
 
@@ -56,5 +59,7 @@ private:
     std::function<void(int index, int delta)> on_adjust_{};
     std::function<void(int index)> on_delete_{};
     bool scroll_capture_active_ = false;
+    mutable std::vector<SDL_Rect> legend_row_rects_{};
+    mutable int legend_row_height_ = 0;
 };
 

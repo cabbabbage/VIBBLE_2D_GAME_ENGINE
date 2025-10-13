@@ -8,6 +8,7 @@
 #include <unordered_set>
 #include <cmath>
 #include <stdexcept>
+#include <chrono>
 #include <SDL.h>
 #include "asset/Asset.hpp"
 #include "asset/asset_library.hpp"
@@ -47,11 +48,23 @@ AssetLoader::AssetLoader(const std::string& map_dir, SDL_Renderer* renderer)
 : map_path_(map_dir),
 renderer_(renderer)
 {
+        const auto overall_begin = std::chrono::steady_clock::now();
+
+        const auto map_begin = std::chrono::steady_clock::now();
         load_map_json();
+        const auto map_end = std::chrono::steady_clock::now();
+
         AudioEngine::instance().init(map_path_);
+
+        const auto library_begin = std::chrono::steady_clock::now();
         asset_library_ = std::make_unique<AssetLibrary>();
-    loadRooms();
+        const auto library_end = std::chrono::steady_clock::now();
+
+        const auto rooms_begin = std::chrono::steady_clock::now();
+        loadRooms();
+        const auto rooms_end = std::chrono::steady_clock::now();
     {
+        const auto preload_begin = std::chrono::steady_clock::now();
 
         std::unordered_set<std::string> used;
         for (Room* room : rooms_) {
@@ -61,10 +74,25 @@ renderer_(renderer)
                 }
             }
         }
+        const std::size_t preload_count = used.size();
         asset_library_->loadAnimationsFor(renderer_, used);
-        asset_library_->ensureAllAnimationsLoaded(renderer_);
+
+        const auto preload_end = std::chrono::steady_clock::now();
+        const double preload_ms = std::chrono::duration_cast<std::chrono::milliseconds>(preload_end - preload_begin).count();
+        std::cout << "[AssetLoader] Preloaded animations for " << preload_count
+                  << " referenced assets in " << preload_ms << "ms\n";
     }
         finalizeAssets();
+
+        const auto overall_end = std::chrono::steady_clock::now();
+        const double map_ms = std::chrono::duration_cast<std::chrono::milliseconds>(map_end - map_begin).count();
+        const double library_ms = std::chrono::duration_cast<std::chrono::milliseconds>(library_end - library_begin).count();
+        const double rooms_ms = std::chrono::duration_cast<std::chrono::milliseconds>(rooms_end - rooms_begin).count();
+        const double total_ms = std::chrono::duration_cast<std::chrono::milliseconds>(overall_end - overall_begin).count();
+        std::cout << "[AssetLoader] Map metadata loaded in " << map_ms << "ms\n";
+        std::cout << "[AssetLoader] Asset library ready in " << library_ms << "ms\n";
+        std::cout << "[AssetLoader] Rooms built in " << rooms_ms << "ms\n";
+        std::cout << "[AssetLoader] Asset loader initialization completed in " << total_ms << "ms\n";
 	auto distant_boundary = collectDistantAssets(0,2000);
 	for(auto a : distant_boundary){
 		a->set_hidden(true);

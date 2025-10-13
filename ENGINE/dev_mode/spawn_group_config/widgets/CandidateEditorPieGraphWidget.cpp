@@ -40,12 +40,16 @@ int CandidateEditorPieGraphWidget::height_for_width(int w) const {
 }
 
 bool CandidateEditorPieGraphWidget::handle_event(const SDL_Event& e) {
-    if (candidates_.empty()) {
-        hovered_index_ = -1;
+    auto release_scroll_capture = [this]() {
         if (scroll_capture_active_) {
             DMWidgetsSetSliderScrollCapture(this, false);
             scroll_capture_active_ = false;
         }
+    };
+
+    if (candidates_.empty()) {
+        hovered_index_ = -1;
+        release_scroll_capture();
         return false;
     }
 
@@ -56,71 +60,65 @@ bool CandidateEditorPieGraphWidget::handle_event(const SDL_Event& e) {
             total = 1.0;
         }
 
-        const float dx = static_cast<float>(e.motion.x) - layout.center.x;
-        const float dy = static_cast<float>(e.motion.y) - layout.center.y;
-        const float dist = std::sqrt(dx * dx + dy * dy);
-        int new_hover = -1;
-        if (layout.radius > 0.0f && dist <= layout.radius + 10.0f) {
-            double angle = std::atan2(dy, dx);
-            double normalized = angle - kStartAngle;
-            while (normalized < 0.0) normalized += kTwoPi;
-            while (normalized >= kTwoPi) normalized -= kTwoPi;
-
-            double used = 0.0;
-            for (size_t i = 0; i < candidates_.size(); ++i) {
-                const double weight = clamp_positive(candidates_[i].weight);
-                double portion = total > 0.0 ? weight / total : 0.0;
-                double sweep = portion * kTwoPi;
-                if (i + 1 == candidates_.size()) {
-                    sweep = kTwoPi - used;
-                }
-                if (sweep <= 0.0) {
-                    used += sweep;
-                    continue;
-                }
-                if (normalized >= used && normalized <= used + sweep) {
-                    new_hover = static_cast<int>(i);
-                    break;
-                }
-                used += sweep;
+        SDL_Point point{e.motion.x, e.motion.y};
+        if (!SDL_PointInRect(&rect_, &point)) {
+            if (hovered_index_ != -1) {
+                hovered_index_ = -1;
+                return true;
             }
+            return false;
         }
 
+        int new_hover = hit_test_candidate(layout, point, total);
         if (new_hover != hovered_index_) {
             hovered_index_ = new_hover;
             return true;
         }
     } else if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
-        if (hovered_index_ >= 0) {
+        Layout layout = compute_layout();
+        double total = total_weight();
+        if (total <= 0.0) {
+            total = 1.0;
+        }
+
+        SDL_Point point{e.button.x, e.button.y};
+        int target_index = -1;
+        if (SDL_PointInRect(&rect_, &point)) {
+            target_index = hit_test_candidate(layout, point, total);
+        } else if (hovered_index_ != -1) {
+            hovered_index_ = -1;
+            return true;
+        }
+
+        if (target_index >= 0) {
+            hovered_index_ = target_index;
             if (e.button.clicks >= 2) {
-                if (on_delete_) on_delete_(hovered_index_);
-                active_index_ = -1;
-                if (scroll_capture_active_) {
-                    DMWidgetsSetSliderScrollCapture(this, false);
-                    scroll_capture_active_ = false;
+                if (on_delete_) {
+                    on_delete_(target_index);
                 }
+                active_index_ = -1;
+                hovered_index_ = -1;
+                release_scroll_capture();
                 return true;
             }
-            if (active_index_ != hovered_index_) {
-                active_index_ = hovered_index_;
+
+            if (active_index_ != target_index) {
+                active_index_ = target_index;
                 if (!scroll_capture_active_) {
                     DMWidgetsSetSliderScrollCapture(this, true);
                     scroll_capture_active_ = true;
                 }
             } else {
                 active_index_ = -1;
-                if (scroll_capture_active_) {
-                    DMWidgetsSetSliderScrollCapture(this, false);
-                    scroll_capture_active_ = false;
-                }
+                release_scroll_capture();
             }
             return true;
-        } else if (active_index_ != -1) {
+        }
+
+        if (active_index_ != -1) {
             active_index_ = -1;
-            if (scroll_capture_active_) {
-                DMWidgetsSetSliderScrollCapture(this, false);
-                scroll_capture_active_ = false;
-            }
+            release_scroll_capture();
+            return true;
         }
     } else if (e.type == SDL_MOUSEWHEEL) {
         if (active_index_ >= 0 && on_adjust_) {
@@ -132,12 +130,63 @@ bool CandidateEditorPieGraphWidget::handle_event(const SDL_Event& e) {
         }
     }
 
-    if (active_index_ == -1 && scroll_capture_active_) {
-        DMWidgetsSetSliderScrollCapture(this, false);
-        scroll_capture_active_ = false;
+    if (active_index_ == -1) {
+        release_scroll_capture();
     }
 
     return false;
+}
+
+int CandidateEditorPieGraphWidget::hit_test_candidate(const Layout& layout, SDL_Point point, double total) const {
+    if (!SDL_PointInRect(&rect_, &point)) {
+        return -1;
+    }
+
+    for (size_t i = 0; i < legend_row_rects_.size(); ++i) {
+        const SDL_Rect& row = legend_row_rects_[i];
+        if (row.w <= 0 || row.h <= 0) {
+            continue;
+        }
+        if (SDL_PointInRect(&row, &point)) {
+            return static_cast<int>(i);
+        }
+    }
+
+    if (layout.radius <= 0.0f) {
+        return -1;
+    }
+
+    const float dx = static_cast<float>(point.x) - layout.center.x;
+    const float dy = static_cast<float>(point.y) - layout.center.y;
+    const float dist = std::sqrt(dx * dx + dy * dy);
+    if (dist > layout.radius + 12.0f) {
+        return -1;
+    }
+
+    double angle = std::atan2(dy, dx);
+    double normalized = angle - kStartAngle;
+    while (normalized < 0.0) normalized += kTwoPi;
+    while (normalized >= kTwoPi) normalized -= kTwoPi;
+
+    double used = 0.0;
+    for (size_t i = 0; i < candidates_.size(); ++i) {
+        const double weight = clamp_positive(candidates_[i].weight);
+        double portion = total > 0.0 ? weight / total : 0.0;
+        double sweep = portion * kTwoPi;
+        if (i + 1 == candidates_.size()) {
+            sweep = kTwoPi - used;
+        }
+        if (sweep <= 0.0) {
+            used += sweep;
+            continue;
+        }
+        if (normalized >= used && normalized <= used + sweep) {
+            return static_cast<int>(i);
+        }
+        used += sweep;
+    }
+
+    return -1;
 }
 
 void CandidateEditorPieGraphWidget::render(SDL_Renderer* renderer) const {
@@ -191,6 +240,8 @@ void CandidateEditorPieGraphWidget::set_weights(std::vector<float> weights) {
     }
     candidates_ = std::move(info);
     hovered_index_ = -1;
+    legend_row_rects_.clear();
+    legend_row_height_ = 0;
 }
 
 void CandidateEditorPieGraphWidget::set_candidates_from_json(const nlohmann::json& entry) {
@@ -234,6 +285,8 @@ void CandidateEditorPieGraphWidget::set_candidates_from_json(const nlohmann::jso
 
     candidates_ = std::move(info);
     hovered_index_ = -1;
+    legend_row_rects_.clear();
+    legend_row_height_ = 0;
     if (active_index_ >= static_cast<int>(candidates_.size())) {
         active_index_ = -1;
         if (scroll_capture_active_) {
@@ -280,6 +333,8 @@ CandidateEditorPieGraphWidget::Layout CandidateEditorPieGraphWidget::compute_lay
                                  std::max(0, rect_.h - margin * 2)};
     }
 
+    cache_legend_rows(layout);
+
     return layout;
 }
 
@@ -288,6 +343,40 @@ double CandidateEditorPieGraphWidget::total_weight() const {
                            [](double acc, const CandidateInfo& info) {
                                return acc + clamp_positive(info.weight);
                            });
+}
+
+void CandidateEditorPieGraphWidget::cache_legend_rows(const Layout& layout, int row_height) const {
+    legend_row_rects_.assign(candidates_.size(), SDL_Rect{0, 0, 0, 0});
+
+    if (layout.legend.w <= 60 || layout.legend.h <= 0 || candidates_.empty()) {
+        if (row_height > 0) {
+            legend_row_height_ = row_height;
+        } else if (legend_row_height_ <= 0) {
+            legend_row_height_ = default_legend_row_height();
+        }
+        return;
+    }
+
+    int effective_height = row_height;
+    if (effective_height <= 0) {
+        effective_height = legend_row_height_ > 0 ? legend_row_height_ : default_legend_row_height();
+    } else {
+        legend_row_height_ = row_height;
+    }
+
+    int y = layout.legend.y;
+    const int bottom = layout.legend.y + layout.legend.h;
+    for (size_t i = 0; i < candidates_.size(); ++i) {
+        if (y + effective_height > bottom) {
+            break;
+        }
+        legend_row_rects_[i] = SDL_Rect{layout.legend.x, y, layout.legend.w, effective_height};
+        y += effective_height;
+    }
+}
+
+int CandidateEditorPieGraphWidget::default_legend_row_height() {
+    return std::max(DMStyles::Label().font_size + 6, 20);
 }
 
 void CandidateEditorPieGraphWidget::draw_background(SDL_Renderer* renderer) const {
@@ -347,9 +436,22 @@ void CandidateEditorPieGraphWidget::render_slices(SDL_Renderer* renderer, const 
             continue;
         }
 
-        const bool highlight = static_cast<int>(i) == hovered_index_;
-        SDL_Color color = color_for_index(i, highlight);
-        float slice_radius = layout.radius + (highlight ? 6.0f : 0.0f);
+        const bool is_hovered = static_cast<int>(i) == hovered_index_;
+        const bool is_active = static_cast<int>(i) == active_index_;
+        SDL_Color color = color_for_index(i);
+        if (is_active) {
+            color = lighten(color, 0.12f);
+        }
+        if (is_hovered) {
+            color = lighten(color, 0.25f);
+        }
+        float slice_radius = layout.radius;
+        if (is_active) {
+            slice_radius += 4.0f;
+        }
+        if (is_hovered) {
+            slice_radius += 6.0f;
+        }
         int segments = std::max(6, static_cast<int>(std::ceil(std::abs(sweep) / (kPi / 32.0))));
 
 #if SDL_VERSION_ATLEAST(2,0,18)
@@ -420,14 +522,31 @@ void CandidateEditorPieGraphWidget::render_legend(SDL_Renderer* renderer, const 
         SDL_Color text_color = DMStyles::Label().color;
         int font_height = TTF_FontHeight(font);
         int row_height = std::max(font_height + 6, 20);
-        int y = layout.legend.y;
+        cache_legend_rows(layout, row_height);
         for (size_t i = 0; i < candidates_.size(); ++i) {
-            if (y + row_height > layout.legend.y + layout.legend.h) {
+            const SDL_Rect& row_rect = i < legend_row_rects_.size() ? legend_row_rects_[i] : SDL_Rect{0, 0, 0, 0};
+            if (row_rect.w <= 0 || row_rect.h <= 0) {
                 break;
             }
-            const bool highlight = static_cast<int>(i) == hovered_index_;
-            SDL_Color swatch = color_for_index(i, highlight);
-            SDL_Rect box{layout.legend.x, y, 16, 16};
+
+            const bool is_hovered = static_cast<int>(i) == hovered_index_;
+            const bool is_active = static_cast<int>(i) == active_index_;
+            if (is_hovered || is_active) {
+                SDL_Color row_bg = DMStyles::PanelHeader();
+                Uint8 alpha = static_cast<Uint8>(is_active && is_hovered ? 220 : (is_active ? 200 : 170));
+                SDL_SetRenderDrawColor(renderer, row_bg.r, row_bg.g, row_bg.b, alpha);
+                SDL_RenderFillRect(renderer, &row_rect);
+            }
+
+            SDL_Color swatch = color_for_index(i);
+            if (is_active) {
+                swatch = lighten(swatch, 0.12f);
+            }
+            if (is_hovered) {
+                swatch = lighten(swatch, 0.25f);
+            }
+
+            SDL_Rect box{row_rect.x, row_rect.y + std::max(0, (row_rect.h - 16) / 2), 16, 16};
             SDL_SetRenderDrawColor(renderer, swatch.r, swatch.g, swatch.b, 255);
             SDL_RenderFillRect(renderer, &box);
             SDL_Color outline_color = DMStyles::Border();
@@ -438,14 +557,13 @@ void CandidateEditorPieGraphWidget::render_legend(SDL_Renderer* renderer, const 
             double percent = total > 0.0 ? (clamp_positive(candidates_[i].weight) / total) * 100.0 : 0.0;
             std::ostringstream label;
             label << candidates_[i].name << " - " << std::fixed << std::setprecision(1) << percent << "% (" << static_cast<int>(std::round(clamp_positive(candidates_[i].weight))) << ")";
-            draw_text(renderer, font, label.str(), box.x + box.w + 8, y + (row_height - font_height) / 2, text_color, false);
-
-            y += row_height;
+            draw_text(renderer, font, label.str(), box.x + box.w + 8, row_rect.y + (row_rect.h - font_height) / 2, text_color, false);
         }
     } else {
         std::ostringstream summary;
         summary << "Total weight: " << static_cast<int>(std::round(total));
         draw_text(renderer, font, summary.str(), rect_.x + DMSpacing::item_gap(), rect_.y + DMSpacing::item_gap(), DMStyles::Label().color, false);
+        cache_legend_rows(layout, 0);
     }
 }
 
@@ -477,7 +595,7 @@ SDL_Rect CandidateEditorPieGraphWidget::draw_text(SDL_Renderer* renderer, TTF_Fo
     return dst;
 }
 
-SDL_Color CandidateEditorPieGraphWidget::color_for_index(size_t index, bool highlight) {
+SDL_Color CandidateEditorPieGraphWidget::color_for_index(size_t index) {
     static constexpr std::array<SDL_Color, 10> kPalette{{
         SDL_Color{0xED, 0x6A, 0x5A, 0xFF},
         SDL_Color{0x5A, 0xC8, 0xED, 0xFF},
@@ -491,11 +609,7 @@ SDL_Color CandidateEditorPieGraphWidget::color_for_index(size_t index, bool high
         SDL_Color{0x64, 0x95, 0xED, 0xFF},
     }};
 
-    SDL_Color color = kPalette[index % kPalette.size()];
-    if (highlight) {
-        color = lighten(color, 0.18f);
-    }
-    return color;
+    return kPalette[index % kPalette.size()];
 }
 
 SDL_Color CandidateEditorPieGraphWidget::lighten(SDL_Color color, float amount) {

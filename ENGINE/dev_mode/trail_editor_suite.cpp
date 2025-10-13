@@ -321,10 +321,10 @@ void TrailEditorSuite::reorder_spawn_group(const std::string& id, size_t new_ind
         return;
     }
 
-    nlohmann::json entry = groups[current];
+    nlohmann::json entry = std::move(groups[current]);
     const auto erase_pos = groups.begin() + static_cast<nlohmann::json::difference_type>(current);
     groups.erase(erase_pos);
-    const size_t insert_index = current < bounded_index ? bounded_index - 1 : bounded_index;
+    size_t insert_index = std::min(bounded_index, groups.size());
     const auto insert_pos = groups.begin() + static_cast<nlohmann::json::difference_type>(insert_index);
     groups.insert(insert_pos, std::move(entry));
 
@@ -332,56 +332,6 @@ void TrailEditorSuite::reorder_spawn_group(const std::string& id, size_t new_ind
         auto& element = groups[i];
         if (element.is_object()) {
             element["priority"] = static_cast<int>(i);
-        }
-    }
-
-    active_trail_->save_assets_json();
-    rebuild_spawn_groups_ui();
-}
-
-void TrailEditorSuite::move_spawn_group_up(const std::string& id) {
-    move_spawn_group_internal(id, -1);
-}
-
-void TrailEditorSuite::move_spawn_group_down(const std::string& id) {
-    move_spawn_group_internal(id, +1);
-}
-
-void TrailEditorSuite::move_spawn_group_internal(const std::string& id, int dir) {
-    if (!active_trail_ || id.empty() || (dir != -1 && dir != 1)) {
-        return;
-    }
-    auto& root = active_trail_->assets_data();
-    auto& groups = ensure_spawn_groups_array(root);
-    if (!groups.is_array() || groups.size() <= 1) {
-        return;
-    }
-
-    int index = -1;
-    for (size_t i = 0; i < groups.size(); ++i) {
-        auto& entry = groups[i];
-        if (!entry.is_object()) {
-            continue;
-        }
-        if (entry.contains("spawn_id") && entry["spawn_id"].is_string() && entry["spawn_id"].get<std::string>() == id) {
-            index = static_cast<int>(i);
-            break;
-        }
-    }
-    if (index < 0) {
-        return;
-    }
-
-    const int target = index + dir;
-    if (target < 0 || target >= static_cast<int>(groups.size())) {
-        return;
-    }
-
-    std::swap(groups[index], groups[target]);
-    for (size_t i = 0; i < groups.size(); ++i) {
-        auto& entry = groups[i];
-        if (entry.is_object()) {
-            entry["priority"] = static_cast<int>(i);
         }
     }
 

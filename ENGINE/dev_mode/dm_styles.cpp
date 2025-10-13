@@ -9,10 +9,10 @@ const SDL_Color kPanelHeader       = dm::rgba(30, 41, 59, 240);
 const SDL_Color kPanelBorder       = dm::rgba(71, 85, 105, 255);
 const SDL_Color kHighlightColor    = dm::rgba(148, 163, 184, 255);
 const SDL_Color kShadowColor       = dm::rgba(15, 23, 42, 255);
-constexpr float kHighlightIntensity = 0.35f;
-constexpr float kShadowIntensity    = 0.45f;
+constexpr float kHighlightIntensity = 0.60f;
+constexpr float kShadowIntensity    = 0.80f;
 constexpr int kCornerRadius         = 6;
-constexpr int kBevelDepth           = 2;
+constexpr int kBevelDepth           = 4;
 
 const SDL_Color kHeaderBg          = dm::rgba(30, 41, 59, 235);
 const SDL_Color kHeaderHover       = dm::rgba(46, 64, 94, 245);
