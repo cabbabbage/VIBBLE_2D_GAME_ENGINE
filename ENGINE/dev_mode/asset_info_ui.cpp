@@ -17,6 +17,7 @@
 #include "utils/input.hpp"
 #include "utils/area.hpp"
 #include "widgets.hpp"
+#include "tag_utils.hpp"
 
 #include "DockableCollapsible.hpp"
 #include "SlidingWindowContainer.hpp"
@@ -793,6 +794,7 @@ bool AssetInfoUI::apply_section_to_assets(AssetInfoSectionId section_id, const s
     }
 
     bool all_success = true;
+    bool any_written = false;
     for (const auto& name : asset_names) {
         try {
             std::filesystem::path path = std::filesystem::path("SRC") / name / "info.json";
@@ -806,6 +808,8 @@ bool AssetInfoUI::apply_section_to_assets(AssetInfoSectionId section_id, const s
             }
             if (!write_json_file(path, target)) {
                 all_success = false;
+            } else {
+                any_written = true;
             }
         } catch (const std::exception& ex) {
             SDL_Log("Failed to apply settings to %s: %s", name.c_str(), ex.what());
@@ -814,6 +818,10 @@ bool AssetInfoUI::apply_section_to_assets(AssetInfoSectionId section_id, const s
             SDL_Log("Failed to apply settings to %s due to unknown error.", name.c_str());
             all_success = false;
         }
+    }
+
+    if (any_written) {
+        tag_utils::notify_tags_changed();
     }
 
     if (all_success) {

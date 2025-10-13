@@ -78,3 +78,32 @@ TEST_CASE("Camera realism toggles with DevControls mode transitions") {
     controls.set_mode(DevControls::Mode::RoomEditor);
     CHECK(cam.realism_enabled());
 }
+
+TEST_CASE("Camera zoom is preserved when switching modes") {
+    ensure_sdl();
+
+    std::vector<SDL_Point> square{{0, 0}, {256, 0}, {256, 256}, {0, 256}};
+    Area base_area("test_zoom", square);
+    camera cam(800, 600, base_area);
+
+    DevControls controls(nullptr, 800, 600);
+    controls.set_camera_override_for_testing(&cam);
+
+    controls.set_mode(DevControls::Mode::RoomEditor);
+    const double initial_scale = cam.get_scale();
+    const bool initial_focus_override = cam.has_focus_override();
+
+    controls.enter_map_editor_mode();
+    CHECK_EQ(cam.get_scale(), doctest::Approx(initial_scale));
+    CHECK_EQ(cam.has_focus_override(), initial_focus_override);
+
+    controls.exit_map_editor_mode(false, true);
+    CHECK_EQ(cam.get_scale(), doctest::Approx(initial_scale));
+    CHECK_EQ(cam.has_focus_override(), initial_focus_override);
+
+    controls.set_mode(DevControls::Mode::AreaMode);
+    CHECK_EQ(cam.get_scale(), doctest::Approx(initial_scale));
+
+    controls.set_mode(DevControls::Mode::RoomEditor);
+    CHECK_EQ(cam.get_scale(), doctest::Approx(initial_scale));
+}

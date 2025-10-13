@@ -562,6 +562,9 @@ void DevControls::set_rooms(std::vector<Room*>* rooms) {
 
 void DevControls::set_camera_override_for_testing(camera* camera_override) {
     camera_override_for_testing_ = camera_override;
+    if (map_editor_) {
+        map_editor_->set_camera_override_for_testing(camera_override);
+    }
     apply_camera_area_render_flag();
 }
 

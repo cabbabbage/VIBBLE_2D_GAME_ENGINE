@@ -12,6 +12,7 @@
 class Assets;
 class Input;
 class Room;
+class camera;
 
 class MapEditor {
 public:
@@ -22,6 +23,7 @@ public:
     void set_rooms(std::vector<Room*>* rooms);
     void set_screen_dimensions(int width, int height);
     void set_ui_blocker(std::function<bool(int, int)> blocker);
+    void set_camera_override_for_testing(camera* camera_override);
 
     void enter();
     void exit(bool focus_player, bool restore_previous_state = true);
@@ -45,6 +47,7 @@ private:
     void render_room_label(SDL_Renderer* renderer, Room* room);
     SDL_Rect label_background_rect(const SDL_Surface* surface, SDL_Point screen_pos) const;
     Room* find_spawn_room() const;
+    camera* active_camera() const;
 
 private:
     Assets* assets_ = nullptr;
@@ -78,4 +81,5 @@ private:
     Room* pending_selection_ = nullptr;
     PanAndZoom pan_zoom_;
     std::vector<std::pair<Room*, SDL_Rect>> label_rects_;
+    camera* camera_override_for_testing_ = nullptr;
 };

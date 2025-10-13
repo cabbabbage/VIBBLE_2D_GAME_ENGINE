@@ -1,6 +1,7 @@
 #pragma once
 
 #include <SDL.h>
+#include <cstdint>
 #include <functional>
 #include <memory>
 #include <string>
@@ -44,6 +45,7 @@ private:
     std::vector<Asset> all_;
     std::vector<std::pair<std::string,bool>> results_;
     std::string last_query_;
+    std::uint64_t tag_data_version_ = 0;
     int screen_w_ = 1920;
     int screen_h_ = 1080;
     SDL_Point last_known_position_{64, 64};

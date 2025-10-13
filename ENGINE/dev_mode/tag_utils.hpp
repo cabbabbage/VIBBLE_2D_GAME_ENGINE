@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cstdint>
 #include <string>
 #include <string_view>
 
@@ -23,6 +24,9 @@ inline std::string normalize(std::string_view input) {
     });
     return out;
 }
+
+std::uint64_t tag_version();
+void notify_tags_changed();
 
 }
 

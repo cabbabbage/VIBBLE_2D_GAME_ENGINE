@@ -309,7 +309,6 @@ void RoomEditor::set_enabled(bool enabled) {
         apply_area_editor_camera_override(false);
         cam.set_manual_zoom_override(false);
         close_asset_info_editor();
-        focus_camera_on_room_center();
         ensure_room_configurator();
         if (room_cfg_ui_) {
             room_cfg_ui_->open(current_room_);

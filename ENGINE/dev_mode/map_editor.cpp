@@ -51,6 +51,10 @@ void MapEditor::set_ui_blocker(std::function<bool(int, int)> blocker) {
     ui_blocker_ = std::move(blocker);
 }
 
+void MapEditor::set_camera_override_for_testing(camera* camera_override) {
+    camera_override_for_testing_ = camera_override;
+}
+
 void MapEditor::set_enabled(bool enabled) {
     if (enabled == enabled_) return;
     if (enabled) {
@@ -66,21 +70,20 @@ void MapEditor::enter() {
     pending_selection_ = nullptr;
     has_entry_center_ = false;
 
-    if (assets_) {
-        camera& cam = assets_->getView();
-        prev_manual_override_ = cam.is_manual_zoom_override();
-        prev_focus_override_ = cam.has_focus_override();
+    if (camera* cam = active_camera()) {
+        prev_manual_override_ = cam->is_manual_zoom_override();
+        prev_focus_override_ = cam->has_focus_override();
         if (prev_focus_override_) {
-            prev_focus_point_ = cam.get_focus_override_point();
+            prev_focus_point_ = cam->get_focus_override_point();
         } else {
             prev_focus_point_ = SDL_Point{0, 0};
         }
-        entry_center_ = cam.get_screen_center();
+        entry_center_ = cam->get_screen_center();
         has_entry_center_ = true;
+        cam->set_manual_zoom_override(true);
     }
 
     compute_bounds();
-    apply_camera_to_bounds();
 }
 
 void MapEditor::exit(bool focus_player, bool restore_previous_state) {
@@ -96,12 +99,11 @@ void MapEditor::exit(bool focus_player, bool restore_previous_state) {
 
 void MapEditor::update(const Input& input) {
     if (!enabled_) return;
-    if (!assets_) return;
-
-    camera& cam = assets_->getView();
+    camera* cam = active_camera();
+    if (!cam) return;
 
     SDL_Point screen_pt{input.getX(), input.getY()};
-    SDL_Point map_pt = cam.screen_to_map(screen_pt);
+    SDL_Point map_pt = cam->screen_to_map(screen_pt);
     const bool pointer_over_ui = ui_blocker_ ? ui_blocker_(screen_pt.x, screen_pt.y) : false;
 
     Room* area_hit = hit_test_room(map_pt);
@@ -115,7 +117,7 @@ void MapEditor::update(const Input& input) {
 
     Room* hit = label_hit ? label_hit : area_hit;
 
-    pan_zoom_.handle_input(cam, input, pointer_over_ui || hit != nullptr);
+    pan_zoom_.handle_input(*cam, input, pointer_over_ui || hit != nullptr);
 
     if (pointer_over_ui) {
         return;
@@ -156,13 +158,14 @@ Room* MapEditor::consume_selected_room() {
 }
 
 void MapEditor::focus_on_room(Room* room) {
-    if (!room || !room->room_area || !assets_) return;
+    if (!room || !room->room_area) return;
+    camera* cam = active_camera();
+    if (!cam) return;
 
-    camera& cam = assets_->getView();
-    Area adjusted = cam.convert_area_to_aspect(*room->room_area);
-    cam.set_manual_zoom_override(true);
-    cam.set_focus_override(adjusted.get_center());
-    cam.zoom_to_area(adjusted, 20);
+    Area adjusted = cam->convert_area_to_aspect(*room->room_area);
+    cam->set_manual_zoom_override(true);
+    cam->set_focus_override(adjusted.get_center());
+    cam->zoom_to_area(adjusted, 20);
 }
 
 void MapEditor::ensure_font() {
@@ -213,9 +216,9 @@ bool MapEditor::compute_bounds() {
 }
 
 void MapEditor::apply_camera_to_bounds() {
-    if (!assets_) return;
-    camera& cam = assets_->getView();
-    cam.set_manual_zoom_override(true);
+    camera* cam = active_camera();
+    if (!cam) return;
+    cam->set_manual_zoom_override(true);
 
     Room* spawn_room = find_spawn_room();
     SDL_Point spawn_center{0, 0};
@@ -249,22 +252,22 @@ void MapEditor::apply_camera_to_bounds() {
             {left, bottom},
 };
         Area area("map_bounds", pts);
-        cam.set_focus_override(center);
-        cam.zoom_to_area(area, 35);
+        cam->set_focus_override(center);
+        cam->zoom_to_area(area, 35);
     } else if (has_entry_center_) {
-        cam.set_focus_override(entry_center_);
-        cam.zoom_to_scale(1.0, 20);
+        cam->set_focus_override(entry_center_);
+        cam->zoom_to_scale(1.0, 20);
     } else if (has_spawn_center) {
-        cam.set_focus_override(spawn_center);
+        cam->set_focus_override(spawn_center);
         if (spawn_room && spawn_room->room_area) {
-            Area adjusted = cam.convert_area_to_aspect(*spawn_room->room_area);
-            cam.zoom_to_area(adjusted, 35);
+            Area adjusted = cam->convert_area_to_aspect(*spawn_room->room_area);
+            cam->zoom_to_area(adjusted, 35);
         } else {
-            cam.zoom_to_scale(1.0, 20);
+            cam->zoom_to_scale(1.0, 20);
         }
     } else {
-        cam.set_focus_override(SDL_Point{0, 0});
-        cam.zoom_to_scale(1.0, 20);
+        cam->set_focus_override(SDL_Point{0, 0});
+        cam->zoom_to_scale(1.0, 20);
     }
 }
 
@@ -279,12 +282,12 @@ Room* MapEditor::find_spawn_room() const {
 }
 
 void MapEditor::restore_camera_state(bool focus_player, bool restore_previous_state) {
-    if (!assets_) return;
-    camera& cam = assets_->getView();
+    camera* cam = active_camera();
+    if (!cam) return;
 
     if (focus_player) {
-        cam.clear_focus_override();
-        cam.set_manual_zoom_override(false);
+        cam->clear_focus_override();
+        cam->set_manual_zoom_override(false);
         return;
     }
 
@@ -292,12 +295,22 @@ void MapEditor::restore_camera_state(bool focus_player, bool restore_previous_st
         return;
     }
 
-    cam.set_manual_zoom_override(prev_manual_override_);
+    cam->set_manual_zoom_override(prev_manual_override_);
     if (prev_focus_override_) {
-        cam.set_focus_override(prev_focus_point_);
+        cam->set_focus_override(prev_focus_point_);
     } else {
-        cam.clear_focus_override();
+        cam->clear_focus_override();
     }
+}
+
+camera* MapEditor::active_camera() const {
+    if (camera_override_for_testing_) {
+        return camera_override_for_testing_;
+    }
+    if (!assets_) {
+        return nullptr;
+    }
+    return &assets_->getView();
 }
 
 Room* MapEditor::hit_test_room(SDL_Point map_point) const {

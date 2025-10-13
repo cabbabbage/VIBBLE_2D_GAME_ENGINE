@@ -3,6 +3,7 @@
 #include "FloatingDockableManager.hpp"
 #include "widgets.hpp"
 #include "dm_styles.hpp"
+#include "tag_utils.hpp"
 #include "utils/input.hpp"
 #include <nlohmann/json.hpp>
 #include <filesystem>
@@ -26,6 +27,7 @@ SearchAssets::SearchAssets() {
     last_known_position_ = panel_->position();
     pending_position_ = last_known_position_;
     has_pending_position_ = true;
+    tag_data_version_ = tag_utils::tag_version();
 }
 
 void SearchAssets::apply_position(int x, int y) {
@@ -103,7 +105,8 @@ std::string SearchAssets::to_lower(std::string s) {
 
 void SearchAssets::open(Callback cb) {
     cb_ = std::move(cb);
-    if (all_.empty()) load_assets();
+    load_assets();
+    tag_data_version_ = tag_utils::tag_version();
     SDL_Point target = last_known_position_;
     if (has_custom_position_) {
         target = last_known_position_;
@@ -174,6 +177,11 @@ void SearchAssets::load_assets() {
 
 void SearchAssets::filter_assets() {
     if (!panel_ || !panel_->is_visible()) return;
+    auto current_version = tag_utils::tag_version();
+    if (current_version != tag_data_version_) {
+        load_assets();
+        tag_data_version_ = current_version;
+    }
     std::string q = to_lower(query_ ? query_->value() : "");
     results_.clear();
     std::set<std::string> tagset;
@@ -228,6 +236,12 @@ bool SearchAssets::handle_event(const SDL_Event& e) {
 
 void SearchAssets::update(const Input& input) {
     if (panel_ && panel_->is_visible()) {
+        auto current_version = tag_utils::tag_version();
+        if (current_version != tag_data_version_) {
+            load_assets();
+            tag_data_version_ = current_version;
+            filter_assets();
+        }
         panel_->update(input, screen_w_, screen_h_);
         last_known_position_ = panel_->position();
         if (!has_custom_position_) {

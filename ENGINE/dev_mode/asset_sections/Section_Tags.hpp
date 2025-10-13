@@ -2,6 +2,7 @@
 
 #include "../DockableCollapsible.hpp"
 #include "dev_mode/room_config/tag_editor_widget.hpp"
+#include "dev_mode/tag_utils.hpp"
 #include "widgets.hpp"
 #include "dev_mode/asset_info_sections.hpp"
 #include <memory>
@@ -28,7 +29,10 @@ class Section_Tags : public DockableCollapsible {
           if (!info_) return;
           info_->set_tags(tags);
           info_->set_anti_tags(anti_tags);
-          (void)info_->update_info_json();
+          bool wrote = info_->update_info_json();
+          if (wrote) {
+            tag_utils::notify_tags_changed();
+          }
         });
       }
 

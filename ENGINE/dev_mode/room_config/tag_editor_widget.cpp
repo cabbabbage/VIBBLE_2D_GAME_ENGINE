@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <array>
 #include <cctype>
+#include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <limits>
@@ -100,8 +101,16 @@ void collect_tags_recursive(const nlohmann::json& node, std::set<std::string>& t
 const std::vector<TagDatasetEntry>& tag_dataset() {
     static std::vector<TagDatasetEntry> dataset;
     static bool loaded = false;
-    if (loaded) return dataset;
+    static std::uint64_t loaded_version = 0;
+
+    std::uint64_t current_version = tag_utils::tag_version();
+    if (loaded && loaded_version == current_version) {
+        return dataset;
+    }
+
+    dataset.clear();
     loaded = true;
+    loaded_version = current_version;
 
     auto add_file = [&](const std::filesystem::path& path) {
         std::ifstream in(path);
