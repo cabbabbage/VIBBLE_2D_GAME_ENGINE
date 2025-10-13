@@ -38,7 +38,10 @@ void render_label_text(SDL_Renderer* renderer, const std::string& text, const SD
 
 SlidingWindowContainer::SlidingWindowContainer() = default;
 
-void SlidingWindowContainer::set_layout_function(LayoutFunction fn) { layout_function_ = std::move(fn); }
+void SlidingWindowContainer::set_layout_function(LayoutFunction fn) {
+    layout_function_ = std::move(fn);
+    layout_dirty_ = true;
+}
 void SlidingWindowContainer::set_render_function(RenderFunction fn) { render_function_ = std::move(fn); }
 void SlidingWindowContainer::set_update_function(UpdateFunction fn) { update_function_ = std::move(fn); }
 void SlidingWindowContainer::set_event_function(EventFunction fn) { event_function_ = std::move(fn); }
@@ -57,7 +60,7 @@ void SlidingWindowContainer::set_header_visible(bool visible) {
     } else {
         close_button_.reset();
     }
-    layout(last_screen_w_, last_screen_h_);
+    layout_dirty_ = true;
 }
 
 void SlidingWindowContainer::set_scrollbar_visible(bool visible) {
@@ -101,11 +104,13 @@ void SlidingWindowContainer::set_header_visibility_controller(std::function<void
 void SlidingWindowContainer::set_panel_bounds_override(const SDL_Rect& bounds) {
     panel_override_ = bounds;
     panel_override_active_ = bounds.w > 0 && bounds.h > 0;
+    layout_dirty_ = true;
 }
 
 void SlidingWindowContainer::clear_panel_bounds_override() {
     panel_override_active_ = false;
     panel_override_ = SDL_Rect{0, 0, 0, 0};
+    layout_dirty_ = true;
 }
 
 void SlidingWindowContainer::open() { set_visible(true); }
@@ -136,9 +141,11 @@ void SlidingWindowContainer::set_visible(bool visible) {
         header_visibility_controller_(visible_);
     }
     update_editor_interaction_block_state();
+    layout_dirty_ = true;
 }
 
 void SlidingWindowContainer::reset_scroll() {
+    layout_dirty_ = true;
     scroll_ = 0;
     scroll_dragging_ = false;
     scrollbar_dragging_ = false;
@@ -146,7 +153,15 @@ void SlidingWindowContainer::reset_scroll() {
 
 void SlidingWindowContainer::pulse_header() { pulse_frames_ = 20; }
 
-void SlidingWindowContainer::prepare_layout(int screen_w, int screen_h) const { layout(screen_w, screen_h); }
+void SlidingWindowContainer::prepare_layout(int screen_w, int screen_h) const {
+    if (screen_w != last_screen_w_ || screen_h != last_screen_h_) {
+        layout_dirty_ = true;
+    }
+    if (!layout_dirty_) {
+        return;
+    }
+    layout(screen_w, screen_h);
+}
 
 bool SlidingWindowContainer::is_point_inside(int x, int y) const {
     if (!visible_) return false;
@@ -179,8 +194,6 @@ void SlidingWindowContainer::update(const Input& input, int screen_w, int screen
     if (pulse_frames_ > 0) {
         --pulse_frames_;
     }
-
-    prepare_layout(screen_w, screen_h);
 }
 
 bool SlidingWindowContainer::handle_event(const SDL_Event& e) {
@@ -259,6 +272,7 @@ bool SlidingWindowContainer::handle_event(const SDL_Event& e) {
 
     if (pointer_event && e.type == SDL_MOUSEMOTION) {
         if (scrollbar_dragging_ && max_scroll_ > 0) {
+            int prev_scroll = scroll_;
             int thumb_h = scroll_thumb_rect_.h;
             int track_h = scroll_track_rect_.h;
             if (track_h > 0 && thumb_h > 0) {
@@ -270,11 +284,18 @@ bool SlidingWindowContainer::handle_event(const SDL_Event& e) {
                 double ratio = (range > 0) ? static_cast<double>(new_thumb_y - min_thumb_y) / static_cast<double>(range) : 0.0;
                 scroll_ = std::max(0, std::min(max_scroll_, static_cast<int>(std::round(ratio * max_scroll_))));
             }
+            if (scroll_ != prev_scroll) {
+                layout_dirty_ = true;
+            }
             return true;
         }
         if (scroll_dragging_) {
+            int prev_scroll = scroll_;
             int dy = pointer.y - scroll_drag_anchor_y_;
             scroll_ = std::max(0, std::min(max_scroll_, scroll_drag_start_scroll_ - dy));
+            if (scroll_ != prev_scroll) {
+                layout_dirty_ = true;
+            }
             return true;
         }
     }
@@ -292,6 +313,7 @@ bool SlidingWindowContainer::handle_event(const SDL_Event& e) {
                 int thumb_h = scroll_thumb_rect_.h;
                 int track_h = scroll_track_rect_.h;
                 if (track_h > 0 && thumb_h > 0) {
+                    int prev_scroll = scroll_;
                     int min_thumb_y = scroll_track_rect_.y;
                     int max_thumb_y = scroll_track_rect_.y + std::max(0, track_h - thumb_h);
                     int desired = pointer.y - thumb_h / 2;
@@ -300,6 +322,9 @@ bool SlidingWindowContainer::handle_event(const SDL_Event& e) {
                     if (range > 0 && max_scroll_ > 0) {
                         double ratio = static_cast<double>(desired - min_thumb_y) / static_cast<double>(range);
                         scroll_ = std::max(0, std::min(max_scroll_, static_cast<int>(std::round(ratio * max_scroll_))));
+                    }
+                    if (scroll_ != prev_scroll) {
+                        layout_dirty_ = true;
                     }
                 }
                 scrollbar_dragging_ = true;
@@ -446,12 +471,20 @@ void SlidingWindowContainer::render(SDL_Renderer* renderer, int screen_w, int sc
 
 void SlidingWindowContainer::update_scroll_from_delta(int delta) {
     if (delta == 0) return;
+    int prev_scroll = scroll_;
     scroll_ -= delta;
     if (scroll_ < 0) scroll_ = 0;
     if (scroll_ > max_scroll_) scroll_ = max_scroll_;
+    if (scroll_ != prev_scroll) {
+        layout_dirty_ = true;
+    }
 }
 
 void SlidingWindowContainer::layout(int screen_w, int screen_h) const {
+    if (!layout_dirty_ && screen_w == last_screen_w_ && screen_h == last_screen_h_) {
+        return;
+    }
+
     last_screen_w_ = screen_w;
     last_screen_h_ = screen_h;
 
@@ -466,6 +499,7 @@ void SlidingWindowContainer::layout(int screen_w, int screen_h) const {
             close_button_->set_rect(close_button_rect_);
         }
         max_scroll_ = 0;
+        layout_dirty_ = false;
         return;
     }
 
@@ -606,6 +640,8 @@ void SlidingWindowContainer::layout(int screen_w, int screen_h) const {
             scroll_thumb_rect_ = SDL_Rect{ track_x, track_y, kScrollbarWidth, track_h };
         }
     }
+
+    layout_dirty_ = false;
 }
 
 void SlidingWindowContainer::update_editor_interaction_block_state() {

@@ -112,5 +112,6 @@ private:
 
     mutable int last_screen_w_ = 0;
     mutable int last_screen_h_ = 0;
+    mutable bool layout_dirty_ = true;
 };
 
