@@ -195,22 +195,6 @@ public:
             instructions_label_ = std::make_unique<LabelWidget>(
                 "Scroll on a slice to adjust weight. Double-click to remove.", DMStyles::Label().color, true);
         }
-        if (!regen_button_ && regen_callback_) {
-            regen_button_ = std::make_unique<DMButton>("Regen", &DMStyles::AccentButton(), 0, DMButton::height());
-        }
-        if (regen_callback_) {
-            if (!regen_widget_) {
-                regen_widget_ = std::make_unique<ButtonWidget>(regen_button_.get(), [this]() { this->handle_regen(); });
-            }
-        } else {
-            regen_widget_.reset();
-            regen_button_.reset();
-        }
-
-        if (!add_button_) {
-            add_button_ = std::make_unique<DMButton>("Add Candidate", &DMStyles::ListButton(), 0, DMButton::height());
-            add_widget_ = std::make_unique<ButtonWidget>(add_button_.get(), [this]() { open_candidate_search(); });
-        }
         if (!pie_widget_) {
             pie_widget_ = std::make_unique<CandidateEditorPieGraphWidget>();
         }
@@ -218,6 +202,12 @@ public:
         pie_widget_->set_on_request_layout([this]() { this->layout(); });
         pie_widget_->set_on_adjust([this](int index, int delta) { adjust_candidate_weight(index, delta); });
         pie_widget_->set_on_delete([this](int index) { remove_candidate(index); });
+        if (regen_callback_) {
+            pie_widget_->set_on_regenerate([this]() { this->handle_regen(); });
+        } else {
+            pie_widget_->set_on_regenerate({});
+        }
+        pie_widget_->set_on_add_candidate([this](const std::string& value) { this->add_candidate_from_search(value); });
 
         if (!ownership_label_.empty()) {
             set_title(ownership_label_ + " Candidates");
@@ -297,10 +287,6 @@ private:
 
         DockableCollapsible::Rows rows;
 
-        if (regen_widget_) {
-            rows.push_back({regen_widget_.get()});
-        }
-
         if (ownership_label_widget_) {
             rows.push_back({ownership_label_widget_.get()});
         }
@@ -324,10 +310,6 @@ private:
 
         if (pie_widget_) {
             rows.push_back({pie_widget_.get()});
-        }
-
-        if (add_widget_) {
-            rows.push_back({add_widget_.get()});
         }
 
         set_rows(rows);
@@ -359,15 +341,6 @@ private:
         auto it = candidates.begin() + static_cast<json::difference_type>(index);
         candidates.erase(it);
         notify_save(true);
-    }
-
-    void open_candidate_search() {
-        if (!pie_widget_ || !add_button_) {
-            return;
-        }
-        pie_widget_->show_search(add_button_->rect(), [this](const std::string& value) {
-            this->add_candidate_from_search(value);
-        });
     }
 
     void add_candidate_from_search(const std::string& label) {
@@ -422,14 +395,10 @@ private:
     int screen_w_ = 1920;
     int screen_h_ = 1080;
 
-    std::unique_ptr<DMButton> regen_button_{};
-    std::unique_ptr<ButtonWidget> regen_widget_{};
     std::unique_ptr<LabelWidget> ownership_label_widget_{};
     std::unique_ptr<LabelWidget> display_name_widget_{};
     std::unique_ptr<LabelWidget> candidates_header_{};
     std::unique_ptr<LabelWidget> instructions_label_{};
-    std::unique_ptr<DMButton> add_button_{};
-    std::unique_ptr<ButtonWidget> add_widget_{};
     std::unique_ptr<CandidateEditorPieGraphWidget> pie_widget_{};
 };
 

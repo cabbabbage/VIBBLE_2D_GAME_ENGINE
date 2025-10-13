@@ -484,16 +484,6 @@ struct SpawnGroupConfig::Entry {
         candidate_header_ = std::make_unique<SpawnGroupLabelWidget>("Candidates");
         candidate_header_->set_subtle(true);
 
-        add_candidate_button_ = std::make_unique<DMButton>("Add Candidate", &DMStyles::CreateButton(), 0, DMButton::height());
-        add_candidate_widget_ = std::make_unique<ButtonWidget>(add_candidate_button_.get(), [this]() {
-            if (!editable_ || !owner_) return;
-            if (auto* graph = candidate_editor_widget()) {
-                graph->show_search(add_candidate_button_->rect(), [this](const std::string& value) {
-                    this->add_candidate_from_search(value);
-                });
-            }
-        });
-
         empty_candidates_label_ = std::make_unique<SpawnGroupLabelWidget>("No candidates", DMStyles::Label().color, true);
 
         rebuild_candidate_widgets();
@@ -723,12 +713,11 @@ struct SpawnGroupConfig::Entry {
                 }
             }
 
-            // Candidates: only pie and Add button
+            // Candidates: header, optional empty label, and pie widget (with internal controls)
             rows.push_back({candidate_header_.get()});
             if (candidate_entries_.empty()) {
                 rows.push_back({empty_candidates_label_.get()});
             }
-            rows.push_back({add_candidate_widget_.get()});
             if (auto* graph = candidate_editor_widget()) {
                 rows.push_back({graph});
             }
@@ -838,6 +827,25 @@ private:
             graph->set_on_delete([this](int index){
                 this->remove_candidate_at(index);
             });
+            if (owner_ && owner_->callbacks_.on_regenerate) {
+                graph->set_on_regenerate([this]() {
+                    if (!owner_) return;
+                    std::string id = spawn_id();
+                    owner_->enqueue_notification([owner = owner_, id]() {
+                        if (!owner) return;
+                        if (owner->callbacks_.on_regenerate) owner->callbacks_.on_regenerate(id);
+                    });
+                });
+            } else {
+                graph->set_on_regenerate({});
+            }
+            if (editable_) {
+                graph->set_on_add_candidate([this](const std::string& value) {
+                    this->add_candidate_from_search(value);
+                });
+            } else {
+                graph->set_on_add_candidate({});
+            }
         }
     }
 
@@ -1095,8 +1103,6 @@ private:
 
     std::vector<CandidateWidgets> candidate_entries_{};
     std::unique_ptr<SpawnGroupLabelWidget> candidate_header_{};
-    std::unique_ptr<DMButton> add_candidate_button_{};
-    std::unique_ptr<ButtonWidget> add_candidate_widget_{};
     std::unique_ptr<SpawnGroupLabelWidget> empty_candidates_label_{};
 };
 

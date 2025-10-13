@@ -1,7 +1,6 @@
 #include "room_configurator.hpp"
 
 #include "dm_styles.hpp"
-#include "DockableCollapsible.hpp"
 #include "map_generation/room.hpp"
 #include "../spawn_group_config/SpawnGroupConfig.hpp"
 #include "../spawn_group_config/spawn_group_utils.hpp"
@@ -17,10 +16,10 @@
 #include <optional>
 #include <set>
 #include <sstream>
+#include <vector>
 #include <utility>
 
 namespace {
-constexpr int kRoomConfigPanelContentWidth = 360;
 constexpr int kRoomConfigPanelMinWidth = 260;
 
 class RoomConfiguratorSectionLabel : public Widget {
@@ -248,7 +247,6 @@ RoomConfigurator::RoomConfigurator() {
     geometry_options_ = {"Square", "Circle"};
     row_gap_ = DMSpacing::item_gap();
     col_gap_ = DMSpacing::item_gap();
-    cell_width_ = kRoomConfigPanelContentWidth;
     container_.set_header_text_provider([this]() {
         if (state_ && !state_->name.empty()) {
             return std::string{"Room: "} + state_->name;
@@ -260,21 +258,18 @@ RoomConfigurator::RoomConfigurator() {
         return this->layout_content(ctx);
     });
     container_.set_render_function([this](SDL_Renderer* renderer) {
-        if (basic_panel_) basic_panel_->render(renderer);
+        this->render_basic_widgets(renderer);
         for (const auto& cfg : spawn_group_configs_) {
             if (cfg) cfg->render(renderer);
         }
     });
     container_.set_event_function([this](const SDL_Event& e) {
-        // Give child dockables first shot at events so clicks don't get swallowed by the container
+        // Give child widgets first shot at events so clicks don't get swallowed by the container
         if (e.type == SDL_KEYDOWN && e.key.keysym.sym == SDLK_ESCAPE) {
             this->close();
             return true;
         }
-        bool used = false;
-        if (basic_panel_ && basic_panel_->is_visible()) {
-            if (basic_panel_->handle_event(e)) used = true;
-        }
+        bool used = this->handle_basic_widget_event(e);
         for (auto& cfg : spawn_group_configs_) {
             if (cfg && cfg->is_visible()) {
                 if (cfg->handle_event(e)) used = true;
@@ -283,7 +278,6 @@ RoomConfigurator::RoomConfigurator() {
         return used;
     });
     container_.set_update_function([this](const Input& input, int screen_w, int screen_h) {
-        if (basic_panel_) basic_panel_->update(input, screen_w, screen_h);
         for (auto& cfg : spawn_group_configs_) {
             if (cfg) cfg->update(input, screen_w, screen_h);
         }
@@ -303,15 +297,16 @@ void RoomConfigurator::set_bounds(const SDL_Rect& bounds) {
         SDL_Rect clamped = bounds;
         clamped.w = std::max(0, clamped.w);
         clamped.h = std::max(0, clamped.h);
-        container_.set_panel_bounds_override(clamped);
         const int padding = DMSpacing::panel_padding();
-        int available = std::max(kRoomConfigPanelMinWidth, clamped.w - padding * 2);
-        cell_width_ = std::max(kRoomConfigPanelMinWidth, available);
+        int min_panel_w = kRoomConfigPanelMinWidth + padding * 2;
+        if (clamped.w > 0) {
+            clamped.w = std::max(min_panel_w, clamped.w);
+        }
+        container_.set_panel_bounds_override(clamped);
     } else {
         container_.clear_panel_bounds_override();
-        cell_width_ = kRoomConfigPanelContentWidth;
     }
-    apply_basic_panel_layout();
+    container_.request_layout();
 }
 
 void RoomConfigurator::set_work_area(const SDL_Rect& bounds) {
@@ -367,16 +362,6 @@ void RoomConfigurator::renumber_spawn_group_priorities(nlohmann::json& groups) c
     }
 }
 
-void RoomConfigurator::apply_basic_panel_layout() {
-    if (!basic_panel_) {
-        return;
-    }
-    basic_panel_->set_cell_width(cell_width_);
-    basic_panel_->set_padding(DMSpacing::panel_padding());
-    basic_panel_->set_row_gap(row_gap_);
-    basic_panel_->set_col_gap(col_gap_);
-}
-
 SDL_Rect RoomConfigurator::clamp_to_work_area(const SDL_Rect& bounds) const {
     if (work_area_.w <= 0 || work_area_.h <= 0) {
         return bounds;
@@ -423,23 +408,138 @@ RoomConfigurator::Rows RoomConfigurator::compute_layout_rows() const {
     return layout_rows;
 }
 
-int RoomConfigurator::layout_content(const SlidingWindowContainer::LayoutContext& ctx) const {
-    int y = ctx.content_top;
-    // Position the basic info panel first
-    if (basic_panel_ && basic_panel_->is_visible()) {
-        basic_panel_->set_rect(SDL_Rect{ctx.content_x, y - ctx.scroll_value, ctx.content_width, 0});
-        y += basic_panel_->height() + ctx.gap;
+int RoomConfigurator::layout_basic_rows(const SlidingWindowContainer::LayoutContext& ctx, int start_y) const {
+    int y = start_y;
+    if (rows_.empty()) {
+        return y;
     }
+
+    const int content_width = std::max(0, ctx.content_width);
+    if (content_width <= 0) {
+        return y;
+    }
+
+    const int base_x = ctx.content_x;
+    const auto layout_rows = compute_layout_rows();
+    bool placed_any = false;
+
+    for (const auto& row : layout_rows) {
+        if (row.empty()) {
+            if (placed_any) {
+                y += row_gap_;
+            }
+            continue;
+        }
+
+        const int column_count = static_cast<int>(row.size());
+        std::vector<int> column_widths(column_count, 0);
+        if (column_count == 1) {
+            column_widths[0] = content_width;
+        } else {
+            const int total_gap = std::max(0, col_gap_ * (column_count - 1));
+            const int remaining = std::max(0, content_width - total_gap);
+            const int base_width = (column_count > 0) ? remaining / column_count : 0;
+            int extra = (column_count > 0) ? remaining % column_count : 0;
+            for (int i = 0; i < column_count; ++i) {
+                int width = base_width + (extra-- > 0 ? 1 : 0);
+                column_widths[i] = std::max(0, width);
+            }
+        }
+
+        int row_height = 0;
+        for (int i = 0; i < column_count; ++i) {
+            Widget* widget = row[i];
+            if (!widget) {
+                continue;
+            }
+            const int width = column_widths.empty() ? content_width : column_widths[std::min<int>(i, column_widths.size() - 1)];
+            row_height = std::max(row_height, widget->height_for_width(width));
+        }
+        row_height = std::max(row_height, 1);
+
+        int x = base_x;
+        const int draw_y = y - ctx.scroll_value;
+        for (int i = 0; i < column_count; ++i) {
+            Widget* widget = row[i];
+            const int width = column_widths.empty() ? content_width : column_widths[std::min<int>(i, column_widths.size() - 1)];
+            if (widget) {
+                widget->set_rect(SDL_Rect{ x, draw_y, width, row_height });
+            }
+            x += width;
+            if (column_count > 1 && i + 1 < column_count) {
+                x += col_gap_;
+            }
+        }
+
+        y += row_height + row_gap_;
+        placed_any = true;
+    }
+
+    if (placed_any) {
+        y -= row_gap_;
+    }
+
+    return y;
+}
+
+void RoomConfigurator::render_basic_widgets(SDL_Renderer* renderer) const {
+    if (!renderer) {
+        return;
+    }
+    for (const auto& row : rows_) {
+        for (Widget* widget : row) {
+            if (widget) {
+                widget->render(renderer);
+            }
+        }
+    }
+}
+
+bool RoomConfigurator::handle_basic_widget_event(const SDL_Event& e) {
+    if (!container_.is_visible()) {
+        return false;
+    }
+    bool used = false;
+    for (auto& row : rows_) {
+        for (auto* widget : row) {
+            if (widget && widget->handle_event(e)) {
+                used = true;
+            }
+        }
+    }
+    return used;
+}
+
+int RoomConfigurator::layout_content(const SlidingWindowContainer::LayoutContext& ctx) const {
+    const int start_y = ctx.content_top;
+    int y = layout_basic_rows(ctx, start_y);
+    bool any_spawn_visible = false;
     // Then position each spawn group panel in order
     for (const auto& cfg : spawn_group_configs_) {
         if (!cfg || !cfg->is_visible()) continue;
+        if (!any_spawn_visible && y > start_y) {
+            y += ctx.gap;
+        }
         cfg->set_rect(SDL_Rect{ctx.content_x, y - ctx.scroll_value, ctx.content_width, 0});
         y += cfg->height() + ctx.gap;
+        any_spawn_visible = true;
+    }
+    if (!any_spawn_visible && y > start_y) {
+        y += ctx.gap;
     }
     return y + ctx.gap;
 }
 
-void RoomConfigurator::set_rows(Rows rows) { rows_ = std::move(rows); }
+void RoomConfigurator::set_rows(Rows rows) {
+    rows_ = std::move(rows);
+    for (auto& row : rows_) {
+        for (auto* widget : row) {
+            if (!widget) continue;
+            widget->set_layout_dirty_callback([this]() { this->container_.request_layout(); });
+        }
+    }
+    container_.request_layout();
+}
 
 void RoomConfigurator::handle_container_closed() {
     for (auto& config : spawn_group_configs_) {
@@ -620,9 +720,6 @@ bool RoomConfigurator::visible() const { return container_.is_visible(); }
 bool RoomConfigurator::any_panel_visible() const { return visible(); }
 
 bool RoomConfigurator::is_locked() const {
-    if (basic_panel_ && basic_panel_->isLocked()) {
-        return true;
-    }
     for (const auto& cfg : spawn_group_configs_) {
         if (cfg && cfg->isLocked()) {
             return true;
@@ -1057,28 +1154,12 @@ void RoomConfigurator::rebuild_rows_internal() {
     rows.push_back({add_spawn_widget_.get()});
 
     set_rows(rows);
-
-    // Ensure a dockable basic info panel exists and uses these rows
-    if (!basic_panel_) {
-        basic_panel_ = std::make_unique<DockableCollapsible>("Basic Room Info", false);
-        basic_panel_->set_show_header(true);
-    }
-    basic_panel_->set_close_button_enabled(false);
-    basic_panel_->set_scroll_enabled(false);
-    basic_panel_->setLocked(false);
-    basic_panel_->set_expanded(true);
-    apply_basic_panel_layout();
-    basic_panel_->set_rows(rows_);
-    basic_panel_->force_pointer_ready();
 }
 
 void RoomConfigurator::update(const Input& input, int screen_w, int screen_h) {
     last_screen_w_ = screen_w;
     last_screen_h_ = screen_h;
     const bool panel_visible = container_.is_visible();
-    if (basic_panel_) {
-        basic_panel_->set_visible(panel_visible);
-    }
     for (auto& config : spawn_group_configs_) {
         if (!config) continue;
         config->set_visible(panel_visible);

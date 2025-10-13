@@ -31,11 +31,16 @@ double clamp_positive(double value) {
 
 CandidateEditorPieGraphWidget::CandidateEditorPieGraphWidget() {
     rect_ = SDL_Rect{0, 0, 280, 180};
+    content_rect_ = rect_;
+    regen_button_ = std::make_unique<DMButton>("Regen", &DMStyles::AccentButton(), 0, DMButton::height());
+    add_button_ = std::make_unique<DMButton>("Add Candidate", &DMStyles::ListButton(), 0, DMButton::height());
+    update_internal_layout();
 }
 
 void CandidateEditorPieGraphWidget::set_rect(const SDL_Rect& r) {
     rect_ = r;
     position_search_within_bounds();
+    update_internal_layout();
 }
 
 const SDL_Rect& CandidateEditorPieGraphWidget::rect() const {
@@ -44,7 +49,15 @@ const SDL_Rect& CandidateEditorPieGraphWidget::rect() const {
 
 int CandidateEditorPieGraphWidget::height_for_width(int w) const {
     int constrained = std::clamp(w, 160, 420);
-    return std::max(constrained, rect_.h > 0 ? rect_.h : 180);
+    const int margin = DMSpacing::item_gap();
+    int min_height = 180 + margin * 2;
+    if (should_show_regen_button()) {
+        min_height += DMButton::height() + margin;
+    }
+    if (should_show_add_button()) {
+        min_height += DMButton::height() + margin;
+    }
+    return std::max(constrained, rect_.h > 0 ? rect_.h : min_height);
 }
 
 bool CandidateEditorPieGraphWidget::handle_event(const SDL_Event& e) {
@@ -69,6 +82,26 @@ bool CandidateEditorPieGraphWidget::handle_event(const SDL_Event& e) {
         if (used || e.type == SDL_TEXTINPUT || e.type == SDL_KEYDOWN || e.type == SDL_KEYUP ||
             e.type == SDL_MOUSEBUTTONDOWN || e.type == SDL_MOUSEBUTTONUP || e.type == SDL_MOUSEMOTION ||
             e.type == SDL_MOUSEWHEEL) {
+            return true;
+        }
+    }
+
+    if (should_show_regen_button() && regen_button_) {
+        if (regen_button_->handle_event(e)) {
+            if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
+                if (on_regenerate_) {
+                    on_regenerate_();
+                }
+            }
+            return true;
+        }
+    }
+
+    if (should_show_add_button() && add_button_) {
+        if (add_button_->handle_event(e)) {
+            if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
+                open_add_candidate_search();
+            }
             return true;
         }
     }
@@ -230,6 +263,13 @@ void CandidateEditorPieGraphWidget::render(SDL_Renderer* renderer) const {
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
     draw_background(renderer);
 
+    if (should_show_regen_button() && regen_button_) {
+        regen_button_->render(renderer);
+    }
+    if (should_show_add_button() && add_button_) {
+        add_button_->render(renderer);
+    }
+
     Layout layout = compute_layout();
     int font_size = std::max(11, DMStyles::Label().font_size - 1);
     TTF_Font* font = TTF_OpenFont(DMStyles::Label().font_path.c_str(), font_size);
@@ -353,6 +393,18 @@ void CandidateEditorPieGraphWidget::set_screen_dimensions(int width, int height)
     }
 }
 
+void CandidateEditorPieGraphWidget::set_on_regenerate(std::function<void()> cb) {
+    on_regenerate_ = std::move(cb);
+    update_internal_layout();
+    notify_layout_change();
+}
+
+void CandidateEditorPieGraphWidget::set_on_add_candidate(std::function<void(const std::string&)> cb) {
+    on_add_candidate_ = std::move(cb);
+    update_internal_layout();
+    notify_layout_change();
+}
+
 void CandidateEditorPieGraphWidget::show_search(const SDL_Rect& anchor_rect, std::function<void(const std::string&)> on_select) {
     ensure_search_created();
     last_search_anchor_ = anchor_rect;
@@ -398,26 +450,34 @@ void CandidateEditorPieGraphWidget::update_search(const Input& input) {
 
 CandidateEditorPieGraphWidget::Layout CandidateEditorPieGraphWidget::compute_layout() const {
     Layout layout;
-    layout.center = SDL_FPoint{static_cast<float>(rect_.x + rect_.w / 2),
-                               static_cast<float>(rect_.y + rect_.h / 2)};
+    SDL_Rect area = content_rect_;
+    if (area.w <= 0 || area.h <= 0) {
+        layout.center = SDL_FPoint{static_cast<float>(rect_.x + rect_.w / 2),
+                                   static_cast<float>(rect_.y + rect_.h / 2)};
+        layout.radius = 0.0f;
+        layout.legend = SDL_Rect{0, 0, 0, 0};
+        return layout;
+    }
+    layout.center = SDL_FPoint{static_cast<float>(area.x + area.w / 2),
+                               static_cast<float>(area.y + area.h / 2)};
     layout.radius = 0.0f;
     layout.legend = SDL_Rect{0, 0, 0, 0};
 
-    if (rect_.w <= 0 || rect_.h <= 0) {
+    if (area.w <= 0 || area.h <= 0) {
         return layout;
     }
 
     const int margin = DMSpacing::item_gap();
     int legend_width = 0;
-    if (rect_.w >= 320) {
-        legend_width = std::max(120, rect_.w / 3);
+    if (area.w >= 320) {
+        legend_width = std::max(120, area.w / 3);
     }
 
-    const int pie_width = std::max(0, rect_.w - margin * 2 - (legend_width > 0 ? legend_width + margin : 0));
-    const int pie_height = std::max(0, rect_.h - margin * 2);
+    const int pie_width = std::max(0, area.w - margin * 2 - (legend_width > 0 ? legend_width + margin : 0));
+    const int pie_height = std::max(0, area.h - margin * 2);
 
-    const int pie_x = rect_.x + margin;
-    const int pie_y = rect_.y + margin;
+    const int pie_x = area.x + margin;
+    const int pie_y = area.y + margin;
 
     layout.center = SDL_FPoint{static_cast<float>(pie_x + pie_width / 2),
                                static_cast<float>(pie_y + pie_height / 2)};
@@ -427,10 +487,10 @@ CandidateEditorPieGraphWidget::Layout CandidateEditorPieGraphWidget::compute_lay
     }
 
     if (legend_width > 0) {
-        layout.legend = SDL_Rect{rect_.x + rect_.w - legend_width - margin,
-                                 rect_.y + margin,
+        layout.legend = SDL_Rect{area.x + area.w - legend_width - margin,
+                                 area.y + margin,
                                  legend_width,
-                                 std::max(0, rect_.h - margin * 2)};
+                                 std::max(0, area.h - margin * 2)};
     }
 
     cache_legend_rows(layout);
@@ -484,6 +544,67 @@ void CandidateEditorPieGraphWidget::draw_background(SDL_Renderer* renderer) cons
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
     SDL_SetRenderDrawColor(renderer, bg.r, bg.g, bg.b, 200);
     SDL_RenderFillRect(renderer, &rect_);
+}
+
+void CandidateEditorPieGraphWidget::update_internal_layout() {
+    content_rect_ = rect_;
+    if (rect_.w <= 0 || rect_.h <= 0) {
+        if (regen_button_) regen_button_->set_rect(SDL_Rect{rect_.x, rect_.y, 0, 0});
+        if (add_button_) add_button_->set_rect(SDL_Rect{rect_.x, rect_.y, 0, 0});
+        return;
+    }
+
+    const int margin = DMSpacing::item_gap();
+    int y = rect_.y + margin;
+    int width = std::max(0, rect_.w - margin * 2);
+
+    if (regen_button_) {
+        if (should_show_regen_button()) {
+            regen_button_->set_rect(SDL_Rect{rect_.x + margin, y, width, DMButton::height()});
+            y += DMButton::height() + margin;
+        } else {
+            regen_button_->set_rect(SDL_Rect{rect_.x + margin, y, 0, 0});
+        }
+    }
+
+    if (add_button_) {
+        if (should_show_add_button()) {
+            add_button_->set_rect(SDL_Rect{rect_.x + margin, y, width, DMButton::height()});
+            y += DMButton::height() + margin;
+        } else {
+            add_button_->set_rect(SDL_Rect{rect_.x + margin, y, 0, 0});
+        }
+    }
+
+    int remaining_height = std::max(0, rect_.y + rect_.h - y);
+    content_rect_ = SDL_Rect{rect_.x, y, rect_.w, remaining_height};
+
+    if (search_visible() && has_search_anchor_ && add_button_ && should_show_add_button()) {
+        last_search_anchor_ = add_button_->rect();
+        position_search_within_bounds();
+    }
+}
+
+void CandidateEditorPieGraphWidget::open_add_candidate_search() {
+    if (!should_show_add_button() || !add_button_) {
+        return;
+    }
+    if (!on_add_candidate_) {
+        return;
+    }
+    show_search(add_button_->rect(), [this](const std::string& value) {
+        if (on_add_candidate_) {
+            on_add_candidate_(value);
+        }
+    });
+}
+
+bool CandidateEditorPieGraphWidget::should_show_regen_button() const {
+    return static_cast<bool>(on_regenerate_);
+}
+
+bool CandidateEditorPieGraphWidget::should_show_add_button() const {
+    return static_cast<bool>(on_add_candidate_);
 }
 
 void CandidateEditorPieGraphWidget::render_empty(SDL_Renderer* renderer, const Layout& layout, TTF_Font* font) const {

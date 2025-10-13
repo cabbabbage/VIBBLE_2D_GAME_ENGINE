@@ -17,7 +17,6 @@ class Input;
 class Room;
 class TagEditorWidget;
 class SpawnGroupConfig;
-class DockableCollapsible;
 class DropdownWidget;
 class RangeSliderWidget;
 class SliderWidget;
@@ -106,18 +105,18 @@ private:
     void reset_scroll();
     bool add_spawn_group_direct();
     void renumber_spawn_group_priorities(nlohmann::json& groups) const;
-    void apply_basic_panel_layout();
+    int  layout_basic_rows(const SlidingWindowContainer::LayoutContext& ctx, int start_y) const;
+    void render_basic_widgets(SDL_Renderer* renderer) const;
+    bool handle_basic_widget_event(const SDL_Event& e);
 
     std::unique_ptr<State> state_;
 
     SlidingWindowContainer container_;
     Rows rows_;
-    std::unique_ptr<DockableCollapsible> basic_panel_;
     bool show_header_ = true;
     SDL_Rect bounds_override_{0, 0, 0, 0};
     SDL_Rect work_area_{0, 0, 0, 0};
     bool has_bounds_override_ = false;
-    int cell_width_ = 0;
     int row_gap_ = 0;
     int col_gap_ = 0;
     int last_screen_w_ = 0;

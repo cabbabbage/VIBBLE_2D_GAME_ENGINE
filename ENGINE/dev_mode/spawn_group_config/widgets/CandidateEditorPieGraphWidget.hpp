@@ -31,7 +31,8 @@ public:
     void set_candidates_from_json(const nlohmann::json& entry);
     void set_on_adjust(std::function<void(int index, int delta)> cb) { on_adjust_ = std::move(cb); }
     void set_on_delete(std::function<void(int index)> cb) { on_delete_ = std::move(cb); }
-    void show_search(const SDL_Rect& anchor_rect, std::function<void(const std::string&)> on_select);
+    void set_on_regenerate(std::function<void()> cb);
+    void set_on_add_candidate(std::function<void(const std::string&)> cb);
     void hide_search();
     void update_search(const Input& input);
 
@@ -49,6 +50,11 @@ private:
 
     Layout compute_layout() const;
     double total_weight() const;
+    void update_internal_layout();
+    void open_add_candidate_search();
+    bool should_show_regen_button() const;
+    bool should_show_add_button() const;
+    void show_search(const SDL_Rect& anchor_rect, std::function<void(const std::string&)> on_select);
     void draw_background(SDL_Renderer* renderer) const;
     void render_empty(SDL_Renderer* renderer, const Layout& layout, TTF_Font* font) const;
     void render_slices(SDL_Renderer* renderer, const Layout& layout, double total) const;
@@ -72,10 +78,15 @@ private:
     int active_index_ = -1;
     std::function<void(int index, int delta)> on_adjust_{};
     std::function<void(int index)> on_delete_{};
+    std::function<void()> on_regenerate_{};
+    std::function<void(const std::string&)> on_add_candidate_{};
     std::function<void()> on_request_layout_{};
     bool scroll_capture_active_ = false;
     mutable std::vector<SDL_Rect> legend_row_rects_{};
     mutable int legend_row_height_ = 0;
+    std::unique_ptr<DMButton> regen_button_{};
+    std::unique_ptr<DMButton> add_button_{};
+    SDL_Rect content_rect_{0, 0, 0, 0};
     std::unique_ptr<SearchAssets> search_assets_{};
     SDL_Rect last_search_anchor_{0, 0, 0, 0};
     int screen_w_ = 0;
