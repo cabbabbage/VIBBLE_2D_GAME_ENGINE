@@ -1637,12 +1637,16 @@ public:
 
     MapLayersPanel* panel_owner() const { return owner_; }
 
+protected:
+    std::string_view lock_settings_namespace() const override { return {}; }
+    std::string_view lock_settings_id() const override { return {}; }
+
 private:
 
     MapLayersPanel* owner_ = nullptr;
     int layer_index_ = -1;
     json* layer_ = nullptr;
-    bool locked_ = false;
+    bool layer_locked_ = false;
     bool cleanup_pending_ = false;
     bool refresh_pending_ = false;
     std::string name_cache_;
@@ -1916,7 +1920,7 @@ void MapLayersPanel::LayerConfigPanel::open(int layer_index, json* layer) {
 
     layer_ = layer;
 
-    locked_ = owner_ ? owner_->is_layer_locked(layer_index_) : false;
+    layer_locked_ = owner_ ? owner_->is_layer_locked(layer_index_) : false;
 
     cleanup_pending_ = false;
 
@@ -1962,7 +1966,7 @@ void MapLayersPanel::LayerConfigPanel::ensure_cleanup() {
 
     layer_ = nullptr;
 
-    locked_ = false;
+    layer_locked_ = false;
 
     name_box_.reset();
 
@@ -2104,7 +2108,7 @@ void MapLayersPanel::LayerConfigPanel::refresh() {
 
     }
 
-    if (!locked_) {
+    if (!layer_locked_) {
 
         name_box_ = std::make_unique<DMTextBox>("Layer Name", name_cache_);
 
@@ -2160,7 +2164,7 @@ void MapLayersPanel::LayerConfigPanel::refresh() {
 
     close_widget_ = std::make_unique<ButtonWidget>(close_btn_.get(), [this]() { this->close(); });
 
-    if (!locked_) {
+    if (!layer_locked_) {
 
         rows.push_back({ delete_layer_widget_.get(), close_widget_.get() });
 
@@ -2182,7 +2186,7 @@ void MapLayersPanel::LayerConfigPanel::refresh() {
 
                 json& entry = rooms[i];
 
-                auto widget = std::make_unique<RoomCandidateWidget>(this, layer_index_, static_cast<int>(i), &entry, !locked_);
+                auto widget = std::make_unique<RoomCandidateWidget>(this, layer_index_, static_cast<int>(i), &entry, !layer_locked_);
 
                 widget->refresh_from_json();
 
@@ -2212,7 +2216,7 @@ void MapLayersPanel::LayerConfigPanel::sync_from_widgets() {
 
     if (!layer_) return;
 
-    if (!locked_ && name_box_) {
+    if (!layer_locked_ && name_box_) {
 
         const std::string current = name_box_->value();
 

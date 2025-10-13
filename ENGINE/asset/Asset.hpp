@@ -32,7 +32,13 @@ struct StaticLight {
 
 class Asset {
 
-	public:
+        public:
+    struct RenderTextureCache {
+        SDL_Texture* texture = nullptr;
+        int          width   = 0;
+        int          height  = 0;
+    };
+
     Area get_area(const std::string& name) const;
     Asset(std::shared_ptr<AssetInfo> info,
           const Area& spawn_area,
@@ -97,6 +103,12 @@ class Asset {
     bool is_highlighted();
     void set_selected(bool state);
     bool is_selected();
+    RenderTextureCache& light_front_cache();
+    RenderTextureCache& light_front_cache() const;
+    RenderTextureCache& light_behind_cache();
+    RenderTextureCache& light_behind_cache() const;
+    RenderTextureCache& shadow_mask_cache();
+    RenderTextureCache& shadow_mask_cache() const;
     Asset* parent = nullptr;
     std::shared_ptr<AssetInfo> info;
     std::string current_animation;
@@ -169,6 +181,12 @@ class Asset {
     ScaleUsageStats last_scale_usage_{};
 
     void update_scale_usage(float requested, float texture_scale, float remainder, int variant_index);
+    void clear_render_caches();
+    static void destroy_render_cache(RenderTextureCache& cache);
+
+    mutable RenderTextureCache light_front_cache_{};
+    mutable RenderTextureCache light_behind_cache_{};
+    mutable RenderTextureCache shadow_mask_cache_{};
 };
 
 #endif

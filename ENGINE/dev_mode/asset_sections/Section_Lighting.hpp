@@ -229,5 +229,9 @@ private:
     std::unique_ptr<DMButton> b_add_;
     std::unique_ptr<DMButton> apply_btn_;
     AssetInfoUI* ui_ = nullptr;
+
+protected:
+    std::string_view lock_settings_namespace() const override { return "asset_info"; }
+    std::string_view lock_settings_id() const override { return "lighting"; }
 };
 

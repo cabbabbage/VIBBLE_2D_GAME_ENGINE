@@ -100,6 +100,7 @@ Asset::~Asset() {
                 if (c && c->parent == this) c->parent = nullptr;
         }
         clear_downscale_cache();
+        clear_render_caches();
         if (final_texture) {
                 SDL_DestroyTexture(final_texture);
                 final_texture = nullptr;
@@ -153,12 +154,14 @@ Asset::Asset(const Asset& o)
 , last_scale_usage_()
 {
         clear_downscale_cache();
+        clear_render_caches();
         last_scale_usage_ = o.last_scale_usage_;
 }
 
 Asset& Asset::operator=(const Asset& o) {
         if (this == &o) return *this;
         clear_downscale_cache();
+        clear_render_caches();
         parent               = o.parent;
         info                 = o.info;
         current_animation    = o.current_animation;
@@ -581,10 +584,26 @@ Area Asset::get_area(const std::string& name) const {
 
 void Asset::deactivate() {
         clear_downscale_cache();
+        clear_render_caches();
         if (final_texture) {
                 SDL_DestroyTexture(final_texture);
                 final_texture = nullptr;
         }
+}
+
+void Asset::destroy_render_cache(RenderTextureCache& cache) {
+        if (cache.texture) {
+                SDL_DestroyTexture(cache.texture);
+                cache.texture = nullptr;
+        }
+        cache.width  = 0;
+        cache.height = 0;
+}
+
+void Asset::clear_render_caches() {
+        destroy_render_cache(light_front_cache_);
+        destroy_render_cache(light_behind_cache_);
+        destroy_render_cache(shadow_mask_cache_);
 }
 
 void Asset::clear_downscale_cache() {
@@ -631,11 +650,18 @@ bool  Asset::is_highlighted(){ return highlighted; }
 void Asset::set_selected(bool state){ selected = state; }
 bool  Asset::is_selected(){ return selected; }
 
+Asset::RenderTextureCache& Asset::light_front_cache() { return light_front_cache_; }
+Asset::RenderTextureCache& Asset::light_front_cache() const { return light_front_cache_; }
+Asset::RenderTextureCache& Asset::light_behind_cache() { return light_behind_cache_; }
+Asset::RenderTextureCache& Asset::light_behind_cache() const { return light_behind_cache_; }
+Asset::RenderTextureCache& Asset::shadow_mask_cache() { return shadow_mask_cache_; }
+Asset::RenderTextureCache& Asset::shadow_mask_cache() const { return shadow_mask_cache_; }
+
 void Asset::Delete() {
-	dead = true;
-	hidden = true;
+        dead = true;
+        hidden = true;
         if (assets_) {
-            assets_->mark_active_assets_dirty();
-            assets_->schedule_removal(this);
+                assets_->mark_active_assets_dirty();
+                assets_->schedule_removal(this);
         }
 }

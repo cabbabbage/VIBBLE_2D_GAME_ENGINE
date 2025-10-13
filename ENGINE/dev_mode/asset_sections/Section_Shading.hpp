@@ -245,5 +245,9 @@ private:
 
     AssetInfoUI* ui_ = nullptr;
     const AssetInfo* last_info_ = nullptr;
+
+protected:
+    std::string_view lock_settings_namespace() const override { return "asset_info"; }
+    std::string_view lock_settings_id() const override { return "shading"; }
 };
 

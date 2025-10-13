@@ -64,4 +64,8 @@ private:
     std::unique_ptr<FloatSliderWidget> parallax_strength_slider_;
     std::unique_ptr<FloatSliderWidget> foreshorten_strength_slider_;
     std::unique_ptr<FloatSliderWidget> distance_strength_slider_;
+
+protected:
+    std::string_view lock_settings_namespace() const override { return "camera"; }
+    std::string_view lock_settings_id() const override { return "controls"; }
 };

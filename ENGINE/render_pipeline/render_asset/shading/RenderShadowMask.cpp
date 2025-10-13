@@ -165,13 +165,6 @@ bool render_orbital_lights(SDL_Renderer* renderer, const Asset& asset, StageCont
 
 }
 
-RenderShadowMask::~RenderShadowMask() {
-    if (cached_texture_) {
-        SDL_DestroyTexture(cached_texture_);
-        cached_texture_ = nullptr;
-    }
-}
-
 bool RenderShadowMask::supports(const Asset& asset) const {
     return asset.is_shaded;
 }
@@ -195,28 +188,30 @@ SDL_Texture* RenderShadowMask::run(SDL_Renderer* renderer, const Asset& asset, S
         return nullptr;
     }
 
-    if (width != cached_width_ || height != cached_height_) {
-        if (cached_texture_) {
-            SDL_DestroyTexture(cached_texture_);
-            cached_texture_ = nullptr;
+    auto& cache = asset.shadow_mask_cache();
+    if (cache.texture) {
+        int tex_w = 0;
+        int tex_h = 0;
+        if (SDL_QueryTexture(cache.texture, nullptr, nullptr, &tex_w, &tex_h) != 0 || tex_w != width || tex_h != height) {
+            SDL_DestroyTexture(cache.texture);
+            cache.texture = nullptr;
+            cache.width   = 0;
+            cache.height  = 0;
         }
-        cached_width_  = width;
-        cached_height_ = height;
     }
 
-    if (!cached_texture_) {
-        cached_texture_ =
-            SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET, width, height);
-        if (!cached_texture_) {
-            cached_width_  = 0;
-            cached_height_ = 0;
+    if (!cache.texture) {
+        cache.texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET, width, height);
+        if (!cache.texture) {
+            cache.width  = 0;
+            cache.height = 0;
             return nullptr;
         }
     }
-    SDL_SetTextureBlendMode(cached_texture_, SDL_BLENDMODE_BLEND);
+    SDL_SetTextureBlendMode(cache.texture, SDL_BLENDMODE_BLEND);
 
     SDL_Texture* prev_target = SDL_GetRenderTarget(renderer);
-    SDL_SetRenderTarget(renderer, cached_texture_);
+    SDL_SetRenderTarget(renderer, cache.texture);
     SDL_SetRenderDrawColor(renderer, 255, 255, 255, 0);
     SDL_RenderClear(renderer);
 
@@ -240,7 +235,10 @@ SDL_Texture* RenderShadowMask::run(SDL_Renderer* renderer, const Asset& asset, S
 
     SDL_SetRenderTarget(renderer, prev_target);
 
-    return cached_texture_;
+    cache.width  = width;
+    cache.height = height;
+
+    return cache.texture;
 }
 
 }

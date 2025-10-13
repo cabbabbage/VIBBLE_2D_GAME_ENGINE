@@ -39,6 +39,10 @@ class Section_BasicInfo : public DockableCollapsible {
     std::vector<std::unique_ptr<Widget>> widgets_;
     std::vector<std::string> type_options_;
     AssetInfoUI* ui_ = nullptr;
+
+  protected:
+    std::string_view lock_settings_namespace() const override { return "asset_info"; }
+    std::string_view lock_settings_id() const override { return "basic"; }
 };
 
 inline Section_BasicInfo::Section_BasicInfo()

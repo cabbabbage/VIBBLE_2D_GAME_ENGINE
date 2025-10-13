@@ -76,4 +76,8 @@ private:
     class StatusLabel;
     StatusLabel* status_label_ = nullptr;
     mutable std::string status_text_{};
+
+protected:
+    std::string_view lock_settings_namespace() const override { return "lighting"; }
+    std::string_view lock_settings_id() const override { return "light_rays"; }
 };

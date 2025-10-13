@@ -187,5 +187,9 @@ private:
     void restore_order_from_snapshot(const std::vector<std::string>& order);
 
     friend class SpawnGroupConfigTestAccessor;
+
+protected:
+    std::string_view lock_settings_namespace() const override { return "spawn_groups"; }
+    std::string_view lock_settings_id() const override { return "config"; }
 };
 

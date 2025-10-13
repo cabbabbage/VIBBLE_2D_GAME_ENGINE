@@ -1,8 +1,10 @@
 #pragma once
 
 #include <SDL.h>
+#include <functional>
 #include <memory>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "dm_styles.hpp"
@@ -36,6 +38,10 @@ public:
     bool show_header() const { return show_header_; }
 
     void set_close_button_enabled(bool enabled);
+
+    void setLocked(bool locked);
+    bool isLocked() const { return locked_; }
+    void onLockChanged(std::function<void(bool)> cb);
 
     void set_scroll_enabled(bool enabled) { scroll_enabled_ = enabled; }
     bool scroll_enabled() const { return scroll_enabled_; }
@@ -73,23 +79,33 @@ public:
 private:
     void layout(int screen_w, int screen_h) const;
     void update_header_button() const;
+    void update_lock_button() const;
     int  compute_row_width(int num_cols) const;
     int  available_height(int screen_h) const;
     void clamp_to_bounds(int screen_w, int screen_h) const;
     void clamp_position_only(int screen_w, int screen_h) const;
     void update_geometry_after_move() const;
+    void ensure_lock_state_initialized() const;
+    void ensure_lock_button() const;
+    const std::string& lock_settings_key() const;
+    bool should_show_lock_button() const;
+    void apply_lock_state(bool locked, bool allow_auto_collapse, bool persist) const;
 
 protected:
     virtual void layout();
+    virtual std::string_view lock_settings_namespace() const { return {}; }
+    virtual std::string_view lock_settings_id() const { return {}; }
 
 protected:
     std::string title_;
     mutable std::unique_ptr<DMButton> header_btn_;
     mutable std::unique_ptr<DMButton> close_btn_;
+    mutable std::unique_ptr<DMButton> lock_btn_;
     mutable SDL_Rect rect_{32,32,260,DMButton::height()+8};
     mutable SDL_Rect header_rect_{0,0,0,0};
     mutable SDL_Rect handle_rect_{0,0,0,0};
     mutable SDL_Rect close_rect_{0,0,0,0};
+    mutable SDL_Rect lock_rect_{0,0,0,0};
     mutable SDL_Rect body_viewport_{0,0,0,0};
 
     Rows rows_;
@@ -111,6 +127,12 @@ protected:
     mutable int scroll_ = 0;
     mutable int max_scroll_ = 0;
     std::shared_ptr<AssetInfo> info_{};
+
+    mutable bool locked_ = false;
+    mutable bool lock_state_initialized_ = false;
+    mutable std::string lock_settings_key_cache_{};
+    mutable bool lock_settings_key_cached_ = false;
+    std::vector<std::function<void(bool)>> on_lock_changed_{};
 
     int padding_   = 10;
     int row_gap_   = 8;

@@ -55,4 +55,8 @@ private:
 
     bool rebuilding_ = false;
     bool rebuild_requested_ = false;
+
+protected:
+    std::string_view lock_settings_namespace() const override { return "asset_info"; }
+    std::string_view lock_settings_id() const override { return "spawn_groups"; }
 };

@@ -181,4 +181,8 @@ private:
     bool embedded_mode_ = false;
     SDL_Rect screen_bounds_{0, 0, 0, 0};
     std::function<void(bool)> header_visibility_callback_{};
+
+protected:
+    std::string_view lock_settings_namespace() const override { return "map_layers"; }
+    std::string_view lock_settings_id() const override { return "panel"; }
 };

@@ -168,4 +168,8 @@ private:
 
     OrbitSettings last_applied_orbit_{};
     ScreenLightSettings last_applied_screen_{};
+
+protected:
+    std::string_view lock_settings_namespace() const override { return "lighting"; }
+    std::string_view lock_settings_id() const override { return "map_panel"; }
 };

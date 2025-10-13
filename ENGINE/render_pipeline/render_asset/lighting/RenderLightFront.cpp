@@ -6,13 +6,6 @@
 
 namespace render_pipeline::lighting {
 
-RenderLightFront::~RenderLightFront() {
-    if (cached_texture_) {
-        SDL_DestroyTexture(cached_texture_);
-        cached_texture_ = nullptr;
-    }
-}
-
 bool RenderLightFront::supports(const Asset& asset) const {
     return asset.is_shaded;
 }
@@ -36,27 +29,32 @@ SDL_Texture* RenderLightFront::run(SDL_Renderer* renderer, const Asset& asset, S
         return nullptr;
     }
 
-    if (width != cached_width_ || height != cached_height_) {
-        if (cached_texture_) {
-            SDL_DestroyTexture(cached_texture_);
-            cached_texture_ = nullptr;
+    auto& cache = asset.light_front_cache();
+    if (cache.texture) {
+        int tex_w = 0;
+        int tex_h = 0;
+        if (SDL_QueryTexture(cache.texture, nullptr, nullptr, &tex_w, &tex_h) != 0 || tex_w != width || tex_h != height) {
+            SDL_DestroyTexture(cache.texture);
+            cache.texture = nullptr;
+            cache.width   = 0;
+            cache.height  = 0;
         }
-        cached_width_  = width;
-        cached_height_ = height;
     }
 
-    SDL_Texture* existing_texture = cached_texture_;
+    SDL_Texture* existing_texture = cache.texture;
     SDL_Texture* texture          = detail::build_light_texture(renderer, asset, context, false, existing_texture);
     if (!texture) {
         if (!existing_texture) {
-            cached_width_  = 0;
-            cached_height_ = 0;
+            cache.width  = 0;
+            cache.height = 0;
         }
         return nullptr;
     }
 
-    cached_texture_ = texture;
-    return cached_texture_;
+    cache.texture = texture;
+    cache.width   = width;
+    cache.height  = height;
+    return cache.texture;
 }
 
 }

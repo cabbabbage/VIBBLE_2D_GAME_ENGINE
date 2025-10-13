@@ -16,7 +16,8 @@ class DummySection : public DockableCollapsible {
 
     void render_content(SDL_Renderer* r) const override {
       const DMLabelStyle& s = DMStyles::Label();
-      TTF_Font* f = s.open_font(); if (!f) return;
+      TTF_Font* f = s.open_font();
+      if (!f) return;
       SDL_Surface* surf = TTF_RenderUTF8_Blended(f, "(Coming soon)", s.color);
       if (surf) {
         SDL_Texture* tex = SDL_CreateTextureFromSurface(r, surf);
@@ -29,6 +30,10 @@ class DummySection : public DockableCollapsible {
       }
       TTF_CloseFont(f);
     }
+
+  protected:
+    std::string_view lock_settings_namespace() const override { return {}; }
+    std::string_view lock_settings_id() const override { return {}; }
 };
 
 struct Section_Sizing      : public DummySection { Section_Sizing()      : DummySection("Sizing") {} };

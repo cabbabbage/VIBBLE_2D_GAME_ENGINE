@@ -208,6 +208,10 @@ public:
         }
     }
 
+protected:
+    std::string_view lock_settings_namespace() const override { return "map_assets"; }
+    std::string_view lock_settings_id() const override { return "candidates"; }
+
 private:
     static double read_candidate_weight(const json& candidate) {
         if (candidate.is_object()) {
