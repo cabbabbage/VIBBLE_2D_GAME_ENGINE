@@ -1,0 +1,15 @@
+
+
+
+MAPS/FORREST/map_info.json::rooms_data
+Vibble,1.000,1,1,exact,0.029,1,0.000
+batch_map_assets,0.827,220,266,mapwide_batch,0.747,1,0.000
+lab_bombs,1.000,5,5,perimeter,0.010,1,0.000
+candle,1.000,1,1,exact,0.019,1,0.000
+
+
+
+MAPS/FORREST/map_info.json::trails_data
+Bomb,1.000,1,1,random,0.018,1,0.000
+New Spawn,0.000,0,1,exact,0.005,1,0.000
+batch_map_assets,0.734,270,368,mapwide_batch,1.198,1,0.000
