@@ -1,7 +1,11 @@
 {
     "dev_ui": {
         "lock": {
+            "camera": {
+                "controls": true
+            },
             "lighting": {
+                "light_rays": true,
                 "map_panel": false
             },
             "map_assets": {
