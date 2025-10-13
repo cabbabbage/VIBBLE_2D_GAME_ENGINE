@@ -28,7 +28,7 @@
       {
         "candidates": [
           {
-            "chance": 121,
+            "chance": 7,
             "name": "null"
           },
           {
@@ -44,7 +44,7 @@
             "name": "Small_Rock"
           },
           {
-            "chance": 40.05,
+            "chance": 38.05,
             "name": "#grass"
           }
         ],
