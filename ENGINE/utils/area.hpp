@@ -46,6 +46,7 @@ class Area {
     const std::string& get_type() const { return area_type_; }
     void set_type(const std::string& t) { area_type_ = t; }
     SDL_Texture* get_texture() const;
+    void set_cached_texture(SDL_Texture* texture);
     void create_area_texture(SDL_Renderer* renderer);
 
 	public:

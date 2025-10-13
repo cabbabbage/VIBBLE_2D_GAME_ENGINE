@@ -67,8 +67,13 @@ bool TrailEditorSuite::handle_event(const SDL_Event& event) {
     if (spawn_groups_ && spawn_groups_->handle_event(event)) {
         used = true;
     }
-    if (configurator_ && configurator_->handle_event(event)) {
-        used = true;
+    if (configurator_) {
+        if (configurator_->visible()) {
+            configurator_->prepare_for_event(screen_w_, screen_h_);
+        }
+        if (configurator_->handle_event(event)) {
+            used = true;
+        }
     }
     if (used) {
         return true;

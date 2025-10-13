@@ -72,13 +72,13 @@ void AnimationLoader::get_area_textures(AssetInfo& info, SDL_Renderer* renderer)
 		auto [minx, miny, maxx, maxy] = named.area->get_bounds();
 		json meta;
 		if (cache.load_metadata(meta_file, meta)) {
-			if (meta.value("bounds", std::vector<int>{}) == std::vector<int>{minx, miny, maxx, maxy}) {
+					if (meta.value("bounds", std::vector<int>{}) == std::vector<int>{minx, miny, maxx, maxy}) {
 					SDL_Surface* surf = cache.load_surface(bmp_file);
 					if (surf) {
 								SDL_Texture* tex = cache.surface_to_texture(renderer, surf);
 								SDL_FreeSurface(surf);
 								if (tex) {
-													named.area->create_area_texture(renderer);
+													named.area->set_cached_texture(tex);
 													continue;
 								}
 					}
@@ -89,13 +89,14 @@ void AnimationLoader::get_area_textures(AssetInfo& info, SDL_Renderer* renderer)
 		if (tex) {
 			SDL_Surface* surf = SDL_CreateRGBSurfaceWithFormat(0, maxx - minx + 1, maxy - miny + 1, 32, SDL_PIXELFORMAT_RGBA8888);
 			if (surf) {
+					SDL_Texture* prev_target = SDL_GetRenderTarget(renderer);
 					SDL_SetRenderTarget(renderer, tex);
 					SDL_RenderReadPixels(renderer, nullptr, SDL_PIXELFORMAT_RGBA8888, surf->pixels, surf->pitch);
 					cache.save_surface_as_png(surf, bmp_file);
 					SDL_FreeSurface(surf);
 					meta["bounds"] = {minx, miny, maxx, maxy};
 					cache.save_metadata(meta_file, meta);
-					SDL_SetRenderTarget(renderer, nullptr);
+					SDL_SetRenderTarget(renderer, prev_target);
 			}
 		}
 	}

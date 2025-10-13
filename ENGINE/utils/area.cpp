@@ -272,6 +272,12 @@ SDL_Texture* Area::get_texture() const {
 	return texture_;
 }
 
+void Area::set_cached_texture(SDL_Texture* texture) {
+	if (!texture) return;
+	texture_ = texture;
+	SDL_SetTextureBlendMode(texture_, SDL_BLENDMODE_BLEND);
+}
+
 void Area::create_area_texture(SDL_Renderer* renderer) {
 	if (!renderer || points.size() < 3) return;
 	auto [minx, miny, maxx, maxy] = get_bounds();

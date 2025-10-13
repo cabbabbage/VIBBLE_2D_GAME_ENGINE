@@ -117,11 +117,15 @@ private:
     void ensure_room_configurator();
     nlohmann::json* ensure_room_entry(const std::string& room_name);
     void update_sidebar_bounds(const SDL_Rect& bounds);
-    void close_layer_config_panel(bool cleanup = false);
+    void close_layer_config_panel(bool cleanup = false, bool suppress_autoreopen = false);
     std::string layer_config_title_for(int index, const nlohmann::json* layer) const;
     SDL_Rect compute_room_config_bounds() const;
     nlohmann::json* active_room_entry();
     void handle_room_spawn_groups_changed(bool request_preview = true);
+    void ensure_details_panel_visible();
+    bool layer_config_has_content() const;
+    void render_layer_details_placeholder(SDL_Renderer* renderer) const;
+    void update_header_visibility_state() const;
     void add_spawn_group_to_active_room();
     void duplicate_spawn_group_in_active_room(const std::string& spawn_id);
     void delete_spawn_group_from_active_room(const std::string& spawn_id);
@@ -199,6 +203,10 @@ private:
     std::string hovered_room_key_;
     int clicked_layer_index_ = -1;
     std::string clicked_room_key_;
+
+    mutable SDL_Rect layer_config_placeholder_rect_{0, 0, 0, 0};
+    mutable bool show_layer_placeholder_ = true;
+    bool suppress_details_autoreopen_ = false;
 
     std::shared_ptr<MapLayersController> controller_;
     bool embedded_mode_ = false;

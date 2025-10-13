@@ -5,7 +5,7 @@
     "height_at_zoom1": 557.0,
     "parallax_strength": 18.5,
     "realism_enabled": true,
-    "render_distance": 1070.0,
+    "render_distance": 1280.0,
     "tripod_distance_y": -1220.0
   },
   "light_rays_params": {
@@ -169,7 +169,7 @@
       ]
     ],
     "max_opacity": 255,
-    "min_opacity": 23,
+    "min_opacity": 2,
     "mult": 0.32,
     "orbit_radius": 1839,
     "orbit_x": 1839,
@@ -182,9 +182,9 @@
         255
       ],
       "max_opacity": 255,
-      "min_opacity": 23
+      "min_opacity": 240
     },
-    "update_interval": 1
+    "update_interval": 13
   },
   "map_name": "FORREST",
   "rooms_data": {
@@ -456,6 +456,19 @@
       "name": "room_4",
       "spawn_groups": []
     },
+    "room_5": {
+      "edge_smoothness": 2,
+      "geometry": "Square",
+      "inherits_map_assets": false,
+      "is_boss": false,
+      "is_spawn": false,
+      "max_height": 10000,
+      "max_width": 10000,
+      "min_height": 1500,
+      "min_width": 1500,
+      "name": "room_5",
+      "spawn_groups": []
+    },
     "room_lab": {
       "areas": [
         {
@@ -667,6 +680,10 @@
             {
               "chance": 100,
               "name": "Axe"
+            },
+            {
+              "chance": 8.0,
+              "name": "candle"
             }
           ],
           "display_name": "Axe",

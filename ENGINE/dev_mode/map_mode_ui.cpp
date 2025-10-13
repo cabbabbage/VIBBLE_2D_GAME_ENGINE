@@ -283,9 +283,6 @@ void MapModeUI::ensure_panels() {
         layers_panel_ = std::make_unique<MapLayersPanel>(kDefaultPanelX + 64, kDefaultPanelY + 64);
         layers_panel_->set_embedded_mode(true);
         layers_panel_->set_header_visibility_callback([this](bool visible) {
-            if (layers_panel_ && layers_panel_->room_config_visible() && layers_panel_->is_visible()) {
-                layers_panel_->hide_main_container();
-            }
             this->set_sliding_headers_hidden(visible);
         });
         if (layers_controller_) {

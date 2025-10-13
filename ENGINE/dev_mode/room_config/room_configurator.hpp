@@ -5,6 +5,7 @@
 #include <functional>
 #include <memory>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include <nlohmann/json.hpp>
@@ -23,6 +24,7 @@ class SliderWidget;
 class CheckboxWidget;
 class TextBoxWidget;
 class ButtonWidget;
+class DockableCollapsible;
 class DMRangeSlider;
 class DMSlider;
 class DMCheckbox;
@@ -58,6 +60,7 @@ public:
     bool is_locked() const;
 
     void update(const Input& input, int screen_w, int screen_h);
+    void prepare_for_event(int screen_w, int screen_h);
     bool handle_event(const SDL_Event& e);
     void render(SDL_Renderer* r) const;
 
@@ -82,13 +85,10 @@ public:
 private:
     struct State;
 
-    using Row = std::vector<Widget*>;
-    using Rows = std::vector<Row>;
-
     bool apply_room_data(const nlohmann::json& data);
     void rebuild_rows();
     void rebuild_rows_internal();
-    void rebuild_spawn_rows(Rows& rows);
+    void rebuild_spawn_rows();
     // Request a rebuild on the next update tick to avoid re-entrant loops
     void request_rebuild();
     void load_tags_from_json(const nlohmann::json& data);
@@ -97,28 +97,29 @@ private:
     bool sync_state_from_widgets();
     const nlohmann::json& live_room_json() const;
     nlohmann::json& live_room_json();
-    void set_rows(Rows rows);
     int layout_content(const SlidingWindowContainer::LayoutContext& ctx) const;
-    Rows compute_layout_rows() const;
     SDL_Rect clamp_to_work_area(const SDL_Rect& bounds) const;
     void handle_container_closed();
     void reset_scroll();
     bool add_spawn_group_direct();
     void renumber_spawn_group_priorities(nlohmann::json& groups) const;
-    int  layout_basic_rows(const SlidingWindowContainer::LayoutContext& ctx, int start_y) const;
-    void render_basic_widgets(SDL_Renderer* renderer) const;
-    bool handle_basic_widget_event(const SDL_Event& e);
+    void ensure_base_panels();
+    void refresh_base_panel_rows();
+    void request_container_layout();
+    void prune_collapsible_caches();
+    int cached_collapsible_height(const DockableCollapsible* panel) const;
+    void update_collapsible_height_cache(const DockableCollapsible* panel, int new_height);
+    void forget_collapsible(const DockableCollapsible* panel);
+    bool base_panel_expanded(const std::string& key) const;
+    void set_base_panel_expanded(const std::string& key, bool expanded);
 
     std::unique_ptr<State> state_;
 
     SlidingWindowContainer container_;
-    Rows rows_;
     bool show_header_ = true;
     SDL_Rect bounds_override_{0, 0, 0, 0};
     SDL_Rect work_area_{0, 0, 0, 0};
     bool has_bounds_override_ = false;
-    int row_gap_ = 0;
-    int col_gap_ = 0;
     int last_screen_w_ = 0;
     int last_screen_h_ = 0;
     std::function<void()> on_close_{};
@@ -159,18 +160,18 @@ private:
     std::unique_ptr<CheckboxWidget> inherit_widget_;
     std::unique_ptr<TagEditorWidget> tag_editor_;
 
-    std::unique_ptr<Widget> room_section_label_;
-    std::unique_ptr<Widget> geometry_label_;
-    std::unique_ptr<Widget> dimensions_label_;
-    std::unique_ptr<Widget> toggles_label_;
-    std::unique_ptr<Widget> spawn_label_;
-    std::unique_ptr<Widget> tags_label_;
-    std::unique_ptr<Widget> empty_spawn_label_;
+    std::unique_ptr<DockableCollapsible> geometry_panel_;
+    std::unique_ptr<DockableCollapsible> tags_panel_;
+    std::unique_ptr<DockableCollapsible> types_panel_;
+    std::vector<DockableCollapsible*> ordered_base_panels_;
 
     std::vector<std::unique_ptr<SpawnGroupConfig>> spawn_group_configs_;
     std::vector<std::string> spawn_group_config_ids_;
     std::unique_ptr<DMButton> add_spawn_button_;
     std::unique_ptr<ButtonWidget> add_spawn_widget_;
+    std::unordered_map<const DockableCollapsible*, int> collapsible_height_cache_;
+    std::unordered_map<const DockableCollapsible*, std::string> base_panel_keys_;
+    std::unordered_map<std::string, bool> base_panel_expanded_state_;
 
     std::function<void(const std::string&)> on_spawn_edit_;
     std::function<void(const std::string&)> on_spawn_duplicate_;

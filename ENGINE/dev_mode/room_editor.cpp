@@ -473,8 +473,8 @@ bool RoomEditor::handle_sdl_event(const SDL_Event& event) {
 
     auto apply_result = [&](const RouteResult& result, bool& pointer_blocked) -> bool {
         if (result.handled) {
-            if (pointer_event && input_) {
-                input_->clearClickBuffer();
+            if (input_) {
+                input_->consumeEvent(event);
             }
             return true;
         }
@@ -482,7 +482,7 @@ bool RoomEditor::handle_sdl_event(const SDL_Event& event) {
             pointer_blocked = true;
         }
         return false;
-};
+    };
 
     bool pointer_blocked = false;
 
@@ -507,6 +507,7 @@ bool RoomEditor::handle_sdl_event(const SDL_Event& event) {
         if (!room_cfg_ui_ || !room_cfg_ui_->visible()) {
             return result;
         }
+        room_cfg_ui_->prepare_for_event(screen_w_, screen_h_);
         if (room_cfg_ui_->handle_event(event)) {
             result.handled = true;
             result.pointer_blocked = true;
@@ -564,8 +565,8 @@ bool RoomEditor::handle_sdl_event(const SDL_Event& event) {
     }
 
     if (pointer_based && pointer_blocked) {
-        if (pointer_event && input_) {
-            input_->clearClickBuffer();
+        if (input_) {
+            input_->consumeEvent(event);
         }
         return true;
     }

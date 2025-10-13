@@ -1,5 +1,6 @@
 #include "room_configurator.hpp"
 
+#include "DockableCollapsible.hpp"
 #include "dm_styles.hpp"
 #include "map_generation/room.hpp"
 #include "../spawn_group_config/SpawnGroupConfig.hpp"
@@ -16,40 +17,12 @@
 #include <optional>
 #include <set>
 #include <sstream>
+#include <unordered_set>
 #include <vector>
 #include <utility>
 
 namespace {
 constexpr int kRoomConfigPanelMinWidth = 260;
-
-class RoomConfiguratorSectionLabel : public Widget {
-public:
-    explicit RoomConfiguratorSectionLabel(std::string text, bool subtle = false)
-        : text_(std::move(text)), subtle_(subtle) {}
-
-    void set_rect(const SDL_Rect& r) override { rect_ = r; }
-    const SDL_Rect& rect() const override { return rect_; }
-
-    int height_for_width(int) const override {
-        return DMCheckbox::height();
-    }
-
-    bool handle_event(const SDL_Event&) override { return false; }
-
-    void render(SDL_Renderer* renderer) const override {
-        if (!renderer) return;
-        const DMLabelStyle& st = DMStyles::Label();
-        SDL_Color color = subtle_ ? SDL_Color{static_cast<Uint8>(st.color.r / 2),
-                                             static_cast<Uint8>(st.color.g / 2), static_cast<Uint8>(st.color.b / 2), st.color.a} : st.color;
-        DMLabelStyle style{st.font_path, st.font_size, color};
-        DrawLabelText(renderer, text_, rect_.x, rect_.y, style);
-    }
-
-private:
-    std::string text_;
-    bool subtle_ = false;
-    SDL_Rect rect_{0, 0, 0, 0};
-};
 
 const nlohmann::json& empty_object() {
     static const nlohmann::json kEmpty = nlohmann::json::object();
@@ -245,8 +218,6 @@ struct RoomConfigurator::State {
 
 RoomConfigurator::RoomConfigurator() {
     geometry_options_ = {"Square", "Circle"};
-    row_gap_ = DMSpacing::item_gap();
-    col_gap_ = DMSpacing::item_gap();
     container_.set_header_text_provider([this]() {
         if (state_ && !state_->name.empty()) {
             return std::string{"Room: "} + state_->name;
@@ -258,9 +229,16 @@ RoomConfigurator::RoomConfigurator() {
         return this->layout_content(ctx);
     });
     container_.set_render_function([this](SDL_Renderer* renderer) {
-        this->render_basic_widgets(renderer);
+        for (auto* panel : ordered_base_panels_) {
+            if (panel && panel->is_visible()) {
+                panel->render(renderer);
+            }
+        }
         for (const auto& cfg : spawn_group_configs_) {
             if (cfg) cfg->render(renderer);
+        }
+        if (add_spawn_widget_) {
+            add_spawn_widget_->render(renderer);
         }
     });
     container_.set_event_function([this](const SDL_Event& e) {
@@ -269,7 +247,16 @@ RoomConfigurator::RoomConfigurator() {
             this->close();
             return true;
         }
-        bool used = this->handle_basic_widget_event(e);
+        bool used = false;
+        for (auto* panel : ordered_base_panels_) {
+            if (panel && panel->is_visible() && panel->handle_event(e)) {
+                used = true;
+                request_container_layout();
+            }
+        }
+        if (!used && add_spawn_widget_ && add_spawn_widget_->handle_event(e)) {
+            used = true;
+        }
         for (auto& cfg : spawn_group_configs_) {
             if (cfg && cfg->is_visible()) {
                 if (cfg->handle_event(e)) used = true;
@@ -278,6 +265,9 @@ RoomConfigurator::RoomConfigurator() {
         return used;
     });
     container_.set_update_function([this](const Input& input, int screen_w, int screen_h) {
+        for (auto* panel : ordered_base_panels_) {
+            if (panel) panel->update(input, screen_w, screen_h);
+        }
         for (auto& cfg : spawn_group_configs_) {
             if (cfg) cfg->update(input, screen_w, screen_h);
         }
@@ -293,25 +283,36 @@ RoomConfigurator::~RoomConfigurator() = default;
 void RoomConfigurator::set_bounds(const SDL_Rect& bounds) {
     bounds_override_ = bounds;
     has_bounds_override_ = bounds.w > 0 && bounds.h > 0;
+    SDL_Rect applied = bounds;
     if (has_bounds_override_) {
-        SDL_Rect clamped = bounds;
-        clamped.w = std::max(0, clamped.w);
-        clamped.h = std::max(0, clamped.h);
+        applied.w = std::max(0, applied.w);
+        applied.h = std::max(0, applied.h);
         const int padding = DMSpacing::panel_padding();
         int min_panel_w = kRoomConfigPanelMinWidth + padding * 2;
-        if (clamped.w > 0) {
-            clamped.w = std::max(min_panel_w, clamped.w);
+        if (applied.w > 0) {
+            applied.w = std::max(min_panel_w, applied.w);
         }
-        container_.set_panel_bounds_override(clamped);
+        container_.set_panel_bounds_override(applied);
     } else {
         container_.clear_panel_bounds_override();
     }
+    if (!has_bounds_override_) {
+        applied = work_area_;
+    }
+    ensure_base_panels();
+    if (geometry_panel_) geometry_panel_->set_work_area(applied);
+    if (tags_panel_) tags_panel_->set_work_area(applied);
+    if (types_panel_) types_panel_->set_work_area(applied);
     container_.request_layout();
 }
 
 void RoomConfigurator::set_work_area(const SDL_Rect& bounds) {
     work_area_ = bounds;
-    // No-op for bounds override; container default layout handles snug sizing
+    ensure_base_panels();
+    if (geometry_panel_) geometry_panel_->set_work_area(bounds);
+    if (tags_panel_) tags_panel_->set_work_area(bounds);
+    if (types_panel_) types_panel_->set_work_area(bounds);
+    request_container_layout();
 }
 
 void RoomConfigurator::set_show_header(bool show) {
@@ -380,165 +381,191 @@ SDL_Rect RoomConfigurator::clamp_to_work_area(const SDL_Rect& bounds) const {
     return result;
 }
 
-RoomConfigurator::Rows RoomConfigurator::compute_layout_rows() const {
-    Rows layout_rows;
-    layout_rows.reserve(rows_.size());
-    for (const auto& row : rows_) {
-        Row current;
-        bool inserted_any = false;
-        for (Widget* w : row) {
-            if (w && w->wants_full_row()) {
-                if (!current.empty()) {
-                    layout_rows.push_back(current);
-                    current.clear();
-                }
-                layout_rows.push_back({w});
-                inserted_any = true;
-            } else {
-                current.push_back(w);
-                if (w) inserted_any = true;
-            }
+void RoomConfigurator::ensure_base_panels() {
+    auto ensure_panel = [&](std::unique_ptr<DockableCollapsible>& panel,
+                            const std::string& key,
+                            const std::string& title) {
+        if (!panel) {
+            panel = std::make_unique<DockableCollapsible>(title, false);
+            panel->set_floatable(false);
+            panel->set_show_header(true);
+            panel->set_close_button_enabled(false);
+            panel->set_scroll_enabled(false);
+            panel->set_row_gap(DMSpacing::item_gap());
+            panel->set_col_gap(DMSpacing::item_gap());
+            panel->set_padding(DMSpacing::panel_padding());
         }
-        if (!current.empty()) {
-            layout_rows.push_back(std::move(current));
-        } else if (!inserted_any) {
-            layout_rows.emplace_back();
+        base_panel_keys_[panel.get()] = key;
+        bool expanded = base_panel_expanded(key);
+        if (panel->is_expanded() != expanded) {
+            panel->set_expanded(expanded);
         }
-    }
-    return layout_rows;
+    };
+
+    ensure_panel(geometry_panel_, "geometry", "Room Geometry");
+    ensure_panel(tags_panel_, "tags", "Room Tags");
+    ensure_panel(types_panel_, "types", "Room Types");
 }
 
-int RoomConfigurator::layout_basic_rows(const SlidingWindowContainer::LayoutContext& ctx, int start_y) const {
-    int y = start_y;
-    if (rows_.empty()) {
-        return y;
-    }
+void RoomConfigurator::refresh_base_panel_rows() {
+    ordered_base_panels_.clear();
 
-    const int content_width = std::max(0, ctx.content_width);
-    if (content_width <= 0) {
-        return y;
-    }
-
-    const int base_x = ctx.content_x;
-    const auto layout_rows = compute_layout_rows();
-    bool placed_any = false;
-
-    for (const auto& row : layout_rows) {
-        if (row.empty()) {
-            if (placed_any) {
-                y += row_gap_;
-            }
-            continue;
+    if (geometry_panel_) {
+        DockableCollapsible::Rows rows;
+        if (name_widget_) rows.push_back({name_widget_.get()});
+        if (geometry_widget_) rows.push_back({geometry_widget_.get()});
+        if (radius_widget_) rows.push_back({radius_widget_.get()});
+        if (width_widget_) rows.push_back({width_widget_.get()});
+        if (height_widget_) rows.push_back({height_widget_.get()});
+        if (edge_widget_) rows.push_back({edge_widget_.get()});
+        if (curvy_widget_) rows.push_back({curvy_widget_.get()});
+        geometry_panel_->set_rows(rows);
+        geometry_panel_->set_visible(!rows.empty());
+        if (!rows.empty()) {
+            ordered_base_panels_.push_back(geometry_panel_.get());
         }
+    }
 
-        const int column_count = static_cast<int>(row.size());
-        std::vector<int> column_widths(column_count, 0);
-        if (column_count == 1) {
-            column_widths[0] = content_width;
+    if (tags_panel_ && tag_editor_) {
+        DockableCollapsible::Rows rows;
+        rows.push_back({tag_editor_.get()});
+        tags_panel_->set_rows(rows);
+        tags_panel_->set_visible(!rows.empty());
+        if (!rows.empty()) {
+            ordered_base_panels_.push_back(tags_panel_.get());
+        }
+    }
+
+    if (types_panel_) {
+        DockableCollapsible::Rows rows;
+        DockableCollapsible::Row toggles;
+        if (spawn_widget_) toggles.push_back(spawn_widget_.get());
+        if (boss_widget_) toggles.push_back(boss_widget_.get());
+        if (inherit_widget_) toggles.push_back(inherit_widget_.get());
+        if (!toggles.empty()) {
+            rows.push_back(std::move(toggles));
+        }
+        types_panel_->set_rows(rows);
+        types_panel_->set_visible(!rows.empty());
+        if (!rows.empty()) {
+            ordered_base_panels_.push_back(types_panel_.get());
+        }
+    }
+}
+
+void RoomConfigurator::request_container_layout() {
+    container_.request_layout();
+}
+
+void RoomConfigurator::prune_collapsible_caches() {
+    std::unordered_set<const DockableCollapsible*> active;
+    active.reserve(ordered_base_panels_.size() + spawn_group_configs_.size());
+    for (auto* panel : ordered_base_panels_) {
+        if (panel) active.insert(panel);
+    }
+    for (const auto& cfg : spawn_group_configs_) {
+        if (cfg) active.insert(cfg.get());
+    }
+
+    for (auto it = collapsible_height_cache_.begin(); it != collapsible_height_cache_.end();) {
+        if (active.find(it->first) == active.end()) {
+            it = collapsible_height_cache_.erase(it);
         } else {
-            const int total_gap = std::max(0, col_gap_ * (column_count - 1));
-            const int remaining = std::max(0, content_width - total_gap);
-            const int base_width = (column_count > 0) ? remaining / column_count : 0;
-            int extra = (column_count > 0) ? remaining % column_count : 0;
-            for (int i = 0; i < column_count; ++i) {
-                int width = base_width + (extra-- > 0 ? 1 : 0);
-                column_widths[i] = std::max(0, width);
-            }
+            ++it;
         }
-
-        int row_height = 0;
-        for (int i = 0; i < column_count; ++i) {
-            Widget* widget = row[i];
-            if (!widget) {
-                continue;
-            }
-            const int width = column_widths.empty() ? content_width : column_widths[std::min<int>(i, column_widths.size() - 1)];
-            row_height = std::max(row_height, widget->height_for_width(width));
-        }
-        row_height = std::max(row_height, 1);
-
-        int x = base_x;
-        const int draw_y = y - ctx.scroll_value;
-        for (int i = 0; i < column_count; ++i) {
-            Widget* widget = row[i];
-            const int width = column_widths.empty() ? content_width : column_widths[std::min<int>(i, column_widths.size() - 1)];
-            if (widget) {
-                widget->set_rect(SDL_Rect{ x, draw_y, width, row_height });
-            }
-            x += width;
-            if (column_count > 1 && i + 1 < column_count) {
-                x += col_gap_;
-            }
-        }
-
-        y += row_height + row_gap_;
-        placed_any = true;
     }
 
-    if (placed_any) {
-        y -= row_gap_;
+    for (auto it = base_panel_keys_.begin(); it != base_panel_keys_.end();) {
+        if (active.find(it->first) == active.end()) {
+            it = base_panel_keys_.erase(it);
+        } else {
+            ++it;
+        }
     }
-
-    return y;
 }
 
-void RoomConfigurator::render_basic_widgets(SDL_Renderer* renderer) const {
-    if (!renderer) {
+int RoomConfigurator::cached_collapsible_height(const DockableCollapsible* panel) const {
+    if (!panel) return 0;
+    auto it = collapsible_height_cache_.find(panel);
+    if (it != collapsible_height_cache_.end() && it->second > 0) {
+        return it->second;
+    }
+    int h = panel->height();
+    if (h <= 0) {
+        h = DMButton::height() + 2 * DMSpacing::panel_padding();
+    }
+    return h;
+}
+
+void RoomConfigurator::update_collapsible_height_cache(const DockableCollapsible* panel, int new_height) {
+    if (!panel) return;
+    int clamped = std::max(new_height, DMButton::height());
+    auto it = collapsible_height_cache_.find(panel);
+    if (it != collapsible_height_cache_.end() && it->second == clamped) {
         return;
     }
-    for (const auto& row : rows_) {
-        for (Widget* widget : row) {
-            if (widget) {
-                widget->render(renderer);
-            }
-        }
-    }
+    collapsible_height_cache_[panel] = clamped;
+    container_.request_layout();
 }
 
-bool RoomConfigurator::handle_basic_widget_event(const SDL_Event& e) {
-    if (!container_.is_visible()) {
-        return false;
-    }
-    bool used = false;
-    for (auto& row : rows_) {
-        for (auto* widget : row) {
-            if (widget && widget->handle_event(e)) {
-                used = true;
-            }
-        }
-    }
-    return used;
+void RoomConfigurator::forget_collapsible(const DockableCollapsible* panel) {
+    if (!panel) return;
+    collapsible_height_cache_.erase(panel);
+    base_panel_keys_.erase(panel);
 }
+
+bool RoomConfigurator::base_panel_expanded(const std::string& key) const {
+    auto it = base_panel_expanded_state_.find(key);
+    if (it != base_panel_expanded_state_.end()) {
+        return it->second;
+    }
+    return true;
+}
+
+void RoomConfigurator::set_base_panel_expanded(const std::string& key, bool expanded) {
+    base_panel_expanded_state_[key] = expanded;
+}
+
 
 int RoomConfigurator::layout_content(const SlidingWindowContainer::LayoutContext& ctx) const {
-    const int start_y = ctx.content_top;
-    int y = layout_basic_rows(ctx, start_y);
+    int y = ctx.content_top;
+
+    auto place_panel = [&](DockableCollapsible* panel) {
+        if (!panel || !panel->is_visible()) {
+            return;
+        }
+        int panel_height = std::max(1, cached_collapsible_height(panel));
+        SDL_Rect rect{ctx.content_x, y - ctx.scroll_value, ctx.content_width, panel_height};
+        panel->set_rect(rect);
+        y += panel_height + ctx.gap;
+    };
+
+    for (auto* panel : ordered_base_panels_) {
+        place_panel(panel);
+    }
+
     bool any_spawn_visible = false;
-    // Then position each spawn group panel in order
     for (const auto& cfg : spawn_group_configs_) {
         if (!cfg || !cfg->is_visible()) continue;
-        if (!any_spawn_visible && y > start_y) {
+        if (!any_spawn_visible && y > ctx.content_top) {
             y += ctx.gap;
         }
-        cfg->set_rect(SDL_Rect{ctx.content_x, y - ctx.scroll_value, ctx.content_width, 0});
-        y += cfg->height() + ctx.gap;
+        int cfg_height = std::max(1, cached_collapsible_height(cfg.get()));
+        cfg->set_rect(SDL_Rect{ctx.content_x, y - ctx.scroll_value, ctx.content_width, cfg_height});
+        y += cfg_height + ctx.gap;
         any_spawn_visible = true;
     }
-    if (!any_spawn_visible && y > start_y) {
-        y += ctx.gap;
-    }
-    return y + ctx.gap;
-}
 
-void RoomConfigurator::set_rows(Rows rows) {
-    rows_ = std::move(rows);
-    for (auto& row : rows_) {
-        for (auto* widget : row) {
-            if (!widget) continue;
-            widget->set_layout_dirty_callback([this]() { this->container_.request_layout(); });
+    if (add_spawn_widget_) {
+        if (y > ctx.content_top) {
+            y += ctx.gap;
         }
+        SDL_Rect rect{ctx.content_x, y - ctx.scroll_value, ctx.content_width, DMButton::height()};
+        add_spawn_widget_->set_rect(rect);
+        y += rect.h;
     }
-    container_.request_layout();
+
+    return y + ctx.gap;
 }
 
 void RoomConfigurator::handle_container_closed() {
@@ -547,6 +574,11 @@ void RoomConfigurator::handle_container_closed() {
             config->close();
             config->set_visible(false);
             config->close_embedded_search();
+        }
+    }
+    for (auto* panel : ordered_base_panels_) {
+        if (panel) {
+            panel->set_visible(false);
         }
     }
     external_room_json_ = nullptr;
@@ -736,10 +768,7 @@ std::string RoomConfigurator::selected_geometry() const {
     return geometry_options_.front();
 }
 
-void RoomConfigurator::rebuild_spawn_rows(Rows& rows) {
-    // In the new layout, spawn groups are individual dockable panels
-    spawn_label_.reset();
-    empty_spawn_label_.reset();
+void RoomConfigurator::rebuild_spawn_rows() {
     add_spawn_button_.reset();
     add_spawn_widget_.reset();
 
@@ -787,9 +816,12 @@ void RoomConfigurator::rebuild_spawn_rows(Rows& rows) {
         config->set_show_header(true);
         config->set_close_button_enabled(false);
         config->set_scroll_enabled(false);
+        config->set_row_gap(DMSpacing::item_gap());
+        config->set_col_gap(DMSpacing::item_gap());
+        config->set_padding(DMSpacing::panel_padding());
         config->force_pointer_ready();
         if (created_new) {
-            config->set_expanded(false);
+            config->set_expanded(true);
         }
 
         config->set_screen_dimensions(last_screen_w_, last_screen_h_);
@@ -914,8 +946,11 @@ void RoomConfigurator::rebuild_spawn_rows(Rows& rows) {
                            std::move(wrapped_entry_change),
                            std::move(entry_callbacks),
                            std::move(final_configure_entry));
-        // When the panel layout changes (collapse/expand), request a relayout
-        config->set_on_layout_changed([this]() { this->request_rebuild(); });
+        // When the panel layout changes (collapse/expand), refresh cached height and relayout
+        config->set_on_layout_changed([this, cfg_ptr = config.get()]() {
+            this->update_collapsible_height_cache(cfg_ptr, cfg_ptr->height());
+            this->request_container_layout();
+        });
 
         spawn_group_config_ids_.push_back(id);
         spawn_group_configs_.push_back(std::move(config));
@@ -989,6 +1024,7 @@ void RoomConfigurator::rebuild_spawn_rows(Rows& rows) {
         }
     }
     (void)have_groups; // Panels are handled above; basic panel handles add button
+    request_container_layout();
 }
 
 void RoomConfigurator::rebuild_rows() {
@@ -1027,18 +1063,14 @@ void RoomConfigurator::rebuild_rows_internal() {
         state_ = std::make_unique<State>();
     }
 
-    Rows rows;
-    room_section_label_ = std::make_unique<RoomConfiguratorSectionLabel>("Room Properties");
-    rows.push_back({room_section_label_.get()});
+    ensure_base_panels();
+    ordered_base_panels_.clear();
 
     name_box_ = std::make_unique<DMTextBox>("Room Name", state_->name);
     name_widget_ = std::make_unique<TextBoxWidget>(name_box_.get());
-    rows.push_back({name_widget_.get()});
 
     bool allow_geometry_choice = !is_trail_context_;
     if (allow_geometry_choice) {
-        geometry_label_ = std::make_unique<RoomConfiguratorSectionLabel>("Geometry", true);
-        rows.push_back({geometry_label_.get()});
         auto geom_it = std::find(geometry_options_.begin(), geometry_options_.end(), state_->geometry);
         int geom_index = 0;
         if (geom_it != geometry_options_.end()) {
@@ -1046,21 +1078,15 @@ void RoomConfigurator::rebuild_rows_internal() {
         }
         geometry_dropdown_ = std::make_unique<DMDropdown>("", geometry_options_, geom_index);
         geometry_widget_ = std::make_unique<DropdownWidget>(geometry_dropdown_.get());
-        rows.push_back({geometry_widget_.get()});
     } else {
-        geometry_label_.reset();
         geometry_dropdown_.reset();
         geometry_widget_.reset();
     }
-
-    dimensions_label_ = std::make_unique<RoomConfiguratorSectionLabel>("Dimensions", true);
-    rows.push_back({dimensions_label_.get()});
 
     if (state_->geometry_is_circle()) {
         radius_slider_ = std::make_unique<DMSlider>("Radius", 0, 200000, state_->radius);
         radius_slider_->set_defer_commit_until_unfocus(true);
         radius_widget_ = std::make_unique<SliderWidget>(radius_slider_.get());
-        rows.push_back({radius_widget_.get()});
         width_slider_.reset();
         width_widget_.reset();
         height_slider_.reset();
@@ -1073,14 +1099,12 @@ void RoomConfigurator::rebuild_rows_internal() {
         width_slider_ = std::make_unique<DMRangeSlider>(width_range.first, width_range.second, state_->width_min, state_->width_max);
         width_slider_->set_defer_commit_until_unfocus(true);
         width_widget_ = std::make_unique<RangeSliderWidget>(width_slider_.get());
-        rows.push_back({width_widget_.get()});
 
         if (!is_trail_context_) {
             auto height_range = compute_slider_range(state_->height_min, state_->height_max);
             height_slider_ = std::make_unique<DMRangeSlider>(height_range.first, height_range.second, state_->height_min, state_->height_max);
             height_slider_->set_defer_commit_until_unfocus(true);
             height_widget_ = std::make_unique<RangeSliderWidget>(height_slider_.get());
-            rows.push_back({height_widget_.get()});
         } else {
             height_slider_.reset();
             height_widget_.reset();
@@ -1090,20 +1114,15 @@ void RoomConfigurator::rebuild_rows_internal() {
     edge_slider_ = std::make_unique<DMSlider>("Edge Smoothness", 0, 101, state_->edge_smoothness);
     edge_slider_->set_defer_commit_until_unfocus(true);
     edge_widget_ = std::make_unique<SliderWidget>(edge_slider_.get());
-    rows.push_back({edge_widget_.get()});
 
     if (is_trail_context_) {
         curvy_slider_ = std::make_unique<DMSlider>("Curvyness", 0, 16, state_->curvyness);
         curvy_slider_->set_defer_commit_until_unfocus(true);
         curvy_widget_ = std::make_unique<SliderWidget>(curvy_slider_.get());
-        rows.push_back({curvy_widget_.get()});
     } else {
         curvy_slider_.reset();
         curvy_widget_.reset();
     }
-
-    toggles_label_ = std::make_unique<RoomConfiguratorSectionLabel>("Flags", true);
-    rows.push_back({toggles_label_.get()});
 
     spawn_checkbox_ = std::make_unique<DMCheckbox>("Spawn", state_->is_spawn);
     spawn_widget_ = std::make_unique<CheckboxWidget>(spawn_checkbox_.get());
@@ -1119,18 +1138,6 @@ void RoomConfigurator::rebuild_rows_internal() {
     inherit_checkbox_ = std::make_unique<DMCheckbox>("Inherit Map Assets", state_->inherits_assets);
     inherit_widget_ = std::make_unique<CheckboxWidget>(inherit_checkbox_.get());
 
-    if (boss_widget_) {
-        rows.push_back({spawn_widget_.get(), boss_widget_.get(), inherit_widget_.get()});
-    } else {
-        rows.push_back({spawn_widget_.get(), inherit_widget_.get()});
-    }
-
-    // Build/refresh spawn group panels (as separate dockable panels)
-    rebuild_spawn_rows(rows);
-
-    tags_label_ = std::make_unique<RoomConfiguratorSectionLabel>("Tags", true);
-    rows.push_back({tags_label_.get()});
-
     tag_editor_ = std::make_unique<TagEditorWidget>();
     tag_editor_->set_tags(room_tags_, room_anti_tags_);
     tag_editor_->set_on_changed([this](const std::vector<std::string>& include,
@@ -1139,9 +1146,13 @@ void RoomConfigurator::rebuild_rows_internal() {
             room_tags_ = include;
             room_anti_tags_ = exclude;
             tags_dirty_ = true;
+            this->request_container_layout();
         }
     });
-    rows.push_back({tag_editor_.get()});
+
+    refresh_base_panel_rows();
+
+    rebuild_spawn_rows();
 
     add_spawn_button_ = std::make_unique<DMButton>("Add Spawn Group", &DMStyles::CreateButton(), 0, DMButton::height());
     add_spawn_widget_ = std::make_unique<ButtonWidget>(add_spawn_button_.get(), [this]() {
@@ -1151,15 +1162,27 @@ void RoomConfigurator::rebuild_rows_internal() {
             this->add_spawn_group_direct();
         }
     });
-    rows.push_back({add_spawn_widget_.get()});
 
-    set_rows(rows);
+    prune_collapsible_caches();
+    request_container_layout();
 }
 
 void RoomConfigurator::update(const Input& input, int screen_w, int screen_h) {
     last_screen_w_ = screen_w;
     last_screen_h_ = screen_h;
+    ensure_base_panels();
     const bool panel_visible = container_.is_visible();
+    SDL_Rect panel_work_area = work_area_;
+    if (panel_work_area.w <= 0 || panel_work_area.h <= 0) {
+        panel_work_area = SDL_Rect{0, 0, screen_w, screen_h};
+    }
+    for (auto* panel : ordered_base_panels_) {
+        if (!panel) continue;
+        panel->set_visible(panel_visible);
+        if (panel_work_area.w > 0 && panel_work_area.h > 0) {
+            panel->set_work_area(panel_work_area);
+        }
+    }
     for (auto& config : spawn_group_configs_) {
         if (!config) continue;
         config->set_visible(panel_visible);
@@ -1167,6 +1190,19 @@ void RoomConfigurator::update(const Input& input, int screen_w, int screen_h) {
     }
 
     container_.update(input, screen_w, screen_h);
+
+    for (auto* panel : ordered_base_panels_) {
+        if (!panel) continue;
+        update_collapsible_height_cache(panel, panel->height());
+        auto it = base_panel_keys_.find(panel);
+        if (it != base_panel_keys_.end()) {
+            set_base_panel_expanded(it->second, panel->is_expanded());
+        }
+    }
+    for (auto& config : spawn_group_configs_) {
+        if (!config) continue;
+        update_collapsible_height_cache(config.get(), config->height());
+    }
 
     if (!state_) return;
 
@@ -1176,6 +1212,37 @@ void RoomConfigurator::update(const Input& input, int screen_w, int screen_h) {
     } else if (deferred_rebuild_) {
         deferred_rebuild_ = false;
         rebuild_rows();
+    }
+}
+
+void RoomConfigurator::prepare_for_event(int screen_w, int screen_h) {
+    int use_w = screen_w > 0 ? screen_w : (last_screen_w_ > 0 ? last_screen_w_ : 0);
+    int use_h = screen_h > 0 ? screen_h : (last_screen_h_ > 0 ? last_screen_h_ : 0);
+    if (use_w <= 0 || use_h <= 0) {
+        return;
+    }
+    ensure_base_panels();
+    last_screen_w_ = use_w;
+    last_screen_h_ = use_h;
+    container_.prepare_layout(use_w, use_h);
+    const bool panel_visible = container_.is_visible();
+    SDL_Rect panel_work_area = work_area_;
+    if (panel_work_area.w <= 0 || panel_work_area.h <= 0) {
+        panel_work_area = SDL_Rect{0, 0, use_w, use_h};
+    }
+    for (auto* panel : ordered_base_panels_) {
+        if (panel) {
+            panel->set_visible(panel_visible);
+            if (panel_work_area.w > 0 && panel_work_area.h > 0) {
+                panel->set_work_area(panel_work_area);
+            }
+        }
+    }
+    for (auto& config : spawn_group_configs_) {
+        if (config) {
+            config->set_visible(panel_visible);
+            config->set_screen_dimensions(use_w, use_h);
+        }
     }
 }
 
@@ -1324,6 +1391,9 @@ bool RoomConfigurator::sync_state_from_widgets() {
 
 bool RoomConfigurator::handle_event(const SDL_Event& e) {
     if (!container_.is_visible()) return false;
+    if (last_screen_w_ > 0 && last_screen_h_ > 0) {
+        prepare_for_event(last_screen_w_, last_screen_h_);
+    }
     return container_.handle_event(e);
 }
 

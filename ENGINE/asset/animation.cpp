@@ -571,15 +571,15 @@ void Animation::load(const std::string& trigger,
                         }
                 }
         }
-        const std::size_t expected_frames = frames.size();
+        const std::size_t frame_count = frames.size();
         if (movement_paths_.empty()) {
                 movement_paths_.emplace_back();
         }
 
         bool any_motion = false;
         for (auto& path : movement_paths_) {
-                if (path.size() != expected_frames) {
-                        path.resize(expected_frames);
+                if (path.size() != frame_count) {
+                        path.resize(frame_count);
                 }
                 for (std::size_t i = 0; i < path.size(); ++i) {
                         AnimationFrame& f = path[i];
