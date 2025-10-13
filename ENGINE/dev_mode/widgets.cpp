@@ -757,12 +757,13 @@ void DMSlider::render(SDL_Renderer* r) const {
     if (!label_.empty() && label_height_ > 0) {
         draw_text(r, label_, label_rect_.x, label_rect_.y);
     }
-    if (focused_) {
+    const bool active = focused_ || dragging_;
+    if (active) {
         const SDL_Color& focus_outline = DMStyles::SliderFocusOutline();
         SDL_SetRenderDrawColor(r, focus_outline.r, focus_outline.g, focus_outline.b, focus_outline.a);
         SDL_RenderDrawRect(r, &rect_);
     } else if (hovered_) {
-        const SDL_Color& hover_outline = DMStyles::HighlightColor();
+        const SDL_Color& hover_outline = DMStyles::SliderHoverOutline();
         SDL_SetRenderDrawColor(r, hover_outline.r, hover_outline.g, hover_outline.b, hover_outline.a);
         SDL_RenderDrawRect(r, &rect_);
     }
@@ -788,12 +789,13 @@ void DMSlider::render(SDL_Renderer* r) const {
     SDL_Rect fill{ tr.x, tr.y, (int)((current_value - min_) * tr.w / (double)range), tr.h };
     if (fill.w > 0) {
         SDL_Rect fill_rect = fill;
+        const SDL_Color track_fill = active ? st.track_fill_active : st.track_fill;
         dm_draw::DrawBeveledRect(
             r,
             fill_rect,
             radius,
             bevel,
-            DMStyles::SliderTrackFill(),
+            track_fill,
             highlight,
             shadow,
             false,
@@ -801,8 +803,15 @@ void DMSlider::render(SDL_Renderer* r) const {
             DMStyles::ShadowIntensity());
     }
     SDL_Rect krect = knob_rect();
-    SDL_Color knob_col = knob_hovered_ ? st.knob_hover : st.knob;
-    SDL_Color kborder = knob_hovered_ ? st.knob_border_hover : st.knob_border;
+    SDL_Color knob_col = st.knob;
+    SDL_Color kborder = st.knob_border;
+    if (active) {
+        knob_col = st.knob_accent;
+        kborder = st.knob_accent_border;
+    } else if (knob_hovered_) {
+        knob_col = st.knob_hover;
+        kborder = st.knob_border_hover;
+    }
     const int knob_radius = std::min(DMStyles::CornerRadius(), std::min(krect.w, krect.h) / 2);
     const int knob_bevel = std::min(DMStyles::BevelDepth(), std::max(0, std::min(krect.w, krect.h) / 2));
     dm_draw::DrawBeveledRect(
@@ -1301,12 +1310,14 @@ void DMRangeSlider::draw_text(SDL_Renderer* r, const std::string& s, int x, int 
 
 void DMRangeSlider::render(SDL_Renderer* r) const {
     const DMSliderStyle& st = DMStyles::Slider();
-    if (focused_) {
+    const bool dragging = dragging_min_ || dragging_max_;
+    const bool active = focused_ || dragging;
+    if (active) {
         const SDL_Color& focus_outline = DMStyles::SliderFocusOutline();
         SDL_SetRenderDrawColor(r, focus_outline.r, focus_outline.g, focus_outline.b, focus_outline.a);
         SDL_RenderDrawRect(r, &rect_);
     } else if (hovered_) {
-        const SDL_Color& hover_outline = DMStyles::HighlightColor();
+        const SDL_Color& hover_outline = DMStyles::SliderHoverOutline();
         SDL_SetRenderDrawColor(r, hover_outline.r, hover_outline.g, hover_outline.b, hover_outline.a);
         SDL_RenderDrawRect(r, &rect_);
     }
@@ -1333,22 +1344,39 @@ void DMRangeSlider::render(SDL_Renderer* r) const {
     int fill_w = (kmax.x + kSliderKnobWidth / 2) - fill_x;
     SDL_Rect fill{ fill_x, tr.y, std::max(0, fill_w), tr.h };
     if (fill.w > 0) {
+        const SDL_Color track_fill = active ? st.track_fill_active : st.track_fill;
         dm_draw::DrawBeveledRect(
             r,
             fill,
             radius,
             bevel,
-            DMStyles::SliderTrackFill(),
+            track_fill,
             highlight,
             shadow,
             false,
             DMStyles::HighlightIntensity(),
             DMStyles::ShadowIntensity());
     }
-    SDL_Color col_min = min_hovered_ ? st.knob_hover : st.knob;
-    SDL_Color col_max = max_hovered_ ? st.knob_hover : st.knob;
-    SDL_Color border_min = min_hovered_ ? st.knob_border_hover : st.knob_border;
-    SDL_Color border_max = max_hovered_ ? st.knob_border_hover : st.knob_border;
+    const bool min_active = focused_ || dragging_min_;
+    const bool max_active = focused_ || dragging_max_;
+    SDL_Color col_min = st.knob;
+    SDL_Color col_max = st.knob;
+    SDL_Color border_min = st.knob_border;
+    SDL_Color border_max = st.knob_border;
+    if (min_active) {
+        col_min = st.knob_accent;
+        border_min = st.knob_accent_border;
+    } else if (min_hovered_) {
+        col_min = st.knob_hover;
+        border_min = st.knob_border_hover;
+    }
+    if (max_active) {
+        col_max = st.knob_accent;
+        border_max = st.knob_accent_border;
+    } else if (max_hovered_) {
+        col_max = st.knob_hover;
+        border_max = st.knob_border_hover;
+    }
     const int knob_radius = std::min(DMStyles::CornerRadius(), std::min(kmin.w, kmin.h) / 2);
     const int knob_bevel = std::min(DMStyles::BevelDepth(), std::max(0, std::min(kmin.w, kmin.h) / 2));
     dm_draw::DrawBeveledRect(

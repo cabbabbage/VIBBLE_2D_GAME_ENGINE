@@ -54,10 +54,13 @@ struct DMSliderStyle {
   DMLabelStyle value;
   SDL_Color track_bg;
   SDL_Color track_fill;
+  SDL_Color track_fill_active;
   SDL_Color knob;
   SDL_Color knob_hover;
   SDL_Color knob_border;
   SDL_Color knob_border_hover;
+  SDL_Color knob_accent;
+  SDL_Color knob_accent_border;
 };
 
 class DMStyles {
@@ -104,6 +107,7 @@ public:
   static const SDL_Color &SliderKnobFill();
   static const SDL_Color &SliderKnobHoverFill();
   static const SDL_Color &SliderFocusOutline();
+  static const SDL_Color &SliderHoverOutline();
 };
 
 struct DMSpacing {

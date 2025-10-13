@@ -85,6 +85,16 @@ const SDL_Color kSliderKnobHover   = kHighlightWhite;
 const SDL_Color kSliderKnobBorder  = kAccentOrangeStrong;
 const SDL_Color kSliderKnobBorderHover = kAccentOrange;
 const SDL_Color kSliderFocusOutline = kAccentOrangeStrong;
+const SDL_Color kSliderFill        = dm::rgba(148, 163, 184, 200);
+const SDL_Color kSliderFillActive  = dm::rgba(249, 115, 22, 235);
+const SDL_Color kSliderKnob        = dm::rgba(226, 232, 240, 255);
+const SDL_Color kSliderKnobHover   = dm::rgba(241, 245, 249, 255);
+const SDL_Color kSliderKnobBorder  = dm::rgba(148, 163, 184, 255);
+const SDL_Color kSliderKnobBorderHover = dm::rgba(248, 250, 252, 255);
+const SDL_Color kSliderKnobAccent       = dm::rgba(251, 146, 60, 255);
+const SDL_Color kSliderKnobAccentBorder = dm::rgba(194, 65, 12, 255);
+const SDL_Color kSliderFocusOutline = dm::rgba(249, 115, 22, 255);
+const SDL_Color kSliderHoverOutline = kSliderKnobBorderHover;
 
 const SDL_Color kButtonFocusOutline = kAccentOrangeStrong;
 const SDL_Color kButtonBaseFill     = kListBg;
@@ -188,10 +198,13 @@ const DMSliderStyle &DMStyles::Slider() {
       {dm::FONT_PATH, 14, kTextPrimary},
       kSliderTrack,
       kSliderFill,
+      kSliderFillActive,
       kSliderKnob,
       kSliderKnobHover,
       kSliderKnobBorder,
-      kSliderKnobBorderHover};
+      kSliderKnobBorderHover,
+      kSliderKnobAccent,
+      kSliderKnobAccentBorder};
   return s;
 }
 
@@ -340,6 +353,11 @@ const SDL_Color &DMStyles::SliderKnobHoverFill() {
 
 const SDL_Color &DMStyles::SliderFocusOutline() {
   static const SDL_Color c = kSliderFocusOutline;
+  return c;
+}
+
+const SDL_Color &DMStyles::SliderHoverOutline() {
+  static const SDL_Color c = kSliderHoverOutline;
   return c;
 }
 
