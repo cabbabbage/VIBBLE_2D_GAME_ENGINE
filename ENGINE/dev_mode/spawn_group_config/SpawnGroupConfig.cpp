@@ -70,6 +70,8 @@ constexpr const char* kDefaultMethod = "Random";
 constexpr int kDefaultMinNumber = 1;
 constexpr int kDefaultMaxNumber = 1;
 constexpr int kExactDefaultQuantity = 1;
+constexpr int kPerimeterRadiusSliderMin = 0;
+constexpr int kPerimeterRadiusSliderMax = 10000;
 
 std::function<std::vector<std::string>()> empty_provider() {
     return []() { return std::vector<std::string>{}; };
@@ -207,6 +209,71 @@ private:
     bool full_row_ = false;
     bool editable_ = true;
     SDL_Rect rect_cache_{0, 0, 0, 0};
+};
+
+class SpawnGroupCallbackSliderWidget : public Widget {
+public:
+    SpawnGroupCallbackSliderWidget(std::unique_ptr<DMSlider> slider,
+                                   std::function<void(int)> on_change,
+                                   bool editable)
+        : slider_(std::move(slider)), on_change_(std::move(on_change)), editable_(editable) {
+        if (slider_) {
+            last_value_ = slider_->value();
+        }
+    }
+
+    void set_rect(const SDL_Rect& r) override {
+        if (slider_) slider_->set_rect(r);
+        rect_cache_ = slider_ ? slider_->rect() : r;
+    }
+
+    const SDL_Rect& rect() const override {
+        if (slider_) return slider_->rect();
+        return rect_cache_;
+    }
+
+    int height_for_width(int w) const override {
+        return slider_ ? slider_->preferred_height(w) : DMSlider::height();
+    }
+
+    bool handle_event(const SDL_Event& e) override {
+        if (!slider_) return false;
+        int before = slider_->value();
+        bool used = editable_ ? slider_->handle_event(e) : false;
+        if (!editable_) {
+            return used;
+        }
+        int after = slider_->value();
+        if (after != before) {
+            last_value_ = after;
+            if (on_change_) on_change_(after);
+            return true;
+        }
+        return used;
+    }
+
+    void render(SDL_Renderer* renderer) const override {
+        if (slider_) slider_->render(renderer);
+    }
+
+    bool wants_full_row() const override { return true; }
+
+    void set_value(int value) {
+        if (!slider_) return;
+        slider_->set_value(value);
+        last_value_ = slider_->value();
+    }
+
+    int value() const { return slider_ ? slider_->value() : last_value_; }
+
+    void set_editable(bool editable) { editable_ = editable; }
+
+private:
+    std::unique_ptr<DMSlider> slider_{};
+    std::function<void(int)> on_change_{};
+    bool editable_ = true;
+    SDL_Rect rect_cache_{0, 0, 0, 0};
+    int last_value_ = 0;
 };
 
 class CallbackCheckboxWidget : public Widget {
@@ -481,6 +548,15 @@ struct SpawnGroupConfig::Entry {
         exact_widget_ = std::make_unique<SpawnGroupCallbackTextBoxWidget>(std::move(exact_box),
             [this](const std::string& text) { on_exact_changed(text); }, false, editable_);
 
+        auto radius_slider = std::make_unique<DMSlider>("Perimeter Radius (px)",
+                                                        kPerimeterRadiusSliderMin,
+                                                        kPerimeterRadiusSliderMax,
+                                                        kPerimeterRadiusSliderMin);
+        perimeter_radius_widget_ = std::make_unique<SpawnGroupCallbackSliderWidget>(
+            std::move(radius_slider),
+            [this](int value) { on_perimeter_radius_changed(value); },
+            editable_);
+
         candidate_header_ = std::make_unique<SpawnGroupLabelWidget>("Candidates");
         candidate_header_->set_subtle(true);
 
@@ -610,6 +686,20 @@ struct SpawnGroupConfig::Entry {
         method_widget_->set_options(method_options_, method_index);
         current_method_ = method;
         use_exact_quantity_ = (method == "Exact" || method == "Exact Position");
+        bool previous_show_radius = show_perimeter_radius_widget_;
+        show_perimeter_radius_widget_ = (method == "Perimeter");
+
+        int radius_value = safe_int(entry, "radius", safe_int(entry, "perimeter_radius", kPerimeterRadiusSliderMin));
+        if (radius_value < kPerimeterRadiusSliderMin) {
+            radius_value = kPerimeterRadiusSliderMin;
+        }
+        if (perimeter_radius_widget_) {
+            perimeter_radius_widget_->set_value(radius_value);
+            perimeter_radius_widget_->set_editable(editable_ && show_perimeter_radius_widget_);
+        }
+        if (previous_show_radius != show_perimeter_radius_widget_ && owner_) {
+            owner_->mark_layout_dirty();
+        }
 
         int min_number = safe_int(entry, "min_number", kDefaultMinNumber);
         int max_number = safe_int(entry, "max_number", std::max(min_number, kDefaultMaxNumber));
@@ -662,6 +752,9 @@ struct SpawnGroupConfig::Entry {
         min_widget_->set_editable(editable_);
         max_widget_->set_editable(editable_);
         exact_widget_->set_editable(editable_);
+        if (perimeter_radius_widget_) {
+            perimeter_radius_widget_->set_editable(editable_ && show_perimeter_radius_widget_);
+        }
     }
 
     void set_expanded(bool expanded) {
@@ -711,6 +804,10 @@ struct SpawnGroupConfig::Entry {
                     qty_row.push_back(max_widget_.get());
                     rows.push_back(qty_row);
                 }
+            }
+
+            if (show_perimeter_radius_widget_ && perimeter_radius_widget_) {
+                rows.push_back({perimeter_radius_widget_.get()});
             }
 
             // Candidates: header, optional empty label, and pie widget (with internal controls)
@@ -1053,6 +1150,23 @@ private:
         }
     }
 
+    void on_perimeter_radius_changed(int value) {
+        if (!editable_) return;
+        int clamped = std::max(kPerimeterRadiusSliderMin, value);
+        if (auto* entry = mutable_entry()) {
+            int current = safe_int(*entry,
+                                   "radius",
+                                   safe_int(*entry, "perimeter_radius", kPerimeterRadiusSliderMin));
+            if (current == clamped) {
+                return;
+            }
+            (*entry)["radius"] = clamped;
+            (*entry)["perimeter_radius"] = clamped;
+            notify_change(true, false, false);
+            sync_from_json();
+        }
+    }
+
     SpawnGroupConfig* owner_ = nullptr;
     nlohmann::json* entry_ = nullptr;
     nlohmann::json shadow_entry_ = nlohmann::json::object();
@@ -1098,6 +1212,8 @@ private:
     std::unique_ptr<SpawnGroupCallbackTextBoxWidget> min_widget_{};
     std::unique_ptr<SpawnGroupCallbackTextBoxWidget> max_widget_{};
     std::unique_ptr<SpawnGroupCallbackTextBoxWidget> exact_widget_{};
+    std::unique_ptr<SpawnGroupCallbackSliderWidget> perimeter_radius_widget_{};
+    bool show_perimeter_radius_widget_ = false;
 
     std::optional<size_t> array_index_{};
 
