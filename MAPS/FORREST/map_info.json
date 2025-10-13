@@ -649,7 +649,7 @@
       "curvyness": 1,
       "edge_smoothness": 97,
       "geometry": "Circle",
-      "inherits_map_assets": false,
+      "inherits_map_assets": true,
       "is_boss": false,
       "is_spawn": true,
       "max_height": 8818,
@@ -657,7 +657,7 @@
       "min_height": 8818,
       "min_width": 8818,
       "name": "spawn",
-      "radius": 4409,
+      "radius": 900,
       "spawn_groups": [
         {
           "candidates": [
