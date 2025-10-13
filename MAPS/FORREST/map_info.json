@@ -15,7 +15,7 @@
     "downsample_log2": 4,
     "enabled": true,
     "exposure": 1.2400000095367432,
-    "gamma_comp": 3.130000114440918,
+    "gamma_comp": 2.680000066757202,
     "metric": "MaxRGB",
     "min_luma_threshold": 0.6639999747276306,
     "per_light_enabled": true,
@@ -28,7 +28,7 @@
       {
         "candidates": [
           {
-            "chance": 25.0,
+            "chance": 57,
             "name": "null"
           },
           {
@@ -40,12 +40,8 @@
             "name": "Grass_1_FPS_2"
           },
           {
-            "chance": 2,
+            "chance": 352,
             "name": "Small_Rock"
-          },
-          {
-            "chance": 52,
-            "name": "fog"
           },
           {
             "chance": 1,
@@ -93,6 +89,10 @@
           {
             "chance": 80,
             "name": "Tree_Darker"
+          },
+          {
+            "chance": 22,
+            "name": "null"
           }
         ],
         "display_name": "batch_map_boundary",
@@ -656,7 +656,7 @@
       "curvyness": 1,
       "edge_smoothness": 97,
       "geometry": "Circle",
-      "inherits_map_assets": true,
+      "inherits_map_assets": false,
       "is_boss": false,
       "is_spawn": true,
       "max_height": 8818,
@@ -664,7 +664,7 @@
       "min_height": 8818,
       "min_width": 8818,
       "name": "spawn",
-      "radius": 1000,
+      "radius": 4409,
       "spawn_groups": [
         {
           "candidates": [
@@ -673,26 +673,7 @@
               "name": "null"
             },
             {
-              "chance": 5.0,
-              "name": "candle"
-            }
-          ],
-          "display_name": "New Spaw",
-          "enforce_spacing": false,
-          "max_number": 40,
-          "min_number": 30,
-          "position": "Random",
-          "priority": 0,
-          "spawn_id": "spn-1189590fa424"
-        },
-        {
-          "candidates": [
-            {
-              "chance": 0,
-              "name": "null"
-            },
-            {
-              "chance": 100,
+              "chance": 1000.0,
               "name": "Vibble"
             }
           ],
@@ -705,7 +686,7 @@
           "origional_height": 1248,
           "origional_width": 1248,
           "position": "Exact",
-          "priority": 1,
+          "priority": 0,
           "spawn_id": "spn-6d19915360f2"
         }
       ],

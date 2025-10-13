@@ -261,11 +261,35 @@ void AssetInfoUI::set_info(const std::shared_ptr<AssetInfo>& info) {
     info_ = info;
     container_.reset_scroll();
     if (asset_selector_) asset_selector_->close();
-    if (animation_editor_window_) animation_editor_window_->set_info(info_);
+    if (animation_editor_window_) {
+        try {
+            animation_editor_window_->set_info(info_);
+        } catch (const std::exception& ex) {
+            SDL_Log("AssetInfoUI: failed to configure animation editor for %s: %s",
+                    info_ ? info_->name.c_str() : "<null>",
+                    ex.what());
+            animation_editor_window_->clear_info();
+            animation_editor_window_->set_visible(false);
+        } catch (...) {
+            SDL_Log("AssetInfoUI: failed to configure animation editor for %s due to unknown error.",
+                    info_ ? info_->name.c_str() : "<null>");
+            animation_editor_window_->clear_info();
+            animation_editor_window_->set_visible(false);
+        }
+    }
     for (auto& s : sections_) {
-        s->set_info(info_);
-        s->reset_scroll();
-        s->build();
+        try {
+            s->set_info(info_);
+            s->reset_scroll();
+            s->build();
+        } catch (const std::exception& ex) {
+            SDL_Log("AssetInfoUI: failed to build section while loading %s: %s",
+                    info_ ? info_->name.c_str() : "<null>",
+                    ex.what());
+        } catch (...) {
+            SDL_Log("AssetInfoUI: failed to build section while loading %s due to unknown error.",
+                    info_ ? info_->name.c_str() : "<null>");
+        }
     }
 }
 
@@ -275,13 +299,25 @@ void AssetInfoUI::clear_info() {
     container_.reset_scroll();
     if (asset_selector_) asset_selector_->close();
     if (animation_editor_window_) {
-        animation_editor_window_->clear_info();
-        animation_editor_window_->set_visible(false);
+        try {
+            animation_editor_window_->clear_info();
+            animation_editor_window_->set_visible(false);
+        } catch (const std::exception& ex) {
+            SDL_Log("AssetInfoUI: failed to reset animation editor: %s", ex.what());
+        } catch (...) {
+            SDL_Log("AssetInfoUI: failed to reset animation editor due to unknown error.");
+        }
     }
     for (auto& s : sections_) {
-        s->set_info(nullptr);
-        s->reset_scroll();
-        s->build();
+        try {
+            s->set_info(nullptr);
+            s->reset_scroll();
+            s->build();
+        } catch (const std::exception& ex) {
+            SDL_Log("AssetInfoUI: failed to reset section: %s", ex.what());
+        } catch (...) {
+            SDL_Log("AssetInfoUI: failed to reset section due to unknown error.");
+        }
     }
     target_asset_ = nullptr;
 }

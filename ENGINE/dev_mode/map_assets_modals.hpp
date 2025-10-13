@@ -1,16 +1,17 @@
  #pragma once
 
- #include <memory>
- #include <functional>
- #include <string>
- #include <nlohmann/json.hpp>
- #include <SDL.h>
+#include <functional>
+#include <memory>
+#include <string>
 
- class Input;
+#include <SDL.h>
+#include <nlohmann/json.hpp>
+
+class Input;
  struct SDL_Renderer;
-class SpawnGroupConfig;
+class CandidateListPanel;
 
- class SingleSpawnGroupModal {
+class SingleSpawnGroupModal {
  public:
     using SaveCallback = std::function<bool()>;
 
@@ -31,15 +32,16 @@ class SpawnGroupConfig;
     void set_floating_stack_key(std::string key);
     void set_on_open_area(std::function<void(const std::string&, const std::string&)> cb);
 
-private:
+ private:
     void ensure_single_group(nlohmann::json& section, const std::string& default_display_name);
     void ensure_visible_position();
 
     nlohmann::json* map_info_ = nullptr;
     nlohmann::json* section_ = nullptr;
+    nlohmann::json* entry_ = nullptr;
     SaveCallback on_save_{};
 
-    std::unique_ptr<SpawnGroupConfig> list_;
+    std::unique_ptr<CandidateListPanel> panel_;
 
     int screen_w_ = 1920;
     int screen_h_ = 1080;

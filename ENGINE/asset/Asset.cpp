@@ -530,9 +530,13 @@ void Asset::set_flip() {
 }
 
 void Asset::set_final_texture(SDL_Texture* tex) {
-        clear_downscale_cache();
-        if (final_texture) SDL_DestroyTexture(final_texture);
-        final_texture = tex;
+        bool same_texture = (tex == final_texture);
+        if (!same_texture) {
+                clear_downscale_cache();
+                if (final_texture) SDL_DestroyTexture(final_texture);
+                final_texture = tex;
+        }
+
         if (tex) SDL_QueryTexture(tex, nullptr, nullptr, &cached_w, &cached_h);
         else     cached_w = cached_h = 0;
 }

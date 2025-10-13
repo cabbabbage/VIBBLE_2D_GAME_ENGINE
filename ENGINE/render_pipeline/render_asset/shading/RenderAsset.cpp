@@ -31,11 +31,23 @@ SDL_Texture* RenderAsset::run(SDL_Renderer* renderer, const Asset& asset, StageC
         return nullptr;
     }
 
-    SDL_Texture* target =
-        SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET, width, height);
-    if (!target) {
-        return nullptr;
+    SDL_Texture* target = nullptr;
+    if (context.reusable_final) {
+        int tex_w = 0;
+        int tex_h = 0;
+        if (SDL_QueryTexture(context.reusable_final, nullptr, nullptr, &tex_w, &tex_h) == 0 &&
+            tex_w == width && tex_h == height) {
+            target = context.reusable_final;
+        }
     }
+
+    if (!target) {
+        target = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET, width, height);
+        if (!target) {
+            return nullptr;
+        }
+    }
+
     SDL_SetTextureBlendMode(target, SDL_BLENDMODE_BLEND);
 #if SDL_VERSION_ATLEAST(2,0,12)
     SDL_SetTextureScaleMode( target, (asset.info && !asset.info->smooth_scaling) ? SDL_ScaleModeNearest : SDL_ScaleModeBest);

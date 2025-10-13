@@ -13,6 +13,7 @@
 #include <vector>
 #include <array>
 #include <iostream>
+#include <unordered_set>
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
@@ -26,31 +27,26 @@ static constexpr int kCacheVersion = 3;
 namespace {
 
 void clear_light_cache(LightSource& light) {
-    SDL_Texture* const base = light.texture;
-    if (base) {
-        SDL_DestroyTexture(base);
-        light.texture = nullptr;
-    }
+    std::unordered_set<SDL_Texture*> destroyed;
+    auto destroy_texture = [&destroyed](SDL_Texture*& texture) {
+        if (texture && destroyed.insert(texture).second) {
+            SDL_DestroyTexture(texture);
+        }
+        texture = nullptr;
+    };
+
+    destroy_texture(light.texture);
+    light.cached_w = 0;
+    light.cached_h = 0;
 
     for (std::size_t idx = 0; idx < light.cached_variants.size(); ++idx) {
-        SDL_Texture* variant = light.cached_variants[idx];
-        if (!variant) continue;
-
-        // The first cached variant reuses the base texture pointer, so avoid
-        // destroying it twice.
-        if (variant != base) {
-            SDL_DestroyTexture(variant);
-        }
-        light.cached_variants[idx] = nullptr;
+        destroy_texture(light.cached_variants[idx]);
         light.variant_w[idx] = 0;
         light.variant_h[idx] = 0;
     }
-
-    light.cached_w = 0;
-    light.cached_h = 0;
 }
 
-} // namespace
+}  // namespace
 
 GenerateLight::GenerateLight(SDL_Renderer* renderer)
 : renderer_(renderer) {}

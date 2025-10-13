@@ -85,9 +85,9 @@ private:
     void configure_footer_buttons();
     void sync_footer_button_states();
     void update_footer_visibility();
+    void set_layers_footer_expanded(bool expanded);
     enum class PanelType { None, Lights, Layers };
     void set_active_panel(PanelType panel);
-    const char* panel_button_id(PanelType panel) const;
     void update_layers_footer(const Input& input);
     bool handle_layers_footer_event(const SDL_Event& e);
     void render_layers_footer(SDL_Renderer* renderer) const;

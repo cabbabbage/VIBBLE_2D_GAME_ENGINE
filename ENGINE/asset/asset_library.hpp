@@ -14,9 +14,10 @@ class AssetLibrary {
     std::shared_ptr<AssetInfo> get(const std::string& name) const;
     const std::unordered_map<std::string, std::shared_ptr<AssetInfo>>& all() const;
     void loadAllAnimations(SDL_Renderer* renderer);
+    void ensureAllAnimationsLoaded(SDL_Renderer* renderer);
     void loadAnimationsFor(SDL_Renderer* renderer, const std::unordered_set<std::string>& names);
     bool remove(const std::string& name);
 
-	private:
+        private:
     std::unordered_map<std::string, std::shared_ptr<AssetInfo>> info_by_name_;
 };

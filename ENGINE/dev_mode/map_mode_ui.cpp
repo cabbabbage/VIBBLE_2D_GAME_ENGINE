@@ -22,7 +22,6 @@
 namespace {
 constexpr int kDefaultPanelX = 48;
 constexpr int kDefaultPanelY = 48;
-constexpr const char* kButtonIdLayers = "layers";
 constexpr const char* kButtonIdLights = "lights";
 }
 
@@ -289,6 +288,10 @@ void MapModeUI::ensure_panels() {
         footer_panel_->set_visible(footer_always_visible_ || map_mode_active_);
         footer_panel_->set_expanded(false);
 
+        footer_panel_->set_on_toggle([this](bool expanded) {
+            set_layers_footer_expanded(expanded);
+            sync_footer_button_states();
+        });
         footer_panel_->set_content_event_handler([this](const SDL_Event& e) -> bool {
             if (layers_footer_visible_ && layers_panel_) {
                 return layers_panel_->handle_event(e);
@@ -341,18 +344,6 @@ void MapModeUI::configure_footer_buttons() {
     if (header_mode_ == HeaderMode::Map) {
         append_custom(map_mode_buttons_, HeaderMode::Map);
 
-        FullScreenCollapsible::HeaderButton layers_btn;
-        layers_btn.id = kButtonIdLayers;
-        layers_btn.label = "Layers";
-        layers_btn.on_toggle = [this](bool active) {
-            if (active) {
-                set_active_panel(PanelType::Layers);
-            } else if (active_panel_ == PanelType::Layers) {
-                set_active_panel(PanelType::None);
-            }
-};
-        buttons.push_back(std::move(layers_btn));
-
         FullScreenCollapsible::HeaderButton lights_btn;
         lights_btn.id = kButtonIdLights;
         lights_btn.label = "Lighting";
@@ -392,7 +383,6 @@ void MapModeUI::configure_footer_buttons() {
 void MapModeUI::sync_footer_button_states() {
     if (!footer_panel_) return;
     if (header_mode_ == HeaderMode::Map) {
-        footer_panel_->set_button_active_state(kButtonIdLayers, active_panel_ == PanelType::Layers);
         footer_panel_->set_button_active_state(kButtonIdLights, active_panel_ == PanelType::Lights);
         for (const auto& config : map_mode_buttons_) {
             footer_panel_->set_button_active_state(config.id, config.active);
@@ -415,6 +405,25 @@ void MapModeUI::update_footer_visibility() {
     footer_panel_->set_visible(should_show);
 }
 
+void MapModeUI::set_layers_footer_expanded(bool expanded) {
+    layers_footer_requested_ = expanded;
+    layers_footer_visible_ = expanded;
+
+    if (expanded) {
+        active_panel_ = PanelType::Layers;
+        if (layers_panel_) {
+            layers_panel_->open();
+        }
+    } else {
+        if (active_panel_ == PanelType::Layers) {
+            active_panel_ = PanelType::None;
+        }
+        if (layers_panel_) {
+            layers_panel_->close();
+        }
+    }
+}
+
 void MapModeUI::set_active_panel(PanelType panel) {
     ensure_panels();
 
@@ -429,38 +438,32 @@ void MapModeUI::set_active_panel(PanelType panel) {
             light_panel_->close();
         }
     }
+
     if (panel == PanelType::Layers) {
-        layers_footer_requested_ = true;
-        new_active = PanelType::Layers;
         if (footer_panel_) {
-            footer_panel_->set_expanded(true);
+            if (!footer_panel_->expanded()) {
+                footer_panel_->set_expanded(true);
+            } else {
+                set_layers_footer_expanded(true);
+            }
+        } else {
+            set_layers_footer_expanded(true);
         }
+        new_active = PanelType::Layers;
     } else {
-        if (layers_footer_requested_) {
-            layers_footer_requested_ = false;
-        }
-        if (layers_footer_visible_) {
-            layers_footer_visible_ = false;
-        }
-        if (layers_panel_) {
-            layers_panel_->close();
+        if (footer_panel_) {
+            if (footer_panel_->expanded()) {
+                footer_panel_->set_expanded(false);
+            } else {
+                set_layers_footer_expanded(false);
+            }
+        } else {
+            set_layers_footer_expanded(false);
         }
     }
 
     active_panel_ = new_active;
     sync_footer_button_states();
-}
-
-const char* MapModeUI::panel_button_id(PanelType panel) const {
-    switch (panel) {
-    case PanelType::Lights:
-        return kButtonIdLights;
-    case PanelType::Layers:
-        return kButtonIdLayers;
-    case PanelType::None:
-    default:
-        return "";
-    }
 }
 
 void MapModeUI::update_layers_footer(const Input& input) {
@@ -494,7 +497,7 @@ bool is_mouse_button_or_motion(const SDL_Event& e) {
 
 bool MapModeUI::handle_layers_footer_event(const SDL_Event& e) {
     if (headers_suppressed_) return false;
-    if (!footer_panel_ || !map_mode_active_ || !footer_panel_->visible()) return false;
+    if (!footer_panel_ || !footer_panel_->visible()) return false;
 
     SDL_Rect header = footer_panel_->header_rect();
     SDL_Point p = event_point(e);
@@ -533,13 +536,14 @@ bool MapModeUI::handle_layers_footer_event(const SDL_Event& e) {
 
 void MapModeUI::render_layers_footer(SDL_Renderer* renderer) const {
     if (headers_suppressed_) return;
-    if (!layers_footer_visible_ || !layers_panel_) return;
+    if (!layers_footer_visible_ || !layers_panel_ || !footer_panel_) return;
+    if (!footer_panel_->visible() || !footer_panel_->expanded()) return;
     layers_panel_->render(renderer);
 }
 
 bool MapModeUI::should_show_layers_footer() const {
     if (headers_suppressed_) return false;
-    if (!map_mode_active_ || !footer_panel_) return false;
+    if (!footer_panel_) return false;
     if (!layers_footer_requested_) return false;
     if (!footer_panel_->visible()) return false;
     return footer_panel_->expanded();
