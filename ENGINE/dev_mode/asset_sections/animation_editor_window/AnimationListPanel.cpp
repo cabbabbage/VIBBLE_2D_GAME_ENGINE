@@ -10,6 +10,7 @@
 #include "AnimationInspectorPanel.hpp"
 #include "PreviewProvider.hpp"
 #include "dm_styles.hpp"
+#include "dev_mode/draw_utils.hpp"
 #include "dev_mode/widgets.hpp"
 
 namespace {
@@ -115,15 +116,27 @@ void AnimationListPanel::render(SDL_Renderer* renderer) const {
     }
 
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-    const SDL_Color& bg = DMStyles::PanelBG();
-    SDL_SetRenderDrawColor(renderer, bg.r, bg.g, bg.b, bg.a);
-    SDL_RenderFillRect(renderer, &bounds_);
+    dm_draw::DrawBeveledRect(
+        renderer,
+        bounds_,
+        DMStyles::CornerRadius(),
+        DMStyles::BevelDepth(),
+        DMStyles::PanelBG(),
+        DMStyles::HighlightColor(),
+        DMStyles::ShadowColor(),
+        false,
+        DMStyles::HighlightIntensity(),
+        DMStyles::ShadowIntensity());
 
-    const SDL_Color& border = DMStyles::Border();
-    SDL_SetRenderDrawColor(renderer, border.r, border.g, border.b, border.a);
-    SDL_RenderDrawRect(renderer, &bounds_);
-
-    SDL_RenderSetClipRect(renderer, &bounds_);
+    SDL_Rect clip = bounds_;
+    const int inset = DMStyles::BevelDepth();
+    clip.x += inset;
+    clip.y += inset;
+    clip.w = std::max(0, clip.w - inset * 2);
+    clip.h = std::max(0, clip.h - inset * 2);
+    if (clip.w > 0 && clip.h > 0) {
+        SDL_RenderSetClipRect(renderer, &clip);
+    }
     for (size_t i = 0; i < inspectors_.size(); ++i) {
         const SDL_Rect& rect = inspector_bounds_[i];
         if (!rects_intersect(rect, bounds_)) {

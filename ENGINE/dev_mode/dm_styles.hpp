@@ -75,6 +75,28 @@ public:
   static const SDL_Color &PanelBG();
   static const SDL_Color &PanelHeader();
   static const SDL_Color &Border();
+  static int CornerRadius();
+  static int BevelDepth();
+  static const SDL_Color &HighlightColor();
+  static const SDL_Color &ShadowColor();
+  static float HighlightIntensity();
+  static float ShadowIntensity();
+  static const SDL_Color &ButtonBaseFill();
+  static const SDL_Color &ButtonHoverFill();
+  static const SDL_Color &ButtonPressedFill();
+  static const SDL_Color &ButtonFocusOutline();
+  static const SDL_Color &TextboxBaseFill();
+  static const SDL_Color &TextboxHoverFill();
+  static const SDL_Color &TextboxFocusOutline();
+  static const SDL_Color &CheckboxBaseFill();
+  static const SDL_Color &CheckboxHoverFill();
+  static const SDL_Color &CheckboxCheckColor();
+  static const SDL_Color &CheckboxFocusOutline();
+  static const SDL_Color &SliderTrackBackground();
+  static const SDL_Color &SliderTrackFill();
+  static const SDL_Color &SliderKnobFill();
+  static const SDL_Color &SliderKnobHoverFill();
+  static const SDL_Color &SliderFocusOutline();
 };
 
 struct DMSpacing {

@@ -7,6 +7,12 @@ const SDL_Color kTextSecondary     = dm::rgba(203, 213, 225, 255);
 const SDL_Color kPanelBackground   = dm::rgba(15, 23, 42, 235);
 const SDL_Color kPanelHeader       = dm::rgba(30, 41, 59, 240);
 const SDL_Color kPanelBorder       = dm::rgba(71, 85, 105, 255);
+const SDL_Color kHighlightColor    = dm::rgba(148, 163, 184, 255);
+const SDL_Color kShadowColor       = dm::rgba(15, 23, 42, 255);
+constexpr float kHighlightIntensity = 0.35f;
+constexpr float kShadowIntensity    = 0.45f;
+constexpr int kCornerRadius         = 6;
+constexpr int kBevelDepth           = 2;
 
 const SDL_Color kHeaderBg          = dm::rgba(30, 41, 59, 235);
 const SDL_Color kHeaderHover       = dm::rgba(46, 64, 94, 245);
@@ -44,13 +50,16 @@ const SDL_Color kDeleteBorder      = dm::rgba(127, 29, 29, 255);
 const SDL_Color kDeleteText        = dm::rgba(254, 226, 226, 255);
 
 const SDL_Color kTextboxBg         = dm::rgba(13, 23, 38, 235);
+const SDL_Color kTextboxBgHover    = dm::rgba(18, 32, 52, 240);
 const SDL_Color kTextboxBorder     = dm::rgba(48, 64, 96, 255);
 const SDL_Color kTextboxBorderHot  = dm::rgba(73, 103, 151, 255);
 const SDL_Color kTextboxText       = kTextPrimary;
 
 const SDL_Color kCheckboxBg        = dm::rgba(20, 32, 52, 235);
+const SDL_Color kCheckboxBgHover   = dm::rgba(28, 44, 72, 240);
 const SDL_Color kCheckboxBorder    = dm::rgba(57, 81, 123, 255);
 const SDL_Color kCheckboxCheck     = dm::rgba(59, 130, 246, 255);
+const SDL_Color kCheckboxFocus     = dm::rgba(96, 165, 250, 255);
 
 const SDL_Color kSliderTrack       = dm::rgba(21, 30, 50, 220);
 const SDL_Color kSliderFill        = dm::rgba(59, 130, 246, 240);
@@ -58,6 +67,12 @@ const SDL_Color kSliderKnob        = dm::rgba(226, 232, 240, 255);
 const SDL_Color kSliderKnobHover   = dm::rgba(186, 230, 253, 255);
 const SDL_Color kSliderKnobBorder  = dm::rgba(59, 130, 246, 255);
 const SDL_Color kSliderKnobBorderHover = dm::rgba(96, 165, 250, 255);
+const SDL_Color kSliderFocusOutline = kSliderKnobBorderHover;
+
+const SDL_Color kButtonFocusOutline = dm::rgba(125, 211, 252, 255);
+const SDL_Color kButtonBaseFill     = kListBg;
+const SDL_Color kButtonHoverFill    = kListHover;
+const SDL_Color kButtonPressFill    = kListPress;
 }
 
 const DMLabelStyle &DMStyles::Label() {
@@ -175,6 +190,104 @@ const SDL_Color &DMStyles::PanelHeader() {
 
 const SDL_Color &DMStyles::Border() {
   static const SDL_Color c = kPanelBorder;
+  return c;
+}
+
+int DMStyles::CornerRadius() { return kCornerRadius; }
+
+int DMStyles::BevelDepth() { return kBevelDepth; }
+
+const SDL_Color &DMStyles::HighlightColor() {
+  static const SDL_Color c = kHighlightColor;
+  return c;
+}
+
+const SDL_Color &DMStyles::ShadowColor() {
+  static const SDL_Color c = kShadowColor;
+  return c;
+}
+
+float DMStyles::HighlightIntensity() { return kHighlightIntensity; }
+
+float DMStyles::ShadowIntensity() { return kShadowIntensity; }
+
+const SDL_Color &DMStyles::ButtonBaseFill() {
+  static const SDL_Color c = kButtonBaseFill;
+  return c;
+}
+
+const SDL_Color &DMStyles::ButtonHoverFill() {
+  static const SDL_Color c = kButtonHoverFill;
+  return c;
+}
+
+const SDL_Color &DMStyles::ButtonPressedFill() {
+  static const SDL_Color c = kButtonPressFill;
+  return c;
+}
+
+const SDL_Color &DMStyles::ButtonFocusOutline() {
+  static const SDL_Color c = kButtonFocusOutline;
+  return c;
+}
+
+const SDL_Color &DMStyles::TextboxBaseFill() {
+  static const SDL_Color c = kTextboxBg;
+  return c;
+}
+
+const SDL_Color &DMStyles::TextboxHoverFill() {
+  static const SDL_Color c = kTextboxBgHover;
+  return c;
+}
+
+const SDL_Color &DMStyles::TextboxFocusOutline() {
+  static const SDL_Color c = kTextboxBorderHot;
+  return c;
+}
+
+const SDL_Color &DMStyles::CheckboxBaseFill() {
+  static const SDL_Color c = kCheckboxBg;
+  return c;
+}
+
+const SDL_Color &DMStyles::CheckboxHoverFill() {
+  static const SDL_Color c = kCheckboxBgHover;
+  return c;
+}
+
+const SDL_Color &DMStyles::CheckboxCheckColor() {
+  static const SDL_Color c = kCheckboxCheck;
+  return c;
+}
+
+const SDL_Color &DMStyles::CheckboxFocusOutline() {
+  static const SDL_Color c = kCheckboxFocus;
+  return c;
+}
+
+const SDL_Color &DMStyles::SliderTrackBackground() {
+  static const SDL_Color c = kSliderTrack;
+  return c;
+}
+
+const SDL_Color &DMStyles::SliderTrackFill() {
+  static const SDL_Color c = kSliderFill;
+  return c;
+}
+
+const SDL_Color &DMStyles::SliderKnobFill() {
+  static const SDL_Color c = kSliderKnob;
+  return c;
+}
+
+const SDL_Color &DMStyles::SliderKnobHoverFill() {
+  static const SDL_Color c = kSliderKnobHover;
+  return c;
+}
+
+const SDL_Color &DMStyles::SliderFocusOutline() {
+  static const SDL_Color c = kSliderFocusOutline;
   return c;
 }
 

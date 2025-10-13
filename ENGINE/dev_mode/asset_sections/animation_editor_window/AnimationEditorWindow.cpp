@@ -25,6 +25,7 @@
 
 #include "asset/asset_info.hpp"
 #include "dev_mode/dm_styles.hpp"
+#include "dev_mode/draw_utils.hpp"
 #include "dev_mode/widgets.hpp"
 
 namespace {
@@ -340,19 +341,32 @@ void AnimationEditorWindow::ensure_layout() const {
 
 void AnimationEditorWindow::render_background(SDL_Renderer* renderer) const {
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-    const SDL_Color bg = DMStyles::PanelBG();
-    SDL_SetRenderDrawColor(renderer, bg.r, bg.g, bg.b, bg.a);
-    SDL_RenderFillRect(renderer, &bounds_);
-
-    const SDL_Color border = DMStyles::Border();
-    SDL_SetRenderDrawColor(renderer, border.r, border.g, border.b, border.a);
-    SDL_RenderDrawRect(renderer, &bounds_);
+    dm_draw::DrawBeveledRect(
+        renderer,
+        bounds_,
+        DMStyles::CornerRadius(),
+        DMStyles::BevelDepth(),
+        DMStyles::PanelBG(),
+        DMStyles::HighlightColor(),
+        DMStyles::ShadowColor(),
+        false,
+        DMStyles::HighlightIntensity(),
+        DMStyles::ShadowIntensity());
 }
 
 void AnimationEditorWindow::render_header(SDL_Renderer* renderer) const {
-    const SDL_Color header_bg = DMStyles::PanelHeader();
-    SDL_SetRenderDrawColor(renderer, header_bg.r, header_bg.g, header_bg.b, header_bg.a);
-    SDL_RenderFillRect(renderer, &header_rect_);
+    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+    dm_draw::DrawBeveledRect(
+        renderer,
+        header_rect_,
+        DMStyles::CornerRadius(),
+        DMStyles::BevelDepth(),
+        DMStyles::PanelHeader(),
+        DMStyles::HighlightColor(),
+        DMStyles::ShadowColor(),
+        false,
+        DMStyles::HighlightIntensity(),
+        DMStyles::ShadowIntensity());
 
     std::string title = "Animation Editor";
     if (!info_path_.empty()) {
@@ -378,13 +392,17 @@ void AnimationEditorWindow::render_status(SDL_Renderer* renderer) const {
     if (status_message_.empty()) return;
 
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-    const SDL_Color bg = DMStyles::PanelBG();
-    SDL_SetRenderDrawColor(renderer, bg.r, bg.g, bg.b, bg.a);
-    SDL_RenderFillRect(renderer, &status_rect_);
-
-    const SDL_Color border = DMStyles::Border();
-    SDL_SetRenderDrawColor(renderer, border.r, border.g, border.b, border.a);
-    SDL_RenderDrawRect(renderer, &status_rect_);
+    dm_draw::DrawBeveledRect(
+        renderer,
+        status_rect_,
+        DMStyles::CornerRadius(),
+        DMStyles::BevelDepth(),
+        DMStyles::PanelBG(),
+        DMStyles::HighlightColor(),
+        DMStyles::ShadowColor(),
+        false,
+        DMStyles::HighlightIntensity(),
+        DMStyles::ShadowIntensity());
 
     render_label(renderer, status_message_, status_rect_.x + DMSpacing::panel_padding(), status_rect_.y + DMSpacing::panel_padding());
 }

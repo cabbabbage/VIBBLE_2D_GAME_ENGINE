@@ -6,6 +6,7 @@
 #include <SDL_ttf.h>
 
 #include "dm_styles.hpp"
+#include "draw_utils.hpp"
 #include "widgets.hpp"
 #include "utils/input.hpp"
 
@@ -311,24 +312,55 @@ void SlidingWindowContainer::render(SDL_Renderer* renderer, int screen_w, int sc
     prepare_layout(screen_w, screen_h);
 
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-    SDL_Color bg = DMStyles::PanelBG();
-    SDL_SetRenderDrawColor(renderer, bg.r, bg.g, bg.b, bg.a);
-    SDL_RenderFillRect(renderer, &panel_);
+    const SDL_Color& panel_fill = DMStyles::PanelBG();
+    const SDL_Color& panel_highlight = DMStyles::PanelHeader();
+    const SDL_Color& panel_shadow = DMStyles::Border();
+    dm_draw::DrawBeveledRect(
+        renderer,
+        panel_,
+        DMStyles::CornerRadius(),
+        DMStyles::BevelDepth(),
+        panel_fill,
+        panel_highlight,
+        panel_shadow,
+        true,
+        DMStyles::HighlightIntensity(),
+        DMStyles::ShadowIntensity());
 
+    SDL_Rect header_region{panel_.x, panel_.y, panel_.w, 0};
     if (header_visible_) {
+        header_region.h = std::max(0, scroll_region_.y - panel_.y);
+        const int inset = 1;
+        if (header_region.h > inset && header_region.w > inset * 2) {
+            header_region.x += inset;
+            header_region.y += inset;
+            header_region.w -= inset * 2;
+            header_region.h -= inset;
+            dm_draw::DrawBeveledRect(
+                renderer,
+                header_region,
+                0,
+                DMStyles::BevelDepth(),
+                DMStyles::PanelHeader(),
+                DMStyles::HighlightColor(),
+                DMStyles::ShadowColor(),
+                false,
+                DMStyles::HighlightIntensity(),
+                DMStyles::ShadowIntensity());
+        }
+
+        if (pulse_frames_ > 0 && header_region.h > 0 && header_region.w > 0) {
+            Uint8 alpha = static_cast<Uint8>(std::clamp(pulse_frames_ * 12, 0, 180));
+            const SDL_Color accent = DMStyles::AccentButton().hover_bg;
+            SDL_SetRenderDrawColor(renderer, accent.r, accent.g, accent.b, alpha);
+            SDL_RenderFillRect(renderer, &header_region);
+        }
+
         if (close_button_) {
             close_button_->render(renderer);
         }
         std::string label = header_text_provider_ ? header_text_provider_() : header_text_;
         render_label_text(renderer, label, name_label_rect_);
-    }
-
-    if (header_visible_ && pulse_frames_ > 0) {
-        Uint8 alpha = static_cast<Uint8>(std::clamp(pulse_frames_ * 12, 0, 180));
-        SDL_Rect header_rect{panel_.x, panel_.y, panel_.w, DMButton::height()};
-        const SDL_Color accent = DMStyles::AccentButton().hover_bg;
-        SDL_SetRenderDrawColor(renderer, accent.r, accent.g, accent.b, alpha);
-        SDL_RenderFillRect(renderer, &header_rect);
     }
 
     SDL_Rect prev_clip;
@@ -356,13 +388,36 @@ void SlidingWindowContainer::render(SDL_Renderer* renderer, int screen_w, int sc
     SDL_RenderSetClipRect(renderer, &panel_clip);
 
     if (max_scroll_ > 0 && scroll_track_rect_.w > 0 && scroll_track_rect_.h > 0) {
-        SDL_Color track_col = DMStyles::Border();
-        SDL_SetRenderDrawColor(renderer, track_col.r, track_col.g, track_col.b, std::min<int>(track_col.a, 120));
-        SDL_RenderFillRect(renderer, &scroll_track_rect_);
+        SDL_Rect track = scroll_track_rect_;
+        const int track_radius = std::min(DMStyles::CornerRadius(), std::min(track.w, track.h) / 2);
+        const int track_bevel = std::min(DMStyles::BevelDepth(), std::max(0, std::min(track.w, track.h) / 2));
+        dm_draw::DrawBeveledRect(
+            renderer,
+            track,
+            track_radius,
+            track_bevel,
+            DMStyles::SliderTrackBackground(),
+            DMStyles::HighlightColor(),
+            DMStyles::ShadowColor(),
+            false,
+            DMStyles::HighlightIntensity(),
+            DMStyles::ShadowIntensity());
+
         if (scroll_thumb_rect_.h > 0) {
-            SDL_Color thumb_col = DMStyles::AccentButton().hover_bg;
-            SDL_SetRenderDrawColor(renderer, thumb_col.r, thumb_col.g, thumb_col.b, thumb_col.a);
-            SDL_RenderFillRect(renderer, &scroll_thumb_rect_);
+            SDL_Rect thumb = scroll_thumb_rect_;
+            const int thumb_radius = std::min(DMStyles::CornerRadius(), std::min(thumb.w, thumb.h) / 2);
+            const int thumb_bevel = std::min(DMStyles::BevelDepth(), std::max(0, std::min(thumb.w, thumb.h) / 2));
+            dm_draw::DrawBeveledRect(
+                renderer,
+                thumb,
+                thumb_radius,
+                thumb_bevel,
+                DMStyles::AccentButton().hover_bg,
+                DMStyles::HighlightColor(),
+                DMStyles::ShadowColor(),
+                true,
+                DMStyles::HighlightIntensity(),
+                DMStyles::ShadowIntensity());
         }
     }
 

@@ -3,6 +3,7 @@
 #include <algorithm>
 
 #include "../../../dm_styles.hpp"
+#include "../../../draw_utils.hpp"
 #include "../../../widgets.hpp"
 #include "movement/FrameMovementEditor.hpp"
 
@@ -61,14 +62,19 @@ void FrameEditor::render(SDL_Renderer* renderer) const {
     if (!renderer) {
         return;
     }
-    const SDL_Color& border = DMStyles::Border();
+    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
     if (tabs_rect_.w > 0 && tabs_rect_.h > 0) {
-        SDL_Rect header_rect = tabs_rect_;
-        const SDL_Color& bg = DMStyles::PanelBG();
-        SDL_SetRenderDrawColor(renderer, bg.r, bg.g, bg.b, bg.a);
-        SDL_RenderFillRect(renderer, &header_rect);
-        SDL_SetRenderDrawColor(renderer, border.r, border.g, border.b, border.a);
-        SDL_RenderDrawRect(renderer, &header_rect);
+        dm_draw::DrawBeveledRect(
+            renderer,
+            tabs_rect_,
+            DMStyles::CornerRadius(),
+            DMStyles::BevelDepth(),
+            DMStyles::PanelBG(),
+            DMStyles::HighlightColor(),
+            DMStyles::ShadowColor(),
+            false,
+            DMStyles::HighlightIntensity(),
+            DMStyles::ShadowIntensity());
     }
 
     for (const auto& button : mode_buttons_) {

@@ -19,6 +19,7 @@
 #include "SourceConfigPanel.hpp"
 #include "string_utils.hpp"
 #include "dm_styles.hpp"
+#include "dev_mode/draw_utils.hpp"
 #include "dev_mode/widgets.hpp"
 
 namespace animation_editor {
@@ -272,17 +273,29 @@ void AnimationInspectorPanel::render(SDL_Renderer* renderer) const {
     layout_widgets();
 
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-    const SDL_Color& bg = DMStyles::PanelBG();
-    SDL_SetRenderDrawColor(renderer, bg.r, bg.g, bg.b, bg.a);
-    SDL_RenderFillRect(renderer, &bounds_);
+    dm_draw::DrawBeveledRect(
+        renderer,
+        bounds_,
+        DMStyles::CornerRadius(),
+        DMStyles::BevelDepth(),
+        DMStyles::PanelBG(),
+        DMStyles::HighlightColor(),
+        DMStyles::ShadowColor(),
+        false,
+        DMStyles::HighlightIntensity(),
+        DMStyles::ShadowIntensity());
 
-    const SDL_Color& header_bg = DMStyles::PanelHeader();
-    SDL_SetRenderDrawColor(renderer, header_bg.r, header_bg.g, header_bg.b, header_bg.a);
-    SDL_RenderFillRect(renderer, &header_rect_);
-
-    const SDL_Color& border = DMStyles::Border();
-    SDL_SetRenderDrawColor(renderer, border.r, border.g, border.b, border.a);
-    SDL_RenderDrawRect(renderer, &bounds_);
+    dm_draw::DrawBeveledRect(
+        renderer,
+        header_rect_,
+        DMStyles::CornerRadius(),
+        DMStyles::BevelDepth(),
+        DMStyles::PanelHeader(),
+        DMStyles::HighlightColor(),
+        DMStyles::ShadowColor(),
+        false,
+        DMStyles::HighlightIntensity(),
+        DMStyles::ShadowIntensity());
 
     if (collapse_toggle_button_) collapse_toggle_button_->render(renderer);
     if (name_box_) name_box_->render(renderer);
@@ -295,10 +308,28 @@ void AnimationInspectorPanel::render(SDL_Renderer* renderer) const {
         render_label(renderer, "Start Animation", header_rect_.x + kInspectorPadding, header_rect_.y + header_rect_.h - style.font_size - DMSpacing::small_gap(), accent);
     }
 
-    SDL_SetRenderDrawColor(renderer, 28, 37, 48, 230);
-    SDL_RenderFillRect(renderer, &preview_rect_);
-    SDL_SetRenderDrawColor(renderer, border.r, border.g, border.b, border.a);
-    SDL_RenderDrawRect(renderer, &preview_rect_);
+    dm_draw::DrawBeveledRect(
+        renderer,
+        preview_rect_,
+        DMStyles::CornerRadius(),
+        DMStyles::BevelDepth(),
+        DMStyles::PanelHeader(),
+        DMStyles::HighlightColor(),
+        DMStyles::ShadowColor(),
+        false,
+        DMStyles::HighlightIntensity(),
+        DMStyles::ShadowIntensity());
+
+    SDL_Rect preview_clip = preview_rect_;
+    const int preview_inset = DMStyles::BevelDepth();
+    preview_clip.x += preview_inset;
+    preview_clip.y += preview_inset;
+    preview_clip.w = std::max(0, preview_clip.w - preview_inset * 2);
+    preview_clip.h = std::max(0, preview_clip.h - preview_inset * 2);
+    const bool clip_preview = preview_clip.w > 0 && preview_clip.h > 0;
+    if (clip_preview) {
+        SDL_RenderSetClipRect(renderer, &preview_clip);
+    }
 
     if (preview_provider_) {
         SDL_Texture* texture = preview_provider_->get_preview_texture(renderer, animation_id_);
@@ -320,6 +351,10 @@ void AnimationInspectorPanel::render(SDL_Renderer* renderer) const {
             SDL_Color color = style.color;
             render_label(renderer, "No Preview Available", preview_rect_.x + (preview_rect_.w - text_width(style, "No Preview Available")) / 2, preview_rect_.y + preview_rect_.h / 2 - style.font_size / 2, color);
         }
+    }
+
+    if (clip_preview) {
+        SDL_RenderSetClipRect(renderer, nullptr);
     }
 
     if (!collapsed_) {

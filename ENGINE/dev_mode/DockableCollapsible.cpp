@@ -1,6 +1,7 @@
 #include "DockableCollapsible.hpp"
 
 #include "FloatingDockableManager.hpp"
+#include "draw_utils.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -321,12 +322,22 @@ void DockableCollapsible::render(SDL_Renderer* r) const {
     if (!visible_) return;
 
     SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
-    SDL_Color bg = DMStyles::PanelBG();
-    SDL_Color border = DMStyles::Border();
-    SDL_SetRenderDrawColor(r, bg.r, bg.g, bg.b, bg.a);
-    SDL_RenderFillRect(r, &rect_);
-    SDL_SetRenderDrawColor(r, border.r, border.g, border.b, border.a);
-    SDL_RenderDrawRect(r, &rect_);
+    const SDL_Color& fill = DMStyles::PanelBG();
+    const SDL_Color& header_highlight = DMStyles::PanelHeader();
+    const SDL_Color& border_shadow = DMStyles::Border();
+    const float highlight_intensity = DMStyles::HighlightIntensity();
+    const float shadow_intensity = DMStyles::ShadowIntensity();
+    dm_draw::DrawBeveledRect(
+        r,
+        rect_,
+        DMStyles::CornerRadius(),
+        DMStyles::BevelDepth(),
+        fill,
+        header_highlight,
+        border_shadow,
+        false,
+        highlight_intensity,
+        shadow_intensity);
 
     if (header_btn_) header_btn_->render(r);
     if (close_btn_ && (floatable_ || close_button_enabled_)) close_btn_->render(r);

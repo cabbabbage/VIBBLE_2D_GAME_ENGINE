@@ -1,4 +1,5 @@
 #include "widgets.hpp"
+#include "draw_utils.hpp"
 #include <algorithm>
 #include <sstream>
 #include <cctype>
@@ -9,14 +10,20 @@
 #include <utility>
 
 namespace {
-constexpr int kBoxTopPadding = 5;
-constexpr int kBoxBottomPadding = 5;
-constexpr int kLabelControlGap = 5;
-constexpr int kTextboxHorizontalPadding = 6;
-constexpr int kSliderControlHeight = 40;
+constexpr int kBoxTopPadding = 8;
+constexpr int kBoxBottomPadding = 8;
+constexpr int kLabelControlGap = 8;
+constexpr int kTextboxHorizontalPadding = 8;
+constexpr int kSliderControlHeight = 44;
 constexpr int kSliderValueWidth = 60;
 constexpr int kDropdownControlHeight = 32;
-constexpr int kButtonHorizontalPadding = 24;
+constexpr int kButtonHorizontalPadding = 28;
+constexpr int kCheckboxLabelGap = 8;
+constexpr int kSliderValueHorizontalPadding = 8;
+constexpr int kSliderTrackThickness = 10;
+constexpr int kSliderKnobWidth = 14;
+constexpr int kSliderKnobHeight = 18;
+constexpr int kSliderKnobVerticalInset = (kSliderKnobHeight - kSliderTrackThickness) / 2;
 
 int slider_value_height() {
     const DMSliderStyle& st = DMStyles::Slider();
@@ -29,9 +36,6 @@ int range_value_width(int total_width) {
     candidate = std::min(candidate, std::max(64, total_width / 2));
     return candidate;
 }
-
-constexpr SDL_Color kSliderHoverOutline{0, 122, 255, 255};
-constexpr SDL_Color kSliderFocusOutline{255, 255, 255, 255};
 
 std::unordered_set<const void*> g_slider_scroll_captures;
 
@@ -138,10 +142,23 @@ void DMButton::draw_label(SDL_Renderer* r, SDL_Color col) const {
 void DMButton::render(SDL_Renderer* r) const {
     if (!style_) return;
     SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
-    SDL_Color bg = pressed_ ? style_->press_bg : (hovered_ ? style_->hover_bg : style_->bg);
-    SDL_SetRenderDrawColor(r, bg.r, bg.g, bg.b, bg.a);
-    SDL_RenderFillRect(r, &rect_);
-    SDL_SetRenderDrawColor(r, style_->border.r, style_->border.g, style_->border.b, style_->border.a);
+    const SDL_Color bg = pressed_ ? style_->press_bg : (hovered_ ? style_->hover_bg : style_->bg);
+    const SDL_Color& highlight = DMStyles::HighlightColor();
+    const SDL_Color& shadow = DMStyles::ShadowColor();
+    dm_draw::DrawBeveledRect(
+        r,
+        rect_,
+        DMStyles::CornerRadius(),
+        DMStyles::BevelDepth(),
+        bg,
+        highlight,
+        shadow,
+        false,
+        DMStyles::HighlightIntensity(),
+        DMStyles::ShadowIntensity());
+
+    SDL_Color border = style_->border;
+    SDL_SetRenderDrawColor(r, border.r, border.g, border.b, border.a);
     SDL_RenderDrawRect(r, &rect_);
     draw_label(r, style_->text);
 }
@@ -252,9 +269,23 @@ void DMTextBox::render(SDL_Renderer* r) const {
         draw_text(r, label_, label_rect_.x, label_rect_.y, label_rect_.w, lbl);
     }
     SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
-    SDL_SetRenderDrawColor(r, st.bg.r, st.bg.g, st.bg.b, st.bg.a);
-    SDL_RenderFillRect(r, &box_rect_);
-    SDL_Color border = (hovered_ || editing_) ? st.border_hover : st.border;
+    const SDL_Color fill = (hovered_ || editing_) ? DMStyles::TextboxHoverFill() : DMStyles::TextboxBaseFill();
+    dm_draw::DrawBeveledRect(
+        r,
+        box_rect_,
+        DMStyles::CornerRadius(),
+        DMStyles::BevelDepth(),
+        fill,
+        DMStyles::HighlightColor(),
+        DMStyles::ShadowColor(),
+        false,
+        DMStyles::HighlightIntensity(),
+        DMStyles::ShadowIntensity());
+
+    SDL_Color border = hovered_ ? st.border_hover : st.border;
+    if (editing_) {
+        border = DMStyles::TextboxFocusOutline();
+    }
     SDL_SetRenderDrawColor(r, border.r, border.g, border.b, border.a);
     SDL_RenderDrawRect(r, &box_rect_);
     DMLabelStyle valStyle{ st.label.font_path, st.label.font_size, st.text };
@@ -389,7 +420,7 @@ void DMCheckbox::draw_label(SDL_Renderer* r) const {
     if (surf) {
         SDL_Texture* tex = SDL_CreateTextureFromSurface(r, surf);
         if (tex) {
-            SDL_Rect dst{ rect_.x + rect_.h + 6, rect_.y + (rect_.h - surf->h)/2, surf->w, surf->h };
+            SDL_Rect dst{ rect_.x + rect_.h + kCheckboxLabelGap, rect_.y + (rect_.h - surf->h)/2, surf->w, surf->h };
             SDL_RenderCopy(r, tex, nullptr, &dst);
             SDL_DestroyTexture(tex);
         }
@@ -402,14 +433,36 @@ void DMCheckbox::render(SDL_Renderer* r) const {
     const DMCheckboxStyle& st = DMStyles::Checkbox();
     SDL_Rect box{ rect_.x, rect_.y, rect_.h, rect_.h };
     SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
-    SDL_SetRenderDrawColor(r, st.box_bg.r, st.box_bg.g, st.box_bg.b, st.box_bg.a);
-    SDL_RenderFillRect(r, &box);
-    SDL_SetRenderDrawColor(r, st.border.r, st.border.g, st.border.b, st.border.a);
+    const SDL_Color fill = hovered_ ? DMStyles::CheckboxHoverFill() : DMStyles::CheckboxBaseFill();
+    dm_draw::DrawBeveledRect(
+        r,
+        box,
+        DMStyles::CornerRadius(),
+        DMStyles::BevelDepth(),
+        fill,
+        DMStyles::HighlightColor(),
+        DMStyles::ShadowColor(),
+        false,
+        DMStyles::HighlightIntensity(),
+        DMStyles::ShadowIntensity());
+
+    SDL_Color border = hovered_ ? DMStyles::CheckboxFocusOutline() : st.border;
+    SDL_SetRenderDrawColor(r, border.r, border.g, border.b, border.a);
     SDL_RenderDrawRect(r, &box);
     if (value_) {
-        SDL_SetRenderDrawColor(r, st.check.r, st.check.g, st.check.b, st.check.a);
+        SDL_Color check = DMStyles::CheckboxCheckColor();
         SDL_Rect inner{ box.x + 4, box.y + 4, box.w - 8, box.h - 8 };
-        SDL_RenderFillRect(r, &inner);
+        dm_draw::DrawBeveledRect(
+            r,
+            inner,
+            std::min(DMStyles::CornerRadius(), 3),
+            std::max(0, DMStyles::BevelDepth() - 1),
+            check,
+            DMStyles::HighlightColor(),
+            DMStyles::ShadowColor(),
+            false,
+            DMStyles::HighlightIntensity(),
+            DMStyles::ShadowIntensity());
     }
     draw_label(r);
 }
@@ -531,19 +584,19 @@ SDL_Rect DMSlider::value_rect() const {
 
 SDL_Rect DMSlider::track_rect() const {
     int track_width = std::max(0, content_rect_.w);
-    return SDL_Rect{ content_rect_.x, content_rect_.y + content_rect_.h/2 - 4, track_width, 8 };
+    return SDL_Rect{ content_rect_.x, content_rect_.y + content_rect_.h/2 - kSliderTrackThickness / 2, track_width, kSliderTrackThickness };
 }
 
 SDL_Rect DMSlider::knob_rect() const {
     SDL_Rect tr = track_rect();
-    int usable = std::max(1, tr.w - 12);
+    int usable = std::max(1, tr.w - kSliderKnobWidth);
     int x = tr.x + (int)((display_value() - min_) * usable / (double)(std::max(1, max_ - min_)));
-    return SDL_Rect{ x, tr.y - 4, 12, 16 };
+    return SDL_Rect{ x, tr.y - kSliderKnobVerticalInset, kSliderKnobWidth, kSliderKnobHeight };
 }
 
 int DMSlider::value_for_x(int x) const {
     SDL_Rect tr = track_rect();
-    int usable = std::max(1, tr.w - 12);
+    int usable = std::max(1, tr.w - kSliderKnobWidth);
     double t = (x - tr.x) / (double)usable;
     int range = std::max(1, max_ - min_);
     int v = min_ + (int)std::round(t * range);
@@ -690,33 +743,71 @@ void DMSlider::render(SDL_Renderer* r) const {
         draw_text(r, label_, label_rect_.x, label_rect_.y);
     }
     if (focused_) {
-        SDL_SetRenderDrawColor(r, kSliderFocusOutline.r, kSliderFocusOutline.g, kSliderFocusOutline.b, kSliderFocusOutline.a);
+        const SDL_Color& focus_outline = DMStyles::SliderFocusOutline();
+        SDL_SetRenderDrawColor(r, focus_outline.r, focus_outline.g, focus_outline.b, focus_outline.a);
         SDL_RenderDrawRect(r, &rect_);
     } else if (hovered_) {
-        SDL_SetRenderDrawColor(r, kSliderHoverOutline.r, kSliderHoverOutline.g, kSliderHoverOutline.b, kSliderHoverOutline.a);
+        const SDL_Color& hover_outline = DMStyles::HighlightColor();
+        SDL_SetRenderDrawColor(r, hover_outline.r, hover_outline.g, hover_outline.b, hover_outline.a);
         SDL_RenderDrawRect(r, &rect_);
     }
     SDL_Rect tr = track_rect();
     SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
-    SDL_SetRenderDrawColor(r, st.track_bg.r, st.track_bg.g, st.track_bg.b, st.track_bg.a);
-    SDL_RenderFillRect(r, &tr);
+    const SDL_Color& highlight = DMStyles::HighlightColor();
+    const SDL_Color& shadow = DMStyles::ShadowColor();
+    const int radius = std::min(DMStyles::CornerRadius(), std::min(tr.w, tr.h) / 2);
+    const int bevel = std::min(DMStyles::BevelDepth(), std::max(0, std::min(tr.w, tr.h) / 2));
+    dm_draw::DrawBeveledRect(
+        r,
+        tr,
+        radius,
+        bevel,
+        DMStyles::SliderTrackBackground(),
+        highlight,
+        shadow,
+        false,
+        DMStyles::HighlightIntensity(),
+        DMStyles::ShadowIntensity());
     int range = std::max(1, max_ - min_);
     int current_value = display_value();
     SDL_Rect fill{ tr.x, tr.y, (int)((current_value - min_) * tr.w / (double)range), tr.h };
-    SDL_SetRenderDrawColor(r, st.track_fill.r, st.track_fill.g, st.track_fill.b, st.track_fill.a);
-    SDL_RenderFillRect(r, &fill);
+    if (fill.w > 0) {
+        SDL_Rect fill_rect = fill;
+        dm_draw::DrawBeveledRect(
+            r,
+            fill_rect,
+            radius,
+            bevel,
+            DMStyles::SliderTrackFill(),
+            highlight,
+            shadow,
+            false,
+            DMStyles::HighlightIntensity(),
+            DMStyles::ShadowIntensity());
+    }
     SDL_Rect krect = knob_rect();
     SDL_Color knob_col = knob_hovered_ ? st.knob_hover : st.knob;
     SDL_Color kborder = knob_hovered_ ? st.knob_border_hover : st.knob_border;
-    SDL_SetRenderDrawColor(r, knob_col.r, knob_col.g, knob_col.b, knob_col.a);
-    SDL_RenderFillRect(r, &krect);
+    const int knob_radius = std::min(DMStyles::CornerRadius(), std::min(krect.w, krect.h) / 2);
+    const int knob_bevel = std::min(DMStyles::BevelDepth(), std::max(0, std::min(krect.w, krect.h) / 2));
+    dm_draw::DrawBeveledRect(
+        r,
+        krect,
+        knob_radius,
+        knob_bevel,
+        knob_col,
+        highlight,
+        shadow,
+        false,
+        DMStyles::HighlightIntensity(),
+        DMStyles::ShadowIntensity());
     SDL_SetRenderDrawColor(r, kborder.r, kborder.g, kborder.b, kborder.a);
     SDL_RenderDrawRect(r, &krect);
     if (edit_box_) {
         edit_box_->render(r);
     } else {
         SDL_Rect vr = value_rect();
-        draw_text(r, format_value(current_value), vr.x + 6, vr.y + (vr.h - st.value.font_size) / 2);
+        draw_text(r, format_value(current_value), vr.x + kSliderValueHorizontalPadding, vr.y + (vr.h - st.value.font_size) / 2);
     }
 }
 
@@ -920,26 +1011,28 @@ SDL_Rect DMRangeSlider::content_rect() const {
 
 SDL_Rect DMRangeSlider::track_rect() const {
     int width = std::max(0, content_rect_.w);
-    return SDL_Rect{ content_rect_.x, content_rect_.y + content_rect_.h/2 - 4, width, 8 };
+    return SDL_Rect{ content_rect_.x, content_rect_.y + content_rect_.h/2 - kSliderTrackThickness / 2, width, kSliderTrackThickness };
 }
 
 SDL_Rect DMRangeSlider::min_knob_rect() const {
     SDL_Rect tr = track_rect();
+    int usable = std::max(1, tr.w - kSliderKnobWidth);
     int range = std::max(1, max_ - min_);
-    int x = tr.x + (int)((display_min_value() - min_) * (tr.w - 12) / (double)range);
-    return SDL_Rect{ x, tr.y, 12, 16 };
+    int x = tr.x + (int)((display_min_value() - min_) * usable / (double)range);
+    return SDL_Rect{ x, tr.y - kSliderKnobVerticalInset, kSliderKnobWidth, kSliderKnobHeight };
 }
 
 SDL_Rect DMRangeSlider::max_knob_rect() const {
     SDL_Rect tr = track_rect();
+    int usable = std::max(1, tr.w - kSliderKnobWidth);
     int range = std::max(1, max_ - min_);
-    int x = tr.x + (int)((display_max_value() - min_) * (tr.w - 12) / (double)range);
-    return SDL_Rect{ x, tr.y - 16 + tr.h,    12, 16 };
+    int x = tr.x + (int)((display_max_value() - min_) * usable / (double)range);
+    return SDL_Rect{ x, tr.y - kSliderKnobVerticalInset, kSliderKnobWidth, kSliderKnobHeight };
 }
 
 int DMRangeSlider::value_for_x(int x) const {
     SDL_Rect tr = track_rect();
-    double t = (x - tr.x) / (double)(std::max(1, tr.w - 12));
+    double t = (x - tr.x) / (double)(std::max(1, tr.w - kSliderKnobWidth));
     int v = min_ + (int)std::round(t * (max_ - min_));
     return std::max(min_, std::min(max_, v));
 }
@@ -1190,53 +1283,100 @@ void DMRangeSlider::draw_text(SDL_Renderer* r, const std::string& s, int x, int 
 void DMRangeSlider::render(SDL_Renderer* r) const {
     const DMSliderStyle& st = DMStyles::Slider();
     if (focused_) {
-        SDL_SetRenderDrawColor(r, kSliderFocusOutline.r, kSliderFocusOutline.g, kSliderFocusOutline.b, kSliderFocusOutline.a);
+        const SDL_Color& focus_outline = DMStyles::SliderFocusOutline();
+        SDL_SetRenderDrawColor(r, focus_outline.r, focus_outline.g, focus_outline.b, focus_outline.a);
         SDL_RenderDrawRect(r, &rect_);
     } else if (hovered_) {
-        SDL_SetRenderDrawColor(r, kSliderHoverOutline.r, kSliderHoverOutline.g, kSliderHoverOutline.b, kSliderHoverOutline.a);
+        const SDL_Color& hover_outline = DMStyles::HighlightColor();
+        SDL_SetRenderDrawColor(r, hover_outline.r, hover_outline.g, hover_outline.b, hover_outline.a);
         SDL_RenderDrawRect(r, &rect_);
     }
     SDL_Rect tr = track_rect();
     SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
-    SDL_SetRenderDrawColor(r, st.track_bg.r, st.track_bg.g, st.track_bg.b, st.track_bg.a);
-    SDL_RenderFillRect(r, &tr);
+    const SDL_Color& highlight = DMStyles::HighlightColor();
+    const SDL_Color& shadow = DMStyles::ShadowColor();
+    const int radius = std::min(DMStyles::CornerRadius(), std::min(tr.w, tr.h) / 2);
+    const int bevel = std::min(DMStyles::BevelDepth(), std::max(0, std::min(tr.w, tr.h) / 2));
+    dm_draw::DrawBeveledRect(
+        r,
+        tr,
+        radius,
+        bevel,
+        DMStyles::SliderTrackBackground(),
+        highlight,
+        shadow,
+        false,
+        DMStyles::HighlightIntensity(),
+        DMStyles::ShadowIntensity());
     SDL_Rect kmin = min_knob_rect();
     SDL_Rect kmax = max_knob_rect();
-    int fill_x = kmin.x + 6;
-    int fill_w = (kmax.x + 6) - fill_x;
+    int fill_x = kmin.x + kSliderKnobWidth / 2;
+    int fill_w = (kmax.x + kSliderKnobWidth / 2) - fill_x;
     SDL_Rect fill{ fill_x, tr.y, std::max(0, fill_w), tr.h };
-    SDL_SetRenderDrawColor(r, st.track_fill.r, st.track_fill.g, st.track_fill.b, st.track_fill.a);
-    SDL_RenderFillRect(r, &fill);
+    if (fill.w > 0) {
+        dm_draw::DrawBeveledRect(
+            r,
+            fill,
+            radius,
+            bevel,
+            DMStyles::SliderTrackFill(),
+            highlight,
+            shadow,
+            false,
+            DMStyles::HighlightIntensity(),
+            DMStyles::ShadowIntensity());
+    }
     SDL_Color col_min = min_hovered_ ? st.knob_hover : st.knob;
     SDL_Color col_max = max_hovered_ ? st.knob_hover : st.knob;
     SDL_Color border_min = min_hovered_ ? st.knob_border_hover : st.knob_border;
     SDL_Color border_max = max_hovered_ ? st.knob_border_hover : st.knob_border;
-    SDL_SetRenderDrawColor(r, col_min.r, col_min.g, col_min.b, col_min.a);
-    SDL_RenderFillRect(r, &kmin);
+    const int knob_radius = std::min(DMStyles::CornerRadius(), std::min(kmin.w, kmin.h) / 2);
+    const int knob_bevel = std::min(DMStyles::BevelDepth(), std::max(0, std::min(kmin.w, kmin.h) / 2));
+    dm_draw::DrawBeveledRect(
+        r,
+        kmin,
+        knob_radius,
+        knob_bevel,
+        col_min,
+        highlight,
+        shadow,
+        false,
+        DMStyles::HighlightIntensity(),
+        DMStyles::ShadowIntensity());
     SDL_SetRenderDrawColor(r, border_min.r, border_min.g, border_min.b, border_min.a);
     SDL_RenderDrawRect(r, &kmin);
-    SDL_SetRenderDrawColor(r, col_max.r, col_max.g, col_max.b, col_max.a);
-    SDL_RenderFillRect(r, &kmax);
+    dm_draw::DrawBeveledRect(
+        r,
+        kmax,
+        knob_radius,
+        knob_bevel,
+        col_max,
+        highlight,
+        shadow,
+        false,
+        DMStyles::HighlightIntensity(),
+        DMStyles::ShadowIntensity());
     SDL_SetRenderDrawColor(r, border_max.r, border_max.g, border_max.b, border_max.a);
     SDL_RenderDrawRect(r, &kmax);
     if (edit_min_) {
         edit_min_->render(r);
     } else {
         int text_y = min_value_rect_.y + (min_value_rect_.h - st.value.font_size) / 2;
-        draw_text(r, std::to_string(display_min_value()), min_value_rect_.x + 4, text_y);
+        draw_text(r, std::to_string(display_min_value()), min_value_rect_.x + kSliderValueHorizontalPadding, text_y);
     }
     if (edit_max_) {
         edit_max_->render(r);
     } else {
         std::string value = std::to_string(display_max_value());
-        int text_x = max_value_rect_.x + 4;
+        int text_x = max_value_rect_.x + kSliderValueHorizontalPadding;
         int text_y = max_value_rect_.y + (max_value_rect_.h - st.value.font_size) / 2;
         TTF_Font* f = TTF_OpenFont(st.label.font_path.c_str(), st.label.font_size);
         if (f) {
             int tw = 0;
             int th = 0;
             if (TTF_SizeUTF8(f, value.c_str(), &tw, &th) == 0) {
-                text_x = std::max(max_value_rect_.x + 4, max_value_rect_.x + max_value_rect_.w - tw - 4);
+                text_x = std::max(max_value_rect_.x + kSliderValueHorizontalPadding,
+                                   max_value_rect_.x + max_value_rect_.w - tw - kSliderValueHorizontalPadding);
             }
             TTF_CloseFont(f);
         }
@@ -1327,8 +1467,18 @@ bool DMDropdown::handle_event(const SDL_Event& e) {
 void DMDropdown::render(SDL_Renderer* r) const {
     const DMTextBoxStyle& st = DMStyles::TextBox();
     SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
-    SDL_SetRenderDrawColor(r, st.bg.r, st.bg.g, st.bg.b, st.bg.a);
-    SDL_RenderFillRect(r, &box_rect_);
+    const SDL_Color fill = hovered_ ? DMStyles::TextboxHoverFill() : DMStyles::TextboxBaseFill();
+    dm_draw::DrawBeveledRect(
+        r,
+        box_rect_,
+        DMStyles::CornerRadius(),
+        DMStyles::BevelDepth(),
+        fill,
+        DMStyles::HighlightColor(),
+        DMStyles::ShadowColor(),
+        false,
+        DMStyles::HighlightIntensity(),
+        DMStyles::ShadowIntensity());
     if (!label_.empty() && label_height_ > 0) {
         DMLabelStyle lbl = DMStyles::Label();
         TTF_Font* f = TTF_OpenFont(lbl.font_path.c_str(), lbl.font_size);
@@ -1347,6 +1497,9 @@ void DMDropdown::render(SDL_Renderer* r) const {
         }
     }
     SDL_Color border = hovered_ ? st.border_hover : st.border;
+    if (expanded_) {
+        border = DMStyles::TextboxFocusOutline();
+    }
     SDL_SetRenderDrawColor(r, border.r, border.g, border.b, border.a);
     SDL_RenderDrawRect(r, &box_rect_);
     DMLabelStyle labelStyle{ st.label.font_path, st.label.font_size, st.text };
@@ -1379,8 +1532,17 @@ void DMDropdown::render_options(SDL_Renderer* r) const {
     DMLabelStyle labelStyle{ st.label.font_path, st.label.font_size, st.text };
     for (size_t i=0;i<options_.size();++i) {
         SDL_Rect opt{ box_rect_.x, box_rect_.y + box_rect_.h*(int)(i+1), box_rect_.w, box_rect_.h };
-        SDL_SetRenderDrawColor(r, st.bg.r, st.bg.g, st.bg.b, st.bg.a);
-        SDL_RenderFillRect(r, &opt);
+        dm_draw::DrawBeveledRect(
+            r,
+            opt,
+            DMStyles::CornerRadius(),
+            DMStyles::BevelDepth(),
+            DMStyles::TextboxBaseFill(),
+            DMStyles::HighlightColor(),
+            DMStyles::ShadowColor(),
+            false,
+            DMStyles::HighlightIntensity(),
+            DMStyles::ShadowIntensity());
         SDL_SetRenderDrawColor(r, border.r, border.g, border.b, border.a);
         SDL_RenderDrawRect(r, &opt);
         TTF_Font* f2 = TTF_OpenFont(labelStyle.font_path.c_str(), labelStyle.font_size);

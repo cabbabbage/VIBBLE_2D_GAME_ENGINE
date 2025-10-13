@@ -23,6 +23,7 @@
 #include "AsyncTaskQueue.hpp"
 #include "CroppingService.hpp"
 #include "dm_styles.hpp"
+#include "dev_mode/draw_utils.hpp"
 #include "dev_mode/widgets.hpp"
 #include "string_utils.hpp"
 
@@ -156,12 +157,19 @@ void SourceConfigPanel::render(SDL_Renderer* renderer) const {
 
     if (bounds_.w <= 0 || bounds_.h <= 0) return;
 
-    SDL_Rect panel_bounds = bounds_;
-    SDL_SetRenderDrawColor(renderer, 0x2d, 0x34, 0x36, 255);
-    SDL_RenderFillRect(renderer, &panel_bounds);
+    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
 
-    SDL_SetRenderDrawColor(renderer, 0x44, 0x52, 0x54, 255);
-    SDL_RenderDrawRect(renderer, &panel_bounds);
+    dm_draw::DrawBeveledRect(
+        renderer,
+        bounds_,
+        DMStyles::CornerRadius(),
+        DMStyles::BevelDepth(),
+        DMStyles::PanelBG(),
+        DMStyles::HighlightColor(),
+        DMStyles::ShadowColor(),
+        false,
+        DMStyles::HighlightIntensity(),
+        DMStyles::ShadowIntensity());
 
     for (size_t i = 0; i < buttons_.size(); ++i) {
         const auto& button = buttons_[i];

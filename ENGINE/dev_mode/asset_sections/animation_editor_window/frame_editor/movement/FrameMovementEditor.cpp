@@ -11,6 +11,7 @@
 #include "../../AnimationDocument.hpp"
 #include "../../PanelLayoutConstants.hpp"
 #include "../../../../dm_styles.hpp"
+#include "../../../../draw_utils.hpp"
 #include "FramePropertiesPanel.hpp"
 #include "MovementCanvas.hpp"
 #include "TotalsPanel.hpp"
@@ -440,13 +441,17 @@ void FrameMovementEditor::render_variant_header(SDL_Renderer* renderer) const {
 
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
 
-    const SDL_Color& panel_bg = DMStyles::PanelBG();
-    SDL_SetRenderDrawColor(renderer, panel_bg.r, panel_bg.g, panel_bg.b, panel_bg.a);
-    SDL_RenderFillRect(renderer, &header_rect_);
-
-    const SDL_Color& border = DMStyles::Border();
-    SDL_SetRenderDrawColor(renderer, border.r, border.g, border.b, border.a);
-    SDL_RenderDrawRect(renderer, &header_rect_);
+    dm_draw::DrawBeveledRect(
+        renderer,
+        header_rect_,
+        DMStyles::CornerRadius(),
+        DMStyles::BevelDepth(),
+        DMStyles::PanelBG(),
+        DMStyles::HighlightColor(),
+        DMStyles::ShadowColor(),
+        false,
+        DMStyles::HighlightIntensity(),
+        DMStyles::ShadowIntensity());
 
     const DMButtonStyle& active_style = DMStyles::AccentButton();
     const DMButtonStyle& inactive_style = DMStyles::HeaderButton();
