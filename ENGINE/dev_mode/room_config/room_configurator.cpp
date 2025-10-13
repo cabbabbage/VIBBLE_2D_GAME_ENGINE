@@ -1052,10 +1052,10 @@ void RoomConfigurator::rebuild_rows_internal() {
         basic_panel_ = std::make_unique<DockableCollapsible>("Basic Room Info", false);
         basic_panel_->set_show_header(true);
         basic_panel_->set_close_button_enabled(false);
-        basic_panel_->set_scroll_enabled(true);
+        basic_panel_->set_scroll_enabled(false);
         basic_panel_->set_expanded(false);
     } else {
-        basic_panel_->set_scroll_enabled(true);
+        basic_panel_->set_scroll_enabled(false);
     }
     basic_panel_->set_rows(rows_);
     basic_panel_->force_pointer_ready();

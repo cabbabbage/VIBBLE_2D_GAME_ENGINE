@@ -37,6 +37,7 @@
 #include "spawn/methods/percent_spawner.hpp"
 #include "spawn/methods/random_spawner.hpp"
 #include "spawn/spawn_logger.hpp"
+#include "spawn/spawn_context.hpp"
 #include "utils/area.hpp"
 #include "utils/map_grid.hpp"
 #include "utils/input.hpp"
