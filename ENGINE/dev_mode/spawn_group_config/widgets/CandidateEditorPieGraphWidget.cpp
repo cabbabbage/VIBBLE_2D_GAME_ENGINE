@@ -92,7 +92,7 @@ bool CandidateEditorPieGraphWidget::handle_event(const SDL_Event& e) {
         }
 
         SDL_Point point{e.motion.x, e.motion.y};
-        if (!SDL_PointInRect(&rect_, &point)) {
+        if (!SDL_PointInRect(&point, &rect_)) {
             if (hovered_index_ != -1) {
                 hovered_index_ = -1;
                 return true;
@@ -114,7 +114,7 @@ bool CandidateEditorPieGraphWidget::handle_event(const SDL_Event& e) {
 
         SDL_Point point{e.button.x, e.button.y};
         int target_index = -1;
-        if (SDL_PointInRect(&rect_, &point)) {
+        if (SDL_PointInRect(&point, &rect_)) {
             target_index = hit_test_candidate(layout, point, total);
         } else if (hovered_index_ != -1) {
             hovered_index_ = -1;
@@ -169,7 +169,7 @@ bool CandidateEditorPieGraphWidget::handle_event(const SDL_Event& e) {
 }
 
 int CandidateEditorPieGraphWidget::hit_test_candidate(const Layout& layout, SDL_Point point, double total) const {
-    if (!SDL_PointInRect(&rect_, &point)) {
+    if (!SDL_PointInRect(&point, &rect_)) {
         return -1;
     }
 
@@ -178,7 +178,7 @@ int CandidateEditorPieGraphWidget::hit_test_candidate(const Layout& layout, SDL_
         if (row.w <= 0 || row.h <= 0) {
             continue;
         }
-        if (SDL_PointInRect(&row, &point)) {
+        if (SDL_PointInRect(&point, &row)) {
             return static_cast<int>(i);
         }
     }

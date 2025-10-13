@@ -12,15 +12,14 @@
 #include <nlohmann/json_fwd.hpp>
 
 #include "DockableCollapsible.hpp"
+#include "SlidingWindowContainer.hpp"
 #include "room_selector_popup.hpp"
 
 class Input;
 struct SDL_Renderer;
 class MapLayersController;
 class RoomConfigurator;
-class SlidingWindowContainer;
-
-class MapLayersPanel {
+class MapLayersPanel : public DockableCollapsible {
 public:
     using SaveCallback = std::function<bool()>;
 

@@ -2739,10 +2739,8 @@ auto MapLayersPanel::layers_array() const -> const nlohmann::json& {
 
 }
 
-MapLayersPanel::MapLayersPanel(int x, int y) {
-
-    (void)x;
-    (void)y;
+MapLayersPanel::MapLayersPanel(int x, int y)
+    : DockableCollapsible("Map Layers", true, x, y) {
 
     main_container_ = std::make_unique<SlidingWindowContainer>();
     if (main_container_) {
