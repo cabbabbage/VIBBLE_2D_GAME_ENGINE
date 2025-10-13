@@ -13,7 +13,7 @@
 struct SpawnCandidate {
     std::string name;
     std::string display_name;
-    int weight = 0;
+    double weight = 0.0;
     std::shared_ptr<AssetInfo> info;
     bool is_null = false;
 };
@@ -42,17 +42,17 @@ struct SpawnInfo {
 
     const SpawnCandidate* select_candidate(std::mt19937& rng) const {
         if (candidates.empty()) return nullptr;
-        std::vector<int> weights;
+        std::vector<double> weights;
         weights.reserve(candidates.size());
-        bool has_positive = false;
+        double total_positive = 0.0;
         for (const auto& cand : candidates) {
-            int w = cand.weight;
-            if (w < 0) w = 0;
-            if (w > 0) has_positive = true;
+            double w = cand.weight;
+            if (w < 0.0) w = 0.0;
+            if (w > 0.0) total_positive += w;
             weights.push_back(w);
         }
-        if (!has_positive) {
-            std::fill(weights.begin(), weights.end(), 1);
+        if (total_positive <= 0.0) {
+            std::fill(weights.begin(), weights.end(), 1.0);
         }
         std::discrete_distribution<size_t> dist(weights.begin(), weights.end());
         return &candidates[dist(rng)];

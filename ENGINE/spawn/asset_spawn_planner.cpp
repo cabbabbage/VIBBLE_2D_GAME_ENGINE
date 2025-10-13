@@ -154,7 +154,7 @@ void AssetSpawnPlanner::parse_asset_spawns(const Area& area) {
         candidates.reserve(cand_jsons.size());
 
         struct CandidateDraft {
-            int weight = 0;
+            double weight = 0.0;
             bool use_tag = false;
             std::string tag;
             std::string original_name;
@@ -163,10 +163,14 @@ void AssetSpawnPlanner::parse_asset_spawns(const Area& area) {
             bool is_null = false;
 };
 
-        auto extract_chance = [](const nlohmann::json& c) -> int {
-            return (c.contains("chance") && c["chance"].is_number_integer())
-                   ? c["chance"].get<int>() : 0;
-};
+        auto extract_chance = [](const nlohmann::json& c) -> double {
+            if (!c.contains("chance")) return 0.0;
+            const auto& chance = c["chance"];
+            if (chance.is_number()) {
+                return chance.get<double>();
+            }
+            return 0.0;
+        };
 
         auto sanitize_key = [](std::string value) {
             auto not_space = [](unsigned char ch) { return !std::isspace(ch); };
@@ -260,7 +264,7 @@ void AssetSpawnPlanner::parse_asset_spawns(const Area& area) {
         for (const auto& cj : cand_jsons) {
             CandidateDraft draft = parse_candidate(cj);
 
-            if (draft.weight <= 0) {
+            if (draft.weight <= 0.0) {
                 if (draft.use_tag) {
                     if (!draft.tag.empty()) blocked_tags.insert(draft.tag);
                 } else if (!draft.is_null) {
@@ -274,7 +278,7 @@ void AssetSpawnPlanner::parse_asset_spawns(const Area& area) {
 
         std::unordered_set<std::string> candidate_tags;
         for (const auto& d : drafts) {
-            if (d.use_tag && !d.tag.empty() && d.weight > 0) {
+            if (d.use_tag && !d.tag.empty() && d.weight > 0.0) {
                 candidate_tags.insert(d.tag);
             }
         }
@@ -286,7 +290,7 @@ void AssetSpawnPlanner::parse_asset_spawns(const Area& area) {
             std::string resolved_name;
             if (draft.use_tag) {
                 std::string tag = !draft.tag.empty() ? draft.tag : sanitize_key(draft.original_name);
-                if (!tag.empty() && draft.weight > 0) {
+                if (!tag.empty() && draft.weight > 0.0) {
                     try {
                         resolved_name = resolve_asset_from_tag( tag, &blocked_tags, &blocked_assets, &candidate_tags );
                     } catch (...) {
@@ -298,7 +302,7 @@ void AssetSpawnPlanner::parse_asset_spawns(const Area& area) {
             }
 
             bool is_null = draft.is_null;
-            if (draft.use_tag && draft.weight <= 0) {
+            if (draft.use_tag && draft.weight <= 0.0) {
                 is_null = true;
             }
 
@@ -329,7 +333,7 @@ void AssetSpawnPlanner::parse_asset_spawns(const Area& area) {
             }
 
             if (c.is_null && c.display_name.empty()) c.display_name = "null";
-            if (c.weight < 0) c.weight = 0;
+            if (c.weight < 0.0) c.weight = 0.0;
 
             candidates.push_back(std::move(c));
         }

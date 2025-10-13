@@ -106,17 +106,17 @@ void AssetSpawner::run_spawning(AssetSpawnPlanner* planner, const Area& area) {
 
                 if (queue_item.name == "batch_map_assets") {
 
-                        std::vector<int> base_weights;
+                        std::vector<double> base_weights;
                         base_weights.reserve(queue_item.candidates.size());
-                        bool has_positive_weight = false;
+                        double total_weight = 0.0;
                         for (const auto& cand : queue_item.candidates) {
-                                int weight = cand.weight;
-                                if (weight < 0) weight = 0;
-                                if (weight > 0) has_positive_weight = true;
+                                double weight = cand.weight;
+                                if (weight < 0.0) weight = 0.0;
+                                if (weight > 0.0) total_weight += weight;
                                 base_weights.push_back(weight);
                         }
-                        if (!has_positive_weight && !base_weights.empty()) {
-                                std::fill(base_weights.begin(), base_weights.end(), 1);
+                        if (total_weight <= 0.0 && !base_weights.empty()) {
+                                std::fill(base_weights.begin(), base_weights.end(), 1.0);
                         }
 
                         auto grid_points = grid.get_all_points_in_area(area);
@@ -133,16 +133,16 @@ void AssetSpawner::run_spawning(AssetSpawnPlanner* planner, const Area& area) {
                                 if (!gp) continue;
                                 SDL_Point spawn_pos{ gp->pos.x, gp->pos.y };
                                 bool placed = false;
-                                std::vector<int> attempt_weights = base_weights;
+                                std::vector<double> attempt_weights = base_weights;
                                 const size_t max_candidate_attempts = queue_item.candidates.size();
                                 for (size_t attempt = 0; attempt < max_candidate_attempts; ++attempt) {
-                                        int total_weight = std::accumulate(attempt_weights.begin(), attempt_weights.end(), 0);
-                                        if (total_weight <= 0) break;
+                                        double total_weight = std::accumulate(attempt_weights.begin(), attempt_weights.end(), 0.0);
+                                        if (total_weight <= 0.0) break;
                                         std::discrete_distribution<size_t> dist(attempt_weights.begin(), attempt_weights.end());
                                         size_t idx = dist(ctx.rng());
                                         if (idx >= queue_item.candidates.size()) break;
-                                        if (attempt_weights[idx] <= 0) {
-                                                attempt_weights[idx] = 0;
+                                        if (attempt_weights[idx] <= 0.0) {
+                                                attempt_weights[idx] = 0.0;
                                                 continue;
                                         }
                                         ++attempts;
@@ -154,12 +154,12 @@ void AssetSpawner::run_spawning(AssetSpawnPlanner* planner, const Area& area) {
                                                 break;
                                         }
                                         if (ctx.checker().check(candidate.info, spawn_pos, ctx.exclusion_zones(), ctx.all_assets(), true, true, true, 5)) {
-                                                attempt_weights[idx] = 0;
+                                                attempt_weights[idx] = 0.0;
                                                 continue;
                                         }
                                         auto* result = ctx.spawnAsset(candidate.name, candidate.info, area, spawn_pos, 0, nullptr, queue_item.spawn_id, queue_item.position);
                                         if (!result) {
-                                                attempt_weights[idx] = 0;
+                                                attempt_weights[idx] = 0.0;
                                                 continue;
                                         }
                                         grid.set_occupied(gp, true);
@@ -212,17 +212,17 @@ void AssetSpawner::run_boundary_spawning(const Area& area) {
                         ctx.set_clip_area(nullptr);
                 }
 
-                std::vector<int> base_weights;
+                std::vector<double> base_weights;
                 base_weights.reserve(queue_item.candidates.size());
-                bool has_positive_weight = false;
+                double total_weight = 0.0;
                 for (const auto& cand : queue_item.candidates) {
-                        int weight = cand.weight;
-                        if (weight < 0) weight = 0;
-                        if (weight > 0) has_positive_weight = true;
+                        double weight = cand.weight;
+                        if (weight < 0.0) weight = 0.0;
+                        if (weight > 0.0) total_weight += weight;
                         base_weights.push_back(weight);
                 }
-                if (!has_positive_weight && !base_weights.empty()) {
-                        std::fill(base_weights.begin(), base_weights.end(), 1);
+                if (total_weight <= 0.0 && !base_weights.empty()) {
+                        std::fill(base_weights.begin(), base_weights.end(), 1.0);
                 }
 
                 auto grid_points = grid.get_all_points_in_area(area);
@@ -250,16 +250,16 @@ void AssetSpawner::run_boundary_spawning(const Area& area) {
                         SDL_Point spawn_pos = gp->pos;
 
                         bool success = false;
-                        std::vector<int> attempt_weights = base_weights;
+                        std::vector<double> attempt_weights = base_weights;
                         const size_t max_candidate_attempts = queue_item.candidates.size();
                         for (size_t attempt = 0; attempt < max_candidate_attempts; ++attempt) {
-                                int total_weight = std::accumulate(attempt_weights.begin(), attempt_weights.end(), 0);
-                                if (total_weight <= 0) break;
+                                double total_weight = std::accumulate(attempt_weights.begin(), attempt_weights.end(), 0.0);
+                                if (total_weight <= 0.0) break;
                                 std::discrete_distribution<size_t> dist(attempt_weights.begin(), attempt_weights.end());
                                 size_t idx = dist(ctx.rng());
                                 if (idx >= queue_item.candidates.size()) break;
-                                if (attempt_weights[idx] <= 0) {
-                                        attempt_weights[idx] = 0;
+                                if (attempt_weights[idx] <= 0.0) {
+                                        attempt_weights[idx] = 0.0;
                                         continue;
                                 }
                                 ++attempts;
@@ -271,13 +271,13 @@ void AssetSpawner::run_boundary_spawning(const Area& area) {
                                 }
 
                                 if (ctx.checker().check(candidate.info, spawn_pos, ctx.exclusion_zones(), ctx.all_assets(), true, true, true, 5)) {
-                                        attempt_weights[idx] = 0;
+                                        attempt_weights[idx] = 0.0;
                                         continue;
                                 }
 
                                 auto* result = ctx.spawnAsset(candidate.name, candidate.info, area, spawn_pos, 0, nullptr, queue_item.spawn_id, queue_item.position);
                                 if (!result) {
-                                        attempt_weights[idx] = 0;
+                                        attempt_weights[idx] = 0.0;
                                         continue;
                                 }
 
