@@ -278,28 +278,25 @@ void CandidateEditorPieGraphWidget::render(SDL_Renderer* renderer) const {
     int font_size = std::max(11, DMStyles::Label().font_size - 1);
     TTF_Font* font = TTF_OpenFont(DMStyles::Label().font_path.c_str(), font_size);
 
-    if (candidates_.empty() || layout.radius <= 0.0f) {
+    const bool has_candidates = !candidates_.empty() && layout.radius > 0.0f;
+    if (!has_candidates) {
         render_empty(renderer, layout, font);
-        if (font) {
-            TTF_CloseFont(font);
-        }
-        return;
-    }
-
-    double total = total_weight();
-    if (total <= 0.0) {
-        total = std::accumulate(candidates_.begin(), candidates_.end(), 0.0,
-                                [](double acc, const CandidateInfo& info) {
-                                    return acc + clamp_positive(info.weight);
-                                });
+    } else {
+        double total = total_weight();
         if (total <= 0.0) {
-            total = 1.0;
+            total = std::accumulate(candidates_.begin(), candidates_.end(), 0.0,
+                                    [](double acc, const CandidateInfo& info) {
+                                        return acc + clamp_positive(info.weight);
+                                    });
+            if (total <= 0.0) {
+                total = 1.0;
+            }
         }
-    }
 
-    render_slices(renderer, layout, total);
-    render_outline(renderer, layout);
-    render_legend(renderer, layout, total, font);
+        render_slices(renderer, layout, total);
+        render_outline(renderer, layout);
+        render_legend(renderer, layout, total, font);
+    }
 
     if (font) {
         TTF_CloseFont(font);

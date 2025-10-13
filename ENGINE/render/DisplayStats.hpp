@@ -47,6 +47,8 @@ private:
 
     TTF_Font* font_ = nullptr;
     bool visible_ = false;
+    bool font_load_attempted_ = false;
+    bool font_warning_logged_ = false;
     static constexpr Uint32 kHistoryDurationMs = 20'000;  // 20 seconds
     static constexpr int kChartWidth = 320;
     static constexpr int kChartHeight = 120;

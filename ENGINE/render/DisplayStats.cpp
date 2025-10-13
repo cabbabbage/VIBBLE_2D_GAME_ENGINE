@@ -7,18 +7,46 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <cstdlib>
 #include <iomanip>
 #include <sstream>
 #include <cmath>
+#include <vector>
 
 namespace {
 
-#ifdef _WIN32
-constexpr const char* kDefaultFontPath = "C:/Windows/Fonts/segoeui.ttf";
-#else
-constexpr const char* kDefaultFontPath = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf";
-#endif
 constexpr int kFontSize = 16;
+
+std::vector<std::string> font_search_paths()
+{
+    std::vector<std::string> paths;
+
+    if (const char* env_override = std::getenv("VIBBLE_STATS_FONT")) {
+        if (env_override[0] != '\0') {
+            paths.emplace_back(env_override);
+        }
+    }
+
+#ifdef _WIN32
+    paths.emplace_back("C:/Windows/Fonts/segoeui.ttf");
+    paths.emplace_back("C:/Windows/Fonts/arial.ttf");
+    paths.emplace_back("C:/Windows/Fonts/tahoma.ttf");
+#elif defined(__APPLE__)
+    paths.emplace_back("/System/Library/Fonts/SFNS.ttf");
+    paths.emplace_back("/System/Library/Fonts/SFNSDisplay.ttf");
+    paths.emplace_back("/System/Library/Fonts/Helvetica.ttc");
+    paths.emplace_back("/System/Library/Fonts/Supplemental/Arial.ttf");
+    paths.emplace_back("/System/Library/Fonts/Supplemental/Arial Unicode.ttf");
+#else
+    paths.emplace_back("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf");
+    paths.emplace_back("/usr/share/fonts/truetype/dejavu/DejaVuSansCondensed.ttf");
+    paths.emplace_back("/usr/share/fonts/truetype/freefont/FreeSans.ttf");
+    paths.emplace_back("/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf");
+    paths.emplace_back("/usr/share/fonts/truetype/ubuntu/Ubuntu-R.ttf");
+#endif
+
+    return paths;
+}
 
 }  // namespace
 
@@ -37,7 +65,27 @@ void DisplayStats::ensure_font() {
     if (font_) {
         return;
     }
-    font_ = TTF_OpenFont(kDefaultFontPath, kFontSize);
+    if (font_load_attempted_) {
+        return;
+    }
+    font_load_attempted_ = true;
+    for (const std::string& path : font_search_paths()) {
+        if (path.empty()) {
+            continue;
+        }
+        font_ = TTF_OpenFont(path.c_str(), kFontSize);
+        if (font_) {
+            font_load_attempted_ = false;
+            font_warning_logged_ = false;
+            break;
+        }
+    }
+
+    if (!font_ && !font_warning_logged_) {
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+                    "[DisplayStats] Unable to load stats font. Set VIBBLE_STATS_FONT to a valid TTF file to restore text.");
+        font_warning_logged_ = true;
+    }
 }
 
 void DisplayStats::handle_input(const Input& input) {
@@ -138,33 +186,35 @@ void DisplayStats::render(SDL_Renderer* renderer) {
         return;
     }
     ensure_font();
-    if (!font_) {
-        return;
-    }
+
+    const bool has_font = (font_ != nullptr);
 
     std::vector<SDL_Surface*> surfaces(rows_.size(), nullptr);
     std::vector<SDL_Texture*> textures(rows_.size(), nullptr);
     int text_max_width = 0;
     int text_total_height = 0;
 
-    for (std::size_t idx = 0; idx < rows_.size(); ++idx) {
-        const std::string& text = rows_[idx].line;
-        SDL_Surface* surf = text.empty() ? nullptr : TTF_RenderUTF8_Blended(font_, text.c_str(), text_color_);
-        surfaces[idx] = surf;
-        const int line_height = surf ? surf->h : kFontSize;
-        text_total_height += line_height;
-        if (idx + 1 < rows_.size()) {
-            text_total_height += line_spacing_;
-        }
-        if (surf) {
-            text_max_width = std::max(text_max_width, surf->w);
+    if (has_font) {
+        for (std::size_t idx = 0; idx < rows_.size(); ++idx) {
+            const std::string& text = rows_[idx].line;
+            SDL_Surface* surf = text.empty() ? nullptr : TTF_RenderUTF8_Blended(font_, text.c_str(), text_color_);
+            surfaces[idx] = surf;
+            const int line_height = surf ? surf->h : kFontSize;
+            text_total_height += line_height;
+            if (idx + 1 < rows_.size()) {
+                text_total_height += line_spacing_;
+            }
+            if (surf) {
+                text_max_width = std::max(text_max_width, surf->w);
+            }
         }
     }
 
     const int content_width = std::max(kChartWidth, text_max_width);
     const int chart_width = content_width;
     const int chart_height = kChartHeight;
-    const int total_height = padding_ * 2 + chart_height + kChartTextSpacing + text_total_height;
+    const int text_block_height = has_font ? (kChartTextSpacing + text_total_height) : 0;
+    const int total_height = padding_ * 2 + chart_height + text_block_height;
 
     SDL_Rect background{
         margin_,
@@ -224,35 +274,37 @@ void DisplayStats::render(SDL_Renderer* renderer) {
         }
     }
 
-    int pen_y = chart_rect.y + chart_rect.h + kChartTextSpacing;
-    for (std::size_t idx = 0; idx < rows_.size(); ++idx) {
-        SDL_Surface* surf = surfaces[idx];
-        int line_height = kFontSize;
-        if (surf) {
-            SDL_Texture* tex = SDL_CreateTextureFromSurface(renderer, surf);
-            textures[idx] = tex;
-            SDL_Rect dst{
-                margin_ + padding_,
-                pen_y,
-                surf->w,
-                surf->h
-            };
-            if (tex) {
-                SDL_RenderCopy(renderer, tex, nullptr, &dst);
+    if (has_font) {
+        int pen_y = chart_rect.y + chart_rect.h + kChartTextSpacing;
+        for (std::size_t idx = 0; idx < rows_.size(); ++idx) {
+            SDL_Surface* surf = surfaces[idx];
+            int line_height = kFontSize;
+            if (surf) {
+                SDL_Texture* tex = SDL_CreateTextureFromSurface(renderer, surf);
+                textures[idx] = tex;
+                SDL_Rect dst{
+                    margin_ + padding_,
+                    pen_y,
+                    surf->w,
+                    surf->h
+                };
+                if (tex) {
+                    SDL_RenderCopy(renderer, tex, nullptr, &dst);
+                }
+                line_height = surf->h;
             }
-            line_height = surf->h;
+            pen_y += line_height + line_spacing_;
         }
-        pen_y += line_height + line_spacing_;
-    }
 
-    for (SDL_Texture* tex : textures) {
-        if (tex) {
-            SDL_DestroyTexture(tex);
+        for (SDL_Texture* tex : textures) {
+            if (tex) {
+                SDL_DestroyTexture(tex);
+            }
         }
-    }
-    for (SDL_Surface* surf : surfaces) {
-        if (surf) {
-            SDL_FreeSurface(surf);
+        for (SDL_Surface* surf : surfaces) {
+            if (surf) {
+                SDL_FreeSurface(surf);
+            }
         }
     }
 }
