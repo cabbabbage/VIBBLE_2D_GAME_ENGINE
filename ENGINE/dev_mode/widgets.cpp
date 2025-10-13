@@ -656,7 +656,11 @@ bool DMSlider::handle_event(const SDL_Event& e) {
         SDL_Point p{ e.button.x, e.button.y };
         bool inside = update_hover(p);
         if (inside) {
+            bool was_focused = focused_;
             set_focus(true);
+            if (!was_focused) {
+                return true;
+            }
             SDL_Rect vr = value_rect();
             if (SDL_PointInRect(&p, &vr)) {
                 edit_box_ = std::make_unique<DMTextBox>("", format_value(display_value()));
@@ -1155,7 +1159,11 @@ bool DMRangeSlider::handle_event(const SDL_Event& e) {
         SDL_Point p{ e.button.x, e.button.y };
         bool inside = update_hover(p);
         if (inside) {
+            bool was_focused = focused_;
             set_focus(true);
+            if (!was_focused) {
+                return true;
+            }
         } else if (!dragging_min_ && !dragging_max_) {
             set_focus(false);
         }
