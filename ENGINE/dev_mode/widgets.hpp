@@ -221,10 +221,12 @@ public:
     const SDL_Rect& rect() const { return rect_; }
     int selected() const { return index_; }
     void set_selected(int idx);
+    bool focused() const { return focused_; }
+    int pending_index() const { return has_pending_index_ ? pending_index_ : index_; }
     bool handle_event(const SDL_Event& e);
     void render(SDL_Renderer* r) const;
     void render_options(SDL_Renderer* r) const;
-    bool expanded() const { return expanded_; }
+    bool expanded() const { return focused_; }
     int preferred_height(int width) const;
     static int height();
 
@@ -232,6 +234,9 @@ public:
 
     static void render_active_options(SDL_Renderer* r);
 private:
+    int clamp_index(int idx) const;
+    bool commit_pending_selection();
+    void begin_focus();
     int label_space() const;
     int compute_label_height(int width) const;
     SDL_Rect box_rect() const;
@@ -244,7 +249,9 @@ private:
     std::vector<std::string> options_;
     int index_ = 0;
     bool hovered_ = false;
-    bool expanded_ = false;
+    bool focused_ = false;
+    int pending_index_ = 0;
+    bool has_pending_index_ = false;
     static DMDropdown* active_;
 };
 

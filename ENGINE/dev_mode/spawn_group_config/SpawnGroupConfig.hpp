@@ -120,6 +120,19 @@ public:
     void fire_entry_callbacks(const nlohmann::json& entry, const ChangeSummary& summary);
 
 private:
+    struct DragState {
+        bool active = false;
+        size_t source_index = 0;
+        size_t hover_index = 0;
+        std::vector<std::string> original_order;
+        std::vector<std::string> expansion_snapshot;
+        std::vector<int> entry_heights;
+        SDL_Rect placeholder_rect{0, 0, 0, 0};
+        SDL_Rect source_rect{0, 0, 0, 0};
+        int pointer_y = 0;
+        bool pointer_inside = false;
+    };
+
     bool default_floatable_mode_ = true;
     bool embedded_mode_ = false;
     bool layout_dirty_ = true;
@@ -159,9 +172,19 @@ private:
     std::unique_ptr<SearchAssets> asset_search_{};
     std::string pending_add_spawn_id_{};
 
+    DragState drag_state_{};
+
     void open_asset_search_for_entry(const std::string& spawn_id);
     void handle_asset_search_selection(const std::string& value);
     Entry* find_entry_by_id(const std::string& id);
+    void begin_drag(size_t index, int pointer_y);
+    void cancel_drag();
+    void finalize_drag(bool commit);
+    void update_drag_visuals(const Input& input);
+    bool should_render_entry_body(const Entry& entry) const;
+    SDL_Rect slot_rect_for_index(size_t index, int fallback_height) const;
+    void reorder_json(size_t from, size_t to);
+    void restore_order_from_snapshot(const std::vector<std::string>& order);
 
     friend class SpawnGroupConfigTestAccessor;
 };

@@ -663,51 +663,62 @@ struct SpawnGroupConfig::Entry {
         if (spawn_id_label_) {
             rows.push_back({spawn_id_label_.get()});
         }
-        if (ownership_label_widget_) {
-            rows.push_back({ownership_label_widget_.get()});
-        }
-
-        DockableCollapsible::Row primary_actions;
-        if (regenerate_widget_) primary_actions.push_back(regenerate_widget_.get());
-        if (duplicate_widget_) primary_actions.push_back(duplicate_widget_.get());
-        if (!primary_actions.empty()) rows.push_back(primary_actions);
-
-        // Display name field
-        rows.push_back({name_widget_.get()});
-
-        // Position + area + enforce spacing
-        DockableCollapsible::Row method_row;
-        method_row.push_back(method_widget_.get());
-        if (show_area_dropdown_) {
-            method_row.push_back(area_widget_.get());
-            if (open_area_widget_ && open_area_handler_) {
-                method_row.push_back(open_area_widget_.get());
+        if (!owner_ || owner_->should_render_entry_body(*this)) {
+            if (ownership_label_widget_) {
+                rows.push_back({ownership_label_widget_.get()});
             }
-        }
-        method_row.push_back(enforce_widget_.get());
-        rows.push_back(method_row);
 
-        // Quantity controls
-        if (!quantity_hidden()) {
-            if (use_exact_quantity_) {
-                rows.push_back({exact_widget_.get()});
-            } else {
-                DockableCollapsible::Row qty_row;
-                qty_row.push_back(min_widget_.get());
-                qty_row.push_back(max_widget_.get());
-                rows.push_back(qty_row);
+            DockableCollapsible::Row primary_actions;
+            if (regenerate_widget_) primary_actions.push_back(regenerate_widget_.get());
+            if (duplicate_widget_) primary_actions.push_back(duplicate_widget_.get());
+            if (!primary_actions.empty()) rows.push_back(primary_actions);
+
+            // Display name field
+            rows.push_back({name_widget_.get()});
+
+            // Position + area + enforce spacing
+            DockableCollapsible::Row method_row;
+            method_row.push_back(method_widget_.get());
+            if (show_area_dropdown_) {
+                method_row.push_back(area_widget_.get());
+                if (open_area_widget_ && open_area_handler_) {
+                    method_row.push_back(open_area_widget_.get());
+                }
             }
+            method_row.push_back(enforce_widget_.get());
+            rows.push_back(method_row);
+
+            // Quantity controls
+            if (!quantity_hidden()) {
+                if (use_exact_quantity_) {
+                    rows.push_back({exact_widget_.get()});
+                } else {
+                    DockableCollapsible::Row qty_row;
+                    qty_row.push_back(min_widget_.get());
+                    qty_row.push_back(max_widget_.get());
+                    rows.push_back(qty_row);
+                }
+            }
+
+            // Candidates: only pie and Add button
+            rows.push_back({candidate_header_.get()});
+            if (candidate_entries_.empty()) {
+                rows.push_back({empty_candidates_label_.get()});
+            }
+            rows.push_back({add_candidate_widget_.get()});
+            if (auto* graph = candidate_editor_widget()) {
+                rows.push_back({graph});
+            }
+
+            return;
         }
 
-        // Candidates: only pie and Add button
-        rows.push_back({candidate_header_.get()});
-        if (candidate_entries_.empty()) {
-            rows.push_back({empty_candidates_label_.get()});
-        }
-        rows.push_back({add_candidate_widget_.get()});
-        if (auto* graph = candidate_editor_widget()) {
-            rows.push_back({graph});
-        }
+    }
+
+    const SDL_Rect& header_rect() const {
+        static SDL_Rect empty{0, 0, 0, 0};
+        if (!spawn_id_label_) return empty;
+        return spawn_id_label_->rect();
     }
 
 private:
@@ -1227,6 +1238,9 @@ nlohmann::json SpawnGroupConfig::to_json() const {
 
 void SpawnGroupConfig::update(const Input& input, int screen_w, int screen_h) {
     DockableCollapsible::update(input, screen_w, screen_h);
+    if (drag_state_.active) {
+        update_drag_visuals(input);
+    }
     if (bound_entry_) {
         const int padding = DMSpacing::panel_padding();
         const int btn = DMButton::height();
@@ -1253,6 +1267,72 @@ bool SpawnGroupConfig::handle_event(const SDL_Event& e) {
     if (asset_search_ && asset_search_->visible()) {
         if (asset_search_->handle_event(e)) return true;
     }
+
+    const bool pointer_event =
+        (e.type == SDL_MOUSEBUTTONDOWN || e.type == SDL_MOUSEBUTTONUP || e.type == SDL_MOUSEMOTION);
+
+    if (drag_state_.active) {
+        if (pointer_event) {
+            SDL_Point pointer{0, 0};
+            if (e.type == SDL_MOUSEMOTION) {
+                pointer = SDL_Point{e.motion.x, e.motion.y};
+            } else {
+                pointer = SDL_Point{e.button.x, e.button.y};
+            }
+            drag_state_.pointer_y = pointer.y;
+            bool inside_panel = SDL_PointInRect(&pointer, &rect_);
+            if (e.type == SDL_MOUSEMOTION) {
+                if (!inside_panel) {
+                    cancel_drag();
+                } else {
+                    drag_state_.pointer_inside = SDL_PointInRect(&pointer, &body_viewport_);
+                }
+                process_pending_notifications();
+                return true;
+            }
+            if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
+                drag_state_.pointer_inside = SDL_PointInRect(&pointer, &body_viewport_);
+                if (!inside_panel || !drag_state_.pointer_inside) {
+                    cancel_drag();
+                } else {
+                    finalize_drag(true);
+                }
+                process_pending_notifications();
+                return true;
+            }
+            if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
+                process_pending_notifications();
+                return true;
+            }
+        }
+        if (e.type == SDL_KEYDOWN && e.key.keysym.sym == SDLK_ESCAPE) {
+            cancel_drag();
+            process_pending_notifications();
+            return true;
+        }
+        if (e.type == SDL_WINDOWEVENT && e.window.event == SDL_WINDOWEVENT_LEAVE) {
+            cancel_drag();
+            process_pending_notifications();
+            return true;
+        }
+        process_pending_notifications();
+        return true;
+    }
+
+    if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
+        SDL_Point pointer{e.button.x, e.button.y};
+        for (size_t i = 0; i < entries_.size(); ++i) {
+            if (!entries_[i]) continue;
+            const SDL_Rect& header = entries_[i]->header_rect();
+            if (header.w <= 0 || header.h <= 0) continue;
+            if (SDL_PointInRect(&pointer, &header)) {
+                begin_drag(i, pointer.y);
+                process_pending_notifications();
+                return true;
+            }
+        }
+    }
+
     if (bound_entry_) {
         auto spawn_id_for_actions = [this]() -> std::string {
             if (entries_.empty() || !entries_[0]) return std::string{};
@@ -1290,6 +1370,24 @@ void SpawnGroupConfig::render(SDL_Renderer* r) const {
 
 void SpawnGroupConfig::render_content(SDL_Renderer* r) const {
     DockableCollapsible::render_content(r);
+    if (!r) return;
+    if (!drag_state_.active) return;
+    SDL_Rect source = drag_state_.source_rect;
+    source.x = body_viewport_.x;
+    source.w = body_viewport_.w;
+    if (source.w > 0 && source.h > 0) {
+        const SDL_Color& bg = DMStyles::PanelBG();
+        SDL_SetRenderDrawColor(r, bg.r, bg.g, bg.b, bg.a);
+        SDL_RenderFillRect(r, &source);
+    }
+    SDL_Rect placeholder = drag_state_.placeholder_rect;
+    placeholder.x = body_viewport_.x;
+    placeholder.w = body_viewport_.w;
+    if (placeholder.w > 0 && placeholder.h > 0) {
+        const SDL_Color& highlight = DMStyles::HighlightColor();
+        SDL_SetRenderDrawColor(r, highlight.r, highlight.g, highlight.b, highlight.a);
+        SDL_RenderFillRect(r, &placeholder);
+    }
 }
 
 void SpawnGroupConfig::open(nlohmann::json& groups, std::function<void(const nlohmann::json&)> on_save) {
@@ -1318,6 +1416,10 @@ SpawnGroupConfig::Entry* SpawnGroupConfig::find_entry_by_id(const std::string& i
         }
     }
     return nullptr;
+}
+
+bool SpawnGroupConfig::should_render_entry_body(const Entry&) const {
+    return !drag_state_.active;
 }
 
 void SpawnGroupConfig::open_asset_search_for_entry(const std::string& spawn_id) {
@@ -1354,6 +1456,256 @@ void SpawnGroupConfig::close_asset_search() {
     if (asset_search_) asset_search_->close();
     pending_add_spawn_id_.clear();
     pending_focus_id_.reset();
+}
+
+void SpawnGroupConfig::begin_drag(size_t index, int pointer_y) {
+    if (index >= entries_.size()) return;
+    if (!entries_[index]) return;
+    drag_state_ = DragState{};
+    drag_state_.active = true;
+    drag_state_.source_index = index;
+    drag_state_.hover_index = index;
+    drag_state_.pointer_y = pointer_y;
+    drag_state_.pointer_inside = false;
+    drag_state_.original_order.clear();
+    drag_state_.original_order.reserve(entries_.size());
+    for (const auto& entry : entries_) {
+        drag_state_.original_order.push_back(entry ? entry->spawn_id() : std::string{});
+    }
+    drag_state_.expansion_snapshot = expanded_groups();
+    drag_state_.entry_heights.assign(entries_.size(), 0);
+    drag_state_.placeholder_rect = SDL_Rect{0, 0, 0, 0};
+    drag_state_.source_rect = SDL_Rect{0, 0, 0, 0};
+    expanded_.clear();
+    mark_layout_dirty();
+}
+
+void SpawnGroupConfig::cancel_drag() {
+    if (!drag_state_.active) return;
+    auto order = drag_state_.original_order;
+    auto expansions = drag_state_.expansion_snapshot;
+    drag_state_ = DragState{};
+    expanded_.clear();
+    for (const auto& id : expansions) {
+        if (!id.empty()) {
+            expanded_.insert(id);
+        }
+    }
+    if (!order.empty()) {
+        restore_order_from_snapshot(order);
+    }
+    rebuild_rows();
+}
+
+void SpawnGroupConfig::finalize_drag(bool commit) {
+    if (!drag_state_.active) return;
+    auto expansions = drag_state_.expansion_snapshot;
+    auto order = drag_state_.original_order;
+    size_t source = drag_state_.source_index;
+    size_t slot = drag_state_.hover_index;
+    drag_state_ = DragState{};
+    if (!commit) {
+        expanded_.clear();
+        for (const auto& id : expansions) {
+            if (!id.empty()) expanded_.insert(id);
+        }
+        if (!order.empty()) {
+            restore_order_from_snapshot(order);
+        }
+        rebuild_rows();
+        return;
+    }
+
+    if (entries_.empty() || source >= entries_.size() || !entries_[source]) {
+        expanded_.clear();
+        for (const auto& id : expansions) {
+            if (!id.empty()) expanded_.insert(id);
+        }
+        rebuild_rows();
+        return;
+    }
+
+    std::string moved_id = entries_[source]->spawn_id();
+    size_t dest_slot = std::min(slot, entries_.size());
+    if (dest_slot > entries_.size()) dest_slot = entries_.size();
+    size_t dest = dest_slot;
+    if (dest > source) dest = dest > 0 ? dest - 1 : 0;
+    if (dest >= entries_.size()) dest = entries_.size() - 1;
+    bool changed = dest != source;
+    if (changed) {
+        reorder_json(source, dest);
+    }
+
+    expanded_.clear();
+    for (const auto& id : expansions) {
+        if (!id.empty()) expanded_.insert(id);
+    }
+    if (!moved_id.empty()) {
+        expanded_.insert(moved_id);
+    }
+
+    rebuild_rows();
+
+    if (!changed) {
+        return;
+    }
+
+    if (dest >= entries_.size()) dest = entries_.empty() ? 0 : entries_.size() - 1;
+    Entry* moved_entry = entries_.empty() ? nullptr : entries_[dest].get();
+    nlohmann::json entry_snapshot = moved_entry ? moved_entry->entry_view() : nlohmann::json::object();
+    enqueue_notification([this, entry = std::move(entry_snapshot), moved_id, dest]() mutable {
+        ChangeSummary summary{};
+        if (on_change_) on_change_();
+        if (on_entry_change_) on_entry_change_(entry, summary);
+        fire_entry_callbacks(entry, summary);
+        if (callbacks_.on_reorder) callbacks_.on_reorder(moved_id, dest);
+    });
+}
+
+void SpawnGroupConfig::update_drag_visuals(const Input& input) {
+    if (!drag_state_.active) return;
+    SDL_Point pointer{input.getX(), input.getY()};
+    drag_state_.pointer_y = pointer.y;
+    drag_state_.pointer_inside = SDL_PointInRect(&pointer, &body_viewport_);
+
+    const int fallback_height = DMCheckbox::height();
+    if (entries_.empty()) {
+        drag_state_.entry_heights.clear();
+        drag_state_.hover_index = 0;
+        drag_state_.placeholder_rect = slot_rect_for_index(0, fallback_height);
+        drag_state_.source_rect = SDL_Rect{0, 0, 0, 0};
+        return;
+    }
+
+    if (drag_state_.entry_heights.size() != entries_.size()) {
+        drag_state_.entry_heights.assign(entries_.size(), fallback_height);
+    }
+
+    size_t candidate = entries_.size();
+    for (size_t i = 0; i < entries_.size(); ++i) {
+        const auto& entry = entries_[i];
+        if (!entry) continue;
+        const SDL_Rect& header = entry->header_rect();
+        int height = header.h > 0 ? header.h : fallback_height;
+        drag_state_.entry_heights[i] = height;
+        if (drag_state_.source_index == i) {
+            drag_state_.source_rect = SDL_Rect{body_viewport_.x, header.y, body_viewport_.w, height};
+        }
+        int threshold = header.y + height / 2;
+        if (pointer.y < threshold) {
+            candidate = i;
+            break;
+        }
+    }
+
+    SDL_Rect placeholder = slot_rect_for_index(candidate, fallback_height);
+    if (candidate != drag_state_.hover_index ||
+        placeholder.y != drag_state_.placeholder_rect.y ||
+        placeholder.h != drag_state_.placeholder_rect.h) {
+        drag_state_.hover_index = candidate;
+        drag_state_.placeholder_rect = placeholder;
+    }
+
+    if (drag_state_.source_index < entries_.size() && entries_[drag_state_.source_index]) {
+        const SDL_Rect& header = entries_[drag_state_.source_index]->header_rect();
+        int height = drag_state_.entry_heights[drag_state_.source_index];
+        if (height <= 0) height = fallback_height;
+        drag_state_.source_rect = SDL_Rect{body_viewport_.x, header.y, body_viewport_.w, height};
+    } else {
+        drag_state_.source_rect = SDL_Rect{0, 0, 0, 0};
+    }
+}
+
+SDL_Rect SpawnGroupConfig::slot_rect_for_index(size_t index, int fallback_height) const {
+    SDL_Rect rect{body_viewport_.x, body_viewport_.y, body_viewport_.w, fallback_height};
+    if (entries_.empty()) {
+        rect.y = body_viewport_.y;
+        return rect;
+    }
+
+    if (index >= entries_.size()) {
+        const auto& last_entry = entries_.back();
+        if (!last_entry) return rect;
+        const SDL_Rect& header = last_entry->header_rect();
+        int height = fallback_height;
+        if (!drag_state_.entry_heights.empty()) {
+            height = drag_state_.entry_heights.back();
+            if (height <= 0) height = fallback_height;
+        }
+        rect.y = header.y + header.h + row_gap_;
+        rect.h = height;
+        int bottom = body_viewport_.y + body_viewport_.h;
+        if (rect.y + rect.h > bottom) {
+            rect.h = std::max(0, bottom - rect.y);
+        }
+        return rect;
+    }
+
+    const auto& entry = entries_[index];
+    if (!entry) return rect;
+    const SDL_Rect& header = entry->header_rect();
+    int height = fallback_height;
+    if (index < drag_state_.entry_heights.size() && drag_state_.entry_heights[index] > 0) {
+        height = drag_state_.entry_heights[index];
+    } else if (header.h > 0) {
+        height = header.h;
+    }
+    rect.y = header.y;
+    rect.h = height;
+    return rect;
+}
+
+void SpawnGroupConfig::reorder_json(size_t from, size_t to) {
+    auto apply = [from, to](nlohmann::json& arr) {
+        if (!arr.is_array()) return;
+        if (arr.empty()) return;
+        if (from >= arr.size()) return;
+        size_t target = std::min(to, arr.size());
+        nlohmann::json moved = std::move(arr[from]);
+        arr.erase(arr.begin() + static_cast<std::ptrdiff_t>(from));
+        if (target > arr.size()) target = arr.size();
+        arr.insert(arr.begin() + static_cast<std::ptrdiff_t>(target), std::move(moved));
+    };
+
+    if (bound_array_) apply(*bound_array_);
+    if (bound_entry_) apply(single_entry_shadow_);
+    if (!bound_array_ && !bound_entry_ && readonly_snapshot_.is_array()) apply(readonly_snapshot_);
+}
+
+void SpawnGroupConfig::restore_order_from_snapshot(const std::vector<std::string>& order) {
+    if (order.empty()) return;
+    nlohmann::json* arr = nullptr;
+    if (bound_array_) {
+        arr = bound_array_;
+    } else if (bound_entry_) {
+        arr = &single_entry_shadow_;
+    } else if (readonly_snapshot_.is_array()) {
+        arr = &readonly_snapshot_;
+    }
+    if (!arr || !arr->is_array()) return;
+    if (arr->size() != order.size()) return;
+
+    auto get_id = [](const nlohmann::json& entry) -> std::string {
+        if (entry.is_object()) {
+            auto it = entry.find("spawn_id");
+            if (it != entry.end() && it->is_string()) {
+                return it->get<std::string>();
+            }
+        }
+        return std::string{};
+    };
+
+    for (size_t i = 0; i < order.size(); ++i) {
+        std::string desired = order[i];
+        std::string current = get_id((*arr)[i]);
+        if (current == desired) continue;
+        for (size_t j = i + 1; j < arr->size(); ++j) {
+            if (get_id((*arr)[j]) == desired) {
+                reorder_json(j, i);
+                break;
+            }
+        }
+    }
 }
 
 void SpawnGroupConfig::rebuild_rows() {
