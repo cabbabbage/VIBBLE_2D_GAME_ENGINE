@@ -3,10 +3,9 @@
 #include <algorithm>
 #include <cmath>
 
-#include <SDL_ttf.h>
-
 #include "dm_styles.hpp"
 #include "draw_utils.hpp"
+#include "font_cache.hpp"
 #include "widgets.hpp"
 #include "utils/input.hpp"
 
@@ -14,26 +13,6 @@ namespace {
 constexpr int kScrollbarWidth = 10;
 constexpr int kScrollbarGap = 6;
 constexpr int kScrollbarTrackMargin = 4;
-
-void render_label_text(SDL_Renderer* renderer, const std::string& text, const SDL_Rect& rect) {
-    if (!renderer || text.empty()) return;
-    const DMLabelStyle& style = DMStyles::Label();
-    TTF_Font* font = style.open_font();
-    if (!font) return;
-    SDL_Surface* surf = TTF_RenderUTF8_Blended(font, text.c_str(), style.color);
-    if (!surf) {
-        TTF_CloseFont(font);
-        return;
-    }
-    SDL_Texture* tex = SDL_CreateTextureFromSurface(renderer, surf);
-    if (tex) {
-        SDL_Rect dst{rect.x, rect.y, surf->w, surf->h};
-        SDL_RenderCopy(renderer, tex, nullptr, &dst);
-        SDL_DestroyTexture(tex);
-    }
-    SDL_FreeSurface(surf);
-    TTF_CloseFont(font);
-}
 }
 
 SlidingWindowContainer::SlidingWindowContainer() = default;
@@ -401,7 +380,7 @@ void SlidingWindowContainer::render(SDL_Renderer* renderer, int screen_w, int sc
             close_button_->render(renderer);
         }
         std::string label = header_text_provider_ ? header_text_provider_() : header_text_;
-        render_label_text(renderer, label, name_label_rect_);
+        DrawLabelText(renderer, label, name_label_rect_, DMStyles::Label());
     }
 
     SDL_Rect prev_clip;

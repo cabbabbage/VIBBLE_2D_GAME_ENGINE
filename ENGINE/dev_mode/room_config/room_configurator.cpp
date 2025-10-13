@@ -9,8 +9,7 @@
 #include "tag_utils.hpp"
 #include "utils/input.hpp"
 #include "widgets.hpp"
-
-#include <SDL_ttf.h>
+#include "font_cache.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -43,21 +42,8 @@ public:
         const DMLabelStyle& st = DMStyles::Label();
         SDL_Color color = subtle_ ? SDL_Color{static_cast<Uint8>(st.color.r / 2),
                                              static_cast<Uint8>(st.color.g / 2), static_cast<Uint8>(st.color.b / 2), st.color.a} : st.color;
-        TTF_Font* font = TTF_OpenFont(st.font_path.c_str(), st.font_size);
-        if (!font) return;
-        SDL_Surface* surface = TTF_RenderUTF8_Blended(font, text_.c_str(), color);
-        if (!surface) {
-            TTF_CloseFont(font);
-            return;
-        }
-        SDL_Texture* texture = SDL_CreateTextureFromSurface(renderer, surface);
-        if (texture) {
-            SDL_Rect dst{rect_.x, rect_.y, surface->w, surface->h};
-            SDL_RenderCopy(renderer, texture, nullptr, &dst);
-            SDL_DestroyTexture(texture);
-        }
-        SDL_FreeSurface(surface);
-        TTF_CloseFont(font);
+        DMLabelStyle style{st.font_path, st.font_size, color};
+        DrawLabelText(renderer, text_, rect_.x, rect_.y, style);
     }
 
 private:

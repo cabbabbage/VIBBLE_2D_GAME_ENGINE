@@ -1,5 +1,6 @@
 #include "widgets.hpp"
 #include "draw_utils.hpp"
+#include "font_cache.hpp"
 #include <algorithm>
 #include <sstream>
 #include <cctype>
@@ -92,18 +93,8 @@ void DMButton::update_preferred_width() {
         preferred_width_ = rect_.w;
         return;
     }
-    TTF_Font* f = TTF_OpenFont(style_->label.font_path.c_str(), style_->label.font_size);
-    if (!f) {
-        preferred_width_ = rect_.w;
-        return;
-    }
-    int text_w = 0;
-    int text_h = 0;
-    if (TTF_SizeUTF8(f, text_.c_str(), &text_w, &text_h) != 0) {
-        text_w = 0;
-    }
-    TTF_CloseFont(f);
-    preferred_width_ = std::max(text_w + kButtonHorizontalPadding, kButtonHorizontalPadding);
+    SDL_Point size = DMFontCache::instance().measure_text(style_->label, text_);
+    preferred_width_ = std::max(size.x + kButtonHorizontalPadding, kButtonHorizontalPadding);
 }
 
 bool DMButton::handle_event(const SDL_Event& e) {
@@ -125,19 +116,11 @@ bool DMButton::handle_event(const SDL_Event& e) {
 
 void DMButton::draw_label(SDL_Renderer* r, SDL_Color col) const {
     if (!style_) return;
-    TTF_Font* f = TTF_OpenFont(style_->label.font_path.c_str(), style_->label.font_size);
-    if (!f) return;
-    SDL_Surface* surf = TTF_RenderUTF8_Blended(f, text_.c_str(), col);
-    if (surf) {
-        SDL_Texture* tex = SDL_CreateTextureFromSurface(r, surf);
-        if (tex) {
-            SDL_Rect dst{ rect_.x + (rect_.w - surf->w)/2, rect_.y + (rect_.h - surf->h)/2, surf->w, surf->h };
-            SDL_RenderCopy(r, tex, nullptr, &dst);
-            SDL_DestroyTexture(tex);
-        }
-        SDL_FreeSurface(surf);
-    }
-    TTF_CloseFont(f);
+    DMLabelStyle label_style{ style_->label.font_path, style_->label.font_size, col };
+    SDL_Point size = DMFontCache::instance().measure_text(label_style, text_);
+    int draw_x = rect_.x + (rect_.w - size.x) / 2;
+    int draw_y = rect_.y + (rect_.h - size.y) / 2;
+    DMFontCache::instance().draw_text(r, label_style, text_, draw_x, draw_y);
 }
 
 void DMButton::render(SDL_Renderer* r) const {
@@ -239,7 +222,7 @@ bool DMTextBox::handle_event(const SDL_Event& e) {
 }
 
 void DMTextBox::draw_text(SDL_Renderer* r, const std::string& s, int x, int y, int max_width, const DMLabelStyle& ls) const {
-    TTF_Font* f = TTF_OpenFont(ls.font_path.c_str(), ls.font_size);
+    TTF_Font* f = DMFontCache::instance().get_font(ls.font_path, ls.font_size);
     if (!f) return;
     const int content_w = std::max(1, max_width);
     auto lines = wrap_lines(f, s, content_w);
@@ -260,7 +243,6 @@ void DMTextBox::draw_text(SDL_Renderer* r, const std::string& s, int x, int y, i
             SDL_FreeSurface(surf);
         }
     }
-    TTF_CloseFont(f);
 }
 
 void DMTextBox::render(SDL_Renderer* r) const {
@@ -295,7 +277,7 @@ void DMTextBox::render(SDL_Renderer* r) const {
     DMLabelStyle valStyle{ st.label.font_path, st.label.font_size, st.text };
     draw_text(r, text_, box_rect_.x + kTextboxHorizontalPadding, box_rect_.y + kTextboxHorizontalPadding, std::max(1, box_rect_.w - 2 * kTextboxHorizontalPadding), valStyle);
     if (editing_) {
-        TTF_Font* f = TTF_OpenFont(valStyle.font_path.c_str(), valStyle.font_size);
+        TTF_Font* f = DMFontCache::instance().get_font(valStyle.font_path, valStyle.font_size);
         if (f) {
             int max_width = std::max(1, box_rect_.w - 2 * kTextboxHorizontalPadding);
             size_t caret_index = std::min(caret_pos_, text_.size());
@@ -325,7 +307,6 @@ void DMTextBox::render(SDL_Renderer* r) const {
             const SDL_Color caret = DMStyles::TextCaretColor();
             SDL_SetRenderDrawColor(r, caret.r, caret.g, caret.b, caret.a);
             SDL_RenderDrawLine(r, caret_x, caret_y, caret_x, caret_y + caret_height);
-            TTF_CloseFont(f);
         }
     }
 }
@@ -378,7 +359,7 @@ int DMTextBox::preferred_height(int width) const {
 int DMTextBox::compute_label_height(int width) const {
     if (label_.empty()) return 0;
     DMLabelStyle lbl = DMStyles::Label();
-    TTF_Font* f = TTF_OpenFont(lbl.font_path.c_str(), lbl.font_size);
+    TTF_Font* f = DMFontCache::instance().get_font(lbl.font_path, lbl.font_size);
     if (!f) return lbl.font_size;
     auto lines = wrap_lines(f, label_, std::max(1, width));
     int total = 0;
@@ -389,7 +370,6 @@ int DMTextBox::compute_label_height(int width) const {
         total += h;
         if (i + 1 < lines.size()) total += gap;
     }
-    TTF_CloseFont(f);
     return total;
 }
 
@@ -419,19 +399,10 @@ bool DMCheckbox::handle_event(const SDL_Event& e) {
 
 void DMCheckbox::draw_label(SDL_Renderer* r) const {
     const DMCheckboxStyle& st = DMStyles::Checkbox();
-    TTF_Font* f = TTF_OpenFont(st.label.font_path.c_str(), st.label.font_size);
-    if (!f) return;
-    SDL_Surface* surf = TTF_RenderUTF8_Blended(f, label_.c_str(), st.label.color);
-    if (surf) {
-        SDL_Texture* tex = SDL_CreateTextureFromSurface(r, surf);
-        if (tex) {
-            SDL_Rect dst{ rect_.x + rect_.h + kCheckboxLabelGap, rect_.y + (rect_.h - surf->h)/2, surf->w, surf->h };
-            SDL_RenderCopy(r, tex, nullptr, &dst);
-            SDL_DestroyTexture(tex);
-        }
-        SDL_FreeSurface(surf);
-    }
-    TTF_CloseFont(f);
+    SDL_Point size = DMFontCache::instance().measure_text(st.label, label_);
+    int draw_x = rect_.x + rect_.h + kCheckboxLabelGap;
+    int draw_y = rect_.y + (rect_.h - size.y) / 2;
+    DMFontCache::instance().draw_text(r, st.label, label_, draw_x, draw_y);
 }
 
 void DMCheckbox::render(SDL_Renderer* r) const {
@@ -737,19 +708,7 @@ bool DMSlider::handle_event(const SDL_Event& e) {
 
 void DMSlider::draw_text(SDL_Renderer* r, const std::string& s, int x, int y) const {
     const DMSliderStyle& st = DMStyles::Slider();
-    TTF_Font* f = TTF_OpenFont(st.label.font_path.c_str(), st.label.font_size);
-    if (!f) return;
-    SDL_Surface* surf = TTF_RenderUTF8_Blended(f, s.c_str(), st.label.color);
-    if (surf) {
-        SDL_Texture* tex = SDL_CreateTextureFromSurface(r, surf);
-        if (tex) {
-            SDL_Rect dst{ x, y, surf->w, surf->h };
-            SDL_RenderCopy(r, tex, nullptr, &dst);
-            SDL_DestroyTexture(tex);
-        }
-        SDL_FreeSurface(surf);
-    }
-    TTF_CloseFont(f);
+    DMFontCache::instance().draw_text(r, st.label, s, x, y);
 }
 
 void DMSlider::render(SDL_Renderer* r) const {
@@ -831,7 +790,11 @@ void DMSlider::render(SDL_Renderer* r) const {
         edit_box_->render(r);
     } else {
         SDL_Rect vr = value_rect();
-        draw_text(r, format_value(current_value), vr.x + kSliderValueHorizontalPadding, vr.y + (vr.h - st.value.font_size) / 2);
+        std::string value_text = format_value(current_value);
+        SDL_Point size = DMFontCache::instance().measure_text(st.label, value_text);
+        int text_x = vr.x + kSliderValueHorizontalPadding;
+        int text_y = vr.y + (vr.h - size.y) / 2;
+        DMFontCache::instance().draw_text(r, st.label, value_text, text_x, text_y);
     }
 }
 
@@ -873,14 +836,9 @@ int DMSlider::preferred_height(int width) const {
 int DMSlider::compute_label_height(int width) const {
     if (label_.empty()) return 0;
     const DMSliderStyle& st = DMStyles::Slider();
-    TTF_Font* f = TTF_OpenFont(st.label.font_path.c_str(), st.label.font_size);
-    if (!f) return st.label.font_size;
-    int text_w = 0;
-    int text_h = 0;
-    TTF_SizeUTF8(f, label_.c_str(), &text_w, &text_h);
-    TTF_CloseFont(f);
+    SDL_Point size = DMFontCache::instance().measure_text(st.label, label_);
     (void)width;
-    return text_h;
+    return size.y;
 }
 
 int DMSlider::height() {
@@ -1293,19 +1251,7 @@ bool DMRangeSlider::handle_event(const SDL_Event& e) {
 
 void DMRangeSlider::draw_text(SDL_Renderer* r, const std::string& s, int x, int y) const {
     const DMSliderStyle& st = DMStyles::Slider();
-    TTF_Font* f = TTF_OpenFont(st.label.font_path.c_str(), st.label.font_size);
-    if (!f) return;
-    SDL_Surface* surf = TTF_RenderUTF8_Blended(f, s.c_str(), st.label.color);
-    if (surf) {
-        SDL_Texture* tex = SDL_CreateTextureFromSurface(r, surf);
-        if (tex) {
-            SDL_Rect dst{ x, y, surf->w, surf->h };
-            SDL_RenderCopy(r, tex, nullptr, &dst);
-            SDL_DestroyTexture(tex);
-        }
-        SDL_FreeSurface(surf);
-    }
-    TTF_CloseFont(f);
+    DMFontCache::instance().draw_text(r, st.label, s, x, y);
 }
 
 void DMRangeSlider::render(SDL_Renderer* r) const {
@@ -1408,26 +1354,21 @@ void DMRangeSlider::render(SDL_Renderer* r) const {
     if (edit_min_) {
         edit_min_->render(r);
     } else {
-        int text_y = min_value_rect_.y + (min_value_rect_.h - st.value.font_size) / 2;
-        draw_text(r, std::to_string(display_min_value()), min_value_rect_.x + kSliderValueHorizontalPadding, text_y);
+        std::string value = std::to_string(display_min_value());
+        SDL_Point size = DMFontCache::instance().measure_text(st.label, value);
+        int text_y = min_value_rect_.y + (min_value_rect_.h - size.y) / 2;
+        int text_x = min_value_rect_.x + kSliderValueHorizontalPadding;
+        DMFontCache::instance().draw_text(r, st.label, value, text_x, text_y);
     }
     if (edit_max_) {
         edit_max_->render(r);
     } else {
         std::string value = std::to_string(display_max_value());
-        int text_x = max_value_rect_.x + kSliderValueHorizontalPadding;
-        int text_y = max_value_rect_.y + (max_value_rect_.h - st.value.font_size) / 2;
-        TTF_Font* f = TTF_OpenFont(st.label.font_path.c_str(), st.label.font_size);
-        if (f) {
-            int tw = 0;
-            int th = 0;
-            if (TTF_SizeUTF8(f, value.c_str(), &tw, &th) == 0) {
-                text_x = std::max(max_value_rect_.x + kSliderValueHorizontalPadding,
-                                   max_value_rect_.x + max_value_rect_.w - tw - kSliderValueHorizontalPadding);
-            }
-            TTF_CloseFont(f);
-        }
-        draw_text(r, value, text_x, text_y);
+        SDL_Point size = DMFontCache::instance().measure_text(st.label, value);
+        int text_y = max_value_rect_.y + (max_value_rect_.h - size.y) / 2;
+        int text_x = std::max(max_value_rect_.x + kSliderValueHorizontalPadding,
+                              max_value_rect_.x + max_value_rect_.w - size.x - kSliderValueHorizontalPadding);
+        DMFontCache::instance().draw_text(r, st.label, value, text_x, text_y);
     }
 }
 
