@@ -10,6 +10,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <iostream>
+#include <chrono>
 #include <limits>
 #include <memory>
 #include <unordered_map>
@@ -128,6 +129,9 @@ void Animation::load(const std::string& trigger,
                      int& original_canvas_height)
 {
         CacheManager cache;
+        const auto load_start = std::chrono::steady_clock::now();
+        bool       loaded_from_cache = false;
+        bool       reused_animation  = false;
         const double safe_scale = sanitize_scale_factor(scale_factor);
         clear_texture_cache();
         if (anim_json.contains("source")) {
@@ -221,11 +225,12 @@ void Animation::load(const std::string& trigger,
         }
 
         movement_paths_ = std::move(parsed_paths);
-	if (source.kind == "animation" && !source.name.empty()) {
-		auto it = info.animations.find(source.name);
-		if (it != info.animations.end()) {
+        if (source.kind == "animation" && !source.name.empty()) {
+                auto it = info.animations.find(source.name);
+                if (it != info.animations.end()) {
                         const Animation& src_anim = it->second;
                         if (!src_anim.frames.empty()) {
+                                reused_animation = true;
                                 std::vector<SDL_Texture*> new_frames;
                                 std::vector<FrameCache>   new_caches;
                                 new_frames.reserve(src_anim.frames.size());
@@ -290,10 +295,10 @@ void Animation::load(const std::string& trigger,
                                 frame_cache_.insert(frame_cache_.end(), std::make_move_iterator(new_caches.begin()), std::make_move_iterator(new_caches.end()));
 			}
 		}
-	} else {
-		std::string src_folder   = dir_path + "/" + source.path;
-		std::string cache_folder = root_cache + "/" + trigger;
-		std::string meta_file    = cache_folder + "/metadata.json";
+        } else {
+                std::string src_folder   = dir_path + "/" + source.path;
+                std::string cache_folder = root_cache + "/" + trigger;
+                std::string meta_file    = cache_folder + "/metadata.json";
 		int expected_frames = 0;
 		int orig_w = 0, orig_h = 0;
 		while (true) {
@@ -309,7 +314,7 @@ void Animation::load(const std::string& trigger,
 			++expected_frames;
 		}
 		if (expected_frames == 0) return;
-		bool use_cache = false;
+                bool use_cache = false;
 		nlohmann::json meta;
                 const auto expected_steps = render_pipeline::ScalingLogic::PercentSteps();
                 if (cache.load_metadata(meta_file, meta)) {
@@ -490,7 +495,7 @@ void Animation::load(const std::string& trigger,
                         }
                         list.clear();
                 }
-		if (flipped_source && renderer && !frame_cache_.empty()) {
+                if (flipped_source && renderer && !frame_cache_.empty()) {
                         for (std::size_t frame_index = 0; frame_index < frame_cache_.size(); ++frame_index) {
                                 FrameCache& cache_entry = frame_cache_[frame_index];
                                 for (std::size_t variant_idx = 0; variant_idx < render_pipeline::ScalingLogic::kVariantCount; ++variant_idx) {
@@ -532,11 +537,12 @@ void Animation::load(const std::string& trigger,
                                 }
                         }
 		}
-		if (reverse_source && !frames.empty()) {
-			std::reverse(frames.begin(), frames.end());
+                if (reverse_source && !frames.empty()) {
+                        std::reverse(frames.begin(), frames.end());
                         std::reverse(frame_cache_.begin(), frame_cache_.end());
-		}
-	}
+                }
+                loaded_from_cache = use_cache;
+        }
         if (!movement_specified && source.kind == "animation" && !source.name.empty()) {
                 auto it = info.animations.find(source.name);
                 if (it != info.animations.end()) {
@@ -640,6 +646,30 @@ void Animation::load(const std::string& trigger,
         if (trigger == "default" && !frames.empty()) {
                 base_sprite = frames[0];
         }
+
+        int frame_width  = 0;
+        int frame_height = 0;
+        if (!frame_cache_.empty()) {
+                frame_width  = frame_cache_[0].widths[0];
+                frame_height = frame_cache_[0].heights[0];
+                if ((frame_width <= 0 || frame_height <= 0) && frame_cache_[0].textures[0]) {
+                        SDL_QueryTexture(frame_cache_[0].textures[0], nullptr, nullptr, &frame_width, &frame_height);
+                }
+        }
+
+        const auto load_end        = std::chrono::steady_clock::now();
+        const double elapsed_secs  = std::chrono::duration<double>(load_end - load_start).count();
+        std::string   origin_label = loaded_from_cache ? "cache" : "source";
+        if (reused_animation) {
+                origin_label = "animation '" + source.name + "'";
+        }
+
+        std::cout << "[AnimationLoader] " << info.name << "::" << trigger << " -> "
+                  << frames.size() << " frame(s)";
+        if (frame_width > 0 && frame_height > 0) {
+                std::cout << " @ " << frame_width << "x" << frame_height;
+        }
+        std::cout << " from " << origin_label << " in " << elapsed_secs << "s\n";
 }
 
 SDL_Texture* Animation::get_frame(const AnimationFrame* frame) const {
