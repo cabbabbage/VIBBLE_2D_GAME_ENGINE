@@ -853,7 +853,7 @@
     },
     "anti_tags": [],
     "asset_name": "Bomb",
-    "asset_type": "Enemy",
+    "asset_type": "enemy",
     "can_invert": true,
     "custom_controller_key": "Bomb_controller",
     "duplicatable": false,
@@ -896,7 +896,7 @@
     "rnd_spawn_max": 400,
     "rnd_spawn_min": 300,
     "size_settings": {
-        "scale_percentage": 19.0
+        "scale_percentage": 75.0
     },
     "start": "backward",
     "tags": [

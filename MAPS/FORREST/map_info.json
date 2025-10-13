@@ -93,6 +93,10 @@
           {
             "chance": 22,
             "name": "null"
+          },
+          {
+            "chance": 1,
+            "name": "null"
           }
         ],
         "display_name": "batch_map_boundary",

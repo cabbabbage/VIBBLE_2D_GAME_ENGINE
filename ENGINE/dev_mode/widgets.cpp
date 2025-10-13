@@ -1389,9 +1389,7 @@ int DMRangeSlider::height() {
 }
 
 DMDropdown::DMDropdown(const std::string& label, const std::vector<std::string>& options, int idx)
-    : label_(label), options_(options), index_(idx) {
-    set_selected(idx);
-}
+    : label_(label), options_(options), index_(idx) {}
 
 DMDropdown::~DMDropdown() {
     if (active_ == this) active_ = nullptr;
@@ -1402,7 +1400,7 @@ DMDropdown* DMDropdown::active_ = nullptr;
 DMDropdown* DMDropdown::active_dropdown() { return active_; }
 
 void DMDropdown::render_active_options(SDL_Renderer* r) {
-    if (active_ && active_->focused_) active_->render_options(r);
+    if (active_) active_->render_options(r);
 }
 
 void DMDropdown::set_rect(const SDL_Rect& r) {
@@ -1418,73 +1416,58 @@ void DMDropdown::set_rect(const SDL_Rect& r) {
 }
 
 void DMDropdown::set_selected(int idx) {
-    index_ = clamp_index(idx);
-    pending_index_ = index_;
-    has_pending_index_ = focused_;
+    if (options_.empty()) {
+        index_ = 0;
+        return;
+    }
+    if (idx < 0) idx = 0;
+    int max_index = static_cast<int>(options_.size()) - 1;
+    if (idx > max_index) idx = max_index;
+    index_ = idx;
 }
 
 bool DMDropdown::handle_event(const SDL_Event& e) {
-    if (e.type == SDL_MOUSEMOTION) {
-        SDL_Point p{ e.motion.x, e.motion.y };
-        const bool inside = SDL_PointInRect(&p, &box_rect_);
-        hovered_ = inside;
-        if (focused_ && active_ == this && !inside) {
-            const bool applied = commit_pending_selection();
-            focused_ = false;
-            has_pending_index_ = false;
+    if (expanded_) {
+        if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
+            SDL_Point p{ e.button.x, e.button.y };
+            if (SDL_PointInRect(&p, &box_rect_)) {
+                expanded_ = false;
+                if (active_ == this) active_ = nullptr;
+                return true;
+            }
+            for (size_t i = 0; i < options_.size(); ++i) {
+                SDL_Rect opt{ box_rect_.x, box_rect_.y + box_rect_.h * (int)(i + 1), box_rect_.w, box_rect_.h };
+                if (SDL_PointInRect(&p, &opt)) {
+                    index_ = (int)i;
+                    expanded_ = false;
+                    if (active_ == this) active_ = nullptr;
+                    return true;
+                }
+            }
+            expanded_ = false;
             if (active_ == this) active_ = nullptr;
-            return applied;
-        }
-        return false;
-    }
-
-    if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
-        SDL_Point p{ e.button.x, e.button.y };
-        const bool inside = SDL_PointInRect(&p, &box_rect_);
-        if (inside) {
-            begin_focus();
             return true;
         }
-        if (focused_ && active_ == this) {
-            const bool applied = commit_pending_selection();
-            focused_ = false;
-            has_pending_index_ = false;
-            if (active_ == this) active_ = nullptr;
-            return applied;
-        }
-        return false;
-    }
-
-    if (e.type == SDL_MOUSEWHEEL) {
-        if (!(focused_ && active_ == this && !options_.empty())) return false;
-        if (!has_pending_index_) {
-            pending_index_ = index_;
-            has_pending_index_ = true;
-        }
-        int raw_delta = e.wheel.y;
-        if (e.wheel.direction == SDL_MOUSEWHEEL_FLIPPED) {
-            raw_delta = -raw_delta;
-        }
-        const int delta = -raw_delta;
-        if (delta == 0) return false;
-        int target = pending_index_ + delta;
-        int clamped = clamp_index(target);
-        if (clamped == pending_index_) {
-            pending_index_ = clamped;
-            return false;
-        }
-        pending_index_ = clamped;
         return true;
     }
-
+    if (e.type == SDL_MOUSEMOTION) {
+        SDL_Point p{ e.motion.x, e.motion.y };
+        hovered_ = SDL_PointInRect(&p, &box_rect_);
+    } else if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
+        SDL_Point p{ e.button.x, e.button.y };
+        if (SDL_PointInRect(&p, &box_rect_)) {
+            expanded_ = true;
+            active_ = this;
+            return true;
+        }
+    }
     return false;
 }
 
 void DMDropdown::render(SDL_Renderer* r) const {
     const DMTextBoxStyle& st = DMStyles::TextBox();
     SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
-    const bool has_focus = focused_ && active_ == this;
-    const SDL_Color fill = has_focus ? DMStyles::TextboxHoverFill() : (hovered_ ? DMStyles::TextboxHoverFill() : DMStyles::TextboxBaseFill());
+    const SDL_Color fill = hovered_ ? DMStyles::TextboxHoverFill() : DMStyles::TextboxBaseFill();
     dm_draw::DrawBeveledRect(
         r,
         box_rect_,
@@ -1514,7 +1497,7 @@ void DMDropdown::render(SDL_Renderer* r) const {
         }
     }
     SDL_Color border = hovered_ ? st.border_hover : st.border;
-    if (has_focus) {
+    if (expanded_) {
         border = DMStyles::TextboxFocusOutline();
     }
     SDL_SetRenderDrawColor(r, border.r, border.g, border.b, border.a);
@@ -1524,16 +1507,16 @@ void DMDropdown::render(SDL_Renderer* r) const {
     if (f) {
         int safe_idx = 0;
         if (!options_.empty()) {
-            int display_idx = has_focus && has_pending_index_ ? pending_index_ : index_;
-            display_idx = clamp_index(display_idx);
-            safe_idx = display_idx;
+            if (index_ < 0) safe_idx = 0;
+            else if (index_ >= (int)options_.size()) safe_idx = (int)options_.size() - 1;
+            else safe_idx = index_;
         }
         const char* display = options_.empty() ? "" : options_[safe_idx].c_str();
         SDL_Surface* surf = TTF_RenderUTF8_Blended(f, display, labelStyle.color);
         if (surf) {
             SDL_Texture* tex = SDL_CreateTextureFromSurface(r, surf);
             if (tex) {
-                SDL_Rect dst{ box_rect_.x + (box_rect_.w - surf->w)/2, box_rect_.y + (box_rect_.h - surf->h)/2, surf->w, surf->h };
+                SDL_Rect dst{ box_rect_.x + 6, box_rect_.y + (box_rect_.h - surf->h)/2, surf->w, surf->h };
                 SDL_RenderCopy(r, tex, nullptr, &dst);
                 SDL_DestroyTexture(tex);
             }
@@ -1544,67 +1527,38 @@ void DMDropdown::render(SDL_Renderer* r) const {
 }
 
 void DMDropdown::render_options(SDL_Renderer* r) const {
-    if (!(focused_ && active_ == this)) return;
-    if (options_.empty()) return;
-
-    const DMTextBoxStyle& tb = DMStyles::TextBox();
-    DMLabelStyle labelStyle{ tb.label.font_path, tb.label.font_size, tb.text };
-    const SDL_Color border = DMStyles::TextboxFocusOutline();
-    const SDL_Color base_fill = DMStyles::TextboxBaseFill();
-    const SDL_Color focus_fill = DMStyles::TextboxHoverFill();
-
-    const int base_index = clamp_index(has_pending_index_ ? pending_index_ : index_);
-    const int prev_index = base_index - 1;
-    const int next_index = base_index + 1;
-
-    struct Entry {
-        int index;
-        SDL_Rect rect;
-        bool is_current;
-    };
-
-    std::vector<Entry> entries;
-    entries.reserve(3);
-    if (prev_index >= 0) {
-        entries.push_back(Entry{ prev_index, SDL_Rect{ box_rect_.x, box_rect_.y - box_rect_.h, box_rect_.w, box_rect_.h }, false });
-    }
-    entries.push_back(Entry{ base_index, box_rect_, true });
-    if (next_index < static_cast<int>(options_.size())) {
-        entries.push_back(Entry{ next_index, SDL_Rect{ box_rect_.x, box_rect_.y + box_rect_.h, box_rect_.w, box_rect_.h }, false });
-    }
-
-    TTF_Font* font = TTF_OpenFont(labelStyle.font_path.c_str(), labelStyle.font_size);
-    for (const Entry& entry : entries) {
-        SDL_Rect rect = entry.rect;
-        const bool current = entry.is_current;
-        const SDL_Color fill = current ? focus_fill : base_fill;
+    const DMTextBoxStyle& st = DMStyles::TextBox();
+    SDL_Color border = hovered_ ? st.border_hover : st.border;
+    DMLabelStyle labelStyle{ st.label.font_path, st.label.font_size, st.text };
+    for (size_t i=0;i<options_.size();++i) {
+        SDL_Rect opt{ box_rect_.x, box_rect_.y + box_rect_.h*(int)(i+1), box_rect_.w, box_rect_.h };
         dm_draw::DrawBeveledRect(
             r,
-            rect,
+            opt,
             DMStyles::CornerRadius(),
             DMStyles::BevelDepth(),
-            fill,
+            DMStyles::TextboxBaseFill(),
             DMStyles::HighlightColor(),
             DMStyles::ShadowColor(),
             false,
             DMStyles::HighlightIntensity(),
             DMStyles::ShadowIntensity());
         SDL_SetRenderDrawColor(r, border.r, border.g, border.b, border.a);
-        SDL_RenderDrawRect(r, &rect);
-        if (!font) continue;
-        SDL_Surface* surf = TTF_RenderUTF8_Blended(font, options_[entry.index].c_str(), labelStyle.color);
-        if (surf) {
-            SDL_Texture* tex = SDL_CreateTextureFromSurface(r, surf);
-            if (tex) {
-                SDL_Rect dst{ rect.x + (rect.w - surf->w)/2, rect.y + (rect.h - surf->h)/2, surf->w, surf->h };
-                SDL_RenderCopy(r, tex, nullptr, &dst);
-                SDL_DestroyTexture(tex);
+        SDL_RenderDrawRect(r, &opt);
+        TTF_Font* f2 = TTF_OpenFont(labelStyle.font_path.c_str(), labelStyle.font_size);
+        if (f2) {
+            SDL_Surface* s2 = TTF_RenderUTF8_Blended(f2, options_[i].c_str(), labelStyle.color);
+            if (s2) {
+                SDL_Texture* t2 = SDL_CreateTextureFromSurface(r, s2);
+                if (t2) {
+                    SDL_Rect dst{ opt.x + 6, opt.y + (opt.h - s2->h)/2, s2->w, s2->h };
+                    SDL_RenderCopy(r, t2, nullptr, &dst);
+                    SDL_DestroyTexture(t2);
+                }
+                SDL_FreeSurface(s2);
             }
-            SDL_FreeSurface(surf);
+            TTF_CloseFont(f2);
         }
-    }
-    if (font) {
-        TTF_CloseFont(font);
     }
 }
 
@@ -1636,39 +1590,4 @@ int DMDropdown::label_space() const { return label_height_; }
 SDL_Rect DMDropdown::box_rect() const { return box_rect_; }
 
 SDL_Rect DMDropdown::label_rect() const { return label_rect_; }
-
-int DMDropdown::clamp_index(int idx) const {
-    if (options_.empty()) {
-        return 0;
-    }
-    if (idx < 0) return 0;
-    int max_index = static_cast<int>(options_.size()) - 1;
-    if (idx > max_index) idx = max_index;
-    return idx;
-}
-
-bool DMDropdown::commit_pending_selection() {
-    if (options_.empty()) {
-        has_pending_index_ = false;
-        return false;
-    }
-    const int target = clamp_index(has_pending_index_ ? pending_index_ : index_);
-    const bool changed = target != index_;
-    index_ = target;
-    pending_index_ = target;
-    has_pending_index_ = false;
-    return changed;
-}
-
-void DMDropdown::begin_focus() {
-    focused_ = true;
-    if (active_ && active_ != this) {
-        active_->commit_pending_selection();
-        active_->focused_ = false;
-        active_->has_pending_index_ = false;
-    }
-    active_ = this;
-    pending_index_ = index_;
-    has_pending_index_ = true;
-}
 
