@@ -219,9 +219,12 @@ AssetInfoUI::AssetInfoUI() {
 
     container_.set_update_function([this](const Input& input, int screen_w, int screen_h) {
         std::vector<bool> previously_expanded;
+        std::vector<int> previous_heights;
         previously_expanded.reserve(sections_.size());
+        previous_heights.reserve(sections_.size());
         for (const auto& section : sections_) {
             previously_expanded.push_back(section->is_expanded());
+            previous_heights.push_back(section->height());
         }
 
         for (auto& section : sections_) {
@@ -244,6 +247,7 @@ AssetInfoUI::AssetInfoUI() {
         }
 
         bool expansion_changed = false;
+        bool height_changed = false;
         for (size_t i = 0; i < sections_.size(); ++i) {
             if (sections_[i]->is_expanded() != previously_expanded[i]) {
                 expansion_changed = true;
@@ -251,7 +255,16 @@ AssetInfoUI::AssetInfoUI() {
             }
         }
 
-        if (expansion_changed) {
+        if (!height_changed) {
+            for (size_t i = 0; i < sections_.size(); ++i) {
+                if (sections_[i]->height() != previous_heights[i]) {
+                    height_changed = true;
+                    break;
+                }
+            }
+        }
+
+        if (expansion_changed || height_changed) {
             container_.request_layout();
         }
     });

@@ -642,12 +642,12 @@
       "inherits_map_assets": true,
       "is_boss": false,
       "is_spawn": true,
-      "max_height": 53732,
-      "max_width": 53732,
-      "min_height": 53732,
-      "min_width": 53732,
+      "max_height": 1800,
+      "max_width": 1800,
+      "min_height": 1800,
+      "min_width": 1800,
       "name": "spawn",
-      "radius": 26866,
+      "radius": 900,
       "spawn_groups": [
         {
           "candidates": [
@@ -682,7 +682,7 @@
               "name": "Axe"
             },
             {
-              "chance": 0.0,
+              "chance": 5.0,
               "name": "candle"
             }
           ],
