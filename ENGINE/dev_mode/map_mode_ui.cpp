@@ -356,17 +356,24 @@ void MapModeUI::configure_footer_buttons() {
     if (header_mode_ == HeaderMode::Map) {
         append_custom(map_mode_buttons_, HeaderMode::Map);
 
-        FullScreenCollapsible::HeaderButton lights_btn;
-        lights_btn.id = kButtonIdLights;
-        lights_btn.label = "Lighting";
-        lights_btn.on_toggle = [this](bool active) {
-            if (active) {
-                set_active_panel(PanelType::Lights);
-            } else if (active_panel_ == PanelType::Lights) {
-                set_active_panel(PanelType::None);
-            }
-};
-        buttons.push_back(std::move(lights_btn));
+        const bool has_lights_button = std::any_of(map_mode_buttons_.begin(), map_mode_buttons_.end(),
+                                                   [](const HeaderButtonConfig& cfg) {
+                                                       return cfg.id == kButtonIdLights;
+                                                   });
+
+        if (!has_lights_button) {
+            FullScreenCollapsible::HeaderButton lights_btn;
+            lights_btn.id = kButtonIdLights;
+            lights_btn.label = "Lighting";
+            lights_btn.on_toggle = [this](bool active) {
+                if (active) {
+                    set_active_panel(PanelType::Lights);
+                } else if (active_panel_ == PanelType::Lights) {
+                    set_active_panel(PanelType::None);
+                }
+            };
+            buttons.push_back(std::move(lights_btn));
+        }
 
     } else if (header_mode_ == HeaderMode::Room) {
         append_custom(room_mode_buttons_, HeaderMode::Room);

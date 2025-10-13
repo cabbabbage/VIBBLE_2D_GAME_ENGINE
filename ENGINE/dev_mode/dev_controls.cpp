@@ -1609,6 +1609,33 @@ void DevControls::configure_header_button_sets() {
     map_buttons.push_back(make_camera_button());
 
     {
+        MapModeUI::HeaderButtonConfig lights_btn;
+        lights_btn.id = "lights";
+        lights_btn.label = "Lighting";
+        lights_btn.active = map_mode_ui_ && map_mode_ui_->is_light_panel_visible();
+        lights_btn.on_toggle = [this](bool active) {
+            if (room_editor_) {
+                room_editor_->close_room_config();
+            }
+            if (!map_mode_ui_) {
+                sync_header_button_states();
+                return;
+            }
+            const bool currently_open = map_mode_ui_->is_light_panel_visible();
+            if (active != currently_open) {
+                if (active && !currently_open && is_modal_blocking_panels()) {
+                    pulse_modal_header();
+                    sync_header_button_states();
+                    return;
+                }
+                map_mode_ui_->toggle_light_panel();
+            }
+            sync_header_button_states();
+        };
+        map_buttons.push_back(std::move(lights_btn));
+    }
+
+    {
         MapModeUI::HeaderButtonConfig map_assets_btn;
         map_assets_btn.id = "map_assets";
         map_assets_btn.label = "Map Assets";
@@ -1639,31 +1666,6 @@ void DevControls::configure_header_button_sets() {
 };
         map_buttons.push_back(std::move(boundary_btn));
     }
-
-    MapModeUI::HeaderButtonConfig lights_btn;
-    lights_btn.id = "lights";
-    lights_btn.label = "Lighting";
-    lights_btn.active = map_mode_ui_ && map_mode_ui_->is_light_panel_visible();
-    lights_btn.on_toggle = [this](bool active) {
-        if (room_editor_) {
-            room_editor_->close_room_config();
-        }
-        if (!map_mode_ui_) {
-            sync_header_button_states();
-            return;
-        }
-        const bool currently_open = map_mode_ui_->is_light_panel_visible();
-        if (active != currently_open) {
-            if (active && !currently_open && is_modal_blocking_panels()) {
-                pulse_modal_header();
-                sync_header_button_states();
-                return;
-            }
-            map_mode_ui_->toggle_light_panel();
-        }
-        sync_header_button_states();
-};
-    room_buttons.push_back(std::move(lights_btn));
 
     MapModeUI::HeaderButtonConfig light_rays_btn;
     light_rays_btn.id = "light_rays";
@@ -1788,7 +1790,6 @@ void DevControls::sync_header_button_states() {
     map_mode_ui_->set_button_state(MapModeUI::HeaderMode::Room, "camera", camera_open);
     map_mode_ui_->set_button_state(MapModeUI::HeaderMode::Map, "camera", camera_open);
     const bool lights_open = map_mode_ui_->is_light_panel_visible();
-    map_mode_ui_->set_button_state(MapModeUI::HeaderMode::Room, "lights", lights_open);
     const bool light_rays_open = light_rays_panel_ && light_rays_panel_->is_visible();
     map_mode_ui_->set_button_state(MapModeUI::HeaderMode::Room, "light_rays", light_rays_open);
     map_mode_ui_->set_button_state(MapModeUI::HeaderMode::Map, "lights", lights_open);
