@@ -3,6 +3,7 @@
 #include <SDL.h>
 #include <fstream>
 #include <sstream>
+#include <cmath>
 
 #include "dev_mode/map_editor.hpp"
 #include "dev_mode/room_editor.hpp"
@@ -21,6 +22,7 @@
 #include "widgets.hpp"
 #include "dev_controls_persistence.hpp"
 #include "render/global_light_source.hpp"
+#include "map_generation/map_layers_geometry.hpp"
 
 #include "asset/Asset.hpp"
 #include "asset/asset_types.hpp"
@@ -1880,7 +1882,10 @@ int DevControls::map_radius_or_default() const {
     try {
         const nlohmann::json& map_json = assets_->map_info_json();
         if (map_json.is_object()) {
-            radius = map_json.value("map_radius", 0);
+            const double computed = map_layers::map_radius_from_map_info(map_json);
+            if (computed > 0.0) {
+                radius = static_cast<int>(std::lround(computed));
+            }
         }
     } catch (...) {
         radius = 0;

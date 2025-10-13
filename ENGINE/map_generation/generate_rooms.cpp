@@ -22,10 +22,10 @@ map_info_path_(map_info_path),
 rng_(std::random_device{}())
 {}
 
-SDL_Point GenerateRooms::polar_to_cartesian(int cx, int cy, int radius, float angle_rad) {
-	float x = cx + std::cos(angle_rad) * radius;
-	float y = cy + std::sin(angle_rad) * radius;
-	return SDL_Point{ static_cast<int>(std::round(x)), static_cast<int>(std::round(y)) };
+SDL_Point GenerateRooms::polar_to_cartesian(int cx, int cy, double radius, float angle_rad) {
+        const double x = static_cast<double>(cx) + std::cos(angle_rad) * radius;
+        const double y = static_cast<double>(cy) + std::sin(angle_rad) * radius;
+        return SDL_Point{ static_cast<int>(std::lround(x)), static_cast<int>(std::lround(y)) };
 }
 
 std::vector<RoomSpec> GenerateRooms::get_children_from_layer(const LayerSpec& layer) {
@@ -99,10 +99,10 @@ std::vector<std::unique_ptr<Room>> GenerateRooms::build(AssetLibrary* asset_lib,
 	for (size_t li = 1; li < map_layers_.size(); ++li) {
 		const LayerSpec& layer = map_layers_[li];
 		auto children_specs = get_children_from_layer(layer);
-		int radius = layer.radius;
-		if (testing) {
-			std::cout << "[GenerateRooms] Layer " << layer.level
-			<< " radius: " << radius
+                double radius = layer.radius;
+                if (testing) {
+                        std::cout << "[GenerateRooms] Layer " << layer.level
+                        << " radius: " << radius
 			<< ", children count: " << children_specs.size() << "\n";
 		}
 		std::vector<Sector> next_sectors;
@@ -246,10 +246,9 @@ std::vector<std::unique_ptr<Room>> GenerateRooms::build(AssetLibrary* asset_lib,
                 for (const auto& r : all_rooms) {
                         exclusion_zones.push_back(*r->room_area);
                 }
-                int cx = map_radius;
-                int cy = map_radius;
-                int diameter = map_radius * 2;
-                SDL_Point center{cx, cy};
+                const int map_radius_int = map_radius > 0.0 ? static_cast<int>(std::lround(map_radius)) : 0;
+                const int diameter = map_radius_int * 2;
+                SDL_Point center{map_radius_int, map_radius_int};
                 Area area("Map", center, diameter, diameter, "Circle", 1, diameter, diameter);
                 AssetSpawner spawner(asset_lib, exclusion_zones);
                 std::vector<std::unique_ptr<Asset>> boundary_assets = spawner.spawn_boundary_from_json( boundary_data, area, map_info_path_ + "::map_boundary_data");

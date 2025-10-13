@@ -18,9 +18,9 @@ struct RoomSpec {
 };
 
 struct LayerSpec {
-        int level;
-        int radius;
-        int max_rooms;
+        int level = 0;
+        double radius = 0.0;
+        int max_rooms = 0;
         std::vector<RoomSpec> rooms;
 };
 
@@ -38,7 +38,7 @@ class GenerateRooms {
     float start_angle;
     float span_angle;
 };
-    SDL_Point polar_to_cartesian(int cx, int cy, int radius, float angle_rad);
+    SDL_Point polar_to_cartesian(int cx, int cy, double radius, float angle_rad);
     std::vector<RoomSpec> get_children_from_layer(const LayerSpec& layer);
     std::vector<LayerSpec> map_layers_;
     int map_center_x_;

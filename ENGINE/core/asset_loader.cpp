@@ -17,6 +17,7 @@
 #include "map_generation/room.hpp"
 #include "utils/area.hpp"
 #include "map_generation/generate_rooms.hpp"
+#include "map_generation/map_layers_geometry.hpp"
 #include <nlohmann/json.hpp>
 using json = nlohmann::json;
 
@@ -263,43 +264,8 @@ void AssetLoader::load_map_json() {
         f >> j;
         map_info_json_ = std::move(j);
 
-        map_radius_     = map_info_json_.value("map_radius", 0.0);
-        map_center_x_   = map_center_y_ = map_radius_;
-        map_layers_.clear();
-
-        auto layers_it = map_info_json_.find("map_layers");
-        if (layers_it != map_info_json_.end() && layers_it->is_array()) {
-                for (const auto& layer_entry : *layers_it) {
-                        LayerSpec spec;
-                        spec.level     = layer_entry.value("level", 0);
-                        spec.radius    = layer_entry.value("radius", 0);
-                        spec.max_rooms = layer_entry.value("max_rooms", 0);
-
-                        auto rooms_it = layer_entry.find("rooms");
-                        if (rooms_it != layer_entry.end() && rooms_it->is_array()) {
-                                for (const auto& room_entry : *rooms_it) {
-                                        RoomSpec rs;
-                                        rs.name          = room_entry.value("name", "unnamed");
-                                        rs.max_instances = room_entry.value("max_instances", 1);
-
-                                        auto required_it = room_entry.find("required_children");
-                                        if (required_it != room_entry.end() && required_it->is_array()) {
-                                                for (const auto& child : *required_it) {
-                                                        if (child.is_string()) {
-                                                                rs.required_children.push_back(child.get<std::string>());
-                                                        } else {
-                                                                std::cerr << "[AssetLoader] Room '" << rs.name
-                                                                          << "' has non-string entry in 'required_children'; skipping.\n";
-                                                        }
-                                                }
-                                        }
-
-                                        spec.rooms.push_back(std::move(rs));
-                                }
-                        }
-
-                        map_layers_.push_back(std::move(spec));
-                }
+        if (!map_info_json_.is_object()) {
+                map_info_json_ = nlohmann::json::object();
         }
 
         map_assets_data_   = &map_info_json_["map_assets_data"];
@@ -310,4 +276,61 @@ void AssetLoader::load_map_json() {
         if (!rooms_data_->is_object()) *rooms_data_ = nlohmann::json::object();
         trails_data_       = &map_info_json_["trails_data"];
         if (!trails_data_->is_object()) *trails_data_ = nlohmann::json::object();
+
+        const auto layers_it = map_info_json_.find("map_layers");
+        map_layers::LayerRadiiResult radii_result;
+        const nlohmann::json* rooms_data_ptr = rooms_data_;
+        if (layers_it != map_info_json_.end()) {
+                radii_result = map_layers::compute_layer_radii(*layers_it, rooms_data_ptr);
+        }
+
+        map_radius_   = radii_result.map_radius;
+        map_center_x_ = map_center_y_ = map_radius_;
+        map_layers_.clear();
+
+        if (layers_it != map_info_json_.end() && layers_it->is_array()) {
+                const auto& radii = radii_result.layer_radii;
+                map_layers_.reserve(layers_it->size());
+                size_t index = 0;
+                for (const auto& layer_entry : *layers_it) {
+                        LayerSpec spec;
+                        spec.level = static_cast<int>(index);
+                        spec.radius = index < radii.size() ? radii[index] : 0.0;
+                        spec.max_rooms = 0;
+
+                        if (layer_entry.is_object()) {
+                                spec.level     = layer_entry.value("level", spec.level);
+                                spec.max_rooms = layer_entry.value("max_rooms", 0);
+
+                                auto rooms_array_it = layer_entry.find("rooms");
+                                if (rooms_array_it != layer_entry.end() && rooms_array_it->is_array()) {
+                                        for (const auto& room_entry : *rooms_array_it) {
+                                                if (!room_entry.is_object()) {
+                                                        continue;
+                                                }
+                                                RoomSpec rs;
+                                                rs.name          = room_entry.value("name", "unnamed");
+                                                rs.max_instances = room_entry.value("max_instances", 1);
+
+                                                auto required_it = room_entry.find("required_children");
+                                                if (required_it != room_entry.end() && required_it->is_array()) {
+                                                        for (const auto& child : *required_it) {
+                                                                if (child.is_string()) {
+                                                                        rs.required_children.push_back(child.get<std::string>());
+                                                                } else {
+                                                                        std::cerr << "[AssetLoader] Room '" << rs.name
+                                                                                  << "' has non-string entry in 'required_children'; skipping.\n";
+                                                                }
+                                                        }
+                                                }
+
+                                                spec.rooms.push_back(std::move(rs));
+                                        }
+                                }
+                        }
+
+                        map_layers_.push_back(std::move(spec));
+                        ++index;
+                }
+        }
 }

@@ -29,6 +29,7 @@
 #include "utils/input.hpp"
 #include "utils/map_grid.hpp"
 #include "utils/relative_room_position.hpp"
+#include "map_generation/map_layers_geometry.hpp"
 
 #include <algorithm>
 #include <array>
@@ -2376,15 +2377,20 @@ void RoomEditor::regenerate_current_room() {
         room_json.erase("radius");
     }
 
-    int map_radius = 0;
+    double map_radius_value = 0.0;
     nlohmann::json map_info_json;
     if (!current_room_->map_path.empty()) {
         std::ifstream map_info(current_room_->map_path + "/map_info.json");
         if (map_info.is_open()) {
-            map_info >> map_info_json;
-            map_radius = map_info_json.value("map_radius", 0);
+            try {
+                map_info >> map_info_json;
+            } catch (...) {
+                map_info_json = nlohmann::json::object();
+            }
+            map_radius_value = map_layers::map_radius_from_map_info(map_info_json);
         }
     }
+    const int map_radius = map_radius_value > 0.0 ? static_cast<int>(std::lround(map_radius_value)) : 0;
     int map_w = map_radius > 0 ? map_radius * 2 : std::max(width * 2, 1);
     int map_h = map_radius > 0 ? map_radius * 2 : std::max(height * 2, 1);
     Area new_area(current_room_->room_name.empty() ? std::string("room") : current_room_->room_name, center, width, height, geometry, edge, map_w, map_h);

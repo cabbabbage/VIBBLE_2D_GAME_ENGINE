@@ -23,5 +23,7 @@ LayerRadiiResult compute_layer_radii(const nlohmann::json& layers,
 double room_extent_from_rooms_data(const nlohmann::json* rooms_data,
                                    const std::string& room_name);
 
+double map_radius_from_map_info(const nlohmann::json& map_info);
+
 }  // namespace map_layers
 

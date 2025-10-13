@@ -165,5 +165,22 @@ LayerRadiiResult compute_layer_radii(const nlohmann::json& layers,
     return result;
 }
 
+double map_radius_from_map_info(const nlohmann::json& map_info) {
+    if (!map_info.is_object()) {
+        return 0.0;
+    }
+    const auto layers_it = map_info.find("map_layers");
+    if (layers_it == map_info.end()) {
+        return 0.0;
+    }
+    const nlohmann::json* rooms_data_ptr = nullptr;
+    const auto rooms_it = map_info.find("rooms_data");
+    if (rooms_it != map_info.end() && rooms_it->is_object()) {
+        rooms_data_ptr = &(*rooms_it);
+    }
+    const LayerRadiiResult result = compute_layer_radii(*layers_it, rooms_data_ptr);
+    return result.map_radius;
+}
+
 }  // namespace map_layers
 

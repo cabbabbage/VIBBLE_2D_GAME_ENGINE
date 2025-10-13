@@ -352,6 +352,9 @@ void SearchAssets::update(const Input& input) {
                 has_pending_position_ = true;
             }
         }
+        if (tag_utils::tag_version() != tag_data_version_) {
+            filter_assets();
+        }
     }
 }
 

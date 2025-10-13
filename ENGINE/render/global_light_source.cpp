@@ -1,6 +1,7 @@
 #include "global_light_source.hpp"
 #include "generate_light.hpp"
 #include "utils/light_source.hpp"
+#include "map_generation/map_layers_geometry.hpp"
 #include <nlohmann/json.hpp>
 #include <fstream>
 #include <iostream>
@@ -77,11 +78,13 @@ bool Global_Light_Source::load_from_map_light(const std::string& map_path) {
         int default_cx = default_center_.x;
         int default_cy = default_center_.y;
         try {
-                double map_radius = j.value("map_radius", 0.0);
-                if (map_radius > 0.0) {
-                        int center_val = static_cast<int>(std::lround(map_radius));
-                        default_cx = center_val;
-                        default_cy = center_val;
+                if (j.is_object()) {
+                        const double map_radius = map_layers::map_radius_from_map_info(j);
+                        if (map_radius > 0.0) {
+                                const int center_val = static_cast<int>(std::lround(map_radius));
+                                default_cx = center_val;
+                                default_cy = center_val;
+                        }
                 }
         } catch (...) {
 
