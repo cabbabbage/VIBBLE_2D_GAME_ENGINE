@@ -4,13 +4,16 @@ namespace {
 const SDL_Color kTextPrimary       = dm::rgba(226, 232, 240, 255);
 const SDL_Color kTextSecondary     = dm::rgba(203, 213, 225, 255);
 
+const SDL_Color kHighlightWhite    = dm::rgba(248, 250, 252, 255);
+
 const SDL_Color kPanelBackground   = dm::rgba(15, 23, 42, 235);
 const SDL_Color kPanelHeader       = dm::rgba(30, 41, 59, 240);
-const SDL_Color kPanelBorder       = dm::rgba(71, 85, 105, 255);
-const SDL_Color kHighlightColor    = dm::rgba(148, 163, 184, 255);
-const SDL_Color kShadowColor       = dm::rgba(15, 23, 42, 255);
-constexpr float kHighlightIntensity = 0.60f;
-constexpr float kShadowIntensity    = 0.80f;
+const SDL_Color kNeutralBorder     = dm::rgba(94, 109, 132, 255);
+const SDL_Color kPanelBorder       = kNeutralBorder;
+const SDL_Color kHighlightColor    = kHighlightWhite;
+const SDL_Color kShadowColor       = dm::rgba(9, 14, 25, 255);
+constexpr float kHighlightIntensity = 0.72f;
+constexpr float kShadowIntensity    = 0.66f;
 constexpr int kCornerRadius         = 6;
 constexpr int kBevelDepth           = 4;
 
@@ -19,11 +22,14 @@ const SDL_Color kHeaderHover       = dm::rgba(46, 64, 94, 245);
 const SDL_Color kHeaderPress       = dm::rgba(24, 34, 53, 245);
 const SDL_Color kHeaderText        = kTextPrimary;
 
-const SDL_Color kAccentBg          = dm::rgba(37, 99, 235, 235);
-const SDL_Color kAccentHover       = dm::rgba(59, 130, 246, 245);
-const SDL_Color kAccentPress       = dm::rgba(29, 78, 216, 235);
-const SDL_Color kAccentBorder      = dm::rgba(30, 64, 175, 255);
-const SDL_Color kAccentText        = dm::rgba(240, 249, 255, 255);
+const SDL_Color kAccentOrange           = dm::rgba(249, 115, 22, 240);
+const SDL_Color kAccentOrangeHover      = dm::rgba(251, 146, 60, 245);
+const SDL_Color kAccentOrangeStrong     = dm::rgba(194, 65, 12, 255);
+const SDL_Color kAccentBorder           = kAccentOrangeStrong;
+const SDL_Color kAccentBg               = kAccentOrange;
+const SDL_Color kAccentHover            = kAccentOrangeHover;
+const SDL_Color kAccentPress            = dm::rgba(194, 65, 12, 240);
+const SDL_Color kAccentText             = kHighlightWhite;
 
 const SDL_Color kWarnBg            = dm::rgba(234, 179, 8, 235);
 const SDL_Color kWarnHover         = dm::rgba(250, 204, 21, 245);
@@ -34,7 +40,7 @@ const SDL_Color kWarnText          = dm::rgba(30, 30, 30, 255);
 const SDL_Color kListBg            = dm::rgba(20, 30, 49, 210);
 const SDL_Color kListHover         = dm::rgba(31, 45, 70, 230);
 const SDL_Color kListPress         = dm::rgba(41, 56, 85, 240);
-const SDL_Color kListBorder        = dm::rgba(52, 70, 105, 255);
+const SDL_Color kListBorder        = kNeutralBorder;
 const SDL_Color kListText          = dm::rgba(215, 224, 244, 255);
 
 const SDL_Color kCreateBg          = dm::rgba(34, 139, 116, 230);
@@ -51,25 +57,25 @@ const SDL_Color kDeleteText        = dm::rgba(254, 226, 226, 255);
 
 const SDL_Color kTextboxBg         = dm::rgba(13, 23, 38, 235);
 const SDL_Color kTextboxBgHover    = dm::rgba(18, 32, 52, 240);
-const SDL_Color kTextboxBorder     = dm::rgba(48, 64, 96, 255);
-const SDL_Color kTextboxBorderHot  = dm::rgba(73, 103, 151, 255);
+const SDL_Color kTextboxBorder     = kNeutralBorder;
+const SDL_Color kTextboxBorderHot  = kAccentOrangeStrong;
 const SDL_Color kTextboxText       = kTextPrimary;
 
 const SDL_Color kCheckboxBg        = dm::rgba(20, 32, 52, 235);
 const SDL_Color kCheckboxBgHover   = dm::rgba(28, 44, 72, 240);
-const SDL_Color kCheckboxBorder    = dm::rgba(57, 81, 123, 255);
-const SDL_Color kCheckboxCheck     = dm::rgba(59, 130, 246, 255);
-const SDL_Color kCheckboxFocus     = dm::rgba(96, 165, 250, 255);
+const SDL_Color kCheckboxBorder    = kNeutralBorder;
+const SDL_Color kCheckboxCheck     = kHighlightWhite;
+const SDL_Color kCheckboxFocus     = kAccentOrangeStrong;
 
 const SDL_Color kSliderTrack       = dm::rgba(21, 30, 50, 220);
-const SDL_Color kSliderFill        = dm::rgba(59, 130, 246, 240);
+const SDL_Color kSliderFill        = kAccentOrange;
 const SDL_Color kSliderKnob        = dm::rgba(226, 232, 240, 255);
-const SDL_Color kSliderKnobHover   = dm::rgba(186, 230, 253, 255);
-const SDL_Color kSliderKnobBorder  = dm::rgba(59, 130, 246, 255);
-const SDL_Color kSliderKnobBorderHover = dm::rgba(96, 165, 250, 255);
-const SDL_Color kSliderFocusOutline = kSliderKnobBorderHover;
+const SDL_Color kSliderKnobHover   = kHighlightWhite;
+const SDL_Color kSliderKnobBorder  = kAccentOrangeStrong;
+const SDL_Color kSliderKnobBorderHover = kAccentOrange;
+const SDL_Color kSliderFocusOutline = kAccentOrangeStrong;
 
-const SDL_Color kButtonFocusOutline = dm::rgba(125, 211, 252, 255);
+const SDL_Color kButtonFocusOutline = kAccentOrangeStrong;
 const SDL_Color kButtonBaseFill     = kListBg;
 const SDL_Color kButtonHoverFill    = kListHover;
 const SDL_Color kButtonPressFill    = kListPress;
