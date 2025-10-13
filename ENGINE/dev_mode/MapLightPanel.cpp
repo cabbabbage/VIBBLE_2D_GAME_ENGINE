@@ -602,12 +602,21 @@ void MapLightPanel::sync_ui_from_json() {
 void MapLightPanel::sync_json_from_ui() {
     json& L = ensure_light();
 
-    L["radius"]         = radius_->value();
-    L["intensity"]      = intensity_->value();
-    L["mult"]           = (double)mult_x100_->value() / 100.0;
-    L["fall_off"]       = falloff_->value();
+    auto slider_value = [](const std::unique_ptr<DMSlider>& slider, int fallback) {
+        return slider ? slider->displayed_value() : fallback;
+    };
 
-    L["base_color"]     = json::array({ base_r_->value(), base_g_->value(), base_b_->value(), base_a_->value() });
+    L["radius"]         = slider_value(radius_, 0);
+    L["intensity"]      = slider_value(intensity_, 255);
+    L["mult"]           = static_cast<double>(slider_value(mult_x100_, 0)) / 100.0;
+    L["fall_off"]       = slider_value(falloff_, 100);
+
+    L["base_color"]     = json::array({
+        slider_value(base_r_, 255),
+        slider_value(base_g_, 255),
+        slider_value(base_b_, 255),
+        slider_value(base_a_, 255)
+    });
 
     OrbitSettings orbit = sanitize_orbit_settings(current_orbit_settings_from_ui());
     write_orbit_settings_to_json(orbit);
@@ -681,21 +690,21 @@ MapLightPanel::ScreenLightSettings MapLightPanel::sanitize_screen_settings(const
 
 MapLightPanel::OrbitSettings MapLightPanel::current_orbit_settings_from_ui() const {
     OrbitSettings current;
-    current.update_interval = update_interval_ ? update_interval_->value() : 10;
-    current.orbit_x = orbit_x_ ? orbit_x_->value() : 0;
-    current.orbit_y = orbit_y_ ? orbit_y_->value() : current.orbit_x;
-    current.min_opacity = min_opacity_ ? min_opacity_->value() : 0;
-    current.max_opacity = max_opacity_ ? max_opacity_->value() : 255;
+    current.update_interval = update_interval_ ? update_interval_->displayed_value() : 10;
+    current.orbit_x = orbit_x_ ? orbit_x_->displayed_value() : 0;
+    current.orbit_y = orbit_y_ ? orbit_y_->displayed_value() : current.orbit_x;
+    current.min_opacity = min_opacity_ ? min_opacity_->displayed_value() : 0;
+    current.max_opacity = max_opacity_ ? max_opacity_->displayed_value() : 255;
     return current;
 }
 
 MapLightPanel::ScreenLightSettings MapLightPanel::current_screen_settings_from_ui() const {
     ScreenLightSettings current;
-    current.r = screen_r_ ? screen_r_->value() : 255;
-    current.g = screen_g_ ? screen_g_->value() : 255;
-    current.b = screen_b_ ? screen_b_->value() : 255;
-    current.min_opacity = screen_min_opacity_ ? screen_min_opacity_->value() : 0;
-    current.max_opacity = screen_max_opacity_ ? screen_max_opacity_->value() : 255;
+    current.r = screen_r_ ? screen_r_->displayed_value() : 255;
+    current.g = screen_g_ ? screen_g_->displayed_value() : 255;
+    current.b = screen_b_ ? screen_b_->displayed_value() : 255;
+    current.min_opacity = screen_min_opacity_ ? screen_min_opacity_->displayed_value() : 0;
+    current.max_opacity = screen_max_opacity_ ? screen_max_opacity_->displayed_value() : 255;
     return current;
 }
 

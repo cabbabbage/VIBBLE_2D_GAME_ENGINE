@@ -666,6 +666,10 @@ void DMSlider::set_value(int v) {
     has_pending_value_ = false;
 }
 
+int DMSlider::displayed_value() const {
+    return display_value();
+}
+
 int DMSlider::label_space() const {
     return label_height_;
 }

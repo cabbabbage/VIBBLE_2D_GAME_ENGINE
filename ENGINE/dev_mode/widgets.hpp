@@ -106,6 +106,7 @@ public:
     const SDL_Rect& rect() const { return rect_; }
     void set_value(int v);
     int value() const { return value_; }
+    int displayed_value() const;
     void set_defer_commit_until_unfocus(bool defer) {
         if (defer_commit_until_unfocus_ == defer) {
             return;

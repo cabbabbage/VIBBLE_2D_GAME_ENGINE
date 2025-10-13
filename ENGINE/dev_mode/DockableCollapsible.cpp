@@ -607,6 +607,18 @@ bool DockableCollapsible::handle_event(const SDL_Event& e) {
     }
 
     if (pointer_event && SDL_PointInRect(&pointer_pos, &rect_)) {
+        bool in_visible_region = false;
+        if (show_header_ && SDL_PointInRect(&pointer_pos, &header_rect_)) {
+            in_visible_region = true;
+        }
+        if (!in_visible_region && expanded_ && SDL_PointInRect(&pointer_pos, &body_viewport_)) {
+            in_visible_region = true;
+        }
+
+        if (!in_visible_region) {
+            return false;
+        }
+
         if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
             return true;
         }
