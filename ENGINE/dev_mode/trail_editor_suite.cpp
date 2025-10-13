@@ -121,8 +121,7 @@ void TrailEditorSuite::ensure_ui() {
                 [this](const std::string& id) { open_spawn_group_editor(id); },
                 [this](const std::string& id) { duplicate_spawn_group(id); },
                 [this](const std::string& id) { delete_spawn_group(id); },
-                [this](const std::string& id) { move_spawn_group_up(id); },
-                [this](const std::string& id) { move_spawn_group_down(id); },
+                [this](const std::string& id, size_t index) { reorder_spawn_group(id, index); },
                 [this]() { add_spawn_group(); });
             configurator_->set_spawn_area_open_callback(on_open_area_, open_area_stack_key_);
         }
@@ -221,8 +220,7 @@ void TrailEditorSuite::rebuild_spawn_groups_ui() {
         cb.on_add       = [this]() { add_spawn_group(); };
         cb.on_duplicate = [this](const std::string& id) { duplicate_spawn_group(id); };
         cb.on_delete    = [this](const std::string& id) { delete_spawn_group(id); };
-        cb.on_move_up   = [this](const std::string& id) { move_spawn_group_up(id); };
-        cb.on_move_down = [this](const std::string& id) { move_spawn_group_down(id); };
+        cb.on_reorder   = [this](const std::string& id, size_t index) { reorder_spawn_group(id, index); };
         spawn_groups_->set_callbacks(std::move(cb));
     }
     if (configurator_) {
@@ -290,6 +288,54 @@ void TrailEditorSuite::delete_spawn_group(const std::string& id) {
     sanitize_perimeter_spawn_groups(groups);
     active_trail_->save_assets_json();
 
+    rebuild_spawn_groups_ui();
+}
+
+void TrailEditorSuite::reorder_spawn_group(const std::string& id, size_t new_index) {
+    if (!active_trail_ || id.empty()) {
+        return;
+    }
+    auto& root = active_trail_->assets_data();
+    auto& groups = ensure_spawn_groups_array(root);
+    if (!groups.is_array() || groups.size() <= 1) {
+        return;
+    }
+
+    size_t current = groups.size();
+    for (size_t i = 0; i < groups.size(); ++i) {
+        const auto& entry = groups[i];
+        if (!entry.is_object()) {
+            continue;
+        }
+        if (entry.contains("spawn_id") && entry["spawn_id"].is_string() && entry["spawn_id"].get<std::string>() == id) {
+            current = i;
+            break;
+        }
+    }
+    if (current >= groups.size()) {
+        return;
+    }
+
+    const size_t bounded_index = std::min(new_index, groups.size() - 1);
+    if (current == bounded_index) {
+        return;
+    }
+
+    nlohmann::json entry = groups[current];
+    const auto erase_pos = groups.begin() + static_cast<nlohmann::json::difference_type>(current);
+    groups.erase(erase_pos);
+    const size_t insert_index = current < bounded_index ? bounded_index - 1 : bounded_index;
+    const auto insert_pos = groups.begin() + static_cast<nlohmann::json::difference_type>(insert_index);
+    groups.insert(insert_pos, std::move(entry));
+
+    for (size_t i = 0; i < groups.size(); ++i) {
+        auto& element = groups[i];
+        if (element.is_object()) {
+            element["priority"] = static_cast<int>(i);
+        }
+    }
+
+    active_trail_->save_assets_json();
     rebuild_spawn_groups_ui();
 }
 

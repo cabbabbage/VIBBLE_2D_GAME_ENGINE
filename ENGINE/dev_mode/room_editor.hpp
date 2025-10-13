@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <string>
 #include <SDL.h>
 #include <functional>
@@ -164,6 +165,7 @@ private:
     void delete_spawn_group_internal(const std::string& spawn_id);
     bool remove_spawn_group_by_id(const std::string& spawn_id);
     void move_spawn_group_internal(const std::string& spawn_id, int dir);
+    void reorder_spawn_group_internal(const std::string& spawn_id, size_t target_index);
     void open_spawn_group_editor_by_id(const std::string& spawn_id);
     void reopen_room_configurator();
     void notify_room_assets_saved();

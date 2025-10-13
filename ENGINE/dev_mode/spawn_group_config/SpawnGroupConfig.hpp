@@ -31,8 +31,7 @@ public:
         std::function<void(const std::string&)> on_regenerate;
         std::function<void(const std::string&)> on_duplicate;
         std::function<void(const std::string&)> on_delete;
-        std::function<void(const std::string&)> on_move_up;
-        std::function<void(const std::string&)> on_move_down;
+        std::function<void(const std::string&, size_t)> on_reorder;
         std::function<void()> on_add;
 };
 
@@ -153,12 +152,8 @@ private:
     std::deque<std::function<void()>> pending_notifications_{};
     bool processing_notifications_ = false;
 
-    // Header actions (moved from internal row): up/down/delete
-    std::unique_ptr<DMButton> header_up_btn_{};
-    std::unique_ptr<DMButton> header_down_btn_{};
+    // Header actions (moved from internal row): delete
     std::unique_ptr<DMButton> header_delete_btn_{};
-    std::unique_ptr<ButtonWidget> header_up_widget_{};
-    std::unique_ptr<ButtonWidget> header_down_widget_{};
     std::unique_ptr<ButtonWidget> header_delete_widget_{};
 
     std::unique_ptr<SearchAssets> asset_search_{};

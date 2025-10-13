@@ -1,6 +1,7 @@
 #pragma once
 
 #include <SDL.h>
+#include <cstddef>
 #include <functional>
 #include <memory>
 #include <string>
@@ -68,8 +69,7 @@ public:
     void set_spawn_group_callbacks(std::function<void(const std::string&)> on_edit,
                                    std::function<void(const std::string&)> on_duplicate,
                                    std::function<void(const std::string&)> on_delete,
-                                   std::function<void(const std::string&)> on_move_up,
-                                   std::function<void(const std::string&)> on_move_down,
+                                   std::function<void(const std::string&, size_t)> on_reorder,
                                    std::function<void()> on_add,
                                    std::function<void(const std::string&)> on_regenerate = {});
     void set_spawn_area_open_callback(std::function<void(const std::string&, const std::string&)> cb,
@@ -174,8 +174,7 @@ private:
     std::function<void(const std::string&)> on_spawn_edit_;
     std::function<void(const std::string&)> on_spawn_duplicate_;
     std::function<void(const std::string&)> on_spawn_delete_;
-    std::function<void(const std::string&)> on_spawn_move_up_;
-    std::function<void(const std::string&)> on_spawn_move_down_;
+    std::function<void(const std::string&, size_t)> on_spawn_reorder_;
     std::function<void()> on_spawn_add_;
     std::function<void(const std::string&)> on_spawn_regenerate_;
     std::function<void(const std::string&, const std::string&)> on_spawn_area_open_;

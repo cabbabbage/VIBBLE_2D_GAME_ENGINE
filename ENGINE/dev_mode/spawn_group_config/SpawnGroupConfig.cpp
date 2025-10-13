@@ -407,26 +407,6 @@ struct SpawnGroupConfig::Entry {
             });
         });
 
-        move_up_button_ = std::make_unique<DMButton>("Up", &DMStyles::ListButton(), 0, DMButton::height());
-        move_up_widget_ = std::make_unique<ButtonWidget>(move_up_button_.get(), [this]() {
-            if (!owner_) return;
-            std::string id = spawn_id();
-            owner_->enqueue_notification([owner = owner_, id]() {
-                if (!owner) return;
-                if (owner->callbacks_.on_move_up) owner->callbacks_.on_move_up(id);
-            });
-        });
-
-        move_down_button_ = std::make_unique<DMButton>("Down", &DMStyles::ListButton(), 0, DMButton::height());
-        move_down_widget_ = std::make_unique<ButtonWidget>(move_down_button_.get(), [this]() {
-            if (!owner_) return;
-            std::string id = spawn_id();
-            owner_->enqueue_notification([owner = owner_, id]() {
-                if (!owner) return;
-                if (owner->callbacks_.on_move_down) owner->callbacks_.on_move_down(id);
-            });
-        });
-
         auto name_box = std::make_unique<DMTextBox>("Display Name", "");
         name_widget_ = std::make_unique<CallbackTextBoxWidget>(std::move(name_box),
             [this](const std::string& value) {
@@ -1050,10 +1030,6 @@ private:
     std::unique_ptr<ButtonWidget> duplicate_widget_{};
     std::unique_ptr<DMButton> delete_button_{};
     std::unique_ptr<ButtonWidget> delete_widget_{};
-    std::unique_ptr<DMButton> move_up_button_{};
-    std::unique_ptr<ButtonWidget> move_up_widget_{};
-    std::unique_ptr<DMButton> move_down_button_{};
-    std::unique_ptr<ButtonWidget> move_down_widget_{};
 
     std::unique_ptr<CallbackTextBoxWidget> name_widget_{};
 
@@ -1092,11 +1068,7 @@ SpawnGroupConfig::SpawnGroupConfig(bool floatable)
     set_col_gap(12);
     set_padding(12);
     // Header action buttons
-    header_up_btn_ = std::make_unique<DMButton>("\xE2\x96\xB2", &DMStyles::HeaderButton(), DMButton::height(), DMButton::height());
-    header_down_btn_ = std::make_unique<DMButton>("\xE2\x96\xBC", &DMStyles::HeaderButton(), DMButton::height(), DMButton::height());
     header_delete_btn_ = std::make_unique<DMButton>("X", &DMStyles::HeaderButton(), DMButton::height(), DMButton::height());
-    header_up_widget_ = std::make_unique<ButtonWidget>(header_up_btn_.get(), [](){});
-    header_down_widget_ = std::make_unique<ButtonWidget>(header_down_btn_.get(), [](){});
     header_delete_widget_ = std::make_unique<ButtonWidget>(header_delete_btn_.get(), [](){});
 }
 
@@ -1258,14 +1230,9 @@ void SpawnGroupConfig::update(const Input& input, int screen_w, int screen_h) {
     if (bound_entry_) {
         const int padding = DMSpacing::panel_padding();
         const int btn = DMButton::height();
-        const int gap = DMSpacing::item_gap();
         int right = rect_.x + rect_.w - padding;
         SDL_Rect del{right - btn, header_rect_.y, btn, btn};
-        SDL_Rect down{del.x - gap - btn, header_rect_.y, btn, btn};
-        SDL_Rect up{down.x - gap - btn, header_rect_.y, btn, btn};
         if (header_delete_btn_) header_delete_btn_->set_rect(del);
-        if (header_down_btn_) header_down_btn_->set_rect(down);
-        if (header_up_btn_) header_up_btn_->set_rect(up);
     }
     if (asset_search_ && asset_search_->visible()) {
         asset_search_->set_screen_dimensions(screen_w_, screen_h_);
@@ -1292,28 +1259,6 @@ bool SpawnGroupConfig::handle_event(const SDL_Event& e) {
             return entries_[0]->spawn_id();
         };
         bool consumed = false;
-        if (header_up_btn_ && header_up_widget_ && header_up_widget_->handle_event(e)) {
-            consumed = true;
-            if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
-                std::string id = spawn_id_for_actions();
-                if (!id.empty()) {
-                    enqueue_notification([this, id]() {
-                        if (callbacks_.on_move_up) callbacks_.on_move_up(id);
-                    });
-                }
-            }
-        }
-        if (header_down_btn_ && header_down_widget_ && header_down_widget_->handle_event(e)) {
-            consumed = true;
-            if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
-                std::string id = spawn_id_for_actions();
-                if (!id.empty()) {
-                    enqueue_notification([this, id]() {
-                        if (callbacks_.on_move_down) callbacks_.on_move_down(id);
-                    });
-                }
-            }
-        }
         if (header_delete_btn_ && header_delete_widget_ && header_delete_widget_->handle_event(e)) {
             consumed = true;
             if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
@@ -1336,8 +1281,6 @@ void SpawnGroupConfig::render(SDL_Renderer* r) const {
     DockableCollapsible::render(r);
     if (!r) return;
     if (bound_entry_) {
-        if (header_up_btn_) header_up_btn_->render(r);
-        if (header_down_btn_) header_down_btn_->render(r);
         if (header_delete_btn_) header_delete_btn_->render(r);
     }
     if (asset_search_ && asset_search_->visible()) {

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <functional>
 #include <memory>
 #include <string>
@@ -120,6 +121,7 @@ private:
     void duplicate_spawn_group_in_active_room(const std::string& spawn_id);
     void delete_spawn_group_from_active_room(const std::string& spawn_id);
     void move_spawn_group_in_active_room(const std::string& spawn_id, int dir);
+    void reorder_spawn_group_in_active_room(const std::string& spawn_id, size_t target_index);
 
     std::string rename_room_everywhere(const std::string& old_key, const std::string& desired_key);
 

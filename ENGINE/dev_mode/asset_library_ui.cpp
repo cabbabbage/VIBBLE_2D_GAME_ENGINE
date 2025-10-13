@@ -544,6 +544,8 @@ void AssetLibraryUI::refresh_tiles(Assets& assets) {
     tiles_.clear();
     tiles_.reserve(items_.size());
 
+    Assets* assets_ptr = &assets;
+
     for (auto& inf : items_) {
         if (!inf) continue;
         if (!matches_query(*inf, search_query_)) continue;
@@ -556,9 +558,9 @@ void AssetLibraryUI::refresh_tiles(Assets& assets) {
                 }
                 close();
             },
-            [this, &assets](const std::shared_ptr<AssetInfo>& info){
-                if (info) {
-                    assets.open_asset_info_editor(info);
+            [this, assets_ptr](const std::shared_ptr<AssetInfo>& info){
+                if (info && assets_ptr) {
+                    assets_ptr->open_asset_info_editor(info);
                 }
                 close();
             },

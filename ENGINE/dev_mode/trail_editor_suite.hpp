@@ -2,6 +2,7 @@
 
 #include <SDL.h>
 
+#include <cstddef>
 #include <memory>
 #include <functional>
 #include <nlohmann/json_fwd.hpp>
@@ -43,6 +44,7 @@ private:
     void duplicate_spawn_group(const std::string& id);
     void delete_spawn_group(const std::string& id);
     void add_spawn_group();
+    void reorder_spawn_group(const std::string& id, size_t new_index);
     void move_spawn_group_internal(const std::string& id, int dir);
     void move_spawn_group_up(const std::string& id);
     void move_spawn_group_down(const std::string& id);

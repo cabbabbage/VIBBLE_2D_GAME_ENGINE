@@ -48,8 +48,7 @@ void Section_SpawnGroups::build() {
     SpawnGroupConfig::Callbacks cb{};
     cb.on_duplicate = [this](const std::string& id){ duplicate_spawn_group(id); };
     cb.on_delete    = [this](const std::string& id){ delete_spawn_group(id); };
-    cb.on_move_up   = [this](const std::string& id){ move_spawn_group(id, -1); };
-    cb.on_move_down = [this](const std::string& id){ move_spawn_group(id, +1); };
+    cb.on_reorder   = [this](const std::string& id, size_t index){ reorder_spawn_group(id, index); };
     cb.on_add       = [this](){ add_spawn_group(); };
     list_->set_callbacks(std::move(cb));
     const auto expanded = list_->expanded_groups();
@@ -211,13 +210,21 @@ void Section_SpawnGroups::delete_spawn_group(const std::string& id) {
     schedule_rebuild();
 }
 
-void Section_SpawnGroups::move_spawn_group(const std::string& id, int dir) {
-    if (!groups_.is_array()) return;
-    const int idx = index_of(id);
-    if (idx < 0) return;
-    const int target = idx + (dir < 0 ? -1 : +1);
-    if (target < 0 || target >= static_cast<int>(groups_.size())) return;
-    std::swap(groups_[idx], groups_[target]);
+void Section_SpawnGroups::reorder_spawn_group(const std::string& id, size_t new_index) {
+    if (!groups_.is_array() || groups_.empty()) return;
+    const int current_index = index_of(id);
+    if (current_index < 0) return;
+    const size_t bounded_index = std::min(new_index, groups_.size() - 1);
+    const size_t from = static_cast<size_t>(current_index);
+    if (from == bounded_index) return;
+
+    nlohmann::json entry = groups_[from];
+    const auto erase_pos = groups_.begin() + static_cast<nlohmann::json::difference_type>(from);
+    groups_.erase(erase_pos);
+    const size_t adjusted_index = from < bounded_index ? bounded_index - 1 : bounded_index;
+    const auto insert_pos = groups_.begin() + static_cast<nlohmann::json::difference_type>(adjusted_index);
+    groups_.insert(insert_pos, std::move(entry));
+
     renumber_priorities();
     (void)save_to_file();
     schedule_rebuild();

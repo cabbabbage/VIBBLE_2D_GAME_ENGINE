@@ -2,6 +2,7 @@
 
 #include "../DockableCollapsible.hpp"
 
+#include <cstddef>
 #include <memory>
 #include <string>
 #include <vector>
@@ -32,7 +33,7 @@ private:
     void add_spawn_group();
     void duplicate_spawn_group(const std::string& id);
     void delete_spawn_group(const std::string& id);
-    void move_spawn_group(const std::string& id, int dir);
+    void reorder_spawn_group(const std::string& id, size_t new_index);
 
     int index_of(const std::string& id) const;
 

@@ -1411,11 +1411,8 @@ void RoomEditor::ensure_room_configurator() {
             [this](const std::string& spawn_id) {
                 delete_spawn_group_internal(spawn_id);
             },
-            [this](const std::string& spawn_id) {
-                move_spawn_group_internal(spawn_id, -1);
-            },
-            [this](const std::string& spawn_id) {
-                move_spawn_group_internal(spawn_id, +1);
+            [this](const std::string& spawn_id, size_t index) {
+                reorder_spawn_group_internal(spawn_id, index);
             },
             [this]() {
                 if (active_modal_ == ActiveModal::AssetInfo) {
@@ -2081,19 +2078,47 @@ void RoomEditor::move_spawn_group_internal(const std::string& spawn_id, int dir)
     auto& root = current_room_->assets_data();
     auto& arr = ensure_spawn_groups_array(root);
     if (!arr.is_array() || arr.size() <= 1) return;
-    int idx = -1;
+    size_t current_index = arr.size();
     for (size_t i = 0; i < arr.size(); ++i) {
         const auto& e = arr[i];
         if (!e.is_object()) continue;
         if (e.contains("spawn_id") && e["spawn_id"].is_string() && e["spawn_id"].get<std::string>() == spawn_id) {
-            idx = static_cast<int>(i);
+            current_index = i;
             break;
         }
     }
-    if (idx < 0) return;
-    int target = idx + dir;
+    if (current_index >= arr.size()) return;
+    const int target = static_cast<int>(current_index) + dir;
     if (target < 0 || target >= static_cast<int>(arr.size())) return;
-    std::swap(arr[idx], arr[target]);
+    reorder_spawn_group_internal(spawn_id, static_cast<size_t>(target));
+}
+
+void RoomEditor::reorder_spawn_group_internal(const std::string& spawn_id, size_t target_index) {
+    if (!current_room_ || spawn_id.empty()) return;
+    auto& root = current_room_->assets_data();
+    auto& arr = ensure_spawn_groups_array(root);
+    if (!arr.is_array() || arr.empty()) return;
+
+    size_t current_index = arr.size();
+    for (size_t i = 0; i < arr.size(); ++i) {
+        const auto& entry = arr[i];
+        if (!entry.is_object()) continue;
+        if (entry.contains("spawn_id") && entry["spawn_id"].is_string() && entry["spawn_id"].get<std::string>() == spawn_id) {
+            current_index = i;
+            break;
+        }
+    }
+    if (current_index >= arr.size()) return;
+
+    const size_t bounded_index = std::min(target_index, arr.size() - 1);
+    if (current_index == bounded_index) return;
+
+    nlohmann::json entry = arr[current_index];
+    const auto erase_pos = arr.begin() + static_cast<nlohmann::json::difference_type>(current_index);
+    arr.erase(erase_pos);
+    const size_t insert_index = current_index < bounded_index ? bounded_index - 1 : bounded_index;
+    const auto insert_pos = arr.begin() + static_cast<nlohmann::json::difference_type>(insert_index);
+    arr.insert(insert_pos, std::move(entry));
 
     for (size_t i = 0; i < arr.size(); ++i) {
         if (arr[i].is_object()) arr[i]["priority"] = static_cast<int>(i);

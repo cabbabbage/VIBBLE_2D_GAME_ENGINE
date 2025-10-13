@@ -4539,9 +4539,7 @@ void MapLayersPanel::ensure_room_configurator() {
 
                 [this](const std::string& id) { delete_spawn_group_from_active_room(id); },
 
-                [this](const std::string& id) { move_spawn_group_in_active_room(id, -1); },
-
-                [this](const std::string& id) { move_spawn_group_in_active_room(id, +1); },
+                [this](const std::string& id, size_t index) { reorder_spawn_group_in_active_room(id, index); },
 
                 [this]() { add_spawn_group_to_active_room(); },
 
@@ -5019,7 +5017,77 @@ void MapLayersPanel::move_spawn_group_in_active_room(const std::string& spawn_id
 
     }
 
-    std::swap(groups[index], groups[target]);
+    reorder_spawn_group_in_active_room(spawn_id, static_cast<size_t>(target));
+
+}
+
+void MapLayersPanel::reorder_spawn_group_in_active_room(const std::string& spawn_id, size_t target_index) {
+
+    if (spawn_id.empty()) {
+
+        return;
+
+    }
+
+    nlohmann::json* entry = active_room_entry();
+
+    if (!entry) {
+
+        return;
+
+    }
+
+    auto& groups = devmode::spawn::ensure_spawn_groups_array(*entry);
+
+    if (!groups.is_array() || groups.empty()) {
+
+        return;
+
+    }
+
+    size_t current_index = groups.size();
+
+    for (size_t i = 0; i < groups.size(); ++i) {
+
+        const auto& item = groups[i];
+
+        if (!item.is_object()) continue;
+
+        if (item.contains("spawn_id") && item["spawn_id"].is_string() && item["spawn_id"].get<std::string>() == spawn_id) {
+
+            current_index = i;
+
+            break;
+
+        }
+
+    }
+
+    if (current_index >= groups.size()) {
+
+        return;
+
+    }
+
+    const size_t bounded_index = std::min(target_index, groups.size() - 1);
+
+    if (current_index == bounded_index) {
+
+        return;
+
+    }
+
+    nlohmann::json moved = groups[current_index];
+
+    const auto erase_pos = groups.begin() + static_cast<nlohmann::json::difference_type>(current_index);
+
+    groups.erase(erase_pos);
+
+    const size_t insert_index = current_index < bounded_index ? bounded_index - 1 : bounded_index;
+
+    const auto insert_pos = groups.begin() + static_cast<nlohmann::json::difference_type>(insert_index);
+
+    groups.insert(insert_pos, std::move(moved));
 
     for (size_t i = 0; i < groups.size(); ++i) {
 

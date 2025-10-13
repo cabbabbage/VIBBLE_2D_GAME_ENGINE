@@ -702,14 +702,8 @@ void RoomConfigurator::rebuild_spawn_rows(Rows& rows) {
             if (room_) this->refresh_spawn_groups(room_);
             else if (external_room_json_) this->refresh_spawn_groups(*external_room_json_);
         };
-        callbacks.on_move_up = [this](const std::string& value) {
-            if (on_spawn_move_up_) on_spawn_move_up_(value);
-            this->request_rebuild();
-            if (room_) this->refresh_spawn_groups(room_);
-            else if (external_room_json_) this->refresh_spawn_groups(*external_room_json_);
-        };
-        callbacks.on_move_down = [this](const std::string& value) {
-            if (on_spawn_move_down_) on_spawn_move_down_(value);
+        callbacks.on_reorder = [this](const std::string& value, size_t index) {
+            if (on_spawn_reorder_) on_spawn_reorder_(value, index);
             this->request_rebuild();
             if (room_) this->refresh_spawn_groups(room_);
             else if (external_room_json_) this->refresh_spawn_groups(*external_room_json_);
@@ -1303,15 +1297,13 @@ void RoomConfigurator::write_tags_to_json(nlohmann::json& object) const {
 void RoomConfigurator::set_spawn_group_callbacks(std::function<void(const std::string&)> on_edit,
                                                  std::function<void(const std::string&)> on_duplicate,
                                                  std::function<void(const std::string&)> on_delete,
-                                                 std::function<void(const std::string&)> on_move_up,
-                                                 std::function<void(const std::string&)> on_move_down,
+                                                 std::function<void(const std::string&, size_t)> on_reorder,
                                                  std::function<void()> on_add,
                                                  std::function<void(const std::string&)> on_regenerate) {
     on_spawn_edit_ = std::move(on_edit);
     on_spawn_duplicate_ = std::move(on_duplicate);
     on_spawn_delete_ = std::move(on_delete);
-    on_spawn_move_up_ = std::move(on_move_up);
-    on_spawn_move_down_ = std::move(on_move_down);
+    on_spawn_reorder_ = std::move(on_reorder);
     on_spawn_add_ = std::move(on_add);
     on_spawn_regenerate_ = std::move(on_regenerate);
 }
