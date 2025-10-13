@@ -1004,6 +1004,20 @@ Asset* Assets::find_asset_by_name(const std::string& name) const {
     return nullptr;
 }
 
+bool Assets::contains_asset(const Asset* asset) const {
+    if (!asset) {
+        return false;
+    }
+
+    if (std::find(all.begin(), all.end(), asset) != all.end()) {
+        return true;
+    }
+
+    return std::any_of(owned_assets.begin(), owned_assets.end(), [asset](const auto& candidate) {
+        return candidate.get() == asset;
+    });
+}
+
 Global_Light_Source* Assets::map_light_source() {
     if (!scene) {
         return nullptr;

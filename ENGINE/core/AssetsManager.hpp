@@ -37,6 +37,7 @@ public:
     void set_input(Input* m);
     Input* get_input() const { return input; }
     Asset* find_asset_by_name(const std::string& name) const;
+    bool contains_asset(const Asset* asset) const;
 
     const std::vector<Asset*>& get_selected_assets() const;
     const std::vector<Asset*>& get_highlighted_assets() const;

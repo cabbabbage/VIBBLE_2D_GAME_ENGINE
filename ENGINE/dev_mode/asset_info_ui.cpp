@@ -240,10 +240,18 @@ AssetInfoUI::AssetInfoUI() {
 AssetInfoUI::~AssetInfoUI() {
     apply_camera_override(false);
     sync_map_light_panel_visibility(false);
+    if (assets_ && forcing_high_quality_rendering_) {
+        assets_->set_force_high_quality_rendering(false);
+    }
+    forcing_high_quality_rendering_ = false;
 }
 
 void AssetInfoUI::set_assets(Assets* a) {
     if (assets_ == a) return;
+    if (assets_ && forcing_high_quality_rendering_) {
+        assets_->set_force_high_quality_rendering(false);
+        forcing_high_quality_rendering_ = false;
+    }
     if (map_light_panel_auto_opened_ && assets_) {
         assets_->set_map_light_panel_visible(false);
         map_light_panel_auto_opened_ = false;
@@ -255,6 +263,12 @@ void AssetInfoUI::set_assets(Assets* a) {
     if (visible_) {
         apply_camera_override(true);
     }
+    validate_target_asset();
+}
+
+void AssetInfoUI::set_target_asset(Asset* a) {
+    target_asset_ = a;
+    validate_target_asset();
 }
 
 void AssetInfoUI::set_info(const std::shared_ptr<AssetInfo>& info) {
@@ -295,6 +309,10 @@ void AssetInfoUI::set_info(const std::shared_ptr<AssetInfo>& info) {
 
 void AssetInfoUI::clear_info() {
     sync_map_light_panel_visibility(false);
+    if (assets_ && forcing_high_quality_rendering_) {
+        assets_->set_force_high_quality_rendering(false);
+        forcing_high_quality_rendering_ = false;
+    }
     info_.reset();
     container_.reset_scroll();
     if (asset_selector_) asset_selector_->close();
@@ -336,6 +354,10 @@ void AssetInfoUI::close() {
     sync_map_light_panel_visibility(false);
     if (animation_editor_window_) animation_editor_window_->set_visible(false);
     if (asset_selector_) asset_selector_->close();
+    if (assets_ && forcing_high_quality_rendering_) {
+        assets_->set_force_high_quality_rendering(false);
+        forcing_high_quality_rendering_ = false;
+    }
 }
 void AssetInfoUI::toggle(){
     if (visible_) {
@@ -423,6 +445,7 @@ bool AssetInfoUI::handle_event(const SDL_Event& e) {
 }
 
 void AssetInfoUI::update(const Input& input, int screen_w, int screen_h) {
+    validate_target_asset();
     layout_widgets(screen_w, screen_h);
 
     if (animation_editor_window_) {
@@ -437,6 +460,27 @@ void AssetInfoUI::update(const Input& input, int screen_w, int screen_h) {
         want_map_light_panel = shading_section_->shading_source_enabled();
     }
     sync_map_light_panel_visibility(want_map_light_panel);
+
+    bool lighting_requires_high_quality = false;
+    bool shading_requires_high_quality = false;
+    if (visible_ && info_) {
+        if (lighting_section_ && lighting_section_->is_expanded()) {
+            lighting_requires_high_quality = info_->generate_rays || !info_->light_sources.empty();
+        }
+        if (shading_section_ && shading_section_->is_expanded()) {
+            shading_requires_high_quality = shading_section_->shading_enabled();
+        }
+    }
+
+    const bool need_high_quality = lighting_requires_high_quality || shading_requires_high_quality;
+    if (assets_) {
+        if (need_high_quality != forcing_high_quality_rendering_) {
+            assets_->set_force_high_quality_rendering(need_high_quality);
+            forcing_high_quality_rendering_ = need_high_quality;
+        }
+    } else {
+        forcing_high_quality_rendering_ = false;
+    }
 
     if (!visible_ || !info_) return;
 
@@ -453,12 +497,6 @@ void AssetInfoUI::update(const Input& input, int screen_w, int screen_h) {
     container_.update(input, screen_w, screen_h);
 
     layout_widgets(screen_w, screen_h);
-
-    const bool shading_open = shading_section_ && shading_section_->is_expanded();
-    const bool lighting_open = lighting_section_ && lighting_section_->is_expanded();
-    if (assets_ && (shading_open || lighting_open)) {
-        assets_->set_force_high_quality_rendering(true);
-    }
 }
 
 void AssetInfoUI::render(SDL_Renderer* r, int screen_w, int screen_h) const {
@@ -537,6 +575,8 @@ float AssetInfoUI::compute_player_screen_height(const camera& cam) const {
 
 void AssetInfoUI::render_world_overlay(SDL_Renderer* r, const camera& cam) const {
     if (!visible_ || !info_) return;
+
+    validate_target_asset();
 
     float reference_screen_height = compute_player_screen_height(cam);
 
@@ -619,7 +659,8 @@ void AssetInfoUI::render_world_overlay(SDL_Renderer* r, const camera& cam) const
 }
 
 void AssetInfoUI::refresh_target_asset_scale() {
-    if (!info_ || !target_asset_) return;
+    if (!info_) return;
+    if (!validate_target_asset() || !target_asset_) return;
     SDL_Renderer* renderer = last_renderer_;
     if (!renderer) return;
     info_->loadAnimations(renderer);
@@ -630,7 +671,7 @@ void AssetInfoUI::refresh_target_asset_scale() {
 }
 
 void AssetInfoUI::sync_target_z_threshold() {
-    if (!target_asset_) return;
+    if (!validate_target_asset() || !target_asset_) return;
     target_asset_->set_z_index();
 }
 
@@ -661,6 +702,20 @@ void AssetInfoUI::sync_map_light_panel_visibility(bool want_visible) {
     if (!panel_visible) {
         map_light_panel_auto_opened_ = false;
     }
+}
+
+bool AssetInfoUI::validate_target_asset() const {
+    if (!target_asset_) {
+        return false;
+    }
+    if (!assets_) {
+        return true;
+    }
+    if (!assets_->contains_asset(target_asset_)) {
+        target_asset_ = nullptr;
+        return false;
+    }
+    return true;
 }
 
 void AssetInfoUI::request_apply_section(AssetInfoSectionId section_id) {

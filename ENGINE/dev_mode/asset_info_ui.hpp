@@ -40,7 +40,7 @@ class AssetInfoUI {
     void pulse_header();
     void set_assets(Assets* a);
     Assets* assets() const { return assets_; }
-    void set_target_asset(class Asset* a) { target_asset_ = a; }
+    void set_target_asset(class Asset* a);
     class Asset* get_target_asset() const { return target_asset_; }
     bool is_point_inside(int x, int y) const;
     SDL_Renderer* get_last_renderer() const { return last_renderer_; }
@@ -58,6 +58,7 @@ class AssetInfoUI {
     bool apply_section_to_assets(AssetInfoSectionId section_id, const std::vector<std::string>& asset_names);
     static const char* section_display_name(AssetInfoSectionId section_id);
     void sync_map_light_panel_visibility(bool want_visible);
+    bool validate_target_asset() const;
 
   private:
     bool visible_ = false;
@@ -70,7 +71,7 @@ class AssetInfoUI {
 
     class Section_Lighting* lighting_section_ = nullptr;
     class Section_Shading* shading_section_ = nullptr;
-    class Asset* target_asset_ = nullptr;
+    mutable class Asset* target_asset_ = nullptr;
     mutable SDL_Rect animation_editor_rect_{0,0,0,0};
 
     SlidingWindowContainer container_;
@@ -83,4 +84,5 @@ class AssetInfoUI {
     std::unique_ptr<SearchAssets> asset_selector_;
     std::unique_ptr<animation_editor::AnimationEditorWindow> animation_editor_window_;
     bool map_light_panel_auto_opened_ = false;
+    bool forcing_high_quality_rendering_ = false;
 };
