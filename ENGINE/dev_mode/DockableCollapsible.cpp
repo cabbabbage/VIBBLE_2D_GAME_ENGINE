@@ -866,6 +866,7 @@ void DockableCollapsible::layout(int screen_w, int screen_h) const {
         max_scroll_ = 0;
         scroll_     = 0;
         if (floatable_) clamp_to_bounds(screen_w, screen_h);
+        layout_custom_content(last_screen_w_, last_screen_h_);
         finalize_layout();
         return;
     }
@@ -903,6 +904,7 @@ void DockableCollapsible::layout(int screen_w, int screen_h) const {
     }
 
     if (floatable_) clamp_to_bounds(screen_w, screen_h);
+    layout_custom_content(last_screen_w_, last_screen_h_);
     finalize_layout();
 }
 

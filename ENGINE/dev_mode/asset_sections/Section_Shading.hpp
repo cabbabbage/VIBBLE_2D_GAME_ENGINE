@@ -81,7 +81,7 @@ public:
         s_sh_factor_    = std::make_unique<DMSlider>("Factor", 1, 200, shading_factor_);
     }
 
-    void layout() override {
+    void layout_custom_content(int /*screen_w*/, int /*screen_h*/) const override {
         int x = rect_.x + DMSpacing::panel_padding();
         int y = rect_.y + DMSpacing::panel_padding() + DMButton::height() + DMSpacing::header_gap();
         int maxw = rect_.w - 2 * DMSpacing::panel_padding();
@@ -120,7 +120,6 @@ public:
         }
 
         content_height_ = std::max(0, y - (rect_.y + DMSpacing::panel_padding() + DMButton::height() + DMSpacing::header_gap()));
-        DockableCollapsible::layout();
     }
 
     bool handle_event(const SDL_Event& e) override {
@@ -234,7 +233,7 @@ private:
     int base_shadow_height_value_ = default_base_shadow_height_value_;
     std::unique_ptr<DMSlider> s_base_shadow_height_;
     std::unique_ptr<DMButton> shading_label_;
-    SDL_Rect shading_rect_{0, 0, 0, 0};
+    mutable SDL_Rect shading_rect_{0, 0, 0, 0};
     std::unique_ptr<DMCheckbox> c_is_shaded_;
     std::unique_ptr<DMSlider> s_sh_intensity_;
     std::unique_ptr<DMSlider> s_sh_radius_;

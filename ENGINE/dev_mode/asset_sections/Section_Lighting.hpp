@@ -50,7 +50,7 @@ public:
         }
     }
 
-    void layout() override {
+    void layout_custom_content(int /*screen_w*/, int /*screen_h*/) const override {
         int x = rect_.x + DMSpacing::panel_padding();
         int y = rect_.y + DMSpacing::panel_padding() + DMButton::height() + DMSpacing::header_gap();
         int maxw = rect_.w - 2 * DMSpacing::panel_padding();
@@ -66,10 +66,10 @@ public:
         }
         for (size_t i = 0; i < rows_.size(); ++i) {
             auto& r = rows_[i];
-            if (!r.lbl)
-                r.lbl = std::make_unique<DMButton>("Light Source " + std::to_string(i + 1), &DMStyles::HeaderButton(), 180, DMButton::height());
-            int lbl_x = rect_.x + DMSpacing::panel_padding() + (maxw - 180) / 2;
-            r.lbl->set_rect(SDL_Rect{ lbl_x, y - scroll_, 180, DMButton::height() });
+            if (r.lbl) {
+                int lbl_x = rect_.x + DMSpacing::panel_padding() + (maxw - 180) / 2;
+                r.lbl->set_rect(SDL_Rect{ lbl_x, y - scroll_, 180, DMButton::height() });
+            }
             if (r.b_delete)
                 r.b_delete->set_rect(SDL_Rect{ x + maxw - 120, y - scroll_, 120, DMButton::height() });
             y += DMButton::height() + DMSpacing::item_gap();
@@ -93,7 +93,6 @@ public:
             y += DMButton::height() + DMSpacing::item_gap();
         }
         content_height_ = std::max(0, y - (rect_.y + DMSpacing::panel_padding() + DMButton::height() + DMSpacing::header_gap()));
-        DockableCollapsible::layout();
     }
 
     bool handle_event(const SDL_Event& e) override {

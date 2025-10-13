@@ -100,6 +100,7 @@ private:
 
 protected:
     virtual void layout();
+    virtual void layout_custom_content(int screen_w, int screen_h) const {}
     virtual std::string_view lock_settings_namespace() const { return {}; }
     virtual std::string_view lock_settings_id() const { return {}; }
 
