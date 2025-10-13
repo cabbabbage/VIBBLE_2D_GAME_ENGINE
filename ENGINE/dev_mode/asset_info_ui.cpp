@@ -704,19 +704,128 @@ void AssetInfoUI::render_world_overlay(SDL_Renderer* r, const camera& cam) const
 
 void AssetInfoUI::refresh_target_asset_scale() {
     if (!info_) return;
-    if (!validate_target_asset() || !target_asset_) return;
+
     SDL_Renderer* renderer = last_renderer_;
+    if (!renderer && assets_) {
+        renderer = assets_->renderer();
+    }
     if (!renderer) return;
+
+    namespace fs = std::filesystem;
+    const fs::path cache_root{"cache"};
+    try {
+        if (fs::exists(cache_root)) {
+            const fs::path anim_cache = cache_root / info_->name / "animations";
+            if (fs::exists(anim_cache)) {
+                std::error_code ec;
+                fs::remove_all(anim_cache, ec);
+                if (ec) {
+                    SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+                                "[AssetInfoUI] Failed to clear animation cache for %s: %s",
+                                info_->name.c_str(),
+                                ec.message().c_str());
+                }
+            }
+
+            const fs::path areas_root = cache_root / "areas";
+            if (fs::exists(areas_root)) {
+                const std::string prefix = info_->name + "_";
+                for (const auto& entry : fs::directory_iterator(areas_root)) {
+                    if (!entry.is_directory()) continue;
+                    const std::string folder = entry.path().filename().string();
+                    if (folder.rfind(prefix, 0) != 0) continue;
+                    std::error_code ec;
+                    fs::remove_all(entry.path(), ec);
+                    if (ec) {
+                        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+                                    "[AssetInfoUI] Failed to clear area cache %s: %s",
+                                    folder.c_str(),
+                                    ec.message().c_str());
+                    }
+                }
+            }
+        }
+    } catch (const std::exception& ex) {
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+                    "[AssetInfoUI] Exception while clearing caches for %s: %s",
+                    info_->name.c_str(),
+                    ex.what());
+    }
+
     info_->loadAnimations(renderer);
-    target_asset_->finalize_setup();
-    target_asset_->set_final_texture(nullptr);
-    target_asset_->cached_w = 0;
-    target_asset_->cached_h = 0;
+
+    Asset* current_target = target_asset_;
+    const bool target_valid = validate_target_asset();
+
+    const auto refresh_asset = [&](Asset* asset) {
+        if (!asset || asset->info.get() != info_.get()) {
+            return false;
+        }
+        asset->clear_render_caches();
+        asset->clear_downscale_cache();
+        asset->set_final_texture(nullptr);
+        asset->cached_w = 0;
+        asset->cached_h = 0;
+        asset->finalize_setup();
+        return true;
+    };
+
+    bool refreshed_any = false;
+    if (assets_) {
+        for (Asset* asset : assets_->all) {
+            if (refresh_asset(asset)) {
+                refreshed_any = true;
+            }
+        }
+        for (const auto& owned : assets_->owned_assets) {
+            if (refresh_asset(owned.get())) {
+                refreshed_any = true;
+            }
+        }
+    }
+
+    if (!refreshed_any && target_valid && current_target) {
+        if (refresh_asset(current_target)) {
+            refreshed_any = true;
+        }
+    }
+
+    if (refreshed_any && assets_) {
+        assets_->mark_active_assets_dirty();
+    }
 }
 
 void AssetInfoUI::sync_target_z_threshold() {
-    if (!validate_target_asset() || !target_asset_) return;
-    target_asset_->set_z_index();
+    if (!info_) return;
+
+    Asset* current_target = target_asset_;
+    const bool target_valid = validate_target_asset();
+
+    const auto sync_asset = [&](Asset* asset) {
+        if (!asset || asset->info.get() != info_.get()) {
+            return false;
+        }
+        asset->set_z_index();
+        return true;
+    };
+
+    bool updated_any = false;
+    if (assets_) {
+        for (Asset* asset : assets_->all) {
+            if (sync_asset(asset)) {
+                updated_any = true;
+            }
+        }
+        for (const auto& owned : assets_->owned_assets) {
+            if (sync_asset(owned.get())) {
+                updated_any = true;
+            }
+        }
+    }
+
+    if (!updated_any && target_valid && current_target) {
+        (void)sync_asset(current_target);
+    }
 }
 
 void AssetInfoUI::sync_map_light_panel_visibility(bool want_visible) {

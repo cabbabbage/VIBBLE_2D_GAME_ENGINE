@@ -1,50 +1,54 @@
 {
-  "asset_name": "Mushroom_3",
-  "asset_type": "Object",
-  "animations": {
-    "default": {
-      "source": {
-        "kind": "folder",
-        "path": "default",
-        "name": null
-      },
-      "flipped_source": false,
-      "reverse_source": false,
-      "locked": false,
-      "speed_factor": 1,
-      "number_of_frames": 2,
-      "movement": [
-        [
-          0,
-          0
-        ],
-        [
-          0,
-          0
-        ]
-      ]
-    }
-  },
-  "impassable_area": null,
-  "min_same_type_distance": 400,
-  "z_threshold": 3,
-  "size_settings": {
-    "scale_percentage": 22,
-    "variability_percentage": 0,
-    "flipability": true
-  },
-  "tags": [
-    "plant",
-    "small",
-    "mushroom",
-    "purple",
-    "ground",
-    "cover",
-    "pretty",
-    "passable",
-    "nature"
-  ],
-  "rnd_spawn_min": 300,
-  "rnd_spawn_max": 400,
-  "anti_tags": []
+    "animations": {
+        "default": {
+            "flipped_source": false,
+            "locked": false,
+            "movement": [
+                [
+                    0,
+                    0
+                ],
+                [
+                    0,
+                    0
+                ]
+            ],
+            "number_of_frames": 2,
+            "reverse_source": false,
+            "source": {
+                "kind": "folder",
+                "name": null,
+                "path": "default"
+            },
+            "speed_factor": 1
+        }
+    },
+    "anti_tags": [],
+    "asset_name": "Mushroom_3",
+    "asset_type": "Object",
+    "can_invert": false,
+    "generate_rays": false,
+    "impassable_area": null,
+    "min_same_type_distance": 400,
+    "neighbor_search_distance": 500,
+    "ray_strength": 0,
+    "rnd_spawn_max": 400,
+    "rnd_spawn_min": 300,
+    "size_settings": {
+        "flipability": true,
+        "scale_percentage": 51.0,
+        "variability_percentage": 0
+    },
+    "tags": [
+        "plant",
+        "small",
+        "mushroom",
+        "purple",
+        "ground",
+        "cover",
+        "pretty",
+        "passable",
+        "nature"
+    ],
+    "z_threshold": -8
 }
