@@ -1,0 +1,9 @@
+{
+    "dev_ui": {
+        "lock": {
+            "map_assets": {
+                "candidates": true
+            }
+        }
+    }
+}

@@ -28,39 +28,11 @@
       {
         "candidates": [
           {
-            "chance": 57,
-            "name": "null"
-          },
-          {
             "chance": 71,
             "name": "Grass_FPS_2"
           },
           {
-            "chance": 69,
-            "name": "Grass_1_FPS_2"
-          },
-          {
-            "chance": 352,
-            "name": "Small_Rock"
-          },
-          {
-            "chance": 1,
-            "name": "Bush_FPS_2"
-          },
-          {
-            "chance": 1,
-            "name": "Bush_1_FPS_2"
-          },
-          {
-            "chance": 1,
-            "name": "Bomb"
-          },
-          {
-            "chance": 1,
-            "name": "Stump"
-          },
-          {
-            "chance": 0,
+            "chance": 67,
             "name": "null"
           }
         ],
@@ -79,24 +51,12 @@
       {
         "candidates": [
           {
-            "chance": 0,
-            "name": "null"
-          },
-          {
             "chance": 25.0,
             "name": "Tree_Dark"
           },
           {
             "chance": 80,
             "name": "Tree_Darker"
-          },
-          {
-            "chance": 22,
-            "name": "null"
-          },
-          {
-            "chance": 1,
-            "name": "null"
           }
         ],
         "display_name": "batch_map_boundary",

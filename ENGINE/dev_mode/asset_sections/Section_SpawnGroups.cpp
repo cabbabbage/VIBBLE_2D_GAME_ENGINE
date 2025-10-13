@@ -52,7 +52,12 @@ void Section_SpawnGroups::build() {
     cb.on_add       = [this](){ add_spawn_group(); };
     list_->set_callbacks(std::move(cb));
     const auto expanded = list_->expanded_groups();
-    list_->load(groups_, on_change);
+    if (info_) {
+        list_->load(groups_, on_change);
+    } else {
+        const nlohmann::json& readonly = groups_;
+        list_->load(readonly);
+    }
     list_->set_on_layout_changed([this]() {
         if (!list_) return;
         DockableCollapsible::Rows rows;
