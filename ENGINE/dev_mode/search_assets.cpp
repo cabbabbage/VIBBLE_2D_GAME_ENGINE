@@ -46,11 +46,26 @@ void SearchAssets::apply_position(int x, int y) {
             panel_->set_rows({ { query_widget_.get() } });
         }
     }
+    if (embedded_) {
+        panel_->set_rect(SDL_Rect{x, y, panel_->rect().w, panel_->rect().h});
+        return;
+    }
     panel_->set_work_area(SDL_Rect{0, 0, screen_w_, screen_h_});
     panel_->set_position(x, y);
 }
 
 void SearchAssets::set_position(int x, int y) {
+    if (embedded_) {
+        embedded_rect_.x = x;
+        embedded_rect_.y = y;
+        if (panel_) {
+            SDL_Rect rect = panel_->rect();
+            rect.x = x;
+            rect.y = y;
+            panel_->set_rect(rect);
+        }
+        return;
+    }
     pending_position_ = SDL_Point{x, y};
     has_pending_position_ = true;
     has_custom_position_ = false;
@@ -62,6 +77,10 @@ void SearchAssets::set_position(int x, int y) {
 }
 
 void SearchAssets::set_anchor_position(int x, int y) {
+    if (embedded_) {
+        set_position(x, y);
+        return;
+    }
     pending_position_ = SDL_Point{x, y};
     has_pending_position_ = true;
     if (has_custom_position_) {
@@ -81,6 +100,19 @@ void SearchAssets::set_screen_dimensions(int width, int height) {
     if (height > 0) {
         screen_h_ = height;
     }
+    if (embedded_) {
+        if (panel_) {
+            panel_->set_work_area(SDL_Rect{0, 0, embedded_rect_.w > 0 ? embedded_rect_.w : screen_w_,
+                                           embedded_rect_.h > 0 ? embedded_rect_.h : screen_h_});
+            if (embedded_rect_.w > 0 || embedded_rect_.h > 0) {
+                SDL_Rect rect = embedded_rect_;
+                if (rect.w <= 0) rect.w = panel_->rect().w;
+                if (rect.h <= 0) rect.h = panel_->rect().h;
+                panel_->set_rect(rect);
+            }
+        }
+        return;
+    }
     if (panel_) {
         panel_->set_work_area(SDL_Rect{0, 0, screen_w_, screen_h_});
         SDL_Point pos = panel_->position();
@@ -98,6 +130,56 @@ void SearchAssets::set_floating_stack_key(std::string key) {
     floating_stack_key_ = std::move(key);
 }
 
+void SearchAssets::set_embedded_mode(bool embedded) {
+    embedded_ = embedded;
+    if (!panel_) {
+        return;
+    }
+    panel_->set_floatable(!embedded_);
+    panel_->set_show_header(!embedded_);
+    panel_->set_close_button_enabled(!embedded_);
+    if (embedded_) {
+        panel_->set_scroll_enabled(true);
+        panel_->set_work_area(SDL_Rect{0, 0, embedded_rect_.w, embedded_rect_.h});
+    } else {
+        panel_->set_work_area(SDL_Rect{0, 0, screen_w_, screen_h_});
+    }
+}
+
+void SearchAssets::set_embedded_rect(const SDL_Rect& rect) {
+    embedded_rect_ = rect;
+    if (!panel_) {
+        return;
+    }
+    if (!embedded_) {
+        apply_position(rect.x, rect.y);
+        return;
+    }
+    SDL_Rect applied = rect;
+    if (applied.w <= 0) {
+        applied.w = panel_->rect().w > 0 ? panel_->rect().w : 260;
+    }
+    if (applied.h <= 0) {
+        applied.h = panel_->rect().h > 0 ? panel_->rect().h : 0;
+    }
+    panel_->set_cell_width(std::max(120, applied.w - 20));
+    if (applied.h > 0) {
+        panel_->set_visible_height(applied.h);
+        panel_->set_available_height_override(applied.h);
+    }
+    panel_->set_work_area(SDL_Rect{0, 0, applied.w, applied.h});
+    panel_->set_rect(applied);
+    Input dummy;
+    panel_->update(dummy, applied.w, applied.h);
+}
+
+SDL_Rect SearchAssets::rect() const {
+    if (!panel_) {
+        return SDL_Rect{0, 0, 0, 0};
+    }
+    return panel_->rect();
+}
+
 std::string SearchAssets::to_lower(std::string s) {
     for (auto& c : s) c = (char)std::tolower((unsigned char)c);
     return s;
@@ -105,8 +187,7 @@ std::string SearchAssets::to_lower(std::string s) {
 
 void SearchAssets::open(Callback cb) {
     cb_ = std::move(cb);
-    load_assets();
-    tag_data_version_ = tag_utils::tag_version();
+    if (all_.empty()) load_assets();
     SDL_Point target = last_known_position_;
     if (has_custom_position_) {
         target = last_known_position_;
@@ -139,12 +220,16 @@ void SearchAssets::open(Callback cb) {
 
 void SearchAssets::close() {
     if (panel_) {
-        last_known_position_ = panel_->position();
-        if (!has_custom_position_) {
-            pending_position_ = last_known_position_;
-            has_pending_position_ = true;
+        if (embedded_) {
+            panel_->set_visible(false);
+        } else {
+            last_known_position_ = panel_->position();
+            if (!has_custom_position_) {
+                pending_position_ = last_known_position_;
+                has_pending_position_ = true;
+            }
+            panel_->set_visible(false);
         }
-        panel_->set_visible(false);
     }
     cb_ = nullptr;
 }
@@ -224,10 +309,12 @@ bool SearchAssets::handle_event(const SDL_Event& e) {
     SDL_Point before = panel_->position();
     bool used = panel_->handle_event(e);
     SDL_Point after = panel_->position();
-    if (after.x != before.x || after.y != before.y) {
-        has_custom_position_ = true;
-        last_known_position_ = after;
-        ensure_visible_position();
+    if (!embedded_) {
+        if (after.x != before.x || after.y != before.y) {
+            has_custom_position_ = true;
+            last_known_position_ = after;
+            ensure_visible_position();
+        }
     }
     std::string q = query_ ? query_->value() : "";
     if (q != last_query_) { last_query_ = q; filter_assets(); }
@@ -236,12 +323,6 @@ bool SearchAssets::handle_event(const SDL_Event& e) {
 
 void SearchAssets::update(const Input& input) {
     if (panel_ && panel_->is_visible()) {
-        auto current_version = tag_utils::tag_version();
-        if (current_version != tag_data_version_) {
-            load_assets();
-            tag_data_version_ = current_version;
-            filter_assets();
-        }
         panel_->update(input, screen_w_, screen_h_);
         last_known_position_ = panel_->position();
         if (!has_custom_position_) {
@@ -261,6 +342,9 @@ bool SearchAssets::is_point_inside(int x, int y) const {
 }
 
 void SearchAssets::ensure_visible_position() {
+    if (embedded_) {
+        return;
+    }
     if (!panel_) {
         return;
     }

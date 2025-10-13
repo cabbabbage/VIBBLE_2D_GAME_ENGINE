@@ -88,10 +88,10 @@ private:
     std::unique_ptr<DMButton> add_button_{};
     SDL_Rect content_rect_{0, 0, 0, 0};
     std::unique_ptr<SearchAssets> search_assets_{};
-    SDL_Rect last_search_anchor_{0, 0, 0, 0};
+    SDL_Rect search_rect_{0, 0, 0, 0};
     int screen_w_ = 0;
     int screen_h_ = 0;
-    bool has_search_anchor_ = false;
     mutable bool search_visible_previous_ = false;
+    int last_search_height_ = 0;
 };
 

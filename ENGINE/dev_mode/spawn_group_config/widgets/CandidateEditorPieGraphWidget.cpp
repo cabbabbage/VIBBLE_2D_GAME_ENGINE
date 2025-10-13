@@ -21,7 +21,6 @@ namespace {
 constexpr double kPi = 3.14159265358979323846;
 constexpr double kTwoPi = 6.28318530717958647692;
 constexpr double kStartAngle = -1.5707963267948966;
-constexpr int kSearchPanelWidth = 280;
 constexpr int kSearchPanelHeight = 320;
 
 double clamp_positive(double value) {
@@ -39,7 +38,6 @@ CandidateEditorPieGraphWidget::CandidateEditorPieGraphWidget() {
 
 void CandidateEditorPieGraphWidget::set_rect(const SDL_Rect& r) {
     rect_ = r;
-    position_search_within_bounds();
     update_internal_layout();
 }
 
@@ -56,6 +54,9 @@ int CandidateEditorPieGraphWidget::height_for_width(int w) const {
     }
     if (should_show_add_button()) {
         min_height += DMButton::height() + margin;
+    }
+    if (search_visible()) {
+        min_height += kSearchPanelHeight + margin;
     }
     return std::max(constrained, rect_.h > 0 ? rect_.h : min_height);
 }
@@ -127,19 +128,22 @@ bool CandidateEditorPieGraphWidget::handle_event(const SDL_Event& e) {
         }
 
         SDL_Point point{e.motion.x, e.motion.y};
-        if (!SDL_PointInRect(&point, &rect_)) {
-            if (hovered_index_ != -1) {
-                hovered_index_ = -1;
-                return true;
-            }
-            return false;
+        int new_hover = -1;
+        if (SDL_PointInRect(&point, &rect_)) {
+            new_hover = hit_test_candidate(layout, point, total);
         }
 
-        int new_hover = hit_test_candidate(layout, point, total);
-        if (new_hover != hovered_index_) {
+        bool changed = false;
+        if (hovered_index_ != new_hover) {
             hovered_index_ = new_hover;
-            return true;
+            changed = true;
         }
+        if (active_index_ >= 0 && new_hover != active_index_) {
+            active_index_ = -1;
+            release_scroll_capture();
+            changed = true;
+        }
+        return changed;
     } else if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
         Layout layout = compute_layout();
         double total = total_weight();
@@ -389,7 +393,6 @@ void CandidateEditorPieGraphWidget::set_screen_dimensions(int width, int height)
     screen_h_ = height;
     if (search_assets_) {
         search_assets_->set_screen_dimensions(screen_w_, screen_h_);
-        position_search_within_bounds();
     }
 }
 
@@ -406,10 +409,8 @@ void CandidateEditorPieGraphWidget::set_on_add_candidate(std::function<void(cons
 }
 
 void CandidateEditorPieGraphWidget::show_search(const SDL_Rect& anchor_rect, std::function<void(const std::string&)> on_select) {
+    (void)anchor_rect;
     ensure_search_created();
-    last_search_anchor_ = anchor_rect;
-    has_search_anchor_ = true;
-    position_search_within_bounds();
     search_assets_->open([this, cb = std::move(on_select)](const std::string& value) {
         if (cb) {
             cb(value);
@@ -417,6 +418,7 @@ void CandidateEditorPieGraphWidget::show_search(const SDL_Rect& anchor_rect, std
         hide_search();
     });
     search_visible_previous_ = search_visible();
+    update_internal_layout();
     notify_layout_change();
 }
 
@@ -428,6 +430,7 @@ void CandidateEditorPieGraphWidget::hide_search() {
     search_assets_->close();
     if (was_visible) {
         search_visible_previous_ = false;
+        update_internal_layout();
         notify_layout_change();
     }
 }
@@ -444,7 +447,17 @@ void CandidateEditorPieGraphWidget::update_search(const Input& input) {
     bool visible_now = search_assets_->visible();
     if (visible_now != search_visible_previous_) {
         search_visible_previous_ = visible_now;
+        update_internal_layout();
         notify_layout_change();
+    }
+    if (visible_now) {
+        SDL_Rect panel_rect = search_assets_->rect();
+        if (panel_rect.h != last_search_height_) {
+            last_search_height_ = panel_rect.h;
+            search_rect_.h = panel_rect.h;
+            update_internal_layout();
+            notify_layout_change();
+        }
     }
 }
 
@@ -576,13 +589,23 @@ void CandidateEditorPieGraphWidget::update_internal_layout() {
         }
     }
 
+    if (search_visible() && search_assets_) {
+        const int available_height = std::max(0, rect_.y + rect_.h - y);
+        int search_height = std::min(available_height, kSearchPanelHeight);
+        if (search_height <= 0) {
+            search_height = std::min(kSearchPanelHeight, rect_.h);
+        }
+        search_rect_ = SDL_Rect{rect_.x + margin, y, width, search_height};
+        position_search_within_bounds();
+        y = search_rect_.y + search_rect_.h + margin;
+        last_search_height_ = search_rect_.h;
+    } else {
+        search_rect_ = SDL_Rect{rect_.x + margin, y, width, 0};
+        last_search_height_ = 0;
+    }
+
     int remaining_height = std::max(0, rect_.y + rect_.h - y);
     content_rect_ = SDL_Rect{rect_.x, y, rect_.w, remaining_height};
-
-    if (search_visible() && has_search_anchor_ && add_button_ && should_show_add_button()) {
-        last_search_anchor_ = add_button_->rect();
-        position_search_within_bounds();
-    }
 }
 
 void CandidateEditorPieGraphWidget::open_add_candidate_search() {
@@ -863,33 +886,27 @@ Uint8 CandidateEditorPieGraphWidget::clamp_color(int value) {
 void CandidateEditorPieGraphWidget::ensure_search_created() {
     if (!search_assets_) {
         search_assets_ = std::make_unique<SearchAssets>();
+        search_assets_->set_embedded_mode(true);
         search_assets_->set_screen_dimensions(screen_w_, screen_h_);
     }
 }
 
 void CandidateEditorPieGraphWidget::position_search_within_bounds() {
-    if (!search_assets_) {
+    if (!search_assets_ || !search_visible()) {
         return;
     }
-    SDL_Rect anchor = has_search_anchor_ ? last_search_anchor_ : rect_;
-    int desired_x = anchor.x;
-    int desired_y = anchor.y + anchor.h + 4;
-
-    const int min_x = rect_.x + 4;
-    int max_x = rect_.x + rect_.w - kSearchPanelWidth - 4;
-    if (max_x < min_x) {
-        max_x = min_x;
+    SDL_Rect target = search_rect_;
+    if (target.w <= 0) {
+        target.w = std::max(0, rect_.w - DMSpacing::item_gap() * 2);
     }
-    desired_x = std::clamp(desired_x, min_x, max_x);
-
-    const int min_y = rect_.y + 4;
-    int max_y = rect_.y + rect_.h - kSearchPanelHeight - 4;
-    if (max_y < min_y) {
-        max_y = min_y;
+    if (target.h <= 0) {
+        target.h = kSearchPanelHeight;
     }
-    desired_y = std::clamp(desired_y, min_y, max_y);
-
-    search_assets_->set_position(desired_x, desired_y);
+    search_assets_->set_embedded_rect(target);
+    SDL_Rect applied = search_assets_->rect();
+    if (applied.w > 0 && applied.h > 0) {
+        search_rect_ = applied;
+    }
 }
 
 void CandidateEditorPieGraphWidget::notify_layout_change() const {

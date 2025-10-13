@@ -25,6 +25,9 @@ public:
     void open(Callback cb);
     void close();
     bool visible() const;
+    void set_embedded_mode(bool embedded);
+    void set_embedded_rect(const SDL_Rect& rect);
+    SDL_Rect rect() const;
     void update(const Input& input);
     bool handle_event(const SDL_Event& e);
     void render(SDL_Renderer* r) const;
@@ -53,4 +56,6 @@ private:
     bool has_pending_position_ = false;
     bool has_custom_position_ = false;
     std::string floating_stack_key_;
+    bool embedded_ = false;
+    SDL_Rect embedded_rect_{0, 0, 0, 0};
 };
