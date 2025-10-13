@@ -4,6 +4,7 @@
 #include <SDL_ttf.h>
 #include <array>
 #include <string>
+#include <vector>
 
 class Input;
 class Assets;
@@ -19,11 +20,19 @@ public:
     void handle_input(const Input& input);
     void update(const Assets& assets);
     void render(SDL_Renderer* renderer);
+    void record_frame_timing(float elapsed_ms, float target_ms, float early_ms, float late_ms);
 
 private:
     struct Row {
         std::string line;
         bool found = false;
+    };
+
+    struct FrameTimingSample {
+        float elapsed_ms = 0.0f;
+        float target_ms = 0.0f;
+        float early_ms = 0.0f;
+        float late_ms = 0.0f;
     };
 
     void ensure_font();
@@ -38,5 +47,6 @@ private:
     int padding_ = 8;
     int line_spacing_ = 4;
     int margin_ = 10;
+    std::vector<FrameTimingSample> frame_timing_samples_;
 };
 

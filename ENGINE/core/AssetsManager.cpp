@@ -651,6 +651,15 @@ void Assets::update(const Input& input,
     process_removals();
 }
 
+void Assets::record_frame_timing(float elapsed_ms, float target_ms, float early_ms, float late_ms)
+{
+    if (!display_stats_) {
+        return;
+    }
+
+    display_stats_->record_frame_timing(elapsed_ms, target_ms, early_ms, late_ms);
+}
+
 void Assets::set_dev_mode(bool mode) {
     const bool changed = (dev_mode != mode);
     dev_mode = mode;

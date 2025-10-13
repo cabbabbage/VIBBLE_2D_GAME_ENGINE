@@ -6,6 +6,7 @@
 #include "utils/input.hpp"
 
 #include <algorithm>
+#include <cstddef>
 #include <iomanip>
 #include <sstream>
 
@@ -73,6 +74,15 @@ void DisplayStats::update(const Assets& assets) {
         row.line = oss.str();
         row.found = true;
     }
+}
+
+void DisplayStats::record_frame_timing(float elapsed_ms, float target_ms, float early_ms, float late_ms)
+{
+    constexpr std::size_t kMaxSamples = 256;
+    if (frame_timing_samples_.size() >= kMaxSamples) {
+        frame_timing_samples_.erase(frame_timing_samples_.begin());
+    }
+    frame_timing_samples_.push_back(FrameTimingSample{elapsed_ms, target_ms, early_ms, late_ms});
 }
 
 void DisplayStats::render(SDL_Renderer* renderer) {
