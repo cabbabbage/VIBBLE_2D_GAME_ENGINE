@@ -1087,7 +1087,9 @@ bool MapLayersPanel::LayerCanvasWidget::handle_event(const SDL_Event& e) {
 
     }
 
-    if (e.type != SDL_MOUSEBUTTONUP) return false;
+    if (e.type != SDL_MOUSEBUTTONDOWN) {
+        return false;
+    }
 
     SDL_Point p{ e.button.x, e.button.y };
 
