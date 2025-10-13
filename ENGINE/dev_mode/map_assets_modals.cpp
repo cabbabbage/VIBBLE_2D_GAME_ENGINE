@@ -159,6 +159,9 @@ public:
         }
         set_visible_height(visible_height);
         set_work_area(SDL_Rect{0, 0, screen_w_, screen_h_});
+        if (pie_widget_) {
+            pie_widget_->set_screen_dimensions(screen_w_, screen_h_);
+        }
     }
 
     void bind(json* entry,
@@ -191,11 +194,13 @@ public:
         }
         if (!add_button_) {
             add_button_ = std::make_unique<DMButton>("Add Candidate", &DMStyles::ListButton(), 0, DMButton::height());
-            add_widget_ = std::make_unique<ButtonWidget>(add_button_.get(), [this]() { add_candidate(); });
+            add_widget_ = std::make_unique<ButtonWidget>(add_button_.get(), [this]() { open_candidate_search(); });
         }
         if (!pie_widget_) {
             pie_widget_ = std::make_unique<CandidateEditorPieGraphWidget>();
         }
+        pie_widget_->set_screen_dimensions(screen_w_, screen_h_);
+        pie_widget_->set_on_request_layout([this]() { this->layout(); });
         pie_widget_->set_on_adjust([this](int index, int delta) { adjust_candidate_weight(index, delta); });
         pie_widget_->set_on_delete([this](int index) { remove_candidate(index); });
 
@@ -216,6 +221,18 @@ public:
             rebuild_rows(false);
         } else if (pie_widget_) {
             pie_widget_->set_candidates_from_json(*entry_);
+        }
+    }
+
+    void update(const Input& input, int screen_w, int screen_h) override {
+        screen_w_ = std::max(screen_w, 0);
+        screen_h_ = std::max(screen_h, 0);
+        if (pie_widget_) {
+            pie_widget_->set_screen_dimensions(screen_w_, screen_h_);
+        }
+        DockableCollapsible::update(input, screen_w, screen_h);
+        if (pie_widget_) {
+            pie_widget_->update_search(input);
         }
     }
 
@@ -325,11 +342,40 @@ private:
         notify_save(true);
     }
 
-    void add_candidate() {
+    void open_candidate_search() {
+        if (!pie_widget_ || !add_button_) {
+            return;
+        }
+        pie_widget_->show_search(add_button_->rect(), [this](const std::string& value) {
+            this->add_candidate_from_search(value);
+        });
+    }
+
+    void add_candidate_from_search(const std::string& label) {
         if (!entry_) return;
+        if (label.empty()) return;
         auto& candidates = (*entry_)["candidates"];
         if (!candidates.is_array()) candidates = json::array();
-        candidates.push_back({{"name", "null"}, {"chance", 1}});
+
+        double max_weight = 0.0;
+        for (const auto& candidate : candidates) {
+            max_weight = std::max(max_weight, std::max(0.0, read_candidate_weight(candidate)));
+        }
+
+        double new_weight = max_weight > 0.0 ? max_weight * 0.05 : 5.0;
+        if (new_weight <= 0.0) {
+            new_weight = 5.0;
+        }
+
+        json candidate = json::object();
+        candidate["name"] = label;
+        if (is_integral(new_weight)) {
+            candidate["chance"] = static_cast<int>(std::llround(new_weight));
+        } else {
+            candidate["chance"] = new_weight;
+        }
+
+        candidates.push_back(std::move(candidate));
         notify_save(true);
     }
 
