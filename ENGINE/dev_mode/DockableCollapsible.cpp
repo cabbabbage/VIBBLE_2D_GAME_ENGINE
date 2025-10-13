@@ -88,7 +88,7 @@ DockableCollapsible::DockableCollapsible(const std::string& title, bool floatabl
     available_height_override_ = -1;
     rect_.x = x; rect_.y = y;
     header_btn_ = std::make_unique<DMButton>(title_, &DMStyles::HeaderButton(), floating_content_width_, DMButton::height());
-    close_btn_  = std::make_unique<DMButton>("X", &DMStyles::HeaderButton(), DMButton::height(), DMButton::height());
+    close_btn_  = std::make_unique<DMButton>("X", &DMStyles::DeleteButton(), DMButton::height(), DMButton::height());
     padding_ = DMSpacing::panel_padding();
     row_gap_ = DMSpacing::item_gap();
     col_gap_ = DMSpacing::item_gap();
@@ -165,7 +165,7 @@ void DockableCollapsible::set_show_header(bool show) {
         int header_w = floatable_ ? floating_content_width_ : 260;
         header_btn_ = std::make_unique<DMButton>(title_, &DMStyles::HeaderButton(), header_w, DMButton::height());
         if (floatable_ || close_button_enabled_) {
-            close_btn_ = std::make_unique<DMButton>("X", &DMStyles::HeaderButton(), DMButton::height(), DMButton::height());
+            close_btn_ = std::make_unique<DMButton>("X", &DMStyles::DeleteButton(), DMButton::height(), DMButton::height());
         }
         update_header_button();
     }
@@ -180,7 +180,7 @@ void DockableCollapsible::set_close_button_enabled(bool enabled) {
     if (show_header_) {
         if (floatable_ || close_button_enabled_) {
             if (!close_btn_) {
-                close_btn_ = std::make_unique<DMButton>("X", &DMStyles::HeaderButton(), DMButton::height(), DMButton::height());
+                close_btn_ = std::make_unique<DMButton>("X", &DMStyles::DeleteButton(), DMButton::height(), DMButton::height());
             }
         } else {
             close_btn_.reset();
@@ -703,9 +703,14 @@ void DockableCollapsible::layout(int screen_w, int screen_h) const {
     update_lock_button();
 
     if (show_header_) {
-
-        int grip_w = std::max(32, std::min(80, std::max(1, header_total_w) / 3));
-        handle_rect_ = SDL_Rect{ header_rect_.x, header_rect_.y, grip_w, header_rect_.h };
+        int available_for_handle = header_rect_.w;
+        if (available_for_handle > 0) {
+            int grip_w = std::max(32, std::min(80, std::max(1, available_for_handle) / 3));
+            grip_w = std::min(grip_w, available_for_handle);
+            handle_rect_ = SDL_Rect{ header_rect_.x, header_rect_.y, grip_w, header_rect_.h };
+        } else {
+            handle_rect_ = SDL_Rect{ header_rect_.x, header_rect_.y, 0, header_rect_.h };
+        }
     } else {
         handle_rect_ = SDL_Rect{ 0, 0, 0, 0 };
     }
