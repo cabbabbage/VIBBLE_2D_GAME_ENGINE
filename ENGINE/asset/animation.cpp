@@ -10,6 +10,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <iostream>
+#include <limits>
 #include <memory>
 #include <unordered_map>
 #include <iterator>
@@ -21,6 +22,32 @@ void apply_scale_mode(SDL_Texture* tex, const AssetInfo& info);
 #endif
 
 using AudioCache = std::unordered_map<std::string, std::weak_ptr<Mix_Chunk>>;
+
+constexpr int kAnimationCacheVersion = 2;
+
+inline double sanitize_scale_factor(float value) {
+        if (!std::isfinite(value) || value < 0.0f) {
+                return 1.0;
+        }
+        return static_cast<double>(value);
+}
+
+inline int scaled_dimension(int base, double scale) {
+        if (base <= 0) {
+                return 0;
+        }
+        if (scale <= 0.0) {
+                return 0;
+        }
+        const long long rounded = std::llround(static_cast<double>(base) * scale);
+        if (rounded < 1) {
+                return 1;
+        }
+        if (rounded > static_cast<long long>(std::numeric_limits<int>::max())) {
+                return std::numeric_limits<int>::max();
+        }
+        return static_cast<int>(rounded);
+}
 
 AudioCache& get_audio_cache() {
         static AudioCache cache;
@@ -101,6 +128,7 @@ void Animation::load(const std::string& trigger,
                      int& original_canvas_height)
 {
         CacheManager cache;
+        const double safe_scale = sanitize_scale_factor(scale_factor);
         clear_texture_cache();
         if (anim_json.contains("source")) {
                 const auto& s = anim_json["source"];
@@ -284,10 +312,10 @@ void Animation::load(const std::string& trigger,
 		bool use_cache = false;
 		nlohmann::json meta;
                 const auto expected_steps = render_pipeline::ScalingLogic::PercentSteps();
-		if (cache.load_metadata(meta_file, meta)) {
+                if (cache.load_metadata(meta_file, meta)) {
                         bool meta_ok = (
+                            meta.value("cache_version", 0) == kAnimationCacheVersion &&
                             meta.value("frame_count", -1) == expected_frames &&
-                            meta.value("scale_factor", -1.0f) == scale_factor &&
                             meta.value("original_width", -1) == orig_w &&
                             meta.value("original_height", -1) == orig_h);
                         if (meta_ok) {
@@ -340,8 +368,8 @@ void Animation::load(const std::string& trigger,
                                 original_canvas_width  = orig_w;
                                 original_canvas_height = orig_h;
                                 if (!variant_surfaces[0].empty() && variant_surfaces[0][0]) {
-                                        scaled_sprite_w = variant_surfaces[0][0]->w;
-                                        scaled_sprite_h = variant_surfaces[0][0]->h;
+                                        scaled_sprite_w = scaled_dimension(variant_surfaces[0][0]->w, safe_scale);
+                                        scaled_sprite_h = scaled_dimension(variant_surfaces[0][0]->h, safe_scale);
                                 }
                         }
                 }
@@ -358,7 +386,7 @@ void Animation::load(const std::string& trigger,
                         for (int i = 0; i < expected_frames; ++i) {
                                         std::string f = src_folder + "/" + std::to_string(i) + ".png";
                                         int new_w = 0, new_h = 0;
-                                        SDL_Surface* scaled = cache.load_and_scale_surface(f, scale_factor, new_w, new_h);
+                                        SDL_Surface* scaled = cache.load_and_scale_surface(f, 1.0f, new_w, new_h);
 					if (!scaled) {
 								std::cerr << "[Animation] Failed to load or scale: " << f << "\n";
 								continue;
@@ -366,8 +394,8 @@ void Animation::load(const std::string& trigger,
 					if (i == 0) {
 								original_canvas_width  = orig_w;
 								original_canvas_height = orig_h;
-								scaled_sprite_w = new_w;
-								scaled_sprite_h = new_h;
+                                                                scaled_sprite_w = scaled_dimension(new_w, safe_scale);
+                                                                scaled_sprite_h = scaled_dimension(new_h, safe_scale);
 					}
                                         base_surfaces.push_back(scaled);
                         }
@@ -391,8 +419,8 @@ void Animation::load(const std::string& trigger,
                                 cache.save_surface_sequence(variant_path, variant_surfaces[idx]);
                         }
                         nlohmann::json new_meta;
+                        new_meta["cache_version"]    = kAnimationCacheVersion;
                         new_meta["frame_count"]     = expected_frames;
-                        new_meta["scale_factor"]    = scale_factor;
                         new_meta["original_width"]  = orig_w;
                         new_meta["original_height"] = orig_h;
                         nlohmann::json step_arr = nlohmann::json::array();
@@ -404,8 +432,8 @@ void Animation::load(const std::string& trigger,
                 }
 
                 if (!variant_surfaces[0].empty() && variant_surfaces[0][0] && (scaled_sprite_w <= 0 || scaled_sprite_h <= 0)) {
-                        scaled_sprite_w = variant_surfaces[0][0]->w;
-                        scaled_sprite_h = variant_surfaces[0][0]->h;
+                        scaled_sprite_w = scaled_dimension(variant_surfaces[0][0]->w, safe_scale);
+                        scaled_sprite_h = scaled_dimension(variant_surfaces[0][0]->h, safe_scale);
                 }
                 if (original_canvas_width <= 0 && orig_w > 0) {
                         original_canvas_width = orig_w;
@@ -414,8 +442,8 @@ void Animation::load(const std::string& trigger,
                         original_canvas_height = orig_h;
                 }
                 if ((scaled_sprite_w <= 0 || scaled_sprite_h <= 0) && orig_w > 0 && orig_h > 0) {
-                        int fallback_w = static_cast<int>(orig_w * scale_factor);
-                        int fallback_h = static_cast<int>(orig_h * scale_factor);
+                        int fallback_w = scaled_dimension(orig_w, safe_scale);
+                        int fallback_h = scaled_dimension(orig_h, safe_scale);
                         if (fallback_w <= 0) fallback_w = 1;
                         if (fallback_h <= 0) fallback_h = 1;
                         scaled_sprite_w = fallback_w;

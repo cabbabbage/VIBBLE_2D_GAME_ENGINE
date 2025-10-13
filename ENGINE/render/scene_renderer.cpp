@@ -193,8 +193,14 @@ SDL_Rect SceneRenderer::get_scaled_position_rect(Asset* a,
                                                  int min_w,
                                                  int min_h,
                                                  float reference_screen_height) {
-        float base_sw = static_cast<float>(fw) * inv_scale;
-        float base_sh = static_cast<float>(fh) * inv_scale;
+        float base_scale = 1.0f;
+        if (a && a->info && std::isfinite(a->info->scale_factor) && a->info->scale_factor >= 0.0f) {
+                base_scale = a->info->scale_factor;
+        }
+        float scaled_fw = static_cast<float>(fw) * base_scale;
+        float scaled_fh = static_cast<float>(fh) * base_scale;
+        float base_sw = scaled_fw * inv_scale;
+        float base_sh = scaled_fh * inv_scale;
 
         const camera::RenderEffects effects = assets_->getView().compute_render_effects(
             SDL_Point{a->pos.x, a->pos.y}, base_sh, reference_screen_height);
@@ -298,7 +304,11 @@ void SceneRenderer::render() {
         if ((pw == 0 || ph == 0) && player_frame) SDL_QueryTexture(player_frame, nullptr, nullptr, &pw, &ph);
         if (pw != 0) player_asset->cached_w = pw;
         if (ph != 0) player_asset->cached_h = ph;
-        if (ph > 0) player_screen_height = static_cast<float>(ph) * inv_scale;
+        const float player_scale = (player_asset->info && std::isfinite(player_asset->info->scale_factor) &&
+                                    player_asset->info->scale_factor >= 0.0f)
+                                       ? player_asset->info->scale_factor
+                                       : 1.0f;
+        if (ph > 0) player_screen_height = static_cast<float>(ph) * player_scale * inv_scale;
     }
     if (player_screen_height <= 0.0f) player_screen_height = 1.0f;
 

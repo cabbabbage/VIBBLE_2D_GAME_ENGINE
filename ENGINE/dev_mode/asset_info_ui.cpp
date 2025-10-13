@@ -610,8 +610,12 @@ float AssetInfoUI::compute_player_screen_height(const camera& cam) const {
 
     float scale = cam.get_scale();
     float inv_scale = (scale > 0.0f) ? (1.0f / scale) : 1.0f;
+    const float base_scale = (player_asset->info && std::isfinite(player_asset->info->scale_factor) &&
+                              player_asset->info->scale_factor >= 0.0f)
+                                 ? player_asset->info->scale_factor
+                                 : 1.0f;
     if (ph > 0) {
-        float screen_h = static_cast<float>(ph) * inv_scale;
+        float screen_h = static_cast<float>(ph) * base_scale * inv_scale;
         return screen_h > 0.0f ? screen_h : 1.0f;
     }
     return 1.0f;

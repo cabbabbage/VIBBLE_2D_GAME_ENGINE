@@ -1055,7 +1055,11 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
                     if (ph <= 0) {
                         if (SDL_Texture* pf = playerAsset->get_final_texture()) SDL_QueryTexture(pf, nullptr, nullptr, nullptr, &ph);
                     }
-                    if (ph > 0) player_screen_height = static_cast<float>(ph) * inv_scale;
+                    const float base_scale = (playerAsset->info && std::isfinite(playerAsset->info->scale_factor) &&
+                                              playerAsset->info->scale_factor >= 0.0f)
+                                                 ? playerAsset->info->scale_factor
+                                                 : 1.0f;
+                    if (ph > 0) player_screen_height = static_cast<float>(ph) * base_scale * inv_scale;
                 }
                 if (player_screen_height <= 0.0f) player_screen_height = 1.0f;
 
@@ -1070,8 +1074,11 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
                         }
                     }
                     if (fw <= 0 || fh <= 0) return zero;
-                    float base_sw = static_cast<float>(fw) * inv_scale;
-                    float base_sh = static_cast<float>(fh) * inv_scale;
+                    const float base_scale = (a->info && std::isfinite(a->info->scale_factor) && a->info->scale_factor >= 0.0f)
+                                                 ? a->info->scale_factor
+                                                 : 1.0f;
+                    float base_sw = static_cast<float>(fw) * base_scale * inv_scale;
+                    float base_sh = static_cast<float>(fh) * base_scale * inv_scale;
                     camera::RenderEffects eff = cam.compute_render_effects(SDL_Point{a->pos.x, a->pos.y}, base_sh, player_screen_height);
                     float scaled_sw = base_sw * eff.distance_scale;
                     float scaled_sh = base_sh * eff.distance_scale;
@@ -1116,7 +1123,11 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
                     if (ph <= 0) {
                         if (SDL_Texture* pf = playerAsset->get_final_texture()) SDL_QueryTexture(pf, nullptr, nullptr, nullptr, &ph);
                     }
-                    if (ph > 0) player_screen_height = static_cast<float>(ph) * inv_scale;
+                    const float base_scale = (playerAsset->info && std::isfinite(playerAsset->info->scale_factor) &&
+                                              playerAsset->info->scale_factor >= 0.0f)
+                                                 ? playerAsset->info->scale_factor
+                                                 : 1.0f;
+                    if (ph > 0) player_screen_height = static_cast<float>(ph) * base_scale * inv_scale;
                 }
                 if (player_screen_height <= 0.0f) player_screen_height = 1.0f;
 
@@ -1346,7 +1357,11 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
                             if (ph <= 0) {
                                 if (SDL_Texture* pf = playerAsset->get_final_texture()) SDL_QueryTexture(pf, nullptr, nullptr, nullptr, &ph);
                             }
-                            if (ph > 0) player_screen_height = static_cast<float>(ph) * inv_scale;
+                            const float base_scale = (playerAsset->info && std::isfinite(playerAsset->info->scale_factor) &&
+                                                      playerAsset->info->scale_factor >= 0.0f)
+                                                         ? playerAsset->info->scale_factor
+                                                         : 1.0f;
+                            if (ph > 0) player_screen_height = static_cast<float>(ph) * base_scale * inv_scale;
                         }
                         if (player_screen_height <= 0.0f) player_screen_height = 1.0f;
 

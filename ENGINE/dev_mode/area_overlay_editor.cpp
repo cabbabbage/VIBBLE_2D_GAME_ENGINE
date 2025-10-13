@@ -18,6 +18,7 @@
 #include <climits>
 #include <cctype>
 #include <iostream>
+#include <limits>
 #include <stdexcept>
 
 namespace {
@@ -118,8 +119,26 @@ bool AreaOverlayEditor::begin(AssetInfo* info, Asset* asset, const std::string& 
 bool AreaOverlayEditor::begin_at_point(AssetInfo* info, SDL_Point anchor_world, const std::string& area_name, Asset* asset) {
     if (!assets_ || !info) return false;
 
-    int cw = std::max(32, info->original_canvas_width);
-    int ch = std::max(32, info->original_canvas_height);
+    const double base_scale = (info && std::isfinite(info->scale_factor) && info->scale_factor >= 0.0f)
+                                  ? static_cast<double>(info->scale_factor)
+                                  : 1.0;
+    auto scaled_dim = [&](int dimension) {
+        if (dimension <= 0) {
+            return 0;
+        }
+        if (base_scale <= 0.0) {
+            return 0;
+        }
+        long long scaled = std::llround(static_cast<double>(dimension) * base_scale);
+        if (scaled < 1) scaled = 1;
+        if (scaled > static_cast<long long>(std::numeric_limits<int>::max())) {
+            return std::numeric_limits<int>::max();
+        }
+        return static_cast<int>(scaled);
+    };
+
+    int cw = std::max(32, scaled_dim(info->original_canvas_width));
+    int ch = std::max(32, scaled_dim(info->original_canvas_height));
     if (asset) {
         int fw = asset->cached_w;
         int fh = asset->cached_h;
@@ -131,8 +150,22 @@ bool AreaOverlayEditor::begin_at_point(AssetInfo* info, SDL_Point anchor_world, 
         if ((fw == 0 || fh == 0) && fr) {
             SDL_QueryTexture(fr, nullptr, nullptr, &fw, &fh);
         }
-        if (fw > 0) cw = fw;
-        if (fh > 0) ch = fh;
+        const double asset_scale = (asset->info && std::isfinite(asset->info->scale_factor) &&
+                                    asset->info->scale_factor >= 0.0f)
+                                       ? static_cast<double>(asset->info->scale_factor)
+                                       : base_scale;
+        auto scale_with_asset = [&](int dimension) {
+            if (dimension <= 0) return 0;
+            if (asset_scale <= 0.0) return 0;
+            long long scaled = std::llround(static_cast<double>(dimension) * asset_scale);
+            if (scaled < 1) scaled = 1;
+            if (scaled > static_cast<long long>(std::numeric_limits<int>::max())) {
+                return std::numeric_limits<int>::max();
+            }
+            return static_cast<int>(scaled);
+        };
+        if (fw > 0) cw = std::max(32, scale_with_asset(fw));
+        if (fh > 0) ch = std::max(32, scale_with_asset(fh));
     }
 
     info_ = info;
