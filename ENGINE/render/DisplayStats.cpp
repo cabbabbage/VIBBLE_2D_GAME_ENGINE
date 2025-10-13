@@ -142,8 +142,8 @@ void DisplayStats::render(SDL_Renderer* renderer) {
         return;
     }
 
-    std::array<SDL_Surface*, rows_.size()> surfaces{};
-    std::array<SDL_Texture*, rows_.size()> textures{};
+    std::vector<SDL_Surface*> surfaces(rows_.size(), nullptr);
+    std::vector<SDL_Texture*> textures(rows_.size(), nullptr);
     int text_max_width = 0;
     int text_total_height = 0;
 
