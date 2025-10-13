@@ -658,36 +658,7 @@
       "min_width": 8818,
       "name": "spawn",
       "radius": 900,
-      "spawn_groups": [
-        {
-          "candidates": [
-            {
-              "chance": 0,
-              "name": "null"
-            },
-            {
-              "chance": 1000.0,
-              "name": "Vibble"
-            },
-            {
-              "chance": 40.0,
-              "name": "Axe"
-            }
-          ],
-          "display_name": "Vibble",
-          "dx": -43,
-          "dy": -154,
-          "enforce_spacing": false,
-          "max_number": 2,
-          "min_number": 2,
-          "origional_height": 1248,
-          "origional_width": 1248,
-          "position": "Exact",
-          "priority": 0,
-          "quantity": 2,
-          "spawn_id": "spn-6d19915360f2"
-        }
-      ],
+      "spawn_groups": [],
       "tags": {
         "include": [
           "man-made",
