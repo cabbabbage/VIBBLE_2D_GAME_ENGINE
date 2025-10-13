@@ -8,6 +8,7 @@
 #include <cmath>
 #include <string>
 #include <vector>
+#include <SDL_log.h>
 
 #include "utils/input.hpp"
 
@@ -123,6 +124,10 @@ void DockableCollapsible::close() {
 }
 
 void DockableCollapsible::set_rows(const Rows& rows) {
+    if (locked_) {
+        log_locked_mutation("set_rows");
+        return;
+    }
     rows_ = rows;
 }
 
@@ -182,6 +187,14 @@ void DockableCollapsible::onLockChanged(std::function<void(bool)> cb) {
     on_lock_changed_.push_back(std::move(cb));
 }
 
+void DockableCollapsible::set_scroll_enabled(bool enabled) {
+    if (locked_) {
+        log_locked_mutation("set_scroll_enabled");
+        return;
+    }
+    scroll_enabled_ = enabled;
+}
+
 void DockableCollapsible::set_position(int x, int y) {
     if (!floatable_) return;
     rect_.x = x; rect_.y = y;
@@ -211,6 +224,62 @@ void DockableCollapsible::set_work_area(const SDL_Rect& area) {
     if (work_area_.h > 0) last_screen_h_ = work_area_.h;
 }
 
+void DockableCollapsible::set_available_height_override(int height) {
+    if (locked_) {
+        log_locked_mutation("set_available_height_override");
+        return;
+    }
+    available_height_override_ = height;
+}
+
+void DockableCollapsible::set_cell_width(int w) {
+    if (locked_) {
+        log_locked_mutation("set_cell_width");
+        return;
+    }
+    cell_width_ = std::max(40, w);
+}
+
+void DockableCollapsible::set_padding(int p) {
+    if (locked_) {
+        log_locked_mutation("set_padding");
+        return;
+    }
+    padding_ = std::max(0, p);
+}
+
+void DockableCollapsible::set_row_gap(int g) {
+    if (locked_) {
+        log_locked_mutation("set_row_gap");
+        return;
+    }
+    row_gap_ = std::max(0, g);
+}
+
+void DockableCollapsible::set_col_gap(int g) {
+    if (locked_) {
+        log_locked_mutation("set_col_gap");
+        return;
+    }
+    col_gap_ = std::max(0, g);
+}
+
+void DockableCollapsible::set_visible_height(int h) {
+    if (locked_) {
+        log_locked_mutation("set_visible_height");
+        return;
+    }
+    visible_height_ = std::max(0, h);
+}
+
+void DockableCollapsible::reset_scroll() const {
+    if (locked_) {
+        log_locked_mutation("reset_scroll");
+        return;
+    }
+    scroll_ = 0;
+}
+
 void DockableCollapsible::force_pointer_ready() {
     pointer_block_frames_ = 0;
 }
@@ -221,6 +290,11 @@ void DockableCollapsible::update(const Input& input, int screen_w, int screen_h)
         --pointer_block_frames_;
     }
     layout(screen_w, screen_h);
+
+    if (locked_) {
+        log_locked_mutation("update");
+        return;
+    }
 
     if (scroll_enabled_ && expanded_ && !locked_ && body_viewport_.w > 0 && body_viewport_.h > 0) {
         int mx = input.getX();
@@ -330,6 +404,44 @@ bool DockableCollapsible::handle_event(const SDL_Event& e) {
         }
     }
 
+    if (locked_) {
+        if (wheel_event) {
+            SDL_Point wheel_point{0, 0};
+            SDL_GetMouseState(&wheel_point.x, &wheel_point.y);
+            if (SDL_PointInRect(&wheel_point, &body_viewport_)) {
+                log_locked_mutation("handle_event.wheel");
+                return true;
+            }
+            if (slider_capture_active) {
+                return true;
+            }
+            return false;
+        }
+
+        if (pointer_event) {
+            if (SDL_PointInRect(&pointer_pos, &body_viewport_)) {
+                if (e.type == SDL_MOUSEBUTTONDOWN || e.type == SDL_MOUSEBUTTONUP || e.type == SDL_MOUSEMOTION) {
+                    log_locked_mutation("handle_event.pointer");
+                    return true;
+                }
+            }
+            if (SDL_PointInRect(&pointer_pos, &rect_) && e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
+                return true;
+            }
+        }
+
+        if (wheel_event && slider_capture_active) {
+            return true;
+        }
+
+        if (e.type == SDL_KEYDOWN && e.key.keysym.sym == SDLK_ESCAPE && floatable_) {
+            set_visible(false);
+            return true;
+        }
+
+        return false;
+    }
+
     if (expanded_ && scroll_enabled_ && wheel_event && !slider_capture_active) {
         SDL_Point mouse_point{0, 0};
         SDL_GetMouseState(&mouse_point.x, &mouse_point.y);
@@ -340,7 +452,7 @@ bool DockableCollapsible::handle_event(const SDL_Event& e) {
         }
     }
 
-    bool forward_to_children = expanded_ && !locked_;
+    bool forward_to_children = expanded_;
     if (forward_to_children && pointer_event) {
         if (SDL_PointInRect(&pointer_pos, &body_viewport_)) {
             forward_to_children = true;
@@ -375,24 +487,8 @@ bool DockableCollapsible::handle_event(const SDL_Event& e) {
         }
     }
 
-    if (locked_) {
-        if (pointer_event && SDL_PointInRect(&pointer_pos, &body_viewport_)) {
-            if (e.type == SDL_MOUSEBUTTONDOWN || e.type == SDL_MOUSEBUTTONUP) {
-                return true;
-            }
-        }
-        if (wheel_event) {
-            SDL_Point wheel_point{0, 0};
-            SDL_GetMouseState(&wheel_point.x, &wheel_point.y);
-            if (SDL_PointInRect(&wheel_point, &body_viewport_)) {
-                return true;
-            }
-        }
-    }
-
     return false;
 }
-
 bool DockableCollapsible::is_point_inside(int x, int y) const {
     SDL_Point p{ x, y };
     return SDL_PointInRect(&p, &rect_);
@@ -448,11 +544,40 @@ void DockableCollapsible::render(SDL_Renderer* r) const {
     }
     render_content(r);
 
+    if (locked_) {
+        render_locked_children_overlay(r);
+    }
+
     if (was_clipping == SDL_TRUE) {
         SDL_RenderSetClipRect(r, &prev_clip);
     } else {
         SDL_RenderSetClipRect(r, nullptr);
     }
+}
+
+void DockableCollapsible::render_locked_children_overlay(SDL_Renderer* r) const {
+    if (!r || !locked_) {
+        return;
+    }
+
+    SDL_Color widget_overlay{40, 40, 40, 140};
+    SDL_SetRenderDrawColor(r, widget_overlay.r, widget_overlay.g, widget_overlay.b, widget_overlay.a);
+    for (const auto& row : rows_) {
+        for (const auto* w : row) {
+            if (!w) {
+                continue;
+            }
+            SDL_Rect widget_rect = w->rect();
+            SDL_Rect clipped;
+            if (SDL_IntersectRect(&widget_rect, &body_viewport_, &clipped)) {
+                SDL_RenderFillRect(r, &clipped);
+            }
+        }
+    }
+
+    SDL_Color content_overlay{20, 20, 20, 110};
+    SDL_SetRenderDrawColor(r, content_overlay.r, content_overlay.g, content_overlay.b, content_overlay.a);
+    SDL_RenderFillRect(r, &body_viewport_);
 }
 
 void DockableCollapsible::layout() {
@@ -642,6 +767,17 @@ void DockableCollapsible::update_lock_button() const {
     lock_btn_->set_text("");
 }
 
+void DockableCollapsible::log_locked_mutation(std::string_view method) const {
+    if (!locked_) {
+        return;
+    }
+    std::string key(method);
+    if (!locked_mutation_warnings_.insert(key).second) {
+        return;
+    }
+    SDL_Log("DockableCollapsible[%s]: ignoring %s while locked", title_.c_str(), key.c_str());
+}
+
 int DockableCollapsible::compute_row_width(int num_cols) const {
     int inner = num_cols*cell_width_ + (num_cols-1)*col_gap_;
     return 2*padding_ + inner;
@@ -811,6 +947,7 @@ void DockableCollapsible::apply_lock_state(bool locked, bool allow_auto_collapse
         return;
     }
 
+    locked_mutation_warnings_.clear();
     locked_ = locked;
     if (locked_ && allow_auto_collapse && expanded_) {
         const_cast<DockableCollapsible*>(this)->set_expanded(false);

@@ -6,6 +6,7 @@
 #include <string>
 #include <string_view>
 #include <vector>
+#include <unordered_set>
 
 #include "dm_styles.hpp"
 #include "widgets.hpp"
@@ -43,10 +44,10 @@ public:
     bool isLocked() const { return locked_; }
     void onLockChanged(std::function<void(bool)> cb);
 
-    void set_scroll_enabled(bool enabled) { scroll_enabled_ = enabled; }
+    void set_scroll_enabled(bool enabled);
     bool scroll_enabled() const { return scroll_enabled_; }
 
-    void set_available_height_override(int height) { available_height_override_ = height; }
+    void set_available_height_override(int height);
 
     void set_position(int x, int y);
     void set_rect(const SDL_Rect& r);
@@ -55,13 +56,13 @@ public:
     bool is_floatable() const { return floatable_; }
     void set_work_area(const SDL_Rect& area);
 
-    void set_cell_width(int w) { cell_width_ = std::max(40, w); }
-    void set_padding(int p)    { padding_ = std::max(0, p); }
-    void set_row_gap(int g)    { row_gap_ = std::max(0, g); }
-    void set_col_gap(int g)    { col_gap_ = std::max(0, g); }
-    void set_visible_height(int h) { visible_height_ = std::max(0, h); }
+    void set_cell_width(int w);
+    void set_padding(int p);
+    void set_row_gap(int g);
+    void set_col_gap(int g);
+    void set_visible_height(int h);
 
-    void reset_scroll() const { scroll_ = 0; }
+    void reset_scroll() const;
 
     virtual void update(const Input& input, int screen_w, int screen_h);
     virtual bool handle_event(const SDL_Event& e);
@@ -90,6 +91,8 @@ private:
     const std::string& lock_settings_key() const;
     bool should_show_lock_button() const;
     void apply_lock_state(bool locked, bool allow_auto_collapse, bool persist) const;
+    void render_locked_children_overlay(SDL_Renderer* r) const;
+    void log_locked_mutation(std::string_view method) const;
 
 protected:
     virtual void layout();
@@ -149,4 +152,5 @@ protected:
 
     mutable int last_screen_w_ = 0;
     mutable int last_screen_h_ = 0;
+    mutable std::unordered_set<std::string> locked_mutation_warnings_{};
 };
