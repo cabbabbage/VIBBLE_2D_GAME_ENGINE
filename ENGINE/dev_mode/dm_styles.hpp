@@ -91,6 +91,9 @@ public:
   static const SDL_Color &CheckboxBaseFill();
   static const SDL_Color &CheckboxHoverFill();
   static const SDL_Color &CheckboxCheckColor();
+  static const SDL_Color &CheckboxOutlineColor();
+  static const SDL_Color &CheckboxHoverOutline();
+  static const SDL_Color &CheckboxActiveOutline();
   static const SDL_Color &CheckboxFocusOutline();
   static const SDL_Color &SliderTrackBackground();
   static const SDL_Color &SliderTrackFill();

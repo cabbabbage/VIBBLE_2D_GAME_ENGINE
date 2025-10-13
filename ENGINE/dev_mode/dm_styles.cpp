@@ -66,6 +66,11 @@ const SDL_Color kCheckboxBgHover   = dm::rgba(28, 44, 72, 240);
 const SDL_Color kCheckboxBorder    = kNeutralBorder;
 const SDL_Color kCheckboxCheck     = kHighlightWhite;
 const SDL_Color kCheckboxFocus     = kAccentOrangeStrong;
+const SDL_Color kCheckboxOutline   = dm::rgba(57, 81, 123, 255);
+const SDL_Color kCheckboxHoverOutline = dm::rgba(248, 250, 252, 255);
+const SDL_Color kCheckboxActiveOutline = dm::rgba(234, 88, 12, 255);
+const SDL_Color kCheckboxCheck     = dm::rgba(251, 146, 60, 255);
+const SDL_Color kCheckboxFocus     = dm::rgba(96, 165, 250, 255);
 
 const SDL_Color kSliderTrack       = dm::rgba(21, 30, 50, 220);
 const SDL_Color kSliderFill        = kAccentOrange;
@@ -167,7 +172,7 @@ const DMCheckboxStyle &DMStyles::Checkbox() {
       {dm::FONT_PATH, 14, kTextSecondary},
       kCheckboxBg,
       kCheckboxCheck,
-      kCheckboxBorder};
+      kCheckboxOutline};
   return s;
 }
 
@@ -264,6 +269,21 @@ const SDL_Color &DMStyles::CheckboxHoverFill() {
 
 const SDL_Color &DMStyles::CheckboxCheckColor() {
   static const SDL_Color c = kCheckboxCheck;
+  return c;
+}
+
+const SDL_Color &DMStyles::CheckboxOutlineColor() {
+  static const SDL_Color c = kCheckboxOutline;
+  return c;
+}
+
+const SDL_Color &DMStyles::CheckboxHoverOutline() {
+  static const SDL_Color c = kCheckboxHoverOutline;
+  return c;
+}
+
+const SDL_Color &DMStyles::CheckboxActiveOutline() {
+  static const SDL_Color c = kCheckboxActiveOutline;
   return c;
 }
 

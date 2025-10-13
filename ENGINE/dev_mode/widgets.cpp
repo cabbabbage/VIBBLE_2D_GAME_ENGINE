@@ -447,7 +447,13 @@ void DMCheckbox::render(SDL_Renderer* r) const {
         DMStyles::HighlightIntensity(),
         DMStyles::ShadowIntensity());
 
-    SDL_Color border = hovered_ ? DMStyles::CheckboxFocusOutline() : st.border;
+    SDL_Color border = DMStyles::CheckboxOutlineColor();
+    if (hovered_) {
+        border = DMStyles::CheckboxHoverOutline();
+    }
+    if (value_) {
+        border = DMStyles::CheckboxActiveOutline();
+    }
     SDL_SetRenderDrawColor(r, border.r, border.g, border.b, border.a);
     SDL_RenderDrawRect(r, &box);
     if (value_) {
