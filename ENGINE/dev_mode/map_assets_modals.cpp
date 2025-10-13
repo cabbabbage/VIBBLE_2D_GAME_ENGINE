@@ -196,7 +196,7 @@ public:
                 "Scroll on a slice to adjust weight. Double-click to remove.", DMStyles::Label().color, true);
         }
         if (!regen_button_ && regen_callback_) {
-            regen_button_ = std::make_unique<DMButton>("Regen", &DMStyles::PrimaryButton(), 0, DMButton::height());
+            regen_button_ = std::make_unique<DMButton>("Regen", &DMStyles::AccentButton(), 0, DMButton::height());
         }
         if (regen_callback_) {
             if (!regen_widget_) {
@@ -488,8 +488,8 @@ void SingleSpawnGroupModal::open(json& map_info,
                  [this]() {
                      if (on_save_) on_save_();
                  },
-                 [this]() {
-                     if (entry_ && on_regen_) on_regen_(*entry_);
+                 [this](const json& updated_entry) {
+                     if (on_regen_) on_regen_(updated_entry);
                  });
 
     panel_->open();

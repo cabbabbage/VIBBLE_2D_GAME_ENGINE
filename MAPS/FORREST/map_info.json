@@ -668,38 +668,24 @@
             {
               "chance": 1000.0,
               "name": "Vibble"
+            },
+            {
+              "chance": 40.0,
+              "name": "Axe"
             }
           ],
           "display_name": "Vibble",
           "dx": -43,
           "dy": -154,
           "enforce_spacing": false,
-          "max_number": 1,
-          "min_number": 1,
+          "max_number": 2,
+          "min_number": 2,
           "origional_height": 1248,
           "origional_width": 1248,
           "position": "Exact",
           "priority": 0,
+          "quantity": 2,
           "spawn_id": "spn-6d19915360f2"
-        },
-        {
-          "candidates": [
-            {
-              "chance": 0,
-              "name": "null"
-            },
-            {
-              "chance": 5.0,
-              "name": "Barrel"
-            }
-          ],
-          "display_name": "New Spawnok",
-          "enforce_spacing": false,
-          "max_number": 1,
-          "min_number": 1,
-          "position": "Random",
-          "priority": 1,
-          "spawn_id": "spn-71d59b926658"
         }
       ],
       "tags": {

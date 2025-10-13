@@ -36,6 +36,8 @@ public:
     void set_header_visible(bool visible);
     void set_scrollbar_visible(bool visible);
 
+    void request_layout();
+
     void set_blocks_editor_interactions(bool block);
     void set_editor_interaction_blocker(std::function<void(bool)> blocker);
     void set_header_visibility_controller(std::function<void(bool)> controller);

@@ -217,14 +217,41 @@ AssetInfoUI::AssetInfoUI() {
     });
 
     container_.set_update_function([this](const Input& input, int screen_w, int screen_h) {
-        for (auto& section : sections_) section->update(input, screen_w, screen_h);
+        std::vector<bool> previously_expanded;
+        previously_expanded.reserve(sections_.size());
+        for (const auto& section : sections_) {
+            previously_expanded.push_back(section->is_expanded());
+        }
+
+        for (auto& section : sections_) {
+            section->update(input, screen_w, screen_h);
+        }
+
         for (size_t i = 0; i < sections_.size(); ++i) {
-            if (sections_[i]->is_expanded()) {
-                for (size_t j = 0; j < sections_.size(); ++j) {
-                    if (i != j) sections_[j]->set_expanded(false);
+            if (!sections_[i]->is_expanded()) {
+                continue;
+            }
+            for (size_t j = 0; j < sections_.size(); ++j) {
+                if (i == j) {
+                    continue;
                 }
+                if (sections_[j]->is_expanded()) {
+                    sections_[j]->set_expanded(false);
+                }
+            }
+            break;
+        }
+
+        bool expansion_changed = false;
+        for (size_t i = 0; i < sections_.size(); ++i) {
+            if (sections_[i]->is_expanded() != previously_expanded[i]) {
+                expansion_changed = true;
                 break;
             }
+        }
+
+        if (expansion_changed) {
+            container_.request_layout();
         }
     });
 

@@ -56,6 +56,10 @@ void SlidingWindowContainer::set_scrollbar_visible(bool visible) {
     layout(last_screen_w_, last_screen_h_);
 }
 
+void SlidingWindowContainer::request_layout() {
+    layout_dirty_ = true;
+}
+
 void SlidingWindowContainer::set_blocks_editor_interactions(bool block) {
     if (blocks_editor_interactions_ == block) {
         return;
