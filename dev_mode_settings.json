@@ -2,12 +2,12 @@
     "dev_ui": {
         "lighting": {
             "map_panel": {
-                "update_map_light": true
+                "update_map_light": false
             }
         },
         "lock": {
             "camera": {
-                "controls": true
+                "controls": false
             },
             "lighting": {
                 "light_rays": true,

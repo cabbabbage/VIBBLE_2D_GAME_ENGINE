@@ -5,7 +5,7 @@
     "height_at_zoom1": 557.0,
     "parallax_strength": 18.5,
     "realism_enabled": true,
-    "render_distance": 850.0,
+    "render_distance": 1070.0,
     "tripod_distance_y": -1220.0
   },
   "light_rays_params": {
@@ -32,7 +32,7 @@
             "name": "Grass_FPS_2"
           },
           {
-            "chance": 67,
+            "chance": 14,
             "name": "null"
           },
           {
@@ -544,110 +544,9 @@
       ]
     },
     "spawn": {
-      "areas": [
-        {
-          "anchor": {
-            "x": 0,
-            "y": 0
-          },
-          "anchor_relative_to_center": true,
-          "kind": "Trigger",
-          "name": "trigger_area",
-          "points": [
-            {
-              "x": -8217,
-              "y": -6884
-            },
-            {
-              "x": -7363,
-              "y": -6558
-            },
-            {
-              "x": -7694,
-              "y": -6023
-            }
-          ],
-          "type": "trigger"
-        },
-        {
-          "anchor": {
-            "x": 0,
-            "y": 0
-          },
-          "anchor_relative_to_center": true,
-          "kind": "Trigger",
-          "name": "trigger_area_1",
-          "points": [
-            {
-              "x": -7659,
-              "y": -6684
-            },
-            {
-              "x": -7860,
-              "y": -6684
-            },
-            {
-              "x": -8271,
-              "y": -5841
-            },
-            {
-              "x": -7528,
-              "y": -5532
-            }
-          ],
-          "type": "trigger"
-        },
-        {
-          "anchor": {
-            "x": 0,
-            "y": 0
-          },
-          "anchor_relative_to_center": true,
-          "kind": "Trigger",
-          "name": "trigger_area_2",
-          "points": [
-            {
-              "x": -7564,
-              "y": -6270
-            },
-            {
-              "x": -8084,
-              "y": -5960
-            },
-            {
-              "x": -8086,
-              "y": -7082
-            }
-          ],
-          "type": "trigger"
-        },
-        {
-          "anchor": {
-            "x": 0,
-            "y": 0
-          },
-          "anchor_relative_to_center": true,
-          "kind": "Trigger",
-          "name": "trigger_area_3",
-          "points": [
-            {
-              "x": -204,
-              "y": -599
-            },
-            {
-              "x": 257,
-              "y": -693
-            },
-            {
-              "x": 194,
-              "y": -237
-            }
-          ],
-          "type": "trigger"
-        }
-      ],
+      "areas": [],
       "curvyness": 1,
-      "edge_smoothness": 97,
+      "edge_smoothness": 84,
       "geometry": "Circle",
       "inherits_map_assets": true,
       "is_boss": false,
@@ -657,8 +556,31 @@
       "min_height": 8818,
       "min_width": 8818,
       "name": "spawn",
-      "radius": 900,
-      "spawn_groups": [],
+      "radius": 4409,
+      "spawn_groups": [
+        {
+          "candidates": [
+            {
+              "chance": 0,
+              "name": "null"
+            },
+            {
+              "chance": 100,
+              "name": "Vibble"
+            }
+          ],
+          "display_name": "Vibble",
+          "dx": -64,
+          "dy": -166,
+          "enforce_spacing": false,
+          "max_number": 1,
+          "min_number": 1,
+          "origional_height": 1807,
+          "origional_width": 1805,
+          "position": "Exact",
+          "spawn_id": "spn-a2c03bfe7161"
+        }
+      ],
       "tags": {
         "include": [
           "man-made",
