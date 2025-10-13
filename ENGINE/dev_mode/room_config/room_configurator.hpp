@@ -40,6 +40,8 @@ public:
     void set_show_header(bool show);
     void set_on_close(std::function<void()> cb);
     void set_header_visibility_controller(std::function<void(bool)> cb);
+    void attach_container(SlidingWindowContainer* container);
+    void detach_container();
 
     void open(const nlohmann::json& room_data);
     void open(nlohmann::json& room_data,
@@ -63,6 +65,8 @@ public:
     void render(SDL_Renderer* r) const;
 
     const SDL_Rect& panel_rect() const;
+
+    std::string current_header_text() const;
 
     nlohmann::json build_json() const;
     bool is_point_inside(int x, int y) const;
@@ -104,6 +108,8 @@ private:
     void ensure_base_panels();
     void refresh_base_panel_rows();
     void request_container_layout();
+    void configure_container(SlidingWindowContainer& container);
+    void clear_container_callbacks(SlidingWindowContainer& container);
     void prune_collapsible_caches();
     int cached_collapsible_height(const DockableCollapsible* panel) const;
     void update_collapsible_height_cache(const DockableCollapsible* panel, int new_height);
@@ -116,8 +122,8 @@ private:
                                           const SpawnGroupConfig::ChangeSummary& summary);
 
     std::unique_ptr<State> state_;
-
-    SlidingWindowContainer container_;
+    std::unique_ptr<SlidingWindowContainer> default_container_;
+    SlidingWindowContainer* container_ = nullptr;
     bool show_header_ = true;
     SDL_Rect bounds_override_{0, 0, 0, 0};
     SDL_Rect work_area_{0, 0, 0, 0};
@@ -191,5 +197,6 @@ private:
     std::function<void(const nlohmann::json&, const SpawnGroupConfig::ChangeSummary&)> on_external_spawn_entry_change_;
     SpawnGroupConfig::ConfigureEntryCallback external_configure_entry_;
     std::function<std::string(const std::string&, const std::string&)> on_room_renamed_;
+    std::function<void(bool)> header_visibility_controller_{};
 };
 

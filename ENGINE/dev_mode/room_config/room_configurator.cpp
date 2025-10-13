@@ -316,17 +316,125 @@ struct RoomConfigurator::State {
 
 RoomConfigurator::RoomConfigurator() {
     geometry_options_ = {"Square", "Circle"};
-    container_.set_header_text_provider([this]() {
-        if (state_ && !state_->name.empty()) {
-            return std::string{"Room: "} + state_->name;
+    state_ = std::make_unique<State>();
+    default_container_ = std::make_unique<SlidingWindowContainer>();
+    container_ = default_container_.get();
+    configure_container(*container_);
+}
+
+RoomConfigurator::~RoomConfigurator() {
+    if (container_ && container_ != default_container_.get()) {
+        clear_container_callbacks(*container_);
+    }
+}
+
+void RoomConfigurator::set_bounds(const SDL_Rect& bounds) {
+    bounds_override_ = bounds;
+    has_bounds_override_ = bounds.w > 0 && bounds.h > 0;
+    SDL_Rect applied = bounds;
+    if (has_bounds_override_) {
+        applied.w = std::max(0, applied.w);
+        applied.h = std::max(0, applied.h);
+        const int padding = DMSpacing::panel_padding();
+        int min_panel_w = kRoomConfigPanelMinWidth + padding * 2;
+        if (applied.w > 0) {
+            applied.w = std::max(min_panel_w, applied.w);
         }
-        return std::string{"Room Config"};
-    });
-    container_.set_on_close([this]() { handle_container_closed(); });
-    container_.set_layout_function([this](const SlidingWindowContainer::LayoutContext& ctx) {
+        if (container_) {
+            container_->set_panel_bounds_override(applied);
+        }
+    } else {
+        if (container_) {
+            container_->clear_panel_bounds_override();
+        }
+    }
+    if (!has_bounds_override_) {
+        applied = work_area_;
+    }
+    ensure_base_panels();
+    if (geometry_panel_) geometry_panel_->set_work_area(applied);
+    if (tags_panel_) tags_panel_->set_work_area(applied);
+    if (types_panel_) types_panel_->set_work_area(applied);
+    request_container_layout();
+}
+
+void RoomConfigurator::set_work_area(const SDL_Rect& bounds) {
+    work_area_ = bounds;
+    ensure_base_panels();
+    if (geometry_panel_) geometry_panel_->set_work_area(bounds);
+    if (tags_panel_) tags_panel_->set_work_area(bounds);
+    if (types_panel_) types_panel_->set_work_area(bounds);
+    request_container_layout();
+}
+
+void RoomConfigurator::set_show_header(bool show) {
+    show_header_ = show;
+    if (container_) {
+        container_->set_header_visible(show_header_);
+    }
+}
+
+void RoomConfigurator::set_on_close(std::function<void()> cb) { on_close_ = std::move(cb); }
+
+void RoomConfigurator::set_header_visibility_controller(std::function<void(bool)> cb) {
+    header_visibility_controller_ = std::move(cb);
+    if (container_) {
+        container_->set_header_visibility_controller(header_visibility_controller_);
+    }
+}
+
+void RoomConfigurator::reset_scroll() {
+    if (container_) {
+        container_->reset_scroll();
+    }
+}
+
+void RoomConfigurator::attach_container(SlidingWindowContainer* container) {
+    if (container == container_) {
+        return;
+    }
+    if (!container) {
+        detach_container();
+        return;
+    }
+    if (container_ && container_ != default_container_.get()) {
+        clear_container_callbacks(*container_);
+    }
+    container_ = container;
+    configure_container(*container_);
+    if (has_bounds_override_) {
+        set_bounds(bounds_override_);
+    } else {
+        request_container_layout();
+    }
+}
+
+void RoomConfigurator::detach_container() {
+    SlidingWindowContainer* previous = container_;
+    if (previous && previous != default_container_.get()) {
+        clear_container_callbacks(*previous);
+    }
+    if (!default_container_) {
+        default_container_ = std::make_unique<SlidingWindowContainer>();
+    }
+    container_ = default_container_.get();
+    if (container_) {
+        configure_container(*container_);
+        if (has_bounds_override_) {
+            set_bounds(bounds_override_);
+        } else {
+            request_container_layout();
+        }
+    }
+}
+
+void RoomConfigurator::configure_container(SlidingWindowContainer& container) {
+    container.set_header_text_provider([this]() { return this->current_header_text(); });
+    container.set_on_close([this]() { handle_container_closed(); });
+    container.set_layout_function([this](const SlidingWindowContainer::LayoutContext& ctx) {
         return this->layout_content(ctx);
     });
-    container_.set_render_function([this](SDL_Renderer* renderer) {
+    container.set_render_function([this](SDL_Renderer* renderer) {
         for (auto* panel : ordered_base_panels_) {
             if (panel && panel->is_visible()) {
                 panel->render(renderer);
@@ -339,8 +447,7 @@ RoomConfigurator::RoomConfigurator() {
             add_spawn_widget_->render(renderer);
         }
     });
-    container_.set_event_function([this](const SDL_Event& e) {
-        // Give child widgets first shot at events so clicks don't get swallowed by the container
+    container.set_event_function([this](const SDL_Event& e) {
         if (e.type == SDL_KEYDOWN && e.key.keysym.sym == SDLK_ESCAPE) {
             this->close();
             return true;
@@ -362,7 +469,7 @@ RoomConfigurator::RoomConfigurator() {
         }
         return used;
     });
-    container_.set_update_function([this](const Input& input, int screen_w, int screen_h) {
+    container.set_update_function([this](const Input& input, int screen_w, int screen_h) {
         for (auto* panel : ordered_base_panels_) {
             if (panel) panel->update(input, screen_w, screen_h);
         }
@@ -370,61 +477,26 @@ RoomConfigurator::RoomConfigurator() {
             if (cfg) cfg->update(input, screen_w, screen_h);
         }
     });
-    container_.set_blocks_editor_interactions(true);
-    container_.set_scrollbar_visible(false);
-    container_.set_header_visible(show_header_);
-    state_ = std::make_unique<State>();
-}
-
-RoomConfigurator::~RoomConfigurator() = default;
-
-void RoomConfigurator::set_bounds(const SDL_Rect& bounds) {
-    bounds_override_ = bounds;
-    has_bounds_override_ = bounds.w > 0 && bounds.h > 0;
-    SDL_Rect applied = bounds;
-    if (has_bounds_override_) {
-        applied.w = std::max(0, applied.w);
-        applied.h = std::max(0, applied.h);
-        const int padding = DMSpacing::panel_padding();
-        int min_panel_w = kRoomConfigPanelMinWidth + padding * 2;
-        if (applied.w > 0) {
-            applied.w = std::max(min_panel_w, applied.w);
-        }
-        container_.set_panel_bounds_override(applied);
-    } else {
-        container_.clear_panel_bounds_override();
-    }
+    container.set_blocks_editor_interactions(true);
+    container.set_scrollbar_visible(false);
+    container.set_header_visible(show_header_);
+    container.set_header_visibility_controller(header_visibility_controller_);
     if (!has_bounds_override_) {
-        applied = work_area_;
+        container.clear_panel_bounds_override();
     }
-    ensure_base_panels();
-    if (geometry_panel_) geometry_panel_->set_work_area(applied);
-    if (tags_panel_) tags_panel_->set_work_area(applied);
-    if (types_panel_) types_panel_->set_work_area(applied);
-    container_.request_layout();
 }
 
-void RoomConfigurator::set_work_area(const SDL_Rect& bounds) {
-    work_area_ = bounds;
-    ensure_base_panels();
-    if (geometry_panel_) geometry_panel_->set_work_area(bounds);
-    if (tags_panel_) tags_panel_->set_work_area(bounds);
-    if (types_panel_) types_panel_->set_work_area(bounds);
-    request_container_layout();
+void RoomConfigurator::clear_container_callbacks(SlidingWindowContainer& container) {
+    container.set_header_text_provider({});
+    container.set_on_close({});
+    container.set_layout_function({});
+    container.set_render_function({});
+    container.set_event_function({});
+    container.set_update_function({});
+    container.set_header_visibility_controller({});
+    container.set_blocks_editor_interactions(false);
+    container.clear_panel_bounds_override();
 }
-
-void RoomConfigurator::set_show_header(bool show) {
-    show_header_ = show;
-    container_.set_header_visible(show_header_);
-}
-
-void RoomConfigurator::set_on_close(std::function<void()> cb) { on_close_ = std::move(cb); }
-
-void RoomConfigurator::set_header_visibility_controller(std::function<void(bool)> cb) {
-    container_.set_header_visibility_controller(std::move(cb));
-}
-
-void RoomConfigurator::reset_scroll() { container_.reset_scroll(); }
 
 bool RoomConfigurator::add_spawn_group_direct() {
     nlohmann::json& root = live_room_json();
@@ -561,7 +633,9 @@ void RoomConfigurator::refresh_base_panel_rows() {
 }
 
 void RoomConfigurator::request_container_layout() {
-    container_.request_layout();
+    if (container_) {
+        container_->request_layout();
+    }
 }
 
 void RoomConfigurator::prune_collapsible_caches() {
@@ -612,7 +686,7 @@ void RoomConfigurator::update_collapsible_height_cache(const DockableCollapsible
         return;
     }
     collapsible_height_cache_[panel] = clamped;
-    container_.request_layout();
+    request_container_layout();
 }
 
 void RoomConfigurator::forget_collapsible(const DockableCollapsible* panel) {
@@ -782,7 +856,7 @@ bool RoomConfigurator::apply_room_data(const nlohmann::json& data) {
 }
 
 void RoomConfigurator::open(const nlohmann::json& room_data) {
-    const bool was_visible = container_.is_visible();
+    const bool was_visible = container_ && container_->is_visible();
 
     room_ = nullptr;
     external_room_json_ = nullptr;
@@ -797,14 +871,16 @@ void RoomConfigurator::open(const nlohmann::json& room_data) {
             reset_scroll();
         }
     }
-    container_.open();
+    if (container_) {
+        container_->open();
+    }
 }
 
 void RoomConfigurator::open(nlohmann::json& room_data,
                             std::function<void()> on_change,
                             std::function<void(const nlohmann::json&, const SpawnGroupConfig::ChangeSummary&)> on_entry_change,
                             SpawnGroupConfig::ConfigureEntryCallback configure_entry) {
-    const bool was_visible = container_.is_visible();
+    const bool was_visible = container_ && container_->is_visible();
 
     room_ = nullptr;
     external_room_json_ = &room_data;
@@ -819,11 +895,13 @@ void RoomConfigurator::open(nlohmann::json& room_data,
             reset_scroll();
         }
     }
-    container_.open();
+    if (container_) {
+        container_->open();
+    }
 }
 
 void RoomConfigurator::open(Room* room) {
-    const bool was_visible = container_.is_visible();
+    const bool was_visible = container_ && container_->is_visible();
 
     Room* previous = room_;
     room_ = room;
@@ -847,7 +925,9 @@ void RoomConfigurator::open(Room* room) {
             reset_scroll();
         }
     }
-    container_.open();
+    if (container_) {
+        container_->open();
+    }
 }
 
 bool RoomConfigurator::refresh_spawn_groups(const nlohmann::json& room_data) {
@@ -873,7 +953,7 @@ bool RoomConfigurator::refresh_spawn_groups(Room* room) {
 }
 
 void RoomConfigurator::close() {
-    if (!container_.is_visible()) {
+    if (!container_ || !container_->is_visible()) {
         for (auto& config : spawn_group_configs_) {
             if (config) config->set_visible(false);
         }
@@ -883,10 +963,10 @@ void RoomConfigurator::close() {
         external_configure_entry_ = {};
         return;
     }
-    container_.close();
+    container_->close();
 }
 
-bool RoomConfigurator::visible() const { return container_.is_visible(); }
+bool RoomConfigurator::visible() const { return container_ && container_->is_visible(); }
 
 bool RoomConfigurator::any_panel_visible() const { return visible(); }
 
@@ -1173,7 +1253,7 @@ void RoomConfigurator::rebuild_rows() {
         state_ = std::make_unique<State>();
     }
 
-    int previous_scroll = container_.scroll_value();
+    int previous_scroll = container_ ? container_->scroll_value() : 0;
 
     if (rebuild_in_progress_) {
         pending_rebuild_ = true;
@@ -1200,7 +1280,9 @@ void RoomConfigurator::rebuild_rows() {
         }
     }
 
-    container_.set_scroll_value(previous_scroll);
+    if (container_) {
+        container_->set_scroll_value(previous_scroll);
+    }
 }
 
 void RoomConfigurator::rebuild_rows_internal() {
@@ -1319,7 +1401,7 @@ void RoomConfigurator::update(const Input& input, int screen_w, int screen_h) {
     last_screen_w_ = screen_w;
     last_screen_h_ = screen_h;
     ensure_base_panels();
-    const bool panel_visible = container_.is_visible();
+    const bool panel_visible = container_ && container_->is_visible();
     SDL_Rect panel_work_area = work_area_;
     if (panel_work_area.w <= 0 || panel_work_area.h <= 0) {
         panel_work_area = SDL_Rect{0, 0, screen_w, screen_h};
@@ -1337,7 +1419,9 @@ void RoomConfigurator::update(const Input& input, int screen_w, int screen_h) {
         config->set_screen_dimensions(screen_w, screen_h);
     }
 
-    container_.update(input, screen_w, screen_h);
+    if (container_) {
+        container_->update(input, screen_w, screen_h);
+    }
 
     for (auto* panel : ordered_base_panels_) {
         if (!panel) continue;
@@ -1372,8 +1456,10 @@ void RoomConfigurator::prepare_for_event(int screen_w, int screen_h) {
     ensure_base_panels();
     last_screen_w_ = use_w;
     last_screen_h_ = use_h;
-    container_.prepare_layout(use_w, use_h);
-    const bool panel_visible = container_.is_visible();
+    if (container_) {
+        container_->prepare_layout(use_w, use_h);
+    }
+    const bool panel_visible = container_ && container_->is_visible();
     SDL_Rect panel_work_area = work_area_;
     if (panel_work_area.w <= 0 || panel_work_area.h <= 0) {
         panel_work_area = SDL_Rect{0, 0, use_w, use_h};
@@ -1579,20 +1665,33 @@ bool RoomConfigurator::sync_state_from_widgets() {
 }
 
 bool RoomConfigurator::handle_event(const SDL_Event& e) {
-    if (!container_.is_visible()) return false;
+    if (!container_ || !container_->is_visible()) return false;
     if (last_screen_w_ > 0 && last_screen_h_ > 0) {
         prepare_for_event(last_screen_w_, last_screen_h_);
     }
-    return container_.handle_event(e);
+    return container_->handle_event(e);
 }
 
 void RoomConfigurator::render(SDL_Renderer* r) const {
-    if (!container_.is_visible()) return;
-    container_.render(r, last_screen_w_, last_screen_h_);
+    if (!container_ || !container_->is_visible()) return;
+    container_->render(r, last_screen_w_, last_screen_h_);
     DMDropdown::render_active_options(r);
 }
 
-const SDL_Rect& RoomConfigurator::panel_rect() const { return container_.panel_rect(); }
+const SDL_Rect& RoomConfigurator::panel_rect() const {
+    if (!container_) {
+        static SDL_Rect empty{0, 0, 0, 0};
+        return empty;
+    }
+    return container_->panel_rect();
+}
+
+std::string RoomConfigurator::current_header_text() const {
+    if (state_ && !state_->name.empty()) {
+        return std::string{"Room: "} + state_->name;
+    }
+    return std::string{"Room Config"};
+}
 
 const nlohmann::json& RoomConfigurator::live_room_json() const {
     if (room_) {
@@ -1627,7 +1726,9 @@ nlohmann::json RoomConfigurator::build_json() const {
     return result;
 }
 
-bool RoomConfigurator::is_point_inside(int x, int y) const { return container_.is_point_inside(x, y); }
+bool RoomConfigurator::is_point_inside(int x, int y) const {
+    return container_ && container_->is_point_inside(x, y);
+}
 
 void RoomConfigurator::load_tags_from_json(const nlohmann::json& data) {
     std::set<std::string> include;
