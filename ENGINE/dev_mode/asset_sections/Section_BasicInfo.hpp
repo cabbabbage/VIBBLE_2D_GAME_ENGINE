@@ -105,6 +105,13 @@ inline bool Section_BasicInfo::handle_event(const SDL_Event& e) {
     bool used = DockableCollapsible::handle_event(e);
     if (!info_) return used;
 
+    if (!used) {
+        if (dd_type_ && dd_type_->handle_event(e)) used = true;
+        if (s_scale_pct_ && s_scale_pct_->handle_event(e)) used = true;
+        if (s_zindex_ && s_zindex_->handle_event(e)) used = true;
+        if (c_flipable_ && c_flipable_->handle_event(e)) used = true;
+    }
+
     bool changed = false;
     bool scale_changed = false;
     bool z_changed = false;

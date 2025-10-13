@@ -58,6 +58,13 @@ class Section_Spacing : public DockableCollapsible {
     bool handle_event(const SDL_Event& e) override {
       bool used = DockableCollapsible::handle_event(e);
       if (!info_ || !expanded_) return used;
+
+      if (!used) {
+        if (s_min_same_ && s_min_same_->handle_event(e)) used = true;
+        if (s_min_all_ && s_min_all_->handle_event(e)) used = true;
+        if (s_neighbor_search_ && s_neighbor_search_->handle_event(e)) used = true;
+      }
+
       bool changed = false;
 
       if (s_min_same_ && info_->min_same_type_distance != s_min_same_->value()) {
