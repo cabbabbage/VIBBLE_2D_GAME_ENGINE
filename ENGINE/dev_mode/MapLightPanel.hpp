@@ -50,6 +50,7 @@ private:
     void update_section_header_labels();
     void sync_ui_from_json();
     void sync_json_from_ui();
+    void load_update_map_light_setting();
     nlohmann::json& ensure_light();
     nlohmann::json& ensure_screen_light(nlohmann::json& light);
 
@@ -113,6 +114,7 @@ private:
 
     int current_key_index_ = 0;
 
+    std::unique_ptr<DMCheckbox> update_map_light_checkbox_;
     std::unique_ptr<DMButton> update_btn_;
     std::unique_ptr<DMButton> orbit_section_btn_;
     std::unique_ptr<DMButton> screen_section_btn_;
@@ -165,6 +167,8 @@ private:
     void toggle_texture_section();
 
     bool needs_sync_to_json_ = false;
+
+    bool update_map_light_enabled_ = false;
 
     OrbitSettings last_applied_orbit_{};
     ScreenLightSettings last_applied_screen_{};

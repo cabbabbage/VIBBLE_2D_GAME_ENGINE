@@ -2,16 +2,24 @@
 
 #include <algorithm>
 #include <cmath>
-#include <sstream>
-#include <utility>
 #include <optional>
+#include <sstream>
+#include <string_view>
+#include <utility>
 #include <SDL_ttf.h>
 
+#include "dev_mode/dev_ui_settings.hpp"
 #include "dev_mode/dm_styles.hpp"
 #include "dev_mode/draw_utils.hpp"
 #include "utils/input.hpp"
 
 using nlohmann::json;
+
+namespace {
+
+constexpr std::string_view kUpdateMapLightSettingKey = "dev_ui.lighting.map_panel.update_map_light";
+
+} // namespace
 
 class MapLightPanel::WarningLabel : public Widget {
 public:
@@ -109,6 +117,7 @@ void MapLightPanel::set_map_info(json* map_info, SaveCallback on_save) {
     }
     ensure_light();
     update_save_status(true);
+    load_update_map_light_setting();
     sync_ui_from_json();
 }
 
@@ -128,6 +137,7 @@ bool MapLightPanel::is_visible() const { return visible_; }
 
 void MapLightPanel::build_ui() {
 
+    update_map_light_checkbox_ = std::make_unique<DMCheckbox>("Update Map Light", false);
     update_btn_ = std::make_unique<DMButton>("Update Light", &DMStyles::AccentButton(), 160, DMButton::height());
     orbit_section_btn_ = std::make_unique<DMButton>("", &DMStyles::HeaderButton(), 220, DMButton::height());
     screen_section_btn_ = std::make_unique<DMButton>("", &DMStyles::HeaderButton(), 220, DMButton::height());
@@ -216,6 +226,11 @@ void MapLightPanel::rebuild_rows() {
         warning_label_->set_text(persistence_warning_text_);
     }
     rows.push_back({ add_widget(std::move(warning_label)) });
+
+    load_update_map_light_setting();
+    if (update_map_light_checkbox_) {
+        rows.push_back({ add_widget(std::make_unique<CheckboxWidget>(update_map_light_checkbox_.get())) });
+    }
 
     rows.push_back({ add_widget(std::make_unique<ButtonWidget>(orbit_section_btn_.get(), [this]() { toggle_orbit_section(); })) });
     if (!orbit_section_collapsed_) {
@@ -619,6 +634,13 @@ void MapLightPanel::sync_json_from_ui() {
     needs_sync_to_json_ = false;
 }
 
+void MapLightPanel::load_update_map_light_setting() {
+    update_map_light_enabled_ = devmode::ui_settings::load_bool(kUpdateMapLightSettingKey, false);
+    if (update_map_light_checkbox_) {
+        update_map_light_checkbox_->set_value(update_map_light_enabled_);
+    }
+}
+
 void MapLightPanel::ensure_keys_array() {
     json& L = ensure_light();
     if (!L.contains("keys") || !L["keys"].is_array()) {
@@ -859,6 +881,13 @@ bool MapLightPanel::handle_event(const SDL_Event& e) {
 
     if (used) {
         needs_sync_to_json_ = true;
+        if (update_map_light_checkbox_) {
+            bool current = update_map_light_checkbox_->value();
+            if (current != update_map_light_enabled_) {
+                update_map_light_enabled_ = current;
+                devmode::ui_settings::save_bool(kUpdateMapLightSettingKey, update_map_light_enabled_);
+            }
+        }
     }
 
     if (needs_sync_to_json_) {

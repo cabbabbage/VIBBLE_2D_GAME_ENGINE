@@ -3,6 +3,7 @@
 #include "asset/Asset.hpp"
 #include "light_map.hpp"
 #include "render/camera.hpp"
+#include "dev_mode/dev_ui_settings.hpp"
 #include <algorithm>
 #include <cmath>
 #include <iostream>
@@ -10,11 +11,16 @@
 #include <tuple>
 #include <vector>
 #include <cstdint>
+#include <string_view>
 
 static constexpr SDL_Color SLATE_COLOR = {69, 101, 74, 255};
 static constexpr float MIN_VISIBLE_SCREEN_RATIO = 0.015f;
 
-namespace { }
+namespace {
+
+constexpr std::string_view kUpdateMapLightSettingKey = "dev_ui.lighting.map_panel.update_map_light";
+
+} // namespace
 
 SceneRenderer::SceneRenderer(SDL_Renderer* renderer,
                              Assets* assets,
@@ -218,7 +224,13 @@ void SceneRenderer::render() {
     ++render_call_count;
 
     update_shading_groups();
-    main_light_source_.update();
+    bool should_update_light = true;
+    if (assets_ && assets_->is_dev_mode()) {
+        should_update_light = devmode::ui_settings::load_bool(kUpdateMapLightSettingKey, false);
+    }
+    if (should_update_light) {
+        main_light_source_.update();
+    }
 
     static Uint8 kPostOverlayAlpha = 255;
 
