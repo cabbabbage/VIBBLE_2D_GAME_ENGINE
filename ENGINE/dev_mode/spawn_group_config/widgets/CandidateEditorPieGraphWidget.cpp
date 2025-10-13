@@ -12,10 +12,15 @@
 #include <SDL_ttf.h>
 #include <nlohmann/json.hpp>
 
+#include "../../search_assets.hpp"
+#include "../../../utils/input.hpp"
+
 namespace {
 constexpr double kPi = 3.14159265358979323846;
 constexpr double kTwoPi = 6.28318530717958647692;
 constexpr double kStartAngle = -1.5707963267948966;
+constexpr int kSearchPanelWidth = 280;
+constexpr int kSearchPanelHeight = 320;
 
 double clamp_positive(double value) {
     return value < 0.0 ? 0.0 : value;
@@ -28,6 +33,7 @@ CandidateEditorPieGraphWidget::CandidateEditorPieGraphWidget() {
 
 void CandidateEditorPieGraphWidget::set_rect(const SDL_Rect& r) {
     rect_ = r;
+    position_search_within_bounds();
 }
 
 const SDL_Rect& CandidateEditorPieGraphWidget::rect() const {
@@ -40,6 +46,31 @@ int CandidateEditorPieGraphWidget::height_for_width(int w) const {
 }
 
 bool CandidateEditorPieGraphWidget::handle_event(const SDL_Event& e) {
+    if (search_visible()) {
+        bool used = search_assets_->handle_event(e);
+        bool should_close = false;
+
+        if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
+            SDL_Point point{e.button.x, e.button.y};
+            if (!search_assets_->is_point_inside(point.x, point.y)) {
+                should_close = true;
+            }
+        } else if (e.type == SDL_KEYDOWN && e.key.keysym.sym == SDLK_ESCAPE) {
+            should_close = true;
+        }
+
+        if (should_close) {
+            hide_search();
+            return true;
+        }
+
+        if (used || e.type == SDL_TEXTINPUT || e.type == SDL_KEYDOWN || e.type == SDL_KEYUP ||
+            e.type == SDL_MOUSEBUTTONDOWN || e.type == SDL_MOUSEBUTTONUP || e.type == SDL_MOUSEMOTION ||
+            e.type == SDL_MOUSEWHEEL) {
+            return true;
+        }
+    }
+
     auto release_scroll_capture = [this]() {
         if (scroll_capture_active_) {
             DMWidgetsSetSliderScrollCapture(this, false);
@@ -227,6 +258,21 @@ void CandidateEditorPieGraphWidget::render(SDL_Renderer* renderer) const {
     if (font) {
         TTF_CloseFont(font);
     }
+
+    if (search_visible()) {
+        SDL_Rect previous_clip;
+        SDL_bool had_clip = SDL_RenderIsClipEnabled(renderer);
+        if (had_clip) {
+            SDL_RenderGetClipRect(renderer, &previous_clip);
+        }
+        SDL_RenderSetClipRect(renderer, &rect_);
+        search_assets_->render(renderer);
+        if (had_clip) {
+            SDL_RenderSetClipRect(renderer, &previous_clip);
+        } else {
+            SDL_RenderSetClipRect(renderer, nullptr);
+        }
+    }
 }
 
 void CandidateEditorPieGraphWidget::set_weights(std::vector<float> weights) {
@@ -293,6 +339,58 @@ void CandidateEditorPieGraphWidget::set_candidates_from_json(const nlohmann::jso
             DMWidgetsSetSliderScrollCapture(this, false);
             scroll_capture_active_ = false;
         }
+    }
+}
+
+void CandidateEditorPieGraphWidget::set_screen_dimensions(int width, int height) {
+    screen_w_ = width;
+    screen_h_ = height;
+    if (search_assets_) {
+        search_assets_->set_screen_dimensions(screen_w_, screen_h_);
+        position_search_within_bounds();
+    }
+}
+
+void CandidateEditorPieGraphWidget::show_search(const SDL_Rect& anchor_rect, std::function<void(const std::string&)> on_select) {
+    ensure_search_created();
+    last_search_anchor_ = anchor_rect;
+    has_search_anchor_ = true;
+    position_search_within_bounds();
+    search_assets_->open([this, cb = std::move(on_select)](const std::string& value) {
+        if (cb) {
+            cb(value);
+        }
+        hide_search();
+    });
+    search_visible_previous_ = search_visible();
+    notify_layout_change();
+}
+
+void CandidateEditorPieGraphWidget::hide_search() {
+    if (!search_assets_) {
+        return;
+    }
+    const bool was_visible = search_assets_->visible();
+    search_assets_->close();
+    if (was_visible) {
+        search_visible_previous_ = false;
+        notify_layout_change();
+    }
+}
+
+void CandidateEditorPieGraphWidget::update_search(const Input& input) {
+    if (!search_assets_) {
+        return;
+    }
+    search_assets_->set_screen_dimensions(screen_w_, screen_h_);
+    if (search_assets_->visible()) {
+        position_search_within_bounds();
+        search_assets_->update(input);
+    }
+    bool visible_now = search_assets_->visible();
+    if (visible_now != search_visible_previous_) {
+        search_visible_previous_ = visible_now;
+        notify_layout_change();
     }
 }
 
@@ -622,4 +720,46 @@ SDL_Color CandidateEditorPieGraphWidget::lighten(SDL_Color color, float amount) 
 
 Uint8 CandidateEditorPieGraphWidget::clamp_color(int value) {
     return static_cast<Uint8>(std::clamp(value, 0, 255));
+}
+
+void CandidateEditorPieGraphWidget::ensure_search_created() {
+    if (!search_assets_) {
+        search_assets_ = std::make_unique<SearchAssets>();
+        search_assets_->set_screen_dimensions(screen_w_, screen_h_);
+    }
+}
+
+void CandidateEditorPieGraphWidget::position_search_within_bounds() {
+    if (!search_assets_) {
+        return;
+    }
+    SDL_Rect anchor = has_search_anchor_ ? last_search_anchor_ : rect_;
+    int desired_x = anchor.x;
+    int desired_y = anchor.y + anchor.h + 4;
+
+    const int min_x = rect_.x + 4;
+    int max_x = rect_.x + rect_.w - kSearchPanelWidth - 4;
+    if (max_x < min_x) {
+        max_x = min_x;
+    }
+    desired_x = std::clamp(desired_x, min_x, max_x);
+
+    const int min_y = rect_.y + 4;
+    int max_y = rect_.y + rect_.h - kSearchPanelHeight - 4;
+    if (max_y < min_y) {
+        max_y = min_y;
+    }
+    desired_y = std::clamp(desired_y, min_y, max_y);
+
+    search_assets_->set_position(desired_x, desired_y);
+}
+
+void CandidateEditorPieGraphWidget::notify_layout_change() const {
+    if (on_request_layout_) {
+        on_request_layout_();
+    }
+}
+
+bool CandidateEditorPieGraphWidget::search_visible() const {
+    return search_assets_ && search_assets_->visible();
 }

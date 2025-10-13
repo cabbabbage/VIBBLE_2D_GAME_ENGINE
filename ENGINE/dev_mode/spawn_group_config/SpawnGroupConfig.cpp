@@ -16,7 +16,6 @@
 #include "widgets.hpp"
 #include "widgets/CandidateEditorPieGraphWidget.hpp"
 #include "spawn_method_control_widgets/LinkToAreaButton.hpp"
-#include "search_assets.hpp"
 
 class LabelWidget : public Widget {
 public:
@@ -364,6 +363,15 @@ struct SpawnGroupConfig::Entry {
         editable_ = (owner_->bound_array_ != nullptr) || (owner_->bound_entry_ != nullptr);
         method_options_ = build_method_options(kDefaultMethod);
 
+        if (candidate_graph_) {
+            candidate_graph_->set_on_request_layout([this]() {
+                if (owner_) owner_->mark_layout_dirty();
+            });
+            if (owner_) {
+                candidate_graph_->set_screen_dimensions(owner_->screen_w_, owner_->screen_h_);
+            }
+        }
+
         toggle_button_ = std::make_unique<DMButton>("â–¶", &DMStyles::ListButton(), 28, DMButton::height());
         toggle_widget_ = std::make_unique<ButtonWidget>(toggle_button_.get(), [this]() {
             expanded_state_ = !expanded_state_;
@@ -468,7 +476,11 @@ struct SpawnGroupConfig::Entry {
         add_candidate_button_ = std::make_unique<DMButton>("Add Candidate", &DMStyles::CreateButton(), 0, DMButton::height());
         add_candidate_widget_ = std::make_unique<ButtonWidget>(add_candidate_button_.get(), [this]() {
             if (!editable_ || !owner_) return;
-            owner_->open_asset_search_for_entry(this->spawn_id());
+            if (auto* graph = candidate_editor_widget()) {
+                graph->show_search(add_candidate_button_->rect(), [this](const std::string& value) {
+                    this->add_candidate_from_search(value);
+                });
+            }
         });
 
         empty_candidates_label_ = std::make_unique<LabelWidget>("No candidates", DMStyles::Label().color, true);
@@ -818,6 +830,13 @@ private:
         }
     }
 
+    void update_embedded_search(const Input& input, int screen_w, int screen_h) {
+        if (auto* graph = candidate_editor_widget()) {
+            graph->set_screen_dimensions(screen_w, screen_h);
+            graph->update_search(input);
+        }
+    }
+
     void rebuild_candidate_widgets() {
         candidate_entries_.clear();
         auto* entry = mutable_entry();
@@ -1088,7 +1107,12 @@ SpawnGroupConfig::~SpawnGroupConfig() = default;
 void SpawnGroupConfig::set_screen_dimensions(int width, int height) {
     screen_w_ = width;
     screen_h_ = height;
-    if (asset_search_) asset_search_->set_screen_dimensions(width, height);
+    for (auto& entry : entries_) {
+        if (!entry) continue;
+        if (auto* graph = entry->candidate_editor_widget()) {
+            graph->set_screen_dimensions(width, height);
+        }
+    }
 }
 
 void SpawnGroupConfig::load(nlohmann::json& groups,
@@ -1248,26 +1272,14 @@ void SpawnGroupConfig::update(const Input& input, int screen_w, int screen_h) {
         SDL_Rect del{right - btn, header_rect_.y, btn, btn};
         if (header_delete_btn_) header_delete_btn_->set_rect(del);
     }
-    if (asset_search_ && asset_search_->visible()) {
-        asset_search_->set_screen_dimensions(screen_w_, screen_h_);
-        SDL_Rect panel = rect();
-        int anchor_x = panel.x + panel.w + 16;
-        int anchor_y = panel.y;
-        if (anchor_.x != 0 || anchor_.y != 0) {
-            anchor_x = anchor_.x;
-            anchor_y = anchor_.y;
-        }
-        asset_search_->set_anchor_position(anchor_x, anchor_y);
-        asset_search_->update(input);
+    for (auto& entry : entries_) {
+        if (!entry) continue;
+        entry->update_embedded_search(input, screen_w, screen_h);
     }
     process_pending_notifications();
 }
 
 bool SpawnGroupConfig::handle_event(const SDL_Event& e) {
-    if (asset_search_ && asset_search_->visible()) {
-        if (asset_search_->handle_event(e)) return true;
-    }
-
     const bool pointer_event =
         (e.type == SDL_MOUSEBUTTONDOWN || e.type == SDL_MOUSEBUTTONUP || e.type == SDL_MOUSEMOTION);
 
@@ -1363,9 +1375,6 @@ void SpawnGroupConfig::render(SDL_Renderer* r) const {
     if (bound_entry_) {
         if (header_delete_btn_) header_delete_btn_->render(r);
     }
-    if (asset_search_ && asset_search_->visible()) {
-        asset_search_->render(r);
-    }
 }
 
 void SpawnGroupConfig::render_content(SDL_Renderer* r) const {
@@ -1408,6 +1417,15 @@ void SpawnGroupConfig::set_anchor(int x, int y) {
     anchor_.y = y;
 }
 
+void SpawnGroupConfig::close_embedded_search() {
+    for (auto& entry : entries_) {
+        if (!entry) continue;
+        if (auto* graph = entry->candidate_editor_widget()) {
+            graph->hide_search();
+        }
+    }
+}
+
 SpawnGroupConfig::Entry* SpawnGroupConfig::find_entry_by_id(const std::string& id) {
     if (id.empty()) return nullptr;
     for (auto& entry : entries_) {
@@ -1420,42 +1438,6 @@ SpawnGroupConfig::Entry* SpawnGroupConfig::find_entry_by_id(const std::string& i
 
 bool SpawnGroupConfig::should_render_entry_body(const Entry&) const {
     return !drag_state_.active;
-}
-
-void SpawnGroupConfig::open_asset_search_for_entry(const std::string& spawn_id) {
-    if (spawn_id.empty()) return;
-    pending_add_spawn_id_ = spawn_id;
-    if (!asset_search_) asset_search_ = std::make_unique<SearchAssets>();
-    asset_search_->set_screen_dimensions(screen_w_, screen_h_);
-    SDL_Rect panel = rect();
-    int anchor_x = panel.x + panel.w + 16;
-    int anchor_y = panel.y;
-    if (anchor_.x != 0 || anchor_.y != 0) {
-        anchor_x = anchor_.x;
-        anchor_y = anchor_.y;
-    }
-    asset_search_->set_anchor_position(anchor_x, anchor_y);
-    asset_search_->open([this](const std::string& value) {
-        this->handle_asset_search_selection(value);
-    });
-}
-
-void SpawnGroupConfig::handle_asset_search_selection(const std::string& value) {
-    if (pending_add_spawn_id_.empty()) {
-        close_asset_search();
-        return;
-    }
-    Entry* entry = find_entry_by_id(pending_add_spawn_id_);
-    if (entry && !value.empty()) {
-        entry->add_candidate_from_search(value);
-    }
-    close_asset_search();
-}
-
-void SpawnGroupConfig::close_asset_search() {
-    if (asset_search_) asset_search_->close();
-    pending_add_spawn_id_.clear();
-    pending_focus_id_.reset();
 }
 
 void SpawnGroupConfig::begin_drag(size_t index, int pointer_y) {

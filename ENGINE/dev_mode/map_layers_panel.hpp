@@ -19,21 +19,26 @@ class MapLayersController;
 class RoomConfigurator;
 class SlidingWindowContainer;
 
-class MapLayersPanel : public DockableCollapsible {
+class MapLayersPanel {
 public:
     using SaveCallback = std::function<bool()>;
 
     explicit MapLayersPanel(int x = 128, int y = 128);
-    ~MapLayersPanel() override;
+    ~MapLayersPanel();
 
     void set_map_info(nlohmann::json* map_info, const std::string& map_path);
     void set_on_save(SaveCallback cb);
     void set_controller(std::shared_ptr<MapLayersController> controller);
     void set_header_visibility_callback(std::function<void(bool)> cb);
 
+    void set_work_area(const SDL_Rect& bounds);
+
     void open();
     void close();
     bool is_visible() const;
+    bool room_config_visible() const;
+
+    void hide_main_container();
 
     void set_embedded_mode(bool embedded);
     bool embedded_mode() const { return embedded_mode_; }
@@ -152,6 +157,12 @@ private:
     std::string map_path_;
     SaveCallback on_save_;
 
+    int layout_main_panel(const SlidingWindowContainer::LayoutContext& ctx);
+    void render_main_panel(SDL_Renderer* renderer) const;
+    bool handle_main_panel_event(const SDL_Event& e);
+    void handle_main_container_closed();
+
+    std::unique_ptr<SlidingWindowContainer> main_container_;
     std::unique_ptr<LayerCanvasWidget> canvas_widget_;
     std::unique_ptr<PreviewToolbarWidget> toolbar_widget_;
     std::unique_ptr<PreviewColumnWidget> preview_column_widget_;
@@ -179,6 +190,8 @@ private:
 
     std::shared_ptr<MapLayersController> controller_;
     bool embedded_mode_ = false;
+    SDL_Rect embedded_bounds_{0, 0, 0, 0};
+    SDL_Rect work_area_{0, 0, 0, 0};
     SDL_Rect screen_bounds_{0, 0, 0, 0};
     std::function<void(bool)> header_visibility_callback_{};
 

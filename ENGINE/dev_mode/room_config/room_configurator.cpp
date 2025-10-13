@@ -448,7 +448,7 @@ void RoomConfigurator::handle_container_closed() {
         if (config) {
             config->close();
             config->set_visible(false);
-            config->close_asset_search();
+            config->close_embedded_search();
         }
     }
     external_room_json_ = nullptr;

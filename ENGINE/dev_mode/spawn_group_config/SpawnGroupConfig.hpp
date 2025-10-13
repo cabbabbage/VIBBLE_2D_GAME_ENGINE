@@ -15,8 +15,6 @@
 #include "DockableCollapsible.hpp"
 
 class Input;
-class SearchAssets;
-
 class SpawnGroupConfig : public DockableCollapsible {
     struct Entry;
 public:
@@ -106,7 +104,7 @@ public:
     void open(nlohmann::json& groups, std::function<void(const nlohmann::json&)> on_save);
     void request_open_spawn_group(const std::string& id, int x, int y);
     void set_anchor(int x, int y);
-    void close_asset_search();
+    void close_embedded_search();
 
     void load_impl(nlohmann::json* array, nlohmann::json* entry, std::function<void()> on_change, std::function<void(const nlohmann::json&, const ChangeSummary&)> on_entry_change, ConfigureEntryCallback configure_entry);
     void rebuild_rows();
@@ -169,13 +167,8 @@ private:
     std::unique_ptr<DMButton> header_delete_btn_{};
     std::unique_ptr<ButtonWidget> header_delete_widget_{};
 
-    std::unique_ptr<SearchAssets> asset_search_{};
-    std::string pending_add_spawn_id_{};
-
     DragState drag_state_{};
 
-    void open_asset_search_for_entry(const std::string& spawn_id);
-    void handle_asset_search_selection(const std::string& value);
     Entry* find_entry_by_id(const std::string& id);
     void begin_drag(size_t index, int pointer_y);
     void cancel_drag();

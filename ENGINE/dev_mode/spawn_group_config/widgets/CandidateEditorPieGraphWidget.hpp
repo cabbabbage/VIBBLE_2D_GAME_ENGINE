@@ -2,12 +2,17 @@
 
 #include <SDL.h>
 
+#include <functional>
+#include <memory>
 #include <string>
 #include <vector>
 
 #include <nlohmann/json_fwd.hpp>
 
 #include "widgets.hpp"
+
+class Input;
+class SearchAssets;
 
 class CandidateEditorPieGraphWidget : public Widget {
 public:
@@ -20,10 +25,15 @@ public:
     void render(SDL_Renderer* renderer) const override;
     bool wants_full_row() const override { return true; }
 
+    void set_screen_dimensions(int width, int height);
+    void set_on_request_layout(std::function<void()> cb) { on_request_layout_ = std::move(cb); }
     void set_weights(std::vector<float> weights);
     void set_candidates_from_json(const nlohmann::json& entry);
     void set_on_adjust(std::function<void(int index, int delta)> cb) { on_adjust_ = std::move(cb); }
     void set_on_delete(std::function<void(int index)> cb) { on_delete_ = std::move(cb); }
+    void show_search(const SDL_Rect& anchor_rect, std::function<void(const std::string&)> on_select);
+    void hide_search();
+    void update_search(const Input& input);
 
 private:
     struct CandidateInfo {
@@ -51,6 +61,10 @@ private:
     static SDL_Color color_for_index(size_t index);
     static SDL_Color lighten(SDL_Color color, float amount);
     static Uint8 clamp_color(int value);
+    void ensure_search_created();
+    void position_search_within_bounds();
+    void notify_layout_change() const;
+    bool search_visible() const;
 
     SDL_Rect rect_{};
     std::vector<CandidateInfo> candidates_{};
@@ -58,8 +72,15 @@ private:
     int active_index_ = -1;
     std::function<void(int index, int delta)> on_adjust_{};
     std::function<void(int index)> on_delete_{};
+    std::function<void()> on_request_layout_{};
     bool scroll_capture_active_ = false;
     mutable std::vector<SDL_Rect> legend_row_rects_{};
     mutable int legend_row_height_ = 0;
+    std::unique_ptr<SearchAssets> search_assets_{};
+    SDL_Rect last_search_anchor_{0, 0, 0, 0};
+    int screen_w_ = 0;
+    int screen_h_ = 0;
+    bool has_search_anchor_ = false;
+    mutable bool search_visible_previous_ = false;
 };
 

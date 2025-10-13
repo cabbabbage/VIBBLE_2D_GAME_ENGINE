@@ -2738,15 +2738,28 @@ auto MapLayersPanel::layers_array() const -> const nlohmann::json& {
 
 }
 
-MapLayersPanel::MapLayersPanel(int x, int y)
+MapLayersPanel::MapLayersPanel(int x, int y) {
 
-    : DockableCollapsible("Map Layers", true, x, y) {
+    (void)x;
+    (void)y;
 
-    set_cell_width(220);
-
-    set_visible(false);
-
-    set_expanded(true);
+    main_container_ = std::make_unique<SlidingWindowContainer>();
+    if (main_container_) {
+        main_container_->set_header_text("Map Layers");
+        main_container_->set_layout_function([this](const SlidingWindowContainer::LayoutContext& ctx) {
+            return this->layout_main_panel(ctx);
+        });
+        main_container_->set_render_function([this](SDL_Renderer* renderer) {
+            this->render_main_panel(renderer);
+        });
+        main_container_->set_event_function([this](const SDL_Event& e) {
+            return this->handle_main_panel_event(e);
+        });
+        main_container_->set_on_close([this]() { this->handle_main_container_closed(); });
+        main_container_->set_header_visible(true);
+        main_container_->set_blocks_editor_interactions(true);
+        main_container_->set_visible(false);
+    }
 
     layer_config_ = std::make_unique<LayerConfigPanel>(this);
 
@@ -2846,16 +2859,6 @@ MapLayersPanel::MapLayersPanel(int x, int y)
 
         layer_config_container_->set_blocks_editor_interactions(true);
 
-        layer_config_container_->set_header_visibility_controller([this](bool visible) {
-
-            if (header_visibility_callback_) {
-
-                header_visibility_callback_(visible);
-
-            }
-
-        });
-
     }
 
     room_selector_ = std::make_unique<RoomSelectorPopup>();
@@ -2932,13 +2935,31 @@ void MapLayersPanel::set_controller(std::shared_ptr<MapLayersController> control
 
 void MapLayersPanel::set_header_visibility_callback(std::function<void(bool)> cb) {
     header_visibility_callback_ = std::move(cb);
-    if (room_configurator_) {
-        room_configurator_->set_header_visibility_controller([this](bool visible) {
-            if (header_visibility_callback_) {
-                header_visibility_callback_(visible);
-            }
-        });
+    auto controller = [this](bool visible) {
+        if (!header_visibility_callback_) {
+            return;
+        }
+        if (embedded_mode_) {
+            header_visibility_callback_(false);
+        } else {
+            header_visibility_callback_(visible);
+        }
+    };
+    if (main_container_) {
+        main_container_->set_header_visibility_controller(controller);
     }
+    if (layer_config_container_) {
+        layer_config_container_->set_header_visibility_controller(controller);
+    }
+    if (room_configurator_) {
+        room_configurator_->set_header_visibility_controller(controller);
+    }
+}
+
+void MapLayersPanel::set_work_area(const SDL_Rect& bounds) {
+
+    work_area_ = bounds;
+
 }
 
 void MapLayersPanel::open() {
@@ -2965,33 +2986,59 @@ void MapLayersPanel::open() {
 
     }
 
-    set_visible(true);
+    if (room_configurator_ && room_configurator_->visible()) {
 
-    set_expanded(true);
+        room_configurator_->close();
+
+        active_room_config_key_.clear();
+
+    }
+
+    if (main_container_) {
+
+        main_container_->open();
+
+    }
 
 }
 
 void MapLayersPanel::close() {
 
-    set_visible(false);
+    if (main_container_) {
 
-    close_layer_config_panel(true);
+        if (main_container_->is_visible()) {
 
-    if (room_selector_) room_selector_->close();
+            main_container_->close();
 
-    if (room_configurator_) room_configurator_->close();
+            return;
 
-    active_room_config_key_.clear();
+        }
 
-    update_click_target(-1, std::string());
+    }
 
-    clear_hover_target();
+    handle_main_container_closed();
 
 }
 
 bool MapLayersPanel::is_visible() const {
 
-    return DockableCollapsible::is_visible();
+    return main_container_ ? main_container_->is_visible() : false;
+
+}
+
+bool MapLayersPanel::room_config_visible() const {
+
+    return room_configurator_ ? room_configurator_->visible() : false;
+
+}
+
+void MapLayersPanel::hide_main_container() {
+
+    if (main_container_) {
+
+        main_container_->set_visible(false);
+
+    }
 
 }
 
@@ -3001,57 +3048,61 @@ void MapLayersPanel::set_embedded_mode(bool embedded) {
 
     embedded_mode_ = embedded;
 
-    if (embedded_mode_) {
+    if (main_container_) {
 
-        floatable_ = false;
+        main_container_->reset_scroll();
 
-        set_show_header(false);
+        main_container_->set_header_visible(!embedded_mode_);
 
-        set_close_button_enabled(false);
+        main_container_->set_blocks_editor_interactions(!embedded_mode_);
 
-        set_scroll_enabled(true);
+        if (embedded_mode_ && embedded_bounds_.w > 0 && embedded_bounds_.h > 0) {
 
-        set_available_height_override(-1);
+            SDL_Rect clamped = embedded_bounds_;
 
-        set_expanded(true);
+            clamped.w = std::max(0, clamped.w);
 
-        reset_scroll();
+            clamped.h = std::max(0, clamped.h);
 
-    } else {
+            main_container_->set_panel_bounds_override(clamped);
 
-        floatable_ = true;
+        } else {
 
-        set_show_header(true);
+            main_container_->clear_panel_bounds_override();
 
-        set_close_button_enabled(true);
-
-        set_scroll_enabled(true);
-
-        set_available_height_override(-1);
+        }
 
     }
 
-    layout();
+    if (header_visibility_callback_) {
+
+        header_visibility_callback_(embedded_mode_ ? false : is_visible());
+
+    }
 
 }
 
 void MapLayersPanel::set_embedded_bounds(const SDL_Rect& bounds) {
 
-    set_rect(bounds);
+    embedded_bounds_ = bounds;
 
-    if (embedded_mode_) {
+    if (main_container_) {
 
-        int inner_height = std::max(0, bounds.h - 2 * padding_);
+        if (embedded_mode_ && bounds.w > 0 && bounds.h > 0) {
 
-        set_available_height_override(inner_height);
+            SDL_Rect clamped = bounds;
 
-        set_work_area(bounds);
+            clamped.w = std::max(0, clamped.w);
 
-    } else {
+            clamped.h = std::max(0, clamped.h);
 
-        set_available_height_override(-1);
+            main_container_->set_panel_bounds_override(clamped);
 
-        set_work_area(SDL_Rect{0, 0, 0, 0});
+        } else if (!embedded_mode_) {
+
+            main_container_->clear_panel_bounds_override();
+
+        }
 
     }
 
@@ -3089,7 +3140,11 @@ void MapLayersPanel::update(const Input& input, int screen_w, int screen_h) {
 
     }
 
-    DockableCollapsible::update(input, screen_w, screen_h);
+    if (main_container_) {
+
+        main_container_->update(input, screen_w, screen_h);
+
+    }
 
     if (layer_config_container_) {
 
@@ -3103,7 +3158,8 @@ void MapLayersPanel::update(const Input& input, int screen_w, int screen_h) {
 
     if (room_selector_) {
 
-        SDL_Rect anchor = sidebar_widget_ ? sidebar_widget_->rect() : rect();
+        SDL_Rect anchor = sidebar_widget_ ? sidebar_widget_->rect()
+                                          : (main_container_ ? main_container_->panel_rect() : embedded_bounds_);
 
         room_selector_->set_anchor_rect(anchor);
 
@@ -3165,7 +3221,11 @@ bool MapLayersPanel::handle_event(const SDL_Event& e) {
 
     }
 
-    used = DockableCollapsible::handle_event(e) || used;
+    if (main_container_) {
+
+        used = main_container_->handle_event(e) || used;
+
+    }
 
     if (room_selector_ && room_selector_->visible()) {
 
@@ -3181,11 +3241,20 @@ void MapLayersPanel::render(SDL_Renderer* renderer) const {
 
     if (!is_visible()) return;
 
-    DockableCollapsible::render(renderer);
+    if (main_container_) {
+
+        const int screen_w = std::max(1, screen_bounds_.w);
+
+        const int screen_h = std::max(1, screen_bounds_.h);
+
+        main_container_->render(renderer, screen_w, screen_h);
+
+    }
 
     if (layer_config_container_) {
 
         const int screen_w = std::max(1, screen_bounds_.w);
+
         const int screen_h = std::max(1, screen_bounds_.h);
 
         layer_config_container_->render(renderer, screen_w, screen_h);
@@ -3214,7 +3283,7 @@ bool MapLayersPanel::is_point_inside(int x, int y) const {
 
     if (!is_visible()) return false;
 
-    if (DockableCollapsible::is_point_inside(x, y)) return true;
+    if (main_container_ && main_container_->is_point_inside(x, y)) return true;
 
     if (layer_config_container_ && layer_config_container_->is_visible() && layer_config_container_->is_point_inside(x, y)) {
 
@@ -4487,6 +4556,12 @@ void MapLayersPanel::open_room_config_for(const std::string& room_name) {
 
     }
 
+    if (main_container_) {
+
+        main_container_->set_visible(false);
+
+    }
+
     ensure_room_configurator();
 
     if (!room_configurator_) {
@@ -5258,11 +5333,128 @@ const nlohmann::json* MapLayersPanel::layer_at(int index) const {
 
 void MapLayersPanel::rebuild_rows() {
 
-    DockableCollapsible::Rows rows;
+    if (preview_column_widget_) {
+        preview_column_widget_->set_rect(SDL_Rect{0, 0, 0, 0});
+    }
 
-    rows.push_back({ preview_column_widget_.get(), sidebar_widget_.get() });
+    if (sidebar_widget_) {
+        sidebar_widget_->set_rect(SDL_Rect{0, 0, 0, 0});
+    }
 
-    set_rows(rows);
+}
+
+int MapLayersPanel::layout_main_panel(const SlidingWindowContainer::LayoutContext& ctx) {
+
+    const int col_gap = DMSpacing::item_gap();
+    const int min_preview_width = 320;
+    const int min_sidebar_width = 260;
+
+    const int content_x = ctx.content_x;
+    const int content_w = std::max(0, ctx.content_width);
+    const int scroll_y = ctx.scroll_value;
+
+    bool stack_vertical = true;
+    int preview_width = content_w;
+    int sidebar_width = content_w;
+
+    if (content_w > 0 && preview_column_widget_) {
+        if (content_w >= min_preview_width + min_sidebar_width + col_gap) {
+            stack_vertical = false;
+            preview_width = std::max(min_preview_width, content_w - min_sidebar_width - col_gap);
+            sidebar_width = std::max(min_sidebar_width, content_w - preview_width - col_gap);
+            if (preview_width + sidebar_width + col_gap > content_w) {
+                int remainder = content_w - col_gap;
+                preview_width = std::max(min_preview_width, remainder / 2);
+                sidebar_width = std::max(min_sidebar_width, remainder - preview_width);
+            }
+        }
+    }
+
+    if (!preview_column_widget_) {
+        preview_width = 0;
+        stack_vertical = true;
+    }
+
+    if (!sidebar_widget_) {
+        sidebar_width = 0;
+    }
+
+    int row_top = ctx.content_top - scroll_y;
+    int row_bottom = row_top;
+
+    if (preview_column_widget_) {
+        int height = preview_column_widget_->height_for_width(preview_width);
+        preview_column_widget_->set_rect(SDL_Rect{content_x, row_top, preview_width, height});
+        row_bottom = preview_column_widget_->rect().y + preview_column_widget_->rect().h;
+    }
+
+    if (sidebar_widget_) {
+        if (stack_vertical) {
+            int sidebar_y = row_bottom + (preview_column_widget_ ? col_gap : 0);
+            int width = content_w;
+            int height = sidebar_widget_->height_for_width(width);
+            sidebar_widget_->set_rect(SDL_Rect{content_x, sidebar_y, width, height});
+            row_bottom = sidebar_widget_->rect().y + sidebar_widget_->rect().h;
+        } else {
+            int width = std::max(min_sidebar_width, sidebar_width);
+            int sidebar_x = content_x + preview_width + col_gap;
+            int height = sidebar_widget_->height_for_width(width);
+            sidebar_widget_->set_rect(SDL_Rect{sidebar_x, row_top, width, height});
+            row_bottom = std::max(row_bottom, sidebar_widget_->rect().y + sidebar_widget_->rect().h);
+        }
+    }
+
+    return row_bottom + ctx.gap;
+
+}
+
+void MapLayersPanel::render_main_panel(SDL_Renderer* renderer) const {
+
+    if (!renderer) return;
+
+    if (preview_column_widget_) {
+        preview_column_widget_->render(renderer);
+    }
+
+    if (sidebar_widget_) {
+        sidebar_widget_->render(renderer);
+    }
+
+}
+
+bool MapLayersPanel::handle_main_panel_event(const SDL_Event& e) {
+
+    bool used = false;
+
+    if (preview_column_widget_ && preview_column_widget_->handle_event(e)) {
+        used = true;
+    }
+
+    if (sidebar_widget_ && sidebar_widget_->handle_event(e)) {
+        used = true;
+    }
+
+    return used;
+
+}
+
+void MapLayersPanel::handle_main_container_closed() {
+
+    close_layer_config_panel(true);
+
+    if (room_selector_) {
+        room_selector_->close();
+    }
+
+    if (room_configurator_) {
+        room_configurator_->close();
+    }
+
+    active_room_config_key_.clear();
+
+    update_click_target(-1, std::string());
+
+    clear_hover_target();
 
 }
 
