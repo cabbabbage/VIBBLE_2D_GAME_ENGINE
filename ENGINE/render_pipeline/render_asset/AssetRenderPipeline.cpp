@@ -7,6 +7,45 @@
 #include "render_pipeline/render_asset/lighting/RenderLightFront.hpp"
 #include "render_pipeline/render_asset/shading/RenderShadingStages.hpp"
 
+#include <algorithm>
+#include <cmath>
+
+namespace {
+
+float compute_asset_screen_height(Asset& asset, float inv_scale) {
+    int cached_w = asset.cached_w;
+    int cached_h = asset.cached_h;
+    if ((cached_w <= 0 || cached_h <= 0)) {
+        if (SDL_Texture* final = asset.get_final_texture()) {
+            SDL_QueryTexture(final, nullptr, nullptr, &cached_w, &cached_h);
+        }
+    }
+    if ((cached_w <= 0 || cached_h <= 0)) {
+        if (SDL_Texture* frame = asset.get_current_frame()) {
+            SDL_QueryTexture(frame, nullptr, nullptr, &cached_w, &cached_h);
+        }
+    }
+
+    if (cached_w > 0) {
+        asset.cached_w = cached_w;
+    }
+    if (cached_h > 0) {
+        asset.cached_h = cached_h;
+    }
+
+    if (cached_h <= 0) {
+        return 0.0f;
+    }
+
+    float scale = 1.0f;
+    if (asset.info && std::isfinite(asset.info->scale_factor) && asset.info->scale_factor >= 0.0f) {
+        scale = asset.info->scale_factor;
+    }
+    return static_cast<float>(cached_h) * scale * inv_scale;
+}
+
+}  // namespace
+
 Uint8 StageContext::main_light_alpha() const {
     return lighting ? lighting->main_light.get_current_color().a : 0;
 }
@@ -33,6 +72,62 @@ const camera& StageContext::camera_view() const {
 
 Asset* StageContext::player() const {
     return lighting ? lighting->player : nullptr;
+}
+
+void StageContext::update_projection(Asset& asset) {
+    base_shadow_scale       = 1.0f;
+    base_shadow_opacity     = 204.0f / 255.0f;
+    screen_rect             = SDL_Rect{ 0, 0, 0, 0 };
+    screen_center           = SDL_FPoint{ 0.0f, 0.0f };
+    reference_screen_height = 1.0f;
+
+    if (!lighting || width <= 0 || height <= 0) {
+        return;
+    }
+
+    camera& cam = lighting->camera_view;
+    const float scale = cam.get_scale();
+    const float inv_scale = (std::isfinite(scale) && scale > 1e-6f) ? (1.0f / scale) : 1.0f;
+
+    float asset_scale = 1.0f;
+    if (asset.info && std::isfinite(asset.info->scale_factor) && asset.info->scale_factor >= 0.0f) {
+        asset_scale = asset.info->scale_factor;
+    }
+
+    const float scaled_fw = static_cast<float>(width) * asset_scale;
+    const float scaled_fh = static_cast<float>(height) * asset_scale;
+    if (scaled_fw <= 0.0f || scaled_fh <= 0.0f) {
+        return;
+    }
+
+    const float base_sw = scaled_fw * inv_scale;
+    const float base_sh = scaled_fh * inv_scale;
+
+    float reference_height = 1.0f;
+    if (Asset* player_asset = player()) {
+        reference_height = compute_asset_screen_height(*player_asset, inv_scale);
+    }
+    if (!std::isfinite(reference_height) || reference_height <= 0.0f) {
+        reference_height = 1.0f;
+    }
+    reference_screen_height = reference_height;
+
+    const camera::RenderEffects effects =
+        cam.compute_render_effects(SDL_Point{ asset.pos.x, asset.pos.y }, base_sh, reference_height);
+
+    const float scaled_sw = base_sw * effects.distance_scale;
+    const float scaled_sh = base_sh * effects.distance_scale;
+    const float final_visible_h = scaled_sh * effects.vertical_scale;
+
+    if (!std::isfinite(scaled_sw) || !std::isfinite(final_visible_h) || scaled_sw <= 0.0f || final_visible_h <= 0.0f) {
+        return;
+    }
+
+    const int sw = std::max(1, static_cast<int>(std::lround(scaled_sw)));
+    const int sh = std::max(1, static_cast<int>(std::lround(final_visible_h)));
+    const SDL_Point cp = effects.screen_position;
+    screen_rect   = SDL_Rect{ cp.x - sw / 2, cp.y - sh, sw, sh };
+    screen_center = SDL_FPoint{ static_cast<float>(cp.x), static_cast<float>(cp.y - sh / 2) };
 }
 
 AssetRenderPipeline::AssetRenderPipeline(SDL_Renderer* renderer, const SceneLighting& lighting)
@@ -78,6 +173,10 @@ SDL_Texture* AssetRenderPipeline::run(Asset& asset) {
     context.width        = width;
     context.height       = height;
     context.reusable_final = asset.get_final_texture();
+    if (renderer_) {
+        SDL_GetRendererOutputSize(renderer_, &context.screen_width_px, &context.screen_height_px);
+    }
+    context.update_projection(asset);
 
     if (stages_.empty() || !stages_[0].stage) {
         return nullptr;

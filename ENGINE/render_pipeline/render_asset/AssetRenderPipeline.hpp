@@ -27,6 +27,13 @@ struct StageContext {
     int           height      = 0;
     SDL_Texture*  reusable_final = nullptr;
     SDL_Texture*  final_texture = nullptr;
+    SDL_Rect      screen_rect{ 0, 0, 0, 0 };
+    SDL_FPoint    screen_center{ 0.0f, 0.0f };
+    float         reference_screen_height = 1.0f;
+    float         base_shadow_scale       = 1.0f;
+    float         base_shadow_opacity     = 204.0f / 255.0f;
+    int           screen_width_px         = 0;
+    int           screen_height_px        = 0;
 
     SDL_Rect asset_bounds() const { return SDL_Rect{ 0, 0, width, height }; }
     SDL_Point anchor_bottom_center() const { return SDL_Point{ width / 2, height }; }
@@ -43,6 +50,8 @@ struct StageContext {
     const camera&            camera_view() const;
     Asset*                   player() const;
     const VirtualLightMap*   virtual_light_map() const { return lighting ? lighting->virtual_light_map : nullptr; }
+
+    void update_projection(Asset& asset);
 };
 
 class AssetRenderPipeline {
