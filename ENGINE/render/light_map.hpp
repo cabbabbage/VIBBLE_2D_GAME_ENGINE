@@ -9,8 +9,8 @@
 #include "render/camera.hpp"
 
 struct VirtualLightMap {
-    static constexpr int kGridWidth  = 12;
-    static constexpr int kGridHeight = 12;
+    static constexpr int kGridWidth  = 20;
+    static constexpr int kGridHeight = 20;
 
     std::array<float, kGridWidth * kGridHeight> cells{};
 
