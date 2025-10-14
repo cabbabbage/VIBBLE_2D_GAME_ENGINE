@@ -411,8 +411,8 @@ SDL_Texture* RenderShadowMask::run(SDL_Renderer* renderer, const Asset& asset, S
     bool        reuse_previous   = false;
 
     if (map && persistent.has_last_map && has_previous_output) {
-        constexpr float kSimilarityThreshold = 0.08f;
-        if (light_maps_similar(persistent.last_light_map, *map, kSimilarityThreshold)) {
+        const float similarity_threshold = clampf(cfg.stability.reuse_similarity_threshold, 0.0f, 1.0f);
+        if (light_maps_similar(persistent.last_light_map, *map, similarity_threshold)) {
             reuse_previous = true;
             target         = previous_output;
             target_scale   = previous_scale;
@@ -444,9 +444,13 @@ SDL_Texture* RenderShadowMask::run(SDL_Renderer* renderer, const Asset& asset, S
                 const float side_component  = std::abs(dir.x);
                 const float directional_norm = front_component + back_component + side_component;
                 if (directional_norm > 1e-6f) {
-                    const float weighted_side = side_component * 3.0f;
-                    directional_weight = (front_component * 2.0f + weighted_side + back_component * 1.0f) /
-                                         directional_norm;
+                    const float weighted_front = front_component * std::max(cfg.directionality.front_weight, 0.0f);
+                    const float weighted_side  = side_component * std::max(cfg.directionality.side_weight, 0.0f);
+                    const float weighted_back  = back_component * std::max(cfg.directionality.back_weight, 0.0f);
+                    const float weighted_sum   = weighted_front + weighted_side + weighted_back;
+                    if (weighted_sum > 1e-6f) {
+                        directional_weight = weighted_sum / directional_norm;
+                    }
                 }
 
                 const float reactivity = gradient_strength * directional_weight * cfg.directionality.offset_strength;
@@ -472,6 +476,11 @@ SDL_Texture* RenderShadowMask::run(SDL_Renderer* renderer, const Asset& asset, S
                     float       opacity_factor = (local_avg > 0.0f) ? (scene_avg / local_avg) : 1.0f;
                     opacity_factor = 1.0f + (opacity_factor - 1.0f) * cfg.response.opacity_strength;
                     opacity        = context.base_shadow_opacity * opacity_factor;
+                    const float front_influence = gradient_strength * front_component;
+                    const float front_boost     = std::max(cfg.response.front_opacity_boost, 0.0f);
+                    if (front_influence > 0.0f && front_boost > 0.0f) {
+                        opacity *= 1.0f + front_influence * front_boost;
+                    }
                     opacity        = clampf(opacity, cfg.response.min_opacity, cfg.response.max_opacity);
                 }
 

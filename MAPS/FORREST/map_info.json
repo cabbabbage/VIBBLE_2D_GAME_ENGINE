@@ -70,8 +70,8 @@
     ]
   },
   "map_grid_settings": {
-    "jitter": 5,
-    "spacing": 142
+    "jitter": 10,
+    "spacing": 161
   },
   "map_layers": [
     {
@@ -175,30 +175,35 @@
     "radius": 2759,
     "reactive_shadows": {
       "directionality": {
+        "back_weight": 0.0,
         "enable_offsets": true,
-        "gradient_sensitivity": 0.46000000834465027,
-        "max_offset_ratio": 0.8100000023841858,
-        "offset_strength": 1.4900000095367432
+        "front_weight": 5.0,
+        "gradient_sensitivity": 0.6899999976158142,
+        "max_offset_ratio": 0.8299999833106995,
+        "offset_strength": 0.5299999713897705,
+        "side_weight": 1.3600000143051147
       },
       "output": {
-        "map_line_weight": 1.5099999904632568,
-        "parallax_strength": 2.130000114440918,
-        "scale_factor": 3.0
+        "map_line_weight": 1.3600000143051147,
+        "parallax_strength": 1.4600000381469727,
+        "scale_factor": 2.4600000381469727
       },
       "response": {
         "enable_opacity": true,
+        "front_opacity_boost": 10.0,
         "max_opacity": 1.0,
-        "min_opacity": 0.3799999952316284,
-        "opacity_strength": 1.6399999856948853
+        "min_opacity": 0.6800000071525574,
+        "opacity_strength": 1.1799999475479126
       },
       "sampling": {
-        "diagonal_weight": 1.100000023841858,
-        "kernel_radius": 12,
-        "outer_ring_weight": 2.5799999237060547
+        "diagonal_weight": 1.0099999904632568,
+        "kernel_radius": 6,
+        "outer_ring_weight": 1.940000057220459
       },
       "stability": {
         "enable_temporal_smoothing": true,
-        "temporal_smoothing": 0.652999997138977
+        "reuse_similarity_threshold": 0.0,
+        "temporal_smoothing": 0.47999998927116394
       }
     },
     "screen_light": {
@@ -210,7 +215,7 @@
       "max_opacity": 15,
       "min_opacity": 0
     },
-    "update_interval": 23
+    "update_interval": 8
   },
   "map_name": "FORREST",
   "rooms_data": {

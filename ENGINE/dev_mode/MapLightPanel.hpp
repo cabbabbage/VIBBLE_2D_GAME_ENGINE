@@ -195,6 +195,9 @@ private:
     std::unique_ptr<DMSlider> reactive_gradient_sensitivity_;
     std::unique_ptr<DMSlider> reactive_offset_strength_;
     std::unique_ptr<DMSlider> reactive_max_offset_ratio_;
+    std::unique_ptr<DMSlider> reactive_front_weight_;
+    std::unique_ptr<DMSlider> reactive_side_weight_;
+    std::unique_ptr<DMSlider> reactive_back_weight_;
     std::unique_ptr<DMSlider> reactive_scale_factor_;
     std::unique_ptr<DMSlider> reactive_map_line_weight_;
     std::unique_ptr<DMSlider> reactive_parallax_strength_;
@@ -202,6 +205,8 @@ private:
     std::unique_ptr<DMSlider> reactive_min_opacity_;
     std::unique_ptr<DMSlider> reactive_max_opacity_;
     std::unique_ptr<DMSlider> reactive_temporal_smoothing_;
+    std::unique_ptr<DMSlider> reactive_front_opacity_boost_;
+    std::unique_ptr<DMSlider> reactive_similarity_threshold_;
 
     mutable std::string current_key_label_;
     mutable std::string persistence_warning_text_;

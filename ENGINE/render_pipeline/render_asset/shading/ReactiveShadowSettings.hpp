@@ -24,12 +24,18 @@ struct ReactiveShadowSettings {
         float gradient_sensitivity  = 0.1f;
         float offset_strength       = 0.5f;
         float max_offset_ratio      = 0.3f;
+        float front_weight          = 2.0f;
+        float side_weight           = 3.0f;
+        float back_weight           = 1.0f;
 
         bool operator==(const Directionality& other) const {
             return enable_offsets == other.enable_offsets &&
                    gradient_sensitivity == other.gradient_sensitivity &&
                    offset_strength == other.offset_strength &&
-                   max_offset_ratio == other.max_offset_ratio;
+                   max_offset_ratio == other.max_offset_ratio &&
+                   front_weight == other.front_weight &&
+                   side_weight == other.side_weight &&
+                   back_weight == other.back_weight;
         }
         bool operator!=(const Directionality& other) const { return !(*this == other); }
     } directionality;
@@ -39,12 +45,14 @@ struct ReactiveShadowSettings {
         float opacity_strength      = 0.6f;
         float min_opacity           = 0.1f;
         float max_opacity           = 1.0f;
+        float front_opacity_boost   = 2.5f;
 
         bool operator==(const Response& other) const {
             return enable_opacity == other.enable_opacity &&
                    opacity_strength == other.opacity_strength &&
                    min_opacity == other.min_opacity &&
-                   max_opacity == other.max_opacity;
+                   max_opacity == other.max_opacity &&
+                   front_opacity_boost == other.front_opacity_boost;
         }
         bool operator!=(const Response& other) const { return !(*this == other); }
     } response;
@@ -52,10 +60,12 @@ struct ReactiveShadowSettings {
     struct Stability {
         bool  enable_temporal_smoothing = true;
         float temporal_smoothing        = 0.6f;
+        float reuse_similarity_threshold = 0.08f;
 
         bool operator==(const Stability& other) const {
             return enable_temporal_smoothing == other.enable_temporal_smoothing &&
-                   temporal_smoothing == other.temporal_smoothing;
+                   temporal_smoothing == other.temporal_smoothing &&
+                   reuse_similarity_threshold == other.reuse_similarity_threshold;
         }
         bool operator!=(const Stability& other) const { return !(*this == other); }
     } stability;
@@ -96,14 +106,19 @@ inline ReactiveShadowSettings sanitize_reactive_shadow_settings(const ReactiveSh
     out.directionality.gradient_sensitivity = clampf(out.directionality.gradient_sensitivity, 0.0f, 2.0f);
     out.directionality.offset_strength      = clampf(out.directionality.offset_strength, 0.0f, 2.0f);
     out.directionality.max_offset_ratio     = clampf(out.directionality.max_offset_ratio, 0.0f, 1.0f);
+    out.directionality.front_weight         = clampf(out.directionality.front_weight, 0.0f, 5.0f);
+    out.directionality.side_weight          = clampf(out.directionality.side_weight, 0.0f, 5.0f);
+    out.directionality.back_weight          = clampf(out.directionality.back_weight, 0.0f, 5.0f);
 
     out.response.opacity_strength = clampf(out.response.opacity_strength, 0.0f, 3.0f);
     out.response.min_opacity      = clampf(out.response.min_opacity, 0.0f, 1.0f);
     out.response.max_opacity      = clampf(out.response.max_opacity,
                                            std::max(out.response.min_opacity, 0.0f),
                                            1.0f);
+    out.response.front_opacity_boost = clampf(out.response.front_opacity_boost, 0.0f, 10.0f);
 
     out.stability.temporal_smoothing = clampf(out.stability.temporal_smoothing, 0.0f, 0.999f);
+    out.stability.reuse_similarity_threshold = clampf(out.stability.reuse_similarity_threshold, 0.0f, 1.0f);
 
     out.output.scale_factor      = clampf(out.output.scale_factor, 0.1f, 4.0f);
     out.output.map_line_weight   = clampf(out.output.map_line_weight, 0.0f, 5.0f);

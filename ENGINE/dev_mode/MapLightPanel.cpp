@@ -318,6 +318,9 @@ void MapLightPanel::build_ui() {
     reactive_gradient_sensitivity_= make_float_slider("Gradient Sensitivity", 0.0f, 1.0f, last_applied_reactive_.directionality.gradient_sensitivity, 100);
     reactive_offset_strength_     = make_float_slider("Offset Strength", 0.0f, 2.0f, last_applied_reactive_.directionality.offset_strength, 100);
     reactive_max_offset_ratio_    = make_float_slider("Max Offset Ratio", 0.0f, 1.0f, last_applied_reactive_.directionality.max_offset_ratio, 100);
+    reactive_front_weight_        = make_float_slider("Front Weight", 0.0f, 5.0f, last_applied_reactive_.directionality.front_weight, 100);
+    reactive_side_weight_         = make_float_slider("Side Weight", 0.0f, 5.0f, last_applied_reactive_.directionality.side_weight, 100);
+    reactive_back_weight_         = make_float_slider("Back Weight", 0.0f, 5.0f, last_applied_reactive_.directionality.back_weight, 100);
     reactive_scale_factor_        = make_float_slider("Scale Factor", 0.1f, 3.0f, last_applied_reactive_.output.scale_factor, 100);
     reactive_map_line_weight_     = make_float_slider("Map Line Weight", 0.0f, 3.0f, last_applied_reactive_.output.map_line_weight, 100);
     reactive_parallax_strength_   = make_float_slider("Parallax Strength", 0.0f, 3.0f, last_applied_reactive_.output.parallax_strength, 100);
@@ -325,6 +328,8 @@ void MapLightPanel::build_ui() {
     reactive_min_opacity_         = make_float_slider("Min Opacity", 0.0f, 1.0f, last_applied_reactive_.response.min_opacity, 100);
     reactive_max_opacity_         = make_float_slider("Max Opacity", 0.0f, 1.0f, last_applied_reactive_.response.max_opacity, 100);
     reactive_temporal_smoothing_  = make_float_slider("Temporal Smoothing", 0.0f, 0.999f, last_applied_reactive_.stability.temporal_smoothing, 1000, 3);
+    reactive_front_opacity_boost_ = make_float_slider("Front Opacity Boost", 0.0f, 10.0f, last_applied_reactive_.response.front_opacity_boost, 100);
+    reactive_similarity_threshold_= make_float_slider("Reuse Similarity Threshold", 0.0f, 0.5f, last_applied_reactive_.stability.reuse_similarity_threshold, 1000, 3);
 
     if (reactive_kernel_radius_) reactive_kernel_radius_->set_defer_commit_until_unfocus(true);
     if (reactive_scale_factor_) reactive_scale_factor_->set_defer_commit_until_unfocus(true);
@@ -453,10 +458,15 @@ void MapLightPanel::rebuild_rows() {
             add_widget(std::make_unique<SliderWidget>(reactive_max_offset_ratio_.get()))
         });
         rows.push_back({
-            add_widget(std::make_unique<SliderWidget>(reactive_scale_factor_.get())),
-            add_widget(std::make_unique<SliderWidget>(reactive_map_line_weight_.get()))
+            add_widget(std::make_unique<SliderWidget>(reactive_front_weight_.get())),
+            add_widget(std::make_unique<SliderWidget>(reactive_side_weight_.get()))
         });
         rows.push_back({
+            add_widget(std::make_unique<SliderWidget>(reactive_back_weight_.get())),
+            add_widget(std::make_unique<SliderWidget>(reactive_scale_factor_.get()))
+        });
+        rows.push_back({
+            add_widget(std::make_unique<SliderWidget>(reactive_map_line_weight_.get())),
             add_widget(std::make_unique<SliderWidget>(reactive_parallax_strength_.get()))
         });
         rows.push_back({
@@ -465,7 +475,11 @@ void MapLightPanel::rebuild_rows() {
         });
         rows.push_back({
             add_widget(std::make_unique<SliderWidget>(reactive_max_opacity_.get())),
-            add_widget(std::make_unique<SliderWidget>(reactive_temporal_smoothing_.get()))
+            add_widget(std::make_unique<SliderWidget>(reactive_front_opacity_boost_.get()))
+        });
+        rows.push_back({
+            add_widget(std::make_unique<SliderWidget>(reactive_temporal_smoothing_.get())),
+            add_widget(std::make_unique<SliderWidget>(reactive_similarity_threshold_.get()))
         });
     }
 
@@ -1049,6 +1063,12 @@ ReactiveShadowSettings MapLightPanel::current_reactive_settings_from_ui() const 
         slider_value_scaled(reactive_offset_strength_, settings.directionality.offset_strength, 100);
     settings.directionality.max_offset_ratio =
         slider_value_scaled(reactive_max_offset_ratio_, settings.directionality.max_offset_ratio, 100);
+    settings.directionality.front_weight =
+        slider_value_scaled(reactive_front_weight_, settings.directionality.front_weight, 100);
+    settings.directionality.side_weight =
+        slider_value_scaled(reactive_side_weight_, settings.directionality.side_weight, 100);
+    settings.directionality.back_weight =
+        slider_value_scaled(reactive_back_weight_, settings.directionality.back_weight, 100);
 
     settings.output.scale_factor =
         slider_value_scaled(reactive_scale_factor_, settings.output.scale_factor, 100);
@@ -1063,11 +1083,15 @@ ReactiveShadowSettings MapLightPanel::current_reactive_settings_from_ui() const 
         slider_value_scaled(reactive_min_opacity_, settings.response.min_opacity, 100);
     settings.response.max_opacity =
         slider_value_scaled(reactive_max_opacity_, settings.response.max_opacity, 100);
+    settings.response.front_opacity_boost =
+        slider_value_scaled(reactive_front_opacity_boost_, settings.response.front_opacity_boost, 100);
 
     if (reactive_temporal_enabled_) {
         settings.stability.enable_temporal_smoothing = reactive_temporal_enabled_->value();
     }
     settings.stability.temporal_smoothing = slider_value_scaled(reactive_temporal_smoothing_, settings.stability.temporal_smoothing, 1000);
+    settings.stability.reuse_similarity_threshold = slider_value_scaled(
+        reactive_similarity_threshold_, settings.stability.reuse_similarity_threshold, 1000);
 
     return render_pipeline::shading::sanitize_reactive_shadow_settings(settings);
 }
@@ -1079,13 +1103,18 @@ void MapLightPanel::set_reactive_sliders(const ReactiveShadowSettings& settings)
     set_slider_scaled(reactive_gradient_sensitivity_, settings.directionality.gradient_sensitivity, 100);
     set_slider_scaled(reactive_offset_strength_, settings.directionality.offset_strength, 100);
     set_slider_scaled(reactive_max_offset_ratio_, settings.directionality.max_offset_ratio, 100);
+    set_slider_scaled(reactive_front_weight_, settings.directionality.front_weight, 100);
+    set_slider_scaled(reactive_side_weight_, settings.directionality.side_weight, 100);
+    set_slider_scaled(reactive_back_weight_, settings.directionality.back_weight, 100);
     set_slider_scaled(reactive_scale_factor_, settings.output.scale_factor, 100);
     set_slider_scaled(reactive_map_line_weight_, settings.output.map_line_weight, 100);
     set_slider_scaled(reactive_parallax_strength_, settings.output.parallax_strength, 100);
     set_slider_scaled(reactive_opacity_strength_, settings.response.opacity_strength, 100);
     set_slider_scaled(reactive_min_opacity_, settings.response.min_opacity, 100);
     set_slider_scaled(reactive_max_opacity_, settings.response.max_opacity, 100);
+    set_slider_scaled(reactive_front_opacity_boost_, settings.response.front_opacity_boost, 100);
     set_slider_scaled(reactive_temporal_smoothing_, settings.stability.temporal_smoothing, 1000);
+    set_slider_scaled(reactive_similarity_threshold_, settings.stability.reuse_similarity_threshold, 1000);
 }
 
 void MapLightPanel::set_reactive_checkboxes(const ReactiveShadowSettings& settings) {
@@ -1124,6 +1153,12 @@ ReactiveShadowSettings MapLightPanel::load_reactive_settings_from_dev_settings()
         load_number(reactive_settings_key("directionality.offset_max_ratio_y"), settings.directionality.max_offset_ratio));
     settings.directionality.max_offset_ratio =
         std::max(settings.directionality.max_offset_ratio, std::max(legacy_max_ratio_x, legacy_max_ratio_y));
+    settings.directionality.front_weight = static_cast<float>(
+        load_number(reactive_settings_key("directionality.front_weight"), settings.directionality.front_weight));
+    settings.directionality.side_weight = static_cast<float>(
+        load_number(reactive_settings_key("directionality.side_weight"), settings.directionality.side_weight));
+    settings.directionality.back_weight = static_cast<float>(
+        load_number(reactive_settings_key("directionality.back_weight"), settings.directionality.back_weight));
 
     settings.output.scale_factor = static_cast<float>(
         load_number(reactive_settings_key("output.scale_factor"), settings.output.scale_factor));
@@ -1146,9 +1181,13 @@ ReactiveShadowSettings MapLightPanel::load_reactive_settings_from_dev_settings()
         load_number(reactive_settings_key("response.max_opacity"), settings.response.max_opacity));
     settings.response.max_opacity = static_cast<float>(
         load_number(reactive_settings_key("response.absolute_opacity_max"), settings.response.max_opacity));
+    settings.response.front_opacity_boost = static_cast<float>(
+        load_number(reactive_settings_key("response.front_opacity_boost"), settings.response.front_opacity_boost));
 
     settings.stability.enable_temporal_smoothing = load_bool(reactive_settings_key("stability.enable_temporal_smoothing"), settings.stability.enable_temporal_smoothing);
     settings.stability.temporal_smoothing = static_cast<float>(load_number(reactive_settings_key("stability.temporal_smoothing"), settings.stability.temporal_smoothing));
+    settings.stability.reuse_similarity_threshold = static_cast<float>(
+        load_number(reactive_settings_key("stability.reuse_similarity_threshold"), settings.stability.reuse_similarity_threshold));
 
     settings.sampling.kernel_radius = clamp_int(static_cast<int>(std::round(load_number(reactive_settings_key("sampling.kernel_radius"), settings.sampling.kernel_radius))), 1, 16);
     settings.sampling.outer_ring_weight = static_cast<float>(load_number(reactive_settings_key("sampling.outer_ring_weight"), settings.sampling.outer_ring_weight));
@@ -1164,6 +1203,9 @@ void MapLightPanel::persist_reactive_settings_to_dev_settings(const ReactiveShad
     save_number(reactive_settings_key("directionality.gradient_sensitivity"), settings.directionality.gradient_sensitivity);
     save_number(reactive_settings_key("directionality.offset_strength"), settings.directionality.offset_strength);
     save_number(reactive_settings_key("directionality.max_offset_ratio"), settings.directionality.max_offset_ratio);
+    save_number(reactive_settings_key("directionality.front_weight"), settings.directionality.front_weight);
+    save_number(reactive_settings_key("directionality.side_weight"), settings.directionality.side_weight);
+    save_number(reactive_settings_key("directionality.back_weight"), settings.directionality.back_weight);
 
     save_number(reactive_settings_key("output.scale_factor"), settings.output.scale_factor);
     save_number(reactive_settings_key("output.map_line_weight"), settings.output.map_line_weight);
@@ -1173,9 +1215,11 @@ void MapLightPanel::persist_reactive_settings_to_dev_settings(const ReactiveShad
     save_number(reactive_settings_key("response.opacity_strength"), settings.response.opacity_strength);
     save_number(reactive_settings_key("response.min_opacity"), settings.response.min_opacity);
     save_number(reactive_settings_key("response.max_opacity"), settings.response.max_opacity);
+    save_number(reactive_settings_key("response.front_opacity_boost"), settings.response.front_opacity_boost);
 
     save_bool(reactive_settings_key("stability.enable_temporal_smoothing"), settings.stability.enable_temporal_smoothing);
     save_number(reactive_settings_key("stability.temporal_smoothing"), settings.stability.temporal_smoothing);
+    save_number(reactive_settings_key("stability.reuse_similarity_threshold"), settings.stability.reuse_similarity_threshold);
 
     save_number(reactive_settings_key("sampling.kernel_radius"), static_cast<double>(settings.sampling.kernel_radius));
     save_number(reactive_settings_key("sampling.outer_ring_weight"), settings.sampling.outer_ring_weight);

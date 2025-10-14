@@ -10,7 +10,7 @@
 
 namespace {
 
-constexpr float MOTION_BLUR_STRENGTH = 0.35f;
+constexpr float MOTION_BLUR_STRENGTH = 0.45f;
 
 float compute_asset_screen_height(Asset& asset, float inv_scale) {
     int cached_w = asset.cached_w;

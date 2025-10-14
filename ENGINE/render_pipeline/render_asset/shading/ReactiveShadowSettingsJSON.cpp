@@ -121,6 +121,10 @@ void populate_from_section(ReactiveShadowSettings::Directionality& directionalit
         const float max_ratio_y = read_float(section, "offset_max_ratio_y", directionality.max_offset_ratio);
         directionality.max_offset_ratio = std::max(max_ratio_x, max_ratio_y);
     }
+
+    directionality.front_weight = read_float(section, "front_weight", directionality.front_weight);
+    directionality.side_weight  = read_float(section, "side_weight", directionality.side_weight);
+    directionality.back_weight  = read_float(section, "back_weight", directionality.back_weight);
 }
 
 void populate_from_section(ReactiveShadowSettings::Response& response, const nlohmann::json& section) {
@@ -142,11 +146,15 @@ void populate_from_section(ReactiveShadowSettings::Response& response, const nlo
     } else {
         response.max_opacity = read_float(section, "absolute_opacity_max", response.max_opacity);
     }
+
+    response.front_opacity_boost = read_float(section, "front_opacity_boost", response.front_opacity_boost);
 }
 
 void populate_from_section(ReactiveShadowSettings::Stability& stability, const nlohmann::json& section) {
     stability.enable_temporal_smoothing = read_bool(section, "enable_temporal_smoothing", stability.enable_temporal_smoothing);
     stability.temporal_smoothing        = read_float(section, "temporal_smoothing", stability.temporal_smoothing);
+    stability.reuse_similarity_threshold =
+        read_float(section, "reuse_similarity_threshold", stability.reuse_similarity_threshold);
 }
 
 void populate_from_section(ReactiveShadowSettings::Output& output, const nlohmann::json& section) {
@@ -207,19 +215,24 @@ void assign_reactive_shadow_settings(nlohmann::json& json, const ReactiveShadowS
         { "enable_offsets", sanitized.directionality.enable_offsets },
         { "gradient_sensitivity", sanitized.directionality.gradient_sensitivity },
         { "offset_strength", sanitized.directionality.offset_strength },
-        { "max_offset_ratio", sanitized.directionality.max_offset_ratio }
+        { "max_offset_ratio", sanitized.directionality.max_offset_ratio },
+        { "front_weight", sanitized.directionality.front_weight },
+        { "side_weight", sanitized.directionality.side_weight },
+        { "back_weight", sanitized.directionality.back_weight }
     });
 
     json["response"] = nlohmann::json::object({
         { "enable_opacity", sanitized.response.enable_opacity },
         { "opacity_strength", sanitized.response.opacity_strength },
         { "min_opacity", sanitized.response.min_opacity },
-        { "max_opacity", sanitized.response.max_opacity }
+        { "max_opacity", sanitized.response.max_opacity },
+        { "front_opacity_boost", sanitized.response.front_opacity_boost }
     });
 
     json["stability"] = nlohmann::json::object({
         { "enable_temporal_smoothing", sanitized.stability.enable_temporal_smoothing },
-        { "temporal_smoothing", sanitized.stability.temporal_smoothing }
+        { "temporal_smoothing", sanitized.stability.temporal_smoothing },
+        { "reuse_similarity_threshold", sanitized.stability.reuse_similarity_threshold }
     });
 
     json["output"] = nlohmann::json::object({
