@@ -17,6 +17,17 @@ auto lerp(float a, float b, float t) -> float {
     return a + (b - a) * t;
 }
 
+auto wrap_degrees(float deg) -> float {
+    while (deg <= -180.0f) deg += 360.0f;
+    while (deg > 180.0f) deg -= 360.0f;
+    return deg;
+}
+
+auto lerp_angle_deg(float from, float to, float t) -> float {
+    float delta = wrap_degrees(to - from);
+    return from + delta * clamp01(t);
+}
+
 auto pixel_luma_norm(uint32_t argb) -> float {
     const float r = static_cast<float>((argb >> 16) & 0xFF) / 255.0f;
     const float g = static_cast<float>((argb >> 8) & 0xFF) / 255.0f;
@@ -198,6 +209,7 @@ void LensFlareRenderer::apply_settings(const Settings& settings) {
         if (!settings_.enabled) {
             ghosts_.clear();
             last_seeds_.clear();
+            sector_states_.clear();
         }
         return;
     }
@@ -208,12 +220,16 @@ void LensFlareRenderer::apply_settings(const Settings& settings) {
     if (!settings_.enabled) {
         ghosts_.clear();
         last_seeds_.clear();
+        sector_states_.clear();
+        frame_counter_ = 0;
         return;
     }
 
     if (!was_enabled && settings_.enabled) {
         ghosts_.clear();
         last_seeds_.clear();
+        sector_states_.clear();
+        frame_counter_ = 0;
     }
 }
 
@@ -230,16 +246,26 @@ void LensFlareRenderer::draw_after_light_map() {
         if (!ghosts_.empty()) {
             ghosts_.clear();
             last_seeds_.clear();
+            sector_states_.clear();
         }
         return;
     }
 
+    ++frame_counter_;
     std::vector<Seed> seeds;
     const bool found = detect_bright_seeds(seeds, settings_.seed_stride_px, settings_.seed_threshold_norm);
     if (found) {
         smooth_and_track_seeds(seeds);
+        update_sector_states(seeds);
     }
-    spawn_or_update_ghosts(found ? seeds : std::vector<Seed>{});
+    if (!found) {
+        static const std::vector<Seed> kEmpty;
+        update_sector_states(kEmpty);
+    }
+
+    std::vector<Seed> sector_seeds;
+    collect_sector_seeds(sector_seeds);
+    spawn_or_update_ghosts(sector_seeds);
     step_and_render_ghosts();
 }
 
@@ -470,6 +496,7 @@ bool LensFlareRenderer::detect_bright_seeds(std::vector<Seed>& out, int stride_p
 void LensFlareRenderer::smooth_and_track_seeds(std::vector<Seed>& seeds) {
     const float match2 = 160.0f * 160.0f;
     std::vector<bool> matched(seeds.size(), false);
+    const float pos_ema = clamp01(settings_.seed_pos_ema);
 
     for (auto& prev : last_seeds_) {
         float best_d2 = match2;
@@ -485,8 +512,9 @@ void LensFlareRenderer::smooth_and_track_seeds(std::vector<Seed>& seeds) {
             }
         }
         if (best >= 0) {
-            seeds[best].sx = lerp(prev.sx, seeds[best].x, settings_.seed_pos_ema);
-            seeds[best].sy = lerp(prev.sy, seeds[best].y, settings_.seed_pos_ema);
+            seeds[best].sx = lerp(prev.sx, seeds[best].x, pos_ema);
+            seeds[best].sy = lerp(prev.sy, seeds[best].y, pos_ema);
+            seeds[best].smoothed_strength = lerp(prev.smoothed_strength, seeds[best].strength, pos_ema);
             matched[best] = true;
         }
     }
@@ -494,6 +522,7 @@ void LensFlareRenderer::smooth_and_track_seeds(std::vector<Seed>& seeds) {
         if (!matched[i]) {
             seeds[i].sx = seeds[i].x;
             seeds[i].sy = seeds[i].y;
+            seeds[i].smoothed_strength = seeds[i].strength;
         }
     }
     last_seeds_ = seeds;
@@ -520,20 +549,134 @@ SDL_FPoint LensFlareRenderer::screen_center() const {
     return SDL_FPoint{ static_cast<float>(screen_width_) * 0.5f, static_cast<float>(screen_height_) * 0.5f };
 }
 
+void LensFlareRenderer::update_sector_states(const std::vector<Seed>& seeds) {
+    const int span = sector_cell_span();
+    for (auto& entry : sector_states_) {
+        entry.second.updated = false;
+    }
+
+    if (span > 0 && !seeds.empty()) {
+        struct Pending {
+            float sum_x = 0.0f;
+            float sum_y = 0.0f;
+            float max_strength = 0.0f;
+            int count = 0;
+        };
+
+        std::unordered_map<std::uint64_t, Pending> pending;
+        pending.reserve(seeds.size());
+
+        auto make_key = [](int cx, int cy) -> std::uint64_t {
+            return (static_cast<std::uint64_t>(static_cast<std::uint32_t>(cx)) << 32) |
+                   static_cast<std::uint32_t>(cy);
+        };
+
+        for (const auto& seed : seeds) {
+            if (!seed.valid) continue;
+            const float sx = seed.sx;
+            const float sy = seed.sy;
+            int cell_x = static_cast<int>(std::floor(sx / static_cast<float>(span)));
+            int cell_y = static_cast<int>(std::floor(sy / static_cast<float>(span)));
+            std::uint64_t key = make_key(cell_x, cell_y);
+            Pending& bucket = pending[key];
+            bucket.sum_x += sx;
+            bucket.sum_y += sy;
+            bucket.count += 1;
+            float strength = seed.smoothed_strength > 0.0f ? seed.smoothed_strength : seed.strength;
+            if (strength > bucket.max_strength) {
+                bucket.max_strength = strength;
+            }
+        }
+
+        for (const auto& [key, bucket] : pending) {
+            SectorState& state = sector_states_[key];
+            const float avg_x = bucket.count > 0 ? bucket.sum_x / static_cast<float>(bucket.count) : 0.0f;
+            const float avg_y = bucket.count > 0 ? bucket.sum_y / static_cast<float>(bucket.count) : 0.0f;
+            if (!state.initialized) {
+                state.target_pos = SDL_FPoint{ avg_x, avg_y };
+                state.smoothed_pos = state.target_pos;
+                state.presence = 0.0f;
+                state.initialized = true;
+            } else {
+                state.target_pos = SDL_FPoint{ avg_x, avg_y };
+            }
+            state.updated = true;
+            state.last_seen_frame = frame_counter_;
+            state.target_presence = clamp01(bucket.max_strength);
+        }
+    }
+
+    const float pos_ema = clamp01(settings_.seed_pos_ema);
+    const float fade_in = 0.08f;
+    const float fade_out = 0.02f;
+    const int hold_frames = 90;
+
+    for (auto it = sector_states_.begin(); it != sector_states_.end();) {
+        SectorState& state = it->second;
+        if (!state.updated && (frame_counter_ - state.last_seen_frame) > hold_frames) {
+            state.target_presence = 0.0f;
+        }
+        state.smoothed_pos.x = lerp(state.smoothed_pos.x, state.target_pos.x, pos_ema);
+        state.smoothed_pos.y = lerp(state.smoothed_pos.y, state.target_pos.y, pos_ema);
+        const float target = clamp01(state.target_presence);
+        const float rate = target > state.presence ? fade_in : fade_out;
+        state.presence = lerp(state.presence, target, rate);
+        if (state.presence < 0.001f && (frame_counter_ - state.last_seen_frame) > hold_frames * 3) {
+            it = sector_states_.erase(it);
+        } else {
+            ++it;
+        }
+    }
+}
+
+void LensFlareRenderer::collect_sector_seeds(std::vector<Seed>& out) const {
+    out.clear();
+    out.reserve(sector_states_.size());
+    for (const auto& [key, state] : sector_states_) {
+        if (!state.initialized) continue;
+        if (state.presence <= 0.001f) continue;
+        Seed s;
+        s.x = state.smoothed_pos.x;
+        s.y = state.smoothed_pos.y;
+        s.sx = state.smoothed_pos.x;
+        s.sy = state.smoothed_pos.y;
+        s.strength = clamp01(state.presence);
+        s.smoothed_strength = s.strength;
+        s.valid = true;
+        out.push_back(s);
+    }
+    std::sort(out.begin(), out.end(), [](const Seed& a, const Seed& b) {
+        return a.strength > b.strength;
+    });
+}
+
+int LensFlareRenderer::sector_cell_span() const {
+    return std::max(32, settings_.seed_stride_px * 2);
+}
+
 void LensFlareRenderer::spawn_or_update_ghosts(const std::vector<Seed>& seeds) {
+    static constexpr int kGhostHoldFrames = 90;
+
     for (auto& g : ghosts_) {
-        g.dying = true;
-        g.target_alpha = 0.0f;
+        if ((frame_counter_ - g.last_seen_frame) > kGhostHoldFrames) {
+            if (!g.dying) {
+                g.dying = true;
+                g.target_alpha = 0.0f;
+            }
+        }
     }
 
     std::vector<SDL_FPoint> pts;
+    pts.reserve(Settings::kAxisCount);
     int new_budget = settings_.max_new_per_frame;
+    const SDL_FPoint center = screen_center();
 
     for (const auto& s : seeds) {
         if (!s.valid) continue;
         axis_cascade_points(s, pts);
-        const float seed_a = clamp01(s.strength * settings_.ghost_intensity_gain);
-        const float base_sz = lerp(settings_.ghost_size_min, settings_.ghost_size_max, clamp01(0.15f + 0.85f * s.strength));
+        const float base_strength = s.smoothed_strength > 0.0f ? s.smoothed_strength : s.strength;
+        const float seed_alpha = clamp01(base_strength * settings_.ghost_intensity_gain);
+        const float base_size = lerp(settings_.ghost_size_min, settings_.ghost_size_max, clamp01(0.15f + 0.85f * base_strength));
 
         for (std::size_t i = 0; i < pts.size(); ++i) {
             const SDL_FPoint p = pts[i];
@@ -547,8 +690,8 @@ void LensFlareRenderer::spawn_or_update_ghosts(const std::vector<Seed>& seeds) {
             for (int gi = 0; gi < static_cast<int>(ghosts_.size()); ++gi) {
                 auto& g = ghosts_[gi];
                 if (g.kind != desired_kind) continue;
-                float dx = g.x - p.x;
-                float dy = g.y - p.y;
+                float dx = g.tx - p.x;
+                float dy = g.ty - p.y;
                 float d2 = dx * dx + dy * dy;
                 if (d2 < best_d2) {
                     best_d2 = d2;
@@ -556,40 +699,39 @@ void LensFlareRenderer::spawn_or_update_ghosts(const std::vector<Seed>& seeds) {
                 }
             }
 
-            float kind_alpha = seed_a * (desired_kind == 0 ? 1.0f : desired_kind == 1 ? 0.70f : 0.85f);
-            float kind_size = base_sz * (desired_kind == 0 ? 1.0f : desired_kind == 1 ? 1.4f : 1.15f);
+            const float kind_alpha = seed_alpha * (desired_kind == 0 ? 1.0f : desired_kind == 1 ? 0.75f : 0.9f);
+            const float kind_size = base_size * (desired_kind == 0 ? 1.0f : desired_kind == 1 ? 1.35f : 1.1f);
+            const float axis_angle = std::atan2(p.y - center.y, p.x - center.x) * (180.0f / static_cast<float>(M_PI));
 
             if (best >= 0) {
                 auto& g = ghosts_[best];
                 g.dying = false;
                 g.tx = p.x;
                 g.ty = p.y;
-                g.target_alpha = std::max(g.target_alpha, kind_alpha);
+                g.target_alpha = kind_alpha;
                 g.size_px = lerp(g.size_px, kind_size, 0.25f);
+                g.target_axis_angle_deg = axis_angle;
+                g.last_seen_frame = frame_counter_;
                 g.life = std::min(g.life + 1.0f, g.max_life);
             } else if (new_budget > 0) {
-                SDL_FPoint c = screen_center();
-                float ax = p.x - c.x;
-                float ay = p.y - c.y;
-                float L = std::sqrt(ax * ax + ay * ay) + 1e-6f;
-                ax /= L;
-                ay /= L;
-
                 Ghost g;
                 g.kind = desired_kind;
-                float spawn_dist = std::max<float>(std::max(screen_width_, screen_height_), L) + settings_.offscreen_spawn_bias;
-                g.x = c.x + ax * spawn_dist;
-                g.y = c.y + ay * spawn_dist;
+                g.x = p.x;
+                g.y = p.y;
                 g.tx = p.x;
                 g.ty = p.y;
-                g.vx = -ax * settings_.ghost_spawn_speed;
-                g.vy = -ay * settings_.ghost_spawn_speed;
+                g.vx = 0.0f;
+                g.vy = 0.0f;
                 g.alpha = 0.0f;
                 g.target_alpha = kind_alpha;
                 g.size_px = kind_size;
-                g.hue = 28.0f + (desired_kind == 0 ? (i * 8.0f) : desired_kind == 2 ? 10.0f : 5.0f);
+                g.hue = 28.0f + (desired_kind == 0 ? (static_cast<float>(i) * 8.0f) : desired_kind == 2 ? 12.0f : 6.0f);
                 g.life = 0.0f;
+                g.max_life = 600.0f;
                 g.dying = false;
+                g.axis_angle_deg = axis_angle;
+                g.target_axis_angle_deg = axis_angle;
+                g.last_seen_frame = frame_counter_;
 
                 ghosts_.push_back(g);
                 --new_budget;
@@ -609,12 +751,15 @@ void LensFlareRenderer::step_and_render_ghosts() {
     std::vector<Ghost> keep;
     keep.reserve(ghosts_.size());
 
-    for (auto& g : ghosts_) {
-        g.x = lerp(g.x, g.tx, settings_.ghost_follow_ema) + g.vx * settings_.ghost_drift;
-        g.y = lerp(g.y, g.ty, settings_.ghost_follow_ema) + g.vy * settings_.ghost_drift;
+    const float follow = clamp01(settings_.ghost_follow_ema);
+    const float drift = settings_.ghost_drift;
+    const float alpha_cap = settings_.ghost_alpha_cap;
+    const float rise = std::max(0.001f, settings_.ghost_alpha_rise);
+    const float fall = std::max(0.001f, settings_.ghost_alpha_fall);
 
-        if (!g.dying) g.alpha = clamp01(g.alpha + settings_.ghost_alpha_rise);
-        else g.alpha = clamp01(g.alpha - settings_.ghost_alpha_fall);
+    for (auto& g : ghosts_) {
+        g.x = lerp(g.x, g.tx, follow) + g.vx * drift;
+        g.y = lerp(g.y, g.ty, follow) + g.vy * drift;
 
         if (!g.dying && g.life > g.max_life) {
             g.dying = true;
@@ -622,15 +767,29 @@ void LensFlareRenderer::step_and_render_ghosts() {
         }
         g.life += 1.0f;
 
-        float target = std::min(g.target_alpha, settings_.ghost_alpha_cap);
-        g.alpha = std::min(g.alpha, target);
+        const float target_alpha = g.dying ? 0.0f : std::min(g.target_alpha, alpha_cap);
+        const float rate = g.dying ? fall : rise;
+        g.alpha = lerp(g.alpha, target_alpha, clamp01(rate));
+        if (std::fabs(target_alpha - g.alpha) < 0.0005f) {
+            g.alpha = target_alpha;
+        }
+        if (g.dying) {
+            g.target_alpha = 0.0f;
+        } else {
+            g.target_alpha = target_alpha;
+        }
 
-        if (g.dying && g.alpha <= 0.001f && !on_screen(g.x, g.y, 24)) {
+        g.axis_angle_deg = lerp_angle_deg(g.axis_angle_deg, g.target_axis_angle_deg, 0.12f);
+
+        if (g.dying && g.alpha <= 0.0005f) {
             continue;
         }
 
         SDL_Texture* tex = (g.kind == 0 ? circle_tex_ : g.kind == 1 ? streak_tex_ : star_tex_);
-        float angle = (g.kind == 1 ? (g.x >= screen_width_ * 0.5f ? +settings_.streak_angle_lean : -settings_.streak_angle_lean) : 0.0f);
+        float angle = 0.0f;
+        if (g.kind == 1) {
+            angle = g.axis_angle_deg + settings_.streak_angle_lean;
+        }
         SDL_Color tint = warm_tint(g.hue, 1.0f);
 
         render_sprite(tex, g.x, g.y, g.alpha, g.size_px, angle, tint);

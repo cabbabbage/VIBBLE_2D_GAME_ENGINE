@@ -458,8 +458,8 @@ void Animation::load(const std::string& trigger,
 			++expected_frames;
 		}
 		if (expected_frames == 0) return;
-                bool use_cache = false;
-		nlohmann::json meta;
+                bool metadata_valid = false;
+                nlohmann::json meta;
                 std::vector<int> expected_steps = render_pipeline::ScalingLogic::PercentSteps(variant_steps_);
                 const std::uint64_t expected_revision = info.scale_profile_revision;
                 if (cache.load_metadata(meta_file, meta)) {
@@ -534,8 +534,8 @@ void Animation::load(const std::string& trigger,
                                         meta_ok = false;
                                 }
                         }
-                        use_cache = meta_ok;
-                        if (!use_cache) {
+                        metadata_valid = meta_ok;
+                        if (!metadata_valid) {
                                 std::cout << "[AnimationLoader] " << info.name << "::" << trigger
                                           << " cache metadata rejected -> rebuilding variants\n";
                         }
@@ -551,11 +551,7 @@ void Animation::load(const std::string& trigger,
                         info.scale_variants = variant_steps_;
                         expected_steps = render_pipeline::ScalingLogic::PercentSteps(variant_steps_);
                 }
-                if (!prefer_cached) {
-                        use_cache = false;
-                        std::cout << "[AnimationLoader] " << info.name << "::" << trigger
-                                  << " prefer_cached disabled -> forcing rebuild\n";
-                }
+
                 auto free_surface_lists = [](std::vector<std::vector<SDL_Surface*>>& lists) {
                         for (auto& list : lists) {
                                 for (SDL_Surface* surf : list) {
@@ -570,57 +566,16 @@ void Animation::load(const std::string& trigger,
                 std::vector<std::vector<SDL_Surface*>> variant_surfaces(variant_count);
                 GenerateFadedMask::MaskVariants mask_surfaces;
                 bool masks_loaded_from_cache = false;
-                if (use_cache) {
-                        bool variants_loaded = true;
-                        for (std::size_t idx = 0; idx < variant_count; ++idx) {
-                                std::string variant_path = render_pipeline::ScalingLogic::VariantFolder(cache_folder, variant_steps_, idx);
-                                std::vector<SDL_Surface*> loaded;
-                                if (!cache.load_surface_sequence(variant_path, expected_frames, loaded)) {
-                                        if (idx == 0 && cache.load_surface_sequence(cache_folder, expected_frames, loaded)) {
-                                                // legacy cache, continue but ensure metadata regenerated later
-                                                use_cache = false;
-                                                std::cout << "[AnimationLoader] " << info.name << "::" << trigger
-                                                          << " legacy cache format detected for variant " << idx
-                                                          << " -> metadata refresh required\n";
-                                        } else {
-                                                variants_loaded = false;
-                                                std::cout << "[AnimationLoader] " << info.name << "::" << trigger
-                                                          << " missing cached surfaces for variant " << idx
-                                                          << " -> forcing rebuild\n";
-                                                break;
-                                        }
-                                }
-                                variant_surfaces[idx] = std::move(loaded);
-                        }
-                        if (!variants_loaded) {
-                                free_surface_lists(variant_surfaces);
-                                use_cache = false;
-                        } else if (use_cache) {
-                                original_canvas_width  = orig_w;
-                                original_canvas_height = orig_h;
-                                if (!variant_surfaces[0].empty() && variant_surfaces[0][0]) {
-                                        scaled_sprite_w = scaled_dimension(variant_surfaces[0][0]->w, safe_scale);
-                                        scaled_sprite_h = scaled_dimension(variant_surfaces[0][0]->h, safe_scale);
-                                }
-                        }
+                std::vector<bool> rebuild_variant(variant_count, false);
+
+                if (!metadata_valid) {
+                        std::fill(rebuild_variant.begin(), rebuild_variant.end(), true);
                 }
 
-                if (!use_cache && prefer_cached) {
-                        const auto& defaults = render_pipeline::ScalingLogic::DefaultScaleSteps();
-                        variant_steps_.assign(defaults.begin(), defaults.end());
-                        normalize_steps(variant_steps_);
-                        info.scale_variants = variant_steps_;
-                        variant_count = variant_steps_.size();
+                if (!prefer_cached) {
+                        std::fill(rebuild_variant.begin(), rebuild_variant.end(), true);
                         std::cout << "[AnimationLoader] " << info.name << "::" << trigger
-                                  << " reverting to default scale steps: " << format_steps(variant_steps_)
-                                  << "\n";
-                        if (variant_count == 0) {
-                                variant_steps_.push_back(1.0f);
-                                variant_count = 1;
-                        }
-                        expected_steps = render_pipeline::ScalingLogic::PercentSteps(variant_steps_);
-                        variant_surfaces.clear();
-                        variant_surfaces.resize(variant_count);
+                                  << " prefer_cached disabled -> forcing rebuild\n";
                 }
 
                 auto cleanup_variant_directories = [&](const std::string& folder) {
@@ -644,52 +599,105 @@ void Animation::load(const std::string& trigger,
                         }
                 };
 
-                if (!use_cache) {
-                        cleanup_variant_directories(cache_folder);
-                        cleanup_variant_directories(mask_cache_folder);
+                cleanup_variant_directories(cache_folder);
+                cleanup_variant_directories(mask_cache_folder);
+
+                const bool attempt_cache_load = metadata_valid && prefer_cached;
+                if (attempt_cache_load) {
+                        bool legacy_detected = false;
+                        for (std::size_t idx = 0; idx < variant_count; ++idx) {
+                                std::string variant_path = render_pipeline::ScalingLogic::VariantFolder(cache_folder, variant_steps_, idx);
+                                std::vector<SDL_Surface*> loaded;
+                                if (!cache.load_surface_sequence(variant_path, expected_frames, loaded)) {
+                                        if (idx == 0 && cache.load_surface_sequence(cache_folder, expected_frames, loaded)) {
+                                                legacy_detected = true;
+                                                std::cout << "[AnimationLoader] " << info.name << "::" << trigger
+                                                          << " legacy cache format detected for variant " << idx
+                                                          << " -> metadata refresh required\n";
+                                        } else {
+                                                rebuild_variant[idx] = true;
+                                                continue;
+                                        }
+                                }
+                                variant_surfaces[idx] = std::move(loaded);
+                        }
+                        if (legacy_detected) {
+                                std::fill(rebuild_variant.begin(), rebuild_variant.end(), true);
+                                free_surface_lists(variant_surfaces);
+                        }
+                }
+
+                if (variant_surfaces.empty() || variant_surfaces[0].empty() || !variant_surfaces[0][0]) {
+                        std::fill(rebuild_variant.begin(), rebuild_variant.end(), true);
+                        free_surface_lists(variant_surfaces);
+                } else if (!rebuild_variant[0]) {
+                        original_canvas_width  = orig_w;
+                        original_canvas_height = orig_h;
+                        scaled_sprite_w        = scaled_dimension(variant_surfaces[0][0]->w, safe_scale);
+                        scaled_sprite_h        = scaled_dimension(variant_surfaces[0][0]->h, safe_scale);
+                }
+
+                bool need_generation = std::any_of(rebuild_variant.begin(), rebuild_variant.end(), [](bool v) { return v; });
+                if (need_generation) {
                         std::cout << "[AnimationLoader] " << info.name << "::" << trigger
                                   << " generating variant surfaces for " << expected_frames
                                   << " frame(s) across " << variant_count << " step(s)\n";
-                        for (auto& list : variant_surfaces) {
-                                for (SDL_Surface* surf : list) {
-                                        if (surf) SDL_FreeSurface(surf);
+                        for (std::size_t idx = 0; idx < variant_count; ++idx) {
+                                if (!rebuild_variant[idx]) {
+                                        continue;
                                 }
-                                list.clear();
+                                for (SDL_Surface* surf : variant_surfaces[idx]) {
+                                        if (surf) {
+                                                SDL_FreeSurface(surf);
+                                        }
+                                }
+                                variant_surfaces[idx].clear();
                         }
-                        std::vector<SDL_Surface*> base_surfaces;
-                        base_surfaces.reserve(expected_frames);
-                        for (int i = 0; i < expected_frames; ++i) {
+                        if (rebuild_variant[0]) {
+                                std::vector<SDL_Surface*> base_surfaces;
+                                base_surfaces.reserve(expected_frames);
+                                for (int i = 0; i < expected_frames; ++i) {
                                         std::string f = src_folder + "/" + std::to_string(i) + ".png";
                                         int new_w = 0, new_h = 0;
                                         SDL_Surface* scaled = cache.load_and_scale_surface(f, 1.0f, new_w, new_h);
-					if (!scaled) {
-								std::cerr << "[Animation] Failed to load or scale: " << f << "\n";
-								continue;
-					}
-					if (i == 0) {
-								original_canvas_width  = orig_w;
-								original_canvas_height = orig_h;
-                                                                scaled_sprite_w = scaled_dimension(new_w, safe_scale);
-                                                                scaled_sprite_h = scaled_dimension(new_h, safe_scale);
-					}
+                                        if (!scaled) {
+                                                std::cerr << "[Animation] Failed to load or scale: " << f << "\n";
+                                                continue;
+                                        }
+                                        if (i == 0) {
+                                                original_canvas_width  = orig_w;
+                                                original_canvas_height = orig_h;
+                                                scaled_sprite_w        = scaled_dimension(new_w, safe_scale);
+                                                scaled_sprite_h        = scaled_dimension(new_h, safe_scale);
+                                        }
                                         base_surfaces.push_back(scaled);
-                        }
-                        if (base_surfaces.size() != static_cast<std::size_t>(expected_frames)) {
-                                for (SDL_Surface* surf : base_surfaces) {
-                                        if (surf) SDL_FreeSurface(surf);
                                 }
-                                return;
+                                if (base_surfaces.size() != static_cast<std::size_t>(expected_frames)) {
+                                        for (SDL_Surface* surf : base_surfaces) {
+                                                if (surf) {
+                                                        SDL_FreeSurface(surf);
+                                                }
+                                        }
+                                        return;
+                                }
+                                variant_surfaces[0] = std::move(base_surfaces);
                         }
-                        variant_surfaces[0] = std::move(base_surfaces);
+                        const std::vector<SDL_Surface*>& base_reference = variant_surfaces[0];
                         for (std::size_t idx = 1; idx < variant_count; ++idx) {
+                                if (!rebuild_variant[idx]) {
+                                        continue;
+                                }
                                 const float scale_step = variant_steps_[idx];
-                                variant_surfaces[idx].reserve(variant_surfaces[0].size());
-                                for (SDL_Surface* base_surface : variant_surfaces[0]) {
-                                        SDL_Surface* scaled = render_pipeline::CreateScaledSurface(base_surface, scale_step);
+                                variant_surfaces[idx].reserve(base_reference.size());
+                                for (SDL_Surface* base_surface : base_reference) {
+                                        SDL_Surface* scaled = base_surface ? render_pipeline::CreateScaledSurface(base_surface, scale_step) : nullptr;
                                         variant_surfaces[idx].push_back(scaled);
                                 }
                         }
                         for (std::size_t idx = 0; idx < variant_count; ++idx) {
+                                if (!rebuild_variant[idx]) {
+                                        continue;
+                                }
                                 const std::string variant_path = render_pipeline::ScalingLogic::VariantFolder(cache_folder, variant_steps_, idx);
                                 cache.save_surface_sequence(variant_path, variant_surfaces[idx]);
                                 std::cout << "[AnimationLoader] " << info.name << "::" << trigger
@@ -715,7 +723,16 @@ void Animation::load(const std::string& trigger,
                                   << " wrote metadata with steps "
                                   << format_percent_steps(expected_steps)
                                   << " revision " << expected_revision << "\n";
+                } else if (!variant_surfaces.empty() && !variant_surfaces[0].empty() && variant_surfaces[0][0]) {
+                        if (scaled_sprite_w <= 0 || scaled_sprite_h <= 0) {
+                                scaled_sprite_w = scaled_dimension(variant_surfaces[0][0]->w, safe_scale);
+                                scaled_sprite_h = scaled_dimension(variant_surfaces[0][0]->h, safe_scale);
+                        }
+                        original_canvas_width  = orig_w;
+                        original_canvas_height = orig_h;
                 }
+
+                const bool cached_variants_loaded = (!need_generation && attempt_cache_load);
 
                 if (info.is_shaded) {
                         auto mask_result = GenerateFadedMask::BuildMasks(info.name, trigger, expected_steps, variant_surfaces);
@@ -914,7 +931,7 @@ void Animation::load(const std::string& trigger,
                         std::reverse(mask_frames.begin(), mask_frames.end());
                         std::reverse(frame_cache_.begin(), frame_cache_.end());
                 }
-                loaded_from_cache = use_cache;
+                loaded_from_cache = cached_variants_loaded;
         }
         if (!movement_specified && source.kind == "animation" && !source.name.empty()) {
                 auto it = info.animations.find(source.name);

@@ -12,6 +12,7 @@
 #include <sstream>
 #include <algorithm>
 #include <cmath>
+#include <exception>
 #include <filesystem>
 #include <vector>
 #include <string>
@@ -52,6 +53,22 @@ void AnimationLoader::load(AssetInfo& info, SDL_Renderer* renderer) {
                   << ", profile_revision=" << profile.revision
                   << ", profile_steps=" << format_steps(profile.steps)
                   << "\n";
+        if (profile.created_entry) {
+                std::filesystem::path asset_cache = std::filesystem::path("cache") / info.name / "animations";
+                try {
+                        if (std::filesystem::exists(asset_cache)) {
+                                std::filesystem::remove_all(asset_cache);
+                                std::cout << "[AnimationLoader] " << info.name
+                                          << " created new scaling profile entry -> cleared animation cache\n";
+                        }
+                } catch (const std::exception& ex) {
+                        std::cerr << "[AnimationLoader] Failed to clear animation cache for " << info.name
+                                  << ": " << ex.what() << "\n";
+                } catch (...) {
+                        std::cerr << "[AnimationLoader] Failed to clear animation cache for " << info.name
+                                  << " due to unknown error\n";
+                }
+        }
         info.scale_variants = profile.steps;
         if (info.scale_variants.empty()) {
                 const auto& defaults = render_pipeline::ScalingLogic::DefaultScaleSteps();

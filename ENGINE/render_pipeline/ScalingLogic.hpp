@@ -36,6 +36,8 @@ struct ScalingLogic {
     struct ScaleProfile {
         ScaleSteps          steps;
         std::uint64_t       revision = 0;
+        bool                had_entry = false;
+        bool                created_entry = false;
         bool has_custom_steps() const { return !steps.empty(); }
     };
 
@@ -310,6 +312,7 @@ struct ScalingLogic {
             const auto& assets = state.data["assets"];
             auto it = assets.find(asset_key);
             if (it != assets.end() && it->is_object()) {
+                profile.had_entry = true;
                 const nlohmann::json& entry = *it;
                 if (entry.contains("recommended_percentages") && entry["recommended_percentages"].is_array()) {
                     for (const auto& value : entry["recommended_percentages"]) {
@@ -325,6 +328,37 @@ struct ScalingLogic {
                     profile.revision = entry["revision"].get<std::uint64_t>();
                 }
             }
+        }
+
+        if (!profile.had_entry) {
+            ensure_assets_container(state);
+            nlohmann::json& entry = state.data["assets"][asset_key];
+            if (!entry.is_object()) {
+                entry = default_asset_entry();
+            }
+
+            const std::size_t initial_variant_count = 3;
+            profile.steps.clear();
+            for (std::size_t idx = 0; idx < initial_variant_count && idx < defaults.size(); ++idx) {
+                profile.steps.push_back(defaults[idx]);
+            }
+            if (profile.steps.empty()) {
+                profile.steps.push_back(1.0f);
+            }
+
+            nlohmann::json recommended_json = nlohmann::json::array();
+            for (float step : profile.steps) {
+                recommended_json.push_back(static_cast<int>(std::lround(step * 100.0f)));
+            }
+            entry["recommended_percentages"] = std::move(recommended_json);
+            std::uint64_t revision = entry.value("revision", static_cast<std::uint64_t>(0));
+            revision += 1;
+            entry["revision"]     = revision;
+            entry["last_updated"] = timestamp_now();
+            profile.revision       = revision;
+            profile.created_entry  = true;
+            state.dirty            = true;
+            save_to_disk(state);
         }
 
         if (profile.steps.empty()) {

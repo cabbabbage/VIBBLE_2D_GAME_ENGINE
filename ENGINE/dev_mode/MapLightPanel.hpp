@@ -167,22 +167,12 @@ private:
     std::unique_ptr<DMSlider> base_a_;
 
     std::unique_ptr<DMCheckbox> lens_enabled_;
-    std::unique_ptr<DMSlider> lens_seed_stride_;
-    std::unique_ptr<DMSlider> lens_max_new_per_frame_;
     std::unique_ptr<DMSlider> lens_seed_threshold_;
     std::unique_ptr<DMSlider> lens_seed_ema_;
-    std::unique_ptr<DMSlider> lens_follow_ema_;
-    std::unique_ptr<DMSlider> lens_spawn_speed_;
-    std::unique_ptr<DMSlider> lens_alpha_rise_;
-    std::unique_ptr<DMSlider> lens_alpha_fall_;
-    std::unique_ptr<DMSlider> lens_drift_;
-    std::unique_ptr<DMSlider> lens_size_min_;
-    std::unique_ptr<DMSlider> lens_size_max_;
+    std::unique_ptr<DMSlider> lens_size_scalar_;
+    std::unique_ptr<DMSlider> lens_fade_frames_;
     std::unique_ptr<DMSlider> lens_intensity_gain_;
     std::unique_ptr<DMSlider> lens_alpha_cap_;
-    std::unique_ptr<DMSlider> lens_streak_angle_;
-    std::unique_ptr<DMSlider> lens_spawn_bias_;
-    std::array<std::unique_ptr<DMSlider>, LensFlareRenderer::Settings::kAxisCount> lens_axis_factors_{};
 
     std::unique_ptr<DMButton> prev_key_btn_;
     std::unique_ptr<DMButton> next_key_btn_;
