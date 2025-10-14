@@ -182,9 +182,17 @@ void SceneRenderer::update_shading_groups() {
 }
 
 bool SceneRenderer::shouldRegen(Asset* a) {
-	if (!a->get_final_texture()) { return true; }
-	return (a->get_shading_group() > 0 &&
-	        a->get_shading_group() == current_shading_group_) || (!a->get_final_texture() || !a->static_frame || a->get_render_player_light());
+        if (!a) {
+                return false;
+        }
+
+        SDL_Texture* final_texture = a->get_final_texture();
+        const int shading_group = a->get_shading_group();
+        const bool shading_group_due = shading_group > 0 && shading_group == current_shading_group_;
+        const bool locked_animation = a->is_current_animation_locked_in_progress();
+        const bool treat_as_static = a->static_frame || locked_animation;
+
+        return !final_texture || shading_group_due || !treat_as_static || a->get_render_player_light();
 }
 
 SDL_Rect SceneRenderer::get_scaled_position_rect(Asset* a,

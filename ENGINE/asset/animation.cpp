@@ -815,7 +815,7 @@ void Animation::change(AnimationFrame*& frame, bool& static_flag) const {
         if (frozen) return;
         auto& self = const_cast<Animation&>(*this);
         frame      = self.get_first_frame();
-        static_flag = is_static();
+        static_flag = is_static() || locked;
 }
 
 std::size_t Animation::movement_path_count() const { return movement_paths_.size(); }

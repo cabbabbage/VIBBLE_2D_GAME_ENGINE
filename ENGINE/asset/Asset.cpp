@@ -302,7 +302,7 @@ void Asset::update() {
                     Animation& anim   = def->second;
                     current_frame     = anim.get_first_frame();
                     frame_progress    = 0.0f;
-                    static_frame      = anim.is_static();
+                    static_frame      = anim.is_static() || anim.locked;
                 }
             }
         } else {
@@ -311,7 +311,7 @@ void Asset::update() {
                 std::size_t path_index = anim_ ? anim_->path_index_for(current_animation) : 0;
                 current_frame = anim.get_first_frame(path_index);
                 frame_progress = 0.0f;
-                static_frame = anim.is_static();
+                static_frame = anim.is_static() || anim.locked;
             }
         }
     }

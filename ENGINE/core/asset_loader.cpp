@@ -192,7 +192,7 @@ std::vector<Asset*> AssetLoader::collectDistantAssets(int lock_threshold, int re
                         double minDistSq = asset_loader_internal::min_distance_sq_to_zones(asset_point, zoneCache, remove_threshold);
                         double minDist = std::sqrt(minDistSq);
 
-                        const bool should_lock = minDist >= lock_distance;
+                        const bool should_lock = minDist > lock_distance;
                         const bool should_remove = minDist >= remove_distance;
 
                         asset->static_frame = should_lock;

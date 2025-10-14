@@ -158,6 +158,11 @@ bool AnimationUpdate::advance(AnimationFrame*& frame) {
         }
     }
 
+    if (anim.locked) {
+        self_->static_frame = anim.is_static() || anim.locked;
+        return true;
+    }
+
     if (frame->next) {
         frame = frame->next;
     } else {
@@ -196,7 +201,7 @@ void AnimationUpdate::switch_to(const std::string& anim_id, std::size_t path_ind
     AnimationFrame* new_frame = anim.get_first_frame(path_index);
     self_->current_animation = it->first;
     self_->current_frame = new_frame;
-    self_->static_frame = anim.is_static();
+    self_->static_frame = anim.is_static() || anim.locked;
     self_->frame_progress = 0.0f;
     active_paths_[self_->current_animation] = path_index;
 }
