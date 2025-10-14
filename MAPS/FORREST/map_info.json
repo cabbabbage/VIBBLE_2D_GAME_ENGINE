@@ -114,7 +114,7 @@
       247
     ],
     "fall_off": 7,
-    "intensity": 254,
+    "intensity": 180,
     "keys": [
       [
         0.0,
@@ -140,7 +140,7 @@
           255,
           237,
           248,
-          45
+          0
         ]
       ],
       [
@@ -163,29 +163,29 @@
         1.399999976158142,
         1.899999976158142
       ],
-      "enabled": false,
-      "ghost_alpha_cap": 0.5299999713897705,
-      "ghost_alpha_fall": 0.0148809514939785,
-      "ghost_alpha_rise": 0.02380952425301075,
+      "enabled": true,
+      "ghost_alpha_cap": 0.09000000357627869,
+      "ghost_alpha_fall": 0.0025510203558951616,
+      "ghost_alpha_rise": 0.004081632476300001,
       "ghost_drift": 0.019999999552965164,
       "ghost_follow_ema": 0.25,
-      "ghost_intensity_gain": 0.1599999964237213,
-      "ghost_size_max": 336.0,
-      "ghost_size_min": 112.0,
+      "ghost_intensity_gain": 0.27000001072883606,
+      "ghost_size_max": 210.0,
+      "ghost_size_min": 70.0,
       "ghost_spawn_speed": 0.0,
       "max_new_per_frame": 12,
       "offscreen_spawn_bias": 0.0,
-      "seed_pos_ema": 0.7099999785423279,
+      "seed_pos_ema": 0.800000011920929,
       "seed_stride_px": 28,
-      "seed_threshold_norm": 0.9399999976158142,
+      "seed_threshold_norm": 1.0,
       "streak_angle_lean": 0.0
     },
-    "max_opacity": 186,
+    "max_opacity": 229,
     "min_opacity": 0,
     "mult": 0.32,
-    "orbit_radius": 1839,
-    "orbit_x": 1839,
-    "orbit_y": 1792,
+    "orbit_radius": 1000,
+    "orbit_x": 1000,
+    "orbit_y": 1000,
     "radius": 2759,
     "reactive_shadows": {
       "directionality": {
@@ -216,10 +216,10 @@
         255,
         255
       ],
-      "max_opacity": 58,
+      "max_opacity": 130,
       "min_opacity": 0
     },
-    "update_interval": 19
+    "update_interval": 1
   },
   "map_name": "FORREST",
   "rooms_data": {

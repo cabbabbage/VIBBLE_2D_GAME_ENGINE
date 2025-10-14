@@ -318,12 +318,18 @@ void MapLightPanel::build_ui() {
     reactive_gradient_sensitivity_= make_float_slider("Gradient Sensitivity", 0.0f, 1.0f, last_applied_reactive_.directionality.gradient_sensitivity, 100);
     reactive_offset_strength_     = make_float_slider("Offset Strength", 0.0f, 2.0f, last_applied_reactive_.directionality.offset_strength, 100);
     reactive_max_offset_ratio_    = make_float_slider("Max Offset Ratio", 0.0f, 1.0f, last_applied_reactive_.directionality.max_offset_ratio, 100);
+    reactive_scale_factor_        = make_float_slider("Scale Factor", 0.1f, 3.0f, last_applied_reactive_.output.scale_factor, 100);
+    reactive_map_line_weight_     = make_float_slider("Map Line Weight", 0.0f, 3.0f, last_applied_reactive_.output.map_line_weight, 100);
+    reactive_parallax_strength_   = make_float_slider("Parallax Strength", 0.0f, 3.0f, last_applied_reactive_.output.parallax_strength, 100);
     reactive_opacity_strength_    = make_float_slider("Opacity Strength", 0.0f, 3.0f, last_applied_reactive_.response.opacity_strength, 100);
     reactive_min_opacity_         = make_float_slider("Min Opacity", 0.0f, 1.0f, last_applied_reactive_.response.min_opacity, 100);
     reactive_max_opacity_         = make_float_slider("Max Opacity", 0.0f, 1.0f, last_applied_reactive_.response.max_opacity, 100);
     reactive_temporal_smoothing_  = make_float_slider("Temporal Smoothing", 0.0f, 0.999f, last_applied_reactive_.stability.temporal_smoothing, 1000, 3);
 
     if (reactive_kernel_radius_) reactive_kernel_radius_->set_defer_commit_until_unfocus(true);
+    if (reactive_scale_factor_) reactive_scale_factor_->set_defer_commit_until_unfocus(true);
+    if (reactive_map_line_weight_) reactive_map_line_weight_->set_defer_commit_until_unfocus(true);
+    if (reactive_parallax_strength_) reactive_parallax_strength_->set_defer_commit_until_unfocus(true);
 
     rebuild_rows();
 }
@@ -445,6 +451,13 @@ void MapLightPanel::rebuild_rows() {
         rows.push_back({
             add_widget(std::make_unique<SliderWidget>(reactive_offset_strength_.get())),
             add_widget(std::make_unique<SliderWidget>(reactive_max_offset_ratio_.get()))
+        });
+        rows.push_back({
+            add_widget(std::make_unique<SliderWidget>(reactive_scale_factor_.get())),
+            add_widget(std::make_unique<SliderWidget>(reactive_map_line_weight_.get()))
+        });
+        rows.push_back({
+            add_widget(std::make_unique<SliderWidget>(reactive_parallax_strength_.get()))
         });
         rows.push_back({
             add_widget(std::make_unique<SliderWidget>(reactive_opacity_strength_.get())),
@@ -1037,6 +1050,13 @@ ReactiveShadowSettings MapLightPanel::current_reactive_settings_from_ui() const 
     settings.directionality.max_offset_ratio =
         slider_value_scaled(reactive_max_offset_ratio_, settings.directionality.max_offset_ratio, 100);
 
+    settings.output.scale_factor =
+        slider_value_scaled(reactive_scale_factor_, settings.output.scale_factor, 100);
+    settings.output.map_line_weight =
+        slider_value_scaled(reactive_map_line_weight_, settings.output.map_line_weight, 100);
+    settings.output.parallax_strength =
+        slider_value_scaled(reactive_parallax_strength_, settings.output.parallax_strength, 100);
+
     settings.response.opacity_strength =
         slider_value_scaled(reactive_opacity_strength_, settings.response.opacity_strength, 100);
     settings.response.min_opacity =
@@ -1059,6 +1079,9 @@ void MapLightPanel::set_reactive_sliders(const ReactiveShadowSettings& settings)
     set_slider_scaled(reactive_gradient_sensitivity_, settings.directionality.gradient_sensitivity, 100);
     set_slider_scaled(reactive_offset_strength_, settings.directionality.offset_strength, 100);
     set_slider_scaled(reactive_max_offset_ratio_, settings.directionality.max_offset_ratio, 100);
+    set_slider_scaled(reactive_scale_factor_, settings.output.scale_factor, 100);
+    set_slider_scaled(reactive_map_line_weight_, settings.output.map_line_weight, 100);
+    set_slider_scaled(reactive_parallax_strength_, settings.output.parallax_strength, 100);
     set_slider_scaled(reactive_opacity_strength_, settings.response.opacity_strength, 100);
     set_slider_scaled(reactive_min_opacity_, settings.response.min_opacity, 100);
     set_slider_scaled(reactive_max_opacity_, settings.response.max_opacity, 100);
@@ -1102,6 +1125,13 @@ ReactiveShadowSettings MapLightPanel::load_reactive_settings_from_dev_settings()
     settings.directionality.max_offset_ratio =
         std::max(settings.directionality.max_offset_ratio, std::max(legacy_max_ratio_x, legacy_max_ratio_y));
 
+    settings.output.scale_factor = static_cast<float>(
+        load_number(reactive_settings_key("output.scale_factor"), settings.output.scale_factor));
+    settings.output.map_line_weight = static_cast<float>(
+        load_number(reactive_settings_key("output.map_line_weight"), settings.output.map_line_weight));
+    settings.output.parallax_strength = static_cast<float>(
+        load_number(reactive_settings_key("output.parallax_strength"), settings.output.parallax_strength));
+
     settings.response.enable_opacity =
         load_bool(reactive_settings_key("response.enable_opacity"), settings.response.enable_opacity);
     settings.response.opacity_strength = static_cast<float>(
@@ -1134,6 +1164,10 @@ void MapLightPanel::persist_reactive_settings_to_dev_settings(const ReactiveShad
     save_number(reactive_settings_key("directionality.gradient_sensitivity"), settings.directionality.gradient_sensitivity);
     save_number(reactive_settings_key("directionality.offset_strength"), settings.directionality.offset_strength);
     save_number(reactive_settings_key("directionality.max_offset_ratio"), settings.directionality.max_offset_ratio);
+
+    save_number(reactive_settings_key("output.scale_factor"), settings.output.scale_factor);
+    save_number(reactive_settings_key("output.map_line_weight"), settings.output.map_line_weight);
+    save_number(reactive_settings_key("output.parallax_strength"), settings.output.parallax_strength);
 
     save_bool(reactive_settings_key("response.enable_opacity"), settings.response.enable_opacity);
     save_number(reactive_settings_key("response.opacity_strength"), settings.response.opacity_strength);

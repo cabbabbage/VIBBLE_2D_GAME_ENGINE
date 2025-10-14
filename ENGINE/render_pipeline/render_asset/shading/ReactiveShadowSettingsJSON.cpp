@@ -149,11 +149,18 @@ void populate_from_section(ReactiveShadowSettings::Stability& stability, const n
     stability.temporal_smoothing        = read_float(section, "temporal_smoothing", stability.temporal_smoothing);
 }
 
+void populate_from_section(ReactiveShadowSettings::Output& output, const nlohmann::json& section) {
+    output.scale_factor      = read_float(section, "scale_factor", output.scale_factor);
+    output.map_line_weight   = read_float(section, "map_line_weight", output.map_line_weight);
+    output.parallax_strength = read_float(section, "parallax_strength", output.parallax_strength);
+}
+
 void populate_from_flat(ReactiveShadowSettings& settings, const nlohmann::json& json) {
     populate_from_section(settings.sampling, json);
     populate_from_section(settings.directionality, json);
     populate_from_section(settings.response, json);
     populate_from_section(settings.stability, json);
+    populate_from_section(settings.output, json);
 }
 
 }  // namespace
@@ -176,6 +183,9 @@ ReactiveShadowSettings reactive_shadow_settings_from_json(const nlohmann::json& 
     }
     if (auto stability_it = json.find("stability"); stability_it != json.end() && stability_it->is_object()) {
         populate_from_section(result.stability, *stability_it);
+    }
+    if (auto output_it = json.find("output"); output_it != json.end() && output_it->is_object()) {
+        populate_from_section(result.output, *output_it);
     }
 
     // Support flat legacy layout if present.
@@ -210,6 +220,12 @@ void assign_reactive_shadow_settings(nlohmann::json& json, const ReactiveShadowS
     json["stability"] = nlohmann::json::object({
         { "enable_temporal_smoothing", sanitized.stability.enable_temporal_smoothing },
         { "temporal_smoothing", sanitized.stability.temporal_smoothing }
+    });
+
+    json["output"] = nlohmann::json::object({
+        { "scale_factor", sanitized.output.scale_factor },
+        { "map_line_weight", sanitized.output.map_line_weight },
+        { "parallax_strength", sanitized.output.parallax_strength }
     });
 }
 

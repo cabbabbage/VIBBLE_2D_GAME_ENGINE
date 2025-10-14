@@ -60,11 +60,25 @@ struct ReactiveShadowSettings {
         bool operator!=(const Stability& other) const { return !(*this == other); }
     } stability;
 
+    struct Output {
+        float scale_factor      = 1.0f;
+        float map_line_weight   = 0.0f;
+        float parallax_strength = 0.0f;
+
+        bool operator==(const Output& other) const {
+            return scale_factor == other.scale_factor &&
+                   map_line_weight == other.map_line_weight &&
+                   parallax_strength == other.parallax_strength;
+        }
+        bool operator!=(const Output& other) const { return !(*this == other); }
+    } output;
+
     bool operator==(const ReactiveShadowSettings& other) const {
         return sampling == other.sampling &&
                directionality == other.directionality &&
                response == other.response &&
-               stability == other.stability;
+               stability == other.stability &&
+               output == other.output;
     }
     bool operator!=(const ReactiveShadowSettings& other) const { return !(*this == other); }
 };
@@ -90,6 +104,10 @@ inline ReactiveShadowSettings sanitize_reactive_shadow_settings(const ReactiveSh
                                            1.0f);
 
     out.stability.temporal_smoothing = clampf(out.stability.temporal_smoothing, 0.0f, 0.999f);
+
+    out.output.scale_factor      = clampf(out.output.scale_factor, 0.1f, 4.0f);
+    out.output.map_line_weight   = clampf(out.output.map_line_weight, 0.0f, 5.0f);
+    out.output.parallax_strength = clampf(out.output.parallax_strength, 0.0f, 5.0f);
 
     return out;
 }

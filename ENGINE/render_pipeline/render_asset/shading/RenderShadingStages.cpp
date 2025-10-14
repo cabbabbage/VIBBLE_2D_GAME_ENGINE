@@ -4,6 +4,7 @@
 #include "render/global_light_source.hpp"
 #include "render_pipeline/render_asset/AssetRenderPipeline.hpp"
 #include "render_pipeline/render_asset/shading/ReactiveShadowSettings.hpp"
+#include "render/camera.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -38,6 +39,9 @@ struct ShadowPersistentState {
     VirtualLightMap     last_light_map{};
     bool                has_last_map   = false;
     bool                has_output     = false;
+    float               last_scale_factor   = 1.0f;
+    float               last_map_line_shift = 0.0f;
+    float               last_parallax_shift = 0.0f;
 };
 
 std::unordered_map<const Asset*, ShadowPersistentState>& shadow_state_cache() {
@@ -63,6 +67,51 @@ bool light_maps_similar(const VirtualLightMap& a, const VirtualLightMap& b, floa
     const float reference = std::max({ magnitude_a, magnitude_b, 1e-5f });
     const float ratio     = diff_sum / reference;
     return ratio <= tolerance;
+}
+
+float compute_map_line_shift(const StageContext& context, int width, float weight) {
+    if (!context.lighting || width <= 0 || weight <= 0.0f || context.screen_width_px <= 0) {
+        return 0.0f;
+    }
+    const float screen_width = static_cast<float>(context.screen_width_px);
+    const SDL_Point light_pos = context.main_light().get_position();
+    const float half_width = std::max(screen_width * 0.5f, 1.0f);
+    const float centered = clampf((static_cast<float>(light_pos.x) - half_width) / half_width, -2.0f, 2.0f);
+    const float light_opacity = static_cast<float>(context.main_light_alpha()) / 255.0f;
+    const float width_scale = static_cast<float>(width) * 0.5f;
+    return centered * light_opacity * weight * width_scale;
+}
+
+float compute_parallax_shift(const StageContext& context, const Asset& asset, int height, float weight) {
+    if (!context.lighting || weight <= 0.0f) {
+        return 0.0f;
+    }
+    const camera& cam = context.camera_view();
+    SDL_Point world_pos{ asset.pos.x, asset.pos.y };
+    SDL_Point baseline = cam.map_to_screen(world_pos);
+
+    float asset_scale = 1.0f;
+    if (asset.info && std::isfinite(asset.info->scale_factor) && asset.info->scale_factor >= 0.0f) {
+        asset_scale = asset.info->scale_factor;
+    }
+    const float cam_scale = cam.get_scale();
+    float       inv_scale = 1.0f;
+    if (std::isfinite(cam_scale) && cam_scale > 1e-6f) {
+        inv_scale = 1.0f / cam_scale;
+    }
+
+    int effective_height = height > 0 ? height : context.height;
+    if (effective_height <= 0) {
+        effective_height = 1;
+    }
+    const float asset_screen_height = static_cast<float>(effective_height) * asset_scale * inv_scale;
+    const float reference_height = context.reference_screen_height > 0.0f
+                                       ? context.reference_screen_height
+                                       : 1.0f;
+
+    camera::RenderEffects effects = cam.compute_render_effects(world_pos, asset_screen_height, reference_height);
+    const float parallax_px = static_cast<float>(effects.screen_position.x - baseline.x);
+    return parallax_px * weight;
 }
 
 struct LightProbe {
@@ -352,7 +401,13 @@ SDL_Texture* RenderShadowMask::run(SDL_Renderer* renderer, const Asset& asset, S
     const float base_scale       = context.base_shadow_scale;
     const float min_scale_limit  = base_scale * 0.9f;
     const float max_scale_limit  = base_scale * 2.0f;
-    float       target_scale     = base_scale;
+    const float requested_scale_factor = cfg.output.scale_factor;
+    const float safe_scale_factor      = std::max(requested_scale_factor, 1e-4f);
+    const float scaled_min_limit       = min_scale_limit * safe_scale_factor;
+    const float scaled_max_limit       = max_scale_limit * safe_scale_factor;
+    const float limit_min              = std::min(scaled_min_limit, scaled_max_limit);
+    const float limit_max              = std::max(scaled_min_limit, scaled_max_limit);
+    float       target_scale           = base_scale;
     bool        reuse_previous   = false;
 
     if (map && persistent.has_last_map && has_previous_output) {
@@ -440,7 +495,24 @@ SDL_Texture* RenderShadowMask::run(SDL_Renderer* renderer, const Asset& asset, S
         }
     }
 
-    target_scale = clampf(target_scale, min_scale_limit, max_scale_limit);
+    float base_offset_x   = target.offset_x;
+    float base_scale_only = target_scale;
+    if (reuse_previous) {
+        base_offset_x -= persistent.last_map_line_shift + persistent.last_parallax_shift;
+        const float previous_factor = std::max(persistent.last_scale_factor, 1e-4f);
+        base_scale_only = target_scale / previous_factor;
+    }
+    base_scale_only = clampf(base_scale_only, min_scale_limit, max_scale_limit);
+
+    const float map_line_shift = compute_map_line_shift(context, width, cfg.output.map_line_weight);
+    const float parallax_shift = compute_parallax_shift(context, asset, height, cfg.output.parallax_strength);
+
+    target.offset_x = base_offset_x + map_line_shift + parallax_shift;
+    target_scale    = clampf(base_scale_only * safe_scale_factor, limit_min, limit_max);
+
+    persistent.last_scale_factor   = safe_scale_factor;
+    persistent.last_map_line_shift = map_line_shift;
+    persistent.last_parallax_shift = parallax_shift;
 
     ShadowTemporalState output      = target;
     float               output_scale = target_scale;
@@ -460,7 +532,7 @@ SDL_Texture* RenderShadowMask::run(SDL_Renderer* renderer, const Asset& asset, S
                              -static_cast<float>(height) * cfg.directionality.max_offset_ratio,
                              static_cast<float>(height) * cfg.directionality.max_offset_ratio);
     output.opacity = clampf(output.opacity, cfg.response.min_opacity, cfg.response.max_opacity);
-    output_scale   = clampf(output_scale, min_scale_limit, max_scale_limit);
+    output_scale   = clampf(output_scale, limit_min, limit_max);
 
     persistent.output    = output;
     persistent.scale     = output_scale;
