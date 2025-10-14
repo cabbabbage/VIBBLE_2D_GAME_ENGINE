@@ -127,10 +127,6 @@ void MainApp::game_loop() {
                 const float early_ms = std::max(TARGET_FRAME_MS - elapsed_ms, 0.0f);
                 const float late_ms = std::max(elapsed_ms - TARGET_FRAME_MS, 0.0f);
 
-                if (game_assets_) {
-                        game_assets_->record_frame_timing(elapsed_ms, TARGET_FRAME_MS, early_ms, late_ms);
-                }
-
                 if (early_ms > 0.0f) {
                         SDL_Delay(static_cast<Uint32>(early_ms));
                 }
