@@ -66,6 +66,12 @@ private:
     struct PreviewNode;
     struct PreviewEdge;
 
+    enum class DetailsView {
+        RoomList,
+        LayerConfig,
+        RoomConfig
+    };
+
     friend class LayerCanvasWidget;
     friend class PanelSidebarWidget;
     friend class LayerConfigPanel;
@@ -120,20 +126,29 @@ private:
     void ensure_room_configurator();
     nlohmann::json* ensure_room_entry(const std::string& room_name);
     void update_sidebar_bounds(const SDL_Rect& bounds);
-    void close_layer_config_panel(bool cleanup = false, bool suppress_autoreopen = false);
     std::string layer_config_title_for(int index, const nlohmann::json* layer) const;
     SDL_Rect compute_room_config_bounds() const;
     nlohmann::json* active_room_entry();
     void handle_room_spawn_groups_changed(bool request_preview = true);
-    void ensure_details_panel_visible();
-    bool layer_config_has_content() const;
-    void render_layer_details_placeholder(SDL_Renderer* renderer) const;
     void update_header_visibility_state() const;
     void add_spawn_group_to_active_room();
     void duplicate_spawn_group_in_active_room(const std::string& spawn_id);
     void delete_spawn_group_from_active_room(const std::string& spawn_id);
     void move_spawn_group_in_active_room(const std::string& spawn_id, int dir);
     void reorder_spawn_group_in_active_room(const std::string& spawn_id, size_t target_index);
+
+    void show_room_list(bool reset_scroll);
+    void show_layer_config(int layer_index);
+    void show_room_config(const std::string& room_key);
+    int layout_room_list(const SlidingWindowContainer::LayoutContext& ctx);
+    int layout_layer_config(const SlidingWindowContainer::LayoutContext& ctx);
+    void render_room_list(SDL_Renderer* renderer) const;
+    void render_layer_config(SDL_Renderer* renderer) const;
+    bool handle_room_list_event(const SDL_Event& e);
+    bool handle_layer_config_event(const SDL_Event& e);
+    void update_room_list(const Input& input, int sw, int sh);
+    void update_layer_config(const Input& input, int sw, int sh);
+    void configure_details_container();
 
     void invalidate_cached_radii() const;
     void ensure_cached_radii() const;
@@ -184,10 +199,13 @@ private:
     std::unique_ptr<PanelSidebarWidget> sidebar_widget_;
     std::unique_ptr<RoomListPanel> room_list_panel_;
     std::unique_ptr<LayerConfigPanel> layer_config_;
-    std::unique_ptr<SlidingWindowContainer> layer_config_container_;
+    std::unique_ptr<SlidingWindowContainer> details_container_;
     std::unique_ptr<RoomSelectorPopup> room_selector_;
     std::unique_ptr<RoomConfigurator> room_configurator_;
     std::string layer_config_header_text_;
+    DetailsView active_details_view_ = DetailsView::RoomList;
+    bool details_header_visible_request_ = true;
+    bool room_configurator_header_visible_request_ = false;
 
     std::vector<std::unique_ptr<PreviewNode>> preview_nodes_;
     std::vector<PreviewEdge> preview_edges_;
@@ -207,10 +225,6 @@ private:
     std::string hovered_room_key_;
     int clicked_layer_index_ = -1;
     std::string clicked_room_key_;
-
-    mutable SDL_Rect layer_config_placeholder_rect_{0, 0, 0, 0};
-    mutable bool show_layer_placeholder_ = true;
-    bool suppress_details_autoreopen_ = false;
 
     std::shared_ptr<MapLayersController> controller_;
     bool embedded_mode_ = false;
