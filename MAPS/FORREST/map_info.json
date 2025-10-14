@@ -155,49 +155,49 @@
     ],
     "lens_flare": {
       "axis_factors": [
-        -0.550000011920929,
-        0.4099999964237213,
-        2.200000047683716,
-        0.550000011920929,
+        -0.5,
+        -0.20000000298023224,
+        0.25,
+        0.6000000238418579,
         0.949999988079071,
-        1.4500000476837158,
-        2.0
+        1.399999976158142,
+        1.899999976158142
       ],
       "enabled": false,
-      "ghost_alpha_cap": 0.6499999761581421,
-      "ghost_alpha_fall": 0.026000000536441803,
-      "ghost_alpha_rise": 0.25699999928474426,
-      "ghost_drift": 0.28200000524520874,
-      "ghost_follow_ema": 1.0,
-      "ghost_intensity_gain": 0.029999999329447746,
-      "ghost_size_max": 1053.0,
-      "ghost_size_min": 432.0,
-      "ghost_spawn_speed": 160.0,
-      "max_new_per_frame": 2,
-      "offscreen_spawn_bias": 10.399999618530273,
-      "seed_pos_ema": 0.9800000190734863,
-      "seed_stride_px": 79,
-      "seed_threshold_norm": 0.550000011920929,
-      "streak_angle_lean": -19.0
+      "ghost_alpha_cap": 0.5299999713897705,
+      "ghost_alpha_fall": 0.0148809514939785,
+      "ghost_alpha_rise": 0.02380952425301075,
+      "ghost_drift": 0.019999999552965164,
+      "ghost_follow_ema": 0.25,
+      "ghost_intensity_gain": 0.1599999964237213,
+      "ghost_size_max": 336.0,
+      "ghost_size_min": 112.0,
+      "ghost_spawn_speed": 0.0,
+      "max_new_per_frame": 12,
+      "offscreen_spawn_bias": 0.0,
+      "seed_pos_ema": 0.7099999785423279,
+      "seed_stride_px": 28,
+      "seed_threshold_norm": 0.9399999976158142,
+      "streak_angle_lean": 0.0
     },
     "max_opacity": 186,
     "min_opacity": 0,
     "mult": 0.32,
     "orbit_radius": 1839,
     "orbit_x": 1839,
-    "orbit_y": 1839,
+    "orbit_y": 1792,
     "radius": 2759,
     "reactive_shadows": {
       "directionality": {
         "enable_offsets": true,
-        "gradient_deadzone": 0.05999999865889549,
-        "gradient_max": 0.6000000238418579,
+        "gradient_deadzone": 0.6000000238418579,
+        "gradient_max": 1.659999966621399,
         "offset_max_ratio_x": 1.0,
         "offset_max_ratio_y": 1.0,
         "offset_ratio_x": 0.49000000953674316,
         "offset_ratio_y": 0.6299999952316284,
         "offset_x_bias": 2.380000114440918,
-        "offset_y_bias": 2.2699999809265137
+        "offset_y_bias": 1.7599999904632568
       },
       "response": {
         "absolute_opacity_max": 0.5299999713897705,
@@ -205,19 +205,19 @@
         "brightness_floor": 0.38999998569488525,
         "enable_opacity": true,
         "enable_scale": true,
-        "opacity_gamma": 2.0399999618530273,
-        "opacity_max_factor": 2.7200000286102295,
-        "opacity_min_factor": 1.5700000524520874,
-        "scale_back_limit": 0.09000000357627869,
-        "scale_front_limit": 0.27000001072883606,
-        "scale_max": 0.10000000149011612,
+        "opacity_gamma": 2.2799999713897705,
+        "opacity_max_factor": 1.3700000047683716,
+        "opacity_min_factor": 1.0099999904632568,
+        "scale_back_limit": 0.8100000023841858,
+        "scale_front_limit": 0.8799999952316284,
+        "scale_max": 1.159999966621399,
         "scale_min": 0.10000000149011612,
-        "scale_strength": 0.09000000357627869
+        "scale_strength": 0.8500000238418579
       },
       "sampling": {
         "diagonal_weight": 0.8700000047683716,
-        "kernel_radius": 8,
-        "outer_ring_weight": 1.5299999713897705
+        "kernel_radius": 13,
+        "outer_ring_weight": 2.200000047683716
       },
       "stability": {
         "enable_temporal_smoothing": true,
@@ -233,7 +233,7 @@
       "max_opacity": 58,
       "min_opacity": 0
     },
-    "update_interval": 26
+    "update_interval": 19
   },
   "map_name": "FORREST",
   "rooms_data": {

@@ -445,9 +445,9 @@ SDL_Texture* RenderShadowMask::run(SDL_Renderer* renderer, const Asset& asset, S
 
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
     SDL_SetTextureBlendMode(mask_texture, SDL_BLENDMODE_BLEND);
-    const Uint8 shade = static_cast<Uint8>(std::lround(output.opacity * 255.0f));
-    SDL_SetTextureColorMod(mask_texture, shade, shade, shade);
-    SDL_SetTextureAlphaMod(mask_texture, shade);
+    const Uint8 shade_alpha = static_cast<Uint8>(std::lround(output.opacity * 255.0f));
+    SDL_SetTextureColorMod(mask_texture, 0, 0, 0);
+    SDL_SetTextureAlphaMod(mask_texture, shade_alpha);
 
     const int scaled_w = std::max(1, static_cast<int>(std::lround(static_cast<float>(width) * output.scale)));
     const int scaled_h = std::max(1, static_cast<int>(std::lround(static_cast<float>(height) * output.scale)));
@@ -456,12 +456,6 @@ SDL_Texture* RenderShadowMask::run(SDL_Renderer* renderer, const Asset& asset, S
     const SDL_Point anchor = context.anchor_bottom_center();
     SDL_Rect dest{ anchor.x - scaled_w / 2 + offset_px_x, anchor.y - scaled_h + offset_px_y, scaled_w, scaled_h };
     SDL_RenderCopy(renderer, mask_texture, nullptr, &dest);
-
-    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_MOD);
-    SDL_SetTextureBlendMode(mask_texture, SDL_BLENDMODE_MOD);
-    SDL_SetTextureColorMod(mask_texture, 255, 255, 255);
-    SDL_SetTextureAlphaMod(mask_texture, 255);
-    SDL_RenderCopy(renderer, mask_texture, nullptr, nullptr);
 
     SDL_SetRenderTarget(renderer, prev_target);
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);

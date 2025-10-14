@@ -3,8 +3,6 @@
 #include "asset/Asset.hpp"
 #include "render/global_light_source.hpp"
 #include "render_pipeline/render_asset/IRenderStage.hpp"
-#include "render_pipeline/render_asset/lighting/RenderLightBehind.hpp"
-#include "render_pipeline/render_asset/lighting/RenderLightFront.hpp"
 #include "render_pipeline/render_asset/shading/RenderShadingStages.hpp"
 
 #include <algorithm>
@@ -143,17 +141,13 @@ AssetRenderPipeline::AssetRenderPipeline(SDL_Renderer* renderer, const SceneLigh
 : renderer_(renderer)
 , lighting_(lighting)
 , render_asset_(renderer) {
-    using render_pipeline::lighting::RenderLightBehind;
-    using render_pipeline::lighting::RenderLightFront;
     using render_pipeline::shading::RenderAsset;
     using render_pipeline::shading::RenderCastShadow;
     using render_pipeline::shading::RenderShadowMask;
 
     stages_.push_back(StageEntry{ std::make_unique<RenderAsset>(), SDL_BLENDMODE_BLEND, false });
-    stages_.push_back(StageEntry{ std::make_unique<RenderLightBehind>(), SDL_BLENDMODE_ADD, true });
-    stages_.push_back(StageEntry{ std::make_unique<RenderLightFront>(), SDL_BLENDMODE_ADD, true });
     stages_.push_back(StageEntry{ std::make_unique<RenderCastShadow>(), SDL_BLENDMODE_BLEND, false });
-    stages_.push_back(StageEntry{ std::make_unique<RenderShadowMask>(), SDL_BLENDMODE_MOD, true });
+    stages_.push_back(StageEntry{ std::make_unique<RenderShadowMask>(), SDL_BLENDMODE_BLEND, true });
 }
 
 SDL_Texture* AssetRenderPipeline::run(Asset& asset) {

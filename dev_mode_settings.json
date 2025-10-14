@@ -5,14 +5,14 @@
                 "reactive": {
                     "directionality": {
                         "enable_offsets": true,
-                        "gradient_deadzone": 0.05999999865889549,
-                        "gradient_max": 0.6000000238418579,
+                        "gradient_deadzone": 0.6000000238418579,
+                        "gradient_max": 1.659999966621399,
                         "offset_max_ratio_x": 1.0,
                         "offset_max_ratio_y": 1.0,
                         "offset_ratio_x": 0.49000000953674316,
                         "offset_ratio_y": 0.6299999952316284,
                         "offset_x_bias": 2.380000114440918,
-                        "offset_y_bias": 2.2699999809265137
+                        "offset_y_bias": 1.7599999904632568
                     },
                     "response": {
                         "absolute_opacity_max": 0.5299999713897705,
@@ -20,26 +20,26 @@
                         "brightness_floor": 0.38999998569488525,
                         "enable_opacity": true,
                         "enable_scale": true,
-                        "opacity_gamma": 2.0399999618530273,
-                        "opacity_max_factor": 2.7200000286102295,
-                        "opacity_min_factor": 1.5700000524520874,
-                        "scale_back_limit": 0.09000000357627869,
-                        "scale_front_limit": 0.27000001072883606,
-                        "scale_max": 0.10000000149011612,
+                        "opacity_gamma": 2.2799999713897705,
+                        "opacity_max_factor": 1.3700000047683716,
+                        "opacity_min_factor": 1.0099999904632568,
+                        "scale_back_limit": 0.8100000023841858,
+                        "scale_front_limit": 0.8799999952316284,
+                        "scale_max": 1.159999966621399,
                         "scale_min": 0.10000000149011612,
-                        "scale_strength": 0.09000000357627869
+                        "scale_strength": 0.8500000238418579
                     },
                     "sampling": {
                         "diagonal_weight": 0.8700000047683716,
-                        "kernel_radius": 8.0,
-                        "outer_ring_weight": 1.5299999713897705
+                        "kernel_radius": 13.0,
+                        "outer_ring_weight": 2.200000047683716
                     },
                     "stability": {
                         "enable_temporal_smoothing": true,
                         "temporal_smoothing": 0.6240000128746033
                     }
                 },
-                "update_map_light": false
+                "update_map_light": true
             }
         },
         "lock": {

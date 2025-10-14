@@ -17,7 +17,7 @@
 namespace {
 
 constexpr int   kCacheVersion    = 1;
-constexpr float kExpansionRatio  = 0.7f;
+constexpr float kExpansionRatio  = 0.4f;
 
 struct DistanceNode {
     float dist;
@@ -84,7 +84,7 @@ SDL_Surface* generate_mask_surface(SDL_Surface* source) {
     }
 
     const int expand_radius = compute_expand_radius(width, height);
-    const int blur_radius   = compute_blur_radius(expand_radius);
+    const int blur_radius   = compute_blur_radius(expand_radius/4);
 
     const Uint8* src_pixels = static_cast<const Uint8*>(src_rgba->pixels);
     const int src_pitch     = src_rgba->pitch;
