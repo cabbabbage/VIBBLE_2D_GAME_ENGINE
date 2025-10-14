@@ -8,8 +8,6 @@
 #include "audio/audio_engine.hpp"
 #include "dev_mode/dev_controls.hpp"
 #include "render/scene_renderer.hpp"
-#include "render/light_rays.hpp"
-#include "render/light_rays_config.hpp"
 #include "render_pipeline/ScalingLogic.hpp"
 #include "map_generation/room.hpp"
 #include "utils/area.hpp"
@@ -313,11 +311,6 @@ void Assets::hydrate_map_info_sections() {
             screen["min_opacity"] = map_min;
             screen["max_opacity"] = map_max;
         }
-    }
-    {
-        nlohmann::json& R = map_info_json_["light_rays_params"];
-        LightRaysConfig config = LightRaysConfig::from_json(R);
-        R = config.to_json();
     }
 }
 

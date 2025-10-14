@@ -8,8 +8,6 @@
 #include <nlohmann/json.hpp>
 #include "light_map.hpp"
 #include "global_light_source.hpp"
-#include "render/light_rays.hpp"
-#include "render/light_rays_config.hpp"
 #include "render_pipeline/render_asset/AssetRenderPipeline.hpp"
 #include "render/camera.hpp"
 
@@ -52,9 +50,6 @@ private:
     int            screen_light_max_opacity_ = 255;
     AssetRenderPipeline render_pipeline_;
     std::unique_ptr<LightMap> z_light_pass_;
-    std::unique_ptr<LightRaysPass> light_rays_pass_;
-    LightRaysConfig light_rays_config_{};
-    LightRaysParams light_rays_params_{};
     bool light_rays_enabled_ = false;
     bool fullscreen_light_rays_disabled_ = true;
     int            current_shading_group_ = 0;

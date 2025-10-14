@@ -54,15 +54,6 @@ SceneRenderer::SceneRenderer(SDL_Renderer* renderer,
         if (z_light_pass_) {
                 z_light_pass_->set_fullscreen_light_settings(screen_light_color_, screen_light_min_opacity_, screen_light_max_opacity_);
         }
-        light_rays_config_ = LightRaysConfig::defaults();
-        light_rays_params_ = light_rays_config_.to_light_rays_params();
-        light_rays_pass_ = std::make_unique<LightRaysPass>(renderer_, screen_width_, screen_height_);
-        light_rays_enabled_ = false;
-        if (light_rays_pass_) {
-                light_rays_pass_->set_screen_size(screen_width_, screen_height_);
-                light_rays_pass_->set_params(light_rays_params_);
-                light_rays_pass_->set_enabled(light_rays_enabled_ && !fullscreen_light_rays_disabled_);
-        }
         main_light_source_.update();
         z_light_pass_->render(debugging);
 }
@@ -118,16 +109,6 @@ void SceneRenderer::apply_map_light_config(const nlohmann::json& data) {
         update_fullscreen_light_texture();
 }
 
-void SceneRenderer::apply_light_rays_config(const nlohmann::json& data) {
-        light_rays_config_ = LightRaysConfig::from_json(data);
-        light_rays_params_ = light_rays_config_.to_light_rays_params();
-        light_rays_enabled_ = false;
-        if (light_rays_pass_) {
-                light_rays_pass_->set_screen_size(screen_width_, screen_height_);
-                light_rays_pass_->set_params(light_rays_params_);
-                light_rays_pass_->set_enabled(light_rays_enabled_ && !fullscreen_light_rays_disabled_);
-        }
-}
 
 void SceneRenderer::apply_screen_light_settings(const nlohmann::json& data) {
         SDL_Color desired_color{255, 255, 255, 255};
@@ -380,18 +361,6 @@ void SceneRenderer::render() {
     SDL_SetRenderTarget(renderer_, use_postprocess ? scene_target_tex_ : nullptr);
     z_light_pass_->render(debugging);
 
-    SDL_Texture* light_rays_texture = nullptr;
-    if (use_postprocess && scene_target_tex_ && light_rays_pass_ && light_rays_enabled_ &&
-        !fullscreen_light_rays_disabled_) {
-        light_rays_pass_->set_screen_size(screen_width_, screen_height_);
-        SDL_Point light_screen_pos = main_light_source_.get_position();
-        if (assets_) {
-            light_screen_pos = assets_->getView().map_to_screen(light_screen_pos);
-        }
-        light_rays_pass_->set_light_screen_pos(light_screen_pos);
-        light_rays_texture = light_rays_pass_->compute(scene_target_tex_);
-    }
-
     if (use_postprocess && scene_target_tex_) {
         SDL_SetRenderTarget(renderer_, nullptr);
         SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND);
@@ -411,10 +380,6 @@ void SceneRenderer::render() {
             SDL_SetTextureAlphaMod(scene_target_tex_, 255);
         }
 
-        if (light_rays_texture) {
-            SDL_Rect dest{0, 0, screen_width_, screen_height_};
-            SDL_RenderCopy(renderer_, light_rays_texture, nullptr, &dest);
-        }
     } else {
         SDL_SetRenderTarget(renderer_, nullptr);
     }
