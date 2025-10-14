@@ -22,21 +22,6 @@
 #include "custom_controllers/default_controller.hpp"
 using nlohmann::json;
 
-namespace {
-std::string format_steps(const std::vector<float>& steps) {
-        std::ostringstream oss;
-        oss << '[';
-        for (std::size_t i = 0; i < steps.size(); ++i) {
-                if (i != 0) {
-                        oss << ", ";
-                }
-                oss << std::fixed << std::setprecision(2) << steps[i];
-        }
-        oss << ']';
-        return oss.str();
-}
-}
-
 void AnimationLoader::load(AssetInfo& info, SDL_Renderer* renderer) {
         if (info.anims_json_.is_null()) return;
         SDL_Texture* base_sprite = nullptr;
@@ -45,6 +30,19 @@ void AnimationLoader::load(AssetInfo& info, SDL_Renderer* renderer) {
         info.generate_lights(renderer);
         CacheManager cache;
         std::string root_cache = "cache/" + info.name + "/animations";
+
+        const auto format_steps = [](const std::vector<float>& steps) {
+                std::ostringstream oss;
+                oss << '[';
+                for (std::size_t i = 0; i < steps.size(); ++i) {
+                        if (i != 0) {
+                                oss << ", ";
+                        }
+                        oss << std::fixed << std::setprecision(2) << steps[i];
+                }
+                oss << ']';
+                return oss.str();
+        };
 
         render_pipeline::ScalingLogic::ConfigureUsageStorage(std::filesystem::path("loading") / "scaling_profiles.json");
         const bool scaling_refresh_pending = render_pipeline::ScalingLogic::HasPendingUsageData();
