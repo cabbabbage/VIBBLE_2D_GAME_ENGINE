@@ -33,6 +33,7 @@
 #include "asset/Asset.hpp"
 #include "render/camera.hpp"
 #include "render/global_light_source.hpp"
+#include "render_pipeline/ScalingLogic.hpp"
 #include "utils/light_source.hpp"
 #include "search_assets.hpp"
 
@@ -914,6 +915,22 @@ bool AssetInfoUI::apply_section_to_assets(AssetInfoSectionId section_id, const s
 
 void AssetInfoUI::set_header_visibility_callback(std::function<void(bool)> cb) {
     container_.set_header_visibility_controller(std::move(cb));
+}
+
+void AssetInfoUI::notify_light_sources_modified(bool purge_light_cache) {
+    if (!info_) {
+        return;
+    }
+
+    render_pipeline::ScalingLogic::ResetAssetUsage(info_->name);
+
+    if (!purge_light_cache) {
+        return;
+    }
+
+    std::error_code ec;
+    std::filesystem::path cache_dir = std::filesystem::path("cache") / info_->name / "lights";
+    std::filesystem::remove_all(cache_dir, ec);
 }
 
 const char* AssetInfoUI::section_display_name(AssetInfoSectionId section_id) {

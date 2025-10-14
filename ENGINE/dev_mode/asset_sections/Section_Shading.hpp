@@ -126,23 +126,26 @@ public:
         bool used = DockableCollapsible::handle_event(e);
         if (!info_ || !expanded_) return used;
         bool changed = false;
+        bool reset_scaling_profile = false;
+        const bool shading_was_enabled = info_ && info_->is_shaded;
 
         if (c_is_shaded_ && c_is_shaded_->handle_event(e)) {
             changed = true;
+            reset_scaling_profile = true;
         }
 
         if (c_is_shaded_ && c_is_shaded_->value()) {
             if (s_base_shadow_height_ && s_base_shadow_height_->handle_event(e)) {
                 base_shadow_height_value_ = s_base_shadow_height_->value();
             }
-            if (s_sh_intensity_ && s_sh_intensity_->handle_event(e)) { shading_light_.intensity = s_sh_intensity_->value(); changed = true; }
-            if (s_sh_radius_    && s_sh_radius_->handle_event(e))    { shading_light_.radius = s_sh_radius_->value(); changed = true; }
-            if (s_sh_x_radius_  && s_sh_x_radius_->handle_event(e))  { shading_light_.x_radius = s_sh_x_radius_->value(); changed = true; }
-            if (s_sh_y_radius_  && s_sh_y_radius_->handle_event(e))  { shading_light_.y_radius = s_sh_y_radius_->value(); changed = true; }
-            if (s_sh_apex_bias_ && s_sh_apex_bias_->handle_event(e)) { shading_light_.apex_speed_bias = s_sh_apex_bias_->value(); changed = true; }
-            if (s_sh_offset_x_  && s_sh_offset_x_->handle_event(e))  { shading_light_.offset_x = s_sh_offset_x_->value(); changed = true; }
-            if (s_sh_offset_y_  && s_sh_offset_y_->handle_event(e))  { shading_light_.offset_y = s_sh_offset_y_->value(); changed = true; }
-            if (s_sh_falloff_   && s_sh_falloff_->handle_event(e))   { shading_light_.fall_off = s_sh_falloff_->value(); changed = true; }
+            if (s_sh_intensity_ && s_sh_intensity_->handle_event(e)) { shading_light_.intensity = s_sh_intensity_->value(); changed = true; reset_scaling_profile = true; }
+            if (s_sh_radius_    && s_sh_radius_->handle_event(e))    { shading_light_.radius = s_sh_radius_->value(); changed = true; reset_scaling_profile = true; }
+            if (s_sh_x_radius_  && s_sh_x_radius_->handle_event(e))  { shading_light_.x_radius = s_sh_x_radius_->value(); changed = true; reset_scaling_profile = true; }
+            if (s_sh_y_radius_  && s_sh_y_radius_->handle_event(e))  { shading_light_.y_radius = s_sh_y_radius_->value(); changed = true; reset_scaling_profile = true; }
+            if (s_sh_apex_bias_ && s_sh_apex_bias_->handle_event(e)) { shading_light_.apex_speed_bias = s_sh_apex_bias_->value(); changed = true; reset_scaling_profile = true; }
+            if (s_sh_offset_x_  && s_sh_offset_x_->handle_event(e))  { shading_light_.offset_x = s_sh_offset_x_->value(); changed = true; reset_scaling_profile = true; }
+            if (s_sh_offset_y_  && s_sh_offset_y_->handle_event(e))  { shading_light_.offset_y = s_sh_offset_y_->value(); changed = true; reset_scaling_profile = true; }
+            if (s_sh_falloff_   && s_sh_falloff_->handle_event(e))   { shading_light_.fall_off = s_sh_falloff_->value(); changed = true; reset_scaling_profile = true; }
             if (s_sh_factor_    && s_sh_factor_->handle_event(e)) {
                 int new_factor = std::clamp(s_sh_factor_->value(), 1, 200);
                 if (new_factor != shading_factor_) {
@@ -163,12 +166,19 @@ public:
                 }
                 shading_factor_ = new_factor;
                 changed = true;
+                reset_scaling_profile = true;
             }
         }
+
+        const bool shading_now_enabled = c_is_shaded_ && c_is_shaded_->value();
+        const bool shading_removed = shading_was_enabled && !shading_now_enabled;
 
         if (changed) {
             commit_to_info();
             if (info_) {
+                if (ui_ && reset_scaling_profile) {
+                    ui_->notify_light_sources_modified(shading_removed);
+                }
                 (void)info_->update_info_json();
                 if (ui_) {
                     SDL_Renderer* renderer = ui_->get_last_renderer();

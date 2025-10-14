@@ -108,10 +108,6 @@ void LightMap::collect_layers(std::vector<LightEntry>& out) {
                 }
 
                 const bool flipped = asset->flipped;
-                const float asset_scale_factor = (asset->info->scale_factor > 0.0f && std::isfinite(asset->info->scale_factor))
-                                                     ? asset->info->scale_factor
-                                                     : 1.0f;
-
                 for (const LightSource& light : lights) {
                         if (!light.texture || light.intensity <= 0) {
                                 continue;
@@ -126,8 +122,8 @@ void LightMap::collect_layers(std::vector<LightEntry>& out) {
                                 continue;
                         }
 
-                        int scaled_fw = std::max(1, static_cast<int>(std::lround(static_cast<float>(base_w) * asset_scale_factor)));
-                        int scaled_fh = std::max(1, static_cast<int>(std::lround(static_cast<float>(base_h) * asset_scale_factor)));
+                        int scaled_fw = base_w;
+                        int scaled_fh = base_h;
 
                         const int offset_x = flipped ? -light.offset_x : light.offset_x;
                         SDL_Point light_pos{asset->pos.x + offset_x, asset->pos.y + light.offset_y};
@@ -136,7 +132,25 @@ void LightMap::collect_layers(std::vector<LightEntry>& out) {
                                 continue;
                         }
 
-                        const float desired_scale = render_pipeline::ScalingLogic::ComputeScale(base_w, base_h, dst.w, dst.h);
+                        float desired_scale = render_pipeline::ScalingLogic::ComputeScale(base_w, base_h, dst.w, dst.h);
+                        const float base_scale = (asset->info->scale_factor > 0.0f && std::isfinite(asset->info->scale_factor))
+                                                     ? asset->info->scale_factor
+                                                     : 1.0f;
+                        const auto& usage = asset->last_scale_usage();
+                        if (std::isfinite(usage.requested_scale) && usage.requested_scale > 0.0f) {
+                                const bool usage_default =
+                                        (std::fabs(usage.requested_scale - 1.0f) < 1e-4f) &&
+                                        (std::fabs(usage.texture_scale   - 1.0f) < 1e-4f) &&
+                                        (std::fabs(usage.remainder_scale - 1.0f) < 1e-4f) &&
+                                        usage.variant_index == 0 &&
+                                        (std::fabs(base_scale - 1.0f) > 1e-4f);
+                                if (!usage_default && base_scale > 0.0f && std::isfinite(base_scale)) {
+                                        float normalized = usage.requested_scale / base_scale;
+                                        if (std::isfinite(normalized) && normalized > 0.0f) {
+                                                desired_scale = normalized;
+                                        }
+                                }
+                        }
                         SDL_Texture* tex = light.texture_for_scale(desired_scale);
                         if (!tex) {
                                 continue;

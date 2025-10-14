@@ -102,6 +102,8 @@ public:
         if (!info_ || !expanded_) return used;
         bool changed = false;
         bool regenerate_lighting = false;
+        bool reset_scaling_profile = false;
+        bool purge_light_cache = false;
         if (s_ray_strength_) {
             if (s_ray_strength_->handle_event(e)) {
                 used = true;
@@ -120,6 +122,8 @@ public:
                     rows_.erase(rows_.begin() + i);
                     changed = true;
                     regenerate_lighting = true;
+                    reset_scaling_profile = true;
+                    purge_light_cache = true;
                     used = true;
                     break;
                 }
@@ -135,6 +139,7 @@ public:
                 if (committed_value != previous_value) {
                     set_value(committed_value);
                     changed = true;
+                    reset_scaling_profile = true;
                     used = true;
                     if (affects_texture) {
                         regenerate_lighting = true;
@@ -205,6 +210,8 @@ public:
                 rows_.push_back(std::move(r));
                 changed = true;
                 regenerate_lighting = true;
+                reset_scaling_profile = true;
+                purge_light_cache = true;
                 used = true;
             }
         }
@@ -217,6 +224,9 @@ public:
         if (changed) {
             commit_to_info();
             if (info_) {
+                if (ui_ && reset_scaling_profile) {
+                    ui_->notify_light_sources_modified(purge_light_cache);
+                }
                 (void)info_->update_info_json();
                 if (regenerate_lighting && ui_) {
                     SDL_Renderer* r = ui_->get_last_renderer();

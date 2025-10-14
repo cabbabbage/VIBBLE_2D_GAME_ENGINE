@@ -48,6 +48,7 @@ class AssetInfoUI {
     void sync_target_z_threshold();
     void request_apply_section(AssetInfoSectionId section_id);
     void set_header_visibility_callback(std::function<void(bool)> cb);
+    void notify_light_sources_modified(bool purge_light_cache);
 
   private:
     void layout_widgets(int screen_w, int screen_h) const;
