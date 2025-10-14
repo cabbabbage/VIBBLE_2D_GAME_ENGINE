@@ -144,19 +144,12 @@ void SceneRenderer::update_fullscreen_light_texture(){
     SDL_SetRenderTarget(renderer_,prev);
 }
 
-void SceneRenderer::update_shading_groups(){
-    ++current_shading_group_;
-    if (current_shading_group_>num_groups_) current_shading_group_=1;
-}
-
 bool SceneRenderer::shouldRegen(Asset* a){
     if (!a) return false;
     SDL_Texture* final_texture=a->get_final_texture();
-    const int sg=a->get_shading_group();
-    const bool group_due=sg>0 && sg==current_shading_group_;
     const bool locked=a->is_current_animation_locked_in_progress();
     const bool treat_static=a->static_frame||locked;
-    return !final_texture||group_due||!treat_static;
+    return !final_texture||!treat_static;
 }
 
 SDL_Rect SceneRenderer::get_scaled_position_rect(Asset* a,int fw,int fh,float inv_scale,int min_w,int min_h,float ref_sh){
@@ -185,7 +178,6 @@ SDL_Rect SceneRenderer::get_scaled_position_rect(Asset* a,int fw,int fh,float in
 void SceneRenderer::render(){
     static int render_call_count=0; ++render_call_count;
 
-    update_shading_groups();
     bool should_update_light=true;
     if (assets_ && assets_->is_dev_mode()){
         should_update_light=devmode::ui_settings::load_bool(kUpdateMapLightSettingKey, false);

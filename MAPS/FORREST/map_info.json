@@ -190,19 +190,19 @@
     "reactive_shadows": {
       "directionality": {
         "enable_offsets": true,
-        "gradient_sensitivity": 0.9599999785423279,
-        "max_offset_ratio": 1.0,
-        "offset_strength": 2.0
+        "gradient_sensitivity": 0.3799999952316284,
+        "max_offset_ratio": 0.46000000834465027,
+        "offset_strength": 1.5
       },
       "response": {
         "enable_opacity": true,
-        "max_opacity": 1.0,
-        "min_opacity": 0.0,
+        "max_opacity": 0.9399999976158142,
+        "min_opacity": 0.6299999952316284,
         "opacity_strength": 3.0
       },
       "sampling": {
         "diagonal_weight": 1.5700000524520874,
-        "kernel_radius": 10,
+        "kernel_radius": 12,
         "outer_ring_weight": 0.23000000417232513
       },
       "stability": {

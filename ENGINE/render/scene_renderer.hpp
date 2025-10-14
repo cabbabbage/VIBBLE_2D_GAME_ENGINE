@@ -37,7 +37,6 @@ public:
     const render_pipeline::shading::ReactiveShadowSettings& reactive_shadow_settings() const { return reactive_shadow_settings_; }
 
 private:
-    void update_shading_groups();
     bool shouldRegen(Asset* a);
     SDL_Rect get_scaled_position_rect(Asset* a, int fw, int fh, float inv_scale, int min_w, int min_h, float reference_screen_height);
     void apply_screen_light_settings(const nlohmann::json& data);
@@ -58,8 +57,6 @@ private:
     AssetRenderPipeline render_pipeline_;
     std::unique_ptr<LightMap> z_light_pass_;
     LensFlareRenderer lens_flares_;
-    int            current_shading_group_ = 0;
-    int            num_groups_ = 40;
     bool           debugging = false;
     bool           low_quality_rendering_ = false;
     bool           light_map_only_mode_ = false;

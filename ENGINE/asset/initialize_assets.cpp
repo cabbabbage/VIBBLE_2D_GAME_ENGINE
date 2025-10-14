@@ -59,7 +59,6 @@ void InitializeAssets::initialize(Assets& assets,
 	find_player(assets);
         assets.initialize_active_assets(SDL_Point{screen_center_x, screen_center_y});
         assets.refresh_active_asset_lists();
-        setup_shading_groups(assets);
         if (kAssetLoggingEnabled) {
                 std::cout << "[InitializeAssets] Initialization base complete. Total assets: "
                 << assets.all.size() << "\n";
@@ -80,23 +79,4 @@ void InitializeAssets::find_player(Assets& assets) {
                         break;
                 }
 	}
-}
-
-void InitializeAssets::set_shading_group_recursive(Asset& asset,
-                                                   int group,
-                                                   int ) {
-	asset.set_shading_group(group);
-	for (Asset* child : asset.children) {
-		if (child) set_shading_group_recursive(*child, group, 0);
-	}
-}
-
-void InitializeAssets::setup_shading_groups(Assets& assets) {
-        const int num_groups = std::max(1, assets.shading_group_count());
-        int group = 1;
-        for (Asset* a : assets.all) {
-                if (!a || !a->info) continue;
-                set_shading_group_recursive(*a, group, num_groups);
-                group = (group == num_groups) ? 1 : group + 1;
-        }
 }
