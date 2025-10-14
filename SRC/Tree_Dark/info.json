@@ -1233,10 +1233,11 @@
     ],
     "asset_name": "Tree_Dark",
     "asset_type": "boundary",
-    "can_invert": true,
+    "can_invert": false,
     "duplicatable": false,
     "duplication_interval_max": 60,
     "duplication_interval_min": 30,
+    "generate_rays": false,
     "has_shading": true,
     "lighting_info": [
         {
@@ -1255,6 +1256,8 @@
     "min_child_depth": 3,
     "min_distance_all": 0,
     "min_same_type_distance": 39,
+    "neighbor_search_distance": 500,
+    "ray_strength": 0,
     "render_radius": 1000,
     "rnd_spawn_max": 400,
     "rnd_spawn_min": 300,

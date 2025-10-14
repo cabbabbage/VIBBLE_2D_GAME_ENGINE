@@ -1,12 +1,12 @@
 {
   "camera_settings": {
-    "distance_scale_strength": 0.05999999865889549,
-    "foreshorten_strength": 0.10999999940395355,
-    "height_at_zoom1": 664.0,
-    "parallax_strength": 50.75,
+    "distance_scale_strength": 0.07999999821186066,
+    "foreshorten_strength": 0.09999999403953552,
+    "height_at_zoom1": 517.0,
+    "parallax_strength": 28.0,
     "realism_enabled": true,
     "render_distance": 2200.0,
-    "tripod_distance_y": -190.0
+    "tripod_distance_y": -495.0
   },
   "map_assets_data": {
     "spawn_groups": [
