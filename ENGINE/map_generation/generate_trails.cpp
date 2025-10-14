@@ -284,7 +284,17 @@ std::vector<std::pair<Room*, Room*>> GenerateTrails::plan_maze_connections(
                         components[dsu.find(i)].push_back(i);
                 }
                 return components;
-};
+        };
+
+        std::vector<std::pair<double, double>> cached_centers;
+        cached_centers.reserve(unique_rooms.size());
+        for (Room* room : unique_rooms) {
+                if (room) {
+                        cached_centers.emplace_back(room_center(room));
+                } else {
+                        cached_centers.emplace_back(0.0, 0.0);
+                }
+        }
 
         auto components = rebuild_components();
         while (components.size() > 1) {
@@ -293,7 +303,13 @@ std::vector<std::pair<Room*, Room*>> GenerateTrails::plan_maze_connections(
                 for (auto& entry : components) {
                         groups.push_back(std::move(entry.second));
                 }
-                const auto& base_group = groups.front();
+                size_t base_index = 0;
+                for (size_t i = 1; i < groups.size(); ++i) {
+                        if (!groups[i].empty() && (groups[base_index].empty() || groups[i].size() < groups[base_index].size())) {
+                                base_index = i;
+                        }
+                }
+                const auto& base_group = groups[base_index];
                 if (base_group.empty()) {
                         break;
                 }
@@ -301,10 +317,11 @@ std::vector<std::pair<Room*, Room*>> GenerateTrails::plan_maze_connections(
                 size_t best_a = base_group.front();
                 size_t best_b = base_group.front();
                 for (size_t idx_a : base_group) {
-                        auto [ax, ay] = room_center(unique_rooms[idx_a]);
-                        for (size_t g = 1; g < groups.size(); ++g) {
+                        const auto [ax, ay] = cached_centers[idx_a];
+                        for (size_t g = 0; g < groups.size(); ++g) {
+                                if (g == base_index) continue;
                                 for (size_t idx_b : groups[g]) {
-                                        auto [bx, by] = room_center(unique_rooms[idx_b]);
+                                        const auto [bx, by] = cached_centers[idx_b];
                                         double dist = std::hypot(ax - bx, ay - by);
                                         if (dist < best_dist) {
                                                 best_dist = dist;
