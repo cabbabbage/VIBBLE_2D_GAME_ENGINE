@@ -7,12 +7,15 @@
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
+#include <deque>
 #include <fstream>
 #include <iomanip>
 #include <limits>
 #include <mutex>
 #include <sstream>
 #include <string>
+#include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #include <SDL.h>
@@ -219,36 +222,33 @@ struct ScalingLogic {
             return;
         }
         ensure_loaded(state);
-        if (!state.data.contains("assets") || !state.data["assets"].is_object()) {
-            state.data["assets"] = nlohmann::json::object();
-        }
-        auto& assets = state.data["assets"];
-        nlohmann::json& entry = assets[asset_key];
-        if (!entry.is_object()) {
-            entry = default_asset_entry();
-        }
-
-        std::vector<std::uint64_t> histogram = parse_histogram(entry);
-        const int bucket = histogram_bucket(requested_scale);
-        if (bucket >= 0 && static_cast<std::size_t>(bucket) < histogram.size()) {
-            histogram[static_cast<std::size_t>(bucket)] += 1;
-        }
-
-        const std::vector<int> recommended = compute_recommendations(histogram);
-        const bool changed = update_entry(entry, histogram, recommended, requested_scale, stored_scale);
-        if (changed) {
-            state.dirty = true;
-        }
-        if (state.dirty) {
-            save_to_disk(state);
-        }
+        enqueue_usage_sample(state, asset_key, requested_scale, stored_scale);
     }
 
     static inline bool FlushUsageData() {
         UsageState& state = usage_state();
         std::lock_guard<std::mutex> guard(state.mutex);
         ensure_loaded(state);
-        return save_to_disk(state);
+        const Uint32 now = SDL_GetTicks();
+        const bool merged = process_pending_samples(state, now, true);
+        if (merged || state.dirty) {
+            return save_to_disk(state);
+        }
+        return true;
+    }
+
+    static inline void TickUsageSampling() {
+        UsageState& state = usage_state();
+        std::lock_guard<std::mutex> guard(state.mutex);
+        if (!state.enabled) {
+            return;
+        }
+        ensure_loaded(state);
+        const Uint32 now = SDL_GetTicks();
+        const bool merged = process_pending_samples(state, now, false);
+        if (merged && state.dirty) {
+            save_to_disk(state);
+        }
     }
 
     static inline ScaleProfile ProfileForAsset(const std::string& asset_key) {
@@ -300,6 +300,14 @@ private:
         bool                  dirty    = false;
         std::filesystem::path file_path = std::filesystem::path("loading") / "scaling_profiles.json";
         nlohmann::json        data      = default_storage();
+        struct Sample {
+            float requested_scale = 1.0f;
+            float stored_scale    = 1.0f;
+        };
+        std::unordered_map<std::string, std::vector<Sample>> pending_samples;
+        std::unordered_map<std::string, Uint32>               next_allowed_sample;
+        std::deque<std::string>                               sampling_queue;
+        std::unordered_set<std::string>                       queued_assets;
     };
 
     static inline UsageState& usage_state() {
@@ -362,6 +370,95 @@ private:
             state.data["new_values"] = false;
             state.dirty               = true;
         }
+    }
+
+    static inline void ensure_assets_container(UsageState& state) {
+        if (!state.data.contains("assets") || !state.data["assets"].is_object()) {
+            state.data["assets"] = nlohmann::json::object();
+        }
+    }
+
+    static inline void enqueue_usage_sample(UsageState& state,
+                                            const std::string& asset_key,
+                                            float requested_scale,
+                                            float stored_scale) {
+        auto& samples = state.pending_samples[asset_key];
+        samples.push_back(UsageState::Sample{ requested_scale, stored_scale });
+        if (state.queued_assets.insert(asset_key).second) {
+            state.sampling_queue.push_back(asset_key);
+        }
+    }
+
+    static inline bool merge_samples_for_asset(UsageState& state,
+                                               const std::string& asset_key,
+                                               const std::vector<UsageState::Sample>& samples) {
+        if (samples.empty()) {
+            return false;
+        }
+
+        ensure_assets_container(state);
+        auto& assets = state.data["assets"];
+        nlohmann::json& entry = assets[asset_key];
+        if (!entry.is_object()) {
+            entry = default_asset_entry();
+        }
+
+        std::vector<std::uint64_t> histogram = parse_histogram(entry);
+        for (const auto& sample : samples) {
+            const int bucket = histogram_bucket(sample.requested_scale);
+            if (bucket >= 0 && static_cast<std::size_t>(bucket) < histogram.size()) {
+                histogram[static_cast<std::size_t>(bucket)] += 1;
+            }
+        }
+
+        const UsageState::Sample& last_sample = samples.back();
+        const std::vector<int> recommended = compute_recommendations(histogram);
+        const bool changed = update_entry(entry,
+                                          histogram,
+                                          recommended,
+                                          last_sample.requested_scale,
+                                          last_sample.stored_scale);
+        if (changed) {
+            state.dirty = true;
+        }
+        return changed;
+    }
+
+    static inline bool process_pending_samples(UsageState& state, Uint32 now, bool process_all) {
+        bool merged = false;
+        std::size_t iterations = state.sampling_queue.size();
+        std::size_t processed  = 0;
+
+        while (!state.sampling_queue.empty() && iterations-- > 0) {
+            std::string asset_key = std::move(state.sampling_queue.front());
+            state.sampling_queue.pop_front();
+            state.queued_assets.erase(asset_key);
+
+            auto pending_it = state.pending_samples.find(asset_key);
+            if (pending_it == state.pending_samples.end() || pending_it->second.empty()) {
+                state.pending_samples.erase(asset_key);
+                continue;
+            }
+
+            const Uint32 next_allowed = state.next_allowed_sample[asset_key];
+            const bool eligible = process_all || SDL_TICKS_PASSED(now, next_allowed);
+            if (!eligible) {
+                state.sampling_queue.push_back(asset_key);
+                state.queued_assets.insert(asset_key);
+                continue;
+            }
+
+            merged = merge_samples_for_asset(state, asset_key, pending_it->second) || merged;
+            state.next_allowed_sample[asset_key] = now + kSamplingIntervalMs;
+            state.pending_samples.erase(pending_it);
+            ++processed;
+
+            if (!process_all && processed >= 1) {
+                break;
+            }
+        }
+
+        return merged;
     }
 
     static inline std::vector<std::uint64_t> parse_histogram(const nlohmann::json& entry) {
@@ -535,7 +632,8 @@ private:
         return true;
     }
 
-    static constexpr int kHistogramBucketCount    = 10;
+    static constexpr Uint32 kSamplingIntervalMs   = 15'000u;
+    static constexpr int    kHistogramBucketCount = 10;
     static constexpr std::size_t kMaxRecommendedVariants = 8;
 };
 
