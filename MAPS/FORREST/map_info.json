@@ -28,23 +28,23 @@
       {
         "candidates": [
           {
-            "chance": 7,
+            "chance": 106,
             "name": "null"
           },
           {
-            "chance": 3.7275,
+            "chance": 1,
             "name": "#pretty"
           },
           {
-            "chance": 3.7275,
+            "chance": 0.7275,
             "name": "#pretty"
           },
           {
-            "chance": 4.7275,
+            "chance": 0.7275,
             "name": "Small_Rock"
           },
           {
-            "chance": 38.05,
+            "chance": 64.05,
             "name": "#grass"
           }
         ],
