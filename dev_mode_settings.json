@@ -2,7 +2,44 @@
     "dev_ui": {
         "lighting": {
             "map_panel": {
-                "update_map_light": false
+                "reactive": {
+                    "directionality": {
+                        "enable_offsets": true,
+                        "gradient_deadzone": 0.05999999865889549,
+                        "gradient_max": 0.6000000238418579,
+                        "offset_max_ratio_x": 0.3499999940395355,
+                        "offset_max_ratio_y": 0.25,
+                        "offset_ratio_x": 0.49000000953674316,
+                        "offset_ratio_y": 0.6299999952316284,
+                        "offset_x_bias": 1.25,
+                        "offset_y_bias": 0.8999999761581421
+                    },
+                    "response": {
+                        "absolute_opacity_max": 1.0,
+                        "absolute_opacity_min": 0.10000000149011612,
+                        "brightness_floor": 0.05000000074505806,
+                        "enable_opacity": true,
+                        "enable_scale": true,
+                        "opacity_gamma": 0.8899999856948853,
+                        "opacity_max_factor": 1.350000023841858,
+                        "opacity_min_factor": 0.44999998807907104,
+                        "scale_back_limit": 0.07999999821186066,
+                        "scale_front_limit": 0.12999999523162842,
+                        "scale_max": 0.5,
+                        "scale_min": 0.38999998569488525,
+                        "scale_strength": 0.30000001192092896
+                    },
+                    "sampling": {
+                        "diagonal_weight": 1.5499999523162842,
+                        "kernel_radius": 10.0,
+                        "outer_ring_weight": 1.690000057220459
+                    },
+                    "stability": {
+                        "enable_temporal_smoothing": true,
+                        "temporal_smoothing": 0.6000000238418579
+                    }
+                },
+                "update_map_light": true
             }
         },
         "lock": {
