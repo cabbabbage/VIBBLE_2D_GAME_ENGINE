@@ -22,9 +22,9 @@ struct LightSource {
         SDL_Color color = {255, 255, 255, 255};
         SDL_Texture* texture = nullptr;
         bool behind = false;
-        std::array<SDL_Texture*, render_pipeline::ScalingLogic::kVariantCount> cached_variants{};
-        std::array<int, render_pipeline::ScalingLogic::kVariantCount> variant_w{};
-        std::array<int, render_pipeline::ScalingLogic::kVariantCount> variant_h{};
+        std::array<SDL_Texture*, render_pipeline::ScalingLogic::kDefaultVariantCount> cached_variants{};
+        std::array<int, render_pipeline::ScalingLogic::kDefaultVariantCount> variant_w{};
+        std::array<int, render_pipeline::ScalingLogic::kDefaultVariantCount> variant_h{};
 
         SDL_Texture* texture_for_scale(float desired_scale) const {
                 const auto selection = render_pipeline::ScalingLogic::Choose(desired_scale);

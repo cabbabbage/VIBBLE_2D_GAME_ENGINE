@@ -1450,17 +1450,14 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
 
         bool drew_indicator = false;
         if (const Global_Light_Source* light = assets_->map_light_source()) {
-            SDL_Texture* texture = light->get_texture();
-            if (texture) {
-                SDL_Point light_pos = light->get_position();
-                SDL_Point start = screen_center;
-                SDL_Point end = cam.map_to_screen(light_pos);
-                SDL_SetRenderDrawColor(renderer, 220, 32, 32, 230);
-                SDL_RenderDrawLine(renderer, start.x, start.y, end.x, end.y);
-                SDL_Rect tip{ end.x - 4, end.y - 4, 8, 8 };
-                SDL_RenderFillRect(renderer, &tip);
-                drew_indicator = true;
-            }
+            SDL_Point light_pos = light->get_position();
+            SDL_Point start = screen_center;
+            SDL_Point end = cam.map_to_screen(light_pos);
+            SDL_SetRenderDrawColor(renderer, 220, 32, 32, 230);
+            SDL_RenderDrawLine(renderer, start.x, start.y, end.x, end.y);
+            SDL_Rect tip{ end.x - 4, end.y - 4, 8, 8 };
+            SDL_RenderFillRect(renderer, &tip);
+            drew_indicator = true;
         }
 
         if (!drew_indicator) {

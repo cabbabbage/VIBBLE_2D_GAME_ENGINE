@@ -1,7 +1,6 @@
 #pragma once
 
 #include <cstddef>
-#include <array>
 #include <memory>
 #include <string>
 #include <utility>
@@ -42,9 +41,15 @@ public:
     SDL_Texture* frame_variant(std::size_t frame_index, std::size_t variant_index) const;
 
     struct FrameCache {
-        std::array<SDL_Texture*, render_pipeline::ScalingLogic::kVariantCount> textures{};
-        std::array<int, render_pipeline::ScalingLogic::kVariantCount> widths{};
-        std::array<int, render_pipeline::ScalingLogic::kVariantCount> heights{};
+        std::vector<SDL_Texture*> textures;
+        std::vector<int> widths;
+        std::vector<int> heights;
+
+        void resize(std::size_t variant_count) {
+            textures.assign(variant_count, nullptr);
+            widths.assign(variant_count, 0);
+            heights.assign(variant_count, 0);
+        }
     };
     struct Source {
     std::string kind;
@@ -71,8 +76,11 @@ public:
     std::vector<AnimationFrame>& movement_path(std::size_t index);
     std::size_t default_movement_path_index() const { return 0; }
     std::size_t clamp_path_index(std::size_t index) const;
+    std::size_t variant_count() const { return variant_steps_.size(); }
+    const std::vector<float>& variant_steps() const { return variant_steps_; }
 private:
     std::vector<FrameCache> frame_cache_;
     AudioClip audio_clip;
     std::vector<std::vector<AnimationFrame>> movement_paths_;
+    std::vector<float> variant_steps_;
 };

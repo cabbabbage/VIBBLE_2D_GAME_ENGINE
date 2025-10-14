@@ -181,8 +181,8 @@
         255,
         255
       ],
-      "max_opacity": 255,
-      "min_opacity": 240
+      "max_opacity": 5,
+      "min_opacity": 2
     },
     "update_interval": 13
   },
@@ -533,30 +533,6 @@
             },
             {
               "chance": 100,
-              "name": "Bomb"
-            }
-          ],
-          "display_name": "lab_bombs",
-          "dx": 39,
-          "dy": -340,
-          "enforce_spacing": false,
-          "max_number": 5,
-          "min_number": 5,
-          "origional_height": 2080,
-          "origional_width": 2080,
-          "position": "Perimeter",
-          "priority": 0,
-          "radius": 584,
-          "spawn_id": "spn-20997858f211"
-        },
-        {
-          "candidates": [
-            {
-              "chance": 0,
-              "name": "null"
-            },
-            {
-              "chance": 100,
               "name": "candle"
             }
           ],
@@ -569,6 +545,7 @@
           "origional_height": 2080,
           "origional_width": 2080,
           "position": "Exact",
+          "priority": 0,
           "spawn_id": "spn-b09ff44ad485"
         }
       ]
@@ -759,25 +736,6 @@
             {
               "chance": 0,
               "name": "null"
-            },
-            {
-              "chance": 100,
-              "name": "#pretty"
-            }
-          ],
-          "display_name": "Bomb",
-          "enforce_spacing": false,
-          "max_number": 1,
-          "min_number": 1,
-          "position": "Random",
-          "priority": 0,
-          "spawn_id": "spn-201a21be3548"
-        },
-        {
-          "candidates": [
-            {
-              "chance": 0,
-              "name": "null"
             }
           ],
           "display_name": "New Spawn",
@@ -785,7 +743,7 @@
           "max_number": 1,
           "min_number": 1,
           "position": "Exact",
-          "priority": 1,
+          "priority": 0,
           "spawn_id": "spn-468fbf18908b"
         }
       ]

@@ -1,6 +1,4 @@
 #include "global_light_source.hpp"
-#include "generate_light.hpp"
-#include "utils/light_source.hpp"
 #include "map_generation/map_layers_geometry.hpp"
 #include <nlohmann/json.hpp>
 #include <fstream>
@@ -18,7 +16,6 @@ Global_Light_Source::Global_Light_Source(SDL_Renderer* renderer,
                                          SDL_Color fallback_base_color,
                                          const std::string& map_path)
 : renderer_(renderer),
-        texture_(nullptr),
         base_color_(fallback_base_color),
         current_color_(fallback_base_color),
         default_center_(screen_center),
@@ -33,7 +30,6 @@ Global_Light_Source::Global_Light_Source(SDL_Renderer* renderer,
 {
         set_defaults(screen_width, fallback_base_color);
         if (!load_from_map_light(map_path)) {
-                build_texture();
                 set_light_brightness();
                 recalc_position();
         }
@@ -204,7 +200,6 @@ void Global_Light_Source::apply_config(const json& data) {
         }
 
         current_color_ = clamp_color_alpha(base_color_);
-        build_texture();
         set_light_brightness();
         recalc_position();
         frame_counter_ = 0;
@@ -239,10 +234,6 @@ float Global_Light_Source::get_angle() const {
 	return angle_;
 }
 
-SDL_Texture* Global_Light_Source::get_texture() const {
-	return texture_;
-}
-
 void Global_Light_Source::set_light_brightness() {
         const int alpha = static_cast<int>(current_color_.a);
         if (alpha <= min_opacity_) {
@@ -256,24 +247,6 @@ void Global_Light_Source::set_light_brightness() {
         const int range = std::max(1, max_opacity_ - min_opacity_);
         const float scaled = static_cast<float>(max_opacity_ - alpha) / static_cast<float>(range);
         light_brightness = static_cast<int>(std::clamp(scaled * 255.0f, 0.0f, 255.0f));
-}
-
-void Global_Light_Source::build_texture() {
-	if (texture_) SDL_DestroyTexture(texture_);
-	LightSource ls;
-	ls.radius    = int(radius_);
-	ls.intensity = int(intensity_);
-	ls.fall_off  = int(fall_off_);
-	ls.flare     = 0;
-	ls.color     = base_color_;
-	GenerateLight gen(renderer_);
-	texture_ = gen.generate(renderer_, "map", ls, 0);
-	if (!texture_) {
-		std::cerr << "[MapLight] build_texture failed\n";
-		cached_w_ = cached_h_ = 0;
-	} else {
-		SDL_QueryTexture(texture_, nullptr, nullptr, &cached_w_, &cached_h_);
-	}
 }
 
 void Global_Light_Source::recalc_position() {
@@ -339,11 +312,4 @@ Uint8 Global_Light_Source::clamp_alpha(Uint8 value) const {
 SDL_Color Global_Light_Source::clamp_color_alpha(SDL_Color color) const {
         color.a = clamp_alpha(color.a);
         return color;
-}
-
-Global_Light_Source::~Global_Light_Source() {
-	if (texture_) {
-		SDL_DestroyTexture(texture_);
-		texture_ = nullptr;
-	}
 }

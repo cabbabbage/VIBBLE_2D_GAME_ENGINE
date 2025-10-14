@@ -6,6 +6,7 @@
 #include <map>
 #include <nlohmann/json.hpp>
 #include <cmath>
+#include <cstdint>
 #include <optional>
 #include <string>
 #include <vector>
@@ -59,6 +60,8 @@ class AssetInfo {
     bool moving_asset = false;
     bool generate_rays = false;
     int ray_strength = 0;
+    std::vector<float>  scale_variants;
+    std::uint64_t       scale_profile_revision = 0;
     struct NamedArea {
         struct RenderFrame {
             int width = 0;

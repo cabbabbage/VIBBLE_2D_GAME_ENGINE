@@ -607,16 +607,27 @@ void Asset::clear_render_caches() {
 }
 
 void Asset::clear_downscale_cache() {
+        const auto& steps = (info && !info->scale_variants.empty())
+            ? static_cast<const std::vector<float>&>(info->scale_variants)
+            : render_pipeline::ScalingLogic::DefaultScaleSteps();
+
         for (std::size_t idx = 0; idx < downscale_cache_.size(); ++idx) {
                 auto& entry = downscale_cache_[idx];
                 if (idx != 0 && entry.texture) {
                         SDL_DestroyTexture(entry.texture);
                 }
+        }
+
+        downscale_cache_.clear();
+        downscale_cache_.resize(steps.size());
+        for (std::size_t idx = 0; idx < downscale_cache_.size(); ++idx) {
+                auto& entry = downscale_cache_[idx];
                 entry.texture = nullptr;
                 entry.width   = 0;
                 entry.height  = 0;
-                entry.scale   = render_pipeline::ScalingLogic::kScaleSteps[idx];
+                entry.scale   = (idx < steps.size()) ? steps[idx] : 1.0f;
         }
+
         last_scaled_texture_      = nullptr;
         last_scaled_source_       = nullptr;
         last_scaled_w_            = 0;
@@ -638,7 +649,12 @@ void Asset::update_scale_usage(float requested, float texture_scale, float remai
         last_scale_usage_.requested_scale = requested;
         last_scale_usage_.texture_scale   = texture_scale;
         last_scale_usage_.remainder_scale = remainder;
-        last_scale_usage_.variant_index   = std::clamp(variant_index, 0, static_cast<int>(render_pipeline::ScalingLogic::kVariantCount) - 1);
+        const int max_index = downscale_cache_.empty() ? 0 : static_cast<int>(downscale_cache_.size() - 1);
+        last_scale_usage_.variant_index   = std::clamp(variant_index, 0, max_index);
+
+        if (info) {
+                render_pipeline::ScalingLogic::RecordUsage(info->name, requested, texture_scale);
+        }
 }
 
 void Asset::set_hidden(bool state){ hidden = state; }

@@ -14,6 +14,7 @@
 #include <limits>
 #include <memory>
 #include <unordered_map>
+#include <unordered_set>
 #include <iterator>
 namespace fs = std::filesystem;
 
@@ -106,13 +107,17 @@ void Animation::clear_texture_cache() {
 }
 
 SDL_Texture* Animation::frame_variant(std::size_t frame_index, std::size_t variant_index) const {
-        if (variant_index >= render_pipeline::ScalingLogic::kVariantCount) {
-                variant_index = 0;
-        }
         if (frame_index >= frame_cache_.size()) {
                 return nullptr;
         }
-        return frame_cache_[frame_index].textures[variant_index];
+        const FrameCache& cache_entry = frame_cache_[frame_index];
+        if (cache_entry.textures.empty()) {
+                return nullptr;
+        }
+        if (variant_index >= cache_entry.textures.size() || !cache_entry.textures[variant_index]) {
+                return cache_entry.textures[0];
+        }
+        return cache_entry.textures[variant_index];
 }
 
 void Animation::load(const std::string& trigger,
@@ -134,11 +139,27 @@ void Animation::load(const std::string& trigger,
         bool       reused_animation  = false;
         const double safe_scale = sanitize_scale_factor(scale_factor);
         clear_texture_cache();
+        variant_steps_ = info.scale_variants;
+        if (variant_steps_.empty()) {
+                const auto& defaults = render_pipeline::ScalingLogic::DefaultScaleSteps();
+                variant_steps_.assign(defaults.begin(), defaults.end());
+        }
+        if (variant_steps_.empty()) {
+                variant_steps_.push_back(1.0f);
+        }
+        std::sort(variant_steps_.begin(), variant_steps_.end(), std::greater<float>());
+        variant_steps_.erase(std::unique(variant_steps_.begin(), variant_steps_.end(), [](float a, float b) {
+                return std::fabs(a - b) <= 1e-4f;
+        }), variant_steps_.end());
+        if (std::fabs(variant_steps_.front() - 1.0f) > 1e-4f) {
+                variant_steps_.insert(variant_steps_.begin(), 1.0f);
+        }
+        const std::size_t variant_count = variant_steps_.size();
         if (anim_json.contains("source")) {
                 const auto& s = anim_json["source"];
-		try {
-			if (s.contains("kind") && s["kind"].is_string())
-			source.kind = s["kind"].get<std::string>();
+                try {
+                        if (s.contains("kind") && s["kind"].is_string())
+                        source.kind = s["kind"].get<std::string>();
 			else
 			source.kind = "folder";
 		} catch (...) { source.kind = "folder"; }
@@ -237,8 +258,9 @@ void Animation::load(const std::string& trigger,
                                 new_caches.reserve(src_anim.frames.size());
                                 for (std::size_t frame_idx = 0; frame_idx < src_anim.frames.size(); ++frame_idx) {
                                         FrameCache cache_entry;
+                                        cache_entry.resize(variant_count);
                                         bool base_ok = false;
-                                        for (std::size_t variant_idx = 0; variant_idx < render_pipeline::ScalingLogic::kVariantCount; ++variant_idx) {
+                                        for (std::size_t variant_idx = 0; variant_idx < variant_count; ++variant_idx) {
                                                 SDL_Texture* source_tex = src_anim.frame_variant(frame_idx, variant_idx);
                                                 if (!source_tex) {
                                                         cache_entry.textures[variant_idx] = nullptr;
@@ -316,7 +338,8 @@ void Animation::load(const std::string& trigger,
 		if (expected_frames == 0) return;
                 bool use_cache = false;
 		nlohmann::json meta;
-                const auto expected_steps = render_pipeline::ScalingLogic::PercentSteps();
+                const auto expected_steps = render_pipeline::ScalingLogic::PercentSteps(variant_steps_);
+                const std::uint64_t expected_revision = info.scale_profile_revision;
                 if (cache.load_metadata(meta_file, meta)) {
                         bool meta_ok = (
                             meta.value("cache_version", 0) == kAnimationCacheVersion &&
@@ -326,8 +349,8 @@ void Animation::load(const std::string& trigger,
                         if (meta_ok) {
                                 if (meta.contains("scale_steps") && meta["scale_steps"].is_array()) {
                                         const auto& stored = meta["scale_steps"];
-                                        if (stored.size() == render_pipeline::ScalingLogic::kVariantCount) {
-                                                for (std::size_t idx = 0; idx < render_pipeline::ScalingLogic::kVariantCount; ++idx) {
+                                        if (stored.size() == expected_steps.size()) {
+                                                for (std::size_t idx = 0; idx < expected_steps.size(); ++idx) {
                                                         int stored_pct = stored[idx].get<int>();
                                                         if (stored_pct != expected_steps[idx]) {
                                                                 meta_ok = false;
@@ -341,14 +364,20 @@ void Animation::load(const std::string& trigger,
                                         meta_ok = false;
                                 }
                         }
-			use_cache = meta_ok;
-		}
+                        if (meta_ok) {
+                                const std::uint64_t stored_revision = meta.value("scale_profile_revision", static_cast<std::uint64_t>(0));
+                                if (stored_revision != expected_revision) {
+                                        meta_ok = false;
+                                }
+                        }
+                        use_cache = meta_ok;
+                }
 
-                std::array<std::vector<SDL_Surface*>, render_pipeline::ScalingLogic::kVariantCount> variant_surfaces;
+                std::vector<std::vector<SDL_Surface*>> variant_surfaces(variant_count);
                 if (use_cache) {
                         bool variants_loaded = true;
-                        for (std::size_t idx = 0; idx < render_pipeline::ScalingLogic::kVariantCount; ++idx) {
-                                std::string variant_path = render_pipeline::ScalingLogic::VariantFolder(cache_folder, idx);
+                        for (std::size_t idx = 0; idx < variant_count; ++idx) {
+                                std::string variant_path = render_pipeline::ScalingLogic::VariantFolder(cache_folder, variant_steps_, idx);
                                 std::vector<SDL_Surface*> loaded;
                                 if (!cache.load_surface_sequence(variant_path, expected_frames, loaded)) {
                                         if (idx == 0 && cache.load_surface_sequence(cache_folder, expected_frames, loaded)) {
@@ -379,7 +408,29 @@ void Animation::load(const std::string& trigger,
                         }
                 }
 
+                auto cleanup_variant_directories = [&](const std::string& folder) {
+                        try {
+                                std::unordered_set<std::string> expected_names;
+                                expected_names.reserve(variant_count);
+                                for (std::size_t idx = 0; idx < variant_count; ++idx) {
+                                        const int percent = (idx < expected_steps.size()) ? expected_steps[idx] : static_cast<int>(std::lround(variant_steps_[idx] * 100.0f));
+                                        expected_names.insert("scale_" + std::to_string(percent));
+                                }
+                                for (const auto& entry : fs::directory_iterator(folder)) {
+                                        if (!entry.is_directory()) {
+                                                continue;
+                                        }
+                                        const std::string name = entry.path().filename().string();
+                                        if (name.rfind("scale_", 0) == 0 && expected_names.find(name) == expected_names.end()) {
+                                                fs::remove_all(entry.path());
+                                        }
+                                }
+                        } catch (...) {
+                        }
+                };
+
                 if (!use_cache) {
+                        cleanup_variant_directories(cache_folder);
                         for (auto& list : variant_surfaces) {
                                 for (SDL_Surface* surf : list) {
                                         if (surf) SDL_FreeSurface(surf);
@@ -411,16 +462,16 @@ void Animation::load(const std::string& trigger,
                                 return;
                         }
                         variant_surfaces[0] = std::move(base_surfaces);
-                        for (std::size_t idx = 1; idx < render_pipeline::ScalingLogic::kVariantCount; ++idx) {
-                                const float scale_step = render_pipeline::ScalingLogic::kScaleSteps[idx];
+                        for (std::size_t idx = 1; idx < variant_count; ++idx) {
+                                const float scale_step = variant_steps_[idx];
                                 variant_surfaces[idx].reserve(variant_surfaces[0].size());
                                 for (SDL_Surface* base_surface : variant_surfaces[0]) {
                                         SDL_Surface* scaled = render_pipeline::CreateScaledSurface(base_surface, scale_step);
                                         variant_surfaces[idx].push_back(scaled);
                                 }
                         }
-                        for (std::size_t idx = 0; idx < render_pipeline::ScalingLogic::kVariantCount; ++idx) {
-                                const std::string variant_path = render_pipeline::ScalingLogic::VariantFolder(cache_folder, idx);
+                        for (std::size_t idx = 0; idx < variant_count; ++idx) {
+                                const std::string variant_path = render_pipeline::ScalingLogic::VariantFolder(cache_folder, variant_steps_, idx);
                                 cache.save_surface_sequence(variant_path, variant_surfaces[idx]);
                         }
                         nlohmann::json new_meta;
@@ -429,10 +480,11 @@ void Animation::load(const std::string& trigger,
                         new_meta["original_width"]  = orig_w;
                         new_meta["original_height"] = orig_h;
                         nlohmann::json step_arr = nlohmann::json::array();
-                        for (std::size_t idx = 0; idx < render_pipeline::ScalingLogic::kVariantCount; ++idx) {
+                        for (std::size_t idx = 0; idx < expected_steps.size(); ++idx) {
                                 step_arr.push_back(expected_steps[idx]);
                         }
                         new_meta["scale_steps"] = std::move(step_arr);
+                        new_meta["scale_profile_revision"] = expected_revision;
                         cache.save_metadata(meta_file, new_meta);
                 }
 
@@ -461,7 +513,8 @@ void Animation::load(const std::string& trigger,
 
                 for (std::size_t frame_idx = 0; frame_idx < variant_surfaces[0].size(); ++frame_idx) {
                         FrameCache cache_entry;
-                        for (std::size_t variant_idx = 0; variant_idx < render_pipeline::ScalingLogic::kVariantCount; ++variant_idx) {
+                        cache_entry.resize(variant_count);
+                        for (std::size_t variant_idx = 0; variant_idx < variant_count; ++variant_idx) {
                                 SDL_Surface* surface = (frame_idx < variant_surfaces[variant_idx].size())
                                                         ? variant_surfaces[variant_idx][frame_idx]
                                                         : nullptr;
@@ -498,7 +551,7 @@ void Animation::load(const std::string& trigger,
                 if (flipped_source && renderer && !frame_cache_.empty()) {
                         for (std::size_t frame_index = 0; frame_index < frame_cache_.size(); ++frame_index) {
                                 FrameCache& cache_entry = frame_cache_[frame_index];
-                                for (std::size_t variant_idx = 0; variant_idx < render_pipeline::ScalingLogic::kVariantCount; ++variant_idx) {
+                                for (std::size_t variant_idx = 0; variant_idx < cache_entry.textures.size(); ++variant_idx) {
                                         SDL_Texture* src_tex = cache_entry.textures[variant_idx];
                                         if (!src_tex) {
                                                 continue;

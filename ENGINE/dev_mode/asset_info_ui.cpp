@@ -661,7 +661,7 @@ void AssetInfoUI::render_world_overlay(SDL_Renderer* r, const camera& cam) const
     SDL_Point screen_center = cam.map_to_screen(screen_center_map);
 
     bool drew_indicator = false;
-    if (global_light && global_light->get_texture()) {
+    if (global_light) {
         SDL_Point light_pos = global_light->get_position();
         SDL_Point end = cam.map_to_screen(light_pos);
         SDL_SetRenderDrawColor(r, 220, 32, 32, 230);

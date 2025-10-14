@@ -3,9 +3,12 @@
 #include "asset/asset_info.hpp"
 #include "utils/cache_manager.hpp"
 #include "asset/animation.hpp"
+#include "render_pipeline/ScalingLogic.hpp"
 #include <nlohmann/json.hpp>
 #include <SDL.h>
 #include <SDL_image.h>
+#include <algorithm>
+#include <cmath>
 #include <filesystem>
 #include <vector>
 #include <string>
@@ -17,16 +20,36 @@
 using nlohmann::json;
 
 void AnimationLoader::load(AssetInfo& info, SDL_Renderer* renderer) {
-	if (info.anims_json_.is_null()) return;
-	SDL_Texture* base_sprite = nullptr;
-	int scaled_sprite_w = 0;
-	int scaled_sprite_h = 0;
-	info.generate_lights(renderer);
-	CacheManager cache;
-	std::string root_cache = "cache/" + info.name + "/animations";
-	std::vector<std::pair<std::string, nlohmann::json>> alias_queue;
-	for (auto it = info.anims_json_.begin(); it != info.anims_json_.end(); ++it) {
-		const std::string& trigger = it.key();
+        if (info.anims_json_.is_null()) return;
+        SDL_Texture* base_sprite = nullptr;
+        int scaled_sprite_w = 0;
+        int scaled_sprite_h = 0;
+        info.generate_lights(renderer);
+        CacheManager cache;
+        std::string root_cache = "cache/" + info.name + "/animations";
+
+        render_pipeline::ScalingLogic::ConfigureUsageStorage(std::filesystem::path("loading") / "scaling_profiles.json");
+        const auto profile = render_pipeline::ScalingLogic::ProfileForAsset(info.name);
+        info.scale_variants = profile.steps;
+        if (info.scale_variants.empty()) {
+                const auto& defaults = render_pipeline::ScalingLogic::DefaultScaleSteps();
+                info.scale_variants.assign(defaults.begin(), defaults.end());
+        }
+        if (info.scale_variants.empty()) {
+                info.scale_variants.push_back(1.0f);
+        }
+        std::sort(info.scale_variants.begin(), info.scale_variants.end(), std::greater<float>());
+        info.scale_variants.erase(std::unique(info.scale_variants.begin(), info.scale_variants.end(), [](float a, float b) {
+                return std::fabs(a - b) <= 1e-4f;
+        }), info.scale_variants.end());
+        if (std::fabs(info.scale_variants.front() - 1.0f) > 1e-4f) {
+                info.scale_variants.insert(info.scale_variants.begin(), 1.0f);
+        }
+        info.scale_profile_revision = profile.revision;
+
+        std::vector<std::pair<std::string, nlohmann::json>> alias_queue;
+        for (auto it = info.anims_json_.begin(); it != info.anims_json_.end(); ++it) {
+                const std::string& trigger = it.key();
 		const auto& anim_json = it.value();
 		if (anim_json.is_null()) continue;
 		if (anim_json.contains("source") && anim_json["source"].is_object()) {

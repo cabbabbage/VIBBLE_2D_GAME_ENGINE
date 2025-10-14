@@ -68,21 +68,6 @@ void LightMap::collect_layers(std::vector<LightEntry>& out, std::mt19937& rng) {
                 entry.color_mod = fullscreen_light_color_;
                 out.push_back(entry);
         }
-        if (SDL_Texture* map_tex = main_light_.get_texture()) {
-                int lw = main_light_.get_cached_w();
-                int lh = main_light_.get_cached_h();
-                if (lw == 0 || lh == 0) SDL_QueryTexture(map_tex, nullptr, nullptr, &lw, &lh);
-                SDL_Rect map_rect = get_scaled_position_rect(main_light_.get_position(), lw, lh, inv_scale, min_visible_w, min_visible_h);
-                if (map_rect.w != 0 || map_rect.h != 0) {
-                        LightEntry entry{};
-                        entry.tex = map_tex;
-                        entry.dst = map_rect;
-                        entry.alpha = main_alpha;
-                        entry.flip = SDL_FLIP_NONE;
-                        entry.color_mod = SDL_Color{255, 255, 220, 255};
-                        out.push_back(entry);
-                }
-        }
         const float main_brightness = static_cast<float>(main_light_.get_brightness());
         for (Asset* a : active) {
                 if (!a || !a->info) continue;

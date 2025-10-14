@@ -79,11 +79,11 @@ SDL_Texture* GenerateLight::generate(SDL_Renderer* renderer,
         }
     }
 
-    std::array<std::vector<SDL_Surface*>, render_pipeline::ScalingLogic::kVariantCount> variant_surfaces;
+    std::array<std::vector<SDL_Surface*>, render_pipeline::ScalingLogic::kDefaultVariantCount> variant_surfaces;
 
     if (cache_ok) {
         bool variants_loaded = true;
-        for (std::size_t idx = 0; idx < render_pipeline::ScalingLogic::kVariantCount; ++idx) {
+        for (std::size_t idx = 0; idx < render_pipeline::ScalingLogic::kDefaultVariantCount; ++idx) {
             std::string variant_path = render_pipeline::ScalingLogic::VariantFolder(folder, idx);
             std::vector<SDL_Surface*> loaded;
             if (!CacheManager::load_surface_sequence(variant_path, 1, loaded)) {
@@ -94,7 +94,7 @@ SDL_Texture* GenerateLight::generate(SDL_Renderer* renderer,
         }
         if (variants_loaded && !variant_surfaces[0].empty() && variant_surfaces[0][0]) {
             SDL_Texture* base_tex = nullptr;
-            for (std::size_t idx = 0; idx < render_pipeline::ScalingLogic::kVariantCount; ++idx) {
+            for (std::size_t idx = 0; idx < render_pipeline::ScalingLogic::kDefaultVariantCount; ++idx) {
                 SDL_Surface* surface = (!variant_surfaces[idx].empty()) ? variant_surfaces[idx][0] : nullptr;
                 SDL_Texture* tex_variant = surface ? CacheManager::surface_to_texture(renderer, surface) : nullptr;
                 if (tex_variant) {
@@ -213,17 +213,19 @@ SDL_Texture* GenerateLight::generate(SDL_Renderer* renderer,
 
     SDL_UnlockSurface(surf);
 
-    std::array<SDL_Surface*, render_pipeline::ScalingLogic::kVariantCount> surfaces{};
+    std::array<SDL_Surface*, render_pipeline::ScalingLogic::kDefaultVariantCount> surfaces{};
     surfaces[0] = surf;
-    for (std::size_t idx = 1; idx < render_pipeline::ScalingLogic::kVariantCount; ++idx) {
-        SDL_Surface* scaled_surface = render_pipeline::CreateScaledSurface(surf, render_pipeline::ScalingLogic::kScaleSteps[idx]);
+    const auto& default_steps = render_pipeline::ScalingLogic::DefaultScaleSteps();
+    for (std::size_t idx = 1; idx < render_pipeline::ScalingLogic::kDefaultVariantCount; ++idx) {
+        const float step = (idx < default_steps.size()) ? default_steps[idx] : 1.0f;
+        SDL_Surface* scaled_surface = render_pipeline::CreateScaledSurface(surf, step);
         if (!scaled_surface) {
             scaled_surface = render_pipeline::CreateScaledSurface(surf, 1.0f);
         }
         surfaces[idx] = scaled_surface;
     }
 
-    for (std::size_t idx = 0; idx < render_pipeline::ScalingLogic::kVariantCount; ++idx) {
+    for (std::size_t idx = 0; idx < render_pipeline::ScalingLogic::kDefaultVariantCount; ++idx) {
         std::vector<SDL_Surface*> single;
         if (surfaces[idx]) {
             single.push_back(surfaces[idx]);
@@ -242,14 +244,14 @@ SDL_Texture* GenerateLight::generate(SDL_Renderer* renderer,
     new_meta["blur_passes"] = blur_passes;
     new_meta["color"]       = { col.r, col.g, col.b };
     nlohmann::json steps_json = nlohmann::json::array();
-    for (std::size_t idx = 0; idx < render_pipeline::ScalingLogic::kVariantCount; ++idx) {
+    for (std::size_t idx = 0; idx < render_pipeline::ScalingLogic::kDefaultVariantCount; ++idx) {
         steps_json.push_back(expected_steps[idx]);
     }
     new_meta["scale_steps"] = std::move(steps_json);
     CacheManager::save_metadata(meta_file, new_meta);
 
     SDL_Texture* base_tex = nullptr;
-    for (std::size_t idx = 0; idx < render_pipeline::ScalingLogic::kVariantCount; ++idx) {
+    for (std::size_t idx = 0; idx < render_pipeline::ScalingLogic::kDefaultVariantCount; ++idx) {
         SDL_Surface* surface = surfaces[idx];
         SDL_Texture* tex_variant = surface ? CacheManager::surface_to_texture(renderer, surface) : nullptr;
         if (tex_variant) {
