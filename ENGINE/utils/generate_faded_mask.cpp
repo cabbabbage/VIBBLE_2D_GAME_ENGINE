@@ -16,7 +16,7 @@
 
 namespace {
 
-constexpr int   kCacheVersion    = 1;
+constexpr int   kCacheVersion    = 2;
 constexpr float kExpansionRatio  = 0.4f;
 
 struct DistanceNode {
@@ -35,7 +35,15 @@ int compute_expand_radius(int w, int h) {
 }
 
 int compute_blur_radius(int expand_radius) {
-    return std::max(1, expand_radius / 2);
+    if (expand_radius <= 0) return 0;
+    return std::max(1, expand_radius / 3);
+}
+
+float bell_curve_weight(float t) {
+    const float clamped = std::clamp(t, 0.0f, 1.0f);
+    // Smooth start/end using a cosine bell curve for softer transitions.
+    const float pi = static_cast<float>(std::acos(-1.0));
+    return 0.5f - 0.5f * std::cos(clamped * pi);
 }
 
 std::string variant_folder(const std::filesystem::path& base,
@@ -64,7 +72,13 @@ SDL_Surface* generate_mask_surface(SDL_Surface* source) {
     const int width  = std::max(1, src_rgba->w);
     const int height = std::max(1, src_rgba->h);
 
-    SDL_Surface* mask = make_rgba_surface(width, height);
+    const int expand_radius = compute_expand_radius(width, height);
+    const int blur_radius   = compute_blur_radius(expand_radius);
+
+    const int expanded_w = width + expand_radius * 2;
+    const int expanded_h = height + expand_radius * 2;
+
+    SDL_Surface* mask = make_rgba_surface(expanded_w, expanded_h);
     if (!mask) {
         SDL_FreeSurface(src_rgba);
         return nullptr;
@@ -83,14 +97,11 @@ SDL_Surface* generate_mask_surface(SDL_Surface* source) {
         return nullptr;
     }
 
-    const int expand_radius = compute_expand_radius(width, height);
-    const int blur_radius   = compute_blur_radius(expand_radius/4);
-
     const Uint8* src_pixels = static_cast<const Uint8*>(src_rgba->pixels);
     const int src_pitch     = src_rgba->pitch;
 
-    std::vector<uint8_t> inside(width * height, 0);
-    std::vector<float> distance(width * height, std::numeric_limits<float>::infinity());
+    std::vector<uint8_t> inside(expanded_w * expanded_h, 0);
+    std::vector<float> distance(expanded_w * expanded_h, std::numeric_limits<float>::infinity());
 
     std::priority_queue<DistanceNode> queue;
 
@@ -98,11 +109,13 @@ SDL_Surface* generate_mask_surface(SDL_Surface* source) {
         const Uint8* row = src_pixels + y * src_pitch;
         for (int x = 0; x < width; ++x) {
             const Uint8 alpha = row[x * 4 + 3];
-            const int idx     = y * width + x;
+            const int expanded_x = x + expand_radius;
+            const int expanded_y = y + expand_radius;
+            const int idx        = expanded_y * expanded_w + expanded_x;
             if (alpha > 0) {
                 inside[idx]   = 1;
                 distance[idx] = 0.0f;
-                queue.push({0.0f, x, y});
+                queue.push({0.0f, expanded_x, expanded_y});
             }
         }
     }
@@ -110,7 +123,7 @@ SDL_Surface* generate_mask_surface(SDL_Surface* source) {
     if (queue.empty()) {
         Uint32* dst_pixels = static_cast<Uint32*>(mask->pixels);
         const Uint32 transparent = SDL_MapRGBA(mask->format, 0, 0, 0, 0);
-        std::fill(dst_pixels, dst_pixels + width * height, transparent);
+        std::fill(dst_pixels, dst_pixels + expanded_w * expanded_h, transparent);
         SDL_UnlockSurface(mask);
         SDL_UnlockSurface(src_rgba);
         SDL_FreeSurface(src_rgba);
@@ -126,18 +139,18 @@ SDL_Surface* generate_mask_surface(SDL_Surface* source) {
         const DistanceNode node = queue.top();
         queue.pop();
 
-        const int idx = node.y * width + node.x;
+        const int idx = node.y * expanded_w + node.x;
         if (node.dist > distance[idx] + 1e-4f) continue;
         if (node.dist > static_cast<float>(expand_radius)) continue;
 
         for (const auto& [dx, dy] : kNeighborOffsets) {
             const int nx = node.x + dx;
             const int ny = node.y + dy;
-            if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
+            if (nx < 0 || ny < 0 || nx >= expanded_w || ny >= expanded_h) continue;
             const float step = (dx == 0 || dy == 0) ? 1.0f : std::sqrt(2.0f);
             const float candidate = node.dist + step;
             if (candidate > static_cast<float>(expand_radius) + 1e-4f) continue;
-            const int nidx = ny * width + nx;
+            const int nidx = ny * expanded_w + nx;
             if (candidate + 1e-4f < distance[nidx]) {
                 distance[nidx] = candidate;
                 queue.push({candidate, nx, ny});
@@ -145,18 +158,19 @@ SDL_Surface* generate_mask_surface(SDL_Surface* source) {
         }
     }
 
-    std::vector<float> alpha_values(width * height, 0.0f);
+    std::vector<float> alpha_values(expanded_w * expanded_h, 0.0f);
 
-    for (int y = 0; y < height; ++y) {
-        for (int x = 0; x < width; ++x) {
-            const int idx = y * width + x;
+    for (int y = 0; y < expanded_h; ++y) {
+        for (int x = 0; x < expanded_w; ++x) {
+            const int idx = y * expanded_w + x;
             if (inside[idx]) {
                 alpha_values[idx] = 255.0f;
             } else {
                 const float d = distance[idx];
                 if (d <= static_cast<float>(expand_radius)) {
                     const float ratio = std::clamp(1.0f - (d / static_cast<float>(expand_radius)), 0.0f, 1.0f);
-                    alpha_values[idx] = ratio * 255.0f;
+                    const float eased = bell_curve_weight(ratio);
+                    alpha_values[idx] = eased * 255.0f;
                 } else {
                     alpha_values[idx] = 0.0f;
                 }
@@ -165,43 +179,71 @@ SDL_Surface* generate_mask_surface(SDL_Surface* source) {
     }
 
     if (blur_radius > 0) {
-        std::vector<float> temp(width * height, 0.0f);
-        for (int y = 0; y < height; ++y) {
-            for (int x = 0; x < width; ++x) {
+        std::vector<float> temp(expanded_w * expanded_h, 0.0f);
+        for (int y = 0; y < expanded_h; ++y) {
+            for (int x = 0; x < expanded_w; ++x) {
+                const int idx = y * expanded_w + x;
+                if (inside[idx]) {
+                    temp[idx] = alpha_values[idx];
+                    continue;
+                }
                 const int start = std::max(0, x - blur_radius);
-                const int end   = std::min(width - 1, x + blur_radius);
+                const int end   = std::min(expanded_w - 1, x + blur_radius);
                 float sum = 0.0f;
                 int count = 0;
                 for (int ix = start; ix <= end; ++ix) {
-                    sum += alpha_values[y * width + ix];
+                    const int nidx = y * expanded_w + ix;
+                    if (inside[nidx]) continue;
+                    sum += alpha_values[nidx];
                     ++count;
                 }
-                temp[y * width + x] = (count > 0) ? (sum / static_cast<float>(count)) : 0.0f;
+                if (count == 0) {
+                    temp[idx] = alpha_values[idx];
+                } else {
+                    temp[idx] = sum / static_cast<float>(count);
+                }
             }
         }
 
-        std::vector<float> blurred(width * height, 0.0f);
-        for (int x = 0; x < width; ++x) {
-            for (int y = 0; y < height; ++y) {
+        std::vector<float> blurred(expanded_w * expanded_h, 0.0f);
+        for (int x = 0; x < expanded_w; ++x) {
+            for (int y = 0; y < expanded_h; ++y) {
+                const int idx = y * expanded_w + x;
+                if (inside[idx]) {
+                    blurred[idx] = temp[idx];
+                    continue;
+                }
                 const int start = std::max(0, y - blur_radius);
-                const int end   = std::min(height - 1, y + blur_radius);
+                const int end   = std::min(expanded_h - 1, y + blur_radius);
                 float sum = 0.0f;
                 int count = 0;
                 for (int iy = start; iy <= end; ++iy) {
-                    sum += temp[iy * width + x];
+                    const int nidx = iy * expanded_w + x;
+                    if (inside[nidx]) continue;
+                    sum += temp[nidx];
                     ++count;
                 }
-                blurred[y * width + x] = (count > 0) ? (sum / static_cast<float>(count)) : 0.0f;
+                if (count == 0) {
+                    blurred[idx] = temp[idx];
+                } else {
+                    blurred[idx] = sum / static_cast<float>(count);
+                }
             }
         }
 
         alpha_values.swap(blurred);
     }
 
+    for (std::size_t i = 0; i < alpha_values.size(); ++i) {
+        if (inside[i]) {
+            alpha_values[i] = 255.0f;
+        }
+    }
+
     Uint32* dst_pixels = static_cast<Uint32*>(mask->pixels);
-    for (int y = 0; y < height; ++y) {
-        for (int x = 0; x < width; ++x) {
-            const int idx = y * width + x;
+    for (int y = 0; y < expanded_h; ++y) {
+        for (int x = 0; x < expanded_w; ++x) {
+            const int idx = y * expanded_w + x;
             const Uint8 alpha = static_cast<Uint8>(std::clamp(alpha_values[idx], 0.0f, 255.0f));
             dst_pixels[idx] = SDL_MapRGBA(mask->format, 0, 0, 0, alpha);
         }
