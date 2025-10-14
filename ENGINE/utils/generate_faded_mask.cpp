@@ -38,11 +38,10 @@ int compute_blur_radius(int expand_radius) {
     return std::max(1, expand_radius / 2);
 }
 
-std::string variant_folder(const std::string& base,
+std::string variant_folder(const std::filesystem::path& base,
                            std::size_t index,
                            const std::vector<int>& scale_steps) {
-    namespace fs = std::filesystem;
-    fs::path folder(base);
+    std::filesystem::path folder(base);
     if (!scale_steps.empty() && index < scale_steps.size()) {
         folder /= "scale_" + std::to_string(scale_steps[index]);
     } else {
@@ -239,8 +238,11 @@ std::pair<GenerateFadedMask::MaskVariants, bool> GenerateFadedMask::BuildMasks(
     MaskVariants masks;
     masks.resize(variant_frames.size());
 
-    const fs::path base_folder = fs::path("cache") / asset_name / "animations" / animation_id / "mask";
-    const std::string meta_file = (base_folder / "metadata.json").string();
+    const fs::path preferred_folder = fs::path("cache") / asset_name / "animations" / animation_id / "masks";
+    const fs::path legacy_folder    = fs::path("cache") / asset_name / "animations" / animation_id / "mask";
+
+    fs::path cache_folder = preferred_folder;
+    fs::path meta_path    = cache_folder / "metadata.json";
 
     const std::size_t variant_count = variant_frames.size();
     const std::size_t frame_count   = variant_frames.empty() ? 0 : variant_frames.front().size();
@@ -267,7 +269,19 @@ std::pair<GenerateFadedMask::MaskVariants, bool> GenerateFadedMask::BuildMasks(
 
     json meta;
     bool cache_ok = false;
-    if (CacheManager::load_metadata(meta_file, meta)) {
+    bool metadata_loaded = CacheManager::load_metadata(meta_path.string(), meta);
+    if (!metadata_loaded) {
+        cache_folder = legacy_folder;
+        meta_path    = cache_folder / "metadata.json";
+        if (CacheManager::load_metadata(meta_path.string(), meta)) {
+            metadata_loaded = true;
+        } else {
+            cache_folder = preferred_folder;
+            meta_path    = cache_folder / "metadata.json";
+        }
+    }
+
+    if (metadata_loaded) {
         try {
             const int stored_version       = meta.value("version", 0);
             const int stored_frame_count   = meta.value("frame_count", -1);
@@ -309,7 +323,7 @@ std::pair<GenerateFadedMask::MaskVariants, bool> GenerateFadedMask::BuildMasks(
     if (cache_ok) {
         bool all_loaded = true;
         for (std::size_t variant_idx = 0; variant_idx < variant_count; ++variant_idx) {
-            const std::string folder = variant_folder(base_folder.string(), variant_idx, scale_steps);
+            const std::string folder = variant_folder(cache_folder, variant_idx, scale_steps);
             std::vector<SDL_Surface*> loaded;
             if (!CacheManager::load_surface_sequence(folder, static_cast<int>(frame_count), loaded)) {
                 all_loaded = false;
@@ -328,7 +342,7 @@ std::pair<GenerateFadedMask::MaskVariants, bool> GenerateFadedMask::BuildMasks(
     }
 
     try {
-        fs::create_directories(base_folder);
+        fs::create_directories(preferred_folder);
     } catch (...) {}
 
     for (std::size_t variant_idx = 0; variant_idx < variant_frames.size(); ++variant_idx) {
@@ -348,7 +362,7 @@ std::pair<GenerateFadedMask::MaskVariants, bool> GenerateFadedMask::BuildMasks(
             mask_list.push_back(mask_surface);
         }
 
-        const std::string folder = variant_folder(base_folder.string(), variant_idx, scale_steps);
+        const std::string folder = variant_folder(preferred_folder, variant_idx, scale_steps);
         CacheManager::save_surface_sequence(folder, mask_list);
     }
 
@@ -371,7 +385,7 @@ std::pair<GenerateFadedMask::MaskVariants, bool> GenerateFadedMask::BuildMasks(
         new_meta["frame_height"] = reference_h;
     }
 
-    CacheManager::save_metadata(meta_file, new_meta);
+    CacheManager::save_metadata((preferred_folder / "metadata.json").string(), new_meta);
 
     return {std::move(masks), false};
 }
@@ -393,99 +407,3 @@ std::vector<std::vector<SDL_Texture*>> GenerateFadedMask::SurfacesToTextures(
     }
     return textures;
 }
-namespace {
-
-SDL_Surface* create_mask_surface(SDL_Surface* source) {
-    if (!source) {
-        return nullptr;
-    }
-
-    SDL_Surface* working = source;
-    SDL_Surface* converted = nullptr;
-    if (source->format->format != SDL_PIXELFORMAT_RGBA8888) {
-        converted = SDL_ConvertSurfaceFormat(source, SDL_PIXELFORMAT_RGBA8888, 0);
-        if (!converted) {
-            return nullptr;
-        }
-        working = converted;
-    }
-
-    SDL_Surface* mask = SDL_CreateRGBSurfaceWithFormat(0, working->w, working->h, 32, SDL_PIXELFORMAT_RGBA8888);
-    if (!mask) {
-        if (converted) {
-            SDL_FreeSurface(converted);
-        }
-        return nullptr;
-    }
-
-    const bool lock_src  = SDL_MUSTLOCK(working);
-    const bool lock_mask = SDL_MUSTLOCK(mask);
-
-    if (lock_src && SDL_LockSurface(working) != 0) {
-        SDL_FreeSurface(mask);
-        if (converted) {
-            SDL_FreeSurface(converted);
-        }
-        return nullptr;
-    }
-    if (lock_mask && SDL_LockSurface(mask) != 0) {
-        if (lock_src) {
-            SDL_UnlockSurface(working);
-        }
-        SDL_FreeSurface(mask);
-        if (converted) {
-            SDL_FreeSurface(converted);
-        }
-        return nullptr;
-    }
-
-    auto* src_pixels  = static_cast<Uint8*>(working->pixels);
-    auto* mask_pixels = static_cast<Uint8*>(mask->pixels);
-    const int src_pitch  = working->pitch;
-    const int mask_pitch = mask->pitch;
-
-    for (int y = 0; y < working->h; ++y) {
-        Uint8* src_row  = src_pixels + y * src_pitch;
-        Uint8* mask_row = mask_pixels + y * mask_pitch;
-        for (int x = 0; x < working->w; ++x) {
-            Uint8 alpha = src_row[x * 4 + 3];
-            mask_row[x * 4 + 0] = 255;
-            mask_row[x * 4 + 1] = 255;
-            mask_row[x * 4 + 2] = 255;
-            mask_row[x * 4 + 3] = alpha;
-        }
-    }
-
-    if (lock_mask) {
-        SDL_UnlockSurface(mask);
-    }
-    if (lock_src) {
-        SDL_UnlockSurface(working);
-    }
-
-    if (converted) {
-        SDL_FreeSurface(converted);
-    }
-
-    return mask;
-}
-
-} // namespace
-
-namespace GenerateFadedMask {
-
-std::vector<std::vector<SDL_Surface*>> BuildMasks(const std::vector<std::vector<SDL_Surface*>>& variant_surfaces) {
-    std::vector<std::vector<SDL_Surface*>> result;
-    result.resize(variant_surfaces.size());
-    for (std::size_t variant_idx = 0; variant_idx < variant_surfaces.size(); ++variant_idx) {
-        const auto& frames = variant_surfaces[variant_idx];
-        auto& out_frames = result[variant_idx];
-        out_frames.reserve(frames.size());
-        for (SDL_Surface* surface : frames) {
-            out_frames.push_back(create_mask_surface(surface));
-        }
-    }
-    return result;
-}
-
-} // namespace GenerateFadedMask

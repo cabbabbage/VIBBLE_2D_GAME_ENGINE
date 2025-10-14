@@ -156,8 +156,6 @@ SDL_Texture* Animation::frame_variant(std::size_t frame_index, std::size_t varia
         return cache_entry.textures[variant_index];
 }
 
-SDL_Texture* Animation::mask_variant(std::size_t /*frame_index*/, std::size_t /*variant_index*/) const {
-        return nullptr;
 SDL_Texture* Animation::mask_variant(std::size_t frame_index, std::size_t variant_index) const {
         if (frame_index >= frame_cache_.size()) {
                 return nullptr;
@@ -569,7 +567,7 @@ void Animation::load(const std::string& trigger,
                 };
                 const std::string mask_cache_folder = cache_folder + "/masks";
                 std::vector<std::vector<SDL_Surface*>> variant_surfaces(variant_count);
-                std::vector<std::vector<SDL_Surface*>> mask_surfaces(variant_count);
+                GenerateFadedMask::MaskVariants mask_surfaces;
                 bool masks_loaded_from_cache = false;
                 if (use_cache) {
                         bool variants_loaded = true;
@@ -603,34 +601,8 @@ void Animation::load(const std::string& trigger,
                                         scaled_sprite_w = scaled_dimension(variant_surfaces[0][0]->w, safe_scale);
                                         scaled_sprite_h = scaled_dimension(variant_surfaces[0][0]->h, safe_scale);
                                 }
-                                bool masks_loaded = true;
-                                for (std::size_t idx = 0; idx < variant_count; ++idx) {
-                                        std::string mask_variant_path = render_pipeline::ScalingLogic::VariantFolder(mask_cache_folder, variant_steps_, idx);
-                                        std::vector<SDL_Surface*> loaded_masks;
-                                        if (!cache.load_surface_sequence(mask_variant_path, expected_frames, loaded_masks)) {
-                                                masks_loaded = false;
-                                                std::cout << "[AnimationLoader] " << info.name << "::" << trigger
-                                                          << " missing cached mask surfaces for variant " << idx
-                                                          << " -> forcing rebuild\n";
-                                                break;
-                                        }
-                                        mask_surfaces[idx] = std::move(loaded_masks);
-                                }
-                                if (!masks_loaded) {
-                                        free_surface_lists(variant_surfaces);
-                                        free_surface_lists(mask_surfaces);
-                                        use_cache = false;
-                                } else {
-                                        masks_loaded_from_cache = true;
-                                        std::cout << "[AnimationLoader] " << info.name << "::" << trigger
-                                                  << " loaded " << variant_surfaces[0].size()
-                                                  << " frame(s) from cache for " << variant_count
-                                                  << " variant step(s)\n";
-                                }
                         }
                 }
-
-                bool mask_cache_needs_save = !masks_loaded_from_cache;
 
                 if (!use_cache && prefer_cached) {
                         const auto& defaults = render_pipeline::ScalingLogic::DefaultScaleSteps();
@@ -648,8 +620,6 @@ void Animation::load(const std::string& trigger,
                         expected_steps = render_pipeline::ScalingLogic::PercentSteps(variant_steps_);
                         variant_surfaces.clear();
                         variant_surfaces.resize(variant_count);
-                        mask_surfaces.clear();
-                        mask_surfaces.resize(variant_count);
                 }
 
                 auto cleanup_variant_directories = [&](const std::string& folder) {
@@ -746,17 +716,23 @@ void Animation::load(const std::string& trigger,
                                   << " revision " << expected_revision << "\n";
                 }
 
-                if (!masks_loaded_from_cache) {
-                        mask_surfaces = GenerateFadedMask::BuildMasks(variant_surfaces);
-                        if (mask_surfaces.size() != variant_surfaces.size()) {
-                                mask_surfaces.resize(variant_surfaces.size());
-                        }
-                        if (mask_cache_needs_save) {
-                                for (std::size_t idx = 0; idx < mask_surfaces.size(); ++idx) {
-                                        const std::string mask_variant_path = render_pipeline::ScalingLogic::VariantFolder(mask_cache_folder, variant_steps_, idx);
-                                        cache.save_surface_sequence(mask_variant_path, mask_surfaces[idx]);
-                                }
-                        }
+                auto mask_result = GenerateFadedMask::BuildMasks(info.name, trigger, expected_steps, variant_surfaces);
+                mask_surfaces            = std::move(mask_result.first);
+                masks_loaded_from_cache  = mask_result.second;
+                if (mask_surfaces.size() != variant_surfaces.size()) {
+                        mask_surfaces.resize(variant_surfaces.size());
+                }
+                if (masks_loaded_from_cache) {
+                        std::cout << "[AnimationLoader] " << info.name << "::" << trigger
+                                  << " loaded faded mask surfaces from cache\n";
+                } else {
+                        const std::size_t mask_frame_count = (!mask_surfaces.empty() && !mask_surfaces.front().empty())
+                                                                 ? mask_surfaces.front().size()
+                                                                 : 0;
+                        std::cout << "[AnimationLoader] " << info.name << "::" << trigger
+                                  << " generated " << mask_frame_count
+                                  << " faded mask frame(s) across " << mask_surfaces.size()
+                                  << " variant(s)\n";
                 }
 
                 if (!variant_surfaces[0].empty() && variant_surfaces[0][0] && (scaled_sprite_w <= 0 || scaled_sprite_h <= 0)) {

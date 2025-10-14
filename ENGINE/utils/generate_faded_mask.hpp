@@ -7,7 +7,7 @@
 #include <vector>
 
 class GenerateFadedMask {
-        public:
+public:
     using MaskVariants = std::vector<std::vector<SDL_Surface*>>;
 
     /**
@@ -31,11 +31,3 @@ class GenerateFadedMask {
     static std::vector<std::vector<SDL_Texture*>> SurfacesToTextures(SDL_Renderer* renderer,
                                                                      const MaskVariants& masks);
 };
-#include <vector>
-#include <SDL.h>
-
-namespace GenerateFadedMask {
-
-std::vector<std::vector<SDL_Surface*>> BuildMasks(const std::vector<std::vector<SDL_Surface*>>& variant_surfaces);
-
-}
