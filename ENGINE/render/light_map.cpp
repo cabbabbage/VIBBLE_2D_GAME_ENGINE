@@ -48,7 +48,7 @@ void LightMap::update_virtual_light_map() {
         compute_virtual_light_map(cached_layers_);
 }
 
-void LightMap::render(bool debugging) {
+void LightMap::render(bool debugging, bool light_map_only) {
         if (debugging) std::cout << "[render_asset_lights_z] start\n";
         const int downscale = 4;
         const int low_w = screen_width_  / downscale;
@@ -65,7 +65,7 @@ void LightMap::render(bool debugging) {
 
         SDL_Texture* prev_target = SDL_GetRenderTarget(renderer_);
         SDL_Texture* lowres_mask = build_lowres_mask(*layers_ptr, low_w, low_h, downscale);
-        SDL_SetTextureBlendMode(lowres_mask, SDL_BLENDMODE_MOD);
+        SDL_SetTextureBlendMode(lowres_mask, light_map_only ? SDL_BLENDMODE_NONE : SDL_BLENDMODE_MOD);
 
         SDL_SetRenderTarget(renderer_, prev_target);
         SDL_RenderCopy(renderer_, lowres_mask, nullptr, nullptr);

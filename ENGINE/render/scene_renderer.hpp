@@ -24,6 +24,8 @@ class SceneRenderer {
     SDL_Renderer* get_renderer() const;
     void set_low_quality_rendering(bool enabled);
     bool low_quality_rendering() const { return low_quality_rendering_; }
+    void toggle_light_map_only_mode() { light_map_only_mode_ = !light_map_only_mode_; }
+    bool light_map_only_mode() const { return light_map_only_mode_; }
     Global_Light_Source& map_light_source() { return main_light_source_; }
     const Global_Light_Source& map_light_source() const { return main_light_source_; }
     SDL_Color screen_light_color() const { return screen_light_color_; }
@@ -53,6 +55,7 @@ private:
     int            num_groups_ = 40;
     bool           debugging = false;
     bool           low_quality_rendering_ = false;
+    bool           light_map_only_mode_ = false;
 
     std::unordered_set<Asset*> last_active_assets_;
 

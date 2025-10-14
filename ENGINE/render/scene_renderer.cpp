@@ -59,7 +59,7 @@ SceneRenderer::SceneRenderer(SDL_Renderer* renderer,
                 render_pipeline_.lighting().virtual_light_map = nullptr;
         }
         main_light_source_.update();
-        z_light_pass_->render(debugging);
+        z_light_pass_->render(debugging, light_map_only_mode_);
 }
 
 SceneRenderer::~SceneRenderer() {
@@ -214,98 +214,103 @@ void SceneRenderer::render() {
 
     SDL_SetRenderTarget(renderer_, nullptr);
     SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND);
-    SDL_SetRenderDrawColor(renderer_, SLATE_COLOR.r, SLATE_COLOR.g, SLATE_COLOR.b, 255);
+    const SDL_Color clear_color = light_map_only_mode_
+                                      ? SDL_Color{0, 0, 0, 255}
+                                      : SLATE_COLOR;
+    SDL_SetRenderDrawColor(renderer_, clear_color.r, clear_color.g, clear_color.b, clear_color.a);
     SDL_RenderClear(renderer_);
 
-    const auto& camera_state = assets_->getView();
-    float scale = camera_state.get_scale();
-    float inv_scale = 1.0f / scale;
-    int min_visible_w = static_cast<int>(screen_width_  * MIN_VISIBLE_SCREEN_RATIO);
-    int min_visible_h = static_cast<int>(screen_height_ * MIN_VISIBLE_SCREEN_RATIO);
+    if (!light_map_only_mode_) {
+        const auto& camera_state = assets_->getView();
+        float scale = camera_state.get_scale();
+        float inv_scale = 1.0f / scale;
+        int min_visible_w = static_cast<int>(screen_width_  * MIN_VISIBLE_SCREEN_RATIO);
+        int min_visible_h = static_cast<int>(screen_height_ * MIN_VISIBLE_SCREEN_RATIO);
 
-    float player_screen_height = 1.0f;
-    Asset* player_asset = assets_ ? assets_->player : nullptr;
-    if (player_asset) {
-        SDL_Texture* player_final = player_asset->get_final_texture();
-        SDL_Texture* player_frame = player_asset->get_current_frame();
-        int pw = player_asset->cached_w, ph = player_asset->cached_h;
-        if ((pw == 0 || ph == 0) && player_final) SDL_QueryTexture(player_final, nullptr, nullptr, &pw, &ph);
-        if ((pw == 0 || ph == 0) && player_frame) SDL_QueryTexture(player_frame, nullptr, nullptr, &pw, &ph);
-        if (pw != 0) player_asset->cached_w = pw;
-        if (ph != 0) player_asset->cached_h = ph;
-        const float player_scale = (player_asset->info && std::isfinite(player_asset->info->scale_factor) &&
-                                    player_asset->info->scale_factor >= 0.0f)
-                                       ? player_asset->info->scale_factor
-                                       : 1.0f;
-        if (ph > 0) player_screen_height = static_cast<float>(ph) * player_scale * inv_scale;
-    }
-    if (player_screen_height <= 0.0f) player_screen_height = 1.0f;
-
-    const auto& active_assets = assets_->getActive();
-    std::unordered_set<Asset*> current_active_assets;
-    current_active_assets.reserve(active_assets.size());
-    for (Asset* a : active_assets) {
-        if (!a || !a->info) continue;
-
-        current_active_assets.insert(a);
-        const bool newly_active = last_active_assets_.find(a) == last_active_assets_.end();
-        if (newly_active) {
-            SDL_Texture* tex = render_pipeline_.regenerateFinalTexture(a);
-            a->set_final_texture(tex);
-        } else if (shouldRegen(a)) {
-            SDL_Texture* tex = render_pipeline_.regenerateFinalTexture(a);
-            a->set_final_texture(tex);
+        float player_screen_height = 1.0f;
+        Asset* player_asset = assets_ ? assets_->player : nullptr;
+        if (player_asset) {
+            SDL_Texture* player_final = player_asset->get_final_texture();
+            SDL_Texture* player_frame = player_asset->get_current_frame();
+            int pw = player_asset->cached_w, ph = player_asset->cached_h;
+            if ((pw == 0 || ph == 0) && player_final) SDL_QueryTexture(player_final, nullptr, nullptr, &pw, &ph);
+            if ((pw == 0 || ph == 0) && player_frame) SDL_QueryTexture(player_frame, nullptr, nullptr, &pw, &ph);
+            if (pw != 0) player_asset->cached_w = pw;
+            if (ph != 0) player_asset->cached_h = ph;
+            const float player_scale = (player_asset->info && std::isfinite(player_asset->info->scale_factor) &&
+                                        player_asset->info->scale_factor >= 0.0f)
+                                           ? player_asset->info->scale_factor
+                                           : 1.0f;
+            if (ph > 0) player_screen_height = static_cast<float>(ph) * player_scale * inv_scale;
         }
+        if (player_screen_height <= 0.0f) player_screen_height = 1.0f;
 
-        SDL_Texture* final_tex = a->get_final_texture();
-        if (!final_tex) continue;
+        const auto& active_assets = assets_->getActive();
+        std::unordered_set<Asset*> current_active_assets;
+        current_active_assets.reserve(active_assets.size());
+        for (Asset* a : active_assets) {
+            if (!a || !a->info) continue;
 
-        int fw = a->cached_w, fh = a->cached_h;
-        if (fw == 0 || fh == 0) {
-            SDL_QueryTexture(final_tex, nullptr, nullptr, &fw, &fh);
-            a->cached_w = fw; a->cached_h = fh;
-        }
+            current_active_assets.insert(a);
+            const bool newly_active = last_active_assets_.find(a) == last_active_assets_.end();
+            if (newly_active) {
+                SDL_Texture* tex = render_pipeline_.regenerateFinalTexture(a);
+                a->set_final_texture(tex);
+            } else if (shouldRegen(a)) {
+                SDL_Texture* tex = render_pipeline_.regenerateFinalTexture(a);
+                a->set_final_texture(tex);
+            }
 
-        SDL_Rect fb = get_scaled_position_rect(a, fw, fh, inv_scale, min_visible_w, min_visible_h, player_screen_height);
-        if (fb.w == 0 && fb.h == 0) continue;
+            SDL_Texture* final_tex = a->get_final_texture();
+            if (!final_tex) continue;
 
-        SDL_Texture* draw_tex = render_pipeline_.texture_for_scale(a, final_tex, fw, fh, fb.w, fb.h);
-        SDL_Texture* mod_target = draw_tex ? draw_tex : final_tex;
+            int fw = a->cached_w, fh = a->cached_h;
+            if (fw == 0 || fh == 0) {
+                SDL_QueryTexture(final_tex, nullptr, nullptr, &fw, &fh);
+                a->cached_w = fw; a->cached_h = fh;
+            }
 
-        if (a->is_highlighted()) {
-            SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_ADD);
-            SDL_SetRenderDrawColor(renderer_, 200, 5, 5, 100);
-            SDL_Rect outline = fb; outline.x -= 2; outline.y -= 2; outline.w += 4; outline.h += 4;
-            SDL_RenderFillRect(renderer_, &outline);
-            SDL_SetTextureColorMod(mod_target, 255, 200, 200);
-        } else if (a->is_selected()) {
-            SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_ADD);
-            SDL_SetRenderDrawColor(renderer_, 5, 5, 200, 100);
-            SDL_Rect outline = fb; outline.x -= 2; outline.y -= 2; outline.w += 4; outline.h += 4;
-            SDL_RenderFillRect(renderer_, &outline);
-            SDL_SetTextureColorMod(mod_target, 255, 200, 200);
-        } else {
+            SDL_Rect fb = get_scaled_position_rect(a, fw, fh, inv_scale, min_visible_w, min_visible_h, player_screen_height);
+            if (fb.w == 0 && fb.h == 0) continue;
+
+            SDL_Texture* draw_tex = render_pipeline_.texture_for_scale(a, final_tex, fw, fh, fb.w, fb.h);
+            SDL_Texture* mod_target = draw_tex ? draw_tex : final_tex;
+
+            if (a->is_highlighted()) {
+                SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_ADD);
+                SDL_SetRenderDrawColor(renderer_, 200, 5, 5, 100);
+                SDL_Rect outline = fb; outline.x -= 2; outline.y -= 2; outline.w += 4; outline.h += 4;
+                SDL_RenderFillRect(renderer_, &outline);
+                SDL_SetTextureColorMod(mod_target, 255, 200, 200);
+            } else if (a->is_selected()) {
+                SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_ADD);
+                SDL_SetRenderDrawColor(renderer_, 5, 5, 200, 100);
+                SDL_Rect outline = fb; outline.x -= 2; outline.y -= 2; outline.w += 4; outline.h += 4;
+                SDL_RenderFillRect(renderer_, &outline);
+                SDL_SetTextureColorMod(mod_target, 255, 200, 200);
+            } else {
+                SDL_SetTextureColorMod(mod_target, 255, 255, 255);
+            }
+
+            SDL_RenderCopyEx(renderer_, draw_tex ? draw_tex : final_tex, nullptr, &fb, 0, nullptr, a->flipped ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE);
             SDL_SetTextureColorMod(mod_target, 255, 255, 255);
+            if (draw_tex && draw_tex != final_tex) {
+                SDL_SetTextureColorMod(final_tex, 255, 255, 255);
+            }
         }
 
-        SDL_RenderCopyEx(renderer_, draw_tex ? draw_tex : final_tex, nullptr, &fb, 0, nullptr, a->flipped ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE);
-        SDL_SetTextureColorMod(mod_target, 255, 255, 255);
-        if (draw_tex && draw_tex != final_tex) {
-            SDL_SetTextureColorMod(final_tex, 255, 255, 255);
-        }
+        last_active_assets_ = std::move(current_active_assets);
     }
-
-    last_active_assets_ = std::move(current_active_assets);
 
     SDL_SetRenderTarget(renderer_, nullptr);
     // The light map pass only depends on whichever render target is bound when it runs.
     // Even without the old post-processing copy, it still composites directly onto the
     // default framebuffer before overlays are drawn.
-    z_light_pass_->render(debugging);
+    z_light_pass_->render(debugging, light_map_only_mode_);
 
     SDL_SetRenderTarget(renderer_, nullptr);
 
-    if (assets_) {
+    if (!light_map_only_mode_ && assets_) {
         assets_->render_overlays(renderer_);
     }
 
