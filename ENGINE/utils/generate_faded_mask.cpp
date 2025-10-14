@@ -16,8 +16,9 @@
 
 namespace {
 
-constexpr int   kCacheVersion    = 2;
+constexpr int   kCacheVersion    = 3;
 constexpr float kExpansionRatio  = 0.4f;
+constexpr float kFadeExponent    = 1.2f;
 
 struct DistanceNode {
     float dist;
@@ -34,9 +35,9 @@ int compute_expand_radius(int w, int h) {
     return std::max(1, radius);
 }
 
-int compute_blur_radius(int expand_radius) {
-    if (expand_radius <= 0) return 0;
-    return std::max(1, expand_radius / 3);
+int compute_base_blur_radius(int expand_radius) {
+    if (expand_radius <= 2) return 0;
+    return std::max(1, expand_radius / 6);
 }
 
 float bell_curve_weight(float t) {
@@ -44,6 +45,47 @@ float bell_curve_weight(float t) {
     // Smooth start/end using a cosine bell curve for softer transitions.
     const float pi = static_cast<float>(std::acos(-1.0));
     return 0.5f - 0.5f * std::cos(clamped * pi);
+}
+
+void apply_box_blur(std::vector<float>& values, int width, int height, int radius) {
+    if (radius <= 0 || width <= 0 || height <= 0) return;
+
+    std::vector<float> horizontal(width * height, 0.0f);
+
+    std::vector<float> prefix_row(width + 1, 0.0f);
+    for (int y = 0; y < height; ++y) {
+        std::fill(prefix_row.begin(), prefix_row.end(), 0.0f);
+        for (int x = 0; x < width; ++x) {
+            prefix_row[x + 1] = prefix_row[x] + values[y * width + x];
+        }
+
+        for (int x = 0; x < width; ++x) {
+            const int left   = std::max(0, x - radius);
+            const int right  = std::min(width - 1, x + radius);
+            const float sum  = prefix_row[right + 1] - prefix_row[left];
+            const int count  = right - left + 1;
+            horizontal[y * width + x] = sum / static_cast<float>(count);
+        }
+    }
+
+    std::vector<float> blurred(width * height, 0.0f);
+    std::vector<float> prefix_col(height + 1, 0.0f);
+    for (int x = 0; x < width; ++x) {
+        std::fill(prefix_col.begin(), prefix_col.end(), 0.0f);
+        for (int y = 0; y < height; ++y) {
+            prefix_col[y + 1] = prefix_col[y] + horizontal[y * width + x];
+        }
+
+        for (int y = 0; y < height; ++y) {
+            const int top     = std::max(0, y - radius);
+            const int bottom  = std::min(height - 1, y + radius);
+            const float sum   = prefix_col[bottom + 1] - prefix_col[top];
+            const int count   = bottom - top + 1;
+            blurred[y * width + x] = sum / static_cast<float>(count);
+        }
+    }
+
+    values.swap(blurred);
 }
 
 std::string variant_folder(const std::filesystem::path& base,
@@ -72,8 +114,8 @@ SDL_Surface* generate_mask_surface(SDL_Surface* source) {
     const int width  = std::max(1, src_rgba->w);
     const int height = std::max(1, src_rgba->h);
 
-    const int expand_radius = compute_expand_radius(width, height);
-    const int blur_radius   = compute_blur_radius(expand_radius);
+    const int expand_radius    = compute_expand_radius(width, height);
+    const int base_blur_radius = compute_base_blur_radius(expand_radius);
 
     const int expanded_w = width + expand_radius * 2;
     const int expanded_h = height + expand_radius * 2;
@@ -100,10 +142,10 @@ SDL_Surface* generate_mask_surface(SDL_Surface* source) {
     const Uint8* src_pixels = static_cast<const Uint8*>(src_rgba->pixels);
     const int src_pitch     = src_rgba->pitch;
 
-    std::vector<uint8_t> inside(expanded_w * expanded_h, 0);
     std::vector<float> distance(expanded_w * expanded_h, std::numeric_limits<float>::infinity());
 
     std::priority_queue<DistanceNode> queue;
+    bool has_opaque = false;
 
     for (int y = 0; y < height; ++y) {
         const Uint8* row = src_pixels + y * src_pitch;
@@ -113,14 +155,14 @@ SDL_Surface* generate_mask_surface(SDL_Surface* source) {
             const int expanded_y = y + expand_radius;
             const int idx        = expanded_y * expanded_w + expanded_x;
             if (alpha > 0) {
-                inside[idx]   = 1;
+                has_opaque    = true;
                 distance[idx] = 0.0f;
                 queue.push({0.0f, expanded_x, expanded_y});
             }
         }
     }
 
-    if (queue.empty()) {
+    if (!has_opaque) {
         Uint32* dst_pixels = static_cast<Uint32*>(mask->pixels);
         const Uint32 transparent = SDL_MapRGBA(mask->format, 0, 0, 0, 0);
         std::fill(dst_pixels, dst_pixels + expanded_w * expanded_h, transparent);
@@ -158,86 +200,29 @@ SDL_Surface* generate_mask_surface(SDL_Surface* source) {
         }
     }
 
+    const float expand_radius_f = static_cast<float>(expand_radius);
+
+    std::vector<float> base_alpha(expanded_w * expanded_h, 0.0f);
+    for (std::size_t i = 0; i < distance.size(); ++i) {
+        const float d = distance[i];
+        if (!std::isfinite(d) || d > expand_radius_f) continue;
+        base_alpha[i] = 255.0f;
+    }
+
+    apply_box_blur(base_alpha, expanded_w, expanded_h, base_blur_radius);
+
     std::vector<float> alpha_values(expanded_w * expanded_h, 0.0f);
-
-    for (int y = 0; y < expanded_h; ++y) {
-        for (int x = 0; x < expanded_w; ++x) {
-            const int idx = y * expanded_w + x;
-            if (inside[idx]) {
-                alpha_values[idx] = 255.0f;
-            } else {
-                const float d = distance[idx];
-                if (d <= static_cast<float>(expand_radius)) {
-                    const float ratio = std::clamp(1.0f - (d / static_cast<float>(expand_radius)), 0.0f, 1.0f);
-                    const float eased = bell_curve_weight(ratio);
-                    alpha_values[idx] = eased * 255.0f;
-                } else {
-                    alpha_values[idx] = 0.0f;
-                }
-            }
-        }
-    }
-
-    if (blur_radius > 0) {
-        std::vector<float> temp(expanded_w * expanded_h, 0.0f);
-        for (int y = 0; y < expanded_h; ++y) {
-            for (int x = 0; x < expanded_w; ++x) {
-                const int idx = y * expanded_w + x;
-                if (inside[idx]) {
-                    temp[idx] = alpha_values[idx];
-                    continue;
-                }
-                const int start = std::max(0, x - blur_radius);
-                const int end   = std::min(expanded_w - 1, x + blur_radius);
-                float sum = 0.0f;
-                int count = 0;
-                for (int ix = start; ix <= end; ++ix) {
-                    const int nidx = y * expanded_w + ix;
-                    if (inside[nidx]) continue;
-                    sum += alpha_values[nidx];
-                    ++count;
-                }
-                if (count == 0) {
-                    temp[idx] = alpha_values[idx];
-                } else {
-                    temp[idx] = sum / static_cast<float>(count);
-                }
-            }
+    for (std::size_t i = 0; i < distance.size(); ++i) {
+        const float d = distance[i];
+        if (!std::isfinite(d) || d > expand_radius_f) {
+            alpha_values[i] = 0.0f;
+            continue;
         }
 
-        std::vector<float> blurred(expanded_w * expanded_h, 0.0f);
-        for (int x = 0; x < expanded_w; ++x) {
-            for (int y = 0; y < expanded_h; ++y) {
-                const int idx = y * expanded_w + x;
-                if (inside[idx]) {
-                    blurred[idx] = temp[idx];
-                    continue;
-                }
-                const int start = std::max(0, y - blur_radius);
-                const int end   = std::min(expanded_h - 1, y + blur_radius);
-                float sum = 0.0f;
-                int count = 0;
-                for (int iy = start; iy <= end; ++iy) {
-                    const int nidx = iy * expanded_w + x;
-                    if (inside[nidx]) continue;
-                    sum += temp[nidx];
-                    ++count;
-                }
-                if (count == 0) {
-                    blurred[idx] = temp[idx];
-                } else {
-                    blurred[idx] = sum / static_cast<float>(count);
-                }
-            }
-        }
-
-        alpha_values.swap(blurred);
-    }
-
-    for (std::size_t i = 0; i < alpha_values.size(); ++i) {
-        if (inside[i]) {
-            alpha_values[i] = 255.0f;
-        }
+        const float ratio = std::clamp(1.0f - (d / expand_radius_f), 0.0f, 1.0f);
+        const float eased = bell_curve_weight(ratio);
+        const float faded = std::pow(eased, kFadeExponent);
+        alpha_values[i]   = base_alpha[i] * faded;
     }
 
     Uint32* dst_pixels = static_cast<Uint32*>(mask->pixels);
@@ -305,8 +290,8 @@ std::pair<GenerateFadedMask::MaskVariants, bool> GenerateFadedMask::BuildMasks(
     const int expected_expand_radius = (reference_w > 0 && reference_h > 0)
         ? compute_expand_radius(reference_w, reference_h)
         : 0;
-    const int expected_blur_radius = (expected_expand_radius > 0)
-        ? compute_blur_radius(expected_expand_radius)
+    const int expected_base_blur_radius = (expected_expand_radius > 0)
+        ? compute_base_blur_radius(expected_expand_radius)
         : 0;
 
     json meta;
@@ -329,8 +314,8 @@ std::pair<GenerateFadedMask::MaskVariants, bool> GenerateFadedMask::BuildMasks(
             const int stored_frame_count   = meta.value("frame_count", -1);
             const int stored_variant_count = meta.value("variant_count", -1);
             const float stored_ratio       = meta.value("expansion_ratio", kExpansionRatio);
-            const int stored_expand_radius = meta.value("expand_radius", expected_expand_radius);
-            const int stored_blur_radius   = meta.value("blur_radius", expected_blur_radius);
+            const int stored_expand_radius    = meta.value("expand_radius", expected_expand_radius);
+            const int stored_base_blur_radius = meta.value("base_blur_radius", expected_base_blur_radius);
 
             bool steps_ok = false;
             if (meta.contains("scale_steps") && meta["scale_steps"].is_array()) {
@@ -350,7 +335,7 @@ std::pair<GenerateFadedMask::MaskVariants, bool> GenerateFadedMask::BuildMasks(
             }
 
             const bool ratio_ok = std::fabs(stored_ratio - kExpansionRatio) <= 1e-4f;
-            const bool blur_ok  = (expected_blur_radius == 0) || (stored_blur_radius == expected_blur_radius);
+            const bool blur_ok   = (expected_base_blur_radius == 0) || (stored_base_blur_radius == expected_base_blur_radius);
             const bool expand_ok = (expected_expand_radius == 0) || (stored_expand_radius == expected_expand_radius);
 
             cache_ok = (stored_version == kCacheVersion &&
@@ -413,8 +398,8 @@ std::pair<GenerateFadedMask::MaskVariants, bool> GenerateFadedMask::BuildMasks(
     new_meta["frame_count"]    = static_cast<int>(frame_count);
     new_meta["variant_count"]  = static_cast<int>(variant_count);
     new_meta["expansion_ratio"] = kExpansionRatio;
-    new_meta["expand_radius"]  = expected_expand_radius;
-    new_meta["blur_radius"]    = expected_blur_radius;
+    new_meta["expand_radius"]     = expected_expand_radius;
+    new_meta["base_blur_radius"]  = expected_base_blur_radius;
 
     nlohmann::json steps_json = nlohmann::json::array();
     for (int step : scale_steps) {
