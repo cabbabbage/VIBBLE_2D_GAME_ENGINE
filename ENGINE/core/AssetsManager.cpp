@@ -588,9 +588,14 @@ void Assets::update(const Input& input,
     (void)screen_center_x;
     (void)screen_center_y;
 
+    render_pipeline::ScalingLogic::TickUsageSampling();
+
     const bool ctrl_down = input.isScancodeDown(SDL_SCANCODE_LCTRL) || input.isScancodeDown(SDL_SCANCODE_RCTRL);
     if (ctrl_down && input.wasScancodePressed(SDL_SCANCODE_R)) {
         const bool enabled = render_pipeline::ScalingLogic::ToggleUsageTracking();
+        if (!enabled) {
+            render_pipeline::ScalingLogic::FlushUsageData();
+        }
         std::cout << "[Assets] Scaling usage tracking " << (enabled ? "enabled" : "disabled") << " (Ctrl+R).\n";
         scaling_notice_ = ScalingNotice{
             enabled ? std::string("Recording scale") : std::string("Stopped recording"),

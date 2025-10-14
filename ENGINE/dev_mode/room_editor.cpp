@@ -1132,11 +1132,40 @@ Asset* RoomEditor::hit_test_asset(SDL_Point screen_point) const {
     const float scale = std::max(0.0001f, cam.get_scale());
     const float inv_scale = 1.0f / scale;
 
+    float reference_screen_height = 1.0f;
+    Asset* player_asset = assets_->player;
+    if (player_asset) {
+        SDL_Texture* player_final = player_asset->get_final_texture();
+        SDL_Texture* player_frame = player_asset->get_current_frame();
+        int pw = player_asset->cached_w;
+        int ph = player_asset->cached_h;
+        if ((pw == 0 || ph == 0) && player_final) {
+            SDL_QueryTexture(player_final, nullptr, nullptr, &pw, &ph);
+        }
+        if ((pw == 0 || ph == 0) && player_frame) {
+            SDL_QueryTexture(player_frame, nullptr, nullptr, &pw, &ph);
+        }
+        if (pw != 0) player_asset->cached_w = pw;
+        if (ph != 0) player_asset->cached_h = ph;
+
+        float player_scale = 1.0f;
+        if (player_asset->info && std::isfinite(player_asset->info->scale_factor) && player_asset->info->scale_factor >= 0.0f) {
+            player_scale = player_asset->info->scale_factor;
+        }
+        if (ph > 0) {
+            reference_screen_height = static_cast<float>(ph) * player_scale * inv_scale;
+        }
+    }
+    if (reference_screen_height <= 0.0f) {
+        reference_screen_height = 1.0f;
+    }
+
     Asset* best = nullptr;
     int best_screen_y = std::numeric_limits<int>::min();
     int best_z_index = std::numeric_limits<int>::min();
 
     for (Asset* asset : *active_assets_) {
+        if (!asset) continue;
 
         SDL_Texture* tex = asset->get_final_texture();
         int fw = asset->cached_w;
@@ -1146,11 +1175,28 @@ Asset* RoomEditor::hit_test_asset(SDL_Point screen_point) const {
         }
         if (fw <= 0 || fh <= 0) continue;
 
-        const SDL_Point center = cam.map_to_screen(SDL_Point{asset->pos.x, asset->pos.y});
-        const int sw = static_cast<int>(std::lround(static_cast<double>(fw) * inv_scale));
-        const int sh = static_cast<int>(std::lround(static_cast<double>(fh) * inv_scale));
+        float base_scale = 1.0f;
+        if (asset->info && std::isfinite(asset->info->scale_factor) && asset->info->scale_factor >= 0.0f) {
+            base_scale = asset->info->scale_factor;
+        }
+
+        const float scaled_fw = static_cast<float>(fw) * base_scale;
+        const float scaled_fh = static_cast<float>(fh) * base_scale;
+        const float base_sw = scaled_fw * inv_scale;
+        const float base_sh = scaled_fh * inv_scale;
+
+        const camera::RenderEffects effects =
+            cam.compute_render_effects(SDL_Point{asset->pos.x, asset->pos.y}, base_sh, reference_screen_height);
+
+        const float scaled_sw = base_sw * effects.distance_scale;
+        const float scaled_sh = base_sh * effects.distance_scale;
+        const float final_visible_h = scaled_sh * effects.vertical_scale;
+
+        const int sw = std::max(1, static_cast<int>(std::lround(static_cast<double>(scaled_sw))));
+        const int sh = std::max(1, static_cast<int>(std::lround(static_cast<double>(final_visible_h))));
         if (sw <= 0 || sh <= 0) continue;
 
+        const SDL_Point& center = effects.screen_position;
         SDL_Rect rect{center.x - sw / 2, center.y - sh, sw, sh};
         if (!SDL_PointInRect(&screen_point, &rect)) continue;
 

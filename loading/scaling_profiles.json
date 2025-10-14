@@ -1,5 +1,277 @@
 {
-    "assets": {},
-    "new_values": true,
+    "assets": {
+        "Grass_1_FPS_2": {
+            "histogram": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                295189
+            ],
+            "last_requested_percent": 3,
+            "last_requested_scale": 0.0254350733011961,
+            "last_updated": "2025-10-14T01:51:21Z",
+            "last_used_texture_scale": 0.10000000149011612,
+            "recommended_percentages": [
+                100,
+                10
+            ],
+            "revision": 1
+        },
+        "Grass_FPS_2": {
+            "histogram": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                29563
+            ],
+            "last_requested_percent": 3,
+            "last_requested_scale": 0.03346720337867737,
+            "last_updated": "2025-10-14T02:00:46Z",
+            "last_used_texture_scale": 0.10000000149011612,
+            "recommended_percentages": [
+                100,
+                10
+            ],
+            "revision": 1
+        },
+        "Mushroom_2": {
+            "histogram": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                1216,
+                567,
+                0
+            ],
+            "last_requested_percent": 25,
+            "last_requested_scale": 0.2450331151485443,
+            "last_updated": "2025-10-14T02:00:47Z",
+            "last_used_texture_scale": 0.20000000298023224,
+            "recommended_percentages": [
+                100,
+                30,
+                20
+            ],
+            "revision": 2
+        },
+        "Mushroom_3": {
+            "histogram": [
+                0,
+                0,
+                0,
+                0,
+                402,
+                550,
+                111,
+                32,
+                0,
+                0
+            ],
+            "last_requested_percent": 43,
+            "last_requested_scale": 0.42580646276474,
+            "last_updated": "2025-10-14T02:01:10Z",
+            "last_used_texture_scale": 0.4000000059604645,
+            "recommended_percentages": [
+                100,
+                60,
+                50,
+                40,
+                30
+            ],
+            "revision": 3
+        },
+        "Small_Rock": {
+            "histogram": [
+                0,
+                0,
+                0,
+                0,
+                597,
+                578,
+                0,
+                0,
+                0,
+                0
+            ],
+            "last_requested_percent": 47,
+            "last_requested_scale": 0.4736842215061188,
+            "last_updated": "2025-10-14T01:51:36Z",
+            "last_used_texture_scale": 0.5,
+            "recommended_percentages": [
+                100,
+                60,
+                50
+            ],
+            "revision": 2
+        },
+        "Tree": {
+            "histogram": [
+                0,
+                0,
+                32563,
+                16753,
+                60010,
+                5103,
+                1302,
+                0,
+                0,
+                0
+            ],
+            "last_requested_percent": 51,
+            "last_requested_scale": 0.5088868141174316,
+            "last_updated": "2025-10-14T02:01:10Z",
+            "last_used_texture_scale": 0.5,
+            "recommended_percentages": [
+                100,
+                80,
+                70,
+                60,
+                50,
+                40
+            ],
+            "revision": 4
+        },
+        "Tree_Dark": {
+            "histogram": [
+                0,
+                0,
+                22410,
+                28458,
+                59440,
+                5557,
+                1228,
+                0,
+                0,
+                0
+            ],
+            "last_requested_percent": 51,
+            "last_requested_scale": 0.5089877247810364,
+            "last_updated": "2025-10-14T02:01:10Z",
+            "last_used_texture_scale": 0.5,
+            "recommended_percentages": [
+                100,
+                80,
+                70,
+                60,
+                50,
+                40
+            ],
+            "revision": 4
+        },
+        "Tree_Darker": {
+            "histogram": [
+                0,
+                0,
+                112442,
+                90330,
+                218768,
+                19394,
+                4252,
+                0,
+                0,
+                0
+            ],
+            "last_requested_percent": 51,
+            "last_requested_scale": 0.5094162225723267,
+            "last_updated": "2025-10-14T02:01:10Z",
+            "last_used_texture_scale": 0.5,
+            "recommended_percentages": [
+                100,
+                80,
+                70,
+                60,
+                50,
+                40
+            ],
+            "revision": 4
+        },
+        "Vibble": {
+            "histogram": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                5074,
+                35
+            ],
+            "last_requested_percent": 14,
+            "last_requested_scale": 0.14450867474079132,
+            "last_updated": "2025-10-14T02:01:10Z",
+            "last_used_texture_scale": 0.10000000149011612,
+            "recommended_percentages": [
+                100,
+                20,
+                10
+            ],
+            "revision": 2
+        },
+        "candle": {
+            "histogram": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                12877
+            ],
+            "last_requested_percent": 6,
+            "last_requested_scale": 0.05911330133676529,
+            "last_updated": "2025-10-14T01:51:21Z",
+            "last_used_texture_scale": 0.10000000149011612,
+            "recommended_percentages": [
+                100,
+                10
+            ],
+            "revision": 1
+        },
+        "flower_4": {
+            "histogram": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                6673
+            ],
+            "last_requested_percent": 5,
+            "last_requested_scale": 0.05335365980863571,
+            "last_updated": "2025-10-14T01:51:21Z",
+            "last_used_texture_scale": 0.10000000149011612,
+            "recommended_percentages": [
+                100,
+                10
+            ],
+            "revision": 1
+        }
+    },
+    "new_values": false,
     "version": 1
 }
