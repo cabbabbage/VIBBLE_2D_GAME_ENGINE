@@ -207,10 +207,10 @@ Asset& Asset::operator=(const Asset& o) {
 }
 
 void Asset::finalize_setup() {
-	if (!info) return;
-	if (current_animation.empty() ||
-	info->animations[current_animation].frames.empty())
-	{
+        if (!info) return;
+        if (current_animation.empty() ||
+        info->animations[current_animation].frames.empty())
+        {
 		std::string start_id = info->start_animation.empty() ? std::string{"default"} : info->start_animation;
 		auto it = info->animations.find(start_id);
 		if (it == info->animations.end()) it = info->animations.find("default");
@@ -254,6 +254,7 @@ void Asset::finalize_setup() {
                 controller_ = cf.create_for_asset(this);
         }
         NeighborSearchRadius = info->NeighborSearchRadius;
+        refresh_cached_dimensions();
 }
 
 SDL_Texture* Asset::get_current_frame() const {
@@ -631,6 +632,60 @@ void Asset::clear_downscale_cache() {
         last_scaled_h_            = 0;
         last_scaled_camera_scale_ = -1.0f;
         last_scale_usage_         = {};
+}
+
+void Asset::refresh_cached_dimensions() {
+        int width = 0;
+        int height = 0;
+
+        if (final_texture) {
+                if (SDL_QueryTexture(final_texture, nullptr, nullptr, &width, &height) != 0) {
+                        width = 0;
+                        height = 0;
+                }
+        }
+
+        if ((width <= 0 || height <= 0)) {
+                SDL_Texture* frame = get_current_frame();
+                if (frame) {
+                        if (SDL_QueryTexture(frame, nullptr, nullptr, &width, &height) != 0) {
+                                width = 0;
+                                height = 0;
+                        }
+                }
+        }
+
+        if ((width <= 0 || height <= 0) && info) {
+                width  = info->original_canvas_width;
+                height = info->original_canvas_height;
+        }
+
+        cached_w = (width > 0) ? width : 0;
+        cached_h = (height > 0) ? height : 0;
+}
+
+void Asset::on_scale_factor_changed() {
+        clear_downscale_cache();
+        last_scale_usage_ = {};
+        refresh_cached_dimensions();
+
+        light_front_cache_.width  = 0;
+        light_front_cache_.height = 0;
+        light_behind_cache_.width  = 0;
+        light_behind_cache_.height = 0;
+        shadow_mask_cache_.width  = 0;
+        shadow_mask_cache_.height = 0;
+
+        if (!children.empty() && info) {
+                for (Asset* child : children) {
+                        if (!child || !child->info) {
+                                continue;
+                        }
+                        if (child->info.get() == info.get()) {
+                                child->on_scale_factor_changed();
+                        }
+                }
+        }
 }
 
 void Asset::update_scale_usage(float requested, float texture_scale, float remainder, int variant_index) {

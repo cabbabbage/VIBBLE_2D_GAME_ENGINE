@@ -12,6 +12,7 @@
 #include <vector>
 #include <cstdint>
 #include <string_view>
+#include <unordered_set>
 
 static constexpr SDL_Color SLATE_COLOR = {69, 101, 74, 255};
 static constexpr float MIN_VISIBLE_SCREEN_RATIO = 0.015f;
@@ -313,10 +314,17 @@ void SceneRenderer::render() {
     if (player_screen_height <= 0.0f) player_screen_height = 1.0f;
 
     const auto& active_assets = assets_->getActive();
+    std::unordered_set<Asset*> current_active_assets;
+    current_active_assets.reserve(active_assets.size());
     for (Asset* a : active_assets) {
         if (!a || !a->info) continue;
 
-        if (shouldRegen(a)) {
+        current_active_assets.insert(a);
+        const bool newly_active = last_active_assets_.find(a) == last_active_assets_.end();
+        if (newly_active) {
+            SDL_Texture* tex = render_pipeline_.regenerateFinalTexture(a);
+            a->set_final_texture(tex);
+        } else if (shouldRegen(a)) {
             SDL_Texture* tex = render_pipeline_.regenerateFinalTexture(a);
             a->set_final_texture(tex);
         }
@@ -358,6 +366,8 @@ void SceneRenderer::render() {
             SDL_SetTextureColorMod(final_tex, 255, 255, 255);
         }
     }
+
+    last_active_assets_ = std::move(current_active_assets);
 
     SDL_SetRenderTarget(renderer_, use_postprocess ? scene_target_tex_ : nullptr);
     z_light_pass_->render(debugging);

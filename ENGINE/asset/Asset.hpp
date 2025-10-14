@@ -53,6 +53,7 @@ class Asset {
     Asset& operator=(Asset&&) noexcept = default;
     ~Asset();
     void finalize_setup();
+    void on_scale_factor_changed();
 
     void update();
     SDL_Texture* get_current_frame() const;
@@ -168,6 +169,7 @@ class Asset {
 };
 
     void clear_downscale_cache();
+    void refresh_cached_dimensions();
 
     std::vector<DownscaleCacheEntry> downscale_cache_{};
 

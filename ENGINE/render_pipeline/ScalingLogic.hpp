@@ -225,6 +225,37 @@ struct ScalingLogic {
         }
     }
 
+    static inline void ResetAssetUsage(const std::string& asset_key) {
+        if (asset_key.empty()) {
+            return;
+        }
+
+        UsageState& state = usage_state();
+        std::lock_guard<std::mutex> guard(state.mutex);
+        ensure_loaded(state);
+
+        state.pending_samples.erase(asset_key);
+        state.next_allowed_sample.erase(asset_key);
+        state.queued_assets.erase(asset_key);
+        auto& queue = state.sampling_queue;
+        queue.erase(std::remove(queue.begin(), queue.end(), asset_key), queue.end());
+
+        bool changed = false;
+        if (state.data.contains("assets") && state.data["assets"].is_object()) {
+            auto& assets = state.data["assets"];
+            auto it = assets.find(asset_key);
+            if (it != assets.end()) {
+                assets.erase(it);
+                changed = true;
+            }
+        }
+
+        if (changed) {
+            state.dirty = true;
+            save_to_disk(state);
+        }
+    }
+
     static inline bool UsageTrackingEnabled() {
         UsageState& state = usage_state();
         std::lock_guard<std::mutex> guard(state.mutex);

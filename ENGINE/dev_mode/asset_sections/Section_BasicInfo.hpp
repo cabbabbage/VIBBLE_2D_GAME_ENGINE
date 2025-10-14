@@ -5,6 +5,7 @@
 #include "asset/asset_info.hpp"
 #include "asset/asset_types.hpp"
 #include "render/camera.hpp"
+#include "render_pipeline/ScalingLogic.hpp"
 #include "widgets.hpp"
 #include "dev_mode/asset_info_sections.hpp"
 #include "dm_styles.hpp"
@@ -127,6 +128,7 @@ inline bool Section_BasicInfo::handle_event(const SDL_Event& e) {
     int pct = std::max(0, static_cast<int>(std::lround(info_->scale_factor * 100.0f)));
     if (s_scale_pct_ && pct != s_scale_pct_->value()) {
         info_->set_scale_percentage(static_cast<float>(s_scale_pct_->value()));
+        render_pipeline::ScalingLogic::ResetAssetUsage(info_->name);
         changed = true;
         scale_changed = true;
     }

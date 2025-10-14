@@ -95,19 +95,22 @@ renderer_(renderer)
         std::cout << "[AssetLoader] Rooms built in " << rooms_ms << "ms\n";
         std::cout << "[AssetLoader] Asset loader initialization completed in " << total_ms << "ms\n";
         auto distant_boundary = collectDistantAssets(150, 400);
-	for(auto a : distant_boundary){
-		a->set_hidden(true);
-	}
+        for (auto* asset : distant_boundary) {
+                asset->set_hidden(true);
+        }
 	std::vector<Asset*> link_candidates;
 	for (Room* room : rooms_) {
 		for (auto& asset_up : room->assets) {
             if (auto* asset = asset_up.get()) {
+                if (asset->is_hidden()) {
+                    continue;
+                }
                 if (asset->info && asset->info->type != asset_types::player && !asset->info->moving_asset) {
                     link_candidates.push_back(asset);
                 }
             }
-		}
-	}
+                }
+        }
 	auto neighbor_assets = group_neighboring_assets(link_candidates, 500, 500, "Child Linking");
 	link_by_child(neighbor_assets);
 }

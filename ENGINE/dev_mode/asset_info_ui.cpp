@@ -709,68 +709,15 @@ void AssetInfoUI::render_world_overlay(SDL_Renderer* r, const camera& cam) const
 void AssetInfoUI::refresh_target_asset_scale() {
     if (!info_) return;
 
-    SDL_Renderer* renderer = last_renderer_;
-    if (!renderer && assets_) {
-        renderer = assets_->renderer();
-    }
-    if (!renderer) return;
-
-    namespace fs = std::filesystem;
-    const fs::path cache_root{"cache"};
-    try {
-        if (fs::exists(cache_root)) {
-            const fs::path anim_cache = cache_root / info_->name / "animations";
-            if (fs::exists(anim_cache)) {
-                std::error_code ec;
-                fs::remove_all(anim_cache, ec);
-                if (ec) {
-                    SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
-                                "[AssetInfoUI] Failed to clear animation cache for %s: %s",
-                                info_->name.c_str(),
-                                ec.message().c_str());
-                }
-            }
-
-            const fs::path areas_root = cache_root / "areas";
-            if (fs::exists(areas_root)) {
-                const std::string prefix = info_->name + "_";
-                for (const auto& entry : fs::directory_iterator(areas_root)) {
-                    if (!entry.is_directory()) continue;
-                    const std::string folder = entry.path().filename().string();
-                    if (folder.rfind(prefix, 0) != 0) continue;
-                    std::error_code ec;
-                    fs::remove_all(entry.path(), ec);
-                    if (ec) {
-                        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
-                                    "[AssetInfoUI] Failed to clear area cache %s: %s",
-                                    folder.c_str(),
-                                    ec.message().c_str());
-                    }
-                }
-            }
-        }
-    } catch (const std::exception& ex) {
-        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
-                    "[AssetInfoUI] Exception while clearing caches for %s: %s",
-                    info_->name.c_str(),
-                    ex.what());
-    }
-
-    info_->loadAnimations(renderer);
-
     Asset* current_target = target_asset_;
     const bool target_valid = validate_target_asset();
+    Asset* validated_target = target_asset_;
 
     const auto refresh_asset = [&](Asset* asset) {
         if (!asset || asset->info.get() != info_.get()) {
             return false;
         }
-        asset->clear_render_caches();
-        asset->clear_downscale_cache();
-        asset->set_final_texture(nullptr);
-        asset->cached_w = 0;
-        asset->cached_h = 0;
-        asset->finalize_setup();
+        asset->on_scale_factor_changed();
         return true;
     };
 
@@ -788,7 +735,13 @@ void AssetInfoUI::refresh_target_asset_scale() {
         }
     }
 
-    if (!refreshed_any && target_valid && current_target) {
+    if (target_valid && validated_target) {
+        if (refresh_asset(validated_target)) {
+            refreshed_any = true;
+        }
+    }
+
+    if (current_target && current_target != validated_target) {
         if (refresh_asset(current_target)) {
             refreshed_any = true;
         }

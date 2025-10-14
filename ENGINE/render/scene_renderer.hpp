@@ -3,6 +3,7 @@
 #include <string>
 #include <memory>
 #include <vector>
+#include <unordered_set>
 #include <SDL.h>
 #include <nlohmann/json.hpp>
 #include "light_map.hpp"
@@ -64,5 +65,7 @@ private:
     SDL_Texture*   scene_target_tex_    = nullptr;
     SDL_Texture*   post_small_tex_a_    = nullptr;
     SDL_Texture*   post_small_tex_b_    = nullptr;
+
+    std::unordered_set<Asset*> last_active_assets_;
 
 };
