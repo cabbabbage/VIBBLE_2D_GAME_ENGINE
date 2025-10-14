@@ -186,32 +186,18 @@ private:
     std::unique_ptr<DMSlider> key_a_;
 
     std::unique_ptr<DMCheckbox> reactive_offsets_enabled_;
-    std::unique_ptr<DMCheckbox> reactive_scale_enabled_;
     std::unique_ptr<DMCheckbox> reactive_opacity_enabled_;
     std::unique_ptr<DMCheckbox> reactive_temporal_enabled_;
 
     std::unique_ptr<DMSlider> reactive_kernel_radius_;
     std::unique_ptr<DMSlider> reactive_outer_ring_weight_;
     std::unique_ptr<DMSlider> reactive_diagonal_weight_;
-    std::unique_ptr<DMSlider> reactive_gradient_deadzone_;
-    std::unique_ptr<DMSlider> reactive_gradient_max_;
-    std::unique_ptr<DMSlider> reactive_offset_ratio_x_;
-    std::unique_ptr<DMSlider> reactive_offset_ratio_y_;
-    std::unique_ptr<DMSlider> reactive_offset_bias_x_;
-    std::unique_ptr<DMSlider> reactive_offset_bias_y_;
-    std::unique_ptr<DMSlider> reactive_offset_limit_x_;
-    std::unique_ptr<DMSlider> reactive_offset_limit_y_;
-    std::unique_ptr<DMSlider> reactive_scale_strength_;
-    std::unique_ptr<DMSlider> reactive_scale_front_limit_;
-    std::unique_ptr<DMSlider> reactive_scale_back_limit_;
-    std::unique_ptr<DMSlider> reactive_scale_min_;
-    std::unique_ptr<DMSlider> reactive_scale_max_;
-    std::unique_ptr<DMSlider> reactive_opacity_gamma_;
-    std::unique_ptr<DMSlider> reactive_opacity_min_factor_;
-    std::unique_ptr<DMSlider> reactive_opacity_max_factor_;
-    std::unique_ptr<DMSlider> reactive_opacity_floor_;
-    std::unique_ptr<DMSlider> reactive_opacity_ceiling_;
-    std::unique_ptr<DMSlider> reactive_brightness_floor_;
+    std::unique_ptr<DMSlider> reactive_gradient_sensitivity_;
+    std::unique_ptr<DMSlider> reactive_offset_strength_;
+    std::unique_ptr<DMSlider> reactive_max_offset_ratio_;
+    std::unique_ptr<DMSlider> reactive_opacity_strength_;
+    std::unique_ptr<DMSlider> reactive_min_opacity_;
+    std::unique_ptr<DMSlider> reactive_max_opacity_;
     std::unique_ptr<DMSlider> reactive_temporal_smoothing_;
 
     mutable std::string current_key_label_;

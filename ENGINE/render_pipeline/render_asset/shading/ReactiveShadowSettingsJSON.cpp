@@ -1,5 +1,6 @@
 #include "render_pipeline/render_asset/shading/ReactiveShadowSettingsJSON.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include <string>
 
@@ -92,31 +93,55 @@ void populate_from_section(ReactiveShadowSettings::Sampling& sampling, const nlo
 }
 
 void populate_from_section(ReactiveShadowSettings::Directionality& directionality, const nlohmann::json& section) {
-    directionality.enable_offsets     = read_bool(section, "enable_offsets", directionality.enable_offsets);
-    directionality.gradient_deadzone  = read_float(section, "gradient_deadzone", directionality.gradient_deadzone);
-    directionality.gradient_max       = read_float(section, "gradient_max", directionality.gradient_max);
-    directionality.offset_ratio_x     = read_float(section, "offset_ratio_x", directionality.offset_ratio_x);
-    directionality.offset_ratio_y     = read_float(section, "offset_ratio_y", directionality.offset_ratio_y);
-    directionality.offset_x_bias      = read_float(section, "offset_x_bias", directionality.offset_x_bias);
-    directionality.offset_y_bias      = read_float(section, "offset_y_bias", directionality.offset_y_bias);
-    directionality.offset_max_ratio_x = read_float(section, "offset_max_ratio_x", directionality.offset_max_ratio_x);
-    directionality.offset_max_ratio_y = read_float(section, "offset_max_ratio_y", directionality.offset_max_ratio_y);
+    directionality.enable_offsets = read_bool(section, "enable_offsets", directionality.enable_offsets);
+    if (section.contains("gradient_sensitivity")) {
+        directionality.gradient_sensitivity =
+            read_float(section, "gradient_sensitivity", directionality.gradient_sensitivity);
+    } else {
+        directionality.gradient_sensitivity =
+            read_float(section, "gradient_deadzone", directionality.gradient_sensitivity);
+    }
+
+    if (section.contains("offset_strength")) {
+        directionality.offset_strength =
+            read_float(section, "offset_strength", directionality.offset_strength);
+    } else {
+        const float ratio_x = read_float(section, "offset_ratio_x", directionality.offset_strength);
+        const float ratio_y = read_float(section, "offset_ratio_y", directionality.offset_strength);
+        const float bias_x  = read_float(section, "offset_x_bias", 1.0f);
+        const float bias_y  = read_float(section, "offset_y_bias", 1.0f);
+        directionality.offset_strength = std::max(ratio_x * bias_x, ratio_y * bias_y);
+    }
+
+    if (section.contains("max_offset_ratio")) {
+        directionality.max_offset_ratio =
+            read_float(section, "max_offset_ratio", directionality.max_offset_ratio);
+    } else {
+        const float max_ratio_x = read_float(section, "offset_max_ratio_x", directionality.max_offset_ratio);
+        const float max_ratio_y = read_float(section, "offset_max_ratio_y", directionality.max_offset_ratio);
+        directionality.max_offset_ratio = std::max(max_ratio_x, max_ratio_y);
+    }
 }
 
 void populate_from_section(ReactiveShadowSettings::Response& response, const nlohmann::json& section) {
-    response.enable_scale          = read_bool(section, "enable_scale", response.enable_scale);
-    response.enable_opacity        = read_bool(section, "enable_opacity", response.enable_opacity);
-    response.scale_strength        = read_float(section, "scale_strength", response.scale_strength);
-    response.scale_front_limit     = read_float(section, "scale_front_limit", response.scale_front_limit);
-    response.scale_back_limit      = read_float(section, "scale_back_limit", response.scale_back_limit);
-    response.scale_min             = read_float(section, "scale_min", response.scale_min);
-    response.scale_max             = read_float(section, "scale_max", response.scale_max);
-    response.opacity_gamma         = read_float(section, "opacity_gamma", response.opacity_gamma);
-    response.opacity_min_factor    = read_float(section, "opacity_min_factor", response.opacity_min_factor);
-    response.opacity_max_factor    = read_float(section, "opacity_max_factor", response.opacity_max_factor);
-    response.absolute_opacity_min  = read_float(section, "absolute_opacity_min", response.absolute_opacity_min);
-    response.absolute_opacity_max  = read_float(section, "absolute_opacity_max", response.absolute_opacity_max);
-    response.brightness_floor      = read_float(section, "brightness_floor", response.brightness_floor);
+    response.enable_opacity = read_bool(section, "enable_opacity", response.enable_opacity);
+    if (section.contains("opacity_strength")) {
+        response.opacity_strength = read_float(section, "opacity_strength", response.opacity_strength);
+    } else {
+        response.opacity_strength = read_float(section, "opacity_gamma", response.opacity_strength);
+    }
+
+    if (section.contains("min_opacity")) {
+        response.min_opacity = read_float(section, "min_opacity", response.min_opacity);
+    } else {
+        response.min_opacity = read_float(section, "absolute_opacity_min", response.min_opacity);
+    }
+
+    if (section.contains("max_opacity")) {
+        response.max_opacity = read_float(section, "max_opacity", response.max_opacity);
+    } else {
+        response.max_opacity = read_float(section, "absolute_opacity_max", response.max_opacity);
+    }
 }
 
 void populate_from_section(ReactiveShadowSettings::Stability& stability, const nlohmann::json& section) {
@@ -170,30 +195,16 @@ void assign_reactive_shadow_settings(nlohmann::json& json, const ReactiveShadowS
 
     json["directionality"] = nlohmann::json::object({
         { "enable_offsets", sanitized.directionality.enable_offsets },
-        { "gradient_deadzone", sanitized.directionality.gradient_deadzone },
-        { "gradient_max", sanitized.directionality.gradient_max },
-        { "offset_ratio_x", sanitized.directionality.offset_ratio_x },
-        { "offset_ratio_y", sanitized.directionality.offset_ratio_y },
-        { "offset_x_bias", sanitized.directionality.offset_x_bias },
-        { "offset_y_bias", sanitized.directionality.offset_y_bias },
-        { "offset_max_ratio_x", sanitized.directionality.offset_max_ratio_x },
-        { "offset_max_ratio_y", sanitized.directionality.offset_max_ratio_y }
+        { "gradient_sensitivity", sanitized.directionality.gradient_sensitivity },
+        { "offset_strength", sanitized.directionality.offset_strength },
+        { "max_offset_ratio", sanitized.directionality.max_offset_ratio }
     });
 
     json["response"] = nlohmann::json::object({
-        { "enable_scale", sanitized.response.enable_scale },
         { "enable_opacity", sanitized.response.enable_opacity },
-        { "scale_strength", sanitized.response.scale_strength },
-        { "scale_front_limit", sanitized.response.scale_front_limit },
-        { "scale_back_limit", sanitized.response.scale_back_limit },
-        { "scale_min", sanitized.response.scale_min },
-        { "scale_max", sanitized.response.scale_max },
-        { "opacity_gamma", sanitized.response.opacity_gamma },
-        { "opacity_min_factor", sanitized.response.opacity_min_factor },
-        { "opacity_max_factor", sanitized.response.opacity_max_factor },
-        { "absolute_opacity_min", sanitized.response.absolute_opacity_min },
-        { "absolute_opacity_max", sanitized.response.absolute_opacity_max },
-        { "brightness_floor", sanitized.response.brightness_floor }
+        { "opacity_strength", sanitized.response.opacity_strength },
+        { "min_opacity", sanitized.response.min_opacity },
+        { "max_opacity", sanitized.response.max_opacity }
     });
 
     json["stability"] = nlohmann::json::object({
