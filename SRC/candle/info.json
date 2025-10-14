@@ -140,6 +140,8 @@
     "impassable_area": null,
     "lighting_info": [
         {
+            "apex_speed_bias": 0,
+            "behind": false,
             "factor": 100,
             "falloff": 0,
             "has_light_source": true,
@@ -151,34 +153,20 @@
             "y_radius": 0
         },
         {
+            "behind": false,
             "falloff": 0,
-            "flare": 1,
-            "flicker": 0,
+            "flare": 0,
+            "flicker": 20,
             "has_light_source": true,
             "light_color": [
-                130,
+                255,
                 255,
                 255
             ],
-            "light_intensity": 0,
-            "offset_x": -1605,
-            "offset_y": -1337,
-            "radius": 0
-        },
-        {
-            "falloff": 35,
-            "flare": 36,
-            "flicker": 11,
-            "has_light_source": true,
-            "light_color": [
-                97,
-                219,
-                183
-            ],
-            "light_intensity": 138,
-            "offset_x": 23,
-            "offset_y": -70,
-            "radius": 1058
+            "light_intensity": 255,
+            "offset_x": 0,
+            "offset_y": 0,
+            "radius": 64
         }
     ],
     "max_child_depth": 2,

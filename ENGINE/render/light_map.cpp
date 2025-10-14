@@ -116,11 +116,6 @@ void LightMap::collect_layers(std::vector<LightEntry>& out) {
                                                      ? asset->info->scale_factor
                                                      : 1.0f;
                 float world_scale = asset_scale_factor;
-                const float requested_scale = scale_usage.requested_scale;
-                if (std::isfinite(requested_scale) && requested_scale > 0.0f &&
-                    std::isfinite(camera_scale) && camera_scale > 0.0f) {
-                        world_scale = requested_scale * camera_scale;
-                }
                 if (!std::isfinite(world_scale) || world_scale <= 0.0f) {
                         world_scale = 1.0f;
                 }
@@ -166,12 +161,55 @@ void LightMap::collect_layers(std::vector<LightEntry>& out) {
                                 continue;
                         }
 
-                        const int scaled_w = std::max(1, static_cast<int>(std::lround(static_cast<float>(base_w) * world_scale)));
-                        const int scaled_h = std::max(1, static_cast<int>(std::lround(static_cast<float>(base_h) * world_scale)));
+                        const float base_world_w = static_cast<float>(base_w) * world_scale;
+                        const float base_world_h = static_cast<float>(base_h) * world_scale;
+                        if (!std::isfinite(base_world_w) || !std::isfinite(base_world_h) ||
+                            base_world_w <= 0.0f || base_world_h <= 0.0f) {
+                                continue;
+                        }
+
+                        const float base_screen_w = base_world_w * inv_scale;
+                        const float base_screen_h = base_world_h * inv_scale;
+                        if (base_screen_w < static_cast<float>(min_visible_w) &&
+                            base_screen_h < static_cast<float>(min_visible_h)) {
+                                continue;
+                        }
 
                         const int offset_x = flipped ? -light.offset_x : light.offset_x;
                         SDL_Point light_pos{asset->pos.x + offset_x, asset->pos.y + light.offset_y};
-                        SDL_Rect dst = get_scaled_position_rect(light_pos, scaled_w, scaled_h, inv_scale, min_visible_w, min_visible_h);
+                        const camera::RenderEffects effects =
+                            assets_->getView().compute_render_effects(light_pos, base_screen_h, base_screen_h);
+
+                        float local_scale = 1.0f;
+                        const float requested_scale = scale_usage.requested_scale;
+                        const float baseline_scale = world_scale * inv_scale;
+                        if (std::isfinite(requested_scale) && requested_scale > 0.0f &&
+                            std::isfinite(baseline_scale) && baseline_scale > 1e-6f) {
+                                float distance_component = requested_scale / baseline_scale;
+                                if (std::isfinite(distance_component) && distance_component > 1e-6f) {
+                                        const float effect_distance = std::max(effects.distance_scale, 1e-6f);
+                                        local_scale = distance_component / effect_distance;
+                                        if (!std::isfinite(local_scale) || local_scale <= 0.0f) {
+                                                local_scale = 1.0f;
+                                        }
+                                }
+                        }
+
+                        const float final_sw_f = base_screen_w * effects.distance_scale * local_scale;
+                        const float final_sh_f = base_screen_h * effects.distance_scale * effects.vertical_scale * local_scale;
+                        if (final_sw_f < static_cast<float>(min_visible_w) &&
+                            final_sh_f < static_cast<float>(min_visible_h)) {
+                                continue;
+                        }
+
+                        const int sw = std::max(1, static_cast<int>(std::lround(final_sw_f)));
+                        const int sh = std::max(1, static_cast<int>(std::lround(final_sh_f)));
+                        if (sw < min_visible_w && sh < min_visible_h) {
+                                continue;
+                        }
+
+                        SDL_Point cp = effects.screen_position;
+                        SDL_Rect dst{ cp.x - sw / 2, cp.y - sh / 2, sw, sh };
                         if (dst.w <= 0 || dst.h <= 0) {
                                 continue;
                         }

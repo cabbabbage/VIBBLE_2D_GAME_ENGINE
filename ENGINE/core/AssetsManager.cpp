@@ -572,11 +572,11 @@ void Assets::update(const Input& input,
     render_pipeline::ScalingLogic::TickUsageSampling();
 
     const bool ctrl_down = input.isScancodeDown(SDL_SCANCODE_LCTRL) || input.isScancodeDown(SDL_SCANCODE_RCTRL);
-    if (scene && (input.wasScancodePressed(SDL_SCANCODE_LCTRL) || input.wasScancodePressed(SDL_SCANCODE_RCTRL))) {
+    if (scene && ctrl_down && input.wasScancodePressed(SDL_SCANCODE_M)) {
         scene->toggle_light_map_only_mode();
         std::cout << "[Assets] Light map-only view "
                   << (scene->light_map_only_mode() ? "enabled" : "disabled")
-                  << " (Ctrl).\n";
+                  << " (Ctrl+M).\n";
     }
     if (ctrl_down && input.wasScancodePressed(SDL_SCANCODE_R)) {
         const bool enabled = render_pipeline::ScalingLogic::ToggleUsageTracking();

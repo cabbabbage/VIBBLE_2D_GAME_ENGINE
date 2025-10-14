@@ -11,6 +11,7 @@
 #include "render_pipeline/render_asset/AssetRenderPipeline.hpp"
 #include "render_pipeline/render_asset/shading/ReactiveShadowSettings.hpp"
 #include "render/camera.hpp"
+#include "lens_flare_renderer.hpp"
 
 class Assets;
 class Asset;
@@ -42,80 +43,6 @@ private:
     void apply_screen_light_settings(const nlohmann::json& data);
     void update_fullscreen_light_texture();
 
-    // ---------- Lens flare (helpers + state; no new classes) ----------
-    struct FlareSeed {
-        float x = 0.f, y = 0.f;     // raw screen
-        float sx = 0.f, sy = 0.f;   // smoothed screen
-        float strength = 0.f;       // [0..1]
-        bool  valid = false;
-    };
-
-    struct FlareGhost {
-        // A rendered element (circle/streak/star) that slides along camera axis.
-        float x = 0.f, y = 0.f;     // current
-        float tx = 0.f, ty = 0.f;   // target along axis
-        float vx = 0.f, vy = 0.f;   // drift velocity
-        float alpha = 0.f;          // current alpha [0..1]
-        float target_alpha = 0.f;   // goal alpha [0..1]
-        float size_px = 160.f;      // base pixel size
-        int   kind = 0;             // 0=circle, 1=streak, 2=starburst
-        float hue = 30.f;           // degrees (for subtle warm tint)
-        float life = 0.f;           // frames since spawn
-        float max_life = 300.f;     // soft lifetime
-        bool  dying = false;
-    };
-
-    void draw_lens_flares_after_light_map();
-
-    // seed detection from current backbuffer (light map already drawn there)
-    bool detect_bright_seeds(std::vector<FlareSeed>& out, int stride_px, float threshold_norm);
-    void smooth_and_track_seeds(std::vector<FlareSeed>& seeds);
-    void spawn_or_update_ghosts(const std::vector<FlareSeed>& seeds);
-    void step_and_render_ghosts();
-
-    // elements
-    void ensure_flare_textures();
-    void destroy_flare_textures();
-    void make_circle_tex();
-    void make_streak_tex();
-    void make_starburst_tex();
-
-    // sprites
-    void render_sprite(SDL_Texture* tex, float cx, float cy, float intensity, float base_px, float angle_deg = 0.f, SDL_Color tint = {255,255,255,255});
-    SDL_Color warm_tint(float hue_deg, float intensity_scale) const;
-
-    // geometry helpers
-    void axis_cascade_points(const FlareSeed& seed, std::vector<SDL_FPoint>& out) const;
-    bool on_screen(float x, float y, int margin_px = 0) const;
-    SDL_FPoint screen_center() const { return SDL_FPoint{ (float)screen_width_ * 0.5f, (float)screen_height_ * 0.5f }; }
-
-    // cached textures
-    SDL_Texture* circle_tex_   = nullptr;   // soft bokeh
-    SDL_Texture* streak_tex_   = nullptr;   // anamorphic streak
-    SDL_Texture* star_tex_     = nullptr;   // compact starburst
-
-    // persistent state
-    std::vector<FlareSeed>  last_seeds_;
-    std::vector<FlareGhost> ghosts_;
-
-    // tunables (low, cinematic)
-    int   seed_stride_px_         = 18;     // coarse scan stride
-    float seed_threshold_norm_    = 0.78f;  // luma threshold for seeds
-    float seed_pos_ema_           = 0.18f;  // seed smoothing
-    float ghost_follow_ema_       = 0.12f;  // ghost follows target
-    float ghost_spawn_speed_      = 20.f;   // px/frame from off-screen
-    float ghost_alpha_rise_       = 0.05f;  // fade-in
-    float ghost_alpha_fall_       = 0.04f;  // fade-out
-    float ghost_drift_            = 0.08f;  // subtle drift
-    float ghost_size_min_         = 90.f;
-    float ghost_size_max_         = 360.f;
-    float ghost_intensity_gain_   = 0.65f;  // overall multiplier
-    float ghost_alpha_cap_        = 0.28f;  // absolute alpha cap (keeps subtle)
-    float streak_angle_lean_      = 10.f;   // slight tilt
-    float offscreen_spawn_bias_   = 64.f;   // px beyond edges
-    float axis_factors_[7]        = { -0.55f, -0.25f, 0.22f, 0.55f, 0.95f, 1.45f, 2.0f }; // cascade along axis
-    int   max_new_per_frame_      = 8;      // throughput limiter
-
 private:
     std::string    map_path_;
     SDL_Renderer*  renderer_;
@@ -130,6 +57,7 @@ private:
     render_pipeline::shading::ReactiveShadowSettings reactive_shadow_settings_{};
     AssetRenderPipeline render_pipeline_;
     std::unique_ptr<LightMap> z_light_pass_;
+    LensFlareRenderer lens_flares_;
     int            current_shading_group_ = 0;
     int            num_groups_ = 40;
     bool           debugging = false;
