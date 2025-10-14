@@ -15,18 +15,18 @@
                         "offset_y_bias": 2.2699999809265137
                     },
                     "response": {
-                        "absolute_opacity_max": 1.0,
-                        "absolute_opacity_min": 0.10000000149011612,
+                        "absolute_opacity_max": 0.5299999713897705,
+                        "absolute_opacity_min": 0.09000000357627869,
                         "brightness_floor": 0.38999998569488525,
                         "enable_opacity": true,
                         "enable_scale": true,
-                        "opacity_gamma": 0.46000000834465027,
-                        "opacity_max_factor": 1.350000023841858,
-                        "opacity_min_factor": 0.44999998807907104,
-                        "scale_back_limit": 0.07999999821186066,
+                        "opacity_gamma": 2.0399999618530273,
+                        "opacity_max_factor": 2.7200000286102295,
+                        "opacity_min_factor": 1.5700000524520874,
+                        "scale_back_limit": 0.09000000357627869,
                         "scale_front_limit": 0.27000001072883606,
-                        "scale_max": 0.5,
-                        "scale_min": 0.38999998569488525,
+                        "scale_max": 0.10000000149011612,
+                        "scale_min": 0.10000000149011612,
                         "scale_strength": 0.09000000357627869
                     },
                     "sampling": {
