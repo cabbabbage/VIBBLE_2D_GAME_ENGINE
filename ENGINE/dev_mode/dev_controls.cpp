@@ -4,6 +4,7 @@
 #include <fstream>
 #include <sstream>
 #include <cmath>
+#include <numeric>
 
 #include "dev_mode/map_editor.hpp"
 #include "dev_mode/room_editor.hpp"
@@ -38,6 +39,7 @@
 #include "spawn/methods/percent_spawner.hpp"
 #include "spawn/methods/random_spawner.hpp"
 #include "spawn/spawn_logger.hpp"
+#include "utils/map_grid_settings.hpp"
 #include "spawn/spawn_context.hpp"
 #include "utils/area.hpp"
 #include "utils/map_grid.hpp"
@@ -360,6 +362,7 @@ DevControls::DevControls(Assets* owner, int screen_w, int screen_h)
     }
     map_editor_ = std::make_unique<MapEditor>(assets_);
     map_mode_ui_ = std::make_unique<MapModeUI>(assets_);
+    map_grid_regen_cb_ = [this]() { this->regenerate_map_grid_assets(); };
     apply_header_suppression();
     camera_panel_ = std::make_unique<CameraUIPanel>(assets_, 72, 72);
     if (camera_panel_) {
@@ -484,9 +487,11 @@ void DevControls::set_input(Input* input) {
 void DevControls::set_map_info(nlohmann::json* map_info, MapLightPanel::SaveCallback on_save) {
     map_info_json_ = map_info;
     map_light_save_cb_ = std::move(on_save);
+    map_grid_save_cb_ = map_light_save_cb_;
     if (map_mode_ui_) {
         map_mode_ui_->set_light_save_callback(map_light_save_cb_);
         map_mode_ui_->set_map_context(map_info_json_, map_path_);
+        map_mode_ui_->set_map_grid_callbacks(map_grid_save_cb_, map_grid_regen_cb_);
     }
     asset_filter_.set_map_info(map_info_json_);
     configure_header_button_sets();
@@ -563,8 +568,11 @@ void DevControls::set_camera_override_for_testing(camera* camera_override) {
 void DevControls::set_map_context(nlohmann::json* map_info, const std::string& map_path) {
     map_info_json_ = map_info;
     map_path_ = map_path;
-    if (map_mode_ui_) map_mode_ui_->set_map_context(map_info, map_path);
-    if (map_mode_ui_) map_mode_ui_->set_light_save_callback(map_light_save_cb_);
+    if (map_mode_ui_) {
+        map_mode_ui_->set_map_context(map_info, map_path);
+        map_mode_ui_->set_light_save_callback(map_light_save_cb_);
+        map_mode_ui_->set_map_grid_callbacks(map_grid_save_cb_, map_grid_regen_cb_);
+    }
     asset_filter_.set_map_info(map_info_json_);
     configure_header_button_sets();
     notify_room_area_data_changed();
@@ -1611,6 +1619,33 @@ void DevControls::configure_header_button_sets() {
     }
 
     {
+        MapModeUI::HeaderButtonConfig grid_btn;
+        grid_btn.id = "map_grid";
+        grid_btn.label = "Map Grid";
+        grid_btn.active = map_mode_ui_ && map_mode_ui_->is_grid_panel_visible();
+        grid_btn.on_toggle = [this](bool active) {
+            if (room_editor_) {
+                room_editor_->close_room_config();
+            }
+            if (!map_mode_ui_) {
+                sync_header_button_states();
+                return;
+            }
+            const bool currently_open = map_mode_ui_->is_grid_panel_visible();
+            if (active != currently_open) {
+                if (active && !currently_open && is_modal_blocking_panels()) {
+                    pulse_modal_header();
+                    sync_header_button_states();
+                    return;
+                }
+                map_mode_ui_->toggle_grid_panel();
+            }
+            sync_header_button_states();
+        };
+        map_buttons.push_back(std::move(grid_btn));
+    }
+
+    {
         MapModeUI::HeaderButtonConfig map_assets_btn;
         map_assets_btn.id = "map_assets";
         map_assets_btn.label = "Map Assets";
@@ -1745,6 +1780,8 @@ void DevControls::sync_header_button_states() {
     map_mode_ui_->set_button_state(MapModeUI::HeaderMode::Map, "camera", camera_open);
     const bool lights_open = map_mode_ui_->is_light_panel_visible();
     map_mode_ui_->set_button_state(MapModeUI::HeaderMode::Map, "lights", lights_open);
+    const bool grid_open = map_mode_ui_->is_grid_panel_visible();
+    map_mode_ui_->set_button_state(MapModeUI::HeaderMode::Map, "map_grid", grid_open);
     map_mode_ui_->set_button_state(MapModeUI::HeaderMode::Room, "regenerate", false);
     map_mode_ui_->set_button_state(MapModeUI::HeaderMode::Room, "regenerate_other", false);
 
@@ -1927,7 +1964,10 @@ void DevControls::regenerate_map_spawn_group(const nlohmann::json& entry) {
         std::vector<std::string> paths;
         AssetSpawnPlanner planner(sources, *room->room_area, assets_->library(), paths);
 
-        MapGrid grid = MapGrid::from_area_bounds(*room->room_area, 100);
+        MapGridSettings grid_settings = room->map_grid_settings();
+        int spacing = grid_settings.spacing;
+        if (spacing <= 0) spacing = 100;
+        MapGrid grid = MapGrid::from_area_bounds(*room->room_area, spacing);
         std::vector<Area> exclusion;
         SpawnLogger logger("", "");
         SpawnContext ctx(rng, checker, logger, exclusion, asset_info_library, spawned, &assets_->library(), &grid);
@@ -1935,6 +1975,79 @@ void DevControls::regenerate_map_spawn_group(const nlohmann::json& entry) {
         const auto& queue = planner.get_spawn_queue();
         const Area* area_ptr = room->room_area.get();
         for (const auto& info : queue) {
+            if (info.name == "batch_map_assets") {
+                std::vector<double> base_weights;
+                base_weights.reserve(info.candidates.size());
+                double total_weight = 0.0;
+                for (const auto& cand : info.candidates) {
+                    double weight = cand.weight;
+                    if (weight < 0.0) weight = 0.0;
+                    if (weight > 0.0) total_weight += weight;
+                    base_weights.push_back(weight);
+                }
+                if (total_weight <= 0.0 && !base_weights.empty()) {
+                    std::fill(base_weights.begin(), base_weights.end(), 1.0);
+                }
+
+                auto grid_points = grid.get_all_points_in_area(*area_ptr);
+                if (grid_points.empty()) {
+                    ctx.logger().output_and_log(info.name, 0, 0, 0, 0, "mapwide_batch");
+                    continue;
+                }
+
+                std::shuffle(grid_points.begin(), grid_points.end(), ctx.rng());
+
+                const int desired = static_cast<int>(grid_points.size());
+                int spawned_count = 0;
+                int attempts = 0;
+
+                for (auto* gp : grid_points) {
+                    if (!gp) continue;
+                    SDL_Point spawn_pos{ gp->pos.x, gp->pos.y };
+                    spawn_pos = apply_map_grid_jitter(grid_settings, spawn_pos, ctx.rng(), *area_ptr);
+                    bool placed = false;
+                    std::vector<double> attempt_weights = base_weights;
+                    const size_t max_candidate_attempts = info.candidates.size();
+                    for (size_t attempt = 0; attempt < max_candidate_attempts; ++attempt) {
+                        double weight_total = std::accumulate(attempt_weights.begin(), attempt_weights.end(), 0.0);
+                        if (weight_total <= 0.0) break;
+                        std::discrete_distribution<size_t> dist(attempt_weights.begin(), attempt_weights.end());
+                        size_t idx = dist(ctx.rng());
+                        if (idx >= info.candidates.size()) break;
+                        if (attempt_weights[idx] <= 0.0) {
+                            attempt_weights[idx] = 0.0;
+                            continue;
+                        }
+                        ++attempts;
+                        const SpawnCandidate& candidate = info.candidates[idx];
+                        if (candidate.is_null || !candidate.info) {
+                            grid.set_occupied(gp, true);
+                            placed = true;
+                            break;
+                        }
+                        if (ctx.checker().check(candidate.info, spawn_pos, ctx.exclusion_zones(), ctx.all_assets(), true, true, true, 5)) {
+                            attempt_weights[idx] = 0.0;
+                            continue;
+                        }
+                        auto* result = ctx.spawnAsset(candidate.name, candidate.info, *area_ptr, spawn_pos, 0, nullptr, info.spawn_id, info.position);
+                        if (!result) {
+                            attempt_weights[idx] = 0.0;
+                            continue;
+                        }
+                        grid.set_occupied(gp, true);
+                        ++spawned_count;
+                        ctx.logger().progress(candidate.info, spawned_count, desired);
+                        placed = true;
+                        break;
+                    }
+                    if (!placed) {
+                        grid.set_occupied(gp, true);
+                    }
+                }
+
+                ctx.logger().output_and_log(info.name, desired, spawned_count, attempts, attempts, "mapwide_batch");
+                continue;
+            }
             const std::string& pos = info.position;
             if (pos == "Exact" || pos == "Exact Position") {
                 exact.spawn(info, area_ptr, ctx);
@@ -1951,6 +2064,23 @@ void DevControls::regenerate_map_spawn_group(const nlohmann::json& entry) {
     }
 
     integrate_spawned_assets(spawned);
+}
+
+void DevControls::regenerate_map_grid_assets() {
+    if (!map_info_json_ || !map_info_json_->is_object()) {
+        return;
+    }
+    auto section_it = map_info_json_->find("map_assets_data");
+    if (section_it == map_info_json_->end() || !section_it->is_object()) {
+        return;
+    }
+    auto groups_it = section_it->find("spawn_groups");
+    if (groups_it == section_it->end() || !groups_it->is_array()) {
+        return;
+    }
+    for (const auto& group : *groups_it) {
+        regenerate_map_spawn_group(group);
+    }
 }
 
 void DevControls::regenerate_boundary_spawn_group(const nlohmann::json& entry) {

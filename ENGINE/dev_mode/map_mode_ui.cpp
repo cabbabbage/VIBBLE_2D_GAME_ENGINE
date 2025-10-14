@@ -1,6 +1,7 @@
 #include "map_mode_ui.hpp"
 
 #include "MapLightPanel.hpp"
+#include "map_grid_panel.hpp"
 #include "DockableCollapsible.hpp"
 #include "full_screen_collapsible.hpp"
 #include "map_layers_controller.hpp"
@@ -279,6 +280,14 @@ void MapModeUI::ensure_panels() {
     if (light_panel_) {
         light_panel_->set_reactive_settings(assets_ ? assets_->reactive_shadow_settings() : nullptr);
     }
+    if (!grid_panel_) {
+        grid_panel_ = std::make_unique<MapGridPanel>(kDefaultPanelX + 96, kDefaultPanelY + 48);
+        grid_panel_->close();
+        track_floating_panel(grid_panel_.get());
+    }
+    if (grid_panel_) {
+        grid_panel_->set_map_info(map_info_, grid_save_callback_, grid_regen_callback_);
+    }
     if (!layers_controller_) {
         layers_controller_ = std::make_shared<MapLayersController>();
     }
@@ -466,6 +475,10 @@ void MapModeUI::set_active_panel(PanelType panel) {
         sync_footer_button_states();
         return;
     }
+    if (panel == PanelType::Grid && !ensure_panel_unlocked(grid_panel_.get(), "Grid")) {
+        sync_footer_button_states();
+        return;
+    }
 
     PanelType new_active = PanelType::None;
 
@@ -476,6 +489,16 @@ void MapModeUI::set_active_panel(PanelType panel) {
             bring_panel_to_front(light_panel_.get());
         } else {
             light_panel_->close();
+        }
+    }
+
+    if (grid_panel_) {
+        if (panel == PanelType::Grid) {
+            grid_panel_->open();
+            bring_panel_to_front(grid_panel_.get());
+            new_active = PanelType::Grid;
+        } else {
+            grid_panel_->close();
         }
     }
 
@@ -600,6 +623,13 @@ void MapModeUI::sync_panel_map_info() {
         }
         light_panel_->set_map_info(map_info_, callback);
     }
+    if (grid_panel_) {
+        GridSaveCallback save_cb = grid_save_callback_;
+        if (!save_cb) {
+            save_cb = [this]() { return save_map_info_to_disk(); };
+        }
+        grid_panel_->set_map_info(map_info_, save_cb, grid_regen_callback_);
+    }
     if (layers_panel_) {
         if (layers_controller_) {
             layers_controller_->bind(map_info_, map_path_);
@@ -633,6 +663,8 @@ void MapModeUI::update(const Input& input) {
         visible = PanelType::Layers;
     } else if (light_panel_ && light_panel_->is_visible()) {
         visible = PanelType::Lights;
+    } else if (grid_panel_ && grid_panel_->is_visible()) {
+        visible = PanelType::Grid;
     }
     if (visible != active_panel_) {
         active_panel_ = visible;
@@ -727,6 +759,38 @@ void MapModeUI::toggle_light_panel() {
     }
 }
 
+void MapModeUI::open_grid_panel() {
+    ensure_panels();
+    if (!ensure_panel_unlocked(grid_panel_.get(), "Grid")) {
+        return;
+    }
+    if (active_panel_ != PanelType::Grid) {
+        set_active_panel(PanelType::Grid);
+    }
+}
+
+void MapModeUI::close_grid_panel() {
+    ensure_panels();
+    if (active_panel_ == PanelType::Grid) {
+        set_active_panel(PanelType::None);
+    } else if (grid_panel_) {
+        grid_panel_->close();
+    }
+}
+
+void MapModeUI::toggle_grid_panel() {
+    ensure_panels();
+    if (!ensure_panel_unlocked(grid_panel_.get(), "Grid")) {
+        sync_footer_button_states();
+        return;
+    }
+    if (active_panel_ == PanelType::Grid) {
+        set_active_panel(PanelType::None);
+    } else {
+        set_active_panel(PanelType::Grid);
+    }
+}
+
 void MapModeUI::toggle_layers_panel() {
     ensure_panels();
     if (!ensure_panel_unlocked(layers_panel_.get(), "Layers")) {
@@ -748,6 +812,10 @@ bool MapModeUI::is_light_panel_visible() const {
     return light_panel_ && light_panel_->is_visible();
 }
 
+bool MapModeUI::is_grid_panel_visible() const {
+    return grid_panel_ && grid_panel_->is_visible();
+}
+
 void MapModeUI::set_light_save_callback(LightSaveCallback cb) {
     light_save_callback_ = std::move(cb);
     ensure_panels();
@@ -757,6 +825,19 @@ void MapModeUI::set_light_save_callback(LightSaveCallback cb) {
             callback = [this]() { return save_map_info_to_disk(); };
         }
         light_panel_->set_map_info(map_info_, callback);
+    }
+}
+
+void MapModeUI::set_map_grid_callbacks(GridSaveCallback save_cb, GridRegenCallback regen_cb) {
+    grid_save_callback_ = std::move(save_cb);
+    grid_regen_callback_ = std::move(regen_cb);
+    ensure_panels();
+    if (grid_panel_) {
+        GridSaveCallback callback = grid_save_callback_;
+        if (!callback) {
+            callback = [this]() { return save_map_info_to_disk(); };
+        }
+        grid_panel_->set_map_info(map_info_, callback, grid_regen_callback_);
     }
 }
 

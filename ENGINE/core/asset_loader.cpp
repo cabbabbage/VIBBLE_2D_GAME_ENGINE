@@ -16,6 +16,7 @@
 #include "audio/audio_engine.hpp"
 #include "map_generation/room.hpp"
 #include "utils/area.hpp"
+#include "utils/map_grid_settings.hpp"
 #include "map_generation/generate_rooms.hpp"
 #include "map_generation/map_layers_geometry.hpp"
 #include <nlohmann/json.hpp>
@@ -230,7 +231,8 @@ void AssetLoader::loadRooms() {
         nlohmann::json empty_rooms    = nlohmann::json::object();
         nlohmann::json empty_trails   = nlohmann::json::object();
         nlohmann::json empty_assets   = nlohmann::json::object();
-        auto room_ptrs = generator.build( asset_library_.get(), map_radius_, layer_radii_, map_boundary_data_ ? *map_boundary_data_ : empty_boundary, rooms_data_        ? *rooms_data_        : empty_rooms, trails_data_       ? *trails_data_       : empty_trails, map_assets_data_   ? *map_assets_data_   : empty_assets);
+        MapGridSettings grid_settings = MapGridSettings::from_json(map_info_json_.contains("map_grid_settings") ? &map_info_json_["map_grid_settings"] : nullptr);
+        auto room_ptrs = generator.build( asset_library_.get(), map_radius_, layer_radii_, map_boundary_data_ ? *map_boundary_data_ : empty_boundary, rooms_data_        ? *rooms_data_        : empty_rooms, trails_data_       ? *trails_data_       : empty_trails, map_assets_data_   ? *map_assets_data_   : empty_assets, grid_settings);
         for (auto& up : room_ptrs) {
                 rooms_.push_back(up.get());
                 all_rooms_.push_back(std::move(up));
@@ -288,6 +290,8 @@ void AssetLoader::load_map_json() {
         if (!map_info_json_.is_object()) {
                 map_info_json_ = nlohmann::json::object();
         }
+
+        ensure_map_grid_settings(map_info_json_);
 
         map_assets_data_   = &map_info_json_["map_assets_data"];
         if (!map_assets_data_->is_object()) *map_assets_data_ = nlohmann::json::object();

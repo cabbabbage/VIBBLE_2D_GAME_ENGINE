@@ -226,6 +226,10 @@ nlohmann::json build_default_map_info(const std::string& map_name) {
     map_info["rooms_data"] = nlohmann::json::object();
     map_info["rooms_data"]["spawn"] = std::move(spawn_room);
     map_info["camera_settings"] = nlohmann::json::object();
+    map_info["map_grid_settings"] = nlohmann::json::object({
+        {"spacing", 100},
+        {"jitter", 0}
+    });
     map_info["map_name"] = map_name;
 
     return map_info;

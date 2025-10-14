@@ -190,6 +190,7 @@ Room::Room(Point origin,
            Area* precomputed_area,
            nlohmann::json* room_data,
            const nlohmann::json* map_assets_data,
+           const MapGridSettings& grid_settings,
            double map_radius,
            const std::string& data_section
 )
@@ -203,6 +204,7 @@ room_area(nullptr),
 type(type_),
 room_data_ptr_(room_data),
 map_assets_data_ptr_(map_assets_data),
+map_grid_settings_(grid_settings),
 map_info_path_(map_info_path),
 data_section_(data_section)
 {

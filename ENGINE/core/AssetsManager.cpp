@@ -14,6 +14,7 @@
 #include "utils/input.hpp"
 #include "utils/range_util.hpp"
 #include "utils/text_style.hpp"
+#include "utils/map_grid_settings.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -216,6 +217,8 @@ void Assets::hydrate_map_info_sections() {
     ensure_object("map_light_data");
     ensure_object("rooms_data");
     ensure_object("trails_data");
+
+    ensure_map_grid_settings(map_info_json_);
 
     {
         nlohmann::json& L = map_info_json_["map_light_data"];

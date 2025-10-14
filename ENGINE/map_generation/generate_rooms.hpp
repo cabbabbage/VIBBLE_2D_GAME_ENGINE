@@ -11,6 +11,8 @@
 #include <SDL.h>
 #include <nlohmann/json.hpp>
 
+#include "utils/map_grid_settings.hpp"
+
 struct RoomSpec {
         std::string name;
         int max_instances;
@@ -28,7 +30,7 @@ class GenerateRooms {
 	public:
     using Point = SDL_Point;
     GenerateRooms(const std::vector<LayerSpec>& layers, int map_cx, int map_cy, const std::string& map_dir, const std::string& map_info_path);
-    std::vector<std::unique_ptr<Room>> build(AssetLibrary* asset_lib, double map_radius, const std::vector<double>& layer_radii, const nlohmann::json& boundary_data, nlohmann::json& rooms_data, nlohmann::json& trails_data, const nlohmann::json& map_assets_data);
+    std::vector<std::unique_ptr<Room>> build(AssetLibrary* asset_lib, double map_radius, const std::vector<double>& layer_radii, const nlohmann::json& boundary_data, nlohmann::json& rooms_data, nlohmann::json& trails_data, const nlohmann::json& map_assets_data, const MapGridSettings& grid_settings);
     bool testing = false;
 
 	private:

@@ -14,6 +14,7 @@ class Input;
 class MapLightPanel;
 class MapLayersPanel;
 class MapLayersController;
+class MapGridPanel;
 class FullScreenCollapsible;
 class DockableCollapsible;
 struct DMButtonStyle;
@@ -47,13 +48,20 @@ public:
     void open_light_panel();
     void close_light_panel();
     void toggle_light_panel();
+    void open_grid_panel();
+    void close_grid_panel();
+    void toggle_grid_panel();
     void toggle_layers_panel();
     void close_all_panels();
 
     bool is_light_panel_visible() const;
+    bool is_grid_panel_visible() const;
     using LightSaveCallback = std::function<bool()>;
+    using GridSaveCallback = std::function<bool()>;
+    using GridRegenCallback = std::function<void()>;
 
     void set_light_save_callback(LightSaveCallback cb);
+    void set_map_grid_callbacks(GridSaveCallback save_cb, GridRegenCallback regen_cb);
 
     void set_map_mode_active(bool active);
 
@@ -87,7 +95,7 @@ private:
     void sync_footer_button_states();
     void update_footer_visibility();
     void set_layers_footer_expanded(bool expanded);
-    enum class PanelType { None, Lights, Layers };
+    enum class PanelType { None, Lights, Layers, Grid };
     void set_active_panel(PanelType panel);
     void update_layers_footer(const Input& input);
     bool handle_layers_footer_event(const SDL_Event& e);
@@ -114,6 +122,7 @@ private:
     std::unique_ptr<MapLightPanel> light_panel_;
     std::shared_ptr<MapLayersController> layers_controller_;
     std::unique_ptr<MapLayersPanel> layers_panel_;
+    std::unique_ptr<MapGridPanel> grid_panel_;
     std::unique_ptr<FullScreenCollapsible> footer_panel_;
     bool footer_buttons_configured_ = false;
     bool map_mode_active_ = false;
@@ -131,6 +140,8 @@ private:
     bool dev_sliding_headers_hidden_ = false;
     std::vector<DockableCollapsible*> floating_panels_;
     LightSaveCallback light_save_callback_;
+    GridSaveCallback grid_save_callback_;
+    GridRegenCallback grid_regen_callback_;
     std::function<void(HeaderMode)> on_mode_changed_;
 };
 

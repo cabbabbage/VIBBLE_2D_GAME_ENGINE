@@ -4,6 +4,7 @@
 #include <vector>
 #include <nlohmann/json.hpp>
 #include "room.hpp"
+#include "utils/map_grid_settings.hpp"
 #include "asset/asset_library.hpp"
 #include "utils/area.hpp"
 #include <iostream>
@@ -233,7 +234,7 @@ bool TrailGeometry::attempt_trail_connection(Room* a,
 			continue;
 		}
 
-                auto trail_room = std::make_unique<Room>( a->map_origin, "trail", name, nullptr, map_dir, map_info_path, asset_lib, &candidate, trail_config, map_assets_data, map_radius, "trails_data" );
+                auto trail_room = std::make_unique<Room>( a->map_origin, "trail", name, nullptr, map_dir, map_info_path, asset_lib, &candidate, trail_config, map_assets_data, MapGridSettings::defaults(), map_radius, "trails_data" );
 		a->add_connecting_room(trail_room.get());
 		b->add_connecting_room(trail_room.get());
 		trail_room->add_connecting_room(a);

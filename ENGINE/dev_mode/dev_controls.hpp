@@ -13,6 +13,7 @@
 #include <nlohmann/json_fwd.hpp>
 
 #include "MapLightPanel.hpp"
+#include "map_grid_panel.hpp"
 #include "asset_filter_bar.hpp"
 #include "trail_editor_suite.hpp"
 #include "dev_mode/pan_and_zoom.hpp"
@@ -164,6 +165,7 @@ private:
     void integrate_spawned_assets(std::vector<std::unique_ptr<Asset>>& spawned);
     void regenerate_map_spawn_group(const nlohmann::json& entry);
     void regenerate_boundary_spawn_group(const nlohmann::json& entry);
+    void regenerate_map_grid_assets();
 
     bool persist_map_info_to_disk() const;
     const RoomAreaCache::PolygonList& room_area_polygons();
@@ -186,6 +188,8 @@ private:
     std::unique_ptr<MapEditor> map_editor_;
     nlohmann::json* map_info_json_ = nullptr;
     MapLightPanel::SaveCallback map_light_save_cb_;
+    MapGridPanel::SaveCallback map_grid_save_cb_;
+    std::function<void()> map_grid_regen_cb_;
     std::unique_ptr<MapModeUI> map_mode_ui_;
     std::unique_ptr<CameraUIPanel> camera_panel_;
     std::unique_ptr<RegenerateRoomPopup> regenerate_popup_;

@@ -2259,8 +2259,13 @@ void RoomEditor::handle_spawn_config_change(const nlohmann::json& entry) {
 
 std::unique_ptr<MapGrid> RoomEditor::build_room_grid(const std::string& ignore_spawn_id) const {
     if (!current_room_ || !current_room_->room_area) return nullptr;
-    int spacing = 100;
-    if (spacing <= 0) spacing = 100;
+    int spacing = 0;
+    if (current_room_) {
+        spacing = current_room_->map_grid_settings().spacing;
+    }
+    if (spacing <= 0) {
+        spacing = MapGridSettings::defaults().spacing;
+    }
     auto grid = std::make_unique<MapGrid>(MapGrid::from_area_bounds(*current_room_->room_area, spacing));
     if (!assets_) return grid;
     for (Asset* asset : assets_->all) {

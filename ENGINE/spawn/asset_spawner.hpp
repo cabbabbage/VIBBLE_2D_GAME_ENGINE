@@ -15,6 +15,7 @@
 #include "spawn_logger.hpp"
 #include "check.hpp"
 #include "spawn_info.hpp"
+#include "utils/map_grid_settings.hpp"
 
 class AssetSpawner {
 
@@ -41,4 +42,5 @@ class AssetSpawner {
     std::vector<std::unique_ptr<Asset>> all_;
     bool boundary_mode_ = false;
     Room* current_room_ = nullptr;
+    MapGridSettings map_grid_settings_ = MapGridSettings::defaults();
 };

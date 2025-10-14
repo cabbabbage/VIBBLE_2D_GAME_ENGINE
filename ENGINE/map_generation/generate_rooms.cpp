@@ -67,7 +67,8 @@ std::vector<std::unique_ptr<Room>> GenerateRooms::build(AssetLibrary* asset_lib,
                                                         const nlohmann::json& boundary_data,
                                                         nlohmann::json& rooms_data,
                                                         nlohmann::json& trails_data,
-                                                        const nlohmann::json& map_assets_data) {
+                                                        const nlohmann::json& map_assets_data,
+                                                        const MapGridSettings& grid_settings) {
         std::vector<std::unique_ptr<Room>> all_rooms;
         if (map_layers_.empty()) return all_rooms;
         const auto& root_spec = map_layers_[0].rooms[0];
@@ -90,6 +91,7 @@ std::vector<std::unique_ptr<Room>> GenerateRooms::build(AssetLibrary* asset_lib,
                                         nullptr,
                                         get_room_data(root_spec.name),
                                         map_assets_ptr,
+                                        grid_settings,
                                         map_radius,
                                         "rooms_data"
  );
@@ -130,6 +132,7 @@ std::vector<std::unique_ptr<Room>> GenerateRooms::build(AssetLibrary* asset_lib,
                                                 nullptr,
                                                 get_room_data(children_specs[i].name),
                                                 map_assets_ptr,
+                                                grid_settings,
                                                 map_radius,
                                                 "rooms_data"
                                         );
@@ -194,6 +197,7 @@ std::vector<std::unique_ptr<Room>> GenerateRooms::build(AssetLibrary* asset_lib,
                                                                     nullptr,
                                                                     get_room_data(kids[i].name),
                                                                     map_assets_ptr,
+                                                                    grid_settings,
                                                                     map_radius,
                                                                     "rooms_data"
                                                             );

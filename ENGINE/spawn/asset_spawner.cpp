@@ -35,9 +35,10 @@ void AssetSpawner::spawn(Room& room) {
 	const Area& spawn_area = *room.room_area;
 	logger_ = SpawnLogger(room.map_path, room.room_directory);
 	current_room_ = &room;
-	run_spawning(room.planner.get(), spawn_area);
-	current_room_ = nullptr;
-	room.add_room_assets(std::move(all_));
+        map_grid_settings_ = room.map_grid_settings();
+        run_spawning(room.planner.get(), spawn_area);
+        current_room_ = nullptr;
+        room.add_room_assets(std::move(all_));
 }
 
 std::vector<std::unique_ptr<Asset>> AssetSpawner::spawn_boundary_from_json(const nlohmann::json& boundary_json,
@@ -79,12 +80,12 @@ void AssetSpawner::run_spawning(AssetSpawnPlanner* planner, const Area& area) {
                 run_boundary_spawning(area);
                 return;
         }
-    int spacing = 100;
+    int spacing = map_grid_settings_.spacing;
+    if (spacing <= 0) spacing = 100;
 
     auto [minx, miny, maxx, maxy] = area.get_bounds();
     int w = std::max(0, maxx - minx);
     int h = std::max(0, maxy - miny);
-    if (spacing <= 0) spacing = 100;
     MapGrid grid(w, h, spacing, SDL_Point{minx, miny});
     SpawnContext ctx(rng_, checker_, logger_, exclusion_zones, asset_info_library_, all_, asset_library_, &grid);
         ExactSpawner exact;
@@ -132,6 +133,7 @@ void AssetSpawner::run_spawning(AssetSpawnPlanner* planner, const Area& area) {
                         for (auto* gp : grid_points) {
                                 if (!gp) continue;
                                 SDL_Point spawn_pos{ gp->pos.x, gp->pos.y };
+                                spawn_pos = apply_map_grid_jitter(map_grid_settings_, spawn_pos, ctx.rng(), area);
                                 bool placed = false;
                                 std::vector<double> attempt_weights = base_weights;
                                 const size_t max_candidate_attempts = queue_item.candidates.size();

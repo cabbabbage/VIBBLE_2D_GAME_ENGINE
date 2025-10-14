@@ -4,6 +4,7 @@
 #include "asset/asset_library.hpp"
 #include "spawn/asset_spawn_planner.hpp"
 #include "asset/Asset.hpp"
+#include "utils/map_grid_settings.hpp"
 
 #include <string>
 #include <vector>
@@ -38,7 +39,7 @@ class Room {
 
         public:
     typedef std::pair<int, int> Point;
-    Room(Point origin, std::string type_, const std::string& room_def_name, Room* parent, const std::string& map_dir, const std::string& map_info_path, AssetLibrary* asset_lib, Area* precomputed_area, nlohmann::json* room_data, const nlohmann::json* map_assets_data, double map_radius, const std::string& data_section);
+    Room(Point origin, std::string type_, const std::string& room_def_name, Room* parent, const std::string& map_dir, const std::string& map_info_path, AssetLibrary* asset_lib, Area* precomputed_area, nlohmann::json* room_data, const nlohmann::json* map_assets_data, const MapGridSettings& grid_settings, double map_radius, const std::string& data_section);
     void set_sibling_left(Room* left_room);
     void set_sibling_right(Room* right_room);
     void add_connecting_room(Room* room);
@@ -47,6 +48,7 @@ class Room {
     void add_room_assets(std::vector<std::unique_ptr<Asset>> new_assets);
     std::vector<std::unique_ptr<Asset>>&& get_room_assets();
     void set_layer(int value);
+    const MapGridSettings& map_grid_settings() const { return map_grid_settings_; }
     Point map_origin;
     double scale_ = 1.0;
     std::string room_name;
@@ -88,6 +90,7 @@ class Room {
     nlohmann::json assets_json;
     nlohmann::json* room_data_ptr_ = nullptr;
     const nlohmann::json* map_assets_data_ptr_ = nullptr;
+    MapGridSettings map_grid_settings_{};
     std::string map_info_path_;
     std::string data_section_;
     int clamp_int(int v, int lo, int hi) const;
