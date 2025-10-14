@@ -1,0 +1,491 @@
+#include "generate_faded_mask.hpp"
+
+#include "cache_manager.hpp"
+#include "render_pipeline/ScalingLogic.hpp"
+
+#include <SDL.h>
+
+#include <algorithm>
+#include <array>
+#include <cmath>
+#include <filesystem>
+#include <limits>
+#include <nlohmann/json.hpp>
+#include <queue>
+#include <vector>
+
+namespace {
+
+constexpr int   kCacheVersion    = 1;
+constexpr float kExpansionRatio  = 0.4f;
+
+struct DistanceNode {
+    float dist;
+    int   x;
+    int   y;
+
+    bool operator<(const DistanceNode& other) const { return dist > other.dist; }
+};
+
+int compute_expand_radius(int w, int h) {
+    const int max_dim = std::max(w, h);
+    const float scaled = static_cast<float>(max_dim) * (kExpansionRatio * 0.5f);
+    const int radius = static_cast<int>(std::ceil(scaled));
+    return std::max(1, radius);
+}
+
+int compute_blur_radius(int expand_radius) {
+    return std::max(1, expand_radius / 2);
+}
+
+std::string variant_folder(const std::string& base,
+                           std::size_t index,
+                           const std::vector<int>& scale_steps) {
+    namespace fs = std::filesystem;
+    fs::path folder(base);
+    if (!scale_steps.empty() && index < scale_steps.size()) {
+        folder /= "scale_" + std::to_string(scale_steps[index]);
+    } else {
+        const int fallback = render_pipeline::ScalingLogic::ScalePercent(index);
+        folder /= "scale_" + std::to_string(fallback);
+    }
+    return folder.string();
+}
+
+SDL_Surface* make_rgba_surface(int w, int h) {
+    return SDL_CreateRGBSurfaceWithFormat(0, w, h, 32, SDL_PIXELFORMAT_RGBA32);
+}
+
+SDL_Surface* generate_mask_surface(SDL_Surface* source) {
+    if (!source) return nullptr;
+
+    SDL_Surface* src_rgba = SDL_ConvertSurfaceFormat(source, SDL_PIXELFORMAT_RGBA32, 0);
+    if (!src_rgba) return nullptr;
+
+    const int width  = std::max(1, src_rgba->w);
+    const int height = std::max(1, src_rgba->h);
+
+    SDL_Surface* mask = make_rgba_surface(width, height);
+    if (!mask) {
+        SDL_FreeSurface(src_rgba);
+        return nullptr;
+    }
+
+    if (SDL_LockSurface(src_rgba) != 0) {
+        SDL_FreeSurface(src_rgba);
+        SDL_FreeSurface(mask);
+        return nullptr;
+    }
+
+    if (SDL_LockSurface(mask) != 0) {
+        SDL_UnlockSurface(src_rgba);
+        SDL_FreeSurface(src_rgba);
+        SDL_FreeSurface(mask);
+        return nullptr;
+    }
+
+    const int expand_radius = compute_expand_radius(width, height);
+    const int blur_radius   = compute_blur_radius(expand_radius);
+
+    const Uint8* src_pixels = static_cast<const Uint8*>(src_rgba->pixels);
+    const int src_pitch     = src_rgba->pitch;
+
+    std::vector<uint8_t> inside(width * height, 0);
+    std::vector<float> distance(width * height, std::numeric_limits<float>::infinity());
+
+    std::priority_queue<DistanceNode> queue;
+
+    for (int y = 0; y < height; ++y) {
+        const Uint8* row = src_pixels + y * src_pitch;
+        for (int x = 0; x < width; ++x) {
+            const Uint8 alpha = row[x * 4 + 3];
+            const int idx     = y * width + x;
+            if (alpha > 0) {
+                inside[idx]   = 1;
+                distance[idx] = 0.0f;
+                queue.push({0.0f, x, y});
+            }
+        }
+    }
+
+    if (queue.empty()) {
+        Uint32* dst_pixels = static_cast<Uint32*>(mask->pixels);
+        const Uint32 transparent = SDL_MapRGBA(mask->format, 0, 0, 0, 0);
+        std::fill(dst_pixels, dst_pixels + width * height, transparent);
+        SDL_UnlockSurface(mask);
+        SDL_UnlockSurface(src_rgba);
+        SDL_FreeSurface(src_rgba);
+        return mask;
+    }
+
+    static const std::array<std::pair<int, int>, 8> kNeighborOffsets = {
+        std::make_pair(1, 0), std::make_pair(-1, 0), std::make_pair(0, 1), std::make_pair(0, -1),
+        std::make_pair(1, 1), std::make_pair(-1, 1), std::make_pair(1, -1), std::make_pair(-1, -1)
+    };
+
+    while (!queue.empty()) {
+        const DistanceNode node = queue.top();
+        queue.pop();
+
+        const int idx = node.y * width + node.x;
+        if (node.dist > distance[idx] + 1e-4f) continue;
+        if (node.dist > static_cast<float>(expand_radius)) continue;
+
+        for (const auto& [dx, dy] : kNeighborOffsets) {
+            const int nx = node.x + dx;
+            const int ny = node.y + dy;
+            if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
+            const float step = (dx == 0 || dy == 0) ? 1.0f : std::sqrt(2.0f);
+            const float candidate = node.dist + step;
+            if (candidate > static_cast<float>(expand_radius) + 1e-4f) continue;
+            const int nidx = ny * width + nx;
+            if (candidate + 1e-4f < distance[nidx]) {
+                distance[nidx] = candidate;
+                queue.push({candidate, nx, ny});
+            }
+        }
+    }
+
+    std::vector<float> alpha_values(width * height, 0.0f);
+
+    for (int y = 0; y < height; ++y) {
+        for (int x = 0; x < width; ++x) {
+            const int idx = y * width + x;
+            if (inside[idx]) {
+                alpha_values[idx] = 255.0f;
+            } else {
+                const float d = distance[idx];
+                if (d <= static_cast<float>(expand_radius)) {
+                    const float ratio = std::clamp(1.0f - (d / static_cast<float>(expand_radius)), 0.0f, 1.0f);
+                    alpha_values[idx] = ratio * 255.0f;
+                } else {
+                    alpha_values[idx] = 0.0f;
+                }
+            }
+        }
+    }
+
+    if (blur_radius > 0) {
+        std::vector<float> temp(width * height, 0.0f);
+        for (int y = 0; y < height; ++y) {
+            for (int x = 0; x < width; ++x) {
+                const int start = std::max(0, x - blur_radius);
+                const int end   = std::min(width - 1, x + blur_radius);
+                float sum = 0.0f;
+                int count = 0;
+                for (int ix = start; ix <= end; ++ix) {
+                    sum += alpha_values[y * width + ix];
+                    ++count;
+                }
+                temp[y * width + x] = (count > 0) ? (sum / static_cast<float>(count)) : 0.0f;
+            }
+        }
+
+        std::vector<float> blurred(width * height, 0.0f);
+        for (int x = 0; x < width; ++x) {
+            for (int y = 0; y < height; ++y) {
+                const int start = std::max(0, y - blur_radius);
+                const int end   = std::min(height - 1, y + blur_radius);
+                float sum = 0.0f;
+                int count = 0;
+                for (int iy = start; iy <= end; ++iy) {
+                    sum += temp[iy * width + x];
+                    ++count;
+                }
+                blurred[y * width + x] = (count > 0) ? (sum / static_cast<float>(count)) : 0.0f;
+            }
+        }
+
+        alpha_values.swap(blurred);
+    }
+
+    Uint32* dst_pixels = static_cast<Uint32*>(mask->pixels);
+    for (int y = 0; y < height; ++y) {
+        for (int x = 0; x < width; ++x) {
+            const int idx = y * width + x;
+            const Uint8 alpha = static_cast<Uint8>(std::clamp(alpha_values[idx], 0.0f, 255.0f));
+            dst_pixels[idx] = SDL_MapRGBA(mask->format, 0, 0, 0, alpha);
+        }
+    }
+
+    SDL_UnlockSurface(mask);
+    SDL_UnlockSurface(src_rgba);
+    SDL_FreeSurface(src_rgba);
+
+    return mask;
+}
+
+void free_surface_list(std::vector<SDL_Surface*>& list) {
+    for (SDL_Surface*& s : list) {
+        if (s) {
+            SDL_FreeSurface(s);
+            s = nullptr;
+        }
+    }
+    list.clear();
+}
+
+}  // namespace
+
+std::pair<GenerateFadedMask::MaskVariants, bool> GenerateFadedMask::BuildMasks(
+    const std::string& asset_name,
+    const std::string& animation_id,
+    const std::vector<int>& scale_steps,
+    const MaskVariants& variant_frames)
+{
+    namespace fs = std::filesystem;
+    using json = nlohmann::json;
+
+    MaskVariants masks;
+    masks.resize(variant_frames.size());
+
+    const fs::path base_folder = fs::path("cache") / asset_name / "animations" / animation_id / "mask";
+    const std::string meta_file = (base_folder / "metadata.json").string();
+
+    const std::size_t variant_count = variant_frames.size();
+    const std::size_t frame_count   = variant_frames.empty() ? 0 : variant_frames.front().size();
+
+    int reference_w = 0;
+    int reference_h = 0;
+    for (const auto& variant : variant_frames) {
+        for (SDL_Surface* frame : variant) {
+            if (frame) {
+                reference_w = frame->w;
+                reference_h = frame->h;
+                break;
+            }
+        }
+        if (reference_w > 0 && reference_h > 0) break;
+    }
+
+    const int expected_expand_radius = (reference_w > 0 && reference_h > 0)
+        ? compute_expand_radius(reference_w, reference_h)
+        : 0;
+    const int expected_blur_radius = (expected_expand_radius > 0)
+        ? compute_blur_radius(expected_expand_radius)
+        : 0;
+
+    json meta;
+    bool cache_ok = false;
+    if (CacheManager::load_metadata(meta_file, meta)) {
+        try {
+            const int stored_version       = meta.value("version", 0);
+            const int stored_frame_count   = meta.value("frame_count", -1);
+            const int stored_variant_count = meta.value("variant_count", -1);
+            const float stored_ratio       = meta.value("expansion_ratio", kExpansionRatio);
+            const int stored_expand_radius = meta.value("expand_radius", expected_expand_radius);
+            const int stored_blur_radius   = meta.value("blur_radius", expected_blur_radius);
+
+            bool steps_ok = false;
+            if (meta.contains("scale_steps") && meta["scale_steps"].is_array()) {
+                std::vector<int> stored_steps;
+                stored_steps.reserve(meta["scale_steps"].size());
+                bool valid = true;
+                for (const auto& value : meta["scale_steps"]) {
+                    if (!value.is_number_integer()) {
+                        valid = false;
+                        break;
+                    }
+                    stored_steps.push_back(value.get<int>());
+                }
+                if (valid) {
+                    steps_ok = (stored_steps == scale_steps);
+                }
+            }
+
+            const bool ratio_ok = std::fabs(stored_ratio - kExpansionRatio) <= 1e-4f;
+            const bool blur_ok  = (expected_blur_radius == 0) || (stored_blur_radius == expected_blur_radius);
+            const bool expand_ok = (expected_expand_radius == 0) || (stored_expand_radius == expected_expand_radius);
+
+            cache_ok = (stored_version == kCacheVersion &&
+                        stored_frame_count == static_cast<int>(frame_count) &&
+                        stored_variant_count == static_cast<int>(variant_count) &&
+                        ratio_ok && blur_ok && expand_ok && steps_ok);
+        } catch (...) {
+            cache_ok = false;
+        }
+    }
+
+    if (cache_ok) {
+        bool all_loaded = true;
+        for (std::size_t variant_idx = 0; variant_idx < variant_count; ++variant_idx) {
+            const std::string folder = variant_folder(base_folder.string(), variant_idx, scale_steps);
+            std::vector<SDL_Surface*> loaded;
+            if (!CacheManager::load_surface_sequence(folder, static_cast<int>(frame_count), loaded)) {
+                all_loaded = false;
+                free_surface_list(loaded);
+                break;
+            }
+            masks[variant_idx] = std::move(loaded);
+        }
+        if (all_loaded) {
+            return {std::move(masks), true};
+        }
+        for (auto& list : masks) {
+            free_surface_list(list);
+        }
+        masks.assign(variant_count, {});
+    }
+
+    try {
+        fs::create_directories(base_folder);
+    } catch (...) {}
+
+    for (std::size_t variant_idx = 0; variant_idx < variant_frames.size(); ++variant_idx) {
+        const auto& frames = variant_frames[variant_idx];
+        auto& mask_list    = masks[variant_idx];
+        mask_list.reserve(frames.size());
+
+        for (SDL_Surface* frame_surface : frames) {
+            SDL_Surface* mask_surface = generate_mask_surface(frame_surface);
+            if (!mask_surface) {
+                // Clean up partial work and abort.
+                for (auto& list : masks) {
+                    free_surface_list(list);
+                }
+                return {MaskVariants{}, false};
+            }
+            mask_list.push_back(mask_surface);
+        }
+
+        const std::string folder = variant_folder(base_folder.string(), variant_idx, scale_steps);
+        CacheManager::save_surface_sequence(folder, mask_list);
+    }
+
+    json new_meta;
+    new_meta["version"]        = kCacheVersion;
+    new_meta["frame_count"]    = static_cast<int>(frame_count);
+    new_meta["variant_count"]  = static_cast<int>(variant_count);
+    new_meta["expansion_ratio"] = kExpansionRatio;
+    new_meta["expand_radius"]  = expected_expand_radius;
+    new_meta["blur_radius"]    = expected_blur_radius;
+
+    nlohmann::json steps_json = nlohmann::json::array();
+    for (int step : scale_steps) {
+        steps_json.push_back(step);
+    }
+    new_meta["scale_steps"] = std::move(steps_json);
+
+    if (reference_w > 0 && reference_h > 0) {
+        new_meta["frame_width"]  = reference_w;
+        new_meta["frame_height"] = reference_h;
+    }
+
+    CacheManager::save_metadata(meta_file, new_meta);
+
+    return {std::move(masks), false};
+}
+
+std::vector<std::vector<SDL_Texture*>> GenerateFadedMask::SurfacesToTextures(
+    SDL_Renderer* renderer,
+    const MaskVariants& masks)
+{
+    std::vector<std::vector<SDL_Texture*>> textures;
+    textures.resize(masks.size());
+    for (std::size_t variant_idx = 0; variant_idx < masks.size(); ++variant_idx) {
+        const auto& surfaces = masks[variant_idx];
+        auto& out_list       = textures[variant_idx];
+        out_list.reserve(surfaces.size());
+        for (SDL_Surface* surface : surfaces) {
+            SDL_Texture* texture = surface ? CacheManager::surface_to_texture(renderer, surface) : nullptr;
+            out_list.push_back(texture);
+        }
+    }
+    return textures;
+}
+namespace {
+
+SDL_Surface* create_mask_surface(SDL_Surface* source) {
+    if (!source) {
+        return nullptr;
+    }
+
+    SDL_Surface* working = source;
+    SDL_Surface* converted = nullptr;
+    if (source->format->format != SDL_PIXELFORMAT_RGBA8888) {
+        converted = SDL_ConvertSurfaceFormat(source, SDL_PIXELFORMAT_RGBA8888, 0);
+        if (!converted) {
+            return nullptr;
+        }
+        working = converted;
+    }
+
+    SDL_Surface* mask = SDL_CreateRGBSurfaceWithFormat(0, working->w, working->h, 32, SDL_PIXELFORMAT_RGBA8888);
+    if (!mask) {
+        if (converted) {
+            SDL_FreeSurface(converted);
+        }
+        return nullptr;
+    }
+
+    const bool lock_src  = SDL_MUSTLOCK(working);
+    const bool lock_mask = SDL_MUSTLOCK(mask);
+
+    if (lock_src && SDL_LockSurface(working) != 0) {
+        SDL_FreeSurface(mask);
+        if (converted) {
+            SDL_FreeSurface(converted);
+        }
+        return nullptr;
+    }
+    if (lock_mask && SDL_LockSurface(mask) != 0) {
+        if (lock_src) {
+            SDL_UnlockSurface(working);
+        }
+        SDL_FreeSurface(mask);
+        if (converted) {
+            SDL_FreeSurface(converted);
+        }
+        return nullptr;
+    }
+
+    auto* src_pixels  = static_cast<Uint8*>(working->pixels);
+    auto* mask_pixels = static_cast<Uint8*>(mask->pixels);
+    const int src_pitch  = working->pitch;
+    const int mask_pitch = mask->pitch;
+
+    for (int y = 0; y < working->h; ++y) {
+        Uint8* src_row  = src_pixels + y * src_pitch;
+        Uint8* mask_row = mask_pixels + y * mask_pitch;
+        for (int x = 0; x < working->w; ++x) {
+            Uint8 alpha = src_row[x * 4 + 3];
+            mask_row[x * 4 + 0] = 255;
+            mask_row[x * 4 + 1] = 255;
+            mask_row[x * 4 + 2] = 255;
+            mask_row[x * 4 + 3] = alpha;
+        }
+    }
+
+    if (lock_mask) {
+        SDL_UnlockSurface(mask);
+    }
+    if (lock_src) {
+        SDL_UnlockSurface(working);
+    }
+
+    if (converted) {
+        SDL_FreeSurface(converted);
+    }
+
+    return mask;
+}
+
+} // namespace
+
+namespace GenerateFadedMask {
+
+std::vector<std::vector<SDL_Surface*>> BuildMasks(const std::vector<std::vector<SDL_Surface*>>& variant_surfaces) {
+    std::vector<std::vector<SDL_Surface*>> result;
+    result.resize(variant_surfaces.size());
+    for (std::size_t variant_idx = 0; variant_idx < variant_surfaces.size(); ++variant_idx) {
+        const auto& frames = variant_surfaces[variant_idx];
+        auto& out_frames = result[variant_idx];
+        out_frames.reserve(frames.size());
+        for (SDL_Surface* surface : frames) {
+            out_frames.push_back(create_mask_surface(surface));
+        }
+    }
+    return result;
+}
+
+} // namespace GenerateFadedMask

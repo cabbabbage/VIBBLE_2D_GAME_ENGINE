@@ -57,6 +57,7 @@ class Asset {
 
     void update();
     SDL_Texture* get_current_frame() const;
+    SDL_Texture* get_current_mask_texture(std::size_t variant_index = 0) const;
     std::string get_current_animation() const;
     bool is_current_animation_locked_in_progress() const;
     bool is_current_animation_last_frame() const;

@@ -277,6 +277,47 @@ SDL_Texture* Asset::get_current_frame() const {
         return anim.get_frame(current_frame);
 }
 
+SDL_Texture* Asset::get_current_mask_texture(std::size_t variant_index) const {
+        if (!info) {
+                return nullptr;
+        }
+
+        auto anim_it = info->animations.find(current_animation);
+        if (anim_it == info->animations.end()) {
+                return nullptr;
+        }
+
+        Animation& anim = const_cast<Animation&>(anim_it->second);
+
+        AnimationFrame* frame = current_frame;
+        if (!frame) {
+                std::size_t path_index = anim_ ? anim_->path_index_for(current_animation) : 0;
+                frame = anim.get_first_frame(path_index);
+                if (!frame) {
+                        return nullptr;
+                }
+                const_cast<Asset*>(this)->current_frame = frame;
+                const_cast<Asset*>(this)->frame_progress = 0.0f;
+        }
+
+        int frame_index = anim.index_of(frame);
+        if (frame_index < 0) {
+                std::size_t path_index = anim_ ? anim_->path_index_for(current_animation) : 0;
+                frame = anim.get_first_frame(path_index);
+                if (!frame) {
+                        return nullptr;
+                }
+                const_cast<Asset*>(this)->current_frame = frame;
+                const_cast<Asset*>(this)->frame_progress = 0.0f;
+                frame_index = anim.index_of(frame);
+                if (frame_index < 0) {
+                        return nullptr;
+                }
+        }
+
+        return anim.mask_variant(static_cast<std::size_t>(frame_index), variant_index);
+}
+
 void Asset::update() {
     if (!info) return;
 

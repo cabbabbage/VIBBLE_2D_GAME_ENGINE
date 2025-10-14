@@ -1,6 +1,7 @@
 #include "animation.hpp"
 #include "asset/asset_info.hpp"
 #include "utils/cache_manager.hpp"
+#include "utils/generate_faded_mask.hpp"
 #include "render_pipeline/ScalingLogic.hpp"
 #include <SDL_image.h>
 #include <SDL_mixer.h>
@@ -53,7 +54,7 @@ std::string format_percent_steps(const std::vector<int>& steps) {
 
 using AudioCache = std::unordered_map<std::string, std::weak_ptr<Mix_Chunk>>;
 
-constexpr int kAnimationCacheVersion = 2;
+constexpr int kAnimationCacheVersion = 3;
 
 inline double sanitize_scale_factor(float value) {
         if (!std::isfinite(value) || value < 0.0f) {
@@ -129,9 +130,16 @@ void Animation::clear_texture_cache() {
                                 tex = nullptr;
                         }
                 }
+                for (SDL_Texture*& mask_tex : cache_entry.mask_textures) {
+                        if (mask_tex) {
+                                SDL_DestroyTexture(mask_tex);
+                                mask_tex = nullptr;
+                        }
+                }
         }
         frame_cache_.clear();
         frames.clear();
+        mask_frames.clear();
 }
 
 SDL_Texture* Animation::frame_variant(std::size_t frame_index, std::size_t variant_index) const {
@@ -146,6 +154,22 @@ SDL_Texture* Animation::frame_variant(std::size_t frame_index, std::size_t varia
                 return cache_entry.textures[0];
         }
         return cache_entry.textures[variant_index];
+}
+
+SDL_Texture* Animation::mask_variant(std::size_t /*frame_index*/, std::size_t /*variant_index*/) const {
+        return nullptr;
+SDL_Texture* Animation::mask_variant(std::size_t frame_index, std::size_t variant_index) const {
+        if (frame_index >= frame_cache_.size()) {
+                return nullptr;
+        }
+        const FrameCache& cache_entry = frame_cache_[frame_index];
+        if (cache_entry.mask_textures.empty()) {
+                return nullptr;
+        }
+        if (variant_index >= cache_entry.mask_textures.size() || !cache_entry.mask_textures[variant_index]) {
+                return cache_entry.mask_textures[0];
+        }
+        return cache_entry.mask_textures[variant_index];
 }
 
 void Animation::load(const std::string& trigger,
@@ -300,18 +324,24 @@ void Animation::load(const std::string& trigger,
                                 reused_animation = true;
                                 std::vector<SDL_Texture*> new_frames;
                                 std::vector<FrameCache>   new_caches;
+                                std::vector<SDL_Texture*> new_mask_frames;
                                 new_frames.reserve(src_anim.frames.size());
                                 new_caches.reserve(src_anim.frames.size());
+                                new_mask_frames.reserve(src_anim.frames.size());
                                 for (std::size_t frame_idx = 0; frame_idx < src_anim.frames.size(); ++frame_idx) {
                                         FrameCache cache_entry;
                                         cache_entry.resize(initial_variant_count);
                                         bool base_ok = false;
+                                        SDL_Texture* base_mask = nullptr;
                                         for (std::size_t variant_idx = 0; variant_idx < initial_variant_count; ++variant_idx) {
                                                 SDL_Texture* source_tex = src_anim.frame_variant(frame_idx, variant_idx);
                                                 if (!source_tex) {
                                                         cache_entry.textures[variant_idx] = nullptr;
                                                         cache_entry.widths[variant_idx]   = 0;
                                                         cache_entry.heights[variant_idx]  = 0;
+                                                        cache_entry.mask_textures[variant_idx] = nullptr;
+                                                        cache_entry.mask_widths[variant_idx]   = 0;
+                                                        cache_entry.mask_heights[variant_idx]  = 0;
                                                         continue;
                                                 }
                                                 Uint32 fmt = SDL_PIXELFORMAT_RGBA8888;
@@ -346,6 +376,46 @@ void Animation::load(const std::string& trigger,
                                                 if (variant_idx == 0) {
                                                         base_ok = true;
                                                 }
+
+                                                SDL_Texture* source_mask = src_anim.mask_variant(frame_idx, variant_idx);
+                                                SDL_Texture* mask_copy   = nullptr;
+                                                int mask_w = 0;
+                                                int mask_h = 0;
+                                                if (source_mask) {
+                                                        Uint32 mask_fmt = SDL_PIXELFORMAT_RGBA8888;
+                                                        int mask_access = 0;
+                                                        if (SDL_QueryTexture(source_mask, &mask_fmt, &mask_access, &mask_w, &mask_h) != 0 || mask_w <= 0 || mask_h <= 0) {
+                                                                mask_w = 0;
+                                                                mask_h = 0;
+                                                        } else {
+                                                                SDL_Texture* prev_target_mask = SDL_GetRenderTarget(renderer);
+                                                                mask_copy = SDL_CreateTexture(renderer, mask_fmt, SDL_TEXTUREACCESS_TARGET, mask_w, mask_h);
+                                                                if (mask_copy) {
+                                                                        SDL_SetTextureBlendMode(mask_copy, SDL_BLENDMODE_BLEND);
+                                                                        apply_scale_mode(mask_copy, info);
+                                                                        SDL_SetRenderTarget(renderer, mask_copy);
+                                                                        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
+                                                                        SDL_RenderClear(renderer);
+                                                                        SDL_Rect mask_rect{0, 0, mask_w, mask_h};
+                                                                        SDL_RenderCopy(renderer, source_mask, nullptr, &mask_rect);
+                                                                        SDL_SetRenderTarget(renderer, prev_target_mask);
+                                                                } else {
+                                                                        mask_w = 0;
+                                                                        mask_h = 0;
+                                                                        SDL_SetRenderTarget(renderer, prev_target_mask);
+                                                                }
+                                                        }
+                                                }
+                                                cache_entry.mask_textures[variant_idx] = mask_copy;
+                                                if (!mask_copy) {
+                                                        mask_w = 0;
+                                                        mask_h = 0;
+                                                }
+                                                cache_entry.mask_widths[variant_idx]   = mask_w;
+                                                cache_entry.mask_heights[variant_idx]  = mask_h;
+                                                if (variant_idx == 0) {
+                                                        base_mask = mask_copy;
+                                                }
                                         }
                                         if (!base_ok || !cache_entry.textures[0]) {
                                                 for (SDL_Texture*& tex : cache_entry.textures) {
@@ -354,15 +424,23 @@ void Animation::load(const std::string& trigger,
                                                                 tex = nullptr;
                                                         }
                                                 }
+                                                for (SDL_Texture*& mask_tex : cache_entry.mask_textures) {
+                                                        if (mask_tex) {
+                                                                SDL_DestroyTexture(mask_tex);
+                                                                mask_tex = nullptr;
+                                                        }
+                                                }
                                                 continue;
                                         }
                                         new_frames.push_back(cache_entry.textures[0]);
+                                        new_mask_frames.push_back(base_mask);
                                         new_caches.push_back(std::move(cache_entry));
                                 }
                                 frames.insert(frames.end(), new_frames.begin(), new_frames.end());
                                 frame_cache_.insert(frame_cache_.end(), std::make_move_iterator(new_caches.begin()), std::make_move_iterator(new_caches.end()));
-			}
-		}
+                                mask_frames.insert(mask_frames.end(), new_mask_frames.begin(), new_mask_frames.end());
+                        }
+                }
         } else {
                 std::string src_folder   = dir_path + "/" + source.path;
                 std::string cache_folder = root_cache + "/" + trigger;
@@ -395,7 +473,8 @@ void Animation::load(const std::string& trigger,
                             meta.value("cache_version", 0) == kAnimationCacheVersion &&
                             meta.value("frame_count", -1) == expected_frames &&
                             meta.value("original_width", -1) == orig_w &&
-                            meta.value("original_height", -1) == orig_h);
+                            meta.value("original_height", -1) == orig_h &&
+                            meta.value("has_masks", false));
                         if (meta_ok) {
                                 if (meta.contains("scale_steps") && meta["scale_steps"].is_array()) {
                                         const auto& stored = meta["scale_steps"];
@@ -478,7 +557,20 @@ void Animation::load(const std::string& trigger,
                         std::cout << "[AnimationLoader] " << info.name << "::" << trigger
                                   << " prefer_cached disabled -> forcing rebuild\n";
                 }
+                auto free_surface_lists = [](std::vector<std::vector<SDL_Surface*>>& lists) {
+                        for (auto& list : lists) {
+                                for (SDL_Surface* surf : list) {
+                                        if (surf) {
+                                                SDL_FreeSurface(surf);
+                                        }
+                                }
+                                list.clear();
+                        }
+                };
+                const std::string mask_cache_folder = cache_folder + "/masks";
                 std::vector<std::vector<SDL_Surface*>> variant_surfaces(variant_count);
+                std::vector<std::vector<SDL_Surface*>> mask_surfaces(variant_count);
+                bool masks_loaded_from_cache = false;
                 if (use_cache) {
                         bool variants_loaded = true;
                         for (std::size_t idx = 0; idx < variant_count; ++idx) {
@@ -502,12 +594,7 @@ void Animation::load(const std::string& trigger,
                                 variant_surfaces[idx] = std::move(loaded);
                         }
                         if (!variants_loaded) {
-                                for (auto& list : variant_surfaces) {
-                                        for (SDL_Surface* surf : list) {
-                                                if (surf) SDL_FreeSurface(surf);
-                                        }
-                                        list.clear();
-                                }
+                                free_surface_lists(variant_surfaces);
                                 use_cache = false;
                         } else if (use_cache) {
                                 original_canvas_width  = orig_w;
@@ -516,12 +603,34 @@ void Animation::load(const std::string& trigger,
                                         scaled_sprite_w = scaled_dimension(variant_surfaces[0][0]->w, safe_scale);
                                         scaled_sprite_h = scaled_dimension(variant_surfaces[0][0]->h, safe_scale);
                                 }
-                                std::cout << "[AnimationLoader] " << info.name << "::" << trigger
-                                          << " loaded " << variant_surfaces[0].size()
-                                          << " frame(s) from cache for " << variant_count
-                                          << " variant step(s)\n";
+                                bool masks_loaded = true;
+                                for (std::size_t idx = 0; idx < variant_count; ++idx) {
+                                        std::string mask_variant_path = render_pipeline::ScalingLogic::VariantFolder(mask_cache_folder, variant_steps_, idx);
+                                        std::vector<SDL_Surface*> loaded_masks;
+                                        if (!cache.load_surface_sequence(mask_variant_path, expected_frames, loaded_masks)) {
+                                                masks_loaded = false;
+                                                std::cout << "[AnimationLoader] " << info.name << "::" << trigger
+                                                          << " missing cached mask surfaces for variant " << idx
+                                                          << " -> forcing rebuild\n";
+                                                break;
+                                        }
+                                        mask_surfaces[idx] = std::move(loaded_masks);
+                                }
+                                if (!masks_loaded) {
+                                        free_surface_lists(variant_surfaces);
+                                        free_surface_lists(mask_surfaces);
+                                        use_cache = false;
+                                } else {
+                                        masks_loaded_from_cache = true;
+                                        std::cout << "[AnimationLoader] " << info.name << "::" << trigger
+                                                  << " loaded " << variant_surfaces[0].size()
+                                                  << " frame(s) from cache for " << variant_count
+                                                  << " variant step(s)\n";
+                                }
                         }
                 }
+
+                bool mask_cache_needs_save = !masks_loaded_from_cache;
 
                 if (!use_cache && prefer_cached) {
                         const auto& defaults = render_pipeline::ScalingLogic::DefaultScaleSteps();
@@ -539,6 +648,8 @@ void Animation::load(const std::string& trigger,
                         expected_steps = render_pipeline::ScalingLogic::PercentSteps(variant_steps_);
                         variant_surfaces.clear();
                         variant_surfaces.resize(variant_count);
+                        mask_surfaces.clear();
+                        mask_surfaces.resize(variant_count);
                 }
 
                 auto cleanup_variant_directories = [&](const std::string& folder) {
@@ -564,6 +675,7 @@ void Animation::load(const std::string& trigger,
 
                 if (!use_cache) {
                         cleanup_variant_directories(cache_folder);
+                        cleanup_variant_directories(mask_cache_folder);
                         std::cout << "[AnimationLoader] " << info.name << "::" << trigger
                                   << " generating variant surfaces for " << expected_frames
                                   << " frame(s) across " << variant_count << " step(s)\n";
@@ -626,11 +738,25 @@ void Animation::load(const std::string& trigger,
                         }
                         new_meta["scale_steps"] = std::move(step_arr);
                         new_meta["scale_profile_revision"] = expected_revision;
+                        new_meta["has_masks"] = true;
                         cache.save_metadata(meta_file, new_meta);
                         std::cout << "[AnimationLoader] " << info.name << "::" << trigger
                                   << " wrote metadata with steps "
                                   << format_percent_steps(expected_steps)
                                   << " revision " << expected_revision << "\n";
+                }
+
+                if (!masks_loaded_from_cache) {
+                        mask_surfaces = GenerateFadedMask::BuildMasks(variant_surfaces);
+                        if (mask_surfaces.size() != variant_surfaces.size()) {
+                                mask_surfaces.resize(variant_surfaces.size());
+                        }
+                        if (mask_cache_needs_save) {
+                                for (std::size_t idx = 0; idx < mask_surfaces.size(); ++idx) {
+                                        const std::string mask_variant_path = render_pipeline::ScalingLogic::VariantFolder(mask_cache_folder, variant_steps_, idx);
+                                        cache.save_surface_sequence(mask_variant_path, mask_surfaces[idx]);
+                                }
+                        }
                 }
 
                 if (!variant_surfaces[0].empty() && variant_surfaces[0][0] && (scaled_sprite_w <= 0 || scaled_sprite_h <= 0)) {
@@ -652,13 +778,16 @@ void Animation::load(const std::string& trigger,
                         scaled_sprite_h = fallback_h;
                 }
                 frames.clear();
+                mask_frames.clear();
                 frame_cache_.clear();
                 frames.reserve(expected_frames);
+                mask_frames.reserve(expected_frames);
                 frame_cache_.reserve(expected_frames);
 
                 for (std::size_t frame_idx = 0; frame_idx < variant_surfaces[0].size(); ++frame_idx) {
                         FrameCache cache_entry;
                         cache_entry.resize(variant_count);
+                        SDL_Texture* variant0_mask = nullptr;
                         for (std::size_t variant_idx = 0; variant_idx < variant_count; ++variant_idx) {
                                 SDL_Surface* surface = (frame_idx < variant_surfaces[variant_idx].size())
                                                         ? variant_surfaces[variant_idx][frame_idx]
@@ -678,21 +807,42 @@ void Animation::load(const std::string& trigger,
                                 cache_entry.textures[variant_idx] = tex_variant;
                                 cache_entry.widths[variant_idx]   = tex_w;
                                 cache_entry.heights[variant_idx]  = tex_h;
+
+                                SDL_Surface* mask_surface = (variant_idx < mask_surfaces.size() && frame_idx < mask_surfaces[variant_idx].size())
+                                                                 ? mask_surfaces[variant_idx][frame_idx]
+                                                                 : nullptr;
+                                SDL_Texture* mask_variant = nullptr;
+                                int mask_w = mask_surface ? mask_surface->w : 0;
+                                int mask_h = mask_surface ? mask_surface->h : 0;
+                                if (mask_surface) {
+                                        mask_variant = cache.surface_to_texture(renderer, mask_surface);
+                                        if (mask_variant) {
+                                                apply_scale_mode(mask_variant, info);
+                                        }
+                                        if (mask_variant && (mask_w == 0 || mask_h == 0)) {
+                                                SDL_QueryTexture(mask_variant, nullptr, nullptr, &mask_w, &mask_h);
+                                        }
+                                }
+                                if (!mask_variant) {
+                                        mask_w = 0;
+                                        mask_h = 0;
+                                }
+                                cache_entry.mask_textures[variant_idx] = mask_variant;
+                                cache_entry.mask_widths[variant_idx]   = mask_w;
+                                cache_entry.mask_heights[variant_idx]  = mask_h;
+                                if (variant_idx == 0) {
+                                        variant0_mask = mask_variant;
+                                }
                                 if (variant_idx == 0) {
                                         frames.push_back(tex_variant);
                                 }
                         }
+                        mask_frames.push_back(variant0_mask);
                         frame_cache_.push_back(std::move(cache_entry));
                 }
 
-                for (auto& list : variant_surfaces) {
-                        for (SDL_Surface* surf : list) {
-                                if (surf) {
-                                        SDL_FreeSurface(surf);
-                                }
-                        }
-                        list.clear();
-                }
+                free_surface_lists(variant_surfaces);
+                free_surface_lists(mask_surfaces);
                 if (flipped_source && renderer && !frame_cache_.empty()) {
                         for (std::size_t frame_index = 0; frame_index < frame_cache_.size(); ++frame_index) {
                                 FrameCache& cache_entry = frame_cache_[frame_index];
@@ -729,14 +879,58 @@ void Animation::load(const std::string& trigger,
                                         cache_entry.textures[variant_idx] = dst;
                                         cache_entry.widths[variant_idx]   = tex_w;
                                         cache_entry.heights[variant_idx]  = tex_h;
+                                        SDL_Texture* src_mask = nullptr;
+                                        if (variant_idx < cache_entry.mask_textures.size()) {
+                                                src_mask = cache_entry.mask_textures[variant_idx];
+                                        }
+                                        if (src_mask) {
+                                                Uint32 mask_fmt = SDL_PIXELFORMAT_RGBA8888;
+                                                int mask_access = 0;
+                                                int mask_w = cache_entry.mask_widths[variant_idx];
+                                                int mask_h = cache_entry.mask_heights[variant_idx];
+                                                if (mask_w <= 0 || mask_h <= 0) {
+                                                        if (SDL_QueryTexture(src_mask, &mask_fmt, &mask_access, &mask_w, &mask_h) != 0 || mask_w <= 0 || mask_h <= 0) {
+                                                                SDL_DestroyTexture(src_mask);
+                                                                cache_entry.mask_textures[variant_idx] = nullptr;
+                                                                cache_entry.mask_widths[variant_idx]   = 0;
+                                                                cache_entry.mask_heights[variant_idx]  = 0;
+                                                                continue;
+                                                        }
+                                                } else if (SDL_QueryTexture(src_mask, &mask_fmt, &mask_access, nullptr, nullptr) != 0) {
+                                                        mask_fmt = SDL_PIXELFORMAT_RGBA8888;
+                                                }
+                                                SDL_Texture* mask_dst = SDL_CreateTexture(renderer, mask_fmt, SDL_TEXTUREACCESS_TARGET, mask_w, mask_h);
+                                                if (mask_dst) {
+                                                        SDL_SetTextureBlendMode(mask_dst, SDL_BLENDMODE_BLEND);
+                                                        apply_scale_mode(mask_dst, info);
+                                                        SDL_Texture* prev_target_mask = SDL_GetRenderTarget(renderer);
+                                                        SDL_SetRenderTarget(renderer, mask_dst);
+                                                        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
+                                                        SDL_RenderClear(renderer);
+                                                        SDL_Rect rect{0, 0, mask_w, mask_h};
+                                                        SDL_RenderCopyEx(renderer, src_mask, nullptr, &rect, 0.0, nullptr, SDL_FLIP_HORIZONTAL);
+                                                        SDL_SetRenderTarget(renderer, prev_target_mask);
+                                                } else {
+                                                        mask_w = 0;
+                                                        mask_h = 0;
+                                                }
+                                                SDL_DestroyTexture(src_mask);
+                                                cache_entry.mask_textures[variant_idx] = mask_dst;
+                                                cache_entry.mask_widths[variant_idx]   = mask_w;
+                                                cache_entry.mask_heights[variant_idx]  = mask_h;
+                                        }
                                 }
                                 if (frame_index < frames.size()) {
                                         frames[frame_index] = cache_entry.textures[0];
                                 }
+                                if (frame_index < mask_frames.size() && !cache_entry.mask_textures.empty()) {
+                                        mask_frames[frame_index] = cache_entry.mask_textures[0];
+                                }
                         }
-		}
+                }
                 if (reverse_source && !frames.empty()) {
                         std::reverse(frames.begin(), frames.end());
+                        std::reverse(mask_frames.begin(), mask_frames.end());
                         std::reverse(frame_cache_.begin(), frame_cache_.end());
                 }
                 loaded_from_cache = use_cache;
@@ -897,7 +1091,14 @@ int Animation::index_of(const AnimationFrame* frame) const {
                         return index;
                 }
         }
-        return -1;
+        // Some animations reuse movement data from cached sources which can
+        // invalidate the raw AnimationFrame pointers held by assets after the
+        // vectors are reallocated. The frame_index, however, is still valid for
+        // locating the texture within the animation. If the pointer lookup
+        // above fails, fall back to the recorded frame_index so that callers
+        // such as Asset::get_current_frame() don't reset to the first frame on
+        // every render pass.
+        return index;
 }
 
 void Animation::change(AnimationFrame*& frame, bool& static_flag) const {

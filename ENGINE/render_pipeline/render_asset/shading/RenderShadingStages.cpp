@@ -318,18 +318,27 @@ SDL_Texture* RenderShadowMask::run(SDL_Renderer* renderer, const Asset& asset, S
     SDL_SetRenderDrawColor(renderer, 255, 255, 255, 0);
     SDL_RenderClear(renderer);
 
-    if (SDL_Texture* base = context.base_texture) {
-        SDL_SetTextureBlendMode(base, SDL_BLENDMODE_BLEND);
-        SDL_SetTextureColorMod(base, 0, 0, 0);
-        SDL_RenderCopy(renderer, base, nullptr, nullptr);
-        SDL_SetTextureColorMod(base, 255, 255, 255);
+    bool mask_applied = false;
+    const auto& scale_usage   = asset.last_scale_usage();
+    std::size_t mask_variant  = (scale_usage.variant_index < 0) ? 0u : static_cast<std::size_t>(scale_usage.variant_index);
+    if (SDL_Texture* mask = asset.get_current_mask_texture(mask_variant)) {
+        SDL_SetTextureBlendMode(mask, SDL_BLENDMODE_BLEND);
+        SDL_RenderCopy(renderer, mask, nullptr, nullptr);
+        mask_applied = true;
+    }
+
+    if (!mask_applied) {
+        if (SDL_Texture* base = context.base_texture) {
+            SDL_SetTextureBlendMode(base, SDL_BLENDMODE_BLEND);
+            SDL_SetTextureColorMod(base, 0, 0, 0);
+            SDL_RenderCopy(renderer, base, nullptr, nullptr);
+            SDL_SetTextureColorMod(base, 255, 255, 255);
+        }
     }
 
     const Uint8 light_alpha = context.main_light_brightness();
     const Uint8 main_alpha  = context.main_light_alpha();
 
-    render_static_lights(renderer, asset, context, light_alpha);
-    render_player_lights(renderer, asset, context, light_alpha);
     render_orbital_lights(renderer, asset, context, main_alpha);
 
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_MOD);

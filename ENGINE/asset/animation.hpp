@@ -39,16 +39,23 @@ public:
     const AudioClip* audio_data() const;
     void clear_texture_cache();
     SDL_Texture* frame_variant(std::size_t frame_index, std::size_t variant_index) const;
+    SDL_Texture* mask_variant(std::size_t frame_index, std::size_t variant_index) const;
 
     struct FrameCache {
         std::vector<SDL_Texture*> textures;
         std::vector<int> widths;
         std::vector<int> heights;
+        std::vector<SDL_Texture*> mask_textures;
+        std::vector<int> mask_widths;
+        std::vector<int> mask_heights;
 
         void resize(std::size_t variant_count) {
             textures.assign(variant_count, nullptr);
             widths.assign(variant_count, 0);
             heights.assign(variant_count, 0);
+            mask_textures.assign(variant_count, nullptr);
+            mask_widths.assign(variant_count, 0);
+            mask_heights.assign(variant_count, 0);
         }
     };
     struct Source {
@@ -68,6 +75,7 @@ public:
     std::string on_end_mapping;
     std::string on_end_animation;
     std::vector<SDL_Texture*> frames;
+    std::vector<SDL_Texture*> mask_frames;
     bool randomize = false;
     bool loop = true;
     bool frozen = false;
