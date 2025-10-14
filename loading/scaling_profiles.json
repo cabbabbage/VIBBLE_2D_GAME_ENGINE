@@ -310,6 +310,27 @@
             ],
             "revision": 1
         },
+        "flower_3": {
+            "histogram": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+            ],
+            "last_updated": "2025-10-14T09:10:27Z",
+            "recommended_percentages": [
+                100,
+                90,
+                80
+            ],
+            "revision": 1
+        },
         "flower_4": {
             "histogram": [
                 0,

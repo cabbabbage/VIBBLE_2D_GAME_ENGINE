@@ -163,7 +163,7 @@
         1.399999976158142,
         1.899999976158142
       ],
-      "enabled": true,
+      "enabled": false,
       "ghost_alpha_cap": 0.09000000357627869,
       "ghost_alpha_fall": 0.0025510203558951616,
       "ghost_alpha_rise": 0.004081632476300001,
@@ -192,7 +192,12 @@
         "enable_offsets": true,
         "gradient_sensitivity": 0.3799999952316284,
         "max_offset_ratio": 0.46000000834465027,
-        "offset_strength": 1.5
+        "offset_strength": 2.0
+      },
+      "output": {
+        "map_line_weight": 2.7100000381469727,
+        "parallax_strength": 3.0,
+        "scale_factor": 1.0
       },
       "response": {
         "enable_opacity": true,
@@ -203,10 +208,10 @@
       "sampling": {
         "diagonal_weight": 1.5700000524520874,
         "kernel_radius": 12,
-        "outer_ring_weight": 0.23000000417232513
+        "outer_ring_weight": 2.0399999618530273
       },
       "stability": {
-        "enable_temporal_smoothing": false,
+        "enable_temporal_smoothing": true,
         "temporal_smoothing": 0.8140000104904175
       }
     },
