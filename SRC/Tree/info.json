@@ -879,5 +879,5 @@
         "spawn"
     ],
     "update_radius": 1000,
-    "z_threshold": 34
+    "z_threshold": 0
 }

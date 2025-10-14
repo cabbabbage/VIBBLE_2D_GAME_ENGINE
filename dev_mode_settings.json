@@ -7,32 +7,32 @@
                         "back_weight": 0.0,
                         "enable_offsets": true,
                         "front_weight": 5.0,
-                        "gradient_sensitivity": 0.6899999976158142,
-                        "max_offset_ratio": 0.8299999833106995,
-                        "offset_strength": 0.5299999713897705,
-                        "side_weight": 1.3600000143051147
+                        "gradient_sensitivity": 0.4399999976158142,
+                        "max_offset_ratio": 0.44999998807907104,
+                        "offset_strength": 0.8600000143051147,
+                        "side_weight": 0.0
                     },
                     "output": {
                         "map_line_weight": 1.3600000143051147,
-                        "parallax_strength": 1.4600000381469727,
-                        "scale_factor": 2.4600000381469727
+                        "parallax_strength": 1.7400000095367432,
+                        "scale_factor": 3.0
                     },
                     "response": {
                         "enable_opacity": true,
                         "front_opacity_boost": 10.0,
                         "max_opacity": 1.0,
-                        "min_opacity": 0.6800000071525574,
-                        "opacity_strength": 1.1799999475479126
+                        "min_opacity": 0.7599999904632568,
+                        "opacity_strength": 3.0
                     },
                     "sampling": {
-                        "diagonal_weight": 1.0099999904632568,
-                        "kernel_radius": 6.0,
-                        "outer_ring_weight": 1.940000057220459
+                        "diagonal_weight": 0.8799999952316284,
+                        "kernel_radius": 12.0,
+                        "outer_ring_weight": 1.440000057220459
                     },
                     "stability": {
                         "enable_temporal_smoothing": true,
                         "reuse_similarity_threshold": 0.0,
-                        "temporal_smoothing": 0.47999998927116394
+                        "temporal_smoothing": 0.11100000143051147
                     }
                 },
                 "update_map_light": true
