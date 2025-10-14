@@ -53,9 +53,9 @@ double distance_sq_to_aabb(const SDL_Point& point,
 
 double min_distance_sq_to_zones(const SDL_Point& point,
                                 const std::vector<ZoneCacheEntry>& cache,
-                                int fade_end_distance) {
+                                int remove_threshold) {
     double minDistSq = std::numeric_limits<double>::infinity();
-    const double pad = static_cast<double>(fade_end_distance);
+    const double pad = static_cast<double>(remove_threshold);
     for (const auto& entry : cache) {
         const double paddedDistSq = distance_sq_to_aabb(point, static_cast<double>(entry.min_x) - pad, static_cast<double>(entry.min_y) - pad, static_cast<double>(entry.max_x) + pad, static_cast<double>(entry.max_y) + pad);
         if (paddedDistSq >= minDistSq) {

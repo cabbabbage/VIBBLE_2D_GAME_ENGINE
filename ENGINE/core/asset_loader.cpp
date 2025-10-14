@@ -94,7 +94,7 @@ renderer_(renderer)
         std::cout << "[AssetLoader] Asset library ready in " << library_ms << "ms\n";
         std::cout << "[AssetLoader] Rooms built in " << rooms_ms << "ms\n";
         std::cout << "[AssetLoader] Asset loader initialization completed in " << total_ms << "ms\n";
-	auto distant_boundary = collectDistantAssets(0,2000);
+        auto distant_boundary = collectDistantAssets(150, 700);
 	for(auto a : distant_boundary){
 		a->set_hidden(true);
 	}
@@ -168,18 +168,14 @@ std::vector<std::vector<Asset*>> AssetLoader::group_neighboring_assets(
 	return groups;
 }
 
-std::vector<Asset*> AssetLoader::collectDistantAssets(int fade_start_distance, int fade_end_distance) {
-	std::vector<Asset*> distant_assets;
-	distant_assets.reserve(rooms_.size() * 4);
+std::vector<Asset*> AssetLoader::collectDistantAssets(int lock_threshold, int remove_threshold) {
+        std::vector<Asset*> distant_assets;
+        distant_assets.reserve(rooms_.size() * 4);
         auto allZones = getAllRoomAndTrailAreas();
         auto zoneCache = asset_loader_internal::build_zone_cache(allZones);
 
-        double removal_distance = fade_end_distance;
-        if (fade_end_distance > fade_start_distance) {
-                const double fade_range = fade_end_distance - fade_start_distance;
-                const double visibility_threshold = std::sqrt(0.3);
-                removal_distance = fade_end_distance - visibility_threshold * fade_range;
-        }
+        const double remove_distance = static_cast<double>(remove_threshold);
+        const double lock_distance = static_cast<double>(lock_threshold);
         for (Room* room : rooms_) {
                 for (auto& asset_up : room->assets) {
                         Asset* asset = asset_up.get();
@@ -190,12 +186,14 @@ std::vector<Asset*> AssetLoader::collectDistantAssets(int fade_start_distance, i
                         if (asset_loader_internal::point_inside_any_zone(asset_point, zoneCache)) {
                                 continue;
                         }
-                        double minDistSq = asset_loader_internal::min_distance_sq_to_zones(asset_point, zoneCache, fade_end_distance);
+                        double minDistSq = asset_loader_internal::min_distance_sq_to_zones(asset_point, zoneCache, remove_threshold);
                         double minDist = std::sqrt(minDistSq);
 
-                        bool distant = minDist >= removal_distance;
-                        asset->static_frame = distant;
-                        if (distant) distant_assets.push_back(asset);
+                        const bool should_lock = minDist >= lock_distance;
+                        const bool should_remove = minDist >= remove_distance;
+
+                        asset->static_frame = should_lock;
+                        if (should_remove) distant_assets.push_back(asset);
                 }
         }
         return distant_assets;

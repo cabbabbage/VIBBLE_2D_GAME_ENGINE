@@ -181,8 +181,8 @@
         255,
         255
       ],
-      "max_opacity": 5,
-      "min_opacity": 2
+      "max_opacity": 97,
+      "min_opacity": 10
     },
     "update_interval": 13
   },

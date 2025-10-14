@@ -78,9 +78,9 @@ TEST_CASE("Zone cache distance matches naive computation with distant zones") {
         SDL_Point{4000, 4000}
     };
 
-    const int fade_end = 1200;
+    const int remove_threshold = 1200;
     for (const SDL_Point& p : samples) {
-        const double cached = asset_loader_internal::min_distance_sq_to_zones(p, cache, fade_end);
+        const double cached = asset_loader_internal::min_distance_sq_to_zones(p, cache, remove_threshold);
         const double naive = naive_min_distance_sq(p, zones);
         if (std::isfinite(naive)) {
             CHECK(cached == doctest::Approx(naive).epsilon(1e-9));

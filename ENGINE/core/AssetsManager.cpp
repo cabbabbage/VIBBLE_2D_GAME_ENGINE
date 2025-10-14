@@ -10,7 +10,6 @@
 #include "render/scene_renderer.hpp"
 #include "render/light_rays.hpp"
 #include "render/light_rays_config.hpp"
-#include "render/DisplayStats.hpp"
 #include "render_pipeline/ScalingLogic.hpp"
 #include "map_generation/room.hpp"
 #include "utils/area.hpp"
@@ -84,8 +83,6 @@ Assets::Assets(std::vector<Asset>&& loaded,
 
     scene = new SceneRenderer(renderer, this, screen_width_, screen_height_, map_path);
     apply_map_light_config();
-    display_stats_ = std::make_unique<DisplayStats>(renderer);
-
     for (Asset* a : all) {
         if (a) a->set_assets(this);
     }
@@ -564,10 +561,6 @@ void Assets::update(const Input& input,
     (void)screen_center_x;
     (void)screen_center_y;
 
-    if (display_stats_) {
-        display_stats_->handle_input(input);
-    }
-
     const bool ctrl_down = input.isScancodeDown(SDL_SCANCODE_LCTRL) || input.isScancodeDown(SDL_SCANCODE_RCTRL);
     if (ctrl_down && input.wasScancodePressed(SDL_SCANCODE_R)) {
         const bool enabled = render_pipeline::ScalingLogic::ToggleUsageTracking();
@@ -651,18 +644,15 @@ void Assets::update(const Input& input,
 
     if (scene && !suppress_render_) scene->render();
 
-    if (display_stats_) {
-        display_stats_->update(*this);
-    }
-
     process_removals();
 }
 
 void Assets::record_frame_timing(float elapsed_ms, float target_ms, float early_ms, float late_ms)
 {
-    if (display_stats_) {
-        display_stats_->record_frame_timing(elapsed_ms, target_ms, early_ms, late_ms);
-    }
+    (void)elapsed_ms;
+    (void)target_ms;
+    (void)early_ms;
+    (void)late_ms;
 }
 
 void Assets::set_dev_mode(bool mode) {
@@ -984,9 +974,6 @@ void Assets::process_removals() {
 void Assets::render_overlays(SDL_Renderer* renderer) {
     if (dev_controls_ && dev_controls_->is_enabled()) {
         dev_controls_->render_overlays(renderer);
-    }
-    if (display_stats_) {
-        display_stats_->render(renderer);
     }
 }
 

@@ -20,7 +20,6 @@ class Input;
 class DevControls;
 class AssetInfo;
 class Global_Light_Source;
-class DisplayStats;
 
 class Assets {
 public:
@@ -159,7 +158,6 @@ private:
     nlohmann::json map_info_json_;
     std::unique_ptr<AssetList> active_asset_list_;
     bool active_assets_dirty_ = true;
-    std::unique_ptr<DisplayStats> display_stats_;
 
     struct ClosestEntry {
         double distance_sq;
