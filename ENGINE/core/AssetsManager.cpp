@@ -215,7 +215,6 @@ void Assets::hydrate_map_info_sections() {
     ensure_object("map_assets_data");
     ensure_object("map_boundary_data");
     ensure_object("map_light_data");
-    ensure_object("light_rays_params");
     ensure_object("rooms_data");
     ensure_object("trails_data");
 
@@ -352,10 +351,6 @@ void Assets::apply_map_light_config() {
     auto it = map_info_json_.find("map_light_data");
     if (it != map_info_json_.end() && it->is_object()) {
         scene->apply_map_light_config(*it);
-    }
-    auto rays_it = map_info_json_.find("light_rays_params");
-    if (rays_it != map_info_json_.end() && rays_it->is_object()) {
-        scene->apply_light_rays_config(*rays_it);
     }
 }
 

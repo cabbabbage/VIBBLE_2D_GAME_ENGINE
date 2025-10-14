@@ -13,7 +13,6 @@
                 "controls": false
             },
             "lighting": {
-                "light_rays": true,
                 "map_panel": false
             },
             "map_assets": {

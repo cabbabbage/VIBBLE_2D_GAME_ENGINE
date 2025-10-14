@@ -5,9 +5,7 @@
 #include "render_pipeline/render_asset/IRenderStage.hpp"
 #include "render_pipeline/render_asset/lighting/RenderLightBehind.hpp"
 #include "render_pipeline/render_asset/lighting/RenderLightFront.hpp"
-#include "render_pipeline/render_asset/shading/RenderCastShadow.hpp"
-#include "render_pipeline/render_asset/shading/RenderShadowMask.hpp"
-#include "render_pipeline/render_asset/shading/RenderAsset.hpp"
+#include "render_pipeline/render_asset/shading/RenderShadingStages.hpp"
 
 Uint8 StageContext::main_light_alpha() const {
     return lighting ? lighting->main_light.get_current_color().a : 0;

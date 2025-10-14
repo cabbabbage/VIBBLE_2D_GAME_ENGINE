@@ -8,21 +8,6 @@
     "render_distance": 1280.0,
     "tripod_distance_y": -190.0
   },
-  "light_rays_params": {
-    "bright_percentile": 0.8479999899864197,
-    "decay": 0.550000011920929,
-    "density": 2.1700000762939453,
-    "downsample_log2": 4,
-    "enabled": true,
-    "exposure": 1.2400000095367432,
-    "gamma_comp": 2.680000066757202,
-    "metric": "MaxRGB",
-    "min_luma_threshold": 0.6639999747276306,
-    "per_light_enabled": true,
-    "samples": 412,
-    "use_alpha_in_mask": true,
-    "weight": 6.949999809265137
-  },
   "map_assets_data": {
     "spawn_groups": [
       {

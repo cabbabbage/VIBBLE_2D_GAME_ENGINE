@@ -21,7 +21,6 @@ class SceneRenderer {
     ~SceneRenderer();
     void render();
     void apply_map_light_config(const nlohmann::json& data);
-    void apply_light_rays_config(const nlohmann::json& data);
     SDL_Renderer* get_renderer() const;
     void set_low_quality_rendering(bool enabled);
     bool low_quality_rendering() const { return low_quality_rendering_; }
@@ -50,8 +49,6 @@ private:
     int            screen_light_max_opacity_ = 255;
     AssetRenderPipeline render_pipeline_;
     std::unique_ptr<LightMap> z_light_pass_;
-    bool light_rays_enabled_ = false;
-    bool fullscreen_light_rays_disabled_ = true;
     int            current_shading_group_ = 0;
     int            num_groups_ = 40;
     bool           debugging = false;

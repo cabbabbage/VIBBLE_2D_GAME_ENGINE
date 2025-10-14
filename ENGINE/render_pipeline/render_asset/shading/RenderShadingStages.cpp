@@ -1,4 +1,4 @@
-#include "render_pipeline/render_asset/shading/RenderShadowMask.hpp"
+#include "render_pipeline/render_asset/shading/RenderShadingStages.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -11,6 +11,106 @@
 #include "utils/light_utils.hpp"
 
 namespace render_pipeline::shading {
+
+bool RenderAsset::supports(const Asset& asset) const {
+    return asset.get_current_frame() != nullptr;
+}
+
+SDL_Texture* RenderAsset::run(SDL_Renderer* renderer, const Asset& asset, StageContext& context) {
+    if (!renderer) {
+        return nullptr;
+    }
+
+    SDL_Texture* base_texture = context.base_texture ? context.base_texture : asset.get_current_frame();
+    if (!base_texture) {
+        return nullptr;
+    }
+
+    int width  = context.width;
+    int height = context.height;
+    if (width <= 0 || height <= 0) {
+        SDL_QueryTexture(base_texture, nullptr, nullptr, &width, &height);
+        context.width  = width;
+        context.height = height;
+    }
+
+    if (width <= 0 || height <= 0) {
+        return nullptr;
+    }
+
+    SDL_Texture* target = nullptr;
+    if (context.reusable_final) {
+        int tex_w = 0;
+        int tex_h = 0;
+        if (SDL_QueryTexture(context.reusable_final, nullptr, nullptr, &tex_w, &tex_h) == 0 && tex_w == width && tex_h == height) {
+            target = context.reusable_final;
+        }
+    }
+
+    if (!target) {
+        target = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET, width, height);
+        if (!target) {
+            return nullptr;
+        }
+    }
+
+    SDL_SetTextureBlendMode(target, SDL_BLENDMODE_BLEND);
+#if SDL_VERSION_ATLEAST(2,0,12)
+    SDL_SetTextureScaleMode(target, (asset.info && !asset.info->smooth_scaling) ? SDL_ScaleModeNearest : SDL_ScaleModeBest);
+#endif
+
+    SDL_Texture* prev_target = SDL_GetRenderTarget(renderer);
+    SDL_SetRenderTarget(renderer, target);
+    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
+    SDL_RenderClear(renderer);
+
+    SDL_SetTextureAlphaMod(base_texture, 255);
+    SDL_SetTextureColorMod(base_texture, 255, 255, 255);
+    SDL_RenderCopy(renderer, base_texture, nullptr, nullptr);
+    SDL_SetTextureAlphaMod(base_texture, 255);
+    SDL_SetTextureColorMod(base_texture, 255, 255, 255);
+
+    SDL_SetRenderTarget(renderer, prev_target);
+
+    return target;
+}
+
+bool RenderCastShadow::supports(const Asset& asset) const {
+    return asset.is_shaded;
+}
+
+SDL_Texture* RenderCastShadow::run(SDL_Renderer* renderer, const Asset& asset, StageContext& context) {
+    if (!renderer || !asset.is_shaded) {
+        return nullptr;
+    }
+
+    int width  = context.width;
+    int height = context.height;
+    if (width <= 0 || height <= 0) {
+        if (SDL_Texture* base = context.base_texture) {
+            SDL_QueryTexture(base, nullptr, nullptr, &width, &height);
+            context.width  = width;
+            context.height = height;
+        }
+    }
+
+    if (width <= 0 || height <= 0) {
+        return nullptr;
+    }
+
+    SDL_Texture* texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET, width, height);
+    if (!texture) {
+        return nullptr;
+    }
+
+    SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_BLEND);
+    SDL_Texture* prev_target = SDL_GetRenderTarget(renderer);
+    SDL_SetRenderTarget(renderer, texture);
+    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
+    SDL_RenderClear(renderer);
+    SDL_SetRenderTarget(renderer, prev_target);
+    return texture;
+}
 
 namespace {
 
@@ -64,7 +164,7 @@ bool render_player_lights(SDL_Renderer* renderer, const Asset& asset, StageConte
         return false;
     }
 
-    bool any_rendered = false;
+    bool any_rendered      = false;
     const double static_factor = LightUtils::calculate_static_alpha_percentage(&asset, player);
     const double base_alpha    = static_cast<double>(alpha) * static_factor;
 
@@ -103,7 +203,7 @@ bool render_orbital_lights(SDL_Renderer* renderer, const Asset& asset, StageCont
         return false;
     }
 
-    bool any_rendered = false;
+    bool any_rendered     = false;
     const float base_angle = context.main_light().get_angle();
 
     const auto compute_angle = [&](const LightSource& light) {
@@ -113,11 +213,11 @@ bool render_orbital_lights(SDL_Renderer* renderer, const Asset& asset, StageCont
         constexpr float kPi     = 3.14159265358979323846f;
         constexpr float kHalfPi = kPi * 0.5f;
         constexpr float kTwoPi  = kPi * 2.0f;
-        float normalized        = (kHalfPi - base_angle) / kTwoPi;
+        float           normalized = (kHalfPi - base_angle) / kTwoPi;
         normalized -= std::floor(normalized);
-        const float bias      = std::clamp(light.apex_speed_bias, 0, 100) / 100.0f;
-        const float exponent  = 1.0f + bias * 4.0f;
-        float       adjusted  = normalized;
+        const float bias     = std::clamp(light.apex_speed_bias, 0, 100) / 100.0f;
+        const float exponent = 1.0f + bias * 4.0f;
+        float       adjusted = normalized;
         if (normalized < 0.5f) {
             const float local = normalized * 2.0f;
             adjusted          = 0.5f * std::pow(local, exponent);
@@ -126,17 +226,17 @@ bool render_orbital_lights(SDL_Renderer* renderer, const Asset& asset, StageCont
             adjusted          = 0.5f + 0.5f * (1.0f - std::pow(1.0f - local, exponent));
         }
         return kHalfPi - adjusted * kTwoPi;
-};
+    };
 
     for (auto& light : asset.info->orbital_light_sources) {
         if (!light.texture || light.behind || light.x_radius <= 0 || light.y_radius <= 0) {
             continue;
         }
 
-        const bool  flipped   = asset.flipped;
-        const float angle     = compute_angle(light);
-        const float offset_x  = flipped ? -static_cast<float>(light.offset_x) : static_cast<float>(light.offset_x);
-        float       orbit_x   = std::cos(angle) * light.x_radius;
+        const bool  flipped  = asset.flipped;
+        const float angle    = compute_angle(light);
+        const float offset_x = flipped ? -static_cast<float>(light.offset_x) : static_cast<float>(light.offset_x);
+        float       orbit_x  = std::cos(angle) * light.x_radius;
         if (flipped) {
             orbit_x = -orbit_x;
         }
@@ -151,7 +251,10 @@ bool render_orbital_lights(SDL_Renderer* renderer, const Asset& asset, StageCont
             light.cached_h = lh;
         }
 
-        SDL_Rect dst = context.dest_from_world_offset(static_cast<int>(std::lround(lx)) - asset.pos.x, static_cast<int>(std::lround(ly)) - asset.pos.y, lw, lh);
+        SDL_Rect dst = context.dest_from_world_offset(static_cast<int>(std::lround(lx)) - asset.pos.x,
+                                                      static_cast<int>(std::lround(ly)) - asset.pos.y,
+                                                      lw,
+                                                      lh);
 
         SDL_SetTextureBlendMode(light.texture, SDL_BLENDMODE_ADD);
         SDL_SetTextureAlphaMod(light.texture, alpha);
@@ -163,7 +266,7 @@ bool render_orbital_lights(SDL_Renderer* renderer, const Asset& asset, StageCont
     return any_rendered;
 }
 
-}
+}  // namespace
 
 bool RenderShadowMask::supports(const Asset& asset) const {
     return asset.is_shaded;
@@ -174,7 +277,7 @@ SDL_Texture* RenderShadowMask::run(SDL_Renderer* renderer, const Asset& asset, S
         return nullptr;
     }
 
-    int width = context.width;
+    int width  = context.width;
     int height = context.height;
     if (width <= 0 || height <= 0) {
         if (SDL_Texture* base = context.base_texture) {
@@ -241,5 +344,5 @@ SDL_Texture* RenderShadowMask::run(SDL_Renderer* renderer, const Asset& asset, S
     return cache.texture;
 }
 
-}
+}  // namespace render_pipeline::shading
 
