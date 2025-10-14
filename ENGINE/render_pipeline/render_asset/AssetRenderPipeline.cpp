@@ -12,6 +12,8 @@
 
 namespace {
 
+constexpr float MOTION_BLUR_STRENGTH = 0.35f;
+
 float compute_asset_screen_height(Asset& asset, float inv_scale) {
     int cached_w = asset.cached_w;
     int cached_h = asset.cached_h;
@@ -166,12 +168,40 @@ SDL_Texture* AssetRenderPipeline::run(Asset& asset) {
 
     int width = asset.cached_w;
     int height = asset.cached_h;
-    if (width <= 0 || height <= 0) {
-        SDL_QueryTexture(base_frame, nullptr, nullptr, &width, &height);
+    Uint32 base_format = SDL_PIXELFORMAT_UNKNOWN;
+    if (width <= 0 || height <= 0 || base_format == SDL_PIXELFORMAT_UNKNOWN) {
+        SDL_QueryTexture(base_frame, &base_format, nullptr, &width, &height);
     }
 
     if (width <= 0 || height <= 0) {
         return nullptr;
+    }
+
+    SDL_Texture* previous_final       = asset.get_final_texture();
+    SDL_Texture* previous_final_copy  = nullptr;
+    const float  clamped_blur_strength = std::clamp(MOTION_BLUR_STRENGTH, 0.0f, 1.0f);
+    if (previous_final && clamped_blur_strength > 0.0f) {
+        int prev_w = 0;
+        int prev_h = 0;
+        Uint32 prev_format = SDL_PIXELFORMAT_UNKNOWN;
+        if (SDL_QueryTexture(previous_final, &prev_format, nullptr, &prev_w, &prev_h) == 0 && prev_w == width && prev_h == height) {
+            if (prev_format == SDL_PIXELFORMAT_UNKNOWN) {
+                prev_format = (base_format != SDL_PIXELFORMAT_UNKNOWN) ? base_format : SDL_PIXELFORMAT_RGBA8888;
+            }
+            previous_final_copy = SDL_CreateTexture(renderer_, prev_format, SDL_TEXTUREACCESS_TARGET, prev_w, prev_h);
+            if (previous_final_copy) {
+                SDL_SetTextureBlendMode(previous_final_copy, SDL_BLENDMODE_BLEND);
+#if SDL_VERSION_ATLEAST(2,0,12)
+                SDL_SetTextureScaleMode(previous_final_copy, SDL_ScaleModeBest);
+#endif
+                SDL_Texture* prev_target = SDL_GetRenderTarget(renderer_);
+                SDL_SetRenderTarget(renderer_, previous_final_copy);
+                SDL_SetRenderDrawColor(renderer_, 0, 0, 0, 0);
+                SDL_RenderClear(renderer_);
+                SDL_RenderCopy(renderer_, previous_final, nullptr, nullptr);
+                SDL_SetRenderTarget(renderer_, prev_target);
+            }
+        }
     }
 
     StageContext context{};
@@ -197,6 +227,9 @@ SDL_Texture* AssetRenderPipeline::run(Asset& asset) {
 
     SDL_Texture* final_texture = base_stage_entry.stage->run(renderer_, asset, context);
     if (!final_texture) {
+        if (previous_final_copy) {
+            SDL_DestroyTexture(previous_final_copy);
+        }
         return nullptr;
     }
 
@@ -227,8 +260,23 @@ SDL_Texture* AssetRenderPipeline::run(Asset& asset) {
         }
     }
 
+    if (previous_final_copy && final_texture) {
+        SDL_Texture* prev_target = SDL_GetRenderTarget(renderer_);
+        SDL_SetRenderTarget(renderer_, final_texture);
+        SDL_SetTextureBlendMode(previous_final_copy, SDL_BLENDMODE_BLEND);
+        const Uint8 blur_alpha = static_cast<Uint8>(std::lround(clamped_blur_strength * 255.0f));
+        SDL_SetTextureAlphaMod(previous_final_copy, blur_alpha);
+        SDL_RenderCopy(renderer_, previous_final_copy, nullptr, nullptr);
+        SDL_SetTextureAlphaMod(previous_final_copy, 255);
+        SDL_SetRenderTarget(renderer_, prev_target);
+    }
+
     for (SDL_Texture* tex : intermediates) {
         SDL_DestroyTexture(tex);
+    }
+
+    if (previous_final_copy) {
+        SDL_DestroyTexture(previous_final_copy);
     }
 
     asset.cached_w = context.width;

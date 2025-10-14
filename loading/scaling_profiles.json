@@ -201,29 +201,6 @@
             ],
             "revision": 2
         },
-        "candle": {
-            "histogram": [
-                0,
-                0,
-                0,
-                0,
-                0,
-                0,
-                0,
-                0,
-                0,
-                32117
-            ],
-            "last_requested_percent": 6,
-            "last_requested_scale": 0.06157635524868965,
-            "last_updated": "2025-10-14T01:51:21Z",
-            "last_used_texture_scale": 0.10000000149011612,
-            "recommended_percentages": [
-                100,
-                10
-            ],
-            "revision": 1
-        },
         "flower_1": {
             "histogram": [
                 0,

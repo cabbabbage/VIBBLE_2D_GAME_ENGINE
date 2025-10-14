@@ -154,7 +154,7 @@
         },
         {
             "behind": false,
-            "falloff": 0,
+            "falloff": 76,
             "flare": 0,
             "flicker": 20,
             "has_light_source": true,
@@ -166,7 +166,7 @@
             "light_intensity": 255,
             "offset_x": -18,
             "offset_y": 0,
-            "radius": 1974
+            "radius": 774
         }
     ],
     "max_child_depth": 2,

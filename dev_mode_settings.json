@@ -31,15 +31,15 @@
                     },
                     "sampling": {
                         "diagonal_weight": 0.8700000047683716,
-                        "kernel_radius": 12.0,
-                        "outer_ring_weight": 0.2199999988079071
+                        "kernel_radius": 8.0,
+                        "outer_ring_weight": 1.5299999713897705
                     },
                     "stability": {
                         "enable_temporal_smoothing": true,
                         "temporal_smoothing": 0.6240000128746033
                     }
                 },
-                "update_map_light": true
+                "update_map_light": false
             }
         },
         "lock": {
