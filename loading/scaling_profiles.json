@@ -11,15 +11,13 @@
                 0,
                 0,
                 0,
-                612884
+                0
             ],
-            "last_requested_percent": 3,
-            "last_requested_scale": 0.0254350733011961,
-            "last_updated": "2025-10-14T01:51:21Z",
-            "last_used_texture_scale": 0.10000000149011612,
+            "last_updated": "2025-10-14T10:02:57Z",
             "recommended_percentages": [
                 100,
-                10
+                90,
+                80
             ],
             "revision": 1
         },
@@ -34,15 +32,13 @@
                 0,
                 0,
                 0,
-                51181
+                0
             ],
-            "last_requested_percent": 3,
-            "last_requested_scale": 0.026773761957883835,
-            "last_updated": "2025-10-14T02:00:46Z",
-            "last_used_texture_scale": 0.10000000149011612,
+            "last_updated": "2025-10-14T10:02:54Z",
             "recommended_percentages": [
                 100,
-                10
+                90,
+                80
             ],
             "revision": 1
         },
@@ -130,7 +126,7 @@
                 0,
                 0
             ],
-            "last_updated": "2025-10-14T07:12:26Z",
+            "last_updated": "2025-10-14T10:02:55Z",
             "recommended_percentages": [
                 100,
                 90,
@@ -229,19 +225,16 @@
                 0,
                 0,
                 0,
-                7213,
-                35
+                0,
+                0
             ],
-            "last_requested_percent": 15,
-            "last_requested_scale": 0.14739884436130524,
-            "last_updated": "2025-10-14T02:01:10Z",
-            "last_used_texture_scale": 0.10000000149011612,
+            "last_updated": "2025-10-14T10:02:54Z",
             "recommended_percentages": [
                 100,
-                20,
-                10
+                90,
+                80
             ],
-            "revision": 2
+            "revision": 1
         },
         "candle": {
             "histogram": [
@@ -256,7 +249,7 @@
                 0,
                 0
             ],
-            "last_updated": "2025-10-14T09:39:09Z",
+            "last_updated": "2025-10-14T10:02:55Z",
             "recommended_percentages": [
                 100,
                 90,

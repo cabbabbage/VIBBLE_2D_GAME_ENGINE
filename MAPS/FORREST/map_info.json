@@ -166,7 +166,7 @@
       "seed_threshold_norm": 1.0,
       "streak_angle_lean": 0.0
     },
-    "max_opacity": 229,
+    "max_opacity": 154,
     "min_opacity": 0,
     "mult": 0.32,
     "orbit_radius": 1000,
@@ -176,20 +176,20 @@
     "reactive_shadows": {
       "directionality": {
         "enable_offsets": true,
-        "gradient_sensitivity": 0.3499999940395355,
-        "max_offset_ratio": 0.5099999904632568,
-        "offset_strength": 0.949999988079071
+        "gradient_sensitivity": 0.46000000834465027,
+        "max_offset_ratio": 0.8100000023841858,
+        "offset_strength": 1.4900000095367432
       },
       "output": {
-        "map_line_weight": 1.4700000286102295,
-        "parallax_strength": 3.0,
-        "scale_factor": 2.6500000953674316
+        "map_line_weight": 1.5099999904632568,
+        "parallax_strength": 2.130000114440918,
+        "scale_factor": 3.0
       },
       "response": {
         "enable_opacity": true,
-        "max_opacity": 0.9399999976158142,
-        "min_opacity": 0.029999999329447746,
-        "opacity_strength": 3.0
+        "max_opacity": 1.0,
+        "min_opacity": 0.3799999952316284,
+        "opacity_strength": 1.6399999856948853
       },
       "sampling": {
         "diagonal_weight": 1.100000023841858,
@@ -198,7 +198,7 @@
       },
       "stability": {
         "enable_temporal_smoothing": true,
-        "temporal_smoothing": 0.2540000081062317
+        "temporal_smoothing": 0.652999997138977
       }
     },
     "screen_light": {
@@ -207,10 +207,10 @@
         234,
         255
       ],
-      "max_opacity": 130,
+      "max_opacity": 15,
       "min_opacity": 0
     },
-    "update_interval": 1
+    "update_interval": 23
   },
   "map_name": "FORREST",
   "rooms_data": {

@@ -101,7 +101,7 @@
     "rnd_spawn_max": 400,
     "rnd_spawn_min": 300,
     "size_settings": {
-        "scale_percentage": 3
+        "scale_percentage": 2.0
     },
     "start": "",
     "tags": [

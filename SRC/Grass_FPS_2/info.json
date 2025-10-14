@@ -96,7 +96,7 @@
     "rnd_spawn_max": 400,
     "rnd_spawn_min": 300,
     "size_settings": {
-        "scale_percentage": 3
+        "scale_percentage": 2.0
     },
     "start": "",
     "tags": [
@@ -113,5 +113,5 @@
         "plant"
     ],
     "update_radius": 1000,
-    "z_threshold": -216
+    "z_threshold": -215
 }

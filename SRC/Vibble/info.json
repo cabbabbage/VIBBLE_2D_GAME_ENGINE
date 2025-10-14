@@ -405,12 +405,29 @@
             "radius": 0,
             "x_radius": 0,
             "y_radius": 0
+        },
+        {
+            "behind": false,
+            "falloff": 0,
+            "flare": 1,
+            "flicker": 0,
+            "has_light_source": true,
+            "light_color": [
+                255,
+                255,
+                255
+            ],
+            "light_intensity": 194,
+            "offset_x": 0,
+            "offset_y": 0,
+            "radius": 226
         }
     ],
     "mappings": {},
     "max_child_depth": 2,
     "min_child_depth": 0,
-    "neighbor_search_distance": 500,
+    "min_distance_all": 106,
+    "neighbor_search_distance": 400,
     "ray_strength": 0,
     "render_radius": 1000,
     "rnd_spawn_max": 400,

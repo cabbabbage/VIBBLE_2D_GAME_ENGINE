@@ -565,15 +565,24 @@ void Asset::set_flip() {
 }
 
 void Asset::set_final_texture(SDL_Texture* tex) {
-        bool same_texture = (tex == final_texture);
+        const bool same_texture = (tex == final_texture);
+
+        // The rendered content may have changed even when the texture pointer is the same,
+        // so all cached scale variants must be invalidated to avoid showing stale frames.
+        clear_downscale_cache();
+
         if (!same_texture) {
-                clear_downscale_cache();
-                if (final_texture) SDL_DestroyTexture(final_texture);
+                if (final_texture) {
+                        SDL_DestroyTexture(final_texture);
+                }
                 final_texture = tex;
         }
 
-        if (tex) SDL_QueryTexture(tex, nullptr, nullptr, &cached_w, &cached_h);
-        else     cached_w = cached_h = 0;
+        if (tex) {
+                SDL_QueryTexture(tex, nullptr, nullptr, &cached_w, &cached_h);
+        } else {
+                cached_w = cached_h = 0;
+        }
 }
 
 SDL_Texture* Asset::get_final_texture() const { return final_texture; }

@@ -115,7 +115,7 @@ SDL_Surface* generate_mask_surface(SDL_Surface* source) {
     const int height = std::max(1, src_rgba->h);
 
     const int expand_radius    = compute_expand_radius(width, height);
-    const int base_blur_radius = compute_base_blur_radius(expand_radius);
+    const int base_blur_radius = compute_base_blur_radius(expand_radius)/2;
 
     const int expanded_w = width + expand_radius * 2;
     const int expanded_h = height + expand_radius * 2;
