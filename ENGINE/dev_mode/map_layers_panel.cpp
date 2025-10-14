@@ -1545,7 +1545,6 @@ private:
     MapLayersPanel* owner_ = nullptr;
     SDL_Rect rect_{0,0,0,0};
     std::unique_ptr<DMButton> add_button_;
-    std::unique_ptr<DMButton> new_room_button_;
     std::unique_ptr<DMButton> reload_button_;
     std::unique_ptr<DMButton> delete_button_;
     std::unique_ptr<DMButton> preview_button_;
@@ -1751,7 +1750,6 @@ MapLayersPanel::PreviewToolbarWidget::PreviewToolbarWidget(MapLayersPanel* owner
     : owner_(owner) {
 
     add_button_ = std::make_unique<DMButton>("Add Layer", &DMStyles::CreateButton(), 140, DMButton::height());
-    new_room_button_ = std::make_unique<DMButton>("New Room", &DMStyles::CreateButton(), 140, DMButton::height());
     reload_button_ = std::make_unique<DMButton>("Reload", &DMStyles::HeaderButton(), 140, DMButton::height());
     delete_button_ = std::make_unique<DMButton>("Delete Layer", &DMStyles::DeleteButton(), 140, DMButton::height());
     preview_button_ = std::make_unique<DMButton>("Generate Preview", &DMStyles::WarnButton(), 140, DMButton::height());
@@ -1761,7 +1759,6 @@ MapLayersPanel::PreviewToolbarWidget::PreviewToolbarWidget(MapLayersPanel* owner
 int MapLayersPanel::PreviewToolbarWidget::button_count() const {
     int count = 0;
     if (add_button_) ++count;
-    if (new_room_button_) ++count;
     if (preview_button_) ++count;
     if (delete_button_) ++count;
     if (reload_button_) ++count;
@@ -1776,8 +1773,15 @@ int MapLayersPanel::PreviewToolbarWidget::columns_for_width(int width) const {
     const int min_button_width = 140;
     int cols = std::max(1, available / std::max(1, min_button_width + spacing));
     cols = std::max(1, std::min(count, cols));
-    if (cols <= 0) cols = 1;
-    return cols;
+    while (cols > 1) {
+        int rows = (count + cols - 1) / cols;
+        int last_row = count - (rows - 1) * cols;
+        if (last_row == 0 || last_row >= cols - 1) {
+            break;
+        }
+        --cols;
+    }
+    return std::max(1, cols);
 }
 
 int MapLayersPanel::PreviewToolbarWidget::height_for_width(int w) const {
@@ -1805,7 +1809,6 @@ void MapLayersPanel::PreviewToolbarWidget::set_rect(const SDL_Rect& r) {
     int col_width = std::max(1, (available_w - (columns - 1) * col_gap) / columns);
     std::vector<DMButton*> buttons;
     if (add_button_) buttons.push_back(add_button_.get());
-    if (new_room_button_) buttons.push_back(new_room_button_.get());
     if (preview_button_) buttons.push_back(preview_button_.get());
     if (delete_button_) buttons.push_back(delete_button_.get());
     if (reload_button_) buttons.push_back(reload_button_.get());
@@ -1830,7 +1833,6 @@ bool MapLayersPanel::PreviewToolbarWidget::handle_event(const SDL_Event& e) {
         }
     };
     handle_btn(add_button_, [this]() { if (owner_) owner_->add_layer_internal(); });
-    handle_btn(new_room_button_, [this]() { if (owner_) owner_->add_room_to_selected_layer(); });
     handle_btn(preview_button_, [this]() {
         if (!owner_) return;
         owner_->request_preview_regeneration();
@@ -1868,7 +1870,6 @@ void MapLayersPanel::PreviewToolbarWidget::render(SDL_Renderer* renderer) const 
         1,
         border);
     if (add_button_) add_button_->render(renderer);
-    if (new_room_button_) new_room_button_->render(renderer);
     if (preview_button_) preview_button_->render(renderer);
     if (delete_button_) delete_button_->render(renderer);
     if (reload_button_) reload_button_->render(renderer);
@@ -3085,10 +3086,7 @@ MapLayersPanel::MapLayersPanel(int x, int y)
     room_list_panel_ = std::make_unique<RoomListPanel>(this);
     if (room_list_panel_) {
         room_list_panel_->set_on_create([this]() {
-            std::string new_key = this->create_new_room(std::string(), true);
-            if (!new_key.empty() && room_list_panel_) {
-                room_list_panel_->set_selected_room(new_key);
-            }
+            this->add_room_to_selected_layer();
         });
         room_list_panel_->set_on_select([this](const std::string& room_key) {
             this->show_room_details(room_key);
