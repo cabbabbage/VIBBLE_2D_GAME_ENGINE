@@ -206,7 +206,7 @@
         "outer_ring_weight": 0.23000000417232513
       },
       "stability": {
-        "enable_temporal_smoothing": true,
+        "enable_temporal_smoothing": false,
         "temporal_smoothing": 0.8140000104904175
       }
     },

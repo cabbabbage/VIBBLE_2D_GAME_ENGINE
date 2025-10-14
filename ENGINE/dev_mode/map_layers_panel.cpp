@@ -2063,47 +2063,19 @@ MapLayersPanel::PanelSidebarWidget::PanelSidebarWidget(MapLayersPanel* owner)
 void MapLayersPanel::PanelSidebarWidget::set_rect(const SDL_Rect& r) {
     rect_ = r;
     const int padding = DMSpacing::item_gap();
-    const int spacing = DMSpacing::item_gap();
     const int width = std::max(0, rect_.w - padding * 2);
+    const int height = std::max(0, rect_.h - padding * 2);
 
-    int x = rect_.x + padding;
-    int y = rect_.y + padding;
-
-    if (owner_ && owner_->room_list_panel_) {
-        const int list_height = owner_->room_list_panel_->height_for_width(width);
-        if (list_height > 0) {
-            owner_->room_list_panel_->set_rect(SDL_Rect{ x, y, width, list_height });
-            y += list_height + spacing;
-        }
-    }
-
-    const int remaining_height = std::max(0, rect_.y + rect_.h - y - padding);
-    config_rect_ = SDL_Rect{ x, y, width, remaining_height };
+    config_rect_ = SDL_Rect{ rect_.x + padding, rect_.y + padding, width, height };
     if (owner_) owner_->update_sidebar_bounds(config_rect_);
 }
 
 int MapLayersPanel::PanelSidebarWidget::height_for_width(int w) const {
     const int padding = DMSpacing::item_gap();
-    const int spacing = DMSpacing::item_gap();
-    int height = padding * 2;
-    int width = std::max(0, w - padding * 2);
-
-    if (owner_ && owner_->room_list_panel_) {
-        const int list_height = owner_->room_list_panel_->height_for_width(width);
-        if (list_height > 0) {
-            height += list_height;
-            height += spacing;
-        }
-    }
-
-    height += std::max(kCanvasPreferredHeight, w);
-    return height;
+    return padding * 2 + std::max(kCanvasPreferredHeight, w);
 }
 
-bool MapLayersPanel::PanelSidebarWidget::handle_event(const SDL_Event& e) {
-    if (owner_ && owner_->room_list_panel_ && owner_->room_list_panel_->handle_event(e)) {
-        return true;
-    }
+bool MapLayersPanel::PanelSidebarWidget::handle_event(const SDL_Event&) {
     return false;
 }
 
@@ -2131,10 +2103,6 @@ void MapLayersPanel::PanelSidebarWidget::render(SDL_Renderer* renderer) const {
         DMStyles::CornerRadius(),
         1,
         border);
-
-    if (owner_ && owner_->room_list_panel_) {
-        owner_->room_list_panel_->render(renderer);
-    }
 }
 MapLayersPanel::LayerConfigPanel::LayerConfigPanel(MapLayersPanel* owner)
 

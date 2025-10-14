@@ -516,11 +516,41 @@ SDL_Texture* RenderShadowMask::run(SDL_Renderer* renderer, const Asset& asset, S
                    scaled_h };
     SDL_RenderCopy(renderer, mask_texture, nullptr, &dest);
 
-    SDL_SetRenderTarget(renderer, prev_target);
-    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
     SDL_SetTextureBlendMode(mask_texture, saved_blend);
     SDL_SetTextureColorMod(mask_texture, saved_r, saved_g, saved_b);
     SDL_SetTextureAlphaMod(mask_texture, saved_a);
+
+#if SDL_VERSION_ATLEAST(2, 0, 6)
+    if (SDL_Texture* base_mask = context.base_texture ? context.base_texture : asset.get_current_frame()) {
+        Uint8 base_r = 255;
+        Uint8 base_g = 255;
+        Uint8 base_b = 255;
+        Uint8 base_a = 255;
+        SDL_BlendMode base_blend = SDL_BLENDMODE_BLEND;
+        SDL_GetTextureColorMod(base_mask, &base_r, &base_g, &base_b);
+        SDL_GetTextureAlphaMod(base_mask, &base_a);
+        SDL_GetTextureBlendMode(base_mask, &base_blend);
+
+        const SDL_BlendMode crop_blend = SDL_ComposeCustomBlendMode(SDL_BLENDFACTOR_ZERO,
+                                                                    SDL_BLENDFACTOR_SRC_ALPHA,
+                                                                    SDL_BLENDOPERATION_ADD,
+                                                                    SDL_BLENDFACTOR_ZERO,
+                                                                    SDL_BLENDFACTOR_SRC_ALPHA,
+                                                                    SDL_BLENDOPERATION_ADD);
+        if (crop_blend != SDL_BLENDMODE_INVALID) {
+            SDL_SetTextureBlendMode(base_mask, crop_blend);
+            SDL_SetTextureColorMod(base_mask, 255, 255, 255);
+            SDL_SetTextureAlphaMod(base_mask, 255);
+            SDL_RenderCopy(renderer, base_mask, nullptr, nullptr);
+            SDL_SetTextureBlendMode(base_mask, base_blend);
+            SDL_SetTextureColorMod(base_mask, base_r, base_g, base_b);
+            SDL_SetTextureAlphaMod(base_mask, base_a);
+        }
+    }
+#endif
+
+    SDL_SetRenderTarget(renderer, prev_target);
+    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
 
     cache.width  = width;
     cache.height = height;
