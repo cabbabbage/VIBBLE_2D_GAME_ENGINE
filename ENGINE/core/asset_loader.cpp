@@ -94,7 +94,7 @@ renderer_(renderer)
         std::cout << "[AssetLoader] Asset library ready in " << library_ms << "ms\n";
         std::cout << "[AssetLoader] Rooms built in " << rooms_ms << "ms\n";
         std::cout << "[AssetLoader] Asset loader initialization completed in " << total_ms << "ms\n";
-        auto distant_boundary = collectDistantAssets(150, 700);
+        auto distant_boundary = collectDistantAssets(150, 400);
 	for(auto a : distant_boundary){
 		a->set_hidden(true);
 	}
