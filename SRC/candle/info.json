@@ -164,9 +164,9 @@
                 255
             ],
             "light_intensity": 255,
-            "offset_x": 0,
+            "offset_x": -18,
             "offset_y": 0,
-            "radius": 64
+            "radius": 1974
         }
     ],
     "max_child_depth": 2,

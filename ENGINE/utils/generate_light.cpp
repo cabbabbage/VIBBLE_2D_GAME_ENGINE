@@ -69,25 +69,43 @@ SDL_Texture* GenerateLight::generate(SDL_Renderer* renderer,
     const std::string meta_file  = folder + "/metadata.json";
     const std::string img_file   = folder + "/light.png";
 
+    const int raw_radius = light.radius;
+    const int intensity  = std::clamp(light.intensity, 0, 255);
+    if (raw_radius <= 0 || intensity <= 0) {
+        fs::remove_all(folder);
+        return nullptr;
+    }
+
     const int blur_passes = 0;
 
     json meta;
     bool cache_ok = false;
-    const auto expected_steps = render_pipeline::ScalingLogic::PercentSteps();
+    constexpr std::size_t kLightVariantCount = 1;
+    constexpr int kLightVariantPercent = 100;
     if (CacheManager::load_metadata(meta_file, meta)) {
         try {
             cache_ok =
                 meta.value("version", -1) == kLightCacheVersion && meta.value("radius",   -1) == light.radius && meta.value("fall_off", -1) == light.fall_off && meta.value("intensity",-1) == light.intensity && meta.value("blur_passes", -1) == blur_passes && meta.contains("color") && meta["color"].is_array() && meta["color"].size() == 3 && meta["color"][0].get<int>() == light.color.r && meta["color"][1].get<int>() == light.color.g && meta["color"][2].get<int>() == light.color.b;
+            if (cache_ok) {
+                if (!meta.contains("scale_steps") || !meta["scale_steps"].is_array()) {
+                    cache_ok = false;
+                } else {
+                    const auto& steps = meta["scale_steps"];
+                    if (steps.size() != 1 || !steps[0].is_number_integer() || steps[0].get<int>() != kLightVariantPercent) {
+                        cache_ok = false;
+                    }
+                }
+            }
         } catch (...) {
             cache_ok = false;
         }
     }
 
-    std::array<std::vector<SDL_Surface*>, render_pipeline::ScalingLogic::kDefaultVariantCount> variant_surfaces;
+    std::array<std::vector<SDL_Surface*>, kLightVariantCount> variant_surfaces;
 
     if (cache_ok) {
         bool variants_loaded = true;
-        for (std::size_t idx = 0; idx < render_pipeline::ScalingLogic::kDefaultVariantCount; ++idx) {
+        for (std::size_t idx = 0; idx < kLightVariantCount; ++idx) {
             std::string variant_path = render_pipeline::ScalingLogic::VariantFolder(folder, idx);
             std::vector<SDL_Surface*> loaded;
             if (!CacheManager::load_surface_sequence(variant_path, 1, loaded)) {
@@ -98,7 +116,7 @@ SDL_Texture* GenerateLight::generate(SDL_Renderer* renderer,
         }
         if (variants_loaded && !variant_surfaces[0].empty() && variant_surfaces[0][0]) {
             SDL_Texture* base_tex = nullptr;
-            for (std::size_t idx = 0; idx < render_pipeline::ScalingLogic::kDefaultVariantCount; ++idx) {
+            for (std::size_t idx = 0; idx < kLightVariantCount; ++idx) {
                 SDL_Surface* surface = (!variant_surfaces[idx].empty()) ? variant_surfaces[idx][0] : nullptr;
                 SDL_Texture* tex_variant = surface ? CacheManager::surface_to_texture(renderer, surface) : nullptr;
                 if (tex_variant) {
@@ -116,14 +134,6 @@ SDL_Texture* GenerateLight::generate(SDL_Renderer* renderer,
                         light.variant_w[0] = light.cached_w;
                         light.variant_h[0] = light.cached_h;
                     }
-                } else {
-                    if (tex_variant) {
-                        SDL_QueryTexture(tex_variant, nullptr, nullptr, &light.variant_w[idx], &light.variant_h[idx]);
-                    } else {
-                        light.variant_w[idx] = 0;
-                        light.variant_h[idx] = 0;
-                    }
-                    light.cached_variants[idx] = tex_variant;
                 }
             }
             for (auto& list : variant_surfaces) {
@@ -149,10 +159,9 @@ SDL_Texture* GenerateLight::generate(SDL_Renderer* renderer,
     fs::remove_all(folder);
     fs::create_directories(folder);
 
-    const int radius    = std::max(1, light.radius);
+    const int radius    = std::max(1, raw_radius);
     const int falloff   = std::clamp(light.fall_off, 0, 100);
     const SDL_Color col = light.color;
-    const int intensity = std::clamp(light.intensity, 0, 255);
 
     const int size = std::max(1, radius * 2);
     SDL_Surface* surf = SDL_CreateRGBSurfaceWithFormat(0, size, size, 32, SDL_PIXELFORMAT_RGBA32);
@@ -217,19 +226,10 @@ SDL_Texture* GenerateLight::generate(SDL_Renderer* renderer,
 
     SDL_UnlockSurface(surf);
 
-    std::array<SDL_Surface*, render_pipeline::ScalingLogic::kDefaultVariantCount> surfaces{};
+    std::array<SDL_Surface*, kLightVariantCount> surfaces{};
     surfaces[0] = surf;
-    const auto& default_steps = render_pipeline::ScalingLogic::DefaultScaleSteps();
-    for (std::size_t idx = 1; idx < render_pipeline::ScalingLogic::kDefaultVariantCount; ++idx) {
-        const float step = (idx < default_steps.size()) ? default_steps[idx] : 1.0f;
-        SDL_Surface* scaled_surface = render_pipeline::CreateScaledSurface(surf, step);
-        if (!scaled_surface) {
-            scaled_surface = render_pipeline::CreateScaledSurface(surf, 1.0f);
-        }
-        surfaces[idx] = scaled_surface;
-    }
 
-    for (std::size_t idx = 0; idx < render_pipeline::ScalingLogic::kDefaultVariantCount; ++idx) {
+    for (std::size_t idx = 0; idx < kLightVariantCount; ++idx) {
         std::vector<SDL_Surface*> single;
         if (surfaces[idx]) {
             single.push_back(surfaces[idx]);
@@ -248,14 +248,12 @@ SDL_Texture* GenerateLight::generate(SDL_Renderer* renderer,
     new_meta["blur_passes"] = blur_passes;
     new_meta["color"]       = { col.r, col.g, col.b };
     nlohmann::json steps_json = nlohmann::json::array();
-    for (std::size_t idx = 0; idx < render_pipeline::ScalingLogic::kDefaultVariantCount; ++idx) {
-        steps_json.push_back(expected_steps[idx]);
-    }
+    steps_json.push_back(kLightVariantPercent);
     new_meta["scale_steps"] = std::move(steps_json);
     CacheManager::save_metadata(meta_file, new_meta);
 
     SDL_Texture* base_tex = nullptr;
-    for (std::size_t idx = 0; idx < render_pipeline::ScalingLogic::kDefaultVariantCount; ++idx) {
+    for (std::size_t idx = 0; idx < kLightVariantCount; ++idx) {
         SDL_Surface* surface = surfaces[idx];
         SDL_Texture* tex_variant = surface ? CacheManager::surface_to_texture(renderer, surface) : nullptr;
         if (tex_variant) {
@@ -273,14 +271,6 @@ SDL_Texture* GenerateLight::generate(SDL_Renderer* renderer,
                 light.variant_w[0] = light.cached_w;
                 light.variant_h[0] = light.cached_h;
             }
-        } else {
-            if (tex_variant) {
-                SDL_QueryTexture(tex_variant, nullptr, nullptr, &light.variant_w[idx], &light.variant_h[idx]);
-            } else {
-                light.variant_w[idx] = 0;
-                light.variant_h[idx] = 0;
-            }
-            light.cached_variants[idx] = tex_variant;
         }
     }
 

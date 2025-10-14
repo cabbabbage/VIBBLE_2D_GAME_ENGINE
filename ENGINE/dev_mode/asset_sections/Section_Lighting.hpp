@@ -129,14 +129,18 @@ public:
                                      auto set_value,
                                      bool affects_texture) {
                 if (!slider) return;
-                if (!slider->handle_event(e)) return;
-                used = true;
-                const int new_value = slider->value();
-                if (get_value() == new_value) return;
-                set_value(new_value);
-                changed = true;
-                if (affects_texture) {
-                    regenerate_lighting = true;
+                const int previous_value = get_value();
+                const bool slider_used = slider->handle_event(e);
+                const int committed_value = slider->value();
+                if (committed_value != previous_value) {
+                    set_value(committed_value);
+                    changed = true;
+                    used = true;
+                    if (affects_texture) {
+                        regenerate_lighting = true;
+                    }
+                } else if (slider_used) {
+                    used = true;
                 }
             };
 
