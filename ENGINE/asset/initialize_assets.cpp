@@ -4,10 +4,8 @@
 #include "asset_info.hpp"
 #include "asset_types.hpp"
 #include "asset_utils.hpp"
-#include "utils/range_util.hpp"
 #include <algorithm>
 #include <iostream>
-#include <stdexcept>
 #include <memory>
 #include <SDL.h>
 
@@ -66,16 +64,6 @@ void InitializeAssets::initialize(Assets& assets,
                 std::cout << "[InitializeAssets] Initialization base complete. Total assets: "
                 << assets.all.size() << "\n";
         }
-        try {
-                setup_static_sources(assets);
-        } catch (const std::length_error& e) {
-                if (kAssetLoggingEnabled) {
-                        std::cerr << "[InitializeAssets] light-gen failed: " << e.what() << "\n";
-                }
-        }
-        if (kAssetLoggingEnabled) {
-                std::cout << "[InitializeAssets] All static sources set.\n";
-        }
     assets.mark_active_assets_dirty();
     assets.refresh_active_asset_lists();
     assets.getView().zoom_to_scale(1.0, 200);
@@ -101,43 +89,6 @@ void InitializeAssets::set_shading_group_recursive(Asset& asset,
 	for (Asset* child : asset.children) {
 		if (child) set_shading_group_recursive(*child, group, 0);
 	}
-}
-
-void InitializeAssets::collect_assets_in_range(const Asset* asset,
-                                               SDL_Point center,
-                                               int radius,
-                                               std::vector<Asset*>& result) {
-	if (!asset) return;
-	if (Range::is_in_range(asset, center, radius)) {
-		result.push_back(const_cast<Asset*>(asset));
-	}
-	for (Asset* child : asset->children) {
-		if (child) collect_assets_in_range(child, center, radius, result);
-	}
-}
-
-void InitializeAssets::setup_static_sources(Assets& assets) {
-	std::function<void(Asset&)> recurse = [&](Asset& owner) {
-		if (owner.info) {
-			for (LightSource& light : owner.info->light_sources) {
-				SDL_Point l{ owner.pos.x + light.offset_x, owner.pos.y + light.offset_y };
-				std::vector<Asset*> targets;
-				targets.reserve(assets.all.size());
-				Range::get_in_range(l, light.radius, assets.all, targets);
-				for (Asset* t : targets) {
-					if (t && t->info) {
-						t->add_static_light_source(&light, l, &owner);
-					}
-				}
-			}
-		}
-		for (Asset* child : owner.children) {
-			if (child) recurse(*child);
-		}
-};
-	for (Asset* owner : assets.all)
-	if (owner)
-	recurse(*owner);
 }
 
 void InitializeAssets::setup_shading_groups(Assets& assets) {

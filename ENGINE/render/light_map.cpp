@@ -1,11 +1,9 @@
 #include "light_map.hpp"
 #include "render/camera.hpp"
 #include <algorithm>
-#include <random>
 #include <vector>
 #include <iostream>
 #include <cmath>
-#include "render_pipeline/ScalingLogic.hpp"
 LightMap::LightMap(SDL_Renderer* renderer,
                    Assets* assets,
                    Global_Light_Source& main_light,
@@ -31,10 +29,9 @@ void LightMap::set_fullscreen_light_settings(SDL_Color color, int min_opacity, i
 
 void LightMap::render(bool debugging) {
 	if (debugging) std::cout << "[render_asset_lights_z] start\n";
-	static std::mt19937 flicker_rng{ std::random_device{}() };
-	static std::vector<LightEntry> z_lights;
-	z_lights.clear();
-	collect_layers(z_lights, flicker_rng);
+        static std::vector<LightEntry> z_lights;
+        z_lights.clear();
+        collect_layers(z_lights);
 	const int downscale = 4;
 	const int low_w = screen_width_  / downscale;
 	const int low_h = screen_height_ / downscale;
@@ -48,7 +45,7 @@ void LightMap::render(bool debugging) {
 	if (debugging) std::cout << "[render_asset_lights_z] end\n";
 }
 
-void LightMap::collect_layers(std::vector<LightEntry>& out, std::mt19937& rng) {
+void LightMap::collect_layers(std::vector<LightEntry>& out) {
         const float inv_scale = 1.0f / assets_->getView().get_scale();
         constexpr int min_visible_w = 1;
         constexpr int min_visible_h = 1;
@@ -67,43 +64,6 @@ void LightMap::collect_layers(std::vector<LightEntry>& out, std::mt19937& rng) {
                 entry.flip = SDL_FLIP_NONE;
                 entry.color_mod = fullscreen_light_color_;
                 out.push_back(entry);
-        }
-        const float main_brightness = static_cast<float>(main_light_.get_brightness());
-        for (Asset* a : active) {
-                if (!a || !a->info) continue;
-                if (a->info->light_sources.empty()) continue;
-                for (auto& light : a->info->light_sources) {
-                        if (!light.texture) continue;
-                        int offX = a->flipped ? -light.offset_x : light.offset_x;
-                        int lw = light.cached_w, lh = light.cached_h;
-                        if (lw == 0 || lh == 0) {
-                                SDL_QueryTexture(light.texture, nullptr, nullptr, &lw, &lh);
-                                light.cached_w = lw;
-                                light.cached_h = lh;
-                        }
-                        SDL_Rect dst = get_scaled_position_rect(SDL_Point{ a->pos.x + offX, a->pos.y + light.offset_y },
-                                           lw, lh, inv_scale,
-                                           min_visible_w, min_visible_h);
-                        if (dst.w == 0 && dst.h == 0) continue;
-                        float alpha_f = main_brightness;
-                        if (a == assets_->player) alpha_f *= 0.9f;
-                        if (light.flicker > 0) {
-                                        float intensity_scale = std::clamp(light.intensity / 255.0f, 0.0f, 1.0f);
-                                        float max_jitter = (light.flicker / 100.0f) * intensity_scale;
-                                        alpha_f *= (1.0f + std::uniform_real_distribution<float>(-max_jitter, max_jitter)(rng));
-                        }
-                        Uint8 alpha = static_cast<Uint8>(std::clamp(alpha_f, 0.0f, 255.0f));
-                        const float desired_scale = render_pipeline::ScalingLogic::ComputeScale(lw, lh, dst.w, dst.h);
-                        SDL_Texture* selected = light.texture_for_scale(desired_scale);
-                        if (!selected) continue;
-                        LightEntry entry{};
-                        entry.tex = selected;
-                        entry.dst = dst;
-                        entry.alpha = alpha;
-                        entry.flip = a->flipped ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE;
-                        entry.color_mod = SDL_Color{255, 255, 220, 255};
-                        out.push_back(entry);
-                }
         }
 }
 

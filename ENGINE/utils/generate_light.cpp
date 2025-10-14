@@ -22,7 +22,11 @@
 namespace fs = std::filesystem;
 using json = nlohmann::json;
 
-static constexpr int kCacheVersion = 3;
+namespace {
+
+static constexpr int kLightCacheVersion = 3;
+
+}  // namespace
 
 namespace {
 
@@ -73,7 +77,7 @@ SDL_Texture* GenerateLight::generate(SDL_Renderer* renderer,
     if (CacheManager::load_metadata(meta_file, meta)) {
         try {
             cache_ok =
-                meta.value("version", -1) == kCacheVersion && meta.value("radius",   -1) == light.radius && meta.value("fall_off", -1) == light.fall_off && meta.value("intensity",-1) == light.intensity && meta.value("blur_passes", -1) == blur_passes && meta.contains("color") && meta["color"].is_array() && meta["color"].size() == 3 && meta["color"][0].get<int>() == light.color.r && meta["color"][1].get<int>() == light.color.g && meta["color"][2].get<int>() == light.color.b;
+                meta.value("version", -1) == kLightCacheVersion && meta.value("radius",   -1) == light.radius && meta.value("fall_off", -1) == light.fall_off && meta.value("intensity",-1) == light.intensity && meta.value("blur_passes", -1) == blur_passes && meta.contains("color") && meta["color"].is_array() && meta["color"].size() == 3 && meta["color"][0].get<int>() == light.color.r && meta["color"][1].get<int>() == light.color.g && meta["color"][2].get<int>() == light.color.b;
         } catch (...) {
             cache_ok = false;
         }
@@ -237,7 +241,7 @@ SDL_Texture* GenerateLight::generate(SDL_Renderer* renderer,
     CacheManager::save_surface_as_png(surf, img_file);
 
     json new_meta;
-    new_meta["version"]     = kCacheVersion;
+    new_meta["version"]     = kLightCacheVersion;
     new_meta["radius"]      = light.radius;
     new_meta["fall_off"]    = light.fall_off;
     new_meta["intensity"]   = light.intensity;

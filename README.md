@@ -51,7 +51,6 @@ This is the complete flow from content to pixels each frame, and how core data t
   - Identity: `name`, `type`, `start_animation`, `z_threshold`, `tags`, `flipable`, `scale_factor`.
   - Animations: `std::map<std::string, Animation>` keyed by trigger/id.
   - Geometry: `areas` (named polygons for collision/shading/passability).
-  - Lights: `light_sources`, `orbital_light_sources`.
   - Children: authoring hints used by tools.
   - Controller: `custom_controller_key` (binds to a C++ controller).
   - Derived: `moving_asset` (true if any Animation indicates movement).
@@ -70,7 +69,7 @@ This is the complete flow from content to pixels each frame, and how core data t
 - `Asset` (runtime instance)
   - `info` (shared_ptr<AssetInfo>), `controller_` (unique_ptr<AssetController>), `anim_` (unique_ptr<AnimationUpdate>).
   - `current_animation` (string id) and `current_frame` (AnimationFrame*).
-  - `pos`, `z_index`, `alpha`, `children`, `areas`, and light attachments.
+  - `pos`, `z_index`, `alpha`, `children`, and defined areas.
 
 - `AnimationUpdate` (movement and animation driver)
   - Controller-facing API: `set_idle`, `set_pursue`, `set_run`, `set_orbit`/`set_orbit_ccw`/`set_orbit_cw`, `set_patrol`, `set_serpentine`, `set_animation_now`, `set_animation_qued`, `set_mode_none`.
@@ -91,16 +90,15 @@ Asset (runtime)
 ├─ controller_: unique_ptr<AssetController>
 ├─ anim_: unique_ptr<AnimationUpdate>
 ├─ current_animation: string
-├─ current_frame: AnimationFrame*
-├─ children: vector<Asset*>
-└─ areas, lights, z, pos, alpha, etc.
+ ├─ current_frame: AnimationFrame*
+ ├─ children: vector<Asset*>
+ └─ areas, z, pos, alpha, etc.
 
 AssetInfo (definition)
 ├─ name, type, start_animation, z_threshold, tags, flipable, scale_factor
 ├─ moving_asset: bool (derived)
 ├─ animations: map<string, Animation>
 ├─ areas: vector<NamedArea>
-├─ light_sources, orbital_light_sources
 ├─ children: vector<ChildInfo>
 └─ custom_controller_key
 

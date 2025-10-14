@@ -54,10 +54,6 @@ private:
     bool           debugging = false;
     bool           low_quality_rendering_ = false;
 
-    SDL_Texture*   scene_target_tex_    = nullptr;
-    SDL_Texture*   post_small_tex_a_    = nullptr;
-    SDL_Texture*   post_small_tex_b_    = nullptr;
-
     std::unordered_set<Asset*> last_active_assets_;
 
 };

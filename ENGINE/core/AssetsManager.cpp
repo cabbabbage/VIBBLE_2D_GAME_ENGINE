@@ -462,11 +462,6 @@ void Assets::ensure_dev_controls() {
 }
 
 void Assets::update_closest_assets(Asset* player, int max_count) {
-    for (Asset* asset : closest_assets) {
-        if (asset) {
-            asset->set_render_player_light(false);
-        }
-    }
     closest_assets.clear();
 
     if (!player || max_count <= 0) {
@@ -549,7 +544,6 @@ void Assets::update_closest_assets(Asset* player, int max_count) {
             continue;
         }
         closest_assets.push_back(asset);
-        asset->set_render_player_light(true);
     }
 }
 

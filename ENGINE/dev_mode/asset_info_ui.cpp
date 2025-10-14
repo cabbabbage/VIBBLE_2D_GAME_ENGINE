@@ -509,7 +509,7 @@ void AssetInfoUI::update(const Input& input, int screen_w, int screen_h) {
     bool shading_requires_high_quality = false;
     if (visible_ && info_) {
         if (lighting_section_ && lighting_section_->is_expanded()) {
-            lighting_requires_high_quality = info_->generate_rays || !info_->light_sources.empty();
+            lighting_requires_high_quality = info_->generate_rays;
         }
         if (shading_section_ && shading_section_->is_expanded()) {
             shading_requires_high_quality = shading_section_->shading_enabled();

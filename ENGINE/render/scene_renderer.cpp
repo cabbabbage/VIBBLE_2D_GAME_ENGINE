@@ -63,19 +63,6 @@ SceneRenderer::~SceneRenderer() {
                 SDL_DestroyTexture(fullscreen_light_tex_);
                 fullscreen_light_tex_ = nullptr;
         }
-        if (scene_target_tex_) {
-                SDL_DestroyTexture(scene_target_tex_);
-                scene_target_tex_ = nullptr;
-        }
-        if (post_small_tex_a_) {
-                SDL_DestroyTexture(post_small_tex_a_);
-                post_small_tex_a_ = nullptr;
-        }
-        if (post_small_tex_b_) {
-                SDL_DestroyTexture(post_small_tex_b_);
-                post_small_tex_b_ = nullptr;
-        }
-
 }
 
 SDL_Renderer* SceneRenderer::get_renderer() const {
@@ -87,20 +74,6 @@ void SceneRenderer::set_low_quality_rendering(bool enabled) {
                 return;
         }
         low_quality_rendering_ = enabled;
-        if (enabled) {
-                if (scene_target_tex_) {
-                        SDL_DestroyTexture(scene_target_tex_);
-                        scene_target_tex_ = nullptr;
-                }
-                if (post_small_tex_a_) {
-                        SDL_DestroyTexture(post_small_tex_a_);
-                        post_small_tex_a_ = nullptr;
-                }
-                if (post_small_tex_b_) {
-                        SDL_DestroyTexture(post_small_tex_b_);
-                        post_small_tex_b_ = nullptr;
-                }
-        }
 }
 
 void SceneRenderer::apply_map_light_config(const nlohmann::json& data) {
@@ -173,7 +146,7 @@ bool SceneRenderer::shouldRegen(Asset* a) {
         const bool locked_animation = a->is_current_animation_locked_in_progress();
         const bool treat_as_static = a->static_frame || locked_animation;
 
-        return !final_texture || shading_group_due || !treat_as_static || a->get_render_player_light();
+        return !final_texture || shading_group_due || !treat_as_static;
 }
 
 SDL_Rect SceneRenderer::get_scaled_position_rect(Asset* a,
@@ -228,55 +201,10 @@ void SceneRenderer::render() {
         main_light_source_.update();
     }
 
-    static Uint8 kPostOverlayAlpha = 255;
-
-    const bool use_postprocess = !low_quality_rendering_;
-
-    auto ensure_target = [&](SDL_Texture*& tex, int w, int h) {
-        int tw = 0, th = 0; Uint32 fmt = 0; int access = 0;
-        if (tex && SDL_QueryTexture(tex, &fmt, &access, &tw, &th) == 0) {
-            if (tw == w && th == h && access == SDL_TEXTUREACCESS_TARGET) return true;
-            SDL_DestroyTexture(tex); tex = nullptr;
-        }
-        tex = SDL_CreateTexture(renderer_, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET, w, h);
-        if (!tex) return false;
-        SDL_SetTextureBlendMode(tex, SDL_BLENDMODE_BLEND);
-        #if SDL_VERSION_ATLEAST(2,0,12)
-        SDL_SetTextureScaleMode(tex, SDL_ScaleModeBest);
-        #endif
-        return true;
-};
-    if (use_postprocess) {
-        if (!ensure_target(scene_target_tex_, screen_width_, screen_height_)) {
-
-            SDL_SetRenderTarget(renderer_, nullptr);
-            SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND);
-            SDL_SetRenderDrawColor(renderer_, SLATE_COLOR.r, SLATE_COLOR.g, SLATE_COLOR.b, 255);
-            SDL_RenderClear(renderer_);
-        } else {
-            SDL_SetRenderTarget(renderer_, scene_target_tex_);
-            SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND);
-            SDL_SetRenderDrawColor(renderer_, SLATE_COLOR.r, SLATE_COLOR.g, SLATE_COLOR.b, 255);
-            SDL_RenderClear(renderer_);
-        }
-    } else {
-        if (scene_target_tex_) {
-            SDL_DestroyTexture(scene_target_tex_);
-            scene_target_tex_ = nullptr;
-        }
-        if (post_small_tex_a_) {
-            SDL_DestroyTexture(post_small_tex_a_);
-            post_small_tex_a_ = nullptr;
-        }
-        if (post_small_tex_b_) {
-            SDL_DestroyTexture(post_small_tex_b_);
-            post_small_tex_b_ = nullptr;
-        }
-        SDL_SetRenderTarget(renderer_, nullptr);
-        SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND);
-        SDL_SetRenderDrawColor(renderer_, SLATE_COLOR.r, SLATE_COLOR.g, SLATE_COLOR.b, 255);
-        SDL_RenderClear(renderer_);
-    }
+    SDL_SetRenderTarget(renderer_, nullptr);
+    SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND);
+    SDL_SetRenderDrawColor(renderer_, SLATE_COLOR.r, SLATE_COLOR.g, SLATE_COLOR.b, 255);
+    SDL_RenderClear(renderer_);
 
     const auto& camera_state = assets_->getView();
     float scale = camera_state.get_scale();
@@ -358,31 +286,10 @@ void SceneRenderer::render() {
 
     last_active_assets_ = std::move(current_active_assets);
 
-    SDL_SetRenderTarget(renderer_, use_postprocess ? scene_target_tex_ : nullptr);
+    SDL_SetRenderTarget(renderer_, nullptr);
     z_light_pass_->render(debugging);
 
-    if (use_postprocess && scene_target_tex_) {
-        SDL_SetRenderTarget(renderer_, nullptr);
-        SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND);
-        SDL_SetRenderDrawColor(renderer_, 0, 0, 0, 255);
-        SDL_RenderClear(renderer_);
-
-        Uint8 base_alpha = static_cast<Uint8>(255 - kPostOverlayAlpha);
-        SDL_SetTextureBlendMode(scene_target_tex_, SDL_BLENDMODE_BLEND);
-        SDL_SetTextureAlphaMod(scene_target_tex_, base_alpha);
-        SDL_RenderCopy(renderer_, scene_target_tex_, nullptr, nullptr);
-
-        if (kPostOverlayAlpha > 0) {
-            SDL_SetTextureAlphaMod(scene_target_tex_, kPostOverlayAlpha);
-            SDL_RenderCopy(renderer_, scene_target_tex_, nullptr, nullptr);
-            SDL_SetTextureAlphaMod(scene_target_tex_, 255);
-        } else {
-            SDL_SetTextureAlphaMod(scene_target_tex_, 255);
-        }
-
-    } else {
-        SDL_SetRenderTarget(renderer_, nullptr);
-    }
+    SDL_SetRenderTarget(renderer_, nullptr);
 
     if (assets_) {
         assets_->render_overlays(renderer_);

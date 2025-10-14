@@ -5,7 +5,6 @@
 #include "core/asset_list.hpp"
 #include "render/camera.hpp"
 #include "utils/area_helpers.hpp"
-#include "utils/light_utils.hpp"
 #include "asset/asset_types.hpp"
 #include <filesystem>
 #include <iostream>
@@ -115,14 +114,12 @@ Asset::Asset(const Asset& o)
 , z_offset(o.z_offset)
 , active(o.active)
 , flipped(o.flipped)
-, render_player_light(o.render_player_light)
 , generate_rays(o.generate_rays)
 , ray_strength(o.ray_strength)
 , distance_to_player_sq(o.distance_to_player_sq)
 , distance_from_camera(o.distance_from_camera)
 , angle_from_camera(o.angle_from_camera)
 , children(o.children)
-, static_lights(o.static_lights)
 , depth(o.depth)
 , is_shaded(o.is_shaded)
 , dead(o.dead)
@@ -167,15 +164,13 @@ Asset& Asset::operator=(const Asset& o) {
 	z_index              = o.z_index;
 	z_offset             = o.z_offset;
 	active               = o.active;
-	flipped              = o.flipped;
-        render_player_light  = o.render_player_light;
+        flipped              = o.flipped;
         generate_rays        = o.generate_rays;
         ray_strength         = o.ray_strength;
         distance_to_player_sq = o.distance_to_player_sq;
         distance_from_camera = o.distance_from_camera;
         angle_from_camera = o.angle_from_camera;
-	children             = o.children;
-	static_lights        = o.static_lights;
+        children             = o.children;
 	depth                = o.depth;
         is_shaded            = o.is_shaded;
 	dead                 = o.dead;
@@ -588,22 +583,9 @@ int  Asset::get_shading_group() const { return shading_group; }
 bool Asset::is_shading_group_set() const { return shading_group_set; }
 
 void Asset::set_shading_group(int x){
-	shading_group = x;
-	shading_group_set = true;
+        shading_group = x;
+        shading_group_set = true;
 }
-
-void Asset::add_static_light_source(LightSource* light, SDL_Point world, Asset* owner) {
-    if (!light) return;
-
-    StaticLight sl;
-    sl.source = light;
-    sl.offset = { world.x - pos.x, world.y - pos.y };
-    sl.alpha_percentage = LightUtils::calculate_static_alpha_percentage(this, owner);
-    static_lights.push_back(sl);
-}
-
-void Asset::set_render_player_light(bool value) { render_player_light = value; }
-bool Asset::get_render_player_light() const { return render_player_light; }
 
 Area Asset::get_area(const std::string& name) const {
         if (!info) {

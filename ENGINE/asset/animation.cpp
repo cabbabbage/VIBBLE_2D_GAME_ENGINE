@@ -467,12 +467,13 @@ void Animation::load(const std::string& trigger,
                                   << " found metadata (revision "
                                   << meta.value("scale_profile_revision", static_cast<std::uint64_t>(0))
                                   << ") expecting revision " << expected_revision << "\n";
+                        const bool meta_has_masks = meta.value("has_masks", false);
                         bool meta_ok = (
                             meta.value("cache_version", 0) == kAnimationCacheVersion &&
                             meta.value("frame_count", -1) == expected_frames &&
                             meta.value("original_width", -1) == orig_w &&
                             meta.value("original_height", -1) == orig_h &&
-                            meta.value("has_masks", false));
+                            (meta_has_masks == info.is_shaded));
                         if (meta_ok) {
                                 if (meta.contains("scale_steps") && meta["scale_steps"].is_array()) {
                                         const auto& stored = meta["scale_steps"];
@@ -708,7 +709,7 @@ void Animation::load(const std::string& trigger,
                         }
                         new_meta["scale_steps"] = std::move(step_arr);
                         new_meta["scale_profile_revision"] = expected_revision;
-                        new_meta["has_masks"] = true;
+                        new_meta["has_masks"] = info.is_shaded;
                         cache.save_metadata(meta_file, new_meta);
                         std::cout << "[AnimationLoader] " << info.name << "::" << trigger
                                   << " wrote metadata with steps "
@@ -716,23 +717,27 @@ void Animation::load(const std::string& trigger,
                                   << " revision " << expected_revision << "\n";
                 }
 
-                auto mask_result = GenerateFadedMask::BuildMasks(info.name, trigger, expected_steps, variant_surfaces);
-                mask_surfaces            = std::move(mask_result.first);
-                masks_loaded_from_cache  = mask_result.second;
-                if (mask_surfaces.size() != variant_surfaces.size()) {
-                        mask_surfaces.resize(variant_surfaces.size());
-                }
-                if (masks_loaded_from_cache) {
-                        std::cout << "[AnimationLoader] " << info.name << "::" << trigger
-                                  << " loaded faded mask surfaces from cache\n";
+                if (info.is_shaded) {
+                        auto mask_result = GenerateFadedMask::BuildMasks(info.name, trigger, expected_steps, variant_surfaces);
+                        mask_surfaces            = std::move(mask_result.first);
+                        masks_loaded_from_cache  = mask_result.second;
+                        if (mask_surfaces.size() != variant_surfaces.size()) {
+                                mask_surfaces.resize(variant_surfaces.size());
+                        }
+                        if (masks_loaded_from_cache) {
+                                std::cout << "[AnimationLoader] " << info.name << "::" << trigger
+                                          << " loaded faded mask surfaces from cache\n";
+                        } else {
+                                const std::size_t mask_frame_count = (!mask_surfaces.empty() && !mask_surfaces.front().empty())
+                                                                         ? mask_surfaces.front().size()
+                                                                         : 0;
+                                std::cout << "[AnimationLoader] " << info.name << "::" << trigger
+                                          << " generated " << mask_frame_count
+                                          << " faded mask frame(s) across " << mask_surfaces.size()
+                                          << " variant(s)\n";
+                        }
                 } else {
-                        const std::size_t mask_frame_count = (!mask_surfaces.empty() && !mask_surfaces.front().empty())
-                                                                 ? mask_surfaces.front().size()
-                                                                 : 0;
-                        std::cout << "[AnimationLoader] " << info.name << "::" << trigger
-                                  << " generated " << mask_frame_count
-                                  << " faded mask frame(s) across " << mask_surfaces.size()
-                                  << " variant(s)\n";
+                        mask_surfaces.resize(variant_surfaces.size());
                 }
 
                 if (!variant_surfaces[0].empty() && variant_surfaces[0][0] && (scaled_sprite_w <= 0 || scaled_sprite_h <= 0)) {

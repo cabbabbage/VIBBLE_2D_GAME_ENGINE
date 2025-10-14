@@ -10,7 +10,6 @@
 
 #include "utils/area.hpp"
 #include "asset_info.hpp"
-#include "utils/light_source.hpp"
 
 #include "asset_controller.hpp"
 #include "animation_update/animation_update.hpp"
@@ -23,12 +22,6 @@ class AnimationFrame;
 class AssetInfoUI;
 class RenderAsset;
 class AssetList;
-
-struct StaticLight {
-    LightSource* source = nullptr;
-    SDL_Point offset{0, 0};
-    double alpha_percentage = 1.0;
-};
 
 class Asset {
 
@@ -77,9 +70,6 @@ class Asset {
 
     const ScaleUsageStats& last_scale_usage() const { return last_scale_usage_; }
 
-    void add_static_light_source(LightSource* light, SDL_Point world, Asset* owner);
-    void set_render_player_light(bool value);
-    bool get_render_player_light() const;
     void set_z_offset(int z);
     void set_shading_group(int x);
     bool is_shading_group_set() const;
@@ -119,7 +109,6 @@ class Asset {
     int z_offset = 0;
     bool active = false;
     bool flipped = false;
-    bool render_player_light = false;
     bool generate_rays = false;
     int ray_strength = 0;
     float distance_to_player_sq = std::numeric_limits<float>::infinity();
@@ -127,7 +116,6 @@ class Asset {
     float angle_from_camera = 0.0f;
 
     std::vector<Asset*> children;
-    std::vector<StaticLight> static_lights;
     int depth = 0;
     bool is_shaded = false;
     bool dead = false;
