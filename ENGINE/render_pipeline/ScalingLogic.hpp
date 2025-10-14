@@ -209,6 +209,22 @@ struct ScalingLogic {
         return state.data.value("new_values", false);
     }
 
+    static inline bool HasPendingUsageData() {
+        UsageState& state = usage_state();
+        std::lock_guard<std::mutex> guard(state.mutex);
+        ensure_loaded(state);
+        return state.data.value("new_values", false);
+    }
+
+    static inline void ClearPendingUsageData() {
+        UsageState& state = usage_state();
+        std::lock_guard<std::mutex> guard(state.mutex);
+        ensure_loaded(state);
+        if (update_new_values_flag(state, false)) {
+            save_to_disk(state);
+        }
+    }
+
     static inline bool UsageTrackingEnabled() {
         UsageState& state = usage_state();
         std::lock_guard<std::mutex> guard(state.mutex);

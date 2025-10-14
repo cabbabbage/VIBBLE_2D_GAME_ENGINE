@@ -131,7 +131,8 @@ void Animation::load(const std::string& trigger,
                      int& scaled_sprite_w,
                      int& scaled_sprite_h,
                      int& original_canvas_width,
-                     int& original_canvas_height)
+                     int& original_canvas_height,
+                     bool scaling_refresh_pending)
 {
         CacheManager cache;
         const auto load_start = std::chrono::steady_clock::now();
@@ -139,22 +140,31 @@ void Animation::load(const std::string& trigger,
         bool       reused_animation  = false;
         const double safe_scale = sanitize_scale_factor(scale_factor);
         clear_texture_cache();
+        const bool prefer_cached = !scaling_refresh_pending;
+        auto normalize_steps = [](std::vector<float>& steps) {
+                if (steps.empty()) {
+                        steps.push_back(1.0f);
+                        return;
+                }
+                std::sort(steps.begin(), steps.end(), std::greater<float>());
+                steps.erase(std::unique(steps.begin(), steps.end(), [](float a, float b) {
+                        return std::fabs(a - b) <= 1e-4f;
+                }), steps.end());
+                if (steps.empty()) {
+                        steps.push_back(1.0f);
+                        return;
+                }
+                if (std::fabs(steps.front() - 1.0f) > 1e-4f) {
+                        steps.insert(steps.begin(), 1.0f);
+                }
+        };
         variant_steps_ = info.scale_variants;
         if (variant_steps_.empty()) {
                 const auto& defaults = render_pipeline::ScalingLogic::DefaultScaleSteps();
                 variant_steps_.assign(defaults.begin(), defaults.end());
         }
-        if (variant_steps_.empty()) {
-                variant_steps_.push_back(1.0f);
-        }
-        std::sort(variant_steps_.begin(), variant_steps_.end(), std::greater<float>());
-        variant_steps_.erase(std::unique(variant_steps_.begin(), variant_steps_.end(), [](float a, float b) {
-                return std::fabs(a - b) <= 1e-4f;
-        }), variant_steps_.end());
-        if (std::fabs(variant_steps_.front() - 1.0f) > 1e-4f) {
-                variant_steps_.insert(variant_steps_.begin(), 1.0f);
-        }
-        const std::size_t variant_count = variant_steps_.size();
+        normalize_steps(variant_steps_);
+        const std::size_t initial_variant_count = variant_steps_.size();
         if (anim_json.contains("source")) {
                 const auto& s = anim_json["source"];
                 try {
@@ -258,9 +268,9 @@ void Animation::load(const std::string& trigger,
                                 new_caches.reserve(src_anim.frames.size());
                                 for (std::size_t frame_idx = 0; frame_idx < src_anim.frames.size(); ++frame_idx) {
                                         FrameCache cache_entry;
-                                        cache_entry.resize(variant_count);
+                                        cache_entry.resize(initial_variant_count);
                                         bool base_ok = false;
-                                        for (std::size_t variant_idx = 0; variant_idx < variant_count; ++variant_idx) {
+                                        for (std::size_t variant_idx = 0; variant_idx < initial_variant_count; ++variant_idx) {
                                                 SDL_Texture* source_tex = src_anim.frame_variant(frame_idx, variant_idx);
                                                 if (!source_tex) {
                                                         cache_entry.textures[variant_idx] = nullptr;
@@ -338,7 +348,7 @@ void Animation::load(const std::string& trigger,
 		if (expected_frames == 0) return;
                 bool use_cache = false;
 		nlohmann::json meta;
-                const auto expected_steps = render_pipeline::ScalingLogic::PercentSteps(variant_steps_);
+                std::vector<int> expected_steps = render_pipeline::ScalingLogic::PercentSteps(variant_steps_);
                 const std::uint64_t expected_revision = info.scale_profile_revision;
                 if (cache.load_metadata(meta_file, meta)) {
                         bool meta_ok = (
@@ -349,16 +359,37 @@ void Animation::load(const std::string& trigger,
                         if (meta_ok) {
                                 if (meta.contains("scale_steps") && meta["scale_steps"].is_array()) {
                                         const auto& stored = meta["scale_steps"];
-                                        if (stored.size() == expected_steps.size()) {
-                                                for (std::size_t idx = 0; idx < expected_steps.size(); ++idx) {
-                                                        int stored_pct = stored[idx].get<int>();
-                                                        if (stored_pct != expected_steps[idx]) {
-                                                                meta_ok = false;
-                                                                break;
-                                                        }
+                                        std::vector<int> stored_steps;
+                                        stored_steps.reserve(stored.size());
+                                        bool stored_valid = true;
+                                        for (const auto& value : stored) {
+                                                if (!value.is_number_integer()) {
+                                                        stored_valid = false;
+                                                        break;
                                                 }
-                                        } else {
+                                                stored_steps.push_back(value.get<int>());
+                                        }
+                                        if (!stored_valid) {
                                                 meta_ok = false;
+                                        } else if (stored_steps != expected_steps) {
+                                                if (prefer_cached) {
+                                                        std::vector<float> adopted_steps;
+                                                        adopted_steps.reserve(stored_steps.size());
+                                                        for (int percent : stored_steps) {
+                                                                const float scale = std::clamp(percent / 100.0f, 0.05f, 2.0f);
+                                                                adopted_steps.push_back(scale);
+                                                        }
+                                                        variant_steps_ = std::move(adopted_steps);
+                                                        normalize_steps(variant_steps_);
+                                                        if (variant_steps_.empty()) {
+                                                                meta_ok = false;
+                                                        } else {
+                                                                info.scale_variants = variant_steps_;
+                                                                expected_steps = render_pipeline::ScalingLogic::PercentSteps(variant_steps_);
+                                                        }
+                                                } else {
+                                                        meta_ok = false;
+                                                }
                                         }
                                 } else {
                                         meta_ok = false;
@@ -366,13 +397,23 @@ void Animation::load(const std::string& trigger,
                         }
                         if (meta_ok) {
                                 const std::uint64_t stored_revision = meta.value("scale_profile_revision", static_cast<std::uint64_t>(0));
-                                if (stored_revision != expected_revision) {
+                                if (!prefer_cached && stored_revision != expected_revision) {
                                         meta_ok = false;
                                 }
                         }
                         use_cache = meta_ok;
                 }
 
+                std::size_t variant_count = variant_steps_.size();
+                if (variant_count == 0) {
+                        variant_steps_.push_back(1.0f);
+                        variant_count = 1;
+                        info.scale_variants = variant_steps_;
+                        expected_steps = render_pipeline::ScalingLogic::PercentSteps(variant_steps_);
+                }
+                if (!prefer_cached) {
+                        use_cache = false;
+                }
                 std::vector<std::vector<SDL_Surface*>> variant_surfaces(variant_count);
                 if (use_cache) {
                         bool variants_loaded = true;
@@ -406,6 +447,21 @@ void Animation::load(const std::string& trigger,
                                         scaled_sprite_h = scaled_dimension(variant_surfaces[0][0]->h, safe_scale);
                                 }
                         }
+                }
+
+                if (!use_cache && prefer_cached) {
+                        const auto& defaults = render_pipeline::ScalingLogic::DefaultScaleSteps();
+                        variant_steps_.assign(defaults.begin(), defaults.end());
+                        normalize_steps(variant_steps_);
+                        info.scale_variants = variant_steps_;
+                        variant_count = variant_steps_.size();
+                        if (variant_count == 0) {
+                                variant_steps_.push_back(1.0f);
+                                variant_count = 1;
+                        }
+                        expected_steps = render_pipeline::ScalingLogic::PercentSteps(variant_steps_);
+                        variant_surfaces.clear();
+                        variant_surfaces.resize(variant_count);
                 }
 
                 auto cleanup_variant_directories = [&](const std::string& folder) {

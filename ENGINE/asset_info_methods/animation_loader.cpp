@@ -29,6 +29,7 @@ void AnimationLoader::load(AssetInfo& info, SDL_Renderer* renderer) {
         std::string root_cache = "cache/" + info.name + "/animations";
 
         render_pipeline::ScalingLogic::ConfigureUsageStorage(std::filesystem::path("loading") / "scaling_profiles.json");
+        const bool scaling_refresh_pending = render_pipeline::ScalingLogic::HasPendingUsageData();
         const auto profile = render_pipeline::ScalingLogic::ProfileForAsset(info.name);
         info.scale_variants = profile.steps;
         if (info.scale_variants.empty()) {
@@ -60,7 +61,7 @@ void AnimationLoader::load(AssetInfo& info, SDL_Renderer* renderer) {
 			}
 		}
 		Animation anim;
-		anim.load(trigger, anim_json, info, info.dir_path_, root_cache, info.scale_factor, renderer, base_sprite, scaled_sprite_w, scaled_sprite_h, info.original_canvas_width, info.original_canvas_height);
+                anim.load(trigger, anim_json, info, info.dir_path_, root_cache, info.scale_factor, renderer, base_sprite, scaled_sprite_w, scaled_sprite_h, info.original_canvas_width, info.original_canvas_height, scaling_refresh_pending);
 		anim.on_end_mapping = anim_json.value("on_end", std::string{"default"});
 		if (!anim.frames.empty()) {
 			info.animations[trigger] = std::move(anim);
@@ -70,14 +71,18 @@ void AnimationLoader::load(AssetInfo& info, SDL_Renderer* renderer) {
 		const std::string& trigger = item.first;
 		const auto& anim_json = item.second;
 		Animation anim;
-		anim.load(trigger, anim_json, info, info.dir_path_, root_cache, info.scale_factor, renderer, base_sprite, scaled_sprite_w, scaled_sprite_h, info.original_canvas_width, info.original_canvas_height);
+                anim.load(trigger, anim_json, info, info.dir_path_, root_cache, info.scale_factor, renderer, base_sprite, scaled_sprite_w, scaled_sprite_h, info.original_canvas_width, info.original_canvas_height, scaling_refresh_pending);
 		anim.on_end_mapping = anim_json.value("on_end", std::string{});
 		if (!anim.frames.empty()) {
 			info.animations[trigger] = std::move(anim);
 		}
-	}
+        }
 
-	info.moving_asset = false;
+        if (scaling_refresh_pending) {
+                render_pipeline::ScalingLogic::ClearPendingUsageData();
+        }
+
+        info.moving_asset = false;
 	for (const auto& kv : info.animations) {
 		const Animation& a = kv.second;
 		if (a.movment || a.total_dx != 0 || a.total_dy != 0) { info.moving_asset = true; break; }
