@@ -2,6 +2,7 @@
 #include "asset/Asset.hpp"
 #include "render/camera.hpp"
 #include <algorithm>
+#include <cstddef>
 #include <vector>
 #include <iostream>
 #include <cmath>
@@ -75,8 +76,8 @@ void LightMap::render(bool debugging, bool light_map_only) {
 }
 
 void LightMap::collect_layers(std::vector<LightEntry>& out) {
-        const float scale = assets_ ? assets_->getView().get_scale() : 1.0f;
-        const float inv_scale = (scale > 0.0f && std::isfinite(scale)) ? (1.0f / scale) : 1.0f;
+        const float camera_scale = assets_ ? assets_->getView().get_scale() : 1.0f;
+        const float inv_scale = (camera_scale > 0.0f && std::isfinite(camera_scale)) ? (1.0f / camera_scale) : 1.0f;
         constexpr int min_visible_w = 1;
         constexpr int min_visible_h = 1;
         Uint8 main_alpha = main_light_.get_current_color().a;
@@ -106,28 +107,67 @@ void LightMap::collect_layers(std::vector<LightEntry>& out) {
                 }
 
                 const bool flipped = asset->flipped;
-                const float base_scale = (asset->info->scale_factor > 0.0f && std::isfinite(asset->info->scale_factor))
-                                             ? asset->info->scale_factor
-                                             : 1.0f;
+                const auto& scale_usage = asset->last_scale_usage();
+                float texture_scale = scale_usage.texture_scale;
+                if (!std::isfinite(texture_scale) || texture_scale <= 0.0f) {
+                        texture_scale = 1.0f;
+                }
+                const float asset_scale_factor = (asset->info->scale_factor > 0.0f && std::isfinite(asset->info->scale_factor))
+                                                     ? asset->info->scale_factor
+                                                     : 1.0f;
+                float world_scale = asset_scale_factor;
+                const float requested_scale = scale_usage.requested_scale;
+                if (std::isfinite(requested_scale) && requested_scale > 0.0f &&
+                    std::isfinite(camera_scale) && camera_scale > 0.0f) {
+                        world_scale = requested_scale * camera_scale;
+                }
+                if (!std::isfinite(world_scale) || world_scale <= 0.0f) {
+                        world_scale = 1.0f;
+                }
 
                 for (const LightSource& light : lights) {
                         if (light.intensity <= 0) {
                                 continue;
                         }
 
-                        SDL_Texture* tex = light.texture_for_scale(scale);
+                        const int variant_index = std::clamp(scale_usage.variant_index, 0,
+                                                             static_cast<int>(light.cached_variants.size()) - 1);
+                        SDL_Texture* tex = nullptr;
+                        if (variant_index >= 0 && variant_index < static_cast<int>(light.cached_variants.size())) {
+                                tex = light.cached_variants[static_cast<std::size_t>(variant_index)];
+                        }
+                        if (!tex) {
+                                tex = light.texture;
+                        }
                         if (!tex) {
                                 continue;
                         }
 
-                        int tex_w = 0;
-                        int tex_h = 0;
-                        if (SDL_QueryTexture(tex, nullptr, nullptr, &tex_w, &tex_h) != 0 || tex_w <= 0 || tex_h <= 0) {
+                        int base_w = light.cached_w;
+                        int base_h = light.cached_h;
+                        if ((base_w <= 0 || base_h <= 0) && light.texture) {
+                                SDL_QueryTexture(light.texture, nullptr, nullptr, &base_w, &base_h);
+                        }
+                        if (base_w <= 0 || base_h <= 0) {
+                                int queried_w = 0;
+                                int queried_h = 0;
+                                if (SDL_QueryTexture(tex, nullptr, nullptr, &queried_w, &queried_h) == 0 &&
+                                    queried_w > 0 && queried_h > 0) {
+                                        if (std::isfinite(texture_scale) && texture_scale > 0.0f) {
+                                                base_w = std::max(1, static_cast<int>(std::lround(static_cast<float>(queried_w) / texture_scale)));
+                                                base_h = std::max(1, static_cast<int>(std::lround(static_cast<float>(queried_h) / texture_scale)));
+                                        } else {
+                                                base_w = queried_w;
+                                                base_h = queried_h;
+                                        }
+                                }
+                        }
+                        if (base_w <= 0 || base_h <= 0) {
                                 continue;
                         }
 
-                        const int scaled_w = std::max(1, static_cast<int>(std::lround(static_cast<float>(tex_w) * base_scale)));
-                        const int scaled_h = std::max(1, static_cast<int>(std::lround(static_cast<float>(tex_h) * base_scale)));
+                        const int scaled_w = std::max(1, static_cast<int>(std::lround(static_cast<float>(base_w) * world_scale)));
+                        const int scaled_h = std::max(1, static_cast<int>(std::lround(static_cast<float>(base_h) * world_scale)));
 
                         const int offset_x = flipped ? -light.offset_x : light.offset_x;
                         SDL_Point light_pos{asset->pos.x + offset_x, asset->pos.y + light.offset_y};

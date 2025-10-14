@@ -1,44 +1,47 @@
 {
-  "asset_name": "Small_Rock",
-  "asset_type": "Object",
-  "animations": {
-    "default": {
-      "source": {
-        "kind": "folder",
-        "path": "default",
-        "name": null
-      },
-      "flipped_source": false,
-      "reverse_source": false,
-      "locked": false,
-      "speed_factor": 1,
-      "number_of_frames": 2,
-      "movement": [
-        [
-          0,
-          0
-        ],
-        [
-          0,
-          0
-        ]
-      ]
-    }
-  },
-  "impassable_area": null,
-  "z_threshold": 19,
-  "size_settings": {
-    "scale_percentage": 50
-  },
-  "min_same_type_distance": 300,
-  "tags": [
-    "passable"
-  ],
-  "rnd_spawn_min": 300,
-  "rnd_spawn_max": 400,
-  "min_distance_all": 0,
-  "anti_tags": [],
-  "can_invert": true,
-  "update_radius": 1000,
-  "render_radius": 1000
+    "animations": {
+        "default": {
+            "flipped_source": false,
+            "locked": false,
+            "movement": [
+                [
+                    0,
+                    0
+                ],
+                [
+                    0,
+                    0
+                ]
+            ],
+            "number_of_frames": 2,
+            "reverse_source": false,
+            "source": {
+                "kind": "folder",
+                "name": null,
+                "path": "default"
+            },
+            "speed_factor": 1
+        }
+    },
+    "anti_tags": [],
+    "asset_name": "Small_Rock",
+    "asset_type": "texture",
+    "can_invert": true,
+    "generate_rays": false,
+    "impassable_area": null,
+    "min_distance_all": 0,
+    "min_same_type_distance": 300,
+    "neighbor_search_distance": 500,
+    "ray_strength": 0,
+    "render_radius": 1000,
+    "rnd_spawn_max": 400,
+    "rnd_spawn_min": 300,
+    "size_settings": {
+        "scale_percentage": 37.0
+    },
+    "tags": [
+        "passable"
+    ],
+    "update_radius": 1000,
+    "z_threshold": 19
 }

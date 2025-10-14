@@ -96,30 +96,6 @@
             ],
             "revision": 3
         },
-        "Small_Rock": {
-            "histogram": [
-                0,
-                0,
-                0,
-                0,
-                597,
-                578,
-                0,
-                0,
-                0,
-                0
-            ],
-            "last_requested_percent": 47,
-            "last_requested_scale": 0.4736842215061188,
-            "last_updated": "2025-10-14T01:51:36Z",
-            "last_used_texture_scale": 0.5,
-            "recommended_percentages": [
-                100,
-                60,
-                50
-            ],
-            "revision": 2
-        },
         "Tree": {
             "histogram": [
                 0,
