@@ -5,6 +5,17 @@
 #include <vector>
 #include <iostream>
 #include <cmath>
+
+namespace {
+
+float compute_luminance(const SDL_Color& color) {
+        // Rec. 709 luminance approximation.
+        return (0.2126f * static_cast<float>(color.r) +
+                0.7152f * static_cast<float>(color.g) +
+                0.0722f * static_cast<float>(color.b)) / 255.0f;
+}
+
+} // namespace
 LightMap::LightMap(SDL_Renderer* renderer,
                    Assets* assets,
                    Global_Light_Source& main_light,
@@ -17,7 +28,9 @@ main_light_(main_light),
 screen_width_(screen_width),
 screen_height_(screen_height),
 fullscreen_light_tex_(fullscreen_light_tex)
-{}
+{
+        virtual_light_map_.clear();
+}
 
 void LightMap::set_fullscreen_light_settings(SDL_Color color, int min_opacity, int max_opacity) {
         fullscreen_light_color_ = SDL_Color{color.r, color.g, color.b, 255};
@@ -28,22 +41,37 @@ void LightMap::set_fullscreen_light_settings(SDL_Color color, int min_opacity, i
         }
 }
 
-void LightMap::render(bool debugging) {
-	if (debugging) std::cout << "[render_asset_lights_z] start\n";
-        static std::vector<LightEntry> z_lights;
-        z_lights.clear();
-        collect_layers(z_lights);
-	const int downscale = 4;
-	const int low_w = screen_width_  / downscale;
-	const int low_h = screen_height_ / downscale;
-	SDL_Texture* prev_target = SDL_GetRenderTarget(renderer_);
-	SDL_Texture* lowres_mask = build_lowres_mask(z_lights, low_w, low_h, downscale);
-	SDL_SetTextureBlendMode(lowres_mask, SDL_BLENDMODE_MOD);
+void LightMap::update_virtual_light_map() {
+        cached_layers_.clear();
+        collect_layers(cached_layers_);
+        cached_layers_ready_ = true;
+        compute_virtual_light_map(cached_layers_);
+}
 
-	SDL_SetRenderTarget(renderer_, prev_target);
-	SDL_RenderCopy(renderer_, lowres_mask, nullptr, nullptr);
-	SDL_DestroyTexture(lowres_mask);
-	if (debugging) std::cout << "[render_asset_lights_z] end\n";
+void LightMap::render(bool debugging) {
+        if (debugging) std::cout << "[render_asset_lights_z] start\n";
+        const int downscale = 4;
+        const int low_w = screen_width_  / downscale;
+        const int low_h = screen_height_ / downscale;
+        const std::vector<LightEntry>* layers_ptr = nullptr;
+        std::vector<LightEntry> transient_layers;
+        if (cached_layers_ready_) {
+                layers_ptr = &cached_layers_;
+        } else {
+                transient_layers.clear();
+                collect_layers(transient_layers);
+                layers_ptr = &transient_layers;
+        }
+
+        SDL_Texture* prev_target = SDL_GetRenderTarget(renderer_);
+        SDL_Texture* lowres_mask = build_lowres_mask(*layers_ptr, low_w, low_h, downscale);
+        SDL_SetTextureBlendMode(lowres_mask, SDL_BLENDMODE_MOD);
+
+        SDL_SetRenderTarget(renderer_, prev_target);
+        SDL_RenderCopy(renderer_, lowres_mask, nullptr, nullptr);
+        SDL_DestroyTexture(lowres_mask);
+        cached_layers_ready_ = false;
+        if (debugging) std::cout << "[render_asset_lights_z] end\n";
 }
 
 void LightMap::collect_layers(std::vector<LightEntry>& out) {
@@ -147,7 +175,7 @@ SDL_Texture* LightMap::build_lowres_mask(const std::vector<LightEntry>& layers,
 };
 		SDL_RenderCopyEx(renderer_, e.tex, nullptr, &scaled_dst, 0, nullptr, e.flip);
 	}
-	return lowres_mask;
+        return lowres_mask;
 }
 
 SDL_Rect LightMap::get_scaled_position_rect(SDL_Point pos, int fw, int fh,
@@ -171,4 +199,84 @@ SDL_Rect LightMap::get_scaled_position_rect(SDL_Point pos, int fw, int fh,
         }
         SDL_Point cp = effects.screen_position;
         return SDL_Rect{ cp.x - sw / 2, cp.y - sh / 2, sw, sh };
+}
+
+void LightMap::compute_virtual_light_map(const std::vector<LightEntry>& layers) {
+        virtual_light_map_.clear();
+        if (screen_width_ <= 0 || screen_height_ <= 0) {
+                return;
+        }
+
+        const float cell_width  = static_cast<float>(screen_width_) / static_cast<float>(VirtualLightMap::kGridWidth);
+        const float cell_height = static_cast<float>(screen_height_) / static_cast<float>(VirtualLightMap::kGridHeight);
+        if (cell_width <= 0.0f || cell_height <= 0.0f) {
+                return;
+        }
+
+        const float cell_area = cell_width * cell_height;
+        for (const LightEntry& entry : layers) {
+                if (entry.dst.w <= 0 || entry.dst.h <= 0 || entry.alpha == 0) {
+                        continue;
+                }
+
+                float luminance = std::clamp(compute_luminance(entry.color_mod), 0.0f, 1.0f);
+                float brightness = (static_cast<float>(entry.alpha) / 255.0f) * luminance;
+                if (brightness <= 0.0f) {
+                        continue;
+                }
+
+                float rect_x0 = static_cast<float>(entry.dst.x);
+                float rect_y0 = static_cast<float>(entry.dst.y);
+                float rect_x1 = rect_x0 + static_cast<float>(entry.dst.w);
+                float rect_y1 = rect_y0 + static_cast<float>(entry.dst.h);
+
+                rect_x0 = std::max(rect_x0, 0.0f);
+                rect_y0 = std::max(rect_y0, 0.0f);
+                rect_x1 = std::min(rect_x1, static_cast<float>(screen_width_));
+                rect_y1 = std::min(rect_y1, static_cast<float>(screen_height_));
+
+                if (rect_x1 <= rect_x0 || rect_y1 <= rect_y0) {
+                        continue;
+                }
+
+                int grid_x0 = static_cast<int>(std::floor(rect_x0 / cell_width));
+                int grid_y0 = static_cast<int>(std::floor(rect_y0 / cell_height));
+                int grid_x1 = static_cast<int>(std::floor((rect_x1 - 1.0f) / cell_width));
+                int grid_y1 = static_cast<int>(std::floor((rect_y1 - 1.0f) / cell_height));
+
+                grid_x0 = std::clamp(grid_x0, 0, VirtualLightMap::kGridWidth - 1);
+                grid_y0 = std::clamp(grid_y0, 0, VirtualLightMap::kGridHeight - 1);
+                grid_x1 = std::clamp(grid_x1, 0, VirtualLightMap::kGridWidth - 1);
+                grid_y1 = std::clamp(grid_y1, 0, VirtualLightMap::kGridHeight - 1);
+
+                for (int gy = grid_y0; gy <= grid_y1; ++gy) {
+                        float cell_y0 = static_cast<float>(gy) * cell_height;
+                        float cell_y1 = cell_y0 + cell_height;
+                        float iy0 = std::max(cell_y0, rect_y0);
+                        float iy1 = std::min(cell_y1, rect_y1);
+                        if (iy1 <= iy0) {
+                                continue;
+                        }
+
+                        for (int gx = grid_x0; gx <= grid_x1; ++gx) {
+                                float cell_x0 = static_cast<float>(gx) * cell_width;
+                                float cell_x1 = cell_x0 + cell_width;
+                                float ix0 = std::max(cell_x0, rect_x0);
+                                float ix1 = std::min(cell_x1, rect_x1);
+                                if (ix1 <= ix0) {
+                                        continue;
+                                }
+
+                                const float area = (ix1 - ix0) * (iy1 - iy0);
+                                if (area <= 0.0f) {
+                                        continue;
+                                }
+
+                                float weight = area / cell_area;
+                                weight = std::clamp(weight, 0.0f, 1.0f);
+                                float& cell_value = virtual_light_map_.at(gx, gy);
+                                cell_value = std::min(1.0f, cell_value + brightness * weight);
+                        }
+                }
+        }
 }

@@ -53,6 +53,10 @@ SceneRenderer::SceneRenderer(SDL_Renderer* renderer,
         z_light_pass_ = std::make_unique<LightMap>(renderer_, assets_, main_light_source_, screen_width_, screen_height_, fullscreen_light_tex_);
         if (z_light_pass_) {
                 z_light_pass_->set_fullscreen_light_settings(screen_light_color_, screen_light_min_opacity_, screen_light_max_opacity_);
+                z_light_pass_->update_virtual_light_map();
+                render_pipeline_.lighting().virtual_light_map = &z_light_pass_->virtual_light_map();
+        } else {
+                render_pipeline_.lighting().virtual_light_map = nullptr;
         }
         main_light_source_.update();
         z_light_pass_->render(debugging);
@@ -199,6 +203,13 @@ void SceneRenderer::render() {
     }
     if (should_update_light) {
         main_light_source_.update();
+    }
+
+    if (z_light_pass_) {
+        z_light_pass_->update_virtual_light_map();
+        render_pipeline_.lighting().virtual_light_map = &z_light_pass_->virtual_light_map();
+    } else {
+        render_pipeline_.lighting().virtual_light_map = nullptr;
     }
 
     SDL_SetRenderTarget(renderer_, nullptr);

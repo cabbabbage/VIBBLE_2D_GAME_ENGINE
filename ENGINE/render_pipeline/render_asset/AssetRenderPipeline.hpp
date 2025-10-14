@@ -11,10 +11,13 @@
 class Asset;
 class camera;
 class Global_Light_Source;
+struct VirtualLightMap;
+
 struct SceneLighting {
     camera&               camera_view;
     Global_Light_Source&  main_light;
     Asset*                player = nullptr;
+    const VirtualLightMap* virtual_light_map = nullptr;
 };
 
 struct StageContext {
@@ -39,6 +42,7 @@ struct StageContext {
     camera&                  camera_view();
     const camera&            camera_view() const;
     Asset*                   player() const;
+    const VirtualLightMap*   virtual_light_map() const { return lighting ? lighting->virtual_light_map : nullptr; }
 };
 
 class AssetRenderPipeline {
