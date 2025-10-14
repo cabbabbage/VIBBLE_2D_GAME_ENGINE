@@ -2,16 +2,16 @@
 
 
 MAPS/FORREST/map_info.json::rooms_data
-Vibble,1.000,26,26,exact,0.033,26,-0.005
-batch_map_assets,0.672,4622,6873,mapwide_batch,0.643,26,-0.343
+Vibble,1.000,29,29,exact,0.034,29,-0.003
+batch_map_assets,0.644,4914,7626,mapwide_batch,0.615,29,-0.292
 lab_bombs,1.000,25,25,perimeter,0.010,5,-0.000
-candle,1.000,26,26,exact,0.010,26,-0.004
-Axe,1.000,159,159,perimeter,0.028,10,-0.005
+candle,1.000,29,29,exact,0.010,29,-0.004
+Axe,1.000,210,210,perimeter,0.027,13,-0.007
 
 
 
 MAPS/FORREST/map_info.json::trails_data
 Bomb,1.000,4,4,random,0.020,4,-0.003
-New Spawn,0.000,0,15,exact,0.004,15,-0.002
-batch_map_assets,0.676,5088,7532,mapwide_batch,0.794,26,-0.400
-candle,1.000,11,11,exact,0.007,11,0.000
+New Spawn,0.000,0,17,exact,0.004,17,-0.002
+batch_map_assets,0.649,5460,8411,mapwide_batch,0.764,29,-0.444
+candle,1.000,12,12,exact,0.007,12,0.000

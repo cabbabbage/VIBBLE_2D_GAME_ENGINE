@@ -287,6 +287,9 @@ void SceneRenderer::render() {
     last_active_assets_ = std::move(current_active_assets);
 
     SDL_SetRenderTarget(renderer_, nullptr);
+    // The light map pass only depends on whichever render target is bound when it runs.
+    // Even without the old post-processing copy, it still composites directly onto the
+    // default framebuffer before overlays are drawn.
     z_light_pass_->render(debugging);
 
     SDL_SetRenderTarget(renderer_, nullptr);

@@ -931,7 +931,11 @@ void Assets::rebuild_active_assets_if_needed() {
     active_asset_list_->full_list(active_assets);
     active_light_assets_.reserve(active_assets.size());
     for (Asset* asset : active_assets) {
-        if (asset && asset->info && asset->info->is_light_source) {
+        if (!asset || !asset->info) {
+            continue;
+        }
+        const auto& info = asset->info;
+        if (!info->light_sources.empty()) {
             active_light_assets_.push_back(asset);
         }
     }

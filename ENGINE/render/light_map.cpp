@@ -1,4 +1,5 @@
 #include "light_map.hpp"
+#include "asset/Asset.hpp"
 #include "render/camera.hpp"
 #include <algorithm>
 #include <vector>
@@ -46,15 +47,16 @@ void LightMap::render(bool debugging) {
 }
 
 void LightMap::collect_layers(std::vector<LightEntry>& out) {
-        const float inv_scale = 1.0f / assets_->getView().get_scale();
+        const float scale = assets_ ? assets_->getView().get_scale() : 1.0f;
+        const float inv_scale = (scale > 0.0f && std::isfinite(scale)) ? (1.0f / scale) : 1.0f;
         constexpr int min_visible_w = 1;
         constexpr int min_visible_h = 1;
         Uint8 main_alpha = main_light_.get_current_color().a;
         Uint8 screen_alpha = static_cast<Uint8>(std::clamp<int>(main_alpha, fullscreen_light_min_opacity_, fullscreen_light_max_opacity_));
         last_main_light_alpha_ = screen_alpha;
-        const auto& active = assets_->getActive();
-        if (out.capacity() < active.size() + 3) {
-                out.reserve(active.size() + 3);
+        const auto& lit_assets = assets_->getActiveLitAssets();
+        if (out.capacity() < lit_assets.size() + 3) {
+                out.reserve(lit_assets.size() + 3);
         }
         if (fullscreen_light_tex_) {
                 LightEntry entry{};
@@ -64,6 +66,56 @@ void LightMap::collect_layers(std::vector<LightEntry>& out) {
                 entry.flip = SDL_FLIP_NONE;
                 entry.color_mod = fullscreen_light_color_;
                 out.push_back(entry);
+        }
+
+        for (Asset* asset : lit_assets) {
+                if (!asset || !asset->info) {
+                        continue;
+                }
+                const auto& lights = asset->info->light_sources;
+                if (lights.empty()) {
+                        continue;
+                }
+
+                const bool flipped = asset->flipped;
+                const float base_scale = (asset->info->scale_factor > 0.0f && std::isfinite(asset->info->scale_factor))
+                                             ? asset->info->scale_factor
+                                             : 1.0f;
+
+                for (const LightSource& light : lights) {
+                        if (light.intensity <= 0) {
+                                continue;
+                        }
+
+                        SDL_Texture* tex = light.texture_for_scale(scale);
+                        if (!tex) {
+                                continue;
+                        }
+
+                        int tex_w = 0;
+                        int tex_h = 0;
+                        if (SDL_QueryTexture(tex, nullptr, nullptr, &tex_w, &tex_h) != 0 || tex_w <= 0 || tex_h <= 0) {
+                                continue;
+                        }
+
+                        const int scaled_w = std::max(1, static_cast<int>(std::lround(static_cast<float>(tex_w) * base_scale)));
+                        const int scaled_h = std::max(1, static_cast<int>(std::lround(static_cast<float>(tex_h) * base_scale)));
+
+                        const int offset_x = flipped ? -light.offset_x : light.offset_x;
+                        SDL_Point light_pos{asset->pos.x + offset_x, asset->pos.y + light.offset_y};
+                        SDL_Rect dst = get_scaled_position_rect(light_pos, scaled_w, scaled_h, inv_scale, min_visible_w, min_visible_h);
+                        if (dst.w <= 0 || dst.h <= 0) {
+                                continue;
+                        }
+
+                        LightEntry entry{};
+                        entry.tex = tex;
+                        entry.dst = dst;
+                        entry.alpha = static_cast<Uint8>(std::clamp(light.intensity, 0, 255));
+                        entry.flip = flipped ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE;
+                        entry.color_mod = SDL_Color{light.color.r, light.color.g, light.color.b, 255};
+                        out.push_back(entry);
+                }
         }
 }
 
