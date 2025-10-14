@@ -7,17 +7,22 @@
 
 #include "render_pipeline/render_asset/IRenderStage.hpp"
 #include "render_pipeline/render_asset/render_asset.hpp"
+#include "render_pipeline/render_asset/shading/ReactiveShadowSettings.hpp"
 
 class Asset;
 class camera;
 class Global_Light_Source;
 struct VirtualLightMap;
 
+namespace render_pipeline::shading {
+struct ReactiveShadowSettings;
+}
 struct SceneLighting {
-    camera&               camera_view;
-    Global_Light_Source&  main_light;
-    Asset*                player = nullptr;
+    camera&                camera_view;
+    Global_Light_Source&   main_light;
+    Asset*                 player = nullptr;
     const VirtualLightMap* virtual_light_map = nullptr;
+    render_pipeline::shading::ReactiveShadowSettings* reactive_shadow_settings = nullptr;
 };
 
 struct StageContext {
@@ -50,8 +55,11 @@ struct StageContext {
     const camera&            camera_view() const;
     Asset*                   player() const;
     const VirtualLightMap*   virtual_light_map() const { return lighting ? lighting->virtual_light_map : nullptr; }
+    const render_pipeline::shading::ReactiveShadowSettings* reactive_shadow_settings() const;
 
     void update_projection(Asset& asset);
+
+    const render_pipeline::shading::ReactiveShadowSettings* reactive_shadow_settings_override = nullptr;
 };
 
 class AssetRenderPipeline {

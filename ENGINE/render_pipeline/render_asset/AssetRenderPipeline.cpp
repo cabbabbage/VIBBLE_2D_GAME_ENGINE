@@ -74,6 +74,13 @@ Asset* StageContext::player() const {
     return lighting ? lighting->player : nullptr;
 }
 
+const render_pipeline::shading::ReactiveShadowSettings* StageContext::reactive_shadow_settings() const {
+    if (reactive_shadow_settings_override) {
+        return reactive_shadow_settings_override;
+    }
+    return (lighting ? lighting->reactive_shadow_settings : nullptr);
+}
+
 void StageContext::update_projection(Asset& asset) {
     base_shadow_scale       = 1.0f;
     base_shadow_opacity     = 204.0f / 255.0f;
@@ -173,6 +180,7 @@ SDL_Texture* AssetRenderPipeline::run(Asset& asset) {
     context.width        = width;
     context.height       = height;
     context.reusable_final = asset.get_final_texture();
+    context.reactive_shadow_settings_override = lighting_.reactive_shadow_settings;
     if (renderer_) {
         SDL_GetRendererOutputSize(renderer_, &context.screen_width_px, &context.screen_height_px);
     }

@@ -8,8 +8,13 @@
 
 #include "DockableCollapsible.hpp"
 #include "widgets.hpp"
+#include "render_pipeline/render_asset/shading/ReactiveShadowSettings.hpp"
 
 #include <nlohmann/json.hpp>
+
+namespace render_pipeline::shading {
+struct ReactiveShadowSettings;
+}
 
 struct OrbitSettings;
 struct ScreenLightSettings;
@@ -22,6 +27,7 @@ public:
     ~MapLightPanel() override;
 
     void set_map_info(nlohmann::json* map_info, SaveCallback on_save = nullptr);
+    void set_reactive_settings(render_pipeline::shading::ReactiveShadowSettings* settings);
 
     void open();
     void close();
@@ -53,6 +59,7 @@ private:
     void load_update_map_light_setting();
     nlohmann::json& ensure_light();
     nlohmann::json& ensure_screen_light(nlohmann::json& light);
+    nlohmann::json& ensure_reactive_settings(nlohmann::json& light);
 
     struct OrbitSettings {
         int update_interval = 10;
@@ -90,6 +97,12 @@ private:
     ScreenLightSettings current_screen_settings_from_ui() const;
     void set_orbit_sliders(const OrbitSettings& orbit);
     void set_screen_sliders(const ScreenLightSettings& screen);
+    render_pipeline::shading::ReactiveShadowSettings current_reactive_settings_from_ui() const;
+    void set_reactive_sliders(const render_pipeline::shading::ReactiveShadowSettings& settings);
+    void set_reactive_checkboxes(const render_pipeline::shading::ReactiveShadowSettings& settings);
+    render_pipeline::shading::ReactiveShadowSettings load_reactive_settings_from_dev_settings() const;
+    void persist_reactive_settings_to_dev_settings(const render_pipeline::shading::ReactiveShadowSettings& settings) const;
+    void write_reactive_settings_to_json(const render_pipeline::shading::ReactiveShadowSettings& settings);
     void write_orbit_settings_to_json(const OrbitSettings& orbit);
     void write_screen_settings_to_json(const ScreenLightSettings& screen);
     void apply_immediate_settings();
@@ -119,9 +132,11 @@ private:
     std::unique_ptr<DMButton> orbit_section_btn_;
     std::unique_ptr<DMButton> screen_section_btn_;
     std::unique_ptr<DMButton> texture_section_btn_;
+    std::unique_ptr<DMButton> reactive_section_btn_;
     bool orbit_section_collapsed_ = false;
     bool screen_section_collapsed_ = false;
     bool texture_section_collapsed_ = false;
+    bool reactive_section_collapsed_ = false;
     std::unique_ptr<DMSlider> radius_;
     std::unique_ptr<DMSlider> intensity_;
     std::unique_ptr<DMSlider> orbit_x_;
@@ -154,6 +169,35 @@ private:
     std::unique_ptr<DMSlider> key_b_;
     std::unique_ptr<DMSlider> key_a_;
 
+    std::unique_ptr<DMCheckbox> reactive_offsets_enabled_;
+    std::unique_ptr<DMCheckbox> reactive_scale_enabled_;
+    std::unique_ptr<DMCheckbox> reactive_opacity_enabled_;
+    std::unique_ptr<DMCheckbox> reactive_temporal_enabled_;
+
+    std::unique_ptr<DMSlider> reactive_kernel_radius_;
+    std::unique_ptr<DMSlider> reactive_outer_ring_weight_;
+    std::unique_ptr<DMSlider> reactive_diagonal_weight_;
+    std::unique_ptr<DMSlider> reactive_gradient_deadzone_;
+    std::unique_ptr<DMSlider> reactive_gradient_max_;
+    std::unique_ptr<DMSlider> reactive_offset_ratio_x_;
+    std::unique_ptr<DMSlider> reactive_offset_ratio_y_;
+    std::unique_ptr<DMSlider> reactive_offset_bias_x_;
+    std::unique_ptr<DMSlider> reactive_offset_bias_y_;
+    std::unique_ptr<DMSlider> reactive_offset_limit_x_;
+    std::unique_ptr<DMSlider> reactive_offset_limit_y_;
+    std::unique_ptr<DMSlider> reactive_scale_strength_;
+    std::unique_ptr<DMSlider> reactive_scale_front_limit_;
+    std::unique_ptr<DMSlider> reactive_scale_back_limit_;
+    std::unique_ptr<DMSlider> reactive_scale_min_;
+    std::unique_ptr<DMSlider> reactive_scale_max_;
+    std::unique_ptr<DMSlider> reactive_opacity_gamma_;
+    std::unique_ptr<DMSlider> reactive_opacity_min_factor_;
+    std::unique_ptr<DMSlider> reactive_opacity_max_factor_;
+    std::unique_ptr<DMSlider> reactive_opacity_floor_;
+    std::unique_ptr<DMSlider> reactive_opacity_ceiling_;
+    std::unique_ptr<DMSlider> reactive_brightness_floor_;
+    std::unique_ptr<DMSlider> reactive_temporal_smoothing_;
+
     mutable std::string current_key_label_;
     mutable std::string persistence_warning_text_;
 
@@ -165,6 +209,7 @@ private:
     void toggle_orbit_section();
     void toggle_screen_section();
     void toggle_texture_section();
+    void toggle_reactive_section();
 
     bool needs_sync_to_json_ = false;
 
@@ -172,6 +217,10 @@ private:
 
     OrbitSettings last_applied_orbit_{};
     ScreenLightSettings last_applied_screen_{};
+    render_pipeline::shading::ReactiveShadowSettings last_applied_reactive_ =
+        render_pipeline::shading::sanitize_reactive_shadow_settings({});
+    render_pipeline::shading::ReactiveShadowSettings* reactive_settings_shared_ = nullptr;
+    bool reactive_settings_initialized_ = false;
 
 protected:
     std::string_view lock_settings_namespace() const override { return "lighting"; }

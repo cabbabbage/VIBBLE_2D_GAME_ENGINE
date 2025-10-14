@@ -276,6 +276,9 @@ void MapModeUI::ensure_panels() {
         light_panel_->close();
         track_floating_panel(light_panel_.get());
     }
+    if (light_panel_) {
+        light_panel_->set_reactive_settings(assets_ ? assets_->reactive_shadow_settings() : nullptr);
+    }
     if (!layers_controller_) {
         layers_controller_ = std::make_shared<MapLayersController>();
     }
@@ -590,6 +593,7 @@ void MapModeUI::sync_panel_map_info() {
     if (!map_info_) return;
     ensure_panels();
     if (light_panel_) {
+        light_panel_->set_reactive_settings(assets_ ? assets_->reactive_shadow_settings() : nullptr);
         LightSaveCallback callback = light_save_callback_;
         if (!callback) {
             callback = [this]() { return save_map_info_to_disk(); };

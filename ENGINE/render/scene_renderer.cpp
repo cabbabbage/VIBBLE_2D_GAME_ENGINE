@@ -4,6 +4,7 @@
 #include "light_map.hpp"
 #include "render/camera.hpp"
 #include "dev_mode/dev_ui_settings.hpp"
+#include "render_pipeline/render_asset/shading/ReactiveShadowSettingsJSON.hpp"
 #include <algorithm>
 #include <cmath>
 #include <iostream>
@@ -44,7 +45,13 @@ SceneRenderer::SceneRenderer(SDL_Renderer* renderer,
   main_light_source_(renderer, SDL_Point{ screen_width / 2, screen_height / 2 },
                      screen_width, SDL_Color{255, 255, 255, 255}, map_path),
   fullscreen_light_tex_(nullptr),
-  render_pipeline_(renderer, SceneLighting{ assets->getView(), main_light_source_, assets->player })
+  reactive_shadow_settings_(render_pipeline::shading::sanitize_reactive_shadow_settings({})),
+  render_pipeline_(renderer,
+                   SceneLighting{ assets->getView(),
+                                  main_light_source_,
+                                  assets->player,
+                                  nullptr,
+                                  &reactive_shadow_settings_ })
 {
     fullscreen_light_tex_ = SDL_CreateTexture(renderer_, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET, screen_width_, screen_height_);
     if (fullscreen_light_tex_) {
@@ -65,6 +72,7 @@ SceneRenderer::SceneRenderer(SDL_Renderer* renderer,
     } else {
         render_pipeline_.lighting().virtual_light_map = nullptr;
     }
+    render_pipeline_.lighting().reactive_shadow_settings = &reactive_shadow_settings_;
     main_light_source_.update();
     z_light_pass_->render(debugging, light_map_only_mode_);
 }
@@ -85,6 +93,15 @@ void SceneRenderer::apply_map_light_config(const nlohmann::json& data){
     main_light_source_.apply_config(data);
     apply_screen_light_settings(data);
     update_fullscreen_light_texture();
+
+    using namespace render_pipeline::shading;
+    auto reactive_it = data.find("reactive_shadows");
+    if (reactive_it != data.end()) {
+        reactive_shadow_settings_ = reactive_shadow_settings_from_json(*reactive_it, reactive_shadow_settings_);
+    } else {
+        reactive_shadow_settings_ = sanitize_reactive_shadow_settings(reactive_shadow_settings_);
+    }
+    render_pipeline_.lighting().reactive_shadow_settings = &reactive_shadow_settings_;
 }
 
 void SceneRenderer::apply_screen_light_settings(const nlohmann::json& data){
@@ -184,6 +201,7 @@ void SceneRenderer::render(){
     } else {
         render_pipeline_.lighting().virtual_light_map=nullptr;
     }
+    render_pipeline_.lighting().reactive_shadow_settings = &reactive_shadow_settings_;
 
     SDL_SetRenderTarget(renderer_,nullptr);
     SDL_SetRenderDrawBlendMode(renderer_,SDL_BLENDMODE_BLEND);

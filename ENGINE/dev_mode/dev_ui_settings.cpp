@@ -128,4 +128,73 @@ void save_bool(std::string_view key, bool value) {
     devmode::core::DevJsonStore::instance().submit(settings_path(), settings_cache(), 4);
 }
 
+double load_number(std::string_view key, double default_value) {
+    if (key.empty()) {
+        return default_value;
+    }
+    std::lock_guard<std::mutex> lock(settings_mutex());
+    ensure_loaded();
+
+    const auto parts = split_key(key);
+    if (parts.empty()) {
+        return default_value;
+    }
+
+    const nlohmann::json* node = &settings_cache();
+    for (const auto& part : parts) {
+        if (!node->is_object()) {
+            return default_value;
+        }
+        auto it = node->find(part);
+        if (it == node->end()) {
+            return default_value;
+        }
+        node = &(*it);
+    }
+
+    try {
+        if (node->is_number_float()) {
+            return node->get<double>();
+        }
+        if (node->is_number_integer()) {
+            return static_cast<double>(node->get<int64_t>());
+        }
+        if (node->is_string()) {
+            const std::string text = node->get<std::string>();
+            size_t idx = 0;
+            double parsed = std::stod(text, &idx);
+            if (idx == text.size()) {
+                return parsed;
+            }
+        }
+    } catch (...) {
+    }
+    return default_value;
+}
+
+void save_number(std::string_view key, double value) {
+    if (key.empty()) {
+        return;
+    }
+    std::lock_guard<std::mutex> lock(settings_mutex());
+    ensure_loaded();
+
+    const auto parts = split_key(key);
+    if (parts.empty()) {
+        return;
+    }
+
+    nlohmann::json* node = &settings_cache();
+    for (size_t i = 0; i + 1 < parts.size(); ++i) {
+        nlohmann::json& next = (*node)[parts[i]];
+        if (!next.is_object()) {
+            next = nlohmann::json::object();
+        }
+        node = &next;
+    }
+    (*node)[parts.back()] = value;
+    settings_dirty_flag() = true;
+    devmode::core::DevJsonStore::instance().submit(settings_path(), settings_cache(), 4);
+}
+
 } // namespace devmode::ui_settings

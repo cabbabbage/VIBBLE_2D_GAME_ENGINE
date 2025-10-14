@@ -9,6 +9,7 @@
 #include "light_map.hpp"
 #include "global_light_source.hpp"
 #include "render_pipeline/render_asset/AssetRenderPipeline.hpp"
+#include "render_pipeline/render_asset/shading/ReactiveShadowSettings.hpp"
 #include "render/camera.hpp"
 
 class Assets;
@@ -31,6 +32,8 @@ public:
     SDL_Color screen_light_color() const { return screen_light_color_; }
     int screen_light_min_opacity() const { return screen_light_min_opacity_; }
     int screen_light_max_opacity() const { return screen_light_max_opacity_; }
+    render_pipeline::shading::ReactiveShadowSettings& reactive_shadow_settings() { return reactive_shadow_settings_; }
+    const render_pipeline::shading::ReactiveShadowSettings& reactive_shadow_settings() const { return reactive_shadow_settings_; }
 
 private:
     void update_shading_groups();
@@ -124,6 +127,7 @@ private:
     SDL_Color      screen_light_color_{255, 255, 255, 255};
     int            screen_light_min_opacity_ = 0;
     int            screen_light_max_opacity_ = 255;
+    render_pipeline::shading::ReactiveShadowSettings reactive_shadow_settings_{};
     AssetRenderPipeline render_pipeline_;
     std::unique_ptr<LightMap> z_light_pass_;
     int            current_shading_group_ = 0;

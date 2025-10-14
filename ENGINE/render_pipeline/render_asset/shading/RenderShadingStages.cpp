@@ -3,6 +3,7 @@
 #include "asset/Asset.hpp"
 #include "render/global_light_source.hpp"
 #include "render_pipeline/render_asset/AssetRenderPipeline.hpp"
+#include "render_pipeline/render_asset/shading/ReactiveShadowSettings.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -15,35 +16,13 @@ namespace render_pipeline::shading {
 
 namespace {
 
-struct ShadowSettings {
-    int   kernel_radius         = 2;
-    float outer_ring_weight     = 1.2f;
-    float diagonal_weight       = 0.5f;
-    float gradient_deadzone     = 0.06f;
-    float gradient_max          = 0.6f;
-    float temporal_smoothing    = 0.6f;
-    float offset_ratio_x        = 0.25f;
-    float offset_ratio_y        = 0.18f;
-    float offset_x_bias         = 1.25f;
-    float offset_y_bias         = 0.9f;
-    float offset_max_ratio_x    = 0.35f;
-    float offset_max_ratio_y    = 0.25f;
-    float scale_strength        = 0.3f;
-    float scale_front_limit     = 0.35f;
-    float scale_back_limit      = 0.22f;
-    float scale_min             = 0.5f;
-    float scale_max             = 1.6f;
-    float opacity_gamma         = 1.4f;
-    float opacity_min_factor    = 0.45f;
-    float opacity_max_factor    = 1.35f;
-    float absolute_opacity_min  = 0.1f;
-    float absolute_opacity_max  = 1.0f;
-    float brightness_floor      = 0.05f;
-};
-
-const ShadowSettings& shadow_settings() {
-    static const ShadowSettings settings{};
-    return settings;
+const ReactiveShadowSettings& reactive_settings_or_default(const StageContext& context) {
+    if (const ReactiveShadowSettings* live = context.reactive_shadow_settings()) {
+        return *live;
+    }
+    static const ReactiveShadowSettings defaults =
+        sanitize_reactive_shadow_settings(ReactiveShadowSettings{});
+    return defaults;
 }
 
 struct ShadowTemporalState {
@@ -76,7 +55,7 @@ struct LightProbe {
 
 LightProbe analyze_light_map(const VirtualLightMap& map, const StageContext& context) {
     LightProbe result{};
-    const ShadowSettings& cfg = shadow_settings();
+    const ReactiveShadowSettings& cfg = reactive_settings_or_default(context);
 
     const auto cells = map.cells;
     const float scene_sum = std::accumulate(cells.begin(), cells.end(), 0.0f);
@@ -120,7 +99,7 @@ LightProbe analyze_light_map(const VirtualLightMap& map, const StageContext& con
         return map.at(x, y);
     };
 
-    const int radius = std::max(1, cfg.kernel_radius);
+    const int radius = std::max(1, cfg.sampling.kernel_radius);
     float local_sum   = 0.0f;
     float local_weight = 0.0f;
     for (int dy = -radius; dy <= radius; ++dy) {
@@ -128,9 +107,9 @@ LightProbe analyze_light_map(const VirtualLightMap& map, const StageContext& con
             const float value = sample(cx + dx, cy + dy);
             const float distance = std::sqrt(static_cast<float>(dx * dx + dy * dy));
             float weight = 1.0f / (1.0f + distance);
-            if (cfg.outer_ring_weight != 1.0f && radius > 0 &&
+            if (cfg.sampling.outer_ring_weight != 1.0f && radius > 0 &&
                 (std::abs(dx) == radius || std::abs(dy) == radius)) {
-                weight *= cfg.outer_ring_weight;
+                weight *= cfg.sampling.outer_ring_weight;
             }
             local_sum += value * weight;
             local_weight += weight;
@@ -145,8 +124,8 @@ LightProbe analyze_light_map(const VirtualLightMap& map, const StageContext& con
     float grad_weight_y = 0.0f;
     for (int step = 1; step <= radius; ++step) {
         float base_weight = 1.0f / static_cast<float>(step);
-        if (cfg.outer_ring_weight != 1.0f && step == radius) {
-            base_weight *= cfg.outer_ring_weight;
+        if (cfg.sampling.outer_ring_weight != 1.0f && step == radius) {
+            base_weight *= cfg.sampling.outer_ring_weight;
         }
 
         const float right = sample(cx + step, cy);
@@ -159,8 +138,8 @@ LightProbe analyze_light_map(const VirtualLightMap& map, const StageContext& con
         grad_y += (down - up) * base_weight;
         grad_weight_y += base_weight;
 
-        if (cfg.diagonal_weight > 0.0f) {
-            const float diag_weight = base_weight * cfg.diagonal_weight * 0.5f;
+        if (cfg.sampling.diagonal_weight > 0.0f) {
+            const float diag_weight = base_weight * cfg.sampling.diagonal_weight * 0.5f;
             const float ur = sample(cx + step, cy - step);
             const float dr = sample(cx + step, cy + step);
             const float ul = sample(cx - step, cy - step);
@@ -336,7 +315,7 @@ SDL_Texture* RenderShadowMask::run(SDL_Renderer* renderer, const Asset& asset, S
     }
     SDL_SetTextureBlendMode(cache.texture, SDL_BLENDMODE_BLEND);
 
-    const ShadowSettings& cfg = shadow_settings();
+    const ReactiveShadowSettings& cfg = reactive_settings_or_default(context);
 
     const VirtualLightMap* map = context.virtual_light_map();
     LightProbe probe{};
@@ -350,8 +329,8 @@ SDL_Texture* RenderShadowMask::run(SDL_Renderer* renderer, const Asset& asset, S
     target.scale    = context.base_shadow_scale;
     target.opacity  = context.base_shadow_opacity;
 
-    const float gradient_deadzone = std::max(0.0f, cfg.gradient_deadzone);
-    const float gradient_max      = std::max(gradient_deadzone + 1e-4f, cfg.gradient_max);
+    const float gradient_deadzone = std::max(0.0f, cfg.directionality.gradient_deadzone);
+    const float gradient_max      = std::max(gradient_deadzone + 1e-4f, cfg.directionality.gradient_max);
     if (map && probe.valid && probe.gradient_magnitude > gradient_deadzone) {
         const float clamped_mag = clampf(probe.gradient_magnitude, gradient_deadzone, gradient_max);
         const float gradient_strength = (clamped_mag - gradient_deadzone) / (gradient_max - gradient_deadzone);
@@ -380,24 +359,34 @@ SDL_Texture* RenderShadowMask::run(SDL_Renderer* renderer, const Asset& asset, S
         const float base_width  = static_cast<float>(width);
         const float base_height = static_cast<float>(height);
 
-        float offset_x = -dir.x * reactivity * base_width * cfg.offset_ratio_x * cfg.offset_x_bias;
-        float offset_y = -dir.y * reactivity * base_height * cfg.offset_ratio_y * cfg.offset_y_bias;
-        const float max_offset_x = base_width * cfg.offset_max_ratio_x;
-        const float max_offset_y = base_height * cfg.offset_max_ratio_y;
-        offset_x = clampf(offset_x, -max_offset_x, max_offset_x);
-        offset_y = clampf(offset_y, -max_offset_y, max_offset_y);
+        float offset_x = target.offset_x;
+        float offset_y = target.offset_y;
+        if (cfg.directionality.enable_offsets) {
+            offset_x = -dir.x * reactivity * base_width * cfg.directionality.offset_ratio_x * cfg.directionality.offset_x_bias;
+            offset_y = -dir.y * reactivity * base_height * cfg.directionality.offset_ratio_y * cfg.directionality.offset_y_bias;
+            const float max_offset_x = base_width * cfg.directionality.offset_max_ratio_x;
+            const float max_offset_y = base_height * cfg.directionality.offset_max_ratio_y;
+            offset_x = clampf(offset_x, -max_offset_x, max_offset_x);
+            offset_y = clampf(offset_y, -max_offset_y, max_offset_y);
+        }
 
-        float scale_delta = (front_component - back_component) * reactivity * cfg.scale_strength;
-        scale_delta = clampf(scale_delta, -cfg.scale_back_limit, cfg.scale_front_limit);
-        float scale = context.base_shadow_scale * (1.0f + scale_delta);
-        scale = clampf(scale, cfg.scale_min, cfg.scale_max);
+        float scale = context.base_shadow_scale;
+        if (cfg.response.enable_scale) {
+            float scale_delta = (front_component - back_component) * reactivity * cfg.response.scale_strength;
+            scale_delta = clampf(scale_delta, -cfg.response.scale_back_limit, cfg.response.scale_front_limit);
+            scale = context.base_shadow_scale * (1.0f + scale_delta);
+            scale = clampf(scale, cfg.response.scale_min, cfg.response.scale_max);
+        }
 
-        float scene_avg = std::max(probe.scene_average, cfg.brightness_floor);
-        float local_avg = std::max(probe.local_average, cfg.brightness_floor);
-        float opacity_factor = (local_avg > 0.0f) ? (scene_avg / local_avg) : 1.0f;
-        opacity_factor = clampf(opacity_factor, cfg.opacity_min_factor, cfg.opacity_max_factor);
-        float opacity = context.base_shadow_opacity * std::pow(opacity_factor, cfg.opacity_gamma);
-        opacity = clampf(opacity, cfg.absolute_opacity_min, cfg.absolute_opacity_max);
+        float opacity = context.base_shadow_opacity;
+        if (cfg.response.enable_opacity) {
+            float scene_avg = std::max(probe.scene_average, cfg.response.brightness_floor);
+            float local_avg = std::max(probe.local_average, cfg.response.brightness_floor);
+            float opacity_factor = (local_avg > 0.0f) ? (scene_avg / local_avg) : 1.0f;
+            opacity_factor = clampf(opacity_factor, cfg.response.opacity_min_factor, cfg.response.opacity_max_factor);
+            opacity = context.base_shadow_opacity * std::pow(opacity_factor, cfg.response.opacity_gamma);
+            opacity = clampf(opacity, cfg.response.absolute_opacity_min, cfg.response.absolute_opacity_max);
+        }
 
         target.offset_x = offset_x;
         target.offset_y = offset_y;
@@ -406,7 +395,9 @@ SDL_Texture* RenderShadowMask::run(SDL_Renderer* renderer, const Asset& asset, S
     }
 
     ShadowTemporalState output = target;
-    const float smoothing = clampf(cfg.temporal_smoothing, 0.0f, 0.999f);
+    const float smoothing = cfg.stability.enable_temporal_smoothing
+                                ? clampf(cfg.stability.temporal_smoothing, 0.0f, 0.999f)
+                                : 0.0f;
     auto& state_cache = shadow_state_cache();
     if (smoothing > 0.0f) {
         const auto it = state_cache.find(&asset);
@@ -417,12 +408,14 @@ SDL_Texture* RenderShadowMask::run(SDL_Renderer* renderer, const Asset& asset, S
             output.opacity  = blend_value(it->second.opacity, target.opacity, smoothing);
         }
     }
-    output.offset_x = clampf(output.offset_x, -static_cast<float>(width) * cfg.offset_max_ratio_x,
-                             static_cast<float>(width) * cfg.offset_max_ratio_x);
-    output.offset_y = clampf(output.offset_y, -static_cast<float>(height) * cfg.offset_max_ratio_y,
-                             static_cast<float>(height) * cfg.offset_max_ratio_y);
-    output.scale = clampf(output.scale, cfg.scale_min, cfg.scale_max);
-    output.opacity = clampf(output.opacity, cfg.absolute_opacity_min, cfg.absolute_opacity_max);
+    output.offset_x = clampf(output.offset_x,
+                             -static_cast<float>(width) * cfg.directionality.offset_max_ratio_x,
+                             static_cast<float>(width) * cfg.directionality.offset_max_ratio_x);
+    output.offset_y = clampf(output.offset_y,
+                             -static_cast<float>(height) * cfg.directionality.offset_max_ratio_y,
+                             static_cast<float>(height) * cfg.directionality.offset_max_ratio_y);
+    output.scale = clampf(output.scale, cfg.response.scale_min, cfg.response.scale_max);
+    output.opacity = clampf(output.opacity, cfg.response.absolute_opacity_min, cfg.response.absolute_opacity_max);
     state_cache[&asset] = output;
 
     SDL_Texture* mask_texture = nullptr;

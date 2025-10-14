@@ -21,6 +21,9 @@ class Input;
 class DevControls;
 class AssetInfo;
 class Global_Light_Source;
+namespace render_pipeline::shading {
+struct ReactiveShadowSettings;
+}
 
 class Assets {
 public:
@@ -102,6 +105,8 @@ public:
 
     Global_Light_Source* map_light_source();
     const Global_Light_Source* map_light_source() const;
+    render_pipeline::shading::ReactiveShadowSettings* reactive_shadow_settings();
+    const render_pipeline::shading::ReactiveShadowSettings* reactive_shadow_settings() const;
     void set_map_light_panel_visible(bool visible);
     bool is_map_light_panel_visible() const;
 

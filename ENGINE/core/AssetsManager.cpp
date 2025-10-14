@@ -1096,6 +1096,17 @@ const Global_Light_Source* Assets::map_light_source() const {
     return const_cast<Assets*>(this)->map_light_source();
 }
 
+render_pipeline::shading::ReactiveShadowSettings* Assets::reactive_shadow_settings() {
+    if (!scene) {
+        return nullptr;
+    }
+    return &scene->reactive_shadow_settings();
+}
+
+const render_pipeline::shading::ReactiveShadowSettings* Assets::reactive_shadow_settings() const {
+    return const_cast<Assets*>(this)->reactive_shadow_settings();
+}
+
 void Assets::set_map_light_panel_visible(bool visible) {
     if (dev_controls_ && dev_controls_->is_enabled()) {
         dev_controls_->set_map_light_panel_visible(visible);

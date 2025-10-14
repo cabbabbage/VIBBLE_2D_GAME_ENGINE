@@ -23,6 +23,7 @@ public:
         if (info_->generate_rays) {
             const int strength = std::clamp(info_->ray_strength, 0, 100);
             s_ray_strength_ = std::make_unique<DMSlider>("Ray Strength", 0, 100, strength);
+            s_ray_strength_->set_defer_commit_until_unfocus(true);
         } else {
             info_->set_ray_strength(0);
         }
@@ -42,6 +43,7 @@ public:
             r.s_color_r   = std::make_unique<DMSlider>("Color R", 0, 255, ls.color.r);
             r.s_color_g   = std::make_unique<DMSlider>("Color G", 0, 255, ls.color.g);
             r.s_color_b   = std::make_unique<DMSlider>("Color B", 0, 255, ls.color.b);
+            configure_row_sliders(r);
             rows_.push_back(std::move(r));
         }
         b_add_ = std::make_unique<DMButton>("Add New Light Source", &DMStyles::CreateButton(), 220, DMButton::height());
@@ -99,9 +101,16 @@ public:
         bool used = DockableCollapsible::handle_event(e);
         if (!info_ || !expanded_) return used;
         bool changed = false;
-        if (s_ray_strength_ && s_ray_strength_->handle_event(e)) {
-            changed = true;
-            used = true;
+        bool regenerate_lighting = false;
+        if (s_ray_strength_) {
+            if (s_ray_strength_->handle_event(e)) {
+                used = true;
+                const int new_strength = std::clamp(s_ray_strength_->value(), 0, 100);
+                if (info_ && info_->ray_strength != new_strength) {
+                    changed = true;
+                    regenerate_lighting = true;
+                }
+            }
         }
         for (size_t i = 0; i < rows_.size(); ++i) {
             auto& r = rows_[i];
@@ -110,20 +119,67 @@ public:
                 if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
                     rows_.erase(rows_.begin() + i);
                     changed = true;
+                    regenerate_lighting = true;
                     used = true;
                     break;
                 }
             }
-            if (r.s_intensity && r.s_intensity->handle_event(e)) { r.light.intensity = r.s_intensity->value(); changed = true; }
-            if (r.s_radius    && r.s_radius->handle_event(e))    { r.light.radius    = r.s_radius->value();    changed = true; }
-            if (r.s_falloff   && r.s_falloff->handle_event(e))   { r.light.fall_off  = r.s_falloff->value();   changed = true; }
-            if (r.s_flicker   && r.s_flicker->handle_event(e))   { r.light.flicker   = r.s_flicker->value();   changed = true; }
-            if (r.s_flare     && r.s_flare->handle_event(e))     { r.light.flare     = r.s_flare->value();     changed = true; }
-            if (r.s_offset_x  && r.s_offset_x->handle_event(e))  { r.light.offset_x  = r.s_offset_x->value();  changed = true; }
-            if (r.s_offset_y  && r.s_offset_y->handle_event(e))  { r.light.offset_y  = r.s_offset_y->value();  changed = true; }
-            if (r.s_color_r   && r.s_color_r->handle_event(e))   { r.light.color.r   = (Uint8)r.s_color_r->value(); changed = true; }
-            if (r.s_color_g   && r.s_color_g->handle_event(e))   { r.light.color.g   = (Uint8)r.s_color_g->value(); changed = true; }
-            if (r.s_color_b   && r.s_color_b->handle_event(e))   { r.light.color.b   = (Uint8)r.s_color_b->value(); changed = true; }
+            auto handle_slider = [&](std::unique_ptr<DMSlider>& slider,
+                                     auto get_value,
+                                     auto set_value,
+                                     bool affects_texture) {
+                if (!slider) return;
+                if (!slider->handle_event(e)) return;
+                used = true;
+                const int new_value = slider->value();
+                if (get_value() == new_value) return;
+                set_value(new_value);
+                changed = true;
+                if (affects_texture) {
+                    regenerate_lighting = true;
+                }
+            };
+
+            handle_slider(r.s_intensity,
+                          [&]() { return r.light.intensity; },
+                          [&](int v) { r.light.intensity = v; },
+                          true);
+            handle_slider(r.s_radius,
+                          [&]() { return r.light.radius; },
+                          [&](int v) { r.light.radius = v; },
+                          true);
+            handle_slider(r.s_falloff,
+                          [&]() { return r.light.fall_off; },
+                          [&](int v) { r.light.fall_off = v; },
+                          true);
+            handle_slider(r.s_flicker,
+                          [&]() { return r.light.flicker; },
+                          [&](int v) { r.light.flicker = v; },
+                          true);
+            handle_slider(r.s_flare,
+                          [&]() { return r.light.flare; },
+                          [&](int v) { r.light.flare = v; },
+                          true);
+            handle_slider(r.s_offset_x,
+                          [&]() { return r.light.offset_x; },
+                          [&](int v) { r.light.offset_x = v; },
+                          false);
+            handle_slider(r.s_offset_y,
+                          [&]() { return r.light.offset_y; },
+                          [&](int v) { r.light.offset_y = v; },
+                          false);
+            handle_slider(r.s_color_r,
+                          [&]() { return static_cast<int>(r.light.color.r); },
+                          [&](int v) { r.light.color.r = static_cast<Uint8>(v); },
+                          true);
+            handle_slider(r.s_color_g,
+                          [&]() { return static_cast<int>(r.light.color.g); },
+                          [&](int v) { r.light.color.g = static_cast<Uint8>(v); },
+                          true);
+            handle_slider(r.s_color_b,
+                          [&]() { return static_cast<int>(r.light.color.b); },
+                          [&](int v) { r.light.color.b = static_cast<Uint8>(v); },
+                          true);
         }
         if (b_add_ && b_add_->handle_event(e)) {
             if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
@@ -141,8 +197,10 @@ public:
                 r.s_color_r   = std::make_unique<DMSlider>("Color R", 0, 255, r.light.color.r);
                 r.s_color_g   = std::make_unique<DMSlider>("Color G", 0, 255, r.light.color.g);
                 r.s_color_b   = std::make_unique<DMSlider>("Color B", 0, 255, r.light.color.b);
+                configure_row_sliders(r);
                 rows_.push_back(std::move(r));
                 changed = true;
+                regenerate_lighting = true;
                 used = true;
             }
         }
@@ -156,7 +214,7 @@ public:
             commit_to_info();
             if (info_) {
                 (void)info_->update_info_json();
-                if (ui_) {
+                if (regenerate_lighting && ui_) {
                     SDL_Renderer* r = ui_->get_last_renderer();
                     if (r) LightingLoader::generate_textures(*info_, r);
                 }
@@ -201,6 +259,22 @@ private:
         std::unique_ptr<DMSlider> s_color_g;
         std::unique_ptr<DMSlider> s_color_b;
 };
+
+    void configure_row_sliders(Row& r) {
+        auto configure_regen_slider = [](std::unique_ptr<DMSlider>& slider) {
+            if (slider) slider->set_defer_commit_until_unfocus(true);
+        };
+        configure_regen_slider(r.s_intensity);
+        configure_regen_slider(r.s_radius);
+        configure_regen_slider(r.s_falloff);
+        configure_regen_slider(r.s_flicker);
+        configure_regen_slider(r.s_flare);
+        configure_regen_slider(r.s_color_r);
+        configure_regen_slider(r.s_color_g);
+        configure_regen_slider(r.s_color_b);
+        if (r.s_offset_x) r.s_offset_x->set_defer_commit_until_unfocus(false);
+        if (r.s_offset_y) r.s_offset_y->set_defer_commit_until_unfocus(false);
+    }
 
     void commit_to_info() {
         if (!info_) return;
