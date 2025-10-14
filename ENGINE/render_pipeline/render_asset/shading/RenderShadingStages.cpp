@@ -29,7 +29,6 @@ struct ShadowTemporalState {
     float offset_x = 0.0f;
     float offset_y = 0.0f;
     float opacity  = 0.0f;
-    float scale    = 1.0f;
 };
 
 std::unordered_map<const Asset*, ShadowTemporalState>& shadow_state_cache() {
@@ -322,14 +321,12 @@ SDL_Texture* RenderShadowMask::run(SDL_Renderer* renderer, const Asset& asset, S
     ShadowTemporalState target{};
     target.offset_x = 0.0f;
     target.offset_y = 0.0f;
-    target.scale    = context.base_shadow_scale;
     target.opacity  = context.base_shadow_opacity;
 
-    const float gradient_deadzone = std::max(0.0f, cfg.directionality.gradient_deadzone);
-    const float gradient_max      = std::max(gradient_deadzone + 1e-4f, cfg.directionality.gradient_max);
-    if (map && probe.valid && probe.gradient_magnitude > gradient_deadzone) {
-        const float clamped_mag = clampf(probe.gradient_magnitude, gradient_deadzone, gradient_max);
-        const float gradient_strength = (clamped_mag - gradient_deadzone) / (gradient_max - gradient_deadzone);
+    const float sensitivity = std::max(0.0f, cfg.directionality.gradient_sensitivity);
+    if (map && probe.valid && probe.gradient_magnitude > sensitivity) {
+        const float gradient_excess = probe.gradient_magnitude - sensitivity;
+        const float gradient_strength = gradient_excess / (gradient_excess + 1.0f);
 
         SDL_FPoint dir = probe.gradient_dir;
         const float dir_len = std::sqrt(dir.x * dir.x + dir.y * dir.y);
@@ -350,7 +347,7 @@ SDL_Texture* RenderShadowMask::run(SDL_Renderer* renderer, const Asset& asset, S
                                  directional_norm;
         }
 
-        const float reactivity = gradient_strength * directional_weight;
+        const float reactivity = gradient_strength * directional_weight * cfg.directionality.offset_strength;
 
         const float base_width  = static_cast<float>(width);
         const float base_height = static_cast<float>(height);
@@ -358,35 +355,26 @@ SDL_Texture* RenderShadowMask::run(SDL_Renderer* renderer, const Asset& asset, S
         float offset_x = target.offset_x;
         float offset_y = target.offset_y;
         if (cfg.directionality.enable_offsets) {
-            offset_x = -dir.x * reactivity * base_width * cfg.directionality.offset_ratio_x * cfg.directionality.offset_x_bias;
-            offset_y = -dir.y * reactivity * base_height * cfg.directionality.offset_ratio_y * cfg.directionality.offset_y_bias;
-            const float max_offset_x = base_width * cfg.directionality.offset_max_ratio_x;
-            const float max_offset_y = base_height * cfg.directionality.offset_max_ratio_y;
+            const float max_offset_x = base_width * cfg.directionality.max_offset_ratio;
+            const float max_offset_y = base_height * cfg.directionality.max_offset_ratio;
+            offset_x = -dir.x * reactivity * max_offset_x;
+            offset_y = -dir.y * reactivity * max_offset_y;
             offset_x = clampf(offset_x, -max_offset_x, max_offset_x);
             offset_y = clampf(offset_y, -max_offset_y, max_offset_y);
         }
 
-        float scale = context.base_shadow_scale;
-        if (cfg.response.enable_scale) {
-            float scale_delta = (front_component - back_component) * reactivity * cfg.response.scale_strength;
-            scale_delta = clampf(scale_delta, -cfg.response.scale_back_limit, cfg.response.scale_front_limit);
-            scale = context.base_shadow_scale * (1.0f + scale_delta);
-            scale = clampf(scale, cfg.response.scale_min, cfg.response.scale_max);
-        }
-
         float opacity = context.base_shadow_opacity;
         if (cfg.response.enable_opacity) {
-            float scene_avg = std::max(probe.scene_average, cfg.response.brightness_floor);
-            float local_avg = std::max(probe.local_average, cfg.response.brightness_floor);
+            const float scene_avg = std::max(probe.scene_average, 1e-4f);
+            const float local_avg = std::max(probe.local_average, 1e-4f);
             float opacity_factor = (local_avg > 0.0f) ? (scene_avg / local_avg) : 1.0f;
-            opacity_factor = clampf(opacity_factor, cfg.response.opacity_min_factor, cfg.response.opacity_max_factor);
-            opacity = context.base_shadow_opacity * std::pow(opacity_factor, cfg.response.opacity_gamma);
-            opacity = clampf(opacity, cfg.response.absolute_opacity_min, cfg.response.absolute_opacity_max);
+            opacity_factor = 1.0f + (opacity_factor - 1.0f) * cfg.response.opacity_strength;
+            opacity = context.base_shadow_opacity * opacity_factor;
+            opacity = clampf(opacity, cfg.response.min_opacity, cfg.response.max_opacity);
         }
 
         target.offset_x = offset_x;
         target.offset_y = offset_y;
-        target.scale    = scale;
         target.opacity  = opacity;
     }
 
@@ -400,18 +388,16 @@ SDL_Texture* RenderShadowMask::run(SDL_Renderer* renderer, const Asset& asset, S
         if (it != state_cache.end()) {
             output.offset_x = blend_value(it->second.offset_x, target.offset_x, smoothing);
             output.offset_y = blend_value(it->second.offset_y, target.offset_y, smoothing);
-            output.scale    = blend_value(it->second.scale, target.scale, smoothing);
             output.opacity  = blend_value(it->second.opacity, target.opacity, smoothing);
         }
     }
     output.offset_x = clampf(output.offset_x,
-                             -static_cast<float>(width) * cfg.directionality.offset_max_ratio_x,
-                             static_cast<float>(width) * cfg.directionality.offset_max_ratio_x);
+                             -static_cast<float>(width) * cfg.directionality.max_offset_ratio,
+                             static_cast<float>(width) * cfg.directionality.max_offset_ratio);
     output.offset_y = clampf(output.offset_y,
-                             -static_cast<float>(height) * cfg.directionality.offset_max_ratio_y,
-                             static_cast<float>(height) * cfg.directionality.offset_max_ratio_y);
-    output.scale = clampf(output.scale, cfg.response.scale_min, cfg.response.scale_max);
-    output.opacity = clampf(output.opacity, cfg.response.absolute_opacity_min, cfg.response.absolute_opacity_max);
+                             -static_cast<float>(height) * cfg.directionality.max_offset_ratio,
+                             static_cast<float>(height) * cfg.directionality.max_offset_ratio);
+    output.opacity = clampf(output.opacity, cfg.response.min_opacity, cfg.response.max_opacity);
     state_cache[&asset] = output;
 
     SDL_Texture* mask_texture = nullptr;
@@ -449,8 +435,9 @@ SDL_Texture* RenderShadowMask::run(SDL_Renderer* renderer, const Asset& asset, S
     SDL_SetTextureColorMod(mask_texture, 0, 0, 0);
     SDL_SetTextureAlphaMod(mask_texture, shade_alpha);
 
-    const int scaled_w = std::max(1, static_cast<int>(std::lround(static_cast<float>(width) * output.scale)));
-    const int scaled_h = std::max(1, static_cast<int>(std::lround(static_cast<float>(height) * output.scale)));
+    const float base_scale = context.base_shadow_scale;
+    const int scaled_w = std::max(1, static_cast<int>(std::lround(static_cast<float>(width) * base_scale)));
+    const int scaled_h = std::max(1, static_cast<int>(std::lround(static_cast<float>(height) * base_scale)));
     const int offset_px_x = static_cast<int>(std::lround(output.offset_x));
     const int offset_px_y = static_cast<int>(std::lround(output.offset_y));
     const SDL_Point anchor = context.anchor_bottom_center();

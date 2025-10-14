@@ -5,29 +5,15 @@
                 "reactive": {
                     "directionality": {
                         "enable_offsets": true,
-                        "gradient_deadzone": 0.6000000238418579,
-                        "gradient_max": 1.659999966621399,
-                        "offset_max_ratio_x": 1.0,
-                        "offset_max_ratio_y": 1.0,
-                        "offset_ratio_x": 0.49000000953674316,
-                        "offset_ratio_y": 0.6299999952316284,
-                        "offset_x_bias": 2.380000114440918,
-                        "offset_y_bias": 1.7599999904632568
+                        "gradient_sensitivity": 0.6000000238418579,
+                        "offset_strength": 1.1699999570846558,
+                        "max_offset_ratio": 1.0
                     },
                     "response": {
-                        "absolute_opacity_max": 0.5299999713897705,
-                        "absolute_opacity_min": 0.09000000357627869,
-                        "brightness_floor": 0.38999998569488525,
                         "enable_opacity": true,
-                        "enable_scale": true,
-                        "opacity_gamma": 2.2799999713897705,
-                        "opacity_max_factor": 1.3700000047683716,
-                        "opacity_min_factor": 1.0099999904632568,
-                        "scale_back_limit": 0.8100000023841858,
-                        "scale_front_limit": 0.8799999952316284,
-                        "scale_max": 1.159999966621399,
-                        "scale_min": 0.10000000149011612,
-                        "scale_strength": 0.8500000238418579
+                        "opacity_strength": 2.2799999713897705,
+                        "min_opacity": 0.09000000357627869,
+                        "max_opacity": 0.5299999713897705
                     },
                     "sampling": {
                         "diagonal_weight": 0.8700000047683716,
