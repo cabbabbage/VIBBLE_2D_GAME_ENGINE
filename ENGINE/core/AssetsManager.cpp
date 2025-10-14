@@ -11,6 +11,7 @@
 #include "render/light_rays.hpp"
 #include "render/light_rays_config.hpp"
 #include "render/DisplayStats.hpp"
+#include "render_pipeline/ScalingLogic.hpp"
 #include "map_generation/room.hpp"
 #include "utils/area.hpp"
 #include "utils/input.hpp"
@@ -565,6 +566,12 @@ void Assets::update(const Input& input,
 
     if (display_stats_) {
         display_stats_->handle_input(input);
+    }
+
+    const bool ctrl_down = input.isScancodeDown(SDL_SCANCODE_LCTRL) || input.isScancodeDown(SDL_SCANCODE_RCTRL);
+    if (ctrl_down && input.wasScancodePressed(SDL_SCANCODE_R)) {
+        const bool enabled = render_pipeline::ScalingLogic::ToggleUsageTracking();
+        std::cout << "[Assets] Scaling usage tracking " << (enabled ? "enabled" : "disabled") << " (Ctrl+R).\n";
     }
 
     bool closest_assets_dirty = false;

@@ -152,10 +152,58 @@ struct ScalingLogic {
     static inline void SetUsageTrackingEnabled(bool enabled) {
         UsageState& state = usage_state();
         std::lock_guard<std::mutex> guard(state.mutex);
-        state.enabled = enabled;
-        if (enabled && !state.loaded) {
-            ensure_loaded(state);
+        ensure_loaded(state);
+        const bool was_enabled = state.enabled;
+        state.enabled          = enabled;
+        if (enabled && !was_enabled) {
+            if (update_new_values_flag(state, true)) {
+                // Flag transitioned from false to true - persist immediately.
+                save_to_disk(state);
+            }
         }
+    }
+
+    static inline bool ToggleUsageTracking() {
+        UsageState& state = usage_state();
+        std::lock_guard<std::mutex> guard(state.mutex);
+        ensure_loaded(state);
+        const bool new_state = !state.enabled;
+        state.enabled        = new_state;
+        if (new_state) {
+            if (update_new_values_flag(state, true)) {
+                save_to_disk(state);
+            }
+        }
+        return new_state;
+    }
+
+    static inline bool MarkNewValuesPending() {
+        UsageState& state = usage_state();
+        std::lock_guard<std::mutex> guard(state.mutex);
+        ensure_loaded(state);
+        const bool previous = state.data.value("new_values", false);
+        if (update_new_values_flag(state, true)) {
+            save_to_disk(state);
+        }
+        return previous;
+    }
+
+    static inline bool ConsumeNewValues() {
+        UsageState& state = usage_state();
+        std::lock_guard<std::mutex> guard(state.mutex);
+        ensure_loaded(state);
+        const bool previous = state.data.value("new_values", false);
+        if (update_new_values_flag(state, false)) {
+            save_to_disk(state);
+        }
+        return previous;
+    }
+
+    static inline bool NewValuesPending() {
+        UsageState& state = usage_state();
+        std::lock_guard<std::mutex> guard(state.mutex);
+        ensure_loaded(state);
+        return state.data.value("new_values", false);
     }
 
     static inline bool UsageTrackingEnabled() {
@@ -261,8 +309,9 @@ private:
 
     static inline nlohmann::json default_storage() {
         nlohmann::json data;
-        data["version"] = 1;
-        data["assets"] = nlohmann::json::object();
+        data["version"]    = 1;
+        data["assets"]     = nlohmann::json::object();
+        data["new_values"] = false;
         return data;
     }
 
@@ -307,6 +356,11 @@ private:
         } catch (...) {
             state.data  = default_storage();
             state.dirty = true;
+        }
+
+        if (!state.data.contains("new_values") || !state.data["new_values"].is_boolean()) {
+            state.data["new_values"] = false;
+            state.dirty               = true;
         }
     }
 
@@ -465,6 +519,20 @@ private:
         } catch (...) {
             return false;
         }
+    }
+
+    static inline bool update_new_values_flag(UsageState& state, bool value) {
+        if (!state.data.contains("new_values") || !state.data["new_values"].is_boolean()) {
+            state.data["new_values"] = false;
+            state.dirty               = true;
+        }
+        const bool current = state.data["new_values"].get<bool>();
+        if (current == value) {
+            return false;
+        }
+        state.data["new_values"] = value;
+        state.dirty               = true;
+        return true;
     }
 
     static constexpr int kHistogramBucketCount    = 10;

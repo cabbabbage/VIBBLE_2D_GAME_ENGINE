@@ -173,11 +173,17 @@ std::vector<Asset*> AssetLoader::collectDistantAssets(int fade_start_distance, i
 	distant_assets.reserve(rooms_.size() * 4);
         auto allZones = getAllRoomAndTrailAreas();
         auto zoneCache = asset_loader_internal::build_zone_cache(allZones);
+
+        double removal_distance = fade_end_distance;
+        if (fade_end_distance > fade_start_distance) {
+                const double fade_range = fade_end_distance - fade_start_distance;
+                const double visibility_threshold = std::sqrt(0.3);
+                removal_distance = fade_end_distance - visibility_threshold * fade_range;
+        }
         for (Room* room : rooms_) {
                 for (auto& asset_up : room->assets) {
                         Asset* asset = asset_up.get();
             if (!asset->info || asset->info->type != asset_types::boundary) {
-                    asset->alpha_percentage = 1.0;
                     continue;
             }
                         SDL_Point asset_point{asset->pos.x, asset->pos.y};
@@ -186,16 +192,8 @@ std::vector<Asset*> AssetLoader::collectDistantAssets(int fade_start_distance, i
                         }
                         double minDistSq = asset_loader_internal::min_distance_sq_to_zones(asset_point, zoneCache, fade_end_distance);
                         double minDist = std::sqrt(minDistSq);
-                        double alpha = 0.0;
-                        if (minDist <= fade_start_distance) alpha = 1.0;
-                        else if (minDist >= fade_end_distance) alpha = 0.0;
-                        else {
-                                double t = (minDist - fade_start_distance) / (fade_end_distance - fade_start_distance);
-                                double diff = 1.0 - t;
-                                alpha = diff * diff;
-                        }
-                        asset->alpha_percentage = alpha * 1.2;
-                        bool distant = !(alpha > 0.3);
+
+                        bool distant = minDist >= removal_distance;
                         asset->static_frame = distant;
                         if (distant) distant_assets.push_back(asset);
                 }

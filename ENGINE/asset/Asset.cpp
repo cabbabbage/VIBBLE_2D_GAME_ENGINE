@@ -46,7 +46,6 @@ Asset::Asset(std::shared_ptr<AssetInfo> info_,
 , pos(start_pos)
 , z_index(0)
 , z_offset(0)
-, alpha_percentage(1.0)
 , depth(depth_)
 , spawn_id(spawn_id_)
 , spawn_method(spawn_method_)
@@ -119,7 +118,6 @@ Asset::Asset(const Asset& o)
 , render_player_light(o.render_player_light)
 , generate_rays(o.generate_rays)
 , ray_strength(o.ray_strength)
-, alpha_percentage(o.alpha_percentage)
 , distance_to_player_sq(o.distance_to_player_sq)
 , distance_from_camera(o.distance_from_camera)
 , angle_from_camera(o.angle_from_camera)
@@ -173,7 +171,6 @@ Asset& Asset::operator=(const Asset& o) {
         render_player_light  = o.render_player_light;
         generate_rays        = o.generate_rays;
         ray_strength         = o.ray_strength;
-	alpha_percentage     = o.alpha_percentage;
         distance_to_player_sq = o.distance_to_player_sq;
         distance_from_camera = o.distance_from_camera;
         angle_from_camera = o.angle_from_camera;

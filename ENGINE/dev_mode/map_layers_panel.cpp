@@ -4871,24 +4871,43 @@ std::string MapLayersPanel::layer_config_title_for(int index, const nlohmann::js
 }
 void MapLayersPanel::update_sidebar_bounds(const SDL_Rect& bounds) {
 
-    if (details_container_) {
+    SDL_Rect adjusted = bounds;
+    adjusted.w = std::max(0, adjusted.w);
+    adjusted.h = std::max(0, adjusted.h);
 
-        if (bounds.w > 0 && bounds.h > 0) {
-
-            details_container_->set_panel_bounds_override(bounds);
-
-        } else {
-
-            details_container_->clear_panel_bounds_override();
-
+    if (embedded_mode_) {
+        const int embedded_top = embedded_bounds_.y;
+        if (adjusted.y < embedded_top) {
+            adjusted.y = embedded_top;
         }
+        const int embedded_bottom = embedded_bounds_.y + std::max(0, embedded_bounds_.h);
+        const int max_height = std::max(0, embedded_bottom - adjusted.y);
+        if (adjusted.h > max_height) {
+            adjusted.h = max_height;
+        }
+    } else {
+        const int screen_top = screen_bounds_.y;
+        const int screen_height = std::max(0, screen_bounds_.h);
+        const int screen_bottom = screen_top + screen_height;
+        if (screen_height > 0) {
+            const int max_height = std::clamp(screen_bottom - adjusted.y, 0, screen_height);
+            if (adjusted.h > max_height) {
+                adjusted.h = max_height;
+            }
+        }
+    }
 
+    if (details_container_) {
+        if (adjusted.w > 0 && adjusted.h > 0) {
+            details_container_->set_panel_bounds_override(adjusted);
+            details_container_->request_layout();
+        } else {
+            details_container_->clear_panel_bounds_override();
+        }
     }
 
     if (room_configurator_) {
-
-        room_configurator_->set_bounds(bounds);
-
+        room_configurator_->set_bounds(adjusted);
     }
 
 }
