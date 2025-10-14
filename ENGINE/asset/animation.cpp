@@ -10,6 +10,8 @@
 #include <cstdint>
 #include <filesystem>
 #include <iostream>
+#include <iomanip>
+#include <sstream>
 #include <chrono>
 #include <limits>
 #include <memory>
@@ -22,6 +24,32 @@ namespace {
 #if SDL_VERSION_ATLEAST(2,0,12)
 void apply_scale_mode(SDL_Texture* tex, const AssetInfo& info);
 #endif
+
+std::string format_steps(const std::vector<float>& steps) {
+        std::ostringstream oss;
+        oss << '[';
+        for (std::size_t i = 0; i < steps.size(); ++i) {
+                if (i != 0) {
+                        oss << ", ";
+                }
+                oss << std::fixed << std::setprecision(2) << steps[i];
+        }
+        oss << ']';
+        return oss.str();
+}
+
+std::string format_percent_steps(const std::vector<int>& steps) {
+        std::ostringstream oss;
+        oss << '[';
+        for (std::size_t i = 0; i < steps.size(); ++i) {
+                if (i != 0) {
+                        oss << ", ";
+                }
+                oss << steps[i];
+        }
+        oss << ']';
+        return oss.str();
+}
 
 using AudioCache = std::unordered_map<std::string, std::weak_ptr<Mix_Chunk>>;
 
@@ -141,6 +169,11 @@ void Animation::load(const std::string& trigger,
         const double safe_scale = sanitize_scale_factor(scale_factor);
         clear_texture_cache();
         const bool prefer_cached = !scaling_refresh_pending;
+        std::cout << "[AnimationLoader] " << info.name << "::" << trigger
+                  << " profile steps (pre-normalize): " << format_steps(variant_steps_)
+                  << ", prefer_cached=" << (prefer_cached ? "true" : "false")
+                  << ", scaling_refresh_pending=" << (scaling_refresh_pending ? "true" : "false")
+                  << "\n";
         auto normalize_steps = [](std::vector<float>& steps) {
                 if (steps.empty()) {
                         steps.push_back(1.0f);
@@ -164,6 +197,9 @@ void Animation::load(const std::string& trigger,
                 variant_steps_.assign(defaults.begin(), defaults.end());
         }
         normalize_steps(variant_steps_);
+        std::cout << "[AnimationLoader] " << info.name << "::" << trigger
+                  << " normalized profile steps: " << format_steps(variant_steps_)
+                  << "\n";
         const std::size_t initial_variant_count = variant_steps_.size();
         if (anim_json.contains("source")) {
                 const auto& s = anim_json["source"];
@@ -351,6 +387,10 @@ void Animation::load(const std::string& trigger,
                 std::vector<int> expected_steps = render_pipeline::ScalingLogic::PercentSteps(variant_steps_);
                 const std::uint64_t expected_revision = info.scale_profile_revision;
                 if (cache.load_metadata(meta_file, meta)) {
+                        std::cout << "[AnimationLoader] " << info.name << "::" << trigger
+                                  << " found metadata (revision "
+                                  << meta.value("scale_profile_revision", static_cast<std::uint64_t>(0))
+                                  << ") expecting revision " << expected_revision << "\n";
                         bool meta_ok = (
                             meta.value("cache_version", 0) == kAnimationCacheVersion &&
                             meta.value("frame_count", -1) == expected_frames &&
@@ -370,8 +410,15 @@ void Animation::load(const std::string& trigger,
                                                 stored_steps.push_back(value.get<int>());
                                         }
                                         if (!stored_valid) {
+                                                std::cout << "[AnimationLoader] " << info.name << "::" << trigger
+                                                          << " metadata scale_steps invalid -> forcing rebuild\n";
                                                 meta_ok = false;
                                         } else if (stored_steps != expected_steps) {
+                                                std::cout << "[AnimationLoader] " << info.name << "::" << trigger
+                                                          << " metadata steps " << format_percent_steps(stored_steps)
+                                                          << " differ from profile " << format_percent_steps(expected_steps)
+                                                          << (prefer_cached ? " -> adopting cached ordering" : " -> rebuild required")
+                                                          << "\n";
                                                 if (prefer_cached) {
                                                         std::vector<float> adopted_steps;
                                                         adopted_steps.reserve(stored_steps.size());
@@ -386,22 +433,37 @@ void Animation::load(const std::string& trigger,
                                                         } else {
                                                                 info.scale_variants = variant_steps_;
                                                                 expected_steps = render_pipeline::ScalingLogic::PercentSteps(variant_steps_);
+                                                                std::cout << "[AnimationLoader] " << info.name << "::" << trigger
+                                                                          << " updated runtime scale variants to cached ordering: "
+                                                                          << format_steps(variant_steps_) << "\n";
                                                         }
                                                 } else {
                                                         meta_ok = false;
                                                 }
                                         }
                                 } else {
+                                        std::cout << "[AnimationLoader] " << info.name << "::" << trigger
+                                                  << " metadata missing scale_steps -> forcing rebuild\n";
                                         meta_ok = false;
                                 }
                         }
                         if (meta_ok) {
                                 const std::uint64_t stored_revision = meta.value("scale_profile_revision", static_cast<std::uint64_t>(0));
                                 if (!prefer_cached && stored_revision != expected_revision) {
+                                        std::cout << "[AnimationLoader] " << info.name << "::" << trigger
+                                                  << " metadata revision mismatch (" << stored_revision << " != "
+                                                  << expected_revision << ") -> rebuild\n";
                                         meta_ok = false;
                                 }
                         }
                         use_cache = meta_ok;
+                        if (!use_cache) {
+                                std::cout << "[AnimationLoader] " << info.name << "::" << trigger
+                                          << " cache metadata rejected -> rebuilding variants\n";
+                        }
+                } else {
+                        std::cout << "[AnimationLoader] " << info.name << "::" << trigger
+                                  << " cache metadata missing -> rebuilding variants\n";
                 }
 
                 std::size_t variant_count = variant_steps_.size();
@@ -413,6 +475,8 @@ void Animation::load(const std::string& trigger,
                 }
                 if (!prefer_cached) {
                         use_cache = false;
+                        std::cout << "[AnimationLoader] " << info.name << "::" << trigger
+                                  << " prefer_cached disabled -> forcing rebuild\n";
                 }
                 std::vector<std::vector<SDL_Surface*>> variant_surfaces(variant_count);
                 if (use_cache) {
@@ -424,8 +488,14 @@ void Animation::load(const std::string& trigger,
                                         if (idx == 0 && cache.load_surface_sequence(cache_folder, expected_frames, loaded)) {
                                                 // legacy cache, continue but ensure metadata regenerated later
                                                 use_cache = false;
+                                                std::cout << "[AnimationLoader] " << info.name << "::" << trigger
+                                                          << " legacy cache format detected for variant " << idx
+                                                          << " -> metadata refresh required\n";
                                         } else {
                                                 variants_loaded = false;
+                                                std::cout << "[AnimationLoader] " << info.name << "::" << trigger
+                                                          << " missing cached surfaces for variant " << idx
+                                                          << " -> forcing rebuild\n";
                                                 break;
                                         }
                                 }
@@ -446,6 +516,10 @@ void Animation::load(const std::string& trigger,
                                         scaled_sprite_w = scaled_dimension(variant_surfaces[0][0]->w, safe_scale);
                                         scaled_sprite_h = scaled_dimension(variant_surfaces[0][0]->h, safe_scale);
                                 }
+                                std::cout << "[AnimationLoader] " << info.name << "::" << trigger
+                                          << " loaded " << variant_surfaces[0].size()
+                                          << " frame(s) from cache for " << variant_count
+                                          << " variant step(s)\n";
                         }
                 }
 
@@ -455,6 +529,9 @@ void Animation::load(const std::string& trigger,
                         normalize_steps(variant_steps_);
                         info.scale_variants = variant_steps_;
                         variant_count = variant_steps_.size();
+                        std::cout << "[AnimationLoader] " << info.name << "::" << trigger
+                                  << " reverting to default scale steps: " << format_steps(variant_steps_)
+                                  << "\n";
                         if (variant_count == 0) {
                                 variant_steps_.push_back(1.0f);
                                 variant_count = 1;
@@ -487,6 +564,9 @@ void Animation::load(const std::string& trigger,
 
                 if (!use_cache) {
                         cleanup_variant_directories(cache_folder);
+                        std::cout << "[AnimationLoader] " << info.name << "::" << trigger
+                                  << " generating variant surfaces for " << expected_frames
+                                  << " frame(s) across " << variant_count << " step(s)\n";
                         for (auto& list : variant_surfaces) {
                                 for (SDL_Surface* surf : list) {
                                         if (surf) SDL_FreeSurface(surf);
@@ -529,6 +609,11 @@ void Animation::load(const std::string& trigger,
                         for (std::size_t idx = 0; idx < variant_count; ++idx) {
                                 const std::string variant_path = render_pipeline::ScalingLogic::VariantFolder(cache_folder, variant_steps_, idx);
                                 cache.save_surface_sequence(variant_path, variant_surfaces[idx]);
+                                std::cout << "[AnimationLoader] " << info.name << "::" << trigger
+                                          << " stored " << variant_surfaces[idx].size()
+                                          << " frame(s) for variant index " << idx
+                                          << " (scale " << std::fixed << std::setprecision(2) << variant_steps_[idx]
+                                          << std::defaultfloat << ")\n";
                         }
                         nlohmann::json new_meta;
                         new_meta["cache_version"]    = kAnimationCacheVersion;
@@ -542,6 +627,10 @@ void Animation::load(const std::string& trigger,
                         new_meta["scale_steps"] = std::move(step_arr);
                         new_meta["scale_profile_revision"] = expected_revision;
                         cache.save_metadata(meta_file, new_meta);
+                        std::cout << "[AnimationLoader] " << info.name << "::" << trigger
+                                  << " wrote metadata with steps "
+                                  << format_percent_steps(expected_steps)
+                                  << " revision " << expected_revision << "\n";
                 }
 
                 if (!variant_surfaces[0].empty() && variant_surfaces[0][0] && (scaled_sprite_w <= 0 || scaled_sprite_h <= 0)) {

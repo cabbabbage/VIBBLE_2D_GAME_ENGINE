@@ -7,6 +7,9 @@
 #include <nlohmann/json.hpp>
 #include <SDL.h>
 #include <SDL_image.h>
+#include <iostream>
+#include <iomanip>
+#include <sstream>
 #include <algorithm>
 #include <cmath>
 #include <filesystem>
@@ -18,6 +21,21 @@
 #include "custom_controllers/Frog_controller.hpp"
 #include "custom_controllers/default_controller.hpp"
 using nlohmann::json;
+
+namespace {
+std::string format_steps(const std::vector<float>& steps) {
+        std::ostringstream oss;
+        oss << '[';
+        for (std::size_t i = 0; i < steps.size(); ++i) {
+                if (i != 0) {
+                        oss << ", ";
+                }
+                oss << std::fixed << std::setprecision(2) << steps[i];
+        }
+        oss << ']';
+        return oss.str();
+}
+}
 
 void AnimationLoader::load(AssetInfo& info, SDL_Renderer* renderer) {
         if (info.anims_json_.is_null()) return;
@@ -31,10 +49,18 @@ void AnimationLoader::load(AssetInfo& info, SDL_Renderer* renderer) {
         render_pipeline::ScalingLogic::ConfigureUsageStorage(std::filesystem::path("loading") / "scaling_profiles.json");
         const bool scaling_refresh_pending = render_pipeline::ScalingLogic::HasPendingUsageData();
         const auto profile = render_pipeline::ScalingLogic::ProfileForAsset(info.name);
+        std::cout << "[AnimationLoader] " << info.name
+                  << " scaling_refresh_pending=" << (scaling_refresh_pending ? "true" : "false")
+                  << ", profile_revision=" << profile.revision
+                  << ", profile_steps=" << format_steps(profile.steps)
+                  << "\n";
         info.scale_variants = profile.steps;
         if (info.scale_variants.empty()) {
                 const auto& defaults = render_pipeline::ScalingLogic::DefaultScaleSteps();
                 info.scale_variants.assign(defaults.begin(), defaults.end());
+                std::cout << "[AnimationLoader] " << info.name
+                          << " falling back to default scaling steps: "
+                          << format_steps(info.scale_variants) << "\n";
         }
         if (info.scale_variants.empty()) {
                 info.scale_variants.push_back(1.0f);
@@ -46,6 +72,9 @@ void AnimationLoader::load(AssetInfo& info, SDL_Renderer* renderer) {
         if (std::fabs(info.scale_variants.front() - 1.0f) > 1e-4f) {
                 info.scale_variants.insert(info.scale_variants.begin(), 1.0f);
         }
+        std::cout << "[AnimationLoader] " << info.name
+                  << " normalized asset scaling steps: " << format_steps(info.scale_variants)
+                  << " (profile revision " << profile.revision << ")\n";
         info.scale_profile_revision = profile.revision;
 
         std::vector<std::pair<std::string, nlohmann::json>> alias_queue;
