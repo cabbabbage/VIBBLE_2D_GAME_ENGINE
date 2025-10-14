@@ -226,6 +226,11 @@ bool AnimationUpdate::point_in_impassable(SDL_Point pt, const Asset* ignored) co
         return false;
     }
 
+    const Assets* assets = assets_owner_ ? assets_owner_ : (self_ ? self_->get_assets() : nullptr);
+    if (!animation_update::detail::bottom_point_inside_playable_area(assets, pt)) {
+        return true;
+    }
+
     return visit_impassable_neighbors(*self_, [&](Asset* neighbor) {
         if (!neighbor || neighbor == self_ || neighbor == ignored || !neighbor->info) {
             return false;
@@ -257,6 +262,11 @@ bool AnimationUpdate::path_blocked(SDL_Point from,
 
     const SDL_Point bottom_from = animation_update::detail::bottom_middle_for(*self_, from);
     const SDL_Point dest_bottom = animation_update::detail::bottom_middle_for(*self_, to);
+
+    const Assets* assets = assets_owner_ ? assets_owner_ : (self_ ? self_->get_assets() : nullptr);
+    if (animation_update::detail::segment_leaves_playable_area(assets, bottom_from, dest_bottom)) {
+        return true;
+    }
 
     bool blocked = false;
     visit_impassable_neighbors(*self_, [&](Asset* neighbor) {
@@ -321,6 +331,8 @@ bool AnimationUpdate::attempt_unstick(SDL_Point from,
 
     SDL_Point push{0, 0};
     std::vector<const Asset*> blocking_neighbors = blockers;
+
+    const Assets* assets = assets_owner_ ? assets_owner_ : (self_ ? self_->get_assets() : nullptr);
 
     if (blocking_neighbors.empty()) {
         visit_impassable_neighbors(*self_, [&](Asset* neighbor) {
@@ -418,6 +430,9 @@ bool AnimationUpdate::attempt_unstick(SDL_Point from,
 
     const auto inside_disallowed = [&](SDL_Point bottom) {
         bool blocked = false;
+        if (!animation_update::detail::bottom_point_inside_playable_area(assets, bottom)) {
+            return true;
+        }
         visit_impassable_neighbors(*self_, [&](Asset* neighbor) {
             if (!neighbor || neighbor == self_ || !neighbor->info) {
                 return false;
@@ -443,6 +458,9 @@ bool AnimationUpdate::attempt_unstick(SDL_Point from,
 };
 
     const auto inside_any = [&](SDL_Point bottom) {
+        if (!animation_update::detail::bottom_point_inside_playable_area(assets, bottom)) {
+            return false;
+        }
         bool inside = false;
         visit_impassable_neighbors(*self_, [&](Asset* neighbor) {
             if (!neighbor || neighbor == self_ || !neighbor->info) {

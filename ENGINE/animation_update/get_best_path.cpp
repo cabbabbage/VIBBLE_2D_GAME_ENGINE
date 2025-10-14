@@ -56,8 +56,12 @@ bool blocked_step(SDL_Point from,
                   const std::vector<CollisionEntry>& collisions,
                   const Asset& self,
                   const Assets* assets_owner) {
-    (void)assets_owner;
-    const SDL_Point dest_bottom = animation_update::detail::bottom_middle_for(self, to);
+    const SDL_Point start_bottom = animation_update::detail::bottom_middle_for(self, from);
+    const SDL_Point dest_bottom  = animation_update::detail::bottom_middle_for(self, to);
+
+    if (animation_update::detail::segment_leaves_playable_area(assets_owner, start_bottom, dest_bottom)) {
+        return true;
+    }
 
     for (const CollisionEntry& entry : collisions) {
         const Asset* other = entry.asset;

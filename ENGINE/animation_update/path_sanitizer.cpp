@@ -119,6 +119,7 @@ std::vector<SDL_Point> PathSanitizer::sanitize(const Asset& self,
     const auto collision_areas = gather_collision_areas(self);
     const SDL_Point origin     = self.pos;
     const int       thresh_sq  = visited_thresh_px * visited_thresh_px;
+    const Assets*   assets     = self.get_assets();
 
     for (const SDL_Point& checkpoint : absolute_checkpoints) {
         SDL_Point anchor = sanitized.empty() ? origin : sanitized.back();
@@ -135,6 +136,15 @@ std::vector<SDL_Point> PathSanitizer::sanitize(const Asset& self,
 
         if (segment_hits_any(anchor, candidate, collision_areas)) {
             candidate = walk_back_to_perimeter(anchor, candidate, collision_areas);
+        }
+
+        const SDL_Point anchor_bottom    = animation_update::detail::bottom_middle_for(self, anchor);
+        const SDL_Point candidate_bottom = animation_update::detail::bottom_middle_for(self, candidate);
+        if (!animation_update::detail::bottom_point_inside_playable_area(assets, candidate_bottom)) {
+            continue;
+        }
+        if (animation_update::detail::segment_leaves_playable_area(assets, anchor_bottom, candidate_bottom)) {
+            continue;
         }
 
         if (thresh_sq > 0 && animation_update::detail::distance_sq(anchor, candidate) <= thresh_sq) {

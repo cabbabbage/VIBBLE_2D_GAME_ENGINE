@@ -10,6 +10,8 @@
 #include "asset/asset_types.hpp"
 #include "utils/area.hpp"
 
+class Assets;
+
 namespace animation_update::detail {
 
 inline constexpr const char kDefaultAnimation[] = "default";
@@ -89,6 +91,9 @@ inline SDL_Point bottom_middle_for(const Asset& asset, SDL_Point pos) {
     const int offset_y = bottom.y - asset.pos.y;
     return SDL_Point{ pos.x + offset_x, pos.y + offset_y };
 }
+
+bool bottom_point_inside_playable_area(const Assets* assets, SDL_Point bottom_point);
+bool segment_leaves_playable_area(const Assets* assets, SDL_Point from, SDL_Point to);
 
 }
 

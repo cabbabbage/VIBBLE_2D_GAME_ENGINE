@@ -8,6 +8,7 @@
 #include <vector>
 #include <memory>
 #include <deque>
+#include <optional>
 #include <nlohmann/json.hpp>
 #include "map_generation/room.hpp"
 
@@ -164,6 +165,13 @@ private:
         Asset* asset;
 };
     std::vector<ClosestEntry> closest_buffer_;
+
+    struct ScalingNotice {
+        std::string message;
+        Uint32 expiry_ms = 0;
+    };
+
+    std::optional<ScalingNotice> scaling_notice_;
 
     void rebuild_active_assets_if_needed();
     void update_active_assets(SDL_Point center);
