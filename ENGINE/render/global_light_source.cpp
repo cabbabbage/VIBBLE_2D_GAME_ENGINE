@@ -19,7 +19,9 @@ Global_Light_Source::Global_Light_Source(SDL_Renderer* renderer,
         base_color_(fallback_base_color),
         current_color_(fallback_base_color),
         default_center_(screen_center),
+        default_map_center_(screen_center),
         center_(screen_center),
+        map_reference_center_(screen_center),
         angle_(0.0f),
         initialized_(false),
         pos_{screen_center.x, screen_center.y},
@@ -50,6 +52,8 @@ void Global_Light_Source::set_defaults(int screen_width, SDL_Color fallback_base
         key_colors_.clear();
         key_colors_.push_back({0.0f, base_color_});
         center_ = default_center_;
+        default_map_center_ = default_center_;
+        map_reference_center_ = default_map_center_;
         recalc_position();
 }
 
@@ -71,8 +75,8 @@ bool Global_Light_Source::load_from_map_light(const std::string& map_path) {
                 return false;
         }
 
-        int default_cx = default_center_.x;
-        int default_cy = default_center_.y;
+        int default_cx = default_map_center_.x;
+        int default_cy = default_map_center_.y;
         try {
                 if (j.is_object()) {
                         const double map_radius = map_layers::map_radius_from_map_info(j);
@@ -85,7 +89,8 @@ bool Global_Light_Source::load_from_map_light(const std::string& map_path) {
         } catch (...) {
 
         }
-        default_center_ = SDL_Point{ default_cx, default_cy };
+        default_map_center_ = SDL_Point{ default_cx, default_cy };
+        map_reference_center_ = default_map_center_;
         center_ = default_center_;
         auto it = j.find("map_light_data");
         if (it == j.end() || !it->is_object()) {
@@ -157,6 +162,7 @@ void Global_Light_Source::apply_config(const json& data) {
         }
 
         center_ = default_center_;
+        map_reference_center_ = default_map_center_;
         auto parse_point = [](const nlohmann::json& arr) -> std::optional<SDL_Point> {
                 if (!arr.is_array() || arr.size() < 2) {
                         return std::nullopt;
@@ -172,14 +178,14 @@ void Global_Light_Source::apply_config(const json& data) {
         bool custom_center = false;
         if (auto center_it = data.find("center"); center_it != data.end()) {
                 if (auto parsed = parse_point(*center_it)) {
-                        center_ = *parsed;
+                        map_reference_center_ = *parsed;
                         custom_center = true;
                 }
         }
         if (!custom_center) {
                 if (auto position_it = data.find("position"); position_it != data.end()) {
                         if (auto parsed = parse_point(*position_it)) {
-                                center_ = *parsed;
+                                map_reference_center_ = *parsed;
                                 custom_center = true;
                         }
                 }
@@ -187,13 +193,13 @@ void Global_Light_Source::apply_config(const json& data) {
         if (!custom_center) {
                 if (data.contains("center_x")) {
                         try {
-                                center_.x = data.at("center_x").get<int>();
+                                map_reference_center_.x = data.at("center_x").get<int>();
                                 custom_center = true;
                         } catch (...) {}
                 }
                 if (data.contains("center_y")) {
                         try {
-                                center_.y = data.at("center_y").get<int>();
+                                map_reference_center_.y = data.at("center_y").get<int>();
                                 custom_center = true;
                         } catch (...) {}
                 }
@@ -256,6 +262,12 @@ void Global_Light_Source::recalc_position() {
         const int dy = static_cast<int>(std::lround(static_cast<double>(orbit_radius_y_) * sa));
         pos_.x = center_.x + dx;
         pos_.y = center_.y - dy;
+}
+
+SDL_Point Global_Light_Source::get_direction_target() const {
+        const int offset_x = pos_.x - center_.x;
+        const int offset_y = pos_.y - center_.y;
+        return SDL_Point{ map_reference_center_.x + offset_x, map_reference_center_.y + offset_y };
 }
 
 SDL_Color Global_Light_Source::compute_color_from_horizon() const {

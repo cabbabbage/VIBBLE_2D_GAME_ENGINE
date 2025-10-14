@@ -146,10 +146,19 @@ void SceneRenderer::update_fullscreen_light_texture(){
 
 bool SceneRenderer::shouldRegen(Asset* a){
     if (!a) return false;
+
+    if (a->is_shaded || a->generate_rays || a->is_shading_group_set()) {
+        return true;
+    }
+
     SDL_Texture* final_texture=a->get_final_texture();
+    if (!final_texture) {
+        return true;
+    }
+
     const bool locked=a->is_current_animation_locked_in_progress();
     const bool treat_static=a->static_frame||locked;
-    return !final_texture||!treat_static;
+    return !treat_static;
 }
 
 SDL_Rect SceneRenderer::get_scaled_position_rect(Asset* a,int fw,int fh,float inv_scale,int min_w,int min_h,float ref_sh){

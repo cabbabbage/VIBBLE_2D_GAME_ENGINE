@@ -177,6 +177,14 @@ std::vector<Asset*> AssetLoader::collectDistantAssets(int lock_threshold, int re
         auto allZones = getAllRoomAndTrailAreas();
         auto zoneCache = asset_loader_internal::build_zone_cache(allZones);
 
+        std::unordered_map<std::string, Room*> room_lookup;
+        room_lookup.reserve(rooms_.size());
+        for (Room* room : rooms_) {
+                if (room) {
+                        room_lookup.emplace(room->room_name, room);
+                }
+        }
+
         const double remove_distance = static_cast<double>(remove_threshold);
         const double lock_distance = static_cast<double>(lock_threshold);
         for (Room* room : rooms_) {
@@ -186,6 +194,20 @@ std::vector<Asset*> AssetLoader::collectDistantAssets(int lock_threshold, int re
                     continue;
             }
                         SDL_Point asset_point{asset->pos.x, asset->pos.y};
+
+                        Room* owning_room = room;
+                        const std::string& owner_name = asset->owning_room_name();
+                        if (!owner_name.empty()) {
+                                auto it = room_lookup.find(owner_name);
+                                if (it != room_lookup.end() && it->second) {
+                                        owning_room = it->second;
+                                }
+                        }
+
+                        if (owning_room && owning_room->room_area && owning_room->room_area->contains_point(asset_point)) {
+                                continue;
+                        }
+
                         if (asset_loader_internal::point_inside_any_zone(asset_point, zoneCache)) {
                                 continue;
                         }

@@ -5,29 +5,29 @@
                 "reactive": {
                     "directionality": {
                         "enable_offsets": true,
-                        "gradient_sensitivity": 0.3799999952316284,
-                        "max_offset_ratio": 0.46000000834465027,
-                        "offset_strength": 2.0
+                        "gradient_sensitivity": 0.3499999940395355,
+                        "max_offset_ratio": 0.5099999904632568,
+                        "offset_strength": 0.949999988079071
                     },
                     "output": {
-                        "map_line_weight": 2.7100000381469727,
+                        "map_line_weight": 1.4700000286102295,
                         "parallax_strength": 3.0,
-                        "scale_factor": 1.0
+                        "scale_factor": 2.6500000953674316
                     },
                     "response": {
                         "enable_opacity": true,
                         "max_opacity": 0.9399999976158142,
-                        "min_opacity": 0.6299999952316284,
+                        "min_opacity": 0.029999999329447746,
                         "opacity_strength": 3.0
                     },
                     "sampling": {
-                        "diagonal_weight": 1.5700000524520874,
+                        "diagonal_weight": 1.100000023841858,
                         "kernel_radius": 12.0,
-                        "outer_ring_weight": 2.0399999618530273
+                        "outer_ring_weight": 2.5799999237060547
                     },
                     "stability": {
                         "enable_temporal_smoothing": true,
-                        "temporal_smoothing": 0.8140000104904175
+                        "temporal_smoothing": 0.2540000081062317
                     }
                 },
                 "update_map_light": true

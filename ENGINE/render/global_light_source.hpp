@@ -17,6 +17,8 @@ class Global_Light_Source {
     SDL_Color get_current_color() const;
     int       get_brightness() const;
     SDL_Point get_orbit_center() const { return center_; }
+    SDL_Point get_direction_reference() const { return map_reference_center_; }
+    SDL_Point get_direction_target() const;
     int       min_opacity() const { return min_opacity_; }
     int       max_opacity() const { return max_opacity_; }
 
@@ -38,7 +40,9 @@ class Global_Light_Source {
     SDL_Color base_color_;
     SDL_Color current_color_;
     SDL_Point default_center_;
+    SDL_Point default_map_center_;
     SDL_Point center_;
+    SDL_Point map_reference_center_;
     SDL_Point pos_;
     float angle_;
     bool  initialized_;

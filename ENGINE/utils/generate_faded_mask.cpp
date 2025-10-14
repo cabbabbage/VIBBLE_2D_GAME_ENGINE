@@ -18,7 +18,7 @@ namespace {
 
 constexpr int   kCacheVersion    = 3;
 constexpr float kExpansionRatio  = 0.8f;
-constexpr float kFadeExponent    = 1.2f;
+constexpr float kFadeExponent    = 1.05f;
 
 struct DistanceNode {
     float dist;

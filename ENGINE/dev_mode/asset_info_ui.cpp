@@ -663,10 +663,12 @@ void AssetInfoUI::render_world_overlay(SDL_Renderer* r, const camera& cam) const
 
     bool drew_indicator = false;
     if (global_light) {
-        SDL_Point light_pos = global_light->get_position();
-        SDL_Point end = cam.map_to_screen(light_pos);
+        SDL_Point start_map = global_light->get_direction_reference();
+        SDL_Point end_map = global_light->get_direction_target();
+        SDL_Point start = cam.map_to_screen(start_map);
+        SDL_Point end = cam.map_to_screen(end_map);
         SDL_SetRenderDrawColor(r, 220, 32, 32, 230);
-        SDL_RenderDrawLine(r, screen_center.x, screen_center.y, end.x, end.y);
+        SDL_RenderDrawLine(r, start.x, start.y, end.x, end.y);
         SDL_Rect tip{end.x - 4, end.y - 4, 8, 8};
         SDL_RenderFillRect(r, &tip);
         drew_indicator = true;
