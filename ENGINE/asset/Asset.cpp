@@ -116,7 +116,6 @@ Asset::Asset(const Asset& o)
 , flipped(o.flipped)
 , generate_rays(o.generate_rays)
 , ray_strength(o.ray_strength)
-, distance_to_player_sq(o.distance_to_player_sq)
 , distance_from_camera(o.distance_from_camera)
 , angle_from_camera(o.angle_from_camera)
 , children(o.children)
@@ -167,7 +166,6 @@ Asset& Asset::operator=(const Asset& o) {
         flipped              = o.flipped;
         generate_rays        = o.generate_rays;
         ray_strength         = o.ray_strength;
-        distance_to_player_sq = o.distance_to_player_sq;
         distance_from_camera = o.distance_from_camera;
         angle_from_camera = o.angle_from_camera;
         children             = o.children;

@@ -21,7 +21,6 @@
 #include <cctype>
 #include <fstream>
 #include <iostream>
-#include <limits>
 #include <memory>
 #include <nlohmann/json.hpp>
 #include <vector>
@@ -630,19 +629,6 @@ void Assets::update(const Input& input,
             update_active_assets(camera_.get_screen_center());
             rebuild_active_assets_if_needed();
             update_filtered_active_assets();
-        }
-    }
-    if (player) {
-        player->distance_to_player_sq = 0.0f;
-        for (Asset* a : active_assets) {
-            if (!a || a == player) continue;
-            const long long dist_sq = Range::distance_sq(a, player);
-            a->distance_to_player_sq = static_cast<float>(dist_sq);
-        }
-    } else {
-        for (Asset* a : active_assets) {
-            if (!a) continue;
-            a->distance_to_player_sq = std::numeric_limits<float>::infinity();
         }
     }
     if (!dev_mode) {
