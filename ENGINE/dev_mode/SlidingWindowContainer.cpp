@@ -510,7 +510,9 @@ void SlidingWindowContainer::layout(int screen_w, int screen_h) const {
         }
         if (desired.w > screen_w) desired.w = screen_w;
         if (desired.h > screen_h) desired.h = screen_h;
-        desired.x = std::max(0, screen_w - desired.w);
+        int max_x = screen_w - desired.w;
+        if (max_x < 0) max_x = 0;
+        desired.x = std::clamp(desired.x, 0, max_x);
         int max_y = screen_h - desired.h;
         if (max_y < 0) max_y = 0;
         desired.y = std::clamp(desired.y, 0, max_y);
