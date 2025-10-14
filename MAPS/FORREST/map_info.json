@@ -70,8 +70,8 @@
     ]
   },
   "map_grid_settings": {
-    "jitter": 0,
-    "spacing": 100
+    "jitter": 5,
+    "spacing": 142
   },
   "map_layers": [
     {
@@ -252,7 +252,7 @@
           "display_name": "Box",
           "enforce_spacing": false,
           "max_number": 23,
-          "min_number": -45,
+          "min_number": 1,
           "position": "Random",
           "priority": 1,
           "spawn_id": "spn-ebb38f93ac8d"
@@ -493,6 +493,19 @@
       "min_height": 1500,
       "min_width": 1500,
       "name": "room_5",
+      "spawn_groups": []
+    },
+    "room_6": {
+      "edge_smoothness": 2,
+      "geometry": "Square",
+      "inherits_map_assets": false,
+      "is_boss": false,
+      "is_spawn": false,
+      "max_height": 10000,
+      "max_width": 10000,
+      "min_height": 1500,
+      "min_width": 1500,
+      "name": "room_6",
       "spawn_groups": []
     },
     "room_lab": {

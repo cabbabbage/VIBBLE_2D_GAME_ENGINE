@@ -284,9 +284,12 @@ void MapModeUI::ensure_panels() {
         grid_panel_ = std::make_unique<MapGridPanel>(kDefaultPanelX + 96, kDefaultPanelY + 48);
         grid_panel_->close();
         track_floating_panel(grid_panel_.get());
-    }
-    if (grid_panel_) {
-        grid_panel_->set_map_info(map_info_, grid_save_callback_, grid_regen_callback_);
+
+        GridSaveCallback save_cb = grid_save_callback_;
+        if (!save_cb) {
+            save_cb = [this]() { return save_map_info_to_disk(); };
+        }
+        grid_panel_->set_map_info(map_info_, save_cb, grid_regen_callback_);
     }
     if (!layers_controller_) {
         layers_controller_ = std::make_shared<MapLayersController>();
