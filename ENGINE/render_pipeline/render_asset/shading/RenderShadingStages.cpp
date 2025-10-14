@@ -37,10 +37,6 @@ std::unordered_map<const Asset*, ShadowTemporalState>& shadow_state_cache() {
     return cache;
 }
 
-float clampf(float value, float min_value, float max_value) {
-    return std::max(min_value, std::min(value, max_value));
-}
-
 float blend_value(float previous, float target, float smoothing) {
     return previous * smoothing + target * (1.0f - smoothing);
 }
