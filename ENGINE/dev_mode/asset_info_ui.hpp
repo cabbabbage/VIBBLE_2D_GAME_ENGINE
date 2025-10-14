@@ -60,6 +60,8 @@ class AssetInfoUI {
     static const char* section_display_name(AssetInfoSectionId section_id);
     void sync_map_light_panel_visibility(bool want_visible);
     bool validate_target_asset() const;
+    bool apply_to_assets_with_info(const std::function<void(Asset*)>& fn);
+    void on_animation_document_saved();
 
   private:
     bool visible_ = false;

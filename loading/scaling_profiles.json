@@ -243,6 +243,27 @@
             ],
             "revision": 2
         },
+        "candle": {
+            "histogram": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+            ],
+            "last_updated": "2025-10-14T09:39:09Z",
+            "recommended_percentages": [
+                100,
+                90,
+                80
+            ],
+            "revision": 1
+        },
         "flower": {
             "histogram": [
                 0,

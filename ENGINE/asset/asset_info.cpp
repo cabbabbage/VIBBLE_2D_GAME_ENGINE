@@ -977,10 +977,71 @@ bool AssetInfo::rename_animation(const std::string& old_name, const std::string&
 }
 
 void AssetInfo::set_start_animation_name(const std::string& name) {
-	try {
-		start_animation = name;
-		info_json_["start"] = name;
-	} catch (...) {
+        try {
+                start_animation = name;
+                info_json_["start"] = name;
+        } catch (...) {
 
-	}
+        }
+}
+
+bool AssetInfo::reload_animations_from_disk() {
+        if (info_json_path_.empty()) {
+                return false;
+        }
+
+        std::ifstream in(info_json_path_);
+        if (!in.is_open()) {
+                return false;
+        }
+
+        nlohmann::json data = nlohmann::json::object();
+        try {
+                in >> data;
+        } catch (...) {
+                return false;
+        }
+
+        if (!data.is_object()) {
+                return false;
+        }
+
+        nlohmann::json animations_section = nlohmann::json::object();
+        auto animations_it = data.find("animations");
+        if (animations_it != data.end()) {
+                animations_section = *animations_it;
+        }
+
+        info_json_["animations"] = animations_section;
+
+        const nlohmann::json* payloads = nullptr;
+        if (animations_section.is_object()) {
+                payloads = &animations_section;
+                auto nested = animations_section.find("animations");
+                if (nested != animations_section.end() && nested->is_object()) {
+                        payloads = &(*nested);
+                }
+        }
+
+        if (payloads && payloads->is_object()) {
+                anims_json_ = *payloads;
+        } else {
+                anims_json_ = nlohmann::json::object();
+        }
+
+        std::string new_start = start_animation;
+        if (animations_section.is_object()) {
+                auto start_it = animations_section.find("start");
+                if (start_it != animations_section.end() && start_it->is_string()) {
+                        new_start = start_it->get<std::string>();
+                }
+        }
+        if (new_start.empty() && data.contains("start") && data["start"].is_string()) {
+                new_start = data["start"].get<std::string>();
+        }
+
+        start_animation = new_start;
+        info_json_["start"] = start_animation;
+
+        return true;
 }

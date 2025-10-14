@@ -135,6 +135,8 @@ class AssetInfo {
 
     void set_start_animation_name(const std::string& name);
 
+    bool reload_animations_from_disk();
+
     struct AreaCodec {
         static SDL_Point scaled_anchor(const AssetInfo& info, std::optional<float> scale_override = std::nullopt);
 

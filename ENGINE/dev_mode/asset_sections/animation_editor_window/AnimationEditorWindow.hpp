@@ -2,6 +2,7 @@
 
 #include <SDL.h>
 #include <filesystem>
+#include <functional>
 #include <memory>
 #include <optional>
 #include <string>
@@ -40,6 +41,8 @@ class AnimationEditorWindow {
     void update(const Input& input, int screen_w, int screen_h);
     void render(SDL_Renderer* renderer) const;
     bool handle_event(const SDL_Event& e);
+
+    void set_on_document_saved(std::function<void()> callback);
 
   private:
     void layout_children();
@@ -91,6 +94,7 @@ class AnimationEditorWindow {
     mutable bool layout_dirty_ = true;
     bool auto_save_pending_ = false;
     int auto_save_timer_frames_ = 0;
+    std::function<void()> on_document_saved_;
 };
 
 }

@@ -9,6 +9,7 @@
 #include <SDL_log.h>
 #include <stdexcept>
 #include <vector>
+#include <unordered_set>
 
 #include <nlohmann/json.hpp>
 #include <functional>
@@ -193,6 +194,9 @@ AssetInfoUI::AssetInfoUI() {
         }
     });
     animation_editor_window_ = std::make_unique<animation_editor::AnimationEditorWindow>();
+    if (animation_editor_window_) {
+        animation_editor_window_->set_on_document_saved([this]() { this->on_animation_document_saved(); });
+    }
 
     container_.set_header_text_provider([this]() {
         return info_ ? info_->name : std::string();
@@ -926,6 +930,17 @@ void AssetInfoUI::notify_light_sources_modified(bool purge_light_cache) {
 
     render_pipeline::ScalingLogic::ResetAssetUsage(info_->name);
 
+    bool updated_any = apply_to_assets_with_info([&](Asset* asset) {
+        asset->is_shaded = info_->is_shaded;
+        asset->generate_rays = info_->generate_rays;
+        asset->ray_strength = info_->ray_strength;
+        asset->clear_render_caches();
+    });
+
+    if (updated_any && assets_) {
+        assets_->mark_active_assets_dirty();
+    }
+
     if (!purge_light_cache) {
         return;
     }
@@ -964,4 +979,95 @@ void AssetInfoUI::save_now() const {
 void AssetInfoUI::open_area_editor(const std::string& name) {
     if (!info_ || !assets_) return;
     assets_->begin_area_edit_for_selected_asset(name);
+}
+
+bool AssetInfoUI::apply_to_assets_with_info(const std::function<void(Asset*)>& fn) {
+    if (!info_) {
+        return false;
+    }
+
+    std::unordered_set<Asset*> visited;
+    auto visit = [&](Asset* asset) {
+        if (!asset || asset->info.get() != info_.get()) {
+            return;
+        }
+        if (!visited.insert(asset).second) {
+            return;
+        }
+        fn(asset);
+    };
+
+    if (assets_) {
+        for (Asset* asset : assets_->all) {
+            visit(asset);
+        }
+        for (const auto& owned : assets_->owned_assets) {
+            visit(owned.get());
+        }
+    }
+    visit(target_asset_);
+    return !visited.empty();
+}
+
+void AssetInfoUI::on_animation_document_saved() {
+    if (!info_) {
+        return;
+    }
+
+    SDL_Renderer* renderer = last_renderer_;
+    if (!renderer && assets_) {
+        renderer = assets_->renderer();
+    }
+
+    if (!renderer) {
+        return;
+    }
+
+    const bool reloaded = info_->reload_animations_from_disk();
+    if (!reloaded) {
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+                    "[AssetInfoUI] Failed to reload animations for %s.",
+                    info_->name.c_str());
+        return;
+    }
+
+    info_->loadAnimations(renderer);
+    render_pipeline::ScalingLogic::ResetAssetUsage(info_->name);
+
+    bool updated_any = apply_to_assets_with_info([&](Asset* asset) {
+        asset->clear_render_caches();
+        asset->clear_downscale_cache();
+        asset->set_final_texture(nullptr);
+        asset->current_frame = nullptr;
+        asset->frame_progress = 0.0f;
+        asset->static_frame = false;
+
+        std::string desired = asset->current_animation.empty() ? std::string{"default"} : asset->current_animation;
+        if (asset->anim_) {
+            asset->anim_->set_animation_now(desired);
+        } else if (asset->info) {
+            auto it = asset->info->animations.find(desired);
+            if (it == asset->info->animations.end()) {
+                it = asset->info->animations.find("default");
+            }
+            if (it == asset->info->animations.end() && !asset->info->animations.empty()) {
+                it = asset->info->animations.begin();
+            }
+            if (it != asset->info->animations.end()) {
+                auto& anim = it->second;
+                asset->current_animation = it->first;
+                asset->current_frame = anim.get_first_frame();
+                asset->static_frame = anim.is_static() || anim.locked;
+            } else {
+                asset->current_animation.clear();
+                asset->current_frame = nullptr;
+            }
+        }
+
+        asset->refresh_cached_dimensions();
+    });
+
+    if (updated_any && assets_) {
+        assets_->mark_active_assets_dirty();
+    }
 }

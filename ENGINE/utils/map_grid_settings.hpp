@@ -2,12 +2,9 @@
 
 #include <random>
 #include <SDL.h>
+#include <nlohmann/json_fwd.hpp>
 
 class Area;
-
-namespace nlohmann {
-class json;
-}
 
 struct MapGridSettings {
     int spacing = 100;

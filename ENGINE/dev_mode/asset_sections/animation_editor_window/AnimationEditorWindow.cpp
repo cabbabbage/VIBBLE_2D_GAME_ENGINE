@@ -9,6 +9,7 @@
 #include <optional>
 #include <sstream>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "AnimationDocument.hpp"
@@ -333,6 +334,10 @@ bool AnimationEditorWindow::handle_event(const SDL_Event& e) {
     return false;
 }
 
+void AnimationEditorWindow::set_on_document_saved(std::function<void()> callback) {
+    on_document_saved_ = std::move(callback);
+}
+
 void AnimationEditorWindow::ensure_layout() const {
     if (layout_dirty_) {
         const_cast<AnimationEditorWindow*>(this)->layout_children();
@@ -518,6 +523,9 @@ void AnimationEditorWindow::process_auto_save() {
     document_->save_to_file();
     if (!info_path_.empty()) {
         set_status_message("Animations auto-saved.", 180);
+    }
+    if (on_document_saved_) {
+        on_document_saved_();
     }
     auto_save_pending_ = false;
     auto_save_timer_frames_ = 0;

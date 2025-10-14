@@ -69,6 +69,10 @@
       }
     ]
   },
+  "map_grid_settings": {
+    "jitter": 0,
+    "spacing": 100
+  },
   "map_layers": [
     {
       "level": 0,
