@@ -10,6 +10,7 @@
 #include "DockableCollapsible.hpp"
 #include "widgets.hpp"
 #include <nlohmann/json.hpp>
+#include "render_pipeline/render_asset/shading/ReactiveShadowSettings.hpp"
 
 struct OrbitSettings;
 struct ScreenLightSettings;
@@ -22,6 +23,7 @@ public:
     ~MapLightPanel() override;
 
     void set_map_info(nlohmann::json* map_info, SaveCallback on_save = nullptr);
+    void set_reactive_settings(render_pipeline::shading::ReactiveShadowSettings* settings);
 
     void open();
     void close();
@@ -56,6 +58,8 @@ private:
     void load_update_map_light_setting();
     nlohmann::json& ensure_light();
     nlohmann::json& ensure_screen_light(nlohmann::json& light);
+    render_pipeline::shading::ReactiveShadowSettings load_reactive_settings_from_json() const;
+    void sync_reactive_settings_shared();
 
     struct OrbitSettings {
         int update_interval = 10;
@@ -174,6 +178,8 @@ private:
 
     OrbitSettings last_applied_orbit_{};
     ScreenLightSettings last_applied_screen_{};
+
+    render_pipeline::shading::ReactiveShadowSettings* reactive_settings_shared_ = nullptr;
 
 protected:
     std::string_view lock_settings_namespace() const override { return "lighting"; }

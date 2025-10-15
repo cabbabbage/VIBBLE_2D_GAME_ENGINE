@@ -204,6 +204,11 @@
         "enable_temporal_smoothing": true,
         "reuse_similarity_threshold": 0.0,
         "temporal_smoothing": 0.11100000143051147
+      },
+      "virtual_light_map": {
+        "directional_strength": 0.5,
+        "distance_strength_falloff": 1.0,
+        "quadrant_count": 20
       }
     },
     "screen_light": {

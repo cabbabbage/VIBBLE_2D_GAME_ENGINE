@@ -12,6 +12,7 @@
 #include "dev_mode/dev_ui_settings.hpp"
 #include "dev_mode/dm_styles.hpp"
 #include "dev_mode/draw_utils.hpp"
+#include "render_pipeline/render_asset/shading/ReactiveShadowSettingsJSON.hpp"
 #include "utils/input.hpp"
 
 using nlohmann::json;
@@ -120,6 +121,12 @@ void MapLightPanel::set_map_info(json* map_info, SaveCallback on_save) {
     update_save_status(true);
     load_update_map_light_setting();
     sync_ui_from_json();
+    sync_reactive_settings_shared();
+}
+
+void MapLightPanel::set_reactive_settings(render_pipeline::shading::ReactiveShadowSettings* settings) {
+    reactive_settings_shared_ = settings;
+    sync_reactive_settings_shared();
 }
 
 nlohmann::json& MapLightPanel::mutable_light() {
@@ -151,7 +158,6 @@ void MapLightPanel::build_ui() {
     orbit_section_btn_ = std::make_unique<DMButton>("", &DMStyles::HeaderButton(), 220, DMButton::height());
     screen_section_btn_ = std::make_unique<DMButton>("", &DMStyles::HeaderButton(), 220, DMButton::height());
     texture_section_btn_ = std::make_unique<DMButton>("", &DMStyles::HeaderButton(), 220, DMButton::height());
-    reactive_section_btn_ = std::make_unique<DMButton>("", &DMStyles::HeaderButton(), 220, DMButton::height());
     update_section_header_labels();
 
     radius_         = std::make_unique<DMSlider>("Radius",          0, 20000, 0);
@@ -517,6 +523,49 @@ nlohmann::json& MapLightPanel::ensure_screen_light(nlohmann::json& light) {
     return screen;
 }
 
+render_pipeline::shading::ReactiveShadowSettings MapLightPanel::load_reactive_settings_from_json() const {
+    using render_pipeline::shading::ReactiveShadowSettings;
+    using render_pipeline::shading::sanitize_reactive_shadow_settings;
+
+    const ReactiveShadowSettings fallback = sanitize_reactive_shadow_settings({});
+
+    const json* reactive_source = nullptr;
+
+    if (editing_light_.is_object()) {
+        auto it = editing_light_.find("reactive_shadows");
+        if (it != editing_light_.end() && it->is_object()) {
+            reactive_source = &(*it);
+        }
+    }
+
+    if (!reactive_source && map_info_ && map_info_->is_object()) {
+        auto light_it = map_info_->find("map_light_data");
+        if (light_it != map_info_->end() && light_it->is_object()) {
+            auto reactive_it = light_it->find("reactive_shadows");
+            if (reactive_it != light_it->end() && reactive_it->is_object()) {
+                reactive_source = &(*reactive_it);
+            }
+        }
+    }
+
+    if (reactive_source) {
+        try {
+            return render_pipeline::shading::sanitize_reactive_shadow_settings(
+                render_pipeline::shading::reactive_shadow_settings_from_json(*reactive_source, fallback));
+        } catch (...) {
+        }
+    }
+
+    return fallback;
+}
+
+void MapLightPanel::sync_reactive_settings_shared() {
+    if (!reactive_settings_shared_) {
+        return;
+    }
+    *reactive_settings_shared_ = load_reactive_settings_from_json();
+}
+
 void MapLightPanel::sync_ui_from_json() {
     json& L = ensure_light();
 
@@ -606,6 +655,7 @@ void MapLightPanel::sync_ui_from_json() {
     }
 
     needs_sync_to_json_ = false;
+    sync_reactive_settings_shared();
 }
 
 void MapLightPanel::sync_json_from_ui() {
@@ -792,6 +842,7 @@ bool MapLightPanel::commit_light_changes() {
         *map_info_ = json::object();
     }
     (*map_info_)["map_light_data"] = ensure_light();
+    sync_reactive_settings_shared();
 
     bool ok = true;
     if (on_save_) {

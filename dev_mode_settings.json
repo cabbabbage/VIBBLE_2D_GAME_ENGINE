@@ -24,21 +24,21 @@
                         "min_opacity": 0.7599999904632568,
                         "opacity_strength": 3.0
                     },
-                "sampling": {
-                    "diagonal_weight": 0.8799999952316284,
-                    "kernel_radius": 12.0,
-                    "outer_ring_weight": 1.440000057220459
-                },
-                "virtual_light_map": {
-                    "quadrant_count": 4,
-                    "distance_strength_falloff": 1.0,
-                    "directional_strength": 0.5
-                },
-                "stability": {
-                    "enable_temporal_smoothing": true,
-                    "reuse_similarity_threshold": 0.0,
-                    "temporal_smoothing": 0.11100000143051147
-                }
+                    "sampling": {
+                        "diagonal_weight": 0.8799999952316284,
+                        "kernel_radius": 12.0,
+                        "outer_ring_weight": 1.440000057220459
+                    },
+                    "stability": {
+                        "enable_temporal_smoothing": true,
+                        "reuse_similarity_threshold": 0.0,
+                        "temporal_smoothing": 0.11100000143051147
+                    },
+                    "virtual_light_map": {
+                        "directional_strength": 0.5,
+                        "distance_strength_falloff": 1.0,
+                        "quadrant_count": 20.0
+                    }
                 },
                 "update_map_light": true
             }
