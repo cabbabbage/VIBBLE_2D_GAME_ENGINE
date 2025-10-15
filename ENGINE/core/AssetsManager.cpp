@@ -390,7 +390,6 @@ const std::vector<Room*>& Assets::rooms() const {
 
 void Assets::refresh_active_asset_lists() {
     rebuild_active_assets_if_needed();
-    update_closest_assets(player, 3);
 
     SDL_Point camera_focus = camera_.get_screen_center();
     auto update_audio_metrics = [&](Asset* asset) {
@@ -463,92 +462,6 @@ void Assets::ensure_dev_controls() {
     dev_mode_trace("[Assets] Dev Controls wiring complete");
 }
 
-void Assets::update_closest_assets(Asset* player, int max_count) {
-    closest_assets.clear();
-
-    if (!player || max_count <= 0) {
-        return;
-    }
-
-    rebuild_active_assets_if_needed();
-
-    const double px = static_cast<double>(player->pos.x);
-    const double py = static_cast<double>(player->pos.y);
-
-    const std::size_t available = active_assets.size();
-    if (available == 0) {
-        return;
-    }
-
-    max_count = static_cast<int>(std::min<std::size_t>(static_cast<std::size_t>(max_count), available));
-    if (max_count <= 0) {
-        return;
-    }
-
-    closest_buffer_.clear();
-    closest_buffer_.reserve(static_cast<std::size_t>(max_count));
-
-    std::size_t worst_index = 0;
-    auto recompute_worst = [&]() {
-        if (closest_buffer_.empty()) {
-            return;
-        }
-        worst_index = 0;
-        double worst = closest_buffer_[0].distance_sq;
-        for (std::size_t i = 1; i < closest_buffer_.size(); ++i) {
-            if (closest_buffer_[i].distance_sq > worst) {
-                worst = closest_buffer_[i].distance_sq;
-                worst_index = i;
-            }
-        }
-};
-
-    auto consider = [&](Asset* asset) {
-        if (!asset || asset == player) {
-            return;
-        }
-
-        const double dx = static_cast<double>(asset->pos.x) - px;
-        const double dy = static_cast<double>(asset->pos.y) - py;
-        const double dist2 = dx * dx + dy * dy;
-
-        if (closest_buffer_.size() < static_cast<std::size_t>(max_count)) {
-            closest_buffer_.push_back({dist2, asset});
-            recompute_worst();
-            return;
-        }
-
-        if (closest_buffer_.empty() || dist2 >= closest_buffer_[worst_index].distance_sq) {
-            return;
-        }
-
-        closest_buffer_[worst_index] = {dist2, asset};
-        recompute_worst();
-};
-
-    for (Asset* asset : active_assets) {
-        consider(asset);
-    }
-
-    if (closest_buffer_.empty()) {
-        return;
-    }
-
-    std::sort(closest_buffer_.begin(), closest_buffer_.end(),
-              [](const ClosestEntry& lhs, const ClosestEntry& rhs) {
-                  return lhs.distance_sq < rhs.distance_sq;
-              });
-
-    closest_assets.reserve(closest_buffer_.size());
-    for (const ClosestEntry& entry : closest_buffer_) {
-        Asset* asset = entry.asset;
-        if (!asset) {
-            continue;
-        }
-        closest_assets.push_back(asset);
-    }
-}
-
 void Assets::set_input(Input* m) {
     input = m;
 
@@ -589,11 +502,6 @@ void Assets::update(const Input& input)
         };
     }
 
-    bool closest_assets_dirty = false;
-    const auto mark_closest_assets_dirty = [&closest_assets_dirty]() {
-        closest_assets_dirty = true;
-};
-
     Room* detected_room = finder_ ? finder_->getCurrentRoom() : nullptr;
     Room* active_room = detected_room;
     if (dev_controls_ && dev_controls_->is_enabled()) {
@@ -603,7 +511,6 @@ void Assets::update(const Input& input)
 
     camera_.update_zoom(active_room, finder_, player);
 
-    mark_closest_assets_dirty();
     update_active_assets(camera_.get_screen_center());
     rebuild_active_assets_if_needed();
 
@@ -624,7 +531,6 @@ void Assets::update(const Input& input)
         dy = player->pos.y - start_py;
         if (dx != 0 || dy != 0) {
             camera_.update_zoom(active_room, finder_, player);
-            mark_closest_assets_dirty();
             update_active_assets(camera_.get_screen_center());
             rebuild_active_assets_if_needed();
             update_filtered_active_assets();
@@ -635,10 +541,6 @@ void Assets::update(const Input& input)
             if (a && a != player)
                 a->update();
         }
-    }
-
-    if (closest_assets_dirty) {
-        update_closest_assets(player, 3);
     }
 
     if (dev_controls_ && dev_controls_->is_enabled()) {
@@ -804,10 +706,9 @@ void Assets::addAsset(const std::string& name, SDL_Point g) {
 
     initialize_active_assets(camera_.get_screen_center());
     rebuild_active_assets_if_needed();
-    update_closest_assets(player, 3);
     update_filtered_active_assets();
 
-    std::cout << "[Assets::addAsset] Active assets=" << active_assets.size() << ", Closest=" << closest_assets.size() << "\n";
+    std::cout << "[Assets::addAsset] Active assets=" << active_assets.size() << "\n";
 
     std::cout << "[Assets::addAsset] Successfully added asset '" << name
               << "' at (" << g.x << ", " << g.y << ")\n";
@@ -860,10 +761,9 @@ Asset* Assets::spawn_asset(const std::string& name, SDL_Point world_pos) {
 
     initialize_active_assets(camera_.get_screen_center());
     rebuild_active_assets_if_needed();
-    update_closest_assets(player, 3);
     update_filtered_active_assets();
 
-    std::cout << "[Assets::spawn_asset] Active assets=" << active_assets.size() << ", Closest=" << closest_assets.size() << "\n";
+    std::cout << "[Assets::spawn_asset] Active assets=" << active_assets.size() << "\n";
 
     std::cout << "[Assets::spawn_asset] Successfully spawned asset '" << name
               << "' at (" << world_pos.x << ", " << world_pos.y << ")\n";
@@ -961,7 +861,6 @@ void Assets::process_removals() {
     erase_ptrs(active_assets);
     erase_ptrs(active_light_assets_);
     erase_ptrs(filtered_active_assets);
-    erase_ptrs(closest_assets);
 
     if (dev_controls_ && dev_controls_->is_enabled()) {
         dev_controls_->clear_selection();
@@ -972,7 +871,6 @@ void Assets::process_removals() {
 
     initialize_active_assets(camera_.get_screen_center());
     rebuild_active_assets_if_needed();
-    update_closest_assets(player, 3);
     update_filtered_active_assets();
 }
 

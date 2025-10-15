@@ -50,7 +50,6 @@ public:
     const std::vector<Asset*>& getActiveLightAssets() const { return active_light_assets_; }
     const std::vector<Asset*>& getActiveLitAssets() const { return active_light_assets_; }
     std::vector<Asset*>& mutable_filtered_active_assets() { return filtered_active_assets; }
-    const std::vector<Asset*>& getClosest() const { return closest_assets; }
     camera& getView() { return camera_; }
     const camera& getView() const { return camera_; }
 
@@ -98,7 +97,6 @@ public:
 
     void refresh_active_asset_lists();
     void refresh_filtered_active_assets();
-    void update_closest_assets(Asset* player, int max_count);
     void mark_active_assets_dirty();
     void initialize_active_assets(SDL_Point center);
 
@@ -149,7 +147,6 @@ private:
     std::vector<Asset*> active_assets;
     std::vector<Asset*> filtered_active_assets;
     std::vector<Asset*> active_light_assets_;
-    std::vector<Asset*> closest_assets;
     std::vector<Room*> rooms_;
     Room* current_room_ = nullptr;
     int num_groups_ = 40;
@@ -164,12 +161,6 @@ private:
     nlohmann::json map_info_json_;
     std::unique_ptr<AssetList> active_asset_list_;
     bool active_assets_dirty_ = true;
-
-    struct ClosestEntry {
-        double distance_sq;
-        Asset* asset;
-};
-    std::vector<ClosestEntry> closest_buffer_;
 
     struct ScalingNotice {
         std::string message;

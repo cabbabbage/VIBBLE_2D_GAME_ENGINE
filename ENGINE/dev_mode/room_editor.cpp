@@ -904,9 +904,6 @@ void RoomEditor::regenerate_room_from_template(Room* source_room) {
 
     if (assets_) {
         assets_->refresh_active_asset_lists();
-        if (assets_->player) {
-            assets_->update_closest_assets(assets_->player, 3);
-        }
     }
 }
 
@@ -2119,9 +2116,6 @@ void RoomEditor::delete_spawn_group_internal(const std::string& spawn_id) {
     reopen_room_configurator();
     if (assets_) {
         assets_->refresh_active_asset_lists();
-        if (assets_->player) {
-            assets_->update_closest_assets(assets_->player, 3);
-        }
     }
 }
 
@@ -2293,7 +2287,6 @@ void RoomEditor::integrate_spawned_assets(std::vector<std::unique_ptr<Asset>>& s
     }
     assets_->initialize_active_assets(assets_->getView().get_screen_center());
     assets_->refresh_active_asset_lists();
-    assets_->update_closest_assets(assets_->player, 3);
     spawned.clear();
 }
 

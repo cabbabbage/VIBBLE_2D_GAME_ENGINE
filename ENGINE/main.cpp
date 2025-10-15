@@ -109,10 +109,9 @@ void MainApp::game_loop() {
                 }
                 if (input_) input_->update();
                 const float elapsed_ms = static_cast<float>(SDL_GetTicks() - start);
-                const float early_ms = std::max(TARGET_FRAME_MS - elapsed_ms, 0.0f);
-
-                if (early_ms > 0.0f) {
-                        SDL_Delay(static_cast<Uint32>(early_ms));
+                const float remaining_ms = TARGET_FRAME_MS - elapsed_ms;
+                if (remaining_ms > 0.0f) {
+                        SDL_Delay(static_cast<Uint32>(remaining_ms));
                 }
         }
 }
