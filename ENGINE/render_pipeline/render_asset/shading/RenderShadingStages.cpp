@@ -117,6 +117,7 @@ float compute_parallax_shift(const StageContext& context, const Asset& asset, in
 struct LightProbe {
     float      local_average     = 0.0f;
     float      scene_average     = 0.0f;
+    float      forward_average   = 0.0f;
     SDL_FPoint gradient_dir{ 0.0f, 0.0f };
     float      gradient_magnitude = 0.0f;
     bool       valid             = false;
@@ -131,14 +132,16 @@ LightProbe analyze_light_map(const VirtualLightMap& map, const StageContext& con
     result.scene_average = cells.empty() ? 0.0f : scene_sum / static_cast<float>(cells.size());
 
     if (context.screen_width_px <= 0 || context.screen_height_px <= 0) {
-        result.local_average = result.scene_average;
-        result.valid         = true;
+        result.local_average   = result.scene_average;
+        result.forward_average = result.scene_average;
+        result.valid           = true;
         return result;
     }
 
     if (context.screen_rect.w <= 0 || context.screen_rect.h <= 0) {
-        result.local_average = result.scene_average;
-        result.valid         = true;
+        result.local_average   = result.scene_average;
+        result.forward_average = result.scene_average;
+        result.valid           = true;
         return result;
     }
 
@@ -186,6 +189,21 @@ LightProbe analyze_light_map(const VirtualLightMap& map, const StageContext& con
     }
 
     result.local_average = (local_weight > 0.0f) ? (local_sum / local_weight) : sample(cx, cy);
+
+    float forward_sum    = 0.0f;
+    float forward_weight = 0.0f;
+    for (int y = 0; y <= cy; ++y) {
+        const int   forward_steps   = cy - y;
+        const float vertical_weight = std::min(5.0f, 1.0f + static_cast<float>(forward_steps));
+        for (int x = 0; x < grid_w; ++x) {
+            const int   horizontal_distance = std::abs(x - cx);
+            const float horizontal_weight = 1.0f / (1.0f + static_cast<float>(horizontal_distance));
+            const float weight            = vertical_weight * horizontal_weight;
+            forward_sum += map.at(x, y) * weight;
+            forward_weight += weight;
+        }
+    }
+    result.forward_average = (forward_weight > 0.0f) ? (forward_sum / forward_weight) : sample(cx, cy);
 
     float grad_x = 0.0f;
     float grad_y = 0.0f;
@@ -471,9 +489,9 @@ SDL_Texture* RenderShadowMask::run(SDL_Renderer* renderer, const Asset& asset, S
 
                 float opacity = context.base_shadow_opacity;
                 if (cfg.response.enable_opacity) {
-                    const float scene_avg = std::max(probe.scene_average, 1e-4f);
-                    const float local_avg = std::max(probe.local_average, 1e-4f);
-                    float       opacity_factor = (local_avg > 0.0f) ? (scene_avg / local_avg) : 1.0f;
+                    const float scene_avg   = std::max(probe.scene_average, 1e-4f);
+                    const float forward_avg = std::max(probe.forward_average, 1e-4f);
+                    float       opacity_factor = (forward_avg > 0.0f) ? (scene_avg / forward_avg) : 1.0f;
                     opacity_factor = 1.0f + (opacity_factor - 1.0f) * cfg.response.opacity_strength;
                     opacity        = context.base_shadow_opacity * opacity_factor;
                     const float front_influence = gradient_strength * front_component;
