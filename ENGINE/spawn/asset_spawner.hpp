@@ -12,7 +12,6 @@
 #include "asset/asset_info.hpp"
 #include "asset/asset_library.hpp"
 #include "asset_spawn_planner.hpp"
-#include "spawn_logger.hpp"
 #include "check.hpp"
 #include "spawn_info.hpp"
 #include "utils/map_grid_settings.hpp"
@@ -36,7 +35,6 @@ class AssetSpawner {
     AssetLibrary* asset_library_;
     std::mt19937 rng_;
     Check checker_;
-    SpawnLogger logger_;
     std::vector<SpawnInfo> spawn_queue_;
     std::unordered_map<std::string, std::shared_ptr<AssetInfo>> asset_info_library_;
     std::vector<std::unique_ptr<Asset>> all_;

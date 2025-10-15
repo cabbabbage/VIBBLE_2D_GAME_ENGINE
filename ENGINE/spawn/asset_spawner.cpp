@@ -8,7 +8,6 @@
 #include "methods/children_spawner.hpp"
 #include "methods/percent_spawner.hpp"
 #include "check.hpp"
-#include "asset/asset_types.hpp"
 #include <algorithm>
 #include <fstream>
 #include <iostream>
@@ -24,8 +23,7 @@ AssetSpawner::AssetSpawner(AssetLibrary* asset_library,
 : asset_library_(asset_library),
 exclusion_zones(std::move(exclusion_zones)),
 rng_(std::random_device{}()),
-checker_(false),
-logger_("", "") {}
+checker_(false) {}
 
 void AssetSpawner::spawn(Room& room) {
 	if (!room.planner) {
@@ -33,8 +31,7 @@ void AssetSpawner::spawn(Room& room) {
 		return;
 	}
 	const Area& spawn_area = *room.room_area;
-	logger_ = SpawnLogger(room.map_path, room.room_directory);
-	current_room_ = &room;
+        current_room_ = &room;
         map_grid_settings_ = room.map_grid_settings();
         run_spawning(room.planner.get(), spawn_area);
         current_room_ = nullptr;
@@ -53,7 +50,6 @@ std::vector<std::unique_ptr<Asset>> AssetSpawner::spawn_boundary_from_json(const
                 source_paths.push_back(source_name);
         }
         AssetSpawnPlanner planner(json_sources, spawn_area, *asset_library_, source_paths);
-	logger_ = SpawnLogger("", "");
         boundary_mode_ = true;
         run_spawning(&planner, spawn_area);
         boundary_mode_ = false;
@@ -65,8 +61,7 @@ void AssetSpawner::spawn_children(const Area& spawn_area, AssetSpawnPlanner* pla
 		std::cerr << "[AssetSpawner] Child planner is null — skipping.\n";
 		return;
 	}
-	logger_ = SpawnLogger("", "");
-	run_child_spawning(planner, spawn_area);
+        run_child_spawning(planner, spawn_area);
 }
 
 std::vector<std::unique_ptr<Asset>> AssetSpawner::extract_all_assets() {
@@ -87,14 +82,13 @@ void AssetSpawner::run_spawning(AssetSpawnPlanner* planner, const Area& area) {
     int w = std::max(0, maxx - minx);
     int h = std::max(0, maxy - miny);
     MapGrid grid(w, h, spacing, SDL_Point{minx, miny});
-    SpawnContext ctx(rng_, checker_, logger_, exclusion_zones, asset_info_library_, all_, asset_library_, &grid);
+    SpawnContext ctx(rng_, checker_, exclusion_zones, asset_info_library_, all_, asset_library_, &grid);
         ExactSpawner exact;
         CenterSpawner center;
         RandomSpawner random;
         PerimeterSpawner perimeter;
         PercentSpawner percent;
         for (auto& queue_item : spawn_queue_) {
-                logger_.start_timer();
                 if (!queue_item.has_candidates()) continue;
                 const std::string& pos = queue_item.position;
 
@@ -122,14 +116,10 @@ void AssetSpawner::run_spawning(AssetSpawnPlanner* planner, const Area& area) {
 
                         auto grid_points = grid.get_all_points_in_area(area);
                         if (grid_points.empty()) {
-                                logger_.output_and_log(queue_item.name, 0, 0, 0, 0, "mapwide_batch");
                                 continue;
                         }
                         std::shuffle(grid_points.begin(), grid_points.end(), ctx.rng());
 
-                        const int desired = static_cast<int>(grid_points.size());
-                        int spawned = 0;
-                        int attempts = 0;
                         for (auto* gp : grid_points) {
                                 if (!gp) continue;
                                 SDL_Point spawn_pos{ gp->pos.x, gp->pos.y };
@@ -147,7 +137,6 @@ void AssetSpawner::run_spawning(AssetSpawnPlanner* planner, const Area& area) {
                                                 attempt_weights[idx] = 0.0;
                                                 continue;
                                         }
-                                        ++attempts;
                                         const SpawnCandidate& candidate = queue_item.candidates[idx];
 
                                         if (candidate.is_null || !candidate.info) {
@@ -165,8 +154,6 @@ void AssetSpawner::run_spawning(AssetSpawnPlanner* planner, const Area& area) {
                                                 continue;
                                         }
                                         grid.set_occupied(gp, true);
-                                        ++spawned;
-                                        ctx.logger().progress(candidate.info, spawned, desired);
                                         placed = true;
                                         break;
                                 }
@@ -174,7 +161,6 @@ void AssetSpawner::run_spawning(AssetSpawnPlanner* planner, const Area& area) {
                                         grid.set_occupied(gp, true);
                                 }
                         }
-                        ctx.logger().output_and_log(queue_item.name, desired, spawned, attempts, attempts, "mapwide_batch");
                         continue;
                 }
                 if (pos == "Exact" || pos == "Exact Position") {
@@ -197,15 +183,12 @@ void AssetSpawner::run_boundary_spawning(const Area& area) {
                 [&](const Area& zone) { return zone.contains_point(pt); });
 };
 
-        const std::string boundary_type{asset_types::boundary};
-
         for (auto& queue_item : spawn_queue_) {
-                logger_.start_timer();
                 if (!queue_item.has_candidates()) continue;
 
                 constexpr int kBoundarySpacing = 100;
                 MapGrid grid = MapGrid::from_area_bounds(area, kBoundarySpacing);
-                SpawnContext ctx(rng_, checker_, logger_, exclusion_zones, asset_info_library_, all_, asset_library_, &grid);
+                SpawnContext ctx(rng_, checker_, exclusion_zones, asset_info_library_, all_, asset_library_, &grid);
 
                 if (current_room_ && !queue_item.link_area_name.empty()) {
                         Area* link = current_room_->find_area(queue_item.link_area_name);
@@ -237,15 +220,10 @@ void AssetSpawner::run_boundary_spawning(const Area& area) {
                 }
 
                 if (eligible.empty()) {
-                        logger_.output_and_log(queue_item.name, 0, 0, 0, 0, boundary_type);
                         continue;
                 }
 
                 std::shuffle(eligible.begin(), eligible.end(), rng_);
-
-                const int desired = static_cast<int>(eligible.size());
-                int spawned = 0;
-                int attempts = 0;
 
                 for (auto* gp : eligible) {
                         if (!gp) continue;
@@ -264,7 +242,6 @@ void AssetSpawner::run_boundary_spawning(const Area& area) {
                                         attempt_weights[idx] = 0.0;
                                         continue;
                                 }
-                                ++attempts;
                                 const SpawnCandidate& candidate = queue_item.candidates[idx];
 
                                 if (candidate.is_null || !candidate.info) {
@@ -284,8 +261,6 @@ void AssetSpawner::run_boundary_spawning(const Area& area) {
                                 }
 
                                 grid.set_occupied(gp, true);
-                                ++spawned;
-                                ctx.logger().progress(candidate.info, spawned, desired);
                                 success = true;
                                 break;
                         }
@@ -294,8 +269,6 @@ void AssetSpawner::run_boundary_spawning(const Area& area) {
                                 grid.set_occupied(gp, true);
                         }
                 }
-
-                ctx.logger().output_and_log(queue_item.name, desired, spawned, attempts, attempts, boundary_type);
         }
 }
 
@@ -303,10 +276,9 @@ void AssetSpawner::run_child_spawning(AssetSpawnPlanner* planner, const Area& ar
         asset_info_library_ = asset_library_->all();
         spawn_queue_ = planner->get_spawn_queue();
 
-        SpawnContext ctx(rng_, checker_, logger_, exclusion_zones, asset_info_library_, all_, asset_library_, nullptr);
+        SpawnContext ctx(rng_, checker_, exclusion_zones, asset_info_library_, all_, asset_library_, nullptr);
         ChildrenSpawner childMethod;
         for (auto& queue_item : spawn_queue_) {
-                logger_.start_timer();
                 if (!queue_item.has_candidates()) continue;
                 childMethod.spawn(queue_item, &area, ctx);
         }

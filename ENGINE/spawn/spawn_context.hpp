@@ -18,13 +18,18 @@ class AssetInfo;
 class AssetLibrary;
 class AssetSpawnPlanner;
 class AssetSpawner;
-class SpawnLogger;
 
 class SpawnContext {
 
-	public:
+        public:
     using Point = SDL_Point;
-    SpawnContext(std::mt19937& rng, Check& checker, SpawnLogger& logger, std::vector<Area>& exclusion_zones, std::unordered_map<std::string, std::shared_ptr<AssetInfo>>& asset_info_library, std::vector<std::unique_ptr<Asset>>& all, AssetLibrary* asset_library, MapGrid* grid);
+    SpawnContext(std::mt19937& rng,
+                 Check& checker,
+                 std::vector<Area>& exclusion_zones,
+                 std::unordered_map<std::string, std::shared_ptr<AssetInfo>>& asset_info_library,
+                 std::vector<std::unique_ptr<Asset>>& all,
+                 AssetLibrary* asset_library,
+                 MapGrid* grid);
     Asset* spawnAsset(const std::string& name,
                       const std::shared_ptr<AssetInfo>& info,
                       const Area& area,
@@ -37,7 +42,6 @@ class SpawnContext {
     Point get_point_within_area(const Area& area);
     std::mt19937& rng() { return rng_; }
     Check& checker() { return checker_; }
-    SpawnLogger& logger() { return logger_; }
     std::vector<Area>& exclusion_zones() { return exclusion_zones_; }
     std::unordered_map<std::string, std::shared_ptr<AssetInfo>>& info_library() { return asset_info_library_; }
     std::vector<std::unique_ptr<Asset>>& all_assets() { return all_; }
@@ -45,11 +49,10 @@ class SpawnContext {
 
     void set_clip_area(const Area* a) { clip_area_ = a; }
     const Area* clip_area() const { return clip_area_; }
-
-	private:
+    
+        private:
     std::mt19937& rng_;
     Check& checker_;
-    SpawnLogger& logger_;
     std::vector<Area>& exclusion_zones_;
     std::unordered_map<std::string, std::shared_ptr<AssetInfo>>& asset_info_library_;
     std::vector<std::unique_ptr<Asset>>& all_;

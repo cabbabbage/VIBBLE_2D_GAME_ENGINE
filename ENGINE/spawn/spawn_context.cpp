@@ -15,7 +15,6 @@ namespace fs = std::filesystem;
 
 SpawnContext::SpawnContext(std::mt19937& rng,
                            Check& checker,
-                           SpawnLogger& logger,
                            std::vector<Area>& exclusion_zones,
                            std::unordered_map<std::string, std::shared_ptr<AssetInfo>>& asset_info_library,
                            std::vector<std::unique_ptr<Asset>>& all,
@@ -23,7 +22,6 @@ SpawnContext::SpawnContext(std::mt19937& rng,
                            MapGrid* grid)
 : rng_(rng),
 checker_(checker),
-logger_(logger),
 exclusion_zones_(exclusion_zones),
 asset_info_library_(asset_info_library),
 all_(all),

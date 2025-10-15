@@ -7,7 +7,6 @@
 #include "asset_spawn_planner.hpp"
 #include "asset/asset_info.hpp"
 #include "utils/area.hpp"
-#include "spawn_logger.hpp"
 
 void CenterSpawner::spawn(const SpawnInfo& item, const Area* area, SpawnContext& ctx) {
     if (!area || !item.has_candidates() || item.quantity <= 0) return;
@@ -21,7 +20,6 @@ void CenterSpawner::spawn(const SpawnInfo& item, const Area* area, SpawnContext&
     }
 
     int attempts = 0;
-    int spawned  = 0;
     const int target_attempts = item.quantity;
 
     while (attempts < target_attempts) {
@@ -38,10 +36,8 @@ void CenterSpawner::spawn(const SpawnInfo& item, const Area* area, SpawnContext&
         }
 
         if (ctx.spawnAsset(candidate->name, info, *area, center, 0, nullptr, item.spawn_id, item.position)) {
-            ++spawned;
-            ctx.logger().progress(info, spawned, target_attempts);
+            // No-op: spawn success recorded by asset list.
         }
     }
 
-    ctx.logger().output_and_log(item.name, target_attempts, spawned, attempts, target_attempts, "center");
 }

@@ -25,7 +25,6 @@
 #include "spawn/methods/percent_spawner.hpp"
 #include "spawn/methods/random_spawner.hpp"
 #include "spawn/spawn_context.hpp"
-#include "spawn/spawn_logger.hpp"
 #include "utils/input.hpp"
 #include "utils/map_grid.hpp"
 #include "utils/relative_room_position.hpp"
@@ -2328,8 +2327,7 @@ void RoomEditor::respawn_spawn_group(const nlohmann::json& entry) {
     std::vector<Area> exclusion;
     std::mt19937 rng(std::random_device{}());
     Check checker(false);
-    SpawnLogger logger("", "");
-    SpawnContext ctx(rng, checker, logger, exclusion, asset_info_library, spawned, &assets_->library(), grid ? grid.get() : nullptr);
+    SpawnContext ctx(rng, checker, exclusion, asset_info_library, spawned, &assets_->library(), grid ? grid.get() : nullptr);
     ExactSpawner exact;
     CenterSpawner center;
     RandomSpawner random;
@@ -2493,9 +2491,8 @@ void RoomEditor::regenerate_current_room() {
     std::vector<std::unique_ptr<Asset>> spawned;
     std::vector<Area> exclusion;
     Check checker(false);
-    SpawnLogger logger("", "");
     std::mt19937 regen_rng(std::random_device{}());
-    SpawnContext ctx(regen_rng, checker, logger, exclusion, asset_info_library, spawned, &assets_->library(), grid ? grid.get() : nullptr);
+    SpawnContext ctx(regen_rng, checker, exclusion, asset_info_library, spawned, &assets_->library(), grid ? grid.get() : nullptr);
     ExactSpawner exact;
     CenterSpawner center_spawn;
     RandomSpawner random;

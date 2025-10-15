@@ -5,10 +5,8 @@
 #include "asset_spawn_planner.hpp"
 #include "asset/asset_info.hpp"
 #include "utils/area.hpp"
-#include "spawn_logger.hpp"
 void RandomSpawner::spawn(const SpawnInfo& item, const Area* area, SpawnContext& ctx) {
     if (!area || !item.has_candidates() || item.quantity <= 0) return;
-    int spawned = 0;
     int attempt_slots_used = 0;
     int attempts = 0;
     const int desired_attempts = item.quantity;
@@ -45,9 +43,6 @@ void RandomSpawner::spawn(const SpawnInfo& item, const Area* area, SpawnContext&
         if (ctx.grid()) {
             ctx.grid()->set_occupied(gp, true);
         }
-        ++spawned;
         ++attempt_slots_used;
-        ctx.logger().progress(info, spawned, desired_attempts);
     }
-    ctx.logger().output_and_log(item.name, desired_attempts, spawned, attempts, max_attempts, "random");
 }

@@ -5,13 +5,11 @@
 #include "check.hpp"
 #include "asset/asset_info.hpp"
 #include "utils/area.hpp"
-#include "spawn_logger.hpp"
 
 void ChildrenSpawner::spawn(const SpawnInfo& item, const Area* area, SpawnContext& ctx) {
     if (!area || !item.has_candidates()) return;
     int quantity = item.quantity > 0 ? item.quantity : 1;
 
-    int spawned = 0;
     int attempts = 0;
     int slots_used = 0;
     int max_attempts = quantity * 50;
@@ -43,9 +41,6 @@ void ChildrenSpawner::spawn(const SpawnInfo& item, const Area* area, SpawnContex
             continue;
         }
 
-        ++spawned;
         ++slots_used;
-        ctx.logger().progress(candidate->info, spawned, quantity);
     }
-    ctx.logger().output_and_log(item.name, quantity, spawned, attempts, max_attempts, "children_random");
 }

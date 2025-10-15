@@ -10,7 +10,6 @@
 #include "asset_spawn_planner.hpp"
 #include "asset/asset_info.hpp"
 #include "utils/area.hpp"
-#include "spawn_logger.hpp"
 #include "utils/relative_room_position.hpp"
 
 void PerimeterSpawner::spawn(const SpawnInfo& item, const Area* area, SpawnContext& ctx) {
@@ -31,15 +30,10 @@ void PerimeterSpawner::spawn(const SpawnInfo& item, const Area* area, SpawnConte
     const double start = phase_dist(ctx.rng());
     const double step  = (item.quantity > 0) ? (2.0 * M_PI / static_cast<double>(item.quantity)) : 0.0;
 
-    int placed = 0;
-    int attempts = 0;
-
     for (int i = 0; i < item.quantity; ++i) {
         const double angle = start + step * static_cast<double>(i);
         const int x = circle_center.x + static_cast<int>(std::lround(R * std::cos(angle)));
         const int y = circle_center.y + static_cast<int>(std::lround(R * std::sin(angle)));
-
-        ++attempts;
 
         SDL_Point pos{x, y};
         const SpawnCandidate* candidate = item.select_candidate(ctx.rng());
@@ -53,9 +47,6 @@ void PerimeterSpawner::spawn(const SpawnInfo& item, const Area* area, SpawnConte
         }
 
         ctx.spawnAsset(candidate->name, info, *area, pos, 0, nullptr, item.spawn_id, item.position);
-        ++placed;
-        ctx.logger().progress(info, placed, item.quantity);
     }
 
-    ctx.logger().output_and_log(item.name, item.quantity, placed, attempts, item.quantity, "perimeter");
 }

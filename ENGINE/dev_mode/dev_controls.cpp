@@ -38,7 +38,6 @@
 #include "spawn/methods/perimeter_spawner.hpp"
 #include "spawn/methods/percent_spawner.hpp"
 #include "spawn/methods/random_spawner.hpp"
-#include "spawn/spawn_logger.hpp"
 #include "utils/map_grid_settings.hpp"
 #include "spawn/spawn_context.hpp"
 #include "utils/area.hpp"
@@ -1968,8 +1967,7 @@ void DevControls::regenerate_map_spawn_group(const nlohmann::json& entry) {
         if (spacing <= 0) spacing = 100;
         MapGrid grid = MapGrid::from_area_bounds(*room->room_area, spacing);
         std::vector<Area> exclusion;
-        SpawnLogger logger("", "");
-        SpawnContext ctx(rng, checker, logger, exclusion, asset_info_library, spawned, &assets_->library(), &grid);
+        SpawnContext ctx(rng, checker, exclusion, asset_info_library, spawned, &assets_->library(), &grid);
 
         const auto& queue = planner.get_spawn_queue();
         const Area* area_ptr = room->room_area.get();
@@ -1990,15 +1988,10 @@ void DevControls::regenerate_map_spawn_group(const nlohmann::json& entry) {
 
                 auto grid_points = grid.get_all_points_in_area(*area_ptr);
                 if (grid_points.empty()) {
-                    ctx.logger().output_and_log(info.name, 0, 0, 0, 0, "mapwide_batch");
                     continue;
                 }
 
                 std::shuffle(grid_points.begin(), grid_points.end(), ctx.rng());
-
-                const int desired = static_cast<int>(grid_points.size());
-                int spawned_count = 0;
-                int attempts = 0;
 
                 for (auto* gp : grid_points) {
                     if (!gp) continue;
@@ -2017,7 +2010,6 @@ void DevControls::regenerate_map_spawn_group(const nlohmann::json& entry) {
                             attempt_weights[idx] = 0.0;
                             continue;
                         }
-                        ++attempts;
                         const SpawnCandidate& candidate = info.candidates[idx];
                         if (candidate.is_null || !candidate.info) {
                             grid.set_occupied(gp, true);
@@ -2034,8 +2026,6 @@ void DevControls::regenerate_map_spawn_group(const nlohmann::json& entry) {
                             continue;
                         }
                         grid.set_occupied(gp, true);
-                        ++spawned_count;
-                        ctx.logger().progress(candidate.info, spawned_count, desired);
                         placed = true;
                         break;
                     }
@@ -2044,7 +2034,6 @@ void DevControls::regenerate_map_spawn_group(const nlohmann::json& entry) {
                     }
                 }
 
-                ctx.logger().output_and_log(info.name, desired, spawned_count, attempts, attempts, "mapwide_batch");
                 continue;
             }
             const std::string& pos = info.position;

@@ -7,7 +7,6 @@
 #include "asset_spawn_planner.hpp"
 #include "asset/asset_info.hpp"
 #include "utils/area.hpp"
-#include "spawn_logger.hpp"
 #include "utils/relative_room_position.hpp"
 
 void ExactSpawner::spawn(const SpawnInfo& item, const Area* area, SpawnContext& ctx) {
@@ -22,7 +21,6 @@ void ExactSpawner::spawn(const SpawnInfo& item, const Area* area, SpawnContext& 
     SDL_Point final_pos = relative.resolve(center, curr_w, curr_h);
 
     int attempts = 0;
-    int spawned  = 0;
     const int target_attempts = item.quantity;
 
     while (attempts < target_attempts) {
@@ -52,9 +50,6 @@ void ExactSpawner::spawn(const SpawnInfo& item, const Area* area, SpawnContext& 
             ctx.grid()->set_occupied(snapped, true);
         }
 
-        ++spawned;
-        ctx.logger().progress(info, spawned, target_attempts);
     }
 
-    ctx.logger().output_and_log(item.name, target_attempts, spawned, attempts, attempts, "exact");
 }
