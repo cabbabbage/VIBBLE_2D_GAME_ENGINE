@@ -4,11 +4,13 @@
 #include "asset_list.hpp"
 #include "asset/asset_library.hpp"
 #include <SDL.h>
+#include <atomic>
+#include <deque>
+#include <memory>
+#include <mutex>
+#include <optional>
 #include <string>
 #include <vector>
-#include <memory>
-#include <deque>
-#include <optional>
 #include <nlohmann/json.hpp>
 #include "map_generation/room.hpp"
 
@@ -154,13 +156,14 @@ private:
     bool suppress_render_ = false;
     bool force_high_quality_rendering_ = false;
     std::vector<Asset*> removal_queue;
+    std::mutex removal_queue_mutex_;
 
     AssetLibrary& library_;
     std::string map_path_;
     std::string map_info_path_;
     nlohmann::json map_info_json_;
     std::unique_ptr<AssetList> active_asset_list_;
-    bool active_assets_dirty_ = true;
+    std::atomic<bool> active_assets_dirty_{true};
 
     struct ScalingNotice {
         std::string message;

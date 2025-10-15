@@ -2,6 +2,7 @@
 
 #include <SDL.h>
 #include <array>
+#include <vector>
 
 class Input {
 public:
@@ -61,5 +62,10 @@ private:
     std::array<bool, SDL_NUM_SCANCODES> prev_keys_down_{};
     std::array<bool, SDL_NUM_SCANCODES> keys_pressed_{};
     std::array<bool, SDL_NUM_SCANCODES> keys_released_{};
+
+    std::vector<SDL_Scancode> dirty_scancodes_;
+    std::vector<SDL_Scancode> pressed_scancode_buffer_;
+    std::vector<SDL_Scancode> released_scancode_buffer_;
+    std::array<bool, SDL_NUM_SCANCODES> scancode_dirty_flags_{};
 };
 

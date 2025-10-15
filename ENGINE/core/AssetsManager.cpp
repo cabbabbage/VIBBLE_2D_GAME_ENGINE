@@ -17,13 +17,16 @@
 #include "utils/map_grid_settings.hpp"
 
 #include <algorithm>
+#include <atomic>
 #include <cmath>
 #include <cstdint>
 #include <cctype>
 #include <fstream>
 #include <iostream>
 #include <memory>
+#include <mutex>
 #include <nlohmann/json.hpp>
+#include <thread>
 #include <vector>
 #include <unordered_set>
 #include <SDL.h>
@@ -537,9 +540,50 @@ void Assets::update(const Input& input)
         }
     }
     if (!dev_mode) {
-        for (Asset* a : active_assets) {
-            if (a && a != player)
-                a->update();
+        std::vector<Asset*> non_player_assets;
+        non_player_assets.reserve(active_assets.size());
+        for (Asset* asset : active_assets) {
+            if (asset && asset != player) {
+                non_player_assets.push_back(asset);
+            }
+        }
+
+        const std::size_t task_count = non_player_assets.size();
+        if (task_count == 1) {
+            non_player_assets.front()->update();
+        } else if (task_count > 1) {
+            const unsigned hardware_threads = std::max(1u, std::thread::hardware_concurrency());
+            const std::size_t thread_count = std::min<std::size_t>(hardware_threads, task_count);
+
+            if (thread_count <= 1) {
+                for (Asset* asset : non_player_assets) {
+                    asset->update();
+                }
+            } else {
+                std::atomic<std::size_t> next_index{0};
+                std::vector<std::thread> workers;
+                workers.reserve(thread_count);
+
+                for (std::size_t i = 0; i < thread_count; ++i) {
+                    workers.emplace_back([&non_player_assets, &next_index, task_count]() {
+                        for (;;) {
+                            const std::size_t idx = next_index.fetch_add(1, std::memory_order_relaxed);
+                            if (idx >= task_count) {
+                                break;
+                            }
+                            if (Asset* asset = non_player_assets[idx]) {
+                                asset->update();
+                            }
+                        }
+                    });
+                }
+
+                for (std::thread& worker : workers) {
+                    if (worker.joinable()) {
+                        worker.join();
+                    }
+                }
+            }
         }
     }
 
@@ -772,7 +816,7 @@ Asset* Assets::spawn_asset(const std::string& name, SDL_Point world_pos) {
 }
 
 void Assets::mark_active_assets_dirty() {
-    active_assets_dirty_ = true;
+    active_assets_dirty_.store(true, std::memory_order_release);
 }
 
 void Assets::initialize_active_assets(SDL_Point center) {
@@ -785,7 +829,7 @@ void Assets::initialize_active_assets(SDL_Point center) {
         std::vector<std::string>{},
         std::vector<std::string>{},
         SortMode::ZIndexAsc);
-    active_assets_dirty_ = true;
+    active_assets_dirty_.store(true, std::memory_order_release);
 }
 
 void Assets::update_active_assets(SDL_Point center) {
@@ -797,7 +841,7 @@ void Assets::update_active_assets(SDL_Point center) {
     active_asset_list_->set_center(center);
     active_asset_list_->set_search_radius(active_search_radius());
     active_asset_list_->update();
-    active_assets_dirty_ = true;
+    active_assets_dirty_.store(true, std::memory_order_release);
 }
 
 void Assets::rebuild_active_assets_if_needed() {
@@ -805,7 +849,7 @@ void Assets::rebuild_active_assets_if_needed() {
         initialize_active_assets(camera_.get_screen_center());
     }
 
-    if (!active_asset_list_ || !active_assets_dirty_) {
+    if (!active_asset_list_ || !active_assets_dirty_.load(std::memory_order_acquire)) {
         return;
     }
 
@@ -822,7 +866,7 @@ void Assets::rebuild_active_assets_if_needed() {
             active_light_assets_.push_back(asset);
         }
     }
-    active_assets_dirty_ = false;
+    active_assets_dirty_.store(false, std::memory_order_release);
 }
 
 int Assets::active_search_radius() const {
@@ -830,15 +874,28 @@ int Assets::active_search_radius() const {
 }
 
 void Assets::schedule_removal(Asset* a) {
-    if (a) removal_queue.push_back(a);
+    if (!a) {
+        return;
+    }
+    std::lock_guard<std::mutex> lock(removal_queue_mutex_);
+    removal_queue.push_back(a);
 }
 
 void Assets::process_removals() {
-    if (removal_queue.empty()) {
+    std::vector<Asset*> pending_removals;
+    {
+        std::lock_guard<std::mutex> lock(removal_queue_mutex_);
+        if (removal_queue.empty()) {
+            return;
+        }
+        pending_removals.swap(removal_queue);
+    }
+
+    if (pending_removals.empty()) {
         return;
     }
 
-    std::unordered_set<Asset*> removal_lookup(removal_queue.begin(), removal_queue.end());
+    std::unordered_set<Asset*> removal_lookup(pending_removals.begin(), pending_removals.end());
 
     for (auto it = owned_assets.begin(); it != owned_assets.end();) {
         if (removal_lookup.count(it->get()) > 0) {
@@ -866,8 +923,6 @@ void Assets::process_removals() {
         dev_controls_->clear_selection();
         dev_controls_->set_active_assets(filtered_active_assets);
     }
-
-    removal_queue.clear();
 
     initialize_active_assets(camera_.get_screen_center());
     rebuild_active_assets_if_needed();

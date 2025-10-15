@@ -42,11 +42,15 @@ void Input::handleEvent(const SDL_Event& e) {
         break;
 
     case SDL_KEYDOWN:
-        keys_down_[e.key.keysym.scancode] = true;
+    case SDL_KEYUP: {
+        SDL_Scancode sc = e.key.keysym.scancode;
+        keys_down_[sc] = (e.type == SDL_KEYDOWN);
+        if (!scancode_dirty_flags_[sc]) {
+            scancode_dirty_flags_[sc] = true;
+            dirty_scancodes_.push_back(sc);
+        }
         break;
-    case SDL_KEYUP:
-        keys_down_[e.key.keysym.scancode] = false;
-        break;
+    }
 
     default:
         break;
@@ -62,11 +66,33 @@ void Input::update() {
         if (clickBuffer_[i] > 0) clickBuffer_[i]--;
     }
 
-    for (int i = 0; i < SDL_NUM_SCANCODES; ++i) {
-        keys_pressed_[i]  = (!prev_keys_down_[i] && keys_down_[i]);
-        keys_released_[i] = (prev_keys_down_[i] && !keys_down_[i]);
-        prev_keys_down_[i] = keys_down_[i];
+    for (SDL_Scancode sc : pressed_scancode_buffer_) {
+        keys_pressed_[sc] = false;
     }
+    pressed_scancode_buffer_.clear();
+
+    for (SDL_Scancode sc : released_scancode_buffer_) {
+        keys_released_[sc] = false;
+    }
+    released_scancode_buffer_.clear();
+
+    for (SDL_Scancode sc : dirty_scancodes_) {
+        const bool is_down = keys_down_[sc];
+        const bool was_down = prev_keys_down_[sc];
+        const bool pressed = (!was_down && is_down);
+        const bool released = (was_down && !is_down);
+        keys_pressed_[sc] = pressed;
+        keys_released_[sc] = released;
+        if (pressed) {
+            pressed_scancode_buffer_.push_back(sc);
+        }
+        if (released) {
+            released_scancode_buffer_.push_back(sc);
+        }
+        prev_keys_down_[sc] = is_down;
+        scancode_dirty_flags_[sc] = false;
+    }
+    dirty_scancodes_.clear();
 
     dx_ = dy_ = 0;
     scrollX_ = scrollY_ = 0;
