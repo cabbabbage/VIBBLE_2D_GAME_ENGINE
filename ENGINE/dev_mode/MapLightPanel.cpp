@@ -13,45 +13,14 @@
 #include "dev_mode/dm_styles.hpp"
 #include "dev_mode/draw_utils.hpp"
 #include "utils/input.hpp"
-#include "render_pipeline/render_asset/shading/ReactiveShadowSettingsJSON.hpp"
 
 using nlohmann::json;
 
 namespace {
 
 constexpr std::string_view kUpdateMapLightSettingKey = "dev_ui.lighting.map_panel.update_map_light";
-constexpr std::string_view kReactiveSettingsKeyPrefix = "dev_ui.lighting.map_panel.reactive";
 
 } // namespace
-
-using render_pipeline::shading::ReactiveShadowSettings;
-
-namespace {
-
-std::string reactive_settings_key(std::string_view suffix) {
-    std::string key(kReactiveSettingsKeyPrefix);
-    if (!suffix.empty()) {
-        key.push_back('.');
-        key.append(suffix);
-    }
-    return key;
-}
-
-float slider_value_scaled(const std::unique_ptr<DMSlider>& slider, float fallback, int scale) {
-    if (!slider) {
-        return fallback;
-    }
-    return static_cast<float>(slider->displayed_value()) / static_cast<float>(scale);
-}
-
-void set_slider_scaled(const std::unique_ptr<DMSlider>& slider, float value, int scale) {
-    if (!slider) {
-        return;
-    }
-    slider->set_value(static_cast<int>(std::round(value * static_cast<float>(scale))));
-}
-
-}  // namespace
 
 class MapLightPanel::WarningLabel : public Widget {
 public:
@@ -139,19 +108,11 @@ MapLightPanel::MapLightPanel(int x, int y)
 
 MapLightPanel::~MapLightPanel() = default;
 
-void MapLightPanel::set_reactive_settings(ReactiveShadowSettings* settings) {
-    reactive_settings_shared_ = settings;
-    if (reactive_settings_shared_ && reactive_settings_initialized_) {
-        *reactive_settings_shared_ = render_pipeline::shading::sanitize_reactive_shadow_settings(last_applied_reactive_);
-    }
-}
-
 void MapLightPanel::set_map_info(json* map_info, SaveCallback on_save) {
     map_info_ = map_info;
     on_save_ = std::move(on_save);
     current_key_index_ = 0;
     editing_light_ = json::object();
-    reactive_settings_initialized_ = false;
     if (map_info_ && map_info_->contains("map_light_data") && (*map_info_)["map_light_data"].is_object()) {
         editing_light_ = (*map_info_)["map_light_data"];
     }
@@ -159,6 +120,14 @@ void MapLightPanel::set_map_info(json* map_info, SaveCallback on_save) {
     update_save_status(true);
     load_update_map_light_setting();
     sync_ui_from_json();
+}
+
+nlohmann::json& MapLightPanel::mutable_light() {
+    return ensure_light();
+}
+
+bool MapLightPanel::commit_light_changes_external() {
+    return commit_light_changes();
 }
 
 void MapLightPanel::open()   {
@@ -184,35 +153,6 @@ void MapLightPanel::build_ui() {
     texture_section_btn_ = std::make_unique<DMButton>("", &DMStyles::HeaderButton(), 220, DMButton::height());
     reactive_section_btn_ = std::make_unique<DMButton>("", &DMStyles::HeaderButton(), 220, DMButton::height());
     update_section_header_labels();
-
-    auto make_float_slider = [&](const std::string& label,
-                                 float min,
-                                 float max,
-                                 float initial,
-                                 int scale,
-                                 int decimals = 2) {
-        int min_i = static_cast<int>(std::round(min * static_cast<float>(scale)));
-        int max_i = static_cast<int>(std::round(max * static_cast<float>(scale)));
-        int init_i = static_cast<int>(std::round(initial * static_cast<float>(scale)));
-        auto slider = std::make_unique<DMSlider>(label, min_i, max_i, init_i);
-        slider->set_value_formatter([scale, decimals](int value, auto& buffer) -> std::string_view {
-            const float actual = static_cast<float>(value) / static_cast<float>(scale);
-            const char* fmt = (decimals == 3) ? "%.3f" : "%.2f";
-            std::snprintf(buffer.data(), buffer.size(), fmt, actual);
-            return std::string_view(buffer.data());
-        });
-        slider->set_value_parser([scale, min, max](const std::string& text) -> std::optional<int> {
-            try {
-                float parsed = std::stof(text);
-                parsed = std::clamp(parsed, min, max);
-                return static_cast<int>(std::round(parsed * static_cast<float>(scale)));
-            } catch (...) {
-                return std::nullopt;
-            }
-        });
-        slider->set_defer_commit_until_unfocus(true);
-        return slider;
-    };
 
     radius_         = std::make_unique<DMSlider>("Radius",          0, 20000, 0);
     intensity_      = std::make_unique<DMSlider>("Intensity",       0,   255, 255);
@@ -257,34 +197,6 @@ void MapLightPanel::build_ui() {
     key_b_     = std::make_unique<DMSlider>("Key B", 0, 255, 255);
     key_a_     = std::make_unique<DMSlider>("Key A", 0, 255, 255);
 
-    reactive_offsets_enabled_ = std::make_unique<DMCheckbox>("Enable Offsets", last_applied_reactive_.directionality.enable_offsets);
-    reactive_opacity_enabled_ = std::make_unique<DMCheckbox>("Enable Opacity", last_applied_reactive_.response.enable_opacity);
-    reactive_temporal_enabled_= std::make_unique<DMCheckbox>("Enable Temporal", last_applied_reactive_.stability.enable_temporal_smoothing);
-
-    reactive_kernel_radius_       = std::make_unique<DMSlider>("Kernel Radius", 1, 16, last_applied_reactive_.sampling.kernel_radius);
-    reactive_outer_ring_weight_   = make_float_slider("Outer Ring Weight", 0.0f, 3.0f, last_applied_reactive_.sampling.outer_ring_weight, 100);
-    reactive_diagonal_weight_     = make_float_slider("Diagonal Weight", 0.0f, 2.0f, last_applied_reactive_.sampling.diagonal_weight, 100);
-    reactive_gradient_sensitivity_= make_float_slider("Gradient Sensitivity", 0.0f, 1.0f, last_applied_reactive_.directionality.gradient_sensitivity, 100);
-    reactive_offset_strength_     = make_float_slider("Offset Strength", 0.0f, 2.0f, last_applied_reactive_.directionality.offset_strength, 100);
-    reactive_max_offset_ratio_    = make_float_slider("Max Offset Ratio", 0.0f, 1.0f, last_applied_reactive_.directionality.max_offset_ratio, 100);
-    reactive_front_weight_        = make_float_slider("Front Weight", 0.0f, 5.0f, last_applied_reactive_.directionality.front_weight, 100);
-    reactive_side_weight_         = make_float_slider("Side Weight", 0.0f, 5.0f, last_applied_reactive_.directionality.side_weight, 100);
-    reactive_back_weight_         = make_float_slider("Back Weight", 0.0f, 5.0f, last_applied_reactive_.directionality.back_weight, 100);
-    reactive_scale_factor_        = make_float_slider("Scale Factor", 0.1f, 3.0f, last_applied_reactive_.output.scale_factor, 100);
-    reactive_map_line_weight_     = make_float_slider("Map Line Weight", 0.0f, 3.0f, last_applied_reactive_.output.map_line_weight, 100);
-    reactive_parallax_strength_   = make_float_slider("Parallax Strength", 0.0f, 3.0f, last_applied_reactive_.output.parallax_strength, 100);
-    reactive_opacity_strength_    = make_float_slider("Opacity Strength", 0.0f, 3.0f, last_applied_reactive_.response.opacity_strength, 100);
-    reactive_min_opacity_         = make_float_slider("Min Opacity", 0.0f, 1.0f, last_applied_reactive_.response.min_opacity, 100);
-    reactive_max_opacity_         = make_float_slider("Max Opacity", 0.0f, 1.0f, last_applied_reactive_.response.max_opacity, 100);
-    reactive_temporal_smoothing_  = make_float_slider("Temporal Smoothing", 0.0f, 0.999f, last_applied_reactive_.stability.temporal_smoothing, 1000, 3);
-    reactive_front_opacity_boost_ = make_float_slider("Front Opacity Boost", 0.0f, 10.0f, last_applied_reactive_.response.front_opacity_boost, 100);
-    reactive_similarity_threshold_= make_float_slider("Reuse Similarity Threshold", 0.0f, 0.5f, last_applied_reactive_.stability.reuse_similarity_threshold, 1000, 3);
-
-    if (reactive_kernel_radius_) reactive_kernel_radius_->set_defer_commit_until_unfocus(true);
-    if (reactive_scale_factor_) reactive_scale_factor_->set_defer_commit_until_unfocus(true);
-    if (reactive_map_line_weight_) reactive_map_line_weight_->set_defer_commit_until_unfocus(true);
-    if (reactive_parallax_strength_) reactive_parallax_strength_->set_defer_commit_until_unfocus(true);
-
     rebuild_rows();
 }
 
@@ -300,9 +212,6 @@ void MapLightPanel::update_section_header_labels() {
     }
     if (texture_section_btn_) {
         texture_section_btn_->set_text(label_for("Map Light Texture", texture_section_collapsed_));
-    }
-    if (reactive_section_btn_) {
-        reactive_section_btn_->set_text(label_for("Reactive Shadows", reactive_section_collapsed_));
     }
 }
 
@@ -363,53 +272,6 @@ void MapLightPanel::rebuild_rows() {
         });
     }
 
-    rows.push_back({ add_widget(std::make_unique<ButtonWidget>(reactive_section_btn_.get(), [this]() { toggle_reactive_section(); })) });
-    if (!reactive_section_collapsed_) {
-        rows.push_back({
-            add_widget(std::make_unique<CheckboxWidget>(reactive_offsets_enabled_.get())),
-            add_widget(std::make_unique<CheckboxWidget>(reactive_opacity_enabled_.get()))
-        });
-        rows.push_back({
-            add_widget(std::make_unique<CheckboxWidget>(reactive_temporal_enabled_.get()))
-        });
-        rows.push_back({
-            add_widget(std::make_unique<SliderWidget>(reactive_kernel_radius_.get())),
-            add_widget(std::make_unique<SliderWidget>(reactive_outer_ring_weight_.get()))
-        });
-        rows.push_back({
-            add_widget(std::make_unique<SliderWidget>(reactive_diagonal_weight_.get())),
-            add_widget(std::make_unique<SliderWidget>(reactive_gradient_sensitivity_.get()))
-        });
-        rows.push_back({
-            add_widget(std::make_unique<SliderWidget>(reactive_offset_strength_.get())),
-            add_widget(std::make_unique<SliderWidget>(reactive_max_offset_ratio_.get()))
-        });
-        rows.push_back({
-            add_widget(std::make_unique<SliderWidget>(reactive_front_weight_.get())),
-            add_widget(std::make_unique<SliderWidget>(reactive_side_weight_.get()))
-        });
-        rows.push_back({
-            add_widget(std::make_unique<SliderWidget>(reactive_back_weight_.get())),
-            add_widget(std::make_unique<SliderWidget>(reactive_scale_factor_.get()))
-        });
-        rows.push_back({
-            add_widget(std::make_unique<SliderWidget>(reactive_map_line_weight_.get())),
-            add_widget(std::make_unique<SliderWidget>(reactive_parallax_strength_.get()))
-        });
-        rows.push_back({
-            add_widget(std::make_unique<SliderWidget>(reactive_opacity_strength_.get())),
-            add_widget(std::make_unique<SliderWidget>(reactive_min_opacity_.get()))
-        });
-        rows.push_back({
-            add_widget(std::make_unique<SliderWidget>(reactive_max_opacity_.get())),
-            add_widget(std::make_unique<SliderWidget>(reactive_front_opacity_boost_.get()))
-        });
-        rows.push_back({
-            add_widget(std::make_unique<SliderWidget>(reactive_temporal_smoothing_.get())),
-            add_widget(std::make_unique<SliderWidget>(reactive_similarity_threshold_.get()))
-        });
-    }
-
     rows.push_back({ add_widget(std::make_unique<ButtonWidget>(texture_section_btn_.get(), [this]() { toggle_texture_section(); })) });
     if (!texture_section_collapsed_) {
         rows.push_back({
@@ -463,11 +325,6 @@ void MapLightPanel::toggle_screen_section() {
 
 void MapLightPanel::toggle_texture_section() {
     texture_section_collapsed_ = !texture_section_collapsed_;
-    rebuild_rows();
-}
-
-void MapLightPanel::toggle_reactive_section() {
-    reactive_section_collapsed_ = !reactive_section_collapsed_;
     rebuild_rows();
 }
 
@@ -598,7 +455,6 @@ nlohmann::json& MapLightPanel::ensure_light() {
     }
 
     ensure_screen_light(L);
-    ensure_reactive_settings(L);
 
     if (!L.contains("keys") || !L["keys"].is_array()) {
 
@@ -661,17 +517,6 @@ nlohmann::json& MapLightPanel::ensure_screen_light(nlohmann::json& light) {
     return screen;
 }
 
-nlohmann::json& MapLightPanel::ensure_reactive_settings(nlohmann::json& light) {
-    if (!light.contains("reactive_shadows") || !light["reactive_shadows"].is_object()) {
-        light["reactive_shadows"] = json::object();
-    }
-    json& reactive = light["reactive_shadows"];
-    ReactiveShadowSettings defaults = load_reactive_settings_from_dev_settings();
-    ReactiveShadowSettings parsed = render_pipeline::shading::reactive_shadow_settings_from_json(reactive, defaults);
-    render_pipeline::shading::assign_reactive_shadow_settings(reactive, parsed);
-    return reactive;
-}
-
 void MapLightPanel::sync_ui_from_json() {
     json& L = ensure_light();
 
@@ -729,19 +574,6 @@ void MapLightPanel::sync_ui_from_json() {
     screen = sanitize_screen_settings(screen, orbit);
     set_screen_sliders(screen);
     last_applied_screen_ = screen;
-
-    json& reactive_json = ensure_reactive_settings(L);
-    ReactiveShadowSettings reactive = render_pipeline::shading::reactive_shadow_settings_from_json(
-        reactive_json, load_reactive_settings_from_dev_settings());
-    reactive = render_pipeline::shading::sanitize_reactive_shadow_settings(reactive);
-    set_reactive_checkboxes(reactive);
-    set_reactive_sliders(reactive);
-    persist_reactive_settings_to_dev_settings(reactive);
-    last_applied_reactive_ = reactive;
-    reactive_settings_initialized_ = true;
-    if (reactive_settings_shared_) {
-        *reactive_settings_shared_ = reactive;
-    }
 
     ensure_keys_array();
     clamp_key_index();
@@ -803,13 +635,6 @@ void MapLightPanel::sync_json_from_ui() {
 
     set_orbit_sliders(orbit);
     set_screen_sliders(screen);
-
-    ReactiveShadowSettings reactive = render_pipeline::shading::sanitize_reactive_shadow_settings(
-        current_reactive_settings_from_ui());
-    write_reactive_settings_to_json(reactive);
-    set_reactive_sliders(reactive);
-    set_reactive_checkboxes(reactive);
-    persist_reactive_settings_to_dev_settings(reactive);
 
     ensure_keys_array();
     clamp_key_index();
@@ -908,195 +733,6 @@ void MapLightPanel::set_screen_sliders(const ScreenLightSettings& screen) {
     if (screen_max_opacity_)screen_max_opacity_->set_value(screen.max_opacity);
 }
 
-ReactiveShadowSettings MapLightPanel::current_reactive_settings_from_ui() const {
-    ReactiveShadowSettings settings = last_applied_reactive_;
-    if (reactive_kernel_radius_) {
-        settings.sampling.kernel_radius = clamp_int(reactive_kernel_radius_->displayed_value(), 1, 16);
-    }
-    settings.sampling.outer_ring_weight = slider_value_scaled(reactive_outer_ring_weight_, settings.sampling.outer_ring_weight, 100);
-    settings.sampling.diagonal_weight   = slider_value_scaled(reactive_diagonal_weight_, settings.sampling.diagonal_weight, 100);
-
-    if (reactive_offsets_enabled_) {
-        settings.directionality.enable_offsets = reactive_offsets_enabled_->value();
-    }
-    if (reactive_opacity_enabled_) {
-        settings.response.enable_opacity = reactive_opacity_enabled_->value();
-    }
-    settings.directionality.gradient_sensitivity =
-        slider_value_scaled(reactive_gradient_sensitivity_, settings.directionality.gradient_sensitivity, 100);
-    settings.directionality.offset_strength =
-        slider_value_scaled(reactive_offset_strength_, settings.directionality.offset_strength, 100);
-    settings.directionality.max_offset_ratio =
-        slider_value_scaled(reactive_max_offset_ratio_, settings.directionality.max_offset_ratio, 100);
-    settings.directionality.front_weight =
-        slider_value_scaled(reactive_front_weight_, settings.directionality.front_weight, 100);
-    settings.directionality.side_weight =
-        slider_value_scaled(reactive_side_weight_, settings.directionality.side_weight, 100);
-    settings.directionality.back_weight =
-        slider_value_scaled(reactive_back_weight_, settings.directionality.back_weight, 100);
-
-    settings.output.scale_factor =
-        slider_value_scaled(reactive_scale_factor_, settings.output.scale_factor, 100);
-    settings.output.map_line_weight =
-        slider_value_scaled(reactive_map_line_weight_, settings.output.map_line_weight, 100);
-    settings.output.parallax_strength =
-        slider_value_scaled(reactive_parallax_strength_, settings.output.parallax_strength, 100);
-
-    settings.response.opacity_strength =
-        slider_value_scaled(reactive_opacity_strength_, settings.response.opacity_strength, 100);
-    settings.response.min_opacity =
-        slider_value_scaled(reactive_min_opacity_, settings.response.min_opacity, 100);
-    settings.response.max_opacity =
-        slider_value_scaled(reactive_max_opacity_, settings.response.max_opacity, 100);
-    settings.response.front_opacity_boost =
-        slider_value_scaled(reactive_front_opacity_boost_, settings.response.front_opacity_boost, 100);
-
-    if (reactive_temporal_enabled_) {
-        settings.stability.enable_temporal_smoothing = reactive_temporal_enabled_->value();
-    }
-    settings.stability.temporal_smoothing = slider_value_scaled(reactive_temporal_smoothing_, settings.stability.temporal_smoothing, 1000);
-    settings.stability.reuse_similarity_threshold = slider_value_scaled(
-        reactive_similarity_threshold_, settings.stability.reuse_similarity_threshold, 1000);
-
-    return render_pipeline::shading::sanitize_reactive_shadow_settings(settings);
-}
-
-void MapLightPanel::set_reactive_sliders(const ReactiveShadowSettings& settings) {
-    if (reactive_kernel_radius_) reactive_kernel_radius_->set_value(settings.sampling.kernel_radius);
-    set_slider_scaled(reactive_outer_ring_weight_, settings.sampling.outer_ring_weight, 100);
-    set_slider_scaled(reactive_diagonal_weight_, settings.sampling.diagonal_weight, 100);
-    set_slider_scaled(reactive_gradient_sensitivity_, settings.directionality.gradient_sensitivity, 100);
-    set_slider_scaled(reactive_offset_strength_, settings.directionality.offset_strength, 100);
-    set_slider_scaled(reactive_max_offset_ratio_, settings.directionality.max_offset_ratio, 100);
-    set_slider_scaled(reactive_front_weight_, settings.directionality.front_weight, 100);
-    set_slider_scaled(reactive_side_weight_, settings.directionality.side_weight, 100);
-    set_slider_scaled(reactive_back_weight_, settings.directionality.back_weight, 100);
-    set_slider_scaled(reactive_scale_factor_, settings.output.scale_factor, 100);
-    set_slider_scaled(reactive_map_line_weight_, settings.output.map_line_weight, 100);
-    set_slider_scaled(reactive_parallax_strength_, settings.output.parallax_strength, 100);
-    set_slider_scaled(reactive_opacity_strength_, settings.response.opacity_strength, 100);
-    set_slider_scaled(reactive_min_opacity_, settings.response.min_opacity, 100);
-    set_slider_scaled(reactive_max_opacity_, settings.response.max_opacity, 100);
-    set_slider_scaled(reactive_front_opacity_boost_, settings.response.front_opacity_boost, 100);
-    set_slider_scaled(reactive_temporal_smoothing_, settings.stability.temporal_smoothing, 1000);
-    set_slider_scaled(reactive_similarity_threshold_, settings.stability.reuse_similarity_threshold, 1000);
-}
-
-void MapLightPanel::set_reactive_checkboxes(const ReactiveShadowSettings& settings) {
-    if (reactive_offsets_enabled_) reactive_offsets_enabled_->set_value(settings.directionality.enable_offsets);
-    if (reactive_opacity_enabled_) reactive_opacity_enabled_->set_value(settings.response.enable_opacity);
-    if (reactive_temporal_enabled_) reactive_temporal_enabled_->set_value(settings.stability.enable_temporal_smoothing);
-}
-
-ReactiveShadowSettings MapLightPanel::load_reactive_settings_from_dev_settings() const {
-    using devmode::ui_settings::load_bool;
-    using devmode::ui_settings::load_number;
-    ReactiveShadowSettings settings = render_pipeline::shading::sanitize_reactive_shadow_settings({});
-    settings.directionality.enable_offsets =
-        load_bool(reactive_settings_key("directionality.enable_offsets"), settings.directionality.enable_offsets);
-    settings.directionality.gradient_sensitivity = static_cast<float>(
-        load_number(reactive_settings_key("directionality.gradient_sensitivity"), settings.directionality.gradient_sensitivity));
-    settings.directionality.gradient_sensitivity = static_cast<float>(
-        load_number(reactive_settings_key("directionality.gradient_deadzone"), settings.directionality.gradient_sensitivity));
-    settings.directionality.offset_strength = static_cast<float>(
-        load_number(reactive_settings_key("directionality.offset_strength"), settings.directionality.offset_strength));
-    const float legacy_ratio_x = static_cast<float>(
-        load_number(reactive_settings_key("directionality.offset_ratio_x"), settings.directionality.offset_strength));
-    const float legacy_ratio_y = static_cast<float>(
-        load_number(reactive_settings_key("directionality.offset_ratio_y"), settings.directionality.offset_strength));
-    const float legacy_bias_x = static_cast<float>(
-        load_number(reactive_settings_key("directionality.offset_x_bias"), 1.0));
-    const float legacy_bias_y = static_cast<float>(
-        load_number(reactive_settings_key("directionality.offset_y_bias"), 1.0));
-    settings.directionality.offset_strength =
-        std::max(settings.directionality.offset_strength, std::max(legacy_ratio_x * legacy_bias_x, legacy_ratio_y * legacy_bias_y));
-    settings.directionality.max_offset_ratio = static_cast<float>(
-        load_number(reactive_settings_key("directionality.max_offset_ratio"), settings.directionality.max_offset_ratio));
-    const float legacy_max_ratio_x = static_cast<float>(
-        load_number(reactive_settings_key("directionality.offset_max_ratio_x"), settings.directionality.max_offset_ratio));
-    const float legacy_max_ratio_y = static_cast<float>(
-        load_number(reactive_settings_key("directionality.offset_max_ratio_y"), settings.directionality.max_offset_ratio));
-    settings.directionality.max_offset_ratio =
-        std::max(settings.directionality.max_offset_ratio, std::max(legacy_max_ratio_x, legacy_max_ratio_y));
-    settings.directionality.front_weight = static_cast<float>(
-        load_number(reactive_settings_key("directionality.front_weight"), settings.directionality.front_weight));
-    settings.directionality.side_weight = static_cast<float>(
-        load_number(reactive_settings_key("directionality.side_weight"), settings.directionality.side_weight));
-    settings.directionality.back_weight = static_cast<float>(
-        load_number(reactive_settings_key("directionality.back_weight"), settings.directionality.back_weight));
-
-    settings.output.scale_factor = static_cast<float>(
-        load_number(reactive_settings_key("output.scale_factor"), settings.output.scale_factor));
-    settings.output.map_line_weight = static_cast<float>(
-        load_number(reactive_settings_key("output.map_line_weight"), settings.output.map_line_weight));
-    settings.output.parallax_strength = static_cast<float>(
-        load_number(reactive_settings_key("output.parallax_strength"), settings.output.parallax_strength));
-
-    settings.response.enable_opacity =
-        load_bool(reactive_settings_key("response.enable_opacity"), settings.response.enable_opacity);
-    settings.response.opacity_strength = static_cast<float>(
-        load_number(reactive_settings_key("response.opacity_strength"), settings.response.opacity_strength));
-    settings.response.opacity_strength = static_cast<float>(
-        load_number(reactive_settings_key("response.opacity_gamma"), settings.response.opacity_strength));
-    settings.response.min_opacity = static_cast<float>(
-        load_number(reactive_settings_key("response.min_opacity"), settings.response.min_opacity));
-    settings.response.min_opacity = static_cast<float>(
-        load_number(reactive_settings_key("response.absolute_opacity_min"), settings.response.min_opacity));
-    settings.response.max_opacity = static_cast<float>(
-        load_number(reactive_settings_key("response.max_opacity"), settings.response.max_opacity));
-    settings.response.max_opacity = static_cast<float>(
-        load_number(reactive_settings_key("response.absolute_opacity_max"), settings.response.max_opacity));
-    settings.response.front_opacity_boost = static_cast<float>(
-        load_number(reactive_settings_key("response.front_opacity_boost"), settings.response.front_opacity_boost));
-
-    settings.stability.enable_temporal_smoothing = load_bool(reactive_settings_key("stability.enable_temporal_smoothing"), settings.stability.enable_temporal_smoothing);
-    settings.stability.temporal_smoothing = static_cast<float>(load_number(reactive_settings_key("stability.temporal_smoothing"), settings.stability.temporal_smoothing));
-    settings.stability.reuse_similarity_threshold = static_cast<float>(
-        load_number(reactive_settings_key("stability.reuse_similarity_threshold"), settings.stability.reuse_similarity_threshold));
-
-    settings.sampling.kernel_radius = clamp_int(static_cast<int>(std::round(load_number(reactive_settings_key("sampling.kernel_radius"), settings.sampling.kernel_radius))), 1, 16);
-    settings.sampling.outer_ring_weight = static_cast<float>(load_number(reactive_settings_key("sampling.outer_ring_weight"), settings.sampling.outer_ring_weight));
-    settings.sampling.diagonal_weight = static_cast<float>(load_number(reactive_settings_key("sampling.diagonal_weight"), settings.sampling.diagonal_weight));
-
-    return render_pipeline::shading::sanitize_reactive_shadow_settings(settings);
-}
-
-void MapLightPanel::persist_reactive_settings_to_dev_settings(const ReactiveShadowSettings& settings) const {
-    using devmode::ui_settings::save_bool;
-    using devmode::ui_settings::save_number;
-    save_bool(reactive_settings_key("directionality.enable_offsets"), settings.directionality.enable_offsets);
-    save_number(reactive_settings_key("directionality.gradient_sensitivity"), settings.directionality.gradient_sensitivity);
-    save_number(reactive_settings_key("directionality.offset_strength"), settings.directionality.offset_strength);
-    save_number(reactive_settings_key("directionality.max_offset_ratio"), settings.directionality.max_offset_ratio);
-    save_number(reactive_settings_key("directionality.front_weight"), settings.directionality.front_weight);
-    save_number(reactive_settings_key("directionality.side_weight"), settings.directionality.side_weight);
-    save_number(reactive_settings_key("directionality.back_weight"), settings.directionality.back_weight);
-
-    save_number(reactive_settings_key("output.scale_factor"), settings.output.scale_factor);
-    save_number(reactive_settings_key("output.map_line_weight"), settings.output.map_line_weight);
-    save_number(reactive_settings_key("output.parallax_strength"), settings.output.parallax_strength);
-
-    save_bool(reactive_settings_key("response.enable_opacity"), settings.response.enable_opacity);
-    save_number(reactive_settings_key("response.opacity_strength"), settings.response.opacity_strength);
-    save_number(reactive_settings_key("response.min_opacity"), settings.response.min_opacity);
-    save_number(reactive_settings_key("response.max_opacity"), settings.response.max_opacity);
-    save_number(reactive_settings_key("response.front_opacity_boost"), settings.response.front_opacity_boost);
-
-    save_bool(reactive_settings_key("stability.enable_temporal_smoothing"), settings.stability.enable_temporal_smoothing);
-    save_number(reactive_settings_key("stability.temporal_smoothing"), settings.stability.temporal_smoothing);
-    save_number(reactive_settings_key("stability.reuse_similarity_threshold"), settings.stability.reuse_similarity_threshold);
-
-    save_number(reactive_settings_key("sampling.kernel_radius"), static_cast<double>(settings.sampling.kernel_radius));
-    save_number(reactive_settings_key("sampling.outer_ring_weight"), settings.sampling.outer_ring_weight);
-    save_number(reactive_settings_key("sampling.diagonal_weight"), settings.sampling.diagonal_weight);
-}
-
-void MapLightPanel::write_reactive_settings_to_json(const ReactiveShadowSettings& settings) {
-    json& L = ensure_light();
-    json& reactive_json = ensure_reactive_settings(L);
-    render_pipeline::shading::assign_reactive_shadow_settings(reactive_json, settings);
-}
-
 void MapLightPanel::write_orbit_settings_to_json(const OrbitSettings& orbit) {
     json& L = ensure_light();
     L["update_interval"] = orbit.update_interval;
@@ -1122,13 +758,9 @@ void MapLightPanel::apply_immediate_settings() {
 
     OrbitSettings orbit = sanitize_orbit_settings(current_orbit_settings_from_ui());
     ScreenLightSettings screen = sanitize_screen_settings(current_screen_settings_from_ui(), orbit);
-    ReactiveShadowSettings reactive = render_pipeline::shading::sanitize_reactive_shadow_settings(
-        current_reactive_settings_from_ui());
-
     bool orbit_changed = !(orbit == last_applied_orbit_);
     bool screen_changed = !(screen == last_applied_screen_);
-    bool reactive_changed = !(reactive == last_applied_reactive_);
-    if (!orbit_changed && !screen_changed && !reactive_changed) {
+    if (!orbit_changed && !screen_changed) {
         return;
     }
 
@@ -1140,15 +772,6 @@ void MapLightPanel::apply_immediate_settings() {
         write_screen_settings_to_json(screen);
         set_screen_sliders(screen);
     }
-    if (reactive_changed) {
-        write_reactive_settings_to_json(reactive);
-        set_reactive_sliders(reactive);
-        set_reactive_checkboxes(reactive);
-        persist_reactive_settings_to_dev_settings(reactive);
-        if (reactive_settings_shared_) {
-            *reactive_settings_shared_ = reactive;
-        }
-    }
 
     bool ok = commit_light_changes();
     if (ok) {
@@ -1157,10 +780,6 @@ void MapLightPanel::apply_immediate_settings() {
         }
         if (screen_changed) {
             last_applied_screen_ = screen;
-        }
-        if (reactive_changed) {
-            last_applied_reactive_ = reactive;
-            reactive_settings_initialized_ = true;
         }
     }
 }

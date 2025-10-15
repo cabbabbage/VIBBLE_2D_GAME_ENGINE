@@ -1,6 +1,7 @@
 #include "map_mode_ui.hpp"
 
 #include "MapLightPanel.hpp"
+#include "MapShadowPanel.hpp"
 #include "map_grid_panel.hpp"
 #include "DockableCollapsible.hpp"
 #include "full_screen_collapsible.hpp"
@@ -44,6 +45,7 @@ void MapModeUI::set_screen_dimensions(int w, int h) {
     ensure_panels();
     SDL_Rect bounds{0, 0, screen_w_, screen_h_};
     if (light_panel_) light_panel_->set_work_area(bounds);
+    if (shadow_panel_) shadow_panel_->set_work_area(bounds);
     if (layers_panel_) layers_panel_->set_work_area(bounds);
     update_footer_visibility();
 }
@@ -209,6 +211,12 @@ bool MapModeUI::pointer_inside_floating_panel(int x, int y) const {
             }
             continue;
         }
+        if (auto* shadows = dynamic_cast<MapShadowPanel*>(panel)) {
+            if (shadows->is_visible() && shadows->is_point_inside(p.x, p.y)) {
+                return true;
+            }
+            continue;
+        }
         if (panel->is_visible() && panel->is_point_inside(p.x, p.y)) {
             return true;
         }
@@ -229,6 +237,7 @@ bool MapModeUI::handle_floating_panel_event(const SDL_Event& e, bool& used) {
         if (!panel) continue;
 
         MapLightPanel* lights = dynamic_cast<MapLightPanel*>(panel);
+        MapShadowPanel* shadows = dynamic_cast<MapShadowPanel*>(panel);
 
         auto handle_and_check = [&](auto* concrete) -> bool {
             if (!concrete || !concrete->is_visible()) return false;
@@ -242,8 +251,11 @@ bool MapModeUI::handle_floating_panel_event(const SDL_Event& e, bool& used) {
             return false;
 };
 
+        bool handled_special = false;
         if (lights) {
-            if (handle_and_check(lights)) { consumed = true; break; }
+            handled_special = handle_and_check(lights);
+        } else if (shadows) {
+            handled_special = handle_and_check(shadows);
         } else {
             if (!panel->is_visible()) continue;
             if (panel->handle_event(e)) {
@@ -256,7 +268,14 @@ bool MapModeUI::handle_floating_panel_event(const SDL_Event& e, bool& used) {
             }
         }
 
-        const bool inside = (lights && lights->is_visible() && lights->is_point_inside(p.x, p.y)) || (!lights && panel->is_visible() && panel->is_point_inside(p.x, p.y));
+        if (handled_special) {
+            consumed = true;
+            break;
+        }
+
+        const bool inside = (lights && lights->is_visible() && lights->is_point_inside(p.x, p.y)) ||
+                            (shadows && shadows->is_visible() && shadows->is_point_inside(p.x, p.y)) ||
+                            (!lights && !shadows && panel->is_visible() && panel->is_point_inside(p.x, p.y));
 
         if ((pointer_event || wheel_event) && inside) {
             if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
@@ -279,6 +298,14 @@ void MapModeUI::ensure_panels() {
     }
     if (light_panel_) {
         light_panel_->set_reactive_settings(assets_ ? assets_->reactive_shadow_settings() : nullptr);
+    }
+    if (!shadow_panel_) {
+        shadow_panel_ = std::make_unique<MapShadowPanel>(light_panel_.get(), kDefaultPanelX + 280, kDefaultPanelY);
+        shadow_panel_->close();
+        track_floating_panel(shadow_panel_.get());
+    }
+    if (shadow_panel_) {
+        shadow_panel_->set_reactive_settings(assets_ ? assets_->reactive_shadow_settings() : nullptr);
     }
     if (!grid_panel_) {
         grid_panel_ = std::make_unique<MapGridPanel>(kDefaultPanelX + 96, kDefaultPanelY + 48);
@@ -467,9 +494,15 @@ void MapModeUI::set_layers_footer_expanded(bool expanded) {
 void MapModeUI::set_active_panel(PanelType panel) {
     ensure_panels();
 
-    if (panel == PanelType::Lights && !ensure_panel_unlocked(light_panel_.get(), "Light")) {
-        sync_footer_button_states();
-        return;
+    if (panel == PanelType::Lights) {
+        if (!ensure_panel_unlocked(light_panel_.get(), "Light")) {
+            sync_footer_button_states();
+            return;
+        }
+        if (!ensure_panel_unlocked(shadow_panel_.get(), "Shadow")) {
+            sync_footer_button_states();
+            return;
+        }
     }
     if (panel == PanelType::Layers && !ensure_panel_unlocked(layers_panel_.get(), "Layers")) {
         if (footer_panel_) {
@@ -492,6 +525,16 @@ void MapModeUI::set_active_panel(PanelType panel) {
             bring_panel_to_front(light_panel_.get());
         } else {
             light_panel_->close();
+        }
+    }
+
+    if (shadow_panel_) {
+        if (panel == PanelType::Lights) {
+            shadow_panel_->open();
+            new_active = PanelType::Lights;
+            bring_panel_to_front(shadow_panel_.get());
+        } else {
+            shadow_panel_->close();
         }
     }
 
@@ -626,6 +669,14 @@ void MapModeUI::sync_panel_map_info() {
         }
         light_panel_->set_map_info(map_info_, callback);
     }
+    if (shadow_panel_) {
+        shadow_panel_->set_reactive_settings(assets_ ? assets_->reactive_shadow_settings() : nullptr);
+        LightSaveCallback callback = light_save_callback_;
+        if (!callback) {
+            callback = [this]() { return save_map_info_to_disk(); };
+        }
+        shadow_panel_->set_map_info(map_info_, callback);
+    }
     if (grid_panel_) {
         GridSaveCallback save_cb = grid_save_callback_;
         if (!save_cb) {
@@ -656,6 +707,12 @@ void MapModeUI::update(const Input& input) {
             }
             continue;
         }
+        if (auto* shadows = dynamic_cast<MapShadowPanel*>(panel)) {
+            if (shadows->is_visible()) {
+                shadows->update(input, screen_w_, screen_h_);
+            }
+            continue;
+        }
         if (panel->is_visible()) {
             panel->update(input, screen_w_, screen_h_);
         }
@@ -664,7 +721,8 @@ void MapModeUI::update(const Input& input) {
     PanelType visible = PanelType::None;
     if (layers_footer_requested_) {
         visible = PanelType::Layers;
-    } else if (light_panel_ && light_panel_->is_visible()) {
+    } else if ((light_panel_ && light_panel_->is_visible()) ||
+               (shadow_panel_ && shadow_panel_->is_visible())) {
         visible = PanelType::Lights;
     } else if (grid_panel_ && grid_panel_->is_visible()) {
         visible = PanelType::Grid;
@@ -710,6 +768,12 @@ void MapModeUI::render(SDL_Renderer* renderer) const {
             }
             continue;
         }
+        if (auto* shadows = dynamic_cast<MapShadowPanel*>(panel)) {
+            if (shadows->is_visible()) {
+                shadows->render(renderer);
+            }
+            continue;
+        }
         if (panel->is_visible()) {
             panel->render(renderer);
         }
@@ -735,6 +799,9 @@ void MapModeUI::open_light_panel() {
     if (!ensure_panel_unlocked(light_panel_.get(), "Light")) {
         return;
     }
+    if (!ensure_panel_unlocked(shadow_panel_.get(), "Shadow")) {
+        return;
+    }
     if (active_panel_ != PanelType::Lights) {
         set_active_panel(PanelType::Lights);
     }
@@ -744,14 +811,23 @@ void MapModeUI::close_light_panel() {
     ensure_panels();
     if (active_panel_ == PanelType::Lights) {
         set_active_panel(PanelType::None);
-    } else if (light_panel_) {
-        light_panel_->close();
+    } else {
+        if (light_panel_) {
+            light_panel_->close();
+        }
+        if (shadow_panel_) {
+            shadow_panel_->close();
+        }
     }
 }
 
 void MapModeUI::toggle_light_panel() {
     ensure_panels();
     if (!ensure_panel_unlocked(light_panel_.get(), "Light")) {
+        sync_footer_button_states();
+        return;
+    }
+    if (!ensure_panel_unlocked(shadow_panel_.get(), "Shadow")) {
         sync_footer_button_states();
         return;
     }
@@ -812,7 +888,8 @@ void MapModeUI::close_all_panels() {
 }
 
 bool MapModeUI::is_light_panel_visible() const {
-    return light_panel_ && light_panel_->is_visible();
+    return (light_panel_ && light_panel_->is_visible()) ||
+           (shadow_panel_ && shadow_panel_->is_visible());
 }
 
 bool MapModeUI::is_grid_panel_visible() const {
@@ -828,6 +905,13 @@ void MapModeUI::set_light_save_callback(LightSaveCallback cb) {
             callback = [this]() { return save_map_info_to_disk(); };
         }
         light_panel_->set_map_info(map_info_, callback);
+    }
+    if (shadow_panel_) {
+        LightSaveCallback callback = light_save_callback_;
+        if (!callback) {
+            callback = [this]() { return save_map_info_to_disk(); };
+        }
+        shadow_panel_->set_map_info(map_info_, callback);
     }
 }
 
@@ -865,6 +949,10 @@ bool MapModeUI::is_any_panel_visible() const {
         if (!panel) continue;
         if (auto* lights = dynamic_cast<MapLightPanel*>(panel)) {
             if (lights->is_visible()) return true;
+            continue;
+        }
+        if (auto* shadows = dynamic_cast<MapShadowPanel*>(panel)) {
+            if (shadows->is_visible()) return true;
             continue;
         }
         if (panel->is_visible()) return true;

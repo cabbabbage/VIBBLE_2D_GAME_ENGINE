@@ -163,12 +163,22 @@ void populate_from_section(ReactiveShadowSettings::Output& output, const nlohman
     output.parallax_strength = read_float(section, "parallax_strength", output.parallax_strength);
 }
 
+void populate_from_section(ReactiveShadowSettings::VirtualLightMapSettings& map_cfg,
+                           const nlohmann::json& section) {
+    map_cfg.quadrant_count = read_int(section, "quadrant_count", map_cfg.quadrant_count);
+    map_cfg.distance_strength_falloff =
+        read_float(section, "distance_strength_falloff", map_cfg.distance_strength_falloff);
+    map_cfg.directional_strength =
+        read_float(section, "directional_strength", map_cfg.directional_strength);
+}
+
 void populate_from_flat(ReactiveShadowSettings& settings, const nlohmann::json& json) {
     populate_from_section(settings.sampling, json);
     populate_from_section(settings.directionality, json);
     populate_from_section(settings.response, json);
     populate_from_section(settings.stability, json);
     populate_from_section(settings.output, json);
+    populate_from_section(settings.virtual_light_map, json);
 }
 
 }  // namespace
@@ -194,6 +204,9 @@ ReactiveShadowSettings reactive_shadow_settings_from_json(const nlohmann::json& 
     }
     if (auto output_it = json.find("output"); output_it != json.end() && output_it->is_object()) {
         populate_from_section(result.output, *output_it);
+    }
+    if (auto vlm_it = json.find("virtual_light_map"); vlm_it != json.end() && vlm_it->is_object()) {
+        populate_from_section(result.virtual_light_map, *vlm_it);
     }
 
     // Support flat legacy layout if present.
@@ -239,6 +252,12 @@ void assign_reactive_shadow_settings(nlohmann::json& json, const ReactiveShadowS
         { "scale_factor", sanitized.output.scale_factor },
         { "map_line_weight", sanitized.output.map_line_weight },
         { "parallax_strength", sanitized.output.parallax_strength }
+    });
+
+    json["virtual_light_map"] = nlohmann::json::object({
+        { "quadrant_count", sanitized.virtual_light_map.quadrant_count },
+        { "distance_strength_falloff", sanitized.virtual_light_map.distance_strength_falloff },
+        { "directional_strength", sanitized.virtual_light_map.directional_strength }
     });
 }
 

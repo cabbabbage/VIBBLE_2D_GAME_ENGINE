@@ -83,12 +83,26 @@ struct ReactiveShadowSettings {
         bool operator!=(const Output& other) const { return !(*this == other); }
     } output;
 
+    struct VirtualLightMapSettings {
+        int   quadrant_count              = 4;
+        float distance_strength_falloff   = 1.0f;
+        float directional_strength        = 0.5f;
+
+        bool operator==(const VirtualLightMapSettings& other) const {
+            return quadrant_count == other.quadrant_count &&
+                   distance_strength_falloff == other.distance_strength_falloff &&
+                   directional_strength == other.directional_strength;
+        }
+        bool operator!=(const VirtualLightMapSettings& other) const { return !(*this == other); }
+    } virtual_light_map;
+
     bool operator==(const ReactiveShadowSettings& other) const {
         return sampling == other.sampling &&
                directionality == other.directionality &&
                response == other.response &&
                stability == other.stability &&
-               output == other.output;
+               output == other.output &&
+               virtual_light_map == other.virtual_light_map;
     }
     bool operator!=(const ReactiveShadowSettings& other) const { return !(*this == other); }
 };
@@ -123,6 +137,12 @@ inline ReactiveShadowSettings sanitize_reactive_shadow_settings(const ReactiveSh
     out.output.scale_factor      = clampf(out.output.scale_factor, 0.1f, 4.0f);
     out.output.map_line_weight   = clampf(out.output.map_line_weight, 0.0f, 5.0f);
     out.output.parallax_strength = clampf(out.output.parallax_strength, 0.0f, 5.0f);
+
+    out.virtual_light_map.quadrant_count = std::clamp(out.virtual_light_map.quadrant_count, 1, 24);
+    out.virtual_light_map.distance_strength_falloff =
+        clampf(out.virtual_light_map.distance_strength_falloff, 0.05f, 10.0f);
+    out.virtual_light_map.directional_strength =
+        clampf(out.virtual_light_map.directional_strength, 0.0f, 4.0f);
 
     return out;
 }

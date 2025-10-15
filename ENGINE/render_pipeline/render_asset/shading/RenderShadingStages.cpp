@@ -49,6 +49,9 @@ std::unordered_map<const Asset*, ShadowPersistentState>& shadow_state_cache() {
     return cache;
 }
 
+constexpr float kPi     = 3.14159265358979323846f;
+constexpr float kTwoPi  = kPi * 2.0f;
+
 float blend_value(float previous, float target, float smoothing) {
     return previous * smoothing + target * (1.0f - smoothing);
 }
@@ -190,19 +193,50 @@ LightProbe analyze_light_map(const VirtualLightMap& map, const StageContext& con
 
     result.local_average = (local_weight > 0.0f) ? (local_sum / local_weight) : sample(cx, cy);
 
+    const auto& map_cfg = cfg.virtual_light_map;
+    const int   quadrant_count = std::max(1, map_cfg.quadrant_count);
+    const float falloff        = std::max(0.05f, map_cfg.distance_strength_falloff);
+    const float dir_strength   = std::max(0.0f, map_cfg.directional_strength);
+    const float angle_step     = kTwoPi / static_cast<float>(quadrant_count);
+    const float half_steps     = std::max(1.0f, static_cast<float>(quadrant_count) * 0.5f);
+
+    const float frac_x = grid_fx - std::floor(grid_fx);
+    const float frac_y = grid_fy - std::floor(grid_fy);
+    const float center_fx = static_cast<float>(cx) + frac_x + 0.5f;
+    const float center_fy = static_cast<float>(cy) + frac_y + 0.5f;
+
     float forward_sum    = 0.0f;
     float forward_weight = 0.0f;
-    for (int y = 0; y <= cy; ++y) {
-        const int   forward_steps   = cy - y;
-        const float vertical_weight = std::min(5.0f, 1.0f + static_cast<float>(forward_steps));
+    for (int y = 0; y < grid_h; ++y) {
         for (int x = 0; x < grid_w; ++x) {
-            const int   horizontal_distance = std::abs(x - cx);
-            const float horizontal_weight = 1.0f / (1.0f + static_cast<float>(horizontal_distance));
-            const float weight            = vertical_weight * horizontal_weight;
-            forward_sum += map.at(x, y) * weight;
+            const float sample_value = map.at(x, y);
+            const float cell_x = static_cast<float>(x) + 0.5f;
+            const float cell_y = static_cast<float>(y) + 0.5f;
+            const float dx = cell_x - center_fx;
+            const float dy = cell_y - center_fy;
+            const float distance = std::sqrt(dx * dx + dy * dy);
+            const float distance_weight = 1.0f / (1.0f + distance * falloff);
+
+            const float angle = std::atan2(-dy, dx);
+            float diff = std::fabs(std::remainder(angle, kTwoPi));
+            if (diff > kPi) {
+                diff = kTwoPi - diff;
+            }
+            const float steps_f = (angle_step > 0.0f) ? diff / angle_step : 0.0f;
+            const float normalized_steps =
+                std::clamp(std::round(steps_f) / half_steps, 0.0f, 1.0f);
+            const float directional_weight = std::pow(std::max(0.0f, 1.0f - normalized_steps), 1.0f + dir_strength);
+
+            const float weight = distance_weight * directional_weight;
+            if (weight <= 0.0f) {
+                continue;
+            }
+
+            forward_sum += sample_value * weight;
             forward_weight += weight;
         }
     }
+
     result.forward_average = (forward_weight > 0.0f) ? (forward_sum / forward_weight) : sample(cx, cy);
 
     float grad_x = 0.0f;
