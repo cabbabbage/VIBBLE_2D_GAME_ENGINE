@@ -252,7 +252,7 @@ void MapShadowPanel::build_ui() {
     reactive_side_weight_         = make_float_slider("Side Weight", 0.0f, 5.0f, last_applied_settings_.directionality.side_weight, 100);
     reactive_back_weight_         = make_float_slider("Back Weight", 0.0f, 5.0f, last_applied_settings_.directionality.back_weight, 100);
     reactive_scale_factor_        = make_float_slider("Scale Factor", 0.1f, 4.0f, last_applied_settings_.output.scale_factor, 100);
-    reactive_map_line_weight_     = make_float_slider("Map Line Weight", 0.0f, 5.0f, last_applied_settings_.output.map_line_weight, 100);
+    reactive_map_line_weight_     = make_float_slider("map_light_weight", 0.0f, 5.0f, last_applied_settings_.output.map_line_weight, 100);
     reactive_parallax_strength_   = make_float_slider("Parallax Strength", 0.0f, 5.0f, last_applied_settings_.output.parallax_strength, 100);
     reactive_opacity_strength_    = make_float_slider("Opacity Strength", 0.0f, 3.0f, last_applied_settings_.response.opacity_strength, 100);
     reactive_min_opacity_         = make_float_slider("Min Opacity", 0.0f, 1.0f, last_applied_settings_.response.min_opacity, 100);
@@ -316,6 +316,11 @@ void MapShadowPanel::rebuild_rows() {
     });
     rows.push_back({ add_widget(std::make_unique<SliderWidget>(quadrant_distance_falloff_.get())) });
 
+    rows.push_back({
+        add_widget(std::make_unique<SliderWidget>(reactive_map_line_weight_.get())),
+        add_widget(std::make_unique<SliderWidget>(reactive_parallax_strength_.get()))
+    });
+
     rows.push_back({ add_widget(std::make_unique<ButtonWidget>(opacity_section_btn_.get(), [this]() { toggle_opacity_section(); })) });
     if (!opacity_section_collapsed_) {
         rows.push_back({
@@ -365,11 +370,7 @@ void MapShadowPanel::rebuild_rows() {
     rows.push_back({ add_widget(std::make_unique<ButtonWidget>(scale_section_btn_.get(), [this]() { toggle_scale_section(); })) });
     if (!scale_section_collapsed_) {
         rows.push_back({
-            add_widget(std::make_unique<SliderWidget>(reactive_scale_factor_.get())),
-            add_widget(std::make_unique<SliderWidget>(reactive_map_line_weight_.get()))
-        });
-        rows.push_back({
-            add_widget(std::make_unique<SliderWidget>(reactive_parallax_strength_.get()))
+            add_widget(std::make_unique<SliderWidget>(reactive_scale_factor_.get()))
         });
     }
 

@@ -565,12 +565,8 @@ void Assets::set_input(Input* m) {
     }
 }
 
-void Assets::update(const Input& input,
-                    int screen_center_x,
-                    int screen_center_y)
+void Assets::update(const Input& input)
 {
-    (void)screen_center_x;
-    (void)screen_center_y;
 
     render_pipeline::ScalingLogic::TickUsageSampling();
 

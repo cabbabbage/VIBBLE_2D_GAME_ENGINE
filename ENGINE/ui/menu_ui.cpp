@@ -46,8 +46,7 @@ void MenuUI::game_loop() {
 	const int FRAME_MS = 1000 / 60;
 	bool quit = false;
 	SDL_Event e;
-	int frame_count = 0;
-	return_to_main_menu_ = false;
+        return_to_main_menu_ = false;
 	while (!quit) {
 		Uint32 start = SDL_GetTicks();
 		while (SDL_PollEvent(&e)) {
@@ -78,20 +77,10 @@ void MenuUI::game_loop() {
                         if (game_assets_) game_assets_->handle_sdl_event(e);
                         if (menu_active_) handle_event(e);
                 }
+                if (game_assets_ && input_) {
+                        game_assets_->update(*input_);
+                }
                 if (game_assets_) {
-                        int px = 0;
-                        int py = 0;
-                        if (game_assets_->player) {
-                                px = game_assets_->player->pos.x;
-                                py = game_assets_->player->pos.y;
-                        } else {
-                                SDL_Point focus = game_assets_->getView().get_screen_center();
-                                px = focus.x;
-                                py = focus.y;
-                        }
-                        if (input_) {
-                                game_assets_->update(*input_, px, py);
-                        }
                         static bool opened_asset_info_once = false;
                         if (!opened_asset_info_once) {
                                 const auto& active = game_assets_->getActive();
@@ -105,14 +94,13 @@ void MenuUI::game_loop() {
                         render();
                         switch (consumeAction()) {
                                         case MenuAction::EXIT:            doExit();         quit = true;        break;
-                                        case MenuAction::RESTART:         doRestart();      frame_count = 0;    break;
+                                        case MenuAction::RESTART:         doRestart();                             break;
                                         case MenuAction::SETTINGS:        doSettings();                         break;
                                         default: break;
                         }
                 }
                 SDL_RenderPresent(renderer_);
-		++frame_count;
-		if (input_) input_->update();
+                if (input_) input_->update();
 		Uint32 elapsed = SDL_GetTicks() - start;
 		if (elapsed < FRAME_MS) SDL_Delay(FRAME_MS - elapsed);
 	}

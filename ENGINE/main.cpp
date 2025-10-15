@@ -96,35 +96,20 @@ void MainApp::game_loop() {
         constexpr float TARGET_FRAME_MS = 1000.0f / TARGET_FPS;
         bool quit = false;
         SDL_Event e;
-        int frame_count = 0;
         std::cout << "game loop started!\n";
         while (!quit) {
                 Uint32 start = SDL_GetTicks();
-		while (SDL_PollEvent(&e)) {
-			if (e.type == SDL_QUIT) quit = true;
+                while (SDL_PollEvent(&e)) {
+                        if (e.type == SDL_QUIT) quit = true;
 			if (input_) input_->handleEvent(e);
 			if (game_assets_) game_assets_->handle_sdl_event(e);
 		}
-                if (game_assets_) {
-                        int px = 0;
-                        int py = 0;
-                        if (game_assets_->player) {
-                                px = game_assets_->player->pos.x;
-                                py = game_assets_->player->pos.y;
-                        } else {
-                                SDL_Point focus = game_assets_->getView().get_screen_center();
-                                px = focus.x;
-                                py = focus.y;
-                        }
-                        if (input_) {
-                                game_assets_->update(*input_, px, py);
-                        }
+                if (game_assets_ && input_) {
+                        game_assets_->update(*input_);
                 }
-		++frame_count;
-		if (input_) input_->update();
+                if (input_) input_->update();
                 const float elapsed_ms = static_cast<float>(SDL_GetTicks() - start);
                 const float early_ms = std::max(TARGET_FRAME_MS - elapsed_ms, 0.0f);
-                const float late_ms = std::max(elapsed_ms - TARGET_FRAME_MS, 0.0f);
 
                 if (early_ms > 0.0f) {
                         SDL_Delay(static_cast<Uint32>(early_ms));

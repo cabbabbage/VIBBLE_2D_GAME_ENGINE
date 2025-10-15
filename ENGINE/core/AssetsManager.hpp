@@ -31,7 +31,7 @@ public:
     ~Assets();
 
     nlohmann::json save_current_room(std::string room_name);
-    void update(const Input& input, int screen_center_x, int screen_center_y);
+    void update(const Input& input);
     void set_dev_mode(bool mode);
     void set_force_high_quality_rendering(bool enable);
     bool force_high_quality_rendering() const { return force_high_quality_rendering_; }
