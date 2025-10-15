@@ -51,44 +51,6 @@ void set_slider_scaled(const std::unique_ptr<DMSlider>& slider, float value, int
     slider->set_value(static_cast<int>(std::round(value * static_cast<float>(scale))));
 }
 
-constexpr float kLensSizeBaseMin = 140.0f;
-constexpr float kLensSizeBaseMax = 420.0f;
-constexpr float kLensSizeScaleMin = 0.5f;
-constexpr float kLensSizeScaleMax = 2.5f;
-constexpr int   kLensFadeFramesMin = 30;
-constexpr int   kLensFadeFramesMax = 300;
-
-float lens_size_scale_from_slider(int slider_value) {
-    int clamped = std::clamp(slider_value, 0, 100);
-    float t = static_cast<float>(clamped) / 100.0f;
-    return kLensSizeScaleMin + t * (kLensSizeScaleMax - kLensSizeScaleMin);
-}
-
-int lens_size_slider_from_settings(const LensFlareRenderer::Settings& settings) {
-    float base = settings.ghost_size_min > 0.0f ? settings.ghost_size_min / kLensSizeBaseMin : 1.0f;
-    float t = (base - kLensSizeScaleMin) / (kLensSizeScaleMax - kLensSizeScaleMin);
-    int slider = static_cast<int>(std::round(t * 100.0f));
-    return std::clamp(slider, 0, 100);
-}
-
-int lens_fade_slider_from_settings(const LensFlareRenderer::Settings& settings) {
-    float rise = std::max(settings.ghost_alpha_rise, 1e-4f);
-    int frames = static_cast<int>(std::round(1.0f / rise));
-    return std::clamp(frames, kLensFadeFramesMin, kLensFadeFramesMax);
-}
-
-void apply_lens_size_slider(LensFlareRenderer::Settings& settings, int slider_value) {
-    float scale = lens_size_scale_from_slider(slider_value);
-    settings.ghost_size_min = kLensSizeBaseMin * scale;
-    settings.ghost_size_max = kLensSizeBaseMax * scale;
-}
-
-void apply_lens_fade_slider(LensFlareRenderer::Settings& settings, int frames) {
-    int clamped = std::clamp(frames, kLensFadeFramesMin, kLensFadeFramesMax);
-    settings.ghost_alpha_rise = 1.0f / static_cast<float>(clamped);
-    settings.ghost_alpha_fall = 1.0f / static_cast<float>(std::max(clamped, 1) * 1.6f);
-}
-
 }  // namespace
 
 class MapLightPanel::WarningLabel : public Widget {
@@ -221,7 +183,6 @@ void MapLightPanel::build_ui() {
     screen_section_btn_ = std::make_unique<DMButton>("", &DMStyles::HeaderButton(), 220, DMButton::height());
     texture_section_btn_ = std::make_unique<DMButton>("", &DMStyles::HeaderButton(), 220, DMButton::height());
     reactive_section_btn_ = std::make_unique<DMButton>("", &DMStyles::HeaderButton(), 220, DMButton::height());
-    lens_section_btn_ = std::make_unique<DMButton>("", &DMStyles::HeaderButton(), 220, DMButton::height());
     update_section_header_labels();
 
     auto make_float_slider = [&](const std::string& label,
@@ -279,18 +240,6 @@ void MapLightPanel::build_ui() {
     if (screen_b_)       screen_b_->set_defer_commit_until_unfocus(true);
     if (screen_min_opacity_) screen_min_opacity_->set_defer_commit_until_unfocus(true);
     if (screen_max_opacity_) screen_max_opacity_->set_defer_commit_until_unfocus(true);
-
-    LensFlareRenderer::Settings default_lens = LensFlareRenderer::default_settings();
-    lens_enabled_ = std::make_unique<DMCheckbox>("Enable Lens Flares", default_lens.enabled);
-    lens_seed_threshold_ = make_float_slider("Sensitivity", 0.0f, 1.0f, default_lens.seed_threshold_norm, 100);
-    lens_seed_ema_ = make_float_slider("Tracking Smoothness", 0.0f, 1.0f, default_lens.seed_pos_ema, 100);
-    lens_size_scalar_ = std::make_unique<DMSlider>("Flare Size", 0, 100, lens_size_slider_from_settings(default_lens));
-    lens_fade_frames_ = std::make_unique<DMSlider>("Fade Duration (frames)", kLensFadeFramesMin, kLensFadeFramesMax, lens_fade_slider_from_settings(default_lens));
-    lens_intensity_gain_ = make_float_slider("Strength", 0.0f, 2.5f, default_lens.ghost_intensity_gain, 100);
-    lens_alpha_cap_ = make_float_slider("Max Brightness", 0.0f, 1.0f, default_lens.ghost_alpha_cap, 100);
-
-    if (lens_size_scalar_) lens_size_scalar_->set_defer_commit_until_unfocus(true);
-    if (lens_fade_frames_) lens_fade_frames_->set_defer_commit_until_unfocus(true);
 
     base_r_ = std::make_unique<DMSlider>("Base R", 0, 255, 255);
     base_g_ = std::make_unique<DMSlider>("Base G", 0, 255, 255);
@@ -355,9 +304,6 @@ void MapLightPanel::update_section_header_labels() {
     if (reactive_section_btn_) {
         reactive_section_btn_->set_text(label_for("Reactive Shadows", reactive_section_collapsed_));
     }
-    if (lens_section_btn_) {
-        lens_section_btn_->set_text(label_for("Lens Flares", lens_section_collapsed_));
-    }
 }
 
 void MapLightPanel::rebuild_rows() {
@@ -414,25 +360,6 @@ void MapLightPanel::rebuild_rows() {
         });
         rows.push_back({
             add_widget(std::make_unique<SliderWidget>(screen_max_opacity_.get()))
-        });
-    }
-
-    rows.push_back({ add_widget(std::make_unique<ButtonWidget>(lens_section_btn_.get(), [this]() { toggle_lens_section(); })) });
-    if (!lens_section_collapsed_) {
-        rows.push_back({
-            add_widget(std::make_unique<CheckboxWidget>(lens_enabled_.get())),
-            add_widget(std::make_unique<SliderWidget>(lens_seed_threshold_.get()))
-        });
-        rows.push_back({
-            add_widget(std::make_unique<SliderWidget>(lens_seed_ema_.get())),
-            add_widget(std::make_unique<SliderWidget>(lens_fade_frames_.get()))
-        });
-        rows.push_back({
-            add_widget(std::make_unique<SliderWidget>(lens_size_scalar_.get())),
-            add_widget(std::make_unique<SliderWidget>(lens_intensity_gain_.get()))
-        });
-        rows.push_back({
-            add_widget(std::make_unique<SliderWidget>(lens_alpha_cap_.get()))
         });
     }
 
@@ -544,11 +471,6 @@ void MapLightPanel::toggle_reactive_section() {
     rebuild_rows();
 }
 
-void MapLightPanel::toggle_lens_section() {
-    lens_section_collapsed_ = !lens_section_collapsed_;
-    rebuild_rows();
-}
-
 void MapLightPanel::apply_changes() {
     if (!map_info_) {
         return;
@@ -557,13 +479,10 @@ void MapLightPanel::apply_changes() {
     sync_json_from_ui();
     OrbitSettings orbit = sanitize_orbit_settings(current_orbit_settings_from_ui());
     ScreenLightSettings screen = sanitize_screen_settings(current_screen_settings_from_ui(), orbit);
-    LensFlareRenderer::Settings lens = current_lens_settings_from_ui();
-
     bool ok = commit_light_changes();
     if (ok) {
         last_applied_orbit_ = orbit;
         last_applied_screen_ = screen;
-        last_applied_lens_ = lens;
     }
 }
 
@@ -680,7 +599,6 @@ nlohmann::json& MapLightPanel::ensure_light() {
 
     ensure_screen_light(L);
     ensure_reactive_settings(L);
-    ensure_lens_flare_settings(L);
 
     if (!L.contains("keys") || !L["keys"].is_array()) {
 
@@ -754,16 +672,6 @@ nlohmann::json& MapLightPanel::ensure_reactive_settings(nlohmann::json& light) {
     return reactive;
 }
 
-nlohmann::json& MapLightPanel::ensure_lens_flare_settings(nlohmann::json& light) {
-    if (!light.contains("lens_flare") || !light["lens_flare"].is_object()) {
-        light["lens_flare"] = json::object();
-    }
-    json& lens = light["lens_flare"];
-    LensFlareRenderer::Settings parsed = LensFlareRenderer::settings_from_json(lens, LensFlareRenderer::default_settings());
-    LensFlareRenderer::settings_to_json(lens, parsed);
-    return lens;
-}
-
 void MapLightPanel::sync_ui_from_json() {
     json& L = ensure_light();
 
@@ -835,11 +743,6 @@ void MapLightPanel::sync_ui_from_json() {
         *reactive_settings_shared_ = reactive;
     }
 
-    json& lens_json = ensure_lens_flare_settings(L);
-    LensFlareRenderer::Settings lens_settings = LensFlareRenderer::settings_from_json(lens_json, LensFlareRenderer::default_settings());
-    set_lens_sliders(lens_settings);
-    last_applied_lens_ = lens_settings;
-
     ensure_keys_array();
     clamp_key_index();
 
@@ -907,10 +810,6 @@ void MapLightPanel::sync_json_from_ui() {
     set_reactive_sliders(reactive);
     set_reactive_checkboxes(reactive);
     persist_reactive_settings_to_dev_settings(reactive);
-
-    LensFlareRenderer::Settings lens = current_lens_settings_from_ui();
-    write_lens_settings_to_json(lens);
-    set_lens_sliders(lens);
 
     ensure_keys_array();
     clamp_key_index();
@@ -993,29 +892,6 @@ MapLightPanel::ScreenLightSettings MapLightPanel::current_screen_settings_from_u
     return current;
 }
 
-LensFlareRenderer::Settings MapLightPanel::current_lens_settings_from_ui() const {
-    LensFlareRenderer::Settings settings = last_applied_lens_;
-    if (lens_enabled_) settings.enabled = lens_enabled_->value();
-    settings.seed_threshold_norm = slider_value_scaled(lens_seed_threshold_, settings.seed_threshold_norm, 100);
-    settings.seed_pos_ema = slider_value_scaled(lens_seed_ema_, settings.seed_pos_ema, 100);
-    if (lens_size_scalar_) apply_lens_size_slider(settings, lens_size_scalar_->displayed_value());
-    if (lens_fade_frames_) apply_lens_fade_slider(settings, lens_fade_frames_->displayed_value());
-    settings.ghost_intensity_gain = slider_value_scaled(lens_intensity_gain_, settings.ghost_intensity_gain, 100);
-    settings.ghost_alpha_cap = slider_value_scaled(lens_alpha_cap_, settings.ghost_alpha_cap, 100);
-
-    LensFlareRenderer::Settings defaults = LensFlareRenderer::default_settings();
-    settings.seed_stride_px = defaults.seed_stride_px;
-    settings.max_new_per_frame = defaults.max_new_per_frame;
-    settings.ghost_follow_ema = std::clamp(settings.seed_pos_ema * 0.5f + 0.04f, 0.04f, 0.25f);
-    settings.ghost_spawn_speed = defaults.ghost_spawn_speed;
-    settings.ghost_drift = defaults.ghost_drift;
-    settings.offscreen_spawn_bias = defaults.offscreen_spawn_bias;
-    settings.streak_angle_lean = defaults.streak_angle_lean;
-    settings.axis_factors = defaults.axis_factors;
-
-    return LensFlareRenderer::sanitize_settings(settings);
-}
-
 void MapLightPanel::set_orbit_sliders(const OrbitSettings& orbit) {
     if (update_interval_) update_interval_->set_value(orbit.update_interval);
     if (orbit_x_)         orbit_x_->set_value(orbit.orbit_x);
@@ -1030,17 +906,6 @@ void MapLightPanel::set_screen_sliders(const ScreenLightSettings& screen) {
     if (screen_b_)          screen_b_->set_value(screen.b);
     if (screen_min_opacity_)screen_min_opacity_->set_value(screen.min_opacity);
     if (screen_max_opacity_)screen_max_opacity_->set_value(screen.max_opacity);
-}
-
-void MapLightPanel::set_lens_sliders(const LensFlareRenderer::Settings& settings) {
-    LensFlareRenderer::Settings sanitized = LensFlareRenderer::sanitize_settings(settings);
-    if (lens_enabled_) lens_enabled_->set_value(sanitized.enabled);
-    set_slider_scaled(lens_seed_threshold_, sanitized.seed_threshold_norm, 100);
-    set_slider_scaled(lens_seed_ema_, sanitized.seed_pos_ema, 100);
-    if (lens_size_scalar_) lens_size_scalar_->set_value(lens_size_slider_from_settings(sanitized));
-    if (lens_fade_frames_) lens_fade_frames_->set_value(lens_fade_slider_from_settings(sanitized));
-    set_slider_scaled(lens_intensity_gain_, sanitized.ghost_intensity_gain, 100);
-    set_slider_scaled(lens_alpha_cap_, sanitized.ghost_alpha_cap, 100);
 }
 
 ReactiveShadowSettings MapLightPanel::current_reactive_settings_from_ui() const {
@@ -1250,12 +1115,6 @@ void MapLightPanel::write_screen_settings_to_json(const ScreenLightSettings& scr
     screen_json["max_opacity"] = screen.max_opacity;
 }
 
-void MapLightPanel::write_lens_settings_to_json(const LensFlareRenderer::Settings& settings) {
-    json& L = ensure_light();
-    json& lens_json = ensure_lens_flare_settings(L);
-    LensFlareRenderer::settings_to_json(lens_json, settings);
-}
-
 void MapLightPanel::apply_immediate_settings() {
     if (!map_info_) {
         return;
@@ -1266,12 +1125,10 @@ void MapLightPanel::apply_immediate_settings() {
     ReactiveShadowSettings reactive = render_pipeline::shading::sanitize_reactive_shadow_settings(
         current_reactive_settings_from_ui());
 
-    LensFlareRenderer::Settings lens = current_lens_settings_from_ui();
     bool orbit_changed = !(orbit == last_applied_orbit_);
     bool screen_changed = !(screen == last_applied_screen_);
     bool reactive_changed = !(reactive == last_applied_reactive_);
-    bool lens_changed = !(lens == last_applied_lens_);
-    if (!orbit_changed && !screen_changed && !reactive_changed && !lens_changed) {
+    if (!orbit_changed && !screen_changed && !reactive_changed) {
         return;
     }
 
@@ -1292,10 +1149,6 @@ void MapLightPanel::apply_immediate_settings() {
             *reactive_settings_shared_ = reactive;
         }
     }
-    if (lens_changed) {
-        write_lens_settings_to_json(lens);
-        set_lens_sliders(lens);
-    }
 
     bool ok = commit_light_changes();
     if (ok) {
@@ -1308,9 +1161,6 @@ void MapLightPanel::apply_immediate_settings() {
         if (reactive_changed) {
             last_applied_reactive_ = reactive;
             reactive_settings_initialized_ = true;
-        }
-        if (lens_changed) {
-            last_applied_lens_ = lens;
         }
     }
 }

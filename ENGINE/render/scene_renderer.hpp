@@ -11,7 +11,6 @@
 #include "render_pipeline/render_asset/AssetRenderPipeline.hpp"
 #include "render_pipeline/render_asset/shading/ReactiveShadowSettings.hpp"
 #include "render/camera.hpp"
-#include "lens_flare_renderer.hpp"
 
 class Assets;
 class Asset;
@@ -56,7 +55,6 @@ private:
     render_pipeline::shading::ReactiveShadowSettings reactive_shadow_settings_{};
     AssetRenderPipeline render_pipeline_;
     std::unique_ptr<LightMap> z_light_pass_;
-    LensFlareRenderer lens_flares_;
     bool           debugging = false;
     bool           low_quality_rendering_ = false;
     bool           light_map_only_mode_ = false;

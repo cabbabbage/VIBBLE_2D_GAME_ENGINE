@@ -41,8 +41,7 @@ SceneRenderer::SceneRenderer(SDL_Renderer* renderer,
                                   main_light_source_,
                                   assets->player,
                                   nullptr,
-                                  &reactive_shadow_settings_ }),
-  lens_flares_(renderer, screen_width, screen_height)
+                                  &reactive_shadow_settings_ })
 {
     fullscreen_light_tex_ = SDL_CreateTexture(renderer_, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET, screen_width_, screen_height_);
     if (fullscreen_light_tex_) {
@@ -93,12 +92,6 @@ void SceneRenderer::apply_map_light_config(const nlohmann::json& data){
     }
     render_pipeline_.lighting().reactive_shadow_settings = &reactive_shadow_settings_;
 
-    auto lens_it = data.find("lens_flare");
-    if (lens_it != data.end()) {
-        lens_flares_.apply_settings_from_json(*lens_it);
-    } else {
-        lens_flares_.apply_settings(LensFlareRenderer::default_settings());
-    }
 }
 
 void SceneRenderer::apply_screen_light_settings(const nlohmann::json& data){
@@ -289,9 +282,6 @@ void SceneRenderer::render(){
     SDL_SetRenderTarget(renderer_,nullptr);
     // Light map composites directly to backbuffer
     z_light_pass_->render(debugging, light_map_only_mode_);
-
-    // ---- Cinematic lens flares (camera-axis, smoothed, lifecycle, subtle) ----
-    lens_flares_.draw_after_light_map();
 
     SDL_SetRenderTarget(renderer_,nullptr);
 

@@ -7,7 +7,6 @@
 #include "asset_loader.hpp"
 #include "asset/asset_types.hpp"
 #include "scene_renderer.hpp"
-#include "render/lens_flare_renderer.hpp"
 #include "AssetsManager.hpp"
 #include "input.hpp"
 #include "audio/audio_engine.hpp"
@@ -183,9 +182,6 @@ nlohmann::json build_default_map_info(const std::string& map_name) {
     layer["rooms"] = nlohmann::json::array({spawn_spec});
     map_info["map_layers"] = nlohmann::json::array({layer});
 
-    nlohmann::json lens_defaults = nlohmann::json::object();
-    LensFlareRenderer::settings_to_json(lens_defaults, LensFlareRenderer::default_settings());
-
     nlohmann::json default_light = nlohmann::json::object({
         {"radius", 0},
         {"intensity", 255},
@@ -200,8 +196,7 @@ nlohmann::json build_default_map_info(const std::string& map_name) {
         {"base_color", nlohmann::json::array({255, 255, 255, 255})},
         {"keys", nlohmann::json::array({
             nlohmann::json::array({0.0, nlohmann::json::array({255, 255, 255, 255})})
-        })},
-        {"lens_flare", lens_defaults}
+        })}
     });
 
     map_info["map_assets_data"] = nlohmann::json::object();

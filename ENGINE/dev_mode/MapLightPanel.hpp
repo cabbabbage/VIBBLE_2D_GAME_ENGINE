@@ -9,7 +9,6 @@
 
 #include "DockableCollapsible.hpp"
 #include "widgets.hpp"
-#include "render/lens_flare_renderer.hpp"
 #include "render_pipeline/render_asset/shading/ReactiveShadowSettings.hpp"
 
 #include <nlohmann/json.hpp>
@@ -62,7 +61,6 @@ private:
     nlohmann::json& ensure_light();
     nlohmann::json& ensure_screen_light(nlohmann::json& light);
     nlohmann::json& ensure_reactive_settings(nlohmann::json& light);
-    nlohmann::json& ensure_lens_flare_settings(nlohmann::json& light);
 
     struct OrbitSettings {
         int update_interval = 10;
@@ -100,9 +98,6 @@ private:
     ScreenLightSettings current_screen_settings_from_ui() const;
     void set_orbit_sliders(const OrbitSettings& orbit);
     void set_screen_sliders(const ScreenLightSettings& screen);
-    LensFlareRenderer::Settings current_lens_settings_from_ui() const;
-    void set_lens_sliders(const LensFlareRenderer::Settings& settings);
-    void write_lens_settings_to_json(const LensFlareRenderer::Settings& settings);
     render_pipeline::shading::ReactiveShadowSettings current_reactive_settings_from_ui() const;
     void set_reactive_sliders(const render_pipeline::shading::ReactiveShadowSettings& settings);
     void set_reactive_checkboxes(const render_pipeline::shading::ReactiveShadowSettings& settings);
@@ -139,12 +134,10 @@ private:
     std::unique_ptr<DMButton> screen_section_btn_;
     std::unique_ptr<DMButton> texture_section_btn_;
     std::unique_ptr<DMButton> reactive_section_btn_;
-    std::unique_ptr<DMButton> lens_section_btn_;
     bool orbit_section_collapsed_ = false;
     bool screen_section_collapsed_ = false;
     bool texture_section_collapsed_ = false;
     bool reactive_section_collapsed_ = false;
-    bool lens_section_collapsed_ = false;
     std::unique_ptr<DMSlider> radius_;
     std::unique_ptr<DMSlider> intensity_;
     std::unique_ptr<DMSlider> orbit_x_;
@@ -165,14 +158,6 @@ private:
     std::unique_ptr<DMSlider> base_g_;
     std::unique_ptr<DMSlider> base_b_;
     std::unique_ptr<DMSlider> base_a_;
-
-    std::unique_ptr<DMCheckbox> lens_enabled_;
-    std::unique_ptr<DMSlider> lens_seed_threshold_;
-    std::unique_ptr<DMSlider> lens_seed_ema_;
-    std::unique_ptr<DMSlider> lens_size_scalar_;
-    std::unique_ptr<DMSlider> lens_fade_frames_;
-    std::unique_ptr<DMSlider> lens_intensity_gain_;
-    std::unique_ptr<DMSlider> lens_alpha_cap_;
 
     std::unique_ptr<DMButton> prev_key_btn_;
     std::unique_ptr<DMButton> next_key_btn_;
@@ -220,7 +205,6 @@ private:
     void toggle_screen_section();
     void toggle_texture_section();
     void toggle_reactive_section();
-    void toggle_lens_section();
 
     bool needs_sync_to_json_ = false;
 
@@ -232,7 +216,6 @@ private:
         render_pipeline::shading::sanitize_reactive_shadow_settings({});
     render_pipeline::shading::ReactiveShadowSettings* reactive_settings_shared_ = nullptr;
     bool reactive_settings_initialized_ = false;
-    LensFlareRenderer::Settings last_applied_lens_ = LensFlareRenderer::sanitize_settings(LensFlareRenderer::default_settings());
 
 protected:
     std::string_view lock_settings_namespace() const override { return "lighting"; }

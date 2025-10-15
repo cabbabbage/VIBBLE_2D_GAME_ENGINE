@@ -37,7 +37,6 @@ public:
             r.s_radius    = std::make_unique<DMSlider>("Radius (px)", 0, 2000, ls.radius);
             r.s_falloff   = std::make_unique<DMSlider>("Falloff (%)", 0, 100, ls.fall_off);
             r.s_flicker   = std::make_unique<DMSlider>("Flicker", 0, 20, ls.flicker);
-            r.s_flare     = std::make_unique<DMSlider>("Flare (px)", 0, 100, ls.flare);
             r.s_offset_x  = std::make_unique<DMSlider>("Offset X", -2000, 2000, ls.offset_x);
             r.s_offset_y  = std::make_unique<DMSlider>("Offset Y", -2000, 2000, ls.offset_y);
             r.s_color_r   = std::make_unique<DMSlider>("Color R", 0, 255, ls.color.r);
@@ -79,7 +78,6 @@ public:
             place(r.s_radius,    DMSlider::height());
             place(r.s_falloff,   DMSlider::height());
             place(r.s_flicker,   DMSlider::height());
-            place(r.s_flare,     DMSlider::height());
             place(r.s_offset_x,  DMSlider::height());
             place(r.s_offset_y,  DMSlider::height());
             place(r.s_color_r,   DMSlider::height());
@@ -165,10 +163,6 @@ public:
                           [&]() { return r.light.flicker; },
                           [&](int v) { r.light.flicker = v; },
                           true);
-            handle_slider(r.s_flare,
-                          [&]() { return r.light.flare; },
-                          [&](int v) { r.light.flare = v; },
-                          true);
             handle_slider(r.s_offset_x,
                           [&]() { return r.light.offset_x; },
                           [&](int v) { r.light.offset_x = v; },
@@ -200,7 +194,6 @@ public:
                 r.s_radius    = std::make_unique<DMSlider>("Radius (px)", 0, 2000, r.light.radius);
                 r.s_falloff   = std::make_unique<DMSlider>("Falloff (%)", 0, 100, r.light.fall_off);
                 r.s_flicker   = std::make_unique<DMSlider>("Flicker", 0, 20, r.light.flicker);
-                r.s_flare     = std::make_unique<DMSlider>("Flare (px)", 0, 100, r.light.flare);
                 r.s_offset_x  = std::make_unique<DMSlider>("Offset X", -2000, 2000, r.light.offset_x);
                 r.s_offset_y  = std::make_unique<DMSlider>("Offset Y", -2000, 2000, r.light.offset_y);
                 r.s_color_r   = std::make_unique<DMSlider>("Color R", 0, 255, r.light.color.r);
@@ -246,7 +239,6 @@ public:
             if (rrow.s_radius)    rrow.s_radius->render(r);
             if (rrow.s_falloff)   rrow.s_falloff->render(r);
             if (rrow.s_flicker)   rrow.s_flicker->render(r);
-            if (rrow.s_flare)     rrow.s_flare->render(r);
             if (rrow.s_offset_x)  rrow.s_offset_x->render(r);
             if (rrow.s_offset_y)  rrow.s_offset_y->render(r);
             if (rrow.s_color_r)   rrow.s_color_r->render(r);
@@ -266,7 +258,6 @@ private:
         std::unique_ptr<DMSlider> s_radius;
         std::unique_ptr<DMSlider> s_falloff;
         std::unique_ptr<DMSlider> s_flicker;
-        std::unique_ptr<DMSlider> s_flare;
         std::unique_ptr<DMSlider> s_offset_x;
         std::unique_ptr<DMSlider> s_offset_y;
         std::unique_ptr<DMSlider> s_color_r;
@@ -282,7 +273,6 @@ private:
         configure_regen_slider(r.s_radius);
         configure_regen_slider(r.s_falloff);
         configure_regen_slider(r.s_flicker);
-        configure_regen_slider(r.s_flare);
         configure_regen_slider(r.s_color_r);
         configure_regen_slider(r.s_color_g);
         configure_regen_slider(r.s_color_b);
