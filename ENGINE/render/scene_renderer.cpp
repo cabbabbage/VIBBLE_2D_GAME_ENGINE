@@ -7,7 +7,6 @@
 #include "render_pipeline/render_asset/shading/ReactiveShadowSettingsJSON.hpp"
 #include <algorithm>
 #include <cmath>
-#include <iostream>
 #include <random>
 #include <tuple>
 #include <vector>
@@ -20,7 +19,6 @@ static constexpr float MIN_VISIBLE_SCREEN_RATIO = 0.015f;
 
 namespace {
 constexpr std::string_view kUpdateMapLightSettingKey = "dev_ui.lighting.map_panel.update_map_light";
-constexpr std::string_view kShowLightMapTextureSettingKey = "dev_ui.lighting.map_panel.show_light_map_texture";
 } // namespace
 
 SceneRenderer::SceneRenderer(SDL_Renderer* renderer,
@@ -35,7 +33,6 @@ SceneRenderer::SceneRenderer(SDL_Renderer* renderer,
   screen_height_(screen_height),
   main_light_source_(renderer, SDL_Point{ screen_width / 2, screen_height / 2 },
                      screen_width, SDL_Color{255, 255, 255, 255}),
-  fullscreen_light_tex_(nullptr),
   reactive_shadow_settings_(render_pipeline::shading::sanitize_reactive_shadow_settings({})),
   render_pipeline_(renderer,
                    SceneLighting{ assets->getView(),
@@ -45,20 +42,8 @@ SceneRenderer::SceneRenderer(SDL_Renderer* renderer,
                                   &reactive_shadow_settings_ })
 {
     main_light_source_.initialize_from_map_manifest(map_manifest, map_id);
-    fullscreen_light_tex_ = SDL_CreateTexture(renderer_, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET, screen_width_, screen_height_);
-    if (fullscreen_light_tex_) {
-        SDL_SetTextureBlendMode(fullscreen_light_tex_, SDL_BLENDMODE_BLEND);
-#if SDL_VERSION_ATLEAST(2,0,12)
-        SDL_SetTextureScaleMode(fullscreen_light_tex_, SDL_ScaleModeNearest);
-#endif
-        update_fullscreen_light_texture();
-    } else {
-        std::cerr << "[SceneRenderer] Failed to create fullscreen light texture: " << SDL_GetError() << "\n";
-    }
-
-    z_light_pass_ = std::make_unique<LightMap>(renderer_, assets_, main_light_source_, screen_width_, screen_height_, fullscreen_light_tex_);
+    z_light_pass_ = std::make_unique<LightMap>(assets_, screen_width_, screen_height_);
     if (z_light_pass_) {
-        z_light_pass_->set_fullscreen_light_settings(screen_light_color_, screen_light_min_opacity_, screen_light_max_opacity_);
         z_light_pass_->update_virtual_light_map();
         render_pipeline_.lighting().virtual_light_map = &z_light_pass_->virtual_light_map();
     } else {
@@ -66,11 +51,6 @@ SceneRenderer::SceneRenderer(SDL_Renderer* renderer,
     }
     render_pipeline_.lighting().reactive_shadow_settings = &reactive_shadow_settings_;
     main_light_source_.update();
-    z_light_pass_->render(debugging, light_map_only_mode_);
-}
-
-SceneRenderer::~SceneRenderer(){
-    if (fullscreen_light_tex_){ SDL_DestroyTexture(fullscreen_light_tex_); fullscreen_light_tex_=nullptr; }
 }
 
 SDL_Renderer* SceneRenderer::get_renderer() const { return renderer_; }
@@ -86,8 +66,6 @@ void SceneRenderer::set_low_quality_rendering(bool enabled){
 
 void SceneRenderer::apply_map_light_config(const nlohmann::json& data){
     main_light_source_.apply_config(data);
-    apply_screen_light_settings(data);
-    update_fullscreen_light_texture();
 
     using namespace render_pipeline::shading;
     auto reactive_it = data.find("reactive_shadows");
@@ -98,49 +76,6 @@ void SceneRenderer::apply_map_light_config(const nlohmann::json& data){
     }
     render_pipeline_.lighting().reactive_shadow_settings = &reactive_shadow_settings_;
 
-}
-
-void SceneRenderer::apply_screen_light_settings(const nlohmann::json& data){
-    SDL_Color desired_color{255,255,255,255};
-    int desired_min=0, desired_max=255;
-    auto it=data.find("screen_light");
-    if (it!=data.end() && it->is_object()){
-        const auto& screen=*it;
-        auto color_it=screen.find("color");
-        if (color_it!=screen.end() && color_it->is_array()){
-            try{
-                if (color_it->size()>=3){
-                    desired_color.r=(Uint8)std::clamp(color_it->at(0).get<int>(),0,255);
-                    desired_color.g=(Uint8)std::clamp(color_it->at(1).get<int>(),0,255);
-                    desired_color.b=(Uint8)std::clamp(color_it->at(2).get<int>(),0,255);
-                }
-            }catch(...){}
-        }
-        desired_min=screen.value("min_opacity",desired_min);
-        desired_max=screen.value("max_opacity",desired_max);
-    }
-
-    int map_min=main_light_source_.min_opacity();
-    int map_max=main_light_source_.max_opacity();
-    desired_min=std::clamp(desired_min,map_min,map_max);
-    desired_max=std::clamp(desired_max,map_min,map_max);
-    if (desired_min>desired_max) std::swap(desired_min,desired_max);
-
-    screen_light_color_=SDL_Color{desired_color.r,desired_color.g,desired_color.b,255};
-    screen_light_min_opacity_=desired_min;
-    screen_light_max_opacity_=desired_max;
-    if (z_light_pass_){
-        z_light_pass_->set_fullscreen_light_settings(screen_light_color_,screen_light_min_opacity_,screen_light_max_opacity_);
-    }
-}
-
-void SceneRenderer::update_fullscreen_light_texture(){
-    if (!renderer_||!fullscreen_light_tex_) return;
-    SDL_Texture* prev=SDL_GetRenderTarget(renderer_);
-    SDL_SetRenderTarget(renderer_,fullscreen_light_tex_);
-    SDL_SetRenderDrawColor(renderer_,255,255,255,255);
-    SDL_RenderClear(renderer_);
-    SDL_SetRenderTarget(renderer_,prev);
 }
 
 bool SceneRenderer::shouldRegen(Asset* a){
@@ -192,12 +127,7 @@ void SceneRenderer::render(){
     }
     if (should_update_light){ main_light_source_.update(); }
 
-    bool show_light_map_texture = true;
-    if (assets_ && assets_->is_dev_mode()) {
-        show_light_map_texture = devmode::ui_settings::load_bool(kShowLightMapTextureSettingKey, true);
-    }
     if (z_light_pass_){
-        z_light_pass_->set_fullscreen_light_enabled(show_light_map_texture);
         z_light_pass_->update_virtual_light_map();
         render_pipeline_.lighting().virtual_light_map=&z_light_pass_->virtual_light_map();
     } else {
@@ -211,14 +141,7 @@ void SceneRenderer::render(){
     SDL_SetRenderDrawColor(renderer_,clear_color.r,clear_color.g,clear_color.b,clear_color.a);
     SDL_RenderClear(renderer_);
 
-    // Ensure the light map is composited immediately after clearing the background.
-    if (z_light_pass_){
-        z_light_pass_->render(debugging, light_map_only_mode_);
-    }
-
     if (!light_map_only_mode_){
-        // Light map rendering modifies the renderer blend mode, so restore it before drawing assets.
-        SDL_SetRenderDrawBlendMode(renderer_,SDL_BLENDMODE_BLEND);
         const auto& camera_state=assets_->getView();
         float scale=camera_state.get_scale();
         float inv_scale=1.f/scale;

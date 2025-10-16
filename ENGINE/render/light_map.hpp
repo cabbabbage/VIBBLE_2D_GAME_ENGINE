@@ -5,7 +5,6 @@
 #include <array>
 #include <cstddef>
 #include "core/AssetsManager.hpp"
-#include "global_light_source.hpp"
 #include "render/camera.hpp"
 
 struct VirtualLightMap {
@@ -29,41 +28,27 @@ struct VirtualLightMap {
 
 class LightMap {
 
-        public:
+public:
     struct LightEntry {
-        SDL_Texture* tex;
         SDL_Rect dst;
         Uint8 alpha;
-        SDL_RendererFlip flip;
         SDL_Color color_mod;
-};
-    LightMap(SDL_Renderer* renderer, Assets* assets, Global_Light_Source& main_light, int screen_width, int screen_height, SDL_Texture* fullscreen_light_tex);
-    void render(bool debugging, bool light_map_only);
-    void set_fullscreen_light_settings(SDL_Color color, int min_opacity, int max_opacity);
-    void set_fullscreen_light_enabled(bool enabled) { fullscreen_light_enabled_ = enabled; }
-    bool fullscreen_light_enabled() const { return fullscreen_light_enabled_; }
+    };
+
+    LightMap(Assets* assets, int screen_width, int screen_height);
+
     void update_virtual_light_map();
     const VirtualLightMap& virtual_light_map() const { return virtual_light_map_; }
 
-        private:
+private:
     void collect_layers(std::vector<LightEntry>& out);
-    SDL_Texture* build_lowres_mask(const std::vector<LightEntry>& layers, int low_w, int low_h, int downscale);
     SDL_Rect get_scaled_position_rect(SDL_Point pos, int fw, int fh, float inv_scale, int min_w, int min_h);
     void compute_virtual_light_map(const std::vector<LightEntry>& layers);
 
-        private:
-    SDL_Renderer* renderer_;
+private:
     Assets* assets_;
-    Global_Light_Source& main_light_;
     int screen_width_;
     int screen_height_;
-    SDL_Texture* fullscreen_light_tex_;
-    Uint8 last_main_light_alpha_ = 0;
-    SDL_Color fullscreen_light_color_{255, 255, 255, 255};
-    int fullscreen_light_min_opacity_ = 0;
-    int fullscreen_light_max_opacity_ = 255;
-    bool fullscreen_light_enabled_ = true;
-    std::vector<LightEntry> cached_layers_;
-    bool cached_layers_ready_ = false;
+    std::vector<LightEntry> scratch_layers_;
     VirtualLightMap virtual_light_map_{};
 };

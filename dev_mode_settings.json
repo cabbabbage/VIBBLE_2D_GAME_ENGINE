@@ -40,7 +40,6 @@
                         "quadrant_count": 24.0
                     }
                 },
-                "show_light_map_texture": false,
                 "update_map_light": true
             }
         },

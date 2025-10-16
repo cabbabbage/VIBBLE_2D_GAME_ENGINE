@@ -23,7 +23,6 @@ using nlohmann::json;
 namespace {
 
 constexpr std::string_view kReactiveSettingsKeyPrefix = "dev_ui.lighting.map_panel.reactive";
-constexpr std::string_view kShowLightMapTextureSettingKey = "dev_ui.lighting.map_panel.show_light_map_texture";
 
 std::string reactive_settings_key(std::string_view suffix) {
     std::string key(kReactiveSettingsKeyPrefix);
@@ -542,7 +541,6 @@ void MapShadowPanel::build_ui() {
     quadrant_directional_strength_ = make_float_slider("Directional Strength", 0.0f, 4.0f,
         last_applied_settings_.virtual_light_map.directional_strength, 100, 2);
 
-    light_map_texture_checkbox_ = std::make_unique<DMCheckbox>("Show Light Map Texture", true);
     reactive_offsets_enabled_ = std::make_unique<DMCheckbox>("Enable Offsets", last_applied_settings_.directionality.enable_offsets);
     reactive_opacity_enabled_ = std::make_unique<DMCheckbox>("Enable Opacity", last_applied_settings_.response.enable_opacity);
     reactive_temporal_enabled_ = std::make_unique<DMCheckbox>("Enable Temporal", last_applied_settings_.stability.enable_temporal_smoothing);
@@ -576,7 +574,6 @@ void MapShadowPanel::build_ui() {
     scale_section_btn_    = std::make_unique<DMButton>("", &DMStyles::HeaderButton(), 220, DMButton::height());
 
     rebuild_rows();
-    load_light_map_texture_setting();
 }
 
 void MapShadowPanel::update_section_header_labels() {
@@ -617,7 +614,6 @@ void MapShadowPanel::rebuild_rows() {
     rows.push_back({ add_widget(std::move(warning_label)) });
 
     rows.push_back({
-        add_widget(std::make_unique<CheckboxWidget>(light_map_texture_checkbox_.get())),
         add_widget(std::make_unique<SliderWidget>(quadrant_count_.get()))
     });
     rows.push_back({
@@ -716,8 +712,6 @@ void MapShadowPanel::sync_ui_from_json() {
     set_reactive_checkboxes(settings);
     set_reactive_sliders(settings);
     persist_reactive_settings_to_dev_settings(settings);
-    load_light_map_texture_setting();
-
     reactive_settings_initialized_ = true;
     if (reactive_settings_shared_) {
         *reactive_settings_shared_ = settings;
@@ -736,14 +730,6 @@ void MapShadowPanel::sync_json_from_ui() {
     set_reactive_sliders(settings);
     set_reactive_checkboxes(settings);
     persist_reactive_settings_to_dev_settings(settings);
-    if (light_map_texture_checkbox_) {
-        bool checkbox_value = light_map_texture_checkbox_->value();
-        if (checkbox_value != light_map_texture_enabled_) {
-            light_map_texture_enabled_ = checkbox_value;
-            devmode::ui_settings::save_bool(kShowLightMapTextureSettingKey, light_map_texture_enabled_);
-        }
-    }
-
     needs_sync_to_json_ = false;
 }
 
@@ -961,13 +947,6 @@ nlohmann::json& MapShadowPanel::ensure_reactive_settings_json() {
         light["reactive_shadows"] = json::object();
     }
     return light["reactive_shadows"];
-}
-
-void MapShadowPanel::load_light_map_texture_setting() {
-    light_map_texture_enabled_ = devmode::ui_settings::load_bool(kShowLightMapTextureSettingKey, true);
-    if (light_map_texture_checkbox_) {
-        light_map_texture_checkbox_->set_value(light_map_texture_enabled_);
-    }
 }
 
 void MapShadowPanel::apply_immediate_settings() {

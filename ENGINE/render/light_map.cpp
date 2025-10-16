@@ -5,7 +5,6 @@
 #include <algorithm>
 #include <cstddef>
 #include <vector>
-#include <iostream>
 #include <cmath>
 
 namespace {
@@ -18,62 +17,20 @@ float compute_luminance(const SDL_Color& color) {
 }
 
 } // namespace
-LightMap::LightMap(SDL_Renderer* renderer,
-                   Assets* assets,
-                   Global_Light_Source& main_light,
+LightMap::LightMap(Assets* assets,
                    int screen_width,
-                   int screen_height,
-                   SDL_Texture* fullscreen_light_tex)
-: renderer_(renderer),
-assets_(assets),
-main_light_(main_light),
+                   int screen_height)
+: assets_(assets),
 screen_width_(screen_width),
-screen_height_(screen_height),
-fullscreen_light_tex_(fullscreen_light_tex)
+screen_height_(screen_height)
 {
         virtual_light_map_.clear();
 }
 
-void LightMap::set_fullscreen_light_settings(SDL_Color color, int min_opacity, int max_opacity) {
-        fullscreen_light_color_ = SDL_Color{color.r, color.g, color.b, 255};
-        fullscreen_light_min_opacity_ = std::clamp(min_opacity, 0, 255);
-        fullscreen_light_max_opacity_ = std::clamp(max_opacity, 0, 255);
-        if (fullscreen_light_min_opacity_ > fullscreen_light_max_opacity_) {
-                std::swap(fullscreen_light_min_opacity_, fullscreen_light_max_opacity_);
-        }
-}
-
 void LightMap::update_virtual_light_map() {
-        cached_layers_.clear();
-        collect_layers(cached_layers_);
-        cached_layers_ready_ = true;
-        compute_virtual_light_map(cached_layers_);
-}
-
-void LightMap::render(bool debugging, bool light_map_only) {
-        if (debugging) std::cout << "[render_asset_lights_z] start\n";
-        const int downscale = 4;
-        const int low_w = screen_width_  / downscale;
-        const int low_h = screen_height_ / downscale;
-        const std::vector<LightEntry>* layers_ptr = nullptr;
-        std::vector<LightEntry> transient_layers;
-        if (cached_layers_ready_) {
-                layers_ptr = &cached_layers_;
-        } else {
-                transient_layers.clear();
-                collect_layers(transient_layers);
-                layers_ptr = &transient_layers;
-        }
-
-        SDL_Texture* prev_target = SDL_GetRenderTarget(renderer_);
-        SDL_Texture* lowres_mask = build_lowres_mask(*layers_ptr, low_w, low_h, downscale);
-        SDL_SetTextureBlendMode(lowres_mask, light_map_only ? SDL_BLENDMODE_NONE : SDL_BLENDMODE_MOD);
-
-        SDL_SetRenderTarget(renderer_, prev_target);
-        SDL_RenderCopy(renderer_, lowres_mask, nullptr, nullptr);
-        SDL_DestroyTexture(lowres_mask);
-        cached_layers_ready_ = false;
-        if (debugging) std::cout << "[render_asset_lights_z] end\n";
+        scratch_layers_.clear();
+        collect_layers(scratch_layers_);
+        compute_virtual_light_map(scratch_layers_);
 }
 
 void LightMap::collect_layers(std::vector<LightEntry>& out) {
@@ -81,21 +38,9 @@ void LightMap::collect_layers(std::vector<LightEntry>& out) {
         const float inv_scale = (camera_scale > 0.0f && std::isfinite(camera_scale)) ? (1.0f / camera_scale) : 1.0f;
         constexpr int min_visible_w = 1;
         constexpr int min_visible_h = 1;
-        Uint8 main_alpha = main_light_.get_current_color().a;
-        Uint8 screen_alpha = static_cast<Uint8>(std::clamp<int>(main_alpha, fullscreen_light_min_opacity_, fullscreen_light_max_opacity_));
-        last_main_light_alpha_ = screen_alpha;
         const auto& lit_assets = assets_->getActiveLitAssets();
         if (out.capacity() < lit_assets.size() + 3) {
                 out.reserve(lit_assets.size() + 3);
-        }
-        if (fullscreen_light_tex_ && fullscreen_light_enabled_) {
-                LightEntry entry{};
-                entry.tex = fullscreen_light_tex_;
-                entry.dst = { 0, 0, screen_width_, screen_height_ };
-                entry.alpha = screen_alpha;
-                entry.flip = SDL_FLIP_NONE;
-                entry.color_mod = fullscreen_light_color_;
-                out.push_back(entry);
         }
 
         for (Asset* asset : lit_assets) {
@@ -157,45 +102,12 @@ void LightMap::collect_layers(std::vector<LightEntry>& out) {
                         }
 
                         LightEntry entry{};
-                        entry.tex = tex;
                         entry.dst = dst;
                         entry.alpha = static_cast<Uint8>(std::clamp(light.intensity, 0, 255));
-                        entry.flip = flipped ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE;
                         entry.color_mod = SDL_Color{light.color.r, light.color.g, light.color.b, 255};
                         out.push_back(entry);
                 }
         }
-}
-
-SDL_Texture* LightMap::build_lowres_mask(const std::vector<LightEntry>& layers,
-                                         int low_w, int low_h, int downscale) {
-        SDL_Texture* lowres_mask = SDL_CreateTexture(renderer_, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET, low_w, low_h);
-        SDL_SetTextureBlendMode(lowres_mask, SDL_BLENDMODE_NONE);
-#if SDL_VERSION_ATLEAST(2,0,12)
-        SDL_SetTextureScaleMode(lowres_mask, SDL_ScaleModeNearest);
-#endif
-        SDL_SetRenderTarget(renderer_, lowres_mask);
-        SDL_SetRenderDrawColor(renderer_, 0, 0, 0, 200);
-        SDL_RenderClear(renderer_);
-        SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_ADD);
-        if (fullscreen_light_enabled_ && last_main_light_alpha_ > 0) {
-                SDL_SetRenderDrawColor(renderer_, fullscreen_light_color_.r, fullscreen_light_color_.g, fullscreen_light_color_.b, last_main_light_alpha_);
-                SDL_Rect fullscreen_rect{ 0, 0, low_w, low_h };
-                SDL_RenderFillRect(renderer_, &fullscreen_rect);
-        }
-        for (auto& e : layers) {
-                SDL_SetTextureBlendMode(e.tex, SDL_BLENDMODE_ADD);
-                SDL_SetTextureAlphaMod(e.tex, e.alpha);
-                SDL_SetTextureColorMod(e.tex, e.color_mod.r, e.color_mod.g, e.color_mod.b);
-                SDL_Rect scaled_dst{
-                        e.dst.x / downscale,
-                        e.dst.y / downscale,
-                        e.dst.w / downscale,
-                        e.dst.h / downscale
-};
-		SDL_RenderCopyEx(renderer_, e.tex, nullptr, &scaled_dst, 0, nullptr, e.flip);
-	}
-        return lowres_mask;
 }
 
 SDL_Rect LightMap::get_scaled_position_rect(SDL_Point pos, int fw, int fh,
