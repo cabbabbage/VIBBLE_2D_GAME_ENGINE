@@ -253,10 +253,6 @@ void RoomEditor::set_header_visibility_callback(std::function<void(bool)> cb) {
     }
 }
 
-void RoomEditor::set_manifest_store(devmode::core::ManifestStore* store) {
-    manifest_store_ = store;
-}
-
 void RoomEditor::set_current_room(Room* room) {
     room_editor_trace("[RoomEditor] set_current_room begin");
     if (room) {

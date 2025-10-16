@@ -172,7 +172,12 @@ add_executable(dev_mode_ui_tests
     ENGINE/dev_mode/font_cache.cpp
     ENGINE/dev_mode/widgets.cpp
     ENGINE/dev_mode/dm_styles.cpp
+    ENGINE/dev_mode/search_assets.cpp
+    ENGINE/dev_mode/core/manifest_store.cpp
+    ENGINE/dev_mode/core/dev_json_store.cpp
+    ENGINE/dev_mode/tag_utils.cpp
     ENGINE/utils/input.cpp
+    ENGINE/core/manifest/manifest_loader.cpp
 )
 target_include_directories(dev_mode_ui_tests PRIVATE
     ${CMAKE_SOURCE_DIR}/external
@@ -304,6 +309,10 @@ add_executable(asset_info_manifest_tests
     ENGINE/asset_info_methods/child_loader.cpp
     ENGINE/utils/area.cpp
     ENGINE/utils/generate_light.cpp
+    ENGINE/dev_mode/core/manifest_store.cpp
+    ENGINE/dev_mode/core/dev_json_store.cpp
+    ENGINE/dev_mode/tag_utils.cpp
+    ENGINE/core/manifest/manifest_loader.cpp
 )
 target_include_directories(asset_info_manifest_tests PRIVATE
     ${CMAKE_SOURCE_DIR}/external
