@@ -4,6 +4,7 @@
 
 #include <iomanip>
 #include <iostream>
+#include <chrono>
 
 AssetLibrary::AssetLibrary() {
 	load_all_from_SRC();
@@ -11,6 +12,7 @@ AssetLibrary::AssetLibrary() {
 
 void AssetLibrary::load_all_from_SRC() {
         info_by_name_.clear();
+        animations_fully_cached_ = false;
 
         manifest::ManifestData manifest;
         try {
@@ -91,24 +93,53 @@ AssetLibrary::all() const {
 }
 
 void AssetLibrary::loadAllAnimations(SDL_Renderer* renderer) {
-    for (auto& [name, info] : info_by_name_) {
-        info->loadAnimations(renderer);
-    }
-}
-
-void AssetLibrary::ensureAllAnimationsLoaded(SDL_Renderer* renderer) {
     if (!renderer) {
         return;
     }
 
+    const auto begin = std::chrono::steady_clock::now();
+    std::size_t loaded = 0;
+    for (auto& [name, info] : info_by_name_) {
+        if (!info) {
+            continue;
+        }
+        info->loadAnimations(renderer);
+        ++loaded;
+    }
+    const auto end = std::chrono::steady_clock::now();
+    const auto elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count();
+    std::cout << "[AssetLibrary] Preloaded animations for " << loaded
+              << " asset(s) in " << elapsed_ms << "ms\n";
+    animations_fully_cached_ = true;
+}
+
+void AssetLibrary::ensureAllAnimationsLoaded(SDL_Renderer* renderer) {
+    if (!renderer || animations_fully_cached_) {
+        return;
+    }
+
+    const auto begin = std::chrono::steady_clock::now();
+    std::size_t loaded_now = 0;
+    std::size_t already_cached = 0;
     for (auto& [name, info] : info_by_name_) {
         if (!info) {
             continue;
         }
         if (!info->animations.empty()) {
+            ++already_cached;
             continue;
         }
         info->loadAnimations(renderer);
+        ++loaded_now;
+    }
+    animations_fully_cached_ = true;
+
+    if (loaded_now > 0) {
+        const auto end = std::chrono::steady_clock::now();
+        const auto elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count();
+        std::cout << "[AssetLibrary] Cached animations for " << loaded_now
+                  << " additional asset(s) (" << already_cached
+                  << " already cached) in " << elapsed_ms << "ms\n";
     }
 }
 
@@ -119,6 +150,7 @@ void AssetLibrary::loadAnimationsFor(SDL_Renderer* renderer, const std::unordere
             it->second->loadAnimations(renderer);
         }
     }
+    animations_fully_cached_ = false;
 }
 
 bool AssetLibrary::remove(const std::string& name) {

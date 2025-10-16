@@ -20,4 +20,5 @@ class AssetLibrary {
 
         private:
     std::unordered_map<std::string, std::shared_ptr<AssetInfo>> info_by_name_;
+    bool animations_fully_cached_ = false;
 };

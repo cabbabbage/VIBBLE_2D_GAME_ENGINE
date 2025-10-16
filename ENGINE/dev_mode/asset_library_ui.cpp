@@ -552,6 +552,11 @@ void AssetLibraryUI::confirm_delete_request() {
 
         if (library_owner_) {
             library_owner_->remove(asset_name);
+            if (assets_owner_) {
+                if (SDL_Renderer* renderer = assets_owner_->renderer()) {
+                    library_owner_->ensureAllAnimationsLoaded(renderer);
+                }
+            }
         }
     }
 
@@ -763,6 +768,11 @@ bool AssetLibraryUI::create_new_asset(const std::string& raw_name) {
 
         if (library_owner_) {
             library_owner_->load_all_from_SRC();
+            if (assets_owner_) {
+                if (SDL_Renderer* renderer = assets_owner_->renderer()) {
+                    library_owner_->ensureAllAnimationsLoaded(renderer);
+                }
+            }
         }
 
         preview_attempted_.erase(name);

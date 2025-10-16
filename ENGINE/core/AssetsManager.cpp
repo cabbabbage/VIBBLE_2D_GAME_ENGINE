@@ -595,6 +595,12 @@ void Assets::set_dev_mode(bool mode) {
     update_scene_render_quality();
 
     if (dev_mode) {
+        if (SDL_Renderer* renderer_ptr = renderer()) {
+            library_.ensureAllAnimationsLoaded(renderer_ptr);
+        } else {
+            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+                        "[Assets] Dev mode asset cache skipped: renderer unavailable.");
+        }
         SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "0");
         if (changed) {
         dev_mode_trace("[Assets] Dev Mode enabled: using low-quality rendering for responsiveness.");
