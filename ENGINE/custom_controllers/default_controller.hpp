@@ -1,7 +1,8 @@
 #pragma once
-#include "asset_controller.hpp"
+#include "asset/asset_controller.hpp"
 
 class Asset;
+class Input;
 
 class DefaultController : public AssetController {
 
