@@ -130,7 +130,7 @@ LightProbe analyze_light_map(const VirtualLightMap& map, const StageContext& con
     LightProbe result{};
     const ReactiveShadowSettings& cfg = reactive_settings_or_default(context);
 
-    const auto cells = map.cells;
+    const auto& cells = map.cells;
     const float scene_sum = std::accumulate(cells.begin(), cells.end(), 0.0f);
     result.scene_average = cells.empty() ? 0.0f : scene_sum / static_cast<float>(cells.size());
 
@@ -416,13 +416,19 @@ SDL_Texture* RenderShadowMask::run(SDL_Renderer* renderer, const Asset& asset, S
 
     auto& cache = asset.shadow_mask_cache();
     if (cache.texture) {
-        int tex_w = 0;
-        int tex_h = 0;
-        if (SDL_QueryTexture(cache.texture, nullptr, nullptr, &tex_w, &tex_h) != 0 || tex_w != width || tex_h != height) {
-            SDL_DestroyTexture(cache.texture);
-            cache.texture = nullptr;
-            cache.width   = 0;
-            cache.height  = 0;
+        const bool metadata_matches = cache.width == width && cache.height == height && cache.width > 0 && cache.height > 0;
+        if (!metadata_matches) {
+            int tex_w = 0;
+            int tex_h = 0;
+            if (SDL_QueryTexture(cache.texture, nullptr, nullptr, &tex_w, &tex_h) != 0 || tex_w != width || tex_h != height) {
+                SDL_DestroyTexture(cache.texture);
+                cache.texture = nullptr;
+                cache.width   = 0;
+                cache.height  = 0;
+            } else {
+                cache.width  = tex_w;
+                cache.height = tex_h;
+            }
         }
     }
 
@@ -433,6 +439,8 @@ SDL_Texture* RenderShadowMask::run(SDL_Renderer* renderer, const Asset& asset, S
             cache.height = 0;
             return nullptr;
         }
+        cache.width  = width;
+        cache.height = height;
     }
     SDL_SetTextureBlendMode(cache.texture, SDL_BLENDMODE_BLEND);
 
