@@ -16,13 +16,30 @@ struct Mix_Chunk;
 class Animation {
 
 public:
+    struct FrameCache {
+        std::vector<SDL_Texture*> textures;
+        std::vector<int> widths;
+        std::vector<int> heights;
+        std::vector<SDL_Texture*> mask_textures;
+        std::vector<int> mask_widths;
+        std::vector<int> mask_heights;
+
+        void resize(std::size_t variant_count) {
+            textures.assign(variant_count, nullptr);
+            widths.assign(variant_count, 0);
+            heights.assign(variant_count, 0);
+            mask_textures.assign(variant_count, nullptr);
+            mask_widths.assign(variant_count, 0);
+            mask_heights.assign(variant_count, 0);
+        }
+    };
     struct AudioClip {
         std::string name;
         std::string path;
         int volume = 100;
         bool effects = false;
         std::shared_ptr<Mix_Chunk> chunk;
-};
+    };
 
 public:
     Animation();
@@ -44,28 +61,10 @@ public:
                                std::vector<SDL_Texture*> base_frames,
                                std::vector<SDL_Texture*> base_masks,
                                std::vector<float> variant_steps);
-
-    struct FrameCache {
-        std::vector<SDL_Texture*> textures;
-        std::vector<int> widths;
-        std::vector<int> heights;
-        std::vector<SDL_Texture*> mask_textures;
-        std::vector<int> mask_widths;
-        std::vector<int> mask_heights;
-
-        void resize(std::size_t variant_count) {
-            textures.assign(variant_count, nullptr);
-            widths.assign(variant_count, 0);
-            heights.assign(variant_count, 0);
-            mask_textures.assign(variant_count, nullptr);
-            mask_widths.assign(variant_count, 0);
-            mask_heights.assign(variant_count, 0);
-        }
-    };
     struct Source {
-    std::string kind;
-    std::string path;
-    std::string name;
+        std::string kind;
+        std::string path;
+        std::string name;
     } source{};
     bool flipped_source = false;
     bool reverse_source = false;
