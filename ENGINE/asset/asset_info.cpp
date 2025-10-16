@@ -18,7 +18,7 @@
 #include "dev_mode/core/manifest_store.hpp"
 
 #ifndef ASSET_INFO_ENABLE_INFO_JSON_COMPAT
-#define ASSET_INFO_ENABLE_INFO_JSON_COMPAT 1
+#define ASSET_INFO_ENABLE_INFO_JSON_COMPAT 0
 #endif
 
 namespace {
@@ -501,36 +501,34 @@ bool AssetInfo::commit_manifest() const {
                 payload["asset_name"] = name;
         }
 
-        bool committed = false;
-
         auto& provider = manifest_store_provider_slot();
-        if (provider) {
-                if (auto* store = provider()) {
-                        auto session = store->begin_asset_edit(name, true);
-                        if (session) {
-                                session.data() = payload;
-                                committed = session.commit();
-                        }
-                }
+        if (!provider) {
+                std::cerr << "[AssetInfo] Manifest store provider unavailable; cannot commit '" << name << "'\n";
+                return false;
         }
 
-#if ASSET_INFO_ENABLE_INFO_JSON_COMPAT
-        if (!committed && !info_json_path_.empty()) {
-                try {
-                        std::ofstream out(info_json_path_);
-                        if (out.is_open()) {
-                                out << payload.dump(4);
-                                committed = true;
-                        }
-                } catch (...) {
-                        return committed;
-                }
+        auto* store = provider();
+        if (!store) {
+                std::cerr << "[AssetInfo] Manifest store not provided; cannot commit '" << name << "'\n";
+                return false;
         }
-#endif
 
+        auto session = store->begin_asset_edit(name, true);
+        if (!session) {
+                std::cerr << "[AssetInfo] Failed to open manifest session for '" << name << "'\n";
+                return false;
+        }
+
+        session.data() = payload;
+        if (!session.commit()) {
+                std::cerr << "[AssetInfo] Failed to commit manifest payload for '" << name << "'\n";
+                session.cancel();
+                return false;
+        }
+
+        store->flush();
         info_json_ = std::move(payload);
-
-        return committed;
+        return true;
 }
 
 void AssetInfo::set_asset_type(const std::string &t) {

@@ -5,7 +5,6 @@
 #include <cmath>
 #include <cstdlib>
 #include <filesystem>
-#include <fstream>
 #include <SDL_log.h>
 #include <stdexcept>
 #include <vector>
@@ -37,6 +36,7 @@
 #include "render_pipeline/ScalingLogic.hpp"
 #include "utils/light_source.hpp"
 #include "search_assets.hpp"
+#include "dev_mode/core/manifest_store.hpp"
 
 namespace {
 
@@ -47,65 +47,48 @@ std::string to_lower_copy(std::string s) {
     return s;
 }
 
-std::string resolve_asset_directory(const std::string& selection) {
-    namespace fs = std::filesystem;
-    fs::path root{"SRC"};
-    if (!fs::exists(root) || !fs::is_directory(root)) return {};
+std::string resolve_asset_manifest_key(devmode::core::ManifestStore* store, const std::string& selection) {
+    if (!store) return {};
 
-    const std::string target = to_lower_copy(selection);
-    for (const auto& dir : fs::directory_iterator(root)) {
-        if (!dir.is_directory()) continue;
-        const std::string folder = dir.path().filename().string();
-        if (to_lower_copy(folder) == target) {
-            return folder;
+    std::string trimmed = selection;
+    if (trimmed.empty()) {
+        return {};
+    }
+
+    if (auto resolved = store->resolve_asset_name(trimmed)) {
+        return *resolved;
+    }
+
+    const std::string target = to_lower_copy(trimmed);
+    for (const auto& view : store->assets()) {
+        if (!view || !view.data || !view.data->is_object()) {
+            continue;
         }
-        fs::path info_path = dir.path() / "info.json";
-        if (!fs::exists(info_path)) continue;
-        try {
-            std::ifstream in(info_path);
-            nlohmann::json j;
-            in >> j;
-            std::string asset_name = j.value("asset_name", folder);
-            if (to_lower_copy(asset_name) == target) {
-                return folder;
+        const auto& asset_json = *view.data;
+        std::string asset_name = asset_json.value("asset_name", view.name);
+        if (!asset_name.empty() && to_lower_copy(asset_name) == target) {
+            return view.name;
+        }
+        auto dir_it = asset_json.find("asset_directory");
+        if (dir_it != asset_json.end() && dir_it->is_string()) {
+            try {
+                std::filesystem::path dir = dir_it->get<std::string>();
+                if (!dir.empty()) {
+                    std::string folder = to_lower_copy(dir.filename().string());
+                    if (!folder.empty() && folder == target) {
+                        return view.name;
+                    }
+                    std::string normalized = to_lower_copy(dir.lexically_normal().generic_string());
+                    if (!normalized.empty() && normalized == target) {
+                        return view.name;
+                    }
+                }
+            } catch (...) {
             }
-        } catch (...) {
         }
     }
+
     return {};
-}
-
-bool load_json_file(const std::filesystem::path& path, nlohmann::json& out) {
-    std::ifstream in(path);
-    if (!in) {
-        SDL_Log("Failed to open %s", path.string().c_str());
-        return false;
-    }
-    try {
-        in >> out;
-        if (!out.is_object()) {
-            out = nlohmann::json::object();
-        }
-        return true;
-    } catch (const std::exception& ex) {
-        SDL_Log("Failed to parse %s: %s", path.string().c_str(), ex.what());
-        return false;
-    }
-}
-
-bool write_json_file(const std::filesystem::path& path, const nlohmann::json& data) {
-    std::ofstream out(path);
-    if (!out) {
-        SDL_Log("Failed to write %s", path.string().c_str());
-        return false;
-    }
-    try {
-        out << data.dump(4);
-        return true;
-    } catch (const std::exception& ex) {
-        SDL_Log("Failed to serialize %s: %s", path.string().c_str(), ex.what());
-        return false;
-    }
 }
 
 bool copy_section_from_source(AssetInfoSectionId section_id, const nlohmann::json& source, nlohmann::json& target) {
@@ -872,12 +855,12 @@ void AssetInfoUI::request_apply_section(AssetInfoSectionId section_id) {
     asset_selector_->open([this, section_id](const std::string& selection) {
         if (selection.empty()) return;
         if (!selection.empty() && selection.front() == '#') return;
-        std::string folder = resolve_asset_directory(selection);
-        if (folder.empty()) {
-            SDL_Log("Unable to resolve asset directory for '%s'", selection.c_str());
+        std::string asset_key = resolve_asset_manifest_key(manifest_store_, selection);
+        if (asset_key.empty()) {
+            SDL_Log("Unable to resolve manifest asset for '%s'", selection.c_str());
             return;
         }
-        std::vector<std::string> assets{folder};
+        std::vector<std::string> assets{asset_key};
         (void)apply_section_to_assets(section_id, assets);
     });
 
@@ -899,41 +882,56 @@ bool AssetInfoUI::apply_section_to_assets(AssetInfoSectionId section_id, const s
         return false;
     }
 
-    (void)info_->commit_manifest();
-    nlohmann::json source;
-    if (!load_json_file(info_->info_json_path(), source)) {
+    if (!manifest_store_) {
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+                    "[AssetInfoUI] Manifest store unavailable; cannot apply settings to other assets.");
         return false;
     }
+
+    (void)info_->commit_manifest();
+    auto source_view = manifest_store_->get_asset(info_->name);
+    if (!source_view || !source_view.data || !source_view.data->is_object()) {
+        SDL_Log("Failed to load manifest payload for source asset '%s'", info_->name.c_str());
+        return false;
+    }
+    const nlohmann::json& source = *source_view.data;
 
     bool all_success = true;
     bool any_written = false;
     for (const auto& name : asset_names) {
-        try {
-            std::filesystem::path path = std::filesystem::path("SRC") / name / "info.json";
-            nlohmann::json target;
-            if (!load_json_file(path, target)) {
-                all_success = false;
-                continue;
-            }
-            if (!copy_section_from_source(section_id, source, target)) {
-                continue;
-            }
-            if (!write_json_file(path, target)) {
-                all_success = false;
-            } else {
-                any_written = true;
-            }
-        } catch (const std::exception& ex) {
-            SDL_Log("Failed to apply settings to %s: %s", name.c_str(), ex.what());
+        if (name.empty()) {
+            continue;
+        }
+        std::string target_key = name;
+        if (auto resolved = manifest_store_->resolve_asset_name(name)) {
+            target_key = *resolved;
+        }
+
+        auto session = manifest_store_->begin_asset_edit(target_key, false);
+        if (!session) {
+            SDL_Log("Failed to open manifest session for '%s'", target_key.c_str());
             all_success = false;
-        } catch (...) {
-            SDL_Log("Failed to apply settings to %s due to unknown error.", name.c_str());
+            continue;
+        }
+
+        nlohmann::json& target = session.data();
+        if (!target.is_object()) {
+            target = nlohmann::json::object();
+        }
+        if (!copy_section_from_source(section_id, source, target)) {
+            continue;
+        }
+        if (!session.commit()) {
+            SDL_Log("Failed to commit manifest changes for '%s'", target_key.c_str());
             all_success = false;
+        } else {
+            any_written = true;
         }
     }
 
     if (any_written) {
         tag_utils::notify_tags_changed();
+        manifest_store_->flush();
     }
 
     if (all_success) {

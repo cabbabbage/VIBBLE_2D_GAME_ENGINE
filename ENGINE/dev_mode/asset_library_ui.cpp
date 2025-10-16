@@ -24,6 +24,7 @@
 #include "widgets.hpp"
 #include "draw_utils.hpp"
 #include "dev_mode/core/manifest_store.hpp"
+#include "core/manifest/manifest_loader.hpp"
 
 #include <nlohmann/json.hpp>
 
@@ -734,7 +735,6 @@ bool AssetLibraryUI::create_new_asset(const std::string& raw_name) {
 
     fs::path base("SRC");
     fs::path dir = base / name;
-    fs::path info_path = dir / "info.json";
 
     try {
         if (!fs::exists(base)) {
@@ -747,27 +747,13 @@ bool AssetLibraryUI::create_new_asset(const std::string& raw_name) {
         }
         fs::create_directories(dir);
 
-        nlohmann::json info_payload = {
+        const std::string asset_dir_str = dir.lexically_normal().generic_string();
+        nlohmann::json manifest_entry = {
             {"asset_name", name},
             {"asset_type", "Object"},
             {"animations", nlohmann::json::object()},
             {"start", ""}
         };
-
-        std::ofstream out(info_path);
-        if (!out.is_open()) {
-            std::cerr << "[AssetLibraryUI] Failed to create info.json for '" << name << "'\n";
-            session.cancel();
-            std::error_code ec;
-            fs::remove_all(dir, ec);
-            return false;
-        }
-        out << info_payload.dump(2) << '\n';
-        out.close();
-
-        const std::string asset_dir_str = dir.lexically_normal().generic_string();
-
-        nlohmann::json manifest_entry = info_payload;
         manifest_entry["start"] = asset_dir_str;
         manifest_entry["asset_directory"] = asset_dir_str;
         manifest_entry["tags"] = nlohmann::json::array();
@@ -798,10 +784,28 @@ bool AssetLibraryUI::create_new_asset(const std::string& raw_name) {
 
         std::cout << "[AssetLibraryUI] Created new asset '" << name << "' at " << dir << "\n";
 
-        const std::string info_arg = info_path.lexically_normal().generic_string();
-        std::thread launcher([info_arg]() {
+        const std::string manifest_arg = manifest::manifest_path();
+        const std::string asset_arg = name;
+        const std::string asset_root_arg = asset_dir_str;
+        std::thread launcher([manifest_arg, asset_arg, asset_root_arg]() {
             try {
-                std::string cmd = std::string("python scripts/animation_ui.py \"") + info_arg + "\"";
+                auto quote = [](const std::string& value) {
+                    std::string escaped = "\"";
+                    for (char ch : value) {
+                        if (ch == '\\' || ch == '\"') {
+                            escaped.push_back('\\');
+                        }
+                        escaped.push_back(ch);
+                    }
+                    escaped.push_back('\"');
+                    return escaped;
+                };
+                std::string cmd = std::string("python scripts/animation_ui.py ") +
+                                   "--manifest " + quote(manifest_arg) + " " +
+                                   "--asset " + quote(asset_arg);
+                if (!asset_root_arg.empty()) {
+                    cmd += " --asset-root " + quote(asset_root_arg);
+                }
                 int rc = std::system(cmd.c_str());
                 if (rc != 0) {
                     std::cerr << "[AssetLibraryUI] animation_ui.py exited with code " << rc << "\n";

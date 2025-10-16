@@ -1,8 +1,7 @@
 #include "Section_SpawnGroups.hpp"
 
 #include <algorithm>
-#include <fstream>
-#include <sstream>
+#include <iostream>
 
 #include <nlohmann/json.hpp>
 
@@ -13,14 +12,6 @@
 #include "dev_mode/widgets.hpp"
 #include "asset/asset_info.hpp"
 #include "dev_mode/asset_info_ui.hpp"
-
-namespace {
-static nlohmann::json ensure_array(nlohmann::json& root, const char* key) {
-    if (!root.is_object()) root = nlohmann::json::object();
-    if (!root.contains(key) || !root[key].is_array()) root[key] = nlohmann::json::array();
-    return root[key];
-}
-}
 
 Section_SpawnGroups::Section_SpawnGroups()
     : DockableCollapsible("Spawn Groups", false) {
@@ -119,91 +110,54 @@ void Section_SpawnGroups::reload_from_file() {
     groups_ = nlohmann::json::array();
     if (!info_) return;
 
-    bool loaded = false;
-    if (manifest_store_) {
-        auto view = manifest_store_->get_asset(info_->name);
-        if (view && view->is_object()) {
-            const auto it = view->find("spawn_groups");
-            if (it != view->end() && it->is_array()) {
-                groups_ = *it;
-                loaded = true;
-            }
-        }
-    }
-
-    if (loaded) {
+    if (!manifest_store_) {
+        std::cerr << "[Section_SpawnGroups] Manifest store unavailable; cannot load spawn groups for '"
+                  << info_->name << "'\n";
         return;
     }
 
-    const std::string path = info_->info_json_path();
-    if (path.empty()) {
-        return;
-    }
-    try {
-        std::ifstream in(path);
-        if (!in.is_open()) return;
-        nlohmann::json root;
-        in >> root;
-        if (root.contains("spawn_groups") && root["spawn_groups"].is_array()) {
-            groups_ = root["spawn_groups"];
+    auto view = manifest_store_->get_asset(info_->name);
+    if (view && view->is_object()) {
+        const auto it = view->find("spawn_groups");
+        if (it != view->end() && it->is_array()) {
+            groups_ = *it;
         }
-    } catch (...) {
-        groups_ = nlohmann::json::array();
     }
 }
 
 bool Section_SpawnGroups::save_to_file() {
     if (!info_) return false;
+    if (!manifest_store_) {
+        std::cerr << "[Section_SpawnGroups] Manifest store unavailable; cannot save spawn groups for '"
+                  << info_->name << "'\n";
+        return false;
+    }
     renumber_priorities();
     nlohmann::json sanitized = groups_.is_array() ? groups_ : nlohmann::json::array();
     if (!sanitized.is_array()) {
         sanitized = nlohmann::json::array();
     }
 
-    if (manifest_store_) {
-        auto session = manifest_store_->begin_asset_edit(info_->name, true);
-        if (!session) {
-            return false;
-        }
-        nlohmann::json& payload = session.data();
-        if (!payload.is_object()) {
-            payload = nlohmann::json::object();
-        }
-        payload["spawn_groups"] = sanitized;
-        if (!session.commit()) {
-            return false;
-        }
-        manifest_store_->flush();
-        groups_ = std::move(sanitized);
-        return true;
-    }
-
-    try {
-        nlohmann::json root;
-        {
-            std::ifstream in(info_->info_json_path());
-            if (in.is_open()) {
-                in >> root;
-            } else {
-                root = nlohmann::json::object();
-            }
-        }
-        ensure_array(root, "spawn_groups");
-        root["spawn_groups"] = sanitized;
-
-        if (root["spawn_groups"].is_array()) {
-            for (size_t i = 0; i < root["spawn_groups"].size(); ++i) {
-                if (root["spawn_groups"][i].is_object()) root["spawn_groups"][i]["priority"] = static_cast<int>(i);
-            }
-        }
-        std::ofstream out(info_->info_json_path());
-        if (!out.is_open()) return false;
-        out << root.dump(2);
-        groups_ = root["spawn_groups"];
-        return true;
-    } catch (...) {
+    auto session = manifest_store_->begin_asset_edit(info_->name, true);
+    if (!session) {
+        std::cerr << "[Section_SpawnGroups] Failed to open manifest session for '" << info_->name << "'\n";
         return false;
     }
+
+    nlohmann::json& payload = session.data();
+    if (!payload.is_object()) {
+        payload = nlohmann::json::object();
+    }
+    payload["spawn_groups"] = sanitized;
+    if (!session.commit()) {
+        std::cerr << "[Section_SpawnGroups] Failed to commit spawn group payload for '" << info_->name << "'\n";
+        session.cancel();
+        return false;
+    }
+
+    manifest_store_->flush();
+    groups_ = std::move(sanitized);
+    return true;
 }
 
 void Section_SpawnGroups::renumber_priorities() {

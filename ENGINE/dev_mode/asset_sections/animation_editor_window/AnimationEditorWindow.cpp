@@ -8,6 +8,7 @@
 #include <filesystem>
 #include <optional>
 #include <sstream>
+#include <iostream>
 #include <string>
 #include <utility>
 #include <unordered_set>
@@ -140,7 +141,6 @@ void AnimationEditorWindow::set_info(const std::shared_ptr<AssetInfo>& info) {
         return;
     }
 
-    info_path_.clear();
     asset_root_path_.clear();
     try {
         std::filesystem::path candidate = info->asset_dir_path();
@@ -150,37 +150,38 @@ void AnimationEditorWindow::set_info(const std::shared_ptr<AssetInfo>& info) {
     } catch (...) {
         asset_root_path_.clear();
     }
-    if (asset_root_path_.empty()) {
-        std::filesystem::path path = info->info_json_path();
-        if (!path.empty()) {
-            asset_root_path_ = path.parent_path();
-        }
+    if (asset_root_path_.empty() && !info->name.empty()) {
+        asset_root_path_ = std::filesystem::path("SRC") / info->name;
     }
 
-    bool loaded_from_manifest = false;
-    if (manifest_store_) {
-        if (auto key = resolve_manifest_key(*info)) {
-            manifest_asset_key_ = *key;
-            manifest_transaction_ = manifest_store_->begin_asset_transaction(manifest_asset_key_, true);
-            if (manifest_transaction_) {
-                using_manifest_store_ = true;
-                nlohmann::json snapshot = manifest_transaction_.data();
-                document_->load_from_manifest(snapshot,
-                                              asset_root_path_,
-                                              [this](const nlohmann::json& payload) {
-                                                  this->persist_manifest_payload(payload);
-                                              });
-                loaded_from_manifest = true;
-            } else {
-                manifest_asset_key_.clear();
-            }
-        }
-    }
+    using_manifest_store_ = false;
+    manifest_asset_key_.clear();
+    manifest_transaction_ = {};
 
-    if (!loaded_from_manifest) {
-        using_manifest_store_ = false;
-        info_path_ = info->info_json_path();
-        document_->load_from_file(info_path_);
+    if (!manifest_store_) {
+        std::cerr << "[AnimationEditor] Manifest store unavailable; animations will not persist for '"
+                  << info->name << "'\n";
+        document_->load_from_manifest(nlohmann::json::object(), asset_root_path_, {});
+    } else if (auto key = resolve_manifest_key(*info)) {
+        manifest_asset_key_ = *key;
+        manifest_transaction_ = manifest_store_->begin_asset_transaction(manifest_asset_key_, true);
+        if (manifest_transaction_) {
+            using_manifest_store_ = true;
+            nlohmann::json snapshot = manifest_transaction_.data();
+            document_->load_from_manifest(snapshot,
+                                          asset_root_path_,
+                                          [this](const nlohmann::json& payload) {
+                                              this->persist_manifest_payload(payload);
+                                          });
+        } else {
+            std::cerr << "[AnimationEditor] Failed to open manifest transaction for '"
+                      << manifest_asset_key_ << "'\n";
+            manifest_asset_key_.clear();
+            document_->load_from_manifest(nlohmann::json::object(), asset_root_path_, {});
+        }
+    } else {
+        std::cerr << "[AnimationEditor] Unable to resolve manifest key for '" << info->name << "'\n";
+        document_->load_from_manifest(nlohmann::json::object(), asset_root_path_, {});
     }
 
     document_->consume_dirty_flag();
@@ -201,13 +202,12 @@ void AnimationEditorWindow::set_info(const std::shared_ptr<AssetInfo>& info) {
 
 void AnimationEditorWindow::clear_info() {
     info_.reset();
-    info_path_.clear();
     asset_root_path_.clear();
     close_manifest_transaction();
     frame_editor_visible_ = false;
     frame_editor_animation_id_.clear();
     update_corner_button();
-    document_->load_from_file(std::filesystem::path{});
+    document_->load_from_manifest(nlohmann::json::object(), std::filesystem::path{}, {});
     document_->consume_dirty_flag();
     preview_provider_->invalidate_all();
     if (list_panel_) list_panel_->set_preview_provider(preview_provider_);
@@ -441,9 +441,6 @@ void AnimationEditorWindow::render_header(SDL_Renderer* renderer) const {
     } else if (!asset_root_path_.empty()) {
         title += " — ";
         title += asset_root_path_.filename().string();
-    } else if (!info_path_.empty()) {
-        title += " — ";
-        title += info_path_.filename().string();
     }
     if (header_corner_button_) header_corner_button_->render(renderer);
     if (add_button_) add_button_->render(renderer);
@@ -569,24 +566,35 @@ void AnimationEditorWindow::create_animation_via_prompt() {
 
 void AnimationEditorWindow::reload_document() {
     auto info_ptr = info_.lock();
-    if (!info_ptr) {
-        document_->load_from_file(std::filesystem::path{});
-    } else if (using_manifest_store_ && manifest_store_ && !manifest_asset_key_.empty()) {
+    if (!info_ptr || !manifest_store_) {
         close_manifest_transaction();
-        manifest_transaction_ = manifest_store_->begin_asset_transaction(manifest_asset_key_, true);
-        if (manifest_transaction_) {
-            nlohmann::json snapshot = manifest_transaction_.data();
-            document_->load_from_manifest(snapshot,
-                                          asset_root_path_,
-                                          [this](const nlohmann::json& payload) {
-                                              this->persist_manifest_payload(payload);
-                                          });
+        document_->load_from_manifest(nlohmann::json::object(), asset_root_path_, {});
+        using_manifest_store_ = false;
+    } else {
+        close_manifest_transaction();
+        if (auto key = resolve_manifest_key(*info_ptr)) {
+            manifest_asset_key_ = *key;
+            manifest_transaction_ = manifest_store_->begin_asset_transaction(manifest_asset_key_, true);
+            if (manifest_transaction_) {
+                using_manifest_store_ = true;
+                nlohmann::json snapshot = manifest_transaction_.data();
+                document_->load_from_manifest(snapshot,
+                                              asset_root_path_,
+                                              [this](const nlohmann::json& payload) {
+                                                  this->persist_manifest_payload(payload);
+                                              });
+            } else {
+                std::cerr << "[AnimationEditor] Failed to reopen manifest transaction for '"
+                          << manifest_asset_key_ << "'\n";
+                manifest_asset_key_.clear();
+                document_->load_from_manifest(nlohmann::json::object(), asset_root_path_, {});
+                using_manifest_store_ = false;
+            }
         } else {
-            document_->load_from_file(info_ptr->info_json_path());
+            std::cerr << "[AnimationEditor] Unable to resolve manifest key during reload\n";
+            document_->load_from_manifest(nlohmann::json::object(), asset_root_path_, {});
             using_manifest_store_ = false;
         }
-    } else {
-        document_->load_from_file(info_ptr->info_json_path());
     }
 
     document_->consume_dirty_flag();
@@ -608,7 +616,7 @@ void AnimationEditorWindow::process_auto_save() {
     }
 
     document_->save_to_file();
-    if (using_manifest_store_ || !info_path_.empty()) {
+    if (using_manifest_store_) {
         set_status_message("Animations auto-saved.", 180);
     }
     if (on_document_saved_) {
@@ -651,7 +659,11 @@ bool AnimationEditorWindow::persist_manifest_payload(const nlohmann::json& paylo
     }
 
     manifest_transaction_.data() = payload;
-    return finalize ? manifest_transaction_.finalize() : manifest_transaction_.save();
+    bool committed = finalize ? manifest_transaction_.finalize() : manifest_transaction_.save();
+    if (committed) {
+        manifest_store_->flush();
+    }
+    return committed;
 }
 
 std::optional<std::string> AnimationEditorWindow::resolve_manifest_key(const AssetInfo& info) const {
@@ -667,21 +679,17 @@ std::optional<std::string> AnimationEditorWindow::resolve_manifest_key(const Ass
         std::filesystem::path dir = info.asset_dir_path();
         if (!dir.empty()) {
             candidates.push_back(dir.filename().string());
+            candidates.push_back(dir.lexically_normal().generic_string());
         }
     } catch (...) {
     }
-    try {
-        std::filesystem::path info_path = info.info_json_path();
-        if (!info_path.empty()) {
-            if (info_path.has_parent_path()) {
-                candidates.push_back(info_path.parent_path().filename().string());
-            }
-            if (info_path.has_stem()) {
-                candidates.push_back(info_path.stem().string());
-            }
-        }
-    } catch (...) {
-    }
+
+    auto to_lower = [](std::string value) {
+        std::transform(value.begin(), value.end(), value.begin(), [](unsigned char c) {
+            return static_cast<char>(std::tolower(c));
+        });
+        return value;
+    };
 
     std::unordered_set<std::string> seen;
     for (const auto& candidate : candidates) {
@@ -691,6 +699,41 @@ std::optional<std::string> AnimationEditorWindow::resolve_manifest_key(const Ass
             return resolved;
         }
     }
+
+    std::string desired_dir;
+    try {
+        std::filesystem::path dir = info.asset_dir_path();
+        if (!dir.empty()) {
+            desired_dir = dir.lexically_normal().generic_string();
+        }
+    } catch (...) {
+        desired_dir.clear();
+    }
+
+    std::string desired_name_lower = to_lower(info.name);
+    for (const auto& view : manifest_store_->assets()) {
+        if (!view || !view.data || !view.data->is_object()) {
+            continue;
+        }
+        const auto& asset_json = *view.data;
+        auto dir_it = asset_json.find("asset_directory");
+        if (dir_it != asset_json.end() && dir_it->is_string()) {
+            try {
+                std::filesystem::path dir = dir_it->get<std::string>();
+                if (!desired_dir.empty() && dir.lexically_normal().generic_string() == desired_dir) {
+                    return view.name;
+                }
+            } catch (...) {
+            }
+        }
+        if (!desired_name_lower.empty()) {
+            std::string manifest_name = asset_json.value("asset_name", view.name);
+            if (!manifest_name.empty() && to_lower(manifest_name) == desired_name_lower) {
+                return view.name;
+            }
+        }
+    }
+
     return std::nullopt;
 }
 

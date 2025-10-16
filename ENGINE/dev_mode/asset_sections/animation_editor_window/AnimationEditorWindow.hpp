@@ -82,7 +82,6 @@ class AnimationEditorWindow {
     bool visible_ = false;
     SDL_Rect bounds_{0, 0, 0, 0};
     std::weak_ptr<AssetInfo> info_;
-    std::filesystem::path info_path_;
     std::filesystem::path asset_root_path_;
     std::shared_ptr<AnimationDocument> document_;
     std::shared_ptr<PreviewProvider> preview_provider_;
