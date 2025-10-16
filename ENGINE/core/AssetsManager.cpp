@@ -1037,6 +1037,10 @@ const render_pipeline::shading::ReactiveShadowSettings* Assets::reactive_shadow_
     return const_cast<Assets*>(this)->reactive_shadow_settings();
 }
 
+const VirtualLightMap* Assets::virtual_light_map() const {
+    return scene ? scene->virtual_light_map() : nullptr;
+}
+
 void Assets::set_map_light_panel_visible(bool visible) {
     if (dev_controls_ && dev_controls_->is_enabled()) {
         dev_controls_->set_map_light_panel_visible(visible);

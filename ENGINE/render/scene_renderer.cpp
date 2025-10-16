@@ -75,6 +75,10 @@ SceneRenderer::~SceneRenderer(){
 
 SDL_Renderer* SceneRenderer::get_renderer() const { return renderer_; }
 
+const VirtualLightMap* SceneRenderer::virtual_light_map() const {
+    return z_light_pass_ ? &z_light_pass_->virtual_light_map() : nullptr;
+}
+
 void SceneRenderer::set_low_quality_rendering(bool enabled){
     if (low_quality_rendering_==enabled) return;
     low_quality_rendering_=enabled;

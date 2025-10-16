@@ -39,6 +39,7 @@ public:
     int screen_light_max_opacity() const { return screen_light_max_opacity_; }
     render_pipeline::shading::ReactiveShadowSettings& reactive_shadow_settings() { return reactive_shadow_settings_; }
     const render_pipeline::shading::ReactiveShadowSettings& reactive_shadow_settings() const { return reactive_shadow_settings_; }
+    const VirtualLightMap* virtual_light_map() const;
 
 private:
     bool shouldRegen(Asset* a);

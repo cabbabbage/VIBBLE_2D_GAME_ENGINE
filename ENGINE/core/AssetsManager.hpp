@@ -16,6 +16,7 @@
 
 class Asset;
 class SceneRenderer;
+struct VirtualLightMap;
 struct SDL_Renderer;
 class CurrentRoomFinder;
 class Room;
@@ -127,6 +128,7 @@ public:
     const Global_Light_Source* map_light_source() const;
     render_pipeline::shading::ReactiveShadowSettings* reactive_shadow_settings();
     const render_pipeline::shading::ReactiveShadowSettings* reactive_shadow_settings() const;
+    const VirtualLightMap* virtual_light_map() const;
     void set_map_light_panel_visible(bool visible);
     bool is_map_light_panel_visible() const;
 

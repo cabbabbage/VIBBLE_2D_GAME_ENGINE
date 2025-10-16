@@ -313,7 +313,7 @@ void MapModeUI::ensure_panels() {
         light_panel_->set_reactive_settings(assets_ ? assets_->reactive_shadow_settings() : nullptr);
     }
     if (!shadow_panel_) {
-        shadow_panel_ = std::make_unique<MapShadowPanel>(light_panel_.get(), kDefaultPanelX + 280, kDefaultPanelY);
+        shadow_panel_ = std::make_unique<MapShadowPanel>(light_panel_.get(), assets_, kDefaultPanelX + 280, kDefaultPanelY);
         shadow_panel_->close();
         track_floating_panel(shadow_panel_.get());
     }

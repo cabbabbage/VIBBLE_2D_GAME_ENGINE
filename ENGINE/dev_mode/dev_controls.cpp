@@ -1689,6 +1689,33 @@ void DevControls::configure_header_button_sets() {
     }
 
     {
+        MapModeUI::HeaderButtonConfig layers_btn;
+        layers_btn.id = "map_layers";
+        layers_btn.label = "Map Layers";
+        layers_btn.active = map_mode_ui_ && map_mode_ui_->is_layers_footer_visible();
+        layers_btn.on_toggle = [this](bool active) {
+            if (room_editor_) {
+                room_editor_->close_room_config();
+            }
+            if (!map_mode_ui_) {
+                sync_header_button_states();
+                return;
+            }
+            const bool currently_open = map_mode_ui_->is_layers_footer_visible();
+            if (active != currently_open) {
+                if (active && !currently_open && is_modal_blocking_panels()) {
+                    pulse_modal_header();
+                    sync_header_button_states();
+                    return;
+                }
+                map_mode_ui_->toggle_layers_panel();
+            }
+            sync_header_button_states();
+        };
+        map_buttons.push_back(std::move(layers_btn));
+    }
+
+    {
         MapModeUI::HeaderButtonConfig map_assets_btn;
         map_assets_btn.id = "map_assets";
         map_assets_btn.label = "Map Assets";
@@ -1825,6 +1852,8 @@ void DevControls::sync_header_button_states() {
     map_mode_ui_->set_button_state(MapModeUI::HeaderMode::Map, "lights", lights_open);
     const bool grid_open = map_mode_ui_->is_grid_panel_visible();
     map_mode_ui_->set_button_state(MapModeUI::HeaderMode::Map, "map_grid", grid_open);
+    const bool layers_open = map_mode_ui_->is_layers_footer_visible();
+    map_mode_ui_->set_button_state(MapModeUI::HeaderMode::Map, "map_layers", layers_open);
     map_mode_ui_->set_button_state(MapModeUI::HeaderMode::Room, "regenerate", false);
     map_mode_ui_->set_button_state(MapModeUI::HeaderMode::Room, "regenerate_other", false);
 
