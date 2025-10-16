@@ -7,6 +7,10 @@
 #include <cmath>
 #include <optional>
 #include <utility>
+#include <vector>
+#include <cstdio>
+#include <cstdlib>
+#include <string>
 
 #include "core/AssetsManager.hpp"
 #include "dev_mode/dm_styles.hpp"
@@ -176,6 +180,106 @@ private:
     float current_value_ = 0.0f;
 };
 
+class DiscreteSliderWidget : public Widget {
+public:
+    DiscreteSliderWidget(std::string label,
+                         std::vector<int> values,
+                         int value)
+        : values_(std::move(values)) {
+        if (values_.empty()) {
+            values_.push_back(100);
+        }
+        slider_min_units_ = 0;
+        slider_max_units_ = static_cast<int>(values_.size() - 1);
+        slider_ = std::make_unique<DMSlider>(std::move(label), slider_min_units_, slider_max_units_, value_to_slider(value));
+        slider_->set_value_formatter([this](int units, std::array<char, dev_mode::kSliderFormatBufferSize>& buffer) {
+            const int idx = clamp_index(units);
+            std::snprintf(buffer.data(), buffer.size(), "%d%%", values_[idx]);
+            return std::string_view(buffer.data());
+        });
+        slider_->set_value_parser([this](const std::string& text) -> std::optional<int> {
+            try {
+                const int parsed = std::stoi(text);
+                return value_to_slider(parsed);
+            } catch (...) {
+                return std::nullopt;
+            }
+        });
+        slider_widget_ = std::make_unique<SliderWidget>(slider_.get());
+        current_index_ = clamp_index(slider_->value());
+    }
+
+    void set_value(int v) {
+        if (!slider_) return;
+        slider_->set_value(value_to_slider(v));
+        current_index_ = clamp_index(slider_->value());
+    }
+
+    int value() const {
+        if (values_.empty()) return 0;
+        const int idx = clamp_index(current_index_);
+        return values_[idx];
+    }
+
+    void set_rect(const SDL_Rect& r) override {
+        if (slider_widget_) slider_widget_->set_rect(r);
+    }
+
+    const SDL_Rect& rect() const override {
+        if (slider_widget_) {
+            return slider_widget_->rect();
+        }
+        static SDL_Rect empty{0, 0, 0, 0};
+        return empty;
+    }
+
+    int height_for_width(int w) const override {
+        return slider_widget_ ? slider_widget_->height_for_width(w) : DMSlider::height();
+    }
+
+    bool wants_full_row() const override { return true; }
+
+    bool handle_event(const SDL_Event& e) override {
+        if (!slider_widget_) return false;
+        bool handled = slider_widget_->handle_event(e);
+        if (slider_) {
+            current_index_ = clamp_index(slider_->value());
+        }
+        return handled;
+    }
+
+    void render(SDL_Renderer* renderer) const override {
+        if (slider_widget_) slider_widget_->render(renderer);
+    }
+
+private:
+    int clamp_index(int index) const {
+        if (values_.empty()) return 0;
+        return std::clamp(index, slider_min_units_, slider_max_units_);
+    }
+
+    int value_to_slider(int value) const {
+        if (values_.empty()) return slider_min_units_;
+        int best_index = slider_min_units_;
+        int best_diff = std::abs(value - values_[best_index]);
+        for (std::size_t i = 1; i < values_.size(); ++i) {
+            const int diff = std::abs(value - values_[i]);
+            if (diff < best_diff) {
+                best_diff = diff;
+                best_index = static_cast<int>(i);
+            }
+        }
+        return clamp_index(best_index);
+    }
+
+    std::unique_ptr<DMSlider> slider_;
+    std::unique_ptr<SliderWidget> slider_widget_;
+    std::vector<int> values_;
+    int slider_min_units_ = 0;
+    int slider_max_units_ = 0;
+    int current_index_ = 0;
+};
+
 CameraUIPanel::CameraUIPanel(Assets* assets, int x, int y)
     : DockableCollapsible("Camera Settings", true, x, y),
       assets_(assets) {
@@ -249,11 +353,13 @@ void CameraUIPanel::sync_from_camera() {
     if (effects_checkbox_) effects_checkbox_->set_value(effects_enabled);
 
     if (render_distance_slider_) render_distance_slider_->set_value(last_settings_.render_distance);
+    if (min_render_size_slider_) min_render_size_slider_->set_value(last_settings_.min_visible_screen_ratio);
     if (tripod_distance_slider_) tripod_distance_slider_->set_value(last_settings_.tripod_distance_y);
     if (height_zoom1_slider_) height_zoom1_slider_->set_value(last_settings_.height_at_zoom1);
     if (parallax_strength_slider_) parallax_strength_slider_->set_value(last_settings_.parallax_strength);
     if (foreshorten_strength_slider_) foreshorten_strength_slider_->set_value(last_settings_.foreshorten_strength);
     if (distance_strength_slider_) distance_strength_slider_->set_value(last_settings_.distance_scale_strength);
+    if (render_quality_slider_) render_quality_slider_->set_value(last_settings_.render_quality_percent);
 }
 
 void CameraUIPanel::build_ui() {
@@ -267,14 +373,16 @@ void CameraUIPanel::build_ui() {
 
     camera::RealismSettings defaults;
 
-    render_section_label_ = std::make_unique<SectionLabelWidget>("Render Distance");
+    render_section_label_ = std::make_unique<SectionLabelWidget>("Rendering");
     perspective_section_label_ = std::make_unique<SectionLabelWidget>("Perspective");
     render_distance_slider_ = std::make_unique<FloatSliderWidget>("Render Distance (world units)", 0.0f, 4000.0f, 10.0f, defaults.render_distance, 0);
+    min_render_size_slider_ = std::make_unique<FloatSliderWidget>("Min Visible Screen Ratio", 0.0f, 0.05f, 0.001f, defaults.min_visible_screen_ratio, 3);
     tripod_distance_slider_ = std::make_unique<FloatSliderWidget>("Tripod Distance (Y)", -2000.0f, 0.0f, 5.0f, defaults.tripod_distance_y, 0);
     height_zoom1_slider_ = std::make_unique<FloatSliderWidget>("Height @ Zoom = 1 (px)", 0.0f, 1000.0f, 1.0f, defaults.height_at_zoom1, 0);
     parallax_strength_slider_ = std::make_unique<FloatSliderWidget>("Parallax Strength", 0.0f, 100.0f, 0.25f, defaults.parallax_strength, 2);
     foreshorten_strength_slider_ = std::make_unique<FloatSliderWidget>("Vertical Foreshortening Strength", 0.0f, 1.0f, 0.01f, defaults.foreshorten_strength, 2);
     distance_strength_slider_ = std::make_unique<FloatSliderWidget>("Distance Scaling Strength", 0.0f, 1.0f, 0.01f, defaults.distance_scale_strength, 2);
+    render_quality_slider_ = std::make_unique<DiscreteSliderWidget>("Render Quality (%)", std::vector<int>{100, 75, 50, 25, 10}, defaults.render_quality_percent);
 
     rebuild_rows();
 }
@@ -284,6 +392,8 @@ void CameraUIPanel::rebuild_rows() {
     rows.push_back({ effects_widget_.get() });
     rows.push_back({ render_section_label_.get() });
     rows.push_back({ render_distance_slider_.get() });
+    rows.push_back({ min_render_size_slider_.get() });
+    rows.push_back({ render_quality_slider_.get() });
     rows.push_back({ perspective_section_label_.get() });
     rows.push_back({ tripod_distance_slider_.get(), height_zoom1_slider_.get() });
     rows.push_back({ parallax_strength_slider_.get(), foreshorten_strength_slider_.get() });
@@ -297,11 +407,13 @@ void CameraUIPanel::reset_to_defaults() {
     if (effects_checkbox_) effects_checkbox_->set_value(true);
 
     if (render_distance_slider_) render_distance_slider_->set_value(defaults.render_distance);
+    if (min_render_size_slider_) min_render_size_slider_->set_value(defaults.min_visible_screen_ratio);
     if (tripod_distance_slider_) tripod_distance_slider_->set_value(defaults.tripod_distance_y);
     if (height_zoom1_slider_) height_zoom1_slider_->set_value(defaults.height_at_zoom1);
     if (parallax_strength_slider_) parallax_strength_slider_->set_value(defaults.parallax_strength);
     if (foreshorten_strength_slider_) foreshorten_strength_slider_->set_value(defaults.foreshorten_strength);
     if (distance_strength_slider_) distance_strength_slider_->set_value(defaults.distance_scale_strength);
+    if (render_quality_slider_) render_quality_slider_->set_value(defaults.render_quality_percent);
     apply_settings_if_needed();
 }
 
@@ -323,7 +435,10 @@ void CameraUIPanel::apply_settings_if_needed() {
 
     bool changed = effects_enabled != last_realism_enabled_;
     const camera::RealismSettings& prev = last_settings_;
-    changed = changed || differs(settings.render_distance, prev.render_distance) || differs(settings.tripod_distance_y, prev.tripod_distance_y) || differs(settings.height_at_zoom1, prev.height_at_zoom1) || differs(settings.parallax_strength, prev.parallax_strength) || differs(settings.foreshorten_strength, prev.foreshorten_strength) || differs(settings.distance_scale_strength, prev.distance_scale_strength);
+    changed = changed || differs(settings.render_distance, prev.render_distance) || differs(settings.tripod_distance_y, prev.tripod_distance_y) || differs(settings.height_at_zoom1, prev.height_at_zoom1) || differs(settings.parallax_strength, prev.parallax_strength) || differs(settings.foreshorten_strength, prev.foreshorten_strength) || differs(settings.distance_scale_strength, prev.distance_scale_strength) || differs(settings.min_visible_screen_ratio, prev.min_visible_screen_ratio);
+    if (render_quality_slider_) {
+        changed = changed || settings.render_quality_percent != prev.render_quality_percent;
+    }
 
     if (changed) {
         apply_settings_to_camera(settings, effects_enabled);
@@ -339,6 +454,9 @@ void CameraUIPanel::apply_settings_to_camera(const camera::RealismSettings& sett
     cam.set_realism_settings(settings);
     cam.set_realism_enabled(effects_enabled);
     cam.set_parallax_enabled(effects_enabled);
+    if (assets_) {
+        assets_->apply_camera_runtime_settings();
+    }
     last_settings_ = settings;
     last_realism_enabled_ = effects_enabled;
 }
@@ -346,11 +464,13 @@ void CameraUIPanel::apply_settings_to_camera(const camera::RealismSettings& sett
 camera::RealismSettings CameraUIPanel::read_settings_from_ui() const {
     camera::RealismSettings settings{};
     if (render_distance_slider_) settings.render_distance = std::max(0.0f, render_distance_slider_->value());
+    if (min_render_size_slider_) settings.min_visible_screen_ratio = std::clamp(min_render_size_slider_->value(), 0.0f, 0.5f);
     if (tripod_distance_slider_) settings.tripod_distance_y = std::clamp(tripod_distance_slider_->value(), -2000.0f, 2000.0f);
     if (height_zoom1_slider_) settings.height_at_zoom1 = std::max(0.0f, height_zoom1_slider_->value());
     if (parallax_strength_slider_) settings.parallax_strength = std::max(0.0f, parallax_strength_slider_->value());
     if (foreshorten_strength_slider_) settings.foreshorten_strength = std::max(0.0f, foreshorten_strength_slider_->value());
     if (distance_strength_slider_) settings.distance_scale_strength = std::max(0.0f, distance_strength_slider_->value());
+    if (render_quality_slider_) settings.render_quality_percent = render_quality_slider_->value();
     return settings;
 }
 

@@ -6,6 +6,7 @@
 #include "render/camera.hpp"
 #include "dev_mode/dev_ui_settings.hpp"
 #include "render_pipeline/render_asset/shading/ReactiveShadowSettingsJSON.hpp"
+#include "render_pipeline/ScalingLogic.hpp"
 #include <algorithm>
 #include <cmath>
 #include <random>
@@ -16,7 +17,7 @@
 #include <unordered_set>
 
 static constexpr SDL_Color SLATE_COLOR = {69, 101, 74, 255};
-static constexpr float MIN_VISIBLE_SCREEN_RATIO = 0.015f;
+static constexpr float kDefaultMinVisibleScreenRatio = 0.015f;
 
 namespace {
 constexpr std::string_view kUpdateMapLightSettingKey = "dev_ui.lighting.map_panel.update_map_light";
@@ -145,10 +146,19 @@ void SceneRenderer::render(){
 
     if (!light_map_only_mode_){
         const auto& camera_state=assets_->getView();
+        const camera::RealismSettings& cam_settings = camera_state.realism_settings();
+        const float quality_percent = std::clamp(static_cast<float>(cam_settings.render_quality_percent), 10.0f, 100.0f);
+        render_pipeline::ScalingLogic::SetQualityCap(quality_percent / 100.0f);
+
         float scale=camera_state.get_scale();
         float inv_scale=1.f/scale;
-        int min_w=(int)(screen_width_*MIN_VISIBLE_SCREEN_RATIO);
-        int min_h=(int)(screen_height_*MIN_VISIBLE_SCREEN_RATIO);
+        float min_ratio = cam_settings.min_visible_screen_ratio;
+        if (!std::isfinite(min_ratio) || min_ratio < 0.0f) {
+            min_ratio = kDefaultMinVisibleScreenRatio;
+        }
+        min_ratio = std::clamp(min_ratio, 0.0f, 0.5f);
+        int min_w=(int)std::lround(static_cast<double>(screen_width_)*min_ratio);
+        int min_h=(int)std::lround(static_cast<double>(screen_height_)*min_ratio);
 
         float player_sh=1.f;
         Asset* player=assets_?assets_->player:nullptr;

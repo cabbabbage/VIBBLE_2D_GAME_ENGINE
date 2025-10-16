@@ -91,6 +91,7 @@ public:
     void finalize_asset_drag(Asset* a, const std::shared_ptr<AssetInfo>& info);
     void on_camera_settings_changed();
     void reload_camera_settings();
+    void apply_camera_runtime_settings();
 
     void focus_camera_on_asset(Asset* a, double zoom_factor = 0.8, int duration_steps = 25);
     void begin_area_edit_for_selected_asset(const std::string& area_name);

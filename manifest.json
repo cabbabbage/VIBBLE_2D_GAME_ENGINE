@@ -11895,9 +11895,11 @@
         "distance_scale_strength": 0.07999999821186066,
         "foreshorten_strength": 0.09999999403953552,
         "height_at_zoom1": 517.0,
+        "min_visible_screen_ratio": 0.015000000596046448,
         "parallax_strength": 28.0,
         "realism_enabled": true,
         "render_distance": 2200.0,
+        "render_quality_percent": 25,
         "tripod_distance_y": -495.0
       },
       "content_root": "MAPS/FORREST",
@@ -12070,12 +12072,12 @@
         "reactive_shadows": {
           "virtual_light_map": {
             "horizontal_falloff": 1.6200000047683716,
-            "vertical_falloff": 3.5,
             "map_light_factor": 0.0,
             "max_offset_x": 100.0,
             "max_offset_y": 100.0,
             "shadow_scale": 1.0,
-            "size_scale_factor": 1.0
+            "size_scale_factor": 1.0,
+            "vertical_falloff": 3.5
           }
         },
         "screen_light": {

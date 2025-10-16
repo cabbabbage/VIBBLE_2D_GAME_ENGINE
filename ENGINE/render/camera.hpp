@@ -20,7 +20,9 @@ class camera {
         float distance_scale_strength = 0.3f;
         float height_at_zoom1 = 18.0f;
         float tripod_distance_y = 0.0f;
-};
+        float min_visible_screen_ratio = 0.015f;
+        int   render_quality_percent = 100;
+    };
 
     struct RenderEffects {
         SDL_Point screen_position{0, 0};

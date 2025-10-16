@@ -23,6 +23,13 @@
 
 namespace render_pipeline {
 
+namespace detail {
+    inline float& quality_cap_storage() {
+        static float cap = 1.0f;
+        return cap;
+    }
+}
+
 struct ScaleSelection {
     int   index           = 0;
     float requested_scale = 1.0f;
@@ -32,6 +39,18 @@ struct ScaleSelection {
 
 struct ScalingLogic {
     using ScaleSteps = std::vector<float>;
+
+    static void SetQualityCap(float cap) {
+        if (!std::isfinite(cap) || cap <= 0.0f) {
+            cap = 0.1f;
+        }
+        cap = std::clamp(cap, 0.1f, 1.0f);
+        detail::quality_cap_storage() = cap;
+    }
+
+    static float QualityCap() {
+        return detail::quality_cap_storage();
+    }
 
     struct ScaleProfile {
         ScaleSteps          steps;
@@ -85,8 +104,23 @@ struct ScalingLogic {
         float chosen_scale = steps.front();
         int   chosen_index = 0;
 
+        const float quality_cap = QualityCap();
+        const bool enforce_cap = std::isfinite(quality_cap) && quality_cap > 0.0f && quality_cap < 0.999f;
+        bool has_allowed = false;
+        if (enforce_cap) {
+            for (float candidate : steps) {
+                if (candidate <= quality_cap + 1e-4f) {
+                    has_allowed = true;
+                    break;
+                }
+            }
+        }
+
         for (std::size_t i = 0; i < steps.size(); ++i) {
             const float candidate = steps[i];
+            if (enforce_cap && has_allowed && candidate > quality_cap + 1e-4f) {
+                continue;
+            }
             const float diff = std::fabs(candidate - desired_scale);
             if (diff < best_diff - 1e-4f) {
                 best_diff    = diff;

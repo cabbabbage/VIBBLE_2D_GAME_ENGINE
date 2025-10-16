@@ -310,6 +310,7 @@ void Assets::load_camera_settings_from_json() {
     }
     camera_.apply_camera_settings(camera_settings);
     camera_settings = camera_.camera_settings_to_json();
+    apply_camera_runtime_settings();
 }
 
 void Assets::write_camera_settings_to_json() {
@@ -320,12 +321,23 @@ void Assets::write_camera_settings_to_json() {
 }
 
 void Assets::on_camera_settings_changed() {
+    apply_camera_runtime_settings();
     write_camera_settings_to_json();
     save_map_info_json();
 }
 
 void Assets::reload_camera_settings() {
     load_camera_settings_from_json();
+}
+
+void Assets::apply_camera_runtime_settings() {
+    const camera::RealismSettings& settings = camera_.realism_settings();
+    const float percent = std::clamp(static_cast<float>(settings.render_quality_percent), 10.0f, 100.0f);
+    const float quality_cap = percent / 100.0f;
+    render_pipeline::ScalingLogic::SetQualityCap(quality_cap);
+    if (scene) {
+        scene->set_low_quality_rendering(settings.render_quality_percent < 100);
+    }
 }
 
 void Assets::apply_map_light_config() {

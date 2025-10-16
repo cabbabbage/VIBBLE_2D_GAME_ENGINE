@@ -464,6 +464,19 @@ void camera::apply_camera_settings(const nlohmann::json& data) {
     try_read_float("distance_scale_strength", settings_.distance_scale_strength);
     try_read_float("height_at_zoom1", settings_.height_at_zoom1);
     try_read_float("tripod_distance_y", settings_.tripod_distance_y);
+    try_read_float("min_visible_screen_ratio", settings_.min_visible_screen_ratio);
+
+    auto try_read_int = [&](const char* key, int& target) {
+        auto it = data.find(key);
+        if (it == data.end()) return;
+        if (it->is_number_integer()) {
+            target = it->get<int>();
+        } else if (it->is_number_float()) {
+            target = static_cast<int>(std::lround(it->get<double>()));
+        }
+    };
+
+    try_read_int("render_quality_percent", settings_.render_quality_percent);
 
     if (!std::isfinite(settings_.render_distance) || settings_.render_distance < 0.0f) {
         settings_.render_distance = 800.0f;
@@ -484,6 +497,28 @@ void camera::apply_camera_settings(const nlohmann::json& data) {
     } else {
         settings_.tripod_distance_y = std::clamp(settings_.tripod_distance_y, -2000.0f, 2000.0f);
     }
+
+    if (!std::isfinite(settings_.min_visible_screen_ratio) || settings_.min_visible_screen_ratio < 0.0f) {
+        settings_.min_visible_screen_ratio = 0.015f;
+    } else {
+        settings_.min_visible_screen_ratio = std::clamp(settings_.min_visible_screen_ratio, 0.0f, 0.5f);
+    }
+
+    auto align_quality = [](int percent) {
+        constexpr int kOptions[] = {100, 75, 50, 25, 10};
+        int best = kOptions[0];
+        int best_diff = std::abs(percent - best);
+        for (int option : kOptions) {
+            const int diff = std::abs(percent - option);
+            if (diff < best_diff) {
+                best_diff = diff;
+                best = option;
+            }
+        }
+        return best;
+    };
+
+    settings_.render_quality_percent = align_quality(settings_.render_quality_percent);
 }
 
 nlohmann::json camera::camera_settings_to_json() const {
@@ -495,6 +530,8 @@ nlohmann::json camera::camera_settings_to_json() const {
     j["distance_scale_strength"] = settings_.distance_scale_strength;
     j["height_at_zoom1"]       = settings_.height_at_zoom1;
     j["tripod_distance_y"]     = settings_.tripod_distance_y;
+    j["min_visible_screen_ratio"] = settings_.min_visible_screen_ratio;
+    j["render_quality_percent"]   = settings_.render_quality_percent;
     return j;
 }
 

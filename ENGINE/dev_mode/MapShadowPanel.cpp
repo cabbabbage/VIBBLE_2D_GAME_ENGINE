@@ -53,7 +53,7 @@ float slider_value_scaled(const std::unique_ptr<DMSlider>& slider, float fallbac
     if (!slider) {
         return fallback;
     }
-    return static_cast<float>(slider->value()) / static_cast<float>(scale);
+    return static_cast<float>(slider->displayed_value()) / static_cast<float>(scale);
 }
 
 void set_slider_scaled(const std::unique_ptr<DMSlider>& slider, float value, int scale) {
@@ -143,6 +143,12 @@ MapShadowPanel::~MapShadowPanel() = default;
 void MapShadowPanel::set_map_info(nlohmann::json* map_info, SaveCallback on_save) {
     map_info_ = map_info;
     on_save_ = std::move(on_save);
+    if (!reactive_settings_initialized_) {
+        last_applied_settings_ = load_reactive_settings_from_dev_settings();
+        set_reactive_sliders(last_applied_settings_);
+        apply_immediate_settings();
+        reactive_settings_initialized_ = true;
+    }
     sync_ui_from_json();
 }
 
@@ -151,15 +157,16 @@ void MapShadowPanel::set_reactive_settings(render_pipeline::shading::ReactiveSha
     if (settings) {
         last_applied_settings_ = render_pipeline::shading::sanitize_reactive_shadow_settings(*settings);
         set_reactive_sliders(last_applied_settings_);
+        apply_immediate_settings();
     }
 }
 
 void MapShadowPanel::open() {
-    set_visible(true);
+    DockableCollapsible::open();
     sync_ui_from_json();
 }
 
-void MapShadowPanel::close() { set_visible(false); }
+void MapShadowPanel::close() { DockableCollapsible::close(); }
 
 void MapShadowPanel::toggle() {
     if (is_visible()) {
@@ -171,7 +178,8 @@ void MapShadowPanel::toggle() {
 
 bool MapShadowPanel::is_visible() const { return DockableCollapsible::is_visible(); }
 
-void MapShadowPanel::update(const Input&, int, int) {
+void MapShadowPanel::update(const Input& input, int screen_w, int screen_h) {
+    DockableCollapsible::update(input, screen_w, screen_h);
     if (!is_visible()) {
         return;
     }
@@ -186,6 +194,7 @@ bool MapShadowPanel::handle_event(const SDL_Event& e) {
     }
 
     if (DockableCollapsible::handle_event(e)) {
+        needs_sync_to_json_ = true;
         return true;
     }
 

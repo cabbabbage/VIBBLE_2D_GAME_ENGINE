@@ -12,6 +12,7 @@ class ButtonWidget;
 class Input;
 class FloatSliderWidget;
 class SectionLabelWidget;
+class DiscreteSliderWidget;
 
 class CameraUIPanel : public DockableCollapsible {
 public:
@@ -64,6 +65,8 @@ private:
     std::unique_ptr<FloatSliderWidget> parallax_strength_slider_;
     std::unique_ptr<FloatSliderWidget> foreshorten_strength_slider_;
     std::unique_ptr<FloatSliderWidget> distance_strength_slider_;
+    std::unique_ptr<FloatSliderWidget> min_render_size_slider_;
+    std::unique_ptr<DiscreteSliderWidget> render_quality_slider_;
 
 protected:
     std::string_view lock_settings_namespace() const override { return "camera"; }
