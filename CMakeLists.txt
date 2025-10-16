@@ -134,6 +134,8 @@ target_include_directories(engine
         ${CMAKE_SOURCE_DIR}/ENGINE/utils
 )
 
+target_compile_definitions(engine PRIVATE PROJECT_ROOT="${CMAKE_SOURCE_DIR}")
+
 # ------------------------------------------
 # Link libraries
 # ------------------------------------------
@@ -186,7 +188,7 @@ target_link_libraries(dev_mode_ui_tests PRIVATE
     SDL2_mixer::SDL2_mixer
     SDL2_ttf::SDL2_ttf
 )
-target_compile_definitions(dev_mode_ui_tests PRIVATE SDL_MAIN_HANDLED)
+target_compile_definitions(dev_mode_ui_tests PRIVATE SDL_MAIN_HANDLED PROJECT_ROOT="${CMAKE_SOURCE_DIR}")
 add_test(NAME dev_mode_ui_tests COMMAND dev_mode_ui_tests)
 
 add_executable(map_grid_tests
@@ -202,7 +204,7 @@ target_include_directories(map_grid_tests PRIVATE
 target_link_libraries(map_grid_tests PRIVATE
     SDL2::SDL2
 )
-target_compile_definitions(map_grid_tests PRIVATE SDL_MAIN_HANDLED)
+target_compile_definitions(map_grid_tests PRIVATE SDL_MAIN_HANDLED PROJECT_ROOT="${CMAKE_SOURCE_DIR}")
 add_test(NAME map_grid_tests COMMAND map_grid_tests)
 
 add_executable(asset_loader_distance_tests
@@ -221,5 +223,21 @@ target_link_libraries(asset_loader_distance_tests PRIVATE
     nlohmann_json::nlohmann_json
     SDL2::SDL2
 )
-target_compile_definitions(asset_loader_distance_tests PRIVATE SDL_MAIN_HANDLED)
+target_compile_definitions(asset_loader_distance_tests PRIVATE SDL_MAIN_HANDLED PROJECT_ROOT="${CMAKE_SOURCE_DIR}")
 add_test(NAME asset_loader_distance_tests COMMAND asset_loader_distance_tests)
+
+add_executable(manifest_loader_tests
+    tests/manifest/manifest_loader_tests.cpp
+    ENGINE/core/manifest/manifest_loader.cpp
+)
+target_include_directories(manifest_loader_tests PRIVATE
+    ${CMAKE_SOURCE_DIR}/external
+    ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/ENGINE
+    ${CMAKE_SOURCE_DIR}/ENGINE/core
+)
+target_link_libraries(manifest_loader_tests PRIVATE
+    nlohmann_json::nlohmann_json
+)
+target_compile_definitions(manifest_loader_tests PRIVATE SDL_MAIN_HANDLED PROJECT_ROOT="${CMAKE_SOURCE_DIR}")
+add_test(NAME manifest_loader_tests COMMAND manifest_loader_tests)
