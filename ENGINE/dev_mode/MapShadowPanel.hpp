@@ -54,6 +54,7 @@ private:
     void persist_reactive_settings_to_dev_settings(const render_pipeline::shading::ReactiveShadowSettings& settings) const;
     void write_reactive_settings_to_json(const render_pipeline::shading::ReactiveShadowSettings& settings);
     nlohmann::json& ensure_reactive_settings_json();
+    void load_light_map_texture_setting();
 
     void toggle_opacity_section();
     void toggle_placement_section();
@@ -69,6 +70,7 @@ private:
     std::unique_ptr<DMSlider> quadrant_distance_falloff_;
     std::unique_ptr<DMSlider> quadrant_directional_strength_;
 
+    std::unique_ptr<DMCheckbox> light_map_texture_checkbox_;
     std::unique_ptr<DMCheckbox> reactive_offsets_enabled_;
     std::unique_ptr<DMCheckbox> reactive_opacity_enabled_;
     std::unique_ptr<DMCheckbox> reactive_temporal_enabled_;
@@ -112,6 +114,7 @@ private:
         render_pipeline::shading::sanitize_reactive_shadow_settings({});
     render_pipeline::shading::ReactiveShadowSettings* reactive_settings_shared_ = nullptr;
     bool reactive_settings_initialized_ = false;
+    bool light_map_texture_enabled_ = true;
 
 protected:
     std::string_view lock_settings_namespace() const override { return "lighting"; }

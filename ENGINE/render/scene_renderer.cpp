@@ -20,6 +20,7 @@ static constexpr float MIN_VISIBLE_SCREEN_RATIO = 0.015f;
 
 namespace {
 constexpr std::string_view kUpdateMapLightSettingKey = "dev_ui.lighting.map_panel.update_map_light";
+constexpr std::string_view kShowLightMapTextureSettingKey = "dev_ui.lighting.map_panel.show_light_map_texture";
 } // namespace
 
 SceneRenderer::SceneRenderer(SDL_Renderer* renderer,
@@ -187,7 +188,12 @@ void SceneRenderer::render(){
     }
     if (should_update_light){ main_light_source_.update(); }
 
+    bool show_light_map_texture = true;
+    if (assets_ && assets_->is_dev_mode()) {
+        show_light_map_texture = devmode::ui_settings::load_bool(kShowLightMapTextureSettingKey, true);
+    }
     if (z_light_pass_){
+        z_light_pass_->set_fullscreen_light_enabled(show_light_map_texture);
         z_light_pass_->update_virtual_light_map();
         render_pipeline_.lighting().virtual_light_map=&z_light_pass_->virtual_light_map();
     } else {

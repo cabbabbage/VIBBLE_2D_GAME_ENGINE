@@ -88,7 +88,7 @@ void LightMap::collect_layers(std::vector<LightEntry>& out) {
         if (out.capacity() < lit_assets.size() + 3) {
                 out.reserve(lit_assets.size() + 3);
         }
-        if (fullscreen_light_tex_) {
+        if (fullscreen_light_tex_ && fullscreen_light_enabled_) {
                 LightEntry entry{};
                 entry.tex = fullscreen_light_tex_;
                 entry.dst = { 0, 0, screen_width_, screen_height_ };
@@ -178,7 +178,7 @@ SDL_Texture* LightMap::build_lowres_mask(const std::vector<LightEntry>& layers,
         SDL_SetRenderDrawColor(renderer_, 0, 0, 0, 200);
         SDL_RenderClear(renderer_);
         SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_ADD);
-        if (last_main_light_alpha_ > 0) {
+        if (fullscreen_light_enabled_ && last_main_light_alpha_ > 0) {
                 SDL_SetRenderDrawColor(renderer_, fullscreen_light_color_.r, fullscreen_light_color_.g, fullscreen_light_color_.b, last_main_light_alpha_);
                 SDL_Rect fullscreen_rect{ 0, 0, low_w, low_h };
                 SDL_RenderFillRect(renderer_, &fullscreen_rect);

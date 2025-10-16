@@ -40,6 +40,8 @@ class LightMap {
     LightMap(SDL_Renderer* renderer, Assets* assets, Global_Light_Source& main_light, int screen_width, int screen_height, SDL_Texture* fullscreen_light_tex);
     void render(bool debugging, bool light_map_only);
     void set_fullscreen_light_settings(SDL_Color color, int min_opacity, int max_opacity);
+    void set_fullscreen_light_enabled(bool enabled) { fullscreen_light_enabled_ = enabled; }
+    bool fullscreen_light_enabled() const { return fullscreen_light_enabled_; }
     void update_virtual_light_map();
     const VirtualLightMap& virtual_light_map() const { return virtual_light_map_; }
 
@@ -60,6 +62,7 @@ class LightMap {
     SDL_Color fullscreen_light_color_{255, 255, 255, 255};
     int fullscreen_light_min_opacity_ = 0;
     int fullscreen_light_max_opacity_ = 255;
+    bool fullscreen_light_enabled_ = true;
     std::vector<LightEntry> cached_layers_;
     bool cached_layers_ready_ = false;
     VirtualLightMap virtual_light_map_{};
