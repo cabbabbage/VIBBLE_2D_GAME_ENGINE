@@ -167,7 +167,6 @@ add_executable(dev_mode_ui_tests
     tests/dev_mode/full_screen_collapsible_tests.cpp
     tests/dev_mode/tag_cache_tests.cpp
     tests/dev_mode/asset_info_stub.cpp
-    ENGINE/asset/asset_info.cpp
     ENGINE/dev_mode/full_screen_collapsible.cpp
     ENGINE/dev_mode/draw_utils.cpp
     ENGINE/dev_mode/font_cache.cpp
@@ -283,6 +282,24 @@ add_executable(manifest_store_tests
     tests/dev_mode/room_editor_manifest_tests.cpp
     ENGINE/dev_mode/core/manifest_store.cpp
     ENGINE/dev_mode/core/dev_json_store.cpp
+    ENGINE/dev_mode/asset_sections/Section_SpawnGroups.cpp
+    ENGINE/dev_mode/spawn_group_config/SpawnGroupConfig.cpp
+    ENGINE/dev_mode/spawn_group_config/spawn_group_utils.cpp
+    ENGINE/dev_mode/spawn_group_config/widgets/CandidateEditorPieGraphWidget.cpp
+    ENGINE/dev_mode/spawn_group_config/widgets/ExactWidget.cpp
+    ENGINE/dev_mode/spawn_group_config/widgets/PerimeterWidget.cpp
+    ENGINE/dev_mode/spawn_group_config/widgets/RandomWidget.cpp
+    ENGINE/dev_mode/spawn_group_config/spawn_method_control_widgets/LinkToAreaButton.cpp
+    ENGINE/dev_mode/spawn_group_config/spawn_method_control_widgets/SpawnMethodDropdown.cpp
+    ENGINE/dev_mode/DockableCollapsible.cpp
+    ENGINE/dev_mode/FloatingDockableManager.cpp
+    ENGINE/dev_mode/draw_utils.cpp
+    ENGINE/dev_mode/font_cache.cpp
+    ENGINE/dev_mode/widgets.cpp
+    ENGINE/dev_mode/dm_styles.cpp
+    ENGINE/dev_mode/tag_utils.cpp
+    ENGINE/dev_mode/search_assets.cpp
+    ENGINE/utils/input.cpp
     ENGINE/dev_mode/room_editor_map_info.cpp
     ENGINE/core/manifest/manifest_loader.cpp
     ENGINE/map_generation/map_layers_geometry.cpp
@@ -298,6 +315,9 @@ target_include_directories(manifest_store_tests PRIVATE
 target_link_libraries(manifest_store_tests PRIVATE
     nlohmann_json::nlohmann_json
     SDL2::SDL2
+    SDL2_image::SDL2_image
+    SDL2_mixer::SDL2_mixer
+    SDL2_ttf::SDL2_ttf
 )
 target_compile_definitions(manifest_store_tests PRIVATE SDL_MAIN_HANDLED PROJECT_ROOT="${CMAKE_SOURCE_DIR}")
 add_test(NAME manifest_store_tests COMMAND manifest_store_tests)
@@ -308,8 +328,10 @@ add_executable(asset_info_manifest_tests
     ENGINE/asset/asset_info.cpp
     ENGINE/asset/asset_types.cpp
     ENGINE/asset/animation.cpp
+    ENGINE/asset_info_methods/animation_loader.cpp
     ENGINE/asset_info_methods/lighting_loader.cpp
     ENGINE/asset_info_methods/child_loader.cpp
+    ENGINE/utils/generate_faded_mask.cpp
     ENGINE/utils/area.cpp
     ENGINE/utils/cache_manager.cpp
     ENGINE/utils/generate_light.cpp

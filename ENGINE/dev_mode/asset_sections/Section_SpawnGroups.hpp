@@ -22,6 +22,7 @@ struct SectionSpawnGroupsTestAccess;
 class Section_SpawnGroups : public DockableCollapsible {
 public:
     Section_SpawnGroups();
+    ~Section_SpawnGroups() override;
 
     void set_ui(AssetInfoUI* ui) { ui_ = ui; }
     void set_manifest_store(devmode::core::ManifestStore* store);

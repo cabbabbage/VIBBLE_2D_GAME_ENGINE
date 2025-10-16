@@ -19,6 +19,8 @@ Section_SpawnGroups::Section_SpawnGroups()
     set_cell_width(260);
 }
 
+Section_SpawnGroups::~Section_SpawnGroups() = default;
+
 void Section_SpawnGroups::build() {
     if (rebuilding_) {
         rebuild_requested_ = true;
