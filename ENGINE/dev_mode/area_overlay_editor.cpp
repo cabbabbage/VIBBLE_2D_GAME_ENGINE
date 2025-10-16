@@ -97,6 +97,121 @@ namespace {
         }).base(), value.end());
         return value;
     }
+
+    static double point_to_segment_distance_sq(const SDL_Point& a, const SDL_Point& b, const SDL_Point& p) {
+        const double vx = static_cast<double>(b.x - a.x);
+        const double vy = static_cast<double>(b.y - a.y);
+        const double wx = static_cast<double>(p.x - a.x);
+        const double wy = static_cast<double>(p.y - a.y);
+
+        const double c1 = vx * wx + vy * wy;
+        if (c1 <= 0.0) {
+            const double dx = static_cast<double>(p.x - a.x);
+            const double dy = static_cast<double>(p.y - a.y);
+            return dx * dx + dy * dy;
+        }
+
+        const double c2 = vx * vx + vy * vy;
+        if (c2 <= c1) {
+            const double dx = static_cast<double>(p.x - b.x);
+            const double dy = static_cast<double>(p.y - b.y);
+            return dx * dx + dy * dy;
+        }
+
+        const double t = (c2 > 0.0) ? (c1 / c2) : 0.0;
+        const double proj_x = static_cast<double>(a.x) + t * vx;
+        const double proj_y = static_cast<double>(a.y) + t * vy;
+        const double dx = static_cast<double>(p.x) - proj_x;
+        const double dy = static_cast<double>(p.y) - proj_y;
+        return dx * dx + dy * dy;
+    }
+
+    static long long orientation(const SDL_Point& a, const SDL_Point& b, const SDL_Point& c) {
+        return static_cast<long long>(b.x - a.x) * static_cast<long long>(c.y - a.y) -
+               static_cast<long long>(b.y - a.y) * static_cast<long long>(c.x - a.x);
+    }
+
+    static bool on_segment(const SDL_Point& a, const SDL_Point& b, const SDL_Point& c) {
+        return std::min(a.x, b.x) <= c.x && c.x <= std::max(a.x, b.x) &&
+               std::min(a.y, b.y) <= c.y && c.y <= std::max(a.y, b.y);
+    }
+
+    static bool segments_intersect(const SDL_Point& a1, const SDL_Point& a2,
+                                   const SDL_Point& b1, const SDL_Point& b2) {
+        const long long o1 = orientation(a1, a2, b1);
+        const long long o2 = orientation(a1, a2, b2);
+        const long long o3 = orientation(b1, b2, a1);
+        const long long o4 = orientation(b1, b2, a2);
+
+        if ((o1 > 0 && o2 < 0 || o1 < 0 && o2 > 0) &&
+            (o3 > 0 && o4 < 0 || o3 < 0 && o4 > 0)) {
+            return true;
+        }
+
+        if (o1 == 0 && on_segment(a1, a2, b1)) return true;
+        if (o2 == 0 && on_segment(a1, a2, b2)) return true;
+        if (o3 == 0 && on_segment(b1, b2, a1)) return true;
+        if (o4 == 0 && on_segment(b1, b2, a2)) return true;
+
+        return false;
+    }
+
+    static bool segments_share_vertex(const SDL_Point& a1, const SDL_Point& a2,
+                                      const SDL_Point& b1, const SDL_Point& b2) {
+        auto equal = [](const SDL_Point& lhs, const SDL_Point& rhs) {
+            return lhs.x == rhs.x && lhs.y == rhs.y;
+        };
+        return equal(a1, b1) || equal(a1, b2) || equal(a2, b1) || equal(a2, b2);
+    }
+
+    static int choose_insertion_index(const std::vector<SDL_Point>& points, const SDL_Point& candidate) {
+        const std::size_t n = points.size();
+        if (n <= 1) {
+            return static_cast<int>(n);
+        }
+
+        const bool closed = (n >= 3);
+        const std::size_t edge_count = closed ? n : (n - 1);
+        double best_score = std::numeric_limits<double>::infinity();
+        int best_index = -1;
+
+        for (std::size_t i = 0; i < edge_count; ++i) {
+            const std::size_t j = closed ? ((i + 1) % n) : (i + 1);
+            if (!closed && j >= n) {
+                continue;
+            }
+
+            const SDL_Point& from = points[i];
+            const SDL_Point& to = points[j];
+
+            auto segment_clear = [&](const SDL_Point& s0, const SDL_Point& s1) {
+                for (std::size_t k = 0; k < edge_count; ++k) {
+                    const std::size_t k_next = closed ? ((k + 1) % n) : (k + 1);
+                    if (!closed && k_next >= n) break;
+                    if ((k == i && k_next == j) || (k == j && k_next == i)) continue;
+                    const SDL_Point& q0 = points[k];
+                    const SDL_Point& q1 = points[k_next];
+                    if (segments_share_vertex(s0, s1, q0, q1)) continue;
+                    if (segments_intersect(s0, s1, q0, q1)) return false;
+                }
+                return true;
+            };
+
+            if (!segment_clear(from, candidate)) continue;
+            if (!segment_clear(candidate, to)) continue;
+
+            const double distance_sq = point_to_segment_distance_sq(from, to, candidate);
+            if (distance_sq < best_score) {
+                best_score = distance_sq;
+                best_index = static_cast<int>(j);
+            }
+        }
+
+        if (best_index < 0) {
+            return static_cast<int>(n);
+        }
+        return best_index;
+    }
 }
 
 constexpr Uint8 kDefaultMaskAlpha = 128;
@@ -247,11 +362,16 @@ bool AreaOverlayEditor::begin_for_room(Room* room,
     } else {
         room_center = SDL_Point{room_->map_origin.first, room_->map_origin.second};
     }
+
+    Area* existing_area = room_->find_area(area_name_);
+    if (room_area_type_.empty() && existing_area) {
+        room_area_type_ = existing_area->get_type();
+    }
     const bool use_center_anchor = should_use_room_center_anchor(room_area_type_, area_name_);
 
     std::vector<SDL_Point> reference_points;
-    if (Area* existing = room_->find_area(area_name_)) {
-        const auto& pts = existing->get_points();
+    if (existing_area) {
+        const auto& pts = existing_area->get_points();
         reference_points.insert(reference_points.end(), pts.begin(), pts.end());
     }
     if (reference_points.empty() && room_->room_area) {
@@ -325,8 +445,8 @@ bool AreaOverlayEditor::begin_for_room(Room* room,
     geometry_points_.clear();
     geometry_dirty_ = false;
 
-    if (Area* existing = room_->find_area(area_name_)) {
-        const auto& pts = existing->get_points();
+    if (existing_area) {
+        const auto& pts = existing_area->get_points();
         geometry_points_.insert(geometry_points_.end(), pts.begin(), pts.end());
         rebuild_mask_from_geometry();
         upload_mask();
@@ -1121,7 +1241,19 @@ bool AreaOverlayEditor::handle_event(const SDL_Event& e) {
             geometry_points_.erase(geometry_points_.begin() + hit_index);
         } else {
             ensure_mask_contains(lx, ly, 2);
-            geometry_points_.push_back(SDL_Point{ lx, ly });
+            SDL_Point new_point{ lx, ly };
+            auto exists = std::find_if(
+                geometry_points_.begin(),
+                geometry_points_.end(),
+                [&](const SDL_Point& p) { return p.x == new_point.x && p.y == new_point.y; });
+            if (exists == geometry_points_.end()) {
+                const int insert_index = choose_insertion_index(geometry_points_, new_point);
+                if (insert_index >= 0 && insert_index <= static_cast<int>(geometry_points_.size())) {
+                    geometry_points_.insert(geometry_points_.begin() + insert_index, new_point);
+                } else {
+                    geometry_points_.push_back(new_point);
+                }
+            }
         }
         geometry_dirty_ = true;
         rebuild_mask_from_geometry();
