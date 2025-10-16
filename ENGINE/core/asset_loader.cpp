@@ -90,6 +90,12 @@ manifest_store_(manifest_store)
         std::cout << "[AssetLoader] Preloaded animations for " << preload_count
                   << " referenced assets in " << preload_ms << "ms\n";
     }
+
+    if (renderer_) {
+        asset_library_->ensureAllAnimationsLoaded(renderer_);
+    } else {
+        std::cerr << "[AssetLoader] Renderer unavailable; skipping asset library cache warmup.\n";
+    }
         finalizeAssets();
 
         const auto overall_end = std::chrono::steady_clock::now();
