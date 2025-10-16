@@ -12,6 +12,8 @@
 #include <limits>
 #include <cmath>
 #include <cctype>
+#include <filesystem>
+#include <utility>
 
 namespace {
 
@@ -19,6 +21,64 @@ struct CanvasMetrics {
     int width = 0;
     int height = 0;
 };
+
+std::vector<std::string> parse_string_array(const nlohmann::json& json_value) {
+    std::vector<std::string> values;
+    if (!json_value.is_array()) {
+        return values;
+    }
+    values.reserve(json_value.size());
+    for (const auto& entry : json_value) {
+        if (entry.is_string()) {
+            auto str = entry.get<std::string>();
+            if (!str.empty()) {
+                values.push_back(std::move(str));
+            }
+        }
+    }
+    return values;
+}
+
+std::string derive_asset_directory(const nlohmann::json& data, const std::string& fallback) {
+    try {
+        if (data.contains("asset_directory") && data["asset_directory"].is_string()) {
+            auto value = data["asset_directory"].get<std::string>();
+            if (!value.empty()) {
+                return value;
+            }
+        }
+
+        auto anims_it = data.find("animations");
+        if (anims_it != data.end() && anims_it->is_object()) {
+            for (auto it = anims_it->begin(); it != anims_it->end(); ++it) {
+                if (!it.value().is_object()) {
+                    continue;
+                }
+                const auto& anim_json = it.value();
+                if (anim_json.contains("source") && anim_json["source"].is_object()) {
+                    std::string path = anim_json["source"].value("path", std::string{});
+                    if (!path.empty()) {
+                        std::filesystem::path p(path);
+                        if (!p.empty()) {
+                            if (p.has_filename()) {
+                                p = p.parent_path();
+                            }
+                            return p.string();
+                        }
+                    }
+                } else if (anim_json.contains("frames_path") && anim_json["frames_path"].is_string()) {
+                    std::filesystem::path p = std::filesystem::path(fallback) / anim_json["frames_path"].get<std::string>();
+                    if (p.has_parent_path()) {
+                        return p.parent_path().string();
+                    }
+                }
+            }
+        }
+    } catch (...) {
+    }
+
+    return fallback;
+}
 
 inline CanvasMetrics canvas_metrics_for(const AssetInfo& info) {
     CanvasMetrics metrics;
@@ -311,106 +371,47 @@ AssetInfo::AreaCodec::decode_entry(const AssetInfo& info, const nlohmann::json& 
 AssetInfo::AssetInfo(const std::string &asset_folder_name)
 : is_shaded(false)
 , is_light_source(false) {
-	name = asset_folder_name;
-	dir_path_ = "SRC/" + asset_folder_name;
-	std::string info_path = dir_path_ + "/info.json";
-	info_json_path_ = info_path;
-	std::ifstream in(info_path);
-	if (!in.is_open()) {
-		throw std::runtime_error("Failed to open asset info: " + info_path);
-	}
-	nlohmann::json data;
-	in >> data;
-	info_json_ = data;
-        tags.clear();
-        if (data.contains("tags") && data["tags"].is_array()) {
-                for (const auto &tag : data["tags"]) {
-                        if (tag.is_string()) {
-                                        std::string str = tag.get<std::string>();
-                                        if (!str.empty())
-                                        tags.push_back(str);
-                        }
-                }
+        name = asset_folder_name;
+        dir_path_ = "SRC/" + asset_folder_name;
+        info_json_path_ = dir_path_ + "/info.json";
+
+        std::ifstream in(info_json_path_);
+        if (!in.is_open()) {
+                throw std::runtime_error("Failed to open asset info: " + info_json_path_);
         }
-        anti_tags.clear();
-        if (data.contains("anti_tags") && data["anti_tags"].is_array()) {
-                for (const auto &tag : data["anti_tags"]) {
-                        if (tag.is_string()) {
-                                        std::string str = tag.get<std::string>();
-                                        if (!str.empty())
-                                        anti_tags.push_back(str);
-                        }
-                }
+
+        nlohmann::json data;
+        in >> data;
+
+        initialize_from_json(data);
+
+        if (!info_json_.contains("asset_name") || !info_json_["asset_name"].is_string() || info_json_["asset_name"].get<std::string>().empty()) {
+                info_json_["asset_name"] = name;
         }
-        rebuild_tag_cache();
-        rebuild_anti_tag_cache();
-        if (data.contains("animations") && data["animations"].is_object()) {
-                nlohmann::json new_anim = nlohmann::json::object();
-                for (auto it = data["animations"].begin(); it != data["animations"].end(); ++it) {
-                        const std::string trig = it.key();
-			const auto &anim_json = it.value();
-			nlohmann::json converted = anim_json;
-			if (!anim_json.contains("source")) {
-					converted["source"] = {
-								{"kind", "folder"},
-								{"path", anim_json.value("frames_path", trig)}};
-					converted["locked"] = anim_json.value("lock_until_done", false);
-					converted["speed_factor"] = anim_json.value("speed", 1.0f);
-					converted.erase("frames_path");
-					converted.erase("lock_until_done");
-					converted.erase("speed");
-			}
-			new_anim[trig] = converted;
-		}
-		anims_json_ = new_anim;
-		info_json_["animations"] = new_anim;
-	}
-	if (data.contains("mappings") && data["mappings"].is_object()) {
-		for (auto it = data["mappings"].begin(); it != data["mappings"].end(); ++it) {
-			const std::string id = it.key();
-			Mapping map;
-			if (it.value().is_array()) {
-					for (const auto& entry_json : it.value()) {
-								MappingEntry me;
-								me.condition = entry_json.value("condition", "");
-								if (entry_json.contains("map_to") && entry_json["map_to"].contains("options")) {
-													for (const auto& opt_json : entry_json["map_to"]["options"]) {
-																					MappingOption opt{opt_json.value("animation", ""), opt_json.value("percent", 100.0f)};
-																					me.options.push_back(opt);
-													}
-								}
-								map.push_back(me);
-					}
-			}
-			mappings[id] = map;
-		}
-                info_json_["mappings"] = data["mappings"];
+}
+
+AssetInfo::AssetInfo(const std::string& asset_folder_name, const nlohmann::json& metadata)
+: is_shaded(false)
+, is_light_source(false) {
+        nlohmann::json data = metadata.is_object() ? metadata : nlohmann::json::object();
+
+        std::string resolved_name = data.value("asset_name", asset_folder_name);
+        if (resolved_name.empty()) {
+                resolved_name = asset_folder_name;
         }
-        smooth_scaling = true;
-        if (has_tag("pixel_art") || has_tag("preserve_pixels")) {
-                smooth_scaling = false;
+        name = resolved_name;
+
+        dir_path_ = derive_asset_directory(data, "SRC/" + resolved_name);
+        if (dir_path_.empty()) {
+                dir_path_ = "SRC/" + resolved_name;
         }
-        load_base_properties(data);
-        LightingLoader::load(*this, data);
-        const auto &ss = data.value("size_settings", nlohmann::json::object());
-        scale_factor = ss.value("scale_percentage", 100.0f) / 100.0f;
-        if (ss.contains("scale_filter")) {
-                std::string filter = ss.value("scale_filter", std::string{});
-                for (char& ch : filter) {
-                        ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
-                }
-                if (!filter.empty()) {
-                        smooth_scaling = !(filter == "nearest" || filter == "point" || filter == "none");
-                }
+        info_json_path_.clear();
+
+        initialize_from_json(data);
+
+        if (!info_json_.contains("asset_name") || !info_json_["asset_name"].is_string() || info_json_["asset_name"].get<std::string>().empty()) {
+                info_json_["asset_name"] = name;
         }
-        load_children(data);
-	try {
-		if (data.contains("custom_controller_key") && data["custom_controller_key"].is_string()) {
-			custom_controller_key = data["custom_controller_key"].get<std::string>();
-		}
-	} catch (...) {
-		custom_controller_key.clear();
-	}
 }
 
 AssetInfo::~AssetInfo() {
@@ -465,11 +466,14 @@ void AssetInfo::generate_lights(SDL_Renderer *renderer) {
 }
 
 bool AssetInfo::update_info_json() const {
-	try {
-		std::ofstream out(info_json_path_);
-		if (!out.is_open())
-		return false;
-		out << info_json_.dump(4);
+        if (info_json_path_.empty()) {
+                return false;
+        }
+        try {
+                std::ofstream out(info_json_path_);
+                if (!out.is_open())
+                return false;
+                out << info_json_.dump(4);
 		return true;
 	} catch (...) {
 		return false;
@@ -714,6 +718,114 @@ void AssetInfo::load_children(const nlohmann::json& data) {
     ChildLoader::load_children(*this, data, dir_path_);
 }
 
+void AssetInfo::initialize_from_json(const nlohmann::json& source) {
+        nlohmann::json data = source.is_object() ? source : nlohmann::json::object();
+
+        info_json_ = data;
+
+        tags = parse_string_array(data.value("tags", nlohmann::json::array()));
+        anti_tags = parse_string_array(data.value("anti_tags", nlohmann::json::array()));
+        rebuild_tag_cache();
+        rebuild_anti_tag_cache();
+
+        if (!info_json_.contains("tags") || !info_json_["tags"].is_array()) {
+                info_json_["tags"] = nlohmann::json::array();
+        }
+        if (!info_json_.contains("anti_tags") || !info_json_["anti_tags"].is_array()) {
+                info_json_["anti_tags"] = nlohmann::json::array();
+        }
+
+        if (data.contains("animations") && data["animations"].is_object()) {
+                nlohmann::json new_anim = nlohmann::json::object();
+                for (auto it = data["animations"].begin(); it != data["animations"].end(); ++it) {
+                        const std::string trig = it.key();
+                        const auto &anim_json = it.value();
+                        if (!anim_json.is_object()) {
+                                continue;
+                        }
+                        nlohmann::json converted = anim_json;
+                        if (!anim_json.contains("source")) {
+                                converted["source"] = {
+                                        {"kind", "folder"},
+                                        {"path", anim_json.value("frames_path", trig)}
+                                };
+                                converted["locked"] = anim_json.value("lock_until_done", false);
+                                converted["speed_factor"] = anim_json.value("speed", 1.0f);
+                                converted.erase("frames_path");
+                                converted.erase("lock_until_done");
+                                converted.erase("speed");
+                        }
+                        new_anim[trig] = converted;
+                }
+                anims_json_ = new_anim;
+                info_json_["animations"] = new_anim;
+        } else {
+                anims_json_ = nlohmann::json::object();
+                info_json_["animations"] = anims_json_;
+        }
+
+        mappings.clear();
+        if (data.contains("mappings") && data["mappings"].is_object()) {
+                for (auto it = data["mappings"].begin(); it != data["mappings"].end(); ++it) {
+                        const std::string id = it.key();
+                        Mapping map;
+                        if (it.value().is_array()) {
+                                for (const auto& entry_json : it.value()) {
+                                        if (!entry_json.is_object()) {
+                                                continue;
+                                        }
+                                        MappingEntry me;
+                                        me.condition = entry_json.value("condition", "");
+                                        if (entry_json.contains("map_to") && entry_json["map_to"].contains("options")) {
+                                                for (const auto& opt_json : entry_json["map_to"]["options"]) {
+                                                        if (!opt_json.is_object()) {
+                                                                continue;
+                                                        }
+                                                        MappingOption opt{opt_json.value("animation", ""), opt_json.value("percent", 100.0f)};
+                                                        me.options.push_back(opt);
+                                                }
+                                        }
+                                        map.push_back(std::move(me));
+                                }
+                        }
+                        mappings[id] = std::move(map);
+                }
+                info_json_["mappings"] = data["mappings"];
+        }
+
+        smooth_scaling = true;
+        if (has_tag("pixel_art") || has_tag("preserve_pixels")) {
+                smooth_scaling = false;
+        }
+
+        load_base_properties(data);
+        LightingLoader::load(*this, data);
+
+        const auto &ss = data.value("size_settings", nlohmann::json::object());
+        scale_factor = ss.value("scale_percentage", 100.0f) / 100.0f;
+        if (ss.contains("scale_filter")) {
+                std::string filter = ss.value("scale_filter", std::string{});
+                for (char& ch : filter) {
+                        ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+                }
+                if (!filter.empty()) {
+                        smooth_scaling = !(filter == "nearest" || filter == "point" || filter == "none");
+                }
+        }
+
+        load_children(data);
+
+        try {
+                if (data.contains("custom_controller_key") && data["custom_controller_key"].is_string()) {
+                        custom_controller_key = data["custom_controller_key"].get<std::string>();
+                } else {
+                        custom_controller_key.clear();
+                }
+        } catch (...) {
+                custom_controller_key.clear();
+        }
+}
+
 void AssetInfo::set_children(const std::vector<ChildInfo>& new_children) {
 
     children = new_children;
@@ -730,21 +842,23 @@ void AssetInfo::set_children(const std::vector<ChildInfo>& new_children) {
             } else if (!c.json_path.empty()) {
 
                 std::string rel = c.json_path;
-                try {
+                if (!info_json_path_.empty()) {
+                    try {
 
-                    std::string base = info_json_path_;
-                    auto pos = base.find_last_of("/\\");
-                    if (pos != std::string::npos) {
-                        base = base.substr(0, pos);
-                        if (rel.rfind(base, 0) == 0) {
+                        std::string base = info_json_path_;
+                        auto pos = base.find_last_of("/\\");
+                        if (pos != std::string::npos) {
+                            base = base.substr(0, pos);
+                            if (rel.rfind(base, 0) == 0) {
 
-                            size_t cut = base.size();
-                            if (rel.size() > cut && (rel[cut] == '/' || rel[cut] == '\\')) ++cut;
-                            rel = rel.substr(cut);
+                                size_t cut = base.size();
+                                if (rel.size() > cut && (rel[cut] == '/' || rel[cut] == '\\')) ++cut;
+                                rel = rel.substr(cut);
+                            }
                         }
-                    }
-                } catch (...) {
+                    } catch (...) {
 
+                    }
                 }
                 entry["json_path"] = rel;
             }

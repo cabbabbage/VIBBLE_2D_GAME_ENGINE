@@ -23,6 +23,33 @@ std::vector<std::string> load_string_array(const nlohmann::json& json_value) {
     }
     return values;
 }
+
+void populate_from_json(AssetInfo& info, const nlohmann::json& raw_data) {
+    nlohmann::json data = raw_data.is_object() ? raw_data : nlohmann::json::object();
+    info.info_json_ = data;
+
+    info.type = info.info_json_.value("asset_type", std::string{});
+    info.start_animation = info.info_json_.value("start", std::string{});
+    info.z_threshold = info.info_json_.value("z_threshold", 0);
+    info.passable = info.info_json_.value("passable", false);
+    info.min_same_type_distance = info.info_json_.value("min_same_type_distance", 0);
+    info.min_distance_all = info.info_json_.value("min_distance_all", 0);
+
+    info.tags = load_string_array(info.info_json_.value("tags", nlohmann::json::array()));
+    info.anti_tags = load_string_array(info.info_json_.value("anti_tags", nlohmann::json::array()));
+
+    info.rebuild_tag_cache();
+    info.rebuild_anti_tag_cache();
+
+    if (!info.info_json_.contains("tags")) {
+        info.info_json_["tags"] = nlohmann::json::array();
+    }
+    if (!info.info_json_.contains("anti_tags")) {
+        info.info_json_["anti_tags"] = nlohmann::json::array();
+    }
+
+    info.passable = info.has_tag("passable");
+}
 } // namespace
 
 AssetInfo::AssetInfo(const std::string& asset_folder_name)
@@ -37,32 +64,31 @@ AssetInfo::AssetInfo(const std::string& asset_folder_name)
         throw std::runtime_error("Failed to open asset info: " + info_json_path_);
     }
 
-    in >> info_json_;
-    if (!info_json_.is_object()) {
-        info_json_ = nlohmann::json::object();
+    nlohmann::json data;
+    in >> data;
+
+    populate_from_json(*this, data);
+}
+
+AssetInfo::AssetInfo(const std::string& asset_folder_name, const nlohmann::json& metadata)
+    : is_shaded(false),
+      is_light_source(false) {
+    nlohmann::json data = metadata.is_object() ? metadata : nlohmann::json::object();
+
+    std::string resolved_name = data.value("asset_name", asset_folder_name);
+    if (resolved_name.empty()) {
+        resolved_name = asset_folder_name;
     }
 
-    type = info_json_.value("asset_type", std::string{});
-    start_animation = info_json_.value("start", std::string{});
-    z_threshold = info_json_.value("z_threshold", 0);
-    passable = info_json_.value("passable", false);
-    min_same_type_distance = info_json_.value("min_same_type_distance", 0);
-    min_distance_all = info_json_.value("min_distance_all", 0);
-
-    tags = load_string_array(info_json_.value("tags", nlohmann::json::array()));
-    anti_tags = load_string_array(info_json_.value("anti_tags", nlohmann::json::array()));
-
-    rebuild_tag_cache();
-    rebuild_anti_tag_cache();
-
-    if (!info_json_.contains("tags")) {
-        info_json_["tags"] = nlohmann::json::array();
+    name = resolved_name;
+    std::string fallback_dir = "SRC/" + resolved_name;
+    dir_path_ = data.value("asset_directory", fallback_dir);
+    if (dir_path_.empty()) {
+        dir_path_ = fallback_dir;
     }
-    if (!info_json_.contains("anti_tags")) {
-        info_json_["anti_tags"] = nlohmann::json::array();
-    }
+    info_json_path_.clear();
 
-    passable = has_tag("passable");
+    populate_from_json(*this, data);
 }
 
 AssetInfo::~AssetInfo() = default;

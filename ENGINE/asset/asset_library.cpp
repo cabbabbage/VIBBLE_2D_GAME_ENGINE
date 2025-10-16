@@ -47,9 +47,15 @@ void AssetLibrary::load_all_from_SRC() {
 
                 try {
                         std::shared_ptr<AssetInfo> info;
+                        const bool has_metadata = metadata.is_object() && !metadata.empty();
                         if constexpr (has_manifest_constructor) {
-                                info = std::make_shared<AssetInfo>(name, metadata);
+                                if (has_metadata) {
+                                        info = std::make_shared<AssetInfo>(name, metadata);
+                                } else {
+                                        info = std::make_shared<AssetInfo>(name);
+                                }
                         } else {
+                                (void)has_metadata;
                                 info = std::make_shared<AssetInfo>(name);
                         }
                         info_by_name_[name] = info;

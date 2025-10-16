@@ -35,6 +35,7 @@ class AssetInfo {
 
 	public:
     AssetInfo(const std::string &asset_folder_name);
+    AssetInfo(const std::string &asset_folder_name, const nlohmann::json& metadata);
     ~AssetInfo();
     void loadAnimations(SDL_Renderer *renderer);
     bool has_tag(const std::string &tag) const;
@@ -154,6 +155,7 @@ class AssetInfo {
     std::string dir_path_;
     nlohmann::json info_json_;
     std::string info_json_path_;
+    void initialize_from_json(const nlohmann::json& data);
     void rebuild_tag_cache();
     void rebuild_anti_tag_cache();
     std::unordered_set<std::string> tag_lookup_;
