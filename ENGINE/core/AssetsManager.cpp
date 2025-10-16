@@ -165,19 +165,18 @@ std::vector<const Room::NamedArea*> Assets::current_room_trigger_areas() const {
 }
 
 void Assets::save_map_info_json() {
-    if (map_info_path_.empty()) {
-        return;
-    }
     write_camera_settings_to_json();
-    std::ofstream out(map_info_path_);
-    if (!out.is_open()) {
-        std::cerr << "[Assets] Failed to write map_info.json at " << map_info_path_ << "\n";
+    if (map_id_.empty()) {
+        std::cerr << "[Assets] Unable to persist map manifest entry: map ID is empty.\n";
         return;
     }
-    try {
-        out << map_info_json_.dump(2);
-    } catch (const std::exception& e) {
-        std::cerr << "[Assets] Failed to serialize map_info.json: " << e.what() << "\n";
+    devmode::core::ManifestStore* store = manifest_store();
+    if (!store) {
+        std::cerr << "[Assets] Unable to persist map manifest entry: manifest store unavailable.\n";
+        return;
+    }
+    if (!store->update_map_entry(map_id_, map_info_json_)) {
+        std::cerr << "[Assets] Failed to persist map manifest entry for " << map_id_ << "\n";
     }
 }
 
@@ -1144,17 +1143,17 @@ void Assets::begin_area_edit_for_selected_asset(const std::string& area_name) {
 }
 
 devmode::core::ManifestStore* Assets::manifest_store() {
-    if (!dev_controls_) {
-        return nullptr;
+    if (dev_controls_) {
+        return &dev_controls_->manifest_store();
     }
-    return &dev_controls_->manifest_store();
+    if (!manifest_store_fallback_) {
+        manifest_store_fallback_ = std::make_unique<devmode::core::ManifestStore>();
+    }
+    return manifest_store_fallback_.get();
 }
 
 const devmode::core::ManifestStore* Assets::manifest_store() const {
-    if (!dev_controls_) {
-        return nullptr;
-    }
-    return &dev_controls_->manifest_store();
+    return const_cast<Assets*>(this)->manifest_store();
 }
 
 void Assets::notify_spawn_group_config_changed(const nlohmann::json& entry) {

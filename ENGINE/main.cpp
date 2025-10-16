@@ -66,31 +66,22 @@ void MainApp::setup() {
                 std::string content_root;
                 const std::string map_identifier = map_path_;
 
-                const fs::path candidate_path = fs::path(map_path_);
-                std::error_code ec;
-                if (!map_path_.empty() && fs::exists(candidate_path, ec) && fs::is_directory(candidate_path, ec)) {
-                        const fs::path manifest_path = candidate_path / "map_info.json";
-                        std::ifstream manifest_stream(manifest_path);
-                        if (!manifest_stream.is_open()) {
-                                throw std::runtime_error("Failed to open map_info.json at " + manifest_path.string());
+                manifest::ManifestData manifest_data = manifest::load_manifest();
+                auto map_it = manifest_data.maps.find(map_identifier);
+                if (map_it == manifest_data.maps.end() || !map_it.value().is_object()) {
+                        throw std::runtime_error("Map '" + map_identifier + "' not found in manifest.");
+                }
+
+                map_manifest_json = map_it.value();
+
+                auto root_it = map_manifest_json.find("content_root");
+                if (root_it != map_manifest_json.end() && root_it->is_string()) {
+                        fs::path resolved_root = root_it->get<std::string>();
+                        if (resolved_root.is_relative()) {
+                                fs::path manifest_root = fs::path(manifest::manifest_path()).parent_path();
+                                resolved_root = manifest_root / resolved_root;
                         }
-                        try {
-                                manifest_stream >> map_manifest_json;
-                        } catch (const std::exception& ex) {
-                                throw std::runtime_error(std::string("Failed to parse map_info.json at ") + manifest_path.string() + ": " + ex.what());
-                        }
-                        content_root = candidate_path.string();
-                } else {
-                        manifest::ManifestData manifest_data = manifest::load_manifest();
-                        auto map_it = manifest_data.maps.find(map_path_);
-                        if (map_it == manifest_data.maps.end() || !map_it.value().is_object()) {
-                                throw std::runtime_error("Map '" + map_path_ + "' not found in manifest.");
-                        }
-                        map_manifest_json = map_it.value();
-                        auto root_it = map_manifest_json.find("content_root");
-                        if (root_it != map_manifest_json.end() && root_it->is_string()) {
-                                content_root = root_it->get<std::string>();
-                        }
+                        content_root = resolved_root.lexically_normal().string();
                 }
 
                 if (!map_manifest_json.is_object()) {
@@ -100,7 +91,8 @@ void MainApp::setup() {
                 if (!content_root.empty()) {
                         fs::path resolved_root = fs::path(content_root);
                         if (resolved_root.is_relative()) {
-                                resolved_root = fs::path(manifest::manifest_path()).parent_path() / resolved_root;
+                                fs::path manifest_root = fs::path(manifest::manifest_path()).parent_path();
+                                resolved_root = manifest_root / resolved_root;
                         }
                         content_root = resolved_root.lexically_normal().string();
                 }

@@ -185,6 +185,7 @@ private:
     nlohmann::json map_info_json_;
     std::unique_ptr<AssetList> active_asset_list_;
     std::atomic<bool> active_assets_dirty_{true};
+    std::unique_ptr<devmode::core::ManifestStore> manifest_store_fallback_;
 
     struct ScalingNotice {
         std::string message;
