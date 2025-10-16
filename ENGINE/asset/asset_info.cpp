@@ -770,6 +770,15 @@ void AssetInfo::set_shading_enabled(bool enabled) {
         info_json_["has_shading"] = enabled;
 }
 
+void AssetInfo::set_virtual_light_map_quadrants(int quadrants) {
+        int clamped = std::clamp(quadrants, 1, 100);
+        virtual_light_map_quadrants = clamped;
+        if (!info_json_.is_object()) {
+                info_json_ = nlohmann::json::object();
+        }
+        info_json_["virtual_light_map_quadrants"] = clamped;
+}
+
 Area* AssetInfo::find_area(const std::string& name) {
 	for (auto& na : areas) {
 		if (na.name == name) return na.area.get();
@@ -974,6 +983,13 @@ void AssetInfo::initialize_from_json(const nlohmann::json& source) {
                 parsed_settings.alpha_multiplier = json_settings.value("alpha_multiplier", parsed_settings.alpha_multiplier);
         }
         set_shadow_mask_settings(parsed_settings);
+
+        if (data.contains("virtual_light_map_quadrants")) {
+                int quadrants = data.value("virtual_light_map_quadrants", virtual_light_map_quadrants);
+                set_virtual_light_map_quadrants(quadrants);
+        } else {
+                virtual_light_map_quadrants = std::clamp(virtual_light_map_quadrants, 1, 100);
+        }
 
         const auto &ss = data.value("size_settings", nlohmann::json::object());
         scale_factor = ss.value("scale_percentage", 100.0f) / 100.0f;

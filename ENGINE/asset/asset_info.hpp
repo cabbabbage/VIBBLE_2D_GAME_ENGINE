@@ -65,6 +65,7 @@ class AssetInfo {
     bool is_shaded = false;
     int shading_factor = 100;
     ShadowMaskSettings shadow_mask_settings{};
+    int virtual_light_map_quadrants = 50;
     int min_same_type_distance;
     int min_distance_all;
     float scale_factor;
@@ -133,6 +134,7 @@ class AssetInfo {
     void set_ray_strength(int strength);
     void set_shadow_mask_settings(const ShadowMaskSettings& settings);
     void set_shading_enabled(bool enabled);
+    void set_virtual_light_map_quadrants(int quadrants);
 
     std::string info_json_path() const { return info_json_path_; }
     std::string asset_dir_path() const { return dir_path_; }

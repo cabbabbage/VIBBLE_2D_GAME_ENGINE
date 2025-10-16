@@ -34,6 +34,7 @@ public:
         preview_container_rect_ = SDL_Rect{0, 0, 0, 0};
 
         c_is_shaded_.reset();
+        s_light_map_quadrants_.reset();
         s_extend_.reset();
         s_blur_.reset();
         s_falloff_start_.reset();
@@ -49,7 +50,31 @@ public:
         working_settings_ = info_->shadow_mask_settings;
         assign_slider_values_from_settings();
 
+        light_map_quadrant_value_ = std::clamp(info_->virtual_light_map_quadrants, quadrant_min_, quadrant_max_);
+        if (info_->virtual_light_map_quadrants != light_map_quadrant_value_) {
+            info_->set_virtual_light_map_quadrants(light_map_quadrant_value_);
+            (void)info_->commit_manifest();
+        }
+
         c_is_shaded_ = std::make_unique<DMCheckbox>("Has Shading", info_->is_shaded);
+
+        s_light_map_quadrants_ = std::make_unique<DMSlider>(
+            "Virtual Light Map Quadrants",
+            quadrant_min_,
+            quadrant_max_,
+            light_map_quadrant_value_);
+        s_light_map_quadrants_->set_value_formatter([](int v, std::array<char, dev_mode::kSliderFormatBufferSize>& buffer) {
+            return dev_mode::FormatSliderValue(static_cast<double>(v), 0, buffer);
+        });
+        s_light_map_quadrants_->set_value_parser([](const std::string& text) -> std::optional<int> {
+            try {
+                int parsed = std::stoi(text);
+                return std::clamp(parsed, quadrant_min_, quadrant_max_);
+            } catch (...) {
+                return std::nullopt;
+            }
+        });
+        s_light_map_quadrants_->set_defer_commit_until_unfocus(true);
 
         s_extend_ = std::make_unique<DMSlider>("Extend Amount", extend_min_, extend_max_, extend_value_);
         configure_ratio_slider(*s_extend_, 100);
@@ -85,15 +110,77 @@ public:
     }
 
     void layout_custom_content(int /*screen_w*/, int /*screen_h*/) const override {
-        int x = rect_.x + DMSpacing::panel_padding();
-        int y = rect_.y + DMSpacing::panel_padding() + DMButton::height() + DMSpacing::header_gap();
-        int maxw = rect_.w - 2 * DMSpacing::panel_padding();
+        int padding = DMSpacing::panel_padding();
+        int header_gap = DMSpacing::header_gap();
+        int base_x = rect_.x + padding;
+        int base_y = rect_.y + padding + DMButton::height() + header_gap;
+        int available_w = rect_.w - 2 * padding;
+
+        int control_x = base_x;
+        int control_y = base_y;
+        int control_w = available_w;
+
+        const int gap = DMSpacing::item_gap();
+        const int min_control_w = 180;
+
+        bool preview_visible = c_is_shaded_ && c_is_shaded_->value();
+        bool preview_side_by_side = false;
+        int preview_height = 0;
+
+        if (!preview_visible) {
+            preview_rect_ = SDL_Rect{0, 0, 0, 0};
+            preview_container_rect_ = SDL_Rect{0, 0, 0, 0};
+        }
+
+        if (preview_visible) {
+            int preview_width = preview_texture_w_ > 0 ? preview_texture_w_ : std::min(available_w, 220);
+            preview_height = preview_texture_h_ > 0 ? preview_texture_h_ : 140;
+            if (preview_width > available_w) {
+                double scale = static_cast<double>(available_w) / static_cast<double>(preview_width);
+                preview_width = available_w;
+                preview_height = std::max(1, static_cast<int>(std::lround(static_cast<double>(preview_height) * scale)));
+            }
+
+            int max_preview_w_for_control = std::max(0, available_w - min_control_w - gap);
+            if (max_preview_w_for_control <= 0) {
+                preview_visible = false;
+                preview_rect_ = SDL_Rect{0, 0, 0, 0};
+                preview_container_rect_ = SDL_Rect{0, 0, 0, 0};
+            } else {
+                if (preview_width > max_preview_w_for_control) {
+                    double scale = static_cast<double>(max_preview_w_for_control) / static_cast<double>(preview_width);
+                    preview_width = max_preview_w_for_control;
+                    preview_height = std::max(1, static_cast<int>(std::lround(static_cast<double>(preview_height) * scale)));
+                }
+
+                control_w = available_w - preview_width - gap;
+                if (control_w < 100) {
+                    control_w = std::max(100, available_w / 2);
+                    preview_width = std::max(0, available_w - control_w - gap);
+                }
+
+                if (preview_width <= 0) {
+                    preview_visible = false;
+                    preview_rect_ = SDL_Rect{0, 0, 0, 0};
+                    preview_container_rect_ = SDL_Rect{0, 0, 0, 0};
+                } else {
+                    preview_side_by_side = true;
+                    int preview_x = control_x + control_w + gap;
+                    preview_rect_ = SDL_Rect{preview_x, base_y, preview_width, preview_height};
+                    preview_container_rect_ = SDL_Rect{preview_x, base_y, preview_width, preview_height};
+                }
+            }
+        }
 
         auto place = [&](auto& widget, int h) {
             if (!widget) return;
-            widget->set_rect(SDL_Rect{x, y - scroll_, maxw, h});
-            y += h + DMSpacing::item_gap();
+            widget->set_rect(SDL_Rect{control_x, control_y - scroll_, control_w, h});
+            control_y += h + gap;
         };
+
+        if (s_light_map_quadrants_) {
+            place(s_light_map_quadrants_, DMSlider::height());
+        }
 
         if (c_is_shaded_) {
             place(c_is_shaded_, DMCheckbox::height());
@@ -105,40 +192,24 @@ public:
             place(s_falloff_start_, DMSlider::height());
             place(s_falloff_rate_, DMSlider::height());
             place(s_alpha_, DMSlider::height());
-
-            int preview_height = preview_texture_h_ > 0 ? preview_texture_h_ : 140;
-            int preview_width  = preview_texture_w_ > 0 ? preview_texture_w_ : std::min(maxw, 220);
-            if (preview_width > maxw) {
-                double scale = static_cast<double>(maxw) / static_cast<double>(preview_width);
-                preview_width = maxw;
-                preview_height = std::max(1, static_cast<int>(std::lround(static_cast<double>(preview_height) * scale)));
+            if (!preview_side_by_side) {
+                preview_rect_ = SDL_Rect{0, 0, 0, 0};
+                preview_container_rect_ = SDL_Rect{0, 0, 0, 0};
             }
 
-            preview_rect_ = SDL_Rect{
-                x + (maxw - preview_width) / 2,
-                y - scroll_,
-                preview_width,
-                preview_height
-            };
-            preview_container_rect_ = SDL_Rect{
-                x,
-                y - scroll_,
-                maxw,
-                preview_height + DMSpacing::item_gap()
-            };
-            y += preview_height + DMSpacing::item_gap();
-
             if (generate_all_btn_) {
-                int btn_w = std::min(generate_all_btn_->preferred_width(), maxw);
-                generate_all_btn_->set_rect(SDL_Rect{x + (maxw - btn_w) / 2, y - scroll_, btn_w, DMButton::height()});
-                y += DMButton::height() + DMSpacing::item_gap();
+                int btn_w = std::min(generate_all_btn_->preferred_width(), control_w);
+                generate_all_btn_->set_rect(SDL_Rect{control_x + (control_w - btn_w) / 2, control_y - scroll_, btn_w, DMButton::height()});
+                control_y += DMButton::height() + gap;
             }
         } else {
             preview_rect_ = SDL_Rect{0, 0, 0, 0};
             preview_container_rect_ = SDL_Rect{0, 0, 0, 0};
         }
 
-        content_height_ = std::max(0, y - (rect_.y + DMSpacing::panel_padding() + DMButton::height() + DMSpacing::header_gap()));
+        int scrollable_height = std::max(0, control_y - base_y);
+        int preview_height_total = preview_side_by_side ? preview_height : 0;
+        content_height_ = std::max(scrollable_height, preview_height_total);
     }
 
     bool handle_event(const SDL_Event& e) override {
@@ -149,6 +220,20 @@ public:
 
         bool shading_toggled = false;
         bool settings_changed = false;
+
+        if (s_light_map_quadrants_) {
+            int previous = light_map_quadrant_value_;
+            bool slider_used = s_light_map_quadrants_->handle_event(e);
+            int committed = std::clamp(s_light_map_quadrants_->value(), quadrant_min_, quadrant_max_);
+            if (committed != previous) {
+                light_map_quadrant_value_ = committed;
+                info_->set_virtual_light_map_quadrants(committed);
+                (void)info_->commit_manifest();
+                used = true;
+            } else if (slider_used) {
+                used = true;
+            }
+        }
 
         if (c_is_shaded_ && c_is_shaded_->handle_event(e)) {
             used = true;
@@ -215,6 +300,7 @@ public:
     }
 
     void render_content(SDL_Renderer* r) const override {
+        if (s_light_map_quadrants_) s_light_map_quadrants_->render(r);
         if (c_is_shaded_) c_is_shaded_->render(r);
         if (c_is_shaded_ && c_is_shaded_->value()) {
             if (s_extend_) s_extend_->render(r);
@@ -229,6 +315,20 @@ public:
                 dm_draw::DrawRoundedOutline(r, preview_container_rect_, DMStyles::CornerRadius(), 1, border);
                 if (preview_texture_) {
                     SDL_RenderCopy(r, preview_texture_, nullptr, &preview_rect_);
+                }
+                if (light_map_quadrant_value_ > 1) {
+                    SDL_Color grid = DMStyles::Border();
+                    SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
+                    SDL_SetRenderDrawColor(r, grid.r, grid.g, grid.b, 120);
+                    const int divisions = std::max(1, light_map_quadrant_value_);
+                    const float cell_w = static_cast<float>(preview_rect_.w) / static_cast<float>(divisions);
+                    const float cell_h = static_cast<float>(preview_rect_.h) / static_cast<float>(divisions);
+                    for (int i = 1; i < divisions; ++i) {
+                        int x = preview_rect_.x + static_cast<int>(std::lround(cell_w * static_cast<float>(i)));
+                        SDL_RenderDrawLine(r, x, preview_rect_.y, x, preview_rect_.y + preview_rect_.h);
+                        int y = preview_rect_.y + static_cast<int>(std::lround(cell_h * static_cast<float>(i)));
+                        SDL_RenderDrawLine(r, preview_rect_.x, y, preview_rect_.x + preview_rect_.w, y);
+                    }
                 }
             }
 
@@ -430,6 +530,8 @@ private:
     static constexpr int falloff_rate_max_ = 400;
     static constexpr int alpha_min_ = 0;
     static constexpr int alpha_max_ = 400;
+    static constexpr int quadrant_min_ = 1;
+    static constexpr int quadrant_max_ = 100;
 
     ShadowMaskSettings working_settings_{};
     int extend_value_ = 80;
@@ -437,8 +539,10 @@ private:
     int falloff_start_value_ = 0;
     int falloff_rate_value_ = 105;
     int alpha_value_ = 100;
+    int light_map_quadrant_value_ = 50;
 
     std::unique_ptr<DMCheckbox> c_is_shaded_;
+    std::unique_ptr<DMSlider> s_light_map_quadrants_;
     std::unique_ptr<DMSlider> s_extend_;
     std::unique_ptr<DMSlider> s_blur_;
     std::unique_ptr<DMSlider> s_falloff_start_;
