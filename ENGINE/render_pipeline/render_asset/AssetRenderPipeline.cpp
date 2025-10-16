@@ -160,11 +160,12 @@ SDL_Texture* AssetRenderPipeline::run(Asset& asset) {
         return nullptr;
     }
 
-    int width = asset.cached_w;
-    int height = asset.cached_h;
+    int    width       = asset.cached_w;
+    int    height      = asset.cached_h;
     Uint32 base_format = SDL_PIXELFORMAT_UNKNOWN;
-    if (width <= 0 || height <= 0 || base_format == SDL_PIXELFORMAT_UNKNOWN) {
-        SDL_QueryTexture(base_frame, &base_format, nullptr, &width, &height);
+
+    if (width <= 0 || height <= 0) {
+        SDL_QueryTexture(base_frame, nullptr, nullptr, &width, &height);
     }
 
     if (width <= 0 || height <= 0) {
@@ -180,6 +181,9 @@ SDL_Texture* AssetRenderPipeline::run(Asset& asset) {
         Uint32 prev_format = SDL_PIXELFORMAT_UNKNOWN;
         if (SDL_QueryTexture(previous_final, &prev_format, nullptr, &prev_w, &prev_h) == 0 && prev_w == width && prev_h == height) {
             if (prev_format == SDL_PIXELFORMAT_UNKNOWN) {
+                if (base_format == SDL_PIXELFORMAT_UNKNOWN) {
+                    SDL_QueryTexture(base_frame, &base_format, nullptr, nullptr);
+                }
                 prev_format = (base_format != SDL_PIXELFORMAT_UNKNOWN) ? base_format : SDL_PIXELFORMAT_RGBA8888;
             }
 
