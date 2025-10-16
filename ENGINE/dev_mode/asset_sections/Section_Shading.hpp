@@ -195,6 +195,8 @@ public:
                 preview_dirty_ = true;
                 if (!new_state) {
                     destroy_preview_texture();
+                } else if (!is_expanded()) {
+                    set_expanded(true);
                 }
                 if (ui_) {
                     ui_->notify_light_sources_modified(false);

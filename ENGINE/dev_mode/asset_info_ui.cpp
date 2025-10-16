@@ -138,6 +138,25 @@ bool copy_section_from_source(AssetInfoSectionId section_id, const nlohmann::jso
     return changed;
 }
 
+bool is_lighting_section(const DockableCollapsible* section) {
+    return dynamic_cast<const Section_Lighting*>(section) != nullptr;
+}
+
+bool is_shading_section(const DockableCollapsible* section) {
+    return dynamic_cast<const Section_Shading*>(section) != nullptr;
+}
+
+bool sections_allow_coexpansion(const DockableCollapsible* a, const DockableCollapsible* b) {
+    if (!a || !b) {
+        return false;
+    }
+    const bool a_is_lighting = is_lighting_section(a);
+    const bool b_is_lighting = is_lighting_section(b);
+    const bool a_is_shading = is_shading_section(a);
+    const bool b_is_shading = is_shading_section(b);
+    return (a_is_lighting && b_is_shading) || (a_is_shading && b_is_lighting);
+}
+
 }
 
 AssetInfoUI::AssetInfoUI() {
@@ -237,6 +256,9 @@ AssetInfoUI::AssetInfoUI() {
                     continue;
                 }
                 if (sections_[j]->is_expanded()) {
+                    if (sections_allow_coexpansion(sections_[i].get(), sections_[j].get())) {
+                        continue;
+                    }
                     sections_[j]->set_expanded(false);
                 }
             }
@@ -397,6 +419,9 @@ void AssetInfoUI::open()  {
     container_.open();
     apply_camera_override(true);
     for (auto& s : sections_) s->set_expanded(false);
+    if (shading_section_ && info_ && info_->is_shaded) {
+        shading_section_->set_expanded(true);
+    }
 }
 void AssetInfoUI::close() {
     if (!visible_) return;
