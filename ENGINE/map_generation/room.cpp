@@ -6,6 +6,7 @@
 #include <nlohmann/json.hpp>
 #include <stdexcept>
 #include <algorithm>
+#include <functional>
 #include <iostream>
 #include <cmath>
 #include <optional>
@@ -290,7 +291,7 @@ manifest_writer_(std::move(manifest_writer))
         std::vector<json> json_sources;
         std::vector<AssetSpawnPlanner::SourceContext> source_contexts;
 
-        auto push_payload = [this](auto mutate) {
+        auto push_payload = [this](const std::function<void(nlohmann::json&)>& mutate) {
                 if (!mutate) {
                         return;
                 }

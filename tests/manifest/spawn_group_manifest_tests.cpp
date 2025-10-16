@@ -1,5 +1,6 @@
 #include "doctest/doctest.h"
 
+#include <algorithm>
 #include <filesystem>
 #include <fstream>
 #include <string>
@@ -12,13 +13,13 @@
 #include "dev_mode/core/manifest_store.hpp"
 #include "dev_mode/core/dev_json_store.hpp"
 
-namespace {
-namespace fs = std::filesystem;
-
 struct SectionSpawnGroupsTestAccess {
     static void reload(Section_SpawnGroups& section) { section.reload_from_file(); }
     static void set_rebuilding(Section_SpawnGroups& section, bool value) { section.rebuilding_ = value; }
 };
+
+namespace {
+namespace fs = std::filesystem;
 
 fs::path make_manifest_path(const std::string& test_name, const nlohmann::json& payload) {
     fs::path root = fs::temp_directory_path() / "vibble_manifest_store_tests" / test_name;
@@ -60,15 +61,30 @@ TEST_CASE("Section_SpawnGroups mutates manifest spawn_groups") {
     nlohmann::json manifest = {
         {"assets", {
             {"TestAsset", {
-                {"spawn_groups", nlohmann::json::array({
-                    nlohmann::json{{"spawn_id", "spn-one"}, {"display_name", "One"}, {"priority", 0}, {"candidates", nlohmann::json::array({{{"name", "alpha"}, {"chance", 100}})}}},
-                    nlohmann::json{{"spawn_id", "spn-two"}, {"display_name", "Two"}, {"priority", 1}, {"candidates", nlohmann::json::array({{{"name", "beta"}, {"chance", 100}})}}}
-                })}
+                {"spawn_groups", nlohmann::json::array()}
             }}
         }},
         {"maps", nlohmann::json::object()},
         {"rooms", nlohmann::json::array()}
     };
+
+    auto& initial_groups = manifest["assets"]["TestAsset"]["spawn_groups"];
+    initial_groups.push_back({
+        {"spawn_id", "spn-one"},
+        {"display_name", "One"},
+        {"priority", 0},
+        {"candidates", nlohmann::json::array({
+            nlohmann::json{{"name", "alpha"}, {"chance", 100}}
+        })}
+    });
+    initial_groups.push_back({
+        {"spawn_id", "spn-two"},
+        {"display_name", "Two"},
+        {"priority", 1},
+        {"candidates", nlohmann::json::array({
+            nlohmann::json{{"name", "beta"}, {"chance", 100}}
+        })}
+    });
 
     const auto manifest_path = make_manifest_path("spawn_group_edits", manifest);
     auto loader = [manifest_path]() { return load_manifest_from_path(manifest_path); };
