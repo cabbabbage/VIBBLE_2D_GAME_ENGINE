@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <functional>
 #include <memory>
 #include <optional>
@@ -9,13 +10,13 @@
 
 #include "DockableCollapsible.hpp"
 #include "widgets.hpp"
+#include "render/light_map.hpp"
 #include "render_pipeline/render_asset/shading/ReactiveShadowSettings.hpp"
 
 #include <nlohmann/json.hpp>
 
 class MapLightPanel;
 class Assets;
-struct VirtualLightMap;
 class Input;
 
 class MapShadowPanel : public DockableCollapsible {
@@ -67,6 +68,7 @@ private:
     const VirtualLightMap* current_virtual_light_map() const;
     std::optional<SDL_Point> player_screen_position() const;
     int current_quadrant_count() const;
+    std::vector<std::string> assets_in_quadrant(int quadrant) const;
 
     static int clamp_int(int v, int lo, int hi);
 
@@ -129,6 +131,8 @@ private:
     mutable SDL_Rect preview_grid_rect_{0, 0, 0, 0};
     mutable int screen_width_px_ = 0;
     mutable int screen_height_px_ = 0;
+    mutable std::array<SDL_Rect, VirtualLightMap::kQuadrantCount> quadrant_preview_rects_{};
+    int selected_quadrant_ = -1;
 
 protected:
     std::string_view lock_settings_namespace() const override { return "lighting"; }

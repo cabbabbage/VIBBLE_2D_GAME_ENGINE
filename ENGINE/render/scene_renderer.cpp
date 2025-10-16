@@ -44,7 +44,8 @@ SceneRenderer::SceneRenderer(SDL_Renderer* renderer,
     main_light_source_.initialize_from_map_manifest(map_manifest, map_id);
     z_light_pass_ = std::make_unique<LightMap>(assets_, screen_width_, screen_height_);
     if (z_light_pass_) {
-        z_light_pass_->update_virtual_light_map();
+        z_light_pass_->prepare_fullscreen_light_map(renderer_);
+        z_light_pass_->update_virtual_light_map(renderer_);
         render_pipeline_.lighting().virtual_light_map = &z_light_pass_->virtual_light_map();
     } else {
         render_pipeline_.lighting().virtual_light_map = nullptr;
@@ -128,7 +129,7 @@ void SceneRenderer::render(){
     if (should_update_light){ main_light_source_.update(); }
 
     if (z_light_pass_){
-        z_light_pass_->update_virtual_light_map();
+        z_light_pass_->prepare_fullscreen_light_map(renderer_);
         render_pipeline_.lighting().virtual_light_map=&z_light_pass_->virtual_light_map();
     } else {
         render_pipeline_.lighting().virtual_light_map=nullptr;
@@ -140,6 +141,10 @@ void SceneRenderer::render(){
     const SDL_Color clear_color = light_map_only_mode_ ? SDL_Color{0,0,0,255} : SLATE_COLOR;
     SDL_SetRenderDrawColor(renderer_,clear_color.r,clear_color.g,clear_color.b,clear_color.a);
     SDL_RenderClear(renderer_);
+
+    if (!light_map_only_mode_ && z_light_pass_) {
+        z_light_pass_->render_fullscreen_light_map(renderer_);
+    }
 
     if (!light_map_only_mode_){
         const auto& camera_state=assets_->getView();
@@ -221,6 +226,10 @@ void SceneRenderer::render(){
     }
 
     SDL_SetRenderTarget(renderer_,nullptr);
+
+    if (z_light_pass_) {
+        z_light_pass_->update_virtual_light_map(renderer_);
+    }
 
     if (!light_map_only_mode_ && assets_){
         assets_->render_overlays(renderer_);

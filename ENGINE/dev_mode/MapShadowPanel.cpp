@@ -174,6 +174,22 @@ bool MapShadowPanel::handle_event(const SDL_Event& e) {
     if (used) {
         needs_sync_to_json_ = true;
     }
+
+    if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
+        const int mx = e.button.x;
+        const int my = e.button.y;
+        for (int i = 0; i < static_cast<int>(quadrant_preview_rects_.size()); ++i) {
+            const SDL_Rect& rect = quadrant_preview_rects_[static_cast<std::size_t>(i)];
+            if (rect.w > 0 && rect.h > 0 && mx >= rect.x && mx < rect.x + rect.w && my >= rect.y && my < rect.y + rect.h) {
+                if (selected_quadrant_ != i) {
+                    selected_quadrant_ = i;
+                }
+                used = true;
+                break;
+            }
+        }
+    }
+
     if (needs_sync_to_json_) {
         sync_json_from_ui();
     }
@@ -199,6 +215,9 @@ void MapShadowPanel::layout_custom_content(int screen_w, int screen_h) const {
 
     preview_rect_ = SDL_Rect{0, 0, 0, 0};
     preview_grid_rect_ = SDL_Rect{0, 0, 0, 0};
+    for (auto& rect : quadrant_preview_rects_) {
+        rect = SDL_Rect{0, 0, 0, 0};
+    }
 
     if (!expanded_ || body_viewport_h_ <= 0) {
         return;
@@ -290,172 +309,213 @@ void MapShadowPanel::render_light_map_preview(SDL_Renderer* renderer) const {
     SDL_SetRenderDrawColor(renderer, preview_bg.r, preview_bg.g, preview_bg.b, preview_bg.a);
     SDL_RenderFillRect(renderer, &preview_rect_);
 
-    if (preview_grid_rect_.w > 0 && preview_grid_rect_.h > 0) {
-        SDL_SetRenderDrawColor(renderer, grid_bg.r, grid_bg.g, grid_bg.b, grid_bg.a);
-        SDL_RenderFillRect(renderer, &preview_grid_rect_);
-    }
-
-    SDL_SetRenderDrawColor(renderer, border.r, border.g, border.b, border.a);
-    SDL_RenderDrawRect(renderer, &preview_rect_);
-
-    const VirtualLightMap* map = current_virtual_light_map();
-    std::array<int, VirtualLightMap::kGridWidth + 1> column_edges{};
-    std::array<int, VirtualLightMap::kGridHeight + 1> row_edges{};
-    if (preview_grid_rect_.w > 0 && preview_grid_rect_.h > 0) {
-        for (int x = 0; x <= VirtualLightMap::kGridWidth; ++x) {
-            float t = static_cast<float>(x) / static_cast<float>(VirtualLightMap::kGridWidth);
-            column_edges[x] = preview_grid_rect_.x + static_cast<int>(std::lround(t * static_cast<float>(preview_grid_rect_.w)));
-        }
-        for (int y = 0; y <= VirtualLightMap::kGridHeight; ++y) {
-            float t = static_cast<float>(y) / static_cast<float>(VirtualLightMap::kGridHeight);
-            row_edges[y] = preview_grid_rect_.y + static_cast<int>(std::lround(t * static_cast<float>(preview_grid_rect_.h)));
-        }
-    }
-
-    if (map && preview_grid_rect_.w > 0 && preview_grid_rect_.h > 0) {
-        for (int y = 0; y < VirtualLightMap::kGridHeight; ++y) {
-            for (int x = 0; x < VirtualLightMap::kGridWidth; ++x) {
-                float value = std::clamp(map->at(x, y), 0.0f, 1.0f);
-                Uint8 intensity = static_cast<Uint8>(std::lround(value * 255.0f));
-                SDL_SetRenderDrawColor(renderer, intensity, intensity, intensity, 255);
-                SDL_Rect cell_rect{
-                    column_edges[x],
-                    row_edges[y],
-                    std::max(1, column_edges[x + 1] - column_edges[x]),
-                    std::max(1, row_edges[y + 1] - row_edges[y])
-                };
-                SDL_RenderFillRect(renderer, &cell_rect);
-            }
-        }
-    }
-
-    int player_cell_x = -1;
-    int player_cell_y = -1;
-    if (screen_width_px_ > 0 && screen_height_px_ > 0) {
-        if (auto player_screen = player_screen_position()) {
-            int px = std::clamp(player_screen->x, 0, std::max(0, screen_width_px_ - 1));
-            int py = std::clamp(player_screen->y, 0, std::max(0, screen_height_px_ - 1));
-            player_cell_x = std::clamp((px * VirtualLightMap::kGridWidth) / std::max(1, screen_width_px_), 0, VirtualLightMap::kGridWidth - 1);
-            player_cell_y = std::clamp((py * VirtualLightMap::kGridHeight) / std::max(1, screen_height_px_), 0, VirtualLightMap::kGridHeight - 1);
-        }
-    }
-
-    if (player_cell_x >= 0 && player_cell_y >= 0 && preview_grid_rect_.w > 0 && preview_grid_rect_.h > 0) {
-        SDL_Rect player_rect{
-            column_edges[player_cell_x],
-            row_edges[player_cell_y],
-            std::max(1, column_edges[player_cell_x + 1] - column_edges[player_cell_x]),
-            std::max(1, row_edges[player_cell_y + 1] - row_edges[player_cell_y])
-        };
-        SDL_SetRenderDrawColor(renderer, highlight.r, highlight.g, highlight.b, 255);
-        SDL_RenderDrawRect(renderer, &player_rect);
-    }
-
-    int quadrant_count = current_quadrant_count();
-    int player_quadrant = -1;
-    float start_angle = 0.0f;
-    float end_angle = 0.0f;
-    if (player_cell_x >= 0 && player_cell_y >= 0 && quadrant_count > 0) {
-        constexpr float kTwoPi = 6.28318530717958647692f;
-        const float step = kTwoPi / static_cast<float>(quadrant_count);
-        float player_fx = static_cast<float>(player_cell_x) + 0.5f;
-        float player_fy = static_cast<float>(player_cell_y) + 0.5f;
-        float center_fx = static_cast<float>(VirtualLightMap::kGridWidth) * 0.5f;
-        float center_fy = static_cast<float>(VirtualLightMap::kGridHeight) * 0.5f;
-        float dy = center_fy - player_fy;
-        float dx = player_fx - center_fx;
-        float angle = std::atan2(dy, dx);
-        if (angle < 0.0f) {
-            angle += kTwoPi;
-        }
-        player_quadrant = static_cast<int>(std::floor(angle / step));
-        player_quadrant = std::clamp(player_quadrant, 0, quadrant_count - 1);
-        start_angle = player_quadrant * step;
-        end_angle = start_angle + step;
-
-        if (preview_grid_rect_.w > 0 && preview_grid_rect_.h > 0) {
-            SDL_FPoint center_point{
-                static_cast<float>(preview_grid_rect_.x) + static_cast<float>(preview_grid_rect_.w) * 0.5f,
-                static_cast<float>(preview_grid_rect_.y) + static_cast<float>(preview_grid_rect_.h) * 0.5f
-            };
-            float radius = std::sqrt(
-                std::pow(static_cast<float>(preview_grid_rect_.w) * 0.5f, 2.0f) +
-                std::pow(static_cast<float>(preview_grid_rect_.h) * 0.5f, 2.0f));
-
-            auto draw_boundary = [&](float angle_radians) {
-                float dir_x = std::cos(angle_radians);
-                float dir_y = -std::sin(angle_radians);
-                int x2 = static_cast<int>(std::lround(center_point.x + dir_x * radius));
-                int y2 = static_cast<int>(std::lround(center_point.y + dir_y * radius));
-                SDL_RenderDrawLine(renderer,
-                                   static_cast<int>(std::lround(center_point.x)),
-                                   static_cast<int>(std::lround(center_point.y)),
-                                   x2,
-                                   y2);
-            };
-
-            SDL_SetRenderDrawColor(renderer, highlight.r, highlight.g, highlight.b, 255);
-            draw_boundary(start_angle);
-            draw_boundary(end_angle);
-
-            SDL_SetRenderDrawColor(renderer, highlight.r, highlight.g, highlight.b, 90);
-            const int fill_steps = 20;
-            for (int i = 0; i <= fill_steps; ++i) {
-                float angle_radians = start_angle + (end_angle - start_angle) * (static_cast<float>(i) / static_cast<float>(fill_steps));
-                float dir_x = std::cos(angle_radians);
-                float dir_y = -std::sin(angle_radians);
-                int x2 = static_cast<int>(std::lround(center_point.x + dir_x * radius));
-                int y2 = static_cast<int>(std::lround(center_point.y + dir_y * radius));
-                SDL_RenderDrawLine(renderer,
-                                   static_cast<int>(std::lround(center_point.x)),
-                                   static_cast<int>(std::lround(center_point.y)),
-                                   x2,
-                                   y2);
-            }
-        }
-    }
-
-    if (preview_grid_rect_.w > 0 && preview_grid_rect_.h > 0) {
-        SDL_SetRenderDrawColor(renderer, border.r, border.g, border.b, border.a);
-        SDL_RenderDrawRect(renderer, &preview_grid_rect_);
-    }
-
-    auto draw_label = [&](const std::string& text, int y) {
+    auto draw_label_at = [&](const std::string& text, int x, int y, int max_x) -> int {
         const DMLabelStyle& label_style = DMStyles::Label();
         TTF_Font* font = label_style.open_font();
         if (!font) {
-            return;
+            return 0;
         }
         SDL_Surface* surface = TTF_RenderUTF8_Blended(font, text.c_str(), label_style.color);
+        int line_height = 0;
         if (surface) {
             SDL_Texture* texture = SDL_CreateTextureFromSurface(renderer, surface);
             if (texture) {
-                SDL_Rect dst{
-                    preview_rect_.x + kPreviewPadding,
-                    y,
-                    surface->w,
-                    surface->h
-                };
-                const int max_x = preview_rect_.x + preview_rect_.w - kPreviewPadding;
+                SDL_Rect dst{ x, y, surface->w, surface->h };
                 if (dst.x + dst.w > max_x) {
-                    dst.x = std::max(preview_rect_.x + kPreviewPadding, max_x - dst.w);
+                    dst.x = std::max(x, max_x - dst.w);
                 }
                 SDL_RenderCopy(renderer, texture, nullptr, &dst);
+                line_height = dst.h;
                 SDL_DestroyTexture(texture);
             }
             SDL_FreeSurface(surface);
         }
         TTF_CloseFont(font);
+        return line_height;
     };
 
-    if (!map) {
-        draw_label("Light map unavailable", preview_rect_.y + kPreviewPadding);
-    } else if (player_cell_x < 0 || player_cell_y < 0) {
-        draw_label("Player position unavailable", preview_rect_.y + kPreviewPadding);
+    auto draw_label_line = [&](const std::string& text, int y) {
+        draw_label_at(text,
+                      preview_rect_.x + kPreviewPadding,
+                      y,
+                      preview_rect_.x + preview_rect_.w - kPreviewPadding);
+    };
+
+    const VirtualLightMap* map = current_virtual_light_map();
+    const int selected_index = (selected_quadrant_ >= 0 && selected_quadrant_ < VirtualLightMap::kQuadrantCount)
+                                   ? selected_quadrant_
+                                   : -1;
+
+    int player_quadrant = -1;
+    if (map && screen_width_px_ > 0 && screen_height_px_ > 0) {
+        if (auto player_screen = player_screen_position()) {
+            player_quadrant = map->quadrant_for_point(static_cast<float>(player_screen->x),
+                                                      static_cast<float>(player_screen->y));
+        }
+    }
+
+    SDL_Rect grid_area = preview_grid_rect_;
+    SDL_Rect detail_area = preview_grid_rect_;
+    const int detail_gap = 6;
+    grid_area.h = std::min(grid_area.h,
+                           std::max(0, static_cast<int>(std::lround(static_cast<float>(preview_grid_rect_.h) * 0.55f))));
+    detail_area.y = grid_area.y + grid_area.h + detail_gap;
+    if (detail_area.y > preview_grid_rect_.y + preview_grid_rect_.h) {
+        detail_area.y = preview_grid_rect_.y + preview_grid_rect_.h;
+    }
+    detail_area.h = std::max(0, preview_grid_rect_.y + preview_grid_rect_.h - detail_area.y);
+
+    if (grid_area.w > 0 && grid_area.h > 0) {
+        SDL_SetRenderDrawColor(renderer, grid_bg.r, grid_bg.g, grid_bg.b, grid_bg.a);
+        SDL_RenderFillRect(renderer, &grid_area);
+    }
+    if (detail_area.w > 0 && detail_area.h > 0) {
+        SDL_SetRenderDrawColor(renderer, grid_bg.r, grid_bg.g, grid_bg.b, grid_bg.a);
+        SDL_RenderFillRect(renderer, &detail_area);
+    }
+
+    auto compute_quadrant_rect = [&](int quadrant) {
+        SDL_Rect rect{0, 0, 0, 0};
+        if (grid_area.w <= 0 || grid_area.h <= 0) {
+            return rect;
+        }
+        const int cols = VirtualLightMap::kQuadrantCols;
+        const int rows = VirtualLightMap::kQuadrantRows;
+        const int qx   = quadrant % cols;
+        const int qy   = quadrant / cols;
+        const int base_w = grid_area.w / cols;
+        const int base_h = grid_area.h / rows;
+        rect.x = grid_area.x + qx * base_w;
+        rect.y = grid_area.y + qy * base_h;
+        rect.w = (qx == cols - 1) ? (grid_area.x + grid_area.w - rect.x) : base_w;
+        rect.h = (qy == rows - 1) ? (grid_area.y + grid_area.h - rect.y) : base_h;
+        rect.x += 2;
+        rect.y += 2;
+        rect.w = std::max(0, rect.w - 4);
+        rect.h = std::max(0, rect.h - 4);
+        return rect;
+    };
+
+    if (map) {
+        for (int quadrant = 0; quadrant < VirtualLightMap::kQuadrantCount; ++quadrant) {
+            SDL_Rect quad_rect = compute_quadrant_rect(quadrant);
+            quadrant_preview_rects_[static_cast<std::size_t>(quadrant)] = quad_rect;
+            if (quad_rect.w <= 0 || quad_rect.h <= 0) {
+                continue;
+            }
+
+            std::array<int, VirtualLightMap::kQuadrantWidth + 1> column_edges{};
+            std::array<int, VirtualLightMap::kQuadrantHeight + 1> row_edges{};
+            for (int x = 0; x <= VirtualLightMap::kQuadrantWidth; ++x) {
+                float t = static_cast<float>(x) / static_cast<float>(VirtualLightMap::kQuadrantWidth);
+                column_edges[x] = quad_rect.x + static_cast<int>(std::lround(t * static_cast<float>(quad_rect.w)));
+            }
+            for (int y = 0; y <= VirtualLightMap::kQuadrantHeight; ++y) {
+                float t = static_cast<float>(y) / static_cast<float>(VirtualLightMap::kQuadrantHeight);
+                row_edges[y] = quad_rect.y + static_cast<int>(std::lround(t * static_cast<float>(quad_rect.h)));
+            }
+
+            const int base_x = (quadrant % VirtualLightMap::kQuadrantCols) * VirtualLightMap::kQuadrantWidth;
+            const int base_y = (quadrant / VirtualLightMap::kQuadrantCols) * VirtualLightMap::kQuadrantHeight;
+            for (int y = 0; y < VirtualLightMap::kQuadrantHeight; ++y) {
+                for (int x = 0; x < VirtualLightMap::kQuadrantWidth; ++x) {
+                    float value = std::clamp(map->at(base_x + x, base_y + y), 0.0f, 1.0f);
+                    Uint8 intensity = static_cast<Uint8>(std::lround(value * 255.0f));
+                    SDL_SetRenderDrawColor(renderer, intensity, intensity, intensity, 255);
+                    SDL_Rect cell_rect{
+                        column_edges[static_cast<std::size_t>(x)],
+                        row_edges[static_cast<std::size_t>(y)],
+                        std::max(1, column_edges[static_cast<std::size_t>(x + 1)] - column_edges[static_cast<std::size_t>(x)]),
+                        std::max(1, row_edges[static_cast<std::size_t>(y + 1)] - row_edges[static_cast<std::size_t>(y)])
+                    };
+                    SDL_RenderFillRect(renderer, &cell_rect);
+                }
+            }
+
+            char buffer[32];
+            std::snprintf(buffer, sizeof(buffer), "%.2f", map->quadrant_settings(quadrant).base_light);
+            draw_label_at(buffer, quad_rect.x + 4, quad_rect.y + 4, quad_rect.x + quad_rect.w - 4);
+
+            SDL_SetRenderDrawColor(renderer, border.r, border.g, border.b, border.a);
+            SDL_RenderDrawRect(renderer, &quad_rect);
+
+            if (player_quadrant == quadrant) {
+                SDL_SetRenderDrawColor(renderer, highlight.r, highlight.g, highlight.b, 160);
+                SDL_RenderDrawRect(renderer, &quad_rect);
+            }
+
+            if (selected_index == quadrant) {
+                SDL_Rect expanded = quad_rect;
+                SDL_SetRenderDrawColor(renderer, highlight.r, highlight.g, highlight.b, 255);
+                for (int i = 0; i < 2 && expanded.w > 0 && expanded.h > 0; ++i) {
+                    SDL_RenderDrawRect(renderer, &expanded);
+                    expanded.x += 1;
+                    expanded.y += 1;
+                    expanded.w = std::max(0, expanded.w - 2);
+                    expanded.h = std::max(0, expanded.h - 2);
+                }
+            }
+        }
     } else {
-        char buffer[128];
-        std::snprintf(buffer, sizeof(buffer), "Quadrant %d of %d", player_quadrant + 1, std::max(1, quadrant_count));
-        draw_label(buffer, preview_rect_.y + kPreviewPadding);
+        for (std::size_t i = 0; i < quadrant_preview_rects_.size(); ++i) {
+            quadrant_preview_rects_[i] = compute_quadrant_rect(static_cast<int>(i));
+        }
+    }
+
+    SDL_SetRenderDrawColor(renderer, border.r, border.g, border.b, border.a);
+    SDL_RenderDrawRect(renderer, &preview_rect_);
+
+    if (!map) {
+        draw_label_line("Light map unavailable", preview_rect_.y + kPreviewPadding);
+    } else {
+        int detail_cursor_y = (detail_area.h > 0)
+                                  ? detail_area.y + detail_gap
+                                  : preview_rect_.y + kPreviewPadding;
+        const int detail_max_x = preview_rect_.x + preview_rect_.w - kPreviewPadding;
+        auto draw_detail_line = [&](const std::string& text) {
+            int line_height = draw_label_at(text,
+                                            detail_area.x + kPreviewPadding,
+                                            detail_cursor_y,
+                                            detail_max_x);
+            detail_cursor_y += (line_height > 0 ? line_height + 4 : 14);
+        };
+
+        if (detail_area.h <= 0) {
+            draw_detail_line("Panel area too small for details.");
+        } else if (selected_index >= 0) {
+            const auto& settings = map->quadrant_settings(selected_index);
+            char buffer[128];
+            std::snprintf(buffer, sizeof(buffer), "Quadrant %d", selected_index + 1);
+            draw_detail_line(buffer);
+            std::snprintf(buffer, sizeof(buffer), "Base light: %.3f", settings.base_light);
+            draw_detail_line(buffer);
+            draw_detail_line("Shadow settings for assets in this quadrant:");
+            std::snprintf(buffer, sizeof(buffer), "  Opacity: %.2f", settings.opacity);
+            draw_detail_line(buffer);
+            std::snprintf(buffer, sizeof(buffer), "  Offset X: %.1f", settings.offset.x);
+            draw_detail_line(buffer);
+            std::snprintf(buffer, sizeof(buffer), "  Offset Y: %.1f", settings.offset.y);
+            draw_detail_line(buffer);
+            std::snprintf(buffer, sizeof(buffer), "  Scale: %.2f", settings.scale);
+            draw_detail_line(buffer);
+
+            auto asset_names = assets_in_quadrant(selected_index);
+            if (asset_names.empty()) {
+                draw_detail_line("Assets: none.");
+            } else {
+                draw_detail_line("Assets:");
+                for (const auto& name : asset_names) {
+                    draw_detail_line("  - " + name);
+                }
+            }
+        } else {
+            draw_detail_line("Select a quadrant to inspect details.");
+            if (player_quadrant >= 0) {
+                char buffer[64];
+                std::snprintf(buffer, sizeof(buffer), "Player is currently in quadrant %d.", player_quadrant + 1);
+                draw_detail_line(buffer);
+            }
+        }
     }
 
     if (was_clipping == SDL_TRUE) {
@@ -464,7 +524,6 @@ void MapShadowPanel::render_light_map_preview(SDL_Renderer* renderer) const {
         SDL_RenderSetClipRect(renderer, nullptr);
     }
 }
-
 const VirtualLightMap* MapShadowPanel::current_virtual_light_map() const {
     return assets_ ? assets_->virtual_light_map() : nullptr;
 }
@@ -481,6 +540,35 @@ int MapShadowPanel::current_quadrant_count() const {
         return clamp_int(quadrant_count_->displayed_value(), 1, 24);
     }
     return std::max(1, last_applied_settings_.virtual_light_map.quadrant_count);
+}
+
+std::vector<std::string> MapShadowPanel::assets_in_quadrant(int quadrant) const {
+    std::vector<std::string> names;
+    if (!assets_ || quadrant < 0 || quadrant >= VirtualLightMap::kQuadrantCount) {
+        return names;
+    }
+
+    const VirtualLightMap* map = current_virtual_light_map();
+    if (!map) {
+        return names;
+    }
+
+    const auto& active_assets = assets_->getActive();
+    const auto& view          = assets_->getView();
+    for (Asset* asset : active_assets) {
+        if (!asset || !asset->info) {
+            continue;
+        }
+        SDL_Point screen = view.map_to_screen(asset->pos);
+        int asset_quadrant = map->quadrant_for_point(static_cast<float>(screen.x), static_cast<float>(screen.y));
+        if (asset_quadrant == quadrant) {
+            names.push_back(asset->info->name);
+        }
+    }
+
+    std::sort(names.begin(), names.end());
+    names.erase(std::unique(names.begin(), names.end()), names.end());
+    return names;
 }
 
 void MapShadowPanel::update_save_status(bool success) const {
