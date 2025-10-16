@@ -226,6 +226,33 @@ target_link_libraries(asset_loader_distance_tests PRIVATE
 target_compile_definitions(asset_loader_distance_tests PRIVATE SDL_MAIN_HANDLED PROJECT_ROOT="${CMAKE_SOURCE_DIR}")
 add_test(NAME asset_loader_distance_tests COMMAND asset_loader_distance_tests)
 
+add_executable(map_layers_controller_tests
+    tests/dev_mode/map_layers_controller_tests.cpp
+    tests/dev_mode/map_layers_controller_main.cpp
+    ENGINE/dev_mode/core/manifest_store.cpp
+    ENGINE/dev_mode/core/dev_json_store.cpp
+    ENGINE/dev_mode/tag_utils.cpp
+    ENGINE/dev_mode/map_layers_controller.cpp
+    ENGINE/dev_mode/dev_controls_persistence.cpp
+    ENGINE/core/manifest/manifest_loader.cpp
+)
+target_include_directories(map_layers_controller_tests PRIVATE
+    ${CMAKE_SOURCE_DIR}/external
+    ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/ENGINE
+    ${CMAKE_SOURCE_DIR}/ENGINE/core
+    ${CMAKE_SOURCE_DIR}/ENGINE/dev_mode
+)
+target_link_libraries(map_layers_controller_tests PRIVATE
+    nlohmann_json::nlohmann_json
+    SDL2::SDL2
+    SDL2_ttf::SDL2_ttf
+    SDL2_image::SDL2_image
+    SDL2_mixer::SDL2_mixer
+)
+target_compile_definitions(map_layers_controller_tests PRIVATE SDL_MAIN_HANDLED PROJECT_ROOT="${CMAKE_SOURCE_DIR}")
+add_test(NAME map_layers_controller_tests COMMAND map_layers_controller_tests)
+
 add_executable(manifest_loader_tests
     tests/manifest/manifest_loader_tests.cpp
     ENGINE/core/manifest/manifest_loader.cpp

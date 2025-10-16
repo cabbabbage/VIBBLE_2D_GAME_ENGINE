@@ -6762,9 +6762,43 @@ bool MapLayersPanel::save_layers_to_disk() {
 
 bool MapLayersPanel::reload_layers_from_disk() {
 
+    if (!map_info_) return false;
+
+    auto refresh_after_reload = [this]() {
+
+        ensure_layers_array();
+
+        ensure_layer_indices();
+
+        rebuild_available_rooms();
+
+        refresh_canvas();
+
+        show_room_list(true);
+
+        request_preview_regeneration();
+
+        mark_clean();
+
+    };
+
+    if (controller_) {
+
+        if (!controller_->reload()) {
+
+            return false;
+
+        }
+
+        refresh_after_reload();
+
+        return true;
+
+    }
+
     std::string path = map_path_.empty() ? std::string{} : (map_path_ + "/map_info.json");
 
-    if (path.empty() || !map_info_) return false;
+    if (path.empty()) return false;
 
     std::ifstream in(path);
 
@@ -6784,19 +6818,7 @@ bool MapLayersPanel::reload_layers_from_disk() {
 
         *map_info_ = std::move(fresh);
 
-        ensure_layers_array();
-
-        ensure_layer_indices();
-
-        rebuild_available_rooms();
-
-        refresh_canvas();
-
-        show_room_list(true);
-
-        request_preview_regeneration();
-
-        mark_clean();
+        refresh_after_reload();
 
         return true;
 
