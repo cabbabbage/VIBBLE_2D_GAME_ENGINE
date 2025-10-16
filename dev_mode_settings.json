@@ -36,11 +36,11 @@
                     },
                     "virtual_light_map": {
                         "directional_strength": 0.5,
-                        "distance_strength_falloff": 4.510000228881836,
+                        "distance_strength_falloff": 0.6800000071525574,
                         "quadrant_count": 20.0
                     }
                 },
-                "show_light_map_texture": true,
+                "show_light_map_texture": false,
                 "update_map_light": true
             }
         },

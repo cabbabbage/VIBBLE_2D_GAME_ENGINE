@@ -207,7 +207,14 @@ void SceneRenderer::render(){
     SDL_SetRenderDrawColor(renderer_,clear_color.r,clear_color.g,clear_color.b,clear_color.a);
     SDL_RenderClear(renderer_);
 
+    // Ensure the light map is composited immediately after clearing the background.
+    if (z_light_pass_){
+        z_light_pass_->render(debugging, light_map_only_mode_);
+    }
+
     if (!light_map_only_mode_){
+        // Light map rendering modifies the renderer blend mode, so restore it before drawing assets.
+        SDL_SetRenderDrawBlendMode(renderer_,SDL_BLENDMODE_BLEND);
         const auto& camera_state=assets_->getView();
         float scale=camera_state.get_scale();
         float inv_scale=1.f/scale;
@@ -285,10 +292,6 @@ void SceneRenderer::render(){
 
         last_active_assets_=std::move(cur_active);
     }
-
-    SDL_SetRenderTarget(renderer_,nullptr);
-    // Light map composites directly to backbuffer
-    z_light_pass_->render(debugging, light_map_only_mode_);
 
     SDL_SetRenderTarget(renderer_,nullptr);
 
