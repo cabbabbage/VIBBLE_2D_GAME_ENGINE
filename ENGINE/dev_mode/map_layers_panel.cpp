@@ -3036,6 +3036,7 @@ MapLayersPanel::MapLayersPanel(int x, int y)
             if (layer_config_ && layer_config_->is_visible()) {
                 layer_config_->update(input, sw, sh);
             }
+            this->flush_canvas_refresh();
         });
         layers_container_->set_on_close([this]() {
             if (layer_config_) {
@@ -3441,9 +3442,9 @@ void MapLayersPanel::update(const Input& input, int screen_w, int screen_h) {
     }
 
     const std::array<SlidingWindowContainer*, 3> containers{
-        main_container_.get(),
+        layers_container_.get(),
         rooms_container_.get(),
-        layers_container_.get()
+        main_container_.get()
     };
 
     for (SlidingWindowContainer* container : containers) {
@@ -3472,17 +3473,6 @@ void MapLayersPanel::update(const Input& input, int screen_w, int screen_h) {
 
     }
 
-    if (room_selector_) {
-
-        SDL_Rect anchor = sidebar_widget_ ? sidebar_widget_->rect()
-                                          : (main_container_ ? main_container_->panel_rect() : embedded_bounds_);
-
-        room_selector_->set_anchor_rect(anchor);
-
-        room_selector_->update(input);
-
-    }
-
     if (room_configurator_) {
 
         if (!room_config_container_visible_) {
@@ -3503,9 +3493,7 @@ void MapLayersPanel::update(const Input& input, int screen_w, int screen_h) {
 
                         *entry = std::move(updated);
 
-                        mark_dirty();
-
-                        request_preview_regeneration();
+                        handle_room_spawn_groups_changed(true);
 
                     }
 
@@ -3516,6 +3504,23 @@ void MapLayersPanel::update(const Input& input, int screen_w, int screen_h) {
         }
 
     }
+
+    if (room_selector_) {
+
+        SDL_Rect anchor = sidebar_widget_ ? sidebar_widget_->rect()
+                                          : (main_container_ ? main_container_->panel_rect() : embedded_bounds_);
+
+        room_selector_->set_anchor_rect(anchor);
+
+        room_selector_->update(input);
+
+    }
+
+    if (preview_dirty_) {
+        regenerate_preview();
+    }
+
+    flush_canvas_refresh();
 
     if (layer_config_) layer_config_->ensure_cleanup();
 
@@ -3585,9 +3590,9 @@ void MapLayersPanel::render(SDL_Renderer* renderer) const {
     if (!is_visible()) return;
 
     const std::array<SlidingWindowContainer*, 3> containers{
-        main_container_.get(),
+        layers_container_.get(),
         rooms_container_.get(),
-        layers_container_.get()
+        main_container_.get()
     };
 
     for (SlidingWindowContainer* container : containers) {
@@ -3771,7 +3776,7 @@ void MapLayersPanel::regenerate_preview() {
 
     if (!layers.is_array() || layers.empty()) {
 
-        if (canvas_widget_) canvas_widget_->refresh();
+        refresh_canvas();
 
         update_click_target(-1, std::string());
 
@@ -3849,7 +3854,7 @@ void MapLayersPanel::regenerate_preview() {
 
     if (layer_specs.empty() || layer_specs.front().rooms.empty()) {
 
-        if (canvas_widget_) canvas_widget_->refresh();
+        refresh_canvas();
 
         return;
 
@@ -4600,11 +4605,7 @@ void MapLayersPanel::regenerate_preview() {
 
     }
 
-    if (canvas_widget_) {
-
-        canvas_widget_->refresh();
-
-    }
+    refresh_canvas();
 
     int layer_count = layers.is_array() ? static_cast<int>(layers.size()) : 0;
 
@@ -5510,6 +5511,9 @@ void MapLayersPanel::select_layer(int index) {
 
     if (canvas_widget_) canvas_widget_->set_selected(index);
 
+    request_preview_regeneration();
+    refresh_canvas();
+
     if (layers_container_visible_ && layer_config_) {
 
         if (index >= 0) {
@@ -5921,7 +5925,21 @@ void MapLayersPanel::refresh_room_list() {
 
 void MapLayersPanel::refresh_canvas() {
 
-    if (canvas_widget_) canvas_widget_->refresh();
+    canvas_refresh_pending_ = true;
+
+}
+
+void MapLayersPanel::flush_canvas_refresh() {
+
+    if (!canvas_refresh_pending_) {
+        return;
+    }
+
+    if (canvas_widget_) {
+        canvas_widget_->refresh();
+    }
+
+    canvas_refresh_pending_ = false;
 
 }
 
@@ -6204,6 +6222,10 @@ void MapLayersPanel::add_layer_internal() {
 
     mark_dirty();
 
+    if (rooms_container_) {
+        rooms_container_->request_layout();
+    }
+
 }
 
 void MapLayersPanel::add_room_to_selected_layer() {
@@ -6432,6 +6454,10 @@ void MapLayersPanel::delete_layer_internal(int index) {
 
     mark_dirty();
 
+    if (rooms_container_) {
+        rooms_container_->request_layout();
+    }
+
 }
 
 void MapLayersPanel::open_layer_config_internal(int index) {
@@ -6608,6 +6634,10 @@ void MapLayersPanel::handle_candidate_min_changed(int layer_index, int candidate
 
     if (layer_config_) layer_config_->refresh_total_summary();
 
+    if (rooms_container_) {
+        rooms_container_->request_layout();
+    }
+
 }
 
 void MapLayersPanel::handle_candidate_max_changed(int layer_index, int candidate_index, int max_instances) {
@@ -6641,6 +6671,10 @@ void MapLayersPanel::handle_candidate_max_changed(int layer_index, int candidate
     mark_dirty();
 
     if (layer_config_) layer_config_->refresh_total_summary();
+
+    if (rooms_container_) {
+        rooms_container_->request_layout();
+    }
 
 }
 
@@ -6678,6 +6712,10 @@ void MapLayersPanel::handle_candidate_removed(int layer_index, int candidate_ind
 
         layers_container_->request_layout();
 
+    }
+
+    if (rooms_container_) {
+        rooms_container_->request_layout();
     }
 
 }
@@ -6738,6 +6776,10 @@ void MapLayersPanel::handle_candidate_child_added(int layer_index, int candidate
 
         }
 
+        if (rooms_container_) {
+            rooms_container_->request_layout();
+        }
+
     }
 
 }
@@ -6773,6 +6815,14 @@ void MapLayersPanel::handle_candidate_child_removed(int layer_index, int candida
         children.erase(it);
 
         mark_dirty();
+
+        if (layers_container_visible_ && layers_container_) {
+            layers_container_->request_layout();
+        }
+
+        if (rooms_container_) {
+            rooms_container_->request_layout();
+        }
 
     }
 
@@ -6838,6 +6888,10 @@ void MapLayersPanel::handle_candidate_added(int layer_index, const std::string& 
 
         layers_container_->request_layout();
 
+    }
+
+    if (rooms_container_) {
+        rooms_container_->request_layout();
     }
 
 }

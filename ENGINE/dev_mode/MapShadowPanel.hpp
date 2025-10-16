@@ -61,6 +61,7 @@ private:
     const VirtualLightMap* current_virtual_light_map() const;
     std::optional<SDL_Point> player_screen_position() const;
     std::vector<std::string> assets_in_quadrant(int quadrant) const;
+    int quadrant_index_from_point(int x, int y) const;
 
     static int clamp_int(int v, int lo, int hi);
 
@@ -77,17 +78,12 @@ private:
     std::unique_ptr<DMSlider> shadow_scale_;
     std::unique_ptr<DMSlider> size_scale_factor_;
 
-    std::unique_ptr<DMButton> opacity_section_btn_;
-    bool opacity_section_collapsed_ = false;
+    class NoteLabel;
+    std::string quadrant_note_text_;
 
     std::vector<std::unique_ptr<Widget>> widget_wrappers_;
 
-    class WarningLabel;
-    WarningLabel* warning_label_ = nullptr;
-
     bool needs_sync_to_json_ = false;
-
-    mutable std::string persistence_warning_text_;
 
     render_pipeline::shading::ReactiveShadowSettings last_applied_settings_ =
         render_pipeline::shading::sanitize_reactive_shadow_settings({});

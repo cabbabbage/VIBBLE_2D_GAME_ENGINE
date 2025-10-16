@@ -12068,37 +12068,6 @@
         "orbit_y": 1000,
         "radius": 2759,
         "reactive_shadows": {
-          "directionality": {
-            "back_weight": 0.0,
-            "enable_offsets": true,
-            "front_weight": 5.0,
-            "gradient_sensitivity": 1.5800000429153442,
-            "max_offset_ratio": 0.8799999952316284,
-            "offset_strength": 1.7000000476837158,
-            "side_weight": 2.799999952316284
-          },
-          "output": {
-            "map_line_weight": 1.2400000095367432,
-            "parallax_strength": 2.240000009536743,
-            "scale_factor": 3.0
-          },
-          "response": {
-            "enable_opacity": true,
-            "front_opacity_boost": 10.0,
-            "max_opacity": 1.0,
-            "min_opacity": 0.6100000143051147,
-            "opacity_strength": 2.2100000381469727
-          },
-          "sampling": {
-            "diagonal_weight": 1.350000023841858,
-            "kernel_radius": 15,
-            "outer_ring_weight": 2.509999990463257
-          },
-          "stability": {
-            "enable_temporal_smoothing": true,
-            "reuse_similarity_threshold": 0.0,
-            "temporal_smoothing": 0.8140000104904175
-          },
           "virtual_light_map": {
             "horizontal_falloff": 1.6200000047683716,
             "vertical_falloff": 3.5,

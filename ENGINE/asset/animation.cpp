@@ -228,6 +228,36 @@ SDL_Texture* Animation::mask_variant(std::size_t frame_index, std::size_t varian
         return cache_entry.mask_textures[variant_index];
 }
 
+void Animation::adopt_prebuilt_frames(std::vector<FrameCache> caches,
+                                      std::vector<SDL_Texture*> base_frames,
+                                      std::vector<SDL_Texture*> base_masks,
+                                      std::vector<float> variant_steps) {
+        clear_texture_cache();
+        frame_cache_   = std::move(caches);
+        frames         = std::move(base_frames);
+        mask_frames    = std::move(base_masks);
+        variant_steps_ = std::move(variant_steps);
+        number_of_frames = static_cast<int>(frames.size());
+
+        movement_paths_.clear();
+        if (number_of_frames <= 0) {
+                movement_paths_.emplace_back();
+                return;
+        }
+
+        movement_paths_.emplace_back();
+        auto& path = movement_paths_.back();
+        path.resize(frames.size());
+        for (std::size_t idx = 0; idx < path.size(); ++idx) {
+                auto& frame = path[idx];
+                frame.frame_index = static_cast<int>(idx);
+                frame.is_first   = (idx == 0);
+                frame.is_last    = (idx + 1 == path.size());
+                frame.next       = (idx + 1 < path.size()) ? &path[idx + 1] : nullptr;
+                frame.prev       = (idx > 0) ? &path[idx - 1] : nullptr;
+        }
+}
+
 void Animation::load(const std::string& trigger,
                      const nlohmann::json& anim_json,
                      AssetInfo& info,

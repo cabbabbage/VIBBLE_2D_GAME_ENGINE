@@ -80,6 +80,7 @@ private:
     void rebuild_available_rooms();
     void refresh_room_list();
     void refresh_canvas();
+    void flush_canvas_refresh();
     void add_layer_internal();
     void add_room_to_selected_layer();
     std::string create_new_room(const std::string& desired_name, bool open_config = false);
@@ -218,6 +219,7 @@ private:
     mutable bool radii_dirty_ = true;
     double preview_extent_ = 0.0;
     bool preview_dirty_ = true;
+    bool canvas_refresh_pending_ = false;
     std::string active_room_config_key_;
 
     std::vector<std::string> available_rooms_;
