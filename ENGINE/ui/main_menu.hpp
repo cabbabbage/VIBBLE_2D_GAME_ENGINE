@@ -35,6 +35,14 @@ class MainMenu {
     SDL_Renderer* renderer_ = nullptr;
     int screen_w_ = 0;
     int screen_h_ = 0;
+    struct MenuEntry {
+        Button button;
+        std::string action;
+    };
+
     SDL_Texture* background_tex_ = nullptr;
-    std::vector<Button> buttons_;
+    std::vector<MenuEntry> buttons_;
+    std::filesystem::path manifest_root_;
+
+    std::filesystem::path resolve_manifest_path(const std::string& forward_path) const;
 };
