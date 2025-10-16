@@ -37,6 +37,18 @@ float sanitize_scale(float value) {
     return value;
 }
 
+bool has_custom_shadow_settings(const ShadowMaskSettings& settings) {
+    const ShadowMaskSettings defaults{};
+    const auto differs = [](float a, float b) {
+        return std::fabs(a - b) > 1e-4f;
+    };
+    return differs(settings.expansion_ratio, defaults.expansion_ratio) ||
+           differs(settings.blur_scale, defaults.blur_scale) ||
+           differs(settings.falloff_start, defaults.falloff_start) ||
+           differs(settings.falloff_exponent, defaults.falloff_exponent) ||
+           differs(settings.alpha_multiplier, defaults.alpha_multiplier);
+}
+
 LightSource adjust_light_source(const LightSource& source, const Asset& asset, SDL_Point merged_origin) {
     LightSource adjusted = source;
     int offset_x = source.offset_x;
@@ -94,7 +106,7 @@ void TemporaryMergedAssetInfo::absorb(const Asset& asset, SDL_Point merged_origi
         ++scale_factor_count_;
     }
 
-    if (!shadow_settings_ && (src.is_shaded || src.shadow_mask_settings.enabled)) {
+    if (!shadow_settings_ && (src.is_shaded || has_custom_shadow_settings(src.shadow_mask_settings))) {
         shadow_settings_ = src.shadow_mask_settings;
     }
 
@@ -535,9 +547,7 @@ std::unique_ptr<Asset> AssetMerger::merge(std::vector<std::unique_ptr<Asset>> as
     merged_asset->set_hidden(hidden);
     merged_asset->NeighborSearchRadius = merged_info->NeighborSearchRadius;
 
-    const auto selection = render_pipeline::ScalingLogic::Choose(camera_scale, variant_steps);
-    merged_asset->update_scale_usage(selection.requested_scale, selection.stored_scale, selection.remainder_scale, selection.index);
-    merged_asset->refresh_cached_dimensions();
+    merged_asset->on_scale_factor_changed();
 
     assets.clear();
     return merged_asset;

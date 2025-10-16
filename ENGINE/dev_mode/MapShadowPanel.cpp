@@ -129,9 +129,11 @@ private:
 };
 
 MapShadowPanel::MapShadowPanel(MapLightPanel* light_panel, Assets* assets, int x, int y)
-    : DockableCollapsible("Virtual Light Map Shadows (Quadrant-based)", x, y, 360, 540),
+    : DockableCollapsible("Virtual Light Map Shadows (Quadrant-based)", true, x, y),
       light_panel_(light_panel),
       assets_(assets) {
+    set_floating_content_width(360);
+    set_visible_height(540);
     build_ui();
     rebuild_rows();
 }

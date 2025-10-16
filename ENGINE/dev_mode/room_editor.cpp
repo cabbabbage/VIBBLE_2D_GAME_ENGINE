@@ -10,6 +10,7 @@
 #include "dev_mode/asset_info_ui.hpp"
 #include "dev_mode/dev_controls_persistence.hpp"
 #include "dev_mode/asset_library_ui.hpp"
+#include "dev_mode/core/manifest_store.hpp"
 #include "spawn_group_config/spawn_group_utils.hpp"
 #include "dev_mode/full_screen_collapsible.hpp"
 #include "room_config/room_configurator.hpp"
