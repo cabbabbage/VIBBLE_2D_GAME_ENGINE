@@ -7,36 +7,36 @@
                         "back_weight": 0.0,
                         "enable_offsets": true,
                         "front_weight": 5.0,
-                        "gradient_sensitivity": 0.4399999976158142,
-                        "max_offset_ratio": 0.44999998807907104,
-                        "offset_strength": 0.8600000143051147,
-                        "side_weight": 0.0
+                        "gradient_sensitivity": 1.5800000429153442,
+                        "max_offset_ratio": 0.8799999952316284,
+                        "offset_strength": 1.7000000476837158,
+                        "side_weight": 2.799999952316284
                     },
                     "output": {
-                        "map_line_weight": 1.3600000143051147,
-                        "parallax_strength": 1.7400000095367432,
+                        "map_line_weight": 0.7799999713897705,
+                        "parallax_strength": 3.309999942779541,
                         "scale_factor": 3.0
                     },
                     "response": {
                         "enable_opacity": true,
                         "front_opacity_boost": 10.0,
                         "max_opacity": 1.0,
-                        "min_opacity": 0.7599999904632568,
-                        "opacity_strength": 3.0
+                        "min_opacity": 0.6100000143051147,
+                        "opacity_strength": 2.2100000381469727
                     },
                     "sampling": {
-                        "diagonal_weight": 0.8799999952316284,
-                        "kernel_radius": 12.0,
-                        "outer_ring_weight": 1.440000057220459
+                        "diagonal_weight": 1.350000023841858,
+                        "kernel_radius": 15.0,
+                        "outer_ring_weight": 2.509999990463257
                     },
                     "stability": {
                         "enable_temporal_smoothing": true,
                         "reuse_similarity_threshold": 0.0,
-                        "temporal_smoothing": 0.11100000143051147
+                        "temporal_smoothing": 0.8140000104904175
                     },
                     "virtual_light_map": {
                         "directional_strength": 0.5,
-                        "distance_strength_falloff": 1.0,
+                        "distance_strength_falloff": 4.510000228881836,
                         "quadrant_count": 20.0
                     }
                 },
