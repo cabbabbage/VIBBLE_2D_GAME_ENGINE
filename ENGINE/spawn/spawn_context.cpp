@@ -97,8 +97,7 @@ Asset* SpawnContext::spawnAsset(const std::string& name,
                         Area childArea = area_helpers::make_world_area(*raw->info, *base_area, raw->pos, raw->flipped);
                         AssetSpawnPlanner childPlanner(std::vector<nlohmann::json>{ j },
                                                        childArea,
-                                                       *asset_library_,
-                                                       std::vector<std::string>{});
+                                                       *asset_library_);
                         AssetSpawner childSpawner(asset_library_, exclusion_zones_);
                         childSpawner.spawn_children(childArea, &childPlanner);
                         auto kids = childSpawner.extract_all_assets();

@@ -5,12 +5,17 @@
 #include <filesystem>
 #include <fstream>
 #include <string>
+#include <sstream>
 
 #include <nlohmann/json.hpp>
 
 #include "dev_mode/core/manifest_store.hpp"
 #include "dev_mode/core/dev_json_store.hpp"
 #include "dev_mode/manifest_spawn_group_utils.hpp"
+#include "dev_mode/dev_controls_persistence.hpp"
+#include "spawn/asset_spawn_planner.hpp"
+#include "utils/area.hpp"
+#include "asset/asset_library.hpp"
 
 namespace {
 namespace fs = std::filesystem;
@@ -286,6 +291,96 @@ TEST_CASE("Manifest spawn-group cleanup updates manifest without touching legacy
     CHECK(fs::exists(asset_info_path));
     CHECK(fs::last_write_time(map_info_path) == map_info_time);
     CHECK(fs::last_write_time(asset_info_path) == asset_info_time);
+
+    devmode::core::DevJsonStore::instance().flush_all();
+    fs::remove_all(manifest_path.parent_path());
+}
+
+TEST_CASE("AssetSpawnPlanner persists spawn ids through manifest store") {
+    nlohmann::json initial = {
+        {"assets", nlohmann::json::object()},
+        {"maps", {
+            {"TestMap", nlohmann::json{
+                {"rooms_data", {
+                    {"TestRoom", nlohmann::json{
+                        {"spawn_groups", nlohmann::json::array({
+                            nlohmann::json{
+                                {"display_name", "Crate"},
+                                {"candidates", nlohmann::json::array({
+                                    nlohmann::json{{"name", "SomeAsset"}, {"chance", 100}}
+                                })}
+                            }
+                        })}
+                    }}
+                }},
+                {"map_assets_data", nlohmann::json::object()}
+            }}
+        }},
+        {"rooms", nlohmann::json::array()}
+    };
+
+    const auto manifest_path = make_manifest_path("planner_persists_spawn_ids", initial);
+    const fs::path legacy_map_info = manifest_path.parent_path() / "map_info.json";
+    {
+        std::ofstream out(legacy_map_info);
+        out << "{\n  \"legacy\": true\n}";
+    }
+    const auto legacy_snapshot = read_json(legacy_map_info);
+
+    auto loader = [manifest_path]() {
+        return load_manifest_from_path(manifest_path);
+    };
+
+    devmode::core::ManifestStore store(manifest_path, loader);
+
+    const nlohmann::json* entry = store.find_map_entry("TestMap");
+    REQUIRE(entry);
+    REQUIRE(entry->contains("rooms_data"));
+    REQUIRE(entry->at("rooms_data").is_object());
+    REQUIRE(entry->at("rooms_data").contains("TestRoom"));
+    const auto& room_payload = entry->at("rooms_data").at("TestRoom");
+    REQUIRE(room_payload.contains("spawn_groups"));
+    REQUIRE(room_payload.at("spawn_groups").is_array());
+    CHECK(!room_payload.at("spawn_groups")[0].contains("spawn_id"));
+
+    std::vector<nlohmann::json> sources{room_payload};
+    std::vector<AssetSpawnPlanner::SourceContext> contexts;
+    AssetSpawnPlanner::SourceContext context;
+    context.persist = [&](const nlohmann::json& updated) {
+        nlohmann::json payload;
+        if (const nlohmann::json* current = store.find_map_entry("TestMap")) {
+            payload = *current;
+        }
+        if (!payload.is_object()) {
+            payload = nlohmann::json::object();
+        }
+        nlohmann::json& rooms_data = payload["rooms_data"];
+        if (!rooms_data.is_object()) {
+            rooms_data = nlohmann::json::object();
+        }
+        rooms_data["TestRoom"] = updated;
+        std::ostringstream log;
+        CHECK(devmode::persist_map_manifest_entry(store, "TestMap", payload, log));
+        store.flush();
+    };
+    contexts.push_back(context);
+
+    Area area("TestRoom", SDL_Point{0, 0}, 10, 10, "Square", 1, 40, 40);
+    AssetLibrary library;
+    AssetSpawnPlanner planner(sources, area, library, contexts);
+
+    const nlohmann::json* updated_entry = store.find_map_entry("TestMap");
+    REQUIRE(updated_entry);
+    const auto& updated_room = updated_entry->at("rooms_data").at("TestRoom");
+    REQUIRE(updated_room.contains("spawn_groups"));
+    const auto& updated_groups = updated_room.at("spawn_groups");
+    REQUIRE(updated_groups.is_array());
+    REQUIRE(!updated_groups.empty());
+    CHECK(updated_groups[0].contains("spawn_id"));
+    CHECK(updated_groups[0].at("spawn_id").is_string());
+    CHECK(!updated_groups[0].at("spawn_id").get<std::string>().empty());
+
+    CHECK(read_json(legacy_map_info) == legacy_snapshot);
 
     devmode::core::DevJsonStore::instance().flush_all();
     fs::remove_all(manifest_path.parent_path());

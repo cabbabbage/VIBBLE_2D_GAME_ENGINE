@@ -1,24 +1,19 @@
 #include "asset_spawn_planner.hpp"
-#include <iostream>
-#include <sstream>
-#include <fstream>
 #include <random>
 #include <algorithm>
 #include <unordered_set>
 #include <cctype>
 #include <iomanip>
 #include "dev_mode/spawn_group_config/spawn_group_utils.hpp"
-namespace fs = std::filesystem;
-
 AssetSpawnPlanner::AssetSpawnPlanner(const std::vector<nlohmann::json>& json_sources,
                                      const Area& area,
                                      AssetLibrary& asset_library,
-                                     const std::vector<std::string>& source_paths)
+                                     const std::vector<SourceContext>& source_contexts)
 : asset_library_(&asset_library) {
     source_jsons_ = json_sources;
-    source_paths_ = source_paths;
-    if (source_paths_.size() < source_jsons_.size()) {
-        source_paths_.resize(source_jsons_.size());
+    source_contexts_ = source_contexts;
+    if (source_contexts_.size() < source_jsons_.size()) {
+        source_contexts_.resize(source_jsons_.size());
     }
     source_changed_.assign(source_jsons_.size(), false);
 
@@ -384,16 +379,13 @@ void AssetSpawnPlanner::sort_spawn_queue() {
 void AssetSpawnPlanner::persist_sources() {
     for (size_t i = 0; i < source_jsons_.size(); ++i) {
         if (i >= source_changed_.size() || !source_changed_[i]) continue;
-        if (i >= source_paths_.size()) continue;
-        const std::string& path = source_paths_[i];
-        if (path.empty()) continue;
-        try {
-            std::ofstream out(path);
-            if (out.is_open()) {
-                out << source_jsons_[i].dump(2);
-                out.close();
-            }
-        } catch (...) {
+        if (i >= source_contexts_.size()) continue;
+        auto& ctx = source_contexts_[i];
+        if (ctx.json_ref) {
+            *ctx.json_ref = source_jsons_[i];
+        }
+        if (ctx.persist) {
+            ctx.persist(source_jsons_[i]);
         }
     }
 }

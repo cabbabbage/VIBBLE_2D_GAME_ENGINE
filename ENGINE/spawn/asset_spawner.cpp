@@ -11,13 +11,10 @@
 #include <algorithm>
 #include <fstream>
 #include <iostream>
-#include <filesystem>
 #include <numeric>
 #include <sstream>
 #include <nlohmann/json.hpp>
 #include "utils/map_grid.hpp"
-namespace fs = std::filesystem;
-
 AssetSpawner::AssetSpawner(AssetLibrary* asset_library,
                            std::vector<Area> exclusion_zones)
 : asset_library_(asset_library),
@@ -44,12 +41,8 @@ std::vector<std::unique_ptr<Asset>> AssetSpawner::spawn_boundary_from_json(const
         if (boundary_json.is_null()) {
                 return {};
         }
-        std::vector<nlohmann::json> json_sources{ boundary_json };
-        std::vector<std::string> source_paths;
-        if (!source_name.empty()) {
-                source_paths.push_back(source_name);
-        }
-        AssetSpawnPlanner planner(json_sources, spawn_area, *asset_library_, source_paths);
+    std::vector<nlohmann::json> json_sources{ boundary_json };
+    AssetSpawnPlanner planner(json_sources, spawn_area, *asset_library_);
         boundary_mode_ = true;
         run_spawning(&planner, spawn_area);
         boundary_mode_ = false;

@@ -3,8 +3,8 @@
 #include <nlohmann/json.hpp>
 #include <vector>
 #include <string>
-#include <filesystem>
 #include <unordered_set>
+#include <functional>
 #include <SDL.h>
 #include "asset/asset_info.hpp"
 #include "asset/asset_library.hpp"
@@ -15,11 +15,16 @@ constexpr double REPRESENTATIVE_SPAWN_AREA = 4096.0 * 4096.0;
 
 class AssetSpawnPlanner {
 
-	public:
+        public:
+    struct SourceContext {
+        nlohmann::json* json_ref = nullptr;
+        std::function<void(const nlohmann::json&)> persist;
+    };
+
     AssetSpawnPlanner(const std::vector<nlohmann::json>& json_sources,
                       const Area& area,
                       AssetLibrary& asset_library,
-                      const std::vector<std::string>& source_paths = {});
+                      const std::vector<SourceContext>& source_contexts = {});
     const std::vector<SpawnInfo>& get_spawn_queue() const;
 
         private:
@@ -30,7 +35,7 @@ class AssetSpawnPlanner {
     void persist_sources();
     nlohmann::json root_json_;
     std::vector<nlohmann::json> source_jsons_;
-    std::vector<std::string> source_paths_;
+    std::vector<SourceContext> source_contexts_;
     struct SourceRef {
         int source_index = -1;
         int entry_index = -1;

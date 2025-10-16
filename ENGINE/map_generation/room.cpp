@@ -287,18 +287,72 @@ manifest_writer_(std::move(manifest_writer))
                 room_area = std::make_unique<Area>(room_name, SDL_Point{map_origin.first, map_origin.second}, width, height, geometry, edge_smoothness, map_w, map_h);
                 if (room_area) room_area->set_type("room");
 	}
-	std::vector<json> json_sources;
-	std::vector<std::string> source_paths;
+        std::vector<json> json_sources;
+        std::vector<AssetSpawnPlanner::SourceContext> source_contexts;
+
+        auto push_payload = [this](auto mutate) {
+                if (!mutate) {
+                        return;
+                }
+                if (map_info_root_) {
+                        if (!map_info_root_->is_object()) {
+                                *map_info_root_ = nlohmann::json::object();
+                        }
+                        mutate(*map_info_root_);
+                }
+                auto apply_mutation = [&](nlohmann::json payload) {
+                        if (!payload.is_object()) {
+                                payload = nlohmann::json::object();
+                        }
+                        mutate(payload);
+                        return payload;
+                };
+                if (manifest_store_ && !manifest_map_id_.empty()) {
+                        nlohmann::json payload;
+                        if (map_info_root_) {
+                                payload = *map_info_root_;
+                        } else if (const nlohmann::json* entry = manifest_store_->find_map_entry(manifest_map_id_)) {
+                                payload = *entry;
+                        }
+                        payload = apply_mutation(std::move(payload));
+                        if (devmode::persist_map_manifest_entry(*manifest_store_, manifest_map_id_, payload, std::cerr)) {
+                                manifest_store_->flush();
+                        }
+                } else if (manifest_writer_ && !manifest_map_id_.empty()) {
+                        nlohmann::json payload = map_info_root_ ? *map_info_root_ : nlohmann::json::object();
+                        payload = apply_mutation(std::move(payload));
+                        manifest_writer_(manifest_map_id_, payload);
+                }
+        };
+
         json_sources.push_back(assets_json);
-        source_paths.push_back(json_path);
+        AssetSpawnPlanner::SourceContext room_context;
+        room_context.persist = [this, push_payload](const nlohmann::json& updated) {
+                assets_json = updated;
+                if (room_data_ptr_) {
+                        *room_data_ptr_ = assets_json;
+                }
+                push_payload([&](nlohmann::json& payload) {
+                        nlohmann::json& section = payload[data_section_];
+                        if (!section.is_object()) {
+                                section = nlohmann::json::object();
+                        }
+                        section[room_name] = assets_json;
+                });
+        };
+        source_contexts.push_back(room_context);
+
         if (assets_json.value("inherits_map_assets", false) && map_assets_data_ptr_) {
                 json_sources.push_back(*map_assets_data_ptr_);
-                const std::string inherited_path = manifest_context_.empty()
-                        ? std::string{"map_assets_data"}
-                        : manifest_context_ + "::map_assets_data";
-                source_paths.push_back(inherited_path);
+                AssetSpawnPlanner::SourceContext map_assets_context;
+                map_assets_context.persist = [this, push_payload](const nlohmann::json& updated) {
+                        push_payload([&](nlohmann::json& payload) {
+                                payload["map_assets_data"] = updated;
+                        });
+                };
+                source_contexts.push_back(map_assets_context);
         }
-        planner = std::make_unique<AssetSpawnPlanner>( json_sources, *room_area, *asset_lib, source_paths );
+        planner = std::make_unique<AssetSpawnPlanner>( json_sources, *room_area, *asset_lib, source_contexts );
         std::vector<Area> exclusion;
         AssetSpawner spawner(asset_lib, exclusion);
         spawner.spawn(*this);

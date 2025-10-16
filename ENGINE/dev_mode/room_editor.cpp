@@ -2342,8 +2342,7 @@ void RoomEditor::respawn_spawn_group(const nlohmann::json& entry) {
     root["spawn_groups"] = nlohmann::json::array();
     root["spawn_groups"].push_back(entry);
     std::vector<nlohmann::json> sources{root};
-    std::vector<std::string> paths;
-    AssetSpawnPlanner planner(sources, *current_room_->room_area, assets_->library(), paths);
+    AssetSpawnPlanner planner(sources, *current_room_->room_area, assets_->library());
     const auto& queue = planner.get_spawn_queue();
     if (queue.empty()) return;
 
@@ -2501,9 +2500,11 @@ void RoomEditor::regenerate_current_room() {
     current_room_->room_area = std::make_unique<Area>(new_area);
 
     std::vector<nlohmann::json> planner_sources{room_json};
-    std::vector<std::string> planner_paths;
-    if (!current_room_->json_path.empty()) planner_paths.push_back(current_room_->json_path);
-    current_room_->planner = std::make_unique<AssetSpawnPlanner>(planner_sources, *current_room_->room_area, assets_->library(), planner_paths);
+    std::vector<AssetSpawnPlanner::SourceContext> planner_contexts;
+    AssetSpawnPlanner::SourceContext room_context;
+    room_context.json_ref = &room_json;
+    planner_contexts.push_back(room_context);
+    current_room_->planner = std::make_unique<AssetSpawnPlanner>(planner_sources, *current_room_->room_area, assets_->library(), planner_contexts);
 
     auto grid = build_room_grid(std::string{});
     std::unordered_map<std::string, std::shared_ptr<AssetInfo>> asset_info_library = assets_->library().all();

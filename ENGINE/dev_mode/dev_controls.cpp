@@ -1995,8 +1995,7 @@ void DevControls::regenerate_map_spawn_group(const nlohmann::json& entry) {
         root["spawn_groups"] = nlohmann::json::array();
         root["spawn_groups"].push_back(entry);
         std::vector<nlohmann::json> sources{root};
-        std::vector<std::string> paths;
-        AssetSpawnPlanner planner(sources, *room->room_area, assets_->library(), paths);
+        AssetSpawnPlanner planner(sources, *room->room_area, assets_->library());
 
         MapGridSettings grid_settings = room->map_grid_settings();
         int spacing = grid_settings.spacing;
