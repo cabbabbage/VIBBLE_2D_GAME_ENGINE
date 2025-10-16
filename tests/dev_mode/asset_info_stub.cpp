@@ -173,3 +173,17 @@ void AssetInfo::rebuild_anti_tag_cache() {
         anti_tag_lookup_.insert(value);
     }
 }
+
+#if defined(ASSET_INFO_ENABLE_TEST_ACCESS)
+void AssetInfoTestAccess::initialize_info_json(AssetInfo& info, nlohmann::json data) {
+    info.info_json_ = std::move(data);
+}
+
+void AssetInfoTestAccess::rebuild_tag_cache(AssetInfo& info) {
+    info.rebuild_tag_cache();
+}
+
+void AssetInfoTestAccess::rebuild_anti_tag_cache(AssetInfo& info) {
+    info.rebuild_anti_tag_cache();
+}
+#endif

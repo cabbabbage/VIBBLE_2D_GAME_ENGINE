@@ -167,6 +167,7 @@ add_executable(dev_mode_ui_tests
     tests/dev_mode/full_screen_collapsible_tests.cpp
     tests/dev_mode/tag_cache_tests.cpp
     tests/dev_mode/asset_info_stub.cpp
+    ENGINE/dev_mode/dev_ui_settings.cpp
     ENGINE/dev_mode/full_screen_collapsible.cpp
     ENGINE/dev_mode/draw_utils.cpp
     ENGINE/dev_mode/font_cache.cpp
@@ -280,6 +281,7 @@ add_executable(manifest_store_tests
     tests/manifest/manifest_store_tests.cpp
     tests/manifest/spawn_group_manifest_tests.cpp
     tests/dev_mode/room_editor_manifest_tests.cpp
+    ENGINE/dev_mode/dev_controls_persistence.cpp
     ENGINE/dev_mode/core/manifest_store.cpp
     ENGINE/dev_mode/core/dev_json_store.cpp
     ENGINE/dev_mode/asset_sections/Section_SpawnGroups.cpp
@@ -298,11 +300,16 @@ add_executable(manifest_store_tests
     ENGINE/dev_mode/widgets.cpp
     ENGINE/dev_mode/dm_styles.cpp
     ENGINE/dev_mode/tag_utils.cpp
+    ENGINE/dev_mode/dev_ui_settings.cpp
+    ENGINE/dev_mode/manifest_spawn_group_utils.cpp
     ENGINE/dev_mode/search_assets.cpp
     ENGINE/utils/input.cpp
+    ENGINE/utils/area.cpp
     ENGINE/dev_mode/room_editor_map_info.cpp
     ENGINE/core/manifest/manifest_loader.cpp
     ENGINE/map_generation/map_layers_geometry.cpp
+    ENGINE/asset/asset_library.cpp
+    ENGINE/spawn/asset_spawn_planner.cpp
 )
 target_include_directories(manifest_store_tests PRIVATE
     ${CMAKE_SOURCE_DIR}/external
