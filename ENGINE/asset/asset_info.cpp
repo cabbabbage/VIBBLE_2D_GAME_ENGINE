@@ -86,6 +86,74 @@ std::string derive_asset_directory(const nlohmann::json& data, const std::string
     return fallback;
 }
 
+const nlohmann::json* locate_animation_container(const nlohmann::json& root) {
+    if (!root.is_object()) {
+        return nullptr;
+    }
+
+    auto animations_it = root.find("animations");
+    if (animations_it != root.end() && animations_it->is_object()) {
+        return &(*animations_it);
+    }
+
+    return nullptr;
+}
+
+const nlohmann::json* locate_animation_payloads(const nlohmann::json& root) {
+    if (!root.is_object()) {
+        return nullptr;
+    }
+
+    if (const auto* container = locate_animation_container(root)) {
+        auto nested = container->find("animations");
+        if (nested != container->end() && nested->is_object()) {
+            return &(*nested);
+        }
+        return container;
+    }
+
+    return &root;
+}
+
+bool extract_start_value(const nlohmann::json& root, std::string& out) {
+    if (!root.is_object()) {
+        return false;
+    }
+
+    if (const auto* container = locate_animation_container(root)) {
+        auto start_it = container->find("start");
+        if (start_it != container->end() && start_it->is_string()) {
+            std::string candidate = start_it->get<std::string>();
+            if (!candidate.empty()) {
+                out = std::move(candidate);
+                return true;
+            }
+        }
+    }
+
+    auto start_it = root.find("start");
+    if (start_it != root.end() && start_it->is_string()) {
+        std::string candidate = start_it->get<std::string>();
+        if (!candidate.empty()) {
+            out = std::move(candidate);
+            return true;
+        }
+    }
+
+    if (const auto* payloads = locate_animation_payloads(root)) {
+        auto nested_start = payloads->find("start");
+        if (nested_start != payloads->end() && nested_start->is_string()) {
+            std::string candidate = nested_start->get<std::string>();
+            if (!candidate.empty()) {
+                out = std::move(candidate);
+                return true;
+            }
+        }
+    }
+
+    return false;
+}
+
 inline CanvasMetrics canvas_metrics_for(const AssetInfo& info) {
     CanvasMetrics metrics;
     metrics.width = std::max(info.original_canvas_width, 0);
@@ -769,6 +837,39 @@ void AssetInfo::load_children(const nlohmann::json& data) {
     ChildLoader::load_children(*this, data, dir_path_);
 }
 
+void AssetInfo::load_animations(const nlohmann::json& data) {
+    const nlohmann::json* payloads = locate_animation_payloads(data);
+
+    nlohmann::json new_anim = nlohmann::json::object();
+    if (payloads && payloads->is_object()) {
+        for (auto it = payloads->begin(); it != payloads->end(); ++it) {
+            if (!it.value().is_object()) {
+                continue;
+            }
+            const auto& anim_json = it.value();
+            nlohmann::json converted = anim_json;
+            if (!anim_json.contains("source")) {
+                converted["source"] = {
+                    {"kind", "folder"},
+                    {"path", anim_json.value("frames_path", it.key())}
+                };
+                converted["locked"] = anim_json.value("lock_until_done", false);
+                converted["speed_factor"] = anim_json.value("speed", 1.0f);
+                converted.erase("frames_path");
+                converted.erase("lock_until_done");
+                converted.erase("speed");
+            }
+            new_anim[it.key()] = std::move(converted);
+        }
+    }
+
+    anims_json_ = std::move(new_anim);
+    if (!info_json_.is_object()) {
+        info_json_ = nlohmann::json::object();
+    }
+    info_json_["animations"] = anims_json_;
+}
+
 void AssetInfo::initialize_from_json(const nlohmann::json& source) {
         nlohmann::json data = source.is_object() ? source : nlohmann::json::object();
 
@@ -786,34 +887,7 @@ void AssetInfo::initialize_from_json(const nlohmann::json& source) {
                 info_json_["anti_tags"] = nlohmann::json::array();
         }
 
-        if (data.contains("animations") && data["animations"].is_object()) {
-                nlohmann::json new_anim = nlohmann::json::object();
-                for (auto it = data["animations"].begin(); it != data["animations"].end(); ++it) {
-                        const std::string trig = it.key();
-                        const auto &anim_json = it.value();
-                        if (!anim_json.is_object()) {
-                                continue;
-                        }
-                        nlohmann::json converted = anim_json;
-                        if (!anim_json.contains("source")) {
-                                converted["source"] = {
-                                        {"kind", "folder"},
-                                        {"path", anim_json.value("frames_path", trig)}
-                                };
-                                converted["locked"] = anim_json.value("lock_until_done", false);
-                                converted["speed_factor"] = anim_json.value("speed", 1.0f);
-                                converted.erase("frames_path");
-                                converted.erase("lock_until_done");
-                                converted.erase("speed");
-                        }
-                        new_anim[trig] = converted;
-                }
-                anims_json_ = new_anim;
-                info_json_["animations"] = new_anim;
-        } else {
-                anims_json_ = nlohmann::json::object();
-                info_json_["animations"] = anims_json_;
-        }
+        load_animations(data);
 
         mappings.clear();
         if (data.contains("mappings") && data["mappings"].is_object()) {
@@ -1180,62 +1254,64 @@ void AssetInfo::set_start_animation_name(const std::string& name) {
 }
 
 bool AssetInfo::reload_animations_from_disk() {
-        if (info_json_path_.empty()) {
-                return false;
+    auto apply_payload = [this](const nlohmann::json& payload) -> bool {
+        if (!payload.is_object()) {
+            return false;
         }
 
-        std::ifstream in(info_json_path_);
-        if (!in.is_open()) {
-                return false;
-        }
-
-        nlohmann::json data = nlohmann::json::object();
-        try {
-                in >> data;
-        } catch (...) {
-                return false;
-        }
-
-        if (!data.is_object()) {
-                return false;
-        }
-
-        nlohmann::json animations_section = nlohmann::json::object();
-        auto animations_it = data.find("animations");
-        if (animations_it != data.end()) {
-                animations_section = *animations_it;
-        }
-
-        info_json_["animations"] = animations_section;
-
-        const nlohmann::json* payloads = nullptr;
-        if (animations_section.is_object()) {
-                payloads = &animations_section;
-                auto nested = animations_section.find("animations");
-                if (nested != animations_section.end() && nested->is_object()) {
-                        payloads = &(*nested);
-                }
-        }
-
-        if (payloads && payloads->is_object()) {
-                anims_json_ = *payloads;
-        } else {
-                anims_json_ = nlohmann::json::object();
-        }
+        load_animations(payload);
 
         std::string new_start = start_animation;
-        if (animations_section.is_object()) {
-                auto start_it = animations_section.find("start");
-                if (start_it != animations_section.end() && start_it->is_string()) {
-                        new_start = start_it->get<std::string>();
-                }
+        std::string candidate;
+        if (extract_start_value(payload, candidate)) {
+            new_start = std::move(candidate);
         }
-        if (new_start.empty() && data.contains("start") && data["start"].is_string()) {
-                new_start = data["start"].get<std::string>();
+        if (new_start.empty()) {
+            new_start = start_animation;
+        }
+        if (new_start.empty()) {
+            new_start = "default";
         }
 
         start_animation = new_start;
+        if (!info_json_.is_object()) {
+            info_json_ = nlohmann::json::object();
+        }
         info_json_["start"] = start_animation;
-
         return true;
+    };
+
+    if (info_json_path_.empty()) {
+        auto& provider = manifest_store_provider_slot();
+        if (!provider) {
+            return false;
+        }
+        devmode::core::ManifestStore* store = provider();
+        if (!store) {
+            return false;
+        }
+        auto view = store->get_asset(name);
+        if (!view || !view.data) {
+            return false;
+        }
+        return apply_payload(*view.data);
+    }
+
+    std::ifstream in(info_json_path_);
+    if (!in.is_open()) {
+        return false;
+    }
+
+    nlohmann::json data = nlohmann::json::object();
+    try {
+        in >> data;
+    } catch (...) {
+        return false;
+    }
+
+    if (!data.is_object()) {
+        return false;
+    }
+
+    return apply_payload(data);
 }

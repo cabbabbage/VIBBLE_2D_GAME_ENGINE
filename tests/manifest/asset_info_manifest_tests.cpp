@@ -256,3 +256,243 @@ TEST_CASE("AssetInfo commit_manifest persists changes via ManifestStore") {
     devmode::core::DevJsonStore::instance().flush_all();
     fs::remove_all(manifest_path.parent_path());
 }
+
+TEST_CASE("AssetInfo reload_animations_from_disk pulls updates from manifest store") {
+    nlohmann::json manifest = {
+        {"assets", {
+            {"ReloadManifest", {
+                {"asset_name", "ReloadManifest"},
+                {"asset_type", "Object"},
+                {"start", "idle"},
+                {"animations", {
+                    {"idle", {
+                        {"source", {
+                            {"kind", "folder"},
+                            {"path", "SRC/assets/ReloadManifest/idle"}
+                        }},
+                        {"locked", false},
+                        {"speed_factor", 1.0},
+                        {"number_of_frames", 1}
+                    }}
+                }}
+            }}
+        }},
+        {"maps", nlohmann::json::object()},
+        {"rooms", nlohmann::json::array()}
+    };
+
+    const auto manifest_path = make_manifest_path("reload_animations_manifest", manifest);
+
+    auto loader = [manifest_path]() {
+        return load_manifest_from_path(manifest_path);
+    };
+
+    devmode::core::ManifestStore store(manifest_path, loader);
+    AssetInfo::set_manifest_store_provider([&store]() -> devmode::core::ManifestStore* {
+        return &store;
+    });
+
+    auto view = store.get_asset("ReloadManifest");
+    REQUIRE(view);
+    auto info = AssetInfo::from_manifest_entry(view.name, *view.data);
+    REQUIRE(info);
+
+    CHECK(info->info_json_path().empty());
+    CHECK(info->start_animation == "idle");
+    auto names = info->animation_names();
+    REQUIRE(names.size() == 1);
+    CHECK(names.front() == "idle");
+
+    auto edit = store.begin_asset_edit("ReloadManifest");
+    REQUIRE(edit);
+    auto& draft = edit.data();
+    draft["animations"] = nlohmann::json{
+        {"run", {
+            {"frames_path", "run"},
+            {"lock_until_done", true},
+            {"speed", 2.0}
+        }}
+    };
+    draft["start"] = "run";
+    REQUIRE(edit.commit());
+
+    CHECK(info->reload_animations_from_disk());
+
+    auto updated_names = info->animation_names();
+    REQUIRE(updated_names.size() == 1);
+    CHECK(updated_names.front() == "run");
+    CHECK(info->start_animation == "run");
+
+    auto run_payload = info->animation_payload("run");
+    REQUIRE(run_payload.is_object());
+    REQUIRE(run_payload["source"].is_object());
+    CHECK(run_payload["source"].value("kind", "") == "folder");
+    CHECK(run_payload["source"].value("path", "") == "run");
+    CHECK(run_payload.value("locked", false));
+    CHECK(run_payload.value("speed_factor", 1.0f) == doctest::Approx(2.0f));
+    CHECK(info->animation_payload("idle").empty());
+
+    AssetInfo::set_manifest_store_provider({});
+    devmode::core::DevJsonStore::instance().flush_all();
+    fs::remove_all(manifest_path.parent_path());
+}
+
+TEST_CASE("AssetInfo reload_animations_from_disk pulls updates from manifest store") {
+    nlohmann::json manifest = {
+        {"assets", {
+            {"ReloadManifest", {
+                {"asset_name", "ReloadManifest"},
+                {"asset_type", "Object"},
+                {"start", "idle"},
+                {"animations", {
+                    {"idle", {
+                        {"source", {
+                            {"kind", "folder"},
+                            {"path", "SRC/assets/ReloadManifest/idle"}
+                        }},
+                        {"locked", false},
+                        {"speed_factor", 1.0},
+                        {"number_of_frames", 1}
+                    }}
+                }}
+            }}
+        }},
+        {"maps", nlohmann::json::object()},
+        {"rooms", nlohmann::json::array()}
+    };
+
+    const auto manifest_path = make_manifest_path("reload_animations_manifest", manifest);
+
+    auto loader = [manifest_path]() {
+        return load_manifest_from_path(manifest_path);
+    };
+
+    devmode::core::ManifestStore store(manifest_path, loader);
+    AssetInfo::set_manifest_store_provider([&store]() -> devmode::core::ManifestStore* {
+        return &store;
+    });
+
+    auto view = store.get_asset("ReloadManifest");
+    REQUIRE(view);
+    auto info = AssetInfo::from_manifest_entry(view.name, *view.data);
+    REQUIRE(info);
+
+    CHECK(info->info_json_path().empty());
+    CHECK(info->start_animation == "idle");
+    auto names = info->animation_names();
+    REQUIRE(names.size() == 1);
+    CHECK(names.front() == "idle");
+
+    auto edit = store.begin_asset_edit("ReloadManifest");
+    REQUIRE(edit);
+    auto& draft = edit.data();
+    draft["animations"] = nlohmann::json{
+        {"run", {
+            {"frames_path", "run"},
+            {"lock_until_done", true},
+            {"speed", 2.0}
+        }}
+    };
+    draft["start"] = "run";
+    REQUIRE(edit.commit());
+
+    CHECK(info->reload_animations_from_disk());
+
+    auto updated_names = info->animation_names();
+    REQUIRE(updated_names.size() == 1);
+    CHECK(updated_names.front() == "run");
+    CHECK(info->start_animation == "run");
+
+    auto run_payload = info->animation_payload("run");
+    REQUIRE(run_payload.is_object());
+    REQUIRE(run_payload["source"].is_object());
+    CHECK(run_payload["source"].value("kind", "") == "folder");
+    CHECK(run_payload["source"].value("path", "") == "run");
+    CHECK(run_payload.value("locked", false));
+    CHECK(run_payload.value("speed_factor", 1.0f) == doctest::Approx(2.0f));
+    CHECK(info->animation_payload("idle").empty());
+
+    AssetInfo::set_manifest_store_provider({});
+    devmode::core::DevJsonStore::instance().flush_all();
+    fs::remove_all(manifest_path.parent_path());
+}
+
+TEST_CASE("AssetInfo reload_animations_from_disk pulls updates from manifest store") {
+    nlohmann::json manifest = {
+        {"assets", {
+            {"ReloadManifest", {
+                {"asset_name", "ReloadManifest"},
+                {"asset_type", "Object"},
+                {"start", "idle"},
+                {"animations", {
+                    {"idle", {
+                        {"source", {
+                            {"kind", "folder"},
+                            {"path", "SRC/assets/ReloadManifest/idle"}
+                        }},
+                        {"locked", false},
+                        {"speed_factor", 1.0},
+                        {"number_of_frames", 1}
+                    }}
+                }}
+            }}
+        }},
+        {"maps", nlohmann::json::object()},
+        {"rooms", nlohmann::json::array()}
+    };
+
+    const auto manifest_path = make_manifest_path("reload_animations_manifest", manifest);
+
+    auto loader = [manifest_path]() {
+        return load_manifest_from_path(manifest_path);
+    };
+
+    devmode::core::ManifestStore store(manifest_path, loader);
+    AssetInfo::set_manifest_store_provider([&store]() -> devmode::core::ManifestStore* {
+        return &store;
+    });
+
+    auto view = store.get_asset("ReloadManifest");
+    REQUIRE(view);
+    auto info = AssetInfo::from_manifest_entry(view.name, *view.data);
+    REQUIRE(info);
+
+    CHECK(info->info_json_path().empty());
+    CHECK(info->start_animation == "idle");
+    auto names = info->animation_names();
+    REQUIRE(names.size() == 1);
+    CHECK(names.front() == "idle");
+
+    auto edit = store.begin_asset_edit("ReloadManifest");
+    REQUIRE(edit);
+    auto& draft = edit.data();
+    draft["animations"] = nlohmann::json{
+        {"run", {
+            {"frames_path", "run"},
+            {"lock_until_done", true},
+            {"speed", 2.0}
+        }}
+    };
+    draft["start"] = "run";
+    REQUIRE(edit.commit());
+
+    CHECK(info->reload_animations_from_disk());
+
+    auto updated_names = info->animation_names();
+    REQUIRE(updated_names.size() == 1);
+    CHECK(updated_names.front() == "run");
+    CHECK(info->start_animation == "run");
+
+    auto run_payload = info->animation_payload("run");
+    REQUIRE(run_payload.is_object());
+    REQUIRE(run_payload["source"].is_object());
+    CHECK(run_payload["source"].value("kind", "") == "folder");
+    CHECK(run_payload["source"].value("path", "") == "run");
+    CHECK(run_payload.value("locked", false));
+    CHECK(run_payload.value("speed_factor", 1.0f) == doctest::Approx(2.0f));
+    CHECK(info->animation_payload("idle").empty());
+
+    AssetInfo::set_manifest_store_provider({});
+    devmode::core::DevJsonStore::instance().flush_all();
+    fs::remove_all(manifest_path.parent_path());
+}
