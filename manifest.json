@@ -10156,7 +10156,7 @@
       "rnd_spawn_max": 400,
       "rnd_spawn_min": 300,
       "size_settings": {
-        "scale_percentage": 65
+        "scale_percentage": 66.0
       },
       "start": "SRC/assets/Tree_Darker",
       "tags": [
@@ -12078,8 +12078,8 @@
             "side_weight": 2.799999952316284
           },
           "output": {
-            "map_line_weight": 0.7799999713897705,
-            "parallax_strength": 3.309999942779541,
+            "map_line_weight": 0.0,
+            "parallax_strength": 0.9800000190734863,
             "scale_factor": 3.0
           },
           "response": {
@@ -12101,8 +12101,8 @@
           },
           "virtual_light_map": {
             "directional_strength": 0.5,
-            "distance_strength_falloff": 0.6800000071525574,
-            "quadrant_count": 20
+            "distance_strength_falloff": 0.05000000074505806,
+            "quadrant_count": 24
           }
         },
         "screen_light": {
@@ -12114,7 +12114,7 @@
           "max_opacity": 15,
           "min_opacity": 0
         },
-        "update_interval": 8
+        "update_interval": 73
       },
       "map_name": "FORREST",
       "rooms_data": {
@@ -12595,12 +12595,8 @@
             {
               "candidates": [
                 {
-                  "chance": 0,
-                  "name": "null"
-                },
-                {
                   "chance": 14.0,
-                  "name": "candle"
+                  "name": "#candle"
                 }
               ],
               "display_name": "Axe",
@@ -12616,29 +12612,6 @@
               "priority": 1,
               "radius": 377,
               "spawn_id": "spn-dbc1671870c3"
-            },
-            {
-              "candidates": [
-                {
-                  "chance": 0,
-                  "name": "null"
-                },
-                {
-                  "chance": 100,
-                  "name": "Barrel"
-                }
-              ],
-              "display_name": "Barrel",
-              "dx": -116,
-              "dy": -112,
-              "enforce_spacing": false,
-              "max_number": 1,
-              "min_number": 1,
-              "origional_height": 1921,
-              "origional_width": 2013,
-              "position": "Exact",
-              "priority": 2,
-              "spawn_id": "spn-2e784cd91d03"
             }
           ],
           "tags": {

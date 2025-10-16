@@ -32,15 +32,17 @@
                 0,
                 0,
                 0,
-                0
+                182
             ],
-            "last_updated": "2025-10-16T06:49:43Z",
+            "last_requested_percent": 8,
+            "last_requested_scale": 0.0805300697684288,
+            "last_updated": "2025-10-16T08:35:57Z",
+            "last_used_texture_scale": 0.800000011920929,
             "recommended_percentages": [
                 100,
-                90,
-                80
+                10
             ],
-            "revision": 1
+            "revision": 2
         },
         "Bench": {
             "histogram": [
@@ -473,15 +475,17 @@
                 0,
                 0,
                 0,
-                0
+                19110
             ],
-            "last_updated": "2025-10-16T06:48:44Z",
+            "last_requested_percent": 2,
+            "last_requested_scale": 0.017402945086359978,
+            "last_updated": "2025-10-16T08:35:57Z",
+            "last_used_texture_scale": 0.800000011920929,
             "recommended_percentages": [
                 100,
-                90,
-                80
+                10
             ],
-            "revision": 1
+            "revision": 2
         },
         "Grass_FPS_2": {
             "histogram": [
@@ -616,19 +620,21 @@
                 0,
                 0,
                 0,
-                0,
+                182,
                 0,
                 0,
                 0,
                 0
             ],
-            "last_updated": "2025-10-16T06:48:45Z",
+            "last_requested_percent": 45,
+            "last_requested_scale": 0.44516128301620483,
+            "last_updated": "2025-10-16T08:35:57Z",
+            "last_used_texture_scale": 0.800000011920929,
             "recommended_percentages": [
                 100,
-                90,
-                80
+                50
             ],
-            "revision": 1
+            "revision": 2
         },
         "Rock": {
             "histogram": [
@@ -804,20 +810,22 @@
                 0,
                 0,
                 0,
-                0,
+                6734,
                 0,
                 0,
                 0,
                 0,
                 0
             ],
-            "last_updated": "2025-10-16T06:48:44Z",
+            "last_requested_percent": 55,
+            "last_requested_scale": 0.5463049411773682,
+            "last_updated": "2025-10-16T08:35:57Z",
+            "last_used_texture_scale": 0.800000011920929,
             "recommended_percentages": [
                 100,
-                90,
-                80
+                60
             ],
-            "revision": 1
+            "revision": 2
         },
         "Tree_Dark": {
             "histogram": [
@@ -825,41 +833,22 @@
                 0,
                 0,
                 0,
-                0,
-                0,
-                0,
-                0,
-                0,
-                0
-            ],
-            "last_updated": "2025-10-16T06:48:45Z",
-            "recommended_percentages": [
-                100,
-                90,
-                80
-            ],
-            "revision": 1
-        },
-        "Tree_Darker": {
-            "histogram": [
-                0,
-                0,
-                0,
-                0,
-                0,
+                12194,
                 0,
                 0,
                 0,
                 0,
                 0
             ],
-            "last_updated": "2025-10-16T06:48:45Z",
+            "last_requested_percent": 55,
+            "last_requested_scale": 0.5468306541442871,
+            "last_updated": "2025-10-16T08:35:57Z",
+            "last_used_texture_scale": 0.800000011920929,
             "recommended_percentages": [
                 100,
-                90,
-                80
+                60
             ],
-            "revision": 1
+            "revision": 2
         },
         "Vibble": {
             "histogram": [
@@ -871,16 +860,18 @@
                 0,
                 0,
                 0,
-                0,
+                182,
                 0
             ],
-            "last_updated": "2025-10-16T06:48:44Z",
+            "last_requested_percent": 16,
+            "last_requested_scale": 0.15606936812400818,
+            "last_updated": "2025-10-16T08:35:57Z",
+            "last_used_texture_scale": 0.800000011920929,
             "recommended_percentages": [
                 100,
-                90,
-                80
+                20
             ],
-            "revision": 1
+            "revision": 2
         },
         "bouncing": {
             "histogram": [
@@ -914,15 +905,17 @@
                 0,
                 0,
                 0,
-                0
+                3640
             ],
-            "last_updated": "2025-10-16T06:48:44Z",
+            "last_requested_percent": 5,
+            "last_requested_scale": 0.052955664694309235,
+            "last_updated": "2025-10-16T08:35:57Z",
+            "last_used_texture_scale": 0.800000011920929,
             "recommended_percentages": [
                 100,
-                90,
-                80
+                10
             ],
-            "revision": 1
+            "revision": 2
         },
         "candle_3": {
             "histogram": [
@@ -1061,15 +1054,17 @@
                 0,
                 0,
                 0,
-                0
+                182
             ],
-            "last_updated": "2025-10-16T06:49:45Z",
+            "last_requested_percent": 5,
+            "last_requested_scale": 0.0518292672932148,
+            "last_updated": "2025-10-16T08:35:57Z",
+            "last_used_texture_scale": 0.800000011920929,
             "recommended_percentages": [
                 100,
-                90,
-                80
+                10
             ],
-            "revision": 1
+            "revision": 2
         },
         "flowr_6": {
             "histogram": [
@@ -1082,15 +1077,17 @@
                 0,
                 0,
                 0,
-                0
+                364
             ],
-            "last_updated": "2025-10-16T06:48:44Z",
+            "last_requested_percent": 5,
+            "last_requested_scale": 0.0518292672932148,
+            "last_updated": "2025-10-16T08:35:57Z",
+            "last_used_texture_scale": 0.800000011920929,
             "recommended_percentages": [
                 100,
-                90,
-                80
+                10
             ],
-            "revision": 1
+            "revision": 2
         },
         "lantern": {
             "histogram": [
@@ -1198,6 +1195,6 @@
             "revision": 1
         }
     },
-    "new_values": false,
+    "new_values": true,
     "version": 1
 }

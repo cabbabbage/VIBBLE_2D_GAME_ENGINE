@@ -101,6 +101,8 @@ class Asset {
     RenderTextureCache& light_behind_cache() const;
     RenderTextureCache& shadow_mask_cache();
     RenderTextureCache& shadow_mask_cache() const;
+    RenderTextureCache& motion_blur_cache();
+    RenderTextureCache& motion_blur_cache() const;
     Asset* parent = nullptr;
     std::shared_ptr<AssetInfo> info;
     std::string current_animation;
@@ -176,6 +178,7 @@ class Asset {
     mutable RenderTextureCache light_front_cache_{};
     mutable RenderTextureCache light_behind_cache_{};
     mutable RenderTextureCache shadow_mask_cache_{};
+    mutable RenderTextureCache motion_blur_cache_{};
 };
 
 #endif

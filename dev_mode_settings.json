@@ -13,8 +13,8 @@
                         "side_weight": 2.799999952316284
                     },
                     "output": {
-                        "map_line_weight": 0.7799999713897705,
-                        "parallax_strength": 3.309999942779541,
+                        "map_line_weight": 0.0,
+                        "parallax_strength": 0.9800000190734863,
                         "scale_factor": 3.0
                     },
                     "response": {
@@ -36,8 +36,8 @@
                     },
                     "virtual_light_map": {
                         "directional_strength": 0.5,
-                        "distance_strength_falloff": 0.6800000071525574,
-                        "quadrant_count": 20.0
+                        "distance_strength_falloff": 0.05000000074505806,
+                        "quadrant_count": 24.0
                     }
                 },
                 "show_light_map_texture": false,

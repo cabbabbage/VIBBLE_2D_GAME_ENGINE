@@ -633,6 +633,7 @@ void Asset::clear_render_caches() {
         destroy_render_cache(light_front_cache_);
         destroy_render_cache(light_behind_cache_);
         destroy_render_cache(shadow_mask_cache_);
+        destroy_render_cache(motion_blur_cache_);
         render_pipeline::shading::ClearShadowStateFor(this);
 }
 
@@ -707,6 +708,8 @@ void Asset::on_scale_factor_changed() {
         light_behind_cache_.height = 0;
         shadow_mask_cache_.width  = 0;
         shadow_mask_cache_.height = 0;
+        motion_blur_cache_.width  = 0;
+        motion_blur_cache_.height = 0;
 
         if (!children.empty() && info) {
                 for (Asset* child : children) {
@@ -756,6 +759,8 @@ Asset::RenderTextureCache& Asset::light_behind_cache() { return light_behind_cac
 Asset::RenderTextureCache& Asset::light_behind_cache() const { return light_behind_cache_; }
 Asset::RenderTextureCache& Asset::shadow_mask_cache() { return shadow_mask_cache_; }
 Asset::RenderTextureCache& Asset::shadow_mask_cache() const { return shadow_mask_cache_; }
+Asset::RenderTextureCache& Asset::motion_blur_cache() { return motion_blur_cache_; }
+Asset::RenderTextureCache& Asset::motion_blur_cache() const { return motion_blur_cache_; }
 
 void Asset::Delete() {
         dead = true;

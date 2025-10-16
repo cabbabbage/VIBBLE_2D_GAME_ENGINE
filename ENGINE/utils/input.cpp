@@ -20,6 +20,7 @@ void Input::handleEvent(const SDL_Event& e) {
         dy_ = e.motion.yrel;
         x_ = e.motion.x;
         y_ = e.motion.y;
+        mouse_motion_dirty_ = true;
         break;
 
     case SDL_MOUSEBUTTONDOWN:
@@ -28,9 +29,11 @@ void Input::handleEvent(const SDL_Event& e) {
         Button button = to_button(e.button.button);
         if (button != COUNT) {
             buttons_[button] = down;
+            button_state_dirty_ = true;
             if (!down) {
 
                 clickBuffer_[button] = 3;
+                click_buffer_active_ = true;
             }
         }
         break;
@@ -39,6 +42,7 @@ void Input::handleEvent(const SDL_Event& e) {
     case SDL_MOUSEWHEEL:
         scrollX_ += e.wheel.x;
         scrollY_ += e.wheel.y;
+        scroll_dirty_ = true;
         break;
 
     case SDL_KEYDOWN:
@@ -58,44 +62,71 @@ void Input::handleEvent(const SDL_Event& e) {
 }
 
 void Input::update() {
-
-    for (int i = 0; i < COUNT; ++i) {
-        pressed_[i]   = (!prevButtons_[i] && buttons_[i]);
-        released_[i]  = (prevButtons_[i] && !buttons_[i]);
-        prevButtons_[i] = buttons_[i];
-        if (clickBuffer_[i] > 0) clickBuffer_[i]--;
-    }
-
-    for (SDL_Scancode sc : pressed_scancode_buffer_) {
-        keys_pressed_[sc] = false;
-    }
-    pressed_scancode_buffer_.clear();
-
-    for (SDL_Scancode sc : released_scancode_buffer_) {
-        keys_released_[sc] = false;
-    }
-    released_scancode_buffer_.clear();
-
-    for (SDL_Scancode sc : dirty_scancodes_) {
-        const bool is_down = keys_down_[sc];
-        const bool was_down = prev_keys_down_[sc];
-        const bool pressed = (!was_down && is_down);
-        const bool released = (was_down && !is_down);
-        keys_pressed_[sc] = pressed;
-        keys_released_[sc] = released;
-        if (pressed) {
-            pressed_scancode_buffer_.push_back(sc);
+    if (button_state_dirty_ || click_buffer_active_ || button_transition_active_) {
+        bool any_click_active = false;
+        bool any_transition = false;
+        for (int i = 0; i < COUNT; ++i) {
+            pressed_[i]     = (!prevButtons_[i] && buttons_[i]);
+            released_[i]    = (prevButtons_[i] && !buttons_[i]);
+            if (pressed_[i] || released_[i]) {
+                any_transition = true;
+            }
+            prevButtons_[i] = buttons_[i];
+            if (clickBuffer_[i] > 0) {
+                --clickBuffer_[i];
+                if (clickBuffer_[i] > 0) {
+                    any_click_active = true;
+                }
+            }
         }
-        if (released) {
-            released_scancode_buffer_.push_back(sc);
-        }
-        prev_keys_down_[sc] = is_down;
-        scancode_dirty_flags_[sc] = false;
+        click_buffer_active_ = any_click_active;
+        button_transition_active_ = any_transition;
+        button_state_dirty_ = false;
     }
-    dirty_scancodes_.clear();
 
-    dx_ = dy_ = 0;
-    scrollX_ = scrollY_ = 0;
+    if (!pressed_scancode_buffer_.empty()) {
+        for (SDL_Scancode sc : pressed_scancode_buffer_) {
+            keys_pressed_[sc] = false;
+        }
+        pressed_scancode_buffer_.clear();
+    }
+
+    if (!released_scancode_buffer_.empty()) {
+        for (SDL_Scancode sc : released_scancode_buffer_) {
+            keys_released_[sc] = false;
+        }
+        released_scancode_buffer_.clear();
+    }
+
+    if (!dirty_scancodes_.empty()) {
+        for (SDL_Scancode sc : dirty_scancodes_) {
+            const bool is_down   = keys_down_[sc];
+            const bool was_down  = prev_keys_down_[sc];
+            const bool pressed   = (!was_down && is_down);
+            const bool released  = (was_down && !is_down);
+            keys_pressed_[sc]    = pressed;
+            keys_released_[sc]   = released;
+            if (pressed) {
+                pressed_scancode_buffer_.push_back(sc);
+            }
+            if (released) {
+                released_scancode_buffer_.push_back(sc);
+            }
+            prev_keys_down_[sc]     = is_down;
+            scancode_dirty_flags_[sc] = false;
+        }
+        dirty_scancodes_.clear();
+    }
+
+    if (mouse_motion_dirty_ || dx_ != 0 || dy_ != 0) {
+        dx_ = dy_ = 0;
+        mouse_motion_dirty_ = false;
+    }
+
+    if (scroll_dirty_ || scrollX_ != 0 || scrollY_ != 0) {
+        scrollX_ = scrollY_ = 0;
+        scroll_dirty_ = false;
+    }
 }
 
 bool Input::wasClicked(Button b) const {
@@ -106,6 +137,7 @@ void Input::clearClickBuffer() {
     for (int i = 0; i < COUNT; ++i) {
         clickBuffer_[i] = 0;
     }
+    click_buffer_active_ = false;
 }
 
 void Input::consumeMouseButton(Button b) {
@@ -114,6 +146,8 @@ void Input::consumeMouseButton(Button b) {
     pressed_[b] = false;
     released_[b] = false;
     clickBuffer_[b] = 0;
+    refresh_click_buffer_active();
+    refresh_button_transition_active();
 }
 
 void Input::consumeAllMouseButtons() {
@@ -125,11 +159,13 @@ void Input::consumeAllMouseButtons() {
 void Input::consumeScroll() {
     scrollX_ = 0;
     scrollY_ = 0;
+    scroll_dirty_ = false;
 }
 
 void Input::consumeMotion() {
     dx_ = 0;
     dy_ = 0;
+    mouse_motion_dirty_ = false;
 }
 
 void Input::consumeEvent(const SDL_Event& e) {
@@ -150,6 +186,26 @@ void Input::consumeEvent(const SDL_Event& e) {
         break;
     default:
         break;
+    }
+}
+
+void Input::refresh_click_buffer_active() {
+    click_buffer_active_ = false;
+    for (int i = 0; i < COUNT; ++i) {
+        if (clickBuffer_[i] > 0) {
+            click_buffer_active_ = true;
+            break;
+        }
+    }
+}
+
+void Input::refresh_button_transition_active() {
+    button_transition_active_ = false;
+    for (int i = 0; i < COUNT; ++i) {
+        if (pressed_[i] || released_[i]) {
+            button_transition_active_ = true;
+            break;
+        }
     }
 }
 

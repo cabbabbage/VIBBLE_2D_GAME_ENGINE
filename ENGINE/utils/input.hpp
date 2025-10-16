@@ -67,5 +67,14 @@ private:
     std::vector<SDL_Scancode> pressed_scancode_buffer_;
     std::vector<SDL_Scancode> released_scancode_buffer_;
     std::array<bool, SDL_NUM_SCANCODES> scancode_dirty_flags_{};
+
+    void refresh_click_buffer_active();
+    void refresh_button_transition_active();
+
+    bool button_state_dirty_ = false;
+    bool button_transition_active_ = false;
+    bool mouse_motion_dirty_ = false;
+    bool scroll_dirty_ = false;
+    bool click_buffer_active_ = false;
 };
 
