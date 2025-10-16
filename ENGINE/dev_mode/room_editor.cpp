@@ -6,6 +6,7 @@
 #include "asset/asset_utils.hpp"
 #include "core/AssetsManager.hpp"
 #include "dev_mode/area_overlay_editor.hpp"
+#include "dev_mode/room_editor_map_info.hpp"
 #include "dev_mode/asset_info_ui.hpp"
 #include "dev_mode/dev_controls_persistence.hpp"
 #include "dev_mode/asset_library_ui.hpp"
@@ -2444,19 +2445,15 @@ void RoomEditor::regenerate_current_room() {
         room_json.erase("radius");
     }
 
-    double map_radius_value = 0.0;
-    nlohmann::json map_info_json;
-    if (!current_room_->map_path.empty()) {
-        std::ifstream map_info(current_room_->map_path + "/map_info.json");
-        if (map_info.is_open()) {
-            try {
-                map_info >> map_info_json;
-            } catch (...) {
-                map_info_json = nlohmann::json::object();
-            }
-            map_radius_value = map_layers::map_radius_from_map_info(map_info_json);
-        }
-    }
+    const std::string map_id = assets_ ? assets_->map_id() : std::string{};
+    const std::string map_path = current_room_ ? current_room_->map_path : std::string{};
+    nlohmann::json map_info_json = devmode::room_editor_detail::resolve_map_info_blob(
+        assets_,
+        manifest_store_,
+        map_id,
+        map_path);
+
+    double map_radius_value = map_layers::map_radius_from_map_info(map_info_json);
     const int map_radius = map_radius_value > 0.0 ? static_cast<int>(std::lround(map_radius_value)) : 0;
     int map_w = map_radius > 0 ? map_radius * 2 : std::max(width * 2, 1);
     int map_h = map_radius > 0 ? map_radius * 2 : std::max(height * 2, 1);

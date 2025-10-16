@@ -207,6 +207,22 @@ TEST_CASE("AssetInfo commit_manifest persists changes via ManifestStore") {
     info->remove_tag("passable");
     info->set_passable(false);
 
+    AssetInfo::ChildInfo absolute_child{};
+    absolute_child.area_name = "absolute";
+    absolute_child.z_offset = 1;
+    absolute_child.inline_assets = nlohmann::json::array();
+    const auto asset_dir = fs::path(info->asset_dir_path());
+    const auto absolute_child_path = fs::absolute(asset_dir / "children" / "abs.json");
+    absolute_child.json_path = absolute_child_path.string();
+
+    AssetInfo::ChildInfo relative_child{};
+    relative_child.area_name = "relative";
+    relative_child.z_offset = 2;
+    relative_child.inline_assets = nlohmann::json::array();
+    relative_child.json_path = (asset_dir / "children" / "rel.json").generic_string();
+
+    info->set_children({absolute_child, relative_child});
+
     CHECK(info->commit_manifest());
     store.flush();
 
@@ -217,6 +233,10 @@ TEST_CASE("AssetInfo commit_manifest persists changes via ManifestStore") {
     REQUIRE(asset_json["tags"].is_array());
     CHECK(asset_json["tags"].size() == 1);
     CHECK(asset_json["tags"][0].get<std::string>() == "fresh");
+    REQUIRE(asset_json["child_assets"].is_array());
+    REQUIRE(asset_json["child_assets"].size() == 2);
+    CHECK(asset_json["child_assets"][0]["json_path"].get<std::string>() == "children/abs.json");
+    CHECK(asset_json["child_assets"][1]["json_path"].get<std::string>() == "children/rel.json");
 
     store.reload();
     auto view = store.get_asset("ManifestCommit");
@@ -228,6 +248,9 @@ TEST_CASE("AssetInfo commit_manifest persists changes via ManifestStore") {
     CHECK_FALSE(rehydrated->passable);
     CHECK_FALSE(rehydrated->has_tag("passable"));
     CHECK(rehydrated->has_tag("fresh"));
+    REQUIRE(rehydrated->children.size() == 2);
+    CHECK(fs::path(rehydrated->children[0].json_path) == fs::path(info->asset_dir_path()) / "children" / "abs.json");
+    CHECK(fs::path(rehydrated->children[1].json_path) == fs::path(info->asset_dir_path()) / "children" / "rel.json");
 
     AssetInfo::set_manifest_store_provider({});
     devmode::core::DevJsonStore::instance().flush_all();

@@ -245,9 +245,12 @@ add_test(NAME manifest_loader_tests COMMAND manifest_loader_tests)
 add_executable(manifest_store_tests
     tests/manifest/manifest_store_tests.cpp
     tests/manifest/spawn_group_manifest_tests.cpp
+    tests/dev_mode/room_editor_manifest_tests.cpp
     ENGINE/dev_mode/core/manifest_store.cpp
     ENGINE/dev_mode/core/dev_json_store.cpp
+    ENGINE/dev_mode/room_editor_map_info.cpp
     ENGINE/core/manifest/manifest_loader.cpp
+    ENGINE/map_generation/map_layers_geometry.cpp
 )
 target_include_directories(manifest_store_tests PRIVATE
     ${CMAKE_SOURCE_DIR}/external
@@ -255,6 +258,7 @@ target_include_directories(manifest_store_tests PRIVATE
     ${CMAKE_SOURCE_DIR}/ENGINE
     ${CMAKE_SOURCE_DIR}/ENGINE/core
     ${CMAKE_SOURCE_DIR}/ENGINE/dev_mode
+    ${CMAKE_SOURCE_DIR}/ENGINE/map_generation
 )
 target_link_libraries(manifest_store_tests PRIVATE
     nlohmann_json::nlohmann_json

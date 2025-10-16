@@ -882,6 +882,24 @@ void AssetInfo::set_children(const std::vector<ChildInfo>& new_children) {
     children = new_children;
 
     nlohmann::json arr = nlohmann::json::array();
+    std::filesystem::path asset_dir = std::filesystem::path(dir_path_);
+    if (!asset_dir.empty()) {
+        asset_dir = asset_dir.lexically_normal();
+    }
+
+#if ASSET_INFO_ENABLE_INFO_JSON_COMPAT
+    std::filesystem::path compat_base;
+    if (!info_json_path_.empty()) {
+        compat_base = std::filesystem::path(info_json_path_).parent_path();
+        if (!compat_base.empty()) {
+            compat_base = compat_base.lexically_normal();
+        }
+    }
+    if (compat_base.empty()) {
+        compat_base = asset_dir;
+    }
+#endif
+
     for (const auto& c : new_children) {
         nlohmann::json entry;
         entry["area_name"] = c.area_name;
@@ -891,27 +909,38 @@ void AssetInfo::set_children(const std::vector<ChildInfo>& new_children) {
             if (c.inline_assets.is_array() && !c.inline_assets.empty()) {
                 entry["spawn_groups"] = c.inline_assets;
             } else if (!c.json_path.empty()) {
+                std::filesystem::path child_path = std::filesystem::path(c.json_path).lexically_normal();
+                std::string manifest_path;
 
-                std::string rel = c.json_path;
-                if (!info_json_path_.empty()) {
-                    try {
-
-                        std::string base = info_json_path_;
-                        auto pos = base.find_last_of("/\\");
-                        if (pos != std::string::npos) {
-                            base = base.substr(0, pos);
-                            if (rel.rfind(base, 0) == 0) {
-
-                                size_t cut = base.size();
-                                if (rel.size() > cut && (rel[cut] == '/' || rel[cut] == '\\')) ++cut;
-                                rel = rel.substr(cut);
-                            }
-                        }
-                    } catch (...) {
-
+                if (child_path.is_relative()) {
+                    manifest_path = child_path.generic_string();
+                } else if (!asset_dir.empty()) {
+                    std::filesystem::path rel = child_path.lexically_relative(asset_dir);
+                    if (!rel.empty() && rel != ".") {
+                        manifest_path = rel.generic_string();
                     }
                 }
-                entry["json_path"] = rel;
+
+                if (manifest_path.empty()) {
+                    std::filesystem::path relative_form = child_path.relative_path();
+                    if (relative_form.empty()) {
+                        relative_form = child_path.filename();
+                    }
+                    manifest_path = relative_form.generic_string();
+                }
+
+#if ASSET_INFO_ENABLE_INFO_JSON_COMPAT
+                if (!compat_base.empty()) {
+                    std::filesystem::path compat_rel = child_path.lexically_relative(compat_base);
+                    if (!compat_rel.empty() && compat_rel != ".") {
+                        manifest_path = compat_rel.generic_string();
+                    }
+                }
+#endif
+
+                if (!manifest_path.empty()) {
+                    entry["json_path"] = manifest_path;
+                }
             }
         } catch (...) {
 
