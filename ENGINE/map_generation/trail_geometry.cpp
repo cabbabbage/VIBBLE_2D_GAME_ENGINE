@@ -115,7 +115,7 @@ bool TrailGeometry::attempt_trail_connection(Room* a,
                                              Room* b,
                                              std::vector<Area>& existing_areas,
                                              const std::string& map_dir,
-                                             const std::string& map_info_path,
+                                             const std::string& manifest_context,
                                              AssetLibrary* asset_lib,
                                              std::vector<std::unique_ptr<Room>>& trail_rooms,
                                              int allowed_intersections,
@@ -124,7 +124,9 @@ bool TrailGeometry::attempt_trail_connection(Room* a,
                                              const nlohmann::json* map_assets_data,
                                              double map_radius,
                                              bool testing,
-                                             std::mt19937& rng)
+                                             std::mt19937& rng,
+                                             nlohmann::json* map_manifest,
+                                             devmode::core::ManifestStore* manifest_store)
 {
         if (!trail_config) {
                 if (testing) {
@@ -234,7 +236,22 @@ bool TrailGeometry::attempt_trail_connection(Room* a,
 			continue;
 		}
 
-                auto trail_room = std::make_unique<Room>( a->map_origin, "trail", name, nullptr, map_dir, map_info_path, asset_lib, &candidate, trail_config, map_assets_data, MapGridSettings::defaults(), map_radius, "trails_data" );
+                auto trail_room = std::make_unique<Room>( a->map_origin,
+                                                         "trail",
+                                                         name,
+                                                         nullptr,
+                                                         map_dir,
+                                                         manifest_context,
+                                                         asset_lib,
+                                                         &candidate,
+                                                         trail_config,
+                                                         map_assets_data,
+                                                         MapGridSettings::defaults(),
+                                                         map_radius,
+                                                         "trails_data",
+                                                         map_manifest,
+                                                         manifest_store,
+                                                         manifest_context );
 		a->add_connecting_room(trail_room.get());
 		b->add_connecting_room(trail_room.get());
 		trail_room->add_connecting_room(a);

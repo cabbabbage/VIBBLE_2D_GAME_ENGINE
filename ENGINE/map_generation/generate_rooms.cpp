@@ -13,12 +13,16 @@ GenerateRooms::GenerateRooms(const std::vector<LayerSpec>& layers,
                              int map_cx,
                              int map_cy,
                              const std::string& map_dir,
-                             const std::string& map_info_path)
+                             const std::string& map_id,
+                             nlohmann::json& map_manifest,
+                             devmode::core::ManifestStore* manifest_store)
 : map_layers_(layers),
 map_center_x_(map_cx),
 map_center_y_(map_cy),
 map_path_(map_dir),
-map_info_path_(map_info_path),
+map_id_(map_id),
+map_manifest_(&map_manifest),
+manifest_store_(manifest_store),
 rng_(std::random_device{}())
 {}
 
@@ -86,14 +90,17 @@ std::vector<std::unique_ptr<Room>> GenerateRooms::build(AssetLibrary* asset_lib,
                                         root_spec.name,
                                         nullptr,
                                         map_path_,
-                                        map_info_path_,
+                                        map_id_,
                                         asset_lib,
                                         nullptr,
                                         get_room_data(root_spec.name),
                                         map_assets_ptr,
                                         grid_settings,
                                         map_radius,
-                                        "rooms_data"
+                                        "rooms_data",
+                                        map_manifest_,
+                                        manifest_store_,
+                                        map_id_
  );
         root->layer = 0;
         all_rooms.push_back(std::move(root));
@@ -127,14 +134,17 @@ std::vector<std::unique_ptr<Room>> GenerateRooms::build(AssetLibrary* asset_lib,
                                                 children_specs[i].name,
                                                 current_parents[0],
                                                 map_path_,
-                                                map_info_path_,
+                                                map_id_,
                                                 asset_lib,
                                                 nullptr,
                                                 get_room_data(children_specs[i].name),
                                                 map_assets_ptr,
                                                 grid_settings,
                                                 map_radius,
-                                                "rooms_data"
+                                                "rooms_data",
+                                                map_manifest_,
+                                                manifest_store_,
+                                                map_id_
                                         );
 					child->layer = layer.level;
 					if (!next_parents.empty()) {
@@ -192,14 +202,17 @@ std::vector<std::unique_ptr<Room>> GenerateRooms::build(AssetLibrary* asset_lib,
                                                                     kids[i].name,
                                                                     parent,
                                                                     map_path_,
-                                                                    map_info_path_,
+                                                                    map_id_,
                                                                     asset_lib,
                                                                     nullptr,
                                                                     get_room_data(kids[i].name),
                                                                     map_assets_ptr,
                                                                     grid_settings,
                                                                     map_radius,
-                                                                    "rooms_data"
+                                                                    "rooms_data",
+                                                                    map_manifest_,
+                                                                    manifest_store_,
+                                                                    map_id_
                                                             );
 								child->layer = layer.level;
 								if (!next_parents.empty()) {
@@ -238,7 +251,15 @@ std::vector<std::unique_ptr<Room>> GenerateRooms::build(AssetLibrary* asset_lib,
                         room_refs.push_back(room_ptr.get());
                 }
                 trailgen.set_all_rooms_reference(room_refs);
-                auto trail_objects = trailgen.generate_trails( connections, existing_areas, map_path_, map_info_path_, asset_lib, map_assets_ptr, map_radius);
+                auto trail_objects = trailgen.generate_trails( connections,
+                                                               existing_areas,
+                                                               map_path_,
+                                                               map_id_,
+                                                               asset_lib,
+                                                               map_assets_ptr,
+                                                               map_radius,
+                                                               map_manifest_,
+                                                               manifest_store_);
                 for (auto& t : trail_objects) {
                         all_rooms.push_back(std::move(t));
                 }
@@ -256,7 +277,10 @@ std::vector<std::unique_ptr<Room>> GenerateRooms::build(AssetLibrary* asset_lib,
                 SDL_Point center{map_radius_int, map_radius_int};
                 Area area("Map", center, diameter, diameter, "Circle", 1, diameter, diameter);
                 AssetSpawner spawner(asset_lib, exclusion_zones);
-                std::vector<std::unique_ptr<Asset>> boundary_assets = spawner.spawn_boundary_from_json( boundary_data, area, map_info_path_ + "::map_boundary_data");
+                std::vector<std::unique_ptr<Asset>> boundary_assets = spawner.spawn_boundary_from_json(
+                        boundary_data,
+                        area,
+                        map_id_ + "::map_boundary_data");
                 int assigned_count = 0;
                 for (auto& asset_ptr : boundary_assets) {
                         Asset* asset = asset_ptr.get();

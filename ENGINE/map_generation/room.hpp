@@ -43,7 +43,22 @@ class Room {
 
         public:
     typedef std::pair<int, int> Point;
-    Room(Point origin, std::string type_, const std::string& room_def_name, Room* parent, const std::string& map_dir, const std::string& map_info_path, AssetLibrary* asset_lib, Area* precomputed_area, nlohmann::json* room_data, const nlohmann::json* map_assets_data, const MapGridSettings& grid_settings, double map_radius, const std::string& data_section);
+    Room(Point origin,
+         std::string type_,
+         const std::string& room_def_name,
+         Room* parent,
+         const std::string& map_dir,
+         const std::string& manifest_context,
+         AssetLibrary* asset_lib,
+         Area* precomputed_area,
+         nlohmann::json* room_data,
+         const nlohmann::json* map_assets_data,
+         const MapGridSettings& grid_settings,
+         double map_radius,
+         const std::string& data_section,
+         nlohmann::json* map_info_root = nullptr,
+         devmode::core::ManifestStore* manifest_store = nullptr,
+         std::string manifest_map_id = {});
     void set_sibling_left(Room* left_room);
     void set_sibling_right(Room* right_room);
     void add_connecting_room(Room* room);
@@ -98,7 +113,7 @@ class Room {
     nlohmann::json* room_data_ptr_ = nullptr;
     const nlohmann::json* map_assets_data_ptr_ = nullptr;
     MapGridSettings map_grid_settings_{};
-    std::string map_info_path_;
+    std::string manifest_context_;
     std::string data_section_;
     devmode::core::ManifestStore* manifest_store_ = nullptr;
     std::string manifest_map_id_;

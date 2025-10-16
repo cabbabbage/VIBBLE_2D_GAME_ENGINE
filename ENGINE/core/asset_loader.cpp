@@ -48,10 +48,12 @@ AssetLoader::~AssetLoader() = default;
 AssetLoader::AssetLoader(const std::string& map_id,
                          const nlohmann::json& map_manifest,
                          SDL_Renderer* renderer,
-                         std::string content_root)
+                         std::string content_root,
+                         devmode::core::ManifestStore* manifest_store)
 : map_id_(map_id),
 map_path_(std::move(content_root)),
-renderer_(renderer)
+renderer_(renderer),
+manifest_store_(manifest_store)
 {
         const auto overall_begin = std::chrono::steady_clock::now();
 
@@ -230,7 +232,13 @@ std::vector<Asset*> AssetLoader::collectDistantAssets(int lock_threshold, int re
 }
 
 void AssetLoader::loadRooms() {
-        GenerateRooms generator(map_layers_, map_center_x_, map_center_y_, map_path_, map_info_path_);
+        GenerateRooms generator(map_layers_,
+                                map_center_x_,
+                                map_center_y_,
+                                map_path_,
+                                map_id_,
+                                map_info_json_,
+                                manifest_store_);
         nlohmann::json empty_boundary = nlohmann::json::object();
         nlohmann::json empty_rooms    = nlohmann::json::object();
         nlohmann::json empty_trails   = nlohmann::json::object();
@@ -286,12 +294,6 @@ void AssetLoader::load_map_json(const nlohmann::json& map_manifest) {
         map_info_json_ = map_manifest;
         if (!map_info_json_.is_object()) {
                 map_info_json_ = nlohmann::json::object();
-        }
-
-        if (!map_path_.empty()) {
-                map_info_path_ = map_path_ + "/map_info.json";
-        } else {
-                map_info_path_.clear();
         }
 
         ensure_map_grid_settings(map_info_json_);

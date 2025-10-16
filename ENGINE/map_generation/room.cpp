@@ -3,7 +3,6 @@
 #include "asset/asset_types.hpp"
 #include "dev_mode/core/manifest_store.hpp"
 #include "dev_mode/dev_controls_persistence.hpp"
-#include <fstream>
 #include <nlohmann/json.hpp>
 #include <stdexcept>
 #include <algorithm>
@@ -187,27 +186,30 @@ Room::Room(Point origin,
            const std::string& room_def_name,
            Room* parent,
            const std::string& map_dir,
-           const std::string& map_info_path,
+           const std::string& manifest_context,
            AssetLibrary* asset_lib,
            Area* precomputed_area,
            nlohmann::json* room_data,
            const nlohmann::json* map_assets_data,
            const MapGridSettings& grid_settings,
            double map_radius,
-           const std::string& data_section
+           const std::string& data_section,
+           nlohmann::json* map_info_root,
+           devmode::core::ManifestStore* manifest_store,
+           std::string manifest_map_id)
 )
 : map_origin(origin),
 parent(parent),
 room_name(room_def_name),
-room_directory(map_info_path + "::" + data_section),
+room_directory(manifest_context.empty() ? data_section : manifest_context + "::" + data_section),
 map_path(map_dir),
-json_path(map_info_path + "::" + data_section + "::" + room_def_name),
+json_path((manifest_context.empty() ? data_section : manifest_context + "::" + data_section) + "::" + room_def_name),
 room_area(nullptr),
 type(type_),
 room_data_ptr_(room_data),
 map_assets_data_ptr_(map_assets_data),
 map_grid_settings_(grid_settings),
-map_info_path_(map_info_path),
+manifest_context_(manifest_context),
 data_section_(data_section)
 {
         if (testing) {
@@ -215,6 +217,11 @@ data_section_(data_section)
                 << " at (" << origin.first << ", " << origin.second << ")"
                 << (parent ? " with parent\n" : " (no parent)\n");
         }
+        if (!manifest_map_id.empty()) {
+                manifest_map_id_ = std::move(manifest_map_id);
+        }
+        manifest_store_ = manifest_store;
+        map_info_root_ = map_info_root;
         if (room_data_ptr_) {
                 if (room_data_ptr_->is_null()) {
                         *room_data_ptr_ = json::object();
@@ -282,11 +289,14 @@ data_section_(data_section)
 	}
 	std::vector<json> json_sources;
 	std::vector<std::string> source_paths;
-	json_sources.push_back(assets_json);
+        json_sources.push_back(assets_json);
         source_paths.push_back(json_path);
         if (assets_json.value("inherits_map_assets", false) && map_assets_data_ptr_) {
                 json_sources.push_back(*map_assets_data_ptr_);
-                source_paths.push_back(map_info_path_ + "::map_assets_data");
+                const std::string inherited_path = manifest_context_.empty()
+                        ? std::string{"map_assets_data"}
+                        : manifest_context_ + "::map_assets_data";
+                source_paths.push_back(inherited_path);
         }
         planner = std::make_unique<AssetSpawnPlanner>( json_sources, *room_area, *asset_lib, source_paths );
         std::vector<Area> exclusion;
@@ -692,6 +702,13 @@ void Room::save_assets_json() const {
         if (room_data_ptr_) {
                 *room_data_ptr_ = assets_json;
         }
+        if (map_info_root_ && map_info_root_->is_object()) {
+                nlohmann::json& section = (*map_info_root_)[data_section_];
+                if (!section.is_object()) {
+                        section = nlohmann::json::object();
+                }
+                section[room_name] = assets_json;
+        }
         if (manifest_store_ && !manifest_map_id_.empty()) {
                 nlohmann::json payload;
                 if (map_info_root_) {
@@ -711,25 +728,5 @@ void Room::save_assets_json() const {
                         manifest_store_->flush();
                 }
                 return;
-        }
-        if (map_info_path_.empty() || data_section_.empty()) {
-                return;
-        }
-        nlohmann::json map_info_json;
-        std::ifstream in(map_info_path_);
-        if (in.is_open()) {
-                in >> map_info_json;
-        }
-        if (!map_info_json.is_object()) {
-                map_info_json = nlohmann::json::object();
-        }
-        nlohmann::json& section = map_info_json[data_section_];
-        if (!section.is_object()) {
-                section = nlohmann::json::object();
-        }
-        section[room_name] = assets_json;
-        std::ofstream out(map_info_path_);
-        if (out.is_open()) {
-                out << map_info_json.dump(2);
         }
 }
