@@ -281,6 +281,8 @@ add_executable(manifest_store_tests
     tests/manifest/manifest_store_tests.cpp
     tests/manifest/spawn_group_manifest_tests.cpp
     tests/dev_mode/room_editor_manifest_tests.cpp
+    ENGINE/asset/asset_info.cpp
+    ENGINE/asset/animation.cpp
     ENGINE/dev_mode/dev_controls_persistence.cpp
     ENGINE/dev_mode/core/manifest_store.cpp
     ENGINE/dev_mode/core/dev_json_store.cpp
@@ -305,6 +307,12 @@ add_executable(manifest_store_tests
     ENGINE/dev_mode/search_assets.cpp
     ENGINE/utils/input.cpp
     ENGINE/utils/area.cpp
+    ENGINE/asset_info_methods/animation_loader.cpp
+    ENGINE/asset_info_methods/lighting_loader.cpp
+    ENGINE/asset_info_methods/child_loader.cpp
+    ENGINE/utils/cache_manager.cpp
+    ENGINE/utils/generate_faded_mask.cpp
+    ENGINE/utils/generate_light.cpp
     ENGINE/dev_mode/room_editor_map_info.cpp
     ENGINE/core/manifest/manifest_loader.cpp
     ENGINE/map_generation/map_layers_geometry.cpp
@@ -335,7 +343,6 @@ add_executable(asset_info_manifest_tests
     ENGINE/asset/asset_info.cpp
     ENGINE/asset/asset_types.cpp
     ENGINE/asset/animation.cpp
-    ENGINE/asset_info_methods/animation_loader.cpp
     ENGINE/asset_info_methods/lighting_loader.cpp
     ENGINE/asset_info_methods/child_loader.cpp
     ENGINE/utils/generate_faded_mask.cpp
