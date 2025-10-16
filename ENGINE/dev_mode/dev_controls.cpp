@@ -487,6 +487,14 @@ DevControls::~DevControls() {
     AssetInfo::set_manifest_store_provider({});
 }
 
+devmode::core::ManifestStore& DevControls::manifest_store() {
+    return manifest_store_;
+}
+
+const devmode::core::ManifestStore& DevControls::manifest_store() const {
+    return manifest_store_;
+}
+
 void DevControls::set_input(Input* input) {
     input_ = input;
     if (room_editor_) room_editor_->set_input(input);

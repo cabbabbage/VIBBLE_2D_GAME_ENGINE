@@ -107,6 +107,9 @@ public:
 
     void finalize_asset_drag(Asset* asset, const std::shared_ptr<AssetInfo>& info);
 
+    [[nodiscard]] devmode::core::ManifestStore& manifest_store();
+    [[nodiscard]] const devmode::core::ManifestStore& manifest_store() const;
+
     void toggle_room_config();
     void close_room_config();
     bool is_room_config_open() const;
@@ -173,8 +176,6 @@ private:
 
     bool persist_map_info_to_disk();
 
-    devmode::core::ManifestStore& manifest_store() { return manifest_store_; }
-    const devmode::core::ManifestStore& manifest_store() const { return manifest_store_; }
     const RoomAreaCache::PolygonList& room_area_polygons();
 
     Assets* assets_ = nullptr;

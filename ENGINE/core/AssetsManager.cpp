@@ -1144,7 +1144,8 @@ void Assets::begin_area_edit_for_selected_asset(const std::string& area_name) {
 
 devmode::core::ManifestStore* Assets::manifest_store() {
     if (dev_controls_) {
-        return &dev_controls_->manifest_store();
+        auto& store = dev_controls_->manifest_store();
+        return &store;
     }
     if (!manifest_store_fallback_) {
         manifest_store_fallback_ = std::make_unique<devmode::core::ManifestStore>();

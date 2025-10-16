@@ -6,12 +6,10 @@
 #include <string>
 #include <vector>
 
+#include <nlohmann/json_fwd.hpp>
+
 #include "dev_mode/SlidingWindowContainer.hpp"
 #include "dev_mode/asset_info_sections.hpp"
-
-namespace nlohmann {
-class json;
-}
 
 class AssetInfo;
 class Input;
@@ -21,10 +19,6 @@ class Section_BasicInfo;
 class SearchAssets;
 class Section_Shading;
 class Section_SpawnGroups;
-namespace devmode::core {
-class ManifestStore;
-}
-
 namespace animation_editor {
 class AnimationEditorWindow;
 }
@@ -65,8 +59,6 @@ class AssetInfoUI {
     void notify_light_sources_modified(bool purge_light_cache);
     void notify_spawn_group_entry_changed(const nlohmann::json& entry);
     void notify_spawn_group_removed(const std::string& spawn_id);
-
-    void set_manifest_store(devmode::core::ManifestStore* store);
 
   private:
     void layout_widgets(int screen_w, int screen_h) const;
@@ -109,10 +101,3 @@ class AssetInfoUI {
     devmode::core::ManifestStore* manifest_store_ = nullptr;
     Section_SpawnGroups* spawn_groups_section_ = nullptr;
 };
-#include <memory>
-#include <string>
-#include <vector>
-
-namespace devmode::core {
-class ManifestStore;
-}

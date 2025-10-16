@@ -188,7 +188,7 @@ target_link_libraries(dev_mode_ui_tests PRIVATE
     SDL2_mixer::SDL2_mixer
     SDL2_ttf::SDL2_ttf
 )
-target_compile_definitions(dev_mode_ui_tests PRIVATE SDL_MAIN_HANDLED PROJECT_ROOT="${CMAKE_SOURCE_DIR}")
+target_compile_definitions(dev_mode_ui_tests PRIVATE SDL_MAIN_HANDLED PROJECT_ROOT="${CMAKE_SOURCE_DIR}" ASSET_INFO_ENABLE_TEST_ACCESS)
 add_test(NAME dev_mode_ui_tests COMMAND dev_mode_ui_tests)
 
 add_executable(map_grid_tests

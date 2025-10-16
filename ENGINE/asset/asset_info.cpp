@@ -563,7 +563,7 @@ void AssetInfo::generate_lights(SDL_Renderer *renderer) {
 	LightingLoader::generate_textures(*this, renderer);
 }
 
-bool AssetInfo::commit_manifest() const {
+bool AssetInfo::commit_manifest() {
         nlohmann::json payload = info_json_;
         if (!payload.contains("asset_name") || !payload["asset_name"].is_string() || payload["asset_name"].get<std::string>().empty()) {
                 payload["asset_name"] = name;
@@ -711,12 +711,26 @@ void AssetInfo::rebuild_tag_cache() {
 }
 
 void AssetInfo::rebuild_anti_tag_cache() {
-        anti_tag_lookup_.clear();
-        anti_tag_lookup_.reserve(anti_tags.size());
-        for (const auto& value : anti_tags) {
-                anti_tag_lookup_.insert(value);
-        }
+    anti_tag_lookup_.clear();
+    anti_tag_lookup_.reserve(anti_tags.size());
+    for (const auto& value : anti_tags) {
+        anti_tag_lookup_.insert(value);
+    }
 }
+
+#if defined(ASSET_INFO_ENABLE_TEST_ACCESS)
+void AssetInfoTestAccess::initialize_info_json(AssetInfo& info, nlohmann::json data) {
+    info.info_json_ = std::move(data);
+}
+
+void AssetInfoTestAccess::rebuild_tag_cache(AssetInfo& info) {
+    info.rebuild_tag_cache();
+}
+
+void AssetInfoTestAccess::rebuild_anti_tag_cache(AssetInfo& info) {
+    info.rebuild_anti_tag_cache();
+}
+#endif
 
 void AssetInfo::set_passable(bool v) {
         passable = v;

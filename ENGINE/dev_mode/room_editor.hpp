@@ -25,6 +25,7 @@ class Room;
 class MapGrid;
 class DMButton;
 class FullScreenCollapsible;
+class DevControls;
 
 namespace devmode::core {
 class ManifestStore;
@@ -99,6 +100,10 @@ public:
     double get_zoom_scale_factor() const { return zoom_scale_factor_; }
 
     bool is_spawn_group_panel_visible() const;
+
+protected:
+    void handle_spawn_config_change(const nlohmann::json& entry);
+
 private:
     enum class DragMode {
         None,
@@ -154,7 +159,6 @@ private:
     void update_exact_json(nlohmann::json& entry, const Asset& asset, SDL_Point center, int width, int height);
     void update_percent_json(nlohmann::json& entry, const Asset& asset, SDL_Point center, int width, int height);
     void save_perimeter_json(nlohmann::json& entry, int dx, int dy, int orig_w, int orig_h, int radius);
-    void handle_spawn_config_change(const nlohmann::json& entry);
     void respawn_spawn_group(const nlohmann::json& entry);
     std::unique_ptr<MapGrid> build_room_grid(const std::string& ignore_spawn_id) const;
     void integrate_spawned_assets(std::vector<std::unique_ptr<Asset>>& spawned);
@@ -175,8 +179,6 @@ private:
     void reopen_room_configurator();
     void notify_room_assets_saved();
     void save_current_room_assets_json();
-
-    void set_manifest_store(devmode::core::ManifestStore* store);
 
 private:
     Assets* assets_ = nullptr;
@@ -249,13 +251,6 @@ private:
 
     RoomAssetsSavedCallback room_assets_saved_callback_;
     std::string rename_active_room(const std::string& old_name, const std::string& desired_name);
-    devmode::core::ManifestStore* manifest_store_ = nullptr;
+
+    friend class DevControls;
 };
-
-#include <memory>
-#include <optional>
-#include <unordered_set>
-
-namespace devmode::core {
-class ManifestStore;
-}

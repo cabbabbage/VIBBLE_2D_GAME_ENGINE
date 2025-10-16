@@ -22,6 +22,7 @@ class Global_Light_Source {
     SDL_Point get_direction_target() const;
     int       min_opacity() const { return min_opacity_; }
     int       max_opacity() const { return max_opacity_; }
+    bool      initialize_from_map_manifest(const nlohmann::json& map_info, std::string_view map_id);
 
         private:
     struct KeyEntry {

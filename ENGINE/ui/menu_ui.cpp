@@ -242,7 +242,19 @@ void MenuUI::doRestart() {
                 }
                 int start_px = player_ptr ? player_ptr->pos.x : static_cast<int>(loader_->getMapRadius());
                 int start_py = player_ptr ? player_ptr->pos.y : static_cast<int>(loader_->getMapRadius());
-                game_assets_ = new Assets(std::move(all_assets), *loader_->getAssetLibrary(), player_ptr, loader_->getRooms(), screen_w_, screen_h_, start_px, start_py, static_cast<int>(loader_->getMapRadius() * 1.2), renderer_, map_path_);
+                game_assets_ = new Assets(std::move(all_assets),
+                                          *loader_->getAssetLibrary(),
+                                          player_ptr,
+                                          loader_->getRooms(),
+                                          screen_w_,
+                                          screen_h_,
+                                          start_px,
+                                          start_py,
+                                          static_cast<int>(loader_->getMapRadius() * 1.2),
+                                          renderer_,
+                                          loader_->map_identifier(),
+                                          loader_->map_manifest(),
+                                          loader_->content_root());
                 if (!input_) input_ = new Input();
                 game_assets_->set_input(input_);
                 if (!player_ptr) {

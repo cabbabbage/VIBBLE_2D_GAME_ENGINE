@@ -43,7 +43,8 @@ using Mapping = std::vector<MappingEntry>;
 
 class AssetInfo {
 
-	public:
+        public:
+    using ChildInfo = ::ChildInfo;
     AssetInfo(const std::string &asset_folder_name);
     AssetInfo(const std::string &asset_folder_name, const nlohmann::json& metadata);
     static std::shared_ptr<AssetInfo> from_manifest_entry(const std::string& asset_folder_name,
@@ -102,7 +103,7 @@ class AssetInfo {
     std::string custom_controller_key;
 
 	public:
-    bool commit_manifest() const;
+    bool commit_manifest();
     void set_asset_type(const std::string &t);
     void set_z_threshold(int z);
     void set_min_same_type_distance(int d);
@@ -178,4 +179,15 @@ class AssetInfo {
     friend class AnimationLoader;
     friend class LightingLoader;
     friend class ChildLoader;
+#if defined(ASSET_INFO_ENABLE_TEST_ACCESS)
+    friend struct AssetInfoTestAccess;
+#endif
 };
+
+#if defined(ASSET_INFO_ENABLE_TEST_ACCESS)
+struct AssetInfoTestAccess {
+    static void initialize_info_json(AssetInfo& info, nlohmann::json data);
+    static void rebuild_tag_cache(AssetInfo& info);
+    static void rebuild_anti_tag_cache(AssetInfo& info);
+};
+#endif

@@ -43,7 +43,7 @@ SceneRenderer::SceneRenderer(SDL_Renderer* renderer,
                                   nullptr,
                                   &reactive_shadow_settings_ })
 {
-    main_light_source_.load_from_map_manifest(map_manifest, map_id);
+    main_light_source_.initialize_from_map_manifest(map_manifest, map_id);
     fullscreen_light_tex_ = SDL_CreateTexture(renderer_, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET, screen_width_, screen_height_);
     if (fullscreen_light_tex_) {
         SDL_SetTextureBlendMode(fullscreen_light_tex_, SDL_BLENDMODE_BLEND);

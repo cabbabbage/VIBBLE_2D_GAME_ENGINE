@@ -27,7 +27,9 @@
 #include "asset_sections/Section_Lighting.hpp"
 #include "asset_sections/Section_Shading.hpp"
 #include "asset_sections/Section_Spacing.hpp"
+#include "spawn_group_config/SpawnGroupConfig.hpp"
 #include "asset_sections/Section_SpawnGroups.hpp"
+#include "dev_mode/core/manifest_store.hpp"
 #include "asset_sections/animation_editor_window/AnimationEditorWindow.hpp"
 #include "core/AssetsManager.hpp"
 #include "asset/Asset.hpp"
@@ -36,7 +38,6 @@
 #include "render_pipeline/ScalingLogic.hpp"
 #include "utils/light_source.hpp"
 #include "search_assets.hpp"
-#include "dev_mode/core/manifest_store.hpp"
 
 namespace {
 
@@ -313,6 +314,9 @@ void AssetInfoUI::set_manifest_store(devmode::core::ManifestStore* store) {
     if (spawn_groups_section_) {
         spawn_groups_section_->set_manifest_store(manifest_store_);
     }
+    if (animation_editor_window_) {
+        animation_editor_window_->set_manifest_store(manifest_store_);
+    }
 }
 
 void AssetInfoUI::set_target_asset(Asset* a) {
@@ -388,13 +392,6 @@ void AssetInfoUI::clear_info() {
         }
     }
     target_asset_ = nullptr;
-}
-
-void AssetInfoUI::set_manifest_store(devmode::core::ManifestStore* store) {
-    manifest_store_ = store;
-    if (animation_editor_window_) {
-        animation_editor_window_->set_manifest_store(manifest_store_);
-    }
 }
 
 void AssetInfoUI::open()  {

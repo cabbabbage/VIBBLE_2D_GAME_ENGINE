@@ -83,6 +83,8 @@ namespace {
         return true;
     }
 
+} // namespace
+
 struct AssetLibraryUI::AssetTileWidget : public Widget {
     static constexpr int kPad = 8;
     static constexpr int kDeleteButtonSize = 24;

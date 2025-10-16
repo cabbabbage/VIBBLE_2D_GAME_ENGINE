@@ -26,27 +26,32 @@ std::vector<std::string> load_string_array(const nlohmann::json& json_value) {
 
 void populate_from_json(AssetInfo& info, const nlohmann::json& raw_data) {
     nlohmann::json data = raw_data.is_object() ? raw_data : nlohmann::json::object();
-    info.info_json_ = data;
+    info.type = data.value("asset_type", std::string{});
+    info.start_animation = data.value("start", std::string{});
+    info.z_threshold = data.value("z_threshold", 0);
+    info.passable = data.value("passable", false);
+    info.min_same_type_distance = data.value("min_same_type_distance", 0);
+    info.min_distance_all = data.value("min_distance_all", 0);
 
-    info.type = info.info_json_.value("asset_type", std::string{});
-    info.start_animation = info.info_json_.value("start", std::string{});
-    info.z_threshold = info.info_json_.value("z_threshold", 0);
-    info.passable = info.info_json_.value("passable", false);
-    info.min_same_type_distance = info.info_json_.value("min_same_type_distance", 0);
-    info.min_distance_all = info.info_json_.value("min_distance_all", 0);
+    info.tags = load_string_array(data.value("tags", nlohmann::json::array()));
+    info.anti_tags = load_string_array(data.value("anti_tags", nlohmann::json::array()));
 
-    info.tags = load_string_array(info.info_json_.value("tags", nlohmann::json::array()));
-    info.anti_tags = load_string_array(info.info_json_.value("anti_tags", nlohmann::json::array()));
+    AssetInfoTestAccess::rebuild_tag_cache(info);
+    AssetInfoTestAccess::rebuild_anti_tag_cache(info);
 
-    info.rebuild_tag_cache();
-    info.rebuild_anti_tag_cache();
-
-    if (!info.info_json_.contains("tags")) {
-        info.info_json_["tags"] = nlohmann::json::array();
+    nlohmann::json tag_array = nlohmann::json::array();
+    for (const auto& value : info.tags) {
+        tag_array.push_back(value);
     }
-    if (!info.info_json_.contains("anti_tags")) {
-        info.info_json_["anti_tags"] = nlohmann::json::array();
+    data["tags"] = std::move(tag_array);
+
+    nlohmann::json anti_tag_array = nlohmann::json::array();
+    for (const auto& value : info.anti_tags) {
+        anti_tag_array.push_back(value);
     }
+    data["anti_tags"] = std::move(anti_tag_array);
+
+    AssetInfoTestAccess::initialize_info_json(info, std::move(data));
 
     info.passable = info.has_tag("passable");
 }

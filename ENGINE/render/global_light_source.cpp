@@ -33,6 +33,10 @@ Global_Light_Source::Global_Light_Source(SDL_Renderer* renderer,
         recalc_position();
 }
 
+bool Global_Light_Source::initialize_from_map_manifest(const json& map_info, std::string_view map_id) {
+        return load_from_map_manifest(map_info, map_id);
+}
+
 void Global_Light_Source::set_defaults(int screen_width, SDL_Color fallback_base_color) {
         radius_          = float(screen_width) * 3.0f;
         intensity_       = 255.0f;

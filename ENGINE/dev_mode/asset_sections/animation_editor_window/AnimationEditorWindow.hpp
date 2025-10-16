@@ -8,14 +8,11 @@
 #include <string>
 #include <vector>
 
+#include "dev_mode/core/manifest_store.hpp"
 #include "dev_mode/widgets.hpp"
 #include "frame_editor/FrameEditor.hpp"
 
 #include <nlohmann/json_fwd.hpp>
-
-namespace devmode::core {
-class ManifestStore;
-}
 
 class AssetInfo;
 class Input;
