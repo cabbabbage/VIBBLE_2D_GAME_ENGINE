@@ -804,52 +804,6 @@
             ],
             "revision": 1
         },
-        "Tree": {
-            "histogram": [
-                0,
-                0,
-                0,
-                0,
-                6734,
-                0,
-                0,
-                0,
-                0,
-                0
-            ],
-            "last_requested_percent": 55,
-            "last_requested_scale": 0.5463049411773682,
-            "last_updated": "2025-10-16T08:35:57Z",
-            "last_used_texture_scale": 0.800000011920929,
-            "recommended_percentages": [
-                100,
-                60
-            ],
-            "revision": 2
-        },
-        "Tree_Dark": {
-            "histogram": [
-                0,
-                0,
-                0,
-                0,
-                12194,
-                0,
-                0,
-                0,
-                0,
-                0
-            ],
-            "last_requested_percent": 55,
-            "last_requested_scale": 0.5468306541442871,
-            "last_updated": "2025-10-16T08:35:57Z",
-            "last_used_texture_scale": 0.800000011920929,
-            "recommended_percentages": [
-                100,
-                60
-            ],
-            "revision": 2
-        },
         "Vibble": {
             "histogram": [
                 0,
@@ -1195,6 +1149,6 @@
             "revision": 1
         }
     },
-    "new_values": true,
+    "new_values": false,
     "version": 1
 }

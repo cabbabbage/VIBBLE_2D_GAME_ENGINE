@@ -8795,7 +8795,7 @@
       "rnd_spawn_max": 400,
       "rnd_spawn_min": 300,
       "size_settings": {
-        "scale_percentage": 65
+        "scale_percentage": 103.0
       },
       "spawn_groups": [
         {
@@ -10088,7 +10088,7 @@
       "rnd_spawn_max": 400,
       "rnd_spawn_min": 300,
       "size_settings": {
-        "scale_percentage": 65
+        "scale_percentage": 95.0
       },
       "tags": [
         "boundary",
@@ -10156,7 +10156,7 @@
       "rnd_spawn_max": 400,
       "rnd_spawn_min": 300,
       "size_settings": {
-        "scale_percentage": 66.0
+        "scale_percentage": 104.0
       },
       "start": "SRC/assets/Tree_Darker",
       "tags": [
