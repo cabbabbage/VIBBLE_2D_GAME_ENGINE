@@ -11,6 +11,12 @@
 #include "dev_mode/widgets.hpp"
 #include "frame_editor/FrameEditor.hpp"
 
+#include <nlohmann/json_fwd.hpp>
+
+namespace devmode::core {
+class ManifestStore;
+}
+
 class AssetInfo;
 class Input;
 
@@ -38,6 +44,8 @@ class AnimationEditorWindow {
     void set_info(const std::shared_ptr<AssetInfo>& info);
     void clear_info();
 
+    void set_manifest_store(devmode::core::ManifestStore* store);
+
     void update(const Input& input, int screen_w, int screen_h);
     void render(SDL_Renderer* renderer) const;
     bool handle_event(const SDL_Event& e);
@@ -60,6 +68,9 @@ class AnimationEditorWindow {
     void create_animation_via_prompt();
     void reload_document();
     void process_auto_save();
+    void close_manifest_transaction();
+    bool persist_manifest_payload(const nlohmann::json& payload, bool finalize = false);
+    std::optional<std::string> resolve_manifest_key(const AssetInfo& info) const;
 
     std::optional<std::filesystem::path> pick_folder() const;
     std::optional<std::filesystem::path> pick_gif() const;
@@ -72,6 +83,7 @@ class AnimationEditorWindow {
     SDL_Rect bounds_{0, 0, 0, 0};
     std::weak_ptr<AssetInfo> info_;
     std::filesystem::path info_path_;
+    std::filesystem::path asset_root_path_;
     std::shared_ptr<AnimationDocument> document_;
     std::shared_ptr<PreviewProvider> preview_provider_;
     std::shared_ptr<CroppingService> cropping_service_;
@@ -95,6 +107,10 @@ class AnimationEditorWindow {
     bool auto_save_pending_ = false;
     int auto_save_timer_frames_ = 0;
     std::function<void()> on_document_saved_;
+    devmode::core::ManifestStore* manifest_store_ = nullptr;
+    devmode::core::ManifestStore::AssetTransaction manifest_transaction_;
+    std::string manifest_asset_key_;
+    bool using_manifest_store_ = false;
 };
 
 }

@@ -123,3 +123,45 @@ TEST_CASE("ManifestStore edits survive reloads") {
     fs::remove_all(manifest_path.parent_path());
 }
 
+TEST_CASE("ManifestStore create and remove assets updates manifest entries") {
+    nlohmann::json initial = {
+        {"assets", nlohmann::json::object()},
+        {"maps", nlohmann::json::object()},
+        {"rooms", nlohmann::json::array()}
+    };
+
+    const auto manifest_path = make_manifest_path("create_remove", initial);
+
+    auto loader = [manifest_path]() {
+        return load_manifest_from_path(manifest_path);
+    };
+
+    devmode::core::ManifestStore store(manifest_path, loader);
+
+    auto session = store.begin_asset_edit("NewAsset", true);
+    REQUIRE(session);
+    CHECK(session.is_new_asset());
+    session.data() = {
+        {"asset_name", "NewAsset"},
+        {"asset_type", "Object"},
+        {"animations", nlohmann::json::object()},
+        {"start", ""}
+    };
+    CHECK(session.commit());
+    store.flush();
+
+    auto manifest_after_create = read_json(manifest_path);
+    REQUIRE(manifest_after_create.contains("assets"));
+    CHECK(manifest_after_create["assets"].contains("NewAsset"));
+
+    CHECK(store.remove_asset("NewAsset"));
+    store.flush();
+
+    auto manifest_after_delete = read_json(manifest_path);
+    REQUIRE(manifest_after_delete.contains("assets"));
+    CHECK(!manifest_after_delete["assets"].contains("NewAsset"));
+
+    devmode::core::DevJsonStore::instance().flush_all();
+    fs::remove_all(manifest_path.parent_path());
+}
+

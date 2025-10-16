@@ -782,7 +782,7 @@ bool AreaOverlayEditor::rename_current_area(const std::string& desired_name) {
             if (!info_->rename_area(area_name_, trimmed)) {
                 return false;
             }
-            (void)info_->update_info_json();
+            (void)info_->commit_manifest();
         }
         return apply_success(had_existing);
     }
@@ -814,7 +814,7 @@ void AreaOverlayEditor::delete_current_area() {
     if (info_) {
         removed = info_->remove_area(area_name_);
         if (removed) {
-            (void)info_->update_info_json();
+            (void)info_->commit_manifest();
         }
     } else if (room_) {
         removed = room_->remove_area(area_name_);
@@ -1318,7 +1318,7 @@ void AreaOverlayEditor::save_area() {
         if (info_) {
             bool removed = info_->remove_area(area_name_);
             if (removed) {
-                (void)info_->update_info_json();
+                (void)info_->commit_manifest();
             }
             return removed;
         }
@@ -1366,7 +1366,7 @@ void AreaOverlayEditor::save_area() {
             }
             frame.pixel_scale = scale;
             info_->upsert_area_from_editor(area, frame);
-            (void)info_->update_info_json();
+            (void)info_->commit_manifest();
         } else if (room_) {
             std::string type = determine_room_type();
             area.set_type(type);

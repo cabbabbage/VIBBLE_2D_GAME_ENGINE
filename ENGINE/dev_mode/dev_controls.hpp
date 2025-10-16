@@ -121,6 +121,9 @@ public:
     void clear_selection();
     void purge_asset(Asset* asset);
 
+    void notify_spawn_group_config_changed(const nlohmann::json& entry);
+    void notify_spawn_group_removed(const std::string& spawn_id);
+
     const std::vector<Asset*>& get_selected_assets() const;
     const std::vector<Asset*>& get_highlighted_assets() const;
     Asset* get_hovered_asset() const;

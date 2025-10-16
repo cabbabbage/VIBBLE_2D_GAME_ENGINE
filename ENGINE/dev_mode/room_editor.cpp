@@ -252,6 +252,10 @@ void RoomEditor::set_header_visibility_callback(std::function<void(bool)> cb) {
     }
 }
 
+void RoomEditor::set_manifest_store(devmode::core::ManifestStore* store) {
+    manifest_store_ = store;
+}
+
 void RoomEditor::set_current_room(Room* room) {
     room_editor_trace("[RoomEditor] set_current_room begin");
     if (room) {
@@ -367,7 +371,12 @@ void RoomEditor::update_ui(const Input& input) {
     }
 
     if (library_ui_ && library_ui_->is_visible()) {
-        library_ui_->update(input, screen_w_, screen_h_, assets_->library(), *assets_);
+        if (manifest_store_) {
+            library_ui_->update(input, screen_w_, screen_h_, assets_->library(), *assets_, *manifest_store_);
+        } else {
+            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+                        "[RoomEditor] Manifest store unavailable; asset library UI update skipped.");
+        }
     }
 
     if (library_ui_) {
@@ -718,6 +727,9 @@ void RoomEditor::open_asset_info_editor(const std::shared_ptr<AssetInfo>& info) 
     }
     if (!info_ui_) {
         info_ui_ = std::make_unique<AssetInfoUI>();
+        if (info_ui_) {
+            info_ui_->set_manifest_store(manifest_store_);
+        }
         info_ui_->set_header_visibility_callback([this](bool visible) {
             asset_info_panel_visible_ = visible;
             if (header_visibility_callback_) {
@@ -742,6 +754,13 @@ void RoomEditor::open_asset_info_editor_for_asset(Asset* asset) {
     focus_camera_on_asset(asset, 0.8, 20);
     open_asset_info_editor(asset->info);
     if (info_ui_) info_ui_->set_target_asset(asset);
+}
+
+void RoomEditor::set_manifest_store(devmode::core::ManifestStore* store) {
+    manifest_store_ = store;
+    if (info_ui_) {
+        info_ui_->set_manifest_store(manifest_store_);
+    }
 }
 
 void RoomEditor::close_asset_info_editor() {

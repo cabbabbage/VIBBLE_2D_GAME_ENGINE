@@ -12,6 +12,7 @@
 
 #include <nlohmann/json.hpp>
 
+#include "dev_mode/core/manifest_store.hpp"
 #include "string_utils.hpp"
 
 namespace animation_editor {
@@ -59,7 +60,6 @@ void CustomControllerService::set_asset_root(const std::filesystem::path& asset_
     }
 
     asset_root_ = normalized.lexically_normal();
-    asset_info_path_ = asset_root_ / "info.json";
 
     asset_name_ = asset_root_.filename().string();
     if (asset_name_.empty() && asset_root_.has_parent_path()) {
@@ -73,6 +73,14 @@ void CustomControllerService::set_asset_root(const std::filesystem::path& asset_
 
     controller_dir_ = engine_root_ / "custom_controllers";
     controller_factory_cpp_ = engine_root_ / "asset" / "controller_factory.cpp";
+}
+
+void CustomControllerService::set_manifest_store(devmode::core::ManifestStore* store) {
+    manifest_store_ = store;
+}
+
+void CustomControllerService::set_manifest_asset_key(std::string asset_key) {
+    manifest_asset_key_ = std::move(asset_key);
 }
 
 void CustomControllerService::create_new_controller(const std::string& controller_name) {
@@ -403,38 +411,37 @@ void CustomControllerService::ensure_controller_factory_registration(const std::
 
 void CustomControllerService::update_asset_metadata(const std::string& base_name,
                                                     const std::string& animation_id) const {
-    if (asset_info_path_.empty()) {
-        return;
+    if (!manifest_store_) {
+        throw std::runtime_error("Manifest store is not configured for custom controller updates.");
+    }
+    if (manifest_asset_key_.empty()) {
+        throw std::runtime_error("Manifest asset key has not been set for controller updates.");
     }
 
-    nlohmann::json data = nlohmann::json::object();
+    auto transaction = manifest_store_->begin_asset_transaction(manifest_asset_key_, true);
+    if (!transaction) {
+        throw std::runtime_error("Failed to begin manifest transaction for asset " + manifest_asset_key_);
+    }
 
-    std::error_code ec;
-    if (std::filesystem::exists(asset_info_path_, ec)) {
-        std::ifstream input(asset_info_path_);
-        if (!input.is_open()) {
-            throw std::runtime_error("Failed to open asset info: " + asset_info_path_.string());
-        }
-        std::string json_text((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
-        if (!json_text.empty()) {
-            nlohmann::json parsed = nlohmann::json::parse(json_text, nullptr, false);
-            if (parsed.is_discarded()) {
-                throw std::runtime_error("Failed to parse asset info JSON: " + asset_info_path_.string());
-            }
-            data = parsed;
-            if (!data.is_object()) {
-                data = nlohmann::json::object();
-            }
-        }
+    nlohmann::json& data = transaction.data();
+    if (!data.is_object()) {
+        data = nlohmann::json::object();
     }
 
     data["custom_controller_key"] = base_name;
 
     if (!animation_id.empty()) {
+        nlohmann::json* animations_container = nullptr;
         auto animations_it = data.find("animations");
-        if (animations_it != data.end() && animations_it->is_object()) {
-            auto entry_it = animations_it->find(animation_id);
-            if (entry_it != animations_it->end() && entry_it->is_object()) {
+        if (animations_it != data.end()) {
+            if (animations_it->is_object()) {
+                animations_container = &(*animations_it);
+            }
+        }
+
+        if (animations_container) {
+            auto entry_it = animations_container->find(animation_id);
+            if (entry_it != animations_container->end() && entry_it->is_object()) {
                 (*entry_it)["custom_animation_controller_key"] = base_name;
                 (*entry_it)["custom_animation_controller_hpp_path"] = (controller_dir_ / (base_name + ".hpp")).string();
                 (*entry_it)["has_custom_animation_controller"] = true;
@@ -442,12 +449,9 @@ void CustomControllerService::update_asset_metadata(const std::string& base_name
         }
     }
 
-    std::ofstream output(asset_info_path_);
-    if (!output.is_open()) {
-        throw std::runtime_error("Failed to write asset info: " + asset_info_path_.string());
+    if (!transaction.save()) {
+        throw std::runtime_error("Failed to persist manifest update for " + manifest_asset_key_);
     }
-
-    output << data.dump(2) << '\n';
 }
 
 std::filesystem::path CustomControllerService::resolve_engine_root(const std::filesystem::path& start) const {

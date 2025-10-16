@@ -17,6 +17,10 @@ class DMButton;
 class DMTextBox;
 class TextBoxWidget;
 
+namespace devmode::core {
+class ManifestStore;
+}
+
 class AssetLibraryUI {
 public:
     AssetLibraryUI();
@@ -34,7 +38,12 @@ public:
     bool is_dragging_asset() const;
     bool is_locked() const;
 
-    void update(const Input& input, int screen_w, int screen_h, AssetLibrary& lib, Assets& assets);
+    void update(const Input& input,
+                int screen_w,
+                int screen_h,
+                AssetLibrary& lib,
+                Assets& assets,
+                devmode::core::ManifestStore& store);
     void render(SDL_Renderer* r, int screen_w, int screen_h) const;
     bool handle_event(const SDL_Event& e);
 
@@ -52,6 +61,7 @@ private:
     void clear_delete_state();
     bool handle_delete_modal_event(const SDL_Event& e);
     void update_delete_modal_geometry(int screen_w, int screen_h);
+    bool create_new_asset(const std::string& name);
 
 private:
     std::unique_ptr<DockableCollapsible> floating_;
@@ -74,6 +84,7 @@ private:
 
     Assets* assets_owner_ = nullptr;
     AssetLibrary* library_owner_ = nullptr;
+    devmode::core::ManifestStore* manifest_store_owner_ = nullptr;
     mutable std::unordered_set<std::string> preview_attempted_;
 
     std::shared_ptr<AssetInfo> pending_selection_{};

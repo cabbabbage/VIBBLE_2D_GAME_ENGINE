@@ -3,8 +3,10 @@
 #include <algorithm>
 #include <cctype>
 #include <utility>
+#include <limits>
 
 #include "dev_mode/core/dev_json_store.hpp"
+#include "dev_mode/tag_utils.hpp"
 
 namespace devmode::core {
 namespace {
@@ -35,6 +37,34 @@ bool ManifestStore::AssetEditSession::commit() {
 }
 
 void ManifestStore::AssetEditSession::cancel() {
+    owner_ = nullptr;
+}
+
+ManifestStore::AssetTransaction::AssetTransaction(ManifestStore* owner,
+                                                  std::string name,
+                                                  nlohmann::json draft,
+                                                  bool is_new_asset)
+    : owner_(owner),
+      name_(std::move(name)),
+      draft_(std::move(draft)),
+      is_new_(is_new_asset) {}
+
+bool ManifestStore::AssetTransaction::save() {
+    if (!owner_) {
+        return false;
+    }
+    return owner_->apply_edit(name_, draft_);
+}
+
+bool ManifestStore::AssetTransaction::finalize() {
+    if (!save()) {
+        return false;
+    }
+    owner_ = nullptr;
+    return true;
+}
+
+void ManifestStore::AssetTransaction::cancel() {
     owner_ = nullptr;
 }
 
@@ -131,10 +161,59 @@ ManifestStore::AssetEditSession ManifestStore::begin_asset_edit(const std::strin
     return AssetEditSession(this, std::move(target_name), std::move(existing), is_new_asset);
 }
 
+<<<<<<< ours
+ManifestStore::AssetTransaction ManifestStore::begin_asset_transaction(const std::string& name,
+                                                                       bool create_if_missing) {
+=======
+bool ManifestStore::remove_asset(const std::string& name) {
+>>>>>>> theirs
+    ensure_loaded();
+    ensure_asset_container();
+
+    auto resolved = resolve_asset_name(name);
+<<<<<<< ours
+    if (!resolved && !create_if_missing) {
+        return {};
+    }
+
+    const bool is_new_asset = !resolved.has_value();
+    std::string target_name = resolved.has_value() ? *resolved : name;
+
+    nlohmann::json existing = nlohmann::json::object();
+    nlohmann::json& assets = manifest_cache_["assets"];
+    if (!is_new_asset) {
+        auto it = assets.find(target_name);
+        if (it == assets.end()) {
+            return {};
+        }
+        existing = *it;
+    }
+
+    return AssetTransaction(this, std::move(target_name), std::move(existing), is_new_asset);
+=======
+    if (!resolved) {
+        return false;
+    }
+
+    nlohmann::json& assets = manifest_cache_["assets"];
+    auto erased = assets.erase(*resolved);
+    if (erased == 0) {
+        return false;
+    }
+
+    dirty_ = true;
+    if (submit_) {
+        submit_(manifest_path_, manifest_cache_, indent_);
+    }
+    return true;
+>>>>>>> theirs
+}
+
 void ManifestStore::reload() {
     loaded_ = false;
     dirty_ = false;
     manifest_cache_ = nlohmann::json::object();
+    last_known_tag_version_ = std::numeric_limits<std::uint64_t>::max();
     ensure_loaded();
 }
 
@@ -150,8 +229,23 @@ const nlohmann::json& ManifestStore::manifest_json() {
     return manifest_cache_;
 }
 
+std::vector<ManifestStore::AssetView> ManifestStore::assets() {
+    ensure_loaded();
+    std::vector<AssetView> views;
+    if (!manifest_cache_.contains("assets") || !manifest_cache_["assets"].is_object()) {
+        return views;
+    }
+    nlohmann::json& assets_json = manifest_cache_["assets"];
+    views.reserve(assets_json.size());
+    for (auto it = assets_json.begin(); it != assets_json.end(); ++it) {
+        views.push_back(AssetView{it.key(), &(*it)});
+    }
+    return views;
+}
+
 void ManifestStore::ensure_loaded() {
-    if (loaded_) {
+    const std::uint64_t current_version = tag_utils::tag_version();
+    if (loaded_ && current_version == last_known_tag_version_) {
         return;
     }
     manifest::ManifestData data = loader_ ? loader_() : manifest::load_manifest();
@@ -162,6 +256,7 @@ void ManifestStore::ensure_loaded() {
     ensure_asset_container();
     loaded_ = true;
     dirty_ = false;
+    last_known_tag_version_ = current_version;
 }
 
 bool ManifestStore::apply_edit(const std::string& name, const nlohmann::json& payload) {

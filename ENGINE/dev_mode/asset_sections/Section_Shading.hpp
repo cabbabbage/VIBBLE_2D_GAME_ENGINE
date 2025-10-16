@@ -179,7 +179,7 @@ public:
                 if (ui_ && reset_scaling_profile) {
                     ui_->notify_light_sources_modified(shading_removed);
                 }
-                (void)info_->update_info_json();
+                (void)info_->commit_manifest();
                 if (ui_) {
                     SDL_Renderer* renderer = ui_->get_last_renderer();
                     if (renderer) {

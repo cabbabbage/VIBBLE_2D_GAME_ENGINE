@@ -3,6 +3,7 @@
 #include "../DockableCollapsible.hpp"
 
 #include <cstddef>
+#include <functional>
 #include <memory>
 #include <string>
 #include <vector>
@@ -12,18 +13,28 @@ class AssetInfoUI;
 class Input;
 class DMButton;
 class ButtonWidget;
+namespace devmode::core {
+class ManifestStore;
+}
+
+struct SectionSpawnGroupsTestAccess;
 
 class Section_SpawnGroups : public DockableCollapsible {
 public:
     Section_SpawnGroups();
 
     void set_ui(AssetInfoUI* ui) { ui_ = ui; }
+    void set_manifest_store(devmode::core::ManifestStore* store);
+    void set_spawn_config_listener(std::function<void(const nlohmann::json&)> listener);
+    void set_spawn_group_removed_listener(std::function<void(const std::string&)> listener);
 
     void build() override;
     void layout() override;
     void update(const Input& input, int screen_w, int screen_h) override;
     bool handle_event(const SDL_Event& e) override;
     void render(SDL_Renderer* r) const override;
+
+    const nlohmann::json& groups() const { return groups_; }
 
 private:
     void reload_from_file();
@@ -40,10 +51,13 @@ private:
     SDL_Point editor_anchor_point() const;
 
     void schedule_rebuild();
+    void notify_spawn_config_listeners(const nlohmann::json& entry);
+    void notify_spawn_group_removed(const std::string& id);
 
 private:
     AssetInfoUI* ui_ = nullptr;
     nlohmann::json groups_ = nlohmann::json::array();
+    devmode::core::ManifestStore* manifest_store_ = nullptr;
 
     std::unique_ptr<class SpawnGroupConfig> list_;
 
@@ -56,7 +70,12 @@ private:
     bool rebuilding_ = false;
     bool rebuild_requested_ = false;
 
+    std::function<void(const nlohmann::json&)> spawn_config_listener_{};
+    std::function<void(const std::string&)> spawn_group_removed_listener_{};
+
 protected:
     std::string_view lock_settings_namespace() const override { return "asset_info"; }
     std::string_view lock_settings_id() const override { return "spawn_groups"; }
+
+    friend struct SectionSpawnGroupsTestAccess;
 };

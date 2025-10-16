@@ -10,7 +10,10 @@
 #include <sstream>
 #include <string>
 #include <utility>
+#include <unordered_set>
 #include <vector>
+
+#include <nlohmann/json.hpp>
 
 #include "AnimationDocument.hpp"
 #include "AnimationInspectorPanel.hpp"
@@ -25,6 +28,7 @@
 #include "utils/input.hpp"
 
 #include "asset/asset_info.hpp"
+#include "dev_mode/core/manifest_store.hpp"
 #include "dev_mode/dm_styles.hpp"
 #include "dev_mode/draw_utils.hpp"
 #include "dev_mode/widgets.hpp"
@@ -124,31 +128,82 @@ void AnimationEditorWindow::set_bounds(const SDL_Rect& bounds) {
 }
 
 void AnimationEditorWindow::set_info(const std::shared_ptr<AssetInfo>& info) {
+    close_manifest_transaction();
     info_ = info;
-    if (info) {
+
+    if (!document_) {
+        document_ = std::make_shared<AnimationDocument>();
+    }
+
+    if (!info) {
+        clear_info();
+        return;
+    }
+
+    info_path_.clear();
+    asset_root_path_.clear();
+    try {
+        std::filesystem::path candidate = info->asset_dir_path();
+        if (!candidate.empty()) {
+            asset_root_path_ = candidate;
+        }
+    } catch (...) {
+        asset_root_path_.clear();
+    }
+    if (asset_root_path_.empty()) {
+        std::filesystem::path path = info->info_json_path();
+        if (!path.empty()) {
+            asset_root_path_ = path.parent_path();
+        }
+    }
+
+    bool loaded_from_manifest = false;
+    if (manifest_store_) {
+        if (auto key = resolve_manifest_key(*info)) {
+            manifest_asset_key_ = *key;
+            manifest_transaction_ = manifest_store_->begin_asset_transaction(manifest_asset_key_, true);
+            if (manifest_transaction_) {
+                using_manifest_store_ = true;
+                nlohmann::json snapshot = manifest_transaction_.data();
+                document_->load_from_manifest(snapshot,
+                                              asset_root_path_,
+                                              [this](const nlohmann::json& payload) {
+                                                  this->persist_manifest_payload(payload);
+                                              });
+                loaded_from_manifest = true;
+            } else {
+                manifest_asset_key_.clear();
+            }
+        }
+    }
+
+    if (!loaded_from_manifest) {
+        using_manifest_store_ = false;
         info_path_ = info->info_json_path();
         document_->load_from_file(info_path_);
-        document_->consume_dirty_flag();
-        preview_provider_->set_document(document_);
-        configure_list_panel();
-        if (list_panel_) list_panel_->set_preview_provider(preview_provider_);
-        if (audio_importer_) {
-            std::filesystem::path audio_root = info_path_.empty() ? std::filesystem::path{}
-                                                                  : info_path_.parent_path() / default_audio_subdir();
-            audio_importer_->set_asset_root(audio_root);
-        }
-        if (list_panel_) list_panel_->set_document(document_);
-        set_status_message("Loaded " + info_path_.filename().string(), 240);
-        auto_save_pending_ = false;
-        auto_save_timer_frames_ = 0;
-    } else {
-        clear_info();
     }
+
+    document_->consume_dirty_flag();
+    preview_provider_->set_document(document_);
+    configure_list_panel();
+    if (list_panel_) list_panel_->set_preview_provider(preview_provider_);
+    if (audio_importer_) {
+        std::filesystem::path audio_root = asset_root_path_.empty() ? std::filesystem::path{}
+                                                                   : asset_root_path_ / default_audio_subdir();
+        audio_importer_->set_asset_root(audio_root);
+    }
+    if (list_panel_) list_panel_->set_document(document_);
+    std::string asset_label = info->name.empty() ? std::string("asset") : info->name;
+    set_status_message("Loaded " + asset_label, 240);
+    auto_save_pending_ = false;
+    auto_save_timer_frames_ = 0;
 }
 
 void AnimationEditorWindow::clear_info() {
     info_.reset();
     info_path_.clear();
+    asset_root_path_.clear();
+    close_manifest_transaction();
     frame_editor_visible_ = false;
     frame_editor_animation_id_.clear();
     update_corner_button();
@@ -374,7 +429,19 @@ void AnimationEditorWindow::render_header(SDL_Renderer* renderer) const {
         DMStyles::ShadowIntensity());
 
     std::string title = "Animation Editor";
-    if (!info_path_.empty()) {
+    if (auto info_ptr = info_.lock()) {
+        std::string name = info_ptr->name;
+        if (name.empty()) {
+            name = asset_root_path_.filename().string();
+        }
+        if (!name.empty()) {
+            title += " — ";
+            title += name;
+        }
+    } else if (!asset_root_path_.empty()) {
+        title += " — ";
+        title += asset_root_path_.filename().string();
+    } else if (!info_path_.empty()) {
         title += " — ";
         title += info_path_.filename().string();
     }
@@ -501,11 +568,31 @@ void AnimationEditorWindow::create_animation_via_prompt() {
 }
 
 void AnimationEditorWindow::reload_document() {
-    if (info_path_.empty()) return;
-    document_->load_from_file(info_path_);
+    auto info_ptr = info_.lock();
+    if (!info_ptr) {
+        document_->load_from_file(std::filesystem::path{});
+    } else if (using_manifest_store_ && manifest_store_ && !manifest_asset_key_.empty()) {
+        close_manifest_transaction();
+        manifest_transaction_ = manifest_store_->begin_asset_transaction(manifest_asset_key_, true);
+        if (manifest_transaction_) {
+            nlohmann::json snapshot = manifest_transaction_.data();
+            document_->load_from_manifest(snapshot,
+                                          asset_root_path_,
+                                          [this](const nlohmann::json& payload) {
+                                              this->persist_manifest_payload(payload);
+                                          });
+        } else {
+            document_->load_from_file(info_ptr->info_json_path());
+            using_manifest_store_ = false;
+        }
+    } else {
+        document_->load_from_file(info_ptr->info_json_path());
+    }
+
+    document_->consume_dirty_flag();
     preview_provider_->invalidate_all();
     if (list_panel_) list_panel_->set_document(document_);
-    set_status_message("Reloaded animations from disk.", 240);
+    set_status_message("Reloaded animations.", 240);
     auto_save_pending_ = false;
     auto_save_timer_frames_ = 0;
 }
@@ -521,7 +608,7 @@ void AnimationEditorWindow::process_auto_save() {
     }
 
     document_->save_to_file();
-    if (!info_path_.empty()) {
+    if (using_manifest_store_ || !info_path_.empty()) {
         set_status_message("Animations auto-saved.", 180);
     }
     if (on_document_saved_) {
@@ -531,8 +618,84 @@ void AnimationEditorWindow::process_auto_save() {
     auto_save_timer_frames_ = 0;
 }
 
+void AnimationEditorWindow::set_manifest_store(devmode::core::ManifestStore* store) {
+    if (manifest_store_ == store) {
+        return;
+    }
+    close_manifest_transaction();
+    manifest_store_ = store;
+    if (auto info_ptr = info_.lock()) {
+        set_info(info_ptr);
+    }
+}
+
+void AnimationEditorWindow::close_manifest_transaction() {
+    if (manifest_transaction_) {
+        manifest_transaction_.cancel();
+        manifest_transaction_ = {};
+    }
+    manifest_asset_key_.clear();
+    using_manifest_store_ = false;
+}
+
+bool AnimationEditorWindow::persist_manifest_payload(const nlohmann::json& payload, bool finalize) {
+    if (!manifest_store_ || manifest_asset_key_.empty()) {
+        return false;
+    }
+    if (!manifest_transaction_) {
+        manifest_transaction_ = manifest_store_->begin_asset_transaction(manifest_asset_key_, true);
+        if (!manifest_transaction_) {
+            return false;
+        }
+        using_manifest_store_ = true;
+    }
+
+    manifest_transaction_.data() = payload;
+    return finalize ? manifest_transaction_.finalize() : manifest_transaction_.save();
+}
+
+std::optional<std::string> AnimationEditorWindow::resolve_manifest_key(const AssetInfo& info) const {
+    if (!manifest_store_) {
+        return std::nullopt;
+    }
+
+    std::vector<std::string> candidates;
+    if (!info.name.empty()) {
+        candidates.push_back(info.name);
+    }
+    try {
+        std::filesystem::path dir = info.asset_dir_path();
+        if (!dir.empty()) {
+            candidates.push_back(dir.filename().string());
+        }
+    } catch (...) {
+    }
+    try {
+        std::filesystem::path info_path = info.info_json_path();
+        if (!info_path.empty()) {
+            if (info_path.has_parent_path()) {
+                candidates.push_back(info_path.parent_path().filename().string());
+            }
+            if (info_path.has_stem()) {
+                candidates.push_back(info_path.stem().string());
+            }
+        }
+    } catch (...) {
+    }
+
+    std::unordered_set<std::string> seen;
+    for (const auto& candidate : candidates) {
+        if (candidate.empty()) continue;
+        if (!seen.insert(candidate).second) continue;
+        if (auto resolved = manifest_store_->resolve_asset_name(candidate)) {
+            return resolved;
+        }
+    }
+    return std::nullopt;
+}
+
 std::optional<std::filesystem::path> AnimationEditorWindow::pick_folder() const {
-    std::string default_path = info_path_.empty() ? std::string{} : info_path_.parent_path().string();
+    std::string default_path = asset_root_path_.empty() ? std::string{} : asset_root_path_.string();
     const char* result = tinyfd_selectFolderDialog("Select Animation Folder", default_path.empty() ? nullptr : default_path.c_str());
     if (!result || std::string(result).empty()) {
         return std::nullopt;
@@ -541,7 +704,7 @@ std::optional<std::filesystem::path> AnimationEditorWindow::pick_folder() const 
 }
 
 std::optional<std::filesystem::path> AnimationEditorWindow::pick_gif() const {
-    std::string default_path = info_path_.empty() ? std::string{} : info_path_.parent_path().string();
+    std::string default_path = asset_root_path_.empty() ? std::string{} : asset_root_path_.string();
     const char* filters[] = {"*.gif"};
     const char* result = tinyfd_openFileDialog("Import GIF", default_path.c_str(), 1, filters, "GIF Image", 0);
     if (!result || std::string(result).empty()) {
@@ -551,7 +714,7 @@ std::optional<std::filesystem::path> AnimationEditorWindow::pick_gif() const {
 }
 
 std::vector<std::filesystem::path> AnimationEditorWindow::pick_png_sequence() const {
-    std::string default_path = info_path_.empty() ? std::string{} : info_path_.parent_path().string();
+    std::string default_path = asset_root_path_.empty() ? std::string{} : asset_root_path_.string();
     const char* filters[] = {"*.png"};
     const char* result = tinyfd_openFileDialog("Import PNG Sequence", default_path.c_str(), 1, filters, "PNG Images", 1);
     if (!result || std::string(result).empty()) {
@@ -580,7 +743,10 @@ std::optional<std::string> AnimationEditorWindow::pick_animation_reference() con
 }
 
 std::optional<std::filesystem::path> AnimationEditorWindow::pick_audio_file() const {
-    std::string default_path = info_path_.empty() ? std::string{} : info_path_.parent_path().string();
+    std::string default_path;
+    if (!asset_root_path_.empty()) {
+        default_path = (asset_root_path_ / default_audio_subdir()).string();
+    }
     const char* filters[] = {"*.wav", "*.ogg", "*.mp3"};
     const char* result = tinyfd_openFileDialog("Select Audio Clip", default_path.c_str(), 3, filters, "Audio Files", 0);
     if (!result || std::string(result).empty()) {

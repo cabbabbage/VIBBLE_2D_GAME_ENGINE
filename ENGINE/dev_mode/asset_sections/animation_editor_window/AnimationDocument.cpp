@@ -145,11 +145,8 @@ AnimationDocument::AnimationDocument() = default;
 
 void AnimationDocument::load_from_file(const std::filesystem::path& info_path) {
     info_path_ = info_path;
-    animations_.clear();
-    start_animation_.reset();
-    use_nested_container_ = false;
-    container_metadata_.clear();
-    dirty_ = false;
+    asset_root_ = info_path.empty() ? std::filesystem::path{} : info_path.parent_path();
+    persist_callback_ = nullptr;
 
     nlohmann::json root = nlohmann::json::object();
     if (!info_path.empty()) {
@@ -167,16 +164,39 @@ void AnimationDocument::load_from_file(const std::filesystem::path& info_path) {
         root = nlohmann::json::object();
     }
 
-    auto start_it = root.find("start");
-    if (start_it != root.end() && start_it->is_string()) {
+    base_data_ = root;
+    load_from_json_object(base_data_);
+}
+
+void AnimationDocument::load_from_manifest(const nlohmann::json& asset_json,
+                                           const std::filesystem::path& asset_root,
+                                           std::function<void(const nlohmann::json&)> persist_callback) {
+    info_path_.clear();
+    asset_root_ = asset_root;
+    persist_callback_ = std::move(persist_callback);
+    base_data_ = asset_json.is_object() ? asset_json : nlohmann::json::object();
+    load_from_json_object(base_data_);
+}
+
+void AnimationDocument::load_from_json_object(const nlohmann::json& root) {
+    animations_.clear();
+    start_animation_.reset();
+    use_nested_container_ = false;
+    container_metadata_.clear();
+    dirty_ = false;
+
+    nlohmann::json canonical = root.is_object() ? root : nlohmann::json::object();
+
+    auto start_it = canonical.find("start");
+    if (start_it != canonical.end() && start_it->is_string()) {
         std::string start_value = start_it->get<std::string>();
         if (!start_value.empty()) {
             start_animation_ = std::move(start_value);
         }
     }
 
-    const auto animations_it = root.find("animations");
-    if (animations_it != root.end()) {
+    const auto animations_it = canonical.find("animations");
+    if (animations_it != canonical.end()) {
         if (animations_it->is_object()) {
             const nlohmann::json* payloads = &(*animations_it);
             if (animations_it->contains("animations") && (*animations_it)["animations"].is_object()) {
@@ -212,20 +232,25 @@ void AnimationDocument::load_from_file(const std::filesystem::path& info_path) {
 }
 
 void AnimationDocument::save_to_file() const {
-    if (info_path_.empty()) return;
-
-    nlohmann::json root = nlohmann::json::object();
-    std::ifstream in(info_path_);
-    if (in.good()) {
-        try {
-            in >> root;
-        } catch (const std::exception& ex) {
-            SDL_Log("AnimationDocument: failed to parse %s for saving: %s", info_path_.string().c_str(), ex.what());
+    nlohmann::json root;
+    if (persist_callback_) {
+        root = base_data_.is_object() ? base_data_ : nlohmann::json::object();
+    } else {
+        root = nlohmann::json::object();
+        if (!info_path_.empty()) {
+            std::ifstream in(info_path_);
+            if (in.good()) {
+                try {
+                    in >> root;
+                } catch (const std::exception& ex) {
+                    SDL_Log("AnimationDocument: failed to parse %s for saving: %s", info_path_.string().c_str(), ex.what());
+                    root = nlohmann::json::object();
+                }
+            }
+        }
+        if (!root.is_object()) {
             root = nlohmann::json::object();
         }
-    }
-    if (!root.is_object()) {
-        root = nlohmann::json::object();
     }
 
     nlohmann::json animations_json = nlohmann::json::object();
@@ -251,12 +276,22 @@ void AnimationDocument::save_to_file() const {
         root["start"] = start_animation_.has_value() ? *start_animation_ : std::string{};
     }
 
-    std::ofstream out(info_path_);
-    if (!out.good()) {
-        SDL_Log("AnimationDocument: failed to open %s for writing", info_path_.string().c_str());
-        return;
+    if (persist_callback_) {
+        persist_callback_(root);
+        base_data_ = root;
+    } else {
+        if (info_path_.empty()) {
+            SDL_Log("AnimationDocument: no info path available for saving.");
+            return;
+        }
+        std::ofstream out(info_path_);
+        if (!out.good()) {
+            SDL_Log("AnimationDocument: failed to open %s for writing", info_path_.string().c_str());
+            return;
+        }
+        out << root.dump(4);
+        base_data_ = root;
     }
-    out << root.dump(4);
     dirty_ = false;
 }
 

@@ -5,6 +5,44 @@
 #include "asset/asset_types.hpp"
 
 #include <filesystem>
+#include <fstream>
+#include <string>
+
+#include "core/manifest/manifest_loader.hpp"
+#include "dev_mode/core/manifest_store.hpp"
+#include "dev_mode/core/dev_json_store.hpp"
+
+namespace {
+namespace fs = std::filesystem;
+
+fs::path make_manifest_path(const std::string& test_name, const nlohmann::json& payload) {
+    fs::path root = fs::temp_directory_path() / "vibble_asset_info_manifest_tests" / test_name;
+    fs::create_directories(root);
+    fs::path manifest = root / "manifest.json";
+    std::ofstream out(manifest);
+    out << payload.dump(2);
+    return manifest;
+}
+
+nlohmann::json read_json(const fs::path& path) {
+    std::ifstream in(path);
+    nlohmann::json parsed = nlohmann::json::object();
+    if (in.is_open()) {
+        in >> parsed;
+    }
+    return parsed;
+}
+
+manifest::ManifestData load_manifest_from_path(const fs::path& path) {
+    manifest::ManifestData data;
+    data.raw = read_json(path);
+    data.assets = data.raw.contains("assets") ? data.raw["assets"] : nlohmann::json::object();
+    data.maps = data.raw.contains("maps") ? data.raw["maps"] : nlohmann::json::object();
+    data.rooms = data.raw.contains("rooms") ? data.raw["rooms"] : nlohmann::json::array();
+    return data;
+}
+
+} // namespace
 
 TEST_CASE("AssetInfo manifest constructor populates metadata without disk access") {
     nlohmann::json metadata = {
@@ -130,4 +168,68 @@ TEST_CASE("AssetInfo manifest constructor populates metadata without disk access
     CHECK(info.light_sources.size() == 1);
     CHECK(info.is_light_source);
     CHECK(info.custom_controller_key == "test_controller");
+}
+
+TEST_CASE("AssetInfo commit_manifest persists changes via ManifestStore") {
+    nlohmann::json initial = {
+        {"assets", {
+            {"ManifestCommit", {
+                {"asset_name", "ManifestCommit"},
+                {"asset_type", "Object"},
+                {"z_threshold", 5},
+                {"tags", nlohmann::json::array({"passable"})},
+                {"anti_tags", nlohmann::json::array()},
+                {"neighbor_search_distance", 100}
+            }}
+        }},
+        {"maps", nlohmann::json::object()},
+        {"rooms", nlohmann::json::array()}
+    };
+
+    const auto manifest_path = make_manifest_path("commit_manifest", initial);
+
+    auto loader = [manifest_path]() {
+        return load_manifest_from_path(manifest_path);
+    };
+
+    devmode::core::ManifestStore store(manifest_path, loader);
+    AssetInfo::set_manifest_store_provider([&store]() -> devmode::core::ManifestStore* {
+        return &store;
+    });
+
+    auto metadata = initial["assets"]["ManifestCommit"];
+    auto info = AssetInfo::from_manifest_entry("ManifestCommit", metadata);
+
+    REQUIRE(info);
+    info->set_z_threshold(42);
+    info->set_neighbor_search_radius(256);
+    info->add_tag("fresh");
+    info->remove_tag("passable");
+    info->set_passable(false);
+
+    CHECK(info->commit_manifest());
+    store.flush();
+
+    auto persisted = read_json(manifest_path);
+    auto& asset_json = persisted["assets"]["ManifestCommit"];
+    CHECK(asset_json["z_threshold"].get<int>() == 42);
+    CHECK(asset_json["neighbor_search_distance"].get<int>() == 256);
+    REQUIRE(asset_json["tags"].is_array());
+    CHECK(asset_json["tags"].size() == 1);
+    CHECK(asset_json["tags"][0].get<std::string>() == "fresh");
+
+    store.reload();
+    auto view = store.get_asset("ManifestCommit");
+    REQUIRE(view);
+    auto rehydrated = AssetInfo::from_manifest_entry(view.name, *view.data);
+    REQUIRE(rehydrated);
+    CHECK(rehydrated->z_threshold == 42);
+    CHECK(rehydrated->NeighborSearchRadius == 256);
+    CHECK_FALSE(rehydrated->passable);
+    CHECK_FALSE(rehydrated->has_tag("passable"));
+    CHECK(rehydrated->has_tag("fresh"));
+
+    AssetInfo::set_manifest_store_provider({});
+    devmode::core::DevJsonStore::instance().flush_all();
+    fs::remove_all(manifest_path.parent_path());
 }

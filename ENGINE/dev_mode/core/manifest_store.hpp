@@ -4,6 +4,9 @@
 #include <functional>
 #include <optional>
 #include <string>
+#include <vector>
+#include <cstdint>
+#include <limits>
 
 #include <nlohmann/json.hpp>
 
@@ -46,6 +49,37 @@ public:
         bool is_new_ = false;
     };
 
+    class AssetTransaction {
+    public:
+        AssetTransaction() = default;
+        AssetTransaction(AssetTransaction&&) noexcept = default;
+        AssetTransaction& operator=(AssetTransaction&&) noexcept = default;
+
+        AssetTransaction(const AssetTransaction&) = delete;
+        AssetTransaction& operator=(const AssetTransaction&) = delete;
+
+        explicit operator bool() const { return owner_ != nullptr; }
+
+        nlohmann::json& data() { return draft_; }
+        const nlohmann::json& data() const { return draft_; }
+
+        bool save();
+        bool finalize();
+        void cancel();
+
+    private:
+        friend class ManifestStore;
+        AssetTransaction(ManifestStore* owner,
+                         std::string name,
+                         nlohmann::json draft,
+                         bool is_new_asset);
+
+        ManifestStore* owner_ = nullptr;
+        std::string name_;
+        nlohmann::json draft_;
+        bool is_new_ = false;
+    };
+
     struct AssetView {
         std::string name;
         const nlohmann::json* data = nullptr;
@@ -67,12 +101,16 @@ public:
     AssetView get_asset(const std::string& name);
 
     AssetEditSession begin_asset_edit(const std::string& name, bool create_if_missing = false);
+    AssetTransaction begin_asset_transaction(const std::string& name, bool create_if_missing = false);
+
+    bool remove_asset(const std::string& name);
 
     void reload();
     void flush();
 
     bool dirty() const { return dirty_; }
     const nlohmann::json& manifest_json();
+    std::vector<AssetView> assets();
 
 private:
     void ensure_loaded();
@@ -88,6 +126,7 @@ private:
     bool loaded_ = false;
     bool dirty_ = false;
     nlohmann::json manifest_cache_ = nlohmann::json::object();
+    std::uint64_t last_known_tag_version_ = std::numeric_limits<std::uint64_t>::max();
 };
 
 } // namespace devmode::core

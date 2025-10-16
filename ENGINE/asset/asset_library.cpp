@@ -4,13 +4,14 @@
 
 #include <iomanip>
 #include <iostream>
-#include <type_traits>
 
 AssetLibrary::AssetLibrary() {
 	load_all_from_SRC();
 }
 
 void AssetLibrary::load_all_from_SRC() {
+        info_by_name_.clear();
+
         manifest::ManifestData manifest;
         try {
                 manifest = manifest::load_manifest();
@@ -23,9 +24,6 @@ void AssetLibrary::load_all_from_SRC() {
                 std::cerr << "[AssetLibrary] Manifest assets section is missing or malformed.\n";
                 return;
         }
-
-        constexpr bool has_manifest_constructor =
-            std::is_constructible_v<AssetInfo, const std::string&, const nlohmann::json&>;
 
         int loaded = 0;
         int failed = 0;
@@ -48,15 +46,14 @@ void AssetLibrary::load_all_from_SRC() {
                 try {
                         std::shared_ptr<AssetInfo> info;
                         const bool has_metadata = metadata.is_object() && !metadata.empty();
-                        if constexpr (has_manifest_constructor) {
-                                if (has_metadata) {
-                                        info = std::make_shared<AssetInfo>(name, metadata);
-                                } else {
-                                        info = std::make_shared<AssetInfo>(name);
-                                }
+                        if (has_metadata) {
+                                info = AssetInfo::from_manifest_entry(name, metadata);
                         } else {
-                                (void)has_metadata;
+#if ASSET_INFO_ENABLE_INFO_JSON_COMPAT
                                 info = std::make_shared<AssetInfo>(name);
+#else
+                                info = AssetInfo::from_manifest_entry(name, nlohmann::json::object());
+#endif
                         }
                         info_by_name_[name] = info;
                         ++loaded;
@@ -125,10 +122,7 @@ void AssetLibrary::loadAnimationsFor(SDL_Renderer* renderer, const std::unordere
 }
 
 bool AssetLibrary::remove(const std::string& name) {
-    auto it = info_by_name_.find(name);
-    if (it == info_by_name_.end()) {
-        return false;
-    }
-    info_by_name_.erase(it);
-    return true;
+    const bool removed = info_by_name_.erase(name) > 0;
+    load_all_from_SRC();
+    return removed;
 }

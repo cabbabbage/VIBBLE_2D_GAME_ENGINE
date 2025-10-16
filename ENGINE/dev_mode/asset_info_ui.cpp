@@ -179,7 +179,15 @@ AssetInfoUI::AssetInfoUI() {
     sections_.push_back(std::move(spacing));
 
     auto spawns = std::make_unique<Section_SpawnGroups>();
+    spawn_groups_section_ = spawns.get();
     spawns->set_ui(this);
+    spawns->set_manifest_store(manifest_store_);
+    spawns->set_spawn_config_listener([this](const nlohmann::json& entry) {
+        this->notify_spawn_group_entry_changed(entry);
+    });
+    spawns->set_spawn_group_removed_listener([this](const std::string& spawn_id) {
+        this->notify_spawn_group_removed(spawn_id);
+    });
     sections_.push_back(std::move(spawns));
 
     configure_btn_ = std::make_unique<DMButton>("Configure Animations", &DMStyles::CreateButton(), 220, DMButton::height());
@@ -195,6 +203,7 @@ AssetInfoUI::AssetInfoUI() {
     });
     animation_editor_window_ = std::make_unique<animation_editor::AnimationEditorWindow>();
     if (animation_editor_window_) {
+        animation_editor_window_->set_manifest_store(manifest_store_);
         animation_editor_window_->set_on_document_saved([this]() { this->on_animation_document_saved(); });
     }
 
@@ -309,10 +318,18 @@ void AssetInfoUI::set_assets(Assets* a) {
         apply_camera_override(false);
     }
     assets_ = a;
+    set_manifest_store(assets_ ? assets_->manifest_store() : nullptr);
     if (visible_) {
         apply_camera_override(true);
     }
     validate_target_asset();
+}
+
+void AssetInfoUI::set_manifest_store(devmode::core::ManifestStore* store) {
+    manifest_store_ = store;
+    if (spawn_groups_section_) {
+        spawn_groups_section_->set_manifest_store(manifest_store_);
+    }
 }
 
 void AssetInfoUI::set_target_asset(Asset* a) {
@@ -326,6 +343,7 @@ void AssetInfoUI::set_info(const std::shared_ptr<AssetInfo>& info) {
     if (asset_selector_) asset_selector_->close();
     if (animation_editor_window_) {
         try {
+            animation_editor_window_->set_manifest_store(manifest_store_);
             animation_editor_window_->set_info(info_);
         } catch (const std::exception& ex) {
             SDL_Log("AssetInfoUI: failed to configure animation editor for %s: %s",
@@ -387,6 +405,13 @@ void AssetInfoUI::clear_info() {
         }
     }
     target_asset_ = nullptr;
+}
+
+void AssetInfoUI::set_manifest_store(devmode::core::ManifestStore* store) {
+    manifest_store_ = store;
+    if (animation_editor_window_) {
+        animation_editor_window_->set_manifest_store(manifest_store_);
+    }
 }
 
 void AssetInfoUI::open()  {
@@ -874,7 +899,7 @@ bool AssetInfoUI::apply_section_to_assets(AssetInfoSectionId section_id, const s
         return false;
     }
 
-    (void)info_->update_info_json();
+    (void)info_->commit_manifest();
     nlohmann::json source;
     if (!load_json_file(info_->info_json_path(), source)) {
         return false;
@@ -950,6 +975,20 @@ void AssetInfoUI::notify_light_sources_modified(bool purge_light_cache) {
     std::filesystem::remove_all(cache_dir, ec);
 }
 
+void AssetInfoUI::notify_spawn_group_entry_changed(const nlohmann::json& entry) {
+    if (!assets_) {
+        return;
+    }
+    assets_->notify_spawn_group_config_changed(entry);
+}
+
+void AssetInfoUI::notify_spawn_group_removed(const std::string& spawn_id) {
+    if (!assets_) {
+        return;
+    }
+    assets_->notify_spawn_group_removed(spawn_id);
+}
+
 const char* AssetInfoUI::section_display_name(AssetInfoSectionId section_id) {
     switch (section_id) {
         case AssetInfoSectionId::BasicInfo:   return "Basic Info";
@@ -973,7 +1012,7 @@ void AssetInfoUI::save_now() const {
         SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "[AssetInfoUI] Panel is locked; save skipped.");
         return;
     }
-    if (info_) (void)info_->update_info_json();
+    if (info_) (void)info_->commit_manifest();
 }
 
 void AssetInfoUI::open_area_editor(const std::string& name) {

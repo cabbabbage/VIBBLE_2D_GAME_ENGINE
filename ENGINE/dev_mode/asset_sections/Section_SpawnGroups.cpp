@@ -8,6 +8,7 @@
 
 #include "dev_mode/spawn_group_config/SpawnGroupConfig.hpp"
 #include "dev_mode/spawn_group_config/spawn_group_utils.hpp"
+#include "dev_mode/core/manifest_store.hpp"
 #include "dev_mode/dm_styles.hpp"
 #include "dev_mode/widgets.hpp"
 #include "asset/asset_info.hpp"
@@ -44,16 +45,25 @@ void Section_SpawnGroups::build() {
     auto on_change = [this]() {
         (void)this->save_to_file();
         this->schedule_rebuild();
-};
+    };
+    auto on_entry_change = [this](const nlohmann::json& entry, const SpawnGroupConfig::ChangeSummary&) {
+        notify_spawn_config_listeners(entry);
+    };
     SpawnGroupConfig::Callbacks cb{};
     cb.on_duplicate = [this](const std::string& id){ duplicate_spawn_group(id); };
     cb.on_delete    = [this](const std::string& id){ delete_spawn_group(id); };
     cb.on_reorder   = [this](const std::string& id, size_t index){ reorder_spawn_group(id, index); };
     cb.on_add       = [this](){ add_spawn_group(); };
+    cb.on_regenerate = [this](const std::string& id) {
+        const int idx = index_of(id);
+        if (idx < 0) return;
+        const auto& entry = groups_.at(static_cast<std::size_t>(idx));
+        notify_spawn_config_listeners(entry);
+    };
     list_->set_callbacks(std::move(cb));
     const auto expanded = list_->expanded_groups();
     if (info_) {
-        list_->load(groups_, on_change);
+        list_->load(groups_, on_change, std::move(on_entry_change));
     } else {
         const nlohmann::json& readonly = groups_;
         list_->load(readonly);
@@ -108,8 +118,29 @@ void Section_SpawnGroups::render(SDL_Renderer* r) const {
 void Section_SpawnGroups::reload_from_file() {
     groups_ = nlohmann::json::array();
     if (!info_) return;
+
+    bool loaded = false;
+    if (manifest_store_) {
+        auto view = manifest_store_->get_asset(info_->name);
+        if (view && view->is_object()) {
+            const auto it = view->find("spawn_groups");
+            if (it != view->end() && it->is_array()) {
+                groups_ = *it;
+                loaded = true;
+            }
+        }
+    }
+
+    if (loaded) {
+        return;
+    }
+
+    const std::string path = info_->info_json_path();
+    if (path.empty()) {
+        return;
+    }
     try {
-        std::ifstream in(info_->info_json_path());
+        std::ifstream in(path);
         if (!in.is_open()) return;
         nlohmann::json root;
         in >> root;
@@ -123,6 +154,30 @@ void Section_SpawnGroups::reload_from_file() {
 
 bool Section_SpawnGroups::save_to_file() {
     if (!info_) return false;
+    renumber_priorities();
+    nlohmann::json sanitized = groups_.is_array() ? groups_ : nlohmann::json::array();
+    if (!sanitized.is_array()) {
+        sanitized = nlohmann::json::array();
+    }
+
+    if (manifest_store_) {
+        auto session = manifest_store_->begin_asset_edit(info_->name, true);
+        if (!session) {
+            return false;
+        }
+        nlohmann::json& payload = session.data();
+        if (!payload.is_object()) {
+            payload = nlohmann::json::object();
+        }
+        payload["spawn_groups"] = sanitized;
+        if (!session.commit()) {
+            return false;
+        }
+        manifest_store_->flush();
+        groups_ = std::move(sanitized);
+        return true;
+    }
+
     try {
         nlohmann::json root;
         {
@@ -134,7 +189,7 @@ bool Section_SpawnGroups::save_to_file() {
             }
         }
         ensure_array(root, "spawn_groups");
-        root["spawn_groups"] = groups_.is_array() ? groups_ : nlohmann::json::array();
+        root["spawn_groups"] = sanitized;
 
         if (root["spawn_groups"].is_array()) {
             for (size_t i = 0; i < root["spawn_groups"].size(); ++i) {
@@ -144,6 +199,7 @@ bool Section_SpawnGroups::save_to_file() {
         std::ofstream out(info_->info_json_path());
         if (!out.is_open()) return false;
         out << root.dump(2);
+        groups_ = root["spawn_groups"];
         return true;
     } catch (...) {
         return false;
@@ -184,6 +240,7 @@ void Section_SpawnGroups::add_spawn_group() {
         SDL_Point anchor = editor_anchor_point();
         list_->request_open_spawn_group(new_id, anchor.x, anchor.y);
     }
+    notify_spawn_config_listeners(groups_.back());
 }
 
 void Section_SpawnGroups::duplicate_spawn_group(const std::string& id) {
@@ -203,6 +260,9 @@ void Section_SpawnGroups::duplicate_spawn_group(const std::string& id) {
     renumber_priorities();
     (void)save_to_file();
     schedule_rebuild();
+    if (!groups_.empty()) {
+        notify_spawn_config_listeners(groups_.back());
+    }
 }
 
 void Section_SpawnGroups::delete_spawn_group(const std::string& id) {
@@ -213,6 +273,7 @@ void Section_SpawnGroups::delete_spawn_group(const std::string& id) {
     renumber_priorities();
     (void)save_to_file();
     schedule_rebuild();
+    notify_spawn_group_removed(id);
 }
 
 void Section_SpawnGroups::reorder_spawn_group(const std::string& id, size_t new_index) {
@@ -233,6 +294,10 @@ void Section_SpawnGroups::reorder_spawn_group(const std::string& id, size_t new_
     renumber_priorities();
     (void)save_to_file();
     schedule_rebuild();
+    const int idx = index_of(id);
+    if (idx >= 0) {
+        notify_spawn_config_listeners(groups_.at(static_cast<std::size_t>(idx)));
+    }
 }
 
 SDL_Point Section_SpawnGroups::editor_anchor_point() const {
@@ -251,5 +316,29 @@ void Section_SpawnGroups::schedule_rebuild() {
 
     rebuild_requested_ = false;
     build();
+}
+
+void Section_SpawnGroups::set_manifest_store(devmode::core::ManifestStore* store) {
+    manifest_store_ = store;
+}
+
+void Section_SpawnGroups::set_spawn_config_listener(std::function<void(const nlohmann::json&)> listener) {
+    spawn_config_listener_ = std::move(listener);
+}
+
+void Section_SpawnGroups::set_spawn_group_removed_listener(std::function<void(const std::string&)> listener) {
+    spawn_group_removed_listener_ = std::move(listener);
+}
+
+void Section_SpawnGroups::notify_spawn_config_listeners(const nlohmann::json& entry) {
+    if (spawn_config_listener_) {
+        spawn_config_listener_(entry);
+    }
+}
+
+void Section_SpawnGroups::notify_spawn_group_removed(const std::string& id) {
+    if (spawn_group_removed_listener_) {
+        spawn_group_removed_listener_(id);
+    }
 }
 

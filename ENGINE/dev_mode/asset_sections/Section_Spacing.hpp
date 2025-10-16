@@ -82,7 +82,7 @@ class Section_Spacing : public DockableCollapsible {
         info_->set_neighbor_search_radius(v);
         changed = true;
       }
-      if (changed) (void)info_->update_info_json();
+      if (changed) (void)info_->commit_manifest();
       return used || changed;
     }
 

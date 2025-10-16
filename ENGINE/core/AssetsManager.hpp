@@ -23,6 +23,9 @@ class Input;
 class DevControls;
 class AssetInfo;
 class Global_Light_Source;
+namespace devmode::core {
+class ManifestStore;
+}
 namespace render_pipeline::shading {
 struct ReactiveShadowSettings;
 }
@@ -90,6 +93,11 @@ public:
 
     void focus_camera_on_asset(Asset* a, double zoom_factor = 0.8, int duration_steps = 25);
     void begin_area_edit_for_selected_asset(const std::string& area_name);
+
+    devmode::core::ManifestStore* manifest_store();
+    const devmode::core::ManifestStore* manifest_store() const;
+    void notify_spawn_group_config_changed(const nlohmann::json& entry);
+    void notify_spawn_group_removed(const std::string& spawn_id);
 
     void set_editor_current_room(Room* room);
 

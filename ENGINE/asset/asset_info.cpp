@@ -15,6 +15,12 @@
 #include <filesystem>
 #include <utility>
 
+#include "dev_mode/core/manifest_store.hpp"
+
+#ifndef ASSET_INFO_ENABLE_INFO_JSON_COMPAT
+#define ASSET_INFO_ENABLE_INFO_JSON_COMPAT 1
+#endif
+
 namespace {
 
 struct CanvasMetrics {
@@ -368,11 +374,21 @@ AssetInfo::AreaCodec::decode_entry(const AssetInfo& info, const nlohmann::json& 
     named.render_frame = frame;
     return named;
 }
+namespace {
+
+AssetInfo::ManifestStoreProvider& manifest_store_provider_slot() {
+    static AssetInfo::ManifestStoreProvider provider;
+    return provider;
+}
+
+} // namespace
+
 AssetInfo::AssetInfo(const std::string &asset_folder_name)
 : is_shaded(false)
 , is_light_source(false) {
         name = asset_folder_name;
         dir_path_ = "SRC/" + asset_folder_name;
+#if ASSET_INFO_ENABLE_INFO_JSON_COMPAT
         info_json_path_ = dir_path_ + "/info.json";
 
         std::ifstream in(info_json_path_);
@@ -388,6 +404,11 @@ AssetInfo::AssetInfo(const std::string &asset_folder_name)
         if (!info_json_.contains("asset_name") || !info_json_["asset_name"].is_string() || info_json_["asset_name"].get<std::string>().empty()) {
                 info_json_["asset_name"] = name;
         }
+#else
+        info_json_path_.clear();
+        initialize_from_json(nlohmann::json::object());
+        info_json_["asset_name"] = name;
+#endif
 }
 
 AssetInfo::AssetInfo(const std::string& asset_folder_name, const nlohmann::json& metadata)
@@ -412,6 +433,15 @@ AssetInfo::AssetInfo(const std::string& asset_folder_name, const nlohmann::json&
         if (!info_json_.contains("asset_name") || !info_json_["asset_name"].is_string() || info_json_["asset_name"].get<std::string>().empty()) {
                 info_json_["asset_name"] = name;
         }
+}
+
+std::shared_ptr<AssetInfo> AssetInfo::from_manifest_entry(const std::string& asset_folder_name,
+                                                         const nlohmann::json& metadata) {
+    return std::make_shared<AssetInfo>(asset_folder_name, metadata);
+}
+
+void AssetInfo::set_manifest_store_provider(ManifestStoreProvider provider) {
+    manifest_store_provider_slot() = std::move(provider);
 }
 
 AssetInfo::~AssetInfo() {
@@ -465,19 +495,42 @@ void AssetInfo::generate_lights(SDL_Renderer *renderer) {
 	LightingLoader::generate_textures(*this, renderer);
 }
 
-bool AssetInfo::update_info_json() const {
-        if (info_json_path_.empty()) {
-                return false;
+bool AssetInfo::commit_manifest() const {
+        nlohmann::json payload = info_json_;
+        if (!payload.contains("asset_name") || !payload["asset_name"].is_string() || payload["asset_name"].get<std::string>().empty()) {
+                payload["asset_name"] = name;
         }
-        try {
-                std::ofstream out(info_json_path_);
-                if (!out.is_open())
-                return false;
-                out << info_json_.dump(4);
-		return true;
-	} catch (...) {
-		return false;
-	}
+
+        bool committed = false;
+
+        auto& provider = manifest_store_provider_slot();
+        if (provider) {
+                if (auto* store = provider()) {
+                        auto session = store->begin_asset_edit(name, true);
+                        if (session) {
+                                session.data() = payload;
+                                committed = session.commit();
+                        }
+                }
+        }
+
+#if ASSET_INFO_ENABLE_INFO_JSON_COMPAT
+        if (!committed && !info_json_path_.empty()) {
+                try {
+                        std::ofstream out(info_json_path_);
+                        if (out.is_open()) {
+                                out << payload.dump(4);
+                                committed = true;
+                        }
+                } catch (...) {
+                        return committed;
+                }
+        }
+#endif
+
+        info_json_ = std::move(payload);
+
+        return committed;
 }
 
 void AssetInfo::set_asset_type(const std::string &t) {

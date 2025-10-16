@@ -7,6 +7,10 @@
 #include <string>
 #include <vector>
 
+namespace devmode::core {
+class ManifestStore;
+}
+
 class DockableCollapsible;
 class DMTextBox;
 class DMButton;
@@ -17,7 +21,8 @@ class Input;
 class SearchAssets {
 public:
     using Callback = std::function<void(const std::string&)>;
-    SearchAssets();
+    explicit SearchAssets(devmode::core::ManifestStore* manifest_store = nullptr);
+    ~SearchAssets();
     void set_position(int x, int y);
     void set_screen_dimensions(int width, int height);
     void set_floating_stack_key(std::string key);
@@ -32,6 +37,9 @@ public:
     bool handle_event(const SDL_Event& e);
     void render(SDL_Renderer* r) const;
     bool is_point_inside(int x, int y) const;
+    void set_manifest_store(devmode::core::ManifestStore* manifest_store);
+    void set_query_for_testing(const std::string& value);
+    std::vector<std::pair<std::string, bool>> results_for_testing() const;
 private:
     struct Asset { std::string name; std::vector<std::string> tags; };
     void load_assets();
@@ -49,6 +57,8 @@ private:
     std::vector<std::pair<std::string,bool>> results_;
     std::string last_query_;
     std::uint64_t tag_data_version_ = 0;
+    devmode::core::ManifestStore* manifest_store_ = nullptr;
+    std::unique_ptr<devmode::core::ManifestStore> owned_manifest_store_;
     int screen_w_ = 1920;
     int screen_h_ = 1080;
     SDL_Point last_known_position_{64, 64};

@@ -438,9 +438,14 @@ std::filesystem::path SourceConfigPanel::resolve_asset_root() const {
     if (cached_asset_root_valid_) return cached_asset_root_;
     cached_asset_root_ = std::filesystem::path{};
     if (document_) {
-        const std::filesystem::path& info_path = document_->info_path();
-        if (!info_path.empty()) {
-            cached_asset_root_ = info_path.parent_path();
+        const std::filesystem::path& root = document_->asset_root();
+        if (!root.empty()) {
+            cached_asset_root_ = root;
+        } else {
+            const std::filesystem::path& info_path = document_->info_path();
+            if (!info_path.empty()) {
+                cached_asset_root_ = info_path.parent_path();
+            }
         }
     }
     cached_asset_root_valid_ = true;

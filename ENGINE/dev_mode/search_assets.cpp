@@ -5,14 +5,18 @@
 #include "dm_styles.hpp"
 #include "tag_utils.hpp"
 #include "utils/input.hpp"
+#include "dev_mode/core/manifest_store.hpp"
 #include <nlohmann/json.hpp>
-#include <filesystem>
-#include <fstream>
 #include <set>
 #include <cctype>
 #include <algorithm>
 
-SearchAssets::SearchAssets() {
+SearchAssets::SearchAssets(devmode::core::ManifestStore* manifest_store)
+    : manifest_store_(manifest_store) {
+    if (!manifest_store_) {
+        owned_manifest_store_ = std::make_unique<devmode::core::ManifestStore>();
+        manifest_store_ = owned_manifest_store_.get();
+    }
     panel_ = std::make_unique<DockableCollapsible>("Search Assets", true, 64, 64);
     panel_->set_expanded(true);
     panel_->set_visible(false);
@@ -29,6 +33,8 @@ SearchAssets::SearchAssets() {
     has_pending_position_ = true;
     tag_data_version_ = tag_utils::tag_version();
 }
+
+SearchAssets::~SearchAssets() = default;
 
 void SearchAssets::apply_position(int x, int y) {
     if (!panel_) {
@@ -256,24 +262,29 @@ bool SearchAssets::visible() const {
 }
 
 void SearchAssets::load_assets() {
-    namespace fs = std::filesystem;
     all_.clear();
-    fs::path src("SRC");
-    if (!fs::exists(src) || !fs::is_directory(src)) return;
-    for (auto& p : fs::directory_iterator(src)) {
-        if (!p.is_directory()) continue;
-        fs::path info = p.path() / "info.json";
-        if (!fs::exists(info)) continue;
-        try {
-            std::ifstream f(info);
-            nlohmann::json j; f >> j;
-            Asset a;
-            a.name = j.value("asset_name", p.path().filename().string());
-            if (j.contains("tags") && j["tags"].is_array()) {
-                for (auto& t : j["tags"]) if (t.is_string()) a.tags.push_back(t.get<std::string>());
+    if (!manifest_store_) {
+        return;
+    }
+    auto manifest_assets = manifest_store_->assets();
+    for (const auto& asset_view : manifest_assets) {
+        if (!asset_view) {
+            continue;
+        }
+        Asset asset;
+        const nlohmann::json& data = *asset_view.data;
+        asset.name = data.value("asset_name", asset_view.name);
+        if (asset.name.empty()) {
+            asset.name = asset_view.name;
+        }
+        if (data.contains("tags") && data["tags"].is_array()) {
+            for (const auto& tag : data["tags"]) {
+                if (tag.is_string()) {
+                    asset.tags.push_back(tag.get<std::string>());
+                }
             }
-            all_.push_back(std::move(a));
-        } catch (...) {}
+        }
+        all_.push_back(std::move(asset));
     }
 }
 
@@ -365,6 +376,33 @@ void SearchAssets::render(SDL_Renderer* r) const {
 bool SearchAssets::is_point_inside(int x, int y) const {
     if (!panel_ || !panel_->is_visible()) return false;
     return panel_->is_point_inside(x, y);
+}
+
+void SearchAssets::set_manifest_store(devmode::core::ManifestStore* manifest_store) {
+    if (manifest_store == manifest_store_) {
+        return;
+    }
+    manifest_store_ = manifest_store;
+    if (!manifest_store_) {
+        owned_manifest_store_ = std::make_unique<devmode::core::ManifestStore>();
+        manifest_store_ = owned_manifest_store_.get();
+    } else {
+        owned_manifest_store_.reset();
+    }
+    all_.clear();
+    results_.clear();
+    tag_data_version_ = 0;
+}
+
+void SearchAssets::set_query_for_testing(const std::string& value) {
+    if (query_) {
+        query_->set_value(value);
+    }
+    filter_assets();
+}
+
+std::vector<std::pair<std::string, bool>> SearchAssets::results_for_testing() const {
+    return results_;
 }
 
 void SearchAssets::ensure_visible_position() {

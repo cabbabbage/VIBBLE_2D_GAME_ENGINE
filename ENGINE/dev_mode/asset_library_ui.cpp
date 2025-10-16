@@ -23,6 +23,7 @@
 #include "DockableCollapsible.hpp"
 #include "widgets.hpp"
 #include "draw_utils.hpp"
+#include "dev_mode/core/manifest_store.hpp"
 
 #include <nlohmann/json.hpp>
 
@@ -48,56 +49,21 @@ namespace {
         return font;
     }
 
-    bool create_new_asset_on_disk(const std::string& name) {
-        if (name.empty()) return false;
-
-        fs::path base("SRC");
-        fs::path dir = base / name;
-        try {
-            if (!fs::exists(base)) {
-                fs::create_directory(base);
-            }
-            if (fs::exists(dir)) {
-                std::cerr << "[AssetLibraryUI] Asset '" << name << "' already exists\n";
-                return false;
-            }
-            fs::create_directory(dir);
-
-            fs::path info_path = dir / "info.json";
-            std::ofstream out(info_path);
-            if (!out.is_open()) {
-                std::cerr << "[AssetLibraryUI] Failed to create info.json for '" << name << "'\n";
-                return false;
-            }
-            out << "{\n"
-                << "  \"asset_name\": \"" << name << "\",\n"
-                << "  \"asset_type\": \"Object\",\n"
-                << "  \"animations\": {},\n"
-                << "  \"start\": \"\"\n"
-                << "}\n";
-            out.close();
-
-            std::cout << "[AssetLibraryUI] Created new asset '" << name << "' at " << dir << "\n";
-
-            const std::string info_arg = info_path.lexically_normal().generic_string();
-            std::thread launcher([info_arg]() {
-                try {
-                    std::string cmd = std::string("python scripts/animation_ui.py \"") + info_arg + "\"";
-                    int rc = std::system(cmd.c_str());
-                    if (rc != 0) {
-                        std::cerr << "[AssetLibraryUI] animation_ui.py exited with code " << rc << "\n";
-                    }
-                } catch (const std::exception& ex) {
-                    std::cerr << "[AssetLibraryUI] Failed to launch animation_ui.py: " << ex.what() << "\n";
-                }
-            });
-            launcher.detach();
-            return true;
-        } catch (const std::exception& e) {
-            std::cerr << "[AssetLibraryUI] Exception creating asset '" << name
-                      << "': " << e.what() << "\n";
-            return false;
+    std::string trim_copy(const std::string& value) {
+        auto begin = value.begin();
+        auto end = value.end();
+        while (begin != end && std::isspace(static_cast<unsigned char>(*begin))) {
+            ++begin;
         }
+        while (end != begin) {
+            auto prev = end;
+            --prev;
+            if (!std::isspace(static_cast<unsigned char>(*prev))) {
+                break;
+            }
+            end = prev;
+        }
+        return std::string(begin, end);
     }
 
     bool remove_directory_if_exists(const fs::path& path) {
@@ -639,8 +605,24 @@ void AssetLibraryUI::confirm_delete_request() {
         }
     }
 
-    if (library_owner_ && !asset_name.empty()) {
-        library_owner_->remove(asset_name);
+    if (!asset_name.empty()) {
+        bool removed_from_manifest = false;
+        if (manifest_store_owner_) {
+            removed_from_manifest = manifest_store_owner_->remove_asset(asset_name);
+            if (!removed_from_manifest) {
+                std::cerr << "[AssetLibraryUI] Failed to remove '" << asset_name
+                          << "' from manifest\n";
+            } else {
+                manifest_store_owner_->flush();
+            }
+        } else {
+            std::cerr << "[AssetLibraryUI] Manifest store unavailable; manifest not updated for '"
+                      << asset_name << "'\n";
+        }
+
+        if (library_owner_) {
+            library_owner_->remove(asset_name);
+        }
     }
 
     if (!asset_dir.empty()) {
@@ -725,6 +707,127 @@ void AssetLibraryUI::update_delete_modal_geometry(int screen_w, int screen_h) {
     const int buttons_y = delete_modal_rect_.y + delete_modal_rect_.h - button_h - 20;
     delete_yes_rect_ = SDL_Rect{ buttons_x, buttons_y, button_w, button_h };
     delete_no_rect_ = SDL_Rect{ buttons_x + button_w + button_gap, buttons_y, button_w, button_h };
+}
+
+bool AssetLibraryUI::create_new_asset(const std::string& raw_name) {
+    std::string name = trim_copy(raw_name);
+    if (name.empty()) {
+        return false;
+    }
+
+    if (!manifest_store_owner_) {
+        std::cerr << "[AssetLibraryUI] Manifest store unavailable; cannot create '" << name << "'\n";
+        return false;
+    }
+
+    auto session = manifest_store_owner_->begin_asset_edit(name, true);
+    if (!session) {
+        std::cerr << "[AssetLibraryUI] Failed to begin manifest session for '" << name << "'\n";
+        return false;
+    }
+
+    if (!session.is_new_asset()) {
+        std::cerr << "[AssetLibraryUI] Asset '" << name << "' already exists\n";
+        session.cancel();
+        return false;
+    }
+
+    fs::path base("SRC");
+    fs::path dir = base / name;
+    fs::path info_path = dir / "info.json";
+
+    try {
+        if (!fs::exists(base)) {
+            fs::create_directories(base);
+        }
+        if (fs::exists(dir)) {
+            std::cerr << "[AssetLibraryUI] Asset directory '" << dir << "' already exists\n";
+            session.cancel();
+            return false;
+        }
+        fs::create_directories(dir);
+
+        nlohmann::json info_payload = {
+            {"asset_name", name},
+            {"asset_type", "Object"},
+            {"animations", nlohmann::json::object()},
+            {"start", ""}
+        };
+
+        std::ofstream out(info_path);
+        if (!out.is_open()) {
+            std::cerr << "[AssetLibraryUI] Failed to create info.json for '" << name << "'\n";
+            session.cancel();
+            std::error_code ec;
+            fs::remove_all(dir, ec);
+            return false;
+        }
+        out << info_payload.dump(2) << '\n';
+        out.close();
+
+        const std::string asset_dir_str = dir.lexically_normal().generic_string();
+
+        nlohmann::json manifest_entry = info_payload;
+        manifest_entry["start"] = asset_dir_str;
+        manifest_entry["asset_directory"] = asset_dir_str;
+        manifest_entry["tags"] = nlohmann::json::array();
+        manifest_entry["anti_tags"] = nlohmann::json::array();
+        manifest_entry["neighbor_search_distance"] = 500;
+        manifest_entry["render_radius"] = 0;
+        manifest_entry["update_radius"] = 0;
+        manifest_entry["min_same_type_distance"] = 0;
+        manifest_entry["min_distance_all"] = 0;
+        manifest_entry["can_invert"] = false;
+        manifest_entry["generate_rays"] = false;
+        manifest_entry["ray_strength"] = 0;
+        manifest_entry["has_shading"] = false;
+        manifest_entry["lighting_info"] = nlohmann::json::array();
+        manifest_entry["size_settings"] = {
+            {"scale_percentage", 100.0}
+        };
+
+        session.data() = manifest_entry;
+        if (!session.commit()) {
+            std::cerr << "[AssetLibraryUI] Failed to commit manifest entry for '" << name << "'\n";
+            std::error_code ec;
+            fs::remove_all(dir, ec);
+            return false;
+        }
+
+        manifest_store_owner_->flush();
+
+        std::cout << "[AssetLibraryUI] Created new asset '" << name << "' at " << dir << "\n";
+
+        const std::string info_arg = info_path.lexically_normal().generic_string();
+        std::thread launcher([info_arg]() {
+            try {
+                std::string cmd = std::string("python scripts/animation_ui.py \"") + info_arg + "\"";
+                int rc = std::system(cmd.c_str());
+                if (rc != 0) {
+                    std::cerr << "[AssetLibraryUI] animation_ui.py exited with code " << rc << "\n";
+                }
+            } catch (const std::exception& ex) {
+                std::cerr << "[AssetLibraryUI] Failed to launch animation_ui.py: " << ex.what() << "\n";
+            }
+        });
+        launcher.detach();
+
+        if (library_owner_) {
+            library_owner_->load_all_from_SRC();
+        }
+
+        preview_attempted_.erase(name);
+        items_cached_ = false;
+        filter_dirty_ = true;
+        tiles_.clear();
+        return true;
+    } catch (const std::exception& e) {
+        std::cerr << "[AssetLibraryUI] Exception creating asset '" << name
+                  << "': " << e.what() << "\n";
+        std::error_code ec;
+        fs::remove_all(dir, ec);
+        return false;
+    }
 }
 
 bool AssetLibraryUI::handle_delete_modal_event(const SDL_Event& e) {
@@ -855,11 +958,13 @@ void AssetLibraryUI::update(const Input& input,
                             int screen_w,
                             int screen_h,
                             AssetLibrary& lib,
-                            Assets& assets)
+                            Assets& assets,
+                            devmode::core::ManifestStore& store)
 {
     if (!floating_) return;
     assets_owner_ = &assets;
     library_owner_ = &lib;
+    manifest_store_owner_ = &store;
     ensure_items(lib);
 
     if (search_box_) {
@@ -1169,15 +1274,14 @@ bool AssetLibraryUI::handle_event(const SDL_Event& e) {
     if (showing_create_popup_) {
         if (e.type == SDL_KEYDOWN) {
             if (e.key.keysym.sym == SDLK_RETURN) {
-                if (create_new_asset_on_disk(new_asset_name_)) {
-                    items_cached_ = false;
-                    tiles_.clear();
-                    filter_dirty_ = true;
+                if (create_new_asset(new_asset_name_)) {
+                    new_asset_name_.clear();
                 }
                 showing_create_popup_ = false;
                 handled = true;
             } else if (e.key.keysym.sym == SDLK_ESCAPE) {
                 showing_create_popup_ = false;
+                new_asset_name_.clear();
                 handled = true;
             } else if (e.key.keysym.sym == SDLK_BACKSPACE) {
                 if (!new_asset_name_.empty()) new_asset_name_.pop_back();

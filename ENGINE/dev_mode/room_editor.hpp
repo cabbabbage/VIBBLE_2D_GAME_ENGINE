@@ -26,6 +26,10 @@ class MapGrid;
 class DMButton;
 class FullScreenCollapsible;
 
+namespace devmode::core {
+class ManifestStore;
+}
+
 class RoomEditor {
 public:
     RoomEditor(Assets* owner, int screen_w, int screen_h);
@@ -39,6 +43,7 @@ public:
     void set_room_config_visible(bool visible);
     void set_shared_fullscreen_panel(FullScreenCollapsible* panel);
     void set_header_visibility_callback(std::function<void(bool)> cb);
+    void set_manifest_store(devmode::core::ManifestStore* store);
 
     void set_enabled(bool enabled);
     bool is_enabled() const { return enabled_; }
@@ -171,6 +176,8 @@ private:
     void notify_room_assets_saved();
     void save_current_room_assets_json();
 
+    void set_manifest_store(devmode::core::ManifestStore* store);
+
 private:
     Assets* assets_ = nullptr;
     Input* input_ = nullptr;
@@ -218,6 +225,8 @@ private:
     int drag_perimeter_orig_w_ = 0;
     int drag_perimeter_orig_h_ = 0;
     int drag_perimeter_curr_w_ = 0;
+
+    devmode::core::ManifestStore* manifest_store_ = nullptr;
     int drag_perimeter_curr_h_ = 0;
     bool drag_moved_ = false;
     std::string drag_spawn_id_;
@@ -240,5 +249,13 @@ private:
 
     RoomAssetsSavedCallback room_assets_saved_callback_;
     std::string rename_active_room(const std::string& old_name, const std::string& desired_name);
+    devmode::core::ManifestStore* manifest_store_ = nullptr;
 };
 
+#include <memory>
+#include <optional>
+#include <unordered_set>
+
+namespace devmode::core {
+class ManifestStore;
+}

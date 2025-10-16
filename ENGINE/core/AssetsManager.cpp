@@ -1138,6 +1138,32 @@ void Assets::begin_area_edit_for_selected_asset(const std::string& area_name) {
     }
 }
 
+devmode::core::ManifestStore* Assets::manifest_store() {
+    if (!dev_controls_) {
+        return nullptr;
+    }
+    return &dev_controls_->manifest_store();
+}
+
+const devmode::core::ManifestStore* Assets::manifest_store() const {
+    if (!dev_controls_) {
+        return nullptr;
+    }
+    return &dev_controls_->manifest_store();
+}
+
+void Assets::notify_spawn_group_config_changed(const nlohmann::json& entry) {
+    if (dev_controls_ && dev_controls_->is_enabled()) {
+        dev_controls_->notify_spawn_group_config_changed(entry);
+    }
+}
+
+void Assets::notify_spawn_group_removed(const std::string& spawn_id) {
+    if (dev_controls_ && dev_controls_->is_enabled()) {
+        dev_controls_->notify_spawn_group_removed(spawn_id);
+    }
+}
+
 void Assets::set_editor_current_room(Room* room) {
     current_room_ = room;
     if (dev_controls_) {

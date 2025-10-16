@@ -3,6 +3,10 @@
 #include <filesystem>
 #include <string>
 
+namespace devmode::core {
+class ManifestStore;
+}
+
 namespace animation_editor {
 
 class CustomControllerService {
@@ -10,6 +14,8 @@ class CustomControllerService {
     CustomControllerService();
 
     void set_asset_root(const std::filesystem::path& asset_root);
+    void set_manifest_store(devmode::core::ManifestStore* store);
+    void set_manifest_asset_key(std::string asset_key);
 
     void create_new_controller(const std::string& controller_name);
     void open_existing_controller(const std::string& controller_name);
@@ -27,12 +33,14 @@ class CustomControllerService {
     void open_in_default_editor(const std::filesystem::path& path) const;
 
     std::filesystem::path asset_root_;
-    std::filesystem::path asset_info_path_;
     std::filesystem::path engine_root_;
     std::filesystem::path controller_dir_;
     std::filesystem::path controller_factory_cpp_;
     std::string asset_name_;
+    devmode::core::ManifestStore* manifest_store_ = nullptr;
+    std::string manifest_asset_key_;
 };
 
 }
 
+#include "dev_mode/core/manifest_store.hpp"

@@ -218,11 +218,15 @@ std::filesystem::path PreviewProvider::resolve_asset_root() const {
     if (!document_) {
         return {};
     }
-    std::filesystem::path info = document_->info_path();
-    if (info.empty()) {
-        return {};
+    const std::filesystem::path& root = document_->asset_root();
+    if (!root.empty()) {
+        return root;
     }
-    return info.parent_path();
+    std::filesystem::path info = document_->info_path();
+    if (!info.empty()) {
+        return info.parent_path();
+    }
+    return {};
 }
 
 std::filesystem::path PreviewProvider::find_first_frame(const std::filesystem::path& folder, int frames) const {

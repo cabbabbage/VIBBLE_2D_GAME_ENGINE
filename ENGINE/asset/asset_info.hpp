@@ -7,10 +7,20 @@
 #include <nlohmann/json.hpp>
 #include <cmath>
 #include <cstdint>
+#include <functional>
+#include <memory>
 #include <optional>
 #include <string>
 #include <vector>
 #include <unordered_set>
+
+#ifndef ASSET_INFO_ENABLE_INFO_JSON_COMPAT
+#define ASSET_INFO_ENABLE_INFO_JSON_COMPAT 1
+#endif
+
+namespace devmode::core {
+class ManifestStore;
+} // namespace devmode::core
 
 struct ChildInfo {
     std::string json_path;
@@ -36,6 +46,10 @@ class AssetInfo {
 	public:
     AssetInfo(const std::string &asset_folder_name);
     AssetInfo(const std::string &asset_folder_name, const nlohmann::json& metadata);
+    static std::shared_ptr<AssetInfo> from_manifest_entry(const std::string& asset_folder_name,
+                                                         const nlohmann::json& metadata);
+    using ManifestStoreProvider = std::function<devmode::core::ManifestStore*()>;
+    static void set_manifest_store_provider(ManifestStoreProvider provider);
     ~AssetInfo();
     void loadAnimations(SDL_Renderer *renderer);
     bool has_tag(const std::string &tag) const;
@@ -88,7 +102,7 @@ class AssetInfo {
     std::string custom_controller_key;
 
 	public:
-    bool update_info_json() const;
+    bool commit_manifest() const;
     void set_asset_type(const std::string &t);
     void set_z_threshold(int z);
     void set_min_same_type_distance(int d);

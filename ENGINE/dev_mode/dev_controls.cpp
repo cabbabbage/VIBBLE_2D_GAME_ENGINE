@@ -353,6 +353,7 @@ DevControls::DevControls(Assets* owner, int screen_w, int screen_h)
     std::cout << ctor_start << "\n";
     room_editor_ = std::make_unique<RoomEditor>(assets_, screen_w_, screen_h_);
     if (room_editor_) {
+        room_editor_->set_manifest_store(&manifest_store_);
         room_editor_->set_room_assets_saved_callback([this]() { notify_room_area_data_changed(); });
         room_editor_->set_header_visibility_callback([this](bool visible) {
             sliding_headers_hidden_ = visible;
@@ -473,9 +474,15 @@ DevControls::DevControls(Assets* owner, int screen_w, int screen_h)
     const char* ctor_end = "[DevControls] ctor complete";
     dev_mode_trace(ctor_end);
     std::cout << ctor_end << "\n";
+    AssetInfo::set_manifest_store_provider([this]() -> devmode::core::ManifestStore* {
+        return &manifest_store_;
+    });
 }
 
-DevControls::~DevControls() = default;
+DevControls::~DevControls() {
+    manifest_store_.flush();
+    AssetInfo::set_manifest_store_provider({});
+}
 
 void DevControls::set_input(Input* input) {
     input_ = input;
@@ -1169,7 +1176,7 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
                             area_name = na.name;
                             removed_existing = target_asset->info->remove_area(na.name);
                             if (removed_existing) {
-                                (void)target_asset->info->update_info_json();
+                                (void)target_asset->info->commit_manifest();
                             }
                             break;
                         }
@@ -1530,6 +1537,16 @@ void DevControls::clear_selection() {
 void DevControls::purge_asset(Asset* asset) {
     if (!room_editor_) return;
     room_editor_->purge_asset(asset);
+}
+
+void DevControls::notify_spawn_group_config_changed(const nlohmann::json& entry) {
+    if (room_editor_) {
+        room_editor_->handle_spawn_config_change(entry);
+    }
+}
+
+void DevControls::notify_spawn_group_removed(const std::string& spawn_id) {
+    remove_spawn_group_assets(spawn_id);
 }
 
 const std::vector<Asset*>& DevControls::get_selected_assets() const {

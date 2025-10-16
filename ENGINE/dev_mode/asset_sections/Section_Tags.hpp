@@ -29,7 +29,7 @@ class Section_Tags : public DockableCollapsible {
           if (!info_) return;
           info_->set_tags(tags);
           info_->set_anti_tags(anti_tags);
-          bool wrote = info_->update_info_json();
+          bool wrote = info_->commit_manifest();
           if (wrote) {
             tag_utils::notify_tags_changed();
           }

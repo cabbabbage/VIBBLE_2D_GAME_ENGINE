@@ -244,6 +244,7 @@ add_test(NAME manifest_loader_tests COMMAND manifest_loader_tests)
 
 add_executable(manifest_store_tests
     tests/manifest/manifest_store_tests.cpp
+    tests/manifest/spawn_group_manifest_tests.cpp
     ENGINE/dev_mode/core/manifest_store.cpp
     ENGINE/dev_mode/core/dev_json_store.cpp
     ENGINE/core/manifest/manifest_loader.cpp
@@ -261,3 +262,34 @@ target_link_libraries(manifest_store_tests PRIVATE
 )
 target_compile_definitions(manifest_store_tests PRIVATE SDL_MAIN_HANDLED PROJECT_ROOT="${CMAKE_SOURCE_DIR}")
 add_test(NAME manifest_store_tests COMMAND manifest_store_tests)
+
+add_executable(asset_info_manifest_tests
+    tests/manifest/asset_info_manifest_tests.cpp
+    tests/manifest/asset_info_animation_stub.cpp
+    ENGINE/asset/asset_info.cpp
+    ENGINE/asset/asset_types.cpp
+    ENGINE/asset/animation.cpp
+    ENGINE/asset_info_methods/lighting_loader.cpp
+    ENGINE/asset_info_methods/child_loader.cpp
+    ENGINE/utils/area.cpp
+    ENGINE/utils/generate_light.cpp
+)
+target_include_directories(asset_info_manifest_tests PRIVATE
+    ${CMAKE_SOURCE_DIR}/external
+    ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/ENGINE
+    ${CMAKE_SOURCE_DIR}/ENGINE/asset
+    ${CMAKE_SOURCE_DIR}/ENGINE/asset_info_methods
+    ${CMAKE_SOURCE_DIR}/ENGINE/core
+    ${CMAKE_SOURCE_DIR}/ENGINE/dev_mode
+    ${CMAKE_SOURCE_DIR}/ENGINE/utils
+)
+target_link_libraries(asset_info_manifest_tests PRIVATE
+    nlohmann_json::nlohmann_json
+    SDL2::SDL2
+    SDL2_image::SDL2_image
+    SDL2_mixer::SDL2_mixer
+    SDL2_ttf::SDL2_ttf
+)
+target_compile_definitions(asset_info_manifest_tests PRIVATE SDL_MAIN_HANDLED PROJECT_ROOT="${CMAKE_SOURCE_DIR}")
+add_test(NAME asset_info_manifest_tests COMMAND asset_info_manifest_tests)

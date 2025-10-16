@@ -145,7 +145,7 @@ inline bool Section_BasicInfo::handle_event(const SDL_Event& e) {
     }
 
     if (changed) {
-        (void)info_->update_info_json();
+        (void)info_->commit_manifest();
         if (ui_) {
             if (scale_changed) ui_->refresh_target_asset_scale();
             if (z_changed) ui_->sync_target_z_threshold();

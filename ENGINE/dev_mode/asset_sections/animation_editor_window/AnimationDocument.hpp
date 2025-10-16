@@ -2,10 +2,13 @@
 
 #include <SDL.h>
 #include <filesystem>
+#include <functional>
 #include <optional>
 #include <string>
 #include <unordered_map>
 #include <vector>
+
+#include <nlohmann/json_fwd.hpp>
 
 namespace animation_editor {
 
@@ -14,6 +17,9 @@ class AnimationDocument {
     AnimationDocument();
 
     void load_from_file(const std::filesystem::path& info_path);
+    void load_from_manifest(const nlohmann::json& asset_json,
+                            const std::filesystem::path& asset_root,
+                            std::function<void(const nlohmann::json&)> persist_callback);
     void save_to_file() const;
 
     bool consume_dirty_flag() const;
@@ -30,19 +36,24 @@ class AnimationDocument {
     std::optional<std::string> animation_payload(const std::string& animation_id) const;
 
     const std::filesystem::path& info_path() const { return info_path_; }
+    const std::filesystem::path& asset_root() const { return asset_root_; }
 
   private:
+    void load_from_json_object(const nlohmann::json& root);
     void ensure_document_initialized();
     void rebuild_animation_cache();
     void mark_dirty() const;
 
   private:
     std::filesystem::path info_path_;
+    std::filesystem::path asset_root_;
     std::unordered_map<std::string, std::string> animations_;
     std::optional<std::string> start_animation_;
     bool use_nested_container_ = false;
     std::string container_metadata_;
     mutable bool dirty_ = false;
+    mutable nlohmann::json base_data_;
+    std::function<void(const nlohmann::json&)> persist_callback_;
 };
 
 }

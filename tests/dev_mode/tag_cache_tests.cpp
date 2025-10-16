@@ -2,6 +2,10 @@
 #include "doctest/doctest.h"
 
 #include "asset/asset_info.hpp"
+#include "dev_mode/search_assets.hpp"
+#include "dev_mode/core/manifest_store.hpp"
+#include "dev_mode/tag_utils.hpp"
+#include "core/manifest/manifest_loader.hpp"
 
 #include <algorithm>
 #include <chrono>
@@ -143,5 +147,56 @@ TEST_CASE("AssetInfo tag cache outperforms linear scans on large pools") {
     CAPTURE(cached_ns);
 
     CHECK_LT(cached_ns, linear_ns);
+}
+
+TEST_CASE("SearchAssets reflects manifest tag mutations") {
+    using devmode::core::ManifestStore;
+
+    nlohmann::json manifest_json = {
+        {"assets",
+            {
+                {
+                    "Alpha",
+                    {
+                        {"asset_name", "Alpha"},
+                        {"tags", nlohmann::json::array({"decor"})}
+                    }
+                }
+            }
+        },
+        {"maps", nlohmann::json::object()},
+        {"rooms", nlohmann::json::array()}
+    };
+
+    auto loader = [&]() {
+        manifest::ManifestData data;
+        data.raw = manifest_json;
+        if (manifest_json.contains("assets")) data.assets = manifest_json["assets"];
+        if (manifest_json.contains("maps")) data.maps = manifest_json["maps"];
+        if (manifest_json.contains("rooms")) data.rooms = manifest_json["rooms"];
+        return data;
+    };
+
+    std::filesystem::path manifest_path = std::filesystem::temp_directory_path() / "search_assets_manifest_test.json";
+    ManifestStore store(manifest_path, loader, [](auto&&...) {}, []() {}, 2);
+
+    SearchAssets search(&store);
+    search.set_embedded_mode(true);
+    search.open([](const std::string&) {});
+
+    search.set_query_for_testing("decor");
+    auto results = search.results_for_testing();
+    CHECK(std::find(results.begin(), results.end(), std::make_pair(std::string{"decor"}, true)) != results.end());
+
+    manifest_json["assets"]["Alpha"]["tags"] = nlohmann::json::array({"collectible"});
+    tag_utils::notify_tags_changed();
+
+    search.set_query_for_testing("decor");
+    results = search.results_for_testing();
+    CHECK(std::find(results.begin(), results.end(), std::make_pair(std::string{"decor"}, true)) == results.end());
+
+    search.set_query_for_testing("collectible");
+    results = search.results_for_testing();
+    CHECK(std::find(results.begin(), results.end(), std::make_pair(std::string{"collectible"}, true)) != results.end());
 }
 
