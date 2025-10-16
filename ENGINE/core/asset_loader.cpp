@@ -1,6 +1,5 @@
 #include "asset_loader.hpp"
 #include "asset_loader_internal.hpp"
-#include <fstream>
 #include <iostream>
 #include <numeric>
 #include <algorithm>
@@ -46,17 +45,22 @@ namespace {
 
 AssetLoader::~AssetLoader() = default;
 
-AssetLoader::AssetLoader(const std::string& map_dir, SDL_Renderer* renderer)
-: map_path_(map_dir),
+AssetLoader::AssetLoader(const std::string& map_id,
+                         const nlohmann::json& map_manifest,
+                         SDL_Renderer* renderer,
+                         std::string content_root)
+: map_id_(map_id),
+map_path_(std::move(content_root)),
 renderer_(renderer)
 {
         const auto overall_begin = std::chrono::steady_clock::now();
 
         const auto map_begin = std::chrono::steady_clock::now();
-        load_map_json();
+        load_map_json(map_manifest);
         const auto map_end = std::chrono::steady_clock::now();
 
-        AudioEngine::instance().init(map_path_);
+        const nlohmann::json& audio_manifest = map_info_json_.contains("audio") ? map_info_json_.at("audio") : nlohmann::json::object();
+        AudioEngine::instance().init(map_id_, audio_manifest, map_path_);
 
         const auto library_begin = std::chrono::steady_clock::now();
         asset_library_ = std::make_unique<AssetLibrary>();
@@ -278,17 +282,16 @@ std::vector<const Area*> AssetLoader::getAllRoomAndTrailAreas() const {
         return areas;
 }
 
-void AssetLoader::load_map_json() {
-        map_info_path_ = map_path_ + "/map_info.json";
-        std::ifstream f(map_info_path_);
-        if (!f) throw std::runtime_error("Failed to open map_info.json");
-
-        json j;
-        f >> j;
-        map_info_json_ = std::move(j);
-
+void AssetLoader::load_map_json(const nlohmann::json& map_manifest) {
+        map_info_json_ = map_manifest;
         if (!map_info_json_.is_object()) {
                 map_info_json_ = nlohmann::json::object();
+        }
+
+        if (!map_path_.empty()) {
+                map_info_path_ = map_path_ + "/map_info.json";
+        } else {
+                map_info_path_.clear();
         }
 
         ensure_map_grid_settings(map_info_json_);

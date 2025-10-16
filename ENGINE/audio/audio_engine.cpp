@@ -39,7 +39,95 @@ struct LoadedTrack {
     fs::path source_path;
 };
 
+fs::path resolve_with_base(const fs::path& candidate, const fs::path& base_root) {
+    if (candidate.empty()) {
+        return {};
+    }
+    if (candidate.is_absolute()) {
+        return candidate;
+    }
+    if (!base_root.empty()) {
+        return base_root / candidate;
+    }
+    return candidate;
 }
+
+std::vector<fs::path> collect_music_files(const nlohmann::json& audio_manifest,
+                                          const std::string& content_root_hint) {
+    std::vector<fs::path> result;
+    if (!audio_manifest.is_object()) {
+        return result;
+    }
+
+    const auto music_it = audio_manifest.find("music");
+    if (music_it == audio_manifest.end() || !music_it->is_object()) {
+        return result;
+    }
+
+    const nlohmann::json& music = *music_it;
+    fs::path fallback_root = content_root_hint.empty() ? fs::path{} : fs::path(content_root_hint);
+    fs::path base_root = fallback_root;
+    if (auto root_it = music.find("content_root"); root_it != music.end() && root_it->is_string()) {
+        fs::path declared = root_it->get<std::string>();
+        if (!declared.is_absolute()) {
+            declared = resolve_with_base(declared, fallback_root);
+        }
+        base_root = declared;
+    }
+
+    auto tracks_it = music.find("tracks");
+    if (tracks_it == music.end() || !tracks_it->is_array()) {
+        return result;
+    }
+
+    for (const auto& entry : *tracks_it) {
+        fs::path local_base = base_root;
+        fs::path track_path;
+        if (entry.is_string()) {
+            track_path = fs::path(entry.get<std::string>());
+        } else if (entry.is_object()) {
+            if (auto local_root_it = entry.find("content_root");
+                local_root_it != entry.end() && local_root_it->is_string()) {
+                fs::path declared = local_root_it->get<std::string>();
+                if (!declared.is_absolute()) {
+                    declared = resolve_with_base(declared, base_root.empty() ? fallback_root : base_root);
+                }
+                local_base = declared;
+            }
+
+            std::string path_value;
+            if (auto path_it = entry.find("path"); path_it != entry.end() && path_it->is_string()) {
+                path_value = path_it->get<std::string>();
+            } else if (auto file_it = entry.find("file"); file_it != entry.end() && file_it->is_string()) {
+                path_value = file_it->get<std::string>();
+            }
+
+            if (!path_value.empty()) {
+                track_path = fs::path(path_value);
+            }
+        }
+
+        if (track_path.empty()) {
+            continue;
+        }
+
+        fs::path resolved = resolve_with_base(track_path, local_base);
+        if (resolved.empty()) {
+            continue;
+        }
+
+        try {
+            resolved = fs::absolute(resolved);
+        } catch (...) {
+        }
+
+        result.push_back(resolved);
+    }
+
+    return result;
+}
+
+} // namespace
 
 AudioEngine& AudioEngine::instance() {
     static AudioEngine engine;
@@ -56,24 +144,27 @@ AudioEngine::MusicTrack::MusicTrack(MusicTrack&& other) noexcept = default;
 
 AudioEngine::MusicTrack& AudioEngine::MusicTrack::operator=(MusicTrack&& other) noexcept = default;
 
-void AudioEngine::init(const std::string& map_path) {
+void AudioEngine::init(const std::string& map_id,
+                       const nlohmann::json& audio_manifest,
+                       const std::string& content_root_hint) {
     shutdown();
 
     std::vector<MusicTrack> loaded;
-    fs::path music_dir = fs::path(map_path) / "music";
-    std::vector<fs::path> wav_files;
-    try {
-        if (fs::exists(music_dir) && fs::is_directory(music_dir)) {
-            for (const auto& entry : fs::directory_iterator(music_dir)) {
-                if (!entry.is_regular_file()) continue;
-                std::string ext = entry.path().extension().string();
-                std::transform(ext.begin(), ext.end(), ext.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-                if (ext != ".wav") continue;
-                wav_files.push_back(entry.path());
+    std::vector<fs::path> wav_files = collect_music_files(audio_manifest, content_root_hint);
+
+    for (auto it = wav_files.begin(); it != wav_files.end();) {
+        try {
+            if (!fs::exists(*it)) {
+                std::cerr << "[AudioEngine] Music track not found: " << it->u8string() << "\n";
+                it = wav_files.erase(it);
+                continue;
             }
+        } catch (const std::exception& ex) {
+            std::cerr << "[AudioEngine] Music path check failed for '" << it->u8string() << "': " << ex.what() << "\n";
+            it = wav_files.erase(it);
+            continue;
         }
-    } catch (const std::exception& ex) {
-        std::cerr << "[AudioEngine] Music load error: " << ex.what() << "\n";
+        ++it;
     }
 
     if (!wav_files.empty()) {
@@ -95,7 +186,7 @@ void AudioEngine::init(const std::string& map_path) {
     {
         std::lock_guard<std::mutex> lock(mutex_);
         playlist_ = std::move(loaded);
-        current_map_ = map_path;
+        current_map_ = map_id;
         next_track_index_ = 0;
         playlist_started_ = false;
     }

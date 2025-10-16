@@ -17,7 +17,10 @@ struct LayerSpec;
 class AssetLoader {
 
         public:
-    AssetLoader(const std::string& map_dir, SDL_Renderer* renderer);
+    AssetLoader(const std::string& map_id,
+                const nlohmann::json& map_manifest,
+                SDL_Renderer* renderer,
+                std::string content_root = {});
     ~AssetLoader();
     std::vector<Asset*> collectDistantAssets(int lock_threshold, int remove_threshold);
     std::vector<std::vector<Asset*>> group_neighboring_assets( const std::vector<Asset*>& assets, int tile_width, int tile_height, const std::string& group_type);
@@ -28,8 +31,12 @@ class AssetLoader {
     AssetLibrary* getAssetLibrary() const { return asset_library_.get(); }
     const std::vector<Room*>& getRooms() const { return rooms_; }
     double getMapRadius() const { return map_radius_; }
+    const nlohmann::json& map_manifest() const { return map_info_json_; }
+    const std::string& map_identifier() const { return map_id_; }
+    const std::string& content_root() const { return map_path_; }
 
 	private:
+    std::string map_id_;
     std::string map_path_;
     SDL_Renderer* renderer_;
     std::vector<Room*> rooms_;
@@ -46,7 +53,7 @@ class AssetLoader {
     nlohmann::json* map_boundary_data_ = nullptr;
     nlohmann::json* rooms_data_        = nullptr;
     nlohmann::json* trails_data_       = nullptr;
-    void load_map_json();
+    void load_map_json(const nlohmann::json& map_manifest);
     void loadRooms();
     void finalizeAssets();
     std::vector<Asset> extract_all_assets();

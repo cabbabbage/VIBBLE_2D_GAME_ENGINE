@@ -3,12 +3,13 @@
 #include <SDL.h>
 #include <vector>
 #include <string>
+#include <string_view>
 #include <nlohmann/json.hpp>
 
 class Global_Light_Source {
 
 	public:
-    Global_Light_Source(SDL_Renderer* renderer, SDL_Point screen_center, int screen_width, SDL_Color fallback_base_color, const std::string& map_path);
+    Global_Light_Source(SDL_Renderer* renderer, SDL_Point screen_center, int screen_width, SDL_Color fallback_base_color);
     void apply_config(const nlohmann::json& data);
     ~Global_Light_Source() = default;
     void update();
@@ -27,7 +28,7 @@ class Global_Light_Source {
         float degree;
         SDL_Color color;
 };
-    bool load_from_map_light(const std::string& map_path);
+    bool load_from_map_manifest(const nlohmann::json& map_info, std::string_view map_id);
     void set_defaults(int screen_width, SDL_Color fallback_base_color);
     void set_light_brightness();
     Uint8 clamp_alpha(Uint8 value) const;

@@ -29,7 +29,19 @@ struct ReactiveShadowSettings;
 
 class Assets {
 public:
-    Assets(std::vector<Asset>&& loaded, AssetLibrary& library, Asset*, std::vector<Room*> rooms, int screen_width, int screen_height, int screen_center_x, int screen_center_y, int map_radius, SDL_Renderer* renderer, const std::string& map_path);
+    Assets(std::vector<Asset>&& loaded,
+           AssetLibrary& library,
+           Asset*,
+           std::vector<Room*> rooms,
+           int screen_width,
+           int screen_height,
+           int screen_center_x,
+           int screen_center_y,
+           int map_radius,
+           SDL_Renderer* renderer,
+           const std::string& map_id,
+           const nlohmann::json& map_manifest,
+           std::string content_root = {});
     ~Assets();
 
     nlohmann::json save_current_room(std::string room_name);
@@ -89,6 +101,7 @@ public:
     const nlohmann::json& map_info_json() const { return map_info_json_; }
     const std::string& map_path() const { return map_path_; }
     const std::string& map_info_path() const { return map_info_path_; }
+    const std::string& map_id() const { return map_id_; }
 
     AssetLibrary& library();
     const AssetLibrary& library() const;
@@ -120,7 +133,6 @@ public:
     Asset* spawn_asset(const std::string& name, SDL_Point world_pos);
 
 private:
-    void load_map_info_json();
     void save_map_info_json();
     void apply_map_light_config();
     bool on_map_light_changed();
@@ -159,6 +171,7 @@ private:
     std::mutex removal_queue_mutex_;
 
     AssetLibrary& library_;
+    std::string map_id_;
     std::string map_path_;
     std::string map_info_path_;
     nlohmann::json map_info_json_;

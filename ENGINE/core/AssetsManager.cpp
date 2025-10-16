@@ -80,7 +80,9 @@ Assets::Assets(std::vector<Asset>&& loaded,
                int screen_center_y,
                int map_radius,
                SDL_Renderer* renderer,
-               const std::string& map_path)
+               const std::string& map_id,
+               const nlohmann::json& map_manifest,
+               std::string content_root)
     : camera_(
           screen_width_,
           screen_height_,
@@ -97,10 +99,17 @@ Assets::Assets(std::vector<Asset>&& loaded,
       screen_width(screen_width_),
       screen_height(screen_height_),
       library_(library),
-      map_path_(map_path),
+      map_id_(map_id),
+      map_path_(std::move(content_root)),
       map_info_path_(map_path_.empty() ? std::string{} : (map_path_ + "/map_info.json"))
 {
-    load_map_info_json();
+    map_info_json_ = map_manifest;
+    if (!map_info_json_.is_object()) {
+        map_info_json_ = nlohmann::json::object();
+    }
+
+    hydrate_map_info_sections();
+    load_camera_settings_from_json();
 
     InitializeAssets::initialize(*this, std::move(loaded), std::move(rooms), screen_width_, screen_height_, screen_center_x, screen_center_y, map_radius);
 
@@ -109,7 +118,7 @@ Assets::Assets(std::vector<Asset>&& loaded,
         camera_.set_up_rooms(finder_);
     }
 
-    scene = new SceneRenderer(renderer, this, screen_width_, screen_height_, map_path);
+    scene = new SceneRenderer(renderer, this, screen_width_, screen_height_, map_info_json_, map_id_);
     apply_map_light_config();
     for (Asset* a : all) {
         if (a) a->set_assets(this);
@@ -152,33 +161,6 @@ std::vector<const Room::NamedArea*> Assets::current_room_trigger_areas() const {
     }
 
     return result;
-}
-
-void Assets::load_map_info_json() {
-    map_info_json_ = nlohmann::json::object();
-    if (map_info_path_.empty()) {
-        return;
-    }
-
-    std::ifstream in(map_info_path_);
-    if (!in.is_open()) {
-        std::cerr << "[Assets] Failed to open map_info.json at " << map_info_path_ << "\n";
-        return;
-    }
-
-    try {
-        in >> map_info_json_;
-    } catch (const std::exception& e) {
-        std::cerr << "[Assets] Failed to parse map_info.json: " << e.what() << "\n";
-        map_info_json_ = nlohmann::json::object();
-    }
-
-    if (!map_info_json_.is_object()) {
-        map_info_json_ = nlohmann::json::object();
-    }
-
-    hydrate_map_info_sections();
-    load_camera_settings_from_json();
 }
 
 void Assets::save_map_info_json() {

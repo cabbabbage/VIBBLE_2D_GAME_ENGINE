@@ -1,7 +1,6 @@
 #include "global_light_source.hpp"
 #include "map_generation/map_layers_geometry.hpp"
 #include <nlohmann/json.hpp>
-#include <fstream>
 #include <iostream>
 #include <cmath>
 #include <algorithm>
@@ -13,8 +12,7 @@ using json = nlohmann::json;
 Global_Light_Source::Global_Light_Source(SDL_Renderer* renderer,
                                          SDL_Point screen_center,
                                          int screen_width,
-                                         SDL_Color fallback_base_color,
-                                         const std::string& map_path)
+                                         SDL_Color fallback_base_color)
 : renderer_(renderer),
         base_color_(fallback_base_color),
         current_color_(fallback_base_color),
@@ -31,10 +29,8 @@ Global_Light_Source::Global_Light_Source(SDL_Renderer* renderer,
         orbit_radius_y_(0)
 {
         set_defaults(screen_width, fallback_base_color);
-        if (!load_from_map_light(map_path)) {
-                set_light_brightness();
-                recalc_position();
-        }
+        set_light_brightness();
+        recalc_position();
 }
 
 void Global_Light_Source::set_defaults(int screen_width, SDL_Color fallback_base_color) {
@@ -57,47 +53,42 @@ void Global_Light_Source::set_defaults(int screen_width, SDL_Color fallback_base
         recalc_position();
 }
 
-bool Global_Light_Source::load_from_map_light(const std::string& map_path) {
-        if (map_path.empty()) {
-                return false;
-        }
-
-        std::ifstream in(map_path + "/map_info.json");
-        if (!in.is_open()) {
-                std::cerr << "[MapLight] Failed to open map_info.json in " << map_path << "\n";
-                return false;
-        }
-        json j;
-        try {
-                in >> j;
-        } catch (const std::exception& e) {
-                std::cerr << "[MapLight] Failed to parse map_info.json: " << e.what() << "\n";
+bool Global_Light_Source::load_from_map_manifest(const json& map_info, std::string_view map_id) {
+        if (!map_info.is_object()) {
+                std::cerr << "[MapLight] Map manifest for '" << map_id << "' is not an object. Using defaults.\n";
+                set_light_brightness();
+                recalc_position();
                 return false;
         }
 
         int default_cx = default_map_center_.x;
         int default_cy = default_map_center_.y;
         try {
-                if (j.is_object()) {
-                        const double map_radius = map_layers::map_radius_from_map_info(j);
-                        if (map_radius > 0.0) {
-                                const int center_val = static_cast<int>(std::lround(map_radius));
-                                default_cx = center_val;
-                                default_cy = center_val;
-                        }
+                const double map_radius = map_layers::map_radius_from_map_info(map_info);
+                if (map_radius > 0.0) {
+                        const int center_val = static_cast<int>(std::lround(map_radius));
+                        default_cx = center_val;
+                        default_cy = center_val;
                 }
         } catch (...) {
-
         }
+
         default_map_center_ = SDL_Point{ default_cx, default_cy };
         map_reference_center_ = default_map_center_;
         center_ = default_center_;
-        auto it = j.find("map_light_data");
-        if (it == j.end() || !it->is_object()) {
 
-                std::cerr << "[MapLight] map_info.json has no valid map_light_data object. Using defaults.\n";
+        auto it = map_info.find("map_light_data");
+        if (it == map_info.end() || !it->is_object()) {
+                if (!map_id.empty()) {
+                        std::cerr << "[MapLight] Manifest for '" << map_id << "' has no valid map_light_data object. Using defaults.\n";
+                } else {
+                        std::cerr << "[MapLight] Manifest has no valid map_light_data object. Using defaults.\n";
+                }
+                set_light_brightness();
+                recalc_position();
                 return false;
         }
+
         apply_config(*it);
         return true;
 }

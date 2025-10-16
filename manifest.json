@@ -12066,6 +12066,13 @@
         },
         "update_interval": 8
       },
+      "audio": {
+        "music": {
+          "content_root": "MAPS/FORREST/music",
+          "tracks": []
+        }
+      },
+      "content_root": "MAPS/FORREST",
       "map_name": "FORREST",
       "rooms_data": {
         "bar": {

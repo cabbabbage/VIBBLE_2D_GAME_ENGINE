@@ -10,6 +10,7 @@
 #include "scene_renderer.hpp"
 #include "AssetsManager.hpp"
 #include "input.hpp"
+#include "core/manifest/manifest_loader.hpp"
 #include "audio/audio_engine.hpp"
 #include <SDL.h>
 #include <SDL_image.h>
@@ -61,7 +62,50 @@ void MainApp::init() {
 void MainApp::setup() {
 	std::srand(static_cast<unsigned int>(std::time(nullptr)));
         try {
-                loader_ = std::make_unique<AssetLoader>(map_path_, renderer_);
+                nlohmann::json map_manifest_json = nlohmann::json::object();
+                std::string content_root;
+                const std::string map_identifier = map_path_;
+
+                const fs::path candidate_path = fs::path(map_path_);
+                std::error_code ec;
+                if (!map_path_.empty() && fs::exists(candidate_path, ec) && fs::is_directory(candidate_path, ec)) {
+                        const fs::path manifest_path = candidate_path / "map_info.json";
+                        std::ifstream manifest_stream(manifest_path);
+                        if (!manifest_stream.is_open()) {
+                                throw std::runtime_error("Failed to open map_info.json at " + manifest_path.string());
+                        }
+                        try {
+                                manifest_stream >> map_manifest_json;
+                        } catch (const std::exception& ex) {
+                                throw std::runtime_error(std::string("Failed to parse map_info.json at ") + manifest_path.string() + ": " + ex.what());
+                        }
+                        content_root = candidate_path.string();
+                } else {
+                        manifest::ManifestData manifest_data = manifest::load_manifest();
+                        auto map_it = manifest_data.maps.find(map_path_);
+                        if (map_it == manifest_data.maps.end() || !map_it.value().is_object()) {
+                                throw std::runtime_error("Map '" + map_path_ + "' not found in manifest.");
+                        }
+                        map_manifest_json = map_it.value();
+                        auto root_it = map_manifest_json.find("content_root");
+                        if (root_it != map_manifest_json.end() && root_it->is_string()) {
+                                content_root = root_it->get<std::string>();
+                        }
+                }
+
+                if (!map_manifest_json.is_object()) {
+                        map_manifest_json = nlohmann::json::object();
+                }
+
+                if (!content_root.empty()) {
+                        fs::path resolved_root = fs::path(content_root);
+                        if (resolved_root.is_relative()) {
+                                resolved_root = fs::path(manifest::manifest_path()).parent_path() / resolved_root;
+                        }
+                        content_root = resolved_root.lexically_normal().string();
+                }
+
+                loader_ = std::make_unique<AssetLoader>(map_identifier, map_manifest_json, renderer_, content_root);
                 auto spawn_begin = std::chrono::steady_clock::now();
                 auto all_assets = loader_->createAssets();
                 const auto asset_count = all_assets.size();
@@ -72,7 +116,19 @@ void MainApp::setup() {
                 }
                 int start_px = player_ptr ? player_ptr->pos.x : static_cast<int>(loader_->getMapRadius());
                 int start_py = player_ptr ? player_ptr->pos.y : static_cast<int>(loader_->getMapRadius());
-                game_assets_ = new Assets(std::move(all_assets), *loader_->getAssetLibrary(), player_ptr, loader_->getRooms(), screen_w_, screen_h_, start_px, start_py, static_cast<int>(loader_->getMapRadius() * 1.2), renderer_, map_path_);
+                game_assets_ = new Assets(std::move(all_assets),
+                                          *loader_->getAssetLibrary(),
+                                          player_ptr,
+                                          loader_->getRooms(),
+                                          screen_w_,
+                                          screen_h_,
+                                          start_px,
+                                          start_py,
+                                          static_cast<int>(loader_->getMapRadius() * 1.2),
+                                          renderer_,
+                                          loader_->map_identifier(),
+                                          loader_->map_manifest(),
+                                          loader_->content_root());
                 const double spawn_seconds = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - spawn_begin).count() / 1000.0;
                 std::ostringstream init_summary;
                 init_summary << "[Init] Assets initialized: " << asset_count

@@ -18,7 +18,12 @@ class Asset;
 class SceneRenderer {
 
 public:
-    SceneRenderer(SDL_Renderer* renderer, Assets* assets, int screen_width, int screen_height, const std::string& map_path);
+    SceneRenderer(SDL_Renderer* renderer,
+                 Assets* assets,
+                 int screen_width,
+                 int screen_height,
+                 const nlohmann::json& map_manifest,
+                 const std::string& map_id);
     ~SceneRenderer();
     void render();
     void apply_map_light_config(const nlohmann::json& data);
@@ -42,7 +47,6 @@ private:
     void update_fullscreen_light_texture();
 
 private:
-    std::string    map_path_;
     SDL_Renderer*  renderer_;
     Assets*        assets_;
     int            screen_width_;

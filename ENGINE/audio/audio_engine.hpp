@@ -6,6 +6,7 @@
 #include <mutex>
 #include <string>
 #include <vector>
+#include <nlohmann/json.hpp>
 
 class Animation;
 class Asset;
@@ -14,7 +15,9 @@ class AudioEngine {
 public:
     static AudioEngine& instance();
 
-    void init(const std::string& map_path);
+    void init(const std::string& map_id,
+              const nlohmann::json& audio_manifest,
+              const std::string& content_root_hint);
     void shutdown();
     void update();
 

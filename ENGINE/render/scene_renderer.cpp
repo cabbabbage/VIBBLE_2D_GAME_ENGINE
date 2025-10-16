@@ -26,14 +26,14 @@ SceneRenderer::SceneRenderer(SDL_Renderer* renderer,
                              Assets* assets,
                              int screen_width,
                              int screen_height,
-                             const std::string& map_path)
-: map_path_(map_path),
-  renderer_(renderer),
+                             const nlohmann::json& map_manifest,
+                             const std::string& map_id)
+: renderer_(renderer),
   assets_(assets),
   screen_width_(screen_width),
   screen_height_(screen_height),
   main_light_source_(renderer, SDL_Point{ screen_width / 2, screen_height / 2 },
-                     screen_width, SDL_Color{255, 255, 255, 255}, map_path),
+                     screen_width, SDL_Color{255, 255, 255, 255}),
   fullscreen_light_tex_(nullptr),
   reactive_shadow_settings_(render_pipeline::shading::sanitize_reactive_shadow_settings({})),
   render_pipeline_(renderer,
@@ -43,6 +43,7 @@ SceneRenderer::SceneRenderer(SDL_Renderer* renderer,
                                   nullptr,
                                   &reactive_shadow_settings_ })
 {
+    main_light_source_.load_from_map_manifest(map_manifest, map_id);
     fullscreen_light_tex_ = SDL_CreateTexture(renderer_, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET, screen_width_, screen_height_);
     if (fullscreen_light_tex_) {
         SDL_SetTextureBlendMode(fullscreen_light_tex_, SDL_BLENDMODE_BLEND);
