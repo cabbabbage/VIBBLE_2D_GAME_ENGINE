@@ -20,13 +20,14 @@ namespace fs = std::filesystem;
 MenuUI::MenuUI(SDL_Renderer* renderer,
                int screen_w,
                int screen_h,
-               MapDescriptor map)
-: MainApp(std::move(map), renderer, screen_w, screen_h)
+               MapDescriptor map,
+               LoadingScreen* loading_screen)
+: MainApp(std::move(map), renderer, screen_w, screen_h, loading_screen)
 {
-	if (TTF_WasInit() == 0) {
-		if (TTF_Init() < 0) {
-			std::cerr << "TTF_Init failed: " << TTF_GetError() << "\n";
-		}
+        if (TTF_WasInit() == 0) {
+                if (TTF_Init() < 0) {
+                        std::cerr << "TTF_Init failed: " << TTF_GetError() << "\n";
+                }
 	}
 	menu_active_ = false;
 }

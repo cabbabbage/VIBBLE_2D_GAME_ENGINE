@@ -4,6 +4,7 @@
 #include "ui/main_menu.hpp"
 #include "ui/menu_ui.hpp"
 #include "ui/tinyfiledialogs.h"
+#include "ui/loading_screen.hpp"
 #include "core/manifest/manifest_loader.hpp"
 #include "asset_loader.hpp"
 #include "asset/asset_types.hpp"
@@ -13,6 +14,7 @@
 #include "core/manifest/manifest_loader.hpp"
 #include "audio/audio_engine.hpp"
 #include "dev_mode/core/manifest_store.hpp"
+#include "utils/loading_status_notifier.hpp"
 #include <SDL.h>
 #include <SDL_image.h>
 #include <SDL_mixer.h>
@@ -40,12 +42,17 @@ extern "C" {
 }
 #endif
 
-MainApp::MainApp(MapDescriptor map, SDL_Renderer* renderer, int screen_w, int screen_h)
+MainApp::MainApp(MapDescriptor map,
+                 SDL_Renderer* renderer,
+                 int screen_w,
+                 int screen_h,
+                 LoadingScreen* loading_screen)
 : map_descriptor_(std::move(map)),
   map_path_(map_descriptor_.id),
   renderer_(renderer),
   screen_w_(screen_w),
-  screen_h_(screen_h) {}
+  screen_h_(screen_h),
+  loading_screen_(loading_screen) {}
 
 MainApp::~MainApp() {
         AudioEngine::instance().shutdown();
@@ -60,7 +67,23 @@ void MainApp::init() {
 }
 
 void MainApp::setup() {
-	std::srand(static_cast<unsigned int>(std::time(nullptr)));
+        std::srand(static_cast<unsigned int>(std::time(nullptr)));
+        std::unique_ptr<loading_status::ScopedNotifier> notifier;
+        if (loading_screen_) {
+                loading_screen_->set_status("Loading assets");
+                loading_screen_->draw_frame();
+                SDL_RenderPresent(renderer_);
+                SDL_PumpEvents();
+                notifier = std::make_unique<loading_status::ScopedNotifier>([this](const std::string& status) {
+                        if (!loading_screen_ || !renderer_) {
+                                return;
+                        }
+                        loading_screen_->set_status(status);
+                        loading_screen_->draw_frame();
+                        SDL_RenderPresent(renderer_);
+                        SDL_PumpEvents();
+                });
+        }
         try {
                 nlohmann::json map_manifest_json = nlohmann::json::object();
                 std::string content_root;
@@ -98,6 +121,7 @@ void MainApp::setup() {
                 }
 
                 loader_ = std::make_unique<AssetLoader>(map_identifier, map_manifest_json, renderer_, content_root);
+                loading_status::notify("Spawning assets");
                 auto spawn_begin = std::chrono::steady_clock::now();
                 auto all_assets = loader_->createAssets();
                 const auto asset_count = all_assets.size();
@@ -391,14 +415,19 @@ void run(SDL_Window* window, SDL_Renderer* renderer, int screen_w, int screen_h,
         if (quit_requested || !chosen_map) break;
 
         MapDescriptor selected_map = std::move(*chosen_map);
-        menu.showLoadingScreen();
+        LoadingScreen loading_screen(renderer, screen_w, screen_h);
+        loading_screen.init();
+        loading_screen.set_status("Loading assets");
+        loading_screen.draw_frame();
+        SDL_RenderPresent(renderer);
+        SDL_PumpEvents();
         if (rebuild_cache) {
             std::cout << "[Main] Rebuilding asset cache...\n";
             RebuildAssets* rebuilder = new RebuildAssets(renderer, selected_map.id);
             delete rebuilder;
             std::cout << "[Main] Asset cache rebuild complete.\n";
         }
-        MenuUI app(renderer, screen_w, screen_h, std::move(selected_map));
+        MenuUI app(renderer, screen_w, screen_h, std::move(selected_map), &loading_screen);
         app.init();
         if (app.wants_return_to_main_menu()) continue;
         break;

@@ -16,11 +16,16 @@ class Assets;
 class SceneRenderer;
 class AssetLoader;
 class Input;
+class LoadingScreen;
 
 class MainApp {
 
-	public:
-    MainApp(MapDescriptor map, SDL_Renderer* renderer, int screen_w, int screen_h);
+        public:
+    MainApp(MapDescriptor map,
+            SDL_Renderer* renderer,
+            int screen_w,
+            int screen_h,
+            LoadingScreen* loading_screen = nullptr);
     virtual ~MainApp();
     virtual void init();
     virtual void game_loop();
@@ -38,6 +43,7 @@ class MainApp {
     Input*         input_            = nullptr;
     SDL_Texture* overlay_texture_    = nullptr;
     bool dev_mode_ = false;
+    LoadingScreen* loading_screen_   = nullptr;
 };
 
 void run(SDL_Window* window, SDL_Renderer* renderer, int screen_w, int screen_h, bool rebuild_cache);

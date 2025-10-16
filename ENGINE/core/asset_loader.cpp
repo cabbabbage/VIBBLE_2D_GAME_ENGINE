@@ -19,6 +19,7 @@
 #include "map_generation/generate_rooms.hpp"
 #include "map_generation/map_layers_geometry.hpp"
 #include <nlohmann/json.hpp>
+#include "utils/loading_status_notifier.hpp"
 using json = nlohmann::json;
 
 namespace {
@@ -58,6 +59,7 @@ manifest_store_(manifest_store)
         const auto overall_begin = std::chrono::steady_clock::now();
 
         const auto map_begin = std::chrono::steady_clock::now();
+        loading_status::notify("Loading map data");
         load_map_json(map_manifest);
         const auto map_end = std::chrono::steady_clock::now();
 
@@ -65,12 +67,15 @@ manifest_store_(manifest_store)
         AudioEngine::instance().init(map_id_, audio_manifest, map_path_);
 
         const auto library_begin = std::chrono::steady_clock::now();
+        loading_status::notify("Loading assets");
         asset_library_ = std::make_unique<AssetLibrary>();
         const auto library_end = std::chrono::steady_clock::now();
 
         const auto rooms_begin = std::chrono::steady_clock::now();
+        loading_status::notify("Creating map");
         loadRooms();
         const auto rooms_end = std::chrono::steady_clock::now();
+        loading_status::notify("Loading assets");
     {
         const auto preload_begin = std::chrono::steady_clock::now();
 
@@ -96,6 +101,7 @@ manifest_store_(manifest_store)
     } else {
         std::cerr << "[AssetLoader] Renderer unavailable; skipping asset library cache warmup.\n";
     }
+        loading_status::notify("Loading assets");
         finalizeAssets();
 
         const auto overall_end = std::chrono::steady_clock::now();

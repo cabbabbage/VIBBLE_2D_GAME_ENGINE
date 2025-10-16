@@ -3,6 +3,7 @@
 #include "utils/cache_manager.hpp"
 #include "utils/generate_faded_mask.hpp"
 #include "render_pipeline/ScalingLogic.hpp"
+#include "utils/loading_status_notifier.hpp"
 #include <SDL_image.h>
 #include <SDL_mixer.h>
 #include <algorithm>
@@ -823,6 +824,8 @@ void Animation::load(const std::string& trigger,
                 const bool cached_variants_loaded = (!need_generation && attempt_cache_load);
 
                 if (info.is_shaded) {
+                        bool announced_generation = false;
+                        loading_status::notify("Creating texture/mask for " + info.name);
                         auto mask_result = GenerateFadedMask::BuildMasks(info.name,
                                                                          trigger,
                                                                          expected_steps,
@@ -830,6 +833,11 @@ void Animation::load(const std::string& trigger,
                                                                          info.shadow_mask_settings);
                         mask_surfaces            = std::move(mask_result.first);
                         masks_loaded_from_cache  = mask_result.second;
+                        if (masks_loaded_from_cache) {
+                                loading_status::notify("Loading assets");
+                        } else {
+                                announced_generation = true;
+                        }
                         if (mask_surfaces.size() != variant_surfaces.size()) {
                                 mask_surfaces.resize(variant_surfaces.size());
                         }
@@ -844,6 +852,9 @@ void Animation::load(const std::string& trigger,
                                           << " generated " << mask_frame_count
                                           << " faded mask frame(s) across " << mask_surfaces.size()
                                           << " variant(s)\n";
+                                if (announced_generation) {
+                                        loading_status::notify("Loading assets");
+                                }
                         }
                 } else {
                         mask_surfaces.resize(variant_surfaces.size());

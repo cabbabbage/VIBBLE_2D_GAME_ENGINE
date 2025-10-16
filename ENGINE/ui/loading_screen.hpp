@@ -10,17 +10,22 @@ class LoadingScreen {
 
 	public:
     LoadingScreen(SDL_Renderer* renderer, int screen_w, int screen_h);
+    ~LoadingScreen();
     void init();
     void draw_frame();
+    void set_status(std::string status);
 
-	private:
+        private:
     SDL_Renderer* renderer_;
     int screen_w_;
     int screen_h_;
     std::vector<std::filesystem::path> images_;
     std::string message_;
+    std::string status_text_;
     size_t current_index_ = 0;
     Uint32 last_switch_time_ = 0;
+    SDL_Texture* current_texture_ = nullptr;
+    std::filesystem::path current_texture_path_;
     std::filesystem::path pick_random_loading_folder();
     std::vector<std::filesystem::path> list_images_in(const std::filesystem::path& dir);
     std::string pick_random_message_from_csv(const std::filesystem::path& csv_path);

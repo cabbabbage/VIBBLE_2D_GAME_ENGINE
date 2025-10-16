@@ -10,6 +10,13 @@ namespace fs = std::filesystem;
 LoadingScreen::LoadingScreen(SDL_Renderer* renderer, int screen_w, int screen_h)
 : renderer_(renderer), screen_w_(screen_w), screen_h_(screen_h) {}
 
+LoadingScreen::~LoadingScreen() {
+        if (current_texture_) {
+                SDL_DestroyTexture(current_texture_);
+                current_texture_ = nullptr;
+        }
+}
+
 fs::path LoadingScreen::pick_random_loading_folder() {
 	std::vector<fs::path> folders;
 	if (!fs::exists("loading") || !fs::is_directory("loading")) return "";
@@ -110,35 +117,63 @@ void LoadingScreen::render_scaled_center(SDL_Texture* tex, int target_w, int tar
 }
 
 void LoadingScreen::init() {
-	fs::path folder = pick_random_loading_folder();
-	if (folder.empty()) return;
-	images_ = list_images_in(folder);
-	message_ = pick_random_message_from_csv(folder / "messages.csv");
-	current_index_ = 0;
-	last_switch_time_ = SDL_GetTicks();
+        fs::path folder = pick_random_loading_folder();
+        if (folder.empty()) return;
+        images_ = list_images_in(folder);
+        message_ = pick_random_message_from_csv(folder / "messages.csv");
+        current_index_ = 0;
+        last_switch_time_ = SDL_GetTicks();
+        status_text_.clear();
+}
+
+void LoadingScreen::set_status(std::string status) {
+        status_text_ = std::move(status);
 }
 
 void LoadingScreen::draw_frame() {
-	if (images_.empty()) return;
-	Uint32 now = SDL_GetTicks();
-	if (now - last_switch_time_ > 250) {
-		current_index_ = (current_index_ + 1) % images_.size();
-		last_switch_time_ = now;
-	}
-	SDL_Surface* surf = IMG_Load(images_[current_index_].string().c_str());
-	if (!surf) return;
-	SDL_Texture* tex = SDL_CreateTextureFromSurface(renderer_, surf);
-	SDL_FreeSurface(surf);
-	if (!tex) return;
-	SDL_SetRenderDrawColor(renderer_,0,0,0,255); SDL_RenderClear(renderer_);
-	const std::string mono_font = ui_fonts::monospace();
-	TTF_Font* title_font=TTF_OpenFont(mono_font.c_str(),48);
-	SDL_Color white={255,255,255,255};
-	if(title_font){int tw,th; TTF_SizeText(title_font,"LOADING...",&tw,&th); int tx=(screen_w_-tw)/2;
-		draw_text(title_font,"LOADING...",tx,40,white); TTF_CloseFont(title_font);}
-	render_scaled_center(tex,screen_w_/3,screen_h_/3,screen_w_/2,screen_h_/2);
+        if (images_.empty()) return;
+        Uint32 now = SDL_GetTicks();
+        if (!images_.empty() && now - last_switch_time_ > 250) {
+                current_index_ = (current_index_ + 1) % images_.size();
+                last_switch_time_ = now;
+        }
+        const fs::path& target_path = images_[current_index_];
+        if (!current_texture_ || target_path != current_texture_path_) {
+                if (current_texture_) {
+                        SDL_DestroyTexture(current_texture_);
+                        current_texture_ = nullptr;
+                        current_texture_path_.clear();
+                }
+                SDL_Surface* surf = IMG_Load(target_path.string().c_str());
+                if (surf) {
+                        current_texture_ = SDL_CreateTextureFromSurface(renderer_, surf);
+                        SDL_FreeSurface(surf);
+                        if (current_texture_) {
+                                current_texture_path_ = target_path;
+                        }
+                }
+        }
+        SDL_SetRenderDrawColor(renderer_,0,0,0,255); SDL_RenderClear(renderer_);
+        const std::string mono_font = ui_fonts::monospace();
+        TTF_Font* title_font=TTF_OpenFont(mono_font.c_str(),48);
+        SDL_Color white={255,255,255,255};
+        int title_height = 0;
+        if(title_font){int tw,th; TTF_SizeText(title_font,"LOADING...",&tw,&th); int tx=(screen_w_-tw)/2;
+                draw_text(title_font,"LOADING...",tx,40,white); title_height = th; TTF_CloseFont(title_font);}
+        if (!status_text_.empty()) {
+                TTF_Font* status_font = TTF_OpenFont(mono_font.c_str(), 28);
+                if (status_font) {
+                        int sw = 0;
+                        int sh = 0;
+                        TTF_SizeText(status_font, status_text_.c_str(), &sw, &sh);
+                        int sx = (screen_w_ - sw) / 2;
+                        int sy = 40 + title_height + 12;
+                        draw_text(status_font, status_text_, sx, sy, white);
+                        TTF_CloseFont(status_font);
+                }
+        }
+        render_scaled_center(current_texture_,screen_w_/3,screen_h_/3,screen_w_/2,screen_h_/2);
         TTF_Font* body_font=TTF_OpenFont(mono_font.c_str(),26);
-	SDL_Rect msg_rect{screen_w_/3,(screen_h_*2)/3,screen_w_/3,screen_h_/4};
-	if(body_font && !message_.empty()){render_justified_text(body_font,message_,msg_rect,white); TTF_CloseFont(body_font);}
-	SDL_DestroyTexture(tex);
+        SDL_Rect msg_rect{screen_w_/3,(screen_h_*2)/3,screen_w_/3,screen_h_/4};
+        if(body_font && !message_.empty()){render_justified_text(body_font,message_,msg_rect,white); TTF_CloseFont(body_font);}
 }
