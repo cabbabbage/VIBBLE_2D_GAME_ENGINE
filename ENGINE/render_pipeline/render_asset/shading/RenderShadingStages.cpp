@@ -205,6 +205,11 @@ LightProbe analyze_light_map(const VirtualLightMap& map, const StageContext& con
     const float center_fx = static_cast<float>(cx) + frac_x + 0.5f;
     const float center_fy = static_cast<float>(cy) + frac_y + 0.5f;
 
+    int front_quadrant_to_skip = -1;
+    if (normalized_y <= 0.5f) {
+        front_quadrant_to_skip = (normalized_x < 0.5f) ? 0 : 1;
+    }
+
     float forward_sum    = 0.0f;
     float forward_weight = 0.0f;
     for (int y = 0; y < grid_h; ++y) {
@@ -214,6 +219,20 @@ LightProbe analyze_light_map(const VirtualLightMap& map, const StageContext& con
             const float cell_y = static_cast<float>(y) + 0.5f;
             const float dx = cell_x - center_fx;
             const float dy = cell_y - center_fy;
+
+            const bool cell_in_front = cell_y <= center_fy;
+            if (!cell_in_front) {
+                continue;
+            }
+
+            if (front_quadrant_to_skip >= 0) {
+                const bool cell_is_left = cell_x < center_fx;
+                const int  cell_front_quadrant = cell_is_left ? 0 : 1;
+                if (cell_front_quadrant == front_quadrant_to_skip) {
+                    continue;
+                }
+            }
+
             const float distance = std::sqrt(dx * dx + dy * dy);
             const float distance_weight = 1.0f / (1.0f + distance * falloff);
 
