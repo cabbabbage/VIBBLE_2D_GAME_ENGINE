@@ -16,7 +16,7 @@
 #include "widgets.hpp"
 #include "widgets/CandidateEditorPieGraphWidget.hpp"
 #include "spawn_method_control_widgets/LinkToAreaButton.hpp"
-#include "Input.hpp"
+#include "utils/input.hpp"
 
 class SpawnGroupLabelWidget : public Widget {
 public:
