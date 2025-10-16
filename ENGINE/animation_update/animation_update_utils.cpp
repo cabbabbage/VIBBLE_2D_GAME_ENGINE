@@ -3,37 +3,60 @@
 #include <algorithm>
 #include <cctype>
 #include <cmath>
+#include <cstdint>
 #include <string>
+#include <string_view>
+#include <unordered_map>
 
 #include "core/AssetsManager.hpp"
 #include "map_generation/room.hpp"
 
 namespace {
 
-std::string normalize_room_type_string(const std::string& raw) {
-    if (raw.empty()) {
-        return std::string{};
-    }
+struct PlayableRoomsCacheEntry {
+    const Room* last_containing_room = nullptr;
+    std::unordered_map<const Room*, bool> playable_lookup;
+    std::uintptr_t rooms_identity = 0;
+    std::size_t rooms_size = 0;
+};
 
-    std::string lowered = raw;
-    std::transform(lowered.begin(), lowered.end(), lowered.begin(), [](unsigned char ch) {
-        return static_cast<char>(std::tolower(ch));
-    });
-    return lowered;
+auto& playable_rooms_cache() {
+    static std::unordered_map<const Assets*, PlayableRoomsCacheEntry> cache;
+    return cache;
 }
 
-bool is_playable_room(const Room& room) {
+bool equals_ignore_case(std::string_view value, std::string_view target) {
+    if (value.size() != target.size()) {
+        return false;
+    }
+    for (std::size_t idx = 0; idx < value.size(); ++idx) {
+        if (std::tolower(static_cast<unsigned char>(value[idx])) !=
+            std::tolower(static_cast<unsigned char>(target[idx]))) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool compute_is_playable_room(const Room& room) {
     if (!room.room_area) {
         return false;
     }
 
-    const std::string area_type = normalize_room_type_string(room.room_area->get_type());
-    if (area_type == "room" || area_type == "trail") {
+    if (equals_ignore_case(room.room_area->get_type(), "room") ||
+        equals_ignore_case(room.room_area->get_type(), "trail")) {
         return true;
     }
 
-    const std::string room_type = normalize_room_type_string(room.type);
-    return room_type == "room" || room_type == "trail";
+    return equals_ignore_case(room.type, "room") || equals_ignore_case(room.type, "trail");
+}
+
+bool is_playable_room_cached(const Room& room, PlayableRoomsCacheEntry& entry) {
+    auto [it, inserted] = entry.playable_lookup.emplace(&room, false);
+    if (inserted) {
+        it->second = compute_is_playable_room(room);
+    }
+    return it->second;
 }
 
 }  // namespace
@@ -45,19 +68,41 @@ bool bottom_point_inside_playable_area(const Assets* assets, SDL_Point bottom_po
         return false;
     }
 
+    auto& cache_entry = playable_rooms_cache()[assets];
+
     const std::vector<Room*>& rooms = assets->rooms();
-    for (const Room* room : rooms) {
+    const std::uintptr_t identity = rooms.empty()
+        ? 0
+        : reinterpret_cast<std::uintptr_t>(rooms.data());
+    if (cache_entry.rooms_identity != identity || cache_entry.rooms_size != rooms.size()) {
+        cache_entry.rooms_identity = identity;
+        cache_entry.rooms_size     = rooms.size();
+        cache_entry.last_containing_room = nullptr;
+        cache_entry.playable_lookup.clear();
+    }
+
+    auto contains_playable = [&](const Room* room) -> bool {
         if (!room || !room->room_area) {
-            continue;
+            return false;
         }
-        if (!is_playable_room(*room)) {
-            continue;
+        if (!is_playable_room_cached(*room, cache_entry)) {
+            return false;
         }
-        if (room->room_area->contains_point(bottom_point)) {
+        return room->room_area->contains_point(bottom_point);
+    };
+
+    if (cache_entry.last_containing_room && contains_playable(cache_entry.last_containing_room)) {
+        return true;
+    }
+
+    for (const Room* room : rooms) {
+        if (contains_playable(room)) {
+            cache_entry.last_containing_room = room;
             return true;
         }
     }
 
+    cache_entry.last_containing_room = nullptr;
     return false;
 }
 
