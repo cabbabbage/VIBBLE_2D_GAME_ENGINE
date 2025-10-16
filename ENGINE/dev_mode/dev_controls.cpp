@@ -2476,11 +2476,13 @@ bool DevControls::passes_asset_filters(Asset* asset) const {
     return asset_filter_.passes(*asset);
 }
 
-bool DevControls::persist_map_info_to_disk() const {
+bool DevControls::persist_map_info_to_disk() {
     if (!assets_) {
         std::cerr << "[DevControls] Cannot persist map info: assets manager not set\n";
         return false;
     }
-    return devmode::write_map_info_json(assets_->map_info_path(), assets_->map_info_json(), std::cerr);
+    const bool map_saved = devmode::write_map_info_json(assets_->map_info_path(), assets_->map_info_json(), std::cerr);
+    manifest_store_.flush();
+    return map_saved;
 }
 

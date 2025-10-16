@@ -17,6 +17,7 @@
 #include "asset_filter_bar.hpp"
 #include "trail_editor_suite.hpp"
 #include "dev_mode/pan_and_zoom.hpp"
+#include "dev_mode/core/manifest_store.hpp"
 #include "map_assets_modals.hpp"
 
 class Asset;
@@ -167,7 +168,10 @@ private:
     void regenerate_boundary_spawn_group(const nlohmann::json& entry);
     void regenerate_map_grid_assets();
 
-    bool persist_map_info_to_disk() const;
+    bool persist_map_info_to_disk();
+
+    devmode::core::ManifestStore& manifest_store() { return manifest_store_; }
+    const devmode::core::ManifestStore& manifest_store() const { return manifest_store_; }
     const RoomAreaCache::PolygonList& room_area_polygons();
 
     Assets* assets_ = nullptr;
@@ -198,6 +202,7 @@ private:
     bool modal_headers_hidden_ = false;
     bool sliding_headers_hidden_ = false;
     std::unique_ptr<TrailEditorSuite> trail_suite_;
+    devmode::core::ManifestStore manifest_store_;
     AssetFilterBar asset_filter_;
 
     camera* camera_override_for_testing_ = nullptr;

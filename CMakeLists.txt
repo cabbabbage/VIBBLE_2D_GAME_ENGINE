@@ -241,3 +241,23 @@ target_link_libraries(manifest_loader_tests PRIVATE
 )
 target_compile_definitions(manifest_loader_tests PRIVATE SDL_MAIN_HANDLED PROJECT_ROOT="${CMAKE_SOURCE_DIR}")
 add_test(NAME manifest_loader_tests COMMAND manifest_loader_tests)
+
+add_executable(manifest_store_tests
+    tests/manifest/manifest_store_tests.cpp
+    ENGINE/dev_mode/core/manifest_store.cpp
+    ENGINE/dev_mode/core/dev_json_store.cpp
+    ENGINE/core/manifest/manifest_loader.cpp
+)
+target_include_directories(manifest_store_tests PRIVATE
+    ${CMAKE_SOURCE_DIR}/external
+    ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/ENGINE
+    ${CMAKE_SOURCE_DIR}/ENGINE/core
+    ${CMAKE_SOURCE_DIR}/ENGINE/dev_mode
+)
+target_link_libraries(manifest_store_tests PRIVATE
+    nlohmann_json::nlohmann_json
+    SDL2::SDL2
+)
+target_compile_definitions(manifest_store_tests PRIVATE SDL_MAIN_HANDLED PROJECT_ROOT="${CMAKE_SOURCE_DIR}")
+add_test(NAME manifest_store_tests COMMAND manifest_store_tests)
