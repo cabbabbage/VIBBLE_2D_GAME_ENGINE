@@ -19,12 +19,70 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <iterator>
+#include <system_error>
 namespace fs = std::filesystem;
 
 namespace {
 #if SDL_VERSION_ATLEAST(2,0,12)
 void apply_scale_mode(SDL_Texture* tex, const AssetInfo& info);
 #endif
+
+fs::path project_root_path() {
+#ifdef PROJECT_ROOT
+        return fs::path(PROJECT_ROOT);
+#else
+        return fs::current_path();
+#endif
+}
+
+bool path_exists_safely(const fs::path& path) {
+        std::error_code ec;
+        return fs::exists(path, ec);
+}
+
+fs::path resolve_source_folder(const std::string& dir_path, const std::string& source_path) {
+        const fs::path base = fs::path(dir_path).lexically_normal();
+        if (source_path.empty()) {
+                return base;
+        }
+
+        fs::path source = fs::path(source_path).lexically_normal();
+        if (source.is_absolute()) {
+                return source;
+        }
+
+        const auto starts_with = [](const std::string& value, const std::string& prefix) {
+                return value.rfind(prefix, 0) == 0;
+        };
+
+        const std::string source_string = source.generic_string();
+        if (starts_with(source_string, "SRC/") || starts_with(source_string, "SRC\\")) {
+                fs::path resolved = (project_root_path() / source).lexically_normal();
+                if (path_exists_safely(resolved)) {
+                        return resolved;
+                }
+        }
+
+        if (!base.empty()) {
+                fs::path resolved = (base / source).lexically_normal();
+                if (path_exists_safely(resolved)) {
+                        return resolved;
+                }
+        }
+
+        {
+                fs::path resolved = (project_root_path() / source).lexically_normal();
+                if (path_exists_safely(resolved)) {
+                        return resolved;
+                }
+        }
+
+        if (!base.empty()) {
+                return (base / source).lexically_normal();
+        }
+
+        return (project_root_path() / source).lexically_normal();
+}
 
 std::string format_steps(const std::vector<float>& steps) {
         std::ostringstream oss;
@@ -440,21 +498,21 @@ void Animation::load(const std::string& trigger,
                         }
                 }
         } else {
-                std::string src_folder   = dir_path + "/" + source.path;
+                fs::path src_folder      = resolve_source_folder(dir_path, source.path);
                 std::string cache_folder = root_cache + "/" + trigger;
                 std::string meta_file    = cache_folder + "/metadata.json";
-		int expected_frames = 0;
-		int orig_w = 0, orig_h = 0;
-		while (true) {
-			std::string f = src_folder + "/" + std::to_string(expected_frames) + ".png";
-			if (!fs::exists(f)) break;
-			if (expected_frames == 0) {
-					if (SDL_Surface* s = IMG_Load(f.c_str())) {
-								orig_w = s->w;
-								orig_h = s->h;
-								SDL_FreeSurface(s);
-					}
-			}
+                int expected_frames = 0;
+                int orig_w = 0, orig_h = 0;
+                while (true) {
+                        fs::path frame_path = src_folder / (std::to_string(expected_frames) + ".png");
+                        if (!fs::exists(frame_path)) break;
+                        if (expected_frames == 0) {
+                                        if (SDL_Surface* s = IMG_Load(frame_path.string().c_str())) {
+                                                                orig_w = s->w;
+                                                                orig_h = s->h;
+                                                                SDL_FreeSurface(s);
+                                        }
+                        }
 			++expected_frames;
 		}
 		if (expected_frames == 0) return;
@@ -657,11 +715,11 @@ void Animation::load(const std::string& trigger,
                                 std::vector<SDL_Surface*> base_surfaces;
                                 base_surfaces.reserve(expected_frames);
                                 for (int i = 0; i < expected_frames; ++i) {
-                                        std::string f = src_folder + "/" + std::to_string(i) + ".png";
+                                        fs::path frame_path = src_folder / (std::to_string(i) + ".png");
                                         int new_w = 0, new_h = 0;
-                                        SDL_Surface* scaled = cache.load_and_scale_surface(f, 1.0f, new_w, new_h);
+                                        SDL_Surface* scaled = cache.load_and_scale_surface(frame_path.string(), 1.0f, new_w, new_h);
                                         if (!scaled) {
-                                                std::cerr << "[Animation] Failed to load or scale: " << f << "\n";
+                                                std::cerr << "[Animation] Failed to load or scale: " << frame_path.string() << "\n";
                                                 continue;
                                         }
                                         if (i == 0) {
