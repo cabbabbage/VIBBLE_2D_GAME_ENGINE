@@ -183,6 +183,8 @@ Mode setters
 Animation overrides
 - `set_animation_now(anim_id)` - switch immediately; suspends the current mode until done
 - `set_animation_qued(anim_id)` - play next when the current animation finishes
+- `set_manual_animation(anim_id, loop = true)` - lock to an animation while driving movement manually
+- `clear_manual_animation()` - release manual animation control back to the planner
 
 Examples
 ```cpp

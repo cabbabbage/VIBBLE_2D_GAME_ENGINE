@@ -68,6 +68,7 @@ void AnimationUpdate::set_animation_now(const std::string& anim_id) {
         return;
     }
     queued_anim_.reset();
+    manual_animation_.reset();
     switch_to(anim_id);
 }
 
@@ -82,6 +83,7 @@ void AnimationUpdate::move(const std::vector<SDL_Point>& rel_checkpoints, int vi
     if (!self_) {
         return;
     }
+    manual_animation_.reset();
     visited_thresh_ = std::max(0, visited_thresh_px);
     path_requested = false;
 
@@ -108,6 +110,40 @@ void AnimationUpdate::move(const std::vector<SDL_Point>& rel_checkpoints, int vi
     }
 }
 
+void AnimationUpdate::clear_movement_plan() {
+    plan_.strides.clear();
+    plan_.sanitized_checkpoints.clear();
+    plan_.final_dest = self_ ? self_->pos : SDL_Point{ 0, 0 };
+    final_dest = plan_.final_dest;
+    stride_index_ = 0;
+    stride_frame_counter_ = 0;
+    next_checkpoint_index_ = 0;
+    path_requested = false;
+}
+
+void AnimationUpdate::set_manual_animation(const std::string& anim_id, bool loop) {
+    if (!self_ || !self_->info || anim_id.empty()) {
+        return;
+    }
+
+    clear_movement_plan();
+
+    ManualAnimationState desired{ anim_id, loop };
+    if (!manual_animation_ || manual_animation_->id != desired.id || manual_animation_->loop != desired.loop) {
+        manual_animation_ = desired;
+    }
+
+    queued_anim_.reset();
+
+    if (self_->current_animation != desired.id) {
+        switch_to(desired.id, path_index_for(desired.id));
+    }
+}
+
+void AnimationUpdate::clear_manual_animation() {
+    manual_animation_.reset();
+}
+
 void AnimationUpdate::refresh_z_index() {
     if (self_) {
         self_->set_z_index();
@@ -120,12 +156,32 @@ void AnimationUpdate::update() {
     }
 
     if (!plan_.strides.empty() && player_.tick(*this, plan_, stride_index_, stride_frame_counter_)) {
+        manual_animation_.reset();
         return;
     }
 
     if (queued_anim_ && self_->is_current_animation_last_frame()) {
         switch_to(*queued_anim_);
         queued_anim_.reset();
+        manual_animation_.reset();
+    }
+
+    if (manual_animation_) {
+        const std::string& anim_id = manual_animation_->id;
+        if (self_->current_animation != anim_id) {
+            switch_to(anim_id, path_index_for(anim_id));
+        }
+        if (!advance(self_->current_frame)) {
+            if (manual_animation_->loop) {
+                switch_to(anim_id, path_index_for(anim_id));
+                advance(self_->current_frame);
+            } else {
+                manual_animation_.reset();
+                switch_to(animation_update::detail::kDefaultAnimation);
+                advance(self_->current_frame);
+            }
+        }
+        return;
     }
 
     if (self_->get_current_animation() != animation_update::detail::kDefaultAnimation) {

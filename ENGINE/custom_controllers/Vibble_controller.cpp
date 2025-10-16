@@ -1,12 +1,12 @@
 #include "Vibble_controller.hpp"
 
+#include "animation_update/animation_update_utils.hpp"
 #include "asset/Asset.hpp"
 #include "custom_controllers/controller_path_utils.hpp"
 #include "utils/input.hpp"
 
 #include <cmath>
 #include <string>
-#include <vector>
 
 namespace {
 
@@ -120,7 +120,9 @@ void VibbleController::movement(const Input& input) {
 
     if (raw_x == 0 && raw_y == 0) {
         if (player_ && player_->anim_) {
-            player_->anim_->move({}, 0);
+            player_->anim_->clear_manual_animation();
+            player_->anim_->set_animation_now(animation_update::detail::kDefaultAnimation);
+            player_->anim_->clear_movement_plan();
         }
         return;
     }
@@ -128,36 +130,50 @@ void VibbleController::movement(const Input& input) {
     SDL_Point step_delta = normalized_step(raw_x, raw_y, kWalkSpeed);
     if (step_delta.x == 0 && step_delta.y == 0) {
         if (player_ && player_->anim_) {
-            player_->anim_->move({}, 0);
-        }
-        return;
-    }
-
-    const int radius = controller_paths::neighbor_radius(player_);
-    if (radius > 0) {
-        step_delta = controller_paths::clamp_delta(step_delta, radius);
-    }
-
-    if (step_delta.x == 0 && step_delta.y == 0) {
-        if (player_ && player_->anim_) {
-            player_->anim_->move({}, 0);
+            player_->anim_->clear_manual_animation();
+            player_->anim_->set_animation_now(animation_update::detail::kDefaultAnimation);
+            player_->anim_->clear_movement_plan();
         }
         return;
     }
 
     const int stride_count = sprint ? kSprintMultiplier : 1;
 
-    std::vector<SDL_Point> path;
-    path.reserve(static_cast<std::size_t>(stride_count));
-    for (int i = 0; i < stride_count; ++i) {
-        path.push_back(step_delta);
-    }
-
     dx_ = step_delta.x * stride_count;
     dy_ = step_delta.y * stride_count;
 
-    if (player_ && player_->anim_) {
-        player_->anim_->move(path, 0);
+    SDL_Point origin = player_->pos;
+    SDL_Point desired{ origin.x + dx_, origin.y + dy_ };
+
+    const int radius = controller_paths::neighbor_radius(player_);
+    if (radius > 0) {
+        SDL_Point clamped = controller_paths::clamp_to_radius(origin, desired, radius);
+        dx_ = clamped.x - origin.x;
+        dy_ = clamped.y - origin.y;
+    }
+
+    if (dx_ == 0 && dy_ == 0) {
+        if (player_ && player_->anim_) {
+            player_->anim_->clear_manual_animation();
+            player_->anim_->set_animation_now(animation_update::detail::kDefaultAnimation);
+            player_->anim_->clear_movement_plan();
+        }
+        return;
+    }
+
+    player_->pos.x += dx_;
+    player_->pos.y += dy_;
+
+    if (player_->anim_) {
+        std::string anim_id;
+        if (std::abs(dx_) >= std::abs(dy_)) {
+            anim_id = (dx_ >= 0) ? "right" : "left";
+        } else {
+            anim_id = (dy_ > 0) ? "forward" : "backward";
+        }
+
+        player_->anim_->set_manual_animation(anim_id, true);
+        player_->anim_->final_dest = player_->pos;
     }
 }
 

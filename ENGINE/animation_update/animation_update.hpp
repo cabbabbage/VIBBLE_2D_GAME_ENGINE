@@ -25,6 +25,9 @@ public:
     void set_animation_now(const std::string& anim_id);
     void set_animation_qued(const std::string& anim_id);
     void move(const std::vector<SDL_Point>& rel_checkpoints, int visited_thresh_px);
+    void clear_movement_plan();
+    void set_manual_animation(const std::string& anim_id, bool loop = true);
+    void clear_manual_animation();
     void refresh_z_index();
     std::size_t path_index_for(const std::string& anim_id) const;
 
@@ -63,4 +66,9 @@ private:
 
     std::optional<std::string> queued_anim_{};
     std::unordered_map<std::string, std::size_t> active_paths_{};
+    struct ManualAnimationState {
+        std::string id;
+        bool        loop = true;
+    };
+    std::optional<ManualAnimationState> manual_animation_{};
 };
