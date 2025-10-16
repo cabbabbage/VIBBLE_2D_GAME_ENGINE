@@ -18,7 +18,6 @@
 #include <SDL_log.h>
 #include <algorithm>
 #include <iterator>
-#include <fstream>
 #include <iostream>
 #include <vector>
 #include <utility>
@@ -36,6 +35,7 @@ MapModeUI::MapModeUI(Assets* assets)
 MapModeUI::~MapModeUI() = default;
 
 void MapModeUI::set_manifest_store(devmode::core::ManifestStore* store) {
+    SDL_assert(store != nullptr);
     manifest_store_ = store;
     if (layers_controller_) {
         layers_controller_->set_manifest_store(manifest_store_, map_id_);
@@ -983,31 +983,20 @@ bool MapModeUI::is_layers_footer_visible() const {
 
 bool MapModeUI::save_map_info_to_disk() const {
     if (!map_info_) return false;
-    if (manifest_store_ && !map_id_.empty()) {
-        if (devmode::persist_map_manifest_entry(*manifest_store_, map_id_, *map_info_, std::cerr)) {
-            manifest_store_->flush();
-            return true;
-        }
+    if (!manifest_store_) {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
+                     "[MapModeUI] Cannot save map info: manifest store is not available.");
         return false;
     }
-
-    std::string path = map_path_.empty() ? std::string{} : (map_path_ + "/map_info.json");
-    if (path.empty() && assets_) {
-        path = assets_->map_info_path();
-    }
-    if (path.empty()) return false;
-
-    std::ofstream out(path);
-    if (!out) {
-        std::cerr << "[MapModeUI] Failed to open " << path << " for writing\n";
+    if (map_id_.empty()) {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
+                     "[MapModeUI] Cannot save map info: map identifier is empty.");
         return false;
     }
-    try {
-        out << map_info_->dump(2);
-        return true;
-    } catch (const std::exception& ex) {
-        std::cerr << "[MapModeUI] Failed to serialize map_info.json: " << ex.what() << "\n";
+    if (!devmode::persist_map_manifest_entry(*manifest_store_, map_id_, *map_info_, std::cerr)) {
         return false;
     }
+    manifest_store_->flush();
+    return true;
 }
 

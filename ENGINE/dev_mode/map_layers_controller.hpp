@@ -52,12 +52,10 @@ private:
     bool validate_layer_index(int index) const;
     bool validate_candidate_index(const nlohmann::json& layer, int candidate_index) const;
     void notify();
-    std::string map_info_path() const;
     void clamp_layer_counts(nlohmann::json& layer) const;
 
 private:
     nlohmann::json* map_info_ = nullptr;
-    std::string map_path_;
     std::string map_id_;
     devmode::core::ManifestStore* manifest_store_ = nullptr;
     bool dirty_ = false;

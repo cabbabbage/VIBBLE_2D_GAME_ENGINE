@@ -16,7 +16,6 @@
 #include "asset/Asset.hpp"
 #include "dm_styles.hpp"
 #include <iostream>
-#include <fstream>
 #include <filesystem>
 #include <SDL_ttf.h>
 #include "core/AssetsManager.hpp"
@@ -25,6 +24,7 @@
 #include "draw_utils.hpp"
 #include "dev_mode/core/manifest_store.hpp"
 #include "core/manifest/manifest_loader.hpp"
+#include "dev_mode/manifest_spawn_group_utils.hpp"
 
 #include <nlohmann/json.hpp>
 
@@ -82,80 +82,6 @@ namespace {
         }
         return true;
     }
-
-    bool remove_asset_from_spawn_groups(nlohmann::json& node, const std::string& asset_name) {
-        bool modified = false;
-
-        if (node.is_object()) {
-            for (auto it = node.begin(); it != node.end(); ++it) {
-                const std::string& key = it.key();
-                nlohmann::json& value = it.value();
-                if (key == "candidates" && value.is_array()) {
-                    auto& candidates = value;
-                    auto erase_it = std::remove_if(candidates.begin(), candidates.end(),
-                        [&](nlohmann::json& candidate) {
-                            if (!candidate.is_object()) {
-                                return false;
-                            }
-                            auto name_it = candidate.find("name");
-                            if (name_it == candidate.end() || !name_it->is_string()) {
-                                return false;
-                            }
-                            return name_it->get<std::string>() == asset_name;
-                        });
-                    if (erase_it != candidates.end()) {
-                        candidates.erase(erase_it, candidates.end());
-                        modified = true;
-                    }
-                }
-                if (remove_asset_from_spawn_groups(value, asset_name)) {
-                    modified = true;
-                }
-            }
-        } else if (node.is_array()) {
-            for (auto& element : node) {
-                if (remove_asset_from_spawn_groups(element, asset_name)) {
-                    modified = true;
-                }
-            }
-        }
-        return modified;
-    }
-
-    bool scrub_spawn_groups_file(const fs::path& path, const std::string& asset_name) {
-        if (path.empty()) {
-            return true;
-        }
-        std::ifstream in(path);
-        if (!in.is_open()) {
-            std::cerr << "[AssetLibraryUI] Failed to open '" << path << "' for reading\n";
-            return false;
-        }
-        nlohmann::json data;
-        try {
-            in >> data;
-        } catch (const std::exception& e) {
-            std::cerr << "[AssetLibraryUI] Failed to parse '" << path << "': " << e.what() << "\n";
-            return false;
-        }
-        in.close();
-        if (!remove_asset_from_spawn_groups(data, asset_name)) {
-            return true;
-        }
-        std::ofstream out(path);
-        if (!out.is_open()) {
-            std::cerr << "[AssetLibraryUI] Failed to open '" << path << "' for writing\n";
-            return false;
-        }
-        try {
-            out << data.dump(2);
-        } catch (const std::exception& e) {
-            std::cerr << "[AssetLibraryUI] Failed to write '" << path << "': " << e.what() << "\n";
-            return false;
-        }
-        return true;
-    }
-}
 
 struct AssetLibraryUI::AssetTileWidget : public Widget {
     static constexpr int kPad = 8;
@@ -606,6 +532,7 @@ void AssetLibraryUI::confirm_delete_request() {
         }
     }
 
+    bool manifest_flush_required = false;
     if (!asset_name.empty()) {
         bool removed_from_manifest = false;
         if (manifest_store_owner_) {
@@ -614,7 +541,7 @@ void AssetLibraryUI::confirm_delete_request() {
                 std::cerr << "[AssetLibraryUI] Failed to remove '" << asset_name
                           << "' from manifest\n";
             } else {
-                manifest_store_owner_->flush();
+                manifest_flush_required = true;
             }
         } else {
             std::cerr << "[AssetLibraryUI] Manifest store unavailable; manifest not updated for '"
@@ -640,37 +567,53 @@ void AssetLibraryUI::confirm_delete_request() {
     }
 
     if (!asset_name.empty()) {
-        try {
-            if (std::filesystem::exists("MAPS")) {
-                for (const auto& entry : std::filesystem::recursive_directory_iterator("MAPS")) {
-                    if (!entry.is_regular_file()) continue;
-                    if (entry.path().filename() == "map_info.json") {
-                        scrub_spawn_groups_file(entry.path(), asset_name);
+        if (manifest_store_owner_) {
+            const nlohmann::json& manifest = manifest_store_owner_->manifest_json();
+            auto maps_it = manifest.find("maps");
+            if (maps_it != manifest.end() && maps_it->is_object()) {
+                for (auto it = maps_it->begin(); it != maps_it->end(); ++it) {
+                    nlohmann::json map_entry = *it;
+                    if (devmode::manifest_utils::remove_asset_from_spawn_groups(map_entry, asset_name)) {
+                        if (!manifest_store_owner_->update_map_entry(it.key(), map_entry)) {
+                            std::cerr << "[AssetLibraryUI] Failed to update manifest map entry '"
+                                      << it.key() << "' while removing '" << asset_name << "'\n";
+                        } else {
+                            manifest_flush_required = true;
+                        }
                     }
                 }
             }
-        } catch (const std::exception& e) {
-            std::cerr << "[AssetLibraryUI] Failed scanning MAPS: " << e.what() << "\n";
+
+            auto assets_it = manifest.find("assets");
+            if (assets_it != manifest.end() && assets_it->is_object()) {
+                for (auto it = assets_it->begin(); it != assets_it->end(); ++it) {
+                    const std::string& referenced_asset = it.key();
+                    if (referenced_asset == asset_name) {
+                        continue;
+                    }
+                    auto transaction = manifest_store_owner_->begin_asset_transaction(referenced_asset);
+                    if (!transaction) {
+                        continue;
+                    }
+                    if (devmode::manifest_utils::remove_asset_from_spawn_groups(transaction.data(), asset_name)) {
+                        if (!transaction.finalize()) {
+                            std::cerr << "[AssetLibraryUI] Failed to update manifest asset entry '"
+                                      << referenced_asset << "' while removing '" << asset_name << "'\n";
+                        } else {
+                            manifest_flush_required = true;
+                        }
+                    }
+                }
+            }
         }
 
         if (assets_owner_) {
-            remove_asset_from_spawn_groups(assets_owner_->map_info_json(), asset_name);
+            devmode::manifest_utils::remove_asset_from_spawn_groups(assets_owner_->map_info_json(), asset_name);
         }
+    }
 
-        try {
-            if (std::filesystem::exists("SRC")) {
-                for (const auto& entry : std::filesystem::directory_iterator("SRC")) {
-                    if (!entry.is_directory()) continue;
-                    if (entry.path() == asset_dir) continue;
-                    const std::filesystem::path info_path = entry.path() / "info.json";
-                    if (std::filesystem::exists(info_path)) {
-                        scrub_spawn_groups_file(info_path, asset_name);
-                    }
-                }
-            }
-        } catch (const std::exception& e) {
-            std::cerr << "[AssetLibraryUI] Failed scanning SRC: " << e.what() << "\n";
-        }
+    if (manifest_store_owner_ && manifest_flush_required) {
+        manifest_store_owner_->flush();
     }
 
     preview_attempted_.erase(asset_name);

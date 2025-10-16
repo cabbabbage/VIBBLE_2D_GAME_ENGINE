@@ -58,8 +58,7 @@ TEST_CASE("RoomEditor resolves map info from manifest when no file is present") 
     const nlohmann::json resolved = devmode::room_editor_detail::resolve_map_info_blob(
         nullptr,
         &store,
-        "ROOM_MAP",
-        "");
+        "ROOM_MAP");
 
     REQUIRE(resolved.is_object());
     CHECK(resolved == map_entry);

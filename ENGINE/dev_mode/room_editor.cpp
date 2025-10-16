@@ -2446,12 +2446,10 @@ void RoomEditor::regenerate_current_room() {
     }
 
     const std::string map_id = assets_ ? assets_->map_id() : std::string{};
-    const std::string map_path = current_room_ ? current_room_->map_path : std::string{};
     nlohmann::json map_info_json = devmode::room_editor_detail::resolve_map_info_blob(
         assets_,
         manifest_store_,
-        map_id,
-        map_path);
+        map_id);
 
     double map_radius_value = map_layers::map_radius_from_map_info(map_info_json);
     const int map_radius = map_radius_value > 0.0 ? static_cast<int>(std::lround(map_radius_value)) : 0;

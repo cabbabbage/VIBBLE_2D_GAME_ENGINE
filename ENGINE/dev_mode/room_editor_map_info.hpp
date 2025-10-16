@@ -14,8 +14,7 @@ namespace devmode::room_editor_detail {
 
 nlohmann::json resolve_map_info_blob(const Assets* assets,
                                      const devmode::core::ManifestStore* manifest_store,
-                                     const std::string& map_id,
-                                     const std::string& map_path);
+                                     const std::string& map_id);
 
 }  // namespace devmode::room_editor_detail
 

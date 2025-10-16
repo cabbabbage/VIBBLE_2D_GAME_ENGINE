@@ -1,7 +1,5 @@
 #include "dev_mode/room_editor_map_info.hpp"
 
-#include <fstream>
-
 #include <nlohmann/json.hpp>
 
 #include "core/AssetsManager.hpp"
@@ -11,8 +9,7 @@ namespace devmode::room_editor_detail {
 
 nlohmann::json resolve_map_info_blob(const Assets* assets,
                                      const devmode::core::ManifestStore* manifest_store,
-                                     const std::string& map_id,
-                                     const std::string& map_path) {
+                                     const std::string& map_id) {
     if (assets) {
         const nlohmann::json& in_memory = assets->map_info_json();
         if (in_memory.is_object()) {
@@ -28,24 +25,7 @@ nlohmann::json resolve_map_info_blob(const Assets* assets,
             return *entry;
         }
     }
-
-    nlohmann::json map_info_json;
-    if (!map_path.empty()) {
-        std::ifstream map_info(map_path + "/map_info.json");
-        if (map_info.is_open()) {
-            try {
-                map_info >> map_info_json;
-            } catch (...) {
-                map_info_json = nlohmann::json::object();
-            }
-        }
-    }
-
-    if (map_info_json.is_null()) {
-        map_info_json = nlohmann::json::object();
-    }
-
-    return map_info_json;
+    return nlohmann::json::object();
 }
 
 }  // namespace devmode::room_editor_detail

@@ -28,11 +28,9 @@
 
 #include <cstdint>
 
-#include <fstream>
 
 #include <functional>
 
-#include <iostream>
 
 #include <numeric>
 
@@ -6728,35 +6726,9 @@ bool MapLayersPanel::save_layers_to_disk() {
 
     }
 
-    std::string path = map_path_.empty() ? std::string{} : (map_path_ + "/map_info.json");
-
-    if (path.empty()) return false;
-
-    std::ofstream out(path);
-
-    if (!out) {
-
-        std::cerr << "[MapLayersPanel] Failed to open " << path << " for writing\n";
-
-        return false;
-
-    }
-
-    try {
-
-        out << map_info_->dump(2);
-
-        mark_clean();
-
-        return true;
-
-    } catch (const std::exception& ex) {
-
-        std::cerr << "[MapLayersPanel] Serialize error: " << ex.what() << "\n";
-
-        return false;
-
-    }
+    SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
+                 "[MapLayersPanel] Cannot save map layers: no save callback provided.");
+    return false;
 
 }
 
@@ -6782,53 +6754,24 @@ bool MapLayersPanel::reload_layers_from_disk() {
 
     };
 
-    if (controller_) {
+    if (!controller_) {
 
-        if (!controller_->reload()) {
-
-            return false;
-
-        }
-
-        refresh_after_reload();
-
-        return true;
-
-    }
-
-    std::string path = map_path_.empty() ? std::string{} : (map_path_ + "/map_info.json");
-
-    if (path.empty()) return false;
-
-    std::ifstream in(path);
-
-    if (!in) {
-
-        std::cerr << "[MapLayersPanel] Failed to open " << path << " for reading\n";
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
+                     "[MapLayersPanel] Cannot reload map layers: controller is unavailable.");
 
         return false;
 
     }
 
-    try {
-
-        json fresh;
-
-        in >> fresh;
-
-        *map_info_ = std::move(fresh);
-
-        refresh_after_reload();
-
-        return true;
-
-    } catch (const std::exception& ex) {
-
-        std::cerr << "[MapLayersPanel] Parse error: " << ex.what() << "\n";
+    if (!controller_->reload()) {
 
         return false;
 
     }
+
+    refresh_after_reload();
+
+    return true;
 
 }
 

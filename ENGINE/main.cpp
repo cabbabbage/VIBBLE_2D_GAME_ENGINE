@@ -12,13 +12,13 @@
 #include "input.hpp"
 #include "core/manifest/manifest_loader.hpp"
 #include "audio/audio_engine.hpp"
+#include "dev_mode/core/manifest_store.hpp"
 #include <SDL.h>
 #include <SDL_image.h>
 #include <SDL_mixer.h>
 #include <SDL_ttf.h>
 #include <chrono>
 #include <ctime>
-#include <fstream>
 #include <filesystem>
 #include <iostream>
 #include <memory>
@@ -268,6 +268,14 @@ nlohmann::json build_default_map_info(const std::string& map_name) {
 
 std::optional<MapDescriptor> create_new_map_interactively() {
     const fs::path maps_root{"MAPS"};
+    devmode::core::ManifestStore manifest_store;
+    try {
+        manifest_store.reload();
+    } catch (const std::exception& ex) {
+        std::string msg = std::string("Failed to load manifest:\n") + ex.what();
+        tinyfd_messageBox("Error", msg.c_str(), "ok", "error", 0);
+        return std::nullopt;
+    }
     try {
         if (!fs::exists(maps_root)) {
             fs::create_directories(maps_root);
@@ -304,24 +312,21 @@ std::optional<MapDescriptor> create_new_map_interactively() {
             continue;
         }
 
-        const nlohmann::json map_info = build_default_map_info(*sanitized);
-        try {
-            std::ofstream out(map_dir / "map_info.json");
-            if (!out.is_open()) {
-                throw std::runtime_error("Unable to open map_info.json for writing.");
-            }
-            out << map_info.dump(2);
-        } catch (const std::exception& ex) {
-            std::string msg = std::string("Failed to write map_info.json:\n") + ex.what();
-            tinyfd_messageBox("Error Creating Map", msg.c_str(), "ok", "error", 0);
+        nlohmann::json map_info = build_default_map_info(*sanitized);
+        map_info["content_root"] = map_dir.generic_string();
+
+        if (!manifest_store.update_map_entry(*sanitized, map_info)) {
+            tinyfd_messageBox("Error Creating Map", "Failed to update manifest for new map.", "ok", "error", 0);
             std::error_code ec;
             fs::remove_all(map_dir, ec);
             continue;
         }
 
+        manifest_store.flush();
+
         MapDescriptor descriptor;
-        descriptor.id   = map_dir.string();
-        descriptor.data = map_info;
+        descriptor.id   = *sanitized;
+        descriptor.data = std::move(map_info);
         return descriptor;
     }
 }

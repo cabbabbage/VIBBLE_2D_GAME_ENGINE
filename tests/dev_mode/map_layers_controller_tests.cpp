@@ -102,3 +102,20 @@ TEST_CASE("MapLayersController reloads map info from manifest") {
 
     fs::remove_all(manifest_path.parent_path());
 }
+
+TEST_CASE("MapLayersController refuses to save without manifest store") {
+    nlohmann::json map_info = make_map_info("LonelyRoom");
+    MapLayersController controller;
+    controller.bind(&map_info, "");
+
+    map_info["map_layers"][0]["rooms"][0]["max_instances"] = 5;
+    CHECK_FALSE(controller.save());
+}
+
+TEST_CASE("MapLayersController refuses to reload without manifest store") {
+    nlohmann::json map_info = make_map_info("LonelyRoom");
+    MapLayersController controller;
+    controller.bind(&map_info, "");
+
+    CHECK_FALSE(controller.reload());
+}

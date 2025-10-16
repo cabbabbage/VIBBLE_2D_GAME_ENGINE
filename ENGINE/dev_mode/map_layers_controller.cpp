@@ -6,9 +6,9 @@
 
 #include <algorithm>
 #include <cctype>
-#include <fstream>
 #include <iostream>
 #include <sstream>
+#include <SDL_log.h>
 
 #include <nlohmann/json.hpp>
 
@@ -22,7 +22,7 @@ using map_layers::clamp_candidate_min;
 
 void MapLayersController::bind(json* map_info, std::string map_path) {
     map_info_ = map_info;
-    map_path_ = std::move(map_path);
+    static_cast<void>(map_path);
     ensure_initialized();
     dirty_ = false;
     notify();
@@ -44,68 +44,46 @@ void MapLayersController::clear_listeners() {
 
 bool MapLayersController::save() {
     if (!map_info_) return false;
-    if (manifest_store_ && !map_id_.empty()) {
-        if (devmode::persist_map_manifest_entry(*manifest_store_, map_id_, *map_info_, std::cerr)) {
-            manifest_store_->flush();
-            mark_clean();
-            return true;
-        }
+    if (!manifest_store_) {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
+                     "[MapLayersController] Cannot save map info: manifest store is not available.");
         return false;
     }
-    std::string path = map_info_path();
-    if (path.empty()) return false;
-
-    std::ofstream out(path);
-    if (!out) {
-        std::cerr << "[MapLayersController] Failed to open " << path << " for writing\n";
+    if (map_id_.empty()) {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
+                     "[MapLayersController] Cannot save map info: map identifier is empty.");
         return false;
     }
-
-    try {
-        out << map_info_->dump(2);
-        mark_clean();
-        return true;
-    } catch (const std::exception& ex) {
-        std::cerr << "[MapLayersController] Serialize error: " << ex.what() << "\n";
+    if (!devmode::persist_map_manifest_entry(*manifest_store_, map_id_, *map_info_, std::cerr)) {
         return false;
     }
+    manifest_store_->flush();
+    mark_clean();
+    return true;
 }
 
 bool MapLayersController::reload() {
     if (!map_info_) return false;
-    if (manifest_store_ && !map_id_.empty()) {
-        const nlohmann::json* entry = manifest_store_->find_map_entry(map_id_);
-        if (!entry) {
-            std::cerr << "[MapLayersController] Map '" << map_id_ << "' not found in manifest\n";
-            return false;
-        }
-        *map_info_ = *entry;
-        ensure_initialized();
-        mark_clean();
-        notify();
-        return true;
-    }
-    std::string path = map_info_path();
-    if (path.empty()) return false;
-
-    std::ifstream in(path);
-    if (!in) {
-        std::cerr << "[MapLayersController] Failed to open " << path << " for reading\n";
+    if (!manifest_store_) {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
+                     "[MapLayersController] Cannot reload map info: manifest store is not available.");
         return false;
     }
-
-    try {
-        json fresh;
-        in >> fresh;
-        *map_info_ = std::move(fresh);
-        ensure_initialized();
-        mark_clean();
-        notify();
-        return true;
-    } catch (const std::exception& ex) {
-        std::cerr << "[MapLayersController] Parse error: " << ex.what() << "\n";
+    if (map_id_.empty()) {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
+                     "[MapLayersController] Cannot reload map info: map identifier is empty.");
         return false;
     }
+    const nlohmann::json* entry = manifest_store_->find_map_entry(map_id_);
+    if (!entry) {
+        std::cerr << "[MapLayersController] Map '" << map_id_ << "' not found in manifest\n";
+        return false;
+    }
+    *map_info_ = *entry;
+    ensure_initialized();
+    mark_clean();
+    notify();
+    return true;
 }
 
 void MapLayersController::mark_clean() {
@@ -434,14 +412,6 @@ void MapLayersController::notify() {
     for (auto& cb : listeners_) {
         if (cb) cb();
     }
-}
-
-std::string MapLayersController::map_info_path() const {
-    if (!map_info_) return {};
-    if (!map_path_.empty()) {
-        return map_path_ + "/map_info.json";
-    }
-    return {};
 }
 
 void MapLayersController::clamp_layer_counts(json& layer) const {
