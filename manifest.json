@@ -12501,56 +12501,28 @@
                 "y": 0
               },
               "anchor_relative_to_center": true,
-              "kind": "Trigger",
-              "name": "trigger_area",
-              "points": [
-                {
-                  "x": 1100,
-                  "y": -1114
-                },
-                {
-                  "x": 845,
-                  "y": -909
-                },
-                {
-                  "x": 1072,
-                  "y": -719
-                },
-                {
-                  "x": 1360,
-                  "y": -1047
-                }
-              ],
-              "type": "trigger"
-            },
-            {
-              "anchor": {
-                "x": 0,
-                "y": 0
-              },
-              "anchor_relative_to_center": true,
               "kind": "Spawn",
-              "name": "spawning_area_cool",
+              "name": "test",
               "points": [
                 {
-                  "x": 1234,
-                  "y": -1176
+                  "x": 237,
+                  "y": -546
                 },
                 {
-                  "x": 975,
-                  "y": -921
+                  "x": 298,
+                  "y": -364
                 },
                 {
-                  "x": 1076,
-                  "y": -699
+                  "x": 7,
+                  "y": -194
                 },
                 {
-                  "x": 1533,
-                  "y": -1047
+                  "x": -30,
+                  "y": -602
                 },
                 {
-                  "x": 1893,
-                  "y": -1315
+                  "x": 110,
+                  "y": -702
                 }
               ],
               "type": "spawning"
