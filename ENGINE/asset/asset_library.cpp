@@ -1,37 +1,77 @@
 #include "asset_library.hpp"
-#include <filesystem>
-#include <iostream>
+
+#include "core/manifest/manifest_loader.hpp"
+
 #include <iomanip>
-namespace fs = std::filesystem;
+#include <iostream>
+#include <type_traits>
 
 AssetLibrary::AssetLibrary() {
 	load_all_from_SRC();
 }
 
 void AssetLibrary::load_all_from_SRC() {
-	const std::string base_path = "SRC/";
-	if (!fs::exists(base_path) || !fs::is_directory(base_path)) {
-		std::cerr << "[AssetLibrary] Invalid path: " << base_path << "\n";
-		return;
-	}
-	int loaded = 0;
-	int failed = 0;
-	for (const auto& entry : fs::directory_iterator(base_path)) {
-		if (!entry.is_directory()) continue;
-		std::string name = entry.path().filename().string();
-		try {
-			auto info = std::make_shared<AssetInfo>(name);
-			info_by_name_[name] = info;
-			++loaded;
-		} catch (const std::exception&) {
-			++failed;
-		}
-		std::cout << "[AssetLibrary] Loaded: " << loaded
-		<< "   Failed: " << failed
-		<< "   Current: " << std::left << std::setw(20) << name << "\r" << std::flush;
-	}
-	std::cout << std::endl
-	<< "[AssetLibrary] Loaded " << info_by_name_.size() << " assets.\n";
+        manifest::ManifestData manifest;
+        try {
+                manifest = manifest::load_manifest();
+        } catch (const std::exception& error) {
+                std::cerr << "[AssetLibrary] Failed to load manifest: " << error.what() << "\n";
+                return;
+        }
+
+        if (!manifest.assets.is_object()) {
+                std::cerr << "[AssetLibrary] Manifest assets section is missing or malformed.\n";
+                return;
+        }
+
+        constexpr bool has_manifest_constructor =
+            std::is_constructible_v<AssetInfo, const std::string&, const nlohmann::json&>;
+
+        int loaded = 0;
+        int failed = 0;
+
+        for (auto it = manifest.assets.begin(); it != manifest.assets.end(); ++it) {
+                const std::string name = it.key();
+                const auto& metadata = it.value();
+
+                if (!metadata.is_object()) {
+                        ++failed;
+                        std::cerr << "[AssetLibrary] Manifest entry for asset '" << name
+                                  << "' is not a JSON object.\n";
+                        std::cout << "[AssetLibrary] Loaded: " << loaded
+                                  << "   Failed: " << failed
+                                  << "   Current: " << std::left << std::setw(20) << name << "\r"
+                                  << std::flush;
+                        continue;
+                }
+
+                try {
+                        std::shared_ptr<AssetInfo> info;
+                        if constexpr (has_manifest_constructor) {
+                                info = std::make_shared<AssetInfo>(name, metadata);
+                        } else {
+                                info = std::make_shared<AssetInfo>(name);
+                        }
+                        info_by_name_[name] = info;
+                        ++loaded;
+                } catch (const std::exception& error) {
+                        ++failed;
+                        std::cerr << "[AssetLibrary] Failed to load asset '" << name
+                                  << "': " << error.what() << "\n";
+                } catch (...) {
+                        ++failed;
+                        std::cerr << "[AssetLibrary] Failed to load asset '" << name
+                                  << "' due to an unknown error.\n";
+                }
+
+                std::cout << "[AssetLibrary] Loaded: " << loaded
+                          << "   Failed: " << failed
+                          << "   Current: " << std::left << std::setw(20) << name << "\r"
+                          << std::flush;
+        }
+
+        std::cout << std::endl
+                  << "[AssetLibrary] Loaded " << info_by_name_.size() << " assets.\n";
 }
 
 std::shared_ptr<AssetInfo> AssetLibrary::get(const std::string& name) const {
