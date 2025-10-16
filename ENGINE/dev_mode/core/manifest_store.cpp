@@ -243,6 +243,32 @@ std::vector<ManifestStore::AssetView> ManifestStore::assets() {
     return views;
 }
 
+bool ManifestStore::update_map_entry(const std::string& map_id, const nlohmann::json& payload) {
+    if (map_id.empty()) {
+        return false;
+    }
+    ensure_loaded();
+    ensure_asset_container();
+    return apply_map_edit(map_id, payload);
+}
+
+const nlohmann::json* ManifestStore::find_map_entry(const std::string& map_id) const {
+    if (map_id.empty()) {
+        return nullptr;
+    }
+    auto* self = const_cast<ManifestStore*>(this);
+    self->ensure_loaded();
+    const auto maps_it = self->manifest_cache_.find("maps");
+    if (maps_it == self->manifest_cache_.end() || !maps_it->is_object()) {
+        return nullptr;
+    }
+    const auto it = maps_it->find(map_id);
+    if (it == maps_it->end()) {
+        return nullptr;
+    }
+    return &(*it);
+}
+
 void ManifestStore::ensure_loaded() {
     const std::uint64_t current_version = tag_utils::tag_version();
     if (loaded_ && current_version == last_known_tag_version_) {
@@ -264,6 +290,15 @@ bool ManifestStore::apply_edit(const std::string& name, const nlohmann::json& pa
     ensure_asset_container();
 
     manifest_cache_["assets"][name] = payload;
+    dirty_ = true;
+    if (submit_) {
+        submit_(manifest_path_, manifest_cache_, indent_);
+    }
+    return true;
+}
+
+bool ManifestStore::apply_map_edit(const std::string& name, const nlohmann::json& payload) {
+    manifest_cache_["maps"][name] = payload;
     dirty_ = true;
     if (submit_) {
         submit_(manifest_path_, manifest_cache_, indent_);

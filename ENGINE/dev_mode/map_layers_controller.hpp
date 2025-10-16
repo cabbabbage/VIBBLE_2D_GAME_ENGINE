@@ -6,6 +6,10 @@
 
 #include <nlohmann/json_fwd.hpp>
 
+namespace devmode::core {
+class ManifestStore;
+}
+
 class MapLayersController {
 public:
     using Listener = std::function<void()>;
@@ -13,6 +17,7 @@ public:
     MapLayersController() = default;
 
     void bind(nlohmann::json* map_info, std::string map_path);
+    void set_manifest_store(devmode::core::ManifestStore* store, std::string map_id);
 
     void add_listener(Listener cb);
     void clear_listeners();
@@ -53,6 +58,8 @@ private:
 private:
     nlohmann::json* map_info_ = nullptr;
     std::string map_path_;
+    std::string map_id_;
+    devmode::core::ManifestStore* manifest_store_ = nullptr;
     bool dirty_ = false;
     std::vector<Listener> listeners_;
 };

@@ -1556,7 +1556,12 @@ std::string RoomEditor::rename_active_room(const std::string& old_name, const st
     if (final_key != current_room_->room_name) {
         current_room_->rename(final_key, map_info);
         rename_room_references_in_layers(map_info, old_name, final_key);
-        devmode::write_map_info_json(assets_->map_info_path(), map_info, std::cerr);
+        if (manifest_store_ && assets_) {
+            if (devmode::persist_map_manifest_entry(
+                    *manifest_store_, assets_->map_id(), map_info, std::cerr)) {
+                manifest_store_->flush();
+            }
+        }
         rebuild_room_spawn_id_cache();
     }
 

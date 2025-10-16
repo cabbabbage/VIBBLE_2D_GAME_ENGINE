@@ -16,6 +16,10 @@
 
 #include <SDL.h>
 
+namespace devmode::core {
+class ManifestStore;
+}
+
 namespace RoomAreaSerialization {
 enum class Kind { Spawn, Trigger, Unknown };
 
@@ -71,6 +75,9 @@ class Room {
     void save_assets_json() const;
     bool is_spawn_room() const;
     void rename(const std::string& new_name, nlohmann::json& map_info_json);
+    void set_manifest_store(devmode::core::ManifestStore* store,
+                            std::string map_id,
+                            nlohmann::json* map_info_root = nullptr);
 
     struct NamedArea {
         std::string name;
@@ -93,6 +100,9 @@ class Room {
     MapGridSettings map_grid_settings_{};
     std::string map_info_path_;
     std::string data_section_;
+    devmode::core::ManifestStore* manifest_store_ = nullptr;
+    std::string manifest_map_id_;
+    nlohmann::json* map_info_root_ = nullptr;
     int clamp_int(int v, int lo, int hi) const;
     void bounds_to_size(const std::tuple<int,int,int,int>& b, int& w, int& h) const;
     void load_named_areas_from_json();

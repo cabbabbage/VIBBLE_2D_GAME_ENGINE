@@ -1,6 +1,8 @@
 #include "map_layers_controller.hpp"
 
 #include "map_layers_common.hpp"
+#include "dev_mode/core/manifest_store.hpp"
+#include "dev_mode/dev_controls_persistence.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -26,6 +28,11 @@ void MapLayersController::bind(json* map_info, std::string map_path) {
     notify();
 }
 
+void MapLayersController::set_manifest_store(devmode::core::ManifestStore* store, std::string map_id) {
+    manifest_store_ = store;
+    map_id_ = std::move(map_id);
+}
+
 void MapLayersController::add_listener(Listener cb) {
     if (!cb) return;
     listeners_.push_back(std::move(cb));
@@ -37,6 +44,14 @@ void MapLayersController::clear_listeners() {
 
 bool MapLayersController::save() {
     if (!map_info_) return false;
+    if (manifest_store_ && !map_id_.empty()) {
+        if (devmode::persist_map_manifest_entry(*manifest_store_, map_id_, *map_info_, std::cerr)) {
+            manifest_store_->flush();
+            mark_clean();
+            return true;
+        }
+        return false;
+    }
     std::string path = map_info_path();
     if (path.empty()) return false;
 
@@ -58,6 +73,18 @@ bool MapLayersController::save() {
 
 bool MapLayersController::reload() {
     if (!map_info_) return false;
+    if (manifest_store_ && !map_id_.empty()) {
+        const nlohmann::json* entry = manifest_store_->find_map_entry(map_id_);
+        if (!entry) {
+            std::cerr << "[MapLayersController] Map '" << map_id_ << "' not found in manifest\n";
+            return false;
+        }
+        *map_info_ = *entry;
+        ensure_initialized();
+        mark_clean();
+        notify();
+        return true;
+    }
     std::string path = map_info_path();
     if (path.empty()) return false;
 

@@ -1,6 +1,8 @@
 #include "room.hpp"
 #include "spawn/asset_spawner.hpp"
 #include "asset/asset_types.hpp"
+#include "dev_mode/core/manifest_store.hpp"
+#include "dev_mode/dev_controls_persistence.hpp"
 #include <fstream>
 #include <nlohmann/json.hpp>
 #include <stdexcept>
@@ -676,11 +678,39 @@ void Room::rename(const std::string& new_name, nlohmann::json& map_info_json) {
         }
 }
 
+void Room::set_manifest_store(devmode::core::ManifestStore* store,
+                              std::string map_id,
+                              nlohmann::json* map_info_root) {
+        manifest_store_ = store;
+        manifest_map_id_ = std::move(map_id);
+        map_info_root_ = map_info_root;
+}
+
 void Room::save_assets_json() const {
 
         const_cast<Room*>(this)->load_named_areas_from_json();
         if (room_data_ptr_) {
                 *room_data_ptr_ = assets_json;
+        }
+        if (manifest_store_ && !manifest_map_id_.empty()) {
+                nlohmann::json payload;
+                if (map_info_root_) {
+                        payload = *map_info_root_;
+                } else if (const nlohmann::json* entry = manifest_store_->find_map_entry(manifest_map_id_)) {
+                        payload = *entry;
+                }
+                if (!payload.is_object()) {
+                        payload = nlohmann::json::object();
+                }
+                nlohmann::json& section = payload[data_section_];
+                if (!section.is_object()) {
+                        section = nlohmann::json::object();
+                }
+                section[room_name] = assets_json;
+                if (devmode::persist_map_manifest_entry(*manifest_store_, manifest_map_id_, payload, std::cerr)) {
+                        manifest_store_->flush();
+                }
+                return;
         }
         if (map_info_path_.empty() || data_section_.empty()) {
                 return;

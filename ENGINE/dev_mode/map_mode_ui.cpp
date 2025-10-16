@@ -9,6 +9,8 @@
 #include "map_layers_panel.hpp"
 #include "core/AssetsManager.hpp"
 #include "dev_mode/widgets.hpp"
+#include "dev_mode/core/manifest_store.hpp"
+#include "dev_mode/dev_controls_persistence.hpp"
 #include "dm_styles.hpp"
 #include "utils/input.hpp"
 
@@ -33,9 +35,20 @@ MapModeUI::MapModeUI(Assets* assets)
 
 MapModeUI::~MapModeUI() = default;
 
+void MapModeUI::set_manifest_store(devmode::core::ManifestStore* store) {
+    manifest_store_ = store;
+    if (layers_controller_) {
+        layers_controller_->set_manifest_store(manifest_store_, map_id_);
+    }
+}
+
 void MapModeUI::set_map_context(nlohmann::json* map_info, const std::string& map_path) {
     map_info_ = map_info;
     map_path_ = map_path;
+    map_id_ = assets_ ? assets_->map_id() : std::string{};
+    if (layers_controller_) {
+        layers_controller_->set_manifest_store(manifest_store_, map_id_);
+    }
     sync_panel_map_info();
 }
 
@@ -320,6 +333,9 @@ void MapModeUI::ensure_panels() {
     }
     if (!layers_controller_) {
         layers_controller_ = std::make_shared<MapLayersController>();
+    }
+    if (layers_controller_) {
+        layers_controller_->set_manifest_store(manifest_store_, map_id_);
     }
     if (!layers_panel_) {
         layers_panel_ = std::make_unique<MapLayersPanel>(kDefaultPanelX + 64, kDefaultPanelY + 64);
@@ -686,6 +702,7 @@ void MapModeUI::sync_panel_map_info() {
     }
     if (layers_panel_) {
         if (layers_controller_) {
+            layers_controller_->set_manifest_store(manifest_store_, map_id_);
             layers_controller_->bind(map_info_, map_path_);
         }
         layers_panel_->set_map_info(map_info_, map_path_);
@@ -966,11 +983,17 @@ bool MapModeUI::is_layers_footer_visible() const {
 
 bool MapModeUI::save_map_info_to_disk() const {
     if (!map_info_) return false;
-    std::string path = map_path_.empty() ? std::string{} : (map_path_ + "/map_info.json");
-    if (path.empty()) {
-        if (assets_) {
-            path = assets_->map_info_path();
+    if (manifest_store_ && !map_id_.empty()) {
+        if (devmode::persist_map_manifest_entry(*manifest_store_, map_id_, *map_info_, std::cerr)) {
+            manifest_store_->flush();
+            return true;
         }
+        return false;
+    }
+
+    std::string path = map_path_.empty() ? std::string{} : (map_path_ + "/map_info.json");
+    if (path.empty() && assets_) {
+        path = assets_->map_info_path();
     }
     if (path.empty()) return false;
 

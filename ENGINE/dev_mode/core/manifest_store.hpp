@@ -112,9 +112,13 @@ public:
     const nlohmann::json& manifest_json();
     std::vector<AssetView> assets();
 
+    bool update_map_entry(const std::string& map_id, const nlohmann::json& payload);
+    const nlohmann::json* find_map_entry(const std::string& map_id) const;
+
 private:
     void ensure_loaded();
     bool apply_edit(const std::string& name, const nlohmann::json& payload);
+    bool apply_map_edit(const std::string& name, const nlohmann::json& payload);
     void ensure_asset_container();
 
     std::filesystem::path manifest_path_;

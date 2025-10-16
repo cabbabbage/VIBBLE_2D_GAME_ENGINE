@@ -6,26 +6,76 @@
 
 #include <nlohmann/json.hpp>
 
+#include "dev_mode/core/manifest_store.hpp"
 #include "dev_mode/dev_controls_persistence.hpp"
+#include "core/manifest/manifest_loader.hpp"
 
-TEST_CASE("persist_map_info_to_disk reports failures for unwritable path") {
+namespace {
+
+devmode::core::ManifestStore make_store(const std::filesystem::path& manifest_path,
+                                        nlohmann::json manifest,
+                                        nlohmann::json& captured_submission) {
+    manifest::ManifestData data;
+    data.raw = manifest;
+    data.assets = manifest.value("assets", nlohmann::json::object());
+    data.maps = manifest.value("maps", nlohmann::json::object());
+    data.rooms = manifest.value("rooms", nlohmann::json::array());
+
+    return devmode::core::ManifestStore(
+        manifest_path,
+        [data]() mutable {
+            return data;
+        },
+        [&captured_submission](const std::filesystem::path&, const nlohmann::json& payload, int) {
+            captured_submission = payload;
+        },
+        []() {},
+        2);
+}
+
+} // namespace
+
+TEST_CASE("persist_map_manifest_entry rejects empty identifiers") {
     namespace fs = std::filesystem;
+    const fs::path manifest_path = fs::temp_directory_path() / "manifest_empty_id.json";
+    nlohmann::json manifest = {
+        {"assets", nlohmann::json::object()},
+        {"maps", nlohmann::json::object()},
+        {"rooms", nlohmann::json::array()}
+    };
+    nlohmann::json submitted;
+    auto store = make_store(manifest_path, manifest, submitted);
 
-    const fs::path temp_dir = fs::temp_directory_path() / "vibble_unwritable_map_info";
-    fs::create_directories(temp_dir);
+    std::ostringstream log;
+    CHECK_FALSE(devmode::persist_map_manifest_entry(store, "", nlohmann::json::object(), log));
+    CHECK_FALSE(submitted.is_object());
+    CHECK(log.str().find("Map identifier is empty") != std::string::npos);
+}
 
-    const fs::path map_info_path = temp_dir; // intentionally a directory path
+TEST_CASE("persist_map_manifest_entry updates manifest store entry") {
+    namespace fs = std::filesystem;
+    const fs::path manifest_path = fs::temp_directory_path() / "manifest_update_map.json";
+    nlohmann::json manifest = {
+        {"assets", nlohmann::json::object()},
+        {"maps", {{"FORREST", {{"name", "FORREST"}}}}},
+        {"rooms", nlohmann::json::array()},
+        {"version", 1}
+    };
+    nlohmann::json submitted;
+    auto store = make_store(manifest_path, manifest, submitted);
 
     nlohmann::json payload = {
-        {"name", "test_map"},
-        {"version", 1}
+        {"name", "FORREST"},
+        {"version", 2}
     };
 
     std::ostringstream log;
-    const bool result = devmode::write_map_info_json(map_info_path.string(), payload, log);
-
-    CHECK_FALSE(result);
-    CHECK(log.str().find("Failed to open") != std::string::npos);
-
-    fs::remove_all(temp_dir);
+    CHECK(devmode::persist_map_manifest_entry(store, "FORREST", payload, log));
+    CHECK(submitted.is_object());
+    CHECK(submitted["maps"].is_object());
+    CHECK(submitted["maps"]["FORREST"] == payload);
+    const auto& manifest_view = store.manifest_json();
+    REQUIRE(manifest_view.contains("maps"));
+    CHECK(manifest_view["maps"]["FORREST"] == payload);
+    CHECK(log.str().empty());
 }

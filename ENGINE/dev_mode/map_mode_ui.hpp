@@ -10,6 +10,9 @@
 #include <nlohmann/json_fwd.hpp>
 
 class Assets;
+namespace devmode::core {
+class ManifestStore;
+}
 class Input;
 class MapLightPanel;
 class MapShadowPanel;
@@ -40,6 +43,8 @@ public:
 
     void set_map_context(nlohmann::json* map_info, const std::string& map_path);
     void set_screen_dimensions(int w, int h);
+
+    void set_manifest_store(devmode::core::ManifestStore* store);
 
     void update(const Input& input);
     bool handle_event(const SDL_Event& e);
@@ -117,9 +122,11 @@ private:
     Assets* assets_ = nullptr;
     nlohmann::json* map_info_ = nullptr;
     std::string map_path_;
+    std::string map_id_;
     int screen_w_ = 1920;
     int screen_h_ = 1080;
 
+    devmode::core::ManifestStore* manifest_store_ = nullptr;
     std::unique_ptr<MapLightPanel> light_panel_;
     std::unique_ptr<MapShadowPanel> shadow_panel_;
     std::shared_ptr<MapLayersController> layers_controller_;

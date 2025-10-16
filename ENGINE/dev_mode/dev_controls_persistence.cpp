@@ -1,43 +1,35 @@
 #include "dev_controls_persistence.hpp"
 
-#include <fstream>
 #include <iostream>
 
 #include <nlohmann/json.hpp>
 
+#include "dev_mode/core/manifest_store.hpp"
+
 namespace devmode {
 
-bool write_map_info_json(const std::string& path,
-                         const nlohmann::json& data,
-                         std::ostream& log) {
-    if (path.empty()) {
-        log << "[DevControls] Map info path is empty; cannot persist data\n";
+bool persist_map_manifest_entry(core::ManifestStore& store,
+                                const std::string& map_id,
+                                const nlohmann::json& data,
+                                std::ostream& log) {
+    if (map_id.empty()) {
+        log << "[DevControls] Map identifier is empty; cannot persist map entry\n";
         return false;
     }
+
     try {
-        std::ofstream out(path);
-        if (!out.is_open()) {
-            log << "[DevControls] Failed to open '" << path << "' for writing\n";
-            return false;
-        }
-        try {
-            out << data.dump(2);
-        } catch (const std::exception& ex) {
-            log << "[DevControls] Failed to serialize map info JSON: " << ex.what() << "\n";
-            return false;
-        }
-        if (!out.good()) {
-            log << "[DevControls] Stream error while writing '" << path << "'\n";
+        if (!store.update_map_entry(map_id, data)) {
+            log << "[DevControls] Failed to persist map entry for '" << map_id << "'\n";
             return false;
         }
         return true;
     } catch (const std::exception& ex) {
-        log << "[DevControls] Exception writing map info: " << ex.what() << "\n";
-        return false;
+        log << "[DevControls] Exception while persisting map entry '" << map_id
+            << "': " << ex.what() << "\n";
     } catch (...) {
-        log << "[DevControls] Unknown exception writing map info\n";
-        return false;
+        log << "[DevControls] Unknown exception while persisting map entry '" << map_id << "'\n";
     }
+    return false;
 }
 
-}
+} // namespace devmode

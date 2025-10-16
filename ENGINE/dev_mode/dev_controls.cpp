@@ -362,6 +362,9 @@ DevControls::DevControls(Assets* owner, int screen_w, int screen_h)
     }
     map_editor_ = std::make_unique<MapEditor>(assets_);
     map_mode_ui_ = std::make_unique<MapModeUI>(assets_);
+    if (map_mode_ui_) {
+        map_mode_ui_->set_manifest_store(&manifest_store_);
+    }
     map_grid_regen_cb_ = [this]() { this->regenerate_map_grid_assets(); };
     apply_header_suppression();
     camera_panel_ = std::make_unique<CameraUIPanel>(assets_, 72, 72);
@@ -560,6 +563,14 @@ void DevControls::set_current_room(Room* room) {
 
 void DevControls::set_rooms(std::vector<Room*>* rooms) {
     rooms_ = rooms;
+    if (rooms_ && assets_) {
+        const std::string map_id = assets_->map_id();
+        nlohmann::json* map_info = &assets_->map_info_json();
+        for (Room* room : *rooms_) {
+            if (!room) continue;
+            room->set_manifest_store(&manifest_store_, map_id, map_info);
+        }
+    }
     if (map_editor_) map_editor_->set_rooms(rooms);
 }
 
@@ -578,6 +589,14 @@ void DevControls::set_map_context(nlohmann::json* map_info, const std::string& m
         map_mode_ui_->set_map_context(map_info, map_path);
         map_mode_ui_->set_light_save_callback(map_light_save_cb_);
         map_mode_ui_->set_map_grid_callbacks(map_grid_save_cb_, map_grid_regen_cb_);
+    }
+    if (rooms_ && assets_) {
+        const std::string map_id = assets_->map_id();
+        nlohmann::json* info = &assets_->map_info_json();
+        for (Room* room : *rooms_) {
+            if (!room) continue;
+            room->set_manifest_store(&manifest_store_, map_id, info);
+        }
     }
     asset_filter_.set_map_info(map_info_json_);
     configure_header_button_sets();
@@ -2498,8 +2517,12 @@ bool DevControls::persist_map_info_to_disk() {
         std::cerr << "[DevControls] Cannot persist map info: assets manager not set\n";
         return false;
     }
-    const bool map_saved = devmode::write_map_info_json(assets_->map_info_path(), assets_->map_info_json(), std::cerr);
-    manifest_store_.flush();
+    const std::string map_id = assets_->map_id();
+    const bool map_saved = devmode::persist_map_manifest_entry(
+        manifest_store_, map_id, assets_->map_info_json(), std::cerr);
+    if (map_saved) {
+        manifest_store_.flush();
+    }
     return map_saved;
 }
 
