@@ -37,7 +37,6 @@ manifest::ManifestData manifest_loader_from(const fs::path& manifest_path) {
     data.raw = load_json(manifest_path);
     data.assets = data.raw.value("assets", nlohmann::json::object());
     data.maps = data.raw.value("maps", nlohmann::json::object());
-    data.rooms = data.raw.value("rooms", nlohmann::json::array());
     return data;
 }
 
@@ -79,8 +78,7 @@ TEST_CASE("MapLayersController reloads map info from manifest") {
     nlohmann::json manifest_entry = make_map_info(manifest_room);
     nlohmann::json manifest_payload = {
         {"assets", nlohmann::json::object()},
-        {"maps", nlohmann::json::object({{map_id, manifest_entry}})},
-        {"rooms", nlohmann::json::array()}
+        {"maps", nlohmann::json::object({{map_id, manifest_entry}})}
     };
 
     const fs::path manifest_path = make_manifest("controller_reload", manifest_payload);

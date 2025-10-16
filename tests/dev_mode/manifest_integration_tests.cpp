@@ -30,7 +30,6 @@ manifest::ManifestData load_manifest_from_path(const fs::path& path) {
     data.raw = read_json(path);
     data.assets = data.raw.contains("assets") ? data.raw["assets"] : nlohmann::json::object();
     data.maps = data.raw.contains("maps") ? data.raw["maps"] : nlohmann::json::object();
-    data.rooms = data.raw.contains("rooms") ? data.raw["rooms"] : nlohmann::json::array();
     return data;
 }
 
@@ -60,8 +59,7 @@ TEST_CASE("AnimationDocument saves manifest payloads") {
                 {"start", "idle"}
             }}
         }},
-        {"maps", nlohmann::json::object()},
-        {"rooms", nlohmann::json::array()}
+        {"maps", nlohmann::json::object()}
     };
 
     const fs::path manifest_path = make_temp_manifest("animation_document", manifest);
@@ -112,8 +110,7 @@ TEST_CASE("CustomControllerService updates manifest metadata") {
                 {"start", "idle"}
             }}
         }},
-        {"maps", nlohmann::json::object()},
-        {"rooms", nlohmann::json::array()}
+        {"maps", nlohmann::json::object()}
     };
 
     const fs::path manifest_path = make_temp_manifest("controller_service", manifest);

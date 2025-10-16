@@ -313,9 +313,6 @@ void ManifestStore::ensure_asset_container() {
     if (!manifest_cache_.contains("maps")) {
         manifest_cache_["maps"] = nlohmann::json::object();
     }
-    if (!manifest_cache_.contains("rooms")) {
-        manifest_cache_["rooms"] = nlohmann::json::array();
-    }
 }
 
 } // namespace devmode::core

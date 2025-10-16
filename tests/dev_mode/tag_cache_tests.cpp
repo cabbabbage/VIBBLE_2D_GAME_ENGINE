@@ -164,8 +164,7 @@ TEST_CASE("SearchAssets reflects manifest tag mutations") {
                 }
             }
         },
-        {"maps", nlohmann::json::object()},
-        {"rooms", nlohmann::json::array()}
+        {"maps", nlohmann::json::object()}
     };
 
     auto loader = [&]() {
@@ -173,7 +172,6 @@ TEST_CASE("SearchAssets reflects manifest tag mutations") {
         data.raw = manifest_json;
         if (manifest_json.contains("assets")) data.assets = manifest_json["assets"];
         if (manifest_json.contains("maps")) data.maps = manifest_json["maps"];
-        if (manifest_json.contains("rooms")) data.rooms = manifest_json["rooms"];
         return data;
     };
 

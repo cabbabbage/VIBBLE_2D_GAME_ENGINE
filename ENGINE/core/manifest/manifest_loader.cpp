@@ -46,7 +46,7 @@ ManifestData load_manifest() {
         throw std::runtime_error(oss.str());
     }
 
-    for (const std::string key : {"assets", "maps", "rooms"}) {
+    for (const std::string key : {"assets", "maps"}) {
         if (!manifest_json.contains(key)) {
             throw std::runtime_error(build_missing_key_message(key, path));
         }
@@ -64,17 +64,10 @@ ManifestData load_manifest() {
         throw std::runtime_error(oss.str());
     }
 
-    if (!manifest_json.at("rooms").is_array()) {
-        std::ostringstream oss;
-        oss << "Manifest entry 'rooms' at '" << path.string() << "' must be a JSON array.";
-        throw std::runtime_error(oss.str());
-    }
-
     ManifestData data;
     data.raw = manifest_json;
     data.assets = data.raw.at("assets");
     data.maps = data.raw.at("maps");
-    data.rooms = data.raw.at("rooms");
 
     return data;
 }

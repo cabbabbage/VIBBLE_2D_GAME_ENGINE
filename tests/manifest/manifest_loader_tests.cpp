@@ -8,7 +8,17 @@ TEST_CASE("load_manifest returns manifest data with required sections") {
 
     CHECK(manifest.assets.is_object());
     CHECK(manifest.maps.is_object());
-    CHECK(manifest.rooms.is_array());
+
+    for (auto it = manifest.maps.begin(); it != manifest.maps.end(); ++it) {
+        const auto& map_entry = it.value();
+        if (!map_entry.is_object()) {
+            continue;
+        }
+        CHECK(map_entry.contains("rooms_data"));
+        CHECK(map_entry.at("rooms_data").is_object());
+        CHECK(map_entry.contains("trails_data"));
+        CHECK(map_entry.at("trails_data").is_object());
+    }
 }
 
 TEST_CASE("manifest_path points to manifest json in project root") {

@@ -17,8 +17,6 @@ devmode::core::ManifestStore make_store(const std::filesystem::path& manifest_pa
     data.raw = manifest;
     data.assets = manifest.value("assets", nlohmann::json::object());
     data.maps = manifest.value("maps", nlohmann::json::object());
-    data.rooms = manifest.value("rooms", nlohmann::json::array());
-
     return devmode::core::ManifestStore(
         manifest_path,
         [data]() mutable {
@@ -48,7 +46,6 @@ TEST_CASE("RoomEditor resolves map info from manifest when no file is present") 
     nlohmann::json manifest = {
         {"assets", nlohmann::json::object()},
         {"maps", {{"ROOM_MAP", map_entry}}},
-        {"rooms", nlohmann::json::array()},
         {"version", 1}
     };
 

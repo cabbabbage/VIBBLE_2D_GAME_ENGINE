@@ -38,7 +38,6 @@ manifest::ManifestData load_manifest_from_path(const fs::path& path) {
     data.raw = read_json(path);
     data.assets = data.raw.contains("assets") ? data.raw["assets"] : nlohmann::json::object();
     data.maps = data.raw.contains("maps") ? data.raw["maps"] : nlohmann::json::object();
-    data.rooms = data.raw.contains("rooms") ? data.raw["rooms"] : nlohmann::json::array();
     return data;
 }
 
@@ -182,8 +181,7 @@ TEST_CASE("AssetInfo commit_manifest persists changes via ManifestStore") {
                 {"neighbor_search_distance", 100}
             }}
         }},
-        {"maps", nlohmann::json::object()},
-        {"rooms", nlohmann::json::array()}
+        {"maps", nlohmann::json::object()}
     };
 
     const auto manifest_path = make_manifest_path("commit_manifest", initial);
@@ -277,8 +275,7 @@ TEST_CASE("AssetInfo reload_animations_from_disk pulls updates from manifest sto
                 }}
             }}
         }},
-        {"maps", nlohmann::json::object()},
-        {"rooms", nlohmann::json::array()}
+        {"maps", nlohmann::json::object()}
     };
 
     const auto manifest_path = make_manifest_path("reload_animations_manifest", manifest);
@@ -357,8 +354,7 @@ TEST_CASE("AssetInfo reload_animations_from_disk pulls updates from manifest sto
                 }}
             }}
         }},
-        {"maps", nlohmann::json::object()},
-        {"rooms", nlohmann::json::array()}
+        {"maps", nlohmann::json::object()}
     };
 
     const auto manifest_path = make_manifest_path("reload_animations_manifest", manifest);
@@ -437,8 +433,7 @@ TEST_CASE("AssetInfo reload_animations_from_disk pulls updates from manifest sto
                 }}
             }}
         }},
-        {"maps", nlohmann::json::object()},
-        {"rooms", nlohmann::json::array()}
+        {"maps", nlohmann::json::object()}
     };
 
     const auto manifest_path = make_manifest_path("reload_animations_manifest", manifest);

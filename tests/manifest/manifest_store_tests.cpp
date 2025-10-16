@@ -43,7 +43,6 @@ manifest::ManifestData load_manifest_from_path(const fs::path& path) {
     data.raw = read_json(path);
     data.assets = data.raw.contains("assets") ? data.raw["assets"] : nlohmann::json::object();
     data.maps = data.raw.contains("maps") ? data.raw["maps"] : nlohmann::json::object();
-    data.rooms = data.raw.contains("rooms") ? data.raw["rooms"] : nlohmann::json::array();
     return data;
 }
 
@@ -56,8 +55,7 @@ TEST_CASE("ManifestStore defers writes until flush") {
                 {"value", 1}
             }}
         }},
-        {"maps", nlohmann::json::object()},
-        {"rooms", nlohmann::json::array()}
+        {"maps", nlohmann::json::object()}
     };
 
     const auto manifest_path = make_manifest_path("defer_writes", initial);
@@ -92,8 +90,7 @@ TEST_CASE("ManifestStore edits survive reloads") {
                 {"value", 7}
             }}
         }},
-        {"maps", nlohmann::json::object()},
-        {"rooms", nlohmann::json::array()}
+        {"maps", nlohmann::json::object()}
     };
 
     const auto manifest_path = make_manifest_path("survive_reload", initial);
@@ -133,8 +130,7 @@ TEST_CASE("ManifestStore edits survive reloads") {
 TEST_CASE("ManifestStore create and remove assets updates manifest entries") {
     nlohmann::json initial = {
         {"assets", nlohmann::json::object()},
-        {"maps", nlohmann::json::object()},
-        {"rooms", nlohmann::json::array()}
+        {"maps", nlohmann::json::object()}
     };
 
     const auto manifest_path = make_manifest_path("create_remove", initial);
@@ -199,8 +195,7 @@ TEST_CASE("Manifest spawn-group cleanup updates manifest without touching legacy
                     })}}
                 })}
             }}
-        }},
-        {"rooms", nlohmann::json::array()}
+        }}
     };
 
     const auto manifest_path = make_manifest_path("spawn_group_cleanup", initial);
@@ -315,8 +310,7 @@ TEST_CASE("AssetSpawnPlanner persists spawn ids through manifest store") {
                 }},
                 {"map_assets_data", nlohmann::json::object()}
             }}
-        }},
-        {"rooms", nlohmann::json::array()}
+        }}
     };
 
     const auto manifest_path = make_manifest_path("planner_persists_spawn_ids", initial);

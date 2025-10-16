@@ -19,8 +19,6 @@ devmode::core::ManifestStore make_store(const std::filesystem::path& manifest_pa
     data.raw = manifest;
     data.assets = manifest.value("assets", nlohmann::json::object());
     data.maps = manifest.value("maps", nlohmann::json::object());
-    data.rooms = manifest.value("rooms", nlohmann::json::array());
-
     return devmode::core::ManifestStore(
         manifest_path,
         [data]() mutable {
@@ -40,8 +38,7 @@ TEST_CASE("persist_map_manifest_entry rejects empty identifiers") {
     const fs::path manifest_path = fs::temp_directory_path() / "manifest_empty_id.json";
     nlohmann::json manifest = {
         {"assets", nlohmann::json::object()},
-        {"maps", nlohmann::json::object()},
-        {"rooms", nlohmann::json::array()}
+        {"maps", nlohmann::json::object()}
     };
     nlohmann::json submitted;
     auto store = make_store(manifest_path, manifest, submitted);
@@ -58,7 +55,6 @@ TEST_CASE("persist_map_manifest_entry updates manifest store entry") {
     nlohmann::json manifest = {
         {"assets", nlohmann::json::object()},
         {"maps", {{"FORREST", {{"name", "FORREST"}}}}},
-        {"rooms", nlohmann::json::array()},
         {"version", 1}
     };
     nlohmann::json submitted;

@@ -1,0 +1,1203 @@
+{
+    "assets": {
+        "Axe": {
+            "histogram": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+            ],
+            "last_updated": "2025-10-16T06:49:43Z",
+            "recommended_percentages": [
+                100,
+                90,
+                80
+            ],
+            "revision": 1
+        },
+        "Barrel": {
+            "histogram": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+            ],
+            "last_updated": "2025-10-16T06:49:43Z",
+            "recommended_percentages": [
+                100,
+                90,
+                80
+            ],
+            "revision": 1
+        },
+        "Bench": {
+            "histogram": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+            ],
+            "last_updated": "2025-10-16T06:49:43Z",
+            "recommended_percentages": [
+                100,
+                90,
+                80
+            ],
+            "revision": 1
+        },
+        "Big_Rock": {
+            "histogram": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+            ],
+            "last_updated": "2025-10-16T06:49:43Z",
+            "recommended_percentages": [
+                100,
+                90,
+                80
+            ],
+            "revision": 1
+        },
+        "Big_Rock_Center": {
+            "histogram": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+            ],
+            "last_updated": "2025-10-16T06:49:43Z",
+            "recommended_percentages": [
+                100,
+                90,
+                80
+            ],
+            "revision": 1
+        },
+        "Bomb": {
+            "histogram": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+            ],
+            "last_updated": "2025-10-16T06:49:43Z",
+            "recommended_percentages": [
+                100,
+                90,
+                80
+            ],
+            "revision": 1
+        },
+        "Bone": {
+            "histogram": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+            ],
+            "last_updated": "2025-10-16T06:49:43Z",
+            "recommended_percentages": [
+                100,
+                90,
+                80
+            ],
+            "revision": 1
+        },
+        "Bone_1": {
+            "histogram": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+            ],
+            "last_updated": "2025-10-16T06:49:43Z",
+            "recommended_percentages": [
+                100,
+                90,
+                80
+            ],
+            "revision": 1
+        },
+        "Bone_Pile": {
+            "histogram": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+            ],
+            "last_updated": "2025-10-16T06:49:43Z",
+            "recommended_percentages": [
+                100,
+                90,
+                80
+            ],
+            "revision": 1
+        },
+        "Book": {
+            "histogram": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+            ],
+            "last_updated": "2025-10-16T06:49:43Z",
+            "recommended_percentages": [
+                100,
+                90,
+                80
+            ],
+            "revision": 1
+        },
+        "Book_1": {
+            "histogram": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+            ],
+            "last_updated": "2025-10-16T06:49:43Z",
+            "recommended_percentages": [
+                100,
+                90,
+                80
+            ],
+            "revision": 1
+        },
+        "Book_Pile": {
+            "histogram": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+            ],
+            "last_updated": "2025-10-16T06:49:43Z",
+            "recommended_percentages": [
+                100,
+                90,
+                80
+            ],
+            "revision": 1
+        },
+        "Book_Pile_1": {
+            "histogram": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+            ],
+            "last_updated": "2025-10-16T06:49:43Z",
+            "recommended_percentages": [
+                100,
+                90,
+                80
+            ],
+            "revision": 1
+        },
+        "Booze_1": {
+            "histogram": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+            ],
+            "last_updated": "2025-10-16T06:49:43Z",
+            "recommended_percentages": [
+                100,
+                90,
+                80
+            ],
+            "revision": 1
+        },
+        "Booze_2": {
+            "histogram": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+            ],
+            "last_updated": "2025-10-16T06:49:43Z",
+            "recommended_percentages": [
+                100,
+                90,
+                80
+            ],
+            "revision": 1
+        },
+        "Box": {
+            "histogram": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+            ],
+            "last_updated": "2025-10-16T06:49:43Z",
+            "recommended_percentages": [
+                100,
+                90,
+                80
+            ],
+            "revision": 1
+        },
+        "Bush_1_FPS_2": {
+            "histogram": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+            ],
+            "last_updated": "2025-10-16T06:49:43Z",
+            "recommended_percentages": [
+                100,
+                90,
+                80
+            ],
+            "revision": 1
+        },
+        "Bush_FPS_2": {
+            "histogram": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+            ],
+            "last_updated": "2025-10-16T06:49:43Z",
+            "recommended_percentages": [
+                100,
+                90,
+                80
+            ],
+            "revision": 1
+        },
+        "Chest": {
+            "histogram": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+            ],
+            "last_updated": "2025-10-16T06:49:43Z",
+            "recommended_percentages": [
+                100,
+                90,
+                80
+            ],
+            "revision": 1
+        },
+        "Davey": {
+            "histogram": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+            ],
+            "last_updated": "2025-10-16T06:49:44Z",
+            "recommended_percentages": [
+                100,
+                90,
+                80
+            ],
+            "revision": 1
+        },
+        "Fountain": {
+            "histogram": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+            ],
+            "last_updated": "2025-10-16T06:49:44Z",
+            "recommended_percentages": [
+                100,
+                90,
+                80
+            ],
+            "revision": 1
+        },
+        "Frog": {
+            "histogram": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+            ],
+            "last_updated": "2025-10-16T06:49:44Z",
+            "recommended_percentages": [
+                100,
+                90,
+                80
+            ],
+            "revision": 1
+        },
+        "Grass_1_FPS_2": {
+            "histogram": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+            ],
+            "last_updated": "2025-10-16T06:48:44Z",
+            "recommended_percentages": [
+                100,
+                90,
+                80
+            ],
+            "revision": 1
+        },
+        "Grass_FPS_2": {
+            "histogram": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+            ],
+            "last_updated": "2025-10-16T06:48:44Z",
+            "recommended_percentages": [
+                100,
+                90,
+                80
+            ],
+            "revision": 1
+        },
+        "Grave_1": {
+            "histogram": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+            ],
+            "last_updated": "2025-10-16T06:49:44Z",
+            "recommended_percentages": [
+                100,
+                90,
+                80
+            ],
+            "revision": 1
+        },
+        "Grave_2": {
+            "histogram": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+            ],
+            "last_updated": "2025-10-16T06:49:44Z",
+            "recommended_percentages": [
+                100,
+                90,
+                80
+            ],
+            "revision": 1
+        },
+        "Key": {
+            "histogram": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+            ],
+            "last_updated": "2025-10-16T06:49:44Z",
+            "recommended_percentages": [
+                100,
+                90,
+                80
+            ],
+            "revision": 1
+        },
+        "Mushroom_1": {
+            "histogram": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+            ],
+            "last_updated": "2025-10-16T06:49:44Z",
+            "recommended_percentages": [
+                100,
+                90,
+                80
+            ],
+            "revision": 1
+        },
+        "Mushroom_2": {
+            "histogram": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+            ],
+            "last_updated": "2025-10-16T06:49:44Z",
+            "recommended_percentages": [
+                100,
+                90,
+                80
+            ],
+            "revision": 1
+        },
+        "Mushroom_3": {
+            "histogram": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+            ],
+            "last_updated": "2025-10-16T06:48:45Z",
+            "recommended_percentages": [
+                100,
+                90,
+                80
+            ],
+            "revision": 1
+        },
+        "Rock": {
+            "histogram": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+            ],
+            "last_updated": "2025-10-16T06:49:44Z",
+            "recommended_percentages": [
+                100,
+                90,
+                80
+            ],
+            "revision": 1
+        },
+        "Sigil_Of_Fortune": {
+            "histogram": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+            ],
+            "last_updated": "2025-10-16T06:49:44Z",
+            "recommended_percentages": [
+                100,
+                90,
+                80
+            ],
+            "revision": 1
+        },
+        "Sign": {
+            "histogram": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+            ],
+            "last_updated": "2025-10-16T06:49:44Z",
+            "recommended_percentages": [
+                100,
+                90,
+                80
+            ],
+            "revision": 1
+        },
+        "Skull_1": {
+            "histogram": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+            ],
+            "last_updated": "2025-10-16T06:49:44Z",
+            "recommended_percentages": [
+                100,
+                90,
+                80
+            ],
+            "revision": 1
+        },
+        "Skull_Pile": {
+            "histogram": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+            ],
+            "last_updated": "2025-10-16T06:49:44Z",
+            "recommended_percentages": [
+                100,
+                90,
+                80
+            ],
+            "revision": 1
+        },
+        "Skull_Pile_1": {
+            "histogram": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+            ],
+            "last_updated": "2025-10-16T06:49:44Z",
+            "recommended_percentages": [
+                100,
+                90,
+                80
+            ],
+            "revision": 1
+        },
+        "Small_Rock": {
+            "histogram": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+            ],
+            "last_updated": "2025-10-16T06:48:44Z",
+            "recommended_percentages": [
+                100,
+                90,
+                80
+            ],
+            "revision": 1
+        },
+        "Stump": {
+            "histogram": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+            ],
+            "last_updated": "2025-10-16T06:49:44Z",
+            "recommended_percentages": [
+                100,
+                90,
+                80
+            ],
+            "revision": 1
+        },
+        "Tree": {
+            "histogram": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+            ],
+            "last_updated": "2025-10-16T06:48:44Z",
+            "recommended_percentages": [
+                100,
+                90,
+                80
+            ],
+            "revision": 1
+        },
+        "Tree_Dark": {
+            "histogram": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+            ],
+            "last_updated": "2025-10-16T06:48:45Z",
+            "recommended_percentages": [
+                100,
+                90,
+                80
+            ],
+            "revision": 1
+        },
+        "Tree_Darker": {
+            "histogram": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+            ],
+            "last_updated": "2025-10-16T06:48:45Z",
+            "recommended_percentages": [
+                100,
+                90,
+                80
+            ],
+            "revision": 1
+        },
+        "Vibble": {
+            "histogram": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+            ],
+            "last_updated": "2025-10-16T06:48:44Z",
+            "recommended_percentages": [
+                100,
+                90,
+                80
+            ],
+            "revision": 1
+        },
+        "bouncing": {
+            "histogram": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+            ],
+            "last_updated": "2025-10-16T06:49:45Z",
+            "recommended_percentages": [
+                100,
+                90,
+                80
+            ],
+            "revision": 1
+        },
+        "candle": {
+            "histogram": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+            ],
+            "last_updated": "2025-10-16T06:48:44Z",
+            "recommended_percentages": [
+                100,
+                90,
+                80
+            ],
+            "revision": 1
+        },
+        "candle_3": {
+            "histogram": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+            ],
+            "last_updated": "2025-10-16T06:49:45Z",
+            "recommended_percentages": [
+                100,
+                90,
+                80
+            ],
+            "revision": 1
+        },
+        "car": {
+            "histogram": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+            ],
+            "last_updated": "2025-10-16T06:49:45Z",
+            "recommended_percentages": [
+                100,
+                90,
+                80
+            ],
+            "revision": 1
+        },
+        "flower": {
+            "histogram": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+            ],
+            "last_updated": "2025-10-16T06:49:45Z",
+            "recommended_percentages": [
+                100,
+                90,
+                80
+            ],
+            "revision": 1
+        },
+        "flower_1": {
+            "histogram": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+            ],
+            "last_updated": "2025-10-16T06:49:45Z",
+            "recommended_percentages": [
+                100,
+                90,
+                80
+            ],
+            "revision": 1
+        },
+        "flower_3": {
+            "histogram": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+            ],
+            "last_updated": "2025-10-16T06:48:44Z",
+            "recommended_percentages": [
+                100,
+                90,
+                80
+            ],
+            "revision": 1
+        },
+        "flower_4": {
+            "histogram": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+            ],
+            "last_updated": "2025-10-16T06:49:45Z",
+            "recommended_percentages": [
+                100,
+                90,
+                80
+            ],
+            "revision": 1
+        },
+        "flower_5": {
+            "histogram": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+            ],
+            "last_updated": "2025-10-16T06:49:45Z",
+            "recommended_percentages": [
+                100,
+                90,
+                80
+            ],
+            "revision": 1
+        },
+        "flowr_6": {
+            "histogram": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+            ],
+            "last_updated": "2025-10-16T06:48:44Z",
+            "recommended_percentages": [
+                100,
+                90,
+                80
+            ],
+            "revision": 1
+        },
+        "lantern": {
+            "histogram": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+            ],
+            "last_updated": "2025-10-16T06:49:46Z",
+            "recommended_percentages": [
+                100,
+                90,
+                80
+            ],
+            "revision": 1
+        },
+        "marker": {
+            "histogram": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+            ],
+            "last_updated": "2025-10-16T06:49:46Z",
+            "recommended_percentages": [
+                100,
+                90,
+                80
+            ],
+            "revision": 1
+        },
+        "noose": {
+            "histogram": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+            ],
+            "last_updated": "2025-10-16T06:49:46Z",
+            "recommended_percentages": [
+                100,
+                90,
+                80
+            ],
+            "revision": 1
+        },
+        "table": {
+            "histogram": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+            ],
+            "last_updated": "2025-10-16T06:49:46Z",
+            "recommended_percentages": [
+                100,
+                90,
+                80
+            ],
+            "revision": 1
+        },
+        "vigil": {
+            "histogram": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+            ],
+            "last_updated": "2025-10-16T06:49:46Z",
+            "recommended_percentages": [
+                100,
+                90,
+                80
+            ],
+            "revision": 1
+        }
+    },
+    "new_values": false,
+    "version": 1
+}

@@ -11843,6 +11843,12 @@
   },
   "maps": {
     "FORREST": {
+      "audio": {
+        "music": {
+          "content_root": "MAPS/FORREST/music",
+          "tracks": []
+        }
+      },
       "camera_settings": {
         "distance_scale_strength": 0.07999999821186066,
         "foreshorten_strength": 0.09999999403953552,
@@ -11852,6 +11858,7 @@
         "render_distance": 2200.0,
         "tripod_distance_y": -495.0
       },
+      "content_root": "MAPS/FORREST",
       "map_assets_data": {
         "spawn_groups": [
           {
@@ -11882,6 +11889,7 @@
             "max_number": 100,
             "min_number": 53,
             "position": "Random",
+            "priority": 2,
             "spawn_id": "spn-5200d51e3675"
           }
         ]
@@ -12066,13 +12074,6 @@
         },
         "update_interval": 8
       },
-      "audio": {
-        "music": {
-          "content_root": "MAPS/FORREST/music",
-          "tracks": []
-        }
-      },
-      "content_root": "MAPS/FORREST",
       "map_name": "FORREST",
       "rooms_data": {
         "bar": {
@@ -12546,6 +12547,7 @@
               "origional_height": 1807,
               "origional_width": 1805,
               "position": "Exact",
+              "priority": 0,
               "spawn_id": "spn-a2c03bfe7161"
             },
             {
@@ -12569,8 +12571,31 @@
               "origional_width": 9017,
               "perimeter_radius": 377,
               "position": "Perimeter",
+              "priority": 1,
               "radius": 377,
               "spawn_id": "spn-dbc1671870c3"
+            },
+            {
+              "candidates": [
+                {
+                  "chance": 0,
+                  "name": "null"
+                },
+                {
+                  "chance": 100,
+                  "name": "Barrel"
+                }
+              ],
+              "display_name": "Barrel",
+              "dx": -116,
+              "dy": -112,
+              "enforce_spacing": false,
+              "max_number": 1,
+              "min_number": 1,
+              "origional_height": 1921,
+              "origional_width": 2013,
+              "position": "Exact",
+              "spawn_id": "spn-2e784cd91d03"
             }
           ],
           "tags": {
@@ -12640,6 +12665,8 @@
               "enforce_spacing": false,
               "max_number": 1,
               "min_number": 1,
+              "origional_height": 2021,
+              "origional_width": 3270,
               "position": "Exact",
               "priority": 0,
               "spawn_id": "spn-468fbf18908b"

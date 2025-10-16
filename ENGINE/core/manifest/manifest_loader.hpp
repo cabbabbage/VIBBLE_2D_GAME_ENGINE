@@ -9,7 +9,6 @@ namespace manifest {
 struct ManifestData {
     nlohmann::json assets;
     nlohmann::json maps;
-    nlohmann::json rooms;
     nlohmann::json raw;
 };
 

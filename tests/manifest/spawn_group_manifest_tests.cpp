@@ -55,7 +55,6 @@ manifest::ManifestData load_manifest_from_path(const fs::path& path) {
     data.raw = read_json(path);
     data.assets = data.raw.contains("assets") ? data.raw["assets"] : nlohmann::json::object();
     data.maps = data.raw.contains("maps") ? data.raw["maps"] : nlohmann::json::object();
-    data.rooms = data.raw.contains("rooms") ? data.raw["rooms"] : nlohmann::json::array();
     return data;
 }
 
@@ -75,8 +74,7 @@ TEST_CASE("Section_SpawnGroups mutates manifest spawn_groups") {
                 {"spawn_groups", nlohmann::json::array()}
             }}
         }},
-        {"maps", nlohmann::json::object()},
-        {"rooms", nlohmann::json::array()}
+        {"maps", nlohmann::json::object()}
     };
 
     auto& initial_groups = manifest["assets"]["TestAsset"]["spawn_groups"];
