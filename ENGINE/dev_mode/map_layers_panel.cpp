@@ -21,6 +21,7 @@
 #include <SDL_ttf.h>
 
 #include <algorithm>
+#include <array>
 
 #include <cctype>
 
@@ -1549,35 +1550,6 @@ private:
     int selected_layer_ = -1;
 };
 
-class MapLayersPanel::PreviewColumnWidget : public Widget {
-
-public:
-
-    PreviewColumnWidget(MapLayersPanel* owner,
-                        PreviewToolbarWidget* toolbar,
-                        LayerCanvasWidget* canvas)
-        : owner_(owner), toolbar_(toolbar), canvas_(canvas) {}
-
-    void set_rect(const SDL_Rect& r) override;
-
-    const SDL_Rect& rect() const override { return rect_; }
-
-    int height_for_width(int w) const override;
-
-    bool handle_event(const SDL_Event& e) override;
-
-    void render(SDL_Renderer* renderer) const override;
-
-private:
-
-    MapLayersPanel* owner_ = nullptr;
-    PreviewToolbarWidget* toolbar_ = nullptr;
-    LayerCanvasWidget* canvas_ = nullptr;
-    SDL_Rect rect_{0,0,0,0};
-    SDL_Rect toolbar_rect_{0,0,0,0};
-    SDL_Rect canvas_rect_{0,0,0,0};
-};
-
 class MapLayersPanel::RoomListPanel : public Widget {
 
 public:
@@ -1871,48 +1843,6 @@ void MapLayersPanel::PreviewToolbarWidget::render(SDL_Renderer* renderer) const 
     if (preview_button_) preview_button_->render(renderer);
     if (delete_button_) delete_button_->render(renderer);
     if (reload_button_) reload_button_->render(renderer);
-}
-
-int MapLayersPanel::PreviewColumnWidget::height_for_width(int w) const {
-    int h = 0;
-    if (toolbar_) h += toolbar_->height_for_width(w);
-    if (toolbar_ && canvas_) h += DMSpacing::item_gap();
-    if (canvas_) h += canvas_->height_for_width(w);
-    return h;
-}
-
-void MapLayersPanel::PreviewColumnWidget::set_rect(const SDL_Rect& r) {
-    rect_ = r;
-    int y = rect_.y;
-    int available_w = rect_.w;
-    if (toolbar_) {
-        int h = toolbar_->height_for_width(available_w);
-        toolbar_rect_ = SDL_Rect{ rect_.x, y, available_w, h };
-        toolbar_->set_rect(toolbar_rect_);
-        y += h;
-    } else {
-        toolbar_rect_ = SDL_Rect{0,0,0,0};
-    }
-    if (canvas_) {
-        if (toolbar_) y += DMSpacing::item_gap();
-        int h = canvas_->height_for_width(available_w);
-        canvas_rect_ = SDL_Rect{ rect_.x, y, available_w, h };
-        canvas_->set_rect(canvas_rect_);
-        y += h;
-    } else {
-        canvas_rect_ = SDL_Rect{0,0,0,0};
-    }
-}
-
-bool MapLayersPanel::PreviewColumnWidget::handle_event(const SDL_Event& e) {
-    if (toolbar_ && toolbar_->handle_event(e)) return true;
-    if (canvas_ && canvas_->handle_event(e)) return true;
-    return false;
-}
-
-void MapLayersPanel::PreviewColumnWidget::render(SDL_Renderer* renderer) const {
-    if (toolbar_) toolbar_->render(renderer);
-    if (canvas_) canvas_->render(renderer);
 }
 
 void MapLayersPanel::RoomListPanel::set_rect(const SDL_Rect& r) {
@@ -3045,10 +2975,6 @@ MapLayersPanel::MapLayersPanel(int x, int y)
 
     toolbar_widget_ = std::make_unique<PreviewToolbarWidget>(this);
 
-    preview_column_widget_ = std::make_unique<PreviewColumnWidget>(this,
-                                                                  toolbar_widget_.get(),
-                                                                  canvas_widget_.get());
-
     room_list_panel_ = std::make_unique<RoomListPanel>(this);
     if (room_list_panel_) {
         room_list_panel_->set_on_create([this]() {
@@ -3072,16 +2998,44 @@ MapLayersPanel::MapLayersPanel(int x, int y)
             return std::string("Layer Config");
         });
         layers_container_->set_layout_function([this](const SlidingWindowContainer::LayoutContext& ctx) {
-            return this->layout_layer_config(ctx);
+            if (!layer_config_ || !layer_config_->is_visible()) {
+                const int padding = DMSpacing::panel_padding();
+                const int width = std::max(0, ctx.content_width - padding * 2);
+                const int content_top = ctx.content_top - ctx.scroll_value + padding;
+                int next_y = content_top;
+                if (room_list_panel_) {
+                    const int height = room_list_panel_->height_for_width(width);
+                    room_list_panel_->set_rect(SDL_Rect{ ctx.content_x + padding, content_top, width, height });
+                    next_y = content_top + height;
+                }
+                return next_y + padding + ctx.gap;
+            }
+
+            const int padding = DMSpacing::panel_padding();
+            const int available_height = std::max(0, screen_bounds_.h - padding * 2);
+            const int cell_width = std::max(160, ctx.content_width - padding * 2);
+            const int content_top = ctx.content_top - ctx.scroll_value + padding;
+            const int inner_width = std::max(0, ctx.content_width - padding * 2);
+            layer_config_->set_available_height_override(available_height);
+            layer_config_->set_cell_width(cell_width);
+            layer_config_->set_rect(SDL_Rect{ ctx.content_x + padding, content_top, inner_width, 0 });
+            return content_top + layer_config_->height() + padding + ctx.gap;
         });
         layers_container_->set_render_function([this](SDL_Renderer* renderer) {
-            this->render_layer_config(renderer);
+            if (layer_config_ && layer_config_->is_visible()) {
+                layer_config_->render(renderer);
+            }
         });
         layers_container_->set_event_function([this](const SDL_Event& e) {
-            return this->handle_layer_config_event(e);
+            if (!layer_config_ || !layer_config_->is_visible()) {
+                return false;
+            }
+            return layer_config_->handle_event(e);
         });
         layers_container_->set_update_function([this](const Input& input, int sw, int sh) {
-            this->update_layer_config(input, sw, sh);
+            if (layer_config_ && layer_config_->is_visible()) {
+                layer_config_->update(input, sw, sh);
+            }
         });
         layers_container_->set_on_close([this]() {
             if (layer_config_) {
@@ -3107,16 +3061,30 @@ MapLayersPanel::MapLayersPanel(int x, int y)
         rooms_container_->set_scrollbar_visible(false);
         rooms_container_->set_header_text("Rooms");
         rooms_container_->set_layout_function([this](const SlidingWindowContainer::LayoutContext& ctx) {
-            return this->layout_room_list(ctx);
+            const int padding = DMSpacing::panel_padding();
+            const int width = std::max(0, ctx.content_width - padding * 2);
+            const int content_top = ctx.content_top - ctx.scroll_value + padding;
+            int next_y = content_top;
+            if (room_list_panel_) {
+                const int height = room_list_panel_->height_for_width(width);
+                room_list_panel_->set_rect(SDL_Rect{ ctx.content_x + padding, content_top, width, height });
+                next_y = content_top + height;
+            }
+            return next_y + padding + ctx.gap;
         });
         rooms_container_->set_render_function([this](SDL_Renderer* renderer) {
-            this->render_room_list(renderer);
+            if (room_list_panel_) {
+                room_list_panel_->render(renderer);
+            }
         });
         rooms_container_->set_event_function([this](const SDL_Event& e) {
-            return this->handle_room_list_event(e);
+            if (!room_list_panel_) {
+                return false;
+            }
+            return room_list_panel_->handle_event(e);
         });
-        rooms_container_->set_update_function([this](const Input& input, int sw, int sh) {
-            this->update_room_list(input, sw, sh);
+        rooms_container_->set_update_function([this](const Input&, int, int) {
+            // Room list currently has no per-frame updates.
         });
         rooms_container_->set_on_close([this]() {
             rooms_container_visible_ = false;
@@ -3178,6 +3146,17 @@ void MapLayersPanel::set_map_info(json* map_info, const std::string& map_path) {
     refresh_canvas();
 
     show_room_list(true);
+
+    request_main_panel_layout();
+    if (rooms_container_) {
+        rooms_container_->request_layout();
+    }
+    if (layers_container_) {
+        layers_container_->request_layout();
+    }
+    if (room_config_container_) {
+        room_config_container_->request_layout();
+    }
 
     if (!is_visible()) {
         if (layers_container_) {
@@ -3262,6 +3241,14 @@ void MapLayersPanel::set_header_visibility_callback(std::function<void(bool)> cb
 void MapLayersPanel::set_work_area(const SDL_Rect& bounds) {
 
     work_area_ = bounds;
+
+    request_main_panel_layout();
+    if (rooms_container_) {
+        rooms_container_->request_layout();
+    }
+    if (layers_container_) {
+        layers_container_->request_layout();
+    }
 
 }
 
@@ -3377,6 +3364,14 @@ void MapLayersPanel::set_embedded_mode(bool embedded) {
 
     }
 
+    request_main_panel_layout();
+    if (rooms_container_) {
+        rooms_container_->request_layout();
+    }
+    if (layers_container_) {
+        layers_container_->request_layout();
+    }
+
 }
 
 void MapLayersPanel::set_embedded_bounds(const SDL_Rect& bounds) {
@@ -3401,6 +3396,14 @@ void MapLayersPanel::set_embedded_bounds(const SDL_Rect& bounds) {
 
         }
 
+    }
+
+    request_main_panel_layout();
+    if (rooms_container_) {
+        rooms_container_->request_layout();
+    }
+    if (layers_container_) {
+        layers_container_->request_layout();
     }
 
 }
@@ -3437,24 +3440,29 @@ void MapLayersPanel::update(const Input& input, int screen_w, int screen_h) {
 
     }
 
-    if (main_container_) {
+    const std::array<SlidingWindowContainer*, 3> containers{
+        main_container_.get(),
+        rooms_container_.get(),
+        layers_container_.get()
+    };
 
-        main_container_->update(input, screen_w, screen_h);
-
-    }
-
-    if (rooms_container_ && rooms_container_visible_) {
-
-        rooms_container_->update(input, screen_w, screen_h);
-        sync_details_scroll_from(rooms_container_.get());
-
-    }
-
-    if (layers_container_ && layers_container_visible_) {
-
-        layers_container_->update(input, screen_w, screen_h);
-        sync_details_scroll_from(layers_container_.get());
-
+    for (SlidingWindowContainer* container : containers) {
+        if (!container) {
+            continue;
+        }
+        bool visible = container->is_visible();
+        if (container == rooms_container_.get()) {
+            visible = rooms_container_visible_ && visible;
+        } else if (container == layers_container_.get()) {
+            visible = layers_container_visible_ && visible;
+        }
+        if (!visible) {
+            continue;
+        }
+        container->update(input, screen_w, screen_h);
+        if (container != main_container_.get()) {
+            sync_details_scroll_from(container);
+        }
     }
 
     if (room_config_container_ && room_config_container_visible_) {
@@ -3527,16 +3535,26 @@ bool MapLayersPanel::handle_event(const SDL_Event& e) {
 
     }
 
-    if (layers_container_ && layers_container_visible_ && layers_container_->is_visible()) {
+    const std::array<SlidingWindowContainer*, 3> containers{
+        layers_container_.get(),
+        rooms_container_.get(),
+        main_container_.get()
+    };
 
-        used = layers_container_->handle_event(e) || used;
-
-    }
-
-    if (rooms_container_ && rooms_container_visible_ && rooms_container_->is_visible()) {
-
-        used = rooms_container_->handle_event(e) || used;
-
+    for (SlidingWindowContainer* container : containers) {
+        if (!container) {
+            continue;
+        }
+        bool visible = container->is_visible();
+        if (container == rooms_container_.get()) {
+            visible = rooms_container_visible_ && visible;
+        } else if (container == layers_container_.get()) {
+            visible = layers_container_visible_ && visible;
+        }
+        if (!visible) {
+            continue;
+        }
+        used = container->handle_event(e) || used;
     }
 
     if (room_config_container_ && room_config_container_visible_ && room_config_container_->is_visible()) {
@@ -3549,12 +3567,6 @@ bool MapLayersPanel::handle_event(const SDL_Event& e) {
         int screen_h = screen_bounds_.h > 0 ? screen_bounds_.h : 1;
         room_configurator_->prepare_for_event(screen_w, screen_h);
         used = room_configurator_->handle_event(e) || used;
-
-    }
-
-    if (main_container_) {
-
-        used = main_container_->handle_event(e) || used;
 
     }
 
@@ -3572,34 +3584,28 @@ void MapLayersPanel::render(SDL_Renderer* renderer) const {
 
     if (!is_visible()) return;
 
-    if (main_container_) {
+    const std::array<SlidingWindowContainer*, 3> containers{
+        main_container_.get(),
+        rooms_container_.get(),
+        layers_container_.get()
+    };
 
+    for (SlidingWindowContainer* container : containers) {
+        if (!container) {
+            continue;
+        }
+        bool visible = container->is_visible();
+        if (container == rooms_container_.get()) {
+            visible = rooms_container_visible_ && visible;
+        } else if (container == layers_container_.get()) {
+            visible = layers_container_visible_ && visible;
+        }
+        if (!visible) {
+            continue;
+        }
         const int screen_w = std::max(1, screen_bounds_.w);
-
         const int screen_h = std::max(1, screen_bounds_.h);
-
-        main_container_->render(renderer, screen_w, screen_h);
-
-    }
-
-    if (rooms_container_ && rooms_container_visible_) {
-
-        const int screen_w = std::max(1, screen_bounds_.w);
-
-        const int screen_h = std::max(1, screen_bounds_.h);
-
-        rooms_container_->render(renderer, screen_w, screen_h);
-
-    }
-
-    if (layers_container_ && layers_container_visible_) {
-
-        const int screen_w = std::max(1, screen_bounds_.w);
-
-        const int screen_h = std::max(1, screen_bounds_.h);
-
-        layers_container_->render(renderer, screen_w, screen_h);
-
+        container->render(renderer, screen_w, screen_h);
     }
 
     if (room_config_container_ && room_config_container_visible_) {
@@ -5662,78 +5668,114 @@ const nlohmann::json* MapLayersPanel::layer_at(int index) const {
 
 void MapLayersPanel::rebuild_rows() {
 
-    if (preview_column_widget_) {
-        preview_column_widget_->set_rect(SDL_Rect{0, 0, 0, 0});
+    if (toolbar_widget_) {
+        toolbar_widget_->set_rect(SDL_Rect{0, 0, 0, 0});
+    }
+
+    if (canvas_widget_) {
+        canvas_widget_->set_rect(SDL_Rect{0, 0, 0, 0});
     }
 
     if (sidebar_widget_) {
         sidebar_widget_->set_rect(SDL_Rect{0, 0, 0, 0});
     }
 
+    request_main_panel_layout();
+
 }
 
-int MapLayersPanel::layout_main_panel(const SlidingWindowContainer::LayoutContext& ctx) {
+void MapLayersPanel::request_main_panel_layout() {
+    if (main_container_) {
+        main_container_->request_layout();
+    }
+}
 
-    const int col_gap = DMSpacing::item_gap();
-    const int min_preview_width = 320;
-    const int min_sidebar_width = 260;
+void MapLayersPanel::update_main_panel_layout_state(int content_width) {
+    MainPanelLayoutState state{};
+    state.last_content_width = std::max(0, content_width);
+    state.preview_width = state.last_content_width;
+    state.sidebar_width = sidebar_widget_ ? state.last_content_width : 0;
+    state.stack_vertical = true;
 
-    const int content_x = ctx.content_x;
-    const int content_w = std::max(0, ctx.content_width);
-    const int scroll_y = ctx.scroll_value;
-
-    bool stack_vertical = true;
-    int preview_width = content_w;
-    int sidebar_width = content_w;
-
-    if (content_w > 0 && preview_column_widget_) {
-        if (content_w >= min_preview_width + min_sidebar_width + col_gap) {
-            stack_vertical = false;
-            preview_width = std::max(min_preview_width, content_w - min_sidebar_width - col_gap);
-            sidebar_width = std::max(min_sidebar_width, content_w - preview_width - col_gap);
-            if (preview_width + sidebar_width + col_gap > content_w) {
-                int remainder = content_w - col_gap;
-                preview_width = std::max(min_preview_width, remainder / 2);
-                sidebar_width = std::max(min_sidebar_width, remainder - preview_width);
+    if (state.last_content_width > 0 && toolbar_widget_ && canvas_widget_ && sidebar_widget_) {
+        const int min_preview_width = 320;
+        const int min_sidebar_width = 260;
+        const int col_gap = DMSpacing::item_gap();
+        if (state.last_content_width >= min_preview_width + min_sidebar_width + col_gap) {
+            state.stack_vertical = false;
+            state.preview_width = std::max(min_preview_width, state.last_content_width - min_sidebar_width - col_gap);
+            state.sidebar_width = std::max(min_sidebar_width, state.last_content_width - state.preview_width - col_gap);
+            if (state.preview_width + state.sidebar_width + col_gap > state.last_content_width) {
+                const int remainder = state.last_content_width - col_gap;
+                state.preview_width = std::max(min_preview_width, remainder / 2);
+                state.sidebar_width = std::max(min_sidebar_width, remainder - state.preview_width);
             }
         }
     }
 
-    if (!preview_column_widget_) {
-        preview_width = 0;
-        stack_vertical = true;
+    if (!toolbar_widget_ && !canvas_widget_) {
+        state.preview_width = 0;
     }
 
     if (!sidebar_widget_) {
-        sidebar_width = 0;
+        state.sidebar_width = 0;
+        state.stack_vertical = true;
     }
 
-    int row_top = ctx.content_top - scroll_y;
-    int row_bottom = row_top;
+    main_panel_layout_state_ = state;
+}
 
-    if (preview_column_widget_) {
-        int height = preview_column_widget_->height_for_width(preview_width);
-        preview_column_widget_->set_rect(SDL_Rect{content_x, row_top, preview_width, height});
-        row_bottom = preview_column_widget_->rect().y + preview_column_widget_->rect().h;
-    }
+int MapLayersPanel::layout_main_panel(const SlidingWindowContainer::LayoutContext& ctx) {
 
-    if (sidebar_widget_) {
-        if (stack_vertical) {
-            int sidebar_y = row_bottom + (preview_column_widget_ ? col_gap : 0);
-            int width = content_w;
-            int height = sidebar_widget_->height_for_width(width);
-            sidebar_widget_->set_rect(SDL_Rect{content_x, sidebar_y, width, height});
-            row_bottom = sidebar_widget_->rect().y + sidebar_widget_->rect().h;
-        } else {
-            int width = std::max(min_sidebar_width, sidebar_width);
-            int sidebar_x = content_x + preview_width + col_gap;
-            int height = sidebar_widget_->height_for_width(width);
-            sidebar_widget_->set_rect(SDL_Rect{sidebar_x, row_top, width, height});
-            row_bottom = std::max(row_bottom, sidebar_widget_->rect().y + sidebar_widget_->rect().h);
+    update_main_panel_layout_state(ctx.content_width);
+
+    const int column_gap = DMSpacing::item_gap();
+    const int content_x = ctx.content_x;
+    const int scroll = ctx.scroll_value;
+
+    const int preview_width = main_panel_layout_state_.stack_vertical
+                                  ? std::max(0, ctx.content_width)
+                                  : std::max(0, main_panel_layout_state_.preview_width);
+    const int sidebar_width = main_panel_layout_state_.stack_vertical
+                                  ? std::max(0, ctx.content_width)
+                                  : std::max(0, main_panel_layout_state_.sidebar_width);
+
+    int y = ctx.content_top;
+    int content_bottom = y;
+
+    if (toolbar_widget_) {
+        const int toolbar_height = toolbar_widget_->height_for_width(preview_width);
+        toolbar_widget_->set_rect(SDL_Rect{ content_x, y - scroll, preview_width, toolbar_height });
+        y += toolbar_height;
+        content_bottom = y;
+        if (canvas_widget_) {
+            y += DMSpacing::item_gap();
         }
     }
 
-    return row_bottom + ctx.gap;
+    if (canvas_widget_) {
+        const int canvas_height = canvas_widget_->height_for_width(preview_width);
+        canvas_widget_->set_rect(SDL_Rect{ content_x, y - scroll, preview_width, canvas_height });
+        y += canvas_height;
+        content_bottom = y;
+    }
+
+    if (sidebar_widget_) {
+        int sidebar_x = content_x;
+        int sidebar_y = main_panel_layout_state_.stack_vertical ? (y + ctx.gap) : ctx.content_top;
+        if (!main_panel_layout_state_.stack_vertical) {
+            sidebar_x += preview_width + column_gap;
+        }
+        const int sidebar_height = sidebar_widget_->height_for_width(sidebar_width);
+        sidebar_widget_->set_rect(SDL_Rect{ sidebar_x, sidebar_y - scroll, sidebar_width, sidebar_height });
+        if (main_panel_layout_state_.stack_vertical) {
+            content_bottom = sidebar_y + sidebar_height;
+        } else {
+            content_bottom = std::max(content_bottom, sidebar_y + sidebar_height);
+        }
+    }
+
+    return content_bottom + ctx.gap;
 
 }
 
@@ -5741,8 +5783,12 @@ void MapLayersPanel::render_main_panel(SDL_Renderer* renderer) const {
 
     if (!renderer) return;
 
-    if (preview_column_widget_) {
-        preview_column_widget_->render(renderer);
+    if (toolbar_widget_) {
+        toolbar_widget_->render(renderer);
+    }
+
+    if (canvas_widget_) {
+        canvas_widget_->render(renderer);
     }
 
     if (sidebar_widget_) {
@@ -5755,7 +5801,11 @@ bool MapLayersPanel::handle_main_panel_event(const SDL_Event& e) {
 
     bool used = false;
 
-    if (preview_column_widget_ && preview_column_widget_->handle_event(e)) {
+    if (toolbar_widget_ && toolbar_widget_->handle_event(e)) {
+        used = true;
+    }
+
+    if (canvas_widget_ && canvas_widget_->handle_event(e)) {
         used = true;
     }
 
@@ -5795,6 +5845,14 @@ void MapLayersPanel::handle_main_container_closed() {
     update_click_target(-1, std::string());
 
     clear_hover_target();
+
+    request_main_panel_layout();
+    if (rooms_container_) {
+        rooms_container_->request_layout();
+    }
+    if (layers_container_) {
+        layers_container_->request_layout();
+    }
 
 }
 
@@ -5855,100 +5913,15 @@ void MapLayersPanel::refresh_room_list() {
     room_list_panel_->set_rooms(available_rooms_, rooms_data);
     room_list_panel_->set_selected_room(active_room_config_key_);
 
+    if (rooms_container_) {
+        rooms_container_->request_layout();
+    }
+
 }
 
 void MapLayersPanel::refresh_canvas() {
 
     if (canvas_widget_) canvas_widget_->refresh();
-
-}
-
-int MapLayersPanel::layout_room_list(const SlidingWindowContainer::LayoutContext& ctx) {
-
-    const int padding = DMSpacing::panel_padding();
-    const int width = std::max(0, ctx.content_width - padding * 2);
-    const int content_top = ctx.content_top - ctx.scroll_value + padding;
-
-    if (room_list_panel_) {
-        SDL_Rect rect{ ctx.content_x + padding, content_top, width, room_list_panel_->height_for_width(width) };
-        room_list_panel_->set_rect(rect);
-        return rect.y + rect.h + padding + ctx.gap;
-    }
-
-    return content_top + ctx.gap;
-
-}
-
-int MapLayersPanel::layout_layer_config(const SlidingWindowContainer::LayoutContext& ctx) {
-
-    if (!layer_config_ || !layer_config_->is_visible()) {
-        return layout_room_list(ctx);
-    }
-
-    const int content_top = ctx.content_top - ctx.scroll_value;
-    const int padding = DMSpacing::panel_padding();
-
-    layer_config_->set_available_height_override(std::max(0, screen_bounds_.h - padding * 2));
-    layer_config_->set_cell_width(std::max(160, ctx.content_width - padding * 2));
-    layer_config_->set_rect(SDL_Rect{ ctx.content_x, content_top, ctx.content_width, 0 });
-
-    return layer_config_->rect().y + layer_config_->height() + ctx.gap;
-
-}
-
-void MapLayersPanel::render_room_list(SDL_Renderer* renderer) const {
-
-    if (!room_list_panel_) {
-        return;
-    }
-
-    room_list_panel_->render(renderer);
-
-}
-
-void MapLayersPanel::render_layer_config(SDL_Renderer* renderer) const {
-
-    if (!layer_config_ || !layer_config_->is_visible()) {
-        return;
-    }
-
-    layer_config_->render(renderer);
-
-}
-
-bool MapLayersPanel::handle_room_list_event(const SDL_Event& e) {
-
-    if (!room_list_panel_) {
-        return false;
-    }
-
-    return room_list_panel_->handle_event(e);
-
-}
-
-bool MapLayersPanel::handle_layer_config_event(const SDL_Event& e) {
-
-    if (!layer_config_ || !layer_config_->is_visible()) {
-        return false;
-    }
-
-    return layer_config_->handle_event(e);
-
-}
-
-void MapLayersPanel::update_room_list(const Input&, int, int) {
-
-    // Room list currently has no per-frame updates.
-
-}
-
-void MapLayersPanel::update_layer_config(const Input& input, int sw, int sh) {
-
-    if (!layer_config_ || !layer_config_->is_visible()) {
-        return;
-    }
-
-    layer_config_->update(input, sw, sh);
 
 }
 
@@ -6021,6 +5994,14 @@ void MapLayersPanel::show_room_list(bool reset_scroll) {
 
     update_header_visibility_state();
 
+    request_main_panel_layout();
+    if (rooms_container_) {
+        rooms_container_->request_layout();
+    }
+    if (layers_container_) {
+        layers_container_->request_layout();
+    }
+
 }
 
 void MapLayersPanel::show_layer_config(int layer_index) {
@@ -6068,6 +6049,14 @@ void MapLayersPanel::show_layer_config(int layer_index) {
     }
 
     update_header_visibility_state();
+
+    request_main_panel_layout();
+    if (layers_container_) {
+        layers_container_->request_layout();
+    }
+    if (rooms_container_) {
+        rooms_container_->request_layout();
+    }
 
 }
 
@@ -6147,6 +6136,17 @@ void MapLayersPanel::show_room_config(const std::string& room_key) {
     }
 
     update_header_visibility_state();
+
+    request_main_panel_layout();
+    if (room_config_container_) {
+        room_config_container_->request_layout();
+    }
+    if (rooms_container_) {
+        rooms_container_->request_layout();
+    }
+    if (layers_container_) {
+        layers_container_->request_layout();
+    }
 
 }
 

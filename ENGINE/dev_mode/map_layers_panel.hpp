@@ -60,7 +60,6 @@ private:
     class PanelSidebarWidget;
     class RoomListPanel;
     class PreviewToolbarWidget;
-    class PreviewColumnWidget;
     class LayerConfigPanel;
     class RoomCandidateWidget;
     struct PreviewNode;
@@ -134,14 +133,6 @@ private:
     void show_room_list(bool reset_scroll);
     void show_layer_config(int layer_index);
     void show_room_config(const std::string& room_key);
-    int layout_room_list(const SlidingWindowContainer::LayoutContext& ctx);
-    int layout_layer_config(const SlidingWindowContainer::LayoutContext& ctx);
-    void render_room_list(SDL_Renderer* renderer) const;
-    void render_layer_config(SDL_Renderer* renderer) const;
-    bool handle_room_list_event(const SDL_Event& e);
-    bool handle_layer_config_event(const SDL_Event& e);
-    void update_room_list(const Input& input, int sw, int sh);
-    void update_layer_config(const Input& input, int sw, int sh);
     void sync_details_scroll_from(const SlidingWindowContainer* container);
     void apply_details_scroll_to(SlidingWindowContainer* container, bool reset_scroll);
 
@@ -187,19 +178,30 @@ private:
     bool handle_main_panel_event(const SDL_Event& e);
     void handle_main_container_closed();
 
+    void request_main_panel_layout();
+    void update_main_panel_layout_state(int content_width);
+
     std::unique_ptr<SlidingWindowContainer> main_container_;
     std::unique_ptr<SlidingWindowContainer> layers_container_;
     std::unique_ptr<SlidingWindowContainer> rooms_container_;
     std::unique_ptr<SlidingWindowContainer> room_config_container_;
     std::unique_ptr<LayerCanvasWidget> canvas_widget_;
     std::unique_ptr<PreviewToolbarWidget> toolbar_widget_;
-    std::unique_ptr<PreviewColumnWidget> preview_column_widget_;
     std::unique_ptr<PanelSidebarWidget> sidebar_widget_;
     std::unique_ptr<RoomListPanel> room_list_panel_;
     std::unique_ptr<LayerConfigPanel> layer_config_;
     std::unique_ptr<RoomSelectorPopup> room_selector_;
     std::unique_ptr<RoomConfigurator> room_configurator_;
     std::string layer_config_header_text_;
+    struct MainPanelLayoutState {
+        bool stack_vertical = true;
+        int preview_width = 0;
+        int sidebar_width = 0;
+        int last_content_width = -1;
+    };
+
+    MainPanelLayoutState main_panel_layout_state_{};
+
     bool layers_container_visible_ = false;
     bool rooms_container_visible_ = false;
     bool room_config_container_visible_ = false;

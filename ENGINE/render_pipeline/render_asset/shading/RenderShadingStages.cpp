@@ -9,7 +9,6 @@
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
-#include <unordered_map>
 
 #include "render/light_map.hpp"
 
@@ -24,47 +23,6 @@ const ReactiveShadowSettings& reactive_settings_or_default(const StageContext& c
     static const ReactiveShadowSettings defaults =
         sanitize_reactive_shadow_settings(ReactiveShadowSettings{});
     return defaults;
-}
-
-struct ShadowTemporalState {
-    float offset_x = 0.0f;
-    float offset_y = 0.0f;
-    float opacity  = 0.0f;
-};
-
-struct ShadowPersistentState {
-    ShadowTemporalState output{};
-    float               scale = 1.0f;
-    bool                has_output     = false;
-    int                 last_quadrant  = -1;
-    float               last_scale_factor   = 1.0f;
-    float               last_map_line_shift = 0.0f;
-    float               last_parallax_shift = 0.0f;
-};
-
-std::unordered_map<const Asset*, ShadowPersistentState>& shadow_state_cache() {
-    static std::unordered_map<const Asset*, ShadowPersistentState> cache;
-    return cache;
-}
-
-constexpr float kPi     = 3.14159265358979323846f;
-constexpr float kTwoPi  = kPi * 2.0f;
-
-float blend_value(float previous, float target, float smoothing) {
-    return previous * smoothing + target * (1.0f - smoothing);
-}
-
-float compute_map_line_shift(const StageContext& context, int width, float weight) {
-    if (!context.lighting || width <= 0 || weight <= 0.0f || context.screen_width_px <= 0) {
-        return 0.0f;
-    }
-    const float screen_width = static_cast<float>(context.screen_width_px);
-    const SDL_Point light_pos = context.main_light().get_position();
-    const float half_width = std::max(screen_width * 0.5f, 1.0f);
-    const float centered = clampf((static_cast<float>(light_pos.x) - half_width) / half_width, -2.0f, 2.0f);
-    const float light_opacity = static_cast<float>(context.main_light_alpha()) / 255.0f;
-    const float width_scale = static_cast<float>(width) * 0.5f;
-    return centered * light_opacity * weight * width_scale;
 }
 
 float compute_parallax_shift(const StageContext& context, const Asset& asset, int height, float weight) {
@@ -101,12 +59,7 @@ float compute_parallax_shift(const StageContext& context, const Asset& asset, in
 
 }  // namespace
 
-void ClearShadowStateFor(const Asset* asset) {
-    if (!asset) {
-        return;
-    }
-    shadow_state_cache().erase(asset);
-}
+void ClearShadowStateFor(const Asset*) {}
 
 bool RenderAsset::supports(const Asset& asset) const {
     return asset.get_current_frame() != nullptr;
@@ -263,108 +216,62 @@ SDL_Texture* RenderShadowMask::run(SDL_Renderer* renderer, const Asset& asset, S
 
     const ReactiveShadowSettings& cfg = reactive_settings_or_default(context);
 
-    auto&                     state_cache          = shadow_state_cache();
-    ShadowPersistentState&    persistent           = state_cache[&asset];
-    const ShadowTemporalState previous_output      = persistent.output;
-    const float               previous_scale       = persistent.scale;
-    const bool                has_previous_output  = persistent.has_output;
-
     const VirtualLightMap* map = context.virtual_light_map();
-    ShadowTemporalState    target{};
-    target.offset_x = 0.0f;
-    target.offset_y = 0.0f;
-    target.opacity  = context.base_shadow_opacity;
 
-    const float base_scale       = context.base_shadow_scale;
-    const float min_scale_limit  = base_scale * 0.9f;
-    const float max_scale_limit  = base_scale * 2.0f;
-    const float requested_scale_factor = cfg.output.scale_factor;
-    const float safe_scale_factor      = std::max(requested_scale_factor, 1e-4f);
-    const float scaled_min_limit       = min_scale_limit * safe_scale_factor;
-    const float scaled_max_limit       = max_scale_limit * safe_scale_factor;
-    const float limit_min              = std::min(scaled_min_limit, scaled_max_limit);
-    const float limit_max              = std::max(scaled_min_limit, scaled_max_limit);
-    float       target_scale           = base_scale;
+    float opacity = clampf(context.base_shadow_opacity, 0.0f, 1.0f);
+    float offset_x = 0.0f;
+    float offset_y = 0.0f;
+    float scale    = std::max(context.base_shadow_scale * cfg.virtual_light_map.shadow_scale, 0.0f);
 
-    int current_quadrant = -1;
     if (map) {
-        current_quadrant = map->quadrant_for_rect(context.screen_rect);
-    }
-
-    if (map && current_quadrant >= 0) {
-        const auto& cell = map->cell_for_index(current_quadrant);
-        if (cfg.response.enable_opacity) {
-            float clamped = clampf(cell.opacity, cfg.response.min_opacity, cfg.response.max_opacity);
-            target.opacity = clampf(clamped, cfg.response.min_opacity, cfg.response.max_opacity);
-        } else {
-            target.opacity = context.base_shadow_opacity;
+        const int cell_index = map->quadrant_for_rect(context.screen_rect);
+        if (cell_index >= 0) {
+            const auto& cell = map->cell_for_index(cell_index);
+            opacity = clampf(cell.opacity, 0.0f, 1.0f);
+            offset_x = cell.offset_x;
+            offset_y = cell.offset_y;
+            scale    = std::max(context.base_shadow_scale * cell.scale * cfg.virtual_light_map.shadow_scale, 0.0f);
         }
-
-        float offset_strength = cfg.directionality.enable_offsets
-                                     ? std::max(cfg.directionality.offset_strength, 0.0f)
-                                     : 0.0f;
-        const float max_offset_x = static_cast<float>(width) * cfg.directionality.max_offset_ratio;
-        const float max_offset_y = static_cast<float>(height) * cfg.directionality.max_offset_ratio;
-        target.offset_x = clampf(cell.offset_x * offset_strength, -max_offset_x, max_offset_x);
-        target.offset_y = clampf(cell.offset_y * offset_strength, -max_offset_y, max_offset_y);
-
-        target_scale = clampf(base_scale * cell.scale, min_scale_limit, max_scale_limit);
-    } else {
-        if (cfg.response.enable_opacity) {
-            target.opacity = clampf(target.opacity, cfg.response.min_opacity, cfg.response.max_opacity);
-        }
-        target.offset_x = 0.0f;
-        target.offset_y = 0.0f;
-        target_scale    = base_scale;
     }
 
-    float base_offset_x = target.offset_x;
-    float base_offset_y = target.offset_y;
-
-    const float map_line_shift = compute_map_line_shift(context, width, cfg.output.map_line_weight);
-    const float parallax_shift = compute_parallax_shift(context, asset, height, cfg.output.parallax_strength);
-
-    target.offset_x = base_offset_x + map_line_shift + parallax_shift;
-    target.offset_y = base_offset_y;
-    float base_scale_only = clampf(target_scale, min_scale_limit, max_scale_limit);
-    target_scale          = clampf(base_scale_only * safe_scale_factor, limit_min, limit_max);
-
-    const float max_offset_x = static_cast<float>(width) * cfg.directionality.max_offset_ratio;
-    const float max_offset_y = static_cast<float>(height) * cfg.directionality.max_offset_ratio;
-    target.offset_x = clampf(target.offset_x, -max_offset_x, max_offset_x);
-    target.offset_y = clampf(target.offset_y, -max_offset_y, max_offset_y);
-
-    bool quadrant_changed = persistent.last_quadrant != current_quadrant;
-
-    persistent.last_scale_factor   = safe_scale_factor;
-    persistent.last_map_line_shift = map_line_shift;
-    persistent.last_parallax_shift = parallax_shift;
-    persistent.last_quadrant       = current_quadrant;
-
-    ShadowTemporalState output      = target;
-    float               output_scale = target_scale;
-    const float         smoothing = cfg.stability.enable_temporal_smoothing
-                                        ? clampf(cfg.stability.temporal_smoothing, 0.0f, 0.999f)
-                                        : 0.0f;
-    if (smoothing > 0.0f && has_previous_output && !quadrant_changed) {
-        output.offset_x = blend_value(previous_output.offset_x, target.offset_x, smoothing);
-        output.offset_y = blend_value(previous_output.offset_y, target.offset_y, smoothing);
-        output.opacity  = blend_value(previous_output.opacity, target.opacity, smoothing);
-        output_scale    = blend_value(previous_scale, target_scale, smoothing);
+    float asset_scale = 1.0f;
+    if (asset.info && std::isfinite(asset.info->scale_factor) && asset.info->scale_factor >= 0.0f) {
+        asset_scale = asset.info->scale_factor;
+    }
+    const float cam_scale = context.camera_view().get_scale();
+    float       inv_cam   = 1.0f;
+    if (std::isfinite(cam_scale) && cam_scale > 1e-6f) {
+        inv_cam = 1.0f / cam_scale;
     }
 
-    output.offset_x = clampf(output.offset_x, -max_offset_x, max_offset_x);
-    output.offset_y = clampf(output.offset_y, -max_offset_y, max_offset_y);
-    if (cfg.response.enable_opacity) {
-        output.opacity = clampf(output.opacity, cfg.response.min_opacity, cfg.response.max_opacity);
-    } else {
-        output.opacity = context.base_shadow_opacity;
+    const float screen_width  = static_cast<float>(width) * asset_scale * inv_cam;
+    const float screen_height = static_cast<float>(height) * asset_scale * inv_cam;
+    const float reference     = std::max(context.reference_screen_height, 1.0f);
+    float       screen_size   = std::max(screen_width, screen_height);
+    if (!std::isfinite(screen_size) || screen_size <= 0.0f) {
+        screen_size = 1.0f;
     }
-    output_scale = clampf(output_scale, limit_min, limit_max);
 
-    persistent.output    = output;
-    persistent.scale     = output_scale;
-    persistent.has_output = true;
+    const float size_multiplier = std::max(cfg.virtual_light_map.size_scale_factor, 0.0f) * (screen_size / reference);
+    const float offset_length   = std::sqrt((offset_x * offset_x) + (offset_y * offset_y));
+    if (offset_length > 0.0f && size_multiplier > 0.0f) {
+        const float dir_x = offset_x / offset_length;
+        const float dir_y = offset_y / offset_length;
+        const float scaled_length = offset_length * size_multiplier;
+        offset_x = dir_x * scaled_length;
+        offset_y = dir_y * scaled_length;
+    } else if (size_multiplier <= 0.0f) {
+        offset_x = 0.0f;
+        offset_y = 0.0f;
+    }
+
+    const float parallax_shift = compute_parallax_shift(context, asset, height, 1.0f);
+    offset_x += parallax_shift;
+
+    const float max_offset_x = std::max(cfg.virtual_light_map.max_offset_x, 0.0f);
+    const float max_offset_y = std::max(cfg.virtual_light_map.max_offset_y, 0.0f);
+    offset_x                 = clampf(offset_x, -max_offset_x, max_offset_x);
+    offset_y                 = clampf(offset_y, -max_offset_y, max_offset_y);
 
     SDL_Texture* mask_texture = nullptr;
     const auto& scale_usage   = asset.last_scale_usage();
@@ -397,14 +304,14 @@ SDL_Texture* RenderShadowMask::run(SDL_Renderer* renderer, const Asset& asset, S
 
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
     SDL_SetTextureBlendMode(mask_texture, SDL_BLENDMODE_BLEND);
-    const Uint8 shade_alpha = static_cast<Uint8>(std::lround(output.opacity * 255.0f));
+    const Uint8 shade_alpha = static_cast<Uint8>(std::lround(opacity * 255.0f));
     SDL_SetTextureColorMod(mask_texture, 0, 0, 0);
     SDL_SetTextureAlphaMod(mask_texture, shade_alpha);
 
-    const int scaled_w = std::max(1, static_cast<int>(std::lround(static_cast<float>(width) * output_scale)));
-    const int scaled_h = std::max(1, static_cast<int>(std::lround(static_cast<float>(height) * output_scale)));
-    const int offset_px_x = static_cast<int>(std::lround(output.offset_x));
-    const int offset_px_y = static_cast<int>(std::lround(output.offset_y));
+    const int scaled_w   = std::max(1, static_cast<int>(std::lround(static_cast<float>(width) * scale)));
+    const int scaled_h   = std::max(1, static_cast<int>(std::lround(static_cast<float>(height) * scale)));
+    const int offset_px_x = static_cast<int>(std::lround(offset_x));
+    const int offset_px_y = static_cast<int>(std::lround(offset_y));
     const SDL_Point anchor{ width / 2, height / 2 };
     SDL_Rect dest{ anchor.x - scaled_w / 2 + offset_px_x,
                    anchor.y - scaled_h / 2 + offset_px_y,

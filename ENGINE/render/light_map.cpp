@@ -438,18 +438,18 @@ void LightMap::compute_virtual_light_map(SDL_Renderer* renderer) {
                 cell.scale      = 1.0f;
         }
 
-        const render_pipeline::shading::ReactiveShadowSettings* reactive_settings =
-                assets_ ? assets_->reactive_shadow_settings() : nullptr;
-        render_pipeline::shading::ReactiveShadowSettings::VirtualLightMapSettings vlm_settings{};
-        if (reactive_settings) {
-                vlm_settings = reactive_settings->virtual_light_map;
+        const render_pipeline::shading::ReactiveShadowSettings default_settings =
+                render_pipeline::shading::sanitize_reactive_shadow_settings({});
+        render_pipeline::shading::ReactiveShadowSettings vlm_settings = default_settings;
+        if (const auto* reactive_settings = assets_ ? assets_->reactive_shadow_settings() : nullptr) {
+                vlm_settings = render_pipeline::shading::sanitize_reactive_shadow_settings(*reactive_settings);
         }
 
         const auto metrics = virtual_light_map_.grid_metrics();
         const float cell_width  = metrics ? metrics->cell_width : 1.0f;
         const float cell_height = metrics ? metrics->cell_height : 1.0f;
 
-        const float map_light_factor = std::clamp(vlm_settings.map_light_factor, 0.0f, 1.0f);
+        const float map_light_factor = std::clamp(vlm_settings.virtual_light_map.map_light_factor, 0.0f, 1.0f);
         const float attenuation      = std::clamp(1.0f - map_light_factor, 0.0f, 1.0f);
 
         const Global_Light_Source* map_light = assets_ ? assets_->map_light_source() : nullptr;
@@ -538,11 +538,11 @@ void LightMap::compute_virtual_light_map(SDL_Renderer* renderer) {
                 trace_grid(start, end);
         }
 
-        const float horizontal_falloff = std::max(vlm_settings.horizontal_falloff, 0.0f);
-        const float vertical_falloff   = std::max(vlm_settings.vertical_falloff, 0.0f);
-        const float max_offset_x       = std::max(vlm_settings.max_offset_x, 0.0f);
-        const float max_offset_y       = std::max(vlm_settings.max_offset_y, 0.0f);
-        const float cell_shadow_scale  = std::max(vlm_settings.shadow_scale, 0.0f);
+        const float horizontal_falloff = std::max(vlm_settings.virtual_light_map.horizontal_falloff, 0.0f);
+        const float vertical_falloff   = std::max(vlm_settings.virtual_light_map.vertical_falloff, 0.0f);
+        const float max_offset_x       = std::max(vlm_settings.virtual_light_map.max_offset_x, 0.0f);
+        const float max_offset_y       = std::max(vlm_settings.virtual_light_map.max_offset_y, 0.0f);
+        const float cell_shadow_scale  = std::max(vlm_settings.virtual_light_map.shadow_scale, 0.0f);
 
         auto weight_for_delta = [&](float dx, float dy) {
                 const float weight_x = (horizontal_falloff > 0.0f)

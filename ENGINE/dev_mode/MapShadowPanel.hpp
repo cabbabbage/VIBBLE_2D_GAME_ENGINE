@@ -1,6 +1,5 @@
 #pragma once
 
-#include <array>
 #include <functional>
 #include <memory>
 #include <optional>
@@ -48,21 +47,15 @@ private:
     void update_save_status(bool success) const;
     void build_ui();
     void rebuild_rows();
-    void update_section_header_labels();
     void sync_ui_from_json();
     void sync_json_from_ui();
     void apply_immediate_settings();
     render_pipeline::shading::ReactiveShadowSettings current_settings_from_ui() const;
     void set_reactive_sliders(const render_pipeline::shading::ReactiveShadowSettings& settings);
-    void set_reactive_checkboxes(const render_pipeline::shading::ReactiveShadowSettings& settings);
     render_pipeline::shading::ReactiveShadowSettings load_reactive_settings_from_dev_settings() const;
     void persist_reactive_settings_to_dev_settings(const render_pipeline::shading::ReactiveShadowSettings& settings) const;
     void write_reactive_settings_to_json(const render_pipeline::shading::ReactiveShadowSettings& settings);
     nlohmann::json& ensure_reactive_settings_json();
-
-    void toggle_opacity_section();
-    void toggle_placement_section();
-    void toggle_scale_section();
 
     void render_light_map_preview(SDL_Renderer* renderer) const;
     const VirtualLightMap* current_virtual_light_map() const;
@@ -82,36 +75,10 @@ private:
     std::unique_ptr<DMSlider> max_offset_x_;
     std::unique_ptr<DMSlider> max_offset_y_;
     std::unique_ptr<DMSlider> shadow_scale_;
-
-    std::unique_ptr<DMCheckbox> reactive_offsets_enabled_;
-    std::unique_ptr<DMCheckbox> reactive_opacity_enabled_;
-    std::unique_ptr<DMCheckbox> reactive_temporal_enabled_;
-
-    std::unique_ptr<DMSlider> reactive_kernel_radius_;
-    std::unique_ptr<DMSlider> reactive_outer_ring_weight_;
-    std::unique_ptr<DMSlider> reactive_diagonal_weight_;
-    std::unique_ptr<DMSlider> reactive_gradient_sensitivity_;
-    std::unique_ptr<DMSlider> reactive_offset_strength_;
-    std::unique_ptr<DMSlider> reactive_max_offset_ratio_;
-    std::unique_ptr<DMSlider> reactive_front_weight_;
-    std::unique_ptr<DMSlider> reactive_side_weight_;
-    std::unique_ptr<DMSlider> reactive_back_weight_;
-    std::unique_ptr<DMSlider> reactive_scale_factor_;
-    std::unique_ptr<DMSlider> reactive_map_line_weight_;
-    std::unique_ptr<DMSlider> reactive_parallax_strength_;
-    std::unique_ptr<DMSlider> reactive_opacity_strength_;
-    std::unique_ptr<DMSlider> reactive_min_opacity_;
-    std::unique_ptr<DMSlider> reactive_max_opacity_;
-    std::unique_ptr<DMSlider> reactive_temporal_smoothing_;
-    std::unique_ptr<DMSlider> reactive_front_opacity_boost_;
-    std::unique_ptr<DMSlider> reactive_similarity_threshold_;
+    std::unique_ptr<DMSlider> size_scale_factor_;
 
     std::unique_ptr<DMButton> opacity_section_btn_;
-    std::unique_ptr<DMButton> placement_section_btn_;
-    std::unique_ptr<DMButton> scale_section_btn_;
     bool opacity_section_collapsed_ = false;
-    bool placement_section_collapsed_ = false;
-    bool scale_section_collapsed_ = false;
 
     std::vector<std::unique_ptr<Widget>> widget_wrappers_;
 

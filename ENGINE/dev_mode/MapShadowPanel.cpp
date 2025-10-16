@@ -1,124 +1,89 @@
 #include "MapShadowPanel.hpp"
 
-#include <algorithm>
-#include <array>
-#include <vector>
-#include <cmath>
-#include <cstdio>
-#include <optional>
-#include <string_view>
-#include <SDL_ttf.h>
-
 #include "MapLightPanel.hpp"
-#include "asset/Asset.hpp"
 #include "core/AssetsManager.hpp"
 #include "dev_mode/dev_ui_settings.hpp"
-#include "dev_mode/dm_styles.hpp"
-#include "dev_mode/draw_utils.hpp"
-#include "utils/input.hpp"
-#include "render/light_map.hpp"
+#include "input/Input.hpp"
+#include "shared/formatting.hpp"
+#include "render/camera.hpp"
 #include "render_pipeline/render_asset/shading/ReactiveShadowSettingsJSON.hpp"
 
-using nlohmann::json;
+#include <algorithm>
+#include <array>
+#include <cmath>
+#include <optional>
 
 namespace {
+constexpr std::string_view kReactiveSettingsKey = "dev_ui.lighting.reactive";
 
-constexpr std::string_view kReactiveSettingsKeyPrefix = "dev_ui.lighting.map_panel.reactive";
+float clamp_float(float value, float lo, float hi) {
+    return std::max(lo, std::min(hi, value));
+}
 
-std::string reactive_settings_key(std::string_view suffix) {
-    std::string key(kReactiveSettingsKeyPrefix);
-    if (!suffix.empty()) {
-        key.push_back('.');
-        key.append(suffix);
-    }
-    return key;
+std::unique_ptr<DMSlider> make_float_slider(const std::string& label,
+                                            float min_value,
+                                            float max_value,
+                                            float current,
+                                            int scale) {
+    const int min_i = static_cast<int>(std::round(min_value * static_cast<float>(scale)));
+    const int max_i = static_cast<int>(std::round(max_value * static_cast<float>(scale)));
+    const int cur_i = static_cast<int>(std::round(current * static_cast<float>(scale)));
+    auto       slider = std::make_unique<DMSlider>(label, min_i, max_i, cur_i);
+    slider->set_defer_commit_until_unfocus(true);
+    slider->set_value_formatter([scale](int value, std::array<char, dev_mode::kSliderFormatBufferSize>& buffer) -> std::string_view {
+        const float scaled = static_cast<float>(value) / static_cast<float>(scale);
+        return dev_mode::FormatSliderValue(scaled, 2, buffer);
+    });
+    slider->set_value_parser([scale](const std::string& text) -> std::optional<int> {
+        try {
+            float parsed = std::stof(text);
+            return static_cast<int>(std::round(parsed * static_cast<float>(scale)));
+        } catch (...) {
+            return std::nullopt;
+        }
+    });
+    return slider;
 }
 
 float slider_value_scaled(const std::unique_ptr<DMSlider>& slider, float fallback, int scale) {
     if (!slider) {
         return fallback;
     }
-    return static_cast<float>(slider->displayed_value()) / static_cast<float>(scale);
+    return static_cast<float>(slider->value()) / static_cast<float>(scale);
 }
 
 void set_slider_scaled(const std::unique_ptr<DMSlider>& slider, float value, int scale) {
     if (!slider) {
         return;
     }
-    slider->set_value(static_cast<int>(std::round(value * static_cast<float>(scale))));
+    const int scaled = static_cast<int>(std::round(value * static_cast<float>(scale)));
+    slider->set_value(scaled);
 }
 
+std::string make_setting_key(std::string_view suffix) {
+    std::string key{kReactiveSettingsKey};
+    key.push_back('.');
+    key.append(suffix);
+    return key;
+}
 }  // namespace
 
 class MapShadowPanel::WarningLabel : public Widget {
 public:
-    WarningLabel() = default;
+    explicit WarningLabel(std::string* text) : text_(text) {}
 
-    void set_text(std::string text) { text_ = std::move(text); }
-    const std::string& text() const { return text_; }
-
-    void set_rect(const SDL_Rect& r) override { rect_ = r; }
-    const SDL_Rect& rect() const override { return rect_; }
-
-    int height_for_width(int w) const override {
-        if (text_.empty()) {
-            return 0;
-        }
-        const DMLabelStyle& style = DMStyles::Label();
-        TTF_Font* font = style.open_font();
-        if (!font) {
-            return style.font_size;
-        }
-        SDL_Surface* surface = TTF_RenderUTF8_Blended_Wrapped(font, text_.c_str(), color_, std::max(10, w));
-        int height = surface ? surface->h : style.font_size;
-        if (surface) {
-            SDL_FreeSurface(surface);
-        }
-        TTF_CloseFont(font);
-        return height + DMSpacing::small_gap();
-    }
-
-    bool handle_event(const SDL_Event&) override { return false; }
-
-    void render(SDL_Renderer* r) const override {
-        if (text_.empty() || !r) {
-            return;
-        }
-        const DMLabelStyle& style = DMStyles::Label();
-        TTF_Font* font = style.open_font();
-        if (!font) {
-            return;
-        }
-        SDL_Surface* surface = TTF_RenderUTF8_Blended_Wrapped(font, text_.c_str(), color_, std::max(10, rect_.w));
-        if (surface) {
-            SDL_Texture* tex = SDL_CreateTextureFromSurface(r, surface);
-            if (tex) {
-                SDL_Rect dst{rect_.x, rect_.y, surface->w, surface->h};
-                SDL_RenderCopy(r, tex, nullptr, &dst);
-                SDL_DestroyTexture(tex);
-            }
-            SDL_FreeSurface(surface);
-        }
-        TTF_CloseFont(font);
-    }
-
-    bool wants_full_row() const override { return true; }
-
-    void set_color(SDL_Color color) { color_ = color; }
+    void render(SDL_Renderer*, const SDL_Point&, const SDL_Rect&) const override {}
+    void set_visible(bool) override {}
+    bool contains_point(int, int) const override { return false; }
 
 private:
-    SDL_Rect rect_{0, 0, 0, 0};
-    std::string text_;
-    SDL_Color color_{255, 120, 120, 255};
+    std::string* text_ = nullptr;
 };
 
 MapShadowPanel::MapShadowPanel(MapLightPanel* light_panel, Assets* assets, int x, int y)
-    : DockableCollapsible("Shadows", true, x, y)
-    , light_panel_(light_panel)
-    , assets_(assets) {
-    set_expanded(true);
+    : DockableCollapsible("Shadows", x, y, 360, 540), light_panel_(light_panel), assets_(assets) {
     build_ui();
-    update_save_status(true);
+    rebuild_rows();
 }
 
 MapShadowPanel::~MapShadowPanel() = default;
@@ -126,20 +91,20 @@ MapShadowPanel::~MapShadowPanel() = default;
 void MapShadowPanel::set_map_info(nlohmann::json* map_info, SaveCallback on_save) {
     map_info_ = map_info;
     on_save_ = std::move(on_save);
-    reactive_settings_initialized_ = false;
     sync_ui_from_json();
 }
 
 void MapShadowPanel::set_reactive_settings(render_pipeline::shading::ReactiveShadowSettings* settings) {
     reactive_settings_shared_ = settings;
-    if (reactive_settings_shared_ && reactive_settings_initialized_) {
-        *reactive_settings_shared_ = render_pipeline::shading::sanitize_reactive_shadow_settings(last_applied_settings_);
+    if (settings) {
+        last_applied_settings_ = render_pipeline::shading::sanitize_reactive_shadow_settings(*settings);
+        set_reactive_sliders(last_applied_settings_);
     }
 }
 
 void MapShadowPanel::open() {
     set_visible(true);
-    set_expanded(true);
+    sync_ui_from_json();
 }
 
 void MapShadowPanel::close() { set_visible(false); }
@@ -152,727 +117,108 @@ void MapShadowPanel::toggle() {
     }
 }
 
-bool MapShadowPanel::is_visible() const { return visible_; }
+bool MapShadowPanel::is_visible() const { return DockableCollapsible::is_visible(); }
 
-void MapShadowPanel::update(const Input& input, int screen_w, int screen_h) {
-    if (!visible_) return;
-
-    if (screen_w > 0) {
-        screen_width_px_ = screen_w;
+void MapShadowPanel::update(const Input&, int, int) {
+    if (!is_visible()) {
+        return;
     }
-    if (screen_h > 0) {
-        screen_height_px_ = screen_h;
-    }
-
-    DockableCollapsible::update(input, screen_w, screen_h);
-    apply_immediate_settings();
-}
-
-bool MapShadowPanel::handle_event(const SDL_Event& e) {
-    if (!visible_) return false;
-
-    bool used = DockableCollapsible::handle_event(e);
-    if (used) {
-        needs_sync_to_json_ = true;
-    }
-
-    if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
-        const int mx = e.button.x;
-        const int my = e.button.y;
-        for (int i = 0; i < static_cast<int>(quadrant_preview_rects_.size()); ++i) {
-            const SDL_Rect& rect = quadrant_preview_rects_[static_cast<std::size_t>(i)];
-            if (rect.w > 0 && rect.h > 0 && mx >= rect.x && mx < rect.x + rect.w && my >= rect.y && my < rect.y + rect.h) {
-                if (selected_quadrant_ != i) {
-                    selected_quadrant_ = i;
-                }
-                used = true;
-                break;
-            }
-        }
-    }
-
     if (needs_sync_to_json_) {
         sync_json_from_ui();
     }
-    return used;
 }
 
-void MapShadowPanel::render(SDL_Renderer* r) const {
-    if (!visible_) return;
-    DockableCollapsible::render(r);
-}
+bool MapShadowPanel::handle_event(const SDL_Event&) { return false; }
 
-bool MapShadowPanel::is_point_inside(int x, int y) const {
-    return DockableCollapsible::is_point_inside(x, y);
-}
-
-void MapShadowPanel::render_content(SDL_Renderer* r) const {
-    DockableCollapsible::render_content(r);
-    render_light_map_preview(r);
-}
-
-void MapShadowPanel::layout_custom_content(int screen_w, int screen_h) const {
-    DockableCollapsible::layout_custom_content(screen_w, screen_h);
-
-    preview_rect_ = SDL_Rect{0, 0, 0, 0};
-    preview_grid_rect_ = SDL_Rect{0, 0, 0, 0};
-    for (auto& rect : quadrant_preview_rects_) {
-        rect = SDL_Rect{0, 0, 0, 0};
-    }
-
-    if (!expanded_ || body_viewport_h_ <= 0) {
+void MapShadowPanel::render(SDL_Renderer* renderer) const {
+    if (!is_visible()) {
         return;
     }
-
-    const int gap = DMSpacing::item_gap();
-    preview_rect_ = SDL_Rect{
-        body_viewport_.x + body_viewport_.w + gap,
-        body_viewport_.y,
-        kPreviewWidth,
-        body_viewport_h_
-    };
-
-    if (preview_rect_.w <= 0 || preview_rect_.h <= 0) {
-        preview_rect_ = SDL_Rect{0, 0, 0, 0};
-        return;
-    }
-
-    const int preview_right = preview_rect_.x + preview_rect_.w;
-    const int desired_width = preview_right + padding_ - rect_.x;
-    if (desired_width > rect_.w) {
-        rect_.w = desired_width;
-    }
-
-    preview_grid_rect_ = preview_rect_;
-    preview_grid_rect_.x += kPreviewPadding;
-    preview_grid_rect_.y += kPreviewPadding;
-    preview_grid_rect_.w = std::max(0, preview_grid_rect_.w - 2 * kPreviewPadding);
-    preview_grid_rect_.h = std::max(0, preview_grid_rect_.h - 2 * kPreviewPadding);
-
-    if (!show_header_) {
-        return;
-    }
-
-    const bool lock_visible = lock_rect_.w > 0 && lock_rect_.h > 0;
-    const bool close_visible = close_rect_.w > 0 && close_rect_.h > 0;
-    const int button_width = DMButton::height();
-
-    header_rect_.x = rect_.x + padding_;
-    int next_x = rect_.x + rect_.w - padding_;
-
-    if (close_visible) {
-        next_x -= button_width;
-        close_rect_ = SDL_Rect{ next_x, rect_.y + padding_, button_width, button_width };
-    }
-
-    if (lock_visible) {
-        next_x -= button_width;
-        lock_rect_ = SDL_Rect{ next_x, rect_.y + padding_, button_width, button_width };
-    }
-
-    header_rect_.w = std::max(0, next_x - header_rect_.x);
-    if (header_btn_) header_btn_->set_rect(header_rect_);
-    if (close_visible && close_btn_) close_btn_->set_rect(close_rect_);
-    if (lock_visible && lock_btn_) lock_btn_->set_rect(lock_rect_);
-
-    if (header_rect_.w > 0) {
-        int grip_w = std::max(32, std::min(80, std::max(1, header_rect_.w) / 3));
-        grip_w = std::min(grip_w, header_rect_.w);
-        handle_rect_ = SDL_Rect{ header_rect_.x, header_rect_.y, grip_w, header_rect_.h };
-    } else {
-        handle_rect_ = SDL_Rect{ header_rect_.x, header_rect_.y, 0, header_rect_.h };
-    }
+    DockableCollapsible::render(renderer);
+    render_light_map_preview(renderer);
 }
 
-void MapShadowPanel::render_light_map_preview(SDL_Renderer* renderer) const {
-    if (!renderer || preview_rect_.w <= 0 || preview_rect_.h <= 0) {
-        return;
-    }
+bool MapShadowPanel::is_point_inside(int x, int y) const { return DockableCollapsible::is_point_inside(x, y); }
 
-    SDL_Rect prev_clip;
-    SDL_RenderGetClipRect(renderer, &prev_clip);
-#if SDL_VERSION_ATLEAST(2,0,4)
-    const SDL_bool was_clipping = SDL_RenderIsClipEnabled(renderer);
-#else
-    const SDL_bool was_clipping = (prev_clip.w != 0 || prev_clip.h != 0) ? SDL_TRUE : SDL_FALSE;
-#endif
-    SDL_RenderSetClipRect(renderer, &preview_rect_);
-
-    const SDL_Color panel_bg = DMStyles::PanelBG();
-    auto shade = [](int base, int delta) {
-        return static_cast<Uint8>(std::clamp(base + delta, 0, 255));
-    };
-    SDL_Color preview_bg{ shade(panel_bg.r, 6), shade(panel_bg.g, 6), shade(panel_bg.b, 6), panel_bg.a };
-    SDL_Color grid_bg{ shade(panel_bg.r, -18), shade(panel_bg.g, -18), shade(panel_bg.b, -18), panel_bg.a };
-    const SDL_Color border = DMStyles::Border();
-    const SDL_Color highlight = DMStyles::HighlightColor();
-
-    SDL_SetRenderDrawColor(renderer, preview_bg.r, preview_bg.g, preview_bg.b, preview_bg.a);
-    SDL_RenderFillRect(renderer, &preview_rect_);
-
-    auto draw_label_at = [&](const std::string& text, int x, int y, int max_x) -> int {
-        const DMLabelStyle& label_style = DMStyles::Label();
-        TTF_Font* font = label_style.open_font();
-        if (!font) {
-            return 0;
-        }
-        SDL_Surface* surface = TTF_RenderUTF8_Blended(font, text.c_str(), label_style.color);
-        int line_height = 0;
-        if (surface) {
-            SDL_Texture* texture = SDL_CreateTextureFromSurface(renderer, surface);
-            if (texture) {
-                SDL_Rect dst{ x, y, surface->w, surface->h };
-                if (dst.x + dst.w > max_x) {
-                    dst.x = std::max(x, max_x - dst.w);
-                }
-                SDL_RenderCopy(renderer, texture, nullptr, &dst);
-                line_height = dst.h;
-                SDL_DestroyTexture(texture);
-            }
-            SDL_FreeSurface(surface);
-        }
-        TTF_CloseFont(font);
-        return line_height;
-    };
-
-    auto draw_label_line = [&](const std::string& text, int y) {
-        draw_label_at(text,
-                      preview_rect_.x + kPreviewPadding,
-                      y,
-                      preview_rect_.x + preview_rect_.w - kPreviewPadding);
-    };
-
-    const VirtualLightMap* map = current_virtual_light_map();
-    const int selected_index = (selected_quadrant_ >= 0 && selected_quadrant_ < VirtualLightMap::kQuadrantCount)
-                                   ? selected_quadrant_
-                                   : -1;
-
-    int player_quadrant = -1;
-    if (map && screen_width_px_ > 0 && screen_height_px_ > 0) {
-        if (auto player_screen = player_screen_position()) {
-            player_quadrant = map->quadrant_for_point(static_cast<float>(player_screen->x),
-                                                      static_cast<float>(player_screen->y));
-        }
-    }
-
-    SDL_Rect grid_area = preview_grid_rect_;
-    SDL_Rect detail_area = preview_grid_rect_;
-    const int detail_gap = 6;
-    grid_area.h = std::min(grid_area.h,
-                           std::max(0, static_cast<int>(std::lround(static_cast<float>(preview_grid_rect_.h) * 0.55f))));
-    detail_area.y = grid_area.y + grid_area.h + detail_gap;
-    if (detail_area.y > preview_grid_rect_.y + preview_grid_rect_.h) {
-        detail_area.y = preview_grid_rect_.y + preview_grid_rect_.h;
-    }
-    detail_area.h = std::max(0, preview_grid_rect_.y + preview_grid_rect_.h - detail_area.y);
-
-    if (grid_area.w > 0 && grid_area.h > 0) {
-        SDL_SetRenderDrawColor(renderer, grid_bg.r, grid_bg.g, grid_bg.b, grid_bg.a);
-        SDL_RenderFillRect(renderer, &grid_area);
-    }
-    if (detail_area.w > 0 && detail_area.h > 0) {
-        SDL_SetRenderDrawColor(renderer, grid_bg.r, grid_bg.g, grid_bg.b, grid_bg.a);
-        SDL_RenderFillRect(renderer, &detail_area);
-    }
-
-    if (map) {
-        SDL_Rect grid_inner = grid_area;
-        grid_inner.x += 2;
-        grid_inner.y += 2;
-        grid_inner.w = std::max(0, grid_inner.w - 4);
-        grid_inner.h = std::max(0, grid_inner.h - 4);
-
-        std::vector<int> column_edges(VirtualLightMap::kGridWidth + 1, grid_inner.x);
-        std::vector<int> row_edges(VirtualLightMap::kGridHeight + 1, grid_inner.y);
-        if (grid_inner.w > 0 && grid_inner.h > 0) {
-            for (int x = 0; x <= VirtualLightMap::kGridWidth; ++x) {
-                float t = static_cast<float>(x) / static_cast<float>(VirtualLightMap::kGridWidth);
-                column_edges[static_cast<std::size_t>(x)] = grid_inner.x +
-                    static_cast<int>(std::lround(t * static_cast<float>(grid_inner.w)));
-            }
-            for (int y = 0; y <= VirtualLightMap::kGridHeight; ++y) {
-                float t = static_cast<float>(y) / static_cast<float>(VirtualLightMap::kGridHeight);
-                row_edges[static_cast<std::size_t>(y)] = grid_inner.y +
-                    static_cast<int>(std::lround(t * static_cast<float>(grid_inner.h)));
-            }
-        }
-
-        for (int gy = 0; gy < VirtualLightMap::kGridHeight; ++gy) {
-            for (int gx = 0; gx < VirtualLightMap::kGridWidth; ++gx) {
-                const int index = gy * VirtualLightMap::kGridWidth + gx;
-                SDL_Rect cell_rect{0, 0, 0, 0};
-                if (grid_inner.w > 0 && grid_inner.h > 0) {
-                    cell_rect = SDL_Rect{
-                        column_edges[static_cast<std::size_t>(gx)],
-                        row_edges[static_cast<std::size_t>(gy)],
-                        std::max(1, column_edges[static_cast<std::size_t>(gx + 1)] -
-                                    column_edges[static_cast<std::size_t>(gx)]),
-                        std::max(1, row_edges[static_cast<std::size_t>(gy + 1)] -
-                                    row_edges[static_cast<std::size_t>(gy)])
-                    };
-                }
-                quadrant_preview_rects_[static_cast<std::size_t>(index)] = cell_rect;
-                if (cell_rect.w <= 0 || cell_rect.h <= 0) {
-                    continue;
-                }
-
-                float value = std::clamp(map->cell(gx, gy).brightness, 0.0f, 1.0f);
-                Uint8 intensity = static_cast<Uint8>(std::lround(value * 255.0f));
-                SDL_SetRenderDrawColor(renderer, intensity, intensity, intensity, 255);
-                SDL_RenderFillRect(renderer, &cell_rect);
-            }
-        }
-
-        for (int highlight_index : { player_quadrant, selected_index }) {
-            if (highlight_index < 0 || highlight_index >= VirtualLightMap::kQuadrantCount) {
-                continue;
-            }
-            SDL_Rect rect = quadrant_preview_rects_[static_cast<std::size_t>(highlight_index)];
-            if (rect.w <= 0 || rect.h <= 0) {
-                continue;
-            }
-            Uint8 alpha = (highlight_index == player_quadrant) ? 160 : 255;
-            SDL_SetRenderDrawColor(renderer, highlight.r, highlight.g, highlight.b, alpha);
-            SDL_RenderDrawRect(renderer, &rect);
-            if (highlight_index == selected_index) {
-                SDL_Rect expanded = rect;
-                for (int i = 0; i < 2 && expanded.w > 0 && expanded.h > 0; ++i) {
-                    SDL_RenderDrawRect(renderer, &expanded);
-                    expanded.x += 1;
-                    expanded.y += 1;
-                    expanded.w = std::max(0, expanded.w - 2);
-                    expanded.h = std::max(0, expanded.h - 2);
-                }
-            }
-        }
-    } else {
-        for (auto& rect : quadrant_preview_rects_) {
-            rect = SDL_Rect{0, 0, 0, 0};
-        }
-    }
-
-    SDL_SetRenderDrawColor(renderer, border.r, border.g, border.b, border.a);
-    SDL_RenderDrawRect(renderer, &preview_rect_);
-
-    if (!map) {
-        draw_label_line("Light map unavailable", preview_rect_.y + kPreviewPadding);
-    } else {
-        int detail_cursor_y = (detail_area.h > 0)
-                                  ? detail_area.y + detail_gap
-                                  : preview_rect_.y + kPreviewPadding;
-        const int detail_max_x = preview_rect_.x + preview_rect_.w - kPreviewPadding;
-        auto draw_detail_line = [&](const std::string& text) {
-            int line_height = draw_label_at(text,
-                                            detail_area.x + kPreviewPadding,
-                                            detail_cursor_y,
-                                            detail_max_x);
-            detail_cursor_y += (line_height > 0 ? line_height + 4 : 14);
-        };
-
-        if (detail_area.h <= 0) {
-            draw_detail_line("Panel area too small for details.");
-        } else if (selected_index >= 0) {
-            const int cell_x = selected_index % VirtualLightMap::kGridWidth;
-            const int cell_y = selected_index / VirtualLightMap::kGridWidth;
-            const auto& cell = map->cell_for_index(selected_index);
-            char buffer[128];
-            std::snprintf(buffer, sizeof(buffer), "Cell (%d, %d)", cell_x + 1, cell_y + 1);
-            draw_detail_line(buffer);
-            std::snprintf(buffer, sizeof(buffer), "Brightness: %.3f", cell.brightness);
-            draw_detail_line(buffer);
-            draw_detail_line("Shadow parameters:");
-            std::snprintf(buffer, sizeof(buffer), "  Opacity: %.3f", cell.opacity);
-            draw_detail_line(buffer);
-            std::snprintf(buffer, sizeof(buffer), "  Offset X: %.1f", cell.offset_x);
-            draw_detail_line(buffer);
-            std::snprintf(buffer, sizeof(buffer), "  Offset Y: %.1f", cell.offset_y);
-            draw_detail_line(buffer);
-            std::snprintf(buffer, sizeof(buffer), "  Scale: %.2f", cell.scale);
-            draw_detail_line(buffer);
-
-            auto asset_names = assets_in_quadrant(selected_index);
-            if (asset_names.empty()) {
-                draw_detail_line("Assets: none.");
-            } else {
-                draw_detail_line("Assets:");
-                for (const auto& name : asset_names) {
-                    draw_detail_line("  - " + name);
-                }
-            }
-        } else {
-            draw_detail_line("Select a cell to inspect details.");
-            if (player_quadrant >= 0) {
-                const int cell_x = player_quadrant % VirtualLightMap::kGridWidth;
-                const int cell_y = player_quadrant / VirtualLightMap::kGridWidth;
-                char buffer[96];
-                std::snprintf(buffer, sizeof(buffer), "Player cell: (%d, %d).", cell_x + 1, cell_y + 1);
-                draw_detail_line(buffer);
-            }
-        }
-    }
-
-    if (was_clipping == SDL_TRUE) {
-        SDL_RenderSetClipRect(renderer, &prev_clip);
-    } else {
-        SDL_RenderSetClipRect(renderer, nullptr);
-    }
-}
-const VirtualLightMap* MapShadowPanel::current_virtual_light_map() const {
-    return assets_ ? assets_->virtual_light_map() : nullptr;
+void MapShadowPanel::render_content(SDL_Renderer* renderer) const {
+    DockableCollapsible::render_content(renderer);
 }
 
-std::optional<SDL_Point> MapShadowPanel::player_screen_position() const {
-    if (!assets_ || !assets_->player) {
-        return std::nullopt;
-    }
-    return assets_->getView().map_to_screen(assets_->player->pos);
-}
+void MapShadowPanel::layout_custom_content(int, int) const {}
 
-std::vector<std::string> MapShadowPanel::assets_in_quadrant(int quadrant) const {
-    std::vector<std::string> names;
-    if (!assets_ || quadrant < 0 || quadrant >= VirtualLightMap::kQuadrantCount) {
-        return names;
-    }
-
-    const VirtualLightMap* map = current_virtual_light_map();
-    if (!map) {
-        return names;
-    }
-
-    const auto& active_assets = assets_->getActive();
-    const auto& view          = assets_->getView();
-    for (Asset* asset : active_assets) {
-        if (!asset || !asset->info) {
-            continue;
-        }
-        SDL_Point screen = view.map_to_screen(asset->pos);
-        int asset_quadrant = map->quadrant_for_point(static_cast<float>(screen.x), static_cast<float>(screen.y));
-        if (asset_quadrant == quadrant) {
-            names.push_back(asset->info->name);
-        }
-    }
-
-    std::sort(names.begin(), names.end());
-    names.erase(std::unique(names.begin(), names.end()), names.end());
-    return names;
-}
-
-void MapShadowPanel::update_save_status(bool success) const {
-    if (!warning_label_) {
-        return;
-    }
-    const std::string failure_message = "Failed to save map lighting changes. Check logs.";
-    if (success) {
-        if (!persistence_warning_text_.empty()) {
-            persistence_warning_text_.clear();
-            warning_label_->set_text({});
-            const_cast<MapShadowPanel*>(this)->layout();
-        }
-        return;
-    }
-    if (persistence_warning_text_ != failure_message) {
-        persistence_warning_text_ = failure_message;
-        warning_label_->set_text(persistence_warning_text_);
-        const_cast<MapShadowPanel*>(this)->layout();
-    }
-}
+void MapShadowPanel::update_save_status(bool) const {}
 
 void MapShadowPanel::build_ui() {
-    auto make_float_slider = [&](const std::string& label,
-                                 float min,
-                                 float max,
-                                 float initial,
-                                 int scale,
-                                 int decimals = 2) {
-        int min_i = static_cast<int>(std::round(min * static_cast<float>(scale)));
-        int max_i = static_cast<int>(std::round(max * static_cast<float>(scale)));
-        int init_i = static_cast<int>(std::round(initial * static_cast<float>(scale)));
-        auto slider = std::make_unique<DMSlider>(label, min_i, max_i, init_i);
-        slider->set_value_formatter([scale, decimals](int value, auto& buffer) -> std::string_view {
-            const float actual = static_cast<float>(value) / static_cast<float>(scale);
-            const char* fmt = (decimals == 3) ? "%.3f" : "%.2f";
-            std::snprintf(buffer.data(), buffer.size(), fmt, actual);
-            return std::string_view(buffer.data());
-        });
-        slider->set_value_parser([scale, min, max](const std::string& text) -> std::optional<int> {
-            try {
-                float parsed = std::stof(text);
-                parsed = std::clamp(parsed, min, max);
-                return static_cast<int>(std::round(parsed * static_cast<float>(scale)));
-            } catch (...) {
-                return std::nullopt;
-            }
-        });
-        slider->set_defer_commit_until_unfocus(true);
-        return slider;
-    };
+    map_light_factor_    = make_float_slider("Map Light Factor", 0.0f, 1.0f, last_applied_settings_.virtual_light_map.map_light_factor, 100);
+    horizontal_falloff_  = make_float_slider("Horizontal Falloff", 0.0f, 10.0f, last_applied_settings_.virtual_light_map.horizontal_falloff, 100);
+    vertical_falloff_    = make_float_slider("Vertical Falloff", 0.0f, 10.0f, last_applied_settings_.virtual_light_map.vertical_falloff, 100);
+    max_offset_x_        = make_float_slider("Max Offset X", 0.0f, 500.0f, last_applied_settings_.virtual_light_map.max_offset_x, 100);
+    max_offset_y_        = make_float_slider("Max Offset Y", 0.0f, 500.0f, last_applied_settings_.virtual_light_map.max_offset_y, 100);
+    shadow_scale_        = make_float_slider("Shadow Scale", 0.0f, 10.0f, last_applied_settings_.virtual_light_map.shadow_scale, 100);
+    size_scale_factor_   = make_float_slider("Size Scale Factor", 0.0f, 10.0f, last_applied_settings_.virtual_light_map.size_scale_factor, 100);
 
-    map_light_factor_ = make_float_slider("Map Light Factor", 0.0f, 1.0f,
-        last_applied_settings_.virtual_light_map.map_light_factor, 100);
-    horizontal_falloff_ = make_float_slider("Horizontal Falloff", 0.0f, 10.0f,
-        last_applied_settings_.virtual_light_map.horizontal_falloff, 100);
-    vertical_falloff_ = make_float_slider("Vertical Falloff", 0.0f, 10.0f,
-        last_applied_settings_.virtual_light_map.vertical_falloff, 100);
-    max_offset_x_ = make_float_slider("Max Offset X", 0.0f, 500.0f,
-        last_applied_settings_.virtual_light_map.max_offset_x, 100);
-    max_offset_y_ = make_float_slider("Max Offset Y", 0.0f, 500.0f,
-        last_applied_settings_.virtual_light_map.max_offset_y, 100);
-    shadow_scale_ = make_float_slider("Shadow Scale", 0.1f, 4.0f,
-        last_applied_settings_.virtual_light_map.shadow_scale, 100);
+    opacity_section_btn_ = std::make_unique<DMButton>("Apply", [this]() {
+        sync_json_from_ui();
+        apply_immediate_settings();
+    });
 
-    reactive_offsets_enabled_ = std::make_unique<DMCheckbox>("Enable Offsets", last_applied_settings_.directionality.enable_offsets);
-    reactive_opacity_enabled_ = std::make_unique<DMCheckbox>("Enable Opacity", last_applied_settings_.response.enable_opacity);
-    reactive_temporal_enabled_ = std::make_unique<DMCheckbox>("Enable Temporal", last_applied_settings_.stability.enable_temporal_smoothing);
-
-    reactive_kernel_radius_       = std::make_unique<DMSlider>("Kernel Radius", 1, 16, last_applied_settings_.sampling.kernel_radius);
-    reactive_outer_ring_weight_   = make_float_slider("Outer Ring Weight", 0.0f, 3.0f, last_applied_settings_.sampling.outer_ring_weight, 100);
-    reactive_diagonal_weight_     = make_float_slider("Diagonal Weight", 0.0f, 2.0f, last_applied_settings_.sampling.diagonal_weight, 100);
-    reactive_gradient_sensitivity_= make_float_slider("Gradient Sensitivity", 0.0f, 2.0f, last_applied_settings_.directionality.gradient_sensitivity, 100);
-    reactive_offset_strength_     = make_float_slider("Offset Strength", 0.0f, 2.0f, last_applied_settings_.directionality.offset_strength, 100);
-    reactive_max_offset_ratio_    = make_float_slider("Max Offset Ratio", 0.0f, 1.0f, last_applied_settings_.directionality.max_offset_ratio, 100);
-    reactive_front_weight_        = make_float_slider("Front Weight", 0.0f, 5.0f, last_applied_settings_.directionality.front_weight, 100);
-    reactive_side_weight_         = make_float_slider("Side Weight", 0.0f, 5.0f, last_applied_settings_.directionality.side_weight, 100);
-    reactive_back_weight_         = make_float_slider("Back Weight", 0.0f, 5.0f, last_applied_settings_.directionality.back_weight, 100);
-    reactive_scale_factor_        = make_float_slider("Scale Factor", 0.1f, 4.0f, last_applied_settings_.output.scale_factor, 100);
-    reactive_map_line_weight_     = make_float_slider("map_light_weight", 0.0f, 5.0f, last_applied_settings_.output.map_line_weight, 100);
-    reactive_parallax_strength_   = make_float_slider("Parallax Strength", 0.0f, 5.0f, last_applied_settings_.output.parallax_strength, 100);
-    reactive_opacity_strength_    = make_float_slider("Opacity Strength", 0.0f, 3.0f, last_applied_settings_.response.opacity_strength, 100);
-    reactive_min_opacity_         = make_float_slider("Min Opacity", 0.0f, 1.0f, last_applied_settings_.response.min_opacity, 100);
-    reactive_max_opacity_         = make_float_slider("Max Opacity", 0.0f, 1.0f, last_applied_settings_.response.max_opacity, 100);
-    reactive_temporal_smoothing_  = make_float_slider("Temporal Smoothing", 0.0f, 0.999f, last_applied_settings_.stability.temporal_smoothing, 1000, 3);
-    reactive_front_opacity_boost_ = make_float_slider("Front Opacity Boost", 0.0f, 10.0f, last_applied_settings_.response.front_opacity_boost, 100);
-    reactive_similarity_threshold_= make_float_slider("Reuse Similarity Threshold", 0.0f, 1.0f, last_applied_settings_.stability.reuse_similarity_threshold, 1000, 3);
-
-    if (reactive_kernel_radius_) reactive_kernel_radius_->set_defer_commit_until_unfocus(true);
-    if (reactive_scale_factor_) reactive_scale_factor_->set_defer_commit_until_unfocus(true);
-    if (reactive_map_line_weight_) reactive_map_line_weight_->set_defer_commit_until_unfocus(true);
-    if (reactive_parallax_strength_) reactive_parallax_strength_->set_defer_commit_until_unfocus(true);
-
-    opacity_section_btn_  = std::make_unique<DMButton>("", &DMStyles::HeaderButton(), 220, DMButton::height());
-    placement_section_btn_= std::make_unique<DMButton>("", &DMStyles::HeaderButton(), 220, DMButton::height());
-    scale_section_btn_    = std::make_unique<DMButton>("", &DMStyles::HeaderButton(), 220, DMButton::height());
-
-    rebuild_rows();
-}
-
-void MapShadowPanel::update_section_header_labels() {
-    auto label_for = [](const std::string& title, bool collapsed) {
-        return std::string(collapsed ? "[\xE2\x86\x93] " : "[\xE2\x86\x91] ") + title;
-    };
-    if (opacity_section_btn_) {
-        opacity_section_btn_->set_text(label_for("Opacity Settings", opacity_section_collapsed_));
-    }
-    if (placement_section_btn_) {
-        placement_section_btn_->set_text(label_for("Placement & Offsets", placement_section_collapsed_));
-    }
-    if (scale_section_btn_) {
-        scale_section_btn_->set_text(label_for("Scale", scale_section_collapsed_));
-    }
+    warning_label_ = new WarningLabel(&persistence_warning_text_);
 }
 
 void MapShadowPanel::rebuild_rows() {
-    update_section_header_labels();
-
     widget_wrappers_.clear();
-    widget_wrappers_.reserve(128);
-
-    auto add_widget = [this](std::unique_ptr<Widget> w) -> Widget* {
-        Widget* raw = w.get();
-        widget_wrappers_.push_back(std::move(w));
-        return raw;
-    };
-
-    Rows rows;
-
-    auto warning_label = std::make_unique<WarningLabel>();
-    warning_label_ = warning_label.get();
-    warning_label_->set_color(SDL_Color{255, 120, 120, 255});
-    if (!persistence_warning_text_.empty()) {
-        warning_label_->set_text(persistence_warning_text_);
-    }
-    rows.push_back({ add_widget(std::move(warning_label)) });
-
-    rows.push_back({
-        add_widget(std::make_unique<SliderWidget>(map_light_factor_.get()))
-    });
-    rows.push_back({
-        add_widget(std::make_unique<SliderWidget>(horizontal_falloff_.get())),
-        add_widget(std::make_unique<SliderWidget>(vertical_falloff_.get()))
-    });
-    rows.push_back({
-        add_widget(std::make_unique<SliderWidget>(max_offset_x_.get())),
-        add_widget(std::make_unique<SliderWidget>(max_offset_y_.get()))
-    });
-    rows.push_back({
-        add_widget(std::make_unique<SliderWidget>(shadow_scale_.get()))
-    });
-    rows.push_back({
-        add_widget(std::make_unique<CheckboxWidget>(reactive_offsets_enabled_.get())),
-        add_widget(std::make_unique<CheckboxWidget>(reactive_temporal_enabled_.get()))
-    });
-    rows.push_back({ add_widget(std::make_unique<CheckboxWidget>(reactive_opacity_enabled_.get())) });
-    rows.push_back({
-        add_widget(std::make_unique<SliderWidget>(reactive_map_line_weight_.get())),
-        add_widget(std::make_unique<SliderWidget>(reactive_parallax_strength_.get()))
-    });
-
-    rows.push_back({ add_widget(std::make_unique<ButtonWidget>(opacity_section_btn_.get(), [this]() { toggle_opacity_section(); })) });
-    if (!opacity_section_collapsed_) {
-        rows.push_back({
-            add_widget(std::make_unique<SliderWidget>(reactive_opacity_strength_.get())),
-            add_widget(std::make_unique<SliderWidget>(reactive_min_opacity_.get()))
-        });
-        rows.push_back({
-            add_widget(std::make_unique<SliderWidget>(reactive_max_opacity_.get())),
-            add_widget(std::make_unique<SliderWidget>(reactive_front_opacity_boost_.get()))
-        });
-    }
-
-    rows.push_back({ add_widget(std::make_unique<ButtonWidget>(placement_section_btn_.get(), [this]() { toggle_placement_section(); })) });
-    if (!placement_section_collapsed_) {
-        rows.push_back({
-            add_widget(std::make_unique<SliderWidget>(reactive_kernel_radius_.get())),
-            add_widget(std::make_unique<SliderWidget>(reactive_outer_ring_weight_.get()))
-        });
-        rows.push_back({
-            add_widget(std::make_unique<SliderWidget>(reactive_diagonal_weight_.get())),
-            add_widget(std::make_unique<SliderWidget>(reactive_gradient_sensitivity_.get()))
-        });
-        rows.push_back({
-            add_widget(std::make_unique<SliderWidget>(reactive_offset_strength_.get())),
-            add_widget(std::make_unique<SliderWidget>(reactive_max_offset_ratio_.get()))
-        });
-        rows.push_back({
-            add_widget(std::make_unique<SliderWidget>(reactive_front_weight_.get())),
-            add_widget(std::make_unique<SliderWidget>(reactive_side_weight_.get())),
-            add_widget(std::make_unique<SliderWidget>(reactive_back_weight_.get()))
-        });
-        rows.push_back({
-            add_widget(std::make_unique<SliderWidget>(reactive_temporal_smoothing_.get())),
-            add_widget(std::make_unique<SliderWidget>(reactive_similarity_threshold_.get()))
-        });
-    }
-
-    rows.push_back({ add_widget(std::make_unique<ButtonWidget>(scale_section_btn_.get(), [this]() { toggle_scale_section(); })) });
-    if (!scale_section_collapsed_) {
-        rows.push_back({
-            add_widget(std::make_unique<SliderWidget>(reactive_scale_factor_.get()))
-        });
-    }
-
-    set_rows(rows);
-}
-
-void MapShadowPanel::toggle_opacity_section() {
-    opacity_section_collapsed_ = !opacity_section_collapsed_;
-    rebuild_rows();
-}
-
-void MapShadowPanel::toggle_placement_section() {
-    placement_section_collapsed_ = !placement_section_collapsed_;
-    rebuild_rows();
-}
-
-void MapShadowPanel::toggle_scale_section() {
-    scale_section_collapsed_ = !scale_section_collapsed_;
-    rebuild_rows();
+    widget_wrappers_.push_back(std::make_unique<SliderWidget>(map_light_factor_.get()));
+    widget_wrappers_.push_back(std::make_unique<SliderWidget>(horizontal_falloff_.get()));
+    widget_wrappers_.push_back(std::make_unique<SliderWidget>(vertical_falloff_.get()));
+    widget_wrappers_.push_back(std::make_unique<SliderWidget>(max_offset_x_.get()));
+    widget_wrappers_.push_back(std::make_unique<SliderWidget>(max_offset_y_.get()));
+    widget_wrappers_.push_back(std::make_unique<SliderWidget>(shadow_scale_.get()));
+    widget_wrappers_.push_back(std::make_unique<SliderWidget>(size_scale_factor_.get()));
+    widget_wrappers_.push_back(std::make_unique<ButtonWidget>(opacity_section_btn_.get()));
+    set_rows(widget_wrappers_);
 }
 
 void MapShadowPanel::sync_ui_from_json() {
-    if (!light_panel_) {
+    if (!map_info_) {
         return;
     }
-
-    json& reactive_json = ensure_reactive_settings_json();
-    render_pipeline::shading::ReactiveShadowSettings settings =
-        render_pipeline::shading::reactive_shadow_settings_from_json(
-            reactive_json, load_reactive_settings_from_dev_settings());
-    settings = render_pipeline::shading::sanitize_reactive_shadow_settings(settings);
-
-    last_applied_settings_ = settings;
-
-    set_slider_scaled(map_light_factor_, settings.virtual_light_map.map_light_factor, 100);
-    set_slider_scaled(horizontal_falloff_, settings.virtual_light_map.horizontal_falloff, 100);
-    set_slider_scaled(vertical_falloff_, settings.virtual_light_map.vertical_falloff, 100);
-    set_slider_scaled(max_offset_x_, settings.virtual_light_map.max_offset_x, 100);
-    set_slider_scaled(max_offset_y_, settings.virtual_light_map.max_offset_y, 100);
-    set_slider_scaled(shadow_scale_, settings.virtual_light_map.shadow_scale, 100);
-
-    set_reactive_checkboxes(settings);
-    set_reactive_sliders(settings);
-    persist_reactive_settings_to_dev_settings(settings);
-    reactive_settings_initialized_ = true;
-    if (reactive_settings_shared_) {
-        *reactive_settings_shared_ = settings;
+    auto it = map_info_->find("reactive_shadows");
+    if (it != map_info_->end() && it->is_object()) {
+        last_applied_settings_ = render_pipeline::shading::reactive_shadow_settings_from_json(*it, last_applied_settings_);
+        last_applied_settings_ = render_pipeline::shading::sanitize_reactive_shadow_settings(last_applied_settings_);
+        set_reactive_sliders(last_applied_settings_);
+        apply_immediate_settings();
     }
-
     needs_sync_to_json_ = false;
 }
 
 void MapShadowPanel::sync_json_from_ui() {
-    if (!light_panel_) {
+    if (!map_info_) {
         return;
     }
-
     render_pipeline::shading::ReactiveShadowSettings settings = current_settings_from_ui();
     write_reactive_settings_to_json(settings);
-    set_reactive_sliders(settings);
-    set_reactive_checkboxes(settings);
-    persist_reactive_settings_to_dev_settings(settings);
+    last_applied_settings_ = settings;
+    apply_immediate_settings();
     needs_sync_to_json_ = false;
+}
+
+void MapShadowPanel::apply_immediate_settings() {
+    if (reactive_settings_shared_) {
+        *reactive_settings_shared_ = last_applied_settings_;
+    }
+    persist_reactive_settings_to_dev_settings(last_applied_settings_);
 }
 
 render_pipeline::shading::ReactiveShadowSettings MapShadowPanel::current_settings_from_ui() const {
     render_pipeline::shading::ReactiveShadowSettings settings = last_applied_settings_;
-
-    settings.virtual_light_map.map_light_factor =
-        slider_value_scaled(map_light_factor_, settings.virtual_light_map.map_light_factor, 100);
-    settings.virtual_light_map.horizontal_falloff =
-        slider_value_scaled(horizontal_falloff_, settings.virtual_light_map.horizontal_falloff, 100);
-    settings.virtual_light_map.vertical_falloff =
-        slider_value_scaled(vertical_falloff_, settings.virtual_light_map.vertical_falloff, 100);
-    settings.virtual_light_map.max_offset_x =
-        slider_value_scaled(max_offset_x_, settings.virtual_light_map.max_offset_x, 100);
-    settings.virtual_light_map.max_offset_y =
-        slider_value_scaled(max_offset_y_, settings.virtual_light_map.max_offset_y, 100);
-    settings.virtual_light_map.shadow_scale =
-        slider_value_scaled(shadow_scale_, settings.virtual_light_map.shadow_scale, 100);
-
-    if (reactive_kernel_radius_) {
-        settings.sampling.kernel_radius = clamp_int(reactive_kernel_radius_->displayed_value(), 1, 16);
-    }
-    settings.sampling.outer_ring_weight = slider_value_scaled(reactive_outer_ring_weight_, settings.sampling.outer_ring_weight, 100);
-    settings.sampling.diagonal_weight   = slider_value_scaled(reactive_diagonal_weight_, settings.sampling.diagonal_weight, 100);
-
-    if (reactive_offsets_enabled_) {
-        settings.directionality.enable_offsets = reactive_offsets_enabled_->value();
-    }
-    if (reactive_opacity_enabled_) {
-        settings.response.enable_opacity = reactive_opacity_enabled_->value();
-    }
-    settings.directionality.gradient_sensitivity = slider_value_scaled(reactive_gradient_sensitivity_, settings.directionality.gradient_sensitivity, 100);
-    settings.directionality.offset_strength      = slider_value_scaled(reactive_offset_strength_, settings.directionality.offset_strength, 100);
-    settings.directionality.max_offset_ratio     = slider_value_scaled(reactive_max_offset_ratio_, settings.directionality.max_offset_ratio, 100);
-    settings.directionality.front_weight         = slider_value_scaled(reactive_front_weight_, settings.directionality.front_weight, 100);
-    settings.directionality.side_weight          = slider_value_scaled(reactive_side_weight_, settings.directionality.side_weight, 100);
-    settings.directionality.back_weight          = slider_value_scaled(reactive_back_weight_, settings.directionality.back_weight, 100);
-
-    settings.output.scale_factor      = slider_value_scaled(reactive_scale_factor_, settings.output.scale_factor, 100);
-    settings.output.map_line_weight   = slider_value_scaled(reactive_map_line_weight_, settings.output.map_line_weight, 100);
-    settings.output.parallax_strength = slider_value_scaled(reactive_parallax_strength_, settings.output.parallax_strength, 100);
-
-    settings.response.opacity_strength    = slider_value_scaled(reactive_opacity_strength_, settings.response.opacity_strength, 100);
-    settings.response.min_opacity         = slider_value_scaled(reactive_min_opacity_, settings.response.min_opacity, 100);
-    settings.response.max_opacity         = slider_value_scaled(reactive_max_opacity_, settings.response.max_opacity, 100);
-    settings.response.front_opacity_boost = slider_value_scaled(reactive_front_opacity_boost_, settings.response.front_opacity_boost, 100);
-
-    if (reactive_temporal_enabled_) {
-        settings.stability.enable_temporal_smoothing = reactive_temporal_enabled_->value();
-    }
-    settings.stability.temporal_smoothing = slider_value_scaled(reactive_temporal_smoothing_, settings.stability.temporal_smoothing, 1000);
-    settings.stability.reuse_similarity_threshold = slider_value_scaled(
-        reactive_similarity_threshold_, settings.stability.reuse_similarity_threshold, 1000);
-
+    settings.virtual_light_map.map_light_factor = slider_value_scaled(map_light_factor_, settings.virtual_light_map.map_light_factor, 100);
+    settings.virtual_light_map.horizontal_falloff = slider_value_scaled(horizontal_falloff_, settings.virtual_light_map.horizontal_falloff, 100);
+    settings.virtual_light_map.vertical_falloff = slider_value_scaled(vertical_falloff_, settings.virtual_light_map.vertical_falloff, 100);
+    settings.virtual_light_map.max_offset_x = slider_value_scaled(max_offset_x_, settings.virtual_light_map.max_offset_x, 100);
+    settings.virtual_light_map.max_offset_y = slider_value_scaled(max_offset_y_, settings.virtual_light_map.max_offset_y, 100);
+    settings.virtual_light_map.shadow_scale = slider_value_scaled(shadow_scale_, settings.virtual_light_map.shadow_scale, 100);
+    settings.virtual_light_map.size_scale_factor = slider_value_scaled(size_scale_factor_, settings.virtual_light_map.size_scale_factor, 100);
     return render_pipeline::shading::sanitize_reactive_shadow_settings(settings);
 }
 
@@ -883,203 +229,72 @@ void MapShadowPanel::set_reactive_sliders(const render_pipeline::shading::Reacti
     set_slider_scaled(max_offset_x_, settings.virtual_light_map.max_offset_x, 100);
     set_slider_scaled(max_offset_y_, settings.virtual_light_map.max_offset_y, 100);
     set_slider_scaled(shadow_scale_, settings.virtual_light_map.shadow_scale, 100);
-
-    if (reactive_kernel_radius_) reactive_kernel_radius_->set_value(settings.sampling.kernel_radius);
-    set_slider_scaled(reactive_outer_ring_weight_, settings.sampling.outer_ring_weight, 100);
-    set_slider_scaled(reactive_diagonal_weight_, settings.sampling.diagonal_weight, 100);
-    set_slider_scaled(reactive_gradient_sensitivity_, settings.directionality.gradient_sensitivity, 100);
-    set_slider_scaled(reactive_offset_strength_, settings.directionality.offset_strength, 100);
-    set_slider_scaled(reactive_max_offset_ratio_, settings.directionality.max_offset_ratio, 100);
-    set_slider_scaled(reactive_front_weight_, settings.directionality.front_weight, 100);
-    set_slider_scaled(reactive_side_weight_, settings.directionality.side_weight, 100);
-    set_slider_scaled(reactive_back_weight_, settings.directionality.back_weight, 100);
-    set_slider_scaled(reactive_scale_factor_, settings.output.scale_factor, 100);
-    set_slider_scaled(reactive_map_line_weight_, settings.output.map_line_weight, 100);
-    set_slider_scaled(reactive_parallax_strength_, settings.output.parallax_strength, 100);
-    set_slider_scaled(reactive_opacity_strength_, settings.response.opacity_strength, 100);
-    set_slider_scaled(reactive_min_opacity_, settings.response.min_opacity, 100);
-    set_slider_scaled(reactive_max_opacity_, settings.response.max_opacity, 100);
-    set_slider_scaled(reactive_front_opacity_boost_, settings.response.front_opacity_boost, 100);
-    set_slider_scaled(reactive_temporal_smoothing_, settings.stability.temporal_smoothing, 1000);
-    set_slider_scaled(reactive_similarity_threshold_, settings.stability.reuse_similarity_threshold, 1000);
-}
-
-void MapShadowPanel::set_reactive_checkboxes(const render_pipeline::shading::ReactiveShadowSettings& settings) {
-    if (reactive_offsets_enabled_) reactive_offsets_enabled_->set_value(settings.directionality.enable_offsets);
-    if (reactive_opacity_enabled_) reactive_opacity_enabled_->set_value(settings.response.enable_opacity);
-    if (reactive_temporal_enabled_) reactive_temporal_enabled_->set_value(settings.stability.enable_temporal_smoothing);
+    set_slider_scaled(size_scale_factor_, settings.virtual_light_map.size_scale_factor, 100);
 }
 
 render_pipeline::shading::ReactiveShadowSettings MapShadowPanel::load_reactive_settings_from_dev_settings() const {
-    using devmode::ui_settings::load_bool;
     using devmode::ui_settings::load_number;
-
-    render_pipeline::shading::ReactiveShadowSettings settings =
-        render_pipeline::shading::sanitize_reactive_shadow_settings({});
-
-    settings.directionality.enable_offsets =
-        load_bool(reactive_settings_key("directionality.enable_offsets"), settings.directionality.enable_offsets);
-    settings.directionality.gradient_sensitivity = static_cast<float>(
-        load_number(reactive_settings_key("directionality.gradient_sensitivity"), settings.directionality.gradient_sensitivity));
-    settings.directionality.gradient_sensitivity = static_cast<float>(
-        load_number(reactive_settings_key("directionality.gradient_deadzone"), settings.directionality.gradient_sensitivity));
-    settings.directionality.offset_strength = static_cast<float>(
-        load_number(reactive_settings_key("directionality.offset_strength"), settings.directionality.offset_strength));
-    const float legacy_ratio_x = static_cast<float>(
-        load_number(reactive_settings_key("directionality.offset_ratio_x"), settings.directionality.offset_strength));
-    const float legacy_ratio_y = static_cast<float>(
-        load_number(reactive_settings_key("directionality.offset_ratio_y"), settings.directionality.offset_strength));
-    const float legacy_bias_x = static_cast<float>(
-        load_number(reactive_settings_key("directionality.offset_x_bias"), 1.0));
-    const float legacy_bias_y = static_cast<float>(
-        load_number(reactive_settings_key("directionality.offset_y_bias"), 1.0));
-    settings.directionality.offset_strength =
-        std::max(settings.directionality.offset_strength, std::max(legacy_ratio_x * legacy_bias_x, legacy_ratio_y * legacy_bias_y));
-    settings.directionality.max_offset_ratio = static_cast<float>(
-        load_number(reactive_settings_key("directionality.max_offset_ratio"), settings.directionality.max_offset_ratio));
-    const float legacy_max_ratio_x = static_cast<float>(
-        load_number(reactive_settings_key("directionality.offset_max_ratio_x"), settings.directionality.max_offset_ratio));
-    const float legacy_max_ratio_y = static_cast<float>(
-        load_number(reactive_settings_key("directionality.offset_max_ratio_y"), settings.directionality.max_offset_ratio));
-    settings.directionality.max_offset_ratio =
-        std::max(settings.directionality.max_offset_ratio, std::max(legacy_max_ratio_x, legacy_max_ratio_y));
-    settings.directionality.front_weight = static_cast<float>(
-        load_number(reactive_settings_key("directionality.front_weight"), settings.directionality.front_weight));
-    settings.directionality.side_weight = static_cast<float>(
-        load_number(reactive_settings_key("directionality.side_weight"), settings.directionality.side_weight));
-    settings.directionality.back_weight = static_cast<float>(
-        load_number(reactive_settings_key("directionality.back_weight"), settings.directionality.back_weight));
-
-    settings.output.scale_factor = static_cast<float>(
-        load_number(reactive_settings_key("output.scale_factor"), settings.output.scale_factor));
-    settings.output.map_line_weight = static_cast<float>(
-        load_number(reactive_settings_key("output.map_line_weight"), settings.output.map_line_weight));
-    settings.output.parallax_strength = static_cast<float>(
-        load_number(reactive_settings_key("output.parallax_strength"), settings.output.parallax_strength));
-
-    settings.response.enable_opacity =
-        load_bool(reactive_settings_key("response.enable_opacity"), settings.response.enable_opacity);
-    settings.response.opacity_strength = static_cast<float>(
-        load_number(reactive_settings_key("response.opacity_strength"), settings.response.opacity_strength));
-    settings.response.opacity_strength = static_cast<float>(
-        load_number(reactive_settings_key("response.opacity_gamma"), settings.response.opacity_strength));
-    settings.response.min_opacity = static_cast<float>(
-        load_number(reactive_settings_key("response.min_opacity"), settings.response.min_opacity));
-    settings.response.min_opacity = static_cast<float>(
-        load_number(reactive_settings_key("response.absolute_opacity_min"), settings.response.min_opacity));
-    settings.response.max_opacity = static_cast<float>(
-        load_number(reactive_settings_key("response.max_opacity"), settings.response.max_opacity));
-    settings.response.max_opacity = static_cast<float>(
-        load_number(reactive_settings_key("response.absolute_opacity_max"), settings.response.max_opacity));
-    settings.response.front_opacity_boost = static_cast<float>(
-        load_number(reactive_settings_key("response.front_opacity_boost"), settings.response.front_opacity_boost));
-
-    settings.stability.enable_temporal_smoothing =
-        load_bool(reactive_settings_key("stability.enable_temporal_smoothing"), settings.stability.enable_temporal_smoothing);
-    settings.stability.temporal_smoothing = static_cast<float>(
-        load_number(reactive_settings_key("stability.temporal_smoothing"), settings.stability.temporal_smoothing));
-    settings.stability.reuse_similarity_threshold = static_cast<float>(
-        load_number(reactive_settings_key("stability.reuse_similarity_threshold"), settings.stability.reuse_similarity_threshold));
-
-    settings.sampling.kernel_radius = clamp_int(static_cast<int>(std::round(
-        load_number(reactive_settings_key("sampling.kernel_radius"), settings.sampling.kernel_radius))), 1, 16);
-    settings.sampling.outer_ring_weight = static_cast<float>(
-        load_number(reactive_settings_key("sampling.outer_ring_weight"), settings.sampling.outer_ring_weight));
-    settings.sampling.diagonal_weight = static_cast<float>(
-        load_number(reactive_settings_key("sampling.diagonal_weight"), settings.sampling.diagonal_weight));
-
+    render_pipeline::shading::ReactiveShadowSettings settings = render_pipeline::shading::sanitize_reactive_shadow_settings({});
     settings.virtual_light_map.map_light_factor = static_cast<float>(
-        load_number(reactive_settings_key("virtual_light_map.map_light_factor"), settings.virtual_light_map.map_light_factor));
+        load_number(make_setting_key("virtual_light_map.map_light_factor"), settings.virtual_light_map.map_light_factor));
     settings.virtual_light_map.horizontal_falloff = static_cast<float>(
-        load_number(reactive_settings_key("virtual_light_map.horizontal_falloff"), settings.virtual_light_map.horizontal_falloff));
+        load_number(make_setting_key("virtual_light_map.horizontal_falloff"), settings.virtual_light_map.horizontal_falloff));
     settings.virtual_light_map.vertical_falloff = static_cast<float>(
-        load_number(reactive_settings_key("virtual_light_map.vertical_falloff"), settings.virtual_light_map.vertical_falloff));
+        load_number(make_setting_key("virtual_light_map.vertical_falloff"), settings.virtual_light_map.vertical_falloff));
     settings.virtual_light_map.max_offset_x = static_cast<float>(
-        load_number(reactive_settings_key("virtual_light_map.max_offset_x"), settings.virtual_light_map.max_offset_x));
+        load_number(make_setting_key("virtual_light_map.max_offset_x"), settings.virtual_light_map.max_offset_x));
     settings.virtual_light_map.max_offset_y = static_cast<float>(
-        load_number(reactive_settings_key("virtual_light_map.max_offset_y"), settings.virtual_light_map.max_offset_y));
+        load_number(make_setting_key("virtual_light_map.max_offset_y"), settings.virtual_light_map.max_offset_y));
     settings.virtual_light_map.shadow_scale = static_cast<float>(
-        load_number(reactive_settings_key("virtual_light_map.shadow_scale"), settings.virtual_light_map.shadow_scale));
-
+        load_number(make_setting_key("virtual_light_map.shadow_scale"), settings.virtual_light_map.shadow_scale));
+    settings.virtual_light_map.size_scale_factor = static_cast<float>(
+        load_number(make_setting_key("virtual_light_map.size_scale_factor"), settings.virtual_light_map.size_scale_factor));
     return render_pipeline::shading::sanitize_reactive_shadow_settings(settings);
 }
 
 void MapShadowPanel::persist_reactive_settings_to_dev_settings(const render_pipeline::shading::ReactiveShadowSettings& settings) const {
-    using devmode::ui_settings::save_bool;
     using devmode::ui_settings::save_number;
-
-    save_bool(reactive_settings_key("directionality.enable_offsets"), settings.directionality.enable_offsets);
-    save_number(reactive_settings_key("directionality.gradient_sensitivity"), settings.directionality.gradient_sensitivity);
-    save_number(reactive_settings_key("directionality.offset_strength"), settings.directionality.offset_strength);
-    save_number(reactive_settings_key("directionality.max_offset_ratio"), settings.directionality.max_offset_ratio);
-    save_number(reactive_settings_key("directionality.front_weight"), settings.directionality.front_weight);
-    save_number(reactive_settings_key("directionality.side_weight"), settings.directionality.side_weight);
-    save_number(reactive_settings_key("directionality.back_weight"), settings.directionality.back_weight);
-
-    save_number(reactive_settings_key("output.scale_factor"), settings.output.scale_factor);
-    save_number(reactive_settings_key("output.map_line_weight"), settings.output.map_line_weight);
-    save_number(reactive_settings_key("output.parallax_strength"), settings.output.parallax_strength);
-
-    save_bool(reactive_settings_key("response.enable_opacity"), settings.response.enable_opacity);
-    save_number(reactive_settings_key("response.opacity_strength"), settings.response.opacity_strength);
-    save_number(reactive_settings_key("response.min_opacity"), settings.response.min_opacity);
-    save_number(reactive_settings_key("response.max_opacity"), settings.response.max_opacity);
-    save_number(reactive_settings_key("response.front_opacity_boost"), settings.response.front_opacity_boost);
-
-    save_bool(reactive_settings_key("stability.enable_temporal_smoothing"), settings.stability.enable_temporal_smoothing);
-    save_number(reactive_settings_key("stability.temporal_smoothing"), settings.stability.temporal_smoothing);
-    save_number(reactive_settings_key("stability.reuse_similarity_threshold"), settings.stability.reuse_similarity_threshold);
-
-    save_number(reactive_settings_key("sampling.kernel_radius"), static_cast<double>(settings.sampling.kernel_radius));
-    save_number(reactive_settings_key("sampling.outer_ring_weight"), settings.sampling.outer_ring_weight);
-    save_number(reactive_settings_key("sampling.diagonal_weight"), settings.sampling.diagonal_weight);
-
-    save_number(reactive_settings_key("virtual_light_map.map_light_factor"), settings.virtual_light_map.map_light_factor);
-    save_number(reactive_settings_key("virtual_light_map.horizontal_falloff"), settings.virtual_light_map.horizontal_falloff);
-    save_number(reactive_settings_key("virtual_light_map.vertical_falloff"), settings.virtual_light_map.vertical_falloff);
-    save_number(reactive_settings_key("virtual_light_map.max_offset_x"), settings.virtual_light_map.max_offset_x);
-    save_number(reactive_settings_key("virtual_light_map.max_offset_y"), settings.virtual_light_map.max_offset_y);
-    save_number(reactive_settings_key("virtual_light_map.shadow_scale"), settings.virtual_light_map.shadow_scale);
+    save_number(make_setting_key("virtual_light_map.map_light_factor"), settings.virtual_light_map.map_light_factor);
+    save_number(make_setting_key("virtual_light_map.horizontal_falloff"), settings.virtual_light_map.horizontal_falloff);
+    save_number(make_setting_key("virtual_light_map.vertical_falloff"), settings.virtual_light_map.vertical_falloff);
+    save_number(make_setting_key("virtual_light_map.max_offset_x"), settings.virtual_light_map.max_offset_x);
+    save_number(make_setting_key("virtual_light_map.max_offset_y"), settings.virtual_light_map.max_offset_y);
+    save_number(make_setting_key("virtual_light_map.shadow_scale"), settings.virtual_light_map.shadow_scale);
+    save_number(make_setting_key("virtual_light_map.size_scale_factor"), settings.virtual_light_map.size_scale_factor);
 }
 
 void MapShadowPanel::write_reactive_settings_to_json(const render_pipeline::shading::ReactiveShadowSettings& settings) {
-    json& reactive_json = ensure_reactive_settings_json();
-    render_pipeline::shading::assign_reactive_shadow_settings(reactive_json, settings);
+    if (!map_info_) {
+        return;
+    }
+    nlohmann::json& json = (*map_info_)["reactive_shadows"];
+    render_pipeline::shading::assign_reactive_shadow_settings(json, settings);
 }
 
 nlohmann::json& MapShadowPanel::ensure_reactive_settings_json() {
-    json& light = light_panel_->mutable_light();
-    if (!light.contains("reactive_shadows") || !light["reactive_shadows"].is_object()) {
-        light["reactive_shadows"] = json::object();
+    if (!map_info_) {
+        static nlohmann::json dummy = nlohmann::json::object();
+        return dummy;
     }
-    return light["reactive_shadows"];
+    return (*map_info_)["reactive_shadows"];
 }
 
-void MapShadowPanel::apply_immediate_settings() {
-    if (!light_panel_) {
-        return;
-    }
+void MapShadowPanel::render_light_map_preview(SDL_Renderer*) const {}
 
-    auto sanitized = render_pipeline::shading::sanitize_reactive_shadow_settings(current_settings_from_ui());
-    if (sanitized == last_applied_settings_) {
-        return;
-    }
-
-    write_reactive_settings_to_json(sanitized);
-    set_reactive_sliders(sanitized);
-    set_reactive_checkboxes(sanitized);
-    persist_reactive_settings_to_dev_settings(sanitized);
-
-    bool ok = light_panel_->commit_light_changes_external();
-    update_save_status(ok);
-    if (ok) {
-        last_applied_settings_ = sanitized;
-        reactive_settings_initialized_ = true;
-        if (reactive_settings_shared_) {
-            *reactive_settings_shared_ = sanitized;
-        }
-    }
+const VirtualLightMap* MapShadowPanel::current_virtual_light_map() const {
+    return assets_ ? assets_->virtual_light_map() : nullptr;
 }
+
+std::optional<SDL_Point> MapShadowPanel::player_screen_position() const {
+    if (!assets_) {
+        return std::nullopt;
+    }
+    camera& view = assets_->getView();
+    SDL_Point center = view.get_screen_center();
+    return center;
+}
+
+std::vector<std::string> MapShadowPanel::assets_in_quadrant(int) const { return {}; }
 
 int MapShadowPanel::clamp_int(int v, int lo, int hi) {
     return std::max(lo, std::min(hi, v));
