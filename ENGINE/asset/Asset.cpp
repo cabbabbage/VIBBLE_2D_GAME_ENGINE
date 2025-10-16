@@ -4,6 +4,7 @@
 #include "core/AssetsManager.hpp"
 #include "core/asset_list.hpp"
 #include "render/camera.hpp"
+#include "render_pipeline/render_asset/shading/RenderShadingStages.hpp"
 #include "utils/area_helpers.hpp"
 #include "asset/asset_types.hpp"
 #include <filesystem>
@@ -632,6 +633,7 @@ void Asset::clear_render_caches() {
         destroy_render_cache(light_front_cache_);
         destroy_render_cache(light_behind_cache_);
         destroy_render_cache(shadow_mask_cache_);
+        render_pipeline::shading::ClearShadowStateFor(this);
 }
 
 void Asset::clear_downscale_cache() {

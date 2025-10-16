@@ -291,6 +291,13 @@ LightProbe analyze_light_map(const VirtualLightMap& map, const StageContext& con
 
 }  // namespace
 
+void ClearShadowStateFor(const Asset* asset) {
+    if (!asset) {
+        return;
+    }
+    shadow_state_cache().erase(asset);
+}
+
 bool RenderAsset::supports(const Asset& asset) const {
     return asset.get_current_frame() != nullptr;
 }

@@ -9,6 +9,7 @@
 #include "dev_mode/dev_controls.hpp"
 #include "render/scene_renderer.hpp"
 #include "render_pipeline/ScalingLogic.hpp"
+#include "render_pipeline/render_asset/shading/RenderShadingStages.hpp"
 #include "map_generation/room.hpp"
 #include "utils/area.hpp"
 #include "utils/input.hpp"
@@ -875,6 +876,10 @@ void Assets::process_removals() {
 
     if (pending_removals.empty()) {
         return;
+    }
+
+    for (Asset* asset : pending_removals) {
+        render_pipeline::shading::ClearShadowStateFor(asset);
     }
 
     std::unordered_set<Asset*> removal_lookup(pending_removals.begin(), pending_removals.end());

@@ -161,17 +161,12 @@ ManifestStore::AssetEditSession ManifestStore::begin_asset_edit(const std::strin
     return AssetEditSession(this, std::move(target_name), std::move(existing), is_new_asset);
 }
 
-<<<<<<< ours
 ManifestStore::AssetTransaction ManifestStore::begin_asset_transaction(const std::string& name,
                                                                        bool create_if_missing) {
-=======
-bool ManifestStore::remove_asset(const std::string& name) {
->>>>>>> theirs
     ensure_loaded();
     ensure_asset_container();
 
     auto resolved = resolve_asset_name(name);
-<<<<<<< ours
     if (!resolved && !create_if_missing) {
         return {};
     }
@@ -190,7 +185,13 @@ bool ManifestStore::remove_asset(const std::string& name) {
     }
 
     return AssetTransaction(this, std::move(target_name), std::move(existing), is_new_asset);
-=======
+}
+
+bool ManifestStore::remove_asset(const std::string& name) {
+    ensure_loaded();
+    ensure_asset_container();
+
+    auto resolved = resolve_asset_name(name);
     if (!resolved) {
         return false;
     }
@@ -206,7 +207,6 @@ bool ManifestStore::remove_asset(const std::string& name) {
         submit_(manifest_path_, manifest_cache_, indent_);
     }
     return true;
->>>>>>> theirs
 }
 
 void ManifestStore::reload() {

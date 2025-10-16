@@ -2,7 +2,11 @@
 
 #include "render_pipeline/render_asset/IRenderStage.hpp"
 
+class Asset;
+
 namespace render_pipeline::shading {
+
+void ClearShadowStateFor(const Asset* asset);
 
 class RenderAsset : public IRenderStage {
 public:
