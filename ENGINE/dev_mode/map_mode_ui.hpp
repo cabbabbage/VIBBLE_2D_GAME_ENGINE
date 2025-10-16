@@ -54,6 +54,9 @@ public:
     void open_light_panel();
     void close_light_panel();
     void toggle_light_panel();
+    void open_shading_panel();
+    void close_shading_panel();
+    void toggle_shading_panel();
     void open_grid_panel();
     void close_grid_panel();
     void toggle_grid_panel();
@@ -61,6 +64,7 @@ public:
     void close_all_panels();
 
     bool is_light_panel_visible() const;
+    bool is_shading_panel_visible() const;
     bool is_grid_panel_visible() const;
     using LightSaveCallback = std::function<bool()>;
     using GridSaveCallback = std::function<bool()>;
@@ -101,7 +105,7 @@ private:
     void sync_footer_button_states();
     void update_footer_visibility();
     void set_layers_footer_expanded(bool expanded);
-    enum class PanelType { None, Lights, Layers, Grid };
+    enum class PanelType { None, Layers, Grid };
     void set_active_panel(PanelType panel);
     void update_layers_footer(const Input& input);
     bool handle_layers_footer_event(const SDL_Event& e);
@@ -117,6 +121,7 @@ private:
     SDL_Point event_point(const SDL_Event& e) const;
     HeaderButtonConfig* find_button(HeaderMode mode, const std::string& id);
     bool ensure_panel_unlocked(DockableCollapsible* panel, const char* panel_name) const;
+    void ensure_light_and_shading_positions();
 
 private:
     Assets* assets_ = nullptr;
@@ -152,5 +157,9 @@ private:
     GridSaveCallback grid_save_callback_;
     GridRegenCallback grid_regen_callback_;
     std::function<void(HeaderMode)> on_mode_changed_;
+    bool light_panel_centered_ = false;
+    bool shading_panel_centered_ = false;
+    bool last_lights_visible_ = false;
+    bool last_shading_visible_ = false;
 };
 

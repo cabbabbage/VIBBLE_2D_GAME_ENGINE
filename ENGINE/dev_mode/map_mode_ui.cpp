@@ -27,6 +27,7 @@ namespace {
 constexpr int kDefaultPanelX = 48;
 constexpr int kDefaultPanelY = 48;
 constexpr const char* kButtonIdLights = "lights";
+constexpr const char* kButtonIdShading = "shading";
 }
 
 MapModeUI::MapModeUI(Assets* assets)
@@ -55,6 +56,8 @@ void MapModeUI::set_map_context(nlohmann::json* map_info, const std::string& map
 void MapModeUI::set_screen_dimensions(int w, int h) {
     screen_w_ = w;
     screen_h_ = h;
+    light_panel_centered_ = false;
+    shading_panel_centered_ = false;
     ensure_panels();
     SDL_Rect bounds{0, 0, screen_w_, screen_h_};
     if (light_panel_) light_panel_->set_work_area(bounds);
@@ -415,6 +418,10 @@ void MapModeUI::configure_footer_buttons() {
                                                    [](const HeaderButtonConfig& cfg) {
                                                        return cfg.id == kButtonIdLights;
                                                    });
+        const bool has_shading_button = std::any_of(map_mode_buttons_.begin(), map_mode_buttons_.end(),
+                                                    [](const HeaderButtonConfig& cfg) {
+                                                        return cfg.id == kButtonIdShading;
+                                                    });
 
         if (!has_lights_button) {
             FullScreenCollapsible::HeaderButton lights_btn;
@@ -422,12 +429,26 @@ void MapModeUI::configure_footer_buttons() {
             lights_btn.label = "Lighting";
             lights_btn.on_toggle = [this](bool active) {
                 if (active) {
-                    set_active_panel(PanelType::Lights);
-                } else if (active_panel_ == PanelType::Lights) {
-                    set_active_panel(PanelType::None);
+                    this->open_light_panel();
+                } else {
+                    this->close_light_panel();
                 }
             };
             buttons.push_back(std::move(lights_btn));
+        }
+
+        if (!has_shading_button) {
+            FullScreenCollapsible::HeaderButton shading_btn;
+            shading_btn.id = kButtonIdShading;
+            shading_btn.label = "Shading";
+            shading_btn.on_toggle = [this](bool active) {
+                if (active) {
+                    this->open_shading_panel();
+                } else {
+                    this->close_shading_panel();
+                }
+            };
+            buttons.push_back(std::move(shading_btn));
         }
 
     } else if (header_mode_ == HeaderMode::Room) {
@@ -457,7 +478,10 @@ void MapModeUI::configure_footer_buttons() {
 void MapModeUI::sync_footer_button_states() {
     if (!footer_panel_) return;
     if (header_mode_ == HeaderMode::Map) {
-        footer_panel_->set_button_active_state(kButtonIdLights, active_panel_ == PanelType::Lights);
+        const bool lights_visible = light_panel_ && light_panel_->is_visible();
+        const bool shading_visible = shadow_panel_ && shadow_panel_->is_visible();
+        footer_panel_->set_button_active_state(kButtonIdLights, lights_visible);
+        footer_panel_->set_button_active_state(kButtonIdShading, shading_visible);
         for (const auto& config : map_mode_buttons_) {
             footer_panel_->set_button_active_state(config.id, config.active);
         }
@@ -510,16 +534,6 @@ void MapModeUI::set_layers_footer_expanded(bool expanded) {
 void MapModeUI::set_active_panel(PanelType panel) {
     ensure_panels();
 
-    if (panel == PanelType::Lights) {
-        if (!ensure_panel_unlocked(light_panel_.get(), "Light")) {
-            sync_footer_button_states();
-            return;
-        }
-        if (!ensure_panel_unlocked(shadow_panel_.get(), "Shadow")) {
-            sync_footer_button_states();
-            return;
-        }
-    }
     if (panel == PanelType::Layers && !ensure_panel_unlocked(layers_panel_.get(), "Layers")) {
         if (footer_panel_) {
             footer_panel_->set_expanded(layers_footer_visible_);
@@ -533,26 +547,6 @@ void MapModeUI::set_active_panel(PanelType panel) {
     }
 
     PanelType new_active = PanelType::None;
-
-    if (light_panel_) {
-        if (panel == PanelType::Lights) {
-            light_panel_->open();
-            new_active = PanelType::Lights;
-            bring_panel_to_front(light_panel_.get());
-        } else {
-            light_panel_->close();
-        }
-    }
-
-    if (shadow_panel_) {
-        if (panel == PanelType::Lights) {
-            shadow_panel_->open();
-            new_active = PanelType::Lights;
-            bring_panel_to_front(shadow_panel_.get());
-        } else {
-            shadow_panel_->close();
-        }
-    }
 
     if (grid_panel_) {
         if (panel == PanelType::Grid) {
@@ -738,14 +732,19 @@ void MapModeUI::update(const Input& input) {
     PanelType visible = PanelType::None;
     if (layers_footer_requested_) {
         visible = PanelType::Layers;
-    } else if ((light_panel_ && light_panel_->is_visible()) ||
-               (shadow_panel_ && shadow_panel_->is_visible())) {
-        visible = PanelType::Lights;
     } else if (grid_panel_ && grid_panel_->is_visible()) {
         visible = PanelType::Grid;
     }
     if (visible != active_panel_) {
         active_panel_ = visible;
+        sync_footer_button_states();
+    }
+
+    const bool lights_visible = light_panel_ && light_panel_->is_visible();
+    const bool shading_visible = shadow_panel_ && shadow_panel_->is_visible();
+    if (lights_visible != last_lights_visible_ || shading_visible != last_shading_visible_) {
+        last_lights_visible_ = lights_visible;
+        last_shading_visible_ = shading_visible;
         sync_footer_button_states();
     }
 }
@@ -814,28 +813,25 @@ void MapModeUI::open_layers_panel() {
 void MapModeUI::open_light_panel() {
     ensure_panels();
     if (!ensure_panel_unlocked(light_panel_.get(), "Light")) {
+        sync_footer_button_states();
         return;
     }
-    if (!ensure_panel_unlocked(shadow_panel_.get(), "Shadow")) {
-        return;
+    if (!light_panel_centered_) {
+        ensure_light_and_shading_positions();
     }
-    if (active_panel_ != PanelType::Lights) {
-        set_active_panel(PanelType::Lights);
+    if (light_panel_) {
+        light_panel_->open();
+        bring_panel_to_front(light_panel_.get());
     }
+    sync_footer_button_states();
 }
 
 void MapModeUI::close_light_panel() {
     ensure_panels();
-    if (active_panel_ == PanelType::Lights) {
-        set_active_panel(PanelType::None);
-    } else {
-        if (light_panel_) {
-            light_panel_->close();
-        }
-        if (shadow_panel_) {
-            shadow_panel_->close();
-        }
+    if (light_panel_) {
+        light_panel_->close();
     }
+    sync_footer_button_states();
 }
 
 void MapModeUI::toggle_light_panel() {
@@ -844,15 +840,50 @@ void MapModeUI::toggle_light_panel() {
         sync_footer_button_states();
         return;
     }
-    if (!ensure_panel_unlocked(shadow_panel_.get(), "Shadow")) {
+    if (light_panel_ && light_panel_->is_visible()) {
+        light_panel_->close();
         sync_footer_button_states();
         return;
     }
-    if (active_panel_ == PanelType::Lights) {
-        set_active_panel(PanelType::None);
-    } else {
-        set_active_panel(PanelType::Lights);
+    open_light_panel();
+}
+
+void MapModeUI::open_shading_panel() {
+    ensure_panels();
+    if (!ensure_panel_unlocked(shadow_panel_.get(), "Shading")) {
+        sync_footer_button_states();
+        return;
     }
+    if (!shading_panel_centered_) {
+        ensure_light_and_shading_positions();
+    }
+    if (shadow_panel_) {
+        shadow_panel_->open();
+        bring_panel_to_front(shadow_panel_.get());
+    }
+    sync_footer_button_states();
+}
+
+void MapModeUI::close_shading_panel() {
+    ensure_panels();
+    if (shadow_panel_) {
+        shadow_panel_->close();
+    }
+    sync_footer_button_states();
+}
+
+void MapModeUI::toggle_shading_panel() {
+    ensure_panels();
+    if (!ensure_panel_unlocked(shadow_panel_.get(), "Shading")) {
+        sync_footer_button_states();
+        return;
+    }
+    if (shadow_panel_ && shadow_panel_->is_visible()) {
+        shadow_panel_->close();
+        sync_footer_button_states();
+        return;
+    }
+    open_shading_panel();
 }
 
 void MapModeUI::open_grid_panel() {
@@ -901,16 +932,101 @@ void MapModeUI::toggle_layers_panel() {
 }
 
 void MapModeUI::close_all_panels() {
+    if (light_panel_) {
+        light_panel_->close();
+    }
+    if (shadow_panel_) {
+        shadow_panel_->close();
+    }
     set_active_panel(PanelType::None);
 }
 
 bool MapModeUI::is_light_panel_visible() const {
-    return (light_panel_ && light_panel_->is_visible()) ||
-           (shadow_panel_ && shadow_panel_->is_visible());
+    return light_panel_ && light_panel_->is_visible();
+}
+
+bool MapModeUI::is_shading_panel_visible() const {
+    return shadow_panel_ && shadow_panel_->is_visible();
 }
 
 bool MapModeUI::is_grid_panel_visible() const {
     return grid_panel_ && grid_panel_->is_visible();
+}
+
+void MapModeUI::ensure_light_and_shading_positions() {
+    ensure_panels();
+    if (screen_w_ <= 0 || screen_h_ <= 0) {
+        return;
+    }
+
+    constexpr int kPanelGap = 40;
+    const int fallback_w = DockableCollapsible::kDefaultFloatingContentWidth;
+    const int fallback_h = 400;
+
+    const auto resolve_dimensions = [&](DockableCollapsible* panel, int fallbackWidth, int fallbackHeight) {
+        int w = fallbackWidth;
+        int h = fallbackHeight;
+        if (panel) {
+            w = panel->rect().w > 0 ? panel->rect().w : fallbackWidth;
+            h = panel->rect().h > 0 ? panel->rect().h : panel->height();
+            if (h <= 0) h = fallbackHeight;
+        }
+        return std::pair<int, int>{w, h};
+    };
+
+    auto [light_w, light_h] = resolve_dimensions(light_panel_.get(), fallback_w, fallback_h);
+    auto [shading_w, shading_h] = resolve_dimensions(shadow_panel_.get(), fallback_w, fallback_h);
+
+    if (!light_panel_ && !shadow_panel_) {
+        return;
+    }
+
+    int total_width = 0;
+    if (light_panel_ && shadow_panel_) {
+        total_width = light_w + shading_w + kPanelGap;
+    } else if (light_panel_) {
+        total_width = light_w;
+    } else {
+        total_width = shading_w;
+    }
+
+    int start_x = (screen_w_ - total_width) / 2;
+    if (start_x < 0) start_x = 0;
+
+    int base_height = 0;
+    if (light_panel_ && shadow_panel_) {
+        base_height = std::max(light_h, shading_h);
+    } else if (light_panel_) {
+        base_height = light_h;
+    } else {
+        base_height = shading_h;
+    }
+    int base_y = (screen_h_ - base_height) / 2;
+    if (base_y < 0) base_y = 0;
+
+    if (light_panel_) {
+        int light_x = light_panel_ && shadow_panel_ ? start_x : (screen_w_ - light_w) / 2;
+        if (light_x < 0) light_x = 0;
+        if (light_x + light_w > screen_w_) {
+            light_x = std::max(0, screen_w_ - light_w);
+        }
+        int light_y = base_y + (base_height - light_h) / 2;
+        if (light_y < 0) light_y = 0;
+        light_panel_->set_position(light_x, light_y);
+        light_panel_centered_ = true;
+    }
+
+    if (shadow_panel_) {
+        int shading_x = light_panel_ ? start_x + light_w + kPanelGap : (screen_w_ - shading_w) / 2;
+        if (shading_x < 0) shading_x = 0;
+        if (shading_x + shading_w > screen_w_) {
+            shading_x = std::max(0, screen_w_ - shading_w);
+        }
+        int shading_y = base_y + (base_height - shading_h) / 2;
+        if (shading_y < 0) shading_y = 0;
+        shadow_panel_->set_position(shading_x, shading_y);
+        shading_panel_centered_ = true;
+    }
 }
 
 void MapModeUI::set_light_save_callback(LightSaveCallback cb) {
