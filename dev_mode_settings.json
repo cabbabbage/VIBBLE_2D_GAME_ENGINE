@@ -35,9 +35,12 @@
                         "temporal_smoothing": 0.8140000104904175
                     },
                     "virtual_light_map": {
-                        "directional_strength": 1.6200000047683716,
-                        "distance_strength_falloff": 3.5,
-                        "quadrant_count": 24.0
+                        "horizontal_falloff": 1.6200000047683716,
+                        "vertical_falloff": 3.5,
+                        "map_light_factor": 0.0,
+                        "max_offset_x": 100.0,
+                        "max_offset_y": 100.0,
+                        "shadow_scale": 1.0
                     }
                 },
                 "update_map_light": true

@@ -67,7 +67,6 @@ private:
     void render_light_map_preview(SDL_Renderer* renderer) const;
     const VirtualLightMap* current_virtual_light_map() const;
     std::optional<SDL_Point> player_screen_position() const;
-    int current_quadrant_count() const;
     std::vector<std::string> assets_in_quadrant(int quadrant) const;
 
     static int clamp_int(int v, int lo, int hi);
@@ -77,9 +76,12 @@ private:
     MapLightPanel* light_panel_ = nullptr;
     Assets* assets_ = nullptr;
 
-    std::unique_ptr<DMSlider> quadrant_count_;
-    std::unique_ptr<DMSlider> quadrant_distance_falloff_;
-    std::unique_ptr<DMSlider> quadrant_directional_strength_;
+    std::unique_ptr<DMSlider> map_light_factor_;
+    std::unique_ptr<DMSlider> horizontal_falloff_;
+    std::unique_ptr<DMSlider> vertical_falloff_;
+    std::unique_ptr<DMSlider> max_offset_x_;
+    std::unique_ptr<DMSlider> max_offset_y_;
+    std::unique_ptr<DMSlider> shadow_scale_;
 
     std::unique_ptr<DMCheckbox> reactive_offsets_enabled_;
     std::unique_ptr<DMCheckbox> reactive_opacity_enabled_;

@@ -59,6 +59,7 @@ class AssetInfoUI {
     void notify_light_sources_modified(bool purge_light_cache);
     void notify_spawn_group_entry_changed(const nlohmann::json& entry);
     void notify_spawn_group_removed(const std::string& spawn_id);
+    void regenerate_shadow_masks();
 
   private:
     void layout_widgets(int screen_w, int screen_h) const;
@@ -72,6 +73,7 @@ class AssetInfoUI {
     bool validate_target_asset() const;
     bool apply_to_assets_with_info(const std::function<void(Asset*)>& fn);
     void on_animation_document_saved();
+    void refresh_loaded_asset_instances();
 
   private:
     bool visible_ = false;

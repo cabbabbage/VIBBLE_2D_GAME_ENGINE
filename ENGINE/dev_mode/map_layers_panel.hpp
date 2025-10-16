@@ -66,12 +66,6 @@ private:
     struct PreviewNode;
     struct PreviewEdge;
 
-    enum class DetailsView {
-        RoomList,
-        LayerConfig,
-        RoomConfig
-    };
-
     friend class LayerCanvasWidget;
     friend class PanelSidebarWidget;
     friend class LayerConfigPanel;
@@ -148,7 +142,8 @@ private:
     bool handle_layer_config_event(const SDL_Event& e);
     void update_room_list(const Input& input, int sw, int sh);
     void update_layer_config(const Input& input, int sw, int sh);
-    void configure_details_container();
+    void sync_details_scroll_from(const SlidingWindowContainer* container);
+    void apply_details_scroll_to(SlidingWindowContainer* container, bool reset_scroll);
 
     void invalidate_cached_radii() const;
     void ensure_cached_radii() const;
@@ -193,19 +188,25 @@ private:
     void handle_main_container_closed();
 
     std::unique_ptr<SlidingWindowContainer> main_container_;
+    std::unique_ptr<SlidingWindowContainer> layers_container_;
+    std::unique_ptr<SlidingWindowContainer> rooms_container_;
+    std::unique_ptr<SlidingWindowContainer> room_config_container_;
     std::unique_ptr<LayerCanvasWidget> canvas_widget_;
     std::unique_ptr<PreviewToolbarWidget> toolbar_widget_;
     std::unique_ptr<PreviewColumnWidget> preview_column_widget_;
     std::unique_ptr<PanelSidebarWidget> sidebar_widget_;
     std::unique_ptr<RoomListPanel> room_list_panel_;
     std::unique_ptr<LayerConfigPanel> layer_config_;
-    std::unique_ptr<SlidingWindowContainer> details_container_;
     std::unique_ptr<RoomSelectorPopup> room_selector_;
     std::unique_ptr<RoomConfigurator> room_configurator_;
     std::string layer_config_header_text_;
-    DetailsView active_details_view_ = DetailsView::RoomList;
-    bool details_header_visible_request_ = true;
-    bool room_configurator_header_visible_request_ = false;
+    bool layers_container_visible_ = false;
+    bool rooms_container_visible_ = false;
+    bool room_config_container_visible_ = false;
+    bool layers_header_visible_request_ = true;
+    bool rooms_header_visible_request_ = true;
+    bool room_config_header_visible_request_ = false;
+    int details_scroll_value_ = 0;
 
     std::vector<std::unique_ptr<PreviewNode>> preview_nodes_;
     std::vector<PreviewEdge> preview_edges_;

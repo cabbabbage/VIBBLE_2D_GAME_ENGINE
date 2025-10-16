@@ -793,7 +793,11 @@ void Animation::load(const std::string& trigger,
                 const bool cached_variants_loaded = (!need_generation && attempt_cache_load);
 
                 if (info.is_shaded) {
-                        auto mask_result = GenerateFadedMask::BuildMasks(info.name, trigger, expected_steps, variant_surfaces);
+                        auto mask_result = GenerateFadedMask::BuildMasks(info.name,
+                                                                         trigger,
+                                                                         expected_steps,
+                                                                         variant_surfaces,
+                                                                         info.shadow_mask_settings);
                         mask_surfaces            = std::move(mask_result.first);
                         masks_loaded_from_cache  = mask_result.second;
                         if (mask_surfaces.size() != variant_surfaces.size()) {

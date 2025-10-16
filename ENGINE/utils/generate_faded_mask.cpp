@@ -16,9 +16,7 @@
 
 namespace {
 
-constexpr int   kCacheVersion    = 3;
-constexpr float kExpansionRatio  = 0.8f;
-constexpr float kFadeExponent    = 1.05f;
+constexpr int kCacheVersion = 4;
 
 struct DistanceNode {
     float dist;
@@ -28,16 +26,18 @@ struct DistanceNode {
     bool operator<(const DistanceNode& other) const { return dist > other.dist; }
 };
 
-int compute_expand_radius(int w, int h) {
+int compute_expand_radius(int w, int h, float expansion_ratio) {
     const int max_dim = std::max(w, h);
-    const float scaled = static_cast<float>(max_dim) * (kExpansionRatio * 0.5f);
+    const float scaled = static_cast<float>(max_dim) * (expansion_ratio * 0.5f);
     const int radius = static_cast<int>(std::ceil(scaled));
     return std::max(1, radius);
 }
 
-int compute_base_blur_radius(int expand_radius) {
+int compute_base_blur_radius(int expand_radius, float blur_scale) {
     if (expand_radius <= 2) return 0;
-    return std::max(1, expand_radius / 6);
+    const int base = std::max(1, expand_radius / 6);
+    const int scaled = static_cast<int>(std::round(static_cast<float>(base) * blur_scale));
+    return std::max(0, scaled);
 }
 
 float bell_curve_weight(float t) {
@@ -105,8 +105,10 @@ SDL_Surface* make_rgba_surface(int w, int h) {
     return SDL_CreateRGBSurfaceWithFormat(0, w, h, 32, SDL_PIXELFORMAT_RGBA32);
 }
 
-SDL_Surface* generate_mask_surface(SDL_Surface* source) {
+SDL_Surface* generate_mask_surface(SDL_Surface* source, const ShadowMaskSettings& raw_settings) {
     if (!source) return nullptr;
+
+    const ShadowMaskSettings settings = SanitizeShadowMaskSettings(raw_settings);
 
     SDL_Surface* src_rgba = SDL_ConvertSurfaceFormat(source, SDL_PIXELFORMAT_RGBA32, 0);
     if (!src_rgba) return nullptr;
@@ -114,8 +116,8 @@ SDL_Surface* generate_mask_surface(SDL_Surface* source) {
     const int width  = std::max(1, src_rgba->w);
     const int height = std::max(1, src_rgba->h);
 
-    const int expand_radius    = compute_expand_radius(width, height);
-    const int base_blur_radius = compute_base_blur_radius(expand_radius)/2;
+    const int expand_radius    = compute_expand_radius(width, height, settings.expansion_ratio);
+    const int base_blur_radius = compute_base_blur_radius(expand_radius, settings.blur_scale) / 2;
 
     const int expanded_w = width + expand_radius * 2;
     const int expanded_h = height + expand_radius * 2;
@@ -201,6 +203,10 @@ SDL_Surface* generate_mask_surface(SDL_Surface* source) {
     }
 
     const float expand_radius_f = static_cast<float>(expand_radius);
+    const float start_distance  = std::clamp(settings.falloff_start, 0.0f, 0.99f) * expand_radius_f;
+    const float fade_span       = std::max(1.0f, expand_radius_f - start_distance);
+    const float exponent        = std::max(0.01f, settings.falloff_exponent);
+    const float alpha_mult      = std::clamp(settings.alpha_multiplier, 0.0f, 4.0f);
 
     std::vector<float> base_alpha(expanded_w * expanded_h, 0.0f);
     for (std::size_t i = 0; i < distance.size(); ++i) {
@@ -219,10 +225,17 @@ SDL_Surface* generate_mask_surface(SDL_Surface* source) {
             continue;
         }
 
-        const float ratio = std::clamp(1.0f - (d / expand_radius_f), 0.0f, 1.0f);
-        const float eased = bell_curve_weight(ratio);
-        const float faded = std::pow(eased, kFadeExponent);
-        alpha_values[i]   = base_alpha[i] * faded;
+        float fade_progress = 0.0f;
+        if (d <= start_distance) {
+            fade_progress = 0.0f;
+        } else {
+            fade_progress = (d - start_distance) / fade_span;
+        }
+        fade_progress = std::clamp(fade_progress, 0.0f, 1.0f);
+        const float weight = 1.0f - fade_progress;
+        const float eased = bell_curve_weight(weight);
+        const float faded = std::pow(eased, exponent);
+        alpha_values[i]   = base_alpha[i] * faded * alpha_mult;
     }
 
     Uint32* dst_pixels = static_cast<Uint32*>(mask->pixels);
@@ -257,13 +270,16 @@ std::pair<GenerateFadedMask::MaskVariants, bool> GenerateFadedMask::BuildMasks(
     const std::string& asset_name,
     const std::string& animation_id,
     const std::vector<int>& scale_steps,
-    const MaskVariants& variant_frames)
+    const MaskVariants& variant_frames,
+    const ShadowMaskSettings& raw_settings)
 {
     namespace fs = std::filesystem;
     using json = nlohmann::json;
 
     MaskVariants masks;
     masks.resize(variant_frames.size());
+
+    const ShadowMaskSettings settings = SanitizeShadowMaskSettings(raw_settings);
 
     const fs::path preferred_folder = fs::path("cache") / asset_name / "animations" / animation_id / "masks";
     const fs::path legacy_folder    = fs::path("cache") / asset_name / "animations" / animation_id / "mask";
@@ -288,10 +304,10 @@ std::pair<GenerateFadedMask::MaskVariants, bool> GenerateFadedMask::BuildMasks(
     }
 
     const int expected_expand_radius = (reference_w > 0 && reference_h > 0)
-        ? compute_expand_radius(reference_w, reference_h)
+        ? compute_expand_radius(reference_w, reference_h, settings.expansion_ratio)
         : 0;
     const int expected_base_blur_radius = (expected_expand_radius > 0)
-        ? compute_base_blur_radius(expected_expand_radius)
+        ? compute_base_blur_radius(expected_expand_radius, settings.blur_scale)
         : 0;
 
     json meta;
@@ -313,9 +329,12 @@ std::pair<GenerateFadedMask::MaskVariants, bool> GenerateFadedMask::BuildMasks(
             const int stored_version       = meta.value("version", 0);
             const int stored_frame_count   = meta.value("frame_count", -1);
             const int stored_variant_count = meta.value("variant_count", -1);
-            const float stored_ratio       = meta.value("expansion_ratio", kExpansionRatio);
+            const float stored_ratio       = meta.value("expansion_ratio", settings.expansion_ratio);
             const int stored_expand_radius    = meta.value("expand_radius", expected_expand_radius);
             const int stored_base_blur_radius = meta.value("base_blur_radius", expected_base_blur_radius);
+            const float stored_falloff_start   = meta.value("falloff_start", settings.falloff_start);
+            const float stored_falloff_exponent = meta.value("falloff_exponent", settings.falloff_exponent);
+            const float stored_alpha_multiplier = meta.value("alpha_multiplier", settings.alpha_multiplier);
 
             bool steps_ok = false;
             if (meta.contains("scale_steps") && meta["scale_steps"].is_array()) {
@@ -334,14 +353,18 @@ std::pair<GenerateFadedMask::MaskVariants, bool> GenerateFadedMask::BuildMasks(
                 }
             }
 
-            const bool ratio_ok = std::fabs(stored_ratio - kExpansionRatio) <= 1e-4f;
+            const bool ratio_ok = std::fabs(stored_ratio - settings.expansion_ratio) <= 1e-4f;
             const bool blur_ok   = (expected_base_blur_radius == 0) || (stored_base_blur_radius == expected_base_blur_radius);
             const bool expand_ok = (expected_expand_radius == 0) || (stored_expand_radius == expected_expand_radius);
+            const bool falloff_start_ok = std::fabs(stored_falloff_start - settings.falloff_start) <= 1e-4f;
+            const bool falloff_exp_ok   = std::fabs(stored_falloff_exponent - settings.falloff_exponent) <= 1e-4f;
+            const bool alpha_mult_ok    = std::fabs(stored_alpha_multiplier - settings.alpha_multiplier) <= 1e-4f;
 
             cache_ok = (stored_version == kCacheVersion &&
                         stored_frame_count == static_cast<int>(frame_count) &&
                         stored_variant_count == static_cast<int>(variant_count) &&
-                        ratio_ok && blur_ok && expand_ok && steps_ok);
+                        ratio_ok && blur_ok && expand_ok && steps_ok &&
+                        falloff_start_ok && falloff_exp_ok && alpha_mult_ok);
         } catch (...) {
             cache_ok = false;
         }
@@ -378,7 +401,7 @@ std::pair<GenerateFadedMask::MaskVariants, bool> GenerateFadedMask::BuildMasks(
         mask_list.reserve(frames.size());
 
         for (SDL_Surface* frame_surface : frames) {
-            SDL_Surface* mask_surface = generate_mask_surface(frame_surface);
+            SDL_Surface* mask_surface = generate_mask_surface(frame_surface, settings);
             if (!mask_surface) {
                 // Clean up partial work and abort.
                 for (auto& list : masks) {
@@ -397,9 +420,12 @@ std::pair<GenerateFadedMask::MaskVariants, bool> GenerateFadedMask::BuildMasks(
     new_meta["version"]        = kCacheVersion;
     new_meta["frame_count"]    = static_cast<int>(frame_count);
     new_meta["variant_count"]  = static_cast<int>(variant_count);
-    new_meta["expansion_ratio"] = kExpansionRatio;
+    new_meta["expansion_ratio"] = settings.expansion_ratio;
     new_meta["expand_radius"]     = expected_expand_radius;
     new_meta["base_blur_radius"]  = expected_base_blur_radius;
+    new_meta["falloff_start"]     = settings.falloff_start;
+    new_meta["falloff_exponent"]  = settings.falloff_exponent;
+    new_meta["alpha_multiplier"]  = settings.alpha_multiplier;
 
     nlohmann::json steps_json = nlohmann::json::array();
     for (int step : scale_steps) {
@@ -433,4 +459,9 @@ std::vector<std::vector<SDL_Texture*>> GenerateFadedMask::SurfacesToTextures(
         }
     }
     return textures;
+}
+
+SDL_Surface* GenerateFadedMask::GenerateSingleMask(SDL_Surface* source,
+                                                   const ShadowMaskSettings& settings) {
+    return generate_mask_surface(source, settings);
 }

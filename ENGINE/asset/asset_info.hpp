@@ -2,6 +2,7 @@
 
 #include "animation.hpp"
 #include "utils/area.hpp"
+#include "utils/shadow_mask_settings.hpp"
 #include "utils/light_source.hpp"
 #include <map>
 #include <nlohmann/json.hpp>
@@ -63,6 +64,7 @@ class AssetInfo {
     bool passable;
     bool is_shaded = false;
     int shading_factor = 100;
+    ShadowMaskSettings shadow_mask_settings{};
     int min_same_type_distance;
     int min_distance_all;
     float scale_factor;
@@ -129,6 +131,8 @@ class AssetInfo {
 
     void set_lighting(bool is_shaded, const LightSource& shading, int shading_factor, const std::vector<LightSource>& lights);
     void set_ray_strength(int strength);
+    void set_shadow_mask_settings(const ShadowMaskSettings& settings);
+    void set_shading_enabled(bool enabled);
 
     std::string info_json_path() const { return info_json_path_; }
     std::string asset_dir_path() const { return dir_path_; }

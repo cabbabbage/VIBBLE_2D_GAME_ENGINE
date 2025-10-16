@@ -165,11 +165,12 @@ void populate_from_section(ReactiveShadowSettings::Output& output, const nlohman
 
 void populate_from_section(ReactiveShadowSettings::VirtualLightMapSettings& map_cfg,
                            const nlohmann::json& section) {
-    map_cfg.quadrant_count = read_int(section, "quadrant_count", map_cfg.quadrant_count);
-    map_cfg.distance_strength_falloff =
-        read_float(section, "distance_strength_falloff", map_cfg.distance_strength_falloff);
-    map_cfg.directional_strength =
-        read_float(section, "directional_strength", map_cfg.directional_strength);
+    map_cfg.map_light_factor   = read_float(section, "map_light_factor", map_cfg.map_light_factor);
+    map_cfg.horizontal_falloff = read_float(section, "horizontal_falloff", map_cfg.horizontal_falloff);
+    map_cfg.vertical_falloff   = read_float(section, "vertical_falloff", map_cfg.vertical_falloff);
+    map_cfg.max_offset_x       = read_float(section, "max_offset_x", map_cfg.max_offset_x);
+    map_cfg.max_offset_y       = read_float(section, "max_offset_y", map_cfg.max_offset_y);
+    map_cfg.shadow_scale       = read_float(section, "shadow_scale", map_cfg.shadow_scale);
 }
 
 void populate_from_flat(ReactiveShadowSettings& settings, const nlohmann::json& json) {
@@ -255,9 +256,12 @@ void assign_reactive_shadow_settings(nlohmann::json& json, const ReactiveShadowS
     });
 
     json["virtual_light_map"] = nlohmann::json::object({
-        { "quadrant_count", sanitized.virtual_light_map.quadrant_count },
-        { "distance_strength_falloff", sanitized.virtual_light_map.distance_strength_falloff },
-        { "directional_strength", sanitized.virtual_light_map.directional_strength }
+        { "map_light_factor", sanitized.virtual_light_map.map_light_factor },
+        { "horizontal_falloff", sanitized.virtual_light_map.horizontal_falloff },
+        { "vertical_falloff", sanitized.virtual_light_map.vertical_falloff },
+        { "max_offset_x", sanitized.virtual_light_map.max_offset_x },
+        { "max_offset_y", sanitized.virtual_light_map.max_offset_y },
+        { "shadow_scale", sanitized.virtual_light_map.shadow_scale }
     });
 }
 

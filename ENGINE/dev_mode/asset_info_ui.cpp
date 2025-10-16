@@ -34,9 +34,7 @@
 #include "core/AssetsManager.hpp"
 #include "asset/Asset.hpp"
 #include "render/camera.hpp"
-#include "render/global_light_source.hpp"
 #include "render_pipeline/ScalingLogic.hpp"
-#include "utils/light_source.hpp"
 #include "search_assets.hpp"
 
 namespace {
@@ -509,11 +507,7 @@ void AssetInfoUI::update(const Input& input, int screen_w, int screen_h) {
         }
     }
 
-    bool want_map_light_panel = false;
-    if (visible_ && info_ && shading_section_ && shading_section_->is_expanded()) {
-        want_map_light_panel = shading_section_->shading_source_enabled();
-    }
-    sync_map_light_panel_visibility(want_map_light_panel);
+    sync_map_light_panel_visibility(false);
 
     bool lighting_requires_high_quality = false;
     bool shading_requires_high_quality = false;
@@ -642,80 +636,6 @@ void AssetInfoUI::render_world_overlay(SDL_Renderer* r, const camera& cam) const
         basic_info_section_->render_world_overlay(r, cam, target_asset_, reference_screen_height);
     }
 
-    if (!shading_section_ || !shading_section_->is_expanded() || !shading_section_->shading_enabled() || !target_asset_) return;
-    const LightSource& light = shading_section_->shading_light();
-    if (light.x_radius <= 0 && light.y_radius <= 0) return;
-    const SDL_Color accent = DMStyles::AccentButton().hover_bg;
-    SDL_SetRenderDrawColor(r, accent.r, accent.g, accent.b, 255);
-    const bool flipped = target_asset_->flipped;
-    const int base_offset_x = flipped ? -light.offset_x : light.offset_x;
-    for (int deg = 0; deg < 360; ++deg) {
-        double rad = deg * M_PI / 180.0;
-        double cx = std::cos(rad) * static_cast<double>(light.x_radius);
-        double cy = std::sin(rad) * static_cast<double>(light.y_radius);
-        if (flipped) cx = -cx;
-        int wx = target_asset_->pos.x + base_offset_x + static_cast<int>(std::llround(cx));
-        int wy = target_asset_->pos.y + light.offset_y - static_cast<int>(std::llround(cy));
-        SDL_Point p = cam.compute_render_effects(SDL_Point{wx, wy}, 0.0f, 0.0f).screen_position;
-        SDL_RenderDrawPoint(r, p.x, p.y);
-    }
-
-    Uint8 prev_r = 0, prev_g = 0, prev_b = 0, prev_a = 0;
-    SDL_GetRenderDrawColor(r, &prev_r, &prev_g, &prev_b, &prev_a);
-    SDL_BlendMode prev_mode = SDL_BLENDMODE_NONE;
-    SDL_GetRenderDrawBlendMode(r, &prev_mode);
-    SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
-
-    const Global_Light_Source* global_light = assets_ ? assets_->map_light_source() : nullptr;
-    SDL_Point screen_center_map = cam.get_screen_center();
-    SDL_Point screen_center = cam.map_to_screen(screen_center_map);
-
-    bool drew_indicator = false;
-    if (global_light) {
-        SDL_Point start_map = global_light->get_direction_reference();
-        SDL_Point end_map = global_light->get_direction_target();
-        SDL_Point start = cam.map_to_screen(start_map);
-        SDL_Point end = cam.map_to_screen(end_map);
-        SDL_SetRenderDrawColor(r, 220, 32, 32, 230);
-        SDL_RenderDrawLine(r, start.x, start.y, end.x, end.y);
-        SDL_Rect tip{end.x - 4, end.y - 4, 8, 8};
-        SDL_RenderFillRect(r, &tip);
-        drew_indicator = true;
-    }
-
-    if (!drew_indicator) {
-        SDL_SetRenderDrawColor(r, 220, 32, 32, 230);
-        SDL_RenderDrawLine(r, screen_center.x - 6, screen_center.y - 6, screen_center.x + 6, screen_center.y + 6);
-        SDL_RenderDrawLine(r, screen_center.x - 6, screen_center.y + 6, screen_center.x + 6, screen_center.y - 6);
-    }
-
-    const double center_x = static_cast<double>(target_asset_->pos.x + base_offset_x);
-    const double center_y = static_cast<double>(target_asset_->pos.y + light.offset_y);
-    SDL_Point orbit_center_screen = cam.compute_render_effects(
-        SDL_Point{static_cast<int>(std::lround(center_x)), static_cast<int>(std::lround(center_y))},
-        0.0f, 0.0f).screen_position;
-
-    double angle = global_light ? static_cast<double>(global_light->get_angle()) : 0.0;
-    double dir_x = std::cos(angle) * static_cast<double>(light.x_radius);
-    if (flipped) dir_x = -dir_x;
-    double dir_y = -std::sin(angle) * static_cast<double>(light.y_radius);
-    double length = std::hypot(dir_x, dir_y);
-    if (length > 0.0) {
-        double max_length = 60.0;
-        double scale = std::min(1.0, max_length / length);
-        SDL_Point orbit_end_screen = cam.compute_render_effects(
-            SDL_Point{
-                static_cast<int>(std::lround(center_x + dir_x * scale)),
-                static_cast<int>(std::lround(center_y + dir_y * scale))
-            },
-            0.0f, 0.0f).screen_position;
-        SDL_Color orbit_color = DMStyles::AccentButton().hover_bg;
-        SDL_SetRenderDrawColor(r, orbit_color.r, orbit_color.g, orbit_color.b, 255);
-        SDL_RenderDrawLine(r, orbit_center_screen.x, orbit_center_screen.y, orbit_end_screen.x, orbit_end_screen.y);
-    }
-
-    SDL_SetRenderDrawColor(r, prev_r, prev_g, prev_b, prev_a);
-    SDL_SetRenderDrawBlendMode(r, prev_mode);
 }
 
 void AssetInfoUI::refresh_target_asset_scale() {
@@ -984,6 +904,24 @@ void AssetInfoUI::notify_spawn_group_removed(const std::string& spawn_id) {
     assets_->notify_spawn_group_removed(spawn_id);
 }
 
+void AssetInfoUI::regenerate_shadow_masks() {
+    if (!info_) {
+        return;
+    }
+
+    SDL_Renderer* renderer = last_renderer_;
+    if (!renderer && assets_) {
+        renderer = assets_->renderer();
+    }
+
+    if (!renderer) {
+        return;
+    }
+
+    info_->loadAnimations(renderer);
+    refresh_loaded_asset_instances();
+}
+
 const char* AssetInfoUI::section_display_name(AssetInfoSectionId section_id) {
     switch (section_id) {
         case AssetInfoSectionId::BasicInfo:   return "Basic Info";
@@ -1043,29 +981,11 @@ bool AssetInfoUI::apply_to_assets_with_info(const std::function<void(Asset*)>& f
     return !visited.empty();
 }
 
-void AssetInfoUI::on_animation_document_saved() {
+void AssetInfoUI::refresh_loaded_asset_instances() {
     if (!info_) {
         return;
     }
 
-    SDL_Renderer* renderer = last_renderer_;
-    if (!renderer && assets_) {
-        renderer = assets_->renderer();
-    }
-
-    if (!renderer) {
-        return;
-    }
-
-    const bool reloaded = info_->reload_animations_from_disk();
-    if (!reloaded) {
-        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
-                    "[AssetInfoUI] Failed to reload animations for %s.",
-                    info_->name.c_str());
-        return;
-    }
-
-    info_->loadAnimations(renderer);
     render_pipeline::ScalingLogic::ResetAssetUsage(info_->name);
 
     bool updated_any = apply_to_assets_with_info([&](Asset* asset) {
@@ -1104,4 +1024,30 @@ void AssetInfoUI::on_animation_document_saved() {
     if (updated_any && assets_) {
         assets_->mark_active_assets_dirty();
     }
+}
+
+void AssetInfoUI::on_animation_document_saved() {
+    if (!info_) {
+        return;
+    }
+
+    SDL_Renderer* renderer = last_renderer_;
+    if (!renderer && assets_) {
+        renderer = assets_->renderer();
+    }
+
+    if (!renderer) {
+        return;
+    }
+
+    const bool reloaded = info_->reload_animations_from_disk();
+    if (!reloaded) {
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+                    "[AssetInfoUI] Failed to reload animations for %s.",
+                    info_->name.c_str());
+        return;
+    }
+
+    info_->loadAnimations(renderer);
+    refresh_loaded_asset_instances();
 }

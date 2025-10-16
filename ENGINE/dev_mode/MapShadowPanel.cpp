@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <array>
+#include <vector>
 #include <cmath>
 #include <cstdio>
 #include <optional>
@@ -374,79 +375,67 @@ void MapShadowPanel::render_light_map_preview(SDL_Renderer* renderer) const {
         SDL_RenderFillRect(renderer, &detail_area);
     }
 
-    auto compute_quadrant_rect = [&](int quadrant) {
-        SDL_Rect rect{0, 0, 0, 0};
-        if (grid_area.w <= 0 || grid_area.h <= 0) {
-            return rect;
-        }
-        const int cols = VirtualLightMap::kQuadrantCols;
-        const int rows = VirtualLightMap::kQuadrantRows;
-        const int qx   = quadrant % cols;
-        const int qy   = quadrant / cols;
-        const int base_w = grid_area.w / cols;
-        const int base_h = grid_area.h / rows;
-        rect.x = grid_area.x + qx * base_w;
-        rect.y = grid_area.y + qy * base_h;
-        rect.w = (qx == cols - 1) ? (grid_area.x + grid_area.w - rect.x) : base_w;
-        rect.h = (qy == rows - 1) ? (grid_area.y + grid_area.h - rect.y) : base_h;
-        rect.x += 2;
-        rect.y += 2;
-        rect.w = std::max(0, rect.w - 4);
-        rect.h = std::max(0, rect.h - 4);
-        return rect;
-    };
-
     if (map) {
-        for (int quadrant = 0; quadrant < VirtualLightMap::kQuadrantCount; ++quadrant) {
-            SDL_Rect quad_rect = compute_quadrant_rect(quadrant);
-            quadrant_preview_rects_[static_cast<std::size_t>(quadrant)] = quad_rect;
-            if (quad_rect.w <= 0 || quad_rect.h <= 0) {
+        SDL_Rect grid_inner = grid_area;
+        grid_inner.x += 2;
+        grid_inner.y += 2;
+        grid_inner.w = std::max(0, grid_inner.w - 4);
+        grid_inner.h = std::max(0, grid_inner.h - 4);
+
+        std::vector<int> column_edges(VirtualLightMap::kGridWidth + 1, grid_inner.x);
+        std::vector<int> row_edges(VirtualLightMap::kGridHeight + 1, grid_inner.y);
+        if (grid_inner.w > 0 && grid_inner.h > 0) {
+            for (int x = 0; x <= VirtualLightMap::kGridWidth; ++x) {
+                float t = static_cast<float>(x) / static_cast<float>(VirtualLightMap::kGridWidth);
+                column_edges[static_cast<std::size_t>(x)] = grid_inner.x +
+                    static_cast<int>(std::lround(t * static_cast<float>(grid_inner.w)));
+            }
+            for (int y = 0; y <= VirtualLightMap::kGridHeight; ++y) {
+                float t = static_cast<float>(y) / static_cast<float>(VirtualLightMap::kGridHeight);
+                row_edges[static_cast<std::size_t>(y)] = grid_inner.y +
+                    static_cast<int>(std::lround(t * static_cast<float>(grid_inner.h)));
+            }
+        }
+
+        for (int gy = 0; gy < VirtualLightMap::kGridHeight; ++gy) {
+            for (int gx = 0; gx < VirtualLightMap::kGridWidth; ++gx) {
+                const int index = gy * VirtualLightMap::kGridWidth + gx;
+                SDL_Rect cell_rect{0, 0, 0, 0};
+                if (grid_inner.w > 0 && grid_inner.h > 0) {
+                    cell_rect = SDL_Rect{
+                        column_edges[static_cast<std::size_t>(gx)],
+                        row_edges[static_cast<std::size_t>(gy)],
+                        std::max(1, column_edges[static_cast<std::size_t>(gx + 1)] -
+                                    column_edges[static_cast<std::size_t>(gx)]),
+                        std::max(1, row_edges[static_cast<std::size_t>(gy + 1)] -
+                                    row_edges[static_cast<std::size_t>(gy)])
+                    };
+                }
+                quadrant_preview_rects_[static_cast<std::size_t>(index)] = cell_rect;
+                if (cell_rect.w <= 0 || cell_rect.h <= 0) {
+                    continue;
+                }
+
+                float value = std::clamp(map->cell(gx, gy).brightness, 0.0f, 1.0f);
+                Uint8 intensity = static_cast<Uint8>(std::lround(value * 255.0f));
+                SDL_SetRenderDrawColor(renderer, intensity, intensity, intensity, 255);
+                SDL_RenderFillRect(renderer, &cell_rect);
+            }
+        }
+
+        for (int highlight_index : { player_quadrant, selected_index }) {
+            if (highlight_index < 0 || highlight_index >= VirtualLightMap::kQuadrantCount) {
                 continue;
             }
-
-            std::array<int, VirtualLightMap::kQuadrantWidth + 1> column_edges{};
-            std::array<int, VirtualLightMap::kQuadrantHeight + 1> row_edges{};
-            for (int x = 0; x <= VirtualLightMap::kQuadrantWidth; ++x) {
-                float t = static_cast<float>(x) / static_cast<float>(VirtualLightMap::kQuadrantWidth);
-                column_edges[x] = quad_rect.x + static_cast<int>(std::lround(t * static_cast<float>(quad_rect.w)));
+            SDL_Rect rect = quadrant_preview_rects_[static_cast<std::size_t>(highlight_index)];
+            if (rect.w <= 0 || rect.h <= 0) {
+                continue;
             }
-            for (int y = 0; y <= VirtualLightMap::kQuadrantHeight; ++y) {
-                float t = static_cast<float>(y) / static_cast<float>(VirtualLightMap::kQuadrantHeight);
-                row_edges[y] = quad_rect.y + static_cast<int>(std::lround(t * static_cast<float>(quad_rect.h)));
-            }
-
-            const int base_x = (quadrant % VirtualLightMap::kQuadrantCols) * VirtualLightMap::kQuadrantWidth;
-            const int base_y = (quadrant / VirtualLightMap::kQuadrantCols) * VirtualLightMap::kQuadrantHeight;
-            for (int y = 0; y < VirtualLightMap::kQuadrantHeight; ++y) {
-                for (int x = 0; x < VirtualLightMap::kQuadrantWidth; ++x) {
-                    float value = std::clamp(map->at(base_x + x, base_y + y), 0.0f, 1.0f);
-                    Uint8 intensity = static_cast<Uint8>(std::lround(value * 255.0f));
-                    SDL_SetRenderDrawColor(renderer, intensity, intensity, intensity, 255);
-                    SDL_Rect cell_rect{
-                        column_edges[static_cast<std::size_t>(x)],
-                        row_edges[static_cast<std::size_t>(y)],
-                        std::max(1, column_edges[static_cast<std::size_t>(x + 1)] - column_edges[static_cast<std::size_t>(x)]),
-                        std::max(1, row_edges[static_cast<std::size_t>(y + 1)] - row_edges[static_cast<std::size_t>(y)])
-                    };
-                    SDL_RenderFillRect(renderer, &cell_rect);
-                }
-            }
-
-            char buffer[32];
-            std::snprintf(buffer, sizeof(buffer), "%.2f", map->quadrant_settings(quadrant).base_light);
-            draw_label_at(buffer, quad_rect.x + 4, quad_rect.y + 4, quad_rect.x + quad_rect.w - 4);
-
-            SDL_SetRenderDrawColor(renderer, border.r, border.g, border.b, border.a);
-            SDL_RenderDrawRect(renderer, &quad_rect);
-
-            if (player_quadrant == quadrant) {
-                SDL_SetRenderDrawColor(renderer, highlight.r, highlight.g, highlight.b, 160);
-                SDL_RenderDrawRect(renderer, &quad_rect);
-            }
-
-            if (selected_index == quadrant) {
-                SDL_Rect expanded = quad_rect;
-                SDL_SetRenderDrawColor(renderer, highlight.r, highlight.g, highlight.b, 255);
+            Uint8 alpha = (highlight_index == player_quadrant) ? 160 : 255;
+            SDL_SetRenderDrawColor(renderer, highlight.r, highlight.g, highlight.b, alpha);
+            SDL_RenderDrawRect(renderer, &rect);
+            if (highlight_index == selected_index) {
+                SDL_Rect expanded = rect;
                 for (int i = 0; i < 2 && expanded.w > 0 && expanded.h > 0; ++i) {
                     SDL_RenderDrawRect(renderer, &expanded);
                     expanded.x += 1;
@@ -457,8 +446,8 @@ void MapShadowPanel::render_light_map_preview(SDL_Renderer* renderer) const {
             }
         }
     } else {
-        for (std::size_t i = 0; i < quadrant_preview_rects_.size(); ++i) {
-            quadrant_preview_rects_[i] = compute_quadrant_rect(static_cast<int>(i));
+        for (auto& rect : quadrant_preview_rects_) {
+            rect = SDL_Rect{0, 0, 0, 0};
         }
     }
 
@@ -483,20 +472,22 @@ void MapShadowPanel::render_light_map_preview(SDL_Renderer* renderer) const {
         if (detail_area.h <= 0) {
             draw_detail_line("Panel area too small for details.");
         } else if (selected_index >= 0) {
-            const auto& settings = map->quadrant_settings(selected_index);
+            const int cell_x = selected_index % VirtualLightMap::kGridWidth;
+            const int cell_y = selected_index / VirtualLightMap::kGridWidth;
+            const auto& cell = map->cell_for_index(selected_index);
             char buffer[128];
-            std::snprintf(buffer, sizeof(buffer), "Quadrant %d", selected_index + 1);
+            std::snprintf(buffer, sizeof(buffer), "Cell (%d, %d)", cell_x + 1, cell_y + 1);
             draw_detail_line(buffer);
-            std::snprintf(buffer, sizeof(buffer), "Base light: %.3f", settings.base_light);
+            std::snprintf(buffer, sizeof(buffer), "Brightness: %.3f", cell.brightness);
             draw_detail_line(buffer);
-            draw_detail_line("Shadow settings for assets in this quadrant:");
-            std::snprintf(buffer, sizeof(buffer), "  Opacity: %.2f", settings.opacity);
+            draw_detail_line("Shadow parameters:");
+            std::snprintf(buffer, sizeof(buffer), "  Opacity: %.3f", cell.opacity);
             draw_detail_line(buffer);
-            std::snprintf(buffer, sizeof(buffer), "  Offset X: %.1f", settings.offset.x);
+            std::snprintf(buffer, sizeof(buffer), "  Offset X: %.1f", cell.offset_x);
             draw_detail_line(buffer);
-            std::snprintf(buffer, sizeof(buffer), "  Offset Y: %.1f", settings.offset.y);
+            std::snprintf(buffer, sizeof(buffer), "  Offset Y: %.1f", cell.offset_y);
             draw_detail_line(buffer);
-            std::snprintf(buffer, sizeof(buffer), "  Scale: %.2f", settings.scale);
+            std::snprintf(buffer, sizeof(buffer), "  Scale: %.2f", cell.scale);
             draw_detail_line(buffer);
 
             auto asset_names = assets_in_quadrant(selected_index);
@@ -509,10 +500,12 @@ void MapShadowPanel::render_light_map_preview(SDL_Renderer* renderer) const {
                 }
             }
         } else {
-            draw_detail_line("Select a quadrant to inspect details.");
+            draw_detail_line("Select a cell to inspect details.");
             if (player_quadrant >= 0) {
-                char buffer[64];
-                std::snprintf(buffer, sizeof(buffer), "Player is currently in quadrant %d.", player_quadrant + 1);
+                const int cell_x = player_quadrant % VirtualLightMap::kGridWidth;
+                const int cell_y = player_quadrant / VirtualLightMap::kGridWidth;
+                char buffer[96];
+                std::snprintf(buffer, sizeof(buffer), "Player cell: (%d, %d).", cell_x + 1, cell_y + 1);
                 draw_detail_line(buffer);
             }
         }
@@ -533,13 +526,6 @@ std::optional<SDL_Point> MapShadowPanel::player_screen_position() const {
         return std::nullopt;
     }
     return assets_->getView().map_to_screen(assets_->player->pos);
-}
-
-int MapShadowPanel::current_quadrant_count() const {
-    if (quadrant_count_) {
-        return clamp_int(quadrant_count_->displayed_value(), 1, 24);
-    }
-    return std::max(1, last_applied_settings_.virtual_light_map.quadrant_count);
 }
 
 std::vector<std::string> MapShadowPanel::assets_in_quadrant(int quadrant) const {
@@ -592,9 +578,6 @@ void MapShadowPanel::update_save_status(bool success) const {
 }
 
 void MapShadowPanel::build_ui() {
-    quadrant_count_ = std::make_unique<DMSlider>("Quadrants", 1, 24, last_applied_settings_.virtual_light_map.quadrant_count);
-    if (quadrant_count_) quadrant_count_->set_defer_commit_until_unfocus(true);
-
     auto make_float_slider = [&](const std::string& label,
                                  float min,
                                  float max,
@@ -624,10 +607,18 @@ void MapShadowPanel::build_ui() {
         return slider;
     };
 
-    quadrant_distance_falloff_ = make_float_slider("Distance Falloff", 0.05f, 10.0f,
-        last_applied_settings_.virtual_light_map.distance_strength_falloff, 100, 2);
-    quadrant_directional_strength_ = make_float_slider("Directional Strength", 0.0f, 4.0f,
-        last_applied_settings_.virtual_light_map.directional_strength, 100, 2);
+    map_light_factor_ = make_float_slider("Map Light Factor", 0.0f, 1.0f,
+        last_applied_settings_.virtual_light_map.map_light_factor, 100);
+    horizontal_falloff_ = make_float_slider("Horizontal Falloff", 0.0f, 10.0f,
+        last_applied_settings_.virtual_light_map.horizontal_falloff, 100);
+    vertical_falloff_ = make_float_slider("Vertical Falloff", 0.0f, 10.0f,
+        last_applied_settings_.virtual_light_map.vertical_falloff, 100);
+    max_offset_x_ = make_float_slider("Max Offset X", 0.0f, 500.0f,
+        last_applied_settings_.virtual_light_map.max_offset_x, 100);
+    max_offset_y_ = make_float_slider("Max Offset Y", 0.0f, 500.0f,
+        last_applied_settings_.virtual_light_map.max_offset_y, 100);
+    shadow_scale_ = make_float_slider("Shadow Scale", 0.1f, 4.0f,
+        last_applied_settings_.virtual_light_map.shadow_scale, 100);
 
     reactive_offsets_enabled_ = std::make_unique<DMCheckbox>("Enable Offsets", last_applied_settings_.directionality.enable_offsets);
     reactive_opacity_enabled_ = std::make_unique<DMCheckbox>("Enable Opacity", last_applied_settings_.response.enable_opacity);
@@ -702,11 +693,18 @@ void MapShadowPanel::rebuild_rows() {
     rows.push_back({ add_widget(std::move(warning_label)) });
 
     rows.push_back({
-        add_widget(std::make_unique<SliderWidget>(quadrant_count_.get()))
+        add_widget(std::make_unique<SliderWidget>(map_light_factor_.get()))
     });
     rows.push_back({
-        add_widget(std::make_unique<SliderWidget>(quadrant_distance_falloff_.get())),
-        add_widget(std::make_unique<SliderWidget>(quadrant_directional_strength_.get()))
+        add_widget(std::make_unique<SliderWidget>(horizontal_falloff_.get())),
+        add_widget(std::make_unique<SliderWidget>(vertical_falloff_.get()))
+    });
+    rows.push_back({
+        add_widget(std::make_unique<SliderWidget>(max_offset_x_.get())),
+        add_widget(std::make_unique<SliderWidget>(max_offset_y_.get()))
+    });
+    rows.push_back({
+        add_widget(std::make_unique<SliderWidget>(shadow_scale_.get()))
     });
     rows.push_back({
         add_widget(std::make_unique<CheckboxWidget>(reactive_offsets_enabled_.get())),
@@ -793,9 +791,12 @@ void MapShadowPanel::sync_ui_from_json() {
 
     last_applied_settings_ = settings;
 
-    if (quadrant_count_) quadrant_count_->set_value(settings.virtual_light_map.quadrant_count);
-    set_slider_scaled(quadrant_distance_falloff_, settings.virtual_light_map.distance_strength_falloff, 100);
-    set_slider_scaled(quadrant_directional_strength_, settings.virtual_light_map.directional_strength, 100);
+    set_slider_scaled(map_light_factor_, settings.virtual_light_map.map_light_factor, 100);
+    set_slider_scaled(horizontal_falloff_, settings.virtual_light_map.horizontal_falloff, 100);
+    set_slider_scaled(vertical_falloff_, settings.virtual_light_map.vertical_falloff, 100);
+    set_slider_scaled(max_offset_x_, settings.virtual_light_map.max_offset_x, 100);
+    set_slider_scaled(max_offset_y_, settings.virtual_light_map.max_offset_y, 100);
+    set_slider_scaled(shadow_scale_, settings.virtual_light_map.shadow_scale, 100);
 
     set_reactive_checkboxes(settings);
     set_reactive_sliders(settings);
@@ -824,13 +825,18 @@ void MapShadowPanel::sync_json_from_ui() {
 render_pipeline::shading::ReactiveShadowSettings MapShadowPanel::current_settings_from_ui() const {
     render_pipeline::shading::ReactiveShadowSettings settings = last_applied_settings_;
 
-    if (quadrant_count_) {
-        settings.virtual_light_map.quadrant_count = clamp_int(quadrant_count_->displayed_value(), 1, 24);
-    }
-    settings.virtual_light_map.distance_strength_falloff =
-        slider_value_scaled(quadrant_distance_falloff_, settings.virtual_light_map.distance_strength_falloff, 100);
-    settings.virtual_light_map.directional_strength =
-        slider_value_scaled(quadrant_directional_strength_, settings.virtual_light_map.directional_strength, 100);
+    settings.virtual_light_map.map_light_factor =
+        slider_value_scaled(map_light_factor_, settings.virtual_light_map.map_light_factor, 100);
+    settings.virtual_light_map.horizontal_falloff =
+        slider_value_scaled(horizontal_falloff_, settings.virtual_light_map.horizontal_falloff, 100);
+    settings.virtual_light_map.vertical_falloff =
+        slider_value_scaled(vertical_falloff_, settings.virtual_light_map.vertical_falloff, 100);
+    settings.virtual_light_map.max_offset_x =
+        slider_value_scaled(max_offset_x_, settings.virtual_light_map.max_offset_x, 100);
+    settings.virtual_light_map.max_offset_y =
+        slider_value_scaled(max_offset_y_, settings.virtual_light_map.max_offset_y, 100);
+    settings.virtual_light_map.shadow_scale =
+        slider_value_scaled(shadow_scale_, settings.virtual_light_map.shadow_scale, 100);
 
     if (reactive_kernel_radius_) {
         settings.sampling.kernel_radius = clamp_int(reactive_kernel_radius_->displayed_value(), 1, 16);
@@ -871,9 +877,12 @@ render_pipeline::shading::ReactiveShadowSettings MapShadowPanel::current_setting
 }
 
 void MapShadowPanel::set_reactive_sliders(const render_pipeline::shading::ReactiveShadowSettings& settings) {
-    set_slider_scaled(quadrant_distance_falloff_, settings.virtual_light_map.distance_strength_falloff, 100);
-    if (quadrant_count_) quadrant_count_->set_value(settings.virtual_light_map.quadrant_count);
-    set_slider_scaled(quadrant_directional_strength_, settings.virtual_light_map.directional_strength, 100);
+    set_slider_scaled(map_light_factor_, settings.virtual_light_map.map_light_factor, 100);
+    set_slider_scaled(horizontal_falloff_, settings.virtual_light_map.horizontal_falloff, 100);
+    set_slider_scaled(vertical_falloff_, settings.virtual_light_map.vertical_falloff, 100);
+    set_slider_scaled(max_offset_x_, settings.virtual_light_map.max_offset_x, 100);
+    set_slider_scaled(max_offset_y_, settings.virtual_light_map.max_offset_y, 100);
+    set_slider_scaled(shadow_scale_, settings.virtual_light_map.shadow_scale, 100);
 
     if (reactive_kernel_radius_) reactive_kernel_radius_->set_value(settings.sampling.kernel_radius);
     set_slider_scaled(reactive_outer_ring_weight_, settings.sampling.outer_ring_weight, 100);
@@ -979,12 +988,18 @@ render_pipeline::shading::ReactiveShadowSettings MapShadowPanel::load_reactive_s
     settings.sampling.diagonal_weight = static_cast<float>(
         load_number(reactive_settings_key("sampling.diagonal_weight"), settings.sampling.diagonal_weight));
 
-    settings.virtual_light_map.quadrant_count = clamp_int(static_cast<int>(std::round(
-        load_number(reactive_settings_key("virtual_light_map.quadrant_count"), settings.virtual_light_map.quadrant_count))), 1, 24);
-    settings.virtual_light_map.distance_strength_falloff = static_cast<float>(
-        load_number(reactive_settings_key("virtual_light_map.distance_strength_falloff"), settings.virtual_light_map.distance_strength_falloff));
-    settings.virtual_light_map.directional_strength = static_cast<float>(
-        load_number(reactive_settings_key("virtual_light_map.directional_strength"), settings.virtual_light_map.directional_strength));
+    settings.virtual_light_map.map_light_factor = static_cast<float>(
+        load_number(reactive_settings_key("virtual_light_map.map_light_factor"), settings.virtual_light_map.map_light_factor));
+    settings.virtual_light_map.horizontal_falloff = static_cast<float>(
+        load_number(reactive_settings_key("virtual_light_map.horizontal_falloff"), settings.virtual_light_map.horizontal_falloff));
+    settings.virtual_light_map.vertical_falloff = static_cast<float>(
+        load_number(reactive_settings_key("virtual_light_map.vertical_falloff"), settings.virtual_light_map.vertical_falloff));
+    settings.virtual_light_map.max_offset_x = static_cast<float>(
+        load_number(reactive_settings_key("virtual_light_map.max_offset_x"), settings.virtual_light_map.max_offset_x));
+    settings.virtual_light_map.max_offset_y = static_cast<float>(
+        load_number(reactive_settings_key("virtual_light_map.max_offset_y"), settings.virtual_light_map.max_offset_y));
+    settings.virtual_light_map.shadow_scale = static_cast<float>(
+        load_number(reactive_settings_key("virtual_light_map.shadow_scale"), settings.virtual_light_map.shadow_scale));
 
     return render_pipeline::shading::sanitize_reactive_shadow_settings(settings);
 }
@@ -1019,9 +1034,12 @@ void MapShadowPanel::persist_reactive_settings_to_dev_settings(const render_pipe
     save_number(reactive_settings_key("sampling.outer_ring_weight"), settings.sampling.outer_ring_weight);
     save_number(reactive_settings_key("sampling.diagonal_weight"), settings.sampling.diagonal_weight);
 
-    save_number(reactive_settings_key("virtual_light_map.quadrant_count"), static_cast<double>(settings.virtual_light_map.quadrant_count));
-    save_number(reactive_settings_key("virtual_light_map.distance_strength_falloff"), settings.virtual_light_map.distance_strength_falloff);
-    save_number(reactive_settings_key("virtual_light_map.directional_strength"), settings.virtual_light_map.directional_strength);
+    save_number(reactive_settings_key("virtual_light_map.map_light_factor"), settings.virtual_light_map.map_light_factor);
+    save_number(reactive_settings_key("virtual_light_map.horizontal_falloff"), settings.virtual_light_map.horizontal_falloff);
+    save_number(reactive_settings_key("virtual_light_map.vertical_falloff"), settings.virtual_light_map.vertical_falloff);
+    save_number(reactive_settings_key("virtual_light_map.max_offset_x"), settings.virtual_light_map.max_offset_x);
+    save_number(reactive_settings_key("virtual_light_map.max_offset_y"), settings.virtual_light_map.max_offset_y);
+    save_number(reactive_settings_key("virtual_light_map.shadow_scale"), settings.virtual_light_map.shadow_scale);
 }
 
 void MapShadowPanel::write_reactive_settings_to_json(const render_pipeline::shading::ReactiveShadowSettings& settings) {

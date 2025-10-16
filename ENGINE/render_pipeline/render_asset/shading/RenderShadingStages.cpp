@@ -292,9 +292,9 @@ SDL_Texture* RenderShadowMask::run(SDL_Renderer* renderer, const Asset& asset, S
     }
 
     if (map && current_quadrant >= 0) {
-        const auto& quadrant = map->quadrant_settings(current_quadrant);
+        const auto& cell = map->cell_for_index(current_quadrant);
         if (cfg.response.enable_opacity) {
-            float clamped = clampf(quadrant.opacity, cfg.response.min_opacity, cfg.response.max_opacity);
+            float clamped = clampf(cell.opacity, cfg.response.min_opacity, cfg.response.max_opacity);
             target.opacity = clampf(clamped, cfg.response.min_opacity, cfg.response.max_opacity);
         } else {
             target.opacity = context.base_shadow_opacity;
@@ -305,10 +305,10 @@ SDL_Texture* RenderShadowMask::run(SDL_Renderer* renderer, const Asset& asset, S
                                      : 0.0f;
         const float max_offset_x = static_cast<float>(width) * cfg.directionality.max_offset_ratio;
         const float max_offset_y = static_cast<float>(height) * cfg.directionality.max_offset_ratio;
-        target.offset_x = clampf(quadrant.offset.x * offset_strength, -max_offset_x, max_offset_x);
-        target.offset_y = clampf(quadrant.offset.y * offset_strength, -max_offset_y, max_offset_y);
+        target.offset_x = clampf(cell.offset_x * offset_strength, -max_offset_x, max_offset_x);
+        target.offset_y = clampf(cell.offset_y * offset_strength, -max_offset_y, max_offset_y);
 
-        target_scale = clampf(base_scale * quadrant.scale, min_scale_limit, max_scale_limit);
+        target_scale = clampf(base_scale * cell.scale, min_scale_limit, max_scale_limit);
     } else {
         if (cfg.response.enable_opacity) {
             target.opacity = clampf(target.opacity, cfg.response.min_opacity, cfg.response.max_opacity);

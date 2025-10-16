@@ -746,6 +746,30 @@ void AssetInfo::set_ray_strength(int strength) {
         info_json_["ray_strength"] = ray_strength;
 }
 
+void AssetInfo::set_shadow_mask_settings(const ShadowMaskSettings& settings) {
+        shadow_mask_settings = SanitizeShadowMaskSettings(settings);
+        if (!info_json_.is_object()) {
+                info_json_ = nlohmann::json::object();
+        }
+        nlohmann::json serialized = nlohmann::json::object();
+        serialized["expansion_ratio"]  = shadow_mask_settings.expansion_ratio;
+        serialized["blur_scale"]       = shadow_mask_settings.blur_scale;
+        serialized["falloff_start"]    = shadow_mask_settings.falloff_start;
+        serialized["falloff_exponent"] = shadow_mask_settings.falloff_exponent;
+        serialized["alpha_multiplier"] = shadow_mask_settings.alpha_multiplier;
+        info_json_["shadow_mask_settings"] = std::move(serialized);
+}
+
+void AssetInfo::set_shading_enabled(bool enabled) {
+        is_shaded = enabled;
+        orbital_light_sources.clear();
+        is_light_source = enabled || !light_sources.empty();
+        if (!info_json_.is_object()) {
+                info_json_ = nlohmann::json::object();
+        }
+        info_json_["has_shading"] = enabled;
+}
+
 Area* AssetInfo::find_area(const std::string& name) {
 	for (auto& na : areas) {
 		if (na.name == name) return na.area.get();
@@ -939,6 +963,17 @@ void AssetInfo::initialize_from_json(const nlohmann::json& source) {
 
         load_base_properties(data);
         LightingLoader::load(*this, data);
+
+        ShadowMaskSettings parsed_settings{};
+        if (data.contains("shadow_mask_settings") && data["shadow_mask_settings"].is_object()) {
+                const auto& json_settings = data["shadow_mask_settings"];
+                parsed_settings.expansion_ratio  = json_settings.value("expansion_ratio", parsed_settings.expansion_ratio);
+                parsed_settings.blur_scale       = json_settings.value("blur_scale", parsed_settings.blur_scale);
+                parsed_settings.falloff_start    = json_settings.value("falloff_start", parsed_settings.falloff_start);
+                parsed_settings.falloff_exponent = json_settings.value("falloff_exponent", parsed_settings.falloff_exponent);
+                parsed_settings.alpha_multiplier = json_settings.value("alpha_multiplier", parsed_settings.alpha_multiplier);
+        }
+        set_shadow_mask_settings(parsed_settings);
 
         const auto &ss = data.value("size_settings", nlohmann::json::object());
         scale_factor = ss.value("scale_percentage", 100.0f) / 100.0f;
