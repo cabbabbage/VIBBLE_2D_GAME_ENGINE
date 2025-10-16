@@ -20,7 +20,7 @@ class MenuUI : public MainApp {
     RESTART,
     SETTINGS
 };
-    MenuUI(SDL_Renderer* renderer, int screen_w, int screen_h, const std::string& map_path);
+    MenuUI(SDL_Renderer* renderer, int screen_w, int screen_h, MapDescriptor map);
     ~MenuUI();
     void init();
     bool wants_return_to_main_menu() const;

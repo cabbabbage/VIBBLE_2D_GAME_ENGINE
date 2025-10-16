@@ -5,6 +5,13 @@
 #include <string>
 #include <unordered_set>
 
+#include <nlohmann/json.hpp>
+
+struct MapDescriptor {
+    std::string    id;
+    nlohmann::json data;
+};
+
 class Assets;
 class SceneRenderer;
 class AssetLoader;
@@ -13,13 +20,14 @@ class Input;
 class MainApp {
 
 	public:
-    MainApp(const std::string& map_path, SDL_Renderer* renderer, int screen_w, int screen_h);
+    MainApp(MapDescriptor map, SDL_Renderer* renderer, int screen_w, int screen_h);
     virtual ~MainApp();
     virtual void init();
     virtual void game_loop();
     virtual void setup();
 	protected:
 	protected:
+    MapDescriptor map_descriptor_;
     std::string   map_path_;
     SDL_Renderer* renderer_   = nullptr;
     int           screen_w_   = 0;

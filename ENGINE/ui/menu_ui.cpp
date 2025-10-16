@@ -12,6 +12,7 @@
 #include <filesystem>
 #include <random>
 #include <sstream>
+#include <utility>
 #include <nlohmann/json.hpp>
 
 namespace fs = std::filesystem;
@@ -19,8 +20,8 @@ namespace fs = std::filesystem;
 MenuUI::MenuUI(SDL_Renderer* renderer,
                int screen_w,
                int screen_h,
-               const std::string& map_path)
-: MainApp(map_path, renderer, screen_w, screen_h)
+               MapDescriptor map)
+: MainApp(std::move(map), renderer, screen_w, screen_h)
 {
 	if (TTF_WasInit() == 0) {
 		if (TTF_Init() < 0) {

@@ -5,6 +5,10 @@
 #include <string>
 #include <vector>
 #include <filesystem>
+#include <optional>
+#include <unordered_map>
+
+#include <nlohmann/json.hpp>
 
 #include "styles.hpp"
 #include "button.hpp"
@@ -12,10 +16,15 @@
 class MainMenu {
 
 	public:
-    MainMenu(SDL_Renderer* renderer, int screen_w, int screen_h);
+    struct Selection {
+        std::string    id;
+        nlohmann::json data;
+    };
+
+    MainMenu(SDL_Renderer* renderer, int screen_w, int screen_h, const nlohmann::json& maps);
     ~MainMenu();
     void buildButtons();
-    std::string handle_event(const SDL_Event& e);
+    std::optional<Selection> handle_event(const SDL_Event& e);
     void render();
     void showLoadingScreen();
 
@@ -38,10 +47,13 @@ class MainMenu {
     struct MenuEntry {
         Button button;
         std::string action;
+        bool is_map = false;
     };
 
     SDL_Texture* background_tex_ = nullptr;
     std::vector<MenuEntry> buttons_;
+    const nlohmann::json* maps_json_ = nullptr;
+    std::unordered_map<std::string, const nlohmann::json*> map_lookup_;
     std::filesystem::path manifest_root_;
 
     std::filesystem::path resolve_manifest_path(const std::string& forward_path) const;

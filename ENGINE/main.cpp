@@ -4,6 +4,7 @@
 #include "ui/main_menu.hpp"
 #include "ui/menu_ui.hpp"
 #include "ui/tinyfiledialogs.h"
+#include "core/manifest/manifest_loader.hpp"
 #include "asset_loader.hpp"
 #include "asset/asset_types.hpp"
 #include "scene_renderer.hpp"
@@ -28,6 +29,7 @@
 #include <iomanip>
 #include <cctype>
 #include <system_error>
+#include <utility>
 namespace fs = std::filesystem;
 
 #if defined(_WIN32)
@@ -37,8 +39,12 @@ extern "C" {
 }
 #endif
 
-MainApp::MainApp(const std::string& map_path, SDL_Renderer* renderer, int screen_w, int screen_h)
-: map_path_(map_path), renderer_(renderer), screen_w_(screen_w), screen_h_(screen_h) {}
+MainApp::MainApp(MapDescriptor map, SDL_Renderer* renderer, int screen_w, int screen_h)
+: map_descriptor_(std::move(map)),
+  map_path_(map_descriptor_.id),
+  renderer_(renderer),
+  screen_w_(screen_w),
+  screen_h_(screen_h) {}
 
 MainApp::~MainApp() {
         AudioEngine::instance().shutdown();
@@ -212,7 +218,7 @@ nlohmann::json build_default_map_info(const std::string& map_name) {
     return map_info;
 }
 
-std::optional<std::string> create_new_map_interactively() {
+std::optional<MapDescriptor> create_new_map_interactively() {
     const fs::path maps_root{"MAPS"};
     try {
         if (!fs::exists(maps_root)) {
@@ -265,7 +271,10 @@ std::optional<std::string> create_new_map_interactively() {
             continue;
         }
 
-        return map_dir.string();
+        MapDescriptor descriptor;
+        descriptor.id   = map_dir.string();
+        descriptor.data = map_info;
+        return descriptor;
     }
 }
 
@@ -273,25 +282,51 @@ std::optional<std::string> create_new_map_interactively() {
 
 void run(SDL_Window* window, SDL_Renderer* renderer, int screen_w, int screen_h, bool rebuild_cache) {
     (void)window;
+
+    manifest::ManifestData manifest_data;
+    try {
+        manifest_data = manifest::load_manifest();
+    } catch (const std::exception& ex) {
+        std::cerr << "[Main] Failed to load manifest: " << ex.what() << "\n";
+        return;
+    }
+
     while (true) {
-        MainMenu menu(renderer, screen_w, screen_h);
-        std::string chosen_map;
+        MainMenu menu(renderer, screen_w, screen_h, manifest_data.maps);
+        std::optional<MapDescriptor> chosen_map;
+        bool quit_requested = false;
         SDL_Event e;
         bool choosing = true;
         while (choosing) {
             while (SDL_PollEvent(&e)) {
-                    if (e.type == SDL_QUIT) { chosen_map = "QUIT"; choosing = false; break; }
-                    std::string result = menu.handle_event(e);
-                    if (result == "QUIT") { chosen_map = "QUIT"; choosing = false; break; }
-                    if (result == "CREATE_NEW_MAP") {
-                        auto created = create_new_map_interactively();
-                        if (created) {
-                            chosen_map = *created;
-                            choosing = false;
-                        }
-                        continue;
+                if (e.type == SDL_QUIT) {
+                    quit_requested = true;
+                    choosing = false;
+                    break;
+                }
+                auto result = menu.handle_event(e);
+                if (!result) {
+                    continue;
+                }
+                if (result->id == "QUIT") {
+                    quit_requested = true;
+                    choosing = false;
+                    break;
+                }
+                if (result->id == "CREATE_NEW_MAP") {
+                    auto created = create_new_map_interactively();
+                    if (created) {
+                        chosen_map = std::move(*created);
+                        choosing = false;
                     }
-                    if (!result.empty()) { chosen_map = result; choosing = false; break; }
+                    continue;
+                }
+                MapDescriptor descriptor;
+                descriptor.id   = result->id;
+                descriptor.data = result->data;
+                chosen_map = std::move(descriptor);
+                choosing = false;
+                break;
             }
             SDL_SetRenderTarget(renderer, nullptr);
             SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
@@ -300,15 +335,17 @@ void run(SDL_Window* window, SDL_Renderer* renderer, int screen_w, int screen_h,
             SDL_RenderPresent(renderer);
             SDL_Delay(16);
         }
-        if (chosen_map == "QUIT" || chosen_map.empty()) break;
+        if (quit_requested || !chosen_map) break;
+
+        MapDescriptor selected_map = std::move(*chosen_map);
         menu.showLoadingScreen();
         if (rebuild_cache) {
             std::cout << "[Main] Rebuilding asset cache...\n";
-            RebuildAssets* rebuilder = new RebuildAssets(renderer, chosen_map);
+            RebuildAssets* rebuilder = new RebuildAssets(renderer, selected_map.id);
             delete rebuilder;
             std::cout << "[Main] Asset cache rebuild complete.\n";
         }
-        MenuUI app(renderer, screen_w, screen_h, chosen_map);
+        MenuUI app(renderer, screen_w, screen_h, std::move(selected_map));
         app.init();
         if (app.wants_return_to_main_menu()) continue;
         break;

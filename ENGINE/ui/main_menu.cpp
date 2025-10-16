@@ -12,12 +12,12 @@
 
 namespace fs = std::filesystem;
 
-MainMenu::MainMenu(SDL_Renderer* renderer, int screen_w, int screen_h)
-: renderer_(renderer), screen_w_(screen_w), screen_h_(screen_h)
+MainMenu::MainMenu(SDL_Renderer* renderer, int screen_w, int screen_h, const nlohmann::json& maps)
+: renderer_(renderer), screen_w_(screen_w), screen_h_(screen_h), maps_json_(&maps)
 {
-	if (TTF_WasInit() == 0 && TTF_Init() < 0) {
-		std::cerr << "TTF_Init failed: " << TTF_GetError() << "\n";
-	}
+        if (TTF_WasInit() == 0 && TTF_Init() < 0) {
+                std::cerr << "TTF_Init failed: " << TTF_GetError() << "\n";
+        }
 	try {
 		manifest_root_ = fs::absolute(fs::path(manifest::manifest_path()).parent_path());
 	} catch (const std::exception& ex) {
@@ -40,53 +40,54 @@ MainMenu::~MainMenu() {
 }
 
 void MainMenu::buildButtons() {
-	buttons_.clear();
-	const int btn_w = Button::width();
-	const int btn_h = Button::height();
-	const int gap   = 18;
-	int y = (screen_h_ / 2) - 140;
-	const int x = (screen_w_ - btn_w) / 2;
-	manifest::ManifestData manifest_data;
-	bool manifest_loaded = false;
-	try {
-		manifest_data = manifest::load_manifest();
-		manifest_loaded = manifest_data.maps.is_object();
-	} catch (const std::exception& ex) {
-		std::cerr << "[MainMenu] Failed to load manifest: " << ex.what() << "\n";
-	}
+        buttons_.clear();
+        map_lookup_.clear();
+        const int btn_w = Button::width();
+        const int btn_h = Button::height();
+        const int gap   = 18;
+        int y = (screen_h_ / 2) - 140;
+        const int x = (screen_w_ - btn_w) / 2;
+        if (maps_json_ && maps_json_->is_object()) {
+                for (auto it = maps_json_->cbegin(); it != maps_json_->cend(); ++it) {
+                        if (!it.value().is_object()) continue;
+                        const std::string map_id = it.key();
+                        map_lookup_.emplace(map_id, &it.value());
+                        std::string label = map_id;
+                        const auto name_it = it.value().find("map_name");
+                        if (name_it != it.value().end() && name_it->is_string()) {
+                                label = name_it->get<std::string>();
+                        }
+                        Button b = Button::get_main_button(label);
+                        b.set_rect(SDL_Rect{ x, y, btn_w, btn_h });
+                        buttons_.push_back(MenuEntry{ std::move(b), map_id, true });
+                        y += btn_h + gap;
+                }
+        }
 
-	if (manifest_loaded) {
-		for (auto it = manifest_data.maps.begin(); it != manifest_data.maps.end(); ++it) {
-			if (!it.value().is_object()) continue;
-			const std::string map_id = it.key();
-			std::string label = map_id;
-			const auto name_it = it.value().find("map_name");
-			if (name_it != it.value().end() && name_it->is_string()) {
-				label = name_it->get<std::string>();
-			}
-			Button b = Button::get_main_button(label);
-			b.set_rect(SDL_Rect{ x, y, btn_w, btn_h });
-			buttons_.push_back(MenuEntry{ std::move(b), map_id });
-			y += btn_h + gap;
-		}
-	}
-
-	Button create = Button::get_main_button("Create New Map");
-	create.set_rect(SDL_Rect{ x, y, btn_w, btn_h });
-	buttons_.push_back(MenuEntry{ std::move(create), "CREATE_NEW_MAP" });
-	y += btn_h + gap;
-	Button quit = Button::get_exit_button("QUIT GAME");
-	quit.set_rect(SDL_Rect{ x, y + 12, btn_w, btn_h });
-	buttons_.push_back(MenuEntry{ std::move(quit), "QUIT" });
+        Button create = Button::get_main_button("Create New Map");
+        create.set_rect(SDL_Rect{ x, y, btn_w, btn_h });
+        buttons_.push_back(MenuEntry{ std::move(create), "CREATE_NEW_MAP", false });
+        y += btn_h + gap;
+        Button quit = Button::get_exit_button("QUIT GAME");
+        quit.set_rect(SDL_Rect{ x, y + 12, btn_w, btn_h });
+        buttons_.push_back(MenuEntry{ std::move(quit), "QUIT", false });
 }
 
-std::string MainMenu::handle_event(const SDL_Event& e) {
-	for (auto& entry : buttons_) {
-		if (entry.button.handle_event(e)) {
-			return entry.action;
-		}
-	}
-	return "";
+std::optional<MainMenu::Selection> MainMenu::handle_event(const SDL_Event& e) {
+        for (auto& entry : buttons_) {
+                if (entry.button.handle_event(e)) {
+                        Selection selection;
+                        selection.id = entry.action;
+                        if (entry.is_map) {
+                                auto it = map_lookup_.find(entry.action);
+                                if (it != map_lookup_.end() && it->second) {
+                                        selection.data = *(it->second);
+                                }
+                        }
+                        return selection;
+                }
+        }
+        return std::nullopt;
 }
 
 void MainMenu::render() {
