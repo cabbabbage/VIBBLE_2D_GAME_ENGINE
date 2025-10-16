@@ -172,8 +172,9 @@ void VibbleController::movement(const Input& input) {
             anim_id = (dy_ > 0) ? "forward" : "backward";
         }
 
-        player_->anim_->set_manual_animation(anim_id, true);
-        player_->anim_->final_dest = player_->pos;
+        player_->anim_->clear_manual_animation();
+        player_->anim_->clear_movement_plan();
+        player_->anim_->set_animation_now(anim_id);
     }
 }
 

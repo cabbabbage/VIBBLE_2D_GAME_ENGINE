@@ -14,6 +14,8 @@ void DefaultController::update(const Input& ) {
         return;
     }
 
+    self_->anim_->clear_manual_animation();
+
     const std::string default_anim{ animation_update::detail::kDefaultAnimation };
 
     auto it = self_->info->animations.find(default_anim);

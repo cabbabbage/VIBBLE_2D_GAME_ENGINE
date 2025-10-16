@@ -10,10 +10,9 @@
 #include <nlohmann/json_fwd.hpp>
 
 #include "widgets.hpp"
+#include "dev_mode/search_assets.hpp"
 
 class Input;
-class SearchAssets;
-
 class CandidateEditorPieGraphWidget : public Widget {
 public:
     CandidateEditorPieGraphWidget();

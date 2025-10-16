@@ -210,6 +210,7 @@ target_include_directories(map_grid_tests PRIVATE
     ${CMAKE_SOURCE_DIR}/ENGINE/utils
 )
 target_link_libraries(map_grid_tests PRIVATE
+    nlohmann_json::nlohmann_json
     SDL2::SDL2
 )
 target_compile_definitions(map_grid_tests PRIVATE SDL_MAIN_HANDLED PROJECT_ROOT="${CMAKE_SOURCE_DIR}")
@@ -281,6 +282,7 @@ add_executable(manifest_store_tests
     tests/manifest/manifest_store_tests.cpp
     tests/manifest/spawn_group_manifest_tests.cpp
     tests/dev_mode/room_editor_manifest_tests.cpp
+    ENGINE/dev_mode/search_assets.cpp
     ENGINE/asset/asset_info.cpp
     ENGINE/asset/animation.cpp
     ENGINE/dev_mode/dev_controls_persistence.cpp

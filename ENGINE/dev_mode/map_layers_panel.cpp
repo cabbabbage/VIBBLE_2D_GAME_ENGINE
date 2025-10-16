@@ -3105,6 +3105,7 @@ MapLayersPanel::MapLayersPanel(int x, int y)
         room_config_container_->set_scrollbar_visible(false);
         room_config_container_->set_blocks_editor_interactions(true);
         room_config_container_->set_header_visible(true);
+        room_config_container_->set_header_text("Room Config");
     }
 
     room_selector_ = std::make_unique<RoomSelectorPopup>();
@@ -3589,38 +3590,22 @@ void MapLayersPanel::render(SDL_Renderer* renderer) const {
 
     if (!is_visible()) return;
 
-    const std::array<SlidingWindowContainer*, 3> containers{
-        layers_container_.get(),
-        rooms_container_.get(),
-        main_container_.get()
+    const int screen_w = std::max(1, screen_bounds_.w);
+    const int screen_h = std::max(1, screen_bounds_.h);
+
+    auto render_container = [&](SlidingWindowContainer* container, bool gate) {
+        if (!container || !gate || !container->is_visible()) {
+            return;
+        }
+        container->render(renderer, screen_w, screen_h);
     };
 
-    for (SlidingWindowContainer* container : containers) {
-        if (!container) {
-            continue;
-        }
-        bool visible = container->is_visible();
-        if (container == rooms_container_.get()) {
-            visible = rooms_container_visible_ && visible;
-        } else if (container == layers_container_.get()) {
-            visible = layers_container_visible_ && visible;
-        }
-        if (!visible) {
-            continue;
-        }
-        const int screen_w = std::max(1, screen_bounds_.w);
-        const int screen_h = std::max(1, screen_bounds_.h);
-        container->render(renderer, screen_w, screen_h);
-    }
+    render_container(main_container_.get(), true);
+    render_container(layers_container_.get(), layers_container_visible_);
+    render_container(rooms_container_.get(), rooms_container_visible_);
 
-    if (room_config_container_ && room_config_container_visible_) {
-
-        const int screen_w = std::max(1, screen_bounds_.w);
-
-        const int screen_h = std::max(1, screen_bounds_.h);
-
+    if (room_config_container_ && room_config_container_visible_ && room_config_container_->is_visible()) {
         room_config_container_->render(renderer, screen_w, screen_h);
-
     }
 
     if (room_selector_ && room_selector_->visible()) {

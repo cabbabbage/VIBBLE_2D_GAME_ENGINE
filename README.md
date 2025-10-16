@@ -120,6 +120,8 @@ AnimationFrame
 **Requirements**
 - Windows + Visual Studio 2022 (CMake generator), CMake >= 3.16
 - SDL2, SDL2_image, SDL2_mixer, SDL2_ttf (via vcpkg toolchain or system installs)
+- Linux users: install the SDL2 development packages before configuring tests, e.g.
+  `sudo apt-get install libsdl2-dev libsdl2-image-dev libsdl2-mixer-dev libsdl2-ttf-dev`
 
 **Build & Run**
 - From the repo root:

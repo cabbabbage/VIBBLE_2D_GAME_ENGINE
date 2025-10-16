@@ -9944,11 +9944,11 @@
       "rnd_spawn_max": 400,
       "rnd_spawn_min": 300,
       "shadow_mask_settings": {
-        "alpha_multiplier": 1.0,
-        "blur_scale": 1.0,
-        "expansion_ratio": 0.800000011920929,
-        "falloff_exponent": 1.0499999523162842,
-        "falloff_start": 0.0
+        "alpha_multiplier": 4.0,
+        "blur_scale": 0.0,
+        "expansion_ratio": 3.200000047683716,
+        "falloff_exponent": 2.0299999713897705,
+        "falloff_start": 0.3799999952316284
       },
       "size_settings": {
         "scale_percentage": 103.0
@@ -9978,6 +9978,7 @@
         "SRC/assets/Tree/spawn"
       ],
       "update_radius": 1000,
+      "virtual_light_map_quadrants": 27,
       "z_threshold": 0
     },
     "Tree_Dark": {
