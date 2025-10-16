@@ -26,7 +26,6 @@ class TrailGeometry {
     static bool attempt_trail_connection(Room* a,
                                          Room* b,
                                          std::vector<Area>& existing_areas,
-                                         const std::string& map_dir,
                                          const std::string& manifest_context,
                                          AssetLibrary* asset_lib,
                                          std::vector<std::unique_ptr<Room>>& trail_rooms,
@@ -38,5 +37,6 @@ class TrailGeometry {
                                          bool testing,
                                          std::mt19937& rng,
                                          nlohmann::json* map_manifest,
-                                         devmode::core::ManifestStore* manifest_store);
+                                         devmode::core::ManifestStore* manifest_store,
+                                         Room::ManifestWriter manifest_writer);
 };

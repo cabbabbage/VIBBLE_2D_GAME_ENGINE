@@ -36,10 +36,10 @@ class GenerateRooms {
     GenerateRooms(const std::vector<LayerSpec>& layers,
                   int map_cx,
                   int map_cy,
-                  const std::string& map_dir,
                   const std::string& map_id,
                   nlohmann::json& map_manifest,
-                  devmode::core::ManifestStore* manifest_store = nullptr);
+                  devmode::core::ManifestStore* manifest_store = nullptr,
+                  Room::ManifestWriter manifest_writer = {});
     std::vector<std::unique_ptr<Room>> build(AssetLibrary* asset_lib, double map_radius, const std::vector<double>& layer_radii, const nlohmann::json& boundary_data, nlohmann::json& rooms_data, nlohmann::json& trails_data, const nlohmann::json& map_assets_data, const MapGridSettings& grid_settings);
     bool testing = false;
 
@@ -54,9 +54,9 @@ class GenerateRooms {
     std::vector<LayerSpec> map_layers_;
     int map_center_x_;
     int map_center_y_;
-    std::string map_path_;
     std::string map_id_;
     nlohmann::json* map_manifest_ = nullptr;
     devmode::core::ManifestStore* manifest_store_ = nullptr;
+    Room::ManifestWriter manifest_writer_{};
     std::mt19937 rng_;
 };

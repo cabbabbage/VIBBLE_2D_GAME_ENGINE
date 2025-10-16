@@ -185,7 +185,6 @@ Room::Room(Point origin,
            std::string type_,
            const std::string& room_def_name,
            Room* parent,
-           const std::string& map_dir,
            const std::string& manifest_context,
            AssetLibrary* asset_lib,
            Area* precomputed_area,
@@ -196,13 +195,13 @@ Room::Room(Point origin,
            const std::string& data_section,
            nlohmann::json* map_info_root,
            devmode::core::ManifestStore* manifest_store,
-           std::string manifest_map_id)
+           std::string manifest_map_id,
+           Room::ManifestWriter manifest_writer)
 )
 : map_origin(origin),
 parent(parent),
 room_name(room_def_name),
 room_directory(manifest_context.empty() ? data_section : manifest_context + "::" + data_section),
-map_path(map_dir),
 json_path((manifest_context.empty() ? data_section : manifest_context + "::" + data_section) + "::" + room_def_name),
 room_area(nullptr),
 type(type_),
@@ -210,7 +209,8 @@ room_data_ptr_(room_data),
 map_assets_data_ptr_(map_assets_data),
 map_grid_settings_(grid_settings),
 manifest_context_(manifest_context),
-data_section_(data_section)
+data_section_(data_section),
+manifest_writer_(std::move(manifest_writer))
 {
         if (testing) {
                 std::cout << "[Room] Created room: " << room_name
@@ -690,10 +690,14 @@ void Room::rename(const std::string& new_name, nlohmann::json& map_info_json) {
 
 void Room::set_manifest_store(devmode::core::ManifestStore* store,
                               std::string map_id,
-                              nlohmann::json* map_info_root) {
+                              nlohmann::json* map_info_root,
+                              Room::ManifestWriter manifest_writer) {
         manifest_store_ = store;
         manifest_map_id_ = std::move(map_id);
         map_info_root_ = map_info_root;
+        if (manifest_writer) {
+                manifest_writer_ = std::move(manifest_writer);
+        }
 }
 
 void Room::save_assets_json() const {
@@ -728,5 +732,20 @@ void Room::save_assets_json() const {
                         manifest_store_->flush();
                 }
                 return;
+        }
+        if (manifest_writer_ && !manifest_map_id_.empty()) {
+                nlohmann::json payload = nlohmann::json::object();
+                if (map_info_root_) {
+                        payload = *map_info_root_;
+                }
+                if (!payload.is_object()) {
+                        payload = nlohmann::json::object();
+                }
+                nlohmann::json& section = payload[data_section_];
+                if (!section.is_object()) {
+                        section = nlohmann::json::object();
+                }
+                section[room_name] = assets_json;
+                manifest_writer_(manifest_map_id_, payload);
         }
 }

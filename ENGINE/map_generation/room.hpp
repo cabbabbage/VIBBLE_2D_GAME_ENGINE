@@ -12,6 +12,7 @@
 #include <optional>
 #include <utility>
 #include <tuple>
+#include <functional>
 #include <nlohmann/json.hpp>
 
 #include <SDL.h>
@@ -43,11 +44,11 @@ class Room {
 
         public:
     typedef std::pair<int, int> Point;
+    using ManifestWriter = std::function<void(const std::string&, const nlohmann::json&)>;
     Room(Point origin,
          std::string type_,
          const std::string& room_def_name,
          Room* parent,
-         const std::string& map_dir,
          const std::string& manifest_context,
          AssetLibrary* asset_lib,
          Area* precomputed_area,
@@ -58,7 +59,8 @@ class Room {
          const std::string& data_section,
          nlohmann::json* map_info_root = nullptr,
          devmode::core::ManifestStore* manifest_store = nullptr,
-         std::string manifest_map_id = {});
+         std::string manifest_map_id = {},
+         ManifestWriter manifest_writer = {});
     void set_sibling_left(Room* left_room);
     void set_sibling_right(Room* right_room);
     void add_connecting_room(Room* room);
@@ -72,7 +74,6 @@ class Room {
     double scale_ = 1.0;
     std::string room_name;
     std::string room_directory;
-    std::string map_path;
     std::string json_path;
     Room* parent = nullptr;
     Room* left_sibling = nullptr;
@@ -92,7 +93,8 @@ class Room {
     void rename(const std::string& new_name, nlohmann::json& map_info_json);
     void set_manifest_store(devmode::core::ManifestStore* store,
                             std::string map_id,
-                            nlohmann::json* map_info_root = nullptr);
+                            nlohmann::json* map_info_root = nullptr,
+                            ManifestWriter manifest_writer = {});
 
     struct NamedArea {
         std::string name;
@@ -118,6 +120,7 @@ class Room {
     devmode::core::ManifestStore* manifest_store_ = nullptr;
     std::string manifest_map_id_;
     nlohmann::json* map_info_root_ = nullptr;
+    ManifestWriter manifest_writer_{};
     int clamp_int(int v, int lo, int hi) const;
     void bounds_to_size(const std::tuple<int,int,int,int>& b, int& w, int& h) const;
     void load_named_areas_from_json();

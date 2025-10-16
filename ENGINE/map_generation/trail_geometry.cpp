@@ -114,7 +114,6 @@ SDL_Point TrailGeometry::compute_edge_point(const SDL_Point& center,
 bool TrailGeometry::attempt_trail_connection(Room* a,
                                              Room* b,
                                              std::vector<Area>& existing_areas,
-                                             const std::string& map_dir,
                                              const std::string& manifest_context,
                                              AssetLibrary* asset_lib,
                                              std::vector<std::unique_ptr<Room>>& trail_rooms,
@@ -126,7 +125,8 @@ bool TrailGeometry::attempt_trail_connection(Room* a,
                                              bool testing,
                                              std::mt19937& rng,
                                              nlohmann::json* map_manifest,
-                                             devmode::core::ManifestStore* manifest_store)
+                                             devmode::core::ManifestStore* manifest_store,
+                                             Room::ManifestWriter manifest_writer)
 {
         if (!trail_config) {
                 if (testing) {
@@ -240,7 +240,6 @@ bool TrailGeometry::attempt_trail_connection(Room* a,
                                                          "trail",
                                                          name,
                                                          nullptr,
-                                                         map_dir,
                                                          manifest_context,
                                                          asset_lib,
                                                          &candidate,
@@ -251,7 +250,8 @@ bool TrailGeometry::attempt_trail_connection(Room* a,
                                                          "trails_data",
                                                          map_manifest,
                                                          manifest_store,
-                                                         manifest_context );
+                                                         manifest_context,
+                                                         manifest_writer );
 		a->add_connecting_room(trail_room.get());
 		b->add_connecting_room(trail_room.get());
 		trail_room->add_connecting_room(a);

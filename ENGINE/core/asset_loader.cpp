@@ -235,7 +235,6 @@ void AssetLoader::loadRooms() {
         GenerateRooms generator(map_layers_,
                                 map_center_x_,
                                 map_center_y_,
-                                map_path_,
                                 map_id_,
                                 map_info_json_,
                                 manifest_store_);
