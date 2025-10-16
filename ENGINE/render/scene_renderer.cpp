@@ -1,6 +1,7 @@
 #include "scene_renderer.hpp"
 #include "core/AssetsManager.hpp"
 #include "asset/Asset.hpp"
+#include "asset/asset_types.hpp"
 #include "light_map.hpp"
 #include "render/camera.hpp"
 #include "dev_mode/dev_ui_settings.hpp"
@@ -142,10 +143,6 @@ void SceneRenderer::render(){
     SDL_SetRenderDrawColor(renderer_,clear_color.r,clear_color.g,clear_color.b,clear_color.a);
     SDL_RenderClear(renderer_);
 
-    if (!light_map_only_mode_ && z_light_pass_) {
-        z_light_pass_->render_fullscreen_light_map(renderer_);
-    }
-
     if (!light_map_only_mode_){
         const auto& camera_state=assets_->getView();
         float scale=camera_state.get_scale();
@@ -168,61 +165,134 @@ void SceneRenderer::render(){
         }
         if (player_sh<=0.f) player_sh=1.f;
 
-        const auto& active=assets_->getActive();
+        const auto& active = assets_->getActive();
         std::unordered_set<Asset*> cur_active;
         cur_active.reserve(active.size());
-        for (Asset* a: active){
-            if (!a || !a->info) continue;
+
+        struct AssetRenderCommand {
+            SDL_Texture* source_texture        = nullptr;
+            SDL_Texture* final_texture         = nullptr;
+            SDL_Rect     dst                   { 0, 0, 0, 0 };
+            bool         uses_scaled_texture   = false;
+            bool         highlighted           = false;
+            bool         selected              = false;
+            bool         flipped               = false;
+        };
+
+        std::vector<AssetRenderCommand> texture_commands;
+        std::vector<AssetRenderCommand> remaining_commands;
+        texture_commands.reserve(active.size());
+        remaining_commands.reserve(active.size());
+
+        auto enqueue_command = [&](Asset* asset,
+                                   SDL_Texture* final_tex,
+                                   SDL_Texture* draw_tex,
+                                   const SDL_Rect& dst_rect) {
+            AssetRenderCommand cmd;
+            cmd.source_texture      = draw_tex ? draw_tex : final_tex;
+            cmd.final_texture       = final_tex;
+            cmd.dst                 = dst_rect;
+            cmd.uses_scaled_texture = draw_tex && draw_tex != final_tex;
+            cmd.highlighted         = asset->is_highlighted();
+            cmd.selected            = asset->is_selected();
+            cmd.flipped             = asset->flipped;
+
+            if (asset->info->type == asset_types::texture) {
+                texture_commands.push_back(cmd);
+            } else {
+                remaining_commands.push_back(cmd);
+            }
+        };
+
+        for (Asset* a : active) {
+            if (!a || !a->info) {
+                continue;
+            }
 
             cur_active.insert(a);
-            const bool newly=last_active_assets_.find(a)==last_active_assets_.end();
-            if (newly){
-                SDL_Texture* tex=render_pipeline_.regenerateFinalTexture(a);
+            const bool newly = last_active_assets_.find(a) == last_active_assets_.end();
+            if (newly) {
+                SDL_Texture* tex = render_pipeline_.regenerateFinalTexture(a);
                 a->set_final_texture(tex);
-            } else if (shouldRegen(a)){
-                SDL_Texture* tex=render_pipeline_.regenerateFinalTexture(a);
+            } else if (shouldRegen(a)) {
+                SDL_Texture* tex = render_pipeline_.regenerateFinalTexture(a);
                 a->set_final_texture(tex);
             }
 
-            SDL_Texture* final_tex=a->get_final_texture();
-            if (!final_tex) continue;
-
-            int fw=a->cached_w, fh=a->cached_h;
-            if (fw==0||fh==0){
-                SDL_QueryTexture(final_tex,nullptr,nullptr,&fw,&fh);
-                a->cached_w=fw; a->cached_h=fh;
+            SDL_Texture* final_tex = a->get_final_texture();
+            if (!final_tex) {
+                continue;
             }
 
-            SDL_Rect fb=get_scaled_position_rect(a,fw,fh,inv_scale,min_w,min_h,player_sh);
-            if (fb.w==0 && fb.h==0) continue;
-
-            SDL_Texture* draw_tex=render_pipeline_.texture_for_scale(a, final_tex, fw, fh, fb.w, fb.h);
-            SDL_Texture* mod_target=draw_tex ? draw_tex : final_tex;
-
-            if (a->is_highlighted()){
-                SDL_SetRenderDrawBlendMode(renderer_,SDL_BLENDMODE_ADD);
-                SDL_SetRenderDrawColor(renderer_,200,5,5,100);
-                SDL_Rect outline=fb; outline.x-=2; outline.y-=2; outline.w+=4; outline.h+=4;
-                SDL_RenderFillRect(renderer_,&outline);
-                SDL_SetTextureColorMod(mod_target,255,200,200);
-            } else if (a->is_selected()){
-                SDL_SetRenderDrawBlendMode(renderer_,SDL_BLENDMODE_ADD);
-                SDL_SetRenderDrawColor(renderer_,5,5,200,100);
-                SDL_Rect outline=fb; outline.x-=2; outline.y-=2; outline.w+=4; outline.h+=4;
-                SDL_RenderFillRect(renderer_,&outline);
-                SDL_SetTextureColorMod(mod_target,255,200,200);
-            } else {
-                SDL_SetTextureColorMod(mod_target,255,255,255);
+            int fw = a->cached_w;
+            int fh = a->cached_h;
+            if (fw == 0 || fh == 0) {
+                SDL_QueryTexture(final_tex, nullptr, nullptr, &fw, &fh);
+                a->cached_w = fw;
+                a->cached_h = fh;
             }
 
-            SDL_RenderCopyEx(renderer_, draw_tex?draw_tex:final_tex, nullptr, &fb, 0, nullptr, a->flipped?SDL_FLIP_HORIZONTAL:SDL_FLIP_NONE);
-            SDL_SetTextureColorMod(mod_target,255,255,255);
-            if (draw_tex && draw_tex!=final_tex){
-                SDL_SetTextureColorMod(final_tex,255,255,255);
+            SDL_Rect dst = get_scaled_position_rect(a, fw, fh, inv_scale, min_w, min_h, player_sh);
+            if (dst.w == 0 && dst.h == 0) {
+                continue;
             }
+
+            SDL_Texture* draw_tex = render_pipeline_.texture_for_scale(a, final_tex, fw, fh, dst.w, dst.h);
+            enqueue_command(a, final_tex, draw_tex, dst);
         }
 
-        last_active_assets_=std::move(cur_active);
+        auto render_commands = [&](const std::vector<AssetRenderCommand>& commands) {
+            for (const AssetRenderCommand& cmd : commands) {
+                if (!cmd.source_texture) {
+                    continue;
+                }
+
+                SDL_Texture* mod_target = cmd.source_texture;
+                if (cmd.highlighted) {
+                    SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_ADD);
+                    SDL_SetRenderDrawColor(renderer_, 200, 5, 5, 100);
+                    SDL_Rect outline = cmd.dst;
+                    outline.x -= 2;
+                    outline.y -= 2;
+                    outline.w += 4;
+                    outline.h += 4;
+                    SDL_RenderFillRect(renderer_, &outline);
+                    SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND);
+                    SDL_SetTextureColorMod(mod_target, 255, 200, 200);
+                } else if (cmd.selected) {
+                    SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_ADD);
+                    SDL_SetRenderDrawColor(renderer_, 5, 5, 200, 100);
+                    SDL_Rect outline = cmd.dst;
+                    outline.x -= 2;
+                    outline.y -= 2;
+                    outline.w += 4;
+                    outline.h += 4;
+                    SDL_RenderFillRect(renderer_, &outline);
+                    SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND);
+                    SDL_SetTextureColorMod(mod_target, 255, 200, 200);
+                } else {
+                    SDL_SetTextureColorMod(mod_target, 255, 255, 255);
+                }
+
+                SDL_RenderCopyEx(renderer_, cmd.source_texture, nullptr, &cmd.dst, 0, nullptr,
+                                 cmd.flipped ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE);
+                SDL_SetTextureColorMod(mod_target, 255, 255, 255);
+                if (cmd.uses_scaled_texture && cmd.final_texture) {
+                    SDL_SetTextureColorMod(cmd.final_texture, 255, 255, 255);
+                }
+            }
+            SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND);
+        };
+
+        render_commands(texture_commands);
+
+        if (z_light_pass_) {
+            z_light_pass_->render_fullscreen_light_map(renderer_);
+        }
+
+        render_commands(remaining_commands);
+
+        last_active_assets_ = std::move(cur_active);
     }
 
     SDL_SetRenderTarget(renderer_,nullptr);

@@ -93,8 +93,9 @@ void LightMap::render_fullscreen_light_map(SDL_Renderer* renderer) const {
         if (!renderer || !fullscreen_texture_) {
                 return;
         }
+        SDL_SetTextureBlendMode(fullscreen_texture_, SDL_BLENDMODE_MOD);
         SDL_SetTextureAlphaMod(fullscreen_texture_, 255);
-        SDL_SetTextureBlendMode(fullscreen_texture_, SDL_BLENDMODE_ADD);
+        SDL_SetTextureColorMod(fullscreen_texture_, 255, 255, 255);
         SDL_RenderCopy(renderer, fullscreen_texture_, nullptr, nullptr);
 }
 
@@ -248,7 +249,7 @@ void LightMap::compute_fullscreen_texture(SDL_Renderer* renderer, const std::vec
         SDL_Texture* prev_target = SDL_GetRenderTarget(renderer);
         SDL_SetRenderTarget(renderer, fullscreen_texture_);
         SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_ADD);
-        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
         SDL_RenderClear(renderer);
 
         for (const LightEntry& entry : layers) {
@@ -280,7 +281,7 @@ void LightMap::compute_fullscreen_texture(SDL_Renderer* renderer, const std::vec
         }
 
         SDL_SetRenderTarget(renderer, prev_target);
-        SDL_SetTextureBlendMode(fullscreen_texture_, SDL_BLENDMODE_ADD);
+        SDL_SetTextureBlendMode(fullscreen_texture_, SDL_BLENDMODE_MOD);
 #if SDL_VERSION_ATLEAST(2,0,12)
         SDL_SetTextureScaleMode(fullscreen_texture_, SDL_ScaleModeBest);
 #endif
