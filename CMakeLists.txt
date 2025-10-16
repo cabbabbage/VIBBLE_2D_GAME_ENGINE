@@ -167,11 +167,14 @@ add_executable(dev_mode_ui_tests
     tests/dev_mode/full_screen_collapsible_tests.cpp
     tests/dev_mode/tag_cache_tests.cpp
     tests/dev_mode/asset_info_stub.cpp
+    ENGINE/asset/asset_info.cpp
     ENGINE/dev_mode/full_screen_collapsible.cpp
     ENGINE/dev_mode/draw_utils.cpp
     ENGINE/dev_mode/font_cache.cpp
     ENGINE/dev_mode/widgets.cpp
     ENGINE/dev_mode/dm_styles.cpp
+    ENGINE/dev_mode/DockableCollapsible.cpp
+    ENGINE/dev_mode/FloatingDockableManager.cpp
     ENGINE/dev_mode/search_assets.cpp
     ENGINE/dev_mode/core/manifest_store.cpp
     ENGINE/dev_mode/core/dev_json_store.cpp
@@ -308,6 +311,7 @@ add_executable(asset_info_manifest_tests
     ENGINE/asset_info_methods/lighting_loader.cpp
     ENGINE/asset_info_methods/child_loader.cpp
     ENGINE/utils/area.cpp
+    ENGINE/utils/cache_manager.cpp
     ENGINE/utils/generate_light.cpp
     ENGINE/dev_mode/core/manifest_store.cpp
     ENGINE/dev_mode/core/dev_json_store.cpp

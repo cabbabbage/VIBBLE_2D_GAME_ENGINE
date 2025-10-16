@@ -50,7 +50,7 @@ namespace {
         return font;
     }
 
-    std::string trim_copy(const std::string& value) {
+    std::string trim_whitespace_copy(const std::string& value) {
         auto begin = value.begin();
         auto end = value.end();
         while (begin != end && std::isspace(static_cast<unsigned char>(*begin))) {
@@ -656,7 +656,7 @@ void AssetLibraryUI::update_delete_modal_geometry(int screen_w, int screen_h) {
 }
 
 bool AssetLibraryUI::create_new_asset(const std::string& raw_name) {
-    std::string name = trim_copy(raw_name);
+    std::string name = trim_whitespace_copy(raw_name);
     if (name.empty()) {
         return false;
     }

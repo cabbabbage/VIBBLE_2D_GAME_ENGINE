@@ -198,8 +198,7 @@ Room::Room(Point origin,
            devmode::core::ManifestStore* manifest_store,
            std::string manifest_map_id,
            Room::ManifestWriter manifest_writer)
-)
-: map_origin(origin),
+    : map_origin(origin),
 parent(parent),
 room_name(room_def_name),
 room_directory(manifest_context.empty() ? data_section : manifest_context + "::" + data_section),

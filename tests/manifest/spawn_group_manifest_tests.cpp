@@ -1,6 +1,7 @@
 #include "doctest/doctest.h"
 
 #include <algorithm>
+#include <cstddef>
 #include <filesystem>
 #include <fstream>
 #include <string>
@@ -16,6 +17,16 @@
 struct SectionSpawnGroupsTestAccess {
     static void reload(Section_SpawnGroups& section) { section.reload_from_file(); }
     static void set_rebuilding(Section_SpawnGroups& section, bool value) { section.rebuilding_ = value; }
+    static void add_spawn_group(Section_SpawnGroups& section) { section.add_spawn_group(); }
+    static void duplicate_spawn_group(Section_SpawnGroups& section, const std::string& id) {
+        section.duplicate_spawn_group(id);
+    }
+    static void reorder_spawn_group(Section_SpawnGroups& section, const std::string& id, size_t new_index) {
+        section.reorder_spawn_group(id, new_index);
+    }
+    static void delete_spawn_group(Section_SpawnGroups& section, const std::string& id) {
+        section.delete_spawn_group(id);
+    }
 };
 
 namespace {
@@ -111,7 +122,7 @@ TEST_CASE("Section_SpawnGroups mutates manifest spawn_groups") {
     notifications.clear();
     removed_ids.clear();
 
-    section.add_spawn_group();
+    SectionSpawnGroupsTestAccess::add_spawn_group(section);
     store.flush();
     auto after_add = read_json(manifest_path);
     auto& stored_groups = after_add["assets"]["TestAsset"]["spawn_groups"];
@@ -128,7 +139,7 @@ TEST_CASE("Section_SpawnGroups mutates manifest spawn_groups") {
     CHECK(removed_ids.empty());
 
     notifications.clear();
-    section.duplicate_spawn_group("spn-one");
+    SectionSpawnGroupsTestAccess::duplicate_spawn_group(section, "spn-one");
     store.flush();
     auto after_duplicate = read_json(manifest_path);
     auto dup_groups = after_duplicate["assets"]["TestAsset"]["spawn_groups"];
@@ -140,7 +151,7 @@ TEST_CASE("Section_SpawnGroups mutates manifest spawn_groups") {
 
     notifications.clear();
     removed_ids.clear();
-    section.reorder_spawn_group("spn-two", 0);
+    SectionSpawnGroupsTestAccess::reorder_spawn_group(section, "spn-two", 0);
     store.flush();
     auto after_reorder = read_json(manifest_path);
     auto reordered = after_reorder["assets"]["TestAsset"]["spawn_groups"];
@@ -156,7 +167,7 @@ TEST_CASE("Section_SpawnGroups mutates manifest spawn_groups") {
     CHECK(removed_ids.empty());
 
     removed_ids.clear();
-    section.delete_spawn_group(added_id);
+    SectionSpawnGroupsTestAccess::delete_spawn_group(section, added_id);
     store.flush();
     auto after_delete = read_json(manifest_path);
     auto deleted = after_delete["assets"]["TestAsset"]["spawn_groups"];
