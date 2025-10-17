@@ -27,7 +27,8 @@
                 "controls": false
             },
             "lighting": {
-                "map_panel": false
+                "map_panel": false,
+                "shadow_panel": false
             },
             "map_assets": {
                 "candidates": false

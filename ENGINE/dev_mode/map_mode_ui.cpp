@@ -924,13 +924,15 @@ void MapModeUI::open_shading_panel() {
     if (!shading_panel_centered_ || !preview_panel_centered_) {
         ensure_light_and_shading_positions();
     }
-    if (shadow_panel_) {
-        shadow_panel_->open();
-        bring_panel_to_front(shadow_panel_.get());
-    }
+    // Open both panels, but ensure the shading panel is on top if they overlap
     if (map_light_preview_panel_) {
         map_light_preview_panel_->open();
         bring_panel_to_front(map_light_preview_panel_.get());
+    }
+    if (shadow_panel_) {
+        shadow_panel_->open();
+        // Bring shading panel to the front last for safer interaction
+        bring_panel_to_front(shadow_panel_.get());
     }
     sync_footer_button_states();
 }

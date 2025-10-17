@@ -44,12 +44,10 @@ public:
     };
 
     GridStatistics static_grid_stats() const;
-    GridStatistics dynamic_grid_stats() const;
-    float          combined_average(float static_weight, float dynamic_weight) const;
+    float          combined_average(float static_weight, float /*dynamic_weight*/) const;
 
     void build_static(const std::vector<std::uint8_t>& grid, int width, int height);
-    void stamp_moving_lights(const std::vector<std::uint8_t>& grid, int width, int height, std::uint8_t clamp = 255);
-    void fade_dynamic(std::uint8_t fade);
+    // Dynamic light rays removed.
 
     void update_tile_mask(SDL_Renderer* renderer, float static_weight, float dynamic_weight);
     void render_tile_mask(SDL_Renderer* renderer) const;
@@ -58,7 +56,7 @@ public:
     float sample_brightness(float local_x,
                             float local_y,
                             float static_weight,
-                            float dynamic_weight,
+                            float /*dynamic_weight*/,
                             bool bilinear) const;
 
 private:
@@ -73,7 +71,7 @@ private:
     int                 padding_cells_   = 0;
     int                 stride_          = 0;
     std::vector<std::uint8_t> static_grid_{};
-    std::vector<std::uint8_t> dynamic_grid_{};
+    // Removed dynamic grid and all related behavior.
     SDL_Texture*        tile_mask_       = nullptr;
     float               base_brightness_ = 0.0f;
     bool                dirty_           = true;
@@ -129,14 +127,7 @@ public:
     int  virtual_light_map_quadrant_size() const { return requested_quadrant_size_px_; }
     int  virtual_light_map_quadrants() const { return requested_quadrants_; }
 
-    // Apply a moving light to the dynamic portion of the light map. The light
-    // is defined in world-space. This updates affected quadrants' dynamic
-    // grids and marks them active/dirty; they will be re-sampled into the
-    // quadrant tile textures on the next update.
-    void stamp_moving_light(SDL_FPoint world_center,
-                            float      radius_px,
-                            std::uint8_t intensity = 255,
-                            std::uint8_t clamp     = 255);
+    // Dynamic moving light rays removed.
 
 private:
     int   find_quadrant_index(int world_x, int world_y) const;

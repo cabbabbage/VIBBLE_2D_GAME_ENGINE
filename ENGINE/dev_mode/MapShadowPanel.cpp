@@ -140,6 +140,8 @@ void MapShadowPanel::open() {
     DockableCollapsible::open();
     // Ensure controls are enabled/unlocked when opening in Map Mode
     setLocked(false);
+    // Allow immediate interaction after opening (avoid initial click suppression)
+    force_pointer_ready();
 }
 
 void MapShadowPanel::close() { DockableCollapsible::close(); }
