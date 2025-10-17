@@ -596,7 +596,7 @@ void MapLightPreviewPanel::render_preview(SDL_Renderer* renderer) const {
         std::ostringstream stream;
         stream << (snap->active ? "A" : "-") << ' ' << (snap->dirty ? "D" : "-") << '\n';
         stream << "S:" << format_float(snap->static_average, 2) << '\n';
-        stream << "D:" << format_float(snap->dynamic_average, 2);
+        stream << "C:" << format_float(snap->combined_brightness, 2);
         const std::string text = stream.str();
 
         SDL_Surface* surface =
@@ -713,9 +713,7 @@ void MapLightPreviewPanel::render_preview(SDL_Renderer* renderer) const {
             detail_lines.push_back("Base Brightness: " + format_float(snap->base_brightness, 3));
             detail_lines.push_back("Combined Brightness: " + format_float(snap->combined_brightness, 3));
             detail_lines.push_back("Static Avg: " + format_float(snap->static_average, 3));
-            detail_lines.push_back("Dynamic Avg: " + format_float(snap->dynamic_average, 3));
-            detail_lines.push_back("Dynamic Range: " + format_float(snap->dynamic_min, 3) + " - " +
-                                   format_float(snap->dynamic_max, 3));
+            detail_lines.push_back("Dynamic Lighting: disabled");
             detail_lines.push_back("Shadow Strength: " + format_float(snap->shadow_opacity_min, 3) + " - " +
                                    format_float(snap->shadow_opacity_max, 3));
         }

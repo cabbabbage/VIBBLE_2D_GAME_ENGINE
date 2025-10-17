@@ -15330,13 +15330,13 @@
                 }
               ],
               "display_name": "Big_Rock",
-              "dx": 23,
-              "dy": -412,
+              "dx": -143,
+              "dy": -503,
               "enforce_spacing": false,
               "max_number": 1,
               "min_number": 1,
-              "origional_height": 1930,
-              "origional_width": 2038,
+              "origional_height": 1959,
+              "origional_width": 2034,
               "position": "Exact",
               "priority": 2,
               "spawn_id": "spn-4e301c5e26b7"
