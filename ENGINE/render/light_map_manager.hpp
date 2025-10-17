@@ -8,13 +8,11 @@
 #include <vector>
 #include <cstdint>
 
+#include "render_pipeline/render_asset/shading/ReactiveShadowSettings.hpp"
+
 class Assets;
 class LightMap;
 class LightMapQuadrant;
-
-namespace render_pipeline::shading {
-struct ReactiveShadowSettings;
-}
 
 class LightMapManager {
 public:
