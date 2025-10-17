@@ -703,7 +703,8 @@ void MapLightPanel::sync_json_from_ui() {
 }
 
 void MapLightPanel::load_update_map_light_setting() {
-    update_map_light_enabled_ = devmode::ui_settings::load_bool(kUpdateMapLightSettingKey, false);
+    // Default live update to ON when opening; persist user's choice thereafter
+    update_map_light_enabled_ = devmode::ui_settings::load_bool(kUpdateMapLightSettingKey, true);
     if (update_map_light_checkbox_) {
         update_map_light_checkbox_->set_value(update_map_light_enabled_);
     }

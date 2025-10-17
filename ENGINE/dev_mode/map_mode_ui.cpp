@@ -81,6 +81,11 @@ void MapModeUI::set_map_mode_active(bool active) {
     update_footer_visibility();
     sync_footer_button_states();
     set_active_panel(PanelType::None);
+    // When entering map mode, ensure the Layers footer is expanded so the
+    // embedded sliding containers are visible and interactive by default.
+    if (active) {
+        set_layers_footer_expanded(true);
+    }
 }
 
 FullScreenCollapsible* MapModeUI::get_footer_panel() const {
@@ -435,6 +440,21 @@ void MapModeUI::configure_footer_buttons() {
 };
 
     if (header_mode_ == HeaderMode::Map) {
+        // Always include a Layers button to control the map layers panel.
+        {
+            FullScreenCollapsible::HeaderButton layers_btn;
+            layers_btn.id = "layers";
+            layers_btn.label = "Layers";
+            layers_btn.on_toggle = [this](bool active) {
+                if (active) {
+                    this->set_active_panel(PanelType::Layers);
+                } else {
+                    // Collapse layers footer when deactivated
+                    this->set_active_panel(PanelType::None);
+                }
+            };
+            buttons.push_back(std::move(layers_btn));
+        }
         append_custom(map_mode_buttons_, HeaderMode::Map);
 
         const bool has_lights_button = std::any_of(map_mode_buttons_.begin(), map_mode_buttons_.end(),
@@ -484,6 +504,8 @@ void MapModeUI::configure_footer_buttons() {
     footer_buttons_configured_ = true;
     sync_footer_button_states();
     if (header_mode_ == HeaderMode::Map) {
+        // Reflect current visibility of the layers footer in the button state
+        footer_panel_->set_button_active_state("layers", layers_footer_visible_);
         for (const auto& config : map_mode_buttons_) {
             footer_panel_->set_button_active_state(config.id, config.active);
         }
@@ -506,6 +528,7 @@ void MapModeUI::sync_footer_button_states() {
                                      (map_light_preview_panel_ && map_light_preview_panel_->is_visible());
         footer_panel_->set_button_active_state(kButtonIdLights, lights_visible);
         footer_panel_->set_button_active_state(kButtonIdShading, shading_visible);
+        footer_panel_->set_button_active_state("layers", layers_footer_visible_);
         for (const auto& config : map_mode_buttons_) {
             footer_panel_->set_button_active_state(config.id, config.active);
         }

@@ -3,10 +3,11 @@
 #include "animation_update/animation_update_utils.hpp"
 #include "asset/Asset.hpp"
 #include "custom_controllers/controller_path_utils.hpp"
+#include "custom_controllers/controller_visit_threshold.hpp"
 #include "utils/input.hpp"
 
 #include <cmath>
-#include <string>
+#include <vector>
 
 namespace {
 
@@ -107,7 +108,7 @@ int VibbleController::get_dy() const { return dy_; }
 
 void VibbleController::movement(const Input& input) {
     dx_ = dy_ = 0;
-    if (!player_) return;
+    if (!player_ || !player_->anim_) return;
 
     const bool up    = input.isScancodeDown(SDL_SCANCODE_W);
     const bool down  = input.isScancodeDown(SDL_SCANCODE_S);
@@ -119,21 +120,17 @@ void VibbleController::movement(const Input& input) {
     const int raw_y = (down  ? 1 : 0) - (up    ? 1 : 0);
 
     if (raw_x == 0 && raw_y == 0) {
-        if (player_ && player_->anim_) {
-            player_->anim_->clear_manual_animation();
-            player_->anim_->set_animation_now(animation_update::detail::kDefaultAnimation);
-            player_->anim_->clear_movement_plan();
-        }
+        player_->anim_->clear_manual_animation();
+        player_->anim_->set_animation_now(animation_update::detail::kDefaultAnimation);
+        player_->anim_->clear_movement_plan();
         return;
     }
 
     SDL_Point step_delta = normalized_step(raw_x, raw_y, kWalkSpeed);
     if (step_delta.x == 0 && step_delta.y == 0) {
-        if (player_ && player_->anim_) {
-            player_->anim_->clear_manual_animation();
-            player_->anim_->set_animation_now(animation_update::detail::kDefaultAnimation);
-            player_->anim_->clear_movement_plan();
-        }
+        player_->anim_->clear_manual_animation();
+        player_->anim_->set_animation_now(animation_update::detail::kDefaultAnimation);
+        player_->anim_->clear_movement_plan();
         return;
     }
 
@@ -150,32 +147,27 @@ void VibbleController::movement(const Input& input) {
         SDL_Point clamped = controller_paths::clamp_to_radius(origin, desired, radius);
         dx_ = clamped.x - origin.x;
         dy_ = clamped.y - origin.y;
+        desired = clamped;
     }
 
     if (dx_ == 0 && dy_ == 0) {
-        if (player_ && player_->anim_) {
-            player_->anim_->clear_manual_animation();
-            player_->anim_->set_animation_now(animation_update::detail::kDefaultAnimation);
-            player_->anim_->clear_movement_plan();
-        }
+        player_->anim_->clear_manual_animation();
+        player_->anim_->set_animation_now(animation_update::detail::kDefaultAnimation);
+        player_->anim_->clear_movement_plan();
         return;
     }
 
-    player_->pos.x += dx_;
-    player_->pos.y += dy_;
-
-    if (player_->anim_) {
-        std::string anim_id;
-        if (std::abs(dx_) >= std::abs(dy_)) {
-            anim_id = (dx_ >= 0) ? "right" : "left";
-        } else {
-            anim_id = (dy_ > 0) ? "forward" : "backward";
-        }
-
-        player_->anim_->clear_manual_animation();
+    const SDL_Point current_dest = player_->anim_->final_dest;
+    const bool same_target = (current_dest.x == desired.x && current_dest.y == desired.y);
+    // Replan if target changed or a new path was requested by the player/engine.
+    if (!same_target || player_->anim_->path_requested) {
         player_->anim_->clear_movement_plan();
-        player_->anim_->set_animation_now(anim_id);
     }
+
+    std::vector<SDL_Point> path;
+    path.push_back(SDL_Point{ dx_, dy_ });
+
+    player_->anim_->move(path, controller_utils::controller_visit_threshold(player_));
 }
 
 void VibbleController::update(const Input& input) {

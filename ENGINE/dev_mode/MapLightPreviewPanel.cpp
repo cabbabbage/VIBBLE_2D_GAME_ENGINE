@@ -140,7 +140,7 @@ private:
 };
 
 MapLightPreviewPanel::MapLightPreviewPanel(Assets* assets, int x, int y)
-    : DockableCollapsible("Light Map Panel", true, x, y), assets_(assets) {
+    : DockableCollapsible("Light Map", true, x, y), assets_(assets) {
     set_floating_content_width(360);
     set_visible_height(540);
     quadrant_note_text_ =

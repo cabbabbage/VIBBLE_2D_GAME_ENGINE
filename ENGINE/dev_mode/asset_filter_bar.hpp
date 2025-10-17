@@ -52,7 +52,7 @@ public:
     bool passes(const Asset& asset) const;
 
 private:
-    enum class FilterKind { MapAssets, CurrentRoom, Groups, Type };
+    enum class FilterKind { MapAssets, CurrentRoom, Type };
 
     struct FilterEntry {
         std::string id;
@@ -63,7 +63,6 @@ private:
     struct FilterState {
         bool map_assets = false;
         bool current_room = true;
-        bool groups = false;
         std::unordered_map<std::string, bool> type_filters;
     };
 

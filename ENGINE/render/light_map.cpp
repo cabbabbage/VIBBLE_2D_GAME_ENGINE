@@ -95,11 +95,16 @@ void LightMapQuadrant::ensure_texture(SDL_Renderer* renderer) {
     if (grid_width_ <= 0 || grid_height_ <= 0) {
         return;
     }
+    // Create a texture that matches the quadrant's world-rect size.
+    // We will resample our internal light grids into this texture so that
+    // each quadrant owns a tile of size (world_rect_.w x world_rect_.h).
+    const int tex_w = std::max(1, world_rect_.w);
+    const int tex_h = std::max(1, world_rect_.h);
     tile_mask_ = SDL_CreateTexture(renderer,
                                    SDL_PIXELFORMAT_RGBA8888,
                                    SDL_TEXTUREACCESS_STREAMING,
-                                   grid_width_,
-                                   grid_height_);
+                                   tex_w,
+                                   tex_h);
     if (tile_mask_) {
         SDL_SetTextureBlendMode(tile_mask_, SDL_BLENDMODE_BLEND);
 #if SDL_VERSION_ATLEAST(2,0,12)
@@ -316,30 +321,52 @@ void LightMapQuadrant::update_tile_mask(SDL_Renderer* renderer, float static_wei
         return;
     }
 
-    const std::size_t total_pixels = static_cast<std::size_t>(grid_width_) * static_cast<std::size_t>(grid_height_);
+    // Generate a tile that matches the quadrant pixel size by resampling the
+    // internal light grids. This effectively "splits" the map-sized light into
+    // quadrant-sized tiles so placement aligns with assets.
+    int tex_w = 0;
+    int tex_h = 0;
+    SDL_QueryTexture(tile_mask_, nullptr, nullptr, &tex_w, &tex_h);
+    if (tex_w <= 0 || tex_h <= 0) {
+        return;
+    }
+
+    const std::size_t total_pixels = static_cast<std::size_t>(tex_w) * static_cast<std::size_t>(tex_h);
     std::vector<std::uint32_t> pixels(total_pixels, 0);
-    for (int y = 0; y < grid_height_; ++y) {
-        for (int x = 0; x < grid_width_; ++x) {
-            const std::size_t idx = static_cast<std::size_t>(y) * static_cast<std::size_t>(grid_width_) +
-                                    static_cast<std::size_t>(x);
-            const float sample = cell_sample(x, y, static_weight, dynamic_weight);
-            const std::uint8_t value = clamp_byte(static_cast<int>(std::round(sample * 255.0f)));
+
+    const int gw = std::max(1, grid_width_);
+    const int gh = std::max(1, grid_height_);
+
+    // Map each destination pixel to a sample in grid-space. Use bilinear sampling
+    // for smoother falloff and to better match full-map reconstruction.
+    for (int py = 0; py < tex_h; ++py) {
+        const float v = (tex_h > 1) ? (static_cast<float>(py) / static_cast<float>(tex_h - 1)) : 0.0f;
+        const float gy = v * static_cast<float>(gh - 1);
+        for (int px = 0; px < tex_w; ++px) {
+            const float u = (tex_w > 1) ? (static_cast<float>(px) / static_cast<float>(tex_w - 1)) : 0.0f;
+            const float gx = u * static_cast<float>(gw - 1);
+
+            const float sample = sample_brightness(gx, gy, static_weight, dynamic_weight, /*bilinear=*/true);
+            const std::uint8_t value    = clamp_byte(static_cast<int>(std::round(sample * 255.0f)));
             const std::uint8_t darkness = static_cast<std::uint8_t>(255 - value);
             const std::uint32_t rgba    = pack_darkness_pixel(darkness);
+
+            const std::size_t idx = static_cast<std::size_t>(py) * static_cast<std::size_t>(tex_w) +
+                                    static_cast<std::size_t>(px);
             pixels[idx] = rgba;
         }
     }
 
-    void*   pixels_ptr = nullptr;
-    int     pitch      = 0;
+    void* pixels_ptr = nullptr;
+    int   pitch      = 0;
     if (SDL_LockTexture(tile_mask_, nullptr, &pixels_ptr, &pitch) != 0) {
         return;
     }
 
-    const int row_bytes = grid_width_ * static_cast<int>(sizeof(std::uint32_t));
+    const int row_bytes = tex_w * static_cast<int>(sizeof(std::uint32_t));
     std::uint8_t* dst   = static_cast<std::uint8_t*>(pixels_ptr);
     const std::uint8_t* src = reinterpret_cast<const std::uint8_t*>(pixels.data());
-    for (int y = 0; y < grid_height_; ++y) {
+    for (int y = 0; y < tex_h; ++y) {
         std::memcpy(dst + static_cast<std::size_t>(y) * pitch,
                     src + static_cast<std::size_t>(y) * row_bytes,
                     static_cast<std::size_t>(row_bytes));
@@ -489,6 +516,72 @@ float LightMap::sample_internal(int quadrant_index,
                                            static_weight,
                                            dynamic_weight,
                                            bilinear);
+}
+
+void LightMap::stamp_moving_light(SDL_FPoint world_center,
+                                  float      radius_px,
+                                  std::uint8_t intensity,
+                                  std::uint8_t clamp) {
+    if (quadrants_.empty() || radius_px <= 0.0f || intensity == 0) {
+        return;
+    }
+
+    const float r  = std::max(1.0f, radius_px);
+    const float r2 = r * r;
+
+    // For each quadrant, project the light into its dynamic grid.
+    for (auto& q : quadrants_) {
+        const SDL_Rect& rect = q.world_rect();
+        if (rect.w <= 0 || rect.h <= 0) {
+            continue;
+        }
+
+        // Quick reject using bounding box of the light.
+        SDL_Rect light_bounds{
+            static_cast<int>(std::floor(world_center.x - r)),
+            static_cast<int>(std::floor(world_center.y - r)),
+            static_cast<int>(std::ceil(r * 2.0f)),
+            static_cast<int>(std::ceil(r * 2.0f))
+        };
+        SDL_Rect overlap{};
+        if (!SDL_IntersectRect(&rect, &light_bounds, &overlap)) {
+            continue;
+        }
+
+        const int gw = std::max(1, q.grid_width());
+        const int gh = std::max(1, q.grid_height());
+        // Map grid cell centers to world space.
+        const float inv_gw = (gw > 1) ? 1.0f / static_cast<float>(gw - 1) : 0.0f;
+        const float inv_gh = (gh > 1) ? 1.0f / static_cast<float>(gh - 1) : 0.0f;
+
+        // Build a temporary dynamic grid for this quadrant and stamp into it,
+        // then merge by taking the max value with any existing dynamic values.
+        std::vector<std::uint8_t> temp(static_cast<std::size_t>(gw * gh), 0);
+
+        for (int gy = 0; gy < gh; ++gy) {
+            const float ny = static_cast<float>(gy) * inv_gh; // [0..1]
+            const float wy = static_cast<float>(rect.y) + ny * static_cast<float>(std::max(1, rect.h) - 1);
+            const float dy = wy - world_center.y;
+            for (int gx = 0; gx < gw; ++gx) {
+                const float nx = static_cast<float>(gx) * inv_gw; // [0..1]
+                const float wx = static_cast<float>(rect.x) + nx * static_cast<float>(std::max(1, rect.w) - 1);
+                const float dx = wx - world_center.x;
+                const float d2 = dx * dx + dy * dy;
+                if (d2 > r2) {
+                    continue;
+                }
+                // Simple linear falloff to the radius.
+                const float d        = std::sqrt(d2);
+                const float falloff  = std::clamp(1.0f - (d / r), 0.0f, 1.0f);
+                const int   raw      = static_cast<int>(std::lround(static_cast<float>(intensity) * falloff));
+                const std::uint8_t v = clamp_byte(raw);
+                temp[static_cast<std::size_t>(gy * gw + gx)] = std::max(temp[static_cast<std::size_t>(gy * gw + gx)], v);
+            }
+        }
+
+        // Stamp into the quadrant's dynamic grid with the provided clamp.
+        q.stamp_moving_lights(temp, gw, gh, clamp);
+    }
 }
 
 float LightMap::sample_brightness(int world_x, int world_y, float static_weight, float dynamic_weight) const {

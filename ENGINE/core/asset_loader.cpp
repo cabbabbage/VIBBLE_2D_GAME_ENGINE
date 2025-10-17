@@ -25,6 +25,9 @@
 using json = nlohmann::json;
 
 namespace {
+        // Temporary guard to preserve the merging implementation without applying it.
+        constexpr bool kEnableAssetMerging = false;
+
         Asset* findCenterAsset(const std::vector<Asset*>& group) {
                 if (group.empty()) return nullptr;
                 double avgX = std::accumulate(group.begin(), group.end(), 0.0,
@@ -151,7 +154,10 @@ manifest_store_(manifest_store)
 }
 
 void AssetLoader::link_by_child(const std::vector<std::vector<Asset*>>& groups) {
-	size_t total_linked = 0;
+        if (!kEnableAssetMerging) {
+                return;
+        }
+        size_t total_linked = 0;
 	for (const auto& group : groups) {
 		if (group.empty()) continue;
 		Asset* center_asset = findCenterAsset(group);
@@ -167,6 +173,9 @@ void AssetLoader::link_by_child(const std::vector<std::vector<Asset*>>& groups) 
 }
 
 void AssetLoader::removeMergedAssets(const std::vector<Asset*>& to_remove, Asset* skip) {
+        if (!kEnableAssetMerging) {
+                return;
+        }
         for (Asset* a : to_remove) {
                 if (a == skip) continue;
                 a->set_hidden(true);
@@ -265,13 +274,16 @@ std::vector<Asset*> AssetLoader::collectDistantAssets(int lock_threshold, int re
                         }
                 }
         }
-        if (!locked_boundary_assets.empty()) {
+        if (kEnableAssetMerging && !locked_boundary_assets.empty()) {
                 mergeLockedBoundaryAssets(locked_boundary_assets);
         }
         return distant_assets;
 }
 
 void AssetLoader::mergeLockedBoundaryAssets(const std::vector<Asset*>& locked_assets) {
+        if (!kEnableAssetMerging) {
+                return;
+        }
         constexpr std::size_t group_size = 4;
         std::vector<Asset*> eligible;
         eligible.reserve(locked_assets.size());
