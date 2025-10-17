@@ -45,6 +45,36 @@ std::vector<std::string> parse_string_array(const nlohmann::json& json_value) {
     return values;
 }
 
+float read_float_field(const nlohmann::json& data, const char* key, float fallback) {
+    if (!key) {
+        return fallback;
+    }
+    try {
+        auto it = data.find(key);
+        if (it == data.end()) {
+            return fallback;
+        }
+        if (it->is_number_float() || it->is_number_integer()) {
+            return static_cast<float>(it->get<double>());
+        }
+        if (it->is_string()) {
+            const std::string text = it->get<std::string>();
+            if (!text.empty()) {
+                try {
+                    size_t consumed = 0;
+                    float parsed = std::stof(text, &consumed);
+                    if (consumed > 0) {
+                        return parsed;
+                    }
+                } catch (...) {
+                }
+            }
+        }
+    } catch (...) {
+    }
+    return fallback;
+}
+
 std::string derive_asset_directory(const nlohmann::json& data, const std::string& fallback) {
     try {
         if (data.contains("asset_directory") && data["asset_directory"].is_string()) {
@@ -779,6 +809,51 @@ void AssetInfo::set_virtual_light_map_quadrants(int quadrants) {
         info_json_["virtual_light_map_quadrants"] = clamped;
 }
 
+namespace {
+constexpr float kShadingParallaxMin = 0.0f;
+constexpr float kShadingParallaxMax = 4.0f;
+constexpr float kShadingBrightnessMin = 0.0f;
+constexpr float kShadingBrightnessMax = 4.0f;
+constexpr float kShadingOpacityMin = 0.0f;
+constexpr float kShadingOpacityMax = 4.0f;
+
+float sanitize_shading_ratio(float value, float lo, float hi, float fallback) {
+    if (!std::isfinite(value)) {
+        return fallback;
+    }
+    return std::clamp(value, lo, hi);
+}
+} // namespace
+
+void AssetInfo::set_shading_parallax_amount(float amount) {
+        float sanitized = sanitize_shading_ratio(amount, kShadingParallaxMin, kShadingParallaxMax, shading_parallax_amount);
+        shading_parallax_amount = sanitized;
+        if (!info_json_.is_object()) {
+                info_json_ = nlohmann::json::object();
+        }
+        info_json_["shading_parallax_amount"] = sanitized;
+}
+
+void AssetInfo::set_shading_screen_brightness_multiplier(float multiplier) {
+        float sanitized = sanitize_shading_ratio(
+                multiplier, kShadingBrightnessMin, kShadingBrightnessMax, shading_screen_brightness_multiplier);
+        shading_screen_brightness_multiplier = sanitized;
+        if (!info_json_.is_object()) {
+                info_json_ = nlohmann::json::object();
+        }
+        info_json_["shading_screen_brightness_multiplier"] = sanitized;
+}
+
+void AssetInfo::set_shading_opacity_multiplier(float multiplier) {
+        float sanitized = sanitize_shading_ratio(
+                multiplier, kShadingOpacityMin, kShadingOpacityMax, shading_opacity_multiplier);
+        shading_opacity_multiplier = sanitized;
+        if (!info_json_.is_object()) {
+                info_json_ = nlohmann::json::object();
+        }
+        info_json_["shading_opacity_multiplier"] = sanitized;
+}
+
 Area* AssetInfo::find_area(const std::string& name) {
 	for (auto& na : areas) {
 		if (na.name == name) return na.area.get();
@@ -983,6 +1058,14 @@ void AssetInfo::initialize_from_json(const nlohmann::json& source) {
                 parsed_settings.alpha_multiplier = json_settings.value("alpha_multiplier", parsed_settings.alpha_multiplier);
         }
         set_shadow_mask_settings(parsed_settings);
+
+        set_shading_parallax_amount(read_float_field(data, "shading_parallax_amount", shading_parallax_amount));
+        set_shading_screen_brightness_multiplier(
+                read_float_field(data,
+                                  "shading_screen_brightness_multiplier",
+                                  shading_screen_brightness_multiplier));
+        set_shading_opacity_multiplier(
+                read_float_field(data, "shading_opacity_multiplier", shading_opacity_multiplier));
 
         if (data.contains("virtual_light_map_quadrants")) {
                 int quadrants = data.value("virtual_light_map_quadrants", virtual_light_map_quadrants);

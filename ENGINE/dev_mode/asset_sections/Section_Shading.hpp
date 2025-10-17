@@ -5,19 +5,15 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
-#include <cctype>
 #include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
-#include <vector>
 
 #include "asset/asset_info.hpp"
 #include "dev_mode/asset_info_sections.hpp"
 #include "dev_mode/draw_utils.hpp"
 #include "dev_mode/shared/formatting.hpp"
-#include "utils/cache_manager.hpp"
-#include "utils/generate_faded_mask.hpp"
 
 class AssetInfoUI;
 
@@ -25,162 +21,51 @@ class Section_Shading : public DockableCollapsible {
 public:
     Section_Shading() : DockableCollapsible("Shading", false) {}
     void set_ui(AssetInfoUI* ui) { ui_ = ui; }
-    ~Section_Shading() override { destroy_preview_texture(); }
+    ~Section_Shading() override = default;
 
     void build() override {
-        destroy_preview_texture();
-        preview_texture_w_ = 0;
-        preview_texture_h_ = 0;
-        preview_dirty_ = true;
-        preview_rect_ = SDL_Rect{0, 0, 0, 0};
-        preview_container_rect_ = SDL_Rect{0, 0, 0, 0};
-
         c_is_shaded_.reset();
-        s_extend_.reset();
-        s_blur_.reset();
-        s_falloff_start_.reset();
-        s_falloff_rate_.reset();
-        s_alpha_.reset();
-        generate_all_btn_.reset();
+        s_parallax_amount_.reset();
+        s_screen_brightness_.reset();
+        s_opacity_multiplier_.reset();
 
-        last_info_ = info_.get();
         if (!info_) {
             return;
         }
 
-        working_settings_ = info_->shadow_mask_settings;
-        assign_slider_values_from_settings();
-
         c_is_shaded_ = std::make_unique<DMCheckbox>("Has Shading", info_->is_shaded);
 
-        s_extend_ = std::make_unique<DMSlider>("Extend Amount", extend_min_, extend_max_, extend_value_);
-        configure_ratio_slider(*s_extend_, 100);
+        assign_slider_values_from_asset();
 
-        s_blur_ = std::make_unique<DMSlider>("Blur Percent", blur_min_, blur_max_, blur_value_);
-        s_blur_->set_value_formatter([](int v, std::array<char, dev_mode::kSliderFormatBufferSize>& buffer) {
-            auto view = dev_mode::FormatSliderValue(static_cast<double>(v), 0, buffer);
-            if (view.empty()) {
-                return view;
-            }
-            auto* data = buffer.data();
-            const std::size_t len = view.size();
-            if (len + 1 < buffer.size()) {
-                data[len] = '%';
-                data[len + 1] = '\0';
-                return std::string_view(data, len + 1);
-            }
-            return view;
-        });
-        s_blur_->set_value_parser([](const std::string& text) -> std::optional<int> {
-            try {
-                std::string trimmed = text;
-                trimmed.erase(std::remove_if(trimmed.begin(), trimmed.end(), [](unsigned char ch) {
-                    return std::isspace(static_cast<int>(ch));
-                }), trimmed.end());
-                if (!trimmed.empty() && trimmed.back() == '%') {
-                    trimmed.pop_back();
-                }
-                int parsed = std::stoi(trimmed);
-                return std::clamp(parsed, blur_min_, blur_max_);
-            } catch (...) {
-                return std::nullopt;
-            }
-        });
-        s_blur_->set_defer_commit_until_unfocus(true);
+        s_parallax_amount_ = std::make_unique<DMSlider>(
+            "Parallax Amount", parallax_min_, parallax_max_, parallax_value_);
+        configure_ratio_slider(*s_parallax_amount_, slider_scale_);
 
-        s_falloff_start_ = std::make_unique<DMSlider>("Falloff Start (%)", falloff_start_min_, falloff_start_max_, falloff_start_value_);
-        s_falloff_start_->set_value_formatter([](int v, std::array<char, dev_mode::kSliderFormatBufferSize>& buffer) {
-            return dev_mode::FormatSliderValue(static_cast<double>(v), 0, buffer);
-        });
-        s_falloff_start_->set_value_parser([](const std::string& text) -> std::optional<int> {
-            try {
-                double parsed = std::stod(text);
-                if (!std::isfinite(parsed)) {
-                    return std::nullopt;
-                }
-                parsed = std::clamp(parsed, static_cast<double>(falloff_start_min_), static_cast<double>(falloff_start_max_));
-                return static_cast<int>(std::lround(parsed));
-            } catch (...) {
-                return std::nullopt;
-            }
-        });
-        s_falloff_start_->set_defer_commit_until_unfocus(true);
+        s_screen_brightness_ = std::make_unique<DMSlider>(
+            "Screen Brightness Multiplier", brightness_min_, brightness_max_, brightness_value_);
+        configure_ratio_slider(*s_screen_brightness_, slider_scale_);
 
-        s_falloff_rate_ = std::make_unique<DMSlider>("Falloff Rate", falloff_rate_min_, falloff_rate_max_, falloff_rate_value_);
-        configure_ratio_slider(*s_falloff_rate_, 100);
+        s_opacity_multiplier_ = std::make_unique<DMSlider>(
+            "Opacity Multiplier", opacity_min_, opacity_max_, opacity_value_);
+        configure_ratio_slider(*s_opacity_multiplier_, slider_scale_);
 
-        s_alpha_ = std::make_unique<DMSlider>("Alpha Multiplier", alpha_min_, alpha_max_, alpha_value_);
-        configure_ratio_slider(*s_alpha_, 100);
-
-        generate_all_btn_ = std::make_unique<DMButton>("Generate All Masks", &DMStyles::CreateButton(), 220, DMButton::height());
+        assign_slider_values_from_asset();
     }
 
     void layout_custom_content(int /*screen_w*/, int /*screen_h*/) const override {
-        int padding = DMSpacing::panel_padding();
-        int header_gap = DMSpacing::header_gap();
-        int base_x = rect_.x + padding;
-        int base_y = rect_.y + padding + DMButton::height() + header_gap;
-        int available_w = rect_.w - 2 * padding;
-
-        int control_x = base_x;
+        const int padding = DMSpacing::panel_padding();
+        const int header_gap = DMSpacing::header_gap();
+        const int base_x = rect_.x + padding;
+        const int base_y = rect_.y + padding + DMButton::height() + header_gap;
+        const int control_w = rect_.w - 2 * padding;
         int control_y = base_y;
-        int control_w = available_w;
-
         const int gap = DMSpacing::item_gap();
-        const int min_control_w = 180;
-
-        bool preview_visible = c_is_shaded_ && c_is_shaded_->value();
-        bool preview_side_by_side = false;
-        int preview_height = 0;
-
-        if (!preview_visible) {
-            preview_rect_ = SDL_Rect{0, 0, 0, 0};
-            preview_container_rect_ = SDL_Rect{0, 0, 0, 0};
-        }
-
-        if (preview_visible) {
-            int preview_width = preview_texture_w_ > 0 ? preview_texture_w_ : std::min(available_w, 220);
-            preview_height = preview_texture_h_ > 0 ? preview_texture_h_ : 140;
-            if (preview_width > available_w) {
-                double scale = static_cast<double>(available_w) / static_cast<double>(preview_width);
-                preview_width = available_w;
-                preview_height = std::max(1, static_cast<int>(std::lround(static_cast<double>(preview_height) * scale)));
-            }
-
-            int max_preview_w_for_control = std::max(0, available_w - min_control_w - gap);
-            if (max_preview_w_for_control <= 0) {
-                preview_visible = false;
-                preview_rect_ = SDL_Rect{0, 0, 0, 0};
-                preview_container_rect_ = SDL_Rect{0, 0, 0, 0};
-            } else {
-                if (preview_width > max_preview_w_for_control) {
-                    double scale = static_cast<double>(max_preview_w_for_control) / static_cast<double>(preview_width);
-                    preview_width = max_preview_w_for_control;
-                    preview_height = std::max(1, static_cast<int>(std::lround(static_cast<double>(preview_height) * scale)));
-                }
-
-                control_w = available_w - preview_width - gap;
-                if (control_w < 100) {
-                    control_w = std::max(100, available_w / 2);
-                    preview_width = std::max(0, available_w - control_w - gap);
-                }
-
-                if (preview_width <= 0) {
-                    preview_visible = false;
-                    preview_rect_ = SDL_Rect{0, 0, 0, 0};
-                    preview_container_rect_ = SDL_Rect{0, 0, 0, 0};
-                } else {
-                    preview_side_by_side = true;
-                    int preview_x = control_x + control_w + gap;
-                    preview_rect_ = SDL_Rect{preview_x, base_y, preview_width, preview_height};
-                    preview_container_rect_ = SDL_Rect{preview_x, base_y, preview_width, preview_height};
-                }
-            }
-        }
 
         auto place = [&](auto& widget, int h) {
-            if (!widget) return;
-            widget->set_rect(SDL_Rect{control_x, control_y - scroll_, control_w, h});
+            if (!widget) {
+                return;
+            }
+            widget->set_rect(SDL_Rect{ base_x, control_y - scroll_, control_w, h });
             control_y += h + gap;
         };
 
@@ -189,29 +74,12 @@ public:
         }
 
         if (c_is_shaded_ && c_is_shaded_->value()) {
-            place(s_extend_, DMSlider::height());
-            place(s_blur_, DMSlider::height());
-            place(s_falloff_start_, DMSlider::height());
-            place(s_falloff_rate_, DMSlider::height());
-            place(s_alpha_, DMSlider::height());
-            if (!preview_side_by_side) {
-                preview_rect_ = SDL_Rect{0, 0, 0, 0};
-                preview_container_rect_ = SDL_Rect{0, 0, 0, 0};
-            }
-
-            if (generate_all_btn_) {
-                int btn_w = std::min(generate_all_btn_->preferred_width(), control_w);
-                generate_all_btn_->set_rect(SDL_Rect{control_x + (control_w - btn_w) / 2, control_y - scroll_, btn_w, DMButton::height()});
-                control_y += DMButton::height() + gap;
-            }
-        } else {
-            preview_rect_ = SDL_Rect{0, 0, 0, 0};
-            preview_container_rect_ = SDL_Rect{0, 0, 0, 0};
+            place(s_parallax_amount_, DMSlider::height());
+            place(s_screen_brightness_, DMSlider::height());
+            place(s_opacity_multiplier_, DMSlider::height());
         }
 
-        int scrollable_height = std::max(0, control_y - base_y);
-        int preview_height_total = preview_side_by_side ? preview_height : 0;
-        content_height_ = std::max(scrollable_height, preview_height_total);
+        content_height_ = std::max(0, control_y - base_y);
     }
 
     bool handle_event(const SDL_Event& e) override {
@@ -221,7 +89,7 @@ public:
         }
 
         bool shading_toggled = false;
-        bool settings_changed = false;
+        bool slider_changed = false;
 
         if (c_is_shaded_ && c_is_shaded_->handle_event(e)) {
             used = true;
@@ -229,35 +97,28 @@ public:
         }
 
         if (c_is_shaded_ && c_is_shaded_->value()) {
-            auto handle_slider = [&](std::unique_ptr<DMSlider>& slider, int& stored_value, int min_v, int max_v) {
-                if (!slider) return;
-                int previous = stored_value;
-                bool slider_used = slider->handle_event(e);
-                int committed = std::clamp(slider->value(), min_v, max_v);
+            auto handle_slider = [&](std::unique_ptr<DMSlider>& slider,
+                                     int& stored_value,
+                                     int min_v,
+                                     int max_v) {
+                if (!slider) {
+                    return;
+                }
+                const int previous = stored_value;
+                const bool slider_used = slider->handle_event(e);
+                const int committed = std::clamp(slider->value(), min_v, max_v);
                 if (committed != previous) {
                     stored_value = committed;
-                    settings_changed = true;
+                    slider_changed = true;
                     used = true;
                 } else if (slider_used) {
                     used = true;
                 }
             };
 
-            handle_slider(s_extend_, extend_value_, extend_min_, extend_max_);
-            handle_slider(s_blur_, blur_value_, blur_min_, blur_max_);
-            handle_slider(s_falloff_start_, falloff_start_value_, falloff_start_min_, falloff_start_max_);
-            handle_slider(s_falloff_rate_, falloff_rate_value_, falloff_rate_min_, falloff_rate_max_);
-            handle_slider(s_alpha_, alpha_value_, alpha_min_, alpha_max_);
-        }
-
-        if (generate_all_btn_ && generate_all_btn_->handle_event(e)) {
-            if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
-                used = true;
-                if (ui_ && info_ && info_->is_shaded) {
-                    ui_->regenerate_shadow_masks();
-                    preview_dirty_ = true;
-                }
-            }
+            handle_slider(s_parallax_amount_, parallax_value_, parallax_min_, parallax_max_);
+            handle_slider(s_screen_brightness_, brightness_value_, brightness_min_, brightness_max_);
+            handle_slider(s_opacity_multiplier_, opacity_value_, opacity_min_, opacity_max_);
         }
 
         if (shading_toggled) {
@@ -265,48 +126,33 @@ public:
             if (info_->is_shaded != new_state) {
                 info_->set_shading_enabled(new_state);
                 (void)info_->commit_manifest();
-                preview_dirty_ = true;
-                if (!new_state) {
-                    destroy_preview_texture();
-                } else if (!is_expanded()) {
-                    set_expanded(true);
-                }
                 if (ui_) {
                     ui_->notify_light_sources_modified(false);
                 }
             }
         }
 
-        if (settings_changed && info_) {
-            update_settings_from_slider_values();
-            info_->set_shadow_mask_settings(working_settings_);
+        if (slider_changed && info_) {
+            apply_slider_values_to_asset();
             (void)info_->commit_manifest();
-            preview_dirty_ = true;
         }
 
-        return used || shading_toggled || settings_changed;
+        return used || shading_toggled || slider_changed;
     }
 
     void render_content(SDL_Renderer* r) const override {
-        if (c_is_shaded_) c_is_shaded_->render(r);
+        if (c_is_shaded_) {
+            c_is_shaded_->render(r);
+        }
         if (c_is_shaded_ && c_is_shaded_->value()) {
-            if (s_extend_) s_extend_->render(r);
-            if (s_blur_) s_blur_->render(r);
-            if (s_falloff_start_) s_falloff_start_->render(r);
-            if (s_falloff_rate_) s_falloff_rate_->render(r);
-            if (s_alpha_) s_alpha_->render(r);
-
-            if (preview_rect_.w > 0 && preview_rect_.h > 0) {
-                ensure_preview(r);
-                SDL_Color border = DMStyles::Border();
-                dm_draw::DrawRoundedOutline(r, preview_container_rect_, DMStyles::CornerRadius(), 1, border);
-                if (preview_texture_) {
-                    SDL_RenderCopy(r, preview_texture_, nullptr, &preview_rect_);
-                }
+            if (s_parallax_amount_) {
+                s_parallax_amount_->render(r);
             }
-
-            if (generate_all_btn_) {
-                generate_all_btn_->render(r);
+            if (s_screen_brightness_) {
+                s_screen_brightness_->render(r);
+            }
+            if (s_opacity_multiplier_) {
+                s_opacity_multiplier_->render(r);
             }
         }
     }
@@ -333,204 +179,64 @@ private:
         slider.set_defer_commit_until_unfocus(true);
     }
 
-    void assign_slider_values_from_settings() {
-        ShadowMaskSettings sanitized = SanitizeShadowMaskSettings(working_settings_);
-        working_settings_ = sanitized;
-        extend_value_ = std::clamp(static_cast<int>(std::lround(sanitized.expansion_ratio * 100.0f)), extend_min_, extend_max_);
-        blur_value_ = std::clamp(static_cast<int>(std::lround(sanitized.blur_scale * 100.0f)), blur_min_, blur_max_);
-        falloff_start_value_ = std::clamp(static_cast<int>(std::lround(sanitized.falloff_start * 100.0f)), falloff_start_min_, falloff_start_max_);
-        falloff_rate_value_ = std::clamp(static_cast<int>(std::lround(sanitized.falloff_exponent * 100.0f)), falloff_rate_min_, falloff_rate_max_);
-        alpha_value_ = std::clamp(static_cast<int>(std::lround(sanitized.alpha_multiplier * 100.0f)), alpha_min_, alpha_max_);
+    static int to_slider_value(float value, int min_v, int max_v) {
+        if (!std::isfinite(value)) {
+            value = 0.0f;
+        }
+        int scaled = static_cast<int>(std::lround(static_cast<double>(value) * slider_scale_));
+        return std::clamp(scaled, min_v, max_v);
     }
 
-    void update_settings_from_slider_values() {
-        working_settings_.expansion_ratio = static_cast<float>(extend_value_) / 100.0f;
-        working_settings_.blur_scale = static_cast<float>(blur_value_) / 100.0f;
-        working_settings_.falloff_start = static_cast<float>(falloff_start_value_) / 100.0f;
-        working_settings_.falloff_exponent = static_cast<float>(falloff_rate_value_) / 100.0f;
-        working_settings_.alpha_multiplier = static_cast<float>(alpha_value_) / 100.0f;
-        working_settings_ = SanitizeShadowMaskSettings(working_settings_);
-        assign_slider_values_from_settings();
-        if (s_extend_) s_extend_->set_value(extend_value_);
-        if (s_blur_) s_blur_->set_value(blur_value_);
-        if (s_falloff_start_) s_falloff_start_->set_value(falloff_start_value_);
-        if (s_falloff_rate_) s_falloff_rate_->set_value(falloff_rate_value_);
-        if (s_alpha_) s_alpha_->set_value(alpha_value_);
+    static float from_slider_value(int value) {
+        return static_cast<float>(value) / static_cast<float>(slider_scale_);
     }
 
-    void ensure_preview(SDL_Renderer* renderer) const {
-        if (!renderer || !info_ || !c_is_shaded_ || !c_is_shaded_->value()) {
+    void assign_slider_values_from_asset() {
+        if (!info_) {
             return;
         }
-        if (!preview_dirty_) {
+        parallax_value_ = to_slider_value(info_->shading_parallax_amount, parallax_min_, parallax_max_);
+        brightness_value_ = to_slider_value(
+            info_->shading_screen_brightness_multiplier, brightness_min_, brightness_max_);
+        opacity_value_ = to_slider_value(info_->shading_opacity_multiplier, opacity_min_, opacity_max_);
+
+        if (s_parallax_amount_) {
+            s_parallax_amount_->set_value(parallax_value_);
+        }
+        if (s_screen_brightness_) {
+            s_screen_brightness_->set_value(brightness_value_);
+        }
+        if (s_opacity_multiplier_) {
+            s_opacity_multiplier_->set_value(opacity_value_);
+        }
+    }
+
+    void apply_slider_values_to_asset() {
+        if (!info_) {
             return;
         }
-
-        preview_dirty_ = false;
-        destroy_preview_texture();
-
-        SDL_Surface* source = capture_preview_surface(renderer);
-        if (!source) {
-            return;
-        }
-
-        SDL_Surface* mask = GenerateFadedMask::GenerateSingleMask(source, working_settings_);
-        SDL_FreeSurface(source);
-        if (!mask) {
-            return;
-        }
-
-        SDL_Surface* scaled = scale_surface(mask, 0.5f);
-        SDL_FreeSurface(mask);
-        if (!scaled) {
-            return;
-        }
-
-        SDL_Texture* preview = CacheManager::surface_to_texture(renderer, scaled);
-        preview_texture_w_ = scaled->w;
-        preview_texture_h_ = scaled->h;
-        SDL_FreeSurface(scaled);
-
-        preview_texture_ = preview;
+        info_->set_shading_parallax_amount(from_slider_value(parallax_value_));
+        info_->set_shading_screen_brightness_multiplier(from_slider_value(brightness_value_));
+        info_->set_shading_opacity_multiplier(from_slider_value(opacity_value_));
+        assign_slider_values_from_asset();
     }
 
-    SDL_Surface* capture_preview_surface(SDL_Renderer* renderer) const {
-        if (!info_ || info_->animations.empty()) {
-            return nullptr;
-        }
+    static constexpr int slider_scale_ = 100;
+    static constexpr int parallax_min_ = 0;
+    static constexpr int parallax_max_ = 400;
+    static constexpr int brightness_min_ = 0;
+    static constexpr int brightness_max_ = 400;
+    static constexpr int opacity_min_ = 0;
+    static constexpr int opacity_max_ = 400;
 
-        const std::string& preferred = !info_->start_animation.empty() ? info_->start_animation : info_->animations.begin()->first;
-        auto it = info_->animations.find(preferred);
-        if (it == info_->animations.end()) {
-            it = info_->animations.begin();
-        }
-        if (it == info_->animations.end()) {
-            return nullptr;
-        }
-
-        const Animation& animation = it->second;
-        SDL_Texture* frame = animation.frame_variant(0, 0);
-        if (!frame) {
-            return nullptr;
-        }
-
-        return texture_to_surface(renderer, frame);
-    }
-
-    SDL_Surface* texture_to_surface(SDL_Renderer* renderer, SDL_Texture* texture) const {
-        if (!renderer || !texture) {
-            return nullptr;
-        }
-
-        Uint32 format = SDL_PIXELFORMAT_RGBA32;
-        int access = 0;
-        int width = 0;
-        int height = 0;
-        if (SDL_QueryTexture(texture, &format, &access, &width, &height) != 0) {
-            return nullptr;
-        }
-
-        SDL_Texture* target = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_TARGET, width, height);
-        if (!target) {
-            return nullptr;
-        }
-
-        SDL_Texture* previous = SDL_GetRenderTarget(renderer);
-        if (SDL_SetRenderTarget(renderer, target) != 0) {
-            SDL_DestroyTexture(target);
-            return nullptr;
-        }
-
-        SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_NONE);
-        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
-        SDL_RenderClear(renderer);
-        SDL_RenderCopy(renderer, texture, nullptr, nullptr);
-
-        SDL_Surface* surface = SDL_CreateRGBSurfaceWithFormat(0, width, height, 32, SDL_PIXELFORMAT_RGBA32);
-        if (!surface) {
-            SDL_SetRenderTarget(renderer, previous);
-            SDL_DestroyTexture(target);
-            return nullptr;
-        }
-
-        if (SDL_RenderReadPixels(renderer, nullptr, SDL_PIXELFORMAT_RGBA32, surface->pixels, surface->pitch) != 0) {
-            SDL_FreeSurface(surface);
-            SDL_SetRenderTarget(renderer, previous);
-            SDL_DestroyTexture(target);
-            return nullptr;
-        }
-
-        SDL_SetRenderTarget(renderer, previous);
-        SDL_DestroyTexture(target);
-        return surface;
-    }
-
-    SDL_Surface* scale_surface(SDL_Surface* surface, float factor) const {
-        if (!surface) {
-            return nullptr;
-        }
-        if (factor <= 0.0f) {
-            factor = 1.0f;
-        }
-        int target_w = std::max(1, static_cast<int>(std::lround(static_cast<float>(surface->w) * factor)));
-        int target_h = std::max(1, static_cast<int>(std::lround(static_cast<float>(surface->h) * factor)));
-        SDL_Surface* scaled = SDL_CreateRGBSurfaceWithFormat(0, target_w, target_h, 32, surface->format->format);
-        if (!scaled) {
-            return nullptr;
-        }
-        SDL_Rect dst{0, 0, target_w, target_h};
-        if (SDL_BlitScaled(surface, nullptr, scaled, &dst) != 0) {
-            SDL_FreeSurface(scaled);
-            return nullptr;
-        }
-        return scaled;
-    }
-
-    void destroy_preview_texture() const {
-        if (preview_texture_) {
-            SDL_DestroyTexture(preview_texture_);
-            preview_texture_ = nullptr;
-        }
-    }
-
-    static constexpr int extend_min_ = 0;
-    static constexpr int extend_max_ = 400;
-    static constexpr int blur_min_ = 0;
-    static constexpr int blur_max_ = 800;
-    static constexpr int falloff_start_min_ = 0;
-    static constexpr int falloff_start_max_ = 95;
-    static constexpr int falloff_rate_min_ = 10;
-    static constexpr int falloff_rate_max_ = 400;
-    static constexpr int alpha_min_ = 0;
-    static constexpr int alpha_max_ = 400;
-
-    ShadowMaskSettings working_settings_{};
-    int extend_value_ = 80;
-    int blur_value_ = 100;
-    int falloff_start_value_ = 0;
-    int falloff_rate_value_ = 105;
-    int alpha_value_ = 100;
+    int parallax_value_ = 0;
+    int brightness_value_ = slider_scale_;
+    int opacity_value_ = slider_scale_;
 
     std::unique_ptr<DMCheckbox> c_is_shaded_;
-    std::unique_ptr<DMSlider> s_extend_;
-    std::unique_ptr<DMSlider> s_blur_;
-    std::unique_ptr<DMSlider> s_falloff_start_;
-    std::unique_ptr<DMSlider> s_falloff_rate_;
-    std::unique_ptr<DMSlider> s_alpha_;
-    std::unique_ptr<DMButton> generate_all_btn_;
+    std::unique_ptr<DMSlider> s_parallax_amount_;
+    std::unique_ptr<DMSlider> s_screen_brightness_;
+    std::unique_ptr<DMSlider> s_opacity_multiplier_;
 
     AssetInfoUI* ui_ = nullptr;
-    const AssetInfo* last_info_ = nullptr;
-
-    mutable SDL_Texture* preview_texture_ = nullptr;
-    mutable int preview_texture_w_ = 0;
-    mutable int preview_texture_h_ = 0;
-    mutable bool preview_dirty_ = true;
-    mutable SDL_Rect preview_rect_{0, 0, 0, 0};
-    mutable SDL_Rect preview_container_rect_{0, 0, 0, 0};
-
-protected:
-    std::string_view lock_settings_namespace() const override { return "asset_info"; }
-    std::string_view lock_settings_id() const override { return "shading"; }
 };
-
