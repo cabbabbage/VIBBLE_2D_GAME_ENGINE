@@ -442,3 +442,58 @@ float LightMap::sample_brightness_bilinear(float world_x,
     return sample_internal(quadrant_index, local_x, local_y, true, static_weight, dynamic_weight);
 }
 
+std::pair<int, int> LightMap::padding_pixels() const {
+    if (quadrants_.empty()) {
+        return {0, 0};
+    }
+    const LightMapQuadrant& reference = quadrants_.front();
+    if (reference.grid_width() <= 0 || reference.grid_height() <= 0) {
+        return {0, 0};
+    }
+    const SDL_Rect& rect = reference.world_rect();
+    if (rect.w <= 0 || rect.h <= 0) {
+        return {0, 0};
+    }
+
+    const double cell_width  = static_cast<double>(rect.w) / static_cast<double>(reference.grid_width());
+    const double cell_height = static_cast<double>(rect.h) / static_cast<double>(reference.grid_height());
+    const int    pad_cells   = reference.padding();
+    if (pad_cells <= 0) {
+        return {0, 0};
+    }
+
+    const int pad_x = static_cast<int>(std::ceil(cell_width * static_cast<double>(pad_cells)));
+    const int pad_y = static_cast<int>(std::ceil(cell_height * static_cast<double>(pad_cells)));
+    return {pad_x, pad_y};
+}
+
+void LightMap::render_visible_quadrants(SDL_Renderer* renderer, const SDL_Rect& view_rect) const {
+    if (!renderer || quadrants_.empty()) {
+        return;
+    }
+    if (view_rect.w <= 0 || view_rect.h <= 0) {
+        return;
+    }
+
+    SDL_Rect expanded = view_rect;
+    auto [pad_x, pad_y] = padding_pixels();
+    if (pad_x > 0) {
+        expanded.x -= pad_x;
+        expanded.w += pad_x * 2;
+    }
+    if (pad_y > 0) {
+        expanded.y -= pad_y;
+        expanded.h += pad_y * 2;
+    }
+
+    for (const auto& quadrant : quadrants_) {
+        const SDL_Rect& rect = quadrant.world_rect();
+        if (rect.w <= 0 || rect.h <= 0) {
+            continue;
+        }
+        if (SDL_HasIntersection(&rect, &expanded)) {
+            quadrant.render_tile_mask(renderer);
+        }
+    }
+}
+

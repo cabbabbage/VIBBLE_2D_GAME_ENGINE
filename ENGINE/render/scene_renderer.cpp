@@ -158,6 +158,17 @@ void SceneRenderer::render(){
     SDL_SetRenderDrawColor(renderer_,clear_color.r,clear_color.g,clear_color.b,clear_color.a);
     SDL_RenderClear(renderer_);
 
+    if (z_light_pass_) {
+        SDL_Rect screen_view{0, 0, screen_width_, screen_height_};
+        SDL_BlendMode previous_mode = SDL_BLENDMODE_BLEND;
+        if (SDL_GetRenderDrawBlendMode(renderer_, &previous_mode) != 0) {
+            previous_mode = SDL_BLENDMODE_BLEND;
+        }
+        SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_MOD);
+        z_light_pass_->render_visible_quadrants(renderer_, screen_view);
+        SDL_SetRenderDrawBlendMode(renderer_, previous_mode);
+    }
+
     if (!light_map_only_mode_){
         const auto& camera_state=assets_->getView();
         const camera::RealismSettings& cam_settings = camera_state.realism_settings();

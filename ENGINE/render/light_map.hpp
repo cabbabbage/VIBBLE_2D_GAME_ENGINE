@@ -91,6 +91,8 @@ public:
                                      float static_weight = kDefaultStaticWeight,
                                      float dynamic_weight = kDefaultDynamicWeight) const;
 
+    void render_visible_quadrants(SDL_Renderer* renderer, const SDL_Rect& view_rect) const;
+
     int screen_width() const { return screen_width_; }
     int screen_height() const { return screen_height_; }
 
@@ -117,6 +119,7 @@ private:
                           bool  bilinear,
                           float static_weight,
                           float dynamic_weight) const;
+    std::pair<int, int> padding_pixels() const;
 
     Assets* assets_ = nullptr;
     int     screen_width_  = 0;

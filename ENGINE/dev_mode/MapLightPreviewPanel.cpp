@@ -194,9 +194,11 @@ void MapLightPreviewPanel::render_preview(SDL_Renderer* renderer) const {
     const int preview_y = rect_.y + header_rect_.h + padding - scroll_;
     const int available_width = std::max(40, rect_.w - padding * 2);
 
-    const float aspect = (map->screen_width > 0)
-                             ? static_cast<float>(map->screen_height) /
-                                   static_cast<float>(map->screen_width)
+    const int map_screen_width  = map->screen_width();
+    const int map_screen_height = map->screen_height();
+    const float aspect = (map_screen_width > 0)
+                             ? static_cast<float>(map_screen_height) /
+                                   static_cast<float>(map_screen_width)
                              : 1.0f;
 
     int grid_width_px = std::max(40, std::min(available_width, 320));
