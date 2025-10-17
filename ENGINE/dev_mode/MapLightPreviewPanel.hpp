@@ -65,7 +65,8 @@ private:
     void                          persist_reactive_settings_to_dev_settings(const render_pipeline::shading::ReactiveShadowSettings& settings) const;
     void                          write_reactive_settings_to_json(const render_pipeline::shading::ReactiveShadowSettings& settings);
     nlohmann::json&               ensure_reactive_settings_json();
-    void                          apply_virtual_light_map_quadrants(int quadrants, bool force_refresh);
+    void                          apply_virtual_light_map_quadrant_size(int size_px, bool apply_to_assets, bool mark_pending = true);
+    void                          request_light_map_regeneration();
     void                          force_shading_refresh_if_needed(bool force_refresh);
 
     Assets* assets_ = nullptr;
@@ -90,11 +91,13 @@ private:
     std::unique_ptr<class DMSlider> shadow_scale_;
     std::unique_ptr<class DMSlider> size_scale_factor_;
     std::unique_ptr<class DMSlider> search_radius_;
-    std::unique_ptr<class DMSlider> quadrant_count_;
+    std::unique_ptr<class DMSlider> quadrant_size_px_;
+    std::unique_ptr<class DMButton> regenerate_button_;
 
     std::vector<std::unique_ptr<class Widget>> widget_wrappers_{};
 
     bool needs_sync_to_json_ = false;
+    bool pending_light_map_regeneration_ = false;
 
     render_pipeline::shading::ReactiveShadowSettings last_applied_settings_ =
         render_pipeline::shading::sanitize_reactive_shadow_settings({});
@@ -102,7 +105,7 @@ private:
     bool reactive_settings_initialized_ = false;
     render_pipeline::shading::ReactiveShadowSettings forced_settings_snapshot_ =
         render_pipeline::shading::sanitize_reactive_shadow_settings({});
-    int last_quadrant_count_ = LightMap::kDefaultQuadrantCount;
-    int forced_quadrant_snapshot_ = LightMap::kDefaultQuadrantCount;
+    int last_quadrant_size_px_ = LightMap::kDefaultQuadrantSizePx;
+    int forced_quadrant_size_snapshot_ = LightMap::kDefaultQuadrantSizePx;
 };
 

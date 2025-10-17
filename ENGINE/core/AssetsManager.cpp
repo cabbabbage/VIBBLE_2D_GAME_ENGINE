@@ -1112,11 +1112,24 @@ void Assets::set_virtual_light_map_quadrants(int quadrants) {
     }
 }
 
+void Assets::set_virtual_light_map_quadrant_size(int size_px) {
+    if (scene) {
+        scene->set_virtual_light_map_quadrant_size(size_px);
+    }
+}
+
 int Assets::virtual_light_map_quadrants() const {
     if (const LightMap* map = light_map()) {
         return map->virtual_light_map_quadrants();
     }
     return LightMap::kDefaultQuadrantCount;
+}
+
+int Assets::virtual_light_map_quadrant_size() const {
+    if (const LightMap* map = light_map()) {
+        return map->virtual_light_map_quadrant_size();
+    }
+    return LightMap::kDefaultQuadrantSizePx;
 }
 
 void Assets::force_virtual_light_map_refresh() {

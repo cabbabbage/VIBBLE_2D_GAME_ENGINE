@@ -30,6 +30,10 @@ struct ReactiveShadowSettings {
         bool operator!=(const VirtualLightMapSettings& other) const { return !(*this == other); }
     } virtual_light_map;
 
+    float opacity_strength  = 1.0f;
+    float parallax_strength = 1.0f;
+    float scale_strength    = 1.0f;
+
     struct ShadowResponseLutEntry {
         float brightness = 0.0f;
         float opacity    = 1.0f;
@@ -64,6 +68,9 @@ struct ReactiveShadowSettings {
 
     bool operator==(const ReactiveShadowSettings& other) const {
         return virtual_light_map == other.virtual_light_map &&
+               opacity_strength == other.opacity_strength &&
+               parallax_strength == other.parallax_strength &&
+               scale_strength == other.scale_strength &&
                response_lut == other.response_lut &&
                sampling_weights == other.sampling_weights;
     }
@@ -88,6 +95,9 @@ inline ReactiveShadowSettings sanitize_reactive_shadow_settings(const ReactiveSh
     out.virtual_light_map.size_scale_factor  = clampf(out.virtual_light_map.size_scale_factor, 0.0f, 10.0f);
     out.virtual_light_map.map_light_factor   = clampf(out.virtual_light_map.map_light_factor, 0.0f, 1.0f);
     out.virtual_light_map.search_radius      = clampi(out.virtual_light_map.search_radius, 0, 64);
+    out.opacity_strength                     = clampf(out.opacity_strength, 0.0f, 10.0f);
+    out.parallax_strength                    = clampf(out.parallax_strength, 0.0f, 10.0f);
+    out.scale_strength                       = clampf(out.scale_strength, 0.0f, 10.0f);
 
     auto sanitize_entry = [](ReactiveShadowSettings::ShadowResponseLutEntry entry) {
         entry.brightness = clampf(entry.brightness, 0.0f, 1.0f);

@@ -78,6 +78,9 @@ void populate(ReactiveShadowSettings& settings, const nlohmann::json& json) {
         read_float(json, "map_light_factor", settings.virtual_light_map.map_light_factor);
     settings.virtual_light_map.search_radius =
         read_int(json, "search_radius", settings.virtual_light_map.search_radius);
+    settings.opacity_strength = read_float(json, "opacity_strength", settings.opacity_strength);
+    settings.parallax_strength = read_float(json, "parallax_strength", settings.parallax_strength);
+    settings.scale_strength = read_float(json, "scale_strength", settings.scale_strength);
 
     auto parse_lut = [&](const nlohmann::json& source) {
         if (!source.is_array()) {
@@ -151,6 +154,9 @@ void assign_reactive_shadow_settings(nlohmann::json& json, const ReactiveShadowS
         { "map_light_factor", sanitized.virtual_light_map.map_light_factor },
         { "search_radius", sanitized.virtual_light_map.search_radius }
     });
+    json["opacity_strength"]  = sanitized.opacity_strength;
+    json["parallax_strength"] = sanitized.parallax_strength;
+    json["scale_strength"]    = sanitized.scale_strength;
 
     nlohmann::json lut = nlohmann::json::array();
     for (const auto& entry : sanitized.response_lut.entries) {

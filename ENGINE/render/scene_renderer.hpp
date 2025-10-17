@@ -38,6 +38,7 @@ public:
     const render_pipeline::shading::ReactiveShadowSettings& reactive_shadow_settings() const { return reactive_shadow_settings_; }
     const LightMap* light_map() const;
     void set_virtual_light_map_quadrants(int quadrants);
+    void set_virtual_light_map_quadrant_size(int size_px);
     void force_virtual_light_map_refresh();
 
 private:

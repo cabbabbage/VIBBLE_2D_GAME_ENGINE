@@ -3,6 +3,7 @@
 #include <functional>
 #include <memory>
 #include <string>
+#include <vector>
 #include <SDL.h>
 
 #include "DockableCollapsible.hpp"
@@ -13,6 +14,8 @@
 class MapLightPanel;
 class Assets;
 class Input;
+class DMSlider;
+class Widget;
 
 class MapShadowPanel : public DockableCollapsible {
 public:
@@ -40,11 +43,25 @@ protected:
     void layout_custom_content(int screen_w, int screen_h) const override;
 
 private:
+    void build_ui();
+    void rebuild_rows();
+    void sync_ui_from_json();
+    void sync_json_from_ui();
+    void apply_settings_to_shared();
+
     MapLightPanel* light_panel_ = nullptr;
     Assets*        assets_ = nullptr;
     nlohmann::json* map_info_ = nullptr;
     SaveCallback    on_save_{};
     render_pipeline::shading::ReactiveShadowSettings* reactive_settings_shared_ = nullptr;
+
+    std::unique_ptr<DMSlider> opacity_strength_{};
+    std::unique_ptr<DMSlider> parallax_strength_{};
+    std::unique_ptr<DMSlider> scale_strength_{};
+    std::vector<std::unique_ptr<Widget>> widget_wrappers_{};
+    render_pipeline::shading::ReactiveShadowSettings last_settings_ =
+        render_pipeline::shading::sanitize_reactive_shadow_settings({});
+    bool needs_sync_to_json_ = false;
 
 protected:
     std::string_view lock_settings_namespace() const override { return "lighting"; }

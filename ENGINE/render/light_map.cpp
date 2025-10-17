@@ -364,6 +364,19 @@ LightMap::~LightMap() = default;
 
 void LightMap::set_virtual_light_map_quadrants(int quadrants) {
     requested_quadrants_ = std::clamp(quadrants, kMinQuadrantCount, kMaxQuadrantCount);
+    if (requested_quadrants_ <= 0) {
+        requested_quadrants_ = kMinQuadrantCount;
+    }
+    if (screen_width_ > 0 || screen_height_ > 0) {
+        const int denom = std::max(1, requested_quadrants_);
+        const int approx_w = (screen_width_ > 0) ? std::max(1, screen_width_ / denom) : kDefaultQuadrantSizePx;
+        const int approx_h = (screen_height_ > 0) ? std::max(1, screen_height_ / denom) : kDefaultQuadrantSizePx;
+        set_virtual_light_map_quadrant_size(std::max(approx_w, approx_h));
+    }
+}
+
+void LightMap::set_virtual_light_map_quadrant_size(int size_px) {
+    requested_quadrant_size_px_ = std::clamp(size_px, kMinQuadrantSizePx, kMaxQuadrantSizePx);
 }
 
 void LightMap::rebuild(SDL_Renderer* renderer) {
@@ -374,12 +387,14 @@ void LightMap::rebuild(SDL_Renderer* renderer) {
         return;
     }
 
-    quadrant_cols_ = std::max(1, requested_quadrants_);
-    quadrant_rows_ = std::max(1, requested_quadrants_);
+    const int desired_size = std::clamp(requested_quadrant_size_px_, kMinQuadrantSizePx, kMaxQuadrantSizePx);
+    quadrant_cols_ = std::max(1, (screen_width_ + desired_size - 1) / desired_size);
+    quadrant_rows_ = std::max(1, (screen_height_ + desired_size - 1) / desired_size);
+    requested_quadrants_ = std::max(quadrant_cols_, quadrant_rows_);
 
-    const int base_width  = std::max(1, screen_width_ / quadrant_cols_);
-    const int base_height = std::max(1, screen_height_ / quadrant_rows_);
-    quadrant_size_px_     = std::max(base_width, base_height);
+    const int base_width = std::max(1, (screen_width_ + quadrant_cols_ - 1) / quadrant_cols_);
+    const int base_height = std::max(1, (screen_height_ + quadrant_rows_ - 1) / quadrant_rows_);
+    quadrant_size_px_ = std::max(base_width, base_height);
 
     const int total_quadrants = quadrant_cols_ * quadrant_rows_;
     quadrants_.clear();

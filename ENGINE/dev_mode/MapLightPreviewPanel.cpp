@@ -146,7 +146,16 @@ MapLightPreviewPanel::~MapLightPreviewPanel() = default;
 
 void MapLightPreviewPanel::set_assets(Assets* assets) {
     assets_ = assets;
-    apply_virtual_light_map_quadrants(last_quadrant_count_, false);
+    if (assets_) {
+        last_quadrant_size_px_ = clamp_int(assets_->virtual_light_map_quadrant_size(),
+                                           LightMap::kMinQuadrantSizePx,
+                                           LightMap::kMaxQuadrantSizePx);
+    }
+    apply_virtual_light_map_quadrant_size(last_quadrant_size_px_, false, false);
+    pending_light_map_regeneration_ = false;
+    if (regenerate_button_) {
+        regenerate_button_->set_label("Regenerate");
+    }
 }
 
 void MapLightPreviewPanel::set_map_info(nlohmann::json* map_info, SaveCallback on_save) {
@@ -158,16 +167,17 @@ void MapLightPreviewPanel::set_map_info(nlohmann::json* map_info, SaveCallback o
         reactive_settings_initialized_ = true;
     }
     if (assets_) {
-        last_quadrant_count_ = clamp_int(assets_->virtual_light_map_quadrants(),
-                                         LightMap::kMinQuadrantCount,
-                                         LightMap::kMaxQuadrantCount);
+        last_quadrant_size_px_ = clamp_int(assets_->virtual_light_map_quadrant_size(),
+                                           LightMap::kMinQuadrantSizePx,
+                                           LightMap::kMaxQuadrantSizePx);
     }
-    if (quadrant_count_) {
-        quadrant_count_->set_value(last_quadrant_count_);
-    }
-    apply_virtual_light_map_quadrants(last_quadrant_count_, false);
+    apply_virtual_light_map_quadrant_size(last_quadrant_size_px_, false, false);
     apply_immediate_settings();
     sync_ui_from_json();
+    pending_light_map_regeneration_ = false;
+    if (regenerate_button_) {
+        regenerate_button_->set_label("Regenerate");
+    }
 }
 
 void MapLightPreviewPanel::set_reactive_settings(render_pipeline::shading::ReactiveShadowSettings* settings) {
@@ -683,8 +693,13 @@ void MapLightPreviewPanel::rebuild_rows() {
 
     rows.push_back({ add_widget(std::make_unique<PreviewWidget>(this)) });
 
-    if (quadrant_count_) {
-        rows.push_back({ add_widget(std::make_unique<SliderWidget>(quadrant_count_.get())) });
+    if (regenerate_button_) {
+        rows.push_back({ add_widget(std::make_unique<ButtonWidget>(regenerate_button_.get(), [this]() {
+                                      this->apply_virtual_light_map_quadrant_size(this->last_quadrant_size_px_, true);
+                                  })) });
+    }
+    if (quadrant_size_px_) {
+        rows.push_back({ add_widget(std::make_unique<SliderWidget>(quadrant_size_px_.get())) });
     }
     if (horizontal_falloff_) {
         rows.push_back({ add_widget(std::make_unique<SliderWidget>(horizontal_falloff_.get())) });
@@ -735,12 +750,17 @@ void MapLightPreviewPanel::build_ui() {
         search_radius_->set_defer_commit_until_unfocus(false);
     }
 
-    const int clamped_quadrants = clamp_int(last_quadrant_count_, LightMap::kMinQuadrantCount,
-                                            LightMap::kMaxQuadrantCount);
-    quadrant_count_ = std::make_unique<DMSlider>(
-        "Quadrant Resolution", LightMap::kMinQuadrantCount, LightMap::kMaxQuadrantCount, clamped_quadrants);
-    if (quadrant_count_) {
-        quadrant_count_->set_defer_commit_until_unfocus(false);
+    regenerate_button_ = std::make_unique<DMButton>("Regenerate", &DMStyles::AccentButton(), 160, DMButton::height());
+    if (regenerate_button_) {
+        regenerate_button_->set_tooltip("Rebuild the virtual light map using the current settings.");
+    }
+
+    const int clamped_size = clamp_int(last_quadrant_size_px_, LightMap::kMinQuadrantSizePx,
+                                       LightMap::kMaxQuadrantSizePx);
+    quadrant_size_px_ = std::make_unique<DMSlider>(
+        "Quadrant Size (px)", LightMap::kMinQuadrantSizePx, LightMap::kMaxQuadrantSizePx, clamped_size);
+    if (quadrant_size_px_) {
+        quadrant_size_px_->set_defer_commit_until_unfocus(false);
     }
 }
 
@@ -750,16 +770,29 @@ void MapLightPreviewPanel::sync_ui_from_json() {
     }
     auto it = map_info_->find("reactive_shadows");
     if (it != map_info_->end() && it->is_object()) {
-        if (auto quad_it = it->find("virtual_light_map_quadrants");
-            quad_it != it->end() && quad_it->is_number_integer()) {
-            last_quadrant_count_ = clamp_int(quad_it->get<int>(),
-                                             LightMap::kMinQuadrantCount,
-                                             LightMap::kMaxQuadrantCount);
+        int desired_size = last_quadrant_size_px_;
+        if (auto size_it = it->find("virtual_light_map_quadrant_size");
+            size_it != it->end() && size_it->is_number_integer()) {
+            desired_size = size_it->get<int>();
+        } else if (auto quad_it = it->find("virtual_light_map_quadrants");
+                   quad_it != it->end() && quad_it->is_number_integer()) {
+            const int count = clamp_int(quad_it->get<int>(), LightMap::kMinQuadrantCount, LightMap::kMaxQuadrantCount);
+            desired_size = last_quadrant_size_px_;
+            const LightMap* map = current_light_map();
+            if (!map && assets_) {
+                map = assets_->light_map();
+            }
+            if (map) {
+                const int approx_w = std::max(1, map->screen_width() / std::max(1, count));
+                const int approx_h = std::max(1, map->screen_height() / std::max(1, count));
+                desired_size       = std::max(approx_w, approx_h);
+            }
         }
+        last_quadrant_size_px_ = clamp_int(desired_size, LightMap::kMinQuadrantSizePx, LightMap::kMaxQuadrantSizePx);
         last_applied_settings_ = render_pipeline::shading::reactive_shadow_settings_from_json(*it, last_applied_settings_);
         last_applied_settings_ = render_pipeline::shading::sanitize_reactive_shadow_settings(last_applied_settings_);
         set_reactive_sliders(last_applied_settings_);
-        apply_virtual_light_map_quadrants(last_quadrant_count_, false);
+        apply_virtual_light_map_quadrant_size(last_quadrant_size_px_, false, false);
         apply_immediate_settings();
     }
     needs_sync_to_json_ = false;
@@ -770,13 +803,13 @@ void MapLightPreviewPanel::sync_json_from_ui() {
         return;
     }
     render_pipeline::shading::ReactiveShadowSettings settings = current_settings_from_ui();
-    int quadrants = last_quadrant_count_;
-    if (quadrant_count_) {
-        quadrants = clamp_int(quadrant_count_->value(),
-                               LightMap::kMinQuadrantCount,
-                               LightMap::kMaxQuadrantCount);
+    int size_px = last_quadrant_size_px_;
+    if (quadrant_size_px_) {
+        size_px = clamp_int(quadrant_size_px_->value(),
+                             LightMap::kMinQuadrantSizePx,
+                             LightMap::kMaxQuadrantSizePx);
     }
-    apply_virtual_light_map_quadrants(quadrants, true);
+    apply_virtual_light_map_quadrant_size(size_px, false);
     write_reactive_settings_to_json(settings);
     last_applied_settings_ = settings;
     apply_immediate_settings();
@@ -823,8 +856,8 @@ void MapLightPreviewPanel::set_reactive_sliders(const render_pipeline::shading::
     if (search_radius_) {
         search_radius_->set_value(settings.virtual_light_map.search_radius);
     }
-    if (quadrant_count_) {
-        quadrant_count_->set_value(last_quadrant_count_);
+    if (quadrant_size_px_) {
+        quadrant_size_px_->set_value(last_quadrant_size_px_);
     }
 }
 
@@ -848,9 +881,19 @@ render_pipeline::shading::ReactiveShadowSettings MapLightPreviewPanel::load_reac
     settings.virtual_light_map.search_radius = static_cast<int>(
         std::lround(load_number(make_setting_key("virtual_light_map.search_radius"),
                                  static_cast<double>(settings.virtual_light_map.search_radius))));
-    int stored_quadrants = static_cast<int>(
-        load_number(make_setting_key("virtual_light_map.quadrants"), last_quadrant_count_));
-    last_quadrant_count_ = clamp_int(stored_quadrants, LightMap::kMinQuadrantCount, LightMap::kMaxQuadrantCount);
+    int stored_size = static_cast<int>(
+        std::lround(load_number(make_setting_key("virtual_light_map.quadrant_size"), last_quadrant_size_px_)));
+    if (stored_size <= 0) {
+        int stored_quadrants = static_cast<int>(
+            load_number(make_setting_key("virtual_light_map.quadrants"), LightMap::kDefaultQuadrantCount));
+        stored_quadrants = clamp_int(stored_quadrants, LightMap::kMinQuadrantCount, LightMap::kMaxQuadrantCount);
+        if (const LightMap* map = current_light_map()) {
+            const int approx_w = std::max(1, map->screen_width() / std::max(1, stored_quadrants));
+            const int approx_h = std::max(1, map->screen_height() / std::max(1, stored_quadrants));
+            stored_size        = std::max(approx_w, approx_h);
+        }
+    }
+    last_quadrant_size_px_ = clamp_int(stored_size, LightMap::kMinQuadrantSizePx, LightMap::kMaxQuadrantSizePx);
     return render_pipeline::shading::sanitize_reactive_shadow_settings(settings);
 }
 
@@ -864,7 +907,12 @@ void MapLightPreviewPanel::persist_reactive_settings_to_dev_settings(const rende
     save_number(make_setting_key("virtual_light_map.shadow_scale"), settings.virtual_light_map.shadow_scale);
     save_number(make_setting_key("virtual_light_map.size_scale_factor"), settings.virtual_light_map.size_scale_factor);
     save_number(make_setting_key("virtual_light_map.search_radius"), settings.virtual_light_map.search_radius);
-    save_number(make_setting_key("virtual_light_map.quadrants"), last_quadrant_count_);
+    save_number(make_setting_key("virtual_light_map.quadrant_size"), last_quadrant_size_px_);
+    int legacy_quadrants = LightMap::kDefaultQuadrantCount;
+    if (assets_) {
+        legacy_quadrants = std::max(LightMap::kMinQuadrantCount, assets_->virtual_light_map_quadrants());
+    }
+    save_number(make_setting_key("virtual_light_map.quadrants"), legacy_quadrants);
 }
 
 void MapLightPreviewPanel::write_reactive_settings_to_json(const render_pipeline::shading::ReactiveShadowSettings& settings) {
@@ -873,7 +921,10 @@ void MapLightPreviewPanel::write_reactive_settings_to_json(const render_pipeline
     }
     nlohmann::json& json = (*map_info_)["reactive_shadows"];
     render_pipeline::shading::assign_reactive_shadow_settings(json, settings);
-    json["virtual_light_map_quadrants"] = last_quadrant_count_;
+    json["virtual_light_map_quadrant_size"] = last_quadrant_size_px_;
+    if (assets_) {
+        json["virtual_light_map_quadrants"] = assets_->virtual_light_map_quadrants();
+    }
 }
 
 nlohmann::json& MapLightPreviewPanel::ensure_reactive_settings_json() {
@@ -884,30 +935,53 @@ nlohmann::json& MapLightPreviewPanel::ensure_reactive_settings_json() {
     return (*map_info_)["reactive_shadows"];
 }
 
-void MapLightPreviewPanel::apply_virtual_light_map_quadrants(int quadrants, bool force_refresh) {
-    const int clamped = clamp_int(quadrants, LightMap::kMinQuadrantCount, LightMap::kMaxQuadrantCount);
-    if (last_quadrant_count_ == clamped && !force_refresh) {
-        return;
+void MapLightPreviewPanel::apply_virtual_light_map_quadrant_size(int size_px,
+                                                                 bool apply_to_assets,
+                                                                 bool mark_pending) {
+    const int clamped = clamp_int(size_px, LightMap::kMinQuadrantSizePx, LightMap::kMaxQuadrantSizePx);
+    const bool changed = (last_quadrant_size_px_ != clamped);
+    last_quadrant_size_px_ = clamped;
+    if (quadrant_size_px_) {
+        quadrant_size_px_->set_value(last_quadrant_size_px_);
     }
-    last_quadrant_count_ = clamped;
-    if (quadrant_count_) {
-        quadrant_count_->set_value(last_quadrant_count_);
-    }
-    if (assets_) {
-        assets_->set_virtual_light_map_quadrants(last_quadrant_count_);
-    }
+
     persist_reactive_settings_to_dev_settings(last_applied_settings_);
-    force_shading_refresh_if_needed(force_refresh);
+
+    if (apply_to_assets) {
+        pending_light_map_regeneration_ = false;
+        if (regenerate_button_) {
+            regenerate_button_->set_label("Regenerate");
+        }
+        if (assets_) {
+            assets_->set_virtual_light_map_quadrant_size(last_quadrant_size_px_);
+        }
+        forced_quadrant_size_snapshot_ = last_quadrant_size_px_;
+        force_shading_refresh_if_needed(true);
+    } else if (changed && mark_pending) {
+        request_light_map_regeneration();
+    }
+}
+
+void MapLightPreviewPanel::request_light_map_regeneration() {
+    pending_light_map_regeneration_ = true;
+    if (regenerate_button_) {
+        regenerate_button_->set_label("Regenerate*");
+    }
 }
 
 void MapLightPreviewPanel::force_shading_refresh_if_needed(bool force_refresh) {
     const bool settings_changed = forced_settings_snapshot_ != last_applied_settings_;
-    const bool quadrants_changed = forced_quadrant_snapshot_ != last_quadrant_count_;
-    if (!assets_ || (!force_refresh && !settings_changed && !quadrants_changed)) {
+    const bool refresh_light_map = force_refresh || settings_changed;
+    const bool refresh_shading   = force_refresh || settings_changed;
+    if (!assets_ || (!refresh_light_map && !refresh_shading)) {
         return;
     }
     forced_settings_snapshot_ = last_applied_settings_;
-    forced_quadrant_snapshot_ = last_quadrant_count_;
-    assets_->force_virtual_light_map_refresh();
-    assets_->force_shaded_assets_rerender();
+    if (refresh_light_map) {
+        forced_quadrant_size_snapshot_ = last_quadrant_size_px_;
+        assets_->force_virtual_light_map_refresh();
+    }
+    if (refresh_shading || refresh_light_map) {
+        assets_->force_shaded_assets_rerender();
+    }
 }

@@ -86,6 +86,9 @@ public:
     static constexpr int   kMinQuadrantCount     = 1;
     static constexpr int   kMaxQuadrantCount     = 100;
     static constexpr int   kDefaultQuadrantCount = 32;
+    static constexpr int   kMinQuadrantSizePx    = 32;
+    static constexpr int   kMaxQuadrantSizePx    = 1024;
+    static constexpr int   kDefaultQuadrantSizePx = 256;
 
     LightMap(Assets* assets, int screen_width, int screen_height);
     ~LightMap();
@@ -120,6 +123,8 @@ public:
     int padding_cells() const { return padding_cells_; }
 
     void set_virtual_light_map_quadrants(int quadrants);
+    void set_virtual_light_map_quadrant_size(int size_px);
+    int  virtual_light_map_quadrant_size() const { return requested_quadrant_size_px_; }
     int  virtual_light_map_quadrants() const { return requested_quadrants_; }
 
 private:
@@ -138,10 +143,11 @@ private:
 
     int quadrant_cols_ = 0;
     int quadrant_rows_ = 0;
-    int quadrant_size_px_       = 256;
+    int quadrant_size_px_       = kDefaultQuadrantSizePx;
     int static_grid_resolution_ = 32;
     int padding_cells_          = 2;
-    int requested_quadrants_    = 32;
+    int requested_quadrants_    = kDefaultQuadrantCount;
+    int requested_quadrant_size_px_ = kDefaultQuadrantSizePx;
 
     std::vector<LightMapQuadrant> quadrants_{};
 };

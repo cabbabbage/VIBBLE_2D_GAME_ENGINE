@@ -73,6 +73,13 @@ void SceneRenderer::set_virtual_light_map_quadrants(int quadrants) {
     force_virtual_light_map_refresh();
 }
 
+void SceneRenderer::set_virtual_light_map_quadrant_size(int size_px) {
+    if (z_light_pass_) {
+        z_light_pass_->set_virtual_light_map_quadrant_size(size_px);
+    }
+    force_virtual_light_map_refresh();
+}
+
 void SceneRenderer::force_virtual_light_map_refresh() {
     if (!z_light_pass_ || !renderer_) {
         return;

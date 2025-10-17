@@ -27,10 +27,17 @@ struct ShadowResponseSample {
 };
 
 ShadowResponseSample evaluate_shadow_response(const ReactiveShadowSettings& settings, float brightness) {
+    auto apply_strength = [&](ShadowResponseSample sample) {
+        sample.opacity *= settings.opacity_strength;
+        sample.offset  *= settings.parallax_strength;
+        sample.scale   *= settings.scale_strength;
+        return sample;
+    };
+
     ShadowResponseSample result{};
-    const auto& entries = settings.response_lut.entries;
+    const auto&          entries = settings.response_lut.entries;
     if (entries.empty()) {
-        return result;
+        return apply_strength(result);
     }
 
     const float clamped_brightness = clampf(brightness, 0.0f, 1.0f);
@@ -39,7 +46,7 @@ ShadowResponseSample evaluate_shadow_response(const ReactiveShadowSettings& sett
         result.opacity    = entry.opacity;
         result.offset     = entry.offset;
         result.scale      = entry.scale;
-        return result;
+        return apply_strength(result);
     }
 
     for (std::size_t i = 1; i < entries.size(); ++i) {
@@ -51,7 +58,7 @@ ShadowResponseSample evaluate_shadow_response(const ReactiveShadowSettings& sett
             result.opacity    = prev.opacity + (next.opacity - prev.opacity) * t;
             result.offset     = prev.offset + (next.offset - prev.offset) * t;
             result.scale      = prev.scale + (next.scale - prev.scale) * t;
-            return result;
+            return apply_strength(result);
         }
     }
 
@@ -59,7 +66,7 @@ ShadowResponseSample evaluate_shadow_response(const ReactiveShadowSettings& sett
     result.opacity    = tail.opacity;
     result.offset     = tail.offset;
     result.scale      = tail.scale;
-    return result;
+    return apply_strength(result);
 }
 
 ReactiveShadowSettings sanitized_settings(const Assets* assets) {

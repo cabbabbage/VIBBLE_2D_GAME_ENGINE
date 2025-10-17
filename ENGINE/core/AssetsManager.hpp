@@ -134,6 +134,8 @@ public:
     LightMapManager*       light_map_manager();
     const LightMapManager* light_map_manager() const;
     void set_virtual_light_map_quadrants(int quadrants);
+    void set_virtual_light_map_quadrant_size(int size_px);
+    int  virtual_light_map_quadrant_size() const;
     int  virtual_light_map_quadrants() const;
     void force_virtual_light_map_refresh();
     void force_shaded_assets_rerender();
