@@ -45,6 +45,7 @@ public:
     Animation();
     void load(const std::string& trigger, const nlohmann::json& anim_json, class AssetInfo& info, const std::string& dir_path, const std::string& root_cache, float scale_factor, SDL_Renderer* renderer, SDL_Texture*& base_sprite, int& scaled_sprite_w, int& scaled_sprite_h, int& original_canvas_width, int& original_canvas_height, bool scaling_refresh_pending);
     SDL_Texture* get_frame(const AnimationFrame* frame) const;
+    const AnimationFrame* get_first_frame(std::size_t path_index = 0) const;
     AnimationFrame* get_first_frame(std::size_t path_index = 0);
     int index_of(const AnimationFrame* frame) const;
     void change(AnimationFrame*& frame, bool& static_flag) const;

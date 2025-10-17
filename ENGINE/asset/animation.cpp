@@ -1172,12 +1172,16 @@ SDL_Texture* Animation::get_frame(const AnimationFrame* frame) const {
         return frames[index];
 }
 
-AnimationFrame* Animation::get_first_frame(std::size_t path_index) {
+const AnimationFrame* Animation::get_first_frame(std::size_t path_index) const {
         if (movement_paths_.empty()) return nullptr;
         path_index = clamp_path_index(path_index);
-        auto& path = movement_paths_[path_index];
+        const auto& path = movement_paths_[path_index];
         if (path.empty()) return nullptr;
         return &path[0];
+}
+
+AnimationFrame* Animation::get_first_frame(std::size_t path_index) {
+        return const_cast<AnimationFrame*>(std::as_const(*this).get_first_frame(path_index));
 }
 
 int Animation::index_of(const AnimationFrame* frame) const {
