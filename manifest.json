@@ -14239,10 +14239,13 @@
       },
       "map_name": "FORREST",
       "reactive_shadows": {
+        "opacity_strength": 1.0,
+        "parallax_strength": 1.0,
         "sampling_weights": {
           "dynamic_weight": 1.0,
           "static_weight": 0.800000011920929
         },
+        "scale_strength": 1.0,
         "shadow_lut": [
           {
             "brightness": 0.0,
@@ -14262,11 +14265,13 @@
           "map_light_factor": 0.0,
           "max_offset_x": 100.0,
           "max_offset_y": 100.0,
+          "search_radius": 2,
           "shadow_scale": 1.0,
           "size_scale_factor": 1.0,
           "vertical_falloff": 3.5
         },
-        "virtual_light_map_quadrants": 32
+        "virtual_light_map_quadrant_size": 256,
+        "virtual_light_map_quadrants": 8
       },
       "rooms_data": {
         "bar": {

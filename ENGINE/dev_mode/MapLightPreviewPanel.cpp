@@ -154,7 +154,7 @@ void MapLightPreviewPanel::set_assets(Assets* assets) {
     apply_virtual_light_map_quadrant_size(last_quadrant_size_px_, false, false);
     pending_light_map_regeneration_ = false;
     if (regenerate_button_) {
-        regenerate_button_->set_label("Regenerate");
+        regenerate_button_->set_text("Regenerate");
     }
 }
 
@@ -176,7 +176,7 @@ void MapLightPreviewPanel::set_map_info(nlohmann::json* map_info, SaveCallback o
     sync_ui_from_json();
     pending_light_map_regeneration_ = false;
     if (regenerate_button_) {
-        regenerate_button_->set_label("Regenerate");
+        regenerate_button_->set_text("Regenerate");
     }
 }
 
@@ -751,9 +751,6 @@ void MapLightPreviewPanel::build_ui() {
     }
 
     regenerate_button_ = std::make_unique<DMButton>("Regenerate", &DMStyles::AccentButton(), 160, DMButton::height());
-    if (regenerate_button_) {
-        regenerate_button_->set_tooltip("Rebuild the virtual light map using the current settings.");
-    }
 
     const int clamped_size = clamp_int(last_quadrant_size_px_, LightMap::kMinQuadrantSizePx,
                                        LightMap::kMaxQuadrantSizePx);
@@ -950,7 +947,7 @@ void MapLightPreviewPanel::apply_virtual_light_map_quadrant_size(int size_px,
     if (apply_to_assets) {
         pending_light_map_regeneration_ = false;
         if (regenerate_button_) {
-            regenerate_button_->set_label("Regenerate");
+            regenerate_button_->set_text("Regenerate");
         }
         if (assets_) {
             assets_->set_virtual_light_map_quadrant_size(last_quadrant_size_px_);
@@ -965,7 +962,7 @@ void MapLightPreviewPanel::apply_virtual_light_map_quadrant_size(int size_px,
 void MapLightPreviewPanel::request_light_map_regeneration() {
     pending_light_map_regeneration_ = true;
     if (regenerate_button_) {
-        regenerate_button_->set_label("Regenerate*");
+        regenerate_button_->set_text("Regenerate*");
     }
 }
 
