@@ -344,6 +344,7 @@ void MapModeUI::ensure_panels() {
     }
     if (map_light_preview_panel_) {
         map_light_preview_panel_->set_assets(assets_);
+        map_light_preview_panel_->set_reactive_settings(assets_ ? assets_->reactive_shadow_settings() : nullptr);
     }
     if (!grid_panel_) {
         grid_panel_ = std::make_unique<MapGridPanel>(kDefaultPanelX + 96, kDefaultPanelY + 48);
@@ -501,7 +502,8 @@ void MapModeUI::sync_footer_button_states() {
     if (!footer_panel_) return;
     if (header_mode_ == HeaderMode::Map) {
         const bool lights_visible = light_panel_ && light_panel_->is_visible();
-        const bool shading_visible = shadow_panel_ && shadow_panel_->is_visible();
+        const bool shading_visible = (shadow_panel_ && shadow_panel_->is_visible()) ||
+                                     (map_light_preview_panel_ && map_light_preview_panel_->is_visible());
         footer_panel_->set_button_active_state(kButtonIdLights, lights_visible);
         footer_panel_->set_button_active_state(kButtonIdShading, shading_visible);
         for (const auto& config : map_mode_buttons_) {
@@ -709,6 +711,14 @@ void MapModeUI::sync_panel_map_info() {
         }
         shadow_panel_->set_map_info(map_info_, callback);
     }
+    if (map_light_preview_panel_) {
+        map_light_preview_panel_->set_reactive_settings(assets_ ? assets_->reactive_shadow_settings() : nullptr);
+        LightSaveCallback callback = light_save_callback_;
+        if (!callback) {
+            callback = [this]() { return save_map_info_to_disk(); };
+        }
+        map_light_preview_panel_->set_map_info(map_info_, callback);
+    }
     if (grid_panel_) {
         GridSaveCallback save_cb = grid_save_callback_;
         if (!save_cb) {
@@ -769,7 +779,8 @@ void MapModeUI::update(const Input& input) {
     }
 
     const bool lights_visible = light_panel_ && light_panel_->is_visible();
-    const bool shading_visible = shadow_panel_ && shadow_panel_->is_visible();
+    const bool shading_visible = (shadow_panel_ && shadow_panel_->is_visible()) ||
+                                 (map_light_preview_panel_ && map_light_preview_panel_->is_visible());
     if (lights_visible != last_lights_visible_ || shading_visible != last_shading_visible_) {
         last_lights_visible_ = lights_visible;
         last_shading_visible_ = shading_visible;
@@ -1000,7 +1011,8 @@ bool MapModeUI::is_light_panel_visible() const {
 }
 
 bool MapModeUI::is_shading_panel_visible() const {
-    return shadow_panel_ && shadow_panel_->is_visible();
+    return (shadow_panel_ && shadow_panel_->is_visible()) ||
+           (map_light_preview_panel_ && map_light_preview_panel_->is_visible());
 }
 
 bool MapModeUI::is_grid_panel_visible() const {
