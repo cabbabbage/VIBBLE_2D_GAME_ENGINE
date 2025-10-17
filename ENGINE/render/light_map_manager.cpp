@@ -66,10 +66,6 @@ ReactiveShadowSettings sanitized_settings(const Assets* assets) {
     return sanitize_reactive_shadow_settings(ReactiveShadowSettings{});
 }
 
-float clamp_unit(float value) {
-    return std::clamp(value, 0.0f, 1.0f);
-}
-
 }  // namespace
 
 LightMapManager::LightMapManager(Assets* assets) : assets_(assets) {}
@@ -108,12 +104,16 @@ std::optional<LightMapManager::QuadrantSnapshot> LightMapManager::snapshot_for_q
 
     snapshot.combined_brightness = quadrant->combined_average(static_weight, dynamic_weight);
 
-    const float min_brightness = clamp_unit(snapshot.base_brightness +
-                                            (snapshot.static_average * static_weight) +
-                                            (snapshot.dynamic_min * dynamic_weight));
-    const float max_brightness = clamp_unit(snapshot.base_brightness +
-                                            (snapshot.static_average * static_weight) +
-                                            (snapshot.dynamic_max * dynamic_weight));
+    const float min_brightness = render_pipeline::shading::clampf(snapshot.base_brightness +
+                                                                  (snapshot.static_average * static_weight) +
+                                                                  (snapshot.dynamic_min * dynamic_weight),
+                                                                  0.0f,
+                                                                  1.0f);
+    const float max_brightness = render_pipeline::shading::clampf(snapshot.base_brightness +
+                                                                  (snapshot.static_average * static_weight) +
+                                                                  (snapshot.dynamic_max * dynamic_weight),
+                                                                  0.0f,
+                                                                  1.0f);
 
     const ShadowResponseSample min_response = evaluate_shadow_response(settings, min_brightness);
     const ShadowResponseSample max_response = evaluate_shadow_response(settings, max_brightness);
