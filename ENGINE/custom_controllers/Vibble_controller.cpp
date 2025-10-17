@@ -167,7 +167,9 @@ void VibbleController::movement(const Input& input) {
     std::vector<SDL_Point> path;
     path.push_back(SDL_Point{ dx_, dy_ });
 
-    player_->anim_->move(path, controller_utils::controller_visit_threshold(player_));
+    // For per-frame player input, use a near-zero visit threshold so
+    // small checkpoints are not discarded by PathSanitizer.
+    player_->anim_->move(path, 0);
 }
 
 void VibbleController::update(const Input& input) {

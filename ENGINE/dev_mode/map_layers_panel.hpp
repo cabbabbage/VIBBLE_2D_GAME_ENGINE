@@ -144,7 +144,7 @@ private:
 
     std::vector<LayerVisual> layer_visuals_;
     double max_visual_radius_ = 1.0;
-    double preview_scale_ = 1.0;
+    mutable double preview_scale_ = 1.0;
 
     int hovered_layer_index_ = -1;
     std::string hovered_room_key_;
