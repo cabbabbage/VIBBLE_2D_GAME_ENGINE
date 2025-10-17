@@ -152,10 +152,11 @@ void AssetLoader::link_by_child(const std::vector<std::vector<Asset*>>& groups) 
 }
 
 void AssetLoader::removeMergedAssets(const std::vector<Asset*>& to_remove, Asset* skip) {
-	for (Asset* a : to_remove) {
-		if (a == skip) continue;
-		a->set_hidden(true);
-	}
+        for (Asset* a : to_remove) {
+                if (a == skip) continue;
+                a->set_hidden(true);
+                a->set_merged_from_neighbors(true);
+        }
 }
 
 std::vector<std::vector<Asset*>> AssetLoader::group_neighboring_assets(

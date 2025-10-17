@@ -130,6 +130,7 @@ Asset::Asset(const Asset& o)
 , highlighted(o.highlighted)
 , hidden(o.hidden)
 , selected(o.selected)
+, merged_from_neighbors_(o.merged_from_neighbors_)
 , current_frame(o.current_frame)
 , frame_progress(o.frame_progress)
 , shading_group(o.shading_group)
@@ -177,9 +178,10 @@ Asset& Asset::operator=(const Asset& o) {
 	cached_w             = o.cached_w;
 	cached_h             = o.cached_h;
 	window               = o.window;
-	highlighted          = o.highlighted;
-	hidden               = o.hidden;
-	selected             = o.selected;
+        highlighted          = o.highlighted;
+        hidden               = o.hidden;
+        selected             = o.selected;
+        merged_from_neighbors_ = o.merged_from_neighbors_;
         current_frame        = o.current_frame;
         frame_progress       = o.frame_progress;
 	shading_group        = o.shading_group;
@@ -746,6 +748,9 @@ void Asset::update_scale_usage(float requested, float texture_scale, float remai
 
 void Asset::set_hidden(bool state){ hidden = state; }
 bool  Asset::is_hidden(){ return hidden; }
+
+void Asset::set_merged_from_neighbors(bool state){ merged_from_neighbors_ = state; }
+bool  Asset::merged_from_neighbors() const{ return merged_from_neighbors_; }
 
 void Asset::set_highlighted(bool state){ highlighted = state; }
 bool  Asset::is_highlighted(){ return highlighted; }

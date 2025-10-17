@@ -95,6 +95,8 @@ class Asset {
     bool is_highlighted();
     void set_selected(bool state);
     bool is_selected();
+    void set_merged_from_neighbors(bool state);
+    bool merged_from_neighbors() const;
     RenderTextureCache& light_front_cache();
     RenderTextureCache& light_front_cache() const;
     RenderTextureCache& light_behind_cache();
@@ -137,6 +139,7 @@ class Asset {
     bool highlighted = false;
     bool hidden = false;
     bool selected = false;
+    bool merged_from_neighbors_ = false;
     void set_flip();
     void set_z_index();
 

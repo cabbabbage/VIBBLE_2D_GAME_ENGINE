@@ -14560,48 +14560,7 @@
           "spawn_groups": []
         },
         "room_lab": {
-          "areas": [
-            {
-              "anchor": {
-                "x": 0,
-                "y": 0
-              },
-              "anchor_relative_to_center": true,
-              "kind": "Trigger",
-              "name": "attack_trigger",
-              "points": [
-                {
-                  "x": -363,
-                  "y": -1011
-                },
-                {
-                  "x": -786,
-                  "y": -453
-                },
-                {
-                  "x": -610,
-                  "y": 119
-                },
-                {
-                  "x": 101,
-                  "y": 367
-                },
-                {
-                  "x": 703,
-                  "y": -115
-                },
-                {
-                  "x": 669,
-                  "y": -628
-                },
-                {
-                  "x": 254,
-                  "y": -964
-                }
-              ],
-              "type": "trigger"
-            }
-          ],
+          "areas": [],
           "curvyness": 1,
           "edge_smoothness": 101,
           "geometry": "Circle",
@@ -14756,6 +14715,7 @@
               "origional_height": 2022,
               "origional_width": 1949,
               "position": "Exact",
+              "priority": 2,
               "spawn_id": "spn-4e301c5e26b7"
             }
           ],

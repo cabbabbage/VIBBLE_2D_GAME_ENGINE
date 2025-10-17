@@ -45,6 +45,14 @@ void AssetFilterBar::initialize() {
     }
     entries_.push_back(std::move(room_entry));
 
+    FilterEntry groups_entry;
+    groups_entry.id = "groups";
+    groups_entry.kind = FilterKind::Groups;
+    const bool groups_value = use_saved_state ? state_.groups : false;
+    groups_entry.checkbox = std::make_unique<DMCheckbox>("Groups", groups_value);
+    state_.groups = groups_value;
+    entries_.push_back(std::move(groups_entry));
+
     const auto all_types = asset_types::all_as_strings();
     std::unordered_set<std::string> known_types;
     known_types.reserve(all_types.size());
@@ -388,6 +396,9 @@ void AssetFilterBar::reset() {
             case FilterKind::CurrentRoom:
                 entry.checkbox->set_value(true);
                 break;
+            case FilterKind::Groups:
+                entry.checkbox->set_value(false);
+                break;
             case FilterKind::Type:
                 entry.checkbox->set_value(default_type_enabled(entry.id));
                 break;
@@ -395,6 +406,7 @@ void AssetFilterBar::reset() {
     }
     state_.map_assets = true;
     state_.current_room = true;
+    state_.groups = false;
     for (auto& kv : state_.type_filters) {
         kv.second = default_type_enabled(kv.first);
     }
@@ -424,6 +436,9 @@ bool AssetFilterBar::passes(const Asset& asset) const {
     }
     const bool is_room_asset = !asset.spawn_id.empty() && room_spawn_ids_.find(asset.spawn_id) != room_spawn_ids_.end();
     if (is_room_asset && !state_.current_room) {
+        return false;
+    }
+    if (!state_.groups && asset.merged_from_neighbors()) {
         return false;
     }
     return true;
@@ -467,6 +482,9 @@ void AssetFilterBar::sync_state_from_ui() {
             break;
         case FilterKind::CurrentRoom:
             state_.current_room = value;
+            break;
+        case FilterKind::Groups:
+            state_.groups = value;
             break;
         case FilterKind::Type:
             state_.type_filters[entry.id] = value;
