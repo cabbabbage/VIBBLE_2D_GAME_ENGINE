@@ -279,7 +279,7 @@ void LightMapQuadrant::update_tile_mask(SDL_Renderer* renderer, float static_wei
             const float u = (tex_w > 1) ? (static_cast<float>(px) / static_cast<float>(tex_w - 1)) : 0.0f;
             const float gx = u * static_cast<float>(gw - 1);
 
-            const float sample = sample_brightness(gx, gy, static_weight, dynamic_weight, /*bilinear=*/true);
+            const float sample = sample_brightness(gx, gy, static_weight, 0.0f, /*bilinear=*/true);
             const std::uint8_t value    = clamp_byte(static_cast<int>(std::round(sample * 255.0f)));
             const std::uint8_t darkness = static_cast<std::uint8_t>(255 - value);
             const std::uint32_t rgba    = pack_darkness_pixel(darkness);
