@@ -31,9 +31,6 @@ public:
         float    base_brightness     = 0.0f;
         float    combined_brightness = 0.0f;
         float    static_average      = 0.0f;
-        float    dynamic_average     = 0.0f;
-        float    dynamic_min         = 0.0f;
-        float    dynamic_max         = 0.0f;
         float    shadow_opacity_min  = 0.0f;
         float    shadow_opacity_max  = 0.0f;
     };
@@ -56,11 +53,7 @@ private:
         int      grid_h        = 0;
         float    base_brightness = 0.0f;
         float    static_average  = 0.0f;
-        float    dynamic_average = 0.0f;
-        float    dynamic_min      = 0.0f;
-        float    dynamic_max      = 0.0f;
         bool     static_empty     = true;
-        bool     dynamic_empty    = true;
     };
 
     struct QuadrantCache {

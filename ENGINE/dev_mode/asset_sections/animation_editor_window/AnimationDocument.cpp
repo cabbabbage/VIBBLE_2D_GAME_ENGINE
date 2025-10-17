@@ -94,6 +94,39 @@ nlohmann::json coerce_payload(const std::string& animation_id, const nlohmann::j
     movement[0] = nlohmann::json::array({0, 0});
     payload["movement"] = movement;
 
+    auto read_component = [](const nlohmann::json& entry, int index) -> int {
+        if (entry.is_array()) {
+            if (index < static_cast<int>(entry.size()) && entry[index].is_number()) {
+                try {
+                    return entry[index].get<int>();
+                } catch (...) {
+                }
+                try {
+                    return static_cast<int>(entry[index].get<double>());
+                } catch (...) {
+                }
+            }
+            return 0;
+        }
+        if (entry.is_object()) {
+            const char* keys[] = {"dx", "dy"};
+            const char* key = (index == 0) ? keys[0] : keys[1];
+            if (entry.contains(key)) {
+                return parse_int(entry[key], 0);
+            }
+        }
+        return 0;
+    };
+
+    int total_dx = 0;
+    int total_dy = 0;
+    for (std::size_t i = 1; i < movement.size(); ++i) {
+        const nlohmann::json& entry = movement[i];
+        total_dx += read_component(entry, 0);
+        total_dy += read_component(entry, 1);
+    }
+    payload["movement_total"] = nlohmann::json{{"dx", total_dx}, {"dy", total_dy}};
+
     std::string on_end = "default";
     if (payload.contains("on_end")) {
         if (payload["on_end"].is_string()) {

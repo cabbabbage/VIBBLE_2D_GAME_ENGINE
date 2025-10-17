@@ -324,6 +324,24 @@ void FrameMovementEditor::apply_changes() {
 
     payload["movement"] = serialize_frames_to_json(variants_.front().frames);
 
+    auto compute_totals = [](const std::vector<MovementFrame>& frames) {
+        struct Totals {
+            int dx = 0;
+            int dy = 0;
+        } totals;
+        if (frames.empty()) {
+            return totals;
+        }
+        for (size_t i = 1; i < frames.size(); ++i) {
+            totals.dx += static_cast<int>(std::lround(frames[i].dx));
+            totals.dy += static_cast<int>(std::lround(frames[i].dy));
+        }
+        return totals;
+    };
+
+    const auto totals = compute_totals(variants_.front().frames);
+    payload["movement_total"] = nlohmann::json{{"dx", totals.dx}, {"dy", totals.dy}};
+
     if (variants_.size() > 1) {
         nlohmann::json variants_json = nlohmann::json::array();
         for (size_t i = 1; i < variants_.size(); ++i) {

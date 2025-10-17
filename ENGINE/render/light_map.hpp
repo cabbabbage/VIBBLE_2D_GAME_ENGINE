@@ -49,7 +49,7 @@ public:
     void build_static(const std::vector<std::uint8_t>& grid, int width, int height);
     // Dynamic light rays removed.
 
-    void update_tile_mask(SDL_Renderer* renderer, float static_weight, float dynamic_weight);
+    void update_tile_mask(SDL_Renderer* renderer, const class Assets* assets, float static_weight, float dynamic_weight);
     void render_tile_mask(SDL_Renderer* renderer) const;
     void render_tile_mask(SDL_Renderer* renderer, Uint8 alpha_mod) const;
 

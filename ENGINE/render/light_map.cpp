@@ -1,4 +1,6 @@
 #include "light_map.hpp"
+#include "core/AssetsManager.hpp"
+#include "asset/Asset.hpp"
 
 #include <SDL.h>
 
@@ -98,12 +100,14 @@ void LightMapQuadrant::ensure_texture(SDL_Renderer* renderer) {
     // each quadrant owns a tile of size (world_rect_.w x world_rect_.h).
     const int tex_w = std::max(1, world_rect_.w);
     const int tex_h = std::max(1, world_rect_.h);
+    // Use a render target so we can composite overlapping light textures directly
     tile_mask_ = SDL_CreateTexture(renderer,
                                    SDL_PIXELFORMAT_RGBA8888,
-                                   SDL_TEXTUREACCESS_STREAMING,
+                                   SDL_TEXTUREACCESS_TARGET,
                                    tex_w,
                                    tex_h);
     if (tile_mask_) {
+        // Default to alpha blend when drawing to screen; content will hold composited lights
         SDL_SetTextureBlendMode(tile_mask_, SDL_BLENDMODE_BLEND);
 #if SDL_VERSION_ATLEAST(2,0,12)
         SDL_SetTextureScaleMode(tile_mask_, SDL_ScaleModeBest);
@@ -124,7 +128,6 @@ void LightMapQuadrant::configure(SDL_Renderer* renderer,
     stride_        = grid_width_ + (padding_cells_ * 2);
     const int total_rows = grid_height_ + (padding_cells_ * 2);
     static_grid_.assign(static_cast<std::size_t>(stride_) * static_cast<std::size_t>(total_rows), 0);
-    dynamic_grid_.assign(static_cast<std::size_t>(stride_) * static_cast<std::size_t>(total_rows), 0);
     base_brightness_ = 0.0f;
     dirty_           = true;
     active_          = false;
@@ -248,63 +251,92 @@ float LightMapQuadrant::sample_brightness(float local_x,
     return sx0 + (sx1 - sx0) * ty;
 }
 
-void LightMapQuadrant::update_tile_mask(SDL_Renderer* renderer, float static_weight, float dynamic_weight) {
+void LightMapQuadrant::update_tile_mask(SDL_Renderer* renderer,
+                                        const Assets* assets,
+                                        float static_weight,
+                                        float dynamic_weight) {
+    (void)static_weight; (void)dynamic_weight; // static grid path no longer used for tile compositing
     ensure_texture(renderer);
-    if (!tile_mask_) {
+    if (!tile_mask_ || !renderer) {
         return;
     }
 
-    // Generate a tile that matches the quadrant pixel size by resampling the
-    // internal light grids. This effectively "splits" the map-sized light into
-    // quadrant-sized tiles so placement aligns with assets.
-    int tex_w = 0;
-    int tex_h = 0;
-    SDL_QueryTexture(tile_mask_, nullptr, nullptr, &tex_w, &tex_h);
-    if (tex_w <= 0 || tex_h <= 0) {
-        return;
-    }
+    // Prepare render target
+    SDL_Texture* prev_target = SDL_GetRenderTarget(renderer);
+    SDL_SetRenderTarget(renderer, tile_mask_);
 
-    const std::size_t total_pixels = static_cast<std::size_t>(tex_w) * static_cast<std::size_t>(tex_h);
-    std::vector<std::uint32_t> pixels(total_pixels, 0);
+    // Clear to transparent black so only stamped lights are visible
+    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
+    SDL_RenderClear(renderer);
 
-    const int gw = std::max(1, grid_width_);
-    const int gh = std::max(1, grid_height_);
+    // If we have assets, composite every light texture that overlaps this quadrant
+    if (assets) {
+        const auto& cam = assets->getView();
+        const float cam_scale = cam.get_scale();
+        const float inv_scale = (std::isfinite(cam_scale) && cam_scale > 1e-6f) ? (1.0f / cam_scale) : 1.0f;
 
-    // Map each destination pixel to a sample in grid-space. Use bilinear sampling
-    // for smoother falloff and to better match full-map reconstruction.
-    for (int py = 0; py < tex_h; ++py) {
-        const float v = (tex_h > 1) ? (static_cast<float>(py) / static_cast<float>(tex_h - 1)) : 0.0f;
-        const float gy = v * static_cast<float>(gh - 1);
-        for (int px = 0; px < tex_w; ++px) {
-            const float u = (tex_w > 1) ? (static_cast<float>(px) / static_cast<float>(tex_w - 1)) : 0.0f;
-            const float gx = u * static_cast<float>(gw - 1);
+        // Iterate active light assets
+        for (Asset* asset : assets->getActiveLightAssets()) {
+            if (!asset || !asset->info) {
+                continue;
+            }
+            for (const auto& light : asset->info->light_sources) {
+                SDL_Texture* tex = light.texture;
+                if (!tex) {
+                    continue;
+                }
 
-            const float sample = sample_brightness(gx, gy, static_weight, 0.0f, /*bilinear=*/true);
-            const std::uint8_t value    = clamp_byte(static_cast<int>(std::round(sample * 255.0f)));
-            const std::uint8_t darkness = static_cast<std::uint8_t>(255 - value);
-            const std::uint32_t rgba    = pack_darkness_pixel(darkness);
+                // Compute screen position of the light center
+                SDL_Point world_center{ asset->pos.x + light.offset_x, asset->pos.y + light.offset_y };
+                SDL_Point screen_center = cam.map_to_screen(world_center);
 
-            const std::size_t idx = static_cast<std::size_t>(py) * static_cast<std::size_t>(tex_w) +
-                                    static_cast<std::size_t>(px);
-            pixels[idx] = rgba;
+                // Determine on-screen size (scale by camera zoom)
+                int src_w = light.cached_w > 0 ? light.cached_w : 0;
+                int src_h = light.cached_h > 0 ? light.cached_h : 0;
+                if (src_w <= 0 || src_h <= 0) {
+                    // Query as fallback
+                    SDL_QueryTexture(tex, nullptr, nullptr, &src_w, &src_h);
+                }
+                int draw_w = std::max(1, static_cast<int>(std::lround(static_cast<float>(src_w) * inv_scale)));
+                int draw_h = std::max(1, static_cast<int>(std::lround(static_cast<float>(src_h) * inv_scale)));
+
+                // Destination in screen-space
+                SDL_Rect dst_screen{ screen_center.x - draw_w / 2,
+                                     screen_center.y - draw_h / 2,
+                                     draw_w,
+                                     draw_h };
+
+                // Cull by intersection with this quadrant; include any overlap
+                if (!SDL_HasIntersection(&dst_screen, &world_rect_)) {
+                    continue;
+                }
+
+                // Translate to local coords of the quadrant texture
+                SDL_Rect dst_local{ dst_screen.x - world_rect_.x,
+                                    dst_screen.y - world_rect_.y,
+                                    dst_screen.w,
+                                    dst_screen.h };
+
+                // Draw with normal alpha blending; do not adjust alpha/color mods
+                Uint8 save_r=255, save_g=255, save_b=255, save_a=255; SDL_BlendMode save_bm=SDL_BLENDMODE_BLEND;
+                SDL_GetTextureColorMod(tex, &save_r, &save_g, &save_b);
+                SDL_GetTextureAlphaMod(tex, &save_a);
+                SDL_GetTextureBlendMode(tex, &save_bm);
+
+                SDL_SetTextureBlendMode(tex, SDL_BLENDMODE_BLEND);
+                SDL_SetTextureAlphaMod(tex, 255);
+                SDL_RenderCopy(renderer, tex, nullptr, &dst_local);
+
+                SDL_SetTextureBlendMode(tex, save_bm);
+                SDL_SetTextureColorMod(tex, save_r, save_g, save_b);
+                SDL_SetTextureAlphaMod(tex, save_a);
+            }
         }
     }
 
-    void* pixels_ptr = nullptr;
-    int   pitch      = 0;
-    if (SDL_LockTexture(tile_mask_, nullptr, &pixels_ptr, &pitch) != 0) {
-        return;
-    }
-
-    const int row_bytes = tex_w * static_cast<int>(sizeof(std::uint32_t));
-    std::uint8_t* dst   = static_cast<std::uint8_t*>(pixels_ptr);
-    const std::uint8_t* src = reinterpret_cast<const std::uint8_t*>(pixels.data());
-    for (int y = 0; y < tex_h; ++y) {
-        std::memcpy(dst + static_cast<std::size_t>(y) * pitch,
-                    src + static_cast<std::size_t>(y) * row_bytes,
-                    static_cast<std::size_t>(row_bytes));
-    }
-    SDL_UnlockTexture(tile_mask_);
+    // Restore target and mark clean
+    SDL_SetRenderTarget(renderer, prev_target);
     dirty_ = false;
 }
 
@@ -386,23 +418,19 @@ void LightMap::rebuild(SDL_Renderer* renderer) {
                                                   static_cast<std::size_t>(static_grid_resolution_),
                                                   0);
             quadrant.build_static(static_grid, static_grid_resolution_, static_grid_resolution_);
-            quadrant.update_tile_mask(renderer, kDefaultStaticWeight, kDefaultDynamicWeight);
+            quadrant.update_tile_mask(renderer, assets_, kDefaultStaticWeight, kDefaultDynamicWeight);
             quadrants_.push_back(std::move(quadrant));
         }
     }
 }
 
-void LightMap::update(SDL_Renderer* renderer, std::uint32_t delta_ms) {
+void LightMap::update(SDL_Renderer* renderer, std::uint32_t /*delta_ms*/) {
     if (!renderer) {
         return;
     }
-    const std::uint8_t fade = static_cast<std::uint8_t>(std::min(delta_ms / 6, 20u));
     for (auto& quadrant : quadrants_) {
-        if (!quadrant.active()) {
-            quadrant.fade_dynamic(fade);
-        }
         if (quadrant.dirty()) {
-            quadrant.update_tile_mask(renderer, kDefaultStaticWeight, kDefaultDynamicWeight);
+            quadrant.update_tile_mask(renderer, assets_, kDefaultStaticWeight, kDefaultDynamicWeight);
         }
         quadrant.set_active(false);
     }
@@ -462,71 +490,7 @@ float LightMap::sample_internal(int quadrant_index,
                                            bilinear);
 }
 
-void LightMap::stamp_moving_light(SDL_FPoint world_center,
-                                  float      radius_px,
-                                  std::uint8_t intensity,
-                                  std::uint8_t clamp) {
-    if (quadrants_.empty() || radius_px <= 0.0f || intensity == 0) {
-        return;
-    }
-
-    const float r  = std::max(1.0f, radius_px);
-    const float r2 = r * r;
-
-    // For each quadrant, project the light into its dynamic grid.
-    for (auto& q : quadrants_) {
-        const SDL_Rect& rect = q.world_rect();
-        if (rect.w <= 0 || rect.h <= 0) {
-            continue;
-        }
-
-        // Quick reject using bounding box of the light.
-        SDL_Rect light_bounds{
-            static_cast<int>(std::floor(world_center.x - r)),
-            static_cast<int>(std::floor(world_center.y - r)),
-            static_cast<int>(std::ceil(r * 2.0f)),
-            static_cast<int>(std::ceil(r * 2.0f))
-        };
-        SDL_Rect overlap{};
-        if (!SDL_IntersectRect(&rect, &light_bounds, &overlap)) {
-            continue;
-        }
-
-        const int gw = std::max(1, q.grid_width());
-        const int gh = std::max(1, q.grid_height());
-        // Map grid cell centers to world space.
-        const float inv_gw = (gw > 1) ? 1.0f / static_cast<float>(gw - 1) : 0.0f;
-        const float inv_gh = (gh > 1) ? 1.0f / static_cast<float>(gh - 1) : 0.0f;
-
-        // Build a temporary dynamic grid for this quadrant and stamp into it,
-        // then merge by taking the max value with any existing dynamic values.
-        std::vector<std::uint8_t> temp(static_cast<std::size_t>(gw * gh), 0);
-
-        for (int gy = 0; gy < gh; ++gy) {
-            const float ny = static_cast<float>(gy) * inv_gh; // [0..1]
-            const float wy = static_cast<float>(rect.y) + ny * static_cast<float>(std::max(1, rect.h) - 1);
-            const float dy = wy - world_center.y;
-            for (int gx = 0; gx < gw; ++gx) {
-                const float nx = static_cast<float>(gx) * inv_gw; // [0..1]
-                const float wx = static_cast<float>(rect.x) + nx * static_cast<float>(std::max(1, rect.w) - 1);
-                const float dx = wx - world_center.x;
-                const float d2 = dx * dx + dy * dy;
-                if (d2 > r2) {
-                    continue;
-                }
-                // Simple linear falloff to the radius.
-                const float d        = std::sqrt(d2);
-                const float falloff  = std::clamp(1.0f - (d / r), 0.0f, 1.0f);
-                const int   raw      = static_cast<int>(std::lround(static_cast<float>(intensity) * falloff));
-                const std::uint8_t v = clamp_byte(raw);
-                temp[static_cast<std::size_t>(gy * gw + gx)] = std::max(temp[static_cast<std::size_t>(gy * gw + gx)], v);
-            }
-        }
-
-        // Stamp into the quadrant's dynamic grid with the provided clamp.
-        q.stamp_moving_lights(temp, gw, gh, clamp);
-    }
-}
+// Dynamic moving light stamping removed.
 
 float LightMap::sample_brightness(int world_x, int world_y, float static_weight, float dynamic_weight) const {
     const int quadrant_index = find_quadrant_index(world_x, world_y);

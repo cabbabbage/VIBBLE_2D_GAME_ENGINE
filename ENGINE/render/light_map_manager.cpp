@@ -180,11 +180,7 @@ LightMapManager::QuadrantSignature LightMapManager::signature_for(const LightMap
     signature.static_empty   = static_stats.empty;
     signature.static_average = static_stats.empty ? 0.0f : static_stats.average;
 
-    const auto dynamic_stats = quadrant.dynamic_grid_stats();
-    signature.dynamic_empty  = dynamic_stats.empty;
-    signature.dynamic_average = dynamic_stats.empty ? 0.0f : dynamic_stats.average;
-    signature.dynamic_min     = dynamic_stats.empty ? 0.0f : dynamic_stats.min;
-    signature.dynamic_max     = dynamic_stats.empty ? 0.0f : dynamic_stats.max;
+    // Dynamic grid removed; preserve static-only signature.
     return signature;
 }
 
@@ -199,12 +195,10 @@ bool LightMapManager::signature_changed(const QuadrantSignature& a, const Quadra
     auto diff = [](float lhs, float rhs) {
         return std::abs(lhs - rhs) > kSignatureEpsilon;
     };
-    if (diff(a.base_brightness, b.base_brightness) || diff(a.static_average, b.static_average) ||
-        diff(a.dynamic_average, b.dynamic_average) || diff(a.dynamic_min, b.dynamic_min) ||
-        diff(a.dynamic_max, b.dynamic_max)) {
+    if (diff(a.base_brightness, b.base_brightness) || diff(a.static_average, b.static_average)) {
         return true;
     }
-    if (a.static_empty != b.static_empty || a.dynamic_empty != b.dynamic_empty) {
+    if (a.static_empty != b.static_empty) {
         return true;
     }
     return false;
@@ -273,7 +267,7 @@ LightMapManager::QuadrantParams LightMapManager::compute_params(const LightMapQu
                 const float sample = quadrant.sample_brightness(static_cast<float>(sample_x),
                                                                 static_cast<float>(sample_y),
                                                                 static_weight,
-                                                                dynamic_weight,
+                                                                0.0f,
                                                                 false);
                 accumulated_brightness += sample * weight;
                 accumulated_weight     += weight;
@@ -285,7 +279,7 @@ LightMapManager::QuadrantParams LightMapManager::compute_params(const LightMapQu
     if (accumulated_weight > 1e-6f) {
         average_brightness = accumulated_brightness / accumulated_weight;
     } else {
-        average_brightness = quadrant.combined_average(static_weight, dynamic_weight);
+        average_brightness = quadrant.combined_average(static_weight, 0.0f);
     }
     average_brightness = clampf(average_brightness, 0.0f, 1.0f);
 
@@ -407,11 +401,7 @@ std::optional<LightMapManager::QuadrantSnapshot> LightMapManager::snapshot_for_q
     snapshot.base_brightness = quadrant->base_brightness();
 
     const auto static_stats  = quadrant->static_grid_stats();
-    const auto dynamic_stats = quadrant->dynamic_grid_stats();
     snapshot.static_average  = static_stats.empty ? 0.0f : static_stats.average;
-    snapshot.dynamic_average = dynamic_stats.empty ? 0.0f : dynamic_stats.average;
-    snapshot.dynamic_min     = dynamic_stats.empty ? 0.0f : dynamic_stats.min;
-    snapshot.dynamic_max     = dynamic_stats.empty ? 0.0f : dynamic_stats.max;
 
     const ReactiveShadowSettings settings = sanitized_settings(assets_);
     const float static_weight             = settings.sampling_weights.static_weight;
@@ -420,15 +410,10 @@ std::optional<LightMapManager::QuadrantSnapshot> LightMapManager::snapshot_for_q
     snapshot.combined_brightness = quadrant->combined_average(static_weight, dynamic_weight);
 
     const float min_brightness = clampf(snapshot.base_brightness +
-                                        (snapshot.static_average * static_weight) +
-                                        (snapshot.dynamic_min * dynamic_weight),
+                                        (snapshot.static_average * static_weight),
                                         0.0f,
                                         1.0f);
-    const float max_brightness = clampf(snapshot.base_brightness +
-                                        (snapshot.static_average * static_weight) +
-                                        (snapshot.dynamic_max * dynamic_weight),
-                                        0.0f,
-                                        1.0f);
+    const float max_brightness = min_brightness;
 
     const ShadowResponseSample min_response = evaluate_shadow_response(settings, min_brightness);
     const ShadowResponseSample max_response = evaluate_shadow_response(settings, max_brightness);
