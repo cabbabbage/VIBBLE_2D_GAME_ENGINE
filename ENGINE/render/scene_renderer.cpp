@@ -62,8 +62,12 @@ SceneRenderer::SceneRenderer(SDL_Renderer* renderer,
 
 SDL_Renderer* SceneRenderer::get_renderer() const { return renderer_; }
 
-const LightMap* SceneRenderer::light_map() const {
+LightMap* SceneRenderer::light_map() {
     return z_light_pass_ ? z_light_pass_.get() : nullptr;
+}
+
+const LightMap* SceneRenderer::light_map() const {
+    return const_cast<SceneRenderer*>(this)->light_map();
 }
 
 void SceneRenderer::set_virtual_light_map_quadrants(int quadrants) {

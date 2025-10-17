@@ -68,6 +68,8 @@ public:
     const std::vector<Asset*>& getFilteredActiveAssets() const;
     const std::vector<Asset*>& getActiveLightAssets() const { return active_light_assets_; }
     const std::vector<Asset*>& getActiveLitAssets() const { return active_light_assets_; }
+    const std::vector<Asset*>& getActiveStaticLightAssets() const { return active_static_light_assets_; }
+    const std::vector<Asset*>& getActiveMovingLightAssets() const { return active_moving_light_assets_; }
     std::vector<Asset*>& mutable_filtered_active_assets() { return filtered_active_assets; }
     camera& getView() { return camera_; }
     const camera& getView() const { return camera_; }
@@ -131,6 +133,7 @@ public:
     render_pipeline::shading::ReactiveShadowSettings* reactive_shadow_settings();
     const render_pipeline::shading::ReactiveShadowSettings* reactive_shadow_settings() const;
     const LightMap* light_map() const;
+    LightMap*       light_map();
     LightMapManager*       light_map_manager();
     const LightMapManager* light_map_manager() const;
     void set_virtual_light_map_quadrants(int quadrants);
@@ -167,6 +170,8 @@ private:
     void update_scene_render_quality();
     int  saved_render_quality_percent() const;
     int  effective_render_quality_percent() const;
+    void notify_light_map_asset_moved(const Asset* asset);
+    void notify_light_map_static_assets_changed();
 
     friend class SceneRenderer;
     friend class Asset;
@@ -183,6 +188,8 @@ private:
     std::vector<Asset*> active_assets;
     std::vector<Asset*> filtered_active_assets;
     std::vector<Asset*> active_light_assets_;
+    std::vector<Asset*> active_static_light_assets_;
+    std::vector<Asset*> active_moving_light_assets_;
     std::vector<Room*> rooms_;
     Room* current_room_ = nullptr;
     int num_groups_ = 40;

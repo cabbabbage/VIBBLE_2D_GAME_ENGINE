@@ -9,6 +9,7 @@
 #include <vector>
 
 class Assets;
+class Asset;
 class camera;
 
 class LightMapQuadrant {
@@ -53,6 +54,7 @@ public:
     void render_tile_mask(SDL_Renderer* renderer) const;
     void render_tile_mask(SDL_Renderer* renderer, Uint8 alpha_mod) const;
     void populate_static_base(SDL_Renderer* renderer, SDL_Texture* static_full_map);
+    void copy_static_mask(SDL_Renderer* renderer) const;
 
     float sample_brightness(float local_x,
                             float local_y,
@@ -63,7 +65,7 @@ public:
 private:
     void destroy_texture();
     void ensure_texture(SDL_Renderer* renderer);
-    void ensure_static_tile(SDL_Renderer* renderer);
+    void ensure_static_mask(SDL_Renderer* renderer);
     std::size_t index_from_cell(int cx, int cy) const;
     float       cell_sample(int cx, int cy, float static_weight, float dynamic_weight) const;
 
@@ -75,7 +77,7 @@ private:
     std::vector<std::uint8_t> static_grid_{};
     // Removed dynamic grid and all related behavior.
     SDL_Texture*        tile_mask_       = nullptr;
-    SDL_Texture*        static_tile_     = nullptr;
+    SDL_Texture*        static_mask_     = nullptr;
     float               base_brightness_ = 0.0f;
     bool                dirty_           = true;
     bool                active_          = false;
@@ -109,6 +111,10 @@ public:
 
     void render_visible_quadrants(SDL_Renderer* renderer, const SDL_Rect& view_rect) const;
     void render_visible_quadrants(SDL_Renderer* renderer, const SDL_Rect& view_rect, float alpha_multiplier) const;
+
+    void mark_region_dirty(const SDL_Rect& screen_rect);
+    void mark_asset_lights_dirty(const Asset* asset);
+    void mark_static_cache_dirty();
 
     int screen_width() const { return screen_width_; }
     int screen_height() const { return screen_height_; }
@@ -158,5 +164,6 @@ private:
 
     std::vector<LightMapQuadrant> quadrants_{};
     SDL_Texture*                  static_full_map_ = nullptr;
+    bool                          static_cache_dirty_ = true;
 };
 

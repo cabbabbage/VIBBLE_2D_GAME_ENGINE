@@ -36,6 +36,7 @@ public:
     const Global_Light_Source& map_light_source() const { return main_light_source_; }
     render_pipeline::shading::ReactiveShadowSettings& reactive_shadow_settings() { return reactive_shadow_settings_; }
     const render_pipeline::shading::ReactiveShadowSettings& reactive_shadow_settings() const { return reactive_shadow_settings_; }
+    LightMap* light_map();
     const LightMap* light_map() const;
     void set_virtual_light_map_quadrants(int quadrants);
     void set_virtual_light_map_quadrant_size(int size_px);

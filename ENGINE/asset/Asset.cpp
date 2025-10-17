@@ -353,6 +353,9 @@ void Asset::update() {
         const bool moved = (pos.x != previous_pos.x || pos.y != previous_pos.y);
         if (moved) {
             update_neighbor_lists(true);
+            if (assets_) {
+                assets_->notify_light_map_asset_moved(this);
+            }
         }
     }
 }

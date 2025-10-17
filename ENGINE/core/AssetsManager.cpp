@@ -855,6 +855,24 @@ void Assets::mark_active_assets_dirty() {
     active_assets_dirty_.store(true, std::memory_order_release);
 }
 
+void Assets::notify_light_map_asset_moved(const Asset* asset) {
+    if (!asset || !asset->info || asset->info->light_sources.empty()) {
+        return;
+    }
+    if (!asset->info->moving_asset) {
+        return;
+    }
+    if (LightMap* map = light_map()) {
+        map->mark_asset_lights_dirty(asset);
+    }
+}
+
+void Assets::notify_light_map_static_assets_changed() {
+    if (LightMap* map = light_map()) {
+        map->mark_static_cache_dirty();
+    }
+}
+
 void Assets::initialize_active_assets(SDL_Point center) {
     const int radius = active_search_radius();
     active_asset_list_ = std::make_unique<AssetList>(
@@ -889,19 +907,60 @@ void Assets::rebuild_active_assets_if_needed() {
         return;
     }
 
-    active_assets.clear();
-    active_light_assets_.clear();
-    active_asset_list_->full_list(active_assets);
-    active_light_assets_.reserve(active_assets.size());
-    for (Asset* asset : active_assets) {
+    std::vector<Asset*> new_active_assets;
+    active_asset_list_->full_list(new_active_assets);
+
+    std::vector<Asset*> new_light_assets;
+    std::vector<Asset*> new_static_lights;
+    std::vector<Asset*> new_moving_lights;
+    new_light_assets.reserve(new_active_assets.size());
+    new_static_lights.reserve(new_active_assets.size());
+    new_moving_lights.reserve(new_active_assets.size());
+
+    for (Asset* asset : new_active_assets) {
         if (!asset || !asset->info) {
             continue;
         }
         const auto& info = asset->info;
-        if (!info->light_sources.empty()) {
-            active_light_assets_.push_back(asset);
+        if (info->light_sources.empty()) {
+            continue;
+        }
+        new_light_assets.push_back(asset);
+        if (info->moving_asset) {
+            new_moving_lights.push_back(asset);
+        } else {
+            new_static_lights.push_back(asset);
         }
     }
+
+    const bool static_changed = (new_static_lights != active_static_light_assets_);
+    const bool moving_changed = (new_moving_lights != active_moving_light_assets_);
+
+    if (static_changed) {
+        notify_light_map_static_assets_changed();
+    }
+
+    if (moving_changed) {
+        std::unordered_set<Asset*> old_moving(active_moving_light_assets_.begin(), active_moving_light_assets_.end());
+        std::unordered_set<Asset*> new_moving(new_moving_lights.begin(), new_moving_lights.end());
+
+        for (Asset* asset : new_moving_lights) {
+            if (old_moving.find(asset) == old_moving.end()) {
+                notify_light_map_asset_moved(asset);
+            }
+        }
+
+        for (Asset* asset : active_moving_light_assets_) {
+            if (new_moving.find(asset) == new_moving.end()) {
+                notify_light_map_asset_moved(asset);
+            }
+        }
+    }
+
+    active_assets                = std::move(new_active_assets);
+    active_light_assets_         = std::move(new_light_assets);
+    active_static_light_assets_  = std::move(new_static_lights);
+    active_moving_light_assets_  = std::move(new_moving_lights);
     active_assets_dirty_.store(false, std::memory_order_release);
 }
 
@@ -933,6 +992,13 @@ void Assets::process_removals() {
 
     for (Asset* asset : pending_removals) {
         render_pipeline::shading::ClearShadowStateFor(asset);
+        if (asset && asset->info && !asset->info->light_sources.empty()) {
+            if (asset->info->moving_asset) {
+                notify_light_map_asset_moved(asset);
+            } else {
+                notify_light_map_static_assets_changed();
+            }
+        }
     }
 
     std::unordered_set<Asset*> removal_lookup(pending_removals.begin(), pending_removals.end());
@@ -957,6 +1023,8 @@ void Assets::process_removals() {
     erase_ptrs(all);
     erase_ptrs(active_assets);
     erase_ptrs(active_light_assets_);
+    erase_ptrs(active_static_light_assets_);
+    erase_ptrs(active_moving_light_assets_);
     erase_ptrs(filtered_active_assets);
 
     if (dev_controls_ && dev_controls_->is_enabled()) {
@@ -1089,6 +1157,10 @@ render_pipeline::shading::ReactiveShadowSettings* Assets::reactive_shadow_settin
 
 const render_pipeline::shading::ReactiveShadowSettings* Assets::reactive_shadow_settings() const {
     return const_cast<Assets*>(this)->reactive_shadow_settings();
+}
+
+LightMap* Assets::light_map() {
+    return scene ? scene->light_map() : nullptr;
 }
 
 const LightMap* Assets::light_map() const {
