@@ -628,6 +628,117 @@ void MapLightPreviewPanel::render_preview(SDL_Renderer* renderer) const {
         SDL_FreeSurface(surface);
     };
 
+    auto draw_light_debug_overlay = [&](const SDL_Rect& grid_rect) {
+        if (!assets_) {
+            return;
+        }
+
+        struct LightDebugSample {
+            SDL_Color color{};
+            Uint8     intensity = 0;
+        };
+
+        constexpr int kMaxOverlayLights = 12;
+
+        std::vector<LightDebugSample> samples;
+        samples.reserve(kMaxOverlayLights);
+
+        const auto& moving_assets = assets_->getActiveMovingLightAssets();
+        for (Asset* asset : moving_assets) {
+            if (!asset || !asset->info) {
+                continue;
+            }
+            for (const auto& light : asset->info->light_sources) {
+                LightDebugSample sample{};
+                sample.color.r = static_cast<Uint8>(std::clamp(static_cast<int>(light.color.r), 0, 255));
+                sample.color.g = static_cast<Uint8>(std::clamp(static_cast<int>(light.color.g), 0, 255));
+                sample.color.b = static_cast<Uint8>(std::clamp(static_cast<int>(light.color.b), 0, 255));
+                sample.color.a = 255;
+                sample.intensity = static_cast<Uint8>(std::clamp(light.intensity, 0, 255));
+                samples.push_back(sample);
+                if (samples.size() >= kMaxOverlayLights) {
+                    break;
+                }
+            }
+            if (samples.size() >= kMaxOverlayLights) {
+                break;
+            }
+        }
+
+        if (samples.empty()) {
+            return;
+        }
+
+        const int padding      = 6;
+        const int spacing      = 4;
+        const int swatch_size  = 14;
+        const int bar_width    = 3;
+        const int cell_width   = swatch_size + bar_width + spacing;
+        const int available_w  = std::max(0, grid_rect.w - padding * 2);
+        if (available_w <= 0) {
+            return;
+        }
+
+        const int max_per_row = std::max(1, (available_w + spacing) / cell_width);
+        const int columns     = std::min(max_per_row, static_cast<int>(samples.size()));
+        const int rows        = std::max(1, (static_cast<int>(samples.size()) + max_per_row - 1) / max_per_row);
+        const int overlay_w   = columns * cell_width - spacing;
+        const int overlay_h   = rows * (swatch_size + spacing) - spacing;
+        if (overlay_w <= 0 || overlay_h <= 0 || overlay_h + padding * 2 > grid_rect.h) {
+            return;
+        }
+
+        SDL_Rect overlay_rect{grid_rect.x + grid_rect.w - overlay_w - padding,
+                              grid_rect.y + padding,
+                              overlay_w,
+                              overlay_h};
+
+        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 160);
+        SDL_RenderFillRect(renderer, &overlay_rect);
+        SDL_SetRenderDrawColor(renderer, 255, 255, 255, 80);
+        SDL_RenderDrawRect(renderer, &overlay_rect);
+
+        for (std::size_t i = 0; i < samples.size(); ++i) {
+            const int row = static_cast<int>(i) / max_per_row;
+            const int col = static_cast<int>(i) % max_per_row;
+            SDL_Rect swatch_rect{overlay_rect.x + col * cell_width,
+                                 overlay_rect.y + row * (swatch_size + spacing),
+                                 swatch_size,
+                                 swatch_size};
+
+            const float intensity_scale = static_cast<float>(samples[i].intensity) / 255.0f;
+            const Uint8 draw_r = static_cast<Uint8>(std::lround(static_cast<float>(samples[i].color.r) * intensity_scale));
+            const Uint8 draw_g = static_cast<Uint8>(std::lround(static_cast<float>(samples[i].color.g) * intensity_scale));
+            const Uint8 draw_b = static_cast<Uint8>(std::lround(static_cast<float>(samples[i].color.b) * intensity_scale));
+
+            SDL_SetRenderDrawColor(renderer, draw_r, draw_g, draw_b, 255);
+            SDL_RenderFillRect(renderer, &swatch_rect);
+            SDL_SetRenderDrawColor(renderer, samples[i].color.r, samples[i].color.g, samples[i].color.b, 255);
+            SDL_RenderDrawRect(renderer, &swatch_rect);
+
+            SDL_Rect bar_rect{swatch_rect.x + swatch_rect.w,
+                              swatch_rect.y,
+                              bar_width,
+                              swatch_rect.h};
+            SDL_SetRenderDrawColor(renderer, 30, 30, 30, 220);
+            SDL_RenderFillRect(renderer, &bar_rect);
+
+            const int bar_fill_height = static_cast<int>(std::round(intensity_scale * static_cast<float>(bar_rect.h)));
+            if (bar_fill_height > 0) {
+                SDL_Rect fill_rect{bar_rect.x,
+                                   bar_rect.y + bar_rect.h - bar_fill_height,
+                                   bar_rect.w,
+                                   bar_fill_height};
+                SDL_SetRenderDrawColor(renderer,
+                                       samples[i].color.r,
+                                       samples[i].color.g,
+                                       samples[i].color.b,
+                                       220);
+                SDL_RenderFillRect(renderer, &fill_rect);
+            }
+        }
+    };
+
     const SDL_Color dirty_color{200, 120, 40, 255};
     const SDL_Color outline_color{70, 70, 70, 255};
 
@@ -683,6 +794,8 @@ void MapLightPreviewPanel::render_preview(SDL_Renderer* renderer) const {
             SDL_RenderDrawRect(renderer, &cell_rect);
         }
     }
+
+    draw_light_debug_overlay(preview_grid_rect_);
 
     SDL_SetRenderDrawColor(renderer, outline_color.r, outline_color.g, outline_color.b, outline_color.a);
     SDL_RenderDrawRect(renderer, &preview_grid_rect_);

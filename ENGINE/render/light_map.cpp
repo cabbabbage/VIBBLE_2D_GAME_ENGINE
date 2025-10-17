@@ -388,7 +388,7 @@ void LightMapQuadrant::update_tile_mask(SDL_Renderer* renderer,
     SDL_Texture* prev_target = SDL_GetRenderTarget(renderer);
     SDL_SetRenderTarget(renderer, tile_mask_);
 
-    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_ADD);
     SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
     SDL_RenderClear(renderer);
 
@@ -426,7 +426,14 @@ void LightMapQuadrant::update_tile_mask(SDL_Renderer* renderer,
                 SDL_GetTextureBlendMode(tex, &save_bm);
 
                 SDL_SetTextureBlendMode(tex, SDL_BLENDMODE_ADD);
-                SDL_SetTextureAlphaMod(tex, 255);
+
+                const Uint8 intensity_mod = clamp_byte(light.intensity);
+                const Uint8 color_r       = clamp_byte(light.color.r);
+                const Uint8 color_g       = clamp_byte(light.color.g);
+                const Uint8 color_b       = clamp_byte(light.color.b);
+
+                SDL_SetTextureColorMod(tex, color_r, color_g, color_b);
+                SDL_SetTextureAlphaMod(tex, intensity_mod);
                 SDL_RenderCopy(renderer, tex, nullptr, &dst_local);
 
                 SDL_SetTextureBlendMode(tex, save_bm);
