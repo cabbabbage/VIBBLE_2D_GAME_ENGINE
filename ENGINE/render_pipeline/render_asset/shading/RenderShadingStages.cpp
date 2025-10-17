@@ -34,7 +34,9 @@ float compute_screen_light_opacity_factor(const StageContext& context) {
     const int current_alpha          = std::clamp(static_cast<int>(light.get_current_color().a), min_opacity, max_opacity);
     const int range                  = std::max(1, max_opacity - min_opacity);
     const float normalized           = static_cast<float>(current_alpha - min_opacity) / static_cast<float>(range);
-    return clampf(normalized, 0.0f, 1.0f);
+    // Higher map-light opacity should darken the screen, so invert the normalized
+    // result before clamping.
+    return clampf(1.0f - normalized, 0.0f, 1.0f);
 }
 
 float compute_parallax_shift(const StageContext& context, const Asset& asset, int height, float weight) {
