@@ -10,6 +10,7 @@
 #include <nlohmann/json_fwd.hpp>
 
 #include "DockableCollapsible.hpp"
+#include "render/light_map.hpp"
 #include "render/light_map_manager.hpp"
 #include "render_pipeline/render_asset/shading/ReactiveShadowSettings.hpp"
 
@@ -20,6 +21,8 @@ class LightMapManager;
 
 class MapLightPreviewPanel : public DockableCollapsible {
 public:
+    class PreviewWidget;
+
     explicit MapLightPreviewPanel(Assets* assets, int x = 72, int y = 40);
     ~MapLightPreviewPanel() override;
 
@@ -41,6 +44,8 @@ protected:
     void layout_custom_content(int screen_w, int screen_h) const override;
 
 private:
+    friend class PreviewWidget;
+
     const class LightMap*        current_light_map() const;
     const LightMapManager*       light_map_manager() const;
     const LightMapManager::QuadrantSnapshot* snapshot_for_quadrant(int index) const;

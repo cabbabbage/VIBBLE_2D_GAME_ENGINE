@@ -60,9 +60,9 @@ struct ScalingLogic {
         bool has_custom_steps() const { return !steps.empty(); }
     };
 
-    static constexpr std::size_t kDefaultVariantCount = 3;
+    static constexpr std::size_t kDefaultVariantCount = 1;
     static inline const ScaleSteps& DefaultScaleSteps() {
-        static const ScaleSteps kDefaultSteps = {0.25f, 0.50f, 0.75f};
+        static const ScaleSteps kDefaultSteps = {0.50f};
         return kDefaultSteps;
     }
 

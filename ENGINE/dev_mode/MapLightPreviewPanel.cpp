@@ -86,7 +86,7 @@ std::string make_setting_key(std::string_view suffix) {
     return key;
 }
 
-SDL_Point event_point(const SDL_Event& e) {
+SDL_Point preview_event_point(const SDL_Event& e) {
     if (e.type == SDL_MOUSEMOTION) {
         return SDL_Point{e.motion.x, e.motion.y};
     }
@@ -96,7 +96,9 @@ SDL_Point event_point(const SDL_Event& e) {
     return SDL_Point{0, 0};
 }
 
-class PreviewWidget : public Widget {
+}  // namespace
+
+class MapLightPreviewPanel::PreviewWidget : public Widget {
 public:
     explicit PreviewWidget(MapLightPreviewPanel* owner) : owner_(owner) {}
 
@@ -128,8 +130,6 @@ private:
     MapLightPreviewPanel* owner_ = nullptr;
     SDL_Rect              rect_{0, 0, 0, 0};
 };
-
-}  // namespace
 
 MapLightPreviewPanel::MapLightPreviewPanel(Assets* assets, int x, int y)
     : DockableCollapsible("Light Map Preview", true, x, y), assets_(assets) {
@@ -204,7 +204,7 @@ bool MapLightPreviewPanel::handle_event(const SDL_Event& e) {
     }
 
     if (pointer_event) {
-        SDL_Point point = event_point(e);
+        SDL_Point point = preview_event_point(e);
         if (SDL_PointInRect(&point, &preview_widget_bounds_)) {
             return true;
         }
@@ -318,7 +318,7 @@ bool MapLightPreviewPanel::handle_preview_event(const SDL_Event& e) {
         return false;
     }
 
-    SDL_Point point = event_point(e);
+    SDL_Point point = preview_event_point(e);
     if (!SDL_PointInRect(&point, &preview_widget_bounds_)) {
         return false;
     }

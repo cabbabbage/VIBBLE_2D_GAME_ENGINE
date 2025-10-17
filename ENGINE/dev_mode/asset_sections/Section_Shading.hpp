@@ -30,7 +30,7 @@ public:
         rows.push_back({ build_widget.get() });
         widgets_.push_back(std::move(build_widget));
 
-        preview_button_ = std::make_unique<DMButton>("Show Preview", &DMStyles::SecondaryButton(), 200, DMButton::height());
+        preview_button_ = std::make_unique<DMButton>("Show Preview", &DMStyles::HeaderButton(), 200, DMButton::height());
         auto preview_widget = std::make_unique<ButtonWidget>(preview_button_.get(), [this]() { this->on_preview(); });
         rows.push_back({ preview_widget.get() });
         widgets_.push_back(std::move(preview_widget));
@@ -50,6 +50,8 @@ public:
     void render_content(SDL_Renderer* r) const override {
         DockableCollapsible::render_content(r);
     }
+
+    bool shading_enabled() const { return info_ && info_->is_shaded; }
 
 private:
     void on_build();
