@@ -12388,7 +12388,7 @@
           "source": {
             "kind": "folder",
             "name": null,
-            "path": "SRC/assets/Vibble/backward"
+            "path": "backward"
           },
           "speed_factor": 1
         },
@@ -12436,73 +12436,31 @@
             ],
             [
               0,
-              6,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
+              0
             ],
             [
               0,
-              5,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
+              0
             ],
             [
               0,
-              6,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
+              0
             ],
             [
               0,
-              6,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
+              0
             ],
             [
               0,
-              6,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
+              0
             ],
             [
               0,
-              5,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
+              0
             ],
             [
               0,
-              6,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
+              0
             ]
           ],
           "movement_total": {
@@ -12515,8 +12473,8 @@
           "rnd_start": false,
           "source": {
             "kind": "animation",
-            "name": "SRC/assets/Vibble/backward",
-            "path": "SRC/assets/Vibble"
+            "name": "backward",
+            "path": ""
           },
           "speed_factor": -1
         },
@@ -12614,7 +12572,7 @@
           "source": {
             "kind": "folder",
             "name": null,
-            "path": "SRC/assets/Vibble/left"
+            "path": "left"
           },
           "speed_factor": 1
         },
@@ -12631,74 +12589,32 @@
               0
             ],
             [
-              6,
               0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
+              0
             ],
             [
-              5,
               0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
+              0
             ],
             [
-              6,
               0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
+              0
             ],
             [
-              6,
               0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
+              0
             ],
             [
-              6,
               0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
+              0
             ],
             [
-              5,
               0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
+              0
             ],
             [
-              6,
               0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
+              0
             ]
           ],
           "movement_total": {
@@ -12711,8 +12627,8 @@
           "rnd_start": false,
           "source": {
             "kind": "animation",
-            "name": "SRC/assets/Vibble/left",
-            "path": "SRC/assets/Vibble"
+            "name": "left",
+            "path": ""
           },
           "speed_factor": 1
         }
@@ -12769,7 +12685,7 @@
       "size_settings": {
         "scale_percentage": 17.0
       },
-      "start": "SRC/assets/Vibble/default",
+      "start": "default",
       "tags": [
         "death",
         "SRC/assets/Vibble/default",
@@ -14332,7 +14248,7 @@
           "max_opacity": 15,
           "min_opacity": 0
         },
-        "update_interval": 9
+        "update_interval": 1
       },
       "map_name": "FORREST",
       "reactive_shadows": {

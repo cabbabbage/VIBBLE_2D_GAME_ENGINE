@@ -18,11 +18,11 @@ namespace {
 
 constexpr int kStrengthSliderScale = 100;
 
-std::unique_ptr<DMSlider> make_float_slider(const std::string& label,
-                                            float                min_value,
-                                            float                max_value,
-                                            float                current,
-                                            int                  scale) {
+std::unique_ptr<DMSlider> make_shadow_float_slider(const std::string& label,
+                                                   float                min_value,
+                                                   float                max_value,
+                                                   float                current,
+                                                   int                  scale) {
     const int min_i = static_cast<int>(std::round(min_value * static_cast<float>(scale)));
     const int max_i = static_cast<int>(std::round(max_value * static_cast<float>(scale)));
     const int cur_i = static_cast<int>(std::round(current * static_cast<float>(scale)));
@@ -190,15 +190,15 @@ void MapShadowPanel::build_ui() {
     scale_strength_    = make_strength_slider("Scale Factor", last_settings_.scale_strength);
 
     // Virtual light map controls moved from preview panel
-    horizontal_falloff_ = make_float_slider("Horizontal Falloff", 0.0f, 10.0f,
+    horizontal_falloff_ = make_shadow_float_slider("Horizontal Falloff", 0.0f, 10.0f,
                                             last_settings_.virtual_light_map.horizontal_falloff, 100);
-    vertical_falloff_   = make_float_slider("Vertical Falloff", 0.0f, 10.0f,
+    vertical_falloff_   = make_shadow_float_slider("Vertical Falloff", 0.0f, 10.0f,
                                             last_settings_.virtual_light_map.vertical_falloff, 100);
-    max_offset_x_       = make_float_slider("Max Offset X", 0.0f, 500.0f,
+    max_offset_x_       = make_shadow_float_slider("Max Offset X", 0.0f, 500.0f,
                                             last_settings_.virtual_light_map.max_offset_x, 100);
-    max_offset_y_       = make_float_slider("Max Offset Y", 0.0f, 500.0f,
+    max_offset_y_       = make_shadow_float_slider("Max Offset Y", 0.0f, 500.0f,
                                             last_settings_.virtual_light_map.max_offset_y, 100);
-    map_light_factor_   = make_float_slider("Map Light Factor", 0.0f, 1.0f,
+    map_light_factor_   = make_shadow_float_slider("Map Light Factor", 0.0f, 1.0f,
                                             last_settings_.virtual_light_map.map_light_factor, 100);
     search_radius_      = std::make_unique<DMSlider>("Search Radius", 0, 64,
                                                      last_settings_.virtual_light_map.search_radius);
