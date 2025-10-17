@@ -315,6 +315,7 @@ add_executable(manifest_store_tests
     ENGINE/utils/cache_manager.cpp
     ENGINE/utils/generate_faded_mask.cpp
     ENGINE/utils/generate_light.cpp
+    ENGINE/utils/loading_status_notifier.cpp
     ENGINE/dev_mode/room_editor_map_info.cpp
     ENGINE/core/manifest/manifest_loader.cpp
     ENGINE/map_generation/map_layers_geometry.cpp
@@ -351,6 +352,7 @@ add_executable(asset_info_manifest_tests
     ENGINE/utils/area.cpp
     ENGINE/utils/cache_manager.cpp
     ENGINE/utils/generate_light.cpp
+    ENGINE/utils/loading_status_notifier.cpp
     ENGINE/dev_mode/core/manifest_store.cpp
     ENGINE/dev_mode/core/dev_json_store.cpp
     ENGINE/dev_mode/tag_utils.cpp

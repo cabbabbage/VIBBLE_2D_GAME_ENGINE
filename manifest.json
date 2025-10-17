@@ -11026,10 +11026,10 @@
       "rnd_spawn_min": 300,
       "shadow_mask_settings": {
         "alpha_multiplier": 1.0,
-        "blur_scale": 1.0,
-        "expansion_ratio": 0.800000011920929,
+        "blur_scale": 0.12999999523162842,
+        "expansion_ratio": 0.20999999344348907,
         "falloff_exponent": 1.0499999523162842,
-        "falloff_start": 0.0
+        "falloff_start": 0.10000000149011612
       },
       "size_settings": {
         "scale_percentage": 95.0
