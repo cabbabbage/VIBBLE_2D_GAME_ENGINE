@@ -14123,128 +14123,128 @@
         },
         {
           "level": 2,
-          "max_rooms": 4,
-          "min_rooms": 2,
+          "max_rooms": 5,
+          "min_rooms": 1,
           "name": "layer_2",
           "rooms": [
             {
-              "name": "garden",
-              "min_instances": 1,
               "max_instances": 2,
+              "min_instances": 1,
+              "name": "garden",
               "required_children": []
             },
             {
+              "max_instances": 1,
+              "min_instances": 0,
               "name": "room",
-              "min_instances": 0,
-              "max_instances": 1,
               "required_children": []
             },
             {
+              "max_instances": 1,
+              "min_instances": 0,
               "name": "room_3",
-              "min_instances": 0,
-              "max_instances": 1,
               "required_children": []
             },
             {
-              "name": "room_4",
-              "min_instances": 0,
               "max_instances": 1,
+              "min_instances": 0,
+              "name": "room_4",
               "required_children": []
             }
           ]
         },
         {
           "level": 3,
-          "max_rooms": 4,
+          "max_rooms": 6,
           "min_rooms": 3,
           "name": "layer_3",
           "rooms": [
             {
+              "max_instances": 2,
+              "min_instances": 1,
               "name": "glowshroom_grotto",
-              "min_instances": 1,
-              "max_instances": 2,
               "required_children": []
             },
             {
+              "max_instances": 2,
+              "min_instances": 1,
               "name": "frog_song_basin",
-              "min_instances": 1,
-              "max_instances": 2,
               "required_children": []
             },
             {
+              "max_instances": 1,
+              "min_instances": 1,
               "name": "whispering_flowers",
-              "min_instances": 1,
-              "max_instances": 1,
               "required_children": []
             },
             {
-              "name": "starlit_bog",
-              "min_instances": 0,
               "max_instances": 1,
+              "min_instances": 0,
+              "name": "starlit_bog",
               "required_children": []
             }
           ]
         },
         {
           "level": 4,
-          "max_rooms": 4,
+          "max_rooms": 6,
           "min_rooms": 2,
           "name": "layer_4",
           "rooms": [
             {
+              "max_instances": 2,
+              "min_instances": 1,
               "name": "stone_sigil_circle",
-              "min_instances": 1,
-              "max_instances": 2,
               "required_children": []
             },
             {
+              "max_instances": 2,
+              "min_instances": 0,
               "name": "runestone_ridge",
-              "min_instances": 0,
-              "max_instances": 2,
               "required_children": []
             },
             {
+              "max_instances": 1,
+              "min_instances": 0,
               "name": "bonefire_camp",
-              "min_instances": 0,
-              "max_instances": 1,
               "required_children": []
             },
             {
-              "name": "gravekeepers_watch",
-              "min_instances": 1,
               "max_instances": 1,
+              "min_instances": 1,
+              "name": "gravekeepers_watch",
               "required_children": []
             }
           ]
         },
         {
           "level": 5,
-          "max_rooms": 4,
+          "max_rooms": 5,
           "min_rooms": 2,
           "name": "layer_5",
           "rooms": [
             {
-              "name": "hermit_woodshop",
-              "min_instances": 1,
               "max_instances": 2,
-              "required_children": []
-            },
-            {
-              "name": "traders_cache",
               "min_instances": 1,
-              "max_instances": 1,
+              "name": "hermit_woodshop",
               "required_children": []
             },
             {
+              "max_instances": 1,
+              "min_instances": 1,
+              "name": "traders_cache",
+              "required_children": []
+            },
+            {
+              "max_instances": 1,
+              "min_instances": 0,
               "name": "booze_smugglers_den",
-              "min_instances": 0,
-              "max_instances": 1,
               "required_children": []
             },
             {
-              "name": "daveys_hideout",
-              "min_instances": 0,
               "max_instances": 1,
+              "min_instances": 0,
+              "name": "daveys_hideout",
               "required_children": []
             }
           ]
@@ -14256,21 +14256,21 @@
           "name": "layer_6",
           "rooms": [
             {
+              "max_instances": 1,
+              "min_instances": 1,
               "name": "lantern_lagoon",
-              "min_instances": 1,
-              "max_instances": 1,
               "required_children": []
             },
             {
+              "max_instances": 1,
+              "min_instances": 1,
               "name": "spirit_vigil_shrine",
-              "min_instances": 1,
-              "max_instances": 1,
               "required_children": []
             },
             {
-              "name": "noose_hollow",
-              "min_instances": 0,
               "max_instances": 1,
+              "min_instances": 0,
+              "name": "noose_hollow",
               "required_children": []
             }
           ]
@@ -14367,7 +14367,7 @@
           "size_scale_factor": 1.0,
           "vertical_falloff": 3.5
         },
-        "virtual_light_map_quadrant_size": 256,
+        "virtual_light_map_quadrant_size": 512,
         "virtual_light_map_quadrants": 8
       },
       "rooms_data": {
@@ -14558,6 +14558,238 @@
             }
           ]
         },
+        "bonefire_camp": {
+          "curvyness": 2,
+          "edge_smoothness": 6,
+          "geometry": "Square",
+          "inherits_map_assets": false,
+          "is_boss": false,
+          "is_spawn": false,
+          "max_height": 2200,
+          "max_width": 2200,
+          "min_height": 1600,
+          "min_width": 1600,
+          "name": "bonefire_camp",
+          "spawn_groups": [
+            {
+              "candidates": [
+                {
+                  "chance": 20,
+                  "name": "null"
+                },
+                {
+                  "chance": 50,
+                  "name": "Bone"
+                },
+                {
+                  "chance": 30,
+                  "name": "Bone_Pile"
+                }
+              ],
+              "display_name": "scatter_bones",
+              "enforce_spacing": false,
+              "max_number": 10,
+              "min_number": 4,
+              "position": "Random",
+              "priority": 0,
+              "spawn_id": "spn-8be3bf9ae337"
+            },
+            {
+              "candidates": [
+                {
+                  "chance": 50,
+                  "name": "null"
+                },
+                {
+                  "chance": 30,
+                  "name": "Booze_1"
+                },
+                {
+                  "chance": 20,
+                  "name": "Booze_2"
+                }
+              ],
+              "display_name": "camp_cache",
+              "enforce_spacing": false,
+              "max_number": 3,
+              "min_number": 0,
+              "position": "Random",
+              "priority": 1,
+              "spawn_id": "spn-6993aee184b8"
+            }
+          ]
+        },
+        "booze_smugglers_den": {
+          "curvyness": 2,
+          "edge_smoothness": 5,
+          "geometry": "Square",
+          "inherits_map_assets": false,
+          "is_boss": false,
+          "is_spawn": false,
+          "max_height": 2100,
+          "max_width": 2100,
+          "min_height": 1500,
+          "min_width": 1500,
+          "name": "booze_smugglers_den",
+          "spawn_groups": [
+            {
+              "candidates": [
+                {
+                  "chance": 15,
+                  "name": "null"
+                },
+                {
+                  "chance": 50,
+                  "name": "Booze_2"
+                },
+                {
+                  "chance": 35,
+                  "name": "Booze_1"
+                }
+              ],
+              "display_name": "hidden_casks",
+              "enforce_spacing": false,
+              "max_number": 6,
+              "min_number": 2,
+              "position": "Random",
+              "priority": 0,
+              "spawn_id": "spn-33fec878afe7"
+            },
+            {
+              "candidates": [
+                {
+                  "chance": 25,
+                  "name": "null"
+                },
+                {
+                  "chance": 75,
+                  "name": "Barrel"
+                }
+              ],
+              "display_name": "barrel_wall",
+              "enforce_spacing": false,
+              "max_number": 5,
+              "min_number": 1,
+              "position": "Random",
+              "priority": 1,
+              "spawn_id": "spn-7dcb94a78e97"
+            }
+          ]
+        },
+        "daveys_hideout": {
+          "curvyness": 3,
+          "edge_smoothness": 9,
+          "geometry": "Square",
+          "inherits_map_assets": false,
+          "is_boss": false,
+          "is_spawn": false,
+          "max_height": 2200,
+          "max_width": 2200,
+          "min_height": 1600,
+          "min_width": 1600,
+          "name": "daveys_hideout",
+          "spawn_groups": [
+            {
+              "candidates": [
+                {
+                  "chance": 30,
+                  "name": "null"
+                },
+                {
+                  "chance": 40,
+                  "name": "Davey"
+                },
+                {
+                  "chance": 30,
+                  "name": "Bench"
+                }
+              ],
+              "display_name": "camp_mates",
+              "enforce_spacing": false,
+              "max_number": 3,
+              "min_number": 1,
+              "position": "Random",
+              "priority": 0,
+              "spawn_id": "spn-f7b1c80af3ed"
+            },
+            {
+              "candidates": [
+                {
+                  "chance": 35,
+                  "name": "null"
+                },
+                {
+                  "chance": 65,
+                  "name": "Book"
+                }
+              ],
+              "display_name": "scattered_notes",
+              "enforce_spacing": false,
+              "max_number": 4,
+              "min_number": 1,
+              "position": "Random",
+              "priority": 1,
+              "spawn_id": "spn-58f77f3aae80"
+            }
+          ]
+        },
+        "frog_song_basin": {
+          "curvyness": 3,
+          "edge_smoothness": 8,
+          "geometry": "Square",
+          "inherits_map_assets": true,
+          "is_boss": false,
+          "is_spawn": false,
+          "max_height": 2100,
+          "max_width": 2100,
+          "min_height": 1500,
+          "min_width": 1500,
+          "name": "frog_song_basin",
+          "spawn_groups": [
+            {
+              "candidates": [
+                {
+                  "chance": 35,
+                  "name": "null"
+                },
+                {
+                  "chance": 65,
+                  "name": "Frog"
+                }
+              ],
+              "display_name": "frog_chorus",
+              "enforce_spacing": false,
+              "max_number": 3,
+              "min_number": 1,
+              "position": "Random",
+              "priority": 0,
+              "spawn_id": "spn-e7c0bd22f8bf"
+            },
+            {
+              "candidates": [
+                {
+                  "chance": 20,
+                  "name": "null"
+                },
+                {
+                  "chance": 40,
+                  "name": "flower_3"
+                },
+                {
+                  "chance": 40,
+                  "name": "Grass_FPS_2"
+                }
+              ],
+              "display_name": "bank_blooms",
+              "enforce_spacing": false,
+              "max_number": 8,
+              "min_number": 3,
+              "position": "Random",
+              "priority": 1,
+              "spawn_id": "spn-83518f5a34a8"
+            }
+          ]
+        },
         "garden": {
           "edge_smoothness": 2,
           "geometry": "Square",
@@ -14570,6 +14802,305 @@
           "min_width": 1095,
           "name": "garden",
           "spawn_groups": []
+        },
+        "glowshroom_grotto": {
+          "areas": [],
+          "curvyness": 3,
+          "edge_smoothness": 18,
+          "geometry": "Circle",
+          "inherits_map_assets": true,
+          "is_boss": false,
+          "is_spawn": false,
+          "max_height": 2600,
+          "max_width": 2600,
+          "min_height": 1900,
+          "min_width": 1900,
+          "name": "glowshroom_grotto",
+          "radius": 1150,
+          "spawn_groups": [
+            {
+              "candidates": [
+                {
+                  "chance": 10,
+                  "name": "null"
+                },
+                {
+                  "chance": 45,
+                  "name": "Mushroom_1"
+                },
+                {
+                  "chance": 25,
+                  "name": "Mushroom_2"
+                },
+                {
+                  "chance": 20,
+                  "name": "Mushroom_3"
+                }
+              ],
+              "display_name": "glowshrooms",
+              "enforce_spacing": false,
+              "max_number": 12,
+              "min_number": 6,
+              "position": "Random",
+              "priority": 0,
+              "spawn_id": "spn-2c3081644019"
+            },
+            {
+              "candidates": [
+                {
+                  "chance": 40,
+                  "name": "null"
+                },
+                {
+                  "chance": 60,
+                  "name": "candle_3"
+                }
+              ],
+              "display_name": "glow_lights",
+              "enforce_spacing": false,
+              "max_number": 4,
+              "min_number": 1,
+              "position": "Random",
+              "priority": 1,
+              "spawn_id": "spn-26a8a717ce9d"
+            }
+          ]
+        },
+        "gravekeepers_watch": {
+          "curvyness": 1,
+          "edge_smoothness": 5,
+          "geometry": "Square",
+          "inherits_map_assets": false,
+          "is_boss": false,
+          "is_spawn": false,
+          "max_height": 2300,
+          "max_width": 2300,
+          "min_height": 1700,
+          "min_width": 1700,
+          "name": "gravekeepers_watch",
+          "spawn_groups": [
+            {
+              "candidates": [
+                {
+                  "chance": 15,
+                  "name": "null"
+                },
+                {
+                  "chance": 45,
+                  "name": "Grave_1"
+                },
+                {
+                  "chance": 40,
+                  "name": "Grave_2"
+                }
+              ],
+              "display_name": "gravestones",
+              "enforce_spacing": false,
+              "max_number": 7,
+              "min_number": 3,
+              "position": "Random",
+              "priority": 0,
+              "spawn_id": "spn-55fdeac5924d"
+            },
+            {
+              "candidates": [
+                {
+                  "chance": 30,
+                  "name": "null"
+                },
+                {
+                  "chance": 70,
+                  "name": "Skull_1"
+                }
+              ],
+              "display_name": "sentinel_skulls",
+              "enforce_spacing": false,
+              "max_number": 3,
+              "min_number": 1,
+              "position": "Random",
+              "priority": 1,
+              "spawn_id": "spn-00849556639e"
+            }
+          ]
+        },
+        "hermit_woodshop": {
+          "curvyness": 1,
+          "edge_smoothness": 4,
+          "geometry": "Square",
+          "inherits_map_assets": false,
+          "is_boss": false,
+          "is_spawn": false,
+          "max_height": 2000,
+          "max_width": 2400,
+          "min_height": 1500,
+          "min_width": 1800,
+          "name": "hermit_woodshop",
+          "spawn_groups": [
+            {
+              "candidates": [
+                {
+                  "chance": 25,
+                  "name": "null"
+                },
+                {
+                  "chance": 45,
+                  "name": "Bench"
+                },
+                {
+                  "chance": 30,
+                  "name": "table"
+                }
+              ],
+              "display_name": "workbenches",
+              "enforce_spacing": false,
+              "max_number": 4,
+              "min_number": 1,
+              "position": "Random",
+              "priority": 0,
+              "spawn_id": "spn-8826ec700697"
+            },
+            {
+              "candidates": [
+                {
+                  "chance": 20,
+                  "name": "null"
+                },
+                {
+                  "chance": 45,
+                  "name": "Axe"
+                },
+                {
+                  "chance": 35,
+                  "name": "Stump"
+                }
+              ],
+              "display_name": "woodstock",
+              "enforce_spacing": false,
+              "max_number": 6,
+              "min_number": 2,
+              "position": "Random",
+              "priority": 1,
+              "spawn_id": "spn-6d39b80c247c"
+            }
+          ]
+        },
+        "lantern_lagoon": {
+          "areas": [],
+          "curvyness": 4,
+          "edge_smoothness": 30,
+          "geometry": "Circle",
+          "inherits_map_assets": true,
+          "is_boss": false,
+          "is_spawn": false,
+          "max_height": 3000,
+          "max_width": 3000,
+          "min_height": 2100,
+          "min_width": 2100,
+          "name": "lantern_lagoon",
+          "radius": 1300,
+          "spawn_groups": [
+            {
+              "candidates": [
+                {
+                  "chance": 20,
+                  "name": "null"
+                },
+                {
+                  "chance": 50,
+                  "name": "Lantern"
+                },
+                {
+                  "chance": 30,
+                  "name": "candle"
+                }
+              ],
+              "display_name": "lagoon_lights",
+              "enforce_spacing": false,
+              "max_number": 6,
+              "min_number": 2,
+              "position": "Random",
+              "priority": 0,
+              "spawn_id": "spn-e6f01cb9aa14"
+            },
+            {
+              "candidates": [
+                {
+                  "chance": 15,
+                  "name": "null"
+                },
+                {
+                  "chance": 85,
+                  "name": "Fountain"
+                }
+              ],
+              "display_name": "moonpool",
+              "enforce_spacing": false,
+              "max_number": 1,
+              "min_number": 1,
+              "origional_height": 2826,
+              "origional_width": 2802,
+              "position": "Exact",
+              "priority": 1,
+              "spawn_id": "spn-e97a744c627e"
+            }
+          ]
+        },
+        "noose_hollow": {
+          "curvyness": 2,
+          "edge_smoothness": 7,
+          "geometry": "Square",
+          "inherits_map_assets": false,
+          "is_boss": false,
+          "is_spawn": false,
+          "max_height": 2400,
+          "max_width": 2400,
+          "min_height": 1800,
+          "min_width": 1800,
+          "name": "noose_hollow",
+          "spawn_groups": [
+            {
+              "candidates": [
+                {
+                  "chance": 25,
+                  "name": "null"
+                },
+                {
+                  "chance": 45,
+                  "name": "Tree_Dark"
+                },
+                {
+                  "chance": 30,
+                  "name": "Tree_Darker"
+                }
+              ],
+              "display_name": "dark_trees",
+              "enforce_spacing": false,
+              "max_number": 6,
+              "min_number": 3,
+              "position": "Random",
+              "priority": 0,
+              "spawn_id": "spn-f0db15d094f4"
+            },
+            {
+              "candidates": [
+                {
+                  "chance": 40,
+                  "name": "null"
+                },
+                {
+                  "chance": 60,
+                  "name": "noose"
+                }
+              ],
+              "display_name": "hanging_noose",
+              "enforce_spacing": false,
+              "max_number": 2,
+              "min_number": 0,
+              "position": "Random",
+              "priority": 1,
+              "spawn_id": "spn-0f17e52a9b66"
+            }
+          ]
         },
         "room": {
           "curvyness": 2,
@@ -14705,6 +15236,63 @@
             }
           ]
         },
+        "runestone_ridge": {
+          "curvyness": 2,
+          "edge_smoothness": 6,
+          "geometry": "Square",
+          "inherits_map_assets": false,
+          "is_boss": false,
+          "is_spawn": false,
+          "max_height": 2500,
+          "max_width": 2500,
+          "min_height": 1800,
+          "min_width": 1800,
+          "name": "runestone_ridge",
+          "spawn_groups": [
+            {
+              "candidates": [
+                {
+                  "chance": 20,
+                  "name": "null"
+                },
+                {
+                  "chance": 50,
+                  "name": "Big_Rock_Center"
+                },
+                {
+                  "chance": 30,
+                  "name": "Rock"
+                }
+              ],
+              "display_name": "ridge_stones",
+              "enforce_spacing": false,
+              "max_number": 6,
+              "min_number": 2,
+              "position": "Random",
+              "priority": 0,
+              "spawn_id": "spn-8340c6ef0d9e"
+            },
+            {
+              "candidates": [
+                {
+                  "chance": 35,
+                  "name": "null"
+                },
+                {
+                  "chance": 65,
+                  "name": "Sigil_Of_Fortune"
+                }
+              ],
+              "display_name": "sigil_marks",
+              "enforce_spacing": false,
+              "max_number": 3,
+              "min_number": 1,
+              "position": "Random",
+              "priority": 1,
+              "spawn_id": "spn-a022468bfaac"
+            }
+          ]
+        },
         "spawn": {
           "areas": [
             {
@@ -14832,83 +15420,20 @@
             ]
           }
         },
-        "glowshroom_grotto": {
+        "spirit_vigil_shrine": {
           "areas": [],
-          "curvyness": 3,
-          "edge_smoothness": 18,
+          "curvyness": 2,
+          "edge_smoothness": 40,
           "geometry": "Circle",
-          "inherits_map_assets": true,
+          "inherits_map_assets": false,
           "is_boss": false,
           "is_spawn": false,
-          "max_height": 2600,
-          "max_width": 2600,
-          "min_height": 1900,
-          "min_width": 1900,
-          "name": "glowshroom_grotto",
-          "radius": 1150,
-          "spawn_groups": [
-            {
-              "candidates": [
-                {
-                  "chance": 10,
-                  "name": "null"
-                },
-                {
-                  "chance": 45,
-                  "name": "Mushroom_1"
-                },
-                {
-                  "chance": 25,
-                  "name": "Mushroom_2"
-                },
-                {
-                  "chance": 20,
-                  "name": "Mushroom_3"
-                }
-              ],
-              "display_name": "glowshrooms",
-              "enforce_spacing": false,
-              "max_number": 12,
-              "min_number": 6,
-              "position": "Random",
-              "priority": 0,
-              "spawn_id": "spn-2c3081644019"
-            },
-            {
-              "candidates": [
-                {
-                  "chance": 40,
-                  "name": "null"
-                },
-                {
-                  "chance": 60,
-                  "name": "candle_3"
-                }
-              ],
-              "display_name": "glow_lights",
-              "enforce_spacing": false,
-              "max_number": 4,
-              "min_number": 1,
-              "position": "Random",
-              "priority": 1,
-              "spawn_id": "spn-26a8a717ce9d"
-            }
-          ]
-        },
-        "lantern_lagoon": {
-          "areas": [],
-          "curvyness": 4,
-          "edge_smoothness": 30,
-          "geometry": "Circle",
-          "inherits_map_assets": true,
-          "is_boss": false,
-          "is_spawn": false,
-          "max_height": 3000,
-          "max_width": 3000,
-          "min_height": 2100,
-          "min_width": 2100,
-          "name": "lantern_lagoon",
-          "radius": 1300,
+          "max_height": 2400,
+          "max_width": 2400,
+          "min_height": 1800,
+          "min_width": 1800,
+          "name": "spirit_vigil_shrine",
+          "radius": 980,
           "spawn_groups": [
             {
               "candidates": [
@@ -14918,39 +15443,96 @@
                 },
                 {
                   "chance": 50,
-                  "name": "Lantern"
+                  "name": "vigil"
                 },
                 {
                   "chance": 30,
                   "name": "candle"
                 }
               ],
-              "display_name": "lagoon_lights",
+              "display_name": "shrine_offerings",
               "enforce_spacing": false,
-              "max_number": 6,
+              "max_number": 5,
               "min_number": 2,
               "position": "Random",
               "priority": 0,
-              "spawn_id": "spn-e6f01cb9aa14"
+              "spawn_id": "spn-c390233aedfe"
             },
             {
               "candidates": [
                 {
-                  "chance": 15,
+                  "chance": 35,
                   "name": "null"
                 },
                 {
-                  "chance": 85,
-                  "name": "Fountain"
+                  "chance": 65,
+                  "name": "candle_3"
                 }
               ],
-              "display_name": "moonpool",
+              "display_name": "guardian_lights",
               "enforce_spacing": false,
-              "max_number": 1,
-              "min_number": 1,
-              "position": "Exact",
+              "max_number": 6,
+              "min_number": 2,
+              "position": "Random",
               "priority": 1,
-              "spawn_id": "spn-e97a744c627e"
+              "spawn_id": "spn-4401cead7648"
+            }
+          ]
+        },
+        "starlit_bog": {
+          "curvyness": 4,
+          "edge_smoothness": 10,
+          "geometry": "Square",
+          "inherits_map_assets": true,
+          "is_boss": false,
+          "is_spawn": false,
+          "max_height": 2100,
+          "max_width": 2100,
+          "min_height": 1600,
+          "min_width": 1600,
+          "name": "starlit_bog",
+          "spawn_groups": [
+            {
+              "candidates": [
+                {
+                  "chance": 25,
+                  "name": "null"
+                },
+                {
+                  "chance": 45,
+                  "name": "Lantern"
+                },
+                {
+                  "chance": 30,
+                  "name": "Grass_1_FPS_2"
+                }
+              ],
+              "display_name": "bog_lights",
+              "enforce_spacing": false,
+              "max_number": 5,
+              "min_number": 2,
+              "position": "Random",
+              "priority": 0,
+              "spawn_id": "spn-5823c6a0bb64"
+            },
+            {
+              "candidates": [
+                {
+                  "chance": 30,
+                  "name": "null"
+                },
+                {
+                  "chance": 70,
+                  "name": "Mushroom_3"
+                }
+              ],
+              "display_name": "bog_caps",
+              "enforce_spacing": false,
+              "max_number": 7,
+              "min_number": 3,
+              "position": "Random",
+              "priority": 1,
+              "spawn_id": "spn-23bc081338fd"
             }
           ]
         },
@@ -15007,188 +15589,11 @@
               "enforce_spacing": false,
               "max_number": 1,
               "min_number": 1,
+              "origional_height": 2189,
+              "origional_width": 2165,
               "position": "Exact",
               "priority": 1,
               "spawn_id": "spn-dd17e04acff9"
-            }
-          ]
-        },
-        "bonefire_camp": {
-          "curvyness": 2,
-          "edge_smoothness": 6,
-          "geometry": "Square",
-          "inherits_map_assets": false,
-          "is_boss": false,
-          "is_spawn": false,
-          "max_height": 2200,
-          "max_width": 2200,
-          "min_height": 1600,
-          "min_width": 1600,
-          "name": "bonefire_camp",
-          "spawn_groups": [
-            {
-              "candidates": [
-                {
-                  "chance": 20,
-                  "name": "null"
-                },
-                {
-                  "chance": 50,
-                  "name": "Bone"
-                },
-                {
-                  "chance": 30,
-                  "name": "Bone_Pile"
-                }
-              ],
-              "display_name": "scatter_bones",
-              "enforce_spacing": false,
-              "max_number": 10,
-              "min_number": 4,
-              "position": "Random",
-              "priority": 0,
-              "spawn_id": "spn-8be3bf9ae337"
-            },
-            {
-              "candidates": [
-                {
-                  "chance": 50,
-                  "name": "null"
-                },
-                {
-                  "chance": 30,
-                  "name": "Booze_1"
-                },
-                {
-                  "chance": 20,
-                  "name": "Booze_2"
-                }
-              ],
-              "display_name": "camp_cache",
-              "enforce_spacing": false,
-              "max_number": 3,
-              "min_number": 0,
-              "position": "Random",
-              "priority": 1,
-              "spawn_id": "spn-6993aee184b8"
-            }
-          ]
-        },
-        "frog_song_basin": {
-          "curvyness": 3,
-          "edge_smoothness": 8,
-          "geometry": "Square",
-          "inherits_map_assets": true,
-          "is_boss": false,
-          "is_spawn": false,
-          "max_height": 2100,
-          "max_width": 2100,
-          "min_height": 1500,
-          "min_width": 1500,
-          "name": "frog_song_basin",
-          "spawn_groups": [
-            {
-              "candidates": [
-                {
-                  "chance": 35,
-                  "name": "null"
-                },
-                {
-                  "chance": 65,
-                  "name": "Frog"
-                }
-              ],
-              "display_name": "frog_chorus",
-              "enforce_spacing": false,
-              "max_number": 3,
-              "min_number": 1,
-              "position": "Random",
-              "priority": 0,
-              "spawn_id": "spn-e7c0bd22f8bf"
-            },
-            {
-              "candidates": [
-                {
-                  "chance": 20,
-                  "name": "null"
-                },
-                {
-                  "chance": 40,
-                  "name": "flower_3"
-                },
-                {
-                  "chance": 40,
-                  "name": "Grass_FPS_2"
-                }
-              ],
-              "display_name": "bank_blooms",
-              "enforce_spacing": false,
-              "max_number": 8,
-              "min_number": 3,
-              "position": "Random",
-              "priority": 1,
-              "spawn_id": "spn-83518f5a34a8"
-            }
-          ]
-        },
-        "hermit_woodshop": {
-          "curvyness": 1,
-          "edge_smoothness": 4,
-          "geometry": "Square",
-          "inherits_map_assets": false,
-          "is_boss": false,
-          "is_spawn": false,
-          "max_height": 2000,
-          "max_width": 2400,
-          "min_height": 1500,
-          "min_width": 1800,
-          "name": "hermit_woodshop",
-          "spawn_groups": [
-            {
-              "candidates": [
-                {
-                  "chance": 25,
-                  "name": "null"
-                },
-                {
-                  "chance": 45,
-                  "name": "Bench"
-                },
-                {
-                  "chance": 30,
-                  "name": "table"
-                }
-              ],
-              "display_name": "workbenches",
-              "enforce_spacing": false,
-              "max_number": 4,
-              "min_number": 1,
-              "position": "Random",
-              "priority": 0,
-              "spawn_id": "spn-8826ec700697"
-            },
-            {
-              "candidates": [
-                {
-                  "chance": 20,
-                  "name": "null"
-                },
-                {
-                  "chance": 45,
-                  "name": "Axe"
-                },
-                {
-                  "chance": 35,
-                  "name": "Stump"
-                }
-              ],
-              "display_name": "woodstock",
-              "enforce_spacing": false,
-              "max_number": 6,
-              "min_number": 2,
-              "position": "Random",
-              "priority": 1,
-              "spawn_id": "spn-6d39b80c247c"
             }
           ]
         },
@@ -15290,407 +15695,6 @@
               "position": "Random",
               "priority": 0,
               "spawn_id": "spn-eb23c66e074f"
-            }
-          ]
-        },
-        "spirit_vigil_shrine": {
-          "areas": [],
-          "curvyness": 2,
-          "edge_smoothness": 40,
-          "geometry": "Circle",
-          "inherits_map_assets": false,
-          "is_boss": false,
-          "is_spawn": false,
-          "max_height": 2400,
-          "max_width": 2400,
-          "min_height": 1800,
-          "min_width": 1800,
-          "name": "spirit_vigil_shrine",
-          "radius": 980,
-          "spawn_groups": [
-            {
-              "candidates": [
-                {
-                  "chance": 20,
-                  "name": "null"
-                },
-                {
-                  "chance": 50,
-                  "name": "vigil"
-                },
-                {
-                  "chance": 30,
-                  "name": "candle"
-                }
-              ],
-              "display_name": "shrine_offerings",
-              "enforce_spacing": false,
-              "max_number": 5,
-              "min_number": 2,
-              "position": "Random",
-              "priority": 0,
-              "spawn_id": "spn-c390233aedfe"
-            },
-            {
-              "candidates": [
-                {
-                  "chance": 35,
-                  "name": "null"
-                },
-                {
-                  "chance": 65,
-                  "name": "candle_3"
-                }
-              ],
-              "display_name": "guardian_lights",
-              "enforce_spacing": false,
-              "max_number": 6,
-              "min_number": 2,
-              "position": "Random",
-              "priority": 1,
-              "spawn_id": "spn-4401cead7648"
-            }
-          ]
-        },
-        "gravekeepers_watch": {
-          "curvyness": 1,
-          "edge_smoothness": 5,
-          "geometry": "Square",
-          "inherits_map_assets": false,
-          "is_boss": false,
-          "is_spawn": false,
-          "max_height": 2300,
-          "max_width": 2300,
-          "min_height": 1700,
-          "min_width": 1700,
-          "name": "gravekeepers_watch",
-          "spawn_groups": [
-            {
-              "candidates": [
-                {
-                  "chance": 15,
-                  "name": "null"
-                },
-                {
-                  "chance": 45,
-                  "name": "Grave_1"
-                },
-                {
-                  "chance": 40,
-                  "name": "Grave_2"
-                }
-              ],
-              "display_name": "gravestones",
-              "enforce_spacing": false,
-              "max_number": 7,
-              "min_number": 3,
-              "position": "Random",
-              "priority": 0,
-              "spawn_id": "spn-55fdeac5924d"
-            },
-            {
-              "candidates": [
-                {
-                  "chance": 30,
-                  "name": "null"
-                },
-                {
-                  "chance": 70,
-                  "name": "Skull_1"
-                }
-              ],
-              "display_name": "sentinel_skulls",
-              "enforce_spacing": false,
-              "max_number": 3,
-              "min_number": 1,
-              "position": "Random",
-              "priority": 1,
-              "spawn_id": "spn-00849556639e"
-            }
-          ]
-        },
-        "noose_hollow": {
-          "curvyness": 2,
-          "edge_smoothness": 7,
-          "geometry": "Square",
-          "inherits_map_assets": false,
-          "is_boss": false,
-          "is_spawn": false,
-          "max_height": 2400,
-          "max_width": 2400,
-          "min_height": 1800,
-          "min_width": 1800,
-          "name": "noose_hollow",
-          "spawn_groups": [
-            {
-              "candidates": [
-                {
-                  "chance": 25,
-                  "name": "null"
-                },
-                {
-                  "chance": 45,
-                  "name": "Tree_Dark"
-                },
-                {
-                  "chance": 30,
-                  "name": "Tree_Darker"
-                }
-              ],
-              "display_name": "dark_trees",
-              "enforce_spacing": false,
-              "max_number": 6,
-              "min_number": 3,
-              "position": "Random",
-              "priority": 0,
-              "spawn_id": "spn-f0db15d094f4"
-            },
-            {
-              "candidates": [
-                {
-                  "chance": 40,
-                  "name": "null"
-                },
-                {
-                  "chance": 60,
-                  "name": "noose"
-                }
-              ],
-              "display_name": "hanging_noose",
-              "enforce_spacing": false,
-              "max_number": 2,
-              "min_number": 0,
-              "position": "Random",
-              "priority": 1,
-              "spawn_id": "spn-0f17e52a9b66"
-            }
-          ]
-        },
-        "starlit_bog": {
-          "curvyness": 4,
-          "edge_smoothness": 10,
-          "geometry": "Square",
-          "inherits_map_assets": true,
-          "is_boss": false,
-          "is_spawn": false,
-          "max_height": 2100,
-          "max_width": 2100,
-          "min_height": 1600,
-          "min_width": 1600,
-          "name": "starlit_bog",
-          "spawn_groups": [
-            {
-              "candidates": [
-                {
-                  "chance": 25,
-                  "name": "null"
-                },
-                {
-                  "chance": 45,
-                  "name": "Lantern"
-                },
-                {
-                  "chance": 30,
-                  "name": "Grass_1_FPS_2"
-                }
-              ],
-              "display_name": "bog_lights",
-              "enforce_spacing": false,
-              "max_number": 5,
-              "min_number": 2,
-              "position": "Random",
-              "priority": 0,
-              "spawn_id": "spn-5823c6a0bb64"
-            },
-            {
-              "candidates": [
-                {
-                  "chance": 30,
-                  "name": "null"
-                },
-                {
-                  "chance": 70,
-                  "name": "Mushroom_3"
-                }
-              ],
-              "display_name": "bog_caps",
-              "enforce_spacing": false,
-              "max_number": 7,
-              "min_number": 3,
-              "position": "Random",
-              "priority": 1,
-              "spawn_id": "spn-23bc081338fd"
-            }
-          ]
-        },
-        "runestone_ridge": {
-          "curvyness": 2,
-          "edge_smoothness": 6,
-          "geometry": "Square",
-          "inherits_map_assets": false,
-          "is_boss": false,
-          "is_spawn": false,
-          "max_height": 2500,
-          "max_width": 2500,
-          "min_height": 1800,
-          "min_width": 1800,
-          "name": "runestone_ridge",
-          "spawn_groups": [
-            {
-              "candidates": [
-                {
-                  "chance": 20,
-                  "name": "null"
-                },
-                {
-                  "chance": 50,
-                  "name": "Big_Rock_Center"
-                },
-                {
-                  "chance": 30,
-                  "name": "Rock"
-                }
-              ],
-              "display_name": "ridge_stones",
-              "enforce_spacing": false,
-              "max_number": 6,
-              "min_number": 2,
-              "position": "Random",
-              "priority": 0,
-              "spawn_id": "spn-8340c6ef0d9e"
-            },
-            {
-              "candidates": [
-                {
-                  "chance": 35,
-                  "name": "null"
-                },
-                {
-                  "chance": 65,
-                  "name": "Sigil_Of_Fortune"
-                }
-              ],
-              "display_name": "sigil_marks",
-              "enforce_spacing": false,
-              "max_number": 3,
-              "min_number": 1,
-              "position": "Random",
-              "priority": 1,
-              "spawn_id": "spn-a022468bfaac"
-            }
-          ]
-        },
-        "booze_smugglers_den": {
-          "curvyness": 2,
-          "edge_smoothness": 5,
-          "geometry": "Square",
-          "inherits_map_assets": false,
-          "is_boss": false,
-          "is_spawn": false,
-          "max_height": 2100,
-          "max_width": 2100,
-          "min_height": 1500,
-          "min_width": 1500,
-          "name": "booze_smugglers_den",
-          "spawn_groups": [
-            {
-              "candidates": [
-                {
-                  "chance": 15,
-                  "name": "null"
-                },
-                {
-                  "chance": 50,
-                  "name": "Booze_2"
-                },
-                {
-                  "chance": 35,
-                  "name": "Booze_1"
-                }
-              ],
-              "display_name": "hidden_casks",
-              "enforce_spacing": false,
-              "max_number": 6,
-              "min_number": 2,
-              "position": "Random",
-              "priority": 0,
-              "spawn_id": "spn-33fec878afe7"
-            },
-            {
-              "candidates": [
-                {
-                  "chance": 25,
-                  "name": "null"
-                },
-                {
-                  "chance": 75,
-                  "name": "Barrel"
-                }
-              ],
-              "display_name": "barrel_wall",
-              "enforce_spacing": false,
-              "max_number": 5,
-              "min_number": 1,
-              "position": "Random",
-              "priority": 1,
-              "spawn_id": "spn-7dcb94a78e97"
-            }
-          ]
-        },
-        "daveys_hideout": {
-          "curvyness": 3,
-          "edge_smoothness": 9,
-          "geometry": "Square",
-          "inherits_map_assets": false,
-          "is_boss": false,
-          "is_spawn": false,
-          "max_height": 2200,
-          "max_width": 2200,
-          "min_height": 1600,
-          "min_width": 1600,
-          "name": "daveys_hideout",
-          "spawn_groups": [
-            {
-              "candidates": [
-                {
-                  "chance": 30,
-                  "name": "null"
-                },
-                {
-                  "chance": 40,
-                  "name": "Davey"
-                },
-                {
-                  "chance": 30,
-                  "name": "Bench"
-                }
-              ],
-              "display_name": "camp_mates",
-              "enforce_spacing": false,
-              "max_number": 3,
-              "min_number": 1,
-              "position": "Random",
-              "priority": 0,
-              "spawn_id": "spn-f7b1c80af3ed"
-            },
-            {
-              "candidates": [
-                {
-                  "chance": 35,
-                  "name": "null"
-                },
-                {
-                  "chance": 65,
-                  "name": "Book"
-                }
-              ],
-              "display_name": "scattered_notes",
-              "enforce_spacing": false,
-              "max_number": 4,
-              "min_number": 1,
-              "position": "Random",
-              "priority": 1,
-              "spawn_id": "spn-58f77f3aae80"
             }
           ]
         }

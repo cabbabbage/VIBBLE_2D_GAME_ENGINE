@@ -57,6 +57,8 @@ private:
     bool           debugging = false;
     bool           low_quality_rendering_ = false;
     bool           light_map_only_mode_ = false;
+    // Temporary switch to disable dynamic light-ray stamping
+    bool           enable_dynamic_light_rays_ = false;
 
     std::unordered_set<Asset*> last_active_assets_;
 };

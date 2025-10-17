@@ -392,6 +392,17 @@ void LightMapQuadrant::render_tile_mask(SDL_Renderer* renderer) const {
     SDL_RenderCopy(renderer, tile_mask_, nullptr, &world_rect_);
 }
 
+void LightMapQuadrant::render_tile_mask(SDL_Renderer* renderer, Uint8 alpha_mod) const {
+    if (!renderer || !tile_mask_) {
+        return;
+    }
+    Uint8 saved_alpha = 255;
+    SDL_GetTextureAlphaMod(tile_mask_, &saved_alpha);
+    SDL_SetTextureAlphaMod(tile_mask_, alpha_mod);
+    SDL_RenderCopy(renderer, tile_mask_, nullptr, &world_rect_);
+    SDL_SetTextureAlphaMod(tile_mask_, saved_alpha);
+}
+
 LightMap::LightMap(Assets* assets, int screen_width, int screen_height)
     : assets_(assets),
       screen_width_(screen_width),
@@ -690,6 +701,39 @@ void LightMap::render_visible_quadrants(SDL_Renderer* renderer, const SDL_Rect& 
         }
         if (SDL_HasIntersection(&rect, &expanded)) {
             quadrant.render_tile_mask(renderer);
+        }
+    }
+}
+
+void LightMap::render_visible_quadrants(SDL_Renderer* renderer, const SDL_Rect& view_rect, float alpha_multiplier) const {
+    if (!renderer || quadrants_.empty()) {
+        return;
+    }
+    if (view_rect.w <= 0 || view_rect.h <= 0) {
+        return;
+    }
+
+    SDL_Rect expanded = view_rect;
+    auto [pad_x, pad_y] = padding_pixels();
+    if (pad_x > 0) {
+        expanded.x -= pad_x;
+        expanded.w += pad_x * 2;
+    }
+    if (pad_y > 0) {
+        expanded.y -= pad_y;
+        expanded.h += pad_y * 2;
+    }
+
+    const float clamped = std::clamp(alpha_multiplier, 0.0f, 1.0f);
+    const Uint8 alpha    = static_cast<Uint8>(std::lround(clamped * 255.0f));
+
+    for (const auto& quadrant : quadrants_) {
+        const SDL_Rect& rect = quadrant.world_rect();
+        if (rect.w <= 0 || rect.h <= 0) {
+            continue;
+        }
+        if (SDL_HasIntersection(&rect, &expanded)) {
+            quadrant.render_tile_mask(renderer, alpha);
         }
     }
 }

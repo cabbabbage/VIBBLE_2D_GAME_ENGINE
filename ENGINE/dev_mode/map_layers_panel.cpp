@@ -248,6 +248,17 @@ void MapLayersPanel::ensure_details_container() {
         int cursor = ctx.content_top - ctx.scroll_value + padding;
 
         if (details_mode_ == DetailsMode::RoomList) {
+            // Build once per layout pass to reflect latest model state
+            if (details_widgets_.empty()) {
+                build_room_list_widgets();
+            }
+            for (const auto& w : details_widgets_) {
+                if (!w) continue;
+                SDL_Rect rect{content_left, cursor, content_width, w->height_for_width(content_width)};
+                w->set_rect(rect);
+                cursor += w->height_for_width(content_width) + gap;
+            }
+            // Then the room buttons list
             for (auto& entry : room_buttons_) {
                 if (!entry.button) continue;
                 SDL_Rect rect{content_left, cursor, content_width, DMButton::height()};
@@ -256,19 +267,33 @@ void MapLayersPanel::ensure_details_container() {
             }
             cursor += padding;
         } else {
-            detail_line_rects_.clear();
-            if (!detail_lines_.empty()) {
-                const int line_height = DMStyles::Label().font_size + small_gap;
-                for (const auto& line : detail_lines_) {
-                    (void)line;
-                    SDL_Rect line_rect{content_left, cursor, content_width, line_height};
-                    detail_line_rects_.push_back(line_rect);
-                    cursor += line_height;
+            // Layer/Room details interactive UI
+            if (details_mode_ == DetailsMode::LayerDetails) {
+                if (details_widgets_.empty()) {
+                    build_layer_details_widgets();
                 }
+                for (const auto& w : details_widgets_) {
+                    if (!w) continue;
+                    SDL_Rect rect{content_left, cursor, content_width, w->height_for_width(content_width)};
+                    w->set_rect(rect);
+                    cursor += w->height_for_width(content_width) + gap;
+                }
+                cursor += padding;
             } else {
-                cursor += DMStyles::Label().font_size + padding;
+                detail_line_rects_.clear();
+                if (!detail_lines_.empty()) {
+                    const int line_height = DMStyles::Label().font_size + small_gap;
+                    for (const auto& line : detail_lines_) {
+                        (void)line;
+                        SDL_Rect line_rect{content_left, cursor, content_width, line_height};
+                        detail_line_rects_.push_back(line_rect);
+                        cursor += line_height;
+                    }
+                } else {
+                    cursor += DMStyles::Label().font_size + padding;
+                }
+                cursor += padding;
             }
-            cursor += padding;
         }
 
         return cursor + ctx.gap;
@@ -277,15 +302,25 @@ void MapLayersPanel::ensure_details_container() {
     details_container_->set_render_function([this](SDL_Renderer* renderer) {
         if (!renderer) return;
         if (details_mode_ == DetailsMode::RoomList) {
+            // Render any control widgets
+            for (const auto& w : details_widgets_) {
+                if (w) w->render(renderer);
+            }
             for (auto& entry : room_buttons_) {
                 if (entry.button) entry.button->render(renderer);
             }
         } else {
-            const DMLabelStyle& style = DMStyles::Label();
-            for (size_t i = 0; i < detail_lines_.size(); ++i) {
-                if (i >= detail_line_rects_.size()) break;
-                const SDL_Rect& rect = detail_line_rects_[i];
-                draw_text(renderer, detail_lines_[i], rect.x, rect.y, style);
+            if (details_mode_ == DetailsMode::LayerDetails) {
+                for (const auto& w : details_widgets_) {
+                    if (w) w->render(renderer);
+                }
+            } else {
+                const DMLabelStyle& style = DMStyles::Label();
+                for (size_t i = 0; i < detail_lines_.size(); ++i) {
+                    if (i >= detail_line_rects_.size()) break;
+                    const SDL_Rect& rect = detail_line_rects_[i];
+                    draw_text(renderer, detail_lines_[i], rect.x, rect.y, style);
+                }
             }
         }
     });
@@ -313,6 +348,12 @@ void MapLayersPanel::set_on_save(SaveCallback cb) {
 
 void MapLayersPanel::set_controller(std::shared_ptr<MapLayersController> controller) {
     controller_ = std::move(controller);
+    if (controller_) {
+        controller_->add_listener([this]() {
+            this->rebuild_visuals();
+            this->update_details_container();
+        });
+    }
 }
 
 void MapLayersPanel::set_header_visibility_callback(std::function<void(bool)> cb) {
@@ -598,6 +639,9 @@ double MapLayersPanel::compute_preview_scale() const {
 
 void MapLayersPanel::update_details_container() {
     ensure_details_container();
+
+    // Always reset per-mode widgets so layout can rebuild fresh
+    clear_detail_ui();
 
     switch (details_mode_) {
         case DetailsMode::RoomList:
@@ -915,6 +959,27 @@ bool MapLayersPanel::handle_details_event(const SDL_Event& e) {
         return false;
     }
 
+    bool used_any = false;
+    // Always route to details widgets first (buttons, sliders, dropdowns)
+    for (auto& w : details_widgets_) {
+        if (!w) continue;
+        bool used = w->handle_event(e);
+        used_any = used_any || used;
+        // If a slider was used and the event is a mouse release, commit changes
+        if (used && details_mode_ == DetailsMode::LayerDetails) {
+            if (e.type == SDL_MOUSEBUTTONUP || e.type == SDL_MOUSEWHEEL || e.type == SDL_KEYUP) {
+                // Apply slider counts to controller
+                if (controller_ && selected_layer_index_ >= 0) {
+                    for (const auto& row : candidate_rows_) {
+                        if (row.count_slider) {
+                            controller_->set_candidate_instance_count(selected_layer_index_, row.candidate_index, row.count_slider->displayed_value());
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     if (details_mode_ == DetailsMode::RoomList) {
         for (auto& entry : room_buttons_) {
             if (!entry.button) continue;
@@ -922,13 +987,11 @@ bool MapLayersPanel::handle_details_event(const SDL_Event& e) {
             if (used && e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
                 open_room_details(entry.key);
             }
-            if (used) {
-                return true;
-            }
+            used_any = used_any || used;
         }
     }
 
-    return false;
+    return used_any;
 }
 
 SDL_Color MapLayersPanel::layer_color(int index) const {
@@ -957,4 +1020,150 @@ SDL_Color MapLayersPanel::layer_color(int index) const {
         return static_cast<Uint8>(std::lround(value * 255.0));
     };
     return SDL_Color{to_byte(r), to_byte(g), to_byte(b), 255};
+}
+
+void MapLayersPanel::clear_detail_ui() {
+    details_widgets_.clear();
+    candidate_rows_.clear();
+}
+
+void MapLayersPanel::build_room_list_widgets() {
+    clear_detail_ui();
+    // Create basic action buttons: Add Layer, Create Room, Save, Reload
+    if (!add_layer_btn_) add_layer_btn_ = std::make_unique<DMButton>("Add Layer", &DMStyles::CreateButton(), 0, DMButton::height());
+    if (!create_room_btn_) create_room_btn_ = std::make_unique<DMButton>("Create Room", &DMStyles::CreateButton(), 0, DMButton::height());
+    if (!save_btn_) save_btn_ = std::make_unique<DMButton>("Save", &DMStyles::AccentButton(), 0, DMButton::height());
+    if (!reload_btn_) reload_btn_ = std::make_unique<DMButton>("Reload", &DMStyles::ListButton(), 0, DMButton::height());
+
+    details_widgets_.push_back(std::make_unique<ButtonWidget>(add_layer_btn_.get(), [this]() {
+        if (controller_) {
+            controller_->create_layer();
+        }
+    }));
+    details_widgets_.push_back(std::make_unique<ButtonWidget>(create_room_btn_.get(), [this]() {
+        this->create_new_room_entry();
+    }));
+    details_widgets_.push_back(std::make_unique<ButtonWidget>(save_btn_.get(), [this]() {
+        bool ok = false;
+        if (controller_) ok = controller_->save();
+        if (!ok && on_save_) ok = on_save_();
+        (void)ok;
+    }));
+    details_widgets_.push_back(std::make_unique<ButtonWidget>(reload_btn_.get(), [this]() {
+        if (controller_) controller_->reload();
+    }));
+}
+
+void MapLayersPanel::build_layer_details_widgets() {
+    clear_detail_ui();
+    if (!controller_ || selected_layer_index_ < 0) return;
+    const nlohmann::json* layer_json = controller_->layer(selected_layer_index_);
+    std::string layer_name = layer_json && layer_json->is_object() ? layer_json->value("name", std::string{}) : std::string{};
+
+    if (!layer_name_box_) layer_name_box_ = std::make_unique<DMTextBox>("Layer Name", layer_name);
+    else layer_name_box_->set_value(layer_name);
+    details_widgets_.push_back(std::make_unique<TextBoxWidget>(layer_name_box_.get(), true));
+
+    // Add room dropdown + add button
+    std::vector<std::string> options;
+    if (controller_) {
+        options = controller_->available_rooms();
+    }
+    if (!add_room_dropdown_) add_room_dropdown_ = std::make_unique<DMDropdown>("Add Room", options, 0);
+    else {
+        // Recreate dropdown to refresh options if sizes changed
+        add_room_dropdown_ = std::make_unique<DMDropdown>("Add Room", options, 0);
+    }
+    if (!add_room_btn_) add_room_btn_ = std::make_unique<DMButton>("Add", &DMStyles::CreateButton(), 0, DMButton::height());
+
+    details_widgets_.push_back(std::make_unique<DropdownWidget>(add_room_dropdown_.get()));
+    details_widgets_.push_back(std::make_unique<ButtonWidget>(add_room_btn_.get(), [this]() {
+        if (!controller_ || selected_layer_index_ < 0 || !add_room_dropdown_) return;
+        auto options = controller_->available_rooms();
+        int idx = add_room_dropdown_->pending_index();
+        if (idx < 0 || idx >= static_cast<int>(options.size())) return;
+        const std::string& room_key = options[idx];
+        if (controller_->add_candidate(selected_layer_index_, room_key)) {
+            rebuild_visuals();
+            update_details_container();
+        }
+    }));
+
+    // Candidates list with sliders and remove buttons
+    if (layer_json && layer_json->is_object()) {
+        const auto it = layer_json->find("rooms");
+        if (it != layer_json->end() && it->is_array()) {
+            int candidate_index = 0;
+            for (const auto& candidate : *it) {
+                if (!candidate.is_object()) { ++candidate_index; continue; }
+                CandidateRowWidgets row;
+                row.candidate_index = candidate_index;
+                row.room_key = candidate.value("name", std::string{});
+                int max_instances = 1;
+                if (candidate.contains("max_instances")) {
+                    if (candidate["max_instances"].is_number_integer()) max_instances = candidate["max_instances"].get<int>();
+                }
+                if (max_instances < 0) max_instances = 0;
+                if (max_instances > 64) max_instances = 64;
+                row.count_slider = std::make_unique<DMSlider>("Max Instances", 0, 64, max_instances);
+                row.count_slider->set_defer_commit_until_unfocus(true);
+                row.remove_btn = std::make_unique<DMButton>(std::string("Remove ") + row.room_key, &DMStyles::DeleteButton(), 0, DMButton::height());
+
+                // Wrap and add to widget list
+                details_widgets_.push_back(std::make_unique<SliderWidget>(row.count_slider.get()));
+                details_widgets_.push_back(std::make_unique<ButtonWidget>(row.remove_btn.get(), [this, idx=candidate_index]() {
+                    if (controller_ && selected_layer_index_ >= 0) {
+                        controller_->remove_candidate(selected_layer_index_, idx);
+                    }
+                }));
+                candidate_rows_.push_back(std::move(row));
+                ++candidate_index;
+            }
+        }
+    }
+
+    // Save/Reload buttons at end
+    if (!save_btn_) save_btn_ = std::make_unique<DMButton>("Save", &DMStyles::AccentButton(), 0, DMButton::height());
+    if (!reload_btn_) reload_btn_ = std::make_unique<DMButton>("Reload", &DMStyles::ListButton(), 0, DMButton::height());
+    details_widgets_.push_back(std::make_unique<ButtonWidget>(save_btn_.get(), [this]() {
+        apply_layer_rename_if_needed();
+        bool ok = false;
+        if (controller_) ok = controller_->save();
+        if (!ok && on_save_) ok = on_save_();
+        (void)ok;
+    }));
+    details_widgets_.push_back(std::make_unique<ButtonWidget>(reload_btn_.get(), [this]() {
+        if (controller_) controller_->reload();
+    }));
+}
+
+void MapLayersPanel::apply_layer_rename_if_needed() {
+    if (!controller_ || selected_layer_index_ < 0 || !layer_name_box_) return;
+    const nlohmann::json* layer_json = controller_->layer(selected_layer_index_);
+    if (!layer_json || !layer_json->is_object()) return;
+    const std::string old_name = layer_json->value("name", std::string{});
+    const std::string new_name = layer_name_box_->value();
+    if (new_name != old_name && !new_name.empty()) {
+        controller_->rename_layer(selected_layer_index_, new_name);
+    }
+}
+
+void MapLayersPanel::create_new_room_entry() {
+    if (!map_info_ || !map_info_->is_object()) return;
+    nlohmann::json& rooms = (*map_info_)["rooms_data"];
+    if (!rooms.is_object()) {
+        rooms = nlohmann::json::object();
+    }
+    // Generate a unique key: NewRoom, NewRoom1, ...
+    std::string base = "NewRoom";
+    std::string key = base;
+    int suffix = 1;
+    while (rooms.contains(key)) {
+        key = base + std::to_string(suffix++);
+    }
+    // Create a minimal entry
+    rooms[key] = nlohmann::json{{"name", key}};
+    // Refresh UI
+    rebuild_visuals();
+    update_details_container();
 }

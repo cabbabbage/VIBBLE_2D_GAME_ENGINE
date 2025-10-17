@@ -18,6 +18,9 @@ namespace animation_editor {
 class AnimationDocument;
 class CroppingService;
 class AsyncTaskQueue;
+class DMCheckbox;
+class DMButton;
+class DMDropdown;
 
 class SourceConfigPanel {
   public:
@@ -66,14 +69,16 @@ class SourceConfigPanel {
     std::filesystem::path resolve_asset_root() const;
     std::filesystem::path animation_output_directory() const;
     bool prepare_output_directory(std::filesystem::path* out_dir) const;
+    bool clean_output_frames() const;
     std::vector<std::filesystem::path> collect_png_files(const std::filesystem::path& folder) const;
     std::vector<std::filesystem::path> normalize_sequence(const std::vector<std::filesystem::path>& files) const;
     void copy_sequence_to_output(const std::vector<std::filesystem::path>& files, const std::filesystem::path& out_dir) const;
     void post_copy_process(const std::vector<std::filesystem::path>& out_files) const;
-    void layout_buttons();
+    void layout_controls();
+    void layout_modal();
     void update_status(const std::string& message) const;
-    int hit_test_buttons(int x, int y) const;
-    bool activate_button(int index);
+    void refresh_animation_options();
+    void apply_animation_selection();
 
     void import_from_folder();
     void import_from_animation();
@@ -103,14 +108,24 @@ class SourceConfigPanel {
     mutable std::filesystem::path cached_asset_root_;
     mutable bool cached_asset_root_valid_ = false;
 
-    struct Button {
-        SDL_Rect rect{0, 0, 0, 0};
-        std::string label;
-};
-    std::array<Button, 4> buttons_{};
-    int hover_button_ = -1;
+    // New UI controls
+    std::unique_ptr<DMCheckbox> from_animation_checkbox_;
+    std::unique_ptr<DMDropdown> animation_dropdown_;
+    std::unique_ptr<DMButton> source_button_;
+    std::array<std::unique_ptr<DMButton>, 3> modal_buttons_{}; // GIF, Folder, PNG sequence
+
+    // Layout rects
+    SDL_Rect checkbox_rect_{0,0,0,0};
+    SDL_Rect dropdown_rect_{0,0,0,0};
+    SDL_Rect source_button_rect_{0,0,0,0};
+    SDL_Rect modal_rect_{0,0,0,0};
+
+    // State
     bool busy_indicator_ = false;
+    bool use_animation_reference_ = false;
+    bool show_import_modal_ = false;
+    std::vector<std::string> animation_options_;
+    int animation_index_ = -1;
 };
 
 }
-

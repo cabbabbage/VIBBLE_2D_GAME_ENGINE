@@ -606,15 +606,14 @@ void MapModeUI::set_active_panel(PanelType panel) {
     }
 
     if (panel == PanelType::Layers) {
+        // Ensure the footer is expanded and the Layers footer is actually requested
+        // so the embedded panel becomes visible and interactive.
         if (footer_panel_) {
             if (!footer_panel_->expanded()) {
                 footer_panel_->set_expanded(true);
-            } else {
-                set_layers_footer_expanded(true);
             }
-        } else {
-            set_layers_footer_expanded(true);
         }
+        set_layers_footer_expanded(true);
         new_active = PanelType::Layers;
     } else {
         if (footer_panel_) {

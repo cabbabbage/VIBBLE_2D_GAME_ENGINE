@@ -114,7 +114,7 @@ rem Create Desktop Shortcut
 rem ----------------------------------------------------
 set "DESKTOP=%USERPROFILE%\Desktop"
 set "SHORTCUT=%DESKTOP%\VI.lnk"
-set "ICONFILE=%cd%\MISC_CONTENT\vibble.ico"
+set "ICONFILE=%cd%\SRC\MISC_CONTENT\vibble.ico"
 set "ROOT_DIR=%~dp0"
 
 powershell -NoProfile -ExecutionPolicy Bypass -Command ^

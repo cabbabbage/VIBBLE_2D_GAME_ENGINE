@@ -809,64 +809,14 @@ void MapLightPreviewPanel::rebuild_rows() {
 
     Rows rows;
 
+    // Preview-only: do not attach any sliders or buttons here.
     rows.push_back({ add_widget(std::make_unique<PreviewWidget>(this)) });
-
-    if (regenerate_button_) {
-        rows.push_back({ add_widget(std::make_unique<ButtonWidget>(regenerate_button_.get(), [this]() {
-                                      this->apply_virtual_light_map_quadrant_size(this->last_quadrant_size_px_, true);
-                                  })) });
-    }
-    if (quadrant_size_px_) {
-        rows.push_back({ add_widget(std::make_unique<SliderWidget>(quadrant_size_px_.get())) });
-    }
-    if (horizontal_falloff_) {
-        rows.push_back({ add_widget(std::make_unique<SliderWidget>(horizontal_falloff_.get())) });
-    }
-    if (vertical_falloff_) {
-        rows.push_back({ add_widget(std::make_unique<SliderWidget>(vertical_falloff_.get())) });
-    }
-    if (max_offset_x_) {
-        rows.push_back({ add_widget(std::make_unique<SliderWidget>(max_offset_x_.get())) });
-    }
-    if (max_offset_y_) {
-        rows.push_back({ add_widget(std::make_unique<SliderWidget>(max_offset_y_.get())) });
-    }
-    if (search_radius_) {
-        rows.push_back({ add_widget(std::make_unique<SliderWidget>(search_radius_.get())) });
-    }
-    if (map_light_factor_) {
-        rows.push_back({ add_widget(std::make_unique<SliderWidget>(map_light_factor_.get())) });
-    }
 
     set_rows(rows);
 }
 
 void MapLightPreviewPanel::build_ui() {
-    horizontal_falloff_ = make_float_slider("Horizontal Falloff", 0.0f, 10.0f,
-                                            last_applied_settings_.virtual_light_map.horizontal_falloff, 100);
-    vertical_falloff_   = make_float_slider("Vertical Falloff", 0.0f, 10.0f,
-                                          last_applied_settings_.virtual_light_map.vertical_falloff, 100);
-    max_offset_x_       = make_float_slider("Max Offset X", 0.0f, 500.0f,
-                                            last_applied_settings_.virtual_light_map.max_offset_x, 100);
-    max_offset_y_       = make_float_slider("Max Offset Y", 0.0f, 500.0f,
-                                            last_applied_settings_.virtual_light_map.max_offset_y, 100);
-    map_light_factor_   = make_float_slider("Map Light Factor", 0.0f, 1.0f,
-                                            last_applied_settings_.virtual_light_map.map_light_factor, 100);
-    search_radius_      = std::make_unique<DMSlider>(
-        "Search Radius", 0, 64, last_applied_settings_.virtual_light_map.search_radius);
-    if (search_radius_) {
-        search_radius_->set_defer_commit_until_unfocus(false);
-    }
-
-    regenerate_button_ = std::make_unique<DMButton>("Regenerate", &DMStyles::AccentButton(), 160, DMButton::height());
-
-    const int clamped_size = clamp_int(last_quadrant_size_px_, LightMap::kMinQuadrantSizePx,
-                                       LightMap::kMaxQuadrantSizePx);
-    quadrant_size_px_ = std::make_unique<DMSlider>(
-        "Quadrant Size (px)", LightMap::kMinQuadrantSizePx, LightMap::kMaxQuadrantSizePx, clamped_size);
-    if (quadrant_size_px_) {
-        quadrant_size_px_->set_defer_commit_until_unfocus(false);
-    }
+    // Preview-only: sliders are managed by MapShadowPanel now.
 }
 
 void MapLightPreviewPanel::sync_ui_from_json() {

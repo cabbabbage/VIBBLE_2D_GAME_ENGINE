@@ -5,9 +5,11 @@
 #include "dev_mode/dm_styles.hpp"
 #include "dev_mode/shared/formatting.hpp"
 #include "dev_mode/widgets.hpp"
+#include "render/light_map.hpp"
 #include "render_pipeline/render_asset/shading/ReactiveShadowSettingsJSON.hpp"
 
 #include <array>
+#include <algorithm>
 #include <cmath>
 #include <optional>
 #include <nlohmann/json.hpp>
@@ -15,6 +17,31 @@
 namespace {
 
 constexpr int kStrengthSliderScale = 100;
+
+std::unique_ptr<DMSlider> make_float_slider(const std::string& label,
+                                            float                min_value,
+                                            float                max_value,
+                                            float                current,
+                                            int                  scale) {
+    const int min_i = static_cast<int>(std::round(min_value * static_cast<float>(scale)));
+    const int max_i = static_cast<int>(std::round(max_value * static_cast<float>(scale)));
+    const int cur_i = static_cast<int>(std::round(current * static_cast<float>(scale)));
+    auto       slider = std::make_unique<DMSlider>(label, min_i, max_i, cur_i);
+    slider->set_defer_commit_until_unfocus(false);
+    slider->set_value_formatter([scale](int value, std::array<char, dev_mode::kSliderFormatBufferSize>& buffer) -> std::string_view {
+        const float scaled = static_cast<float>(value) / static_cast<float>(scale);
+        return dev_mode::FormatSliderValue(scaled, 2, buffer);
+    });
+    slider->set_value_parser([scale](const std::string& text) -> std::optional<int> {
+        try {
+            float parsed = std::stof(text);
+            return static_cast<int>(std::round(parsed * static_cast<float>(scale)));
+        } catch (...) {
+            return std::nullopt;
+        }
+    });
+    return slider;
+}
 
 std::unique_ptr<DMSlider> make_strength_slider(const std::string& label, float value) {
     const int scaled = static_cast<int>(std::round(value * static_cast<float>(kStrengthSliderScale)));
@@ -43,6 +70,19 @@ float slider_value(const std::unique_ptr<DMSlider>& slider, float fallback) {
         return fallback;
     }
     return static_cast<float>(slider->displayed_value()) / static_cast<float>(kStrengthSliderScale);
+}
+
+float slider_value_scaled(const std::unique_ptr<DMSlider>& slider, float fallback, int scale) {
+    if (!slider) {
+        return fallback;
+    }
+    return static_cast<float>(slider->displayed_value()) / static_cast<float>(scale);
+}
+
+void set_slider_scaled(const std::unique_ptr<DMSlider>& slider, float value, int scale) {
+    if (!slider) return;
+    const int scaled = static_cast<int>(std::round(value * static_cast<float>(scale)));
+    slider->set_value(scaled);
 }
 
 }  // namespace
@@ -81,6 +121,17 @@ void MapShadowPanel::set_reactive_settings(render_pipeline::shading::ReactiveSha
             scale_strength_->set_value(static_cast<int>(std::round(last_settings_.scale_strength *
                                                                    static_cast<float>(kStrengthSliderScale))));
         }
+        set_slider_scaled(horizontal_falloff_, last_settings_.virtual_light_map.horizontal_falloff, 100);
+        set_slider_scaled(vertical_falloff_,   last_settings_.virtual_light_map.vertical_falloff,   100);
+        set_slider_scaled(max_offset_x_,       last_settings_.virtual_light_map.max_offset_x,       100);
+        set_slider_scaled(max_offset_y_,       last_settings_.virtual_light_map.max_offset_y,       100);
+        set_slider_scaled(map_light_factor_,   last_settings_.virtual_light_map.map_light_factor,   100);
+        if (search_radius_) search_radius_->set_value(last_settings_.virtual_light_map.search_radius);
+        int init_quad = assets_ ? assets_->virtual_light_map_quadrant_size() : last_quadrant_size_px_;
+        if (init_quad <= 0) init_quad = LightMap::kDefaultQuadrantSizePx;
+        init_quad = std::clamp(init_quad, LightMap::kMinQuadrantSizePx, LightMap::kMaxQuadrantSizePx);
+        last_quadrant_size_px_ = init_quad;
+        if (quadrant_size_px_) quadrant_size_px_->set_value(last_quadrant_size_px_);
         apply_settings_to_shared();
     }
 }
@@ -137,6 +188,32 @@ void MapShadowPanel::build_ui() {
     opacity_strength_  = make_strength_slider("Opacity Strength", last_settings_.opacity_strength);
     parallax_strength_ = make_strength_slider("Parallax Strength", last_settings_.parallax_strength);
     scale_strength_    = make_strength_slider("Scale Factor", last_settings_.scale_strength);
+
+    // Virtual light map controls moved from preview panel
+    horizontal_falloff_ = make_float_slider("Horizontal Falloff", 0.0f, 10.0f,
+                                            last_settings_.virtual_light_map.horizontal_falloff, 100);
+    vertical_falloff_   = make_float_slider("Vertical Falloff", 0.0f, 10.0f,
+                                            last_settings_.virtual_light_map.vertical_falloff, 100);
+    max_offset_x_       = make_float_slider("Max Offset X", 0.0f, 500.0f,
+                                            last_settings_.virtual_light_map.max_offset_x, 100);
+    max_offset_y_       = make_float_slider("Max Offset Y", 0.0f, 500.0f,
+                                            last_settings_.virtual_light_map.max_offset_y, 100);
+    map_light_factor_   = make_float_slider("Map Light Factor", 0.0f, 1.0f,
+                                            last_settings_.virtual_light_map.map_light_factor, 100);
+    search_radius_      = std::make_unique<DMSlider>("Search Radius", 0, 64,
+                                                     last_settings_.virtual_light_map.search_radius);
+    if (search_radius_) search_radius_->set_defer_commit_until_unfocus(false);
+
+    int init_quad_size = last_quadrant_size_px_;
+    if (init_quad_size <= 0) {
+        init_quad_size = assets_ ? assets_->virtual_light_map_quadrant_size() : LightMap::kDefaultQuadrantSizePx;
+    }
+    init_quad_size = std::clamp(init_quad_size, LightMap::kMinQuadrantSizePx, LightMap::kMaxQuadrantSizePx);
+    last_quadrant_size_px_ = init_quad_size;
+    quadrant_size_px_ = std::make_unique<DMSlider>(
+        "Quadrant Size (px)", LightMap::kMinQuadrantSizePx, LightMap::kMaxQuadrantSizePx, init_quad_size);
+    if (quadrant_size_px_) quadrant_size_px_->set_defer_commit_until_unfocus(false);
+    regenerate_button_ = std::make_unique<DMButton>("Regenerate", &DMStyles::AccentButton(), 160, DMButton::height());
 }
 
 void MapShadowPanel::rebuild_rows() {
@@ -160,6 +237,34 @@ void MapShadowPanel::rebuild_rows() {
         rows.push_back({ add_widget(std::make_unique<SliderWidget>(scale_strength_.get())) });
     }
 
+    // Virtual Light Map block
+    if (regenerate_button_) {
+        rows.push_back({ add_widget(std::make_unique<ButtonWidget>(regenerate_button_.get(), [this]() {
+            this->apply_virtual_light_map_quadrant_size(this->last_quadrant_size_px_, true);
+        })) });
+    }
+    if (quadrant_size_px_) {
+        rows.push_back({ add_widget(std::make_unique<SliderWidget>(quadrant_size_px_.get())) });
+    }
+    if (horizontal_falloff_) {
+        rows.push_back({ add_widget(std::make_unique<SliderWidget>(horizontal_falloff_.get())) });
+    }
+    if (vertical_falloff_) {
+        rows.push_back({ add_widget(std::make_unique<SliderWidget>(vertical_falloff_.get())) });
+    }
+    if (max_offset_x_) {
+        rows.push_back({ add_widget(std::make_unique<SliderWidget>(max_offset_x_.get())) });
+    }
+    if (max_offset_y_) {
+        rows.push_back({ add_widget(std::make_unique<SliderWidget>(max_offset_y_.get())) });
+    }
+    if (search_radius_) {
+        rows.push_back({ add_widget(std::make_unique<SliderWidget>(search_radius_.get())) });
+    }
+    if (map_light_factor_) {
+        rows.push_back({ add_widget(std::make_unique<SliderWidget>(map_light_factor_.get())) });
+    }
+
     set_rows(rows);
 }
 
@@ -175,6 +280,7 @@ void MapShadowPanel::sync_ui_from_json() {
     }
     last_settings_ = render_pipeline::shading::reactive_shadow_settings_from_json(*it, last_settings_);
     last_settings_ = render_pipeline::shading::sanitize_reactive_shadow_settings(last_settings_);
+    // Update sliders from JSON
     if (opacity_strength_) {
         opacity_strength_->set_value(static_cast<int>(std::round(last_settings_.opacity_strength *
                                                                  static_cast<float>(kStrengthSliderScale))));
@@ -187,6 +293,21 @@ void MapShadowPanel::sync_ui_from_json() {
         scale_strength_->set_value(static_cast<int>(std::round(last_settings_.scale_strength *
                                                                static_cast<float>(kStrengthSliderScale))));
     }
+    set_slider_scaled(horizontal_falloff_, last_settings_.virtual_light_map.horizontal_falloff, 100);
+    set_slider_scaled(vertical_falloff_,   last_settings_.virtual_light_map.vertical_falloff,   100);
+    set_slider_scaled(max_offset_x_,       last_settings_.virtual_light_map.max_offset_x,       100);
+    set_slider_scaled(max_offset_y_,       last_settings_.virtual_light_map.max_offset_y,       100);
+    set_slider_scaled(map_light_factor_,   last_settings_.virtual_light_map.map_light_factor,   100);
+    if (search_radius_) search_radius_->set_value(last_settings_.virtual_light_map.search_radius);
+
+    // Quadrant size from JSON or assets
+    int desired_size = last_quadrant_size_px_ > 0 ? last_quadrant_size_px_ : (assets_ ? assets_->virtual_light_map_quadrant_size() : LightMap::kDefaultQuadrantSizePx);
+    if (auto size_it = it->find("virtual_light_map_quadrant_size"); size_it != it->end() && size_it->is_number_integer()) {
+        desired_size = size_it->get<int>();
+    }
+    desired_size = std::clamp(desired_size, LightMap::kMinQuadrantSizePx, LightMap::kMaxQuadrantSizePx);
+    last_quadrant_size_px_ = desired_size;
+    if (quadrant_size_px_) quadrant_size_px_->set_value(last_quadrant_size_px_);
     apply_settings_to_shared();
     needs_sync_to_json_ = false;
 }
@@ -199,12 +320,27 @@ void MapShadowPanel::sync_json_from_ui() {
     last_settings_.opacity_strength  = slider_value(opacity_strength_, last_settings_.opacity_strength);
     last_settings_.parallax_strength = slider_value(parallax_strength_, last_settings_.parallax_strength);
     last_settings_.scale_strength    = slider_value(scale_strength_, last_settings_.scale_strength);
+    // Virtual light map
+    last_settings_.virtual_light_map.horizontal_falloff = slider_value_scaled(horizontal_falloff_, last_settings_.virtual_light_map.horizontal_falloff, 100);
+    last_settings_.virtual_light_map.vertical_falloff   = slider_value_scaled(vertical_falloff_,   last_settings_.virtual_light_map.vertical_falloff,   100);
+    last_settings_.virtual_light_map.max_offset_x       = slider_value_scaled(max_offset_x_,       last_settings_.virtual_light_map.max_offset_x,       100);
+    last_settings_.virtual_light_map.max_offset_y       = slider_value_scaled(max_offset_y_,       last_settings_.virtual_light_map.max_offset_y,       100);
+    last_settings_.virtual_light_map.map_light_factor   = slider_value_scaled(map_light_factor_,   last_settings_.virtual_light_map.map_light_factor,   100);
+    if (search_radius_) last_settings_.virtual_light_map.search_radius = search_radius_->displayed_value();
+    // Quadrant size: only mark pending unless applied via button
+    int desired_size = last_quadrant_size_px_;
+    if (quadrant_size_px_) {
+        desired_size = std::clamp(quadrant_size_px_->value(), LightMap::kMinQuadrantSizePx, LightMap::kMaxQuadrantSizePx);
+    }
+    if (desired_size != last_quadrant_size_px_) {
+        last_quadrant_size_px_ = desired_size;
+        request_light_map_regeneration();
+    }
     last_settings_ = render_pipeline::shading::sanitize_reactive_shadow_settings(last_settings_);
 
     nlohmann::json& json = (*map_info_)["reactive_shadows"];
-    json["opacity_strength"]  = last_settings_.opacity_strength;
-    json["parallax_strength"] = last_settings_.parallax_strength;
-    json["scale_strength"]    = last_settings_.scale_strength;
+    render_pipeline::shading::assign_reactive_shadow_settings(json, last_settings_);
+    json["virtual_light_map_quadrant_size"] = last_quadrant_size_px_;
 
     apply_settings_to_shared();
     needs_sync_to_json_ = false;
@@ -221,6 +357,8 @@ void MapShadowPanel::apply_settings_to_shared() {
     if (*reactive_settings_shared_ != sanitized) {
         *reactive_settings_shared_ = sanitized;
         if (assets_) {
+            // Refresh both the light map (sampling depends on settings) and shaded textures
+            assets_->force_virtual_light_map_refresh();
             assets_->force_shaded_assets_rerender();
         }
     }
@@ -232,3 +370,27 @@ void MapShadowPanel::render_content(SDL_Renderer* renderer) const {
 }
 
 void MapShadowPanel::layout_custom_content(int, int) const {}
+
+void MapShadowPanel::apply_virtual_light_map_quadrant_size(int size_px, bool apply_to_assets, bool mark_pending) {
+    const int clamped = std::clamp(size_px, LightMap::kMinQuadrantSizePx, LightMap::kMaxQuadrantSizePx);
+    const bool changed = (last_quadrant_size_px_ != clamped);
+    last_quadrant_size_px_ = clamped;
+    if (quadrant_size_px_) quadrant_size_px_->set_value(last_quadrant_size_px_);
+
+    if (apply_to_assets) {
+        pending_light_map_regeneration_ = false;
+        if (regenerate_button_) regenerate_button_->set_text("Regenerate");
+        if (assets_) {
+            assets_->set_virtual_light_map_quadrant_size(last_quadrant_size_px_);
+            assets_->force_virtual_light_map_refresh();
+            assets_->force_shaded_assets_rerender();
+        }
+    } else if (changed && mark_pending) {
+        request_light_map_regeneration();
+    }
+}
+
+void MapShadowPanel::request_light_map_regeneration() {
+    pending_light_map_regeneration_ = true;
+    if (regenerate_button_) regenerate_button_->set_text("Regenerate*");
+}

@@ -168,4 +168,34 @@ private:
     int screen_h_ = 0;
 
     std::function<void(bool)> header_visibility_callback_{};
+
+    // --- Extended editing UI state ---
+    // Action buttons shown in details area
+    std::unique_ptr<class DMButton> create_room_btn_;
+    std::unique_ptr<class DMButton> add_layer_btn_;
+    std::unique_ptr<class DMButton> save_btn_;
+    std::unique_ptr<class DMButton> reload_btn_;
+
+    // Layer details widgets
+    std::unique_ptr<class DMTextBox> layer_name_box_;
+    std::unique_ptr<class DMDropdown> add_room_dropdown_;
+    std::unique_ptr<class DMButton> add_room_btn_;
+
+    struct CandidateRowWidgets {
+        int candidate_index = -1;
+        std::string room_key;
+        std::unique_ptr<class DMSlider> count_slider; // controls max_instances
+        std::unique_ptr<class DMButton> remove_btn;
+    };
+    std::vector<CandidateRowWidgets> candidate_rows_;
+
+    // Render/event wrappers for details UI
+    std::vector<std::unique_ptr<class Widget>> details_widgets_;
+
+    // Helpers to build UI for each mode
+    void build_room_list_widgets();
+    void build_layer_details_widgets();
+    void clear_detail_ui();
+    void apply_layer_rename_if_needed();
+    void create_new_room_entry();
 };

@@ -184,13 +184,24 @@ void SceneRenderer::render(){
         if (!z_light_pass_ || rendered_light_map) {
             return;
         }
+        // Compute a global alpha multiplier from the map light's current opacity window
+        // (same logic as shading stages).
+        float alpha_mult = 1.0f;
+        {
+            const int min_opacity = main_light_source_.min_opacity();
+            const int max_opacity = main_light_source_.max_opacity();
+            const int cur_a       = std::clamp(static_cast<int>(main_light_source_.get_current_color().a), min_opacity, max_opacity);
+            const int range       = std::max(1, max_opacity - min_opacity);
+            alpha_mult = std::clamp(static_cast<float>(cur_a - min_opacity) / static_cast<float>(range), 0.0f, 1.0f);
+        }
+
         SDL_Rect screen_view{0,0,screen_width_,screen_height_};
         SDL_BlendMode previous_mode = SDL_BLENDMODE_BLEND;
         if (SDL_GetRenderDrawBlendMode(renderer_,&previous_mode) != 0) {
             previous_mode = SDL_BLENDMODE_BLEND;
         }
         SDL_SetRenderDrawBlendMode(renderer_,SDL_BLENDMODE_BLEND);
-        z_light_pass_->render_visible_quadrants(renderer_,screen_view);
+        z_light_pass_->render_visible_quadrants(renderer_,screen_view, alpha_mult);
         SDL_SetRenderDrawBlendMode(renderer_,previous_mode);
         rendered_light_map = true;
     };
@@ -336,7 +347,7 @@ void SceneRenderer::render(){
                     stamp_from_list(a2->info->orbital_light_sources, a2);
                 }
             }
-            // Now bake updated quadrant tiles for this frame.
+            // Bake updated quadrant tiles for this frame.
             z_light_pass_->update(renderer_, 16);
             render_pipeline_.lighting().light_map_sampler = z_light_pass_.get();
         }

@@ -1571,14 +1571,14 @@ void RoomEditor::ensure_spawn_group_config_ui() {
 }
 
 void RoomEditor::update_room_config_bounds() {
-    const int side_margin = 48;
+    const int side_margin = 0; // Align flush to the right edge
     const int available_width = std::max(0, screen_w_ - 2 * side_margin);
     const int max_width = std::max(320, available_width);
     const int desired_width = std::max(360, screen_w_ / 3);
     const int width = std::min(max_width, desired_width);
     const int height = std::max(1, screen_h_);
     const int max_x = std::max(0, screen_w_ - width);
-    const int desired_x = screen_w_ - width - side_margin;
+    const int desired_x = screen_w_ - width; // no right margin gap
     const int x = std::clamp(desired_x, 0, max_x);
     const int y = 0;
     room_config_bounds_ = SDL_Rect{x, y, width, height};

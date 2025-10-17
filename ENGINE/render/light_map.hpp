@@ -53,6 +53,7 @@ public:
 
     void update_tile_mask(SDL_Renderer* renderer, float static_weight, float dynamic_weight);
     void render_tile_mask(SDL_Renderer* renderer) const;
+    void render_tile_mask(SDL_Renderer* renderer, Uint8 alpha_mod) const;
 
     float sample_brightness(float local_x,
                             float local_y,
@@ -106,6 +107,7 @@ public:
                                      float dynamic_weight = kDefaultDynamicWeight) const;
 
     void render_visible_quadrants(SDL_Renderer* renderer, const SDL_Rect& view_rect) const;
+    void render_visible_quadrants(SDL_Renderer* renderer, const SDL_Rect& view_rect, float alpha_multiplier) const;
 
     int screen_width() const { return screen_width_; }
     int screen_height() const { return screen_height_; }

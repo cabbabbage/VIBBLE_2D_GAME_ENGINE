@@ -723,6 +723,12 @@ void AreaOverlayEditor::ensure_toolbox() {
     toolbox_ = std::make_unique<DockableCollapsible>("Area Tools", true);
 
     toolbox_->set_expanded(true);
+    // Improve spacing and alignment for the Area Tools panel
+    // Target two-column layout (180px each) with a 12px gap: 2*180 + 12 = 372
+    toolbox_->set_floating_content_width(372);
+    toolbox_->set_padding(12);
+    toolbox_->set_row_gap(10);
+    toolbox_->set_col_gap(12);
     btn_mask_  = std::make_unique<DMButton>("Mask",  &DMStyles::CreateButton(), 180, DMButton::height());
     btn_geom_  = std::make_unique<DMButton>("Geometry",  &DMStyles::CreateButton(), 180, DMButton::height());
     btn_save_  = std::make_unique<DMButton>("Save",  &DMStyles::CreateButton(), 180, DMButton::height());
@@ -811,19 +817,22 @@ void AreaOverlayEditor::rebuild_toolbox_rows() {
     }
 
     if (mode_ == Mode::Mask) {
-        if (crop_left_slider_ && crop_right_slider_) {
+        // Sliders request full-row layout; add them as single-column rows for clean alignment
+        if (crop_left_slider_) {
             owned_widgets_.push_back(std::make_unique<SliderWidget>(crop_left_slider_.get()));
-            Widget* left_widget = owned_widgets_.back().get();
-            owned_widgets_.push_back(std::make_unique<SliderWidget>(crop_right_slider_.get()));
-            Widget* right_widget = owned_widgets_.back().get();
-            rows.push_back({ left_widget, right_widget });
+            rows.push_back({ owned_widgets_.back().get() });
         }
-        if (crop_top_slider_ && crop_bottom_slider_) {
+        if (crop_right_slider_) {
+            owned_widgets_.push_back(std::make_unique<SliderWidget>(crop_right_slider_.get()));
+            rows.push_back({ owned_widgets_.back().get() });
+        }
+        if (crop_top_slider_) {
             owned_widgets_.push_back(std::make_unique<SliderWidget>(crop_top_slider_.get()));
-            Widget* top_widget = owned_widgets_.back().get();
+            rows.push_back({ owned_widgets_.back().get() });
+        }
+        if (crop_bottom_slider_) {
             owned_widgets_.push_back(std::make_unique<SliderWidget>(crop_bottom_slider_.get()));
-            Widget* bottom_widget = owned_widgets_.back().get();
-            rows.push_back({ top_widget, bottom_widget });
+            rows.push_back({ owned_widgets_.back().get() });
         }
     }
 
