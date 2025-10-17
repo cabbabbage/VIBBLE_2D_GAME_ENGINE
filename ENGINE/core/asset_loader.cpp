@@ -52,12 +52,21 @@ AssetLoader::AssetLoader(const std::string& map_id,
                          const nlohmann::json& map_manifest,
                          SDL_Renderer* renderer,
                          std::string content_root,
-                         devmode::core::ManifestStore* manifest_store)
+                         devmode::core::ManifestStore* manifest_store,
+                         AssetLibrary* shared_asset_library)
 : map_id_(map_id),
 map_path_(std::move(content_root)),
 renderer_(renderer),
 manifest_store_(manifest_store)
 {
+        using_shared_asset_library_ = (shared_asset_library != nullptr);
+        if (using_shared_asset_library_) {
+                asset_library_ = shared_asset_library;
+        } else {
+                owned_asset_library_ = std::make_unique<AssetLibrary>();
+                asset_library_ = owned_asset_library_.get();
+        }
+
         const auto overall_begin = std::chrono::steady_clock::now();
 
         const auto map_begin = std::chrono::steady_clock::now();
@@ -70,7 +79,6 @@ manifest_store_(manifest_store)
 
         const auto library_begin = std::chrono::steady_clock::now();
         loading_status::notify("Loading assets");
-        asset_library_ = std::make_unique<AssetLibrary>();
         const auto library_end = std::chrono::steady_clock::now();
 
         const auto rooms_begin = std::chrono::steady_clock::now();
@@ -81,27 +89,33 @@ manifest_store_(manifest_store)
     {
         const auto preload_begin = std::chrono::steady_clock::now();
 
-        std::unordered_set<std::string> used;
-        for (Room* room : rooms_) {
-            for (const auto& aup : room->assets) {
-                if (const Asset* a = aup.get()) {
-                    if (a->info) used.insert(a->info->name);
+        if (asset_library_ && !using_shared_asset_library_) {
+                std::unordered_set<std::string> used;
+                for (Room* room : rooms_) {
+                        for (const auto& aup : room->assets) {
+                                if (const Asset* a = aup.get()) {
+                                        if (a->info) used.insert(a->info->name);
+                                }
+                        }
                 }
-            }
-        }
-        const std::size_t preload_count = used.size();
-        asset_library_->loadAnimationsFor(renderer_, used);
+                const std::size_t preload_count = used.size();
+                asset_library_->loadAnimationsFor(renderer_, used);
 
-        const auto preload_end = std::chrono::steady_clock::now();
-        const double preload_ms = std::chrono::duration_cast<std::chrono::milliseconds>(preload_end - preload_begin).count();
-        std::cout << "[AssetLoader] Preloaded animations for " << preload_count
-                  << " referenced assets in " << preload_ms << "ms\n";
+                const auto preload_end = std::chrono::steady_clock::now();
+                const double preload_ms = std::chrono::duration_cast<std::chrono::milliseconds>(preload_end - preload_begin).count();
+                std::cout << "[AssetLoader] Preloaded animations for " << preload_count
+                          << " referenced assets in " << preload_ms << "ms\n";
+        } else {
+                std::cout << "[AssetLoader] Using shared asset library cache; skipping per-map preload.\n";
+        }
     }
 
-    if (renderer_) {
-        asset_library_->ensureAllAnimationsLoaded(renderer_);
-    } else {
-        std::cerr << "[AssetLoader] Renderer unavailable; skipping asset library cache warmup.\n";
+    if (asset_library_) {
+        if (renderer_) {
+                asset_library_->ensureAllAnimationsLoaded(renderer_);
+        } else {
+                std::cerr << "[AssetLoader] Renderer unavailable; skipping asset library cache warmup.\n";
+        }
     }
         loading_status::notify("Loading assets");
         finalizeAssets();
@@ -363,7 +377,14 @@ void AssetLoader::loadRooms() {
         nlohmann::json empty_trails   = nlohmann::json::object();
         nlohmann::json empty_assets   = nlohmann::json::object();
         MapGridSettings grid_settings = MapGridSettings::from_json(map_info_json_.contains("map_grid_settings") ? &map_info_json_["map_grid_settings"] : nullptr);
-        auto room_ptrs = generator.build( asset_library_.get(), map_radius_, layer_radii_, map_boundary_data_ ? *map_boundary_data_ : empty_boundary, rooms_data_        ? *rooms_data_        : empty_rooms, trails_data_       ? *trails_data_       : empty_trails, map_assets_data_   ? *map_assets_data_   : empty_assets, grid_settings);
+        auto room_ptrs = generator.build( asset_library_,
+                                          map_radius_,
+                                          layer_radii_,
+                                          map_boundary_data_ ? *map_boundary_data_ : empty_boundary,
+                                          rooms_data_        ? *rooms_data_        : empty_rooms,
+                                          trails_data_       ? *trails_data_       : empty_trails,
+                                          map_assets_data_   ? *map_assets_data_   : empty_assets,
+                                          grid_settings);
         for (auto& up : room_ptrs) {
                 rooms_.push_back(up.get());
                 all_rooms_.push_back(std::move(up));

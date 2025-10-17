@@ -15,6 +15,7 @@
 #include <sstream>
 #include <utility>
 #include <nlohmann/json.hpp>
+#include <stdexcept>
 
 namespace fs = std::filesystem;
 
@@ -22,8 +23,9 @@ MenuUI::MenuUI(SDL_Renderer* renderer,
                int screen_w,
                int screen_h,
                MapDescriptor map,
-               LoadingScreen* loading_screen)
-: MainApp(std::move(map), renderer, screen_w, screen_h, loading_screen)
+               LoadingScreen* loading_screen,
+               AssetLibrary* asset_library)
+: MainApp(std::move(map), renderer, screen_w, screen_h, loading_screen, asset_library)
 {
         if (TTF_WasInit() == 0) {
                 if (TTF_Init() < 0) {
@@ -241,7 +243,12 @@ void MenuUI::doRestart() {
                     nlohmann::json manifest_copy = loader_->map_manifest();
                     std::string content_root = loader_->content_root();
                     std::string map_id = loader_->map_identifier();
-                    loader_ = std::make_unique<AssetLoader>(map_id, manifest_copy, renderer_, content_root);
+                    loader_ = std::make_unique<AssetLoader>(map_id,
+                                                         manifest_copy,
+                                                         renderer_,
+                                                         content_root,
+                                                         nullptr,
+                                                         asset_library_);
                 }
                 auto all_assets = loader_->createAssets();
                 Asset* player_ptr = nullptr;
@@ -251,8 +258,12 @@ void MenuUI::doRestart() {
                 }
                 int start_px = player_ptr ? player_ptr->pos.x : static_cast<int>(loader_->getMapRadius());
                 int start_py = player_ptr ? player_ptr->pos.y : static_cast<int>(loader_->getMapRadius());
+                AssetLibrary* restart_library = loader_->getAssetLibrary();
+                if (!restart_library) {
+                        throw std::runtime_error("Asset library unavailable during restart.");
+                }
                 game_assets_ = new Assets(std::move(all_assets),
-                                          *loader_->getAssetLibrary(),
+                                          *restart_library,
                                           player_ptr,
                                           loader_->getRooms(),
                                           screen_w_,

@@ -9,7 +9,7 @@
 class AssetLibrary {
 
 	public:
-    AssetLibrary();
+    explicit AssetLibrary(bool auto_load = true);
     void load_all_from_SRC();
     std::shared_ptr<AssetInfo> get(const std::string& name) const;
     const std::unordered_map<std::string, std::shared_ptr<AssetInfo>>& all() const;

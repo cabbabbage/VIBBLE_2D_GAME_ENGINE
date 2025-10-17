@@ -6,8 +6,10 @@
 #include <iostream>
 #include <chrono>
 
-AssetLibrary::AssetLibrary() {
-	load_all_from_SRC();
+AssetLibrary::AssetLibrary(bool auto_load) {
+        if (auto_load) {
+                load_all_from_SRC();
+        }
 }
 
 void AssetLibrary::load_all_from_SRC() {

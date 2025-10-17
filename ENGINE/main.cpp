@@ -8,6 +8,7 @@
 #include "core/manifest/manifest_loader.hpp"
 #include "asset_loader.hpp"
 #include "asset/asset_types.hpp"
+#include "asset/asset_library.hpp"
 #include "scene_renderer.hpp"
 #include "AssetsManager.hpp"
 #include "input.hpp"
@@ -33,6 +34,7 @@
 #include <cctype>
 #include <system_error>
 #include <utility>
+#include <stdexcept>
 namespace fs = std::filesystem;
 
 #if defined(_WIN32)
@@ -46,13 +48,15 @@ MainApp::MainApp(MapDescriptor map,
                  SDL_Renderer* renderer,
                  int screen_w,
                  int screen_h,
-                 LoadingScreen* loading_screen)
+                 LoadingScreen* loading_screen,
+                 AssetLibrary* asset_library)
 : map_descriptor_(std::move(map)),
   map_path_(map_descriptor_.id),
   renderer_(renderer),
   screen_w_(screen_w),
   screen_h_(screen_h),
-  loading_screen_(loading_screen) {}
+  loading_screen_(loading_screen),
+  asset_library_(asset_library) {}
 
 MainApp::~MainApp() {
         AudioEngine::instance().shutdown();
@@ -120,7 +124,12 @@ void MainApp::setup() {
                         content_root = resolved_root.lexically_normal().string();
                 }
 
-                loader_ = std::make_unique<AssetLoader>(map_identifier, map_manifest_json, renderer_, content_root);
+                loader_ = std::make_unique<AssetLoader>(map_identifier,
+                                                       map_manifest_json,
+                                                       renderer_,
+                                                       content_root,
+                                                       nullptr,
+                                                       asset_library_);
                 loading_status::notify("Spawning assets");
                 auto spawn_begin = std::chrono::steady_clock::now();
                 auto all_assets = loader_->createAssets();
@@ -133,8 +142,12 @@ void MainApp::setup() {
                 }
                 int start_px = player_ptr ? player_ptr->pos.x : static_cast<int>(loader_->getMapRadius());
                 int start_py = player_ptr ? player_ptr->pos.y : static_cast<int>(loader_->getMapRadius());
+                AssetLibrary* active_library = loader_->getAssetLibrary();
+                if (!active_library) {
+                        throw std::runtime_error("Asset library unavailable during game setup.");
+                }
                 game_assets_ = new Assets(std::move(all_assets),
-                                          *loader_->getAssetLibrary(),
+                                          *active_library,
                                           player_ptr,
                                           loader_->getRooms(),
                                           screen_w_,
@@ -369,6 +382,15 @@ void run(SDL_Window* window, SDL_Renderer* renderer, int screen_w, int screen_h,
         return;
     }
 
+    std::shared_ptr<AssetLibrary> shared_asset_library = std::make_shared<AssetLibrary>(false);
+    std::cout << "[Main] Preparing asset metadata cache...\n";
+    shared_asset_library->load_all_from_SRC();
+    std::cout << "[Main] Asset metadata cache ready for "
+              << shared_asset_library->all().size() << " asset(s).\n";
+    std::cout << "[Main] Loading cached asset resources...\n";
+    shared_asset_library->loadAllAnimations(renderer);
+    std::cout << "[Main] Cached asset resources loaded.\n";
+
     while (true) {
         MainMenu menu(renderer, screen_w, screen_h, manifest_data.maps);
         std::optional<MapDescriptor> chosen_map;
@@ -427,8 +449,17 @@ void run(SDL_Window* window, SDL_Renderer* renderer, int screen_w, int screen_h,
             RebuildAssets* rebuilder = new RebuildAssets(renderer, selected_map.id);
             delete rebuilder;
             std::cout << "[Main] Asset cache rebuild complete.\n";
+            std::cout << "[Main] Refreshing shared asset library after cache rebuild...\n";
+            shared_asset_library->load_all_from_SRC();
+            shared_asset_library->loadAllAnimations(renderer);
+            std::cout << "[Main] Shared asset library refreshed.\n";
         }
-        MenuUI app(renderer, screen_w, screen_h, std::move(selected_map), &loading_screen);
+        MenuUI app(renderer,
+                   screen_w,
+                   screen_h,
+                   std::move(selected_map),
+                   &loading_screen,
+                   shared_asset_library.get());
         app.init();
         if (app.wants_return_to_main_menu()) continue;
         break;

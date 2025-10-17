@@ -25,7 +25,8 @@ class AssetLoader {
                 const nlohmann::json& map_manifest,
                 SDL_Renderer* renderer,
                 std::string content_root = {},
-                devmode::core::ManifestStore* manifest_store = nullptr);
+                devmode::core::ManifestStore* manifest_store = nullptr,
+                AssetLibrary* shared_asset_library = nullptr);
     ~AssetLoader();
     std::vector<Asset*> collectDistantAssets(int lock_threshold, int remove_threshold);
     std::vector<std::vector<Asset*>> group_neighboring_assets( const std::vector<Asset*>& assets, int tile_width, int tile_height, const std::string& group_type);
@@ -33,7 +34,7 @@ class AssetLoader {
 
     std::vector<std::unique_ptr<Asset>> createAssets();
     std::vector<const Area*> getAllRoomAndTrailAreas() const;
-    AssetLibrary* getAssetLibrary() const { return asset_library_.get(); }
+    AssetLibrary* getAssetLibrary() const { return asset_library_; }
     const std::vector<Room*>& getRooms() const { return rooms_; }
     double getMapRadius() const { return map_radius_; }
     const nlohmann::json& map_manifest() const { return map_info_json_; }
@@ -46,7 +47,9 @@ class AssetLoader {
     SDL_Renderer* renderer_;
     std::vector<Room*> rooms_;
     std::vector<std::unique_ptr<Room>> all_rooms_;
-    std::unique_ptr<AssetLibrary> asset_library_;
+    std::unique_ptr<AssetLibrary> owned_asset_library_;
+    AssetLibrary* asset_library_ = nullptr;
+    bool using_shared_asset_library_ = false;
     std::vector<LayerSpec>              map_layers_;
     std::vector<double>                 layer_radii_;
     double map_center_x_ = 0.0;

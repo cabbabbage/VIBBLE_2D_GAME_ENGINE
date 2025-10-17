@@ -24,7 +24,8 @@ class MenuUI : public MainApp {
            int screen_w,
            int screen_h,
            MapDescriptor map,
-           LoadingScreen* loading_screen = nullptr);
+           LoadingScreen* loading_screen = nullptr,
+           AssetLibrary* asset_library = nullptr);
     ~MenuUI();
     void init();
     bool wants_return_to_main_menu() const;
