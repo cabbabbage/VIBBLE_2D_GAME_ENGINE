@@ -11,7 +11,7 @@
 
 class Assets;
 class Input;
-struct VirtualLightMap;
+class LightMap;
 
 class MapLightPreviewPanel : public DockableCollapsible {
 public:
@@ -32,7 +32,7 @@ protected:
     void layout_custom_content(int screen_w, int screen_h) const override;
 
 private:
-    const struct VirtualLightMap* current_virtual_light_map() const;
+    const class LightMap* current_light_map() const;
     std::optional<SDL_Point>      player_screen_position() const;
     std::vector<std::string>      assets_in_quadrant(int quadrant) const;
     int                           quadrant_index_from_point(int x, int y) const;

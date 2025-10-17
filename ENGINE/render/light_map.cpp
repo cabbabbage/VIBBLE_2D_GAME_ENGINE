@@ -1,695 +1,436 @@
 #include "light_map.hpp"
-#include "asset/Asset.hpp"
-#include "render/camera.hpp"
-#include "render_pipeline/ScalingLogic.hpp"
-#include "render_pipeline/render_asset/shading/ReactiveShadowSettings.hpp"
+
+#include <SDL.h>
+
 #include <algorithm>
-#include <cstddef>
-#include <vector>
 #include <cmath>
+#include <cstring>
 #include <limits>
+#include <utility>
+
 
 namespace {
-
-float compute_luminance(const SDL_Color& color) {
-        // Rec. 709 luminance approximation.
-        return (0.2126f * static_cast<float>(color.r) +
-                0.7152f * static_cast<float>(color.g) +
-                0.0722f * static_cast<float>(color.b)) / 255.0f;
+std::uint8_t clamp_byte(int value) {
+    return static_cast<std::uint8_t>(std::clamp(value, 0, 255));
 }
 
-} // namespace
-
-VirtualLightMap::VirtualLightMap() {
-        ensure_cell_storage();
-        clear();
+float clamp_unit(float value) {
+    return std::clamp(value, 0.0f, 1.0f);
 }
 
-void VirtualLightMap::set_square_grid(int quadrants) {
-        const int clamped = std::clamp(quadrants, kMinGridSize, kMaxGridSize);
-        if (grid_width_ == clamped && grid_height_ == clamped) {
-                return;
+}  // namespace
+
+LightMapQuadrant::LightMapQuadrant(LightMapQuadrant&& other) noexcept {
+    *this = std::move(other);
+}
+
+LightMapQuadrant& LightMapQuadrant::operator=(LightMapQuadrant&& other) noexcept {
+    if (this == &other) {
+        return *this;
+    }
+
+    destroy_texture();
+    world_rect_      = other.world_rect_;
+    grid_width_      = other.grid_width_;
+    grid_height_     = other.grid_height_;
+    padding_cells_   = other.padding_cells_;
+    stride_          = other.stride_;
+    static_grid_     = std::move(other.static_grid_);
+    dynamic_grid_    = std::move(other.dynamic_grid_);
+    tile_mask_       = other.tile_mask_;
+    base_brightness_ = other.base_brightness_;
+    dirty_           = other.dirty_;
+    active_          = other.active_;
+
+    other.tile_mask_     = nullptr;
+    other.grid_width_    = 0;
+    other.grid_height_   = 0;
+    other.padding_cells_ = 0;
+    other.stride_        = 0;
+    other.static_grid_.clear();
+    other.dynamic_grid_.clear();
+    other.base_brightness_ = 0.0f;
+    other.dirty_           = true;
+    other.active_          = false;
+    other.world_rect_      = SDL_Rect{0, 0, 0, 0};
+    return *this;
+}
+
+LightMapQuadrant::~LightMapQuadrant() {
+    destroy_texture();
+}
+
+void LightMapQuadrant::destroy_texture() {
+    if (tile_mask_) {
+        SDL_DestroyTexture(tile_mask_);
+        tile_mask_ = nullptr;
+    }
+}
+
+void LightMapQuadrant::ensure_texture(SDL_Renderer* renderer) {
+    if (!renderer) {
+        destroy_texture();
+        return;
+    }
+    if (tile_mask_) {
+        return;
+    }
+    if (grid_width_ <= 0 || grid_height_ <= 0) {
+        return;
+    }
+    tile_mask_ = SDL_CreateTexture(renderer,
+                                   SDL_PIXELFORMAT_RGBA8888,
+                                   SDL_TEXTUREACCESS_STREAMING,
+                                   grid_width_,
+                                   grid_height_);
+    if (tile_mask_) {
+        SDL_SetTextureBlendMode(tile_mask_, SDL_BLENDMODE_MOD);
+#if SDL_VERSION_ATLEAST(2,0,12)
+        SDL_SetTextureScaleMode(tile_mask_, SDL_ScaleModeBest);
+#endif
+    }
+}
+
+void LightMapQuadrant::configure(SDL_Renderer* renderer,
+                                 const SDL_Rect& world_rect,
+                                 int grid_resolution,
+                                 int padding_cells) {
+    destroy_texture();
+
+    world_rect_    = world_rect;
+    grid_width_    = std::max(1, grid_resolution);
+    grid_height_   = std::max(1, grid_resolution);
+    padding_cells_ = std::max(0, padding_cells);
+    stride_        = grid_width_ + (padding_cells_ * 2);
+    const int total_rows = grid_height_ + (padding_cells_ * 2);
+    static_grid_.assign(static_cast<std::size_t>(stride_) * static_cast<std::size_t>(total_rows), 0);
+    dynamic_grid_.assign(static_cast<std::size_t>(stride_) * static_cast<std::size_t>(total_rows), 0);
+    base_brightness_ = 0.0f;
+    dirty_           = true;
+    active_          = false;
+    ensure_texture(renderer);
+}
+
+std::size_t LightMapQuadrant::index_from_cell(int cx, int cy) const {
+    const int sx = std::clamp(cx + padding_cells_, 0, stride_ - 1);
+    const int sy = std::clamp(cy + padding_cells_, 0, grid_height_ + (padding_cells_ * 2) - 1);
+    return static_cast<std::size_t>(sy) * static_cast<std::size_t>(stride_) + static_cast<std::size_t>(sx);
+}
+
+void LightMapQuadrant::build_static(const std::vector<std::uint8_t>& grid, int width, int height) {
+    if (width <= 0 || height <= 0) {
+        return;
+    }
+    const int expected = grid_width_ * grid_height_;
+    if (static_cast<int>(grid.size()) < expected) {
+        return;
+    }
+
+    double accum = 0.0;
+    int    count = 0;
+    for (int y = 0; y < grid_height_; ++y) {
+        for (int x = 0; x < grid_width_; ++x) {
+            const int src_index = y * width + x;
+            const std::uint8_t value = grid[static_cast<std::size_t>(src_index)];
+            const std::size_t dst_index = index_from_cell(x, y);
+            static_grid_[dst_index] = value;
+            accum += static_cast<double>(value) / 255.0;
+            ++count;
         }
-        grid_width_ = clamped;
-        grid_height_ = clamped;
-        ensure_cell_storage();
-        clear();
+    }
+    if (count > 0) {
+        base_brightness_ = static_cast<float>(std::clamp(accum / static_cast<double>(count), 0.0, 1.0));
+    } else {
+        base_brightness_ = 0.0f;
+    }
+    dirty_ = true;
 }
 
-void VirtualLightMap::ensure_cell_storage() {
-        const std::size_t expected = static_cast<std::size_t>(grid_width_) *
-                                     static_cast<std::size_t>(grid_height_);
-        if (grid_.size() != expected) {
-                grid_.assign(expected, ShadowCell{});
+void LightMapQuadrant::stamp_moving_lights(const std::vector<std::uint8_t>& grid,
+                                           int width,
+                                           int height,
+                                           std::uint8_t clamp) {
+    if (width <= 0 || height <= 0) {
+        return;
+    }
+    const int expected = grid_width_ * grid_height_;
+    if (static_cast<int>(grid.size()) < expected) {
+        return;
+    }
+    for (int y = 0; y < grid_height_; ++y) {
+        for (int x = 0; x < grid_width_; ++x) {
+            const int src_index = y * width + x;
+            const std::uint8_t value = clamp_byte(grid[static_cast<std::size_t>(src_index)]);
+            const std::size_t dst_index = index_from_cell(x, y);
+            dynamic_grid_[dst_index] = std::min<std::uint8_t>(value, clamp);
         }
+    }
+    dirty_  = true;
+    active_ = true;
 }
 
-void VirtualLightMap::reserve_cells(std::size_t count) {
-        if (grid_.capacity() < count) {
-                grid_.reserve(count);
+void LightMapQuadrant::fade_dynamic(std::uint8_t fade) {
+    if (fade == 0) {
+        return;
+    }
+    const std::size_t total = dynamic_grid_.size();
+    for (std::size_t i = 0; i < total; ++i) {
+        const std::uint8_t value = dynamic_grid_[i];
+        if (value == 0) {
+            continue;
         }
+        dynamic_grid_[i] = (value > fade) ? (value - fade) : 0;
+    }
+    dirty_ = true;
 }
 
-void VirtualLightMap::clear(float brightness) {
-        ensure_cell_storage();
-        for (auto& cell : grid_) {
-                cell.brightness = brightness;
-                cell.opacity    = 0.0f;
-                cell.offset_x   = 0.0f;
-                cell.offset_y   = 0.0f;
-                cell.scale      = 1.0f;
+float LightMapQuadrant::cell_sample(int cx, int cy, float static_weight, float dynamic_weight) const {
+    if (stride_ <= 0) {
+        return base_brightness_;
+    }
+    const std::size_t idx = index_from_cell(cx, cy);
+    const float s = static_cast<float>(static_grid_[idx]) / 255.0f;
+    const float d = static_cast<float>(dynamic_grid_[idx]) / 255.0f;
+    return clamp_unit(base_brightness_ + (s * static_weight) + (d * dynamic_weight));
+}
+
+float LightMapQuadrant::sample_brightness(float local_x,
+                                          float local_y,
+                                          float static_weight,
+                                          float dynamic_weight,
+                                          bool bilinear) const {
+    if (grid_width_ <= 0 || grid_height_ <= 0) {
+        return 0.0f;
+    }
+
+    const float clamped_x = std::clamp(local_x, 0.0f, static_cast<float>(grid_width_ - 1));
+    const float clamped_y = std::clamp(local_y, 0.0f, static_cast<float>(grid_height_ - 1));
+
+    if (!bilinear) {
+        const int ix = static_cast<int>(std::round(clamped_x));
+        const int iy = static_cast<int>(std::round(clamped_y));
+        return cell_sample(ix, iy, static_weight, dynamic_weight);
+    }
+
+    const int   x0 = static_cast<int>(std::floor(clamped_x));
+    const int   y0 = static_cast<int>(std::floor(clamped_y));
+    const int   x1 = std::min(x0 + 1, grid_width_ - 1);
+    const int   y1 = std::min(y0 + 1, grid_height_ - 1);
+    const float tx = clamped_x - static_cast<float>(x0);
+    const float ty = clamped_y - static_cast<float>(y0);
+
+    const float s00 = cell_sample(x0, y0, static_weight, dynamic_weight);
+    const float s10 = cell_sample(x1, y0, static_weight, dynamic_weight);
+    const float s01 = cell_sample(x0, y1, static_weight, dynamic_weight);
+    const float s11 = cell_sample(x1, y1, static_weight, dynamic_weight);
+
+    const float sx0 = s00 + (s10 - s00) * tx;
+    const float sx1 = s01 + (s11 - s01) * tx;
+    return sx0 + (sx1 - sx0) * ty;
+}
+
+void LightMapQuadrant::update_tile_mask(SDL_Renderer* renderer, float static_weight, float dynamic_weight) {
+    ensure_texture(renderer);
+    if (!tile_mask_) {
+        return;
+    }
+
+    const std::size_t total_pixels = static_cast<std::size_t>(grid_width_) * static_cast<std::size_t>(grid_height_);
+    std::vector<std::uint32_t> pixels(total_pixels, 0);
+    for (int y = 0; y < grid_height_; ++y) {
+        for (int x = 0; x < grid_width_; ++x) {
+            const std::size_t idx = static_cast<std::size_t>(y) * static_cast<std::size_t>(grid_width_) +
+                                    static_cast<std::size_t>(x);
+            const float sample = cell_sample(x, y, static_weight, dynamic_weight);
+            const std::uint8_t value = clamp_byte(static_cast<int>(std::round(sample * 255.0f)));
+            const std::uint32_t rgba = (static_cast<std::uint32_t>(value) << 24) |
+                                       (static_cast<std::uint32_t>(value) << 16) |
+                                       (static_cast<std::uint32_t>(value) << 8) |
+                                       static_cast<std::uint32_t>(value);
+            pixels[idx] = rgba;
         }
+    }
+
+    void*   pixels_ptr = nullptr;
+    int     pitch      = 0;
+    if (SDL_LockTexture(tile_mask_, nullptr, &pixels_ptr, &pitch) != 0) {
+        return;
+    }
+
+    const int row_bytes = grid_width_ * static_cast<int>(sizeof(std::uint32_t));
+    std::uint8_t* dst   = static_cast<std::uint8_t*>(pixels_ptr);
+    const std::uint8_t* src = reinterpret_cast<const std::uint8_t*>(pixels.data());
+    for (int y = 0; y < grid_height_; ++y) {
+        std::memcpy(dst + static_cast<std::size_t>(y) * pitch,
+                    src + static_cast<std::size_t>(y) * row_bytes,
+                    static_cast<std::size_t>(row_bytes));
+    }
+    SDL_UnlockTexture(tile_mask_);
+    dirty_ = false;
 }
 
-std::size_t VirtualLightMap::index_of(int x, int y) const {
-        return static_cast<std::size_t>(y) * static_cast<std::size_t>(grid_width_) +
-               static_cast<std::size_t>(x);
+void LightMapQuadrant::render_tile_mask(SDL_Renderer* renderer) const {
+    if (!renderer || !tile_mask_) {
+        return;
+    }
+    SDL_RenderCopy(renderer, tile_mask_, nullptr, &world_rect_);
 }
 
-VirtualLightMap::ShadowCell& VirtualLightMap::cell(int x, int y) {
-        return grid_[index_of(x, y)];
-}
+LightMap::LightMap(Assets* assets, int screen_width, int screen_height)
+    : assets_(assets),
+      screen_width_(screen_width),
+      screen_height_(screen_height) {}
 
-const VirtualLightMap::ShadowCell& VirtualLightMap::cell(int x, int y) const {
-        return grid_[index_of(x, y)];
-}
-
-VirtualLightMap::ShadowCell& VirtualLightMap::cell_by_index(std::size_t index) {
-        return grid_[index];
-}
-
-const VirtualLightMap::ShadowCell& VirtualLightMap::cell_by_index(std::size_t index) const {
-        return grid_[index];
-}
-
-const VirtualLightMap::ShadowCell& VirtualLightMap::cell_for_index(int index) const {
-        static const ShadowCell kFallback{};
-        if (index < 0 || index >= quadrant_count()) {
-                return kFallback;
-        }
-        return grid_[static_cast<std::size_t>(index)];
-}
-
-SDL_Rect VirtualLightMap::GridMetrics::cell_bounds(int gx, int gy) const {
-        SDL_Rect rect{};
-        rect.x = static_cast<int>(std::lround(static_cast<float>(gx) * cell_width));
-        rect.y = static_cast<int>(std::lround(static_cast<float>(gy) * cell_height));
-        rect.w = static_cast<int>(std::lround(cell_width));
-        rect.h = static_cast<int>(std::lround(cell_height));
-        return rect;
-}
-
-SDL_FPoint VirtualLightMap::GridMetrics::cell_center(int gx, int gy) const {
-        return SDL_FPoint{ (static_cast<float>(gx) + 0.5f) * cell_width,
-                           (static_cast<float>(gy) + 0.5f) * cell_height };
-}
-
-SDL_FPoint VirtualLightMap::GridMetrics::screen_to_grid(float x, float y) const {
-        return SDL_FPoint{ x * inv_cell_width, y * inv_cell_height };
-}
-
-std::optional<VirtualLightMap::GridMetrics> VirtualLightMap::grid_metrics() const {
-        if (screen_width <= 0 || screen_height <= 0) {
-                return std::nullopt;
-        }
-        GridMetrics metrics{};
-        metrics.grid_width      = grid_width_;
-        metrics.grid_height     = grid_height_;
-        metrics.cell_width      = static_cast<float>(screen_width) / static_cast<float>(grid_width_);
-        metrics.cell_height     = static_cast<float>(screen_height) / static_cast<float>(grid_height_);
-        metrics.inv_cell_width  = (metrics.cell_width > 0.0f) ? (1.0f / metrics.cell_width) : 0.0f;
-        metrics.inv_cell_height = (metrics.cell_height > 0.0f) ? (1.0f / metrics.cell_height) : 0.0f;
-        if (metrics.cell_width <= 0.0f || metrics.cell_height <= 0.0f) {
-                return std::nullopt;
-        }
-        return metrics;
-}
-
-std::optional<VirtualLightMap::GridCoord> VirtualLightMap::locate_index(int index) const {
-        if (index < 0 || index >= quadrant_count()) {
-                return std::nullopt;
-        }
-        const auto metrics = grid_metrics();
-        if (!metrics) {
-                return std::nullopt;
-        }
-        const int gx = index % grid_width_;
-        const int gy = index / grid_width_;
-        GridCoord coord{};
-        coord.x      = gx;
-        coord.y      = gy;
-        coord.index  = index;
-        coord.bounds = metrics->cell_bounds(gx, gy);
-        coord.center = metrics->cell_center(gx, gy);
-        coord.bounds.w = std::min(coord.bounds.w, screen_width - coord.bounds.x);
-        coord.bounds.h = std::min(coord.bounds.h, screen_height - coord.bounds.y);
-        return coord;
-}
-
-std::optional<VirtualLightMap::GridCoord> VirtualLightMap::locate_screen_point(float x, float y) const {
-        const auto metrics = grid_metrics();
-        if (!metrics) {
-                return std::nullopt;
-        }
-        if (x < 0.0f || y < 0.0f ||
-            x >= static_cast<float>(screen_width) ||
-            y >= static_cast<float>(screen_height)) {
-                return std::nullopt;
-        }
-        SDL_FPoint grid_pos = metrics->screen_to_grid(x, y);
-        int gx = static_cast<int>(std::floor(grid_pos.x));
-        int gy = static_cast<int>(std::floor(grid_pos.y));
-        gx = std::clamp(gx, 0, grid_width_ - 1);
-        gy = std::clamp(gy, 0, grid_height_ - 1);
-        return locate_index(gy * grid_width_ + gx);
-}
-
-std::optional<VirtualLightMap::GridCoord> VirtualLightMap::locate_world_point(SDL_Point world,
-                                                                              const camera& view) const {
-        SDL_Point screen = view.map_to_screen(world);
-        return locate_screen_point(static_cast<float>(screen.x), static_cast<float>(screen.y));
-}
-
-SDL_Rect VirtualLightMap::quadrant_bounds(int index) const {
-        auto coord = locate_index(index);
-        if (!coord) {
-                return SDL_Rect{0, 0, 0, 0};
-        }
-        return coord->bounds;
-}
-
-int VirtualLightMap::quadrant_for_point(float x, float y) const {
-        auto coord = locate_screen_point(x, y);
-        return coord ? coord->index : -1;
-}
-
-int VirtualLightMap::quadrant_for_rect(const SDL_Rect& rect) const {
-        const float cx = static_cast<float>(rect.x) + static_cast<float>(rect.w) * 0.5f;
-        const float cy = static_cast<float>(rect.y) + static_cast<float>(rect.h) * 0.5f;
-        return quadrant_for_point(cx, cy);
-}
-LightMap::LightMap(Assets* assets,
-                   int screen_width,
-                   int screen_height)
-: assets_(assets),
-screen_width_(screen_width),
-screen_height_(screen_height)
-{
-        virtual_light_map_.clear();
-        capture_format_ = SDL_AllocFormat(SDL_PIXELFORMAT_RGBA8888);
-}
-
-LightMap::~LightMap() {
-        if (fullscreen_texture_) {
-                SDL_DestroyTexture(fullscreen_texture_);
-                fullscreen_texture_ = nullptr;
-        }
-        if (capture_format_) {
-                SDL_FreeFormat(capture_format_);
-                capture_format_ = nullptr;
-        }
-}
-
-void LightMap::prepare_fullscreen_light_map(SDL_Renderer* renderer) {
-        if (!renderer) {
-                return;
-        }
-        scratch_layers_.clear();
-        collect_layers(scratch_layers_);
-        compute_fullscreen_texture(renderer, scratch_layers_);
-}
-
-void LightMap::render_fullscreen_light_map(SDL_Renderer* renderer) const {
-        if (!renderer || !fullscreen_texture_) {
-                return;
-        }
-        SDL_SetTextureBlendMode(fullscreen_texture_, SDL_BLENDMODE_MOD);
-        SDL_SetTextureAlphaMod(fullscreen_texture_, 255);
-        SDL_SetTextureColorMod(fullscreen_texture_, 255, 255, 255);
-        SDL_RenderCopy(renderer, fullscreen_texture_, nullptr, nullptr);
-}
-
-void LightMap::update_virtual_light_map(SDL_Renderer* renderer) {
-        if (!renderer) {
-                return;
-        }
-        compute_virtual_light_map(renderer);
-}
+LightMap::~LightMap() = default;
 
 void LightMap::set_virtual_light_map_quadrants(int quadrants) {
-        virtual_light_map_.set_square_grid(quadrants);
-        const std::size_t cell_count = static_cast<std::size_t>(virtual_light_map_.grid_width()) *
-                                       static_cast<std::size_t>(virtual_light_map_.grid_height());
-        cell_brightness_accum_.assign(cell_count, 0.0f);
-        cell_sample_counts_.assign(cell_count, 0);
+    requested_quadrants_ = std::clamp(quadrants, kMinQuadrantCount, kMaxQuadrantCount);
 }
 
-void LightMap::collect_layers(std::vector<LightEntry>& out) {
-        const float camera_scale = assets_ ? assets_->getView().get_scale() : 1.0f;
-        const float inv_scale = (camera_scale > 0.0f && std::isfinite(camera_scale)) ? (1.0f / camera_scale) : 1.0f;
-        constexpr int min_visible_w = 1;
-        constexpr int min_visible_h = 1;
-        const auto& lit_assets = assets_->getActiveLitAssets();
-        if (out.capacity() < lit_assets.size() + 3) {
-                out.reserve(lit_assets.size() + 3);
+void LightMap::rebuild(SDL_Renderer* renderer) {
+    if (!renderer) {
+        return;
+    }
+    if (screen_width_ <= 0 || screen_height_ <= 0) {
+        return;
+    }
+
+    quadrant_cols_ = std::max(1, requested_quadrants_);
+    quadrant_rows_ = std::max(1, requested_quadrants_);
+
+    const int base_width  = std::max(1, screen_width_ / quadrant_cols_);
+    const int base_height = std::max(1, screen_height_ / quadrant_rows_);
+    quadrant_size_px_     = std::max(base_width, base_height);
+
+    const int total_quadrants = quadrant_cols_ * quadrant_rows_;
+    quadrants_.clear();
+    quadrants_.reserve(static_cast<std::size_t>(total_quadrants));
+
+    for (int row = 0; row < quadrant_rows_; ++row) {
+        for (int col = 0; col < quadrant_cols_; ++col) {
+            SDL_Rect rect{};
+            rect.x = col * base_width;
+            rect.y = row * base_height;
+            rect.w = (col == quadrant_cols_ - 1) ? (screen_width_ - rect.x) : base_width;
+            rect.h = (row == quadrant_rows_ - 1) ? (screen_height_ - rect.y) : base_height;
+
+            LightMapQuadrant quadrant;
+            quadrant.configure(renderer, rect, static_grid_resolution_, padding_cells_);
+
+            std::vector<std::uint8_t> static_grid(static_cast<std::size_t>(static_grid_resolution_) *
+                                                  static_cast<std::size_t>(static_grid_resolution_),
+                                                  0);
+            quadrant.build_static(static_grid, static_grid_resolution_, static_grid_resolution_);
+            quadrant.update_tile_mask(renderer, kDefaultStaticWeight, kDefaultDynamicWeight);
+            quadrants_.push_back(std::move(quadrant));
         }
-
-        for (Asset* asset : lit_assets) {
-                if (!asset || !asset->info) {
-                        continue;
-                }
-                const auto& lights = asset->info->light_sources;
-                if (lights.empty()) {
-                        continue;
-                }
-
-                const bool flipped = asset->flipped;
-                for (const LightSource& light : lights) {
-                        if (!light.texture || light.intensity <= 0) {
-                                continue;
-                        }
-
-                        int base_w = light.cached_w;
-                        int base_h = light.cached_h;
-                        if (base_w <= 0 || base_h <= 0) {
-                                SDL_QueryTexture(light.texture, nullptr, nullptr, &base_w, &base_h);
-                        }
-                        if (base_w <= 0 || base_h <= 0) {
-                                continue;
-                        }
-
-                        int scaled_fw = base_w;
-                        int scaled_fh = base_h;
-
-                        const int offset_x = flipped ? -light.offset_x : light.offset_x;
-                        SDL_Point light_pos{asset->pos.x + offset_x, asset->pos.y + light.offset_y};
-                        SDL_Rect dst = get_scaled_position_rect(light_pos, scaled_fw, scaled_fh, inv_scale, min_visible_w, min_visible_h);
-                        if (dst.w == 0 && dst.h == 0) {
-                                continue;
-                        }
-
-                        float desired_scale = render_pipeline::ScalingLogic::ComputeScale(base_w, base_h, dst.w, dst.h);
-                        const float base_scale = (asset->info->scale_factor > 0.0f && std::isfinite(asset->info->scale_factor))
-                                                     ? asset->info->scale_factor
-                                                     : 1.0f;
-                        const auto& usage = asset->last_scale_usage();
-                        if (std::isfinite(usage.requested_scale) && usage.requested_scale > 0.0f) {
-                                const bool usage_default =
-                                        (std::fabs(usage.requested_scale - 1.0f) < 1e-4f) &&
-                                        (std::fabs(usage.texture_scale   - 1.0f) < 1e-4f) &&
-                                        (std::fabs(usage.remainder_scale - 1.0f) < 1e-4f) &&
-                                        usage.variant_index == 0 &&
-                                        (std::fabs(base_scale - 1.0f) > 1e-4f);
-                                if (!usage_default && base_scale > 0.0f && std::isfinite(base_scale)) {
-                                        float normalized = usage.requested_scale / base_scale;
-                                        if (std::isfinite(normalized) && normalized > 0.0f) {
-                                                desired_scale = normalized;
-                                        }
-                                }
-                        }
-                        SDL_Texture* tex = light.texture_for_scale(desired_scale);
-                        if (!tex) {
-                                continue;
-                        }
-
-                        LightEntry entry{};
-                        entry.dst = dst;
-                        entry.alpha = static_cast<Uint8>(std::clamp(light.intensity, 0, 255));
-                        entry.color_mod = SDL_Color{light.color.r, light.color.g, light.color.b, 255};
-                        entry.texture = tex;
-                        out.push_back(entry);
-                }
-        }
+    }
 }
 
-SDL_Rect LightMap::get_scaled_position_rect(SDL_Point pos, int fw, int fh,
-                                            float inv_scale, int min_w, int min_h) {
-        float base_sw = static_cast<float>(fw) * inv_scale;
-        float base_sh = static_cast<float>(fh) * inv_scale;
-        if (base_sw < static_cast<float>(min_w) && base_sh < static_cast<float>(min_h)) {
-                return {0, 0, 0, 0};
+void LightMap::update(SDL_Renderer* renderer, std::uint32_t delta_ms) {
+    if (!renderer) {
+        return;
+    }
+    const std::uint8_t fade = static_cast<std::uint8_t>(std::min(delta_ms / 6, 20u));
+    for (auto& quadrant : quadrants_) {
+        if (!quadrant.active()) {
+            quadrant.fade_dynamic(fade);
         }
-        const camera::RenderEffects effects = assets_->getView().compute_render_effects(pos, base_sh, base_sh);
-        float scaled_sw = base_sw * effects.distance_scale;
-        float scaled_sh = base_sh * effects.distance_scale;
-        float final_visible_h = scaled_sh * effects.vertical_scale;
-        if (scaled_sw < static_cast<float>(min_w) && final_visible_h < static_cast<float>(min_h)) {
-                return {0, 0, 0, 0};
+        if (quadrant.dirty()) {
+            quadrant.update_tile_mask(renderer, kDefaultStaticWeight, kDefaultDynamicWeight);
         }
-        int sw = std::max(1, static_cast<int>(std::lround(scaled_sw)));
-        int sh = std::max(1, static_cast<int>(std::lround(final_visible_h)));
-        if (sw < min_w && sh < min_h) {
-                return {0, 0, 0, 0};
-        }
-        SDL_Point cp = effects.screen_position;
-        return SDL_Rect{ cp.x - sw / 2, cp.y - sh / 2, sw, sh };
+        quadrant.set_active(false);
+    }
 }
 
-void LightMap::compute_fullscreen_texture(SDL_Renderer* renderer, const std::vector<LightEntry>& layers) {
-        if (!renderer) {
-                return;
-        }
-
-        int output_w = screen_width_;
-        int output_h = screen_height_;
-        if (SDL_GetRendererOutputSize(renderer, &output_w, &output_h) == 0) {
-                screen_width_ = output_w;
-                screen_height_ = output_h;
-        }
-
-        if (screen_width_ <= 0 || screen_height_ <= 0) {
-                return;
-        }
-
-        if (!fullscreen_texture_) {
-                fullscreen_texture_ = SDL_CreateTexture(renderer,
-                                                       SDL_PIXELFORMAT_RGBA8888,
-                                                       SDL_TEXTUREACCESS_TARGET,
-                                                       screen_width_,
-                                                       screen_height_);
-        } else {
-                int tex_w = 0;
-                int tex_h = 0;
-                if (SDL_QueryTexture(fullscreen_texture_, nullptr, nullptr, &tex_w, &tex_h) != 0 || tex_w != screen_width_ || tex_h != screen_height_) {
-                        SDL_DestroyTexture(fullscreen_texture_);
-                        fullscreen_texture_ = SDL_CreateTexture(renderer,
-                                                               SDL_PIXELFORMAT_RGBA8888,
-                                                               SDL_TEXTUREACCESS_TARGET,
-                                                               screen_width_,
-                                                               screen_height_);
-                }
-        }
-
-        if (!fullscreen_texture_) {
-                return;
-        }
-
-        SDL_Texture* prev_target = SDL_GetRenderTarget(renderer);
-        SDL_SetRenderTarget(renderer, fullscreen_texture_);
-        SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_ADD);
-        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
-        SDL_RenderClear(renderer);
-
-        for (const LightEntry& entry : layers) {
-                if (entry.dst.w <= 0 || entry.dst.h <= 0 || entry.alpha == 0) {
-                        continue;
-                }
-
-                if (entry.texture) {
-                        Uint8 saved_r = 255;
-                        Uint8 saved_g = 255;
-                        Uint8 saved_b = 255;
-                        Uint8 saved_a = 255;
-                        SDL_BlendMode saved_blend = SDL_BLENDMODE_BLEND;
-                        SDL_GetTextureColorMod(entry.texture, &saved_r, &saved_g, &saved_b);
-                        SDL_GetTextureAlphaMod(entry.texture, &saved_a);
-                        SDL_GetTextureBlendMode(entry.texture, &saved_blend);
-
-                        SDL_SetTextureColorMod(entry.texture, entry.color_mod.r, entry.color_mod.g, entry.color_mod.b);
-                        SDL_SetTextureAlphaMod(entry.texture, entry.alpha);
-                        SDL_SetTextureBlendMode(entry.texture, SDL_BLENDMODE_ADD);
-                        SDL_RenderCopy(renderer, entry.texture, nullptr, &entry.dst);
-                        SDL_SetTextureBlendMode(entry.texture, saved_blend);
-                        SDL_SetTextureColorMod(entry.texture, saved_r, saved_g, saved_b);
-                        SDL_SetTextureAlphaMod(entry.texture, saved_a);
-                } else {
-                        SDL_SetRenderDrawColor(renderer, entry.color_mod.r, entry.color_mod.g, entry.color_mod.b, entry.alpha);
-                        SDL_RenderFillRect(renderer, &entry.dst);
-                }
-        }
-
-        SDL_SetRenderTarget(renderer, prev_target);
-        SDL_SetTextureBlendMode(fullscreen_texture_, SDL_BLENDMODE_MOD);
-#if SDL_VERSION_ATLEAST(2,0,12)
-        SDL_SetTextureScaleMode(fullscreen_texture_, SDL_ScaleModeBest);
-#endif
+const LightMapQuadrant* LightMap::quadrant(int index) const {
+    if (index < 0 || index >= static_cast<int>(quadrants_.size())) {
+        return nullptr;
+    }
+    return &quadrants_[static_cast<std::size_t>(index)];
 }
 
-void LightMap::compute_virtual_light_map(SDL_Renderer* renderer) {
-        virtual_light_map_.clear();
-        if (!renderer) {
-                return;
-        }
-
-        if (!capture_format_) {
-                capture_format_ = SDL_AllocFormat(SDL_PIXELFORMAT_RGBA8888);
-        }
-
-        if (!capture_format_) {
-                return;
-        }
-
-        int output_w = screen_width_;
-        int output_h = screen_height_;
-        if (SDL_GetRendererOutputSize(renderer, &output_w, &output_h) != 0) {
-                return;
-        }
-
-        screen_width_ = output_w;
-        screen_height_ = output_h;
-        virtual_light_map_.screen_width = screen_width_;
-        virtual_light_map_.screen_height = screen_height_;
-
-        if (screen_width_ <= 0 || screen_height_ <= 0) {
-                return;
-        }
-
-        const std::size_t pixel_count = static_cast<std::size_t>(screen_width_) * static_cast<std::size_t>(screen_height_);
-        pixel_buffer_.resize(pixel_count);
-        if (pixel_buffer_.empty()) {
-                return;
-        }
-
-        SDL_Rect read_rect{0, 0, screen_width_, screen_height_};
-        const int pitch = screen_width_ * static_cast<int>(sizeof(Uint32));
-        if (SDL_RenderReadPixels(renderer, &read_rect, SDL_PIXELFORMAT_RGBA8888, pixel_buffer_.data(), pitch) != 0) {
-                return;
-        }
-
-        const int grid_w = virtual_light_map_.grid_width();
-        const int grid_h = virtual_light_map_.grid_height();
-        const std::size_t cell_count = static_cast<std::size_t>(grid_w) *
-                                       static_cast<std::size_t>(grid_h);
-        virtual_light_map_.reserve_cells(cell_count);
-        cell_brightness_accum_.assign(cell_count, 0.0f);
-        cell_sample_counts_.assign(cell_count, 0);
-
-        const float inv_screen_w = (screen_width_ > 0)
-                                        ? static_cast<float>(grid_w) /
-                                                  static_cast<float>(screen_width_)
-                                        : 0.0f;
-        const float inv_screen_h = (screen_height_ > 0)
-                                        ? static_cast<float>(grid_h) /
-                                                  static_cast<float>(screen_height_)
-                                        : 0.0f;
-
-        for (int y = 0; y < screen_height_; ++y) {
-                const int gy = std::clamp(static_cast<int>(std::floor(static_cast<float>(y) * inv_screen_h)),
-                                           0,
-                                           grid_h - 1);
-                for (int x = 0; x < screen_width_; ++x) {
-                        const int gx = std::clamp(static_cast<int>(std::floor(static_cast<float>(x) * inv_screen_w)),
-                                                   0,
-                                                   grid_w - 1);
-                        const std::size_t cell_index = virtual_light_map_.index_of(gx, gy);
-                        const Uint32 pixel = pixel_buffer_[static_cast<std::size_t>(y) * screen_width_ +
-                                                          static_cast<std::size_t>(x)];
-                        Uint8 r = 0;
-                        Uint8 g = 0;
-                        Uint8 b = 0;
-                        Uint8 a = 0;
-                        SDL_GetRGBA(pixel, capture_format_, &r, &g, &b, &a);
-                        SDL_Color color{r, g, b, a};
-                        const float brightness = compute_luminance(color) *
-                                                 (static_cast<float>(a) / 255.0f);
-                        cell_brightness_accum_[cell_index] += brightness;
-                        cell_sample_counts_[cell_index] += 1;
-                }
-        }
-
-        for (std::size_t idx = 0; idx < cell_count; ++idx) {
-                const int count = cell_sample_counts_[idx];
-                auto& cell = virtual_light_map_.cell_by_index(idx);
-                const float averaged = (count > 0)
-                        ? std::clamp(cell_brightness_accum_[idx] / static_cast<float>(count), 0.0f, 1.0f)
-                        : 0.0f;
-                cell.brightness = averaged;
-                cell.opacity    = 0.0f;
-                cell.offset_x   = 0.0f;
-                cell.offset_y   = 0.0f;
-                cell.scale      = 1.0f;
-        }
-
-        const render_pipeline::shading::ReactiveShadowSettings default_settings =
-                render_pipeline::shading::sanitize_reactive_shadow_settings({});
-        render_pipeline::shading::ReactiveShadowSettings vlm_settings = default_settings;
-        if (const auto* reactive_settings = assets_ ? assets_->reactive_shadow_settings() : nullptr) {
-                vlm_settings = render_pipeline::shading::sanitize_reactive_shadow_settings(*reactive_settings);
-        }
-
-        const auto metrics = virtual_light_map_.grid_metrics();
-        const float cell_width  = metrics ? metrics->cell_width : 1.0f;
-        const float cell_height = metrics ? metrics->cell_height : 1.0f;
-
-        const float map_light_factor = std::clamp(vlm_settings.virtual_light_map.map_light_factor, 0.0f, 1.0f);
-        const float attenuation      = std::clamp(1.0f - map_light_factor, 0.0f, 1.0f);
-
-        const Global_Light_Source* map_light = assets_ ? assets_->map_light_source() : nullptr;
-        if (map_light && metrics && attenuation < 1.0f) {
-                SDL_Point camera_center = assets_->getView().get_screen_center();
-                SDL_Point light_pos     = map_light->get_position();
-
-                auto clamp_grid = [](float value, int max_index) {
-                        const float max_value = static_cast<float>(max_index) - 1e-4f;
-                        return std::clamp(value, 0.0f, max_value);
-                };
-
-                SDL_FPoint start = metrics->screen_to_grid(static_cast<float>(camera_center.x),
-                                                           static_cast<float>(camera_center.y));
-                SDL_FPoint end   = metrics->screen_to_grid(static_cast<float>(light_pos.x),
-                                                           static_cast<float>(light_pos.y));
-
-                start.x = clamp_grid(start.x, grid_w);
-                start.y = clamp_grid(start.y, grid_h);
-                end.x   = clamp_grid(end.x, grid_w);
-                end.y   = clamp_grid(end.y, grid_h);
-
-                auto attenuate_cell = [&](int gx, int gy) {
-                        if (gx < 0 || gy < 0 ||
-                            gx >= grid_w || gy >= grid_h) {
-                                return;
-                        }
-                        auto& cell = virtual_light_map_.cell(gx, gy);
-                        cell.brightness = std::clamp(cell.brightness * attenuation, 0.0f, 1.0f);
-                };
-
-                auto trace_grid = [&](SDL_FPoint s, SDL_FPoint e) {
-                        const float dx = e.x - s.x;
-                        const float dy = e.y - s.y;
-
-                        int x = static_cast<int>(std::floor(s.x));
-                        int y = static_cast<int>(std::floor(s.y));
-                        const int end_x = static_cast<int>(std::floor(e.x));
-                        const int end_y = static_cast<int>(std::floor(e.y));
-
-                        const int step_x = (dx > 0.0f) ? 1 : (dx < 0.0f ? -1 : 0);
-                        const int step_y = (dy > 0.0f) ? 1 : (dy < 0.0f ? -1 : 0);
-
-                        auto safe_div = [](float numerator, float denominator) {
-                                if (denominator == 0.0f) {
-                                        return std::numeric_limits<float>::infinity();
-                                }
-                                return numerator / denominator;
-                        };
-
-                        float next_boundary_x = (step_x > 0)
-                                ? (static_cast<float>(x) + 1.0f)
-                                : static_cast<float>(x);
-                        float next_boundary_y = (step_y > 0)
-                                ? (static_cast<float>(y) + 1.0f)
-                                : static_cast<float>(y);
-
-                        float t_max_x = (step_x != 0)
-                                ? safe_div(next_boundary_x - s.x, dx)
-                                : std::numeric_limits<float>::infinity();
-                        float t_max_y = (step_y != 0)
-                                ? safe_div(next_boundary_y - s.y, dy)
-                                : std::numeric_limits<float>::infinity();
-
-                        const float t_delta_x = (step_x != 0)
-                                ? std::abs(safe_div(1.0f, dx))
-                                : std::numeric_limits<float>::infinity();
-                        const float t_delta_y = (step_y != 0)
-                                ? std::abs(safe_div(1.0f, dy))
-                                : std::numeric_limits<float>::infinity();
-
-                        attenuate_cell(x, y);
-
-                        while (x != end_x || y != end_y) {
-                                if (t_max_x < t_max_y) {
-                                        t_max_x += t_delta_x;
-                                        x += step_x;
-                                } else {
-                                        t_max_y += t_delta_y;
-                                        y += step_y;
-                                }
-                                attenuate_cell(x, y);
-                        }
-                };
-
-                trace_grid(start, end);
-        }
-
-        const float horizontal_falloff = std::max(vlm_settings.virtual_light_map.horizontal_falloff, 0.0f);
-        const float vertical_falloff   = std::max(vlm_settings.virtual_light_map.vertical_falloff, 0.0f);
-        const float max_offset_x       = std::max(vlm_settings.virtual_light_map.max_offset_x, 0.0f);
-        const float max_offset_y       = std::max(vlm_settings.virtual_light_map.max_offset_y, 0.0f);
-        const float cell_shadow_scale  = std::max(vlm_settings.virtual_light_map.shadow_scale, 0.0f);
-
-        auto weight_for_delta = [&](float dx, float dy) {
-                const float weight_x = (horizontal_falloff > 0.0f)
-                        ? std::exp(-std::fabs(dx) * horizontal_falloff)
-                        : 1.0f;
-                const float weight_y = (vertical_falloff > 0.0f)
-                        ? std::exp(-std::fabs(dy) * vertical_falloff)
-                        : 1.0f;
-                return weight_x * weight_y;
-        };
-
-        for (int y = 0; y < grid_h; ++y) {
-                for (int x = 0; x < grid_w; ++x) {
-                        auto& cell = virtual_light_map_.cell(x, y);
-
-                        float opacity_sum    = 0.0f;
-                        float opacity_weight = 0.0f;
-                        for (int sample_y = y; sample_y < grid_h; ++sample_y) {
-                                for (int sample_x = 0; sample_x < grid_w; ++sample_x) {
-                                        const auto& sample = virtual_light_map_.cell(sample_x, sample_y);
-                                        const float dx = static_cast<float>(sample_x - x);
-                                        const float dy = static_cast<float>(sample_y - y);
-                                        const float weight = weight_for_delta(dx, dy);
-                                        opacity_sum += weight * sample.brightness;
-                                        opacity_weight += weight;
-                                }
-                        }
-
-                        const float normalized_opacity = (opacity_weight > 0.0f)
-                                ? std::clamp(opacity_sum / opacity_weight, 0.0f, 1.0f)
-                                : 0.0f;
-                        cell.opacity = normalized_opacity;
-
-                        float offset_weight = 0.0f;
-                        float offset_x_sum  = 0.0f;
-                        float offset_y_sum  = 0.0f;
-                        for (int sample_y = 0; sample_y < grid_h; ++sample_y) {
-                                for (int sample_x = 0; sample_x < grid_w; ++sample_x) {
-                                        const auto& sample = virtual_light_map_.cell(sample_x, sample_y);
-                                        if (sample.brightness <= 0.0f) {
-                                                continue;
-                                        }
-                                        const float dx = static_cast<float>(sample_x - x);
-                                        const float dy = static_cast<float>(sample_y - y);
-                                        const float weight = weight_for_delta(dx, dy) * sample.brightness;
-                                        if (weight <= 0.0f) {
-                                                continue;
-                                        }
-                                        offset_weight += weight;
-                                        offset_x_sum  += weight * dx;
-                                        offset_y_sum  += weight * dy;
-                                }
-                        }
-
-                        const float offset_scale_x = (offset_weight > 0.0f)
-                                ? (offset_x_sum / offset_weight) * cell_width
-                                : 0.0f;
-                        const float offset_scale_y = (offset_weight > 0.0f)
-                                ? (offset_y_sum / offset_weight) * cell_height
-                                : 0.0f;
-
-                        cell.offset_x = std::clamp(offset_scale_x, -max_offset_x, max_offset_x);
-                        cell.offset_y = std::clamp(offset_scale_y, -max_offset_y, max_offset_y);
-                        cell.scale    = cell_shadow_scale;
-                }
-        }
-
+SDL_Rect LightMap::quadrant_bounds(int index) const {
+    const LightMapQuadrant* quad = quadrant(index);
+    if (!quad) {
+        return SDL_Rect{0, 0, 0, 0};
+    }
+    return quad->world_rect();
 }
+
+int LightMap::quadrant_for_point(float x, float y) const {
+    SDL_Point point{static_cast<int>(std::floor(x)), static_cast<int>(std::floor(y))};
+    for (std::size_t i = 0; i < quadrants_.size(); ++i) {
+        const SDL_Rect& rect = quadrants_[i].world_rect();
+        if (SDL_PointInRect(&point, &rect)) {
+            return static_cast<int>(i);
+        }
+    }
+    return -1;
+}
+
+int LightMap::find_quadrant_index(int world_x, int world_y) const {
+    SDL_Point point{world_x, world_y};
+    for (std::size_t i = 0; i < quadrants_.size(); ++i) {
+        const SDL_Rect& rect = quadrants_[i].world_rect();
+        if (SDL_PointInRect(&point, &rect)) {
+            return static_cast<int>(i);
+        }
+    }
+    return -1;
+}
+
+float LightMap::sample_internal(int quadrant_index, float local_x, float local_y, bool bilinear) const {
+    const LightMapQuadrant* quadrant_ptr = quadrant(quadrant_index);
+    if (!quadrant_ptr) {
+        return 0.0f;
+    }
+    return quadrant_ptr->sample_brightness(local_x,
+                                           local_y,
+                                           kDefaultStaticWeight,
+                                           kDefaultDynamicWeight,
+                                           bilinear);
+}
+
+float LightMap::sample_brightness(int world_x, int world_y) const {
+    const int quadrant_index = find_quadrant_index(world_x, world_y);
+    if (quadrant_index < 0) {
+        return 0.0f;
+    }
+    const LightMapQuadrant* quadrant_ptr = quadrant(quadrant_index);
+    if (!quadrant_ptr) {
+        return 0.0f;
+    }
+    const SDL_Rect& rect = quadrant_ptr->world_rect();
+    if (rect.w <= 0 || rect.h <= 0) {
+        return 0.0f;
+    }
+    const float nx = static_cast<float>(world_x - rect.x) / static_cast<float>(rect.w);
+    const float ny = static_cast<float>(world_y - rect.y) / static_cast<float>(rect.h);
+    const float local_x = nx * static_cast<float>(quadrant_ptr->grid_width() - 1);
+    const float local_y = ny * static_cast<float>(quadrant_ptr->grid_height() - 1);
+    return sample_internal(quadrant_index, local_x, local_y, false);
+}
+
+float LightMap::sample_brightness_bilinear(float world_x, float world_y) const {
+    const int ix = static_cast<int>(std::round(world_x));
+    const int iy = static_cast<int>(std::round(world_y));
+    const int quadrant_index = find_quadrant_index(ix, iy);
+    if (quadrant_index < 0) {
+        return 0.0f;
+    }
+    const LightMapQuadrant* quadrant_ptr = quadrant(quadrant_index);
+    if (!quadrant_ptr) {
+        return 0.0f;
+    }
+    const SDL_Rect& rect = quadrant_ptr->world_rect();
+    if (rect.w <= 0 || rect.h <= 0) {
+        return 0.0f;
+    }
+    const float nx = (world_x - static_cast<float>(rect.x)) / static_cast<float>(rect.w);
+    const float ny = (world_y - static_cast<float>(rect.y)) / static_cast<float>(rect.h);
+    const float local_x = std::clamp(nx, 0.0f, 1.0f) * static_cast<float>(quadrant_ptr->grid_width() - 1);
+    const float local_y = std::clamp(ny, 0.0f, 1.0f) * static_cast<float>(quadrant_ptr->grid_height() - 1);
+    return sample_internal(quadrant_index, local_x, local_y, true);
+}
+

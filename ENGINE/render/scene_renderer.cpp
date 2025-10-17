@@ -46,11 +46,10 @@ SceneRenderer::SceneRenderer(SDL_Renderer* renderer,
     main_light_source_.initialize_from_map_manifest(map_manifest, map_id);
     z_light_pass_ = std::make_unique<LightMap>(assets_, screen_width_, screen_height_);
     if (z_light_pass_) {
-        z_light_pass_->prepare_fullscreen_light_map(renderer_);
-        z_light_pass_->update_virtual_light_map(renderer_);
-        render_pipeline_.lighting().virtual_light_map = &z_light_pass_->virtual_light_map();
+        z_light_pass_->rebuild(renderer_);
+        render_pipeline_.lighting().light_map = z_light_pass_.get();
     } else {
-        render_pipeline_.lighting().virtual_light_map = nullptr;
+        render_pipeline_.lighting().light_map = nullptr;
     }
     render_pipeline_.lighting().reactive_shadow_settings = &reactive_shadow_settings_;
     main_light_source_.update();
@@ -58,8 +57,8 @@ SceneRenderer::SceneRenderer(SDL_Renderer* renderer,
 
 SDL_Renderer* SceneRenderer::get_renderer() const { return renderer_; }
 
-const VirtualLightMap* SceneRenderer::virtual_light_map() const {
-    return z_light_pass_ ? &z_light_pass_->virtual_light_map() : nullptr;
+const LightMap* SceneRenderer::light_map() const {
+    return z_light_pass_ ? z_light_pass_.get() : nullptr;
 }
 
 void SceneRenderer::set_virtual_light_map_quadrants(int quadrants) {
@@ -73,9 +72,8 @@ void SceneRenderer::force_virtual_light_map_refresh() {
     if (!z_light_pass_ || !renderer_) {
         return;
     }
-    z_light_pass_->prepare_fullscreen_light_map(renderer_);
-    z_light_pass_->update_virtual_light_map(renderer_);
-    render_pipeline_.lighting().virtual_light_map = &z_light_pass_->virtual_light_map();
+    z_light_pass_->rebuild(renderer_);
+    render_pipeline_.lighting().light_map = z_light_pass_.get();
 }
 
 void SceneRenderer::set_low_quality_rendering(bool enabled){
@@ -147,10 +145,10 @@ void SceneRenderer::render(){
     if (should_update_light){ main_light_source_.update(); }
 
     if (z_light_pass_){
-        z_light_pass_->prepare_fullscreen_light_map(renderer_);
-        render_pipeline_.lighting().virtual_light_map=&z_light_pass_->virtual_light_map();
+        z_light_pass_->update(renderer_, 16);
+        render_pipeline_.lighting().light_map = z_light_pass_.get();
     } else {
-        render_pipeline_.lighting().virtual_light_map=nullptr;
+        render_pipeline_.lighting().light_map = nullptr;
     }
     render_pipeline_.lighting().reactive_shadow_settings = &reactive_shadow_settings_;
 
@@ -312,20 +310,12 @@ void SceneRenderer::render(){
 
         render_commands(texture_commands);
 
-        if (z_light_pass_) {
-            z_light_pass_->render_fullscreen_light_map(renderer_);
-        }
-
         render_commands(remaining_commands);
 
         last_active_assets_ = std::move(cur_active);
     }
 
     SDL_SetRenderTarget(renderer_,nullptr);
-
-    if (z_light_pass_) {
-        z_light_pass_->update_virtual_light_map(renderer_);
-    }
 
     if (!light_map_only_mode_ && assets_){
         assets_->render_overlays(renderer_);

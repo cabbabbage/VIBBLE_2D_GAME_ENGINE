@@ -16,7 +16,7 @@
 
 class Asset;
 class SceneRenderer;
-struct VirtualLightMap;
+class LightMap;
 struct SDL_Renderer;
 class CurrentRoomFinder;
 class Room;
@@ -129,7 +129,7 @@ public:
     const Global_Light_Source* map_light_source() const;
     render_pipeline::shading::ReactiveShadowSettings* reactive_shadow_settings();
     const render_pipeline::shading::ReactiveShadowSettings* reactive_shadow_settings() const;
-    const VirtualLightMap* virtual_light_map() const;
+    const LightMap* light_map() const;
     void set_virtual_light_map_quadrants(int quadrants);
     int  virtual_light_map_quadrants() const;
     void force_virtual_light_map_refresh();

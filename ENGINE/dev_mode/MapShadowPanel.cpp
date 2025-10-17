@@ -7,6 +7,7 @@
 #include "dev_mode/dev_ui_settings.hpp"
 #include "input.hpp"
 #include "render/camera.hpp"
+#include "render/light_map.hpp"
 #include "render_pipeline/render_asset/shading/ReactiveShadowSettingsJSON.hpp"
 
 #include <algorithm>
@@ -77,8 +78,8 @@ MapShadowPanel::MapShadowPanel(MapLightPanel* light_panel, Assets* assets, int x
     set_visible_height(540);
     if (assets_) {
         last_quadrant_count_ = clamp_int(assets_->virtual_light_map_quadrants(),
-                                         VirtualLightMap::kMinGridSize,
-                                         VirtualLightMap::kMaxGridSize);
+                                         LightMap::kMinQuadrantCount,
+                                         LightMap::kMaxQuadrantCount);
         forced_quadrant_snapshot_ = last_quadrant_count_;
     }
     forced_settings_snapshot_ = last_applied_settings_;
@@ -98,8 +99,8 @@ void MapShadowPanel::set_map_info(nlohmann::json* map_info, SaveCallback on_save
     }
     if (assets_) {
         last_quadrant_count_ = clamp_int(assets_->virtual_light_map_quadrants(),
-                                         VirtualLightMap::kMinGridSize,
-                                         VirtualLightMap::kMaxGridSize);
+                                         LightMap::kMinQuadrantCount,
+                                         LightMap::kMaxQuadrantCount);
     }
     if (quadrant_count_) {
         quadrant_count_->set_value(last_quadrant_count_);
@@ -192,10 +193,10 @@ void MapShadowPanel::build_ui() {
     map_light_factor_   = make_float_slider("Map Light Factor", 0.0f, 1.0f,
                                             last_applied_settings_.virtual_light_map.map_light_factor, 100);
 
-    const int clamped_quadrants = clamp_int(last_quadrant_count_, VirtualLightMap::kMinGridSize,
-                                            VirtualLightMap::kMaxGridSize);
+    const int clamped_quadrants = clamp_int(last_quadrant_count_, LightMap::kMinQuadrantCount,
+                                            LightMap::kMaxQuadrantCount);
     quadrant_count_ = std::make_unique<DMSlider>(
-        "Quadrant Resolution", VirtualLightMap::kMinGridSize, VirtualLightMap::kMaxGridSize, clamped_quadrants);
+        "Quadrant Resolution", LightMap::kMinQuadrantCount, LightMap::kMaxQuadrantCount, clamped_quadrants);
     if (quadrant_count_) {
         quadrant_count_->set_defer_commit_until_unfocus(false);
     }
@@ -250,8 +251,8 @@ void MapShadowPanel::sync_ui_from_json() {
         if (auto quad_it = it->find("virtual_light_map_quadrants");
             quad_it != it->end() && quad_it->is_number_integer()) {
             last_quadrant_count_ = clamp_int(quad_it->get<int>(),
-                                             VirtualLightMap::kMinGridSize,
-                                             VirtualLightMap::kMaxGridSize);
+                                             LightMap::kMinQuadrantCount,
+                                             LightMap::kMaxQuadrantCount);
         }
         last_applied_settings_ = render_pipeline::shading::reactive_shadow_settings_from_json(*it, last_applied_settings_);
         last_applied_settings_ = render_pipeline::shading::sanitize_reactive_shadow_settings(last_applied_settings_);
@@ -270,8 +271,8 @@ void MapShadowPanel::sync_json_from_ui() {
     int quadrants = last_quadrant_count_;
     if (quadrant_count_) {
         quadrants = clamp_int(quadrant_count_->value(),
-                               VirtualLightMap::kMinGridSize,
-                               VirtualLightMap::kMaxGridSize);
+                               LightMap::kMinQuadrantCount,
+                               LightMap::kMaxQuadrantCount);
     }
     apply_virtual_light_map_quadrants(quadrants, true);
     write_reactive_settings_to_json(settings);
@@ -338,7 +339,7 @@ render_pipeline::shading::ReactiveShadowSettings MapShadowPanel::load_reactive_s
         load_number(make_setting_key("virtual_light_map.size_scale_factor"), settings.virtual_light_map.size_scale_factor));
     int stored_quadrants = static_cast<int>(
         load_number(make_setting_key("virtual_light_map.quadrants"), last_quadrant_count_));
-    last_quadrant_count_ = clamp_int(stored_quadrants, VirtualLightMap::kMinGridSize, VirtualLightMap::kMaxGridSize);
+    last_quadrant_count_ = clamp_int(stored_quadrants, LightMap::kMinQuadrantCount, LightMap::kMaxQuadrantCount);
     return render_pipeline::shading::sanitize_reactive_shadow_settings(settings);
 }
 
@@ -364,7 +365,7 @@ void MapShadowPanel::write_reactive_settings_to_json(const render_pipeline::shad
 }
 
 void MapShadowPanel::apply_virtual_light_map_quadrants(int quadrants, bool force_refresh) {
-    const int clamped = clamp_int(quadrants, VirtualLightMap::kMinGridSize, VirtualLightMap::kMaxGridSize);
+    const int clamped = clamp_int(quadrants, LightMap::kMinQuadrantCount, LightMap::kMaxQuadrantCount);
     if (last_quadrant_count_ == clamped && !force_refresh) {
         return;
     }

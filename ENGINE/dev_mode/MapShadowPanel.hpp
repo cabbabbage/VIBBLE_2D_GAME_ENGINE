@@ -86,8 +86,8 @@ private:
     bool reactive_settings_initialized_ = false;
     render_pipeline::shading::ReactiveShadowSettings forced_settings_snapshot_ =
         render_pipeline::shading::sanitize_reactive_shadow_settings({});
-    int last_quadrant_count_ = VirtualLightMap::kDefaultGridSize;
-    int forced_quadrant_snapshot_ = VirtualLightMap::kDefaultGridSize;
+    int last_quadrant_count_ = LightMap::kDefaultQuadrantCount;
+    int forced_quadrant_snapshot_ = LightMap::kDefaultQuadrantCount;
 
 protected:
     std::string_view lock_settings_namespace() const override { return "lighting"; }

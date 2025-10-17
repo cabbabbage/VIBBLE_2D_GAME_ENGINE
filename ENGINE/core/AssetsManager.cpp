@@ -8,6 +8,7 @@
 #include "audio/audio_engine.hpp"
 #include "dev_mode/dev_controls.hpp"
 #include "render/scene_renderer.hpp"
+#include "render/light_map.hpp"
 #include "render_pipeline/ScalingLogic.hpp"
 #include "render_pipeline/render_asset/shading/RenderShadingStages.hpp"
 #include "map_generation/room.hpp"
@@ -1089,8 +1090,8 @@ const render_pipeline::shading::ReactiveShadowSettings* Assets::reactive_shadow_
     return const_cast<Assets*>(this)->reactive_shadow_settings();
 }
 
-const VirtualLightMap* Assets::virtual_light_map() const {
-    return scene ? scene->virtual_light_map() : nullptr;
+const LightMap* Assets::light_map() const {
+    return scene ? scene->light_map() : nullptr;
 }
 
 void Assets::set_virtual_light_map_quadrants(int quadrants) {
@@ -1100,10 +1101,10 @@ void Assets::set_virtual_light_map_quadrants(int quadrants) {
 }
 
 int Assets::virtual_light_map_quadrants() const {
-    if (const VirtualLightMap* map = virtual_light_map()) {
-        return map->grid_size();
+    if (const LightMap* map = light_map()) {
+        return map->virtual_light_map_quadrants();
     }
-    return VirtualLightMap::kDefaultGridSize;
+    return LightMap::kDefaultQuadrantCount;
 }
 
 void Assets::force_virtual_light_map_refresh() {

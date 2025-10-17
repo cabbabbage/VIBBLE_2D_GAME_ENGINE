@@ -216,7 +216,7 @@ SDL_Texture* RenderShadowMask::run(SDL_Renderer* renderer, const Asset& asset, S
 
     const ReactiveShadowSettings& cfg = reactive_settings_or_default(context);
 
-    const VirtualLightMap* map = context.virtual_light_map();
+    const LightMap* map = context.light_map();
 
     float opacity = clampf(context.base_shadow_opacity, 0.0f, 1.0f);
     float offset_x = 0.0f;
@@ -224,14 +224,11 @@ SDL_Texture* RenderShadowMask::run(SDL_Renderer* renderer, const Asset& asset, S
     float scale    = std::max(context.base_shadow_scale * cfg.virtual_light_map.shadow_scale, 0.0f);
 
     if (map) {
-        const int cell_index = map->quadrant_for_rect(context.screen_rect);
-        if (cell_index >= 0) {
-            const auto& cell = map->cell_for_index(cell_index);
-            opacity = clampf(cell.opacity, 0.0f, 1.0f);
-            offset_x = cell.offset_x;
-            offset_y = cell.offset_y;
-            scale    = std::max(context.base_shadow_scale * cell.scale * cfg.virtual_light_map.shadow_scale, 0.0f);
-        }
+        const SDL_Rect& rect = context.screen_rect;
+        const float center_x = static_cast<float>(rect.x) + static_cast<float>(rect.w) * 0.5f;
+        const float center_y = static_cast<float>(rect.y) + static_cast<float>(rect.h) * 0.5f;
+        const float brightness = map->sample_brightness_bilinear(center_x, center_y);
+        opacity = clampf(1.0f - brightness, 0.0f, 1.0f);
     }
 
     float asset_scale = 1.0f;

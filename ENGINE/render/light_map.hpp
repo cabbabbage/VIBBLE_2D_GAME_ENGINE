@@ -1,126 +1,123 @@
 #pragma once
 
 #include <SDL.h>
-#include <vector>
-#include <cstddef>
+
+#include <cstdint>
+#include <memory>
 #include <optional>
-#include "core/AssetsManager.hpp"
-#include "render/camera.hpp"
+#include <utility>
+#include <vector>
 
-struct VirtualLightMap {
-    static constexpr int kDefaultGridSize = 50;
-    static constexpr int kMinGridSize     = 1;
-    static constexpr int kMaxGridSize     = 100;
+class Assets;
+class camera;
 
-    struct ShadowCell {
-        float brightness = 0.0f;
-        float opacity    = 0.0f;
-        float offset_x   = 0.0f;
-        float offset_y   = 0.0f;
-        float scale      = 1.0f;
-    };
+class LightMapQuadrant {
+public:
+    LightMapQuadrant() = default;
+    LightMapQuadrant(const LightMapQuadrant&) = delete;
+    LightMapQuadrant& operator=(const LightMapQuadrant&) = delete;
+    LightMapQuadrant(LightMapQuadrant&& other) noexcept;
+    LightMapQuadrant& operator=(LightMapQuadrant&& other) noexcept;
+    ~LightMapQuadrant();
 
-    struct GridMetrics {
-        float cell_width     = 0.0f;
-        float cell_height    = 0.0f;
-        float inv_cell_width = 0.0f;
-        float inv_cell_height= 0.0f;
-        int   grid_width     = 0;
-        int   grid_height    = 0;
+    void configure(SDL_Renderer* renderer,
+                   const SDL_Rect& world_rect,
+                   int grid_resolution,
+                   int padding_cells);
 
-        SDL_Rect  cell_bounds(int gx, int gy) const;
-        SDL_FPoint cell_center(int gx, int gy) const;
-        SDL_FPoint screen_to_grid(float x, float y) const;
-    };
+    const SDL_Rect& world_rect() const { return world_rect_; }
+    int              grid_width() const { return grid_width_; }
+    int              grid_height() const { return grid_height_; }
+    int              padding() const { return padding_cells_; }
+    float            base_brightness() const { return base_brightness_; }
+    bool             dirty() const { return dirty_; }
+    bool             active() const { return active_; }
 
-    struct GridCoord {
-        int        x      = 0;
-        int        y      = 0;
-        int        index  = -1;
-        SDL_Rect   bounds { 0, 0, 0, 0 };
-        SDL_FPoint center { 0.0f, 0.0f };
-    };
+    void set_dirty(bool value) { dirty_ = value; }
+    void set_active(bool value) { active_ = value; }
 
-    VirtualLightMap();
+    void build_static(const std::vector<std::uint8_t>& grid, int width, int height);
+    void stamp_moving_lights(const std::vector<std::uint8_t>& grid, int width, int height, std::uint8_t clamp = 255);
+    void fade_dynamic(std::uint8_t fade);
 
-    void set_square_grid(int quadrants);
-    int  grid_width() const { return grid_width_; }
-    int  grid_height() const { return grid_height_; }
-    int  quadrant_cols() const { return grid_width_; }
-    int  quadrant_rows() const { return grid_height_; }
-    int  quadrant_count() const { return grid_width_ * grid_height_; }
+    void update_tile_mask(SDL_Renderer* renderer, float static_weight, float dynamic_weight);
+    void render_tile_mask(SDL_Renderer* renderer) const;
 
-    void clear(float brightness = 0.0f);
-
-    std::size_t index_of(int x, int y) const;
-
-    ShadowCell& cell(int x, int y);
-    const ShadowCell& cell(int x, int y) const;
-
-    ShadowCell& cell_by_index(std::size_t index);
-    const ShadowCell& cell_by_index(std::size_t index) const;
-
-    const ShadowCell& cell_for_index(int index) const;
-
-    std::optional<GridMetrics> grid_metrics() const;
-    std::optional<GridCoord>   locate_index(int index) const;
-    std::optional<GridCoord>   locate_screen_point(float x, float y) const;
-    std::optional<GridCoord>   locate_world_point(SDL_Point world, const camera& view) const;
-
-    SDL_Rect quadrant_bounds(int index) const;
-    int      quadrant_for_point(float x, float y) const;
-    int      quadrant_for_rect(const SDL_Rect& rect) const;
-
-    int grid_size() const { return grid_width_; }
-
-    void reserve_cells(std::size_t count);
-
-    int screen_width  = 0;
-    int screen_height = 0;
+    float sample_brightness(float local_x,
+                            float local_y,
+                            float static_weight,
+                            float dynamic_weight,
+                            bool bilinear) const;
 
 private:
-    void ensure_cell_storage();
+    void destroy_texture();
+    void ensure_texture(SDL_Renderer* renderer);
+    std::size_t index_from_cell(int cx, int cy) const;
+    float       cell_sample(int cx, int cy, float static_weight, float dynamic_weight) const;
 
-    int grid_width_  = kDefaultGridSize;
-    int grid_height_ = kDefaultGridSize;
-    std::vector<ShadowCell> grid_{};
+    SDL_Rect            world_rect_{0, 0, 0, 0};
+    int                 grid_width_      = 0;
+    int                 grid_height_     = 0;
+    int                 padding_cells_   = 0;
+    int                 stride_          = 0;
+    std::vector<std::uint8_t> static_grid_{};
+    std::vector<std::uint8_t> dynamic_grid_{};
+    SDL_Texture*        tile_mask_       = nullptr;
+    float               base_brightness_ = 0.0f;
+    bool                dirty_           = true;
+    bool                active_          = false;
 };
 
 class LightMap {
-
 public:
-    struct LightEntry {
-        SDL_Rect     dst;
-        Uint8        alpha;
-        SDL_Color    color_mod;
-        SDL_Texture* texture = nullptr;
-    };
+    static constexpr float kDefaultStaticWeight  = 0.8f;
+    static constexpr float kDefaultDynamicWeight = 1.0f;
+    static constexpr int   kMinQuadrantCount     = 1;
+    static constexpr int   kMaxQuadrantCount     = 100;
+    static constexpr int   kDefaultQuadrantCount = 32;
 
     LightMap(Assets* assets, int screen_width, int screen_height);
     ~LightMap();
 
-    void prepare_fullscreen_light_map(SDL_Renderer* renderer);
-    void render_fullscreen_light_map(SDL_Renderer* renderer) const;
-    void update_virtual_light_map(SDL_Renderer* renderer);
-    const VirtualLightMap& virtual_light_map() const { return virtual_light_map_; }
+    void rebuild(SDL_Renderer* renderer);
+    void update(SDL_Renderer* renderer, std::uint32_t delta_ms);
+
+    float sample_brightness(int world_x, int world_y) const;
+    float sample_brightness_bilinear(float world_x, float world_y) const;
+
+    int screen_width() const { return screen_width_; }
+    int screen_height() const { return screen_height_; }
+
+    int quadrant_count() const { return static_cast<int>(quadrants_.size()); }
+    int quadrant_columns() const { return quadrant_cols_; }
+    int quadrant_rows() const { return quadrant_rows_; }
+
+    const LightMapQuadrant* quadrant(int index) const;
+    int quadrant_for_point(float x, float y) const;
+    SDL_Rect quadrant_bounds(int index) const;
+
+    int quadrant_size_px() const { return quadrant_size_px_; }
+    int static_grid_resolution() const { return static_grid_resolution_; }
+    int padding_cells() const { return padding_cells_; }
+
     void set_virtual_light_map_quadrants(int quadrants);
-    int  virtual_light_map_quadrants() const { return virtual_light_map_.grid_size(); }
+    int  virtual_light_map_quadrants() const { return requested_quadrants_; }
 
 private:
-    void collect_layers(std::vector<LightEntry>& out);
-    SDL_Rect get_scaled_position_rect(SDL_Point pos, int fw, int fh, float inv_scale, int min_w, int min_h);
-    void compute_fullscreen_texture(SDL_Renderer* renderer, const std::vector<LightEntry>& layers);
-    void compute_virtual_light_map(SDL_Renderer* renderer);
+    int   find_quadrant_index(int world_x, int world_y) const;
+    float sample_internal(int quadrant_index, float local_x, float local_y, bool bilinear) const;
 
-private:
-    Assets* assets_;
-    int screen_width_;
-    int screen_height_;
-    std::vector<LightEntry> scratch_layers_;
-    VirtualLightMap virtual_light_map_{};
-    SDL_Texture* fullscreen_texture_ = nullptr;
-    std::vector<Uint32> pixel_buffer_;
-    std::vector<float>  cell_brightness_accum_;
-    std::vector<int>    cell_sample_counts_;
-    SDL_PixelFormat* capture_format_ = nullptr;
+    Assets* assets_ = nullptr;
+    int     screen_width_  = 0;
+    int     screen_height_ = 0;
+
+    int quadrant_cols_ = 0;
+    int quadrant_rows_ = 0;
+    int quadrant_size_px_       = 256;
+    int static_grid_resolution_ = 32;
+    int padding_cells_          = 2;
+    int requested_quadrants_    = 32;
+
+    std::vector<LightMapQuadrant> quadrants_{};
 };
+

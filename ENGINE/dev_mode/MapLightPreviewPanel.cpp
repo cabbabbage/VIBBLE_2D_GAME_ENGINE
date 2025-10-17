@@ -99,8 +99,8 @@ void MapLightPreviewPanel::render_content(SDL_Renderer* renderer) const {
 
 void MapLightPreviewPanel::layout_custom_content(int, int) const {}
 
-const VirtualLightMap* MapLightPreviewPanel::current_virtual_light_map() const {
-    return assets_ ? assets_->virtual_light_map() : nullptr;
+const LightMap* MapLightPreviewPanel::current_light_map() const {
+    return assets_ ? assets_->light_map() : nullptr;
 }
 
 std::optional<SDL_Point> MapLightPreviewPanel::player_screen_position() const {
@@ -114,7 +114,7 @@ std::optional<SDL_Point> MapLightPreviewPanel::player_screen_position() const {
 
 std::vector<std::string> MapLightPreviewPanel::assets_in_quadrant(int quadrant) const {
     std::vector<std::string> names;
-    const VirtualLightMap* map = current_virtual_light_map();
+    const LightMap* map = current_light_map();
     if (!assets_ || !map || quadrant < 0 || quadrant >= map->quadrant_count()) {
         return names;
     }
@@ -143,12 +143,12 @@ int MapLightPreviewPanel::quadrant_index_from_point(int x, int y) const {
     if (!SDL_PointInRect(&point, &preview_grid_rect_)) {
         return -1;
     }
-    const VirtualLightMap* map = current_virtual_light_map();
+    const LightMap* map = current_light_map();
     if (!map || preview_grid_rect_.w <= 0 || preview_grid_rect_.h <= 0) {
         return -1;
     }
-    const int grid_w = map->grid_width();
-    const int grid_h = map->grid_height();
+    const int grid_w = map->quadrant_columns();
+    const int grid_h = map->quadrant_rows();
     if (grid_w <= 0 || grid_h <= 0) {
         return -1;
     }
@@ -176,13 +176,13 @@ void MapLightPreviewPanel::render_preview(SDL_Renderer* renderer) const {
         return;
     }
 
-    const VirtualLightMap* map = current_virtual_light_map();
-    if (!map || map->screen_width <= 0 || map->screen_height <= 0) {
+    const LightMap* map = current_light_map();
+    if (!map || map->screen_width() <= 0 || map->screen_height() <= 0) {
         return;
     }
 
-    const int grid_w = map->grid_width();
-    const int grid_h = map->grid_height();
+    const int grid_w = map->quadrant_columns();
+    const int grid_h = map->quadrant_rows();
     if (grid_w <= 0 || grid_h <= 0) {
         return;
     }
@@ -220,8 +220,8 @@ void MapLightPreviewPanel::render_preview(SDL_Renderer* renderer) const {
     preview_grid_rect_ = SDL_Rect{preview_x, preview_y, grid_width_px, grid_height_px};
     preview_rect_ = SDL_Rect{preview_x, preview_y, available_width, grid_height_px};
 
-    screen_width_px_ = map->screen_width;
-    screen_height_px_ = map->screen_height;
+    screen_width_px_ = map->screen_width();
+    screen_height_px_ = map->screen_height();
 
     SDL_Color bg{30, 30, 30, 255};
     SDL_SetRenderDrawColor(renderer, bg.r, bg.g, bg.b, bg.a);
@@ -250,15 +250,23 @@ void MapLightPreviewPanel::render_preview(SDL_Renderer* renderer) const {
                                std::max(1, right - left),
                                std::max(1, bottom - top)};
 
-            const std::size_t index = map->index_of(gx, gy);
+            const std::size_t index = static_cast<std::size_t>(gy) * static_cast<std::size_t>(grid_w) +
+                                      static_cast<std::size_t>(gx);
             if (index < quadrant_preview_rects_.size()) {
                 quadrant_preview_rects_[index] = cell_rect;
             }
 
-            const VirtualLightMap::ShadowCell& cell = map->cell(gx, gy);
-            const Uint8 brightness = static_cast<Uint8>(
-                std::clamp(cell.brightness, 0.0f, 1.0f) * 255.0f);
-            SDL_SetRenderDrawColor(renderer, brightness, brightness, brightness, 255);
+            const LightMapQuadrant* quadrant = map->quadrant(static_cast<int>(index));
+            float brightness = 0.0f;
+            if (quadrant) {
+                SDL_Rect qrect = quadrant->world_rect();
+                const float cx = static_cast<float>(qrect.x) + static_cast<float>(qrect.w) * 0.5f;
+                const float cy = static_cast<float>(qrect.y) + static_cast<float>(qrect.h) * 0.5f;
+                brightness = map->sample_brightness(static_cast<int>(std::round(cx)),
+                                                    static_cast<int>(std::round(cy)));
+            }
+            const Uint8 brightness_u8 = static_cast<Uint8>(std::clamp(brightness, 0.0f, 1.0f) * 255.0f);
+            SDL_SetRenderDrawColor(renderer, brightness_u8, brightness_u8, brightness_u8, 255);
             SDL_RenderFillRect(renderer, &cell_rect);
         }
     }
@@ -294,8 +302,6 @@ void MapLightPreviewPanel::render_preview(SDL_Renderer* renderer) const {
     if (detail_quadrant >= 0) {
         const int gx = detail_quadrant % grid_w;
         const int gy = detail_quadrant / grid_w;
-        const VirtualLightMap::ShadowCell& cell = map->cell_for_index(detail_quadrant);
-
         auto format_value = [](float value, int precision = 3) {
             std::ostringstream stream;
             stream << std::fixed << std::setprecision(precision) << value;
@@ -304,11 +310,19 @@ void MapLightPreviewPanel::render_preview(SDL_Renderer* renderer) const {
 
         detail_lines.push_back("Cell [" + std::to_string(gx) + ", " + std::to_string(gy) + "] #" +
                                std::to_string(detail_quadrant));
-        detail_lines.push_back("Brightness: " + format_value(cell.brightness));
-        detail_lines.push_back("Opacity: " + format_value(cell.opacity));
-        detail_lines.push_back("Offset X: " + format_value(cell.offset_x, 2));
-        detail_lines.push_back("Offset Y: " + format_value(cell.offset_y, 2));
-        detail_lines.push_back("Scale: " + format_value(cell.scale));
+        const LightMapQuadrant* quadrant = map->quadrant(detail_quadrant);
+        if (quadrant) {
+            SDL_Rect qrect = quadrant->world_rect();
+            const float cx = static_cast<float>(qrect.x) + static_cast<float>(qrect.w) * 0.5f;
+            const float cy = static_cast<float>(qrect.y) + static_cast<float>(qrect.h) * 0.5f;
+            const float brightness = map->sample_brightness(static_cast<int>(std::round(cx)),
+                                                           static_cast<int>(std::round(cy)));
+            detail_lines.push_back("Brightness: " + format_value(brightness));
+            detail_lines.push_back("Base Brightness: " + format_value(quadrant->base_brightness()));
+            detail_lines.push_back("Grid Resolution: " + std::to_string(quadrant->grid_width()) + "x" +
+                                   std::to_string(quadrant->grid_height()));
+            detail_lines.push_back("Padding: " + std::to_string(quadrant->padding()));
+        }
         detail_lines.push_back("");
         detail_lines.push_back("Assets:");
 
