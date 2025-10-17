@@ -13,14 +13,19 @@
 
 #include <nlohmann/json.hpp>
 
+class DMCheckbox;
+class DMButton;
+class DMDropdown;
+
 namespace animation_editor {
 
 class AnimationDocument;
 class CroppingService;
 class AsyncTaskQueue;
-class DMCheckbox;
-class DMButton;
-class DMDropdown;
+
+using DMCheckbox = ::DMCheckbox;
+using DMButton = ::DMButton;
+using DMDropdown = ::DMDropdown;
 
 class SourceConfigPanel {
   public:

@@ -10,9 +10,15 @@
 
 #include "dev_mode/widgets.hpp"
 
+class DMCheckbox;
+class DMSlider;
+
 namespace animation_editor {
 
 class AnimationDocument;
+
+using DMCheckbox = ::DMCheckbox;
+using DMSlider = ::DMSlider;
 
 class PlaybackSettingsPanel {
   public:

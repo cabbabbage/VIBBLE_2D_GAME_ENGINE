@@ -16,6 +16,7 @@
 
 class AssetInfo;
 class Input;
+class DMButton;
 
 namespace animation_editor {
 
@@ -25,6 +26,8 @@ class PreviewProvider;
 class CroppingService;
 class AsyncTaskQueue;
 class AudioImporter;
+
+using DMButton = ::DMButton;
 
 class AnimationEditorWindow {
   public:

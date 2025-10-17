@@ -15,6 +15,8 @@ namespace animation_editor {
 class AnimationDocument;
 class FrameMovementEditor;
 
+using DMButton = ::DMButton;
+
 class FrameEditor {
   public:
     enum class Mode {

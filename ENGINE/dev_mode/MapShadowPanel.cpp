@@ -72,14 +72,14 @@ float slider_value(const std::unique_ptr<DMSlider>& slider, float fallback) {
     return static_cast<float>(slider->displayed_value()) / static_cast<float>(kStrengthSliderScale);
 }
 
-float slider_value_scaled(const std::unique_ptr<DMSlider>& slider, float fallback, int scale) {
+float shadow_slider_value_scaled(const std::unique_ptr<DMSlider>& slider, float fallback, int scale) {
     if (!slider) {
         return fallback;
     }
     return static_cast<float>(slider->displayed_value()) / static_cast<float>(scale);
 }
 
-void set_slider_scaled(const std::unique_ptr<DMSlider>& slider, float value, int scale) {
+void shadow_set_slider_scaled(const std::unique_ptr<DMSlider>& slider, float value, int scale) {
     if (!slider) return;
     const int scaled = static_cast<int>(std::round(value * static_cast<float>(scale)));
     slider->set_value(scaled);
@@ -121,11 +121,11 @@ void MapShadowPanel::set_reactive_settings(render_pipeline::shading::ReactiveSha
             scale_strength_->set_value(static_cast<int>(std::round(last_settings_.scale_strength *
                                                                    static_cast<float>(kStrengthSliderScale))));
         }
-        set_slider_scaled(horizontal_falloff_, last_settings_.virtual_light_map.horizontal_falloff, 100);
-        set_slider_scaled(vertical_falloff_,   last_settings_.virtual_light_map.vertical_falloff,   100);
-        set_slider_scaled(max_offset_x_,       last_settings_.virtual_light_map.max_offset_x,       100);
-        set_slider_scaled(max_offset_y_,       last_settings_.virtual_light_map.max_offset_y,       100);
-        set_slider_scaled(map_light_factor_,   last_settings_.virtual_light_map.map_light_factor,   100);
+        shadow_set_slider_scaled(horizontal_falloff_, last_settings_.virtual_light_map.horizontal_falloff, 100);
+        shadow_set_slider_scaled(vertical_falloff_,   last_settings_.virtual_light_map.vertical_falloff,   100);
+        shadow_set_slider_scaled(max_offset_x_,       last_settings_.virtual_light_map.max_offset_x,       100);
+        shadow_set_slider_scaled(max_offset_y_,       last_settings_.virtual_light_map.max_offset_y,       100);
+        shadow_set_slider_scaled(map_light_factor_,   last_settings_.virtual_light_map.map_light_factor,   100);
         if (search_radius_) search_radius_->set_value(last_settings_.virtual_light_map.search_radius);
         int init_quad = assets_ ? assets_->virtual_light_map_quadrant_size() : last_quadrant_size_px_;
         if (init_quad <= 0) init_quad = LightMap::kDefaultQuadrantSizePx;
@@ -293,11 +293,11 @@ void MapShadowPanel::sync_ui_from_json() {
         scale_strength_->set_value(static_cast<int>(std::round(last_settings_.scale_strength *
                                                                static_cast<float>(kStrengthSliderScale))));
     }
-    set_slider_scaled(horizontal_falloff_, last_settings_.virtual_light_map.horizontal_falloff, 100);
-    set_slider_scaled(vertical_falloff_,   last_settings_.virtual_light_map.vertical_falloff,   100);
-    set_slider_scaled(max_offset_x_,       last_settings_.virtual_light_map.max_offset_x,       100);
-    set_slider_scaled(max_offset_y_,       last_settings_.virtual_light_map.max_offset_y,       100);
-    set_slider_scaled(map_light_factor_,   last_settings_.virtual_light_map.map_light_factor,   100);
+    shadow_set_slider_scaled(horizontal_falloff_, last_settings_.virtual_light_map.horizontal_falloff, 100);
+    shadow_set_slider_scaled(vertical_falloff_,   last_settings_.virtual_light_map.vertical_falloff,   100);
+    shadow_set_slider_scaled(max_offset_x_,       last_settings_.virtual_light_map.max_offset_x,       100);
+    shadow_set_slider_scaled(max_offset_y_,       last_settings_.virtual_light_map.max_offset_y,       100);
+    shadow_set_slider_scaled(map_light_factor_,   last_settings_.virtual_light_map.map_light_factor,   100);
     if (search_radius_) search_radius_->set_value(last_settings_.virtual_light_map.search_radius);
 
     // Quadrant size from JSON or assets
@@ -321,11 +321,11 @@ void MapShadowPanel::sync_json_from_ui() {
     last_settings_.parallax_strength = slider_value(parallax_strength_, last_settings_.parallax_strength);
     last_settings_.scale_strength    = slider_value(scale_strength_, last_settings_.scale_strength);
     // Virtual light map
-    last_settings_.virtual_light_map.horizontal_falloff = slider_value_scaled(horizontal_falloff_, last_settings_.virtual_light_map.horizontal_falloff, 100);
-    last_settings_.virtual_light_map.vertical_falloff   = slider_value_scaled(vertical_falloff_,   last_settings_.virtual_light_map.vertical_falloff,   100);
-    last_settings_.virtual_light_map.max_offset_x       = slider_value_scaled(max_offset_x_,       last_settings_.virtual_light_map.max_offset_x,       100);
-    last_settings_.virtual_light_map.max_offset_y       = slider_value_scaled(max_offset_y_,       last_settings_.virtual_light_map.max_offset_y,       100);
-    last_settings_.virtual_light_map.map_light_factor   = slider_value_scaled(map_light_factor_,   last_settings_.virtual_light_map.map_light_factor,   100);
+    last_settings_.virtual_light_map.horizontal_falloff = shadow_slider_value_scaled(horizontal_falloff_, last_settings_.virtual_light_map.horizontal_falloff, 100);
+    last_settings_.virtual_light_map.vertical_falloff   = shadow_slider_value_scaled(vertical_falloff_,   last_settings_.virtual_light_map.vertical_falloff,   100);
+    last_settings_.virtual_light_map.max_offset_x       = shadow_slider_value_scaled(max_offset_x_,       last_settings_.virtual_light_map.max_offset_x,       100);
+    last_settings_.virtual_light_map.max_offset_y       = shadow_slider_value_scaled(max_offset_y_,       last_settings_.virtual_light_map.max_offset_y,       100);
+    last_settings_.virtual_light_map.map_light_factor   = shadow_slider_value_scaled(map_light_factor_,   last_settings_.virtual_light_map.map_light_factor,   100);
     if (search_radius_) last_settings_.virtual_light_map.search_radius = search_radius_->displayed_value();
     // Quadrant size: only mark pending unless applied via button
     int desired_size = last_quadrant_size_px_;

@@ -10,10 +10,18 @@
 
 #include "dev_mode/widgets.hpp"
 
+class DMButton;
+class DMSlider;
+class DMCheckbox;
+
 namespace animation_editor {
 
 class AnimationDocument;
 class AudioImporter;
+
+using DMButton = ::DMButton;
+using DMSlider = ::DMSlider;
+using DMCheckbox = ::DMCheckbox;
 
 class AudioPanel {
   public:

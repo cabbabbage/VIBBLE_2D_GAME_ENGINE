@@ -15,6 +15,9 @@ struct SDL_Renderer;
 #include "dev_mode/dm_styles.hpp"
 #include "dev_mode/widgets.hpp"
 
+class DMButton;
+class DMTextBox;
+
 namespace animation_editor {
 
 class AnimationDocument;
@@ -27,6 +30,9 @@ class PreviewProvider;
 class CroppingService;
 class AsyncTaskQueue;
 class AudioImporter;
+
+using DMButton = ::DMButton;
+using DMTextBox = ::DMTextBox;
 
 class AnimationInspectorPanel {
   public:
