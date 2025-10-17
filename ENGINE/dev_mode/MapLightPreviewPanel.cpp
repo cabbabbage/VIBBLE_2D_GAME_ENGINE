@@ -528,6 +528,11 @@ void MapLightPreviewPanel::render_preview(SDL_Renderer* renderer) const {
     screen_width_px_  = map->screen_width();
     screen_height_px_ = map->screen_height();
 
+    // Clip all preview rendering to the preview widget bounds to prevent overlap
+    SDL_Rect prev_clip;
+    SDL_RenderGetClipRect(renderer, &prev_clip);
+    SDL_RenderSetClipRect(renderer, &preview_widget_bounds_);
+
     SDL_Color bg{30, 30, 30, 255};
     SDL_SetRenderDrawColor(renderer, bg.r, bg.g, bg.b, bg.a);
     SDL_RenderFillRect(renderer, &preview_grid_rect_);
@@ -777,13 +782,19 @@ void MapLightPreviewPanel::render_preview(SDL_Renderer* renderer) const {
         }
     }
 
+    // Clamp final heights to the widget bounds to avoid drawing over controls
+    const int max_preview_h = std::max(0, preview_widget_bounds_.h);
     if (detail_below) {
-        detail_rect.h = detail_text_height;
-        preview_rect_.h = grid_height_px + detail_gap + detail_text_height;
+        const int remaining = std::max(0, max_preview_h - grid_height_px - detail_gap);
+        detail_rect.h = std::min(detail_text_height, remaining);
+        preview_rect_.h = std::min(max_preview_h, grid_height_px + detail_gap + detail_rect.h);
     } else {
         detail_rect.h = grid_height_px;
-        preview_rect_.h = std::max(grid_height_px, detail_text_height);
+        preview_rect_.h = std::min(max_preview_h, std::max(grid_height_px, detail_text_height));
     }
+
+    // Restore previous clip rectangle
+    SDL_RenderSetClipRect(renderer, &prev_clip);
 }
 
 void MapLightPreviewPanel::rebuild_rows() {

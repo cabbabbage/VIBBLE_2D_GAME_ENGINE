@@ -140,6 +140,8 @@ bool MapLightPanel::commit_light_changes_external() {
 void MapLightPanel::open()   {
     set_visible(true);
     set_expanded(true);
+    // Ensure controls are enabled/unlocked when opening in Map Mode
+    setLocked(false);
 }
 void MapLightPanel::close()  { set_visible(false); }
 void MapLightPanel::toggle() {

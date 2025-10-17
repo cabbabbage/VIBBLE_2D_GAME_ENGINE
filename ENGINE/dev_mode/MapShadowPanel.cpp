@@ -85,7 +85,11 @@ void MapShadowPanel::set_reactive_settings(render_pipeline::shading::ReactiveSha
     }
 }
 
-void MapShadowPanel::open() { DockableCollapsible::open(); }
+void MapShadowPanel::open() {
+    DockableCollapsible::open();
+    // Ensure controls are enabled/unlocked when opening in Map Mode
+    setLocked(false);
+}
 
 void MapShadowPanel::close() { DockableCollapsible::close(); }
 

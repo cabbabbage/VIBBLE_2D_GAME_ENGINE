@@ -165,7 +165,7 @@ void SceneRenderer::render(){
     }
 
     if (z_light_pass_){
-        z_light_pass_->update(renderer_, 16);
+        // Defer light map update until after we stamp moving lights below.
         render_pipeline_.lighting().light_map_sampler = z_light_pass_.get();
     } else {
         render_pipeline_.lighting().light_map_sampler = nullptr;
@@ -300,6 +300,45 @@ void SceneRenderer::render(){
 
             SDL_Texture* draw_tex = render_pipeline_.texture_for_scale(a, final_tex, fw, fh, dst.w, dst.h);
             enqueue_command(a, final_tex, draw_tex, dst);
+        }
+
+        // Stamp moving asset lights into the light map's dynamic layer before rendering it.
+        if (z_light_pass_ && assets_) {
+            camera& cam = assets_->getView();
+            auto stamp_from_list = [&](const std::vector<LightSource>& list, const Asset* owner){
+                for (const auto& L : list) {
+                    const int intensity = std::clamp(L.intensity, 0, 255);
+                    if (intensity <= 0) continue;
+                    const SDL_Point world_center{ owner->pos.x + L.offset_x, owner->pos.y + L.offset_y };
+                    const SDL_Point screen_center = cam.map_to_screen(world_center);
+                    const SDL_Point world_edge{ world_center.x + std::max(1, std::max({L.radius, L.x_radius, L.y_radius})), world_center.y };
+                    const SDL_Point screen_edge = cam.map_to_screen(world_edge);
+                    const float dx = static_cast<float>(screen_edge.x - screen_center.x);
+                    const float dy = static_cast<float>(screen_edge.y - screen_center.y);
+                    const float radius_px = std::max(1.0f, std::sqrt(dx*dx + dy*dy));
+                    z_light_pass_->stamp_moving_light(SDL_FPoint{ static_cast<float>(screen_center.x), static_cast<float>(screen_center.y) },
+                                                      radius_px,
+                                                      static_cast<std::uint8_t>(intensity),
+                                                      255);
+                }
+            };
+
+            for (Asset* a2 : active) {
+                if (!a2 || !a2->info) continue;
+                // Treat assets that are actively animating/not static as moving for light contribution.
+                const bool is_moving = shouldRegen(a2) || !a2->static_frame || a2->info->moving_asset;
+                if (!is_moving) continue;
+                if (!a2->info->is_light_source) continue;
+                if (!a2->info->light_sources.empty()) {
+                    stamp_from_list(a2->info->light_sources, a2);
+                }
+                if (!a2->info->orbital_light_sources.empty()) {
+                    stamp_from_list(a2->info->orbital_light_sources, a2);
+                }
+            }
+            // Now bake updated quadrant tiles for this frame.
+            z_light_pass_->update(renderer_, 16);
+            render_pipeline_.lighting().light_map_sampler = z_light_pass_.get();
         }
 
         auto render_commands = [&](const std::vector<AssetRenderCommand>& commands) {

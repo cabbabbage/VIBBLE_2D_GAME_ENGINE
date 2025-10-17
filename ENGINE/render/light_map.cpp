@@ -184,7 +184,10 @@ void LightMapQuadrant::stamp_moving_lights(const std::vector<std::uint8_t>& grid
             const int src_index = y * width + x;
             const std::uint8_t value = clamp_byte(grid[static_cast<std::size_t>(src_index)]);
             const std::size_t dst_index = index_from_cell(x, y);
-            dynamic_grid_[dst_index] = std::min<std::uint8_t>(value, clamp);
+            const std::uint8_t clamped = std::min<std::uint8_t>(value, clamp);
+            if (clamped > dynamic_grid_[dst_index]) {
+                dynamic_grid_[dst_index] = clamped;
+            }
         }
     }
     dirty_  = true;
@@ -196,14 +199,21 @@ void LightMapQuadrant::fade_dynamic(std::uint8_t fade) {
         return;
     }
     const std::size_t total = dynamic_grid_.size();
+    bool changed = false;
     for (std::size_t i = 0; i < total; ++i) {
         const std::uint8_t value = dynamic_grid_[i];
         if (value == 0) {
             continue;
         }
-        dynamic_grid_[i] = (value > fade) ? (value - fade) : 0;
+        const std::uint8_t next = (value > fade) ? static_cast<std::uint8_t>(value - fade) : 0;
+        if (next != value) {
+            dynamic_grid_[i] = next;
+            changed = true;
+        }
     }
-    dirty_ = true;
+    if (changed) {
+        dirty_ = true;
+    }
 }
 
 LightMapQuadrant::GridStatistics LightMapQuadrant::static_grid_stats() const {
